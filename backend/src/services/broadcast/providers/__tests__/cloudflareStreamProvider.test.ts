@@ -326,36 +326,71 @@ describe('failure paths are classified, not leaked', () => {
 /* ─────────────────────────────────────────────────────────────────── lifecycle ─ */
 
 describe('is the input actually live', () => {
-  const lifecycle = (body: string, status = 200) =>
-    readLiveLifecycle(UID, { fetchImpl: fakeFetch({ status, body }).impl, config: CONFIG });
-
-  it('reads live and the per-broadcast video uid', async () => {
-    const videoUid = '55b9b5ce48c3968c6b514c458959d6ab';
-    await expect(lifecycle(JSON.stringify({ isInput: true, videoUID: videoUid, live: true })))
-      .resolves.toEqual({ live: true, videoUid });
+  /**
+   * THE 15 OCTOBER 2026 DEFECT, pinned.
+   *
+   * This used to call /lifecycle on the DELIVERY domain, exactly as Cloudflare documents.
+   * During the first production airing that endpoint returned 401 the moment the input was
+   * actually broadcasting with signed URLs required - while answering fine minutes earlier
+   * when the same input was idle. The result was a healthy, airing class reported as not
+   * ready, which makes the state machine refuse go_live. An outage reading as "nothing live".
+   *
+   * Readiness now comes from the API domain. The host assertion below is the regression test:
+   * if anything moves this back to the delivery domain, it fails.
+   */
+  const videos = (result: unknown, status = 200) => readLiveLifecycle(UID, {
+    fetchImpl: fakeFetch({ status, body: JSON.stringify({ success: true, errors: [], messages: [], result }) }).impl,
+    config: CONFIG,
   });
 
-  it('reads idle', async () => {
-    await expect(lifecycle(JSON.stringify({ isInput: true, videoUID: null, live: false })))
+  const LIVE_UID = '55b9b5ce48c3968c6b514c458959d6ab';
+  const liveVideo = { uid: LIVE_UID, status: { state: 'live-inprogress' } };
+
+  it('reads live and the per-broadcast video uid', async () => {
+    await expect(videos([liveVideo])).resolves.toEqual({ live: true, videoUid: LIVE_UID });
+  });
+
+  it('reads idle when the input has never broadcast', async () => {
+    await expect(videos([])).resolves.toEqual({ live: false, videoUid: null });
+  });
+
+  it('a FINISHED recording is not live, and does not leak its uid as a live one', async () => {
+    // `ready` is a completed recording. Returning its uid would invite a caller to treat a
+    // replay as a live stream, which is how last week's class ends up on today's badge.
+    await expect(videos([{ uid: LIVE_UID, status: { state: 'ready' } }]))
       .resolves.toEqual({ live: false, videoUid: null });
   });
 
   it.each([
-    ['a truthy string', JSON.stringify({ live: 'true' })],
-    ['an absent field', JSON.stringify({ isInput: true })],
-    ['a number', JSON.stringify({ live: 1 })],
-  ])('treats %s as NOT live, because the safe direction for an unreadable answer is not-ready', async (_l, body) => {
-    await expect(lifecycle(body)).resolves.toMatchObject({ live: false });
+    ['not-started', [{ uid: LIVE_UID, status: { state: 'not-started' } }]],
+    ['an absent status', [{ uid: LIVE_UID }]],
+    ['a non-string state', [{ uid: LIVE_UID, status: { state: 1 } }]],
+    ['a result that is not a list', { uid: LIVE_UID }],
+  ])('treats %s as NOT live, because the safe direction for an unreadable answer is not-ready', async (_l, result) => {
+    await expect(videos(result)).resolves.toMatchObject({ live: false });
   });
 
-  it('hits the delivery host, not the API host', async () => {
-    const f = fakeFetch({ body: JSON.stringify({ live: false }) });
+  it('hits the API host, NOT the delivery host - this is the 401 regression', async () => {
+    const f = fakeFetch({ body: JSON.stringify({ success: true, errors: [], messages: [], result: [] }) });
     await readLiveLifecycle(UID, { fetchImpl: f.impl, config: CONFIG });
-    expect(f.calls[0].url).toBe(`https://customer-keedfbz9hw.cloudflarestream.com/${UID}/lifecycle`);
+    expect(f.calls[0].url).toBe(
+      `https://api.cloudflare.com/client/v4/accounts/${CONFIG.accountId}/stream/live_inputs/${UID}/videos`,
+    );
+    expect(f.calls[0].url).not.toContain('cloudflarestream.com');
+    expect(f.calls[0].url).not.toContain('/lifecycle');
+  });
+
+  it('classifies a 401 rather than reporting the stream as idle', async () => {
+    // The whole point: an auth failure must NOT look like "nothing is broadcasting".
+    const f = fakeFetch({ status: 401 });
+    await expect(readLiveLifecycle(UID, { fetchImpl: f.impl, config: CONFIG }))
+      .rejects.toMatchObject({ error_class: 'Unauthorized' });
   });
 
   it('classifies a 404 as NotFound', async () => {
-    await expect(lifecycle('{}', 404)).rejects.toMatchObject({ error_class: 'NotFound' });
+    const f = fakeFetch({ status: 404 });
+    await expect(readLiveLifecycle(UID, { fetchImpl: f.impl, config: CONFIG }))
+      .rejects.toMatchObject({ error_class: 'NotFound' });
   });
 
   it('fails closed on a malformed uid before any request goes out', async () => {
