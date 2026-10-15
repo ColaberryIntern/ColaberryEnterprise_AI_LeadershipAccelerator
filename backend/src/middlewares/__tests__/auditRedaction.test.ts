@@ -29,7 +29,7 @@ const MUST_REDACT = [
   'password', 'currentPassword', 'newPassword', 'confirmPassword',
   'smtp_pass', 'ghl_api_key', 'sms_api_key', 'synthflow_api_key',
   'apiKey', 'client_secret', 'access_token', 'refresh_token',
-  'authorization', 'key', 'token', 'private_key',
+  'authorization', 'private_key', 'portal_token',
 ];
 
 /**
@@ -42,6 +42,11 @@ const MUST_SURVIVE = [
   'associated_variable_keys', 'creates_variable_keys',
   'ai_max_tokens', 'apis_added', 'apis_modified', 'strapi_lead_id',
   'email', 'name', 'status',
+  // Bare `key` and `token`. Both WERE treated as secrets until a survey of all
+  // 541,396 audit rows found them in exactly one row, three times, every
+  // occurrence a lesson template variable NAME. Zero credentials caught, real
+  // content destroyed. They live here now, and this comment is why.
+  'key', 'token',
 ];
 
 describe('isSecretKey — the precision boundary', () => {
@@ -96,12 +101,44 @@ describe('redactSecrets', () => {
 
   it('redacts by KEY, whatever the value type is', () => {
     const out = redactSecrets({
-      password: 12345, token: null, key: ['a', 'b'], secret: { nested: 'x' },
+      password: 12345, access_token: null, api_key: ['a', 'b'], secret: { nested: 'x' },
     }) as Record<string, unknown>;
     expect(out.password).toBe(REDACTED);
-    expect(out.token).toBe(REDACTED);
-    expect(out.key).toBe(REDACTED);
+    expect(out.access_token).toBe(REDACTED);
+    expect(out.api_key).toBe(REDACTED);
     expect(out.secret).toBe(REDACTED);
+  });
+
+  it('leaves lesson blueprint variable names intact — the real over-redaction', () => {
+    // The exact shape found in audit_logs row of 2026-03-18, entity `lessons`.
+    // Treating a bare `key` as a secret redacted three template variable NAMES
+    // here, which is content loss dressed up as security.
+    const body = {
+      blueprint: {
+        mini_sections: [
+          {}, {},
+          {
+            variables: [
+              { key: 'learner_goal_text' },
+              { key: 'session_title' },
+              { key: 'practice_prompt_body' },
+            ],
+          },
+        ],
+      },
+    };
+    const out = redactSecrets(body);
+    expect(JSON.stringify(out)).toBe(JSON.stringify(body));
+    expect(JSON.stringify(out)).not.toContain(REDACTED);
+  });
+
+  it('still redacts a REAL credential nested at the same depth', () => {
+    // The counterpart to the test above: proving nothing survives by accident.
+    const out = redactSecrets({
+      blueprint: { mini_sections: [{ variables: [{ api_key: 'secret-c' }] }] },
+    });
+    expect(JSON.stringify(out)).not.toContain('secret-c');
+    expect(JSON.stringify(out)).toContain(REDACTED);
   });
 
   it('does not mutate the caller\'s object', () => {

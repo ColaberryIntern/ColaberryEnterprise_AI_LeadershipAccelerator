@@ -46,12 +46,24 @@ const SECRET_SUBSTRINGS = [
 ];
 
 /**
- * Exact names that are secrets on their own. `key` and `token` are here rather
- * than in the substring list precisely so `ai_max_tokens` and `content_key`
- * survive: a bare `key` is the Mandrill-style credential field, `aimaxtokens`
- * is not a bare `token`.
+ * Exact names that are secrets on their own.
+ *
+ * `key` AND `token` WERE HERE AND HAVE BEEN REMOVED, on evidence rather than
+ * taste. The original reasoning was that a bare `key` is the Mandrill-style
+ * credential field. Surveying all 541,396 audit rows showed otherwise: a bare
+ * `key` or `token` field occurs in **exactly one row**, three times, and every
+ * occurrence is `blueprint.mini_sections[].variables[].key` — the NAME of a
+ * lesson template variable, not a credential. So the rule caught zero secrets
+ * and silently destroyed real content, which is precisely the over-redaction
+ * this module's design is supposed to avoid.
+ *
+ * Nothing is lost by dropping them. Real credential fields in this codebase
+ * are spelled `ghl_api_key`, `sms_api_key`, `synthflow_api_key`, `smtp_pass`
+ * and `portal_token`, every one of which the substring list still catches. If
+ * a route ever does post a bare `key` holding a credential, add it back with
+ * the route named here.
  */
-const SECRET_EXACT = new Set(['key', 'token', 'secret', 'auth', 'jwt', 'otp']);
+const SECRET_EXACT = new Set(['secret', 'auth', 'jwt', 'otp']);
 
 /** Trailing `...pass`, which is how `smtp_pass` and `db_pass` are spelled. */
 const SECRET_SUFFIXES = ['pass'];
