@@ -3254,6 +3254,16 @@ async function start(): Promise<void> {
   } catch (err: any) {
     console.warn('[DB] portal_handoff_tokens schema ensure failed:', err?.message);
   }
+  // Apollo credit guard counter (idempotent). Must exist before any Apollo call, and
+  // the guard FAILS CLOSED, so if this ensure fails the table is missing and every
+  // Apollo call is refused rather than made without a ceiling. That is the intended
+  // ordering: no counter, no spending. See CC-20260710-a9f2 (credit-leak audit).
+  try {
+    const { ensureApolloCreditGuardSchema } = await import('./db/ensureApolloCreditGuardSchema');
+    await ensureApolloCreditGuardSchema();
+  } catch (err: any) {
+    console.warn('[DB] apollo_credit_usage schema ensure failed:', err?.message);
+  }
   // Seed v0 automation rules (idempotent).
   try {
     const { seedDefaultAutomationRules } = await import('./services/ops/automationRulesService');
