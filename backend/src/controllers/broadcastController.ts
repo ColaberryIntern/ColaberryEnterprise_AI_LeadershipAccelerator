@@ -189,6 +189,11 @@ export async function postPlaybackGrant(req: Request, res: Response): Promise<vo
           url: live.url,
           expires_at: live.expiresAt,
           ttl_seconds: live.ttlSeconds,
+          // The client must NOT infer liveness from the url shape. A live manifest restarts
+          // its timeline on reload, so the player has to know not to restore the viewer's
+          // position on renewal — doing so replays the last stretch, every renewal, which is
+          // what the 15 Oct 2026 airing found. The server is the only honest authority here.
+          is_live: occurrence.editorial_state === 'live',
           grant: decision.grant,
           preview_seconds_remaining: decision.previewSecondsRemaining ?? null,
         });
@@ -233,6 +238,10 @@ export async function postPlaybackGrant(req: Request, res: Response): Promise<vo
       url: signed.url,
       expires_at: signed.expiresAt,
       ttl_seconds: signed.ttlSeconds,
+      // Same field on the replay path, and normally false: a replay is served once the
+      // occurrence has ended. Sent explicitly rather than omitted so the two branches answer
+      // the same question in the same shape.
+      is_live: occurrence.editorial_state === 'live',
       grant: decision.grant,
       preview_seconds_remaining: decision.previewSecondsRemaining ?? null,
     });

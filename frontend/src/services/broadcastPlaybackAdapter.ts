@@ -86,6 +86,16 @@ export interface GrantResponse {
   ttl_seconds: number;
   grant: 'full' | 'preview';
   preview_seconds_remaining: number | null;
+  /**
+   * Whether this credential points at a LIVE stream rather than a replay.
+   *
+   * The server is the authority: it knows the occurrence's editorial state, and the client
+   * must not infer liveness from the url shape. Optional so an older server that omits it is
+   * treated as a replay, which is the behaviour that existed before this field and the safe
+   * default — restoring a position on a replay is merely redundant, while failing to restore
+   * one would lose the viewer's place.
+   */
+  is_live?: boolean;
 }
 
 /** The subset of HTMLVideoElement this adapter touches. */
@@ -342,7 +352,27 @@ export function createPlaybackAdapter(
     if (stopped || mine !== generation) return;
 
     media.src = grant.url;
-    if (resumeAt > 0) {
+
+    /**
+     * A LIVE STREAM MUST NOT HAVE ITS POSITION RESTORED.
+     *
+     * Swapping `src` reloads the element, and a live manifest's timeline restarts on reload.
+     * Restoring the viewer's old `currentTime` therefore seeks BACKWARDS into the DVR buffer
+     * and replays the last stretch — every renewal, which is roughly every 100 seconds,
+     * forever. The viewer hears the same minute and a half on a loop and never reaches the
+     * live edge again.
+     *
+     * Found in the first production airing, 15 October 2026, and reported independently by
+     * two viewers as "the last lines keep repeating". No unit test caught it because the
+     * replay behaviour it was modelled on is correct: for a REPLAY the timeline is stable, so
+     * restoring is exactly right. The two cases are genuinely different, and the server is
+     * the one that knows which this is.
+     *
+     * Live still resumes playback — it just resumes at the live edge, which is the only
+     * position on a live stream that means anything.
+     */
+    const restorePosition = resumeAt > 0 && grant.is_live !== true;
+    if (restorePosition) {
       const restore = (): void => {
         media.removeEventListener('loadedmetadata', restore);
         pendingRestore = null;
@@ -355,7 +385,10 @@ export function createPlaybackAdapter(
       pendingRestore = restore;
       media.addEventListener('loadedmetadata', restore);
     } else if (wasPlaying) {
-      startPlayback('load');
+      // A pending restore from an EARLIER acquisition would otherwise still fire and seek a
+      // live viewer backwards, which is the whole defect this branch exists to prevent.
+      cancelPendingRestore();
+      startPlayback(isRenewal ? 'renewal' : 'load');
     }
 
     // A successful acquisition clears the recovery budget: the next failure gets a full set
