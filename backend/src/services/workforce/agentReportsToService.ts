@@ -1,4 +1,5 @@
 import AiAgent from '../../models/AiAgent';
+import OrgMember from '../../models/OrgMember';
 import { resolveReportsToChainWithTrail } from '../ticketCreatorReportsToResolver';
 import { buildReportsToView } from '../reese/agentDetailService';
 import type { AgentDetailResult } from '../reese/agentDetailEmployeeFacts';
@@ -15,6 +16,25 @@ import type { AgentDetailResult } from '../reese/agentDetailEmployeeFacts';
 // resolveReportsToChainWithTrail() the real ticket-creation gate uses, and rejected if it
 // doesn't resolve to a real human — moving "verify the chain actually resolves" from this
 // skill's own documentation into real enforced code.
+//
+// THAT PARAGRAPH WAS TRUE OF THE 'agent' BRANCH AND FALSE OF THE 'human' ONE, until AF6.4.
+// `resolveReportsToChainWithTrail` handles the two asymmetrically: for `type: 'agent'` it does an
+// `AiAgent.findByPk` and returns null on a dangling target, but for `type: 'human'` it RETURNS THE
+// ID IT WAS HANDED with no `org_members` lookup at all. So `resolvedHumanId` was truthy for any
+// non-empty string, the guard below passed, and an agent could be given an accountable human who
+// does not exist. T16 hit this and worked around it with a caller-side pre-flight check, which
+// protects one caller and no others.
+//
+// The existence check is therefore added HERE, on the write path, and deliberately NOT in the
+// resolver: the resolver is also the read path for `enforceReportsToGate`, the live
+// ticket-creation gate. Adding a lookup there would start rejecting ticket creation for any agent
+// whose chain already ends at a missing human — changing live behaviour to fix a latent defect.
+// Validating on write stops new bad rows without touching what already reads.
+//
+// Measured in production 2026-10-15 before the change: of 10 agents with a human target, ALL 10
+// resolve to a real org_members row and ZERO dangle. So this closes a latent hole rather than
+// repairing existing damage, and it matters now because Release Zero (AF3.1) is about to set
+// reports_to on ten new agents.
 
 export type ReportsToType = 'human' | 'agent';
 
@@ -46,6 +66,20 @@ export async function setAgentReportsTo(
 
   if (reportsToType === 'agent' && reportsToId === agent.id) {
     return notUpdated(agent.id, agent.agent_name, 'An agent cannot report to itself');
+  }
+
+  // A HUMAN TARGET MUST EXIST. The resolver below cannot tell us this: its 'human' branch echoes
+  // the id back, so it would accept any non-empty string. Checked against org_members, which is
+  // what `reports_to_id` means for type 'human' (see ticketCreatorReportsToResolver's own header).
+  if (reportsToType === 'human') {
+    const human = await OrgMember.findByPk(reportsToId);
+    if (!human) {
+      return notUpdated(
+        agent.id,
+        agent.agent_name,
+        'That human target does not exist — no org_members row has that id',
+      );
+    }
   }
 
   // Dry-run the proposed chain through the real resolver before writing anything — the

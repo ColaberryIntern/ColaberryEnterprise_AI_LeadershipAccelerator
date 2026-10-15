@@ -2,6 +2,7 @@ import AiAgent from '../../../models/AiAgent';
 import { resolveReportsToChainWithTrail } from '../../ticketCreatorReportsToResolver';
 import { buildReportsToView } from '../../reese/agentDetailService';
 import { setAgentReportsTo } from '../agentReportsToService';
+import OrgMember from '../../../models/OrgMember';
 
 // Reports-to editor (2026-09-30) — setAgentReportsTo() is the real, deliberate mechanism
 // behind the new "change who this agent reports to" admin write. Mirrors
@@ -9,6 +10,12 @@ import { setAgentReportsTo } from '../agentReportsToService';
 // mock) — no real DB row, real or synthetic, is ever touched by this test.
 
 jest.mock('../../../models/AiAgent', () => ({ findByPk: jest.fn() }));
+// AF6.4 added an OrgMember.findByPk existence check to the service for a 'human' target.
+// Without this mock the suite reaches the REAL model and dies on
+// SequelizeConnectionRefusedError -- which looks like a local-environment problem and is
+// not one. Same class as the frontend's fetchLandingPageTraffic break: a module gains a
+// dependency and an existing test's mock of that module stays incomplete.
+jest.mock('../../../models/OrgMember', () => ({ findByPk: jest.fn() }));
 jest.mock('../../ticketCreatorReportsToResolver', () => ({ resolveReportsToChainWithTrail: jest.fn() }));
 jest.mock('../../reese/agentDetailService', () => ({ buildReportsToView: jest.fn() }));
 
@@ -24,6 +31,9 @@ function makeAgent(overrides: Partial<any> = {}) {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  // Default: the human target EXISTS, which is what these pre-existing tests assume. The suite
+  // that proves a MISSING human is refused is agentReportsToHumanExists.test.ts.
+  (OrgMember.findByPk as jest.Mock).mockResolvedValue({ id: 'human-1', email: 'ali@colaberry.com' });
   mockResolveChain.mockResolvedValue({ resolvedHumanId: 'human-1', trail: ['TestAgent (agent) -> [human]'] });
   mockBuildReportsToView.mockResolvedValue({ trail: ['TestAgent (agent) -> [human]'], resolved_human: { id: 'human-1', name: 'Ali', email: 'ali@colaberry.com' }, immediate_agent: null });
 });
