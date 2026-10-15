@@ -162,14 +162,20 @@ describe('the wiring: systemHealthService actually calls it', () => {
     expect(settled).toContain('checkGrowthJourney(checks),');
   });
 
-  it('still calls the two extracted checks, from their new home', () => {
+  it('still calls the three extracted checks, from their new home', () => {
     expect(source).toContain("import { checkSequenceProgression } from './health/sequenceProgressionCheck';");
     expect(source).toContain("import { checkCampaignHealth } from './health/campaignHealthCheck';");
+    // The FOURTH extraction, 2026-10-15. `checkLifecycleRegistration` was written inline in
+    // `systemHealthService.ts` and took it to 565 lines - over the ceiling the test below pins.
+    // It moved here rather than the ceiling moving, which is the rule this directory exists for.
+    expect(source).toContain("import { checkLifecycleRegistration } from './health/lifecycleRegistrationCheck';");
     const settled = source.slice(source.indexOf('await Promise.allSettled(['), source.indexOf(']);', source.indexOf('await Promise.allSettled([')));
     expect(settled).toContain('checkSequenceProgression(checks),');
     expect(settled).toContain('checkCampaignHealth(checks),');
-    // nine checks now, and the journey is the one that was added
-    expect(settled.match(/check\w+\(checks\),/g)).toHaveLength(9);
+    expect(settled).toContain('checkLifecycleRegistration(checks),');
+    // TEN checks now. The count is pinned rather than left open because this assertion's job is
+    // to notice a check that stops being called, and a `toBeGreaterThan` would not.
+    expect(settled.match(/check\w+\(checks\),/g)).toHaveLength(10);
   });
 
   it('stays under the 500-line ceiling, which is why the split happened at all', () => {

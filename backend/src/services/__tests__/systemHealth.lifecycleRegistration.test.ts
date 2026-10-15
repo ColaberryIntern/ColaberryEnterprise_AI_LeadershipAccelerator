@@ -38,7 +38,8 @@ jest.mock('../lifecycle/projectLifecycleRegistration', () => ({
 }));
 
 // eslint-disable-next-line import/first
-import { checkLifecycleRegistration, runFullSystemHealthCheck } from '../systemHealthService';
+import { checkLifecycleRegistration } from '../health/lifecycleRegistrationCheck';
+import { runFullSystemHealthCheck } from '../systemHealthService';
 
 /** Point the two detectors at whatever a case needs, then run the check. */
 async function runCheck(opts: {
