@@ -237,3 +237,48 @@ describe('a showcase draft cannot invent a metric', () => {
     expect(r.unsupported.map((u) => u.normalized)).toContain('90000');
   });
 });
+
+/**
+ * THE ARTIFACT IS PART OF WHAT WAS APPROVED.
+ *
+ * A mutation run on 2026-10-15 deleted `artifactId` from the canonical form and
+ * every test still passed: it had been added to the hash and never tested, so the
+ * staleness it is meant to trigger was decorative. Somebody approved a specific
+ * recording filed as a specific artifact; re-filing against a different one has to
+ * invalidate that, exactly as swapping the take already does.
+ */
+describe('the approval hash covers the artifact', () => {
+  const base = { attemptId: 'a1', recordingIds: ['r1'], draftSummary: 'A courier routing demo.' };
+
+  it('a DIFFERENT artifact produces a different hash', () => {
+    expect(contentHash({ ...base, artifactId: 'art-1' }))
+      .not.toBe(contentHash({ ...base, artifactId: 'art-2' }));
+  });
+
+  it('the same artifact produces the same hash', () => {
+    expect(contentHash({ ...base, artifactId: 'art-1' }))
+      .toBe(contentHash({ ...base, artifactId: 'art-1' }));
+  });
+
+  it('BACKWARD COMPATIBLE: an artifact-less hash still equals the pre-artifact GOLDEN value', () => {
+    // A GOLDEN HASH, not a comparison between two current calls.
+    //
+    // The first version of this asserted contentHash(base) === contentHash({...base,
+    // artifactId: null}). Both sides run the same code, so hashing an absent artifact
+    // AS null satisfied it - and a mutation doing exactly that survived, while
+    // silently invalidating the approval of every showcase hashed before this column
+    // existed. Only a value computed from the OLD canonical form catches that.
+    //
+    // sha256 of {"attemptId":"a1","recordingIds":["r1"],"draftSummary":"A courier routing demo."}
+    const PRE_ARTIFACT = '22fb4dda3252ff83bacaf66e69c5b7eeb07e3b6530e9eb17bcac4ce1a9b20ce5';
+    expect(contentHash(base)).toBe(PRE_ARTIFACT);
+    expect(contentHash({ ...base, artifactId: null })).toBe(PRE_ARTIFACT);
+    expect(contentHash({ ...base, artifactId: undefined })).toBe(PRE_ARTIFACT);
+  });
+
+  it('binding an artifact to a showcase that had none DOES make it stale', () => {
+    // The flip side, and the one that matters: a showcase approved with no artifact
+    // and later bound to one is no longer the thing that was approved.
+    expect(contentHash(base)).not.toBe(contentHash({ ...base, artifactId: 'art-1' }));
+  });
+});

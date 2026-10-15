@@ -109,6 +109,25 @@ export const PRESENTATION_STUDIO_STATEMENTS: string[] = [
      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
    )`,
+  // ---------------------------------------------------------------------------
+  // ONE PORTFOLIO ARTIFACT PER HANDED-IN RECORDING.
+  //
+  // `runtime_portfolio_artifacts` is a SHARED table - case studies, cert evidence
+  // and the classroom portfolio rail all write it - and it carries no unique
+  // constraint of any kind. A handed-in rehearsal must land there exactly once, and
+  // the hand-in path can be retried, so the guard is a constraint rather than a
+  // read-then-write that two requests can both win.
+  //
+  // PARTIAL, on `kind = 'presentation'`, so it can only ever constrain rows this
+  // subsystem writes. No other kind is affected, which is what makes it safe to add
+  // a presentation-specific index to somebody else's table from this module.
+  //
+  // Keyed on the recording ref inside the JSONB rather than on (enrollment, task):
+  // the ref IS the identity of the thing being filed, and a learner who re-hands-in
+  // a different take should get a second artifact, not silently overwrite the first.
+  `CREATE UNIQUE INDEX IF NOT EXISTS runtime_portfolio_artifacts_one_per_recording
+     ON runtime_portfolio_artifacts ((content->>'recordingRef'))
+   WHERE kind = 'presentation'`,
   `ALTER TABLE presentation_assignments ADD COLUMN IF NOT EXISTS project_id UUID`,
   `ALTER TABLE presentation_assignments ADD COLUMN IF NOT EXISTS story_id VARCHAR(60)`,
   `ALTER TABLE presentation_assignments ADD COLUMN IF NOT EXISTS enrollment_id UUID`,
@@ -359,6 +378,14 @@ export const PRESENTATION_STUDIO_STATEMENTS: string[] = [
    )`,
   `ALTER TABLE presentation_showcases ADD COLUMN IF NOT EXISTS attempt_id UUID`,
   `ALTER TABLE presentation_showcases ADD COLUMN IF NOT EXISTS audience VARCHAR(30) DEFAULT 'private'`,
+  // The portfolio artifact this showcase publishes. The two stores are NOT copies of
+  // each other - the artifact is "what the learner made", the showcase is "who may
+  // see it and who signed off" - but a showcase that cannot name its artifact leaves
+  // the gallery and the portfolio describing the same rehearsal with no link between
+  // them. Nullable: showcases predate artifacts, and a missing link is a gap to
+  // backfill rather than a reason to refuse a publish.
+  `ALTER TABLE presentation_showcases ADD COLUMN IF NOT EXISTS artifact_id UUID`,
+
   `ALTER TABLE presentation_showcases ADD COLUMN IF NOT EXISTS draft_json JSONB DEFAULT '{}'::jsonb`,
   `ALTER TABLE presentation_showcases ADD COLUMN IF NOT EXISTS content_hash VARCHAR(80)`,
   `ALTER TABLE presentation_showcases ADD COLUMN IF NOT EXISTS author_approved_at TIMESTAMPTZ`,
