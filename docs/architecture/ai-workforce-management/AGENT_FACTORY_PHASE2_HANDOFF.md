@@ -29,7 +29,7 @@ Every project sits at lifecycle stage `discovery`, entry point `agent_domain_fac
 
 | Domain | Releases | Stories | Manager reachable | Intended builder | Existing agent |
 |---|---|---|---|---|---|
-| admissions | 3 | 53 | **no** — Taiwo Oludimimu | verified_active | — |
+| admissions | 3 | 53 | yes | verified_active | — |
 | curriculum | 3 | 44 | yes | **onboarding_pending** | Dara |
 | executive | 3 | 95 | yes | unassigned | — |
 | internship | 3 | 41 | yes | verified_active | — |
@@ -100,7 +100,7 @@ Checked against production on 2026-10-14. If any of these differs, something reg
 
 | Route | Expect |
 |---|---|
-| `agent-domains` | 10 domains; `manager_can_reach` false on admissions, platform, product_experience, sales and true on the other five, each false one carrying a named `manager_blocker` |
+| `agent-domains` | 10 domains; `manager_can_reach` false on **platform, product_experience and sales only**, each with a named `manager_blocker`; true on the other seven |
 | `agent-domains-summary` | 503 stories, 443 capabilities, **0** confirmed, and the words **"NO coverage to report"** — not a percentage |
 | `agent-domains-authorization` | all ten `authorized: false`, reason `no_authorization` |
 | `agent-domains-builders` | the intern roster. **403 for a `program`-only role** — this one needs `internship` |
@@ -122,10 +122,40 @@ ssh root@95.216.199.47 "docker exec accelerator-db psql -U accelerator -d accele
 
 ---
 
+## The fleet, measured
+
+Checked 2026-10-15. **Three different numbers, and only one of them is the useful one.**
+
+| Figure | Value | What it counts |
+|---|---|---|
+| Rows in `ai_agents` | **257** | the registry, including disabled and never-run |
+| Enabled | **175** | `enabled = true` |
+| **Have ever executed anything** | **152** | distinct `agent_id` in `ai_agent_activity_logs` (4,470,103 rows) |
+| Above `observe` | **2** | Reese and Dara, both `communicate` |
+
+**"217" cannot be reproduced by any filter.** It was the true fleet size for about eight
+milliseconds on 2026-08-13 at 15:10:05.865 UTC, during a bulk seed, and has not been accurate
+since. The nearest single filter is `agent_group IS NULL` at **216** — one off, close enough to be
+tempting, and not an explanation.
+
+So the consolidation story should be **152 agents that have ever done anything, down to 10** — not
+257 registry rows and not 217. A registry row is not a working agent, and 255 of the 257 are held
+at `observe` deliberately.
+
+---
+
 ## Four decisions that are yours, not mine
 
 1. **21 legacy agent rows belong to no domain.** Five are live production rows. They are tracked in `backend/src/services/agentDomain/capabilities/_unresolved.json`, each with a disposition of `unresolved` and a measured reason. They need an owner decision.
-2. **Four managers cannot reach the admin surface.** Admissions needs *two* fixes together: Taiwo Oludimimu has no `admin_users` row, **and** no `/api/admin/admissions` prefix is mapped in `mgmtSectionGate`, which is deny-by-default — so a scoped login alone would still 403 him on all nine of his own routes.
+2. **Three managers cannot reach the admin surface** — Kes Delele (platform), Aleem (product_experience) and Roselen (sales). Each has an `org_members` row and no `admin_users` row under *either* their work address or their org_members one, re-checked 2026-10-15.
+> **CORRECTED 2026-10-15, was "four managers".** Admissions was listed here and is not blocked. Taiwo Oludimimu has `taiwo@colaberry.com`, role `admin` — a legacy full admin — so he
+> reaches all nine admissions routes today. The false negative was an **email mismatch**: his
+> `org_members` row carries his personal address while he signs in with the work one, so matching
+> `org_members.email` against `admin_users.email` found nothing and that read as "no login". The
+> reliable link is `org_members.enrollment_id` → `enrollments.email`, a real FK populated 29 of 29.
+> Separately, mapping `/api/admin/admissions` in `mgmtSectionGate` would have changed nothing for
+> anyone: all nine routes carry `requireAdmin`, not `requireSection`, and there is no `admissions`
+> section key to map to.
 3. **No capability is confirmed.** Every one of the 443 is `draft`. Promotion out of draft is a manager decision, and nothing in the system can make it on their behalf.
 4. **Ruth Kumera is `onboarding_pending`.** Production shows `signed_documents_uploaded`, `updated_at` 4:19 PM CDT on 2026-10-07 — her own timestamp. She is not assignable and her onboarding has not been routed around.
 
