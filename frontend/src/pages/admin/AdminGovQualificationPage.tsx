@@ -23,6 +23,7 @@ import { BuildSpecPanel } from './govWorkspace/BuildSpecPanel';
 import { GovBuildPlanAIPanel } from './govWorkspace/GovBuildPlanAIPanel';
 import { GovMaterializePanel } from './govWorkspace/GovMaterializePanel';
 import { SubmissionReadinessPanel } from './govWorkspace/SubmissionReadinessPanel';
+import { AssignmentOverviewPanel } from './govWorkspace/AssignmentOverviewPanel';
 import { WORKSPACE_STEPS, resolveStep, deriveStepState, type WorkspaceStep } from './govWorkspace/workspaceSteps';
 import { StepBar } from './govWorkspace/StepBar';
 import { RightRail } from './govWorkspace/RightRail';
@@ -1566,6 +1567,16 @@ export default function AdminGovQualificationPage(): React.ReactElement {
                 requirements={(established ?? []).map((r) => ({ id: r.id, text: r.text }))}
                 title={oppDetail?.opportunity?.title ?? null} buyer={oppDetail?.opportunity?.agency ?? null}
                 deadline={oppDetail?.opportunity?.closeDate ?? ws.source?.deadline?.utc ?? null} />
+            </SectionCard>
+          )}
+          {(
+            <SectionCard title="Assignment at a glance" icon="user-shared-line"
+              subtitle="Who can build this contract and how much is already assigned — advisory. The assign controls are the two cards below; this summary changes nothing.">
+              <AssignmentOverviewPanel
+                deliveryProjectId={ws.build?.deliveryProjectId ?? null}
+                builders={ws.build?.assignableBuilders ?? []}
+                stories={ws.build?.stories ?? []}
+              />
             </SectionCard>
           )}
           {(
