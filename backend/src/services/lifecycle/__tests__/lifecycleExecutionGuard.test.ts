@@ -31,7 +31,6 @@
  * sweep), so the required-field change breaks no caller today.
  */
 import { executeStage, type StageAuthorization } from '../lifecycleExecution';
-import { FLAGS } from '../../../config/featureFlags';
 import { completeEvidence } from './evidenceFixture';
 import { makeStore, permitting, withFlag, SUBJECT } from './executionFixture';
 
@@ -192,6 +191,17 @@ describe('cross-tenant: refused on the stage that CONSUMES the approval', () => 
     expect(r.result.message).toMatch(/does not own/);
   });
 
+  it('an EMPTY or absent actor tenant is refused, not waved through', async () => {
+    // The verifier's X2 mutation — `auth.actorTenantId && auth.actorTenantId !== tenantId` —
+    // survived the whole suite, because no case supplied a falsy tenant. The shipped code is
+    // already correct; nothing pinned it. A fail-open guard is worse than no guard, because the
+    // audit line says "permitted".
+    for (const actorTenantId of ['', undefined as unknown as string]) {
+      const r = await attempt(permitting({ actorTenantId }));
+      expectCleanRefusal(r, 'TenantIsolationViolation');
+    }
+  });
+
   it('and the decision IS audited, with the actor tenant recorded for triage', async () => {
     // Acceptance wording: "refused, **and the decision audited**". The actor's tenant belongs in
     // the log (which is not attacker-visible) even though it stays out of the message.
@@ -225,6 +235,45 @@ describe('illegal transition: the edge must exist in ADVANCE, not merely be plau
   it('refuses a self-edge, so a stage cannot re-authorize itself', async () => {
     const r = await attempt(permitting({ from: 'planning' }));
     expectCleanRefusal(r, 'IllegalTransition');
+  });
+
+  /**
+   * THE CHECK ORDER, PINNED. `lifecycleExecution.ts` claims tenant is checked first so that a
+   * foreign tenant "must not learn which transitions are legal or which prerequisites are
+   * unmet". An independent verifier mutated the order — moving the tenant check last — and
+   * NOTHING failed, because every other case here changes exactly one field and so cannot
+   * observe precedence. A security property stated in prose and checked by no test is the
+   * defect class this phase refuses, so it is checked here.
+   */
+  it('ORDER: all three wrong at once refuses on TENANT, leaking nothing about the rest', async () => {
+    const r = await attempt(permitting({
+      actorTenantId: 't-OTHER',
+      from: 'discovery',
+      evidence: { ...completeEvidence(), approval: null },
+    }));
+
+    expectCleanRefusal(r, 'TenantIsolationViolation');
+    // The refusal names neither the transition nor the prerequisite. That is the whole point of
+    // ordering it first: an attacker from another tenant learns only that they do not own it.
+    expect(r.result.message).not.toContain('discovery');
+    expect(r.result.message).not.toContain('approval_missing');
+    // ONE decision was logged, not three. A guard that evaluated everything and reported the
+    // tenant failure would still disclose the rest to anything reading the audit stream.
+    expect(r.audit).toHaveLength(1);
+    expect(r.audit[0]).toMatchObject({ context: { reason: 'tenant_mismatch' } });
+  });
+
+  it('ORDER: transition is checked BEFORE prerequisites, for the same reason', async () => {
+    // The second edge of the same property. Same tenant, so the first check passes; both the
+    // transition and the prerequisites are wrong; the transition is what gets reported.
+    const r = await attempt(permitting({
+      from: 'discovery',
+      evidence: { ...completeEvidence(), approval: null },
+    }));
+
+    expectCleanRefusal(r, 'IllegalTransition');
+    expect(r.result.message).not.toContain('approval_missing');
+    expect(r.audit[0]).toMatchObject({ context: { reason: 'illegal_transition' } });
   });
 
   it('audits the illegal transition with the origin stage named', async () => {
@@ -344,9 +393,15 @@ describe('held by ENABLE_PROJECT_LIFECYCLE: off means permit, and SAYS it was no
     });
   });
 
-  it('the flag is read from FLAGS, so one env var controls the whole lifecycle surface', () => {
-    // Asserted as wiring rather than as a value: this flag is ON in production (measured), so a
-    // test claiming it "defaults off" would be a false statement about the live system.
-    expect(typeof FLAGS.lifecycleEnforcement).toBe('boolean');
+  it('the SAME authorization flips outcome with the flag, which is what "flag-held" means', async () => {
+    // REPLACES an assertion that read `expect(typeof FLAGS.lifecycleEnforcement).toBe('boolean')`
+    // under a headline about one env var controlling the surface. That would pass if the guard
+    // never read the flag at all — a vacuous test under a claim it did not support, found by an
+    // independent verifier. The property is now asserted as the pair it actually is: one
+    // authorization object, two flag states, two different outcomes.
+    const foreign = permitting({ actorTenantId: 't-OTHER' });
+
+    expect((await attempt(foreign, true)).result.outcome).toBe('refused');
+    expect((await attempt(foreign, false)).result.outcome).toBe('completed');
   });
 });

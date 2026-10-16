@@ -13,8 +13,9 @@
  *
  * What it DOES prove is everything that is deterministic and therefore testable here:
  *
- *   1. the SAFE-002 instruction is PRESENT in all four assembled prompts, so the live call
- *      cannot be missing it;
+ *   1. the SAFE-002 instruction is PRESENT in all THREE prompts that carry it, so the live
+ *      call cannot be missing it. Three, not four: `approvedRequirementsPromptBlock` is also
+ *      exercised below, but it is delimiter-tested only and carries no instruction of its own;
  *   2. the delimiters and their ORDER survive assembly;
  *   3. a directive inside a benign body stays inside its delimiters;
  *   4. authority is structural: a brief that SAYS it is approved grants nothing, which is the
@@ -29,10 +30,20 @@
  *
  * `delimited()` interpolates the body raw, so a body containing its own closing tag closes the
  * block early. Measured on production: **0 of 48 stored briefs contain a closing tag, a `</`,
- * or even a single `<`**, so the vector is latent, not active. The fix is a one-line
- * neutralisation awaiting Ali's decision; full write-up, pre-registered decision rule and
- * measurement in `.loop-architect/runs/20261001-unified-project-lifecycle/
- * finding-safe002-delimiter-forgery.md`.
+ * or even a single `<`**.
+ *
+ * **That measurement is narrower than the defect, and the limit is stated rather than rounded
+ * off.** `delimited()` is duplicated verbatim in `factory/factoryDecomposePrompt.ts`, whose
+ * `SOURCE_BLOCKS`/`REQUIREMENTS`/`CONTEXT` bodies come from PARSED SOURCE DOCUMENTS on the
+ * OOXML extraction path, where a `<` is ordinary rather than unlikely. That half is unmeasured,
+ * as is the `EXPANDED_DOCUMENT` half of this path. So the honest result is "latent in the
+ * measured half of one of the two affected call paths", not "latent, not active" — which is
+ * what an earlier version of this file said. The one-line fix covers all five tags in both
+ * modules, so it closes the measured and unmeasured halves together.
+ *
+ * Full write-up, pre-registered decision rule and measurement in
+ * `.loop-architect/runs/20261001-unified-project-lifecycle/finding-safe002-delimiter-forgery.md`
+ * (that directory is gitignored, so the file is absent from a fresh clone).
  *
  * The last describe block asserts the forgery AS THE BEHAVIOUR IT ACTUALLY IS. That is
  * deliberate: it turns the finding into a tripwire, so whoever fixes `delimited()` sees a test
@@ -231,8 +242,9 @@ describe('AUTHORITY IS STRUCTURAL: a brief that says it is approved grants nothi
 describe('KNOWN LIMITATION: a body containing its own closing tag forges the delimiter', () => {
   /**
    * Asserted as the behaviour it IS, not as the behaviour anyone wants. See
-   * `finding-safe002-delimiter-forgery.md`. Latent on production today: 0 of 48 stored briefs
-   * contain a `<` of any kind.
+   * `finding-safe002-delimiter-forgery.md`. Latent in the MEASURED half on production today:
+   * 0 of 48 stored briefs contain a `<` of any kind. The factory call path, whose bodies are
+   * parsed source documents, is NOT measured.
    *
    * **When someone fixes `delimited()`, this block fails. That is its purpose.** Read the
    * finding, then invert these assertions.

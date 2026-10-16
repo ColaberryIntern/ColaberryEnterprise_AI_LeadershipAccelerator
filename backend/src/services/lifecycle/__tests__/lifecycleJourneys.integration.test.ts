@@ -34,6 +34,8 @@
  */
 import { QueryTypes } from 'sequelize';
 import { journeyFixture, type JourneyFixture } from './journeyFixture';
+import { completeEvidence } from './evidenceFixture';
+import { ADVANCE } from '../lifecycleStages';
 
 jest.setTimeout(180_000);
 
@@ -260,7 +262,18 @@ describeIfDb('the review journeys, each seeding and deleting its own fixture', (
     // naming: `DeadLetter`'s fields match `lifecycle_stage_failures`' columns one for one, so the
     // table was built as this sink and the adapter was never written. Until it is, nothing in
     // production can record a stage failure at all.
-    const stateId = await seedLifecycle(P.failed, 'allocation_ready');
+    // THE SEEDED STAGE AND THE TARGET ARE ONE FACT, not two hardcoded strings that have to be
+    // kept in agreement by hand. The journey seeds `allocation_ready`, so the stage under test
+    // is whatever `ADVANCE` says follows it — read from the shipped table, because P7-T2 made
+    // `executeStage` refuse an illegal transition and a journey that hardcoded both sides could
+    // drift into testing a refusal while still calling itself a dead-letter test.
+    const SEEDED = 'allocation_ready' as const;
+    const TARGET = ADVANCE[SEEDED]!;
+    // Pinned, so a change to `ADVANCE` surfaces here instead of silently retargeting the SQL
+    // assertions below, which name `design_ready` as the attempted stage.
+    expect(TARGET).toBe('design_ready');
+
+    const stateId = await seedLifecycle(P.failed, SEEDED);
     try {
       const exec = await import('../lifecycleExecution');
       const { executeStage, MAX_ATTEMPTS, classifyError } = exec;
@@ -303,12 +316,18 @@ describeIfDb('the review journeys, each seeding and deleting its own fixture', (
         // independent attempts rather than relying on that release — but it does mean this
         // journey would not notice a regression that stopped releasing it. That is covered in
         // `lifecycleExecution.test.ts`, which is where it belongs.
-        const key = `${stateId}:design_ready`;
+        const key = `${stateId}:${TARGET}`;
         const held = runs.get(key);
         if (held) held.leaseUntil = null;
         const r = await executeStage({
-          lifecycleStateId: stateId, tenantId: TENANT, stage: 'design_ready',
+          lifecycleStateId: stateId, tenantId: TENANT, stage: TARGET,
           correlationId: 'journey-4-correlation', work: uncertain, store,
+          // REQUIRED since P7-T2, and it must PERMIT — this journey is about the retry bound and
+          // the dead letter, so a refusal here would stop the machine before it ever ran and the
+          // journey would assert nothing it claims to. The actor is the journey's own tenant, the
+          // edge comes from `ADVANCE`, and `completeEvidence()` leaves no blocking prerequisite
+          // for this stage.
+          authorization: { from: SEEDED, actorTenantId: TENANT, evidence: completeEvidence() },
         });
         outcomes.push(r.outcome);
       }
