@@ -26,11 +26,12 @@ import {
 
 /** The five new roles and the exact sections each is supposed to reach. Hand-written on purpose. */
 const DOMAIN_ROLES: ReadonlyArray<readonly [MgmtRole, SectionKey[], string]> = [
-  ['marketing', ['dashboard', 'campaigns'], 'Sarbjit — brands, content, campaigns, publishing'],
+  ['marketing', ['dashboard', 'campaigns', 'brands'], 'Sarbjit - campaigns AND brands; brands is listed so the 16 Oct section split did not quietly take it away'],
   ['platform', ['dashboard', 'system'], 'Quincy — tickets, reports, settings, events, automation'],
   ['executive', ['dashboard', 'trust', 'war_room'], 'the executive surfaces'],
   ['lead_intake', ['dashboard', 'lead_ingestion'], 'Kalkidan — intake WITHOUT the internship queue'],
-  ['internship_review', ['dashboard', 'internship'], 'Tashima — the queue WITHOUT lead intake'],
+  ['internship_review', ['dashboard', 'internship'], 'Tashima - the queue WITHOUT lead intake'],
+  ['product_experience', ['dashboard', 'brands'], 'Mihret - the websites, and NOT the campaign tooling around them'],
 ];
 
 describe('AF2.3 Agent Factory domain roles', () => {
