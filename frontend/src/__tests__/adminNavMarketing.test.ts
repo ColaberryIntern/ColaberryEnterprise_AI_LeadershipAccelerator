@@ -54,21 +54,42 @@ describe('every marketing route resolves to a section', () => {
     expect(sectionForPath(path)).not.toBeNull();
   });
 
+  /**
+   * Brands left this section on 2026-10-16. It is a child path of `/admin/marketing` and is
+   * deliberately NOT 'campaigns' any more, so it is excluded here and asserted on its own below.
+   * Listing it as an exception rather than deleting it keeps the fact visible: the one route in
+   * this spec that does not follow the prefix rule, and why.
+   */
+  const BRANDS_ROUTE = '/admin/marketing/brands';
+  const CAMPAIGN_ROUTES = SPEC_ROUTES.filter((p) => p !== BRANDS_ROUTE);
+
   it('resolves them all to campaigns, by longest-prefix inheritance', () => {
     // The mechanism worth pinning: `sectionForPath` matches on longest prefix, so the single
     // `/admin/marketing` entry already covers every child. That is why this suite adds no
     // per-route registrations - they would be redundant, and redundancy here is what drifts.
-    for (const path of SPEC_ROUTES) {
+    for (const path of CAMPAIGN_ROUTES) {
       expect(sectionForPath(path)).toBe('campaigns');
     }
+  });
+
+  it('resolves BRANDS to its own section, overriding the prefix', () => {
+    // A longer, more specific entry beats the group's. If this ever falls back to 'campaigns',
+    // the product-experience role is 403d against the only page it was granted.
+    expect(sectionForPath(BRANDS_ROUTE)).toBe('brands');
+    expect(sectionForPath('/admin/brands')).toBe('brands');
   });
 
   it('agrees with the backend section for the same surface', () => {
     // The frontend gate and `mgmtSectionGate` must classify a path identically. When they
     // disagree, ProtectedRoute admits an identity the API then refuses, and the user gets a
     // shell whose every call fails with nothing explaining why.
-    expect(sectionForPath('/admin/marketing')).toBe('campaigns');
-    expect(sectionForPath('/admin/brands')).toBe(sectionForPath('/admin/marketing'));
+    //
+    // Asserted against the BACKEND's values rather than against each other: the old form here
+    // compared brands to marketing, which passed for the wrong reason the moment both changed
+    // together and would have passed even if both had become 'nonsense'.
+    expect(sectionForPath('/admin/marketing')).toBe('campaigns'); // mgmtSectionGate: campaigns
+    expect(sectionForPath('/admin/brands')).toBe('brands'); //        mgmtSectionGate: brands
+    expect(sectionForPath('/admin/brands')).not.toBe(sectionForPath('/admin/marketing'));
   });
 
   it('a deeply nested future route still resolves', () => {
@@ -89,7 +110,17 @@ describe('every marketing route resolves to a section', () => {
 });
 
 describe('the sidebar advertises only what exists', () => {
-  const marketingLinks = ALL_LINKS.filter((l) => l.path.startsWith('/admin/marketing'));
+  // Scoped to the Marketing GROUP rather than to every path starting '/admin/marketing'.
+  //
+  // The path filter was right while Marketing owned every one of those routes. On 2026-10-16
+  // brand admin became its own section with its own owner, and its rail entry points at
+  // /admin/marketing/brands — so a path filter counts it as a second Marketing button and fails
+  // an instruction it does not actually break. Ali's rule ("just have one button for Marketing",
+  // 8 Oct) collapsed eight rows belonging to ONE section; the Brands row belongs to another.
+  //
+  // Asserted by group, so the rule it enforces is the rule that was given.
+  const marketingGroup = NAV_GROUPS.find((g) => g.label === 'Marketing');
+  const marketingLinks = marketingGroup ? marketingGroup.links : [];
 
   it('links no marketing route that this phase has not built', () => {
     // The destinations below are in the spec's target IA and are NOT delivered yet. If a

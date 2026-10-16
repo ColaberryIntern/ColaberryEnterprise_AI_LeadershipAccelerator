@@ -1,4 +1,5 @@
 import { pathToSection } from '../mgmtSectionGate';
+import { roleCanAccessSection } from '../../services/access/mgmtRoles';
 
 /**
  * Brand administration must be CLASSIFIED, not merely unguarded.
@@ -15,10 +16,22 @@ import { pathToSection } from '../mgmtSectionGate';
  * brand surface's receipt, written at the same time as the routes rather than after someone
  * hit it.
  *
- * Why 'campaigns' and not a new section key: brand admin governs the sending identity behind
- * campaigns and communications, and both of those are already 'campaigns'. Minting a new key
+ * ## It IS its own section key now, as of 2026-10-16
+ *
+ * This header used to argue the opposite, and the argument was a good one: "minting a new key
  * would mean every scoped role that legitimately reaches campaign tooling loses this surface
- * until each role definition is edited — a permissions change disguised as a routing change.
+ * until each role definition is edited - a permissions change disguised as a routing change."
+ *
+ * That objection names a CONDITION rather than forbidding the split, and the condition is now
+ * met. `owner` and `admin` derive their sections from ALL_SECTIONS and picked `brands` up
+ * automatically; `marketing` lists it explicitly in the same change. No role lost the surface,
+ * and there is a test below asserting that rather than asking anyone to trust this paragraph.
+ *
+ * What changed is the readership, not the routing. A brand here is a website the platform
+ * publishes to, and the Agent Factory gave those websites a second owner: the product-experience
+ * intern, whose job is checking them and who has no business in the campaign tooling that used
+ * to come attached. The alternative was handing her the whole `marketing` role, which is the
+ * over-grant AF2.3 exists to prevent.
  */
 
 const BRAND_ENDPOINTS = [
@@ -29,22 +42,42 @@ const BRAND_ENDPOINTS = [
 ];
 
 describe('mgmtSectionGate classifies the brand admin surface', () => {
-  it('maps every brand endpoint to the campaigns section', () => {
+  it('maps every brand endpoint to the brands section', () => {
     for (const path of BRAND_ENDPOINTS) {
-      expect(pathToSection(path)).toBe('campaigns');
+      expect(pathToSection(path)).toBe('brands');
     }
   });
 
-  it('agrees with the marketing surface it belongs to', () => {
-    // If these ever diverge, an operator can reach the campaign that sends from a brand but
-    // not the brand itself, which reads as a bug in the page rather than a policy decision.
-    expect(pathToSection('/api/admin/brands')).toBe(pathToSection('/api/admin/marketing'));
+  it('is a DIFFERENT section from the marketing surface around it', () => {
+    // These deliberately diverge as of 2026-10-16, which is the whole point of the split: brand
+    // admin has a reader who is not a marketer, and campaign tooling has readers who do not
+    // check websites.
+    expect(pathToSection('/api/admin/brands')).not.toBe(pathToSection('/api/admin/marketing'));
+    expect(pathToSection('/api/admin/marketing')).toBe('campaigns');
+  });
+
+  it('did not take brands away from anyone who already had it', () => {
+    // The precise objection this file used to raise against splitting the key. Asserted rather
+    // than promised, because "we edited the roles too" is exactly the kind of claim that is true
+    // on the day it is written and false a month later.
+    for (const role of ['owner', 'admin', 'marketing']) {
+      expect(roleCanAccessSection(role, 'brands')).toBe(true);
+    }
+  });
+
+  it('gives product_experience brands and NOT the campaign tooling around it', () => {
+    // The reason the split happened. If this role ever reaches `campaigns`, the split bought
+    // nothing and Mihret has Sarbjit's domain after all.
+    expect(roleCanAccessSection('product_experience', 'brands')).toBe(true);
+    for (const section of ['campaigns', 'inbox_content', 'revenue', 'program']) {
+      expect(roleCanAccessSection('product_experience', section)).toBe(false);
+    }
   });
 
   it('classifies an unknown sub-path rather than leaving it to fall off the map', () => {
     // Detail and action routes added later inherit the prefix. This is the property that
     // makes the row durable instead of a list to maintain per endpoint.
-    expect(pathToSection('/api/admin/brands/anything/deeper/still')).toBe('campaigns');
+    expect(pathToSection('/api/admin/brands/anything/deeper/still')).toBe('brands');
   });
 
   it('maps the marketing content composer to campaigns, without swallowing content-queue', () => {
@@ -63,6 +96,6 @@ describe('mgmtSectionGate classifies the brand admin surface', () => {
   it('does not accidentally classify a DIFFERENT surface that merely starts similarly', () => {
     // Guards against a prefix rule that is too greedy. `/api/admin/brand-safety` is not a
     // brand-admin route and must not inherit its section by string accident.
-    expect(pathToSection('/api/admin/brand-safety')).not.toBe('campaigns');
+    expect(pathToSection('/api/admin/brand-safety')).not.toBe('brands');
   });
 });

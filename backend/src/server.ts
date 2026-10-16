@@ -763,7 +763,7 @@ async function ensureCommunityMemberRoleSchema() {
     // via mgmtRoles.ts.
     `ALTER TABLE community_members ADD COLUMN IF NOT EXISTS mgmt_role VARCHAR(20)`,
     `ALTER TABLE community_members DROP CONSTRAINT IF EXISTS ck_community_members_mgmt_role`,
-    `ALTER TABLE community_members ADD CONSTRAINT ck_community_members_mgmt_role CHECK (mgmt_role IS NULL OR mgmt_role IN ('owner','admin','curriculum','revenue','admissions','support','community_organizer','mentor','marketing','platform','executive','lead_intake','internship_review'))`,
+    `ALTER TABLE community_members ADD CONSTRAINT ck_community_members_mgmt_role CHECK (mgmt_role IS NULL OR mgmt_role IN ('owner','admin','curriculum','revenue','admissions','support','community_organizer','mentor','marketing','platform','executive','lead_intake','internship_review','product_experience'))`,
   ];
   for (const sql of statements) {
     try {

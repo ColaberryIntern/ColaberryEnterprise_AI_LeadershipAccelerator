@@ -90,6 +90,20 @@ export const NAV_GROUPS: NavGroup[] = [
     // entry points this replaced.
     { path: '/admin/marketing', label: 'Marketing', icon: 'broadcast-line' },
   ]},
+  // Brands — its own group as of 2026-10-16, because brand admin became its own section key.
+  //
+  // This is a SECOND sidebar row next to Marketing, which narrows the 8 Oct instruction ("just
+  // have one button for Marketing"). That instruction collapsed eight rows belonging to ONE
+  // owner into one; this row belongs to a DIFFERENT owner. The product-experience intern holds
+  // `brands` and nothing else, and without an entry here she signs in to a dashboard with no way
+  // to reach the only page she has been granted — nav is gated by section, not by role, so there
+  // is no way to show her a link inside a group she cannot see.
+  //
+  // Marketing keeps brands too (the role lists it), so Sarbjit sees this row as well. That is the
+  // cost of the split and it is one row.
+  { label: 'Brands', section: 'brands', links: [
+    { path: '/admin/marketing/brands', label: 'Brands', icon: 'global-line' },
+  ]},
   { label: 'Campaigns', section: 'campaigns', links: [
     { path: '/admin/campaigns', label: 'Campaigns', icon: 'megaphone-line' },
     { path: '/admin/communications', label: 'Communications', icon: 'chat-3-line' },
@@ -273,15 +287,19 @@ export const UNLISTED_PATH_SECTIONS: ReadonlyArray<readonly [string, string]> = 
   ['/admin/tracking-estate', 'campaigns'],
   // Executive summary — the Command Center's own job, so the landing section.
   ['/admin/executive-narrative', 'dashboard'],
-  // Brand administration. The page now lives at /admin/marketing/brands and is listed in the
-  // Marketing group; this entry keeps the OLD path classified, because /admin/brands still
-  // resolves (it redirects, preserving the query string the LinkedIn OAuth callback returns
-  // with). Without it a scoped identity following a bookmark is bounced off a path the API
-  // would have served: `mgmtSectionGate` maps `/api/admin/brands` to 'campaigns', and
-  // ProtectedRoute computes `allowed = section ? canSection(section) : !isScopedRep`, so a
-  // null here and a 'campaigns' there disagree. Caught by adminNavMarketing.test.ts asserting
-  // the two sides agree, not by review.
-  ['/admin/brands', 'campaigns'],
+  // Brand administration. The page lives at /admin/marketing/brands; this entry keeps the OLD
+  // path classified, because /admin/brands still resolves (it redirects, preserving the query
+  // string the LinkedIn OAuth callback returns with). Without it a scoped identity following a
+  // bookmark is bounced off a path the API would have served: ProtectedRoute computes
+  // `allowed = section ? canSection(section) : !isScopedRep`, so a null here and a real section
+  // there disagree. Caught by adminNavMarketing.test.ts asserting the two sides agree.
+  //
+  // 'brands' as of 2026-10-16, matching the backend's PATH_SECTION remap. Only the LEGACY path
+  // is listed here: /admin/marketing/brands is now a real nav link in the Brands group, and
+  // sectionForPath searches both lists on the same longest-prefix rule, so listing it twice
+  // would be duplication rather than belt and braces. Being a child of /admin/marketing does
+  // not pull it back to 'campaigns' — the longer path wins.
+  ['/admin/brands', 'brands'],
   // Audit ledger. Classified from what it QUERIES (event_type, actor,
   // entity_type, entity_id, payload) rather than from its name — it is a
   // system audit trail, not a marketing events page.

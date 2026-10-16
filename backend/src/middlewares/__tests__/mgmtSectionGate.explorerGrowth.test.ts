@@ -125,11 +125,15 @@ describe('exactly which roles hold campaigns — pinned, not assumed', () => {
     expect([...holders].sort()).toEqual([...HOLDERS].sort());
   });
 
-  it('marketing holds campaigns and NOTHING else beyond its landing page', () => {
+  it('marketing holds campaigns, brands, and NOTHING else beyond its landing page', () => {
     // The grant above is only acceptable because it is this narrow. Asserted here, next to the
     // widening, rather than only in the domain-roles suite — a reader auditing who can see learner
     // data should not have to go to another file to find out how far the new role reaches.
-    expect(sectionsForRole('marketing').sort()).toEqual(['campaigns', 'dashboard']);
+    //
+    // `brands` joined on 2026-10-16 and is NOT a widening: brand admin was already inside
+    // `campaigns`, and when it became its own key this role had to list it explicitly or Sarbjit
+    // would have silently lost a surface she already had. Listing it keeps her access identical.
+    expect(sectionsForRole('marketing').sort()).toEqual(['brands', 'campaigns', 'dashboard']);
   });
 
   it.each(['curriculum', 'revenue', 'admissions', 'support', 'mentor', 'community_organizer',
