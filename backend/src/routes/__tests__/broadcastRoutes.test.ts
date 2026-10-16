@@ -33,6 +33,12 @@ jest.mock('../../controllers/broadcastController', () => ({
   // every test in this file fails at once. Nineteen of them did.
   getActiveBroadcasts: (req: { participant?: { isStaff?: boolean } }, res: { json: (b: unknown) => void }) =>
     res.json({ reached: 'discovery', isStaff: req.participant?.isStaff ?? null }),
+  // L4.6's measurement pair. Same trap as the note above, and it caught this change too:
+  // leaving either out fails every test in this file at module load, not just its own.
+  postPlaybackHeartbeat: (req: { participant?: { isStaff?: boolean } }, res: { json: (b: unknown) => void }) =>
+    res.json({ reached: 'heartbeat', isStaff: req.participant?.isStaff ?? null }),
+  getLiveAudience: (req: { participant?: { isStaff?: boolean } }, res: { json: (b: unknown) => void }) =>
+    res.json({ reached: 'audience', isStaff: req.participant?.isStaff ?? null }),
 }));
 
 // participantAuth calls logAuthFailure on every rejected token, which reaches

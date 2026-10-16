@@ -93,4 +93,40 @@ router.post(
   c.postPlaybackGrant,
 );
 
+/**
+ * Heartbeats arrive far more often than anything else here — one per tab per heartbeat
+ * interval, for the whole length of a class — so they get their own, more generous limiter.
+ * Reusing the playback limiter would throttle a legitimate two-hour viewer off the count
+ * partway through, which would corrupt the very number this route exists to produce.
+ *
+ * It still returns a real 429 rather than a quiet 204: a client being throttled is dropping
+ * measurements, and that should be visible rather than look like a successful write.
+ */
+const heartbeatLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 120,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (_req, res) => {
+    res.status(429).json({ error: 'RateLimited', reason: 'too_many_heartbeats' });
+  },
+});
+
+router.post(
+  `${P}/:id/heartbeat`,
+  flagGate, heartbeatLimiter, requireParticipant, attachCommunityStaffContext,
+  c.postPlaybackHeartbeat,
+);
+
+/**
+ * The producer-facing audience read. Staff-only, decided in the controller on the same
+ * context the producer commands use, and carrying the command limiter rather than the
+ * playback one: this is a producer looking at a dashboard, not a player polling.
+ */
+router.get(
+  `${P}/:id/audience`,
+  flagGate, commandLimiter, requireParticipant, attachCommunityStaffContext,
+  c.getLiveAudience,
+);
+
 export default router;

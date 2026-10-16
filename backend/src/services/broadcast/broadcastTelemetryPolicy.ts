@@ -33,7 +33,14 @@ export type PlaybackBeatState = 'playing' | 'buffering' | 'paused' | 'ended';
 export type ViewerIntent = 'deliberate' | 'auto';
 
 /** The server's entitlement decision at measurement time. Never a client assertion. */
-export type MeasuredAccessMode = 'free' | 'preview' | 'paid' | 'private';
+/**
+ * The access modes telemetry splits by. A const list rather than a bare union so a caller can
+ * CHECK membership at runtime — an occurrence's `access_mode` arrives as a plain string from
+ * the database, and narrowing it with a cast alone would let an unrecognised value through
+ * into the counts under a label nobody defined.
+ */
+export const MEASURED_ACCESS_MODES = ['free', 'preview', 'paid', 'private'] as const;
+export type MeasuredAccessMode = (typeof MEASURED_ACCESS_MODES)[number];
 
 export interface TelemetryConfig {
   appHeartbeatSeconds: number;
