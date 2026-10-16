@@ -1,12 +1,13 @@
 // Each router is a sentinel: this suite is about the ORDER the module mounts them in, not what they serve, and importing the
 // real routers would pull their controllers, models and half the service graph.
-const ROUTERS = ['participantRoutes', 'capePortalRoutes', 'careerPortfolioRoutes', 'explorerSignalRoutes', 'journeyNudgeRoutes', 'consentPromptRoutes'] as const;
+const ROUTERS = ['participantRoutes', 'capePortalRoutes', 'careerPortfolioRoutes', 'explorerSignalRoutes', 'journeyNudgeRoutes', 'consentPromptRoutes', 'campusRoutes'] as const;
 jest.mock('../participantRoutes', () => ({ __esModule: true, default: 'participantRoutes' }));
 jest.mock('../capePortalRoutes', () => ({ __esModule: true, default: 'capePortalRoutes' }));
 jest.mock('../careerPortfolioRoutes', () => ({ __esModule: true, default: 'careerPortfolioRoutes' }));
 jest.mock('../explorerSignalRoutes', () => ({ __esModule: true, default: 'explorerSignalRoutes' }));
 jest.mock('../journeyNudgeRoutes', () => ({ __esModule: true, default: 'journeyNudgeRoutes' }));
 jest.mock('../consentPromptRoutes', () => ({ __esModule: true, default: 'consentPromptRoutes' }));
+jest.mock('../campusRoutes', () => ({ __esModule: true, default: 'campusRoutes' }));
 
 import fs from 'fs';
 import path from 'path';
@@ -86,6 +87,12 @@ describe('the mount order, driven for real', () => {
     const order = mounted();
     expect(order.indexOf('journeyNudgeRoutes')).toBe(order.indexOf('explorerSignalRoutes') + 1);
     expect(order.indexOf('consentPromptRoutes')).toBe(order.indexOf('journeyNudgeRoutes') + 1);
+  });
+
+  it('mounts the campus router last, after the consent prompt (Basecamp C1)', () => {
+    const order = mounted();
+    expect(order[order.length - 1]).toBe('campusRoutes');
+    expect(order.indexOf('campusRoutes')).toBe(order.indexOf('consentPromptRoutes') + 1);
   });
 
   it('mounts each router exactly once and nothing else', () => {
