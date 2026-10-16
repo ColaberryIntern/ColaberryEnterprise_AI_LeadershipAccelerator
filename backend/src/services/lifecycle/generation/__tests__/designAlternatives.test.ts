@@ -156,8 +156,13 @@ describe('PER-PATTERN REACH: each of the three positions is produced by some inp
     }
   });
 
-  it('exception_first is reached ONLY by the rework input, which no reference fixture supplies', () => {
-    expect(reachedBy('exception_first')).toEqual(['D legal plus a rework edge']);
+  it('exception_first is reached by fixture B AND the synthetic rework input', () => {
+    // It used to be reached ONLY by this suite's own synthetic input, because no reference
+    // fixture carried a rework edge. P7-T1.2 gave fixture B one, so the REFERENCE corpus now
+    // reaches this pattern rather than only a purpose-built probe. Both are asserted: the
+    // synthetic input stays because it isolates the flag (same graph, flag flipped), and fixture
+    // B is what proves the pattern is reachable from a workflow somebody would actually draw.
+    expect(reachedBy('exception_first')).toEqual(['B admissions', 'D legal plus a rework edge']);
   });
 
   it.each([['inapplicable'], ['structurally_identical']] as const)('the exclusion reason %s is reached', (why) => {
@@ -386,31 +391,54 @@ describe('AMENDMENT 4: every operand of the binding filter is isolated', () => {
 });
 
 describe('the corpus claim this suite rests on is ASSERTED, not stated', () => {
-  // Amendment 3: no apparatus number in prose unless a test asserts it. Three documents and
-  // this file say the reference corpus has no rework edge, which is why this suite supplies
-  // its own. That is a present-tense claim about two other files, so it is checked here.
+  // Amendment 3: no apparatus number in prose unless a test asserts it. This block used to
+  // assert the GAP -- that neither fixture file flagged a single transition `is_rework`, so this
+  // suite had to supply its own rework project to reach `exception_first` at all.
   //
-  // WHEN THIS FAILS, it is probably good news: it means Fixture B finally has the
-  // exception/rework edge its own documented coverage in `reference-fixtures.md` promises.
-  // Then update this test, the register entry, and the "reached ONLY by the rework input"
-  // assertion above — all three describe the same fact.
+  // THE GAP CLOSED ON 2026-10-15 (P7-T1.2), which the old test predicted would look like a
+  // failure and be good news. It did, and it was. The three things it told the next person to
+  // update are updated together: this assertion, the "reached ONLY by the rework input" name
+  // above, and the register entry in `plan-phase7.md` section 0.3.
+  //
+  // The assertion is INVERTED rather than deleted. "Fixture B has a rework edge" is now the
+  // load-bearing fact -- two shipped rules, `cyclingReworkEdges` and `REWORK_BOUND`, had no
+  // reference fixture that could reach them before it -- so losing it should fail just as loudly
+  // as gaining it once did.
   const FIXTURES = ['referenceFixtures.ts', 'manualOnly.ts'] as const;
 
-  it('no transition in either fixture file is flagged is_rework', () => {
+  it('fixture B supplies the ONE rework edge the reference corpus has', () => {
     let transitions = 0;
     let rework = 0;
+    const perFile: Record<string, number> = {};
+    // COMMENTS ARE STRIPPED FIRST, and that is not tidiness. The first run of this inverted
+    // assertion reported TEN transitions against nine real ones, because the doc comment added
+    // to `shell()` in the same change contains the literal `is_rework: true` while explaining
+    // that it used to appear zero times. A regex over raw source cannot tell an explanation from
+    // an edge. CRLF is normalised before the line-comment strip because `//.*$` does not match
+    // across a carriage return, and a strip that silently no-ops is worse than no strip.
+    const code = (src: string): string => src
+      .replace(/\r\n/g, '\n')
+      .replace(/\/\*[\s\S]*?\*\//g, ' ')
+      .split('\n')
+      .map((l) => l.replace(/\/\/.*$/, ''))
+      .join('\n');
+
     for (const f of FIXTURES) {
-      const src = readFileSync(join(__dirname, 'fixtures', f), 'utf8');
+      const src = code(readFileSync(join(__dirname, 'fixtures', f), 'utf8'));
       transitions += [...src.matchAll(/is_rework:\s*(true|false)/g)].length;
-      rework += [...src.matchAll(/is_rework:\s*true/g)].length;
+      const n = [...src.matchAll(/is_rework:\s*true/g)].length;
+      perFile[f] = n;
+      rework += n;
     }
-    // The COUNT is asserted, not just the property. Three documents and this file say "all
-    // eight transitions", and `toBeGreaterThan(0)` left that number unpinned: a ninth
-    // non-rework edge would stale all three while the suite stayed green, which is exactly
-    // what Amendment 3 exists to catch. Asserting 8 also keeps the extraction control — a
-    // regex matching nothing yields 0, which is not 8.
-    expect(transitions).toBe(8);
-    expect(rework).toBe(0);
+    // NINE now, not eight: the rework edge is the ninth. The count stays pinned for the reason
+    // it always was -- a tenth edge added silently would stale every document that quotes this
+    // number while the suite stayed green -- and pinning it also keeps the extraction control,
+    // because a regex matching nothing yields 0, which is neither 9 nor 1.
+    expect(transitions).toBe(9);
+    expect(rework).toBe(1);
+    // WHICH file carries it, so the edge cannot migrate to manualOnly.ts unnoticed. Fixture D is
+    // the manual-only case and a rework loop there would be a different claim entirely.
+    expect(perFile).toEqual({ 'referenceFixtures.ts': 1, 'manualOnly.ts': 0 });
   });
 
   it('and no ProcessRecord in either fixture declares an exception', () => {

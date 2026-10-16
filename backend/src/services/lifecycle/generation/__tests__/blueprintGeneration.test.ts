@@ -169,6 +169,10 @@ describe('ALL FOUR fixtures run end to end \u2014 acceptance item 3', () => {
     effort: f.effort(),
     declaration: { declaration: f.declaration(), origin: 'approved_blueprint' as const },
     targetAcceptance: f.acceptance(),
+    // Fixture B gained a cycling rework edge in P7-T1.2 and declares its own bound. A and C have
+    // no rework edge, and `validateProcess` only looks up bounds for edges the project actually
+    // has, so passing B's bound for all three is inert rather than a special case to maintain.
+    reworkBounds: fixtureB.reworkBounds(),
   });
 
   it.each(cases)('%s completes', (_label, f) => {

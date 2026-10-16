@@ -52,6 +52,15 @@ const cleanComposition = () => ({
   bindings: [ws('t-draft', 'r-1'), ws('t-review', 'r-1')],
   workspaceStates: [wsState('t-draft'), wsState('t-review')],
   design: acceptedDesign(),
+  // Fixture B carries a cycling rework edge (P7-T1.2) and `REWORK_BOUND` refuses one with no
+  // declared iteration limit, so the clean baseline has to declare it or every B twin would
+  // refuse for two reasons and the control would stop isolating anything.
+  //
+  // Declared for ALL fixtures rather than only B. `validateProcess` iterates the project's own
+  // cycling rework edges and looks each one up, so a bound for an edge a fixture does not have
+  // is never read. One shared composition beats a conditional that has to stay in step with
+  // which fixture happens to carry the edge today.
+  reworkBounds: fixtureB.reworkBounds(),
 });
 
 type Fixture = typeof fixtureA;
@@ -240,5 +249,109 @@ describe('CONTROL 6 — a self-approval fails with SelfApprovalError', () => {
     expect(approval?.reason).toContain('approveBlueprint');
     // And the stage really is one of the five the runner defers, not a name that matches nothing.
     expect(notReached.map((s) => s.stage)).toContain('blueprint_approved');
+  });
+});
+
+/**
+ * THE INHERITED GAP, CLOSED: fixture B's rework edge.
+ *
+ * `plan-phase7.md` §0.3 measured it: `is_rework: true` appeared **0 times across 8 transitions**
+ * in `referenceFixtures.ts` and `manualOnly.ts`. Two shipped rules therefore had no reference
+ * fixture that could reach them — `processValidation.cyclingReworkEdges` and its `REWORK_BOUND`
+ * error — and `designAlternatives` had to supply a synthetic rework project to reach its
+ * `exception_first` pattern at all.
+ *
+ * The plan flagged this as the one inherited gap that is genuinely fixture-local: "adding a
+ * rework transition to a fixture changes no production module." It does not. Nothing in
+ * `backend/src` outside `__tests__` was touched to make these pass.
+ *
+ * ## Why fixture B and not A, C or D
+ *
+ * B is the admissions workflow, and "the officer sends the application back for more information"
+ * is what that process actually does. A rework loop in the manual-only legal fixture would be a
+ * different claim about a different business.
+ *
+ * ## Why the edge CLOSES A CYCLE
+ *
+ * `cyclingReworkEdges` only demands a bound when the edge's destination can reach its origin
+ * again, and its source comment says why: an edge flagged `is_rework` that closes no cycle "is
+ * just an edge someone labelled pessimistically, and demanding a bound for it would train people
+ * to write meaningless numbers." So review -> draft, with draft -> review already present, is
+ * what makes the rule reachable. An edge that merely carried the flag would prove nothing.
+ */
+describe('THE INHERITED GAP: fixture B carries the corpus’s only rework edge', () => {
+  /** Fixture B's fields, with the composition the baseline uses. */
+  const withBounds = (bounds?: Readonly<Record<string, number>>): CorpusFixture => ({
+    id: 'B-rework',
+    proves: 'a cycling rework edge needs a declared iteration bound',
+    build: () => fieldsOf(fixtureB),
+    composition: {
+      ...cleanComposition(),
+      // `undefined` is not the same as absent here: spreading it would leave the shared default
+      // in place and the unbounded case would silently pass. Deleted explicitly below instead.
+      ...(bounds === undefined ? {} : { reworkBounds: bounds }),
+    },
+  });
+
+  /** The composition with NO bounds at all, which is the violating twin. */
+  const unbounded = (): CorpusFixture => {
+    const fx = withBounds();
+    const composition = { ...fx.composition } as Record<string, unknown>;
+    delete composition.reworkBounds;
+    return { ...fx, id: 'B-rework-unbounded', composition };
+  };
+
+  const refusalsOf = (fx: CorpusFixture) => runCorpusCase(fx).composed?.refusals ?? [];
+
+  it('the edge is REAL and it CYCLES, which is what makes the rule reachable', () => {
+    const project = fixtureB.project();
+    const rework = project.transitions.filter((t) => t.is_rework);
+
+    expect(rework).toHaveLength(1);
+    expect(rework[0]).toMatchObject({ from_task_id: 't-review', to_task_id: 't-draft' });
+    // The cycle, asserted rather than assumed: draft -> review already exists, so review -> draft
+    // closes it. Without this the edge could be a dead-end someone flagged.
+    expect(project.transitions.some((t) => t.from_task_id === 't-draft' && t.to_task_id === 't-review'))
+      .toBe(true);
+  });
+
+  it('OBSERVED FAILING: with no declared bound it refuses REWORK_BOUND, naming the edge', () => {
+    const refusals = refusalsOf(unbounded());
+    const bound = refusals.find((r) => r.code === 'REWORK_BOUND');
+
+    expect(bound).toBeDefined();
+    // The id AND the direction, so a reader can find the edge without opening the fixture.
+    expect(bound?.message).toContain('e-rework');
+    expect(bound?.message).toContain('t-review -> t-draft');
+    expect(bound?.stage).toBe('process');
+  });
+
+  it('and the clean baseline does NOT refuse it — the half that makes the twin mean something', () => {
+    // Without this, swapping the twin for its clean counterpart would leave the suite green.
+    expect(refusalsOf(withBounds(fixtureB.reworkBounds())).map((r) => r.code))
+      .not.toContain('REWORK_BOUND');
+  });
+
+  it.each([
+    ['zero, which is a loop that cannot be entered', 0],
+    ['negative', -1],
+    ['fractional', 2.5],
+  ])('a bound that is %s is NOT a bound, and is refused', (_why, value) => {
+    // The second half of the rule, which a present/absent test cannot reach. `hasOwnProperty` is
+    // what distinguishes "declared as 0" from "not declared", and 0 has its own refusal message.
+    const refusals = refusalsOf(withBounds({ 'e-rework': value }));
+    const bound = refusals.find((r) => r.code === 'REWORK_BOUND');
+
+    expect(bound).toBeDefined();
+    expect(bound?.message).toContain(String(value));
+  });
+
+  it('LOOP does not fire on the rework cycle — which is WHY REWORK_BOUND has to exist', () => {
+    // The reason this rule is not redundant. `factoryValidate`'s LOOP rule errors on a cycle over
+    // NON-rework edges, so flagging a back-edge `is_rework` makes the cycle explicitly LEGAL.
+    // That is exactly the hole `REWORK_BOUND` fills: a legal cycle with no iteration limit is a
+    // process that can run forever and still pass the gate. If LOOP ever started firing here,
+    // REWORK_BOUND would be dead code and this suite should say so.
+    expect(refusalsOf(unbounded()).map((r) => r.code)).not.toContain('LOOP');
   });
 });

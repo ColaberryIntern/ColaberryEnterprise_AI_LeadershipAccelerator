@@ -37,12 +37,26 @@ const req = (value: string): UnderstandingItem => ({
   dimension: 'requirements', classification: 'FACT', provenance: 'source_document', value,
 });
 
-/** Shell: START → draft → DECISION(review) → approved/rejected END. Shared by A, B and C. */
+/**
+ * Shell: START -> draft -> DECISION(review) -> approved/rejected END. Shared by A, B and C.
+ *
+ * `rework` adds the send-it-back edge, review -> draft, flagged `is_rework`. Before P7-T1.2
+ * `is_rework: true` appeared ZERO times across the eight transitions in this file and
+ * `manualOnly.ts`, so two shipped rules had no fixture that could reach them:
+ * `processValidation.cyclingReworkEdges` and its `REWORK_BOUND` error. A rule nothing exercises
+ * is a rule nobody knows is broken.
+ *
+ * It is OPT IN rather than on by default, because an unbounded rework edge is itself the
+ * violation: turning it on everywhere would make every fixture refuse. Fixture B takes it, since
+ * "the officer sends the application back for more information" is what that workflow actually
+ * does, and `fixtureB.reworkBounds()` carries the bound that makes it legal.
+ */
 function shell(over: {
   draft: Partial<FactoryTask>;
   review: Partial<FactoryTask>;
   assignments: Assignment[];
   blocks?: string[];
+  rework?: boolean;
 }): FactoryProject {
   const blocks = over.blocks ?? ['blk-1'];
   return {
@@ -68,6 +82,12 @@ function shell(over: {
       { id: 'e-2', from_task_id: 't-draft', to_task_id: 't-review', condition: null, is_rework: false },
       { id: 'e-3', from_task_id: 't-review', to_task_id: 't-yes', condition: 'approved', is_rework: false },
       { id: 'e-4', from_task_id: 't-review', to_task_id: 't-no', condition: 'rejected', is_rework: false },
+      // CLOSES A CYCLE on purpose. `cyclingReworkEdges` only asks for a bound when the edge's
+      // destination can reach its origin again, so an edge that merely LOOKS like rework would
+      // prove nothing: review -> draft -> review is what makes this reachable.
+      ...(over.rework
+        ? [{ id: 'e-rework', from_task_id: 't-review', to_task_id: 't-draft', condition: 'more_information_needed', is_rework: true }]
+        : []),
     ],
     allocation: [], role_map: [],
   };
@@ -159,7 +179,21 @@ export const fixtureB = {
       asg({ id: 'a-2', task_id: 't-draft', role_id: 'r-1', responsibility: 'APPROVER' }),
       asg({ id: 'a-3', task_id: 't-review', role_id: 'r-1', responsibility: 'PERFORMER' }),
     ],
+    rework: true,
   }),
+  /**
+   * The declared iteration bound for the rework edge.
+   *
+   * SEPARATE from `project()` because the bound is composition input, not process shape, and
+   * because the corpus needs to run this fixture BOTH ways: with the bound, which composes
+   * cleanly, and without it, which must refuse `REWORK_BOUND`. A bound baked into the project
+   * could not be withheld.
+   *
+   * Three, not a round number chosen to look decisive: `processValidation` treats a MISSING entry
+   * as the violation rather than defaulting one, precisely so nobody writes a meaningless figure.
+   * Three is "two revisions then decide", which is a rule an admissions office can actually hold.
+   */
+  reworkBounds: (): Readonly<Record<string, number>> => ({ 'e-rework': 3 }),
   allocation: (): AllocationRow[] => [
     {
       task_id: 't-draft', execution_class: 'ai_with_approval', accountable_role_id: 'r-1',
