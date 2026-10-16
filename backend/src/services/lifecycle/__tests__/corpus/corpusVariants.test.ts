@@ -11,7 +11,9 @@ import { runCorpusCase, type CorpusFixture } from './corpusRunner';
 import { fixtureC } from '../../generation/__tests__/fixtures/referenceFixtures';
 import { prerequisiteGaps, blockingGaps } from '../../lifecyclePrerequisites';
 import { completeEvidence } from '../evidenceFixture';
-import { measureAutomation, renderShare } from '../../generation/effortMeasures';
+import {
+  measureAutomation, renderShare, type EffortAssessment,
+} from '../../generation/effortMeasures';
 import {
   buildFactoryDecomposeUserPrompt, coversRequirementBlocks, sourceBlocksPrecedeContext,
   MAX_BLOCK_CHARS, MAX_BLOCKS,

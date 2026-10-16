@@ -22,7 +22,7 @@
  * T1.3 changes something known rather than something assumed.
  */
 
-import { runCorpusCase } from './corpusRunner';
+import { runCorpusCase, type CorpusFixture } from './corpusRunner';
 import { fixtureA, fixtureB, fixtureC } from '../../generation/__tests__/fixtures/referenceFixtures';
 import { factoryProjectView } from '../../../factory/factoryProjectView';
 import { manualOnlyEffort } from '../../generation/__tests__/fixtures/manualOnly';
@@ -101,9 +101,19 @@ describe('§103 cases 1 to 4: each fixture composes, and records its OWN numbers
     expect(Object.keys(byType).sort()).toEqual(['proposal', 'solution_build']);
     // The same id, not merely one id each. A canonical id is what lets a compliance matrix join
     // the proposal answer to the build story.
-    expect(byType.proposal).toEqual(['REQ-CANON-1']);
+    // The canonical id is in BOTH.
+    expect(byType.proposal).toContain('REQ-CANON-1');
+    expect(byType.solution_build).toContain('REQ-CANON-1');
+
+    // AND THE TRACK-EXCLUSIVE ONE IS IN EXACTLY ONE. This is the half that makes it a JOIN
+    // rather than a dump: deleting the track filter in `factoryProjectView` used to leave every
+    // test in the tree green, because one requirement cannot show over-inclusion.
+    expect(byType.proposal).toContain('REQ-PROP-ONLY');
+    expect(byType.solution_build).not.toContain('REQ-PROP-ONLY');
+
+    // Exact membership, so a third requirement cannot appear unnoticed on either side.
+    expect([...byType.proposal].sort()).toEqual(['REQ-CANON-1', 'REQ-PROP-ONLY']);
     expect(byType.solution_build).toEqual(['REQ-CANON-1']);
-    expect(byType.proposal).toEqual(byType.solution_build);
   });
 
   it('and fixtures B and C do NOT inherit tracks, so the shape belongs to the government case', () => {

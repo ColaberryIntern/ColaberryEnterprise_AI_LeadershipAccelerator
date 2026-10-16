@@ -90,6 +90,25 @@ function shell(over: {
       source_document: 'solicitation-A', amendment_version: '1', section: 'M.2',
       extracted_text: 'stated', interpretation: null, human_confirmed: true,
       evidence_state: 'tested', source_evidence: blocks,
+    }, {
+      // TRACK-EXCLUSIVE, and it exists to kill a mutant that survived attempt 3.
+      //
+      // With only the canonical requirement, deleting the track filter in
+      // `factoryProjectView` -- so every requirement lands under every track -- left all 31
+      // tests green and all 1,682 in the tree green. One requirement cannot show the
+      // OVER-inclusion direction: a dump and a join look identical when there is nothing to
+      // exclude. This one belongs to `proposal` ONLY, so a dump puts it in `solution_build`
+      // and the assertion below catches it.
+      //
+      // I had recorded that closing this needed production code and was therefore out of this
+      // packet's scope. That was asserted, not tested, and it was wrong: a fixture row and an
+      // assertion do it, both inside scope.
+      id: 'REQ-PROP-ONLY',
+      statement: 'The proposal must include a past-performance reference.',
+      kind: 'administrative', priority: 'must', tracks: ['proposal'],
+      source_document: 'solicitation-A', amendment_version: '1', section: 'L.4',
+      extracted_text: 'stated', interpretation: null, human_confirmed: true,
+      evidence_state: 'tested', source_evidence: blocks,
     }] : [],
     processes: [{
       id: 'proc', business_outcome: 'o', success_criterion: 'c', trigger: 't',

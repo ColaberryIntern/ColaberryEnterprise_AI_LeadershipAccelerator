@@ -8,25 +8,14 @@
  * Extracting the apparatus rather than halving the cases arbitrarily keeps each file about one
  * thing: this module is the fixtures and their compositions, and the two suites are the claims.
  */
-import { runCorpusCase, type CorpusFixture } from './corpusRunner';
-import {
-  fixtureA, fixtureB, fixtureC,
-} from '../../generation/__tests__/fixtures/referenceFixtures';
+import { type CorpusFixture } from './corpusRunner';
+import { fixtureA, fixtureB } from '../../generation/__tests__/fixtures/referenceFixtures';
 import {
   manualOnlyUnderstanding, manualOnlyProject, manualOnlyAllocation, manualOnlyAgents,
   manualOnlyDeclaration, manualOnlyEffort, manualOnlyAcceptance,
 } from '../../generation/__tests__/fixtures/manualOnly';
 import { ws, wsState, acceptedDesign } from '../../generation/__tests__/fixtures/acceptedDesign';
-import { prerequisiteGaps, blockingGaps } from '../../lifecyclePrerequisites';
-import { factoryProjectView } from '../../../factory/factoryProjectView';
-import { completeEvidence } from '../evidenceFixture';
-import {
-  measureAutomation, renderShare, type EffortAssessment,
-} from '../../generation/effortMeasures';
-import {
-  buildFactoryDecomposeUserPrompt, coversRequirementBlocks, sourceBlocksPrecedeContext,
-  MAX_BLOCK_CHARS, MAX_BLOCKS,
-} from '../../../factory/factoryDecomposePrompt';
+import { type EffortAssessment } from '../../generation/effortMeasures';
 
 type Fixture = typeof fixtureA;
 
@@ -77,5 +66,5 @@ const fixtureDCase = (over: { effort?: EffortAssessment[] } = {}): CorpusFixture
 });
 
 export {
-  fieldsOf, abcComposition, dComposition, caseOf, fixtureDCase, type Fixture,
+  fieldsOf, abcComposition, caseOf, fixtureDCase, type Fixture,
 };
