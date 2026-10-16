@@ -1,6 +1,15 @@
 import { Request, Response } from 'express';
 import { ZodError } from 'zod';
-import { producerCommandSchema, occurrenceIdParamSchema, playbackGrantSchema } from '../schemas/broadcastSchema';
+import {
+  producerCommandSchema, occurrenceIdParamSchema, playbackGrantSchema, playbackHeartbeatSchema,
+} from '../schemas/broadcastSchema';
+import {
+  rejectUntrustedFields, resolveTelemetryConfig, type MeasuredAccessMode,
+} from '../services/broadcast/broadcastTelemetryPolicy';
+// The runtime list, from the module that also defines the column's CHECK constraint. One
+// source of truth: a second array in the policy module would be a second place to forget.
+import { ACCESS_MODES } from '../db/ensureBroadcastSchema';
+import { recordPlaybackBeat, readLiveAudience } from '../services/broadcast/broadcastTelemetryService';
 import { runProducerCommand } from '../services/broadcast/broadcastCommandService';
 import { decideBroadcastAccess, resolveBroadcastAccess } from '../services/broadcast/broadcastEntitlement';
 import { resolveRoomEligibility } from '../services/broadcast/broadcastRoomEligibility';
@@ -248,6 +257,121 @@ export async function postPlaybackGrant(req: Request, res: Response): Promise<vo
   } catch (err) {
     respondError(res, err, 'broadcast_playback_grant_failed');
   }
+}
+
+/**
+ * POST /api/portal/broadcasts/:id/heartbeat — one playback beat from one tab.
+ *
+ * THE CLIENT SENDS WHAT ITS PLAYER IS DOING. NOTHING ELSE.
+ *
+ * Identity, staff status and access mode are all resolved here, from the JWT and the
+ * occurrence row. A body that tries to supply any of them is refused with the offending
+ * fields NAMED, because a silently dropped field is indistinguishable from an accepted one:
+ * a client that believes it is reporting paid viewers would go on believing it, and the
+ * number it inflates would be trusted.
+ *
+ * ANSWERS 204 EVEN WHEN THE WRITE FAILS. Telemetry must never break the thing it measures.
+ * A viewer watching successfully must not see an error because a metrics row did not persist,
+ * and a client must not retry into a database that is already struggling. The failure is
+ * logged by the service with a stable error_class; it is not the viewer's problem.
+ */
+export async function postPlaybackHeartbeat(req: Request, res: Response): Promise<void> {
+  try {
+    const { id } = occurrenceIdParamSchema.parse(req.params);
+
+    // Named refusal FIRST, before the schema's generic unknown-key error, so the caller is
+    // told precisely which claim was rejected rather than merely that something was wrong.
+    const offending = rejectUntrustedFields(req.body);
+    if (offending.length > 0) {
+      res.status(400).json({
+        error: 'UntrustedFields',
+        reason: 'client_supplied_identity_or_counts',
+        fields: offending,
+      });
+      return;
+    }
+
+    const body = playbackHeartbeatSchema.parse(req.body ?? {});
+
+    const occurrence = await BroadcastOccurrence.findByPk(id);
+    if (!occurrence) {
+      res.status(404).json({ error: 'NotFoundError' });
+      return;
+    }
+
+    const cfg = resolveTelemetryConfig(process.env as unknown as Record<string, unknown>);
+    await recordPlaybackBeat(
+      { occurrenceId: occurrence.id, sessionId: body.session_id, state: body.state, intent: body.intent },
+      {
+        // Every one of these is server-decided. None can be influenced by the body above.
+        enrollmentId: req.participant!.sub,
+        isStaff: isStaff(req),
+        isTest: process.env.BROADCAST_TELEMETRY_TEST_MODE === 'true',
+        // Checked, not cast. An unrecognised mode records as null rather than appearing in
+        // the counts under a label nobody defined.
+        accessMode: (ACCESS_MODES as readonly string[]).includes(occurrence.access_mode)
+          ? (occurrence.access_mode as MeasuredAccessMode)
+          : null,
+      },
+      cfg,
+      Date.now(),
+    );
+
+    res.status(204).end();
+  } catch (err) {
+    respondError(res, err, 'broadcast_heartbeat_failed');
+  }
+}
+
+/**
+ * GET /api/portal/broadcasts/:id/audience — who is watching, for a producer.
+ *
+ * ZERO AND "WE DO NOT KNOW" ARE DIFFERENT ANSWERS, AND THIS IS WHERE THEY STAY DIFFERENT.
+ *
+ * The metrics dictionary calls a fabricated zero a defect rather than a cosmetic issue, and
+ * it is right: "nobody watched" is a verdict on the broadcast, while "collection is down" is
+ * a verdict on us. Rendering the second as the first would have a producer stop a class that
+ * people were actually watching.
+ *
+ * So a collection failure answers 503 and the body carries NO COUNT FIELD AT ALL. Not zero,
+ * not null — absent. A client cannot render a number that is not there, which is a stronger
+ * guarantee than asking it to check a flag first.
+ */
+export async function getLiveAudience(req: Request, res: Response): Promise<void> {
+  const { id } = occurrenceIdParamSchema.parse(req.params);
+
+  // A viewer count is producer information: it says how a class is performing while it airs.
+  if (!isStaff(req)) {
+    res.status(403).json({ error: 'Forbidden', reason: 'not_a_producer' });
+    return;
+  }
+
+  const cfg = resolveTelemetryConfig(process.env as unknown as Record<string, unknown>);
+  let audience;
+  try {
+    audience = await readLiveAudience(id, cfg, Date.now());
+  } catch (err) {
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(), level: 'error', service: 'broadcast',
+      event: 'broadcast_audience_unavailable', outcome: 'failure',
+      error_class: (err as Error)?.name ?? 'UnexpectedError',
+      context: { occurrence_id: id },
+    }));
+    res.status(503).json({
+      error: 'MeasurementUnavailable',
+      available: false,
+      reason: 'collection_unavailable',
+    });
+    return;
+  }
+
+  res.json({
+    available: true,
+    watching_now: audience.watchingNow,
+    deliberate: audience.deliberate,
+    auto: audience.auto,
+    by_mode: audience.byMode,
+  });
 }
 
 /**

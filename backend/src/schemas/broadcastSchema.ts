@@ -40,6 +40,30 @@ export const playbackGrantSchema = z
 export type PlaybackGrantInput = z.infer<typeof playbackGrantSchema>;
 
 /**
+ * One playback heartbeat from one tab.
+ *
+ * Three fields, and every one of them is a FACT ABOUT THE PLAYER, never about the person.
+ * `session_id` is an opaque tab id the client generates; it is not identity and is never
+ * trusted as such — the enrollment is taken from the JWT. `state` is what the media element
+ * is doing. `intent` is whether this viewer chose to watch or the player started on its own,
+ * which is the difference between an audience and a page view.
+ *
+ * What a client may NOT send is enforced twice over: `rejectUntrustedFields` names any
+ * identity, entitlement or count field BEFORE this schema runs, and `.strict()` refuses
+ * anything else unrecognised. Two layers because they fail differently — the first tells a
+ * caller precisely which claim was refused, the second catches everything nobody thought of.
+ */
+export const playbackHeartbeatSchema = z
+  .object({
+    /** Opaque, client-generated, per tab. Bounded so a long id cannot bloat the row. */
+    session_id: z.string().regex(/^[A-Za-z0-9_-]{8,64}$/, 'Invalid session id'),
+    state: z.enum(['playing', 'paused', 'buffering', 'ended']),
+    intent: z.enum(['deliberate', 'auto']),
+  })
+  .strict();
+export type PlaybackHeartbeatInput = z.infer<typeof playbackHeartbeatSchema>;
+
+/**
  * Deliberately NOT in any schema: viewer identity, role, paid status, preview deadline, or
  * occurrence state. Request §7 — "Never let a client supply its own identity, role, paid
  * status, source URL, campaign recipient list or authoritative viewer count." All of those
