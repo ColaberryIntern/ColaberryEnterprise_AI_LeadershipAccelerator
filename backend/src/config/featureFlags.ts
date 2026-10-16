@@ -28,6 +28,16 @@ export const FLAGS = {
   // (default off) behind its OWN flag — distinct from govIngestion (already on) so deploying does not auto-run it.
   // Narrow by design: v1 feed carries the close DATE only, never amendments/meetings (no programmatic Bonfire).
   govDailySync: process.env.ENABLE_GOV_DAILY_SYNC === 'true',
+  // SBP source-overflow BLOCK (P7-T1.3). Ships DARK (default off). With it off, an over-long
+  // brief or document is clipped and labelled exactly as it is today; with it on, `sourceBlocks`
+  // refuses rather than silently sending the model half a student's brief.
+  //
+  // The promotion from detect-only to blocking is not a preference. `plan-phase7.md` section 3.3
+  // pre-registered the rule BEFORE the data was seen -- "any build in the last 90 days exceeded
+  // the cap -> implement a blocking overflow behind the new flag" -- precisely so the measurement
+  // could not be read to suit the outcome. Measured 16 Oct 2026 with the shipped `buildBriefText`
+  // over the stored rows: 11 of 48, p90 27,772 against a 20,000 cap. The blocking branch fires.
+  sbpSourceOverflowBlock: process.env.ENABLE_SBP_SOURCE_OVERFLOW_BLOCK === 'true',
 };
 
 export const isDev = process.env.APP_ENV === 'dev';
