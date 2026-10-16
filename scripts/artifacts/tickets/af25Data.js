@@ -40,10 +40,45 @@ const STAFF_SIDE_EFFECTS = {
 };
 
 const V = {
-  READY: { key: 'READY', label: 'Ready to grant', color: SEV.ok },
+  GRANTED: { key: 'GRANTED', label: 'GRANTED + verified', color: SEV.ok },
   CONFIRM: { key: 'CONFIRM', label: 'Confirm email first', color: SEV.watch },
   NO_SURFACE: { key: 'NO_SURFACE', label: 'No surface to grant', color: SEV.bad },
   HELD: { key: 'HELD', label: 'Held by AF6.2', color: SEV.bad },
+};
+
+/**
+ * Executed 16 Oct 2026 on Ali's instruction: "execute approved grants but don't send out any
+ * emails yet. Just collect the information and get it ready for monday."
+ *
+ * Four written, three deliberately not. No email, no invitation, no notification of any kind.
+ */
+const EXECUTED = {
+  on: '16 October 2026',
+  approvedBy: 'Ali Muwwakkil',
+  rowsChanged: 4,
+  notNotified: 'No email, invitation or notification has been sent to anybody. The grants exist '
+    + 'in the database and the interns do not know about them yet.',
+  /** Proof the row is not merely a row. */
+  verification: [
+    ['Bridge mints a token for all four', 'mintMgmtAdminToken returns a token whose sections '
+      + 'match the role exactly; before the grant it returned null for all four, which is the '
+      + 'control that makes this mean something'],
+    ['The JWT claim agrees with the computed sections', 'decoded mgmt_role matches the granted '
+      + 'role on all four; the array and the token that travels could disagree, so both checked'],
+    ['Nobody reaches another intern surface', '3 of 3 refused, per person, asserted individually'],
+    ['The three ungranted still mint NOTHING', 'Ruth, Sarbjit and Mihret all return null'],
+    ['The three ungranted rows are byte-identical', 'role and mgmt_role compared before and after'],
+  ],
+};
+
+/** What each granted intern needs on Monday. Collected, NOT sent. */
+const MONDAY_PACK = {
+  signIn: 'https://enterprise.colaberry.ai',
+  path: 'Sign in to the portal with the address below, then open the Employee nav group and '
+    + 'choose Management Portal. That bridges to the admin side with a token scoped to their '
+    + 'sections only.',
+  caveat: 'Nothing has been sent. These four can sign in today and reach their surface; they '
+    + 'simply have not been told.',
 };
 
 /**
@@ -61,25 +96,25 @@ const PEOPLE = [
   },
   {
     name: 'Quincy Nkwain Ninying', domain: 'platform', role: 'platform',
-    email: 'qninying@gmail.com', cmRow: 1, enrollments: 1, verdict: V.READY,
+    email: 'qninying@gmail.com', cmRow: 1, enrollments: 1, verdict: V.GRANTED,
     note: '`system` is the widest-consequence section on the platform: tickets, reports, '
       + 'settings, events, automation. Worth approving deliberately rather than as one of a list.',
   },
   {
     name: 'Kalkidan Bezabeh', domain: 'admissions', role: 'lead_intake',
-    email: 'kalkidankin@gmail.com', cmRow: 1, enrollments: 1, verdict: V.READY,
+    email: 'kalkidankin@gmail.com', cmRow: 1, enrollments: 1, verdict: V.GRANTED,
     note: 'Gets lead ingestion WITHOUT the internship queue, which is what the new role was '
       + 'added for.',
   },
   {
     name: 'Tashima Diah', domain: 'internship', role: 'internship_review',
-    email: 'tash.diah@gmail.com', cmRow: 1, enrollments: 1, verdict: V.READY,
+    email: 'tash.diah@gmail.com', cmRow: 1, enrollments: 1, verdict: V.GRANTED,
     note: 'The internship queue carries applicant resumes, phone numbers and interview '
       + 'transcripts. Narrowest role that reaches it, and it reaches nothing else.',
   },
   {
     name: 'Victoria Spencer-Auber', domain: 'sales', role: 'revenue',
-    email: 'vesauber@gmail.com', cmRow: 1, enrollments: 1, verdict: V.READY,
+    email: 'vesauber@gmail.com', cmRow: 1, enrollments: 1, verdict: V.GRANTED,
     note: 'Uses the pre-existing `revenue` role, which also carries `leads`, a narrower slice of '
       + 'the same group. No new role was needed.',
   },
@@ -97,10 +132,17 @@ const PEOPLE = [
   },
 ];
 
-const READY = PEOPLE.filter((p) => p.verdict === V.READY);
+const GRANTED_PEOPLE = PEOPLE.filter((p) => p.verdict === V.GRANTED);
+/** The sections each minted token actually carried, read back from the bridge. */
+const MINTED_SECTIONS = {
+  "platform": "dashboard, system",
+  "lead_intake": "dashboard, lead_ingestion",
+  "internship_review": "dashboard, internship",
+  "revenue": "dashboard, leads, revenue"
+};
 const COUNTS = {
   people: PEOPLE.length,
-  ready: READY.length,
+  granted: GRANTED_PEOPLE.length,
   confirm: PEOPLE.filter((p) => p.verdict === V.CONFIRM).length,
   noSurface: PEOPLE.filter((p) => p.verdict === V.NO_SURFACE).length,
   held: PEOPLE.filter((p) => p.verdict === V.HELD).length,
@@ -141,8 +183,9 @@ const REVERSAL = {
     + 'listed as owed rather than claimed.',
 };
 
-const HEADLINE = `${COUNTS.ready} of the ${COUNTS.people} can be granted today. One needs an email `
-  + 'confirmed, one has no surface to grant, and Ruth stays held.';
+const HEADLINE = `${COUNTS.granted} of the ${COUNTS.people} are GRANTED and verified. One needs `
+  + 'an email confirmed, one has no surface to grant, Ruth stays held, and nobody has been '
+  + 'told yet.';
 
 const ASKED = 'Each of the seven interns can sign in on Monday and reach their own portal, '
   + 'department and agent, with the grant recorded and reversible.';
@@ -151,6 +194,7 @@ const DELIVERED = 'The grant plan, every account verified by direct lookup rathe
   + 'it fail silently. No grant has been issued.';
 
 module.exports = {
-  MEASURED_ON, SEV, V, PEOPLE, READY, COUNTS, GRANT_SHAPE, STAFF_SIDE_EFFECTS,
+  MEASURED_ON, SEV, V, PEOPLE, GRANTED_PEOPLE, MINTED_SECTIONS, EXECUTED,
+  MONDAY_PACK, COUNTS, GRANT_SHAPE, STAFF_SIDE_EFFECTS,
   RUTH_BEFORE, UNASSERTABLE, REVERSAL, HEADLINE, ASKED, DELIVERED,
 };

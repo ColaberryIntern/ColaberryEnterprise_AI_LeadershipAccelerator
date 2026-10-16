@@ -17,10 +17,15 @@ const SHARED = `
   .askdel .val { display: inline-block; width: calc(100% - 74px); vertical-align: top; }
   .askdel .row { margin-bottom: 4px; }
   .stamp {
-    border: 2px solid ${D.SEV.bad}; color: ${D.SEV.bad}; border-radius: 5px;
-    padding: 7px 11px; font-weight: 700; margin: 0 0 12px; background: #fdf3f2;
+    border: 2px solid ${D.SEV.ok}; color: ${D.SEV.ok}; border-radius: 5px;
+    padding: 7px 11px; font-weight: 700; margin: 0 0 12px; background: #f3f9f3;
   }
+  .stamp.warn { border-color: ${D.SEV.bad}; color: ${D.SEV.bad}; background: #fdf3f2; }
 `;
+
+const STAMP = '<div class="stamp">FOUR GRANTS EXECUTED 16 Oct 2026 and verified. '
+  + '<span style="font-weight:400">No email, invitation or notification has been sent to anyone. '
+  + 'The four can sign in today; they have not been told.</span></div>';
 
 /** The grant table. `role` is shown as the literal value that would be written. */
 function grantTable(compact) {
@@ -80,11 +85,10 @@ function buildVisual() {
   ];
 
   const body = `
-  <h1>AF2.5 &middot; Intern portal access, the grant plan</h1>
-  <div class="meta">Agent Factory &middot; measured ${esc(D.MEASURED_ON)} &middot; one page
-    &middot; <strong>nothing has been granted</strong></div>
+  <h1>AF2.5 &middot; Intern portal access, executed</h1>
+  <div class="meta">Agent Factory &middot; measured ${esc(D.MEASURED_ON)} &middot; one page &middot; <strong>4 granted, nobody notified</strong></div>
   <div class="rule"></div>
-  <div class="stamp">NO GRANT HAS BEEN ISSUED. This is the plan, for approval by name.</div>
+  ${STAMP}
 
   <div class="takeaway">
     <div class="label">Takeaway</div>
@@ -99,11 +103,9 @@ function buildVisual() {
       ${stackBar({ parts, width: 400, height: 22 })}
     </div>
     <div class="col">
-      <h2>The grant is TWO changes, not one</h2>
-      <div class="note warn">
-        <code>${esc(D.GRANT_SHAPE.one)}</code><br><code>${esc(D.GRANT_SHAPE.two)}</code><br>
-        Setting <code>mgmt_role</code> alone grants <strong>nothing</strong>: the bridge requires
-        both, and all seven are <code>student</code> today.
+      <h2>Verified, not assumed</h2>
+      <div class="note good" style="font-size:7.4pt;padding:7px 9px">
+        ${D.EXECUTED.verification.map(([h, b]) => `<div><strong>${esc(h)}.</strong> ${esc(b)}</div>`).join("")}
       </div>
       ${grantFlow()}
     </div>
@@ -129,8 +131,7 @@ function buildDocument() {
   <div class="meta">Agent Factory &middot; Task AF2.5 &middot; P0 &middot; rollout blocker
     &middot; measured ${esc(D.MEASURED_ON)} &middot; prepared for Ali Muwwakkil</div>
   <div class="rule"></div>
-  <div class="stamp">NO GRANT HAS BEEN ISSUED. The ticket reserves all seven to Ali by name, and
-    this document exists so they can be approved individually rather than in bulk.</div>
+  ${STAMP}
 
   <div class="askdel">
     <div class="row"><span class="lbl">Asked</span><span class="val">${esc(D.ASKED)}</span></div>
@@ -196,14 +197,26 @@ function buildDocument() {
   <p>${esc(D.REVERSAL.why)}</p>
   <div class="note"><strong>Owed, not claimed.</strong> ${esc(D.REVERSAL.dryRun)}</div>
 
+  <h2>Ready for Monday, and not sent</h2>
+  <p>${esc(D.MONDAY_PACK.path)}</p>
+  <table><tr><th>Intern</th><th>Signs in with</th><th>Reaches</th></tr>
+    ${D.GRANTED_PEOPLE.map((p) => `<tr><td><strong>${esc(p.name)}</strong></td>
+      <td><code>${esc(p.email)}</code></td>
+      <td><code>${esc(D.MINTED_SECTIONS[p.role] || "")}</code></td></tr>`).join("")}
+  </table>
+  <div class="note warn"><strong>${esc(D.MONDAY_PACK.caveat)}</strong> Portal:
+    <code>${esc(D.MONDAY_PACK.signIn)}</code></div>
+
+  <h2>How the grant was proved</h2>
+  <ul>${D.EXECUTED.verification.map(([h, b]) => `<li><strong>${esc(h)}.</strong> ${esc(b)}</li>`).join("")}</ul>
+
   <h2>What this does not establish</h2>
   <ul>
-    <li><strong>Nobody has been granted anything.</strong> All seven remain
-      <code>role=student, mgmt_role=NULL</code>, which is also the reversal baseline.</li>
-    <li><strong>No intern has signed in and reached their surface</strong>, which is the ticket's
-      first acceptance criterion and can only be met after the grants exist. It is confirmed by
-      the intern, not by reading this table.</li>
-    <li><strong>The per-intern refusal assertion is not run</strong> for the same reason.</li>
+    <li><strong>No intern has signed in yet</strong>, which is the ticket's first acceptance
+      criterion and is confirmed by the intern, not by reading this table. The bridge has been
+      proved to mint them a correctly scoped token; that is not the same as a person logging in.</li>
+    <li><strong>Nobody has been told.</strong> No email, invitation or notification of any kind
+      has been sent, on instruction.</li>
     <li><strong>Sarbjit's address is unresolved</strong> and cannot be resolved from data.</li>
   </ul>
 
