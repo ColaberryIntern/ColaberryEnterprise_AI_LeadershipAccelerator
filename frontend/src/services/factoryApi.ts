@@ -245,7 +245,8 @@ export interface ServiceOffering {
   pscCodes?: string[];
   pastPerformance?: string | null;
   owner?: string | null;
-  status: 'active' | 'retired';
+  /** 'growth' = in development; excluded from fit matching, kept in reporting (P3). */
+  status: 'active' | 'growth' | 'retired';
   createdBy?: string | null;
   createdAt?: string;
   updatedAt?: string;
@@ -260,10 +261,12 @@ export interface ServiceOfferingInput {
   pscCodes?: string[];
   pastPerformance?: string;
   owner?: string;
+  /** Create as 'growth' (in development) instead of the default 'active'. */
+  status?: 'active' | 'growth';
 }
 
-/** List the team's service offerings (active by default, or every status). */
-export async function listServiceOfferings(status: 'active' | 'all' = 'active'): Promise<ServiceOffering[]> {
+/** List the team's service offerings (active by default, or growth only, or every status). */
+export async function listServiceOfferings(status: 'active' | 'growth' | 'all' = 'active'): Promise<ServiceOffering[]> {
   const { data } = await api.get<{ services: ServiceOffering[] }>(`/api/admin/factory/services?status=${status}`);
   return data.services;
 }
@@ -283,6 +286,12 @@ export async function updateServiceOffering(id: string, patch: Partial<ServiceOf
 /** Soft-retire a service offering (status flip; reversible by editing it back to active is not exposed — retire is one-way in the UI). */
 export async function retireServiceOffering(id: string): Promise<ServiceOffering> {
   const { data } = await api.post<{ service: ServiceOffering }>(`/api/admin/factory/services/${encodeURIComponent(id)}/retire`, {});
+  return data.service;
+}
+
+/** Flip a service to 'growth' (in development; excluded from fit matching, kept in reporting). Idempotent. */
+export async function markGrowthServiceOffering(id: string): Promise<ServiceOffering> {
+  const { data } = await api.post<{ service: ServiceOffering }>(`/api/admin/factory/services/${encodeURIComponent(id)}/growth`, {});
   return data.service;
 }
 
@@ -310,6 +319,56 @@ export interface MatchSignals {
 /** Suggested services for an opportunity, ranked. Advisory only — writes nothing, gates nothing. */
 export async function matchServicesToOpportunity(signals: MatchSignals): Promise<{ matches: ServiceMatch[]; catalogSize: number }> {
   const { data } = await api.post<{ matches: ServiceMatch[]; catalogSize: number }>('/api/admin/factory/opportunities/match', signals);
+  return data;
+}
+
+// ── Step 3 "Fit": capability assessment vs Our Services (advisory) ────────────
+export type FitAssessment = 'have' | 'partial' | 'new';
+/** A capability the scope needs, assessed against the active service catalog. Advisory; matchedServiceId is a real id or null. */
+export interface CapabilityItem {
+  id: string;
+  name: string;
+  why: string;
+  assessment: FitAssessment;
+  matchedServiceId: string | null;
+  rationale: string;
+  whatItIs?: string;
+  whatThisBidGivesUs?: string;
+  toDeliver?: string;
+}
+export interface CapabilityFitResult { capabilities: CapabilityItem[]; cached: boolean; generatedAt: string; error?: string }
+
+/** ADVISORY: derive the capabilities the scope needs and assess each against the ACTIVE catalog (have/partial/new).
+ *  Growth services are excluded. Fails soft server-side (no key / upstream → the service returns an error). */
+export async function assessCapabilityFit(
+  canonicalOpportunityId: string,
+  body: { requirements: { id: string; text: string }[]; title?: string | null; buyer?: string | null },
+): Promise<CapabilityFitResult> {
+  const { data } = await api.post<CapabilityFitResult>(qUrl(canonicalOpportunityId, '/capability-fit'), body);
+  return data;
+}
+
+/** The reviewer's Step 3 decisions, persisted on the record (advisory; sets no gate). */
+export interface CapabilityDecision {
+  id: string;
+  name: string;
+  assessment: FitAssessment;
+  matchedServiceId: string | null;
+  action?: 'none' | 'updated_service' | 'added_growth' | 'find_partner';
+}
+export interface CapabilityDecisionsPayload {
+  decisions: CapabilityDecision[];
+  /** ids of ticked eligibility GapItems. */
+  eligibilityResolved: string[];
+  savedAt: string;
+}
+
+/** Persist the Step 3 capability decisions (requirements_json.capabilities). Returns the forked qualification. */
+export async function recordCapabilityDecisions(
+  canonicalOpportunityId: string,
+  body: { biddingEntity: string; expectedVersion: number; capabilities: CapabilityDecisionsPayload },
+): Promise<{ qualification: unknown }> {
+  const { data } = await api.post<{ qualification: unknown }>(qUrl(canonicalOpportunityId, '/capability-decisions'), body);
   return data;
 }
 
