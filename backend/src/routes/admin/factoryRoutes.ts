@@ -23,7 +23,7 @@ import { lookupGovContractsContainer } from '../../scripts/lib/factoryDemoContai
 import { dismissOpportunity, restoreOpportunity, listActiveDismissedKeys } from '../../services/factory/opportunities/govOpportunityDismissals';
 // Colaberry's service catalog (CRUD). Lazy-loads its model inside each function, so this import never inits the ORM.
 import {
-  createServiceOffering, updateServiceOffering, retireServiceOffering, listServiceOfferings,
+  createServiceOffering, updateServiceOffering, retireServiceOffering, markGrowthServiceOffering, listServiceOfferings,
   ServiceOfferingNotFoundError,
 } from '../../services/factory/serviceCatalog';
 // The pure, deterministic opportunity->services matcher (advisory; writes nothing, gates nothing).
@@ -328,9 +328,12 @@ const serviceCreateBody = z.object({
   pscCodes: serviceStrArr.optional(),
   pastPerformance: z.string().max(4000).optional(),
   owner: z.string().max(120).optional(),
+  // A capability added from a gov pursuit's Fit step as in-development is created with status 'growth' (excluded
+  // from fit matching, kept in reporting). Omitted -> 'active'. 'retired' is never set on create.
+  status: z.enum(['active', 'growth']).optional(),
 });
 const serviceUpdateBody = serviceCreateBody.partial();
-const serviceStatusQuery = z.object({ status: z.enum(['active', 'all']).optional() });
+const serviceStatusQuery = z.object({ status: z.enum(['active', 'growth', 'all']).optional() });
 
 /** GET /api/admin/factory/services?status=active|all — list the tenant's service offerings. */
 router.get('/api/admin/factory/services', requireSection('program'), async (req: Request, res: Response) => {
@@ -359,6 +362,7 @@ router.post('/api/admin/factory/services', requireSection('program'), async (req
       name: b.data.name, description: b.data.description ?? null, category: b.data.category ?? null,
       keywords: b.data.keywords, naicsCodes: b.data.naicsCodes, pscCodes: b.data.pscCodes,
       pastPerformance: b.data.pastPerformance ?? null, owner: b.data.owner ?? null,
+      status: b.data.status,
     });
     res.status(201).json({ service });
   } catch (err: any) {
@@ -398,6 +402,23 @@ router.post('/api/admin/factory/services/:id/retire', requireSection('program'),
     if (err instanceof ServiceOfferingNotFoundError) { res.status(404).json({ error: 'That service was not found in this workspace.' }); return; }
     logFail('factory_services_retire_failed', err, { id: p.data.id });
     res.status(500).json({ error: 'Could not retire the service.' });
+  }
+});
+
+/** POST /api/admin/factory/services/:id/growth — flip an existing service to 'growth' (in development; excluded from
+ *  fit matching, kept in reporting). Idempotent. */
+router.post('/api/admin/factory/services/:id/growth', requireSection('program'), async (req: Request, res: Response) => {
+  const p = serviceIdParam.safeParse(req.params);
+  if (!p.success) { res.status(400).json({ error: 'Invalid service id.' }); return; }
+  const container = await lookupGovContractsContainer();
+  if (!container) { logFail('factory_services_growth_scope', new Error('gov container not resolvable'), { id: p.data.id }); res.status(503).json({ error: 'The government contracts workspace is not configured.' }); return; }
+  try {
+    const service = await markGrowthServiceOffering({ tenantId: container.tenant.id, id: p.data.id });
+    res.json({ service });
+  } catch (err: any) {
+    if (err instanceof ServiceOfferingNotFoundError) { res.status(404).json({ error: 'That service was not found in this workspace.' }); return; }
+    logFail('factory_services_growth_failed', err, { id: p.data.id });
+    res.status(500).json({ error: 'Could not mark the service as growth.' });
   }
 });
 

@@ -121,7 +121,7 @@ describe('the section gate + tenant scoping', () => {
   it('mounts every route behind requireSection("program") (source-level, route-auth lint)', () => {
     const src = fs.readFileSync(path.join(__dirname, '..', 'govQualificationRoutes.ts'), 'utf8');
     const routeLines = src.split('\n').filter((l) => /router\.(get|post|put|patch|delete)\(/.test(l));
-    expect(routeLines.length).toBe(29); // +2 P3 assign; +5 P4 responses/amendments; +6 P5 submission export/package(GET)/receipt/acknowledge/reopen + outcome; +2 AI advisory (risk-narrative, proposal-summary); +1 P1 build-spec; +1 P2 build-plan-ai; +1 P2.3 materialize-build-project
+    expect(routeLines.length).toBe(31); // +2 P3 assign; +5 P4 responses/amendments; +6 P5 submission export/package(GET)/receipt/acknowledge/reopen + outcome; +2 AI advisory (risk-narrative, proposal-summary); +1 P1 build-spec; +1 P2 build-plan-ai; +1 P2.3 materialize-build-project; +2 gov-redesign P3 (capability-fit advisory + capability-decisions persist)
     // Each route DEFINITION line must carry the section guard (not just somewhere in the file).
     const unguarded = routeLines.filter((l) => !l.includes("requireSection('program')"));
     expect(unguarded).toEqual([]);
