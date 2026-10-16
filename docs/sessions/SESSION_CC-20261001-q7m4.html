@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Thursday, October 8, 2026 at 11:31 AM</div>
-    <div><span class="sid">CC-20261001-q7m4</span><span class="count">25 changes</span></div>
+    <div class="meta">Generated Thursday, October 15, 2026 at 4:27 PM</div>
+    <div><span class="sid">CC-20261001-q7m4</span><span class="count">58 changes</span></div>
   </header>
   <main>
     
@@ -432,6 +432,501 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">frontend `tsc --noEmit` exit 0; 12 frontend tests; 82 backend tests across</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">**A third wrong citation in T2’s own spec**, caught by the first grep rather than</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">26</span>
+          <h2>P5-T3 — compare two blueprint revisions, and request changes to one</h2>
+          <span class="badge">2026-10-08</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`services/lifecycle/blueprintRevisionDiff.ts` (the diff, keyspace derived by</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">110 backend tests across 3 suites</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**The compare component has a runtime fallback its own types say is unreachable.** The</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">27</span>
+          <h2>P5-T4 — linked views: requirements, workflow, allocation, workspaces, controls, design</h2>
+          <span class="badge">2026-10-08</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`services/lifecycle/linkedViews.ts` (the six-kind registry and the traversal),</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">152 backend tests across 4 suites</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**Two test names carried wrong counts while their assertions were right.** The adapter</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">28</span>
+          <h2>P5-T4 follow-up — stop `String()` fabricating an edge out of a malformed manifest</h2>
+          <span class="badge">2026-10-08</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`services/lifecycle/linkedViews.ts` — one `asId` helper replaces `String()` for</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">33 tests in `linkedViews.test.ts`</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**The empty-string half of the guard needed a test, not a comment.** Mutation M15</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">29</span>
+          <h2>P5-T7 — five personas and delegated review, over the 13 existing roles (LC-14 PARTIAL)</h2>
+          <span class="badge">2026-10-08</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`services/lifecycle/lifecyclePersonas.ts` (the persona registry) and</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">195 backend tests across 5 suites and 67 frontend tests across 3, both with</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**Two measurement hazards found and recorded, both mine.** A mutation harness poisoned</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">30</span>
+          <h2>P5-T7 follow-up — a sweep satisfied by prose, and a page that threw instead of failing closed</h2>
+          <span class="badge">2026-10-08</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">the LC-14 cross-tenant sweep in `projectLifecycleRoutes.test.ts` now reads CODE</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">86 route tests (`npx jest --no-cache --runTestsByPath</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**The conventions deduction was measured before being acted on.** The route suite</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">31</span>
+          <h2>P5-T8 — complete review journeys, fixtures, and an honest account of the screenshot gap</h2>
+          <span class="badge">2026-10-08</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`services/lifecycle/__tests__/lifecycleJourneys.integration.test.ts` (six</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">208 backend tests across 6 suites with `DATABASE_URL` pointed at a throwaway</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**Two things are NOT evidenced, which the packet explicitly provides for.** No</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">32</span>
+          <h2>P5-T11 (part) — boundary report and acceptance rows, the half that does not need a deploy</h2>
+          <span class="badge">2026-10-08</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`docs/project-lifecycle/phase5-handoff.md` (NEW) and the Phase 5 rows in</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">the acceptance-ID derivation was RUN, not described — `grep -oE &quot;LC-[0-9]{2}&quot;`</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**The acceptance table gained nothing it did not earn.** Phase 5 adds exactly two rows —</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">33</span>
+          <h2>P5-T8 attempt 2 — two overstated claims corrected, and Journey 4 made able to fail</h2>
+          <span class="badge">2026-10-08</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">the `kind` paragraph in `review-walkthrough.md` plus a test that measures it;</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">208 backend tests across 7 suites and 76 frontend across 4; Journey 4 proven</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**The ceiling argument did not survive contact with this phase.** I had recorded that</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">34</span>
+          <h2>P5-T8 attempt 2 PASSED 11/12 — and the one remaining overstatement corrected</h2>
+          <span class="badge">2026-10-08</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">three comments in `lifecycleJourneys.integration.test.ts`; the `error_class`</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">8 tests in the journeys suite, `--no-cache` against a throwaway database.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**One assertion was agreeing with itself.** `error_class` was computed by</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">35</span>
+          <h2>P5-T9 — deploy, and P5-T10 — production verification (PASS), and P5-T11 completed</h2>
+          <span class="badge">2026-10-09</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">deployed `a11961e3c7142eb2e8ad66757571fbcbba3b04f4` to production via</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">the deploy&#39;s own output; the MANDATED schema check pasted verbatim —</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**The deploy did not use the control the contract prescribes.** It ran in the script&#39;s</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">36</span>
+          <h2>P6-T1a (part 1 of 2) — register delivery-project lifecycles from the model, with the</h2>
+          <span class="badge">2026-10-09</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `services/lifecycle/projectLifecycleRegistration.ts` (an `afterCreate` hook</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">14/14 passing, `jest --no-cache --runTestsByPath`, exit 0. Backend</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Three self-inflicted defects were caught by controls rather than review, and each one is</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">37</span>
+          <h2>P6-T1a (part 2 of 2) — the registration hook&#39;s write-feasibility contract, measured against</h2>
+          <span class="badge">2026-10-09</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `__tests__/lifecycleRegistration.integration.test.ts` (11 tests), plus two</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">11/11 against Postgres 15.16 in a throwaway container, and 25/25 across both</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">A first run looked like a ten-minute hang. It had actually finished its assertions and</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">38</span>
+          <h2>P6-T1a (part 3) — the gov approval path registers a lifecycle, and replay stays safe</h2>
+          <span class="badge">2026-10-09</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `__tests__/lifecycleRegistration.gov.integration.test.ts` (4 tests).</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">4/4 against Postgres 15.16, exit 0. Every table under test built from its model</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">An apparatus guard runs first. `lookupGovContractsContainer` fails CLOSED — a missing</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">39</span>
+          <h2>P6-T1a (part 4) — label the seed-created lifecycles, and reassign LC-14&#39;s fourth clause</h2>
+          <span class="badge">2026-10-09</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">the three seed scripts now pass `lifecycleEntryPoint` so their lifecycles are</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">26/26 across both T1a suites, exit 0. Line endings checked per file after the</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">The hook does not special-case seeds. A conditional on &quot;is this a seed&quot; is exactly the</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">40</span>
+          <h2>P6-T1a — graded PASS 11/12, then remediated the recorded follow-ups</h2>
+          <span class="badge">2026-10-09</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">merged `origin/main` forward (8 commits, no conflicts); gov suite now cleans up</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">**34/34, three suites, ONE shared database, run TWICE — exit 0 both times.** That</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">One acceptance clause stays unasserted and is REASSIGNED to T5 with its location named:</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">41</span>
+          <h2>P6-T3 — per-story lifecycle references in the plan contract, and the renderer split that had</h2>
+          <span class="badge">2026-10-09</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`renderDocs.ts` split 554 → 293 lines with the per-document renderers moved to a</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">10/10 new renderer tests, 39/39 plan-contract tests, 54/54 pre-existing renderer</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**`/tmp` means two different directories here, and Python says the wrong one exists.**</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">42</span>
+          <h2>P6-T3 — graded PASS 11/12; two of my own figures corrected</h2>
+          <span class="badge">2026-10-09</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`renderDocs.ts` EOF double-newline (a split-script artifact) normalised, 293 → 292</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">64/64 across the three renderer suites after the EOF change, exit 0. The grader</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**Carried to T4:** `buildStoryPrompt.ts` reads `narrative`, `owner_agent`, `blocked_by`,</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">43</span>
+          <h2>P6-T4 (part 1 of 2) — the traceability predicates and `release_review`&#39;s real rule</h2>
+          <span class="badge">2026-10-09</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new pure `services/lifecycle/storyTraceability.ts`; `release_review` implemented</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">15/15 new predicate tests, 100/100 across the three affected lifecycle suites,</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Four existing tests legitimately changed, none weakened — `clean()` and</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">44</span>
+          <h2>P6-T4 (part 2 of 2) — wire the measurements, so `release_review` reads a real plan</h2>
+          <span class="badge">2026-10-10</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`EvidenceContext` gains `plan`; a module-private `latestPublishedPlan(row)` reader</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">7/7 new wiring tests; **full lifecycle directory 31 suites / 989 tests / 0 failed,</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**DELIVERY PROJECTS CANNOT PASS `release_review` YET, and it needs an owner before Phase</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">45</span>
+          <h2>P6-T4 (part 3 of 3) — the silent source clip, made visible</h2>
+          <span class="badge">2026-10-10</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`sourceOverflows()` + `SourceOverflow` exported from `decomposePrompt.ts`;</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">47/47 with the plan-contract suite alongside; **full sbp directory 80 suites /</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">The clamp itself STILL HAPPENS and is asserted alongside the report — it is a SAFE-002</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">46</span>
+          <h2>P6-T4 attempt 2 (partial) — three of the four graded findings fixed; the fourth is blocked</h2>
+          <span class="badge">2026-10-10</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `__tests__/decomposeService.sourceTruncation.test.ts` (6 tests);</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">2708 tests across `services/lifecycle` + `services/sbp`, 137 suites, 0 failed,</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**THE FOURTH FIX IS BLOCKED, and the reason is architectural rather than effort.**</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">47</span>
+          <h2>P6-T4 attempt 2 (complete) — `workspace` becomes model-emitted, so the rule has a real domain</h2>
+          <span class="badge">2026-10-11</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`StoryWorkspace` added to `planContract.ts` and `workspace` moved OUT of</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">**138 suites / 2713 tests / 0 failed, exit 0** across `services/lifecycle` and</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">One of my own assertions was a brittle proxy and my own change broke it. I had asserted</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">48</span>
+          <h2>P6-T4 — PASSED 11/12 on attempt 2; both named residuals closed</h2>
+          <span class="badge">2026-10-11</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">two renderer branch tests in `planDocSections.references.test.ts` (the</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">**138 suites / 2715 tests / 0 failed, exit 0** across `services/lifecycle` and</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**A better reading of the typecheck baseline.** `playwright` is a declared ROOT</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">49</span>
+          <h2>P6-T5 (part 1 of 2) — the publish race, demonstrated and closed; the reviewed-hash check made</h2>
+          <span class="badge">2026-10-11</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`publishPlan` now wraps its publish and supersede statements in ONE transaction</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">5/5 against Postgres 15.16; **117 suites / 1855 tests / 0 test failures** across</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Two suites fail to LOAD in this worktree - `internshipPdf` and</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">50</span>
+          <h2>P6-T5 (LC-13): launch_ready gets a feed, and the duplicate-publish state becomes impossible</h2>
+          <span class="badge">2026-10-12</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`lifecyclePlanReads.ts` (new) reads `build_plans` once and returns the published</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">100 of 101 suites / 1738 of 1739 tests; publishIntegrity 8/8; plan-reads</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">`sbpOrchestrator.autoPublish.test.ts` fails its FIRST test on jest&#39;s default 5s</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">51</span>
+          <h2>P6-T2: split requirement extraction from implementation-plan generation</h2>
+          <span class="badge">2026-10-12</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`requirementExtraction.ts` (new) is STAGE A - it extracts and refines</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">102 of 104 suites, 1774 of 1776 tests. requirementStages 16/16 carries the</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">`skillRunbookCoverage` caught all three new modules as undocumented and they now have</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">52</span>
+          <h2>P6-T6: one front-door lifecycle skill, and the specialized skill handoffs</h2>
+          <span class="badge">2026-10-12</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new DRI-owned skill `.claude/skills/project-lifecycle/` with SKILL.md, a</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">projectLifecycleSkill.integration 10/10 against a real Postgres (database</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">The front door REFUSES `--kind student` by name rather than silently doing nothing,</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">53</span>
+          <h2>P6-T7 (LC-14): the new seam&#39;s tenancy test, cross-tenant clause re-tested</h2>
+          <span class="badge">2026-10-12</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`lifecycleRegistration.tenancy.integration.test.ts` (new, 13 tests) covering the</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">tenancy 13/13 against a real Postgres (database t7_tenancy); sourceSweep 9/9;</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">BOUNDARY MEASURED AND RECORDED, not fixed. Moving a delivery project to another tenant</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">54</span>
+          <h2>P6-T1b (LC-01, student half): projects get a tenant, and a lifecycle</h2>
+          <span class="badge">2026-10-12</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`db/ensureProjectTenantSchema.ts` (new) adds a nullable `projects.tenant_id`,</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">studentProjectRegistration.integration 9/9 on a fresh Postgres; 115 of 115</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">I wrote one test that asserted a literal array&#39;s length and nothing about the code, and</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">55</span>
+          <h2>P6-T8, T9, T10, T11: quality gate, PR, deploy, production verification and handoff</h2>
+          <span class="badge">2026-10-12</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`docs/project-lifecycle/phase6-handoff.md` (new) and Phase 6&#39;s five items</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`ENABLE_PROJECT_LIFECYCLE` queried BY NAME on the prod backend and is ABSENT.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">The main app is not served by this nginx (its server names are aiflotation.com,</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">56</span>
+          <h2>P7 plan audit cycle 1: FAILED 10/20, and the three rules it caught me breaking</h2>
+          <span class="badge">2026-10-12</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`plan-phase7.md` written, audited, FAILED, and rewritten as cycle 2. No code.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">independent `loop-plan-auditor`, 10 of 20 with a ZERO on dimension 10 (handoff).</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">The baseline has since been re-measured on this phase&#39;s base `e29d6eea` and the SET is</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">57</span>
+          <h2>P7 plan: caps exhausted at 14/20, DRI carve-out, and P7-T0&#39;s finding</h2>
+          <span class="badge">2026-10-13</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`plan-phase7.md` through three audit cycles (10/20, 15/20, 14/20) plus eight</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">three independent `loop-plan-auditor` runs. Ali chose option B on 2026-10-13:</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">AND THE FIVE ATTEMPTS DID NOT FAIL ON DIFFICULTY. Criterion 6 of the task rubric is</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">58</span>
+          <h2>P7-T1.1: the corpus runner, where a skipped stage is a failure rather than an absence</h2>
+          <span class="badge">2026-10-13</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`__tests__/corpus/corpusRunner.ts` and its suite. Tests only; no production</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">12 of 12, case A driving 10 stages in under 700ms against an 8-minute suite cap.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">I INVENTED A VOCABULARY AND FILTERED ON IT. The requirement filter keyed on</span></div>
           
         </div>
       </article>

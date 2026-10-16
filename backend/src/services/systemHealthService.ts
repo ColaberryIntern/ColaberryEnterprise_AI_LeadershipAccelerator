@@ -5,6 +5,7 @@ import { logAiEvent } from './aiEventService';
 import { checkSequenceProgression } from './health/sequenceProgressionCheck';
 import { checkCampaignHealth } from './health/campaignHealthCheck';
 import { checkGrowthJourney } from './health/growthJourneyCheck';
+import { checkLifecycleRegistration } from './health/lifecycleRegistrationCheck';
 
 // ─── Original content-generation health metrics (used by aiOpsRoutes, systemAutoResponseService) ───
 
@@ -452,6 +453,7 @@ export async function runFullSystemHealthCheck(): Promise<SystemHealthReport> {
     checkFrontendAvailability(checks),
     checkCampaignHealth(checks),
     checkGrowthJourney(checks),
+    checkLifecycleRegistration(checks),
   ]);
 
   const hasCritical = checks.some(c => c.severity === 'critical');

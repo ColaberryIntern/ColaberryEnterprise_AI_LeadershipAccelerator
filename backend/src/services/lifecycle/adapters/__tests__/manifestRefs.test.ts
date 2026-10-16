@@ -57,6 +57,13 @@ describe('emptyRefs keeps the promise its doc comment makes', () => {
     expect(Array.isArray(refs.agents.builder)).toBe(true);
     expect(Array.isArray(refs.trackMappings.proposalSections)).toBe(true);
     expect(Array.isArray(refs.trackMappings.solutionStories)).toBe(true);
+
+    // `coverage` is the third object-holding-arrays carve-out, and it breaks the pattern of the
+    // two above ON PURPOSE: its array is `null` on a skeleton, not `[]`. `[]` would mean "somebody
+    // checked source coverage and every requirement block is cited", which a bare `emptyRefs()`
+    // has not earned. The field is present so the SHAPE is stable; the value says nobody looked.
+    expect(refs).toHaveProperty('coverage');
+    expect(refs.coverage.uncitedRequirementBlocks).toBeNull();
   });
 
   it('carries the origin and project it was asked for, not a default', () => {

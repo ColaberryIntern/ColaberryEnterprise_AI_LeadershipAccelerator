@@ -11,7 +11,7 @@
  * gate bypass: every predicate would trust it and the NOT_ASSESSED refusal would become a pass.
  */
 import type { LifecycleEvidence, EvidenceField } from './lifecyclePrerequisites';
-import type { ManifestRefs } from './adapters/manifestRefs';
+import { REQUIREMENT_SOURCE_COLLECTIONS, type ManifestRefs } from './adapters/manifestRefs';
 import { requirementsNeedingCoverage } from './adapters/sbpAdapter';
 import {
   publishedPlanState,
@@ -112,7 +112,7 @@ type Measurement = (ctx: EvidenceContext) => unknown;
  * the readable subset would report a provenance gap list that quietly omitted the rows nobody
  * could read — and a shorter gap list looks like better news, which is the wrong way to fail.
  */
-interface SourceLike { id: string; state?: unknown; provenanceKind?: unknown }
+interface SourceLike { id: string; state?: unknown; provenanceKind?: unknown; source?: unknown }
 
 function readableSources(ctx: EvidenceContext): ReadonlyArray<SourceLike> | null {
   const list: unknown = ctx.refs?.sources;
@@ -236,11 +236,84 @@ export const EVIDENCE_MEASUREMENTS: Partial<Record<EvidenceField, Measurement>> 
       : ctx.published.hashIntact
   ),
 
-  // DELIBERATELY NOT `requirementCount: refs.sources.length`. `SourceRef` is documented as "a
-  // requirement OR OTHER CAPTURED STATEMENT", so sources is a superset of requirements and
-  // equating them would publish a count that means something slightly different from its name.
-  // That is the shape of error this phase has been caught on repeatedly, and it is cheaper to
-  // leave the field unassessed — where it BLOCKS — than to measure it approximately.
+  /**
+   * How many requirements have been captured.
+   *
+   * ## This field had no measurement, and the lifecycle could not turn because of it
+   *
+   * The note that stood here said: DELIBERATELY NOT `requirementCount: refs.sources.length`,
+   * because `SourceRef` is documented as "a requirement OR OTHER CAPTURED STATEMENT", so sources
+   * is a superset and equating them publishes a count meaning something other than its name —
+   * "cheaper to leave the field unassessed, where it BLOCKS, than to measure it approximately."
+   *
+   * The reasoning was sound and the consequence was not measured. `requirements_ready` is the
+   * FIRST gate, `blockingGaps` filters only `ADVISORY_RULES`, and no kind is advisory — so an
+   * unassessed `requirementCount` blocks every project at stage one of thirteen, permanently.
+   * The lifecycle shipped, deployed and activated in that state. "Unassessed because honest" is
+   * the right answer only while something is on its way to measuring it.
+   *
+   * ## Why it can now be measured EXACTLY, not approximately
+   *
+   * The superset is a property of the TYPE's intent, not of the data. Both shipped adapters map
+   * `input.requirements` and nothing else into `sources`, and `SourceRef.source` records which
+   * collection each pointer came from. So the non-requirements can be FILTERED rather than
+   * guessed at, and `REQUIREMENT_SOURCE_COLLECTIONS` is the one place that says which collections
+   * those are — asserted against both adapters by a test, in both directions, so it cannot drift
+   * into a silently shrinking filter.
+   *
+   * ALL-OR-NOTHING, and the direction is the reason. One unrecognised `source` means a collection
+   * nobody has classified. Counting the recognised subset would under-report, and under-reporting
+   * is the dangerous direction for a `> 0` predicate: a short count can only make a project look
+   * LESS ready, but a count that silently excluded the only real requirement collection would
+   * report zero and refuse a project that is in fact ready — a fabricated refusal, which this
+   * file treats as the same class of defect as a fabricated pass.
+   */
+  requirementCount: (ctx) => {
+    const sources = readableSources(ctx);
+    if (sources === null) return NOT_MEASURED;
+    const allClassified = sources.every(
+      (s) => typeof s.source === 'string' && REQUIREMENT_SOURCE_COLLECTIONS.has(s.source),
+    );
+    if (!allClassified) return NOT_MEASURED;
+    return sources.filter((s) => REQUIREMENT_SOURCE_COLLECTIONS.has(s.source as string)).length;
+  },
+
+  /**
+   * Requirement source blocks that no business task cites.
+   *
+   * ## Measured at composition, read here
+   *
+   * This is the other field that had no measurement, and it could not have one: the question is
+   * "which requirement source blocks does no task cite", and NEITHER half is in a ref set.
+   * `sources` holds requirement pointers, not the process document's source blocks, and
+   * `businessTasks` is `PinnedRef[]` — ids with no `source_evidence`. The relation lives on
+   * `FactoryProject`, which the composer holds and this reader does not.
+   *
+   * So the measurement moved to where the data is, and `refs.coverage` carries the result. The
+   * rule is `factoryValidate`'s shipped SOURCE_COVERAGE, not a second implementation of it.
+   *
+   * ## Three states, one check
+   *
+   * `null` is "nobody measured" (a skeleton ref set, or a factory input that supplied no source
+   * blocks). `undefined` is a manifest written before the field existed. Both are NOT_MEASURED
+   * and both therefore BLOCK, which is the whole doctrine of this file. `[]` is the measured
+   * answer "every requirement block is cited", and only an adapter that actually looked writes
+   * it. One `Array.isArray` separates the two groups.
+   *
+   * THE ELEMENTS ARE CHECKED, not just the container, for the same reason `readableSources`
+   * checks its elements: `refs_json` is cast `parsed as ManifestRefs` at the JSONB boundary with
+   * nothing having validated what is inside. A list of nulls would otherwise be reported as a
+   * list of gap ids and rendered as `Source block null is a requirement but no task cites it.`
+   */
+  uncitedRequirementSourceBlocks: (ctx) => {
+    const measured = ctx.refs?.coverage?.uncitedRequirementBlocks;
+    if (!Array.isArray(measured)) return NOT_MEASURED;
+    const readable = measured.every((id) => typeof id === 'string' && id.trim() !== '');
+    // ONE unreadable element makes the WHOLE list unmeasurable, matching `readableSources`.
+    // Returning the readable subset would publish a SHORTER gap list, and a shorter gap list
+    // reads as better news.
+    return readable ? [...measured] : NOT_MEASURED;
+  },
 };
 
 /**

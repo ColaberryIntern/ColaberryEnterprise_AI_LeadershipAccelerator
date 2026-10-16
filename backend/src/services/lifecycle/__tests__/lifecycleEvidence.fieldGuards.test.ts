@@ -138,20 +138,27 @@ describe('the read-field set is honest in BOTH directions', () => {
     // hardcoded, so this test does not have to be edited every time the map grows — what it
     // asserts is that the injection is REMOVED afterwards, not what the map happens to hold.
     const before = Object.keys(map).sort();
-    expect(before).not.toContain('requirementCount');
 
-    map.requirementCount = () => 42;
+    // THE PROBE FIELD MUST BE ONE THE REAL MAP LACKS, or the injection proves nothing: a field
+    // that is already measured would make `assessedFields` contain it either way. It was
+    // `requirementCount` until B3 gave that field a measurement, at which point this test failed
+    // — correctly, and loudly, which is why the guard below is an assertion and not a comment.
+    // `graphHasStart` is the replacement: still unmeasured, and read by `process_ready` through
+    // `condGaps`, so the measured-not-unassessed half of the claim is still checkable.
+    expect(before).not.toContain('graphHasStart');
+
+    map.graphHasStart = () => true;
     try {
       const e = await readLifecycleEvidence(ROW);
-      expect(e.requirementCount).toBe(42);
-      expect(e.assessedFields.has('requirementCount')).toBe(true);
+      expect(e.graphHasStart).toBe(true);
+      expect(e.assessedFields.has('graphHasStart')).toBe(true);
 
       // And the stage that reads it must now treat it as MEASURED, not not-assessed.
-      const gap = prerequisiteGaps('requirements_ready', e)
-        .find((g) => g.rule === 'no_requirements');
+      const gap = prerequisiteGaps('process_ready', e)
+        .find((g) => g.rule === 'graph_no_start');
       expect(gap).toBeUndefined();
     } finally {
-      delete map.requirementCount;
+      delete map.graphHasStart;
     }
     expect(Object.keys(map).sort()).toEqual(before);
   });
@@ -382,26 +389,81 @@ describe('a measurement that cannot measure leaves the field UNASSESSED', () => 
       .assessedFields.size).toBe(2);
   });
 
-  it('requirementCount is deliberately NOT measured, and that is a decision not an omission', () => {
-    // `SourceRef` is documented as "a requirement OR OTHER CAPTURED STATEMENT", so sources is a
-    // superset of requirements and `sources.length` would be a count meaning something slightly
-    // different from its name. Left unassessed, where it BLOCKS, rather than measured loosely.
-    expect(Object.keys(EVIDENCE_MEASUREMENTS)).not.toContain('requirementCount');
-    // P6-T4 added the three plan-derived measurements and P6-T5 the two publication ones.
-    // `requirementCount` is STILL absent, and the reason above still holds: `sources` is a
-    // superset of requirements, so `sources.length` would be a count meaning something
-    // slightly different from its name.
-    // Pinned as a sorted list rather than a size so an addition has to name itself here.
+  /**
+   * THE MAP IS PINNED IN BOTH DIRECTIONS, because each half catches a different mistake.
+   *
+   * ## What this test used to say, and why it was wrong
+   *
+   * It asserted `requirementCount` was "deliberately NOT measured, and that is a decision not an
+   * omission", on the reasoning that `SourceRef` is documented as "a requirement OR OTHER
+   * CAPTURED STATEMENT", so `sources.length` would be a count meaning something other than its
+   * name — better left unassessed, where it BLOCKS, than measured loosely.
+   *
+   * Every sentence of that was true and the conclusion still shipped a closed system.
+   * `requirements_ready` is stage 2 of 13, `blockingGaps` filters only `ADVISORY_RULES`, and no
+   * gap KIND is advisory — so an unassessed `requirementCount` meant **no project could ever
+   * leave `discovery`**. "Unassessed because honest" is only the right answer while something is
+   * on its way to measuring it, and for this field nothing was.
+   *
+   * B3 measured it exactly instead of loosely: the superset is a property of the type's intent,
+   * not of the data, and `SourceRef.source` records which collection each pointer came from. See
+   * `lifecycleEvidence.requirementsGate.test.ts`.
+   */
+  it('the map holds exactly nine measurements, and an addition must name itself here', () => {
+    // A sorted list rather than a size: a size moves when one field is swapped for another and
+    // says nothing about which.
     expect(Object.keys(EVIDENCE_MEASUREMENTS).sort())
       .toEqual([
         'mustHaveRequirementsWithoutStory',
         'publishedPlanHashIntact',
         'publishedPlanIsSingular',
         'releasesWithoutUserVisibleWorkflow',
+        'requirementCount',
         'requirementsWithoutProvenance',
         'storiesWithoutTraceability',
+        'uncitedRequirementSourceBlocks',
         'unresolvedSourceBlocks',
       ]);
+  });
+
+  /**
+   * WHAT IS STILL UNMEASURED, pinned so the scope of B3 cannot be overstated.
+   *
+   * Opening `requirements_ready` moves a project ONE stage. Every field below is read by
+   * `process_ready` or later and has no measurement, so those stages still refuse with
+   * `not_assessed` — correctly, since nobody has looked. The data they need lives on
+   * `FactoryProject` and on the approval rows, neither of which `ManifestRefs` carries today.
+   *
+   * This exists because "the gate opens" is the kind of sentence that gets read as "the lifecycle
+   * turns", and the honest claim is narrower. A test is a worse place to hide the difference than
+   * a commit message.
+   */
+  it('eighteen fields are still unmeasured, so stages 3 onward still refuse', () => {
+    const measured = new Set(Object.keys(EVIDENCE_MEASUREMENTS));
+    const unmeasured = Object.keys(complete())
+      .filter((k) => k !== 'assessedFields' && k !== 'tenantId' && !measured.has(k))
+      .sort();
+
+    expect(unmeasured).toEqual([
+      'actorStillAuthorized',
+      'agentTasksAccountableForThemselves',
+      'approval',
+      'currentManifestRevision',
+      'effortCoverageDisclosed',
+      'graphHasEnd',
+      'graphHasStart',
+      'manifestContentHash',
+      'processesWithoutTasks',
+      'proposedBy',
+      'screensWithoutRationale',
+      'selectedDesignRef',
+      'tasksUnmappedToSurface',
+      'tasksWithoutAccountableHuman',
+      'tasksWithoutExecutionClass',
+      'unboundedReworkLoops',
+      'unknownAllocationCount',
+      'unreachableTasks',
+    ]);
   });
 });
 

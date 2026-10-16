@@ -1207,3 +1207,23 @@ Taken against production after the Phase 6 deploy. **The 409 sits behind authent
 the observation requires a program-section admin token, which cannot be minted from a Claude
 session. One authenticated `curl` before the flag flips is the whole task. After activation the
 evidence is unobtainable forever.
+
+## A delivery-side enforcement gate must carry the registration cutoff
+
+**Raised:** 2026-10-14, session `CC-20261001-q7m4`, closing backbone task B2.
+
+The DRI decided not to backfill legacy projects. Four `delivery_projects` (two
+`government_public_sector`) and 62 `projects` predate their registration hooks and hold no
+lifecycle row. They are legacy and out of scope.
+
+That is safe **today** because there is no delivery-side gate: nothing refuses work for a missing
+lifecycle row on the delivery path. `storyAuthorizationFor` is student-only and has one caller.
+
+**The obligation.** Whoever builds the gov equivalent of the story gate must apply
+`LIFECYCLE_REGISTRATION_LIVE_SINCE` (2026-10-09) the way `storyAuthorization.ts` applies
+`STUDENT_REGISTRATION_LIVE_SINCE` — a project created BEFORE the cutoff with no lifecycle row is
+legacy and permitted; one created after is a bypass and refused. Without it, the first deploy of
+that gate refuses all four legacy delivery projects, two of them live government work.
+
+The mechanism already exists and is tested (`registrationCutoff.test.ts`). This is a reminder to
+USE it, not to build it.

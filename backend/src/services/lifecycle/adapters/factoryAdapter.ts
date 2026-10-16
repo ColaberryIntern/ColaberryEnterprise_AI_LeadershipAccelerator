@@ -40,8 +40,18 @@ export interface FactoryRequirementLike {
   tracks?: ReadonlyArray<string> | null;
 }
 
-export interface FactoryTaskLike { id: string }
+/**
+ * `source_evidence` is the SOURCE_COVERAGE anchor, and it is read here rather than only its id.
+ *
+ * OPTIONAL, and the three cases are different. An ABSENT field means the caller did not supply
+ * citations, so coverage is unmeasurable and must be reported as such. An EMPTY array means the
+ * task cites nothing, which `factoryValidate`'s own comment calls "a validation error" — it is a
+ * measured fact, not an absence. A populated array is the citation itself.
+ */
+export interface FactoryTaskLike { id: string; source_evidence?: ReadonlyArray<string> | null }
 export interface FactoryProcessLike { id: string }
+/** One addressable block of the source. Only the two fields coverage needs, named structurally. */
+export interface FactorySourceBlockLike { id: string; kind?: string | null }
 export interface FactoryAssignmentLike { role_id: string; responsibility?: string | null; executor?: { type?: string | null; id?: string | null } | null }
 
 export interface FactoryAdapterInput {
@@ -51,6 +61,14 @@ export interface FactoryAdapterInput {
   requirements: ReadonlyArray<FactoryRequirementLike>;
   processes?: ReadonlyArray<FactoryProcessLike>;
   tasks?: ReadonlyArray<FactoryTaskLike>;
+  /**
+   * The process document's source blocks, for the coverage measurement.
+   *
+   * ABSENT IS NOT EMPTY. Omitting this leaves `coverage.uncitedRequirementBlocks` unmeasurable,
+   * and the adapter says so by omitting the field rather than writing `[]` — `[]` is the answer
+   * "every requirement block is cited", which nobody has earned if nobody supplied the blocks.
+   */
+  sourceBlocks?: ReadonlyArray<FactorySourceBlockLike>;
   assignments?: ReadonlyArray<FactoryAssignmentLike>;
   /** canonical_req_id -> proposal section, from requirement_proposal_sections. */
   proposalSections?: ReadonlyArray<{ canonical_req_id: string; proposal_section_ref: string }>;
@@ -87,6 +105,27 @@ export function evidenceStateToSourceState(
   }
 }
 
+/**
+ * Requirement source blocks no task cites. The `SOURCE_COVERAGE` question, keeping the ids.
+ *
+ * A task whose `source_evidence` is absent or null contributes NO citations rather than being
+ * skipped. The difference matters: skipping it would be the same as treating a task that cites
+ * nothing as a task that cites everything, and "cites nothing" is the violation
+ * `factoryValidate` already calls an error.
+ *
+ * Only `kind === 'requirement'` is asked about. `context`, `constraint` and `out_of_scope` blocks
+ * are legitimately uncited, and `unresolved` has its own rule (`SOURCE_CLASSIFICATION`) — folding
+ * it in here would report one failure under two names.
+ */
+function uncitedRequirementBlocks(
+  blocks: ReadonlyArray<FactorySourceBlockLike>,
+  tasks: ReadonlyArray<FactoryTaskLike>,
+): string[] {
+  const cited = new Set<string>();
+  for (const t of tasks) for (const id of t.source_evidence ?? []) cited.add(id);
+  return blocks.filter((b) => b.kind === 'requirement' && !cited.has(b.id)).map((b) => b.id);
+}
+
 /** Translate Factory records into pinned references. Pure: same input, same output, no writes. */
 export function factoryToManifestRefs(input: FactoryAdapterInput): ManifestRefs {
   const refs = emptyRefs('factory', input.deliveryProjectId);
@@ -103,6 +142,25 @@ export function factoryToManifestRefs(input: FactoryAdapterInput): ManifestRefs 
     // document named "".
     provenanceKind: r.source_document && r.source_document.trim() ? r.source_document : null,
   }));
+
+  // SOURCE COVERAGE, measured here because this is the only place that can see both halves.
+  //
+  // THE RULE IS NOT REIMPLEMENTED, IT IS THE SAME RULE. `factoryValidate`'s SOURCE_COVERAGE is
+  // "every source block of kind 'requirement' must appear in at least one task's
+  // `source_evidence`", and that is what this is, over the same two collections. The reason it
+  // runs here rather than being read off `factoryValidate`'s issue list is that the issue list
+  // is prose — a `ValidationIssue` carries `message`, and recovering ids by parsing the message
+  // is the string-matching this programme keeps finding broken. `processValidation.ts` declined
+  // to reimplement the rule's JUDGEMENT; this reuses the judgement and keeps the ids.
+  //
+  // `undefined` blocks vs `null`: unmeasurable, reported as such, so the prerequisite keeps
+  // refusing. An EMPTY `sourceBlocks` array is different and is honoured — a project with no
+  // source blocks genuinely has no uncited ones.
+  refs.coverage = {
+    uncitedRequirementBlocks: input.sourceBlocks === undefined
+      ? null
+      : uncitedRequirementBlocks(input.sourceBlocks, input.tasks ?? []),
+  };
 
   const pin = (ids: ReadonlyArray<string>, source: string): PinnedRef[] =>
     ids.map((id) => ({ id, revision: rev, source }));
