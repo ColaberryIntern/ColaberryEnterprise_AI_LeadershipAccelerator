@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import type { ItemMedia, Poll, ContentVariant, ItemLink, ProviderKey, ProviderSummary } from '../../../../services/contentComposerApi';
+import { acceptedRatios, chooseFrame, cropNote, frameBox, type Frame } from './previewFraming';
 
 /**
  * Step 8: how the post will look on each network, at desktop and phone width.
@@ -36,8 +37,24 @@ type Device = 'desktop' | 'mobile';
  * `url` is a short-lived signed link to the same `/m/` route the publisher fetches from. When it
  * is absent - no public base URL on this server - the placeholder returns, captioned, rather
  * than a broken image icon.
+ *
+ * SHOWING IT IN THE RIGHT SHAPE (2026-10-15). Showing the file was only half the question. Every
+ * attachment was drawn in the same 360px-tall `contain` box, so a 9:16 reel and a 16:9 landscape
+ * previewed identically - and neither matched what the network would publish, because a network
+ * crops an upload into the nearest shape it supports rather than letterboxing it. The frame below
+ * comes from that network's own registry entry, and `object-fit: cover` means what you see is
+ * what survives the crop. "Whole file" puts it back, for checking the parts being cut.
  */
-function PreviewMedia({ media, count }: { media: readonly ItemMedia[]; count: number }) {
+function PreviewMedia({
+  media, count, provider, networkName, maxWidth,
+}: {
+  media: readonly ItemMedia[];
+  count: number;
+  provider: ProviderSummary | undefined;
+  networkName: string;
+  maxWidth: number;
+}) {
+  const [whole, setWhole] = useState(false);
   const shown = media.slice(0, 4);
   // No media rows but a non-zero count means the confirmation knows about assets this component
   // was not given; show the old placeholder rather than claiming there is nothing attached.
@@ -54,12 +71,27 @@ function PreviewMedia({ media, count }: { media: readonly ItemMedia[]; count: nu
   }
 
   const single = shown.length === 1;
+
+  // Resolved once per render so the notes below and the boxes above cannot disagree.
+  const frames = shown.map((m) => chooseFrame(m, acceptedRatios(m.mimeType, provider)));
+  const notes = shown
+    .map((m, i) => (frames[i] ? cropNote(m, frames[i] as Frame, networkName) : null))
+    .filter((n): n is string => n !== null);
+  const framable = frames.some((f) => f !== null);
+
   return (
-    <div className="mt-2 d-flex flex-wrap gap-1" data-testid="preview-media">
-      {shown.map((m) => {
-        const box: React.CSSProperties = single
-          ? { width: '100%', maxHeight: 360, objectFit: 'contain' }
-          : { width: 96, height: 96, objectFit: 'cover' };
+    <>
+    <div className="mt-2 d-flex flex-wrap gap-1 align-items-start" data-testid="preview-media">
+      {shown.map((m, i) => {
+        const frame = whole ? null : frames[i];
+        // The frame the network will use, at a size that fits the card. Falls back to the old
+        // plain box whenever the shape is unknown - a file with no recorded dimensions, or a
+        // provider whose registry entry carries no ratios for this media type.
+        const box: React.CSSProperties = frame
+          ? { ...frameBox(frame.value, single ? maxWidth : 112, single ? 420 : 112), objectFit: 'cover' }
+          : single
+            ? { width: '100%', maxHeight: 360, objectFit: 'contain' }
+            : { width: 96, height: 96, objectFit: 'cover' };
         if (m.url && m.mimeType.startsWith('video/')) {
           return (
             <video
@@ -102,6 +134,24 @@ function PreviewMedia({ media, count }: { media: readonly ItemMedia[]; count: nu
       })}
       {media.length > 4 && <div className="small text-muted align-self-center">+{media.length - 4}</div>}
     </div>
+
+    {/* Only what is being cut, and only when something is. A note on every attachment teaches
+        the eye to skip the notes, which costs exactly the ones that mattered. */}
+    {!whole && notes.map((n) => (
+      <div key={n} className="small text-warning mt-1" data-testid="preview-crop-note">{n}</div>
+    ))}
+
+    {framable && (
+      <button
+        type="button"
+        className="btn btn-link btn-sm p-0 mt-1 text-decoration-none"
+        onClick={() => setWhole((w) => !w)}
+        data-testid="preview-frame-toggle"
+      >
+        {whole ? `Show as ${networkName} will crop it` : 'Show the whole file'}
+      </button>
+    )}
+    </>
   );
 }
 
@@ -172,7 +222,14 @@ export default function ComposerPreview({ variants, providers, links, mediaCount
           </div>
         )}
 
-        <PreviewMedia media={media} count={mediaCount} />
+        <PreviewMedia
+          media={media}
+          count={mediaCount}
+          provider={caps}
+          networkName={caps?.displayName ?? 'This network'}
+          // The card's inner width at this device, so a framed box never overflows it.
+          maxWidth={device === 'mobile' ? 328 : 520}
+        />
 
         {link && caps?.linkBehavior !== 'no_clickable_links' && (
           <div className="mt-2 border rounded p-2 bg-light small" data-testid="preview-link-card">

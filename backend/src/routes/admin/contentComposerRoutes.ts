@@ -247,6 +247,11 @@ router.get('/api/admin/content/providers', requireAdmin, (_req: Request, res: Re
         displayName: caps.displayName,
         contentTypes: caps.contentTypes,
         maxChars: caps.text.maxChars,
+        // The shapes this network renders media in. The preview frames an attachment in the
+        // nearest one and states what the crop costs, so these come from the dated registry
+        // rather than being restated in the UI, where they would drift out of step with it.
+        imageRatios: caps.image?.aspectRatios ?? [],
+        videoRatios: caps.video?.aspectRatios ?? [],
         linkBehavior: caps.linkBehavior,
         mode: decision.mode,
         reasons: decision.mode === 'handoff' ? decision.reasons : [],

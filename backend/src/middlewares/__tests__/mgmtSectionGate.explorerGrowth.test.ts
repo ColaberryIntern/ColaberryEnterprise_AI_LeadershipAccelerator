@@ -105,18 +105,35 @@ describe('the prefix respects the segment boundary', () => {
 });
 
 describe('exactly which roles hold campaigns — pinned, not assumed', () => {
-  const HOLDERS: MgmtRole[] = ['owner', 'admin'];
+  // Updated for AF2.3 (Ali approved 2026-10-15), and the update is the whole value of this test.
+  //
+  // It was `['owner', 'admin']`, and adding the `marketing` role broke it — which is exactly what
+  // it exists to do. Granting `campaigns` to a scoped role is a real widening of who can read
+  // every learner's scores, signals and decision history, so it must be stated out loud in a diff
+  // rather than slipped in. Stating it: the marketing intern owns this department and needs read
+  // AND update on it, which is link 2 of the capability-transfer chain. `marketing` is a strict
+  // subset of `admin` and reaches nothing else; `agentFactoryDomainRoles.test.ts` asserts that
+  // separately against every section.
+  const HOLDERS: MgmtRole[] = ['owner', 'admin', 'marketing'];
 
-  it('is owner and admin, and nobody else', () => {
+  it('is owner, admin and marketing, and nobody else', () => {
     // The load-bearing assertion in this file. If a future change grants
-    // 'campaigns' to a scoped role, this fails and the diff has to say so out
+    // 'campaigns' to another scoped role, this fails and the diff has to say so out
     // loud — which is the point, because that role would gain read access to
     // every learner's scores, signals and decision history.
     const holders = MGMT_ROLES.filter((r) => roleCanAccessSection(r, 'campaigns'));
     expect([...holders].sort()).toEqual([...HOLDERS].sort());
   });
 
-  it.each(['curriculum', 'revenue', 'admissions', 'support', 'mentor', 'community_organizer'])(
+  it('marketing holds campaigns and NOTHING else beyond its landing page', () => {
+    // The grant above is only acceptable because it is this narrow. Asserted here, next to the
+    // widening, rather than only in the domain-roles suite — a reader auditing who can see learner
+    // data should not have to go to another file to find out how far the new role reaches.
+    expect(sectionsForRole('marketing').sort()).toEqual(['campaigns', 'dashboard']);
+  });
+
+  it.each(['curriculum', 'revenue', 'admissions', 'support', 'mentor', 'community_organizer',
+    'platform', 'executive', 'lead_intake', 'internship_review'])(
     'scoped role %s does NOT hold campaigns',
     (role) => {
       // Named individually rather than derived, so the failure message says

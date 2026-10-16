@@ -15,16 +15,23 @@
  *
  * ## Why the wrapping is asserted and not just the presence
  *
- * `ensureAgentDomainProjectSchema` is the only one of 106 `ensure*` files whose post-condition
+ * `ensureAgentDomainProjectSchema` is one of five `ensure*` files (of 110) whose post-condition
  * throws. `start()` is called bare, `app.listen` is its last statement, and `backend/src` registers
  * no `unhandledRejection` handler — so an uncontained throw here stops the backend binding its
  * port. That is the rule `server.ts` states twice within 250 lines of this registration. Removing
  * the `try`/`catch` would be invisible to every other test in the repository.
  */
 
+import * as fs from 'fs';
+import * as path from 'path';
 import { activeBootCall, serverSourceText } from './helpers/bootCalls';
 
-const CALL = 'await ensureAgentDomainProjectSchema()';
+// The boot call is the GUARDED helper. The inline try/catch moved into the module so the
+// failure path could be EXERCISED rather than grepped -- see
+// ensureAgentDomainProjectSchema.guard.test.ts, which drives it with a rejecting
+// dependency. An independent re-grade failed this task because every assertion here read
+// server.ts as a string and none proved the port still binds.
+const CALL = 'await ensureAgentDomainProjectSchemaGuarded()';
 const src = serverSourceText();
 
 describe('the boot registration is wired', () => {
@@ -81,15 +88,19 @@ describe('the boot registration is WRAPPED, because its assert throws', () => {
    *
    * Verified by applying that edit and re-running; reverted by re-applying the lines.
    */
-  it('the call site contains a try and a catch', () => {
+  it('the guard is in the MODULE, so server.ts has no inline try/catch to grep', () => {
+    // This used to assert server.ts contained a try and a catch around the call. It no longer
+    // does, ON PURPOSE: the guard moved into ensureAgentDomainProjectSchemaGuarded so the failure
+    // path could be driven by a test instead of described by a regex. The old assertion passed
+    // while proving nothing about whether the port binds -- and, as an independent re-grade
+    // pointed out, `try {` survived even a mutation that deleted the whole block, because a
+    // neighbouring boot section supplied one within the search window. The margin was one keyword.
     const at = activeBootCall(CALL);
-    expect(at).toBeGreaterThan(-1);
-    const around = src.slice(Math.max(0, at - 400), at + 400);
-    expect(around).toContain('try {');
-    expect(around).toContain('catch');
+    const around = src.slice(at, at + 400);
+    expect(around).not.toMatch(/catch \(/);
   });
 
-  it('this really is the only ensure* with a throwing post-condition, which is why it needs the guard', () => {
+  it('every ensure* with a throwing post-condition is accounted for, and this one is the guarded one', () => {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const fs = require('fs');
     // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -101,32 +112,58 @@ describe('the boot registration is WRAPPED, because its assert throws', () => {
       const s = fs.readFileSync(path.join(dir, f), 'utf8');
       // A POST-CONDITION that throws, not a statement loop that re-throws: the marker is an
       // assert function raising SchemaInvariantViolation.
-      return /SchemaInvariantViolation/.test(s) && /throw new Error\(`SchemaInvariantViolation/.test(s);
+      // NEWLINE-TOLERANT. The original detector required `throw new Error(` and the backtick
+      // on ONE line, so `ensureBroadcastTelemetrySchema.ts` -- which splits them across two --
+      // was invisible to it. A green test asserting a falsehood on a whitespace artifact is a
+      // disabled check, and this one asserted that this file was unique when it is not.
+      return /throw new Error\(\s*`SchemaInvariantViolation/s.test(s);
     });
-    expect(throwing).toEqual(['ensureAgentDomainProjectSchema.ts']);
+    // The honest invariant: this file is AMONG the throwing set, and the set is the measured
+    // one. Asserting uniqueness was the fabrication; asserting membership plus a pinned roster is
+    // what actually protects anything.
+    expect(throwing).toContain('ensureAgentDomainProjectSchema.ts');
+    expect(throwing.sort()).toEqual(
+      ['ensureAgentDomainProjectSchema.ts', 'ensureBroadcastTelemetrySchema.ts'],
+    );
   });
 
-  it('the catch DERIVES its error class rather than asserting one', () => {
-    // It used to log a literal `SchemaInvariantViolation` for any caught error, so a connection
-    // failure inside the introspection query would have been labelled as a schema violation it
-    // is not. CLAUDE.md requires the class to be tagged before logging, and tagged correctly.
-    const at = activeBootCall(CALL);
-    const around = src.slice(at, at + 1200);
-    expect(around).toMatch(/err instanceof Error \? err\.constructor\.name/);
-    expect(around).not.toMatch(/error_class=SchemaInvariantViolation/);
+  /**
+   * THE CATCH IS NO LONGER IN server.ts, AND THAT IS THE FIX.
+   *
+   * Three assertions used to live here: that the catch derives its error class, that it emits
+   * structured JSON, and that it does not rethrow. All three read server.ts as a STRING. An
+   * independent re-grade failed the task on exactly that — a source-grep proves a try/catch was
+   * typed, never that the port still binds when the schema call rejects.
+   *
+   * The guard is now `ensureAgentDomainProjectSchemaGuarded` in the module, and those three
+   * properties are asserted BEHAVIOURALLY in ensureAgentDomainProjectSchema.guard.test.ts: it is
+   * driven with a rejecting dependency (an Error, a bare Error, a string, null, undefined) and
+   * asserted to RESOLVE, with the emitted warning parsed and its derived error_class checked.
+   *
+   * What remains here is the only thing server.ts can actually prove: that it calls the guarded
+   * helper rather than the raw one, so the guard cannot be bypassed by reverting one word.
+   */
+  it('server.ts calls the GUARDED helper, never the raw schema function', () => {
+    expect(activeBootCall('await ensureAgentDomainProjectSchemaGuarded()')).toBeGreaterThan(-1);
+    // The raw call must not be awaited directly anywhere in the boot path -- that is the
+    // regression this guards, and it is a one-word revert away.
+    expect(activeBootCall('await ensureAgentDomainProjectSchema()')).toBe(-1);
   });
 
-  it('the catch emits structured JSON with a timestamp, not a prose string', () => {
-    const at = activeBootCall(CALL);
-    const around = src.slice(at, at + 1200);
-    expect(around).toMatch(/JSON\.stringify\(\{/);
-    expect(around).toMatch(/timestamp:/);
-    expect(around).toMatch(/outcome: 'failure'/);
+  it('the behavioural guard test exists and drives the failure path', () => {
+    // A pointer with teeth: if the behavioural suite is deleted, this fails rather than leaving
+    // the structural assertions above looking like full coverage.
+    const guardTest = fs.readFileSync(
+      path.join(__dirname, 'ensureAgentDomainProjectSchema.guard.test.ts'), 'utf8',
+    );
+    expect(guardTest).toMatch(/resolves\.toMatchObject\(\{ ok: false \}\)/);
+    expect(guardTest).toMatch(/mockRejectedValue/);
   });
 
-  it('and it CONTINUES: the catch does not rethrow or exit', () => {
-    // A guard that swallows and then rethrows is not a guard. A backend that will not boot is
-    // worse than one that boots carrying a named schema problem.
+  it('and it CONTINUES: the boot call cannot reject', () => {
+    // A guard that swallows and then rethrows is not a guard. Asserted behaviourally in
+    // guard.test.ts; what is checked here is that server.ts awaits it BARE, which is only safe
+    // because the helper itself cannot reject.
     const at = activeBootCall(CALL);
     const around = src.slice(at, at + 1200);
     const catchBody = around.slice(around.indexOf('catch'));

@@ -38,6 +38,13 @@ export interface ProviderSummary {
   displayName: string;
   contentTypes: ContentType[];
   maxChars: number;
+  /**
+   * The shapes this network renders media in, from its dated capability registry entry.
+   * Optional because backend and frontend deploy separately: a UI running ahead of the server
+   * that added these must fall back to showing the file plainly, not to a guessed crop.
+   */
+  imageRatios?: string[];
+  videoRatios?: string[];
   linkBehavior: 'inline' | 'first_comment_recommended' | 'no_clickable_links' | 'attachment';
   mode: PublishMode;
   reasons: string[];

@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agent Factory — the intern journey, end state</title>
+<link href="https://cdn.jsdelivr.net/npm/remixicon@4.2.0/fonts/remixicon.css" rel="stylesheet">
+<style>
+  :root{
+    --cherry:#FB2832; --cherry-deep:#C20E1E; --cherry-bg:#FFF0F1; --leaf:#77BB4A;
+    --text:#2d3748; --muted:#718096; --line:#e2e8f0; --bg:#ffffff; --bg-alt:#f7fafc;
+    --sidebar:#1f2328; --sidebar-text:#c7ccd4; --ok:#10b981; --warn:#f59e0b; --warn-bg:rgba(245,158,11,.10);
+    --danger:#ef4444; --danger-bg:rgba(239,68,68,.08); --info:#3b82f6;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:'Segoe UI',system-ui,-apple-system,sans-serif;color:var(--text);
+       background:var(--bg-alt);line-height:1.6}
+  .wrap{max-width:1180px;margin:0 auto;padding:0 16px 80px}
+  header.hero{background:linear-gradient(160deg,#fff 0%,var(--cherry-bg) 100%);
+       border-bottom:1px solid var(--line);padding:44px 0 36px;margin-bottom:34px}
+  .hero h1{margin:0 0 8px;font-size:30px;font-weight:700;color:var(--cherry);line-height:1.2}
+  .hero p{margin:0;color:var(--muted);max-width:760px}
+  .pill{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+        padding:4px 10px;border-radius:20px;background:var(--cherry);color:#fff;margin-bottom:14px}
+
+  .stage{margin:0 0 42px}
+  .stage-head{display:flex;align-items:flex-start;gap:14px;margin-bottom:14px}
+  .num{flex:0 0 36px;height:36px;border-radius:50%;background:var(--cherry);color:#fff;
+       display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px}
+  .stage-head h2{margin:4px 0 2px;font-size:20px;font-weight:700;color:var(--text)}
+  .stage-head .sub{color:var(--muted);font-size:14px}
+
+  /* browser chrome */
+  .frame{border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#fff;
+         box-shadow:0 2px 14px rgba(0,0,0,.07)}
+  .chrome{background:#eef1f5;border-bottom:1px solid var(--line);padding:8px 12px;display:flex;
+          align-items:center;gap:8px}
+  .dot{width:10px;height:10px;border-radius:50%;background:#cfd5de}
+  .url{flex:1;background:#fff;border:1px solid var(--line);border-radius:6px;padding:3px 10px;
+       font-size:12px;color:var(--muted);font-family:ui-monospace,Consolas,monospace}
+
+  /* app shell */
+  .app{display:grid;grid-template-columns:186px 1fr;min-height:330px}
+  .side{background:var(--sidebar);padding:14px 0;color:var(--sidebar-text);font-size:12.5px}
+  .side .grp{padding:11px 14px 5px;font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;color:#6b7482;font-weight:700}
+  .side a{display:flex;align-items:center;gap:8px;padding:6px 14px;color:var(--sidebar-text);text-decoration:none}
+  .side a.on{background:var(--cherry);color:#fff;font-weight:600}
+  .side a.dim{color:#5c636e}
+  .side i{font-size:14px}
+  .main{padding:18px 20px;background:var(--bg)}
+  .ph{font-size:17px;font-weight:700;margin:0 0 3px}
+  .psub{color:var(--muted);font-size:12.5px;margin:0 0 16px}
+
+  .card{border:1px solid var(--line);border-radius:9px;padding:14px 16px;margin-bottom:12px;background:#fff}
+  .card h4{margin:0 0 9px;font-size:13.5px;font-weight:700}
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:6px}
+  .stat .v{font-size:23px;font-weight:700;color:var(--cherry);line-height:1.1}
+  .stat .v.zero{color:#9ca3af}
+  .stat .l{font-size:11px;color:var(--muted)}
+  .note{background:var(--cherry-bg);border-left:3px solid var(--cherry);padding:10px 13px;
+        border-radius:0 6px 6px 0;font-size:13px;margin:12px 0}
+  .warnbox{background:var(--warn-bg);border-left:3px solid var(--warn);padding:10px 13px;
+        border-radius:0 6px 6px 0;font-size:13px;margin:12px 0}
+  .okbox{background:rgba(16,185,129,.08);border-left:3px solid var(--ok);padding:10px 13px;
+        border-radius:0 6px 6px 0;font-size:13px;margin:12px 0}
+
+  .badge{display:inline-block;font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:12px;
+         text-transform:uppercase;letter-spacing:.04em}
+  .b-draft{background:#eef1f5;color:#6b7280}
+  .b-ok{background:rgba(16,185,129,.14);color:#047857}
+  .b-wait{background:var(--warn-bg);color:#b45309}
+  .b-no{background:var(--danger-bg);color:#b91c1c}
+
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th{text-align:left;font-weight:600;color:var(--muted);font-size:11px;text-transform:uppercase;
+     letter-spacing:.05em;padding:7px 8px;border-bottom:1px solid var(--line)}
+  td{padding:8px;border-bottom:1px solid #f1f4f8;vertical-align:middle}
+  code{font-family:ui-monospace,Consolas,monospace;font-size:12px;background:#f4f6f9;
+       padding:1px 5px;border-radius:4px;color:#334155}
+
+  .flow{display:grid;grid-template-columns:1fr auto 1fr auto 1fr;gap:10px;align-items:center;
+        margin:16px 0}
+  .step{border:1px solid var(--line);border-radius:8px;padding:12px;text-align:center;background:#fff}
+  .step .who{font-size:10.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:700}
+  .step .what{font-size:13px;font-weight:600;margin-top:3px}
+  .arrow{color:var(--cherry);font-size:20px;text-align:center}
+  .gate{border-color:var(--cherry);background:var(--cherry-bg)}
+
+  .btn{display:inline-block;padding:6px 14px;border-radius:6px;font-size:12.5px;font-weight:600;
+       border:1px solid var(--cherry);color:var(--cherry);background:#fff}
+  .btn.solid{background:var(--cherry);color:#fff}
+  .btn.ghost{border-color:var(--line);color:var(--muted)}
+
+  .legend{display:flex;gap:18px;flex-wrap:wrap;font-size:12.5px;color:var(--muted);margin-top:10px}
+  .legend span{display:flex;align-items:center;gap:6px}
+  .sw{width:11px;height:11px;border-radius:3px;display:inline-block}
+
+  footer{border-top:1px solid var(--line);margin-top:40px;padding-top:22px;color:var(--muted);font-size:13px}
+  @media (max-width:820px){.app{grid-template-columns:1fr}.side{display:none}
+    .stats{grid-template-columns:repeat(2,1fr)}.flow{grid-template-columns:1fr}.arrow{transform:rotate(90deg)}}
+</style>
+</head>
+<body>
+
+<header class="hero"><div class="wrap">
+  <span class="pill">End state · Monday 19 Oct</span>
+  <h1>What an intern sees, from signing in to granting their agent a tool</h1>
+  <p>Five stages, using Sarbjit and Marketing as the worked example. Two things this is designed to
+     make unmissable: <strong>an intern controls their section and their agent separately</strong>, and
+     <strong>a tool only reaches the agent through an approval the intern cannot give themselves.</strong></p>
+</div></header>
+
+<div class="wrap">
+
+<!-- 1 -->
+<section class="stage">
+  <div class="stage-head"><div class="num">1</div><div>
+    <h2>They start in the student portal, where they already live</h2>
+    <div class="sub">No second password. The <em>Management Portal</em> link appears only for staff with a management role.</div>
+  </div></div>
+  <div class="frame">
+    <div class="chrome"><span class="dot"></span><span class="dot"></span><span class="dot"></span>
+      <span class="url">enterprise.colaberry.ai/portal/today</span></div>
+    <div class="app">
+      <div class="side">
+        <div class="grp">Build and learn</div>
+        <a class="dim"><i class="ri-home-5-line"></i>Today</a>
+        <a class="dim"><i class="ri-book-2-line"></i>Curriculum</a>
+        <a class="dim"><i class="ri-briefcase-line"></i>Internship</a>
+        <div class="grp">Employee</div>
+        <a class="on"><i class="ri-layout-grid-line"></i>Management Portal</a>
+      </div>
+      <div class="main">
+        <p class="ph">Today</p>
+        <p class="psub">Signed in as Sarbjit Kaur — intern, Marketing domain</p>
+        <div class="note"><strong>Only visible to employees.</strong> The link renders when the signed-in
+          account carries a management role. A student never sees it, and the endpoint behind it refuses
+          them as well — the nav is not the access control.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 2 -->
+<section class="stage">
+  <div class="stage-head"><div class="num">2</div><div>
+    <h2>One click bridges them into the management portal</h2>
+    <div class="sub">A scoped admin token is minted from their existing session. They never hold a second credential.</div>
+  </div></div>
+  <div class="flow">
+    <div class="step"><div class="who">Portal session</div><div class="what">Sarbjit, already signed in</div></div>
+    <div class="arrow"><i class="ri-arrow-right-line"></i></div>
+    <div class="step gate"><div class="who">The bridge</div><div class="what">Mints a token scoped to her role only</div></div>
+    <div class="arrow"><i class="ri-arrow-right-line"></i></div>
+    <div class="step"><div class="who">Management portal</div><div class="what">Opens on her own domain</div></div>
+  </div>
+  <div class="warnbox"><strong>The scope is the point.</strong> The token carries only the sections her role
+    allows. If she opens a section she does not hold, the server refuses her — not the menu.</div>
+</section>
+
+<!-- 3 -->
+<section class="stage">
+  <div class="stage-head"><div class="num">3</div><div>
+    <h2>She lands on her domain — and it does not overstate progress</h2>
+    <div class="sub">Story counts never appear without the verified count beside them.</div>
+  </div></div>
+  <div class="frame">
+    <div class="chrome"><span class="dot"></span><span class="dot"></span><span class="dot"></span>
+      <span class="url">enterprise.colaberry.ai/admin/my-domain</span></div>
+    <div class="app">
+      <div class="side">
+        <div class="grp">Program</div>
+        <a class="on"><i class="ri-robot-2-line"></i>My Domain</a>
+        <a class="dim"><i class="ri-megaphone-line"></i>Marketing</a>
+        <a class="dim"><i class="ri-chat-smile-2-line"></i>My Agent</a>
+      </div>
+      <div class="main">
+        <p class="ph">Marketing</p>
+        <p class="psub">Your domain · accountable manager Sohail</p>
+        <div class="card">
+          <div class="stats">
+            <div class="stat"><div class="v">3</div><div class="l">Releases</div></div>
+            <div class="stat"><div class="v">70</div><div class="l">Stories</div></div>
+            <div class="stat"><div class="v zero">0</div><div class="l">Stories verified</div></div>
+            <div class="stat"><div class="v zero">0</div><div class="l">Tools granted</div></div>
+          </div>
+        </div>
+        <div class="note"><strong>These are plans.</strong> No story is verified and no tool is granted, so
+          the agent has not done any of this work yet. That sentence comes from the server, and it changes
+          on its own the moment the first story is verified.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 4 -->
+<section class="stage">
+  <div class="stage-head"><div class="num">4</div><div>
+    <h2>Two tabs, two different powers</h2>
+    <div class="sub">Her section is where she does the work by hand. Her agent is where she hands it over.</div>
+  </div></div>
+  <div class="frame"><div class="chrome"><span class="dot"></span><span class="dot"></span><span class="dot"></span>
+    <span class="url">enterprise.colaberry.ai/admin/marketing</span></div>
+    <div class="app"><div class="side">
+      <div class="grp">Program</div>
+      <a class="dim"><i class="ri-robot-2-line"></i>My Domain</a>
+      <a class="on"><i class="ri-megaphone-line"></i>Marketing</a>
+      <a class="dim"><i class="ri-chat-smile-2-line"></i>My Agent</a>
+    </div>
+    <div class="main">
+      <p class="ph">Marketing</p>
+      <p class="psub">Brands, campaigns, landing pages, publishing, performance</p>
+      <table>
+        <tr><th>She can</th><th>Today</th></tr>
+        <tr><td>Create a campaign, a landing page, a post</td><td><span class="badge b-ok">yes</span></td></tr>
+        <tr><td>Publish to a connected channel</td><td><span class="badge b-ok">yes</span></td></tr>
+        <tr><td>Read performance and click data</td><td><span class="badge b-ok">yes</span></td></tr>
+        <tr><td><strong>Expand what the section can do</strong></td>
+            <td><span class="badge b-wait">change request → your approval</span></td></tr>
+      </table>
+      <div class="note"><strong>This is where capability is proven.</strong> She does it by hand first. Nothing
+        reaches the agent until it works here.</div>
+    </div></div>
+  </div>
+
+  <div class="frame" style="margin-top:16px"><div class="chrome"><span class="dot"></span><span class="dot"></span><span class="dot"></span>
+    <span class="url">enterprise.colaberry.ai/admin/my-agent</span></div>
+    <div class="app"><div class="side">
+      <div class="grp">Program</div>
+      <a class="dim"><i class="ri-robot-2-line"></i>My Domain</a>
+      <a class="dim"><i class="ri-megaphone-line"></i>Marketing</a>
+      <a class="on"><i class="ri-chat-smile-2-line"></i>My Agent</a>
+    </div>
+    <div class="main">
+      <p class="ph">Her agent</p>
+      <p class="psub">Autonomy <code>observe</code> · accountable human Sohail · 0 tools granted</p>
+      <table>
+        <tr><th>Tool</th><th>Proven in the section</th><th>Granted to the agent</th></tr>
+        <tr><td>Create a landing page</td><td><span class="badge b-ok">yes</span></td><td><span class="badge b-wait">awaiting approval</span></td></tr>
+        <tr><td>Draft a campaign</td><td><span class="badge b-ok">yes</span></td><td><span class="badge b-draft">not requested</span></td></tr>
+        <tr><td>Publish to social</td><td><span class="badge b-no">not yet</span></td><td><span class="badge b-no">blocked</span></td></tr>
+      </table>
+      <div class="warnbox"><strong>An agent with no granted tools can be talked to and can do nothing.</strong>
+        That is the intended starting state, not a bug.</div>
+    </div></div>
+  </div>
+</section>
+
+<!-- 5 -->
+<section class="stage">
+  <div class="stage-head"><div class="num">5</div><div>
+    <h2>Granting a tool — the step she cannot do alone</h2>
+    <div class="sub">Four moves. She makes the first and the last; she cannot make the middle two.</div>
+  </div></div>
+  <div class="flow" style="grid-template-columns:1fr auto 1fr auto 1fr auto 1fr">
+    <div class="step"><div class="who">Sarbjit</div><div class="what">Proves it by hand, then proposes it as a tool</div></div>
+    <div class="arrow"><i class="ri-arrow-right-line"></i></div>
+    <div class="step gate"><div class="who">Manager</div><div class="what">Confirms the capability is real</div></div>
+    <div class="arrow"><i class="ri-arrow-right-line"></i></div>
+    <div class="step gate"><div class="who">You</div><div class="what">Approve the grant</div></div>
+    <div class="arrow"><i class="ri-arrow-right-line"></i></div>
+    <div class="step"><div class="who">Agent</div><div class="what">Can now do that one thing</div></div>
+  </div>
+  <div class="okbox"><strong>Four rules the system enforces, not conventions.</strong>
+    The proposer can never approve their own grant · a tool cannot be granted for a capability still in draft ·
+    a grant writes the tool and <em>nothing else</em>, so it can never quietly raise autonomy ·
+    an automated identity can never stand in for the human approval, however it is labelled.</div>
+  <div class="legend">
+    <span><span class="sw" style="background:var(--ok)"></span> intern can do alone</span>
+    <span><span class="sw" style="background:var(--warn)"></span> needs an approval</span>
+    <span><span class="sw" style="background:var(--danger)"></span> blocked until proven</span>
+  </div>
+</section>
+
+<section class="stage">
+  <div class="stage-head"><div class="num"><i class="ri-git-branch-line"></i></div><div>
+    <h2>Their repo is the workbench</h2>
+    <div class="sub">Each intern works in their own public repo and reaches the platform only through review.</div>
+  </div></div>
+  <div class="flow">
+    <div class="step"><div class="who">Their repo</div><div class="what">Public, theirs, their portfolio</div></div>
+    <div class="arrow"><i class="ri-arrow-right-line"></i></div>
+    <div class="step gate"><div class="who">Review</div><div class="what">Your approval, not theirs</div></div>
+    <div class="arrow"><i class="ri-arrow-right-line"></i></div>
+    <div class="step"><div class="who">Platform</div><div class="what">Change lands</div></div>
+  </div>
+  <div class="warnbox">No intern holds write access to the platform's main branch, and no credential ever
+    travels into a public repo.</div>
+</section>
+
+<footer>
+  <strong>Status, stated plainly.</strong> Stage 1 and 2 are built and working today. Stage 3 is built and
+  awaiting deploy. Stages 4 and 5 are in progress for Monday. Nothing in this page describes work an agent
+  has done — no capability is confirmed and no tool is granted anywhere yet.
+  <div style="margin-top:10px">Agent Factory · drawn 15 Oct 2026 · tracked in Basecamp, list <code>10406233777</code></div>
+</footer>
+
+</div>
+</body>
+</html>
