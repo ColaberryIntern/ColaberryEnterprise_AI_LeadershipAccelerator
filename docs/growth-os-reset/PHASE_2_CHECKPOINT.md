@@ -16,7 +16,7 @@
 | 2 | Can an unpaid Explorer still be mistaken for converted? | **No — live in production** |
 | 3 | Can I look at one person and see the website journey that led to their signup? | **Yes.** |
 | 4 | Can I see what they have done since registering? | **Yes, with named gaps.** |
-| 5 | Is Person 360 trustworthy enough to be the Sales Readiness Score's input in Phase 3? | **Not yet, but close** — population repaired, loss-of-evidence guard live, all 11 loaders covered, the `matchMethod` mutant dead. What remains: an unexplained load flake, a NULL `explorer_entered_at`, and the written readiness call itself |
+| 5 | Is Person 360 trustworthy enough to be the Sales Readiness Score's input in Phase 3? | **Not yet, but close** — population repaired, loss-of-evidence guard live, all 11 loaders covered, the `matchMethod` mutant dead, and `explorer_entered_at` filled so the score has a denominator. What remains: one unexplained load flake, and the written readiness call itself (M24) |
 
 **The answers are not yes/yes/no/no/no, and they are also not five clean yeses.** Two carry real
 qualifications and the fifth is a no. In detail:
@@ -101,9 +101,11 @@ A gate that produces false reds is the gate protecting this input. Note that (b)
 does **not** by itself make the answer yes: the inputs are now covered, but whether they are good
 enough to score is the question M24 exists to answer, with a written yes or no.
 
-**And one new reason, created by closing (e):** all 56 now-coherent rows carry
-`explorer_entered_at` NULL. A journey score with no journey start date has no denominator, and
-filling it requires a decision about what the date means for a row recovered from provenance.
+~~**And one new reason, created by closing (e):** all 56 now-coherent rows carry
+`explorer_entered_at` NULL.~~ **CLOSED 2026-10-16.** A journey score with no journey start date has
+no denominator, so the column was filled once the semantic was settled from the live writers rather
+than invented: 56 rows, NULL to 0, reversible from a saved ledger. **The score now has its
+denominator.** What remains for question 5 is the Gap 5 flake and the written readiness call in M24.
 
 ---
 
@@ -449,10 +451,11 @@ directions.
 
 ### Still not done
 
-- **All 56 now-coherent rows carry `explorer_entered_at` NULL**, and no task owns backfilling that
-  column. The script's disclosure names only the 37 it wrote into the programme, which understates
-  it: the 19 tier-corrected rows are NULL too, because the column has never been populated for
-  anybody. Measured after the run — `entered_at_null = 56`, `entered_at_set = 0`.
+- ~~**All 56 now-coherent rows carry `explorer_entered_at` NULL.**~~ **FILLED 2026-10-16** by
+  `backfillExplorerEnteredAt.ts` on Ali's authorisation, after the semantic was settled from the
+  live writers rather than chosen. `entered_at_null` went **56 to 0**. The script's own disclosure
+  had named only the 37 it wrote into the programme, which understated it — the 19 tier-corrected
+  rows were NULL too. Both are now filled.
 - **37 ambiguous rows are still reported rather than decided.** The script will not guess at
   programme membership from shape alone, which is the behaviour it was written for.
 - `explorer_entered_at` would be left NULL for all 37 joiners, and **no task owns that column.**
@@ -648,12 +651,27 @@ So Phase 3 should open by closing, in this order. **Progress as of 2026-10-15:**
    hypothesis, not a finding:** the isolation timing does not confirm it, and nothing here should
    be refactored until the flake is reproduced under load. Diagnostic: run the full backend suite
    repeatedly and capture which assertion times out, rather than inferring from module cost.
-4. ⬜ **`explorer_entered_at`.** Measured after the backfill: **all 56** coherent rows are NULL,
-   not the 37 the script's warning names — the column has never been populated for anybody. **This
-   is not purely mechanical.** The honest entry date for a row backfilled from provenance is
-   unknown; using `enrollments.created_at` as a proxy would be the same guess the backfill
-   predicate deliberately refuses to make. **Phase 3 needs a decision on the semantic before the
-   column can be filled.**
+4. ✅ **`explorer_entered_at` — DECIDED AND FILLED 2026-10-16.** Ali authorised option A:
+   `enrollments.created_at`, labelled as backfilled. **56 rows written; NULL went 56 to 0**, and
+   an independent query confirms all 56 are exact. A 56-entry rollback ledger sits at
+   `/root/m21-ledger-20261016.json`.
+
+   **THE SEMANTIC WAS NOT MINE TO CHOOSE, AND AN EARLIER VERSION OF THIS LINE GOT IT WRONG.** It
+   said using `created_at` "would be the same guess the backfill predicate deliberately refuses to
+   make". That conflated two questions. The predicate refuses to guess at **programme membership**,
+   which was already settled for these rows; given membership, the entry date follows from the
+   definition the live code already writes. Both live writers set the moment of registration:
+
+   `backend/src/services/freeAccountRegistration.ts:85` → "explorer_entered_at: programme === 'learner' ? new Date() : null,"
+   `backend/src/services/enrollmentService.ts:352` → "explorer_entered_at: new Date(),"
+
+   This line also said the column "has never been populated for anybody". That stopped being true
+   on 2026-10-13: every Explorer registering after the fix gets a real date, 11 of them by the time
+   this was measured and 13 an hour later. Only the recovered rows were ever blank.
+
+   **The earliest lead date was rejected, and not for lack of coverage** — it reaches all 56 too.
+   It answers a different question, first touch, which `journeyPanel` already carries as
+   `firstTouch`. Using it here would put two meanings in one column.
 
 Only then the score itself.
 
