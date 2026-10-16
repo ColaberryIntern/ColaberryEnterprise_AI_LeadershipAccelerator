@@ -73,6 +73,13 @@ const ALLOW_LISTED = [
   // `conversionState.ts` is a DERIVATION - SQL fragments and a TS predicate. It
   // writes nothing at all; its literals are the stage CASE's branch values.
   'services/adminOs/conversionState.ts',
+  // Added by M21. It DOES write, but only to `explorer_entered_at`, and only on
+  // rows whose programme membership is already settled: its WHERE clause is
+  // `enrollment_type = 'explorer' AND tier = 'guest' AND explorer_entered_at IS
+  // NULL`. It never moves a person into or out of the learner programme, which
+  // is what this tripwire exists to catch. Dry run is the default, every UPDATE
+  // is pinned to the NULL it planned against, and the ledger is reversible.
+  'scripts/backfillExplorerEnteredAt.ts',
 ];
 
 describe('T203 — the scanner can tell a write from a read', () => {
@@ -290,9 +297,11 @@ describe('T203 — the writer allow-list', () => {
     expect(writers.length).toBeGreaterThanOrEqual(7);
     // 3 -> 5: T207's pure predicate and T210's derivation both match the
     // scanner by SHAPE (a returned object literal naming the columns) while
-    // writing nothing. Updated deliberately, which is what the pinned number
-    // is for.
-    expect(files).toHaveLength(5);
+    // writing nothing. 5 -> 6: M21's backfill, which matches because its WHERE
+    // clause names the columns to SELECT the population; the only column it
+    // assigns is explorer_entered_at. Updated deliberately, which is what the
+    // pinned number is for.
+    expect(files).toHaveLength(6);
   });
 
   it('the canonical service is one of them', () => {
@@ -304,16 +313,19 @@ describe('T203 — the writer allow-list', () => {
     expect(unexpected).toEqual([]);
   });
 
-  it('the allow-list has exactly four members, so growing it is a deliberate edit', () => {
+  it('the allow-list has exactly five members, so growing it is a deliberate edit', () => {
     // The plan said one. Derived from source it was two; T207 and T210 added two
-    // more, both SHAPE matches that write nothing, justified where they are
-    // listed. Stated as an exact set so a fifth cannot be added quietly.
-    expect(ALLOW_LISTED).toHaveLength(4);
+    // more, both SHAPE matches that write nothing. M21 added the fifth, which is
+    // the first entry that genuinely writes - to `explorer_entered_at` only, on
+    // rows whose membership is already settled. Stated as an exact set so a
+    // sixth cannot be added quietly.
+    expect(ALLOW_LISTED).toHaveLength(5);
     expect(ALLOW_LISTED).toEqual([
       'services/enrollmentService.ts',
       'services/openHouseCreditService.ts',
       'scripts/lib/freeAccountCoherenceBackfill.ts',
       'services/adminOs/conversionState.ts',
+      'scripts/backfillExplorerEnteredAt.ts',
     ]);
     expect([
       'services/enrollmentService.ts',
