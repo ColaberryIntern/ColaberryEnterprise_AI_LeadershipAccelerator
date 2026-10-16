@@ -62,6 +62,9 @@ export interface CreateServiceOfferingInput {
   pastPerformance?: string | null;
   owner?: string | null;
   createdBy: string;
+  /** New services default to 'active'; a capability added from a gov pursuit's Fit step as in-development is 'growth'
+   *  (excluded from fit matching, kept in reporting). 'retired' is never set on create - use retireServiceOffering. */
+  status?: 'active' | 'growth';
 }
 
 export async function createServiceOffering(input: CreateServiceOfferingInput): Promise<any> {
@@ -71,7 +74,7 @@ export async function createServiceOffering(input: CreateServiceOfferingInput): 
     name: input.name.trim(), description: toStr(input.description), category: toStr(input.category),
     keywords_json: toStrArray(input.keywords), naics_codes_json: toStrArray(input.naicsCodes),
     psc_codes_json: toStrArray(input.pscCodes), past_performance: toStr(input.pastPerformance),
-    owner: toStr(input.owner), status: 'active', created_by: input.createdBy,
+    owner: toStr(input.owner), status: input.status === 'growth' ? 'growth' : 'active', created_by: input.createdBy,
   });
   return toServiceOfferingDto(row);
 }
@@ -109,11 +112,23 @@ export async function retireServiceOffering(input: { tenantId: string; id: strin
   return toServiceOfferingDto(row);
 }
 
-/** List the tenant's services, newest first. status 'active' (default) returns only active; 'all' returns every status. */
-export async function listServiceOfferings(input: { tenantId: string; status?: 'active' | 'all' }): Promise<any[]> {
+/** Flip a service to 'growth' (in development; EXCLUDED from fit matching, kept in reporting). Idempotent. 404 if absent. */
+export async function markGrowthServiceOffering(input: { tenantId: string; id: string }): Promise<any> {
+  const { default: ServiceOffering } = await import('../../models/ServiceOffering');
+  const row: any = await ServiceOffering.findOne({ where: { id: input.id, tenant_id: input.tenantId } });
+  if (!row) throw new ServiceOfferingNotFoundError(input.id);
+  if (row.status !== 'growth') { row.status = 'growth'; await row.save(); }
+  return toServiceOfferingDto(row);
+}
+
+/** List the tenant's services, newest first. status 'active' (default) returns only active, 'growth' only growth,
+ *  'all' returns every status. The matcher only ever requests 'active', so growth is excluded from fit. */
+export async function listServiceOfferings(input: { tenantId: string; status?: 'active' | 'growth' | 'all' }): Promise<any[]> {
   const { default: ServiceOffering } = await import('../../models/ServiceOffering');
   const where: any = { tenant_id: input.tenantId };
-  if ((input.status ?? 'active') === 'active') where.status = 'active';
+  const s = input.status ?? 'active';
+  if (s === 'active') where.status = 'active';
+  else if (s === 'growth') where.status = 'growth';
   const rows: any[] = await ServiceOffering.findAll({ where, order: [['created_at', 'DESC']] });
   return rows.map(toServiceOfferingDto);
 }
