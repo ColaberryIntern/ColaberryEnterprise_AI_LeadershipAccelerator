@@ -5,6 +5,7 @@ import careerPortfolioRoutes from './careerPortfolioRoutes';
 import explorerSignalRoutes from './explorerSignalRoutes';
 import journeyNudgeRoutes from './journeyNudgeRoutes';
 import consentPromptRoutes from './consentPromptRoutes';
+import campusRoutes from './campusRoutes';
 
 /**
  * The learner-portal mounts, out of `server.ts` (Phase 5 T514).
@@ -35,4 +36,7 @@ export function mountLearnerPortalRoutes(app: Express): void {
   // In-app consent prompt (participant-authed). A PROMPT, not a gate: the portal
   // stays fully usable whether a learner accepts, declines or ignores it.
   app.use(consentPromptRoutes);
+  // Colaberry Campus (participant-authed, per route). Dark until CAMPUS_ENABLED
+  // is allowlist or all; with it off the flags route answers {campus:false}.
+  app.use(campusRoutes);
 }
