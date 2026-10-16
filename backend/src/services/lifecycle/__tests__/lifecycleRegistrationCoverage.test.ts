@@ -164,19 +164,32 @@ describe('LC-01 — the set of project-creation sites is derived, not listed', (
   });
 
   it('reads the NUL-byte files that plain grep skips as binary', () => {
-    // Three `.ts` files in this repository carry deliberate NUL bytes; these are the TWO inside
-    // this walker's scope (the third is `routes/__tests__/trackedLinkRedirectRoutes.test.ts`, which
-    // the walker excludes along with every other `__tests__` directory). An earlier version of this
-    // comment said "these three" above a two-element array, which read as a guard that had been
-    // quietly shrunk — it had not, but the prose made it impossible to tell at a glance.
+    // TWO `.ts` files in this repository still carry deliberate NUL bytes, and ONE of them is
+    // inside this walker's scope: `factoryIds.ts`. (The other is
+    // `routes/__tests__/trackedLinkRedirectRoutes.test.ts`, which the walker excludes along with
+    // every other `__tests__` directory.)
     //
-    // `grep -r` without `-a` omits these silently, so a sweep built on it would report a clean
-    // result it never actually checked. If this ever fails, the sweep above has stopped covering
-    // the approval surface and no other test will say so.
+    // `factoryApproval.ts` USED TO BE THE THIRD and is deliberately no longer: P7-T3 converted
+    // its separator from a literal NUL to the escape, because the literal byte made the file
+    // binary to git and a security fix to it could not be reviewed as a diff. Its digests are
+    // unchanged and pinned by golden vectors in that module's own suite. It is still asserted
+    // below for COVERAGE -- the approval surface must stay in the sweep -- just not as a
+    // NUL-hazard subject, because it no longer is one.
+    //
+    // `grep -r` without `-a` omits NUL-bearing files silently, so a sweep built on it would
+    // report a clean result it never actually checked. If the hazard assertion fails, the sweep
+    // has stopped covering those files and no other test will say so.
     const nulBearing = [
-      'services/factory/factoryApproval.ts',
       'services/factory/factoryIds.ts',
     ];
+    // Covered by the sweep, but no longer NUL-bearing. Kept separate so the two properties are
+    // not conflated: one is about reach, the other about the binary-file hazard.
+    const coveredNotNul = ['services/factory/factoryApproval.ts'];
+    for (const target of coveredNotNul) {
+      expect(SOURCE_FILES.map(rel)).toContain(target);
+      // And it really is plain text now, so this file cannot silently drift back.
+      expect(fs.readFileSync(path.join(SRC, target)).includes(0)).toBe(false);
+    }
     for (const target of nulBearing) {
       const full = path.join(SRC, target);
       expect(fs.existsSync(full)).toBe(true);

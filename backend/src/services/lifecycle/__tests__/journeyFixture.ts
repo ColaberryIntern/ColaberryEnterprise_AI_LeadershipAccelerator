@@ -30,7 +30,10 @@ export interface JourneyFixture {
 
 /** The execution-machine plumbing Journey 4 needs, kept out of the suite body. */
 export interface JourneyExecutionStore {
-  /** A real-database `ExecutionStore`, TYPED against the interface rather than cast. */
+  /**
+   * An `ExecutionStore` that is PART in-memory and PART real database, TYPED against the
+   * interface rather than cast. Which part is which matters -- see the factory below.
+   */
   store: ExecutionStore;
   /**
    * Free the lease so the next attempt is independent.
@@ -44,7 +47,18 @@ export interface JourneyExecutionStore {
 }
 
 /**
- * Journey 4's store, against the real tables.
+ * Journey 4's store.
+ *
+ * **WHAT IS AND IS NOT DATABASE-BACKED, because an earlier version of this comment said "a
+ * real-database `ExecutionStore`" and that was wrong.** `get` and `put` are an in-process `Map`;
+ * only `deadLetter` writes to Postgres. So JOURNEY 4 exercises the dead-letter sink against a real
+ * table, while the lease, the attempt count and `holdForReview` are exercised in memory exactly as
+ * `lifecycleExecution.test.ts` does. **There is no DB-backed coverage of `StageRun` persistence
+ * anywhere in this repo**, and this fixture must not be read as providing it.
+ *
+ * That is not a flaw in the fixture -- there is no production `ExecutionStore` to be backed by a
+ * table yet -- but calling it "real-database" overstated what the journey proves, which is the
+ * one thing a fixture comment must never do.
  *
  * TYPED rather than cast, on purpose: nothing typechecks test files in this repo, so the declared
  * shape is the only signal a reader gets if `ExecutionStore` changes.
