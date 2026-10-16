@@ -102,7 +102,10 @@
       "staff_commission": 9175.0,
       "ali_comm": 1966.28,
       "company_paid": 17478.02,
-      "sent_utc": "2026-09-06T23:47:36Z"
+      "sent_utc": "2026-09-06T23:47:36Z",
+      "restated_to": 1938.15,
+      "restated_reason": "one student's two $250.00 payments, one in June and one in July, were reversed after both months had been reported; verified 2026-10-05 by diffing the Aug 2026 export against the Jul 2026 export, which showed exactly those two rows moving 250.00 -> 0.00 and nothing else",
+      "restated_on": "2026-10-05"
     },
     {
       "year": 2026,
@@ -111,7 +114,28 @@
       "staff_commission": 6875.0,
       "ali_comm": 3557.79,
       "company_paid": 27904.24,
-      "sent_utc": "2026-09-17T16:15:55Z"
+      "sent_utc": "2026-09-17T16:15:55Z",
+      "restated_to": 3525.92,
+      "restated_reason": "one student's two $250.00 payments, one in June and one in July, were reversed after both months had been reported; verified 2026-10-05 by diffing the Aug 2026 export against the Jul 2026 export, which showed exactly those two rows moving 250.00 -> 0.00 and nothing else",
+      "restated_on": "2026-10-05"
+    },
+    {
+      "year": 2026,
+      "month": 8,
+      "subject": "Aug 2026 Commission (Mentor/Instructor/SMI)",
+      "staff_commission": 5900.0,
+      "ali_comm": 2746.66,
+      "company_paid": 21542.44,
+      "sent_utc": "2026-10-06T01:54:30Z"
+    },
+    {
+      "year": 2026,
+      "month": 9,
+      "subject": "Sep 2026 Commission (Mentor/Instructor/SMI)",
+      "staff_commission": 5750.0,
+      "ali_comm": 1979.42,
+      "company_paid": 17594.86,
+      "sent_utc": "2026-10-15T22:48:43Z"
     }
   ]
 }

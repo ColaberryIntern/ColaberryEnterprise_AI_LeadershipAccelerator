@@ -1,6 +1,7 @@
 import { Brand, Campaign } from '../../models';
 import { getInstrumentedOpenAI } from '../openaiInstrumented';
 import { WorkflowError } from './contentWorkflowService';
+import { describeItemMedia, type DescriptionBasis } from './mediaDescriptionService';
 
 /**
  * composerDraftService — turn a topic into a first draft of the canonical message.
@@ -36,6 +37,14 @@ export interface DraftRequest {
   hasOffer?: boolean;
   /** Where the tracked link will point, so the copy can lead to it rather than repeat it. */
   destinationUrl?: string | null;
+  /**
+   * The content item being drafted for, so the uploaded media can be read.
+   *
+   * Optional: a draft written before anything is attached still works, and that is the normal
+   * order - operators type a topic first. When it is present and the item has media, what is
+   * actually IN the upload becomes part of the brief.
+   */
+  contentItemId?: string | null;
 }
 
 export interface DraftResult {
@@ -45,6 +54,14 @@ export interface DraftResult {
   /** Specifics the model produced that nothing in the request supports. Reported, not removed. */
   unverifiedClaims: string[];
   model: string;
+  /**
+   * How the attached media informed this draft: 'vision' means the images were actually read,
+   * 'metadata' means only the file facts were, 'none' means there was nothing attached.
+   *
+   * Reported so the UI can say which, rather than letting an operator assume a video was
+   * watched. It never was - see mediaDescriptionService.
+   */
+  mediaBasis: DescriptionBasis;
 }
 
 /** `[like this]` - the visible hole the prompt asks for instead of an invented fact. */
@@ -116,7 +133,7 @@ const SYSTEM = `You write short social posts for a professional audience of work
 
 RULES, in order of importance:
 
-1. NEVER invent a specific fact. No dates, times, prices, durations, seat counts, percentages, statistics, names, or testimonials unless they appear verbatim in the brief you are given. When the post needs one, write a bracketed placeholder the operator will fill in, for example [date] or [price]. A placeholder is always better than a plausible guess.
+1. NEVER invent a specific fact. No dates, times, prices, durations, seat counts, percentages, statistics, names, or testimonials unless they appear verbatim in the brief you are given. When the post needs one, write a bracketed placeholder the operator will fill in, for example [date] or [price]. A placeholder is always better than a plausible guess. A description of the attached media IS part of the brief: what it says is visible, you may write about. What it does not say, you may not assume - and if it tells you a video was not watched, do not describe what happens in it.
 2. Write like a person, not a brochure. No "unlock", "supercharge", "game-changing", "dive into", "in today's fast-paced world". No em-dashes anywhere.
 3. One idea. Two or three short paragraphs at most, under 120 words.
 4. End with one clear next step. Do NOT paste a URL: a tracked link is attached separately, so refer to it as "the link below" or similar.
@@ -134,6 +151,14 @@ export async function draftCanonicalMessage(input: DraftRequest): Promise<DraftR
 
   const campaign = input.campaignId ? await Campaign.findByPk(input.campaignId) : null;
 
+  // What the operator actually uploaded. Read BEFORE the brief is assembled, because
+  // it becomes part of it - and never allowed to fail the draft: describeItemMedia
+  // returns an empty description rather than throwing, so a post can still be written
+  // when the file cannot be read.
+  const media = input.contentItemId
+    ? await describeItemMedia(input.contentItemId)
+    : { text: '', basis: 'none' as DescriptionBasis, mediaCount: 0 };
+
   // The brief is ONLY facts we actually hold. Anything absent is absent on purpose: what is not
   // here is what the model must not assert.
   const brief = [
@@ -144,6 +169,12 @@ export async function draftCanonicalMessage(input: DraftRequest): Promise<DraftR
     input.destinationUrl ? `The link sends people to: ${input.destinationUrl}` : null,
     input.hasOffer ? 'This post mentions an offer or price, which the operator will supply as a placeholder.' : null,
     input.isPaid ? 'This is a PAID placement; a disclosure line is added separately, so leave room for it and do not write one.' : null,
+    // Placed ABOVE the topic on purpose: the topic is usually four words and the upload is
+    // usually the richer source. The model reads the brief in order.
+    media.text ? `Attached media: ${media.text}` : null,
+    media.basis === 'metadata' && media.mediaCount > 0
+      ? 'The attached file was NOT viewed - only its file details are known. Do not describe its contents.'
+      : null,
     '',
     `Topic: ${topic}`,
   ].filter(Boolean).join('\n');
@@ -183,5 +214,6 @@ export async function draftCanonicalMessage(input: DraftRequest): Promise<DraftR
     placeholders: findPlaceholders(message),
     unverifiedClaims: findInventedSpecifics(message, `${brief} ${brand.name}`),
     model: MODEL,
+    mediaBasis: media.basis,
   };
 }

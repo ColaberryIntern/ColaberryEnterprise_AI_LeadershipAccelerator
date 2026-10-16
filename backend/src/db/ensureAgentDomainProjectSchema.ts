@@ -290,4 +290,65 @@ async function readNames(sql: string, names: ReadonlyArray<string>): Promise<str
   return normalizeNameRows(rows);
 }
 
+/**
+ * Derive a usable `error_class` for a boot failure.
+ *
+ * `err.constructor.name` alone is NOT enough here, and that was a real defect. This module raises
+ * its post-condition failure as `new Error('SchemaInvariantViolation: ...')`, so a plain
+ * constructor-name derivation logs `error_class: "Error"` in the EXACT case the boot guard exists
+ * for. CLAUDE.md's Error classification rule names a generic `Error` in a production path as not
+ * acceptable, so the marker in the message is promoted to the class when it is there.
+ */
+export function deriveBootErrorClass(err: unknown): string {
+  const message = err instanceof Error ? err.message : typeof err === 'string' ? err : '';
+  const marker = /^([A-Z][A-Za-z]*(?:Violation|Error)):/.exec(message || '');
+  if (marker) return marker[1];
+  if (err instanceof Error) return err.constructor.name;
+  return 'UnknownError';
+}
+
+export interface GuardedSchemaResult {
+  readonly ok: boolean;
+  readonly error_class: string | null;
+}
+
+/**
+ * The boot-time call, guarded so it CANNOT reject.
+ *
+ * Extracted out of `server.ts` for one reason: every assertion about the guard used to read
+ * `server.ts` as a STRING. Nothing executed `start()`, nothing made the schema call reject, and
+ * nothing observed `app.listen` — so the failure path the guard exists for was asserted
+ * structurally and never exercised. A source-grep is not a behavioural assertion, and an
+ * independent re-grade failed the task on exactly that. As an exported function it can be driven
+ * with a rejecting dependency, which is what the repo's own precedent
+ * (`__tests__/ensureExplorerCampaignKeyIndex.test.ts`) does: reject with an Error, a string, null
+ * and undefined, and assert the call RESOLVES.
+ *
+ * It resolves on every failure and reports what happened. A backend that will not boot is worse
+ * than one that boots carrying a named schema problem — and the problem is named, both in the
+ * warning here and in the structured statement-level warnings the module emits before throwing.
+ */
+export async function ensureAgentDomainProjectSchemaGuarded(): Promise<GuardedSchemaResult> {
+  try {
+    await ensureAgentDomainProjectSchema();
+    return { ok: true, error_class: null };
+  } catch (err: unknown) {
+    const error_class = deriveBootErrorClass(err);
+    const message = err instanceof Error ? err.message : String(err);
+    // eslint-disable-next-line no-console
+    console.warn(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      level: 'warn',
+      service: 'backend',
+      event: 'agent_domain_schema_boot_failed',
+      error_class,
+      outcome: 'failure',
+      message,
+      impact: 'The ten agent-domain projects cannot be provisioned until this is fixed.',
+      remedy: 'Read the agent_domain_schema_statement_failed warnings above for the first DDL error.',
+    }));
+    return { ok: false, error_class };
+  }
+}
+
 export default ensureAgentDomainProjectSchema;

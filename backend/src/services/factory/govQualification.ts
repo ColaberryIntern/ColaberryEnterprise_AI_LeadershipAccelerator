@@ -443,6 +443,26 @@ export async function recordDecision(input: RecordDecisionInput): Promise<any> {
   });
 }
 
+export interface RecordCapabilityDecisionsInput {
+  canonicalOpportunityId: string; biddingEntity: string; expectedVersion: number; reviewerIdentityId: string;
+  /** The Step 3 capability-fit decisions + any ticked eligibility items. ADVISORY (feeds Step 4 + the brief); not a
+   *  gate. Stored in requirements_json.capabilities as an opaque bag the frontend owns. */
+  capabilities: any;
+}
+
+/** Persist the Step 3 "Fit" capability decisions on the record (requirements_json.capabilities). ADVISORY - it sets no
+ *  gate and does not touch established requirements; fork-on-edit preserves established/provenance/dossier. Additive
+ *  JSONB, no migration. */
+export async function recordCapabilityDecisions(input: RecordCapabilityDecisionsInput): Promise<any> {
+  const current = await loadCurrent(input.canonicalOpportunityId, input.biddingEntity);
+  if (!current) throw new QualificationNotFoundError();
+  if (current.version !== input.expectedVersion) throw new QualificationConflictError(current.version);
+  return forkNewVersion(current, {
+    reviewer_identity_id: input.reviewerIdentityId,
+    requirements_json: { ...(current.requirements_json || {}), capabilities: input.capabilities ?? null },
+  });
+}
+
 const AUTHORITATIVE_ROLES = new Set(['solicitation', 'final_pws_sow', 'amendment']);
 
 /** The set of authoritative docIds a record has had MANUALLY reviewed (from requirements_json.reviewedDocuments). */

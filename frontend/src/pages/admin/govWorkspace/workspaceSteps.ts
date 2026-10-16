@@ -1,21 +1,23 @@
 /**
- * workspaceSteps — the Gov pursuit's seven numbered steps (the 2026-10 redesign).
+ * workspaceSteps — the Gov pursuit's seven steps (the 2026-10 redesign, P1).
  *
- * Replaces the old seven `?tab=` workspace tabs with a numbered, left-to-right pursuit flow:
- *   1 Solicitation → 2 Requirements → 3 Go/No-go → 4 Proposal → 5 Build → 6 Submit → 7 Outcome.
+ * The flow is a left-to-right pursuit, one question and one primary action per step:
+ *   1 Snapshot → 2 Solicitation → 3 Fit → 4 Decide → 5 Build → 6 Submit → 7 Outcome.
+ * Steps 1–4 are qualification (cheap, reversible). APPROVAL IS THE HINGE: steps 5–7 are LOCKED
+ * previews until a second admin approves the pursuit.
  *
  * PURE module — no React, no I/O. The step a viewer is on lives in the URL (`?tab=<step>`) so a
  * reload restores it and the view is shareable; legacy tab values still resolve (old links keep
- * working). Step done/current/to-do is ADVISORY UI only — it mirrors the server gates (exactly as
- * the retired journey strip did) and gates nothing, so an imperfect heuristic can never block a
- * real action.
+ * working). Step state is ADVISORY UI only — it mirrors the server gates and gates nothing, so an
+ * imperfect heuristic can never block a real action. Done-ness follows pursuit order: a later step
+ * never shows done while an earlier one is not.
  */
 
 export type WorkspaceStep =
+  | 'snapshot'
   | 'solicitation'
-  | 'requirements'
-  | 'gono'
-  | 'proposal'
+  | 'fit'
+  | 'decide'
   | 'build'
   | 'submit'
   | 'outcome';
@@ -24,79 +26,128 @@ export interface WorkspaceStepDef {
   key: WorkspaceStep;
   n: number;
   label: string;
+  /** One-line question the step answers (shown under the label in the step bar). */
+  question: string;
+  /** Rough time to spend, shown in the step intro ("Step N of 7 · about X"). */
+  minutes: string;
   icon: string; // RemixIcon name (sans the `ri-` prefix)
 }
 
 /** Display order = pursuit order. */
 export const WORKSPACE_STEPS: WorkspaceStepDef[] = [
-  { key: 'solicitation', n: 1, label: 'Solicitation', icon: 'folder-zip-line' },
-  { key: 'requirements', n: 2, label: 'Requirements', icon: 'list-check-2' },
-  { key: 'gono', n: 3, label: 'Go / No-go', icon: 'scales-3-line' },
-  { key: 'proposal', n: 4, label: 'Proposal', icon: 'file-text-line' },
-  { key: 'build', n: 5, label: 'Build', icon: 'tools-line' },
-  { key: 'submit', n: 6, label: 'Submit', icon: 'send-plane-line' },
-  { key: 'outcome', n: 7, label: 'Outcome', icon: 'trophy-line' },
+  { key: 'snapshot', n: 1, label: 'Snapshot', question: 'Is it worth a look?', minutes: '2 minutes', icon: 'eye-line' },
+  { key: 'solicitation', n: 2, label: 'Solicitation', question: 'What do we submit, under what rules?', minutes: '10 minutes', icon: 'folder-zip-line' },
+  { key: 'fit', n: 3, label: 'Fit', question: 'Can we deliver, and what would we learn?', minutes: '10 minutes', icon: 'scales-3-line' },
+  { key: 'decide', n: 4, label: 'Decide', question: 'Should we bid?', minutes: '5 minutes', icon: 'thumb-up-line' },
+  { key: 'build', n: 5, label: 'Build the bid', question: 'What is the product, and is the bid ready?', minutes: 'weeks', icon: 'tools-line' },
+  { key: 'submit', n: 6, label: 'Submit', question: 'Is it out the door?', minutes: '1 hour', icon: 'send-plane-line' },
+  { key: 'outcome', n: 7, label: 'Outcome', question: 'Did we win?', minutes: '5 minutes', icon: 'trophy-line' },
 ];
 
 const STEP_KEYS: ReadonlySet<string> = new Set(WORKSPACE_STEPS.map((s) => s.key));
 
+/** Steps that stay LOCKED (preview only) until the pursuit is approved. */
+const POST_APPROVAL_STEPS: ReadonlySet<WorkspaceStep> = new Set(['build', 'submit', 'outcome']);
+
 /**
- * Legacy `?tab=` values → new step, so bookmarked/pasted links from the old 7-tab UI keep working.
- * overview/documents/dates collapse onto Solicitation (the entry step); proposal/build/outcome keep
- * their names; `submission` becomes `submit`.
+ * Legacy `?tab=` values → new step, so bookmarked/pasted links keep working. The pre-redesign
+ * flow was solicitation/requirements/gono/proposal/build/submit/outcome; `requirements` folds into
+ * the new Solicitation, `gono` → Decide, `proposal` → Build. overview/documents/dates collapse onto
+ * Solicitation; `submission` → Submit. New keys (snapshot/fit/decide/solicitation/build/submit/
+ * outcome) resolve directly.
  */
 export const LEGACY_TAB_TO_STEP: Record<string, WorkspaceStep> = {
   overview: 'solicitation',
   documents: 'solicitation',
   dates: 'solicitation',
-  proposal: 'proposal',
-  build: 'build',
+  requirements: 'solicitation',
+  gono: 'decide',
+  proposal: 'build',
   submission: 'submit',
-  outcome: 'outcome',
 };
 
-/** Resolve the active step from a raw `?tab=` value: a legacy alias, else a direct step key, else Solicitation. */
+/** Resolve the active step from a raw `?tab=` value: a legacy alias, else a direct step key, else Snapshot. */
 export function resolveStep(tabParam: string | null | undefined): WorkspaceStep {
   const raw = (tabParam ?? '').trim();
   if (raw in LEGACY_TAB_TO_STEP) return LEGACY_TAB_TO_STEP[raw];
   if (STEP_KEYS.has(raw)) return raw as WorkspaceStep;
-  return 'solicitation';
+  return 'snapshot';
 }
 
-export type StepStatus = 'done' | 'current' | 'todo';
+export type StepStatus = 'done' | 'current' | 'todo' | 'locked';
 
 /** The server-derived signals the step bar reads — all already computed in the page from `ws`. */
 export interface StepStateInput {
   zipAttested: boolean;        // ws.zipAttestation?.sha256 present — the solicitation ZIP is attested
   establishedCount: number;    // ws.evaluation.evals.length — established requirements
-  decision: string | null;     // record.decision — a terminal pursuit decision means Go/No-go is settled
-  proposalContentReady: boolean; // the proposal WORK is done — every response slot approved (decoupled from the
-                                 // build delivery project; the submission/export gate keeps its stricter checks)
-  hasBuild: boolean;           // a delivery project / build stories exist
+  decision: string | null;     // record.decision — a terminal pursuit decision settles Decide
+  proposalContentReady: boolean; // the proposal WORK is done — every response slot approved
+  hasBuild: boolean;           // a delivery project / build stories exist (NOT proof of done — see below)
   submissionStatus: string | null; // ws.submission.status
   outcome: string | null;      // ws.submission.outcome
 }
 
 const SUBMITTED_STATUSES: ReadonlySet<string> = new Set(['exported', 'externally_submitted', 'acknowledged']);
 const TERMINAL_DECISIONS: ReadonlySet<string> = new Set(['approved_bid_pursuit', 'no_bid']);
+const APPROVED = 'approved_bid_pursuit';
 
-/** Per-step completion (advisory). The ACTIVE step always renders as `current`; others are `done`/`todo`. */
-export function deriveStepState(
-  activeStep: WorkspaceStep,
-  input: StepStateInput,
-): Record<WorkspaceStep, StepStatus> {
-  const done: Record<WorkspaceStep, boolean> = {
-    solicitation: input.zipAttested,
-    requirements: input.establishedCount > 0,
-    gono: !!input.decision && TERMINAL_DECISIONS.has(input.decision),
-    proposal: input.proposalContentReady,
-    build: input.hasBuild,
+export interface StepModel {
+  /** Per-step advisory status for the step bar. */
+  statuses: Record<WorkspaceStep, StepStatus>;
+  /** First unfinished, actionable step — where a fresh load should land (not step 1). */
+  frontier: WorkspaceStep;
+  /** True once the pursuit is approved: unlocks steps 5–7. */
+  approved: boolean;
+}
+
+/**
+ * Per-step model (advisory). `current` is the step the user is VIEWING (`activeStep`); `frontier` is
+ * the first unfinished actionable step (emphasized in the bar and used for fresh-load landing).
+ *
+ * Build can NEVER show done before approval (it is `locked` until then) — fixing the pre-redesign bug
+ * where an AI plan made Build show a green check before the pursuit was approved.
+ */
+export function deriveStepState(activeStep: WorkspaceStep, input: StepStateInput): StepModel {
+  const approved = input.decision === APPROVED;
+
+  // Raw per-step completion signals.
+  const raw: Record<WorkspaceStep, boolean> = {
+    snapshot: input.zipAttested || input.establishedCount > 0 || !!input.decision,
+    solicitation: input.zipAttested && input.establishedCount > 0,
+    // Fit has no dedicated server signal until P3; a terminal decision implies fit was worked through.
+    fit: !!input.decision,
+    decide: !!input.decision && TERMINAL_DECISIONS.has(input.decision),
+    build: approved && input.proposalContentReady, // never done before approval
     submit: !!input.submissionStatus && SUBMITTED_STATUSES.has(input.submissionStatus),
     outcome: !!input.outcome && input.outcome !== 'pending' && input.outcome !== 'unknown',
   };
-  const out = {} as Record<WorkspaceStep, StepStatus>;
+
+  // Enforce pursuit order: once a step is not done, no later step shows done.
+  const done = {} as Record<WorkspaceStep, boolean>;
+  let prevDone = true;
   for (const s of WORKSPACE_STEPS) {
-    out[s.key] = s.key === activeStep ? 'current' : done[s.key] ? 'done' : 'todo';
+    done[s.key] = prevDone && raw[s.key];
+    prevDone = done[s.key];
   }
-  return out;
+
+  const isLocked = (key: WorkspaceStep): boolean => POST_APPROVAL_STEPS.has(key) && !approved;
+
+  // Frontier: first unfinished, unlocked step; else first unfinished; else the last step.
+  let frontier: WorkspaceStep | null = null;
+  for (const s of WORKSPACE_STEPS) { if (!done[s.key] && !isLocked(s.key)) { frontier = s.key; break; } }
+  if (!frontier) { for (const s of WORKSPACE_STEPS) { if (!done[s.key]) { frontier = s.key; break; } } }
+  if (!frontier) frontier = WORKSPACE_STEPS[WORKSPACE_STEPS.length - 1].key;
+
+  const statuses = {} as Record<WorkspaceStep, StepStatus>;
+  for (const s of WORKSPACE_STEPS) {
+    statuses[s.key] = s.key === activeStep
+      ? 'current'
+      : isLocked(s.key)
+        ? 'locked'
+        : done[s.key]
+          ? 'done'
+          : 'todo';
+  }
+
+  return { statuses, frontier, approved };
 }

@@ -153,6 +153,13 @@ const DraftSchema = z.object({
   is_paid: z.boolean().optional(),
   has_offer: z.boolean().optional(),
   destination_url: z.string().trim().url().max(2048).nullable().optional(),
+  /**
+   * The item being drafted for, so the copy can be written from what was actually uploaded.
+   *
+   * Optional because the usual order is topic first, attachment later - a draft with nothing
+   * attached is the normal case and must keep working.
+   */
+  content_item_id: UUID.nullable().optional(),
 }).strict();
 
 router.post('/api/admin/content/draft-message', requireAdmin, async (req: Request, res: Response) => {
@@ -167,6 +174,14 @@ router.post('/api/admin/content/draft-message', requireAdmin, async (req: Reques
       return void res.status(404).json({ error: 'Brand not found', error_class: 'NotFound' });
     }
 
+    // TENANCY, before the media is read. describeItemMedia takes a bare id and will happily
+    // describe any item's attachments, so an id from another tenant would otherwise have its
+    // images sent to a vision model on this admin's behalf. Checked here, where the scope is.
+    const itemId = parsed.data.content_item_id ?? null;
+    if (itemId && !(await visibleItem(req, itemId))) {
+      return void res.status(404).json(NOT_FOUND);
+    }
+
     const { draftCanonicalMessage } = await import('../../services/content/composerDraftService');
     const draft = await draftCanonicalMessage({
       topic: parsed.data.topic,
@@ -176,6 +191,7 @@ router.post('/api/admin/content/draft-message', requireAdmin, async (req: Reques
       isPaid: parsed.data.is_paid,
       hasOffer: parsed.data.has_offer,
       destinationUrl: parsed.data.destination_url ?? null,
+      contentItemId: itemId,
     });
     res.json(draft);
   } catch (err) { fail(res, err, 'composer_draft_failed'); }
@@ -231,6 +247,11 @@ router.get('/api/admin/content/providers', requireAdmin, (_req: Request, res: Re
         displayName: caps.displayName,
         contentTypes: caps.contentTypes,
         maxChars: caps.text.maxChars,
+        // The shapes this network renders media in. The preview frames an attachment in the
+        // nearest one and states what the crop costs, so these come from the dated registry
+        // rather than being restated in the UI, where they would drift out of step with it.
+        imageRatios: caps.image?.aspectRatios ?? [],
+        videoRatios: caps.video?.aspectRatios ?? [],
         linkBehavior: caps.linkBehavior,
         mode: decision.mode,
         reasons: decision.mode === 'handoff' ? decision.reasons : [],

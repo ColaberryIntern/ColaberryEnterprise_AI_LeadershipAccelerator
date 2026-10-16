@@ -8,7 +8,7 @@ import { requireSection } from '../../middlewares/authMiddleware';
 import { lookupGovContractsContainer } from '../../scripts/lib/factoryDemoContainer';
 // The qualification services lazy-load their models inside their functions, so these imports never init the ORM.
 import {
-  createQualification, recordDecision, approveGovQualification, recordDocumentReview,
+  createQualification, recordDecision, recordCapabilityDecisions, approveGovQualification, recordDocumentReview,
   createDecoupledQualification, getDecoupledWorkspace, recordZipAttestation, approveDecoupledQualification,
   evaluateRequirements, evaluateEvidenceCoverage, reviewedDocIdsFrom, resolveDecoupledDeliveryProjectId,
   QUALIFICATION_DECISIONS, APPROVAL_DECISIONS,
@@ -34,6 +34,8 @@ import { inspectZipSafety } from '../../services/factory/proposal/zipSafety';
 import { generateRiskNarrative, generateProposalSummary } from '../../services/factory/govBidNarrative';
 import { generateBuildSpec } from '../../services/factory/govBuildSpec';
 import { generateGovBuildPlanAI } from '../../services/factory/govBuildPlanAI';
+import { assessCapabilityFit } from '../../services/factory/govCapabilityFit';
+import { listServiceOfferings } from '../../services/factory/serviceCatalog';
 import { materializeGovBuildProject, GovMaterializeError, type GovMaterializeReason } from '../../services/factory/govProjectMaterialization';
 
 /**
@@ -512,6 +514,66 @@ router.post('/api/admin/factory/qualification/:canonicalOpportunityId/build-plan
   }
 });
 
+const capabilityFitBody = z.object({
+  requirements: z.array(z.object({ id: z.string().max(60), text: z.string().max(4000) })).max(200),
+  title: z.string().max(300).nullable().optional(),
+  buyer: z.string().max(200).nullable().optional(),
+});
+
+/** POST …/capability-fit — ADVISORY: derive the capabilities the scope needs and assess each against the tenant's
+ *  ACTIVE service catalog (have / partial / new). Only active services are matched, so growth is excluded from fit.
+ *  Gates nothing; persists nothing; fails soft (no key / upstream → `error` mapped to 503, empty requirements → 400). */
+router.post('/api/admin/factory/qualification/:canonicalOpportunityId/capability-fit', requireSection('program'), async (req: Request, res: Response) => {
+  const pk = qualKeyParam.safeParse({ canonicalOpportunityId: req.params.canonicalOpportunityId });
+  if (!pk.success) { res.status(400).json({ error: 'Invalid opportunity key.' }); return; }
+  const { canonicalOpportunityId } = pk.data;
+  const body = capabilityFitBody.safeParse(req.body ?? {});
+  if (!body.success) { res.status(400).json({ error: 'Invalid requirements payload.' }); return; }
+  const scope = await scopeOrFail(res, 'gov_capability_fit_scope', { canonicalOpportunityId });
+  if (!scope) return;
+  try {
+    const services = await listServiceOfferings({ tenantId: scope.tenantId, status: 'active' });
+    const result = await assessCapabilityFit({
+      requirements: body.data.requirements,
+      services: services.map((s: any) => ({ id: s.id, name: s.name, description: s.description, category: s.category, keywords: s.keywords })),
+      title: body.data.title ?? null,
+      buyer: body.data.buyer ?? null,
+    });
+    if (result.error) { res.status(result.error.includes('No established') ? 400 : 503).json({ error: result.error }); return; }
+    res.json(result);
+  } catch (err: any) {
+    logFail('gov_capability_fit_failed', err, { canonicalOpportunityId }); res.status(500).json({ error: 'Could not assess capability fit.' });
+  }
+});
+
+const capabilityDecisionsBody = z.object({
+  biddingEntity: biddingEntityField,
+  expectedVersion: z.coerce.number().int().min(1),
+  capabilities: z.any(),
+});
+
+/** POST …/capability-decisions — persist the Step 3 capability decisions (requirements_json.capabilities). ADVISORY:
+ *  sets no gate, does not touch established requirements; fork-on-edit preserves established/provenance. */
+router.post('/api/admin/factory/qualification/:canonicalOpportunityId/capability-decisions', requireSection('program'), async (req: Request, res: Response) => {
+  const p = qualKeyParam.safeParse(req.params);
+  if (!p.success) { res.status(400).json({ error: 'Invalid opportunity key.' }); return; }
+  const b = capabilityDecisionsBody.safeParse(req.body ?? {});
+  if (!b.success) { res.status(400).json({ error: 'Invalid decisions body.', issues: b.error.issues }); return; }
+  const { canonicalOpportunityId } = p.data;
+  const scope = await scopeOrFail(res, 'gov_capability_decisions_scope', { canonicalOpportunityId });
+  if (!scope) return;
+  try {
+    const q = await recordCapabilityDecisions({
+      canonicalOpportunityId, biddingEntity: b.data.biddingEntity, expectedVersion: b.data.expectedVersion,
+      reviewerIdentityId: actorIdentity(req), capabilities: b.data.capabilities,
+    });
+    res.json({ qualification: q });
+  } catch (err: any) {
+    if (mapQualificationError(res, err)) return;
+    logFail('gov_capability_decisions_failed', err, { canonicalOpportunityId }); res.status(500).json({ error: 'Could not save the capability decisions.' });
+  }
+});
+
 const materializeBuildBody = z.object({
   deliveryProjectId: z.string().uuid(),
   assigneeIdentityId: z.string().uuid(),
@@ -768,6 +830,10 @@ const establishedRequirement = z.object({
   id: z.string().min(1),
   text: z.string().min(1),
   category: z.string().max(60).optional(),
+  // P2: optional downstream tracks. Only a `scope` item carries `solution_build` (so deriveGovBuildPlan keeps
+  // generating its build story); others are ['proposal']. Backward-compatible — omitted falls back to the text
+  // classifier in govBuildPlan.ts exactly as before.
+  tracks: z.array(z.string().max(40)).max(8).optional(),
   applicability: z.enum(['always', 'conditional', 'not_applicable', 'unknown']),
   applicabilityEvidenceRef: z.object({ docId: z.string() }).nullable().optional(),
   responsibleParty: z.string().max(60).optional(),
@@ -1090,14 +1156,19 @@ router.post('/api/admin/factory/qualification/:canonicalOpportunityId/extract-re
   if (!file || !file.buffer) { res.status(400).json({ error: 'No document file uploaded (field "document").' }); return; }
   try {
     const { extractProposal } = await import('../../services/factory/proposal/proposalExtractor');
+    const { buildRequirementItems } = await import('../../services/factory/proposal/govRequirementItems');
     const result = await extractProposal(file.buffer);
     const candidates = (result.requirements || []).map((r: any) => ({
       id: r.canonicalReqId, text: r.statement, extractedText: r.extractedText,
       sourceDocument: r.sourceDocument, section: r.section, kind: r.kind, priority: r.priority,
     }));
+    // P2: the same candidates grouped into defined items across 4 categories (submit/rule/scope/after_award),
+    // each citing its source fragment(s). Deterministic, advisory (gates nothing), persists nothing — the reviewer
+    // confirms items into established requirements through the /decision path. `candidates` stays the Raw view.
+    const items = buildRequirementItems(result.requirements, result.dossier);
     // Surface the per-file extraction outcomes so the reviewer sees EVERY file and what happened to it (nothing
     // silently skipped) — unsupported / unreadable / scanned-PDF / truncated are flagged for manual review.
-    res.json({ candidates, fileCount: result.fileCount, files: result.files });
+    res.json({ candidates, items, fileCount: result.fileCount, files: result.files });
   } catch (err: any) {
     logFail('gov_qualification_extract_requirements_failed', err, { canonicalOpportunityId: p.data.canonicalOpportunityId });
     res.status(500).json({ error: 'Could not extract requirements from the document.' });

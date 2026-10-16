@@ -9,7 +9,7 @@ import {
   saveGovProposalResponse, reviewGovProposalResponse, addGovProposalFigure, removeGovProposalFigure, recordGovProposalAmendment,
   exportGovSubmission, downloadGovSubmissionPackage, recordGovSubmissionReceipt, acknowledgeGovSubmission, reopenGovSubmission, recordGovOutcome,
   type GovQualificationWorkspace, type QualRequirementEval, type GovCandidatesResult, type EstablishedRequirement,
-  type ServiceMatch, type ExtractedRequirementCandidate, type GovOpportunity, type GovDossier, type GovRelationship,
+  type ServiceMatch, type ExtractedRequirementCandidate, type RequirementItem, type ReqItemCategory, type GovOpportunity, type GovDossier, type GovRelationship,
   type GovResponseSlot, type GovBuildPlan, type GovBuildStory, type GovAssignableBuilder,
   type GovResponseFigure, type GovProposalAmendment, type GovSubmission, type GovSubmissionReadiness,
 } from '../../services/factoryApi';
@@ -24,9 +24,12 @@ import { GovBuildPlanAIPanel } from './govWorkspace/GovBuildPlanAIPanel';
 import { GovMaterializePanel } from './govWorkspace/GovMaterializePanel';
 import { SubmissionReadinessPanel } from './govWorkspace/SubmissionReadinessPanel';
 import { AssignmentOverviewPanel } from './govWorkspace/AssignmentOverviewPanel';
-import { WORKSPACE_STEPS, resolveStep, deriveStepState, type WorkspaceStep } from './govWorkspace/workspaceSteps';
+import { WORKSPACE_STEPS, resolveStep, deriveStepState, type WorkspaceStep, type StepStateInput } from './govWorkspace/workspaceSteps';
 import { StepBar } from './govWorkspace/StepBar';
+import { StepFooter } from './govWorkspace/StepFooter';
+import { PursuitBrief, type BriefSection } from './govWorkspace/PursuitBrief';
 import { RightRail } from './govWorkspace/RightRail';
+import { SolicitationItemsView, tracksForCategory, dueStageForCategory, type SolView } from './govWorkspace/SolicitationItemsView';
 
 /** The discovery opportunity's display details fetched for the decoupled (ZIP) workspace. */
 type OppDetail = { opportunity: GovOpportunity | null; source: 'live' | 'snapshot'; snapshotDate: string | null };
@@ -878,8 +881,9 @@ export default function AdminGovQualificationPage(): React.ReactElement {
   // Extract-from-ZIP → confirm → establish. Extraction is read-only (persists nothing); establishment is the write.
   const [extractFile, setExtractFile] = useState<File | null>(null);
   const [candidates, setCandidates] = useState<ExtractedRequirementCandidate[] | null>(null);
+  const [items, setItems] = useState<RequirementItem[] | null>(null);
   const [candRows, setCandRows] = useState<Record<string, CandidateRow>>({});
-  const [showAllCandidates, setShowAllCandidates] = useState(false);
+  const [solView, setSolView] = useState<SolView>('map');
   const [extractBusy, setExtractBusy] = useState(false);
   const [extractError, setExtractError] = useState<string | null>(null);
   // Discovery details (why-surfaced + overview + Source link) for the decoupled (gws) workspace. Best-effort.
@@ -953,13 +957,23 @@ export default function AdminGovQualificationPage(): React.ReactElement {
     try {
       const r = await extractGovQualificationRequirements(canonical, extractFile);
       setCandidates(r.candidates);
+      const its = r.items ?? null;
+      setItems(its);
+      // Default each candidate's due-stage from its item category when the taxonomy is present (scope -> delivery,
+      // submit/rule -> submission, after_award -> award), so a confirmed scope item lands as a build-stage obligation.
+      const catByCand = new Map<string, ReqItemCategory>();
+      for (const it of its ?? []) catByCand.set(it.sourceFragments[0]?.reqId ?? it.id, it.category);
       const rows: Record<string, CandidateRow> = {};
-      for (const c of r.candidates) rows[c.id] = { checked: true, applicability: 'always', dueStage: 'submission' };
+      for (const c of r.candidates) {
+        const cat = catByCand.get(c.id);
+        rows[c.id] = { checked: true, applicability: 'always', dueStage: cat ? dueStageForCategory(cat) : 'submission' };
+      }
       setCandRows(rows);
       return true;
     } catch (err: any) {
       setExtractError(err?.response?.data?.error ?? 'Could not extract requirements from the document.');
       setCandidates(null);
+      setItems(null);
       return false;
     } finally {
       setExtractBusy(false);
@@ -997,19 +1011,27 @@ export default function AdminGovQualificationPage(): React.ReactElement {
     if (!candidates || !record) return;
     const chosen = candidates.filter((c) => candRows[c.id]?.checked);
     if (chosen.length === 0) return;
-    const mapped: EstablishedRequirement[] = chosen.map((c) => ({
-      id: c.id, text: c.text,
-      applicability: (candRows[c.id]?.applicability ?? 'always') as EstablishedRequirement['applicability'],
-      dueStage: (candRows[c.id]?.dueStage ?? 'submission') as EstablishedRequirement['dueStage'],
-      bindingStatus: 'binding_solicitation_requirement',
-    }));
+    // Look up each candidate's item category (1:1) to carry category + tracks onto the established requirement,
+    // so a confirmed `scope` item reliably becomes a build story and the rest are submission/award-stage.
+    const catByCand = new Map<string, ReqItemCategory>();
+    for (const it of items ?? []) catByCand.set(it.sourceFragments[0]?.reqId ?? it.id, it.category);
+    const mapped: EstablishedRequirement[] = chosen.map((c) => {
+      const cat = catByCand.get(c.id);
+      return {
+        id: c.id, text: c.text,
+        ...(cat ? { category: cat, tracks: tracksForCategory(cat) } : {}),
+        applicability: (candRows[c.id]?.applicability ?? 'always') as EstablishedRequirement['applicability'],
+        dueStage: (candRows[c.id]?.dueStage ?? 'submission') as EstablishedRequirement['dueStage'],
+        bindingStatus: 'binding_solicitation_requirement',
+      };
+    });
     const byId = new Map<string, EstablishedRequirement>();
     for (const e of record.requirements_json?.established ?? []) byId.set(e.id, e);
     for (const m of mapped) byId.set(m.id, m);
     const merged = Array.from(byId.values());
     void run(async () => {
       await recordGovQualificationDecision(canonical, { biddingEntity, expectedVersion: version, decision: 'needs_evidence', establishedRequirements: merged });
-      setCandidates(null); setCandRows({});
+      setCandidates(null); setItems(null); setCandRows({});
     }, `Established ${mapped.length} requirement(s) from the solicitation.`);
   };
 
@@ -1035,6 +1057,22 @@ export default function AdminGovQualificationPage(): React.ReactElement {
     }
   }, [extract, isDecoupled, record, version, extractFile, ws, run, canonical, biddingEntity, fromParam, agencyParam]);
 
+  const stepInput: StepStateInput | null = ws ? {
+    zipAttested: !!(ws.zipAttestation && ws.zipAttestation.sha256),
+    establishedCount: ws.evaluation ? ws.evaluation.evals.length : 0,
+    decision: record ? record.decision : null,
+    proposalContentReady: (ws.responseSlots?.length ?? 0) > 0 && (ws.responseSlots ?? []).every((s) => s.status === 'approved'),
+    hasBuild: !!(ws.build && (ws.build.deliveryProjectId || (ws.build.buildStoryCount ?? 0) > 0)),
+    submissionStatus: ws.submission ? ws.submission.status : null,
+    outcome: ws.submission ? ws.submission.outcome : null,
+  } : null;
+  const stepModel = stepInput ? deriveStepState(activeStep, stepInput) : null;
+  const frontier = stepModel ? stepModel.frontier : null;
+  // Land on the frontier (first unfinished step) on a fresh load with no explicit ?tab=.
+  useEffect(() => {
+    if (ws && !tabParam && frontier && frontier !== activeStep) setStep(frontier);
+  }, [ws, tabParam, frontier, activeStep, setStep]);
+
   return (
     <div className="admin-page">
       {header}
@@ -1057,24 +1095,19 @@ export default function AdminGovQualificationPage(): React.ReactElement {
             </div>
           )}
 
-          <StepBar
-            steps={WORKSPACE_STEPS}
-            onStep={setStep}
-            stateByStep={deriveStepState(activeStep, {
-              zipAttested: !!(ws.zipAttestation && ws.zipAttestation.sha256),
-              establishedCount: ws.evaluation ? ws.evaluation.evals.length : 0,
-              decision: record ? record.decision : null,
-              proposalContentReady: (ws.responseSlots?.length ?? 0) > 0 && (ws.responseSlots ?? []).every((s) => s.status === 'approved'),
-              hasBuild: !!(ws.build && (ws.build.deliveryProjectId || (ws.build.buildStoryCount ?? 0) > 0)),
-              submissionStatus: ws.submission ? ws.submission.status : null,
-              outcome: ws.submission ? ws.submission.outcome : null,
-            })}
-          />
+          {stepModel && (
+            <StepBar
+              steps={WORKSPACE_STEPS}
+              onStep={setStep}
+              statuses={stepModel.statuses}
+              frontier={stepModel.frontier}
+            />
+          )}
 
           <div className="row g-4">
             <div className="col-12 col-lg-8">{/* ── LEFT: the active step's panel + the always-reachable qualification drawer ── */}
 
-          <GovTabPanel active={activeStep === 'gono'}>
+          <GovTabPanel active={activeStep === 'decide'}>
 
           {(() => {
             const ns = deriveNextStep({
@@ -1132,6 +1165,16 @@ export default function AdminGovQualificationPage(): React.ReactElement {
           )}
 
           {/* Deadline countdown now lives in the persistent right rail (see RightRail below). */}
+
+          {stepModel && (
+            <StepFooter
+              ready={stepModel.approved}
+              statusLine={stepModel.approved ? 'Approved — the build and submission steps are unlocked.' : 'Open the qualification, record your call, and approve (a second admin) below.'}
+              nextLine={stepModel.approved ? 'Next: define the product and build the bid.' : 'Approval is the hinge — steps 5–7 unlock once a second admin approves.'}
+              onBack={() => setStep('fit')}
+              primary={stepModel.approved ? { label: 'Build the bid', onClick: () => setStep('build') } : { label: 'Approve below to continue', disabled: true, onClick: () => undefined }}
+            />
+          )}
 
           </GovTabPanel>{/* end Go/No-go (was Overview) */}
 
@@ -1233,50 +1276,19 @@ export default function AdminGovQualificationPage(): React.ReactElement {
               )}
               {candidates !== null && candidates.length > 0 && (
                 <>
-                  <div className="small text-secondary mb-2">{candidates.length} candidate requirement(s) detected <span className="badge bg-info-subtle text-info-emphasis ms-1">suggested — confirm</span></div>
-                  <ul className="list-unstyled mb-3">
-                    {(showAllCandidates ? candidates : candidates.slice(0, 10)).map((c, idx) => {
-                      const row = candRows[c.id] ?? { checked: true, applicability: 'always', dueStage: 'submission' };
-                      return (
-                        <li key={c.id + idx} className="py-2 border-bottom">
-                          <div className="d-flex align-items-start gap-2">
-                            <input type="checkbox" className="form-check-input mt-1" checked={row.checked}
-                              aria-label={`Confirm ${c.id}`}
-                              onChange={(e) => setCandRows({ ...candRows, [c.id]: { ...row, checked: e.target.checked } })} />
-                            <div className="flex-grow-1">
-                              <div className="fw-semibold small">{c.id}</div>
-                              <div className="small">{c.text}</div>
-                              {(c.sourceDocument || c.section || c.kind) && (
-                                <div className="small text-secondary">{c.sourceDocument ?? ''}{c.section ? ` · §${c.section}` : ''}{c.kind ? ` · ${c.kind}` : ''}</div>
-                              )}
-                              <div className="d-flex flex-wrap gap-2 mt-1">
-                                <select className="form-select form-select-sm" style={{ maxWidth: 150 }} value={row.applicability} aria-label={`Applicability for ${c.id}`}
-                                  onChange={(e) => setCandRows({ ...candRows, [c.id]: { ...row, applicability: e.target.value } })}>
-                                  <option value="always">always</option><option value="conditional">conditional</option><option value="not_applicable">not_applicable</option><option value="unknown">unknown</option>
-                                </select>
-                                <select className="form-select form-select-sm" style={{ maxWidth: 140 }} value={row.dueStage} aria-label={`Due stage for ${c.id}`}
-                                  onChange={(e) => setCandRows({ ...candRows, [c.id]: { ...row, dueStage: e.target.value } })}>
-                                  <option value="submission">submission</option><option value="award">award</option><option value="delivery">delivery</option><option value="unknown">unknown</option>
-                                </select>
-                              </div>
-                            </div>
-                          </div>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                  {candidates.length > 10 && (
-                    <button type="button" className="btn btn-link btn-sm px-0 mb-2 d-block" onClick={() => setShowAllCandidates((v) => !v)} aria-expanded={showAllCandidates}>
-                      {showAllCandidates ? 'Show fewer' : `Show all ${candidates.length} (${candidates.length - 10} more) — all are selected by default`}
-                    </button>
-                  )}
+                  <SolicitationItemsView
+                    items={items} candidates={candidates} candRows={candRows}
+                    onToggle={(cid, checked) => setCandRows((prev) => ({ ...prev, [cid]: { ...(prev[cid] ?? { checked: true, applicability: 'always', dueStage: 'submission' }), checked } }))}
+                    onSetField={(cid, field, value) => setCandRows((prev) => ({ ...prev, [cid]: { ...(prev[cid] ?? { checked: true, applicability: 'always', dueStage: 'submission' }), [field]: value } }))}
+                    view={solView} onView={setSolView}
+                  />
                   {record ? (
                     <button type="button" className="btn btn-primary btn-sm" disabled={busy || selectedCandidateCount === 0} onClick={establishSelected}>
                       <i className="ri-check-double-line me-1" aria-hidden="true" />Establish selected ({selectedCandidateCount})
                     </button>
                   ) : (
                     <div className="alert alert-info py-2 mb-0" role="status">
-                      <i className="ri-information-line me-1" aria-hidden="true" />Open the qualification (in <strong>Qualification actions</strong> below) to confirm these into established requirements.
+                      <i className="ri-information-line me-1" aria-hidden="true" />Open the qualification on the <strong>Decide</strong> step to confirm these into established requirements.
                     </div>
                   )}
                 </>
@@ -1352,12 +1364,26 @@ export default function AdminGovQualificationPage(): React.ReactElement {
             );
           })()}
 
+          {stepModel && (
+            <StepFooter
+              ready={!!(ws.zipAttestation && ws.zipAttestation.sha256) && (ws.evaluation?.evals.length ?? 0) > 0}
+              statusLine={!!(ws.zipAttestation && ws.zipAttestation.sha256) && (ws.evaluation?.evals.length ?? 0) > 0 ? 'Ready: the ZIP is attested and requirements are established.' : 'Not yet: attest the ZIP and establish the cited requirements.'}
+              nextLine="Next: assess whether we can deliver it, and what it would teach us."
+              onBack={() => setStep('snapshot')}
+              primary={{ label: 'Confirm the package — assess fit', disabled: !(!!(ws.zipAttestation && ws.zipAttestation.sha256) && (ws.evaluation?.evals.length ?? 0) > 0), onClick: () => setStep('fit') }}
+              blockers={[
+                ...(ws.zipAttestation && ws.zipAttestation.sha256 ? [] : ['Upload and attest the solicitation ZIP.']),
+                ...((ws.evaluation?.evals.length ?? 0) > 0 ? [] : ['Establish at least one cited requirement.']),
+              ]}
+            />
+          )}
+
           </GovTabPanel>{/* end Solicitation */}
 
           {/* The former Dates & Messages tab (dossier, key dates, amendments inbox) now lives in the
               persistent right rail (see RightRail below), visible on every step. */}
 
-          <GovTabPanel active={activeStep === 'proposal'}>
+          <GovTabPanel active={activeStep === 'snapshot'}>
 
           {(ws.source || isDecoupled) && (
             <SectionCard title="What they want / what we&apos;d build (AI)" icon="sparkling-2-line"
@@ -1369,22 +1395,30 @@ export default function AdminGovQualificationPage(): React.ReactElement {
           )}
 
           {(
-            <SectionCard title="Response checklist" icon="draft-line"
-              subtitle="One slot per established requirement the proposal must answer, each citing its source. Draft each response, then take it through review → approval; a material amendment reopens an affected answer.">
-              <ResponseSlotsChecklist slots={ws.responseSlots ?? []} authoring={{
-                canAuthor: !!ws.build?.deliveryProjectId,
-                busy,
-                onSave: (rid, content) => run(() => saveGovProposalResponse(canonical, rid, content), 'Response saved.'),
-                onReview: (rid, decision) => run(() => reviewGovProposalResponse(canonical, rid, decision), 'Response updated.'),
-                onAddFigure: (rid, fig) => run(() => addGovProposalFigure(canonical, rid, fig), 'Figure attached.'),
-                onRemoveFigure: (rid, ref) => run(() => removeGovProposalFigure(canonical, rid, ref), 'Figure removed.'),
-              }} />
+            <SectionCard title="Snapshot facts" icon="dashboard-3-line"
+              subtitle="The quick read — value, timing and the legacy scores — so you can pass in two minutes if it is clearly not for us.">
+              <div className="row g-3">
+                <div className="col-6 col-lg-3"><StatCard label="Estimated value" value={fmtValue(oppDetail?.opportunity?.estimatedValue ?? null)} icon="money-dollar-circle-line" tone="neutral" hint="unverified" /></div>
+                <div className="col-6 col-lg-3"><StatCard label="Closes" value={closeLabel(oppDetail?.opportunity?.closeDate ?? ws.source?.deadline?.utc ?? null)} icon="calendar-event-line" tone="neutral" hint={daysLeft(oppDetail?.opportunity?.closeDate ?? ws.source?.deadline?.utc ?? null) !== null ? `${daysLeft(oppDetail?.opportunity?.closeDate ?? ws.source?.deadline?.utc ?? null)} days` : undefined} /></div>
+                <div className="col-6 col-lg-3"><StatCard label="Legacy priority" value={oppDetail?.opportunity?.priorityScore ?? '—'} icon="bar-chart-box-line" tone="neutral" hint="advisory" /></div>
+                <div className="col-6 col-lg-3"><StatCard label="Legacy fit" value={oppDetail?.opportunity?.fitScore ?? '—'} icon="scales-3-line" tone="neutral" hint="advisory" /></div>
+              </div>
             </SectionCard>
           )}
 
-          </GovTabPanel>{/* end Proposal */}
+          {stepModel && (
+            <StepFooter
+              ready
+              statusLine="Read the short version. If it is clearly not for us, pass now."
+              nextLine="Next: pull the solicitation ZIP and read the real requirements."
+              secondary={record ? { label: 'Pass on this', onClick: () => run(() => recordGovQualificationDecision(canonical, { biddingEntity, expectedVersion: version, decision: 'no_bid', rationale: rationale || 'passed at snapshot' }), 'Recorded: no bid.') } : null}
+              primary={{ label: 'Worth a look — get the solicitation', onClick: () => setStep('solicitation') }}
+            />
+          )}
 
-          <GovTabPanel active={activeStep === 'requirements'}>
+          </GovTabPanel>{/* end Snapshot */}
+
+          <GovTabPanel active={activeStep === 'fit'}>
 
           {ws.evaluation && (ws.source || isDecoupled) && (
             <SectionCard title="Requirements by due stage" icon="list-check-2" subtitle="Missing evidence, unknown applicability, and unevidenced dismissals block a bid pursuit.">
@@ -1467,6 +1501,17 @@ export default function AdminGovQualificationPage(): React.ReactElement {
             );
           })()}
 
+          {stepModel && (
+            <StepFooter
+              ready
+              statusLine="Confirm the matches and eligibility, then decide."
+              nextLine="Next: weigh win probability and value, and request approval."
+              onBack={() => setStep('solicitation')}
+              secondary={record ? { label: 'Disqualified — no bid', onClick: () => run(() => recordGovQualificationDecision(canonical, { biddingEntity, expectedVersion: version, decision: 'no_bid', rationale: rationale || 'disqualified at fit' }), 'Recorded: no bid.') } : null}
+              primary={{ label: 'Fit is workable — decide', onClick: () => setStep('decide') }}
+            />
+          )}
+
           </GovTabPanel>{/* end Requirements */}
 
           {/* Manual document review moved up into the Solicitation step above (one panel per step). */}
@@ -1474,7 +1519,8 @@ export default function AdminGovQualificationPage(): React.ReactElement {
           {/* ── Qualification drawer: provenance / assessment / approvals. Always reachable from any tab, but
                 de-emphasized (collapsible) so it does not dominate the workspace; open by default only until a
                 record exists so "Open qualification" is one glance away on arrival. ─ */}
-          <SectionCard key={record?.decision ?? 'none'} title="Qualification drawer — open, decide & approve" icon="quill-pen-line" collapsible defaultOpen={!record || record.decision !== 'approved_bid_pursuit'}>
+          {activeStep === 'decide' && (
+          <SectionCard key={record?.decision ?? 'none'} title="Open, decide &amp; approve" icon="quill-pen-line" collapsible defaultOpen={!record || record.decision !== 'approved_bid_pursuit'}>
             <div className="mb-3 d-flex flex-wrap align-items-end gap-2">
               <label className="form-label small mb-0">Bidding entity
                 <input className="form-control form-control-sm" value={biddingEntity} onChange={(e) => setBiddingEntity(e.target.value)} />
@@ -1548,6 +1594,7 @@ export default function AdminGovQualificationPage(): React.ReactElement {
               </>
             )}
           </SectionCard>
+          )}
 
           <GovTabPanel active={activeStep === 'build'}>
           {/* ── Build tab: the AI build spec/research (advisory) + the solution-build track (forward) + the separate build authorization ─ */}
@@ -1616,6 +1663,20 @@ export default function AdminGovQualificationPage(): React.ReactElement {
           </SectionCard>
           )}
 
+          {(
+            <SectionCard title="Proposal responses" icon="draft-line"
+              subtitle="One slot per established requirement the proposal must answer, each citing its source. Draft each response, then take it through review → approval; a material amendment reopens an affected answer.">
+              <ResponseSlotsChecklist slots={ws.responseSlots ?? []} authoring={{
+                canAuthor: !!ws.build?.deliveryProjectId,
+                busy,
+                onSave: (rid, content) => run(() => saveGovProposalResponse(canonical, rid, content), 'Response saved.'),
+                onReview: (rid, decision) => run(() => reviewGovProposalResponse(canonical, rid, decision), 'Response updated.'),
+                onAddFigure: (rid, fig) => run(() => addGovProposalFigure(canonical, rid, fig), 'Figure attached.'),
+                onRemoveFigure: (rid, ref) => run(() => removeGovProposalFigure(canonical, rid, ref), 'Figure removed.'),
+              }} />
+            </SectionCard>
+          )}
+
           </GovTabPanel>{/* end Build */}
 
           <GovTabPanel active={activeStep === 'submit'}>
@@ -1672,7 +1733,29 @@ export default function AdminGovQualificationPage(): React.ReactElement {
           </GovTabPanel>{/* end Outcome & Case Study */}
 
             </div>{/* end LEFT column */}
-            <aside className="col-12 col-lg-4">{/* ── RIGHT: persistent pursuit rail (deadline, dates+buyer, messages, team) — on every step ── */}
+            <aside className="col-12 col-lg-4">{/* ── RIGHT: pursuit brief + persistent rail (deadline, dates+buyer, messages, team) ── */}
+              {stepModel && (
+                <PursuitBrief sections={WORKSPACE_STEPS.filter((s) => s.n <= 6).map((s): BriefSection => {
+                  const st = stepModel.statuses[s.key];
+                  const state: BriefSection['state'] = st === 'current' ? 'adding' : st === 'done' ? 'known' : 'future';
+                  const facts: string[] = [];
+                  if (state !== 'future') {
+                    if (s.key === 'snapshot') {
+                      if (oppDetail?.opportunity?.title) facts.push(oppDetail.opportunity.title);
+                      const dl = daysLeft(oppDetail?.opportunity?.closeDate ?? ws.source?.deadline?.utc ?? null);
+                      if (dl !== null) facts.push(`${dl} days to close`);
+                    } else if (s.key === 'solicitation') {
+                      facts.push(`${ws.evaluation?.evals.length ?? 0} requirements established`);
+                      if (ws.zipAttestation && ws.zipAttestation.sha256) facts.push('ZIP attested');
+                    } else if (s.key === 'decide' && record) {
+                      facts.push(`Decision: ${record.decision.replace(/_/g, ' ')}`);
+                    } else if (s.key === 'build' && ws.build?.deliveryProjectId) {
+                      facts.push('Monitored project created');
+                    }
+                  }
+                  return { n: s.n, label: s.label, state, facts };
+                })} />
+              )}
               <RightRail
                 deadline={
                   <DeadlineCard
