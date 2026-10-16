@@ -4,8 +4,11 @@ import {
   producerCommandSchema, occurrenceIdParamSchema, playbackGrantSchema, playbackHeartbeatSchema,
 } from '../schemas/broadcastSchema';
 import {
-  rejectUntrustedFields, resolveTelemetryConfig, MEASURED_ACCESS_MODES, type MeasuredAccessMode,
+  rejectUntrustedFields, resolveTelemetryConfig, type MeasuredAccessMode,
 } from '../services/broadcast/broadcastTelemetryPolicy';
+// The runtime list, from the module that also defines the column's CHECK constraint. One
+// source of truth: a second array in the policy module would be a second place to forget.
+import { ACCESS_MODES } from '../db/ensureBroadcastSchema';
 import { recordPlaybackBeat, readLiveAudience } from '../services/broadcast/broadcastTelemetryService';
 import { runProducerCommand } from '../services/broadcast/broadcastCommandService';
 import { decideBroadcastAccess, resolveBroadcastAccess } from '../services/broadcast/broadcastEntitlement';
@@ -306,7 +309,7 @@ export async function postPlaybackHeartbeat(req: Request, res: Response): Promis
         isTest: process.env.BROADCAST_TELEMETRY_TEST_MODE === 'true',
         // Checked, not cast. An unrecognised mode records as null rather than appearing in
         // the counts under a label nobody defined.
-        accessMode: (MEASURED_ACCESS_MODES as readonly string[]).includes(occurrence.access_mode)
+        accessMode: (ACCESS_MODES as readonly string[]).includes(occurrence.access_mode)
           ? (occurrence.access_mode as MeasuredAccessMode)
           : null,
       },
