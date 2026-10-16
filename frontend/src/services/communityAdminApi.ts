@@ -16,8 +16,8 @@ export type CommunityMemberRole = 'student' | 'mentor' | 'staff';
 // This list is what the role picker renders, so a role absent here is a role nobody can assign.
 export type MgmtRole = 'owner' | 'admin' | 'curriculum' | 'revenue' | 'admissions' | 'support'
   | 'community_organizer' | 'mentor'
-  | 'marketing' | 'platform' | 'executive' | 'lead_intake' | 'internship_review';
-export const MGMT_ROLES: MgmtRole[] = ['owner', 'admin', 'curriculum', 'revenue', 'admissions', 'support', 'community_organizer', 'mentor', 'marketing', 'platform', 'executive', 'lead_intake', 'internship_review'];
+  | 'marketing' | 'platform' | 'executive' | 'lead_intake' | 'internship_review' | 'product_experience';
+export const MGMT_ROLES: MgmtRole[] = ['owner', 'admin', 'curriculum', 'revenue', 'admissions', 'support', 'community_organizer', 'mentor', 'marketing', 'platform', 'executive', 'lead_intake', 'internship_review', 'product_experience'];
 export const MGMT_ROLE_LABEL: Record<MgmtRole, string> = {
   owner: 'Owner', admin: 'Admin', curriculum: 'Curriculum',
   revenue: 'Revenue', admissions: 'Admissions', support: 'Support',
@@ -25,6 +25,7 @@ export const MGMT_ROLE_LABEL: Record<MgmtRole, string> = {
   // Agent Factory domain roles (AF2.3). Each scopes one intern to one department.
   marketing: 'Marketing', platform: 'Platform', executive: 'Executive',
   lead_intake: 'Lead Intake', internship_review: 'Internship Review',
+  product_experience: 'Product Experience',
 };
 
 export interface AdminCommunityMember {

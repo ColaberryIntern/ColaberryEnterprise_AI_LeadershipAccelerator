@@ -33,7 +33,15 @@ const PATH_SECTION: Array<[string, SectionKey]> = [
   // `res.status(403)` below with no row explaining why. Brand admin governs the
   // sending identity behind campaigns and communications, both already 'campaigns',
   // so it belongs to the same section rather than a new key.
-  ['/api/admin/brands', 'campaigns'],
+  // Brand administration moved OUT of 'campaigns' into its own key on 2026-10-16 (Ali, option 2).
+  // A brand here is a website the platform publishes to, and the product-experience intern's job
+  // is checking those websites — so it gained a reader with no business in campaign tooling.
+  //
+  // `brandPaths.test.ts` argued against this and named the condition that makes it safe: every
+  // role that legitimately reaches campaign tooling must be edited IN THE SAME CHANGE, or it
+  // silently loses the surface. `owner` and `admin` are derived from ALL_SECTIONS and pick the
+  // key up automatically; `marketing` now lists 'brands' explicitly. Nobody loses brands.
+  ['/api/admin/brands', 'brands'],
   // Marketing content composer (drafts, variants, validation). Same section as the campaigns
   // and brands it publishes for. Mapped the day the routes landed, for the reason the brands
   // row above gives. NOTE the prefix matcher is boundary-aware, so this does not swallow

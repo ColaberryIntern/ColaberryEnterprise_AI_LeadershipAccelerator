@@ -25,6 +25,21 @@ export const SECTION_KEYS = [
   // interview transcript — reviewing an internship application is a materially
   // wider grant than editing curriculum, and the two should not travel together.
   'internship',
+  // Brand administration: the brands themselves, their domains, sender profiles and send
+  // readiness. It WAS folded into 'campaigns', and that was the right call at the time — brand
+  // admin governs the sending identity behind campaigns, so the two travelled together.
+  //
+  // Split out on 2026-10-16 (Ali, option 2) because the Agent Factory gave it a second, separate
+  // reader: the product-experience intern checks the different websites, which is what a brand
+  // IS here, and has no business in the campaign tooling that surrounds it.
+  //
+  // `mgmtSectionGate.brandPaths.test.ts` argued against exactly this, and its objection is
+  // specific and answerable: "minting a new key would mean every scoped role that legitimately
+  // reaches campaign tooling loses this surface until each role definition is edited — a
+  // permissions change disguised as a routing change." Editing them in the same diff is the
+  // condition it names. `owner` and `admin` pick the key up automatically because both are
+  // derived from ALL_SECTIONS; `marketing` is granted it explicitly below. No role loses brands.
+  'brands',
 ] as const;
 export type SectionKey = typeof SECTION_KEYS[number];
 
@@ -35,7 +50,7 @@ export const ALL_SECTIONS: SectionKey[] = [...SECTION_KEYS];
 // because an intern owns exactly one department and the only roles that reached their surface were
 // Admin (13 of 14 sections) and Owner. See MGMT_ROLE_DEFS below for why the admissions split needed
 // two roles rather than one.
-export const MGMT_ROLES = ['owner', 'admin', 'curriculum', 'revenue', 'admissions', 'support', 'community_organizer', 'mentor', 'marketing', 'platform', 'executive', 'lead_intake', 'internship_review'] as const;
+export const MGMT_ROLES = ['owner', 'admin', 'curriculum', 'revenue', 'admissions', 'support', 'community_organizer', 'mentor', 'marketing', 'platform', 'executive', 'lead_intake', 'internship_review', 'product_experience'] as const;
 export type MgmtRole = typeof MGMT_ROLES[number];
 
 export interface MgmtRoleDef {
@@ -95,7 +110,14 @@ export const MGMT_ROLE_DEFS: Record<MgmtRole, MgmtRoleDef> = {
   // Marketing → the Campaigns group: brands, content, campaigns, communications, landing pages,
   // publishing, visitors, explorer growth, growth journey, tracking estate. Eleven route prefixes,
   // the widest single-section grant of the five, and the surface demonstrated on the 14 Oct call.
-  marketing: { role: 'marketing', label: 'Marketing', sections: ['dashboard', 'campaigns'] },
+  // `brands` is listed explicitly, and that is the whole reason splitting the key was safe.
+  // Before the split, brand admin arrived free with `campaigns`; the moment it became its own
+  // key, every role holding campaigns would have silently lost it. Sarbjit keeps brands.
+  marketing: {
+    role: 'marketing',
+    label: 'Marketing',
+    sections: ['dashboard', 'campaigns', 'brands'],
+  },
 
   // Platform → the System group: tickets, reports, settings, events, work-ledger health,
   // automation. This is the widest-CONSEQUENCE section on the platform even though it is not the
@@ -123,6 +145,19 @@ export const MGMT_ROLE_DEFS: Record<MgmtRole, MgmtRoleDef> = {
     role: 'internship_review',
     label: 'Internship Review',
     sections: ['dashboard', 'internship'],
+  },
+
+  // Product Experience (Mihret). Ali, 16 Oct: "Mihret should get access to the brands page
+  // because the checks she will be doing will be based on the different websites."
+  //
+  // Brands and NOTHING else. The alternative on the table was handing her the `marketing` role,
+  // which would have given her campaigns, communications, visitors, publishing, landing pages,
+  // content and growth journey as well — another intern's entire domain, dressed up as scoping.
+  // That is the exact trap AF2.3 was written to close, so the section was split instead.
+  product_experience: {
+    role: 'product_experience',
+    label: 'Product Experience',
+    sections: ['dashboard', 'brands'],
   },
 };
 

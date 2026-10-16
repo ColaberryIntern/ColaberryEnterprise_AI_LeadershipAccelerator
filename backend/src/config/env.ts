@@ -254,6 +254,12 @@ export const env = {
   // Same 'off'/'all'/CSV shape as SBP_AGENT_SCOPING above, deliberately: one
   // parse convention for "narrow rollout to named accounts" in this codebase.
   caseStudySurfaceLabUserIds: (process.env.CASE_STUDY_SURFACE_LAB_USER_IDS ?? 'off').trim(),
+  // Colaberry Campus (walkable-map portal navigation). off (default) | allowlist | all.
+  // allowlist admits enrollments in CAMPUS_ENROLLMENT_IDS or cohorts in CAMPUS_COHORT_IDS
+  // (CSV). Parsed by services/campus/campusFlag.ts; unknown values mean off.
+  campusEnabled: (process.env.CAMPUS_ENABLED ?? 'off').trim(),
+  campusEnrollmentIds: (process.env.CAMPUS_ENROLLMENT_IDS ?? '').trim(),
+  campusCohortIds: (process.env.CAMPUS_COHORT_IDS ?? '').trim(),
   // Today aggregation — blend Project + Community cards into the Today feed
   // (Phase 2). Default OFF; the feed stays Class-only until enabled.
   todayAggregateSources: process.env.TODAY_AGGREGATE_SOURCES === 'true',

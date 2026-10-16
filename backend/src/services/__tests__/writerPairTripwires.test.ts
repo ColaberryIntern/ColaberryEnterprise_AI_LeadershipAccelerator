@@ -170,6 +170,11 @@ const OFF_EXPLORER_FILES: Record<string, string> = {
   'services/agentBlueprint/ticketCreatorIdentitySeed.ts': 'AGENT IDENTITY, not a person.',
   'services/curriculum/daraIdentitySeed.ts': 'AGENT IDENTITY, not a person.',
   'services/reese/reeseIdentitySeed.ts': 'AGENT IDENTITY, not a person.',
+  'scripts/backfillExplorerEnteredAt.ts':
+    'SHAPE MATCH, NOT A TRANSITION (M21). It matches because its WHERE clause reads '
+    + "enrollment_type = 'explorer' to SELECT the population. It writes one column, "
+    + 'explorer_entered_at, and never assigns enrollment_type at all, so it cannot move '
+    + 'anybody off explorer. Pinned here so the newcomer is accounted for rather than ignored.',
 };
 
 describe('the scanners themselves can fail', () => {

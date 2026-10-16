@@ -30,6 +30,7 @@ import { StepFooter } from './govWorkspace/StepFooter';
 import { PursuitBrief, type BriefSection } from './govWorkspace/PursuitBrief';
 import { RightRail } from './govWorkspace/RightRail';
 import { SolicitationItemsView, tracksForCategory, dueStageForCategory, type SolView } from './govWorkspace/SolicitationItemsView';
+import { FitCapabilitiesPanel } from './govWorkspace/FitCapabilitiesPanel';
 
 /** The discovery opportunity's display details fetched for the decoupled (ZIP) workspace. */
 type OppDetail = { opportunity: GovOpportunity | null; source: 'live' | 'snapshot'; snapshotDate: string | null };
@@ -1472,34 +1473,20 @@ export default function AdminGovQualificationPage(): React.ReactElement {
             </SectionCard>
           )}
 
-          {/* ── Gaps / potential disqualifiers (advisory; surfaces, never decides) ─ */}
-          {isDecoupled && (() => {
-            const gaps = derivePotentialDisqualifiers(established, ws.evaluation, svcMatches ?? []);
-            return (
-              <SectionCard title="Gaps / potential disqualifiers" icon="error-warning-line" collapsible defaultOpen={false}
-                subtitle="Eligibility & qualification gates that could disqualify a bid — a focused risk view, not a copy of the full checklist above. Verify or resolve before bidding.">
-                <div className="alert alert-warning py-2 small" role="status">
-                  <i className="ri-alert-line me-1" aria-hidden="true" />Advisory only — not a verified pass/fail. Deeper eligibility verification (SAM/registration/set-asides/clearances) is a later step.
-                </div>
-                {gaps.empty === 'no_requirements' ? (
-                  <p className="text-secondary small mb-0">No requirements established yet — establish the cited requirements above to surface potential disqualifiers. An empty list is not evidence of "no requirements".</p>
-                ) : gaps.empty === 'none_flagged' ? (
-                  <p className="text-secondary small mb-0">No potential disqualifiers detected from the established requirements. This is advisory; verify eligibility before bidding.</p>
-                ) : (
-                  <ul className="list-unstyled mb-0">{gaps.items.map((g) => (
-                    <li key={g.kind + g.id} className="py-2 border-bottom">
-                      <div className="d-flex align-items-center gap-2">
-                        <span className={`badge ${g.kind === 'blocking' ? 'bg-danger-subtle text-danger-emphasis' : 'bg-warning-subtle text-warning-emphasis'}`}>{g.kind === 'blocking' ? 'blocking' : 'verify / resolve'}</span>
-                        <span className="fw-semibold small">{g.id}</span>
-                      </div>
-                      <div className="small">{g.text}</div>
-                      <div className="small text-secondary">{g.reason} · {g.basis}</div>
-                    </li>
-                  ))}</ul>
-                )}
-              </SectionCard>
-            );
-          })()}
+          {/* Step 3 "Fit" (P3): AI capability assessment vs Our Services, write-back, and tickable eligibility. */}
+          {(ws.source || isDecoupled) && (
+            <FitCapabilitiesPanel
+              canonicalOpportunityId={canonical}
+              needs={needs}
+              title={oppDetail?.opportunity?.title ?? ws.provenance?.title ?? null}
+              buyer={ws.source?.publisher?.leadBuyer?.name ?? oppDetail?.opportunity?.agency ?? null}
+              gaps={derivePotentialDisqualifiers(established, ws.evaluation, svcMatches ?? [])}
+              biddingEntity={biddingEntity}
+              version={version}
+              canWrite={!!record}
+              onSaved={() => { void load(); }}
+            />
+          )}
 
           {stepModel && (
             <StepFooter
