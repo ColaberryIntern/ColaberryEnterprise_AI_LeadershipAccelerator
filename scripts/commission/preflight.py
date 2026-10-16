@@ -226,20 +226,49 @@ def main():
                  "would change the rate" % money(head))
 
     # ---- 5. regression against every prior send --------------------------
+    #
+    # A prior month that no longer computes to what was emailed is a FAIL by
+    # default, and that is the point: a silently restated basis is how a wrong
+    # figure reaches payroll twice.
+    #
+    # But a restatement can be real and explained. Aug 2026: one student's two
+    # $250.00 payments, one in June and one in July, were reversed after both
+    # months had been reported, moving Ali's figure by $28.13 and $31.87. The
+    # data was right both times; the underlying payments changed.
+    #
+    # `restated_to` on a ledger entry is how that gets acknowledged. It is
+    # DELIBERATELY a separate field from `ali_comm`: `ali_comm` records what was
+    # actually emailed and must never be edited, because the ledger is the
+    # historical record of what accounting was told. `restated_to` records what
+    # the same month computes to now, and why, so the next run compares against
+    # the accepted figure instead of failing forever on a settled question.
+    #
+    # Adding it requires a human to look at the diff first. Do not add one to
+    # silence a failure that has not been explained.
     print("\n[5] regression - prior months must still compute to what was emailed")
     if smi:
         for s in led["sends"]:
             if (s["year"], s["month"]) == (year, month):
                 continue
             got = smi["summary"].get((s["year"], s["month"]))
+            label = "%s %d" % (MONTH_ABBR[s["month"]], s["year"])
+            restated = s.get("restated_to")
             if got is None:
-                warn("%s %d absent from this workbook's summary block" % (MONTH_ABBR[s["month"]], s["year"]))
-            elif abs(got - s["ali_comm"]) > 0.005:
-                fail("%s %d was emailed as %s but now computes to %s - the basis was RESTATED. "
-                     "Do not send until this is explained."
-                     % (MONTH_ABBR[s["month"]], s["year"], money(s["ali_comm"]), money(got)))
+                warn("%s absent from this workbook's summary block" % label)
+            elif abs(got - s["ali_comm"]) <= 0.005:
+                ok("%s still %s" % (label, money(got)))
+            elif restated is not None and abs(got - float(restated)) <= 0.005:
+                ok("%s emailed as %s, acknowledged restatement to %s - matches%s"
+                   % (label, money(s["ali_comm"]), money(float(restated)),
+                      (": " + s["restated_reason"]) if s.get("restated_reason") else ""))
+            elif restated is not None:
+                fail("%s carries an acknowledged restatement of %s but now computes to %s - "
+                     "it has MOVED AGAIN. Do not send until this is explained."
+                     % (label, money(float(restated)), money(got)))
             else:
-                ok("%s %d still %s" % (MONTH_ABBR[s["month"]], s["year"], money(got)))
+                fail("%s was emailed as %s but now computes to %s - the basis was RESTATED. "
+                     "Do not send until this is explained."
+                     % (label, money(s["ali_comm"]), money(got)))
 
     # ---- 6. carried-over tabs intact -------------------------------------
     print("\n[6] carried-over tabs survived the rebuild")
