@@ -31,7 +31,11 @@ export type SectionKey = typeof SECTION_KEYS[number];
 export const ALL_SECTIONS: SectionKey[] = [...SECTION_KEYS];
 
 // The management roles. 'owner' sees everything; the rest are scoped.
-export const MGMT_ROLES = ['owner', 'admin', 'curriculum', 'revenue', 'admissions', 'support', 'community_organizer', 'mentor'] as const;
+// The last five are the Agent Factory domain roles (AF2.3, Ali approved 2026-10-15). Each exists
+// because an intern owns exactly one department and the only roles that reached their surface were
+// Admin (13 of 14 sections) and Owner. See MGMT_ROLE_DEFS below for why the admissions split needed
+// two roles rather than one.
+export const MGMT_ROLES = ['owner', 'admin', 'curriculum', 'revenue', 'admissions', 'support', 'community_organizer', 'mentor', 'marketing', 'platform', 'executive', 'lead_intake', 'internship_review'] as const;
 export type MgmtRole = typeof MGMT_ROLES[number];
 
 export interface MgmtRoleDef {
@@ -72,6 +76,54 @@ export const MGMT_ROLE_DEFS: Record<MgmtRole, MgmtRoleDef> = {
   // every learner on the platform, which is not what was asked for.
   mentor: { role: 'mentor', label: 'Mentor', sections: ['dashboard', 'career_review'] },
   community_organizer: { role: 'community_organizer', label: 'Community Organizer', sections: ['dashboard'] },
+
+  // ---------------------------------------------------------------------------------------------
+  // Agent Factory domain roles (AF2.3). Ali approved option A on 2026-10-15.
+  //
+  // Each intern owns exactly ONE department and must be able to READ AND UPDATE it, because that
+  // is link 2 of the capability-transfer chain: they prove the surface by hand, then hand the
+  // capability to their agent. Before these, the narrowest role that reached `campaigns`,
+  // `system` or `war_room` was `admin` — 13 of the 14 sections — so scoping an intern to their own
+  // department was not expressible at all, and the quick path was to call Admin "scoped".
+  //
+  // Every role below is a STRICT SUBSET of `admin`. None widens an existing definition; the seven
+  // roles above are untouched, which is AF2.3's fourth acceptance criterion.
+  //
+  // `dashboard` rides along with each so the holder has a landing page rather than a 403 on sign-in
+  // — the same reason `curriculum` and `revenue` carry it.
+
+  // Marketing → the Campaigns group: brands, content, campaigns, communications, landing pages,
+  // publishing, visitors, explorer growth, growth journey, tracking estate. Eleven route prefixes,
+  // the widest single-section grant of the five, and the surface demonstrated on the 14 Oct call.
+  marketing: { role: 'marketing', label: 'Marketing', sections: ['dashboard', 'campaigns'] },
+
+  // Platform → the System group: tickets, reports, settings, events, work-ledger health,
+  // automation. This is the widest-CONSEQUENCE section on the platform even though it is not the
+  // widest by route count, because `/api/admin/settings` is in it.
+  platform: { role: 'platform', label: 'Platform', sections: ['dashboard', 'system'] },
+
+  // Executive → the three pinned executive surfaces. `executive-narrative` maps to `dashboard`,
+  // which this role already holds, so the three keys here cover the whole domain.
+  executive: { role: 'executive', label: 'Executive', sections: ['dashboard', 'trust', 'war_room'] },
+
+  // ---- the admissions split, which needed TWO roles and not one ----
+  //
+  // `admissions` grants `lead_ingestion` AND `internship` together, so it cannot separate the two
+  // interns who own those domains: give it to either and they also get the other's department. The
+  // obvious fix — narrowing `admissions` — is the wrong one. Dhee holds that role and runs the
+  // internship end to end (AI_INTERNSHIP_SPEC.md), so narrowing it would quietly take a working
+  // surface away from someone who is not part of this change.
+  //
+  // So `admissions` is left exactly as it is, and the two narrow halves are added beside it.
+  // Separating them matters more than the usual tidiness argument: the internship queue carries an
+  // applicant's resume, phone number and interview transcript, which the comment on that section
+  // key already calls "a materially wider grant than editing curriculum".
+  lead_intake: { role: 'lead_intake', label: 'Lead Intake', sections: ['dashboard', 'lead_ingestion'] },
+  internship_review: {
+    role: 'internship_review',
+    label: 'Internship Review',
+    sections: ['dashboard', 'internship'],
+  },
 };
 
 export function isMgmtRole(role: string | undefined | null): role is MgmtRole {

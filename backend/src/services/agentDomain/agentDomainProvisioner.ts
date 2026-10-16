@@ -6,8 +6,12 @@
  *
  * ## What makes a second run write nothing
  *
- * Every id is derived from the domain key (`agentDomainProvisionPlan.ts`), and every INSERT carries
- * that id explicitly with `ON CONFLICT DO NOTHING ... RETURNING id`. So the thing that stops a
+ * Every id is derived from the domain key (`agentDomainProvisionPlan.ts`). The three INSERTs this
+ * module issues carry that id explicitly with `ON CONFLICT DO NOTHING ... RETURNING id`.
+ * CORRECTED: this used to say "every INSERT", which stopped being true at the LC-01 rework --
+ * `projects` now goes through `Project.findOrCreate` so the model hooks fire, and
+ * `project_lifecycle_states` is written by the afterCreate HOOK, not by this module at all.
+ * So the thing that stops a
  * duplicate is a PRIMARY KEY or a UNIQUE INDEX, enforced by Postgres inside the transaction, not a
  * read-then-write check that two concurrent callers could both pass. See correction C in the plan
  * module for why the anchor cannot be inserted first.
@@ -305,7 +309,8 @@ async function provisionOne(
   };
 
   // Logged HERE, not in the loop that calls this. It used to live in `provisionAllDomains`, so a
-  // single-domain `provisionDomain` call wrote roughly 45 rows and emitted nothing -- the same
+  // single-domain `provisionDomain` call wrote 76 rows for marketing (1+1+1+3+70, MEASURED after
+  // "roughly 45" was found wrong) and emitted nothing -- the same
   // observability gap one level down, attached to the loop instead of to the unit of work.
   //
   // `already_present` is a re-run that wrote nothing, which is a DIFFERENT outcome from a run that
@@ -349,31 +354,53 @@ export interface AnchorReconcileResult {
  * changes nothing and says so. `IS DISTINCT FROM` rather than `<>` because the columns are
  * nullable and `NULL <> false` is NULL, which would match nothing and silently do no work -- the
  * exact failure this function exists to repair.
+ *
+ * ## TENANT-SCOPED, after an independent re-grade REPRODUCED A CROSS-TENANT WRITE here
+ *
+ * This UPDATE was `WHERE domain_key = $1` with no tenant predicate. `uq_agent_domain_key` is on
+ * **(tenant_id, domain_key)**, so the same domain key may legitimately exist for several tenants --
+ * and the statement reached every one of them. A verifier planted a second tenant holding
+ * `domain_key = 'marketing'` with its own measured blocker, ran this function, and watched the
+ * other tenant's `manager_can_reach` and `manager_blocker` get CLOBBERED. `changed: true` was
+ * misreported too: it was true when the only row touched belonged to a different tenant.
+ *
+ * Latent with one tenant, and still a destructive write in net-new code. `provisionOne` resolved
+ * the tenant 170 lines above for its INSERT path; this function simply did not. The long comment
+ * above about `IS DISTINCT FROM` being load-bearing was written while the tenant scope was missing
+ * entirely, which is what reasoning carefully about the wrong clause looks like.
  */
 export async function reconcileAnchorMetadata(
   ctx: ProvisionContext,
 ): Promise<AnchorReconcileResult[]> {
   const out: AnchorReconcileResult[] = [];
-  for (const plan of planAllProvisions()) {
-    // eslint-disable-next-line no-await-in-loop
-    const rows = await ctx.sequelize.query<{ id: string }>(
-      `UPDATE agent_domain_projects
-          SET manager_can_reach = $2, manager_blocker = $3, updated_at = now()
-        WHERE domain_key = $1
-          AND (manager_can_reach IS DISTINCT FROM $2 OR manager_blocker IS DISTINCT FROM $3)
-        RETURNING id`,
-      {
-        bind: [plan.domain_key, plan.manager_can_reach, plan.manager_blocker],
-        type: QueryTypes.SELECT,
-      },
-    );
-    out.push({
-      domain_key: plan.domain_key,
-      changed: rows.length > 0,
-      manager_can_reach: plan.manager_can_reach,
-      manager_blocker: plan.manager_blocker,
-    });
-  }
+  // One transaction for the whole reconcile: the tenant is resolved once, and every UPDATE is
+  // bound to it. `resolveTenantId` throws unless EXACTLY one tenant carries the slug, so an
+  // ambiguous environment fails loudly rather than reconciling into whichever row came back first.
+  await ctx.sequelize.transaction(async (tx) => {
+    const tenantId = await resolveTenantId(ctx.sequelize, tx);
+    for (const plan of planAllProvisions()) {
+      // eslint-disable-next-line no-await-in-loop
+      const rows = await ctx.sequelize.query<{ id: string }>(
+        `UPDATE agent_domain_projects
+            SET manager_can_reach = $2, manager_blocker = $3, updated_at = now()
+          WHERE domain_key = $1
+            AND tenant_id = $4
+            AND (manager_can_reach IS DISTINCT FROM $2 OR manager_blocker IS DISTINCT FROM $3)
+          RETURNING id`,
+        {
+          bind: [plan.domain_key, plan.manager_can_reach, plan.manager_blocker, tenantId],
+          type: QueryTypes.SELECT,
+          transaction: tx,
+        },
+      );
+      out.push({
+        domain_key: plan.domain_key,
+        changed: rows.length > 0,
+        manager_can_reach: plan.manager_can_reach,
+        manager_blocker: plan.manager_blocker,
+      });
+    }
+  });
   return out;
 }
 
@@ -396,7 +423,7 @@ export async function provisionAllDomains(ctx: ProvisionContext): Promise<Provis
   const failed: { domain_key: string; error_class: string; message: string }[] = [];
 
   // One correlation id for the whole run, propagated to every per-domain line, per CLAUDE.md's
-  // Observability Framework. This writes roughly 450 rows across ten transactions and emitted
+  // Observability Framework. This writes 563 rows across ten transactions (10 projects, 10 anchors, 10 lifecycle rows, 30 releases, 503 stories -- MEASURED, after 'roughly 450' was found to be wrong) and emitted
   // nothing at all until now, so a partial run could not be traced from symptom to cause.
   const correlation_id = ctx.correlationId ?? randomUUID();
 

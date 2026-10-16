@@ -5,12 +5,26 @@ import api from '../utils/api';
 export type CommunityMemberRole = 'student' | 'mentor' | 'staff';
 
 // Management-portal roles a staff member can hold. Empty string = no mgmt role.
-export type MgmtRole = 'owner' | 'admin' | 'curriculum' | 'revenue' | 'admissions' | 'support' | 'community_organizer';
-export const MGMT_ROLES: MgmtRole[] = ['owner', 'admin', 'curriculum', 'revenue', 'admissions', 'support', 'community_organizer'];
+//
+// THIS IS THE THIRD COPY of the role list. The other two are the TypeScript union in
+// `backend/src/services/access/mgmtRoles.ts` and the CHECK constraint in `backend/src/server.ts`.
+// The frontend cannot import backend code, so the list is restated here — and it had already
+// drifted: `mentor` was added to both backend copies and never to this one, so the role could not
+// be selected in this picker even once the database would accept it. A parity test now compares
+// all three and names whichever is missing (mgmtRoleConstraintParity.test.ts).
+//
+// This list is what the role picker renders, so a role absent here is a role nobody can assign.
+export type MgmtRole = 'owner' | 'admin' | 'curriculum' | 'revenue' | 'admissions' | 'support'
+  | 'community_organizer' | 'mentor'
+  | 'marketing' | 'platform' | 'executive' | 'lead_intake' | 'internship_review';
+export const MGMT_ROLES: MgmtRole[] = ['owner', 'admin', 'curriculum', 'revenue', 'admissions', 'support', 'community_organizer', 'mentor', 'marketing', 'platform', 'executive', 'lead_intake', 'internship_review'];
 export const MGMT_ROLE_LABEL: Record<MgmtRole, string> = {
   owner: 'Owner', admin: 'Admin', curriculum: 'Curriculum',
   revenue: 'Revenue', admissions: 'Admissions', support: 'Support',
-  community_organizer: 'Community Organizer',
+  community_organizer: 'Community Organizer', mentor: 'Mentor',
+  // Agent Factory domain roles (AF2.3). Each scopes one intern to one department.
+  marketing: 'Marketing', platform: 'Platform', executive: 'Executive',
+  lead_intake: 'Lead Intake', internship_review: 'Internship Review',
 };
 
 export interface AdminCommunityMember {
