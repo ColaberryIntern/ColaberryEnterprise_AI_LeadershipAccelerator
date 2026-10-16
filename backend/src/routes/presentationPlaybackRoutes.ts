@@ -23,9 +23,18 @@
  * asserts this mount precedes the gate. Move it after, and playback silently 401s
  * again with every unit test still green.
  *
- * AUTHENTICATION IS THE SIGNED TICKET, AND THE OWNERSHIP QUERY UNDERNEATH IT. The
- * ticket says "this link was issued to you"; `resolvePlayableRecording` says "and the
- * recording is yours". Either alone would be enough to serve somebody else's video.
+ * AUTHENTICATION IS THE SIGNED TICKET, AND THE ACCESS QUERY UNDERNEATH IT. The
+ * ticket says "this link was issued to you"; `resolveViewableRecording` says "and you
+ * are allowed to watch it". Either alone would be enough to serve somebody else's
+ * video.
+ *
+ * THE RESOLVER IS THE AUDIENCE-AWARE ONE, AND THAT IS NOT A DETAIL. This route first
+ * shipped calling `resolvePlayableRecording`, which proves OWNERSHIP — right for a
+ * private rehearsal, and wrong the moment a demo is published to a cohort. The
+ * audience-aware path existed, with eleven refusal tests, and nothing called it: every
+ * peer clicking a published demo got a 404 while the page above it said "public". The
+ * viewable resolver tries the owner path FIRST and only then falls through to
+ * `canView`, so it is a strict superset — Step 4 is unaffected and Step 5 works.
  */
 import { Router, Request, Response, NextFunction } from 'express';
 import fs from 'fs';
@@ -47,8 +56,8 @@ router.get('/api/portal/projects/:projectId/tasks/:storyId/recordings/:recording
       return res.status(404).json({ error: 'Not found' });
     }
 
-    const { resolvePlayableRecording } = await import('../services/presentation/recordingPlayback');
-    const r = await resolvePlayableRecording(
+    const { resolveViewableRecording } = await import('../services/presentation/recordingPlayback');
+    const r = await resolveViewableRecording(
       claims.enrollmentId,
       String(req.params.projectId),
       String(req.params.storyId),
@@ -64,7 +73,18 @@ router.get('/api/portal/projects/:projectId/tasks/:storyId/recordings/:recording
       return res.status(404).json({ error: 'Not found' });
     }
 
-    const { filePath, sizeBytes, mimeType, downloadName } = r.recording;
+    const { filePath, sizeBytes, mimeType, downloadName, ownerEnrollmentId } = r.recording;
+
+    // COUNT THE VIEWER, NOT THE REQUEST, and never the owner.
+    //
+    // This route is the one chokepoint every byte passes through, so it is where a
+    // view is observable - but a player makes many requests per watch, so the count
+    // lives on DISTINCT viewers rather than a per-request counter. Deliberately not
+    // awaited: recording a view must never delay or fail the serving of bytes. A
+    // count one short is a smaller harm than a video that will not start.
+    void import('../services/presentation/recordingViews')
+      .then(({ recordView }) => recordView(String(req.params.recordingId), claims.enrollmentId, ownerEnrollmentId))
+      .catch(() => { /* a missed view is not worth an error page */ });
     const { parseRange, contentRangeHeader, rangeLength } = await import('../services/presentation/byteRange');
     const outcome = parseRange(req.headers.range, sizeBytes);
 

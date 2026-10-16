@@ -163,8 +163,15 @@ export interface PracticeSession {
   bookingState: string | null;
   meetingReady: boolean;
   recordingPolicy: string | null;
-  /** The learner's own ingested takes, earliest part first. Ids only — never a URL. */
-  recordings?: Array<{ id: string; partNo: number; playbackUrl: string }>;
+  /**
+   * The learner's own ingested takes, earliest part first.
+   *
+   * `published` mirrors the server's view of whether this attempt's showcase is
+   * live, so the panel can stop calling a take private once the cohort can watch it.
+   * Optional, so an older payload degrades to the private label — the safe direction
+   * to be wrong in on a page about who can see your face.
+   */
+  recordings?: Array<{ id: string; partNo: number; playbackUrl: string; published?: boolean }>;
 }
 
 const taskPath = (projectId: string, storyId: string, leaf: string) =>
@@ -281,4 +288,44 @@ export async function launchPractice(
     if (status === 403) throw new Error(message || 'You are not authorized to join this session.');
     throw err;
   }
+}
+
+/**
+ * A demo this learner has published, and how many people watched it.
+ *
+ * `viewLabel` is composed server-side rather than from `viewCount` here, so the
+ * wording of "No views yet" lives in one place and cannot drift between the page
+ * and anything else that reports the same number.
+ */
+export interface PublishedDemo {
+  showcaseId: string;
+  recordingId: string;
+  audience: string;
+  publishedAt: string | null;
+  summary: string | null;
+  durationSeconds: number | null;
+  viewCount: number;
+  viewLabel: string;
+  /** Already carries its own signed ticket: a <video> cannot send a bearer. */
+  playbackUrl: string;
+}
+
+export async function fetchPublished(projectId: string, storyId: string): Promise<PublishedDemo[]> {
+  const { data } = await portalApi.get<{ published: PublishedDemo[] }>(
+    taskPath(projectId, storyId, 'published'),
+  );
+  return data?.published ?? [];
+}
+
+/**
+ * Take a published demo down. Needs nobody's approval — see the route comment.
+ */
+export async function withdrawPublished(
+  projectId: string,
+  storyId: string,
+  showcaseId: string,
+): Promise<void> {
+  await portalApi.post(
+    `${taskPath(projectId, storyId, 'published')}/${encodeURIComponent(showcaseId)}/withdraw`,
+  );
 }

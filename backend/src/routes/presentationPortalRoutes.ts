@@ -27,6 +27,8 @@
  *   POST /api/portal/projects/:projectId/tasks/:storyId/deck
  *   GET  /api/portal/showcases
  *   POST /api/portal/projects/:projectId/tasks/:storyId/showcase
+ *   GET  /api/portal/projects/:projectId/tasks/:storyId/published
+ *   POST /api/portal/projects/:projectId/tasks/:storyId/published/:showcaseId/withdraw
  *   POST /api/portal/projects/:projectId/tasks/:storyId/recording-recovery
  *   POST /api/portal/projects/:projectId/tasks/:storyId/final-take
  */
@@ -423,6 +425,105 @@ router.post('/api/portal/projects/:projectId/tasks/:storyId/showcase', requirePa
     });
     if (!r.ok) return res.status(422).json({ error: r.reason });
     res.status(r.created ? 201 : 200).json({ showcase_id: r.showcaseId, created: r.created, awaiting: 'staff approval' });
+  } catch (e) { fail(res, e, next); }
+});
+
+// WHAT THIS LEARNER HAS PUBLISHED FOR THIS TASK, and how many people watched.
+//
+// The Present stage's counterpart to the Practice stage's private list. Same
+// recordings, different question: Practice asks "what have I recorded", Present
+// asks "what have I SHOWN PEOPLE, and who saw it".
+router.get('/api/portal/projects/:projectId/tasks/:storyId/published', requireParticipant, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!gate(res)) return;
+    if (!env.presentationStudioEnabled) return res.status(404).json({ error: 'Presentation Studio not enabled' });
+
+    const { getOwnedProjectTree } = await import('../services/projects/projectReadService');
+    if (!(await getOwnedProjectTree(eid(req), String(req.params.projectId)))) {
+      return res.status(404).json({ error: 'Not found' });
+    }
+
+    const { sequelize } = await import('../config/database');
+    const [rows] = await sequelize.query(
+      `SELECT s.id AS showcase_id, s.audience, s.published_at, s.withdrawn_at,
+              s.draft_json->>'summary' AS summary,
+              r.id AS recording_id, r.duration_seconds
+         FROM presentation_showcases   s
+         JOIN presentation_attempts    a   ON a.id = s.attempt_id
+         JOIN presentation_assignments asg ON asg.id = a.assignment_id
+         JOIN presentation_recordings  r   ON r.attempt_id = a.id AND r.ingest_status = 'ingested'
+        WHERE asg.project_id = :projectId
+          AND asg.story_id   = :storyId
+          AND asg.enrollment_id = :eid
+          AND s.published_at IS NOT NULL
+          AND s.withdrawn_at IS NULL
+        ORDER BY s.published_at DESC`,
+      { replacements: { projectId: String(req.params.projectId), storyId: String(req.params.storyId), eid: eid(req) } },
+    ) as [Array<Record<string, any>>, unknown];
+
+    const { viewCounts, describeViews } = await import('../services/presentation/recordingViews');
+    const counts = await viewCounts((rows || []).map((r) => String(r.recording_id)));
+
+    const { createRecordingTicket } = await import('../services/presentation/recordingTicket');
+    res.json({
+      published: (rows || []).map((r) => {
+        const id = String(r.recording_id);
+        const n = counts[id] ?? 0;
+        return {
+          showcaseId: String(r.showcase_id),
+          recordingId: id,
+          audience: r.audience,
+          publishedAt: r.published_at,
+          summary: r.summary,
+          durationSeconds: r.duration_seconds,
+          viewCount: n,
+          viewLabel: describeViews(n),
+          // Signed per read, like the Practice list. A <video> cannot send a bearer.
+          playbackUrl: `/api/portal/projects/${encodeURIComponent(String(req.params.projectId))}/tasks/${encodeURIComponent(String(req.params.storyId))}/recordings/${encodeURIComponent(id)}/file?t=${encodeURIComponent(createRecordingTicket(id, eid(req)))}`,
+        };
+      }),
+    });
+  } catch (e) { fail(res, e, next); }
+});
+
+// TAKE IT DOWN. The learner's own call, needing nobody's approval.
+//
+// Publishing required staff sign-off; UNPUBLISHING does not, and that asymmetry is
+// deliberate. Consent is withdrawable by the person who gave it, and making a
+// student wait for approval to stop showing their own face would be the wrong way
+// round.
+router.post('/api/portal/projects/:projectId/tasks/:storyId/published/:showcaseId/withdraw', requireParticipant, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!gate(res)) return;
+    if (!env.presentationStudioEnabled) return res.status(404).json({ error: 'Presentation Studio not enabled' });
+
+    const { sequelize } = await import('../config/database');
+    // Ownership proved in the WHERE clause: a showcase on a task of a project this
+    // enrollment owns. Not theirs is indistinguishable from not there.
+    const [rows] = await sequelize.query(
+      `SELECT s.id FROM presentation_showcases s
+         JOIN presentation_attempts    a   ON a.id = s.attempt_id
+         JOIN presentation_assignments asg ON asg.id = a.assignment_id
+        WHERE s.id = :id AND asg.enrollment_id = :eid
+          AND asg.project_id = :projectId AND asg.story_id = :storyId
+        LIMIT 1`,
+      { replacements: { id: String(req.params.showcaseId), eid: eid(req), projectId: String(req.params.projectId), storyId: String(req.params.storyId) } },
+    ) as [Array<{ id: string }>, unknown];
+    if (!rows?.length) return res.status(404).json({ error: 'Not found' });
+
+    const { withdrawShowcase } = await import('../services/presentation/showcaseService');
+    const w = await withdrawShowcase(String(req.params.showcaseId), 'Taken down by the learner.');
+
+    // The feed post goes too. Leaving it would show a demo the student has just
+    // withdrawn, which is the whole thing they asked to stop.
+    await sequelize.query(
+      `UPDATE community_posts
+          SET status = 'removed', removed_at = NOW()
+        WHERE ritual_meta->>'showcase_ref' = :ref AND status = 'visible'`,
+      { replacements: { ref: `showcase:${String(req.params.showcaseId)}` } },
+    );
+
+    res.json({ withdrawn: true, alreadyWithdrawn: w.ok ? w.alreadyWithdrawn : false });
   } catch (e) { fail(res, e, next); }
 });
 

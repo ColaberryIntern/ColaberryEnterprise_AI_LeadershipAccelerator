@@ -4,6 +4,7 @@ import PromptPanel from './PromptPanel';
 import PreparePanel from './PreparePanel';
 import DeckPanel from './DeckPanel';
 import PracticePanel from './PracticePanel';
+import PublishedPanel from './PublishedPanel';
 import LearnStage from './LearnStage';
 import { STAGE_META, type PresentationStage } from './presentationStages';
 
@@ -104,6 +105,13 @@ export default function PresentationStageBody(props: PresentationStageBodyProps)
           the same reason. */}
       {stage === 'practice' && (
         <PracticePanel projectId={projectId} storyId={taskId} demo={demo} />
+      )}
+
+      {/* UNGATED, like the practice panel and for the same reason: this is not a
+          "not shipped yet" notice, it is the learner's own published work, and the
+          task that hands in on this stage is exactly the one with something to show. */}
+      {stage === 'present' && (
+        <PublishedPanel projectId={projectId} storyId={taskId} demo={demo} />
       )}
 
       {stage === 'present' && !isDemoDay && (

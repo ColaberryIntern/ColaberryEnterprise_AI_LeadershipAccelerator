@@ -18,16 +18,30 @@ jest.mock('../../../models/PresentationRecording', () => ({
   __esModule: true,
   default: { findAll: jest.fn().mockResolvedValue([]) },
 }));
+// Each take now reports whether its attempt is PUBLISHED, so the Practice panel can
+// stop calling it private once the cohort can watch it. Mocked here for the reason
+// `recordingsForAttempt` states in its own comment: this module reads through
+// models, and the first version of that lookup used `sequelize.query` instead, which
+// opened a real Postgres connection in this suite and failed four tests with
+// `SequelizeConnectionRefusedError`.
+jest.mock('../../../models/PresentationShowcase', () => ({
+  __esModule: true,
+  default: { findOne: jest.fn().mockResolvedValue(null) },
+}));
 
 import { getOwnedProjectTree } from '../../projects/projectReadService';
 import PresentationAssignment from '../../../models/PresentationAssignment';
 import PresentationAttempt from '../../../models/PresentationAttempt';
+import PresentationRecording from '../../../models/PresentationRecording';
+import PresentationShowcase from '../../../models/PresentationShowcase';
 import RoomBooking from '../../../models/RoomBooking';
-import { resolveSessionForAssignment, listSessionsForAssignment } from '../presentationSessionService';
+import { resolveSessionForAssignment, listSessionsForAssignment, recordingsForAttempt } from '../presentationSessionService';
 
 const mockTree = getOwnedProjectTree as unknown as jest.Mock;
 const assignments = PresentationAssignment as unknown as { findOne: jest.Mock };
 const attempts = PresentationAttempt as unknown as { findAll: jest.Mock };
+const recordings = PresentationRecording as unknown as { findAll: jest.Mock };
+const showcases = PresentationShowcase as unknown as { findOne: jest.Mock };
 const bookings = RoomBooking as unknown as { findByPk: jest.Mock; findAll: jest.Mock };
 
 const attempt = (over: Record<string, unknown> = {}) => ({
@@ -49,6 +63,10 @@ beforeEach(() => {
   mockTree.mockResolvedValue({ id: 'p1', name: 'Load Intake Agent', lists: [] });
   assignments.findOne.mockResolvedValue({ id: 'as1', project_id: 'p1', story_id: 'PREP-4' });
   attempts.findAll.mockResolvedValue([]);
+  // `clearAllMocks` wipes the resolved values set in the module factories above, so
+  // both are re-armed here rather than relying on the production code's `|| []`.
+  recordings.findAll.mockResolvedValue([]);
+  showcases.findOne.mockResolvedValue(null);
   bookings.findByPk.mockResolvedValue(null);
   bookings.findAll.mockResolvedValue([]);
 });
@@ -173,5 +191,62 @@ describe('the attempt history list', () => {
     mockTree.mockResolvedValue(null);
     const r = await listSessionsForAssignment('e1', 'nope', 'PREP-4');
     expect(r).toEqual({ ok: false, reason: 'not_found' });
+  });
+});
+
+describe('a take knows whether it is published', () => {
+  /**
+   * Step 4 labels every take "Private - only you can see this". That assurance has
+   * to follow the fact: once the learner publishes the attempt in Step 5 the cohort
+   * can watch it, and a lock icon beside it is then a false promise rather than a
+   * stale label. The flag is resolved here, server-side, because the showcase is
+   * the only place that knows.
+   */
+  const take = { id: 'rec1', part_no: 1, created_at: new Date('2026-10-16T12:00:00Z') };
+  const ticketFor = { enrollmentId: 'e1', projectId: 'p1', storyId: 'PREP-4' };
+
+  it('is NOT published when no showcase exists', async () => {
+    recordings.findAll.mockResolvedValue([take]);
+    showcases.findOne.mockResolvedValue(null);
+    const out = await recordingsForAttempt('a1', ticketFor);
+    expect(out).toHaveLength(1);
+    expect(out[0].published).toBe(false);
+  });
+
+  it('IS published when a live showcase exists', async () => {
+    recordings.findAll.mockResolvedValue([take]);
+    showcases.findOne.mockResolvedValue({ id: 's1' });
+    const out = await recordingsForAttempt('a1', ticketFor);
+    expect(out[0].published).toBe(true);
+  });
+
+  it('asks only about THIS attempt, published and not withdrawn', async () => {
+    // A withdrawn demo really is private again, so `withdrawn_at` matters as much
+    // as `published_at`. Dropping either half of this predicate makes the label
+    // wrong in one direction or the other.
+    recordings.findAll.mockResolvedValue([take]);
+    await recordingsForAttempt('a1', ticketFor);
+    const where = showcases.findOne.mock.calls[0][0].where;
+    expect(where.attempt_id).toBe('a1');
+    expect(where.withdrawn_at).toBeNull();
+    expect(where.published_at).toBeDefined();
+  });
+
+  it('asks ONCE for the whole attempt, not once per take', async () => {
+    // Publication is an attempt-level fact. A query per take would multiply the
+    // round trips on exactly the rehearsals that have the most of them.
+    recordings.findAll.mockResolvedValue([take, { ...take, id: 'rec2', part_no: 2 }]);
+    const out = await recordingsForAttempt('a1', ticketFor);
+    expect(out).toHaveLength(2);
+    expect(showcases.findOne).toHaveBeenCalledTimes(1);
+  });
+
+  it('reads through the MODEL, never a raw connection', async () => {
+    // The regression guard. A `sequelize.query` here opens a real Postgres
+    // connection under this suite and takes four unrelated tests red; that is how
+    // this flag first shipped.
+    recordings.findAll.mockResolvedValue([take]);
+    await recordingsForAttempt('a1', ticketFor);
+    expect(showcases.findOne).toHaveBeenCalled();
   });
 });
