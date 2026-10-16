@@ -16,10 +16,10 @@ jest.mock('../../../../services/landingPageApi', () => ({
   publishLandingPage: jest.fn(),
   unpublishLandingPage: jest.fn(),
   previewLandingPage: jest.fn(),
-  // The traffic panel on this page calls this on mount. An explicit mock factory replaces the
+  // The page loads traffic for the table on mount. An explicit mock factory replaces the
   // WHOLE module, so an export missing here is `undefined` at the call site - which failed every
   // test in this file with "fetchLandingPageTraffic is not a function", not just the ones that
-  // care about traffic. Resolving empty keeps the panel silent and the page under test unchanged.
+  // care about traffic. Resolving empty leaves the rows unmeasured and everything else unchanged.
   fetchLandingPageTraffic: jest.fn(),
   errorMessage: (_e: unknown, fallback: string) => fallback,
 }));
@@ -104,8 +104,8 @@ beforeEach(() => {
   // Set HERE and not in the mock factory: `jest.clearAllMocks()` above wipes a
   // `mockResolvedValue` declared at mock-definition time, leaving a bare fn that returns
   // undefined - which fails as "Cannot read properties of undefined (reading 'then')" in
-  // the panel's useEffect, in every test in this file. The traffic panel is not what these
-  // tests are about; it just has to stay quiet.
+  // the page's traffic load, in every test in this file. Most of these tests are not about the
+  // numbers; the load just has to resolve. The ones that ARE override this.
   mockFetchTraffic.mockResolvedValue({ traffic: [], window_days: 30 });
 });
 
@@ -296,5 +296,100 @@ describe('a failed list is not an empty one', () => {
     await render();
 
     expect(text()).toMatch(/could not be loaded/);
+  });
+});
+
+/**
+ * One table: the numbers sit on the row and the detail opens underneath it.
+ *
+ * Ali, 2026-10-16: "Allow the stats to be on the line of the Landing page and allow the user to
+ * drill down into the details." `landingPageRowStats.test.ts` proves the join arithmetic; these
+ * prove it reaches the DOM, which is a different claim - a correct join whose result never gets
+ * rendered looks identical from the unit tests and identical to the old table on screen.
+ */
+describe('stats on the row', () => {
+  const traffic = (over: Record<string, unknown> = {}) => ({
+    brand_slug: 'colaberry-training', slug: 'six-week-build', status: 'published',
+    views: 38, visitors: 16, identified_leads: 2, ad_clicks: 2,
+    cta_clicks: 8, cta_clickers: 4, engaged_visitors: 9,
+    first_seen: '2026-10-01T12:00:00Z', last_seen: '2026-10-15T12:00:00Z',
+    ...over,
+  });
+
+  it('puts this page\'s visitor count on its own line', async () => {
+    mockFetchTraffic.mockResolvedValue({ traffic: [traffic()], window_days: 30 });
+    await render();
+    await act(async () => { await Promise.resolve(); });
+
+    expect(q('lp-visitors-lp-1')!.textContent).toBe('16');
+    expect(q('lp-row-summary-lp-1')!.textContent).toBe('16 visitors, 4 clicked');
+  });
+
+  it('does not take another brand\'s numbers for the same slug', async () => {
+    // The whole reason the join key is the path. A slug-only join would print 999 here.
+    mockFetchTraffic.mockResolvedValue({
+      traffic: [traffic({ brand_slug: 'refactored', visitors: 999 })], window_days: 30,
+    });
+    await render();
+    await act(async () => { await Promise.resolve(); });
+
+    expect(q('lp-visitors-lp-1')!.textContent).not.toBe('999');
+    expect(q('lp-visitors-lp-1')!.textContent).toBe('—');
+  });
+
+  it('shows a dash for a page that was never published, not a zero', async () => {
+    mockListLandingPages.mockResolvedValue([page({ path: null, status: 'draft' })]);
+    mockFetchTraffic.mockResolvedValue({ traffic: [traffic()], window_days: 30 });
+    await render();
+    await act(async () => { await Promise.resolve(); });
+
+    expect(q('lp-visitors-lp-1')!.textContent).toBe('—');
+    expect(q('lp-row-summary-lp-1')!.textContent).toBe('Not published yet');
+  });
+
+  it('keeps the table readable when traffic cannot be loaded at all', async () => {
+    mockFetchTraffic.mockRejectedValue(new Error('down'));
+    await render();
+    await act(async () => { await Promise.resolve(); });
+
+    // The pages are still workable; only the numbers are missing.
+    expect(q('lp-row-lp-1')).not.toBeNull();
+    expect(q('lp-visitors-lp-1')!.textContent).toBe('—');
+  });
+});
+
+describe('drilling into one page', () => {
+  it('opens the detail under its own row, and closes it again', async () => {
+    await render();
+    expect(q('lp-details-lp-1')).toBeNull();
+
+    await act(async () => { q('lp-select-lp-1')!.click(); });
+    expect(q('lp-details-lp-1')).not.toBeNull();
+    expect(q('lp-select-lp-1')!.textContent).toBe('Close');
+
+    await act(async () => { q('lp-select-lp-1')!.click(); });
+    expect(q('lp-details-lp-1')).toBeNull();
+    expect(q('lp-select-lp-1')!.textContent).toBe('Open');
+  });
+
+  it('shows the full metric strip only once a row is open', async () => {
+    mockFetchTraffic.mockResolvedValue({
+      traffic: [{
+        brand_slug: 'colaberry-training', slug: 'six-week-build', status: 'published',
+        views: 38, visitors: 16, identified_leads: 2, ad_clicks: 2,
+        cta_clicks: 8, cta_clickers: 4, engaged_visitors: 9,
+        first_seen: '2026-10-01T12:00:00Z', last_seen: '2026-10-15T12:00:00Z',
+      }],
+      window_days: 30,
+    });
+    await render();
+    await act(async () => { await Promise.resolve(); });
+
+    // Collapsed, the page is listed once - the standalone traffic panel that used to repeat
+    // every page above this table is gone.
+    expect(q('lp-detail-traffic')).toBeNull();
+
+    await act(async () => { q('lp-select-lp-1')!.click(); });
+    expect(q('lp-detail-traffic')!.textContent).toContain('38');
   });
 });

@@ -4,10 +4,14 @@ import { useMarketingBrand } from './MarketingBrandContext';
 import { ALL_BRANDS } from './brandScope';
 import * as lp from '../../../services/landingPageApi';
 import { previewFileName, OPEN_REVOKE_MS, DOWNLOAD_REVOKE_MS } from './landingPagePreviewFile';
-import { LandingPageTrafficPanel } from './LandingPageTrafficPanel';
+import LandingPageDetails from './LandingPageDetails';
+import { statsByPath, statsForPage, rowSummary } from './landingPageRowStats';
 import {
-  briefIsUsable, draftWarnings, pageActions, publicUrl, slugProblem, statusLabel, suggestSlug,
+  briefIsUsable, draftWarnings, pageActions, publicUrl, statusLabel, suggestSlug,
 } from './landingPageState';
+
+/** The window every number on this screen is measured over. */
+const TRAFFIC_DAYS = 30;
 
 /**
  * Landing pages: paste a brief, read the page, publish it.
@@ -34,6 +38,9 @@ export default function AdminLandingPagesPage() {
   const scoped = brandId !== ALL_BRANDS;
 
   const [pages, setPages] = useState<lp.LandingPage[]>([]);
+  // Traffic for every hosted page across all brands; joined to these rows by public path.
+  // A failure here must not take the table with it - the pages are still workable unmeasured.
+  const [traffic, setTraffic] = useState<lp.LandingPageTrafficRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ tone: 'success' | 'danger' | 'info'; text: string } | null>(null);
@@ -112,7 +119,15 @@ export default function AdminLandingPagesPage() {
       setPages([]);
       fail(err, 'The landing pages could not be loaded.');
     } finally { setLoading(false); }
+
+    // Deliberately after the list and deliberately swallowed: numbers are an enrichment of the
+    // table, and a traffic outage should cost the operator their stats, not their pages.
+    try {
+      setTraffic((await lp.fetchLandingPageTraffic(TRAFFIC_DAYS)).traffic);
+    } catch { setTraffic([]); }
   }, []);
+
+  const byPath = useMemo(() => statsByPath(traffic), [traffic]);
 
   useEffect(() => {
     if (!scoped) { setPages([]); setSelectedId(null); return; }
@@ -235,14 +250,6 @@ export default function AdminLandingPagesPage() {
 
       {notice && <div className={`alert alert-${notice.tone} py-2 small`} role="status">{notice.text}</div>}
 
-      <SectionCard
-        title="Who is landing on these pages"
-        subtitle="Every hosted page, across brands. Visitors is people; loads counts refreshes."
-        icon="line-chart-line"
-      >
-        <LandingPageTrafficPanel days={30} />
-      </SectionCard>
-
       {!scoped && (
         <SectionCard title="Choose a brand" icon="price-tag-3-line">
           <p className="text-muted mb-0" data-testid="needs-brand">
@@ -301,7 +308,11 @@ export default function AdminLandingPagesPage() {
             </div>
           </SectionCard>
 
-          <SectionCard title="2. This brand's pages" subtitle="Select one to read it, revise it, or publish it." icon="list-check-2">
+          <SectionCard
+            title="2. This brand's pages"
+            subtitle={`How each one is doing over the last ${TRAFFIC_DAYS} days. Open a row to read it, revise it, or publish it.`}
+            icon="list-check-2"
+          >
             {loading && pages.length === 0 && <p className="text-muted mb-0">Loading...</p>}
             {!loading && pages.length === 0 && (
               <p className="text-muted mb-0" data-testid="lp-empty">
@@ -312,28 +323,72 @@ export default function AdminLandingPagesPage() {
               <div className="table-responsive">
                 <table className="table table-hover mb-0 align-middle">
                   <thead className="table-light">
-                    <tr><th>Name</th><th>Status</th><th>URL</th><th className="text-end">&nbsp;</th></tr>
+                    <tr>
+                      <th>Name</th><th>Status</th><th>URL</th>
+                      {/* People, then the people who did something. Views is in the detail, not
+                          here: it counts refreshes and would be the biggest number in every row. */}
+                      <th className="text-end">Visitors</th>
+                      <th className="text-end">Read it</th>
+                      <th className="text-end">Clicked</th>
+                      <th className="text-end">Known</th>
+                      <th className="text-end">&nbsp;</th>
+                    </tr>
                   </thead>
                   <tbody>
                     {pages.map((p) => {
                       const badge = statusLabel(p);
                       const url = publicUrl(p);
+                      const stats = statsForPage(p, byPath);
+                      const open = p.id === selectedId;
+                      // A dash, never a zero, when the page has never been served: a 0 is a
+                      // measurement and would read as "nobody came" for a page nobody could reach.
+                      const n = (v: number | undefined) => (stats ? (v ?? 0).toLocaleString() : '—');
                       return (
-                        <tr key={p.id} className={p.id === selectedId ? 'table-active' : undefined} data-testid={`lp-row-${p.id}`}>
-                          <td>{p.name}</td>
-                          <td><span className={`badge bg-${badge.tone}`}>{badge.text}</span></td>
-                          <td className="small">
-                            {url
-                              ? <a href={url} target="_blank" rel="noreferrer"><code>{url}</code></a>
-                              : <span className="text-muted">{p.kind === 'hosted' ? 'not published' : (p.path ?? 'unknown')}</span>}
-                          </td>
-                          <td className="text-end">
-                            <button type="button" className="btn btn-sm btn-outline-secondary" disabled={busy}
-                              onClick={() => setSelectedId(p.id)} data-testid={`lp-select-${p.id}`}>
-                              {p.id === selectedId ? 'Selected' : 'Open'}
-                            </button>
-                          </td>
-                        </tr>
+                        <React.Fragment key={p.id}>
+                          <tr className={open ? 'table-active' : undefined} data-testid={`lp-row-${p.id}`}>
+                            <td>
+                              <div>{p.name}</div>
+                              <div className="text-muted" style={{ fontSize: '.72rem' }} data-testid={`lp-row-summary-${p.id}`}>
+                                {rowSummary(stats)}
+                              </div>
+                            </td>
+                            <td><span className={`badge bg-${badge.tone}`}>{badge.text}</span></td>
+                            <td className="small">
+                              {url
+                                ? <a href={url} target="_blank" rel="noreferrer"><code>{url}</code></a>
+                                : <span className="text-muted">{p.kind === 'hosted' ? 'not published' : (p.path ?? 'unknown')}</span>}
+                            </td>
+                            <td className="text-end fw-semibold" data-testid={`lp-visitors-${p.id}`}>{n(stats?.visitors)}</td>
+                            <td className="text-end">{n(stats?.engaged_visitors)}</td>
+                            <td className="text-end">{n(stats?.cta_clickers)}</td>
+                            <td className="text-end">{n(stats?.identified_leads)}</td>
+                            <td className="text-end">
+                              <button type="button" className="btn btn-sm btn-outline-secondary" disabled={busy}
+                                aria-expanded={open} onClick={() => setSelectedId(open ? null : p.id)}
+                                data-testid={`lp-select-${p.id}`}>
+                                {open ? 'Close' : 'Open'}
+                              </button>
+                            </td>
+                          </tr>
+                          {open && (
+                            <tr className="table-active">
+                              <td colSpan={8} className="p-0">
+                                <LandingPageDetails
+                                  page={p}
+                                  brandSlug={brand?.slug ?? 'brand'}
+                                  stats={stats}
+                                  days={TRAFFIC_DAYS}
+                                  warnings={warnings}
+                                  actions={actions}
+                                  busy={busy}
+                                  preview={{ html: previewHtml, error: previewError, openFullScreen, download: downloadPreview }}
+                                  revision={{ feedback, setFeedback, apply: revise }}
+                                  publishing={{ slugDraft, setSlugDraft, publish, unpublish }}
+                                />
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
                       );
                     })}
                   </tbody>
@@ -341,99 +396,6 @@ export default function AdminLandingPagesPage() {
               </div>
             )}
           </SectionCard>
-
-          {selected && (
-            <SectionCard
-              title={`3. ${selected.name}`}
-              subtitle="The preview below is the real page, rendered by the same code that serves it."
-              icon="eye-line"
-            >
-              {warnings.length > 0 && (
-                <div className="alert alert-warning py-2 small" data-testid="lp-warnings">
-                  {warnings.map((w) => <div key={w}>{w}</div>)}
-                </div>
-              )}
-              {actions.publishBlocker && selected.kind !== 'hosted' && (
-                <p className="small text-muted" data-testid="lp-not-hosted">{actions.publishBlocker}</p>
-              )}
-
-              {selected.kind === 'hosted' && (
-                <div className="row g-3">
-                  <div className="col-12 col-xl-7">
-                    {previewError && <div className="alert alert-danger py-2 small" data-testid="lp-preview-error">{previewError}</div>}
-                    {!previewError && previewHtml === null && <p className="text-muted small mb-2">Rendering...</p>}
-                    {previewHtml !== null && (
-                      <div className="d-flex flex-wrap gap-2 mb-2" data-testid="lp-preview-actions">
-                        <button type="button" className="btn btn-sm btn-outline-secondary" onClick={openFullScreen} data-testid="lp-full-screen">
-                          Open full screen
-                        </button>
-                        <button type="button" className="btn btn-sm btn-outline-secondary" onClick={downloadPreview} data-testid="lp-download">
-                          Download
-                        </button>
-                        <span className="form-text small align-self-center mb-0">A real page is hard to judge in a column this wide.</span>
-                      </div>
-                    )}
-                    {previewHtml !== null && (
-                      // sandbox="" - no scripts, no forms, no navigation. The preview carries no
-                      // tracker by design, so nothing it needs is being withheld.
-                      <iframe
-                        title={`Preview of ${selected.name}`}
-                        srcDoc={previewHtml}
-                        sandbox=""
-                        data-testid="lp-preview"
-                        style={{ width: '100%', height: '32rem', border: '1px solid var(--bs-border-color, #dee2e6)', borderRadius: '.4rem', background: '#fff' }}
-                      />
-                    )}
-                  </div>
-
-                  <div className="col-12 col-xl-5">
-                    <div className="mb-3">
-                      <label className="form-label small mb-1" htmlFor="lp-feedback">What should change?</label>
-                      <textarea id="lp-feedback" className="form-control form-control-sm" rows={4} value={feedback} disabled={busy}
-                        placeholder="Make the headline about the mentor review, and drop the FAQ."
-                        onChange={(e) => setFeedback(e.target.value)} data-testid="lp-feedback" />
-                      <button type="button" className="btn btn-sm btn-outline-primary mt-2" data-testid="lp-revise"
-                        disabled={busy || !actions.canRevise || feedback.trim().length < 3} onClick={revise}>
-                        Apply the change
-                      </button>
-                    </div>
-
-                    <div className="border-top pt-3">
-                      <label className="form-label small mb-1" htmlFor="lp-slug">URL slug</label>
-                      <div className="input-group input-group-sm">
-                        <span className="input-group-text">/lp/{brand?.slug ?? 'brand'}/</span>
-                        <input id="lp-slug" className="form-control" value={slugDraft} disabled={busy || selected.status === 'published'}
-                          onChange={(e) => setSlugDraft(e.target.value)} data-testid="lp-slug" />
-                      </div>
-                      {slugDraft.trim() !== '' && slugProblem(slugDraft) && (
-                        <div className="form-text small text-danger" data-testid="lp-slug-problem">{slugProblem(slugDraft)}</div>
-                      )}
-                      {selected.status === 'published' && (
-                        <div className="form-text small">
-                          Live pages keep their URL. Unpublish first if it has to change, and remember
-                          anything already posted points here.
-                        </div>
-                      )}
-
-                      <div className="d-flex flex-wrap gap-2 mt-2">
-                        <button type="button" className="btn btn-sm btn-success" data-testid="lp-publish"
-                          disabled={busy || !actions.canPublish} onClick={publish}>
-                          Publish
-                        </button>
-                        <button type="button" className="btn btn-sm btn-outline-warning" data-testid="lp-unpublish"
-                          disabled={busy || !actions.canUnpublish} onClick={unpublish}>
-                          Unpublish
-                        </button>
-                      </div>
-                      {actions.publishBlocker && selected.kind === 'hosted' && (
-                        <div className="form-text small" data-testid="lp-publish-blocker">{actions.publishBlocker}</div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
-            </SectionCard>
-          )}
         </>
       )}
     </div>

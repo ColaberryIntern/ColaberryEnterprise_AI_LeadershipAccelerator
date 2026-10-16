@@ -33,6 +33,14 @@ export type PlaybackBeatState = 'playing' | 'buffering' | 'paused' | 'ended';
 export type ViewerIntent = 'deliberate' | 'auto';
 
 /** The server's entitlement decision at measurement time. Never a client assertion. */
+/**
+ * The access modes telemetry splits by.
+ *
+ * A TYPE only, deliberately. The runtime list lives in `ensureBroadcastSchema.ACCESS_MODES`,
+ * which is already the source of truth for the column's CHECK constraint — a second array
+ * here would be a second place to forget. It also keeps this module import-free, which is
+ * what lets it stay a pure rules file testable without a database.
+ */
 export type MeasuredAccessMode = 'free' | 'preview' | 'paid' | 'private';
 
 export interface TelemetryConfig {
