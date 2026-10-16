@@ -57,13 +57,40 @@ function shell(over: {
   assignments: Assignment[];
   blocks?: string[];
   rework?: boolean;
+  /**
+   * Opt-in two-track shape: a `proposal` track, a `solution_build` track, and ONE canonical
+   * requirement whose `tracks` array spans both.
+   *
+   * OPT IN for the same reason `rework` is. `shell()` is shared by A, B and C, and B and C are
+   * not government contracts -- giving them tracks would make three fixtures claim a shape only
+   * one of them has.
+   *
+   * It exists because a verifier found that §103 case 2 was LABELLED "track-bearing
+   * requirements survive composition" while `tracks` and `requirements` were both `[]`. Nothing
+   * in the corpus asserted a track. The claim was true of nothing, which is the defect class this
+   * phase refuses and which cost a helper its life earlier in the same build.
+   */
+  twoTrack?: boolean;
 }): FactoryProject {
   const blocks = over.blocks ?? ['blk-1'];
   return {
     delivery_project_id: 'dp',
-    tracks: [],
+    tracks: over.twoTrack ? [
+      { id: 'trk-prop', delivery_project_id: 'dp', track_type: 'proposal', status: 'open', owner_identity_id: null, solution_student_project_id: null },
+      { id: 'trk-sol', delivery_project_id: 'dp', track_type: 'solution_build', status: 'open', owner_identity_id: null, solution_student_project_id: 'sp-1' },
+    ] : [],
     source_blocks: blocks.map((id, n) => ({ id, locator: `${n + 1}.0`, text: 'stated', kind: 'requirement' as const })),
-    requirements: [],
+    // ONE canonical id spanning BOTH tracks. That is the whole property the government case
+    // exists to protect: the same requirement seen from the proposal side and the build side has
+    // to be the SAME id, or a compliance matrix cannot join them.
+    requirements: over.twoTrack ? [{
+      id: 'REQ-CANON-1',
+      statement: 'The system must notify the applicant within one business day.',
+      kind: 'technical', priority: 'must', tracks: ['proposal', 'solution_build'],
+      source_document: 'solicitation-A', amendment_version: '1', section: 'M.2',
+      extracted_text: 'stated', interpretation: null, human_confirmed: true,
+      evidence_state: 'tested', source_evidence: blocks,
+    }] : [],
     processes: [{
       id: 'proc', business_outcome: 'o', success_criterion: 'c', trigger: 't',
       inputs: [], outputs: [], decision_branches: [], future_owner_role_id: 'r-1', exceptions: [],
@@ -107,6 +134,7 @@ export const fixtureA = {
   ],
   project: (): FactoryProject => shell({
     blocks: ['blk-sec-m', 'blk-matrix'],
+    twoTrack: true,
     draft: {
       title: 'Draft the section responses',
       effort_minutes: 240, effort_basis: 'ESTIMATED', frequency: 'per solicitation',

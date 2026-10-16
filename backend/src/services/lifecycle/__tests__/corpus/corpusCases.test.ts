@@ -31,6 +31,7 @@ import {
 } from '../../generation/__tests__/fixtures/manualOnly';
 import { ws, wsState, acceptedDesign } from '../../generation/__tests__/fixtures/acceptedDesign';
 import { prerequisiteGaps, blockingGaps } from '../../lifecyclePrerequisites';
+import { factoryProjectView } from '../../../factory/factoryProjectView';
 import { completeEvidence } from '../evidenceFixture';
 import {
   measureAutomation, renderShare, type EffortAssessment,
@@ -136,8 +137,59 @@ describe('§103 cases 1 to 4: each fixture composes, and records its OWN numbers
    * The runner reports the block IDS, derived from the project and from `factoryValidate`'s
    * shipped `SOURCE_COVERAGE` rule, so the assertion below names them.
    */
+  /**
+   * THE PROPERTY §103 CASE 2 ACTUALLY NAMES, which this suite previously only claimed.
+   *
+   * The spec row is "Government project, linked proposal + solution tracks | A | track mappings
+   * preserved", and `reference-fixtures.md` requires that "a requirement spanning both tracks
+   * appears once with a stable canonical ID, mapped into both requirement_proposal_sections and
+   * requirement_solution_stories".
+   *
+   * An independent verifier found the case LABELLED with that and asserting none of it: fixture A
+   * carried `tracks: []` and `requirements: []`, and no test in this directory mentioned a track.
+   * A prose claim with nothing behind it is the defect class this phase refuses.
+   *
+   * Driven against `factoryProjectView`, which declares itself pure with no I/O and computes
+   * `tracks[].requirementIds` directly -- the same pure-layer route cases 5 and 8 use. The
+   * assertion is BY ID and is the SAME id on both sides, because "one requirement appears in two
+   * tracks" and "two requirements happen to exist" are different facts and a count cannot tell
+   * them apart.
+   */
+  it('case 2 keeps ONE canonical requirement id in BOTH tracks — the property the row names', () => {
+    const view = factoryProjectView(fixtureA.project());
+    const byType = Object.fromEntries(view.tracks.map((t) => [t.trackType, t.requirementIds]));
+
+    expect(Object.keys(byType).sort()).toEqual(['proposal', 'solution_build']);
+    // The same id, not merely one id each. A canonical id is what lets a compliance matrix join
+    // the proposal answer to the build story.
+    expect(byType.proposal).toEqual(['REQ-CANON-1']);
+    expect(byType.solution_build).toEqual(['REQ-CANON-1']);
+    expect(byType.proposal).toEqual(byType.solution_build);
+  });
+
+  it('and fixtures B and C do NOT inherit tracks, so the shape belongs to the government case', () => {
+    // `shell()` is shared by A, B and C. Without this, making A two-track would silently give the
+    // admissions and service-business fixtures a government contract shape.
+    expect(factoryProjectView(fixtureB.project()).tracks).toEqual([]);
+    expect(factoryProjectView(fixtureC.project()).tracks).toEqual([]);
+  });
+
   it('case 2 enumerates its requirement blocks BY ID, covered and uncovered', () => {
     const t = runCorpusCase(caseOf('A-government', 'enumeration', fixtureA)).traceability;
+
+    // THE COMMAND IS PRINTED, because the acceptance clause is "a derived enumeration WITH THE
+    // COMMAND PRINTED". An enumeration nobody else can reproduce is still a number I am asking
+    // to be believed. Printed rather than only written in a comment so it appears in the run log.
+    // eslint-disable-next-line no-console
+    console.log([
+      '[corpus] requirement-block coverage for fixture A.',
+      'Derived by factoryValidate SOURCE_COVERAGE via corpusRunner.requirementCoverage.',
+      'Reproduce:  node ../node_modules/jest/bin/jest.js -c jest.ci.config.ts'
+        + ' --runTestsByPath src/services/lifecycle/__tests__/corpus/corpusCases.test.ts',
+      `blocks=${JSON.stringify(t.requirementBlocks)}`,
+      `covered=${JSON.stringify(t.covered)}`,
+      `uncovered=${JSON.stringify(t.uncovered)}`,
+    ].join('\n  '));
 
     expect(t.requirementBlocks.sort()).toEqual(['blk-matrix', 'blk-sec-m']);
     expect(t.covered.sort()).toEqual(['blk-matrix', 'blk-sec-m']);
@@ -162,6 +214,28 @@ describe('§103 cases 1 to 4: each fixture composes, and records its OWN numbers
     // stops it being a bare percentage.
     expect(m.aiShare.denominatorMinutes).toBeGreaterThan(0);
     expect(m.aiShare.fraction!).toBeLessThan(0.85);
+  });
+
+  /**
+   * FIXTURE D'S VIOLATING TWIN. Every fixture ships one; D had none, and the extension point
+   * where it belonged -- `fixtureDCase({ effort })` -- was never called with an argument. A
+   * verifier found the dead hook sitting exactly where the missing twin went.
+   *
+   * The twin is the manual-only fixture with its effort assessed as UNKNOWN basis. That is the
+   * violation that matters FOR THIS FIXTURE: D's whole claim is that 0% automation is a recorded
+   * decision backed by measured human minutes, so minutes that are not evidence turn the recorded
+   * decision back into an assertion.
+   */
+  it('TWIN: fixture D with UNKNOWN-basis minutes is REFUSED, and the clean D is not', () => {
+    const twin = fixtureDCase({
+      effort: manualOnlyEffort().map((a) => ({ ...a, basis: 'UNKNOWN' as const })),
+    });
+    const codes = (runCorpusCase(twin).composed?.refusals ?? []).map((r) => r.code);
+    expect(codes).toContain('EFFORT_BASIS_UNKNOWN');
+
+    // The half that makes the twin mean something: the clean fixture does NOT refuse.
+    expect((runCorpusCase(fixtureDCase()).composed?.refusals ?? []).map((r) => r.code))
+      .not.toContain('EFFORT_BASIS_UNKNOWN');
   });
 
   it('case 4 is 0% automated BY DECISION: an empty agent roster with a recorded acceptance', () => {

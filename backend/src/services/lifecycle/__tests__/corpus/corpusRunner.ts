@@ -217,8 +217,15 @@ export interface CorpusRun {
 const DB_REASON =
   'needs a database: `approveBlueprint` writes the approval row and `publishedPlanState` reads '
   + 'the published plan. The pure parts of this half — `prerequisiteGaps`, `evaluateTransition` '
-  + 'and `storyTraceability` — do NOT need one. P7-T1.2 supplies the DB-backed half; this is not '
-  + 'a silent skip.';
+  + 'and `storyTraceability` — do NOT need one. '
+  // CORRECTED 2026-10-16. This used to read "P7-T1.2 supplies the DB-backed half". T1.2 did
+  // not: it PINNED this half as not-reached, with the blocker named, in
+  // `corpusControls.test.ts`. A verifier caught the promise still standing after the packet
+  // that falsified it. An uncorrected forward promise is a claim about the future that
+  // quietly became a claim about the present.
+  + 'The DB-backed half is NOT supplied by P7-T1.2, which pinned it as unreached with this '
+  + 'reason rather than supplying it. It is owed by a packet with a real database; this is '
+  + 'accounted for, not a silent skip.';
 
 /** The pre-check that refuses BEFORE the handoff runs, so it reaches no earlier stage. */
 const PRE_HANDOFF_REFUSAL = 'DECLARATION_SELF_SUPPLIED';
