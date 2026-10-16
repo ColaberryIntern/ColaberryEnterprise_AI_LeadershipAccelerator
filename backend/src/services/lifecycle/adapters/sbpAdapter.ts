@@ -79,6 +79,21 @@ export function sbpToManifestRefs(input: SbpAdapterInput): ManifestRefs {
     provenanceKind: r.source && r.source.trim() ? r.source : null,
   }));
 
+  // SOURCE COVERAGE IS VACUOUS HERE, AND THAT IS A LIMITATION RATHER THAN A PASS.
+  //
+  // `[]`, not `null`. SBP has no source-block layer and no business-task layer: there are zero
+  // blocks classified `requirement`, so zero of them are uncited, and `[]` is the literal and
+  // correct answer to the question asked. `null` would be the wrong answer for the right-looking
+  // reason — it would read as "nobody measured" and block every student project at the first
+  // gate forever, which is precisely the defect this change exists to remove.
+  //
+  // WHAT IT COSTS, SAID PLAINLY: this gate does no work for a student project. An SBP
+  // requirement's trace into the build is checked by `mustHaveRequirementsWithoutStory` at
+  // `plan_ready`, and its provenance by `requirementsWithoutProvenance` at this same stage, so
+  // nothing goes unchecked — but a reader should not believe the citation rule is protecting a
+  // student build. Recorded in docs/project-lifecycle/backbone-adoption.md.
+  refs.coverage = { uncitedRequirementBlocks: [] };
+
   const pin = (ids: ReadonlyArray<string>, source: string): PinnedRef[] =>
     ids.map((id) => ({ id, revision: rev, source }));
 

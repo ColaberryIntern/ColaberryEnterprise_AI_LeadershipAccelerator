@@ -292,3 +292,74 @@ describe('extractProposal — structured office docs (the requirements-matrix pa
     expect(files.find((f) => f.name === 'compliance.docx')!.status).toBe('extracted');
   });
 });
+
+/**
+ * P2 — the Herriman fixture. A real solicitation PDF/TXT wraps a sentence across lines; the old
+ * splitter broke on EVERY newline, so one requirement became two fragments (the "21 broken candidates"
+ * screenshot). These lock the join-wrapped-lines fix: a wrapped obligation is ONE requirement, an intro
+ * ending in ":" keeps its following list, a heading is not swallowed, and .docx/.xlsx cells still DON'T fuse.
+ */
+describe('extractProposal — Herriman wrap-join (soft line wraps must not shatter a requirement)', () => {
+  const HERRIMAN_RFP = [
+    'Herriman City - Enterprise Work Order Management System RFP',
+    '',
+    'SCOPE OF WORK',
+    'The selected vendor shall provide both asset management and',
+    'work order tracking integrated with the City GIS platform.',
+    '',
+    'The proposal must include the following elements:',
+    '- a technical approach to the implementation',
+    '- a detailed project schedule',
+    '- three client references',
+    '',
+    'Offerors are required to submit a signed cover letter with the response.',
+  ].join('\n');
+
+  it('merges a soft-wrapped obligation into ONE requirement (no "...and" / "work order..." fragments)', async () => {
+    const { requirements } = await extractProposal(makeZip({ 'RFP.txt': HERRIMAN_RFP }));
+    // The wrapped sentence is captured whole.
+    const merged = requirements.find((r) => r.extractedText.includes('asset management and work order tracking'));
+    expect(merged).toBeTruthy();
+    expect(merged!.extractedText).toContain('integrated with the City GIS platform');
+    // And it is NOT shattered into a dangling fragment ending in "and".
+    expect(requirements.some((r) => /asset management and$/.test(r.extractedText.trim()))).toBe(false);
+    expect(requirements.some((r) => r.extractedText.trim() === 'work order tracking integrated with the City GIS platform.')).toBe(false);
+  });
+
+  it('keeps an intro ending in ":" as its own requirement, with the list items NOT fused in', async () => {
+    const { requirements } = await extractProposal(makeZip({ 'RFP.txt': HERRIMAN_RFP }));
+    const intro = requirements.find((r) => r.extractedText.includes('must include the following elements'));
+    expect(intro).toBeTruthy();
+    expect(intro!.extractedText.endsWith(':')).toBe(true);
+    // the list bullets are not glued onto the intro sentence
+    expect(intro!.extractedText).not.toContain('technical approach');
+  });
+
+  it('does not swallow the "SCOPE OF WORK" heading into the obligation that follows it', async () => {
+    const { requirements } = await extractProposal(makeZip({ 'RFP.txt': HERRIMAN_RFP }));
+    const merged = requirements.find((r) => r.extractedText.includes('asset management and work order tracking'));
+    expect(merged!.extractedText.startsWith('The selected vendor shall provide')).toBe(true);
+    expect(merged!.extractedText).not.toContain('SCOPE OF WORK');
+  });
+
+  it('yields exactly the three distinct obligations from the fixture', async () => {
+    const { requirements } = await extractProposal(makeZip({ 'RFP.txt': HERRIMAN_RFP }));
+    // vendor-shall-provide, proposal-must-include, offerors-required-to-submit
+    expect(requirements).toHaveLength(3);
+  });
+
+  it('a .docx table is UNAFFECTED by the wrap-join (cells still do not fuse)', async () => {
+    // a cell whose text has no terminator must NOT glue onto the next cell/row for office docs
+    const z = new AdmZip();
+    z.addFile('word/document.xml', Buffer.from(
+      '<w:document><w:body><w:tbl>' +
+      '<w:tr><w:tc><w:p><w:r><w:t>The vendor shall provide asset management and</w:t></w:r></w:p></w:tc></w:tr>' +
+      '<w:tr><w:tc><w:p><w:r><w:t>Unrelated note cell with no duty.</w:t></w:r></w:p></w:tc></w:tr>' +
+      '</w:tbl></w:body></w:document>', 'utf8'));
+    const outer = new AdmZip();
+    outer.addFile('matrix.docx', z.toBuffer());
+    const { requirements } = await extractProposal(outer.toBuffer());
+    // the two rows did NOT get glued into one sentence
+    expect(requirements.some((r) => r.extractedText.includes('asset management and Unrelated note'))).toBe(false);
+  });
+});

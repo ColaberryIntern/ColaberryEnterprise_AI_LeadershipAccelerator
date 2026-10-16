@@ -312,14 +312,24 @@ export default function AdminContentComposerPage() {
         is_paid: setup.is_paid,
         has_offer: setup.has_offer,
         destination_url: setup.destination_url || null,
+        // So the copy is written from what was actually uploaded rather than from the topic
+        // alone. Null before the item is saved, which is the normal first-draft case.
+        content_item_id: item?.id ?? null,
       });
       setSetup((v) => ({ ...v, canonical_body: d.message }));
       setDraftNotes({ placeholders: d.placeholders, unverifiedClaims: d.unverifiedClaims });
+      // Naming the basis matters: "written from your image" and "written from the file
+      // details" are different promises, and a video is never watched.
+      const from = d.mediaBasis === 'vision'
+        ? ' Written from your image.'
+        : d.mediaBasis === 'metadata'
+          ? ' Your file was not opened, only its details, so check it describes the right thing.'
+          : '';
       say(
         d.unverifiedClaims.length > 0 ? 'info' : 'success',
-        d.unverifiedClaims.length > 0
+        (d.unverifiedClaims.length > 0
           ? 'Draft written. Check the flagged specifics before you publish.'
-          : 'Draft written. Edit it freely, it is only a starting point.',
+          : 'Draft written. Edit it freely, it is only a starting point.') + from,
       );
     } catch (err) { fail(err, 'The draft could not be written.'); } finally { setBusy(false); }
   };

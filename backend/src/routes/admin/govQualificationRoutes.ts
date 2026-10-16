@@ -768,6 +768,10 @@ const establishedRequirement = z.object({
   id: z.string().min(1),
   text: z.string().min(1),
   category: z.string().max(60).optional(),
+  // P2: optional downstream tracks. Only a `scope` item carries `solution_build` (so deriveGovBuildPlan keeps
+  // generating its build story); others are ['proposal']. Backward-compatible — omitted falls back to the text
+  // classifier in govBuildPlan.ts exactly as before.
+  tracks: z.array(z.string().max(40)).max(8).optional(),
   applicability: z.enum(['always', 'conditional', 'not_applicable', 'unknown']),
   applicabilityEvidenceRef: z.object({ docId: z.string() }).nullable().optional(),
   responsibleParty: z.string().max(60).optional(),
@@ -1090,14 +1094,19 @@ router.post('/api/admin/factory/qualification/:canonicalOpportunityId/extract-re
   if (!file || !file.buffer) { res.status(400).json({ error: 'No document file uploaded (field "document").' }); return; }
   try {
     const { extractProposal } = await import('../../services/factory/proposal/proposalExtractor');
+    const { buildRequirementItems } = await import('../../services/factory/proposal/govRequirementItems');
     const result = await extractProposal(file.buffer);
     const candidates = (result.requirements || []).map((r: any) => ({
       id: r.canonicalReqId, text: r.statement, extractedText: r.extractedText,
       sourceDocument: r.sourceDocument, section: r.section, kind: r.kind, priority: r.priority,
     }));
+    // P2: the same candidates grouped into defined items across 4 categories (submit/rule/scope/after_award),
+    // each citing its source fragment(s). Deterministic, advisory (gates nothing), persists nothing — the reviewer
+    // confirms items into established requirements through the /decision path. `candidates` stays the Raw view.
+    const items = buildRequirementItems(result.requirements, result.dossier);
     // Surface the per-file extraction outcomes so the reviewer sees EVERY file and what happened to it (nothing
     // silently skipped) — unsupported / unreadable / scanned-PDF / truncated are flagged for manual review.
-    res.json({ candidates, fileCount: result.fileCount, files: result.files });
+    res.json({ candidates, items, fileCount: result.fileCount, files: result.files });
   } catch (err: any) {
     logFail('gov_qualification_extract_requirements_failed', err, { canonicalOpportunityId: p.data.canonicalOpportunityId });
     res.status(500).json({ error: 'Could not extract requirements from the document.' });

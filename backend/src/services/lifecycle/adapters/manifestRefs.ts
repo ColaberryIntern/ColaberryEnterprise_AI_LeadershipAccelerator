@@ -82,6 +82,57 @@ export interface ManifestRefs {
   /** Present only for origins that have tracks. Empty arrays, never omitted, so a reader can
    *  tell "no mappings" from "this origin has no concept of mappings". */
   trackMappings: TrackMappingRefs;
+  /**
+   * WHAT THE SOURCE-COVERAGE CHECK MEASURED, carried because the measurement cannot be redone
+   * from the refs alone.
+   *
+   * `uncitedRequirementSourceBlocks` is one of the four things standing between a project and
+   * `requirements_ready`, and it had NO measurement function at all — so every project blocked
+   * on `not_assessed` at the first gate and the lifecycle could not turn. The reason it had
+   * none is structural: the question is "which requirement source blocks does no business task
+   * cite", and neither half of that is in a ref set. `sources` holds requirement POINTERS, not
+   * the process document's source blocks; `businessTasks` is `PinnedRef[]`, which carries ids
+   * and no `source_evidence`. The relation is in `FactoryProject`, which the composer has and
+   * the evidence reader does not.
+   *
+   * So the answer is MEASURED WHERE THE DATA IS — at composition, by the shipped
+   * `factoryValidate` SOURCE_COVERAGE rule — and recorded here. A measurement moved rather
+   * than a second implementation of the same rule, which is what the lifecycle generation layer
+   * already refused to do for this exact check (`generation/processValidation.ts` header).
+   *
+   * AN INLINE TYPE, NOT AN EXPORTED ONE. This file is at eleven of CLAUDE.md's twelve public
+   * symbols and nothing outside needs to name the shape — the adapters build it structurally and
+   * the measurement reads one field off it. Naming it would spend the last export on a type with
+   * no second reader.
+   *
+   * ABSENT ON A LEGACY MANIFEST, and that is load-bearing. `refs_json` is JSONB, so a row
+   * written before this field existed parses with `coverage` undefined. Every reader must treat
+   * that as UNMEASURED rather than as an empty list: an empty list means "somebody looked and
+   * every requirement block is cited", and a manifest written before anyone looked has not
+   * earned that. The measurement checks `Array.isArray` for exactly this reason.
+   */
+  coverage: {
+    /**
+     * Source blocks classified `requirement` that no task's `source_evidence` cites.
+     *
+     * `null` MEANS NOBODY MEASURED; `[]` MEANS SOMEBODY LOOKED AND EVERY BLOCK IS CITED. The two
+     * are the whole point of the field being nullable rather than defaulted, and they are the
+     * same distinction `refs: null` and `published: null` carry one level up: a reader that
+     * collapses them turns "not assessed" into "no gaps", which is the single bypass this
+     * evidence path exists to refuse. A legacy manifest parses with `coverage` undefined, which
+     * is ALSO not an array, so one `Array.isArray` check covers both.
+     *
+     * VACUOUS FOR `sbp`, AND THAT IS A STATED LIMITATION RATHER THAN A HIDDEN PASS. SBP has no
+     * source-block layer and no business tasks: there are zero requirement blocks, so zero of
+     * them are uncited, and `[]` is the literal answer to the question asked. What it means in
+     * practice is that this particular gate does no work for a student project. The work is done
+     * for them by `requirementsWithoutProvenance` at the same stage and by
+     * `mustHaveRequirementsWithoutStory` at `plan_ready`, which is where an SBP requirement's
+     * trace into the build actually lives. Recorded in
+     * docs/project-lifecycle/backbone-adoption.md rather than left for a reader to infer.
+     */
+    uncitedRequirementBlocks: string[] | null;
+  };
 }
 
 /** An empty ref set for a given origin and project. Every array present, so shape is stable. */
@@ -99,8 +150,41 @@ export function emptyRefs(origin: RefOrigin, projectId: string): ManifestRefs {
     designDecisions: [],
     downstream: [],
     trackMappings: { proposalSections: [], solutionStories: [] },
+    // `null`, NOT `[]`. A skeleton has measured nothing, and `[]` here would make every ref set
+    // that never reached a coverage check look like one that passed it.
+    coverage: { uncitedRequirementBlocks: null },
   };
 }
+
+/**
+ * The `SourceRef.source` values that hold REQUIREMENTS, as opposed to other captured statements.
+ *
+ * THIS IS WHAT MAKES `requirementCount` EXACT RATHER THAN APPROXIMATE. The field had no
+ * measurement, and `lifecycleEvidence.ts` recorded why: `SourceRef` is documented as "a
+ * requirement OR OTHER CAPTURED STATEMENT", so `sources.length` would publish a count meaning
+ * something slightly different from its name, and "it is cheaper to leave the field unassessed —
+ * where it BLOCKS — than to measure it approximately."
+ *
+ * That reasoning was about the TYPE's intent. What the two shipped adapters actually put in
+ * `sources` is narrower: `factoryToManifestRefs` maps `input.requirements` only, and
+ * `sbpToManifestRefs` maps `input.requirements` only. Neither has ever written a non-requirement
+ * into the list. `source` records which collection each came from, so the superset can be
+ * filtered out instead of guessed at — and a count over a filtered list is exact.
+ *
+ * THE FILTER IS ALL-OR-NOTHING AT THE CALL SITE, not per element. One source carrying an
+ * unrecognised `source` means a collection exists that nobody has classified, and counting the
+ * recognised subset would report a number that is quietly too low. Too low is the dangerous
+ * direction here: `requirementCount > 0` is the predicate, so a subset count can only ever make
+ * a project look readier than it is, never less ready.
+ *
+ * ASSERTED AGAINST BOTH ADAPTERS BY A TEST, in both directions. A set hand-maintained beside the
+ * adapters would drift the first time one of them changed its `source` string, and the drift
+ * would show up as a silently unassessed prerequisite rather than as a failure.
+ */
+export const REQUIREMENT_SOURCE_COLLECTIONS: ReadonlySet<string> = new Set<string>([
+  'contract_requirements',      // factory: the compliance-matrix rows
+  'build_plans#requirements',   // sbp: the student plan's requirements
+]);
 
 /** Tables an adapter must never claim to have written. Asserted by a test over the module text. */
 export const DOMAIN_TABLES_ADAPTERS_MUST_NOT_WRITE: ReadonlyArray<string> = [
@@ -135,10 +219,12 @@ export interface RefIntegrityReport {
  * producer-with-no-consumer failure this repo names, one level down: not a function nobody
  * calls, but a check that stops covering what it claims to.
  *
- * `agents` and `trackMappings` are deliberately absent: they are objects holding arrays, not
- * arrays, so they are not walkable by the `PinnedRef[]` loop below. The test asserts this set
- * equals exactly the ARRAY-valued top-level keys of a fresh `emptyRefs()`, so that carve-out
- * is measured rather than remembered.
+ * `agents`, `trackMappings` and `coverage` are deliberately absent: they are objects holding
+ * arrays, not arrays, so they are not walkable by the `PinnedRef[]` loop below. `coverage` is
+ * doubly so — it holds bare id STRINGS, not refs with an `id` field, so the loop would read
+ * `r.id` off a string and find `undefined` on every element. The test asserts this set equals
+ * exactly the ARRAY-valued top-level keys of a fresh `emptyRefs()`, so that carve-out is
+ * measured rather than remembered.
  */
 export const INTEGRITY_CHECKED_LISTS = [
   'sources', 'processes', 'businessTasks', 'assignments',
