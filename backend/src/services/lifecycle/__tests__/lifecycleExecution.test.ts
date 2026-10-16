@@ -14,46 +14,21 @@ import {
   MAX_ATTEMPTS,
   BACKOFF_MS,
   LEASE_TTL_MS,
-  type ExecutionStore,
-  type StageRun,
-  type DeadLetter,
 } from '../lifecycleExecution';
-
-/** In-memory store that records every write, so duplicate execution is observable. */
-function makeStore() {
-  const runs = new Map<string, StageRun>();
-  const deadLetters: DeadLetter[] = [];
-  let putCount = 0;
-  const key = (id: string, stage: string) => `${id}::${stage}`;
-  const store: ExecutionStore = {
-    async get(id, stage) { return runs.get(key(id, stage)) ?? null; },
-    async put(run) { putCount++; runs.set(key(run.lifecycleStateId, run.stage), { ...run }); },
-    async deadLetter(entry) { deadLetters.push(entry); },
-  };
-  return {
-    store,
-    deadLetters,
-    get putCount() { return putCount; },
-    current: () => runs.get(key('ls-1', 'planning')) ?? null,
-    seed: (over: Partial<StageRun> = {}) => {
-      runs.set(key('ls-1', 'planning'), {
-        lifecycleStateId: 'ls-1', tenantId: 't-1', stage: 'planning',
-        leaseUntil: null, attempts: 0, completedAt: null, holdForReview: false, ...over,
-      });
-    },
-  };
-}
-
-/** A fake clock that only moves when told to. */
-function makeClock(start = 1_000_000) {
-  let t = start;
-  return { now: () => t, advance: (ms: number) => { t += ms; } };
-}
+// The store double, the injected clock and the permitting authorization are SHARED with
+// `lifecycleExecutionGuard.test.ts`. See `executionFixture.ts` for why that sharing is load
+// bearing rather than tidiness.
+import { makeStore, makeClock, permitting } from './executionFixture';
 
 function run(s: ReturnType<typeof makeStore>, work: () => Promise<void>, now?: () => number) {
   return executeStage({
     lifecycleStateId: 'ls-1', tenantId: 't-1', stage: 'planning',
     correlationId: 'corr-1', work, store: s.store, now,
+    // REQUIRED since P7-T2. This suite is about DURABILITY -- leases, retries, dead-lettering --
+    // so it supplies an authorization that permits and lets those paths run. The guard's own
+    // refusals live in `lifecycleExecutionGuard.test.ts`, because a durability test that also
+    // asserted authorization would fail for two unrelated reasons.
+    authorization: permitting(),
   });
 }
 
