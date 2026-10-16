@@ -33,7 +33,7 @@
  * evidence that the journey works.
  */
 import { QueryTypes } from 'sequelize';
-import { journeyFixture, type JourneyFixture } from './journeyFixture';
+import { journeyFixture, journeyExecutionStore, type JourneyFixture } from './journeyFixture';
 import { completeEvidence } from './evidenceFixture';
 import { ADVANCE } from '../lifecycleStages';
 
@@ -277,33 +277,11 @@ describeIfDb('the review journeys, each seeding and deleting its own fixture', (
     try {
       const exec = await import('../lifecycleExecution');
       const { executeStage, MAX_ATTEMPTS, classifyError } = exec;
-      type StageRun = import('../lifecycleExecution').StageRun;
-      type DeadLetter = import('../lifecycleExecution').DeadLetter;
-      type Store = import('../lifecycleExecution').ExecutionStore;
 
-      /**
-       * A real-database `ExecutionStore`, TYPED against the interface rather than cast.
-       *
-       * Typed on purpose: nothing typechecks test files here, so the declared shape is the only
-       * signal a reader gets if `ExecutionStore` changes. A cast would remove it.
-       */
-      const runs = new Map<string, StageRun>();
-      const store: Store = {
-        async get(id, stage) { return runs.get(`${id}:${stage}`) ?? null; },
-        async put(run) { runs.set(`${run.lifecycleStateId}:${run.stage}`, run); },
-        async deadLetter(entry: DeadLetter) {
-          await sequelize.query(
-            `INSERT INTO lifecycle_stage_failures
-               (tenant_id, lifecycle_state_id, attempted_stage, attempts, error_class,
-                error_message, correlation_id)
-             VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-            {
-              bind: [entry.tenantId, entry.lifecycleStateId, entry.attemptedStage,
-                     entry.attempts, entry.errorClass, entry.errorMessage, entry.correlationId],
-            },
-          );
-        },
-      };
+      // The real-database store and the lease release live in `journeyFixture.ts`, with the rest
+      // of this suite's plumbing. Moved there when this file crossed CLAUDE.md's 500-line hard
+      // ceiling for the SECOND time -- that module's own header records the first.
+      const { store, releaseLease } = journeyExecutionStore(sequelize);
 
       // Work that never succeeds: the model returns nothing usable, every time.
       const uncertain = async () => { throw new Error('model returned no usable design'); };
@@ -311,14 +289,8 @@ describeIfDb('the review journeys, each seeding and deleting its own fixture', (
       const outcomes: string[] = [];
       for (let i = 0; i < MAX_ATTEMPTS; i += 1) {
         // The lease must be free for the next attempt; the machine sets it while working.
-        // REDUNDANT, deliberately: `executeStage` already releases the lease on a failed
-        // attempt (`lifecycleExecution.ts:169`). Kept so this loop reads as a sequence of
-        // independent attempts rather than relying on that release — but it does mean this
-        // journey would not notice a regression that stopped releasing it. That is covered in
-        // `lifecycleExecution.test.ts`, which is where it belongs.
-        const key = `${stateId}:${TARGET}`;
-        const held = runs.get(key);
-        if (held) held.leaseUntil = null;
+        // Why this is deliberately redundant is documented on `releaseLease` itself.
+        releaseLease(stateId, TARGET);
         const r = await executeStage({
           lifecycleStateId: stateId, tenantId: TENANT, stage: TARGET,
           correlationId: 'journey-4-correlation', work: uncertain, store,

@@ -32,6 +32,7 @@
  */
 import { executeStage, type StageAuthorization } from '../lifecycleExecution';
 import { completeEvidence } from './evidenceFixture';
+import { ADVANCE } from '../lifecycleStages';
 import { makeStore, permitting, withFlag, SUBJECT } from './executionFixture';
 
 /** Captured audit lines, parsed. Only this module's authorization event is kept. */
@@ -200,6 +201,50 @@ describe('cross-tenant: refused on the stage that CONSUMES the approval', () => 
       const r = await attempt(permitting({ actorTenantId }));
       expectCleanRefusal(r, 'TenantIsolationViolation');
     }
+  });
+
+  /**
+   * NON-DISCLOSURE, ASSERTED EXACTLY rather than by absence of two sample strings.
+   *
+   * A verifier broke the previous version twice without failing a test: one mutation appended
+   * `(legal next: ${ADVANCE[auth.from]})` to this message, and another printed the gap's KIND
+   * (`unmet`) instead of its rule name. Both slipped past assertions of the form "does not
+   * contain 'discovery'" and "does not contain 'approval_missing'", because a `not.toContain`
+   * pair only forbids the two strings somebody thought of.
+   *
+   * So the message is pinned by EQUALITY. That is deliberately brittle: this string is a
+   * security boundary, and any change to what a foreign tenant is told should be a reviewed
+   * act rather than something that rides along with an edit.
+   */
+  it('the refusal message is EXACTLY the non-disclosing sentence, nothing appended', async () => {
+    const r = await attempt(permitting({
+      actorTenantId: 't-OTHER',
+      from: 'discovery',
+      evidence: { ...completeEvidence(), approval: null },
+    }));
+
+    expect(r.result.message)
+      .toBe(`Stage ${SUBJECT.stage} refused: the actor's tenant does not own this lifecycle row.`);
+  });
+
+  it('and it names NO stage but the one asked for, and NO gap kind', async () => {
+    // The generic form of the same property, which survives a legitimate rewording of the
+    // sentence above. Derived from `ADVANCE`'s own keys, so a new lifecycle stage is covered
+    // the day it is added rather than when somebody remembers to extend a list.
+    const r = await attempt(permitting({
+      actorTenantId: 't-OTHER',
+      from: 'discovery',
+      evidence: { ...completeEvidence(), approval: null },
+    }));
+
+    for (const stage of Object.keys(ADVANCE)) {
+      if (stage === SUBJECT.stage) continue;
+      expect(r.result.message).not.toContain(stage);
+    }
+    // `unmet` and `not_assessed` are the gap KINDS. Leaking either tells a foreign tenant that
+    // the project is or is not ready, which is the fact the tenant check exists to withhold.
+    expect(r.result.message).not.toContain('unmet');
+    expect(r.result.message).not.toContain('not_assessed');
   });
 
   it('and the decision IS audited, with the actor tenant recorded for triage', async () => {
