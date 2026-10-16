@@ -55,7 +55,7 @@ const V = {
 const EXECUTED = {
   on: '16 October 2026',
   approvedBy: 'Ali Muwwakkil',
-  rowsChanged: 4,
+  rowsChanged: 6,
   notNotified: 'No email, invitation or notification has been sent to anybody. The grants exist '
     + 'in the database and the interns do not know about them yet.',
   /** Proof the row is not merely a row. */
@@ -88,11 +88,12 @@ const MONDAY_PACK = {
 const PEOPLE = [
   {
     name: 'Sarbjit Kaur', domain: 'marketing', role: 'marketing',
-    email: 'sarbjitsaini83@yahoo.com', cmRow: 1, enrollments: 2, verdict: V.CONFIRM,
-    note: 'TWO enrollments, different addresses. The community_members row - and therefore any '
-      + 'grant - hangs off the yahoo one. The second, sarbjitsaini716@gmail.com, created 4 Aug, '
-      + 'has NO community_members row. If she signs in with the gmail address the grant reaches '
-      + 'nothing and she is blocked on day one. Same class as the AF2.6 mismatch.',
+    email: 'sarbjitsaini83@yahoo.com', cmRow: 1, enrollments: 2, verdict: V.GRANTED,
+    note: 'Resolved 16 Oct. TWO enrollments: the yahoo one is PAID, holds the only '
+      + 'community_members row, and carries her internship application (submitted 21 Sep); the '
+      + 'gmail one is pending with zero rows in every activity table. Granted on yahoo, and the '
+      + 'duplicate was asserted to still mint nothing. No table records either account logging '
+      + 'in, so the identification rests on payment, the community row and the application.',
   },
   {
     name: 'Quincy Nkwain Ninying', domain: 'platform', role: 'platform',
@@ -119,10 +120,12 @@ const PEOPLE = [
       + 'the same group. No new role was needed.',
   },
   {
-    name: 'Mihret Netsereab', domain: 'product_experience', role: null,
-    email: 'mihretnetsereab@gmail.com', cmRow: 1, enrollments: 1, verdict: V.NO_SURFACE,
-    note: 'No admin path prefix maps to product_experience, and a scoped role is deny-by-default '
-      + 'on an unmapped path. There is nothing to grant. No page was invented to close this.',
+    name: 'Mihret Netsereab', domain: 'product_experience', role: 'product_experience',
+    email: 'mihretnetsereab@gmail.com', cmRow: 1, enrollments: 1, verdict: V.GRANTED,
+    note: 'Had no surface at all until 16 Oct. Rather than hand her the marketing role and with '
+      + 'it Sarbjit’s whole domain, `brands` was split into its own section key: she reaches '
+      + 'the websites she is checking and is refused campaigns, inbox_content and program. '
+      + 'Sarbjit kept brands, asserted on her live token rather than on the role definition.',
   },
   {
     name: 'Ruth Kumera', domain: 'curriculum', role: 'curriculum',
@@ -134,7 +137,7 @@ const PEOPLE = [
 
 const GRANTED_PEOPLE = PEOPLE.filter((p) => p.verdict === V.GRANTED);
 /** The sections each minted token actually carried, read back from the bridge. */
-const MINTED_SECTIONS = {
+const MINTED_SECTIONS_OLD = {
   "platform": "dashboard, system",
   "lead_intake": "dashboard, lead_ingestion",
   "internship_review": "dashboard, internship",
@@ -183,15 +186,23 @@ const REVERSAL = {
     + 'listed as owed rather than claimed.',
 };
 
-const HEADLINE = `${COUNTS.granted} of the ${COUNTS.people} are GRANTED and verified. One needs `
-  + 'an email confirmed, one has no surface to grant, Ruth stays held, and nobody has been '
-  + 'told yet.';
+const HEADLINE = `${COUNTS.granted} of the ${COUNTS.people} are GRANTED and verified. Only Ruth `
+  + 'is left, held by AF6.2, and nobody has been told yet.';
 
 const ASKED = 'Each of the seven interns can sign in on Monday and reach their own portal, '
   + 'department and agent, with the grant recorded and reversible.';
 const DELIVERED = 'The grant plan, every account verified by direct lookup rather than from the '
   + 'roster, the two-change shape the grant actually needs, and three things that would have made '
   + 'it fail silently. No grant has been issued.';
+
+const MINTED_SECTIONS = {
+  platform: 'dashboard, system',
+  lead_intake: 'dashboard, lead_ingestion',
+  internship_review: 'dashboard, internship',
+  revenue: 'dashboard, leads, revenue',
+  marketing: 'dashboard, campaigns, brands',
+  product_experience: 'dashboard, brands',
+};
 
 module.exports = {
   MEASURED_ON, SEV, V, PEOPLE, GRANTED_PEOPLE, MINTED_SECTIONS, EXECUTED,
