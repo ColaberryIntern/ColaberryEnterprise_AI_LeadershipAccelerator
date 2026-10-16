@@ -537,7 +537,7 @@ describe('AdminGovQualificationPage — journey', () => {
     expect(container.textContent ?? '').toContain('No submission deadline captured yet');
   });
 
-  it('Gaps panel: advisory banner + a flagged eligibility gap (SAM registration, no evidence, no matching capability)', async () => {
+  it('Fit panel: eligibility checks list a flagged gap (SAM registration, no evidence, no matching capability)', async () => {
     (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(decoupledWs({
       qualification: { id: 'q1', bidding_entity: 'colaberry', decision: 'needs_evidence', version: 2, rationale: null, source_snapshot_version: null, reviewer_identity_id: 'rev', requirements_json: { established: [{ id: 'E1', text: 'Offeror must be registered in SAM.gov.', applicability: 'always', dueStage: 'submission', bindingStatus: 'binding_solicitation_requirement' }] } },
       evaluation: { evals: [], blocking: [], deliveryObligations: [], byDueStage: { submission: [], award: [], delivery: [], unknown: [] }, canApproveBid: true },
@@ -545,17 +545,16 @@ describe('AdminGovQualificationPage — journey', () => {
     await renderAt(`?gws=${encodeURIComponent(GWS)}`);
     await flush();
     const text = container.textContent ?? '';
-    expect(text).toContain('Gaps / potential disqualifiers');
-    expect(text).toContain('Advisory only');                       // the unmissable advisory banner
+    expect(text).toContain('Can we deliver it?');                  // the Fit capability panel (P3)
+    expect(text).toContain('Eligibility checks');                  // the tickable eligibility section
     expect(text).toContain('registered in SAM.gov');               // the flagged eligibility requirement
-    expect(text).toContain('no evidence attached');                // the honest basis
   });
 
-  it('Gaps panel: honest no_requirements empty state when nothing is established', async () => {
+  it('Fit panel: honest no-requirements empty state when nothing is established', async () => {
     (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(decoupledWs()); // qualification null -> established []
     await renderAt(`?gws=${encodeURIComponent(GWS)}`);
     await flush();
-    expect(container.textContent ?? '').toContain('No requirements established yet — establish the cited requirements above to surface potential disqualifiers');
+    expect(container.textContent ?? '').toContain('establish the cited requirements on the Solicitation step first');
   });
 
   it('canonical workspace renders NEITHER new card (Discovery details / Gaps panel are decoupled-only)', async () => {

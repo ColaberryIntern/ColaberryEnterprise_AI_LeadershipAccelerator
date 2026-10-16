@@ -25,6 +25,12 @@ jest.mock('../../services/broadcast/broadcastAccessDeps', () => ({
     cohortIdOf: (e: { cohort_id?: string | null } | null) => e?.cohort_id ?? null,
   },
 }));
+// L4.6's measurement path. Mocked because this file tests the HTTP edge, not Postgres:
+// what matters here is which facts the controller decides for itself and what it refuses.
+jest.mock('../../services/broadcast/broadcastTelemetryService', () => ({
+  recordPlaybackBeat: jest.fn(),
+  readLiveAudience: jest.fn(),
+}));
 jest.mock('../../services/broadcast/broadcastActiveQuery', () => ({
   ACTIVE_DISCOVERY_STATES: ['live', 'reconnecting'],
   findActiveOccurrences: jest.fn(),
@@ -36,6 +42,8 @@ import { runProducerCommand } from '../../services/broadcast/broadcastCommandSer
 import { resolveRoomEligibility } from '../../services/broadcast/broadcastRoomEligibility';
 import { loadViewerAccessFacts, broadcastAccessDeps } from '../../services/broadcast/broadcastAccessDeps';
 import { findActiveOccurrences } from '../../services/broadcast/broadcastActiveQuery';
+import { postPlaybackHeartbeat, getLiveAudience } from '../broadcastController';
+import { recordPlaybackBeat, readLiveAudience } from '../../services/broadcast/broadcastTelemetryService';
 
 const findByPk = (BroadcastOccurrence as any).findByPk as jest.Mock;
 const runCommand = runProducerCommand as jest.Mock;
@@ -45,6 +53,8 @@ const loadEnrollment = broadcastAccessDeps.loadEnrollment as jest.Mock;
 const loadCohort = broadcastAccessDeps.loadCohort as jest.Mock;
 const loadRoleInfo = broadcastAccessDeps.loadRoleInfo as jest.Mock;
 const activeOccurrences = findActiveOccurrences as jest.Mock;
+const recordBeat = recordPlaybackBeat as jest.Mock;
+const readAudience = readLiveAudience as jest.Mock;
 
 const OCC = '11111111-2222-4333-8444-555555555555';
 
@@ -494,5 +504,113 @@ describe('postPlaybackGrant — the Cloudflare provider branch', () => {
     const res = mockRes();
     await postPlaybackGrant(req({ body: { asset: 'master.m3u8' } }), res);
     expect(res.json.mock.calls[0][0].url).toMatch(/^\/bm\/broadcast\//);
+  });
+});
+
+describe('postPlaybackHeartbeat', () => {
+  const live = () => ({ id: OCC, access_mode: 'free', editorial_state: 'live', preview_seconds: 900, content_started_at: new Date() });
+  const beatBody = { session_id: 'tab-abcdefgh', state: 'playing', intent: 'deliberate' };
+
+  beforeEach(() => { recordBeat.mockResolvedValue(true); });
+
+  it('NAMES the fields when a client asserts identity, entitlement or counts', async () => {
+    findByPk.mockResolvedValue(live());
+    const res = mockRes();
+    await postPlaybackHeartbeat(req({ body: { ...beatBody, enrollment_id: 'someone-else', watching_now: 500 } }), res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    const body = res.json.mock.calls[0][0];
+    expect(body.error).toBe('UntrustedFields');
+    // Naming them is the point. A silently dropped field is indistinguishable from an
+    // accepted one, and a client that believes it is reporting viewers would go on believing
+    // it - and the number it inflates would be trusted.
+    expect(body.fields).toEqual(expect.arrayContaining(['enrollment_id', 'watching_now']));
+    expect(recordBeat).not.toHaveBeenCalled();
+  });
+
+  it('takes identity and staff status from the SERVER, never from the body', async () => {
+    findByPk.mockResolvedValue(live());
+    await postPlaybackHeartbeat(
+      req({ participant: { sub: 'enr-real', isStaff: true }, body: beatBody }),
+      mockRes(),
+    );
+    const [, facts] = recordBeat.mock.calls[0];
+    expect(facts).toMatchObject({ enrollmentId: 'enr-real', isStaff: true, accessMode: 'free' });
+  });
+
+  it('records an UNRECOGNISED access mode as null rather than inventing a label', async () => {
+    findByPk.mockResolvedValue({ ...live(), access_mode: 'something_new' });
+    await postPlaybackHeartbeat(req({ body: beatBody }), mockRes());
+    expect(recordBeat.mock.calls[0][1].accessMode).toBeNull();
+  });
+
+  it('answers 204 even when the write FAILS - telemetry must not break playback', async () => {
+    findByPk.mockResolvedValue(live());
+    recordBeat.mockResolvedValue(false);
+    const res = mockRes();
+    await postPlaybackHeartbeat(req({ body: beatBody }), res);
+    expect(res.status).toHaveBeenCalledWith(204);
+  });
+
+  it('rejects an unknown body key', async () => {
+    findByPk.mockResolvedValue(live());
+    const res = mockRes();
+    await postPlaybackHeartbeat(req({ body: { ...beatBody, nonsense: 1 } }), res);
+    expect(res.status).toHaveBeenCalledWith(400);
+  });
+
+  it('404s an unknown occurrence', async () => {
+    findByPk.mockResolvedValue(null);
+    const res = mockRes();
+    await postPlaybackHeartbeat(req({ body: beatBody }), res);
+    expect(res.status).toHaveBeenCalledWith(404);
+  });
+});
+
+/**
+ * "Nobody watched" is a verdict on the broadcast. "Collection is down" is a verdict on us.
+ * Rendering the second as the first would have a producer stop a class people were watching,
+ * which is why the metrics dictionary calls a fabricated zero a defect rather than a
+ * cosmetic issue.
+ */
+describe('getLiveAudience keeps zero and "we do not know" apart', () => {
+  it('reports a real zero as zero', async () => {
+    readAudience.mockResolvedValue({ watchingNow: 0, deliberate: 0, auto: 0, byMode: {} });
+    const res = mockRes();
+    await getLiveAudience(req({ participant: { sub: 'enr-1', isStaff: true } }), res);
+    expect(res.json.mock.calls[0][0]).toMatchObject({ available: true, watching_now: 0 });
+  });
+
+  it('a COLLECTION FAILURE carries no count field at all - not zero, not null, absent', async () => {
+    readAudience.mockRejectedValue(new Error('connection terminated'));
+    const spy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    const res = mockRes();
+    await getLiveAudience(req({ participant: { sub: 'enr-1', isStaff: true } }), res);
+    spy.mockRestore();
+
+    expect(res.status).toHaveBeenCalledWith(503);
+    const body = res.json.mock.calls[0][0];
+    expect(body).toMatchObject({ available: false, reason: 'collection_unavailable' });
+    // A client cannot render a number that is not there. That is a stronger guarantee than
+    // asking it to check a flag first.
+    expect(body).not.toHaveProperty('watching_now');
+    expect(body).not.toHaveProperty('deliberate');
+    expect(body).not.toHaveProperty('auto');
+  });
+
+  it('reports the splits a producer actually needs', async () => {
+    readAudience.mockResolvedValue({ watchingNow: 7, deliberate: 5, auto: 2, byMode: { free: 7 } });
+    const res = mockRes();
+    await getLiveAudience(req({ participant: { sub: 'enr-1', isStaff: true } }), res);
+    expect(res.json.mock.calls[0][0]).toMatchObject({
+      available: true, watching_now: 7, deliberate: 5, auto: 2, by_mode: { free: 7 },
+    });
+  });
+
+  it('403s a non-producer - a live viewer count is producer information', async () => {
+    const res = mockRes();
+    await getLiveAudience(req({ participant: { sub: 'enr-1', isStaff: false } }), res);
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(readAudience).not.toHaveBeenCalled();
   });
 });

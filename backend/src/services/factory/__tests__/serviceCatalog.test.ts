@@ -16,7 +16,7 @@ jest.mock('../../../models/ServiceOffering', () => ({
 }));
 
 import {
-  createServiceOffering, updateServiceOffering, retireServiceOffering, listServiceOfferings, getServiceOffering,
+  createServiceOffering, updateServiceOffering, retireServiceOffering, markGrowthServiceOffering, listServiceOfferings, getServiceOffering,
   ServiceOfferingNotFoundError,
 } from '../serviceCatalog';
 
@@ -42,6 +42,13 @@ describe('createServiceOffering', () => {
     expect(arg.naics_codes_json).toEqual(['541512']);
     expect(arg.psc_codes_json).toBeNull();                      // empty array -> null
     expect(dto).toMatchObject({ id: 's1', name: 'Data Platform', keywords: ['dashboards', 'etl'], status: 'active' });
+  });
+
+  it('creates a growth-status service when status:"growth" is passed (Fit "add as growth")', async () => {
+    create.mockImplementation(async (attrs: any) => makeRow({ id: 's2', ...attrs }));
+    const dto = await createServiceOffering({ tenantId: 't1', name: 'AI vision', createdBy: 'ali@colaberry.com', status: 'growth' });
+    expect(create.mock.calls[0][0]).toMatchObject({ status: 'growth' });
+    expect(dto.status).toBe('growth');
   });
 });
 
@@ -84,6 +91,27 @@ describe('retireServiceOffering — soft, idempotent', () => {
   });
 });
 
+describe('markGrowthServiceOffering — soft, idempotent', () => {
+  it('flips status to growth and saves', async () => {
+    const row = makeRow({ id: 's1', status: 'active' });
+    findOne.mockResolvedValueOnce(row);
+    const dto = await markGrowthServiceOffering({ tenantId: 't1', id: 's1' });
+    expect(row.status).toBe('growth');
+    expect(row.save).toHaveBeenCalledTimes(1);
+    expect(dto.status).toBe('growth');
+  });
+  it('is a no-op when already growth (no second save)', async () => {
+    const row = makeRow({ id: 's1', status: 'growth' });
+    findOne.mockResolvedValueOnce(row);
+    await markGrowthServiceOffering({ tenantId: 't1', id: 's1' });
+    expect(row.save).not.toHaveBeenCalled();
+  });
+  it('404s an unknown id', async () => {
+    findOne.mockResolvedValueOnce(null);
+    await expect(markGrowthServiceOffering({ tenantId: 't1', id: 'nope' })).rejects.toBeInstanceOf(ServiceOfferingNotFoundError);
+  });
+});
+
 describe('listServiceOfferings — tenant-scoped, status-filtered', () => {
   it('active (default) filters status=active for the tenant, newest first', async () => {
     findAll.mockResolvedValueOnce([makeRow({ id: 's1', name: 'A', status: 'active' })]);
@@ -97,6 +125,11 @@ describe('listServiceOfferings — tenant-scoped, status-filtered', () => {
     const where = findAll.mock.calls[0][0].where;
     expect(where).toEqual({ tenant_id: 't1' });
     expect(where.status).toBeUndefined();
+  });
+  it('growth filters status=growth for the tenant', async () => {
+    findAll.mockResolvedValueOnce([makeRow({ id: 's1', name: 'G', status: 'growth' })]);
+    await listServiceOfferings({ tenantId: 't1', status: 'growth' });
+    expect(findAll.mock.calls[0][0]).toMatchObject({ where: { tenant_id: 't1', status: 'growth' } });
   });
 });
 
