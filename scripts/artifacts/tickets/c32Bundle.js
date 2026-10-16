@@ -237,4 +237,12 @@ function build() {
   return html;
 }
 
-module.exports = { build };
+// Each section is exported so it can also be rendered as its OWN pdf. Ali's rule, 16 Oct 2026:
+// when a ticket asks for a bundle of things, every item in the bundle ships as its own pdf.
+// A combined html file that has to be opened to find the seven deliverables inside it shows the
+// reader nothing, because Basecamp does not preview html.
+module.exports = {
+  build,
+  sections: { deck, leaveBehind, capability, demo, agenda, faq, evidence },
+  CSS,
+};
