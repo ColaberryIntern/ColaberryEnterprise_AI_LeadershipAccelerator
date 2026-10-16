@@ -264,6 +264,87 @@ describe('when auto-publish fails', () => {
     expect(failure.context.error_class).toBe('UpstreamUnavailable');
     expect(failure.context.recovery).toContain('publish');
   });
+
+  /**
+   * P7-T3 CASE 6 — publish / repo-write failure. `request.md:257` requires "recoverable state, no
+   * duplicated work, no lost approved version, visible retry reason".
+   *
+   * THE GAP THESE THREE CLOSE: every pre-existing failure test here rejects a mock that runs
+   * BEFORE `publishPlan` commits -- `mockPublishPlan` itself, or `mockRepoFor`, which is reached
+   * at `sbpOrchestrator.ts:438` before `publishBuild` is even entered. Nothing rejected
+   * `mockWriteDocs` or `mockMaterialize`, which are the two steps that run AFTER the plan row is
+   * already committed as published. So the half-published state was undemonstrated, in the suite
+   * whose stated third invariant is "a publish that fails does not cost the student their plan".
+   *
+   * `publishPlan` has its own transaction; the repo write and the task materialization do not
+   * share it. There is no outer transaction, and there cannot easily be one -- a network write to
+   * GitHub is not rollback-able -- so the honest target is RECOVERABILITY, not atomicity.
+   */
+  it('a repo-write failure AFTER the plan is published leaves the plan published, not lost', async () => {
+    mockWriteDocs.mockRejectedValue(
+      Object.assign(new Error('github 502'), { error_class: 'UpstreamUnavailable' }),
+    );
+    await startBuild(INPUT as any);
+    await flush();
+
+    // The plan row was committed before the failure: the approved version is NOT lost, which is
+    // the half of LC-13 that matters most here.
+    expect(mockPublishPlan).toHaveBeenCalledTimes(1);
+    // But the intake never reaches 'published', because `setStatus` is the last step.
+    expect(finalStatus()).toBe('drafted');
+    expect(statuses()).not.toContain('published');
+    // And the student has no tasks, because materialization is downstream of the write.
+    expect(mockMaterialize).not.toHaveBeenCalled();
+  });
+
+  it('a materialization failure leaves the same divergence: plan published, intake drafted', async () => {
+    mockMaterialize.mockRejectedValue(
+      Object.assign(new Error('task write failed'), { error_class: 'UpstreamUnavailable' }),
+    );
+    await startBuild(INPUT as any);
+    await flush();
+
+    expect(mockPublishPlan).toHaveBeenCalledTimes(1);
+    expect(mockWriteDocs).toHaveBeenCalledTimes(1);   // got further than the test above
+    expect(finalStatus()).toBe('drafted');
+    expect(statuses()).not.toContain('published');
+  });
+
+  /**
+   * THE RECOVERY MESSAGE WAS FALSE, and this is defect 2 of P7-T3's cap of three.
+   *
+   * It read: *"plan is drafted and intact; POST .../publish retries"*. Once `publishPlan` has
+   * committed -- which is the case in both tests above -- the plan is **published**, not drafted.
+   * `build_intake.status` is drafted; the plan row is not. A responder following that message
+   * looks for a draft and finds a published plan, and the one sentence they were given to act on
+   * has told them the wrong thing about the system's state.
+   *
+   * "Visible retry reason" is an acceptance criterion, and a visible reason that misdescribes the
+   * state does not meet it. The message now says what is actually true, including that the retry
+   * is idempotent -- `planStore.ts:231` returns the existing row for an already-published plan,
+   * so re-POSTing resumes the repo write and the materialization rather than duplicating them.
+   */
+  it('the retry reason DESCRIBES THE REAL STATE: the plan may already be published', async () => {
+    const logs: string[] = [];
+    (console.log as jest.Mock).mockImplementation((line: string) => { logs.push(String(line)); });
+    mockWriteDocs.mockRejectedValue(
+      Object.assign(new Error('github 502'), { error_class: 'UpstreamUnavailable' }),
+    );
+    await startBuild(INPUT as any);
+    await flush();
+
+    const failure = logs.map((l) => { try { return JSON.parse(l); } catch { return null; } })
+      .find((e) => e?.event === 'sbp_autopublish_failed');
+    expect(failure).toBeDefined();
+
+    const recovery = String(failure.context.recovery);
+    // The claim that was wrong, asserted as absent so it cannot come back.
+    expect(recovery).not.toContain('plan is drafted and intact');
+    // What a responder actually needs: the plan may be published, and the retry is safe.
+    expect(recovery).toMatch(/already be published/i);
+    expect(recovery).toMatch(/idempotent/i);
+    expect(recovery).toContain('publish');
+  });
 });
 
 // ── the kill switch ─────────────────────────────────────────────────────────
