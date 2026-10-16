@@ -284,7 +284,14 @@ router.get(
  */
 router.get(
   '/api/admin/agent-domains-mine',
-  requireSection('program'),
+  // 'dashboard', not 'program'. This route is self-scoped: it resolves the caller's own identity
+  // from their verified token and returns only what they own, so a stranger learns nothing by
+  // reaching it. Gating it on 'program' protected nothing and blocked every intern it was built
+  // for — all six returned 403 when walked through production for AF8.3.
+  //
+  // The sibling route above still returns ALL TEN domains to anyone who can reach it, so it
+  // keeps 'program'. The difference is what the handler gives back, not who asks.
+  requireSection('dashboard'),
   guarded(async (req: Request, res: Response) => {
     const email = req.admin?.email ?? '';
     const identityIds = await resolveOwnerIdentityIds(sequelize, email);
