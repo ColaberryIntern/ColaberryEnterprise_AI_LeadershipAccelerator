@@ -13,7 +13,7 @@ import ServiceEvidencePanel from '../../components/admin/ServiceEvidencePanel';
  * Design: Bootstrap 5 + admin-shell + RemixIcon; colors via tokens / Bootstrap utilities, no hardcoded hex.
  */
 
-type StatusFilter = 'active' | 'all';
+type StatusFilter = 'active' | 'growth' | 'all';
 type Editing = ServiceOffering | 'new' | null;
 
 const parseList = (s: string): string[] => s.split(',').map((x) => x.trim()).filter(Boolean);
@@ -175,6 +175,7 @@ export default function AdminGovServicesPage(): React.ReactElement {
         actions={
           <div className="btn-group btn-group-sm" role="group" aria-label="Status filter">
             <button type="button" className={`btn ${filter === 'active' ? 'btn-dark' : 'btn-outline-secondary'}`} onClick={() => setFilter('active')}>Active</button>
+            <button type="button" className={`btn ${filter === 'growth' ? 'btn-dark' : 'btn-outline-secondary'}`} onClick={() => setFilter('growth')}>Growth</button>
             <button type="button" className={`btn ${filter === 'all' ? 'btn-dark' : 'btn-outline-secondary'}`} onClick={() => setFilter('all')}>All</button>
           </div>
         }
@@ -204,7 +205,7 @@ export default function AdminGovServicesPage(): React.ReactElement {
                 {services.map((s) => (
                   <tr key={s.id} className={s.status === 'retired' ? 'opacity-50' : undefined}>
                     <td>
-                      <div className="fw-semibold">{s.name}{s.status === 'retired' && <span className="badge bg-secondary-subtle text-secondary-emphasis ms-2">Retired</span>}</div>
+                      <div className="fw-semibold">{s.name}{s.status === 'retired' && <span className="badge bg-secondary-subtle text-secondary-emphasis ms-2">Retired</span>}{s.status === 'growth' && <span className="badge bg-primary-subtle text-primary-emphasis ms-2">Growth</span>}</div>
                       {s.description && <div className="small text-secondary">{s.description}</div>}
                     </td>
                     <td>{s.category ? <span className="badge bg-secondary-subtle text-secondary-emphasis">{s.category}</span> : <span className="text-secondary">—</span>}</td>
