@@ -16,7 +16,7 @@
 | 2 | Can an unpaid Explorer still be mistaken for converted? | **No — live in production** |
 | 3 | Can I look at one person and see the website journey that led to their signup? | **Yes.** |
 | 4 | Can I see what they have done since registering? | **Yes, with named gaps.** |
-| 5 | Is Person 360 trustworthy enough to be the Sales Readiness Score's input in Phase 3? | **Not yet** — but the population is repaired and a loss-of-evidence guard now exists; what remains is coverage for 9 groups, one surviving mutant, an unexplained load flake, and a NULL `explorer_entered_at` |
+| 5 | Is Person 360 trustworthy enough to be the Sales Readiness Score's input in Phase 3? | **Not yet, but close** — population repaired, loss-of-evidence guard live, all 11 loaders covered, the `matchMethod` mutant dead. What remains: an unexplained load flake, a NULL `explorer_entered_at`, and the written readiness call itself |
 
 **The answers are not yes/yes/no/no/no, and they are also not five clean yeses.** Two carry real
 qualifications and the fifth is a no. In detail:
@@ -88,17 +88,18 @@ the existing panels all render on one screen (§D). The gaps are real and listed
 twenty evidence groups the spec names, several have no test, and **there is no registry test that
 would fail if a group silently lost its evidence.**
 
-**5 — Still not yet, but two and a half of the five reasons are now gone.** (a) Deployed and
+**5 — Still not yet, but four of the five original reasons are now gone.** (a) Deployed and
 production-verified. (e) The incoherent population — the rows an SRS would actually score — is
-repaired: **86 invisible became 49**, and 56 rows are coherent where none were. (b) is **half
-closed**: a guard now fails when an evidence group loses its evidence
-(`evidenceRegistry.test.ts`, 22 groups, both halves bound, mutation-proved), but **nine groups
-still have no behavioural test of their own**, which is the open half.
+repaired: **86 invisible became 49**, and 56 rows are coherent where none were. (b) **closed**: a
+guard fails when an evidence group loses its evidence (`evidenceRegistry.test.ts`, 22 groups, both
+halves bound), and all **eleven** uncovered loaders now have behavioural tests. (c) **closed**:
+`trustPanel`'s surviving `matchMethod` mutant is dead, all four branches asserted.
 
-**What still blocks it:** the rest of (b); (c) `trustPanel`'s `matchMethod` has a surviving
-mutant, pre-existing and inherited by a verbatim move; (d) suites that pass in isolation and fail
-under heavy parallel load — **not root-caused**, see the Phase 3 list below for the candidate and
-why it is not yet a finding. A gate that produces false reds is the gate protecting this input.
+**What still blocks it:** (d) suites that pass in isolation and fail under heavy parallel load —
+**not root-caused**, see the Phase 3 list below for the candidate and why it is not yet a finding.
+A gate that produces false reds is the gate protecting this input. Note that (b) and (c) closing
+does **not** by itself make the answer yes: the inputs are now covered, but whether they are good
+enough to score is the question M24 exists to answer, with a written yes or no.
 
 **And one new reason, created by closing (e):** all 56 now-coherent rows carry
 `explorer_entered_at` NULL. A journey score with no journey start date has no denominator, and
@@ -530,11 +531,29 @@ it, where a reader scanning sixteen numbered lines would have missed it.
    all 22, because `evidenceRegistry.test.ts` (gap 1 above) names every one in its registry map.
    A naive count reports full coverage. The eleven are only visible when that file is excluded.
 
-   **Still uncovered, three:** `loadCcppHistory` (MSSQL, env-gated — different substrate, needs
-   its own suite), `buildJourney` and `buildTrust` (both compose already-loaded evidence rather
-   than loading any, and `buildTrust` should be closed together with gap 3 below).
-3. **`trustPanel`'s `matchMethod` has a surviving mutant** — pre-existing, inherited by a verbatim
-   move; the existing test exercises only the `'none'` branch.
+   **FULLY CLOSED 2026-10-16.** The last three — `loadCcppHistory`, `buildJourney` and
+   `buildTrust` — are covered by `adminOs/__tests__/historyJourneyTrustPanels.test.ts`, 21 tests.
+   All **eleven** loaders now have behavioural coverage.
+3. ~~**`trustPanel`'s `matchMethod` has a surviving mutant**~~ **CLOSED 2026-10-16**, in the same
+   suite, because `buildTrust` was the last uncovered composer and the mutant lived in it.
+   `matchMethod` is one ternary over two id lists, so all four combinations are enumerable and all
+   four are now asserted. Mutating it to a constant `'exact_email'` kills three tests by name.
+
+   **What those 21 tests pin, beyond presence.** Three rules these modules state in their own
+   comments and then rely on:
+   - **Absent is not zero.** `daysKnown` is null when there is no first touch; a 0 would read as
+     "we met them today" about a person we know nothing about.
+   - **Sales data is withheld, not zeroed.** `intentScore` is null for a caller without the sales
+     sections. Removing that check kills the test by name — a 0 there is a number the caller is
+     not cleared to see, and a wrong one.
+   - **An unconfigured dependency never silently connects.** With CCPP unset, `loadCcppHistory`
+     returns unavailable *with its reason* and never constructs a pool; the two EMPTY branches
+     carry different reasons, and a control asserts they have not collapsed into one message.
+
+   Three mutations, all proved, six named kills, every restore byte-identical. The first run of
+   that mutation driver reported `MUTANT_EXIT=null` with no jest output at all, because the
+   `.bin/jest` shim is not directly spawnable on Windows — no evidence, dressed as a result. The
+   driver now refuses to report a verdict unless jest actually produced a `Tests:` line.
 4. **Nothing typechecks test files.** `tsc -p tsconfig.json` excludes `**/*.test.ts` and ts-jest
    runs `isolatedModules`, so a type error in a test file passes every gate.
 5. **Two suites fail only under heavy parallel load** (`personViewRoles`, `evidencePackage`, and in
@@ -614,10 +633,12 @@ So Phase 3 should open by closing, in this order. **Progress as of 2026-10-15:**
 
 1. ~~**The backfill decision above**, because it determines the input set.~~ ✅ **DONE** — run
    2026-10-13; the input set is now 56 coherent rows with 49 still outside it.
-2. **Gap 1 and 2 of §H.** ✅ **Gap 1 CLOSED** by `evidenceRegistry.test.ts` (see §H).
-   ✅ **Gap 2 mostly closed:** it was **eleven** loaders uncovered, not nine; eight now have
-   behavioural tests. Three remain — `loadCcppHistory` (MSSQL, needs its own suite),
-   `buildJourney` and `buildTrust` (composers, and `buildTrust` belongs with gap 3).
+2. **Gap 1 and 2 of §H.** ✅ **BOTH CLOSED.** Gap 1 by `evidenceRegistry.test.ts`; gap 2 by
+   `growthWorkAcquisitionPanels.test.ts` (eight loaders) and
+   `historyJourneyTrustPanels.test.ts` (the last three). It was **eleven** loaders uncovered,
+   not the nine §H claimed, and all eleven now have behavioural coverage.
+   ✅ **Gap 3 closed in the same pass**, because its surviving mutant lived in `buildTrust`,
+   which was the last uncovered composer.
 3. ⬜ **Gap 5** — the suites that pass in isolation and fail under parallel load. **NOT root-caused.**
    `personViewRoles` runs 24 tests in **14.5 s alone**, against its own `jest.setTimeout(120000)`,
    so reaching that ceiling needs roughly an 8× degradation. The leading candidate is that
