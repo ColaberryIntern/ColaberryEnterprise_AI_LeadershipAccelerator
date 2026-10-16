@@ -1,0 +1,239 @@
+<div class="d-flex align-items-center gap-3 mb-4">
+  <a href="/communications" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-arrow-left"></i>
+  </a>
+  <div class="flex-grow-1">
+    <div class="d-flex align-items-center gap-2">
+      <h2 class="mb-0">{{survey.title}}</h2>
+      <span class="badge {{survey.statusBadge}}">{{survey.statusLabel}}</span>
+    </div>
+    <p class="text-muted mb-0 small">
+      Created by {{survey.creator_name}} &middot;
+      {{survey.audienceLabel}} &middot;
+      {{survey.questionCount}} question{{#if (ne survey.questionCount 1)}}s{{/if}} &middot;
+      {{responseCount}} response{{#if (ne responseCount 1)}}s{{/if}}
+    </p>
+  </div>
+  {{#if canEditStatus}}
+  <div class="dropdown">
+    <button class="btn btn-outline-secondary btn-sm dropdown-toggle" data-bs-toggle="dropdown">
+      Change Status
+    </button>
+    <ul class="dropdown-menu dropdown-menu-end">
+      {{#unless (eq survey.status "draft")}}
+      <li>
+        <form method="POST" action="/communications/surveys/{{survey.id}}/status" class="m-0">
+          <input type="hidden" name="status" value="draft">
+          <button type="submit" class="dropdown-item">Set to Draft</button>
+        </form>
+      </li>
+      {{/unless}}
+      {{#unless (eq survey.status "active")}}
+      <li>
+        <form method="POST" action="/communications/surveys/{{survey.id}}/status" class="m-0">
+          <input type="hidden" name="status" value="active">
+          <button type="submit" class="dropdown-item">Activate</button>
+        </form>
+      </li>
+      {{/unless}}
+      {{#unless (eq survey.status "closed")}}
+      <li>
+        <form method="POST" action="/communications/surveys/{{survey.id}}/status" class="m-0">
+          <input type="hidden" name="status" value="closed">
+          <button type="submit" class="dropdown-item text-danger">Close Survey</button>
+        </form>
+      </li>
+      {{/unless}}
+    </ul>
+  </div>
+  {{/if}}
+</div>
+
+{{#if survey.description}}
+<p class="text-muted mb-4">{{survey.description}}</p>
+{{/if}}
+
+{{#if (eq query.flash "responded")}}
+<div class="alert alert-success border-0 mb-4">
+  <i class="bi bi-check-circle me-2"></i>
+  Your response has been recorded. Thank you!
+</div>
+{{/if}}
+
+<div class="row g-4">
+
+  <!-- ── Respond form (active + not yet responded) ── -->
+  {{#if (eq survey.status "active")}}
+  {{#unless myResponse}}
+  <div class="col-lg-6">
+    <div class="card border-0 shadow-sm border-start border-success border-4">
+      <div class="card-header bg-light fw-semibold small py-2">
+        <i class="bi bi-pencil-square me-2 text-success"></i>Your Response
+      </div>
+      <div class="card-body">
+        <form method="POST" action="/communications/surveys/{{survey.id}}/respond">
+          {{#each stats}}
+          <div class="mb-4">
+            <label class="form-label fw-semibold">{{add @index 1}}. {{text}}</label>
+            {{#if (eq type "text")}}
+            <textarea class="form-control form-control-sm" name="q{{@index}}" rows="2"
+              placeholder="Your answer…"></textarea>
+            {{/if}}
+            {{#if (eq type "yesno")}}
+            <div class="d-flex gap-3">
+              <div class="form-check">
+                <input class="form-check-input" type="radio" name="q{{@index}}"
+                  id="q{{@index}}_yes" value="yes" required>
+                <label class="form-check-label" for="q{{@index}}_yes">Yes</label>
+              </div>
+              <div class="form-check">
+                <input class="form-check-input" type="radio" name="q{{@index}}"
+                  id="q{{@index}}_no" value="no">
+                <label class="form-check-label" for="q{{@index}}_no">No</label>
+              </div>
+            </div>
+            {{/if}}
+            {{#if (eq type "rating")}}
+            <div class="d-flex gap-2">
+              <div class="btn-group" role="group">
+                <input type="radio" class="btn-check" name="q{{@index}}" id="q{{@index}}_1" value="1" required>
+                <label class="btn btn-outline-danger btn-sm" for="q{{@index}}_1">1</label>
+                <input type="radio" class="btn-check" name="q{{@index}}" id="q{{@index}}_2" value="2">
+                <label class="btn btn-outline-danger btn-sm" for="q{{@index}}_2">2</label>
+                <input type="radio" class="btn-check" name="q{{@index}}" id="q{{@index}}_3" value="3">
+                <label class="btn btn-outline-warning btn-sm" for="q{{@index}}_3">3</label>
+                <input type="radio" class="btn-check" name="q{{@index}}" id="q{{@index}}_4" value="4">
+                <label class="btn btn-outline-primary btn-sm" for="q{{@index}}_4">4</label>
+                <input type="radio" class="btn-check" name="q{{@index}}" id="q{{@index}}_5" value="5">
+                <label class="btn btn-outline-success btn-sm" for="q{{@index}}_5">5</label>
+              </div>
+            </div>
+            {{/if}}
+          </div>
+          {{/each}}
+          <button type="submit" class="btn btn-success px-4">
+            <i class="bi bi-send me-1"></i>Submit Response
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+  {{/unless}}
+  {{/if}}
+
+  <!-- ── Results panel ── -->
+  <div class="{{#if (eq survey.status "active")}}{{#unless myResponse}}col-lg-6{{else}}col-lg-12{{/unless}}{{else}}col-lg-12{{/if}}">
+
+    {{#if myResponse}}
+    <div class="alert alert-success border-0 mb-4">
+      <i class="bi bi-check-circle me-2"></i>
+      You responded on {{myResponse.submitted_at}}.
+    </div>
+    {{/if}}
+
+    {{#if responseCount}}
+    <!-- Per-question results -->
+    <div class="card border-0 shadow-sm mb-4">
+      <div class="card-header bg-light fw-semibold small py-2">
+        <i class="bi bi-bar-chart-line me-2 text-primary"></i>Results Summary
+      </div>
+      <div class="card-body">
+        {{#each stats}}
+        <div class="mb-4{{#unless @last}} border-bottom pb-4{{/unless}}">
+          <div class="fw-semibold small mb-2">{{add @index 1}}. {{text}}</div>
+
+          {{#if (eq type "rating")}}
+          {{#if avg}}
+          <div class="d-flex align-items-center gap-3 mb-2">
+            <span class="fs-4 fw-bold">{{avg}}</span>
+            <span class="text-muted small">avg out of 5 &middot; {{answerCount}} response{{#if (ne answerCount 1)}}s{{/if}}</span>
+          </div>
+          {{#each dist}}
+          <div class="d-flex align-items-center gap-2 mb-1" style="font-size:.82rem">
+            <span class="text-muted" style="width:1.2rem">{{value}}</span>
+            <div class="progress flex-grow-1" style="height:10px">
+              <div class="progress-bar bg-primary"
+                style="width:{{#if count}}{{count}}{{else}}0{{/if}}%"></div>
+            </div>
+            <span class="text-muted" style="width:1.5rem">{{count}}</span>
+          </div>
+          {{/each}}
+          {{else}}
+          <span class="text-muted small">No responses yet.</span>
+          {{/if}}
+          {{/if}}
+
+          {{#if (eq type "yesno")}}
+          <div class="d-flex gap-4 align-items-center">
+            <div>
+              <span class="fs-5 fw-bold text-success">{{yes}}</span>
+              <span class="text-muted small ms-1">Yes ({{yesPct}}%)</span>
+            </div>
+            <div>
+              <span class="fs-5 fw-bold text-danger">{{no}}</span>
+              <span class="text-muted small ms-1">No</span>
+            </div>
+            <div class="flex-grow-1">
+              <div class="progress" style="height:10px">
+                <div class="progress-bar bg-success" style="width:{{yesPct}}%"></div>
+              </div>
+            </div>
+          </div>
+          {{/if}}
+
+          {{#if (eq type "text")}}
+          {{#if textAnswers.length}}
+          <div class="d-flex flex-column gap-2">
+            {{#each textAnswers}}
+            <div class="bg-light rounded p-2 small fst-italic">"{{this}}"</div>
+            {{/each}}
+          </div>
+          {{else}}
+          <span class="text-muted small">No responses yet.</span>
+          {{/if}}
+          {{/if}}
+        </div>
+        {{/each}}
+      </div>
+    </div>
+
+    <!-- Individual responses (manager view) -->
+    {{#if canManage}}
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-light fw-semibold small py-2">
+        <i class="bi bi-people me-2 text-muted"></i>Individual Responses
+      </div>
+      <div class="list-group list-group-flush">
+        {{#each responses}}
+        <div class="list-group-item">
+          <div class="d-flex justify-content-between align-items-center mb-1">
+            <span class="fw-semibold small">{{respondent_name}}</span>
+            <span class="text-muted" style="font-size:.78rem">{{formattedDate}}</span>
+          </div>
+          <div class="d-flex flex-wrap gap-2">
+            {{#each ../stats}}
+            <span class="badge bg-light text-dark border small">
+              Q{{add @index 1}}: {{lookup ../answers key}}
+            </span>
+            {{/each}}
+          </div>
+        </div>
+        {{/each}}
+      </div>
+    </div>
+    {{/if}}
+
+    {{else}}
+    <div class="card border-0 shadow-sm">
+      <div class="card-body text-center text-muted py-5">
+        <i class="bi bi-clipboard2 fs-2 d-block mb-2 opacity-25"></i>
+        No responses yet.
+        {{#if (eq survey.status "draft")}}
+        Activate the survey to start collecting responses.
+        {{/if}}
+      </div>
+    </div>
+    {{/if}}
+
+  </div>
+</div>

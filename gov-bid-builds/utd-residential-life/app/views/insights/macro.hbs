@@ -1,0 +1,221 @@
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <h2 class="mb-0">Insight Dashboard</h2>
+    <p class="text-muted mb-0 small">Community-wide analytics — drill from hall → floor → student</p>
+  </div>
+  <span class="badge bg-primary px-3 py-2">
+    <i class="bi bi-bar-chart-line me-1"></i>Community View
+  </span>
+</div>
+
+<!-- KPI cards -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md-4 col-lg-2">
+    <div class="card border-0 shadow-sm text-center">
+      <div class="card-body py-3">
+        <div class="fs-2 fw-bold text-primary">{{stats.totalResidents}}</div>
+        <div class="small text-muted">Residents</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-4 col-lg-2">
+    <div class="card border-0 shadow-sm text-center">
+      <div class="card-body py-3">
+        <div class="fs-2 fw-bold text-danger">{{stats.openIncidents}}</div>
+        <div class="small text-muted">Open Incidents</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-4 col-lg-2">
+    <div class="card border-0 shadow-sm text-center">
+      <div class="card-body py-3">
+        <div class="fs-2 fw-bold text-secondary">{{stats.totalIncidents}}</div>
+        <div class="small text-muted">Total Incidents</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-4 col-lg-2">
+    <div class="card border-0 shadow-sm text-center">
+      <div class="card-body py-3">
+        <div class="fs-2 fw-bold text-success">{{stats.approvedPrograms}}</div>
+        <div class="small text-muted">Approved Programs</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-4 col-lg-2">
+    <div class="card border-0 shadow-sm text-center">
+      <div class="card-body py-3">
+        <div class="fs-2 fw-bold text-info">{{stats.totalNotes}}</div>
+        <div class="small text-muted">Staff Notes</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-4 col-lg-2">
+    <div class="card border-0 shadow-sm text-center">
+      <div class="card-body py-3">
+        <div class="fs-2 fw-bold text-warning">{{stats.activeSurveys}}</div>
+        <div class="small text-muted">Active Surveys</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Charts row -->
+<div class="row g-4 mb-4">
+  <div class="col-lg-7">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-header bg-light fw-semibold small py-2">
+        <i class="bi bi-bar-chart-line me-2 text-warning"></i>Complaints per Hall
+      </div>
+      <div class="card-body">
+        <canvas id="incidentsByBuilding" style="max-height:220px"></canvas>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-5">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-header bg-light fw-semibold small py-2">
+        <i class="bi bi-pie-chart me-2 text-success"></i>Programs by Category
+      </div>
+      <div class="card-body d-flex align-items-center justify-content-center">
+        {{#if byCategory.length}}
+        <canvas id="programsByCategory" style="max-height:220px;max-width:260px"></canvas>
+        {{else}}
+        <div class="text-muted small text-center">
+          <i class="bi bi-pie-chart fs-2 d-block mb-2 opacity-25"></i>No approved programs yet.
+        </div>
+        {{/if}}
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Hall drill-down grid + RA Conversations -->
+<div class="row g-4 mb-4">
+  <div class="col-lg-8">
+    <h5 class="fw-semibold mb-3">
+      <i class="bi bi-buildings me-2 text-primary"></i>Drill Down by Hall
+    </h5>
+    <div class="row g-3">
+      {{#each byBuilding}}
+      <div class="col-md-6">
+        <a href="/insights/hall/{{urlencode building}}" class="text-decoration-none">
+          <div class="card border-0 shadow-sm" style="transition:box-shadow .15s">
+            <div class="card-body">
+              <div class="d-flex justify-content-between align-items-start mb-2">
+                <div class="fw-semibold text-dark">{{building}}</div>
+                <span class="badge bg-light text-dark border">{{residentCount}} residents</span>
+              </div>
+              <div class="d-flex gap-2 flex-wrap mb-2">
+                <span class="badge bg-warning text-dark small">
+                  <i class="bi bi-volume-up me-1"></i>{{noise}} noise
+                </span>
+                <span class="badge bg-primary small">
+                  <i class="bi bi-lock me-1"></i>{{lockout}} lockouts
+                </span>
+                {{#if escalated}}
+                <span class="badge bg-danger small">
+                  <i class="bi bi-exclamation-triangle me-1"></i>{{escalated}} escalated
+                </span>
+                {{/if}}
+              </div>
+              <div class="text-primary small">
+                View hall insights <i class="bi bi-arrow-right ms-1"></i>
+              </div>
+            </div>
+          </div>
+        </a>
+      </div>
+      {{/each}}
+    </div>
+  </div>
+
+  <div class="col-lg-4">
+    <h5 class="fw-semibold mb-3">
+      <i class="bi bi-chat-square-text me-2 text-info"></i>RA Conversations
+    </h5>
+    {{#if notesByAuthor.length}}
+    <div class="card border-0 shadow-sm">
+      <div class="list-group list-group-flush">
+        {{#each notesByAuthor}}
+        <div class="list-group-item py-3">
+          <div class="d-flex justify-content-between align-items-center">
+            <div>
+              <div class="small fw-semibold">{{name}}</div>
+              <div class="text-muted" style="font-size:.78rem">{{building}}</div>
+            </div>
+            <div class="text-end">
+              <span class="badge bg-info text-dark">{{total}} notes</span>
+              {{#if privateCount}}
+              <div class="text-muted" style="font-size:.72rem">{{privateCount}} private</div>
+              {{/if}}
+            </div>
+          </div>
+        </div>
+        {{/each}}
+      </div>
+    </div>
+    {{else}}
+    <div class="text-muted small">No staff notes recorded yet.</div>
+    {{/if}}
+  </div>
+</div>
+
+<!-- Recent Activity -->
+<div class="card border-0 shadow-sm">
+  <div class="card-header bg-light fw-semibold small py-2">
+    <i class="bi bi-clock-history me-2 text-muted"></i>Recent Incidents
+  </div>
+  <div class="list-group list-group-flush">
+    {{#each recentIncidents}}
+    <a href="/reports/{{id}}" class="list-group-item list-group-item-action py-3">
+      <div class="d-flex justify-content-between align-items-center">
+        <div>
+          <span class="fw-semibold small">{{typeLabel}}</span>
+          <span class="text-muted small ms-2">{{building}}{{#if room_number}} Rm {{room_number}}{{/if}}</span>
+          <div class="text-muted" style="font-size:.78rem">{{formattedDate}} · {{reporter_name}}</div>
+        </div>
+        <span class="badge {{statusBadge}} flex-shrink-0">{{statusLabel}}</span>
+      </div>
+    </a>
+    {{/each}}
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+<script>
+Chart.defaults.font.family = "'Segoe UI', system-ui, sans-serif";
+Chart.defaults.font.size = 12;
+
+new Chart(document.getElementById('incidentsByBuilding'), {
+  type: 'bar',
+  data: {
+    labels: {{{chartBuildingLabels}}},
+    datasets: [
+      { label: 'Noise Complaints', data: {{{chartNoiseData}}},   backgroundColor: '#ffc107' },
+      { label: 'Lockouts',         data: {{{chartLockoutData}}}, backgroundColor: '#0d6efd' },
+      { label: 'Other',            data: {{{chartOtherData}}},   backgroundColor: '#6c757d' },
+    ]
+  },
+  options: {
+    indexAxis: 'y',
+    responsive: true,
+    plugins: { legend: { position: 'bottom' } },
+    scales: { x: { stacked: true, beginAtZero: true }, y: { stacked: true } }
+  }
+});
+
+{{#if byCategory.length}}
+new Chart(document.getElementById('programsByCategory'), {
+  type: 'doughnut',
+  data: {
+    labels: {{{chartCategoryLabels}}},
+    datasets: [{ data: {{{chartCategoryData}}}, backgroundColor: {{{chartCategoryColors}}}, borderWidth: 2 }]
+  },
+  options: {
+    responsive: true,
+    plugins: { legend: { position: 'bottom' } }
+  }
+});
+{{/if}}
+</script>

@@ -1,0 +1,127 @@
+<div class="d-flex align-items-center gap-3 mb-4">
+  <a href="/communications" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-arrow-left"></i>
+  </a>
+  <div>
+    <h2 class="mb-0">New Broadcast</h2>
+    <p class="text-muted mb-0 small">Send a message to staff by hall or individually.</p>
+  </div>
+</div>
+
+<div class="row g-4">
+  <div class="col-lg-8">
+    <div class="card border-0 shadow-sm">
+      <div class="card-body">
+        <form method="POST" action="/communications" id="broadcastForm">
+          <div class="mb-3">
+            <label class="form-label">Subject <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" name="subject" required
+              placeholder="e.g. Important Building Announcement">
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">Message <span class="text-danger">*</span></label>
+            <textarea class="form-control" name="body" rows="4" required
+              placeholder="Write your message here…"></textarea>
+          </div>
+
+          <div class="row g-3 mb-3">
+            <div class="col-md-6">
+              <label class="form-label">Channel <span class="text-danger">*</span></label>
+              <select class="form-select" name="channel">
+                <option value="inapp">In-App Notification</option>
+                <option value="email">Email</option>
+                <option value="sms">SMS</option>
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Audience <span class="text-danger">*</span></label>
+              <select class="form-select" id="audienceType" name="audience_type"
+                onchange="updateAudience()">
+                <option value="all_staff">All Staff</option>
+                <option value="hall">Specific Hall</option>
+                <option value="individual">Individual</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Dynamic audience value field -->
+          <div id="audienceValueWrap" class="mb-4" style="display:none">
+            <label class="form-label" id="audienceValueLabel">Hall</label>
+            <select id="hallSelect" class="form-select">
+              <option value="">— Select hall —</option>
+              {{#each halls}}
+              <option value="{{this}}">{{this}}</option>
+              {{/each}}
+            </select>
+            <select id="userSelect" class="form-select d-none">
+              <option value="">— Select staff member —</option>
+              {{#each allUsers}}
+              <option value="{{id}}">{{name}} ({{building}})</option>
+              {{/each}}
+            </select>
+            <input type="hidden" name="audience_value" id="audienceValue">
+          </div>
+
+          <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-primary px-4">
+              <i class="bi bi-send me-1"></i>Send Broadcast
+            </button>
+            <a href="/communications" class="btn btn-outline-secondary">Cancel</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-4">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-light fw-semibold py-2 small">
+        <i class="bi bi-info-circle me-2 text-muted"></i>Channel Guide
+      </div>
+      <div class="card-body small">
+        <p class="mb-2">
+          <span class="badge bg-info text-dark me-1">In-App</span>
+          Appears in each recipient's notification feed immediately.
+        </p>
+        <p class="mb-2">
+          <span class="badge bg-primary me-1">Email</span>
+          Sent to recipient's @utd.edu address.
+          <span class="text-muted">(Demo: logged only)</span>
+        </p>
+        <p class="mb-0">
+          <span class="badge bg-success me-1">SMS</span>
+          Sent to recipient's registered mobile.
+          <span class="text-muted">(Demo: logged only)</span>
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function updateAudience() {
+  var type = document.getElementById('audienceType').value;
+  var wrap = document.getElementById('audienceValueWrap');
+  var lbl  = document.getElementById('audienceValueLabel');
+  var hallSel = document.getElementById('hallSelect');
+  var userSel = document.getElementById('userSelect');
+
+  if (type === 'all_staff') {
+    wrap.style.display = 'none';
+  } else {
+    wrap.style.display = '';
+    var isHall = type === 'hall';
+    hallSel.classList.toggle('d-none', !isHall);
+    userSel.classList.toggle('d-none',  isHall);
+    lbl.textContent = isHall ? 'Hall' : 'Staff Member';
+  }
+}
+
+document.getElementById('broadcastForm').addEventListener('submit', function() {
+  var type = document.getElementById('audienceType').value;
+  var av   = document.getElementById('audienceValue');
+  if (type === 'hall')       av.value = document.getElementById('hallSelect').value;
+  else if (type === 'individual') av.value = document.getElementById('userSelect').value;
+});
+</script>

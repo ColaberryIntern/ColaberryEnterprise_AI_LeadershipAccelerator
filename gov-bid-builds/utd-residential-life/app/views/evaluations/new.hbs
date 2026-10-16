@@ -1,0 +1,203 @@
+<div class="d-flex align-items-center gap-3 mb-4">
+  <a href="/evaluations" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left"></i></a>
+  <div>
+    <h2 class="mb-0">{{#if isSelf}}Self-Evaluation{{else}}Supervisor Evaluation{{/if}}</h2>
+    <p class="text-muted mb-0 small">
+      {{#if isSelf}}Rate yourself across 5 dimensions for {{currentPeriod}}.{{else}}Rate {{#if evaluatee}}{{evaluatee.name}}{{else}}a student staff member{{/if}} for {{currentPeriod}}.{{/if}}
+    </p>
+  </div>
+</div>
+
+<div class="row g-4">
+  <div class="col-lg-8">
+    <div class="card border-0 shadow-sm">
+      <div class="card-body">
+        <form method="POST" action="/evaluations">
+          <input type="hidden" name="eval_type" value="{{evalType}}">
+          <input type="hidden" name="period" value="{{currentPeriod}}">
+
+          {{#if isSupervisor}}
+          <div class="mb-4">
+            <label class="form-label">Student Staff Member <span class="text-danger">*</span></label>
+            {{#if evaluatee}}
+            <input type="hidden" name="evaluatee_id" value="{{evaluatee.id}}">
+            <div class="form-control bg-light">{{evaluatee.name}} — {{evaluatee.building}}</div>
+            {{else}}
+            <select class="form-select" name="evaluatee_id" required>
+              <option value="">— Select staff member —</option>
+              {{#each staffList}}
+              <option value="{{id}}">{{name}} — {{building}}</option>
+              {{/each}}
+            </select>
+            {{/if}}
+          </div>
+          {{/if}}
+
+          <h6 class="text-muted text-uppercase small fw-semibold mb-3">Performance Ratings <span class="text-muted fw-normal normal-case">(1 = Unsatisfactory · 5 = Excellent)</span></h6>
+
+          <!-- Communication -->
+          <div class="mb-3">
+            <label class="form-label">Communication</label>
+            <div class="d-flex gap-2">
+              <div class="btn-group w-100" role="group">
+                <input type="radio" class="btn-check" name="communication_rating" id="comm1" value="1" required>
+                <label class="btn btn-outline-danger btn-sm" for="comm1">1</label>
+                <input type="radio" class="btn-check" name="communication_rating" id="comm2" value="2">
+                <label class="btn btn-outline-danger btn-sm" for="comm2">2</label>
+                <input type="radio" class="btn-check" name="communication_rating" id="comm3" value="3">
+                <label class="btn btn-outline-warning btn-sm" for="comm3">3</label>
+                <input type="radio" class="btn-check" name="communication_rating" id="comm4" value="4">
+                <label class="btn btn-outline-primary btn-sm" for="comm4">4</label>
+                <input type="radio" class="btn-check" name="communication_rating" id="comm5" value="5">
+                <label class="btn btn-outline-success btn-sm" for="comm5">5</label>
+              </div>
+            </div>
+          </div>
+
+          <!-- Resident Engagement -->
+          <div class="mb-3">
+            <label class="form-label">Resident Engagement</label>
+            <div class="btn-group w-100" role="group">
+              <input type="radio" class="btn-check" name="resident_engagement_rating" id="re1" value="1" required>
+              <label class="btn btn-outline-danger btn-sm" for="re1">1</label>
+              <input type="radio" class="btn-check" name="resident_engagement_rating" id="re2" value="2">
+              <label class="btn btn-outline-danger btn-sm" for="re2">2</label>
+              <input type="radio" class="btn-check" name="resident_engagement_rating" id="re3" value="3">
+              <label class="btn btn-outline-warning btn-sm" for="re3">3</label>
+              <input type="radio" class="btn-check" name="resident_engagement_rating" id="re4" value="4">
+              <label class="btn btn-outline-primary btn-sm" for="re4">4</label>
+              <input type="radio" class="btn-check" name="resident_engagement_rating" id="re5" value="5">
+              <label class="btn btn-outline-success btn-sm" for="re5">5</label>
+            </div>
+          </div>
+
+          <!-- Program Planning -->
+          <div class="mb-3">
+            <label class="form-label">Program Planning</label>
+            <div class="btn-group w-100" role="group">
+              <input type="radio" class="btn-check" name="program_planning_rating" id="pp1" value="1" required>
+              <label class="btn btn-outline-danger btn-sm" for="pp1">1</label>
+              <input type="radio" class="btn-check" name="program_planning_rating" id="pp2" value="2">
+              <label class="btn btn-outline-danger btn-sm" for="pp2">2</label>
+              <input type="radio" class="btn-check" name="program_planning_rating" id="pp3" value="3">
+              <label class="btn btn-outline-warning btn-sm" for="pp3">3</label>
+              <input type="radio" class="btn-check" name="program_planning_rating" id="pp4" value="4">
+              <label class="btn btn-outline-primary btn-sm" for="pp4">4</label>
+              <input type="radio" class="btn-check" name="program_planning_rating" id="pp5" value="5">
+              <label class="btn btn-outline-success btn-sm" for="pp5">5</label>
+            </div>
+          </div>
+
+          <!-- Crisis Response -->
+          <div class="mb-3">
+            <label class="form-label">Crisis Response</label>
+            <div class="btn-group w-100" role="group">
+              <input type="radio" class="btn-check" name="crisis_response_rating" id="cr1" value="1" required>
+              <label class="btn btn-outline-danger btn-sm" for="cr1">1</label>
+              <input type="radio" class="btn-check" name="crisis_response_rating" id="cr2" value="2">
+              <label class="btn btn-outline-danger btn-sm" for="cr2">2</label>
+              <input type="radio" class="btn-check" name="crisis_response_rating" id="cr3" value="3">
+              <label class="btn btn-outline-warning btn-sm" for="cr3">3</label>
+              <input type="radio" class="btn-check" name="crisis_response_rating" id="cr4" value="4">
+              <label class="btn btn-outline-primary btn-sm" for="cr4">4</label>
+              <input type="radio" class="btn-check" name="crisis_response_rating" id="cr5" value="5">
+              <label class="btn btn-outline-success btn-sm" for="cr5">5</label>
+            </div>
+          </div>
+
+          <!-- Documentation -->
+          <div class="mb-4">
+            <label class="form-label">Documentation & Reporting</label>
+            <div class="btn-group w-100" role="group">
+              <input type="radio" class="btn-check" name="documentation_rating" id="doc1" value="1" required>
+              <label class="btn btn-outline-danger btn-sm" for="doc1">1</label>
+              <input type="radio" class="btn-check" name="documentation_rating" id="doc2" value="2">
+              <label class="btn btn-outline-danger btn-sm" for="doc2">2</label>
+              <input type="radio" class="btn-check" name="documentation_rating" id="doc3" value="3">
+              <label class="btn btn-outline-warning btn-sm" for="doc3">3</label>
+              <input type="radio" class="btn-check" name="documentation_rating" id="doc4" value="4">
+              <label class="btn btn-outline-primary btn-sm" for="doc4">4</label>
+              <input type="radio" class="btn-check" name="documentation_rating" id="doc5" value="5">
+              <label class="btn btn-outline-success btn-sm" for="doc5">5</label>
+            </div>
+          </div>
+
+          <h6 class="text-muted text-uppercase small fw-semibold mb-3">Open-Ended Responses</h6>
+
+          {{#if isSelf}}
+          <div class="mb-3">
+            <label class="form-label">Strengths</label>
+            <textarea class="form-control" name="strengths" rows="2"
+              placeholder="What have you done well this semester?">{{prefill.strengths}}</textarea>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Areas for Growth</label>
+            <textarea class="form-control" name="growth_areas" rows="2"
+              placeholder="What would you like to improve?">{{prefill.growth_areas}}</textarea>
+          </div>
+          <div class="mb-4">
+            <label class="form-label">Goals for Next Semester</label>
+            <textarea class="form-control" name="goals_next_semester" rows="2"
+              placeholder="What are your goals for next semester?">{{prefill.goals_next_semester}}</textarea>
+          </div>
+          {{else}}
+          <div class="mb-3">
+            <label class="form-label">Observed Strengths</label>
+            <textarea class="form-control" name="strengths" rows="2"
+              placeholder="What has this staff member done particularly well?">{{prefill.strengths}}</textarea>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Areas for Development</label>
+            <textarea class="form-control" name="growth_areas" rows="2"
+              placeholder="Where do you see opportunity for growth?">{{prefill.growth_areas}}</textarea>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Recommended Goals</label>
+            <textarea class="form-control" name="goals_next_semester" rows="2"
+              placeholder="What goals would you set for next semester?">{{prefill.goals_next_semester}}</textarea>
+          </div>
+          <div class="mb-4">
+            <label class="form-label">Supervisor Notes <span class="text-muted">(private — staff member won't see this)</span></label>
+            <textarea class="form-control" name="supervisor_notes" rows="2"
+              placeholder="Confidential notes for your own records or for the RD.">{{prefill.supervisor_notes}}</textarea>
+          </div>
+          {{/if}}
+
+          <div class="d-flex gap-2">
+            <button type="submit" name="action" value="submit" class="btn btn-primary px-4">
+              <i class="bi bi-send me-1"></i>Submit Evaluation
+            </button>
+            <button type="submit" name="action" value="draft" class="btn btn-outline-secondary">
+              Save as Draft
+            </button>
+            <a href="/evaluations" class="btn btn-link text-muted">Cancel</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-4">
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-header bg-light fw-semibold py-2 small">
+        <i class="bi bi-info-circle me-2 text-muted"></i>Rating Scale
+      </div>
+      <div class="card-body small">
+        <div class="d-flex align-items-center gap-2 mb-1"><span class="badge bg-success">5</span> Excellent</div>
+        <div class="d-flex align-items-center gap-2 mb-1"><span class="badge bg-primary">4</span> Good</div>
+        <div class="d-flex align-items-center gap-2 mb-1"><span class="badge bg-warning text-dark">3</span> Satisfactory</div>
+        <div class="d-flex align-items-center gap-2 mb-1"><span class="badge bg-danger">2</span> Needs Work</div>
+        <div class="d-flex align-items-center gap-2"><span class="badge bg-danger">1</span> Unsatisfactory</div>
+      </div>
+    </div>
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-light fw-semibold py-2 small">
+        <i class="bi bi-diagram-3 me-2 text-muted"></i>Evaluation Period
+      </div>
+      <div class="card-body small text-muted">
+        <p class="mb-1"><strong>{{currentPeriod}}</strong></p>
+        <p class="mb-0">Self-evaluations and supervisor evaluations are compared side-by-side after both are submitted. The comparison view shows per-dimension deltas.</p>
+      </div>
+    </div>
+  </div>
+</div>

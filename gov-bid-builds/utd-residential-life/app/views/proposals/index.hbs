@@ -1,0 +1,72 @@
+<div class="d-flex align-items-center justify-content-between gap-3 mb-4 flex-wrap">
+  <div>
+    <h2 class="mb-0"><i class="bi bi-lightbulb me-2 text-warning"></i>Program Proposals</h2>
+    <p class="text-muted mb-0 small">Submit program ideas linked to residential curriculum outcomes.</p>
+  </div>
+  <a href="/proposals/new" class="btn btn-primary btn-sm">
+    <i class="bi bi-plus-circle me-1"></i>New Proposal
+  </a>
+</div>
+
+{{#if pendingCount}}
+{{#if canManage}}
+<div class="alert alert-warning d-flex align-items-center gap-2 mb-3">
+  <i class="bi bi-hourglass-split flex-shrink-0"></i>
+  <span class="small"><strong>{{pendingCount}} proposal{{#if (ne pendingCount 1)}}s{{/if}}</strong> awaiting review.</span>
+</div>
+{{/if}}
+{{/if}}
+
+<div class="d-flex gap-2 mb-3 flex-wrap">
+  <a href="/proposals" class="btn btn-sm {{#if (eq filterStatus '')}}btn-secondary{{else}}btn-outline-secondary{{/if}}">
+    All <span class="badge bg-light text-dark ms-1">{{add (add (add (or counts.pending 0) (or counts.approved 0)) (or counts.rejected 0)) (or counts.draft 0)}}</span>
+  </a>
+  <a href="/proposals?status=pending" class="btn btn-sm {{#if (eq filterStatus 'pending')}}btn-warning text-dark{{else}}btn-outline-warning{{/if}}">
+    Pending <span class="badge bg-light text-dark ms-1">{{or counts.pending 0}}</span>
+  </a>
+  <a href="/proposals?status=approved" class="btn btn-sm {{#if (eq filterStatus 'approved')}}btn-success{{else}}btn-outline-success{{/if}}">
+    Approved <span class="badge bg-light text-dark ms-1">{{or counts.approved 0}}</span>
+  </a>
+  <a href="/proposals?status=rejected" class="btn btn-sm {{#if (eq filterStatus 'rejected')}}btn-danger{{else}}btn-outline-danger{{/if}}">
+    Rejected <span class="badge bg-light text-dark ms-1">{{or counts.rejected 0}}</span>
+  </a>
+  <a href="/proposals?status=draft" class="btn btn-sm {{#if (eq filterStatus 'draft')}}btn-secondary{{else}}btn-outline-secondary{{/if}}">
+    Drafts <span class="badge bg-light text-dark ms-1">{{or counts.draft 0}}</span>
+  </a>
+</div>
+
+{{#if proposals.length}}
+<div class="card border-0 shadow-sm">
+  <div class="list-group list-group-flush">
+    {{#each proposals}}
+    <a href="/proposals/{{id}}" class="list-group-item list-group-item-action py-3">
+      <div class="d-flex align-items-start justify-content-between gap-2">
+        <div class="flex-grow-1 min-w-0">
+          <div class="d-flex align-items-center gap-2 flex-wrap mb-1">
+            <span class="fw-semibold">{{title}}</span>
+            <span class="badge bg-{{statusBadge}} {{statusText}}">{{this.statusLabel}}</span>
+            {{#if outcome_code}}
+            <span class="badge bg-{{catBadge}} bg-opacity-75">{{outcome_code}}</span>
+            {{/if}}
+          </div>
+          <div class="text-muted small text-truncate mb-1">{{description}}</div>
+          <div class="text-muted small d-flex gap-3 flex-wrap">
+            <span><i class="bi bi-person me-1"></i>{{submitter_name}}</span>
+            {{#if proposed_date}}<span><i class="bi bi-calendar me-1"></i>{{proposed_date}}</span>{{/if}}
+            {{#if budgetFmt}}<span><i class="bi bi-cash me-1"></i>{{budgetFmt}}</span>{{/if}}
+            {{#if outcome_title}}<span><i class="bi bi-diagram-3 me-1"></i>{{outcome_title}}</span>{{/if}}
+          </div>
+        </div>
+        <i class="bi bi-chevron-right text-muted flex-shrink-0 mt-1"></i>
+      </div>
+    </a>
+    {{/each}}
+  </div>
+</div>
+{{else}}
+<div class="text-center text-muted py-5">
+  <i class="bi bi-lightbulb fs-1 d-block mb-2 opacity-25"></i>
+  <p class="mb-2">No proposals yet{{#if filterStatus}} with status "{{filterStatus}}"{{/if}}.</p>
+  <a href="/proposals/new" class="btn btn-outline-primary btn-sm">Submit the first one</a>
+</div>
+{{/if}}

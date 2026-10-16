@@ -4,15 +4,19 @@
   "private": true,
   "description": "Residential life platform: forms, scheduling, program proposals, mass communications, student profiles, StarRez + Salesforce integration.",
   "scripts": {
-    "dev": "echo 'TODO: boot dev server' && exit 0",
-    "build": "echo 'TODO: build' && exit 0",
+    "dev": "node app/server.js",
+    "start": "node app/server.js",
     "seed": "node seeds/index.js",
-    "db:migrate": "echo 'TODO: db migrate' && exit 0",
-    "db:rollback": "echo 'TODO: db rollback' && exit 0",
-    "lint": "echo 'TODO: lint' && exit 0",
-    "test": "echo 'TODO: tests' && exit 0",
-    "deploy": "echo \"TODO: deploy\" && exit 0"
+    "db:migrate": "node -e \"require('./app/db'); console.log('Migrations applied.')\"",
+    "db:rollback": "echo 'No rollback defined — delete data/app.db to reset'",
+    "lint": "echo 'TODO: lint'",
+    "test": "echo 'TODO: tests'"
   },
-  "dependencies": {},
+  "dependencies": {
+    "cookie-parser": "^1.4.7",
+    "express": "^4.21.2",
+    "express-handlebars": "^7.1.3",
+    "multer": "^1.4.5-lts.1"
+  },
   "devDependencies": {}
 }

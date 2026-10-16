@@ -1,0 +1,93 @@
+<!-- Breadcrumb -->
+<nav aria-label="breadcrumb" class="mb-4">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="/insights">Insights</a></li>
+    <li class="breadcrumb-item"><a href="/insights/hall/{{urlencode building}}">{{building}}</a></li>
+    <li class="breadcrumb-item active">Floor {{floor}}</li>
+  </ol>
+</nav>
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <h2 class="mb-0">Floor {{floor}} — {{building}}</h2>
+    <p class="text-muted mb-0 small">Individual students on this floor — click a card to open the full 360 profile</p>
+  </div>
+  <div class="d-flex gap-2">
+    <span class="badge bg-primary px-3 py-2">{{residents.length}} residents</span>
+    <span class="badge bg-secondary px-3 py-2">{{incidents.length}} incidents</span>
+  </div>
+</div>
+
+<!-- Residents grid -->
+{{#if residents.length}}
+<h5 class="fw-semibold mb-3">
+  <i class="bi bi-person me-2 text-primary"></i>Residents
+</h5>
+<div class="row g-3 mb-5">
+  {{#each residents}}
+  <div class="col-sm-6 col-md-4 col-lg-3">
+    <a href="/students/{{id}}" class="text-decoration-none">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body text-center py-4">
+          <div class="mb-2">
+            <i class="bi bi-person-circle text-muted" style="font-size:2.5rem"></i>
+          </div>
+          <div class="fw-semibold text-dark">{{name}}</div>
+          <div class="text-muted small">Rm {{room}}</div>
+          {{#if student_id}}
+          <div class="text-muted" style="font-size:.75rem">{{student_id}}</div>
+          {{/if}}
+          <div class="mt-2">
+            <span class="badge bg-light text-dark border small">{{year}}</span>
+            {{#if meal_plan}}
+            <span class="badge bg-light text-dark border small">{{meal_plan}} plan</span>
+            {{/if}}
+          </div>
+          <div class="text-primary small mt-2">
+            View 360 profile <i class="bi bi-arrow-right ms-1"></i>
+          </div>
+        </div>
+      </div>
+    </a>
+  </div>
+  {{/each}}
+</div>
+{{else}}
+<div class="alert alert-light border mb-4">
+  <i class="bi bi-info-circle me-2 text-muted"></i>No residents found for Floor {{floor}} in {{building}}.
+</div>
+{{/if}}
+
+<!-- Incidents on this floor -->
+<h5 class="fw-semibold mb-3">
+  <i class="bi bi-clipboard-pulse me-2 text-danger"></i>Incidents on This Floor
+</h5>
+{{#if incidents.length}}
+<div class="card border-0 shadow-sm">
+  <div class="list-group list-group-flush">
+    {{#each incidents}}
+    <a href="/reports/{{id}}" class="list-group-item list-group-item-action py-3">
+      <div class="d-flex justify-content-between align-items-center">
+        <div>
+          <span class="fw-semibold small">{{typeLabel}}</span>
+          <span class="text-muted small ms-2">Rm {{room_number}}</span>
+          <div class="text-muted" style="font-size:.78rem">
+            {{formattedDate}}{{#if reporter_name}} · {{reporter_name}}{{/if}}
+          </div>
+          {{#if description}}
+          <div class="text-muted small mt-1" style="font-size:.78rem;max-width:540px">
+            {{description}}
+          </div>
+          {{/if}}
+        </div>
+        <span class="badge {{statusBadge}} flex-shrink-0">{{statusLabel}}</span>
+      </div>
+    </a>
+    {{/each}}
+  </div>
+</div>
+{{else}}
+<div class="alert alert-light border">
+  <i class="bi bi-check-circle me-2 text-success"></i>No incidents recorded for Floor {{floor}} — all clear.
+</div>
+{{/if}}
