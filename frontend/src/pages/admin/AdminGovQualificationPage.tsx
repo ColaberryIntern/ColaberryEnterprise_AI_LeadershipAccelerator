@@ -3,6 +3,7 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import { PageHeader, SectionCard, StatCard, StatusBadge, EmptyState } from '../../components/admin/shell';
 import {
   getGovQualificationWorkspace, createGovQualification, recordGovQualificationDecision, approveGovQualification,
+  requestGovApproval, sendBackGovApproval,
   authorizeGovBuild, getGovOpportunityCandidates, reviewGovQualificationDocuments, matchServicesToOpportunity,
   extractGovQualificationRequirements, getGovOpportunityDetail, attestSolicitationZip,
   assignGovBuildStory, unassignGovBuildStory,
@@ -31,6 +32,7 @@ import { PursuitBrief, type BriefSection } from './govWorkspace/PursuitBrief';
 import { RightRail } from './govWorkspace/RightRail';
 import { SolicitationItemsView, tracksForCategory, dueStageForCategory, type SolView } from './govWorkspace/SolicitationItemsView';
 import { FitCapabilitiesPanel } from './govWorkspace/FitCapabilitiesPanel';
+import { DecidePanel } from './govWorkspace/DecidePanel';
 
 /** The discovery opportunity's display details fetched for the decoupled (ZIP) workspace. */
 type OppDetail = { opportunity: GovOpportunity | null; source: 'live' | 'snapshot'; snapshotDate: string | null };
@@ -866,7 +868,9 @@ export default function AdminGovQualificationPage(): React.ReactElement {
   const canonical = params.get('canonical') ?? params.get('gws') ?? '';
   const fromParam = params.get('from') ?? '';
   const agencyParam = params.get('agency') ?? '';
-  const [biddingEntity, setBiddingEntity] = useState(params.get('biddingEntity') ?? 'colaberry');
+  // Bidding entity comes from the URL (?biddingEntity=) or defaults to colaberry; it is not edited in-page since the
+  // "Open, decide & approve" drawer that held the field was replaced by <DecidePanel/> (P4).
+  const [biddingEntity] = useState(params.get('biddingEntity') ?? 'colaberry');
   const [ws, setWs] = useState<GovQualificationWorkspace | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -874,7 +878,6 @@ export default function AdminGovQualificationPage(): React.ReactElement {
   const [busy, setBusy] = useState(false);
   const inFlight = useRef(false); // synchronous guard so a same-tick double-click cannot fire two writes
   const [rationale, setRationale] = useState('');
-  const [reqDraft, setReqDraft] = useState({ id: '', text: '', applicability: 'always', dueStage: 'submission', bindingStatus: 'binding_solicitation_requirement', docId: '' });
   const [docFile, setDocFile] = useState<File | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [svcMatches, setSvcMatches] = useState<ServiceMatch[] | null>(null);
@@ -1133,13 +1136,14 @@ export default function AdminGovQualificationPage(): React.ReactElement {
           {(
           <div className="row g-3 mb-3">
             <div className="col-6 col-lg-3"><StatCard label="Source state" value={ws.sourceState} icon="git-commit-line" tone={ws.sourceState === 'available' ? 'success' : ws.sourceState === 'unavailable' || ws.sourceState === 'auth_failed' || ws.sourceState === 'malformed' ? 'danger' : 'warning'} hint={ws.snapshotRecorded ? `snapshot v${ws.sourceSnapshotVersion}` : 'snapshot unrecorded'} /></div>
-            <div className="col-6 col-lg-3"><StatCard label="Blocking requirements" value={ws.evaluation ? ws.evaluation.blocking.length : '—'} icon="error-warning-line" tone={ws.evaluation && ws.evaluation.blocking.length > 0 ? 'danger' : 'success'} /></div>
+            <div className="col-6 col-lg-3"><StatCard label="Needed before submit" value={ws.evaluation ? (ws.evaluation.openSubmissionRequirements ?? []).length : '—'} icon="checkbox-multiple-line" tone="neutral" hint="submission prerequisites — these don't block the pursuit" /></div>
             <div className="col-6 col-lg-3"><StatCard label="Current decision" value={record ? record.decision.replace(/_/g, ' ') : 'not opened'} icon="file-list-3-line" tone="neutral" hint={record ? `v${record.version}` : undefined} /></div>
             <div className="col-6 col-lg-3"><StatCard label="Approval allowed" value={ws.canApprove ? 'yes' : 'no'} icon={ws.canApprove ? 'shield-check-line' : 'shield-cross-line'} tone={ws.canApprove ? 'success' : 'warning'} /></div>
           </div>
           )}
 
-          {isDecoupled && ws.evaluation && ws.evaluation.evals.length > 0 && (() => {
+          {/* P4: the bid-decision dashboard shows for BOTH decoupled (gws:) and coupled (op:gov:) workspaces. */}
+          {ws.evaluation && ws.evaluation.evals.length > 0 && (() => {
             const matches = svcMatches ?? [];
             const capability: 'strong' | 'moderate' | 'none' = matches.some((m) => m.strength === 'strong') ? 'strong' : matches.some((m) => m.strength === 'moderate') ? 'moderate' : 'none';
             return (
@@ -1164,6 +1168,25 @@ export default function AdminGovQualificationPage(): React.ReactElement {
               <RelationshipPanel relationship={ws.relationship} currentKey={canonical} />
             </SectionCard>
           )}
+
+          {/* P4: the first-class Decide card — record a call, write the brief, route it to a second admin, approve
+              or send back. Replaces the old "Open, decide & approve" drawer. */}
+          <DecidePanel
+            record={record}
+            canApprove={ws.canApprove}
+            blockedReason={ws.canApprove ? null : (isDecoupled
+              ? (ws.coverage && !ws.coverage.sufficient ? `Blocked: ${ws.coverage.reasons.map((r) => COVERAGE_REASON[r] ?? r).join('; ')}.` : 'Blocked: resolve the flagged requirements before approving.')
+              : ws.changedSource ? 'Blocked: source changed since review.'
+              : ws.sourceState !== 'available' ? `Blocked: source ${ws.sourceState}.`
+              : 'Blocked: requirements/coverage not yet sufficient.')}
+            canOpen={ws.sourceAvailable || isDecoupled}
+            busy={busy}
+            onOpen={() => run(() => createGovQualification(canonical, { biddingEntity, from: fromParam || undefined, agency: agencyParam || undefined }), 'Qualification opened.')}
+            onApprove={(rat) => run(() => approveGovQualification(canonical, { biddingEntity, expectedVersion: version, decision: 'approved_bid_pursuit', rationale: rat || undefined }), 'Bid pursuit approved.', () => setStep('build'))}
+            onQuickDecision={(d, rat) => run(() => recordGovQualificationDecision(canonical, { biddingEntity, expectedVersion: version, decision: d, rationale: rat || undefined }), d === 'no_bid' ? 'Recorded: no bid.' : 'Recorded: needs evidence.')}
+            onRequest={(approverId, brief) => run(() => requestGovApproval(canonical, { biddingEntity, expectedVersion: version, approverIdentityId: approverId, decisionBrief: brief }), 'Approval requested.')}
+            onSendBack={(n) => run(() => sendBackGovApproval(canonical, { biddingEntity, expectedVersion: version, note: n || undefined }), 'Sent back for revision.')}
+          />
 
           {/* Deadline countdown now lives in the persistent right rail (see RightRail below). */}
 
@@ -1503,85 +1526,9 @@ export default function AdminGovQualificationPage(): React.ReactElement {
 
           {/* Manual document review moved up into the Solicitation step above (one panel per step). */}
 
-          {/* ── Qualification drawer: provenance / assessment / approvals. Always reachable from any tab, but
-                de-emphasized (collapsible) so it does not dominate the workspace; open by default only until a
-                record exists so "Open qualification" is one glance away on arrival. ─ */}
-          {activeStep === 'decide' && (
-          <SectionCard key={record?.decision ?? 'none'} title="Open, decide &amp; approve" icon="quill-pen-line" collapsible defaultOpen={!record || record.decision !== 'approved_bid_pursuit'}>
-            <div className="mb-3 d-flex flex-wrap align-items-end gap-2">
-              <label className="form-label small mb-0">Bidding entity
-                <input className="form-control form-control-sm" value={biddingEntity} onChange={(e) => setBiddingEntity(e.target.value)} />
-              </label>
-              {!record && (
-                <button type="button" className="btn btn-primary btn-sm" disabled={busy || (!ws.sourceAvailable && !isDecoupled)}
-                  onClick={() => run(() => createGovQualification(canonical, { biddingEntity, from: fromParam || undefined, agency: agencyParam || undefined }), 'Qualification opened.')}>
-                  <i className="ri-add-line me-1" aria-hidden="true" />Open qualification
-                </button>
-              )}
-            </div>
-
-            {record && record.decision === 'approved_bid_pursuit' && (
-              <div className="alert alert-success py-2 mb-0 small" role="status">
-                <i className="ri-shield-check-line me-1" aria-hidden="true" />
-                Bid pursuit <strong>approved</strong> — it moved to the Build step. A pursuit can only be approved once, so the decision controls are closed here.
-              </div>
-            )}
-
-            {record && record.decision !== 'approved_bid_pursuit' && (
-              <>
-                <div className="mb-3">
-                  <label className="form-label small">Rationale (optional)</label>
-                  <textarea className="form-control form-control-sm" rows={2} value={rationale} onChange={(e) => setRationale(e.target.value)} />
-                </div>
-
-                <div className="d-flex flex-wrap gap-2 mb-3">
-                  <button type="button" className="btn btn-outline-secondary btn-sm" disabled={busy}
-                    onClick={() => run(() => recordGovQualificationDecision(canonical, { biddingEntity, expectedVersion: version, decision: 'needs_evidence', rationale: rationale || undefined }), 'Recorded: needs evidence.')}>Needs evidence</button>
-                  <button type="button" className="btn btn-outline-danger btn-sm" disabled={busy}
-                    onClick={() => run(() => recordGovQualificationDecision(canonical, { biddingEntity, expectedVersion: version, decision: 'no_bid', rationale: rationale || undefined }), 'Recorded: no bid.')}>No bid</button>
-                </div>
-
-                <div className="border rounded p-2 mb-3">
-                  <div className="small fw-semibold mb-2">Establish a cited requirement</div>
-                  <div className="d-flex flex-wrap gap-2 mb-2">
-                    <input className="form-control form-control-sm" style={{ maxWidth: 90 }} placeholder="id" value={reqDraft.id} onChange={(e) => setReqDraft({ ...reqDraft, id: e.target.value })} />
-                    <input className="form-control form-control-sm" style={{ maxWidth: 220 }} placeholder="text" value={reqDraft.text} onChange={(e) => setReqDraft({ ...reqDraft, text: e.target.value })} />
-                    <select className="form-select form-select-sm" style={{ maxWidth: 140 }} value={reqDraft.applicability} onChange={(e) => setReqDraft({ ...reqDraft, applicability: e.target.value })}>
-                      <option value="always">always</option><option value="conditional">conditional</option><option value="not_applicable">not_applicable</option><option value="unknown">unknown</option>
-                    </select>
-                    <select className="form-select form-select-sm" style={{ maxWidth: 130 }} value={reqDraft.dueStage} onChange={(e) => setReqDraft({ ...reqDraft, dueStage: e.target.value })}>
-                      <option value="submission">submission</option><option value="award">award</option><option value="delivery">delivery</option><option value="unknown">unknown</option>
-                    </select>
-                    <input className="form-control form-control-sm" style={{ maxWidth: 100 }} placeholder="evidence docId" value={reqDraft.docId} onChange={(e) => setReqDraft({ ...reqDraft, docId: e.target.value })} />
-                  </div>
-                  <button type="button" className="btn btn-outline-primary btn-sm" disabled={busy || !reqDraft.id || !reqDraft.text}
-                    onClick={() => {
-                      const er: EstablishedRequirement = {
-                        id: reqDraft.id, text: reqDraft.text, applicability: reqDraft.applicability as any,
-                        dueStage: reqDraft.dueStage as any, bindingStatus: reqDraft.bindingStatus,
-                        evidenceRef: reqDraft.docId ? { docId: reqDraft.docId } : null,
-                      };
-                      const existing = record.requirements_json?.established ?? [];
-                      return run(() => recordGovQualificationDecision(canonical, { biddingEntity, expectedVersion: version, decision: 'needs_evidence', establishedRequirements: [...existing, er] }), 'Requirement established.');
-                    }}>Add established requirement</button>
-                </div>
-
-                <div className="d-flex flex-wrap align-items-center gap-3">
-                  <button type="button" className="btn btn-success" disabled={busy || !ws.canApprove}
-                    title={ws.canApprove ? undefined : 'Approval is blocked until the source is current and every requirement is established, evidenced, and cleared.'}
-                    onClick={() => run(() => approveGovQualification(canonical, { biddingEntity, expectedVersion: version, decision: 'approved_bid_pursuit', rationale: rationale || undefined }), 'Bid pursuit approved.', () => setStep('build'))}>
-                    <i className="ri-shield-check-line me-1" aria-hidden="true" />Approve bid pursuit
-                  </button>
-                  {!ws.canApprove && <span className="small text-secondary">{isDecoupled ? (ws.coverage && !ws.coverage.sufficient ? `Blocked: ${ws.coverage.reasons.map((r) => COVERAGE_REASON[r] ?? r).join('; ')}.` : 'Blocked: resolve the flagged requirements before approving.') : ws.changedSource ? 'Blocked: source changed since review.' : ws.sourceState !== 'available' ? `Blocked: source ${ws.sourceState}.` : 'Blocked: requirements/coverage not yet sufficient.'}</span>}
-                </div>
-                <div className="small text-secondary mt-2">
-                  <i className="ri-group-line me-1" aria-hidden="true" />
-                  <strong>Separation of duties:</strong> the admin who established the requirements cannot approve the pursuit — a <em>different</em> admin must. A <strong>master admin</strong> may approve their own (the exception is audit-logged); for everyone else it is refused server-side (a 403), by design.
-                </div>
-              </>
-            )}
-          </SectionCard>
-          )}
+          {/* P4: the old "Open, decide & approve" drawer was replaced by the first-class <DecidePanel/> rendered
+              inside the Decide step above (open / decide / brief + request approval / approve / send back). The
+              bidding-entity field + the establish-a-requirement form live on their own steps now. */}
 
           <GovTabPanel active={activeStep === 'build'}>
           {/* ── Build tab: the AI build spec/research (advisory) + the solution-build track (forward) + the separate build authorization ─ */}

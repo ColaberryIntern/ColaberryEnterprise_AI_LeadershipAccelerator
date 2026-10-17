@@ -638,6 +638,26 @@ describe('AdminGovQualificationPage — journey', () => {
     expect(call[1].decision).toBe('approved_bid_pursuit');
   });
 
+  // ── P4: the request / send-back approval loop on the Decide card ──
+  it('Decide: an un-approved record offers the request-a-pursuit-approval section', async () => {
+    (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(cleanWs());
+    await renderAt(`?canonical=${CANON}&tab=decide`);
+    await flush();
+    expect(container.textContent ?? '').toContain('Request a pursuit approval');
+  });
+
+  it('Decide: a pending approval request shows the awaiting banner and Send back calls sendBackGovApproval', async () => {
+    (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(cleanWs({
+      qualification: { id: 'q1', bidding_entity: 'colaberry', decision: 'pending_review', version: 1, rationale: null, source_snapshot_version: 3, reviewer_identity_id: 'rev-1', requirements_json: { established: [], approval: { status: 'requested', approverIdentityId: 'approver@colaberry.com', requestedBy: 'rev-1' } } },
+    }));
+    (factoryApi.sendBackGovApproval as jest.Mock).mockResolvedValue({ qualification: { id: 'q2' } });
+    await renderAt(`?canonical=${CANON}&tab=decide`);
+    await flush();
+    expect(container.textContent ?? '').toContain('Awaiting approval from');
+    await clickButton('Send back');
+    expect((factoryApi.sendBackGovApproval as jest.Mock).mock.calls[0][0]).toBe(CANON);
+  });
+
   // ── P2-T4: the 7-tab shared workspace shell ──
   const navTabs = () => Array.from(container.querySelectorAll('[role="tab"]')) as HTMLButtonElement[];
   const tabByLabel = (label: string) => navTabs().find((b) => b.textContent?.includes(label)) as HTMLButtonElement;

@@ -437,10 +437,30 @@ export interface QualSourceDetail {
 }
 export interface QualEvidenceCoverage { sufficient: boolean; reasons: string[]; }
 export interface ReviewedDocument { docId: string; role: string; method: string; filename: string | null; sha256: string | null; reviewedBy: string | null; reviewedAt: string | null; }
+/** P4 Decide: the establisher's brief for the approver. ADVISORY (sets no gate); an opaque bag the UI owns. */
+export interface GovDecisionBrief {
+  proposedDecision?: 'approved_bid_pursuit' | 'rfi_response' | 'no_bid' | 'needs_evidence';
+  summary?: string;
+  rationale?: string;
+  [k: string]: unknown;
+}
+/** P4 Decide: the request/approve/send-back state machine (advisory; the real gate is approveGovQualification). */
+export interface GovApprovalState {
+  status: 'requested' | 'sent_back';
+  requestedBy?: string;
+  approverIdentityId?: string;
+  requestedAt?: string;
+  sentBackBy?: string;
+  sentBackNote?: string | null;
+  sentBackAt?: string;
+}
 export interface QualificationRecord {
   id: string; bidding_entity: string; decision: string; version: number;
   rationale: string | null; source_snapshot_version: number | null; reviewer_identity_id: string | null;
-  requirements_json?: { established?: EstablishedRequirement[]; reviewedDocuments?: ReviewedDocument[] } | null;
+  requirements_json?: {
+    established?: EstablishedRequirement[]; reviewedDocuments?: ReviewedDocument[];
+    approval?: GovApprovalState | null; decisionBrief?: GovDecisionBrief | null;
+  } | null;
 }
 /** The resolved, honest source state (mirrors the server gate). */
 export type QualSourceState = 'available' | 'degraded' | 'snapshot_unrecorded' | 'unavailable' | 'auth_failed' | 'malformed' | 'zip_workspace';
@@ -812,6 +832,48 @@ export async function authorizeGovBuild(canonicalOpportunityId: string, body: {
   deliveryProjectId: string; scope: string; resourceLimit: string; rationale?: string; govQualificationId?: string;
 }): Promise<{ buildAuthorization: { id: string } }> {
   const { data } = await api.post(qUrl(canonicalOpportunityId, '/authorize-build'), body);
+  return data;
+}
+
+/** P4 Decide: the establisher routes the pursuit to a DIFFERENT program-capable admin for approval, attaching a
+ *  decision brief. ADVISORY — the un-bypassable gate is still approveGovQualification (approver != establisher). */
+export async function requestGovApproval(canonicalOpportunityId: string, body: {
+  biddingEntity: string; expectedVersion: number; approverIdentityId: string; decisionBrief: GovDecisionBrief;
+}): Promise<{ qualification: QualificationRecord }> {
+  const { data } = await api.post(qUrl(canonicalOpportunityId, '/request-approval'), body);
+  return data;
+}
+
+/** P4 Decide: the requested approver returns the pursuit to the establisher for revision, with a note. */
+export async function sendBackGovApproval(canonicalOpportunityId: string, body: {
+  biddingEntity: string; expectedVersion: number; note?: string;
+}): Promise<{ qualification: QualificationRecord }> {
+  const { data } = await api.post(qUrl(canonicalOpportunityId, '/send-back'), body);
+  return data;
+}
+
+/** P4 Decide: a gov qualification with an OPEN approval request (for the opportunities-list pending flag). */
+export interface PendingGovApproval {
+  canonicalOpportunityId: string; biddingEntity: string;
+  approverIdentityId: string | null; requestedBy: string | null; requestedAt: string | null;
+}
+/** List the active gov qualifications waiting on a second-admin approval. */
+export async function listPendingGovApprovals(): Promise<{ pending: PendingGovApproval[] }> {
+  const { data } = await api.get('/api/admin/factory/qualification/pending-approvals');
+  return data;
+}
+
+/** An admin community member row (for the Decide approver picker). */
+export interface AdminMemberRow {
+  id: string; enrollment_id: string | null; display_name: string; email: string | null;
+  role: string; signed_up_at: string | null; free_access: boolean; mgmt_role: string | null;
+  org: { id: string; name: string; membership: 'manager' | 'member' } | null;
+}
+
+/** List admin community members. The Decide approver picker filters these to program-capable mgmt_roles
+ *  (owner/admin/curriculum) and excludes the establisher by email; the server still enforces the real gate. */
+export async function listAdminMembers(search?: string): Promise<{ members: AdminMemberRow[] }> {
+  const { data } = await api.get('/api/admin/community/members', { params: search ? { search } : undefined });
   return data;
 }
 
