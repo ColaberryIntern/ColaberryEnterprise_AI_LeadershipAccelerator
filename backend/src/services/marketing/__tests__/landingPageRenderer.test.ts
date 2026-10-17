@@ -496,3 +496,43 @@ describe('the document itself', () => {
     expect((html.match(/<h1>/g) ?? [])).toHaveLength(1);
   });
 });
+
+/**
+ * Rule 6c reaches the HTML, not just the generator.
+ *
+ * Measured on the live page at /lp/colaberry-training/ai-learning-platform on 2026-10-16: nine
+ * of nine headings were Title Case, against a rule that has been in the prompt since v6. The
+ * generator now normalises, but that only helps pages written afterwards - this page was
+ * already in the database and already taking ad traffic. Normalising at the render boundary is
+ * what fixes it, and these tests are what prove the boundary is really there.
+ */
+describe('headings are served in sentence case whenever they were written', () => {
+  it('rewrites a Title Case headline on the way out', () => {
+    const { html } = render(content({
+      sections: [{ type: 'hero', headline: 'Start Learning AI for $0 Today' }],
+    }));
+    expect(html).toContain('Start learning AI for $0 today');
+    expect(html).not.toContain('Start Learning AI for $0 Today');
+  });
+
+  it('keeps the brand name capitalised while fixing the rest', () => {
+    const { html } = render(content({
+      sections: [{ type: 'hero', headline: 'Your Learning Path with Colaberry' }],
+    }));
+    expect(html).toContain('Your learning path with Colaberry');
+  });
+
+  it('leaves a heading that was already right exactly as it was', () => {
+    const { html } = render(MINIMAL);
+    expect(html).toContain('Ship an AI project in six weeks');
+  });
+
+  it('still escapes a hostile headline - normalising runs before escaping, not instead of it', () => {
+    // The ordering that would be a security bug: rewriting case after escaping could reopen
+    // markup. This asserts the escaping survives the new pass.
+    const { html } = render(content({
+      sections: [{ type: 'hero', headline: '<script>alert(1)</script>' }],
+    }));
+    expect(html).not.toContain('<script>alert(1)</script>');
+  });
+});

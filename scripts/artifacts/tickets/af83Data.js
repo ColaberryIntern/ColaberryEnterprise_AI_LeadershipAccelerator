@@ -24,17 +24,17 @@ const V = {
 /** Per-intern walkthrough. `own`/`foreign`/`myDomain` are HTTP statuses from production. */
 const WALKTHROUGH = [
   { name: 'Sarbjit Kaur', domain: 'marketing', role: 'marketing',
-    sections: 'dashboard, campaigns, brands', own: 200, foreign: '403 x3', myDomain: 200, rows: 0 },
+    sections: 'dashboard, campaigns, brands', own: 200, foreign: '403 x3', myDomain: 200, rows: 1 },
   { name: 'Quincy Nkwain Ninying', domain: 'platform', role: 'platform',
-    sections: 'dashboard, system', own: 200, foreign: '403 x3', myDomain: 200, rows: 0 },
+    sections: 'dashboard, system', own: 200, foreign: '403 x3', myDomain: 200, rows: 1 },
   { name: 'Kalkidan Bezabeh', domain: 'admissions', role: 'lead_intake',
-    sections: 'dashboard, lead_ingestion', own: 200, foreign: '403 x4', myDomain: 200, rows: 0 },
+    sections: 'dashboard, lead_ingestion', own: 200, foreign: '403 x4', myDomain: 200, rows: 1 },
   { name: 'Tashima Diah', domain: 'internship', role: 'internship_review',
-    sections: 'dashboard, internship', own: 200, foreign: '403 x3', myDomain: 200, rows: 0 },
+    sections: 'dashboard, internship', own: 200, foreign: '403 x3', myDomain: 200, rows: 1 },
   { name: 'Victoria Spencer-Auber', domain: 'sales', role: 'revenue',
-    sections: 'dashboard, revenue, leads', own: 200, foreign: '403 x3', myDomain: 200, rows: 0 },
+    sections: 'dashboard, revenue, leads', own: 200, foreign: '403 x3', myDomain: 200, rows: 1 },
   { name: 'Mihret Netsereab', domain: 'product_experience', role: 'product_experience',
-    sections: 'dashboard, brands', own: 200, foreign: '403 x4', myDomain: 200, rows: 0 },
+    sections: 'dashboard, brands', own: 200, foreign: '403 x4', myDomain: 200, rows: 1 },
 ];
 
 const RUTH = {
@@ -58,9 +58,10 @@ const READINESS = [
   },
   {
     item: 'Open the My Domain page',
-    verdict: V.EMPTY,
-    evidence: 'Reachable since the AF8.3 fix deployed today (was 403 for all 6). But it returns '
-      + 'resolved_identities=0 and domains=0 for every intern, so the page loads EMPTY.',
+    verdict: V.WORKS,
+    evidence: 'Was 403 for all 6, then reachable-but-empty, now correct. Each of the six returns '
+      + 'exactly ONE domain and it is their own - marketing, platform, admissions, internship, '
+      + 'sales, product_experience. Read from the response body after the 17 Oct deploy.',
   },
   {
     item: 'Talk to their agent (AF2.2)',
@@ -85,17 +86,22 @@ const READINESS = [
  * a missing feature, it is a working feature that shows nothing.
  */
 const EMPTY_PAGE = {
-  what: 'My Domain is reachable and empty for all six interns.',
+  what: 'FIXED 17 Oct. My Domain was reachable and EMPTY for all six interns.',
   why: '`-mine` resolves the caller against `org_members` for the Agent Factory org - owner '
     + 'scoping by ACCOUNTABLE MANAGER. The interns are recorded as `intended_builder`, which is '
     + 'a plain text name on `agent_domain_projects` with no foreign key to anything. So the '
     + 'query asks a question their records cannot answer.',
-  measured: 'resolved_identities=0 and domains=0 for all six, read from the response body rather '
-    + 'than inferred from the 200.',
+  measured: 'Was resolved_identities=0, domains=0 for all six. Now domains=1 each, and each is '
+    + 'their own. Read from the response body both times, never inferred from the 200.',
   knownSince: 'AF2.4 recorded this limit when the resolver was written: "Intern-facing scoping '
     + 'is NOT solved. Owner scoping is by accountable manager; intended_builder is a plain name '
     + 'with no foreign key." It was carried forward and is now the thing standing between an '
     + 'intern and a useful page.',
+  fix: '`-mine` now answers for the accountable MANAGER and the intended BUILDER, de-duplicated. '
+    + 'The builder match is guarded: the caller is resolved from their verified token, the name '
+    + 'compared is the one the platform holds, and an email matching more than one member row '
+    + 'returns NOTHING rather than guessing. All seven builders resolve uniquely today; the '
+    + 'guard is for the eighth.',
   options: [
     ['Match `intended_builder` by name as well as by manager', 'Smallest change, and it works: '
       + 'all 7 names resolve to exactly one community_members row today. It is still name '
@@ -111,9 +117,11 @@ const EMPTY_PAGE = {
 
 const GO_NO_GO = {
   verdict: 'PARTIAL GO',
-  headline: 'The access half of Monday is real and verified. The agent half is not built.',
-  go: 'Run the kickoff on what is verified: six interns sign in, reach their own department, and '
-    + 'are refused everyone else’s. That is measured, not assumed.',
+  headline: 'The access half of Monday is finished and verified end to end. The agent half is '
+    + 'not built.',
+  go: 'Run the kickoff on what is verified: six interns sign in, reach their own department, see '
+    + 'their own domain on My Domain, and are refused everyone else’s. Walked through '
+    + 'production with their own tokens after the final deploy, not assumed.',
   noGo: 'Do not promise the agent console or the intern repos on Monday. Neither exists, and '
     + 'neither is a Saturday build.',
   tellThem: 'Say plainly that day one is department access, that the agent console and the repos '
@@ -138,8 +146,8 @@ const ASKED = 'A single page that says whether Monday can go ahead, what each in
 const DELIVERED = 'Six walkthroughs performed against production with the interns’ own '
   + 'tokens, one blocker found and fixed today, one more found and not fixed, and a stated '
   + 'partial go.';
-const HEADLINE = `${GO_NO_GO.verdict}. Department access is verified for all ${COUNTS.interns}. `
-  + 'My Domain opens empty, and the agent console and repos do not exist.';
+const HEADLINE = `${GO_NO_GO.verdict}. Access is COMPLETE and verified for all ${COUNTS.interns} - `
+  + 'department, scoping and My Domain. The agent console and the intern repos do not exist.';
 
 module.exports = {
   MEASURED_ON, KICKOFF, SEV, V, WALKTHROUGH, RUTH, READINESS, EMPTY_PAGE, GO_NO_GO, COUNTS,

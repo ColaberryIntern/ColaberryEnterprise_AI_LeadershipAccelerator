@@ -69,6 +69,7 @@ import {
 import {
   loadProvisionedDomains,
   loadProvisionedDomainsForOwner,
+  loadMyDomains,
   resolveOwnerIdentityIds,
   summariseProvisioned,
 } from '../../services/agentDomain/agentDomainProvisionedReader';
@@ -295,17 +296,25 @@ router.get(
   guarded(async (req: Request, res: Response) => {
     const email = req.admin?.email ?? '';
     const identityIds = await resolveOwnerIdentityIds(sequelize, email);
-    const rows = await loadProvisionedDomainsForOwner(sequelize, identityIds);
+    // Managed AND built. Scoping by manager alone returned an empty page to all six interns,
+    // who are recorded as the intended BUILDER of their domain and manage nothing.
+    const rows = await loadMyDomains(sequelize, email, identityIds);
+    const managed = rows.filter((r) => identityIds.includes(String(r.manager_identity_id ?? '')));
     res.json({
       caller_email: email,
       resolved_identities: identityIds.length,
+      // Said separately so the page can be honest about WHY a domain is yours. "You build this"
+      // and "you are accountable for this" are different claims and the intern needs the first.
+      as_manager: managed.length,
+      as_builder: rows.length - managed.length,
       summary: summariseProvisioned(rows),
       domains: rows,
-      note: identityIds.length === 0
-        ? 'This email resolves to no org_members row in the org of record, so it owns no domain. '
-          + 'That is why the list is empty; it is not a failure to load.'
-        : 'Scoped to the domains this identity is the accountable manager for. Section access '
-          + 'decides whether you may ask; ownership decides what comes back.',
+      note: rows.length === 0
+        ? 'This email matches no domain as either accountable manager or intended builder, so '
+          + 'there is nothing to show. That is why the list is empty; it is not a failure to load.'
+        : 'Scoped to the domains you are the accountable manager for, plus those you are the '
+          + 'intended builder of. Section access decides whether you may ask; these two '
+          + 'relationships decide what comes back.',
     });
   }),
 );

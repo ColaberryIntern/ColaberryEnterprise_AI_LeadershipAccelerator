@@ -160,6 +160,80 @@ export async function loadProvisionedDomainsForOwner(
 }
 
 /**
+ * The provisioned domains this caller is the intended BUILDER of.
+ *
+ * ## Why this exists at all
+ *
+ * `loadProvisionedDomainsForOwner` scopes by accountable MANAGER, and that is correct for a
+ * manager. It is useless for an intern: all six granted interns opened My Domain on 17 Oct 2026
+ * and got `resolved_identities=0, domains=0` -- a page that loads and says nothing. They are
+ * recorded as `intended_builder`, which is a plain text name on `agent_domain_projects` with no
+ * foreign key to anything. AF2.4 recorded that limit when the resolver was written.
+ *
+ * ## Matching a NAME, carefully, because the last time we did this it was wrong
+ *
+ * AF2.6 was an entire ticket spent on a name that resolved to the wrong record, and the lesson
+ * was to follow a foreign key instead. There is no foreign key here, so the name is all there
+ * is -- which makes the guard the important part rather than the match:
+ *
+ *   - the caller is resolved from their VERIFIED token's email, never from a supplied name
+ *   - the email is turned into a display name through `community_members`, so the comparison is
+ *     between a name the platform holds and a name the registry holds, not between a name and
+ *     user input
+ *   - a name matching MORE THAN ONE community_members row returns nothing, because at that point
+ *     the platform cannot say who the caller is and guessing is how someone sees another
+ *     intern's domain
+ *
+ * Measured before shipping: all seven intended builders resolve to exactly one row today.
+ * The guard is for the eighth.
+ */
+export async function loadProvisionedDomainsForBuilder(
+  sequelize: Sequelize,
+  email: string,
+): Promise<ProvisionedDomainRow[]> {
+  const trimmed = (email || '').trim();
+  if (!trimmed) return [];
+
+  // One row, or nothing. An ambiguous identity is not a licence to pick one.
+  const names = await sequelize.query<{ display_name: string }>(
+    `SELECT cm.display_name
+       FROM community_members cm
+       JOIN enrollments e ON e.id = cm.enrollment_id
+      WHERE lower(e.email) = lower($1)
+        AND cm.display_name IS NOT NULL AND btrim(cm.display_name) <> ''`,
+    { bind: [trimmed], type: QueryTypes.SELECT },
+  );
+  if (names.length !== 1) return [];
+
+  return sequelize.query<ProvisionedDomainRow>(
+    `${BASE_SQL}
+      WHERE lower(btrim(adp.intended_builder)) = lower(btrim($1))
+      ORDER BY adp.domain_key`,
+    { bind: [names[0].display_name], type: QueryTypes.SELECT },
+  );
+}
+
+/**
+ * Everything this caller should see on My Domain: what they manage, plus what they build.
+ *
+ * De-duplicated on `domain_key`, because a person can legitimately be both -- and a domain
+ * appearing twice on the page would read as a data error rather than as two true facts.
+ */
+export async function loadMyDomains(
+  sequelize: Sequelize,
+  email: string,
+  identityIds: readonly string[],
+): Promise<ProvisionedDomainRow[]> {
+  const [managed, built] = await Promise.all([
+    loadProvisionedDomainsForOwner(sequelize, identityIds),
+    loadProvisionedDomainsForBuilder(sequelize, email),
+  ]);
+  const seen = new Set(managed.map((r) => r.domain_key));
+  return [...managed, ...built.filter((r) => !seen.has(r.domain_key))]
+    .sort((a, b) => a.domain_key.localeCompare(b.domain_key));
+}
+
+/**
  * A summary that states what is NOT true alongside what is.
  *
  * `stories_verified` and `build_authorizations` are surfaced at the top level because they are the

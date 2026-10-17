@@ -206,3 +206,52 @@ jobs:
       - name: Static security scan (report-only)
         working-directory: backend
         run: npx ts-node src/scripts/runSecurityScan.ts
+
+  # THE GAP THIS CLOSES. `backend/tsconfig.json` EXCLUDES test files, and ts-jest
+  # runs with `isolatedModules`, which transpiles without checking types. So a
+  # type error in a backend test file passes every gate in this repo - the
+  # `Backend typecheck` job above never reads those files at all.
+  #
+  # That matters more here than it would elsewhere. The guards protecting Person
+  # 360, the Sales Readiness Score and the Explorer writer set ARE test files.
+  # The thing doing the checking was itself unchecked.
+  #
+  # REPORT-ONLY ON PURPOSE, FOR NOW. Measured 2026-10-17: 400 pre-existing errors
+  # across 141 files, every one a test file and none in src. A job that simply
+  # failed could not be merged, so it would be switched off instead; the frozen
+  # baseline in backend/src/services/content/testTypecheckBaseline.ts makes that
+  # debt a named number and gates the only thing still preventable - a NEW one.
+  # Promoting this to a required check is Ali's call, and it should report green
+  # on main for a while first.
+  #
+  # THE SELF-TEST RUNS FIRST, and as its own step, for the same reason the
+  # Explorer copy lint does it: the thing being trusted here is the checker. At
+  # the default heap, tsc over this program dies after ~490s with a heap FATAL
+  # ERROR, printing NO diagnostics and exiting 134 - a crash that reads exactly
+  # like a clean pass. The suite proves the crash detection still rejects that
+  # before the gate is allowed to approve anything.
+  #
+  # COST, measured rather than estimated: ~12.5 minutes, and the script spawns
+  # tsc with --max-old-space-size=8192 because 4GB is not enough. It runs in
+  # parallel, so it does not slow the other checks down; it does become the
+  # slowest thing in CI.
+  test-typecheck:
+    name: Test-file typecheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      # Root deps first, for the same reason the backend typecheck job does it:
+      # some suites import deps hoisted to the ROOT package.json.
+      - name: Install deps (root + backend)
+        run: |
+          npm install --no-audit --no-fund
+          cd backend && npm install --no-audit --no-fund
+      - name: Checker self-test (crash detection + ratchet, both directions)
+        working-directory: backend
+        run: npx jest src/services/content/__tests__/testTypecheckRatchet.test.ts --ci
+      - name: Typecheck test files against the frozen baseline
+        run: node scripts/checkTestTypecheck.js

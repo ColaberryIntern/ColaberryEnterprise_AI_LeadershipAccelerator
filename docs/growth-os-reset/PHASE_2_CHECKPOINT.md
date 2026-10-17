@@ -16,7 +16,7 @@
 | 2 | Can an unpaid Explorer still be mistaken for converted? | **No — live in production** |
 | 3 | Can I look at one person and see the website journey that led to their signup? | **Yes.** |
 | 4 | Can I see what they have done since registering? | **Yes, with named gaps.** |
-| 5 | Is Person 360 trustworthy enough to be the Sales Readiness Score's input in Phase 3? | **Not yet, but close** — population repaired, loss-of-evidence guard live, all 11 loaders covered, the `matchMethod` mutant dead, and `explorer_entered_at` filled so the score has a denominator. What remains: one unexplained load flake, and the written readiness call itself (M24) |
+| 5 | Is Person 360 trustworthy enough to be the Sales Readiness Score's input in Phase 3? | **ANSWERED 2026-10-17 by M24: no, not today, and now precisely why.** 7 of the 13 inputs the score needs are safe. The whole passive-browsing component is not: `engagement.sessions` and the `journey` counts both read `0` for a person we have no evidence about, so an untracked stranger and a tracked visitor who never returned are indistinguishable. Three small local fixes, plus the M22 population decision, then yes. The written call is `SALES_READINESS_SCORE_CONTRACT.md` Part 7 |
 
 **The answers are not yes/yes/no/no/no, and they are also not five clean yeses.** Two carry real
 qualifications and the fifth is a no. In detail:
@@ -54,8 +54,11 @@ been run.
 
 **Two disclosures belong with that result.** The script warns that the 37 rows joining the Explorer
 programme would carry `explorer_entered_at` NULL; measured afterwards, **all 56 coherent rows have
-it NULL** — the 37 joiners *and* the 19 whose tier was corrected — because the column has never
-been populated for anybody and no task owns backfilling it:
+it NULL** — the 37 joiners *and* the 19 whose tier was corrected — ~~because the column has never
+been populated for anybody and no task owns backfilling it~~ **CORRECTED 2026-10-17: true when
+written, false now. M21 decided the column's meaning from the live writers and filled all 56 on
+2026-10-16, taking `entered_at_null` from 56 to 0. The measurement below is the pre-M21 state and
+is left standing as the record of it:**
 
 ```
 coherent_free_total | entered_at_null | entered_at_set
@@ -105,7 +108,7 @@ enough to score is the question M24 exists to answer, with a written yes or no.
 `explorer_entered_at` NULL.~~ **CLOSED 2026-10-16.** A journey score with no journey start date has
 no denominator, so the column was filled once the semantic was settled from the live writers rather
 than invented: 56 rows, NULL to 0, reversible from a saved ledger. **The score now has its
-denominator.** What remains for question 5 is the Gap 5 flake and the written readiness call in M24.
+denominator.** **The readiness call was written on 2026-10-17 (M24) and the answer is no for today:** 7 of 13 inputs are safe, the passive-browsing component is not, and three small fixes plus the M22 population decision stand between here and yes. What remains for question 5 is therefore the Gap 5 flake and those four items.
 
 ---
 

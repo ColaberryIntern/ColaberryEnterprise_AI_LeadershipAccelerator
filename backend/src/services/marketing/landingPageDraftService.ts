@@ -2,6 +2,7 @@ import { Brand } from '../../models';
 import { getInstrumentedOpenAI } from '../openaiInstrumented';
 import { WorkflowError } from '../content/contentWorkflowService';
 import { findInventedSpecifics } from '../content/composerDraftService';
+import { normalizeHeadingCase } from './landingPageHeadingCase';
 import {
   landingPageContentSchema,
   landingPageSectionSchema,
@@ -426,7 +427,11 @@ export async function draftLandingPage(input: LandingPageDraftRequest): Promise<
     droppedSections = salvaged.dropped;
   }
 
-  const content = stripEmDashes(result.content);
+  // Rule 6c, enforced rather than requested. Measured on the live page 2026-10-16: nine of nine
+  // headings were Title Case. The prompt alone does not carry this rule, so it sits here beside
+  // `stripEmDashes` - the same kind of thing, a deterministic pass over generated copy for a
+  // rule the model will not reliably keep on its own.
+  const content = normalizeHeadingCase(stripEmDashes(result.content));
   const text = visibleText(content);
 
   return {
