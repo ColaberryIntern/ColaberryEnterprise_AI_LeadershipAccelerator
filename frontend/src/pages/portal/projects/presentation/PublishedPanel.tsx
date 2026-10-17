@@ -109,7 +109,9 @@ const PublishedPanel: React.FC<PublishedPanelProps> = ({ projectId, storyId, dem
   if (state.items.length === 0) {
     return (
       <p role="status" className="ps-note ps-note--soft" data-testid="ps-published-none">
-        You have not published anything from this task. Nothing here is visible to anyone else.
+        You have not published anything from this task. Nothing here is visible to
+        anyone else. To share a demo, open <strong>Practice</strong>, pick the take you
+        want people to see, and ask staff to share it.
       </p>
     );
   }

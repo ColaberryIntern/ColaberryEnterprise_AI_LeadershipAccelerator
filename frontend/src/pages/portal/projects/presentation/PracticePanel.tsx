@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import GetReadyPanel from './GetReadyPanel';
+import ShareTakeControl from './ShareTakeControl';
 import {
   fetchPracticeSession,
   startPractice,
@@ -96,8 +97,15 @@ function recordingLine(state: string): { label: string; tone: 'ok' | 'wait' | 'i
 
 /** The reserved slot, once there is one. */
 function BookedSlot(
-  { session, projectId, storyId, demo }:
-  { session: PracticeSession; projectId: string; storyId: string; demo?: boolean },
+  { session, projectId, storyId, demo, onRefresh }:
+  {
+    session: PracticeSession;
+    projectId: string;
+    storyId: string;
+    demo?: boolean;
+    /** Re-read the session, so a share request flips the label without a reload. */
+    onRefresh: () => void;
+  },
 ) {
   return (
     <>
@@ -161,11 +169,19 @@ function BookedSlot(
               would be the most misleading thing on the page — not a stale label but
               an active assurance of privacy that no longer holds. The flag comes from
               the server, where the showcase actually lives. */}
-          {take.published ? (
+          {take.shareState === 'published' && (
             <p className="ps-privacy" data-testid="ps-practice-published" style={{ margin: '0 0 6px', fontWeight: 600 }}>
               <span aria-hidden="true">🌐 </span>Published — your cohort can watch this. Take it down in Present.
             </p>
-          ) : (
+          )}
+          {take.shareState === 'pending' && (
+            // The state a boolean could not express. Having asked, a learner must
+            // not think it is already public — nor that nothing happened.
+            <p className="ps-privacy" data-testid="ps-practice-awaiting-approval" style={{ margin: '0 0 6px', fontWeight: 600 }}>
+              <span aria-hidden="true">⏳ </span>Waiting for staff approval — still private until someone says yes.
+            </p>
+          )}
+          {take.shareState !== 'published' && take.shareState !== 'pending' && (
             <p className="ps-privacy" data-testid="ps-practice-private" style={{ margin: '0 0 6px', fontWeight: 600 }}>
               <span aria-hidden="true">🔒 </span>Private — only you can see this
             </p>
@@ -185,6 +201,18 @@ function BookedSlot(
             {/* Shown only where the element is unsupported; same signed URL. */}
             <a href={take.playbackUrl}>Download this take</a>
           </video>
+
+          {/* Offered only on a take that is still private. A second request on an
+              attempt already asked about is idempotent server-side, but showing the
+              button would invite a learner to think the first one had not worked. */}
+          {take.shareState !== 'published' && take.shareState !== 'pending' && (
+            <ShareTakeControl
+              projectId={projectId}
+              storyId={storyId}
+              attemptId={session.attemptId}
+              onRequested={onRefresh}
+            />
+          )}
         </div>
       ))}
     </div>
@@ -221,6 +249,53 @@ export default function PracticePanel({ projectId, storyId, demo }: PracticePane
       .catch(() => { if (live) setLoad('error'); });
     return () => { live = false; };
   }, [projectId, storyId, demo]);
+
+  /**
+   * Re-read the session after asking to share, so the take's label changes to
+   * "waiting for staff approval" there and then. Without it the button stays
+   * offered and the learner cannot tell whether the request landed.
+   */
+  const refreshSession = useCallback(() => {
+    fetchPracticeSession(projectId, storyId)
+      .then((s) => setSession(s))
+      .catch(() => { /* the request itself succeeded; a stale label is not worth an error */ });
+  }, [projectId, storyId]);
+
+  /** A take is on its way: Zoom has it, we do not have it yet. */
+  const waitingForTake = session?.recordingState === 'expected'
+    || session?.recordingState === 'processing';
+
+  /**
+   * WATCH FOR THE TAKE TO ARRIVE, because nothing else tells the learner.
+   *
+   * A recording lands 2-4 minutes after the meeting ENDS in the ordinary case
+   * (measured on production: 1m54s, 2m38s, 3m41s, 3m59s), but two of six took 25
+   * and 47 minutes — the variance is Zoom's processing, not ours. Until this, the
+   * page never re-checked, so a student sat looking at "processing" while their
+   * finished take existed on the server, and the only cure was knowing to reload.
+   *
+   * STOPS, rather than polling forever. It runs only while a recording is actually
+   * expected, and gives up after WATCH_FOR so a forgotten tab does not quietly
+   * request the same endpoint for the rest of the day. Giving up is safe: a reload
+   * still shows the take, which is exactly the behaviour we had before.
+   */
+  useEffect(() => {
+    if (demo || !waitingForTake) return;
+
+    const EVERY = 20_000;
+    const WATCH_FOR = 10 * 60_000;
+    const startedAt = Date.now();
+    const timer = setInterval(() => {
+      if (Date.now() - startedAt > WATCH_FOR) { clearInterval(timer); return; }
+      refreshSession();
+    }, EVERY);
+    return () => clearInterval(timer);
+    // DELIBERATELY NOT `session`. Each poll replaces the session object, which would
+    // re-run this effect, clear the interval and reset `startedAt` — so the give-up
+    // cap would never be reached and the tab would poll forever. Depending on the
+    // boolean means the deps are unchanged while nothing has actually changed, and
+    // the effect tears down exactly once: when the take arrives.
+  }, [demo, waitingForTake, refreshSession]);
 
   const reserve = useCallback(async (isoStart: string) => {
     setBusy(true);
@@ -269,7 +344,15 @@ export default function PracticePanel({ projectId, storyId, demo }: PracticePane
   }
 
   if (session && session.bookingId) {
-    return <BookedSlot session={session} projectId={projectId} storyId={storyId} demo={demo} />;
+    return (
+      <BookedSlot
+        session={session}
+        projectId={projectId}
+        storyId={storyId}
+        demo={demo}
+        onRefresh={refreshSession}
+      />
+    );
   }
 
   return (

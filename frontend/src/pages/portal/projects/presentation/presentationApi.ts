@@ -166,12 +166,17 @@ export interface PracticeSession {
   /**
    * The learner's own ingested takes, earliest part first.
    *
-   * `published` mirrors the server's view of whether this attempt's showcase is
-   * live, so the panel can stop calling a take private once the cohort can watch it.
-   * Optional, so an older payload degrades to the private label — the safe direction
-   * to be wrong in on a page about who can see your face.
+   * `shareState` mirrors the server's view of how far this attempt has got towards
+   * being public, so the panel can stop calling a take private once it is not.
+   * Optional, and absent degrades to `private` — the safe direction to be wrong in
+   * on a page about who can see your face.
    */
-  recordings?: Array<{ id: string; partNo: number; playbackUrl: string; published?: boolean }>;
+  recordings?: Array<{
+    id: string;
+    partNo: number;
+    playbackUrl: string;
+    shareState?: TakeShareState;
+  }>;
 }
 
 const taskPath = (projectId: string, storyId: string, leaf: string) =>
@@ -328,4 +333,55 @@ export async function withdrawPublished(
   await portalApi.post(
     `${taskPath(projectId, storyId, 'published')}/${encodeURIComponent(showcaseId)}/withdraw`,
   );
+}
+
+/**
+ * How far a take has got from "only mine" towards "my cohort is watching it".
+ *
+ * Three states, because the middle one is what a student gets wrong: having asked
+ * to share, they must not believe it is already public, nor that nothing happened.
+ */
+export type TakeShareState = 'private' | 'pending' | 'published';
+
+/** The server could not use this summary, and said why. */
+export class ShareRejectedError extends Error {
+  notices: string[];
+  constructor(message: string, notices: string[]) {
+    super(message);
+    this.name = 'ShareRejectedError';
+    this.notices = notices;
+  }
+}
+
+/**
+ * Ask staff to publish this take to the cohort.
+ *
+ * The learner's half of the publish chain: this records THEIR approval and nothing
+ * else. A staff member still has to agree before anybody can watch it, which is why
+ * the result says `awaiting` rather than anything resembling "done".
+ */
+export async function requestShare(
+  projectId: string,
+  storyId: string,
+  attemptId: string,
+  summary: string,
+): Promise<{ showcaseId: string; created: boolean }> {
+  try {
+    const { data } = await portalApi.post<{ showcase_id: string; created: boolean }>(
+      taskPath(projectId, storyId, 'showcase'),
+      { attempt_id: attemptId, summary },
+    );
+    return { showcaseId: data.showcase_id, created: data.created };
+  } catch (err: any) {
+    // 422 is the grounding check refusing a summary that claims something the
+    // project does not support. Its notices are the actionable part and must reach
+    // the learner rather than collapsing into "something went wrong".
+    if (err?.response?.status === 422) {
+      throw new ShareRejectedError(
+        err.response.data?.error || 'That summary needs fixing before it can be shared.',
+        err.response.data?.notices || [],
+      );
+    }
+    throw err;
+  }
 }

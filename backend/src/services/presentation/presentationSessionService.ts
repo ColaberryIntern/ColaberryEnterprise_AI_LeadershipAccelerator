@@ -61,21 +61,31 @@ export interface SessionView {
 }
 
 /**
+ * Where a take stands between "only mine" and "my cohort is watching it".
+ *
+ * THREE STATES, NOT TWO, because the middle one is the one a student gets wrong.
+ * Having asked to share, they must not believe it is already public — nor that
+ * nothing happened. "Waiting for staff approval" is the honest answer to both, and
+ * a boolean cannot express it.
+ */
+export type TakeShareState = 'private' | 'pending' | 'published';
+
+/**
  * One rehearsal take as the Practice panel shows it.
  *
- * `published` exists so the panel can stop calling a take private once it is not.
- * Step 4 labels every take "Private — only you can see this", which is true until the
- * learner publishes it in Step 5 and then becomes the most misleading sentence on the
- * page: a student reading it believes a demo their cohort is already watching is for
- * their eyes only. It is an ATTEMPT-level fact, because a showcase is keyed on the
- * attempt rather than on one take, and it is reported at that granularity rather than
- * guessed at a finer one.
+ * `shareState` exists so the panel can stop calling a take private once it is not.
+ * Step 4 labelled every take "Private — only you can see this", which held only until
+ * the publish flow existed and then became the most misleading sentence on the page:
+ * a student reading it believes a demo their cohort is already watching is for their
+ * eyes only. It is an ATTEMPT-level fact, because a showcase is keyed on the attempt
+ * rather than on one take, and it is reported at that granularity rather than guessed
+ * at a finer one.
  */
 export interface PracticeTake {
   id: string;
   partNo: number;
   playbackUrl: string;
-  published: boolean;
+  shareState: TakeShareState;
 }
 
 export type SessionResult =
@@ -134,22 +144,26 @@ export async function recordingsForAttempt(
   });
   const { createRecordingTicket } = await import('./recordingTicket');
 
-  // IS THIS ATTEMPT PUBLISHED? One question, asked once, so the panel never labels a
-  // take "private" while the cohort is watching it. A live showcase is one that was
-  // published and not taken back down; `withdrawn_at` matters as much as
-  // `published_at`, because a withdrawn demo really is private again.
+  // WHERE DOES THIS ATTEMPT STAND? One question, asked once, so the panel never
+  // labels a take "private" while the cohort is watching it — nor leaves a learner
+  // who has asked to share wondering whether anything happened.
+  //
+  // A LIVE showcase is one not taken back down: `withdrawn_at` matters as much as
+  // `published_at`, because a withdrawn demo really is private again. Among live
+  // rows, `published_at` separates "waiting for staff" from "they can see it".
   //
   // THROUGH THE MODEL, for the reason stated above: the first version of this used
   // `sequelize.query` and opened a real Postgres connection in suites that mock only
   // the models, taking 4 tests red with `SequelizeConnectionRefusedError`. The
   // warning was already written here and I added the raw query anyway.
-  const { Op } = await import('sequelize');
   const { default: PresentationShowcase } = await import('../../models/PresentationShowcase');
   const live = await PresentationShowcase.findOne({
-    where: { attempt_id: attemptId, published_at: { [Op.ne]: null }, withdrawn_at: null },
-    attributes: ['id'],
+    where: { attempt_id: attemptId, withdrawn_at: null },
+    attributes: ['id', 'published_at'],
   });
-  const published = Boolean(live);
+  const shareState: TakeShareState = !live
+    ? 'private'
+    : (live.published_at ? 'published' : 'pending');
 
   return (rows || []).map((r: any) => {
     const id = String(r.id);
@@ -163,7 +177,7 @@ export async function recordingsForAttempt(
       id,
       partNo: Number(r.part_no) || 1,
       playbackUrl: base ? `${base}?t=${encodeURIComponent(ticket)}` : '',
-      published,
+      shareState,
     };
   });
 }

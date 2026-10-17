@@ -194,42 +194,56 @@ describe('the attempt history list', () => {
   });
 });
 
-describe('a take knows whether it is published', () => {
+describe('a take knows how far it has got towards being public', () => {
   /**
-   * Step 4 labels every take "Private - only you can see this". That assurance has
-   * to follow the fact: once the learner publishes the attempt in Step 5 the cohort
-   * can watch it, and a lock icon beside it is then a false promise rather than a
-   * stale label. The flag is resolved here, server-side, because the showcase is
-   * the only place that knows.
+   * Step 4 labelled every take "Private - only you can see this". That assurance has
+   * to follow the fact: once the learner publishes the attempt the cohort can watch
+   * it, and a lock icon beside it is then a false promise rather than a stale label.
+   *
+   * THREE STATES, NOT TWO. The middle one is what a student gets wrong: having asked
+   * to share, they must not believe it is already public, nor that nothing happened.
+   * A boolean cannot say "waiting for staff approval", and that is precisely the
+   * state in which a learner is most likely to be misled.
    */
   const take = { id: 'rec1', part_no: 1, created_at: new Date('2026-10-16T12:00:00Z') };
   const ticketFor = { enrollmentId: 'e1', projectId: 'p1', storyId: 'PREP-4' };
 
-  it('is NOT published when no showcase exists', async () => {
+  it('is PRIVATE when no showcase exists', async () => {
     recordings.findAll.mockResolvedValue([take]);
     showcases.findOne.mockResolvedValue(null);
     const out = await recordingsForAttempt('a1', ticketFor);
     expect(out).toHaveLength(1);
-    expect(out[0].published).toBe(false);
+    expect(out[0].shareState).toBe('private');
   });
 
-  it('IS published when a live showcase exists', async () => {
+  it('is PENDING when a showcase exists but is not published', async () => {
     recordings.findAll.mockResolvedValue([take]);
-    showcases.findOne.mockResolvedValue({ id: 's1' });
+    showcases.findOne.mockResolvedValue({ id: 's1', published_at: null });
     const out = await recordingsForAttempt('a1', ticketFor);
-    expect(out[0].published).toBe(true);
+    expect(out[0].shareState).toBe('pending');
   });
 
-  it('asks only about THIS attempt, published and not withdrawn', async () => {
-    // A withdrawn demo really is private again, so `withdrawn_at` matters as much
-    // as `published_at`. Dropping either half of this predicate makes the label
-    // wrong in one direction or the other.
+  it('is PUBLISHED once it carries a published_at', async () => {
+    recordings.findAll.mockResolvedValue([take]);
+    showcases.findOne.mockResolvedValue({ id: 's1', published_at: new Date('2026-10-16') });
+    const out = await recordingsForAttempt('a1', ticketFor);
+    expect(out[0].shareState).toBe('published');
+  });
+
+  it('asks only about THIS attempt, and only about LIVE showcases', async () => {
+    // A withdrawn demo really is private again, so the query must exclude it here
+    // rather than reporting a take as shared when it has been taken down.
     recordings.findAll.mockResolvedValue([take]);
     await recordingsForAttempt('a1', ticketFor);
     const where = showcases.findOne.mock.calls[0][0].where;
     expect(where.attempt_id).toBe('a1');
     expect(where.withdrawn_at).toBeNull();
-    expect(where.published_at).toBeDefined();
+  });
+
+  it('reads published_at, or it could never tell pending from published', async () => {
+    recordings.findAll.mockResolvedValue([take]);
+    await recordingsForAttempt('a1', ticketFor);
+    expect(showcases.findOne.mock.calls[0][0].attributes).toContain('published_at');
   });
 
   it('asks ONCE for the whole attempt, not once per take', async () => {
