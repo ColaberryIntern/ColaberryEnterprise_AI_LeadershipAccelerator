@@ -49,8 +49,16 @@ function route(handlers: Array<[string, Row[]]>): void {
   });
 }
 
-const profileFor = (sections: string[], visibleEnrollmentIds: string[] | null = null) =>
-  getPersonProfile({ email: IDENTITY.email, sections, visibleEnrollmentIds });
+/**
+ * `getPersonProfile` returns null for a person outside the caller's scope. Every case here is in
+ * scope, so a null means the fixture is wrong, not that the code behaved. Throwing here says so
+ * once, instead of eleven assertions tiptoeing around a null that should never arrive.
+ */
+async function profileFor(sections: string[], visibleEnrollmentIds: string[] | null = null) {
+  const profile = await getPersonProfile({ email: IDENTITY.email, sections, visibleEnrollmentIds });
+  if (!profile) throw new Error(`fixture error: no profile for sections [${sections.join(', ')}]`);
+  return profile;
+}
 
 describe('M24.1 - engagement separates never tracked from tracked and never visited', () => {
   it('is NULL for a person with no visitor record at all', async () => {
