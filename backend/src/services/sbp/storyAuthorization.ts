@@ -45,6 +45,20 @@
  *
  * This is P8-T4's own clause: "old projects retain compatibility mode".
  *
+ * AND THAT CLAUSE DID NOT WORK. Measured against production on 2026-10-17 by running this
+ * function over all 72 real student projects: every one of the 62 legacy projects was REFUSED
+ * `no_lifecycle`, logging `project_created_at: null`, rather than permitted. The compatibility
+ * branch read `project.created_at`, which is `undefined` on a real `Project` instance — see
+ * `projectCreationTime` below for why — and the `&&` guard turned that undefined into a silent
+ * refusal. The protection everyone relied on to make arming this gate safe was dead code, and
+ * arming it would have refused all 72 projects rather than the 10 the design intended.
+ *
+ * No test caught it because the `Project.findByPk` mock returned a plain object literal carrying
+ * `created_at`: the shape of the TypeScript type rather than of the runtime instance. The test was
+ * green, named "PERMITS a project that predates the registration hook", and certified a branch
+ * that could not be taken. The mock now mimics a Sequelize instance, so it fails against the old
+ * reader.
+ *
  * The flag default is off and `enforcementDisabled` is reported rather than silently assumed, so
  * the dark period is visible in logs instead of being inferred from the absence of refusals.
  */
@@ -101,6 +115,46 @@ function log(event: string, outcome: 'success' | 'failure', ctx: Record<string, 
 }
 
 /**
+ * The project's creation time, read the way Sequelize actually exposes it.
+ *
+ * `Project` is initialised with `timestamps: true, underscored: true`, so the Sequelize
+ * ATTRIBUTE is `createdAt`, mapped to the `created_at` COLUMN. The model separately carries
+ * `declare created_at: Date`, and `declare` is a TYPE-ONLY declaration that emits no runtime
+ * property. `created_at` is also absent from the `Project.init()` attribute block. So
+ * `project.created_at` type-checks as a `Date` and evaluates to `undefined` — `tsc` cannot see
+ * the problem and 141 of this repo's 447 models carry the same declaration shape.
+ *
+ * Measured on a real production instance, 2026-10-17:
+ *
+ *   column created_at            2026-04-02T17:33:42.613Z
+ *   project.created_at           undefined
+ *   project.createdAt            Date(2026-04-02T17:33:42.613Z)
+ *   'created_at' in attributes   false
+ *   'createdAt'  in attributes   true
+ *
+ * Reads the Sequelize accessor first, then the camelCase attribute, then a snake_case property.
+ * The last is for plain objects only; this gate's own tests deliberately use an instance-shaped
+ * mock WITHOUT `created_at`, so they cannot pass on that fallback alone.
+ */
+function projectCreationTime(project: unknown): Date | null {
+  const p = project as {
+    get?: (key: string) => unknown;
+    createdAt?: unknown;
+    created_at?: unknown;
+  };
+  const candidate = (typeof p.get === 'function' ? p.get('createdAt') : undefined)
+    ?? p.createdAt
+    ?? p.created_at;
+
+  if (candidate instanceof Date) return Number.isNaN(candidate.getTime()) ? null : candidate;
+  if (typeof candidate === 'string' || typeof candidate === 'number') {
+    const parsed = new Date(candidate);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+  return null;
+}
+
+/**
  * Whether stories may be authorized for this student project.
  *
  * NEVER THROWS for a missing project: a refusal is a verdict, not an exception, because the
@@ -135,20 +189,27 @@ export async function storyAuthorizationFor(studentProjectId: string): Promise<S
       return { authorized: false, reason: 'no_lifecycle', gaps: ['project_not_found'] };
     }
 
+    // Read through `projectCreationTime`, NOT `project.created_at`: that property is undefined on
+    // a real Sequelize instance, which silently refused all 62 legacy projects. See the header.
+    const createdAt = projectCreationTime(project);
+
     // `< cutoff`, never `<=`: the cutoff is the instant the hook went live, so a project created
     // AT it is covered by the hook and a missing row is already a bypass.
-    if (project.created_at && project.created_at < STUDENT_REGISTRATION_LIVE_SINCE) {
+    if (createdAt && createdAt < STUDENT_REGISTRATION_LIVE_SINCE) {
       log('sbp_story_authorization_granted', 'success', {
         project_id: studentProjectId, reason: 'legacy_compatibility',
-        project_created_at: project.created_at.toISOString(),
+        project_created_at: createdAt.toISOString(),
         cutoff: STUDENT_REGISTRATION_LIVE_SINCE.toISOString(),
       });
       return { authorized: true, reason: 'legacy_compatibility', gaps: [] };
     }
 
+    // `project_created_at: null` here now means the row genuinely has no creation time, rather
+    // than the reader having looked at the wrong property. That distinction is why this log line
+    // is the thing that exposed the defect: 62 refusals all carrying null is not a data pattern.
     log('sbp_story_authorization_refused', 'failure', {
       project_id: studentProjectId, reason: 'no_lifecycle', error_class: 'ContractViolation',
-      project_created_at: project.created_at ? project.created_at.toISOString() : null,
+      project_created_at: createdAt ? createdAt.toISOString() : null,
       cutoff: STUDENT_REGISTRATION_LIVE_SINCE.toISOString(),
     });
     return { authorized: false, reason: 'no_lifecycle', gaps: ['lifecycle_unregistered'] };
