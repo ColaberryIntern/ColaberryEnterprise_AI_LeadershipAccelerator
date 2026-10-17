@@ -1724,3 +1724,73 @@ What is cheap and worth doing first, for whoever picks it up: a derived sweep ov
 `backend/src/db/ensure*.ts` that lists every table ALTERed without a CREATE anywhere. That names
 the real population instead of the one table someone happened to notice - the same pattern
 `lifecycleRegistrationCoverage.test.ts` and the model-timestamp sweep already use.
+
+## THE BUILD RE-ENTRY GUARD NOW EXPIRES, and the threshold is measured
+
+Carried since Phase 7: *"the build re-entry guard has no expiry ... a build whose generation dies
+without the process dying stays `generating` indefinitely and every retry is refused until
+somebody deploys."* True, and now fixed for the half that can be fixed safely.
+
+### The measurement the threshold rests on
+
+Production, 2026-10-17, all 48 intakes that produced a plan, timed from the intake row to its
+first `build_plans` row:
+
+| | |
+|---|---|
+| p50 | **30.2s** |
+| p75 | 38.0s |
+| p90 | **57.3s** |
+| Finished inside 60 seconds | **44 of 48** |
+| Slowest plausible single generation | **2,072s (34.5 min)** |
+
+Two samples of roughly five days sit in that set and are **not** single generations - they are
+plans first written long after their intake. They are excluded from the reasoning and named here
+so the next reader does not rediscover them as outliers.
+
+`STALE_GENERATION_SECONDS = 3600`. An hour is about 60x the p90 and comfortably past the slowest
+plausible run, so a healthy build is never taken over, while a dead one frees itself in an hour
+instead of waiting for a deploy.
+
+**My first measurement was of the wrong thing.** It used `build_intake.updated_at - created_at`,
+which is row staleness rather than generation time: `updated_at` moves on later lifecycle events,
+and the tail proved it - p90 of 5.75 days, max 54.7 days. A threshold derived from that would
+have been nonsense. The honest proxy is the interval to the first plan row.
+
+### Why the takeover is safe regardless of the threshold
+
+`claimStaleGeneratingIntake` puts the entire decision in the WHERE clause:
+
+```sql
+UPDATE build_intake SET correlation_id = :c, updated_at = NOW()
+ WHERE project_id = :p AND status = 'generating'
+   AND updated_at < NOW() - (:staleSeconds * INTERVAL '1 second')
+ RETURNING project_id
+```
+
+Two callers racing on the same stuck project cannot both win: Postgres applies the UPDATE once,
+and the loser's predicate no longer holds. So a wrong threshold changes **when** a takeover may
+happen, never **whether** two callers can both win one. The lesson is recent - Phase 7 measured
+`factoryApproval`'s compare-and-swap refusing nobody, because both callers read the same version
+before either wrote.
+
+### Stated plainly: what is NOT proven
+
+**The two-caller race is argued from the SQL's atomicity, not observed.** No test runs two
+concurrent callers against a real Postgres, because CI provisions none. This is therefore one
+more entry on the list this register already keeps - the six locks elsewhere "covered" only by
+asserting their SQL contains `FOR UPDATE`. It is a better argument than those (the predicate is
+the lock, rather than a hint that one exists), and it is still an argument.
+
+**Nothing is stuck today.** Measured: **0 rows in `generating`**, and the newest intake is
+2026-10-05. This was latent, not live-biting, which is why it was safe to change deliberately
+rather than urgently.
+
+### The remaining half, recorded
+
+`recoverStrandedBuilds` still has **no age filter**: it resumes every `generating` row it finds.
+That is correct at boot, where every such row is by definition stranded. It is why the sweep
+cannot simply be put on a timer - run periodically as written, it would re-resume builds that are
+legitimately in flight and generate them twice. Giving the sweep the same staleness predicate is
+the natural next step and is deliberately not bundled here, because it changes a boot-time path
+that currently has exactly one caller and one meaning.

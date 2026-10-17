@@ -387,6 +387,40 @@ export async function listIntakesByStatus(status: string, limit = 100): Promise<
   );
 }
 
+/**
+ * Claim a `generating` intake that has been idle too long, so a build whose generation died
+ * without the process dying can be retried without waiting for a deploy.
+ *
+ * ATOMIC ON PURPOSE. The whole decision lives in the WHERE clause, so two callers racing on the
+ * same stuck project cannot both win: Postgres applies the UPDATE once, and the loser's
+ * `status = 'generating' AND updated_at < cutoff` predicate no longer holds. A read-then-write
+ * in the caller would have exactly the race this exists to avoid, and the lesson is recent —
+ * Phase 7 measured `factoryApproval`'s compare-and-swap refusing nobody, because both callers
+ * read the same version before either wrote.
+ *
+ * `status` is deliberately NOT changed: it is already `generating` and the caller is taking the
+ * same job over. Moving `updated_at` is what claims it, and what stops a third caller a second
+ * later from claiming it again.
+ *
+ * Returns true only for the caller that took ownership.
+ */
+export async function claimStaleGeneratingIntake(
+  projectId: string,
+  correlationId: string,
+  staleSeconds: number,
+): Promise<boolean> {
+  const rows = await sequelize.query<{ project_id: string }>(
+    `UPDATE build_intake
+        SET correlation_id = :correlationId, updated_at = NOW()
+      WHERE project_id = :projectId
+        AND status = 'generating'
+        AND updated_at < NOW() - (:staleSeconds * INTERVAL '1 second')
+      RETURNING project_id`,
+    { type: QueryTypes.SELECT, replacements: { projectId, correlationId, staleSeconds } },
+  );
+  return rows.length === 1;
+}
+
 /** Read the intake so a failed generation can be replayed from it. */
 export async function getIntake(projectId: string): Promise<BuildIntake | null> {
   const rows = await sequelize.query<BuildIntake>(

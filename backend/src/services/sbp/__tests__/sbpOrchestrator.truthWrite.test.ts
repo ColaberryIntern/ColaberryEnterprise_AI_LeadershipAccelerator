@@ -15,6 +15,8 @@ const mockGetIntake = jest.fn();
 const mockSaveTruth = jest.fn();
 
 jest.mock('../planStore', () => ({
+  // Not stale: the guard consults this, gets false, and refuses exactly as before.
+  claimStaleGeneratingIntake: jest.fn(async () => false),
   saveIntake: (...a: any[]) => mockSaveIntake(...a),
   getIntake: (...a: any[]) => mockGetIntake(...a),
   savePlanDraft: jest.fn(),
