@@ -1574,3 +1574,90 @@ mitigation worth considering:** a test that walks `backend/src/models/*.ts` and 
 declares `created_at` without either defining it as an attribute or setting `timestamps: false` —
 the same derived-sweep pattern `lifecycleRegistrationCoverage.test.ts` already uses, which exists
 because a hand-written list of creation sites was wrong within a week.
+
+## THE ALL-WORKSPACE DETECTOR: why it cannot be built yet, measured
+
+Phase 6 item 1, deferred by Phase 7, owned by Phase 8. The obligation: *"either add a check that
+can detect the all-workspace answer, or record in writing why it cannot be detected."* Neither half
+was delivered for two phases running. **This is the second half, with the measurement that settles
+it.**
+
+### What the all-workspace answer is
+
+`storyTraceability.releasesWithoutUserVisibleWorkflow` requires at least one `workspace` story per
+release. The prompt tells the model to declare, per story, whether finishing it gives a person
+something to open, click or see (`workspace`) or is background work no page shows (`headless`).
+The instruction exists because of a named incident, recorded in `decomposePrompt.ts`: **a student
+finished 20 of 20 stories, platform-verified, with twelve of her fourteen services unreachable**,
+because her releases were layered by pipeline stage and nothing asked whether a release reached a
+person.
+
+The degenerate answer is to label **every** story `workspace`. That satisfies the schema and the
+per-release rule, and makes `release_review` pass on exactly the plans it was built to catch.
+
+### The measurement, production, 2026-10-17, all 84 build plans
+
+| Question | Answer |
+|---|---|
+| Plans where every story is `workspace` | **0 of 84** |
+| Plans carrying ANY `workspace` declaration | **0 of 84** — not one story in roughly 1,300 |
+| Plans whose raw JSON contains `"headless"` | **0 of 84** |
+| Control: plans whose raw JSON contains `"stories"` | **84 of 84** |
+
+Story keys in the newest stored plan are `id, title, release, fulfills, narrative, acceptance,
+blocked_by, owner_agent, failure_paths, task_guidance` — exactly the schema's **first** required
+line. `workspace` is on the next line, and is absent.
+
+### Why it is absent, which is the part that decides the obligation
+
+- The schema requiring `workspace` (`274467cd`, authored 2026-10-11) first reached **production**
+  in the deployed checkout `42a2e22a7` at **2026-10-12 23:27:01Z**.
+- The **last real LLM decomposition ran 2026-10-05T06:03:06Z.**
+- Six plans were written after the schema went live. All six belong to **one** project, versions
+  v14-v19, story counts flat at 30 then 31, recorded as `model='student'` or `NULL` with
+  `attempts` unset. They are student edits and Add-a-Story derivations inheriting pre-schema
+  stories, not decompositions.
+
+**Real decompositions under the live schema: ZERO.** Distinct model values across all plans:
+`gpt-4o` 53 (attempts set on all 53, 2026-08-10 to 2026-10-05), `student` 22 (attempts set on
+none), `NULL` 9.
+
+**So the all-workspace answer cannot be detected because no answer of any kind exists yet.** A
+detector written today would have no population to run against, could not be validated against
+real data, and could not be mutation-tested on anything but fixtures. That is a check with no
+input, which is the same failure class as a guard with no caller and a gate with no data - the
+class this programme has now paid for three times in one run.
+
+### A near-miss, recorded because the first answer was the opposite one
+
+A first pass concluded that the required field **was not arriving despite `strict: true`**, i.e. a
+live defect in which six post-schema plans had silently dropped a required field. That came from
+my own probe's heuristic - `model IS NOT NULL` as a proxy for "a real decomposition ran" - which
+counts `model='student'`. Checking the distinct values reversed it.
+
+**A heuristic I wrote is an instrument like any other, and its verdict line is not evidence.** The
+probe printed a confident sentence; the sentence was wrong because the proxy behind it was wrong.
+
+### What Phase 8 asked for, now supplied
+
+`release_review` splits into two rule classes on purpose: the MEASURED failure is advisory, because
+a blocking release-level rule would retroactively refuse Add-a-Story through `PlanPredatesGate` for
+students whose published plans predate the field; the NOT-MEASURED case BLOCKS, because "an
+unmeasured prerequisite is not a satisfied one". `lifecyclePrerequisites.ts` records that promoting
+the advisory half belongs to Phase 8 **"AFTER the affected-student count is measured"**.
+
+**That count is 84 of 84 - every plan in production.** None carries the field, so promoting the
+measured-failure rule to blocking today would block every project on a rule no existing plan can
+satisfy. It must not be promoted until fresh decompositions exist.
+
+### What is true today, and is correct
+
+`release_review` currently emits `release_workflow_unassessed`, which **blocks**. Fail-closed, by
+design, and the right behaviour for a prerequisite nobody has measured.
+
+### The precondition, stated so the next phase can check it in one query
+
+The detector becomes buildable the moment `build_plans` holds a row with a provider model name
+(not `student`), `attempts` set, and `created_at > 2026-10-12 23:27:01Z`. Until that row exists,
+the honest state of this obligation is **recorded, not deliverable** - and the recording is this
+section.
