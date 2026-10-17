@@ -110,11 +110,20 @@ export interface TrustPanel {
   gaps: Array<{ field: string; reason: string }>;
 }
 
+/**
+ * M24.2 and M24.3 - the counts are nullable because the backend now distinguishes "we counted
+ * nothing" from "we never looked". A zero means the query ran; null means it did not, because
+ * the person has no lead record, no enrolments, or the caller may not see them.
+ *
+ * Render null as absent, never as 0. The daysKnown and intentScore treatment already in
+ * PersonProfilePage is the pattern.
+ */
 export interface Journey {
   firstTouch: string | null; lastActivity: string | null; daysKnown: number | null;
-  sessions: number; pageEvents: number; campaigns: number; emailsSent: number;
-  enrollments: number; intentScore: number | null;
-  cardsCompleted: number; sessionsAttended: number;
+  sessions: number | null; pageEvents: number | null;
+  campaigns: number | null; emailsSent: number | null;
+  enrollments: number | null; intentScore: number | null;
+  cardsCompleted: number | null; sessionsAttended: number | null;
 }
 
 // ── Programme panels, added 2026-09-09 ──────────────────────────────────────
@@ -388,8 +397,9 @@ export interface Profile {
   learning?: LearningRow[];
   billing?: BillingRow[];
   engagement?: { sessions: number; firstSeen: string | null; lastSeen: string | null; sites: string[] } | null;
-  appointments?: AppointmentRow[];
-  automation?: AutomationRow[];
+  /** M24.3 - null means there was no lead key to look with, which is not "nothing booked". */
+  appointments?: AppointmentRow[] | null;
+  automation?: AutomationRow[] | null;
   classActivity?: ClassActivityPanel | null;
   curriculum?: CurriculumPanel | null;
   work?: WorkPanel | null;

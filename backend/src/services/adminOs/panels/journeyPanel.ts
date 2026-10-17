@@ -17,16 +17,30 @@ export interface JourneySummary {
   firstTouch: string | null;
   lastActivity: string | null;
   daysKnown: number | null;
-  sessions: number;
-  pageEvents: number;
-  campaigns: number;
-  emailsSent: number;
-  enrollments: number;
+  /**
+   * M24.2 - these four are null when the acquisition query was never issued, which happens when
+   * the person has no lead record at all. They were `number` and coerced with `?? 0`, so an
+   * unlinked person reported a measured zero on every one of them. Those are precisely the rows
+   * whose lead linkage M22 has not resolved, so the two defects compounded.
+   *
+   * A zero here now means the query ran and counted nothing. Null means we never looked.
+   */
+  sessions: number | null;
+  pageEvents: number | null;
+  campaigns: number | null;
+  emailsSent: number | null;
+  /**
+   * M24.3 - null when the id list was narrowed by the caller's permissions, because then the
+   * count is a fact about the CALLER, not about the person. It read 0 for a mentor without
+   * grants, which a score would have consumed as "never enrolled", making the same person rank
+   * differently depending on who asked.
+   */
+  enrollments: number | null;
   /** Highest recorded intent score, when the caller may see sales data. */
   intentScore: number | null;
-  /** Learning counterparts, so the summary is not acquisition-only. */
-  cardsCompleted: number;
-  sessionsAttended: number;
+  /** Learning counterparts, so the summary is not acquisition-only. Null when not looked up. */
+  cardsCompleted: number | null;
+  sessionsAttended: number | null;
 }
 
 export async function buildJourney(
@@ -34,6 +48,12 @@ export async function buildJourney(
   enrollmentIds: string[],
   sections: readonly string[],
   timeline: TimelineEvent[],
+  /**
+   * False when `enrollmentIds` was narrowed by the caller's permissions, so the length is not a
+   * count of the person's enrolments. Defaults to true: an omitted argument must not silently
+   * turn a withheld count into a measured one.
+   */
+  enrollmentsCounted = true,
 ): Promise<JourneySummary> {
   const counts = leadIds.length
     ? (
@@ -88,17 +108,19 @@ export async function buildJourney(
     daysKnown: firstTouch
       ? Math.max(0, Math.round((Date.now() - new Date(firstTouch).getTime()) / 86400000))
       : null,
-    sessions: Number(counts?.sessions ?? 0),
-    pageEvents: Number(counts?.page_events ?? 0),
-    campaigns: Number(counts?.campaigns ?? 0),
-    emailsSent: Number(counts?.emails ?? 0),
-    enrollments: enrollmentIds.length,
+    // Null when the query was never issued, which is the docblock's rule above. `counts` is only
+    // assigned when there is at least one lead id to count against.
+    sessions: counts ? Number(counts.sessions ?? 0) : null,
+    pageEvents: counts ? Number(counts.page_events ?? 0) : null,
+    campaigns: counts ? Number(counts.campaigns ?? 0) : null,
+    emailsSent: counts ? Number(counts.emails ?? 0) : null,
+    enrollments: enrollmentsCounted ? enrollmentIds.length : null,
     // Sales data. Withheld rather than shown as 0 when the caller lacks it.
     intentScore:
       sections.includes('leads') || sections.includes('revenue') || sections.includes('lead_ingestion')
         ? (counts?.intent != null ? Number(counts.intent) : null)
         : null,
-    cardsCompleted: Number(learning?.cards ?? 0),
-    sessionsAttended: Number(learning?.attended ?? 0),
+    cardsCompleted: learning ? Number(learning.cards ?? 0) : null,
+    sessionsAttended: learning ? Number(learning.attended ?? 0) : null,
   };
 }

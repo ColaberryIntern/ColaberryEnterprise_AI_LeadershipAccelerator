@@ -11,16 +11,24 @@ import { Unknown, fmtDateTime } from './primitives';
  *
  * Both halves say "nothing yet" rather than rendering an empty table, because
  * an empty table with headers reads as a load failure.
+ *
+ * M24.3 - and NULL is a third state, distinct from the empty one. It means the person has no
+ * lead record, so there was no key to look with. "Nothing was booked" and "we could not look"
+ * are different facts and a reader must not have to guess which one an empty panel means.
  */
+const NOT_LOOKED = 'No lead record for this person, so there was nothing to look in.';
+
 export default function AppointmentsAutomationTab({ appointments, automation }: {
-  appointments: AppointmentRow[] | undefined;
-  automation: AutomationRow[] | undefined;
+  appointments: AppointmentRow[] | undefined | null;
+  automation: AutomationRow[] | undefined | null;
 }) {
   return (
     <div className="row g-3">
       <div className="col-lg-6">
         <SectionCard title="Appointments" padded={false}>
-          {(appointments?.length ?? 0) === 0 ? (
+          {appointments === null ? (
+            <p className="text-muted small p-4 mb-0 text-center">{NOT_LOOKED}</p>
+          ) : (appointments?.length ?? 0) === 0 ? (
             <p className="text-muted small p-4 mb-0 text-center">Nothing booked.</p>
           ) : (
             <div className="table-responsive">
@@ -50,7 +58,9 @@ export default function AppointmentsAutomationTab({ appointments, automation }: 
       </div>
       <div className="col-lg-6">
         <SectionCard title="Automation history" padded={false}>
-          {(automation?.length ?? 0) === 0 ? (
+          {automation === null ? (
+            <p className="text-muted small p-4 mb-0 text-center">{NOT_LOOKED}</p>
+          ) : (automation?.length ?? 0) === 0 ? (
             <p className="text-muted small p-4 mb-0 text-center">No automation events yet.</p>
           ) : (
             <div className="table-responsive" style={{ maxHeight: '24rem', overflowY: 'auto' }}>

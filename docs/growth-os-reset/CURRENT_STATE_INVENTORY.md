@@ -340,7 +340,7 @@ So whichever he picks is already enforceable.
    and that stage is treated as post-conversion, which nulls temperature and lead score
    **on the server**, not merely hiding them in the UI:
 
-`backend/src/services/adminOs/personProfileService.ts:297` → "row.temperatureUpdatedAt = null;"
+`backend/src/services/adminOs/personProfileService.ts:302` → "row.temperatureUpdatedAt = null;"
 
    with this explanation attached to the suppression:
 

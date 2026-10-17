@@ -237,17 +237,20 @@ export default function PersonProfilePage() {
                 hint={fmtDate(profile.journey.firstTouch) ? `since ${fmtDate(profile.journey.firstTouch)}` : undefined}
               />
             </div>
+            {/* M24.2 - a dash, not a zero, when the count was never taken. These four come from
+                the lead side, so a person with no lead record has no measurement here at all,
+                and showing 0 claimed we had looked and found nothing. */}
             <div className="col-6 col-md-4 col-xl-2">
-              <StatCard label="Page events" value={profile.journey.pageEvents} icon="cursor-line" tone="primary" />
+              <StatCard label="Page events" value={profile.journey.pageEvents ?? '—'} icon="cursor-line" tone="primary" />
             </div>
             <div className="col-6 col-md-4 col-xl-2">
-              <StatCard label="Sessions" value={profile.journey.sessions} icon="global-line" tone="primary" />
+              <StatCard label="Sessions" value={profile.journey.sessions ?? '—'} icon="global-line" tone="primary" />
             </div>
             <div className="col-6 col-md-4 col-xl-2">
-              <StatCard label="Emails sent" value={profile.journey.emailsSent} icon="mail-send-line" tone="neutral" />
+              <StatCard label="Emails sent" value={profile.journey.emailsSent ?? '—'} icon="mail-send-line" tone="neutral" />
             </div>
             <div className="col-6 col-md-4 col-xl-2">
-              <StatCard label="Campaigns" value={profile.journey.campaigns} icon="megaphone-line" tone="neutral" />
+              <StatCard label="Campaigns" value={profile.journey.campaigns ?? '—'} icon="megaphone-line" tone="neutral" />
             </div>
             {/* No intent tile once someone has converted. A dash would still
                 invite the question; the tile simply does not belong on an
@@ -264,21 +267,25 @@ export default function PersonProfilePage() {
             )}
             {profile.intentSuppressedReason && (
               <div className="col-6 col-md-4 col-xl-2">
-                <StatCard label="Enrolments" value={profile.journey.enrollments}
+                {/* M24.3 - null when the caller's grants narrowed the id list, in which case
+                    this is a fact about the viewer and not about the person. */}
+                <StatCard label="Enrolments" value={profile.journey.enrollments ?? '—'}
                   icon="graduation-cap-line" tone="success" />
               </div>
             )}
             {/* What they DID, beside what they were sent. An acquisition-only
-                header made a heavy learner look like a quiet lead. */}
-            {profile.journey.cardsCompleted > 0 && (
+                header made a heavy learner look like a quiet lead.
+                The tiles stay hidden for an absent count as well as a zero one: there is
+                nothing to say about a learner we never looked up. */}
+            {(profile.journey.cardsCompleted ?? 0) > 0 && (
               <div className="col-6 col-md-4 col-xl-2">
-                <StatCard label="Cards completed" value={profile.journey.cardsCompleted}
+                <StatCard label="Cards completed" value={profile.journey.cardsCompleted ?? '—'}
                   icon="book-open-line" tone="success" />
               </div>
             )}
-            {profile.journey.sessionsAttended > 0 && (
+            {(profile.journey.sessionsAttended ?? 0) > 0 && (
               <div className="col-6 col-md-4 col-xl-2">
-                <StatCard label="Classes attended" value={profile.journey.sessionsAttended}
+                <StatCard label="Classes attended" value={profile.journey.sessionsAttended ?? '—'}
                   icon="calendar-check-line" tone="success" />
               </div>
             )}
