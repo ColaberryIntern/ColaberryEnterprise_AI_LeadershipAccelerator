@@ -31,6 +31,8 @@
 .cm-btn.is-secondary:hover{background:var(--sunken)}
 .cm-btn.is-disabled{background:var(--sunken);color:var(--muted);cursor:default}
 .cm-link{background:none;border:none;padding:4px 2px;color:var(--berry);font-weight:600;font-size:13px;cursor:pointer;text-decoration:underline}
+.te-nav .cm-switch-back{margin:10px 12px 0;text-align:left}
+.te-shell.collapsed .te-nav .cm-switch-back{display:none}
 .cm-btn:focus-visible,.cm-link:focus-visible,.cm-nav-item:focus-visible,.cm-tab:focus-visible{outline:3px solid var(--berry);outline-offset:2px}
 
 /* ---- the map ---- */

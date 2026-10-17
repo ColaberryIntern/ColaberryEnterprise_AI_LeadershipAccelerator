@@ -563,6 +563,11 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge, condens
         groups={groups} active={active} navCollapsed={navCollapsed} navExpanded={navExpanded}
         onToggleGroup={(grp) => setNavExpanded((m) => ({ ...m, [grp]: !m[grp] }))}
         todayBadge={todayBadge} isStaff={isStaff} hasFullAccess={hasFullAccess} cohortName={cohortName}
+        footer={campus.enabled ? (
+          <button type="button" className="cm-link cm-switch-back" data-testid="cm-use-campus" onClick={() => campus.updateSettings({ nav: 'campus' })}>
+            Switch to campus map
+          </button>
+        ) : undefined}
       />
       )}
 

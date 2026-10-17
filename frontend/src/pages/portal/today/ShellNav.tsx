@@ -56,9 +56,11 @@ export interface ClassicNavProps {
   isStaff: boolean;
   hasFullAccess: boolean;
   cohortName: string;
+  /** Rendered at the foot of the rail when given (the campus "switch back" link). Absent = markup unchanged. */
+  footer?: React.ReactNode;
 }
 
-export function ClassicNav({ groups, active, navCollapsed, navExpanded, onToggleGroup, todayBadge, isStaff, hasFullAccess, cohortName }: ClassicNavProps): React.ReactElement {
+export function ClassicNav({ groups, active, navCollapsed, navExpanded, onToggleGroup, todayBadge, isStaff, hasFullAccess, cohortName, footer }: ClassicNavProps): React.ReactElement {
   return (
       <nav className="te-nav">
         {groups.map((group) => {
@@ -124,6 +126,7 @@ export function ClassicNav({ groups, active, navCollapsed, navExpanded, onToggle
             <span className="pmini">+</span> Meet your cohort when you enroll
           </div>
         </div>
+        {footer}
       </nav>
   );
 }

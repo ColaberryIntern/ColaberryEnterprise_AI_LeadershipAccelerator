@@ -87,6 +87,8 @@ describe('campus list view', () => {
       expect(list.querySelector(`[data-building="${b.id}"]`)).not.toBeNull();
       for (const r of b.rooms) expect(list.textContent).toContain(r.label);
     }
+    // A planned route (Game Room, C10) is listed but never a link.
+    expect(list.querySelector('a[href="/portal/game-room"]')).toBeNull();
     // The career building shows the audience face.
     const face = { member: 'Career Center', explorer: 'Career Center', business: 'Partner Office', staff: 'Staff Office' }[aud];
     expect(list.querySelector('[data-building="career"] h3')!.textContent).toContain(face);

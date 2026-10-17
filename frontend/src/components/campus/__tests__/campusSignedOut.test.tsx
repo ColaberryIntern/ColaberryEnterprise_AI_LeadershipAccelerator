@@ -17,10 +17,14 @@ import { MemoryRouter } from 'react-router-dom';
 
 // One fake axios for every importer. Implementations are set in beforeEach because
 // react-scripts sets resetMocks: true.
+// The plain axios.get and the shared portalApi instance (made by axios.create) get DIFFERENT fakes,
+// so the suite can prove the flags request never goes through portalApi and its redirecting
+// 401 interceptor.
 jest.mock('axios', () => {
   const get = jest.fn();
-  const instance = { get, post: jest.fn(), interceptors: { request: { use: jest.fn() }, response: { use: jest.fn() } }, defaults: { headers: { common: {} } } };
-  return { __esModule: true, default: { get, create: () => instance, isAxiosError: () => false } };
+  const instanceGet = jest.fn();
+  const instance = { get: instanceGet, post: jest.fn(), interceptors: { request: { use: jest.fn() }, response: { use: jest.fn() } }, defaults: { headers: { common: {} } } };
+  return { __esModule: true, default: { get, create: () => instance, isAxiosError: () => false, __instance: instance } };
 });
 
 // eslint-disable-next-line import/first
@@ -34,7 +38,9 @@ import { PARTICIPANT_TOKEN_KEY } from '../../../utils/participantToken';
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 const get = axios.get as unknown as jest.Mock;
+const instanceGet = (axios as unknown as { __instance: { get: jest.Mock } }).__instance.get;
 const flagCalls = () => get.mock.calls.filter((c) => String(c[0]).includes('/api/portal/campus/flags'));
+const portalApiFlagCalls = () => instanceGet.mock.calls.filter((c) => String(c[0]).includes('/api/portal/campus/flags'));
 
 let seen: { enabled: boolean; ready: boolean } = { enabled: false, ready: false };
 function Probe(): null { const c = useCampus(); seen = { enabled: c.enabled, ready: c.ready }; return null; }
@@ -78,6 +84,7 @@ describe('campus flags and signed-out visitors', () => {
     get.mockResolvedValue({ data: { campus: true } });
     const unmount = await mountAt('/portal/today');
     expect(flagCalls()).toHaveLength(1);
+    expect(portalApiFlagCalls()).toHaveLength(0); // never through the redirecting shared client
     expect(flagCalls()[0][1]).toMatchObject({ headers: { Authorization: 'Bearer tok-123' } });
     expect(seen).toEqual({ enabled: true, ready: true });
     unmount();

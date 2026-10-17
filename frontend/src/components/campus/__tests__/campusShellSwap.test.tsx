@@ -97,6 +97,9 @@ describe('PortalShell nav swap', () => {
     expect(container.textContent).toContain('Page body');
     // You are in the Library: its building is marked as the current page.
     expect(container.querySelector('.cm-nav-item.active')!.getAttribute('href')).toBe('/portal/library');
+    // A planned route (Game Room, C10) is never a link in the side nav.
+    expect(container.querySelector('nav.cm-nav a[href="/portal/game-room"]')).toBeNull();
+    expect(container.querySelector('nav.cm-nav')!.textContent).toContain('Game Room');
   });
 
   it('campus on but the learner chose the classic menu: classic nav', async () => {
@@ -118,6 +121,20 @@ describe('PortalShell nav swap', () => {
     expect(has('nav.te-nav')).toBe(true);
     expect(has('nav.cm-nav')).toBe(false);
     expect(JSON.parse(window.localStorage.getItem(CAMPUS_SETTINGS_KEY)!).nav).toBe('classic');
+  });
+
+  it('the classic menu offers "Switch to campus map" when the campus is available, and it works', async () => {
+    await mount({ campus: true, nav: 'classic' });
+    const back = container.querySelector('nav.te-nav [data-testid="cm-use-campus"]');
+    expect(back).not.toBeNull();
+    act(() => { back!.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+    expect(has('nav.cm-nav')).toBe(true);
+    expect(JSON.parse(window.localStorage.getItem(CAMPUS_SETTINGS_KEY)!).nav).toBe('campus');
+  });
+
+  it('with the campus off there is no switch link (the classic menu is unchanged)', async () => {
+    await mount({ campus: false });
+    expect(has('[data-testid="cm-use-campus"]')).toBe(false);
   });
 
   it('the phone tab bar Map button opens the full campus map', async () => {
