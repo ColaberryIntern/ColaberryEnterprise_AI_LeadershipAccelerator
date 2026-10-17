@@ -16,7 +16,7 @@ jest.mock('../govOpportunitySync', () => ({ getGovSyncEntry: jest.fn().mockResol
 jest.mock('../govRelationship', () => ({ getAgencyRelationship: jest.fn().mockResolvedValue({ agency: null, priorCount: 0, pursuits: [] }) }));
 
 import {
-  evaluateRequirements, evaluateEvidenceCoverage, createQualification, recordDecision, approveGovQualification,
+  evaluateRequirements, evaluateEvidenceCoverage, createQualification, recordDecision, recordCapabilityDecisions, approveGovQualification,
   recordDocumentReview, evaluateZipCoverage, recordZipAttestation, getDecoupledWorkspace, approveDecoupledQualification,
   QualificationConflictError, QualificationBlockedError, ChangedSourceError, SourceUnavailableError,
   QualificationNotFoundError, SelfApprovalError, SourceNotApprovableError, EvidenceInsufficientError,
@@ -204,6 +204,41 @@ describe('recordDecision (CAS + fork-on-edit, non-approval states)', () => {
       canonicalOpportunityId: CLEAN_CANONICAL, biddingEntity: 'colaberry', expectedVersion: 1,
       decision: 'needs_evidence', reviewerIdentityId: 'rev-1',
     })).rejects.toBeInstanceOf(QualificationNotFoundError);
+  });
+});
+
+describe('recordCapabilityDecisions (advisory: must NOT reset the decision/evidence or move the establisher)', () => {
+  it('preserves decision, evidence_json, rationale and reviewer_identity_id; only adds the capabilities bag', async () => {
+    const current: any = {
+      version: 5, status: 'active', tenant_id: 't', organization_id: 'o', bidding_entity: 'colaberry',
+      canonical_opportunity_id: CLEAN_CANONICAL, delivery_project_id: null, source_snapshot: {}, source_snapshot_version: 1, source_available: true,
+      reviewer_identity_id: 'establisher@colaberry.com', decision: 'approved_bid_pursuit',
+      rationale: 'solid fit', evidence_json: { approvedBy: 'approver@colaberry.com' }, effort_cap: 'cap', reassessment_conditions: 'rc',
+      requirements_json: { established: [{ id: 'E1', text: 'x' }], reviewedDocuments: [{ docId: 'z' }] },
+      save: jest.fn().mockResolvedValue(undefined),
+    };
+    findOne.mockResolvedValue(current);
+    create.mockImplementation(async (row: any) => ({ ...row, id: 'q6', get: () => ({ ...row, id: 'q6' }) }));
+    await recordCapabilityDecisions({
+      canonicalOpportunityId: CLEAN_CANONICAL, biddingEntity: 'colaberry', expectedVersion: 5,
+      reviewerIdentityId: 'someone-else@colaberry.com', capabilities: { decisions: [{ id: 'CAP-01' }] },
+    });
+    const row = create.mock.calls[0][0];
+    expect(row.reviewer_identity_id).toBe('establisher@colaberry.com'); // the ESTABLISHER, never the acting saver
+    expect(row.decision).toBe('approved_bid_pursuit');                   // decision NOT reset (no un-approve)
+    expect(row.evidence_json).toEqual({ approvedBy: 'approver@colaberry.com' }); // evidence preserved
+    expect(row.rationale).toBe('solid fit');
+    expect(row.requirements_json.capabilities).toEqual({ decisions: [{ id: 'CAP-01' }] }); // the new bag added
+    expect(row.requirements_json.established).toEqual([{ id: 'E1', text: 'x' }]);           // established preserved
+    expect(current.status).toBe('superseded');
+  });
+
+  it('refuses a stale expectedVersion (CAS)', async () => {
+    findOne.mockResolvedValue({ version: 3, save: jest.fn() });
+    await expect(recordCapabilityDecisions({
+      canonicalOpportunityId: CLEAN_CANONICAL, biddingEntity: 'colaberry', expectedVersion: 1, reviewerIdentityId: 'x', capabilities: {},
+    })).rejects.toBeInstanceOf(QualificationConflictError);
+    expect(create).not.toHaveBeenCalled();
   });
 });
 
