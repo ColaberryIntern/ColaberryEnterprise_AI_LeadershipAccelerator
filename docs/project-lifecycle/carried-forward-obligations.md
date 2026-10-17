@@ -1490,3 +1490,87 @@ using it believe they have reported.
 
 This is also the fourth instance in this run of the same class: a mechanism assumed to work
 because a document said so, never checked against a case whose answer was known.
+
+## THE LEGACY-COMPATIBILITY GUARD WAS DEAD CODE, and three documents relied on it
+
+Found 2026-10-17 while establishing whether P8-T4 could safely arm the story-authorization gate.
+**Fixed, with a reproducing test.** This section exists because the defect's shape matters more
+than the defect.
+
+### What was wrong
+
+`storyAuthorization.ts` protects the 62 pre-hook student projects with a compatibility branch:
+a project created before `STUDENT_REGISTRATION_LIVE_SINCE` with no lifecycle row is PERMITTED as
+`legacy_compatibility`. That branch read `project.created_at`.
+
+**`project.created_at` is `undefined` on a real `Project` instance.** The model is initialised
+with `timestamps: true, underscored: true`, so the Sequelize ATTRIBUTE is `createdAt` mapped to
+the `created_at` COLUMN. The model separately carries `declare created_at: Date` — a TYPE-ONLY
+declaration that emits no runtime property — and `created_at` is absent from the `init()`
+attribute block. So `tsc` types it as a `Date` and the runtime value is `undefined`.
+
+The guard was written `if (project.created_at && project.created_at < CUTOFF)`. The defensive
+`&&` converted the undefined into a **silent refusal**.
+
+### Measured, not inferred
+
+Running the shipped function against all 72 real production projects, 2026-10-17:
+
+| Population | Count | Verdict |
+|---|---|---|
+| Has a lifecycle row (post-hook) | 10 | REFUSED `blueprint_not_approved`, gaps `approval_missing, authority_revoked` |
+| No lifecycle row (legacy) | 62 | **REFUSED `no_lifecycle`** — every one logging `project_created_at: null` |
+| Control: a nonexistent project id | 1 | REFUSED (so the gate is not bypassable) |
+
+And on a real instance: the column held `2026-04-02T17:33:42.613Z`, `project.created_at` was
+`undefined`, `project.get('createdAt')` returned the Date, `'created_at' in attributes` was
+**false**, `'createdAt' in attributes` was **true**. The same guard written against the real
+attribute evaluated **true** — the control that proves the fix is the fix.
+
+**So arming the gate would have refused all 72 projects, not the 10 the design intended.** Three
+documents — `phase8-handoff.md`, the run's `deployment-log.md` and, as of this morning, this
+register — said arming it would refuse the legacy builds. They were right about the outcome and
+wrong about every reason, and the protection they cited as the mitigation was inert.
+
+### Why no test caught it, which is the part worth keeping
+
+A test existed. It was green. It was named **"PERMITS a project that predates the registration
+hook (compatibility mode)"**, and its own comment said refusing those 62 "would break every legacy
+build". It passed because the `Project.findByPk` mock returned a plain object literal carrying
+`created_at` — **the shape of the TypeScript declaration rather than of the runtime instance.**
+
+The mock encoded the same false belief as the type. A test whose fixture is built from the type
+cannot discover that the type is a lie, and the more faithfully it matches the declaration the
+more certain it is to pass. This is the deepest version of the class this run kept paying for: not
+an unchecked instrument, but an instrument built from the same mistaken premise as the thing it
+measures.
+
+The mock now mimics a Sequelize instance — `createdAt` plus a `get()` accessor, and deliberately
+**no** `created_at` key. Proof it reproduces the defect: reverting the production fix makes
+**exactly 2 tests fail**, both expecting `legacy_compatibility` and receiving a refusal. Before
+this change, those two tests passed against the broken reader.
+
+### STILL OPEN: what arming the gate does now
+
+With the fix, arming it permits the 62 legacy projects and **still refuses the 10 post-hook
+projects** as `blueprint_not_approved`. That is correct by design — none of the 10 has an approved
+blueprint, all sit at stage `discovery` with prerequisites reported "not assessed", and under the
+NOT_MEASURED doctrine `not_assessed` BLOCKS. **But it is a product decision, not a technical one:**
+arming the gate today stops story generation for every current and new student project until a
+blueprint is approved through the product. **That decision is the DRI's and is what P8-T4 actually
+turns on** — not the one-line edit everyone has been describing.
+
+### SYSTEMIC, and ESCALATED rather than fixed
+
+**141 of this repo's 447 models carry the same declaration shape**: `declare created_at: Date`
+with no matching entry in the `init()` attribute block. Every one is a place where `tsc` will
+accept `.created_at` and hand back `undefined` at runtime. Most are harmless because nothing reads
+the property that way; `storyAuthorization.ts` was the realized case, and `StrategyCall` was
+checked and is safe because it defines the attribute explicitly.
+
+Fixing the model layer is a cross-module change touching a third of the models, which is squarely
+in CLAUDE.md's ESCALATE tier, so it is recorded here rather than attempted. **The cheap partial
+mitigation worth considering:** a test that walks `backend/src/models/*.ts` and fails when a model
+declares `created_at` without either defining it as an attribute or setting `timestamps: false` —
+the same derived-sweep pattern `lifecycleRegistrationCoverage.test.ts` already uses, which exists
+because a hand-written list of creation sites was wrong within a week.

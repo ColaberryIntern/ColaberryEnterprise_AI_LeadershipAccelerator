@@ -67,7 +67,7 @@ async function loadGate(opts: {
     default: { findOne },
   }));
   const findByPk = jest.fn(async () => (
-    'project' in opts ? opts.project : { id: PROJECT, created_at: AFTER_CUTOFF }
+    'project' in opts ? opts.project : sequelizeProject(AFTER_CUTOFF)
   ));
   jest.doMock('../../../models/Project', () => ({
     __esModule: true,
@@ -92,6 +92,31 @@ const BEFORE_CUTOFF = new Date('2026-10-05T06:02:41.455Z');
 const AFTER_CUTOFF = new Date('2026-10-13T14:03:48.285Z');
 /** The cutoff instant itself. The hook was live AT it, so this must NOT be treated as legacy. */
 const AT_CUTOFF = new Date('2026-10-12T00:00:00.000Z');
+
+/**
+ * A stand-in for what `Project.findByPk` ACTUALLY returns.
+ *
+ * This mock used to be `{ id, created_at }` — the shape of the TypeScript declaration rather than
+ * of the runtime object. A real Sequelize `Project` exposes the ATTRIBUTE `createdAt` and has NO
+ * `created_at` property: `declare created_at: Date` is type-only, and `created_at` is not in the
+ * `init()` attribute block, so the column is reached through `underscored` mapping.
+ *
+ * That difference is not cosmetic. It is why the compatibility branch was DEAD IN PRODUCTION
+ * while this suite was green: `project.created_at` was `undefined`, the `&&` guard fell through,
+ * and all 62 legacy projects were refused. Measured on a live instance 2026-10-17 —
+ * `project.created_at === undefined` while `project.get('createdAt')` returned the Date.
+ *
+ * It therefore has NO `created_at` key on purpose. A reader that looks for one gets `undefined`
+ * here exactly as it does in production, which is what makes this mock able to fail.
+ */
+function sequelizeProject(createdAt: Date) {
+  const attributes: Record<string, unknown> = { id: PROJECT, createdAt };
+  return {
+    id: PROJECT,
+    createdAt,
+    get: (key: string) => attributes[key],
+  };
+}
 
 /** A client that returns exactly what it is given. */
 const clientReturning = (payload: unknown) => ({
@@ -266,7 +291,7 @@ describe('THE NEGATIVE CONTROL: a refined but unapproved requirement set authori
     // on, which is the bypass LC-01 forbids. Projects predating the cutoff are permitted instead,
     // which the compatibility block below proves.
     const { storyAuthorizationFor } = await loadGate({
-      enforcement: true, row: null, project: { id: PROJECT, created_at: AFTER_CUTOFF },
+      enforcement: true, row: null, project: sequelizeProject(AFTER_CUTOFF),
     });
 
     expect(await storyAuthorizationFor(PROJECT)).toEqual({
@@ -279,7 +304,7 @@ describe('THE NEGATIVE CONTROL: a refined but unapproved requirement set authori
     // cohort; refusing them would break every legacy build for a rule that did not exist when
     // they were created, which is the reason the gate stayed unwired after the flag went on.
     const { storyAuthorizationFor, readLifecycleEvidence } = await loadGate({
-      enforcement: true, row: null, project: { id: PROJECT, created_at: BEFORE_CUTOFF },
+      enforcement: true, row: null, project: sequelizeProject(BEFORE_CUTOFF),
     });
 
     expect(await storyAuthorizationFor(PROJECT)).toEqual({
@@ -294,7 +319,7 @@ describe('THE NEGATIVE CONTROL: a refined but unapproved requirement set authori
     // The off-by-one that decides whether the first governed project is governed. The hook was
     // live at that instant, so a missing row is already a bypass. `<`, never `<=`.
     const { storyAuthorizationFor } = await loadGate({
-      enforcement: true, row: null, project: { id: PROJECT, created_at: AT_CUTOFF },
+      enforcement: true, row: null, project: sequelizeProject(AT_CUTOFF),
     });
 
     const verdict = await storyAuthorizationFor(PROJECT);
@@ -325,12 +350,12 @@ describe('THE NEGATIVE CONTROL: a refined but unapproved requirement set authori
     // first made the second mock answer for the first gate, which is how this test failed on its
     // first run. The same pattern IS safe for `readLifecycleEvidence`, imported statically.
     const legacy = await loadGate({
-      enforcement: true, row: null, project: { id: PROJECT, created_at: BEFORE_CUTOFF },
+      enforcement: true, row: null, project: sequelizeProject(BEFORE_CUTOFF),
     });
     expect((await legacy.storyAuthorizationFor(PROJECT)).reason).toBe('legacy_compatibility');
 
     const modern = await loadGate({
-      enforcement: true, row: null, project: { id: PROJECT, created_at: AFTER_CUTOFF },
+      enforcement: true, row: null, project: sequelizeProject(AFTER_CUTOFF),
     });
     expect((await modern.storyAuthorizationFor(PROJECT)).reason).toBe('no_lifecycle');
   });
