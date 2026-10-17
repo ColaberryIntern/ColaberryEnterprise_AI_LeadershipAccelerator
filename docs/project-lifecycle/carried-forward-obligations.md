@@ -1407,3 +1407,66 @@ an em dash belonged, committed, inside the sentence explaining a `\r` bug. Writt
 heredoc, which turns an escape into the byte it names. It is the third instance of that class in
 this run and the reason the rule is "never write prose or source through a heredoc", not "be
 careful with heredocs".
+
+### What independent production verification found, 2026-10-17
+
+Phase 7's production state was graded by an independent verifier rather than by the session that
+handled the deploy. **Verdict: PASS.** It also found four documentation defects in my own work,
+all now corrected in place, and one production bug that belongs to nobody in this programme.
+
+#### A REAL BUG, outside Phase 7, needing a ticket
+
+**A boot schema assert reports tables INCOMPLETE that demonstrably exist.** On every backend boot
+the log carries both of these lines:
+
+```
+[DB] Case Study Story Studio schema ensured (4 tables)
+[DB] Case Study Story Studio schema INCOMPLETE: table case_study_storylines,
+     table case_study_ai_drafts, table case_study_quotes, table case_study_charts
+```
+
+Measured in `accelerator_prod`, schema `public`, with both controls validated (a table that must
+exist returns EXISTS, a name that cannot returns MISSING): **14 `case_study%` tables are present,
+including all four the assert names.** The assert is emitting a false INCOMPLETE.
+
+This is precisely the warn-and-carry-on failure mode `verifyProjectLifecycleSchema` was built to
+replace, with an extra edge: a schema alarm that cries wolf on every boot trains the next
+responder to scroll past the one that is real. **Owner: whoever owns the Case Study Story Studio
+schema. Not Phase 8's, recorded so it is not lost.**
+
+Two other pre-existing noise sources, confirmed as not caused by this release by checking that the
+`3b4bb21d..e4ce4bb9` diff touches none of the emitting code: a recurring
+`[InboxCOS][Sync] gmail_personal ... invalid_grant` (expired OAuth grant) and
+`[StrategicStateStore] Snapshot capture failed: notNull Violation: KPISnapshot.snapshot_date cannot
+be null` — while `kpi_snapshots` nonetheless holds 219 rows and wrote successfully that morning,
+so something is both failing and succeeding on that path.
+
+#### Two lessons about instruments, both bought here
+
+**1. `9>` truncates. `9>>` does not.** The verifier intended a read-only run and tested the deploy
+lock with `flock -n 9 9>/var/lock/colaberry-deploy.lock`, which **zeroed the 68-byte attribution
+record** the deploy script writes (`pid= user= started= services=`). Functional impact nil — the
+script truncates that file on every run and `flock` is advisory on the descriptor, not the contents
+— but it destroyed the one piece of evidence that would have settled *who* deployed, directly,
+instead of by inference. My own two probes of the same lock used `8>>` and were safe. **One
+character is the whole difference between probing a lock and erasing its contents**, and it sits in
+a script whose author believed it was read-only.
+
+**2. A verdict decided by a broken control decides nothing — twice in ten minutes.** Checking the
+schema-assert claim, my first probe reported all four tables **MISSING**, contradicting the
+verifier. Its control query **threw**, so that result was void; I reported neither finding and
+rebuilt the instrument. The second attempt died to nested shell quoting without running its query
+at all. The third piped the script straight into `docker exec -i ... node`, so the source never
+passed through a shell, and with both controls behaving the answer was unambiguous and **opposite
+to my first reading**. Had I written up round one, I would have published a false refutation of a
+correct finding — and the thing that stopped me was a control, not care.
+
+#### The documentation defect worth naming here
+
+**An invalid health probe survived two verification cycles after being corrected once.** Both my
+handoff and the deployment log cited "`/api/health` answers 401" as evidence the backend was up and
+routing. An arbitrary nonexistent `/api` path returns the **identical** 401 body, so that 401 is an
+unscoped catch-all and proves nothing about routing. The valid probe is `GET /health`, which returns
+**200** with a live timestamp. A previous cycle had already established this, and the correction was
+not carried forward — which is the same failure this register exists to prevent, committed against
+this register's own subject matter.

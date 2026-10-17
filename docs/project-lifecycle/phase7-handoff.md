@@ -1,7 +1,13 @@
 # Phase 7 handoff — hardening, replay testing, legacy assessment and the controlled pilot
 
-Packets T0 through T8. Merged to `main` as `e4ce4bb9` on 2026-10-17 via
+Packets T0 through T8. Merged to `main` as **`78ba814b`** on 2026-10-17 via
 [PR #3142](https://github.com/ColaberryIntern/ColaberryEnterprise_AI_LeadershipAccelerator/pull/3142).
+**Deployed to production inside `e4ce4bb9`**, which is the merge of PR #3149 (AF8.3, a different
+workstream) and carries `78ba814b` as an ancestor.
+
+> **Corrected 2026-10-17.** This header originally read "merged as `e4ce4bb9` via PR #3142",
+> conflating Phase 7's merge commit with the release SHA that happened to be deployed.
+> `git diff --name-only e4ce4bb9^1 e4ce4bb9` is three files, none of them Phase 7's.
 
 **Read this first, because it is the whole shape of the phase.** Phase 7 fixed three real
 production defects, answered a measurement open since Phase 2, and built a guard, a legacy
@@ -17,7 +23,8 @@ are fixed in code that *does* run, and that the rest is built, tested and inert.
 | | |
 |---|---|
 | **What merged** | 6 production modules changed or added; 46 files, +6,238 lines including tests and docs |
-| **What runs in production** | The three defect fixes only. The guard, the legacy assessment and the pilot renderer have no caller |
+| **What of PHASE 7 runs in production** | The three defect fixes only. The guard, the legacy assessment and the pilot renderer have no caller |
+| **What else is in the same container** | **An authorization change that is not Phase 7's.** `e4ce4bb9` adds three `PATH_SECTION` rows in `middlewares/mgmtSectionGate.ts`, one of which moves `/api/admin/agent-domains-mine` from the `program` section to `dashboard`. It is AF8.3's work, it looks deliberate and is tested, and it is live in the same image as Phase 7. **Added 2026-10-17** after an independent verifier found the boundary report described Phase 7's contribution as though it described the release |
 | **What is proven** | Three defects reproduced by test before being fixed; Risk R5 measured and answered |
 | **What is NOT proven** | Anything that needs a database in CI. CI provisions no Postgres, so all seven replay-case and assessor suites self-skip on merge |
 
@@ -26,7 +33,7 @@ are fixed in code that *does* run, and that the rest is built, tested and inert.
 The Phase 7 plan recorded `ENABLE_PROJECT_LIFECYCLE` as absent in production and its deploy task
 asserted that **both** lifecycle flags are absent. **That criterion cannot pass as written.**
 Measured on the production host on 2026-10-17: `ENABLE_PROJECT_LIFECYCLE` is **`true`**, set on
-2026-10-13 under DRI authorization. `ENABLE_SBP_SOURCE_OVERFLOW_BLOCK` is genuinely absent.
+2026-10-13 under DRI authorization — **though the date is unverified and may be 2026-10-14**: the run's `deployment-log.md` dates activation 10-14 and names a backup file whose own name carries `20261014`. The **value** is measured three independent ways (`printenv` by name, an anchored count in `/proc/1/environ`, and the shipped `featureFlags.js`); the **date** is not, and the host env file was deliberately not read because it holds secrets. `ENABLE_SBP_SOURCE_OVERFLOW_BLOCK` is genuinely absent.
 
 So the new authorization guard is **not** held dark by a flag. What holds it inert is that
 **`executeStage` has no non-test caller anywhere in `backend/src`** — the only non-test mention of
@@ -50,7 +57,7 @@ is the honest division: **another session deployed `e4ce4bb9`; this session prov
 | Checkout on the host | `e4ce4bb9` |
 | Container replaced | `3f3ed0e0` → `3fec0a9c`, created 14:51:18Z |
 | **Phase 7 code present** | **Yes.** `FabricatedEvidenceError` found in `dist/services/lifecycle/legacyGapAssessment.js` |
-| Backend up and routing | Yes — `/api/health` answers **401** from inside the container |
+| Backend up and routing | Yes — **`GET /health` returns 200** with a live timestamp, both in-container and through the public hostname. **Corrected 2026-10-17:** this row originally cited `/api/health` answering **401** as the proof, which it is not — an arbitrary nonexistent `/api` path returns the identical 401 body, so that 401 is an unscoped catch-all rather than a health answer |
 | `ENABLE_PROJECT_LIFECYCLE` | **`true`** (confirms the plan's record was wrong) |
 | `ENABLE_SBP_SOURCE_OVERFLOW_BLOCK` | **absent** (genuinely dark) |
 | Lifecycle/sbp/factory errors in the logs | None |
@@ -58,7 +65,7 @@ is the honest division: **another session deployed `e4ce4bb9`; this session prov
 **The marker was validated in both directions**, which is the only way its presence means
 anything. Before the deploy: 0 hits, with a clean `grep` exit 1 and empty stderr, and a positive
 control (`sourceBlocks`) returning 9 hits to prove the instrument worked inside that container.
-After: 2 hits, control 10. An absence that was never shown to be detectable is not evidence.
+After: **2 files** (`legacyGapAssessment.js` and its `.d.ts`), control 10. **Those are FILE counts** -- the instrument was `grep -rlF`, which lists files, not lines; by line the symbol appears 5 times in the module. Reported as bare "hits", the number is not reproducible by a reader who reaches for `grep -c`. An absence that was never shown to be detectable is not evidence.
 
 **The ordering fix was verified on the shipped artifact, not the source**: in the running
 container's `dist/db/ensureSbpSchema.js`, `CREATE TABLE IF NOT EXISTS build_plans` is at line 126
@@ -70,8 +77,9 @@ now follows the CREATE in the code that actually boots.
 **A health check that could not have succeeded.** My first post-deploy probe curled
 `127.0.0.1:3001/api/health` from the host and got `000` on all three paths. The container
 publishes `3001/tcp` as *exposed*, not mapped to the host, so that request could never connect
-regardless of application health. Asked from inside the container the same endpoint returns 401.
-A `000` reported as "the backend is not answering" would have been a false outage.
+regardless of application health. A `000` reported as "the backend is not answering" would have been a false outage.
+
+**And the replacement evidence was also weak, which is the worse half of this.** I substituted "`/api/health` returns 401 from inside the container", reasoning that reaching auth middleware proves the app is routing. An independent verifier's control killed it: an arbitrary nonexistent `/api` path returns the **identical** 401 body. The valid probe is `GET /health`, which returns **200** with a live timestamp. A previous verification cycle had already established exactly this, and the correction was not carried forward — so this run shipped the same invalid probe twice after being told once.
 
 **A false caller.** Grepping the shipped `dist` for `executeStage` returned
 `growthJourney/execution/runExecutor.js`, which appeared to refute the inertness claim this whole
@@ -203,7 +211,7 @@ Measured on production 2026-10-16 with the **shipped `buildBriefText`** over the
 **p90 27,772**, max 41,679, and **11 of 48 over the 20,000 cap**. p90 sits above the cap, so this
 is not a tail event — roughly a quarter of real student briefs are clipped today and the largest
 is more than double the budget. The blocking gate exists behind
-`ENABLE_SBP_SOURCE_OVERFLOW_BLOCK`, inside `sourceBlocks()` so both generation stages reach it.
+`ENABLE_SBP_SOURCE_OVERFLOW_BLOCK`, inside `sourceBlocks()` so both **SBP** generation stages reach it. **Clarified 2026-10-17:** "both generation stages" meant both SBP stages. The factory path has its own ungated slicing at `factoryDecomposePrompt.ts` and no gated `sourceBlocks`, which is carried item 5 — a reader who did not already know that would read "both" as covering the factory half too.
 **Turning it on refuses 11 of 48 builds that succeed today** — a real change on a live student
 path, and the DRI's call.
 
