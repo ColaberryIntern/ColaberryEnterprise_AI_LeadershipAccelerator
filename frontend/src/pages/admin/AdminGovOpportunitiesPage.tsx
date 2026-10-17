@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PageHeader, StatCard, SectionCard } from '../../components/admin/shell';
 import {
-  listGovOpportunities, dismissGovOpportunity, restoreGovOpportunity, matchServicesToOpportunity,
+  listGovOpportunities, dismissGovOpportunity, restoreGovOpportunity, matchServicesToOpportunity, listPendingGovApprovals,
   type GovOpportunity, type GovOpportunityFeed, type ServiceMatch,
 } from '../../services/factoryApi';
 import { band, subtle, fmtValue, shortValue, daysLeft, closeLabel } from './govOppFormat';
@@ -211,6 +211,8 @@ export default function AdminGovOpportunitiesPage(): React.ReactElement {
   const [recentlyDismissed, setRecentlyDismissed] = useState<GovOpportunity[]>([]);
   const [showDismissed, setShowDismissed] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  // P4: discovery uuids whose pursuit has an approval awaiting a second admin (advisory list-flag).
+  const [pendingKeys, setPendingKeys] = useState<Set<string>>(new Set());
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -225,6 +227,23 @@ export default function AdminGovOpportunitiesPage(): React.ReactElement {
   }, []);
 
   useEffect(() => { void load(); }, [load]);
+
+  // P4: pursuits awaiting a second-admin approval, so the list can flag them. Decoupled (gws:) keys map back to the
+  // discovery uuid; a canonical (op:gov:) key does not map to a discovery row, so only gws: keys are collected.
+  // Advisory chrome only — a failure is swallowed and simply shows no flag.
+  useEffect(() => {
+    let alive = true;
+    void (async () => {
+      try {
+        const { pending } = await listPendingGovApprovals();
+        if (!alive) return;
+        const keys = new Set<string>();
+        for (const p of pending) if (p.canonicalOpportunityId.startsWith('gws:')) keys.add(p.canonicalOpportunityId.slice(4));
+        setPendingKeys(keys);
+      } catch { /* advisory flag only */ }
+    })();
+    return () => { alive = false; };
+  }, []);
 
   const opportunities = feed?.opportunities ?? [];
   const isLive = feed?.source === 'live';
@@ -480,6 +499,7 @@ export default function AdminGovOpportunitiesPage(): React.ReactElement {
                             <span>{o.agency}</span>
                             {o.category && <span className="badge bg-secondary-subtle text-secondary-emphasis">{o.category}</span>}
                             {unassessed && <span className="badge bg-secondary-subtle text-secondary-emphasis" title="No review verdict (absent or null) — unassessed, never approved">Unassessed</span>}
+                            {pendingKeys.has(o.uuid) && <span className="badge bg-info-subtle text-info-emphasis" title="A pursuit approval is awaiting a second admin">Approval pending</span>}
                           </div>
                         </td>
                         <td><ScoreChip score={o.priorityScore} /></td>

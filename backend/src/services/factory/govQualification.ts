@@ -30,6 +30,12 @@ export class EvidenceInsufficientError extends Error { constructor(public reason
 /** A manual document review named a docId that the source never LISTED as an authoritative document — a human
  *  cannot invent an authoritative doc; manual review may only attest to OP-listed authoritative docIds. */
 export class DocumentNotListedError extends Error { constructor(public docIds: string[]) { super('document(s) not listed as authoritative in the source snapshot'); this.name = 'DocumentNotListedError'; } }
+/** The establisher tried to route the pursuit approval to themselves. Separation of duties is enforced at REQUEST
+ *  time too (not only at approve), so a request can never be used to stage a self-approval. */
+export class ApprovalRequestSelfError extends Error { constructor() { super('the qualification establisher may not request their own approval'); this.name = 'ApprovalRequestSelfError'; } }
+/** Someone other than the requested approver tried to act on (send back) an approval request, or there was no
+ *  open request to act on. Only the admin the establisher routed to may return it. */
+export class NotRequestedApproverError extends Error { constructor() { super('only the requested approver may act on this approval request'); this.name = 'NotRequestedApproverError'; } }
 
 function contentHash(salt: string, obj: unknown): string {
   return crypto.createHash('sha256').update(`${salt}:${JSON.stringify(obj)}`).digest('hex');
@@ -475,6 +481,122 @@ export async function recordCapabilityDecisions(input: RecordCapabilityDecisions
     reassessment_conditions: current.reassessment_conditions,
     requirements_json: { ...(current.requirements_json || {}), capabilities: input.capabilities ?? null },
   });
+}
+
+export interface RequestApprovalInput {
+  canonicalOpportunityId: string; biddingEntity: string; expectedVersion: number;
+  /** The establisher requesting a second-admin review (for audit; not written to reviewer_identity_id). */
+  requesterIdentityId: string;
+  /** The chosen program-capable approver — MUST differ from the establisher (separation of duties). */
+  approverIdentityId: string;
+  /** The Step 4 decision brief for the approver (proposed decision, rationale, summary). ADVISORY opaque bag the
+   *  frontend owns; sets no gate. */
+  decisionBrief: any;
+}
+
+/**
+ * Route the pursuit to a DIFFERENT program-capable admin for approval, attaching the establisher's decision brief.
+ * ADVISORY state (requirements_json.approval + .decisionBrief) — it sets NO gate; the real, un-bypassable
+ * separation-of-duties + evidence gate is still approveGovQualification. Separation of duties is mirrored HERE so a
+ * request can never stage a self-approval: the chosen approver must differ from the establisher of record
+ * (reviewer_identity_id). Fork-on-edit; like recordCapabilityDecisions it preserves decision / reviewer_identity_id
+ * (the ESTABLISHER, never the requester) / evidence_json / rationale / effort_cap / reassessment_conditions, so the
+ * only change is the advisory approval bag. Works for coupled and decoupled records alike (keyed by loadCurrent).
+ */
+export async function requestApproval(input: RequestApprovalInput): Promise<any> {
+  const current = await loadCurrent(input.canonicalOpportunityId, input.biddingEntity);
+  if (!current) throw new QualificationNotFoundError();
+  if (current.version !== input.expectedVersion) throw new QualificationConflictError(current.version);
+  if (input.approverIdentityId && current.reviewer_identity_id && input.approverIdentityId === current.reviewer_identity_id) {
+    throw new ApprovalRequestSelfError();
+  }
+  const approval = {
+    status: 'requested',
+    requestedBy: input.requesterIdentityId,
+    approverIdentityId: input.approverIdentityId,
+    requestedAt: new Date().toISOString(),
+  };
+  return forkNewVersion(current, {
+    reviewer_identity_id: current.reviewer_identity_id,
+    decision: current.decision,
+    rationale: current.rationale,
+    evidence_json: current.evidence_json,
+    effort_cap: current.effort_cap,
+    reassessment_conditions: current.reassessment_conditions,
+    requirements_json: { ...(current.requirements_json || {}), approval, decisionBrief: input.decisionBrief ?? null },
+  });
+}
+
+export interface SendBackInput {
+  canonicalOpportunityId: string; biddingEntity: string; expectedVersion: number;
+  /** The admin returning the pursuit — MUST be the requested approver, and never the establisher. */
+  approverIdentityId: string;
+  note?: string | null;
+}
+
+/**
+ * The requested approver returns the pursuit to the establisher for revision, with a note. Only the admin the
+ * establisher routed to (approval.approverIdentityId) may send back, and never the establisher themselves — so a
+ * send-back cannot be used to self-service the record. ADVISORY: the decision is left UNCHANGED (the establisher
+ * revises, then re-requests), and no gate is touched. Fork-on-edit; preserves all the same fields as requestApproval.
+ */
+export async function sendBack(input: SendBackInput): Promise<any> {
+  const current = await loadCurrent(input.canonicalOpportunityId, input.biddingEntity);
+  if (!current) throw new QualificationNotFoundError();
+  if (current.version !== input.expectedVersion) throw new QualificationConflictError(current.version);
+  const prior = (current.requirements_json && current.requirements_json.approval) || null;
+  if (!prior || prior.status !== 'requested' || prior.approverIdentityId !== input.approverIdentityId) {
+    throw new NotRequestedApproverError();
+  }
+  // Defense in depth: the establisher can never be the one sending back (they are not the requested approver anyway,
+  // but a record whose establisher somehow matches the approver is a separation-of-duties violation).
+  if (input.approverIdentityId && current.reviewer_identity_id && input.approverIdentityId === current.reviewer_identity_id) {
+    throw new SelfApprovalError();
+  }
+  const approval = {
+    ...prior,
+    status: 'sent_back',
+    sentBackBy: input.approverIdentityId,
+    sentBackNote: input.note ?? null,
+    sentBackAt: new Date().toISOString(),
+  };
+  return forkNewVersion(current, {
+    reviewer_identity_id: current.reviewer_identity_id,
+    decision: current.decision,
+    rationale: current.rationale,
+    evidence_json: current.evidence_json,
+    effort_cap: current.effort_cap,
+    reassessment_conditions: current.reassessment_conditions,
+    requirements_json: { ...(current.requirements_json || {}), approval },
+  });
+}
+
+export interface PendingApproval {
+  canonicalOpportunityId: string; biddingEntity: string;
+  approverIdentityId: string | null; requestedBy: string | null; requestedAt: string | null;
+}
+
+/**
+ * List the active qualifications in a tenant that have an OPEN approval request (requirements_json.approval.status
+ * === 'requested'), so the opportunities list can show a "pending approval" flag. Bounded by design — one active row
+ * per pursuit (canonical, bidding_entity) — so it loads the tenant's active rows and filters in JS rather than with
+ * a fragile JSONB query. Read-only; never throws for an empty set.
+ */
+export async function listPendingApprovals(tenantId: string): Promise<PendingApproval[]> {
+  const { default: GovQualification } = await import('../../models/GovQualification');
+  const rows: any[] = await GovQualification.findAll({ where: { tenant_id: tenantId, status: 'active' } });
+  const out: PendingApproval[] = [];
+  for (const r of rows) {
+    const rec = r.get ? r.get() : r;
+    const ap = rec.requirements_json && rec.requirements_json.approval;
+    if (ap && ap.status === 'requested') {
+      out.push({
+        canonicalOpportunityId: rec.canonical_opportunity_id, biddingEntity: rec.bidding_entity,
+        approverIdentityId: ap.approverIdentityId ?? null, requestedBy: ap.requestedBy ?? null, requestedAt: ap.requestedAt ?? null,
+      });
+    }
+  }
+  return out;
 }
 
 const AUTHORITATIVE_ROLES = new Set(['solicitation', 'final_pws_sow', 'amendment']);
