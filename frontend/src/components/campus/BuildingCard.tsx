@@ -1,0 +1,69 @@
+import React from 'react';
+import { Link } from 'react-router-dom';
+import type { CampusBuilding, ExplorerAccess } from './campusMap';
+import { buildingName } from './campusMap';
+import { accessLabel, enrollCta } from './campusAccess';
+
+/**
+ * The card that opens when you arrive at a building (Campus C2): its name, what you can
+ * do here (primary action), its rooms as real links, and - for an Explorer - what is
+ * locked, a demo or a preview, with the enroll path the paywall already uses.
+ *
+ * Real data only: "Who's here" (C4) and "Staff on duty" (C5) are not rendered until those
+ * phases pass real data in, so nothing invented ever shows. A route that does not exist
+ * yet (marked `planned` in the catalog) shows as "Opening soon", never as a dead link.
+ */
+export interface BuildingCardProps {
+  building: CampusBuilding;
+  access: ExplorerAccess;
+  workplaceNames: boolean;
+  onClose: () => void;
+  /** Called when the learner follows any link out of the card (the overlay closes). */
+  onNavigate: () => void;
+}
+
+const NOTICE: Record<Exclude<ExplorerAccess, 'open'>, string> = {
+  locked: 'This building is for members. You can look around; enrolling opens it.',
+  demo: 'Explore it in demo mode. Running and saving work is for members.',
+  preview: 'You can watch a short preview. Enrolling opens everything here.',
+};
+
+export default function BuildingCard({ building: b, access, workplaceNames, onClose, onNavigate }: BuildingCardProps): React.ReactElement {
+  const name = buildingName(b, workplaceNames);
+  const chip = accessLabel(access);
+  const primaryPlanned = b.rooms.find((r) => r.route === b.primary.route)?.planned;
+  const headingId = `cm-card-${b.id}`;
+  return (
+    <section className={`cm-card cm-b-${b.id}`} aria-labelledby={headingId} data-testid="cm-card" data-building={b.id}>
+      <button type="button" className="cm-card-x" onClick={onClose} aria-label={`Close ${name}`}>×</button>
+      {chip && <div className="cm-card-chip">{chip}</div>}
+      <h2 id={headingId} className="cm-card-title">{name}</h2>
+
+      {primaryPlanned
+        ? <span className="cm-btn is-disabled" aria-disabled="true">{b.primary.label} - opening soon</span>
+        : <Link className="cm-btn" to={b.primary.route} onClick={onNavigate}>{b.primary.label}</Link>}
+
+      {access !== 'open' && (
+        <div className="cm-card-note">
+          <p>{NOTICE[access]}</p>
+          <Link className="cm-btn is-secondary" to={enrollCta(b).to} onClick={onNavigate}>{enrollCta(b).label}</Link>
+        </div>
+      )}
+
+      {b.rooms.length > 0 && (
+        <>
+          <h3 className="cm-card-h">Rooms</h3>
+          <ul className="cm-rooms">
+            {b.rooms.map((r) => (
+              <li key={r.route}>
+                {r.planned
+                  ? <span className="cm-room is-disabled" aria-disabled="true">{r.label} <small>opening soon</small></span>
+                  : <Link className="cm-room" to={r.route} onClick={onNavigate}>{r.label}</Link>}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+    </section>
+  );
+}

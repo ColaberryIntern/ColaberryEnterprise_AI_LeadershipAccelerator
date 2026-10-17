@@ -101,7 +101,7 @@ export const CAMPUS_BUILDINGS: readonly CampusBuilding[] = [
     prefixes: ['/portal/game-room'], explorer: 'open', audiences: EVERYONE, pos: { x: 210, y: 448, w: 108, h: 50 } },
   { id: 'gate', name: 'Main Gate', workplaceName: 'Visitor Entrance',
     primary: { label: "Visit Maya's welcome desk", route: '/portal/today' },
-    rooms: [], prefixes: [], explorer: 'open', audiences: ['explorer', 'staff'], pos: { x: 500, y: 660, w: 90, h: 50 } },
+    rooms: [], prefixes: [], explorer: 'open', audiences: ['explorer', 'staff'], pos: { x: 500, y: 622, w: 90, h: 50 } },
 ];
 
 /** The career building's face per audience (D4 career row). Staff links go to existing admin pages in C6. */

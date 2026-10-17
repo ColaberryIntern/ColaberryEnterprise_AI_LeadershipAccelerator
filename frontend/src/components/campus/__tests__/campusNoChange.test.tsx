@@ -61,18 +61,34 @@ jest.mock('../../../pages/portal/today/PeoplePanelRail', () => ({ __esModule: tr
 jest.mock('../../../pages/portal/today/ChatDock', () => ({ __esModule: true, default: () => null }));
 jest.mock('../../../pages/portal/today/MessagesButton', () => ({ __esModule: true, default: () => null }));
 jest.mock('../../ConfettiCelebration', () => ({ __esModule: true, default: () => null }));
-// The campus flag request: the production default answer.
-jest.mock('../campusApi', () => ({ fetchCampusFlags: () => Promise.resolve({ campus: false }), CAMPUS_FLAGS_TIMEOUT_MS: 10000 }));
+// The campus flag request: the production default answer. A plain counter (not jest.fn) so
+// react-scripts' resetMocks cannot wipe it; the byte-identical test asserts the fetch ran.
+jest.mock('../campusApi', () => {
+  let calls = 0;
+  return {
+    fetchCampusFlags: () => { calls += 1; return Promise.resolve({ campus: false }); },
+    __flagCalls: () => calls,
+    CAMPUS_FLAGS_TIMEOUT_MS: 10000,
+  };
+});
 
 // eslint-disable-next-line import/first
 import PortalShell from '../../../pages/portal/today/PortalShell';
 // eslint-disable-next-line import/first
 import { CampusProvider } from '../CampusContext';
+// eslint-disable-next-line import/first
+import { ParticipantAuthProvider } from '../../../contexts/ParticipantAuthContext';
+// eslint-disable-next-line import/first
+import { PARTICIPANT_TOKEN_KEY } from '../../../utils/participantToken';
+// eslint-disable-next-line import/first
+import * as campusApi from '../campusApi';
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+const flagCalls = (): number => (campusApi as unknown as { __flagCalls: () => number }).__flagCalls();
 
-async function renderHtml(wrap: (shell: React.ReactElement) => React.ReactElement): Promise<string> {
+async function renderHtml(wrap: (shell: React.ReactElement) => React.ReactElement, token?: string): Promise<string> {
   window.localStorage.clear();
+  if (token) window.localStorage.setItem(PARTICIPANT_TOKEN_KEY, token);
   const container = document.createElement('div');
   document.body.appendChild(container);
   let root: Root | null = null;
@@ -101,9 +117,23 @@ describe('Campus C1: flag off changes nothing', () => {
   });
 
   it('renders byte-identical HTML with CampusProvider mounted and the campus off', async () => {
-    const alone = await renderHtml((s) => s);
-    const withProvider = await renderHtml((s) => <CampusProvider>{s}</CampusProvider>);
+    // Signed in, so the provider really asks the server and gets {campus:false} - the production
+    // state - rather than taking the signed-out short cut (Campus C2 gate).
+    // Fake, unsigned test token: its only payload is {"email":"learner@example.com"}. Not a credential.
+    const TOKEN = 'h.eyJlbWFpbCI6ImxlYXJuZXJAZXhhbXBsZS5jb20ifQ.s'; // gitleaks:allow
+    const alone = await renderHtml((s) => <ParticipantAuthProvider>{s}</ParticipantAuthProvider>, TOKEN);
+    const before = flagCalls();
+    const withProvider = await renderHtml((s) => <ParticipantAuthProvider><CampusProvider>{s}</CampusProvider></ParticipantAuthProvider>, TOKEN);
+    expect(flagCalls()).toBe(before + 1);
     expect(withProvider.length).toBeGreaterThan(1000);
+    expect(withProvider).toBe(alone);
+  });
+
+  it('signed out, the provider makes no flags request and still changes nothing', async () => {
+    const alone = await renderHtml((s) => <ParticipantAuthProvider>{s}</ParticipantAuthProvider>);
+    const before = flagCalls();
+    const withProvider = await renderHtml((s) => <ParticipantAuthProvider><CampusProvider>{s}</CampusProvider></ParticipantAuthProvider>);
+    expect(flagCalls()).toBe(before);
     expect(withProvider).toBe(alone);
   });
 

@@ -1,0 +1,123 @@
+/* ============================================================
+   Colaberry Campus (C2). Scoped .cm-* classes, rendered inside .te-shell so every color is a
+   shell token (TodayShell.css) - no hard-coded colors (__tests__/campusNoHex.test.ts).
+   Layout mirrors the classic rail: .cm-nav takes grid-area:nav, .cm-tabbar the phone bar.
+   ============================================================ */
+
+/* ---- left column ---- */
+.cm-nav{grid-area:nav;background:var(--surface);border-right:1px solid var(--border);padding:14px 12px;
+  display:flex;flex-direction:column;gap:6px;position:sticky;top:61px;height:calc(100vh - 61px);overflow:auto}
+.cm-nav .grp{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:700;margin:12px 12px 4px}
+.cm-nav-map{border-radius:var(--r-16);overflow:hidden;border:1px solid var(--border-sub)}
+.cm-nav-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
+.cm-nav-item{display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:var(--r-pill);color:var(--body);
+  text-decoration:none;font-size:14px;font-weight:500}
+.cm-nav-item:hover{background:var(--sunken)}
+.cm-nav-item.active{background:var(--strong);color:var(--surface)}
+.cm-nav-item.is-disabled{color:var(--muted);cursor:default}
+.cm-nav-item .lb{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cm-nav-chip{font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin-left:6px}
+.cm-nav-item.active .cm-nav-chip{color:var(--surface)}
+.cm-dot{width:10px;height:10px;border-radius:50%;flex:none;background:var(--cm-c)}
+.cm-nav-foot{margin-top:auto;display:flex;justify-content:space-between;gap:8px;padding:10px 8px 2px;border-top:1px solid var(--border-sub)}
+.te-shell.collapsed .cm-nav .lb,.te-shell.collapsed .cm-nav .grp,.te-shell.collapsed .cm-nav-chip,
+.te-shell.collapsed .cm-nav-foot,.te-shell.collapsed .cm-nav-open{display:none}
+
+/* ---- buttons and links ---- */
+.cm-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:10px 16px;border-radius:var(--r-pill);
+  background:var(--cherry);color:var(--surface);font-weight:700;font-size:14px;border:none;cursor:pointer;text-decoration:none}
+.cm-btn:hover{background:var(--cherry-deep);color:var(--surface)}
+.cm-btn.is-secondary{background:var(--surface);color:var(--strong);border:1px solid var(--border)}
+.cm-btn.is-secondary:hover{background:var(--sunken)}
+.cm-btn.is-disabled{background:var(--sunken);color:var(--muted);cursor:default}
+.cm-link{background:none;border:none;padding:4px 2px;color:var(--berry);font-weight:600;font-size:13px;cursor:pointer;text-decoration:underline}
+.cm-btn:focus-visible,.cm-link:focus-visible,.cm-nav-item:focus-visible,.cm-tab:focus-visible{outline:3px solid var(--berry);outline-offset:2px}
+
+/* ---- the map ---- */
+.cm-map{display:block;width:100%;height:auto;font-family:var(--sans)}
+.cm-ground{fill:var(--sunken)}
+.cm-path{stroke:var(--border);stroke-width:14;stroke-linecap:round;fill:none}
+.cm-map.is-compact .cm-path{stroke-width:18}
+.cm-quad{fill:var(--surface);stroke:var(--border);stroke-width:3}
+.cm-bld{cursor:pointer}
+.cm-bld .cm-body{fill:var(--surface);stroke:var(--cm-c);stroke-width:3}
+.cm-bld .cm-roof{fill:var(--cm-c);stroke:var(--cm-c)}
+.cm-bld .cm-detail{fill:var(--surface);stroke:var(--cm-c);stroke-width:3}
+/* outline-only shapes (amphitheater arch, gate): the class wins over the .cm-roof fill */
+.cm-bld .cm-roof.cm-arch{fill:none;stroke-width:9;stroke-linecap:round}
+.cm-bld .cm-door{fill:var(--cm-c)}
+.cm-bld.is-locked .cm-body,.cm-bld.is-locked .cm-roof,.cm-bld.is-locked .cm-door{opacity:.55}
+.cm-bld:hover .cm-body,.cm-bld:focus .cm-body{stroke-width:5}
+.cm-bld:focus{outline:none}
+.cm-bld:focus-visible .cm-body{stroke:var(--berry);stroke-width:6}
+.cm-label{font-size:17px;font-weight:700;fill:var(--strong);paint-order:stroke;stroke:var(--surface);stroke-width:5px}
+.cm-chip{font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;fill:var(--muted)}
+.cm-pin{fill:var(--cherry);stroke:var(--surface);stroke-width:2}
+.cm-pin-dot{fill:var(--surface)}
+
+/* building colors: shell tokens only */
+.cm-b-lecture{--cm-c:var(--cherry)}
+.cm-b-library{--cm-c:var(--berry)}
+.cm-b-tower{--cm-c:var(--amber)}
+.cm-b-studio{--cm-c:var(--berry-hover)}
+.cm-b-amphi{--cm-c:var(--amber-deep)}
+.cm-b-testing{--cm-c:var(--leaf)}
+.cm-b-observatory{--cm-c:var(--leaf-deep)}
+.cm-b-commons{--cm-c:var(--amber)}
+.cm-b-gallery{--cm-c:var(--cherry-deep)}
+.cm-b-career{--cm-c:var(--berry)}
+.cm-b-arcade{--cm-c:var(--strong)}
+.cm-b-gate{--cm-c:var(--muted)}
+
+/* ---- full-screen layers ---- */
+.cm-layer{position:fixed;inset:0;z-index:60;background:var(--page);display:flex;flex-direction:column;outline:none}
+.cm-layer-bar{display:flex;align-items:center;gap:14px;padding:12px 20px;background:var(--surface);border-bottom:1px solid var(--border)}
+.cm-layer-bar strong{font-family:var(--logo);font-size:18px;color:var(--strong)}
+.cm-layer-hint{flex:1;color:var(--muted);font-size:13px}
+.cm-world{position:relative;flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:12px}
+.cm-world .cm-map{max-height:100%;max-width:min(100%,1200px);border-radius:var(--r-16)}
+
+/* ---- building card ---- */
+.cm-card{position:absolute;top:20px;right:20px;width:min(360px,calc(100% - 40px));max-height:calc(100% - 40px);overflow:auto;
+  background:var(--surface);border:1px solid var(--border);border-top:6px solid var(--cm-c);border-radius:var(--r-16);
+  box-shadow:var(--shadow-lg);padding:18px 20px;display:flex;flex-direction:column;gap:10px}
+.cm-card-x{position:absolute;top:10px;right:12px;background:none;border:none;font-size:24px;line-height:1;color:var(--muted);cursor:pointer}
+.cm-card-chip{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.cm-card-title{margin:0;font-size:24px;color:var(--strong)}
+.cm-card-note{background:var(--sunken);border-radius:var(--r-12);padding:12px 14px;display:flex;flex-direction:column;gap:10px}
+.cm-card-note p{margin:0;font-size:14px;color:var(--body)}
+.cm-card-h{margin:6px 0 0;font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.cm-rooms{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.cm-room{display:block;padding:10px 12px;border:1px solid var(--border-sub);border-radius:var(--r-12);color:var(--strong);text-decoration:none;font-weight:600}
+.cm-room:hover{background:var(--sunken)}
+.cm-room.is-disabled{color:var(--muted)}
+
+/* ---- list view ---- */
+.cm-filter{flex:1;min-width:0;padding:9px 14px;border:1px solid var(--border);border-radius:var(--r-pill);font-size:14px;background:var(--surface);color:var(--body)}
+.cm-list-body{flex:1;overflow:auto;padding:18px 20px;display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;align-content:start}
+.cm-list-bld{background:var(--surface);border:1px solid var(--border-sub);border-radius:var(--r-12);padding:12px 16px}
+.cm-list-bld h3{margin:0 0 6px;font-size:16px;color:var(--strong)}
+.cm-list-bld ul{margin:0;padding-left:18px}
+.cm-list-bld a{color:var(--berry)}
+.cm-empty{color:var(--muted)}
+
+/* ---- phone tab bar ---- */
+.cm-tabbar{display:none;position:fixed;bottom:0;left:0;right:0;z-index:40;background:var(--surface);border-top:1px solid var(--border);
+  padding:6px 2px calc(6px + env(safe-area-inset-bottom));justify-content:space-around}
+.cm-tab{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:2px;color:var(--muted);font-size:10px;font-weight:600;
+  text-decoration:none;padding:4px 0;background:none;border:none;cursor:pointer}
+.cm-tab.active{color:var(--cherry-text)}
+.cm-tab-ic{width:22px;height:22px;display:flex;align-items:center;justify-content:center}
+.cm-tab-ic svg{width:22px;height:22px}
+.cm-tab-dot{width:8px;height:8px;border-radius:50%;background:currentColor}
+
+@media(max-width:820px){
+  .cm-nav{display:none}
+  .cm-tabbar{display:flex}
+  .cm-layer-hint{display:none}
+  .cm-card{position:fixed;top:auto;bottom:12px;right:12px;left:12px;width:auto;max-height:55%}
+  /* Phones: the map fills the screen height and pans sideways, so labels stay readable
+     instead of shrinking the whole campus into a 250px strip. CampusWorld centers it. */
+  .cm-world{overflow-x:auto;overflow-y:hidden;justify-content:flex-start;align-items:stretch;padding:0}
+  .cm-world .cm-map{height:100%;width:auto;max-width:none;max-height:none;border-radius:0;flex:none}
+}

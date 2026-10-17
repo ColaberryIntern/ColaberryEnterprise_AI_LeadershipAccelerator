@@ -1,0 +1,148 @@
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import type { BuildingId, CampusBuilding, ExplorerAccess } from './campusMap';
+import { buildingName } from './campusMap';
+import { accessLabel } from './campusAccess';
+
+/**
+ * The campus world (Campus C2): an SVG map drawn from the catalog. Original art only - simple
+ * pediment, tower, block, amphitheater and arcade shapes, colored by shell tokens in campus.css.
+ *
+ * Buildings are real buttons (role=button, in Tab order, Enter/Space activate) so the map is
+ * usable without a pointer. In full mode a pick walks the avatar along the paths to the door
+ * (requestAnimationFrame) and then calls onArrive; with reduce motion it arrives at once and
+ * never schedules a frame. Compact mode (the side column) has no avatar: a pick is reported
+ * straight away so the caller can open the full map at that building.
+ */
+
+export const WORLD = { w: 1000, h: 700 };
+export const QUAD = { x: 500, y: 430 };
+const SPEED = 900; // world units per second
+
+type Pt = { x: number; y: number };
+// The avatar stands on the door step (the pin's tip is its position), above the building's label.
+export const doorOf = (b: Pick<CampusBuilding, 'pos'>): Pt => ({ x: b.pos.x, y: b.pos.y + b.pos.h / 2 + 2 });
+
+/** How far a building's roof rises above its body, so the access chip sits clear of it. */
+function roofRise(b: CampusBuilding): number {
+  const { h } = b.pos;
+  if (b.id === 'lecture' || b.id === 'library' || b.id === 'testing' || b.id === 'amphi') return h * 0.45;
+  if (b.id === 'observatory') return h * 0.7;
+  if (b.id === 'arcade') return 14;
+  return 6;
+}
+
+export interface CampusMapProps {
+  buildings: CampusBuilding[];
+  accessOf: (b: CampusBuilding) => ExplorerAccess;
+  workplaceNames: boolean;
+  reduceMotion: boolean;
+  compact?: boolean;
+  /** Full mode: walk here on mount (e.g. the building picked in the side column). */
+  initialTarget?: BuildingId | null;
+  onArrive: (id: BuildingId) => void;
+  /** Registers each building's element so a closed card can return focus to it. */
+  buildingRef?: (id: BuildingId, el: SVGGElement | null) => void;
+}
+
+function Roof({ b }: { b: CampusBuilding }): React.ReactElement {
+  const { x, y, w, h } = b.pos;
+  const left = x - w / 2, top = y - h / 2;
+  switch (b.id) {
+    case 'lecture': case 'library': case 'testing': case 'observatory':
+      return b.id === 'observatory'
+        ? <path className="cm-roof" d={`M${left} ${top} A ${w / 2} ${h * 0.7} 0 0 1 ${left + w} ${top} Z`} />
+        : <polygon className="cm-roof" points={`${left - 6},${top} ${x},${top - h * 0.45} ${left + w + 6},${top}`} />;
+    case 'tower':
+      return <circle className="cm-detail" cx={x} cy={top + 18} r={12} />;
+    case 'amphi':
+      return <path className="cm-roof cm-arch" d={`M${left} ${top + h * 0.2} A ${w / 2} ${h * 0.65} 0 0 1 ${left + w} ${top + h * 0.2}`} />;
+    case 'arcade':
+      return <rect className="cm-roof" x={left} y={top - 14} width={w} height={16} rx={3} />;
+    case 'gate':
+      return <path className="cm-roof cm-arch" d={`M${left} ${top + h} V ${top + 10} A ${w / 2} 18 0 0 1 ${left + w} ${top + 10} V ${top + h}`} />;
+    default:
+      return <rect className="cm-roof" x={left} y={top - 6} width={w} height={8} />;
+  }
+}
+
+function Building({ b, access, label, compact, onPick, setRef }: {
+  b: CampusBuilding; access: ExplorerAccess; label: string; compact: boolean;
+  onPick: (id: BuildingId) => void; setRef?: (id: BuildingId, el: SVGGElement | null) => void;
+}): React.ReactElement {
+  const { x, y, w, h } = b.pos;
+  const chip = accessLabel(access);
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onPick(b.id); }
+  };
+  return (
+    <g
+      ref={(el) => setRef?.(b.id, el)}
+      className={`cm-bld cm-b-${b.id}${access === 'locked' ? ' is-locked' : ''}`}
+      role="button" tabIndex={0} aria-label={chip ? `${label}, ${chip}` : label}
+      data-building={b.id} onClick={() => onPick(b.id)} onKeyDown={onKeyDown}
+    >
+      {b.id !== 'gate' && <rect className="cm-body" x={x - w / 2} y={y - h / 2} width={w} height={h} rx={4} />}
+      <Roof b={b} />
+      {b.id !== 'gate' && <rect className="cm-door" x={x - 7} y={y + h / 2 - 16} width={14} height={16} rx={2} />}
+      {!compact && <text className="cm-label" x={x} y={y + h / 2 + 22} textAnchor="middle">{label}</text>}
+      {!compact && chip && <text className="cm-chip" x={x} y={y - h / 2 - roofRise(b) - 10} textAnchor="middle">{chip}</text>}
+    </g>
+  );
+}
+
+export default function CampusWorldMap({ buildings, accessOf, workplaceNames, reduceMotion, compact = false, initialTarget, onArrive, buildingRef }: CampusMapProps): React.ReactElement {
+  const [pos, setPos] = useState<Pt>({ x: QUAD.x, y: 640 });
+  const posRef = useRef(pos);
+  const raf = useRef<number | null>(null);
+  posRef.current = pos;
+
+  const stop = () => { if (raf.current !== null) { cancelAnimationFrame(raf.current); raf.current = null; } };
+  useEffect(() => stop, []);
+
+  const walkTo = useCallback((id: BuildingId) => {
+    const b = buildings.find((x) => x.id === id);
+    if (!b) return;
+    stop();
+    const door = doorOf(b);
+    if (compact) { onArrive(id); return; }
+    if (reduceMotion) { setPos(door); onArrive(id); return; }
+    const pts: Pt[] = [posRef.current, QUAD, door];
+    const seg = pts.slice(1).map((p, i) => Math.hypot(p.x - pts[i].x, p.y - pts[i].y));
+    const total = seg.reduce((a, c) => a + c, 0) || 1;
+    const duration = (total / SPEED) * 1000;
+    let start: number | null = null;
+    const step = (t: number) => {
+      if (start === null) start = t;
+      const d = Math.min(1, (t - start) / duration) * total;
+      let acc = 0, i = 0;
+      while (i < seg.length - 1 && acc + seg[i] < d) { acc += seg[i]; i += 1; }
+      const f = seg[i] ? Math.min(1, (d - acc) / seg[i]) : 1;
+      setPos({ x: pts[i].x + (pts[i + 1].x - pts[i].x) * f, y: pts[i].y + (pts[i + 1].y - pts[i].y) * f });
+      if (d < total) raf.current = requestAnimationFrame(step);
+      else { raf.current = null; onArrive(id); }
+    };
+    raf.current = requestAnimationFrame(step);
+  }, [buildings, compact, reduceMotion, onArrive]);
+
+  const started = useRef(false);
+  useEffect(() => {
+    if (initialTarget && !started.current) { started.current = true; walkTo(initialTarget); }
+  }, [initialTarget, walkTo]);
+
+  return (
+    <svg className={`cm-map${compact ? ' is-compact' : ''}`} viewBox={`0 0 ${WORLD.w} ${WORLD.h}`} role="group" aria-label="Campus map">
+      <rect className="cm-ground" x={0} y={0} width={WORLD.w} height={WORLD.h} rx={compact ? 18 : 0} />
+      {buildings.map((b) => { const d = doorOf(b); return <path key={'p-' + b.id} className="cm-path" d={`M${QUAD.x} ${QUAD.y} L${d.x} ${d.y}`} />; })}
+      <circle className="cm-quad" cx={QUAD.x} cy={QUAD.y} r={compact ? 34 : 28} />
+      {buildings.map((b) => (
+        <Building key={b.id} b={b} access={accessOf(b)} label={buildingName(b, workplaceNames)} compact={compact} onPick={walkTo} setRef={buildingRef} />
+      ))}
+      {!compact && (
+        <g className="cm-avatar" transform={`translate(${pos.x} ${pos.y}) scale(0.8)`} aria-hidden="true" data-testid="cm-avatar">
+          <path className="cm-pin" d="M0 0 C -9 -12 -12 -18 -12 -24 A 12 12 0 1 1 12 -24 C 12 -18 9 -12 0 0 Z" />
+          <circle className="cm-pin-dot" cx={0} cy={-24} r={5} />
+        </g>
+      )}
+    </svg>
+  );
+}

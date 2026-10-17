@@ -23,7 +23,12 @@ import { useOrgManager, companyLabel } from '../useIsOrgManager';
 import { useMgmtStatus } from '../useMgmtStatus';
 import { useInternshipNav } from '../useInternshipNav';
 import ConfettiCelebration from '../../../components/ConfettiCelebration';
-import type { GatedFeatureKey } from '../../../components/paywall/gatedFeatures';
+import { ClassicNav, ClassicTabBar } from './ShellNav';
+import { useCampus } from '../../../components/campus/CampusContext';
+import CampusNav from '../../../components/campus/CampusNav';
+import CampusTabBar from '../../../components/campus/CampusTabBar';
+import CampusLayers from '../../../components/campus/CampusLayers';
+import type { NavItem, NavGroup } from './ShellNav';
 import { useScrollCondense } from '../../../hooks/useScrollCondense';
 
 // Sidebar nav — mirrors the Design E mockup: three grouped sections, one SVG
@@ -33,40 +38,10 @@ import { useScrollCondense } from '../../../hooks/useScrollCondense';
 // is present from day one and the page explains when the track opens rather than
 // the sidebar hiding it. (Rooms IS the group-chat surface — text + video rooms —
 // so the old "Group Chat" placeholder was removed.)
-// `gate` marks an item as content-paywalled (<PageGate> on its route) — the item
-// STAYS a clickable Link (unlike `soon`, which fully disables it): a free/unpaid
-// student can click through and see the upsell screen the route itself renders.
-type NavItem = { label: string; to?: string; icon: React.ReactNode; soon?: boolean; newTab?: boolean; gate?: GatedFeatureKey };
-type NavGroup = { grp: string; items: NavItem[] };
-
-/**
- * How many items each nav group shows before "More". The sidebar had grown to
- * 12 destinations across three groups and read as a wall; two per group keeps
- * the common paths one click away and the rest one click behind. Group item
- * ORDER therefore carries meaning — the first two are the defaults.
- */
-export const NAV_PRIMARY_COUNT = 2;
-
-/**
- * Split a group into the items always shown and the ones behind "More" (pure).
- *
- * `activeTo` forces the group open when the current page lives in the overflow —
- * otherwise a learner on Path or Portfolio sees no highlighted item anywhere in
- * the sidebar and cannot tell where they are.
- */
-export function splitNavGroup(
-  items: NavItem[],
-  expanded: boolean,
-  activeTo?: string,
-): { shown: NavItem[]; hidden: NavItem[]; activeIsHidden: boolean } {
-  if (items.length <= NAV_PRIMARY_COUNT) return { shown: items, hidden: [], activeIsHidden: false };
-  const primary = items.slice(0, NAV_PRIMARY_COUNT);
-  const overflow = items.slice(NAV_PRIMARY_COUNT);
-  const isActive = (n: NavItem) => !!n.to && !!activeTo && (activeTo === n.to || activeTo.startsWith(n.to + '/'));
-  const activeIsHidden = overflow.some(isActive);
-  const open = expanded || activeIsHidden;
-  return { shown: open ? items : primary, hidden: open ? [] : overflow, activeIsHidden };
-}
+// The nav item types, the "More" split and the classic rail + tab bar live in
+// ShellNav.tsx (moved unchanged for Colaberry Campus C2). Re-exported so existing
+// imports from PortalShell keep working.
+export { NAV_PRIMARY_COUNT, splitNavGroup } from './ShellNav';
 
 export const NAV_GROUPS: NavGroup[] = [
   {
@@ -477,6 +452,7 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge, condens
   );
   const cohortName = schedule?.first_class?.cohort_name || 'Your cohort';
   const active = location.pathname;
+  const campus = useCampus(); // Colaberry Campus: off (and classic nav) unless the server flag is on for this learner
 
   // Contacts rail — up to RAIL_MAX people shown as faces, friends-first then
   // most-active (the API sorts). Capped so there's never a long scroll. Incoming
@@ -581,72 +557,14 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge, condens
         </div>
       </header>
 
-      {/* ── nav ── */}
-      <nav className="te-nav">
-        {groups.map((group) => {
-          // When the rail is collapsed to icons the rows are tiny and the "More"
-          // control is hidden by CSS, so force every item visible — otherwise the
-          // overflow items would be unreachable in that mode.
-          const { shown, hidden, activeIsHidden } = splitNavGroup(
-            group.items, !!navExpanded[group.grp] || navCollapsed, active,
-          );
-          return (
-          <React.Fragment key={group.grp}>
-            <div className="grp">{group.grp}</div>
-            {shown.map((n) => {
-              const isActive = !!n.to && (active === n.to || active.startsWith(n.to + '/'));
-              const inner = (
-                <>
-                  <span className="ic">{n.icon}</span>
-                  <span className="lb">{n.label}</span>
-                  {n.label === 'Today' && !!todayBadge && todayBadge > 0 && <span className="badge">{todayBadge}</span>}
-                  {n.gate && !isStaff && !hasFullAccess && (
-                    <span className="te-navlock" title="Requires a paid seat" aria-label="Locked — requires a paid seat">
-                      <svg viewBox="0 0 24 24" width="11" height="11" fill="none" aria-hidden="true">
-                        <rect x="5" y="10" width="14" height="9" rx="2" stroke="currentColor" strokeWidth="2" />
-                        <path d="M8 10V7a4 4 0 0 1 8 0v3" stroke="currentColor" strokeWidth="2" />
-                      </svg>
-                    </span>
-                  )}
-                  {n.soon && <span className="te-soon">Soon</span>}
-                </>
-              );
-              if (isActive) return <span key={n.label} className="te-navbtn active">{inner}</span>;
-              if (n.soon) return <span key={n.label} className="te-navbtn is-soon" title="Coming soon" aria-disabled="true">{inner}</span>;
-              // Open in a NEW TAB (e.g. Management Portal) so the student session stays put.
-              if (n.newTab) return <a key={n.label} className="te-navbtn" href={n.to!} target="_blank" rel="noopener noreferrer">{inner}</a>;
-              return <Link key={n.label} className="te-navbtn" to={n.to!}>{inner}</Link>;
-            })}
-            {/* Only offered when collapsing actually hides something. When the
-                active page sits in the overflow the group is force-opened, so
-                the control reads "Show less" rather than lying about a count. */}
-            {(hidden.length > 0 || (group.items.length > NAV_PRIMARY_COUNT && !activeIsHidden)) && (
-              <button
-                type="button"
-                className="te-navmore"
-                aria-expanded={hidden.length === 0}
-                onClick={() => setNavExpanded((m) => ({ ...m, [group.grp]: !m[group.grp] }))}
-              >
-                <span className="ic" aria-hidden="true">
-                  <svg viewBox="0 0 24 24" fill="none">
-                    <path d={hidden.length > 0 ? 'M6 9l6 6 6-6' : 'M6 15l6-6 6 6'}
-                      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </span>
-                <span className="lb">{hidden.length > 0 ? `${hidden.length} more` : 'Show less'}</span>
-              </button>
-            )}
-          </React.Fragment>
-          );
-        })}
-
-        <div className="te-presence">
-          <div className="h"><span className="pdot" /> {cohortName}</div>
-          <div className="te-onrow" style={{ cursor: 'default' }}>
-            <span className="pmini">+</span> Meet your cohort when you enroll
-          </div>
-        </div>
-      </nav>
+      {/* ── nav ── Colaberry Campus replaces the classic rail when active (flag on + not chosen classic) */}
+      {campus.active ? <CampusNav active={active} /> : (
+      <ClassicNav
+        groups={groups} active={active} navCollapsed={navCollapsed} navExpanded={navExpanded}
+        onToggleGroup={(grp) => setNavExpanded((m) => ({ ...m, [grp]: !m[grp] }))}
+        todayBadge={todayBadge} isStaff={isStaff} hasFullAccess={hasFullAccess} cohortName={cohortName}
+      />
+      )}
 
       {/* ── main ── */}
       <main className="te-main">{typeof children === 'function' ? children(condensed) : children}</main>
@@ -774,18 +692,9 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge, condens
       {dmError && <div className="te-toast">{dmError}</div>}
 
       {/* ── bottom tab bar (mobile only via CSS) — nav reachable on phones ── */}
-      <nav className="te-tabbar">
-        {tabItems.map((t) => {
-          const on = !!t.to && (active === t.to || active.startsWith(t.to + '/'));
-          return (
-            <Link key={t.label} to={t.to!} className={`te-tab${on ? ' active' : ''}`}>
-              <span className="ic">{t.icon}</span>
-              <span className="lb">{t.label}</span>
-              {t.label === 'Today' && !!todayBadge && todayBadge > 0 && <span className="tdot" />}
-            </Link>
-          );
-        })}
-      </nav>
+      {campus.active
+        ? <><CampusTabBar active={active} /><CampusLayers /></>
+        : <ClassicTabBar tabItems={tabItems} active={active} todayBadge={todayBadge} />}
 
       {/* global build-ready toast (fires on any portal page) */}
       <BuildToast />

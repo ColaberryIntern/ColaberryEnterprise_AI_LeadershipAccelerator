@@ -13,6 +13,7 @@ import { BroadcastPlayerProvider } from '../contexts/BroadcastPlayerContext';
 import { BroadcastDiscoveryProvider } from '../contexts/BroadcastDiscoveryContext';
 import LiveMiniPlayer from '../components/portal/LiveMiniPlayer';
 import LiveNowBadge from '../components/portal/LiveNowBadge';
+import { CampusProvider } from '../components/campus/CampusContext';
 const PortalHandoffPage = lazy(() => import('../pages/portal/PortalHandoffPage'));
 const ClassCheckinPage = lazy(() => import('../pages/portal/ClassCheckinPage'));
 const ClassroomPage = lazy(() => import('../pages/portal/ClassroomPage'));
@@ -69,6 +70,14 @@ const portalRoutes = (
         */}
         <BroadcastDiscoveryProvider>
           <BroadcastPlayerProvider>
+            {/*
+              COLABERRY CAMPUS STATE lives here, beside <Outlet/>, for the same reason as the
+              mini-player: PortalShell remounts on every navigation. The provider renders only its
+              children (no DOM), and it makes NO request unless a participant is signed in - this
+              layout also wraps login, signup, verify, handoff and class-checkin
+              (components/campus/__tests__/campusSignedOut.test.tsx).
+            */}
+            <CampusProvider>
             <ReadOnlyBanner />
             <Outlet />
             {/*
@@ -94,6 +103,7 @@ const portalRoutes = (
             */}
             <LiveNowBadge />
             <LiveMiniPlayer />
+            </CampusProvider>
           </BroadcastPlayerProvider>
         </BroadcastDiscoveryProvider>
       </ParticipantAuthProvider>
