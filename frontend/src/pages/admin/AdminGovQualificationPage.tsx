@@ -2,7 +2,8 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { PageHeader, SectionCard, StatCard, StatusBadge, EmptyState } from '../../components/admin/shell';
 import {
-  getGovQualificationWorkspace, createGovQualification, recordGovQualificationDecision,
+  getGovQualificationWorkspace, createGovQualification, recordGovQualificationDecision, approveGovQualification,
+  requestGovApproval, sendBackGovApproval,
   authorizeGovBuild, getGovOpportunityCandidates, reviewGovQualificationDocuments, matchServicesToOpportunity,
   extractGovQualificationRequirements, getGovOpportunityDetail, attestSolicitationZip,
   assignGovBuildStory, unassignGovBuildStory,
@@ -1171,14 +1172,20 @@ export default function AdminGovQualificationPage(): React.ReactElement {
           {/* P4: the first-class Decide card — record a call, write the brief, route it to a second admin, approve
               or send back. Replaces the old "Open, decide & approve" drawer. */}
           <DecidePanel
-            canonicalOpportunityId={canonical}
-            biddingEntity={biddingEntity}
             record={record}
             canApprove={ws.canApprove}
+            blockedReason={ws.canApprove ? null : (isDecoupled
+              ? (ws.coverage && !ws.coverage.sufficient ? `Blocked: ${ws.coverage.reasons.map((r) => COVERAGE_REASON[r] ?? r).join('; ')}.` : 'Blocked: resolve the flagged requirements before approving.')
+              : ws.changedSource ? 'Blocked: source changed since review.'
+              : ws.sourceState !== 'available' ? `Blocked: source ${ws.sourceState}.`
+              : 'Blocked: requirements/coverage not yet sufficient.')}
             canOpen={ws.sourceAvailable || isDecoupled}
+            busy={busy}
             onOpen={() => run(() => createGovQualification(canonical, { biddingEntity, from: fromParam || undefined, agency: agencyParam || undefined }), 'Qualification opened.')}
-            onChanged={() => { void load(); }}
-            onApproved={() => setStep('build')}
+            onApprove={(rat) => run(() => approveGovQualification(canonical, { biddingEntity, expectedVersion: version, decision: 'approved_bid_pursuit', rationale: rat || undefined }), 'Bid pursuit approved.', () => setStep('build'))}
+            onQuickDecision={(d, rat) => run(() => recordGovQualificationDecision(canonical, { biddingEntity, expectedVersion: version, decision: d, rationale: rat || undefined }), d === 'no_bid' ? 'Recorded: no bid.' : 'Recorded: needs evidence.')}
+            onRequest={(approverId, brief) => run(() => requestGovApproval(canonical, { biddingEntity, expectedVersion: version, approverIdentityId: approverId, decisionBrief: brief }), 'Approval requested.')}
+            onSendBack={(n) => run(() => sendBackGovApproval(canonical, { biddingEntity, expectedVersion: version, note: n || undefined }), 'Sent back for revision.')}
           />
 
           {/* Deadline countdown now lives in the persistent right rail (see RightRail below). */}
