@@ -42,16 +42,27 @@ export interface CampusState {
   /** C4: who is in each building (null until the first read), and whether the last read failed. */
   presence: CampusPresence | null;
   presenceError: boolean;
+  /** C3: a door transition in progress (CampusDoorTransition plays it), or null. */
+  door: DoorState | null;
+  /** Zoom through a building's door into a real page (instant with reduce motion). */
+  enterThroughDoor: (route: string, from: DoorRect | null) => void;
+  /** Step back outside: open the map at this building, zooming out to its door (instant with reduce motion). */
+  stepOutside: (buildingId: BuildingId | null) => void;
+  clearDoor: () => void;
 }
 
 export type CampusLayer = 'none' | 'map' | 'list';
+export interface DoorRect { left: number; top: number; width: number; height: number }
+export type DoorState =
+  | { phase: 'in'; route: string; from: DoorRect | null; id: number }
+  | { phase: 'out'; buildingId: BuildingId | null; id: number };
 
 const noop = () => { /* no provider */ };
 const OFF: CampusState = {
   enabled: false, ready: false, active: false,
   settings: { nav: 'campus', workplaceNames: false, reduceMotion: false },
   updateSettings: noop, layer: 'none', mapFocus: null, openMap: noop, openList: noop, closeLayer: noop,
-  presence: null, presenceError: false,
+  presence: null, presenceError: false, door: null, enterThroughDoor: noop, stepOutside: noop, clearDoor: noop,
 };
 
 const Ctx = createContext<CampusState>(OFF);
@@ -85,9 +96,23 @@ export function CampusProvider({ children }: { children?: React.ReactNode }): Re
   const active = enabled && settings.nav === 'campus';
   const { presence, presenceError } = useCampusPresencePoll(active);
 
+  // C3 door transitions. The context only records the request; CampusDoorTransition (inside the router)
+  // plays it and performs the navigation, so this provider never needs router context.
+  const [door, setDoor] = useState<DoorState | null>(null);
+  const doorSeq = React.useRef(0);
+  const enterThroughDoor = useCallback((route: string, from: DoorRect | null) => {
+    doorSeq.current += 1; setDoor({ phase: 'in', route, from, id: doorSeq.current });
+  }, []);
+  const stepOutside = useCallback((buildingId: BuildingId | null) => {
+    doorSeq.current += 1; setDoor({ phase: 'out', buildingId, id: doorSeq.current });
+  }, []);
+  const clearDoor = useCallback(() => setDoor(null), []);
+
   const value = useMemo<CampusState>(
-    () => ({ enabled, ready, settings, active, updateSettings, layer, mapFocus, openMap, openList, closeLayer, presence, presenceError }),
-    [enabled, ready, settings, active, updateSettings, layer, mapFocus, openMap, openList, closeLayer, presence, presenceError],
+    () => ({ enabled, ready, settings, active, updateSettings, layer, mapFocus, openMap, openList, closeLayer, presence, presenceError,
+      door, enterThroughDoor, stepOutside, clearDoor }),
+    [enabled, ready, settings, active, updateSettings, layer, mapFocus, openMap, openList, closeLayer, presence, presenceError,
+      door, enterThroughDoor, stepOutside, clearDoor],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

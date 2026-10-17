@@ -13,7 +13,7 @@ import NotificationBell from '../community/NotificationBell';
 import BuildToast from '../projects/BuildToast';
 import { CohortContact, fetchCohortPresence, sendFriendRequest, respondToFriendRequest, colorFor } from '../../../services/cohortPresenceApi';
 import { fetchPeoplePanel, PeoplePanel } from '../../../services/peoplePanelApi';
-import PeoplePanelRail from './PeoplePanelRail';
+import ShellContactsRail from './ShellContactsRail';
 import { pingPresence } from '../../../services/communityApi';
 import { openDm } from '../../../services/dmApi';
 import ChatDock, { DmTarget } from './ChatDock';
@@ -28,6 +28,7 @@ import { useCampus } from '../../../components/campus/CampusContext';
 import CampusNav from '../../../components/campus/CampusNav';
 import CampusTabBar from '../../../components/campus/CampusTabBar';
 import CampusLayers from '../../../components/campus/CampusLayers';
+import CampusBanner from '../../../components/campus/CampusBanner';
 import type { NavItem, NavGroup } from './ShellNav';
 import { useScrollCondense } from '../../../hooks/useScrollCondense';
 
@@ -572,118 +573,20 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge, condens
       )}
 
       {/* ── main ── */}
-      <main className="te-main">{typeof children === 'function' ? children(condensed) : children}</main>
+      <main className="te-main">{campus.active && <CampusBanner />}{typeof children === 'function' ? children(condensed) : children}</main>
 
       {/* ── right contacts rail (Facebook-style cohort presence) ──
           Shell-level, so it appears on every PortalShell page. On narrow
           viewports it is the FIRST thing to collapse (avatar-only rail), before
           the left nav — see the staged .te-contacts media rules in TodayShell.css. */}
-      <aside className="te-contacts" aria-label="Cohort contacts">
-        {panel ? (
-          // Role-aware People panel (PEOPLE_PANEL_ROLES_ENABLED=true). When null (flag
-          // OFF or fetch error) the legacy cohort-presence rail below renders unchanged.
-          <PeoplePanelRail
-            panel={panel}
-            collapsed={contactsCollapsed}
-            onToggleCollapsed={() => setContactsCollapsed((c) => !c)}
-            onOpenPerson={openPerson}
-          />
-        ) : showFind ? (
-          <>
-            {/* Find-people view — the full cohort directory, reachable by clicking
-                "Find people" and dismissed with the back arrow. */}
-            <div className="te-ct-head">
-              <button type="button" className="te-ct-back" onClick={() => setRailView('people')} aria-label="Back to contacts" title="Back">
-                <svg viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
-              </button>
-              <h3>Find people</h3>
-            </div>
-            <div className="te-ct-search-wrap">
-              <svg viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" /><path d="M21 21l-4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
-              <input
-                className="te-ct-search"
-                type="text"
-                autoFocus
-                value={findQuery}
-                onChange={(e) => setFindQuery(e.target.value)}
-                placeholder="Search your cohort…"
-                aria-label="Search people"
-              />
-            </div>
-            <div className="te-ct-list">
-              {findFiltered.map((c) => (
-                <div key={c.id} className="te-ctrow te-ctrow-static" title={c.name}>
-                  <span className="te-ctav" style={{ background: c.color }}>{c.avatarUrl ? <img src={c.avatarUrl} alt="" /> : c.initials}<span className={`te-ctpres ${c.presence}`} /></span>
-                  <span className="te-ctname">{c.name}</span>
-                  {c.friendshipStatus === 'friend' ? (
-                    <span className="te-ct-added">Friends</span>
-                  ) : c.friendshipStatus === 'requested' ? (
-                    <button type="button" className="te-ct-add" disabled>Requested</button>
-                  ) : c.friendshipStatus === 'incoming' ? (
-                    <button type="button" className="te-ct-add" onClick={() => onRespondFriend(c.id, true)}>Accept</button>
-                  ) : (
-                    <button type="button" className="te-ct-add" onClick={() => onAddFriend(c.id)}>Add</button>
-                  )}
-                </div>
-              ))}
-              {findFiltered.length === 0 && (
-                <div className="te-ct-empty">{findQuery.trim() ? `No one matches “${findQuery.trim()}”.` : 'No one from your cohort is here yet.'}</div>
-              )}
-            </div>
-          </>
-        ) : (
-          <>
-            {/* Default view — up to RAIL_MAX faces, most-active first. */}
-            <div className="te-ct-head">
-              <h3>Contacts</h3>
-              <button
-                type="button"
-                className="te-ct-toggle"
-                onClick={() => setContactsCollapsed((c) => !c)}
-                title={contactsCollapsed ? 'Expand contacts' : 'Collapse contacts'}
-                aria-label="Toggle contacts panel"
-                aria-expanded={!contactsCollapsed}
-              >
-                <svg viewBox="0 0 24 24" fill="none" style={{ transform: contactsCollapsed ? 'rotate(180deg)' : 'none' }}>
-                  <path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </button>
-            </div>
-            <button type="button" className="te-ct-find" title="Find people" onClick={() => { setContactsCollapsed(false); setRailView('find'); setFindQuery(''); }}>
-              <svg viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" /><path d="M21 21l-4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
-              <span>Find people</span>
-            </button>
-            {!contactsCollapsed && incoming.length > 0 && (
-              <div className="te-ct-list te-ct-requests">
-                <div className="te-ct-grp">Requests · {incoming.length}</div>
-                {incoming.map((c) => (
-                  <div key={c.id} className="te-ctrow te-ctrow-static" title={c.name}>
-                    <span className="te-ctav" style={{ background: c.color }}>{c.avatarUrl ? <img src={c.avatarUrl} alt="" /> : c.initials}</span>
-                    <span className="te-ctname">{c.name}</span>
-                    <span className="te-ct-reqbtns">
-                      <button type="button" className="te-ct-add" onClick={() => onRespondFriend(c.id, true)}>Accept</button>
-                      <button type="button" className="te-ct-decline" onClick={() => onRespondFriend(c.id, false)} aria-label="Decline request">✕</button>
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-            <div className="te-ct-list">
-              {people.length > 0 && <div className="te-ct-grp">{cohortName} · {onlineNow} online</div>}
-              {people.map((c) => (
-                <button key={c.id} type="button" className="te-ctrow" data-name={c.name} title={`Message ${c.name}`} onClick={() => openChat(c)}>
-                  <span className="te-ctav" style={{ background: c.color }}>{c.avatarUrl ? <img src={c.avatarUrl} alt="" /> : c.initials}<span className={`te-ctpres ${c.presence}`} /></span>
-                  <span className="te-ctname">{c.name}</span>
-                  <span className={`te-ctpres ${c.presence}`} />
-                </button>
-              ))}
-              {contacts.length === 0 && (
-                <div className="te-ct-empty">No one from your cohort yet. Check back soon.</div>
-              )}
-            </div>
-          </>
-        )}
-      </aside>
+      <ShellContactsRail
+        panel={panel} contactsCollapsed={contactsCollapsed} onToggleCollapsed={() => setContactsCollapsed((c) => !c)}
+        openPerson={openPerson} showFind={showFind} onBackToPeople={() => setRailView('people')}
+        onOpenFind={() => { setContactsCollapsed(false); setRailView('find'); setFindQuery(''); }}
+        findQuery={findQuery} setFindQuery={setFindQuery} findFiltered={findFiltered}
+        onAddFriend={onAddFriend} onRespondFriend={onRespondFriend} incoming={incoming} people={people}
+        cohortName={cohortName} onlineNow={onlineNow} contactsCount={contacts.length} openChat={openChat}
+      />
 
       {/* ── 1:1 chat docks (Facebook-style, bottom-right) ── */}
       {chats.length > 0 && (
