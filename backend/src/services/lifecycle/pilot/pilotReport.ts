@@ -137,9 +137,15 @@ export function renderPilotReport(input: PilotInputs): string {
 
   L.push('# Project lifecycle pilot results');
   L.push('');
-  L.push(`**Measured on ${measuredOn}.** Every figure below carries its denominator. Figures`);
-  L.push('without one are not in this document; dimensions that could not be measured are listed');
-  L.push('as unmeasured with the reason, rather than estimated.');
+  L.push(`**Measured on ${measuredOn}.** No figure here is a SHARE without its denominator:`);
+  L.push('coverage prints covered and total, effort prints numerator and total minutes, and');
+  L.push('nothing is divided. Bare numbers — workspace counts, refusal counts — are counts of the');
+  L.push('thing named, not ratios. Dimensions that could not be measured are listed as unmeasured');
+  L.push('with the reason, rather than estimated.');
+  L.push('');
+  L.push('**An earlier version of this line claimed every figure carried a denominator. It did');
+  L.push('not** — the workspace and refusal counts are bare — and an independent review caught the');
+  L.push('overstatement. The claim is now the narrower one that is true.');
   L.push('');
   // THE PERCENT SIGN IS SPELLED OUT, NOT PRINTED, and that is not fastidiousness: the first
   // generated draft of this report was REFUSED by its own check, because this very sentence
@@ -212,7 +218,15 @@ export function renderPilotReport(input: PilotInputs): string {
   }
   L.push('');
 
-  L.push('## 4. Generation time and cost');
+  L.push('## 4. Effort allocation — and why generation time and cost are ABSENT');
+  L.push('');
+  L.push('**This section does not contain a generation time or a cost, and the heading it used to');
+  L.push('carry promised both.** What the table holds is the effort allocation each fixture');
+  L.push('DECLARES: `aiShare` numerator and denominator minutes, read back out of the fixture that');
+  L.push('states them. They are inputs to the composition, not measurements of anything this pilot');
+  L.push('did. The one quantity that was genuinely measured — compose wall time — is deliberately');
+  L.push('withheld, for the reason given below. So a reader should take these as "what the fixture');
+  L.push('says the work costs", never as "what generation cost".');
   L.push('');
   L.push('| Fixture | Effort bases | AI minutes | Total minutes | Below target |');
   L.push('|---|---|---|---|---|');
@@ -232,9 +246,14 @@ export function renderPilotReport(input: PilotInputs): string {
   L.push('AI minutes are printed as a numerator and a denominator, never divided.');
   const below = observations.filter((o) => o.belowTarget).length;
   // Counted, with its denominator, rather than asserted over the cohort.
-  L.push(`${below} of the ${observations.length} fixtures are below the automation target, which`);
-  L.push('is a recorded decision for the manual-only and human-heavy shapes rather than a');
-  L.push('shortfall.');
+  L.push(`${below} of the ${observations.length} fixtures are below the automation target.`);
+  L.push('');
+  L.push('**That is one fact with two different causes, and an earlier version of this sentence');
+  L.push('gave only one of them.** For the manual-only and human-heavy shapes, being below target');
+  L.push('is a RECORDED DECISION rather than a shortfall — zero automation is what those fixtures');
+  L.push('exist to express. For the others it is simply where their declared effort split lands,');
+  L.push('and this pilot offers no view on whether that is right. Reading the single reason across');
+  L.push('all of them would be the generalisation this report refuses elsewhere.');
   L.push('');
 
   L.push('## 5. Failure recovery');
@@ -248,6 +267,14 @@ export function renderPilotReport(input: PilotInputs): string {
   L.push('');
 
   L.push('## What this pilot could not measure');
+  L.push('');
+  L.push('**The plainest limit first, because the four below are about technique and this one is');
+  L.push('about reach: none of what this pilot exercises runs anywhere.** No model was called, no');
+  L.push('database was touched, the fixtures carry one or two requirement blocks each against real');
+  L.push('student briefs measured at up to 41,679 characters, and the execution machine whose');
+  L.push('lease handover appears in section 5 has no production caller and no production store.');
+  L.push('This is a disciplined exercise of a test harness. A reader who takes it for a pilot of a');
+  L.push('running system will overestimate what it shows, and the title alone invites that.');
   L.push('');
   for (const n of notMeasured) L.push(`- **${n.dimension}** — ${n.why}`);
   L.push('');

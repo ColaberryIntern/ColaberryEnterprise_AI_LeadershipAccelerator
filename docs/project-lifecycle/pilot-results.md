@@ -1,8 +1,14 @@
 # Project lifecycle pilot results
 
-**Measured on 2026-10-17.** Every figure below carries its denominator. Figures
-without one are not in this document; dimensions that could not be measured are listed
-as unmeasured with the reason, rather than estimated.
+**Measured on 2026-10-17.** No figure here is a SHARE without its denominator:
+coverage prints covered and total, effort prints numerator and total minutes, and
+nothing is divided. Bare numbers — workspace counts, refusal counts — are counts of the
+thing named, not ratios. Dimensions that could not be measured are listed as unmeasured
+with the reason, rather than estimated.
+
+**An earlier version of this line claimed every figure carried a denominator. It did
+not** — the workspace and refusal counts are bare — and an independent review caught the
+overstatement. The claim is now the narrower one that is true.
 
 **There are no comparison percentages in this report, and that is enforced rather
 than intended:** `comparisonClaimViolations` fails a test on any percent sign within
@@ -59,7 +65,15 @@ reach, rather than a claim about how much approval effort the system needs.
 | C-ordinary | 10 of 15 | 5 | 0 |
 | D-manual-only | 10 of 15 | 5 | 0 |
 
-## 4. Generation time and cost
+## 4. Effort allocation — and why generation time and cost are ABSENT
+
+**This section does not contain a generation time or a cost, and the heading it used to
+carry promised both.** What the table holds is the effort allocation each fixture
+DECLARES: `aiShare` numerator and denominator minutes, read back out of the fixture that
+states them. They are inputs to the composition, not measurements of anything this pilot
+did. The one quantity that was genuinely measured — compose wall time — is deliberately
+withheld, for the reason given below. So a reader should take these as "what the fixture
+says the work costs", never as "what generation cost".
 
 | Fixture | Effort bases | AI minutes | Total minutes | Below target |
 |---|---|---|---|---|
@@ -77,9 +91,14 @@ comparison this section cannot support. It is recorded as an observation in the 
 log and left out of the published tables.
 
 AI minutes are printed as a numerator and a denominator, never divided.
-4 of the 4 fixtures are below the automation target, which
-is a recorded decision for the manual-only and human-heavy shapes rather than a
-shortfall.
+4 of the 4 fixtures are below the automation target.
+
+**That is one fact with two different causes, and an earlier version of this sentence
+gave only one of them.** For the manual-only and human-heavy shapes, being below target
+is a RECORDED DECISION rather than a shortfall — zero automation is what those fixtures
+exist to express. For the others it is simply where their declared effort split lands,
+and this pilot offers no view on whether that is right. Reading the single reason across
+all of them would be the generalisation this report refuses elsewhere.
 
 ## 5. Failure recovery
 
@@ -97,6 +116,14 @@ a statistic about the fixtures dressed as a statistic about the system.
 | Expired lease | a second worker reclaims and completes; the side effect happens once across the handover |
 
 ## What this pilot could not measure
+
+**The plainest limit first, because the four below are about technique and this one is
+about reach: none of what this pilot exercises runs anywhere.** No model was called, no
+database was touched, the fixtures carry one or two requirement blocks each against real
+student briefs measured at up to 41,679 characters, and the execution machine whose
+lease handover appears in section 5 has no production caller and no production store.
+This is a disciplined exercise of a test harness. A reader who takes it for a pilot of a
+running system will overestimate what it shows, and the title alone invites that.
 
 - **Model generation cost** — every generation path requires a live model call, so there is no token count to report. No model was invoked, and spending to produce a pilot figure is outside this packet.
 - **The existing path on the same inputs** — the existing generation path is model-driven for both student and delivery projects, so a same-inputs comparison needs the same live calls. Without it, any comparative claim here would be invented, which is exactly what the check in this report refuses.
