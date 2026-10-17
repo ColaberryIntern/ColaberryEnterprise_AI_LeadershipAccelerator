@@ -1,5 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { fetchCampusFlags } from './campusApi';
+import type { CampusPresence } from './campusApi';
+import { useCampusPresencePoll } from './useCampusPresencePoll';
 import { useParticipantAuth } from '../../contexts/ParticipantAuthContext';
 import type { BuildingId } from './campusMap';
 import { CampusSettings, readCampusSettings, writeCampusSettings } from './campusSettings';
@@ -37,6 +39,9 @@ export interface CampusState {
   openMap: (focus?: BuildingId) => void;
   openList: () => void;
   closeLayer: () => void;
+  /** C4: who is in each building (null until the first read), and whether the last read failed. */
+  presence: CampusPresence | null;
+  presenceError: boolean;
 }
 
 export type CampusLayer = 'none' | 'map' | 'list';
@@ -46,6 +51,7 @@ const OFF: CampusState = {
   enabled: false, ready: false, active: false,
   settings: { nav: 'campus', workplaceNames: false, reduceMotion: false },
   updateSettings: noop, layer: 'none', mapFocus: null, openMap: noop, openList: noop, closeLayer: noop,
+  presence: null, presenceError: false,
 };
 
 const Ctx = createContext<CampusState>(OFF);
@@ -76,9 +82,12 @@ export function CampusProvider({ children }: { children?: React.ReactNode }): Re
   const openList = useCallback(() => setLayer('list'), []);
   const closeLayer = useCallback(() => { setLayer('none'); setMapFocus(null); }, []);
 
+  const active = enabled && settings.nav === 'campus';
+  const { presence, presenceError } = useCampusPresencePoll(active);
+
   const value = useMemo<CampusState>(
-    () => ({ enabled, ready, settings, active: enabled && settings.nav === 'campus', updateSettings, layer, mapFocus, openMap, openList, closeLayer }),
-    [enabled, ready, settings, updateSettings, layer, mapFocus, openMap, openList, closeLayer],
+    () => ({ enabled, ready, settings, active, updateSettings, layer, mapFocus, openMap, openList, closeLayer, presence, presenceError }),
+    [enabled, ready, settings, active, updateSettings, layer, mapFocus, openMap, openList, closeLayer, presence, presenceError],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

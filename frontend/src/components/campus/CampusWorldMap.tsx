@@ -42,6 +42,8 @@ export interface CampusMapProps {
   onArrive: (id: BuildingId) => void;
   /** Registers each building's element so a closed card can return focus to it. */
   buildingRef?: (id: BuildingId, el: SVGGElement | null) => void;
+  /** C4: live head count per building id (real data only; absent or 0 = no chip). */
+  counts?: Partial<Record<string, number>>;
 }
 
 function Roof({ b }: { b: CampusBuilding }): React.ReactElement {
@@ -65,8 +67,23 @@ function Roof({ b }: { b: CampusBuilding }): React.ReactElement {
   }
 }
 
-function Building({ b, access, label, compact, onPick, setRef }: {
-  b: CampusBuilding; access: ExplorerAccess; label: string; compact: boolean;
+/** Live head count on a building (C4). Rendered only for a real count above zero. */
+function CountChip({ b, count, compact }: { b: CampusBuilding; count: number; compact: boolean }): React.ReactElement {
+  const { x, y, w, h } = b.pos;
+  // The side-column map renders the 1000-unit world at about a fifth of its size, so its chip is
+  // drawn large enough to read there (about 24 x 16 px on screen).
+  const cw = compact ? 110 : 40, ch = compact ? 76 : 24;
+  const cx = x + w / 2 - cw / 2 + 6, cy = y - h / 2 - ch / 2 - (compact ? 10 : 0);
+  return (
+    <g className="cm-count" data-count={count} aria-hidden="true">
+      <rect x={cx} y={cy} width={cw} height={ch} rx={ch / 2} />
+      <text x={cx + cw / 2} y={cy + ch / 2 + (compact ? 19 : 5)} textAnchor="middle">{count}</text>
+    </g>
+  );
+}
+
+function Building({ b, access, label, compact, count, onPick, setRef }: {
+  b: CampusBuilding; access: ExplorerAccess; label: string; compact: boolean; count: number;
   onPick: (id: BuildingId) => void; setRef?: (id: BuildingId, el: SVGGElement | null) => void;
 }): React.ReactElement {
   const { x, y, w, h } = b.pos;
@@ -74,11 +91,12 @@ function Building({ b, access, label, compact, onPick, setRef }: {
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onPick(b.id); }
   };
+  const aria = [label, chip, count > 0 ? `${count} here now` : null].filter(Boolean).join(', ');
   return (
     <g
       ref={(el) => setRef?.(b.id, el)}
       className={`cm-bld cm-b-${b.id}${access === 'locked' ? ' is-locked' : ''}`}
-      role="button" tabIndex={0} aria-label={chip ? `${label}, ${chip}` : label}
+      role="button" tabIndex={0} aria-label={aria}
       data-building={b.id} onClick={() => onPick(b.id)} onKeyDown={onKeyDown}
     >
       {b.id !== 'gate' && <rect className="cm-body" x={x - w / 2} y={y - h / 2} width={w} height={h} rx={4} />}
@@ -86,11 +104,12 @@ function Building({ b, access, label, compact, onPick, setRef }: {
       {b.id !== 'gate' && <rect className="cm-door" x={x - 7} y={y + h / 2 - 16} width={14} height={16} rx={2} />}
       {!compact && <text className="cm-label" x={x} y={y + h / 2 + 22} textAnchor="middle">{label}</text>}
       {!compact && chip && <text className="cm-chip" x={x} y={y - h / 2 - roofRise(b) - 10} textAnchor="middle">{chip}</text>}
+      {count > 0 && <CountChip b={b} count={count} compact={compact} />}
     </g>
   );
 }
 
-export default function CampusWorldMap({ buildings, accessOf, workplaceNames, reduceMotion, compact = false, initialTarget, onArrive, buildingRef }: CampusMapProps): React.ReactElement {
+export default function CampusWorldMap({ buildings, accessOf, workplaceNames, reduceMotion, compact = false, initialTarget, onArrive, buildingRef, counts }: CampusMapProps): React.ReactElement {
   const [pos, setPos] = useState<Pt>({ x: QUAD.x, y: 640 });
   const posRef = useRef(pos);
   const raf = useRef<number | null>(null);
@@ -135,7 +154,7 @@ export default function CampusWorldMap({ buildings, accessOf, workplaceNames, re
       {buildings.map((b) => { const d = doorOf(b); return <path key={'p-' + b.id} className="cm-path" d={`M${QUAD.x} ${QUAD.y} L${d.x} ${d.y}`} />; })}
       <circle className="cm-quad" cx={QUAD.x} cy={QUAD.y} r={compact ? 34 : 28} />
       {buildings.map((b) => (
-        <Building key={b.id} b={b} access={accessOf(b)} label={buildingName(b, workplaceNames)} compact={compact} onPick={walkTo} setRef={buildingRef} />
+        <Building key={b.id} b={b} access={accessOf(b)} label={buildingName(b, workplaceNames)} compact={compact} count={counts?.[b.id] ?? 0} onPick={walkTo} setRef={buildingRef} />
       ))}
       {!compact && (
         <g className="cm-avatar" transform={`translate(${pos.x} ${pos.y}) scale(0.8)`} aria-hidden="true" data-testid="cm-avatar">

@@ -1,4 +1,5 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { CampusPresence } from './campusApi';
 import CampusWorldMap from './CampusWorldMap';
 import BuildingCard from './BuildingCard';
 import type { BuildingId, CampusAudience, CampusBuilding } from './campusMap';
@@ -19,9 +20,17 @@ export interface CampusWorldProps {
   initialTarget?: BuildingId | null;
   onExit: () => void;
   onNavigate: () => void;
+  /** C4: live presence by building id. `undefined` = presence not wired (no counts, no Who's here). */
+  presence?: CampusPresence | null;
+  presenceError?: boolean;
 }
 
-export default function CampusWorld({ buildings, audience, hasFullAccess, workplaceNames, reduceMotion, initialTarget, onExit, onNavigate }: CampusWorldProps): React.ReactElement {
+export default function CampusWorld({ buildings, audience, hasFullAccess, workplaceNames, reduceMotion, initialTarget, onExit, onNavigate, presence, presenceError = false }: CampusWorldProps): React.ReactElement {
+  const counts = useMemo(() => {
+    const out: Record<string, number> = {};
+    if (presence) for (const [id, a] of Object.entries(presence)) out[id] = a.count;
+    return out;
+  }, [presence]);
   const [open, setOpen] = useState<BuildingId | null>(null);
   const els = useRef(new Map<BuildingId, SVGGElement>());
   const accessOf = useCallback((b: CampusBuilding) => buildingAccess(b, audience, hasFullAccess), [audience, hasFullAccess]);
@@ -50,8 +59,10 @@ export default function CampusWorld({ buildings, audience, hasFullAccess, workpl
   return (
     <div className="cm-world" onKeyDown={onKeyDown} ref={world}>
       <CampusWorldMap buildings={buildings} accessOf={accessOf} workplaceNames={workplaceNames} reduceMotion={reduceMotion}
-        initialTarget={initialTarget} onArrive={setOpen} buildingRef={registerEl} />
-      {b && <BuildingCard building={b} access={accessOf(b)} workplaceNames={workplaceNames} onClose={closeCard} onNavigate={onNavigate} />}
+        initialTarget={initialTarget} onArrive={setOpen} buildingRef={registerEl} counts={presenceError ? undefined : counts} />
+      {b && <BuildingCard building={b} access={accessOf(b)} workplaceNames={workplaceNames} onClose={closeCard} onNavigate={onNavigate}
+        whoIsHere={presence === undefined && !presenceError ? undefined
+          : { presence: presence?.[b.id], error: presenceError, loading: presence === null && !presenceError }} />}
     </div>
   );
 }

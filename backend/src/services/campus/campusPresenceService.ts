@@ -1,0 +1,105 @@
+import { Op } from 'sequelize';
+import CampusPresence from '../../models/CampusPresence';
+import { ensureCampusPresenceSchema } from '../../db/ensureCampusPresenceSchema';
+import { env } from '../../config/env';
+import { getPeoplePanel } from '../peoplePanelService';
+import { getCohortPresence } from '../cohortPresenceService';
+import { isCampusArea, CampusArea } from './campusAreas';
+
+/**
+ * Who is in each campus building right now (Colaberry Campus C4).
+ *
+ * VISIBILITY PARITY, BY CONSTRUCTION. The campus may name a person only if the portal's people
+ * rail names them for this viewer. So the named set is computed by the rail's OWN function for
+ * this viewer, under the same switch the rail route uses (PEOPLE_PANEL_ROLES_ENABLED): the role
+ * panel (staff: online; student: my class + active now) or, with the flag off, cohort presence.
+ * Everyone else present is returned as exactly { anonymous: true }: no id, no name, no avatar.
+ * A named person is reduced to three fields in both modes, so nothing the rail lacks is added.
+ *
+ * Disclosed (PR and ticket): counts include people from other cohorts (never named), and a named
+ * person's building is new information compared with the rail's online dot.
+ *
+ * COST. The rail function runs at most once per viewer per minute: results are cached for 60 s
+ * (the rail's own refresh cadence), keyed on enrollment AND cohort, in a Map capped at 2,000
+ * viewers (oldest evicted). Presence rows are bounded by the 90 s window and LIMIT 500.
+ *
+ * FAILURE. Any error (including the first-create race in ensureCampusPresenceSchema) propagates
+ * to the route as a 500, and the UI shows "We can't load who's online" - never an empty campus.
+ */
+
+export const FRESH_MS = 90_000;
+export const ROW_LIMIT = 500;
+export const VISIBLE_TTL_MS = 60_000;
+export const VISIBLE_CACHE_MAX = 2_000;
+
+export interface CampusPerson { enrollment_id: string; display_name: string; avatar_url: string | null }
+export type CampusPresenceEntry = CampusPerson | { anonymous: true };
+export interface CampusPresenceAreas { areas: Partial<Record<CampusArea, { count: number; people: CampusPresenceEntry[] }>> }
+
+export class CampusAreaError extends Error {
+  readonly error_class = 'UnknownCampusArea';
+  constructor(area: unknown) { super(`Unknown campus area: ${String(area).slice(0, 40)}`); this.name = 'CampusAreaError'; }
+}
+
+/** Record that this learner is in `area` now. Unknown area: throws before any database call. */
+export async function touchCampusArea(enrollmentId: string, area: unknown): Promise<void> {
+  if (!isCampusArea(area)) throw new CampusAreaError(area);
+  await ensureCampusPresenceSchema();
+  await CampusPresence.upsert({ enrollment_id: enrollmentId, area, updated_at: new Date() });
+}
+
+const pick = (enrollment_id: string, display_name: string, avatar_url: string | null | undefined): CampusPerson =>
+  ({ enrollment_id, display_name, avatar_url: avatar_url ?? null });
+
+/** The people this viewer may see by name, from the rail's own source. */
+async function computeVisible(viewer: string, cohort: string | null): Promise<Map<string, CampusPerson>> {
+  const out = new Map<string, CampusPerson>();
+  if (env.peoplePanelRolesEnabled) {
+    const panel = await getPeoplePanel(viewer, cohort);
+    const list = panel.viewer_role === 'staff' ? panel.online : [...panel.my_class, ...panel.active_now];
+    for (const p of list) out.set(p.enrollment_id, pick(p.enrollment_id, p.display_name, p.avatar_url));
+  } else {
+    for (const c of await getCohortPresence(viewer, cohort)) out.set(c.id, pick(c.id, c.name, c.avatarUrl));
+  }
+  return out;
+}
+
+const visibleCache = new Map<string, { at: number; people: Map<string, CampusPerson> }>();
+
+export async function visibleSetFor(viewer: string, cohort: string | null, now: Date = new Date()): Promise<Map<string, CampusPerson>> {
+  const key = `${viewer}|${cohort ?? ''}`;
+  const hit = visibleCache.get(key);
+  if (hit && now.getTime() - hit.at < VISIBLE_TTL_MS) return hit.people;
+  const people = await computeVisible(viewer, cohort);
+  visibleCache.delete(key);
+  visibleCache.set(key, { at: now.getTime(), people });
+  while (visibleCache.size > VISIBLE_CACHE_MAX) visibleCache.delete(visibleCache.keys().next().value as string);
+  return people;
+}
+
+/** Test seams. */
+export function __resetCampusPresenceCacheForTests(): void { visibleCache.clear(); }
+export function __campusPresenceCacheSize(): number { return visibleCache.size; }
+
+export async function getCampusPresence(viewer: string, cohort: string | null, now: Date = new Date()): Promise<CampusPresenceAreas> {
+  await ensureCampusPresenceSchema();
+  const since = new Date(now.getTime() - FRESH_MS);
+  const rows = (await CampusPresence.findAll({
+    where: { updated_at: { [Op.gte]: since } },
+    attributes: ['enrollment_id', 'area', 'updated_at'],
+    order: [['updated_at', 'DESC']],
+    limit: ROW_LIMIT,
+    raw: true,
+  })) as unknown as Array<{ enrollment_id: string; area: string; updated_at: Date | string }>;
+  const visible = await visibleSetFor(viewer, cohort, now);
+  const areas: CampusPresenceAreas['areas'] = {};
+  for (const r of rows) {
+    if (new Date(r.updated_at).getTime() < since.getTime()) continue; // defensive: the query already bounds it
+    if (!isCampusArea(r.area)) continue; // a retired building id is ignored, not shown
+    const slot = areas[r.area] ?? (areas[r.area] = { count: 0, people: [] });
+    slot.count += 1;
+    if (r.enrollment_id === viewer) continue; // you are counted, not listed
+    slot.people.push(visible.get(r.enrollment_id) ?? { anonymous: true });
+  }
+  return { areas };
+}
