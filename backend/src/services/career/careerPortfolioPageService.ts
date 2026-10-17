@@ -36,7 +36,7 @@
 import { sequelize } from '../../config/database';
 import { getCareerProfile } from './careerProfileService';
 import { projectPublicPortfolio, type PublicPortfolio } from './careerPortfolioPublicProjection';
-import { caseStudyLinksForProjects } from './portfolioCaseStudyLinks';
+import { gatherOptionalEvidence } from './portfolioOptionalEvidence';
 import {
   readResumeHistory, approvedResumeHistoryOf, EMPTY_RESUME_HISTORY, type ResumeHistory,
 } from './resumeHistoryAdapter';
@@ -433,18 +433,19 @@ async function buildPortfolio(
   // out when this file reached CLAUDE.md's 500-line ceiling, and tested there on
   // its own, because it is the one rule that can point a stranger at a learner's
   // writing.
-  let caseStudyByProject: Record<string, string> = {};
-  try {
-    caseStudyByProject = await caseStudyLinksForProjects(projects);
-  } catch (err: any) {
-    // A case study that cannot be resolved costs its link, never the page.
-    console.warn(JSON.stringify({
-      timestamp: now.toISOString(), level: 'warn', service: 'backend',
-      event: 'public_portfolio_case_study_unavailable', outcome: 'partial',
-      error_class: err?.error_class || err?.name || 'Error',
-      context: { enrollment_id: enrollmentId },
-    }));
-  }
+  // The three lookups that enrich this page and none of which may break it. The policy
+  // and each failure path live in `portfolioOptionalEvidence.ts`.
+  const { caseStudyByProject, verifiedCommits, reachableRepoUrls } = await gatherOptionalEvidence({
+    enrollmentId,
+    projects,
+    repoUrls: (Array.isArray((profile as any)?.github?.repos)
+      ? (profile as any).github.repos : []).map((r: any) => r?.repo_url ?? r?.html_url ?? r?.url),
+    query: async (sql, id) => {
+      const [rows]: any = await sequelize.query(sql, { bind: [id] });
+      return Array.isArray(rows) ? rows : [];
+    },
+    now,
+  });
 
   // The About paragraph names the project the record is about, in the learner's own words.
   const firstRecord: any = Array.isArray(records) ? (records as any[])[0] : null;
@@ -467,6 +468,8 @@ async function buildPortfolio(
     featuredRepoUrl,
     featuredLanguages,
     featuredTopLevelAreas,
+    verifiedCommits,
+    reachableRepoUrls,
     generatedAt: now.toISOString(),
   });
 }
