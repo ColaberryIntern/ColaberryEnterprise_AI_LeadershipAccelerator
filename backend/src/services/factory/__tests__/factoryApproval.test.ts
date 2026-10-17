@@ -9,6 +9,20 @@ jest.mock('../../../models/ContractProcessDocument', () => ({
   default: { findOne: (...a: any[]) => findOne(...a), create: (...a: any[]) => create(...a) },
 }));
 
+/**
+ * P7-T3 defect 1: the create and the supersede now run inside ONE transaction, because as two
+ * separately committing statements a failure between them left two live heads for one track.
+ * Mocked here so this suite still runs without a database, and asserted below -- a unit-tier
+ * regression guard, so dropping the transaction fails here too and not only in the DB-backed
+ * suite somebody has to remember to run.
+ */
+const TX = { __tx: 'sentinel' };
+const transaction = jest.fn(async (cb: (t: unknown) => Promise<unknown>) => cb(TX));
+jest.mock('../../../config/database', () => ({
+  __esModule: true,
+  sequelize: { transaction: (...a: any[]) => (transaction as any)(...a) },
+}));
+
 import {
   approveProcessDocument, contentHash, canTransition, checkExpectedVersion, ApprovalConflictError,
   assertApprovable, ApprovalGateError,
@@ -20,6 +34,43 @@ const validDoc = buildSampleContractProject();
 beforeEach(() => jest.clearAllMocks());
 
 describe('pure primitives', () => {
+  /**
+   * GOLDEN VECTORS. These digests are STORED in `contract_process_documents.content_sha256`, so a
+   * change to how the hash is composed orphans every existing row's hash -- silently, because
+   * nothing recomputes them. The self-comparison below cannot catch that: it passes for any
+   * composition at all, as long as it is deterministic.
+   *
+   * Captured when the domain separator was converted from a literal NUL byte to the escape
+   * `\x00` (identical string, so identical digests) and kept because the risk is permanent, not
+   * specific to that change.
+   */
+  it('contentHash matches its GOLDEN digests, so the composition cannot change silently', () => {
+    expect(contentHash('rev-1', { a: 1 }))
+      .toBe('c49f56a533f00aa169038bd75f9c139bfe2f22e4a47ffe36be0a8f560de10720');
+    expect(contentHash('rev-2', { a: 1 }))
+      .toBe('e924eb7f7c1eb11c1e4a4a762b5ade513f24650b075660787562fe8e5fa09e80');
+    expect(contentHash('rev-1', { tasks: [], processes: [] }))
+      .toBe('10d48edf406d2fb2e4e8d5d5598a47b2eb08af1212b7672ddf3c6bd1cd82ccc0');
+    expect(contentHash('', null))
+      .toBe('b018d21dce8b6a938aecc2bb5ffdef6c1cd0d821f0f282c0eb96a08a36ef7bfe');
+  });
+
+  it('the DOMAIN SEPARATOR is load bearing: field boundaries cannot be shifted', () => {
+    /**
+     * The pair has to be chosen so the fields CONCATENATE AMBIGUOUSLY, which a string document
+     * does not: `JSON.stringify('c')` is `"c"` with quotes, and those quotes act as an accidental
+     * separator. A NUMBER stringifies bare, so:
+     *
+     *   ('a1', 1)  ->  'a1' + '1'  = 'a11'
+     *   ('a',  11) ->  'a'  + '11' = 'a11'     <- identical, with no separator
+     *
+     * A first draft of this test used ('ab','c') vs ('a','bc') and PASSED with the separator
+     * removed -- a collision test that could not observe a collision. Found by mutating the
+     * separator away and noticing only one test failed instead of two.
+     */
+    expect(contentHash('a1', 1)).not.toBe(contentHash('a', 11));
+  });
+
   it('contentHash is stable and content-addressed', () => {
     expect(contentHash('rev-1', { a: 1 })).toBe(contentHash('rev-1', { a: 1 }));
     expect(contentHash('rev-1', { a: 1 })).not.toBe(contentHash('rev-1', { a: 2 }));
@@ -70,6 +121,12 @@ describe('approveProcessDocument (fork-on-edit + CAS)', () => {
     expect(current.status).toBe('superseded');    // fork-on-edit: prior superseded, not mutated away
     expect(current.superseded_by_id).toBe('new-id');
     expect(current.save).toHaveBeenCalledTimes(1);
+
+    // ATOMICITY, pinned at the unit tier. Both writes must carry the SAME transaction, or the
+    // fork-on-edit pair can half-commit -- the defect P7-T3 reproduced with a planted trigger.
+    expect(transaction).toHaveBeenCalledTimes(1);
+    expect(create.mock.calls[0][1]).toEqual({ transaction: TX });
+    expect((current.save as jest.Mock).mock.calls[0][0]).toEqual({ transaction: TX });
     expect(dto).toMatchObject({ version: 2, status: 'documented', approval_level: 'documented' });
   });
 

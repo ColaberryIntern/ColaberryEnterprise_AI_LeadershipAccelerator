@@ -1,4 +1,7 @@
 import { QueryTypes, type Sequelize } from 'sequelize';
+// `import type` only: erased at compile time, so this adds no runtime import to a module the
+// journey suite loads before it knows whether a database exists.
+import type { ExecutionStore, StageRun, DeadLetter } from '../lifecycleExecution';
 
 /**
  * Fixture plumbing for the lifecycle journey suite.
@@ -23,6 +26,73 @@ export interface JourneyFixture {
   countFor(table: string, column: string, projectId: string): Promise<number>;
   /** Remove everything one journey wrote. Called per journey, not only at the end. */
   deleteFixture(projectId: string): Promise<void>;
+}
+
+/** The execution-machine plumbing Journey 4 needs, kept out of the suite body. */
+export interface JourneyExecutionStore {
+  /**
+   * An `ExecutionStore` that is PART in-memory and PART real database, TYPED against the
+   * interface rather than cast. Which part is which matters -- see the factory below.
+   */
+  store: ExecutionStore;
+  /**
+   * Free the lease so the next attempt is independent.
+   *
+   * REDUNDANT, deliberately: `executeStage` already releases the lease on a failed attempt.
+   * Kept so the journey's loop reads as a sequence of independent attempts rather than relying
+   * on that release -- which does mean the journey would not notice a regression that stopped
+   * releasing it. `lifecycleExecution.test.ts` covers that, which is where it belongs.
+   */
+  releaseLease(lifecycleStateId: string, stage: string): void;
+}
+
+/**
+ * Journey 4's store.
+ *
+ * **WHAT IS AND IS NOT DATABASE-BACKED, because an earlier version of this comment said "a
+ * real-database `ExecutionStore`" and that was wrong.** `get` and `put` are an in-process `Map`;
+ * only `deadLetter` writes to Postgres. So JOURNEY 4 exercises the dead-letter sink against a real
+ * table, while the lease, the attempt count and `holdForReview` are exercised in memory exactly as
+ * `lifecycleExecution.test.ts` does. **There is no DB-backed coverage of `StageRun` persistence
+ * anywhere in this repo**, and this fixture must not be read as providing it.
+ *
+ * That is not a flaw in the fixture -- there is no production `ExecutionStore` to be backed by a
+ * table yet -- but calling it "real-database" overstated what the journey proves, which is the
+ * one thing a fixture comment must never do.
+ *
+ * TYPED rather than cast, on purpose: nothing typechecks test files in this repo, so the declared
+ * shape is the only signal a reader gets if `ExecutionStore` changes.
+ *
+ * **No production `ExecutionStore` exists** -- it appears only in `lifecycleExecution.ts` and its
+ * tests. `DeadLetter`'s fields match `lifecycle_stage_failures`' columns one for one, so the table
+ * was built as this sink and the adapter was never written. Until it is, nothing in production can
+ * record a stage failure at all. That is a boundary, not a detail.
+ */
+export function journeyExecutionStore(sequelize: Sequelize): JourneyExecutionStore {
+  const runs = new Map<string, StageRun>();
+  const key = (id: string, stage: string) => `${id}:${stage}`;
+  return {
+    store: {
+      async get(id, stage) { return runs.get(key(id, stage)) ?? null; },
+      async put(run) { runs.set(key(run.lifecycleStateId, run.stage), run); },
+      async deadLetter(entry: DeadLetter) {
+        await sequelize.query(
+          `INSERT INTO lifecycle_stage_failures
+             (tenant_id, lifecycle_state_id, attempted_stage, attempts, error_class,
+              error_message, correlation_id)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+          {
+            bind: [entry.tenantId, entry.lifecycleStateId, entry.attemptedStage,
+                   entry.attempts, entry.errorClass, entry.errorMessage, entry.correlationId],
+          },
+        );
+      },
+    },
+    releaseLease(lifecycleStateId, stage) {
+      const held = runs.get(key(lifecycleStateId, stage));
+      if (held) held.leaseUntil = null;
+    },
+  };
 }
 
 export function journeyFixture(sequelize: Sequelize, tenantId: string): JourneyFixture {

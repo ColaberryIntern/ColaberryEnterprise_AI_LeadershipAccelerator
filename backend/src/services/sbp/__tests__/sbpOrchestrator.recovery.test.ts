@@ -172,6 +172,42 @@ describe('recoverStrandedBuilds', () => {
   });
 });
 
+/**
+ * P7-T3 CASE 1, the acceptance clause the rest of the packet satisfies and this one did not:
+ * **every recovery emits a VISIBLE RETRY REASON**.
+ *
+ * `recoverStrandedBuilds` logs `sbp_build_resumed_after_restart` with the correlation id of
+ * the run it is resuming, which is the only thread tying the resumed generation back to the
+ * one the restart interrupted. Before this test, `grep -rn "sbp_build_resumed_after_restart"
+ * src` returned ONE production line and no test -- the reason was emitted and nothing checked
+ * it, so a refactor could drop the correlation id, or the whole line, in silence.
+ */
+describe('case 1: the resume emits a visible, traceable retry reason', () => {
+  it('logs sbp_build_resumed_after_restart carrying the INTERRUPTED run id', async () => {
+    const logs: string[] = [];
+    (console.log as jest.Mock).mockImplementation((line: string) => { logs.push(String(line)); });
+    mockListByStatus.mockResolvedValue([stranded()]);
+
+    await recoverStrandedBuilds();
+
+    const entry = logs
+      .map((l) => { try { return JSON.parse(l); } catch { return null; } })
+      .find((e) => e?.event === 'sbp_build_resumed_after_restart');
+
+    expect(entry).toBeDefined();
+    // `partial` rather than `success`: the build is not finished, it is being picked up again.
+    expect(entry.outcome).toBe('partial');
+    expect(entry.context.projectId).toBe('proj-1');
+    // THE TRACEABLE HALF. Without the previous correlation id the resumed run is a new event
+    // with no link to the interrupted one, and nobody can follow a build across the restart.
+    expect(entry.context).toHaveProperty('previous_correlation_id');
+    expect(entry.context.previous_correlation_id).toBe(stranded().correlation_id);
+    // And the resume carries its OWN correlation id, distinct from the one it is resuming.
+    expect(entry.correlation_id).toBeTruthy();
+    expect(entry.correlation_id).not.toBe(entry.context.previous_correlation_id);
+  });
+});
+
 describe('the defect this closes', () => {
   it('startBuild still refuses a generating row - which is why the sweep, not a retry, is the recovery', async () => {
     mockGetIntake.mockResolvedValue(stranded());

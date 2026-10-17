@@ -85,7 +85,6 @@ export async function ensureSbpSchema(): Promise<void> {
     // file existed and was never run, because nothing forced it. It is declared
     // here now, and in REQUIRED_COLUMNS below, so a boot on a database that lacks
     // it says so out loud instead of failing one INSERT at a time.
-    `ALTER TABLE build_plans ADD COLUMN IF NOT EXISTS truth_revision INTEGER`,
     `ALTER TABLE student_tasks ADD COLUMN IF NOT EXISTS verified_at TIMESTAMPTZ`,
     `ALTER TABLE student_tasks ADD COLUMN IF NOT EXISTS verified_by TEXT`,
 
@@ -143,6 +142,22 @@ export async function ensureSbpSchema(): Promise<void> {
      )`,
     // Versions are immutable once written (FR-004): a regeneration is a new
     // version, never an overwrite.
+    // MOVED HERE FROM ABOVE THE CREATE, by P7-T3. It used to sit ~40 lines earlier in this
+    // array, so on a PRISTINE database it ran before `build_plans` existed, the per-statement
+    // catch below swallowed `relation "build_plans" does not exist`, and the column never
+    // landed. `assertSbpSchema` then reported it missing and boot continued regardless.
+    //
+    // That is the 2026-09-11 outage this column's own comment describes -- every
+    // `savePlanDraft` INSERT throwing because the column is absent -- reproduced by the guard
+    // written to prevent it. Found by P7-T3's `providerFailure.integration`, which failed 3/3
+    // on a fresh container and passed on a second run against the same one.
+    //
+    // AN ALTER MUST FOLLOW ITS CREATE IN THIS ARRAY, and nothing enforces that. The ALTERs
+    // targeting `student_tasks` and `github_connections` are deliberately left where they are:
+    // those tables belong to other schema modules, so their ordering is a cross-module
+    // question rather than this file's to decide. Recorded, not silently changed.
+    `ALTER TABLE build_plans ADD COLUMN IF NOT EXISTS truth_revision INTEGER`,
+
     `CREATE UNIQUE INDEX IF NOT EXISTS build_plans_unique_project_version ON build_plans (project_id, version)`,
     // AT MOST ONE PUBLISHED PLAN PER PROJECT (P6-T5 / LC-13). The structural half of a fix
     // whose other half is `publishPlan`'s row lock: a lock stops the interleaving THIS

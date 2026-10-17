@@ -451,7 +451,13 @@ async function autoPublish(
       error_class: err?.error_class ?? err?.name ?? 'Error',
       status: typeof err?.status === 'number' ? err.status : null,
       message: err?.message,
-      recovery: 'plan is drafted and intact; POST /api/portal/sbp/builds/:projectId/publish retries',
+      // ACCURATE as of P7-T3 case 6. This used to say 'plan is drafted and intact', which is
+      // false once `publishPlan` has committed -- and it commits BEFORE the repo write and the
+      // task materialization, the two steps most likely to fail. A responder who followed the
+      // old sentence went looking for a draft and found a published plan. The retry really is
+      // safe: `planStore.publishPlan` returns the existing row for an already-published plan,
+      // so re-POSTing resumes the remaining steps instead of duplicating them.
+      recovery: 'the plan may ALREADY be published (publishPlan commits before the repo write and task materialization); POST /api/portal/sbp/builds/:projectId/publish is idempotent and resumes the remaining steps',
     });
   }
 }

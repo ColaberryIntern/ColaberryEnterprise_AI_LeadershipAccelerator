@@ -37,6 +37,15 @@
 const HAS_DB = Boolean(process.env.DATABASE_URL);
 const describeIfDb = HAS_DB ? describe : describe.skip;
 
+if (!HAS_DB) {
+  // P7-T6: a suite that skips in silence is indistinguishable from one that passed.
+  // eslint-disable-next-line no-console
+  console.warn(
+    '[ensurePublishingSchema.integration] SKIPPED: no DATABASE_URL. These are idempotency\n'
+    + 'constraints against a real Postgres; without one they are not evidence.',
+  );
+}
+
 describeIfDb('ensurePublishingSchema — idempotency constraints (requires DATABASE_URL)', () => {
   let sequelize: any;
   let ensurePublishingSchema: any;

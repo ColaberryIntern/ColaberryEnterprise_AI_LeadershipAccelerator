@@ -26,6 +26,11 @@ export const DEFAULT_TARGETS = {
 };
 
 /** Hard cap so a very large document cannot blow the context window. */
+// The ONLY import this module takes, and it is a config read rather than I/O: the module
+// stays pure and synchronous, which is what lets both generation stages call it and what
+// lets a test drive it without a database.
+import { FLAGS } from '../../config/featureFlags';
+
 export const MAX_DOCUMENT_CHARS = 200_000;
 export const MAX_BRIEF_CHARS = 20_000;
 
@@ -207,6 +212,29 @@ export function sourceOverflows(inputs: Pick<DecomposeInputs, 'brief' | 'documen
     }));
 }
 
+/**
+ * Raised when the flag is on and source would be clipped.
+ *
+ * A TYPED error rather than a boolean return, because every caller of `sourceBlocks` is building
+ * a prompt and has no sensible half-answer: a prompt assembled from clipped source is the defect.
+ * `name` is stable so a caller can branch on it without string-matching the message.
+ */
+export class SourceOverflowError extends Error {
+  readonly name = 'SourceOverflowError';
+
+  readonly error_class = 'SourceOverflowBlocked';
+
+  constructor(readonly overflows: SourceOverflow[]) {
+    super(
+      'source exceeds the prompt budget and would be silently clipped: '
+      + overflows.map((o) => `${o.tag} is ${o.actual} chars against a ${o.limit} limit, so `
+        + `${o.droppedChars} characters would never reach the model`).join('; ')
+      + '. Shorten the input or split the build; generating from clipped source produces a plan '
+      + 'for a brief the student did not write.',
+    );
+  }
+}
+
 /** Clamp and label an untrusted input so it cannot be read as instruction (SAFE-002). */
 function delimited(tag: string, body: string, max: number): string {
   const clipped = body.length > max ? `${body.slice(0, max)}\n…[truncated at ${max} chars]` : body;
@@ -223,6 +251,16 @@ function delimited(tag: string, body: string, max: number): string {
  * for both stages rather than only for the one it was written against.
  */
 export function sourceBlocks(inputs: Pick<DecomposeInputs, 'brief' | 'document'>): string {
+  // THE BLOCK LIVES HERE, not in a guard a caller must remember to invoke. Both generation
+  // stages already call this function, so putting the refusal inside it means the control cannot
+  // become a producer with no consumer -- which is the exact failure this programme spent a day
+  // on elsewhere: two bypass detectors that were written, tested, and called from nothing.
+  //
+  // Flag OFF is byte-for-byte today's behaviour: clip, label, carry on.
+  if (FLAGS.sbpSourceOverflowBlock) {
+    const overflows = sourceOverflows(inputs);
+    if (overflows.length) throw new SourceOverflowError(overflows);
+  }
   return [
     delimited('ORIGINAL_BRIEF', inputs.brief, MAX_BRIEF_CHARS),
     '',
