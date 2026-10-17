@@ -55,8 +55,12 @@ export interface LegacyProjectAssessment {
   /** Always false in this report: having one is what excludes a project from it. */
   hasLifecycleRow: boolean;
   counts: LegacyEvidenceCounts;
-  /** The furthest stage the available evidence justifies. Derived, see the module header. */
-  highestJustifiableStage: LifecycleStage;
+  /**
+   * The furthest stage the available evidence justifies, or NULL when even the first stage's
+   * prerequisites are unmet -- which is the honest answer for an unattributable project, and an
+   * answer the first version of this module could not give.
+   */
+  highestJustifiableStage: LifecycleStage | null;
   /** The rule that stops it going further, named by the shipped predicate. */
   stoppedBy: string;
 }
@@ -65,8 +69,22 @@ export interface LegacyProjectAssessment {
  * The ONLY things a migration may create. Anything absent from this set is refused by name.
  *
  * A lifecycle row is fabricable because it asserts nothing that is not already true: the project
- * exists, it belongs to a tenant, and it has reached no gate. Everything else on this surface
- * encodes a human decision or a cryptographic commitment that was never made.
+ * exists and it has reached no gate. Everything else on this surface encodes a human decision or
+ * a cryptographic commitment that was never made.
+ *
+ * **IT IS FABRICABLE ONLY FOR AN ATTRIBUTABLE PROJECT, and an earlier version of this comment
+ * got that wrong.** It claimed the project "belongs to a tenant" as a ground for fabricability.
+ * `projects.tenant_id` is deliberately NULLABLE, and `models/Project.ts` is explicit that null
+ * means NOT ATTRIBUTABLE rather than "no tenant" -- *"the registration hook skips it and logs a
+ * ContractViolation"*. So unattributable projects are not an edge case here: being skipped by the
+ * hook is exactly what puts a project in the no-lifecycle-row cohort this module reports.
+ *
+ * `project_lifecycle_states.tenant_id` is NOT NULL, so proposing a row for one would be
+ * proposing a write the database must reject -- and the hook has already decided not to make it.
+ * Those projects are routed to `cannotMigrate` with the blocking rule named. Measured on
+ * production 2026-10-17: **0 of the 62** currently have a null tenant, so this is latent rather
+ * than live -- but the hook creates the population by design, so the next one lands straight in
+ * the cohort.
  */
 export const FABRICABLE: ReadonlySet<string> = new Set<string>(['lifecycle_row']);
 
@@ -99,7 +117,7 @@ export class FabricatedEvidenceError extends Error {
  */
 export function assertNoFabrication(kind: string): void {
   if (FABRICABLE.has(kind)) return;
-  const why = NEVER_FABRICABLE[kind]
+  const why = (Object.hasOwn(NEVER_FABRICABLE, kind) ? NEVER_FABRICABLE[kind] : undefined)
     ?? 'it is not in the set a migration may create, and anything outside that set encodes a '
       + 'decision or commitment that was never recorded';
   throw new FabricatedEvidenceError(kind, why);
@@ -145,7 +163,12 @@ function evidenceForLegacy(tenantId: string | null): LifecycleEvidence {
     releasesWithoutUserVisibleWorkflow: [],
     publishedPlanIsSingular: false,
     publishedPlanHashIntact: false,
-  } as LifecycleEvidence;
+  };
+  // NO `as LifecycleEvidence` CAST. `tsc` accepts the literal on its own, so the cast was
+  // redundant -- and redundant in the dangerous direction: `{...} as T` permits MISSING
+  // properties, so the day `LifecycleEvidence` gains a field this function would silently return
+  // an object without it and `prerequisiteGaps` would read `undefined`. Without the cast that
+  // day is a compile error on a file CI typechecks.
 }
 
 /**
@@ -157,8 +180,13 @@ function evidenceForLegacy(tenantId: string | null): LifecycleEvidence {
  */
 export function highestJustifiableStage(
   evidence: LifecycleEvidence,
-): { stage: LifecycleStage; stoppedBy: string } {
-  let reached: LifecycleStage = LIFECYCLE_STAGES[0];
+): { stage: LifecycleStage | null; stoppedBy: string } {
+  // STARTS AT NULL, not at stage zero. The first version seeded `reached` with
+  // `LIFECYCLE_STAGES[0]` before checking anything, so it could never answer "no stage is
+  // justified" -- it returned `discovery` while its own `stoppedBy` said
+  // `discovery:no_tenant:unmet`. A record that contradicts itself is worse than one that
+  // declines to answer.
+  let reached: LifecycleStage | null = null;
   for (const stage of LIFECYCLE_STAGES) {
     const blocking = blockingGaps(prerequisiteGaps(stage, evidence));
     if (blocking.length) {
@@ -231,6 +259,14 @@ export interface MigrationProposal {
 export interface MigrationPreview {
   assessed: number;
   proposals: MigrationProposal[];
+  /**
+   * Projects that cannot be migrated at all, with the blocking rule named.
+   *
+   * A separate bucket rather than a refusal in `refused`, because the two are different kinds of
+   * "no": `refused` is about evidence a migration must never INVENT, this is about a project that
+   * cannot be given even the one thing a migration may create.
+   */
+  cannotMigrate: Array<{ projectId: string; why: string }>;
   /** Named refusals, so the report says what it will NOT do as loudly as what it will. */
   refused: Array<{ kind: string; why: string }>;
   /** Preserved untouched: counted so a reviewer can see nothing is being discarded. */
@@ -252,14 +288,23 @@ export function previewLegacyMigration(
 
   const refused = Object.entries(NEVER_FABRICABLE).map(([kind, why]) => ({ kind, why }));
 
+  // Split before proposing anything: a project with no justifiable stage cannot be given a
+  // lifecycle row, because `project_lifecycle_states.tenant_id` is NOT NULL and the registration
+  // hook has already declined to write it.
+  const migratable = assessments.filter((a) => a.highestJustifiableStage !== null);
+  const cannotMigrate = assessments
+    .filter((a) => a.highestJustifiableStage === null)
+    .map((a) => ({ projectId: a.projectId, why: a.stoppedBy }));
+
   return {
     assessed: assessments.length,
-    proposals: assessments.map((a) => ({
+    proposals: migratable.map((a) => ({
       projectId: a.projectId,
       create: 'lifecycle_row' as const,
-      stage: a.highestJustifiableStage,
+      stage: a.highestJustifiableStage as LifecycleStage,
       stoppedBy: a.stoppedBy,
     })),
+    cannotMigrate,
     refused,
     preserves: {
       publishedPlans: assessments.reduce((n, a) => n + a.counts.publishedPlans, 0),

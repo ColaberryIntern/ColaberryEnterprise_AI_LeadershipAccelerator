@@ -66,6 +66,12 @@ describeIfDb('LC-15 — legacy gap assessment and migration preview', () => {
     '8a000000-0000-0000-0000-000000000003',
   ];
   const REGISTERED = '8b000000-0000-0000-0000-000000000001';
+  /**
+   * UNATTRIBUTABLE. `projects.tenant_id` is nullable and null means NOT ATTRIBUTABLE,
+   * which `models/Project.ts` records as the case the registration hook SKIPS. Being
+   * skipped is exactly what puts a project in this cohort, so it belongs in the fixtures.
+   */
+  const NO_TENANT = '8c000000-0000-0000-0000-000000000001';
   const CUTOFF = new Date('2026-10-12T00:00:00.000Z');
 
   beforeAll(async () => {
@@ -100,14 +106,14 @@ describeIfDb('LC-15 — legacy gap assessment and migration preview', () => {
 
   beforeEach(async () => {
     await sequelize.query(`DELETE FROM build_plans WHERE project_id = ANY($1::uuid[])`,
-      { bind: [[...LEGACY, REGISTERED]] });
+      { bind: [[...LEGACY, REGISTERED, NO_TENANT]] });
     await sequelize.query(`DELETE FROM build_intake WHERE project_id = ANY($1::uuid[])`,
-      { bind: [[...LEGACY, REGISTERED]] });
+      { bind: [[...LEGACY, REGISTERED, NO_TENANT]] });
     await sequelize.query(`DELETE FROM student_tasks WHERE project_id = ANY($1::uuid[])`,
-      { bind: [[...LEGACY, REGISTERED]] });
+      { bind: [[...LEGACY, REGISTERED, NO_TENANT]] });
     await sequelize.query(`DELETE FROM project_lifecycle_states WHERE tenant_id = $1`, { bind: [TENANT] });
     await sequelize.query(`DELETE FROM projects WHERE id = ANY($1::uuid[])`,
-      { bind: [[...LEGACY, REGISTERED]] });
+      { bind: [[...LEGACY, REGISTERED, NO_TENANT]] });
 
     // Three legacy projects, created before the cutoff.
     for (const id of LEGACY) {
@@ -126,6 +132,12 @@ describeIfDb('LC-15 — legacy gap assessment and migration preview', () => {
        VALUES ($1, $2, 'discovery')`,
       { bind: [TENANT, REGISTERED] },
     );
+    // No tenant, pre-cutoff, no lifecycle row: in the cohort, and un-migratable.
+    await sequelize.query(
+      `INSERT INTO projects (id, tenant_id, created_at)
+       VALUES ($1, NULL, '2026-09-01T00:00:00Z')`,
+      { bind: [NO_TENANT] },
+    );
   });
 
   async function counts(): Promise<Record<string, number>> {
@@ -135,6 +147,32 @@ describeIfDb('LC-15 — legacy gap assessment and migration preview', () => {
         `SELECT count(*)::text AS n FROM ${t}`, { type: QueryTypes.SELECT },
       );
       out[t] = Number(rows[0].n);
+    }
+    return out;
+  }
+
+  /**
+   * A CONTENT DIGEST per table: md5 over every row, order-independent.
+   *
+   * Row counts alone are NOT sufficient for "writes nothing" -- an UPDATE leaves every count
+   * identical, which a verifier demonstrated against the first version of this suite. It
+   * suggested `pg_stat_user_tables` write counters instead, and that is stronger, but only
+   * OUT OF BAND: the stats collector is asynchronous, and measured in-test on a pristine
+   * database it reported `0/0/0` while the fixture writes had already happened. An assertion
+   * whose truth depends on a background flush is flaky, so it is not what ships here.
+   *
+   * A digest is synchronous, needs no collector, and changes on an insert, an update OR a
+   * delete -- strictly stronger than either alternative.
+   */
+  async function digests(): Promise<Record<string, string>> {
+    const out: Record<string, string> = {};
+    for (const table of TABLES) {
+      const rows = await sequelize.query<{ d: string }>(
+        `SELECT coalesce(md5(string_agg(x, '|' ORDER BY x)), 'empty') AS d
+           FROM (SELECT t::text AS x FROM ${table} t) s`,
+        { type: QueryTypes.SELECT },
+      );
+      out[table] = rows[0].d;
     }
     return out;
   }
@@ -175,8 +213,13 @@ describeIfDb('LC-15 — legacy gap assessment and migration preview', () => {
     // which is every legacy project, and 0 rows in production for both tables -- the honest
     // answer is `discovery`, and the reason is a `not_assessed` gap on the next stage.
     const report = await assessLegacyProjects(CUTOFF);
+    // ATTRIBUTABLE projects only. The blanket loop this replaces asserted the attributable
+    // answer for EVERY row, which encoded the assumption `models/Project.ts` explicitly
+    // denies -- and would have failed on the unattributable fixture.
+    const attributable = report.filter((r) => r.tenantId !== null);
+    expect(attributable.length).toBeGreaterThan(0);
 
-    for (const r of report) {
+    for (const r of attributable) {
       expect(r.highestJustifiableStage).toBe('discovery');
       expect(r.stoppedBy).toContain('requirements_ready');
       expect(r.stoppedBy).toContain('not_assessed');
@@ -189,14 +232,25 @@ describeIfDb('LC-15 — legacy gap assessment and migration preview', () => {
       { bind: [LEGACY[0]] },
     );
     const before = await counts();
+    const beforeD = await digests();
 
     const report = await assessLegacyProjects(CUTOFF);
     const preview = previewLegacyMigration(report);
 
     const after = await counts();
+    const afterD = await digests();
 
     // Every table, not a spot check -- the acceptance says "across every table it reads".
     expect(after).toEqual(before);
+
+    // AND THE STRONGER INSTRUMENT: row counts cannot see a mutation, because an UPDATE leaves
+    // every count identical. A content digest changes on insert, update or delete alike.
+    expect(afterD).toEqual(beforeD);
+    // NON-VACUOUS: an empty map compares equal to itself, and a table with no rows digests to
+    // the literal 'empty'. At least one table must hold content, which the fixtures guarantee.
+    expect(Object.keys(afterD)).toEqual(TABLES);
+    expect(Object.values(afterD).some((d) => d !== 'empty')).toBe(true);
+
     // And the preview really did produce something, so the equality above is not vacuous.
     expect(preview.proposals.length).toBeGreaterThan(0);
     expect(preview.assessed).toBe(report.length);
@@ -214,6 +268,56 @@ describeIfDb('LC-15 — legacy gap assessment and migration preview', () => {
 
     expect(preview.preserves.intakes).toBe(1);
     expect(preview.preserves.tasks).toBe(3);
+  });
+
+  it('an UNATTRIBUTABLE project is assessed but CANNOT be migrated, with the rule named', async () => {
+    /**
+     * The defect this closes. `project_lifecycle_states.tenant_id` is NOT NULL, so proposing a
+     * row for a null-tenant project would be proposing a write the database must reject -- and
+     * the registration hook has already declined to make it. The first version proposed it
+     * anyway, while its own `stoppedBy` said `discovery:no_tenant:unmet`.
+     *
+     * Measured on production 2026-10-17: 0 of the 62 currently have a null tenant, so this is
+     * latent rather than live. Latent is not safe -- the hook creates the population by design.
+     */
+    const report = await assessLegacyProjects(CUTOFF);
+    const row = report.find((r) => r.projectId === NO_TENANT);
+
+    // It IS reported. Hiding it would be worse than proposing it.
+    expect(row).toBeDefined();
+    expect(row!.tenantId).toBeNull();
+    // And NO stage is justified, rather than `discovery` with a self-contradicting reason.
+    expect(row!.highestJustifiableStage).toBeNull();
+    expect(row!.stoppedBy).toContain('no_tenant');
+
+    const preview = previewLegacyMigration(report);
+    expect(preview.proposals.map((p) => p.projectId)).not.toContain(NO_TENANT);
+    expect(preview.cannotMigrate.map((c) => c.projectId)).toContain(NO_TENANT);
+    expect(preview.cannotMigrate.find((c) => c.projectId === NO_TENANT)!.why)
+      .toContain('no_tenant');
+    // The arithmetic stays whole: everything assessed is in exactly one bucket.
+    expect(preview.assessed).toBe(preview.proposals.length + preview.cannotMigrate.length);
+  });
+
+  it('counts PUBLISHED and DRAFT plans separately - the branch behind the 47 figure', async () => {
+    // Previously unexercised: no test inserted a `build_plans` row, so swapping the two
+    // subqueries would have passed everything, on the clause whose headline number is
+    // "47 published plans". `build_plans_one_published_per_project` caps published at one.
+    await sequelize.query(
+      `INSERT INTO build_plans (project_id, version, status, plan_json, plan_sha256)
+       VALUES ($1, 1, 'published', '{}'::jsonb, 'a'), ($1, 2, 'draft', '{}'::jsonb, 'b'),
+              ($1, 3, 'draft', '{}'::jsonb, 'c')`,
+      { bind: [LEGACY[0]] },
+    );
+
+    const report = await assessLegacyProjects(CUTOFF);
+    const first = report.find((r) => r.projectId === LEGACY[0])!;
+    expect(first.counts.publishedPlans).toBe(1);
+    expect(first.counts.draftPlans).toBe(2);
+
+    const preview = previewLegacyMigration(report);
+    expect(preview.preserves.publishedPlans).toBe(1);
+    expect(preview.preserves.draftPlans).toBe(2);
   });
 
   it('every proposal creates a lifecycle row and NOTHING else', async () => {

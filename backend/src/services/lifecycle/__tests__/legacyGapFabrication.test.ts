@@ -97,11 +97,32 @@ describe('the justifiable stage is DERIVED, not a constant', () => {
     expect(stoppedBy).toContain('not_assessed');
   });
 
-  it('with COMPLETE evidence it goes FURTHER, which proves it is reading the predicate', () => {
-    // The decisive half. If this still returned `discovery`, the function would be a constant
-    // and every legacy assertion in this packet would be meaningless.
-    const { stage } = highestJustifiableStage(completeEvidence());
-    expect(stage).not.toBe('discovery');
+  it('with COMPLETE evidence it reaches `operating` with nothing blocking', () => {
+    // The decisive half, now asserted on the VALUE rather than on what it is not. A verifier
+    // pointed out that `not.toBe('discovery')` would also pass a one-stage-off bug, and measured
+    // the real answer: `operating`, `stoppedBy: 'none'`. That was free to assert.
+    const { stage, stoppedBy } = highestJustifiableStage(completeEvidence());
+    expect(stage).toBe('operating');
+    expect(stoppedBy).toBe('none');
+  });
+
+  it('answers NULL when even the FIRST stage blocks, rather than naming a stage anyway', () => {
+    /**
+     * The defect: `reached` was seeded with `LIFECYCLE_STAGES[0]` before any gate was checked, so
+     * the function could never say "no stage is justified" -- it returned `discovery` while its
+     * own `stoppedBy` read `discovery:no_tenant:unmet`. A record that contradicts itself is worse
+     * than one that declines to answer.
+     *
+     * An empty tenant is the real trigger: `projects.tenant_id` is nullable, null means NOT
+     * ATTRIBUTABLE, and the registration hook skips exactly those projects.
+     */
+    const noTenant = {
+      ...completeEvidence(), tenantId: '', assessedFields: new Set<never>(),
+    } as never;
+    const { stage, stoppedBy } = highestJustifiableStage(noTenant);
+
+    expect(stage).toBeNull();
+    expect(stoppedBy).toContain('no_tenant');
   });
 });
 
@@ -135,6 +156,23 @@ describe('the preview is pure, and says what it will NOT do', () => {
     expect(preview.preserves).toEqual({
       publishedPlans: 2, draftPlans: 3, tasks: 17, intakes: 2,
     });
+  });
+
+  it('routes an UN-MIGRATABLE project away from proposals, into cannotMigrate', () => {
+    // The pure half of the same defect: a null justifiable stage must not become a proposal.
+    const preview = previewLegacyMigration([
+      assessment(),
+      assessment({
+        projectId: 'proj-unattributable', tenantId: null,
+        highestJustifiableStage: null, stoppedBy: 'discovery:no_tenant:unmet',
+      }),
+    ]);
+
+    expect(preview.proposals.map((p) => p.projectId)).toEqual(['proj-legacy-1']);
+    expect(preview.cannotMigrate).toEqual([
+      { projectId: 'proj-unattributable', why: 'discovery:no_tenant:unmet' },
+    ]);
+    expect(preview.assessed).toBe(preview.proposals.length + preview.cannotMigrate.length);
   });
 
   it('an empty cohort previews cleanly rather than throwing', () => {
