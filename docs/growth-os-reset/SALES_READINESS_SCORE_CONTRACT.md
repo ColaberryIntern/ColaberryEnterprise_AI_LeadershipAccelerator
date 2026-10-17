@@ -189,3 +189,176 @@ weights are untested.
 - **Threshold-free by design.** §6 warns against pretending an arbitrary threshold is proven,
   so this contract defines ordering and explainability and deliberately defines no cut-off.
 - **Nothing here is implemented.** Every DECISION is intent for Phase 3.
+
+---
+
+## Part 6 — The input contract (M24)
+
+**Phase 3, task M24.** Session `CC-20261005-r6h2`, written 2026-10-17 against `origin/main`.
+
+Parts 1 to 5 define what the score *is*. This part asks the prior question: is the Person 360
+evidence package trustworthy enough to be its input, input by input. It is bound to the M16
+evidence registry by `backend/src/services/adminOs/__tests__/srsInputContract.test.ts`, which
+fails if an input named below loses its evidence group.
+
+### 6.1 What the registry guarantees, and what it does not
+
+There are **22 registered evidence groups**:
+
+`backend/src/services/adminOs/__tests__/evidenceRegistry.test.ts:221` → "expect(Object.keys(EVIDENCE).length).toBe(22);"
+
+The M16 guard proves, for every group, that the profile both *loads* it and *attaches* it. That
+is a **static source-text** property. It does not prove the SQL parses, that the value is
+correct, or that an absent value is distinguishable from a zero. Those are separate questions,
+and 6.3 answers them input by input.
+
+One limit is worth stating because it bears on 6.4: every behavioural test in this directory
+mocks `sequelize.query`, so **no test in the package proves its SQL parses**. The suites say so
+themselves. Validity rests on manual verification against production. Marked **UNVERIFIED**.
+
+### 6.2 The rule this part enforces
+
+From M24's acceptance criteria, and it is the one that does the work:
+
+> **An absent input never scores as zero.**
+
+"We have no evidence" and "we have evidence of nothing" are different facts about a person, and a
+score that cannot tell them apart ranks an untracked stranger identically to a known tourist. For
+each input below, the question is therefore not "is there a number" but "does the number lie when
+the evidence is missing".
+
+### 6.3 Input by input
+
+Components are from DECISION 3, 4 and 5. **Measured** means counted from a source table.
+**Derived** means computed from other fields in the package.
+
+| Component | Evidence group | Field | M/D | What happens when absent | v1 |
+|---|---|---|---|---|---|
+| Tenure | `journey` | `daysKnown` | D | `null`, never 0 | **SAFE** |
+| Intent | `journey` | `intentScore` | M | `null` when withheld or unknown | **SAFE** |
+| Commitment: human reply | `communications` | `inboundCount` | M | panel `null`; cap admitted by `truncated` | **SAFE** |
+| Friction: payment failure | `billingDetail` | `failuresSinceLastSuccess` | D | panel `null` when no enrolment | **SAFE** (see 6.5) |
+| Prior outcome | `history` | `available`, `unavailableReason` | M | first-class availability flag, with a reason | **SAFE** |
+| Explorer bands | `explorerScore` | `engagement`/`intent`/`fit` | M | whole panel `null`, never 0/0/0 | **SAFE**, population caveat |
+| Consent | `acquisition` | `consentContact` | M | `null` distinguishes never-recorded from refused | **SAFE** |
+| Passive: site sessions | `engagement` | `sessions` | M | **reads `0` for a person never tracked** | **EXCLUDED** |
+| Passive: page events | `journey` | `pageEvents`, `sessions`, `campaigns`, `emailsSent` | M | **read `0` for anyone with no lead row** | **EXCLUDED** |
+| Commitment: enrolment | `journey` | `enrollments` | D | counts the caller's *visible* ids, so a mentor without grants reads `0` | **EXCLUDED** |
+| Commitment: appointment | `appointments` | rows | M | `[]` substituted when there was no key to look with | **EXCLUDED** |
+| Prior outcome detail | `history` | `everHired`, `everCertified`, `totalListedFees` | M | a NULL column reads `false`, and all-null fees sum to `0` | **EXCLUDED** |
+| Recency | `journey` | `lastActivity` | D | derived from a timeline capped at 150 with no truncation flag, and section-filtered per caller | **EXCLUDED** |
+
+### 6.4 The four absence defects, in full
+
+**(a) `engagement.sessions` reads an untracked person as a tracked one with zero sessions.**
+The query is a bare aggregate with no `GROUP BY`:
+
+`backend/src/services/adminOs/personProfileService.ts:352` → "array_remove(array_agg(DISTINCT vs.site_slug), NULL) AS sites"
+
+An aggregate with no `GROUP BY` returns exactly one row even when its joins match nothing, so the
+`e ? … : null` guard immediately below it can never take the null branch. A person with no
+visitor record at all receives `{sessions: 0, firstSeen: null, lastSeen: null, sites: []}`, which
+is byte-identical to a tracked person who has never opened a page. This group is also the one
+whose registry anchor is a bare table name rather than a call site, and the one with no
+behavioural test of its contents at all.
+
+**(b) `journey` breaks a promise its own docblock makes.** The module states the rule:
+
+`backend/src/services/adminOs/panels/journeyPanel.ts:10` → " * rather than 0 — the same rule the metric registry enforces everywhere else."
+
+Four lines below the counts are coerced:
+
+`backend/src/services/adminOs/panels/journeyPanel.ts:91` → "    sessions: Number(counts?.sessions ?? 0),"
+
+`counts` is only assigned when `leadIds.length` is non-zero, so for a person with no lead row
+`sessions`, `pageEvents`, `campaigns` and `emailsSent` are all a hard `0`, and the same pattern
+zeroes `cardsCompleted` and `sessionsAttended` when there are no enrolment ids. Only `daysKnown`
+and `intentScore` honour the docblock. **This is the defect that most directly touches the M22
+population**: the rows whose lead linkage is unresolved are exactly the rows these counts lie
+about.
+
+**(c) `journey.enrollments` reports a permission state as a fact about the person.**
+
+`backend/src/services/adminOs/panels/journeyPanel.ts:95` → "    enrollments: enrollmentIds.length,"
+
+The id list is already narrowed to what the caller may see, so a mentor without grants reads `0`
+enrolments for a person who has several. `withheldPanels` names withheld *panels*; it does not
+name withheld *values*. A score consuming this field would rank the same person differently
+depending on who asked, which breaks DECISION 1's determinism at the input rather than in the
+arithmetic.
+
+**(d) `appointments` and `automation` substitute an empty list for "no key to look with".**
+
+`backend/src/services/adminOs/personProfileService.ts:400` → "    profile.appointments = leadIdForPanels !== null ? await loadAppointments(leadIdForPanels) : [];"
+
+`[]` means "nothing booked" and "we could not look" alike, and an appointment request is a
+commitment signal under DECISION 3, which is the heaviest band in the score.
+
+### 6.5 Three further findings that do not block, but are named
+
+- **`trust.matchMethod` cannot be read as match quality.**
+  `backend/src/services/adminOs/panels/trustPanel.ts:110` → "    matchMethod: leadIds.length > 0 && enrollmentIds.length > 0 ? 'exact_email' : 'none',"
+  The field reports whether both a lead and an enrolment were found, not how they were matched.
+  A pure prospect, a lead with no enrolment and the SRS's primary subject, was matched by exact
+  email and still reports `'none'`. It is asserted as intended by its test, so this is a naming
+  and definition problem rather than a bug. Do not use it as an input.
+- **`billingDetail` is withheld without being named.** Unlike every other panel it has no branch
+  pushing itself to `withheldPanels` on denial, so a reader cannot tell suppression from absence.
+  It stays SAFE as an input because the panel is `null` either way, but the reader-facing gap is
+  real and belongs to M26.
+- **Only CCPP is bounded.** `backend/src/services/adminOs/panels/historyPanels.ts:100` → "const TIMEOUT_MS = 8000;"
+  It is also the only loader with a failure contract and an error class. Every Postgres loader
+  has no timeout and no classification, and a single thrown query takes the whole package to a
+  500 with no partial result. For a score computed in a batch this is an availability risk, not a
+  correctness one, so it does not gate v1.
+
+### 6.6 Entry-gate tickets that still bear on this
+
+| Ticket | State | What it changes here |
+|---|---|---|
+| M20 | open | The flake is in the suites guarding these very inputs. Until a red run is known to mean a real failure, the guards' verdicts carry less weight. It does not make any input above wrong. |
+| M22 | open | **Population, not correctness.** 37 ambiguous rows are undecided, so *who* is scored is undecided. Defect (b) makes this worse: those rows are the ones whose counts read as zero. |
+
+---
+
+## Part 7 — The readiness call
+
+**The answer M24 was asked for: NO, not today. YES once four named things are done, none of them
+a redesign.**
+
+Person 360 is close, and the honest version of "close" is specific. **Eight of the thirteen
+inputs the score needs are safe today** and their absence behaviour is already correct. The score
+cannot be built as specified because its **entire passive-browsing component is unusable**: both
+inputs that would feed it, `engagement.sessions` and the `journey` counts, report zero for people
+we have no evidence about. Under DECISION 3 that component is capped, so the damage is bounded,
+but it is not harmless: every untracked person would enter the queue with the same browsing
+evidence as a tracked person who never came back.
+
+**What has to change, in order:**
+
+1. **Fix `engagement` (defect a).** Return `null` when no visitor record exists rather than a
+   zero-filled shape. Small, local, and testable. The group has no behavioural test today, so the
+   fix ships with the first one.
+2. **Fix the `journey` counts (defect b).** Honour the docblock already in the file: `null`, not
+   `0`, when the query was skipped. The frontend already renders `daysKnown` and `intentScore` as
+   an em-dash, so the absent treatment exists and needs extending to six more fields.
+3. **Fix `journey.enrollments` and the `appointments` substitution (defects c and d).** Both are
+   the same mistake in two places: a permission or key state written into a value slot.
+4. **Decide M22.** Not a code fix and not mine. Until the 37 ambiguous rows are resolved or
+   explicitly parked, the score's population is a default rather than a decision.
+
+**Items 1 to 3 are small, local and independently testable, and they are not in M24's scope**
+(this ticket is a document). They are logged here as the proposal M24 produces, to be worked
+before or alongside M25 rather than folded into it.
+
+**What may proceed now, without waiting:** M25 may build the engine against the eight SAFE
+inputs, because its own acceptance criteria are about determinism, attribution and absence
+handling rather than about having every component populated. A passive-browsing component that
+is *declared and left unpopulated*, with its reason recorded, is consistent with this contract.
+A passive-browsing component fed from the two inputs above is not.
+
+**What this does not establish.** That the SQL behind any group parses, which no test in the
+package proves (**UNVERIFIED**). That the weights are right; Part 5 already refuses to propose
+any, and DECISION 2 keeps them provisional. That the eight safe inputs are *sufficient* to rank
+well, which only the distribution run in M25 can show. And it does not revisit DECISION 6's
+dependency on the suppression gap, which remains Phase 4's.
