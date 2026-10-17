@@ -25,16 +25,25 @@ import '../../models';
 describe('ensurePresentationStudioSchema — DDL and models agree', () => {
   const created = parseCreatedTables(PRESENTATION_STUDIO_STATEMENTS);
 
-  it('creates exactly the five Studio tables', () => {
+  it('creates exactly the Studio tables the module declares', () => {
     expect(created.map((t) => t.table).sort()).toEqual([...PRESENTATION_STUDIO_TABLES].sort());
   });
 
   it('positive control: the parser found real columns, so the parity checks are not vacuous', () => {
     // Without this, a parser that silently stopped matching would make every
     // assertion below compare two empty sets and pass.
+    //
+    // The per-table bar was `> 5` until 2026-10-16, which held only while every
+    // Studio table happened to be wide. `presentation_recording_views` is a
+    // legitimately narrow join table — id, two foreign keys and two timestamps — so
+    // that threshold was asserting a coincidence rather than the property it names.
+    // The control keeps its teeth from the TOTAL: a broken parser drops it to near
+    // zero, which no arrangement of real tables can do.
     for (const t of created) {
-      expect(t.columns.length).toBeGreaterThan(5);
+      expect(t.columns.length).toBeGreaterThan(1);
     }
+    const total = created.reduce((n, t) => n + t.columns.length, 0);
+    expect(total).toBeGreaterThan(50);
   });
 
   it.each([...PRESENTATION_STUDIO_TABLES])(

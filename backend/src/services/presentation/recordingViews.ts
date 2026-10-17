@@ -55,19 +55,27 @@ export async function recordView(
   return Boolean(rows?.[0]?.inserted);
 }
 
-/** How many distinct people have watched each of these recordings. */
+/**
+ * How many distinct people have watched each of these recordings.
+ *
+ * Through the MODEL, unlike `recordView` above. This is a plain grouped count that
+ * Sequelize expresses perfectly well, and the model is the schema contract the
+ * parity suite enforces — a table whose only access is raw SQL drifts from its model
+ * silently. The upsert stays raw solely because it needs `RETURNING (xmax = 0)`.
+ */
 export async function viewCounts(recordingIds: string[]): Promise<Record<string, number>> {
   const ids = recordingIds.filter(isUuid);
   if (ids.length === 0) return {};
 
-  const sequelize = await db();
-  const [rows] = await sequelize.query(
-    `SELECT recording_id, COUNT(*)::int AS n
-       FROM presentation_recording_views
-      WHERE recording_id IN (:ids)
-      GROUP BY recording_id`,
-    { replacements: { ids } },
-  ) as [Array<{ recording_id: string; n: number }>, unknown];
+  const { fn, col } = await import('sequelize');
+  const { default: PresentationRecordingView } = await import('../../models/PresentationRecordingView');
+  const found = await PresentationRecordingView.findAll({
+    attributes: ['recording_id', [fn('COUNT', col('id')), 'n']],
+    where: { recording_id: ids },
+    group: ['recording_id'],
+    raw: true,
+  }) as unknown as Array<{ recording_id: string; n: number | string }>;
+  const rows = found || [];
 
   const out: Record<string, number> = {};
   // Every id asked about gets an answer. A recording nobody has watched is 0, not

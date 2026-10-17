@@ -64,6 +64,7 @@ export const PRESENTATION_STUDIO_TABLES = [
   'presentation_recordings',
   'presentation_feedback',
   'presentation_showcases',
+  'presentation_recording_views',
 ] as const;
 
 /**

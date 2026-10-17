@@ -1,9 +1,17 @@
 jest.mock('../../../config/database', () => ({ sequelize: { query: jest.fn() } }));
+// The count reads through the model; only the upsert is raw, because it needs
+// `RETURNING (xmax = 0)` to tell an INSERT from an ON CONFLICT update.
+jest.mock('../../../models/PresentationRecordingView', () => ({
+  __esModule: true,
+  default: { findAll: jest.fn().mockResolvedValue([]) },
+}));
 
 import { sequelize } from '../../../config/database';
+import PresentationRecordingView from '../../../models/PresentationRecordingView';
 import { recordView, viewCounts, describeViews } from '../recordingViews';
 
 const q = sequelize.query as unknown as jest.Mock;
+const views = PresentationRecordingView as unknown as { findAll: jest.Mock };
 
 /**
  * A NUMBER A STUDENT WILL BELIEVE.
@@ -21,7 +29,12 @@ const REC2 = '7aa1b2c3-0929-4ab4-8e3f-df32c338a931';
 const OWNER = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
 const VIEWER = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
 
-beforeEach(() => { jest.clearAllMocks(); q.mockReset(); });
+beforeEach(() => {
+  jest.clearAllMocks();
+  q.mockReset();
+  // `clearAllMocks` wipes the resolved value set in the module factory above.
+  views.findAll.mockResolvedValue([]);
+});
 
 describe('the owner is never a view', () => {
   it('does not count the owner watching themselves, and writes NOTHING', async () => {
@@ -100,28 +113,37 @@ describe('counting them back', () => {
     // A recording nobody watched must come back as 0, not absent. An absent key
     // reads as `undefined` at the call site and renders as a blank where a number
     // belongs.
-    q.mockResolvedValueOnce([[{ recording_id: REC, n: 3 }], {}]);
+    views.findAll.mockResolvedValue([{ recording_id: REC, n: 3 }]);
     expect(await viewCounts([REC, REC2])).toEqual({ [REC]: 3, [REC2]: 0 });
   });
 
+  it('counts a Postgres bigint string rather than rendering NaN', async () => {
+    // `COUNT(*)` comes back from pg as a STRING, because a bigint does not fit a
+    // JS number safely. Reading it without coercion puts "3" through arithmetic
+    // and the page shows nonsense.
+    views.findAll.mockResolvedValue([{ recording_id: REC, n: '3' }]);
+    expect(await viewCounts([REC])).toEqual({ [REC]: 3 });
+  });
+
   it('groups by recording rather than returning one lump', async () => {
-    q.mockResolvedValueOnce([[], {}]);
     await viewCounts([REC]);
-    const sql = String(q.mock.calls[0][0]);
-    expect(sql).toContain('GROUP BY recording_id');
-    expect(sql).toContain('COUNT(*)');
+    const opts = views.findAll.mock.calls[0][0];
+    expect(opts.group).toEqual(['recording_id']);
+    // `raw` matters: without it Sequelize returns model instances and the aggregate
+    // alias is not a plain property, so every count reads as undefined.
+    expect(opts.raw).toBe(true);
   });
 
   it('queries nothing at all for an empty list', async () => {
     expect(await viewCounts([])).toEqual({});
+    expect(views.findAll).not.toHaveBeenCalled();
     expect(q).not.toHaveBeenCalled();
   });
 
   it('drops non-uuids before querying, and does not invent keys for them', async () => {
-    q.mockResolvedValueOnce([[], {}]);
     const out = await viewCounts([REC, 'garbage']);
     expect(out).toEqual({ [REC]: 0 });
-    expect(q.mock.calls[0][1].replacements.ids).toEqual([REC]);
+    expect(views.findAll.mock.calls[0][0].where.recording_id).toEqual([REC]);
   });
 });
 
