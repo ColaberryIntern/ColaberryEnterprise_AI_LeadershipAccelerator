@@ -118,12 +118,53 @@ function delimited(tag: string, body: string, max: number): string {
   return `<${tag}>\n${clipped}\n</${tag}>`;
 }
 
-/** Render the source blocks as an id-labelled list so the model can cite the exact ids. */
+/**
+ * The blocks that actually reach the model, and the ones the cap removes.
+ *
+ * ONE DEFINITION OF "SUPPLIED", used by both the instruction line and the rendered body. They
+ * used to disagree: `renderBlocks` sliced to `MAX_BLOCKS` while the instruction named every id
+ * from the full input, so the prompt ordered the model to cite blocks it had never been given,
+ * and `coversRequirementBlocks` read that instruction line and reported full coverage.
+ */
+export function suppliedBlocks(blocks: FactoryDecomposeInputs['sourceBlocks']): {
+  kept: FactoryDecomposeInputs['sourceBlocks'];
+  dropped: FactoryDecomposeInputs['sourceBlocks'];
+} {
+  return { kept: blocks.slice(0, MAX_BLOCKS), dropped: blocks.slice(MAX_BLOCKS) };
+}
+
+/** How many dropped ids to name before summarising, so the notice cannot itself overflow. */
+const MAX_NAMED_DROPPED = 20;
+
+/**
+ * Render the source blocks as an id-labelled list so the model can cite the exact ids.
+ *
+ * EVERY REMOVAL IS LABELLED. `delimited()` already says `…[truncated at N chars]` when a whole
+ * body is clipped, but it only sees the JOINED string: 201 short blocks never approach its cap,
+ * so the 201st vanished with nothing said, and a block longer than `MAX_BLOCK_CHARS` lost its
+ * tail the same way. A model cannot ask for what it was not told is missing, and a reviewer
+ * reading the prompt could not tell either.
+ *
+ * Dropped ids are named WITHOUT the `[id]` brackets used for a supplied block, so the notice
+ * can never be mistaken for the block arriving — `coversRequirementBlocks` keys on that form.
+ */
 function renderBlocks(blocks: FactoryDecomposeInputs['sourceBlocks']): string {
-  return blocks
-    .slice(0, MAX_BLOCKS)
-    .map((b) => `[${b.id}] (${b.kind}, ${b.locator}) ${b.text.slice(0, MAX_BLOCK_CHARS)}`)
-    .join('\n');
+  const { kept, dropped } = suppliedBlocks(blocks);
+  const lines = kept.map((b) => {
+    const clipped = b.text.length > MAX_BLOCK_CHARS
+      ? `${b.text.slice(0, MAX_BLOCK_CHARS)}\n…[truncated at ${MAX_BLOCK_CHARS} chars]`
+      : b.text;
+    return `[${b.id}] (${b.kind}, ${b.locator}) ${clipped}`;
+  });
+  if (dropped.length) {
+    const named = dropped.slice(0, MAX_NAMED_DROPPED).map((b) => b.id).join(', ');
+    const rest = dropped.length > MAX_NAMED_DROPPED
+      ? `, and ${dropped.length - MAX_NAMED_DROPPED} more`
+      : '';
+    lines.push(`…[truncated: ${dropped.length} source block(s) over the ${MAX_BLOCKS} cap were `
+      + `NOT supplied: ${named}${rest}]`);
+  }
+  return lines.join('\n');
 }
 
 /** Render the requirements as a compact compliance list. */
@@ -136,7 +177,10 @@ function renderRequirements(reqs: FactoryDecomposeInputs['requirements']): strin
 /** Assemble the user message. Source blocks lead — the model must cite them, so they come first. */
 export function buildFactoryDecomposeUserPrompt(inputs: FactoryDecomposeInputs): string {
   const t = { ...DEFAULT_FACTORY_TARGETS, ...(inputs.targets ?? {}) };
-  const reqBlockIds = inputs.sourceBlocks.filter((b) => b.kind === 'requirement').map((b) => b.id);
+  // From the blocks that are actually SUPPLIED, not from the full input. Naming an id the body
+  // does not carry orders the model to cite something it was never given.
+  const reqBlockIds = suppliedBlocks(inputs.sourceBlocks)
+    .kept.filter((b) => b.kind === 'requirement').map((b) => b.id);
   return [
     `Decompose this contract into ${t.tasks[0]}-${t.tasks[1]} tasks across at most ${t.stages} stages, ` +
       `with a single START, at least one END, and a reachable flow between them.`,
@@ -153,11 +197,28 @@ export function buildFactoryDecomposeUserPrompt(inputs: FactoryDecomposeInputs):
   ].join('\n');
 }
 
-/** True when every requirement block id is named in the prompt for the model to cite. */
+/**
+ * True when every requirement block was actually SUPPLIED to the model.
+ *
+ * READS THE BODY, NOT THE WHOLE PROMPT. It used to ask `userPrompt.includes(b.id)`, and the
+ * instruction line at the top names every requirement id — so the answer was yes even when the
+ * block had been dropped by the `MAX_BLOCKS` cap and its text never reached the model. The check
+ * verified that we ASKED for the block, not that we SUPPLIED it, which is the one thing it
+ * exists to establish.
+ *
+ * It keys on the rendered `[id]` form, so the truncation notice listing dropped ids in plain
+ * text cannot satisfy it, and an id that happens to appear inside another block's prose cannot
+ * either.
+ */
 export function coversRequirementBlocks(userPrompt: string, inputs: FactoryDecomposeInputs): boolean {
+  const start = userPrompt.indexOf('<SOURCE_BLOCKS>');
+  const end = userPrompt.indexOf('</SOURCE_BLOCKS>');
+  // No delimited body is not "covered": it is unreadable, and the SAFE-002 tags are required.
+  if (start === -1 || end === -1 || end < start) return false;
+  const body = userPrompt.slice(start, end);
   return inputs.sourceBlocks
     .filter((b) => b.kind === 'requirement')
-    .every((b) => userPrompt.includes(b.id));
+    .every((b) => body.includes(`[${b.id}]`));
 }
 
 /** True when the source blocks are positioned ahead of the free-text context — the grounding invariant. */

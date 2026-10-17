@@ -1794,3 +1794,58 @@ cannot simply be put on a timer - run periodically as written, it would re-resum
 legitimately in flight and generate them twice. Giving the sweep the same staleness predicate is
 the natural next step and is deliberately not bundled here, because it changes a boot-time path
 that currently has exactly one caller and one meaning.
+
+## THE FACTORY PROMPT NO LONGER DROPS SOURCE BLOCKS SILENTLY, and its check no longer lies
+
+Carried since Phase 7: *"`factoryDecomposePrompt.ts:122-126` does `.slice(0, MAX_BLOCKS)` and
+`.slice(0, MAX_BLOCK_CHARS)` with no label, while `coversRequirementBlocks` returns true anyway
+... `plan-phase7.md` assigned this to T1.3 and said 'both need the same answer'; T1.3 changed only
+the SBP path."* Closed.
+
+### The root cause was one disagreement, not two bugs
+
+The instruction line was built from the **full** input:
+
+```ts
+const reqBlockIds = inputs.sourceBlocks.filter((b) => b.kind === 'requirement').map((b) => b.id);
+```
+
+while the body was **sliced** to `MAX_BLOCKS`. So the prompt ordered the model to cite blocks it
+had never been given, and `coversRequirementBlocks` - which asked `userPrompt.includes(b.id)` -
+found those ids in the instruction line and reported full coverage. **The check verified that we
+ASKED for a block, not that we SUPPLIED it**, which is the one thing it exists to establish.
+
+Both now derive from a single exported `suppliedBlocks()`, so the instruction cannot name an id
+the body lacks.
+
+### Every removal is now labelled
+
+`delimited()` already said `…[truncated at N chars]`, but it only ever saw the JOINED string: 201
+short blocks never approach its cap, so the 201st vanished with nothing said, and a block longer
+than `MAX_BLOCK_CHARS` lost its tail the same way. `renderBlocks` now labels both - the per-block
+clip, and a trailing notice naming the dropped ids (capped at 20 names plus a count, so the
+notice cannot itself overflow).
+
+Dropped ids are printed **without** the `[id]` brackets a supplied block renders with, and
+`coversRequirementBlocks` keys on the bracketed form. So the notice listing what is missing can
+never be mistaken for the thing arriving.
+
+### Coverage and completeness are deliberately different questions
+
+A block clipped at `MAX_BLOCK_CHARS` still counts as **covered**: it was supplied, and what was
+lost is its tail, which the label reports. Conflating the two would make one of them
+unreportable. The inverted corpus case states this in as many words, because it is the kind of
+distinction a later reader would otherwise "simplify" away.
+
+### The recorded gaps are kept, inverted
+
+`corpusVariants.test.ts` carried two cases named `RECORDED GAP 1` and `RECORDED GAP 2` that
+asserted the broken behaviour on purpose. They are not deleted - they are inverted, so the
+closure cannot silently regress, and a third case now pins the instruction line itself. The
+existing `the SAFE-002 delimiters and the grounding order survive, which any fix must preserve`
+case still passes, which was the named trap: hardening overflow must not weaken injection
+resistance in the same change.
+
+**Mutation-proven:** restoring the whole-prompt check fails **exactly one** test, the one that
+asserts the refusal, while the other 15 pass - including the pre-existing `the check is NOT
+vacuous` control.
