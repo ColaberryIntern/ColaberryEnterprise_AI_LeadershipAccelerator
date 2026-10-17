@@ -4,6 +4,7 @@ import { themeCssVars, themeForLandingPage } from './landingPageTheme';
 import { logoForLandingPage, logoOnDarkForLandingPage } from './landingPageLogos';
 import { fontCssFor } from './landingPageFonts';
 import { metaPixelHead } from './landingPagePixel';
+import { normalizeHeadingCase } from './landingPageHeadingCase';
 import type { LandingPageContentShape, LandingPageSection } from '../../schemas/landingPageContentSchema';
 import { STYLES } from './landingPageStyles';
 import { renderCta, renderSectionBody, type Cta } from './landingPageSections';
@@ -140,7 +141,12 @@ export interface RenderedLandingPage {
 }
 
 export function renderLandingPage(input: RenderLandingPageInput): RenderedLandingPage {
-  const { content, brand, siteSlug, pageUrl, cspNonce } = input;
+  const { brand, siteSlug, pageUrl, cspNonce } = input;
+  // Sentence case at the boundary, so no page can be SERVED in Title Case whenever it was
+  // written. The generator normalises too, but pages built before that existed are already in
+  // the database and already live, and this fixes those without a migration. The function is
+  // idempotent, so the two passes cannot fight.
+  const content = normalizeHeadingCase(input.content);
   const { theme, branded } = themeForLandingPage(brand.default_theme_key);
   const logo = logoForLandingPage(brand.default_theme_key);
   const darkLogo = logoOnDarkForLandingPage(brand.default_theme_key);
