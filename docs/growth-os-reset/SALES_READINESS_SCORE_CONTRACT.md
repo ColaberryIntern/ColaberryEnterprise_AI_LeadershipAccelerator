@@ -326,7 +326,7 @@ commitment signal under DECISION 3, which is the heaviest band in the score.
 **The answer M24 was asked for: NO, not today. YES once four named things are done, none of them
 a redesign.**
 
-Person 360 is close, and the honest version of "close" is specific. **Eight of the thirteen
+Person 360 is close, and the honest version of "close" is specific. **Seven of the thirteen
 inputs the score needs are safe today** and their absence behaviour is already correct. The score
 cannot be built as specified because its **entire passive-browsing component is unusable**: both
 inputs that would feed it, `engagement.sessions` and the `journey` counts, report zero for people
@@ -351,7 +351,7 @@ evidence as a tracked person who never came back.
 (this ticket is a document). They are logged here as the proposal M24 produces, to be worked
 before or alongside M25 rather than folded into it.
 
-**What may proceed now, without waiting:** M25 may build the engine against the eight SAFE
+**What may proceed now, without waiting:** M25 may build the engine against the seven SAFE
 inputs, because its own acceptance criteria are about determinism, attribution and absence
 handling rather than about having every component populated. A passive-browsing component that
 is *declared and left unpopulated*, with its reason recorded, is consistent with this contract.
@@ -359,6 +359,6 @@ A passive-browsing component fed from the two inputs above is not.
 
 **What this does not establish.** That the SQL behind any group parses, which no test in the
 package proves (**UNVERIFIED**). That the weights are right; Part 5 already refuses to propose
-any, and DECISION 2 keeps them provisional. That the eight safe inputs are *sufficient* to rank
+any, and DECISION 2 keeps them provisional. That the seven safe inputs are *sufficient* to rank
 well, which only the distribution run in M25 can show. And it does not revisit DECISION 6's
 dependency on the suppression gap, which remains Phase 4's.
