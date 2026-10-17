@@ -90,11 +90,23 @@ const CODES = [
 const OTHER_CODES = { codes: 14, n: 36 };
 
 /**
- * The cost, measured. This is the tradeoff Ali weighs, so it is stated as numbers rather than
- * as "slow": at the default heap the run does not merely take longer, it DIES and reports success.
+ * The cost, measured in BOTH places, because the first figure written here was wrong in a way
+ * that would have changed the decision.
+ *
+ * The local runs took 761 and 785 seconds, and "about 13 minutes" went into the first draft of
+ * the commit, the PR and this artifact. The CI run then finished the same typecheck in 71
+ * seconds, with an identical verdict (400 errors across 141 files, baseline matched). The local
+ * machine is Windows, with the tree under a syncing folder and two other heavy jobs running
+ * against it at the time; the runner is a clean Linux box. The CI number is the one that bears on
+ * whether this belongs in CI, so it leads.
+ *
+ * A 2-minute green on a check expected to take 13 minutes is exactly the shape of a false pass,
+ * so it was NOT taken at face value: the job log was read, and it shows the real tsc line.
  */
 const COST = {
-  seconds: 785,
+  ciSeconds: 71,
+  ciJobSeconds: 121,
+  localSeconds: 761,
   heapMb: 8192,
   crashSeconds: 490,
   crashExit: 134,

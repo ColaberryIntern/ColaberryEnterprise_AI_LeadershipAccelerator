@@ -104,7 +104,7 @@ function buildVisual() {
     { n: D.SCALE.errors, k: 'type errors found' },
     { n: D.SCALE.filesWithErrors, k: 'files carrying them' },
     { n: D.SCALE.srcErrors, k: 'errors in production code' },
-    { n: `${Math.round(D.COST.seconds / 60)} min`, k: `cost, at ${D.COST.heapMb / 1024}GB heap` },
+    { n: `${D.COST.ciSeconds}s`, k: `cost in CI, at ${D.COST.heapMb / 1024}GB heap` },
   ].map((c) => `<div class="card"><div class="n">${esc(c.n)}</div>
       <div class="k">${esc(c.k)}</div></div>`).join('');
 
@@ -245,10 +245,24 @@ function buildDocument() {
     <figcaption>The exit status is checked before any count is believed. Exit 0 and exit 2 are the
       only accepted verdicts.</figcaption>
   </figure>
-  <p>The measured cost of a run that actually completes:
-    <strong>${D.COST.seconds} seconds</strong> with
-    <code>--max-old-space-size=${D.COST.heapMb}</code>. It runs as its own parallel CI job, so it
-    does not slow the other checks; it does become the slowest thing in CI.</p>
+  <p>The measured cost of a run that actually completes, with
+    <code>--max-old-space-size=${D.COST.heapMb}</code>:
+    <strong>${D.COST.ciSeconds} seconds on the CI runner</strong>
+    (${D.COST.ciJobSeconds}s for the whole job including dependency install), against
+    ${D.COST.localSeconds}s on the development machine.</p>
+  <div class="note warn">
+    <strong>The first version of this document said "about 13 minutes", and that was wrong in the
+    direction that mattered.</strong> It used the local figure. The local machine is Windows, with
+    the tree under a syncing folder and two other heavy jobs running against it at the time; the
+    runner is a clean Linux box. The honest cost for deciding whether this belongs in CI is
+    ${D.COST.ciSeconds} seconds, not ${Math.round(D.COST.localSeconds / 60)} minutes, and it makes
+    the cost objection largely disappear.
+    <br><br>
+    Worth noting how it was caught: a 2-minute green on a check expected to take 13 minutes looks
+    exactly like a job that skipped its work, so the badge was not believed. The job log was
+    opened, and it carries the real line - same 400 errors across the same 141 files as the local
+    run. A job that had skipped the typecheck could not have produced those counts.
+  </div>
 
   <h2>5. The defect this task found in itself</h2>
   <div class="note warn">
@@ -268,7 +282,7 @@ function buildDocument() {
     section 5, so that test is known to catch it rather than assumed to. Each mutant killed exactly
     one named test, which also shows the four rules are independent rather than all keying off the
     same assertion.</div>
-  <p>The gate run itself then completed in ${D.COST.seconds}s at exit 2 and reported
+  <p>The gate run itself then completed in ${D.COST.localSeconds}s locally and ${D.COST.ciSeconds}s in CI, both at exit 2, and both reported
     <strong>baseline matched exactly, in both directions</strong>. Because it flags any unlisted
     file carrying an error, that clean result is also the proof that the new test file is itself
     type-clean.</p>
@@ -279,7 +293,7 @@ function buildDocument() {
   <h2>8. Reversing it</h2>
   <p>Entirely code and config, no data touched and nothing sent. <code>git revert</code> removes
     the job, the config, the baseline and the checker together. Removing only the CI job leaves the
-    checker runnable by hand, which is the sensible half-step if the ${D.COST.seconds}s cost turns
+    checker runnable by hand, which is the sensible half-step if the ${D.COST.ciSeconds}s cost turns
     out not to be worth it.</p>
 
   <div class="footer">${esc(D.CODE)} ${esc(D.TITLE)} &middot; document &middot;

@@ -66,7 +66,8 @@ const DOC_COMMENT = `<div><strong>READY FOR ALI REVIEW - DOCUMENT. ${D.CODE}, `
   + 'declared a crash. Section 5 of the document states it rather than quietly fixing it.</div>'
   + '<div><br></div>'
   + '<div><strong>One thing for you to weigh</strong>, in section 4: the check costs '
-  + `${D.COST.seconds} seconds and needs an 8GB heap. It is wired REPORT-ONLY, so it is not `
+  + `${D.COST.ciSeconds} seconds on the CI runner (an earlier draft said 13 minutes, which was the `
+  + `slower development machine). It is wired REPORT-ONLY, so it is not `
   + 'blocking anything yet. Promoting it to a required status check is your call.</div>'
   + '<div><br></div><div>Review state unchanged. I do not close tickets.</div>';
 
