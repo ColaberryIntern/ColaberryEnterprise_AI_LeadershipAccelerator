@@ -79,6 +79,18 @@
 .cm-world{position:relative;flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:12px}
 .cm-world .cm-map{max-height:100%;max-width:min(100%,1200px);border-radius:var(--r-16)}
 
+/* ---- C4: live head count and Who's here ---- */
+.cm-count rect{fill:var(--leaf-deep)}
+.cm-count text{fill:var(--surface);font-size:15px;font-weight:700}
+.cm-map.is-compact .cm-count text{font-size:54px}
+.cm-layer-warn{color:var(--amber-deep);font-size:13px;font-weight:600}
+.cm-who{display:flex;flex-direction:column;gap:6px}
+.cm-people{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:8px}
+.cm-person{display:flex;align-items:center;gap:8px;padding:4px 10px 4px 4px;border:1px solid var(--border-sub);border-radius:var(--r-pill);font-size:13px;color:var(--strong)}
+.cm-face{width:26px;height:26px;border-radius:50%;object-fit:cover;flex:none}
+.cm-initials{display:inline-flex;align-items:center;justify-content:center;background:var(--sunken);color:var(--muted);font-size:11px;font-weight:700}
+.cm-who-note{margin:0;font-size:13px;color:var(--muted)}
+
 /* ---- building card ---- */
 .cm-card{position:absolute;top:20px;right:20px;width:min(360px,calc(100% - 40px));max-height:calc(100% - 40px);overflow:auto;
   background:var(--surface);border:1px solid var(--border);border-top:6px solid var(--cm-c);border-radius:var(--r-16);

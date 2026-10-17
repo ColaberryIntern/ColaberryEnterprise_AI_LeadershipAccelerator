@@ -3,14 +3,15 @@ import { Link } from 'react-router-dom';
 import type { CampusBuilding, ExplorerAccess } from './campusMap';
 import { buildingName } from './campusMap';
 import { accessLabel, enrollCta } from './campusAccess';
+import WhoIsHere, { WhoIsHereProps } from './WhoIsHere';
 
 /**
  * The card that opens when you arrive at a building (Campus C2): its name, what you can
  * do here (primary action), its rooms as real links, and - for an Explorer - what is
  * locked, a demo or a preview, with the enroll path the paywall already uses.
  *
- * Real data only: "Who's here" (C4) and "Staff on duty" (C5) are not rendered until those
- * phases pass real data in, so nothing invented ever shows. A route that does not exist
+ * Real data only: "Who's here" (C4) renders only when the caller passes presence, and "Staff on
+ * duty" (C5) is not rendered yet, so nothing invented ever shows. A route that does not exist
  * yet (marked `planned` in the catalog) shows as "Opening soon", never as a dead link.
  */
 export interface BuildingCardProps {
@@ -20,6 +21,8 @@ export interface BuildingCardProps {
   onClose: () => void;
   /** Called when the learner follows any link out of the card (the overlay closes). */
   onNavigate: () => void;
+  /** C4: presence for this building. Absent = the section is not rendered at all. */
+  whoIsHere?: WhoIsHereProps;
 }
 
 const NOTICE: Record<Exclude<ExplorerAccess, 'open'>, string> = {
@@ -28,7 +31,7 @@ const NOTICE: Record<Exclude<ExplorerAccess, 'open'>, string> = {
   preview: 'You can watch a short preview. Enrolling opens everything here.',
 };
 
-export default function BuildingCard({ building: b, access, workplaceNames, onClose, onNavigate }: BuildingCardProps): React.ReactElement {
+export default function BuildingCard({ building: b, access, workplaceNames, onClose, onNavigate, whoIsHere }: BuildingCardProps): React.ReactElement {
   const name = buildingName(b, workplaceNames);
   const chip = accessLabel(access);
   const primaryPlanned = b.rooms.find((r) => r.route === b.primary.route)?.planned;
@@ -64,6 +67,8 @@ export default function BuildingCard({ building: b, access, workplaceNames, onCl
           </ul>
         </>
       )}
+
+      {whoIsHere && <WhoIsHere presence={whoIsHere.presence} error={whoIsHere.error} />}
     </section>
   );
 }

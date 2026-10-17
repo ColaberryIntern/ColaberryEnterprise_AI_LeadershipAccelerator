@@ -48,7 +48,9 @@ jest.mock('../../../pages/portal/today/ChatDock', () => ({ __esModule: true, def
 jest.mock('../../../pages/portal/today/MessagesButton', () => ({ __esModule: true, default: () => null }));
 jest.mock('../../ConfettiCelebration', () => ({ __esModule: true, default: () => null }));
 let mockCampusOn = true;
-jest.mock('../campusApi', () => ({ fetchCampusFlags: () => Promise.resolve({ campus: mockCampusOn }), CAMPUS_FLAGS_TIMEOUT_MS: 10000 }));
+jest.mock('../campusApi', () => ({ fetchCampusFlags: () => Promise.resolve({ campus: mockCampusOn }), CAMPUS_FLAGS_TIMEOUT_MS: 10000,
+  // C4 presence: a quiet campus (no one in any building).
+  fetchCampusPresence: () => Promise.resolve({}), postCampusHere: () => Promise.resolve(), isReadOnlySession: () => false }));
 
 // eslint-disable-next-line import/first
 import PortalShell from '../../../pages/portal/today/PortalShell';

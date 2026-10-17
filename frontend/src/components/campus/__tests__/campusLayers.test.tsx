@@ -14,7 +14,9 @@ jest.mock('../useCampusView', () => {
   const actual = jest.requireActual('../useCampusView');
   return { ...actual, useCampusView: () => ({ audience: mockAudience, hasFullAccess: false, buildings: actual.campusBuildingsFor(mockAudience) }) };
 });
-jest.mock('../campusApi', () => ({ fetchCampusFlags: () => Promise.resolve({ campus: true }), CAMPUS_FLAGS_TIMEOUT_MS: 10000 }));
+jest.mock('../campusApi', () => ({ fetchCampusFlags: () => Promise.resolve({ campus: true }), CAMPUS_FLAGS_TIMEOUT_MS: 10000,
+  // C4 presence: a quiet campus (no one in any building).
+  fetchCampusPresence: () => Promise.resolve({}), postCampusHere: () => Promise.resolve(), isReadOnlySession: () => false }));
 
 // eslint-disable-next-line import/first
 import { CampusProvider, useCampus } from '../CampusContext';

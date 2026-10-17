@@ -13,14 +13,16 @@ import { buildingForPath, buildingName } from './campusMap';
  * one-click link to its main page, and the way back to the classic menu.
  */
 export default function CampusNav({ active }: { active: string }): React.ReactElement {
-  const { settings, openMap, openList, updateSettings } = useCampus();
+  const { settings, openMap, openList, updateSettings, presence, presenceError } = useCampus();
   const { audience, hasFullAccess, buildings } = useCampusView();
   const here = buildingForPath(active);
+  const counts: Record<string, number> = {};
+  if (presence && !presenceError) for (const [id, a] of Object.entries(presence)) counts[id] = a.count;
   return (
     <nav className="cm-nav" aria-label="Campus">
       <div className="cm-nav-map">
         <CampusWorldMap buildings={buildings} accessOf={(b) => buildingAccess(b, audience, hasFullAccess)}
-          workplaceNames={settings.workplaceNames} reduceMotion={settings.reduceMotion} compact onArrive={(id) => openMap(id)} />
+          workplaceNames={settings.workplaceNames} reduceMotion={settings.reduceMotion} compact onArrive={(id) => openMap(id)} counts={counts} />
       </div>
       <button type="button" className="cm-btn cm-nav-open" onClick={() => openMap()} data-testid="cm-open-map">Open campus map</button>
       <div className="grp">Buildings</div>

@@ -24,7 +24,7 @@ function useReturnFocus(open: boolean): void {
 }
 
 export function CampusMapOverlay(): React.ReactElement | null {
-  const { layer, mapFocus, settings, closeLayer, openList } = useCampus();
+  const { layer, mapFocus, settings, closeLayer, openList, presence, presenceError } = useCampus();
   const { audience, hasFullAccess, buildings } = useCampusView();
   const open = layer === 'map';
   const dialog = useRef<HTMLDivElement | null>(null);
@@ -37,11 +37,13 @@ export function CampusMapOverlay(): React.ReactElement | null {
       <div className="cm-layer-bar">
         <strong>Colaberry Campus</strong>
         <span className="cm-layer-hint">Pick a building, or press Tab to move between them.</span>
+        {presenceError && <span className="cm-layer-warn" role="status" data-testid="cm-presence-broken">We can't load who's online right now.</span>}
         <button type="button" className="cm-link" onClick={openList}>List view</button>
         <button type="button" className="cm-btn is-secondary" onClick={closeLayer} aria-label="Close campus map">Close</button>
       </div>
       <CampusWorld buildings={buildings} audience={audience} hasFullAccess={hasFullAccess} workplaceNames={settings.workplaceNames}
-        reduceMotion={settings.reduceMotion} initialTarget={mapFocus} onExit={closeLayer} onNavigate={closeLayer} />
+        reduceMotion={settings.reduceMotion} initialTarget={mapFocus} onExit={closeLayer} onNavigate={closeLayer}
+        presence={presence} presenceError={presenceError} />
     </div>
   );
 }
