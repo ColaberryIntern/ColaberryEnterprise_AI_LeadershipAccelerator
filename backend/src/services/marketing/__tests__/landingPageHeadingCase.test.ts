@@ -132,7 +132,12 @@ describe('walking a whole generated page', () => {
     // body copy would be a bigger change than the one that was asked for.
     const out = normalizeHeadingCase(content);
     expect(out.hero.cta.label).toBe('Join The Class');
-    expect(out.sections[0].items[0].label).toBe('Week One Starts Monday');
+    // `items` is optional on a section, so it is checked rather than assumed. Asserting it is
+    // defined first keeps the failure message useful: without it, an absent list would report
+    // "cannot read label of undefined" instead of naming the missing list.
+    const items = out.sections[0].items;
+    expect(items).toBeDefined();
+    expect(items?.[0].label).toBe('Week One Starts Monday');
   });
 
   it('does not mutate the content it was given', () => {
