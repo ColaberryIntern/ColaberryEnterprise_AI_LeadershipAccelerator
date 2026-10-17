@@ -1661,3 +1661,66 @@ The detector becomes buildable the moment `build_plans` holds a row with a provi
 (not `student`), `attempts` set, and `created_at > 2026-10-12 23:27:01Z`. Until that row exists,
 the honest state of this obligation is **recorded, not deliverable** - and the recording is this
 section.
+
+## THE github_connections DDL ITEM IS MIS-SCOPED, and the fixable half is now fixed
+
+This register has carried, since Phase 7: *"`github_connections` has NO idempotent DDL anywhere
+... Moving an ALTER cannot fix this - it is missing DDL, not an ordering bug."* The first half is
+true. The framing is wrong, and acting on it as written would have made things worse.
+
+### What is actually true, measured 2026-10-17
+
+`github_connections` has no `CREATE TABLE IF NOT EXISTS` anywhere in `backend/src`. **Neither does
+`projects`** - and `ensureCaseStudySchema.ts:24` already says so in as many words: *"there is no
+`CREATE TABLE IF NOT EXISTS projects` anywhere in backend/src"*. The only `CREATE` for
+`enrollments` is inside an integration **test**; the only one for `student_tasks` is inside a
+**seed** script.
+
+Two separate modules ALTER `github_connections` - `ensureSbpSchema.ts:217` adds `webhook_secret`,
+`ensureWorkspaceRepoSchema.ts:30` adds `project_id` and rebuilds its indexes - and neither creates
+it.
+
+**So this is not a one-table gap. The `ensure*Schema` modules EVOLVE tables; they do not bootstrap
+them.** The bootstrap is `sequelize.sync`, gated behind `DB_BOOT_SYNC`, off by default. A pristine
+database is not a supported boot path in this repo, and `github_connections` is one instance of
+that, not the cause of it.
+
+### Why the obvious fix would have been wrong
+
+Adding `CREATE TABLE IF NOT EXISTS github_connections` would not work in isolation. Read from the
+live table, its foreign keys are `enrollment_id -> enrollments(id)` and `project_id ->
+projects(id)`. On a pristine database **neither parent exists**, so the CREATE fails on the
+reference - or "works" only by dropping the foreign keys, which would silently ship a weaker
+schema than production has. Production's table carries 18 columns, 45 rows, a primary key, both
+foreign keys and four indexes.
+
+Boot order makes it worse: `ensureSbpSchema()` runs at `server.ts:2768` and
+`ensureWorkspaceRepoSchema()` at `:2890`, so a CREATE placed in the module that actually owns the
+table would still land **after** the module that asserts its column.
+
+### What shipped instead: the assert now names the cause
+
+`REQUIRED_COLUMNS` names two tables that `REQUIRED_TABLES` does not - `student_tasks` and
+`github_connections` - because this file asserts their columns without owning their existence.
+When such a table was absent entirely, the check emitted **one `column:` line per required
+column and never said the table was gone**: six symptoms for `student_tasks`, one for
+`github_connections`, and no cause anywhere in the output. On a pristine database that is the
+entire boot report, and it sends the reader hunting a skipped ALTER that never had a table to run
+against.
+
+`catalogGaps` is now a pure function, separated from the catalog read so it can be tested without
+a database, and an absent table reports itself **once** instead of restating its symptoms. Nine
+tests, with a negative control (a complete catalog yields nothing, so a function returning `[]`
+unconditionally fails) and a mutation that makes **exactly the two collapse tests** fail.
+
+### STILL OPEN, and correctly scoped this time
+
+**A pristine database cannot boot this schema**, and that is an infrastructure question - whether
+to generate DDL from the models, adopt a migration tool, or declare `DB_BOOT_SYNC` the supported
+bootstrap and document it. Cross-module, multi-table, and squarely CLAUDE.md ESCALATE tier. It is
+**not** "add a CREATE for github_connections", and this entry replaces that framing.
+
+What is cheap and worth doing first, for whoever picks it up: a derived sweep over
+`backend/src/db/ensure*.ts` that lists every table ALTERed without a CREATE anywhere. That names
+the real population instead of the one table someone happened to notice - the same pattern
+`lifecycleRegistrationCoverage.test.ts` and the model-timestamp sweep already use.
