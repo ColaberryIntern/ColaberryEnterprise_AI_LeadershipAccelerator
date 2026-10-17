@@ -217,8 +217,19 @@ describe('AF2.4 /agent-domains-mine scopes by identity, not by section', () => {
     expect(res.status).toBe(200);
     expect(res.body.domains).toEqual([]);
     expect(res.body.resolved_identities).toBe(0);
+    // Neither relationship, so neither count.
+    expect(res.body.as_manager).toBe(0);
+    expect(res.body.as_builder).toBe(0);
     // It must SAY why, so an empty list is not read as a load failure.
-    expect(res.body.note).toMatch(/owns no domain/i);
+    //
+    // The pattern was /owns no domain/i until 2026-10-17, when `-mine` stopped being
+    // manager-only: it now answers for the accountable MANAGER and the intended BUILDER, and
+    // the note had to widen with it or it would have described half the query. Both halves are
+    // asserted rather than the sentence as a whole, so a future rewording stays free while the
+    // guarantee -- the reader is told which relationships were checked -- does not.
+    expect(res.body.note).toMatch(/manager/i);
+    expect(res.body.note).toMatch(/builder/i);
+    expect(res.body.note).toMatch(/not a failure to load/i);
     // And it must not have asked the domain table at all.
     expect(seenSql.some((s) => /FROM\s+agent_domain_projects/i.test(s))).toBe(false);
   });
