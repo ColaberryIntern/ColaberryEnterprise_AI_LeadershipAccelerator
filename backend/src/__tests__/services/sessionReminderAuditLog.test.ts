@@ -19,7 +19,12 @@ const getTestOverridesMock = jest.fn().mockResolvedValue({ enabled: false, email
 // Test mode is only honoured while the flag is fresh, so these tests report it
 // as set a minute ago. Without this the redirect case below would be skipped as
 // stale and the suite would assert "live" while believing it tested a redirect.
-const getSettingUpdatedAtMock = jest.fn(async () => new Date(Date.now() - 60 * 1000));
+// Takes a rest parameter because the module mock forwards its arguments
+// (`getSettingUpdatedAt('test_mode_enabled')`); a zero-arg mock typechecks
+// locally and fails the test-file typecheck in CI.
+const getSettingUpdatedAtMock = jest.fn(
+  async (..._args: any[]) => new Date(Date.now() - 60 * 1000),
+);
 
 jest.mock('nodemailer', () => ({
   __esModule: true,
