@@ -71,7 +71,7 @@ const SHA = /^[0-9a-f]{7,40}$/i;
  *
  * Mirrors the guard `portfolioEvidence.composeFeatured` already applies to `repo_url`, so a
  * repository URL that is not GitHub cannot become a commit URL by a different route. A
- * trailing slash or a `.git` suffix is normalised rather than refused, because both appear in
+ * trailing slash or a `.git` suffix is normalized rather than refused, because both appear in
  * stored connection rows and neither is a reason to deny a reader the evidence.
  */
 export function buildCommitUrl(repoUrl: unknown, sha: unknown): string | null {
