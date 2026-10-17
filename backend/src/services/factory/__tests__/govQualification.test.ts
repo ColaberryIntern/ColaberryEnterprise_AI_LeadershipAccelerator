@@ -7,9 +7,10 @@
  */
 const findOne = jest.fn();
 const create = jest.fn();
+const findAll = jest.fn();
 jest.mock('../../../models/GovQualification', () => ({
   __esModule: true,
-  default: { findOne: (...a: any[]) => findOne(...a), create: (...a: any[]) => create(...a) },
+  default: { findOne: (...a: any[]) => findOne(...a), create: (...a: any[]) => create(...a), findAll: (...a: any[]) => findAll(...a) },
 }));
 // getDecoupledWorkspace reads the daily-sync state + the agency relationship; keep both DB-free in these unit tests.
 jest.mock('../govOpportunitySync', () => ({ getGovSyncEntry: jest.fn().mockResolvedValue(null) }));
@@ -18,9 +19,10 @@ jest.mock('../govRelationship', () => ({ getAgencyRelationship: jest.fn().mockRe
 import {
   evaluateRequirements, evaluateEvidenceCoverage, createQualification, recordDecision, recordCapabilityDecisions, approveGovQualification,
   recordDocumentReview, evaluateZipCoverage, recordZipAttestation, getDecoupledWorkspace, approveDecoupledQualification,
+  requestApproval, sendBack, listPendingApprovals,
   QualificationConflictError, QualificationBlockedError, ChangedSourceError, SourceUnavailableError,
   QualificationNotFoundError, SelfApprovalError, SourceNotApprovableError, EvidenceInsufficientError,
-  DocumentNotListedError,
+  DocumentNotListedError, ApprovalRequestSelfError, NotRequestedApproverError,
 } from '../govQualification';
 import {
   CLEAN_CANONICAL, BLOCKING_CANONICAL, UNAVAILABLE_CANONICAL, DEGRADED_CANONICAL, UNRECORDED_CANONICAL,
@@ -239,6 +241,126 @@ describe('recordCapabilityDecisions (advisory: must NOT reset the decision/evide
       canonicalOpportunityId: CLEAN_CANONICAL, biddingEntity: 'colaberry', expectedVersion: 1, reviewerIdentityId: 'x', capabilities: {},
     })).rejects.toBeInstanceOf(QualificationConflictError);
     expect(create).not.toHaveBeenCalled();
+  });
+});
+
+describe('requestApproval (route the pursuit to a second admin; advisory; separation of duties at request time)', () => {
+  const current = (over: any = {}): any => ({
+    version: 5, status: 'active', tenant_id: 't', organization_id: 'o', bidding_entity: 'colaberry',
+    canonical_opportunity_id: CLEAN_CANONICAL, delivery_project_id: null, source_snapshot: {}, source_snapshot_version: 1, source_available: true,
+    reviewer_identity_id: 'establisher@colaberry.com', decision: 'pending_review',
+    rationale: 'draft', evidence_json: { note: 'keep me' }, effort_cap: 'cap', reassessment_conditions: 'rc',
+    requirements_json: { established: [{ id: 'E1' }], capabilities: { decisions: [] } },
+    save: jest.fn().mockResolvedValue(undefined), ...over,
+  });
+
+  it('adds the approval bag + decisionBrief and preserves decision/evidence/establisher', async () => {
+    findOne.mockResolvedValue(current());
+    create.mockImplementation(async (row: any) => ({ ...row, id: 'q7', get: () => ({ ...row, id: 'q7' }) }));
+    await requestApproval({
+      canonicalOpportunityId: CLEAN_CANONICAL, biddingEntity: 'colaberry', expectedVersion: 5,
+      requesterIdentityId: 'establisher@colaberry.com', approverIdentityId: 'approver@colaberry.com',
+      decisionBrief: { proposedDecision: 'approved_bid_pursuit', summary: 's' },
+    });
+    const row = create.mock.calls[0][0];
+    expect(row.requirements_json.approval.status).toBe('requested');
+    expect(row.requirements_json.approval.approverIdentityId).toBe('approver@colaberry.com');
+    expect(row.requirements_json.approval.requestedBy).toBe('establisher@colaberry.com');
+    expect(row.requirements_json.decisionBrief).toEqual({ proposedDecision: 'approved_bid_pursuit', summary: 's' });
+    expect(row.reviewer_identity_id).toBe('establisher@colaberry.com'); // establisher preserved (not the requester-as-reviewer)
+    expect(row.decision).toBe('pending_review');                        // decision untouched
+    expect(row.evidence_json).toEqual({ note: 'keep me' });             // evidence preserved
+    expect(row.requirements_json.established).toEqual([{ id: 'E1' }]);  // other requirements_json keys preserved
+    expect(current().status).toBeDefined();
+  });
+
+  it('refuses routing the approval to the establisher themselves (separation of duties)', async () => {
+    findOne.mockResolvedValue(current());
+    await expect(requestApproval({
+      canonicalOpportunityId: CLEAN_CANONICAL, biddingEntity: 'colaberry', expectedVersion: 5,
+      requesterIdentityId: 'establisher@colaberry.com', approverIdentityId: 'establisher@colaberry.com',
+      decisionBrief: {},
+    })).rejects.toBeInstanceOf(ApprovalRequestSelfError);
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it('refuses a stale expectedVersion (CAS)', async () => {
+    findOne.mockResolvedValue({ version: 3, reviewer_identity_id: 'establisher@colaberry.com', save: jest.fn() });
+    await expect(requestApproval({
+      canonicalOpportunityId: CLEAN_CANONICAL, biddingEntity: 'colaberry', expectedVersion: 1,
+      requesterIdentityId: 'establisher@colaberry.com', approverIdentityId: 'approver@colaberry.com', decisionBrief: {},
+    })).rejects.toBeInstanceOf(QualificationConflictError);
+    expect(create).not.toHaveBeenCalled();
+  });
+});
+
+describe('sendBack (requested approver returns the pursuit for revision; advisory; decision unchanged)', () => {
+  const requested = (over: any = {}): any => ({
+    version: 6, status: 'active', tenant_id: 't', bidding_entity: 'colaberry', canonical_opportunity_id: CLEAN_CANONICAL,
+    source_snapshot: {}, reviewer_identity_id: 'establisher@colaberry.com', decision: 'pending_review',
+    rationale: 'draft', evidence_json: { note: 'keep me' },
+    requirements_json: { established: [{ id: 'E1' }], approval: { status: 'requested', approverIdentityId: 'approver@colaberry.com', requestedBy: 'establisher@colaberry.com' } },
+    save: jest.fn().mockResolvedValue(undefined), ...over,
+  });
+
+  it('marks the approval sent_back with the note and leaves the decision + establisher untouched', async () => {
+    findOne.mockResolvedValue(requested());
+    create.mockImplementation(async (row: any) => ({ ...row, id: 'q8', get: () => ({ ...row, id: 'q8' }) }));
+    await sendBack({
+      canonicalOpportunityId: CLEAN_CANONICAL, biddingEntity: 'colaberry', expectedVersion: 6,
+      approverIdentityId: 'approver@colaberry.com', note: 'tighten the staffing plan',
+    });
+    const row = create.mock.calls[0][0];
+    expect(row.requirements_json.approval.status).toBe('sent_back');
+    expect(row.requirements_json.approval.sentBackBy).toBe('approver@colaberry.com');
+    expect(row.requirements_json.approval.sentBackNote).toBe('tighten the staffing plan');
+    expect(row.reviewer_identity_id).toBe('establisher@colaberry.com');
+    expect(row.decision).toBe('pending_review'); // decision NOT changed by a send-back
+    expect(row.evidence_json).toEqual({ note: 'keep me' });
+  });
+
+  it('refuses a sender who is not the requested approver', async () => {
+    findOne.mockResolvedValue(requested());
+    await expect(sendBack({
+      canonicalOpportunityId: CLEAN_CANONICAL, biddingEntity: 'colaberry', expectedVersion: 6,
+      approverIdentityId: 'someone-else@colaberry.com', note: 'x',
+    })).rejects.toBeInstanceOf(NotRequestedApproverError);
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it('refuses when there is no open request to act on', async () => {
+    findOne.mockResolvedValue(requested({ requirements_json: { established: [{ id: 'E1' }] } }));
+    await expect(sendBack({
+      canonicalOpportunityId: CLEAN_CANONICAL, biddingEntity: 'colaberry', expectedVersion: 6,
+      approverIdentityId: 'approver@colaberry.com', note: 'x',
+    })).rejects.toBeInstanceOf(NotRequestedApproverError);
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it('refuses a stale expectedVersion (CAS)', async () => {
+    findOne.mockResolvedValue({ version: 3, requirements_json: {}, save: jest.fn() });
+    await expect(sendBack({
+      canonicalOpportunityId: CLEAN_CANONICAL, biddingEntity: 'colaberry', expectedVersion: 1, approverIdentityId: 'approver@colaberry.com',
+    })).rejects.toBeInstanceOf(QualificationConflictError);
+    expect(create).not.toHaveBeenCalled();
+  });
+});
+
+describe('listPendingApprovals (active quals with an OPEN approval request)', () => {
+  it('returns only records whose approval.status is requested, scoped to the tenant', async () => {
+    findAll.mockResolvedValue([
+      { get: () => ({ canonical_opportunity_id: 'gws:a', bidding_entity: 'colaberry', requirements_json: { approval: { status: 'requested', approverIdentityId: 'x@c.com', requestedBy: 'e@c.com', requestedAt: 't0' } } }) },
+      { get: () => ({ canonical_opportunity_id: 'gws:b', bidding_entity: 'colaberry', requirements_json: { approval: { status: 'sent_back' } } }) },
+      { get: () => ({ canonical_opportunity_id: 'op:gov:c', bidding_entity: 'colaberry', requirements_json: {} }) },
+    ]);
+    const out = await listPendingApprovals('tenant-1');
+    expect(findAll).toHaveBeenCalledWith({ where: { tenant_id: 'tenant-1', status: 'active' } });
+    expect(out).toEqual([{ canonicalOpportunityId: 'gws:a', biddingEntity: 'colaberry', approverIdentityId: 'x@c.com', requestedBy: 'e@c.com', requestedAt: 't0' }]);
+  });
+
+  it('returns [] when nothing is pending', async () => {
+    findAll.mockResolvedValue([]);
+    expect(await listPendingApprovals('t')).toEqual([]);
   });
 });
 

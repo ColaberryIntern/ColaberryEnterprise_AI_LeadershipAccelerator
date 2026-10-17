@@ -10,11 +10,12 @@ import { lookupGovContractsContainer } from '../../scripts/lib/factoryDemoContai
 import {
   createQualification, recordDecision, recordCapabilityDecisions, approveGovQualification, recordDocumentReview,
   createDecoupledQualification, getDecoupledWorkspace, recordZipAttestation, approveDecoupledQualification,
+  requestApproval, sendBack, listPendingApprovals,
   evaluateRequirements, evaluateEvidenceCoverage, reviewedDocIdsFrom, resolveDecoupledDeliveryProjectId,
   QUALIFICATION_DECISIONS, APPROVAL_DECISIONS,
   QualificationConflictError, QualificationBlockedError, ChangedSourceError, SourceUnavailableError,
   QualificationNotFoundError, SelfApprovalError, SourceNotApprovableError, EvidenceInsufficientError,
-  DocumentNotListedError,
+  DocumentNotListedError, ApprovalRequestSelfError, NotRequestedApproverError,
 } from '../../services/factory/govQualification';
 import { assignBuildStory, unassignBuildStory, AssignmentError } from '../../services/factory/govBuildAssignment';
 import { saveProposalResponse, reviewProposalResponse, addProposalFigure, removeProposalFigure, ResponseError } from '../../services/factory/govProposalResponse';
@@ -109,9 +110,25 @@ function mapQualificationError(res: Response, err: any): boolean {
   if (err instanceof SourceNotApprovableError) { res.status(409).json({ error: err.message, sourceNotApprovable: true, reason: err.reason }); return true; }
   if (err instanceof SourceUnavailableError) { res.status(503).json({ error: err.message, sourceUnavailable: true }); return true; }
   if (err instanceof SelfApprovalError) { res.status(403).json({ error: err.message }); return true; }
+  if (err instanceof ApprovalRequestSelfError) { res.status(403).json({ error: err.message }); return true; }
+  if (err instanceof NotRequestedApproverError) { res.status(403).json({ error: err.message }); return true; }
   if (err instanceof QualificationNotFoundError) { res.status(404).json({ error: err.message }); return true; }
   return false;
 }
+
+/** GET …/pending-approvals — the active qualifications in the gov container with an OPEN approval request, so the
+ *  opportunities list can flag the pursuits waiting on a second admin. Tenant-scoped; read-only. Declared BEFORE the
+ *  `:canonicalOpportunityId` GET so "pending-approvals" is not parsed as an opportunity key (which would 400). */
+router.get('/api/admin/factory/qualification/pending-approvals', requireSection('program'), async (req: Request, res: Response) => {
+  const scope = await scopeOrFail(res, 'gov_pending_approvals_scope', {});
+  if (!scope) return;
+  try {
+    const pending = await listPendingApprovals(scope.tenantId);
+    res.json({ pending });
+  } catch (err: any) {
+    logFail('gov_pending_approvals_failed', err, {}); res.status(500).json({ error: 'Could not list pending approvals.' });
+  }
+});
 
 /**
  * GET /api/admin/factory/qualification/:canonicalOpportunityId?biddingEntity=…
@@ -571,6 +588,66 @@ router.post('/api/admin/factory/qualification/:canonicalOpportunityId/capability
   } catch (err: any) {
     if (mapQualificationError(res, err)) return;
     logFail('gov_capability_decisions_failed', err, { canonicalOpportunityId }); res.status(500).json({ error: 'Could not save the capability decisions.' });
+  }
+});
+
+const requestApprovalBody = z.object({
+  biddingEntity: biddingEntityField,
+  expectedVersion: z.coerce.number().int().min(1),
+  approverIdentityId: z.string().min(1).max(200),
+  decisionBrief: z.any(),
+});
+
+/** POST …/request-approval — the establisher routes the pursuit to a DIFFERENT program-capable admin for approval,
+ *  attaching the decision brief. ADVISORY (requirements_json.approval + .decisionBrief); the un-bypassable gate is
+ *  still /approve. Separation of duties is mirrored in the service (approver ≠ establisher → ApprovalRequestSelfError
+ *  403). Works for coupled (op:gov:) and decoupled (gws:) keys alike. */
+router.post('/api/admin/factory/qualification/:canonicalOpportunityId/request-approval', requireSection('program'), async (req: Request, res: Response) => {
+  const p = qualKeyParam.safeParse(req.params);
+  if (!p.success) { res.status(400).json({ error: 'Invalid opportunity key.' }); return; }
+  const b = requestApprovalBody.safeParse(req.body ?? {});
+  if (!b.success) { res.status(400).json({ error: 'Invalid request-approval body.', issues: b.error.issues }); return; }
+  const { canonicalOpportunityId } = p.data;
+  const scope = await scopeOrFail(res, 'gov_request_approval_scope', { canonicalOpportunityId });
+  if (!scope) return;
+  try {
+    const q = await requestApproval({
+      canonicalOpportunityId, biddingEntity: b.data.biddingEntity, expectedVersion: b.data.expectedVersion,
+      requesterIdentityId: actorIdentity(req), approverIdentityId: b.data.approverIdentityId, decisionBrief: b.data.decisionBrief,
+    });
+    res.json({ qualification: q });
+  } catch (err: any) {
+    if (mapQualificationError(res, err)) return;
+    logFail('gov_request_approval_failed', err, { canonicalOpportunityId }); res.status(500).json({ error: 'Could not request approval.' });
+  }
+});
+
+const sendBackBody = z.object({
+  biddingEntity: biddingEntityField,
+  expectedVersion: z.coerce.number().int().min(1),
+  note: z.string().max(4000).optional(),
+});
+
+/** POST …/send-back — the requested approver returns the pursuit to the establisher for revision, with a note.
+ *  Only the admin the establisher routed to may act (NotRequestedApproverError 403), and never the establisher
+ *  (SelfApprovalError 403). ADVISORY: the decision is left unchanged; nothing is approved here. */
+router.post('/api/admin/factory/qualification/:canonicalOpportunityId/send-back', requireSection('program'), async (req: Request, res: Response) => {
+  const p = qualKeyParam.safeParse(req.params);
+  if (!p.success) { res.status(400).json({ error: 'Invalid opportunity key.' }); return; }
+  const b = sendBackBody.safeParse(req.body ?? {});
+  if (!b.success) { res.status(400).json({ error: 'Invalid send-back body.', issues: b.error.issues }); return; }
+  const { canonicalOpportunityId } = p.data;
+  const scope = await scopeOrFail(res, 'gov_send_back_scope', { canonicalOpportunityId });
+  if (!scope) return;
+  try {
+    const q = await sendBack({
+      canonicalOpportunityId, biddingEntity: b.data.biddingEntity, expectedVersion: b.data.expectedVersion,
+      approverIdentityId: actorIdentity(req), note: b.data.note ?? null,
+    });
+    res.json({ qualification: q });
+  } catch (err: any) {
+    if (mapQualificationError(res, err)) return;
+    logFail('gov_send_back_failed', err, { canonicalOpportunityId }); res.status(500).json({ error: 'Could not send back the approval request.' });
   }
 });
 
