@@ -132,7 +132,9 @@ describe('walking a whole generated page', () => {
     // body copy would be a bigger change than the one that was asked for.
     const out = normalizeHeadingCase(content);
     expect(out.hero.cta.label).toBe('Join The Class');
-    expect(out.sections[0].items[0].label).toBe('Week One Starts Monday');
+    // `sections` is a heterogeneous array, so TS widens `items` to `{ label: string }[] | undefined`
+    // on the union; the first section is the one that has items, hence the non-null assertion.
+    expect(out.sections[0].items![0].label).toBe('Week One Starts Monday');
   });
 
   it('does not mutate the content it was given', () => {
