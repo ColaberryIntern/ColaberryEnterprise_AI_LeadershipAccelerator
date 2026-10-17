@@ -1,0 +1,21 @@
+{
+  // M23 - typecheck the test files.
+  //
+  // `tsconfig.json` excludes `**/*.test.ts` and `**/__tests__/**`, and ts-jest
+  // runs with `isolatedModules`, which transpiles without type checking. The
+  // result is that a type error in a test file passes every gate in this repo.
+  //
+  // That matters more here than in most codebases: the guards protecting
+  // Person 360 and the Sales Readiness Score are all test files. The thing
+  // doing the checking was itself unchecked.
+  //
+  // This config exists ONLY to typecheck. It never emits, and it is not the
+  // build. The build stays `tsconfig.json` so production output is unchanged.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": ["jest", "node"]
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["node_modules", "dist"]
+}
