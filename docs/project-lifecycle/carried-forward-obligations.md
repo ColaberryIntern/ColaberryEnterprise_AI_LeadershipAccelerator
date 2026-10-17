@@ -1227,3 +1227,116 @@ that gate refuses all four legacy delivery projects, two of them live government
 
 The mechanism already exists and is tested (`registrationCutoff.test.ts`). This is a reminder to
 USE it, not to build it.
+
+---
+
+## Phase 7 open items, and the two obligations Phase 7 was handed
+
+Written 2026-10-17, with T0–T6 complete and T7/T8 blocked on a human merge. This section exists
+because an independent scope review found that Phase 7's deferrals lived only in a **gitignored**
+run directory and in session-log prose. This file is the tracked home, and it is where the list
+has to survive.
+
+### FIRST, the two obligations this register assigned to Phase 7
+
+**"Source overflow is DETECT-ONLY" (Phase 6 item 2) — the measurement is DONE, the gate is built,
+and it is OFF.** The obligation said: *"Measure the real distribution of brief and document sizes
+first. Refusing on an unmeasured assumption is how a gate hurts the people it was built for."*
+
+Measured on production 2026-10-16, with the **shipped `buildBriefText`** over the stored
+`build_intake` rows rather than a SQL approximation of it: 48 rows, which is the entire corpus;
+p50 5,737; **p90 27,772**; max 41,679; and **11 of 48 over the 20,000 cap**. p90 sits above the
+cap, so this is not a tail event — roughly a quarter of real student briefs are clipped today and
+the largest is more than double the budget. A blocking overflow now exists behind
+`ENABLE_SBP_SOURCE_OVERFLOW_BLOCK`, inside `sourceBlocks()` so both generation stages reach it.
+
+**Still open, and narrower than before:** the flag defaults off, so the live behaviour is
+unchanged and the path is still detect-only in effect. Turning it on refuses 11 of 48 builds
+that succeed today — a real change on a live student path, and the DRI's call. The **document
+half remains unmeasured**: `document` is not a `build_intake` column, so `MAX_DOCUMENT_CHARS` has
+no source there and needs instrumenting at the request boundary.
+
+**"The `workspace` prompt instruction is soft" (Phase 6 item 1) — NOT DONE, for the second phase
+running.** The obligation was to *"either add a check that can detect the all-workspace answer,
+or record in writing why it cannot be detected."* `plan-phase7.md` promised the detector as a
+corpus case and it did not ship: `grep -rn "all-workspace\|allWorkspace\|all_workspace"
+backend/src` returns nothing, and no corpus case tests it. Neither half was delivered — not the
+check, and not the written reason. **Owner: Phase 8.** Recording it as undone rather than letting
+it drift a third time.
+
+### Found by Phase 7 and still open
+
+**`github_connections` has NO idempotent DDL anywhere.** `grep -rn "CREATE TABLE IF NOT EXISTS
+github_connections" backend/src` returns nothing. The table exists only as a Sequelize model, and
+`sequelize.sync` is gated behind `DB_BOOT_SYNC`, off by default. So on a genuinely pristine
+database the table is never created at boot, and `assertSbpSchema` reports
+`github_connections.webhook_secret` missing forever. **Moving an ALTER cannot fix this** — it is
+missing DDL, not an ordering bug. Found while fixing the ordering bug next to it.
+
+**The build re-entry guard has no expiry.** `sbpOrchestrator.ts:195-199` refuses a second start
+while `status === 'generating'`, and the only thing that clears that status is
+`recoverStrandedBuilds`, which runs **once at boot**. There is no age filter and no lease,
+deadline or heartbeat column — `updated_at` is ordered by, never compared against. A build whose
+generation dies without the process dying stays `generating` indefinitely and every retry is
+refused **until somebody deploys**. Fail-closed, which is the right direction, and deliberate —
+the orchestrator calls the sweep "the recovery, not a retry" — but the recovery path for one
+stuck student is a service restart. Pinned by a test that backdates a row 30 days and asserts on
+`information_schema` that no deadline-shaped column exists.
+
+**No role is compared at approval time.** `approvedByRole` is written to a nullable column
+(`blueprintApproval.ts:238`) and `git grep approved_by_role` outside tests returns only the DDL,
+the model, the input type and that one assignment. Nothing reads it. LC-10's "authorized human"
+limb is therefore bound by RECORDING, not by enforcement, which is why LC-10 is PARTIAL.
+
+**SAFE-002: `delimited()` interpolates untrusted bodies raw, in BOTH prompt builders.** A body
+containing its own `</TAG>` closes the block early and everything after it sits outside any
+delimiter — the position the SAFE-002 instruction explicitly does not cover. Every pre-existing
+delimiter assertion passes against such a prompt, because a forged close tag ADDS a delimiter
+rather than removing the real one. Measured 0 of 48 stored briefs on the path that could be
+measured, so it fires the latent branch — **but the honest statement is "latent in the measured
+half of one of the two affected call paths"**, and the unmeasured factory half takes its bodies
+from OOXML/proposal extraction, where a stray angle bracket is *more* likely, not less. A
+one-line neutralisation is written out and measured at 0 of 48 briefs rendering differently.
+**A DECISION IS OWED** and it currently reaches the DRI only through a gitignored file; this
+entry is the tracked ask.
+
+**The factory prompt drops source blocks SILENTLY.** `factoryDecomposePrompt.ts:122-126` does
+`.slice(0, MAX_BLOCKS)` and `.slice(0, MAX_BLOCK_CHARS)` with no label, while
+`coversRequirementBlocks` returns true anyway because it checks the ids named in the instruction
+line, which sits outside every `delimited()` call. `plan-phase7.md` assigned this to T1.3 and
+said "both need the same answer"; T1.3 changed only the SBP path. The `RECORDED GAP` tests at
+`corpusVariants.test.ts:263,284` still pass.
+
+**Four modules have no production caller.** `executeStage` and `ExecutionStore` are already
+registered above (the dead-letter sink entry). Two more joined them in Phase 7:
+`services/lifecycle/legacyGapAssessment.ts` and `services/lifecycle/pilot/pilotReport.ts`. The
+second is compiled into `dist/` while its only consumer — a generator under `__tests__/` — is
+excluded from the build, so in a container it is dead code by construction. T4's "opt-in" preview
+consequently has no surface to opt in from, and that is also *why* its null-tenant premise error
+could never have surfaced from a production run.
+
+**Six locks elsewhere are "covered" only by asserting their SQL contains `FOR UPDATE`.**
+`resource_leases` — the closest structural analogue to what `lifecycleExecution` lacks — has no
+race test at all. The others: the execution-run claim, the room outbox, the scheduler claim, the
+enrollment row lock, the telemetry anchor.
+
+**CI provisions no Postgres, so Phase 7's integration tier never runs on merge.**
+`.github/workflows/ci.yml` sets no `DATABASE_URL` and starts no service container, so every
+database-backed suite self-skips. That includes all seven replay-case and assessor suites. They
+are **visible** skips that print their reason, so this is not the hidden-skipped-test the phase
+exit forbids — it is the structural version: a future merge cannot regress any of it. "All
+required checks green" is a statement about the unit tier only.
+
+### A correction T8 must carry into the final matrix
+
+**Do not write "16 of 18".** `acceptance-evidence.md` holds rows for exactly four IDs — LC-01,
+LC-08, LC-09, LC-14 — of which one is recorded met and three partial, and it says in its own
+words that the other fourteen "are not written here." The figure originated as shorthand for
+*two IDs are carried open* and was written into the Phase 7 session log three times as though it
+meant *sixteen are evidenced*. Phase 5 refused exactly this: *"Sixteen of the eighteen are not
+evidenced by Phase 5. That is the honest number."*
+
+**And reconcile LC-01's green tick.** The matrix shows "Authorization enforced ✅" via
+`storyAuthorization.ts`, while `phase8-handoff.md` records that the gate is unreachable from all
+three `decomposeBuild` call sites because none passes `projectId`. The handoff is the correct
+one; the tick is what a reader takes away.
