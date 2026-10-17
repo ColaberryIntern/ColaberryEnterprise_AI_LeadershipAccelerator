@@ -76,6 +76,13 @@ describe("Who's here in the card", () => {
     expect(container.querySelector('[data-testid="cm-who-quiet"]')!.textContent).toBe('Nobody here right now.');
   });
 
+  it('loading: before the first read answers, the card says it is checking (unknown is not empty)', async () => {
+    await render(world(null, false));
+    openCard('library');
+    expect(container.querySelector('[data-testid="cm-who-loading"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="cm-who-quiet"]')).toBeNull();
+  });
+
   it('broken: the card says presence could not load', async () => {
     await render(world(null, true));
     openCard('library');

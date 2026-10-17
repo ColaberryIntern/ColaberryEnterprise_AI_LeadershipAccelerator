@@ -28,11 +28,18 @@ function PersonChip({ p }: { p: CampusPerson }): React.ReactElement {
   );
 }
 
-export interface WhoIsHereProps { presence: CampusAreaPresence | undefined; error: boolean }
+export interface WhoIsHereProps {
+  presence: CampusAreaPresence | undefined;
+  error: boolean;
+  /** True until the first presence read has answered: unknown is not the same as empty. */
+  loading?: boolean;
+}
 
-export default function WhoIsHere({ presence, error }: WhoIsHereProps): React.ReactElement {
+export default function WhoIsHere({ presence, error, loading = false }: WhoIsHereProps): React.ReactElement {
   let body: React.ReactNode;
-  if (error) {
+  if (loading && !error) {
+    body = <p className="cm-who-note" data-testid="cm-who-loading">Checking who's here...</p>;
+  } else if (error) {
     body = <p className="cm-who-note" data-testid="cm-who-broken">We can't load who's online. Everything else still works.</p>;
   } else if (!presence || presence.count === 0) {
     body = <p className="cm-who-note" data-testid="cm-who-quiet">Nobody here right now.</p>;

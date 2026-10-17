@@ -61,7 +61,8 @@ export default function CampusWorld({ buildings, audience, hasFullAccess, workpl
       <CampusWorldMap buildings={buildings} accessOf={accessOf} workplaceNames={workplaceNames} reduceMotion={reduceMotion}
         initialTarget={initialTarget} onArrive={setOpen} buildingRef={registerEl} counts={presenceError ? undefined : counts} />
       {b && <BuildingCard building={b} access={accessOf(b)} workplaceNames={workplaceNames} onClose={closeCard} onNavigate={onNavigate}
-        whoIsHere={presence === undefined && !presenceError ? undefined : { presence: presence?.[b.id], error: presenceError }} />}
+        whoIsHere={presence === undefined && !presenceError ? undefined
+          : { presence: presence?.[b.id], error: presenceError, loading: presence === null && !presenceError }} />}
     </div>
   );
 }

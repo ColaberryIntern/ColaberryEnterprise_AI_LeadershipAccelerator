@@ -68,7 +68,7 @@ export default function BuildingCard({ building: b, access, workplaceNames, onCl
         </>
       )}
 
-      {whoIsHere && <WhoIsHere presence={whoIsHere.presence} error={whoIsHere.error} />}
+      {whoIsHere && <WhoIsHere presence={whoIsHere.presence} error={whoIsHere.error} loading={whoIsHere.loading} />}
     </section>
   );
 }
