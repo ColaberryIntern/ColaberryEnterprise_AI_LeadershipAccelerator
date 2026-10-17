@@ -2,8 +2,12 @@ import React from 'react';
 import './portfolio.css';
 import {
   ExperienceSection, EducationSection, SectionHead, Rule,
-  type ExperienceItem, type EducationItem,
 } from './PortfolioHistory';
+import {
+  SkillsSection, CompetenciesSection, EvidenceSourceSection,
+  VerifiedCommitsSection, CodeSection,
+} from './PortfolioEvidence';
+import type { Portfolio, ProjectItem } from './portfolioTypes';
 
 /**
  * PortfolioBody - the rendered portfolio, shared by the public page and the reviewer.
@@ -26,25 +30,6 @@ import {
  * broken. Nothing here invents a value to fill a slot.
  */
 
-interface Capability { name: string; count: number; proven?: boolean; on_sample?: boolean }
-interface RecordLink {
-  slug: string; title: string; published_at: string | null;
-  /** The case study covering the same work. Null means no link is offered. */
-  case_study_slug?: string | null;
-}
-
-interface ProjectItem {
-  title: string; organization: string | null; industry: string | null;
-  problem: string | null; automation_goal: string | null; stage: string | null;
-  repo_url: string | null; demo_url: string | null;
-  /** An image committed to the project's own PUBLIC repo. Null when there is none. */
-  hero_image_url?: string | null;
-  /** The published write-up about THIS project, at /p/:slug. Null when there is none. */
-  record_slug?: string | null;
-  /** The published case study about THIS project, at /stories/:slug. Preferred. */
-  case_study_slug?: string | null;
-}
-
 /**
  * Where a project card drills to, or null when it should not be clickable at all.
  *
@@ -65,49 +50,6 @@ function drillTarget(p: ProjectItem): { href: string; label: string } | null {
     return { href: `/stories/${p.case_study_slug}`, label: 'Read the full case study' };
   }
   return null;
-}
-
-interface Repository { name: string; url: string }
-
-interface PortfolioStats {
-  years_experience?: number | null;
-  files_committed?: number | null;
-  capabilities?: number | null;
-  evidence_records?: number | null;
-}
-
-interface FeaturedProject {
-  name: string;
-  repo_url: string | null;
-  files: number | null;
-  top_level_areas: number | null;
-  capabilities: number | null;
-  languages: number | null;
-}
-
-interface Competency { domain: string; label: string; score: number }
-interface EvidenceSource { source_type: string; label: string; count: number }
-
-interface Portfolio {
-  identity: {
-    full_name: string; headline: string | null; cohort_name: string | null;
-    avatar_data_url: string | null; linkedin_url: string | null;
-    email?: string | null; location?: string | null; github_url?: string | null;
-  };
-  about?: string[];
-  stats?: PortfolioStats;
-  featured?: FeaturedProject | null;
-  competencies?: Competency[];
-  competency_domain_count?: number;
-  evidence_by_source?: EvidenceSource[];
-  experience?: ExperienceItem[];
-  education?: EducationItem[];
-  capabilities: Capability[];
-  projects: ProjectItem[];
-  records: RecordLink[];
-  repositories: Repository[];
-  private_repository_count: number;
-  generated_at: string;
 }
 
 /** Up to two initials, for an avatar or a project with no image. */
@@ -189,9 +131,7 @@ const PortfolioBody: React.FC<{ portfolio: Portfolio; embedded?: boolean }> = ({
   const competencies = portfolio.competencies || [];
   const domainCount = portfolio.competency_domain_count || 0;
   const evidenceBySource = portfolio.evidence_by_source || [];
-  // Bars are drawn relative to the strongest domain, so the shape of the profile reads
-  // at a glance without implying a ceiling nobody defined.
-  const topScore = competencies.reduce((m, c) => Math.max(m, c.score), 0) || 1;
+  const verifiedCommits = portfolio.verified_commits || [];
 
   const statTiles = [
     { value: stats.years_experience, label: 'Years experience' },
@@ -208,7 +148,8 @@ const PortfolioBody: React.FC<{ portfolio: Portfolio; embedded?: boolean }> = ({
   ].filter((t) => typeof t.value === 'number' && (t.value as number) > 0);
 
   const isEmpty = !capabilities.length && !records.length && !repositories.length
-    && !projects.length && !experience.length && !education.length && !about.length;
+    && !projects.length && !experience.length && !education.length && !about.length
+    && !verifiedCommits.length;
 
   return (
     <div className={embedded ? 'pf pf-embedded' : 'pf'}>
@@ -431,92 +372,22 @@ const PortfolioBody: React.FC<{ portfolio: Portfolio; embedded?: boolean }> = ({
 
           {/* Every line here traces to a file in their repository. The count IS the
               reason: it is what the platform observed, not a claim about quality. */}
-          {capabilities.length > 0 && (
-            <section id="skills" className="pf-card">
-              <SectionHead badge="every line traces to committed code">
-                Skills, and why each is listed
-              </SectionHead>
-              <Rule />
-              <ul className="pf-list">
-                {capabilities.map((c) => (
-                  <li key={c.name} style={{ display: 'flex', justifyContent: 'space-between', gap: 14, flexWrap: 'wrap' }}>
-                    <span className="pf-title" style={{ fontSize: 15 }}>{c.name}</span>
-                    <span style={{ color: 'var(--pf-mut)', fontSize: 13.5 }}>
-                      {c.count > 1 && <>{c.count} committed</>}
-                      {c.proven && <>{c.count > 1 ? ' · ' : ''}demonstrated</>}
-                      {c.on_sample && <> · built on the sample</>}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          )}
+          <SkillsSection items={capabilities} />
 
-          {competencies.length > 0 && (
-            <section className="pf-card">
-              <SectionHead badge="from validated evidence">Competencies earned</SectionHead>
-              <Rule />
-              {competencies.map((c) => (
-                <div className="pf-bar" key={c.domain}>
-                  <div className="pf-bar-label">{c.label}</div>
-                  <div className="pf-bar-track">
-                    <div
-                      className="pf-bar-fill"
-                      style={{ width: `${Math.max(4, Math.round((c.score / topScore) * 100))}%` }}
-                    />
-                  </div>
-                  <div className="pf-bar-val">{c.score}</div>
-                </div>
-              ))}
-              {/* The list is capped, so it says so rather than implying it is the whole. */}
-              {domainCount > competencies.length && (
-                <p className="pf-note">
-                  Showing the strongest {competencies.length} of {domainCount} domains.
-                </p>
-              )}
-            </section>
-          )}
+          <CompetenciesSection items={competencies} domainCount={domainCount} />
 
-          {evidenceBySource.length > 0 && (
-            <section className="pf-card">
-              <SectionHead>Evidence behind those competencies</SectionHead>
-              <Rule />
-              <div className="pf-chips">
-                {evidenceBySource.map((e) => (
-                  <div className="pf-chip" key={e.source_type}>
-                    <b>{e.count}</b>
-                    <span>{e.label}</span>
-                  </div>
-                ))}
-              </div>
-              {/* The distinction this page has to keep making, stated once, plainly. */}
-              <p className="pf-note">
-                Each record is something they did and submitted. None of it is time spent
-                reading.
-              </p>
-            </section>
-          )}
+          <EvidenceSourceSection items={evidenceBySource} />
 
-          {(repositories.length > 0 || private_repository_count > 0) && (
-            <section className="pf-card">
-              <SectionHead>Code</SectionHead>
-              <Rule />
-              <ul className="pf-list">
-                {repositories.map((r) => (
-                  <li key={r.url}>
-                    <a href={r.url} target="_blank" rel="noopener noreferrer">{r.name}</a>
-                  </li>
-                ))}
-              </ul>
-              {private_repository_count > 0 && (
-                // The honest statement -- there was more work behind this -- without the identity.
-                <p className="pf-projmeta" style={{ marginTop: 8 }}>
-                  and {private_repository_count} private{' '}
-                  {private_repository_count === 1 ? 'repository' : 'repositories'}
-                </p>
-              )}
-            </section>
-          )}
+          <CodeSection
+            repositories={repositories}
+            privateCount={private_repository_count}
+          />
+
+          {/* LAST, because it is the strongest thing on the page and it answers the
+              question the sections above raise. Everything higher up is a claim the
+              platform makes about this person; these rows hand the reader the commit
+              and invite them to check it themselves. */}
+          <VerifiedCommitsSection items={verifiedCommits} />
 
           {/* An entirely empty portfolio is a real state and says so plainly, rather than
               rendering a page of blank headings that reads as abandonment. */}

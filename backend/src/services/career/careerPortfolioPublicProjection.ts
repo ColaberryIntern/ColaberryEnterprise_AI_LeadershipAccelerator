@@ -66,6 +66,11 @@ import {
 import type { ResumeExperience, ResumeEducation } from '../resumeHistory';
 import { composeAbout, composeStats, type PortfolioStats } from './portfolioOverview';
 import {
+  restrictCommitsToRepos, type PublicVerifiedCommit,
+} from './portfolioVerifiedCommits';
+import { buildRepositories, type PublicRepository } from './portfolioRepositories';
+import { str, count, httpUrl, recordTitle } from './portfolioReaders';
+import {
   normalizeCompetencies, normalizeEvidenceSources, composeFeatured, countCompetencyDomains,
   type PublicCompetency, type PublicEvidenceSource, type PublicFeaturedProject,
 } from './portfolioEvidence';
@@ -242,10 +247,7 @@ export interface PublicProject {
   case_study_slug: string | null;
 }
 
-export interface PublicRepository {
-  name: string;
-  url: string;
-}
+export type { PublicRepository };
 
 export interface PublicPortfolio {
   identity: PublicIdentity;
@@ -269,61 +271,16 @@ export interface PublicPortfolio {
   repositories: PublicRepository[];
   /** Work that exists behind a private repo, stated as a count and nothing more. */
   private_repository_count: number;
+  /**
+   * Verified stories a STRANGER CAN CHECK: each one links to the commit that satisfied it.
+   *
+   * This is the half of "verifiable" that a buyer means. A row in our table saying verified
+   * is what we already had; this lets the reader go and look without taking our word for it.
+   * The shape carries no failure data - see portfolioVerifiedCommits for the privacy
+   * decision and the reason the join is on project rather than enrollment.
+   */
+  verified_commits: PublicVerifiedCommit[];
   generated_at: string;
-}
-
-// ── Defensive readers. Anything unreadable is dropped, never rendered. ─────
-
-const str = (v: unknown): string | null =>
-  typeof v === 'string' && v.trim() !== '' ? v.trim() : null;
-
-const count = (v: unknown): number =>
-  typeof v === 'number' && Number.isFinite(v) && v > 0 ? Math.floor(v) : 0;
-
-/**
- * Only `http:` and `https:` survive. A `javascript:` or `data:` URL reaching an
- * unauthenticated page is a scripting vector, and this content is student-authored.
- */
-function httpUrl(v: unknown): string | null {
-  const s = str(v);
-  if (!s) return null;
-  try {
-    const u = new URL(s);
-    return u.protocol === 'http:' || u.protocol === 'https:' ? u.toString() : null;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * A record's title, and NEVER its slug.
- *
- * `ali-muwwakkil` rendered as a project title on Ali's own live page, because
- * `system.project_name` was null and the fallback was the slug. A URL fragment presented
- * as the name of someone's work reads as broken software to the hiring manager it is
- * shown to.
- *
- * The fallback chain uses only REAL data, never an invented name:
- *   1. `project_name` as compiled
- *   2. the descriptor's own first heading -- the document titled itself
- *   3. "Untitled record" -- honest, and still a working link
- */
-function recordTitle(r: any): string {
-  const named = str(r.title) ?? str(r.project_name);
-  if (named) return named;
-
-  const descriptor = str(r.descriptor);
-  if (descriptor) {
-    for (const line of descriptor.split('\n')) {
-      const m = /^\s{0,3}#{1,3}\s+(.+?)\s*#*\s*$/.exec(line);
-      // Strip inline emphasis so a heading like `# **Strategy**` does not keep its stars.
-      if (m) {
-        const heading = m[1].replace(/[*_`]/g, '').trim();
-        if (heading) return heading.slice(0, 160);
-      }
-    }
-  }
-  return 'Untitled record';
 }
 
 // ── The projection. ───────────────────────────────────────────────────────
@@ -353,6 +310,21 @@ export interface ProjectPortfolioInput {
   competencies?: unknown;
   /** `{source_type, count}` rows over the same validated set. */
   evidenceBySource?: unknown;
+  /**
+   * Verified stories with a checkable commit link, already composed and privacy-filtered by
+   * `portfolioVerifiedCommits`. Passed in rather than built here, because this module is pure
+   * and that one needs a query.
+   */
+  verifiedCommits?: PublicVerifiedCommit[];
+  /**
+   * The repository URLs a logged-out stranger can actually open, measured by the caller
+   * (`portfolioRepoReachability`). It decides BOTH which repositories are named and which
+   * commits are linked, from one answer, so the page cannot link into a repository it is
+   * simultaneously calling private.
+   *
+   * Omitting it keeps the old stored-flag behavior and emits no commit link at all.
+   */
+  reachableRepoUrls?: ReadonlySet<string>;
   /** Repository-derived counts for the featured project block. */
   featuredRepoUrl?: string | null;
   featuredTopLevelAreas?: number | null;
@@ -446,20 +418,11 @@ export function projectPublicPortfolio(input: ProjectPortfolioInput): PublicPort
       case_study_slug: caseStudyByProject[str(r.project_id) ?? ''] ?? null,
     }));
 
-  // Repos: a public one is named and linked, a private one is only counted.
-  const rawRepos: any[] = Array.isArray(profile?.github?.repos) ? profile.github.repos : [];
-  const repositories: PublicRepository[] = [];
-  let privateCount = 0;
-  for (const r of rawRepos) {
-    if (!r || typeof r !== 'object') continue;
-    const url = httpUrl(r.html_url ?? r.url);
-    const isPrivate = r.private === true || r.visibility === 'private';
-    if (isPrivate || !url) {
-      privateCount += 1;
-      continue;
-    }
-    repositories.push({ name: str(r.name) ?? 'repository', url });
-  }
+  // Repos: one a stranger can open is named, anything else is only counted. The rule and
+  // the evidence for it live in `portfolioRepositories`.
+  const { repositories, privateCount } = buildRepositories(
+    profile?.github?.repos, input.reachableRepoUrls,
+  );
 
   // The GitHub profile is derived from a repository we can actually see, so it is a fact
   // rather than a guess at a username from somebody's name. First public repo wins, which
@@ -511,6 +474,11 @@ export function projectPublicPortfolio(input: ProjectPortfolioInput): PublicPort
     records,
     repositories,
     private_repository_count: privateCount,
+    // Defensive, like every other read here: a caller that passes junk costs this page its
+    // evidence links, never the page itself.
+    // Gated on the SAME measured set that decided `repositories`, so a link can never point
+    // into a repository this very payload is counting as private.
+    verified_commits: restrictCommitsToRepos(input.verifiedCommits, input.reachableRepoUrls),
     generated_at: input.generatedAt,
   };
 }

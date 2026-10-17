@@ -79,6 +79,18 @@ const CONTROLS = {
     bad: 'https://academy.openai.com/this-definitely-does-not-exist-qqq111x' },
   'partners.openai.com': { good: 'https://partners.openai.com/',
     bad: 'https://partners.openai.com/this-definitely-does-not-exist-qqq111x' },
+  // Added for C5.0, which probes learner commit URLs. The good control is the first commit
+  // in git's own repository, chosen because it is public, famous and cannot be force-pushed
+  // away. The bad control is forty hex zeros: a well-formed sha that resolves to nothing.
+  //
+  // READ A 404 HERE CORRECTLY. GitHub serves 404, not 403, for a private repository to an
+  // anonymous visitor, so this channel cannot tell "private" from "deleted" from "never
+  // existed". For C5.0's purpose that distinction does not matter and the conflation is the
+  // honest one: a stranger who clicks gets nothing, whatever the cause.
+  'github.com': {
+    good: 'https://github.com/git/git/commit/e83c5163316f89bfbde7d9ab23ca2e25604af290',
+    bad: 'https://github.com/git/git/commit/0000000000000000000000000000000000000000',
+  },
 };
 
 async function validateChannel(host) {
@@ -122,7 +134,20 @@ async function main() {
       + trust);
   }
 
+  // RE-RUN THE CONTROLS AT THE END. A long run can be rate-limited partway through, and the
+  // opening control check cannot see that: every probe after the limit kicks in comes back
+  // 404 or 429 and the log looks like a pile of genuine absences. Validating both ends is
+  // what makes a clean log mean something.
   const blocked = Object.values(validity).filter((v) => v.ok === false);
+  if (urls.length > 10 && !blocked.length) {
+    console.log('\nCONTROLS AGAIN, because a long run can be throttled partway');
+    for (const h of hosts) {
+      const v = await validateChannel(h);
+      console.log('  ' + h.padEnd(24) + 'good=' + v.good + ' bad=' + v.bad + '  ' + v.note);
+      if (v.ok === false) blocked.push(v);
+    }
+  }
+
   console.log('\n' + rows.filter((r) => r.status === 404).length + ' of ' + rows.length
     + ' returned 404');
   if (blocked.length) {

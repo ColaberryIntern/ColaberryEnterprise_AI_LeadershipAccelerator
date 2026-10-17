@@ -393,3 +393,23 @@
    so opening the tab never shows one background and then replaces it with another. */
 .pf-preview-interim { min-height: 100vh; display: grid; place-items: center; }
 .pf-preview-interim p { color: var(--pf-mut); font-size: 14px; margin: 0; }
+
+/* ── Verified commits ─────────────────────────────────────────────────── */
+
+/* A two-part list row: the thing on the left, its figures on the right. The skills list
+   carried this same declaration inline on every item and now shares it. */
+.pf-row { display: flex; justify-content: space-between; gap: 14px; flex-wrap: wrap; align-items: baseline; }
+
+/* Specificity note: `.pf-list a` above is a class+element selector, so a bare class here
+   would lose to it and the title would render in link blue. These name the element too. */
+.pf-list a.pf-commit-ttl { display: block; font-size: 15px; color: var(--pf-ink); text-decoration: none; }
+.pf-list a.pf-commit-ttl:hover { color: var(--pf-a); text-decoration: underline; }
+.pf-commit-meta { display: block; color: var(--pf-mut); font-size: 13px; margin-top: 3px; }
+.pf-commit-right { display: flex; align-items: center; gap: 10px; white-space: nowrap; }
+.pf-commit-when { color: var(--pf-mut); font-size: 13px; }
+
+/* The sha, monospaced so it reads as an identifier rather than a word. The success tint
+   is reinforcement, never the message: the section badge says what these rows are, and
+   the sha is also the link text, so nothing here is carried by color alone. */
+.pf-list a.pf-sha { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.5px; font-weight: 600; color: var(--pf-good); background: var(--pf-goodbg); border-radius: 5px; padding: 3px 7px; text-decoration: none; }
+.pf-list a.pf-sha:hover { text-decoration: underline; }

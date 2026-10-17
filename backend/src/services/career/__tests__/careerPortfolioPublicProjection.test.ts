@@ -131,7 +131,65 @@ describe('careerPortfolioPublicProjection', () => {
       'about', 'capabilities', 'competencies', 'competency_domain_count', 'education',
       'evidence_by_source', 'experience', 'featured', 'generated_at', 'identity',
       'private_repository_count', 'projects', 'records', 'repositories', 'stats',
+      'verified_commits',
     ]);
+  });
+
+  it('defaults verified_commits to an empty array rather than omitting the key', () => {
+    // A caller that passes nothing must still produce the agreed shape: a consumer reading
+    // `payload.verified_commits.length` should never meet undefined.
+    expect(project().verified_commits).toEqual([]);
+  });
+
+  it('publishes a verified commit only once its repository is measured reachable', () => {
+    const given = [{
+      story_id: 'STORY-001', title: 'A story', commit_sha_short: '25c54db',
+      committed_at: '2026-08-26T13:47:16.000Z', criteria_passed: 3, criteria_total: 3,
+      commit_url: 'https://github.com/acme/widget/commit/25c54db546d3d67ad124f243776c173fd19a5ba6',
+    }];
+    const run = (over: any) => projectPublicPortfolio({
+      profile: loadedProfile(), records: [], generatedAt: AT, ...over,
+    }).verified_commits;
+
+    expect(run({
+      verifiedCommits: given, reachableRepoUrls: new Set(['https://github.com/acme/widget']),
+    })).toEqual(given);
+
+    // No measurement, or a measurement that excludes the repo, means no link. The page
+    // must never hand a hostile reader a URL nobody checked.
+    expect(run({ verifiedCommits: given })).toEqual([]);
+    expect(run({ verifiedCommits: given, reachableRepoUrls: new Set() })).toEqual([]);
+
+    // Junk degrades to nothing rather than reaching a reader.
+    for (const bad of [null, 'x', 42, {}]) {
+      expect(run({ verifiedCommits: bad, reachableRepoUrls: new Set(['https://github.com/acme/widget']) }))
+        .toEqual([]);
+    }
+  });
+
+  it('never names a repository that was not measured reachable', () => {
+    // Regression for the live defect: the profile emits repo_url/repo_name, the projection
+    // read html_url/name, so production published repositories: [] with a private count of 4
+    // for four public repositories. Fixing the keys without the gate would have swung it the
+    // other way and published private repository names.
+    const prodShape = {
+      github: {
+        repos: [
+          { repo_url: 'https://github.com/qninying/ambit', repo_name: 'ambit' },
+          { repo_url: 'https://github.com/qninying/secret', repo_name: 'secret' },
+        ],
+      },
+    };
+    const out = projectPublicPortfolio({
+      profile: { ...loadedProfile(), ...prodShape } as never,
+      records: [], generatedAt: AT,
+      reachableRepoUrls: new Set(['https://github.com/qninying/ambit']),
+    });
+    expect(out.repositories).toEqual([
+      { name: 'ambit', url: 'https://github.com/qninying/ambit' },
+    ]);
+    expect(out.private_repository_count).toBe(1);
+    expect(JSON.stringify(out)).not.toContain('qninying/secret');
   });
 
   describe('capabilities come from the REPO, never from curriculum consumption', () => {
