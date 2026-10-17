@@ -80,6 +80,11 @@ const ALLOW_LISTED = [
   // is what this tripwire exists to catch. Dry run is the default, every UPDATE
   // is pinned to the NULL it planned against, and the ledger is reversible.
   'scripts/backfillExplorerEnteredAt.ts',
+  // Added by M25, and it writes NOTHING. A read-only distribution report: it SELECTs the
+  // explorer population, reads each person through the normal Person 360 reader, scores them
+  // in memory and prints a histogram. No INSERT, UPDATE or DELETE appears in it, and it
+  // assigns enrollment_type nowhere. It matches this scanner only on the shape of its SELECT.
+  'scripts/srsDistributionReport.ts',
 ];
 
 describe('T203 — the scanner can tell a write from a read', () => {
@@ -300,8 +305,9 @@ describe('T203 — the writer allow-list', () => {
     // writing nothing. 5 -> 6: M21's backfill, which matches because its WHERE
     // clause names the columns to SELECT the population; the only column it
     // assigns is explorer_entered_at. Updated deliberately, which is what the
-    // pinned number is for.
-    expect(files).toHaveLength(6);
+    // pinned number is for. 6 -> 7: M25's distribution report, which writes NOTHING and
+    // matches only on the shape of its SELECT.
+    expect(files).toHaveLength(7);
   });
 
   it('the canonical service is one of them', () => {
@@ -313,19 +319,22 @@ describe('T203 — the writer allow-list', () => {
     expect(unexpected).toEqual([]);
   });
 
-  it('the allow-list has exactly five members, so growing it is a deliberate edit', () => {
+  it('the allow-list has exactly six members, so growing it is a deliberate edit', () => {
     // The plan said one. Derived from source it was two; T207 and T210 added two
     // more, both SHAPE matches that write nothing. M21 added the fifth, which is
     // the first entry that genuinely writes - to `explorer_entered_at` only, on
     // rows whose membership is already settled. Stated as an exact set so a
     // sixth cannot be added quietly.
-    expect(ALLOW_LISTED).toHaveLength(5);
+    // M25 added the sixth, and it is the weakest kind of match: a read-only report that
+    // writes nothing at all and matches only because it SELECTs the explorer population.
+    expect(ALLOW_LISTED).toHaveLength(6);
     expect(ALLOW_LISTED).toEqual([
       'services/enrollmentService.ts',
       'services/openHouseCreditService.ts',
       'scripts/lib/freeAccountCoherenceBackfill.ts',
       'services/adminOs/conversionState.ts',
       'scripts/backfillExplorerEnteredAt.ts',
+      'scripts/srsDistributionReport.ts',
     ]);
     expect([
       'services/enrollmentService.ts',
