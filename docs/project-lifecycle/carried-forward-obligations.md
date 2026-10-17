@@ -1032,7 +1032,7 @@ string, so its exclusion entry never fired.
 
 The fix was to strip comments first. **That fix was itself a no-op.** These route files are CRLF
 in this worktree, so every line ends with a carriage return, and in `/\/\/.*$/` the `.` does not
-match `` — so `$` never matches, the replacement does nothing, and the sweep went on reading
+match `\r` — so `$` never matches, the replacement does nothing, and the sweep went on reading
 prose as code while *looking* like it had been fixed. Caught only because the new positive control
 (assert `/compose` IS flagged when the exclusion is removed) returned an empty list.
 
@@ -1340,3 +1340,153 @@ evidenced by Phase 5. That is the honest number."*
 `storyAuthorization.ts`, while `phase8-handoff.md` records that the gate is unreachable from all
 three `decomposeBuild` call sites because none passes `projectId`. The handoff is the correct
 one; the tick is what a reader takes away.
+
+### T7 and T8: what closed, what is new, and three instrument errors
+
+**The LC-01 reconciliation above is DONE.** `acceptance-evidence.md` now reads
+"⚠️ Armed, and unreachable" in that cell, with the measurement behind it: the gate is consulted
+at `decomposeService.ts:141` under `if (opts.projectId)`, and none of the three non-test
+`decomposeBuild` call sites passes one. `sbpOrchestrator.ts` holds `input.projectId` in scope at
+lines 195-202 and omits it at line 286. Arming it is one line, and it is Phase 8's P8-T4. **And it must not be done yet.** 62 production student projects predate the registration hook and hold no lifecycle row, so arming the gate refuses **every legacy student build** on the next deploy — `storyAuthorization.ts` warns about exactly this in its own header, and the run's `deployment-log.md` records it. Arming it needs either an approved blueprint through the product first or the same `LIVE_SINCE` cutoff treatment the registration check already uses. “One line” describes the edit, not the change.
+
+**Phase 7 writes no acceptance row, and says so in the table.** Every enforcement mechanism it
+built has no caller, so crediting an LC ID to it would be the failure that table exists to
+prevent. The "16 of 18" figure is retired with the reason recorded.
+
+**NEW — the deploy script's own bar for registry mode was met and never acted on.**
+`scripts/deploy-prod.sh` records a DRI decision of 2026-09-10 keeping `DEPLOY_MODE=registry`
+opt-in, with a checkable bar: at least 5 successful registry deploys spanning at least 14 days,
+six counting its own deliberate exclusion. Measured 2026-10-17:
+`/var/log/colaberry-registry-deploys.log` holds **130 entries spanning 2026-09-16 to 2026-10-16**,
+about 30 days. The bar is met roughly twenty times over and the default is still `build`. This is
+not cosmetic: building on the production host is the largest recurring memory spike on a box that
+also runs five Postgres instances, with 344 OOM kills in the kernel journal. **Flipping a deploy
+default is infrastructure, so it is the DRI's call** — recorded rather than done. The bar was
+written to be checkable precisely so it would not be left to memory, and it was left to memory
+anyway.
+
+**NEW — this session did not deploy its own release.** Preparing the deploy, the host's deploy
+lock read `HELD_BY_ANOTHER_DEPLOY`: another session had started one at 14:45:10Z for the same
+merged commit, with a host build already running and 348 MB free. A second concurrent build is the
+failure mode that produced six collisions in a single session and the incident the lock exists
+for. Waiting and then verifying was the correct division of labour, and it is worth recording as
+a *pattern* rather than an anecdote: **on a shared box, "my phase, my deploy" is not a property
+worth having.** The release landed and was verified; who ran it does not change the evidence.
+
+#### Three instrument errors, each of which would have been reported as a fact
+
+These belong in this register because the register's whole premise is that an unverified
+instrument manufactures findings in both directions.
+
+1. **A health check that could not have succeeded.** A host-side
+   `curl 127.0.0.1:3001/api/health` returned `000` on three paths. The container publishes
+   `3001/tcp` as *exposed*, never mapped to the host, so the request could not connect regardless
+   of application health. Asked from inside the container the same endpoint returns 401. Reported
+   unchecked, `000` reads as a production outage.
+2. **A false caller, against the claim the phase rests on.** Grepping the shipped `dist` for
+   `executeStage` returned `growthJourney/execution/runExecutor.js`, apparently refuting the
+   inertness argument for the whole guard. `runExecutor.ts:203` defines its **own module-private**
+   `executeStage(programs, asOf, flags, …)` — an unrelated function sharing a name. **The robust
+   form of an inertness claim is "no module importer", never "the string appears nowhere."**
+3. **A line-ending reading that was backwards.** `grep -c $'\r'` reported 172 of 172 lines CRLF in
+   a file that is pure LF; the pattern did not expand, and an empty pattern matches every line. A
+   100%% reading should have been suspicious on its face. Had I trusted it and built multi-line
+   CRLF anchors on it, every anchor would have missed — which is the same failure that cost three
+   mutation anchors earlier in this run, arrived at from the opposite direction.
+
+**The shared shape of all three, and of the NUL byte and the bare CR repaired in this file:** the
+instrument was never checked against a case whose answer was already known. A grep that returns
+zero, a curl that returns `000`, and a count that returns 100%% are all indistinguishable from a
+broken instrument until something that must be found is found. Every measurement in T7's
+verification therefore carries a positive control, and the deploy marker was validated in both
+directions — 0 hits before with a control proving the grep worked in that container, 2 hits
+after.
+
+**Repaired on the way past:** line 1035 of this file carried a **bare carriage return byte** where
+an em dash belonged, committed, inside the sentence explaining a `\r` bug. Written through a shell
+heredoc, which turns an escape into the byte it names. It is the third instance of that class in
+this run and the reason the rule is "never write prose or source through a heredoc", not "be
+careful with heredocs".
+
+### What independent production verification found, 2026-10-17
+
+Phase 7's production state was graded by an independent verifier rather than by the session that
+handled the deploy. **Verdict: PASS.** It also found four documentation defects in my own work,
+all now corrected in place, and one production bug that belongs to nobody in this programme.
+
+#### A REAL BUG, outside Phase 7, needing a ticket
+
+**A boot schema assert reports tables INCOMPLETE that demonstrably exist.** On every backend boot
+the log carries both of these lines:
+
+```
+[DB] Case Study Story Studio schema ensured (4 tables)
+[DB] Case Study Story Studio schema INCOMPLETE: table case_study_storylines,
+     table case_study_ai_drafts, table case_study_quotes, table case_study_charts
+```
+
+Measured in `accelerator_prod`, schema `public`, with both controls validated (a table that must
+exist returns EXISTS, a name that cannot returns MISSING): **14 `case_study%` tables are present,
+including all four the assert names.** The assert is emitting a false INCOMPLETE.
+
+This is precisely the warn-and-carry-on failure mode `verifyProjectLifecycleSchema` was built to
+replace, with an extra edge: a schema alarm that cries wolf on every boot trains the next
+responder to scroll past the one that is real. **Owner: whoever owns the Case Study Story Studio
+schema. Not Phase 8's, recorded so it is not lost.**
+
+Two other pre-existing noise sources, confirmed as not caused by this release by checking that the
+`3b4bb21d..e4ce4bb9` diff touches none of the emitting code: a recurring
+`[InboxCOS][Sync] gmail_personal ... invalid_grant` (expired OAuth grant) and
+`[StrategicStateStore] Snapshot capture failed: notNull Violation: KPISnapshot.snapshot_date cannot
+be null` — while `kpi_snapshots` nonetheless holds 219 rows and wrote successfully that morning,
+so something is both failing and succeeding on that path.
+
+#### Two lessons about instruments, both bought here
+
+**1. `9>` truncates. `9>>` does not.** The verifier intended a read-only run and tested the deploy
+lock with `flock -n 9 9>/var/lock/colaberry-deploy.lock`, which **zeroed the 68-byte attribution
+record** the deploy script writes (`pid= user= started= services=`). Functional impact nil — the
+script truncates that file on every run and `flock` is advisory on the descriptor, not the contents
+— but it destroyed the one piece of evidence that would have settled *who* deployed, directly,
+instead of by inference. My own two probes of the same lock used `8>>` and were safe. **One
+character is the whole difference between probing a lock and erasing its contents**, and it sits in
+a script whose author believed it was read-only.
+
+**2. A verdict decided by a broken control decides nothing — twice in ten minutes.** Checking the
+schema-assert claim, my first probe reported all four tables **MISSING**, contradicting the
+verifier. Its control query **threw**, so that result was void; I reported neither finding and
+rebuilt the instrument. The second attempt died to nested shell quoting without running its query
+at all. The third piped the script straight into `docker exec -i ... node`, so the source never
+passed through a shell, and with both controls behaving the answer was unambiguous and **opposite
+to my first reading**. Had I written up round one, I would have published a false refutation of a
+correct finding — and the thing that stopped me was a control, not care.
+
+#### The documentation defect worth naming here
+
+**An invalid health probe survived two verification cycles after being corrected once.** Both my
+handoff and the deployment log cited "`/api/health` answers 401" as evidence the backend was up and
+routing. An arbitrary nonexistent `/api` path returns the **identical** 401 body, so that 401 is an
+unscoped catch-all and proves nothing about routing. The valid probe is `GET /health`, which returns
+**200** with a live timestamp. A previous cycle had already established this, and the correction was
+not carried forward — which is the same failure this register exists to prevent, committed against
+this register's own subject matter.
+
+#### A defect in the reporting machinery itself
+
+**The auto-open hook the loop depends on does not exist.** `loop-architect/SKILL.md` states that
+`.claude/hooks/open-html.sh` "already auto-opens any `.html` file this loop writes — just writing
+the file is enough, no separate 'open browser' step." Measured 2026-10-17: **that file is not in
+the repository.** The milestone dashboards are the mechanism by which this loop reports progress
+*instead of* narrating it in chat, so if the hook has never existed, every dashboard this run
+wrote was written to a gitignored directory and opened by nobody — and the loop's design
+deliberately suppressed the chat narration those dashboards were meant to replace.
+
+Two things follow. **For this phase:** `dashboard-phase7-live.html` was written and NOT opened,
+because the DRI's standing instruction is to open the review surface and nothing else, and the PR
+was already opened. Its path is named in the handoff instead. **For the skill:** either the hook
+ships, or the skill stops promising it and says the dashboard path must be handed over explicitly.
+A reporting channel that silently goes nowhere is worse than no channel, because the sessions
+using it believe they have reported.
+
+This is also the fourth instance in this run of the same class: a mechanism assumed to work
+because a document said so, never checked against a case whose answer was known.
