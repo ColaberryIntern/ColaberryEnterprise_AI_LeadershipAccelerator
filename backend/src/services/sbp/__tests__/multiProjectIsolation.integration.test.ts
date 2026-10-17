@@ -40,6 +40,17 @@ import { createHash } from 'crypto';
 const RUN = process.env.SBP_INTEGRATION_DB === '1';
 const describeDb = RUN ? describe : describe.skip;
 
+if (!RUN) {
+  // P7-T6. Note this suite gates on SBP_INTEGRATION_DB rather than DATABASE_URL, so a
+  // reader who set only DATABASE_URL would otherwise see nothing and assume it ran.
+  // eslint-disable-next-line no-console
+  console.warn(
+    '[multiProjectIsolation.integration] SKIPPED: SBP_INTEGRATION_DB is not 1. This suite\n'
+    + 'is destructive and additionally refuses any database whose name does not announce\n'
+    + 'itself as scratch.',
+  );
+}
+
 // Guard rail. `accelerator_prod`, `accelerator_dev`, anything with a real name:
 // refuse. Only a database that announces itself as scratch is acceptable.
 const DB_URL = process.env.DATABASE_URL ?? '';

@@ -22,6 +22,7 @@ import fs from 'fs';
 import path from 'path';
 import {
   comparisonClaimViolations, COMPARISON_WORDS, COMPARISON_WINDOW,
+  renderPilotReport, type PilotObservation,
 } from '../pilotReport';
 import { runCorpusCase } from '../../__tests__/corpus/corpusRunner';
 import { CORPUS_STAGES } from '../../__tests__/corpus/corpusStages';
@@ -80,6 +81,71 @@ describe('§3.4 — the no-comparison-percentage check', () => {
     // The check must not ban percentages outright -- a denominator-carrying figure is fine.
     expect(comparisonClaimViolations('coverage was 2 of 2 blocks, which is 100% of them'))
       .toEqual([]);
+  });
+});
+
+describe('the WINDOW edge, pinned where the two readings of §3.4 diverge', () => {
+  /**
+   * A verifier measured the real behaviour and it is narrower than "within 40 characters of":
+   * the WHOLE matched word must fit inside the window, so the effective trailing reach is
+   * `COMPARISON_WINDOW - word.length + 1`. My original boundary test used a 10-character cushion
+   * on one side and 20 on the other, so it never probed the band where the two readings differ.
+   * Pinned here as the behaviour it actually is.
+   */
+  const reach = (word: string) => COMPARISON_WINDOW - word.length + 1;
+
+  it('catches a word that FITS entirely inside the window', () => {
+    const gap = reach('faster') - 2;
+    expect(comparisonClaimViolations(`12%${' '.repeat(gap)}faster`)).toHaveLength(1);
+  });
+
+  it('does NOT catch one whose word starts inside 40 but ENDS beyond it', () => {
+    // The divergent band. This is a defensible reading of §3.4 and errs toward fewer catches,
+    // which is the direction a tripwire should err only if it is written down -- so it is.
+    const gap = COMPARISON_WINDOW - 3;
+    const found = comparisonClaimViolations(`12%${' '.repeat(gap)}faster`);
+    expect(found).toEqual([]);
+  });
+});
+
+describe('the report DERIVES its cohort statements, so it cannot contradict its own table', () => {
+  /**
+   * The one hazard a verifier found in the first version: section 3's prose was rendered from
+   * `observations[0]` and section 4's below-target line was hardcoded, so a heterogeneous cohort
+   * would have produced a document whose prose contradicted its own table. Nothing could catch
+   * it -- the golden-file test rebuilds the same wrong sentence, and the comparison check cannot
+   * see a false generalisation.
+   */
+  const obs = (over: Partial<PilotObservation>): PilotObservation => ({
+    fixture: 'X', shape: 'synthetic', stagesDriven: 10, stagesNotReached: 5, refusals: 0,
+    workspaceCount: 2, effortBases: 'MEASURED', requirementBlocks: 1, covered: 1, uncovered: 0,
+    storyCoverageAssessable: false, aiNumeratorMinutes: 1, aiDenominatorMinutes: 2,
+    belowTarget: true, composeMs: 1, ...over,
+  });
+
+  const render = (observations: PilotObservation[]) => renderPilotReport({
+    measuredOn: '2026-01-01', corpusStages: 15, observations,
+    notMeasured: [{ dimension: 'd', why: 'w' }],
+    recoveryOutcomes: [{ case: 'c', observed: 'o' }],
+  });
+
+  it('a UNIFORM cohort is described as uniform', () => {
+    const text = render([obs({ fixture: 'A' }), obs({ fixture: 'B' })]);
+    expect(text).toContain('every one of the 2 fixtures drove 10 and did not reach 5');
+  });
+
+  it('a HETEROGENEOUS cohort is described as a RANGE, not as a single value', () => {
+    const text = render([obs({ fixture: 'A' }), obs({ fixture: 'B', stagesDriven: 3, stagesNotReached: 12 })]);
+    // The sentence that would have been false before.
+    expect(text).not.toContain('every one of the 2 fixtures drove');
+    expect(text).toContain('drove between 3 and 10');
+    expect(text).toContain('did not reach between 5 and 12');
+  });
+
+  it('the below-target line COUNTS, with its denominator, rather than generalising', () => {
+    const text = render([obs({ fixture: 'A' }), obs({ fixture: 'B', belowTarget: false })]);
+    expect(text).toContain('1 of the 2 fixtures are below the automation target');
+    expect(text).not.toContain('Every fixture is below');
   });
 });
 

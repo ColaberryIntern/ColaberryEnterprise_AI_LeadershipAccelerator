@@ -20,9 +20,28 @@
  *
  * It is a TEXT check. It cannot tell a true comparison from a false one, and it does not try:
  * a legitimately measured comparison would also be refused, and the right response to that is a
- * sentence with both absolute numbers and their denominators, which is better writing anyway. It
- * also only knows the six listed words, so it is a tripwire on the common phrasing rather than a
- * proof that no comparative claim exists anywhere in the document.
+ * sentence with both absolute numbers and their denominators, which is better writing anyway.
+ *
+ * **Three known bypasses, measured rather than guessed**, because a tripwire whose gaps are
+ * undocumented gets mistaken for a proof:
+ *
+ *  1. **The six words only.** `a 40% reduction` and `reducing by 40%` both pass, as do `cut`,
+ *     `fewer`, `less`, `more`, `saving`, `outperform`, `gain` and `half`.
+ *  2. **The spelled-out percentage.** `faster by 40 percent` sails through, because the check
+ *     looks for the SIGN. The report you are reading uses exactly that construction to describe
+ *     the rule without tripping it, so the document demonstrates its own bypass.
+ *  3. **Distance.** The whole matched word must fit inside the window, so the effective trailing
+ *     reach is `COMPARISON_WINDOW - len(word) + 1` -- about 34 characters for `improve`. A claim
+ *     that puts the number further away than that is not caught.
+ *
+ * None of these is a defect against §3.4, which specifies the sign and names six words. They are
+ * the limits of what a text tripwire can be, written down so nobody reads a pass as a proof.
+ *
+ * **Provenance, kept here rather than in the published report:** the first generated draft of
+ * `pilot-results.md` was refused by this function before the file was opened, because the
+ * sentence explaining the rule put a literal sign inside the window of the word list it was
+ * describing. That draft was never committed, so a reader cannot check the claim -- which is
+ * exactly why it belongs in the source and not in the document.
  */
 
 /** The comparison words §3.4 names. Matched as PREFIXES, so "improved" and "improvement" count. */
@@ -131,7 +150,8 @@ export function renderPilotReport(input: PilotInputs): string {
   L.push('than intended:** `comparisonClaimViolations` fails a test on any percent sign within');
   L.push(`${COMPARISON_WINDOW} characters of a comparison word. The words it knows are listed in`);
   L.push('`COMPARISON_WORDS`. The check has its own positive control, so it is known to be');
-  L.push('capable of failing - and it has already failed once, on this document.');
+  L.push('capable of failing, and its known bypasses are documented in that module rather than');
+  L.push('left for a reader to discover.');
   L.push('');
 
   L.push('## 1. Completeness');
@@ -165,12 +185,25 @@ export function renderPilotReport(input: PilotInputs): string {
 
   L.push('## 3. Approval effort');
   L.push('');
-  L.push(`Of ${corpusStages} stages in the corpus ladder, each fixture drove`);
-  L.push(`${observations[0]?.stagesDriven ?? 0} and did not reach`);
-  L.push(`${observations[0]?.stagesNotReached ?? 0}. The stages not reached are the`);
-  L.push('database-backed ones, including the approval gates, so **the number of human approval');
-  L.push('decisions this pilot observed is zero** — not a small number, zero — and that is the');
-  L.push('honest reading of what a generation-tier pilot can say about approval effort.');
+  // DERIVED, not asserted over the cohort. An earlier version rendered this sentence from
+  // `observations[0]` and section 4's below-target claim was hardcoded, so a heterogeneous
+  // cohort would have produced a document that contradicted its own table -- invisible to the
+  // golden-file test, which would rebuild the same wrong sentence, and to the comparison check.
+  const driven = [...new Set(observations.map((o) => o.stagesDriven))].sort((a, b) => a - b);
+  const notReached = [...new Set(observations.map((o) => o.stagesNotReached))].sort((a, b) => a - b);
+  const uniform = driven.length === 1 && notReached.length === 1;
+  L.push(uniform
+    ? `Of ${corpusStages} stages in the corpus ladder, every one of the ${observations.length} `
+      + `fixtures drove ${driven[0]} and did not reach ${notReached[0]}.`
+    : `Of ${corpusStages} stages in the corpus ladder, the ${observations.length} fixtures drove `
+      + `between ${driven[0]} and ${driven[driven.length - 1]}, and did not reach between `
+      + `${notReached[0]} and ${notReached[notReached.length - 1]}.`);
+  L.push('');
+  L.push('The stages not reached are the database-backed ones, and **two of those five are the');
+  L.push('approval gates themselves** (`awaiting_blueprint_approval` and `blueprint_approved`).');
+  L.push('So **the number of human approval decisions this pilot observed is zero** — not a small');
+  L.push('number, zero — and that is a consequence of which stages a generation-tier pilot can');
+  L.push('reach, rather than a claim about how much approval effort the system needs.');
   L.push('');
   L.push('| Fixture | Stages driven | Stages not reached | Refusals |');
   L.push('|---|---|---|---|');
@@ -196,9 +229,12 @@ export function renderPilotReport(input: PilotInputs): string {
   L.push('comparison this section cannot support. It is recorded as an observation in the session');
   L.push('log and left out of the published tables.');
   L.push('');
-  L.push('AI minutes are printed as a numerator and a denominator, never divided. Every fixture is');
-  L.push('below the automation target, which is a recorded decision for the manual-only and');
-  L.push('human-heavy shapes rather than a shortfall.');
+  L.push('AI minutes are printed as a numerator and a denominator, never divided.');
+  const below = observations.filter((o) => o.belowTarget).length;
+  // Counted, with its denominator, rather than asserted over the cohort.
+  L.push(`${below} of the ${observations.length} fixtures are below the automation target, which`);
+  L.push('is a recorded decision for the manual-only and human-heavy shapes rather than a');
+  L.push('shortfall.');
   L.push('');
 
   L.push('## 5. Failure recovery');

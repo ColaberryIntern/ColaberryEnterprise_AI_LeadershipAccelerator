@@ -47,6 +47,16 @@ import {
 
 const describePg = PG_URL ? describe : describe.skip;
 
+if (!PG_URL) {
+  // P7-T6: skipping silently makes an absent guarantee look like a kept one. This suite
+  // covers send-once idempotency, so a silent skip is the worst kind.
+  // eslint-disable-next-line no-console
+  console.warn(
+    '[idempotentSend.pg] SKIPPED: no Postgres URL. Send-once idempotency is a property of\n'
+    + 'the database, so it cannot be evidenced without one.',
+  );
+}
+
 const EVENT = 'story000-unblock-2026-08-17';
 const SUBJECT = 'Your Daily Priority Assistant, and a fresh sign in link';
 

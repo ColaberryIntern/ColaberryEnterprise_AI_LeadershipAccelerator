@@ -8,7 +8,8 @@ as unmeasured with the reason, rather than estimated.
 than intended:** `comparisonClaimViolations` fails a test on any percent sign within
 40 characters of a comparison word. The words it knows are listed in
 `COMPARISON_WORDS`. The check has its own positive control, so it is known to be
-capable of failing - and it has already failed once, on this document.
+capable of failing, and its known bypasses are documented in that module rather than
+left for a reader to discover.
 
 ## 1. Completeness
 
@@ -43,12 +44,13 @@ live model calls named in section 4.
 
 ## 3. Approval effort
 
-Of 15 stages in the corpus ladder, each fixture drove
-10 and did not reach
-5. The stages not reached are the
-database-backed ones, including the approval gates, so **the number of human approval
-decisions this pilot observed is zero** — not a small number, zero — and that is the
-honest reading of what a generation-tier pilot can say about approval effort.
+Of 15 stages in the corpus ladder, every one of the 4 fixtures drove 10 and did not reach 5.
+
+The stages not reached are the database-backed ones, and **two of those five are the
+approval gates themselves** (`awaiting_blueprint_approval` and `blueprint_approved`).
+So **the number of human approval decisions this pilot observed is zero** — not a small
+number, zero — and that is a consequence of which stages a generation-tier pilot can
+reach, rather than a claim about how much approval effort the system needs.
 
 | Fixture | Stages driven | Stages not reached | Refusals |
 |---|---|---|---|
@@ -74,9 +76,10 @@ millisecond would therefore be unreproducible AND would invite exactly the cost
 comparison this section cannot support. It is recorded as an observation in the session
 log and left out of the published tables.
 
-AI minutes are printed as a numerator and a denominator, never divided. Every fixture is
-below the automation target, which is a recorded decision for the manual-only and
-human-heavy shapes rather than a shortfall.
+AI minutes are printed as a numerator and a denominator, never divided.
+4 of the 4 fixtures are below the automation target, which
+is a recorded decision for the manual-only and human-heavy shapes rather than a
+shortfall.
 
 ## 5. Failure recovery
 
