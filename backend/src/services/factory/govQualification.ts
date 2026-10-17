@@ -444,21 +444,35 @@ export async function recordDecision(input: RecordDecisionInput): Promise<any> {
 }
 
 export interface RecordCapabilityDecisionsInput {
-  canonicalOpportunityId: string; biddingEntity: string; expectedVersion: number; reviewerIdentityId: string;
+  canonicalOpportunityId: string; biddingEntity: string; expectedVersion: number;
+  /** Accepted for audit, but NOT written to reviewer_identity_id: a capability save is advisory and must not change
+   *  who established the requirements (see below). */
+  reviewerIdentityId: string;
   /** The Step 3 capability-fit decisions + any ticked eligibility items. ADVISORY (feeds Step 4 + the brief); not a
    *  gate. Stored in requirements_json.capabilities as an opaque bag the frontend owns. */
   capabilities: any;
 }
 
 /** Persist the Step 3 "Fit" capability decisions on the record (requirements_json.capabilities). ADVISORY - it sets no
- *  gate and does not touch established requirements; fork-on-edit preserves established/provenance/dossier. Additive
- *  JSONB, no migration. */
+ *  gate and does not touch established requirements.
+ *
+ *  forkNewVersion does NOT carry forward decision / reviewer_identity_id / evidence_json / rationale / effort_cap /
+ *  reassessment_conditions (only the caller's patch does), so this preserves ALL of them from the current version.
+ *  Critically it keeps `reviewer_identity_id` = the ESTABLISHER (not the acting admin): the self-approval
+ *  separation-of-duties gate (approveGovQualification) compares the approver against reviewer_identity_id, and an
+ *  advisory save must never reset the decision (un-approving a pursuit), wipe evidence, or move the establisher
+ *  identity. It only adds the capabilities bag. */
 export async function recordCapabilityDecisions(input: RecordCapabilityDecisionsInput): Promise<any> {
   const current = await loadCurrent(input.canonicalOpportunityId, input.biddingEntity);
   if (!current) throw new QualificationNotFoundError();
   if (current.version !== input.expectedVersion) throw new QualificationConflictError(current.version);
   return forkNewVersion(current, {
-    reviewer_identity_id: input.reviewerIdentityId,
+    reviewer_identity_id: current.reviewer_identity_id,
+    decision: current.decision,
+    rationale: current.rationale,
+    evidence_json: current.evidence_json,
+    effort_cap: current.effort_cap,
+    reassessment_conditions: current.reassessment_conditions,
     requirements_json: { ...(current.requirements_json || {}), capabilities: input.capabilities ?? null },
   });
 }
