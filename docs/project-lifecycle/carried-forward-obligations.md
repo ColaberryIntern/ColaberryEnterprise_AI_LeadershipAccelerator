@@ -1032,7 +1032,7 @@ string, so its exclusion entry never fired.
 
 The fix was to strip comments first. **That fix was itself a no-op.** These route files are CRLF
 in this worktree, so every line ends with a carriage return, and in `/\/\/.*$/` the `.` does not
-match `` — so `$` never matches, the replacement does nothing, and the sweep went on reading
+match `\r` — so `$` never matches, the replacement does nothing, and the sweep went on reading
 prose as code while *looking* like it had been fixed. Caught only because the new positive control
 (assert `/compose` IS flagged when the exclusion is removed) returned an empty list.
 
@@ -1340,3 +1340,70 @@ evidenced by Phase 5. That is the honest number."*
 `storyAuthorization.ts`, while `phase8-handoff.md` records that the gate is unreachable from all
 three `decomposeBuild` call sites because none passes `projectId`. The handoff is the correct
 one; the tick is what a reader takes away.
+
+### T7 and T8: what closed, what is new, and three instrument errors
+
+**The LC-01 reconciliation above is DONE.** `acceptance-evidence.md` now reads
+"⚠️ Armed, and unreachable" in that cell, with the measurement behind it: the gate is consulted
+at `decomposeService.ts:141` under `if (opts.projectId)`, and none of the three non-test
+`decomposeBuild` call sites passes one. `sbpOrchestrator.ts` holds `input.projectId` in scope at
+lines 195-202 and omits it at line 286. Arming it is one line, and it is Phase 8's P8-T4.
+
+**Phase 7 writes no acceptance row, and says so in the table.** Every enforcement mechanism it
+built has no caller, so crediting an LC ID to it would be the failure that table exists to
+prevent. The "16 of 18" figure is retired with the reason recorded.
+
+**NEW — the deploy script's own bar for registry mode was met and never acted on.**
+`scripts/deploy-prod.sh` records a DRI decision of 2026-09-10 keeping `DEPLOY_MODE=registry`
+opt-in, with a checkable bar: at least 5 successful registry deploys spanning at least 14 days,
+six counting its own deliberate exclusion. Measured 2026-10-17:
+`/var/log/colaberry-registry-deploys.log` holds **130 entries spanning 2026-09-16 to 2026-10-16**,
+about 30 days. The bar is met roughly twenty times over and the default is still `build`. This is
+not cosmetic: building on the production host is the largest recurring memory spike on a box that
+also runs five Postgres instances, with 344 OOM kills in the kernel journal. **Flipping a deploy
+default is infrastructure, so it is the DRI's call** — recorded rather than done. The bar was
+written to be checkable precisely so it would not be left to memory, and it was left to memory
+anyway.
+
+**NEW — this session did not deploy its own release.** Preparing the deploy, the host's deploy
+lock read `HELD_BY_ANOTHER_DEPLOY`: another session had started one at 14:45:10Z for the same
+merged commit, with a host build already running and 348 MB free. A second concurrent build is the
+failure mode that produced six collisions in a single session and the incident the lock exists
+for. Waiting and then verifying was the correct division of labour, and it is worth recording as
+a *pattern* rather than an anecdote: **on a shared box, "my phase, my deploy" is not a property
+worth having.** The release landed and was verified; who ran it does not change the evidence.
+
+#### Three instrument errors, each of which would have been reported as a fact
+
+These belong in this register because the register's whole premise is that an unverified
+instrument manufactures findings in both directions.
+
+1. **A health check that could not have succeeded.** A host-side
+   `curl 127.0.0.1:3001/api/health` returned `000` on three paths. The container publishes
+   `3001/tcp` as *exposed*, never mapped to the host, so the request could not connect regardless
+   of application health. Asked from inside the container the same endpoint returns 401. Reported
+   unchecked, `000` reads as a production outage.
+2. **A false caller, against the claim the phase rests on.** Grepping the shipped `dist` for
+   `executeStage` returned `growthJourney/execution/runExecutor.js`, apparently refuting the
+   inertness argument for the whole guard. `runExecutor.ts:203` defines its **own module-private**
+   `executeStage(programs, asOf, flags, …)` — an unrelated function sharing a name. **The robust
+   form of an inertness claim is "no module importer", never "the string appears nowhere."**
+3. **A line-ending reading that was backwards.** `grep -c $'\r'` reported 172 of 172 lines CRLF in
+   a file that is pure LF; the pattern did not expand, and an empty pattern matches every line. A
+   100%% reading should have been suspicious on its face. Had I trusted it and built multi-line
+   CRLF anchors on it, every anchor would have missed — which is the same failure that cost three
+   mutation anchors earlier in this run, arrived at from the opposite direction.
+
+**The shared shape of all three, and of the NUL byte and the bare CR repaired in this file:** the
+instrument was never checked against a case whose answer was already known. A grep that returns
+zero, a curl that returns `000`, and a count that returns 100%% are all indistinguishable from a
+broken instrument until something that must be found is found. Every measurement in T7's
+verification therefore carries a positive control, and the deploy marker was validated in both
+directions — 0 hits before with a control proving the grep worked in that container, 2 hits
+after.
+
+**Repaired on the way past:** line 1035 of this file carried a **bare carriage return byte** where
+an em dash belonged, committed, inside the sentence explaining a `\r` bug. Written through a shell
+heredoc, which turns an escape into the byte it names. It is the third instance of that class in
+this run and the reason the rule is "never write prose or source through a heredoc", not "be
+careful with heredocs".

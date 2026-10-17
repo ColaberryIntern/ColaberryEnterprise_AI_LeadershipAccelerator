@@ -117,7 +117,7 @@ the routes."* Phase 5 is that phase, and this row records only the part it actua
 
 | Consumer | Registration wired | Registration **proven in production** | Authorization enforced |
 |---|---|---|---|
-| 🏭 **Project Factory** — 10 agent domains, student projects | ✅ `Project` model `afterCreate` | ✅ all ten hold exactly one `project_lifecycle_states` row, stage `discovery`, created 2026-10-13 14:03Z, 0 duplicates / 0 orphans / 0 tenant mismatches | ✅ `services/sbp/storyAuthorization.ts` refuses story work, with a `legacy_compatibility` branch for pre-hook projects |
+| 🏭 **Project Factory** — 10 agent domains, student projects | ✅ `Project` model `afterCreate` | ✅ all ten hold exactly one `project_lifecycle_states` row, stage `discovery`, created 2026-10-13 14:03Z, 0 duplicates / 0 orphans / 0 tenant mismatches | ⚠️ **Armed, and unreachable.** `storyAuthorization.ts` does refuse story work, and `decomposeService.ts:141` consults it — but that call is guarded by `if (opts.projectId)` and **none of the three non-test `decomposeBuild` call sites passes one**. `sbpOrchestrator.ts` is the sharp case: it holds `input.projectId` in scope at lines 195-202 and omits it at line 286. **Amended by Phase 7, 2026-10-17.** This cell read ✅ while `phase8-handoff.md` recorded ❌ for the same gate; the cross was the correct one |
 | 🏛️ **Gov contracts** — delivery projects | ✅ `models/DeliveryProject.ts:174` `afterCreate: deliveryProjectLifecycleHook`; `services/factory/govDeliveryProject.ts:134` creates through that model | ❌ **never fired.** Zero delivery projects created since the hook shipped 2026-10-09. The path is real and has no production evidence | ❌ **no delivery-side equivalent of `storyAuthorizationFor` exists.** Nothing in the gov build path refuses work because a lifecycle row is missing |
 
 **That last cell is the honest cost of this row.** A delivery project registers and then nothing
@@ -156,6 +156,40 @@ two of which are live government work.
 
 ---
 
+## Rows written by Phase 7
+
+### None. Phase 7 claims no acceptance ID, and the reason is the finding.
+
+Phase 7 fixed three production defects, answered Risk R5, and built an authorization guard, a
+legacy assessment and a pilot report. **It evidences no new LC ID, because every enforcement
+mechanism it built is unreachable in production.**
+
+| What Phase 7 built | Why it evidences nothing here |
+|---|---|
+| Authorization guard on `executeStage` — refuses a foreign tenant, an illegal transition and unmet prerequisites before any store read; 28 tests | **No module importer.** The only non-test mention of `lifecycleExecution` in all of `backend/src` is a comment at `blueprintGeneration.ts:11`. A guard nothing calls refuses nothing |
+| `legacyGapAssessment.ts` — read-only, previews a migration that writes nothing | No production caller. Its opt-in preview has no surface to opt in from |
+| `pilot/pilotReport.ts` — the pilot renderer | No production caller. Compiled into `dist/` while its only consumer sits under `__tests__/`, which the build excludes, so in a container it is dead code by construction |
+
+**Why this is a row and not an omission.** An earlier draft of the Phase 7 log recorded "16 of 18"
+three times, as though sixteen IDs were evidenced. They are not: this table holds rows for four
+IDs — LC-01, LC-08, LC-09 and LC-14 — one met and three partial. The figure began as shorthand
+for *two IDs are carried open* and drifted into meaning its opposite. Phase 5 refused exactly this:
+*"Sixteen of the eighteen are not evidenced by Phase 5. That is the honest number."*
+
+**What Phase 7 adds to rows that already exist**, without changing their status:
+
+- **LC-01** — the enforcement cell above is amended from ✅ to ⚠️. One line in
+  `sbpOrchestrator.ts` would arm it; that line is Phase 8's P8-T4.
+- **LC-10 stays unwritten, and now has a measured reason.** `approvedByRole` is written to a
+  nullable column at `blueprintApproval.ts:238` and `git grep approved_by_role` outside tests
+  returns only the DDL, the model, the input type and that one assignment. **Nothing reads it.**
+  LC-10's "authorized human" limb is bound by *recording*, not by *enforcement*.
+- **LC-14** — unchanged. The new guard refuses foreign tenants in code, and the clause is about
+  production refusal. Writing it up on the strength of an uncalled module is precisely what this
+  table exists to prevent.
+
+---
+
 ## Rows owed by other phases
 
 LC-01 … LC-07, LC-10 … LC-13 and LC-15 … LC-18 are not written here. **LC-01 to LC-07 and LC-13
@@ -170,3 +204,9 @@ them when P5-T1.3's evidence failed five gradings. `phase5-handoff.md` records w
 have delivered and what ships regardless. An empty row is the correct state for work that has
 not happened, and filling one in from a plan rather than a measurement is how this table would
 become the thing it exists to prevent.
+
+**Amended 2026-10-17 by Phase 7.** Phase 7 writes no new row and says so above. It amends LC-01's
+enforcement cell from ✅ to ⚠️ on a measurement, and records the reason LC-10 cannot be
+written: no role is compared at approval time. A phase that built three modules and claims no
+acceptance ID is the expected outcome when what it built has no caller — the alternative is a
+table that credits code nothing runs.
