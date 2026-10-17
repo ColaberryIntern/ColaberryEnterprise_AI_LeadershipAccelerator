@@ -230,7 +230,7 @@ suite that skips silently is indistinguishable from one that passed.
 `decomposeService.ts:141` reads `if (opts.projectId)`, and **none of the three non-test
 `decomposeBuild` call sites passes one.** `sbpOrchestrator.ts` is the sharp case: it has
 `input.projectId` in scope at lines 195-202 and still calls `decomposeBuild({ brief, document,
-targets, correlationId })` at line 286 without it. The gate is armed and unreachable. This is
+targets, correlationId })` at line 286 without it. The gate is armed and unreachable. **And it must not be done yet.** 62 production student projects predate the registration hook and hold no lifecycle row, so arming the gate refuses **every legacy student build** on the next deploy — `storyAuthorization.ts` warns about exactly this in its own header, and the run's `deployment-log.md` records it. Arming it needs either an approved blueprint through the product first or the same `LIVE_SINCE` cutoff treatment the registration check already uses. “One line” describes the edit, not the change. This is
 Phase 8's P8-T4 and is already recorded in `phase8-handoff.md`; it is repeated here because the
 acceptance matrix's LC-01 row reads `✅ Authorization enforced` on the strength of that gate.
 

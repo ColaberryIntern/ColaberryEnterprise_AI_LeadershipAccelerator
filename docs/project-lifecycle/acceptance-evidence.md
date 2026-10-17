@@ -132,7 +132,7 @@ two of which are live government work.
 | Claim | How it is established |
 |---|---|
 | The creation-site set is **derived, not listed** | `__tests__/lifecycleRegistrationCoverage.test.ts` reads the source tree on every run and fails when a site appears that is not accounted for. It exists because a hand-written list *was* wrong within a week: the three "natural chokepoints" named in the discovery record covered 5 of 7 sites as enumerated, and the one they missed — `govDeliveryProject.ts` — landed three days after the inventory and was live in production creating ungoverned projects |
-| It reads files rather than shelling out to grep | Three `.ts` files under `backend/src` carry deliberate, load-bearing NUL bytes, including `factory/factoryApproval.ts`. Plain `grep -r` reports them binary and **skips the matching lines**, so a sweep using it reports completeness it does not have |
+| It reads files rather than shelling out to grep | **Two** `.ts` files under `backend/src` carry deliberate, load-bearing NUL bytes: `services/factory/factoryIds.ts` (2 bytes) and `routes/__tests__/trackedLinkRedirectRoutes.test.ts` (1). **Corrected 2026-10-17** from “three, including `factory/factoryApproval.ts`” — Phase 7 converted that file's literal byte to a `\x00` escape (3 escapes, 0 real bytes) and did not re-measure the sentence its own change invalidated. Census over 5,944 `.ts` files. **The reason this row exists is unchanged**: two files still carry real NULs. Plain `grep -r` reports them binary and **skips the matching lines**, so a sweep using it reports completeness it does not have |
 | Every creation path goes through a hook-carrying model | Enumerating sweep, 2026-10-14 (B5): **4 student sites** (`agentDomainProvisioner.ts:209`, `businessProcessSeedService.ts:135`, `projectService.ts:67`, all via `Project`) and **5 delivery sites** (`delivery/leadConversion.ts:175`, `factory/govDeliveryProject.ts:134`, three seed scripts, all via `DeliveryProject`). `ops/bcSyncService.ts:288` looked like a fifth student site and is not — `OpsBcProject` maps to `ops_bc_projects`, a different table |
 | The mechanisms a model hook **cannot** see are tripwired | Asserted across all of `backend/src`: no `bulkCreate` or `upsert` on either identity model (`bulkCreate` does not fire per-row `afterCreate`), no raw `INSERT` into either identity table, no `queryInterface.bulkInsert`, and no `hooks: false` anywhere — which would disable registration one site at a time |
 | Exactly one model owns each table | Both declare the hook. Two models over one table would make the hook a convention rather than a chokepoint |
@@ -180,6 +180,8 @@ for *two IDs are carried open* and drifted into meaning its opposite. Phase 5 re
 
 - **LC-01** — the enforcement cell above is amended from ✅ to ⚠️. One line in
   `sbpOrchestrator.ts` would arm it; that line is Phase 8's P8-T4.
+  **It must not be armed yet:** 62 legacy student projects hold no lifecycle row, so arming it
+  refuses every legacy student build until a cutoff or an approved blueprint exists.
 - **LC-10 stays unwritten, and now has a measured reason.** `approvedByRole` is written to a
   nullable column at `blueprintApproval.ts:238` and `git grep approved_by_role` outside tests
   returns only the DDL, the model, the input type and that one assignment. **Nothing reads it.**

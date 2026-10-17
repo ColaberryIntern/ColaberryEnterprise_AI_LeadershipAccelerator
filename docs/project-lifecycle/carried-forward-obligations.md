@@ -1347,7 +1347,7 @@ one; the tick is what a reader takes away.
 "⚠️ Armed, and unreachable" in that cell, with the measurement behind it: the gate is consulted
 at `decomposeService.ts:141` under `if (opts.projectId)`, and none of the three non-test
 `decomposeBuild` call sites passes one. `sbpOrchestrator.ts` holds `input.projectId` in scope at
-lines 195-202 and omits it at line 286. Arming it is one line, and it is Phase 8's P8-T4.
+lines 195-202 and omits it at line 286. Arming it is one line, and it is Phase 8's P8-T4. **And it must not be done yet.** 62 production student projects predate the registration hook and hold no lifecycle row, so arming the gate refuses **every legacy student build** on the next deploy — `storyAuthorization.ts` warns about exactly this in its own header, and the run's `deployment-log.md` records it. Arming it needs either an approved blueprint through the product first or the same `LIVE_SINCE` cutoff treatment the registration check already uses. “One line” describes the edit, not the change.
 
 **Phase 7 writes no acceptance row, and says so in the table.** Every enforcement mechanism it
 built has no caller, so crediting an LC ID to it would be the failure that table exists to
