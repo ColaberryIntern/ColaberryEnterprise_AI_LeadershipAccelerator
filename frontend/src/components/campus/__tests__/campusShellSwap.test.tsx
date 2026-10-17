@@ -104,10 +104,18 @@ describe('PortalShell nav swap', () => {
     expect(container.querySelector('nav.cm-nav')!.textContent).toContain('Game Room');
   });
 
+  it('campus active: the campus banner (C3) sits at the top of <main>, above the page', async () => {
+    await mount({ campus: true });
+    const main = container.querySelector('main.te-main')!;
+    expect(main.firstElementChild?.getAttribute('data-testid')).toBe('cm-banner');
+    expect(main.textContent).toContain('Page body');
+  });
+
   it('campus on but the learner chose the classic menu: classic nav', async () => {
     await mount({ campus: true, nav: 'classic' });
     expect(has('nav.te-nav')).toBe(true);
     expect(has('nav.cm-nav')).toBe(false);
+    expect(has('[data-testid="cm-banner"]')).toBe(false);
   });
 
   it('campus off: classic nav and tab bar', async () => {
@@ -115,6 +123,7 @@ describe('PortalShell nav swap', () => {
     expect(has('nav.te-nav')).toBe(true);
     expect(has('nav.te-tabbar')).toBe(true);
     expect(has('nav.cm-nav')).toBe(false);
+    expect(has('[data-testid="cm-banner"]')).toBe(false);
   });
 
   it('"Use classic menu" switches back at once and is remembered', async () => {

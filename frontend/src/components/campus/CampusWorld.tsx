@@ -23,9 +23,11 @@ export interface CampusWorldProps {
   /** C4: live presence by building id. `undefined` = presence not wired (no counts, no Who's here). */
   presence?: CampusPresence | null;
   presenceError?: boolean;
+  /** C3: zoom through the open building's door to a route, from that building's on-screen rect. */
+  onEnterRoom?: (route: string, from: DOMRect | null) => void;
 }
 
-export default function CampusWorld({ buildings, audience, hasFullAccess, workplaceNames, reduceMotion, initialTarget, onExit, onNavigate, presence, presenceError = false }: CampusWorldProps): React.ReactElement {
+export default function CampusWorld({ buildings, audience, hasFullAccess, workplaceNames, reduceMotion, initialTarget, onExit, onNavigate, presence, presenceError = false, onEnterRoom }: CampusWorldProps): React.ReactElement {
   const counts = useMemo(() => {
     const out: Record<string, number> = {};
     if (presence) for (const [id, a] of Object.entries(presence)) out[id] = a.count;
@@ -61,6 +63,7 @@ export default function CampusWorld({ buildings, audience, hasFullAccess, workpl
       <CampusWorldMap buildings={buildings} accessOf={accessOf} workplaceNames={workplaceNames} reduceMotion={reduceMotion}
         initialTarget={initialTarget} onArrive={setOpen} buildingRef={registerEl} counts={presenceError ? undefined : counts} />
       {b && <BuildingCard building={b} access={accessOf(b)} workplaceNames={workplaceNames} onClose={closeCard} onNavigate={onNavigate}
+        onEnterRoom={onEnterRoom ? (route) => onEnterRoom(route, els.current.get(b.id)?.getBoundingClientRect() ?? null) : undefined}
         whoIsHere={presence === undefined && !presenceError ? undefined
           : { presence: presence?.[b.id], error: presenceError, loading: presence === null && !presenceError }} />}
     </div>

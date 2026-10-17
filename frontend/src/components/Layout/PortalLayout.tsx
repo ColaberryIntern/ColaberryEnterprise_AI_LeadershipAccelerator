@@ -2,6 +2,7 @@ import React from 'react';
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useParticipantAuth } from '../../contexts/ParticipantAuthContext';
 import { MentorContextProvider } from '../../contexts/MentorContext';
+import CampusScopedChrome from '../campus/CampusScopedChrome';
 
 // Minimal portal chrome for the remaining legacy student pages (curriculum,
 // sessions, assignments, progress, lessons). The primary student experience is
@@ -73,6 +74,7 @@ function PortalLayout() {
       </nav>
 
       <main className="container py-4">
+        <CampusScopedChrome />
         <div key={location.pathname} className="ws-surface-arrival">
           <Outlet />
         </div>

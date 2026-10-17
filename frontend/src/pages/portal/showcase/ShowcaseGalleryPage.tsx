@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import portalApi from '../../../utils/portalApi';
+import CampusScopedChrome from '../../../components/campus/CampusScopedChrome';
 
 /**
  * "What We're Building" — the gallery of showcases a learner is allowed to see.
@@ -72,6 +73,7 @@ const ShowcaseGalleryPage: React.FC = () => {
 
   return (
     <main className="rt" style={{ maxWidth: 1100, margin: '0 auto', padding: '32px 16px 72px' }}>
+      <CampusScopedChrome />
       <h1 style={{ margin: '0 0 6px', fontSize: '1.6rem' }}>What we&rsquo;re building</h1>
       <p className="rt-muted" style={{ marginTop: 0 }}>
         Demos from across the programme. You see what each author chose to share with you.

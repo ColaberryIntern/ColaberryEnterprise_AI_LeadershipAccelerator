@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import CampusWorld from './CampusWorld';
+import CampusDoorTransition from './CampusDoorTransition';
 import './campus.css';
 import { useCampus } from './CampusContext';
 import { useCampusView } from './useCampusView';
@@ -24,7 +25,7 @@ function useReturnFocus(open: boolean): void {
 }
 
 export function CampusMapOverlay(): React.ReactElement | null {
-  const { layer, mapFocus, settings, closeLayer, openList, presence, presenceError } = useCampus();
+  const { layer, mapFocus, settings, closeLayer, openList, presence, presenceError, enterThroughDoor } = useCampus();
   const { audience, hasFullAccess, buildings } = useCampusView();
   const open = layer === 'map';
   const dialog = useRef<HTMLDivElement | null>(null);
@@ -43,7 +44,8 @@ export function CampusMapOverlay(): React.ReactElement | null {
       </div>
       <CampusWorld buildings={buildings} audience={audience} hasFullAccess={hasFullAccess} workplaceNames={settings.workplaceNames}
         reduceMotion={settings.reduceMotion} initialTarget={mapFocus} onExit={closeLayer} onNavigate={closeLayer}
-        presence={presence} presenceError={presenceError} />
+        presence={presence} presenceError={presenceError}
+        onEnterRoom={(route, from) => enterThroughDoor(route, from ? { left: from.left, top: from.top, width: from.width, height: from.height } : null)} />
     </div>
   );
 }
@@ -95,5 +97,5 @@ export function CampusListView(): React.ReactElement | null {
 }
 
 export default function CampusLayers(): React.ReactElement {
-  return <><CampusMapOverlay /><CampusListView /></>;
+  return <><CampusMapOverlay /><CampusListView /><CampusDoorTransition /></>;
 }

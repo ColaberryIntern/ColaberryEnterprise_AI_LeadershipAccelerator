@@ -23,6 +23,8 @@ export interface BuildingCardProps {
   onNavigate: () => void;
   /** C4: presence for this building. Absent = the section is not rendered at all. */
   whoIsHere?: WhoIsHereProps;
+  /** C3: zoom through this building's door to a route. Absent = a plain link (C2 behavior). */
+  onEnterRoom?: (route: string) => void;
 }
 
 const NOTICE: Record<Exclude<ExplorerAccess, 'open'>, string> = {
@@ -31,8 +33,13 @@ const NOTICE: Record<Exclude<ExplorerAccess, 'open'>, string> = {
   preview: 'You can watch a short preview. Enrolling opens everything here.',
 };
 
-export default function BuildingCard({ building: b, access, workplaceNames, onClose, onNavigate, whoIsHere }: BuildingCardProps): React.ReactElement {
+export default function BuildingCard({ building: b, access, workplaceNames, onClose, onNavigate, whoIsHere, onEnterRoom }: BuildingCardProps): React.ReactElement {
   const name = buildingName(b, workplaceNames);
+  // A plain click goes through the door; a modified click (new tab, etc.) stays a normal link.
+  const go = (route: string) => (e: React.MouseEvent) => {
+    if (onEnterRoom && e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey) { e.preventDefault(); onEnterRoom(route); return; }
+    onNavigate();
+  };
   const chip = accessLabel(access);
   const primaryPlanned = b.rooms.find((r) => r.route === b.primary.route)?.planned;
   const headingId = `cm-card-${b.id}`;
@@ -44,7 +51,7 @@ export default function BuildingCard({ building: b, access, workplaceNames, onCl
 
       {primaryPlanned
         ? <span className="cm-btn is-disabled" aria-disabled="true">{b.primary.label} - opening soon</span>
-        : <Link className="cm-btn" to={b.primary.route} onClick={onNavigate}>{b.primary.label}</Link>}
+        : <Link className="cm-btn" to={b.primary.route} onClick={go(b.primary.route)}>{b.primary.label}</Link>}
 
       {access !== 'open' && (
         <div className="cm-card-note">
@@ -61,7 +68,7 @@ export default function BuildingCard({ building: b, access, workplaceNames, onCl
               <li key={r.route}>
                 {r.planned
                   ? <span className="cm-room is-disabled" aria-disabled="true">{r.label} <small>opening soon</small></span>
-                  : <Link className="cm-room" to={r.route} onClick={onNavigate}>{r.label}</Link>}
+                  : <Link className="cm-room" to={r.route} onClick={go(r.route)}>{r.label}</Link>}
               </li>
             ))}
           </ul>
