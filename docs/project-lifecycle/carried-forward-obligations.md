@@ -1470,3 +1470,23 @@ unscoped catch-all and proves nothing about routing. The valid probe is `GET /he
 **200** with a live timestamp. A previous cycle had already established this, and the correction was
 not carried forward — which is the same failure this register exists to prevent, committed against
 this register's own subject matter.
+
+#### A defect in the reporting machinery itself
+
+**The auto-open hook the loop depends on does not exist.** `loop-architect/SKILL.md` states that
+`.claude/hooks/open-html.sh` "already auto-opens any `.html` file this loop writes — just writing
+the file is enough, no separate 'open browser' step." Measured 2026-10-17: **that file is not in
+the repository.** The milestone dashboards are the mechanism by which this loop reports progress
+*instead of* narrating it in chat, so if the hook has never existed, every dashboard this run
+wrote was written to a gitignored directory and opened by nobody — and the loop's design
+deliberately suppressed the chat narration those dashboards were meant to replace.
+
+Two things follow. **For this phase:** `dashboard-phase7-live.html` was written and NOT opened,
+because the DRI's standing instruction is to open the review surface and nothing else, and the PR
+was already opened. Its path is named in the handoff instead. **For the skill:** either the hook
+ships, or the skill stops promising it and says the dashboard path must be handed over explicitly.
+A reporting channel that silently goes nowhere is worse than no channel, because the sessions
+using it believe they have reported.
+
+This is also the fourth instance in this run of the same class: a mechanism assumed to work
+because a document said so, never checked against a case whose answer was known.
