@@ -80,6 +80,30 @@ const PATH_SECTION: Array<[string, SectionKey]> = [
   // AI Project Factory Command Center (Phase 3): a delivery contract is program-domain work, the
   // same section as /api/admin/projects. Mapped the day the route landed; an unmapped path is a latent 403.
   ['/api/admin/factory', 'program'],
+  // Agent Factory domain surfaces. UNMAPPED until 2026-10-16, which made them a latent 403 for
+  // every scoped role — the exact failure `mgmtSectionGate.unlistedPaths.test.ts` exists to
+  // catch, and it caught nobody here because these routes landed after that sweep.
+  //
+  // Found by walking all six interns through production with their own tokens for AF8.3: every
+  // one of them got 403 on the page AF2.1 built FOR THEM. Not inferable from the route file,
+  // which carries `requireSection('program')` and looks deliberate; the refusal happens earlier,
+  // in this table, because `pathToSection` returned null and a scoped role is deny-by-default.
+  //
+  // TWO ROWS, NOT ONE, and the split is the point:
+  //
+  //   -mine        is SELF-SCOPED. It resolves the caller's own identity from their verified
+  //                token and returns only the domains they own — an owner of nothing gets an
+  //                empty list. Its safety lives in the query, not in the gate, so gating it on
+  //                a section no intern holds protected nothing and blocked everyone. 'dashboard'
+  //                is the one section every mgmt role carries.
+  //
+  //   the rest     return ALL TEN domains regardless of caller, so they stay on 'program'.
+  //
+  // These are siblings separated by a hyphen, not a slash, and `matchesPrefix` requires an exact
+  // match or a '/' boundary — so the 'program' row below cannot swallow '-mine'.
+  ['/api/admin/agent-domains-mine', 'dashboard'],
+  ['/api/admin/agent-domains-provisioned', 'program'],
+  ['/api/admin/agent-domains', 'program'],
   ['/api/admin/cohorts', 'program'], ['/api/admin/curriculum', 'program'], ['/api/admin/components', 'program'],
   ['/api/admin/composer', 'program'], ['/api/admin/capabilities', 'program'], ['/api/admin/recipes', 'program'],
   ['/api/admin/feed-control', 'program'],
