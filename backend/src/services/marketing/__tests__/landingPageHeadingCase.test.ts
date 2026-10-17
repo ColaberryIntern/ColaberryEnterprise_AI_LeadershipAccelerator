@@ -114,7 +114,7 @@ describe('walking a whole generated page', () => {
   const content = {
     hero: { headline: 'Start Learning AI for $0 Today', subhead: 'A Short Line About It', cta: { label: 'Join The Class' } },
     sections: [
-      { heading: 'Learn AI Beyond Basic Prompts', items: [{ label: 'Week One Is Free' }] },
+      { heading: 'Learn AI Beyond Basic Prompts', items: [{ label: 'Week One Starts Monday' }] },
       { title: 'Ready to Go Further?' },
     ],
   };
@@ -132,7 +132,7 @@ describe('walking a whole generated page', () => {
     // body copy would be a bigger change than the one that was asked for.
     const out = normalizeHeadingCase(content);
     expect(out.hero.cta.label).toBe('Join The Class');
-    expect(out.sections[0].items[0].label).toBe('Week One Is Free');
+    expect(out.sections[0].items[0].label).toBe('Week One Starts Monday');
   });
 
   it('does not mutate the content it was given', () => {

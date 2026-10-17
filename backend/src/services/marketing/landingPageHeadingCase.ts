@@ -62,7 +62,7 @@ const COMMON_WORDS = new Set<string>([
   'job', 'jobs', 'role', 'roles', 'career', 'careers', 'course', 'courses', 'class', 'classes',
   'lesson', 'lessons', 'project', 'projects', 'program', 'programs', 'tool', 'tools', 'basic',
   'basics', 'advanced', 'real', 'practical', 'practically', 'simple', 'easy', 'hard', 'new',
-  'old', 'next', 'last', 'first', 'second', 'third', 'free', 'ready', 'further', 'longer',
+  'old', 'next', 'last', 'first', 'second', 'third', 'ready', 'further', 'longer',
   'better', 'best', 'good', 'great', 'right', 'wrong', 'own', 'full', 'whole', 'part', 'parts',
   'result', 'results', 'outcome', 'outcomes', 'proof', 'evidence', 'example', 'examples',
   'question', 'questions', 'answer', 'answers', 'prompt', 'prompts', 'idea', 'ideas', 'week',
@@ -97,6 +97,13 @@ const COMMON_WORDS = new Set<string>([
 // Pointedly NOT in the list, although they are common English: "Will", "May", "Mark", "Grace",
 // "Bill", "Summit", "Rose" and "Chase" are all also names, and lowercasing a person or a month
 // is the one failure this design exists to avoid.
+//
+// Also absent, for a different reason: the adjective meaning "at no cost". It is banned from
+// outbound copy on this surface under TWC 807.172(d) - the house phrasings are "$0 to start" and
+// "No card needed" - and `bannedWordOutboundCopy.test.ts` rejects a new source file that carries
+// it, which is how this version was caught. Leaving it out also behaves better: a heading that
+// uses it keeps its capital and stays conspicuous, rather than being tidied into something that
+// reads like approved copy.
 
 /** Sentence-ending punctuation, after which the next word is capitalised again. */
 const SENTENCE_END = /[.!?]["')\]]?$/;
