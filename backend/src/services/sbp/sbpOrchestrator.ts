@@ -51,7 +51,7 @@ import { scheduleForEnrollment } from './scheduleForEnrollment';
 import { hashPlan } from './planHash';
 import {
   saveIntake, getIntake, savePlanDraft, getPlan, publishPlan, firstPublishedAt, StoredPlan, BuildIntake,
-  listIntakesByStatus,
+  listIntakesByStatus, claimStaleGeneratingIntake,
 } from './planStore';
 import { getProvisionQueue } from './boundedQueue';
 import { setProjectNameIfEmpty } from './projectNaming';
@@ -189,13 +189,55 @@ async function readTruthRevision(projectId: string): Promise<number | null> {
   }
 }
 
+/**
+ * How long a `generating` intake may sit untouched before another start may take it over.
+ *
+ * MEASURED, not chosen. Production, 2026-10-17, over all 48 intakes that produced a plan, timed
+ * from the intake row to its first `build_plans` row:
+ *
+ *   p50 30.2s · p75 38.0s · p90 57.3s · 44 of 48 finished inside 60 SECONDS
+ *   slowest plausible single generation: 2,072s (34.5 min)
+ *
+ * (Two samples of ~5 days are in that set and are not single generations — they are plans first
+ * written long after their intake. They are excluded from the reasoning rather than from the
+ * data, and named here so the next reader does not rediscover them as outliers.)
+ *
+ * One hour is roughly 60x the p90 and comfortably past the slowest plausible run, so a healthy
+ * build is never taken over, while a dead one frees itself in an hour instead of waiting for a
+ * deploy. Lowering this is not free: the cost of being wrong is a second generation running
+ * beside a first, which costs money and can publish twice.
+ *
+ * The takeover is atomic regardless (`claimStaleGeneratingIntake`), so a wrong value here
+ * changes WHEN a takeover may happen, never whether two callers can both win one.
+ */
+export const STALE_GENERATION_SECONDS = 3600;
+
 export async function startBuild(input: StartBuildInput): Promise<{ projectId: string; correlationId: string; status: BuildStatus }> {
   const correlationId = randomUUID();
 
   const existing = await getIntake(input.projectId);
   if (existing?.status === 'generating') {
-    log('sbp_build_already_running', correlationId, 'success', { projectId: input.projectId });
-    return { projectId: input.projectId, correlationId, status: 'generating' };
+    // A build whose generation died WITHOUT the process dying used to sit here forever: the
+    // only thing that cleared `generating` was `recoverStrandedBuilds`, which runs once at
+    // boot. So the recovery path for one stuck student was a service restart, and every retry
+    // in between was refused. Fail-closed, and the right direction, but the student waits on a
+    // deploy for a failure that was never theirs.
+    //
+    // The claim is attempted rather than assumed: it only succeeds if the row is still
+    // `generating` AND has been idle past the threshold, and only one racing caller can win it.
+    // If it fails, the behaviour is exactly what it was before.
+    const claimed = await claimStaleGeneratingIntake(
+      input.projectId, correlationId, STALE_GENERATION_SECONDS,
+    );
+    if (!claimed) {
+      log('sbp_build_already_running', correlationId, 'success', { projectId: input.projectId });
+      return { projectId: input.projectId, correlationId, status: 'generating' };
+    }
+    log('sbp_build_stale_generation_reclaimed', correlationId, 'partial', {
+      projectId: input.projectId,
+      previous_correlation_id: existing.correlation_id ?? null,
+      idle_seconds_at_least: STALE_GENERATION_SECONDS,
+    });
   }
 
   await saveIntake({

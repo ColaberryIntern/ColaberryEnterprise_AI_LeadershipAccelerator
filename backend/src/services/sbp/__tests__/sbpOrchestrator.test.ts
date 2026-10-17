@@ -24,6 +24,8 @@ jest.mock('../decomposeService', () => ({ decomposeBuild: (...a: any[]) => mockD
 const mockEmitAlert = jest.fn().mockResolvedValue({});
 jest.mock('../../alertService', () => ({ emitAlert: (...a: any[]) => mockEmitAlert(...a) }));
 jest.mock('../planStore', () => ({
+  // Not stale: the guard consults this, gets false, and refuses exactly as before.
+  claimStaleGeneratingIntake: jest.fn(async () => false),
   saveIntake: (...a: any[]) => mockSaveIntake(...a),
   getIntake: (...a: any[]) => mockGetIntake(...a),
   savePlanDraft: (...a: any[]) => mockSaveDraft(...a),

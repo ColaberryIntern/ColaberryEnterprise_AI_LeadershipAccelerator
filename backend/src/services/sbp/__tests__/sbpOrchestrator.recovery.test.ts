@@ -15,8 +15,10 @@ const mockSaveTruth = jest.fn();
 const mockDecompose = jest.fn();
 const mockQueueRun = jest.fn();
 const mockNameProject = jest.fn();
+const mockClaimStale = jest.fn();
 
 jest.mock('../planStore', () => ({
+  claimStaleGeneratingIntake: (...a: any[]) => mockClaimStale(...a),
   saveIntake: (...a: any[]) => mockSaveIntake(...a),
   getIntake: (...a: any[]) => mockGetIntake(...a),
   listIntakesByStatus: (...a: any[]) => mockListByStatus(...a),
@@ -42,7 +44,7 @@ jest.mock('../../../config/database', () => ({ sequelize: { query: jest.fn(async
 // A failed generation emails an alert; the brief test below fails generation on purpose.
 jest.mock('../../alertService', () => ({ emitAlert: jest.fn(async () => undefined) }));
 
-import { recoverStrandedBuilds, startBuild } from '../sbpOrchestrator';
+import { recoverStrandedBuilds, startBuild, STALE_GENERATION_SECONDS } from '../sbpOrchestrator';
 
 const stranded = (over: Record<string, unknown> = {}) => ({
   project_id: 'proj-1',
@@ -61,6 +63,9 @@ beforeEach(() => {
   jest.clearAllMocks();
   jest.spyOn(console, 'log').mockImplementation(() => undefined);
   mockQueueRun.mockImplementation(async () => undefined);
+  // Default: the row is NOT stale, so nothing is reclaimed and the refusal below is the
+  // ordinary path. Only the stale test opts into a successful claim.
+  mockClaimStale.mockResolvedValue(false);
   mockSaveIntake.mockResolvedValue({ project_id: 'proj-1', status: 'generating' });
   mockSaveTruth.mockResolvedValue({ outcome: 'saved', revision: 1, items: [], unmapped: 0 });
 });
@@ -209,11 +214,65 @@ describe('case 1: the resume emits a visible, traceable retry reason', () => {
 });
 
 describe('the defect this closes', () => {
-  it('startBuild still refuses a generating row - which is why the sweep, not a retry, is the recovery', async () => {
+  it('startBuild still refuses a generating row that is NOT stale - the sweep, not a retry, is the recovery', async () => {
     mockGetIntake.mockResolvedValue(stranded());
     const res = await startBuild({ projectId: 'proj-1', enrollmentId: 'enr-1', idea: 'x'.repeat(40) });
     expect(res.status).toBe('generating');
     expect(mockQueueRun).not.toHaveBeenCalled();
     expect(mockSaveIntake).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * The second half of the same defect. The sweep recovers a row the RESTART stranded, because a
+ * restart is what runs it. A generation that dies while the process lives strands a row the
+ * sweep will not see again until the next boot — so the student's retry was refused until
+ * somebody deployed.
+ */
+describe('a generation that died without the process dying', () => {
+  it('RECLAIMS a generating row once it has been idle past the threshold, and generates', async () => {
+    mockGetIntake.mockResolvedValue(stranded());
+    mockClaimStale.mockResolvedValue(true);
+
+    const res = await startBuild({ projectId: 'proj-1', enrollmentId: 'enr-1', idea: 'x'.repeat(40) });
+
+    // `status` is NOT the discriminator: a reclaimed build is generating again, so both paths
+    // answer 'generating'. What separates them is whether the work actually restarted.
+    expect(mockSaveIntake).toHaveBeenCalled();
+    expect(mockQueueRun).toHaveBeenCalled();
+    // And it runs under a NEW correlation id, so the dead run's logs stay distinguishable from
+    // the live one's.
+    expect(res.correlationId).not.toBe('old-corr');
+  });
+
+  it('asks for the claim with the project and the MEASURED threshold, not an invented one', async () => {
+    mockGetIntake.mockResolvedValue(stranded());
+    mockClaimStale.mockResolvedValue(false);
+
+    await startBuild({ projectId: 'proj-1', enrollmentId: 'enr-1', idea: 'x'.repeat(40) });
+
+    expect(mockClaimStale).toHaveBeenCalledWith('proj-1', expect.any(String), STALE_GENERATION_SECONDS);
+    // An hour is far above the measured p90 of 57.3s. If this constant is ever lowered towards
+    // the time a real generation takes, a healthy build gets taken over mid-flight.
+    expect(STALE_GENERATION_SECONDS).toBeGreaterThanOrEqual(600);
+  });
+
+  it('does NOT reclaim when the claim is refused, so a live build is never taken over', async () => {
+    // The negative control. Without it, a change that reclaimed unconditionally would pass the
+    // test above and break every concurrent start.
+    mockGetIntake.mockResolvedValue(stranded());
+    mockClaimStale.mockResolvedValue(false);
+
+    const res = await startBuild({ projectId: 'proj-1', enrollmentId: 'enr-1', idea: 'x'.repeat(40) });
+
+    expect(res.status).toBe('generating');
+    expect(mockQueueRun).not.toHaveBeenCalled();
+    expect(mockSaveIntake).not.toHaveBeenCalled();
+  });
+
+  it('never consults the claim for a row that is not generating', async () => {
+    mockGetIntake.mockResolvedValue({ ...stranded(), status: 'failed' });
+    await startBuild({ projectId: 'proj-1', enrollmentId: 'enr-1', idea: 'x'.repeat(40) });
+    expect(mockClaimStale).not.toHaveBeenCalled();
   });
 });
