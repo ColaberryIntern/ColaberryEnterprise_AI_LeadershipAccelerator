@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Thursday, October 15, 2026 at 12:33 PM</div>
-    <div><span class="sid">CC-20261015-09c8</span><span class="count">4 changes</span></div>
+    <div class="meta">Generated Saturday, October 17, 2026 at 1:59 PM</div>
+    <div><span class="sid">CC-20261015-09c8</span><span class="count">6 changes</span></div>
   </header>
   <main>
     
@@ -125,6 +125,36 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">`node scripts/generateSessionChangelog.js CC-20261015-09c8` renders `docs/sessions/SESSION_CC-20261015-09c8.html` and exits 0, which it refuses to do for a log with no entries.</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">The first attempt appended to `PROGRESS.md`, which is wrong — that file was sealed at the 2026-08-23 cutover and the changelog generator says so in its own failure message. The append was reverted rather than left in place, and the CLAUDE.md copy in this session&#39;s context is the stale one that still describes the shared file. Worth knowing for the next session that inherits the same stale copy: the live gate is `docs/sessions/CC-&lt;id&gt;.md`, one file per session, and `PROGRESS.md` is read-only history.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">05</span>
+          <h2>**Test mode was left on in production and redirected every outbound email to one mailbox for 29 hours**</h2>
+          <span class="badge">2026-10-17</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Production state only. `system_settings.test_mode_enabled` set back to `false` at **11:57 AM CDT**, and a fresh portal access link issued to each of the nine people it had stranded. Reported by Firas Baidhani at 11:57 PM Friday: &quot;when I enter my email, the system doesn&#39;t send the secure access link to my inbox.&quot; Root cause is `resolveEmailRecipient` in `emailService.ts`, which under test mode does not suppress mail but REWRITES the recipient to `test_email` (`ali@colaberry.com`) and relabels the subject `[TEST -&gt; their@address]`. The flag was switched on at **6:58 AM CDT on 2026-10-16** and never switched back.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">Measured, not inferred. Mandrill reports **579 redirected messages**, of which **492** were Community Digests and **35** were portal access links belonging to **10 distinct people**; the intended address is recoverable because the redirect writes it into the subject. The fix was verified through `getTestOverrides()`, the function `resolveTestRedirect` actually calls, which now returns `{enabled:false}`; re-running the real login path shows the `TEST MODE: redirecting` line gone and the link addressed to the intended recipient. All nine people were then re-sent a link one command at a time and **8 of 9 verified at Mandrill in a single pass** as `state: sent`, not redirected, no bounce or reject; the ninth is Firas, verified separately an hour earlier at **11:58 AM CDT** and outside that pass&#39;s 30-minute window.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">THE DIAGNOSIS TOOK FOUR WRONG SUSPECTS FIRST, and the order matters because each was plausible and each was cheap to eliminate: the kill switch from two days earlier (off), a missing SMTP transporter (the Mandrill key is present, so it is not null), the anti-enumeration branch that silently sends nothing for an unknown address (Firas has an active, portal-enabled row), and an exception inside the send (no error anywhere). What settled it was giving up on inference and RUNNING the real path in the container against a `.test` fixture address, which printed `TEST MODE: redirecting` in one line. THE LOGS WERE GONE: a deploy recreated the backend container at 11:45 AM, mid-investigation, so the evidence from the 11:13 AM mint no longer existed. NO AUDIT TRAIL EXISTS for who set the flag. `audit_logs` holds nothing in that window, which is itself notable because `setSetting` writes a `setting_changed` event, so the flag was probably set by something other than `setSetting`. One clue, not a conclusion: `aleem@colaberry.com` requested a portal link **21 seconds after** the flag flipped, which looks like someone testing a login. THIS WAS NOT THE FIRST EPISODE. Redirected mail exists from **14 October**, two days before this flag&#39;s timestamp, so a previous occurrence was switched back off. And the figure stated to the DRI mid-investigation was 53 hours; the correct figure is **29**, the error being that 53 was measured from the earliest redirected message rather than from the flag itself.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">06</span>
+          <h2>**Test mode now expires by itself, and no email carrying a login can be redirected at all**</h2>
+          <span class="badge">2026-10-17</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`backend/src/services/email/testModeWindow.ts` (NEW), `getSettingUpdatedAt()` added to `settingsService.ts`, and `emailService.ts` wired to both. Two independent protections, because they fail differently. **Expiry:** `resolveTestRedirect` now reads the `test_mode_enabled` row&#39;s `updated_at` and ignores the flag once it is older than `TEST_MODE_MAX_AGE_HOURS` (4), logging `test_mode.expired_ignored` with the age. The age comes from the settings row `setSetting` already maintains, so there is no second setting to keep in step. **Credential exemption:** `resolveEmailRecipient` takes `{ neverRedirect: true }`, and the four sends that embed a sign-in token now pass it: `sendPortalMagicLink`, `sendTrainingWelcome` (its `portalLink` is built as `/portal/verify?token=` in `enrollmentService.ts:427`), `sendOrgInvite`, and `sendDeliveryClientMagicLink`. A redirected login is not just undelivered, it is somebody else&#39;s working credential in a third party&#39;s inbox.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`npx jest --config jest.ci.config.ts src/services/email/__tests__` reports **92 passed, 16 skipped, 108 total** across 7 suites. Two mutations each drive it RED and each targets a different failure: disabling the expiry check fails **3** tests, and un-exempting the portal magic link fails **2**, with `emailService.ts` restored byte-identically after both, sha256 `3773ec68be7c2838` before and after each. The expiry test uses the REAL incident timestamps, so widening the window past the point that would have allowed it fails the suite by name. Backend `tsc --noEmit` exits **0** under the pinned TypeScript 5.9.3.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">THE PURE TEST WOULD NOT HAVE BEEN ENOUGH, and that is the lesson carried from the `auditMiddleware` fix two days earlier: a test of `isTestModeExpired` alone stays green while the call to it is deleted, which is exactly how the original defect survived. So the expiry is also tested through `resolveEmailRecipient` with `settingsService` mocked, which is what mutation 1 actually kills. A SOURCE-LEVEL TEST GUARDS THE FIFTH SEND: the way the credential exemption goes wrong is not someone removing it, it is someone adding a new token-bearing email later and not knowing the rule exists, so one test reads `emailService.ts` and asserts the exemption count matches the known list. WHAT THIS DOES NOT DO: it does not stop test mode being switched on by something that bypasses `setSetting` and therefore writes no audit row, and it does not alert anyone while test mode is live. The alerting gap is the one that matters, since the system-health and cron-failure alerts that should have reported this were themselves redirected into the same mailbox, exactly as the kill switch suppressed its own alarms two days earlier.</span></div>
           
         </div>
       </article>
