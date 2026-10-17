@@ -1,5 +1,9 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { fetchCampusFlags } from './campusApi';
+import type { CampusPresence } from './campusApi';
+import { useCampusPresencePoll } from './useCampusPresencePoll';
+import { useParticipantAuth } from '../../contexts/ParticipantAuthContext';
+import type { BuildingId } from './campusMap';
 import { CampusSettings, readCampusSettings, writeCampusSettings } from './campusSettings';
 
 /**
@@ -28,12 +32,26 @@ export interface CampusState {
   /** enabled && settings.nav === 'campus'. */
   active: boolean;
   updateSettings: (patch: Partial<CampusSettings>) => void;
+  /** Which full-screen campus layer is open (C2): the walkable map, the list view, or none. */
+  layer: CampusLayer;
+  /** Building the map should walk to when it opens, if any. */
+  mapFocus: BuildingId | null;
+  openMap: (focus?: BuildingId) => void;
+  openList: () => void;
+  closeLayer: () => void;
+  /** C4: who is in each building (null until the first read), and whether the last read failed. */
+  presence: CampusPresence | null;
+  presenceError: boolean;
 }
 
+export type CampusLayer = 'none' | 'map' | 'list';
+
+const noop = () => { /* no provider */ };
 const OFF: CampusState = {
   enabled: false, ready: false, active: false,
   settings: { nav: 'campus', workplaceNames: false, reduceMotion: false },
-  updateSettings: () => { /* no provider: nothing to update */ },
+  updateSettings: noop, layer: 'none', mapFocus: null, openMap: noop, openList: noop, closeLayer: noop,
+  presence: null, presenceError: false,
 };
 
 const Ctx = createContext<CampusState>(OFF);
@@ -43,19 +61,33 @@ export function CampusProvider({ children }: { children?: React.ReactNode }): Re
   const [ready, setReady] = useState(false);
   const [settings, setSettings] = useState<CampusSettings>(() => readCampusSettings());
 
+  // Signed out (login, signup, verify, handoff, class-checkin all share this layout): no request at
+  // all, campus off. Re-runs when sign-in state changes, so signing in without a reload still reads
+  // the flag, and signing out turns the campus off.
+  const { isAuthenticated } = useParticipantAuth();
   useEffect(() => {
+    if (!isAuthenticated) { setEnabled(false); setReady(true); return undefined; }
     let alive = true;
     fetchCampusFlags().then((f) => { if (alive) { setEnabled(f.campus); setReady(true); } });
     return () => { alive = false; };
-  }, []);
+  }, [isAuthenticated]);
 
   const updateSettings = useCallback((patch: Partial<CampusSettings>) => {
     setSettings((prev) => { const next = { ...prev, ...patch }; writeCampusSettings(next); return next; });
   }, []);
 
+  const [layer, setLayer] = useState<CampusLayer>('none');
+  const [mapFocus, setMapFocus] = useState<BuildingId | null>(null);
+  const openMap = useCallback((focus?: BuildingId) => { setMapFocus(focus ?? null); setLayer('map'); }, []);
+  const openList = useCallback(() => setLayer('list'), []);
+  const closeLayer = useCallback(() => { setLayer('none'); setMapFocus(null); }, []);
+
+  const active = enabled && settings.nav === 'campus';
+  const { presence, presenceError } = useCampusPresencePoll(active);
+
   const value = useMemo<CampusState>(
-    () => ({ enabled, ready, settings, active: enabled && settings.nav === 'campus', updateSettings }),
-    [enabled, ready, settings, updateSettings],
+    () => ({ enabled, ready, settings, active, updateSettings, layer, mapFocus, openMap, openList, closeLayer, presence, presenceError }),
+    [enabled, ready, settings, active, updateSettings, layer, mapFocus, openMap, openList, closeLayer, presence, presenceError],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
