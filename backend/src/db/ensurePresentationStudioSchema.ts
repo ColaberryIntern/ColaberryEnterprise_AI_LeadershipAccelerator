@@ -64,6 +64,7 @@ export const PRESENTATION_STUDIO_TABLES = [
   'presentation_recordings',
   'presentation_feedback',
   'presentation_showcases',
+  'presentation_recording_views',
 ] as const;
 
 /**
@@ -109,6 +110,37 @@ export const PRESENTATION_STUDIO_STATEMENTS: string[] = [
      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
    )`,
+  // ---------------------------------------------------------------------------
+  // WHO WATCHED A DEMO - distinct people, not requests.
+  //
+  // A video player issues MANY range requests for one viewing: a HEAD-ish probe, a
+  // tail read for the moov atom, then a request per seek. A counter incremented per
+  // request would report hundreds of "views" for one watch and be worse than no
+  // number at all, because a learner would believe it.
+  //
+  // So a row per (recording, viewer) and the count is the row count. Naturally
+  // idempotent, immune to how chatty the player is, and it answers the question a
+  // student actually asks - how many PEOPLE have seen this.
+  //
+  // `last_viewed_at` moves on each watch so a rewatch is visible without inflating
+  // the count.
+  `CREATE TABLE IF NOT EXISTS presentation_recording_views (
+     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+     recording_id UUID NOT NULL,
+     viewer_enrollment_id UUID NOT NULL,
+     first_viewed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+     last_viewed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+   )`,
+  `ALTER TABLE presentation_recording_views ADD COLUMN IF NOT EXISTS recording_id UUID`,
+  `ALTER TABLE presentation_recording_views ADD COLUMN IF NOT EXISTS viewer_enrollment_id UUID`,
+  `ALTER TABLE presentation_recording_views ADD COLUMN IF NOT EXISTS first_viewed_at TIMESTAMPTZ DEFAULT NOW()`,
+  `ALTER TABLE presentation_recording_views ADD COLUMN IF NOT EXISTS last_viewed_at TIMESTAMPTZ DEFAULT NOW()`,
+  // The dedupe key, and what makes the count mean "people".
+  `CREATE UNIQUE INDEX IF NOT EXISTS presentation_recording_views_one_per_viewer
+     ON presentation_recording_views (recording_id, viewer_enrollment_id)`,
+  `CREATE INDEX IF NOT EXISTS presentation_recording_views_recording
+     ON presentation_recording_views (recording_id)`,
+
   // ---------------------------------------------------------------------------
   // ONE PORTFOLIO ARTIFACT PER HANDED-IN RECORDING.
   //

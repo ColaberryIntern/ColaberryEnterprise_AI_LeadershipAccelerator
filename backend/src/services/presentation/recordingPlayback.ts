@@ -37,6 +37,11 @@ export interface PlayableRecording {
   mimeType: string;
   /** For the download filename; never anything the learner supplied. */
   downloadName: string;
+  /**
+   * Whose rehearsal this is. Carried so the caller can tell an owner rewatching
+   * themselves from somebody else watching — only the latter is a view.
+   */
+  ownerEnrollmentId: string | null;
 }
 
 export type PlaybackResolution =
@@ -110,6 +115,8 @@ export async function resolvePlayableRecording(
       sizeBytes: stat.size,
       mimeType: row.mime_type ? String(row.mime_type) : 'video/mp4',
       downloadName: `${storyId}-rehearsal${path.extname(safeName) || '.mp4'}`,
+      // This path only ever resolves for the owner, so the viewer is the owner.
+      ownerEnrollmentId: enrollmentId,
     },
   };
 }
@@ -229,6 +236,7 @@ export async function resolveViewableRecording(
       sizeBytes: stat.size,
       mimeType: row.mime_type ? String(row.mime_type) : 'video/mp4',
       downloadName: `${storyId}-demo${path.extname(safeName) || '.mp4'}`,
+      ownerEnrollmentId: String(row.owner_enrollment_id),
     },
   };
 }

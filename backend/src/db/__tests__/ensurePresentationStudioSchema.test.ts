@@ -62,7 +62,7 @@ beforeEach(() => {
 });
 
 describe('ensurePresentationStudioSchema — statement contract', () => {
-  it('happy path: issues a CREATE TABLE IF NOT EXISTS for all 5 Studio tables', async () => {
+  it('happy path: issues a CREATE TABLE IF NOT EXISTS for all 6 Studio tables', async () => {
     await ensurePresentationStudioSchema();
     const issued = mockQuery.mock.calls.map((c) => flat(String(c[0])));
     for (const table of PRESENTATION_STUDIO_TABLES) {
@@ -70,7 +70,11 @@ describe('ensurePresentationStudioSchema — statement contract', () => {
         issued.some((s) => s.includes(`CREATE TABLE IF NOT EXISTS ${table} (`)),
       ).toBe(true);
     }
-    expect(PRESENTATION_STUDIO_TABLES).toHaveLength(5);
+    // PINNED, not a lower bound: this assertion's job is to notice a table that
+    // STOPS being created, which `toBeGreaterThan` would miss entirely. Raised from
+    // 5 to 6 on 2026-10-16 for `presentation_recording_views` — deliberately, and
+    // with the matching model added rather than by relaxing the parity rule.
+    expect(PRESENTATION_STUDIO_TABLES).toHaveLength(6);
   });
 
   it('issues every statement in the array, in order', async () => {
@@ -88,7 +92,7 @@ describe('ensurePresentationStudioSchema — statement contract', () => {
     // Positive control: the parser must actually have found something. A regex that
     // silently stopped matching would make this whole test vacuously green — which is
     // exactly the failure mode it exists to prevent.
-    expect(created.size).toBe(5);
+    expect(created.size).toBe(6);
     const totalCreated = [...created.values()].reduce((n, c) => n + c.length, 0);
     expect(totalCreated).toBeGreaterThan(50);
     expect(altered.size).toBeGreaterThan(50);

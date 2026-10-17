@@ -57,7 +57,25 @@ export interface SessionView {
    * A split recording is genuinely several parts; offering only the first would
    * silently hide the half of a rehearsal that came after the break.
    */
-  recordings: Array<{ id: string; partNo: number; playbackUrl: string }>;
+  recordings: Array<PracticeTake>;
+}
+
+/**
+ * One rehearsal take as the Practice panel shows it.
+ *
+ * `published` exists so the panel can stop calling a take private once it is not.
+ * Step 4 labels every take "Private — only you can see this", which is true until the
+ * learner publishes it in Step 5 and then becomes the most misleading sentence on the
+ * page: a student reading it believes a demo their cohort is already watching is for
+ * their eyes only. It is an ATTEMPT-level fact, because a showcase is keyed on the
+ * attempt rather than on one take, and it is reported at that granularity rather than
+ * guessed at a finer one.
+ */
+export interface PracticeTake {
+  id: string;
+  partNo: number;
+  playbackUrl: string;
+  published: boolean;
 }
 
 export type SessionResult =
@@ -73,7 +91,7 @@ export function toSessionView(
   attempt: PresentationAttempt,
   booking: RoomBooking | null,
   /** Empty for every caller that has not looked them up; never fabricated. */
-  recordings: Array<{ id: string; partNo: number; playbackUrl: string }> = [],
+  recordings: Array<PracticeTake> = [],
 ): SessionView {
   return {
     attemptId: String(attempt.id),
@@ -105,7 +123,7 @@ export async function recordingsForAttempt(
   attemptId: string,
   /** Issuing a playback ticket needs the viewer and the path it will be fetched at. */
   ticketFor?: { enrollmentId: string; projectId: string; storyId: string },
-): Promise<Array<{ id: string; partNo: number; playbackUrl: string }>> {
+): Promise<Array<PracticeTake>> {
   // THE MODEL, NOT RAW SQL. Everything else in this module reads through models, and
   // a raw query here opened a real connection in a suite that mocks only the models —
   // which is both a broken test and the wrong shape for this file.
@@ -115,6 +133,24 @@ export async function recordingsForAttempt(
     order: [['part_no', 'ASC'], ['created_at', 'ASC']],
   });
   const { createRecordingTicket } = await import('./recordingTicket');
+
+  // IS THIS ATTEMPT PUBLISHED? One question, asked once, so the panel never labels a
+  // take "private" while the cohort is watching it. A live showcase is one that was
+  // published and not taken back down; `withdrawn_at` matters as much as
+  // `published_at`, because a withdrawn demo really is private again.
+  //
+  // THROUGH THE MODEL, for the reason stated above: the first version of this used
+  // `sequelize.query` and opened a real Postgres connection in suites that mock only
+  // the models, taking 4 tests red with `SequelizeConnectionRefusedError`. The
+  // warning was already written here and I added the raw query anyway.
+  const { Op } = await import('sequelize');
+  const { default: PresentationShowcase } = await import('../../models/PresentationShowcase');
+  const live = await PresentationShowcase.findOne({
+    where: { attempt_id: attemptId, published_at: { [Op.ne]: null }, withdrawn_at: null },
+    attributes: ['id'],
+  });
+  const published = Boolean(live);
+
   return (rows || []).map((r: any) => {
     const id = String(r.id);
     // The URL carries its own authority, because a <video> element cannot send a
@@ -127,6 +163,7 @@ export async function recordingsForAttempt(
       id,
       partNo: Number(r.part_no) || 1,
       playbackUrl: base ? `${base}?t=${encodeURIComponent(ticket)}` : '',
+      published,
     };
   });
 }

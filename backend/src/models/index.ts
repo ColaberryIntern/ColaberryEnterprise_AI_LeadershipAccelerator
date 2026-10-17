@@ -362,6 +362,7 @@ import RoomBookingAttendee from './RoomBookingAttendee';
 import PresentationAssignment from './PresentationAssignment';
 import PresentationAttempt from './PresentationAttempt';
 import PresentationRecording from './PresentationRecording';
+import PresentationRecordingView from './PresentationRecordingView';
 import PresentationFeedback from './PresentationFeedback';
 import PresentationShowcase from './PresentationShowcase';
 import RoomMessage from './RoomMessage';
@@ -1568,6 +1569,7 @@ export {
   PresentationAssignment,
   PresentationAttempt,
   PresentationRecording,
+  PresentationRecordingView,
   PresentationFeedback,
   PresentationShowcase,
   RoomMessage,

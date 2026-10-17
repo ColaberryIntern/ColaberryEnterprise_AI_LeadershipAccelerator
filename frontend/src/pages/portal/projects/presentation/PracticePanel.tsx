@@ -151,6 +151,25 @@ function BookedSlot(
           is what the numbering below avoids. */}
       {!demo && (session.recordings || []).filter((t) => t.playbackUrl).map((take, i, all) => (
         <div key={take.id} className="ps-card" data-testid={`ps-practice-player-${i + 1}`} style={{ marginTop: 12 }}>
+          {/* SAID ON THE VIDEO ITSELF, not only in the notice before the room.
+              A learner looking at a recording of their own face needs to know who
+              else can see it at the moment they are looking at it — not to remember
+              a sentence from a panel they passed through earlier.
+
+              CONDITIONAL, BECAUSE "PRIVATE" STOPS BEING TRUE. Once this take is
+              published in Step 5 the cohort can watch it, and a lock icon beside it
+              would be the most misleading thing on the page — not a stale label but
+              an active assurance of privacy that no longer holds. The flag comes from
+              the server, where the showcase actually lives. */}
+          {take.published ? (
+            <p className="ps-privacy" data-testid="ps-practice-published" style={{ margin: '0 0 6px', fontWeight: 600 }}>
+              <span aria-hidden="true">🌐 </span>Published — your cohort can watch this. Take it down in Present.
+            </p>
+          ) : (
+            <p className="ps-privacy" data-testid="ps-practice-private" style={{ margin: '0 0 6px', fontWeight: 600 }}>
+              <span aria-hidden="true">🔒 </span>Private — only you can see this
+            </p>
+          )}
           {all.length > 1 && (
             <p className="ps-note ps-note--soft" style={{ margin: '0 0 6px' }}>
               Take {i + 1} of {all.length}
