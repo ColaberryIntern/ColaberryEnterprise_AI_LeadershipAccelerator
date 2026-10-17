@@ -291,7 +291,15 @@ export function previewLegacyMigration(
   // Split before proposing anything: a project with no justifiable stage cannot be given a
   // lifecycle row, because `project_lifecycle_states.tenant_id` is NOT NULL and the registration
   // hook has already declined to write it.
-  const migratable = assessments.filter((a) => a.highestJustifiableStage !== null);
+  // A TYPE PREDICATE, not a plain filter, so the narrowing below is the COMPILER's
+  // guarantee rather than a cast trusting this line. The first version used a plain filter
+  // plus `as LifecycleStage` three lines down -- the same "redundant in the dangerous
+  // direction" hazard that was accepted and removed for `as LifecycleEvidence` in the very
+  // same commit. Change the filter now and the compiler objects; with the cast it would not.
+  const migratable = assessments.filter(
+    (a): a is LegacyProjectAssessment & { highestJustifiableStage: LifecycleStage } =>
+      a.highestJustifiableStage !== null,
+  );
   const cannotMigrate = assessments
     .filter((a) => a.highestJustifiableStage === null)
     .map((a) => ({ projectId: a.projectId, why: a.stoppedBy }));
@@ -301,7 +309,7 @@ export function previewLegacyMigration(
     proposals: migratable.map((a) => ({
       projectId: a.projectId,
       create: 'lifecycle_row' as const,
-      stage: a.highestJustifiableStage as LifecycleStage,
+      stage: a.highestJustifiableStage,
       stoppedBy: a.stoppedBy,
     })),
     cannotMigrate,
