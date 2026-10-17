@@ -268,8 +268,59 @@ export const REQUIRED_INDEXES = [
  * met. Exported so a test can prove the assertion actually fires against an
  * un-migrated database — an assertion nobody has seen fail is not an assertion.
  */
-export async function assertSbpSchema(): Promise<{ ok: boolean; missing: string[] }> {
+/**
+ * The gaps a catalog reading implies. Pure, so it is testable without a database — the I/O
+ * shell below only reads the catalog and hands the answers here.
+ *
+ * WHY THIS IS SEPARATE, and why an absent table now reports itself.
+ *
+ * `REQUIRED_COLUMNS` names two tables `REQUIRED_TABLES` does not: `student_tasks` and
+ * `github_connections`. Those belong to other schema modules, so this file asserts their
+ * COLUMNS without claiming to own their existence. When such a table is absent ENTIRELY, the
+ * old loop emitted one `column:` line per required column and never said the table was gone —
+ * six symptoms for `student_tasks`, one for `github_connections`, and no cause.
+ *
+ * On a pristine database that is the whole output, and it sends the reader hunting a skipped
+ * ALTER that never had a table to run against. Measured 2026-10-17: there is no
+ * `CREATE TABLE IF NOT EXISTS github_connections` anywhere in `backend/src`, and none for
+ * `projects` either — `ensureCaseStudySchema.ts:24` already says so. These `ensure*` modules
+ * EVOLVE tables; they do not bootstrap them. The bootstrap is `sequelize.sync` behind
+ * `DB_BOOT_SYNC`, off by default.
+ *
+ * So this cannot create the table, and pretending otherwise would add a CREATE whose foreign
+ * keys name two parents that do not exist on a pristine database either. What it can do is
+ * name the cause once instead of its symptoms many times.
+ */
+export function catalogGaps(found: {
+  tables: ReadonlyArray<string>;
+  indexes: ReadonlyArray<string>;
+  /** "table.column" for every column actually present on the tables that were queried. */
+  columns: ReadonlyArray<string>;
+  /** Of the tables `REQUIRED_COLUMNS` names, the ones that EXIST. */
+  columnTables: ReadonlyArray<string>;
+}): string[] {
   const missing: string[] = [];
+  for (const t of REQUIRED_TABLES) if (!found.tables.includes(t)) missing.push(`table:${t}`);
+  for (const i of REQUIRED_INDEXES) if (!found.indexes.includes(i)) missing.push(`index:${i}`);
+
+  const present = new Set(found.columns);
+  const absentTables = new Set<string>();
+  for (const c of REQUIRED_COLUMNS) {
+    const table = c.split('.')[0];
+    // An absent table is reported ONCE, below. Listing its columns as well would restate the
+    // same fact six times and bury the one line that explains it.
+    if (!found.columnTables.includes(table)) { absentTables.add(table); continue; }
+    if (!present.has(c)) missing.push(`column:${c}`);
+  }
+  for (const t of [...absentTables].sort()) {
+    // Not double-reported: anything in REQUIRED_TABLES already produced its own line.
+    if (!(REQUIRED_TABLES as ReadonlyArray<string>).includes(t)) missing.push(`table:${t}`);
+  }
+  return missing;
+}
+
+export async function assertSbpSchema(): Promise<{ ok: boolean; missing: string[] }> {
+  let missing: string[] = [];
   try {
     const [rows]: any = await sequelize.query(
       `SELECT
@@ -281,8 +332,6 @@ export async function assertSbpSchema(): Promise<{ ok: boolean; missing: string[
     );
     const foundTables: string[] = rows?.[0]?.tables ?? [];
     const foundIndexes: string[] = rows?.[0]?.indexes ?? [];
-    for (const t of REQUIRED_TABLES) if (!foundTables.includes(t)) missing.push(`table:${t}`);
-    for (const i of REQUIRED_INDEXES) if (!foundIndexes.includes(i)) missing.push(`index:${i}`);
 
     // Columns added after a table's first release need checking separately:
     // CREATE TABLE IF NOT EXISTS is a no-op on an existing table, so on any
@@ -298,8 +347,19 @@ export async function assertSbpSchema(): Promise<{ ok: boolean; missing: string[
       // That happened with github_connections.webhook_secret.
       { bind: { tables: [...new Set(REQUIRED_COLUMNS.map((c) => c.split('.')[0]))] } },
     );
-    const found = new Set((colRows ?? []).map((r: any) => `${r.table_name}.${r.column_name}`));
-    for (const c of REQUIRED_COLUMNS) if (!found.has(c)) missing.push(`column:${c}`);
+    // A table that EXISTS returns at least one row here, because the query asks for all of its
+    // columns rather than only the required ones. So "no rows for this table" means the table
+    // is absent, and that distinction needs no extra round trip.
+    const columns: string[] = (colRows ?? []).map((r: any) => `${r.table_name}.${r.column_name}`);
+    // `Set<string>` explicitly: `colRows` is `any`, so an inferred `new Set(...)` lands on
+    // `Set<unknown>` and the spread is `unknown[]`. The backend typecheck catches it.
+    const columnTables: string[] = [
+      ...new Set<string>((colRows ?? []).map((r: any) => String(r.table_name))),
+    ];
+
+    missing = catalogGaps({
+      tables: foundTables, indexes: foundIndexes, columns, columnTables,
+    });
   } catch (err: any) {
     console.warn('[DB] sbp schema post-check could not run:', err?.message);
     return { ok: false, missing: ['post-check-failed'] };
