@@ -175,6 +175,12 @@ const OFF_EXPLORER_FILES: Record<string, string> = {
     + "enrollment_type = 'explorer' to SELECT the population. It writes one column, "
     + 'explorer_entered_at, and never assigns enrollment_type at all, so it cannot move '
     + 'anybody off explorer. Pinned here so the newcomer is accounted for rather than ignored.',
+  'scripts/srsDistributionReport.ts':
+    'SHAPE MATCH, NOT A WRITE AT ALL (M25). It matches because it SELECTs its population with '
+    + "enrollment_type = 'explorer'. It is a read-only report: it reads through the normal "
+    + 'Person 360 reader, computes the Sales Readiness Score in memory, prints a distribution '
+    + 'and persists nothing. No INSERT, UPDATE or DELETE appears in it, and it assigns '
+    + 'enrollment_type nowhere, so it cannot move anybody off explorer.',
 };
 
 describe('the scanners themselves can fail', () => {
