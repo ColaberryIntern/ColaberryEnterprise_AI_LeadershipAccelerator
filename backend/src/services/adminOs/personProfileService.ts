@@ -112,8 +112,13 @@ export interface PersonProfile {
   learning?: LearningPanel[];
   billing?: BillingPanel[];
   engagement?: EngagementPanel | null;
-  appointments?: AppointmentRow[];
-  automation?: AutomationRow[];
+  /**
+   * M24.3 - null means "there was no lead key to look with", which is not the same fact as the
+   * empty array's "nothing is booked". An appointment request is a commitment signal, so a score
+   * reading one as the other would be reading absence as evidence of nothing happening.
+   */
+  appointments?: AppointmentRow[] | null;
+  automation?: AutomationRow[] | null;
   /** Added 2026-09-09: what they did, built, pay, and who they belong to. */
   classActivity?: ClassActivityPanel | null;
   curriculum?: CurriculumPanel | null;
@@ -343,10 +348,23 @@ export async function getPersonProfile(query: ProfileQuery): Promise<PersonProfi
 
   // ── Engagement ────────────────────────────────────────────────────────────
   if (may('engagement', query.sections)) {
+    // M24.1 - `visitors` is what separates "never tracked" from "tracked, never visited".
+    //
+    // This is an aggregate with no GROUP BY, so it returns exactly ONE row even when its joins
+    // match nothing. The `eng[0]` guard below therefore could never fire, and a person with no
+    // visitor record received {sessions: 0, firstSeen: null, sites: []} - byte-identical to a
+    // tracked person who never opened a page. The Sales Readiness Score would have read both as
+    // the same evidence (M24 contract, Part 6.4 defect a).
+    //
+    // Counting the visitor rows inside the same aggregate keeps the existing semantics (totals
+    // ACROSS all of a person's visitor records, which a GROUP BY would have split) while making
+    // absence detectable. A real zero still reports as zero.
     const eng = await sequelize.query<{
-      sessions: string; firstSeen: string | null; lastSeen: string | null; sites: string[] | null;
+      sessions: string; visitors: string;
+      firstSeen: string | null; lastSeen: string | null; sites: string[] | null;
     }>(
       `SELECT COUNT(vs.id)::text AS sessions,
+              COUNT(DISTINCT v.id)::text AS visitors,
               min(vs.started_at) AS "firstSeen",
               max(vs.started_at) AS "lastSeen",
               array_remove(array_agg(DISTINCT vs.site_slug), NULL) AS sites
@@ -357,7 +375,7 @@ export async function getPersonProfile(query: ProfileQuery): Promise<PersonProfi
       { type: QueryTypes.SELECT, replacements: { email } },
     );
     const e = eng[0];
-    profile.engagement = e
+    profile.engagement = e && Number(e.visitors ?? 0) > 0
       ? {
           sessions: Number(e.sessions ?? 0),
           firstSeen: e.firstSeen,
@@ -396,9 +414,11 @@ export async function getPersonProfile(query: ProfileQuery): Promise<PersonProfi
 
   // ── Appointments and automation, both lead-page parity ────────────────────
   if (may('acquisition', query.sections)) {
+    // M24.3 - null, not [], when there is no lead id. "Nothing booked" and "no key to look
+    // with" were the same answer here, and only one of them is evidence.
     const leadIdForPanels = profile.acquisition?.leadId ?? null;
-    profile.appointments = leadIdForPanels !== null ? await loadAppointments(leadIdForPanels) : [];
-    profile.automation = leadIdForPanels !== null ? await loadAutomation(leadIdForPanels) : [];
+    profile.appointments = leadIdForPanels !== null ? await loadAppointments(leadIdForPanels) : null;
+    profile.automation = leadIdForPanels !== null ? await loadAutomation(leadIdForPanels) : null;
   }
 
   // ── Programme panels: what they did, built and learned ────────────────────
@@ -461,7 +481,14 @@ export async function getPersonProfile(query: ProfileQuery): Promise<PersonProfi
   const domains = domainsForSections(query.sections);
   profile.timelineDomains = domains;
   profile.timeline = await getPersonTimeline({ leadIds, enrollmentIds, domains, limit: 150 });
-  profile.journey = await buildJourney(leadIds, enrollmentIds, query.sections, profile.timeline);
+  // M24.3 - when the enrolment ids were narrowed by permission, their count is a fact about the
+  // caller rather than about the person, so it is withheld rather than reported as a smaller
+  // number. It is named through the EXISTING withholding mechanism; a second one is forbidden.
+  const enrollmentsCounted = scoped === null && !mentorWithNoGrants;
+  if (!enrollmentsCounted) profile.withheldPanels.push('journey.enrollments');
+  profile.journey = await buildJourney(
+    leadIds, enrollmentIds, query.sections, profile.timeline, enrollmentsCounted,
+  );
 
   // T211: Explorer E/I/F, gated on the same sections as acquisition because it
   // is a conversion signal. Null for anyone the scorer has not assessed, which

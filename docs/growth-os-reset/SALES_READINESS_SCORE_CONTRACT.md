@@ -241,10 +241,10 @@ Components are from DECISION 3, 4 and 5. **Measured** means counted from a sourc
 | Prior outcome | `history` | `available`, `unavailableReason` | M | first-class availability flag, with a reason | **SAFE** |
 | Explorer bands | `explorerScore` | `engagement`/`intent`/`fit` | M | whole panel `null`, never 0/0/0 | **SAFE**, population caveat |
 | Consent | `acquisition` | `consentContact` | M | `null` distinguishes never-recorded from refused | **SAFE** |
-| Passive: site sessions | `engagement` | `sessions` | M | **reads `0` for a person never tracked** | **EXCLUDED** |
-| Passive: page events | `journey` | `pageEvents`, `sessions`, `campaigns`, `emailsSent` | M | **read `0` for anyone with no lead row** | **EXCLUDED** |
-| Commitment: enrolment | `journey` | `enrollments` | D | counts the caller's *visible* ids, so a mentor without grants reads `0` | **EXCLUDED** |
-| Commitment: appointment | `appointments` | rows | M | `[]` substituted when there was no key to look with | **EXCLUDED** |
+| Passive: site sessions | `engagement` | `sessions` | M | `null` when never tracked; a real `0` only when a visitor row exists **(M24.1, fixed 2026-10-17)** | **SAFE** |
+| Passive: page events | `journey` | `pageEvents`, `sessions`, `campaigns`, `emailsSent` | M | `null` when there is no lead row to count against **(M24.2, fixed 2026-10-17)** | **SAFE** |
+| Commitment: enrolment | `journey` | `enrollments` | D | `null` when the ids were narrowed, named in `withheldPanels` **(M24.3, fixed 2026-10-17)** | **SAFE** |
+| Commitment: appointment | `appointments` | rows | M | `null` when there was no key to look with; `[]` only when nothing is booked **(M24.3, fixed 2026-10-17)** | **SAFE** |
 | Prior outcome detail | `history` | `everHired`, `everCertified`, `totalListedFees` | M | a NULL column reads `false`, and all-null fees sum to `0` | **EXCLUDED** |
 | Recency | `journey` | `lastActivity` | D | derived from a timeline capped at 150 with no truncation flag, and section-filtered per caller | **EXCLUDED** |
 
@@ -253,7 +253,7 @@ Components are from DECISION 3, 4 and 5. **Measured** means counted from a sourc
 **(a) `engagement.sessions` reads an untracked person as a tracked one with zero sessions.**
 The query is a bare aggregate with no `GROUP BY`:
 
-`backend/src/services/adminOs/personProfileService.ts:352` → "array_remove(array_agg(DISTINCT vs.site_slug), NULL) AS sites"
+`backend/src/services/adminOs/personProfileService.ts:370` → "array_remove(array_agg(DISTINCT vs.site_slug), NULL) AS sites"
 
 An aggregate with no `GROUP BY` returns exactly one row even when its joins match nothing, so the
 `e ? … : null` guard immediately below it can never take the null branch. A person with no
@@ -268,7 +268,7 @@ behavioural test of its contents at all.
 
 Four lines below the counts are coerced:
 
-`backend/src/services/adminOs/panels/journeyPanel.ts:91` → "    sessions: Number(counts?.sessions ?? 0),"
+`backend/src/services/adminOs/panels/journeyPanel.ts:113` → "    sessions: counts ? Number(counts.sessions ?? 0) : null,"
 
 `counts` is only assigned when `leadIds.length` is non-zero, so for a person with no lead row
 `sessions`, `pageEvents`, `campaigns` and `emailsSent` are all a hard `0`, and the same pattern
@@ -279,7 +279,7 @@ about.
 
 **(c) `journey.enrollments` reports a permission state as a fact about the person.**
 
-`backend/src/services/adminOs/panels/journeyPanel.ts:95` → "    enrollments: enrollmentIds.length,"
+`backend/src/services/adminOs/panels/journeyPanel.ts:117` → "    enrollments: enrollmentsCounted ? enrollmentIds.length : null,"
 
 The id list is already narrowed to what the caller may see, so a mentor without grants reads `0`
 enrolments for a person who has several. `withheldPanels` names withheld *panels*; it does not
@@ -289,7 +289,7 @@ arithmetic.
 
 **(d) `appointments` and `automation` substitute an empty list for "no key to look with".**
 
-`backend/src/services/adminOs/personProfileService.ts:400` → "    profile.appointments = leadIdForPanels !== null ? await loadAppointments(leadIdForPanels) : [];"
+`backend/src/services/adminOs/personProfileService.ts:420` → "    profile.appointments = leadIdForPanels !== null ? await loadAppointments(leadIdForPanels) : null;"
 
 `[]` means "nothing booked" and "we could not look" alike, and an appointment request is a
 commitment signal under DECISION 3, which is the heaviest band in the score.
@@ -323,39 +323,62 @@ commitment signal under DECISION 3, which is the heaviest band in the score.
 
 ## Part 7 — The readiness call
 
-**The answer M24 was asked for: NO, not today. YES once four named things are done, none of them
-a redesign.**
+**The answer M24 gave was: NO, not today. YES once four named things are done, none of them a
+redesign. AMENDED 2026-10-17, later the same day: three of the four are now done.**
 
-Person 360 is close, and the honest version of "close" is specific. **Seven of the thirteen
-inputs the score needs are safe today** and their absence behaviour is already correct. The score
-cannot be built as specified because its **entire passive-browsing component is unusable**: both
-inputs that would feed it, `engagement.sessions` and the `journey` counts, report zero for people
-we have no evidence about. Under DECISION 3 that component is capped, so the damage is bounded,
-but it is not harmless: every untracked person would enter the queue with the same browsing
-evidence as a tracked person who never came back.
+M24.1, M24.2 and M24.3 shipped the fixes this part asked for, so **eleven of the thirteen inputs
+the score needs are safe**, up from seven. The passive-browsing component that made the original
+answer "no" is usable: `engagement.sessions` is `null` when a person was never tracked rather than
+a zero-filled shape, and the `journey` counts are `null` when there was no lead row to count
+against, which is the rule that module's own docblock already stated. The enrolment count and the
+appointments list no longer report a permission or key state as a fact about the person.
+
+**The original finding is kept rather than overwritten**, because it is why the fixes exist:
+every untracked person would otherwise have entered the queue carrying the same browsing evidence
+as a tracked person who never came back.
+
+### 7.1 What is still not safe, and it is not nothing
+
+Two inputs remain **EXCLUDED**, and neither was part of the three fixes:
+
+- **Prior outcome detail** (`history.everHired`, `everCertified`, `totalListedFees`). A NULL
+  column still reads `false`, and a set of enrolments with all-null fees still sums to `0`, so
+  "not recorded" and "not hired" remain the same answer. The panel's availability flag is sound;
+  the per-enrolment booleans beneath it are not.
+- **Recency** (`journey.lastActivity`). Still derived from a timeline capped at 150 with no
+  truncation flag, and section-filtered per caller, so two callers with different roles can read
+  a different "last activity" for the same person. DECISION 5 makes recency a decay applied per
+  component, so an input that varies by viewer is a determinism problem rather than a cosmetic
+  one.
+
+**So the answer is now: yes for a score built on the eleven, with recency and prior-outcome
+detail declared and left unpopulated and their reason recorded**, which is the shape this part
+already permits. It is not yet yes for the full component set in Part 3.
 
 **What has to change, in order:**
 
-1. **Fix `engagement` (defect a).** Return `null` when no visitor record exists rather than a
-   zero-filled shape. Small, local, and testable. The group has no behavioural test today, so the
-   fix ships with the first one.
-2. **Fix the `journey` counts (defect b).** Honour the docblock already in the file: `null`, not
-   `0`, when the query was skipped. The frontend already renders `daysKnown` and `intentScore` as
-   an em-dash, so the absent treatment exists and needs extending to six more fields.
-3. **Fix `journey.enrollments` and the `appointments` substitution (defects c and d).** Both are
-   the same mistake in two places: a permission or key state written into a value slot.
+1. ~~**Fix `engagement` (defect a).**~~ **DONE 2026-10-17 (M24.1).** The aggregate now counts
+   visitor rows alongside sessions, so absence is detectable without splitting the totals a
+   `GROUP BY` would have split. The group also got the behavioural test it had never had.
+2. ~~**Fix the `journey` counts (defect b).**~~ **DONE 2026-10-17 (M24.2).** Six fields are now
+   `number | null` and the frontend renders the absent case the way it already rendered
+   `daysKnown`. The docblock and the code agree.
+3. ~~**Fix `journey.enrollments` and the `appointments` substitution (defects c and d).**~~
+   **DONE 2026-10-17 (M24.3).** The enrolment count is withheld through the existing
+   `withheldPanels` mechanism rather than shrunk, and the appointment and automation lists are
+   `null` when there was no key to look with.
 4. **Decide M22.** Not a code fix and not mine. Until the 37 ambiguous rows are resolved or
-   explicitly parked, the score's population is a default rather than a decision.
+   explicitly parked, the score's population is a default rather than a decision. **This is now
+   the only one of the four still open.**
 
-**Items 1 to 3 are small, local and independently testable, and they are not in M24's scope**
-(this ticket is a document). They are logged here as the proposal M24 produces, to be worked
-before or alongside M25 rather than folded into it.
+Each of the three fixes was mutation-proved: reverting it fails exactly one named test, and every
+restore was verified byte-identical with `cmp`.
 
-**What may proceed now, without waiting:** M25 may build the engine against the seven SAFE
+**What may proceed now, without waiting:** M25 may build the engine against the eleven SAFE
 inputs, because its own acceptance criteria are about determinism, attribution and absence
-handling rather than about having every component populated. A passive-browsing component that
-is *declared and left unpopulated*, with its reason recorded, is consistent with this contract.
-A passive-browsing component fed from the two inputs above is not.
+handling rather than about having every component populated. A component that is *declared and
+left unpopulated*, with its reason recorded, is consistent with this contract. One fed from an
+input marked EXCLUDED in 7.1 is not.
 
 **What this does not establish.** That the SQL behind any group parses, which no test in the
 package proves (**UNVERIFIED**). That the weights are right; Part 5 already refuses to propose
