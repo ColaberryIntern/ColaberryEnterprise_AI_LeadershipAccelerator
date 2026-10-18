@@ -89,10 +89,12 @@ const STILL_EXCLUDED = [
   {
     what: 'Recency',
     fields: 'journey.lastActivity',
-    why: 'Still derived from a timeline capped at 150 with no truncation flag and filtered per '
-      + 'caller, so two callers with different roles read a different last activity for the same '
-      + 'person. DECISION 5 makes recency a per-component decay, so an input that varies by '
-      + 'viewer is a determinism problem.',
+    why: 'Section-filtered per caller, so two callers with different roles read a different last '
+      + 'activity for the same person. DECISION 5 makes recency a per-component decay, so an '
+      + 'input that varies by viewer is a determinism problem. (An earlier version of this line '
+      + 'also blamed the timeline\'s 150-row cap. It should not have: the timeline is ordered '
+      + 'newest-first and the limit applies afterwards, so the cap truncates the tail and cannot '
+      + 'affect a MAX. The per-caller filter is the whole of the defect.)',
   },
 ];
 

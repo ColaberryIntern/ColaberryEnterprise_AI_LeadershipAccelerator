@@ -42,7 +42,7 @@ const INPUTS = [
   { component: 'Commitment: enrolment', group: 'journey', field: 'enrollments', md: 'D', absence: 'counts only ids the caller may see', verdict: 'EXCLUDED' },
   { component: 'Commitment: appointment', group: 'appointments', field: 'rows', md: 'M', absence: '[] substituted when there was no key', verdict: 'EXCLUDED' },
   { component: 'Prior outcome detail', group: 'history', field: 'everHired, fees', md: 'M', absence: 'a NULL column reads false; null fees sum to 0', verdict: 'EXCLUDED' },
-  { component: 'Recency', group: 'journey', field: 'lastActivity', md: 'D', absence: 'from a timeline capped at 150, no truncation flag', verdict: 'EXCLUDED' },
+  { component: 'Recency', group: 'journey', field: 'lastActivity', md: 'D', absence: 'section-filtered per caller; the 150-row cap does NOT affect it', verdict: 'EXCLUDED' },
 ];
 
 const COUNTS = {
