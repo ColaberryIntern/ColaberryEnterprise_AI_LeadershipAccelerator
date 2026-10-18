@@ -76,25 +76,48 @@ LOCK_WAIT="${LOCK_WAIT:-600}"
 # box that also runs five Postgres instances: the kernel journal recorded 344 OOM
 # kills, and the 2026-09-08 cascade opens with "docker-buildx invoked oom-killer".
 #
-# It stays OPT-IN rather than becoming the default, because the build path has
-# years of mileage and this one has a single proven run (2026-09-10, all three
-# services, digests verified against origin/main).
+# It WAS opt-in, because the build path had years of mileage and this one had a
+# single proven run (2026-09-10, all three services, digests verified).
 #
 # DECISION, Ali, 2026-09-10: leave it opt-in and flip the default after it has
-# more runs behind it. "More runs" is deliberately not left to memory — every
+# more runs behind it. "More runs" was deliberately not left to memory — every
 # successful registry deploy appends a line to REGISTRY_DEPLOY_LOG below, so the
-# bar is checkable rather than felt:
+# bar was checkable rather than felt:
 #
 #   THE BAR: flip DEPLOY_MODE's default to `registry` once that log shows at
-#   least 5 successful registry deploys spanning at least 14 days. Until then a
-#   deploy that does not pass DEPLOY_MODE=registry still builds on the host.
+#   least 5 successful registry deploys spanning at least 14 days.
 #
-# The 2026-09-10 run is deliberately NOT seeded into that log: it happened before
-# this recording existed, and back-writing a line for it would be inventing
-# evidence. The count therefore starts at zero and the real bar is six runs.
+# The 2026-09-10 run was deliberately NOT seeded into that log: it happened before
+# this recording existed, and back-writing a line for it would have been inventing
+# evidence. The count started at zero and the real bar was six runs.
 #
-# Check it with: wc -l < /var/log/colaberry-registry-deploys.log
-DEPLOY_MODE="${DEPLOY_MODE:-build}"
+# ---------------------------------------------------------------------------
+# THE BAR IS MET, and this is that decision executing rather than a new one.
+# Flipped 2026-10-18, re-measured rather than recalled:
+#
+#   successful registry deploys   134   (bar: 5)
+#   span                           30 days, 2026-09-16 .. 2026-10-17  (bar: 14)
+#   distinct commits               95   — not one commit deployed 134 times
+#
+# That last figure is the one that makes the count mean anything: 134 deploys of a
+# single commit would prove nothing about the path.
+#
+# The pressure this relieves has roughly doubled since the paragraph above was
+# written: 344 kernel OOM kills then, 670 on 2026-10-18. Building here remains the
+# largest recurring memory spike on a box that also runs five Postgres instances,
+# and the 2026-09-08 cascade opens with "docker-buildx invoked oom-killer".
+#
+# WHAT CHANGES FOR A DEPLOYER. Registry mode needs CI to have published an image
+# for the EXACT commit. If it has not, the guard below refuses and says so — a
+# loud, actionable stop rather than a silent older build. Two ways past it:
+#
+#   DEPLOY_MODE=build ./scripts/deploy-prod.sh    # build on the host, as before
+#   or wait for the "Build images" workflow to finish, then re-run
+#
+# TO REVERT: put `build` back on the line below. One word, nothing else.
+#
+# Check the log with: wc -l < /var/log/colaberry-registry-deploys.log
+DEPLOY_MODE="${DEPLOY_MODE:-registry}"
 # Durable record of registry-mode deploys. Only successful ones are recorded, so
 # the count means "this path worked", not "this path was attempted".
 REGISTRY_DEPLOY_LOG="${REGISTRY_DEPLOY_LOG:-/var/log/colaberry-registry-deploys.log}"
