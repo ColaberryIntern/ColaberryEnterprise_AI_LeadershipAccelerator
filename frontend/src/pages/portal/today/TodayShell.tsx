@@ -34,6 +34,7 @@ import TodayJourneyNudges from './TodayJourneyNudges';
 import NextLiveClassCard from './NextLiveClassCard';
 import InternshipOpportunityCard from './InternshipOpportunityCard';
 import InternshipCommandCard from './InternshipCommandCard';
+import GovProjectCard from './GovProjectCard';
 import { fetchInternshipStatus, InternshipStatus } from '../../../services/internshipApi';
 import { useNextLiveSession } from './useNextLiveSession';
 import '../../../components/timeline/timeline.css';
@@ -598,6 +599,9 @@ const TodayShell: React.FC = () => {
               onChanged={() => setInternshipToken((n) => n + 1)}
             />
           )}
+          {/* P6: the "on your profile" entry to an assigned government project. Self-hides when the intern has
+              none, so it only appears for someone actually on a gov pursuit. */}
+          {internship?.render && <GovProjectCard />}
           {nextLiveSession ? (
             <NextLiveClassCard session={nextLiveSession} />
           ) : schedule?.first_class ? (

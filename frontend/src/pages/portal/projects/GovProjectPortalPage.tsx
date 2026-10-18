@@ -143,6 +143,10 @@ export default function GovProjectPortalPage(): React.ReactElement {
     );
   }
 
+  // P6: the proposal is shown only when it is shared with this viewer (level !== 'none'); the checklist is price-free.
+  const proposal = view.proposal;
+  const checklist = view.submissionChecklist;
+
   return (
     <div className="container py-4" data-testid="gov-project-view">
       <div className="d-flex flex-wrap align-items-center gap-2 mb-1">
@@ -191,6 +195,61 @@ export default function GovProjectPortalPage(): React.ReactElement {
             </li>
           ))}
         </ul>
+      )}
+
+      {proposal && proposal.level !== 'none' && (
+        <section className="mt-4" data-testid="gov-project-proposal">
+          <div className="d-flex flex-wrap align-items-baseline gap-2 mb-2">
+            <h2 className="h5 mb-0">Proposal</h2>
+            <span className="small text-secondary">shared with you: {proposal.level === 'edit' ? 'can edit' : proposal.level === 'comment' ? 'can comment' : 'view only'}</span>
+          </div>
+          {proposal.responses.length === 0 ? (
+            <p className="text-secondary small">No responses have been drafted yet.</p>
+          ) : (
+            <ul className="list-group">
+              {proposal.responses.map((r) => (
+                <li className="list-group-item" key={r.requirementId}>
+                  <div className="d-flex flex-wrap align-items-start gap-2">
+                    <span className="badge bg-secondary-subtle text-secondary-emphasis">{r.requirementId}</span>
+                    <span className="flex-grow-1">{r.statement}</span>
+                    <span className="badge bg-light text-dark border">{r.status}</span>
+                    {r.openGapCount > 0 && <span className="badge bg-warning-subtle text-warning-emphasis">{r.openGapCount} open gap{r.openGapCount === 1 ? '' : 's'}</span>}
+                  </div>
+                  {r.content && <div className="small mt-1" style={{ whiteSpace: 'pre-wrap' }}>{r.content}</div>}
+                  {proposal.canComment && (r.gaps?.length ?? 0) > 0 && (
+                    <ul className="small text-secondary mt-1 mb-0">
+                      {r.gaps!.map((g) => (
+                        <li key={g.id}>{g.question}{g.resolution === 'filler' ? ' (filler — needs a real answer)' : g.resolution === 'answered' ? ' (answered)' : ''}</li>
+                      ))}
+                    </ul>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
+
+      {checklist && checklist.items.length > 0 && (
+        <section className="mt-4" data-testid="gov-project-submission-checklist">
+          <div className="d-flex flex-wrap align-items-baseline gap-2 mb-2">
+            <h2 className="h5 mb-0">Submission checklist</h2>
+            <span className="small text-secondary">{checklist.counts.approved} of {checklist.counts.total} ready{checklist.counts.remaining > 0 ? ` · ${checklist.counts.remaining} still owed` : ''}</span>
+            {checklist.ready && <span className="badge bg-success-subtle text-success-emphasis">ready to submit</span>}
+          </div>
+          <ul className="list-group">
+            {checklist.items.map((i) => (
+              <li className="list-group-item d-flex flex-wrap align-items-center gap-2" key={i.requirementId}>
+                <i className={i.approved ? 'ri-checkbox-circle-line text-success' : 'ri-checkbox-blank-circle-line text-secondary'} aria-hidden="true" />
+                <span className="badge bg-secondary-subtle text-secondary-emphasis">{i.requirementId}</span>
+                <span className="flex-grow-1">{i.statement}</span>
+                <span className="badge bg-light text-dark border">{i.status}</span>
+                {i.openGapCount > 0 && <span className="badge bg-warning-subtle text-warning-emphasis">{i.openGapCount} gap{i.openGapCount === 1 ? '' : 's'}</span>}
+              </li>
+            ))}
+          </ul>
+          <p className="small text-secondary mt-1"><i className="ri-information-line me-1" aria-hidden="true" />Pricing is handled by your admin and is not shown here.</p>
+        </section>
       )}
 
       <div className="d-flex flex-wrap align-items-baseline gap-2 mb-2 mt-4">

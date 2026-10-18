@@ -122,6 +122,40 @@ describe('GovProjectPortalPage (student restricted view)', () => {
     expect(text).toContain('my submitted build');     // the student's evidence is preserved and shown
   });
 
+  it('P6: renders the shared proposal (comment level shows the gap questions) + the price-free submission checklist', async () => {
+    (api.getStudentGovProject as jest.Mock).mockResolvedValue({
+      ...VIEW,
+      proposal: {
+        level: 'comment', canComment: true, canEdit: false,
+        responses: [{ requirementId: 'REQ-1', statement: 'Provide a claims search database', status: 'draft', content: 'We will build the search index.', openGapCount: 1, gaps: [{ id: 'g1', question: 'Which system must it integrate with?', suggestions: [], resolution: 'open' }] }],
+      },
+      submissionChecklist: {
+        items: [{ requirementId: 'REQ-1', statement: 'Provide a claims search database', status: 'draft', approved: false, openGapCount: 1 }],
+        counts: { total: 1, approved: 0, remaining: 1 }, ready: false,
+      },
+    });
+    await render();
+    const text = container.textContent ?? '';
+    expect(container.querySelector('[data-testid="gov-project-proposal"]')).toBeTruthy();
+    expect(text).toContain('can comment');
+    expect(text).toContain('We will build the search index.');
+    expect(text).toContain('Which system must it integrate with?'); // comment level sees the gap question
+    expect(container.querySelector('[data-testid="gov-project-submission-checklist"]')).toBeTruthy();
+    expect(text).toContain('0 of 1 ready');
+    expect(text).toContain('Pricing is handled by your admin');
+  });
+
+  it('P6: hides the Proposal section entirely when it is not shared (level none)', async () => {
+    (api.getStudentGovProject as jest.Mock).mockResolvedValue({
+      ...VIEW,
+      proposal: { level: 'none', canComment: false, canEdit: false, responses: [] },
+      submissionChecklist: { items: [], counts: { total: 0, approved: 0, remaining: 0 }, ready: false },
+    });
+    await render();
+    expect(container.querySelector('[data-testid="gov-project-proposal"]')).toBeNull();
+    expect(container.querySelector('[data-testid="gov-project-submission-checklist"]')).toBeNull();
+  });
+
   it('shows a "not found" page on a 404 (unassigned project) — never leaks that it exists', async () => {
     (api.getStudentGovProject as jest.Mock).mockRejectedValue({ response: { status: 404 } });
     await render('dp-OTHER');

@@ -13,9 +13,13 @@ const evFindAll = jest.fn();
 jest.mock('../../../models/GovBuildStoryEvidence', () => ({ __esModule: true, default: { findAll: (...a: any[]) => evFindAll(...a) } }));
 const asFindAll = jest.fn();
 jest.mock('../../../models/GovBuildStoryAssignment', () => ({ __esModule: true, default: { findAll: (...a: any[]) => asFindAll(...a) } }));
+const gprFindAll = jest.fn();
+jest.mock('../../../models/GovProposalResponse', () => ({ __esModule: true, default: { findAll: (...a: any[]) => gprFindAll(...a), findOne: jest.fn() } }));
+const gpsgFindOne = jest.fn();
+jest.mock('../../../models/GovProposalShareGrant', () => ({ __esModule: true, default: { findOne: (...a: any[]) => gpsgFindOne(...a) } }));
 const plain = (v: any) => ({ get: () => ({ ...v }) });
 
-import { toStudentGovProjectView, getStudentGovProjectView } from '../govProjectProjection';
+import { toStudentGovProjectView, getStudentGovProjectView, toStudentSubmissionChecklist } from '../govProjectProjection';
 
 // Rows carrying the FULL set of admin/internal fields that must NOT reach a student.
 const projectRow = { id: 'dp-1', name: 'TxDOT Claims Search', slug: 'gov-x', status: 'discovery', project_class: 'government_public_sector',
@@ -83,10 +87,51 @@ describe('toStudentGovProjectView (pure) — student-safe', () => {
     expect(view.viewerCanVerify).toBe(false); // default (the `view` fixture passes no flag)
     expect(toStudentGovProjectView(projectRow, trackRows, reqRows, true).viewerCanVerify).toBe(true);
   });
+
+  it('P6: the pure view defaults to NOTHING shared and NOTHING owed until the loader resolves them', () => {
+    expect(view.proposal).toEqual({ level: 'none', canComment: false, canEdit: false, responses: [] });
+    expect(view.submissionChecklist.ready).toBe(false);
+    expect(view.submissionChecklist.items).toEqual([]);
+  });
+});
+
+describe('toStudentSubmissionChecklist (pure) — PRICE-FREE', () => {
+  const established = [
+    { canonical_req_id: 'REQ-1', kind: 'scope' },
+    { canonical_req_id: 'REQ-2', kind: 'rule' },
+    { canonical_req_id: 'REQ-PRICE', kind: 'pricing' },
+  ];
+  const slots = [
+    { requirementId: 'REQ-1', statement: 'Search DB', status: 'approved', gaps: [] },
+    { requirementId: 'REQ-2', statement: 'Offer', status: 'draft', gaps: [{ resolution: 'filler' }] },
+    { requirementId: 'REQ-PRICE', statement: 'Total not to exceed $4,200,000.', status: 'approved', gaps: [] },
+  ];
+
+  it('drops the pricing slot, scores approved vs remaining, and never carries a price', () => {
+    const c = toStudentSubmissionChecklist(slots, established);
+    expect(c.items.map((i) => i.requirementId)).toEqual(['REQ-1', 'REQ-2']); // REQ-PRICE dropped
+    expect(JSON.stringify(c)).not.toContain('4,200,000');
+    expect(c.items.find((i) => i.requirementId === 'REQ-1')!.approved).toBe(true);
+    expect(c.items.find((i) => i.requirementId === 'REQ-2')!.approved).toBe(false); // a filler gap blocks it
+    expect(c.counts).toEqual({ total: 2, approved: 1, remaining: 1 });
+    expect(c.ready).toBe(false);
+  });
+
+  it('is ready only when every non-pricing response is approved with no open/filler gap', () => {
+    const allApproved = [
+      { requirementId: 'REQ-1', statement: 'a', status: 'approved', gaps: [] },
+      { requirementId: 'REQ-2', statement: 'b', status: 'approved', gaps: [{ resolution: 'answered' }] },
+    ];
+    expect(toStudentSubmissionChecklist(allApproved, established).ready).toBe(true);
+  });
+
+  it('is total on garbage', () => {
+    expect(toStudentSubmissionChecklist(undefined as any, undefined as any)).toEqual({ items: [], counts: { total: 0, approved: 0, remaining: 0 }, ready: false });
+  });
 });
 
 describe('getStudentGovProjectView (loader) — only a non-archived government project', () => {
-  beforeEach(() => { jest.clearAllMocks(); ctFindAll.mockResolvedValue(trackRows); crFindAll.mockResolvedValue(reqRows); evFindAll.mockResolvedValue([]); asFindAll.mockResolvedValue([]); });
+  beforeEach(() => { jest.clearAllMocks(); ctFindAll.mockResolvedValue(trackRows); crFindAll.mockResolvedValue(reqRows); evFindAll.mockResolvedValue([]); asFindAll.mockResolvedValue([]); gprFindAll.mockResolvedValue([]); gpsgFindOne.mockResolvedValue(null); });
 
   it('returns the view for a government_public_sector project', async () => {
     dpFindByPk.mockResolvedValue(projectRow);
@@ -127,5 +172,25 @@ describe('getStudentGovProjectView (loader) — only a non-archived government p
     expect(await getStudentGovProjectView('dp-1')).toBeNull();
     dpFindByPk.mockResolvedValue(null);
     expect(await getStudentGovProjectView('nope')).toBeNull();
+  });
+
+  it('P6: with NO viewer identity the proposal stays hidden (level none) but the price-free checklist still populates', async () => {
+    dpFindByPk.mockResolvedValue(projectRow);
+    const v = await getStudentGovProjectView('dp-1'); // no viewerIdentityId
+    expect(v!.proposal.level).toBe('none');
+    expect(v!.proposal.responses).toEqual([]);
+    expect(gpsgFindOne).not.toHaveBeenCalled();                 // no identity ⇒ no grant lookup
+    expect(v!.submissionChecklist.counts.total).toBe(2);        // REQ-1 + REQ-2 (REQ-PRICE is not in this fixture)
+    expect(v!.submissionChecklist.ready).toBe(false);           // all unanswered
+  });
+
+  it('P6: threads the viewer identity to the share grant — a "view" grant reveals the responses read-only', async () => {
+    dpFindByPk.mockResolvedValue(projectRow);
+    gpsgFindOne.mockResolvedValue(plain({ delivery_project_id: 'dp-1', member_identity_id: 'id-1', level: 'view', updated_at: null }));
+    const v = await getStudentGovProjectView('dp-1', false, 'id-1');
+    expect(v!.proposal.level).toBe('view');
+    expect(v!.proposal.canComment).toBe(false);                 // view is read-only
+    expect(v!.proposal.responses.map((r) => r.requirementId)).toEqual(['REQ-1', 'REQ-2']); // no responses yet, slots unanswered
+    expect(v!.proposal.responses.every((r) => r.status === 'unanswered')).toBe(true);
   });
 });
