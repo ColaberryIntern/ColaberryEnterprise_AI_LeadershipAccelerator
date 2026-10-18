@@ -2150,3 +2150,62 @@ failure appears.
 They still do not run in CI. Three suites now exist that only a developer with Docker will ever
 execute, which is better than nothing and worse than a gate — and the ordering that fixes it is
 recorded above: a pristine database has to boot first.
+
+## THE SCHEDULER'S LOCK IS NOT THE ONE ITS COMMENT NAMED
+
+Third of the seven locks. I went to prove it and found there was nothing to prove: the mechanism
+the code documented **does not exist in the file**.
+
+`schedulerService.ts:425` read:
+
+> `// Atomically claim pending actions using FOR UPDATE SKIP LOCKED`
+> `// This prevents race conditions if multiple scheduler instances run concurrently`
+
+`FOR UPDATE SKIP LOCKED` occurs **exactly once in the whole file — in that comment**. There is no
+such statement. The claim is a plain `SELECT` of candidate ids, taking no locks, followed by:
+
+```sql
+UPDATE scheduled_emails SET status = 'processing', ... WHERE id IN (:ids) AND status = 'pending'
+RETURNING *
+```
+
+### What actually protects it
+
+**`AND status = 'pending'` on the UPDATE.** The candidate SELECT takes no locks, so two instances
+can and do pick the same ids. The UPDATE decides: the second blocks on the first's row locks and,
+under READ COMMITTED, **re-evaluates its WHERE clause once those locks are released**. By then the
+rows read `processing`, it matches none, and `RETURNING` hands back an empty set. Each row is
+claimed exactly once.
+
+So the protection is sound — it is simply not the protection the comment described, and it is the
+same compare-and-swap shape as the stale-build claim rather than a queue lock.
+
+### Why this is worth more than a tidier comment
+
+**Three sender instances run on production.** That predicate looks redundant - the rows were just
+selected as pending - and deleting it would leave every existing test passing while three senders
+claimed the same rows and emailed real people twice.
+
+A comment naming a mechanism that is not present is worse than no comment, because it makes the
+real one look like leftover defensive code. This is the same class as `coversRequirementBlocks`
+checking the instruction line, and the `legacy_compatibility` guard reading a property that was
+always `undefined`: the documentation and the behaviour had drifted, and only the documentation
+was being read.
+
+The comment now describes the actual mechanism and says plainly that the predicate IS the lock.
+
+### Still not observed, and deliberately so
+
+Proving this one needs the claim exercised without the send path, which means extracting that
+block into its own exported function — a restructuring of a live email scheduler. That is not a
+comment fix and was not bundled with one. **Proposed, not done:** extract
+`claimPendingActions(processorId)` from `processScheduledActions`, preserving the transaction and
+the empty-candidates early return with its heartbeat, then race it exactly as
+`staleClaimRace.integration.test.ts` races the build claim, with the control removing
+`AND status = 'pending'` and asserting both senders claim the same rows.
+
+### Four remain
+
+The execution-run claim, the room outbox, the enrollment row lock and the telemetry anchor. Two of
+seven are observed; this third one turned out to be mis-documented rather than unproven, which is
+its own kind of answer.
