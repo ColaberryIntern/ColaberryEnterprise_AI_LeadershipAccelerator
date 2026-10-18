@@ -42,6 +42,11 @@ export interface PlayableRecording {
    * themselves from somebody else watching — only the latter is a view.
    */
   ownerEnrollmentId: string | null;
+  /**
+   * How long the take runs, when Zoom reported it. Carried so a caller choosing a
+   * thumbnail frame knows where it may sample; null simply means fewer probes.
+   */
+  durationSeconds: number | null;
 }
 
 export type PlaybackResolution =
@@ -62,7 +67,8 @@ const SQL = `
   SELECT r.id            AS recording_id,
          rr.storage_key  AS storage_key,
          rr.size_bytes   AS size_bytes,
-         rr.mime_type    AS mime_type
+         rr.mime_type    AS mime_type,
+         r.duration_seconds AS duration_seconds
     FROM presentation_recordings r
     JOIN presentation_attempts   a  ON a.id = r.attempt_id
     JOIN presentation_assignments asg ON asg.id = a.assignment_id
@@ -117,6 +123,7 @@ export async function resolvePlayableRecording(
       downloadName: `${storyId}-rehearsal${path.extname(safeName) || '.mp4'}`,
       // This path only ever resolves for the owner, so the viewer is the owner.
       ownerEnrollmentId: enrollmentId,
+      durationSeconds: row.duration_seconds === null || row.duration_seconds === undefined ? null : Number(row.duration_seconds),
     },
   };
 }
@@ -170,7 +177,8 @@ export async function resolveViewableRecording(
             asg.enrollment_id AS owner_enrollment_id,
             asg.cohort_id     AS cohort_id,
             rr.storage_key    AS storage_key,
-            rr.mime_type      AS mime_type
+            rr.mime_type      AS mime_type,
+            r.duration_seconds AS duration_seconds
        FROM presentation_recordings r
        JOIN presentation_attempts    a   ON a.id = r.attempt_id
        JOIN presentation_assignments asg ON asg.id = a.assignment_id
@@ -237,6 +245,7 @@ export async function resolveViewableRecording(
       mimeType: row.mime_type ? String(row.mime_type) : 'video/mp4',
       downloadName: `${storyId}-demo${path.extname(safeName) || '.mp4'}`,
       ownerEnrollmentId: String(row.owner_enrollment_id),
+      durationSeconds: row.duration_seconds === null || row.duration_seconds === undefined ? null : Number(row.duration_seconds),
     },
   };
 }

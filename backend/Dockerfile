@@ -24,7 +24,14 @@ WORKDIR /app
 # on every commit) was copied first, so xvfb/git/curl/gnupg, the Docker CLI +
 # compose plugin, and the Playwright Chromium download were all re-fetched on
 # every single build — multiple minutes of unrelated work per rebuild.
-RUN apt-get update && apt-get install -y --no-install-recommends xvfb x11vnc git ca-certificates curl gnupg poppler-utils && rm -rf /var/lib/apt/lists/*
+# `ffmpeg` is here for demo thumbnails, and it is the only reason it is here.
+# The feed card used the frame at one second, which is black whenever a learner
+# had their camera off and a bare desktop whenever a screen share had not started
+# yet. Choosing a frame worth showing means decoding a few frames, and nothing
+# already in this image can do that. Approved as an infrastructure change by the
+# DRI on 2026-10-18 rather than slipped in: see `frameScore.ts` for the rule and
+# `recordingThumbnail.ts` for the extraction.
+RUN apt-get update && apt-get install -y --no-install-recommends xvfb x11vnc git ca-certificates curl gnupg poppler-utils ffmpeg && rm -rf /var/lib/apt/lists/*
 # Install docker CLI + compose plugin so the backend can provision preview stacks
 # via the mounted /var/run/docker.sock. Only the CLI — the daemon lives on the host.
 RUN install -m 0755 -d /etc/apt/keyrings \

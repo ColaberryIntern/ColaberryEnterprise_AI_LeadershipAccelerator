@@ -27,6 +27,8 @@ export interface CommunityCommenter {
 export interface CommunityPostDemo {
   recordingId: string;
   playbackUrl: string;
+  /** Poster frame, same ticket. May 404 when no frame is worth showing. */
+  thumbnailUrl?: string | null;
   durationSeconds: number | null;
   viewCount: number;
   viewLabel: string;
