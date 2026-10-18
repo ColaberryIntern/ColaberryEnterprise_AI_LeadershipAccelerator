@@ -1,4 +1,4 @@
-import { Op, Transaction } from 'sequelize';
+import { Op, QueryTypes, Transaction } from 'sequelize';
 import { sequelize } from '../../config/database';
 import RoomOutboxEvent, { RoomOutboxAggregateType } from '../../models/RoomOutboxEvent';
 import { RoomEventType, eventIdempotencyKey } from './roomEvents';
@@ -42,15 +42,44 @@ export async function emitRoomEvent(params: {
   return event;
 }
 
+export const CRASH_RECOVERY_ERROR = 'reclaimed after a worker left this event in processing';
+export const CRASH_RECOVERY_EXHAUSTED = 'dead-lettered: no delivery attempts left after a worker crash';
+
 // Reset rows a crashed worker left in 'processing' so they become claimable again.
-async function recoverStale(): Promise<void> {
-  await RoomOutboxEvent.update(
-    { status: 'failed' },
+//
+// A crash counts as a delivery attempt. The handler may well have run - we just never
+// learned the outcome - and more importantly, without the increment an event that kills
+// the worker is reclaimed every minute for ever and can never reach max_attempts. That
+// is the unbounded retry CLAUDE.md prohibits, so recovery is bounded like every other
+// path: this is the same semantics as a visibility timeout counting a redelivery.
+//
+// Dead-letter first, so a row that has just spent its last attempt is not handed back to
+// the drain. Raw SQL because `attempts + 1` and `attempts + 1 >= max_attempts` are
+// column expressions; routing them through Model.update would need a cast that claims
+// a Literal is a number.
+// Exported so the bound above can be observed directly: a crash is the one failure mode
+// the drain cannot simulate from the outside, because it is defined by the drain never
+// running again.
+export async function recoverStaleProcessing(): Promise<void> {
+  await sequelize.query(
+    `UPDATE room_outbox_events
+        SET status = 'dead', attempts = attempts + 1, last_error = :reason, updated_at = NOW()
+      WHERE status = 'processing'
+        AND updated_at < NOW() - (:staleMs * INTERVAL '1 millisecond')
+        AND attempts + 1 >= max_attempts`,
     {
-      where: {
-        status: 'processing',
-        updated_at: { [Op.lt]: new Date(Date.now() - STALE_PROCESSING_MS) },
-      },
+      replacements: { staleMs: STALE_PROCESSING_MS, reason: CRASH_RECOVERY_EXHAUSTED },
+      type: QueryTypes.UPDATE,
+    },
+  );
+  await sequelize.query(
+    `UPDATE room_outbox_events
+        SET status = 'failed', attempts = attempts + 1, last_error = :reason, updated_at = NOW()
+      WHERE status = 'processing'
+        AND updated_at < NOW() - (:staleMs * INTERVAL '1 millisecond')`,
+    {
+      replacements: { staleMs: STALE_PROCESSING_MS, reason: CRASH_RECOVERY_ERROR },
+      type: QueryTypes.UPDATE,
     },
   );
 }
@@ -86,7 +115,7 @@ export interface DrainResult {
 }
 
 export async function drainOutbox(limit = 25): Promise<DrainResult> {
-  await recoverStale();
+  await recoverStaleProcessing();
   const batch = await claimBatch(limit);
   const result: DrainResult = { claimed: batch.length, processed: 0, failed: 0, dead: 0 };
   for (const event of batch) {

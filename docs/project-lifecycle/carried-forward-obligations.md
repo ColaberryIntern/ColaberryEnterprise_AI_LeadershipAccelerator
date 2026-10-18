@@ -2252,3 +2252,81 @@ and uncalled.
 
 The room outbox, the enrollment row lock and the telemetry anchor. Four of the seven are now
 addressed: three observed, and the scheduler's found to be mis-documented rather than unproven.
+
+## THE ROOM OUTBOX CLAIM IS THE FIRST OF THESE LOCKS THAT ACTUALLY RUNS
+
+Fourth observed lock, and the first one carrying live traffic. The register said the room
+outbox was "covered only by asserting its SQL contains `FOR UPDATE`". That was generous:
+`skipLocked: true` appears **exactly once in the repository**, in the service itself. There was
+no test of the claim at all.
+
+### Why it mattered more than the others
+
+| | |
+|---|---|
+| Scheduled | every minute, `server.ts`, gated on `COMMUNITY_ROOMS_ENABLED` |
+| That flag in production | **`true`** on `accelerator-backend` (queried by name) |
+| Events delivered to date | **284**, 2026-07-22 to 2026-10-17 |
+| Of those | 58 RSVP reminders that post a real message into a real room, 7 Meet provisions |
+| Stuck in `processing` | 0 |
+| Highest `attempts` ever reached | **0** |
+
+Two concurrent drains are therefore not hypothetical: a tick that runs past 60 seconds overlaps
+the next, and a deploy runs the old and new containers together for a moment.
+
+That last row is its own finding: **the retry, backoff and dead-letter branches have never
+executed in production.** Three months of green is three months of the happy path.
+
+### What is now measured, with the mutation run both ways
+
+Eight tests against real Postgres (`roomOutboxClaimRace.integration.test.ts`, port 55437):
+
+- two concurrent drains, six events: **six deliveries, six distinct ids, nothing left behind**
+- drains beyond the queue depth come back **empty** rather than blocking - what `SKIP LOCKED` buys
+- an event inside its backoff window is **not** claimable
+- **positive control:** the same selection without the lock hands one event to two claimants
+- emit is idempotent on the unique key **even when five emits race** - 5 concurrent
+  `findOrCreate` calls, one row
+- a guard that the pool allows real concurrency, so the suite cannot quietly become a no-op on
+  a single connection
+
+**Mutation 1 - delete `lock` + `skipLocked` from `claimBatch`:** six events delivered **twelve**
+times, every one claimed by both drains. The lock is load-bearing, measured on the production
+code path, not inferred from the string.
+
+### A bound that was missing: crash recovery could retry for ever
+
+`recoverStale` flipped rows stuck in `processing` back to `failed` **without counting the
+attempt**. `attempts` only ever incremented in the drain's catch block, which a crashed worker
+never reaches - so an event that kills the worker was reclaimable every minute for ever and
+could never reach `max_attempts`. That is the unbounded retry CLAUDE.md prohibits, in a path
+that fires on every deploy that interrupts a drain.
+
+Recovery now counts the crash and dead-letters when the attempts are spent, which is the same
+semantics as a visibility timeout counting a redelivery.
+
+**Mutation 2 - delete the `attempts + 1`:** the termination test runs all twenty crash cycles
+and the row is **still `failed`, still claimable**. With the bound it reaches `dead` after
+exactly six, which is `max_attempts`. The test proves termination by terminating.
+
+### New evidence for the OPEN DDL-bootstrap decision
+
+The suite builds its table with `RoomOutboxEvent.sync()`, and that table is **not** the
+production table. `\d` on both:
+
+| Column | `sync()` | production DDL |
+|---|---|---|
+| `id` | `uuid NOT NULL`, **no default** | `DEFAULT gen_random_uuid()` |
+| `created_at` / `updated_at` | `NOT NULL`, **no default** | `DEFAULT now()` |
+
+Sequelize mints all three in JS, so it never needs the defaults. The consequence is concrete:
+**a table created by `sync()` can only be written through Sequelize** - any raw `INSERT` in the
+codebase fails on it, which is exactly how this was found (three failing runs before the cause
+was measured rather than guessed; the first two guesses were wrong). Whatever the DDL bootstrap
+ends up being, `sync()` alone is not equivalent to the hand-written DDL, and the difference is
+silent until something writes raw SQL.
+
+### Two remain
+
+The enrollment row lock and the telemetry anchor. Five of the seven are addressed: four
+observed, and the scheduler's found to be mis-documented rather than unproven.
