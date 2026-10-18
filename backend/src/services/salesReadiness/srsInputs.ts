@@ -58,5 +58,9 @@ export function inputsFromProfile(profile: PersonProfile): SrsInputs {
     // Acquisition and engagement.
     consentContact: orNull(profile.acquisition?.consentContact),
     siteSessions: orNull(profile.engagement?.sessions),
+
+    // M27 - the only input that dates itself today is the Explorer snapshot. Freshness is bounded
+    // by this, so recomputing a score over an old snapshot cannot make it look current.
+    evidenceAsOf: orNull(profile.explorerScore?.asOfDate),
   };
 }

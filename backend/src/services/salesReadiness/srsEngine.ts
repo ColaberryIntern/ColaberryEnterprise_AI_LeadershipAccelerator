@@ -44,6 +44,11 @@ export interface SrsInputs {
   pageEvents: number | null;
   enrolments: number | null;
   appointments: number | null;
+  /**
+   * M27 - the oldest evidence date among inputs that carry one, so freshness can be bounded by
+   * the EVIDENCE and not only by when the score was computed. Null when nothing dated itself.
+   */
+  evidenceAsOf: string | null;
 }
 
 export type FactorState = 'scored' | 'absent';
@@ -75,6 +80,8 @@ export interface ScoreResult {
   factors: FactorResult[];
   /** DECISION 4: reported, never subtracted. */
   frictionFlag: boolean;
+  /** M27 - echoed so a score can be assessed for freshness without its inputs. */
+  oldestEvidenceAt: string | null;
 }
 
 /** Proportional points, capped. `full` is the value at which the factor maxes out. */
@@ -165,5 +172,6 @@ export function scoreReadiness(inputs: SrsInputs, computedAt: string): ScoreResu
     coverage: Math.round((scored.length / factors.length) * 100) / 100,
     factors,
     frictionFlag: (inputs.paymentFailures ?? 0) > 0,
+    oldestEvidenceAt: inputs.evidenceAsOf,
   };
 }

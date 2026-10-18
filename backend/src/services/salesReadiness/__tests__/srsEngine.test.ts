@@ -23,7 +23,7 @@ const EMPTY: SrsInputs = {
   daysKnown: null, intentScore: null, inboundReplies: null, paymentFailures: null,
   priorHistoryAvailable: null, priorEnrolments: null, explorerEngagement: null,
   explorerIntent: null, consentContact: null, siteSessions: null, pageEvents: null,
-  enrolments: null, appointments: null,
+  enrolments: null, appointments: null, evidenceAsOf: null,
 };
 
 /** Everything present and strong. */
@@ -31,7 +31,7 @@ const FULL: SrsInputs = {
   daysKnown: 365, intentScore: 100, inboundReplies: 5, paymentFailures: 0,
   priorHistoryAvailable: true, priorEnrolments: 2, explorerEngagement: 100,
   explorerIntent: 100, consentContact: true, siteSessions: 50, pageEvents: 200,
-  enrolments: 1, appointments: 3,
+  enrolments: 1, appointments: 3, evidenceAsOf: '2026-10-18T00:00:00.000Z',
 };
 
 /** Deterministic LCG, so a failing case can be replayed from its seed. */
@@ -61,6 +61,7 @@ function sample(next: () => number): SrsInputs {
     pageEvents: maybe(Math.floor(next() * 300)),
     enrolments: maybe(Math.floor(next() * 2)),
     appointments: maybe(Math.floor(next() * 3)),
+    evidenceAsOf: null,
   };
 }
 
