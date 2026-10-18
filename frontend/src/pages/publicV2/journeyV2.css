@@ -1,0 +1,135 @@
+/*
+ * journeyV2 - shared styles for /how-it-works and /accelerator.
+ *
+ * Thin on purpose: redesigning the design system is out of scope on both tickets, so this
+ * borrows the existing cbv2-section and cbv2-wrap rhythm and adds only what the two pages
+ * need. No new colour values; everything resolves to tokens the site already sets.
+ */
+
+.cbv2-jy__lede {
+  font-size: clamp(1.6rem, 3.6vw, 2.5rem);
+  line-height: 1.22;
+  font-weight: 700;
+  margin: 0 0 1rem;
+  max-width: 28ch;
+}
+
+.cbv2-jy__claim {
+  font-size: 1.02rem;
+  color: var(--cbv2-muted, #475569);
+  margin: 0;
+  max-width: 62ch;
+}
+
+/* ── The five stages ─────────────────────────────────────────────── */
+
+.cbv2-jy__stages {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  counter-reset: none;
+}
+
+.cbv2-jy__stage {
+  display: flex;
+  gap: 1.1rem;
+  padding: 1.1rem 0;
+  border-bottom: 1px solid var(--cbv2-border, #e2e8f0);
+}
+
+.cbv2-jy__stage:last-child { border-bottom: none; }
+
+.cbv2-jy__n {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  font-size: 1.1rem;
+  color: var(--cbv2-accent, #b3261e);
+  min-width: 2.2rem;
+}
+
+.cbv2-jy__body h2 {
+  font-size: 1.15rem;
+  font-weight: 700;
+  margin: 0 0 0.35rem;
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.cbv2-jy__body p { margin: 0 0 0.35rem; color: var(--cbv2-muted, #475569); line-height: 1.55; }
+.cbv2-jy__out { font-size: 0.95rem; }
+
+/*
+ * Who delivers the stage. TEXT carries the meaning, never colour alone, so the distinction
+ * survives greyscale, a colour-blind reader and a printed page.
+ */
+.cbv2-jy__by {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.12rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+  white-space: nowrap;
+}
+
+.cbv2-jy__by--platform { color: var(--cbv2-good, #15803d); }
+.cbv2-jy__by--people { color: var(--cbv2-muted, #475569); }
+
+.cbv2-jy__note {
+  margin: 1.1rem 0 0;
+  font-size: 0.95rem;
+  color: var(--cbv2-muted, #475569);
+  max-width: 62ch;
+}
+
+/* ── Offer cards ─────────────────────────────────────────────────── */
+
+.cbv2-jy__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1.5rem;
+}
+
+.cbv2-jy__card h2 { font-size: 1.08rem; font-weight: 700; margin: 0 0 0.4rem; }
+.cbv2-jy__card p { margin: 0; color: var(--cbv2-muted, #475569); line-height: 1.55; }
+
+.cbv2-jy__inline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.4rem;
+  list-style: none;
+  margin: 0 0 0.9rem;
+  padding: 0;
+  font-weight: 700;
+}
+
+.cbv2-jy__needs { margin: 0.6rem 0 0; padding-left: 1.1rem; line-height: 1.7; }
+.cbv2-jy__proof { max-width: 64ch; color: var(--cbv2-muted, #475569); line-height: 1.6; }
+.cbv2-jy__link { font-weight: 600; }
+
+/* ── The single call to action ───────────────────────────────────── */
+
+.cbv2-jy__cta { display: flex; justify-content: center; padding: 0.5rem 0 0.25rem; }
+
+.cbv2-jy__btn {
+  display: inline-block;
+  padding: 0.85rem 1.6rem;
+  border-radius: 8px;
+  background: var(--cbv2-accent, #b3261e);
+  color: #fff;
+  font-weight: 700;
+  text-decoration: none;
+  /* 48px target, so the one call to action is reachable on a phone. */
+  min-height: 48px;
+  line-height: 1.6;
+}
+
+.cbv2-jy__btn:hover,
+.cbv2-jy__btn:focus-visible {
+  background: var(--cbv2-accent-deep, #8c1d18);
+  color: #fff;
+  text-decoration: none;
+}
