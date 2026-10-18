@@ -162,7 +162,15 @@ const KIND = {
   PENDING: { k: 'PENDING', color: '#718096' },
 };
 
-const PR = 'https://github.com/ColaberryIntern/ColaberryEnterprise_AI_LeadershipAccelerator/pull/3191';
+/*
+ * ONE constant, because the first cut of this file spelled the number in four places and
+ * the number changed. PR 3191 merged the C5.2 split while these commits were still being
+ * written, so they went into a second PR, and four literals had to agree. A guard below
+ * fails the build if any other PR number is spelled anywhere in these two modules.
+ */
+const PR_NUM = 3198;
+const PR = 'https://github.com/ColaberryIntern/ColaberryEnterprise_AI_LeadershipAccelerator/pull/'
+  + PR_NUM;
 
 function criteria(id) {
   const r = ROUTES[id];
@@ -195,7 +203,7 @@ function criteria(id) {
     },
     {
       c: 'PR open, not merged',
-      e: 'PR 3191, open. Both tickets say open a PR and do not merge, and both name copy '
+      e: 'PR ' + PR_NUM + ', open. Both tickets say open a PR and do not merge, and both name copy '
         + 'approval before merge as your decision.',
       kind: KIND.LINK,
     },
@@ -371,6 +379,31 @@ function assertNothingClaimedLive() {
   return true;
 }
 
+/**
+ * No PR number is spelled anywhere in these modules except the one constant.
+ *
+ * This guard exists because the number DID drift: four literals said 3191 after the work
+ * had moved to a second PR, and the PDFs would have sent a reviewer to a merged PR that
+ * does not contain the code they were asked to review.
+ */
+function assertOnePrNumber() {
+  const sources = ['c53c54Data.js', 'c53c54Render.js'];
+  for (const f of sources) {
+    // Comments are stripped first, as in the duration guard: a note explaining WHY the
+    // number changed is exactly the context a later reader needs, and must not be the
+    // thing that fails the build.
+    const src = stripComments(fs.readFileSync(path.join(__dirname, f), 'utf8'));
+    const found = new Set();
+    for (const m of src.matchAll(/(?:pull\/|PR )(\d{3,6})/g)) found.add(Number(m[1]));
+    found.delete(PR_NUM);
+    if (found.size) {
+      throw new Error(f + ' spells PR number(s) ' + [...found].join(', ')
+        + ' but the artifact cites PR ' + PR_NUM);
+    }
+  }
+  return PR_NUM;
+}
+
 /** Every acceptance criterion carries evidence, and every evidence line names something. */
 function assertEveryCriterionHasEvidence() {
   let n = 0;
@@ -385,9 +418,10 @@ function assertEveryCriterionHasEvidence() {
 }
 
 module.exports = {
-  AS_OF, PR, STAGES, GAPS, CLAIMS, ROUTES, TICKETS, KIND,
+  AS_OF, PR, PR_NUM, STAGES, GAPS, CLAIMS, ROUTES, TICKETS, KIND,
   SO_WHAT, LIMITS, DECISION,
   headline, criteria, MANIFEST,
   assertRoutesDeclared, assertStagesMatchAudit, assertClaimsVerified,
   assertNoUnsourcedDurationInSource, assertNothingClaimedLive, assertEveryCriterionHasEvidence,
+  assertOnePrNumber,
 };

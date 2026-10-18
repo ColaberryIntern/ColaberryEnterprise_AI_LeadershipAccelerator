@@ -99,7 +99,7 @@ function buildVisual(id) {
   const body = `<div>
     <h1>${esc(t.id)} &middot; ${esc(t.title)}</h1>
     <div class="meta">${esc(D.AS_OF)} &middot; route <b>${esc(t.route)}</b> &middot;
-      PR 3191, open and unmerged &middot; four of five acceptance criteria met now</div>
+      PR ${D.PR_NUM}, open and unmerged &middot; four of five acceptance criteria met now</div>
     <div class="rule"></div>
 
     <div class="takeaway">
@@ -177,7 +177,7 @@ function buildDocument(id) {
     <h1>${esc(t.id)} &middot; ${esc(t.title)}</h1>
     <div class="meta">${esc(D.AS_OF)} &middot; route ${esc(t.route)} &middot;
       <a href="${esc(t.bc)}">ticket ${esc(t.id)}</a> &middot;
-      <a href="${esc(D.PR)}">PR 3191</a></div>
+      <a href="${esc(D.PR)}">PR ${D.PR_NUM}</a></div>
     <div class="rule"></div>
 
     <div class="asked">

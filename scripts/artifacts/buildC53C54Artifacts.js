@@ -34,6 +34,7 @@ async function main() {
   const scanned = D.assertNoUnsourcedDurationInSource();
   D.assertNothingClaimedLive();
   const criteria = D.assertEveryCriterionHasEvidence();
+  const pr = D.assertOnePrNumber();
 
   for (const j of JOBS) {
     const html = j.visual ? R.buildVisual(j.id) : R.buildDocument(j.id);
@@ -54,6 +55,7 @@ async function main() {
   console.log('  source files scanned       : ' + scanned + ', none states an unsourced duration');
   console.log('  nothing recorded as live   : the PR is unmerged and no production URL is claimed');
   console.log('  acceptance criteria        : ' + criteria + ' across both tickets, each with evidence');
+  console.log('  PR cited                   : ' + pr + ', the only PR number spelled anywhere');
   console.log('\nwritten to ' + OUT);
 }
 
