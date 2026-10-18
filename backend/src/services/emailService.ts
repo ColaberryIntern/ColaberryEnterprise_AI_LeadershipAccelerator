@@ -1,6 +1,9 @@
 import nodemailer from 'nodemailer';
 import { env } from '../config/env';
-import { getTestOverrides, getSetting } from './settingsService';
+import { getTestOverrides, getSetting, getSettingUpdatedAt } from './settingsService';
+import {
+  isTestModeExpired, testModeAgeHours, TEST_MODE_MAX_AGE_HOURS,
+} from './email/testModeWindow';
 import { isKillSwitchActive } from './launchSafety';
 import type { DigestData } from './digestService';
 import { redactForLogs } from '../utils/piiRedaction';
@@ -137,7 +140,29 @@ async function applyDevEmailGuard(
 async function resolveTestRedirect(): Promise<string | null> {
   try {
     const test = await getTestOverrides();
-    if (test.enabled && test.email) return test.email;
+    if (!test.enabled || !test.email) return null;
+
+    // EXPIRY (2026-10-17): a flag left on for 29 hours sent 579 emails to one
+    // mailbox, including 35 portal access links. Test mode is now honoured only
+    // while it is fresh; see services/email/testModeWindow.ts for the incident
+    // and why the age comes from the settings row itself.
+    const enabledAt = await getSettingUpdatedAt('test_mode_enabled');
+    if (isTestModeExpired(enabledAt)) {
+      console.warn(JSON.stringify({
+        service: 'backend',
+        level: 'warn',
+        event: 'test_mode.expired_ignored',
+        outcome: 'success',
+        error_class: 'TestModeExpired',
+        context: {
+          age_hours: testModeAgeHours(enabledAt),
+          max_age_hours: TEST_MODE_MAX_AGE_HOURS,
+          note: 'test_mode_enabled is still true but is being IGNORED; mail is going to its real recipients',
+        },
+      }));
+      return null;
+    }
+    return test.email;
   } catch {
     // If settings DB fails, don't block email sending
   }
@@ -157,10 +182,25 @@ export async function resolveDeliveryAddress(intended: string): Promise<string> 
   return (await resolveTestRedirect()) ?? intended;
 }
 
+/**
+ * `neverRedirect` exempts a send from test mode entirely.
+ *
+ * It exists for one class of mail: a message that CARRIES A CREDENTIAL. A
+ * portal access link is a bearer token — whoever opens it is signed in as that
+ * student. Redirecting it does two things at once, and both are bad: the
+ * student cannot log in, and their working login lands in somebody else's
+ * inbox. That is a security property, not a delivery preference, so it is not
+ * left to whether a flag happens to be on.
+ *
+ * Non-credential mail (digests, reminders, reports) still redirects, which is
+ * the whole point of test mode.
+ */
 export async function resolveEmailRecipient(
   intended: string,
-  subject: string
+  subject: string,
+  options?: { neverRedirect?: boolean }
 ): Promise<{ to: string; subject: string }> {
+  if (options?.neverRedirect) return { to: intended, subject };
   const redirect = await resolveTestRedirect();
   if (redirect) {
     console.log(`[Email] TEST MODE: redirecting from ${redactForLogs(intended)} to ${redactForLogs(redirect)}`);
@@ -382,7 +422,9 @@ export async function sendTrainingWelcome(data: TrainingWelcomeData): Promise<{ 
     return { sent: false };
   }
   const subject = 'Welcome to Colaberry: your AI journey starts now';
-  const r = await resolveEmailRecipient(data.to, subject);
+  // NEVER REDIRECTED: `portalLink` is built as /portal/verify?token=... by
+  // enrollmentService, so this welcome email is also a login.
+  const r = await resolveEmailRecipient(data.to, subject, { neverRedirect: true });
   const html = buildTrainingWelcomeHtml(data);
   const fromHeader = `"${env.trainingWelcomeFromName}" <${env.trainingWelcomeFromEmail}>`;
   const info = await guardedSendMail({
@@ -1786,9 +1828,14 @@ export async function sendPortalMagicLink(data: PortalMagicLinkData): Promise<vo
   const nextParam = data.next ? `&next=${encodeURIComponent(data.next)}` : '';
   const magicLink = `${portalBaseUrl}/portal/verify?token=${data.token}${nextParam}`;
 
+  // NEVER REDIRECTED: this email contains a working login for `data.to`.
+  // Test mode sent 35 of these to a single mailbox over 29 hours in October
+  // 2026, locking 10 people out of the portal while handing their logins to
+  // someone else. See resolveEmailRecipient's note on `neverRedirect`.
   const r = await resolveEmailRecipient(
     data.to,
-    `[Accelerator] Your Portal Access Link`
+    `[Accelerator] Your Portal Access Link`,
+    { neverRedirect: true }
   );
   const html = buildPortalMagicLinkHtml(data, magicLink);
   const info = await guardedSendMail({
@@ -1822,9 +1869,11 @@ export async function sendOrgInviteEmail(data: OrgInviteData): Promise<void> {
   const portalBaseUrl = env.frontendUrl || 'https://enterprise.colaberry.ai';
   const magicLink = `${portalBaseUrl}/portal/verify?token=${data.token}`;
 
+  // NEVER REDIRECTED: carries a /portal/verify token, so it is a login.
   const r = await resolveEmailRecipient(
     data.to,
     `You're invited to join ${data.orgName} on Colaberry`,
+    { neverRedirect: true },
   );
   const html = buildOrgInviteHtml(data, magicLink);
   const info = await guardedSendMail({
@@ -2819,7 +2868,10 @@ export async function sendDeliveryClientMagicLink(
   const baseUrl = env.frontendUrl || 'https://enterprise.colaberry.ai';
   const magicLink = `${baseUrl}/client?token=${encodeURIComponent(data.token)}`;
 
-  const r = await resolveEmailRecipient(data.to, 'Your project review sign-in link');
+  // NEVER REDIRECTED: carries a /client sign-in token, so it is a login.
+  const r = await resolveEmailRecipient(data.to, 'Your project review sign-in link', {
+    neverRedirect: true,
+  });
   const html = buildDeliveryClientMagicLinkHtml(data, magicLink);
   const info = await guardedSendMail({
     from: `"Colaberry" <${env.emailFrom}>`,

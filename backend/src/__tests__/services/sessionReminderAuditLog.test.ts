@@ -16,6 +16,15 @@
 const sendMailMock = jest.fn().mockResolvedValue({ messageId: 'msg-abc', accepted: ['s@x.com'], rejected: [] });
 const logCommunicationMock = jest.fn().mockResolvedValue({});
 const getTestOverridesMock = jest.fn().mockResolvedValue({ enabled: false, email: null });
+// Test mode is only honoured while the flag is fresh, so these tests report it
+// as set a minute ago. Without this the redirect case below would be skipped as
+// stale and the suite would assert "live" while believing it tested a redirect.
+// Takes a rest parameter because the module mock forwards its arguments
+// (`getSettingUpdatedAt('test_mode_enabled')`); a zero-arg mock typechecks
+// locally and fails the test-file typecheck in CI.
+const getSettingUpdatedAtMock = jest.fn(
+  async (..._args: any[]) => new Date(Date.now() - 60 * 1000),
+);
 
 jest.mock('nodemailer', () => ({
   __esModule: true,
@@ -31,6 +40,12 @@ jest.mock('../../config/env', () => ({
 jest.mock('../../services/settingsService', () => ({
   getTestOverrides: (...a: any[]) => getTestOverridesMock(...a),
   getSetting: jest.fn().mockResolvedValue(null),
+  // Test mode now also has to be FRESH to be honoured: a flag older than
+  // TEST_MODE_MAX_AGE_HOURS is ignored (services/email/testModeWindow.ts,
+  // added after one was left on for 29 hours and redirected 579 emails).
+  // This mock reports the flag as having just been set, so the redirect
+  // behaviour below is exercised rather than silently skipped.
+  getSettingUpdatedAt: (...a: any[]) => getSettingUpdatedAtMock(...a),
 }));
 jest.mock('../../services/launchSafety', () => ({ isKillSwitchActive: jest.fn().mockResolvedValue(false) }));
 jest.mock('../../utils/piiRedaction', () => ({ redactForLogs: (s: string) => s }));

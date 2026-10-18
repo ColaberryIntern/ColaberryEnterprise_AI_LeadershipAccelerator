@@ -75,6 +75,23 @@ export async function getSetting(key: string): Promise<any> {
   return DEFAULTS[key] !== undefined ? DEFAULTS[key] : null;
 }
 
+/**
+ * When a setting was last written, or null if it has never been written.
+ *
+ * Added for test mode's expiry (services/email/testModeWindow.ts): a flag that
+ * redirects live mail needs an age, and `setSetting` already maintains
+ * `updated_at`, so the age is read from the row rather than from a second
+ * setting someone would have to remember to keep in step with the first.
+ *
+ * A row that does not exist returns null, NOT the DEFAULTS fallback that
+ * `getSetting` applies: a default has no timestamp, and inventing one would
+ * make an unset flag look freshly set.
+ */
+export async function getSettingUpdatedAt(key: string): Promise<Date | null> {
+  const setting = await SystemSetting.findOne({ where: { key } });
+  return setting?.updated_at ?? null;
+}
+
 export async function getAllSettings(): Promise<Record<string, any>> {
   const settings = await SystemSetting.findAll();
   const result: Record<string, any> = { ...DEFAULTS };
