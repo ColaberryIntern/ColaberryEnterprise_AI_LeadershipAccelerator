@@ -4,11 +4,13 @@ jest.mock('../../../db/ensureCampusPresenceSchema', () => ({ ensureCampusPresenc
 jest.mock('../../../models/CampusPresence', () => ({ __esModule: true, default: { findAll: jest.fn(), upsert: jest.fn() } }));
 jest.mock('../../peoplePanelService', () => ({ getPeoplePanel: jest.fn() }));
 jest.mock('../../cohortPresenceService', () => ({ getCohortPresence: jest.fn() }));
+jest.mock('../../communityRooms/dmEligibility', () => ({ canDmMany: jest.fn() }));
 
 import CampusPresence from '../../../models/CampusPresence';
 import { ensureCampusPresenceSchema } from '../../../db/ensureCampusPresenceSchema';
 import { getPeoplePanel } from '../../peoplePanelService';
 import { getCohortPresence } from '../../cohortPresenceService';
+import { canDmMany } from '../../communityRooms/dmEligibility';
 import {
   getCampusPresence, touchCampusArea, visibleSetFor, CampusAreaError, FRESH_MS, VISIBLE_CACHE_MAX,
   __resetCampusPresenceCacheForTests, __campusPresenceCacheSize,
@@ -19,6 +21,9 @@ const upsert = CampusPresence.upsert as unknown as jest.Mock;
 const panel = getPeoplePanel as unknown as jest.Mock;
 const cohort = getCohortPresence as unknown as jest.Mock;
 const ensure = ensureCampusPresenceSchema as unknown as jest.Mock;
+const canDm = canDmMany as unknown as jest.Mock;
+// The DM rule's answer per person (C5): classmates yes, the active-now person from another cohort no.
+const DM_OK: Record<string, boolean> = { mate: true, mate2: true, active: false, stranger: true };
 
 const NOW = new Date('2026-10-17T15:00:00Z');
 const at = (msAgo: number) => new Date(NOW.getTime() - msAgo);
@@ -30,6 +35,7 @@ beforeEach(() => {
   __resetCampusPresenceCacheForTests();
   ensure.mockResolvedValue(undefined);
   mockEnv.peoplePanelRolesEnabled = true;
+  canDm.mockImplementation(async (_v: string, _c: string | null, ids: string[]) => new Map(ids.map((id) => [id, DM_OK[id] === true])));
 });
 
 describe('touchCampusArea', () => {
@@ -62,11 +68,11 @@ describe('getCampusPresence visibility parity', () => {
     const { areas } = await getCampusPresence('me', 'coh-1', NOW);
     expect(areas.library!.count).toBe(4);
     expect(areas.library!.people).toEqual([
-      { enrollment_id: 'mate', display_name: 'Mia', avatar_url: null },
-      { enrollment_id: 'active', display_name: 'Ana', avatar_url: null },
+      { enrollment_id: 'mate', display_name: 'Mia', avatar_url: null, can_message: true },
+      { enrollment_id: 'active', display_name: 'Ana', avatar_url: null, can_message: false },
       { anonymous: true },
     ]);
-    expect(areas.lecture!.people).toEqual([{ enrollment_id: 'mate2', display_name: 'Max', avatar_url: null }]);
+    expect(areas.lecture!.people).toEqual([{ enrollment_id: 'mate2', display_name: 'Max', avatar_url: null, can_message: true }]);
     expect(panel).toHaveBeenCalledWith('me', 'coh-1');
     expect(cohort).not.toHaveBeenCalled();
   });
@@ -75,7 +81,7 @@ describe('getCampusPresence visibility parity', () => {
     findAll.mockResolvedValue(rows);
     panel.mockResolvedValue({ viewer_role: 'staff', online: [person('stranger', 'Sam')], classes: [], businesses: [] });
     const { areas } = await getCampusPresence('me', null, NOW);
-    expect(areas.library!.people).toEqual([{ anonymous: true }, { anonymous: true }, { enrollment_id: 'stranger', display_name: 'Sam', avatar_url: null }]);
+    expect(areas.library!.people).toEqual([{ anonymous: true }, { anonymous: true }, { enrollment_id: 'stranger', display_name: 'Sam', avatar_url: null, can_message: true }]);
   });
 
   it('panel OFF: names exactly the cohort-presence contacts (the rail fallback)', async () => {
@@ -84,17 +90,17 @@ describe('getCampusPresence visibility parity', () => {
     cohort.mockResolvedValue([{ id: 'mate', name: 'Mia', avatarUrl: 'data:image/png;base64,AA', presence: 'online', friendshipStatus: 'none' }]);
     const { areas } = await getCampusPresence('me', 'coh-1', NOW);
     expect(areas.library!.people).toEqual([
-      { enrollment_id: 'mate', display_name: 'Mia', avatar_url: 'data:image/png;base64,AA' },
+      { enrollment_id: 'mate', display_name: 'Mia', avatar_url: 'data:image/png;base64,AA', can_message: true },
       { anonymous: true }, { anonymous: true },
     ]);
     expect(panel).not.toHaveBeenCalled();
   });
 
-  it('a named person carries exactly three fields (no role, presence, cohort, member id)', async () => {
+  it('a named person carries exactly the three C4 fields plus can_message (no role, presence, cohort, member id)', async () => {
     findAll.mockResolvedValue([rows[1]]);
     panel.mockResolvedValue({ viewer_role: 'student', my_class: [person('mate', 'Mia')], active_now: [] });
     const { areas } = await getCampusPresence('me', 'coh-1', NOW);
-    expect(Object.keys(areas.library!.people[0]).sort()).toEqual(['avatar_url', 'display_name', 'enrollment_id']);
+    expect(Object.keys(areas.library!.people[0]).sort()).toEqual(['avatar_url', 'can_message', 'display_name', 'enrollment_id']);
   });
 
   it('anonymous entries are exactly {anonymous:true}', async () => {
@@ -146,5 +152,66 @@ describe('visible-set cache', () => {
     panel.mockResolvedValue({ viewer_role: 'student', my_class: [], active_now: [] });
     for (let i = 0; i < VISIBLE_CACHE_MAX + 25; i++) await visibleSetFor('v' + i, null, NOW);
     expect(__campusPresenceCacheSize()).toBe(VISIBLE_CACHE_MAX);
+  });
+});
+
+describe('can_message (C5): the one DM rule, per viewer, fail closed', () => {
+  const rows = [
+    { enrollment_id: 'mate', area: 'library', updated_at: at(1000) },
+    { enrollment_id: 'active', area: 'library', updated_at: at(2000) },
+    { enrollment_id: 'mate', area: 'library', updated_at: at(2500) },
+    { enrollment_id: 'ghost', area: 'lecture', updated_at: at(3000) },
+  ];
+  beforeEach(() => panel.mockResolvedValue({ viewer_role: 'student', my_class: [person('mate', 'Mia')], active_now: [person('active', 'Ana')] }));
+
+  it('asks the DM rule once, for the viewer and cohort, with each named person once (anonymous people never asked)', async () => {
+    findAll.mockResolvedValue(rows);
+    await getCampusPresence('me', 'coh-1', NOW);
+    expect(canDm).toHaveBeenCalledTimes(1);
+    expect(canDm).toHaveBeenCalledWith('me', 'coh-1', ['mate', 'active']);
+  });
+
+  it('a classmate can be messaged; an active-now person from another cohort cannot', async () => {
+    findAll.mockResolvedValue(rows.slice(0, 2));
+    const { areas } = await getCampusPresence('me', 'coh-1', NOW);
+    expect(areas.library!.people.map((p) => ('anonymous' in p ? 'anon' : p.enrollment_id + ':' + p.can_message))).toEqual(['mate:true', 'active:false']);
+  });
+
+  it('if the rule lookup fails, everyone named reads can_message false and the failure is logged', async () => {
+    findAll.mockResolvedValue(rows.slice(0, 2));
+    canDm.mockRejectedValue(new TypeError('db down'));
+    const err = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    const { areas } = await getCampusPresence('me', 'coh-1', NOW);
+    expect(areas.library!.people.every((p) => !('anonymous' in p) && p.can_message === false)).toBe(true);
+    expect(JSON.parse(String(err.mock.calls[0][0]))).toMatchObject({ event: 'campus_can_message_failed', error_class: 'TypeError' });
+    err.mockRestore();
+  });
+
+  it('Reese, named by the rail, reads can_message true for a student in any cohort (her bypass in the one rule)', async () => {
+    findAll.mockResolvedValue([{ enrollment_id: 'reese-1', area: 'commons', updated_at: at(1000) }]);
+    panel.mockResolvedValue({ viewer_role: 'student', my_class: [], active_now: [person('reese-1', 'Reese')] });
+    canDm.mockImplementation(async (_v: string, _c: string | null, ids: string[]) => new Map(ids.map((id) => [id, id === 'reese-1'])));
+    const { areas } = await getCampusPresence('me', 'coh-1', NOW);
+    expect(areas.commons!.people).toEqual([{ enrollment_id: 'reese-1', display_name: 'Reese', avatar_url: null, can_message: true }]);
+  });
+
+  it('an id the rule did not answer reads can_message false (never assumed allowed)', async () => {
+    findAll.mockResolvedValue(rows.slice(0, 2));
+    canDm.mockResolvedValue(new Map([['mate', true]])); // no answer for 'active'
+    const { areas } = await getCampusPresence('me', 'coh-1', NOW);
+    expect(areas.library!.people.map((p) => ('anonymous' in p ? 'anon' : p.enrollment_id + ':' + p.can_message))).toEqual(['mate:true', 'active:false']);
+  });
+
+  it('nobody named: the rule is not asked at all', async () => {
+    findAll.mockResolvedValue([rows[3]]);
+    await getCampusPresence('me', 'coh-1', NOW);
+    expect(canDm).not.toHaveBeenCalled();
+  });
+
+  it('the shared visible-set cache never stores can_message (it is per viewer, added on output)', async () => {
+    findAll.mockResolvedValue(rows.slice(0, 1));
+    await getCampusPresence('me', 'coh-1', NOW);
+    const cached = await visibleSetFor('me', 'coh-1', NOW);
+    expect(Object.keys(cached.get('mate')!).sort()).toEqual(['avatar_url', 'display_name', 'enrollment_id']);
   });
 });

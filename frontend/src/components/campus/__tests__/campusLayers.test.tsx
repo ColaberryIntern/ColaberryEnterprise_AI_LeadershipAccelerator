@@ -10,6 +10,8 @@ import type { CampusAudience } from '../campusMap';
 
 // The view hook reads entitlement and audience from the network; here the audience is set per test.
 let mockAudience: CampusAudience = 'member';
+// C5: the provider reads staff desks and polls the inbox while the campus is on; stubbed so no test touches the network.
+jest.mock('../campusPeopleApi', () => ({ fetchStaffDesks: () => Promise.resolve([]), fetchConversationsQuiet: () => Promise.resolve([]), postWave: () => Promise.resolve({ sent: true, reason: 'sent' }) }));
 jest.mock('../useCampusView', () => {
   const actual = jest.requireActual('../useCampusView');
   return { ...actual, useCampusView: () => ({ audience: mockAudience, hasFullAccess: false, buildings: actual.campusBuildingsFor(mockAudience) }) };

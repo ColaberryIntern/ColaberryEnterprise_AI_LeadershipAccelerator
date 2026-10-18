@@ -13,6 +13,10 @@ jest.mock('../../services/campus/campusPresenceService', () => ({
   touchCampusArea: (...a: unknown[]) => mockTouch(...a),
   getCampusPresence: (...a: unknown[]) => mockGetPresence(...a),
 }));
+const mockGetDesks = jest.fn();
+jest.mock('../../services/campus/campusStaffDesks', () => ({ getStaffDesks: (...a: unknown[]) => mockGetDesks(...a) }));
+const mockWave = jest.fn();
+jest.mock('../../services/campus/campusWave', () => ({ waveAt: (...a: unknown[]) => mockWave(...a) }));
 
 import express from 'express';
 import request from 'supertest';
@@ -148,7 +152,7 @@ describe('POST /api/portal/campus/here (C4)', () => {
 
 describe('GET /api/portal/campus/presence (C4)', () => {
   const PRES = '/api/portal/campus/presence';
-  const sample = { areas: { library: { count: 3, people: [{ enrollment_id: 'enr-2', display_name: 'Mia', avatar_url: null }, { anonymous: true }] } } };
+  const sample = { areas: { library: { count: 3, people: [{ enrollment_id: 'enr-2', display_name: 'Mia', avatar_url: null, can_message: true }, { anonymous: true }] } } };
   beforeEach(() => { mockGetPresence.mockReset(); mockGetPresence.mockResolvedValue(sample); });
 
   it('401s without a token', async () => {
@@ -183,8 +187,101 @@ describe('GET /api/portal/campus/presence (C4)', () => {
   });
 
   it('a response that breaks the contract fails loud outside production', async () => {
-    mockGetPresence.mockResolvedValue({ areas: { library: { count: 1, people: [{ enrollment_id: 'x', display_name: 'X', avatar_url: null, role: 'student' }] } } });
+    mockGetPresence.mockResolvedValue({ areas: { library: { count: 1, people: [{ enrollment_id: 'x', display_name: 'X', avatar_url: null, can_message: true, role: 'student' }] } } });
     const res = await request(buildApp({ CAMPUS_ENABLED: 'all' })).get(PRES).set('Authorization', `Bearer ${token()}`);
     expect(res.status).toBe(500);
+  });
+});
+
+describe('GET /api/portal/campus/staff-desks (C5)', () => {
+  const DESKS = '/api/portal/campus/staff-desks';
+  const reese = { id: 'reese', name: 'Reese', title: 'Mentor desk', building: 'commons', ai: true, on_duty: true, enrollment_id: 'r-1', opens: null, prompts: ['Q1', 'Q2', 'Q3'] };
+  beforeEach(() => { mockGetDesks.mockReset(); mockGetDesks.mockResolvedValue({ audience: 'member', desks: [reese] }); });
+
+  it('401s without a token', async () => {
+    expect((await request(buildApp({ CAMPUS_ENABLED: 'all' })).get(DESKS)).status).toBe(401);
+  });
+  it('403 CampusNotEnabled outside the pilot, and the service is never asked', async () => {
+    const res = await request(buildApp({})).get(DESKS).set('Authorization', `Bearer ${token()}`);
+    expect(res.status).toBe(403);
+    expect(res.body.error_class).toBe('CampusNotEnabled');
+    expect(mockGetDesks).not.toHaveBeenCalled();
+  });
+  it('in the pilot: the desks for THIS enrollment (from the token), without the audience', async () => {
+    const res = await request(buildApp({ CAMPUS_ENABLED: 'all' })).get(DESKS).set('Authorization', `Bearer ${token()}`);
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ desks: [reese] });
+    expect(mockGetDesks).toHaveBeenCalledWith('enr-1');
+  });
+  it('a service failure answers 500 CampusStaffDesksUnavailable', async () => {
+    mockGetDesks.mockRejectedValue(new TypeError('db down'));
+    const err = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    const res = await request(buildApp({ CAMPUS_ENABLED: 'all' })).get(DESKS).set('Authorization', `Bearer ${token()}`);
+    expect(res.status).toBe(500);
+    expect(res.body.error_class).toBe('CampusStaffDesksUnavailable');
+    err.mockRestore();
+  });
+  it('a desk that breaks the contract fails loud outside production', async () => {
+    mockGetDesks.mockResolvedValue({ audience: 'member', desks: [{ ...reese, avatar: 'x.png' }] });
+    const err = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    expect((await request(buildApp({ CAMPUS_ENABLED: 'all' })).get(DESKS).set('Authorization', `Bearer ${token()}`)).status).toBe(500);
+    err.mockRestore();
+  });
+});
+
+describe('POST /api/portal/campus/wave (C5)', () => {
+  const WAVE = '/api/portal/campus/wave';
+  const TO = '6f1c2a5e-8b1d-4c3e-9a7f-1b2c3d4e5f60';
+  beforeEach(() => { mockWave.mockReset(); mockWave.mockResolvedValue({ sent: true, reason: 'sent', roomId: 'room-1' }); });
+  const post = (vars: CampusEnv, body: unknown, tok = token()) => request(buildApp(vars)).post(WAVE).set('Authorization', `Bearer ${tok}`).send(body as object);
+
+  it('401s without a token', async () => {
+    expect((await request(buildApp({ CAMPUS_ENABLED: 'all' })).post(WAVE).send({ to: TO })).status).toBe(401);
+  });
+  it('a read-only "view as" token cannot wave', async () => {
+    const res = await post({ CAMPUS_ENABLED: 'all' }, { to: TO }, token({ read_only: true, impersonated_by: 'admin-1' }));
+    expect(res.status).toBe(403);
+    expect(mockWave).not.toHaveBeenCalled();
+  });
+  it('403 CampusNotEnabled outside the pilot; nothing sent', async () => {
+    const res = await post({}, { to: TO });
+    expect(res.status).toBe(403);
+    expect(res.body.error_class).toBe('CampusNotEnabled');
+    expect(mockWave).not.toHaveBeenCalled();
+  });
+  it.each([[{}], [{ to: 'not-a-uuid' }], [{ to: TO, from: TO }]])('400 for a malformed body %j', async (body) => {
+    const res = await post({ CAMPUS_ENABLED: 'all' }, body);
+    expect(res.status).toBe(400);
+    expect(mockWave).not.toHaveBeenCalled();
+  });
+  it('in the pilot: waves as the token enrollment and cohort', async () => {
+    const res = await post({ CAMPUS_ENABLED: 'all' }, { to: TO });
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ sent: true, reason: 'sent', roomId: 'room-1' });
+    expect(mockWave).toHaveBeenCalledWith('enr-1', 'coh-1', TO);
+  });
+  it('already waved: 200 with sent false', async () => {
+    mockWave.mockResolvedValue({ sent: false, reason: 'already_waved', roomId: 'room-1' });
+    expect((await post({ CAMPUS_ENABLED: 'all' }, { to: TO })).body).toMatchObject({ sent: false, reason: 'already_waved' });
+  });
+  it('the DM rule refusal keeps its usual text as 400 DmNotAllowed', async () => {
+    const e = new Error('You can only message people in your cohort'); e.name = 'DmError';
+    mockWave.mockRejectedValue(e);
+    const res = await post({ CAMPUS_ENABLED: 'all' }, { to: TO });
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({ error: 'You can only message people in your cohort', error_class: 'DmNotAllowed' });
+  });
+  it('waving at AI staff: 400 with its own error class', async () => {
+    const e = Object.assign(new Error('AI staff answer questions'), { name: 'WaveError', error_class: 'WaveToAiStaff' });
+    mockWave.mockRejectedValue(e);
+    expect((await post({ CAMPUS_ENABLED: 'all' }, { to: TO })).body.error_class).toBe('WaveToAiStaff');
+  });
+  it('an unexpected failure: 500 CampusWaveUnavailable', async () => {
+    mockWave.mockRejectedValue(new TypeError('db down'));
+    const err = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    const res = await post({ CAMPUS_ENABLED: 'all' }, { to: TO });
+    expect(res.status).toBe(500);
+    expect(res.body.error_class).toBe('CampusWaveUnavailable');
+    err.mockRestore();
   });
 });

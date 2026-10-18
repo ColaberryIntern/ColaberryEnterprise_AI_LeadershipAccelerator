@@ -17,13 +17,19 @@ export function initialsOf(name: string): string {
   return ((parts[0][0] ?? '') + (parts.length > 1 ? parts[parts.length - 1][0] ?? '' : '')).toUpperCase();
 }
 
-function PersonChip({ p }: { p: CampusPerson }): React.ReactElement {
-  return (
-    <li className="cm-person" data-enrollment={p.enrollment_id}>
+function PersonChip({ p, onPick }: { p: CampusPerson; onPick?: (p: CampusPerson) => void }): React.ReactElement {
+  const inner = (
+    <>
       {p.avatar_url
         ? <img className="cm-face" src={p.avatar_url} alt="" />
         : <span className="cm-face cm-initials" aria-hidden="true">{initialsOf(p.display_name)}</span>}
       <span className="cm-person-name">{p.display_name}</span>
+    </>
+  );
+  // C5: with onPick, the chip opens that person's card.
+  return (
+    <li className="cm-person" data-enrollment={p.enrollment_id}>
+      {onPick ? <button type="button" className="cm-person-btn" onClick={() => onPick(p)} aria-label={`${p.display_name}, open their card`}>{inner}</button> : inner}
     </li>
   );
 }
@@ -33,9 +39,11 @@ export interface WhoIsHereProps {
   error: boolean;
   /** True until the first presence read has answered: unknown is not the same as empty. */
   loading?: boolean;
+  /** C5: open a named person's card. Absent = chips are plain (C4 behavior). */
+  onPick?: (p: CampusPerson) => void;
 }
 
-export default function WhoIsHere({ presence, error, loading = false }: WhoIsHereProps): React.ReactElement {
+export default function WhoIsHere({ presence, error, loading = false, onPick }: WhoIsHereProps): React.ReactElement {
   let body: React.ReactNode;
   if (loading && !error) {
     body = <p className="cm-who-note" data-testid="cm-who-loading">Checking who's here...</p>;
@@ -48,7 +56,7 @@ export default function WhoIsHere({ presence, error, loading = false }: WhoIsHer
     const others = presence.people.length - named.length;
     body = (
       <>
-        {named.length > 0 && <ul className="cm-people">{named.map((p) => <PersonChip key={p.enrollment_id} p={p} />)}</ul>}
+        {named.length > 0 && <ul className="cm-people">{named.map((p) => <PersonChip key={p.enrollment_id} p={p} onPick={onPick} />)}</ul>}
         {others > 0 && <p className="cm-who-note" data-testid="cm-who-anon">{others === 1 ? '1 other learner' : `${others} other learners`}</p>}
       </>
     );

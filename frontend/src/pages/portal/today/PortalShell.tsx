@@ -11,12 +11,12 @@ import { useNextLiveSession } from './useNextLiveSession';
 import { parseSessionTimeToHHMM } from '../../../utils/sessionTime';
 import NotificationBell from '../community/NotificationBell';
 import BuildToast from '../projects/BuildToast';
-import { CohortContact, fetchCohortPresence, sendFriendRequest, respondToFriendRequest, colorFor } from '../../../services/cohortPresenceApi';
+import { CohortContact, fetchCohortPresence, sendFriendRequest, respondToFriendRequest } from '../../../services/cohortPresenceApi';
 import { fetchPeoplePanel, PeoplePanel } from '../../../services/peoplePanelApi';
 import ShellContactsRail from './ShellContactsRail';
 import { pingPresence } from '../../../services/communityApi';
-import { openDm } from '../../../services/dmApi';
-import ChatDock, { DmTarget } from './ChatDock';
+import ChatDock from './ChatDock';
+import { useShellDms } from './useShellDms';
 import MessagesButton from './MessagesButton';
 import { useEntitlement } from '../useEntitlement';
 import { useOrgManager, companyLabel } from '../useIsOrgManager';
@@ -312,42 +312,8 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge, condens
   const onRespondFriend = useCallback((requesterId: string, accept: boolean) => {
     respondToFriendRequest(requesterId, accept).then(refreshContacts).catch(() => { /* keep request */ });
   }, [refreshContacts]);
-  // Open (or focus) a 1:1 chat dock when a contact face is clicked.
-  const [chats, setChats] = useState<DmTarget[]>([]);
-  const openChatTarget = useCallback((t: DmTarget) => {
-    setChats((prev) => (prev.some((x) => x.roomId === t.roomId) ? prev : [...prev, t]));
-  }, []);
-  // Surfaces a failed DM-open (e.g. "You can only message people in your cohort")
-  // instead of swallowing it — a click that silently does nothing looks broken.
-  const [dmError, setDmError] = useState('');
-  const flashDmError = useCallback((err: any) => {
-    setDmError(err?.response?.data?.error || 'Could not open that conversation.');
-    window.setTimeout(() => setDmError(''), 3200);
-  }, []);
-  const openChat = useCallback((c: CohortContact) => {
-    openDm(c.id).then((roomId) => openChatTarget({ roomId, name: c.name, color: c.color })).catch(flashDmError);
-  }, [openChatTarget, flashDmError]);
-  // People-panel rows carry only enrollmentId + name; derive the colour the same way
-  // the cohort rail does so the same person is always the same colour.
-  const openPerson = useCallback((enrollmentId: string, name: string) => {
-    openDm(enrollmentId).then((roomId) => openChatTarget({ roomId, name, color: colorFor(enrollmentId) })).catch(flashDmError);
-  }, [openChatTarget, flashDmError]);
-
-  // Bridge: other surfaces (e.g. the community member profile drawer) open a DM
-  // by dispatching a `te-open-dm` CustomEvent { enrollmentId, name, color? } —
-  // the same dock mechanism the contacts rail uses, without prop-drilling the
-  // opener into every page.
-  useEffect(() => {
-    const onOpenDm = (e: Event) => {
-      const detail = (e as CustomEvent<{ enrollmentId?: string; name?: string; color?: string }>).detail;
-      if (!detail?.enrollmentId) return;
-      openDm(detail.enrollmentId)
-        .then((roomId) => openChatTarget({ roomId, name: detail.name ?? 'Direct message', color: detail.color ?? colorFor(detail.enrollmentId!) }))
-        .catch(flashDmError);
-    };
-    window.addEventListener('te-open-dm', onOpenDm as EventListener);
-    return () => window.removeEventListener('te-open-dm', onOpenDm as EventListener);
-  }, [openChatTarget, flashDmError]);
+  // Direct messages: docks, the open-failed flash, the openers and the te-open-dm bridge (moved to useShellDms).
+  const { chats, openChatTarget, closeChat, dmError, openChat, openPerson } = useShellDms();
 
   /**
    * Two INDEPENDENT reads, settled independently.
@@ -592,7 +558,7 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge, condens
       {chats.length > 0 && (
         <div className="te-dmdock">
           {chats.map((t) => (
-            <ChatDock key={t.roomId} target={t} onClose={() => setChats((prev) => prev.filter((x) => x.roomId !== t.roomId))} />
+            <ChatDock key={t.roomId} target={t} onClose={() => closeChat(t.roomId)} />
           ))}
         </div>
       )}

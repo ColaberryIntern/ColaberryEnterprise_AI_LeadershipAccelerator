@@ -41,7 +41,7 @@ export async function fetchCampusFlags(): Promise<CampusFlags> {
 
 // ---- C4: presence by building (same rules: own request, token attached, no redirect interceptor) ----
 
-export interface CampusPerson { enrollment_id: string; display_name: string; avatar_url: string | null }
+export interface CampusPerson { enrollment_id: string; display_name: string; avatar_url: string | null; /** C5: may I message them (the DM rule). Absent from an older server = no. */ can_message?: boolean }
 export type CampusPresenceEntry = CampusPerson | { anonymous: true };
 export interface CampusAreaPresence { count: number; people: CampusPresenceEntry[] }
 export type CampusPresence = Record<string, CampusAreaPresence>;
