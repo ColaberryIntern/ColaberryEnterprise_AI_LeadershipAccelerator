@@ -48,6 +48,14 @@ export function workingDaysBetween(start: Date, end: Date): number {
   return count;
 }
 
+/** Advance `n` working days from `start` (n >= 0); the start day is not counted. */
+export function addWorkingDays(start: Date, n: number): Date {
+  const cur = startOfUtcDay(start);
+  let remaining = Math.max(0, Math.floor(n));
+  while (remaining > 0) { cur.setUTCDate(cur.getUTCDate() + 1); if (isWorkingDay(cur)) remaining -= 1; }
+  return cur;
+}
+
 /** The day BEFORE the deadline (never earlier than `now`); null if no deadline. Mirrors backend govShipByDate. */
 export function shipByDate(deadline: Date | null, now: Date): Date | null {
   if (!deadline) return null;
@@ -105,4 +113,50 @@ export function deriveCountdown(input: {
     : blocked > 0 ? `${blocked} item(s) waiting on your answer; ${workingDaysToShipBy} working days to ship-by vs ${effectiveNeeded} needed`
       : `${workingDaysToShipBy} working days to ship-by vs ${effectiveNeeded} of remaining build work`;
   return base;
+}
+
+/** Working days reserved AFTER the MVP is demo-ready for proposal drafting + sign/ship, before the deadline. */
+export const PROPOSAL_BUFFER_WORKING_DAYS = 5;
+
+/** Go back `n` working days from `start` (n >= 0). */
+function subtractWorkingDays(start: Date, n: number): Date {
+  const cur = startOfUtcDay(start);
+  let remaining = Math.max(0, Math.floor(n));
+  while (remaining > 0) { cur.setUTCDate(cur.getUTCDate() - 1); if (isWorkingDay(cur)) remaining -= 1; }
+  return cur;
+}
+
+export interface MvpSchedule {
+  shipBy: string | null;
+  mvpDemoReadyBy: string | null;
+  latestMvpReadyBy: string | null;
+  daysBeforeDue: number | null;
+  feasible: boolean | null;
+  mvpBuildDays: number | null;
+  headline: string;
+}
+
+/**
+ * Back-plan the MVP from the deadline, deterministically + working-day aware. The MVP is demo-ready after
+ * mvpStoryCount * WORKING_DAYS_PER_STORY working days of build; it must land by ship-by MINUS a proposal/sign buffer.
+ * Feasible when the earliest demo-ready date fits before that latest-allowed date. "-" (nulls) when an input is
+ * missing - never a guessed date.
+ */
+export function deriveMvpSchedule(input: { now: Date; deadline: Date | null; mvpStoryCount: number | null }): MvpSchedule {
+  const ship = shipByDate(input.deadline, input.now);
+  if (!ship || input.deadline == null || input.mvpStoryCount === null) {
+    return {
+      shipBy: ship ? dayKey(ship) : null, mvpDemoReadyBy: null, latestMvpReadyBy: null, daysBeforeDue: null,
+      feasible: null, mvpBuildDays: null, headline: input.deadline == null ? 'No submission deadline' : 'No build plan yet',
+    };
+  }
+  const mvpBuildDays = Math.max(0, input.mvpStoryCount) * WORKING_DAYS_PER_STORY;
+  const earliest = addWorkingDays(startOfUtcDay(input.now), mvpBuildDays);
+  const latest = subtractWorkingDays(ship, PROPOSAL_BUFFER_WORKING_DAYS);
+  const daysBeforeDue = workingDaysBetween(earliest, startOfUtcDay(input.deadline));
+  const feasible = earliest.getTime() <= latest.getTime();
+  const headline = feasible
+    ? `MVP demo-ready by ${dayKey(earliest)} - ${daysBeforeDue} working days before due`
+    : `MVP will not be demo-ready in time: it needs ${mvpBuildDays} working days and only fits if ready by ${dayKey(latest)}`;
+  return { shipBy: dayKey(ship), mvpDemoReadyBy: dayKey(earliest), latestMvpReadyBy: dayKey(latest), daysBeforeDue, feasible, mvpBuildDays, headline };
 }

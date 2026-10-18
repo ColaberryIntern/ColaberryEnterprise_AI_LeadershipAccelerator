@@ -35,6 +35,7 @@ import { FitCapabilitiesPanel } from './govWorkspace/FitCapabilitiesPanel';
 import { DecidePanel } from './govWorkspace/DecidePanel';
 import { CountdownBand } from './govWorkspace/CountdownBand';
 import { TeamAccessPanel } from './govWorkspace/TeamAccessPanel';
+import { MvpScheduleBanner } from './govWorkspace/MvpScheduleBanner';
 
 /** The discovery opportunity's display details fetched for the decoupled (ZIP) workspace. */
 type OppDetail = { opportunity: GovOpportunity | null; source: 'live' | 'snapshot'; snapshotDate: string | null };
@@ -1587,6 +1588,15 @@ export default function AdminGovQualificationPage(): React.ReactElement {
             canShare={!!ws.build?.deliveryProjectId}
             responseCount={(ws.responseSlots ?? []).length}
           />
+          {/* P5 B: the pre-submission MVP schedule, back-planned from the submission deadline (distinct from the
+              post-award build timeline further down). */}
+          <SectionCard title="Spec &amp; MVP schedule (pre-submission)" icon="calendar-schedule-line"
+            subtitle="Back-planned from the submission deadline: can we build a demo-able MVP before the bid is due? Deterministic and working-day aware. This is distinct from the post-award build timeline below.">
+            <MvpScheduleBanner
+              deadline={oppDetail?.opportunity?.closeDate ?? ws.source?.deadline?.utc ?? null}
+              mvpStoryCount={ws.build ? (ws.build.stories ?? []).length : null}
+            />
+          </SectionCard>
           {/* ── Build tab: the AI build spec/research (advisory) + the solution-build track (forward) + the separate build authorization ─ */}
           {(
             <SectionCard title="Build spec & buyer-system research (AI)" icon="sparkling-2-line"
