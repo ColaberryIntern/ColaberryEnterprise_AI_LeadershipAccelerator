@@ -603,6 +603,47 @@ interface SubmissionActions {
  * every response is approved + covered. EXPORTED ≠ SUBMITTED: the download + the receipt/acknowledgement are
  * distinct, manual steps; nothing here submits to any external portal. Mirrors the server, never replaces it.
  */
+/**
+ * SubmitStatusTiles (P7) — a compact, at-a-glance read of the Submit step: deadline, readiness, package, and the
+ * external-submission confirmation. PRESENTATIONAL and advisory — it derives entirely from the submission +
+ * readiness the page already holds and triggers nothing; the controls below (SubmissionPanel) remain the source
+ * of truth, and the submission routes are unchanged.
+ */
+function SubmitStatusTiles({ submission, readiness, deadlineUtc, daysLeftN }: {
+  submission: GovSubmission | null | undefined;
+  readiness: GovSubmissionReadiness | undefined;
+  deadlineUtc: string | null;
+  daysLeftN: number | null;
+}): React.ReactElement {
+  const status = submission?.status ?? 'preparing';
+  const ready = !!readiness?.ready;
+  const blockingN = readiness?.blocking?.length ?? 0;
+  const submitted = status === 'externally_submitted' || status === 'acknowledged';
+  const exported = status === 'exported' || submitted;
+  const dateStr = deadlineUtc && !Number.isNaN(Date.parse(deadlineUtc)) ? new Date(deadlineUtc).toISOString().slice(0, 10) : 'Not set';
+  const tiles: { k: string; v: string; sub: string; tone: string; icon: string }[] = [
+    { k: 'Deadline', v: dateStr, sub: daysLeftN != null ? `${daysLeftN} day${daysLeftN === 1 ? '' : 's'} left` : 'no date on file', tone: daysLeftN != null && daysLeftN <= 3 ? 'danger' : 'secondary', icon: 'ri-timer-flash-line' },
+    { k: 'Readiness', v: ready ? 'Ready' : `${blockingN} blocking`, sub: ready ? 'all responses approved' : 'resolve before submit', tone: ready ? 'success' : 'warning', icon: ready ? 'ri-checkbox-circle-line' : 'ri-error-warning-line' },
+    { k: 'Package', v: exported ? 'Exported' : 'Not exported', sub: exported ? 'download below' : 'export when ready', tone: exported ? 'info' : 'secondary', icon: 'ri-folder-zip-line' },
+    { k: 'Submission', v: submitted ? (status === 'acknowledged' ? 'Acknowledged' : 'Recorded') : 'Not recorded', sub: submission?.externalRef ? `ref ${submission.externalRef}` : 'record after you submit', tone: submitted ? 'success' : 'secondary', icon: 'ri-send-plane-line' },
+  ];
+  return (
+    <div className="row g-2 mb-3" data-testid="submit-status-tiles">
+      {tiles.map((t) => (
+        <div className="col-6 col-lg-3" key={t.k}>
+          <div className={`card h-100 border-${t.tone}-subtle`}>
+            <div className="card-body py-2 px-3">
+              <div className="small text-secondary text-uppercase" style={{ fontSize: '0.7rem', letterSpacing: '0.04em' }}><i className={`${t.icon} me-1`} aria-hidden="true" />{t.k}</div>
+              <div className={`fw-semibold text-${t.tone}-emphasis`}>{t.v}</div>
+              <div className="small text-secondary">{t.sub}</div>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function SubmissionPanel({ submission, readiness, actions }: { submission: GovSubmission | null | undefined; readiness: GovSubmissionReadiness | undefined; actions: SubmissionActions }): React.ReactElement {
   const [externalRef, setExternalRef] = useState('');
   const [ackRef, setAckRef] = useState('');
@@ -1707,6 +1748,13 @@ export default function AdminGovQualificationPage(): React.ReactElement {
           </GovTabPanel>{/* end Build */}
 
           <GovTabPanel active={activeStep === 'submit'}>
+          {/* P7: at-a-glance submit tiles (deadline / readiness / package / confirmation) — advisory, derived. */}
+          <SubmitStatusTiles
+            submission={ws.submission}
+            readiness={ws.submissionReadiness}
+            deadlineUtc={ws.source?.deadline?.utc ?? oppDetail?.opportunity?.closeDate ?? null}
+            daysLeftN={daysLeft(ws.source?.deadline?.utc ?? oppDetail?.opportunity?.closeDate ?? null)}
+          />
           {/* ── What gets submitted (advisory summary: legible bid, changes nothing) ─ */}
           <SectionCard title="What gets submitted" icon="file-list-3-line"
             subtitle="A read-only summary of the bid — what it must answer, how far along it is, and the deadline with a day-before ship target. It changes nothing; the release controls are below.">
