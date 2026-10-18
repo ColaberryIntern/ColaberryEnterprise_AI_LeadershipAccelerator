@@ -1904,3 +1904,57 @@ The derived sweep already recorded under the DDL item - list every table an `ens
 ALTERs with no `CREATE` anywhere - would have predicted this result without starting a database
 at all. It names the real population. `student_tasks` and `github_connections` are simply the
 two that the lifecycle and sbp suites happen to touch first.
+
+## 20 OF 73 TABLES CANNOT EXIST ON A PRISTINE DATABASE, and the sweep now says so
+
+The DDL item recorded a cheap first step: *"a derived sweep over `backend/src/db/ensure*.ts` that
+lists every table ALTERed without a CREATE anywhere. That names the real population instead of the
+one table someone happened to notice."* Shipped, as
+`backend/src/db/__tests__/bootSchemaCreatable.test.ts`.
+
+### The population
+
+| | |
+|---|---|
+| Tables the boot path ALTERs | **73** |
+| Creatable by the boot path (`db/` or `server.ts`) | 53 |
+| **No `CREATE` anywhere** | **14** |
+| **`CREATE` only in a test, seed or script** | **6** |
+| **Cannot exist on a pristine database** | **20 (27%)** |
+
+The six with a non-boot CREATE are the ones that matter most, because they are the identity
+tables everything else references: **`projects`, `enrollments`, `admin_users`, `ai_agents`,
+`student_tasks`, `organizations`**. `student_tasks`' only CREATE is in `seeds/seedStudentTasks.ts`
+and `projects`' only CREATE is in integration tests - which is why a bare Postgres failed 11 times
+on one and the schema has no way to bootstrap the other.
+
+The fourteen with none at all include `github_connections`, confirming the morning's finding, plus
+a cluster of marketing and CRM tables (`campaigns`, `page_events`, `visitor_sessions`,
+`lead_sources`, `follow_up_sequences`, `tickets`, `event_ledger`).
+
+### The instrument failed its own control first, and that is encoded in the test
+
+A first pass classified `github_connections` as **creatable**, contradicting a finding made hours
+earlier. The regex had matched this sentence, inside a doc comment:
+
+> there is no `CREATE TABLE IF NOT EXISTS github_connections` anywhere in `backend/src`
+
+**Prose written that morning to document the table's ABSENCE, read by the sweep as its presence.**
+Comments are now stripped before matching, and a test asserts the stripping using that exact
+sentence, because without it the sweep reports the opposite of the truth.
+
+Two further refinements came from the output disagreeing with itself: `ALTER TABLE` was matching
+the words `add` and `drop` as table names, and `server.ts` was being treated as outside the boot
+path when it is the boot path. Three rounds, each corrected by a control rather than by review.
+
+**Mutation-proven:** making `stripComments` a no-op fails **three** tests - the direct assertion,
+the new-offender sweep, and the grandfathered check, which flips because `github_connections`
+starts looking creatable from the comment describing it as absent.
+
+### What it does and does not do
+
+It **freezes** the population: nothing new may be ALTERed at boot without something creating it,
+and a table that becomes creatable must leave the list, so the list can only shrink. It does
+**not** create anything. Making a pristine database bootable is the ESCALATE-tier decision, and
+this sweep exists to give that decision its actual scope - 20 tables, 6 of them load-bearing -
+rather than the one or two anybody happened to trip over.
