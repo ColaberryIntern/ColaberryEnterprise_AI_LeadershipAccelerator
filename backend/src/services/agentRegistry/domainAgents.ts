@@ -46,14 +46,30 @@ import type { AgentSeedEntry } from './agentSeedTypes';
  * row. `operations` is the honest fallback for a department agent with no category of its own.
  */
 
-/** Shared by all ten, so a change to the Release Zero floor happens in one place. */
-const RELEASE_ZERO = {
+/**
+ * The Release Zero floor, in one place so changing it changes all ten.
+ *
+ * A FACTORY, not a shared constant, for two reasons that both bit:
+ *
+ *   1. `as const` on the object literal typed `tools_granted` as `readonly []`, which is not
+ *      assignable to `AgentSeedEntry.tools_granted?: string[]`. Ten TS2322s in CI. Typing the
+ *      return explicitly keeps the literal types the union needs while leaving the array
+ *      mutable, which is what the interface asks for.
+ *   2. A shared constant would hand the SAME array instance to all ten entries. Nothing mutates
+ *      it today, and an aliasing bug where granting one agent a tool grants it to ten is not
+ *      one to leave lying around.
+ */
+type ReleaseZeroFloor = Pick<
+  AgentSeedEntry, 'agent_type' | 'trigger_type' | 'schedule' | 'enabled' | 'tools_granted'
+>;
+
+const releaseZero = (): ReleaseZeroFloor => ({
   agent_type: 'ai_employee',
   trigger_type: 'event_driven',
   schedule: '',
   enabled: false,
   tools_granted: [],
-} as const;
+});
 
 const describe = (title: string, owns: string) =>
   `${title} — the Agent Factory domain employee for this department. Owns ${owns} `
@@ -64,7 +80,7 @@ const describe = (title: string, owns: string) =>
 
 export const DOMAIN_AGENT_ENTRIES: AgentSeedEntry[] = [
   {
-    ...RELEASE_ZERO,
+    ...releaseZero(),
     agent_name: 'MarketingDomainAgent',
     module: 'agentDomain',
     source_file: 'backend/src/services/agentDomain/',
@@ -75,7 +91,7 @@ export const DOMAIN_AGENT_ENTRIES: AgentSeedEntry[] = [
       + 'performance read behind them.'),
   },
   {
-    ...RELEASE_ZERO,
+    ...releaseZero(),
     agent_name: 'CurriculumDomainAgent',
     module: 'agentDomain',
     source_file: 'backend/src/services/agentDomain/',
@@ -86,7 +102,7 @@ export const DOMAIN_AGENT_ENTRIES: AgentSeedEntry[] = [
       + 'the Agent Factory project.'),
   },
   {
-    ...RELEASE_ZERO,
+    ...releaseZero(),
     agent_name: 'AdmissionsDomainAgent',
     module: 'agentDomain',
     source_file: 'backend/src/services/agentDomain/',
@@ -95,7 +111,7 @@ export const DOMAIN_AGENT_ENTRIES: AgentSeedEntry[] = [
       'lead intake: sources, ingest logs, routing rules and import.'),
   },
   {
-    ...RELEASE_ZERO,
+    ...releaseZero(),
     agent_name: 'InternshipDomainAgent',
     module: 'agentDomain',
     source_file: 'backend/src/services/agentDomain/',
@@ -106,7 +122,7 @@ export const DOMAIN_AGENT_ENTRIES: AgentSeedEntry[] = [
       + 'guarding it is separate from curriculum.'),
   },
   {
-    ...RELEASE_ZERO,
+    ...releaseZero(),
     agent_name: 'SalesDomainAgent',
     module: 'agentDomain',
     source_file: 'backend/src/services/agentDomain/',
@@ -116,7 +132,7 @@ export const DOMAIN_AGENT_ENTRIES: AgentSeedEntry[] = [
       'the revenue surface: pipeline, opportunities, payments, refunds and the funnel read.'),
   },
   {
-    ...RELEASE_ZERO,
+    ...releaseZero(),
     agent_name: 'PlatformDomainAgent',
     module: 'agentDomain',
     source_file: 'backend/src/services/agentDomain/',
@@ -127,7 +143,7 @@ export const DOMAIN_AGENT_ENTRIES: AgentSeedEntry[] = [
       + 'will want more scrutiny than most.'),
   },
   {
-    ...RELEASE_ZERO,
+    ...releaseZero(),
     agent_name: 'ProductExperienceDomainAgent',
     module: 'agentDomain',
     source_file: 'backend/src/services/agentDomain/',
@@ -136,7 +152,7 @@ export const DOMAIN_AGENT_ENTRIES: AgentSeedEntry[] = [
       'the brands and websites the platform publishes to, and the checks run across them.'),
   },
   {
-    ...RELEASE_ZERO,
+    ...releaseZero(),
     agent_name: 'LearnerSuccessDomainAgent',
     module: 'agentDomain',
     source_file: 'backend/src/services/agentDomain/',
@@ -145,7 +161,7 @@ export const DOMAIN_AGENT_ENTRIES: AgentSeedEntry[] = [
       'learner progress, intervention and the student story surface.'),
   },
   {
-    ...RELEASE_ZERO,
+    ...releaseZero(),
     agent_name: 'ExecutiveDomainAgent',
     module: 'agentDomain',
     source_file: 'backend/src/services/agentDomain/',
@@ -154,7 +170,7 @@ export const DOMAIN_AGENT_ENTRIES: AgentSeedEntry[] = [
       'the executive read: the war room, the trust surface and the narrative above them.'),
   },
   {
-    ...RELEASE_ZERO,
+    ...releaseZero(),
     agent_name: 'WebsiteDomainAgent',
     module: 'agentDomain',
     source_file: 'backend/src/services/agentDomain/',

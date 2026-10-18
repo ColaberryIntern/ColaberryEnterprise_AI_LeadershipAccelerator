@@ -51,6 +51,19 @@ describe('AF3.1 Release Zero: created, not alive', () => {
     expect(e.tools_granted).toEqual([]);
   });
 
+  it('gives every entry its OWN tools array, not one shared instance', () => {
+    // The floor is a factory rather than a shared constant precisely so this holds. With a
+    // shared `tools_granted: []`, granting one agent a tool would grant it to all ten, and
+    // every assertion above would still pass while it happened.
+    const arrays = DOMAIN_AGENT_ENTRIES.map((e) => e.tools_granted);
+    expect(new Set(arrays).size).toBe(DOMAIN_AGENT_ENTRIES.length);
+
+    // Demonstrated, not just counted: pushing into one must not reach another.
+    (arrays[0] as string[]).push('probe_tool');
+    expect(arrays[1]).toEqual([]);
+    (arrays[0] as string[]).length = 0;
+  });
+
   it.each(NAMES)('%s is not a cron and carries no schedule', (name) => {
     const e = DOMAIN_AGENT_ENTRIES.find((x) => x.agent_name === name)!;
     expect(e.trigger_type).not.toBe('cron');
