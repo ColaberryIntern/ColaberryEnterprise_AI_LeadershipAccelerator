@@ -14,7 +14,7 @@
  */
 
 /** Bump on ANY change to weights, caps or the factor set. Stored beside every score. */
-export const RULESET_VERSION = 'srs-v1-provisional-2026-10-17';
+export const RULESET_VERSION = 'srs-v2-provisional-2026-10-18';
 
 export type Band = 'commitment' | 'passive' | 'context';
 
@@ -70,6 +70,21 @@ export const FACTORS: readonly FactorDef[] = [
   },
 
   // ── Context. Measured signals that are not acts of commitment. ───────────
+  /**
+   * NOT DECISION 5. That decision wants recency expressed as a per-component half-life, so an
+   * old high-commitment act and a recent page view stay distinguishable. This is a recency
+   * SIGNAL scored as its own factor: simpler, testable today, and honest about what it is. The
+   * per-component decay remains unimplemented and is a separate piece of work.
+   */
+  {
+    key: 'recency',
+    label: 'How recently they did anything',
+    band: 'context',
+    max: 25,
+    evidenceGroup: 'timeline',
+    absentMeans: 'the timeline was read in part, or there is no activity to date, so recency '
+      + 'would be a fact about the caller rather than about the person',
+  },
   {
     key: 'intent',
     label: 'Peak intent score',

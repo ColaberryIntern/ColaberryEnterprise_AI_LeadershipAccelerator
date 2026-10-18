@@ -23,7 +23,7 @@ const EMPTY: SrsInputs = {
   daysKnown: null, intentScore: null, inboundReplies: null, paymentFailures: null,
   priorHistoryAvailable: null, priorEnrolments: null, explorerEngagement: null,
   explorerIntent: null, consentContact: null, siteSessions: null, pageEvents: null,
-  enrolments: null, appointments: null, evidenceAsOf: null,
+  enrolments: null, appointments: null, evidenceAsOf: null, lastActivityAt: null,
 };
 
 /** Everything present and strong. */
@@ -32,6 +32,7 @@ const FULL: SrsInputs = {
   priorHistoryAvailable: true, priorEnrolments: 2, explorerEngagement: 100,
   explorerIntent: 100, consentContact: true, siteSessions: 50, pageEvents: 200,
   enrolments: 1, appointments: 3, evidenceAsOf: '2026-10-18T00:00:00.000Z',
+  lastActivityAt: '2026-10-17T12:00:00.000Z',
 };
 
 /** Deterministic LCG, so a failing case can be replayed from its seed. */
@@ -62,6 +63,7 @@ function sample(next: () => number): SrsInputs {
     enrolments: maybe(Math.floor(next() * 2)),
     appointments: maybe(Math.floor(next() * 3)),
     evidenceAsOf: null,
+    lastActivityAt: null,
   };
 }
 
@@ -77,11 +79,21 @@ describe('M25 - the score is deterministic', () => {
     }
   });
 
-  it('does not read the clock: computedAt is an input, not an observation', () => {
-    const a = scoreReadiness(FULL, '2020-01-01T00:00:00.000Z');
-    const b = scoreReadiness(FULL, '2030-01-01T00:00:00.000Z');
-    expect(a.total).toBe(b.total);
-    expect(a.computedAt).not.toBe(b.computedAt);
+  it('reads no hidden clock: the same inputs and the same computedAt give the same result', () => {
+    expect(scoreReadiness(FULL, AT)).toEqual(scoreReadiness(FULL, AT));
+  });
+
+  it('DOES depend on computedAt now, because recency is measured against it', () => {
+    // This assertion was the other way round until the recency factor landed, and the old version
+    // would now be a lie: the score IS a function of (inputs, computedAt). That is not a clock
+    // read - computedAt is an explicit argument - but pretending the score ignores it would be
+    // the wrong kind of determinism, and a reader comparing two scores needs to know.
+    const soonAfter = scoreReadiness(FULL, '2026-10-17T13:00:00.000Z');
+    const aYearLater = scoreReadiness(FULL, '2027-10-17T13:00:00.000Z');
+    expect(aYearLater.total).toBeLessThan(soonAfter.total);
+    const recency = (r: ScoreResult) => r.factors.find((f) => f.key === 'recency');
+    expect(recency(soonAfter)?.points).toBe(25);
+    expect(recency(aYearLater)?.points).toBe(0);
   });
 
   it('stamps the ruleset version on every score, so two versions cannot be silently compared', () => {
@@ -224,6 +236,7 @@ describe('M25 - one named test per factor, so a mutation to any of them kills so
     ['consent', { consentContact: true }, 5],
     ['siteSessions', { siteSessions: 10 }, 8],
     ['pageEvents', { pageEvents: 40 }, 7],
+    ['recency', { lastActivityAt: AT }, 25],
     ['friction', { paymentFailures: 1 }, 0],
   ];
 
