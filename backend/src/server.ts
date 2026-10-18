@@ -87,6 +87,7 @@ import { ensureGovSourceBundleSchema } from './db/ensureGovSourceBundleSchema';
 import { ensureGovBuildStoryEvidenceSchema } from './db/ensureGovBuildStoryEvidenceSchema';
 import { ensureGovBuildStoryAssignmentSchema } from './db/ensureGovBuildStoryAssignmentSchema';
 import { ensureGovProposalResponseSchema } from './db/ensureGovProposalResponseSchema';
+import { ensureGovProposalShareGrantSchema } from './db/ensureGovProposalShareGrantSchema';
 import { ensureGovProposalAmendmentSchema } from './db/ensureGovProposalAmendmentSchema';
 import { ensureGovSubmissionSchema } from './db/ensureGovSubmissionSchema';
 import { ensureServiceOfferingSchema } from './db/ensureServiceOfferingSchema';
@@ -2843,6 +2844,7 @@ async function start(): Promise<void> {
   // additive NEW tables (UNIQUE per project+key); no existing table is altered. The agent never advances a response
   // to approved or records an amendment on its own — these are operator actions.
   await ensureGovProposalResponseSchema();
+  await ensureGovProposalShareGrantSchema();
   await ensureGovProposalAmendmentSchema();
   // Gov submission + outcome (gov_submission): the per-project submission lifecycle (preparing→…→exported→
   // externally_submitted→acknowledged; exported ≠ submitted), the export manifest, the MANUAL external receipt, the

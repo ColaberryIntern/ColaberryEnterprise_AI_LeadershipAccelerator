@@ -18,6 +18,7 @@ import {
   DocumentNotListedError, ApprovalRequestSelfError, NotRequestedApproverError,
 } from '../../services/factory/govQualification';
 import { assignBuildStory, unassignBuildStory, AssignmentError } from '../../services/factory/govBuildAssignment';
+import { setProposalShareGrant, listProposalShareGrants, type ProposalShareLevel } from '../../services/factory/govProposalShare';
 import { saveProposalResponse, reviewProposalResponse, addProposalFigure, removeProposalFigure, saveDraftWithGaps, resolveProposalGap, ResponseError } from '../../services/factory/govProposalResponse';
 import { recordProposalAmendment, AmendmentError } from '../../services/factory/govProposalAmendment';
 import { exportSubmission, recordSubmissionReceipt, acknowledgeSubmission, reopenSubmission, recordOutcome, getSubmission, SubmissionError } from '../../services/factory/govSubmission';
@@ -418,6 +419,47 @@ router.post('/api/admin/factory/qualification/:canonicalOpportunityId/responses/
   } catch (err: any) {
     if (err instanceof ResponseError) { res.status(RESPONSE_ERR_STATUS[err.reason] ?? 400).json({ error: err.message, reason: err.reason }); return; }
     logFail('gov_response_gap_failed', err, { canonicalOpportunityId }); res.status(500).json({ error: 'Could not resolve the gap.' });
+  }
+});
+
+const proposalShareBody = z.object({
+  memberIdentityId: z.string().uuid(),
+  level: z.enum(['none', 'view', 'comment', 'edit']),
+});
+
+/** GET …/proposal-share - the current per-member proposal share grants on this pursuit's delivery project. */
+router.get('/api/admin/factory/qualification/:canonicalOpportunityId/proposal-share', requireSection('program'), async (req: Request, res: Response) => {
+  const p = qualKeyParam.safeParse(req.params);
+  if (!p.success) { res.status(400).json({ error: 'Invalid opportunity key.' }); return; }
+  const { canonicalOpportunityId } = p.data;
+  const scope = await scopeOrFail(res, 'gov_proposal_share_list_scope', { canonicalOpportunityId });
+  if (!scope) return;
+  try {
+    const deliveryProjectId = await resolveProjectOr404(req, res, canonicalOpportunityId, scope.tenantId);
+    if (!deliveryProjectId) return;
+    res.json({ grants: await listProposalShareGrants(deliveryProjectId) });
+  } catch (err: any) {
+    logFail('gov_proposal_share_list_failed', err, { canonicalOpportunityId }); res.status(500).json({ error: 'Could not list the proposal share grants.' });
+  }
+});
+
+/** POST …/proposal-share - set (or clear with 'none') a member's proposal share level. A per-member grant ROW; it
+ *  never widens anyone else's access and never touches requireSection('program'). */
+router.post('/api/admin/factory/qualification/:canonicalOpportunityId/proposal-share', requireSection('program'), async (req: Request, res: Response) => {
+  const p = qualKeyParam.safeParse(req.params);
+  if (!p.success) { res.status(400).json({ error: 'Invalid opportunity key.' }); return; }
+  const b = proposalShareBody.safeParse(req.body ?? {});
+  if (!b.success) { res.status(400).json({ error: 'Invalid share body.', issues: b.error.issues }); return; }
+  const { canonicalOpportunityId } = p.data;
+  const scope = await scopeOrFail(res, 'gov_proposal_share_set_scope', { canonicalOpportunityId });
+  if (!scope) return;
+  try {
+    const deliveryProjectId = await resolveProjectOr404(req, res, canonicalOpportunityId, scope.tenantId);
+    if (!deliveryProjectId) return;
+    const grant = await setProposalShareGrant(deliveryProjectId, b.data.memberIdentityId, b.data.level as ProposalShareLevel);
+    res.json({ grant });
+  } catch (err: any) {
+    logFail('gov_proposal_share_set_failed', err, { canonicalOpportunityId }); res.status(500).json({ error: 'Could not set the proposal share level.' });
   }
 });
 

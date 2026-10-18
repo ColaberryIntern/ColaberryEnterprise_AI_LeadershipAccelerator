@@ -34,6 +34,7 @@ import { SolicitationItemsView, tracksForCategory, dueStageForCategory, type Sol
 import { FitCapabilitiesPanel } from './govWorkspace/FitCapabilitiesPanel';
 import { DecidePanel } from './govWorkspace/DecidePanel';
 import { CountdownBand } from './govWorkspace/CountdownBand';
+import { TeamAccessPanel } from './govWorkspace/TeamAccessPanel';
 
 /** The discovery opportunity's display details fetched for the decoupled (ZIP) workspace. */
 type OppDetail = { opportunity: GovOpportunity | null; source: 'live' | 'snapshot'; snapshotDate: string | null };
@@ -1578,6 +1579,13 @@ export default function AdminGovQualificationPage(): React.ReactElement {
             submitTotal={(ws.responseSlots ?? []).length}
             submitDone={(ws.responseSlots ?? []).filter((s) => s.status === 'approved').length}
             fillerCount={(ws.responseSlots ?? []).filter((s) => s.status === 'filler' || (s.gaps ?? []).some((g) => g.resolution === 'filler')).length}
+          />
+          {/* P5 Team & access: assign is below (AssignmentOverviewPanel); this shares the proposal safely. */}
+          <TeamAccessPanel
+            canonicalOpportunityId={canonical}
+            builders={ws.build?.assignableBuilders ?? []}
+            canShare={!!ws.build?.deliveryProjectId}
+            responseCount={(ws.responseSlots ?? []).length}
           />
           {/* ── Build tab: the AI build spec/research (advisory) + the solution-build track (forward) + the separate build authorization ─ */}
           {(
