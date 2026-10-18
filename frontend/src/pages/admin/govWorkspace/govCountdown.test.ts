@@ -28,7 +28,7 @@ describe('deriveCountdown (deterministic)', () => {
 
   it('computes the ship-by and a high probability with ample slack', () => {
     const c = deriveCountdown({ now, deadline: utc(2026, 11, 1), remainingStoryCount: 1, humanBlockedCount: 0 });
-    expect(c.shipBy).toBe('2026-12-31'); // the day before the deadline
+    expect(c.shipBy).toBe('2026-11-30'); // deadline is Dec 1 2026, so ship-by is the day before
     expect(c.remainingBuildDays).toBe(2); // 1 story * 2 working days
     expect(c.probability).toBe(95);       // lots of working days vs 2 needed
   });
