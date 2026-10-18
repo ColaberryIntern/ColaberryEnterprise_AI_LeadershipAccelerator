@@ -2063,3 +2063,48 @@ CLAUDE.md puts in the ESCALATE tier regardless of how well-evidenced the change 
 
 So the evidence is here and the diff is one line. Applying it is the DRI's, with the bar that
 was written to be checkable now checked.
+
+## ONE OF THE ARGUED LOCKS IS NOW OBSERVED, and it taught something about itself
+
+This register keeps a list of locks "covered" only by asserting what their SQL says. PR #3169
+added a seventh entry honestly, in its own words: the stale-build claim was **"argued from the
+SQL's atomicity, not observed"**, because CI provisions no Postgres and no test ran two callers
+at once.
+
+**That one is now measured.** `services/sbp/__tests__/staleClaimRace.integration.test.ts` runs
+two concurrent `claimStaleGeneratingIntake` calls against a real Postgres and asserts exactly one
+wins. It bootstraps the little schema it needs - a minimal `projects` and `build_intake` - because
+both are among the 20 tables the boot path cannot create.
+
+### What it proves, and what makes that a measurement
+
+| | |
+|---|---|
+| Two concurrent callers on a stale row | **exactly one wins**, and the row carries the winner's correlation id |
+| A fresh `generating` row | claimed by **nobody** - the age gate works |
+| A row that is not `generating` | never claimed |
+| **Positive control** | the read-then-write the implementation avoids produces **two** winners |
+
+The control is mandatory and is the reason the first line means anything: it performs the
+non-atomic claim with both reads taken before either write, and asserts the harness SEES a
+double-win. If it ever stops producing two, nothing above it is evidence.
+
+### The staleness predicate is also the mutual exclusion
+
+Removing `AND updated_at < NOW() - ...` from the shipped statement fails **two** tests, not one.
+The fresh-row test fails as expected - but so does *exactly one wins*, because **both** callers
+then win: `status` is still `generating` for the loser, so nothing refuses it.
+
+So that clause is doing two jobs at once. It is the age gate, and it is the lock - the winner
+bumping `updated_at` is what invalidates the loser's predicate. `planStore.ts` says as much in
+its docblock ("Moving `updated_at` is what claims it"), and that sentence is now observed rather
+than reasoned. Anyone tempted to "simplify" the claim by matching on status alone would remove
+the exclusion along with the age filter.
+
+### Six remain
+
+The execution-run claim, the room outbox, the scheduler claim, the enrollment row lock, the
+telemetry anchor and `resource_leases` are still argued from their SQL. The pattern that closed
+this one is reusable and cheap - a self-bootstrapping integration suite that skips loudly without
+`DATABASE_URL` - but it is a suite per lock, and it does not run in CI until a pristine database
+can boot. That ordering is recorded above.
