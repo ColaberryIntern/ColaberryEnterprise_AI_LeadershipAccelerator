@@ -3,6 +3,7 @@ import PresentationAssignment from '../../models/PresentationAssignment';
 import PresentationAttempt from '../../models/PresentationAttempt';
 import RoomBooking from '../../models/RoomBooking';
 import type { PresentationAttemptMode } from '../../models/PresentationAttempt';
+import { presentationTypeLabel } from './takePresentationType';
 
 /**
  * Which room a learner's demo actually happens in.
@@ -100,6 +101,18 @@ export interface PracticeTake {
   viewCount: number;
   /** The sentence shown to the learner, composed server-side so it cannot drift. */
   viewLabel: string;
+  /**
+   * What kind of presentation this take is, as it will be filed and posted.
+   *
+   * EFFECTIVE, not raw: the take's own classification when the learner has set
+   * one, otherwise the task's Learn-stage template. A learner records several
+   * takes in one room and usually means the task's type for all of them, so
+   * inheriting keeps the common case at zero clicks — while `typeSource` lets the
+   * page say where the answer came from instead of presenting a guess as a choice.
+   */
+  presentationType: string | null;
+  presentationTypeLabel: string | null;
+  typeSource: 'take' | 'task' | 'unset';
 }
 
 export type SessionResult =
@@ -147,6 +160,18 @@ export async function recordingsForAttempt(
   attemptId: string,
   /** Issuing a playback ticket needs the viewer and the path it will be fetched at. */
   ticketFor?: { enrollmentId: string; projectId: string; storyId: string },
+  /**
+   * The task's Learn-stage template, which a take with no classification of its
+   * own inherits.
+   *
+   * PASSED IN, NOT LOOKED UP. The caller already holds the assignment, so reading
+   * it again here would be a second query for a value in hand — and the first
+   * version did it with `sequelize.query`, directly beneath the comment below
+   * warning that a raw query in this module opens a real connection in suites
+   * that mock only models. That took fourteen tests red in CI. Second time I have
+   * made that mistake in this exact function.
+   */
+  taskType?: string | null,
 ): Promise<Array<PracticeTake>> {
   // THE MODEL, NOT RAW SQL. Everything else in this module reads through models, and
   // a raw query here opened a real connection in a suite that mocks only the models —
@@ -194,6 +219,7 @@ export async function recordingsForAttempt(
 
   return (rows || []).map((r: any) => {
     const id = String(r.id);
+    const takeType = (r as any).presentation_type || null;
     // The URL carries its own authority, because a <video> element cannot send a
     // bearer header. Minted per read, so it expires shortly after the page does.
     const ticket = ticketFor ? createRecordingTicket(id, ticketFor.enrollmentId) : '';
@@ -209,6 +235,11 @@ export async function recordingsForAttempt(
       showcaseId: showcaseByRecording.get(id) ?? null,
       viewCount: counts[id] ?? 0,
       viewLabel: describeViews(counts[id] ?? 0),
+      presentationType: takeType || taskType || null,
+      presentationTypeLabel: presentationTypeLabel(takeType || taskType),
+      // Said plainly so the page can distinguish "you chose this" from "this came
+      // from your task", rather than showing an inherited value as a decision.
+      typeSource: takeType ? 'take' : (taskType ? 'task' : 'unset'),
     };
   });
 }
@@ -264,7 +295,11 @@ export async function resolveSessionForAssignment(
   // Looked up only on the single-session read, which is the one the Practice panel
   // calls. The list and the create paths deliberately leave it empty rather than
   // issue a query per attempt for something those screens do not render.
-  const takes = await recordingsForAttempt(String(booked.id), { enrollmentId, projectId, storyId });
+  const takes = await recordingsForAttempt(
+    String(booked.id),
+    { enrollmentId, projectId, storyId },
+    (assignment as any)?.template_slug ?? null,
+  );
   return { ok: true, session: toSessionView(booked, booking, takes) };
 }
 

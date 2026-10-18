@@ -378,6 +378,10 @@ router.post('/api/portal/projects/:projectId/tasks/:storyId/deck', requirePartic
 // column and a separate act; a demo reaches the feed only when both exist. The
 // audience stays `private` until that happens, so an unapproved request is invisible
 // to everyone but its owner and staff.
+const takeTypeSchema = z.object({
+  presentation_type: z.string().trim().min(1).max(40),
+}).strict();
+
 const shareRequestSchema = z.object({
   attempt_id: z.string().trim().uuid(),
   // THE TAKE, not just the attempt. A learner records several in order to choose
@@ -540,6 +544,51 @@ router.post('/api/portal/projects/:projectId/tasks/:storyId/published/:showcaseI
     );
 
     res.json({ withdrawn: true, alreadyWithdrawn: w.ok ? w.alreadyWithdrawn : false });
+  } catch (e) { fail(res, e, next); }
+});
+
+// WHAT KIND OF PRESENTATION THIS TAKE IS.
+//
+// Chosen per take, because a learner records several in one booked room and may
+// deliberately record a short introduction and a full showcase against the same
+// task. The vocabulary is the seven Learn-stage template ids, reused rather than
+// duplicated, so a demo filed as a `working_system_demo` means the same thing on
+// every surface.
+//
+// The service proves ownership inside its UPDATE, so a learner cannot classify
+// somebody else's rehearsal; not theirs reads as not found.
+router.post('/api/portal/projects/:projectId/tasks/:storyId/recordings/:recordingId/type', requireParticipant, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!gate(res)) return;
+    if (!env.presentationStudioEnabled) return res.status(404).json({ error: 'Presentation Studio not enabled' });
+    const body = takeTypeSchema.parse(req.body || {});
+
+    const { setTakePresentationType } = await import('../services/presentation/takePresentationType');
+    const r = await setTakePresentationType(
+      eid(req),
+      String(req.params.projectId),
+      String(req.params.storyId),
+      String(req.params.recordingId),
+      body.presentation_type,
+    );
+    if (!r.ok) {
+      // A bad type is the caller's error and worth naming; not-found stays opaque.
+      return r.reason === 'bad_type'
+        ? res.status(422).json({ error: 'That is not a presentation type.' })
+        : res.status(404).json({ error: 'Not found' });
+    }
+    res.json({ recording_id: r.recordingId, presentation_type: r.presentationType, label: r.label });
+  } catch (e) { fail(res, e, next); }
+});
+
+// The options the chooser shows. Served rather than hardcoded in the page, so the
+// list cannot drift from the templates the lesson and the deck prompt use.
+router.get('/api/portal/presentation-types', requireParticipant, async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!gate(res)) return;
+    if (!env.presentationStudioEnabled) return res.status(404).json({ error: 'Presentation Studio not enabled' });
+    const { presentationTypeOptions } = await import('../services/presentation/takePresentationType');
+    res.json({ types: presentationTypeOptions() });
   } catch (e) { fail(res, e, next); }
 });
 

@@ -217,6 +217,7 @@ const PostCard: React.FC<{
               <DemoVideoCard
                 playbackUrl={post.demo.playbackUrl}
                 thumbnailUrl={post.demo.thumbnailUrl}
+                presentationTypeLabel={post.demo.presentationTypeLabel}
                 durationSeconds={post.demo.durationSeconds}
                 viewLabel={post.demo.viewLabel}
               />

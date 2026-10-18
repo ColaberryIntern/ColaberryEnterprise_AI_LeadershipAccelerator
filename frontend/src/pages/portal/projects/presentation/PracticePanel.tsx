@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import GetReadyPanel from './GetReadyPanel';
 import VisibilitySwitch from './VisibilitySwitch';
+import TakeTypePicker from './TakeTypePicker';
 import {
   fetchPracticeSession,
   startPractice,
@@ -189,6 +190,18 @@ function BookedSlot(
               here and a take-down on another tab. The switch is keyed per RECORDING,
               which is only honest because the showcase is too — keyed on the attempt,
               flipping one take would have flipped every take from the same room. */}
+          {/* WHAT this is, above WHO can see it: a learner decides what a take is
+              before deciding whether to show it to anybody. */}
+          <TakeTypePicker
+            projectId={projectId}
+            storyId={storyId}
+            recordingId={take.id}
+            presentationType={take.presentationType ?? null}
+            presentationTypeLabel={take.presentationTypeLabel ?? null}
+            typeSource={take.typeSource ?? 'unset'}
+            onChanged={onRefresh}
+          />
+
           <VisibilitySwitch
             projectId={projectId}
             storyId={storyId}

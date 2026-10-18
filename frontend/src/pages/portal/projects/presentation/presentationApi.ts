@@ -176,6 +176,11 @@ export interface PracticeSession {
     partNo: number;
     playbackUrl: string;
     shareState?: TakeShareState;
+    /** What kind of presentation this take is; inherited from the task when unset. */
+    presentationType?: string | null;
+    presentationTypeLabel?: string | null;
+    /** Where that answer came from, so the page never shows inherited as chosen. */
+    typeSource?: 'take' | 'task' | 'unset';
     /** The live showcase, so the switch can turn sharing back off. */
     showcaseId?: string | null;
     viewCount?: number;
@@ -389,4 +394,32 @@ export async function requestShare(
     }
     throw err;
   }
+}
+
+/** One option in the take-type chooser. Served, never hardcoded in the page. */
+export interface PresentationTypeOption {
+  id: string;
+  label: string;
+  prominent: boolean;
+  defaultSeconds: number;
+}
+
+export async function fetchPresentationTypes(): Promise<PresentationTypeOption[]> {
+  const { data } = await portalApi.get<{ types: PresentationTypeOption[] }>(
+    '/api/portal/presentation-types',
+  );
+  return data?.types ?? [];
+}
+
+/** Classify one take. The server proves ownership inside its UPDATE. */
+export async function setTakeType(
+  projectId: string,
+  storyId: string,
+  recordingId: string,
+  presentationType: string,
+): Promise<void> {
+  await portalApi.post(
+    `${taskPath(projectId, storyId, 'recordings')}/${encodeURIComponent(recordingId)}/type`,
+    { presentation_type: presentationType },
+  );
 }
