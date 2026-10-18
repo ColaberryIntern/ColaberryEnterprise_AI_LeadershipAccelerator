@@ -422,8 +422,26 @@ async function processScheduledActions(): Promise<void> {
     console.error('[Scheduler] stale-action expiry failed (non-blocking):', err.message);
   }
 
-  // Atomically claim pending actions using FOR UPDATE SKIP LOCKED
-  // This prevents race conditions if multiple scheduler instances run concurrently
+  // Atomically claim pending actions. THERE IS NO `FOR UPDATE SKIP LOCKED` HERE, despite what
+  // this comment said until 2026-10-18 — the words appeared nowhere else in this file, and
+  // naming a mechanism that is not present is worse than naming none, because the real one then
+  // looks redundant.
+  //
+  // WHAT ACTUALLY PREVENTS TWO SENDERS CLAIMING THE SAME ROW is the `AND status = 'pending'`
+  // predicate on the UPDATE below. The candidate SELECT takes no locks, so two instances can and
+  // do pick the same ids. The UPDATE is what decides: the second one blocks on the first's row
+  // locks, and under READ COMMITTED it RE-EVALUATES its WHERE clause once those locks are
+  // released. By then the rows read `processing`, so it matches none and `RETURNING` hands back
+  // an empty set. Each row is claimed exactly once.
+  //
+  // THAT PREDICATE IS THE LOCK. It looks redundant — the rows were just selected as pending —
+  // and deleting it would leave every test passing while three concurrent senders on production
+  // claimed the same rows and emailed real people twice.
+  //
+  // It is not yet covered by a race test: proving it means exercising the claim without the send
+  // path, which needs this block extracted into its own exported function. Recorded in
+  // `docs/project-lifecycle/carried-forward-obligations.md` rather than folded in here, because
+  // restructuring a live email scheduler is not a comment fix.
   let pendingActions: InstanceType<typeof ScheduledEmail>[];
   try {
     const t = await sequelize.transaction();
