@@ -11,16 +11,16 @@ import React, { useState } from 'react';
  * hostile on a phone and on a metered connection, and a rehearsal is somebody
  * speaking — sound starting unbidden is worse here than on a muted clip.
  *
- * THE STILL IS A FRAME OF THE RECORDING ITSELF, via `preload="metadata"` and a
- * `#t=` media fragment, which makes the browser paint the frame at that offset
- * without downloading the whole file. There is no stored thumbnail because the
- * backend image has no ffmpeg, and adding it is an infrastructure change rather
- * than something to slip into a feature branch. The trade is honest and worth
- * naming: this costs a metadata request per card, and a stored still would not.
+ * THE STILL IS A FRAME CHOSEN FOR HAVING SOMETHING ON IT. The server samples
+ * several frames and scores each one — see `frameScore.ts` — because the frame at
+ * any fixed offset is black whenever the learner had their camera off and a bare
+ * desktop whenever the screen share had not started. With a poster the browser
+ * fetches no video at all until play.
  *
- * ONE SECOND IN, not zero: the first frame of a screen share is very often a blank
- * desktop or a dialog mid-fade, and a wall of grey rectangles tells a viewer
- * nothing about which demo is which.
+ * THE FRAGMENT FALLBACK REMAINS for recordings with no usable frame. A camera-off
+ * take is black end to end and the server correctly declines to invent a
+ * thumbnail; the player then paints its own frame as it did before. A missing
+ * picture must never break a working demo.
  *
  * THE URL IS NOT REBUILT HERE. It arrives signed, minted for this viewer, and the
  * server decided they may watch — a card that constructed its own URL would be
@@ -29,6 +29,13 @@ import React, { useState } from 'react';
 
 export interface DemoVideoCardProps {
   playbackUrl: string;
+  /**
+   * A still chosen for having something ON it — see `frameScore.ts`. Optional,
+   * and allowed to 404: a camera-off recording has no good frame, and the player
+   * then shows its own first frame as before. A missing picture must never break
+   * a working demo.
+   */
+  thumbnailUrl?: string | null;
   durationSeconds: number | null;
   viewLabel: string;
   /** The author's own words. Shown above the player, as the post body already is. */
@@ -40,7 +47,7 @@ const mmss = (s: number | null): string | null => {
   return `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 };
 
-const DemoVideoCard: React.FC<DemoVideoCardProps> = ({ playbackUrl, durationSeconds, viewLabel }) => {
+const DemoVideoCard: React.FC<DemoVideoCardProps> = ({ playbackUrl, thumbnailUrl, durationSeconds, viewLabel }) => {
   const [playing, setPlaying] = useState(false);
   const length = mmss(durationSeconds);
 
@@ -51,12 +58,16 @@ const DemoVideoCard: React.FC<DemoVideoCardProps> = ({ playbackUrl, durationSeco
           data-testid="demo-video-player"
           controls={playing}
           autoPlay={playing}
-          preload="metadata"
           playsInline
           style={{ width: '100%', display: 'block', aspectRatio: '16 / 9', objectFit: 'contain' }}
-          // The fragment is what paints a still without a stored thumbnail. Dropping
-          // it leaves most browsers showing a black rectangle.
-          src={playing ? playbackUrl : `${playbackUrl}#t=1`}
+          // WITH a poster, the browser paints that and fetches no video at all until
+          // play — the metadata request per card goes away entirely. WITHOUT one,
+          // the `#t=1` fragment is the fallback that at least paints something.
+          poster={thumbnailUrl || undefined}
+          src={playing || thumbnailUrl ? playbackUrl : `${playbackUrl}#t=1`}
+          // `none` once a poster exists: nothing about the video is needed to draw
+          // the card. Without a poster we still need metadata for the fragment.
+          preload={thumbnailUrl && !playing ? 'none' : 'metadata'}
         >
           <a href={playbackUrl}>Open this demo</a>
         </video>

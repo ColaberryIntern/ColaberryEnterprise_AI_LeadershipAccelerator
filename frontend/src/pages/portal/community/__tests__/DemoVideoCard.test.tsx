@@ -23,6 +23,7 @@ let container: HTMLDivElement;
 let root: Root | null = null;
 
 const URL_ = '/api/portal/projects/p1/tasks/PREP-4/recordings/r1/file?t=tkt';
+const THUMB = '/api/portal/projects/p1/tasks/PREP-4/recordings/r1/thumbnail?t=tkt';
 
 beforeEach(() => {
   container = document.createElement('div');
@@ -59,16 +60,15 @@ describe('before anyone presses play', () => {
     expect(video().hasAttribute('controls')).toBe(false);
   });
 
-  it('loads metadata only — not the whole rehearsal', async () => {
+  it('WITHOUT a poster, loads metadata only — not the whole rehearsal', async () => {
     // A feed of demos must not pull megabytes per card on open.
     await mount();
     expect(video().getAttribute('preload')).toBe('metadata');
   });
 
-  it('paints a still from ONE SECOND IN, not frame zero', async () => {
-    // There is no stored thumbnail (no ffmpeg in the backend image), so the media
-    // fragment is what produces a still at all. Frame zero of a screen share is
-    // usually a blank desktop, which makes every card look identical.
+  it('WITHOUT a poster, paints a still from ONE SECOND IN, not frame zero', async () => {
+    // The fallback for a recording with no usable frame. Frame zero of a screen
+    // share is usually a blank desktop, which makes every card look identical.
     await mount();
     expect(video().getAttribute('src')).toBe(`${URL_}#t=1`);
   });
@@ -114,5 +114,46 @@ describe('what it says about itself', () => {
   it('offers a plain link for a browser that cannot play it', async () => {
     await mount();
     expect(container.querySelector('a')!.getAttribute('href')).toBe(URL_);
+  });
+});
+
+describe('with a server-chosen poster', () => {
+  it('uses it, and fetches NO video at all until play', async () => {
+    // The whole point of generating stills: nothing about the video is needed to
+    // draw the card, so the per-card metadata request disappears.
+    await mount({ thumbnailUrl: THUMB });
+    expect(video().getAttribute('poster')).toBe(THUMB);
+    expect(video().getAttribute('preload')).toBe('none');
+  });
+
+  it('drops the #t=1 fragment, which exists only to compensate for no poster', async () => {
+    await mount({ thumbnailUrl: THUMB });
+    expect(video().getAttribute('src')).toBe(URL_);
+  });
+
+  it('still waits for a click before playing', async () => {
+    await mount({ thumbnailUrl: THUMB });
+    expect(q('[data-testid="demo-video-play"]')).not.toBeNull();
+    expect(video().hasAttribute('autoplay')).toBe(false);
+  });
+
+  it('loads the video on play, poster still in place behind it', async () => {
+    await mount({ thumbnailUrl: THUMB });
+    await click(q('[data-testid="demo-video-play"]')!);
+    expect(video().getAttribute('src')).toBe(URL_);
+    expect(video().getAttribute('preload')).toBe('metadata');
+  });
+
+  it('FALLS BACK CLEANLY when the server declines to make one', async () => {
+    // A camera-off recording is black end to end and the server returns no
+    // thumbnail rather than inventing one. The card must still work.
+    for (const missing of [null, undefined, '']) {
+      await mount({ thumbnailUrl: missing });
+      expect(video().hasAttribute('poster')).toBe(false);
+      expect(video().getAttribute('src')).toBe(`${URL_}#t=1`);
+      await act(async () => { root?.unmount(); });
+      root = null;
+      container.innerHTML = '';
+    }
   });
 });

@@ -216,6 +216,7 @@ const PostCard: React.FC<{
             <div className="fc-body">
               <DemoVideoCard
                 playbackUrl={post.demo.playbackUrl}
+                thumbnailUrl={post.demo.thumbnailUrl}
                 durationSeconds={post.demo.durationSeconds}
                 viewLabel={post.demo.viewLabel}
               />

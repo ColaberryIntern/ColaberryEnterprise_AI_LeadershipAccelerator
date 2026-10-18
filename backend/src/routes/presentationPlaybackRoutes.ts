@@ -111,4 +111,59 @@ router.get('/api/portal/projects/:projectId/tasks/:storyId/recordings/:recording
   } catch (e) { fail(res, e, next); }
 });
 
+/**
+ * THE POSTER FRAME — same authority as the video, because it IS the video.
+ *
+ * A still of a private rehearsal is the learner's face. Serving thumbnails on a
+ * looser rule than playback would mean the picture leaks where the footage does
+ * not, so this resolves through exactly the same `resolveViewableRecording` and
+ * the same signed ticket. The only difference is what gets sent.
+ *
+ * A MISSING THUMBNAIL IS A 404, NEVER AN ERROR. Generation fails for real and
+ * ordinary reasons — a camera-off recording has no frame worth showing at all —
+ * and the card simply falls back to its poster-less player. Nothing about a demo
+ * should break because a picture could not be made.
+ *
+ * NOT COUNTED AS A VIEW. The feed renders a poster for every demo on the page
+ * whether or not anybody watches; counting those would make the number mean
+ * "scrolled past" instead of "watched", which is worse than having no number.
+ */
+router.get('/api/portal/projects/:projectId/tasks/:storyId/recordings/:recordingId/thumbnail', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!gate(res)) return;
+    if (!env.presentationStudioEnabled) return res.status(404).json({ error: 'Presentation Studio not enabled' });
+
+    const { verifyRecordingTicket } = await import('../services/presentation/recordingTicket');
+    const claims = verifyRecordingTicket(typeof req.query.t === 'string' ? req.query.t : null);
+    if (!claims || claims.recordingId !== String(req.params.recordingId)) {
+      return res.status(404).json({ error: 'Not found' });
+    }
+
+    const { resolveViewableRecording } = await import('../services/presentation/recordingPlayback');
+    const r = await resolveViewableRecording(
+      claims.enrollmentId,
+      String(req.params.projectId),
+      String(req.params.storyId),
+      String(req.params.recordingId),
+    );
+    if (!r.ok) return res.status(404).json({ error: 'Not found' });
+
+    const { ensureThumbnail } = await import('../services/presentation/recordingThumbnail');
+    const thumb = await ensureThumbnail(
+      String(req.params.recordingId),
+      r.recording.filePath,
+      r.recording.durationSeconds,
+    );
+    // No frame worth showing. The card falls back; see the note above.
+    if (!thumb) return res.status(404).json({ error: 'No thumbnail' });
+
+    res.setHeader('Content-Type', 'image/jpeg');
+    // A recording is immutable once ingested, so its still can be cached hard.
+    // PRIVATE, because the audience check above is per viewer and a shared cache
+    // would serve one learner's frame to whoever asked next.
+    res.setHeader('Cache-Control', 'private, max-age=86400');
+    return fs.createReadStream(thumb.path).pipe(res);
+  } catch (e) { fail(res, e, next); }
+});
+
 export default router;

@@ -38,6 +38,13 @@ export interface DemoPlayback {
   recordingId: string;
   /** Carries its own signed ticket: a <video> cannot send a bearer. */
   playbackUrl: string;
+  /**
+   * The poster. Same ticket, same audience rule — a still of a private rehearsal
+   * is the learner's face, so it is not served on a looser rule than the footage.
+   * The card tolerates a 404 here: a camera-off recording has no frame worth
+   * showing, and a missing picture must never break a working demo.
+   */
+  thumbnailUrl: string;
   durationSeconds: number | null;
   viewCount: number;
   viewLabel: string;
@@ -149,13 +156,18 @@ export async function resolveDemoPlayback(
     if (!allowed) continue;
 
     const n = counts[recordingId] ?? 0;
+    // ONE ticket and ONE base for both urls: minted twice they could differ in
+    // expiry, and a poster that outlives its player is a broken-looking card.
+    const base = `/api/portal/projects/${encodeURIComponent(String(r.project_id))}`
+      + `/tasks/${encodeURIComponent(String(r.story_id))}`
+      + `/recordings/${encodeURIComponent(recordingId)}`;
+    const ticket = encodeURIComponent(createRecordingTicket(recordingId, viewerEnrollmentId));
+
     out[postId] = {
       postId,
       recordingId,
-      playbackUrl: `/api/portal/projects/${encodeURIComponent(String(r.project_id))}`
-        + `/tasks/${encodeURIComponent(String(r.story_id))}`
-        + `/recordings/${encodeURIComponent(recordingId)}/file`
-        + `?t=${encodeURIComponent(createRecordingTicket(recordingId, viewerEnrollmentId))}`,
+      playbackUrl: `${base}/file?t=${ticket}`,
+      thumbnailUrl: `${base}/thumbnail?t=${ticket}`,
       durationSeconds: r.duration_seconds === null || r.duration_seconds === undefined
         ? null
         : Number(r.duration_seconds),
