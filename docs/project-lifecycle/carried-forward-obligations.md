@@ -1849,3 +1849,58 @@ resistance in the same change.
 **Mutation-proven:** restoring the whole-prompt check fails **exactly one** test, the one that
 asserts the refusal, while the other 15 pass - including the pre-existing `the check is NOT
 vacuous` control.
+
+## GIVING CI A POSTGRES WOULD TURN EVERY PR RED, and the reason is the DDL item
+
+This register carries two items that read as independent:
+
+1. *"CI provisions no Postgres, so Phase 7's integration tier never runs on merge"* - which is
+   also why six (now seven) lock behaviours are "covered" only by asserting their SQL.
+2. *"A pristine database cannot boot this schema"* - escalated earlier today.
+
+**They are one item. The first is blocked by the second, and it is now measured rather than
+argued.**
+
+### The measurement
+
+A disposable Postgres 16 was started locally on its own port, `DATABASE_URL` pointed at it, and
+the suites that normally self-skip were run:
+
+| | Without Postgres | With a bare Postgres |
+|---|---|---|
+| Suites | 15 skipped, 0 failed | **12 FAILED**, 159 passed, 1 skipped |
+| Tests | - | **81 FAILED**, 3,070 passed |
+
+And the failures are not varied. Counted by message:
+
+```
+  11 x relation "student_tasks" does not exist
+   6 x relation "github_connections" does not exist
+```
+
+**Those are exactly the two tables identified this morning as having no idempotent DDL
+anywhere** - `student_tasks`, whose only `CREATE` lives in a seed script, and
+`github_connections`, which has none at all. The same two tables the schema assert now names by
+cause rather than by six phantom column gaps.
+
+### What this changes about the plan
+
+Adding a Postgres service container to `.github/workflows/ci.yml` is a two-line change and it
+would be **wrong on its own**: it converts 15 visible skips into 12 red suites on every pull
+request, for every session, immediately. The work has an order:
+
+1. Make a pristine database bootable - the ESCALATE-tier item (generate DDL from the models,
+   adopt a migration tool, or declare `DB_BOOT_SYNC` the supported bootstrap and document it).
+2. **Then** give CI a Postgres, and the integration tier starts running on merge.
+3. Only then do the seven lock behaviours become observable rather than reasoned, including the
+   stale-build claim added today, which is honestly recorded as argued-not-observed.
+
+Doing (2) before (1) is the version of this that gets reverted within a day and leaves the item
+looking attempted.
+
+### The cheap thing that is still worth doing first
+
+The derived sweep already recorded under the DDL item - list every table an `ensure*` module
+ALTERs with no `CREATE` anywhere - would have predicted this result without starting a database
+at all. It names the real population. `student_tasks` and `github_connections` are simply the
+two that the lifecycle and sbp suites happen to touch first.
