@@ -14,6 +14,7 @@
 
 import { deriveGovBuildPlan, buildGovStoryPrompt, reconcileGovBuildPlan, type GovBuildStory, type GovBuildRelease } from './proposal/govBuildPlan';
 import type { EvidenceView } from './govBuildEvidence';
+import type { SharedProposalView, ProposalShareLevel } from './govProposalShare';
 
 export interface StudentGovTrackView { trackType: string; status: string; hasBuild: boolean; }
 export interface StudentGovRequirementView {
@@ -28,6 +29,16 @@ export interface StudentGovBuildPlan {
   /** Stories whose requirement left the established set but which still carry the student's work — preserved, flagged. */
   orphanedStories: StudentGovBuildStory[];
 }
+/** One row of the intern-facing, PRICE-FREE submission checklist: a response slot and whether it is ship-ready. */
+export interface StudentSubmissionChecklistItem {
+  requirementId: string; statement: string; status: string; approved: boolean; openGapCount: number;
+}
+export interface StudentSubmissionChecklist {
+  items: StudentSubmissionChecklistItem[];
+  counts: { total: number; approved: number; remaining: number };
+  /** True only when every non-pricing response is approved with no open/filler gap. */
+  ready: boolean;
+}
 export interface StudentGovProjectView {
   projectId: string;
   name: string;
@@ -37,9 +48,38 @@ export interface StudentGovProjectView {
   requirementCounts: { total: number; proposal: number; build: number };
   /** The Build-track plan for this project — releases → stories → the prompt the student works from. */
   build: StudentGovBuildPlan;
+  /** P6: the proposal projected to THIS viewer's share level ('none' ⇒ empty, hidden). Pricing + identities are
+   *  never carried; comment/edit additionally see the open gap questions (never the stored answer text). */
+  proposal: SharedProposalView;
+  /** P6: a PRICE-FREE submission checklist (one row per non-pricing response) — what is still owed before submit. */
+  submissionChecklist: StudentSubmissionChecklist;
   /** Whether THIS viewer may verify evidence (holds evidence.verify) — lights up reviewer controls. Never a
    *  student (they lack evidence.verify); it is the viewer's own capability, not a leak of anyone else's. */
   viewerCanVerify: boolean;
+}
+
+/**
+ * PURE: a PRICE-FREE submission checklist for an intern — one row per NON-pricing response slot, its lifecycle
+ * status, and whether it is ship-ready (approved with no open/filler gap). Pricing slots are dropped by id against
+ * the established set's `kind`, the same rail the proposal + requirement projections use, so an intern's checklist
+ * can never carry a price. Total; garbage in yields an empty checklist.
+ */
+export function toStudentSubmissionChecklist(slots: any[], established: any[]): StudentSubmissionChecklist {
+  const pricingIds = new Set(
+    (Array.isArray(established) ? established : [])
+      .filter((r) => r && String(r.kind ?? '').trim().toLowerCase() === 'pricing')
+      .map((r) => String(r.id ?? r.canonicalReqId ?? r.canonical_req_id ?? '')),
+  );
+  const items: StudentSubmissionChecklistItem[] = (Array.isArray(slots) ? slots : [])
+    .filter((s) => s && !pricingIds.has(String(s.requirementId)))
+    .map((s) => {
+      const gaps = Array.isArray(s.gaps) ? s.gaps : [];
+      const openGapCount = gaps.filter((g: any) => g && (g.resolution === 'open' || g.resolution === 'filler')).length;
+      const status = String(s.status ?? 'unanswered');
+      return { requirementId: String(s.requirementId ?? ''), statement: String(s.statement ?? ''), status, approved: status === 'approved' && openGapCount === 0, openGapCount };
+    });
+  const approved = items.filter((i) => i.approved).length;
+  return { items, counts: { total: items.length, approved, remaining: items.length - approved }, ready: items.length > 0 && approved === items.length };
 }
 
 /**
@@ -86,6 +126,9 @@ export function toStudentGovProjectView(project: any, tracks: any[], requirement
       build: reqRows.filter((r) => r.tracks.includes('solution_build')).length,
     },
     build,
+    // Safe defaults — nothing shared, nothing owed — until the async loader resolves the viewer's grant + responses.
+    proposal: { level: 'none', canComment: false, canEdit: false, responses: [] },
+    submissionChecklist: { items: [], counts: { total: 0, approved: 0, remaining: 0 }, ready: false },
     viewerCanVerify,
   };
 }
@@ -94,7 +137,7 @@ export function toStudentGovProjectView(project: any, tracks: any[], requirement
  * Load + project. Serves ONLY a non-archived `government_public_sector` project (else null -> 404). Access must
  * already be authorized by the caller's guard; this never performs an access check of its own.
  */
-export async function getStudentGovProjectView(deliveryProjectId: string, viewerCanVerify = false): Promise<StudentGovProjectView | null> {
+export async function getStudentGovProjectView(deliveryProjectId: string, viewerCanVerify = false, viewerIdentityId: string | null = null): Promise<StudentGovProjectView | null> {
   const { default: DeliveryProject } = await import('../../models/DeliveryProject');
   const { default: ContractTrack } = await import('../../models/ContractTrack');
   const { default: ContractRequirement } = await import('../../models/ContractRequirement');
@@ -133,5 +176,22 @@ export async function getStudentGovProjectView(deliveryProjectId: string, viewer
     view.build.stories = recon.stories.map(toStudent);
     view.build.orphanedStories = recon.orphanedStories.map(toStudent);
   } catch { /* overlay is additive; a failure here never blocks the student view */ }
+
+  // P6: the shared proposal (projected to THIS viewer's grant level) + the price-free submission checklist. Built
+  // from the SAME response slots the admin workspace uses (deriveResponseSlots + the persisted responses), then run
+  // through the P5 trust boundary (toSharedProposalView drops pricing + identities; 'none' ⇒ empty, hidden). The
+  // full requirement set is passed as `established` so pricing is identified and dropped by id. Additive: a failure
+  // here leaves the safe defaults (nothing shared, nothing owed) in place and never blocks the Build view.
+  try {
+    const { deriveResponseSlots, applyResponsesToSlots } = await import('./proposal/responseSlots');
+    const { listProposalResponses } = await import('./govProposalResponse');
+    const { toSharedProposalView, getProposalShareLevel } = await import('./govProposalShare');
+    let slots = deriveResponseSlots(requirements);
+    const responses = await listProposalResponses(deliveryProjectId);
+    slots = applyResponsesToSlots(slots, responses as any);
+    const level: ProposalShareLevel = viewerIdentityId ? await getProposalShareLevel(deliveryProjectId, viewerIdentityId) : 'none';
+    view.proposal = toSharedProposalView(slots, requirements, level);
+    view.submissionChecklist = toStudentSubmissionChecklist(slots, requirements);
+  } catch { /* additive; the safe defaults set in the pure view remain */ }
   return view;
 }

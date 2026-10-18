@@ -1,6 +1,6 @@
 import { Router, Response } from 'express';
 import { requireParticipant } from '../middlewares/participantAuth';
-import { requireGovProjectAccess, type GovProjectRequest } from '../middlewares/govProjectAccess';
+import { requireGovProjectAccess, resolveGovProjectActor, type GovProjectRequest } from '../middlewares/govProjectAccess';
 import { getStudentGovProjectView } from '../services/factory/govProjectProjection';
 
 /**
@@ -18,6 +18,38 @@ import { getStudentGovProjectView } from '../services/factory/govProjectProjecti
  */
 const router = Router();
 
+/**
+ * GET /api/portal/gov-projects — the gov projects THIS intern is an active member of (for the "on your profile"
+ * card). Membership-scoped: it lists ONLY the caller's own active DeliveryProjectMember rows, joined to
+ * non-archived government_public_sector projects, so it can never enumerate a project they are not on. Minimal
+ * fields only (id, name, status); the full student-safe view is the per-project GET below. requireParticipant is
+ * enough here — there is no project param to guard, and the query is already scoped to the caller's identity.
+ */
+router.get(
+  '/api/portal/gov-projects',
+  requireParticipant,
+  async (req: GovProjectRequest, res: Response) => {
+    try {
+      const actor = await resolveGovProjectActor(req);
+      if (!actor) { res.json({ projects: [] }); return; } // no resolvable identity ⇒ nothing assigned
+      const { default: DeliveryProjectMember } = await import('../models/DeliveryProjectMember');
+      const { default: DeliveryProject } = await import('../models/DeliveryProject');
+      const memberships: any[] = await DeliveryProjectMember.findAll({
+        where: { platform_identity_id: actor.platformIdentityId, status: 'active' },
+      });
+      const ids = Array.from(new Set(memberships.map((m) => m.delivery_project_id).filter(Boolean)));
+      if (ids.length === 0) { res.json({ projects: [] }); return; }
+      const projects: any[] = await DeliveryProject.findAll({ where: { id: ids } });
+      const cards = projects
+        .filter((p) => p && p.project_class === 'government_public_sector' && !p.archived_at)
+        .map((p) => ({ projectId: String(p.id), name: String(p.name ?? ''), status: String(p.status ?? '') }));
+      res.json({ projects: cards });
+    } catch {
+      res.status(500).json({ error: 'Could not load your projects.' });
+    }
+  },
+);
+
 router.get(
   '/api/portal/gov-projects/:projectId',
   requireParticipant,
@@ -33,7 +65,9 @@ router.get(
       // Does THIS viewer hold evidence.verify? (a reviewer does; a student does not) — lights up reviewer controls.
       const { hasDeliveryPermission } = await import('../modules/delivery/deliveryAuthorization');
       const viewerCanVerify = !!(req.deliveryContext && hasDeliveryPermission(req.deliveryContext, 'evidence.verify'));
-      const view = await getStudentGovProjectView(projectId, viewerCanVerify);
+      // Pass the guard-resolved identity so the projection can resolve THIS viewer's proposal share level (P6).
+      const viewerIdentityId = req.deliveryContext?.platformIdentityId ?? null;
+      const view = await getStudentGovProjectView(projectId, viewerCanVerify, viewerIdentityId);
       // Access already passed the guard; a null here means the project is not a (non-archived) gov project.
       if (!view) {
         res.status(404).json({ error: 'Not found' });

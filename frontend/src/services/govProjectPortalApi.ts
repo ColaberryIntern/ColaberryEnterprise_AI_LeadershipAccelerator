@@ -32,6 +32,28 @@ export interface StudentGovBuildPlan {
   /** Stories whose requirement was revised away but whose work is preserved (optional — absent on older backends). */
   orphanedStories?: StudentGovBuildStory[];
 }
+/** P6: one shared proposal response, projected to the viewer's share level. Never carries a price or an identity. */
+export interface SharedProposalResponse {
+  requirementId: string; statement: string; status: string; content: string; openGapCount: number;
+  /** Present only for comment/edit members — the open gap QUESTIONS, never the stored answer text. */
+  gaps?: { id: string; question: string; suggestions: string[]; resolution: string }[];
+}
+/** P6: the proposal as THIS viewer may see it. `level: 'none'` ⇒ not shared (empty responses, hidden in the UI). */
+export interface SharedProposalView {
+  level: 'none' | 'view' | 'comment' | 'edit';
+  canComment: boolean;
+  canEdit: boolean;
+  responses: SharedProposalResponse[];
+}
+/** P6: one row of the PRICE-FREE submission checklist. */
+export interface StudentSubmissionChecklistItem {
+  requirementId: string; statement: string; status: string; approved: boolean; openGapCount: number;
+}
+export interface StudentSubmissionChecklist {
+  items: StudentSubmissionChecklistItem[];
+  counts: { total: number; approved: number; remaining: number };
+  ready: boolean;
+}
 export interface StudentGovProjectView {
   projectId: string;
   name: string;
@@ -40,15 +62,28 @@ export interface StudentGovProjectView {
   requirements: StudentGovRequirementView[];
   requirementCounts: { total: number; proposal: number; build: number };
   build: StudentGovBuildPlan;
+  /** P6: the proposal projected to this viewer's share level ('none' ⇒ not shared). Optional — absent on older backends. */
+  proposal?: SharedProposalView;
+  /** P6: the price-free submission checklist. Optional — absent on older backends. */
+  submissionChecklist?: StudentSubmissionChecklist;
   /** Whether the current viewer may verify evidence (a reviewer, not a student) — lights up verify/reject controls. */
   viewerCanVerify: boolean;
 }
+
+/** P6: a card for a gov project the intern is assigned to — minimal fields for the "on your profile" surface. */
+export interface MyGovProjectCard { projectId: string; name: string; status: string; }
 
 export async function getStudentGovProject(projectId: string): Promise<StudentGovProjectView> {
   const { data } = await portalApi.get<{ project: StudentGovProjectView }>(
     `/api/portal/gov-projects/${encodeURIComponent(projectId)}`,
   );
   return data.project;
+}
+
+/** P6: the gov projects THIS intern is assigned to (membership-scoped server-side) — for the profile card. */
+export async function listMyGovProjects(): Promise<MyGovProjectCard[]> {
+  const { data } = await portalApi.get<{ projects: MyGovProjectCard[] }>('/api/portal/gov-projects');
+  return Array.isArray(data?.projects) ? data.projects : [];
 }
 
 /** Hand in completion evidence for a build story. The server records it `submitted` — a reviewer verifies later. */
