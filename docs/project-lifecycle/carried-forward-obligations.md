@@ -2016,3 +2016,50 @@ The `KNOWN LIMITATION` block still passes, because the flag is off and that bloc
 shipped behaviour. It is reframed rather than inverted, and a new block asserts the other branch
 with a flag-off control beside it - without that control the suite would pass against a build
 that neutralised ALWAYS, which is the silent live-path change the rule forbids.
+
+## DEPLOY_MODE: THE BAR IS MET, re-measured, and the edit is outside an agent's scope
+
+`scripts/deploy-prod.sh` carries a DRI decision from 2026-09-10 that is unusual and useful: it
+recorded not just the decision but **its trigger condition**, so that executing it later would
+not require re-arguing it.
+
+> **THE BAR:** flip `DEPLOY_MODE`'s default to `registry` once that log shows at least 5
+> successful registry deploys spanning at least 14 days.
+
+### Re-measured 2026-10-18, not recalled
+
+| | Required | Actual |
+|---|---|---|
+| Successful registry deploys | 5 | **134** |
+| Span | 14 days | **30** (2026-09-16 .. 2026-10-17) |
+| *Control:* distinct commits | — | **95** — not one commit deployed 134 times |
+
+The control matters: a count of 134 would mean nothing if it were the same commit redeployed, so
+the distinct-commit figure is what makes "this path works" a real claim.
+
+**And the pressure it relieves has roughly doubled.** The script's own comment records 344 kernel
+OOM kills; the journal now shows **670**. Building on the host remains the largest recurring
+memory spike on a box that also runs five Postgres instances, and one deploy watched during this
+session built on the host with about 300 MB free.
+
+### The change, in full
+
+```diff
+-DEPLOY_MODE="${DEPLOY_MODE:-build}"
++DEPLOY_MODE="${DEPLOY_MODE:-registry}"
+```
+
+**What it changes for a deployer:** registry mode needs CI to have published an image for the
+EXACT commit. If it has not, the existing guard refuses with a message saying so — a loud,
+actionable stop rather than a silent older build. The escapes are
+`DEPLOY_MODE=build ./scripts/deploy-prod.sh`, or waiting for the "Build images" workflow.
+Reverting is the same one word.
+
+### Why this entry exists instead of the change
+
+The edit was attempted and **refused by the harness as a protected-scope infrastructure
+change**. That is the right guardrail: a deploy script is production infrastructure, which
+CLAUDE.md puts in the ESCALATE tier regardless of how well-evidenced the change is.
+
+So the evidence is here and the diff is one line. Applying it is the DRI's, with the bar that
+was written to be checkable now checked.
