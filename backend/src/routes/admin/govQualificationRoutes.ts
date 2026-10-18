@@ -20,6 +20,7 @@ import {
 import { assignBuildStory, unassignBuildStory, AssignmentError } from '../../services/factory/govBuildAssignment';
 import { setProposalShareGrant, listProposalShareGrants, type ProposalShareLevel } from '../../services/factory/govProposalShare';
 import { saveProposalResponse, reviewProposalResponse, addProposalFigure, removeProposalFigure, saveDraftWithGaps, resolveProposalGap, ResponseError } from '../../services/factory/govProposalResponse';
+import { generateProposalDraftAI } from '../../services/factory/govProposalDraftAI';
 import { recordProposalAmendment, AmendmentError } from '../../services/factory/govProposalAmendment';
 import { exportSubmission, recordSubmissionReceipt, acknowledgeSubmission, reopenSubmission, recordOutcome, getSubmission, SubmissionError } from '../../services/factory/govSubmission';
 import { buildSubmissionManifest, buildPackageFiles, evaluateSubmissionReadiness } from '../../services/factory/proposal/submissionPackage';
@@ -419,6 +420,32 @@ router.post('/api/admin/factory/qualification/:canonicalOpportunityId/responses/
   } catch (err: any) {
     if (err instanceof ResponseError) { res.status(RESPONSE_ERR_STATUS[err.reason] ?? 400).json({ error: err.message, reason: err.reason }); return; }
     logFail('gov_response_gap_failed', err, { canonicalOpportunityId }); res.status(500).json({ error: 'Could not resolve the gap.' });
+  }
+});
+
+/**
+ * POST …/responses/:requirementId/draft-ai - ADVISORY "Draft with AI": generate a grounded draft + typed gaps for
+ * one requirement (body: requirementText, title?, buyer?) and PERSIST it via saveDraftWithGaps (lands as `draft`;
+ * the AI never resolves a gap, so nothing is filler until a human marks it). 503 if the AI is unavailable.
+ */
+router.post('/api/admin/factory/qualification/:canonicalOpportunityId/responses/:requirementId/draft-ai', requireSection('program'), async (req: Request, res: Response) => {
+  const pk = qualKeyParam.safeParse({ canonicalOpportunityId: req.params.canonicalOpportunityId });
+  const pr = requirementIdParam.safeParse(req.params.requirementId);
+  if (!pk.success || !pr.success) { res.status(400).json({ error: 'Invalid opportunity key or requirement id.' }); return; }
+  const { canonicalOpportunityId } = pk.data;
+  const scope = await scopeOrFail(res, 'gov_response_draft_ai_scope', { canonicalOpportunityId });
+  if (!scope) return;
+  try {
+    const deliveryProjectId = await resolveProjectOr404(req, res, canonicalOpportunityId, scope.tenantId);
+    if (!deliveryProjectId) return;
+    const ai = await generateProposalDraftAI({ requirementId: pr.data, requirementText: String(req.body?.requirementText ?? ''), title: req.body?.title ?? null, buyer: req.body?.buyer ?? null });
+    if (ai.error) { res.status(503).json({ error: ai.error }); return; }
+    const actor = await resolveGovProjectActor(req).catch(() => null);
+    const view = await saveDraftWithGaps({ deliveryProjectId, requirementId: pr.data, content: ai.content, gaps: ai.gaps, authoredByIdentityId: actor ? actor.platformIdentityId : null });
+    res.json({ ...view, generatedAt: ai.generatedAt, cached: ai.cached });
+  } catch (err: any) {
+    if (err instanceof ResponseError) { res.status(RESPONSE_ERR_STATUS[err.reason] ?? 400).json({ error: err.message, reason: err.reason }); return; }
+    logFail('gov_response_draft_ai_failed', err, { canonicalOpportunityId }); res.status(500).json({ error: 'Could not generate the AI draft.' });
   }
 });
 

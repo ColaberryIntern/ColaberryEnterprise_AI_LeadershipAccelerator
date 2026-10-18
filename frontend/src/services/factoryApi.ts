@@ -711,6 +711,16 @@ export async function resolveGovProposalGap(canonicalOpportunityId: string, requ
   return data;
 }
 
+/**
+ * P5: ADVISORY "Draft with AI". The server drafts a grounded response to this requirement and returns typed gaps for
+ * any fact it would have to invent; it persists the result as `draft` (never resolves a gap). Throws 503 if the AI is
+ * unavailable. The returned slot carries `generatedAt`/`cached` advisory metadata alongside the usual fields.
+ */
+export async function draftGovProposalWithAI(canonicalOpportunityId: string, requirementId: string, requirementText: string, title?: string | null, buyer?: string | null): Promise<GovResponseSlot & { generatedAt?: string; cached?: boolean }> {
+  const { data } = await api.post(rUrl(canonicalOpportunityId, requirementId, '/draft-ai'), { requirementText, title, buyer });
+  return data;
+}
+
 /** P5 Team & access: how much of the proposal a member may see. */
 export type ProposalShareLevel = 'none' | 'view' | 'comment' | 'edit';
 export interface ProposalShareGrant { deliveryProjectId: string; memberIdentityId: string; level: ProposalShareLevel; updatedAt: string | null; }

@@ -7,7 +7,7 @@ import {
   authorizeGovBuild, getGovOpportunityCandidates, reviewGovQualificationDocuments, matchServicesToOpportunity,
   extractGovQualificationRequirements, getGovOpportunityDetail, attestSolicitationZip,
   assignGovBuildStory, unassignGovBuildStory,
-  saveGovProposalResponse, reviewGovProposalResponse, addGovProposalFigure, removeGovProposalFigure, saveGovProposalDraft, resolveGovProposalGap, recordGovProposalAmendment,
+  saveGovProposalResponse, reviewGovProposalResponse, addGovProposalFigure, removeGovProposalFigure, saveGovProposalDraft, resolveGovProposalGap, draftGovProposalWithAI, recordGovProposalAmendment,
   exportGovSubmission, downloadGovSubmissionPackage, recordGovSubmissionReceipt, acknowledgeGovSubmission, reopenGovSubmission, recordGovOutcome,
   type GovQualificationWorkspace, type QualRequirementEval, type GovCandidatesResult, type EstablishedRequirement,
   type ServiceMatch, type ExtractedRequirementCandidate, type RequirementItem, type ReqItemCategory, type GovOpportunity, type GovDossier, type GovRelationship,
@@ -367,6 +367,8 @@ interface ResponseAuthoring {
   onResolveGap: (requirementId: string, gapId: string, resolution: 'answered' | 'filler', answer?: string) => void;
   /** P5: flag this response as needing input with a filler placeholder (blocks export until replaced). */
   onMarkFiller: (requirementId: string, content: string) => void;
+  /** P5 Draft-with-AI: generate an advisory draft + typed gaps for this requirement. Persists as `draft`; resolves no gap. */
+  onDraftAI: (requirementId: string, requirementText: string) => void;
 }
 
 /** One Draft-with-AI gap: the question, past-performance suggestions, and resolve as answered or (red) filler. */
@@ -421,6 +423,10 @@ function ResponseSlotRow({ slot, authoring }: { slot: GovResponseSlot; authoring
             onChange={(e) => setContent(e.target.value)} aria-label={`Response to ${slot.requirementId}`} />
           <div className="d-flex flex-wrap gap-2 align-items-center mb-1">
             <button type="button" className="btn btn-outline-primary btn-sm" disabled={busy} onClick={() => authoring.onSave(slot.requirementId, content)}>Save draft</button>
+            {(slot.status === 'unanswered' || slot.status === 'draft' || slot.status === 'revision_required') && (
+              <button type="button" className="btn btn-outline-secondary btn-sm" disabled={busy} title="Advisory: the AI drafts a grounded response and flags any fact it would have to invent as a gap. It never answers a gap for you."
+                onClick={() => authoring.onDraftAI(slot.requirementId, slot.statement)}><i className="ri-sparkling-2-line me-1" aria-hidden="true" />Draft with AI</button>
+            )}
             {slot.status === 'draft' && <button type="button" className="btn btn-outline-info btn-sm" disabled={busy} onClick={() => authoring.onReview(slot.requirementId, 'reviewed')}>Mark reviewed</button>}
             {slot.status === 'reviewed' && <button type="button" className="btn btn-success btn-sm" disabled={busy} onClick={() => authoring.onReview(slot.requirementId, 'approved')}>Approve</button>}
             {(slot.status === 'reviewed' || slot.status === 'approved' || slot.status === 'draft') && (
@@ -1675,6 +1681,7 @@ export default function AdminGovQualificationPage(): React.ReactElement {
                 onRemoveFigure: (rid, ref) => run(() => removeGovProposalFigure(canonical, rid, ref), 'Figure removed.'),
                 onResolveGap: (rid, gapId, resolution, answer) => run(() => resolveGovProposalGap(canonical, rid, gapId, resolution, answer), resolution === 'filler' ? 'Marked filler (blocks export).' : 'Gap answered.'),
                 onMarkFiller: (rid, content) => run(() => saveGovProposalDraft(canonical, rid, content, [{ id: 'needs-input', question: 'This response needs input before it can ship.', suggestions: [], resolution: 'filler' }]), 'Flagged: needs input (filler).'),
+                onDraftAI: (rid, requirementText) => run(() => draftGovProposalWithAI(canonical, rid, requirementText, oppDetail?.opportunity?.title ?? null, oppDetail?.opportunity?.agency ?? null), 'AI draft generated — review it and answer any gaps.'),
               }} />
             </SectionCard>
           )}
