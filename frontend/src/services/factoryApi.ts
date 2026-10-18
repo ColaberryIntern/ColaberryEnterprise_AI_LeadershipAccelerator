@@ -711,6 +711,22 @@ export async function resolveGovProposalGap(canonicalOpportunityId: string, requ
   return data;
 }
 
+/** P5 Team & access: how much of the proposal a member may see. */
+export type ProposalShareLevel = 'none' | 'view' | 'comment' | 'edit';
+export interface ProposalShareGrant { deliveryProjectId: string; memberIdentityId: string; level: ProposalShareLevel; updatedAt: string | null; }
+
+/** The per-member proposal share grants on this pursuit's delivery project. */
+export async function listGovProposalShare(canonicalOpportunityId: string): Promise<{ grants: ProposalShareGrant[] }> {
+  const { data } = await api.get(qUrl(canonicalOpportunityId, '/proposal-share'));
+  return data;
+}
+
+/** Set (or clear with 'none') a member's proposal share level — a per-member grant, never a role change. */
+export async function setGovProposalShare(canonicalOpportunityId: string, memberIdentityId: string, level: ProposalShareLevel): Promise<{ grant: ProposalShareGrant }> {
+  const { data } = await api.post(qUrl(canonicalOpportunityId, '/proposal-share'), { memberIdentityId, level });
+  return data;
+}
+
 /** Record an amendment/message in the inbox. An amendment's `affects` invalidates affected responses (server-side). */
 export async function recordGovProposalAmendment(canonicalOpportunityId: string, body: {
   amendmentKey: string; kind?: 'amendment' | 'message'; summary: string; affects?: string[]; provenance?: string | null; observedAt?: string | null;

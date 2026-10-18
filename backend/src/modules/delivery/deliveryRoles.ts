@@ -38,6 +38,12 @@ export type DeliveryPermission =
   | 'story.write'
   | 'story.execute'
   | 'story.review'
+  // P5 Team & access: a proposal can be SHARED with a member at a level (view/comment/edit). These are checked
+  // against a PER-MEMBER share grant (GovProposalShareGrant), NOT role grants, so sharing one proposal with one
+  // intern never widens anyone else's access. They are listed here so the permission name has one definition.
+  | 'proposal.read'
+  | 'proposal.comment'
+  | 'proposal.edit'
   | 'agent.read'
   | 'agent.write'
   | 'agent.approve'
