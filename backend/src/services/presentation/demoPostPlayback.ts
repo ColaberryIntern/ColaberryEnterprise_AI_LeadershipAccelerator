@@ -50,23 +50,38 @@ export interface DemoPlayback {
  * present with a null url — the card then renders as an ordinary post, and the
  * page never has to decide what a half-resolved demo looks like.
  */
+/**
+ * For each demo post this viewer can watch, the URL that plays it.
+ *
+ * TAKES POST IDS, NOT POST OBJECTS, and reads the ref from the database itself.
+ * The first version read `ritual_meta` off the objects the feed had already built
+ * — and `toFeedItem` constructs an explicit DTO that does not carry it, so every
+ * demo resolved to nothing and the card never rendered, with no error anywhere.
+ * Depending on a caller's shape for a field it had every right not to expose was
+ * the mistake; the ref lives in `community_posts`, so this reads it from there.
+ *
+ * Posts the viewer may NOT watch are simply absent from the result rather than
+ * present with a null url — the card then renders as an ordinary post, and the
+ * page never has to decide what a half-resolved demo looks like.
+ */
 export async function resolveDemoPlayback(
   viewerEnrollmentId: string,
-  posts: Array<{ id: string; ritual_meta?: Record<string, unknown> | null }>,
+  postIds: string[],
 ): Promise<Record<string, DemoPlayback>> {
-  const wanted: Array<{ postId: string; recordingId: string }> = [];
-  for (const p of posts || []) {
-    const rid = recordingIdFromRef((p.ritual_meta || {})['recording_ref']);
-    if (rid) wanted.push({ postId: String(p.id), recordingId: rid });
-  }
-  if (wanted.length === 0) return {};
+  const ids = (postIds || []).map(String).filter((id) => UUID.test(id));
+  if (ids.length === 0) return {};
 
   // ONE QUERY for the whole page. A feed of twenty demos must not become twenty
   // round trips, and the audience predicate is the same for all of them.
+  //
+  // The ref is matched by STRING rather than cast to a uuid: a legacy row holding
+  // `recording:<attempt_id>` is syntactically valid and casts fine, so a cast would
+  // not protect anything, while a malformed ref would abort the whole query.
+  // Matching against `r.id::text` simply finds nothing, which is the right answer.
   const sequelize = await db();
-  const ids = Array.from(new Set(wanted.map((w) => w.recordingId)));
   const [rows] = await sequelize.query(
-    `SELECT r.id                AS recording_id,
+    `SELECT p.id                AS post_id,
+            r.id                AS recording_id,
             r.duration_seconds,
             asg.project_id,
             asg.story_id,
@@ -77,11 +92,14 @@ export async function resolveDemoPlayback(
             s.content_hash,
             s.draft_json->>'current_content_hash' AS current_content_hash,
             s.author_approved_at, s.staff_approved_at, s.published_at, s.withdrawn_at
-       FROM presentation_recordings  r
+       FROM community_posts         p
+       JOIN presentation_recordings r
+              ON p.ritual_meta->>'recording_ref' = 'recording:' || r.id::text
+             AND r.ingest_status = 'ingested'
        JOIN presentation_attempts    a   ON a.id = r.attempt_id
        JOIN presentation_assignments asg ON asg.id = a.assignment_id
        JOIN presentation_showcases   s   ON s.recording_id = r.id AND s.withdrawn_at IS NULL
-      WHERE r.id IN (:ids) AND r.ingest_status = 'ingested'`,
+      WHERE p.id IN (:ids)`,
     { replacements: { ids } },
   ) as [Array<Record<string, any>>, unknown];
 
@@ -95,16 +113,14 @@ export async function resolveDemoPlayback(
 
   const { canView } = await import('./showcaseAccess');
   const { viewCounts, describeViews } = await import('./recordingViews');
-  const counts = await viewCounts(ids);
+  // Counted on the RECORDINGS the query actually found, not on the post ids.
+  const counts = await viewCounts(rows.map((r) => String(r.recording_id)));
   const { createRecordingTicket } = await import('./recordingTicket');
 
-  const byRecording = new Map<string, Record<string, any>>();
-  for (const r of rows) byRecording.set(String(r.recording_id), r);
-
   const out: Record<string, DemoPlayback> = {};
-  for (const { postId, recordingId } of wanted) {
-    const r = byRecording.get(recordingId);
-    if (!r) continue;
+  for (const r of rows) {
+    const postId = String(r.post_id);
+    const recordingId = String(r.recording_id);
 
     // ONE policy, not two: `canView` already grants the owner and staff, so a
     // separate owner short-circuit here would be a second copy of an access rule

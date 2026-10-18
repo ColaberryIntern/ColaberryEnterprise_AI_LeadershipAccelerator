@@ -954,8 +954,15 @@ router.get('/api/portal/community/posts', requireParticipant, async (req, res) =
     // PER VIEWER, and deliberately not cached onto the post: the author, a
     // cohort-mate and a stranger are three different answers to the same row, and
     // the ticket is minted for whoever is asking.
+    // POST IDS, not the post objects: `toFeedItem` builds an explicit DTO that
+    // does not carry `ritual_meta`, so passing the objects resolved nothing and
+    // the card silently never rendered. The resolver reads the ref from the
+    // database, which no change to this DTO can break.
     const { resolveDemoPlayback } = await import('../services/presentation/demoPostPlayback');
-    const demos = await resolveDemoPlayback(req.participant!.sub, posts as any[]);
+    const demos = await resolveDemoPlayback(
+      req.participant!.sub,
+      (posts as any[]).map((p) => String(p.id)),
+    );
 
     res.json({
       posts: (posts as any[]).map((p) => (demos[String(p.id)]
