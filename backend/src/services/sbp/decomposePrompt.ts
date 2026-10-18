@@ -30,6 +30,7 @@ export const DEFAULT_TARGETS = {
 // stays pure and synchronous, which is what lets both generation stages call it and what
 // lets a test drive it without a database.
 import { FLAGS } from '../../config/featureFlags';
+import { neutraliseDelimiters } from '../../utils/promptDelimiters';
 
 export const MAX_DOCUMENT_CHARS = 200_000;
 export const MAX_BRIEF_CHARS = 20_000;
@@ -235,9 +236,18 @@ export class SourceOverflowError extends Error {
   }
 }
 
-/** Clamp and label an untrusted input so it cannot be read as instruction (SAFE-002). */
+/**
+ * Clamp and label an untrusted input so it cannot be read as instruction (SAFE-002).
+ *
+ * NEUTRALISE BEFORE CLIPPING, so a forged tag cannot survive by sitting past the cap. The
+ * substitution is one character for one, so truncation behaviour is byte-for-byte unchanged.
+ *
+ * Gated: with `promptDelimiterNeutralisation` off — its default — this is exactly the function
+ * it has always been. See `utils/promptDelimiters.ts` for why the default is the decision.
+ */
 function delimited(tag: string, body: string, max: number): string {
-  const clipped = body.length > max ? `${body.slice(0, max)}\n…[truncated at ${max} chars]` : body;
+  const safe = FLAGS.promptDelimiterNeutralisation ? neutraliseDelimiters(body) : body;
+  const clipped = safe.length > max ? `${safe.slice(0, max)}\n…[truncated at ${max} chars]` : safe;
   return `<${tag}>\n${clipped}\n</${tag}>`;
 }
 
