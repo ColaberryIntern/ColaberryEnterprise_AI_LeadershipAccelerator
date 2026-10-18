@@ -14,6 +14,8 @@ import HomeV2 from './pages/publicV2/HomeV2';
 import { ServicesV2, ServiceDetailV2 } from './pages/publicV2/ServicesV2';
 import PlatformV2 from './pages/publicV2/PlatformV2';
 import SegmentPageV2 from './pages/publicV2/SegmentPageV2';
+import HowItWorksV2 from './pages/publicV2/HowItWorksV2';
+import AcceleratorV2 from './pages/publicV2/AcceleratorV2';
 import { readySegments } from './config/v2Segments';
 import OpportunityLabV2 from './pages/publicV2/OpportunityLabV2';
 import TryV2 from './pages/publicV2/TryV2';
@@ -104,6 +106,13 @@ function App() {
                 is not a formality: `/partners` was the obvious choice for the ecosystem
                 page and is already a live page.
             */}
+            {/*
+                C5.3 and C5.4. Both routes were verified free against the real route tree in
+                C5.1, and both mount here rather than under the legacy block so they get the
+                V2 nav and footer.
+            */}
+            <Route path="how-it-works" element={<HowItWorksV2 />} />
+            <Route path="accelerator" element={<AcceleratorV2 />} />
             {readySegments().map((s) => (
               <Route key={s.slug} path={s.slug} element={<SegmentPageV2 slug={s.slug} />} />
             ))}
