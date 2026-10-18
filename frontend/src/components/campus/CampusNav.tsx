@@ -4,7 +4,7 @@ import CampusWorldMap from './CampusWorldMap';
 import './campus.css';
 import { useCampus } from './CampusContext';
 import { useCampusView } from './useCampusView';
-import { buildingAccess, accessLabel } from './campusAccess';
+import { accessLabel } from './campusAccess';
 import { buildingForPath, buildingName } from './campusMap';
 
 /**
@@ -14,21 +14,21 @@ import { buildingForPath, buildingName } from './campusMap';
  */
 export default function CampusNav({ active }: { active: string }): React.ReactElement {
   const { settings, openMap, openList, updateSettings, presence, presenceError } = useCampus();
-  const { audience, hasFullAccess, buildings } = useCampusView();
+  const { buildings, accessOf } = useCampusView();
   const here = buildingForPath(active);
   const counts: Record<string, number> = {};
   if (presence && !presenceError) for (const [id, a] of Object.entries(presence)) counts[id] = a.count;
   return (
     <nav className="cm-nav" aria-label="Campus">
       <div className="cm-nav-map">
-        <CampusWorldMap buildings={buildings} accessOf={(b) => buildingAccess(b, audience, hasFullAccess)}
+        <CampusWorldMap buildings={buildings} accessOf={accessOf}
           workplaceNames={settings.workplaceNames} reduceMotion={settings.reduceMotion} compact onArrive={(id) => openMap(id)} counts={counts} />
       </div>
       <button type="button" className="cm-btn cm-nav-open" onClick={() => openMap()} data-testid="cm-open-map">Open campus map</button>
       <div className="grp">Buildings</div>
       <ul className="cm-nav-list">
         {buildings.filter((b) => b.id !== 'gate').map((b) => {
-          const chip = accessLabel(buildingAccess(b, audience, hasFullAccess));
+          const chip = accessLabel(accessOf(b));
           const planned = b.rooms.find((r) => r.route === b.primary.route)?.planned;
           const name = buildingName(b, settings.workplaceNames);
           const isHere = here?.id === b.id;

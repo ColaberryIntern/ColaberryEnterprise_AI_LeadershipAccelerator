@@ -3,12 +3,15 @@ import type { CampusPresence } from './campusApi';
 import CampusWorldMap from './CampusWorldMap';
 import BuildingCard from './BuildingCard';
 import type { BuildingId, CampusAudience, CampusBuilding } from './campusMap';
-import { buildingAccess } from './campusAccess';
+import { buildingState } from './campusAccess';
+import type { ExplorerAccess } from './campusMap';
 import PersonCard from './PersonCard';
 import type { PersonCardTarget } from './CampusContext';
 import type { StaffDesk } from './campusPeopleApi';
 import { tokensFor, desksForBuilding } from './campusPeople';
 import { buildingName } from './campusMap';
+import ExplorerPath from './ExplorerPath';
+import { explorerPath } from './campusPath';
 
 /**
  * Map + building card, with the keyboard contract (Campus C2):
@@ -20,6 +23,11 @@ export interface CampusWorldProps {
   buildings: CampusBuilding[];
   audience: CampusAudience;
   hasFullAccess: boolean;
+  /** C6: each building's state from the pages' own signals (useCampusView). Absent (tests, older callers): derived from the
+   *  audience with no staff, which is how the page paywall treats a learner without a staff role. */
+  accessOf?: (b: CampusBuilding) => ExplorerAccess;
+  /** C6: the portal's is_explorer; shows the path to enrolling in the Main Gate card. */
+  isExplorer?: boolean;
   workplaceNames: boolean;
   reduceMotion: boolean;
   initialTarget?: BuildingId | null;
@@ -37,7 +45,7 @@ export interface CampusWorldProps {
   onClosePerson?: () => void;
 }
 
-export default function CampusWorld({ buildings, audience, hasFullAccess, workplaceNames, reduceMotion, initialTarget, onExit, onNavigate, presence, presenceError = false, onEnterRoom, staffDesks, personCard, onOpenPerson, onClosePerson }: CampusWorldProps): React.ReactElement {
+export default function CampusWorld({ buildings, audience, hasFullAccess, accessOf: accessOfProp, isExplorer = false, workplaceNames, reduceMotion, initialTarget, onExit, onNavigate, presence, presenceError = false, onEnterRoom, staffDesks, personCard, onOpenPerson, onClosePerson }: CampusWorldProps): React.ReactElement {
   const counts = useMemo(() => {
     const out: Record<string, number> = {};
     if (presence) for (const [id, a] of Object.entries(presence)) out[id] = a.count;
@@ -45,7 +53,9 @@ export default function CampusWorld({ buildings, audience, hasFullAccess, workpl
   }, [presence]);
   const [open, setOpen] = useState<BuildingId | null>(null);
   const els = useRef(new Map<BuildingId, SVGGElement>());
-  const accessOf = useCallback((b: CampusBuilding) => buildingAccess(b, audience, hasFullAccess), [audience, hasFullAccess]);
+  const accessOf = useCallback((b: CampusBuilding) => (accessOfProp
+    ? accessOfProp(b)
+    : buildingState(b, { isStaff: false, hasFullAccess, isExplorer: audience === 'explorer' })), [accessOfProp, audience, hasFullAccess]);
   const registerEl = useCallback((id: BuildingId, el: SVGGElement | null) => { if (el) els.current.set(id, el); else els.current.delete(id); }, []);
 
   const closeCard = useCallback(() => {
@@ -91,6 +101,8 @@ export default function CampusWorld({ buildings, audience, hasFullAccess, workpl
       {b && !personCard && <BuildingCard building={b} access={accessOf(b)} workplaceNames={workplaceNames} onClose={closeCard} onNavigate={onNavigate}
         onEnterRoom={onEnterRoom ? (route) => onEnterRoom(route, els.current.get(b.id)?.getBoundingClientRect() ?? null) : undefined}
         desks={staffDesks ? desksForBuilding(staffDesks, b.id, audience) : undefined}
+        children={b.id === 'gate' && isExplorer ? <ExplorerPath onNavigate={onNavigate}
+          model={explorerPath(buildings, accessOf, workplaceNames, !!staffDesks?.some((d) => d.id === 'maya' && d.on_duty))} /> : undefined}
         whoIsHere={presence === undefined && !presenceError ? undefined
           : { presence: presence?.[b.id], error: presenceError, loading: presence === null && !presenceError,
             onPick: onOpenPerson ? (p) => pickPerson(p, b.id) : undefined }} />}

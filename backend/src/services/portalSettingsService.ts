@@ -241,6 +241,12 @@ export async function isOrgManager(enrollmentId: string): Promise<boolean> {
   return (await resolveManagedOrg(enrollmentId)) !== null;
 }
 
+/** The id of the organization this enrollment manages (owner first, else a manager membership), or null. Exported for the
+ *  campus team-only rule (C6); the same lookup as is_org_manager, no logic of its own. */
+export async function managedOrgIdFor(enrollmentId: string): Promise<string | null> {
+  return (await resolveManagedOrg(enrollmentId))?.id ?? null;
+}
+
 export async function getSettings(enrollmentId: string): Promise<SettingsView | null> {
   const e: any = await Enrollment.findByPk(enrollmentId, {
     include: [

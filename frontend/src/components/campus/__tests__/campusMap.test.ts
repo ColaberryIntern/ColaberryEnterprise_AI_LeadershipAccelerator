@@ -39,10 +39,13 @@ describe('campus catalog', () => {
     }
   });
 
-  it('matches the D4 Explorer access column', () => {
+  // C6: the column is what each page does for an Explorer once inside. 'locked' is no longer a catalog value: only the page
+  // paywall (PageGate) locks, decided per viewer by campusAccess.buildingState. The career building was 'locked' with no gate,
+  // a rule the campus had invented; its pages are not paywalled.
+  it('matches the Explorer mode column (what each page does for an Explorer)', () => {
     const access = Object.fromEntries(CAMPUS_BUILDINGS.map((b) => [b.id, b.explorer]));
-    expect(access).toEqual({ lecture: 'preview', library: 'open', tower: 'open', studio: 'demo', amphi: 'open', testing: 'locked',
-      observatory: 'open', commons: 'open', gallery: 'locked', career: 'locked', arcade: 'open', gate: 'open' });
+    expect(access).toEqual({ lecture: 'preview', library: 'open', tower: 'open', studio: 'demo', amphi: 'open', testing: 'open',
+      observatory: 'open', commons: 'open', gallery: 'open', career: 'open', arcade: 'open', gate: 'open' });
   });
 
   it('shows the Main Gate (Maya\'s desk) only to Explorers and staff', () => {
@@ -63,7 +66,23 @@ describe('campus catalog', () => {
     expect(careerBuildingFor('member').name).toBe('Career Center');
     expect(careerBuildingFor('explorer').name).toBe('Career Center');
     expect(careerBuildingFor('business')).toMatchObject({ name: 'Partner Office', primary: { route: '/portal/company' } });
-    expect(careerBuildingFor('staff')).toMatchObject({ name: 'Staff Office', primary: { route: '/portal/view-as' } });
+    expect(careerBuildingFor('staff')).toMatchObject({ name: 'Staff Office', primary: { route: '/portal/mgmt-enter', admin: true } });
+  });
+
+  // C6: the Staff Office's links reach real admin pages through the Management Portal bridge; /portal/view-as is gone (it
+  // needs an admin-minted token and showed an error when browsed to).
+  it('the Staff Office links go through the bridge to admin pages that exist, and never to /portal/view-as', () => {
+    const ADMIN = fs.readFileSync(path.join(__dirname, '..', '..', '..', 'routes', 'adminRoutes.tsx'), 'utf8');
+    const staff = careerBuildingFor('staff');
+    expect(staff.rooms.map((r) => r.label)).toEqual(['Handoffs', 'People', 'View as a learner']);
+    for (const r of staff.rooms) {
+      expect(r.admin).toBe(true);
+      expect(r.route.startsWith('/portal/mgmt-enter?next=')).toBe(true);
+      const target = decodeURIComponent(r.route.split('next=')[1]).split('?')[0];
+      expect({ target, routed: ADMIN.includes(`path="${target.replace('/admin/', '')}"`) || ADMIN.includes(`path="${target}"`) }).toEqual({ target, routed: true });
+    }
+    expect(ROUTED.has('/portal/mgmt-enter')).toBe(true);
+    expect(JSON.stringify(staff)).not.toContain('/portal/view-as');
   });
 });
 

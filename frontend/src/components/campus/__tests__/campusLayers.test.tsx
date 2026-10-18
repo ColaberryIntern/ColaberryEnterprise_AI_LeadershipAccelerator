@@ -14,7 +14,7 @@ let mockAudience: CampusAudience = 'member';
 jest.mock('../campusPeopleApi', () => ({ fetchStaffDesks: () => Promise.resolve([]), fetchConversationsQuiet: () => Promise.resolve([]), postWave: () => Promise.resolve({ sent: true, reason: 'sent' }) }));
 jest.mock('../useCampusView', () => {
   const actual = jest.requireActual('../useCampusView');
-  return { ...actual, useCampusView: () => ({ audience: mockAudience, hasFullAccess: false, buildings: actual.campusBuildingsFor(mockAudience) }) };
+  return { ...actual, useCampusView: () => actual.campusViewFor(mockAudience, { isStaff: false, hasFullAccess: false, isExplorer: mockAudience === 'explorer' }) };
 });
 jest.mock('../campusApi', () => ({ fetchCampusFlags: () => Promise.resolve({ campus: true }), CAMPUS_FLAGS_TIMEOUT_MS: 10000,
   // C4 presence: a quiet campus (no one in any building).

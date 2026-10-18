@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom';
 import type { CampusBuilding, ExplorerAccess } from './campusMap';
 import { buildingName } from './campusMap';
 import { accessLabel, enrollCta } from './campusAccess';
+import { GATED_FEATURES } from '../paywall/gatedFeatures';
+import { useIsMgmt } from './campusMgmt';
 import WhoIsHere, { WhoIsHereProps } from './WhoIsHere';
 import StaffDesk from './StaffDesk';
 import type { StaffDesk as Desk } from './campusPeopleApi';
@@ -29,15 +31,28 @@ export interface BuildingCardProps {
   onEnterRoom?: (route: string) => void;
   /** C5: the AI staff desks for THIS building, already filtered for the viewer. */
   desks?: Desk[];
+  /** C6: extra content for this building's card (the Explorer path in the Main Gate). */
+  children?: React.ReactNode;
 }
 
-const NOTICE: Record<Exclude<ExplorerAccess, 'open'>, string> = {
-  locked: 'This building is for members. You can look around; enrolling opens it.',
+// Demo and preview say what the Explorer can do here. A locked building shows its own paywall copy instead (contextual sign-up).
+const NOTICE: Record<'demo' | 'preview', string> = {
   demo: 'Explore it in demo mode. Running and saving work is for members.',
   preview: 'You can watch a short preview. Enrolling opens everything here.',
 };
 
-export default function BuildingCard({ building: b, access, workplaceNames, onClose, onNavigate, whoIsHere, onEnterRoom, desks }: BuildingCardProps): React.ReactElement {
+/** C6 contextual sign-up: the copy PageGate's paywall shows for THIS building's page (title and up to 3 benefits). */
+function LockedNotice({ b }: { b: CampusBuilding }): React.ReactElement {
+  const copy = GATED_FEATURES[b.gate ?? 'classroom'];
+  return (
+    <>
+      <p className="cm-signup-title" data-testid="cm-signup-title">{copy.title}</p>
+      <ul className="cm-signup-benefits">{copy.benefits.slice(0, 3).map((x) => <li key={x}>{x}</li>)}</ul>
+    </>
+  );
+}
+
+export default function BuildingCard({ building: b, access, workplaceNames, onClose, onNavigate, whoIsHere, onEnterRoom, desks, children }: BuildingCardProps): React.ReactElement {
   const name = buildingName(b, workplaceNames);
   // A plain click goes through the door; a modified click (new tab, etc.) stays a normal link.
   const go = (route: string) => (e: React.MouseEvent) => {
@@ -45,6 +60,12 @@ export default function BuildingCard({ building: b, access, workplaceNames, onCl
     onNavigate();
   };
   const chip = accessLabel(access);
+  // C6: admin links (Staff Office) work only through the Management Portal bridge; without that access they are disabled.
+  const isMgmt = useIsMgmt();
+  const adminLink = (label: string, route: string, cls: string, key?: string) => (isMgmt
+    ? <a key={key} className={cls} href={route} target="_blank" rel="noopener noreferrer" data-admin="true">{label}</a>
+    : <span key={key} className={`${cls} is-disabled`} aria-disabled="true" data-admin="true">{label}</span>);
+  const hasAdmin = !!b.primary.admin || b.rooms.some((r) => r.admin);
   const primaryPlanned = b.rooms.find((r) => r.route === b.primary.route)?.planned;
   const headingId = `cm-card-${b.id}`;
   return (
@@ -53,13 +74,16 @@ export default function BuildingCard({ building: b, access, workplaceNames, onCl
       {chip && <div className="cm-card-chip">{chip}</div>}
       <h2 id={headingId} className="cm-card-title">{name}</h2>
 
-      {primaryPlanned
+      {b.primary.admin ? adminLink(b.primary.label, b.primary.route, 'cm-btn') : primaryPlanned
         ? <span className="cm-btn is-disabled" aria-disabled="true">{b.primary.label} - opening soon</span>
         : <Link className="cm-btn" to={b.primary.route} onClick={go(b.primary.route)}>{b.primary.label}</Link>}
+      {hasAdmin && (
+        <p className="cm-who-note" data-testid="cm-admin-note">{isMgmt ? 'Opens the Management Portal in a new tab.' : 'Needs Management Portal access.'}</p>
+      )}
 
       {access !== 'open' && (
         <div className="cm-card-note">
-          <p>{NOTICE[access]}</p>
+          {access === 'locked' ? <LockedNotice b={b} /> : <p>{NOTICE[access]}</p>}
           <Link className="cm-btn is-secondary" to={enrollCta(b).to} onClick={onNavigate}>{enrollCta(b).label}</Link>
         </div>
       )}
@@ -70,7 +94,7 @@ export default function BuildingCard({ building: b, access, workplaceNames, onCl
           <ul className="cm-rooms">
             {b.rooms.map((r) => (
               <li key={r.route}>
-                {r.planned
+                {r.admin ? adminLink(r.label, r.route, 'cm-room') : r.planned
                   ? <span className="cm-room is-disabled" aria-disabled="true">{r.label} <small>opening soon</small></span>
                   : <Link className="cm-room" to={r.route} onClick={go(r.route)}>{r.label}</Link>}
               </li>
@@ -78,6 +102,8 @@ export default function BuildingCard({ building: b, access, workplaceNames, onCl
           </ul>
         </>
       )}
+
+      {children}
 
       {desks && desks.length > 0 && (
         <div className="cm-desks">

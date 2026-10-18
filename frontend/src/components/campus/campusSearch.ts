@@ -27,6 +27,7 @@ export function searchCampus(query: string, buildings: CampusBuilding[], presenc
     const name = buildingName(b, workplaceNames);
     if (hit(name)) out.push({ kind: 'building', id: 'b:' + b.id, label: name, buildingId: b.id });
     for (const r of b.rooms) {
+      if (r.admin) continue; // C6: admin tools are not campus places
       if (hit(r.label) || hit(name)) {
         if (hit(r.label) || r.label !== name) out.push({ kind: 'room', id: 'r:' + b.id + ':' + r.route, label: r.label, buildingId: b.id, route: r.route, navigable: !r.planned, detail: name });
       }

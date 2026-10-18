@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import portalApi from '../../utils/portalApi';
+import { allowedMgmtNext } from './mgmtNext';
 
 /**
  * "Management Portal" entry — an employee opens the admin portal from inside
@@ -8,6 +9,9 @@ import portalApi from '../../utils/portalApi';
  * session, and redirects into /admin (which the backend gates to their role's
  * sections). Non-mgmt students never see the link that leads here; the endpoint
  * also 403s them.
+ *
+ * C6: an optional ?next= sends them straight to one of three allowlisted admin pages (mgmtNext.ts). Anything else is
+ * ignored and the landing is unchanged, so `next` cannot be used as an open redirect.
  */
 export default function PortalMgmtEnterPage() {
   const [error, setError] = useState('');
@@ -23,7 +27,8 @@ export default function PortalMgmtEnterPage() {
         // NOTE: land on '/admin/dashboard', NOT '/admin' — the '/admin' index
         // route unconditionally redirects to '/admin/login', which would bounce
         // an already-authenticated bridge session back to a login prompt.
-        window.location.replace(res.data?.role === 'support' ? '/admin/students' : '/admin/dashboard');
+        const next = allowedMgmtNext(window.location.search);
+        window.location.replace(next ?? (res.data?.role === 'support' ? '/admin/students' : '/admin/dashboard'));
       })
       .catch((e: any) => setError(e?.response?.data?.error || 'Could not open the management portal.'));
   }, []);

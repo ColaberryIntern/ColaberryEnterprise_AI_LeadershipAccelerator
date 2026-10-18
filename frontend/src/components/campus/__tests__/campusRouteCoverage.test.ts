@@ -15,14 +15,16 @@ import type { CampusAudience } from '../campusMap';
 const SRC_ROOT = path.join(__dirname, '..', '..', '..');
 const ROUTES_FILE = path.join(SRC_ROOT, 'routes', 'portalRoutes.tsx');
 const ROUTES_SRC = fs.readFileSync(ROUTES_FILE, 'utf8');
-export const EXCLUDED = ['/portal/view-as', '/portal/portfolio/preview'];
+// C6: /portal/view-as is no longer a room (the Staff Office links go through the Management Portal instead).
+export const EXCLUDED = ['/portal/portfolio/preview'];
 const AUDIENCES: CampusAudience[] = ['member', 'explorer', 'business', 'staff'];
 
 function roomRoutes(): string[] {
   const all = new Set<string>();
   for (const a of AUDIENCES) for (const b of campusBuildingsFor(a)) {
-    if (!b.rooms.find((r) => r.route === b.primary.route)?.planned) all.add(b.primary.route);
-    for (const r of b.rooms) if (!r.planned) all.add(r.route);
+    // C6: admin links (Staff Office) are not campus pages; they open the Management Portal in a new tab.
+    if (!b.primary.admin && !b.rooms.find((r) => r.route === b.primary.route)?.planned) all.add(b.primary.route);
+    for (const r of b.rooms) if (!r.planned && !r.admin) all.add(r.route);
   }
   return Array.from(all).sort();
 }
@@ -74,8 +76,8 @@ describe('every walkable room shows the campus banner (D2, D2a)', () => {
     expect({ route, covered: files.some(rendersCampusChrome) }).toEqual({ route, covered: true });
   });
 
-  it('the exclusion list is exactly the two chromeless routes, and both are real rooms', () => {
-    expect(EXCLUDED).toEqual(['/portal/view-as', '/portal/portfolio/preview']);
+  it('the exclusion list is exactly the one chromeless room, and it is a real room', () => {
+    expect(EXCLUDED).toEqual(['/portal/portfolio/preview']);
     for (const r of EXCLUDED) expect(routes).toContain(r);
   });
 });

@@ -1,0 +1,561 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`per-audience campus (buildings, labels, links) business 1`] = `
+Array [
+  Object {
+    "explorer": "preview",
+    "gate": "classroom",
+    "id": "lecture",
+    "name": "Classroom",
+    "primary": "Continue this week's lessons -> /portal/classroom",
+    "rooms": Array [
+      "Classroom -> /portal/classroom",
+      "Live sessions -> /portal/sessions",
+    ],
+    "workplaceName": "Training Room",
+  },
+  Object {
+    "explorer": "open",
+    "gate": null,
+    "id": "library",
+    "name": "Library",
+    "primary": "Browse the library -> /portal/library",
+    "rooms": Array [
+      "Library -> /portal/library",
+    ],
+    "workplaceName": "Knowledge Base",
+  },
+  Object {
+    "explorer": "open",
+    "gate": null,
+    "id": "tower",
+    "name": "Schedule",
+    "primary": "Open my schedule -> /portal/schedule",
+    "rooms": Array [
+      "Today -> /portal/today",
+      "Schedule -> /portal/schedule",
+    ],
+    "workplaceName": "Calendar",
+  },
+  Object {
+    "explorer": "demo",
+    "gate": "projects",
+    "id": "studio",
+    "name": "Project Studio",
+    "primary": "Open my projects -> /portal/projects",
+    "rooms": Array [
+      "Projects -> /portal/projects",
+      "Assignments -> /portal/assignments",
+    ],
+    "workplaceName": "Project Studio",
+  },
+  Object {
+    "explorer": "open",
+    "gate": null,
+    "id": "amphi",
+    "name": "Events Hall",
+    "primary": "See events and RSVP -> /portal/events",
+    "rooms": Array [
+      "Events -> /portal/events",
+    ],
+    "workplaceName": "Town Hall",
+  },
+  Object {
+    "explorer": "open",
+    "gate": "cert-prep",
+    "id": "testing",
+    "name": "Cert Prep Center",
+    "primary": "Start the knowledge check -> /portal/cert-prep",
+    "rooms": Array [
+      "Cert prep -> /portal/cert-prep",
+    ],
+    "workplaceName": "Certification Center",
+  },
+  Object {
+    "explorer": "open",
+    "gate": null,
+    "id": "observatory",
+    "name": "My Progress",
+    "primary": "View my path -> /portal/path",
+    "rooms": Array [
+      "Path -> /portal/path",
+      "Progress -> /portal/progress",
+      "Points -> /portal/points",
+    ],
+    "workplaceName": "My Performance",
+  },
+  Object {
+    "explorer": "open",
+    "gate": null,
+    "id": "commons",
+    "name": "Community Lounge",
+    "primary": "Open live rooms -> /portal/rooms",
+    "rooms": Array [
+      "Rooms -> /portal/rooms",
+      "Community -> /portal/community",
+      "People -> /portal/community/people",
+    ],
+    "workplaceName": "Collab Cafe",
+  },
+  Object {
+    "explorer": "open",
+    "gate": "portfolio",
+    "id": "gallery",
+    "name": "Showcase Gallery",
+    "primary": "Open my portfolio -> /portal/portfolio",
+    "rooms": Array [
+      "Portfolio -> /portal/portfolio",
+      "Preview -> /portal/portfolio/preview",
+      "Showcase -> /portal/showcase",
+    ],
+    "workplaceName": "Portfolio Gallery",
+  },
+  Object {
+    "explorer": "open",
+    "gate": null,
+    "id": "career",
+    "name": "Partner Office",
+    "primary": "Open your company -> /portal/company",
+    "rooms": Array [
+      "Company -> /portal/company",
+    ],
+    "workplaceName": "Engagements",
+  },
+  Object {
+    "explorer": "open",
+    "gate": null,
+    "id": "arcade",
+    "name": "Game Room",
+    "primary": "Games and leaderboards -> /portal/game-room",
+    "rooms": Array [
+      "Game Room -> /portal/game-room (planned C10)",
+    ],
+    "workplaceName": "Break Room",
+  },
+]
+`;
+
+exports[`per-audience campus (buildings, labels, links) explorer 1`] = `
+Array [
+  Object {
+    "explorer": "preview",
+    "gate": "classroom",
+    "id": "lecture",
+    "name": "Classroom",
+    "primary": "Continue this week's lessons -> /portal/classroom",
+    "rooms": Array [
+      "Classroom -> /portal/classroom",
+      "Live sessions -> /portal/sessions",
+    ],
+    "workplaceName": "Training Room",
+  },
+  Object {
+    "explorer": "open",
+    "gate": null,
+    "id": "library",
+    "name": "Library",
+    "primary": "Browse the library -> /portal/library",
+    "rooms": Array [
+      "Library -> /portal/library",
+    ],
+    "workplaceName": "Knowledge Base",
+  },
+  Object {
+    "explorer": "open",
+    "gate": null,
+    "id": "tower",
+    "name": "Schedule",
+    "primary": "Open my schedule -> /portal/schedule",
+    "rooms": Array [
+      "Today -> /portal/today",
+      "Schedule -> /portal/schedule",
+    ],
+    "workplaceName": "Calendar",
+  },
+  Object {
+    "explorer": "demo",
+    "gate": "projects",
+    "id": "studio",
+    "name": "Project Studio",
+    "primary": "Open my projects -> /portal/projects",
+    "rooms": Array [
+      "Projects -> /portal/projects",
+      "Assignments -> /portal/assignments",
+    ],
+    "workplaceName": "Project Studio",
+  },
+  Object {
+    "explorer": "open",
+    "gate": null,
+    "id": "amphi",
+    "name": "Events Hall",
+    "primary": "See events and RSVP -> /portal/events",
+    "rooms": Array [
+      "Events -> /portal/events",
+    ],
+    "workplaceName": "Town Hall",
+  },
+  Object {
+    "explorer": "open",
+    "gate": "cert-prep",
+    "id": "testing",
+    "name": "Cert Prep Center",
+    "primary": "Start the knowledge check -> /portal/cert-prep",
+    "rooms": Array [
+      "Cert prep -> /portal/cert-prep",
+    ],
+    "workplaceName": "Certification Center",
+  },
+  Object {
+    "explorer": "open",
+    "gate": null,
+    "id": "observatory",
+    "name": "My Progress",
+    "primary": "View my path -> /portal/path",
+    "rooms": Array [
+      "Path -> /portal/path",
+      "Progress -> /portal/progress",
+      "Points -> /portal/points",
+    ],
+    "workplaceName": "My Performance",
+  },
+  Object {
+    "explorer": "open",
+    "gate": null,
+    "id": "commons",
+    "name": "Community Lounge",
+    "primary": "Open live rooms -> /portal/rooms",
+    "rooms": Array [
+      "Rooms -> /portal/rooms",
+      "Community -> /portal/community",
+      "People -> /portal/community/people",
+    ],
+    "workplaceName": "Collab Cafe",
+  },
+  Object {
+    "explorer": "open",
+    "gate": "portfolio",
+    "id": "gallery",
+    "name": "Showcase Gallery",
+    "primary": "Open my portfolio -> /portal/portfolio",
+    "rooms": Array [
+      "Portfolio -> /portal/portfolio",
+      "Preview -> /portal/portfolio/preview",
+      "Showcase -> /portal/showcase",
+    ],
+    "workplaceName": "Portfolio Gallery",
+  },
+  Object {
+    "explorer": "open",
+    "gate": null,
+    "id": "career",
+    "name": "Career Center",
+    "primary": "Open the internship -> /portal/internship",
+    "rooms": Array [
+      "Internship -> /portal/internship",
+    ],
+    "workplaceName": "Engagements",
+  },
+  Object {
+    "explorer": "open",
+    "gate": null,
+    "id": "arcade",
+    "name": "Game Room",
+    "primary": "Games and leaderboards -> /portal/game-room",
+    "rooms": Array [
+      "Game Room -> /portal/game-room (planned C10)",
+    ],
+    "workplaceName": "Break Room",
+  },
+  Object {
+    "explorer": "open",
+    "gate": null,
+    "id": "gate",
+    "name": "Main Gate",
+    "primary": "Start on Today -> /portal/today",
+    "rooms": Array [],
+    "workplaceName": "Visitor Entrance",
+  },
+]
+`;
+
+exports[`per-audience campus (buildings, labels, links) member 1`] = `
+Array [
+  Object {
+    "explorer": "preview",
+    "gate": "classroom",
+    "id": "lecture",
+    "name": "Classroom",
+    "primary": "Continue this week's lessons -> /portal/classroom",
+    "rooms": Array [
+      "Classroom -> /portal/classroom",
+      "Live sessions -> /portal/sessions",
+    ],
+    "workplaceName": "Training Room",
+  },
+  Object {
+    "explorer": "open",
+    "gate": null,
+    "id": "library",
+    "name": "Library",
+    "primary": "Browse the library -> /portal/library",
+    "rooms": Array [
+      "Library -> /portal/library",
+    ],
+    "workplaceName": "Knowledge Base",
+  },
+  Object {
+    "explorer": "open",
+    "gate": null,
+    "id": "tower",
+    "name": "Schedule",
+    "primary": "Open my schedule -> /portal/schedule",
+    "rooms": Array [
+      "Today -> /portal/today",
+      "Schedule -> /portal/schedule",
+    ],
+    "workplaceName": "Calendar",
+  },
+  Object {
+    "explorer": "demo",
+    "gate": "projects",
+    "id": "studio",
+    "name": "Project Studio",
+    "primary": "Open my projects -> /portal/projects",
+    "rooms": Array [
+      "Projects -> /portal/projects",
+      "Assignments -> /portal/assignments",
+    ],
+    "workplaceName": "Project Studio",
+  },
+  Object {
+    "explorer": "open",
+    "gate": null,
+    "id": "amphi",
+    "name": "Events Hall",
+    "primary": "See events and RSVP -> /portal/events",
+    "rooms": Array [
+      "Events -> /portal/events",
+    ],
+    "workplaceName": "Town Hall",
+  },
+  Object {
+    "explorer": "open",
+    "gate": "cert-prep",
+    "id": "testing",
+    "name": "Cert Prep Center",
+    "primary": "Start the knowledge check -> /portal/cert-prep",
+    "rooms": Array [
+      "Cert prep -> /portal/cert-prep",
+    ],
+    "workplaceName": "Certification Center",
+  },
+  Object {
+    "explorer": "open",
+    "gate": null,
+    "id": "observatory",
+    "name": "My Progress",
+    "primary": "View my path -> /portal/path",
+    "rooms": Array [
+      "Path -> /portal/path",
+      "Progress -> /portal/progress",
+      "Points -> /portal/points",
+    ],
+    "workplaceName": "My Performance",
+  },
+  Object {
+    "explorer": "open",
+    "gate": null,
+    "id": "commons",
+    "name": "Community Lounge",
+    "primary": "Open live rooms -> /portal/rooms",
+    "rooms": Array [
+      "Rooms -> /portal/rooms",
+      "Community -> /portal/community",
+      "People -> /portal/community/people",
+    ],
+    "workplaceName": "Collab Cafe",
+  },
+  Object {
+    "explorer": "open",
+    "gate": "portfolio",
+    "id": "gallery",
+    "name": "Showcase Gallery",
+    "primary": "Open my portfolio -> /portal/portfolio",
+    "rooms": Array [
+      "Portfolio -> /portal/portfolio",
+      "Preview -> /portal/portfolio/preview",
+      "Showcase -> /portal/showcase",
+    ],
+    "workplaceName": "Portfolio Gallery",
+  },
+  Object {
+    "explorer": "open",
+    "gate": null,
+    "id": "career",
+    "name": "Career Center",
+    "primary": "Open the internship -> /portal/internship",
+    "rooms": Array [
+      "Internship -> /portal/internship",
+    ],
+    "workplaceName": "Engagements",
+  },
+  Object {
+    "explorer": "open",
+    "gate": null,
+    "id": "arcade",
+    "name": "Game Room",
+    "primary": "Games and leaderboards -> /portal/game-room",
+    "rooms": Array [
+      "Game Room -> /portal/game-room (planned C10)",
+    ],
+    "workplaceName": "Break Room",
+  },
+]
+`;
+
+exports[`per-audience campus (buildings, labels, links) staff 1`] = `
+Array [
+  Object {
+    "explorer": "preview",
+    "gate": "classroom",
+    "id": "lecture",
+    "name": "Classroom",
+    "primary": "Continue this week's lessons -> /portal/classroom",
+    "rooms": Array [
+      "Classroom -> /portal/classroom",
+      "Live sessions -> /portal/sessions",
+    ],
+    "workplaceName": "Training Room",
+  },
+  Object {
+    "explorer": "open",
+    "gate": null,
+    "id": "library",
+    "name": "Library",
+    "primary": "Browse the library -> /portal/library",
+    "rooms": Array [
+      "Library -> /portal/library",
+    ],
+    "workplaceName": "Knowledge Base",
+  },
+  Object {
+    "explorer": "open",
+    "gate": null,
+    "id": "tower",
+    "name": "Schedule",
+    "primary": "Open my schedule -> /portal/schedule",
+    "rooms": Array [
+      "Today -> /portal/today",
+      "Schedule -> /portal/schedule",
+    ],
+    "workplaceName": "Calendar",
+  },
+  Object {
+    "explorer": "demo",
+    "gate": "projects",
+    "id": "studio",
+    "name": "Project Studio",
+    "primary": "Open my projects -> /portal/projects",
+    "rooms": Array [
+      "Projects -> /portal/projects",
+      "Assignments -> /portal/assignments",
+    ],
+    "workplaceName": "Project Studio",
+  },
+  Object {
+    "explorer": "open",
+    "gate": null,
+    "id": "amphi",
+    "name": "Events Hall",
+    "primary": "See events and RSVP -> /portal/events",
+    "rooms": Array [
+      "Events -> /portal/events",
+    ],
+    "workplaceName": "Town Hall",
+  },
+  Object {
+    "explorer": "open",
+    "gate": "cert-prep",
+    "id": "testing",
+    "name": "Cert Prep Center",
+    "primary": "Start the knowledge check -> /portal/cert-prep",
+    "rooms": Array [
+      "Cert prep -> /portal/cert-prep",
+    ],
+    "workplaceName": "Certification Center",
+  },
+  Object {
+    "explorer": "open",
+    "gate": null,
+    "id": "observatory",
+    "name": "My Progress",
+    "primary": "View my path -> /portal/path",
+    "rooms": Array [
+      "Path -> /portal/path",
+      "Progress -> /portal/progress",
+      "Points -> /portal/points",
+    ],
+    "workplaceName": "My Performance",
+  },
+  Object {
+    "explorer": "open",
+    "gate": null,
+    "id": "commons",
+    "name": "Community Lounge",
+    "primary": "Open live rooms -> /portal/rooms",
+    "rooms": Array [
+      "Rooms -> /portal/rooms",
+      "Community -> /portal/community",
+      "People -> /portal/community/people",
+    ],
+    "workplaceName": "Collab Cafe",
+  },
+  Object {
+    "explorer": "open",
+    "gate": "portfolio",
+    "id": "gallery",
+    "name": "Showcase Gallery",
+    "primary": "Open my portfolio -> /portal/portfolio",
+    "rooms": Array [
+      "Portfolio -> /portal/portfolio",
+      "Preview -> /portal/portfolio/preview",
+      "Showcase -> /portal/showcase",
+    ],
+    "workplaceName": "Portfolio Gallery",
+  },
+  Object {
+    "explorer": "open",
+    "gate": null,
+    "id": "career",
+    "name": "Staff Office",
+    "primary": "Open the Management Portal -> /portal/mgmt-enter",
+    "rooms": Array [
+      "Handoffs -> /portal/mgmt-enter?next=%2Fadmin%2Fgrowth-journey%3Ftab%3Dhandoffs (admin, new tab)",
+      "People -> /portal/mgmt-enter?next=%2Fadmin%2Fpeople (admin, new tab)",
+      "View as a learner -> /portal/mgmt-enter?next=%2Fadmin%2Faccelerator (admin, new tab)",
+    ],
+    "workplaceName": "Engagements",
+  },
+  Object {
+    "explorer": "open",
+    "gate": null,
+    "id": "arcade",
+    "name": "Game Room",
+    "primary": "Games and leaderboards -> /portal/game-room",
+    "rooms": Array [
+      "Game Room -> /portal/game-room (planned C10)",
+    ],
+    "workplaceName": "Break Room",
+  },
+  Object {
+    "explorer": "open",
+    "gate": null,
+    "id": "gate",
+    "name": "Main Gate",
+    "primary": "Start on Today -> /portal/today",
+    "rooms": Array [],
+    "workplaceName": "Visitor Entrance",
+  },
+]
+`;

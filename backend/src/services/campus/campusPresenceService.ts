@@ -6,6 +6,8 @@ import { getPeoplePanel } from '../peoplePanelService';
 import { getCohortPresence } from '../cohortPresenceService';
 import { isCampusArea, CampusArea } from './campusAreas';
 import { canDmMany } from '../communityRooms/dmEligibility';
+import { campusAudienceFor } from './campusAudience';
+import { teamEnrollmentIdsFor } from './campusTeam';
 
 /**
  * Who is in each campus building right now (Colaberry Campus C4).
@@ -23,6 +25,11 @@ import { canDmMany } from '../communityRooms/dmEligibility';
  * COST. The rail function runs at most once per viewer per minute: results are cached for 60 s
  * (the rail's own refresh cadence), keyed on enrollment AND cohort, in a Map capped at 2,000
  * viewers (oldest evicted). Presence rows are bounded by the 90 s window and LIMIT 500.
+ *
+ * BUSINESS SEES ITS TEAM ONLY (C6). For a viewer whose campus audience is business (an org manager), the named set is the
+ * rail's set INTERSECTED with the organization they manage (campusTeam.ts, the existing manages rule). The campus therefore
+ * still never names anyone the rail would not, and names only teammates. A failed team lookup names nobody (fail closed) and
+ * is logged. Cached with the rest of the visible set (60 s per viewer and cohort).
  *
  * CAN MESSAGE (C5). Each named person carries can_message, decided by the ONE DM rule (dmEligibility, the same
  * check POST /api/portal/dm/open makes), per viewer, on output only: it is never stored in the shared visible-set
@@ -59,8 +66,27 @@ export async function touchCampusArea(enrollmentId: string, area: unknown): Prom
 const pick = (enrollment_id: string, display_name: string, avatar_url: string | null | undefined): CampusPerson =>
   ({ enrollment_id, display_name, avatar_url: avatar_url ?? null });
 
-/** The people this viewer may see by name, from the rail's own source. */
+/** C6: a business viewer keeps only their team; everyone else keeps the rail's set unchanged. */
+async function limitToTeam(viewer: string, rail: Map<string, CampusPerson>): Promise<Map<string, CampusPerson>> {
+  if (!rail.size || (await campusAudienceFor(viewer)) !== 'business') return rail;
+  try {
+    const team = await teamEnrollmentIdsFor(viewer);
+    return new Map(Array.from(rail).filter(([id]) => team.has(id)));
+  } catch (err: unknown) {
+    const e = err as { name?: string; message?: string };
+    console.error(JSON.stringify({ level: 'error', service: 'backend', event: 'campus_team_lookup_failed', outcome: 'failure',
+      error_class: e?.name || 'Error', context: { message: String(e?.message || err).slice(0, 200) } }));
+    return new Map();
+  }
+}
+
+/** The people this viewer may see by name: the rail's own set (business viewers: only their team). */
 async function computeVisible(viewer: string, cohort: string | null): Promise<Map<string, CampusPerson>> {
+  return limitToTeam(viewer, await railVisible(viewer, cohort));
+}
+
+/** The people the rail names for this viewer, from the rail's own source. */
+async function railVisible(viewer: string, cohort: string | null): Promise<Map<string, CampusPerson>> {
   const out = new Map<string, CampusPerson>();
   if (env.peoplePanelRolesEnabled) {
     const panel = await getPeoplePanel(viewer, cohort);

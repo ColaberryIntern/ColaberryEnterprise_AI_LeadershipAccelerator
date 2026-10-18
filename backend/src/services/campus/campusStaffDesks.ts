@@ -1,8 +1,8 @@
-import { resolveContentPageAccess, isFreePreviewTier } from '../access/contentEntitlement';
-import { isOrgManager } from '../portalSettingsService';
+import { campusAudienceFor, CampusAudienceKind } from './campusAudience';
 import { isReeseEnabled, getReeseEnrollmentId } from '../reese/reeseIdentitySeed';
 import { isDaraEnabled, getDaraEnrollmentId } from '../curriculum/daraIdentitySeed';
 import type { CampusArea } from './campusAreas';
+import { env } from '../../config/env';
 
 /**
  * The AI staff desks on the campus (Colaberry Campus C5).
@@ -13,8 +13,9 @@ import type { CampusArea } from './campusAreas';
  * frontend/src/components/campus/campusAudience.ts (staff > business > explorer > member), so the two can only
  * disagree if one of those shared functions changes for both. A test pins the frontend precedence line.
  *
- * MAYA is shown to staff and Explorers only. She is the public admissions chat, not a portal agent: there is no portal
- * endpoint to reach her, so her desk is listed as not yet open ("opens with C6", which owns "Ask Maya about enrolling";
+ * MAYA is shown to staff and Explorers only. She is the public admissions chat, not a portal agent. C6 (Ali's decision: the
+ * website chat at the gate): her desk is on duty exactly when the site chat is switched on (ENABLE_CHAT), and the campus opens
+ * her existing website chat; with the site chat off it reads "opens soon". (Historical note, C5: listed as opening with C6;
  * C7 owns her handoff). The frontend also renders her desk only inside the Main Gate, which it shows only to Explorers
  * and staff, so Maya appears only when both sides agree.
  *
@@ -23,7 +24,7 @@ import type { CampusArea } from './campusAreas';
  * conversation that would get no answer.
  */
 
-export type CampusAudienceKind = 'staff' | 'business' | 'explorer' | 'member';
+export type { CampusAudienceKind };
 export type DeskId = 'reese' | 'dara' | 'maya';
 
 export interface StaffDesk {
@@ -38,14 +39,8 @@ export interface StaffDesk {
   prompts: string[];
 }
 
-export async function campusAudienceFor(enrollmentId: string): Promise<CampusAudienceKind> {
-  const [page, manager, explorer] = await Promise.all([
-    resolveContentPageAccess(enrollmentId),
-    isOrgManager(enrollmentId),
-    isFreePreviewTier(enrollmentId),
-  ]);
-  return page.isStaff ? 'staff' : manager ? 'business' : explorer ? 'explorer' : 'member';
-}
+// campusAudienceFor moved to ./campusAudience (C6) so presence can use it too; re-exported for existing callers.
+export { campusAudienceFor } from './campusAudience';
 
 const REESE_PROMPTS = ['How do I get unstuck on this week\'s lab?', 'What should I focus on next?', 'Can you look over my project plan?'];
 const DARA_PROMPTS = ['Can you explain today\'s lesson more simply?', 'Where is this topic covered in the curriculum?', 'What does this week\'s assignment ask for?'];
@@ -59,7 +54,12 @@ async function agentDesk(
   return { id, name, title, building, ai: true, on_duty: onDuty, enrollment_id: onDuty ? eid : null, opens: null, prompts: onDuty ? prompts : [] };
 }
 
-const MAYA: StaffDesk = { id: 'maya', name: 'Maya', title: 'Welcome desk', building: 'gate', ai: true, on_duty: false, enrollment_id: null, opens: 'C6', prompts: [] };
+/** Maya's desk: on duty iff the public site chat is on (her chat endpoints answer 204 otherwise). No enrollment: she is not
+ *  a portal DM agent, and no prompts: her own widget offers its quick replies. */
+function mayaDesk(): StaffDesk {
+  const on = env.enableChat === true;
+  return { id: 'maya', name: 'Maya', title: 'Welcome desk', building: 'gate', ai: true, on_duty: on, enrollment_id: null, opens: on ? null : 'site_chat_off', prompts: [] };
+}
 
 export function mayaVisibleTo(audience: CampusAudienceKind): boolean {
   return audience === 'staff' || audience === 'explorer';
@@ -72,6 +72,6 @@ export async function getStaffDesks(enrollmentId: string): Promise<{ audience: C
     agentDesk('dara', 'Dara', 'Curriculum desk', 'library', DARA_PROMPTS, isDaraEnabled, getDaraEnrollmentId),
   ]);
   const desks = [reese, dara];
-  if (mayaVisibleTo(audience)) desks.push({ ...MAYA });
+  if (mayaVisibleTo(audience)) desks.push(mayaDesk());
   return { audience, desks };
 }

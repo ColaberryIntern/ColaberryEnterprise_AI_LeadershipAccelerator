@@ -16,9 +16,13 @@
  *    GatedFeatureKey that already decides it (components/paywall/gatedFeatures).
  */
 import type { GatedFeatureKey } from '../paywall/gatedFeatures';
+import { mgmtBridgeTo } from '../../pages/portal/mgmtNext';
 
 export type CampusAudience = 'member' | 'explorer' | 'business' | 'staff';
+/** A building's state for THIS viewer (computed by campusAccess.buildingState, never stored in the catalog). */
 export type ExplorerAccess = 'open' | 'preview' | 'demo' | 'locked';
+/** What a building's page does for an Explorer once inside (Projects runs a demo, the Classroom feed is a week-0 preview). */
+export type ExplorerMode = 'open' | 'preview' | 'demo';
 export type BuildingId =
   | 'lecture' | 'library' | 'tower' | 'studio' | 'amphi' | 'testing'
   | 'observatory' | 'commons' | 'gallery' | 'career' | 'arcade' | 'gate';
@@ -28,6 +32,9 @@ export interface CampusRoom {
   route: string;
   /** Set only when the route does not exist yet; names the Basecamp ticket that adds it. */
   planned?: string;
+  /** C6: an admin page reached through the Management Portal bridge. Opens in a new tab, never a door zoom; not a campus
+   *  place, so search, the trail and route coverage skip it. */
+  admin?: boolean;
 }
 
 export interface CampusBuilding {
@@ -35,12 +42,13 @@ export interface CampusBuilding {
   name: string;
   /** "Workplace" look names (Settings > Workplace names). */
   workplaceName: string;
-  primary: { label: string; route: string };
+  primary: { label: string; route: string; admin?: boolean };
   rooms: CampusRoom[];
   /** Every route that belongs to this building, for "where am I" lookups. */
   prefixes: string[];
-  explorer: ExplorerAccess;
-  /** The existing gate that decides preview / demo / locked. Required unless explorer is 'open'. */
+  /** C6: what the page does for an Explorer once inside. 'locked' is not a catalog value: only the page paywall locks. */
+  explorer: ExplorerMode;
+  /** The page's PageGate key, if its route is wrapped in PageGate (routes/portalRoutes.tsx). Absent = not paywalled. */
   gate?: GatedFeatureKey;
   audiences: CampusAudience[];
   pos: { x: number; y: number; w: number; h: number };
@@ -74,7 +82,7 @@ export const CAMPUS_BUILDINGS: readonly CampusBuilding[] = [
   { id: 'testing', name: 'Cert Prep Center', workplaceName: 'Certification Center',
     primary: { label: 'Start the knowledge check', route: '/portal/cert-prep' },
     rooms: [{ label: 'Cert prep', route: '/portal/cert-prep' }],
-    prefixes: ['/portal/cert-prep'], explorer: 'locked', gate: 'cert-prep', audiences: EVERYONE, pos: { x: 150, y: 330, w: 104, h: 62 } },
+    prefixes: ['/portal/cert-prep'], explorer: 'open', gate: 'cert-prep', audiences: EVERYONE, pos: { x: 150, y: 330, w: 104, h: 62 } },
   { id: 'observatory', name: 'My Progress', workplaceName: 'My Performance',
     primary: { label: 'View my path', route: '/portal/path' },
     rooms: [{ label: 'Path', route: '/portal/path' }, { label: 'Progress', route: '/portal/progress' }, { label: 'Points', route: '/portal/points' }],
@@ -87,30 +95,41 @@ export const CAMPUS_BUILDINGS: readonly CampusBuilding[] = [
     primary: { label: 'Open my portfolio', route: '/portal/portfolio' },
     rooms: [{ label: 'Portfolio', route: '/portal/portfolio' }, { label: 'Preview', route: '/portal/portfolio/preview' }, { label: 'Showcase', route: '/portal/showcase' }],
     prefixes: ['/portal/portfolio', '/portal/showcase'],
-    explorer: 'locked', gate: 'portfolio', audiences: EVERYONE, pos: { x: 690, y: 546, w: 120, h: 56 } },
+    explorer: 'open', gate: 'portfolio', audiences: EVERYONE, pos: { x: 690, y: 546, w: 120, h: 56 } },
   // One building, three faces: Career Center for members and interns, Partner Office for
   // org managers, Staff Office for staff. careerBuildingFor() picks the face.
   { id: 'career', name: 'Career Center', workplaceName: 'Engagements',
     primary: { label: 'Open the internship', route: '/portal/internship' },
     rooms: [{ label: 'Internship', route: '/portal/internship' }],
     prefixes: ['/portal/internship', '/portal/company'],
-    explorer: 'locked', audiences: EVERYONE, pos: { x: 870, y: 546, w: 116, h: 76 } },
+    // C6: open. Neither /portal/internship nor /portal/company is paywalled; C2's 'locked' here was a rule the campus invented.
+    explorer: 'open', audiences: EVERYONE, pos: { x: 870, y: 546, w: 116, h: 76 } },
   { id: 'arcade', name: 'Game Room', workplaceName: 'Break Room',
     primary: { label: 'Games and leaderboards', route: '/portal/game-room' },
     rooms: [{ label: 'Game Room', route: '/portal/game-room', planned: 'C10' }],
     prefixes: ['/portal/game-room'], explorer: 'open', audiences: EVERYONE, pos: { x: 210, y: 448, w: 108, h: 50 } },
   { id: 'gate', name: 'Main Gate', workplaceName: 'Visitor Entrance',
-    primary: { label: "Visit Maya's welcome desk", route: '/portal/today' },
+    primary: { label: 'Start on Today', route: '/portal/today' }, // C6: Maya's desk is in this card now; the button goes to Today, so it says so
     rooms: [], prefixes: [], explorer: 'open', audiences: ['explorer', 'staff'], pos: { x: 500, y: 622, w: 90, h: 50 } },
 ];
 
-/** The career building's face per audience (D4 career row). Staff links go to existing admin pages in C6. */
+/** The career building's face per audience (D4 career row). C6: the Staff Office links go to existing admin pages THROUGH
+ *  the Management Portal bridge (a direct /admin link lands on the admin login without a bridged session), and the old
+ *  /portal/view-as link is gone: that page needs a token minted by an admin and showed an error when browsed to. */
 export function careerBuildingFor(audience: CampusAudience): Pick<CampusBuilding, 'name' | 'primary' | 'rooms'> {
   if (audience === 'business') {
     return { name: 'Partner Office', primary: { label: 'Open your company', route: '/portal/company' }, rooms: [{ label: 'Company', route: '/portal/company' }] };
   }
   if (audience === 'staff') {
-    return { name: 'Staff Office', primary: { label: 'View as a learner', route: '/portal/view-as' }, rooms: [{ label: 'View as', route: '/portal/view-as' }] };
+    return {
+      name: 'Staff Office',
+      primary: { label: 'Open the Management Portal', route: '/portal/mgmt-enter', admin: true },
+      rooms: [
+        { label: 'Handoffs', route: mgmtBridgeTo('/admin/growth-journey?tab=handoffs'), admin: true },
+        { label: 'People', route: mgmtBridgeTo('/admin/people'), admin: true },
+        { label: 'View as a learner', route: mgmtBridgeTo('/admin/accelerator'), admin: true },
+      ],
+    };
   }
   const b = CAMPUS_BUILDINGS.find((x) => x.id === 'career') as CampusBuilding;
   return { name: b.name, primary: b.primary, rooms: b.rooms };
