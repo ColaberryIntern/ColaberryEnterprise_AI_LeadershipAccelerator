@@ -1,4 +1,4 @@
-import { deriveCountdown, shipByDate, workingDaysBetween, usFederalHolidays } from './govCountdown';
+import { deriveCountdown, deriveMvpSchedule, shipByDate, workingDaysBetween, usFederalHolidays } from './govCountdown';
 
 const utc = (y: number, m0: number, d: number) => new Date(Date.UTC(y, m0, d));
 
@@ -48,5 +48,35 @@ describe('deriveCountdown (deterministic)', () => {
     const b = deriveCountdown({ now, deadline: utc(2026, 10, 16), remainingStoryCount: 5, humanBlockedCount: 2 });
     expect(a).toEqual(b); // pure
     expect(a.effectiveNeeded).toBe(5 * 2 + 2 * 2); // remainingBuildDays 10 + blocked 2*2
+  });
+});
+
+describe('deriveMvpSchedule (back-planned, working-day aware)', () => {
+  const now = utc(2026, 9, 19); // Mon 2026-10-19
+
+  it('is "-" (null) when the deadline or plan is missing', () => {
+    expect(deriveMvpSchedule({ now, deadline: null, mvpStoryCount: 3 }).feasible).toBeNull();
+    expect(deriveMvpSchedule({ now, deadline: null, mvpStoryCount: 3 }).headline).toBe('No submission deadline');
+    expect(deriveMvpSchedule({ now, deadline: utc(2027, 0, 4), mvpStoryCount: null }).headline).toBe('No build plan yet');
+  });
+
+  it('is feasible with a far deadline + small MVP, naming the demo-ready date', () => {
+    const s = deriveMvpSchedule({ now, deadline: utc(2027, 0, 4), mvpStoryCount: 2 });
+    expect(s.mvpBuildDays).toBe(4);
+    expect(s.mvpDemoReadyBy).toBe('2026-10-23'); // Mon + 4 working days -> Fri Oct 23
+    expect(s.feasible).toBe(true);
+    expect(s.headline).toContain('MVP demo-ready by 2026-10-23');
+  });
+
+  it('is infeasible when the work cannot fit before the deadline', () => {
+    const s = deriveMvpSchedule({ now, deadline: utc(2026, 9, 23), mvpStoryCount: 10 }); // Oct 23 deadline, 20 build days
+    expect(s.feasible).toBe(false);
+    expect(s.headline).toContain('will not be demo-ready');
+  });
+
+  it('is reproducible (pure)', () => {
+    const a = deriveMvpSchedule({ now, deadline: utc(2026, 11, 1), mvpStoryCount: 3 });
+    const b = deriveMvpSchedule({ now, deadline: utc(2026, 11, 1), mvpStoryCount: 3 });
+    expect(a).toEqual(b);
   });
 });
