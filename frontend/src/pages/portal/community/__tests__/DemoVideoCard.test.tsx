@@ -157,3 +157,28 @@ describe('with a server-chosen poster', () => {
     }
   });
 });
+
+describe('the kind of presentation', () => {
+  it('REPLACES the generic word when we know it', async () => {
+    // "Working-system demo · 3 people have watched this" tells a viewer what they
+    // are about to watch; "Demo" tells them nothing, and classifying takes exists
+    // precisely so the feed can say the former.
+    await mount({ presentationTypeLabel: 'Working-system demo', viewLabel: '3 people have watched this' });
+    const line = q('[data-testid="demo-video-views"]')!.textContent!;
+    expect(line).toContain('Working-system demo');
+    expect(line).toContain('3 people have watched this');
+    expect(line).not.toContain('Demo ·');
+  });
+
+  it('falls back to "Demo" on a post that carries no type', async () => {
+    // Posts published before classification existed. A blank where the kind goes
+    // reads as a bug.
+    for (const missing of [null, undefined, '']) {
+      await mount({ presentationTypeLabel: missing });
+      expect(q('[data-testid="demo-video-views"]')!.textContent).toContain('Demo');
+      await act(async () => { root?.unmount(); });
+      root = null;
+      container.innerHTML = '';
+    }
+  });
+});

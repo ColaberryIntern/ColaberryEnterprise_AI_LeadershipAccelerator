@@ -19,6 +19,8 @@
  * for the viewer asking, and a viewer who may not watch simply gets none.
  */
 
+import { presentationTypeLabel } from './takePresentationType';
+
 async function db() {
   const { sequelize } = await import('../../config/database');
   return sequelize;
@@ -48,6 +50,16 @@ export interface DemoPlayback {
   durationSeconds: number | null;
   viewCount: number;
   viewLabel: string;
+  /**
+   * What kind of presentation this is, so a viewer can tell a 90-second project
+   * introduction from a full showcase before pressing play.
+   *
+   * READ LIVE from the recording rather than frozen into the post at publish
+   * time: the type describes the video, the video has not changed, and a learner
+   * who reclassifies a take should see the feed agree with them.
+   */
+  presentationType: string | null;
+  presentationTypeLabel: string | null;
 }
 
 /**
@@ -90,6 +102,8 @@ export async function resolveDemoPlayback(
     `SELECT p.id                AS post_id,
             r.id                AS recording_id,
             r.duration_seconds,
+            r.presentation_type,
+            asg.template_slug,
             asg.project_id,
             asg.story_id,
             asg.enrollment_id   AS owner_enrollment_id,
@@ -173,6 +187,10 @@ export async function resolveDemoPlayback(
         : Number(r.duration_seconds),
       viewCount: n,
       viewLabel: describeViews(n),
+      // The take's own classification, falling back to the task's, exactly as the
+      // Practice panel resolves it — one rule, so the badge and the chooser agree.
+      presentationType: r.presentation_type || r.template_slug || null,
+      presentationTypeLabel: presentationTypeLabel(r.presentation_type || r.template_slug),
     };
   }
   return out;

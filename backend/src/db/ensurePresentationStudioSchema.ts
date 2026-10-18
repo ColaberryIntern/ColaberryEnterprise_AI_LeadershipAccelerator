@@ -284,6 +284,7 @@ export const PRESENTATION_STUDIO_STATEMENTS: string[] = [
      part_no INTEGER NOT NULL DEFAULT 1,
      parts_total INTEGER,
      recording_type VARCHAR(60),
+     presentation_type VARCHAR(40),
      starts_at TIMESTAMPTZ,
      ends_at TIMESTAMPTZ,
      duration_seconds INTEGER,
@@ -308,6 +309,18 @@ export const PRESENTATION_STUDIO_STATEMENTS: string[] = [
   `ALTER TABLE presentation_recordings ADD COLUMN IF NOT EXISTS duration_seconds INTEGER`,
   `ALTER TABLE presentation_recordings ADD COLUMN IF NOT EXISTS ingest_status VARCHAR(30) DEFAULT 'expected'`,
   `ALTER TABLE presentation_recordings ADD COLUMN IF NOT EXISTS ingest_provenance VARCHAR(30)`,
+  // WHAT KIND OF PRESENTATION THIS TAKE IS, chosen by the learner in Practice.
+  //
+  // NOT `recording_type`, which is Zoom's word for the layout it captured
+  // (`active_speaker`, `shared_screen_with_speaker_view`). This is the learner's
+  // own answer to "what am I presenting" and comes from the seven template ids the
+  // Learn stage already uses — one vocabulary, so a demo filed as a
+  // `working_system_demo` means the same thing everywhere.
+  //
+  // PER TAKE, not per task: the task has a template, but a learner records several
+  // takes against it and may deliberately record a short project introduction and a
+  // full showcase in the same booked room.
+  `ALTER TABLE presentation_recordings ADD COLUMN IF NOT EXISTS presentation_type VARCHAR(40)`,
   `ALTER TABLE presentation_recordings ADD COLUMN IF NOT EXISTS has_audio BOOLEAN`,
   `ALTER TABLE presentation_recordings ADD COLUMN IF NOT EXISTS has_shared_screen BOOLEAN`,
   `ALTER TABLE presentation_recordings ADD COLUMN IF NOT EXISTS review_reason TEXT`,

@@ -40,6 +40,12 @@ export interface DemoVideoCardProps {
   viewLabel: string;
   /** The author's own words. Shown above the player, as the post body already is. */
   summary?: string | null;
+  /**
+   * What kind of presentation this is — "Working-system demo", "Project
+   * introduction". Lets a viewer tell a 90-second intro from a full showcase
+   * before committing to watch. Optional: an older post carries none.
+   */
+  presentationTypeLabel?: string | null;
 }
 
 const mmss = (s: number | null): string | null => {
@@ -47,7 +53,9 @@ const mmss = (s: number | null): string | null => {
   return `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 };
 
-const DemoVideoCard: React.FC<DemoVideoCardProps> = ({ playbackUrl, thumbnailUrl, durationSeconds, viewLabel }) => {
+const DemoVideoCard: React.FC<DemoVideoCardProps> = ({
+  playbackUrl, thumbnailUrl, durationSeconds, viewLabel, presentationTypeLabel,
+}) => {
   const [playing, setPlaying] = useState(false);
   const length = mmss(durationSeconds);
 
@@ -111,7 +119,11 @@ const DemoVideoCard: React.FC<DemoVideoCardProps> = ({ playbackUrl, thumbnailUrl
       </div>
 
       <p className="rt-muted" data-testid="demo-video-views" style={{ margin: '6px 0 0', fontSize: 13 }}>
-        <span aria-hidden="true">🎬 </span>Demo · {viewLabel}
+        <span aria-hidden="true">🎬 </span>
+        {/* The KIND replaces the generic word when we know it: "Working-system
+            demo · 3 people have watched this" tells a viewer more than "Demo"
+            ever could, and it is the whole point of classifying takes. */}
+        {presentationTypeLabel || 'Demo'} · {viewLabel}
       </p>
     </div>
   );

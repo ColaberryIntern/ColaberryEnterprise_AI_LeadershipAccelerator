@@ -29,6 +29,9 @@ export interface CommunityPostDemo {
   playbackUrl: string;
   /** Poster frame, same ticket. May 404 when no frame is worth showing. */
   thumbnailUrl?: string | null;
+  /** What kind of presentation this is, so a viewer knows before pressing play. */
+  presentationType?: string | null;
+  presentationTypeLabel?: string | null;
   durationSeconds: number | null;
   viewCount: number;
   viewLabel: string;
