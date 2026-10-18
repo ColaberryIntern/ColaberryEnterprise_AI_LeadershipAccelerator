@@ -7,6 +7,8 @@ For: ColaberryIntern/ColaberryEnterprise_AI_LeadershipAccelerator
 
 Contents
 
+- `FLOW.md` - **the flow AS SHIPPED (P0 to P7)**: the seven steps, each step's gate/rail, the admin + intern entry points, and the determinism / advisory-AI / pricing rails. Read this for what the code does; the `designs/` screens show the shape.
+- `OPERATOR_GUIDE.md` - **a short runbook** for running one pursuit end to end (admin steps + what the intern sees + the guardrails you cannot override).
 - `PROMPT.md` — the build instructions: problems found in the code, target flow, feature specs, non-negotiables, 7 phased PRs, open questions.
 - `designs/screens/` — clickable HTML screens. Start at `Main.html`; footer buttons move between steps. No server needed.
 - `designs/screenshots/` — full-page PNGs of every screen plus four interaction states.
