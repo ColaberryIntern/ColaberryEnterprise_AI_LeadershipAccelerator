@@ -83,6 +83,13 @@ tmp/cb-ai-runner-state-*.json
 tmp/launch-pmo-*
 tmp/gov-*
 tmp/cohort-reports/
+# Named contacts and verified email addresses pulled from Apollo for the C6.x
+# account mapping. THIS REPOSITORY IS PUBLIC: those files are third-party personal
+# data and must never reach a commit. The artifacts built from them go to Basecamp,
+# which is private. Pattern-scoped for the same reason as the entries above.
+tmp/c6*_search.json
+tmp/c6*_owned.json
+tmp/c6*_contacts.json
 backend/tmp/
 docs/reports/
 docs/gov-contracts-daily-*.html
