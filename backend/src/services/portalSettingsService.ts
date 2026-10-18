@@ -235,6 +235,12 @@ async function resolveManagedOrg(
   return { id: org.id, name: org.name, has_real_name: name.length > 0 && !isFallbackToPersonName };
 }
 
+/** True when this enrollment owns or manages an organization: the same answer the frontend receives as
+ *  is_org_manager (getSettings below). Exported for the campus staff-desk audience (C5); no logic of its own. */
+export async function isOrgManager(enrollmentId: string): Promise<boolean> {
+  return (await resolveManagedOrg(enrollmentId)) !== null;
+}
+
 export async function getSettings(enrollmentId: string): Promise<SettingsView | null> {
   const e: any = await Enrollment.findByPk(enrollmentId, {
     include: [

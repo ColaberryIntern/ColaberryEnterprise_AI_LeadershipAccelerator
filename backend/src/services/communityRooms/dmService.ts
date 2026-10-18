@@ -5,9 +5,9 @@ import Enrollment from '../../models/Enrollment';
 import RoomMessage from '../../models/RoomMessage';
 import { RoomAccessContext } from './roomEntitlementService';
 import { postMessage, listMessages } from './roomMessageService';
-import { isStaffOrMgmt } from '../access/staffAccess';
 import { getReeseEnrollmentId } from '../reese/reeseIdentitySeed';
 import { getDaraEnrollmentId } from '../curriculum/daraIdentitySeed';
+import { dmBlockReasonFor } from './dmEligibility';
 
 // 1:1 direct messages, modelled as a 2-person private CommunityRoom
 // (room_type 'dm') so they reuse the persisted RoomMessage layer — messages
@@ -29,50 +29,11 @@ export class DmError extends Error {
 // cohorts, so staff must be able to open a DM with anyone shown there, not just
 // their own cohort. Without this, clicking a cross-cohort name in that panel
 // threw a DmError that the frontend then silently swallowed.
+// The rule itself (and the Reese / Dara identity-keyed bypasses with their fail-closed lookups) lives in
+// dmEligibility.ts, so the campus can ask the same question without opening a room. Same messages, same order.
 async function assertSameCohort(me: string, otherId: string, myCohortId: string | null | undefined): Promise<void> {
-  const other = await Enrollment.findByPk(otherId);
-  if (!other) throw new DmError('That person is no longer available');
-  if (myCohortId && other.cohort_id === myCohortId) return;
-  if (await isStaffOrMgmt(me)) return;
-  // Reese Phase 1 — narrow, identity-keyed bypass (NOT a broadened isStaffOrMgmt
-  // semantic): a student can always reach Reese regardless of cohort, since
-  // Reese's own enrollment has no cohort_id. Scoped to Reese's specific,
-  // known enrollment id only — every other student's cross-cohort DM behavior
-  // is byte-for-byte unchanged (see the regression test in dmService.test.ts).
-  // Fail-closed: a lookup error here must still deny cross-cohort access, not
-  // throw an unhandled 500 that could look like "server broke, try again until
-  // it works" — the same DmError as an ordinary rejection.
-  let reeseEnrollmentId: string | null = null;
-  try {
-    reeseEnrollmentId = await getReeseEnrollmentId();
-  } catch (e: any) {
-    console.warn(JSON.stringify({
-      level: 'warn', service: 'dm', event: 'reese_enrollment_lookup_failed',
-      error_class: e?.name || 'Error', message: String(e?.message || e),
-    }));
-  }
-  if (reeseEnrollmentId && (me === reeseEnrollmentId || otherId === reeseEnrollmentId)) return;
-
-  // Dara v2 Phase 3 — identical, identity-keyed bypass for Dara's own real
-  // enrollment id, same reasoning as Reese's above: a student can always
-  // reach Dara for a curriculum question regardless of cohort, since Dara's
-  // own enrollment has no cohort_id either. Kept as an explicit duplicate of
-  // the Reese block above rather than a generalized "any AI agent" mechanism
-  // — two real cases, not yet the three this repo's own CLAUDE.md treats as
-  // the extraction threshold; a third agent needing this is the trigger to
-  // generalize, not add a third copy.
-  let daraEnrollmentId: string | null = null;
-  try {
-    daraEnrollmentId = await getDaraEnrollmentId();
-  } catch (e: any) {
-    console.warn(JSON.stringify({
-      level: 'warn', service: 'dm', event: 'dara_enrollment_lookup_failed',
-      error_class: e?.name || 'Error', message: String(e?.message || e),
-    }));
-  }
-  if (daraEnrollmentId && (me === daraEnrollmentId || otherId === daraEnrollmentId)) return;
-
-  throw new DmError(myCohortId ? 'You can only message people in your cohort' : 'You are not in a cohort yet');
+  const reason = await dmBlockReasonFor(me, otherId, myCohortId);
+  if (reason) throw new DmError(reason);
 }
 
 /**

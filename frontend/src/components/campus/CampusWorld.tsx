@@ -4,6 +4,11 @@ import CampusWorldMap from './CampusWorldMap';
 import BuildingCard from './BuildingCard';
 import type { BuildingId, CampusAudience, CampusBuilding } from './campusMap';
 import { buildingAccess } from './campusAccess';
+import PersonCard from './PersonCard';
+import type { PersonCardTarget } from './CampusContext';
+import type { StaffDesk } from './campusPeopleApi';
+import { tokensFor, desksForBuilding } from './campusPeople';
+import { buildingName } from './campusMap';
 
 /**
  * Map + building card, with the keyboard contract (Campus C2):
@@ -25,9 +30,14 @@ export interface CampusWorldProps {
   presenceError?: boolean;
   /** C3: zoom through the open building's door to a route, from that building's on-screen rect. */
   onEnterRoom?: (route: string, from: DOMRect | null) => void;
+  /** C5: AI staff desks, the open person card and its controls. Absent = C4 behavior. */
+  staffDesks?: StaffDesk[];
+  personCard?: PersonCardTarget | null;
+  onOpenPerson?: (t: PersonCardTarget) => void;
+  onClosePerson?: () => void;
 }
 
-export default function CampusWorld({ buildings, audience, hasFullAccess, workplaceNames, reduceMotion, initialTarget, onExit, onNavigate, presence, presenceError = false, onEnterRoom }: CampusWorldProps): React.ReactElement {
+export default function CampusWorld({ buildings, audience, hasFullAccess, workplaceNames, reduceMotion, initialTarget, onExit, onNavigate, presence, presenceError = false, onEnterRoom, staffDesks, personCard, onOpenPerson, onClosePerson }: CampusWorldProps): React.ReactElement {
   const counts = useMemo(() => {
     const out: Record<string, number> = {};
     if (presence) for (const [id, a] of Object.entries(presence)) out[id] = a.count;
@@ -44,10 +54,19 @@ export default function CampusWorld({ buildings, audience, hasFullAccess, workpl
     if (id) els.current.get(id)?.focus();
   }, [open]);
 
+  const [walkRequest, setWalkRequest] = useState<{ id: BuildingId; seq: number } | null>(null);
+  const people = useMemo(() => {
+    if (!presence || presenceError || !onOpenPerson) return undefined;
+    const out: Record<string, ReturnType<typeof tokensFor>> = {};
+    for (const [id, a] of Object.entries(presence)) { const t = tokensFor(a); if (t.shown.length) out[id] = t; }
+    return out;
+  }, [presence, presenceError, onOpenPerson]);
+  const pickPerson = useCallback((p: PersonCardTarget['person'], buildingId: BuildingId) => { setOpen(null); onOpenPerson?.({ person: p, buildingId }); }, [onOpenPerson]);
+
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (e.key !== 'Escape') return;
     e.stopPropagation();
-    if (open) closeCard(); else onExit();
+    if (personCard) onClosePerson?.(); else if (open) closeCard(); else onExit();
   };
 
   // On phones the map is wider than the screen (campus.css); start centered on the quad.
@@ -61,11 +80,20 @@ export default function CampusWorld({ buildings, audience, hasFullAccess, workpl
   return (
     <div className="cm-world" onKeyDown={onKeyDown} ref={world}>
       <CampusWorldMap buildings={buildings} accessOf={accessOf} workplaceNames={workplaceNames} reduceMotion={reduceMotion}
-        initialTarget={initialTarget} onArrive={setOpen} buildingRef={registerEl} counts={presenceError ? undefined : counts} />
-      {b && <BuildingCard building={b} access={accessOf(b)} workplaceNames={workplaceNames} onClose={closeCard} onNavigate={onNavigate}
+        initialTarget={initialTarget} onArrive={setOpen} buildingRef={registerEl} counts={presenceError ? undefined : counts}
+        people={people} onPickPerson={onOpenPerson ? pickPerson : undefined} walkRequest={walkRequest} />
+      {personCard && (() => {
+        const pb = buildings.find((x) => x.id === personCard.buildingId);
+        return <PersonCard person={personCard.person} buildingLabel={pb ? buildingName(pb, workplaceNames) : 'the campus'} onClose={() => onClosePerson?.()}
+          onMessaged={onNavigate}
+          onWalkOver={() => { const id = personCard.buildingId; onClosePerson?.(); setWalkRequest((w) => ({ id, seq: (w?.seq ?? 0) + 1 })); }} />;
+      })()}
+      {b && !personCard && <BuildingCard building={b} access={accessOf(b)} workplaceNames={workplaceNames} onClose={closeCard} onNavigate={onNavigate}
         onEnterRoom={onEnterRoom ? (route) => onEnterRoom(route, els.current.get(b.id)?.getBoundingClientRect() ?? null) : undefined}
+        desks={staffDesks ? desksForBuilding(staffDesks, b.id, audience) : undefined}
         whoIsHere={presence === undefined && !presenceError ? undefined
-          : { presence: presence?.[b.id], error: presenceError, loading: presence === null && !presenceError }} />}
+          : { presence: presence?.[b.id], error: presenceError, loading: presence === null && !presenceError,
+            onPick: onOpenPerson ? (p) => pickPerson(p, b.id) : undefined }} />}
     </div>
   );
 }

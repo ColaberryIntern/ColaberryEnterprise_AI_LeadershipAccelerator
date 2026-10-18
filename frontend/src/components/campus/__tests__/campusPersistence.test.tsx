@@ -12,6 +12,8 @@ import { MemoryRouter, Routes, Route, Outlet, useNavigate } from 'react-router-d
 
 // A plain counter, not jest.fn: this suite runs with resetMocks:true, which would wipe the implementation.
 let mockFlagReads = 0;
+// C5: the provider reads staff desks and polls the inbox while the campus is on; stubbed so no test touches the network.
+jest.mock('../campusPeopleApi', () => ({ fetchStaffDesks: () => Promise.resolve([]), fetchConversationsQuiet: () => Promise.resolve([]), postWave: () => Promise.resolve({ sent: true, reason: 'sent' }) }));
 jest.mock('../campusApi', () => ({
   fetchCampusFlags: () => { mockFlagReads += 1; return Promise.resolve({ campus: true }); }, CAMPUS_FLAGS_TIMEOUT_MS: 10000,
   fetchCampusPresence: () => Promise.resolve({}), postCampusHere: () => Promise.resolve(), isReadOnlySession: () => false,
@@ -30,6 +32,8 @@ import CampusBanner from '../CampusBanner';
 import PortalLayout from '../../Layout/PortalLayout';
 // eslint-disable-next-line import/first
 import { PRESENCE_POLL_MS } from '../useCampusPresencePoll';
+// eslint-disable-next-line import/first
+import { DM_TOAST_POLL_MS } from '../useCampusDmToasts';
 // eslint-disable-next-line import/first
 import { ParticipantAuthProvider } from '../../../contexts/ParticipantAuthContext';
 // eslint-disable-next-line import/first
@@ -52,6 +56,8 @@ let container: HTMLDivElement;
 let root: Root;
 let intervalSpy: jest.SpyInstance;
 const pollIntervals = () => intervalSpy.mock.calls.filter((c) => c[1] === PRESENCE_POLL_MS).length;
+// C5: the new-message poll lives in the provider too, so walking between rooms must not start a second one.
+const toastIntervals = () => intervalSpy.mock.calls.filter((c) => c[1] === DM_TOAST_POLL_MS).length;
 const flush = async () => { for (let i = 0; i < 6; i++) await act(async () => { await Promise.resolve(); }); };
 
 beforeEach(async () => {
@@ -99,6 +105,7 @@ describe('one campus across rooms and chromes', () => {
 
     expect(mockFlagReads).toBe(1);
     expect(pollIntervals()).toBe(1);
+    expect(toastIntervals()).toBe(1);
   });
 
   it('exactly one banner on a PortalShell page and on a PortalLayout page, never doubled', async () => {

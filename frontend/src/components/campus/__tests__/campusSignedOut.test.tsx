@@ -20,6 +20,8 @@ import { MemoryRouter } from 'react-router-dom';
 // The plain axios.get and the shared portalApi instance (made by axios.create) get DIFFERENT fakes,
 // so the suite can prove the flags request never goes through portalApi and its redirecting
 // 401 interceptor.
+// C5: the provider reads staff desks and polls the inbox while the campus is on; stubbed so no test touches the network.
+jest.mock('../campusPeopleApi', () => ({ fetchStaffDesks: () => Promise.resolve([]), fetchConversationsQuiet: () => Promise.resolve([]), postWave: () => Promise.resolve({ sent: true, reason: 'sent' }) }));
 jest.mock('axios', () => {
   const get = jest.fn();
   const instanceGet = jest.fn();

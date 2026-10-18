@@ -5,6 +5,7 @@ import { env } from '../../config/env';
 import { getPeoplePanel } from '../peoplePanelService';
 import { getCohortPresence } from '../cohortPresenceService';
 import { isCampusArea, CampusArea } from './campusAreas';
+import { canDmMany } from '../communityRooms/dmEligibility';
 
 /**
  * Who is in each campus building right now (Colaberry Campus C4).
@@ -23,6 +24,12 @@ import { isCampusArea, CampusArea } from './campusAreas';
  * (the rail's own refresh cadence), keyed on enrollment AND cohort, in a Map capped at 2,000
  * viewers (oldest evicted). Presence rows are bounded by the 90 s window and LIMIT 500.
  *
+ * CAN MESSAGE (C5). Each named person carries can_message, decided by the ONE DM rule (dmEligibility, the same
+ * check POST /api/portal/dm/open makes), per viewer, on output only: it is never stored in the shared visible-set
+ * cache. A failed lookup makes every named person can_message false (fail closed) and is logged. Disclosed: for a
+ * person the rail already names, it reveals whether you may message them (for an "active now" student, whether they
+ * share your cohort), which clicking Message in the rail already reveals today.
+ *
  * FAILURE. Any error (including the first-create race in ensureCampusPresenceSchema) propagates
  * to the route as a 500, and the UI shows "We can't load who's online" - never an empty campus.
  */
@@ -33,7 +40,8 @@ export const VISIBLE_TTL_MS = 60_000;
 export const VISIBLE_CACHE_MAX = 2_000;
 
 export interface CampusPerson { enrollment_id: string; display_name: string; avatar_url: string | null }
-export type CampusPresenceEntry = CampusPerson | { anonymous: true };
+export interface CampusPersonOut extends CampusPerson { can_message: boolean }
+export type CampusPresenceEntry = CampusPersonOut | { anonymous: true };
 export interface CampusPresenceAreas { areas: Partial<Record<CampusArea, { count: number; people: CampusPresenceEntry[] }>> }
 
 export class CampusAreaError extends Error {
@@ -99,7 +107,22 @@ export async function getCampusPresence(viewer: string, cohort: string | null, n
     const slot = areas[r.area] ?? (areas[r.area] = { count: 0, people: [] });
     slot.count += 1;
     if (r.enrollment_id === viewer) continue; // you are counted, not listed
-    slot.people.push(visible.get(r.enrollment_id) ?? { anonymous: true });
+    const named = visible.get(r.enrollment_id);
+    slot.people.push(named ? { ...named, can_message: false } : { anonymous: true });
   }
+  await markCanMessage(viewer, cohort, areas);
   return { areas };
+}
+
+/** Sets can_message on every named entry in place. One batched lookup; any failure leaves them all false. */
+async function markCanMessage(viewer: string, cohort: string | null, areas: CampusPresenceAreas['areas']): Promise<void> {
+  const named = Object.values(areas).flatMap((a) => (a ? a.people : [])).filter((p): p is CampusPersonOut => !('anonymous' in p));
+  if (!named.length) return;
+  try {
+    const ok = await canDmMany(viewer, cohort, Array.from(new Set(named.map((p) => p.enrollment_id))));
+    for (const p of named) p.can_message = ok.get(p.enrollment_id) === true;
+  } catch (err: any) {
+    console.error(JSON.stringify({ level: 'error', service: 'backend', event: 'campus_can_message_failed', outcome: 'failure',
+      error_class: err?.name || 'Error', context: { named: named.length, message: String(err?.message || err).slice(0, 200) } }));
+  }
 }

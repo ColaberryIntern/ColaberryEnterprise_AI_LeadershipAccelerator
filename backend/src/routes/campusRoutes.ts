@@ -5,6 +5,8 @@ import { env } from '../config/env';
 import { campusEnabledFor } from '../services/campus/campusFlag';
 import { isCampusArea } from '../services/campus/campusAreas';
 import { touchCampusArea, getCampusPresence } from '../services/campus/campusPresenceService';
+import { getStaffDesks } from '../services/campus/campusStaffDesks';
+import { waveAt } from '../services/campus/campusWave';
 
 /**
  * Colaberry Campus learner endpoints (Basecamp C1 onward). Mounted with the
@@ -59,7 +61,7 @@ export function getCampusFlags(req: Request, res: Response): void {
 
 // ---- C4: presence by building ----
 const HereBody = z.object({ area: z.string().min(1).max(32) }).strict();
-const PersonSchema = z.object({ enrollment_id: z.string(), display_name: z.string(), avatar_url: z.string().nullable() }).strict();
+const PersonSchema = z.object({ enrollment_id: z.string(), display_name: z.string(), avatar_url: z.string().nullable(), can_message: z.boolean() }).strict();
 const EntrySchema = z.union([PersonSchema, z.object({ anonymous: z.literal(true) }).strict()]);
 export const CampusPresenceResponse = z.object({
   areas: z.record(z.string(), z.object({ count: z.number().int().nonnegative(), people: z.array(EntrySchema) }).strict()),
@@ -96,9 +98,53 @@ export async function getCampusPresenceRoute(req: Request, res: Response): Promi
   }
 }
 
+// ---- C5: AI staff desks ----
+const DeskSchema = z.object({
+  id: z.enum(['reese', 'dara', 'maya']), name: z.string(), title: z.string(), building: z.string(), ai: z.literal(true),
+  on_duty: z.boolean(), enrollment_id: z.string().nullable(), opens: z.string().nullable(), prompts: z.array(z.string()).max(5),
+}).strict();
+export const StaffDesksResponse = z.object({ desks: z.array(DeskSchema).max(3) }).strict();
+
+/** GET /api/portal/campus/staff-desks - the AI staff desks this viewer may see (pilot only). The audience is decided
+ *  here, from the same sources as the frontend; the response carries only the desks, not the audience. */
+export async function getStaffDesksRoute(req: Request, res: Response): Promise<void> {
+  if (!campusOnFor(req)) { res.status(403).json({ error: 'The campus is not enabled for this account', error_class: 'CampusNotEnabled' }); return; }
+  try {
+    const { desks } = await getStaffDesks(req.participant!.sub);
+    sendValidated(res, StaffDesksResponse, { desks } as z.infer<typeof StaffDesksResponse>, 'campus_staff_desks');
+  } catch (err) {
+    logFailure('campus_staff_desks_failed', err);
+    res.status(500).json({ error: 'Could not load the staff desks', error_class: 'CampusStaffDesksUnavailable' });
+  }
+}
+
+// ---- C5: wave (an ordinary DM, idempotent by room state; see campusWave.ts) ----
+const WaveBody = z.object({ to: z.string().uuid() }).strict();
+export const WaveResponse = z.object({ sent: z.boolean(), reason: z.enum(['sent', 'already_waved']), roomId: z.string() }).strict();
+
+/** POST /api/portal/campus/wave {to} - pilot only. The sender comes ONLY from the token; read-only "view as" tokens
+ *  are refused for every POST by requireParticipant. The DM rule refusal keeps its usual text (400 DmNotAllowed). */
+export async function postWaveRoute(req: Request, res: Response): Promise<void> {
+  const parsed = WaveBody.safeParse(req.body ?? {});
+  if (!parsed.success) { res.status(400).json({ error: 'Invalid body', error_class: 'ValidationFailed' }); return; }
+  if (!campusOnFor(req)) { res.status(403).json({ error: 'The campus is not enabled for this account', error_class: 'CampusNotEnabled' }); return; }
+  try {
+    const result = await waveAt(req.participant!.sub, req.participant!.cohort_id ?? null, parsed.data.to);
+    sendValidated(res, WaveResponse, result, 'campus_wave');
+  } catch (err) {
+    const e = err as { name?: string; message?: string; error_class?: string };
+    if (e?.name === 'DmError') { res.status(400).json({ error: e.message, error_class: 'DmNotAllowed' }); return; }
+    if (e?.name === 'WaveError') { res.status(400).json({ error: e.message, error_class: e.error_class }); return; }
+    logFailure('campus_wave_failed', err);
+    res.status(500).json({ error: 'Could not send the wave', error_class: 'CampusWaveUnavailable' });
+  }
+}
+
 const router = Router();
 router.get('/api/portal/campus/flags', requireParticipant, getCampusFlags);
 router.post('/api/portal/campus/here', requireParticipant, postCampusHere);
 router.get('/api/portal/campus/presence', requireParticipant, getCampusPresenceRoute);
+router.get('/api/portal/campus/staff-desks', requireParticipant, getStaffDesksRoute);
+router.post('/api/portal/campus/wave', requireParticipant, postWaveRoute);
 
 export default router;

@@ -1,7 +1,10 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { fetchCampusFlags } from './campusApi';
-import type { CampusPresence } from './campusApi';
+import type { CampusPresence, CampusPerson } from './campusApi';
 import { useCampusPresencePoll } from './useCampusPresencePoll';
+import { useStaffDesks } from './useStaffDesks';
+import { useCampusDmToasts, DmToast } from './useCampusDmToasts';
+import type { StaffDesk } from './campusPeopleApi';
 import { useParticipantAuth } from '../../contexts/ParticipantAuthContext';
 import type { BuildingId } from './campusMap';
 import { CampusSettings, readCampusSettings, writeCampusSettings } from './campusSettings';
@@ -49,7 +52,19 @@ export interface CampusState {
   /** Step back outside: open the map at this building, zooming out to its door (instant with reduce motion). */
   stepOutside: (buildingId: BuildingId | null) => void;
   clearDoor: () => void;
+  /** C5: the AI staff desks this viewer may see (empty until read, or when the read failed). */
+  staffDesks: StaffDesk[];
+  staffDesksError: boolean;
+  /** C5: the person card open on the map (from a token or a Who's here chip), or null. */
+  personCard: PersonCardTarget | null;
+  openPersonCard: (t: PersonCardTarget) => void;
+  closePersonCard: () => void;
+  /** C5: the current "new message" toast (polled here, so it survives navigation), and its dismiss. */
+  dmToast: DmToast | null;
+  dismissDmToast: () => void;
 }
+
+export interface PersonCardTarget { person: CampusPerson; buildingId: BuildingId }
 
 export type CampusLayer = 'none' | 'map' | 'list';
 export interface DoorRect { left: number; top: number; width: number; height: number }
@@ -63,6 +78,8 @@ const OFF: CampusState = {
   settings: { nav: 'campus', workplaceNames: false, reduceMotion: false },
   updateSettings: noop, layer: 'none', mapFocus: null, openMap: noop, openList: noop, closeLayer: noop,
   presence: null, presenceError: false, door: null, enterThroughDoor: noop, stepOutside: noop, clearDoor: noop,
+  staffDesks: [], staffDesksError: false, personCard: null, openPersonCard: noop, closePersonCard: noop,
+  dmToast: null, dismissDmToast: noop,
 };
 
 const Ctx = createContext<CampusState>(OFF);
@@ -88,10 +105,11 @@ export function CampusProvider({ children }: { children?: React.ReactNode }): Re
   }, []);
 
   const [layer, setLayer] = useState<CampusLayer>('none');
+  const [personCard, setPersonCard] = useState<PersonCardTarget | null>(null); // C5; closing the map closes it too
   const [mapFocus, setMapFocus] = useState<BuildingId | null>(null);
   const openMap = useCallback((focus?: BuildingId) => { setMapFocus(focus ?? null); setLayer('map'); }, []);
   const openList = useCallback(() => setLayer('list'), []);
-  const closeLayer = useCallback(() => { setLayer('none'); setMapFocus(null); }, []);
+  const closeLayer = useCallback(() => { setLayer('none'); setMapFocus(null); setPersonCard(null); }, []);
 
   const active = enabled && settings.nav === 'campus';
   const { presence, presenceError } = useCampusPresencePoll(active);
@@ -108,11 +126,17 @@ export function CampusProvider({ children }: { children?: React.ReactNode }): Re
   }, []);
   const clearDoor = useCallback(() => setDoor(null), []);
 
+  // C5: AI staff desks (read once while active) and the open person card.
+  const { staffDesks, staffDesksError } = useStaffDesks(active);
+  const { toast: dmToast, dismiss: dismissDmToast } = useCampusDmToasts(active);
+  const openPersonCard = useCallback((t: PersonCardTarget) => setPersonCard(t), []);
+  const closePersonCard = useCallback(() => setPersonCard(null), []);
+
   const value = useMemo<CampusState>(
     () => ({ enabled, ready, settings, active, updateSettings, layer, mapFocus, openMap, openList, closeLayer, presence, presenceError,
-      door, enterThroughDoor, stepOutside, clearDoor }),
+      door, enterThroughDoor, stepOutside, clearDoor, staffDesks, staffDesksError, personCard, openPersonCard, closePersonCard, dmToast, dismissDmToast }),
     [enabled, ready, settings, active, updateSettings, layer, mapFocus, openMap, openList, closeLayer, presence, presenceError,
-      door, enterThroughDoor, stepOutside, clearDoor],
+      door, enterThroughDoor, stepOutside, clearDoor, staffDesks, staffDesksError, personCard, openPersonCard, closePersonCard, dmToast, dismissDmToast],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

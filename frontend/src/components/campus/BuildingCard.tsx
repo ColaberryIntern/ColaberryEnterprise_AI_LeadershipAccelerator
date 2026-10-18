@@ -4,14 +4,16 @@ import type { CampusBuilding, ExplorerAccess } from './campusMap';
 import { buildingName } from './campusMap';
 import { accessLabel, enrollCta } from './campusAccess';
 import WhoIsHere, { WhoIsHereProps } from './WhoIsHere';
+import StaffDesk from './StaffDesk';
+import type { StaffDesk as Desk } from './campusPeopleApi';
 
 /**
  * The card that opens when you arrive at a building (Campus C2): its name, what you can
  * do here (primary action), its rooms as real links, and - for an Explorer - what is
  * locked, a demo or a preview, with the enroll path the paywall already uses.
  *
- * Real data only: "Who's here" (C4) renders only when the caller passes presence, and "Staff on
- * duty" (C5) is not rendered yet, so nothing invented ever shows. A route that does not exist
+ * Real data only: "Who's here" (C4) renders only when the caller passes presence, and the AI staff
+ * desks (C5) only when the server listed one for this building, so nothing invented ever shows. A route that does not exist
  * yet (marked `planned` in the catalog) shows as "Opening soon", never as a dead link.
  */
 export interface BuildingCardProps {
@@ -25,6 +27,8 @@ export interface BuildingCardProps {
   whoIsHere?: WhoIsHereProps;
   /** C3: zoom through this building's door to a route. Absent = a plain link (C2 behavior). */
   onEnterRoom?: (route: string) => void;
+  /** C5: the AI staff desks for THIS building, already filtered for the viewer. */
+  desks?: Desk[];
 }
 
 const NOTICE: Record<Exclude<ExplorerAccess, 'open'>, string> = {
@@ -33,7 +37,7 @@ const NOTICE: Record<Exclude<ExplorerAccess, 'open'>, string> = {
   preview: 'You can watch a short preview. Enrolling opens everything here.',
 };
 
-export default function BuildingCard({ building: b, access, workplaceNames, onClose, onNavigate, whoIsHere, onEnterRoom }: BuildingCardProps): React.ReactElement {
+export default function BuildingCard({ building: b, access, workplaceNames, onClose, onNavigate, whoIsHere, onEnterRoom, desks }: BuildingCardProps): React.ReactElement {
   const name = buildingName(b, workplaceNames);
   // A plain click goes through the door; a modified click (new tab, etc.) stays a normal link.
   const go = (route: string) => (e: React.MouseEvent) => {
@@ -75,7 +79,14 @@ export default function BuildingCard({ building: b, access, workplaceNames, onCl
         </>
       )}
 
-      {whoIsHere && <WhoIsHere presence={whoIsHere.presence} error={whoIsHere.error} loading={whoIsHere.loading} />}
+      {desks && desks.length > 0 && (
+        <div className="cm-desks">
+          <h3 className="cm-card-h">Staff desks</h3>
+          {desks.map((d) => <StaffDesk key={d.id} desk={d} onMessaged={onNavigate} />)}
+        </div>
+      )}
+
+      {whoIsHere && <WhoIsHere presence={whoIsHere.presence} error={whoIsHere.error} loading={whoIsHere.loading} onPick={whoIsHere.onPick} />}
     </section>
   );
 }

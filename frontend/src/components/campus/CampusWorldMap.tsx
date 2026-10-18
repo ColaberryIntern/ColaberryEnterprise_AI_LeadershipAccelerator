@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import type { BuildingId, CampusBuilding, ExplorerAccess } from './campusMap';
 import { buildingName } from './campusMap';
 import { accessLabel } from './campusAccess';
+import PersonTokens from './PersonToken';
+import type { CampusPerson } from './campusApi';
 
 /**
  * The campus world (Campus C2): an SVG map drawn from the catalog. Original art only - simple
@@ -44,6 +46,11 @@ export interface CampusMapProps {
   buildingRef?: (id: BuildingId, el: SVGGElement | null) => void;
   /** C4: live head count per building id (real data only; absent or 0 = no chip). */
   counts?: Partial<Record<string, number>>;
+  /** C5: named people per building id (tokens beside the building) and what a token click does. Full map only. */
+  people?: Partial<Record<string, { shown: CampusPerson[]; more: number }>>;
+  onPickPerson?: (p: CampusPerson, buildingId: BuildingId) => void;
+  /** C5: walk to this building now (Walk over). A new seq means a new walk. */
+  walkRequest?: { id: BuildingId; seq: number } | null;
 }
 
 function Roof({ b }: { b: CampusBuilding }): React.ReactElement {
@@ -100,6 +107,9 @@ function Building({ b, access, label, compact, count, onPick, setRef }: {
       data-building={b.id} onClick={() => onPick(b.id)} onKeyDown={onKeyDown}
     >
       {b.id !== 'gate' && <rect className="cm-body" x={x - w / 2} y={y - h / 2} width={w} height={h} rx={4} />}
+      {/* The gate is only an arch outline; this invisible area makes its whole footprint clickable (found in C5
+          screenshots: clicks inside the arch fell through to the path behind it). */}
+      {b.id === 'gate' && <rect className="cm-hit" x={x - w / 2} y={y - h / 2 - 18} width={w} height={h + 18} />}
       <Roof b={b} />
       {b.id !== 'gate' && <rect className="cm-door" x={x - 7} y={y + h / 2 - 16} width={14} height={16} rx={2} />}
       {!compact && <text className="cm-label" x={x} y={y + h / 2 + 22} textAnchor="middle">{label}</text>}
@@ -109,7 +119,7 @@ function Building({ b, access, label, compact, count, onPick, setRef }: {
   );
 }
 
-export default function CampusWorldMap({ buildings, accessOf, workplaceNames, reduceMotion, compact = false, initialTarget, onArrive, buildingRef, counts }: CampusMapProps): React.ReactElement {
+export default function CampusWorldMap({ buildings, accessOf, workplaceNames, reduceMotion, compact = false, initialTarget, onArrive, buildingRef, counts, people, onPickPerson, walkRequest }: CampusMapProps): React.ReactElement {
   const [pos, setPos] = useState<Pt>({ x: QUAD.x, y: 640 });
   const posRef = useRef(pos);
   const raf = useRef<number | null>(null);
@@ -147,6 +157,10 @@ export default function CampusWorldMap({ buildings, accessOf, workplaceNames, re
   useEffect(() => {
     if (initialTarget && !started.current) { started.current = true; walkTo(initialTarget); }
   }, [initialTarget, walkTo]);
+  const lastWalk = useRef(0);
+  useEffect(() => {
+    if (walkRequest && walkRequest.seq !== lastWalk.current) { lastWalk.current = walkRequest.seq; walkTo(walkRequest.id); }
+  }, [walkRequest, walkTo]);
 
   return (
     <svg className={`cm-map${compact ? ' is-compact' : ''}`} viewBox={`0 0 ${WORLD.w} ${WORLD.h}`} role="group" aria-label="Campus map">
@@ -156,6 +170,10 @@ export default function CampusWorldMap({ buildings, accessOf, workplaceNames, re
       {buildings.map((b) => (
         <Building key={b.id} b={b} access={accessOf(b)} label={buildingName(b, workplaceNames)} compact={compact} count={counts?.[b.id] ?? 0} onPick={walkTo} setRef={buildingRef} />
       ))}
+      {!compact && people && onPickPerson && buildings.map((b) => {
+        const t = people[b.id];
+        return t ? <PersonTokens key={'t-' + b.id} b={b} shown={t.shown} more={t.more} maxY={WORLD.h} onPick={(p) => onPickPerson(p, b.id)} /> : null;
+      })}
       {!compact && (
         <g className="cm-avatar" transform={`translate(${pos.x} ${pos.y}) scale(0.8)`} aria-hidden="true" data-testid="cm-avatar">
           <path className="cm-pin" d="M0 0 C -9 -12 -12 -18 -12 -24 A 12 12 0 1 1 12 -24 C 12 -18 9 -12 0 0 Z" />
