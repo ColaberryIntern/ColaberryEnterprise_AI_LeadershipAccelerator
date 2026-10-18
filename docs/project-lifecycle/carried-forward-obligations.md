@@ -2415,3 +2415,83 @@ pinned in one test, so whoever changes either one meets the other.
 The enrollment row lock (`projectService.ts`, `SELECT id FROM enrollments ... FOR UPDATE`). Six
 of the seven are addressed: five observed, and the scheduler's found to be mis-documented rather
 than unproven.
+
+## THE LAST LOCK: TWO CONCURRENT BUILDS NOW DEMONSTRABLY GET THEIR OWN PROJECTS
+
+Seventh and last. **The "covered only by asserting their SQL" item is closed.**
+
+### The test it had
+
+`resolveProjectForNewBuild.test.ts:283` is titled *"serialises concurrent resolves with a row
+lock on the enrollment"*:
+
+```ts
+await resolveProjectForNewBuild(ENROLLMENT);
+expect(queries.some((q) => /FROM enrollments WHERE id = :enrollmentId FOR UPDATE/.test(q)))
+  .toBe(true);
+```
+
+ONE resolve, then a regex over the captured SQL. The title promises serialisation; the body
+asserts a substring, and nothing in it can tell two concurrent resolves from one.
+
+This is the lock with the most at stake of the seven: it closes a defect **a student reported on
+2026-08-19** - a new build that "merged with" the old one, because two builds started in the same
+instant both found the same pristine project and built into it, so the second plan's stories
+landed on the first plan's rows and the card kept the first build's name while every task under
+it described the second.
+
+### What is now measured
+
+Four tests against real Postgres (`resolveProjectForNewBuildRace.integration.test.ts`, port
+55439):
+
+- **two concurrent resolves get two DIFFERENT projects**, and exactly one of them is allowed to
+  reuse the pristine row
+- the reuse STAMP makes that row ineligible for the next resolve
+- a project with build content is never reused, even when it is the active one
+- **positive control:** the pre-fix decision - read the active project, judge it pristine, stamp
+  it, with no lock and both reads before either write - hands **both** builds the same project.
+  The reported bug, reproduced.
+
+**Mutation - drop `FOR UPDATE` from the enrollment read, keep the read:** the two resolves return
+**the same project id**, deterministically, on three consecutive runs, while the other three
+tests keep passing. The lock is the whole difference.
+
+### What this suite had to learn about bootstrapping, which the DDL item should carry
+
+The first version called `sequelize.sync()` over the whole model set. It passed. Then it **hung**
+on the second run against the same database - a `beforeAll` that blew a 300-second hook timeout,
+reproduced three times, with the lock restored so the mutation was not the cause. A suite that
+passes once and hangs afterwards is broken, so the bootstrap is now scoped to the six models this
+path actually touches, in FK order, and **verified replayable: green twice in a row on one
+database.**
+
+One deliberate stub: `student_tasks`. Syncing the real model drags in `student_task_lists`, then
+`requirements_maps`, and from there `artifact_definitions`, `capabilities` and `features` - a
+widening chain, none of which this lock touches, while `hasBuildContent` only ever asks
+`StudentTask.count({ project_id })`. (`student_tasks` is also one of the two tables in this repo
+with no DDL anywhere, which is its own entry above.)
+
+So the DDL-bootstrap decision now has three measured facts against the easy answer: `sync()` does
+not reproduce production's column defaults, `sync()` over the full model set is not re-runnable,
+and the model-level FK graph pulls in far more than any one path needs.
+
+### The register item, closed
+
+| Lock | Outcome |
+|---|---|
+| The stale-build claim | observed |
+| `resource_leases` | observed |
+| The scheduler claim | **mis-documented, not unproven** - the comment named a lock the code does not have; the real protection is a status predicate, and the comment now says so |
+| The execution-run claim | observed (and still has no production caller) |
+| The room outbox | observed - and gained a bound on crash recovery |
+| The telemetry anchor | observed - and its write path turned out to be dead since 2026-10-09 |
+| The enrollment row lock | observed |
+
+**Seven of seven addressed: six observed, one corrected.** "Observed" means the same four things
+every time: a real Postgres, genuinely concurrent callers, a positive control that reproduces the
+failure the lock prevents, and a mutation of the production code that makes the test fail.
+
+Ports 55433-55439 are now taken by the disposable-Postgres suites, which all run side by side.
+None of them runs in CI, because CI provisions no Postgres - they are **visible** skips that
+print their reason. That remains the open item it already was above.
