@@ -36,6 +36,7 @@ const PROJ = '6e4bd9da-a22b-4b90-b5b2-55686487f39f';
 
 const HASH = 'h1';
 const row = (over: Record<string, unknown> = {}) => ({
+  post_id: POST,
   recording_id: REC,
   duration_seconds: 71,
   project_id: PROJ,
@@ -53,11 +54,7 @@ const row = (over: Record<string, unknown> = {}) => ({
   ...over,
 });
 
-const post = (over: Record<string, unknown> = {}) => ({
-  id: 'post-1',
-  ritual_meta: { recording_ref: `recording:${REC}`, kind: 'demo_video' },
-  ...over,
-});
+const POST = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -90,38 +87,38 @@ describe('reading the ref', () => {
 
 describe('a cohort-mate gets a player', () => {
   it('returns a signed url keyed by post id', async () => {
-    const out = await resolveDemoPlayback(PEER, [post()]);
-    expect(out['post-1']).toBeDefined();
-    expect(out['post-1'].playbackUrl).toContain(`/recordings/${REC}/file?t=`);
-    expect(out['post-1'].recordingId).toBe(REC);
+    const out = await resolveDemoPlayback(PEER, [POST]);
+    expect(out[POST]).toBeDefined();
+    expect(out[POST].playbackUrl).toContain(`/recordings/${REC}/file?t=`);
+    expect(out[POST].recordingId).toBe(REC);
   });
 
   it('builds the url on the OWNER\'s project and task, not the viewer\'s', async () => {
     // The route resolves the recording against the task it belongs to. Using the
     // viewer's own project would 404 for every peer.
-    const out = await resolveDemoPlayback(PEER, [post()]);
-    expect(out['post-1'].playbackUrl).toContain(`/projects/${PROJ}/tasks/PREP-4/`);
+    const out = await resolveDemoPlayback(PEER, [POST]);
+    expect(out[POST].playbackUrl).toContain(`/projects/${PROJ}/tasks/PREP-4/`);
   });
 
   it('carries the duration and the view sentence', async () => {
-    const out = await resolveDemoPlayback(PEER, [post()]);
-    expect(out['post-1'].durationSeconds).toBe(71);
-    expect(out['post-1'].viewLabel).toBe('No views yet');
+    const out = await resolveDemoPlayback(PEER, [POST]);
+    expect(out[POST].durationSeconds).toBe(71);
+    expect(out[POST].viewLabel).toBe('No views yet');
   });
 
   it('reads the viewer cohort FRESH, never from a claim', async () => {
     // Otherwise someone removed from a cohort keeps seeing its demos.
-    await resolveDemoPlayback(PEER, [post()]);
+    await resolveDemoPlayback(PEER, [POST]);
     expect(findEnrollment).toHaveBeenCalledWith(PEER);
   });
 });
 
 describe('every way a viewer must be refused', () => {
   const refused = async () => {
-    const out = await resolveDemoPlayback(PEER, [post()]);
+    const out = await resolveDemoPlayback(PEER, [POST]);
     // ABSENT, not null: the card then renders as an ordinary post, and the page
     // never has to decide what a half-resolved demo looks like.
-    expect(out['post-1']).toBeUndefined();
+    expect(out[POST]).toBeUndefined();
     expect(Object.keys(out)).toHaveLength(0);
   };
 
@@ -171,41 +168,57 @@ describe('every way a viewer must be refused', () => {
 
 describe('the owner sees their own demo', () => {
   it('resolves for the author even though they are not a peer', async () => {
-    const out = await resolveDemoPlayback(OWNER, [post()]);
-    expect(out['post-1']).toBeDefined();
+    const out = await resolveDemoPlayback(OWNER, [POST]);
+    expect(out[POST]).toBeDefined();
   });
 });
 
 describe('the query, and the cost of a feed', () => {
   it('asks ONCE for a page of many demos, not once per post', async () => {
-    const posts = [
-      post({ id: 'p1' }),
-      post({ id: 'p2', ritual_meta: { recording_ref: 'recording:7aa1b2c3-0929-4ab4-8e3f-df32c338a931' } }),
-    ];
-    await resolveDemoPlayback(PEER, posts);
+    await resolveDemoPlayback(PEER, [POST, 'ffffffff-ffff-4fff-8fff-ffffffffffff']);
     expect(q).toHaveBeenCalledTimes(1);
   });
 
   it('only considers INGESTED recordings and LIVE showcases', async () => {
-    await resolveDemoPlayback(PEER, [post()]);
+    await resolveDemoPlayback(PEER, [POST]);
     const sql = String(q.mock.calls[0][0]);
     expect(sql).toContain("r.ingest_status = 'ingested'");
     expect(sql).toContain('s.withdrawn_at IS NULL');
     expect(sql).toContain('s.recording_id = r.id');
+    // THE REGRESSION THIS FILE NOW EXISTS FOR. The ref is read from
+    // `community_posts`, not from an object the caller passed in: the feed builds
+    // an explicit DTO via `toFeedItem` that does not carry `ritual_meta`, so the
+    // first version resolved nothing on every real request while twenty unit
+    // tests passed against hand-made objects that did carry it.
+    expect(sql).toContain('FROM community_posts');
+    expect(sql).toContain("p.ritual_meta->>'recording_ref'");
+    // Matched as TEXT. A legacy `recording:<attempt_id>` casts to uuid perfectly
+    // well, so a cast protects nothing, while a malformed ref would abort the
+    // whole query instead of simply matching no row.
+    expect(sql).toContain("'recording:' || r.id::text");
+    expect(sql).not.toMatch(/recording_ref'\)::uuid|::uuid\s*=\s*r\.id/);
   });
 
-  it('queries nothing at all when no post carries a recording ref', async () => {
-    const out = await resolveDemoPlayback(PEER, [
-      { id: 'p1', ritual_meta: null },
-      { id: 'p2', ritual_meta: { kind: 'text' } },
-    ]);
-    expect(out).toEqual({});
+  it('queries nothing at all for an empty page', async () => {
+    expect(await resolveDemoPlayback(PEER, [])).toEqual({});
     expect(q).not.toHaveBeenCalled();
   });
 
+  it('drops non-uuid post ids rather than passing them to the database', async () => {
+    await resolveDemoPlayback(PEER, [POST, 'not-a-uuid']);
+    expect(q.mock.calls[0][1].replacements.ids).toEqual([POST]);
+  });
+
+  it('a post with no demo ref simply yields nothing — the JOIN finds no row', async () => {
+    // An ordinary text post is in the same page as a demo. The join matches on the
+    // ref, so a post without one contributes no row and no card.
+    q.mockResolvedValue([[], {}]);
+    expect(await resolveDemoPlayback(PEER, [POST])).toEqual({});
+  });
+
   it('passes ids as replacements, never interpolated', async () => {
-    await resolveDemoPlayback(PEER, [post()]);
-    expect(String(q.mock.calls[0][0])).not.toContain(REC);
-    expect(q.mock.calls[0][1].replacements.ids).toEqual([REC]);
+    await resolveDemoPlayback(PEER, [POST]);
+    expect(String(q.mock.calls[0][0])).not.toContain(POST);
+    expect(q.mock.calls[0][1].replacements.ids).toEqual([POST]);
   });
 });
