@@ -202,6 +202,11 @@ function AdminAcceleratorPage() {
   const [sessionForm, setSessionForm] = useState({
     session_number: 1, title: '', description: '', session_date: '',
     start_time: '10:00', end_time: '11:30', session_type: 'core' as 'core' | 'lab',
+    // Colaberry Live. Not a column on the session: ticking it creates the broadcast occurrence,
+    // and the occurrence's existence IS the flag. Starts false on both Add and Edit because it
+    // is an action, not a state — and because turning live back OFF is a producer command, not
+    // a checkbox. Re-timing an already-live class happens automatically on save.
+    live_enabled: false,
   });
 
   // Attendance state
@@ -524,7 +529,7 @@ function AdminAcceleratorPage() {
   const resetSessionForm = () => {
     setSessionForm({
       session_number: (sessions.length || 0) + 1, title: '', description: '', session_date: '',
-      start_time: '10:00', end_time: '11:30', session_type: 'core',
+      start_time: '10:00', end_time: '11:30', session_type: 'core', live_enabled: false,
     });
   };
 
@@ -533,7 +538,7 @@ function AdminAcceleratorPage() {
     setSessionForm({
       session_number: s.session_number, title: s.title, description: s.description || '',
       session_date: s.session_date, start_time: s.start_time, end_time: s.end_time,
-      session_type: s.session_type,
+      session_type: s.session_type, live_enabled: false,
     });
     setShowSessionModal(true);
   };
@@ -1445,6 +1450,21 @@ function AdminAcceleratorPage() {
                       <label className="form-label small fw-medium">End Time (CT)</label>
                       <input type="time" className="form-control form-control-sm" value={sessionForm.end_time.slice(0, 5)}
                         onChange={(e) => setSessionForm({ ...sessionForm, end_time: e.target.value })} />
+                    </div>
+                  </div>
+                  <div className="border-top pt-3">
+                    <div className="form-check">
+                      <input className="form-check-input" type="checkbox" id="sessionLiveEnabled"
+                        checked={sessionForm.live_enabled}
+                        onChange={(e) => setSessionForm({ ...sessionForm, live_enabled: e.target.checked })} />
+                      <label className="form-check-label small fw-medium" htmlFor="sessionLiveEnabled">
+                        Broadcast this class on Colaberry Live
+                      </label>
+                    </div>
+                    <div className="form-text small">
+                      Creates the broadcast for this class, visible only to this cohort. Going on
+                      air stays a separate step on the day. Already broadcasting? Saving a new date
+                      or time moves it for you.
                     </div>
                   </div>
                 </div>
