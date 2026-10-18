@@ -53,13 +53,18 @@ export function toStudentGovProjectView(project: any, tracks: any[], requirement
     status: String(t?.status ?? ''),
     hasBuild: !!(t && t.solution_student_project_id), // a boolean only — never the raw project id
   }));
-  const reqRows: StudentGovRequirementView[] = (Array.isArray(requirements) ? requirements : []).map((r) => ({
-    canonicalReqId: String(r?.canonical_req_id ?? ''),
-    statement: String(r?.statement ?? ''),
-    priority: String(r?.priority ?? ''),
-    tracks: Array.isArray(r?.tracks) ? r.tracks.map((x: any) => String(x)) : [],
-    evidenceState: String(r?.evidence_state ?? ''),
-  }));
+  // P5 PRICING RAIL: a pricing requirement is administrative and its statement can carry dollar figures. Pricing is
+  // admin-only, so it is DROPPED from the student projection entirely (the API is the trust boundary, not the UI) -
+  // a non-admin never receives a pricing requirement, its statement, or its counts.
+  const reqRows: StudentGovRequirementView[] = (Array.isArray(requirements) ? requirements : [])
+    .filter((r) => String(r?.kind ?? '').trim().toLowerCase() !== 'pricing')
+    .map((r) => ({
+      canonicalReqId: String(r?.canonical_req_id ?? ''),
+      statement: String(r?.statement ?? ''),
+      priority: String(r?.priority ?? ''),
+      tracks: Array.isArray(r?.tracks) ? r.tracks.map((x: any) => String(x)) : [],
+      evidenceState: String(r?.evidence_state ?? ''),
+    }));
   // The Build-track plan: derive stories from the requirements' OWN tracks (solution_build only — admin
   // requirements never become a feature), each enriched with the student's Claude Code prompt. Deterministic.
   const planBase = deriveGovBuildPlan(reqRows);
