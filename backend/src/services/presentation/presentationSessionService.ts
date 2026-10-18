@@ -160,23 +160,22 @@ export async function recordingsForAttempt(
   attemptId: string,
   /** Issuing a playback ticket needs the viewer and the path it will be fetched at. */
   ticketFor?: { enrollmentId: string; projectId: string; storyId: string },
+  /**
+   * The task's Learn-stage template, which a take with no classification of its
+   * own inherits.
+   *
+   * PASSED IN, NOT LOOKED UP. The caller already holds the assignment, so reading
+   * it again here would be a second query for a value in hand — and the first
+   * version did it with `sequelize.query`, directly beneath the comment below
+   * warning that a raw query in this module opens a real connection in suites
+   * that mock only models. That took fourteen tests red in CI. Second time I have
+   * made that mistake in this exact function.
+   */
+  taskType?: string | null,
 ): Promise<Array<PracticeTake>> {
   // THE MODEL, NOT RAW SQL. Everything else in this module reads through models, and
   // a raw query here opened a real connection in a suite that mocks only the models —
   // which is both a broken test and the wrong shape for this file.
-  // THE TASK'S TYPE, as the fallback each take inherits. Read once: it is a
-  // property of the assignment, not of any one recording.
-  const { sequelize } = await import('../../config/database');
-  const [taskRows] = await sequelize.query(
-    `SELECT asg.template_slug
-       FROM presentation_attempts    a
-       JOIN presentation_assignments asg ON asg.id = a.assignment_id
-      WHERE a.id = :attemptId
-      LIMIT 1`,
-    { replacements: { attemptId } },
-  ) as [Array<{ template_slug: string | null }>, unknown];
-  const taskType = taskRows?.[0]?.template_slug || null;
-
   const { default: PresentationRecording } = await import('../../models/PresentationRecording');
   const rows = await PresentationRecording.findAll({
     where: { attempt_id: attemptId, ingest_status: 'ingested' },
@@ -296,7 +295,11 @@ export async function resolveSessionForAssignment(
   // Looked up only on the single-session read, which is the one the Practice panel
   // calls. The list and the create paths deliberately leave it empty rather than
   // issue a query per attempt for something those screens do not render.
-  const takes = await recordingsForAttempt(String(booked.id), { enrollmentId, projectId, storyId });
+  const takes = await recordingsForAttempt(
+    String(booked.id),
+    { enrollmentId, projectId, storyId },
+    (assignment as any)?.template_slug ?? null,
+  );
   return { ok: true, session: toSessionView(booked, booking, takes) };
 }
 

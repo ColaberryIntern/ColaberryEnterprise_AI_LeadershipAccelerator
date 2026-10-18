@@ -33,6 +33,8 @@ export interface PresentationRecordingAttributes {
   part_no?: number;
   parts_total?: number | null;
   recording_type?: string | null;
+  /** The learner's own classification; see takePresentationType.ts. */
+  presentation_type?: string | null;
   starts_at?: Date | null;
   ends_at?: Date | null;
   duration_seconds?: number | null;
@@ -57,6 +59,7 @@ class PresentationRecording
   declare part_no: number;
   declare parts_total: number | null;
   declare recording_type: string | null;
+  declare presentation_type: string | null;
   declare starts_at: Date | null;
   declare ends_at: Date | null;
   declare duration_seconds: number | null;
@@ -80,6 +83,7 @@ PresentationRecording.init(
     part_no: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 1 },
     parts_total: { type: DataTypes.INTEGER, allowNull: true },
     recording_type: { type: DataTypes.STRING(60), allowNull: true },
+    presentation_type: { type: DataTypes.STRING(40), allowNull: true },
     starts_at: { type: DataTypes.DATE, allowNull: true },
     ends_at: { type: DataTypes.DATE, allowNull: true },
     duration_seconds: { type: DataTypes.INTEGER, allowNull: true },
