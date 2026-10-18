@@ -395,6 +395,7 @@ export const PRESENTATION_STUDIO_STATEMENTS: string[] = [
   `CREATE TABLE IF NOT EXISTS presentation_showcases (
      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
      attempt_id UUID NOT NULL,
+     recording_id UUID,
      audience VARCHAR(30) NOT NULL DEFAULT 'private',
      draft_json JSONB NOT NULL DEFAULT '{}'::jsonb,
      content_hash VARCHAR(80),
@@ -429,11 +430,42 @@ export const PRESENTATION_STUDIO_STATEMENTS: string[] = [
   `ALTER TABLE presentation_showcases ADD COLUMN IF NOT EXISTS withdrawn_reason TEXT`,
   `ALTER TABLE presentation_showcases ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW()`,
   `ALTER TABLE presentation_showcases ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()`,
-  // One LIVE showcase per attempt — a publish retried after a timeout must not
+  // THE SHOWCASE IS KEYED ON THE RECORDING, NOT THE ATTEMPT.
+  //
+  // It was keyed on the attempt until 2026-10-18, and that made "share this take" a
+  // promise the data could not keep. An attempt is one booked room, and it collects
+  // takes for as long as the learner keeps using it — Ali's PREP-4 attempt holds
+  // three, recorded across five days. Attempt-level keying published all three
+  // together and took all three down together, so a per-take switch would have
+  // flipped two takes the learner never touched while appearing to flip one.
+  //
+  // A learner records several takes in order to choose ONE. The thing being shared
+  // is the take.
+  `ALTER TABLE presentation_showcases ADD COLUMN IF NOT EXISTS recording_id UUID`,
+  // Backfill before the new index exists, or legacy rows could collide under it.
+  // Idempotent: only rows that have no recording yet, and only live ones — a
+  // withdrawn showcase is history and does not need re-pointing. Picks the attempt's
+  // most recent ingested take, which is the one a learner sharing "the attempt"
+  // almost certainly meant.
+  `UPDATE presentation_showcases s
+      SET recording_id = (
+            SELECT r.id FROM presentation_recordings r
+             WHERE r.attempt_id = s.attempt_id AND r.ingest_status = 'ingested'
+             ORDER BY r.created_at DESC LIMIT 1)
+    WHERE s.recording_id IS NULL AND s.withdrawn_at IS NULL`,
+  // The attempt-level uniqueness has to GO, not merely be supplemented: while it
+  // exists, a learner cannot publish a second take from the same room, which is the
+  // ordinary case this change exists to support.
+  `DROP INDEX IF EXISTS presentation_showcases_one_live`,
+  // One LIVE showcase per RECORDING — a publish retried after a timeout must not
   // produce a second post. Partial on withdrawn_at so a withdrawn showcase can be
-  // legitimately replaced by a new one later.
-  `CREATE UNIQUE INDEX IF NOT EXISTS presentation_showcases_one_live
-     ON presentation_showcases (attempt_id) WHERE withdrawn_at IS NULL`,
+  // legitimately replaced by a new one later. NULL recording_id never collides in a
+  // Postgres unique index, so any legacy row the backfill could not resolve (an
+  // attempt with no ingested take) stays put rather than blocking the index.
+  `CREATE UNIQUE INDEX IF NOT EXISTS presentation_showcases_one_live_per_recording
+     ON presentation_showcases (recording_id) WHERE withdrawn_at IS NULL`,
+  `CREATE INDEX IF NOT EXISTS presentation_showcases_recording
+     ON presentation_showcases (recording_id)`,
   `CREATE INDEX IF NOT EXISTS presentation_showcases_audience
      ON presentation_showcases (audience) WHERE published_at IS NOT NULL AND withdrawn_at IS NULL`,
   // Plain lookup by attempt. The partial unique index above only covers rows that

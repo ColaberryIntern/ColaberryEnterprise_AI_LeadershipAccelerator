@@ -86,6 +86,20 @@ export interface PracticeTake {
   partNo: number;
   playbackUrl: string;
   shareState: TakeShareState;
+  /**
+   * The live showcase for this take, when there is one. The switch needs it to turn
+   * sharing back OFF, and carrying it here saves the page a second round trip just
+   * to learn the id of something it is already displaying.
+   */
+  showcaseId: string | null;
+  /**
+   * Distinct people who have watched, excluding the owner. Only meaningful once
+   * published — a private take has no audience by definition — so it is 0 until
+   * then rather than null, because a blank where a number belongs reads as a bug.
+   */
+  viewCount: number;
+  /** The sentence shown to the learner, composed server-side so it cannot drift. */
+  viewLabel: string;
 }
 
 export type SessionResult =
@@ -144,9 +158,10 @@ export async function recordingsForAttempt(
   });
   const { createRecordingTicket } = await import('./recordingTicket');
 
-  // WHERE DOES THIS ATTEMPT STAND? One question, asked once, so the panel never
-  // labels a take "private" while the cohort is watching it — nor leaves a learner
-  // who has asked to share wondering whether anything happened.
+  // WHERE DOES EACH TAKE STAND? Asked PER RECORDING, because that is what the
+  // learner shares. Keyed on the attempt until 2026-10-18, which meant publishing
+  // one take marked all of them published — a switch on take three would have
+  // flipped takes one and two while appearing to flip one.
   //
   // A LIVE showcase is one not taken back down: `withdrawn_at` matters as much as
   // `published_at`, because a withdrawn demo really is private again. Among live
@@ -156,14 +171,26 @@ export async function recordingsForAttempt(
   // `sequelize.query` and opened a real Postgres connection in suites that mock only
   // the models, taking 4 tests red with `SequelizeConnectionRefusedError`. The
   // warning was already written here and I added the raw query anyway.
+  //
+  // ONE QUERY FOR THE WHOLE ATTEMPT, not one per take: a rehearsal with six takes
+  // should not cost six round trips to render.
   const { default: PresentationShowcase } = await import('../../models/PresentationShowcase');
-  const live = await PresentationShowcase.findOne({
+  const live = await PresentationShowcase.findAll({
     where: { attempt_id: attemptId, withdrawn_at: null },
-    attributes: ['id', 'published_at'],
+    attributes: ['id', 'recording_id', 'published_at'],
   });
-  const shareState: TakeShareState = !live
-    ? 'private'
-    : (live.published_at ? 'published' : 'pending');
+  const stateByRecording = new Map<string, TakeShareState>();
+  const showcaseByRecording = new Map<string, string>();
+  for (const s of live || []) {
+    if (!s.recording_id) continue;
+    stateByRecording.set(String(s.recording_id), s.published_at ? 'published' : 'pending');
+    showcaseByRecording.set(String(s.recording_id), String(s.id));
+  }
+
+  // Counted once for every take here, rather than per take, for the same reason the
+  // showcase lookup is one query.
+  const { viewCounts, describeViews } = await import('./recordingViews');
+  const counts = await viewCounts((rows || []).map((r: any) => String(r.id)));
 
   return (rows || []).map((r: any) => {
     const id = String(r.id);
@@ -177,7 +204,11 @@ export async function recordingsForAttempt(
       id,
       partNo: Number(r.part_no) || 1,
       playbackUrl: base ? `${base}?t=${encodeURIComponent(ticket)}` : '',
-      shareState,
+      // Absent from the map means no live showcase names this take: private.
+      shareState: stateByRecording.get(id) ?? 'private',
+      showcaseId: showcaseByRecording.get(id) ?? null,
+      viewCount: counts[id] ?? 0,
+      viewLabel: describeViews(counts[id] ?? 0),
     };
   });
 }

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import GetReadyPanel from './GetReadyPanel';
-import ShareTakeControl from './ShareTakeControl';
+import VisibilitySwitch from './VisibilitySwitch';
 import {
   fetchPracticeSession,
   startPractice,
@@ -169,23 +169,6 @@ function BookedSlot(
               would be the most misleading thing on the page — not a stale label but
               an active assurance of privacy that no longer holds. The flag comes from
               the server, where the showcase actually lives. */}
-          {take.shareState === 'published' && (
-            <p className="ps-privacy" data-testid="ps-practice-published" style={{ margin: '0 0 6px', fontWeight: 600 }}>
-              <span aria-hidden="true">🌐 </span>Published — your cohort can watch this. Take it down in Present.
-            </p>
-          )}
-          {take.shareState === 'pending' && (
-            // The state a boolean could not express. Having asked, a learner must
-            // not think it is already public — nor that nothing happened.
-            <p className="ps-privacy" data-testid="ps-practice-awaiting-approval" style={{ margin: '0 0 6px', fontWeight: 600 }}>
-              <span aria-hidden="true">⏳ </span>Waiting for staff approval — still private until someone says yes.
-            </p>
-          )}
-          {take.shareState !== 'published' && take.shareState !== 'pending' && (
-            <p className="ps-privacy" data-testid="ps-practice-private" style={{ margin: '0 0 6px', fontWeight: 600 }}>
-              <span aria-hidden="true">🔒 </span>Private — only you can see this
-            </p>
-          )}
           {all.length > 1 && (
             <p className="ps-note ps-note--soft" style={{ margin: '0 0 6px' }}>
               Take {i + 1} of {all.length}
@@ -202,17 +185,20 @@ function BookedSlot(
             <a href={take.playbackUrl}>Download this take</a>
           </video>
 
-          {/* Offered only on a take that is still private. A second request on an
-              attempt already asked about is idempotent server-side, but showing the
-              button would invite a learner to think the first one had not worked. */}
-          {take.shareState !== 'published' && take.shareState !== 'pending' && (
-            <ShareTakeControl
-              projectId={projectId}
-              storyId={storyId}
-              attemptId={session.attemptId}
-              onRequested={onRefresh}
-            />
-          )}
+          {/* WHO CAN SEE THIS TAKE, on the take, as one control rather than a label
+              here and a take-down on another tab. The switch is keyed per RECORDING,
+              which is only honest because the showcase is too — keyed on the attempt,
+              flipping one take would have flipped every take from the same room. */}
+          <VisibilitySwitch
+            projectId={projectId}
+            storyId={storyId}
+            attemptId={session.attemptId}
+            recordingId={take.id}
+            showcaseId={take.showcaseId ?? null}
+            shareState={take.shareState ?? 'private'}
+            viewLabel={take.viewLabel ?? 'No views yet'}
+            onChanged={onRefresh}
+          />
         </div>
       ))}
     </div>

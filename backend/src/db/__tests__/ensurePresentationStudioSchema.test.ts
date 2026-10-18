@@ -160,12 +160,47 @@ describe('ensurePresentationStudioSchema — statement contract', () => {
     expect(stmt).toMatch(/presentation_recordings \(occurrence_uuid, provider_file_id\)/i);
   });
 
-  it('at most one live showcase per attempt, and one final take per assignment', () => {
+  it('at most one live showcase per RECORDING, and one final take per assignment', () => {
     const issued = PRESENTATION_STUDIO_STATEMENTS.map(flat);
-    const showcase = issued.find((s) => s.includes('presentation_showcases_one_live'));
-    expect(showcase).toMatch(/WHERE withdrawn_at IS NULL/i);
+
+    // Keyed on the recording since 2026-10-18. An attempt is one booked room and
+    // collects takes for days; attempt-level uniqueness meant publishing one take
+    // published every take from that room, and a per-take switch over it would have
+    // flipped takes the learner never touched.
+    const live = issued.find((s) => s.includes('CREATE UNIQUE INDEX')
+      && s.includes('presentation_showcases_one_live_per_recording'));
+    expect(live).toBeDefined();
+    expect(live).toMatch(/\(recording_id\)/i);
+    expect(live).toMatch(/WHERE withdrawn_at IS NULL/i);
+
+    // The attempt-level index must be GONE, not merely superseded: while it exists a
+    // learner cannot publish a second take from the same room, which is the ordinary
+    // case the change exists to support.
+    expect(issued.some((s) => s.includes('DROP INDEX IF EXISTS presentation_showcases_one_live'))).toBe(true);
+    // And no surviving CREATE still keys live uniqueness on the attempt.
+    const attemptKeyed = issued.filter((s) => s.includes('CREATE UNIQUE INDEX')
+      && s.includes('presentation_showcases')
+      && /\(attempt_id\)/i.test(s));
+    expect(attemptKeyed).toEqual([]);
+
     const finalTake = issued.find((s) => s.includes('presentation_attempts_one_final_take'));
     expect(finalTake).toMatch(/WHERE is_final_take/i);
+  });
+
+  it('backfills recording_id BEFORE creating the index that depends on it', () => {
+    // Order is load-bearing. Creating the unique index first is fine (NULLs never
+    // collide), but the backfill has to run before anything reads recording_id as
+    // authoritative, and it must be idempotent so a restart does not re-point a row
+    // the learner has since changed.
+    const issued = PRESENTATION_STUDIO_STATEMENTS.map(flat);
+    const backfill = issued.findIndex((s) => s.includes('UPDATE presentation_showcases')
+      && s.includes('SET recording_id'));
+    const index = issued.findIndex((s) => s.includes('presentation_showcases_one_live_per_recording'));
+    expect(backfill).toBeGreaterThan(-1);
+    expect(index).toBeGreaterThan(backfill);
+    // Only rows with no take and still live: a withdrawn showcase is history.
+    expect(issued[backfill]).toMatch(/recording_id IS NULL/i);
+    expect(issued[backfill]).toMatch(/withdrawn_at IS NULL/i);
   });
 
   it('write-facing flags default to the closed state', () => {
