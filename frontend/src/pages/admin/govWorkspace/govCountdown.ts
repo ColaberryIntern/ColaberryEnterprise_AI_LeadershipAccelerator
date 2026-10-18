@@ -160,3 +160,53 @@ export function deriveMvpSchedule(input: { now: Date; deadline: Date | null; mvp
     : `MVP will not be demo-ready in time: it needs ${mvpBuildDays} working days and only fits if ready by ${dayKey(latest)}`;
   return { shipBy: dayKey(ship), mvpDemoReadyBy: dayKey(earliest), latestMvpReadyBy: dayKey(latest), daysBeforeDue, feasible, mvpBuildDays, headline };
 }
+
+function parseDayKey(k: string): Date { return utcDay(Number(k.slice(0, 4)), Number(k.slice(5, 7)) - 1, Number(k.slice(8, 10))); }
+
+export interface PreSubmissionBar { key: string; label: string; leftPct: number; widthPct: number; tone: 'critical' | 'buffer' | 'overflow'; }
+export interface PreSubmissionMarker { key: string; label: string; date: string; leftPct: number; tone: 'now' | 'constraint' | 'ship' | 'deadline'; }
+export interface PreSubmissionGantt {
+  feasible: boolean | null;
+  headline: string;
+  bars: PreSubmissionBar[];
+  markers: PreSubmissionMarker[];
+  schedule: MvpSchedule;
+}
+
+/**
+ * Lay the pre-submission back-plan out on a FIXED now->deadline axis (the deadline is the anchor, so it is always the
+ * right edge). Two bars: the MVP build (now -> demo-ready; its tone is `overflow`/red when it crosses the latest-safe
+ * date) and the draft/ship buffer (latest-safe -> ship-by). Four markers: today, the latest the MVP can be ready,
+ * ship-by, and the deadline. PURE + total: a missing input, or a non-positive now->deadline span, yields empty
+ * bars/markers while preserving the schedule headline (the banner still renders the reason). leftPct/widthPct are
+ * percentages (one decimal) so a plain positioned div renders each bar, matching the post-award Gantt convention.
+ */
+export function derivePreSubmissionGantt(input: { now: Date; deadline: Date | null; mvpStoryCount: number | null }): PreSubmissionGantt {
+  const schedule = deriveMvpSchedule(input);
+  const empty: PreSubmissionGantt = { feasible: schedule.feasible, headline: schedule.headline, bars: [], markers: [], schedule };
+  if (input.deadline == null || input.mvpStoryCount === null || schedule.mvpDemoReadyBy == null || schedule.latestMvpReadyBy == null || schedule.shipBy == null) {
+    return empty;
+  }
+  const now = startOfUtcDay(input.now);
+  const deadline = startOfUtcDay(input.deadline);
+  const span = deadline.getTime() - now.getTime();
+  if (span <= 0) return empty;
+  const pct = (d: Date): number => Math.max(0, Math.min(100, Math.round(((d.getTime() - now.getTime()) / span) * 1000) / 10));
+
+  const demoReady = parseDayKey(schedule.mvpDemoReadyBy);
+  const latest = parseDayKey(schedule.latestMvpReadyBy);
+  const ship = parseDayKey(schedule.shipBy);
+  const latestPct = pct(latest);
+
+  const bars: PreSubmissionBar[] = [
+    { key: 'build', label: `Build MVP (${schedule.mvpBuildDays ?? 0} working days)`, leftPct: 0, widthPct: Math.max(1, pct(demoReady)), tone: schedule.feasible ? 'critical' : 'overflow' },
+    { key: 'buffer', label: `Draft & ship (${PROPOSAL_BUFFER_WORKING_DAYS} working days)`, leftPct: latestPct, widthPct: Math.max(1, pct(ship) - latestPct), tone: 'buffer' },
+  ];
+  const markers: PreSubmissionMarker[] = [
+    { key: 'now', label: 'Today', date: dayKey(now), leftPct: 0, tone: 'now' },
+    { key: 'latest', label: 'MVP ready by', date: schedule.latestMvpReadyBy, leftPct: latestPct, tone: 'constraint' },
+    { key: 'ship', label: 'Ship by', date: schedule.shipBy, leftPct: pct(ship), tone: 'ship' },
+    { key: 'deadline', label: 'Deadline', date: dayKey(deadline), leftPct: 100, tone: 'deadline' },
+  ];
+  return { feasible: schedule.feasible, headline: schedule.headline, bars, markers, schedule };
+}
