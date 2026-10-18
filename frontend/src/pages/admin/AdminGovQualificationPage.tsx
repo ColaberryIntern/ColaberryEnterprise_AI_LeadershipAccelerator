@@ -20,6 +20,7 @@ import { parseDeadline, countdownTo, deadlineTone, formatCountdown } from './gov
 import { deriveNextStep } from './govNextStep';
 import { BidDecisionDashboard } from './govWorkspace/BidDecisionDashboard';
 import { ProposalSummaryPanel } from './govWorkspace/ProposalSummaryPanel';
+import { ClarificationDraftPanel } from './govWorkspace/ClarificationDraftPanel';
 import { BuildSpecPanel } from './govWorkspace/BuildSpecPanel';
 import { GovBuildPlanAIPanel } from './govWorkspace/GovBuildPlanAIPanel';
 import { GovMaterializePanel } from './govWorkspace/GovMaterializePanel';
@@ -1555,6 +1556,18 @@ export default function AdminGovQualificationPage(): React.ReactElement {
               canWrite={!!record}
               onSaved={() => { void load(); }}
             />
+          )}
+
+          {(ws.source || isDecoupled) && (
+            <SectionCard title="Ask the buyer: clarification questions (AI)" icon="questionnaire-line" collapsible defaultOpen={false}
+              subtitle="Advisory: finds the vague requirements (a line like 'connect to their system' with no system named) and drafts a sharp question for each, plus a ready-to-send email. Grounded only in the established requirements; this app sends nothing and changes no gate.">
+              <ClarificationDraftPanel
+                canonical={canonical}
+                requirements={(established ?? []).map((r) => ({ id: r.id, text: r.text }))}
+                title={oppDetail?.opportunity?.title ?? ws.provenance?.title ?? null}
+                buyer={ws.source?.publisher?.leadBuyer?.name ?? oppDetail?.opportunity?.agency ?? null}
+              />
+            </SectionCard>
           )}
 
           {stepModel && (

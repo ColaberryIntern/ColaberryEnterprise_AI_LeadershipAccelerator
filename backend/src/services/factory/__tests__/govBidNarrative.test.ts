@@ -1,4 +1,4 @@
-import { generateRiskNarrative, generateProposalSummary, __clearGovNarrativeCache, type RiskNarrativeFacts } from '../govBidNarrative';
+import { generateRiskNarrative, generateProposalSummary, generateClarificationQuestions, sanitizeClarifications, buildClarificationEmail, __clearGovNarrativeCache, type RiskNarrativeFacts } from '../govBidNarrative';
 
 jest.mock('../../openaiInstrumented', () => ({ getInstrumentedOpenAI: jest.fn() }));
 import { getInstrumentedOpenAI } from '../../openaiInstrumented';
@@ -70,5 +70,51 @@ describe('govBidNarrative (advisory AI, downstream of the deterministic engine)'
     expect(call.response_format).toEqual({ type: 'json_object' });
     expect(call.messages[0].content).toMatch(/ONLY from the requirement/i);
     expect(call.messages[1].content).toContain('Provide an AI IVR solution');
+  });
+
+  it('clarifications: errors (no throw) with no requirements, and never calls the model', async () => {
+    const r = await generateClarificationQuestions({ requirements: [] });
+    expect(r.error).toBeTruthy();
+    expect(r.questions).toEqual([]);
+    expect(getInstrumentedOpenAI).not.toHaveBeenCalled();
+  });
+
+  it('clarifications: keeps questions on real requirements, DROPS one that cites an invented id, and builds the email from survivors', async () => {
+    const client = mockClient(JSON.stringify({ questions: [
+      { requirementId: 'R1', ambiguity: 'no system named', question: 'Which system must the solution integrate with?' },
+      { requirementId: 'R9', ambiguity: 'fabricated', question: 'What is the budget for the invented line item?' }, // R9 is not provided -> must be dropped
+    ] }));
+    (getInstrumentedOpenAI as jest.Mock).mockReturnValue(client);
+    const r = await generateClarificationQuestions({ requirements: [{ id: 'R1', text: 'The solution must connect to their system' }], title: 'DOT portal', buyer: 'TxDOT' });
+    expect(r.questions).toHaveLength(1);
+    expect(r.questions[0].requirementId).toBe('R1');
+    expect(r.email).toContain('(R1)');
+    expect(r.email).not.toContain('R9');          // the invented-requirement question never reaches the email
+    expect(r.email).not.toMatch(/[—–]/);          // no em-dashes in a draft a human may send
+    const call = client.chat.completions.create.mock.calls[0][0];
+    expect(call.response_format).toEqual({ type: 'json_object' });
+    expect(call.messages[0].content).toMatch(/NEVER invent/i);
+  });
+
+  it('sanitizeClarifications (PURE rail): drops unknown ids and question-less entries, caps at 20, total on garbage', () => {
+    const valid = new Set(['R1', 'R2']);
+    const kept = sanitizeClarifications({ questions: [
+      { requirementId: 'R1', question: 'ok?' },
+      { requirementId: 'R2', question: '' },           // no question -> dropped
+      { requirementId: 'NOPE', question: 'invented?' },  // unknown id -> dropped
+    ] }, valid);
+    expect(kept.map((q) => q.requirementId)).toEqual(['R1']);
+    const many = sanitizeClarifications({ questions: Array.from({ length: 30 }, () => ({ requirementId: 'R1', question: 'q?' })) }, valid);
+    expect(many.length).toBe(20);                      // capped
+    expect(sanitizeClarifications(undefined, valid)).toEqual([]);
+    expect(sanitizeClarifications({ questions: 'nope' }, valid)).toEqual([]);
+  });
+
+  it('buildClarificationEmail (PURE): empty on no questions; numbered, cited, em-dash-free otherwise', () => {
+    expect(buildClarificationEmail([], 'X', 'Y')).toBe('');
+    const email = buildClarificationEmail([{ requirementId: 'R1', ambiguity: 'a', question: 'Which platform?' }], 'DOT portal', 'TxDOT');
+    expect(email).toContain('1. (R1) Which platform?');
+    expect(email).toContain('TxDOT');
+    expect(email).not.toMatch(/[—–]/);
   });
 });

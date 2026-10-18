@@ -810,6 +810,20 @@ export async function getGovProposalSummary(
   return data;
 }
 
+export interface GovClarificationQuestion { requirementId: string; ambiguity: string; question: string; }
+export interface GovClarificationDraft { questions: GovClarificationQuestion[]; email: string; generatedAt: string; cached: boolean; }
+/**
+ * "Ask the buyer": advisory clarification questions for the ambiguous requirements, each citing a REAL requirement,
+ * plus a ready-to-send email assembled from them. Grounded only in the established requirements; changes no gate.
+ */
+export async function getGovClarificationQuestions(
+  canonicalOpportunityId: string,
+  body: { requirements: { id: string; text: string }[]; title?: string | null; buyer?: string | null },
+): Promise<GovClarificationDraft> {
+  const { data } = await api.post(qUrl(canonicalOpportunityId, '/clarification-questions'), body);
+  return data;
+}
+
 /** AI build spec + advisory buyer-system research (post-approval Build step). Advisory only — gates nothing;
  *  `research` is LLM-knowledge-based and labelled "likely / verify" (the backend has no live web search). */
 export interface GovBuildSpec { spec: string; research: string; generatedAt: string; cached: boolean; }
