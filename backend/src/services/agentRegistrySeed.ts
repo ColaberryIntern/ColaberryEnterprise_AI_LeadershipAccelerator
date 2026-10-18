@@ -9,6 +9,7 @@ import { repointCurriculumLegacyBehaviors } from './curriculum/repointLegacyBeha
 import { recordPersonaVersionChangeIfNeeded } from './agentPersonaVersionHistoryService';
 import { classifyNewAgentAutonomyLevel, maybeReclassifyAutonomyLevel } from './agentAutonomyReclassificationService';
 import { GROWTH_JOURNEY_AGENT_ENTRIES } from './agentRegistry/growthJourneyAgents';
+import { DOMAIN_AGENT_ENTRIES } from './agentRegistry/domainAgents';
 
 import type { AgentSeedEntry } from './agentRegistry/agentSeedTypes';
 import {
@@ -2822,6 +2823,10 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     ],
   },
   ...GROWTH_JOURNEY_AGENT_ENTRIES,
+  // AF3.1 Release Zero: ten domain employees, one per provisioned Agent Factory domain.
+  // Every one ships `enabled: false` with no tools, so autonomy auto-classifies to
+  // `observe`. Grouped in their own module for the same reason growth journey is.
+  ...DOMAIN_AGENT_ENTRIES,
   {
     agent_name: 'GrowthJourneyHandoffs',
     agent_type: 'ticket_creator_identity',

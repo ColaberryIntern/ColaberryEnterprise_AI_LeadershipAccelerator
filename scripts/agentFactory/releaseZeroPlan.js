@@ -87,7 +87,11 @@ function deriveDomainAgent(domainKey, opts = {}) {
   const registryEntry = {
     agent_name: agentName,
     display_name: config.displayName,
-    agent_type: 'ai_staff_mentor',
+    // `ai_employee`, NOT `ai_staff_mentor`. The AiAgentType union reserves the latter for
+    // Reese's "student DM, ProofDesk-linked" meaning, and added `ai_employee` as "a generic
+    // type ... so future employees (#2-#10) reuse this same literal". Dara is #1; these are
+    // the rest. Labelling them ai_staff_mentor would claim a student-DM surface none has.
+    agent_type: 'ai_employee',
     category: profile.category,
     description: profile.intent,
     domain_key: domainKey,
