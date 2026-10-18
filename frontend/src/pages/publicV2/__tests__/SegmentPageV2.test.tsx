@@ -27,6 +27,14 @@ import { trackEvent } from '../../../utils/tracker';
 
 jest.mock('../../../utils/tracker', () => ({ trackEvent: jest.fn(), initTracker: jest.fn() }));
 
+/*
+ * Clicking the CTA is a <Link>, so React Router navigates and sets state. Without this flag
+ * React logs an "update not wrapped in act" warning even though the dispatch IS wrapped,
+ * because the router's update lands after it. The suite stays green either way; the point
+ * is not to leave warnings in a 5,683-test run. Same line as the other interaction suites.
+ */
+(globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
 const APP = fs.readFileSync(path.join(__dirname, '..', '..', '..', 'App.tsx'), 'utf8');
 
 const html = (slug: string): string => renderToStaticMarkup(
