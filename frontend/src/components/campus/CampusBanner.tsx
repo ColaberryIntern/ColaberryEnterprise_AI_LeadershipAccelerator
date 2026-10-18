@@ -4,7 +4,6 @@ import CampusWorldMap from './CampusWorldMap';
 import WhereTo from './WhereTo';
 import { useCampus } from './CampusContext';
 import { useCampusView } from './useCampusView';
-import { buildingAccess } from './campusAccess';
 import { trailFor } from './campusTrail';
 import { shouldStepOutside } from './campusEsc';
 import type { BuildingId } from './campusMap';
@@ -23,7 +22,7 @@ import './campusBanner.css';
  */
 export default function CampusBanner(): React.ReactElement {
   const { settings, presence, presenceError, layer, openMap, stepOutside } = useCampus();
-  const { audience, hasFullAccess, buildings } = useCampusView();
+  const { buildings, accessOf, isExplorer } = useCampusView();
   const { pathname } = useLocation();
   const crumbs = trailFor(pathname, buildings, settings.workplaceNames);
   const here = (crumbs[1]?.buildingId ?? null) as BuildingId | null;
@@ -41,7 +40,7 @@ export default function CampusBanner(): React.ReactElement {
     <div className="cm-banner" data-testid="cm-banner">
       <button type="button" className="cm-banner-mini" onClick={() => openMap(here ?? undefined)} aria-label="Open the campus map">
         <span aria-hidden="true" className="cm-banner-mini-map">
-          <CampusWorldMap buildings={buildings} accessOf={(b) => buildingAccess(b, audience, hasFullAccess)} workplaceNames={settings.workplaceNames}
+          <CampusWorldMap buildings={buildings} accessOf={accessOf} workplaceNames={settings.workplaceNames}
             reduceMotion compact onArrive={() => undefined} counts={counts} />
         </span>
       </button>
@@ -60,6 +59,10 @@ export default function CampusBanner(): React.ReactElement {
         </ol>
       </nav>
       <WhereTo />
+      {/* C6: Explorers get a direct way to their path to enrolling (it lives in the Main Gate card). */}
+      {/* Only where the path exists: an Explorer whose campus has the Main Gate (an org manager on an Explorer account gets the
+          Partner Office campus, which has no gate and so no path). */}
+      {isExplorer && buildings.some((b) => b.id === 'gate') && <button type="button" className="cm-link" data-testid="cm-your-path" onClick={() => openMap('gate')}>Your path</button>}
       <button type="button" className="cm-btn is-secondary cm-step-out" onClick={() => stepOutside(here)} data-testid="cm-step-out">
         Step outside
       </button>

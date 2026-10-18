@@ -1,20 +1,35 @@
 import { GATED_FEATURES } from '../paywall/gatedFeatures';
-import type { CampusAudience, CampusBuilding, ExplorerAccess } from './campusMap';
+import type { CampusBuilding, ExplorerAccess } from './campusMap';
 
 /**
- * What a learner can do in a building (Campus C2).
+ * What a learner can do in a building (Campus C2; rewritten in C6 to invent no rule).
  *
- * No new rule: an Explorer without a paid seat gets the catalog's explorer access
- * (open / preview / demo / locked), which mirrors PageGate and the classic nav's lock
- * badge; everyone else, and any learner with full access, finds every building open.
- * `hasFullAccess` comes from useEntitlement, the same signal PageGate reads.
+ * The state is what the building's page itself does for this viewer, from the SAME signals the page reads:
+ *  - locked  : the route is wrapped in PageGate and PageGate would show its paywall. Same condition as
+ *              components/paywall/PageGate.tsx (`if (isStaff || hasFullAccess) return children`), with PageGate's own
+ *              isStaff (useEntitlement), never the campus's wider definition of staff.
+ *  - demo    : the page runs a demo for Explorers (Projects reads useIsExplorer), and the viewer is an Explorer.
+ *  - preview : the page shows Explorers a preview (the Classroom feed is week 0 only), and the viewer is an Explorer.
+ *  - open    : anything else.
+ * isExplorer is the portal's is_explorer (useIsExplorer), not the campus audience: an org manager on an Explorer account
+ * sees Project Studio in demo mode because Projects really runs in demo mode for them.
  */
-export function buildingAccess(b: Pick<CampusBuilding, 'explorer'>, audience: CampusAudience, hasFullAccess: boolean): ExplorerAccess {
-  if (audience !== 'explorer' || hasFullAccess) return 'open';
-  return b.explorer;
+export interface AccessSignals {
+  /** PageGate's staff signal: useEntitlement().isStaff. */
+  isStaff: boolean;
+  /** useEntitlement().hasFullAccess (true for everyone while the page gate is off). */
+  hasFullAccess: boolean;
+  /** The portal's is_explorer (useIsExplorer). */
+  isExplorer: boolean;
 }
 
-/** The enroll call to action for a gated building, reused from the paywall copy. */
+export function buildingState(b: Pick<CampusBuilding, 'explorer' | 'gate'>, s: AccessSignals): ExplorerAccess {
+  if (b.gate && !(s.isStaff || s.hasFullAccess)) return 'locked';
+  if (s.isExplorer && (b.explorer === 'demo' || b.explorer === 'preview')) return b.explorer;
+  return 'open';
+}
+
+/** The enroll call to action for a building, reused from the paywall copy (its own gate's copy when it has one). */
 export function enrollCta(b: Pick<CampusBuilding, 'gate'>): { label: string; to: string } {
   const copy = GATED_FEATURES[b.gate ?? 'classroom'];
   return { label: copy.ctaLabel, to: copy.ctaTo };

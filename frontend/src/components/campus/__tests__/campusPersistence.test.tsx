@@ -21,7 +21,7 @@ jest.mock('../campusApi', () => ({
 jest.mock('../../../contexts/MentorContext', () => ({ MentorContextProvider: ({ children }: { children: React.ReactNode }) => <>{children}</> }));
 jest.mock('../useCampusView', () => {
   const actual = jest.requireActual('../useCampusView');
-  return { ...actual, useCampusView: () => ({ audience: 'member', hasFullAccess: true, buildings: actual.campusBuildingsFor('member') }) };
+  return { ...actual, useCampusView: () => actual.campusViewFor('member', { isStaff: false, hasFullAccess: true, isExplorer: false }) };
 });
 
 // eslint-disable-next-line import/first

@@ -2,12 +2,16 @@
  * C5 staff desks: who sees which desk, decided from the SAME sources as the frontend's audience, and the on-duty rule.
  */
 const mockEntitlement = { isStaff: false, explorer: false };
+const mockEnv = { enableChat: false };
+jest.mock('../../../config/env', () => ({ env: mockEnv }));
 let mockManager = false;
 jest.mock('../../access/contentEntitlement', () => ({
   resolveContentPageAccess: jest.fn(async () => ({ isStaff: mockEntitlement.isStaff, hasFullAccess: true })),
   isFreePreviewTier: jest.fn(async () => mockEntitlement.explorer),
 }));
 jest.mock('../../portalSettingsService', () => ({ isOrgManager: jest.fn(async () => mockManager) }));
+let mockMgmt: boolean | 'throw' = false;
+jest.mock('../../access/mgmtBridgeService', () => ({ getMgmtStatus: jest.fn(async () => { if (mockMgmt === 'throw') throw new TypeError('db down'); return { is_mgmt: mockMgmt, role: mockMgmt ? 'ops' : null, label: null }; }) }));
 jest.mock('../../reese/reeseIdentitySeed', () => ({ isReeseEnabled: jest.fn(), getReeseEnrollmentId: jest.fn() }));
 jest.mock('../../curriculum/daraIdentitySeed', () => ({ isDaraEnabled: jest.fn(), getDaraEnrollmentId: jest.fn() }));
 // The thing NOT to use: a broader staff test (staff role OR mgmt_role). Mocked to say "yes" so a regression to it shows.
@@ -19,8 +23,8 @@ import { isReeseEnabled, getReeseEnrollmentId } from '../../reese/reeseIdentityS
 import { isDaraEnabled, getDaraEnrollmentId } from '../../curriculum/daraIdentitySeed';
 import { getStaffDesks, campusAudienceFor, mayaVisibleTo } from '../campusStaffDesks';
 
-const set = (o: { staff?: boolean; manager?: boolean; explorer?: boolean }) => {
-  mockEntitlement.isStaff = !!o.staff; mockEntitlement.explorer = !!o.explorer; mockManager = !!o.manager;
+const set = (o: { staff?: boolean; manager?: boolean; explorer?: boolean; mgmt?: boolean | 'throw' }) => {
+  mockEntitlement.isStaff = !!o.staff; mockEntitlement.explorer = !!o.explorer; mockManager = !!o.manager; mockMgmt = o.mgmt ?? false;
 };
 const ids = async () => (await getStaffDesks('enr-1')).desks.map((d) => d.id);
 
@@ -47,6 +51,26 @@ describe('audience: the frontend\'s sources, the frontend\'s precedence', () => 
     await expect(campusAudienceFor('enr-1')).resolves.toBe(want);
   });
 
+  it('C6: a Management Portal user (staff role + mgmt_role) is staff even while the page gate says nobody is staff', async () => {
+    set({ mgmt: true });
+    await expect(campusAudienceFor('enr-1')).resolves.toBe('staff');
+    set({ mgmt: true, manager: true, explorer: true });
+    await expect(campusAudienceFor('enr-1')).resolves.toBe('staff');
+  });
+
+  it('C6: a failed management-status read is not staff (fail closed) and is logged', async () => {
+    set({ mgmt: 'throw', manager: true });
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+    await expect(campusAudienceFor('enr-1')).resolves.toBe('business');
+    expect(JSON.parse(String(warn.mock.calls[0][0]))).toMatchObject({ event: 'campus_mgmt_status_failed', error_class: 'TypeError' });
+    warn.mockRestore();
+  });
+
+  it('C6: pins the frontend staff signal (page staff OR management), so both sides use the same pair', () => {
+    const src = fs.readFileSync(path.join(__dirname, '..', '..', '..', '..', '..', 'frontend', 'src', 'components', 'campus', 'useCampusAudience.ts'), 'utf8');
+    expect(src).toContain('const isStaff = pageStaff || isMgmt;');
+  });
+
   it('pins the frontend precedence line, so a change on either side fails here', () => {
     const src = fs.readFileSync(path.join(__dirname, '..', '..', '..', '..', '..', 'frontend', 'src', 'components', 'campus', 'campusAudience.ts'), 'utf8');
     expect(src).toContain("s.isStaff ? 'staff' : s.isOrgManager ? 'business' : s.isExplorer ? 'explorer' : 'member'");
@@ -69,10 +93,17 @@ describe('Maya: staff and Explorers only', () => {
     expect(['staff', 'business', 'explorer', 'member'].filter((a) => mayaVisibleTo(a as never))).toEqual(['staff', 'explorer']);
   });
 
-  it('her desk is listed as not yet open (C6), with no prompts and no enrollment', async () => {
-    set({ explorer: true });
+  it('C6: with the site chat OFF her desk is not open (opens soon), with no prompts and no enrollment', async () => {
+    set({ explorer: true }); mockEnv.enableChat = false;
     const maya = (await getStaffDesks('enr-1')).desks.find((d) => d.id === 'maya')!;
-    expect(maya).toMatchObject({ building: 'gate', title: 'Welcome desk', ai: true, on_duty: false, opens: 'C6', enrollment_id: null, prompts: [] });
+    expect(maya).toMatchObject({ building: 'gate', title: 'Welcome desk', ai: true, on_duty: false, opens: 'site_chat_off', enrollment_id: null, prompts: [] });
+  });
+
+  it('C6: with the site chat ON (ENABLE_CHAT) she is on duty, still with no enrollment (she is the website chat, not a DM agent)', async () => {
+    set({ explorer: true }); mockEnv.enableChat = true;
+    const maya = (await getStaffDesks('enr-1')).desks.find((d) => d.id === 'maya')!;
+    expect(maya).toMatchObject({ on_duty: true, opens: null, enrollment_id: null, prompts: [] });
+    mockEnv.enableChat = false;
   });
 });
 

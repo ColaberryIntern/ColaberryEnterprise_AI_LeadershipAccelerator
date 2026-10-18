@@ -4,10 +4,11 @@ import CampusWorld from './CampusWorld';
 import CampusDoorTransition from './CampusDoorTransition';
 import CampusDmToast from './CampusDmToast';
 import './campusPeople.css';
+import './campusAudiences.css';
 import './campus.css';
 import { useCampus } from './CampusContext';
 import { useCampusView } from './useCampusView';
-import { buildingAccess, accessLabel } from './campusAccess';
+import { accessLabel } from './campusAccess';
 import { buildingName } from './campusMap';
 
 /**
@@ -29,7 +30,7 @@ function useReturnFocus(open: boolean): void {
 export function CampusMapOverlay(): React.ReactElement | null {
   const { layer, mapFocus, settings, closeLayer, openList, presence, presenceError, enterThroughDoor,
     staffDesks, personCard, openPersonCard, closePersonCard } = useCampus();
-  const { audience, hasFullAccess, buildings } = useCampusView();
+  const { audience, hasFullAccess, buildings, accessOf, isExplorer } = useCampusView();
   const open = layer === 'map';
   const dialog = useRef<HTMLDivElement | null>(null);
   useReturnFocus(open);
@@ -45,7 +46,7 @@ export function CampusMapOverlay(): React.ReactElement | null {
         <button type="button" className="cm-link" onClick={openList}>List view</button>
         <button type="button" className="cm-btn is-secondary" onClick={closeLayer} aria-label="Close campus map">Close</button>
       </div>
-      <CampusWorld buildings={buildings} audience={audience} hasFullAccess={hasFullAccess} workplaceNames={settings.workplaceNames}
+      <CampusWorld buildings={buildings} audience={audience} hasFullAccess={hasFullAccess} accessOf={accessOf} isExplorer={isExplorer} workplaceNames={settings.workplaceNames}
         reduceMotion={settings.reduceMotion} initialTarget={mapFocus} onExit={closeLayer} onNavigate={closeLayer}
         presence={presence} presenceError={presenceError}
         staffDesks={staffDesks} personCard={personCard} onOpenPerson={openPersonCard} onClosePerson={closePersonCard}
@@ -56,7 +57,7 @@ export function CampusMapOverlay(): React.ReactElement | null {
 
 export function CampusListView(): React.ReactElement | null {
   const { layer, settings, closeLayer } = useCampus();
-  const { audience, hasFullAccess, buildings } = useCampusView();
+  const { buildings, accessOf } = useCampusView();
   const [q, setQ] = useState('');
   const open = layer === 'list';
   const input = useRef<HTMLInputElement | null>(null);
@@ -79,7 +80,7 @@ export function CampusListView(): React.ReactElement | null {
       </div>
       <div className="cm-list-body">
         {shown.map(({ b, name, rooms }) => {
-          const chip = accessLabel(buildingAccess(b, audience, hasFullAccess));
+          const chip = accessLabel(accessOf(b));
           return (
             <section key={b.id} className="cm-list-bld" data-building={b.id}>
               <h3>{name}{chip && <small className="cm-nav-chip">{chip}</small>}</h3>

@@ -19,7 +19,7 @@ const under = (path: string, prefix: string) => path === prefix || path.startsWi
 export function trailFor(pathname: string, buildings: CampusBuilding[], workplaceNames: boolean): Crumb[] {
   const campus: Crumb = { label: 'Campus' };
   for (const b of buildings) {
-    const room = b.rooms.find((r) => !r.planned && r.route === pathname);
+    const room = b.rooms.find((r) => !r.planned && !r.admin && r.route === pathname);
     if (room) return [campus, { label: buildingName(b, workplaceNames), buildingId: b.id }, { label: room.label, route: room.route }];
   }
   let best: CampusBuilding | null = null;

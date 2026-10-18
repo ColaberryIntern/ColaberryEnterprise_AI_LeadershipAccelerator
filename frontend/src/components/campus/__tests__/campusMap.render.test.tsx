@@ -59,11 +59,19 @@ describe('campus map and building card', () => {
     expect(bld('testing').getAttribute('aria-label')).toBe('Cert Prep Center, Members only');
   });
 
-  it('a member sees no access notice anywhere', async () => {
-    await mount({ audience: 'member' });
+  // C6: the state is what the page does. A member with full access is never paywalled; one WITHOUT full access is shown the
+  // lock PageGate would show them at a paywalled page (C2 assumed members were never blocked, which PageGate does not).
+  it('a member with full access sees no access notice anywhere', async () => {
+    await mount({ audience: 'member', full: true });
     act(() => { bld('testing').dispatchEvent(new MouseEvent('click', { bubbles: true })); });
     expect(card()!.textContent).not.toContain('Members only');
     expect(container.querySelector('.cm-chip')).toBeNull();
+  });
+
+  it('a member without full access sees the paywalled Cert Prep Center as locked, as PageGate would show it', async () => {
+    await mount({ audience: 'member', full: false });
+    act(() => { bld('testing').dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+    expect(card()!.textContent).toContain('Members only');
   });
 
   it('reduce motion: arrives at once and never schedules an animation frame', async () => {

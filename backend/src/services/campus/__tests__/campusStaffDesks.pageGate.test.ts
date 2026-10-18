@@ -10,6 +10,7 @@ jest.mock('../../access/contentEntitlement', () => ({
   isFreePreviewTier: jest.fn(async () => false),
 }));
 jest.mock('../../portalSettingsService', () => ({ isOrgManager: jest.fn(async () => false) }));
+jest.mock('../../access/mgmtBridgeService', () => ({ getMgmtStatus: jest.fn(async () => ({ is_mgmt: false, role: null, label: null })) }));
 jest.mock('../../access/staffAccess', () => ({ isStaffOrMgmt: jest.fn(async () => true), isStaffEnrollment: jest.fn(async () => true) }));
 jest.mock('../../reese/reeseIdentitySeed', () => ({ isReeseEnabled: jest.fn(async () => true), getReeseEnrollmentId: jest.fn(async () => 'reese-1') }));
 jest.mock('../../curriculum/daraIdentitySeed', () => ({ isDaraEnabled: jest.fn(async () => true), getDaraEnrollmentId: jest.fn(async () => 'dara-1') }));

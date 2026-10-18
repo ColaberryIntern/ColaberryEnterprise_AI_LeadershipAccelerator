@@ -9,7 +9,7 @@ describe('trailFor', () => {
     const buildings = campusBuildingsFor(aud);
     let checked = 0;
     for (const b of buildings) {
-      for (const r of b.rooms.filter((x) => !x.planned)) {
+      for (const r of b.rooms.filter((x) => !x.planned && !x.admin)) { // C6: admin links are not campus places
         const t = trailFor(r.route, buildings, false);
         // A room route shared by two buildings would be ambiguous; the catalog has none (asserted here).
         expect({ route: r.route, labels: t.map((c) => c.label) }).toEqual({ route: r.route, labels: ['Campus', b.name, r.label] });
@@ -19,8 +19,10 @@ describe('trailFor', () => {
     expect(checked).toBeGreaterThan(10);
   });
 
-  it('the staff View as room (no building prefix) still gets its full trail', () => {
-    expect(trailFor('/portal/view-as', campusBuildingsFor('staff'), false).map((c) => c.label)).toEqual(['Campus', 'Staff Office', 'View as']);
+  // C6: the Staff Office's rooms are admin links (the Management Portal, a new tab), never a campus place or a trail.
+  it('admin links never become a trail, and /portal/view-as is no longer a campus room', () => {
+    expect(trailFor('/portal/mgmt-enter', campusBuildingsFor('staff'), false).map((c) => c.label)).toEqual(['Campus']);
+    expect(trailFor('/portal/view-as', campusBuildingsFor('staff'), false).map((c) => c.label)).toEqual(['Campus']);
   });
 
   it('a page under a building but not a listed room reads Campus > building', () => {
@@ -41,7 +43,7 @@ describe('trailFor', () => {
   });
 
   it('buildingIdForPath follows the same rules', () => {
-    expect(buildingIdForPath('/portal/view-as', campusBuildingsFor('staff'))).toBe('career');
+    expect(buildingIdForPath('/portal/company', campusBuildingsFor('business'))).toBe('career');
     expect(buildingIdForPath('/portal/settings', campusBuildingsFor('member'))).toBeNull();
   });
 });

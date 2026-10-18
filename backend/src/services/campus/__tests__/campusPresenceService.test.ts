@@ -5,6 +5,10 @@ jest.mock('../../../models/CampusPresence', () => ({ __esModule: true, default: 
 jest.mock('../../peoplePanelService', () => ({ getPeoplePanel: jest.fn() }));
 jest.mock('../../cohortPresenceService', () => ({ getCohortPresence: jest.fn() }));
 jest.mock('../../communityRooms/dmEligibility', () => ({ canDmMany: jest.fn() }));
+let mockAudience = 'member';
+let mockTeam: Set<string> | 'throw' = new Set();
+jest.mock('../campusAudience', () => ({ campusAudienceFor: jest.fn(async () => mockAudience) }));
+jest.mock('../campusTeam', () => ({ teamEnrollmentIdsFor: jest.fn(async () => { if (mockTeam === 'throw') throw new TypeError('db down'); return mockTeam; }) }));
 
 import CampusPresence from '../../../models/CampusPresence';
 import { ensureCampusPresenceSchema } from '../../../db/ensureCampusPresenceSchema';
@@ -35,6 +39,8 @@ beforeEach(() => {
   __resetCampusPresenceCacheForTests();
   ensure.mockResolvedValue(undefined);
   mockEnv.peoplePanelRolesEnabled = true;
+  mockAudience = 'member';
+  mockTeam = new Set();
   canDm.mockImplementation(async (_v: string, _c: string | null, ids: string[]) => new Map(ids.map((id) => [id, DM_OK[id] === true])));
 });
 
@@ -213,5 +219,42 @@ describe('can_message (C5): the one DM rule, per viewer, fail closed', () => {
     await getCampusPresence('me', 'coh-1', NOW);
     const cached = await visibleSetFor('me', 'coh-1', NOW);
     expect(Object.keys(cached.get('mate')!).sort()).toEqual(['avatar_url', 'display_name', 'enrollment_id']);
+  });
+});
+
+describe('business viewers see their team only (C6)', () => {
+  const rows = [
+    { enrollment_id: 'mate', area: 'library', updated_at: at(1000) },
+    { enrollment_id: 'teammate', area: 'library', updated_at: at(2000) },
+    { enrollment_id: 'stranger', area: 'library', updated_at: at(3000) },
+  ];
+  beforeEach(() => panel.mockResolvedValue({ viewer_role: 'student', my_class: [person('mate', 'Mia'), person('teammate', 'Tom')], active_now: [person('stranger', 'Sam')] }));
+  const names = (areas: Awaited<ReturnType<typeof getCampusPresence>>['areas']) => areas.library!.people.map((p) => ('anonymous' in p ? 'anon' : p.display_name));
+
+  it('names only teammates the rail names; everyone else is anonymous', async () => {
+    mockAudience = 'business'; mockTeam = new Set(['teammate', 'not-in-rail']);
+    findAll.mockResolvedValue(rows);
+    expect(names((await getCampusPresence('me', 'coh-1', NOW)).areas)).toEqual(['anon', 'Tom', 'anon']);
+  });
+
+  it('a teammate the rail does not name stays anonymous (never more than the rail)', async () => {
+    mockAudience = 'business'; mockTeam = new Set(['ghost']);
+    findAll.mockResolvedValue([...rows, { enrollment_id: 'ghost', area: 'library', updated_at: at(4000) }]);
+    expect(names((await getCampusPresence('me', 'coh-1', NOW)).areas)).toEqual(['anon', 'anon', 'anon', 'anon']);
+  });
+
+  it('a failed team lookup names nobody (fail closed) and is logged', async () => {
+    mockAudience = 'business'; mockTeam = 'throw';
+    findAll.mockResolvedValue(rows);
+    const err = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    expect(names((await getCampusPresence('me', 'coh-1', NOW)).areas)).toEqual(['anon', 'anon', 'anon']);
+    expect(err.mock.calls.map((c) => JSON.parse(String(c[0])).event)).toContain('campus_team_lookup_failed');
+    err.mockRestore();
+  });
+
+  it.each(['member', 'explorer', 'staff'])('a %s viewer keeps the rail set unchanged', async (aud) => {
+    mockAudience = aud;
+    findAll.mockResolvedValue(rows);
+    expect(names((await getCampusPresence('me', 'coh-1', NOW)).areas)).toEqual(['Mia', 'Tom', 'Sam']);
   });
 });

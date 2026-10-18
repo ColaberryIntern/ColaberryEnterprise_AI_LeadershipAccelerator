@@ -1,0 +1,15 @@
+/* Colaberry Campus C6: contextual sign-up, the path to enrolling, admin links. Shell tokens only, no hex. */
+
+/* Contextual sign-up inside a locked building's card (the page paywall's own copy). */
+.cm-signup-title{margin:0 0 6px;font-weight:700;color:var(--strong)}
+.cm-signup-benefits{margin:0 0 10px;padding-left:18px;color:var(--body);font-size:13px;line-height:1.45}
+.cm-signup-benefits li{margin:2px 0}
+
+/* Your path to enrolling (Main Gate card, Explorers). */
+.cm-path{margin-top:12px;padding:12px;border:1px solid var(--border-sub);border-radius:var(--r-12);background:var(--sunken)}
+.cm-path-steps{margin:0 0 8px;padding-left:20px;font-size:14px;line-height:1.5}
+.cm-path-steps a{color:var(--berry);font-weight:600}
+.cm-path .cm-btn{margin-top:4px}
+
+/* Staff Office admin links: a disabled one reads as unavailable, never as a link. */
+.cm-room.is-disabled[data-admin="true"]{color:var(--muted);background:var(--sunken);cursor:default}

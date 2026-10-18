@@ -1,8 +1,24 @@
-import React, { useRef, useState } from 'react';
+import React, { Suspense, lazy, useRef, useState } from 'react';
 import type { StaffDesk as Desk } from './campusPeopleApi';
 import { initialsOf } from './WhoIsHere';
 import { hasDmHost, openDmThroughShell } from './dmHost';
 import { openDm, sendDmMessage } from '../../services/dmApi';
+
+// C6: Maya is the website's admissions chat. Loaded only when a learner asks, so portal pages do not carry it otherwise.
+const MayaChatWidget = lazy(() => import('../MayaChatWidget'));
+
+/** True when this browser already has the public site's visitor id (written only by the site's own tracker). The campus
+ *  only READS it: creating one in the portal would be a tracking/consent change, which is Ali's decision. */
+export function hasSiteVisitorId(): boolean {
+  try { return !!window.localStorage.getItem('cb_visitor_fp'); } catch { return false; }
+}
+
+/** The widget hides itself entirely for Do Not Track browsers (site and campus alike); the desk says so instead. */
+export function doNotTrackOn(): boolean {
+  return typeof navigator !== 'undefined' && navigator.doNotTrack === '1';
+}
+
+const ENROLL_PAGE = '/enroll';
 
 /**
  * An AI staff desk inside its building's card (Colaberry Campus C5): Reese (Commons), Dara (Library), Maya (Main Gate,
@@ -19,6 +35,8 @@ export default function StaffDesk({ desk: d, onMessaged }: StaffDeskProps): Reac
   const host = hasDmHost();
   const live = d.on_duty && !!d.enrollment_id && host;
   const [note, setNote] = useState('');
+  const [mayaOpen, setMayaOpen] = useState(false);
+  const isMaya = d.id === 'maya';
   const busy = useRef(false);
 
   const ask = (q: string) => {
@@ -31,7 +49,7 @@ export default function StaffDesk({ desk: d, onMessaged }: StaffDeskProps): Reac
       .finally(() => { busy.current = false; });
   };
 
-  const status = d.id === 'maya' && d.opens ? `${d.name}'s desk opens soon`
+  const status = isMaya && !d.on_duty ? `${d.name}'s desk opens soon`
     : d.on_duty ? 'On duty around the clock, replies in seconds' : 'Back soon';
 
   return (
@@ -55,7 +73,23 @@ export default function StaffDesk({ desk: d, onMessaged }: StaffDeskProps): Reac
           )}
         </>
       )}
-      {d.on_duty && !host && <p className="cm-who-note">Open Today to message {d.name}.</p>}
+      {d.on_duty && !host && !isMaya && <p className="cm-who-note">Open Today to message {d.name}.</p>}
+      {isMaya && d.on_duty && doNotTrackOn() && (
+        <p className="cm-who-note" data-testid="cm-maya-dnt">Your browser asks sites not to track you, so Maya's chat stays hidden.</p>
+      )}
+      {isMaya && d.on_duty && !doNotTrackOn() && (hasSiteVisitorId()
+        ? <button type="button" className="cm-btn is-secondary" data-testid="cm-ask-maya" onClick={() => setMayaOpen(true)}>Ask Maya about enrolling</button>
+        : (
+          <>
+            <a className="cm-btn is-secondary" href={ENROLL_PAGE} target="_blank" rel="noopener noreferrer" data-testid="cm-ask-maya-site">Ask Maya about enrolling</a>
+            <p className="cm-who-note">Maya chats on our enrollment page; it opens in a new tab.</p>
+          </>
+        ))}
+      {isMaya && mayaOpen && (
+        <Suspense fallback={null}>
+          <MayaChatWidget mode="embedded" open onClose={() => setMayaOpen(false)} />
+        </Suspense>
+      )}
       {note && <p className="cm-who-note" role="status">{note}</p>}
     </div>
   );

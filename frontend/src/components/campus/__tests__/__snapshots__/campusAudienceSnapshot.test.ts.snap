@@ -61,7 +61,7 @@ Array [
     "workplaceName": "Town Hall",
   },
   Object {
-    "explorer": "locked",
+    "explorer": "open",
     "gate": "cert-prep",
     "id": "testing",
     "name": "Cert Prep Center",
@@ -98,7 +98,7 @@ Array [
     "workplaceName": "Collab Cafe",
   },
   Object {
-    "explorer": "locked",
+    "explorer": "open",
     "gate": "portfolio",
     "id": "gallery",
     "name": "Showcase Gallery",
@@ -111,7 +111,7 @@ Array [
     "workplaceName": "Portfolio Gallery",
   },
   Object {
-    "explorer": "locked",
+    "explorer": "open",
     "gate": null,
     "id": "career",
     "name": "Partner Office",
@@ -196,7 +196,7 @@ Array [
     "workplaceName": "Town Hall",
   },
   Object {
-    "explorer": "locked",
+    "explorer": "open",
     "gate": "cert-prep",
     "id": "testing",
     "name": "Cert Prep Center",
@@ -233,7 +233,7 @@ Array [
     "workplaceName": "Collab Cafe",
   },
   Object {
-    "explorer": "locked",
+    "explorer": "open",
     "gate": "portfolio",
     "id": "gallery",
     "name": "Showcase Gallery",
@@ -246,7 +246,7 @@ Array [
     "workplaceName": "Portfolio Gallery",
   },
   Object {
-    "explorer": "locked",
+    "explorer": "open",
     "gate": null,
     "id": "career",
     "name": "Career Center",
@@ -272,7 +272,7 @@ Array [
     "gate": null,
     "id": "gate",
     "name": "Main Gate",
-    "primary": "Visit Maya's welcome desk -> /portal/today",
+    "primary": "Start on Today -> /portal/today",
     "rooms": Array [],
     "workplaceName": "Visitor Entrance",
   },
@@ -340,7 +340,7 @@ Array [
     "workplaceName": "Town Hall",
   },
   Object {
-    "explorer": "locked",
+    "explorer": "open",
     "gate": "cert-prep",
     "id": "testing",
     "name": "Cert Prep Center",
@@ -377,7 +377,7 @@ Array [
     "workplaceName": "Collab Cafe",
   },
   Object {
-    "explorer": "locked",
+    "explorer": "open",
     "gate": "portfolio",
     "id": "gallery",
     "name": "Showcase Gallery",
@@ -390,7 +390,7 @@ Array [
     "workplaceName": "Portfolio Gallery",
   },
   Object {
-    "explorer": "locked",
+    "explorer": "open",
     "gate": null,
     "id": "career",
     "name": "Career Center",
@@ -475,7 +475,7 @@ Array [
     "workplaceName": "Town Hall",
   },
   Object {
-    "explorer": "locked",
+    "explorer": "open",
     "gate": "cert-prep",
     "id": "testing",
     "name": "Cert Prep Center",
@@ -512,7 +512,7 @@ Array [
     "workplaceName": "Collab Cafe",
   },
   Object {
-    "explorer": "locked",
+    "explorer": "open",
     "gate": "portfolio",
     "id": "gallery",
     "name": "Showcase Gallery",
@@ -525,13 +525,15 @@ Array [
     "workplaceName": "Portfolio Gallery",
   },
   Object {
-    "explorer": "locked",
+    "explorer": "open",
     "gate": null,
     "id": "career",
     "name": "Staff Office",
-    "primary": "View as a learner -> /portal/view-as",
+    "primary": "Open the Management Portal -> /portal/mgmt-enter",
     "rooms": Array [
-      "View as -> /portal/view-as",
+      "Handoffs -> /portal/mgmt-enter?next=%2Fadmin%2Fgrowth-journey%3Ftab%3Dhandoffs (admin, new tab)",
+      "People -> /portal/mgmt-enter?next=%2Fadmin%2Fpeople (admin, new tab)",
+      "View as a learner -> /portal/mgmt-enter?next=%2Fadmin%2Faccelerator (admin, new tab)",
     ],
     "workplaceName": "Engagements",
   },
@@ -551,7 +553,7 @@ Array [
     "gate": null,
     "id": "gate",
     "name": "Main Gate",
-    "primary": "Visit Maya's welcome desk -> /portal/today",
+    "primary": "Start on Today -> /portal/today",
     "rooms": Array [],
     "workplaceName": "Visitor Entrance",
   },
