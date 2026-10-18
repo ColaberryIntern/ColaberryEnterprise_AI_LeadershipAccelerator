@@ -17,10 +17,27 @@ export interface CommunityCommenter {
   avatar_url: string | null;
 }
 
+/**
+ * A playable demo attached to a `demo_video` post.
+ *
+ * Present ONLY when the server decided this viewer may watch. Absent means an
+ * ordinary post, never a broken player — the audience rule is applied server-side
+ * and the url arrives already signed for this viewer.
+ */
+export interface CommunityPostDemo {
+  recordingId: string;
+  playbackUrl: string;
+  durationSeconds: number | null;
+  viewCount: number;
+  viewLabel: string;
+}
+
 export interface CommunityPost {
   id: string;
   body: string | null;
   media_urls: string[];
+  /** Set by the server on a demo_video post this viewer is allowed to play. */
+  demo?: CommunityPostDemo | null;
   category: string | null;
   pinned: boolean;
   like_count: number;

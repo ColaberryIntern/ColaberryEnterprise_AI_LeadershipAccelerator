@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import Avatar from './Avatar';
 import LevelBadge from './LevelBadge';
 import RichText from './RichText';
+import DemoVideoCard from './DemoVideoCard';
 import { timeAgo, isVideoUrl, youtubeId, youtubeThumb } from './communityUtils';
 import {
   fetchComments, createComment, togglePin as apiTogglePin,
@@ -207,7 +208,21 @@ const PostCard: React.FC<{
       ) : (
         <>
           {post.body && <div className="fc-body"><p className="cm-post-body"><RichText text={post.body} /></p></div>}
-          <MediaGrid urls={post.media_urls} />
+          {/* A demo gets its own treatment rather than the image grid: it is a
+              person presenting, not an attachment. `media_urls` is empty on these
+              by design — the recording is served through the ticketed route, never
+              uploaded to the unauthenticated community media path. */}
+          {post.demo ? (
+            <div className="fc-body">
+              <DemoVideoCard
+                playbackUrl={post.demo.playbackUrl}
+                durationSeconds={post.demo.durationSeconds}
+                viewLabel={post.demo.viewLabel}
+              />
+            </div>
+          ) : (
+            <MediaGrid urls={post.media_urls} />
+          )}
         </>
       )}
 

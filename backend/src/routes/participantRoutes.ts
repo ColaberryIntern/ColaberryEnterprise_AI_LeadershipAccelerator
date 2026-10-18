@@ -945,7 +945,24 @@ router.get('/api/portal/community/posts', requireParticipant, async (req, res) =
       cursor: parsed.data.cursor,
       limit: parsed.data.limit,
     });
-    res.json({ posts, next_cursor });
+
+    // A `demo_video` post names a recording in `ritual_meta` and carries no media,
+    // because community media is unauthenticated and capped at 8 MB. Resolving the
+    // ref here is what turns it from a text post into something the cohort can
+    // actually play — it was published, visible, and unplayable until now.
+    //
+    // PER VIEWER, and deliberately not cached onto the post: the author, a
+    // cohort-mate and a stranger are three different answers to the same row, and
+    // the ticket is minted for whoever is asking.
+    const { resolveDemoPlayback } = await import('../services/presentation/demoPostPlayback');
+    const demos = await resolveDemoPlayback(req.participant!.sub, posts as any[]);
+
+    res.json({
+      posts: (posts as any[]).map((p) => (demos[String(p.id)]
+        ? { ...p, demo: demos[String(p.id)] }
+        : p)),
+      next_cursor,
+    });
   } catch (err: any) {
     res.status(communityErrorStatus(err)).json({ error: err.message });
   }

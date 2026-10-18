@@ -236,6 +236,7 @@ export async function approveAndPublish(
             s.draft_json->>'summary'              AS summary,
             s.author_approved_at, s.staff_approved_at, s.published_at, s.withdrawn_at,
             s.attempt_id,
+            s.recording_id,
             asg.enrollment_id AS owner_enrollment_id,
             asg.cohort_id     AS cohort_id
        FROM presentation_showcases s
@@ -282,7 +283,14 @@ export async function approveAndPublish(
       showcaseId,
       memberId: String(member.id),
       cohortId: String(row.cohort_id),
-      recordingRef: `recording:${String(row.attempt_id)}`,
+      // THE RECORDING, not the attempt. This ref is what the feed card resolves to
+      // a player, and an attempt id points at a rehearsal that may hold several
+      // takes — the feed would have to guess which one was published, and under
+      // per-recording sharing it would guess wrong. Falls back to the attempt only
+      // for showcases written before per-recording keying.
+      recordingRef: row.recording_id
+        ? `recording:${String(row.recording_id)}`
+        : `attempt:${String(row.attempt_id)}`,
       summary: String(row.summary || 'Shared a demo video.'),
     });
     postId = announced?.postId ?? null;
