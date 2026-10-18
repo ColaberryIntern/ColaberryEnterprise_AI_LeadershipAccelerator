@@ -22,6 +22,7 @@ import { getPersonProfile } from '../services/adminOs/personProfileService';
 import { inputsFromProfile } from '../services/salesReadiness/srsInputs';
 import { scoreReadiness, ScoreResult } from '../services/salesReadiness/srsEngine';
 import { FACTORS, MAX_POSSIBLE, RULESET_VERSION } from '../services/salesReadiness/srsRuleset';
+import { measureDiscrimination } from '../services/salesReadiness/srsDiscrimination';
 
 /** Every section, so the report sees the evidence an unrestricted reader would see. */
 const ALL_SECTIONS = [
@@ -114,6 +115,23 @@ async function main(): Promise<void> {
     console.log(`  ${def.key.padEnd(18)} present ${String(pct).padStart(3)}%  `
       + `mean when present ${(Math.round(avg * 100) / 100).toFixed(2)} / ${def.max}`);
   }
+
+  // ── WHICH FACTORS ACTUALLY RANK ───────────────────────────────────────────
+  //
+  // "Present %" and "mean when present" say whether a factor has evidence. They do not say
+  // whether it ORDERS anybody: a factor identical for every person has evidence for all of them
+  // and still sorts nobody. Variance share is the measurement that separates the two.
+  const disc = measureDiscrimination(scores);
+  console.log('\nDISCRIMINATION: how much of the ORDERING each factor actually carries');
+  const ranked = [...disc.factors].sort((a, b) => b.rankingShare - a.rankingShare);
+  for (const f of ranked) {
+    const pct = (f.rankingShare * 100).toFixed(1);
+    const bar = '#'.repeat(Math.round(f.rankingShare * 40));
+    console.log(`  ${f.key.padEnd(18)} ${String(pct).padStart(5)}%  ${bar.padEnd(40)} `
+      + `${f.verdict}  (max ${f.max}, ${f.distinctValues} distinct value(s))`);
+  }
+  console.log(`\n  DEAD WEIGHT: ${disc.deadPoints} of ${disc.totalPoints} points `
+    + `(${Math.round(disc.deadShare * 100)}%) sit in factors that cannot rank anybody here.`);
 
   console.log('\nNOTHING WAS WRITTEN. No score persisted, no row updated, nothing sent.');
 }
