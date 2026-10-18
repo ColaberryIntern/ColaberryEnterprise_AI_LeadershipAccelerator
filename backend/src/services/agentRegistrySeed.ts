@@ -2823,10 +2823,6 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     ],
   },
   ...GROWTH_JOURNEY_AGENT_ENTRIES,
-  // AF3.1 Release Zero: ten domain employees, one per provisioned Agent Factory domain.
-  // Every one ships `enabled: false` with no tools, so autonomy auto-classifies to
-  // `observe`. Grouped in their own module for the same reason growth journey is.
-  ...DOMAIN_AGENT_ENTRIES,
   {
     agent_name: 'GrowthJourneyHandoffs',
     agent_type: 'ticket_creator_identity',
@@ -2849,6 +2845,14 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     // value, then age), assignHandoff() (the gated tickets write).
     tools_granted: ['materializeHandoffs', 'rankQueue', 'assignHandoff'],
   },
+  // AF3.1 Release Zero: ten domain employees, one per provisioned Agent Factory domain.
+  // Every one ships `enabled: false` with no tools, so autonomy auto-classifies to
+  // `observe`. Grouped in their own module for the same reason growth journey is.
+  //
+  // PLACED AFTER GrowthJourneyHandoffs, not before it: agentRegistrySeedGrowthJourney
+  // acceptance 7 pins that group CONTIGUOUS - shadow, executor, digest, handoffs at
+  // shadow+1..+3 - so ten entries inserted mid-run break it. The test is right.
+  ...DOMAIN_AGENT_ENTRIES,
   {
     agent_name: 'workforce_intelligence_engine',
     agent_type: 'ticket_creator_identity',
