@@ -101,7 +101,14 @@ export async function recordPlaybackBeat(
            occurrence_id, enrollment_id, first_seen_at, last_beat_at, last_credited_at,
            playing_seconds, intent, access_mode, is_staff, is_test
          ) VALUES (
-           :occ, :enr, :now, :now, CASE WHEN :playing THEN :now ELSE NULL END,
+           -- CAST, not a bare :now. In a VALUES list both branches of this CASE are untyped,
+           -- so Postgres resolves the whole expression to text and then refuses to put text
+           -- in a timestamptz column: "column last_credited_at is of type timestamp with time
+           -- zone but expression is of type text". The DO UPDATE below needs no cast because
+           -- its ELSE branch IS the column, which types the CASE. Spelled CAST(x AS t) rather
+           -- than the :: form, because Sequelize reads a trailing ::timestamptz as a named
+           -- replacement and throws on the missing value.
+           :occ, :enr, :now, :now, CASE WHEN :playing THEN CAST(:now AS TIMESTAMPTZ) ELSE NULL END,
            :earned, :intent, :mode, :staff, :test
          )
          ON CONFLICT (occurrence_id, enrollment_id) DO UPDATE SET
@@ -137,7 +144,8 @@ export async function recordPlaybackBeat(
         `INSERT INTO broadcast_viewer_sessions (
            occurrence_id, session_id, enrollment_id, state, last_beat_at, last_playing_at, started_at
          ) VALUES (
-           :occ, :sid, :enr, :state, :now, CASE WHEN :playing THEN :now ELSE NULL END, :now
+           -- Same untyped-CASE trap as the people insert above, same cast.
+           :occ, :sid, :enr, :state, :now, CASE WHEN :playing THEN CAST(:now AS TIMESTAMPTZ) ELSE NULL END, :now
          )
          ON CONFLICT (occurrence_id, session_id) DO UPDATE SET
            state           = :state,
@@ -166,8 +174,15 @@ export async function recordPlaybackBeat(
   } catch (err) {
     // Classified and swallowed. A failed metrics write must not surface to a viewer who is
     // watching successfully, and must not retry into a struggling database.
+    //
+    // The MESSAGE is logged, not just the class. Without it this path reported
+    // `SequelizeDatabaseError` and nothing else, which is the same line for a type error, a
+    // constraint violation and a dropped connection - so a statement that could never succeed
+    // was indistinguishable from a database having a bad minute. It is the error's own text,
+    // not a row, and these tables hold no secret values.
     log('broadcast_beat_write_failed', {
       error_class: (err as Error)?.name ?? 'UnexpectedError',
+      error_message: (err as Error)?.message ?? String(err),
       occurrence_id: beat.occurrenceId,
     });
     return false;

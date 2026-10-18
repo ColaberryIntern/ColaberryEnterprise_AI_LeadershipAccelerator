@@ -2330,3 +2330,88 @@ silent until something writes raw SQL.
 
 The enrollment row lock and the telemetry anchor. Five of the seven are addressed: four
 observed, and the scheduler's found to be mis-documented rather than unproven.
+
+## TRYING TO OBSERVE THE TELEMETRY ANCHOR FOUND THE WRITE PATH DEAD
+
+Sixth observed lock. The lock is fine. Getting far enough to measure it required fixing the
+statement around it, because **every `recordPlaybackBeat` call failed against the production
+schema** and had done since the feature shipped on 2026-10-09 (`adf97375`, on `main`).
+
+### The defect
+
+Both viewer upserts open with an untyped CASE in a VALUES list:
+
+```sql
+VALUES (..., CASE WHEN :playing THEN :now ELSE NULL END, ...)
+```
+
+Postgres resolves that to `text` - a string literal and NULL give it nothing better to go on -
+and then refuses to put text in a `timestamptz` column. Run the service's own statement, copied
+from its own SQL log, against the production DDL:
+
+    ERROR:  column "last_credited_at" is of type timestamp with time zone
+            but expression is of type text
+    HINT:  You will need to rewrite or cast the expression.
+
+Two sites: `broadcast_viewer_people.last_credited_at` and
+`broadcast_viewer_sessions.last_playing_at`. The `ON CONFLICT DO UPDATE` branches of the same
+statements are fine, because their ELSE branch is the column itself, which types the CASE. The
+fix is `CAST(:now AS TIMESTAMPTZ)` - spelled that way and not with `::`, because Sequelize reads
+a trailing `::timestamptz` as a named replacement and throws on the missing value.
+
+### Why nothing noticed for nine days
+
+| | |
+|---|---|
+| The service's catch | logged `error_class` and the occurrence id, and **not the message** |
+| So the symptom was | `SequelizeDatabaseError`, which is also what a dropped connection says |
+| Its unit suite | **13 tests, all green**, with `sequelize` mocked - the SQL is never parsed |
+| That suite says so itself | "No database... the only honest thing to assert without one" |
+| The write is | best-effort by design: it swallows its own failure and returns `false` |
+
+Thirteen green tests over a write path that cannot write. The mock was honest about being a
+mock; the gap was that nothing else ever ran the statement.
+
+The catch now logs the message too. With the cast reverted, the test run prints the Postgres
+error verbatim - which is the difference between a nine-day silence and a one-line diagnosis.
+
+### Scope, stated carefully
+
+**Latent, not active.** No frontend code posts to `POST .../:id/heartbeat` - the route is
+mounted and flag-gated, but nothing in `frontend/src` calls it. Production's
+`broadcast_viewer_people` and `broadcast_viewer_sessions` are both **empty**, and exactly one
+occurrence exists, which did go live on 2026-10-15 and produced no row.
+
+**What cannot be claimed:** whether any beat was ever attempted. The backend container had been
+up about an hour when this was measured, so its logs cannot reach 2026-10-15, and the absence of
+`broadcast_beat_write_failed` in them is not evidence of anything.
+
+### The lock itself, now measured
+
+Five tests against real Postgres (`broadcastTelemetryAnchorRace.integration.test.ts`, port
+55438), with the two tables created from the PRODUCTION DDL rather than hand-written copies:
+
+- two tabs beating in the same instant credit the ten seconds **once**
+- **three tabs credit the same ten seconds as one tab** - the claim the service's docblock makes
+- a paused beat does not advance the anchor, so the viewer keeps what they earned
+- **positive control:** the same read-then-credit without the lock bills ten seconds as twenty
+
+**Mutation - delete `FOR UPDATE` from the anchor read:** ten seconds is credited as twenty. The
+lock is load-bearing. **Mutation - revert the cast:** four of the five fail and the log prints
+the type error.
+
+Every test asserts the call returned `true`, because it is best-effort: without that assertion
+a broken statement reads as a passing test. That assertion is what caught this.
+
+### A hole in the lock, safe for a reason kept in another file
+
+`FOR UPDATE` on a row that does not exist locks nothing, so two FIRST-EVER beats from one person
+are **not** serialised. That is harmless only because `creditSeconds(null, ...)` returns 0, which
+lives in `broadcastTelemetryPolicy.ts` with nothing connecting the two facts. Both halves are now
+pinned in one test, so whoever changes either one meets the other.
+
+### One remains
+
+The enrollment row lock (`projectService.ts`, `SELECT id FROM enrollments ... FOR UPDATE`). Six
+of the seven are addressed: five observed, and the scheduler's found to be mis-documented rather
+than unproven.
