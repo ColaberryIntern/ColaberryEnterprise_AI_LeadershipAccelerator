@@ -37,6 +37,7 @@ import { DecidePanel } from './govWorkspace/DecidePanel';
 import { CountdownBand } from './govWorkspace/CountdownBand';
 import { TeamAccessPanel } from './govWorkspace/TeamAccessPanel';
 import { MvpScheduleBanner } from './govWorkspace/MvpScheduleBanner';
+import { PreSubmissionGantt } from './govWorkspace/PreSubmissionGantt';
 
 /** The discovery opportunity's display details fetched for the decoupled (ZIP) workspace. */
 type OppDetail = { opportunity: GovOpportunity | null; source: 'live' | 'snapshot'; snapshotDate: string | null };
@@ -1612,6 +1613,10 @@ export default function AdminGovQualificationPage(): React.ReactElement {
           <SectionCard title="Spec &amp; MVP schedule (pre-submission)" icon="calendar-schedule-line"
             subtitle="Back-planned from the submission deadline: can we build a demo-able MVP before the bid is due? Deterministic and working-day aware. This is distinct from the post-award build timeline below.">
             <MvpScheduleBanner
+              deadline={oppDetail?.opportunity?.closeDate ?? ws.source?.deadline?.utc ?? null}
+              mvpStoryCount={ws.build ? (ws.build.stories ?? []).length : null}
+            />
+            <PreSubmissionGantt
               deadline={oppDetail?.opportunity?.closeDate ?? ws.source?.deadline?.utc ?? null}
               mvpStoryCount={ws.build ? (ws.build.stories ?? []).length : null}
             />

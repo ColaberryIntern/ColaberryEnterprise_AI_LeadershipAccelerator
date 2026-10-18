@@ -1,4 +1,4 @@
-import { deriveCountdown, deriveMvpSchedule, shipByDate, workingDaysBetween, usFederalHolidays } from './govCountdown';
+import { deriveCountdown, deriveMvpSchedule, derivePreSubmissionGantt, shipByDate, workingDaysBetween, usFederalHolidays } from './govCountdown';
 
 const utc = (y: number, m0: number, d: number) => new Date(Date.UTC(y, m0, d));
 
@@ -77,6 +77,46 @@ describe('deriveMvpSchedule (back-planned, working-day aware)', () => {
   it('is reproducible (pure)', () => {
     const a = deriveMvpSchedule({ now, deadline: utc(2026, 11, 1), mvpStoryCount: 3 });
     const b = deriveMvpSchedule({ now, deadline: utc(2026, 11, 1), mvpStoryCount: 3 });
+    expect(a).toEqual(b);
+  });
+});
+
+describe('derivePreSubmissionGantt (fixed now->deadline axis)', () => {
+  const now = utc(2026, 9, 19); // Mon 2026-10-19
+
+  it('feasible: a build bar + a draft/ship buffer bar, anchored today=0 and deadline=100', () => {
+    const g = derivePreSubmissionGantt({ now, deadline: utc(2027, 0, 4), mvpStoryCount: 2 });
+    expect(g.feasible).toBe(true);
+    const build = g.bars.find((b) => b.key === 'build')!;
+    const buffer = g.bars.find((b) => b.key === 'buffer')!;
+    expect(build.tone).toBe('critical');          // fits -> not red
+    expect(build.leftPct).toBe(0);                 // the build starts today
+    expect(buffer.tone).toBe('buffer');
+    const today = g.markers.find((m) => m.key === 'now')!;
+    const deadline = g.markers.find((m) => m.key === 'deadline')!;
+    expect(today.leftPct).toBe(0);
+    expect(deadline.leftPct).toBe(100);            // the deadline is always the right edge
+    expect(g.markers.map((m) => m.key)).toEqual(['now', 'latest', 'ship', 'deadline']);
+    // every position stays on the axis
+    expect(g.bars.every((b) => b.leftPct >= 0 && b.leftPct + b.widthPct <= 100.01)).toBe(true);
+  });
+
+  it('infeasible: the build bar is flagged overflow (red)', () => {
+    const g = derivePreSubmissionGantt({ now, deadline: utc(2026, 9, 23), mvpStoryCount: 10 });
+    expect(g.feasible).toBe(false);
+    expect(g.bars.find((b) => b.key === 'build')!.tone).toBe('overflow');
+  });
+
+  it('is total: empty bars/markers but keeps the headline when the deadline is missing', () => {
+    const g = derivePreSubmissionGantt({ now, deadline: null, mvpStoryCount: 3 });
+    expect(g.bars).toEqual([]);
+    expect(g.markers).toEqual([]);
+    expect(g.headline).toBe('No submission deadline');
+  });
+
+  it('is reproducible (pure)', () => {
+    const a = derivePreSubmissionGantt({ now, deadline: utc(2026, 11, 1), mvpStoryCount: 3 });
+    const b = derivePreSubmissionGantt({ now, deadline: utc(2026, 11, 1), mvpStoryCount: 3 });
     expect(a).toEqual(b);
   });
 });
