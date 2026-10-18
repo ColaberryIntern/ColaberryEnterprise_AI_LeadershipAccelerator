@@ -380,6 +380,9 @@ router.post('/api/portal/projects/:projectId/tasks/:storyId/deck', requirePartic
 // to everyone but its owner and staff.
 const shareRequestSchema = z.object({
   attempt_id: z.string().trim().uuid(),
+  // THE TAKE, not just the attempt. A learner records several in order to choose
+  // one, and keying the showcase on the attempt published all of them together.
+  recording_id: z.string().trim().uuid(),
   summary: z.string().trim().min(1).max(2000),
 }).strict();
 
@@ -415,13 +418,26 @@ router.post('/api/portal/projects/:projectId/tasks/:storyId/showcase', requirePa
       return res.status(422).json({ error: 'The summary needs fixing before it can be shared.', notices: verdict.notices });
     }
 
+    // THE TAKE MUST BELONG TO THE ATTEMPT JUST PROVED. Without this, a learner
+    // could pass their own attempt id alongside somebody else's recording id and
+    // publish a stranger's rehearsal through a route that looks fully authorised.
+    const { sequelize } = await import('../config/database');
+    const [owned] = await sequelize.query(
+      `SELECT 1 FROM presentation_recordings
+        WHERE id = :recordingId AND attempt_id = :attemptId AND ingest_status = 'ingested'
+        LIMIT 1`,
+      { replacements: { recordingId: body.recording_id, attemptId: body.attempt_id } },
+    ) as [Array<unknown>, unknown];
+    if (!owned?.length) return res.status(404).json({ error: 'Not found' });
+
     const { requestShare } = await import('../services/presentation/showcaseLifecycle');
     const r = await requestShare({
       enrollmentId: eid(req),
       attemptId: body.attempt_id,
+      recordingId: body.recording_id,
       cohortId: req.participant?.cohort_id ?? null,
       draftSummary: body.summary,
-      recordingIds: [body.attempt_id],
+      recordingIds: [body.recording_id],
     });
     if (!r.ok) return res.status(422).json({ error: r.reason });
     res.status(r.created ? 201 : 200).json({ showcase_id: r.showcaseId, created: r.created, awaiting: 'staff approval' });

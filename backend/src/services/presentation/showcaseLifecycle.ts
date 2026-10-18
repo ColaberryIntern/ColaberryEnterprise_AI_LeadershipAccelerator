@@ -43,6 +43,12 @@ function log(event: string, ctx: Record<string, unknown>, outcome: 'success' | '
 export interface RequestShareInput {
   enrollmentId: string;
   attemptId: string;
+  /**
+   * THE TAKE being shared. A learner records several in order to choose one, so the
+   * showcase is keyed here rather than on the attempt — see the DDL comment on
+   * `presentation_showcases_one_live_per_recording`.
+   */
+  recordingId: string;
   cohortId: string | null;
   /** The blurb a stranger reads. Already grounding-checked by `showcaseDraft`. */
   draftSummary: string;
@@ -75,17 +81,21 @@ export async function requestShare(input: RequestShareInput): Promise<RequestSha
   const sequelize = await db();
   const [rows] = await sequelize.query(
     `INSERT INTO presentation_showcases
-       (attempt_id, audience, draft_json, content_hash, artifact_id, author_approved_at)
-     VALUES (:attemptId, 'private', CAST(:draft AS jsonb), :hash, :artifactId, NOW())
+       (attempt_id, recording_id, audience, draft_json, content_hash, artifact_id, author_approved_at)
+     VALUES (:attemptId, :recordingId, 'private', CAST(:draft AS jsonb), :hash, :artifactId, NOW())
      -- The unique index is PARTIAL (\`WHERE withdrawn_at IS NULL\`), so the conflict
      -- target has to carry the same predicate or Postgres cannot infer it and the
      -- statement fails outright. The partial scope is deliberate: a withdrawn
      -- showcase may legitimately be replaced by a new request later.
-     ON CONFLICT (attempt_id) WHERE withdrawn_at IS NULL DO NOTHING
+     --
+     -- KEYED ON THE RECORDING, not the attempt: a learner sharing their third take
+     -- must not also publish the first two, which attempt-level keying did.
+     ON CONFLICT (recording_id) WHERE withdrawn_at IS NULL DO NOTHING
      RETURNING id`,
     {
       replacements: {
         attemptId: input.attemptId,
+        recordingId: input.recordingId,
         draft: JSON.stringify({ summary, current_content_hash: hash }),
         hash,
         artifactId: input.artifactId ?? null,
@@ -94,7 +104,9 @@ export async function requestShare(input: RequestShareInput): Promise<RequestSha
   ) as [Array<{ id: string }>, unknown];
 
   if (rows?.length) {
-    log('showcase_share_requested', { showcaseId: rows[0].id, attemptId: input.attemptId });
+    log('showcase_share_requested', {
+      showcaseId: rows[0].id, attemptId: input.attemptId, recordingId: input.recordingId,
+    });
     return { ok: true, showcaseId: String(rows[0].id), created: true };
   }
 
@@ -104,9 +116,9 @@ export async function requestShare(input: RequestShareInput): Promise<RequestSha
   // to publish it.
   const [found] = await sequelize.query(
     `SELECT id FROM presentation_showcases
-      WHERE attempt_id = :attemptId AND withdrawn_at IS NULL
+      WHERE recording_id = :recordingId AND withdrawn_at IS NULL
       LIMIT 1`,
-    { replacements: { attemptId: input.attemptId } },
+    { replacements: { recordingId: input.recordingId } },
   ) as [Array<{ id: string }>, unknown];
 
   return found?.length

@@ -176,6 +176,10 @@ export interface PracticeSession {
     partNo: number;
     playbackUrl: string;
     shareState?: TakeShareState;
+    /** The live showcase, so the switch can turn sharing back off. */
+    showcaseId?: string | null;
+    viewCount?: number;
+    viewLabel?: string;
   }>;
 }
 
@@ -364,12 +368,13 @@ export async function requestShare(
   projectId: string,
   storyId: string,
   attemptId: string,
+  recordingId: string,
   summary: string,
 ): Promise<{ showcaseId: string; created: boolean }> {
   try {
     const { data } = await portalApi.post<{ showcase_id: string; created: boolean }>(
       taskPath(projectId, storyId, 'showcase'),
-      { attempt_id: attemptId, summary },
+      { attempt_id: attemptId, recording_id: recordingId, summary },
     );
     return { showcaseId: data.showcase_id, created: data.created };
   } catch (err: any) {

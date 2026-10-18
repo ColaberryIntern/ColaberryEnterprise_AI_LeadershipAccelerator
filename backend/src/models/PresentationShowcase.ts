@@ -22,6 +22,12 @@ export type PresentationShowcaseAudience = 'private' | 'cohort' | 'community' | 
 export interface PresentationShowcaseAttributes {
   id?: string;
   attempt_id: string;
+  /**
+   * The take being shared. Nullable only for rows that predate per-recording
+   * keying; every new showcase names one, because a learner records several takes
+   * in order to choose ONE and the thing being shared is the take.
+   */
+  recording_id?: string | null;
   audience?: PresentationShowcaseAudience;
   draft_json?: Record<string, unknown>;
   content_hash?: string | null;
@@ -41,6 +47,7 @@ class PresentationShowcase
   implements PresentationShowcaseAttributes {
   declare id: string;
   declare attempt_id: string;
+  declare recording_id: string | null;
   declare audience: PresentationShowcaseAudience;
   declare draft_json: Record<string, unknown>;
   declare content_hash: string | null;
@@ -59,6 +66,7 @@ PresentationShowcase.init(
   {
     id: { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true },
     attempt_id: { type: DataTypes.UUID, allowNull: false },
+    recording_id: { type: DataTypes.UUID, allowNull: true },
     audience: { type: DataTypes.STRING(30), allowNull: false, defaultValue: 'private' },
     draft_json: { type: DataTypes.JSONB, allowNull: false, defaultValue: {} },
     content_hash: { type: DataTypes.STRING(80), allowNull: true },
@@ -84,6 +92,7 @@ PresentationShowcase.init(
     // DDL module is the source of truth for indexes; this list is the non-partial subset.
     indexes: [
       { fields: ['attempt_id'], name: 'presentation_showcases_attempt' },
+      { fields: ['recording_id'], name: 'presentation_showcases_recording' },
     ],
   },
 );

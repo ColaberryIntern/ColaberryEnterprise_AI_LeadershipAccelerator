@@ -24,9 +24,13 @@ jest.mock('../../../models/PresentationRecording', () => ({
 // models, and the first version of that lookup used `sequelize.query` instead, which
 // opened a real Postgres connection in this suite and failed four tests with
 // `SequelizeConnectionRefusedError`.
+jest.mock('../../../models/PresentationRecordingView', () => ({
+  __esModule: true,
+  default: { findAll: jest.fn().mockResolvedValue([]) },
+}));
 jest.mock('../../../models/PresentationShowcase', () => ({
   __esModule: true,
-  default: { findOne: jest.fn().mockResolvedValue(null) },
+  default: { findAll: jest.fn().mockResolvedValue([]) },
 }));
 
 import { getOwnedProjectTree } from '../../projects/projectReadService';
@@ -34,6 +38,7 @@ import PresentationAssignment from '../../../models/PresentationAssignment';
 import PresentationAttempt from '../../../models/PresentationAttempt';
 import PresentationRecording from '../../../models/PresentationRecording';
 import PresentationShowcase from '../../../models/PresentationShowcase';
+import PresentationRecordingView from '../../../models/PresentationRecordingView';
 import RoomBooking from '../../../models/RoomBooking';
 import { resolveSessionForAssignment, listSessionsForAssignment, recordingsForAttempt } from '../presentationSessionService';
 
@@ -41,7 +46,8 @@ const mockTree = getOwnedProjectTree as unknown as jest.Mock;
 const assignments = PresentationAssignment as unknown as { findOne: jest.Mock };
 const attempts = PresentationAttempt as unknown as { findAll: jest.Mock };
 const recordings = PresentationRecording as unknown as { findAll: jest.Mock };
-const showcases = PresentationShowcase as unknown as { findOne: jest.Mock };
+const showcases = PresentationShowcase as unknown as { findAll: jest.Mock };
+const views = PresentationRecordingView as unknown as { findAll: jest.Mock };
 const bookings = RoomBooking as unknown as { findByPk: jest.Mock; findAll: jest.Mock };
 
 const attempt = (over: Record<string, unknown> = {}) => ({
@@ -66,7 +72,8 @@ beforeEach(() => {
   // `clearAllMocks` wipes the resolved values set in the module factories above, so
   // both are re-armed here rather than relying on the production code's `|| []`.
   recordings.findAll.mockResolvedValue([]);
-  showcases.findOne.mockResolvedValue(null);
+  showcases.findAll.mockResolvedValue([]);
+  views.findAll.mockResolvedValue([]);
   bookings.findByPk.mockResolvedValue(null);
   bookings.findAll.mockResolvedValue([]);
 });
@@ -194,73 +201,97 @@ describe('the attempt history list', () => {
   });
 });
 
-describe('a take knows how far it has got towards being public', () => {
+describe('each take knows how far IT has got towards being public', () => {
   /**
    * Step 4 labelled every take "Private - only you can see this". That assurance has
-   * to follow the fact: once the learner publishes the attempt the cohort can watch
-   * it, and a lock icon beside it is then a false promise rather than a stale label.
+   * to follow the fact, and it has to follow it PER TAKE.
    *
-   * THREE STATES, NOT TWO. The middle one is what a student gets wrong: having asked
-   * to share, they must not believe it is already public, nor that nothing happened.
-   * A boolean cannot say "waiting for staff approval", and that is precisely the
-   * state in which a learner is most likely to be misled.
+   * The showcase was keyed on the attempt until 2026-10-18, so publishing one take
+   * marked every take from that booked room as published. Ali's PREP-4 attempt holds
+   * three takes recorded across five days; a switch on the third would have flipped
+   * the first two while appearing to flip one. These tests exist to keep the state
+   * attached to the recording.
+   *
+   * THREE STATES, because the middle one is what a student misreads: having asked to
+   * share, they must not believe it is already public, nor that nothing happened.
    */
-  const take = { id: 'rec1', part_no: 1, created_at: new Date('2026-10-16T12:00:00Z') };
+  const takeA = { id: 'aaaaaaa1-1111-4111-8111-111111111111', part_no: 1, created_at: new Date('2026-10-12T18:00:00Z') };
+  const takeB = { id: 'bbbbbbb2-2222-4222-8222-222222222222', part_no: 1, created_at: new Date('2026-10-17T17:00:00Z') };
   const ticketFor = { enrollmentId: 'e1', projectId: 'p1', storyId: 'PREP-4' };
 
-  it('is PRIVATE when no showcase exists', async () => {
-    recordings.findAll.mockResolvedValue([take]);
-    showcases.findOne.mockResolvedValue(null);
+  it('is PRIVATE when no showcase names it', async () => {
+    recordings.findAll.mockResolvedValue([takeA]);
+    showcases.findAll.mockResolvedValue([]);
     const out = await recordingsForAttempt('a1', ticketFor);
-    expect(out).toHaveLength(1);
     expect(out[0].shareState).toBe('private');
+    expect(out[0].showcaseId).toBeNull();
   });
 
-  it('is PENDING when a showcase exists but is not published', async () => {
-    recordings.findAll.mockResolvedValue([take]);
-    showcases.findOne.mockResolvedValue({ id: 's1', published_at: null });
+  it('is PENDING when its showcase exists but is unpublished', async () => {
+    recordings.findAll.mockResolvedValue([takeA]);
+    showcases.findAll.mockResolvedValue([{ id: 's1', recording_id: 'aaaaaaa1-1111-4111-8111-111111111111', published_at: null }]);
     const out = await recordingsForAttempt('a1', ticketFor);
     expect(out[0].shareState).toBe('pending');
+    expect(out[0].showcaseId).toBe('s1');
   });
 
-  it('is PUBLISHED once it carries a published_at', async () => {
-    recordings.findAll.mockResolvedValue([take]);
-    showcases.findOne.mockResolvedValue({ id: 's1', published_at: new Date('2026-10-16') });
+  it('is PUBLISHED once its showcase carries a published_at', async () => {
+    recordings.findAll.mockResolvedValue([takeA]);
+    showcases.findAll.mockResolvedValue([{ id: 's1', recording_id: 'aaaaaaa1-1111-4111-8111-111111111111', published_at: new Date() }]);
+    expect((await recordingsForAttempt('a1', ticketFor))[0].shareState).toBe('published');
+  });
+
+  it('THE SIBLING TAKE STAYS PRIVATE - the whole reason for this change', async () => {
+    // Publishing take B must not mark take A as published. Under attempt-level
+    // keying both came back published and the switch lied about two of three takes.
+    recordings.findAll.mockResolvedValue([takeA, takeB]);
+    showcases.findAll.mockResolvedValue([{ id: 's2', recording_id: 'bbbbbbb2-2222-4222-8222-222222222222', published_at: new Date() }]);
+
     const out = await recordingsForAttempt('a1', ticketFor);
-    expect(out[0].shareState).toBe('published');
+    const byId = Object.fromEntries(out.map((t) => [t.id, t]));
+    expect(byId['bbbbbbb2-2222-4222-8222-222222222222'].shareState).toBe('published');
+    expect(byId['aaaaaaa1-1111-4111-8111-111111111111'].shareState).toBe('private');
+    expect(byId['aaaaaaa1-1111-4111-8111-111111111111'].showcaseId).toBeNull();
   });
 
-  it('asks only about THIS attempt, and only about LIVE showcases', async () => {
-    // A withdrawn demo really is private again, so the query must exclude it here
-    // rather than reporting a take as shared when it has been taken down.
-    recordings.findAll.mockResolvedValue([take]);
+  it('ignores a legacy showcase with no recording_id rather than guessing', async () => {
+    // Rows written before this change name no take. Attaching one to an arbitrary
+    // recording would resurrect exactly the bug being fixed.
+    recordings.findAll.mockResolvedValue([takeA]);
+    showcases.findAll.mockResolvedValue([{ id: 'old', recording_id: null, published_at: new Date() }]);
+    expect((await recordingsForAttempt('a1', ticketFor))[0].shareState).toBe('private');
+  });
+
+  it('asks ONCE for the attempt, not once per take', async () => {
+    recordings.findAll.mockResolvedValue([takeA, takeB]);
     await recordingsForAttempt('a1', ticketFor);
-    const where = showcases.findOne.mock.calls[0][0].where;
-    expect(where.attempt_id).toBe('a1');
-    expect(where.withdrawn_at).toBeNull();
+    expect(showcases.findAll).toHaveBeenCalledTimes(1);
+    expect(views.findAll).toHaveBeenCalledTimes(1);
+  });
+
+  it('scopes to LIVE showcases, because a withdrawn take is private again', async () => {
+    recordings.findAll.mockResolvedValue([takeA]);
+    await recordingsForAttempt('a1', ticketFor);
+    expect(showcases.findAll.mock.calls[0][0].where.withdrawn_at).toBeNull();
   });
 
   it('reads published_at, or it could never tell pending from published', async () => {
-    recordings.findAll.mockResolvedValue([take]);
+    recordings.findAll.mockResolvedValue([takeA]);
     await recordingsForAttempt('a1', ticketFor);
-    expect(showcases.findOne.mock.calls[0][0].attributes).toContain('published_at');
+    expect(showcases.findAll.mock.calls[0][0].attributes).toContain('published_at');
+    expect(showcases.findAll.mock.calls[0][0].attributes).toContain('recording_id');
   });
 
-  it('asks ONCE for the whole attempt, not once per take', async () => {
-    // Publication is an attempt-level fact. A query per take would multiply the
-    // round trips on exactly the rehearsals that have the most of them.
-    recordings.findAll.mockResolvedValue([take, { ...take, id: 'rec2', part_no: 2 }]);
+  it('carries a view label for every take, so the page never renders a blank', async () => {
+    recordings.findAll.mockResolvedValue([takeA]);
     const out = await recordingsForAttempt('a1', ticketFor);
-    expect(out).toHaveLength(2);
-    expect(showcases.findOne).toHaveBeenCalledTimes(1);
+    expect(out[0].viewCount).toBe(0);
+    expect(out[0].viewLabel).toBe('No views yet');
   });
 
   it('reads through the MODEL, never a raw connection', async () => {
-    // The regression guard. A `sequelize.query` here opens a real Postgres
-    // connection under this suite and takes four unrelated tests red; that is how
-    // this flag first shipped.
-    recordings.findAll.mockResolvedValue([take]);
+    recordings.findAll.mockResolvedValue([takeA]);
     await recordingsForAttempt('a1', ticketFor);
-    expect(showcases.findOne).toHaveBeenCalled();
+    expect(showcases.findAll).toHaveBeenCalled();
   });
 });

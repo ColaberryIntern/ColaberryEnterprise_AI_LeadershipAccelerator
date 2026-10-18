@@ -27,6 +27,7 @@ const ATTEMPT = '11111111-1111-1111-1111-111111111111';
 const SHOWCASE = '22222222-2222-2222-2222-222222222222';
 const OWNER = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
 const COHORT = 'cccccccc-cccc-cccc-cccc-cccccccccccc';
+const RECORDING = 'dddddddd-dddd-dddd-dddd-dddddddddddd';
 
 beforeEach(() => { jest.clearAllMocks(); q.mockReset(); });
 
@@ -34,7 +35,7 @@ describe('the author asks', () => {
   it('records the request and the AUTHOR approval only', async () => {
     q.mockResolvedValueOnce([[{ id: SHOWCASE }], {}]);
     const r = await requestShare({
-      enrollmentId: OWNER, attemptId: ATTEMPT, cohortId: COHORT,
+      enrollmentId: OWNER, attemptId: ATTEMPT, recordingId: RECORDING, cohortId: COHORT,
       draftSummary: 'A courier routing demo.', recordingIds: [ATTEMPT],
     });
     expect(r).toEqual({ ok: true, showcaseId: SHOWCASE, created: true });
@@ -49,32 +50,32 @@ describe('the author asks', () => {
   });
 
   it('infers the PARTIAL unique index, or the insert fails outright', async () => {
-    // The index is `(attempt_id) WHERE withdrawn_at IS NULL`. A bare
-    // `ON CONFLICT (attempt_id)` cannot infer it and Postgres rejects the statement.
+    // The index is `(recording_id) WHERE withdrawn_at IS NULL`. A bare
+    // `ON CONFLICT (recording_id)` cannot infer it and Postgres rejects the statement.
     q.mockResolvedValueOnce([[{ id: SHOWCASE }], {}]);
     await requestShare({
-      enrollmentId: OWNER, attemptId: ATTEMPT, cohortId: COHORT,
+      enrollmentId: OWNER, attemptId: ATTEMPT, recordingId: RECORDING, cohortId: COHORT,
       draftSummary: 'x', recordingIds: [ATTEMPT],
     });
-    expect(String(q.mock.calls[0][0])).toContain('ON CONFLICT (attempt_id) WHERE withdrawn_at IS NULL');
+    expect(String(q.mock.calls[0][0])).toContain('ON CONFLICT (recording_id) WHERE withdrawn_at IS NULL');
   });
 
   it('asking twice is ONE request, and returns the existing one', async () => {
     q.mockResolvedValueOnce([[], {}]);                    // conflict: nothing inserted
     q.mockResolvedValueOnce([[{ id: SHOWCASE }], {}]);    // the existing row
     const r = await requestShare({
-      enrollmentId: OWNER, attemptId: ATTEMPT, cohortId: COHORT,
+      enrollmentId: OWNER, attemptId: ATTEMPT, recordingId: RECORDING, cohortId: COHORT,
       draftSummary: 'x', recordingIds: [ATTEMPT],
     });
     expect(r).toEqual({ ok: true, showcaseId: SHOWCASE, created: false });
-    // Scoped to the LIVE row: a withdrawn showcase is history, and handing it back
-    // would give the caller a dead row that then refuses to publish.
+    // Scoped to the LIVE row FOR THIS TAKE: a withdrawn showcase is history, and
+    // handing it back would give the caller a dead row that then refuses to publish.
     expect(String(q.mock.calls[1][0])).toContain('withdrawn_at IS NULL');
   });
 
   it('refuses an empty summary — a showcase needs something readable', async () => {
     const r = await requestShare({
-      enrollmentId: OWNER, attemptId: ATTEMPT, cohortId: COHORT,
+      enrollmentId: OWNER, attemptId: ATTEMPT, recordingId: RECORDING, cohortId: COHORT,
       draftSummary: '   ', recordingIds: [ATTEMPT],
     });
     expect(r.ok).toBe(false);
@@ -208,5 +209,71 @@ describe('approve, publish and announce as one decision', () => {
     q.mockResolvedValueOnce([[], {}]);
     expect(await approveAndPublish(SHOWCASE, 'staff@colaberry.com'))
       .toEqual({ ok: false, reason: 'No such showcase.' });
+  });
+});
+
+describe('the showcase names the TAKE, not the room', () => {
+  /**
+   * Keyed on the attempt until 2026-10-18, which quietly made every take from one
+   * booked room share a single visibility. An attempt is long-lived - Ali's PREP-4
+   * attempt collected three takes across five days - and a learner records several
+   * in order to choose ONE. Attempt keying published all three together and took
+   * all three down together, so a per-take switch would have flipped two takes the
+   * learner never touched while appearing to flip one.
+   */
+  it('writes the recording id, so the switch controls what it claims to', async () => {
+    q.mockResolvedValueOnce([[{ id: SHOWCASE }], {}]);
+    await requestShare({
+      enrollmentId: OWNER, attemptId: ATTEMPT, recordingId: RECORDING, cohortId: COHORT,
+      draftSummary: 'A courier routing demo.', recordingIds: [RECORDING],
+    });
+    const [sql, opts] = q.mock.calls[0];
+    expect(String(sql)).toContain('recording_id');
+    expect(opts.replacements.recordingId).toBe(RECORDING);
+  });
+
+  it('still records the attempt, because lineage is not the same as identity', async () => {
+    // The attempt says which rehearsal this came out of and is what the gallery and
+    // the feed join through. Dropping it to key on the take would lose that.
+    q.mockResolvedValueOnce([[{ id: SHOWCASE }], {}]);
+    await requestShare({
+      enrollmentId: OWNER, attemptId: ATTEMPT, recordingId: RECORDING, cohortId: COHORT,
+      draftSummary: 'x', recordingIds: [RECORDING],
+    });
+    expect(q.mock.calls[0][1].replacements.attemptId).toBe(ATTEMPT);
+  });
+
+  it('the duplicate check looks up the TAKE, never the attempt', async () => {
+    // Looking up by attempt would hand back a sibling take's showcase and let the
+    // caller believe this take was already shared.
+    q.mockResolvedValueOnce([[], {}]);
+    q.mockResolvedValueOnce([[{ id: SHOWCASE }], {}]);
+    await requestShare({
+      enrollmentId: OWNER, attemptId: ATTEMPT, recordingId: RECORDING, cohortId: COHORT,
+      draftSummary: 'x', recordingIds: [RECORDING],
+    });
+    const [sql, opts] = q.mock.calls[1];
+    expect(String(sql)).toContain('recording_id = :recordingId');
+    expect(String(sql)).not.toContain('attempt_id = :attemptId');
+    expect(opts.replacements.recordingId).toBe(RECORDING);
+  });
+
+  it('hashes the TAKE, so approval binds to the footage reviewed', async () => {
+    // Two takes of the same attempt must not produce the same content hash, or an
+    // approval of one would read as an approval of the other.
+    q.mockResolvedValueOnce([[{ id: SHOWCASE }], {}]);
+    await requestShare({
+      enrollmentId: OWNER, attemptId: ATTEMPT, recordingId: RECORDING, cohortId: COHORT,
+      draftSummary: 'same words', recordingIds: [RECORDING],
+    });
+    const first = q.mock.calls[0][1].replacements.hash;
+
+    q.mockReset();
+    q.mockResolvedValueOnce([[{ id: 'other' }], {}]);
+    await requestShare({
+      enrollmentId: OWNER, attemptId: ATTEMPT, recordingId: SHOWCASE, cohortId: COHORT,
+      draftSummary: 'same words', recordingIds: [SHOWCASE],
+    });
+    expect(q.mock.calls[0][1].replacements.hash).not.toBe(first);
   });
 });
