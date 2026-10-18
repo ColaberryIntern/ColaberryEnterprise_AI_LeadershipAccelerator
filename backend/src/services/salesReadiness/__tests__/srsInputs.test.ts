@@ -79,6 +79,45 @@ describe('M25 - a real measurement survives the mapping', () => {
   });
 });
 
+describe('recency is scored only when the timeline was read in FULL', () => {
+  const ALL = ['acquisition', 'sales', 'communication', 'commerce', 'learning', 'community'];
+  const JOURNEY = {
+    firstTouch: null, lastActivity: '2026-10-17T12:00:00.000Z', daysKnown: null,
+    sessions: null, pageEvents: null, campaigns: null, emailsSent: null,
+    enrollments: null, intentScore: null, cardsCompleted: null, sessionsAttended: null,
+  };
+
+  it('carries lastActivity when every domain was read', () => {
+    const i = inputsFromProfile(withPanels({
+      journey: JOURNEY, timelineDomains: ALL as PersonProfile['timelineDomains'],
+    }));
+    expect(i.lastActivityAt).toBe('2026-10-17T12:00:00.000Z');
+  });
+
+  it('reports it ABSENT when even one domain was withheld', () => {
+    // The whole reason the M24 contract excluded recency: a caller-shaped last activity is a
+    // fact about the viewer, not the person. Absent is the true answer, and the engine already
+    // knows how to handle absent.
+    const i = inputsFromProfile(withPanels({
+      journey: JOURNEY,
+      timelineDomains: ALL.slice(0, 5) as PersonProfile['timelineDomains'],
+    }));
+    expect(i.lastActivityAt).toBeNull();
+  });
+
+  it('reports it absent when the caller got no timeline at all', () => {
+    expect(inputsFromProfile(withPanels({ journey: JOURNEY })).lastActivityAt).toBeNull();
+  });
+
+  it('reports it absent when the timeline was complete but there was no activity', () => {
+    const i = inputsFromProfile(withPanels({
+      journey: { ...JOURNEY, lastActivity: null },
+      timelineDomains: ALL as PersonProfile['timelineDomains'],
+    }));
+    expect(i.lastActivityAt).toBeNull();
+  });
+});
+
 describe('M25 - the EXCLUDED inputs are not read at all', () => {
   it('reads prior history only through its availability flag and enrolment count', () => {
     const unavailable = inputsFromProfile(withPanels({
@@ -98,7 +137,7 @@ describe('M25 - the EXCLUDED inputs are not read at all', () => {
     expect(available.priorEnrolments).toBe(2);
   });
 
-  it('never reads lastActivity, which the contract still marks EXCLUDED', () => {
+  it('does not read lastActivity when the timeline coverage is unknown', () => {
     const i = inputsFromProfile(withPanels({
       journey: {
         firstTouch: null, lastActivity: '2026-10-01T00:00:00.000Z', daysKnown: null,

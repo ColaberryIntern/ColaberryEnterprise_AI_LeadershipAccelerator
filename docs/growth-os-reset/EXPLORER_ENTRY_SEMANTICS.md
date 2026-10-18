@@ -32,7 +32,7 @@ Declared as a two-value union on the model:
 The database does not enforce it. The column is `VARCHAR(20)` with a default, created not by
 a migration but by a startup drift-guard:
 
-`backend/src/server.ts:1052` → "`ALTER TABLE enrollments ADD COLUMN IF NOT EXISTS enrollment_type VARCHAR(20) NOT NULL DEFAULT 'standard'`,"
+`backend/src/server.ts:1053` → "`ALTER TABLE enrollments ADD COLUMN IF NOT EXISTS enrollment_type VARCHAR(20) NOT NULL DEFAULT 'standard'`,"
 
 **Two declared values; more than two are written in practice.** Because there is no CHECK
 and no ENUM, out-of-union values exist in code paths that write this column. The model's own
@@ -46,7 +46,7 @@ Declared as a different two-value union, on the same model:
 
 Same storage story, same kind of drift-guard:
 
-`backend/src/server.ts:1009` → "`ALTER TABLE enrollments ADD COLUMN IF NOT EXISTS tier VARCHAR(20) NOT NULL DEFAULT 'member'`,"
+`backend/src/server.ts:1010` → "`ALTER TABLE enrollments ADD COLUMN IF NOT EXISTS tier VARCHAR(20) NOT NULL DEFAULT 'member'`,"
 
 Its doc comment claims it is the source of truth for access level. **It is not** — the
 paywall never reads it, which is gap A5 in `GAP_MATRIX.md`:

@@ -188,7 +188,7 @@ advisory.
 
 **The two columns, and the mechanism that creates them:**
 
-- `backend/src/server.ts:1052` → "ALTER TABLE enrollments ADD COLUMN IF NOT EXISTS enrollment_type VARCHAR(20) NOT NULL DEFAULT 'standard'"
+- `backend/src/server.ts:1053` → "ALTER TABLE enrollments ADD COLUMN IF NOT EXISTS enrollment_type VARCHAR(20) NOT NULL DEFAULT 'standard'"
 
 **The partner-app gate reads `tier`, not `enrollment_type` — row 1, and the correction to the
 plan's assumption:**

@@ -16,7 +16,25 @@
  * here reads `lastActivity`.
  */
 import { PersonProfile } from '../adminOs/personProfileService';
+import { ALL_EVENT_DOMAINS } from '../adminOs/personTimelineService';
 import { SrsInputs } from './srsEngine';
+
+/**
+ * Did this read see the WHOLE timeline?
+ *
+ * `journey.lastActivity` is the newest event among the domains the caller was permitted, so two
+ * callers with different sections read a different "last activity" for the same person. That is
+ * why the M24 contract excluded recency: an input that varies by viewer breaks determinism at the
+ * input rather than in the arithmetic.
+ *
+ * The fix is not to widen anybody's permissions. It is to let the DATA say whether the read was
+ * complete, and to score recency only when it was. A partial read reports recency ABSENT, which
+ * is true and which the engine already knows how to handle.
+ */
+function hasFullTimelineCoverage(profile: PersonProfile): boolean {
+  const seen = new Set(profile.timelineDomains ?? []);
+  return ALL_EVENT_DOMAINS.every((d) => seen.has(d));
+}
 
 /** A list's length, or null when the list itself is absent rather than empty. */
 function countOf(list: readonly unknown[] | null | undefined): number | null {
@@ -62,5 +80,11 @@ export function inputsFromProfile(profile: PersonProfile): SrsInputs {
     // M27 - the only input that dates itself today is the Explorer snapshot. Freshness is bounded
     // by this, so recomputing a score over an old snapshot cannot make it look current.
     evidenceAsOf: orNull(profile.explorerScore?.asOfDate),
+
+    // Recency, scored ONLY when the timeline was read in full. A partial read would give a
+    // caller-shaped answer, and a score that changes with the viewer is not a score.
+    lastActivityAt: hasFullTimelineCoverage(profile)
+      ? orNull(profile.journey?.lastActivity)
+      : null,
   };
 }

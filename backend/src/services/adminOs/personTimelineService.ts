@@ -86,6 +86,15 @@ const DOMAIN_SECTIONS: Record<EventDomain, readonly string[]> = {
   community: ['students', 'program'],
 };
 
+/**
+ * Every domain the timeline can carry.
+ *
+ * Derived from the map rather than written out again, so a seventh domain cannot be added above
+ * and forgotten here. A caller that received ALL of these read a complete timeline, which is what
+ * lets a consumer tell a caller-independent fact from a caller-shaped one.
+ */
+export const ALL_EVENT_DOMAINS = Object.keys(DOMAIN_SECTIONS) as EventDomain[];
+
 export function domainsForSections(sections: readonly string[]): EventDomain[] {
   return (Object.keys(DOMAIN_SECTIONS) as EventDomain[])
     .filter((d) => DOMAIN_SECTIONS[d].some((s) => sections.includes(s)));
