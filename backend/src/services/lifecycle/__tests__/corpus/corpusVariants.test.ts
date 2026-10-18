@@ -260,38 +260,59 @@ describe('§103 case 7: source overflow drops blocks SILENTLY, and the check doe
     expect(sourceSection(prompt)).toContain('the system must notify the applicant');
   });
 
-  it('RECORDED GAP 1: block 201 is dropped ENTIRELY and UNLABELLED, yet the check returns true', () => {
-    // `renderBlocks` does `.slice(0, MAX_BLOCKS)`. There is no truncation label for this one --
-    // `delimited()` only labels when the JOINED body exceeds its own cap, and 201 short blocks do
-    // not come close. So the block does not arrive and nothing says so.
+  // GAP 1 AND GAP 2 WERE RECORDED HERE, AND ARE NOW CLOSED. They documented a prompt that
+  // dropped source blocks with nothing said, while the completeness check reported full
+  // coverage because it read the instruction line rather than the delimited body. These two
+  // cases are kept, inverted, so the closure cannot silently regress.
+  it('a block over the cap is dropped, SAYS SO, and the coverage check now refuses', () => {
     const blocks = Array.from({ length: MAX_BLOCKS + 1 }, (_, i) => block(`blk-${i + 1}`, `requirement number ${i + 1}`));
     const inputs = { sourceBlocks: blocks, requirements: [], context: 'c' };
     const prompt = buildFactoryDecomposeUserPrompt(inputs);
     const body = sourceSection(prompt);
 
-    // Dropped: the 201st block's text never reaches the model.
+    // Still dropped: the cap is a real limit and this does not pretend otherwise.
     expect(body).not.toContain(`requirement number ${MAX_BLOCKS + 1}`);
     expect(body).toContain('requirement number 1');
-    // Silent: no label anywhere saying anything was removed.
-    expect(prompt).not.toContain('truncated');
 
-    // AND THE COMPLETENESS CHECK IS SATISFIED, because the id is listed in the instruction line
-    // at the top, which `delimited()` never touches. The check verifies we ASKED for the block,
-    // not that we SUPPLIED it. This is the finding §103 case 7 exists to force.
-    expect(coversRequirementBlocks(prompt, inputs)).toBe(true);
+    // NO LONGER SILENT: the body names what did not arrive.
+    expect(body).toContain('truncated');
+    expect(body).toContain(`blk-${MAX_BLOCKS + 1}`);
+
+    // AND THE CHECK NO LONGER LIES. It reads the delimited body and keys on the rendered
+    // `[id]` form, so the plain-text notice listing the dropped id cannot satisfy it.
+    expect(coversRequirementBlocks(prompt, inputs)).toBe(false);
+    expect(body).not.toContain(`[blk-${MAX_BLOCKS + 1}]`);
   });
 
-  it('RECORDED GAP 2: a block longer than MAX_BLOCK_CHARS is clipped, also unlabelled', () => {
+  it('a block longer than MAX_BLOCK_CHARS is clipped and LABELLED, and still counts as supplied', () => {
     const tail = 'THE TAIL THE MODEL NEVER SEES';
     const inputs = {
       sourceBlocks: [block('blk-long', `${'x'.repeat(MAX_BLOCK_CHARS)}${tail}`)],
       requirements: [], context: 'c',
     };
     const prompt = buildFactoryDecomposeUserPrompt(inputs);
+    const body = sourceSection(prompt);
 
-    expect(sourceSection(prompt)).not.toContain(tail);
-    expect(prompt).not.toContain('truncated');
+    expect(body).not.toContain(tail);
+    expect(body).toContain(`truncated at ${MAX_BLOCK_CHARS} chars`);
+
+    // TRUE on purpose, and the distinction matters: this block WAS supplied, so coverage holds.
+    // What was lost is its tail, and the label is what says so. Coverage is about supply; the
+    // truncation notice is about completeness, and conflating them would make one of the two
+    // unreportable.
     expect(coversRequirementBlocks(prompt, inputs)).toBe(true);
+  });
+
+  it('the instruction cannot order the model to cite a block it was never given', () => {
+    // The root cause: the instruction line was built from the FULL input while the body was
+    // sliced, so the two disagreed. They now share one definition of "supplied".
+    const blocks = Array.from({ length: MAX_BLOCKS + 2 }, (_, i) => block(`blk-${i + 1}`, `requirement number ${i + 1}`));
+    const prompt = buildFactoryDecomposeUserPrompt({ sourceBlocks: blocks, requirements: [], context: 'c' });
+    const instruction = prompt.slice(0, prompt.indexOf('<SOURCE_BLOCKS>'));
+
+    expect(instruction).toContain('blk-1');
+    expect(instruction).not.toContain(`blk-${MAX_BLOCKS + 1},`);
+    expect(instruction).not.toContain(`blk-${MAX_BLOCKS + 2}`);
   });
 
   it('the SAFE-002 delimiters and the grounding order survive, which any fix must preserve', () => {
