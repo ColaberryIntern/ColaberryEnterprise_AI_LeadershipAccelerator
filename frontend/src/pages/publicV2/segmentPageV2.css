@@ -1,0 +1,100 @@
+/*
+ * segmentPageV2 - the four bands from the C5.1 wireframe.
+ *
+ * Deliberately thin. The ticket puts redesigning the design system out of scope, so this
+ * borrows the existing `cbv2-section` and `cbv2-wrap` rhythm and adds only what the four
+ * bands need. No new colour values: everything resolves to tokens the site already sets.
+ */
+
+.cbv2-seg__band + .cbv2-seg__band {
+  border-top: 1px solid var(--cbv2-border, #e2e8f0);
+}
+
+/* Band 1 */
+.cbv2-seg__noun {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--cbv2-accent, #b3261e);
+  margin: 0 0 0.5rem;
+}
+
+.cbv2-seg__lede {
+  font-size: clamp(1.6rem, 3.6vw, 2.5rem);
+  line-height: 1.22;
+  font-weight: 700;
+  margin: 0 0 1rem;
+  max-width: 26ch;
+}
+
+.cbv2-seg__claim {
+  font-size: 1.02rem;
+  color: var(--cbv2-muted, #475569);
+  margin: 0;
+  max-width: 62ch;
+}
+
+/* Band 2 */
+.cbv2-seg__gets {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1.5rem;
+}
+
+.cbv2-seg__get h2 {
+  font-size: 1.08rem;
+  font-weight: 700;
+  margin: 0 0 0.4rem;
+}
+
+.cbv2-seg__get p {
+  margin: 0;
+  color: var(--cbv2-muted, #475569);
+  line-height: 1.55;
+}
+
+/* Band 3 */
+.cbv2-seg__proofh {
+  font-size: 1.3rem;
+  font-weight: 700;
+  margin: 0 0 0.6rem;
+}
+
+.cbv2-seg__proof {
+  max-width: 64ch;
+  color: var(--cbv2-muted, #475569);
+  line-height: 1.6;
+  margin: 0 0 0.9rem;
+}
+
+.cbv2-seg__link {
+  font-weight: 600;
+}
+
+/* Band 4 */
+.cbv2-seg__cta {
+  display: flex;
+  justify-content: center;
+  padding: 0.5rem 0 0.25rem;
+}
+
+.cbv2-seg__btn {
+  display: inline-block;
+  padding: 0.85rem 1.6rem;
+  border-radius: 8px;
+  background: var(--cbv2-accent, #b3261e);
+  color: #fff;
+  font-weight: 700;
+  text-decoration: none;
+  /* A 48px target, so the one call to action on the page is reachable on a phone. */
+  min-height: 48px;
+  line-height: 1.6;
+}
+
+.cbv2-seg__btn:hover,
+.cbv2-seg__btn:focus-visible {
+  background: var(--cbv2-accent-deep, #8c1d18);
+  color: #fff;
+  text-decoration: none;
+}

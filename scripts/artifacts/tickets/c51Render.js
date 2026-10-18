@@ -223,8 +223,12 @@ function buildDocument() {
     <h2>7. What this needs you to decide</h2>
     ${D.DECISIONS.map((d) => `<div class="pg">
       <div><b>${esc(d.q)}</b></div>
-      <div style="margin-top:3px">${esc(d.detail)}</div>
-      <div class="lab">Recommendation</div><div>${esc(d.rec)}</div>
+      <div class="lab">Decided, 18 October 2026</div>
+      <div><b>${esc(d.decided)}</b>${d.overridden
+    ? ' <span style="color:#b26a00">(this overrides what I recommended)</span>' : ''}</div>
+      <div class="lab">What was recommended</div><div>${esc(d.recommended)}</div>
+      <div class="lab">Reasoning</div><div>${esc(d.detail)}</div>
+      <div class="lab">What follows</div><div>${esc(d.consequence)}</div>
     </div>`).join('')}
 
     <h2>8. Limits</h2>
