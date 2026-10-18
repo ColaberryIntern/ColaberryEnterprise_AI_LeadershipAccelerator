@@ -59,6 +59,19 @@ describe('both pages are actually routed', () => {
 });
 
 describe('the accelerator page states no duration the registry has not verified', () => {
+  it('states the duration the registry DID verify, so the absence test cannot pass on an empty page', () => {
+    // <Claim> renders NOTHING when a key is unpublishable, so "never says 90 days" would
+    // also hold for a page that lost its duration entirely. This is the positive half:
+    // the registry's own wording for program.duration has to be on the page.
+    expect(textOf(acc)).toContain('12 weeks');
+  });
+
+  it('renders the positioning claim on both pages, through the registry', () => {
+    for (const h of [how, acc]) {
+      expect(textOf(h)).toContain('Build the system. Build the people. Prove the capability.');
+    }
+  });
+
   it('never says "90 days"', () => {
     // The registry's only verified duration is "12 weeks". Ninety has no row, and CLM-029
     // says a figure without a source row does not go out. If ninety is what we want to
