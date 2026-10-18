@@ -22,7 +22,16 @@ export interface ResponseFigureAttr {
   caption: string;
 }
 
-export type ProposalResponseStatusAttr = 'draft' | 'reviewed' | 'approved' | 'revision_required';
+export type ProposalResponseStatusAttr = 'draft' | 'reviewed' | 'approved' | 'revision_required' | 'filler';
+
+/** A Draft-with-AI gap (P5): a fact the AI could not ground, surfaced as a question. A 'filler' resolution blocks export. */
+export interface ResponseGapAttr {
+  id: string;
+  question: string;
+  suggestions: string[];
+  resolution: 'open' | 'answered' | 'filler';
+  answer?: string;
+}
 
 export interface GovProposalResponseAttributes {
   id?: string;
@@ -33,6 +42,8 @@ export interface GovProposalResponseAttributes {
   status: ProposalResponseStatusAttr;
   /** Commit-bound figures attached to the response. JSONB array of {commit, ref, caption}. */
   figures: ResponseFigureAttr[];
+  /** P5 Draft-with-AI gaps. JSONB array; a 'filler' gap blocks export server-side. */
+  gaps: ResponseGapAttr[];
   authored_by_identity_id: string | null;
   reviewed_by_identity_id: string | null;
   created_at?: Date;
@@ -46,6 +57,7 @@ class GovProposalResponse extends Model<GovProposalResponseAttributes> implement
   declare content: string;
   declare status: ProposalResponseStatusAttr;
   declare figures: ResponseFigureAttr[];
+  declare gaps: ResponseGapAttr[];
   declare authored_by_identity_id: string | null;
   declare reviewed_by_identity_id: string | null;
   declare created_at: Date;
@@ -60,6 +72,7 @@ GovProposalResponse.init(
     content: { type: DataTypes.TEXT, allowNull: false, defaultValue: '' },
     status: { type: DataTypes.STRING(20), allowNull: false, defaultValue: 'draft' },
     figures: { type: DataTypes.JSONB, allowNull: false, defaultValue: [] },
+    gaps: { type: DataTypes.JSONB, allowNull: false, defaultValue: [] },
     authored_by_identity_id: { type: DataTypes.UUID, allowNull: true },
     reviewed_by_identity_id: { type: DataTypes.UUID, allowNull: true },
     created_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },

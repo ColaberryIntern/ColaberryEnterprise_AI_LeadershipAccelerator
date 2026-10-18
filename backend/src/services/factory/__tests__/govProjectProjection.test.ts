@@ -39,6 +39,16 @@ describe('toStudentGovProjectView (pure) — student-safe', () => {
     expect(view.requirementCounts).toEqual({ total: 2, proposal: 2, build: 1 });
   });
 
+  it('P5: drops a pricing requirement entirely — its dollar figures never reach a student', () => {
+    const withPricing = toStudentGovProjectView(projectRow, trackRows, [
+      ...reqRows,
+      { canonical_req_id: 'REQ-PRICE', statement: 'Total not to exceed $4,200,000 over the base year.', priority: 'must', tracks: ['proposal'], evidence_state: 'unassessed', kind: 'pricing' },
+    ]);
+    expect(withPricing.requirements.map((r) => r.canonicalReqId)).not.toContain('REQ-PRICE');
+    expect(JSON.stringify(withPricing)).not.toContain('4,200,000'); // the price is not anywhere in the projection
+    expect(withPricing.requirementCounts.total).toBe(2);            // pricing is not counted either
+  });
+
   it('exposes the build link as a BOOLEAN, never the raw student-project id', () => {
     const build = view.tracks.find((t) => t.trackType === 'solution_build')!;
     expect(build.hasBuild).toBe(true);

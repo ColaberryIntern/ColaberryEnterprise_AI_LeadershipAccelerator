@@ -532,14 +532,25 @@ export interface GovSubmission {
 export interface GovResponseFigure { commit: string; ref: string; caption: string }
 
 /** One line of the proposal response checklist — cites the requirement it answers; carries the authored response. */
+/** P5 Draft-with-AI: a gap the draft could not ground. A `filler` resolution blocks export server-side. */
+export interface GovResponseGap {
+  id: string;
+  question: string;
+  suggestions: string[];
+  resolution: 'open' | 'answered' | 'filler';
+  answer?: string;
+}
+
 export interface GovResponseSlot {
   requirementId: string;
   statement: string;
   sourceRef: string | null;
-  /** `unanswered` until authored; then the response's lifecycle. A material amendment flips it to revision_required. */
-  status: 'unanswered' | 'draft' | 'reviewed' | 'approved' | 'revision_required';
+  /** `unanswered` until authored; then the response's lifecycle. `filler` (P5) blocks export. */
+  status: 'unanswered' | 'draft' | 'reviewed' | 'approved' | 'revision_required' | 'filler';
   content?: string;
   figures?: GovResponseFigure[];
+  /** P5 Draft-with-AI gaps on this response; a `filler` gap blocks export. */
+  gaps?: GovResponseGap[];
   authoredByIdentityId?: string | null;
   reviewedByIdentityId?: string | null;
   updatedAt?: string | null;
@@ -685,6 +696,18 @@ export async function addGovProposalFigure(canonicalOpportunityId: string, requi
 /** Remove a figure by its ref. */
 export async function removeGovProposalFigure(canonicalOpportunityId: string, requirementId: string, ref: string): Promise<GovResponseSlot> {
   const { data } = await api.delete(rUrl(canonicalOpportunityId, requirementId, `/figures?ref=${encodeURIComponent(ref)}`));
+  return data;
+}
+
+/** P5: persist a Draft-with-AI result (content + typed gaps). Lands as `draft`; a filler gap marks it `filler`. */
+export async function saveGovProposalDraft(canonicalOpportunityId: string, requirementId: string, content: string, gaps: GovResponseGap[]): Promise<GovResponseSlot> {
+  const { data } = await api.post(rUrl(canonicalOpportunityId, requirementId, '/draft'), { content, gaps });
+  return data;
+}
+
+/** P5: resolve one Draft-with-AI gap. `filler` blocks export server-side until replaced. */
+export async function resolveGovProposalGap(canonicalOpportunityId: string, requirementId: string, gapId: string, resolution: 'open' | 'answered' | 'filler', answer?: string): Promise<GovResponseSlot> {
+  const { data } = await api.post(rUrl(canonicalOpportunityId, requirementId, `/gaps/${encodeURIComponent(gapId)}`), { resolution, answer });
   return data;
 }
 

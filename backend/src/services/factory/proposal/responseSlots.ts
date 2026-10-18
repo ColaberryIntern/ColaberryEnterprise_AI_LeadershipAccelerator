@@ -16,13 +16,26 @@
  * never fabricates a reviewed/approved state — `reviewed`/`approved` are set only by explicit human review, and a
  * material amendment flips an affected answer to `revision_required`.
  */
-export type ProposalResponseStatus = 'unanswered' | 'draft' | 'reviewed' | 'approved' | 'revision_required';
+export type ProposalResponseStatus = 'unanswered' | 'draft' | 'reviewed' | 'approved' | 'revision_required' | 'filler';
 
 /** A figure attached to a response, bound to the git commit it was captured at (the provenance). */
 export interface ResponseFigure {
   commit: string;
   ref: string;
   caption: string;
+}
+
+/**
+ * P5 Draft-with-AI: a typed GAP the draft could not answer from grounded facts. The AI never invents the fact - it
+ * inserts a question. `resolution` is how the human closed it: `answered` with a real answer, or `filler` with a
+ * placeholder that is visibly red and BLOCKS export/submission server-side until it is replaced. `open` is unanswered.
+ */
+export interface ResponseGap {
+  id: string;
+  question: string;
+  suggestions: string[];
+  resolution: 'open' | 'answered' | 'filler';
+  answer?: string;
 }
 
 export interface ResponseSlot {
@@ -38,6 +51,8 @@ export interface ResponseSlot {
   content?: string;
   /** Commit-bound figures on the response. */
   figures?: ResponseFigure[];
+  /** Draft-with-AI gaps the author must resolve; a `filler` gap blocks submission (see evaluateSubmissionReadiness). */
+  gaps?: ResponseGap[];
   authoredByIdentityId?: string | null;
   reviewedByIdentityId?: string | null;
   updatedAt?: string | null;
@@ -49,6 +64,7 @@ export interface ResponseOverlay {
   status: Exclude<ProposalResponseStatus, 'unanswered'>;
   content: string;
   figures: ResponseFigure[];
+  gaps: ResponseGap[];
   authoredByIdentityId: string | null;
   reviewedByIdentityId: string | null;
   updatedAt: string | null;
@@ -88,12 +104,13 @@ export function applyResponsesToSlots(slots: ResponseSlot[], responses: Response
   for (const r of Array.isArray(responses) ? responses : []) if (r && r.requirementId) byReq.set(r.requirementId, r);
   return (Array.isArray(slots) ? slots : []).map((s) => {
     const r = byReq.get(s.requirementId);
-    if (!r) return { ...s, status: 'unanswered' as const, content: '', figures: [], authoredByIdentityId: null, reviewedByIdentityId: null, updatedAt: null };
+    if (!r) return { ...s, status: 'unanswered' as const, content: '', figures: [], gaps: [], authoredByIdentityId: null, reviewedByIdentityId: null, updatedAt: null };
     return {
       ...s,
       status: r.status,
       content: r.content ?? '',
       figures: Array.isArray(r.figures) ? r.figures : [],
+      gaps: Array.isArray(r.gaps) ? r.gaps : [],
       authoredByIdentityId: r.authoredByIdentityId ?? null,
       reviewedByIdentityId: r.reviewedByIdentityId ?? null,
       updatedAt: r.updatedAt ?? null,

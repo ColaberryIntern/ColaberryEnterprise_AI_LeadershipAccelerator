@@ -26,6 +26,9 @@ export async function ensureGovProposalResponseSchema(): Promise<void> {
        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
      )`,
     `CREATE UNIQUE INDEX IF NOT EXISTS idx_gov_proposal_response_project_req ON gov_proposal_response (delivery_project_id, requirement_id)`,
+    // P5 Draft-with-AI: the typed gaps the author must resolve. Additive, idempotent; a 'filler' gap (or the
+    // 'filler' status) blocks export server-side (see evaluateSubmissionReadiness).
+    `ALTER TABLE gov_proposal_response ADD COLUMN IF NOT EXISTS gaps JSONB NOT NULL DEFAULT '[]'::jsonb`,
   ];
 
   for (const sql of statements) {

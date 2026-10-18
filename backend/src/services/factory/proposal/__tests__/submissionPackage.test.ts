@@ -25,6 +25,18 @@ describe('evaluateSubmissionReadiness', () => {
     expect(evaluateSubmissionReadiness([], true, true).blocking).toContain('no_response_slots');
   });
 
+  it('P5: a filler placeholder blocks export server-side, whether by slot status or by a filler gap', () => {
+    const byStatus = evaluateSubmissionReadiness([slot('R1', 'approved'), slot('R2', 'filler')], true, true);
+    expect(byStatus.ready).toBe(false);
+    expect(byStatus.blocking.some((b) => b.startsWith('responses_filler') && b.includes('R2'))).toBe(true);
+
+    const byGap = evaluateSubmissionReadiness([
+      slot('R1', 'approved'),
+      { requirementId: 'R3', statement: 's', sourceRef: null, status: 'draft', content: 'x', figures: [], gaps: [{ id: 'g1', question: 'q', suggestions: [], resolution: 'filler' }] } as any,
+    ], true, true);
+    expect(byGap.blocking.some((b) => b.startsWith('responses_filler') && b.includes('R3'))).toBe(true);
+  });
+
   it('is total on garbage', () => {
     expect(evaluateSubmissionReadiness(undefined as any, true, true).ready).toBe(false);
   });

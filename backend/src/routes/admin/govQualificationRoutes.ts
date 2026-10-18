@@ -18,7 +18,7 @@ import {
   DocumentNotListedError, ApprovalRequestSelfError, NotRequestedApproverError,
 } from '../../services/factory/govQualification';
 import { assignBuildStory, unassignBuildStory, AssignmentError } from '../../services/factory/govBuildAssignment';
-import { saveProposalResponse, reviewProposalResponse, addProposalFigure, removeProposalFigure, ResponseError } from '../../services/factory/govProposalResponse';
+import { saveProposalResponse, reviewProposalResponse, addProposalFigure, removeProposalFigure, saveDraftWithGaps, resolveProposalGap, ResponseError } from '../../services/factory/govProposalResponse';
 import { recordProposalAmendment, AmendmentError } from '../../services/factory/govProposalAmendment';
 import { exportSubmission, recordSubmissionReceipt, acknowledgeSubmission, reopenSubmission, recordOutcome, getSubmission, SubmissionError } from '../../services/factory/govSubmission';
 import { buildSubmissionManifest, buildPackageFiles, evaluateSubmissionReadiness } from '../../services/factory/proposal/submissionPackage';
@@ -269,6 +269,7 @@ const requirementIdParam = z.string().min(1).max(120);
 const RESPONSE_ERR_STATUS: Record<string, number> = {
   bad_input: 400, bad_decision: 400, figure_no_ref: 400, not_found: 404,
   not_draft: 409, not_reviewed: 409, empty_content: 422, figure_not_commit_bound: 422,
+  bad_resolution: 400, empty_answer: 422, gap_not_found: 404,
 };
 
 /** Resolve the gws/canonical key to its delivery project, or respond 404 and return null (not approved yet). */
@@ -371,6 +372,52 @@ router.delete('/api/admin/factory/qualification/:canonicalOpportunityId/response
   } catch (err: any) {
     if (err instanceof ResponseError) { res.status(RESPONSE_ERR_STATUS[err.reason] ?? 400).json({ error: err.message, reason: err.reason }); return; }
     logFail('gov_response_figure_remove_failed', err, { canonicalOpportunityId }); res.status(500).json({ error: 'Could not remove the figure.' });
+  }
+});
+
+/**
+ * POST …/responses/:requirementId/draft - persist a Draft-with-AI result (body: content, gaps[]). ADVISORY: it lands
+ * as `draft` (never reviewed/approved), and a `filler` gap marks it `filler` + blocks export (evaluateSubmissionReadiness).
+ */
+router.post('/api/admin/factory/qualification/:canonicalOpportunityId/responses/:requirementId/draft', requireSection('program'), async (req: Request, res: Response) => {
+  const pk = qualKeyParam.safeParse({ canonicalOpportunityId: req.params.canonicalOpportunityId });
+  const pr = requirementIdParam.safeParse(req.params.requirementId);
+  if (!pk.success || !pr.success) { res.status(400).json({ error: 'Invalid opportunity key or requirement id.' }); return; }
+  const { canonicalOpportunityId } = pk.data;
+  const scope = await scopeOrFail(res, 'gov_response_draft_scope', { canonicalOpportunityId });
+  if (!scope) return;
+  try {
+    const deliveryProjectId = await resolveProjectOr404(req, res, canonicalOpportunityId, scope.tenantId);
+    if (!deliveryProjectId) return;
+    const actor = await resolveGovProjectActor(req).catch(() => null);
+    const view = await saveDraftWithGaps({ deliveryProjectId, requirementId: pr.data, content: String(req.body?.content ?? ''), gaps: Array.isArray(req.body?.gaps) ? req.body.gaps : [], authoredByIdentityId: actor ? actor.platformIdentityId : null });
+    res.json(view);
+  } catch (err: any) {
+    if (err instanceof ResponseError) { res.status(RESPONSE_ERR_STATUS[err.reason] ?? 400).json({ error: err.message, reason: err.reason }); return; }
+    logFail('gov_response_draft_failed', err, { canonicalOpportunityId }); res.status(500).json({ error: 'Could not save the draft.' });
+  }
+});
+
+/**
+ * POST …/responses/:requirementId/gaps/:gapId - resolve one Draft-with-AI gap (body: resolution ∈ open|answered|filler,
+ * answer?). A `filler` resolution blocks export server-side until replaced; the response status is recomputed.
+ */
+router.post('/api/admin/factory/qualification/:canonicalOpportunityId/responses/:requirementId/gaps/:gapId', requireSection('program'), async (req: Request, res: Response) => {
+  const pk = qualKeyParam.safeParse({ canonicalOpportunityId: req.params.canonicalOpportunityId });
+  const pr = requirementIdParam.safeParse(req.params.requirementId);
+  const gapId = String(req.params.gapId ?? '').trim();
+  if (!pk.success || !pr.success || !gapId) { res.status(400).json({ error: 'Invalid opportunity key, requirement id, or gap id.' }); return; }
+  const { canonicalOpportunityId } = pk.data;
+  const scope = await scopeOrFail(res, 'gov_response_gap_scope', { canonicalOpportunityId });
+  if (!scope) return;
+  try {
+    const deliveryProjectId = await resolveProjectOr404(req, res, canonicalOpportunityId, scope.tenantId);
+    if (!deliveryProjectId) return;
+    const view = await resolveProposalGap({ deliveryProjectId, requirementId: pr.data, gapId, resolution: req.body?.resolution, answer: req.body?.answer ?? null });
+    res.json(view);
+  } catch (err: any) {
+    if (err instanceof ResponseError) { res.status(RESPONSE_ERR_STATUS[err.reason] ?? 400).json({ error: err.message, reason: err.reason }); return; }
+    logFail('gov_response_gap_failed', err, { canonicalOpportunityId }); res.status(500).json({ error: 'Could not resolve the gap.' });
   }
 });
 

@@ -26,6 +26,12 @@ export function evaluateSubmissionReadiness(slots: ResponseSlot[], coverageSuffi
   if (rows.length === 0) blocking.push('no_response_slots');
   const unapproved = rows.filter((s) => s.status !== 'approved').map((s) => s.requirementId);
   if (unapproved.length) blocking.push(`responses_not_approved:${unapproved.join(',')}`);
+  // P5: a FILLER placeholder (a Draft-with-AI gap resolved with a filler, or a slot marked filler) can never ship.
+  // This is an EXPLICIT reason on top of the not-approved check, and is enforced at BOTH submission/export and
+  // submission/package - no UI can bypass it, because both routes re-run this on the live slots.
+  const filler = rows.filter((s) => s.status === 'filler'
+    || (Array.isArray(s.gaps) && s.gaps.some((g) => g && g.resolution === 'filler'))).map((s) => s.requirementId);
+  if (filler.length) blocking.push(`responses_filler:${filler.join(',')}`);
   if (!coverageSufficient) blocking.push('coverage_insufficient');
   if (!canApproveBid) blocking.push('requirements_blocking');
   return { ready: blocking.length === 0, blocking };

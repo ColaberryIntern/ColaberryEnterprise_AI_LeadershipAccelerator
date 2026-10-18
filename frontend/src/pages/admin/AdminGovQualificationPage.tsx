@@ -7,12 +7,12 @@ import {
   authorizeGovBuild, getGovOpportunityCandidates, reviewGovQualificationDocuments, matchServicesToOpportunity,
   extractGovQualificationRequirements, getGovOpportunityDetail, attestSolicitationZip,
   assignGovBuildStory, unassignGovBuildStory,
-  saveGovProposalResponse, reviewGovProposalResponse, addGovProposalFigure, removeGovProposalFigure, recordGovProposalAmendment,
+  saveGovProposalResponse, reviewGovProposalResponse, addGovProposalFigure, removeGovProposalFigure, saveGovProposalDraft, resolveGovProposalGap, recordGovProposalAmendment,
   exportGovSubmission, downloadGovSubmissionPackage, recordGovSubmissionReceipt, acknowledgeGovSubmission, reopenGovSubmission, recordGovOutcome,
   type GovQualificationWorkspace, type QualRequirementEval, type GovCandidatesResult, type EstablishedRequirement,
   type ServiceMatch, type ExtractedRequirementCandidate, type RequirementItem, type ReqItemCategory, type GovOpportunity, type GovDossier, type GovRelationship,
   type GovResponseSlot, type GovBuildPlan, type GovBuildStory, type GovAssignableBuilder,
-  type GovResponseFigure, type GovProposalAmendment, type GovSubmission, type GovSubmissionReadiness,
+  type GovResponseFigure, type GovResponseGap, type GovProposalAmendment, type GovSubmission, type GovSubmissionReadiness,
 } from '../../services/factoryApi';
 import { band, subtle, fmtValue, daysLeft, closeLabel } from './govOppFormat';
 import { derivePotentialDisqualifiers } from './govGaps';
@@ -33,6 +33,7 @@ import { RightRail } from './govWorkspace/RightRail';
 import { SolicitationItemsView, tracksForCategory, dueStageForCategory, type SolView } from './govWorkspace/SolicitationItemsView';
 import { FitCapabilitiesPanel } from './govWorkspace/FitCapabilitiesPanel';
 import { DecidePanel } from './govWorkspace/DecidePanel';
+import { CountdownBand } from './govWorkspace/CountdownBand';
 
 /** The discovery opportunity's display details fetched for the decoupled (ZIP) workspace. */
 type OppDetail = { opportunity: GovOpportunity | null; source: 'live' | 'snapshot'; snapshotDate: string | null };
@@ -349,7 +350,7 @@ function GovTabPanel({ active, children }: { active: boolean; children: React.Re
 
 /** The lifecycle tone for a response slot's status. */
 const RESPONSE_TONE: Record<string, 'neutral' | 'warning' | 'info' | 'success' | 'danger'> = {
-  unanswered: 'neutral', draft: 'warning', reviewed: 'info', approved: 'success', revision_required: 'danger',
+  unanswered: 'neutral', draft: 'warning', reviewed: 'info', approved: 'success', revision_required: 'danger', filler: 'danger',
 };
 
 /** Handlers the Proposal tab wires so a slot can be authored + reviewed; absent on a read-only checklist. */
@@ -360,6 +361,35 @@ interface ResponseAuthoring {
   onReview: (requirementId: string, decision: 'reviewed' | 'approved' | 'revision_required') => void;
   onAddFigure: (requirementId: string, figure: GovResponseFigure) => void;
   onRemoveFigure: (requirementId: string, ref: string) => void;
+  /** P5: resolve a Draft-with-AI gap (answered with a real answer, or filler which blocks export). */
+  onResolveGap: (requirementId: string, gapId: string, resolution: 'answered' | 'filler', answer?: string) => void;
+  /** P5: flag this response as needing input with a filler placeholder (blocks export until replaced). */
+  onMarkFiller: (requirementId: string, content: string) => void;
+}
+
+/** One Draft-with-AI gap: the question, past-performance suggestions, and resolve as answered or (red) filler. */
+function GapRow({ requirementId, gap, busy, onResolveGap }: { requirementId: string; gap: GovResponseGap; busy: boolean; onResolveGap: ResponseAuthoring['onResolveGap'] }): React.ReactElement {
+  const [answer, setAnswer] = useState(gap.answer ?? '');
+  const isFiller = gap.resolution === 'filler';
+  return (
+    <div className={`border rounded p-2 mb-1 ${isFiller ? 'border-danger bg-danger-subtle' : ''}`}>
+      <div className="small fw-semibold">
+        {gap.question}
+        {gap.resolution === 'answered' && <span className="badge bg-success-subtle text-success-emphasis ms-1">answered</span>}
+        {isFiller && <span className="badge bg-danger-subtle text-danger-emphasis ms-1">filler — blocks export</span>}
+      </div>
+      {gap.suggestions.length > 0 && (
+        <div className="small text-secondary mb-1">From past performance: {gap.suggestions.map((s, i) => (
+          <button key={i} type="button" className="btn btn-link btn-sm p-0 me-2" disabled={busy} onClick={() => setAnswer(s)}>{s}</button>
+        ))}</div>
+      )}
+      <div className="input-group input-group-sm">
+        <input type="text" className="form-control" value={answer} placeholder="Type the real answer…" disabled={busy} onChange={(e) => setAnswer(e.target.value)} aria-label={`Answer for ${gap.id}`} />
+        <button type="button" className="btn btn-outline-success" disabled={busy || !answer.trim()} onClick={() => onResolveGap(requirementId, gap.id, 'answered', answer.trim())}>Save answer</button>
+        <button type="button" className="btn btn-outline-danger" disabled={busy} onClick={() => onResolveGap(requirementId, gap.id, 'filler')}>Use a filler</button>
+      </div>
+    </div>
+  );
 }
 
 /**
@@ -394,7 +424,15 @@ function ResponseSlotRow({ slot, authoring }: { slot: GovResponseSlot; authoring
             {(slot.status === 'reviewed' || slot.status === 'approved' || slot.status === 'draft') && (
               <button type="button" className="btn btn-outline-danger btn-sm" disabled={busy} onClick={() => authoring.onReview(slot.requirementId, 'revision_required')}>Request revision</button>
             )}
+            <button type="button" className="btn btn-outline-warning btn-sm" disabled={busy} title="Flag as needing input; a filler placeholder blocks export until replaced"
+              onClick={() => authoring.onMarkFiller(slot.requirementId, content)}>Needs input (filler)</button>
           </div>
+          {(slot.gaps ?? []).length > 0 && (
+            <div className="mb-2">
+              <div className="small fw-semibold text-uppercase text-secondary mb-1">Draft-with-AI gaps — answer or mark filler</div>
+              {(slot.gaps ?? []).map((g) => <GapRow key={g.id} requirementId={slot.requirementId} gap={g} busy={busy} onResolveGap={authoring.onResolveGap} />)}
+            </div>
+          )}
           {figures.length > 0 && (
             <ul className="list-unstyled small mb-1">
               {figures.map((f) => (
@@ -1531,6 +1569,16 @@ export default function AdminGovQualificationPage(): React.ReactElement {
               bidding-entity field + the establish-a-requirement form live on their own steps now. */}
 
           <GovTabPanel active={activeStep === 'build'}>
+          {/* P5: the countdown band — are we going to make it? Deterministic on-time probability from the deadline,
+              remaining build work, and items waiting on a human answer (see govCountdown). */}
+          <CountdownBand
+            deadline={oppDetail?.opportunity?.closeDate ?? ws.source?.deadline?.utc ?? null}
+            remainingStoryCount={ws.build ? (ws.build.stories ?? []).length : null}
+            humanBlockedCount={(ws.responseSlots ?? []).filter((s) => (s.gaps ?? []).some((g) => g.resolution === 'open' || g.resolution === 'filler')).length}
+            submitTotal={(ws.responseSlots ?? []).length}
+            submitDone={(ws.responseSlots ?? []).filter((s) => s.status === 'approved').length}
+            fillerCount={(ws.responseSlots ?? []).filter((s) => s.status === 'filler' || (s.gaps ?? []).some((g) => g.resolution === 'filler')).length}
+          />
           {/* ── Build tab: the AI build spec/research (advisory) + the solution-build track (forward) + the separate build authorization ─ */}
           {(
             <SectionCard title="Build spec & buyer-system research (AI)" icon="sparkling-2-line"
@@ -1607,6 +1655,8 @@ export default function AdminGovQualificationPage(): React.ReactElement {
                 onReview: (rid, decision) => run(() => reviewGovProposalResponse(canonical, rid, decision), 'Response updated.'),
                 onAddFigure: (rid, fig) => run(() => addGovProposalFigure(canonical, rid, fig), 'Figure attached.'),
                 onRemoveFigure: (rid, ref) => run(() => removeGovProposalFigure(canonical, rid, ref), 'Figure removed.'),
+                onResolveGap: (rid, gapId, resolution, answer) => run(() => resolveGovProposalGap(canonical, rid, gapId, resolution, answer), resolution === 'filler' ? 'Marked filler (blocks export).' : 'Gap answered.'),
+                onMarkFiller: (rid, content) => run(() => saveGovProposalDraft(canonical, rid, content, [{ id: 'needs-input', question: 'This response needs input before it can ship.', suggestions: [], resolution: 'filler' }]), 'Flagged: needs input (filler).'),
               }} />
             </SectionCard>
           )}
