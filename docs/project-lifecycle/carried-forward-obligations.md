@@ -2209,3 +2209,46 @@ the empty-candidates early return with its heartbeat, then race it exactly as
 The execution-run claim, the room outbox, the enrollment row lock and the telemetry anchor. Two of
 seven are observed; this third one turned out to be mis-documented rather than unproven, which is
 its own kind of answer.
+
+## THE EXECUTION-RUN CLAIM IS A REAL QUEUE, and the test it had could not have told you
+
+Third observed lock. This one is the clearest illustration of why this list exists.
+
+### The test it had
+
+`CLAIM_NEXT_RUN_SQL`'s own docblock says it is exported as a constant "so the concurrency
+semantics are reviewable and **testable without a database**". What that produced, at
+`executionPlane.test.ts:332`:
+
+```ts
+expect(CLAIM_NEXT_RUN_SQL).toContain('FOR UPDATE SKIP LOCKED');
+```
+
+That asserts the string contains the words. It would pass if the clause sat inside a comment, if
+it applied to the wrong subquery, or if the surrounding statement claimed the same row twice. It
+is the exact shape this register means by "covered only by asserting their SQL".
+
+### What is now measured
+
+| | |
+|---|---|
+| Five concurrent workers, five queued runs | **all five claimed, no run twice** - five distinct ids |
+| Workers beyond the queue depth | get **nothing**, rather than blocking or erroring - which is what `SKIP LOCKED` buys |
+| A claimed run | records which worker took it, and moves to `provisioning` |
+| **Positive control:** the same selection without the lock | **one run claimed by TWO workers** - the second overwrites the first's ownership |
+
+The control is the point: it is the failure the clause prevents, and it is precisely what the
+string assertion cannot distinguish from success.
+
+### Nothing executes it in production yet
+
+`CLAIM_NEXT_RUN_SQL` has **no non-test caller**. The only mentions are its definition, a doc
+reference in `ensureRefactoredDeliverySchema.ts`, and that text assertion. So this is correct
+before it has a caller, which is the right order — and a green run here is **not** evidence that
+any queue is running. That is the fourth module in this programme found to be written, reviewed
+and uncalled.
+
+### Three remain
+
+The room outbox, the enrollment row lock and the telemetry anchor. Four of the seven are now
+addressed: three observed, and the scheduler's found to be mis-documented rather than unproven.
