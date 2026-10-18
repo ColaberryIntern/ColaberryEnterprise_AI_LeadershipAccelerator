@@ -34,7 +34,7 @@ import { fetchGovOpportunityCandidatesV2 } from '../../services/factory/opportun
 import { FLAGS } from '../../config/featureFlags';
 import { ensureGovTwoTrackProject } from '../../services/factory/govDeliveryProject';
 import { inspectZipSafety } from '../../services/factory/proposal/zipSafety';
-import { generateRiskNarrative, generateProposalSummary } from '../../services/factory/govBidNarrative';
+import { generateRiskNarrative, generateProposalSummary, generateClarificationQuestions } from '../../services/factory/govBidNarrative';
 import { generateBuildSpec } from '../../services/factory/govBuildSpec';
 import { generateGovBuildPlanAI } from '../../services/factory/govBuildPlanAI';
 import { assessCapabilityFit } from '../../services/factory/govCapabilityFit';
@@ -580,6 +580,24 @@ router.post('/api/admin/factory/qualification/:canonicalOpportunityId/proposal-s
     res.json(result);
   } catch (err: any) {
     logFail('gov_proposal_summary_failed', err, { canonicalOpportunityId }); res.status(500).json({ error: 'Could not generate the proposal summary.' });
+  }
+});
+
+/** POST …/clarification-questions — ADVISORY "Ask the buyer": sharp questions for the ambiguous requirements, grounded in them. */
+router.post('/api/admin/factory/qualification/:canonicalOpportunityId/clarification-questions', requireSection('program'), async (req: Request, res: Response) => {
+  const pk = qualKeyParam.safeParse({ canonicalOpportunityId: req.params.canonicalOpportunityId });
+  if (!pk.success) { res.status(400).json({ error: 'Invalid opportunity key.' }); return; }
+  const { canonicalOpportunityId } = pk.data;
+  const body = proposalSummaryBody.safeParse(req.body ?? {});
+  if (!body.success) { res.status(400).json({ error: 'Invalid requirements payload.' }); return; }
+  const scope = await scopeOrFail(res, 'gov_clarification_questions_scope', { canonicalOpportunityId });
+  if (!scope) return;
+  try {
+    const result = await generateClarificationQuestions(body.data);
+    if (result.error) { res.status(result.error.includes('No established') ? 400 : 503).json({ error: result.error }); return; }
+    res.json(result);
+  } catch (err: any) {
+    logFail('gov_clarification_questions_failed', err, { canonicalOpportunityId }); res.status(500).json({ error: 'Could not generate the clarification questions.' });
   }
 });
 

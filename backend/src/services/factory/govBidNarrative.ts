@@ -7,6 +7,12 @@
  *                            is forbidden to invent numbers, dates, or a different verdict.
  *   generateProposalSummary — "what they want / what we'd build" from the established requirement
  *                            statements only; never invents requirements or scope.
+ *   generateClarificationQuestions — "Ask the buyer": finds the AMBIGUOUS requirements and drafts a
+ *                            precise question for each, so a vague line like "connect to their system"
+ *                            becomes answerable. Every question must cite a REAL requirement id (the
+ *                            PURE `sanitizeClarifications` rail drops any that do not), and the email is
+ *                            assembled deterministically from the validated questions — so it can never
+ *                            ask about a requirement the model invented.
  *
  * Idempotency without a migration: a content-hash in-memory cache (advisory text is cheap and
  * regenerable, so identical inputs return the stored text instead of re-calling the model). The
@@ -144,6 +150,91 @@ export async function generateProposalSummary(req: ProposalSummaryRequest): Prom
   } catch (err) {
     logFail('gov_proposal_summary', err);
     return { whatTheyWant: '', whatWedBuild: '', cached: false, generatedAt: now(), error: 'The AI summary could not be generated right now.' };
+  }
+}
+
+export interface ClarificationRequest { requirements: { id: string; text: string }[]; title?: string | null; buyer?: string | null; }
+export interface ClarificationQuestion { requirementId: string; ambiguity: string; question: string; }
+export interface ClarificationResult { questions: ClarificationQuestion[]; email: string; cached: boolean; generatedAt: string; error?: string; }
+
+const clampStr = (v: unknown, n: number): string => String(v ?? '').trim().slice(0, n);
+
+/**
+ * PURE, total: keep only the questions that cite a KNOWN requirement id AND carry a question; cap the list.
+ * This is the load-bearing rail — the model may ask about a requirement that exists, it can never invent one
+ * to ask about (a question citing an unknown id is dropped). Deterministic; no I/O.
+ */
+export function sanitizeClarifications(raw: unknown, validIds: Set<string>): ClarificationQuestion[] {
+  const r = (raw && typeof raw === 'object') ? raw as { questions?: unknown } : {};
+  const arr = Array.isArray(r.questions) ? r.questions : [];
+  const out: ClarificationQuestion[] = [];
+  for (const q of arr.slice(0, 40) as any[]) {
+    const requirementId = clampStr(q?.requirementId, 60);
+    const question = clampStr(q?.question, 600);
+    if (!requirementId || !validIds.has(requirementId) || !question) continue;
+    out.push({ requirementId, ambiguity: clampStr(q?.ambiguity, 400), question });
+    if (out.length >= 20) break;
+  }
+  return out;
+}
+
+/** PURE: assemble a ready-to-send clarification email from VALIDATED questions only (no em-dashes). */
+export function buildClarificationEmail(questions: ClarificationQuestion[], title?: string | null, buyer?: string | null): string {
+  if (questions.length === 0) return '';
+  const lines: string[] = [];
+  lines.push(`Subject: Clarification questions${title ? `: ${title}` : ''}`);
+  lines.push('');
+  lines.push(`To the ${buyer || 'contracting officer'}:`);
+  lines.push('');
+  lines.push(`We are preparing a response${title ? ` to ${title}` : ''} and request clarification on the following items before the question deadline:`);
+  lines.push('');
+  questions.forEach((q, i) => { lines.push(`${i + 1}. (${q.requirementId}) ${q.question}`); });
+  lines.push('');
+  lines.push('Thank you for your consideration.');
+  return lines.join('\n');
+}
+
+/**
+ * ADVISORY "Ask the buyer": find the ambiguous requirements and draft a sharp clarification question for each.
+ * Grounded ONLY in the requirement statements; cached by input hash; fails SOFT (no key / no requirements /
+ * upstream error -> `error`, never throws). The email is built in code from the sanitized questions.
+ */
+export async function generateClarificationQuestions(req: ClarificationRequest): Promise<ClarificationResult> {
+  const now = () => new Date().toISOString();
+  if (!process.env.OPENAI_API_KEY) {
+    return { questions: [], email: '', cached: false, generatedAt: now(), error: 'AI clarification drafting is unavailable (no API key configured).' };
+  }
+  const reqs = (Array.isArray(req.requirements) ? req.requirements : []).slice(0, 120); // bound prompt size
+  if (reqs.length === 0) {
+    return { questions: [], email: '', cached: false, generatedAt: now(), error: 'No established requirements to draft questions from yet.' };
+  }
+  const key = 'clarify:' + hash({ reqs, t: req.title ?? null, b: req.buyer ?? null });
+  const hit = cacheGet<ClarificationResult>(key);
+  if (hit) return { ...hit, cached: true };
+
+  const system =
+    'You help a small firm find the AMBIGUOUS requirements in a government solicitation and draft precise clarification questions to send the buyer before the question deadline. ' +
+    'Work ONLY from the requirement statements provided. For each requirement that is vague, under-specified, or references a system, standard, or interface it does not name (for example "connect to their system"), produce ONE sharp question that would make it concrete and answerable. ' +
+    'Skip requirements that are already clear. NEVER invent a requirement, a system name, a date, or a fact; ask about what is missing rather than asserting it. ' +
+    'Return strict JSON {"questions": [{"requirementId": string, "ambiguity": string, "question": string}]}. requirementId MUST be one of the provided ids. Keep each question to one or two sentences. No markdown.';
+  const user = `Opportunity: ${req.title || '(untitled)'}${req.buyer ? `: ${req.buyer}` : ''}\nRequirements (${reqs.length}):\n${reqs.map((r) => `- ${r.id}: ${r.text}`).join('\n')}`;
+
+  try {
+    const client = getInstrumentedOpenAI({ workflow_id: 'gov_clarification_questions' }, { timeout: 60000, maxRetries: 1 });
+    const res = await client.chat.completions.create({
+      model: DEFAULT_MODEL, temperature: 0.3, max_tokens: 1200, response_format: { type: 'json_object' },
+      messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
+    });
+    let parsed: unknown = {};
+    try { parsed = JSON.parse(res.choices?.[0]?.message?.content || '{}'); } catch { parsed = {}; }
+    const questions = sanitizeClarifications(parsed, new Set(reqs.map((r) => r.id)));
+    const email = buildClarificationEmail(questions, req.title ?? null, req.buyer ?? null);
+    const result: ClarificationResult = { questions, email, cached: false, generatedAt: now() };
+    if (questions.length) cacheSet(key, result);
+    return result;
+  } catch (err) {
+    logFail('gov_clarification_questions', err);
+    return { questions: [], email: '', cached: false, generatedAt: now(), error: 'The clarification questions could not be generated right now.' };
   }
 }
 
