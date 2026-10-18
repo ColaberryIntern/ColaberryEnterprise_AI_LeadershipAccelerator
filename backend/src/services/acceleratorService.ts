@@ -40,21 +40,61 @@ export async function createSession(data: {
   meeting_link?: string;
   curriculum_json?: any;
   materials_json?: any;
-}) {
+}, opts: { liveEnabled?: boolean } = {}) {
   const session = await LiveSession.create(data as any);
-  // Colaberry Commons — auto-create the linked cohort room for this official
-  // session (acceptance criterion #1). Best-effort, idempotent, and flag-gated:
-  // it never blocks or fails session creation, and does nothing when the feature
-  // is off. Lazily imported so the community-rooms tree only loads when enabled.
-  if (env.communityRoomsEnabled) {
-    try {
-      const { ensureRoomForSession } = await import('./communityRooms/roomService');
-      await ensureRoomForSession(session);
-    } catch (err: any) {
-      console.warn('[CommunityRooms] ensureRoomForSession failed (non-fatal):', err?.message);
-    }
-  }
+  const roomId = await resolveRoomId(session);
+  if (opts.liveEnabled) await enableLiveForSession(session, roomId);
   return session;
+}
+
+/**
+ * Colaberry Commons — the linked cohort room for an official session (acceptance criterion #1).
+ * Best-effort, idempotent and flag-gated: it never blocks or fails session creation, and does
+ * nothing when the feature is off. Lazily imported so the community-rooms tree only loads when
+ * enabled.
+ *
+ * Returns the room id because Colaberry Live needs it: `room_id` is the ONLY key joining a
+ * broadcast occurrence to anything else in the portal. `ensureRoomForSession` returns the room
+ * whether it created one or found one, so this is safe to call for an existing session.
+ */
+async function resolveRoomId(session: { id: string }): Promise<string | null> {
+  if (!env.communityRoomsEnabled) return null;
+  try {
+    const { ensureRoomForSession } = await import('./communityRooms/roomService');
+    const room = await ensureRoomForSession(session as any);
+    return (room as any)?.id ?? null;
+  } catch (err: any) {
+    console.warn('[CommunityRooms] ensureRoomForSession failed (non-fatal):', err?.message);
+    return null;
+  }
+}
+
+/**
+ * Colaberry Live — bring the broadcast occurrence into being for a session marked live.
+ *
+ * Same posture as the room block: best-effort and non-fatal, because a broadcast problem must
+ * not stop a class from being scheduled. A refusal is logged with its machine-readable reason
+ * rather than swallowed — "no occurrence was created" is something the admin needs to be able
+ * to find out afterwards.
+ *
+ * Deliberately NOT gated on `env.broadcastEnabled`. A private, scheduled occurrence is inert
+ * while that flag is off: discovery only surfaces active states, and private occurrences are
+ * hidden from anyone not room-eligible. Gating creation on it would force the feature to be
+ * switched on globally before a class could even be set up, which inverts the workflow.
+ */
+async function enableLiveForSession(session: { id: string }, roomId: string | null): Promise<void> {
+  try {
+    const { ensureOccurrenceForSession } = await import('./broadcast/broadcastSessionOccurrence');
+    const result = await ensureOccurrenceForSession(session as any, roomId);
+    if (result.outcome === 'refused') {
+      console.warn(
+        `[ColaberryLive] no occurrence for session ${session.id}: ${result.reason}`
+        + (result.detail ? ` (${result.detail})` : ''),
+      );
+    }
+  } catch (err: any) {
+    console.warn('[ColaberryLive] ensureOccurrenceForSession failed (non-fatal):', err?.message);
+  }
 }
 
 export async function updateSession(sessionId: string, data: Partial<{
@@ -69,11 +109,35 @@ export async function updateSession(sessionId: string, data: Partial<{
   recording_url: string;
   materials_json: any;
   curriculum_json: any;
-}>) {
+}>, opts: { liveEnabled?: boolean } = {}) {
   const session = await LiveSession.findByPk(sessionId);
   if (!session) return null;
   await session.update(data);
+  // Enabling live on an edit has to work too: the admin page uses ONE modal for Add and Edit.
+  // This also covers a rescheduled class — the occurrence key embeds the start instant, so
+  // ensureOccurrenceForSession re-times the existing occurrence rather than minting a second.
+  // Turning live OFF is out of scope for L7.1: cancelling an occurrence is a producer command,
+  // and making a form checkbox silently cancel a show is not a decision to take implicitly.
+  // Also re-run when live is ALREADY enabled, even if the box was not ticked on this edit.
+  // Otherwise rescheduling a live class leaves its occurrence at the old instant: the key
+  // embeds the start time, and the preview window and access decision are measured from it.
+  // Requiring the admin to re-tick a checkbox to keep the two in sync is a bug waiting to
+  // happen on the one edit nobody thinks of as a broadcast change.
+  if (opts.liveEnabled || await liveAlreadyEnabled(session.id)) {
+    await enableLiveForSession(session, await resolveRoomId(session));
+  }
   return session;
+}
+
+/** Non-fatal lookup: an error here must not turn a session edit into a failure. */
+async function liveAlreadyEnabled(sessionId: string): Promise<boolean> {
+  try {
+    const { isLiveEnabledForSession } = await import('./broadcast/broadcastSessionOccurrence');
+    return await isLiveEnabledForSession(sessionId);
+  } catch (err: any) {
+    console.warn('[ColaberryLive] isLiveEnabledForSession failed (non-fatal):', err?.message);
+    return false;
+  }
 }
 
 export async function deleteSession(sessionId: string) {

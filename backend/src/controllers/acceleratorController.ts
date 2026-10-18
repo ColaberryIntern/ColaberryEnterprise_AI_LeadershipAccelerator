@@ -75,19 +75,35 @@ export async function handleGetSession(req: Request, res: Response, next: NextFu
   } catch (err) { next(err); }
 }
 
+/**
+ * `live_enabled` is pulled OUT of the body rather than spread through with it.
+ *
+ * There is no such column on live_sessions — the occurrence's existence is the flag — so leaving
+ * it in the spread would hand an unknown attribute to `LiveSession.create`/`session.update` and
+ * rely on Sequelize quietly dropping it. A key that is silently ignored is the exact failure the
+ * broadcast schemas' `.strict()` rule was written to prevent, and this route has no Zod to catch
+ * it, so the extraction is the guard.
+ */
+function splitLiveFlag(body: any): { rest: any; liveEnabled: boolean } {
+  const { live_enabled: liveEnabled, ...rest } = body ?? {};
+  return { rest, liveEnabled: liveEnabled === true };
+}
+
 export async function handleCreateSession(req: Request, res: Response, next: NextFunction) {
   try {
-    const session = await createSession({
-      cohort_id: req.params.cohortId as string,
-      ...req.body,
-    });
+    const { rest, liveEnabled } = splitLiveFlag(req.body);
+    const session = await createSession(
+      { cohort_id: req.params.cohortId as string, ...rest },
+      { liveEnabled },
+    );
     res.status(201).json({ session });
   } catch (err) { next(err); }
 }
 
 export async function handleUpdateSession(req: Request, res: Response, next: NextFunction) {
   try {
-    const session = await updateSession(req.params.id as string, req.body);
+    const { rest, liveEnabled } = splitLiveFlag(req.body);
+    const session = await updateSession(req.params.id as string, rest, { liveEnabled });
     if (!session) return res.status(404).json({ error: 'Session not found' });
     res.json({ session });
   } catch (err) { next(err); }
