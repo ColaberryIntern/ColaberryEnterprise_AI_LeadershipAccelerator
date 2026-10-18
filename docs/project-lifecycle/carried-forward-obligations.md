@@ -2108,3 +2108,45 @@ telemetry anchor and `resource_leases` are still argued from their SQL. The patt
 this one is reusable and cheap - a self-bootstrapping integration suite that skips loudly without
 `DATABASE_URL` - but it is a suite per lock, and it does not run in CI until a pristine database
 can boot. That ordering is recorded above.
+
+## TWO OF THE SEVEN LOCKS ARE NOW OBSERVED: `resource_leases` joins the stale-build claim
+
+This register named `resource_leases` as *"the closest structural analogue to what
+`lifecycleExecution` lacks"* and recorded that it **had no race test at all**. It has one now.
+
+### What the lock actually is
+
+`ensureWorkGraphSchema.ts` states it plainly: collision detection is enforced **at the DB level**,
+by a partial unique index on `(resource_key) WHERE status = 'active'`, and
+`workCoordinatorService.acquireLease()` relies on catching that unique violation.
+
+So this is a different mechanism from the stale-build claim proved alongside it. That one is a
+compare-and-swap in a WHERE clause; this one is an index. Both were argued from their SQL, and
+both are now measured.
+
+### What the suite proves
+
+| | |
+|---|---|
+| Two concurrent acquires, one `resource_key` | **exactly one granted**, and the loser is handed `conflictWith` rather than a database error |
+| **Positive control:** the partial index dropped | the same race grants **TWO** |
+| The same idempotency key twice | idempotent — short-circuits before any INSERT, which is a different path from losing a race and is asserted separately |
+| A released lease | frees the key, because the index only binds `active` rows |
+
+The control is the load-bearing one: it is what shows the **index** refuses the second acquire
+rather than the application code. Risk R5 found exactly this shape in `factoryApproval` — a
+compare-and-swap that refused nobody, with the unique index as the only real backstop — and the
+lesson generalises: application-level checks around a database constraint are usually decoration,
+and the only way to tell is to remove the constraint and watch.
+
+### Five remain
+
+The execution-run claim, the room outbox, the scheduler claim, the enrollment row lock and the
+telemetry anchor are still argued from their SQL. The pattern is now established twice over and
+costs roughly an hour each: a self-bootstrapping suite that creates the little schema it needs,
+runs the real code concurrently, and carries a control that removes the constraint and asserts the
+failure appears.
+
+They still do not run in CI. Three suites now exist that only a developer with Docker will ever
+execute, which is better than nothing and worse than a gate — and the ordering that fixes it is
+recorded above: a pristine database has to boot first.
