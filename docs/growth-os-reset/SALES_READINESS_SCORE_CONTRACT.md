@@ -246,7 +246,7 @@ Components are from DECISION 3, 4 and 5. **Measured** means counted from a sourc
 | Commitment: enrolment | `journey` | `enrollments` | D | `null` when the ids were narrowed, named in `withheldPanels` **(M24.3, fixed 2026-10-17)** | **SAFE** |
 | Commitment: appointment | `appointments` | rows | M | `null` when there was no key to look with; `[]` only when nothing is booked **(M24.3, fixed 2026-10-17)** | **SAFE** |
 | Prior outcome detail | `history` | `everHired`, `everCertified`, `totalListedFees` | M | a NULL column reads `false`, and all-null fees sum to `0` | **EXCLUDED** |
-| Recency | `journey` | `lastActivity` | D | derived from a timeline capped at 150 with no truncation flag, and section-filtered per caller | **EXCLUDED** |
+| Recency | `journey` | `lastActivity` | D | section-filtered per caller, so two callers read a different last activity (the 150-row cap does NOT affect it, see 7.1) | **EXCLUDED** |
 
 ### 6.4 The four absence defects, in full
 
@@ -345,11 +345,20 @@ Two inputs remain **EXCLUDED**, and neither was part of the three fixes:
   column still reads `false`, and a set of enrolments with all-null fees still sums to `0`, so
   "not recorded" and "not hired" remain the same answer. The panel's availability flag is sound;
   the per-enrolment booleans beneath it are not.
-- **Recency** (`journey.lastActivity`). Still derived from a timeline capped at 150 with no
-  truncation flag, and section-filtered per caller, so two callers with different roles can read
-  a different "last activity" for the same person. DECISION 5 makes recency a decay applied per
-  component, so an input that varies by viewer is a determinism problem rather than a cosmetic
-  one.
+- **Recency** (`journey.lastActivity`). Section-filtered per caller, so two callers with different
+  roles read a different "last activity" for the same person. DECISION 5 makes recency a decay
+  applied per component, so an input that varies by viewer is a determinism problem rather than a
+  cosmetic one.
+
+  **CORRECTION, 2026-10-18.** Earlier versions of this row gave TWO reasons and one of them was
+  wrong: they also blamed the timeline's 150-row cap. ~~derived from a timeline capped at 150
+  with no truncation flag~~. The cap cannot affect this field. `getPersonTimeline` assembles with
+  `ORDER BY max(occurred_at) DESC` and then applies the limit, so the cap truncates the TAIL and
+  `timeline[0]` is always the newest permitted event. The cap genuinely does break a COUNT taken
+  from the timeline, which is why `journeyPanel` takes its counts from the source tables and says
+  so in its own docblock, and that is the claim this row borrowed without checking that a MAX
+  behaves like a count. **It does not.** The per-caller domain filter is the whole of the defect,
+  and it is enough on its own: the field is still EXCLUDED.
 
 **So the answer is now: yes for a score built on the eleven, with recency and prior-outcome
 detail declared and left unpopulated and their reason recorded**, which is the shape this part
