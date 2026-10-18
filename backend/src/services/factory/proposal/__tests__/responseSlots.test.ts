@@ -55,7 +55,7 @@ describe('applyResponsesToSlots (P4 overlay)', () => {
   it('overlays an authored response onto its slot (status + content + figures) and keeps the rest `unanswered`', () => {
     const out = applyResponsesToSlots(slots, [{
       requirementId: 'R1', status: 'approved', content: 'We are SAM-registered (CAGE 1AB23).',
-      figures: [{ commit: 'abc1234', ref: 'docs/sam.png', caption: 'SAM record' }], authoredByIdentityId: 'a1', reviewedByIdentityId: 'r1', updatedAt: '2026-10-08T00:00:00Z',
+      figures: [{ commit: 'abc1234', ref: 'docs/sam.png', caption: 'SAM record' }], gaps: [], authoredByIdentityId: 'a1', reviewedByIdentityId: 'r1', updatedAt: '2026-10-08T00:00:00Z',
     }]);
     const r1 = out.find((s) => s.requirementId === 'R1')!;
     const r2 = out.find((s) => s.requirementId === 'R2')!;
@@ -72,7 +72,7 @@ describe('applyResponsesToSlots (P4 overlay)', () => {
   });
 
   it('drops a response whose requirement is no longer a slot (requirement left the established set)', () => {
-    const out = applyResponsesToSlots(slots, [{ requirementId: 'GONE', status: 'draft', content: 'x', figures: [], authoredByIdentityId: null, reviewedByIdentityId: null, updatedAt: null }]);
+    const out = applyResponsesToSlots(slots, [{ requirementId: 'GONE', status: 'draft', content: 'x', figures: [], gaps: [], authoredByIdentityId: null, reviewedByIdentityId: null, updatedAt: null }]);
     expect(out.map((s) => s.requirementId)).toEqual(['R1', 'R2']); // only the derived slots, in order
     expect(out.every((s) => s.status === 'unanswered')).toBe(true);
   });
