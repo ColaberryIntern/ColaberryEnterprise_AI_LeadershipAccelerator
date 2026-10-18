@@ -38,6 +38,19 @@ export const FLAGS = {
   // could not be read to suit the outcome. Measured 16 Oct 2026 with the shipped `buildBriefText`
   // over the stored rows: 11 of 48, p90 27,772 against a 20,000 cap. The blocking branch fires.
   sbpSourceOverflowBlock: process.env.ENABLE_SBP_SOURCE_OVERFLOW_BLOCK === 'true',
+  // SAFE-002. `delimited()` interpolates an untrusted body raw, so a body carrying its own
+  // `</TAG>` closes the block early and everything after it sits outside any delimiter. On it,
+  // `neutraliseDelimiters` rewrites those brackets to single angle quotation marks: readable to
+  // the model, inert as markup, and refusing nobody.
+  //
+  // DEFAULT OFF, AND THE DEFAULT IS THE DECISION. The finding pre-registered its rule before the
+  // measurement -- "zero forged tags in stored briefs -> latent; PROPOSE the fix rather than
+  // change a live student prompt path" -- and the measurement was zero, 0 of 48. So the code
+  // ships inert and turning it on stays the DRI's call. The factory half, whose bodies are
+  // parsed OOXML and proposal text where a `<` is ordinary rather than unlikely, was never
+  // measurable at all, which is why the switch covers both prompt builders and not only the
+  // one with a number against it.
+  promptDelimiterNeutralisation: process.env.ENABLE_PROMPT_DELIMITER_NEUTRALISATION === 'true',
 };
 
 export const isDev = process.env.APP_ENV === 'dev';

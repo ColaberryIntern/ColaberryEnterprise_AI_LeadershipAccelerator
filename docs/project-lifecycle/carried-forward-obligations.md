@@ -1958,3 +1958,61 @@ and a table that becomes creatable must leave the list, so the list can only shr
 **not** create anything. Making a pristine database bootable is the ESCALATE-tier decision, and
 this sweep exists to give that decision its actual scope - 20 tables, 6 of them load-bearing -
 rather than the one or two anybody happened to trip over.
+
+## THE SAFE-002 FIX IS WRITTEN, TESTED AND OFF, because the decision rule says so
+
+The register has carried this since Phase 7: *"`delimited()` interpolates untrusted bodies raw,
+in BOTH prompt builders ... A DECISION IS OWED."* The decision is still owed. What changed is
+that the fix now exists, is tested in both states, and turning it on is one environment variable.
+
+### Why it ships inert rather than applied
+
+The finding pre-registered its decision rule **before** the measurement, so that no result could
+be read as justifying whatever was already wanted:
+
+| Measurement | Action |
+|---|---|
+| **Any** stored brief contains a forged close tag | Active risk. Neutralise. |
+| **Zero** | Latent. **Propose the fix rather than change a live student prompt path on zero evidence.** |
+
+The measurement was zero: 0 of 48 stored briefs contain a `<` of any kind. So the rule reserves
+this call, and it is not reopened by a later instruction to pick something to work on - that is
+the whole point of writing a rule down before looking at the data.
+
+`ENABLE_PROMPT_DELIMITER_NEUTRALISATION` therefore defaults to **off**, and the default is the
+decision. The code, the tests and the flag exist; the shipped behaviour is unchanged.
+
+### What it does when turned on
+
+`utils/promptDelimiters.ts` rewrites `<TAG>` and `</TAG>` to single angle quotation marks for
+every delimiter tag, in both builders. Neutralise rather than refuse: a brief that happens to
+contain angle brackets is not an attack, and refusing it would punish the ordinary case to defend
+against the rare one. Measured blast radius on the half that could be measured: **0 of 48 briefs
+render differently**.
+
+The substitution is **one character for one**, so `delimited()`'s truncation behaviour is
+byte-for-byte unchanged - the neutralisation runs before the clip, and the clip lands in the same
+place.
+
+### The proposal covered four of the five tags
+
+As written out in the finding, the regex named `ORIGINAL_BRIEF`, `EXPANDED_DOCUMENT`,
+`SOURCE_BLOCKS` and `CONTEXT`. **`REQUIREMENTS` was missing**, while the prose beside it said
+"all five tags". A hand-maintained list of tags protecting a security boundary is exactly the
+thing that silently stops covering whichever one is added next, so the tag list is now checked
+against a scan of the real `delimited()` call sites in both builders, and the test fails if they
+diverge.
+
+### Both halves, not just the measured one
+
+The flag covers the factory builder as well as the sbp one. That half is where the defect is more
+plausible and has **less** evidence behind it: its bodies are parsed OOXML and proposal text,
+where a `<` is ordinary rather than unlikely, and it was never measurable from `build_intake` at
+all. Covering only the half with a number against it would have been measuring where the light is.
+
+### The tripwire still holds
+
+The `KNOWN LIMITATION` block still passes, because the flag is off and that block asserts the
+shipped behaviour. It is reframed rather than inverted, and a new block asserts the other branch
+with a flag-off control beside it - without that control the suite would pass against a build
+that neutralised ALWAYS, which is the silent live-path change the rule forbids.
