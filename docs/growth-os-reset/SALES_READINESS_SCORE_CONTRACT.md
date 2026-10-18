@@ -246,7 +246,7 @@ Components are from DECISION 3, 4 and 5. **Measured** means counted from a sourc
 | Commitment: enrolment | `journey` | `enrollments` | D | `null` when the ids were narrowed, named in `withheldPanels` **(M24.3, fixed 2026-10-17)** | **SAFE** |
 | Commitment: appointment | `appointments` | rows | M | `null` when there was no key to look with; `[]` only when nothing is booked **(M24.3, fixed 2026-10-17)** | **SAFE** |
 | Prior outcome detail | `history` | `everHired`, `everCertified`, `totalListedFees` | M | a NULL column reads `false`, and all-null fees sum to `0` | **EXCLUDED** |
-| Recency | `journey` | `lastActivity` | D | section-filtered per caller, so two callers read a different last activity (the 150-row cap does NOT affect it, see 7.1) | **EXCLUDED** |
+| Recency | `journey` | `lastActivity` | D | `null` unless the timeline was read in FULL, so a caller-shaped recency is never scored **(unblocked 2026-10-18)** | **SAFE** |
 
 ### 6.4 The four absence defects, in full
 
@@ -326,12 +326,20 @@ commitment signal under DECISION 3, which is the heaviest band in the score.
 **The answer M24 gave was: NO, not today. YES once four named things are done, none of them a
 redesign. AMENDED 2026-10-17, later the same day: three of the four are now done.**
 
-M24.1, M24.2 and M24.3 shipped the fixes this part asked for, so **eleven of the thirteen inputs
+M24.1, M24.2 and M24.3 shipped the fixes this part asked for, so **twelve of the thirteen inputs
 the score needs are safe**, up from seven. The passive-browsing component that made the original
 answer "no" is usable: `engagement.sessions` is `null` when a person was never tracked rather than
 a zero-filled shape, and the `journey` counts are `null` when there was no lead row to count
 against, which is the rule that module's own docblock already stated. The enrolment count and the
 appointments list no longer report a permission or key state as a fact about the person.
+
+**AMENDED AGAIN 2026-10-18: recency is unblocked**, which takes the count from eleven to twelve.
+The defect was never the value, it was that `lastActivity` is the newest event among the domains
+the CALLER was permitted, so two readers saw different answers. Widening anybody's permissions
+would have been the wrong fix. Instead the data now says whether the read was complete:
+`timelineDomains` records which domains were included, and recency is scored only when all six are
+there. A partial read reports recency **absent**, which is true, and which the engine already
+knows how to handle. Nobody sees a domain they could not see before.
 
 **The original finding is kept rather than overwritten**, because it is why the fixes exist:
 every untracked person would otherwise have entered the queue carrying the same browsing evidence
@@ -339,16 +347,20 @@ as a tracked person who never came back.
 
 ### 7.1 What is still not safe, and it is not nothing
 
-Two inputs remain **EXCLUDED**, and neither was part of the three fixes:
+**One input remains EXCLUDED.** Recency was the second until 2026-10-18; its entry is kept below,
+struck, because the reasoning is the record of how it was unblocked.
 
 - **Prior outcome detail** (`history.everHired`, `everCertified`, `totalListedFees`). A NULL
   column still reads `false`, and a set of enrolments with all-null fees still sums to `0`, so
   "not recorded" and "not hired" remain the same answer. The panel's availability flag is sound;
   the per-enrolment booleans beneath it are not.
-- **Recency** (`journey.lastActivity`). Section-filtered per caller, so two callers with different
-  roles read a different "last activity" for the same person. DECISION 5 makes recency a decay
-  applied per component, so an input that varies by viewer is a determinism problem rather than a
-  cosmetic one.
+- ~~**Recency** (`journey.lastActivity`). Section-filtered per caller, so two callers with
+  different roles read a different "last activity" for the same person.~~ **UNBLOCKED
+  2026-10-18.** The diagnosis held; the fix was not to widen permissions but to let the data
+  declare its own completeness. `timelineDomains` records which domains a read covered, and
+  recency is scored only when all six are present; a partial read reports it absent. DECISION 5
+  still wants recency as a per-component decay, and that remains unimplemented: what ships is a
+  recency SIGNAL scored as its own factor, which is a simpler and different thing.
 
   **CORRECTION, 2026-10-18.** Earlier versions of this row gave TWO reasons and one of them was
   wrong: they also blamed the timeline's 150-row cap. ~~derived from a timeline capped at 150
@@ -358,11 +370,13 @@ Two inputs remain **EXCLUDED**, and neither was part of the three fixes:
   from the timeline, which is why `journeyPanel` takes its counts from the source tables and says
   so in its own docblock, and that is the claim this row borrowed without checking that a MAX
   behaves like a count. **It does not.** The per-caller domain filter is the whole of the defect,
-  and it is enough on its own: the field is still EXCLUDED.
+  and it is enough on its own, which is why the unblock above addresses exactly that and nothing
+  else.
 
-**So the answer is now: yes for a score built on the eleven, with recency and prior-outcome
-detail declared and left unpopulated and their reason recorded**, which is the shape this part
-already permits. It is not yet yes for the full component set in Part 3.
+**So the answer is now: yes for a score built on the twelve, with prior-outcome detail declared
+and left unpopulated and its reason recorded**, which is the shape this part already permits. It
+is not yet yes for the full component set in Part 3, because DECISION 5's per-component decay is
+still unbuilt.
 
 **What has to change, in order:**
 

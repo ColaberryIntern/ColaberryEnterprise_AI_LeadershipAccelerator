@@ -21,9 +21,11 @@
  *  - It does not filter anyone out. DECISION 6 makes converted, no-contact and suppressed people
  *    a QUEUE filter, not a score adjustment, so that nothing a weight change can do will
  *    re-admit them.
- *  - It does not decay by recency. DECISION 5 wants a per-component half-life, and the input it
- *    needs (`lastActivity`) is still EXCLUDED by the M24 contract's Part 7.1 because it varies
- *    by caller. The component is declared absent with that reason rather than faked.
+ *  - It does not implement DECISION 5's per-component half-life. It now scores a recency SIGNAL
+ *    as its own factor, which is a different and simpler thing: an old high-commitment act and a
+ *    recent page view are still not distinguished the way that decision wants. Recency is scored
+ *    only when the timeline was read in FULL, because a caller-shaped recency is a fact about the
+ *    viewer rather than the person; a partial read reports it absent.
  */
 import {
   FACTORS, FactorDef, PASSIVE_CAP, RULESET_VERSION, MAX_POSSIBLE,
@@ -49,6 +51,12 @@ export interface SrsInputs {
    * the EVIDENCE and not only by when the score was computed. Null when nothing dated itself.
    */
   evidenceAsOf: string | null;
+  /**
+   * The newest activity we know of, but ONLY when the timeline was read in full. The mapper
+   * reports null for a partial read, because a caller-shaped recency is not a fact about the
+   * person. See srsInputs.hasFullTimelineCoverage.
+   */
+  lastActivityAt: string | null;
 }
 
 export type FactorState = 'scored' | 'absent';
@@ -91,8 +99,14 @@ function scale(value: number, full: number, max: number): number {
   return Math.round(ratio * max * 100) / 100;
 }
 
+/** Values derived from more than one input, computed once and passed in. */
+interface Derived {
+  /** Days between the last known activity and the computation. Null when either is missing. */
+  activityAgeDays: number | null;
+}
+
 /** A factor's raw contribution, or null when it has no evidence. */
-function rawPoints(key: string, i: SrsInputs, max: number): number | null {
+function rawPoints(key: string, i: SrsInputs, max: number, d: Derived): number | null {
   switch (key) {
     case 'enrolmentStarted':
       return i.enrolments === null ? null : (i.enrolments > 0 ? max : 0);
@@ -100,6 +114,17 @@ function rawPoints(key: string, i: SrsInputs, max: number): number | null {
       return i.appointments === null ? null : (i.appointments > 0 ? max : 0);
     case 'humanReply':
       return i.inboundReplies === null ? null : scale(i.inboundReplies, 2, max);
+    case 'recency': {
+      // Full marks inside a week, nothing after a quarter, straight line between. Provisional,
+      // like every other number in the ruleset.
+      if (d.activityAgeDays === null) return null;
+      const FULL = 7;
+      const NONE = 90;
+      if (d.activityAgeDays <= FULL) return max;
+      if (d.activityAgeDays >= NONE) return 0;
+      const ratio = 1 - (d.activityAgeDays - FULL) / (NONE - FULL);
+      return Math.round(ratio * max * 100) / 100;
+    }
     case 'intent':
       return i.intentScore === null ? null : scale(i.intentScore, 100, max);
     case 'explorerBands': {
@@ -132,8 +157,17 @@ function rawPoints(key: string, i: SrsInputs, max: number): number | null {
  * Score one person. Pure: same inputs and same `computedAt` give the same result, always.
  */
 export function scoreReadiness(inputs: SrsInputs, computedAt: string): ScoreResult {
+  // Derived once. Both halves are inputs, so this stays a pure function of its arguments.
+  const activityMs = inputs.lastActivityAt ? Date.parse(inputs.lastActivityAt) : NaN;
+  const computedMs = Date.parse(computedAt);
+  const derived: Derived = {
+    activityAgeDays: Number.isFinite(activityMs) && Number.isFinite(computedMs)
+      ? Math.max(0, (computedMs - activityMs) / 86400000)
+      : null,
+  };
+
   const factors: FactorResult[] = FACTORS.map((def) => {
-    const pts = rawPoints(def.key, inputs, def.max);
+    const pts = rawPoints(def.key, inputs, def.max, derived);
     return {
       key: def.key,
       label: def.label,

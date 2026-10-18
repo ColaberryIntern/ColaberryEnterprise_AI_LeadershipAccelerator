@@ -16,7 +16,7 @@ const EMPTY: SrsInputs = {
   daysKnown: null, intentScore: null, inboundReplies: null, paymentFailures: null,
   priorHistoryAvailable: null, priorEnrolments: null, explorerEngagement: null,
   explorerIntent: null, consentContact: null, siteSessions: null, pageEvents: null,
-  enrolments: null, appointments: null, evidenceAsOf: null,
+  enrolments: null, appointments: null, evidenceAsOf: null, lastActivityAt: null,
 };
 
 const score = (patch: Partial<SrsInputs>) =>
@@ -137,9 +137,9 @@ describe('the headline: how many points do no work', () => {
 
   it('reports a low dead share when the factors genuinely vary - the control', () => {
     const scores = [
-      score({ enrolments: 1, appointments: 2, inboundReplies: 2, intentScore: 90, daysKnown: 300, consentContact: true, siteSessions: 20, pageEvents: 100, explorerEngagement: 80, explorerIntent: 70, priorHistoryAvailable: true, priorEnrolments: 1, paymentFailures: 0 }),
-      score({ enrolments: 0, appointments: 0, inboundReplies: 0, intentScore: 5, daysKnown: 2, consentContact: false, siteSessions: 1, pageEvents: 3, explorerEngagement: 5, explorerIntent: 2, priorHistoryAvailable: true, priorEnrolments: 0, paymentFailures: 1 }),
-      score({ enrolments: 1, appointments: 1, inboundReplies: 1, intentScore: 50, daysKnown: 60, consentContact: true, siteSessions: 8, pageEvents: 30, explorerEngagement: 40, explorerIntent: 30, priorHistoryAvailable: true, priorEnrolments: 1, paymentFailures: 0 }),
+      score({ enrolments: 1, appointments: 2, inboundReplies: 2, intentScore: 90, daysKnown: 300, consentContact: true, siteSessions: 20, pageEvents: 100, explorerEngagement: 80, explorerIntent: 70, priorHistoryAvailable: true, priorEnrolments: 1, paymentFailures: 0, lastActivityAt: '2026-10-17T12:00:00.000Z' }),
+      score({ enrolments: 0, appointments: 0, inboundReplies: 0, intentScore: 5, daysKnown: 2, consentContact: false, siteSessions: 1, pageEvents: 3, explorerEngagement: 5, explorerIntent: 2, priorHistoryAvailable: true, priorEnrolments: 0, paymentFailures: 1, lastActivityAt: '2026-06-01T12:00:00.000Z' }),
+      score({ enrolments: 1, appointments: 1, inboundReplies: 1, intentScore: 50, daysKnown: 60, consentContact: true, siteSessions: 8, pageEvents: 30, explorerEngagement: 40, explorerIntent: 30, priorHistoryAvailable: true, priorEnrolments: 1, paymentFailures: 0, lastActivityAt: '2026-09-20T12:00:00.000Z' }),
     ];
     const r = measureDiscrimination(scores);
     // Only `friction` is structurally dead here (its max is 0 by DECISION 4).

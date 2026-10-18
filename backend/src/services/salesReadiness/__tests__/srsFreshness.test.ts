@@ -15,7 +15,7 @@ const EMPTY_INPUTS: SrsInputs = {
   daysKnown: null, intentScore: null, inboundReplies: null, paymentFailures: null,
   priorHistoryAvailable: null, priorEnrolments: null, explorerEngagement: null,
   explorerIntent: null, consentContact: null, siteSessions: null, pageEvents: null,
-  enrolments: null, appointments: null, evidenceAsOf: null,
+  enrolments: null, appointments: null, evidenceAsOf: null, lastActivityAt: null,
 };
 
 const NOW = '2026-10-18T12:00:00.000Z';
