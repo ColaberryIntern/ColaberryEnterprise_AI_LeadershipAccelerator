@@ -101,9 +101,13 @@ const PAGES = [
     cta: '/contact?segment=ecosystem',
   },
   {
-    route: '/government', segment: true, name: 'Government', ticket: 'none yet', status: 'gap',
-    job: 'The fifth segment the ticket names. Group 05 has no ticket for it.',
-    story: 'Undecided. See the open decision below.',
+    route: '/government', segment: true, name: 'Government', ticket: 'needs one',
+    status: 'new',
+    job: 'The fifth segment, and it gets its own page. Ali decided this on 18 October 2026, '
+      + 'against my recommendation to fold it into /workforce. Group 05 still has no ticket '
+      + 'for it, so one has to be raised.',
+    story: 'Public-sector buyers, who have their own procurement path and their own '
+      + 'constraints. C7.0 found those constraints are real and specific.',
     cta: '/contact?segment=government',
   },
 ];
@@ -147,25 +151,35 @@ const ENQUIRY_GAP = {
  * THE DECISION THE TICKET ASKS ALI FOR
  * ------------------------------------------------------------------ */
 
+/**
+ * Both decided by Ali on 18 October 2026. Recorded with what was recommended, because a
+ * decision log that only shows the accepted recommendations teaches nothing later.
+ */
 const DECISIONS = [
   {
     q: 'Does government get its own page?',
-    detail: 'The ticket names five segments. Group 05 has four segment pages: enterprise, '
-      + 'workforce and economic development, higher education and ecosystem. There is no '
-      + 'government ticket.',
-    rec: 'Fold it into /workforce for now and revisit. C7.0 found that the Texas state '
-      + 'agency route is gated behind a cooperative contract we do not hold, while local '
-      + 'government and school districts are reachable, and those buy through the same '
-      + 'workforce and economic development motion. A separate page would be a door into a '
-      + 'room we cannot yet sell into.',
+    recommended: 'Fold it into /workforce for now.',
+    decided: 'YES, its own page and its own section.',
+    overridden: true,
+    detail: 'My recommendation was to fold it in, on the grounds that C7.0 found the Texas '
+      + 'state-agency route gated behind a cooperative contract we do not hold, while local '
+      + 'government and school districts buy through the same workforce motion. Ali decided '
+      + 'otherwise.',
+    consequence: 'The route `/government` was already verified free and is already a door on '
+      + 'the homepage, so the IA does not change. What changes is that group 05 now needs a '
+      + 'ticket for it, because there is no C5.x covering government and the other four '
+      + 'segment pages each have one.',
   },
   {
-    q: 'Which segment page gets built first?',
-    detail: 'C5.5 to C5.8 are four separate tickets and they are not equal.',
-    rec: 'Higher education, C5.7. C2.5 approved it as the beachhead on 14 October because '
-      + 'the continuing education unit is self-funded and its dean signs. Building the '
-      + 'beachhead page first also tests the segment template on the audience we most want '
-      + 'to be right about.',
+    q: 'Which segment page is built first?',
+    recommended: 'Higher education, C5.7.',
+    decided: 'Higher education, C5.7.',
+    overridden: false,
+    detail: 'C2.5 approved higher education through a self-funded continuing education unit '
+      + 'as the beachhead on 14 October, because the CE dean signs without a faculty senate.',
+    consequence: 'C5.7 is built first and carries the shared segment template that C5.5, '
+      + 'C5.6, C5.8 and the new government page all reuse, so the beachhead audience is also '
+      + 'the one the template is tested against.',
   },
 ];
 

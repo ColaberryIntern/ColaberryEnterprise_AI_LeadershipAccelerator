@@ -13,6 +13,8 @@ import PublicLayoutV2 from './components/publicV2/PublicLayoutV2';
 import HomeV2 from './pages/publicV2/HomeV2';
 import { ServicesV2, ServiceDetailV2 } from './pages/publicV2/ServicesV2';
 import PlatformV2 from './pages/publicV2/PlatformV2';
+import SegmentPageV2 from './pages/publicV2/SegmentPageV2';
+import { readySegments } from './config/v2Segments';
 import OpportunityLabV2 from './pages/publicV2/OpportunityLabV2';
 import TryV2 from './pages/publicV2/TryV2';
 import PrivacyV2 from './pages/publicV2/PrivacyV2';
@@ -88,6 +90,23 @@ function App() {
                 standard survives as a band on the index (`StoriesStandardBand`);
                 the promise is replaced by the records that keep it.
             */}
+            {/*
+                The buyer-segment pages from the C5.1 information architecture. One route
+                per segment, all mounting the same template, because C5.1 settled that the
+                four share a template so they cannot drift into four different arguments.
+
+                Only the ready segments are declared. Ali chose higher education first on
+                18 October 2026, since C2.5 approved it as the beachhead. `SegmentPageV2`
+                renders nothing for a slug that is not ready, so an unwritten page cannot
+                reach a visitor even if a route were added ahead of its content.
+
+                These routes were verified free against the real route tree in C5.1, which
+                is not a formality: `/partners` was the obvious choice for the ecosystem
+                page and is already a live page.
+            */}
+            {readySegments().map((s) => (
+              <Route key={s.slug} path={s.slug} element={<SegmentPageV2 slug={s.slug} />} />
+            ))}
             <Route path="proof" element={<StoriesV2 />} />
             <Route path="lab" element={<OpportunityLabV2 />} />
             {/* NOT "try": /try is the real product workspace
