@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import { z } from 'zod';
 import * as aiOpsService from '../services/aiOpsService';
 import { scanAllCampaigns, scanCampaign } from '../services/campaignHealthScanner';
 import {
@@ -38,9 +39,39 @@ export async function handleGetAgents(req: Request, res: Response) {
   }
 }
 
+/**
+ * STRICT on purpose. An unknown key is a 400 rather than a silent ignore, because the
+ * defect this closes was exactly a key nobody intended being written: the handler passed
+ * `req.body` into a spread, so `tools_granted`, `autonomy_level`, `system_prompt` and
+ * `agent_name` were all reachable on any of the agents.
+ *
+ * `.strict()` means a caller sending an extra field gets told which one. Silently
+ * dropping it would leave the caller believing a write happened.
+ */
+const AgentPatchBody = z
+  .object({
+    status: z.enum(['idle', 'running', 'paused', 'error']).optional(),
+    enabled: z.boolean().optional(),
+  })
+  .strict()
+  // An empty body is a no-op dressed as a write, so it is refused too.
+  .refine((b) => b.status !== undefined || b.enabled !== undefined, {
+    message: 'Provide at least one of: status, enabled',
+  });
+
 export async function handleUpdateAgent(req: Request, res: Response) {
+  const parsed = AgentPatchBody.safeParse(req.body);
+  if (!parsed.success) {
+    const rejected = parsed.error.issues
+      .map((i) => (i.path.length ? i.path.join('.') : i.message))
+      .join(', ');
+    res.status(400).json({
+      error: `This route may only change status or enabled. Rejected: ${rejected}`,
+    });
+    return;
+  }
   try {
-    const agent = await aiOpsService.updateAgent(String(req.params.id), req.body);
+    const agent = await aiOpsService.updateAgent(String(req.params.id), parsed.data);
     res.json(agent);
   } catch (err: any) {
     res.status(err.message === 'Agent not found' ? 404 : 500).json({ error: err.message });

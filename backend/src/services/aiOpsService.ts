@@ -1,5 +1,5 @@
 import { Op, fn, col } from 'sequelize';
-import AiAgent from '../models/AiAgent';
+import AiAgent, { type AiAgentStatus } from '../models/AiAgent';
 import AiAgentActivityLog from '../models/AiAgentActivityLog';
 import CampaignHealth from '../models/CampaignHealth';
 import CampaignError from '../models/CampaignError';
@@ -74,10 +74,38 @@ export async function getAgents() {
   return AiAgent.findAll({ order: [['agent_name', 'ASC']] });
 }
 
-export async function updateAgent(agentId: string, updates: Record<string, any>) {
+/**
+ * The ONLY fields this route may change.
+ *
+ * It used to take `Record<string, any>` and spread it into `agent.update()`, so any key
+ * that happened to be a column was written. `tools_granted`, `autonomy_level`,
+ * `system_prompt` and `agent_name` are all columns. One request could therefore arm an
+ * agent or rename it, bypassing the autonomy classifier and the build-authorization gate,
+ * and renaming is worse than it looks: `agent_name` is the findOrCreate key in
+ * `agentRegistrySeed.ts`, so a rename orphans the row and the next boot re-creates the
+ * original as a SECOND agent.
+ *
+ * Narrowed to the two fields a caller actually sends, verified by grepping every caller:
+ * `AdminAISettingsPage.tsx:363` sends `{ status }` and
+ * `ai-settings/DepartmentAgentsTab.tsx:84` sends `{ enabled }`. Nothing else in the repo
+ * calls this route.
+ */
+export interface AgentFieldUpdate {
+  readonly status?: AiAgentStatus;
+  readonly enabled?: boolean;
+}
+
+export async function updateAgent(agentId: string, updates: AgentFieldUpdate) {
   const agent = await AiAgent.findByPk(agentId);
   if (!agent) throw new Error('Agent not found');
-  await agent.update({ ...updates, updated_at: new Date() });
+
+  // Built field by field rather than spread. A spread is what made the old version
+  // unbounded, and a type alone would not stop a plain object arriving at runtime.
+  const patch: Record<string, unknown> = { updated_at: new Date() };
+  if (updates.status !== undefined) patch.status = updates.status;
+  if (updates.enabled !== undefined) patch.enabled = updates.enabled;
+
+  await agent.update(patch);
   return agent;
 }
 
