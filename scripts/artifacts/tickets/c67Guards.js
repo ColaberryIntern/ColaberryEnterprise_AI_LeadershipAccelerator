@@ -2,7 +2,7 @@
  * C6.7 guards - the ticket's acceptance criteria expressed as code.
  *
  * C6.7 names its own failure mode precisely: "Templated personalization. If the opening
- * could be sent to anyone, it is not tier 1." That is a judgement a writer makes badly at
+ * could be sent to anyone, it is not tier 1." That is a judgment a writer makes badly at
  * message nineteen, so it is checked here instead.
  *
  * Kept in its own module from the data because these are the interesting part and they

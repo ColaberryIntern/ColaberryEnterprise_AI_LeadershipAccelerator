@@ -1,5 +1,5 @@
 /**
- * C5.5 and C5.6 - the one-page visual and the document, parameterised by ticket.
+ * C5.5 and C5.6 - the one-page visual and the document, parameterized by ticket.
  *
  * One render module because the two pages shipped as one change: the same template, the
  * same guards, two content blocks and a boolean. Where they genuinely differ is the

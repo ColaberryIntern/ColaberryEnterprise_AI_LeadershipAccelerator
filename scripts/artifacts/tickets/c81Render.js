@@ -130,7 +130,7 @@ function buildDocument() {
       <br><br>
       <b>What was delivered.</b> All ten tiles designed and sourced against the real
       production schema, an HTML prototype using the actual design tokens from
-      <code>frontend/src/styles/tokens.css</code>, the route and authorisation C8.2 should
+      <code>frontend/src/styles/tokens.css</code>, the route and authorization C8.2 should
       build, and the four schema additions that stand between this design and a board worth
       opening.
     </div>
@@ -161,14 +161,14 @@ function buildDocument() {
     <table>
       <tr><th style="width:22%">Field</th><th>Value</th></tr>
       <tr><td><b>Route</b></td><td class="mono">${esc(D.ROUTE.path)}</td></tr>
-      <tr><td><b>Authorisation</b></td><td>${esc(D.ROUTE.auth)}</td></tr>
+      <tr><td><b>Authorization</b></td><td>${esc(D.ROUTE.auth)}</td></tr>
       <tr><td><b>Built by</b></td><td>${esc(D.ROUTE.note)}</td></tr>
     </table>
 
     <h2>Design system</h2>
     <p>The prototype declares the token names from
     <code>frontend/src/styles/tokens.css</code> and uses them throughout rather than
-    inventing colours, so it can be lifted into the admin shell unchanged. A build assertion
+    inventing colors, so it can be lifted into the admin shell unchanged. A build assertion
     reads that stylesheet and fails if the prototype ever references a token the app does
     not define, which is how "reuses the existing admin design system" is checked rather
     than claimed.</p>

@@ -20,7 +20,7 @@
  * ## Measured against the real codebase on 17 October 2026
  *
  * 189 routes declared across App.tsx and five route-tree files. `/contact` is the single
- * enquiry surface and it reads no query parameter, which is a real gap against the third
+ * inquiry surface and it reads no query parameter, which is a real gap against the third
  * acceptance criterion and is written up rather than glossed.
  */
 
@@ -43,7 +43,7 @@ const SO_WHAT = [
     + 'mistaken for either.',
   'The third criterion is not met by the current site and cannot be met by page design '
     + 'alone. Every segment can reach `/contact`, so the path exists, but ContactPage reads '
-    + 'no query parameter and posts only a fixed form type. An enquiry therefore arrives '
+    + 'no query parameter and posts only a fixed form type. An inquiry therefore arrives '
     + 'with no record of which of the five doors it came through, which makes the criterion '
     + 'true and unmeasurable at the same time.',
 ];
@@ -58,7 +58,7 @@ const PAGES = [
     job: 'Tell one story and route the rest.',
     story: 'Our people learn to build with AI, and the buyer gets proof of what each person '
       + 'actually built, verified against real code.',
-    cta: 'Five segment doors, plus one enquiry.',
+    cta: 'Five segment doors, plus one inquiry.',
   },
   {
     route: '/how-it-works', segment: false, name: 'How it works', ticket: 'C5.3', status: 'new',
@@ -117,7 +117,7 @@ const REUSE = [
   { route: '/proof', what: 'Already a proof surface. The homepage story links here.' },
   { route: '/platform', what: 'The platform page. Link from /how-it-works.' },
   { route: '/pricing', what: 'Pricing. Link from the segment pages that quote a price.' },
-  { route: '/contact', what: 'The single enquiry surface for all five segments.' },
+  { route: '/contact', what: 'The single inquiry surface for all five segments.' },
   { route: '/services', what: 'Services. Check against /enterprise for overlap before C5.5.' },
 ];
 
@@ -133,14 +133,14 @@ const TRAPS = [
  * THE GAP AGAINST CRITERION 3
  * ------------------------------------------------------------------ */
 
-const ENQUIRY_GAP = {
+const INQUIRY_GAP = {
   what: 'Every segment can reach /contact, so the path exists. None of them can be told '
     + 'apart once it arrives.',
   evidence: 'ContactPage posts metadata { source_form, industry, title } with a fixed form '
     + 'type and reads no query parameter at all. Measured 17 October 2026.',
   fix: 'Have ContactPage read a `segment` query parameter and carry it into that metadata, '
     + 'then give every segment page one CTA to /contact?segment=<slug>. That is a small '
-    + 'change and it is what turns "one path to enquiry" from a layout claim into something '
+    + 'change and it is what turns "one path to inquiry" from a layout claim into something '
     + 'the funnel can count.',
   constraint: 'ContactPage is 657 lines, past CLAUDE.md’s 500-line ceiling, so under '
     + 'the repository’s own rule the next change to it splits the file first. Budget for '
@@ -254,29 +254,29 @@ function assertHomepageTellsOneStory() {
 }
 
 /**
- * "Each segment has one path to enquiry", and the gap against it stays stated.
+ * "Each segment has one path to inquiry", and the gap against it stays stated.
  *
  * Counted from the `segment` flag, not from the CTA string. The first version counted any
  * page whose CTA carried `segment=`, which swept in the 90-day accelerator and made the
  * homepage promise five doors while rendering six. An offer page is not an audience.
  */
-function assertOnePathToEnquiry() {
+function assertOnePathToInquiry() {
   const segments = PAGES.filter((p) => p.segment);
   if (segments.length !== 5) {
     throw new Error(`C5.1: the homepage promises five doors and there are ${segments.length}`);
   }
   for (const s of segments) {
     const n = (String(s.cta).match(/\/contact/g) || []).length;
-    if (n !== 1) throw new Error(`C5.1: ${s.route} does not have exactly one enquiry path`);
+    if (n !== 1) throw new Error(`C5.1: ${s.route} does not have exactly one inquiry path`);
   }
-  if (!ENQUIRY_GAP.evidence || !/reads no query parameter/i.test(ENQUIRY_GAP.evidence)) {
-    throw new Error('C5.1: the enquiry-attribution gap must stay stated, not quietly dropped');
+  if (!INQUIRY_GAP.evidence || !/reads no query parameter/i.test(INQUIRY_GAP.evidence)) {
+    throw new Error('C5.1: the inquiry-attribution gap must stay stated, not quietly dropped');
   }
   return segments.length;
 }
 
 module.exports = {
-  AS_OF, HEADLINE, SO_WHAT, PAGES, REUSE, TRAPS, ENQUIRY_GAP, DECISIONS, LIMITS,
+  AS_OF, HEADLINE, SO_WHAT, PAGES, REUSE, TRAPS, INQUIRY_GAP, DECISIONS, LIMITS,
   assertRoutesFree, assertTrapsAreReallyTaken, assertHomepageTellsOneStory,
-  assertOnePathToEnquiry,
+  assertOnePathToInquiry,
 };

@@ -167,7 +167,7 @@ const LIMITS = [
     + 'and stops at the signature path.',
   'The success metrics measure the customer’s baseline rather than predicting a return. '
     + 'That is a deliberate consequence of C4.7, which refused five figures for want of '
-    + 'evidence, and it should be explained to a buyer rather than apologised for.',
+    + 'evidence, and it should be explained to a buyer rather than apologized for.',
   'What buyers push back on is unknown and C9.8 is supposed to feed it back. Until it does, '
     + 'the exclusions list is written from our own capability audit rather than from '
     + 'objections we have actually heard.',

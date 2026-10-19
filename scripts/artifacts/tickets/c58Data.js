@@ -117,8 +117,8 @@ function criteria() {
     },
     {
       c: 'CTA instrumented',
-      e: "trackEvent('cta_click', { cta_name: 'segment_enquiry', segment }) fires on the "
-        + `single enquiry link, which carries ?segment=${SLUG}. A test asserts exactly one `
+      e: "trackEvent('cta_click', { cta_name: 'segment_enquiry', segment }) fires on the " // spelling-exempt
+        + `single inquiry link, which carries ?segment=${SLUG}. A test asserts exactly one `
         + '/contact link per page and that it carries its own segment.',
       kind: KIND.TEST,
     },

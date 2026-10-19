@@ -55,7 +55,7 @@ const PROVEN = {
 
 const PHASES = [
   {
-    days: 'Day 0 to 7', name: 'Mobilisation', owner: OWNER.DELIVERY, proven: PROVEN.YES,
+    days: 'Day 0 to 7', name: 'Mobilization', owner: OWNER.DELIVERY, proven: PROVEN.YES,
     gate: 'A named executive sponsor, three to ten business problems in writing each with a '
       + 'named owner, and named participants with their managers signed up to the time. '
       + 'These are C7.2’s customer obligations and they are a gate, not a wish: the '

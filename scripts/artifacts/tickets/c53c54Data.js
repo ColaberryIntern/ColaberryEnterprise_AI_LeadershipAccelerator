@@ -142,7 +142,7 @@ const SO_WHAT = [
     + 'executive impact report has no generator, both sitting at day eighty to ninety, '
     + 'which is exactly where a sponsor decides whether to run it again. Both tickets say '
     + 'never describe roadmap as live, so every stage carries a visible label in text '
-    + 'rather than in colour: the platform does this, or our team does this.',
+    + 'rather than in color: the platform does this, or our team does this.',
   'Routing is proven from the route tree, because the ticket asked for that and not for a '
     + 'file. Both tickets warn that a page under pages/ may be unrouted; such a page '
     + 'renders perfectly in a test and is unreachable to a visitor. The test reads App.tsx '
@@ -174,7 +174,7 @@ const PR = 'https://github.com/ColaberryIntern/ColaberryEnterprise_AI_Leadership
 
 function criteria(id) {
   const r = ROUTES[id];
-  const cta = id === 'c53' ? 'how_it_works_enquiry' : 'accelerator_enquiry';
+  const cta = id === 'c53' ? 'how_it_works_enquiry' : 'accelerator_enquiry'; // spelling-exempt
   const claims = id === 'c53'
     ? 'positioning.primary'
     : 'positioning.primary and program.duration';
@@ -196,7 +196,7 @@ function criteria(id) {
     },
     {
       c: 'CTA instrumented',
-      e: "trackEvent('cta_click', { cta_name: '" + cta + "' }) fires on the single enquiry "
+      e: "trackEvent('cta_click', { cta_name: '" + cta + "' }) fires on the single inquiry "
         + 'link. A test asserts exactly one /contact link exists, and a click test asserts '
         + 'the event fires with that name.',
       kind: KIND.TEST,
@@ -284,7 +284,7 @@ const LIMITS = [
     + 'acceptance criteria are met now; the fourth is met by the PR existing; the fifth is '
     + 'met only after you merge.',
   'No conversion data exists and none can until launch. Both tickets say so themselves '
-    + 'under missing evidence, so "visitors from this segment reach an enquiry" is '
+    + 'under missing evidence, so "visitors from this segment reach an inquiry" is '
     + 'instrumented rather than measured.',
   'Demo Day appears on neither page, deliberately. The C2.2 audit says it has schema but '
     + 'has never been run end to end and must not be described to a customer as proven.',

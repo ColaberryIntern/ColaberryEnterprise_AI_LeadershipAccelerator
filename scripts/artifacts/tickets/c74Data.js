@@ -163,7 +163,7 @@ const HEADLINE = () => `${countWhen(WHEN.DAY0)} of ${items().length} items are r
 const LIMITS = [
   'Selling is out of scope. This is post-signature and the questions assume a deal that has '
     + 'already cleared the C7.1 gates.',
-  'The day-one set is eleven items. That is a judgement about what genuinely blocks a start '
+  'The day-one set is eleven items. That is a judgment about what genuinely blocks a start '
     + 'and it should be revised the first time a real pilot stalls on something not on it.',
   'It is a document today, not a form. The ticket notes it could become a web surface '
     + 'later, and the internship and cohort intake flows already model that pattern if it '

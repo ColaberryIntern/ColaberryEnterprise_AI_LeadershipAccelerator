@@ -39,7 +39,7 @@ const SHARES = [
   { key: 'tenure', before: 4.5, after: 2.1, note: 'ranks, 78 distinct values' },
   { key: 'pageEvents', before: 3.8, after: 1.7, note: 'ranks' },
   { key: 'explorerBands', before: 0.3, after: 0.1, note: 'ranks, but almost no spread' },
-  { key: 'enrolmentStarted', before: 0.0, after: 0.0, note: 'CONSTANT - every Explorer has one' },
+  { key: 'enrolmentStarted', before: 0.0, after: 0.0, note: 'CONSTANT - every Explorer has one' }, // spelling-exempt
   { key: 'appointmentBooked', before: 0.0, after: 0.0, note: 'ALWAYS ZERO - nobody has booked' },
   { key: 'humanReply', before: 0.0, after: 0.0, note: 'ALWAYS ZERO - nobody has replied' },
 ];
@@ -91,7 +91,7 @@ const VERIFICATION = [
 
 const NOT_ESTABLISHED = [
   'That the weights are now right. The measurement says which factors CAN rank; what they should '
-    + 'be worth is a judgement about what readiness means, and that is still Ali\'s.',
+    + 'be worth is a judgment about what readiness means, and that is still Ali\'s.',
   'That the score is ready to surface. M26 is the surface, and it is now unblocked in the sense '
     + 'that the ordering is real, not in the sense that the thresholds are calibrated.',
   'That the remaining dead weight is a defect. 105 points sit in factors that are population '

@@ -306,7 +306,7 @@ const LIMITS = [
 ];
 
 const DECISION = 'Two one-line fixes would close the holes this found: have getApolloQuota '
-  + 'claim a credit like every other call, or retire it in favour of getApolloUsageToday, '
+  + 'claim a credit like every other call, or retire it in favor of getApolloUsageToday, '
   + 'and put the kill switch in front of the one script that bypasses it. Both are small, '
   + 'both are outside this ticket, which says to build nothing, so they are proposed rather '
   + 'than done.';

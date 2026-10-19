@@ -1,5 +1,5 @@
 /**
- * M24.1 / M24.2 / M24.3 renderers, parameterised by ticket code.
+ * M24.1 / M24.2 / M24.3 renderers, parameterized by ticket code.
  *
  * Three tickets, three artifact pairs, one data module. Each pair leads with ITS OWN fix; the
  * shared context (the rule, the contract tally, what is still excluded) is the same in all three

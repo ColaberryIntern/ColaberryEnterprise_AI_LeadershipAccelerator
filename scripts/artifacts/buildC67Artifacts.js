@@ -8,8 +8,8 @@
  * data module refuses to load it if it ever becomes tracked.
  *
  * The assertion that matters is assertNoneInterchangeable. The ticket's named failure mode
- * is "templated personalisation: if the opening could be sent to anyone, it is not tier 1",
- * and that is a judgement a writer makes badly at draft nineteen.
+ * is "templated personalization: if the opening could be sent to anyone, it is not tier 1",
+ * and that is a judgment a writer makes badly at draft nineteen.
  */
 const fs = require('fs');
 const path = require('path');

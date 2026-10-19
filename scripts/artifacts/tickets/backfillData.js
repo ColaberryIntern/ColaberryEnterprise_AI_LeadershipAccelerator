@@ -159,7 +159,7 @@ const TICKETS = [
   D --> E["Their domain, with<br/>0 verified shown beside 503"]
   style B fill:#f7fafc,stroke:#e2e8f0,color:#718096
   style D fill:#FFF0F1,stroke:#FB2832,color:#2d3748`,
-    mermaidCaption: 'Grey was already built. Only the last two steps were this ticket.',
+    mermaidCaption: 'Gray was already built. Only the last two steps were this ticket.',
     corrections: [],
     notEstablished: [
       'NOT DEPLOYED. There are no production screenshots, so that acceptance criterion is unmet.',
@@ -314,7 +314,7 @@ const TICKETS = [
     corrections: [],
     notEstablished: [
       'T06 IS NOT FIXED. It needs wiring at a real write boundary, must consult '
-      + '<code>RISK_TIER_BEARING_MODELS</code>, must normalise case and whitespace, and must stop '
+      + '<code>RISK_TIER_BEARING_MODELS</code>, must normalize case and whitespace, and must stop '
       + 'refusing the legitimate <code>R0</code>&ndash;<code>R5</code> values.',
       'T14 still owes a committed regression test. The fix was proved with a standalone probe '
       + 'after three failed attempts to land the test against the integration fixtures.',

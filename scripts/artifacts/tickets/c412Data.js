@@ -34,7 +34,7 @@ const AS_OF = '17 October 2026';
 const SRC = {
   QUERY: { k: 'PRODUCTION QUERY', color: '#1f6feb' },
   REGISTRY: { k: 'CLAIM REGISTRY', color: '#7a4fb6' },
-  JUDGEMENT: { k: 'JUDGEMENT CALL', color: '#b26a00' },
+  JUDGMENT: { k: 'JUDGMENT CALL', color: '#b26a00' },
 };
 
 const HEADLINE = 'One figure on the six-pager is reproducible, mislabeled, and claims '
@@ -51,8 +51,8 @@ const SO_WHAT = [
     + 'a label. Projects read 51 because it counted build-plan rows; it is 48. Case studies '
     + 'read 13, which was right for approved and is wrong for what a reader can open, now 11.',
   'Nothing here is a new claim. Every corrected figure traces to a named query that anyone '
-    + 'can re-run, which is the control CLM-029 exists to enforce, and the two judgement items '
-    + 'are flagged as judgement rather than smuggled in as fact.',
+    + 'can re-run, which is the control CLM-029 exists to enforce, and the two judgment items '
+    + 'are flagged as judgment rather than smuggled in as fact.',
 ];
 
 /* ------------------------------------------------------------------ *
@@ -136,13 +136,13 @@ const ROWS = [
     where: 'Page 6, the goal',
     prints: '10,000 engineers in 18 to 24 months',
     becomes: 'Add a sentence saying how, or use a smaller number',
-    src: SRC.JUDGEMENT,
+    src: SRC.JUDGMENT,
     why: 'This is Anthropic’s own number for a $100 million program, not ours. C2.4 found '
       + 'lead supply to be the binding constraint, with a measured 0.05% reply rate across '
       + '48,924 sends. Printing someone else’s target as our goal, with no mechanism '
       + 'named, invites the one question we cannot answer.',
-    query: 'Judgement. C2.4 supplies the constraint.',
-    severity: 'judgement',
+    query: 'Judgment. C2.4 supplies the constraint.',
+    severity: 'judgment',
   },
   {
     n: 7,
@@ -179,7 +179,7 @@ const LIMITS = [
   'Every count here moves. Verified stories rose from 319 to 345 while this ticket sat open. '
     + 'Each row names its query so the figure can be re-derived on the day it is printed '
     + 'rather than trusted from this page.',
-  'Rows 6 and 7 are judgement and policy, not arithmetic, and are tagged as such. They need '
+  'Rows 6 and 7 are judgment and policy, not arithmetic, and are tagged as such. They need '
     + 'Ali’s decision rather than a re-run.',
   'CLM-002 expires 8 November 2026. The verified-stories row needs a re-verification pass '
     + 'before that date whatever this document says.',
@@ -215,16 +215,16 @@ function assertSeventeenComesOff() {
   return true;
 }
 
-/** The two judgement items may not masquerade as measurements. */
-function assertJudgementIsLabeled() {
+/** The two judgment items may not masquerade as measurements. */
+function assertJudgmentIsLabeled() {
   for (const r of ROWS) {
-    const isJudgement = r.severity === 'judgement';
-    const taggedJudgement = r.src === SRC.JUDGEMENT;
-    if (isJudgement !== taggedJudgement) {
-      throw new Error(`C4.12: row ${r.n} disagrees with itself about being a judgement call`);
+    const isJudgment = r.severity === 'judgment';
+    const taggedJudgment = r.src === SRC.JUDGMENT;
+    if (isJudgment !== taggedJudgment) {
+      throw new Error(`C4.12: row ${r.n} disagrees with itself about being a judgment call`);
     }
   }
-  return ROWS.filter((r) => r.severity === 'judgement').length;
+  return ROWS.filter((r) => r.severity === 'judgment').length;
 }
 
 /** No figure may be printed without an as-of date somewhere in its row. */
@@ -240,5 +240,5 @@ function assertDatedWhereItMoves() {
 
 module.exports = {
   AS_OF, SRC, HEADLINE, SO_WHAT, ROWS, SEVENTEEN, LIMITS,
-  assertSourced, assertSeventeenComesOff, assertJudgementIsLabeled, assertDatedWhereItMoves,
+  assertSourced, assertSeventeenComesOff, assertJudgmentIsLabeled, assertDatedWhereItMoves,
 };
