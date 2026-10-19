@@ -19,7 +19,7 @@ import { getPeoplePanel } from '../../peoplePanelService';
 import { getCohortPresence } from '../../cohortPresenceService';
 import { canDmMany } from '../../communityRooms/dmEligibility';
 import {
-  getCampusPresence, touchCampusArea, visibleSetFor, CampusAreaError, FRESH_MS, VISIBLE_CACHE_MAX,
+  getCampusPresence, touchCampusArea, visibleSetFor, CampusAreaError, FRESH_MS, VISIBLE_CACHE_MAX, type CampusPersonOut,
   __resetCampusPresenceCacheForTests, __campusPresenceCacheSize,
 } from '../campusPresenceService';
 
@@ -290,7 +290,7 @@ describe('C9: level and gear on named people only', () => {
   it('a look that could not be read: the person stays named, with no level or gear', async () => {
     mockLooks = 'unread';
     const { areas } = await getCampusPresence('me', 'coh-1', NOW);
-    const mate = areas.library!.people.find((p) => 'enrollment_id' in p) as Record<string, unknown>;
+    const mate = areas.library!.people.find((p): p is CampusPersonOut => 'enrollment_id' in p)!;
     expect(mate.display_name).toBe('Mia');
     expect(mate.rung_name).toBeUndefined();
     expect(mate.gear).toBeUndefined();
