@@ -51,6 +51,10 @@ export interface CampusMapProps {
   onPickPerson?: (p: CampusPerson, buildingId: BuildingId) => void;
   /** C5: walk to this building now (Walk over). A new seq means a new walk. */
   walkRequest?: { id: BuildingId; seq: number } | null;
+  /** C8: buildings whose room is on air now (from broadcast discovery). */
+  onAir?: Set<string>;
+  /** C8: today's plan route, the unfinished stops' buildings in order (campusPlan.routeBuildings). Full map only. */
+  route?: BuildingId[];
 }
 
 function Roof({ b }: { b: CampusBuilding }): React.ReactElement {
@@ -74,6 +78,19 @@ function Roof({ b }: { b: CampusBuilding }): React.ReactElement {
   }
 }
 
+/** C8: a building whose room is on air. Drawn at the roof's left (the head count sits at the right), large on the small maps. */
+function OnAirBadge({ b, compact }: { b: CampusBuilding; compact: boolean }): React.ReactElement {
+  const { x, y, w, h } = b.pos;
+  const bw = compact ? 170 : 62, bh = compact ? 70 : 22;
+  const bx = x - w / 2 - 6, by = y - h / 2 - bh / 2 - (compact ? 10 : 0);
+  return (
+    <g className="cm-onair" aria-hidden="true" data-testid={`cm-onair-${b.id}`}>
+      <rect x={bx} y={by} width={bw} height={bh} rx={bh / 2} />
+      <text x={bx + bw / 2} y={by + bh / 2 + (compact ? 17 : 4)} textAnchor="middle">ON AIR</text>
+    </g>
+  );
+}
+
 /** Live head count on a building (C4). Rendered only for a real count above zero. */
 function CountChip({ b, count, compact }: { b: CampusBuilding; count: number; compact: boolean }): React.ReactElement {
   const { x, y, w, h } = b.pos;
@@ -89,8 +106,8 @@ function CountChip({ b, count, compact }: { b: CampusBuilding; count: number; co
   );
 }
 
-function Building({ b, access, label, compact, count, onPick, setRef }: {
-  b: CampusBuilding; access: ExplorerAccess; label: string; compact: boolean; count: number;
+function Building({ b, access, label, compact, count, onAir = false, onPick, setRef }: {
+  b: CampusBuilding; access: ExplorerAccess; label: string; compact: boolean; count: number; onAir?: boolean;
   onPick: (id: BuildingId) => void; setRef?: (id: BuildingId, el: SVGGElement | null) => void;
 }): React.ReactElement {
   const { x, y, w, h } = b.pos;
@@ -98,7 +115,7 @@ function Building({ b, access, label, compact, count, onPick, setRef }: {
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onPick(b.id); }
   };
-  const aria = [label, chip, count > 0 ? `${count} here now` : null].filter(Boolean).join(', ');
+  const aria = [label, onAir ? 'on air now' : null, chip, count > 0 ? `${count} here now` : null].filter(Boolean).join(', ');
   return (
     <g
       ref={(el) => setRef?.(b.id, el)}
@@ -115,11 +132,12 @@ function Building({ b, access, label, compact, count, onPick, setRef }: {
       {!compact && <text className="cm-label" x={x} y={y + h / 2 + 22} textAnchor="middle">{label}</text>}
       {!compact && chip && <text className="cm-chip" x={x} y={y - h / 2 - roofRise(b) - 10} textAnchor="middle">{chip}</text>}
       {count > 0 && <CountChip b={b} count={count} compact={compact} />}
+      {onAir && <OnAirBadge b={b} compact={compact} />}
     </g>
   );
 }
 
-export default function CampusWorldMap({ buildings, accessOf, workplaceNames, reduceMotion, compact = false, initialTarget, onArrive, buildingRef, counts, people, onPickPerson, walkRequest }: CampusMapProps): React.ReactElement {
+export default function CampusWorldMap({ buildings, accessOf, workplaceNames, reduceMotion, compact = false, initialTarget, onArrive, buildingRef, counts, people, onPickPerson, walkRequest, onAir, route }: CampusMapProps): React.ReactElement {
   const [pos, setPos] = useState<Pt>({ x: QUAD.x, y: 640 });
   const posRef = useRef(pos);
   const raf = useRef<number | null>(null);
@@ -166,10 +184,24 @@ export default function CampusWorldMap({ buildings, accessOf, workplaceNames, re
     <svg className={`cm-map${compact ? ' is-compact' : ''}`} viewBox={`0 0 ${WORLD.w} ${WORLD.h}`} role="group" aria-label="Campus map">
       <rect className="cm-ground" x={0} y={0} width={WORLD.w} height={WORLD.h} rx={compact ? 18 : 0} />
       {buildings.map((b) => { const d = doorOf(b); return <path key={'p-' + b.id} className="cm-path" d={`M${QUAD.x} ${QUAD.y} L${d.x} ${d.y}`} />; })}
+      {!compact && route && route.map((id) => {
+        const b = buildings.find((x) => x.id === id); if (!b) return null; const d = doorOf(b);
+        return <path key={'r-' + id} className="cm-path is-route" data-testid={`cm-route-${id}`} d={`M${QUAD.x} ${QUAD.y} L${d.x} ${d.y}`} />;
+      })}
       <circle className="cm-quad" cx={QUAD.x} cy={QUAD.y} r={compact ? 34 : 28} />
       {buildings.map((b) => (
-        <Building key={b.id} b={b} access={accessOf(b)} label={buildingName(b, workplaceNames)} compact={compact} count={counts?.[b.id] ?? 0} onPick={walkTo} setRef={buildingRef} />
+        <Building key={b.id} b={b} access={accessOf(b)} label={buildingName(b, workplaceNames)} compact={compact} count={counts?.[b.id] ?? 0} onAir={!!onAir?.has(b.id)} onPick={walkTo} setRef={buildingRef} />
       ))}
+      {!compact && route && route.map((id, i) => {
+        const b = buildings.find((x) => x.id === id); if (!b) return null;
+        const n = { x: b.pos.x + b.pos.w / 2, y: b.pos.y }; // the right edge: clear of the label (below) and the chips (top corners)
+        return (
+          <g key={'n-' + id} className="cm-route-stop" data-testid={`cm-route-stop-${id}`} aria-hidden="true">
+            <circle cx={n.x} cy={n.y} r={12} />
+            <text x={n.x} y={n.y + 5} textAnchor="middle">{i + 1}</text>
+          </g>
+        );
+      })}
       {!compact && people && onPickPerson && buildings.map((b) => {
         const t = people[b.id];
         return t ? <PersonTokens key={'t-' + b.id} b={b} shown={t.shown} more={t.more} maxY={WORLD.h} onPick={(p) => onPickPerson(p, b.id)} /> : null;

@@ -1,4 +1,5 @@
 import React from 'react';
+import { useCampusOnAir } from './campusOnAir';
 import { Link } from 'react-router-dom';
 import CampusWorldMap from './CampusWorldMap';
 import './campus.css';
@@ -15,6 +16,7 @@ import { buildingForPath, buildingName } from './campusMap';
 export default function CampusNav({ active }: { active: string }): React.ReactElement {
   const { settings, openMap, openList, updateSettings, presence, presenceError } = useCampus();
   const { buildings, accessOf } = useCampusView();
+  const { buildings: onAir } = useCampusOnAir();
   const here = buildingForPath(active);
   const counts: Record<string, number> = {};
   if (presence && !presenceError) for (const [id, a] of Object.entries(presence)) counts[id] = a.count;
@@ -22,7 +24,7 @@ export default function CampusNav({ active }: { active: string }): React.ReactEl
     <nav className="cm-nav" aria-label="Campus">
       <div className="cm-nav-map">
         <CampusWorldMap buildings={buildings} accessOf={accessOf}
-          workplaceNames={settings.workplaceNames} reduceMotion={settings.reduceMotion} compact onArrive={(id) => openMap(id)} counts={counts} />
+          workplaceNames={settings.workplaceNames} reduceMotion={settings.reduceMotion} compact onArrive={(id) => openMap(id)} counts={counts} onAir={onAir} />
       </div>
       <button type="button" className="cm-btn cm-nav-open" onClick={() => openMap()} data-testid="cm-open-map">Open campus map</button>
       <div className="grp">Buildings</div>

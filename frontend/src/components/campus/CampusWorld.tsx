@@ -43,9 +43,13 @@ export interface CampusWorldProps {
   personCard?: PersonCardTarget | null;
   onOpenPerson?: (t: PersonCardTarget) => void;
   onClosePerson?: () => void;
+  /** C8: buildings whose room is on air now. */
+  onAir?: Set<string>;
+  /** C8: today's plan route (building ids in order). */
+  route?: BuildingId[];
 }
 
-export default function CampusWorld({ buildings, audience, hasFullAccess, accessOf: accessOfProp, isExplorer = false, workplaceNames, reduceMotion, initialTarget, onExit, onNavigate, presence, presenceError = false, onEnterRoom, staffDesks, personCard, onOpenPerson, onClosePerson }: CampusWorldProps): React.ReactElement {
+export default function CampusWorld({ buildings, audience, hasFullAccess, accessOf: accessOfProp, isExplorer = false, workplaceNames, reduceMotion, initialTarget, onExit, onNavigate, presence, presenceError = false, onEnterRoom, staffDesks, personCard, onOpenPerson, onClosePerson, onAir, route }: CampusWorldProps): React.ReactElement {
   const counts = useMemo(() => {
     const out: Record<string, number> = {};
     if (presence) for (const [id, a] of Object.entries(presence)) out[id] = a.count;
@@ -91,7 +95,7 @@ export default function CampusWorld({ buildings, audience, hasFullAccess, access
     <div className="cm-world" onKeyDown={onKeyDown} ref={world}>
       <CampusWorldMap buildings={buildings} accessOf={accessOf} workplaceNames={workplaceNames} reduceMotion={reduceMotion}
         initialTarget={initialTarget} onArrive={setOpen} buildingRef={registerEl} counts={presenceError ? undefined : counts}
-        people={people} onPickPerson={onOpenPerson ? pickPerson : undefined} walkRequest={walkRequest} />
+        people={people} onPickPerson={onOpenPerson ? pickPerson : undefined} walkRequest={walkRequest} onAir={onAir} route={route} />
       {personCard && (() => {
         const pb = buildings.find((x) => x.id === personCard.buildingId);
         return <PersonCard person={personCard.person} buildingLabel={pb ? buildingName(pb, workplaceNames) : 'the campus'} onClose={() => onClosePerson?.()}
