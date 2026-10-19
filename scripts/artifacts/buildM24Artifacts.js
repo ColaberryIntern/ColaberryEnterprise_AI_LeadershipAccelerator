@@ -7,7 +7,7 @@
  * count back out of the rendered bytes rather than trusting the layout.
  *
  * The arithmetic is checked BEFORE anything is drawn, and it is not ceremony: the contract this
- * artifact summarises shipped a first draft whose headline said eight safe inputs while its table
+ * artifact summarizes shipped a first draft whose headline said eight safe inputs while its table
  * held seven. A chart whose parts do not sum to the number beside it is worse than no chart.
  */
 const fs = require('fs');

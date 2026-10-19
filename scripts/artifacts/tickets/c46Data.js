@@ -230,7 +230,7 @@ function assertNoCustomerStoryClaim(html) {
   const text = String(html).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
   // Every occurrence of the phrase must sit near a negation. Matching a fixed list of denial
   // phrasings was too brittle: the first version fired on five legitimate denials because it
-  // only recognised two of the ways we had written them. Checking the WINDOW around each
+  // only recognized two of the ways we had written them. Checking the WINDOW around each
   // occurrence for a negation is both stricter and more robust, because a new way of phrasing
   // a denial still passes while an actual claim still fails.
   const NEG = /\b(no|not|none|never|nothing|without|lack|zero|0 of|do not|does not|is the thing we are building)\b/i;

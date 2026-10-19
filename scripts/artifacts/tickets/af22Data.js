@@ -1,7 +1,7 @@
 /**
  * AF2.2's facts, measured against production on 17 Oct 2026.
  *
- * The ticket's premise is that there is no generalised agent console and one must be built. That
+ * The ticket's premise is that there is no generalized agent console and one must be built. That
  * premise is wrong in the same way AF2.1's and AF2.6's were: the console exists, it is already
  * per-agent, and `AgentDetailPage.tsx` says so in its own comment - "Generic by construction
  * (this page fetches by route...)". It renders Work and Decisions, Performance Settings, and the
@@ -93,7 +93,7 @@ const WHAT_I_DID_NOT_DO = [
     + 'instruction is the right one - a bypass here is how seven interns get the ability to make '
     + '255 observe-level agents act on production.',
   'I did not build a second console. The one that exists is already generic, and the ticket '
-    + 'itself says to generalise rather than design a new one.',
+    + 'itself says to generalize rather than design a new one.',
 ];
 
 const HEADLINE = 'The console already exists and is already per-agent. No intern can reach it, '

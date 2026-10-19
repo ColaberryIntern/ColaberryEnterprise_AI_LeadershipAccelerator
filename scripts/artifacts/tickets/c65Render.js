@@ -32,7 +32,7 @@ const bchip = (b) => `<span class="bill ${b ? '' : 'free'}">${b ? 'BILLABLE' : '
  *
  * Taking only the first sentence left three cells reading "CONTRACT DEFECT." and
  * "MISNAMED." - a label where the reader needed the finding. Several notes open with
- * exactly that kind of short capitalised lead, so the cut keeps going until it has said
+ * exactly that kind of short capitalized lead, so the cut keeps going until it has said
  * something. The trailing-period strip is because splitting on '. ' leaves the final
  * sentence's own period in place, which produced ".." on the first build.
  */

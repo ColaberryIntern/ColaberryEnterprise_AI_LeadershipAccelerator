@@ -78,7 +78,7 @@ const ENTITIES = [
   {
     n: 2, entity: 'Decision makers', verdict: V.REUSE, where: 'leads',
     why: 'This is what `leads` already is. It carries name, email, title, role, phone, '
-      + 'linkedin_url, apollo_id and 24,791 rows of them. Modelling people a second time is '
+      + 'linkedin_url, apollo_id and 24,791 rows of them. Modeling people a second time is '
       + 'the duplicate universe the ticket warns about.',
     change: 'None to the entity. See row 3 for the join.',
     proof: '62 columns on `leads`, including title, role, linkedin_url and apollo_id.',

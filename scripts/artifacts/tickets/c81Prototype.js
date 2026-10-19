@@ -3,7 +3,7 @@
  *
  * Standalone and static on purpose: it fetches nothing, so it can be opened from the
  * Basecamp folder with no backend. It uses the REAL token names from
- * frontend/src/styles/tokens.css rather than invented colours, which is what makes it
+ * frontend/src/styles/tokens.css rather than invented colors, which is what makes it
  * droppable into the admin shell and is checked by assertPrototypeUsesRealTokens().
  *
  * The thing to look at is what the blank tiles do. They are not zeroes and they are not
@@ -127,7 +127,7 @@ footer { margin-top:26px; font-size:.78rem; color:var(--color-text-light); }
 <table>
   <tr><th style="width:26%">Field</th><th>Value</th></tr>
   <tr><td><b>Route</b></td><td><code>${esc(D.ROUTE.path)}</code></td></tr>
-  <tr><td><b>Authorisation</b></td><td>${esc(D.ROUTE.auth)}</td></tr>
+  <tr><td><b>Authorization</b></td><td>${esc(D.ROUTE.auth)}</td></tr>
   <tr><td><b>Built by</b></td><td>${esc(D.ROUTE.note)}</td></tr>
 </table>
 

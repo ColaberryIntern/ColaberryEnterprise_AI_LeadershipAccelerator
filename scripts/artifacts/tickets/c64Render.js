@@ -51,7 +51,7 @@ function spendTable() {
   </table>`;
 }
 
-/** The one-pager's gap table: the eleven named-without-an-address are summarised, the
+/** The one-pager's gap table: the eleven named-without-an-address are summarized, the
  * three not-found are listed, because those are the ones needing a decision. */
 function gapTable() {
   return `<table>

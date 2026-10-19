@@ -63,7 +63,7 @@ const DEFECTS = [
       + 'code, and a person with no visitor record receives {sessions: 0, firstSeen: null, '
       + 'lastSeen: null, sites: []}.',
     aggravation: 'This is also the only group anchored in the registry by a bare table name '
-      + 'rather than a call site, and the only one with no behavioural test of its contents.',
+      + 'rather than a call site, and the only one with no behavioral test of its contents.',
   },
   {
     id: 'B',
@@ -71,7 +71,7 @@ const DEFECTS = [
     cite: 'journeyPanel.ts:10 and :91',
     detail: 'The file states "A count we cannot compute is null rather than 0". Four lines below, '
       + 'six counts are coerced with ?? 0, and the query is skipped entirely when there are no '
-      + 'lead ids. Only daysKnown and intentScore honour the rule.',
+      + 'lead ids. Only daysKnown and intentScore honor the rule.',
     aggravation: 'These are the counts that lie about exactly the rows M22 has not yet '
       + 'classified, which is why the population decision and this defect compound.',
   },
@@ -89,7 +89,7 @@ const MUTATION = {
 /** Four things between here and yes, in order. Three are code, one is Ali's. */
 const TO_YES = [
   { n: 1, what: 'engagement returns null when there is no visitor record', who: 'code', size: 'small, local' },
-  { n: 2, what: 'the journey counts honour their own docblock: null, not 0', who: 'code', size: 'small, local' },
+  { n: 2, what: 'the journey counts honor their own docblock: null, not 0', who: 'code', size: 'small, local' },
   { n: 3, what: 'journey.enrollments and the appointments [] substitution stop writing a permission or key state into a value slot', who: 'code', size: 'small, local' },
   { n: 4, what: 'decide M22: the 37 ambiguous rows are in the scored population or they are not', who: 'Ali', size: 'a decision, not a fix' },
 ];
@@ -105,7 +105,7 @@ const PROCEEDS = 'M25 may start against the seven safe inputs. Its own criteria 
   + 'recorded, is consistent with this contract. One fed from the two inputs above is not.';
 
 const NOT_ESTABLISHED = [
-  'That the SQL behind any evidence group parses. Every behavioural test in the package mocks '
+  'That the SQL behind any evidence group parses. Every behavioral test in the package mocks '
     + 'sequelize.query, so none of them would notice. Marked UNVERIFIED in the contract.',
   'That the weights are right. Part 5 of the contract still refuses to propose any, and '
     + 'DECISION 2 keeps them provisional.',

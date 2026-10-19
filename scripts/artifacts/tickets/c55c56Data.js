@@ -140,8 +140,8 @@ function criteria(id) {
     },
     {
       c: 'CTA instrumented',
-      e: "trackEvent('cta_click', { cta_name: 'segment_enquiry', segment }) fires on the "
-        + `single enquiry link, and the href carries ?segment=${t.slug} for attribution. A `
+      e: "trackEvent('cta_click', { cta_name: 'segment_enquiry', segment }) fires on the " // spelling-exempt
+        + `single inquiry link, and the href carries ?segment=${t.slug} for attribution. A `
         + 'test asserts exactly one /contact link per page and that it carries its own '
         + 'segment rather than another one’s.',
       kind: KIND.TEST,

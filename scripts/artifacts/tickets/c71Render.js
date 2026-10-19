@@ -202,7 +202,7 @@ function buildDocument() {
     <ol>${D.LIMITS.map((l) => `<li style="margin-bottom:5px">${esc(l)}</li>`).join('')}</ol>
 
     <div class="note"><b>What needs your decision:</b> the weights, and any decision to waive
-    a gate. The weights are a judgement and are meant to be argued with. The gates are not,
+    a gate. The weights are a judgment and are meant to be argued with. The gates are not,
     and changing one is a decision rather than a tuning exercise.</div>
   </div>`;
 

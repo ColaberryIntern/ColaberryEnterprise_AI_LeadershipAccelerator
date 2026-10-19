@@ -9,7 +9,7 @@
  * an SVG string: no network, no canvas, no race. Mermaid is the one exception (it genuinely needs
  * a layout engine) and `renderArtifactPdf` asserts its SVG exists before it will emit a PDF.
  *
- * ## Colours
+ * ## Colors
  *
  * From `frontend/src/styles/tokens.css`, which is the source of truth. The baseline-ui skill's
  * summary table was wrong about this for months -- it listed a navy `--color-primary` that appears

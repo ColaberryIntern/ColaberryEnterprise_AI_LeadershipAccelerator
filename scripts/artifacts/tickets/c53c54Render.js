@@ -1,5 +1,5 @@
 /**
- * C5.3 and C5.4 - the one-page visual and the document, parameterised by ticket.
+ * C5.3 and C5.4 - the one-page visual and the document, parameterized by ticket.
  *
  * One render module rather than two near-identical ones: the two pages were built together,
  * share a config and a stylesheet, and differ in four fields. Where they genuinely diverge
@@ -128,8 +128,8 @@ function buildVisual(id) {
           and a test asserts no other one appears.</div>`
     : `<div class="note"><b>Two of the five are delivered by people.</b> The C2.2 audit
           found no platform capability for deployment candidate selection or for the
-          executive impact report. The page labels each stage in text rather than in colour,
-          so the distinction survives greyscale and a printed page.</div>`}
+          executive impact report. The page labels each stage in text rather than in color,
+          so the distinction survives grayscale and a printed page.</div>`}
       </div>
     </div>
 
@@ -213,7 +213,7 @@ function buildDocument(id) {
     deployment candidate selection has no platform capability at all and the executive impact
     report has no generator; both sit at day eighty to ninety, which is where a sponsor
     decides whether to run the program again. The label is rendered as text rather than as
-    a colour, so it survives greyscale, a colour-blind reader and a printed page.</p>
+    a color, so it survives grayscale, a color-blind reader and a printed page.</p>
 
     <h2>Every claim on the page, quoted from the registry</h2>
     ${registryTable()}

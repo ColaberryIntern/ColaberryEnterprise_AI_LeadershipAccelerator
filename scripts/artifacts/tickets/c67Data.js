@@ -13,7 +13,7 @@
  * ## The standard this ticket sets, and why it is checked rather than trusted
  *
  * "Templated personalization. If the opening could be sent to anyone, it is not tier 1."
- * That judgement gets made badly at draft nineteen, so `c67Guards.js` enforces it: every
+ * That judgment gets made badly at draft nineteen, so `c67Guards.js` enforces it: every
  * opening must contain a word appearing in no other opening, and no two openings may share
  * more than a third of their vocabulary.
  *

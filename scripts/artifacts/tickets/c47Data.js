@@ -56,7 +56,7 @@ const INPUTS = [
       + 'the two is not an estimate we are willing to make for you.' },
   { id: 'I5', label: 'Value to you of one AI project reaching production', unit: 'currency',
     why: 'Cost avoided, revenue enabled, or hours returned. Whichever your finance team already '
-      + 'recognises. This is the number most likely to be argued about internally, so it should '
+      + 'recognizes. This is the number most likely to be argued about internally, so it should '
       + 'be yours from the start.' },
   { id: 'I6', label: 'Over what period you want to evaluate this', unit: 'months',
     why: 'Twelve months is the usual frame. Shorter frames flatter any training spend; longer '

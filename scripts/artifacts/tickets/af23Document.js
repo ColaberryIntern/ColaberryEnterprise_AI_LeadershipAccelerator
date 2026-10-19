@@ -58,7 +58,7 @@ function surfaceChart() {
     }));
   return `<figure>${barChart({ rows, width: 660, barH: 17, gap: 6, labelW: 215 })}
     <figcaption>Admin path prefixes mapping to each domain's section, from the gate's own table.
-      Bar colour is the scoping verdict. The two domains with no section are absent because they
+      Bar color is the scoping verdict. The two domains with no section are absent because they
       have nothing to count &mdash; <code>product_experience</code> and <code>website</code>.
     </figcaption></figure>`;
 }
