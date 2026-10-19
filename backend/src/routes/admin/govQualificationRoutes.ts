@@ -602,6 +602,21 @@ router.post('/api/admin/factory/qualification/:canonicalOpportunityId/clarificat
   }
 });
 
+/**
+ * GET /api/admin/factory/active-interns — ALL active interns a gov build can be assigned to, UNASSIGNED first.
+ * Materialize only needs an enrolled intern (not a delivery-project member), so the "Create the monitored project"
+ * picker is no longer limited to a project's current builders. Not opportunity-scoped; operator-gated.
+ */
+router.get('/api/admin/factory/active-interns', requireSection('program'), async (_req: Request, res: Response) => {
+  try {
+    const { listActiveInternsForAssignment } = await import('../../services/factory/govBuildAssignment');
+    const interns = await listActiveInternsForAssignment();
+    res.json({ interns });
+  } catch (err: any) {
+    logFail('gov_active_interns_failed', err, {}); res.status(500).json({ error: 'Could not load the active interns.' });
+  }
+});
+
 const buildSpecBody = z.object({
   requirements: z.array(z.object({ id: z.string().max(60), text: z.string().max(4000) })).max(200),
   title: z.string().max(300).nullable().optional(),

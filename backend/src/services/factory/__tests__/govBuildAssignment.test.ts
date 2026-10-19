@@ -20,6 +20,9 @@ const memFindAll = jest.fn();
 jest.mock('../../../models/DeliveryProjectMember', () => ({ __esModule: true, default: { findAll: (...a: any[]) => memFindAll(...a) } }));
 const idFindAll = jest.fn();
 jest.mock('../../../models/PlatformIdentity', () => ({ __esModule: true, default: { findAll: (...a: any[]) => idFindAll(...a) } }));
+const getConsoleRoster = jest.fn();
+jest.mock('../../internship/internConsoleRoster', () => ({ __esModule: true, getConsoleRoster: (...a: any[]) => getConsoleRoster(...a) }));
+jest.mock('../../../modules/identity/platformIdentityService', () => ({ __esModule: true, normalizeEmail: (e: any) => String(e ?? '').trim().toLowerCase() }));
 
 // Keep the REAL permission logic (hasDeliveryPermission + the role grant map); stub ONLY the membership read so the
 // test controls the assignee's roles. A mutant that drops the story.execute check therefore fails a real-grant test.
@@ -29,7 +32,7 @@ jest.mock('../../../modules/delivery/deliveryAuthorization', () => {
   return { __esModule: true, ...actual, buildDeliveryContext: (...a: any[]) => buildCtx(...a) };
 });
 
-import { assignBuildStory, unassignBuildStory, listBuildStoryAssignments, listAssignableBuilders, AssignmentError } from '../govBuildAssignment';
+import { assignBuildStory, unassignBuildStory, listBuildStoryAssignments, listAssignableBuilders, listActiveInternsForAssignment, AssignmentError } from '../govBuildAssignment';
 
 const ctxWithRoles = (roles: string[]) => ({ platformIdentityId: 'who', deliveryProjectId: 'dp-1', projectTenantId: 't-1', roles, isClientOnly: false });
 const rowFrom = (v: any) => ({ get: () => ({ id: 'as-1', assigned_at: new Date('2026-10-08T00:00:00Z'), ...v }) });
@@ -119,5 +122,29 @@ describe('listAssignableBuilders — only real builders, via the real grant map'
     expect(builders.map((b) => b.identityId).sort()).toEqual(['b-1', 'b-2']);
     expect(builders.find((b) => b.identityId === 'b-1')!.email).toBe('b1@x.com');
     expect(await listAssignableBuilders('')).toEqual([]);
+  });
+});
+
+describe('listActiveInternsForAssignment — all active interns, UNASSIGNED first', () => {
+  it('resolves interns to platform identities by email, drops the unresolvable, and lists no-project first', async () => {
+    getConsoleRoster.mockResolvedValue([
+      { enrollment_id: 'e1', name: 'Zoe Assigned', email: 'Zoe@x.com', project: { project_id: 'p1' } },
+      { enrollment_id: 'e2', name: 'Amy Available', email: 'amy@x.com', project: null },
+      { enrollment_id: 'e3', name: 'Ghost NoIdentity', email: 'ghost@x.com', project: null }, // no identity -> dropped
+    ]);
+    idFindAll.mockResolvedValue([
+      { id: 'id-zoe', primary_email: 'zoe@x.com' },
+      { id: 'id-amy', primary_email: 'amy@x.com' },
+    ]);
+    const out = await listActiveInternsForAssignment();
+    expect(out.map((o) => o.name)).toEqual(['Amy Available', 'Zoe Assigned']); // no-project (Amy) first
+    expect(out.find((o) => o.name === 'Amy Available')).toMatchObject({ identityId: 'id-amy', hasProject: false });
+    expect(out.find((o) => o.name === 'Zoe Assigned')).toMatchObject({ identityId: 'id-zoe', hasProject: true });
+    expect(out.some((o) => o.email === 'ghost@x.com')).toBe(false); // unresolvable identity is dropped
+  });
+
+  it('is best-effort — a roster failure yields an empty list, never throws', async () => {
+    getConsoleRoster.mockRejectedValue(new Error('db down'));
+    expect(await listActiveInternsForAssignment()).toEqual([]);
   });
 });

@@ -875,6 +875,14 @@ export async function materializeGovBuildProject(
   return data;
 }
 
+/** An active intern the gov build can be assigned to at materialization (not limited to this project's builders). */
+export interface ActiveInternOption { identityId: string; email: string | null; name: string; hasProject: boolean }
+/** All active interns, UNASSIGNED (no project) first — the people available to staff onto this build. */
+export async function listActiveInterns(): Promise<ActiveInternOption[]> {
+  const { data } = await api.get<{ interns: ActiveInternOption[] }>('/api/admin/factory/active-interns');
+  return Array.isArray(data?.interns) ? data.interns : [];
+}
+
 /** Record a NON-approval decision and/or the reviewer-established cited requirements. */
 export async function recordGovQualificationDecision(canonicalOpportunityId: string, body: {
   biddingEntity: string; expectedVersion: number; decision: 'pending_review' | 'needs_evidence' | 'no_bid';
