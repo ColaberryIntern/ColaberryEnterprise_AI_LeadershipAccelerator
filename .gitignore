@@ -90,6 +90,10 @@ tmp/cohort-reports/
 tmp/c6*_search.json
 tmp/c6*_owned.json
 tmp/c6*_contacts.json
+# C6.7 adds drafted outreach: the same names and addresses PLUS a message written to
+# each person. It was very nearly written into a tracked generator file instead; the
+# data lives here and the generator reads it, exactly as the C6.4 generator does.
+tmp/c6*_messages.json
 backend/tmp/
 docs/reports/
 docs/gov-contracts-daily-*.html
