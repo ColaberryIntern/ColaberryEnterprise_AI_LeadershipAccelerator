@@ -6,6 +6,8 @@ import {
   fetchNotifications, fetchUnreadNotificationCount, markNotificationRead, markAllNotificationsRead,
   CommunityNotification,
 } from '../../../services/communityApi';
+import { useCampus } from '../../../components/campus/CampusContext';
+import { notificationPlace } from '../../../components/campus/campusNotify';
 
 function notifText(n: CommunityNotification): string {
   const who = n.actor?.display_name ?? 'Someone';
@@ -22,12 +24,16 @@ function notifText(n: CommunityNotification): string {
  * 45s; opening the panel fetches the list. Clicking an item marks it read and
  * jumps to the community feed. Degrades silently for users with no community
  * membership (count stays 0). Lives in the portal shell so it shows everywhere.
+ *
+ * Campus (C8): while the campus is active, every item walks through the campus door to its place (campusNotify); with the
+ * campus off, the classic behavior below is unchanged.
  */
 const NotificationBell: React.FC = () => {
   const [count, setCount] = useState(0);
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<CommunityNotification[] | null>(null);
   const ref = useRef<HTMLDivElement>(null);
+  const { active: campusActive, enterThroughDoor } = useCampus();
 
   useEffect(() => {
     const load = () => fetchUnreadNotificationCount().then(setCount).catch(() => {});
@@ -52,6 +58,7 @@ const NotificationBell: React.FC = () => {
   const onItem = (n: CommunityNotification) => {
     if (!n.read) { markNotificationRead(n.id).catch(() => {}); setCount((c) => Math.max(0, c - 1)); }
     setOpen(false);
+    if (campusActive) { enterThroughDoor(notificationPlace(n.notification_type).route, null); return; }
     // Friend / DM notifications point at the rail (present on every page) — no jump.
     if (n.source_type === 'friendship' || n.source_type === 'dm') return;
     window.location.assign('/portal/community');

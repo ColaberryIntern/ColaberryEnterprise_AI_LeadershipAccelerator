@@ -3,9 +3,12 @@ import { Link } from 'react-router-dom';
 import CampusWorld from './CampusWorld';
 import CampusDoorTransition from './CampusDoorTransition';
 import CampusDmToast from './CampusDmToast';
+import { useCampusOnAir } from './campusOnAir';
+import { routeBuildings } from './campusPlan';
 import './campusPeople.css';
 import './campusAudiences.css';
 import './campus.css';
+import './campusLive.css';
 import { useCampus } from './CampusContext';
 import { useCampusView } from './useCampusView';
 import { accessLabel } from './campusAccess';
@@ -29,8 +32,10 @@ function useReturnFocus(open: boolean): void {
 
 export function CampusMapOverlay(): React.ReactElement | null {
   const { layer, mapFocus, settings, closeLayer, openList, presence, presenceError, enterThroughDoor,
-    staffDesks, personCard, openPersonCard, closePersonCard } = useCampus();
+    staffDesks, personCard, openPersonCard, closePersonCard, planStops } = useCampus();
   const { audience, hasFullAccess, buildings, accessOf, isExplorer } = useCampusView();
+  const { buildings: onAir } = useCampusOnAir();
+  const route = planStops ? routeBuildings(planStops) : undefined;
   const open = layer === 'map';
   const dialog = useRef<HTMLDivElement | null>(null);
   useReturnFocus(open);
@@ -49,7 +54,7 @@ export function CampusMapOverlay(): React.ReactElement | null {
       <CampusWorld buildings={buildings} audience={audience} hasFullAccess={hasFullAccess} accessOf={accessOf} isExplorer={isExplorer} workplaceNames={settings.workplaceNames}
         reduceMotion={settings.reduceMotion} initialTarget={mapFocus} onExit={closeLayer} onNavigate={closeLayer}
         presence={presence} presenceError={presenceError}
-        staffDesks={staffDesks} personCard={personCard} onOpenPerson={openPersonCard} onClosePerson={closePersonCard}
+        staffDesks={staffDesks} personCard={personCard} onOpenPerson={openPersonCard} onClosePerson={closePersonCard} onAir={onAir} route={route}
         onEnterRoom={(route, from) => enterThroughDoor(route, from ? { left: from.left, top: from.top, width: from.width, height: from.height } : null)} />
     </div>
   );

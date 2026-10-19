@@ -6,9 +6,13 @@ import { useCampus } from './CampusContext';
 import { useCampusView } from './useCampusView';
 import { trailFor } from './campusTrail';
 import { shouldStepOutside } from './campusEsc';
+import CampusLive from './CampusLive';
+import { useCampusOnAir } from './campusOnAir';
+import { nextStop } from './campusPlan';
 import type { BuildingId } from './campusMap';
 import './campus.css';
 import './campusBanner.css';
+import './campusLive.css';
 
 /**
  * The campus banner on every campus page (Colaberry Campus C3): a mini-map (opens the full map at
@@ -18,11 +22,12 @@ import './campusBanner.css';
  *
  * Stateless: everything it shows comes from CampusContext, which lives beside <Outlet/> and survives
  * navigation. Rendered by both page chromes (PortalShell and the legacy PortalLayout) and by the
- * Showcase page, only while the campus is active. "Next" arrives with C8 (today's plan route).
+ * Showcase page, only while the campus is active. "Next" (C8) is the first unfinished step of today's plan outside this building.
  */
 export default function CampusBanner(): React.ReactElement {
-  const { settings, presence, presenceError, layer, openMap, stepOutside } = useCampus();
+  const { settings, presence, presenceError, layer, openMap, stepOutside, enterThroughDoor, planStops } = useCampus();
   const { buildings, accessOf, isExplorer } = useCampusView();
+  const { buildings: onAir } = useCampusOnAir();
   const { pathname } = useLocation();
   const crumbs = trailFor(pathname, buildings, settings.workplaceNames);
   const here = (crumbs[1]?.buildingId ?? null) as BuildingId | null;
@@ -33,6 +38,9 @@ export default function CampusBanner(): React.ReactElement {
     return () => window.removeEventListener('keydown', onKey);
   }, [layer, here, stepOutside]);
 
+  // C8: Next = the first unfinished plan step not in this building (campusPlan). Absent when there is no plan.
+  const next = planStops ? nextStop(planStops, here) : null;
+
   const counts: Record<string, number> = {};
   if (presence && !presenceError) for (const [id, a] of Object.entries(presence)) counts[id] = a.count;
 
@@ -41,7 +49,7 @@ export default function CampusBanner(): React.ReactElement {
       <button type="button" className="cm-banner-mini" onClick={() => openMap(here ?? undefined)} aria-label="Open the campus map">
         <span aria-hidden="true" className="cm-banner-mini-map">
           <CampusWorldMap buildings={buildings} accessOf={accessOf} workplaceNames={settings.workplaceNames}
-            reduceMotion compact onArrive={() => undefined} counts={counts} />
+            reduceMotion compact onArrive={() => undefined} counts={counts} onAir={onAir} />
         </span>
       </button>
       <nav className="cm-trail" aria-label="Where you are on campus">
@@ -63,9 +71,15 @@ export default function CampusBanner(): React.ReactElement {
       {/* Only where the path exists: an Explorer whose campus has the Main Gate (an org manager on an Explorer account gets the
           Partner Office campus, which has no gate and so no path). */}
       {isExplorer && buildings.some((b) => b.id === 'gate') && <button type="button" className="cm-link" data-testid="cm-your-path" onClick={() => openMap('gate')}>Your path</button>}
+      {next && (
+        <button type="button" className="cm-btn cm-next" data-testid="cm-next" onClick={() => enterThroughDoor(next.route, null)}
+          title={next.title}>Next: {next.title}</button>
+      )}
       <button type="button" className="cm-btn is-secondary cm-step-out" onClick={() => stepOutside(here)} data-testid="cm-step-out">
         Step outside
       </button>
+      {/* C8: what is on air now (renders nothing when nothing is) */}
+      <CampusLive />
     </div>
   );
 }

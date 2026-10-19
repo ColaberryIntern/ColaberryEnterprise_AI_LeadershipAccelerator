@@ -3,6 +3,8 @@ import { fetchCampusFlags } from './campusApi';
 import type { CampusPresence, CampusPerson } from './campusApi';
 import { useCampusPresencePoll } from './useCampusPresencePoll';
 import { useStaffDesks } from './useStaffDesks';
+import { useCampusPlan } from './useCampusPlan';
+import type { PlanStop } from './campusPlan';
 import { useCampusDmToasts, DmToast } from './useCampusDmToasts';
 import type { StaffDesk } from './campusPeopleApi';
 import { useParticipantAuth } from '../../contexts/ParticipantAuthContext';
@@ -62,6 +64,8 @@ export interface CampusState {
   /** C5: the current "new message" toast (polled here, so it survives navigation), and its dismiss. */
   dmToast: DmToast | null;
   dismissDmToast: () => void;
+  /** C8: today's plan as campus stops (null when the plan is off, failed, or the campus is off). */
+  planStops: PlanStop[] | null;
 }
 
 export interface PersonCardTarget { person: CampusPerson; buildingId: BuildingId }
@@ -79,7 +83,7 @@ const OFF: CampusState = {
   updateSettings: noop, layer: 'none', mapFocus: null, openMap: noop, openList: noop, closeLayer: noop,
   presence: null, presenceError: false, door: null, enterThroughDoor: noop, stepOutside: noop, clearDoor: noop,
   staffDesks: [], staffDesksError: false, personCard: null, openPersonCard: noop, closePersonCard: noop,
-  dmToast: null, dismissDmToast: noop,
+  dmToast: null, dismissDmToast: noop, planStops: null,
 };
 
 const Ctx = createContext<CampusState>(OFF);
@@ -129,14 +133,15 @@ export function CampusProvider({ children }: { children?: React.ReactNode }): Re
   // C5: AI staff desks (read once while active) and the open person card.
   const { staffDesks, staffDesksError } = useStaffDesks(active);
   const { toast: dmToast, dismiss: dismissDmToast } = useCampusDmToasts(active);
+  const planStops = useCampusPlan(active, layer === 'map');
   const openPersonCard = useCallback((t: PersonCardTarget) => setPersonCard(t), []);
   const closePersonCard = useCallback(() => setPersonCard(null), []);
 
   const value = useMemo<CampusState>(
     () => ({ enabled, ready, settings, active, updateSettings, layer, mapFocus, openMap, openList, closeLayer, presence, presenceError,
-      door, enterThroughDoor, stepOutside, clearDoor, staffDesks, staffDesksError, personCard, openPersonCard, closePersonCard, dmToast, dismissDmToast }),
+      door, enterThroughDoor, stepOutside, clearDoor, staffDesks, staffDesksError, personCard, openPersonCard, closePersonCard, dmToast, dismissDmToast, planStops }),
     [enabled, ready, settings, active, updateSettings, layer, mapFocus, openMap, openList, closeLayer, presence, presenceError,
-      door, enterThroughDoor, stepOutside, clearDoor, staffDesks, staffDesksError, personCard, openPersonCard, closePersonCard, dmToast, dismissDmToast],
+      door, enterThroughDoor, stepOutside, clearDoor, staffDesks, staffDesksError, personCard, openPersonCard, closePersonCard, dmToast, dismissDmToast, planStops],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
