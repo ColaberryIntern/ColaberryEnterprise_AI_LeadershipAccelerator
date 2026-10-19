@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import {
   fetchConsoleRoster, ConsoleRoster, ConsoleCounts, InternRow,
 } from '../../../services/adminInternConsoleApi';
-import { FILTERS, RosterFilter, matchesFilter, byNeediest } from './consoleFormat';
+import { FILTERS, RosterFilter, matchesFilter, byUnassignedFirst } from './consoleFormat';
 import ConsoleViewA from './ConsoleViewA';
 import ConsoleViewB from './ConsoleViewB';
 import ConsoleViewC from './ConsoleViewC';
@@ -108,7 +108,7 @@ export const InternConsoleMode: React.FC<{
   useEffect(() => { load(); }, [load]);
 
   const rows: InternRow[] = useMemo(
-    () => (data?.interns ?? []).filter((r) => matchesFilter(r, filter)).sort(byNeediest),
+    () => (data?.interns ?? []).filter((r) => matchesFilter(r, filter)).sort(byUnassignedFirst),
     [data, filter],
   );
 

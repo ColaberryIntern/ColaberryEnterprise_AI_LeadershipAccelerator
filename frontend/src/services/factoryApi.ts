@@ -460,6 +460,8 @@ export interface QualificationRecord {
   requirements_json?: {
     established?: EstablishedRequirement[]; reviewedDocuments?: ReviewedDocument[];
     approval?: GovApprovalState | null; decisionBrief?: GovDecisionBrief | null;
+    /** The Step 3 Fit decisions, persisted here (advisory). */
+    capabilities?: CapabilityDecisionsPayload | null;
   } | null;
 }
 /** The resolved, honest source state (mirrors the server gate). */
@@ -804,7 +806,7 @@ export interface GovProposalSummary { whatTheyWant: string; whatWedBuild: string
 /** Generate a "what they want / what we'd build" summary from the established requirement statements. */
 export async function getGovProposalSummary(
   canonicalOpportunityId: string,
-  body: { requirements: { id: string; text: string }[]; title?: string | null; buyer?: string | null },
+  body: { requirements: { id: string; text: string }[]; title?: string | null; buyer?: string | null; synopsis?: string | null },
 ): Promise<GovProposalSummary> {
   const { data } = await api.post(qUrl(canonicalOpportunityId, '/proposal-summary'), body);
   return data;
