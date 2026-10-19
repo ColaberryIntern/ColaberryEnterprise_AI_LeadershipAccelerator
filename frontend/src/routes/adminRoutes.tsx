@@ -44,6 +44,7 @@ const AdminOrchestrationPage = lazy(() => import('../pages/admin/AdminOrchestrat
 const WorkforceOSPage = lazy(() => import('../pages/admin/workforce/WorkforceOSPage'));
 // AF2.1 - the landing a domain owner sees after bridging in from the portal.
 const AdminMyDomainPage = lazy(() => import('../pages/admin/AdminMyDomainPage'));
+const AdminAllDomainsPage = lazy(() => import('../pages/admin/AdminAllDomainsPage'));
 const AdminToolsPage = lazy(() => import('../pages/admin/AdminToolsPage'));
 const ApprovalRequestsPage = lazy(() => import('../pages/admin/ApprovalRequestsPage'));
 const EnterpriseIntelligencePage = lazy(() => import('../pages/admin/intelligence/EnterpriseIntelligencePage'));
@@ -217,6 +218,10 @@ const adminRoutes = (
         <Route path="/admin/ops-center" element={<Navigate to="/admin/workforce" replace />} />
         <Route path="/admin/workforce" element={<WorkforceOSPage />} />
         <Route path="/admin/my-domain" element={<AdminMyDomainPage />} />
+        {/* The programme-wide counterpart to My Domain. Same data source as the
+            agent-domain routes, gated on 'program'; My Domain stays scoped by
+            ownership and must not be widened to cover this. */}
+        <Route path="/admin/all-domains" element={<AdminAllDomainsPage />} />
         {/* Reese manager-growth mission, Phase 3 (T09/T10) — fleet-wide
             read-only effective-access resolver + tool catalog. */}
         <Route path="/admin/tools" element={<AdminToolsPage />} />

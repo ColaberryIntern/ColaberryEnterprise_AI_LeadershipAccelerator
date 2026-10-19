@@ -174,6 +174,9 @@ export const NAV_GROUPS: NavGroup[] = [
     // the backend's agent-domain routes require. The page itself scopes by OWNERSHIP, so a
     // full admin who opens it sees only the domains they are accountable for, not all ten.
     { path: '/admin/my-domain', label: 'My Domain', icon: 'robot-2-line' },
+    // The programme-wide view of the same ten. Sits beside My Domain because the pair is
+    // the distinction worth seeing in the nav: one is what you own, one is everything.
+    { path: '/admin/all-domains', label: 'All Domains', icon: 'stack-line' },
     // Reese manager-growth mission, Phase 3 (T09/T10) — fleet-wide tool/
     // capability catalog, reconciled read-only across every real authority
     // source. Sibling to "AI Organization" (agents), not nested under it.
@@ -323,6 +326,7 @@ export const UNLISTED_PATH_SECTIONS: ReadonlyArray<readonly [string, string]> = 
   ['/admin/cert-prep', 'program'],
   ['/admin/case-studies', 'program'],
   ['/admin/projects', 'program'],
+  ['/admin/all-domains', 'program'],
   ['/admin/feed-control-governance', 'program'],
   // Architecture Skills (the CAPE rubric) became a tab on the Curriculum page
   // in the same pass — curriculum configuration, authored by the people who

@@ -12,6 +12,21 @@
  * `ai_staff` enrollment whose `cohort_id` is NULL, so the page renders nothing about them.
  * Measured, twice, on 14 and 15 Oct: `ten 10, with_cohort 0, invisible 10`.
  *
+ * ## CORRECTED 19 Oct 2026: that is the COHORTS TAB, not the page
+ *
+ * `/admin/projects` has two tabs and opens on DELIVERY, which is a different endpoint:
+ * `GET /api/admin/projects/delivery` -> `projectDeliveryService.getProjectDelivery()`. Its query
+ * runs `FROM projects p LEFT JOIN enrollments e` and only appends `AND e.cohort_id = :cohortId`
+ * when a cohort is actually supplied, which this route never does. A NULL-cohort enrollment is
+ * therefore not excluded. Measured by calling the real service in production on 19 Oct 2026:
+ * **10 of 10 returned**, among 57 rows, each as `audience: 'unenrolled'` with `cohort_name: null`.
+ *
+ * So the sentence above is right about the query it names and wrong about the page. The reason
+ * this module still exists is unchanged and worth restating, because "they are visible after all"
+ * is the wrong lesson to take: the Delivery board shows them as anonymous unenrolled builds with
+ * no domain_key, no manager, no intended builder and no build-authorization count. It can tell
+ * you the rows exist. It cannot tell you whose they are.
+ *
  * Being an ordinary `projects` row is NECESSARY AND NOT SUFFICIENT for being visible. The earlier
  * claim that these appear at `/admin/projects` "because they are ordinary projects rows" was
  * wrong, and wrong in the instructive direction: it inferred what a user can see from the shape of
