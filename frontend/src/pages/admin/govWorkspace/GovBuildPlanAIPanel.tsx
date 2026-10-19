@@ -12,12 +12,15 @@ import { GovBuildGantt } from './GovBuildGantt';
  * track below stays the record), and creates no build. The last result is kept in localStorage so a
  * revisit does not re-run the (expensive) decomposition; a "Re-run" stays available.
  */
-export function GovBuildPlanAIPanel({ canonical, requirements, title, buyer, deadline }: {
+export function GovBuildPlanAIPanel({ canonical, requirements, title, buyer, deadline, onLoaded }: {
   canonical: string;
   requirements: { id: string; text: string }[];
   title?: string | null;
   buyer?: string | null;
   deadline?: string | null;
+  /** Reports the loaded plan's story/release counts up (null when none), so sibling panels can present ONE
+   *  coherent build-out message instead of contradicting this plan. Pass a stable setter. */
+  onLoaded?: (summary: { storyCount: number; releaseCount: number } | null) => void;
 }): React.ReactElement {
   const storeKey = `govBuildPlanAI:${canonical}`;
   const [result, setResult] = useState<GovBuildPlanAI | null>(null);
@@ -26,6 +29,11 @@ export function GovBuildPlanAIPanel({ canonical, requirements, title, buyer, dea
   useEffect(() => {
     try { const raw = localStorage.getItem(storeKey); if (raw) setResult(JSON.parse(raw) as GovBuildPlanAI); } catch { /* storage may be unavailable */ }
   }, [storeKey]);
+  const loadedPlan = result?.plan ?? null;
+  useEffect(() => {
+    if (!onLoaded) return;
+    onLoaded(loadedPlan ? { storyCount: loadedPlan.stories.length, releaseCount: loadedPlan.releases.length } : null);
+  }, [loadedPlan, onLoaded]);
   const run = async (): Promise<void> => {
     setBusy(true); setErr(null);
     // Best-effort: feed the already-generated build spec as the expansion document (grounding stays the requirements).

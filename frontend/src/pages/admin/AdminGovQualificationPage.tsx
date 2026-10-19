@@ -301,15 +301,23 @@ function GovBuildStoryRow({ story, assign }: { story: GovBuildStory; assign?: Bu
  * all-admin requirement set has no build stories, by design). Assignment is server-gated: the control only offers
  * enrolled builders and the write is refused if the assignee can't build — this UI mirrors that, never replaces it.
  */
-function GovBuildPlanPanel({ build, assign }: { build: GovBuildPlan | undefined; assign?: BuildAssignProps }): React.ReactElement {
+function GovBuildPlanPanel({ build, assign, aiBuild }: { build: GovBuildPlan | undefined; assign?: BuildAssignProps; aiBuild?: { storyCount: number; releaseCount: number } | null }): React.ReactElement {
   const releases = build?.releases ?? [];
   const stories = build?.stories ?? [];
   const orphans = build?.orphanedStories ?? [];
   if (stories.length === 0 && orphans.length === 0) {
+    // ONE coherent message: this deterministic check only cites requirements that carry an explicit build signal,
+    // so a service engagement legitimately has none here. It must NOT claim "no software to build" when the AI build
+    // plan above already decomposes a real build-out — defer to that as the working plan.
+    const hasAiBuild = !!(aiBuild && aiBuild.storyCount > 0);
     return (
       <div className="small text-secondary">
         <i className="ri-information-line me-1" aria-hidden="true" />
-        No build stories — this opportunity's established requirements are all administrative/compliance (no technical build signal), so there is no software to build. Build stories appear here only for requirements that carry a build signal.
+        {hasAiBuild ? (
+          <>No requirement here carries an explicit build signal, so this traceability check cites no requirement-level build stories. The <strong>AI build plan above is the working build-out</strong> ({aiBuild!.storyCount} {aiBuild!.storyCount === 1 ? 'story' : 'stories'} across {aiBuild!.releaseCount} release{aiBuild!.releaseCount === 1 ? '' : 's'}, from the full spec + research); the requirements themselves are delivered through the proposal responses. Empty here is by design for a service engagement, not "nothing to build".</>
+        ) : (
+          <>No requirement here carries an explicit build signal, so there are no requirement-cited build stories yet. Generate the <strong>AI build plan above</strong> to see the working build-out for this opportunity, or establish a requirement that carries a build signal.</>
+        )}
       </div>
     );
   }
@@ -971,6 +979,9 @@ export default function AdminGovQualificationPage(): React.ReactElement {
   const [notice, setNotice] = useState<string | null>(null);
   const [svcMatches, setSvcMatches] = useState<ServiceMatch[] | null>(null);
   const [svcMatchLoading, setSvcMatchLoading] = useState(false);
+  // The AI build plan's loaded counts (lifted from GovBuildPlanAIPanel) so the deterministic cross-check presents
+  // ONE coherent build-out message instead of contradicting the plan with "no software to build".
+  const [aiBuildSummary, setAiBuildSummary] = useState<{ storyCount: number; releaseCount: number } | null>(null);
   // Extract-from-ZIP → confirm → establish. Extraction is read-only (persists nothing); establishment is the write.
   const [extractFile, setExtractFile] = useState<File | null>(null);
   const [candidates, setCandidates] = useState<ExtractedRequirementCandidate[] | null>(null);
@@ -1682,7 +1693,8 @@ export default function AdminGovQualificationPage(): React.ReactElement {
               <GovBuildPlanAIPanel canonical={canonical}
                 requirements={(established ?? []).map((r) => ({ id: r.id, text: r.text }))}
                 title={oppDetail?.opportunity?.title ?? null} buyer={oppDetail?.opportunity?.agency ?? null}
-                deadline={oppDetail?.opportunity?.closeDate ?? ws.source?.deadline?.utc ?? null} />
+                deadline={oppDetail?.opportunity?.closeDate ?? ws.source?.deadline?.utc ?? null}
+                onLoaded={setAiBuildSummary} />
             </SectionCard>
           )}
           {(
@@ -1709,7 +1721,7 @@ export default function AdminGovQualificationPage(): React.ReactElement {
           {(
             <SectionCard title="Requirement coverage (deterministic cross-check)" icon="list-check-2" collapsible defaultOpen={false}
               subtitle="A secondary, deterministic check: every solution_build requirement projected into a cited story. The AI build plan above is the working plan; this confirms each requirement is covered. A pursuit approval is NOT a build authorization.">
-              <GovBuildPlanPanel build={ws.build} assign={{
+              <GovBuildPlanPanel build={ws.build} aiBuild={aiBuildSummary} assign={{
                 builders: ws.build?.assignableBuilders ?? [],
                 canAssign: !!(ws.build?.deliveryProjectId && (ws.build?.assignableBuilders?.length ?? 0) > 0),
                 busy,
