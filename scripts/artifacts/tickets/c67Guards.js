@@ -1,13 +1,15 @@
 /**
  * C6.7 guards - the ticket's acceptance criteria expressed as code.
  *
- * C6.7 names its own failure mode precisely: "Templated personalisation. If the opening
+ * C6.7 names its own failure mode precisely: "Templated personalization. If the opening
  * could be sent to anyone, it is not tier 1." That is a judgement a writer makes badly at
  * message nineteen, so it is checked here instead.
  *
  * Kept in its own module from the data because these are the interesting part and they
  * should be readable without scrolling past twenty-four drafts.
  */
+
+const { findBritishSpelling, americanForm } = require('../britishSpellings');
 
 /** Words too common to make an opening distinctive. */
 const STOP = new Set([
@@ -137,8 +139,9 @@ function assertNoProhibitedWording(messages) {
       throw new Error(`${m.account}: claims Colaberry certifies someone (CLM-026)`);
     }
     if (/\bguarantee\b/.test(body)) throw new Error(`${m.account}: promises a guarantee`);
-    if (/programme|licence|organisation|\bcentre\b|labour|artefact|enrolment|behaviour|analyse|defence/.test(body)) {
-      throw new Error(`${m.account}: British spelling in outbound copy`);
+        const brit = findBritishSpelling(body);
+    if (brit) {
+      throw new Error(`${m.account}: British spelling "${brit}" in outbound copy; use "${americanForm(brit)}"`);
     }
     if (/—/.test(`${m.subject} ${m.opening} ${m.body}`)) {
       throw new Error(`${m.account}: contains an em dash, which does not go in outbound copy`);

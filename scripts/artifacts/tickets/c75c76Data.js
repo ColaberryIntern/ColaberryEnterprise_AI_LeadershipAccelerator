@@ -225,16 +225,16 @@ const MEASURES = [
     cadence: 'Not applicable.',
     attribution: ATTRIB.WEAK,
     why: 'Deliberately out of scope. C7.6 says not to measure what we cannot attribute. A '
-      + 'twelve-week pilot touching a handful of problems inside a large organisation '
+      + 'twelve-week pilot touching a handful of problems inside a large organization '
       + 'cannot be separated from everything else that moved, and claiming it would be the '
-      + 'fastest way to lose a sceptical reader of the first case study.',
+      + 'fastest way to lose a skeptical reader of the first case study.',
   },
 ];
 
 const PUBLICATION_RULE = 'Where attribution is partial or weak, the published wording says '
   + 'so in the sentence that carries the number, not in a footnote and not at review time. '
   + 'A case study that says "capability improved, measured on the same instrument twelve '
-  + 'weeks apart, which does not isolate our contribution" survives a sceptical read. One '
+  + 'weeks apart, which does not isolate our contribution" survives a skeptical read. One '
   + 'that says "we improved capability by X" does not.';
 
 /* ------------------------------------------------------------------ *

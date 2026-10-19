@@ -50,7 +50,7 @@ const GATES = [
     why: 'The differentiator is commit-level proof of what each person built, and since '
       + '17 October 2026 a stranger can check it on a public page. A customer who will not '
       + 'let us publish produces revenue and no reference. The first five exist to produce '
-      + 'references, so this is the criterion the whole programme rests on.',
+      + 'references, so this is the criterion the whole program rests on.',
   },
   {
     n: 2, name: 'A named executive sponsor who will meet us monthly',

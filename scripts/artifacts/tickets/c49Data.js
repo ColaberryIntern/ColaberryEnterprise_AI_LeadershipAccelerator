@@ -13,7 +13,7 @@
  *
  * ## Auto-population is marked per section and honestly
  *
- * The ticket asks which sections C8.x can auto-populate. C8.2, the command centre, is due
+ * The ticket asks which sections C8.x can auto-populate. C8.2, the command center, is due
  * 20 October and is not built, so every "auto" here is a statement about where the data
  * already lives rather than about a feature that exists. Sections whose data has no home
  * yet are marked MANUAL and say why, because a template that promises automation it cannot
@@ -28,7 +28,7 @@ const HEADLINE = 'Outcomes occupy the first three sections and are the only ones
 
 const SO_WHAT = [
   'The ticket names the failure precisely: a template that invites filling with activity. '
-    + 'The defence is structural rather than editorial. Outcome sections come first, they '
+    + 'The defense is structural rather than editorial. Outcome sections come first, they '
     + 'are the only ones with a number slot, and a build assertion fails if that order is '
     + 'ever reversed.',
   'Five of the nine sections can be auto-populated from data that already exists today, '
@@ -136,7 +136,7 @@ const HOUR_BUDGET = [
 ];
 
 const LIMITS = [
-  'C8.2, the command centre that would make the AUTO sections genuinely automatic, is due '
+  'C8.2, the command center that would make the AUTO sections genuinely automatic, is due '
     + '20 October and does not exist. Every AUTO mark here says the data has a home and a '
     + 'query, not that a button exists.',
   'Narrative strategy stays in C4.8 and out of this pack. If a month needs a strategy '
@@ -168,7 +168,7 @@ function assertFixedSectionSet() {
 /**
  * "Outcome metrics lead."
  *
- * Checked structurally, which is the whole defence against the failure the ticket names:
+ * Checked structurally, which is the whole defense against the failure the ticket names:
  * no activity section may appear above an outcome section, and only outcome sections may
  * carry a headline number.
  */

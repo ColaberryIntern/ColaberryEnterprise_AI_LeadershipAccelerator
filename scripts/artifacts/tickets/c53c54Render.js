@@ -212,7 +212,7 @@ function buildDocument(id) {
     page renders, so this table cannot drift from the page. The C2.2 capability audit found
     deployment candidate selection has no platform capability at all and the executive impact
     report has no generator; both sit at day eighty to ninety, which is where a sponsor
-    decides whether to run the programme again. The label is rendered as text rather than as
+    decides whether to run the program again. The label is rendered as text rather than as
     a colour, so it survives greyscale, a colour-blind reader and a printed page.</p>
 
     <h2>Every claim on the page, quoted from the registry</h2>

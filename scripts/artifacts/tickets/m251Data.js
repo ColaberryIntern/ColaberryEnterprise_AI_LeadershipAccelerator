@@ -95,7 +95,7 @@ const NOT_ESTABLISHED = [
   'That the score is ready to surface. M26 is the surface, and it is now unblocked in the sense '
     + 'that the ordering is real, not in the sense that the thresholds are calibrated.',
   'That the remaining dead weight is a defect. 105 points sit in factors that are population '
-    + 'facts: every Explorer has an enrolment, and none has booked a call or replied.',
+    + 'facts: every Explorer has an enrollment, and none has booked a call or replied.',
   'That recency decays contribution the way DECISION 5 asks. It does not.',
 ];
 

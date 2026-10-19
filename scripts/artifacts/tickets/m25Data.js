@@ -101,7 +101,7 @@ const NOT_ESTABLISHED = [
   'That the weights are right. They are provisional by DECISION 2 and this run is the first '
     + 'evidence that they are not yet useful.',
   'That a score over this population is the right question at all. Everyone in it has already '
-    + 'enrolled in the free programme, which is why the enrolment factor is constant.',
+    + 'enrolled in the free program, which is why the enrollment factor is constant.',
   'That recency would fix it. It is the obvious candidate and it is still EXCLUDED by the M24 '
     + 'contract, because lastActivity varies by caller.',
   'Nothing was persisted or surfaced. No score is stored, no queue is ordered, nothing was sent.',

@@ -25,7 +25,7 @@
  *
  * ## The trap worth naming
  *
- * The admin surface labelled "Business Accounts" reads `adminOrgApi`, which is the
+ * The admin surface labeled "Business Accounts" reads `adminOrgApi`, which is the
  * `organizations` table. Anyone looking for the account entity finds that page first and
  * could reasonably conclude the CRM account model already exists and is populated with
  * three rows named "Colaberry" and one named "Self Emp". It is the learner org construct
@@ -148,7 +148,7 @@ const ENTITIES = [
   },
   {
     n: 10, entity: 'Everything not yet named', verdict: V.EXTEND, where: 'organizations',
-    why: 'The fields above are what C6.1 lists today. A strategic account programme discovers '
+    why: 'The fields above are what C6.1 lists today. A strategic account program discovers '
       + 'attributes as it runs, and the alternative to planning for that is a migration per '
       + 'discovery.',
     change: 'One nullable jsonb `attributes` column. The codebase already does this in 35 '

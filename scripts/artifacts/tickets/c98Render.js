@@ -35,7 +35,7 @@ function zeroBanner() {
     <div style="margin-top:4px">Six of the ten questions this brief asks can only be
     answered by a buyer. Nobody has said anything yet, so those six are answered NO EVIDENCE
     with the reason rather than filled in, and the other four are answered from our own
-    evidence work and labelled as such.</div>
+    evidence work and labeled as such.</div>
   </div>`;
 }
 
@@ -131,7 +131,7 @@ function buildDocument() {
     <div class="rule"></div>
 
     <div class="asked">
-      <b>What the ticket asked for.</b> Every Friday from 16 October, synthesise the week:
+      <b>What the ticket asked for.</b> Every Friday from 16 October, synthesize the week:
       what resonated, what confused buyers, what created meetings, what blocked purchase,
       what feature was requested, what nobody cared about, which ICP is strongest, pricing
       objections, competitor mentions, and what should stop being built. End every brief
@@ -140,7 +140,7 @@ function buildDocument() {
       <br><br>
       <b>What was delivered.</b> Brief 1, answering all ten questions: six NO EVIDENCE with
       the reason, because there have been no buyer conversations, and four from preparatory
-      evidence that is labelled as our own work rather than the market's.
+      evidence that is labeled as our own work rather than the market's.
       ${D.DECISIONS.length} decisions raised in the Master Index column shape and
       ${D.NO_CHANGES.length} explicit no-changes recorded.
     </div>
