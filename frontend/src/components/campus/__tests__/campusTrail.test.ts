@@ -34,8 +34,8 @@ describe('trailFor', () => {
     expect(trailFor('/portal/settings', campusBuildingsFor('member'), false)).toEqual([{ label: 'Campus' }]);
   });
 
-  it('a planned room never matches (nobody can be on it)', () => {
-    expect(trailFor('/portal/game-room', campusBuildingsFor('member'), false).map((c) => c.label)).toEqual(['Campus', 'Game Room']);
+  it('the Game Room (C10) reads Campus > Game Room > Game Room', () => {
+    expect(trailFor('/portal/game-room', campusBuildingsFor('member'), false).map((c) => c.label)).toEqual(['Campus', 'Game Room', 'Game Room']);
   });
 
   it('honors Workplace names', () => {

@@ -32,8 +32,8 @@ describe('searchCampus', () => {
     expect(searchCampus('learner', B, PRESENCE, false).some((x) => x.kind === 'person')).toBe(false);
   });
 
-  it('a planned room is listed but not navigable', () => {
-    expect(searchCampus('game', B, null, false)).toContainEqual(expect.objectContaining({ kind: 'room', route: '/portal/game-room', navigable: false }));
+  it('the Game Room (C10) is a navigable room', () => {
+    expect(searchCampus('game', B, null, false)).toContainEqual(expect.objectContaining({ kind: 'room', route: '/portal/game-room', navigable: true }));
   });
 
   it('puts labels that start with the query first and caps the list', () => {

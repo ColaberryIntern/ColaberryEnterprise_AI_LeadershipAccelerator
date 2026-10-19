@@ -33,6 +33,7 @@ const InternshipPage = lazy(() => import('../pages/portal/internship/InternshipP
 const SchedulePage = lazy(() => import('../pages/portal/schedule/SchedulePage'));
 const EventsPage = lazy(() => import('../pages/portal/events/EventsPage'));
 const PointsPage = lazy(() => import('../pages/portal/points/PointsPage'));
+const GameRoomPage = lazy(() => import('../pages/portal/campus/GameRoomPage'));
 const ProjectsPage = lazy(() => import('../pages/portal/projects/ProjectsPage'));
 const PortfolioPage = lazy(() => import('../pages/portal/portfolio/PortfolioPage'));
 const PortfolioPreviewPage = lazy(() => import('../pages/portal/portfolio/PortfolioPreviewPage'));
@@ -134,6 +135,8 @@ const portalRoutes = (
           Schedule — these are open-to-the-community events, not paid content. */}
       <Route path="/portal/events" element={<EventsPage />} />
       <Route path="/portal/points" element={<PointsPage />} />
+      {/* Colaberry Campus Game Room (C10): no PageGate (the arcade building has no gate); its API is behind the campus pilot. */}
+      <Route path="/portal/game-room" element={<GameRoomPage />} />
       <Route path="/portal/projects" element={<PageGate feature="projects"><ProjectsPage /></PageGate>} />
       {/* Living Career Portfolio — the private Career Studio. Gated like its
           siblings; the resume prerequisite inside it is enforced server-side. */}

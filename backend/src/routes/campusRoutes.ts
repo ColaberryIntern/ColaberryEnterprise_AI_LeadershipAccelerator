@@ -1,8 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { requireParticipant } from '../middlewares/participantAuth';
-import { env } from '../config/env';
-import { campusEnabledFor } from '../services/campus/campusFlag';
+import { campusOnFor } from '../services/campus/campusPilot';
 import { isCampusArea } from '../services/campus/campusAreas';
 import { touchCampusArea, getCampusPresence } from '../services/campus/campusPresenceService';
 import { getStaffDesks } from '../services/campus/campusStaffDesks';
@@ -50,14 +49,7 @@ function logFailure(event: string, err: unknown): void {
     error_class: e?.error_class ?? e?.name ?? 'UnknownError', context: { message: String(e?.message ?? '').slice(0, 200) } }));
 }
 
-/** C1's per-enrollment pilot rule, shared by every campus endpoint. */
-function campusOnFor(req: Request): boolean {
-  const p = req.participant;
-  return campusEnabledFor(
-    { enrollmentId: p?.sub, cohortId: p?.cohort_id },
-    { mode: env.campusEnabled, enrollmentIds: env.campusEnrollmentIds, cohortIds: env.campusCohortIds },
-  );
-}
+// C1's per-enrollment pilot rule lives in services/campus/campusPilot.ts (shared with the Game Room routes, C10).
 
 export function getCampusFlags(req: Request, res: Response): void {
   sendValidated(res, CampusFlagsResponse, { campus: campusOnFor(req) }, 'campus_flags');

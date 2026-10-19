@@ -128,7 +128,7 @@ Array [
     "name": "Game Room",
     "primary": "Games and leaderboards -> /portal/game-room",
     "rooms": Array [
-      "Game Room -> /portal/game-room (planned C10)",
+      "Game Room -> /portal/game-room",
     ],
     "workplaceName": "Break Room",
   },
@@ -263,7 +263,7 @@ Array [
     "name": "Game Room",
     "primary": "Games and leaderboards -> /portal/game-room",
     "rooms": Array [
-      "Game Room -> /portal/game-room (planned C10)",
+      "Game Room -> /portal/game-room",
     ],
     "workplaceName": "Break Room",
   },
@@ -407,7 +407,7 @@ Array [
     "name": "Game Room",
     "primary": "Games and leaderboards -> /portal/game-room",
     "rooms": Array [
-      "Game Room -> /portal/game-room (planned C10)",
+      "Game Room -> /portal/game-room",
     ],
     "workplaceName": "Break Room",
   },
@@ -544,7 +544,7 @@ Array [
     "name": "Game Room",
     "primary": "Games and leaderboards -> /portal/game-room",
     "rooms": Array [
-      "Game Room -> /portal/game-room (planned C10)",
+      "Game Room -> /portal/game-room",
     ],
     "workplaceName": "Break Room",
   },

@@ -58,7 +58,7 @@ describe('the catalog matches the route table', () => {
     return m ? m[1] : null;
   }
 
-  // The gate has no route of its own; a planned primary (Game Room, C10) is not routed yet.
+  // The gate has no route of its own. (Since C10 no primary is planned; the arcade's route has no PageGate, matching its missing gate key.)
   it.each(CAMPUS_BUILDINGS.filter((b) => b.id !== 'gate' && !b.rooms.find((r) => r.route === b.primary.route)?.planned).map((b) => [b.id, b] as const))('%s: gate key equals the PageGate on its primary route (or none)', (_id, b) => {
     expect({ id: b.id, gate: b.gate ?? null }).toEqual({ id: b.id, gate: pageGateOf(b.primary.route) });
   });
