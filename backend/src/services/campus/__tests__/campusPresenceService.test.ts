@@ -8,6 +8,9 @@ jest.mock('../../communityRooms/dmEligibility', () => ({ canDmMany: jest.fn() })
 let mockAudience = 'member';
 let mockTeam: Set<string> | 'throw' = new Set();
 jest.mock('../campusAudience', () => ({ campusAudienceFor: jest.fn(async () => mockAudience) }));
+// looksFor never throws (it logs and returns what it could); 'unread' models a read that returned nothing.
+let mockLooks: Map<string, { rung_name?: string; gear?: Record<string, string> }> | 'unread' = new Map();
+jest.mock('../campusLookService', () => ({ looksFor: jest.fn(async () => (mockLooks === 'unread' ? new Map() : mockLooks)) }));
 jest.mock('../campusTeam', () => ({ teamEnrollmentIdsFor: jest.fn(async () => { if (mockTeam === 'throw') throw new TypeError('db down'); return mockTeam; }) }));
 
 import CampusPresence from '../../../models/CampusPresence';
@@ -16,7 +19,7 @@ import { getPeoplePanel } from '../../peoplePanelService';
 import { getCohortPresence } from '../../cohortPresenceService';
 import { canDmMany } from '../../communityRooms/dmEligibility';
 import {
-  getCampusPresence, touchCampusArea, visibleSetFor, CampusAreaError, FRESH_MS, VISIBLE_CACHE_MAX,
+  getCampusPresence, touchCampusArea, visibleSetFor, CampusAreaError, FRESH_MS, VISIBLE_CACHE_MAX, type CampusPersonOut,
   __resetCampusPresenceCacheForTests, __campusPresenceCacheSize,
 } from '../campusPresenceService';
 
@@ -256,5 +259,40 @@ describe('business viewers see their team only (C6)', () => {
     mockAudience = aud;
     findAll.mockResolvedValue(rows);
     expect(names((await getCampusPresence('me', 'coh-1', NOW)).areas)).toEqual(['Mia', 'Tom', 'Sam']);
+  });
+});
+
+describe('C9: level and gear on named people only', () => {
+  const rows = [
+    { enrollment_id: 'mate', area: 'library', updated_at: at(1000) },
+    { enrollment_id: 'stranger', area: 'library', updated_at: at(2000) },
+  ];
+  beforeEach(() => {
+    findAll.mockResolvedValue(rows);
+    panel.mockResolvedValue({ viewer_role: 'student', my_class: [person('mate', 'Mia')], active_now: [] });
+  });
+  afterEach(() => { mockLooks = new Map(); });
+
+  it('a named person carries rung_name and gear; the anonymous entry stays exactly {anonymous:true}', async () => {
+    mockLooks = new Map([['mate', { rung_name: 'AI Enabled I', gear: { head: 'cap' } }], ['stranger', { rung_name: 'AI Aware I', gear: { head: 'cap' } }]]);
+    const { areas } = await getCampusPresence('me', 'coh-1', NOW);
+    const people = areas.library!.people;
+    expect(people.find((p) => 'enrollment_id' in p && p.enrollment_id === 'mate')).toMatchObject({ rung_name: 'AI Enabled I', gear: { head: 'cap' } });
+    expect(people.filter((p) => 'anonymous' in p)).toEqual([{ anonymous: true }]);
+  });
+
+  it('only the NAMED ids are asked for (the stranger is never looked up)', async () => {
+    const { looksFor } = jest.requireMock('../campusLookService') as { looksFor: jest.Mock };
+    await getCampusPresence('me', 'coh-1', NOW);
+    expect(looksFor).toHaveBeenLastCalledWith(['mate']);
+  });
+
+  it('a look that could not be read: the person stays named, with no level or gear', async () => {
+    mockLooks = 'unread';
+    const { areas } = await getCampusPresence('me', 'coh-1', NOW);
+    const mate = areas.library!.people.find((p): p is CampusPersonOut => 'enrollment_id' in p)!;
+    expect(mate.display_name).toBe('Mia');
+    expect(mate.rung_name).toBeUndefined();
+    expect(mate.gear).toBeUndefined();
   });
 });

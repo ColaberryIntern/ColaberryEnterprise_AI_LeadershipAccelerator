@@ -4,6 +4,8 @@ import type { CampusPresence, CampusPerson } from './campusApi';
 import { useCampusPresencePoll } from './useCampusPresencePoll';
 import { useStaffDesks } from './useStaffDesks';
 import { useCampusPlan } from './useCampusPlan';
+import { useCampusLook } from './useCampusLook';
+import type { CampusLook } from './campusApi';
 import type { PlanStop } from './campusPlan';
 import { useCampusDmToasts, DmToast } from './useCampusDmToasts';
 import type { StaffDesk } from './campusPeopleApi';
@@ -71,6 +73,13 @@ export interface CampusState {
   startTour: () => void;
   setTourIndex: (i: number) => void;
   endTour: () => void;
+  /** C9: my look (read once while active), whether the locker is open, and saving the complete set. */
+  look: CampusLook | null;
+  lookError: boolean;
+  saveLook: (equipped: Record<string, string | null>) => Promise<CampusLook>;
+  lockerOpen: boolean;
+  openLocker: () => void;
+  closeLocker: () => void;
 }
 
 export interface PersonCardTarget { person: CampusPerson; buildingId: BuildingId }
@@ -89,6 +98,7 @@ const OFF: CampusState = {
   presence: null, presenceError: false, door: null, enterThroughDoor: noop, stepOutside: noop, clearDoor: noop,
   staffDesks: [], staffDesksError: false, personCard: null, openPersonCard: noop, closePersonCard: noop,
   dmToast: null, dismissDmToast: noop, planStops: null, tourIndex: null, startTour: noop, setTourIndex: noop, endTour: noop,
+  look: null, lookError: false, saveLook: () => Promise.reject(new Error('The campus is off')), lockerOpen: false, openLocker: noop, closeLocker: noop,
 };
 
 const Ctx = createContext<CampusState>(OFF);
@@ -119,8 +129,11 @@ export function CampusProvider({ children }: { children?: React.ReactNode }): Re
   const openMap = useCallback((focus?: BuildingId) => { setMapFocus(focus ?? null); setLayer('map'); }, []);
   const openList = useCallback(() => setLayer('list'), []);
   const [tourIndex, setTourIndexState] = useState<number | null>(null);
-  const closeLayer = useCallback(() => { setLayer('none'); setMapFocus(null); setPersonCard(null); setTourIndexState(null); }, []);
-  const startTour = useCallback(() => { setPersonCard(null); setMapFocus(null); setTourIndexState(0); setLayer('map'); }, []);
+  const [lockerOpen, setLockerOpen] = useState(false);
+  const closeLayer = useCallback(() => { setLayer('none'); setMapFocus(null); setPersonCard(null); setTourIndexState(null); setLockerOpen(false); }, []);
+  const openLocker = useCallback(() => { setPersonCard(null); setTourIndexState(null); setLockerOpen(true); setLayer('map'); }, []);
+  const closeLocker = useCallback(() => setLockerOpen(false), []);
+  const startTour = useCallback(() => { setPersonCard(null); setMapFocus(null); setLockerOpen(false); setTourIndexState(0); setLayer('map'); }, []);
   const setTourIndex = useCallback((i: number) => setTourIndexState(Math.max(0, i)), []);
   const endTour = useCallback(() => setTourIndexState(null), []);
 
@@ -143,14 +156,15 @@ export function CampusProvider({ children }: { children?: React.ReactNode }): Re
   const { staffDesks, staffDesksError } = useStaffDesks(active);
   const { toast: dmToast, dismiss: dismissDmToast } = useCampusDmToasts(active);
   const planStops = useCampusPlan(active, layer === 'map');
+  const { look, lookError, saveLook } = useCampusLook(active);
   const openPersonCard = useCallback((t: PersonCardTarget) => setPersonCard(t), []);
   const closePersonCard = useCallback(() => setPersonCard(null), []);
 
   const value = useMemo<CampusState>(
     () => ({ enabled, ready, settings, active, updateSettings, layer, mapFocus, openMap, openList, closeLayer, presence, presenceError,
-      door, enterThroughDoor, stepOutside, clearDoor, staffDesks, staffDesksError, personCard, openPersonCard, closePersonCard, dmToast, dismissDmToast, planStops, tourIndex, startTour, setTourIndex, endTour }),
+      door, enterThroughDoor, stepOutside, clearDoor, staffDesks, staffDesksError, personCard, openPersonCard, closePersonCard, dmToast, dismissDmToast, planStops, tourIndex, startTour, setTourIndex, endTour, look, lookError, saveLook, lockerOpen, openLocker, closeLocker }),
     [enabled, ready, settings, active, updateSettings, layer, mapFocus, openMap, openList, closeLayer, presence, presenceError,
-      door, enterThroughDoor, stepOutside, clearDoor, staffDesks, staffDesksError, personCard, openPersonCard, closePersonCard, dmToast, dismissDmToast, planStops, tourIndex, startTour, setTourIndex, endTour],
+      door, enterThroughDoor, stepOutside, clearDoor, staffDesks, staffDesksError, personCard, openPersonCard, closePersonCard, dmToast, dismissDmToast, planStops, tourIndex, startTour, setTourIndex, endTour, look, lookError, saveLook, lockerOpen, openLocker, closeLocker],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

@@ -1,0 +1,34 @@
+/* Colaberry Campus C9: earned gear on avatars and tokens, the My look locker, and the person card's level. Shell tokens only. */
+
+/* Gear on a round head (pin head or token) */
+.cm-gear-cap{fill:var(--berry);stroke:var(--surface);stroke-width:1}
+.cm-gear-shades rect{fill:var(--strong)}
+.cm-gear-hoodie{fill:none;stroke:var(--berry);stroke-width:3;stroke-linecap:round}
+.cm-gear-chain{fill:none;stroke:var(--amber);stroke-width:2;stroke-linecap:round}
+
+/* Your own ride, only while you travel */
+.cm-ride-deck,.cm-ride-body{fill:var(--cherry)}
+.cm-ride-wheel{fill:var(--strong)}
+
+/* Level ring on a token: the stroke color comes from the portal's rung tone (set inline from --rung-solid) */
+.cm-token-ring.is-level{stroke-width:3}
+
+/* Person card level: the pill takes the portal's rung tone (background, text and border set inline from the rung-* variables) */
+.cm-person-level{display:inline-block;margin:4px 0 0;padding:2px 10px;border-radius:var(--r-pill);font-size:12px;font-weight:800;
+  border:1px solid var(--border-sub)}
+
+/* The locker */
+.cm-look{max-width:380px}
+.cm-look .cm-card-title:focus{outline:none}
+.cm-look .cm-card-title:focus-visible{outline:3px solid var(--berry);outline-offset:2px;border-radius:var(--r-12)}
+.cm-look-slot{margin-top:10px}
+.cm-look-items{display:flex;flex-wrap:wrap;gap:8px;margin:6px 0 0;padding:0;list-style:none}
+.cm-look-item{display:flex;flex-direction:column;align-items:flex-start;gap:2px;min-width:140px;padding:8px 10px;border-radius:var(--r-12);
+  border:1px solid var(--border);background:var(--surface);color:var(--strong);font:inherit;font-size:14px;text-align:left;cursor:pointer}
+.cm-look-item small{color:var(--muted);font-size:12px}
+.cm-look-item.is-worn{border-color:var(--berry);background:var(--sunken)}
+.cm-look-item.is-worn small{color:var(--berry);font-weight:700}
+.cm-look-item:disabled{cursor:not-allowed;opacity:.65}
+.cm-look-item:focus-visible{outline:3px solid var(--berry);outline-offset:2px}
+.cm-look-error{margin:8px 0 0;padding:8px 10px;border-radius:var(--r-12);border-left:4px solid var(--cherry);background:var(--sunken);
+  font-size:13px;color:var(--strong)}

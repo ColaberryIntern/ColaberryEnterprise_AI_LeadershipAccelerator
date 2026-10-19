@@ -20,6 +20,7 @@ jest.mock('../../services/campus/campusWave', () => ({ waveAt: (...a: unknown[])
 // C7: the tour route loads the audience rule and the handoff writer; mocked here (campusTourRoute.test covers them) so each
 // isolated router stays cheap to load.
 jest.mock('../../services/campus/campusAudience', () => ({ campusAudienceFor: jest.fn() }));
+jest.mock('../../services/campus/campusLookService', () => ({ getLook: jest.fn(), setLook: jest.fn(), looksFor: jest.fn(async () => new Map()) }));
 jest.mock('../../services/campus/campusTourHandoff', () => ({ requestTourHandoff: jest.fn() }));
 
 import express from 'express';

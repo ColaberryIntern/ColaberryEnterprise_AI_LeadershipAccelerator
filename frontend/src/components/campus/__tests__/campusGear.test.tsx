@@ -1,0 +1,112 @@
+/**
+ * C9 gear drawing: every item the server catalog defines has a drawing in the right slot; your OWN ride shows only while your
+ * avatar travels (never standing, never with reduce motion); nobody else's token ever shows a ride; tokens carry the level.
+ */
+import fs from 'fs';
+import path from 'path';
+import React from 'react';
+import { createRoot, type Root } from 'react-dom/client';
+import { act } from 'react-dom/test-utils';
+import CampusWorldMap from '../CampusWorldMap';
+import PersonTokens from '../PersonToken';
+import { GEAR_DRAWINGS, GEAR_NAMES, publicOnly } from '../campusGear';
+import { CAMPUS_BUILDINGS } from '../campusMap';
+import type { CampusPerson } from '../campusApi';
+
+(globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+describe('the server catalog and the drawings agree', () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', '..', '..', '..', '..', 'backend', 'src', 'services', 'campus', 'campusUnlocks.ts'), 'utf8');
+  const found = Array.from(src.matchAll(/\{ id: '([a-z]+)', name: '([^']+)', slot: '([a-z]+)', threshold: \d+ \}/g));
+  const items = found.map((m) => [m[1], m[3]]);
+  const names = found.map((m) => [m[1], m[2]]);
+  it('found the catalog', () => { expect(items.length).toBeGreaterThanOrEqual(6); });
+  it.each(items)('%s draws in its %s slot', (id, slot) => { expect(GEAR_DRAWINGS[id]).toBe(slot); });
+  it.each(names)('%s is called %s, as on the server', (id, name) => { expect(GEAR_NAMES[id]).toBe(name); });
+  it('publicOnly drops a ride and anything in the wrong slot', () => {
+    expect(publicOnly({ head: 'cap', ride: 'cruiser', face: 'board', neck: 'chain' })).toEqual({ head: 'cap', neck: 'chain' });
+    expect(publicOnly(undefined)).toEqual({});
+  });
+});
+
+let container: HTMLDivElement;
+let root: Root | undefined;
+let frames: Array<(t: number) => void> = [];
+beforeEach(() => {
+  frames = [];
+  container = document.createElement('div');
+  document.body.appendChild(container);
+  window.requestAnimationFrame = ((cb: (t: number) => void) => { frames.push(cb); return frames.length; }) as typeof window.requestAnimationFrame;
+  window.cancelAnimationFrame = (() => undefined) as typeof window.cancelAnimationFrame;
+});
+afterEach(() => { const r = root; if (r) act(() => r.unmount()); root = undefined; container.remove(); });
+
+const map = (props: Partial<React.ComponentProps<typeof CampusWorldMap>>) => (
+  <CampusWorldMap buildings={[...CAMPUS_BUILDINGS]} accessOf={() => 'open'} workplaceNames={false} reduceMotion={false} onArrive={() => undefined} {...props} />
+);
+const render = (el: React.ReactElement) => act(() => { root = root ?? createRoot(container); root!.render(el); });
+const runFrames = (t: number) => act(() => { const fs2 = frames; frames = []; fs2.forEach((f) => f(t)); });
+const ride = () => container.querySelector('[data-testid="cm-ride"]');
+
+describe('your own ride, only while you travel', () => {
+  it('standing: gear on your pin, no ride; walking: the ride; arrived: gone', () => {
+    root = createRoot(container);
+    render(map({ ownGear: { head: 'cap', ride: 'board' } }));
+    expect(container.querySelector('[data-testid="cm-avatar"] [data-gear="cap"]')).not.toBeNull();
+    expect(ride()).toBeNull();
+    render(map({ ownGear: { head: 'cap', ride: 'board' }, walkRequest: { id: 'library', seq: 1 } }));
+    expect(ride()?.getAttribute('data-ride')).toBe('board');
+    runFrames(0);
+    runFrames(100000); // far past the walk's duration: arrived
+    expect(ride()).toBeNull();
+  });
+
+  it('reduce motion: never a ride, even on a walk', () => {
+    root = createRoot(container);
+    render(map({ reduceMotion: true, ownGear: { ride: 'cruiser' }, walkRequest: { id: 'library', seq: 1 } }));
+    expect(ride()).toBeNull();
+  });
+
+  it('no ride equipped: nothing drawn under the pin while walking', () => {
+    root = createRoot(container);
+    render(map({ ownGear: { head: 'cap' }, walkRequest: { id: 'library', seq: 1 } }));
+    expect(ride()).toBeNull();
+  });
+});
+
+describe('other people\'s tokens', () => {
+  const lib = CAMPUS_BUILDINGS.find((b) => b.id === 'library')!;
+  const p = (o: Partial<CampusPerson>): CampusPerson => ({ enrollment_id: 'e1', display_name: 'Mia Lopez', avatar_url: null, ...o });
+  const tokens = (shown: CampusPerson[]) => (
+    <svg><PersonTokens b={lib} shown={shown} more={0} onPick={() => undefined} maxY={700} /></svg>
+  );
+
+  it('never draw a ride, even if one arrived', () => {
+    root = createRoot(container);
+    render(tokens([p({ gear: { head: 'cap', ride: 'cruiser' } })]));
+    expect(container.querySelector('[data-ride]')).toBeNull();
+    expect(container.querySelector('[data-gear="cap"]')).not.toBeNull();
+  });
+
+  it('show only the head item (anything else would cover the initials on an 11 px token)', () => {
+    root = createRoot(container);
+    render(tokens([p({ gear: { face: 'shades', neck: 'chain', body: 'hoodie' } })]));
+    expect(container.querySelector('[data-gear]')).toBeNull();
+  });
+
+  it('carry the level: a toned ring and the rung in the label', () => {
+    root = createRoot(container);
+    render(tokens([p({ rung_name: 'AI Enabled II' })]));
+    const ring = container.querySelector('.cm-token-ring.is-level');
+    expect(ring?.getAttribute('data-rung')).toBe('AI Enabled II');
+    expect(ring?.getAttribute('class')).toContain('rung-enabled-2');
+    expect(container.querySelector('.cm-token')?.getAttribute('aria-label')).toBe('Mia Lopez, AI Enabled II, open their card');
+  });
+
+  it('no level known: the plain ring, no level in the label', () => {
+    root = createRoot(container);
+    render(tokens([p({})]));
+    expect(container.querySelector('.cm-token-ring.is-level')).toBeNull();
+    expect(container.querySelector('.cm-token')?.getAttribute('aria-label')).toBe('Mia Lopez, open their card');
+  });
+});

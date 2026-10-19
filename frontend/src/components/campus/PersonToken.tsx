@@ -2,6 +2,10 @@ import React from 'react';
 import type { CampusPerson } from './campusApi';
 import type { CampusBuilding } from './campusMap';
 import { initialsOf } from './WhoIsHere';
+import { GearOnHead } from './AvatarGear';
+import { publicOnly } from './campusGear';
+import { rungTone } from '../../services/bandLadder';
+import '../../styles/rungTones.css';
 
 /**
  * The named people beside a building on the full campus map (Colaberry Campus C5).
@@ -36,10 +40,13 @@ export default function PersonTokens({ b, shown, more, onPick, maxY }: PersonTok
         const cx = x0 + i * GAP, clip = `cm-tok-${b.id}-${i}`;
         const pick = () => onPick(p);
         return (
-          <g key={p.enrollment_id} className="cm-token" role="button" tabIndex={0} aria-label={`${p.display_name}, open their card`}
+          <g key={p.enrollment_id} className="cm-token" role="button" tabIndex={0} aria-label={`${p.display_name}${p.rung_name ? `, ${p.rung_name}` : ''}, open their card`}
             data-enrollment={p.enrollment_id} onClick={(e) => { e.stopPropagation(); pick(); }}
             onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); pick(); } }}>
-            <circle className="cm-token-ring" cx={cx} cy={y0} r={R + 2} />
+            {/* C9: the ring takes the level's tone (the portal's rung colors); the rung is in the label and on the card. */}
+            {p.rung_name
+              ? <circle className={`cm-token-ring is-level rung-${rungTone(p.rung_name)}`} style={{ stroke: 'var(--rung-solid)' }} cx={cx} cy={y0} r={R + 2} data-rung={p.rung_name} />
+              : <circle className="cm-token-ring" cx={cx} cy={y0} r={R + 2} />}
             {p.avatar_url ? (
               <>
                 <clipPath id={clip}><circle cx={cx} cy={y0} r={R} /></clipPath>
@@ -51,6 +58,8 @@ export default function PersonTokens({ b, shown, more, onPick, maxY }: PersonTok
                 <text className="cm-token-initials" x={cx} y={y0 + 4} textAnchor="middle">{initialsOf(p.display_name)}</text>
               </>
             )}
+            {/* Tokens are 11 px: only the head item fits without covering the initials; the card lists everything worn. */}
+            <GearOnHead gear={{ head: publicOnly(p.gear).head }} cx={cx} cy={y0} r={R} />
           </g>
         );
       })}
