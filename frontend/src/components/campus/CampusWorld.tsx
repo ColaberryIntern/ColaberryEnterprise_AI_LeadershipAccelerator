@@ -47,9 +47,11 @@ export interface CampusWorldProps {
   onAir?: Set<string>;
   /** C8: today's plan route (building ids in order). */
   route?: BuildingId[];
+  /** C7: a tour in progress: walk to `target` whenever it changes, show `card` instead of the building card, Esc ends the tour. */
+  tour?: { target: BuildingId | null; card: React.ReactNode; onEnd: () => void };
 }
 
-export default function CampusWorld({ buildings, audience, hasFullAccess, accessOf: accessOfProp, isExplorer = false, workplaceNames, reduceMotion, initialTarget, onExit, onNavigate, presence, presenceError = false, onEnterRoom, staffDesks, personCard, onOpenPerson, onClosePerson, onAir, route }: CampusWorldProps): React.ReactElement {
+export default function CampusWorld({ buildings, audience, hasFullAccess, accessOf: accessOfProp, isExplorer = false, workplaceNames, reduceMotion, initialTarget, onExit, onNavigate, presence, presenceError = false, onEnterRoom, staffDesks, personCard, onOpenPerson, onClosePerson, onAir, route, tour }: CampusWorldProps): React.ReactElement {
   const counts = useMemo(() => {
     const out: Record<string, number> = {};
     if (presence) for (const [id, a] of Object.entries(presence)) out[id] = a.count;
@@ -69,6 +71,12 @@ export default function CampusWorld({ buildings, audience, hasFullAccess, access
   }, [open]);
 
   const [walkRequest, setWalkRequest] = useState<{ id: BuildingId; seq: number } | null>(null);
+  const tourTarget = tour?.target ?? null;
+  useEffect(() => {
+    if (tourTarget) { setOpen(null); setWalkRequest((w) => ({ id: tourTarget, seq: (w?.seq ?? 0) + 1 })); }
+  }, [tourTarget]);
+  const touring = !!tour;
+  const onArrive = useCallback((id: BuildingId) => { if (!touring) setOpen(id); }, [touring]);
   const people = useMemo(() => {
     if (!presence || presenceError || !onOpenPerson) return undefined;
     const out: Record<string, ReturnType<typeof tokensFor>> = {};
@@ -80,7 +88,7 @@ export default function CampusWorld({ buildings, audience, hasFullAccess, access
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (e.key !== 'Escape') return;
     e.stopPropagation();
-    if (personCard) onClosePerson?.(); else if (open) closeCard(); else onExit();
+    if (tour) tour.onEnd(); else if (personCard) onClosePerson?.(); else if (open) closeCard(); else onExit();
   };
 
   // On phones the map is wider than the screen (campus.css); start centered on the quad.
@@ -94,15 +102,16 @@ export default function CampusWorld({ buildings, audience, hasFullAccess, access
   return (
     <div className="cm-world" onKeyDown={onKeyDown} ref={world}>
       <CampusWorldMap buildings={buildings} accessOf={accessOf} workplaceNames={workplaceNames} reduceMotion={reduceMotion}
-        initialTarget={initialTarget} onArrive={setOpen} buildingRef={registerEl} counts={presenceError ? undefined : counts}
+        initialTarget={initialTarget} onArrive={onArrive} buildingRef={registerEl} counts={presenceError ? undefined : counts}
         people={people} onPickPerson={onOpenPerson ? pickPerson : undefined} walkRequest={walkRequest} onAir={onAir} route={route} />
-      {personCard && (() => {
+      {tour && tour.card}
+      {!tour && personCard && (() => {
         const pb = buildings.find((x) => x.id === personCard.buildingId);
         return <PersonCard person={personCard.person} buildingLabel={pb ? buildingName(pb, workplaceNames) : 'the campus'} onClose={() => onClosePerson?.()}
           onMessaged={onNavigate}
           onWalkOver={() => { const id = personCard.buildingId; onClosePerson?.(); setWalkRequest((w) => ({ id, seq: (w?.seq ?? 0) + 1 })); }} />;
       })()}
-      {b && !personCard && <BuildingCard building={b} access={accessOf(b)} workplaceNames={workplaceNames} onClose={closeCard} onNavigate={onNavigate}
+      {!tour && b && !personCard && <BuildingCard building={b} access={accessOf(b)} workplaceNames={workplaceNames} onClose={closeCard} onNavigate={onNavigate}
         onEnterRoom={onEnterRoom ? (route) => onEnterRoom(route, els.current.get(b.id)?.getBoundingClientRect() ?? null) : undefined}
         desks={staffDesks ? desksForBuilding(staffDesks, b.id, audience) : undefined}
         children={b.id === 'gate' && isExplorer ? <ExplorerPath onNavigate={onNavigate}

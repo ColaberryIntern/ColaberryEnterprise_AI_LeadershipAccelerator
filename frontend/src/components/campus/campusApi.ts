@@ -75,3 +75,20 @@ export async function fetchCampusPresence(): Promise<CampusPresence> {
   if (!areas || typeof areas !== 'object') throw new Error('Malformed campus presence response');
   return areas as CampusPresence;
 }
+
+// ---- C7: the Explorer tour's opt-in (same rules: own request, token attached, no redirect interceptor) ----
+
+export type TourCompleteReason = 'created' | 'already_open' | 'closed' | 'disabled' | 'unavailable';
+export interface TourCompleteAnswer { handoff: boolean; reason: TourCompleteReason }
+export const TOUR_COMPLETE_TIMEOUT_MS = 15_000;
+const TOUR_REASONS: readonly string[] = ['created', 'already_open', 'closed', 'disabled', 'unavailable'];
+
+/** "Have admissions reach out to me." THROWS on any failure or a malformed answer; the caller treats that as not confirmed. */
+export async function postTourComplete(): Promise<TourCompleteAnswer> {
+  const { data } = await axios.post<unknown>(`${process.env.REACT_APP_API_URL || ''}/api/portal/campus/tour/complete`, { tour: 'explorer' }, {
+    headers: authHeaders(), timeout: TOUR_COMPLETE_TIMEOUT_MS,
+  });
+  const d = data && typeof data === 'object' ? (data as { handoff?: unknown; reason?: unknown }) : {};
+  if (typeof d.handoff !== 'boolean' || typeof d.reason !== 'string' || !TOUR_REASONS.includes(d.reason)) throw new Error('Malformed tour answer');
+  return { handoff: d.handoff, reason: d.reason as TourCompleteReason };
+}

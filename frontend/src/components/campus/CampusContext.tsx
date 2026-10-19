@@ -66,6 +66,11 @@ export interface CampusState {
   dismissDmToast: () => void;
   /** C8: today's plan as campus stops (null when the plan is off, failed, or the campus is off). */
   planStops: PlanStop[] | null;
+  /** C7: the guided tour's position (null = no tour; stops.length = the end card). Starting opens the map; closing the map ends it. */
+  tourIndex: number | null;
+  startTour: () => void;
+  setTourIndex: (i: number) => void;
+  endTour: () => void;
 }
 
 export interface PersonCardTarget { person: CampusPerson; buildingId: BuildingId }
@@ -83,7 +88,7 @@ const OFF: CampusState = {
   updateSettings: noop, layer: 'none', mapFocus: null, openMap: noop, openList: noop, closeLayer: noop,
   presence: null, presenceError: false, door: null, enterThroughDoor: noop, stepOutside: noop, clearDoor: noop,
   staffDesks: [], staffDesksError: false, personCard: null, openPersonCard: noop, closePersonCard: noop,
-  dmToast: null, dismissDmToast: noop, planStops: null,
+  dmToast: null, dismissDmToast: noop, planStops: null, tourIndex: null, startTour: noop, setTourIndex: noop, endTour: noop,
 };
 
 const Ctx = createContext<CampusState>(OFF);
@@ -113,7 +118,11 @@ export function CampusProvider({ children }: { children?: React.ReactNode }): Re
   const [mapFocus, setMapFocus] = useState<BuildingId | null>(null);
   const openMap = useCallback((focus?: BuildingId) => { setMapFocus(focus ?? null); setLayer('map'); }, []);
   const openList = useCallback(() => setLayer('list'), []);
-  const closeLayer = useCallback(() => { setLayer('none'); setMapFocus(null); setPersonCard(null); }, []);
+  const [tourIndex, setTourIndexState] = useState<number | null>(null);
+  const closeLayer = useCallback(() => { setLayer('none'); setMapFocus(null); setPersonCard(null); setTourIndexState(null); }, []);
+  const startTour = useCallback(() => { setPersonCard(null); setMapFocus(null); setTourIndexState(0); setLayer('map'); }, []);
+  const setTourIndex = useCallback((i: number) => setTourIndexState(Math.max(0, i)), []);
+  const endTour = useCallback(() => setTourIndexState(null), []);
 
   const active = enabled && settings.nav === 'campus';
   const { presence, presenceError } = useCampusPresencePoll(active);
@@ -139,9 +148,9 @@ export function CampusProvider({ children }: { children?: React.ReactNode }): Re
 
   const value = useMemo<CampusState>(
     () => ({ enabled, ready, settings, active, updateSettings, layer, mapFocus, openMap, openList, closeLayer, presence, presenceError,
-      door, enterThroughDoor, stepOutside, clearDoor, staffDesks, staffDesksError, personCard, openPersonCard, closePersonCard, dmToast, dismissDmToast, planStops }),
+      door, enterThroughDoor, stepOutside, clearDoor, staffDesks, staffDesksError, personCard, openPersonCard, closePersonCard, dmToast, dismissDmToast, planStops, tourIndex, startTour, setTourIndex, endTour }),
     [enabled, ready, settings, active, updateSettings, layer, mapFocus, openMap, openList, closeLayer, presence, presenceError,
-      door, enterThroughDoor, stepOutside, clearDoor, staffDesks, staffDesksError, personCard, openPersonCard, closePersonCard, dmToast, dismissDmToast, planStops],
+      door, enterThroughDoor, stepOutside, clearDoor, staffDesks, staffDesksError, personCard, openPersonCard, closePersonCard, dmToast, dismissDmToast, planStops, tourIndex, startTour, setTourIndex, endTour],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

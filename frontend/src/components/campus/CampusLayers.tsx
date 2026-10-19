@@ -4,6 +4,11 @@ import CampusWorld from './CampusWorld';
 import CampusDoorTransition from './CampusDoorTransition';
 import CampusDmToast from './CampusDmToast';
 import { useCampusOnAir } from './campusOnAir';
+import CampusTour from './CampusTour';
+import CampusTourEnd from './CampusTourEnd';
+import { tourFor } from './tourSteps';
+import { explorerPath } from './campusPath';
+import './campusTour.css';
 import { routeBuildings } from './campusPlan';
 import './campusPeople.css';
 import './campusAudiences.css';
@@ -32,14 +37,24 @@ function useReturnFocus(open: boolean): void {
 
 export function CampusMapOverlay(): React.ReactElement | null {
   const { layer, mapFocus, settings, closeLayer, openList, presence, presenceError, enterThroughDoor,
-    staffDesks, personCard, openPersonCard, closePersonCard, planStops } = useCampus();
+    staffDesks, personCard, openPersonCard, closePersonCard, planStops, tourIndex, startTour, setTourIndex, endTour } = useCampus();
   const { audience, hasFullAccess, buildings, accessOf, isExplorer } = useCampusView();
   const { buildings: onAir } = useCampusOnAir();
   const route = planStops ? routeBuildings(planStops) : undefined;
+  // C7: the guided tour for THIS viewer's campus (null for staff). The end card walks to the Main Gate where it exists (Maya's desk).
+  const tour = tourFor(audience, buildings, accessOf, settings.workplaceNames);
+  const touring = tour && tourIndex !== null ? Math.min(tourIndex, tour.stops.length) : null;
+  const tourTarget = tour && touring !== null
+    ? (touring < tour.stops.length ? tour.stops[touring].buildingId : (buildings.some((x) => x.id === 'gate') ? 'gate' : tour.stops[tour.stops.length - 1]?.buildingId ?? null))
+    : null;
+  // The path's "Ask Maya at her desk below" line is for the Main Gate card; the tour card has no desk below it, so it is off here.
   const open = layer === 'map';
   const dialog = useRef<HTMLDivElement | null>(null);
   useReturnFocus(open);
-  useEffect(() => { if (open) dialog.current?.focus(); }, [open]);
+  // C7: opening straight into a tour leaves focus on the tour card's heading (CampusTour focuses it; this parent effect runs after).
+  const touringRef = useRef(false);
+  touringRef.current = tourIndex !== null;
+  useEffect(() => { if (open && !touringRef.current) dialog.current?.focus(); }, [open]);
   if (!open) return null;
   return (
     <div className="cm-layer" role="dialog" aria-modal="true" aria-label="Campus map" tabIndex={-1} ref={dialog} data-testid="cm-overlay"
@@ -48,6 +63,7 @@ export function CampusMapOverlay(): React.ReactElement | null {
         <strong>Colaberry Campus</strong>
         <span className="cm-layer-hint">Pick a building, or press Tab to move between them.</span>
         {presenceError && <span className="cm-layer-warn" role="status" data-testid="cm-presence-broken">We can't load who's online right now.</span>}
+        {tour && touring === null && <button type="button" className="cm-link" onClick={startTour} data-testid="cm-tour-start-bar">Take the tour</button>}
         <button type="button" className="cm-link" onClick={openList}>List view</button>
         <button type="button" className="cm-btn is-secondary" onClick={closeLayer} aria-label="Close campus map">Close</button>
       </div>
@@ -55,6 +71,8 @@ export function CampusMapOverlay(): React.ReactElement | null {
         reduceMotion={settings.reduceMotion} initialTarget={mapFocus} onExit={closeLayer} onNavigate={closeLayer}
         presence={presence} presenceError={presenceError}
         staffDesks={staffDesks} personCard={personCard} onOpenPerson={openPersonCard} onClosePerson={closePersonCard} onAir={onAir} route={route}
+        tour={tour && touring !== null ? { target: tourTarget, onEnd: endTour, card: <CampusTour tour={tour} index={touring} onIndex={setTourIndex} onEnd={endTour}
+          explorerEnd={<CampusTourEnd pathModel={explorerPath(buildings, accessOf, settings.workplaceNames, false)} onNavigate={closeLayer} />} /> } : undefined}
         onEnterRoom={(route, from) => enterThroughDoor(route, from ? { left: from.left, top: from.top, width: from.width, height: from.height } : null)} />
     </div>
   );
