@@ -32,6 +32,7 @@ import { StepFooter } from './govWorkspace/StepFooter';
 import { PursuitBrief, type BriefSection } from './govWorkspace/PursuitBrief';
 import { RightRail } from './govWorkspace/RightRail';
 import { SolicitationItemsView, tracksForCategory, dueStageForCategory, type SolView } from './govWorkspace/SolicitationItemsView';
+import { ManualRequirementForm } from './govWorkspace/ManualRequirementForm';
 import { FitCapabilitiesPanel } from './govWorkspace/FitCapabilitiesPanel';
 import { DecidePanel } from './govWorkspace/DecidePanel';
 import { CountdownBand } from './govWorkspace/CountdownBand';
@@ -1139,6 +1140,21 @@ export default function AdminGovQualificationPage(): React.ReactElement {
     }, `Established ${mapped.length} requirement(s) from the solicitation.`);
   };
 
+  // Manual fallback for the Solicitation step: establish ONE hand-typed requirement when the extractor missed it
+  // (or found nothing at all). Same merge-by-id + deliberate establish/decision write as `establishSelected`, so a
+  // manual requirement is gate-bearing in exactly the same way a confirmed candidate is. Requires an open record.
+  const establishManual = (req: EstablishedRequirement): void => {
+    if (!record) return;
+    const byId = new Map<string, EstablishedRequirement>();
+    for (const e of record.requirements_json?.established ?? []) byId.set(e.id, e);
+    byId.set(req.id, req);
+    const merged = Array.from(byId.values());
+    void run(
+      () => recordGovQualificationDecision(canonical, { biddingEntity, expectedVersion: version, decision: 'needs_evidence', establishedRequirements: merged }),
+      'Established 1 requirement you added by hand.',
+    );
+  };
+
   // ONE upload does it ALL on the decoupled path: extract the requirement candidates (read-only) AND attest the SAME
   // ZIP as the evidence of record (a server hash) — AUTO-OPENING the qualification first if it isn't open yet. No
   // separate "Open qualification" click is needed: upload opens it and attests in one step. If the qualification is
@@ -1396,7 +1412,10 @@ export default function AdminGovQualificationPage(): React.ReactElement {
               </div>
               {extractError && <div className="alert alert-danger py-2" role="alert">{extractError}</div>}
               {candidates !== null && candidates.length === 0 && (
-                <div className="text-secondary small"><i className="ri-information-line me-1" aria-hidden="true" />No requirements detected in that ZIP — establish them manually below.</div>
+                <>
+                  <div className="text-secondary small mb-0"><i className="ri-information-line me-1" aria-hidden="true" />No requirements detected in that ZIP (it may be a scanned PDF, or the obligations may be phrased without the usual shall/must/will triggers). Establish at least one by hand below.</div>
+                  <ManualRequirementForm busy={busy} noRecord={!record} onEstablish={establishManual} />
+                </>
               )}
               {candidates !== null && candidates.length > 0 && (
                 <>
@@ -1415,6 +1434,7 @@ export default function AdminGovQualificationPage(): React.ReactElement {
                       <i className="ri-information-line me-1" aria-hidden="true" />Open the qualification on the <strong>Decide</strong> step to confirm these into established requirements.
                     </div>
                   )}
+                  <ManualRequirementForm busy={busy} noRecord={!record} onEstablish={establishManual} />
                 </>
               )}
             </SectionCard>

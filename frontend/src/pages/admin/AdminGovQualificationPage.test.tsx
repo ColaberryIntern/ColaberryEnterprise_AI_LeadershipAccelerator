@@ -353,6 +353,49 @@ describe('AdminGovQualificationPage — journey', () => {
     expect(factoryApi.recordGovQualificationDecision).not.toHaveBeenCalled();
   });
 
+  it('extract empty → add a requirement manually: establishes the hand-typed requirement with the picked category/tracks', async () => {
+    (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(cleanWs({
+      qualification: { id: 'q1', bidding_entity: 'colaberry', decision: 'needs_evidence', version: 4, rationale: null, source_snapshot_version: 3, reviewer_identity_id: 'rev-1', requirements_json: { established: [] } },
+    }));
+    (factoryApi.extractGovQualificationRequirements as jest.Mock).mockResolvedValue({ fileCount: 1, candidates: [] });
+    (factoryApi.recordGovQualificationDecision as jest.Mock).mockResolvedValue({ qualification: { id: 'q1' } });
+    await renderAt(`?canonical=${CANON}&tab=decide`);
+    await flush();
+    await uploadExtractZip('empty.zip');
+    // The manual-add form renders because the extractor found nothing — type a requirement and establish it.
+    const ta = container.querySelector('textarea[aria-label="Requirement text"]') as HTMLTextAreaElement;
+    const setValue = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')!.set!;
+    await act(async () => { setValue.call(ta, 'Deliver a web-based broadcasting platform with live and on-demand streaming.'); ta.dispatchEvent(new Event('input', { bubbles: true })); await Promise.resolve(); });
+    await clickButton('Establish this requirement');
+    await flush();
+    expect((factoryApi.recordGovQualificationDecision as jest.Mock).mock.calls.length).toBe(1);
+    const [canonArg, body] = (factoryApi.recordGovQualificationDecision as jest.Mock).mock.calls[0];
+    expect(canonArg).toBe(CANON);
+    expect(body.expectedVersion).toBe(4);
+    expect(body.establishedRequirements.length).toBe(1);
+    const req = body.establishedRequirements[0];
+    expect(req.text).toContain('broadcasting platform');
+    expect(req.category).toBe('scope');                       // the default category is the buildable one
+    expect(req.tracks).toEqual(['proposal', 'solution_build']); // a scope requirement becomes a build story
+    expect(req.applicability).toBe('always');
+    expect(req.dueStage).toBe('delivery');
+    expect(req.bindingStatus).toBe('binding_solicitation_requirement');
+  });
+
+  it('manual add: the Establish button is disabled until requirement text is entered (no empty requirement)', async () => {
+    (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(cleanWs({
+      qualification: { id: 'q1', bidding_entity: 'colaberry', decision: 'needs_evidence', version: 4, rationale: null, source_snapshot_version: 3, reviewer_identity_id: 'rev-1', requirements_json: { established: [] } },
+    }));
+    (factoryApi.extractGovQualificationRequirements as jest.Mock).mockResolvedValue({ fileCount: 1, candidates: [] });
+    await renderAt(`?canonical=${CANON}&tab=decide`);
+    await flush();
+    await uploadExtractZip('empty.zip');
+    const btn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('Establish this requirement')) as HTMLButtonElement;
+    expect(btn).toBeTruthy();
+    expect(btn.disabled).toBe(true);
+    expect(factoryApi.recordGovQualificationDecision).not.toHaveBeenCalled();
+  });
+
   it('extract without an opened qualification prompts to open it first (establishment stays a deliberate write)', async () => {
     (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(cleanWs({ qualification: null }));
     (factoryApi.extractGovQualificationRequirements as jest.Mock).mockResolvedValue({ fileCount: 1, candidates: [{ id: 'RQ1', text: 'SAM registration required.' }] });
