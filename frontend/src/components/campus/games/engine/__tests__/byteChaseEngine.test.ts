@@ -49,9 +49,9 @@ describe('scoring and lives', () => {
     const s = fresh();
     s.shield = 5; s.safe = 0;
     const g = s.glitches[0];
-    const before = s.glitches.map((x) => [x.x, x.y]);
-    byteChase.update(s, 0.05, input(), rng);
-    expect(s.glitches.map((x) => [x.x, x.y])).toEqual(before); // frozen: did not move
+    const before = s.glitches.map((x) => [x.x, x.y, x.prog, x.dir]);
+    for (let i = 0; i < 40; i += 1) byteChase.update(s, 0.05, input(), rng); // two seconds of shield: an active glitch would cross several tiles
+    expect(s.glitches.map((x) => [x.x, x.y, x.prog, x.dir])).toEqual(before); // frozen: no tile change, no progress
     g.x = s.player.x; g.y = s.player.y;
     byteChase.update(s, 0.01, input(), rng);
     expect(s.score).toBe(POINTS.reboot);
