@@ -113,6 +113,18 @@ const TIME_RE = /\b(\d{1,2}:\d{2}\s*(?:[ap]\.?m\.?)?|\d{1,2}\s*[ap]\.?m\.?)\b/i;
 // (CT=Connecticut/court, ET=et al.), and a false zone is worse than a null that tells the reviewer to verify.
 const TZ_RE = /\b(C[SD]T|E[SD]T|M[SD]T|P[SD]T|UTC|GMT|(?:Central|Eastern|Mountain|Pacific)(?:\s+(?:Standard|Daylight))?\s+Time)\b/i;
 
+/** PURE: pull the first stated date, time, and (only if unambiguous) timezone from one line of text. */
+function whenOf(str: string): { date: string | null; time: string | null; timezone: string | null } {
+  const dateM = str.match(DATE_RE);
+  const timeM = str.match(TIME_RE);
+  const tzM = str.match(TZ_RE);
+  return {
+    date: dateM ? dateM[1] : null,
+    time: timeM ? timeM[1].replace(/\s+/g, ' ').trim() : null,
+    timezone: tzM ? tzM[1].replace(/\s+/g, ' ').trim() : null,
+  };
+}
+
 /**
  * PURE: pull an opportunity dossier (contacts, NAICS, meeting + key-date lines) from the extracted context blocks.
  * Deterministic regex over the literal text; de-duplicated and capped; each item cites its source document.
@@ -156,15 +168,23 @@ export function extractDossier(blocks: ExtractedBlock[]): ExtractedDossier {
       const key = `nigp:${code}`;
       if (!seenCode.has(key) && codes.length < 20) { seenCode.add(key); codes.push({ system: 'nigp', code, sourceDocument: doc }); }
     }
-    for (const s of sentences(text)) {
-      const dateM = s.match(DATE_RE);
-      const date = dateM ? dateM[1] : null;
-      const timeM = s.match(TIME_RE);
-      const time = timeM ? timeM[1].replace(/\s+/g, ' ').trim() : null;
-      const tzM = s.match(TZ_RE);
-      const timezone = tzM ? tzM[1].replace(/\s+/g, ' ').trim() : null;
-      if (meetings.length < 10 && MEETING_RE.test(s)) meetings.push({ text: truncate(s, 240), date, time, timezone, sourceDocument: doc });
-      else if (keyDates.length < 10 && KEYDATE_RE.test(s) && date) keyDates.push({ text: truncate(s, 240), date, time, timezone, sourceDocument: doc });
+    const sents = sentences(text);
+    for (let i = 0; i < sents.length; i++) {
+      const s = sents[i];
+      let { date, time, timezone } = whenOf(s);
+      if (meetings.length < 10 && MEETING_RE.test(s)) {
+        // A conference / site visit is usually LABELLED on one line ("Pre-Proposal Conference:") and DATED on the
+        // next (or in the next table cell). When the meeting's own line carries no date, borrow it from the
+        // immediately following line - as long as that line is not itself another meeting - so the meeting actually
+        // shows WHEN it is. Still "detected - verify"; it gates nothing.
+        if (!date && i + 1 < sents.length && !MEETING_RE.test(sents[i + 1])) {
+          const nxt = whenOf(sents[i + 1]);
+          if (nxt.date) { date = nxt.date; time = time ?? nxt.time; timezone = timezone ?? nxt.timezone; }
+        }
+        meetings.push({ text: truncate(s, 240), date, time, timezone, sourceDocument: doc });
+      } else if (keyDates.length < 10 && KEYDATE_RE.test(s) && date) {
+        keyDates.push({ text: truncate(s, 240), date, time, timezone, sourceDocument: doc });
+      }
     }
   }
   return { contacts, naics, codes, meetings, keyDates };
