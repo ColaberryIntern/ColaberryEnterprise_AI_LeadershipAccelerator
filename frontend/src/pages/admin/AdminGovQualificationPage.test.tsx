@@ -396,6 +396,29 @@ describe('AdminGovQualificationPage — journey', () => {
     expect(factoryApi.recordGovQualificationDecision).not.toHaveBeenCalled();
   });
 
+  it('zero candidates from SCANNED PDFs explains why (no selectable text), not a generic shrug', async () => {
+    (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(cleanWs());
+    (factoryApi.extractGovQualificationRequirements as jest.Mock).mockResolvedValue({ fileCount: 0, candidates: [],
+      files: [{ name: 'rfq.pdf', status: 'image_only_pdf', chars: 0, truncated: false, warning: 'scanned' }] });
+    await renderAt(`?canonical=${CANON}&tab=decide`);
+    await flush();
+    await uploadExtractZip('scanned.zip');
+    const text = container.textContent ?? '';
+    expect(text).toMatch(/scanned|no selectable text/i);
+    // the manual-add form is still offered so the operator can proceed
+    expect(Array.from(container.querySelectorAll('button')).some((b) => b.textContent?.includes('Establish this requirement'))).toBe(true);
+  });
+
+  it('zero candidates from an UNREADABLE upload says the ZIP did not open (not "no requirements")', async () => {
+    (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(cleanWs());
+    (factoryApi.extractGovQualificationRequirements as jest.Mock).mockResolvedValue({ fileCount: 0, candidates: [],
+      files: [{ name: 'upload', status: 'unreadable', chars: 0, truncated: false, warning: 'archive' }] });
+    await renderAt(`?canonical=${CANON}&tab=decide`);
+    await flush();
+    await uploadExtractZip('broken.zip');
+    expect(container.textContent ?? '').toMatch(/did not open as a readable ZIP/i);
+  });
+
   it('extract without an opened qualification prompts to open it first (establishment stays a deliberate write)', async () => {
     (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(cleanWs({ qualification: null }));
     (factoryApi.extractGovQualificationRequirements as jest.Mock).mockResolvedValue({ fileCount: 1, candidates: [{ id: 'RQ1', text: 'SAM registration required.' }] });
