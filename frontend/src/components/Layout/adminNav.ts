@@ -173,7 +173,14 @@ export const NAV_GROUPS: NavGroup[] = [
     // AF2.1. Sits in the Program group and is therefore gated on 'program', the same section
     // the backend's agent-domain routes require. The page itself scopes by OWNERSHIP, so a
     // full admin who opens it sees only the domains they are accountable for, not all ten.
-    { path: '/admin/my-domain', label: 'My Domain', icon: 'robot-2-line' },
+    // CARRIES ITS OWN SECTION, and that is the whole point of this line.
+    // The route behind it, /api/admin/agent-domains-mine, is gated on 'dashboard'
+    // because AF8.3 moved it there after all six interns got 403 on 'program'. The nav
+    // filter uses `l.section ?? g.section`, so without this the link inherits the
+    // Program group's 'program' and the people it was built for cannot see it. Found
+    // live on 19 Oct when an intern's sidebar showed only Dashboard and Brands.
+    // Same shape as Leads/Pipeline, which sit in the Revenue group on 'leads'.
+    { path: '/admin/my-domain', label: 'My Domain', icon: 'robot-2-line', section: 'dashboard' },
     // The programme-wide view of the same ten. Sits beside My Domain because the pair is
     // the distinction worth seeing in the nav: one is what you own, one is everything.
     { path: '/admin/all-domains', label: 'All Domains', icon: 'stack-line' },

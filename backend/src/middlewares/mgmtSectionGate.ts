@@ -25,6 +25,11 @@ const PATH_SECTION: Array<[string, SectionKey]> = [
   ['/api/admin/revenue', 'revenue'], ['/api/admin/refunds', 'revenue'], ['/api/admin/pipeline', 'revenue'],
   ['/api/admin/opportunities', 'revenue'], ['/api/admin/leads', 'revenue'], ['/api/admin/funnel', 'revenue'],
   ['/api/admin/campaigns', 'campaigns'], ['/api/admin/communications', 'campaigns'],
+  // BEFORE the broad marketing row below, deliberately: pathToSection returns the FIRST
+  // match in array order, not the longest prefix, so a narrower path placed after it is
+  // never reached. This one is the catalog of connectors a brand can post through, which
+  // is brand configuration rather than campaign tooling.
+  ['/api/admin/marketing/connectors', 'brands'],
   ['/api/admin/marketing', 'campaigns'], ['/api/admin/visitors', 'campaigns'],
   // Brand administration (brands, their domains, sender profiles, send readiness).
   //
@@ -42,6 +47,19 @@ const PATH_SECTION: Array<[string, SectionKey]> = [
   // silently loses the surface. `owner` and `admin` are derived from ALL_SECTIONS and pick the
   // key up automatically; `marketing` now lists 'brands' explicitly. Nobody loses brands.
   ['/api/admin/brands', 'brands'],
+  // The accounts a brand posts AS. Unmapped until 19 Oct, and because this gate is
+  // deny-by-default that meant the Channels tab answered 'You do not have access to this
+  // section' for EVERY scoped role, not just one: only legacy full admins, who skip the
+  // gate entirely, could ever load it. Found live in an intern session.
+  //
+  // Filed under 'brands' because that is what these are: the destinations a brand
+  // publishes to, configured on the brand setup page. The prefix also covers
+  // /status, /:id and /:id/select.
+  //
+  // NOT widened here: /api/admin/marketing/connect/* and /marketing/linkedin/*, which
+  // run the OAuth handshake that mints a real publishing credential. Reading a brand's
+  // configuration and granting it the right to post are different decisions.
+  ['/api/admin/channel-accounts', 'brands'],
   // Marketing content composer (drafts, variants, validation). Same section as the campaigns
   // and brands it publishes for. Mapped the day the routes landed, for the reason the brands
   // row above gives. NOTE the prefix matcher is boundary-aware, so this does not swallow
