@@ -1,12 +1,16 @@
 /**
  * Seed the four campus audiences into the LOCAL e2e database. Never production.
  *
- *   member    standard enrollment, paid
- *   explorer  enrollment_type 'explorer'
+ *   member    an enrollment at the column defaults (a standard programme; the paid gate is off locally)
+ *   explorer  a free learner made by the CANONICAL writer, freeAccountRegistration.resolveFreeAccount
  *   business  owner of an organization
  *   staff     community member with role 'staff' and mgmt_role 'admin'
  *
- * All in one cohort named "campus-e2e-marker"; the e2e reads that name back through
+ * WHY NO PROGRAMME OR PAYMENT VALUES ARE WRITTEN HERE. The repo pins every file that writes a learner's programme,
+ * access tier or paid status (learnerWriterTripwire, writerPairTripwires, freeAccountConsumers). A seed is no reason to
+ * become one more: the Explorer goes through the one free-account writer, and the others take the column defaults.
+ *
+ * The member, business and staff rows share one cohort named "campus-e2e-marker"; the e2e reads that name back through
  * GET /api/portal/profile to prove the running backend is reading THIS database.
  *
  * Idempotent: fixed ids and emails, find-or-create, then update to the fixed shape. Running it twice
@@ -28,19 +32,19 @@ const COHORT_ID = '0e2e0000-0000-4000-8000-000000000001';
 const ORG_ID = '0e2e0000-0000-4000-8000-0000000000a1';
 
 export interface AudienceSeed {
-  key: 'member' | 'explorer' | 'business' | 'staff';
+  key: 'member' | 'business' | 'staff';
   id: string;
   email: string;
   full_name: string;
-  enrollment_type: 'standard' | 'explorer';
 }
 
+/** The three audiences seeded here at the column defaults. The Explorer is made by the canonical writer (see seed()). */
 export const AUDIENCES: readonly AudienceSeed[] = [
-  { key: 'member', id: '0e2e0000-0000-4000-8000-000000000101', email: 'campus-e2e-member@colaberry.test', full_name: 'Morgan Member', enrollment_type: 'standard' },
-  { key: 'explorer', id: '0e2e0000-0000-4000-8000-000000000102', email: 'campus-e2e-explorer@colaberry.test', full_name: 'Ellis Explorer', enrollment_type: 'explorer' },
-  { key: 'business', id: '0e2e0000-0000-4000-8000-000000000103', email: 'campus-e2e-business@colaberry.test', full_name: 'Blair Business', enrollment_type: 'standard' },
-  { key: 'staff', id: '0e2e0000-0000-4000-8000-000000000104', email: 'campus-e2e-staff@colaberry.test', full_name: 'Sasha Staff', enrollment_type: 'standard' },
+  { key: 'member', id: '0e2e0000-0000-4000-8000-000000000101', email: 'campus-e2e-member@colaberry.test', full_name: 'Morgan Member' },
+  { key: 'business', id: '0e2e0000-0000-4000-8000-000000000103', email: 'campus-e2e-business@colaberry.test', full_name: 'Blair Business' },
+  { key: 'staff', id: '0e2e0000-0000-4000-8000-000000000104', email: 'campus-e2e-staff@colaberry.test', full_name: 'Sasha Staff' },
 ];
+export const EXPLORER = { email: 'campus-e2e-explorer@colaberry.test', full_name: 'Ellis Explorer' };
 
 async function seed(): Promise<Record<string, { enrollment_id: string; jwt: string }>> {
   // Imported only after the guard passed: these open the database connection.
@@ -48,6 +52,7 @@ async function seed(): Promise<Record<string, { enrollment_id: string; jwt: stri
   const { signParticipantJwt } = await import('../services/participantService');
 
   const { seedAgentRegistry } = await import('../services/agentRegistrySeed');
+  const { resolveFreeAccount } = await import('../services/freeAccountRegistration');
 
   const [cohort] = await Cohort.findOrCreate({
     where: { id: COHORT_ID },
@@ -59,12 +64,15 @@ async function seed(): Promise<Record<string, { enrollment_id: string; jwt: stri
   for (const a of AUDIENCES) {
     const fields = {
       full_name: a.full_name, email: a.email, company: 'Campus E2E', cohort_id: COHORT_ID,
-      enrollment_type: a.enrollment_type, payment_status: 'paid' as const, payment_method: 'invoice' as const, status: 'active' as const, portal_enabled: true,
+      payment_status: 'pending' as const, payment_method: 'invoice' as const, status: 'active' as const, portal_enabled: true, // the column defaults, stated for the type
     };
     const [row] = await Enrollment.findOrCreate({ where: { id: a.id }, defaults: { id: a.id, ...fields } });
     await row.update(fields);
     out[a.key] = { enrollment_id: a.id, jwt: signParticipantJwt({ id: row.id, email: row.email, cohort_id: row.cohort_id ?? null }) };
   }
+  // The Explorer: the one free-account writer, idempotent by email (reuses the row on a rerun).
+  const { enrollment: explorer } = await resolveFreeAccount({ ...EXPLORER, programme: 'learner' });
+  out.explorer = { enrollment_id: explorer.id, jwt: signParticipantJwt({ id: explorer.id, email: explorer.email, cohort_id: explorer.cohort_id ?? null }) };
 
   const staff = AUDIENCES.find((a) => a.key === 'staff')!;
   const [member] = await CommunityMember.findOrCreate({

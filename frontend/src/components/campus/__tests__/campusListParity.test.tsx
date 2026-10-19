@@ -47,6 +47,8 @@ import { CampusProvider, useCampus } from '../CampusContext';
 // eslint-disable-next-line import/first
 import CampusLayers from '../CampusLayers';
 // eslint-disable-next-line import/first
+import CampusNav from '../CampusNav';
+// eslint-disable-next-line import/first
 import { campusViewFor } from '../useCampusView';
 // eslint-disable-next-line import/first
 import { desksForBuilding } from '../campusPeople';
@@ -153,5 +155,33 @@ describe('the Main Gate and admin rooms', () => {
       input.dispatchEvent(new Event('input', { bubbles: true }));
     });
     expect(list.querySelector('[data-testid="cm-list-count"]')!.textContent).toBe('1 building match');
+  });
+});
+
+describe('the side nav follows the same admin rule (C11)', () => {
+  async function mountNav(): Promise<HTMLElement> {
+    window.localStorage.setItem(CAMPUS_SETTINGS_KEY, JSON.stringify({ nav: 'campus', workplaceNames: false, motion: 'on' }));
+    window.localStorage.setItem(PARTICIPANT_TOKEN_KEY, 'h.eyJlbWFpbCI6ImxlYXJuZXJAZXhhbXBsZS5jb20ifQ.s'); // gitleaks:allow (fake, unsigned)
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    await act(async () => { root = createRoot(container); root.render(<MemoryRouter><ParticipantAuthProvider><CampusProvider><Controls /><CampusNav active="/portal/today" /></CampusProvider></ParticipantAuthProvider></MemoryRouter>); });
+    await flush();
+    return document.querySelector('nav.cm-nav') as HTMLElement;
+  }
+  it('staff with management access: the Staff Office is a new-tab link, never an in-app route', async () => {
+    mockAudience = 'staff'; mockMgmt = true;
+    const nav = await mountNav();
+    const admin = nav.querySelectorAll('[data-admin="true"]');
+    expect(admin).toHaveLength(1);
+    expect(admin[0].tagName).toBe('A');
+    expect(admin[0].getAttribute('target')).toBe('_blank');
+    expect(admin[0].textContent).toContain('Staff Office');
+  });
+  it('staff without management access: the Staff Office is disabled', async () => {
+    mockAudience = 'staff'; mockMgmt = false;
+    const nav = await mountNav();
+    const admin = nav.querySelector('[data-admin="true"]')!;
+    expect(admin.tagName).toBe('SPAN');
+    expect(admin.getAttribute('aria-disabled')).toBe('true');
   });
 });

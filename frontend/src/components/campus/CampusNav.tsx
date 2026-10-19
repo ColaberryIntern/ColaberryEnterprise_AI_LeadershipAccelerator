@@ -9,6 +9,8 @@ import { accessLabel } from './campusAccess';
 import { buildingForPath, buildingName } from './campusMap';
 import { tourFor } from './tourSteps';
 import CampusSettingsPanel from './CampusSettingsPanel';
+import AdminLink from './AdminLink';
+import { useIsMgmt } from './campusMgmt';
 
 /**
  * The campus in the portal's left column (Campus C2), in place of nav.te-nav when the campus
@@ -21,6 +23,7 @@ export default function CampusNav({ active }: { active: string }): React.ReactEl
   const hasTour = !!tourFor(audience, buildings, accessOf, settings.workplaceNames); // C7: everyone but staff
   const { buildings: onAir } = useCampusOnAir();
   const here = buildingForPath(active);
+  const isMgmt = useIsMgmt();
   const counts: Record<string, number> = {};
   if (presence && !presenceError) for (const [id, a] of Object.entries(presence)) counts[id] = a.count;
   return (
@@ -42,7 +45,10 @@ export default function CampusNav({ active }: { active: string }): React.ReactEl
           const inner = <><span className={`cm-dot cm-b-${b.id}`} aria-hidden="true" /><span className="lb">{name}</span>{chip && <small className="cm-nav-chip">{chip}</small>}</>;
           return (
             <li key={b.id}>
-              {planned
+              {/* C11: an admin building (the Staff Office) follows the card's rule: a new tab through the bridge, or disabled. */}
+              {b.primary.admin
+                ? <AdminLink label={name} route={b.primary.route} className="cm-nav-item" isMgmt={isMgmt}>{inner}</AdminLink>
+                : planned
                 ? <span className="cm-nav-item is-disabled" aria-disabled="true">{inner}<small className="cm-nav-chip">Soon</small></span>
                 : <Link className={`cm-nav-item${isHere ? ' active' : ''}`} to={b.primary.route} aria-current={isHere ? 'page' : undefined}>{inner}</Link>}
             </li>

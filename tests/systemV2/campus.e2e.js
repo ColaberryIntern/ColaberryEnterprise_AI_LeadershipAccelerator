@@ -68,13 +68,25 @@ async function runAudience(browser, audience, jwt) {
     });
 
     await step(audience, 'every building opens its real page with the banner', async () => {
-      const hrefs = await page.locator('nav.cm-nav .cm-nav-list a').evaluateAll((as) => as.map((a) => a.getAttribute('href')));
+      // Admin rooms (the Staff Office) open the Management Portal in a new tab, not a campus page; checked separately below.
+      const hrefs = await page.locator('nav.cm-nav .cm-nav-list a:not([data-admin])').evaluateAll((as) => as.map((a) => a.getAttribute('href')));
       must(hrefs.length >= 6, `only ${hrefs.length} building links`);
       for (const href of hrefs) {
         await page.goto(urls.base + href, { waitUntil: 'domcontentloaded' });
         await page.waitForSelector('[data-testid="cm-banner"]', { timeout: 30_000 }).catch(() => { throw new Error(`no banner on ${href}`); });
       }
     });
+
+    if (audience === 'staff') {
+      await step(audience, 'the Staff Office opens the Management Portal in a new tab', async () => {
+        await page.goto(`${urls.base}/portal/today`, { waitUntil: 'domcontentloaded' });
+        // Management access is read asynchronously (GET /api/portal/mgmt/status): disabled until it answers, then a link.
+        await page.waitForSelector('nav.cm-nav .cm-nav-list a[data-admin]', { timeout: 15_000 });
+        const link = page.locator('nav.cm-nav .cm-nav-list a[data-admin]');
+        must(await link.count() === 1, 'no admin link in the nav');
+        must(await link.getAttribute('target') === '_blank', 'Staff Office does not open in a new tab');
+      });
+    }
 
     await step(audience, 'presence answers, and the map opens', async () => {
       const r = await api('/api/portal/campus/presence', jwt);
