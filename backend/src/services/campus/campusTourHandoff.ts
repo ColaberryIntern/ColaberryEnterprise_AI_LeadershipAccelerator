@@ -2,6 +2,7 @@ import { env } from '../../config/env';
 import { isGrowthJourneyCapabilityEnabled, type GrowthJourneyFlags } from '../../config/growthJourneyFlags';
 import { OPEN_HANDOFF_STATUSES } from '../../models/GrowthJourneyHandoff';
 import { classifyError } from '../../utils/errorClassifier';
+import { subjectRefFrom } from '../identity/identifierPrecedence';
 import type { EXPLORER_PROGRAM as ExplorerProgramConst } from '../growthJourney/explorerProgramBridge';
 import type { AssignResult, CreateHandoffArgs, CreateHandoffResult } from '../growthJourney/handoffs/handoffService';
 
@@ -87,7 +88,8 @@ export async function requestTourHandoff(
       refs: {
         tenant_id: brand.tenant_id, brand_id: brand.id, brand_slug: brand.slug,
         program: program ? { id: program.id, slug: program.slug, kind: program.kind } : null,
-        subject_ref: `enrollment:${enrollmentId}`, lead_id: leadId, enrollment_id: enrollmentId, path: null,
+        // The shared builder (identity T208 tripwire): enrollment outranks lead, so this is enrollment:<id>.
+        subject_ref: subjectRefFrom({ enrollmentId }) as string, lead_id: leadId, enrollment_id: enrollmentId, path: null,
       },
       trigger: { source: 'manual', owner_queue: 'admissions', reason: TOUR_HANDOFF_REASON, urgent_hint: false,
         event_ref: `${TOUR_HANDOFF_REASON}:${enrollmentId}:${centralDate(asOf)}` },
