@@ -20,6 +20,7 @@
 import crypto from 'crypto';
 import { getInstrumentedOpenAI } from '../openaiInstrumented';
 import { DEFAULT_MODEL } from '../components/costEstimationService';
+import { selectsSolutionBuild } from './govDeliveryProject';
 
 interface CacheEntry<T> { value: T; at: number; }
 const TTL_MS = 60 * 60 * 1000; // 1h — advisory text, regenerable
@@ -66,11 +67,19 @@ export async function generateBuildSpec(req: BuildSpecRequest): Promise<BuildSpe
   if (!process.env.OPENAI_API_KEY) {
     return { spec: '', research: '', cached: false, generatedAt: now(), error: 'AI build spec is unavailable (no API key configured).' };
   }
-  const reqs = (Array.isArray(req.requirements) ? req.requirements : []).slice(0, 120); // bound prompt size
-  if (reqs.length === 0) {
+  const established = (Array.isArray(req.requirements) ? req.requirements : []).slice(0, 120); // bound prompt size
+  if (established.length === 0) {
     return { spec: '', research: '', cached: false, generatedAt: now(), error: 'No established requirements to build a spec from yet.' };
   }
-  const key = 'buildspec:' + hash({ reqs, t: req.title ?? null, b: req.buyer ?? null, d: req.daysLeft ?? null });
+  // Spec ONLY the solution — the "what they're buying" requirements. Bid-submission and administrative obligations
+  // (redaction, statements of reasons, pricing/registration forms) are proposal responses, not software to build;
+  // feeding them here is what turned "submit our proposal" into a build capability. Same classifier the deterministic
+  // build projection and the coverage cross-check use, so all three select the same set.
+  const reqs = established.filter(selectsSolutionBuild);
+  if (reqs.length === 0) {
+    return { spec: '', research: '', cached: false, generatedAt: now(), error: 'No requirement carries a build signal — this pursuit has no software to build; it is delivered through the proposal responses.' };
+  }
+  const key = 'buildspec:v2:' + hash({ reqs, t: req.title ?? null, b: req.buyer ?? null, d: req.daysLeft ?? null }); // v2: reqs filtered to solution_build
   const hit = cacheGet<BuildSpecResult>(key);
   if (hit) return { ...hit, cached: true };
 

@@ -30,7 +30,7 @@ jest.mock('../../../models/DeliveryProjectSourceLink', () => ({ __esModule: true
 const linkStudentProject = jest.fn();
 jest.mock('../../delivery/projectSourceLink', () => ({ linkStudentProject: (...a: any[]) => linkStudentProject(...a) }));
 
-import { ensureGovTwoTrackProject, govProjectSlug, toContractRequirementRow, classifyRequirementTracks, linkGovBuildToStudentProject, GovContainerUnavailableError } from '../govDeliveryProject';
+import { ensureGovTwoTrackProject, govProjectSlug, toContractRequirementRow, classifyRequirementTracks, selectsSolutionBuild, linkGovBuildToStudentProject, GovContainerUnavailableError } from '../govDeliveryProject';
 
 const GWS = 'gws:04ac1711-c3f6-418a-9d9b-c5e6211295ec';
 
@@ -77,6 +77,31 @@ describe('classifyRequirementTracks (pure) — admin forms never reach the build
   it('is total on empty/garbage input (still proposal)', () => {
     expect(classifyRequirementTracks({})).toEqual(['proposal']);
     expect(classifyRequirementTracks(null)).toEqual(['proposal']);
+  });
+});
+
+describe('selectsSolutionBuild (pure) — the gate that keeps bid-submission rules out of the build', () => {
+  it('a build/solution requirement is selected', () => {
+    expect(selectsSolutionBuild({ text: 'The platform shall provide a reporting dashboard and API integration' })).toBe(true);
+    expect(selectsSolutionBuild({ text: 'Develop and implement the video streaming system' })).toBe(true);
+  });
+  it('a bid-submission / administrative requirement is NOT selected (it is a proposal response, not software)', () => {
+    for (const t of [
+      'A claimant MUST submit a redacted and non-redacted version of their proposal.',
+      'A claim must include a concise statement of reasons supporting the claim.',
+      'Offeror shall be registered in SAM.gov',
+      'Complete the Execution of Offer form and sign it',
+    ]) expect(selectsSolutionBuild({ text: t })).toBe(false);
+  });
+  it('prefers the established `tracks` when present (reviewer category wins over text)', () => {
+    // No build keyword in the text, but the reviewer established it as a build (scope) requirement.
+    expect(selectsSolutionBuild({ text: 'Closed captioning on every broadcast', tracks: ['proposal', 'solution_build'] })).toBe(true);
+    // Has a build-ish word in text, but the reviewer established it proposal-only — honor the stored tracks.
+    expect(selectsSolutionBuild({ text: 'Describe your platform approach', tracks: ['proposal'] })).toBe(false);
+  });
+  it('is total on empty/garbage input (not a build requirement)', () => {
+    expect(selectsSolutionBuild({})).toBe(false);
+    expect(selectsSolutionBuild(null)).toBe(false);
   });
 });
 

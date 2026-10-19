@@ -75,11 +75,14 @@ export function GovBuildGantt({ plan }: { plan: GovDatedPlan }): React.ReactElem
                 <ul className="list-unstyled ms-3 mt-1 border-start ps-2">
                   {stories.map((s) => {
                     const so = !!openStories[s.id];
+                    // Prefix the STORY-### id so the AI-plan stories read like the STORY-000 seed and the
+                    // deterministic STORY-<reqId> spine (the seed's title already carries its id, so don't double it).
+                    const label = s.title.startsWith(s.id) ? s.title : `${s.id} · ${s.title}`;
                     return (
                       <li key={s.id} className="py-1 border-bottom">
                         <button type="button" className="btn btn-link btn-sm px-0 text-decoration-none d-flex align-items-center gap-2 w-100" onClick={() => toggleStory(s.id)}>
                           <i className={`ri-arrow-${so ? 'down' : 'right'}-s-line`} aria-hidden="true" />
-                          <span>{s.title}</span>
+                          <span>{label}</span>
                           <span className="text-secondary small ms-auto" style={{ fontVariantNumeric: 'tabular-nums' }}>due {s.dueDate}</span>
                         </button>
                         {so && <StoryDetail story={s} />}

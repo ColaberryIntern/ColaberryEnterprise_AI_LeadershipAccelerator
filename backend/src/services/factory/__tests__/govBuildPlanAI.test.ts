@@ -51,6 +51,16 @@ describe('govBuildPlanAI (advisory, reuses the SBP engine, fail-soft)', () => {
     expect(getInstrumentedOpenAI).not.toHaveBeenCalled();
   });
 
+  it('requirements present but NONE carry a build signal → error, never calls the model (submission rules are not built)', async () => {
+    const r = await generateGovBuildPlanAI({ ...baseReq, buildSpec: null, requirements: [
+      { id: 'SUB-001', text: 'A claimant MUST submit a redacted and non-redacted version of their proposal' },
+      { id: 'SUB-002', text: 'A claim must include a concise statement of reasons supporting the claim' },
+    ] });
+    expect(r.plan).toBeNull();
+    expect(r.error).toMatch(/no software to plan|build signal/i);
+    expect(getInstrumentedOpenAI).not.toHaveBeenCalled();
+  });
+
   it('success → a dated plan back-scheduled to finish the day before the deadline; STORY-000 leads', async () => {
     const client = fakeClient(okCreate);
     (getInstrumentedOpenAI as jest.Mock).mockReturnValue(client);

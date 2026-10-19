@@ -57,6 +57,19 @@ export function classifyRequirementTracks(est: any): string[] {
 }
 
 /**
+ * Does this requirement belong on the solution_build track — i.e. is it part of WHAT WE BUILD, not WHAT WE SUBMIT?
+ * Prefers the requirement's already-established `tracks` (the reviewer's classification) when present, and otherwise
+ * falls back to deterministic text classification. This is the gate that keeps bid-submission and administrative
+ * rules ("submit a redacted copy", "include a statement of reasons", pricing/registration forms) OUT of the AI
+ * build spec/plan: they are proposal obligations, never software to build. PURE + total.
+ */
+export function selectsSolutionBuild(req: any): boolean {
+  const tracks = req?.tracks;
+  if (Array.isArray(tracks)) return tracks.includes('solution_build');
+  return classifyRequirementTracks(req).includes('solution_build');
+}
+
+/**
  * Map one reviewer-ESTABLISHED requirement onto a `contract_requirements` row for its classified track(s). PURE + deterministic
  * (the id is `factoryId('contract_requirement', [deliveryProjectId, canonical_req_id])`, so a re-run upserts the
  * same row). Fabricates nothing: `evidence_state` is always `unassessed` (the factory has not assessed evidence),
