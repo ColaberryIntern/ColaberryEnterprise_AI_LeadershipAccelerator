@@ -1737,17 +1737,30 @@ export default function AdminGovQualificationPage(): React.ReactElement {
           )}
           {(
             <SectionCard title="Build plan — releases, stories & schedule (AI)" icon="flow-chart"
-              subtitle="A rich build-out of the opportunity — releases and stories with narratives, acceptance criteria, dependencies and a projected post-award build timeline (the build runs after award, not before the proposal deadline) — so you can inspect the work before authorizing the build. Advisory only: it authors no requirement-cited story and changes no gate.">
+              subtitle="One build-out of the opportunity — the AI plan is the working build (releases and stories with narratives, acceptance criteria, dependencies and a projected post-award timeline); the deterministic requirement-coverage cross-check is folded in below. Advisory only: it authors no requirement-cited story and changes no gate.">
               <GovBuildPlanAIPanel canonical={canonical}
                 requirements={(established ?? []).map((r) => ({ id: r.id, text: r.text }))}
                 title={oppDetail?.opportunity?.title ?? null} buyer={oppDetail?.opportunity?.agency ?? null}
                 deadline={oppDetail?.opportunity?.closeDate ?? ws.source?.deadline?.utc ?? null}
                 onLoaded={setAiBuildSummary} />
+              <details className="mt-3 pt-2 border-top">
+                <summary className="small fw-semibold text-secondary" style={{ cursor: 'pointer' }}>
+                  <i className="ri-list-check-2 me-1" aria-hidden="true" />Requirement coverage (deterministic cross-check)
+                </summary>
+                <div className="small text-secondary mt-1 mb-2">A secondary, deterministic check: every solution_build requirement projected into a cited story. The AI plan above is the working build; this confirms each requirement is covered. A pursuit approval is NOT a build authorization.</div>
+                <GovBuildPlanPanel build={ws.build} aiBuild={aiBuildSummary} assign={{
+                  builders: ws.build?.assignableBuilders ?? [],
+                  canAssign: !!(ws.build?.deliveryProjectId && (ws.build?.assignableBuilders?.length ?? 0) > 0),
+                  busy,
+                  onAssign: (storyId, assigneeIdentityId) => run(() => assignGovBuildStory(canonical, storyId, assigneeIdentityId), 'Story assigned.'),
+                  onUnassign: (storyId) => run(() => unassignGovBuildStory(canonical, storyId), 'Assignment removed.'),
+                }} />
+              </details>
             </SectionCard>
           )}
           {(
             <SectionCard title="Assignment at a glance" icon="user-shared-line"
-              subtitle="Who can build this contract and how much is already assigned — advisory. The assign controls are the two cards below; this summary changes nothing.">
+              subtitle="Who can build this contract and how much is already assigned — advisory. The assign controls are in the Build plan card above (per story) and the Create card below (the intern); this summary changes nothing.">
               <AssignmentOverviewPanel
                 deliveryProjectId={ws.build?.deliveryProjectId ?? null}
                 builders={ws.build?.assignableBuilders ?? []}
@@ -1764,18 +1777,6 @@ export default function AdminGovQualificationPage(): React.ReactElement {
                 requirements={(established ?? []).map((r) => ({ id: r.id, text: r.text }))}
                 title={oppDetail?.opportunity?.title ?? null} buyer={oppDetail?.opportunity?.agency ?? null}
                 deadline={oppDetail?.opportunity?.closeDate ?? ws.source?.deadline?.utc ?? null} />
-            </SectionCard>
-          )}
-          {(
-            <SectionCard title="Requirement coverage (deterministic cross-check)" icon="list-check-2" collapsible defaultOpen={false}
-              subtitle="A secondary, deterministic check: every solution_build requirement projected into a cited story. The AI build plan above is the working plan; this confirms each requirement is covered. A pursuit approval is NOT a build authorization.">
-              <GovBuildPlanPanel build={ws.build} aiBuild={aiBuildSummary} assign={{
-                builders: ws.build?.assignableBuilders ?? [],
-                canAssign: !!(ws.build?.deliveryProjectId && (ws.build?.assignableBuilders?.length ?? 0) > 0),
-                busy,
-                onAssign: (storyId, assigneeIdentityId) => run(() => assignGovBuildStory(canonical, storyId, assigneeIdentityId), 'Story assigned.'),
-                onUnassign: (storyId) => run(() => unassignGovBuildStory(canonical, storyId), 'Assignment removed.'),
-              }} />
             </SectionCard>
           )}
           {(
