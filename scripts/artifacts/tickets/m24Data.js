@@ -25,7 +25,7 @@ const TAKEAWAY = 'Seven of the thirteen inputs the Sales Readiness Score needs a
 const ASKED = 'prove Person 360 is trustworthy enough to be the Sales Readiness Score input, '
   + 'input by input, bound to the real evidence groups, ending in a yes or no.';
 const DELIVERED = 'Part 6 of the contract binds 13 inputs to their evidence groups with their '
-  + 'absence behaviour, Part 7 gives the call, and a binding test fails when an input loses its '
+  + 'absence behavior, Part 7 gives the call, and a binding test fails when an input loses its '
   + 'evidence group.';
 
 /** The 13 inputs, from DECISION 3, 4 and 5 of the contract. M = measured, D = derived. */
@@ -33,13 +33,13 @@ const INPUTS = [
   { component: 'Tenure', group: 'journey', field: 'daysKnown', md: 'D', absence: 'null, never 0', verdict: 'SAFE' },
   { component: 'Intent', group: 'journey', field: 'intentScore', md: 'M', absence: 'null when withheld or unknown', verdict: 'SAFE' },
   { component: 'Commitment: human reply', group: 'communications', field: 'inboundCount', md: 'M', absence: 'panel null; cap admitted by truncated', verdict: 'SAFE' },
-  { component: 'Friction: payment failure', group: 'billingDetail', field: 'failuresSinceLastSuccess', md: 'D', absence: 'panel null when no enrolment', verdict: 'SAFE' },
+  { component: 'Friction: payment failure', group: 'billingDetail', field: 'failuresSinceLastSuccess', md: 'D', absence: 'panel null when no enrollment', verdict: 'SAFE' },
   { component: 'Prior outcome', group: 'history', field: 'available + reason', md: 'M', absence: 'first-class availability flag, with a reason', verdict: 'SAFE' },
   { component: 'Explorer bands', group: 'explorerScore', field: 'engagement/intent/fit', md: 'M', absence: 'whole panel null, never 0/0/0', verdict: 'SAFE' },
   { component: 'Consent', group: 'acquisition', field: 'consentContact', md: 'M', absence: 'null separates never-recorded from refused', verdict: 'SAFE' },
   { component: 'Passive: site sessions', group: 'engagement', field: 'sessions', md: 'M', absence: 'reads 0 for a person never tracked', verdict: 'EXCLUDED' },
   { component: 'Passive: page events', group: 'journey', field: 'pageEvents + 3 more', md: 'M', absence: 'read 0 for anyone with no lead row', verdict: 'EXCLUDED' },
-  { component: 'Commitment: enrolment', group: 'journey', field: 'enrollments', md: 'D', absence: 'counts only ids the caller may see', verdict: 'EXCLUDED' },
+  { component: 'Commitment: enrollment', group: 'journey', field: 'enrollments', md: 'D', absence: 'counts only ids the caller may see', verdict: 'EXCLUDED' },
   { component: 'Commitment: appointment', group: 'appointments', field: 'rows', md: 'M', absence: '[] substituted when there was no key', verdict: 'EXCLUDED' },
   { component: 'Prior outcome detail', group: 'history', field: 'everHired, fees', md: 'M', absence: 'a NULL column reads false; null fees sum to 0', verdict: 'EXCLUDED' },
   { component: 'Recency', group: 'journey', field: 'lastActivity', md: 'D', absence: 'section-filtered per caller; the 150-row cap does NOT affect it', verdict: 'EXCLUDED' },

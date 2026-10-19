@@ -133,7 +133,7 @@ const SO_WHAT = [
   'The duration has no row, so the page does not state it. C5.4 is titled "90-Day '
     + 'Accelerator" and the C2.2 blueprint is a ninety-day one, but the only verified '
     + 'duration in the C0.6 registry is program.duration, public wording "12 weeks", '
-    + 'evidenced by curriculum_blueprints weeks 0 to 12 and by the live programme page. '
+    + 'evidenced by curriculum_blueprints weeks 0 to 12 and by the live program page. '
     + 'Twelve weeks is eighty-four days. CLM-029 is the control: a figure with no source '
     + 'row does not go out. The page renders the registry claim, and a test asserts no '
     + 'other duration appears anywhere on it.',
@@ -226,7 +226,7 @@ const TICKETS = {
     asked: 'Build the how-it-works route as a real, routed, deployed page consistent with '
       + 'the locked positioning, reusing the shared design system rather than inventing a '
       + 'visual language.',
-    delivered: 'A routed page carrying the five-stage model, each stage labelled with who '
+    delivered: 'A routed page carrying the five-stage model, each stage labeled with who '
       + 'actually delivers it today, and the mechanism argument pointed at the published '
       + 'proof records. Routing is proven from App.tsx, not asserted.',
     files: [

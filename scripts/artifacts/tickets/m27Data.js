@@ -13,7 +13,7 @@ const TAKEAWAY = 'A score computed a minute ago over week-old evidence is not fr
   + 'without one new fact entering the system. So the effective as-of is the OLDER of the '
   + 'computation and the oldest dated evidence: recomputation cannot buy freshness.';
 
-const ASKED = 'every score carries an as-of time, a stale score is labelled rather than hidden, '
+const ASKED = 'every score carries an as-of time, a stale score is labeled rather than hidden, '
   + 'and the boundary cases are tested.';
 const DELIVERED = 'all three, plus the evidence date threaded onto the score so a surface can '
   + 'judge it without reassembling inputs it no longer has.';

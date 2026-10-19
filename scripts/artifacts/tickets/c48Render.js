@@ -184,7 +184,7 @@ function buildDocument() {
   <li>Quota attainment is modeled at 100% of benchmark, which is optimistic by construction. At
   50% the acquisition cost doubles and the pilot contributes nothing.</li>
   <li>Fundraising strategy is out of scope by instruction.</li>
-  <li>Delivery labour rates are inherited from C2.3, where they were assumptions, so an error
+  <li>Delivery labor rates are inherited from C2.3, where they were assumptions, so an error
   there propagates straight through this document.</li>
   </ul>
   </div>`;

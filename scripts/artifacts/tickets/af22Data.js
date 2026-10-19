@@ -67,7 +67,7 @@ const AGENTS_PER_DOMAIN = [
 ];
 
 const AGENT_CAVEAT = 'Those counts are agents whose NAME contains the domain key, which is a '
-  + 'weak proxy and deliberately labelled as one. Admissions showing 27 is substring noise, not '
+  + 'weak proxy and deliberately labeled as one. Admissions showing 27 is substring noise, not '
   + '27 admissions agents. There is no column that says "this agent belongs to this domain" - '
   + 'that is what AF3.1 was meant to establish, and AF3.1 has not started. Four domains match '
   + 'nothing at all, so for those interns there is no agent to open under any reading.';

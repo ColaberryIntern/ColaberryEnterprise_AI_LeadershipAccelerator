@@ -41,7 +41,7 @@ function build() {
     <td style="width:36%"><code>${esc(c.where)}</code></td>
     <td style="width:16%">${esc(c.cap)}</td>
     <td>${esc(c.effect)}</td>
-    <td style="width:14%" class="${c.labelled ? 'yes' : 'no'}">${c.labelled ? 'labelled' : 'SILENT'}</td>
+    <td style="width:14%" class="${c.labeled ? 'yes' : 'no'}">${c.labeled ? 'labeled' : 'SILENT'}</td>
   </tr>`).join('');
 
   const tests = v.newTests.map((t) => `<tr><td>${esc(t.suite)}</td>
@@ -109,20 +109,20 @@ is trusted. A suite that cannot fail is not a suite.</p>
   <tr><th>Where it clips</th><th>Cap</th><th>Effect</th><th>Says so?</th></tr>
   ${clips}
 </table>
-<p>Only the third is labelled, and it is the one that almost never fires: the first two shrink the
+<p>Only the third is labeled, and it is the one that almost never fires: the first two shrink the
 body long before it could reach 800,000 characters. Send 201 requirement blocks and the 201st is
 dropped entirely, its id still listed at the top, with nothing anywhere saying a block was
 removed.</p>
 <p><strong>Pinned, not merely written down.</strong> Tests named RECORDED GAP assert this
-behaviour including the absence of a label, so <strong>they fail when the fix lands</strong>. The
+behavior including the absence of a label, so <strong>they fail when the fix lands</strong>. The
 SAFE-002 delimiters and the source-before-context ordering are asserted alongside, because
-<code>delimited()</code> is the injection defence and any fix that chunks or refuses must not
+<code>delimited()</code> is the injection defense and any fix that chunks or refuses must not
 weaken it in the same change.</p>
 
 <h2>Two assumptions that were wrong</h2>
 <div class="note">
   <p><strong>Case 6 expected a partial measure.</strong> Composition refuses instead, so there
-  were no measures to inspect. Refusing is the better behaviour, and the shipped message says why:
+  were no measures to inspect. Refusing is the better behavior, and the shipped message says why:
   <em>"Omitting a task is not the same as assessing it and finding nothing: the first inflates
   every share, the second lowers coverage."</em> The case asserts that distinction now, at three
   levels: the gate refuses, the arithmetic returns a null share rather than a fabricated zero, and

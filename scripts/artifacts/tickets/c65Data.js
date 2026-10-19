@@ -4,8 +4,8 @@
  * ## The ticket's own failure mode is the thing this module is built against
  *
  * C6.5 says the audit becomes untrustworthy by "assuming a function works without reading
- * its error handling and quota behaviour", and its acceptance criterion is that
- * quota-exhaustion behaviour is "established by reading code, not assumed". So the facts
+ * its error handling and quota behavior", and its acceptance criterion is that
+ * quota-exhaustion behavior is "established by reading code, not assumed". So the facts
  * below are READ OUT OF THE REPO at build time, not typed from a reading of it:
  *
  *   GUARDED      which functions call claimApolloCall, parsed from apolloService.ts
@@ -296,7 +296,7 @@ const FOR_NEXT = [
 
 const LIMITS = [
   'This audit reads code and production configuration. It does not exercise the Apollo API, '
-    + 'so no claim is made about Apollo’s own behaviour beyond the status codes this code '
+    + 'so no claim is made about Apollo’s own behavior beyond the status codes this code '
     + 'handles.',
   'The ceiling has only ever been observed stopping a run once, the 50-call ceiling-proof '
     + 'row on 15 October. The daily ceiling of 250 has never been reached in production, so '

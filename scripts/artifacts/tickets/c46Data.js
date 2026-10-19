@@ -129,7 +129,7 @@ const SELECTED = [
       + 'until it has been gated and shadow-tested. Public.',
     use: 'For any buyer whose first question is about safety or control.' },
   { slug: 'the-request-was-messy-the-price-couldnt-be', why: 'The clearest non-education '
-      + 'example, with a deterministic outcome a sceptic can follow. Public, though the '
+      + 'example, with a deterministic outcome a skeptic can follow. Public, though the '
       + 'organization cannot be named.',
     use: 'When the buyer suspects everything we do is education-shaped.' },
 ];
@@ -148,7 +148,7 @@ const MATRIX = [
       + 'next with them.' },
   { icp: 'Workforce organizations', rank: 'SECONDARY',
     lead: 'ai-systems-architect-training-system', second: 'every-lead-has-a-history',
-    gap: 'Same gap. The workforce-development tag belongs to our own programme.' },
+    gap: 'Same gap. The workforce-development tag belongs to our own program.' },
   { icp: 'Mid-market and enterprise', rank: 'Opportunistic',
     lead: 'testing-ai-actions-before-they-reach-customers',
     second: 'the-request-was-messy-the-price-couldnt-be',

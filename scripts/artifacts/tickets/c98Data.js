@@ -99,7 +99,7 @@ const SECTIONS = [
       + 'produced reachability evidence for it rather than demand evidence. The buyer is '
       + 'now named at 35 of 38 tier-1 accounts, 24 with a verified email address. Against '
       + 'that, zero of the 41 contacts we already held at those accounts was in the right '
-      + 'buying centre: 31 accounts held only IT contacts.',
+      + 'buying center: 31 accounts held only IT contacts.',
     why: 'Reachability is not demand. This supports C2.5 rather than confirming it, and the '
       + 'confirmation can only come from replies.',
   },
@@ -124,7 +124,7 @@ const SECTIONS = [
   },
   {
     q: 'What should stop being built', basis: BASIS.PREPARATORY,
-    finding: 'C8.2, the commercialization command centre, should not be built in its '
+    finding: 'C8.2, the commercialization command center, should not be built in its '
       + 'current sequence. C8.1 established that 8 of its 10 required metrics have no data '
       + 'source at all, so building the route now ships eight tiles reading "not measured".',
     why: 'Not a cancellation. Four small schema additions turn seven of the eight blanks '

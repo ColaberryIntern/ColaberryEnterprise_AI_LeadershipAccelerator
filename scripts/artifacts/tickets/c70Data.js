@@ -137,7 +137,7 @@ const ETPL_COST = [
     v: 'Removal of the program from the statewide list for not less than 24 months',
     cite: '40 TAC 840.31(g), 840.51(a)' },
   { k: 'Failing performance',
-    v: 'Improvement plan, then suspension of board-funded enrolment, then revocation in the '
+    v: 'Improvement plan, then suspension of board-funded enrollment, then revocation in the '
       + 'third consecutive year',
     cite: 'WD 05-19 Change 3, Attachment 1' },
 ];

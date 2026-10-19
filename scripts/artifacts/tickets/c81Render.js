@@ -123,7 +123,7 @@ function buildDocument() {
     <div class="rule"></div>
 
     <div class="asked">
-      <b>What the ticket asked for.</b> Design the command centre with ten required top
+      <b>What the ticket asked for.</b> Design the command center with ten required top
       metrics. Every tile must name the data source that will populate it, and any tile with
       no source is marked NOT YET MEASURABLE rather than mocked. Reuse the existing admin
       design system. The named risk is "designing for metrics we cannot populate".

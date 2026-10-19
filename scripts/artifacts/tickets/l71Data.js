@@ -71,19 +71,19 @@ const CLIPS = [
     where: 'renderBlocks .slice(0, MAX_BLOCKS)',
     cap: '200 blocks',
     effect: 'block 201 and beyond dropped ENTIRELY',
-    labelled: false,
+    labeled: false,
   },
   {
     where: 'renderBlocks b.text.slice(0, MAX_BLOCK_CHARS)',
     cap: '4,000 chars per block',
     effect: 'the tail of any longer block is cut',
-    labelled: false,
+    labeled: false,
   },
   {
     where: 'delimited(..., MAX_BLOCK_CHARS * MAX_BLOCKS)',
     cap: '800,000 chars joined',
     effect: 'the joined body is cut',
-    labelled: true,
+    labeled: true,
   },
 ];
 
@@ -126,7 +126,7 @@ const HEADLINE = {
   casesTotal: CASES.length,
   controlsObserved: CONTROLS.filter((c) => c.observed).length,
   controlsTotal: CONTROLS.length,
-  clipsUnlabelled: CLIPS.filter((c) => !c.labelled).length,
+  clipsUnlabelled: CLIPS.filter((c) => !c.labeled).length,
   clipsTotal: CLIPS.length,
   newTestsTotal: 0,
 };

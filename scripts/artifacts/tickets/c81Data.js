@@ -153,7 +153,7 @@ function counts() {
 
 function headline() {
   const c = counts();
-  return `Of the ${c.total} metrics this command centre is required to show, ${c.live} can be `
+  return `Of the ${c.total} metrics this command center is required to show, ${c.live} can be `
     + `computed from production today, ${c.proxy} has only a near neighbour, and ${c.none} have `
     + 'no source at all. The design is therefore mostly a specification for the data we have '
     + 'not captured yet, and the honest dashboard says so on its face.';

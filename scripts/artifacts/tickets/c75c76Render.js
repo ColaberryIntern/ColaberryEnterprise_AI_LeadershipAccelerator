@@ -125,7 +125,7 @@ function buildVisual(which) {
         the work" without saying that would claim a strength we do not have.</div>
       <div class="note"><b>Business outcome is deliberately not measured.</b> C7.6 says not
         to measure what we cannot attribute, and a twelve-week pilot inside a large
-        organisation cannot be isolated from everything else that moved.</div>`}
+        organization cannot be isolated from everything else that moved.</div>`}
 
     <div class="dec">
       <div class="lab">What needs your decision</div>

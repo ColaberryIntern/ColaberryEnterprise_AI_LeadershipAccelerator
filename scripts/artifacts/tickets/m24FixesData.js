@@ -57,14 +57,14 @@ const FIXES = [
     title: 'permission and key states stop being written into value slots',
     file: 'journeyPanel.ts + personProfileService.ts',
     was: 'enrollments counted only the ids the caller could see, so a mentor without grants read '
-      + '0 enrolments for a person who had several. appointments and automation substituted [] '
+      + '0 enrollments for a person who had several. appointments and automation substituted [] '
       + 'when there was no lead id, making "nothing booked" and "we could not look" the same '
       + 'answer.',
-    now: 'The enrolment count is withheld through the EXISTING withheldPanels mechanism rather '
+    now: 'The enrollment count is withheld through the EXISTING withheldPanels mechanism rather '
       + 'than shrunk, and the two lists are null when there was no key. A second withholding '
       + 'mechanism was explicitly not introduced.',
     mutant: 'enrollments counted regardless of permission, and appointments back to []',
-    killed: 'withholds the enrolment count when the id list was narrowed',
+    killed: 'withholds the enrollment count when the id list was narrowed',
     extra: 'This was the determinism bug: the same person ranked differently depending on who '
       + 'asked, which breaks DECISION 1 at the input rather than in the arithmetic.',
   },
@@ -83,7 +83,7 @@ const STILL_EXCLUDED = [
   {
     what: 'Prior outcome detail',
     fields: 'history.everHired, everCertified, totalListedFees',
-    why: 'A NULL column still reads false, and a set of enrolments with all-null fees still sums '
+    why: 'A NULL column still reads false, and a set of enrollments with all-null fees still sums '
       + 'to 0, so "not recorded" and "not hired" remain the same answer.',
   },
   {
