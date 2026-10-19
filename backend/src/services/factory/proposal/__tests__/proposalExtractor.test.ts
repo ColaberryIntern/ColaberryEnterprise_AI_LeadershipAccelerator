@@ -142,6 +142,23 @@ describe('extractDossier (pure)', () => {
     expect(d.keyDates.some((k) => k.date === 'March 15, 2026')).toBe(true);
   });
 
+  it('borrows a meeting date from the NEXT line when the label line has none (the common label-then-date layout)', () => {
+    // The colon after "Conference" splits the label from the date into two sentences; the meeting must still show WHEN.
+    const d = extractDossier([ctx('A Pre-Proposal Conference will be held: December 15, 2026 at 10:00 AM CST')]);
+    const m = d.meetings.find((x) => /pre-proposal/i.test(x.text));
+    expect(m).toBeTruthy();
+    expect(m!.date).toBe('December 15, 2026');
+    expect(m!.time).toBe('10:00 AM');
+    expect(m!.timezone).toBe('CST');
+  });
+
+  it('does not borrow across to ANOTHER meeting line — each meeting keeps its own date or none', () => {
+    const d = extractDossier([ctx('A Pre-Proposal Conference will be held.\nA site visit occurs on 02/01/2026 thereafter.')]);
+    const conf = d.meetings.find((x) => /pre-proposal/i.test(x.text));
+    expect(conf!.date).toBeNull(); // the next line is itself a meeting (site visit), so no borrow
+    expect(d.meetings.find((x) => /site visit/i.test(x.text))!.date).toBe('02/01/2026');
+  });
+
   it('requires a date for a key-date line (no date → not captured)', () => {
     const d = extractDossier([ctx('Proposals are due as specified elsewhere in this document.')]);
     expect(d.keyDates).toHaveLength(0);
