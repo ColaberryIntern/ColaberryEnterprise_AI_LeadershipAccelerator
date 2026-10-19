@@ -123,6 +123,30 @@ export async function hasPublishedBuild(projectId: string): Promise<boolean> {
 }
 
 /**
+ * True when this project is one of the ten provisioned agent-domain projects.
+ *
+ * A SECOND WAY A PROJECT CAN BE PIPELINE-AUTHORED, and the one that was missing.
+ * `hasPublishedBuild` above asks about `build_plans`, which is how the SBP pipeline records
+ * authorship. `agentDomainProvisioner` writes no `build_plans` row, so all ten domain
+ * projects answered false there and were left open to a client import overwriting them.
+ *
+ * Measured in production 19 Oct 2026: 10 of 10 domain projects had zero `build_plans` rows
+ * while ordinary student projects had one or two, so the exposure was total and specific to
+ * them. Mihret Netsereab's project was overwritten twice in one afternoon, the second time
+ * minutes after a repair, which is what made the hole visible.
+ *
+ * Raw SQL for the same reason the sibling gives: this is the legacy write path and importing
+ * another layer's model here would tie it to that layer's schema.
+ */
+export async function isProvisionedDomainProject(projectId: string): Promise<boolean> {
+  const [rows]: any = await sequelize.query(
+    `SELECT 1 FROM agent_domain_projects WHERE student_project_id = $pid LIMIT 1`,
+    { bind: { pid: projectId } },
+  );
+  return Array.isArray(rows) && rows.length > 0;
+}
+
+/**
  * Set a task's status — scoped to the requesting enrollment. Null if not found
  * / not owned. Client-originated, so `complete` is refused with a 409 (see
  * assertClientMaySet): owning a task was never authority to award yourself
@@ -300,10 +324,21 @@ export async function importProject(enrollmentId: string, payload: ImportProject
   // A published plan is authored by the pipeline, not by the browser, so the
   // browser is never the newer truth. Import stays available for the legacy
   // client-only projects it was written for.
-  if (await hasPublishedBuild(project.id)) {
+  // TWO WAYS TO BE PIPELINE-AUTHORED, and both must refuse the browser's copy. The second
+  // was added 19 Oct 2026 after the ten agent-domain projects turned out to answer false to
+  // the first: they carry no `build_plans` row, so this guard never fired for them and a
+  // stale tab rewrote one of them twice in an afternoon, the second time minutes after it
+  // had been repaired by hand.
+  const publishedPlan = await hasPublishedBuild(project.id);
+  const provisionedDomain = publishedPlan ? false : await isProvisionedDomainProject(project.id);
+  if (publishedPlan || provisionedDomain) {
     log('project_import_skipped_published', {
       enrollmentId, projectId: project.id, lists: payload.lists.length,
-      reason: 'project has a published build plan; client state is not authoritative',
+      // Which of the two refused it, so the log says what happened rather than implying
+      // a build plan exists when the reason was the domain registry.
+      reason: publishedPlan
+        ? 'project has a published build plan; client state is not authoritative'
+        : 'project is a provisioned agent-domain project; client state is not authoritative',
     });
     return getOwnedProjectTree(enrollmentId, project.id);
   }
