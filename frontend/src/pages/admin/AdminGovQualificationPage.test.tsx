@@ -61,6 +61,8 @@ beforeEach(() => {
   (factoryApi.matchServicesToOpportunity as jest.Mock).mockResolvedValue({ matches: [], catalogSize: 0 });
   // The decoupled workspace fetches the discovery detail by uuid; default to "not in the feed" so unrelated tests don't throw.
   (factoryApi.getGovOpportunityDetail as jest.Mock).mockResolvedValue({ opportunity: null, source: 'snapshot', snapshotDate: null });
+  // The materialize panel fetches the active-intern roster on mount once a delivery project exists; default to empty.
+  (factoryApi.listActiveInterns as jest.Mock).mockResolvedValue([]);
 });
 const flush = async () => { await act(async () => { await Promise.resolve(); }); await act(async () => { await Promise.resolve(); }); };
 
