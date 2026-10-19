@@ -326,7 +326,6 @@ export const UNLISTED_PATH_SECTIONS: ReadonlyArray<readonly [string, string]> = 
   ['/admin/cert-prep', 'program'],
   ['/admin/case-studies', 'program'],
   ['/admin/projects', 'program'],
-  ['/admin/all-domains', 'program'],
   ['/admin/feed-control-governance', 'program'],
   // Architecture Skills (the CAPE rubric) became a tab on the Curriculum page
   // in the same pass — curriculum configuration, authored by the people who
