@@ -19,8 +19,13 @@ const MAX_REQUIREMENTS = 200;
 const MIN_SENTENCE_LEN = 12;
 /** The file types the extractor can pull text from. Anything else is recorded as 'unsupported', never silently dropped. */
 const SUPPORTED_EXT = new Set(['txt', 'md', 'docx', 'xlsx', 'pdf']);
-/** An obligation keyword marks a sentence as a candidate requirement (what the RFP says you must do/submit). */
-const OBLIGATION = /\b(shall|must|will\s+provide|is\s+required|are\s+required|required\s+to|submit|provide)\b/i;
+/** An obligation keyword marks a sentence as a candidate requirement (what the RFP says you must do/submit).
+ *  Broadened past the strict shall/must set because real solicitations (and Bonfire requirements-response
+ *  templates) phrase obligations many ways — `should`, `responsible for`, `ensure`, `needs to`, and the
+ *  "Describe/Demonstrate your approach to…" prompts of a scored-criteria matrix. A candidate is only a
+ *  SUGGESTION the reviewer confirms, so missing a real requirement (zero candidates) is far costlier than a
+ *  spare one; this errs toward capture. Strict superset of the old pattern — every previous match still matches. */
+const OBLIGATION = /\b(?:shall|must|should|will\s+(?:provide|be|perform|deliver|support|include|furnish|maintain|ensure|respond)|responsible\s+for|is\s+responsible|are\s+responsible|needs?\s+to|ensure|describe|demonstrate|capable\s+of|submit|provide|required)\b/i;
 
 export interface ExtractedBlock {
   id: string;
@@ -277,9 +282,31 @@ export async function extractProposal(zipBuffer: Buffer): Promise<ProposalExtrac
   let fileCount = 0;
 
   let entries: any[] = [];
+  let openedZip = false;
   try {
     entries = new AdmZip(zipBuffer).getEntries().filter((e: any) => !e.isDirectory);
+    openedZip = true;
   } catch {
+    openedZip = false;
+  }
+  // The upload is often NOT a zip-of-files but a LONE document, and both cases otherwise produce a silent zero:
+  //   (1) a lone PDF — adm-zip THROWS (a PDF is not a zip container), so nothing is ever read;
+  //   (2) a lone .docx — adm-zip OPENS it (a .docx IS a zip), but its entries are the OOXML parts
+  //       (word/document.xml, …), none of a SUPPORTED_EXT, so every entry is 'unsupported' → zero.
+  // In both, treat the WHOLE buffer as that single document so its obligations are still captured. A single
+  // synthetic entry reuses the normal per-file read path below (ext decides PDF vs docx).
+  const looksPdf = zipBuffer.length >= 5 && zipBuffer.toString('latin1', 0, 5) === '%PDF-';
+  const looksDocx = openedZip && entries.some((e: any) => String(e.entryName) === 'word/document.xml');
+  if (looksPdf) {
+    entries = [{ entryName: 'solicitation.pdf', isDirectory: false, getData: () => zipBuffer }];
+  } else if (looksDocx) {
+    entries = [{ entryName: 'solicitation.docx', isDirectory: false, getData: () => zipBuffer }];
+  } else if (!openedZip) {
+    // Genuinely couldn't open and it isn't a lone PDF — DON'T fail silently (the old behavior returned an empty
+    // files[] that surfaced as a bare "no requirements detected", indistinguishable from "read it, found none").
+    // Record one legible outcome so the operator knows WHY and what to do.
+    files.push({ name: 'upload', status: 'unreadable', chars: 0, truncated: false,
+      warning: 'The upload did not open as a readable ZIP (it may be password-protected, an encrypted/ZIP64 archive, or not a ZIP at all). Re-export the solicitation ZIP from the source and upload again, or establish the requirements by hand.' });
     return { blocks, requirements, dossier: { contacts: [], naics: [], codes: [], meetings: [], keyDates: [] }, fileCount: 0, files };
   }
   entries.sort((a: any, b: any) => String(a.entryName).localeCompare(String(b.entryName)));

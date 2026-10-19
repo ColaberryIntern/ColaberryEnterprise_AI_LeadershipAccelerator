@@ -58,6 +58,38 @@ describe('extractProposal', () => {
     expect(requirements).toHaveLength(0);
   });
 
+  it('captures the broadened obligation phrasings real RFQs use (should / responsible for / describe / needs to / ensure)', async () => {
+    const zip = makeZip({
+      'RFP.txt': [
+        'The vendor should maintain 99.9% uptime.',                         // should
+        'The contractor is responsible for all data migration.',            // responsible for
+        'Describe your approach to live and on-demand streaming support.',  // describe
+        'The offeror needs to register before the deadline.',               // needs to
+        'The system will ensure captioning on every broadcast.',            // will ensure / ensure
+        'This paragraph is plain background with no obligation in it.',      // none → dropped
+      ].join('\n'),
+    });
+    const { requirements } = await extractProposal(zip);
+    const text = requirements.map((r) => r.extractedText);
+    expect(text.some((s) => s.includes('should maintain'))).toBe(true);
+    expect(text.some((s) => s.includes('responsible for all data migration'))).toBe(true);
+    expect(text.some((s) => s.includes('Describe your approach'))).toBe(true);
+    expect(text.some((s) => s.includes('needs to register'))).toBe(true);
+    expect(text.some((s) => s.includes('ensure captioning'))).toBe(true);
+    expect(text.some((s) => s.includes('plain background'))).toBe(false); // still never fabricates
+  });
+
+  it('a LONE PDF (not a ZIP) is read as a single document, not reported as an unreadable archive', async () => {
+    // adm-zip throws on a PDF (a PDF is not a zip). The %PDF- magic routes it to the single-PDF read path;
+    // this buffer is not a valid PDF body, so pdf-parse yields no usable text — but the point is the ROUTING:
+    // the per-file outcome names the synthetic PDF, NOT the "did not open as a readable ZIP" archive failure.
+    const { files, fileCount } = await extractProposal(Buffer.from('%PDF-1.7\nnot a real pdf body', 'latin1'));
+    expect(fileCount).toBe(0);
+    expect(files).toHaveLength(1);
+    expect(files[0].name).toBe('solicitation.pdf');            // took the lone-PDF path
+    expect(files[0].warning ?? '').not.toMatch(/did not open as a readable ZIP/i);
+  });
+
   it('never throws on a non-zip buffer', async () => {
     const res = await extractProposal(Buffer.from('not a zip at all'));
     expect(res.requirements).toEqual([]);
@@ -248,8 +280,13 @@ describe('extractProposal — per-file outcome (the honesty rail: no silent loss
     expect(files[0]).toMatchObject({ status: 'extracted', truncated: false, warning: null });
   });
 
-  it('a non-zip buffer returns an empty files list, not a throw', async () => {
-    expect((await extractProposal(Buffer.from('not a zip at all'))).files).toEqual([]);
+  it('a non-zip, non-PDF buffer returns ONE legible "unreadable" outcome (not a silent empty list), not a throw', async () => {
+    const { files, fileCount, requirements } = await extractProposal(Buffer.from('not a zip at all'));
+    expect(fileCount).toBe(0);
+    expect(requirements).toEqual([]);
+    expect(files).toHaveLength(1);
+    expect(files[0].status).toBe('unreadable');
+    expect(files[0].warning).toMatch(/did not open as a readable ZIP/i);
   });
 });
 
@@ -307,6 +344,19 @@ describe('extractProposal — structured office docs (the requirements-matrix pa
     // the two cells of the header row did NOT fuse into one token (structure preserved)
     expect(blocks.some((b) => b.text.includes('RequirementResponse'))).toBe(false);
     expect(files.find((f) => f.name === 'compliance.docx')!.status).toBe('extracted');
+  });
+
+  it('a LONE .docx (the upload IS a docx, not a zip-of-files) is read as a single document, not left unsupported', async () => {
+    // A .docx is itself a zip whose entries are the OOXML parts (word/document.xml), none of a supported
+    // extension — so without the lone-document path every entry is "unsupported" and the result is a silent zero.
+    const bareDocx = docxBuffer([
+      ['Requirement', 'Response'],
+      ['The vendor must provide a web-based broadcasting platform.', 'Comply'],
+    ]);
+    const { requirements, fileCount, files } = await extractProposal(bareDocx);
+    expect(fileCount).toBe(1);
+    expect(requirements.some((r) => r.extractedText.includes('web-based broadcasting platform'))).toBe(true);
+    expect(files.some((f) => f.name === 'solicitation.docx' && f.status === 'extracted')).toBe(true);
   });
 });
 
