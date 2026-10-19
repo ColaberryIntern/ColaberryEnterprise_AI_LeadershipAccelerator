@@ -23,12 +23,13 @@
  *      to be gone. If either check fails, PUT the original content back and stop.
  *
  * The rollback is the point. A comment left without its visible artifact is worse than a
- * comment with "authorisation" in it.
+ * comment with "authorisation" in it. (spelling-exempt: quotes the misspelling on purpose)
  *
  * ## What it does NOT fix
  *
  * The attached PDF itself. The bytes on the ticket were rendered before the spelling sweep,
- * so the document still reads "authorisation" even once the comment above it does not.
+ * so the document still reads "authorisation" (spelling-exempt: quoted on purpose) even
+ * once the comment above it does not.
  * Replacing the PDF means replacing the comment, which is the churn this script avoids.
  * Run `attachArtifactToTicket.js` for that, deliberately, when a ticket is next touched.
  *
