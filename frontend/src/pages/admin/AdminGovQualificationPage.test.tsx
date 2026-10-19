@@ -775,7 +775,10 @@ describe('AdminGovQualificationPage — journey', () => {
     }));
     await renderAt(`?canonical=${CANON}&tab=build`);
     await flush();
-    expect(container.textContent ?? '').toContain('No build stories');
+    // The coherence fix: the deterministic cross-check reports no requirement-cited stories, but it must NOT
+    // contradict the AI build plan by claiming there is "no software to build".
+    expect(container.textContent ?? '').toContain('no requirement-cited build stories');
+    expect(container.textContent ?? '').not.toContain('no software to build');
   });
 
   // ── P3-T2: assign a story to a builder; show the assignee; surface preserved orphans ──

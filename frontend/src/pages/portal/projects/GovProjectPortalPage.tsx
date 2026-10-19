@@ -257,7 +257,7 @@ export default function GovProjectPortalPage(): React.ReactElement {
         <span className="small text-secondary">{view.build.buildStoryCount} to build — each with a prompt to run</span>
       </div>
       {view.build.stories.length === 0 ? (
-        <p className="text-secondary small">No build stories — this project’s requirements are all administrative, so there’s nothing to build here.</p>
+        <p className="text-secondary small">No requirement-cited build stories — this project’s deliverables are handled through the proposal, not a per-requirement software build. Any build work is tracked on your project, not here.</p>
       ) : (
         view.build.releases.map((rel) => (
           <div className="mb-3" key={rel.key}>
