@@ -133,7 +133,7 @@ const SO_WHAT = [
   'The duration has no row, so the page does not state it. C5.4 is titled "90-Day '
     + 'Accelerator" and the C2.2 blueprint is a ninety-day one, but the only verified '
     + 'duration in the C0.6 registry is program.duration, public wording "12 weeks", '
-    + 'evidenced by curriculum_blueprints weeks 0 to 12 and by the live programme page. '
+    + 'evidenced by curriculum_blueprints weeks 0 to 12 and by the live program page. '
     + 'Twelve weeks is eighty-four days. CLM-029 is the control: a figure with no source '
     + 'row does not go out. The page renders the registry claim, and a test asserts no '
     + 'other duration appears anywhere on it.',
@@ -142,7 +142,7 @@ const SO_WHAT = [
     + 'executive impact report has no generator, both sitting at day eighty to ninety, '
     + 'which is exactly where a sponsor decides whether to run it again. Both tickets say '
     + 'never describe roadmap as live, so every stage carries a visible label in text '
-    + 'rather than in colour: the platform does this, or our team does this.',
+    + 'rather than in color: the platform does this, or our team does this.',
   'Routing is proven from the route tree, because the ticket asked for that and not for a '
     + 'file. Both tickets warn that a page under pages/ may be unrouted; such a page '
     + 'renders perfectly in a test and is unreachable to a visitor. The test reads App.tsx '
@@ -174,7 +174,7 @@ const PR = 'https://github.com/ColaberryIntern/ColaberryEnterprise_AI_Leadership
 
 function criteria(id) {
   const r = ROUTES[id];
-  const cta = id === 'c53' ? 'how_it_works_enquiry' : 'accelerator_enquiry';
+  const cta = id === 'c53' ? 'how_it_works_enquiry' : 'accelerator_enquiry'; // spelling-exempt
   const claims = id === 'c53'
     ? 'positioning.primary'
     : 'positioning.primary and program.duration';
@@ -196,7 +196,7 @@ function criteria(id) {
     },
     {
       c: 'CTA instrumented',
-      e: "trackEvent('cta_click', { cta_name: '" + cta + "' }) fires on the single enquiry "
+      e: "trackEvent('cta_click', { cta_name: '" + cta + "' }) fires on the single inquiry "
         + 'link. A test asserts exactly one /contact link exists, and a click test asserts '
         + 'the event fires with that name.',
       kind: KIND.TEST,
@@ -226,7 +226,7 @@ const TICKETS = {
     asked: 'Build the how-it-works route as a real, routed, deployed page consistent with '
       + 'the locked positioning, reusing the shared design system rather than inventing a '
       + 'visual language.',
-    delivered: 'A routed page carrying the five-stage model, each stage labelled with who '
+    delivered: 'A routed page carrying the five-stage model, each stage labeled with who '
       + 'actually delivers it today, and the mechanism argument pointed at the published '
       + 'proof records. Routing is proven from App.tsx, not asserted.',
     files: [
@@ -284,7 +284,7 @@ const LIMITS = [
     + 'acceptance criteria are met now; the fourth is met by the PR existing; the fifth is '
     + 'met only after you merge.',
   'No conversion data exists and none can until launch. Both tickets say so themselves '
-    + 'under missing evidence, so "visitors from this segment reach an enquiry" is '
+    + 'under missing evidence, so "visitors from this segment reach an inquiry" is '
     + 'instrumented rather than measured.',
   'Demo Day appears on neither page, deliberately. The C2.2 audit says it has schema but '
     + 'has never been run end to end and must not be described to a customer as proven.',

@@ -13,7 +13,7 @@ const OUT = path.join(__dirname, '..', '..', 'docs', 'artifacts', 'C4.12');
 async function main() {
   const sourced = D.assertSourced();
   D.assertSeventeenComesOff();
-  const judgement = D.assertJudgementIsLabeled();
+  const judgment = D.assertJudgmentIsLabeled();
   const dated = D.assertDatedWhereItMoves();
 
   const jobs = [
@@ -32,7 +32,7 @@ async function main() {
   }
 
   console.log('\n  figures recut, every one with its query : ' + sourced);
-  console.log('  judgement calls labeled as judgement    : ' + judgement);
+  console.log('  judgment calls labeled as judgment    : ' + judgment);
   console.log('  moving figures carrying an as-of date   : ' + dated);
   console.log('  the retired figure                      : comes off, and build-complete is 0');
   console.log('\nwritten to ' + OUT);

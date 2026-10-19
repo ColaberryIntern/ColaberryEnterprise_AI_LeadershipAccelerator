@@ -42,7 +42,7 @@ const SO_WHAT = [
  * ------------------------------------------------------------------ */
 
 const INPUTS = [
-  { id: 'I1', label: 'How many people will go through the programme', unit: 'people',
+  { id: 'I1', label: 'How many people will go through the program', unit: 'people',
     why: 'Drives every per-head figure below.' },
   { id: 'I2', label: 'Fully loaded annual cost of one of those people', unit: 'currency',
     why: 'Salary plus benefits plus overhead, as your finance team books it. We do not supply a '
@@ -56,7 +56,7 @@ const INPUTS = [
       + 'the two is not an estimate we are willing to make for you.' },
   { id: 'I5', label: 'Value to you of one AI project reaching production', unit: 'currency',
     why: 'Cost avoided, revenue enabled, or hours returned. Whichever your finance team already '
-      + 'recognises. This is the number most likely to be argued about internally, so it should '
+      + 'recognizes. This is the number most likely to be argued about internally, so it should '
       + 'be yours from the start.' },
   { id: 'I6', label: 'Over what period you want to evaluate this', unit: 'months',
     why: 'Twelve months is the usual frame. Shorter frames flatter any training spend; longer '
@@ -74,10 +74,10 @@ const OURS = [
     src: 'Production, re-read ' + AS_OF + ', registry CLM-001' },
   { id: 'O3', label: 'Marginal cost to us of verifying one more story', value: 'effectively zero',
     src: 'Verification runs on push and is identical in all three delivery modes, C2.2. This is '
-      + 'why the licence carries an 84% gross margin and why we can say it without hedging.' },
+      + 'why the license carries an 84% gross margin and why we can say it without hedging.' },
   { id: 'O4', label: 'What we charge', value: 'See the C2.3 price list',
     src: 'C2.3, approved. Two families: staffed cohorts priced per engagement, self-paced '
-      + 'licences priced per learner per year, with two floors below which a deal is not worth '
+      + 'licenses priced per learner per year, with two floors below which a deal is not worth '
       + 'running.' },
 ];
 
@@ -86,7 +86,7 @@ const OURS = [
  * ------------------------------------------------------------------ */
 
 const FORMULAS = [
-  { out: 'Cost per verified story', f: 'programme price divided by stories verified',
+  { out: 'Cost per verified story', f: 'program price divided by stories verified',
     note: 'The only efficiency figure that is ours to quote, because both halves are things we '
       + 'can measure.' },
   { out: 'Days of productivity returned', f: '(I3 today minus I3 after) times I1',
@@ -97,9 +97,9 @@ const FORMULAS = [
   { out: 'Value of rework avoided', f: '(I4 today minus I4 after) times projects attempted '
       + 'times I5', note: 'Two of the three inputs are yours and the third is yours after you '
       + 'measure it again.' },
-  { out: 'Payback period', f: 'programme price divided by monthly value returned',
+  { out: 'Payback period', f: 'program price divided by monthly value returned',
     note: 'Expressed in months. If the inputs are blank this is blank, which is the intended '
-      + 'behaviour rather than a defect.' },
+      + 'behavior rather than a defect.' },
 ];
 
 /* ------------------------------------------------------------------ *
@@ -123,7 +123,7 @@ const BENCHMARKS = [
     caution: 'Ours. Useful to you only as an indication of how long our own process takes.' },
 ];
 
-/** The values we will not supply, each with the reason. This is the honest centre of the piece. */
+/** The values we will not supply, each with the reason. This is the honest center of the piece. */
 const REFUSED = [
   { what: 'Typical time-to-productivity improvement from AI training',
     why: 'No primary source we have read measures it, and the figures that circulate come from '
@@ -134,7 +134,7 @@ const REFUSED = [
       + 'difference between the two is the entire claim.' },
   { what: 'A benchmark salary or loaded cost',
     why: 'Yours is the only one your finance team will accept. A national average invites an '
-      + 'argument about the average instead of a decision about the programme.' },
+      + 'argument about the average instead of a decision about the program.' },
   { what: 'An expected return percentage',
     why: 'This is the one most often asked for and the one we are least willing to give. Any '
       + 'percentage we supplied would be built on the three rows above, none of which we can '

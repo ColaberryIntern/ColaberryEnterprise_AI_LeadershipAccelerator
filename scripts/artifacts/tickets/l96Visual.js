@@ -60,7 +60,7 @@ function clipTable() {
     <td><code>${esc(c.where)}</code></td>
     <td>${esc(c.cap)}</td>
     <td>${esc(c.effect)}</td>
-    <td class="${c.labelled ? 'yes' : 'no'}">${c.labelled ? 'labelled' : 'SILENT'}</td>
+    <td class="${c.labeled ? 'yes' : 'no'}">${c.labeled ? 'labeled' : 'SILENT'}</td>
   </tr>`).join('');
   return `<table>
     <tr><th style="width:34%">Where it clips</th><th style="width:17%">Cap</th>
@@ -97,13 +97,13 @@ function build() {
     <h2>Three places it clips, ${D.HEADLINE.clipsUnlabelled} of ${D.HEADLINE.clipsTotal} without saying so</h2>
     ${clipTable()}
     <div class="look">
-      <strong>Only the third is labelled, and it is the one that almost never fires.</strong> The
+      <strong>Only the third is labeled, and it is the one that almost never fires.</strong> The
       first two shrink the body long before it could reach 800,000 characters, so in practice the
       <code>[truncated at N chars]</code> note never appears.
     </div>
     <h2 style="margin-top:9px">Pinned, not just written down</h2>
     <div class="look">
-      Tests named <strong>RECORDED GAP</strong> assert this behaviour, including that no label
+      Tests named <strong>RECORDED GAP</strong> assert this behavior, including that no label
       appears. <strong>When the fix lands they fail</strong>, which is the signal that the gap
       closed rather than drifted. The SAFE-002 delimiters and the source-before-context ordering
       are asserted alongside, because any fix that chunks or refuses must not spring that trap.

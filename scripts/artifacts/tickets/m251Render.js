@@ -88,7 +88,7 @@ function buildVisual() {
       <h2>Who carries it AFTER</h2>
       <figure>${sharesChart(430, 'after')}
         <figcaption>Carried by <code>recency</code>: present for everyone, 162 distinct values.
-          The grey bars are factors that cannot rank anybody here.</figcaption></figure>
+          The gray bars are factors that cannot rank anybody here.</figcaption></figure>
     </div>
   </div>
 
@@ -131,7 +131,7 @@ function buildDocument() {
   <h2>2. Before and after, same population, same method</h2>
   ${sharesTable()}
   <figure>${sharesChart(660, 'after')}
-    <figcaption>Share of the ordering after the change. Grey bars carry none of it.
+    <figcaption>Share of the ordering after the change. Gray bars carry none of it.
       Dead weight moved from ${D.DEAD.beforePoints}/${D.DEAD.beforeTotal} points to
       ${D.DEAD.afterPoints}/${D.DEAD.afterTotal}; the remaining dead points are population facts,
       not weight errors.</figcaption></figure>

@@ -27,7 +27,7 @@ const TOKENS_CSS = path.join(ROOT, 'frontend', 'src', 'styles', 'tokens.css');
 
 const STATUS = {
   LIVE: { k: 'LIVE', color: '#2f7d32', note: 'populatable from production today' },
-  PROXY: { k: 'PROXY ONLY', color: '#b26a00', note: 'a near neighbour exists, not the metric asked for' },
+  PROXY: { k: 'PROXY ONLY', color: '#b26a00', note: 'a near neighbor exists, not the metric asked for' },
   NONE: { k: 'NOT YET MEASURABLE', color: '#b3261e', note: 'no source exists' },
 };
 
@@ -37,7 +37,7 @@ const STATUS = {
 
 const TILES = [
   {
-    key: 'annualised_revenue', label: 'Annualised revenue', status: STATUS.LIVE,
+    key: 'annualized_revenue', label: 'Annualized revenue', status: STATUS.LIVE,
     value: '$143,136', sub: '54 active subscriptions at $11,928 per month',
     source: 'subscriptions WHERE status = \'active\', sum(amount_cents) x 12.',
     caveat: 'The revenue rule is app-originated checkout only, and this table has NO origin '
@@ -64,9 +64,9 @@ const TILES = [
   {
     key: 'active_pilots', label: 'Active pilots', status: STATUS.PROXY, value: null,
     sub: null,
-    source: 'delivery_engagements WHERE status = \'active\' is the nearest neighbour.',
+    source: 'delivery_engagements WHERE status = \'active\' is the nearest neighbor.',
     caveat: 'Measured today it holds 2 rows, both engagement_type = \'commercial_client\', '
-      + 'not \'pilot\'. Labelling those two as pilots would be inventing a category. Shown '
+      + 'not \'pilot\'. Labeling those two as pilots would be inventing a category. Shown '
       + 'as a proxy with its real name, or left blank.',
   },
   {
@@ -129,7 +129,7 @@ const PREREQS = [
   ['An interaction record for meetings and demos', 'One row per externally-facing meeting or '
     + 'demo with the account and the person. C9.5 and C9.2 are measured in these and there '
     + 'is nowhere to write one.'],
-  ['An origin column on subscriptions', 'Without it the one tile that works cannot honour '
+  ['An origin column on subscriptions', 'Without it the one tile that works cannot honor '
     + 'the app-originated-only revenue rule, and the number silently includes payments that '
     + 'rule excludes.'],
 ];
@@ -153,8 +153,8 @@ function counts() {
 
 function headline() {
   const c = counts();
-  return `Of the ${c.total} metrics this command centre is required to show, ${c.live} can be `
-    + `computed from production today, ${c.proxy} has only a near neighbour, and ${c.none} have `
+  return `Of the ${c.total} metrics this command center is required to show, ${c.live} can be `
+    + `computed from production today, ${c.proxy} has only a near neighbor, and ${c.none} have `
     + 'no source at all. The design is therefore mostly a specification for the data we have '
     + 'not captured yet, and the honest dashboard says so on its face.';
 }
@@ -170,7 +170,7 @@ const SO_WHAT = [
     + 'front-end work: it is four small schema additions, listed in this document, that '
     + 'between them unlock seven of the eight. A commercial opportunity record alone unlocks '
     + 'three.',
-  'THE ONE WORKING TILE HAS AN ATTRIBUTION HOLE WORTH KNOWING ABOUT. Annualised revenue '
+  'THE ONE WORKING TILE HAS AN ATTRIBUTION HOLE WORTH KNOWING ABOUT. Annualized revenue '
     + 'computes to $143,136 from 54 active subscriptions. The standing rule is that revenue '
     + 'counts app-originated checkout only, and the subscriptions table has no origin '
     + 'column, so that rule cannot be applied in SQL. The number is real and the filter the '
@@ -200,7 +200,7 @@ const DECISION = 'The metric set, and the order. My recommendation is to add the
  * ------------------------------------------------------------------ */
 
 /** The ten metrics the ticket names are all present, none quietly dropped. */
-const REQUIRED = ['annualised revenue', 'qualified pipeline', 'paid pilots', 'active pilots',
+const REQUIRED = ['annualized revenue', 'qualified pipeline', 'paid pilots', 'active pilots',
   'strategic partner conversations', 'meetings', 'demos', 'proposal value', 'win rate',
   'deployment outcomes'];
 

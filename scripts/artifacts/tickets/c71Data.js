@@ -50,7 +50,7 @@ const GATES = [
     why: 'The differentiator is commit-level proof of what each person built, and since '
       + '17 October 2026 a stranger can check it on a public page. A customer who will not '
       + 'let us publish produces revenue and no reference. The first five exist to produce '
-      + 'references, so this is the criterion the whole programme rests on.',
+      + 'references, so this is the criterion the whole program rests on.',
   },
   {
     n: 2, name: 'A named executive sponsor who will meet us monthly',
@@ -154,7 +154,7 @@ const EXAMPLES = [
       + 'named as the weak criterion, owned and dated.',
   },
   {
-    name: 'An inbound enquiry wanting "an AI strategy workshop"',
+    name: 'An inbound inquiry wanting "an AI strategy workshop"',
     gates: [false, false, false],
     scores: [0, 0, 1, 1, 1, 0],
     note: 'Fails all three gates and scores badly. Decline in one sentence.',
@@ -176,7 +176,7 @@ function verdictOf(example) {
 const LIMITS = [
   'Finding the customers is out of scope and lives in groups 06 and 09. This governs which '
     + 'opportunities we accept, not where they come from.',
-  'The weights are a judgement and are meant to be argued with. The gates are not, and '
+  'The weights are a judgment and are meant to be argued with. The gates are not, and '
     + 'changing one of those is a decision rather than a tuning exercise.',
   'The middle band depends on somebody actually recording which criterion was weak. If that '
     + 'is not recorded, the band becomes a way of saying yes to everything with extra steps.',

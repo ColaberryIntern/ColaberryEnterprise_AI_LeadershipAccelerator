@@ -32,7 +32,7 @@ const bchip = (b) => `<span class="bill ${b ? '' : 'free'}">${b ? 'BILLABLE' : '
  *
  * Taking only the first sentence left three cells reading "CONTRACT DEFECT." and
  * "MISNAMED." - a label where the reader needed the finding. Several notes open with
- * exactly that kind of short capitalised lead, so the cut keeps going until it has said
+ * exactly that kind of short capitalized lead, so the cut keeps going until it has said
  * something. The trailing-period strip is because splitting on '. ' leaves the final
  * sentence's own period in place, which produced ".." on the first build.
  */
@@ -50,7 +50,7 @@ function verdictTable(compact) {
     <tr><th style="width:${compact ? '26%' : '21%'}">Function</th>
       <th style="width:9%">Cost</th>
       <th style="width:${compact ? '23%' : '17%'}">Verdict</th>
-      <th>${compact ? 'Why' : 'Failure behaviour'}</th></tr>
+      <th>${compact ? 'Why' : 'Failure behavior'}</th></tr>
     ${D.FUNCTIONS.map((f) => `<tr>
       <td><span class="fn">${esc(f.name)}</span></td>
       <td>${bchip(f.billable)}</td>
@@ -72,7 +72,7 @@ const ONE_PAGE_PROD = ['APOLLO_ENABLED', 'Spend today',
 function exhaustionTable(only) {
   const rows = only ? D.EXHAUSTION.filter((r) => only.includes(r[0])) : D.EXHAUSTION;
   return `<table>
-    <tr><th style="width:24%">Mechanism</th><th>Behaviour, read from the code</th></tr>
+    <tr><th style="width:24%">Mechanism</th><th>Behavior, read from the code</th></tr>
     ${rows.map((r) => `<tr><td><b>${esc(r[0])}</b></td>
       <td>${esc(r[1])}</td></tr>`).join('')}
   </table>`;
@@ -162,7 +162,7 @@ function buildDocument() {
     <div class="asked">
       <b>What the ticket asked for.</b> Establish exactly what the existing Apollo
       integration can do before anyone builds on it: every exported function documented with
-      inputs, outputs, failure modes and quota consumption, quota-exhaustion behaviour
+      inputs, outputs, failure modes and quota consumption, quota-exhaustion behavior
       established by reading code rather than assumed, and a clear reuse verdict per
       function. Build nothing.
       <br><br>
@@ -199,7 +199,7 @@ function buildDocument() {
     <div class="note warn"><b>The consequence worth carrying into C6.4.</b> A refused call
     and a genuine miss return the same thing. If a mapping run crosses a ceiling halfway,
     the remaining accounts come back empty and look like accounts with no reachable contact.
-    The only defence is to read the counter before and after the run and report both.</div>
+    The only defense is to read the counter before and after the run and report both.</div>
 
     <h2>Production configuration and spend, ${esc(D.PROD.asOf)}</h2>
     ${prodTable()}

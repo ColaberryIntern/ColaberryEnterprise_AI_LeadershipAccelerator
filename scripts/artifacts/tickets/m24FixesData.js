@@ -31,7 +31,7 @@ const FIXES = [
       + 'visitors gives null; one visitor and no sessions still gives a real 0.',
     mutant: 'the visitor-count guard removed',
     killed: 'is NULL for a person with no visitor record at all',
-    extra: 'The group had no behavioural test at all, in a registry of 22. It has one now.',
+    extra: 'The group had no behavioral test at all, in a registry of 22. It has one now.',
   },
   {
     code: 'M24.2',
@@ -41,7 +41,7 @@ const FIXES = [
     file: 'journeyPanel.ts',
     was: 'The module docblock said "a count we cannot compute is null rather than 0". Four lines '
       + 'below, six counts were coerced with ?? 0, and the query was skipped entirely when there '
-      + 'were no lead ids. Only daysKnown and intentScore honoured the rule.',
+      + 'were no lead ids. Only daysKnown and intentScore honored the rule.',
     now: 'Six fields are number | null. Null means the query was never issued; 0 means it ran '
       + 'and counted nothing. The frontend renders the absent case as the dash it already used '
       + 'for daysKnown.',
@@ -57,14 +57,14 @@ const FIXES = [
     title: 'permission and key states stop being written into value slots',
     file: 'journeyPanel.ts + personProfileService.ts',
     was: 'enrollments counted only the ids the caller could see, so a mentor without grants read '
-      + '0 enrolments for a person who had several. appointments and automation substituted [] '
+      + '0 enrollments for a person who had several. appointments and automation substituted [] '
       + 'when there was no lead id, making "nothing booked" and "we could not look" the same '
       + 'answer.',
-    now: 'The enrolment count is withheld through the EXISTING withheldPanels mechanism rather '
+    now: 'The enrollment count is withheld through the EXISTING withheldPanels mechanism rather '
       + 'than shrunk, and the two lists are null when there was no key. A second withholding '
       + 'mechanism was explicitly not introduced.',
     mutant: 'enrollments counted regardless of permission, and appointments back to []',
-    killed: 'withholds the enrolment count when the id list was narrowed',
+    killed: 'withholds the enrollment count when the id list was narrowed',
     extra: 'This was the determinism bug: the same person ranked differently depending on who '
       + 'asked, which breaks DECISION 1 at the input rather than in the arithmetic.',
   },
@@ -83,7 +83,7 @@ const STILL_EXCLUDED = [
   {
     what: 'Prior outcome detail',
     fields: 'history.everHired, everCertified, totalListedFees',
-    why: 'A NULL column still reads false, and a set of enrolments with all-null fees still sums '
+    why: 'A NULL column still reads false, and a set of enrollments with all-null fees still sums '
       + 'to 0, so "not recorded" and "not hired" remain the same answer.',
   },
   {

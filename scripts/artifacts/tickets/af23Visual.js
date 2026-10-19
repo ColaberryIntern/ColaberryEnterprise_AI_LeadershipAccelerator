@@ -47,7 +47,7 @@ const CSS = `${baseCss()}
   .chain .mermaid svg { max-height: 86px; width: 100%; }
 `;
 
-/** Five tiles, one per verdict, each coloured by the verdict it counts. */
+/** Five tiles, one per verdict, each colored by the verdict it counts. */
 function tiles() {
   const t = [
     { n: D.COUNTS.scopable, k: 'Scopable today', c: D.V.SCOPABLE.color },
@@ -87,7 +87,7 @@ function internTable() {
  *
  * Full width at the foot of the page rather than inside a column: the first draft put it in the
  * right-hand column, where mermaid scaled the text down to roughly 4pt and the diagram became a
- * grey smudge that LOOKED like information. A diagram nobody can read is worse than no diagram,
+ * gray smudge that LOOKED like information. A diagram nobody can read is worse than no diagram,
  * because the page still appears to have covered the point.
  */
 function chainDiagram() {

@@ -129,7 +129,7 @@ const SELECTED = [
       + 'until it has been gated and shadow-tested. Public.',
     use: 'For any buyer whose first question is about safety or control.' },
   { slug: 'the-request-was-messy-the-price-couldnt-be', why: 'The clearest non-education '
-      + 'example, with a deterministic outcome a sceptic can follow. Public, though the '
+      + 'example, with a deterministic outcome a skeptic can follow. Public, though the '
       + 'organization cannot be named.',
     use: 'When the buyer suspects everything we do is education-shaped.' },
 ];
@@ -148,7 +148,7 @@ const MATRIX = [
       + 'next with them.' },
   { icp: 'Workforce organizations', rank: 'SECONDARY',
     lead: 'ai-systems-architect-training-system', second: 'every-lead-has-a-history',
-    gap: 'Same gap. The workforce-development tag belongs to our own programme.' },
+    gap: 'Same gap. The workforce-development tag belongs to our own program.' },
   { icp: 'Mid-market and enterprise', rank: 'Opportunistic',
     lead: 'testing-ai-actions-before-they-reach-customers',
     second: 'the-request-was-messy-the-price-couldnt-be',
@@ -230,7 +230,7 @@ function assertNoCustomerStoryClaim(html) {
   const text = String(html).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
   // Every occurrence of the phrase must sit near a negation. Matching a fixed list of denial
   // phrasings was too brittle: the first version fired on five legitimate denials because it
-  // only recognised two of the ways we had written them. Checking the WINDOW around each
+  // only recognized two of the ways we had written them. Checking the WINDOW around each
   // occurrence for a negation is both stricter and more robust, because a new way of phrasing
   // a denial still passes while an actual claim still fails.
   const NEG = /\b(no|not|none|never|nothing|without|lack|zero|0 of|do not|does not|is the thing we are building)\b/i;

@@ -24,6 +24,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { findBritishSpelling, americanForm } = require('../britishSpellings');
 
 const AS_OF = '19 October 2026';
 const ROOT = path.join(__dirname, '..', '..', '..');
@@ -116,8 +117,8 @@ function criteria() {
     },
     {
       c: 'CTA instrumented',
-      e: "trackEvent('cta_click', { cta_name: 'segment_enquiry', segment }) fires on the "
-        + `single enquiry link, which carries ?segment=${SLUG}. A test asserts exactly one `
+      e: "trackEvent('cta_click', { cta_name: 'segment_enquiry', segment }) fires on the " // spelling-exempt
+        + `single inquiry link, which carries ?segment=${SLUG}. A test asserts exactly one `
         + '/contact link per page and that it carries its own segment.',
       kind: KIND.TEST,
     },
@@ -194,13 +195,13 @@ const LIMITS = [
   'No price, same as the other segment pages. C2.3’s numbers still have no registry '
     + 'row, and a partner page is a particularly bad place to be vague about money, which '
     + 'is an argument for the row rather than for guessing.',
-  'There is no partner programme behind this page yet: no tiering, no margin, no referral '
+  'There is no partner program behind this page yet: no tiering, no margin, no referral '
     + 'mechanics, no agreement. It is a page that starts a conversation, and anyone reading '
-    + 'it as a published programme would be reading more into it than exists.',
+    + 'it as a published program would be reading more into it than exists.',
 ];
 
 const DECISION = 'Copy approval, and whether a partner page should exist before a partner '
-  + 'programme does. The page is honest about what it offers and it offers a conversation '
+  + 'program does. The page is honest about what it offers and it offers a conversation '
   + 'rather than terms, which I think is the right order; the alternative is to hold it '
   + 'until C3.x settles what a partnership actually is.';
 
@@ -293,8 +294,9 @@ function assertCopyIsClaimFree() {
   if (/\$\s?\d/.test(prose)) throw new Error('the copy carries a price');
   if (/\d+\s?%/.test(prose)) throw new Error('the copy carries a percentage');
   if (/\bfree\b/i.test(prose)) throw new Error('the copy uses the word free');
-  if (/programme|licence|organisation|\bcentre\b|labour|artefact|enrolment/i.test(prose)) {
-    throw new Error('the copy uses British spelling');
+    const brit = findBritishSpelling(prose);
+  if (brit) {
+    throw new Error(`the copy uses British spelling "${brit}". The rule is American everywhere; use "${americanForm(brit)}".`);
   }
   return true;
 }

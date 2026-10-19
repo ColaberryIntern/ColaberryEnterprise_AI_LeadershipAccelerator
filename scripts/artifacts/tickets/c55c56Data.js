@@ -19,6 +19,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { findBritishSpelling, americanForm } = require('../britishSpellings');
 
 const AS_OF = '18 October 2026';
 const ROOT = path.join(__dirname, '..', '..', '..');
@@ -139,8 +140,8 @@ function criteria(id) {
     },
     {
       c: 'CTA instrumented',
-      e: "trackEvent('cta_click', { cta_name: 'segment_enquiry', segment }) fires on the "
-        + `single enquiry link, and the href carries ?segment=${t.slug} for attribution. A `
+      e: "trackEvent('cta_click', { cta_name: 'segment_enquiry', segment }) fires on the " // spelling-exempt
+        + `single inquiry link, and the href carries ?segment=${t.slug} for attribution. A `
         + 'test asserts exactly one /contact link per page and that it carries its own '
         + 'segment rather than another one’s.',
       kind: KIND.TEST,
@@ -201,7 +202,7 @@ const SO_WHAT = [
     + 'eventually asked what changed, a board answering to a funder. A test asserts the '
     + 'ledes, proof bands, calls to action and headings are all distinct.',
   'TWO EXISTING TESTS CHANGED, AND THE DISTINCTION MATTERS. Both pinned the set of shipped '
-    + 'segments, so shipping two more is a real behaviour change rather than a test that '
+    + 'segments, so shipping two more is a real behavior change rather than a test that '
     + 'needed fixing. One now asserts three slugs in information-architecture order; the '
     + 'other moved its unready example from enterprise to government, which you approved as '
     + 'its own section and which still needs a ticket raised in group 05.',
@@ -279,8 +280,9 @@ function assertCopyIsClaimFree() {
     if (/\$\s?\d/.test(prose)) throw new Error(`${t.id}: the copy carries a price`);
     if (/\d+\s?%/.test(prose)) throw new Error(`${t.id}: the copy carries a percentage`);
     if (/\bfree\b/i.test(prose)) throw new Error(`${t.id}: the copy uses the word free`);
-    if (/programme|licence|organisation/i.test(prose)) {
-      throw new Error(`${t.id}: the copy uses British spelling`);
+        const brit = findBritishSpelling(prose);
+    if (brit) {
+      throw new Error(`${t.id}: the copy uses British spelling "${brit}". The rule is American everywhere; use "${americanForm(brit)}".`);
     }
   }
   return 2;

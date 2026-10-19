@@ -99,7 +99,7 @@ function buildVisual() {
       <figure>
         ${ENGAGEMENT_DIAGRAM('TD')}
         <figcaption><code>engagement</code>, the one group whose registry anchor is a bare table
-          name and the only one with no behavioural test of its contents.</figcaption>
+          name and the only one with no behavioral test of its contents.</figcaption>
       </figure>
       <div class="note warn">
         <strong>An absent input must never score as zero.</strong> That is this ticket's own

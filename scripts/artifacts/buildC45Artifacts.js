@@ -35,7 +35,7 @@ async function main() {
   console.log('  running time   : ' + mm + ' MEASURED from ' + timing.words
     + ' spoken words at ' + D.WPM + ' wpm (band 2:30-3:15)');
   console.log('  frames         : ' + labels.real + ' real, ' + labels.sample
-    + ' sample, all labelled');
+    + ' sample, all labeled');
   console.log('  failure path   : scripted word for word');
   console.log('  pilot          : NOT committed, asserted');
   console.log('');

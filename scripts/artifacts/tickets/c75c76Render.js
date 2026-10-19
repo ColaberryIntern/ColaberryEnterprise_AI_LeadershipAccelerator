@@ -125,7 +125,7 @@ function buildVisual(which) {
         the work" without saying that would claim a strength we do not have.</div>
       <div class="note"><b>Business outcome is deliberately not measured.</b> C7.6 says not
         to measure what we cannot attribute, and a twelve-week pilot inside a large
-        organisation cannot be isolated from everything else that moved.</div>`}
+        organization cannot be isolated from everything else that moved.</div>`}
 
     <div class="dec">
       <div class="lab">What needs your decision</div>
@@ -155,7 +155,7 @@ function buildDocument(which) {
     ? '<b>What the ticket asked for.</b> The day 0 to day 90 runbook so delivery does not '
       + 'depend on memory. Every phase with an owner and a gate, the failure paths written '
       + 'and not just the happy path, and unproven steps flagged as unproven. The named '
-      + 'risk is writing an idealised plan.'
+      + 'risk is writing an idealized plan.'
     : '<b>What the ticket asked for.</b> Define what gets measured, how, and against what '
       + 'baseline, before the pilot starts. Do not measure what cannot be attributed, and '
       + 'where attribution is weak say so in the spec rather than at publication.';
@@ -203,7 +203,7 @@ function buildDocument(which) {
       </div>`).join('')}
 
       <h2>The four failure paths the ticket names</h2>
-      <p>An idealised plan is the named risk on this ticket, so these are written at the
+      <p>An idealized plan is the named risk on this ticket, so these are written at the
       same level of detail as the happy path. Each threshold is a proposal and all four are
       yours to set.</p>
       ${failureTable()}`

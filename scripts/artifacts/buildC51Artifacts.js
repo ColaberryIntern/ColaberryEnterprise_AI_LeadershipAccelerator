@@ -22,7 +22,7 @@ async function main() {
   const routes = D.assertRoutesFree();
   const traps = D.assertTrapsAreReallyTaken();
   D.assertHomepageTellsOneStory();
-  const segments = D.assertOnePathToEnquiry();
+  const segments = D.assertOnePathToInquiry();
 
   const jobs = [
     { file: 'C51_1_ONE_PAGE.pdf', html: R.buildVisual(), landscape: true, maxPages: 1,
@@ -50,7 +50,7 @@ async function main() {
     + ' proposed, all free, against ' + routes.declared + ' declared');
   console.log('  taken routes confirmed still taken   : ' + traps);
   console.log('  homepage names no segment            : assertion holds');
-  console.log('  segments with exactly one enquiry    : ' + segments);
+  console.log('  segments with exactly one inquiry    : ' + segments);
   console.log('\nwritten to ' + OUT);
 }
 

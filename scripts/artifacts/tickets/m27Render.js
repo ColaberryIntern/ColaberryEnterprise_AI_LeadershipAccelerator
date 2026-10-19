@@ -82,7 +82,7 @@ function buildVisual() {
           because the evidence date travels on it.</figcaption></figure>
     </div>
     <div>
-      <h2>A stale score is labelled, not hidden</h2>
+      <h2>A stale score is labeled, not hidden</h2>
       ${statesTable()}
       <div class="note warn">
         <strong>Hiding it is the failure mode this avoids.</strong> No number and no reason reads

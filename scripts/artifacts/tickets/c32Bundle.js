@@ -73,7 +73,7 @@ function leaveBehind() {
   the General Motors Prize for Advanced Technologies at the same event. One of seven finalists in
   the JFF Labs $1 Billion Wage Gain Challenge, 2019. A finalist in XPRIZE Rapid Reskilling as a
   partner in Team VITAL, with Gleechi AB and Banyan Tree Global.</p>
-  <p><strong>What we are not.</strong> Colaberry is not part of the Anthropic or OpenAI programmes
+  <p><strong>What we are not.</strong> Colaberry is not part of the Anthropic or OpenAI programs
   and issues neither credential. We prepare people for Anthropic's architect certification and
   verify what they build; we do not award it. Our first cohort has not finished. Our agent fleet
   is instrumented, audited and read-only: it watches and records, it does not act.</p>

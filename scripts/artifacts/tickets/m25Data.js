@@ -55,7 +55,7 @@ const HISTOGRAM = [
 
 /** Per factor: how often there was evidence at all, and what it contributed when there was. */
 const FACTORS = [
-  { key: 'enrolmentStarted', max: 40, presentPct: 100, meanWhenPresent: 40.00, verdict: 'CONSTANT' },
+  { key: 'enrolmentStarted', max: 40, presentPct: 100, meanWhenPresent: 40.00, verdict: 'CONSTANT' }, // spelling-exempt
   { key: 'appointmentBooked', max: 35, presentPct: 100, meanWhenPresent: 0.00, verdict: 'ALWAYS ZERO' },
   { key: 'humanReply', max: 30, presentPct: 100, meanWhenPresent: 0.00, verdict: 'ALWAYS ZERO' },
   { key: 'intent', max: 20, presentPct: 13, meanWhenPresent: 11.81, verdict: 'discriminates, rarely present' },
@@ -72,7 +72,7 @@ const FACTORS = [
 const DEAD_WEIGHT = {
   points: 40 + 35 + 30,
   of: RUN.maxPossible,
-  factors: ['enrolmentStarted', 'appointmentBooked', 'humanReply'],
+  factors: ['enrolmentStarted', 'appointmentBooked', 'humanReply'], // spelling-exempt
   iqrPoints: Math.round((RUN.p75 - RUN.p25) * 100) / 100,
 };
 
@@ -101,7 +101,7 @@ const NOT_ESTABLISHED = [
   'That the weights are right. They are provisional by DECISION 2 and this run is the first '
     + 'evidence that they are not yet useful.',
   'That a score over this population is the right question at all. Everyone in it has already '
-    + 'enrolled in the free programme, which is why the enrolment factor is constant.',
+    + 'enrolled in the free program, which is why the enrollment factor is constant.',
   'That recency would fix it. It is the obvious candidate and it is still EXCLUDED by the M24 '
     + 'contract, because lastActivity varies by caller.',
   'Nothing was persisted or surfaced. No score is stored, no queue is ordered, nothing was sent.',

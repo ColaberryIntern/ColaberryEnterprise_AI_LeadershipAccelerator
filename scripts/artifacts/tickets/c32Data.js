@@ -67,7 +67,7 @@ const REGISTRY = {
       + 'Academy, October 2026', src: 'anthropic.com/news/claude-frontier-academy', dated: false },
   'CLM-023': { deck: true, text: 'Anthropic is aiming at 10,000 Frontier Deployed Engineers by the '
       + 'end of 2027', src: 'anthropic.com/news/claude-frontier-academy', dated: false },
-  'CLM-025': { deck: true, text: 'Colaberry is not part of the Anthropic or OpenAI programmes and '
+  'CLM-025': { deck: true, text: 'Colaberry is not part of the Anthropic or OpenAI programs and '
       + 'issues neither credential', src: 'Required wording', dated: false },
   'CLM-026': { deck: true, text: 'We prepare people for Anthropic\'s architect certification '
       + 'and verify what they build. We do not award the credential',
@@ -182,7 +182,7 @@ const DECK = [
       + 'specialize in getting customers live can qualify early. That is the lane we are in.',
       'We prepare people for Anthropic\'s architect certification and verify what they build. '
       + 'We do not award the credential, and we are not part of the Anthropic or OpenAI '
-      + 'programmes.'],
+      + 'programs.'],
     claims: ['CLM-025', 'CLM-026'] },
 
   { n: 8, title: 'What we are not claiming', kicker: 'The honest slide',
@@ -370,9 +370,9 @@ function assertOneAsk() {
 function assertNoOpenAI(html) {
   const text = String(html).replace(/<[^>]+>/g, ' ');
   const hits = text.match(/\bopen\s?ai\b|\bchatgpt\b|\bgpt-?[0-9]/gi) || [];
-  // CLM-025 is required wording and names both programmes; that single sentence is the one
+  // CLM-025 is required wording and names both programs; that single sentence is the one
   // permitted mention, so allow exactly the occurrences inside it.
-  const allowed = (text.match(/not part of the Anthropic or OpenAI programmes/gi) || []).length;
+  const allowed = (text.match(/not part of the Anthropic or OpenAI programs/gi) || []).length;
   if (hits.length > allowed) {
     throw new Error('OpenAI content found in Anthropic material: ' + hits.length + ' mention(s), '
       + allowed + ' allowed by CLM-025. ' + JSON.stringify([...new Set(hits)]));

@@ -49,7 +49,7 @@ function homeWireframe() {
       appear.
       <div class="doors">${D.PAGES.filter((p) => p.segment)
     .map((p) => `<span>${esc(p.name)}</span>`).join('')}</div></div>
-    <div class="band"><b>Band 5 &middot; one enquiry</b>/contact. The same surface every
+    <div class="band"><b>Band 5 &middot; one inquiry</b>/contact. The same surface every
       segment page sends to.</div>
   </div>`;
 }
@@ -136,8 +136,8 @@ function buildVisual() {
           ${D.PAGES.map((p) => `<tr><td><code>${esc(p.route)}</code></td><td>${esc(p.name)}</td><td>${esc(p.ticket)}</td></tr>`).join('')}
         </table>
 
-        <div class="note warn" style="padding:6px 10px"><b>${esc(D.ENQUIRY_GAP.what)}</b>
-          ${esc(D.ENQUIRY_GAP.evidence)}</div>
+        <div class="note warn" style="padding:6px 10px"><b>${esc(D.INQUIRY_GAP.what)}</b>
+          ${esc(D.INQUIRY_GAP.evidence)}</div>
       </div>
     </div>
   </div>`;
@@ -166,7 +166,7 @@ function buildDocument() {
       <b>What the ticket asked for.</b> Design the site structure before any page is written,
       so the homepage does not become an everything-platform. A site map plus annotated
       wireframes, with every proposed route verified as free, a homepage that tells one
-      story, and one path to enquiry per segment.
+      story, and one path to inquiry per segment.
       <br><br>
       <b>What was delivered.</b> All of that, with the route check implemented as a build
       assertion that re-reads the codebase rather than as a table that goes stale, and one
@@ -215,10 +215,10 @@ function buildDocument() {
     assertion re-reads the route tree and fails if any proposed route stops being free.</div>
 
     <h2>6. The criterion the current site cannot meet</h2>
-    <div class="note warn"><b>${esc(D.ENQUIRY_GAP.what)}</b><br><br>
-      ${esc(D.ENQUIRY_GAP.evidence)}</div>
-    <p><b>The fix.</b> ${esc(D.ENQUIRY_GAP.fix)}</p>
-    <p><b>A constraint to budget for.</b> ${esc(D.ENQUIRY_GAP.constraint)}</p>
+    <div class="note warn"><b>${esc(D.INQUIRY_GAP.what)}</b><br><br>
+      ${esc(D.INQUIRY_GAP.evidence)}</div>
+    <p><b>The fix.</b> ${esc(D.INQUIRY_GAP.fix)}</p>
+    <p><b>A constraint to budget for.</b> ${esc(D.INQUIRY_GAP.constraint)}</p>
 
     <h2>7. What this needs you to decide</h2>
     ${D.DECISIONS.map((d) => `<div class="pg">

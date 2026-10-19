@@ -104,7 +104,7 @@ function buildVisual() {
           zero for everyone.</figcaption></figure>
       <div class="note">
         <strong>${esc(D.DEAD_WEIGHT.factors.join(', '))}</strong> hold
-        ${D.DEAD_WEIGHT.points} of ${D.DEAD_WEIGHT.of} points. Every Explorer has an enrolment,
+        ${D.DEAD_WEIGHT.points} of ${D.DEAD_WEIGHT.of} points. Every Explorer has an enrollment,
         so that factor is a constant; nobody has booked a call or replied, so those two are flat
         zero.
       </div>
@@ -168,7 +168,7 @@ function buildDocument() {
   <div class="note warn">
     <p style="margin:0 0 6px"><strong>${D.DEAD_WEIGHT.points} of ${D.DEAD_WEIGHT.of} points
       (${Math.round((D.DEAD_WEIGHT.points / D.DEAD_WEIGHT.of) * 100)}%) cannot separate anybody.</strong></p>
-    <p style="margin:0">Every person in this population has an enrolment, so the 40-point
+    <p style="margin:0">Every person in this population has an enrollment, so the 40-point
       commitment factor is a constant. Nobody has booked a call or replied to a human, so the
       35-point and 30-point factors are flat zero. What is left to rank on is tenure, consent and
       prior history, which are weak by design, plus intent, which is present for only
@@ -185,7 +185,7 @@ function buildDocument() {
     <li><strong>Reweight.</strong> Demote the constant, promote what varies. Cheap, and testable
       the same way: re-run this report and compare the spread.</li>
     <li><strong>Change the population.</strong> A readiness queue over people who have all
-      already enrolled in the free programme may be the wrong question. Leads, or Explorers who
+      already enrolled in the free program may be the wrong question. Leads, or Explorers who
       have done something recently, would both discriminate more.</li>
     <li><strong>Unblock recency.</strong> The single most likely discriminator for "who to call
       next" is how recently they did anything, and that input is still EXCLUDED by the M24

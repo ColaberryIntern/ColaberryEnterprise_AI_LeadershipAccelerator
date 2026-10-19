@@ -14,7 +14,7 @@ const SEV = {
   stale: { label: 'STALE', color: '#b26a00' },
   retired: { label: 'RETIRED', color: '#b3261e' },
   mislabeled: { label: 'MISLABELED', color: '#b26a00' },
-  judgement: { label: 'JUDGEMENT', color: '#7a4fb6' },
+  judgment: { label: 'JUDGMENT', color: '#7a4fb6' },
   missing: { label: 'MISSING', color: '#1f6feb' },
 };
 
@@ -107,7 +107,7 @@ function buildVisual() {
       <div class="col">${rowCards(true, D.ROWS.slice(0, 4))}</div>
       <div class="col">
         ${rowCards(true, D.ROWS.slice(4))}
-        <div class="note" style="margin-top:7px;padding:6px 10px">Rows 6 and 7 are judgement
+        <div class="note" style="margin-top:7px;padding:6px 10px">Rows 6 and 7 are judgment
           and policy rather than arithmetic, and are tagged so they cannot be mistaken for
           measurements. They need a decision, not a re-run.</div>
       </div>
@@ -172,7 +172,7 @@ function buildDocument() {
 
     <div class="note"><b>Nothing here is a new claim.</b> Every corrected figure traces to a
     query printed beside it, which is the control CLM-029 exists to enforce: a number without
-    a source row does not go out. The two judgement items are tagged as judgement rather than
+    a source row does not go out. The two judgment items are tagged as judgment rather than
     presented as measurement.</div>
   </div>`;
 

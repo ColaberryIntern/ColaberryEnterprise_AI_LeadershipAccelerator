@@ -95,13 +95,13 @@ function buildVisual() {
         <h2>The hour, accounted for</h2>
         ${budgetTable()}
         <div class="note warn" style="padding:7px 10px"><b>Every AUTO mark means the data has
-          a home and a query, not that a button exists.</b> C8.2, the command centre that
+          a home and a query, not that a button exists.</b> C8.2, the command center that
           would make these genuinely automatic, is due 20 October and is not built. Four
           sections are marked MANUAL with the reason, because a template that promises
           automation it cannot deliver costs an hour a month forever.</div>
         <div class="note" style="padding:7px 10px"><b>Why activity is section 6.</b> The
           ticket names the failure mode as a template that invites filling with activity
-          rather than outcomes. Order is the defence: revenue, pipeline, pilots and proof
+          rather than outcomes. Order is the defense: revenue, pipeline, pilots and proof
           come first and are the only sections with a number slot.</div>
       </div>
     </div>
