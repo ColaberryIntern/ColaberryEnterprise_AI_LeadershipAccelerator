@@ -62,6 +62,21 @@ describe('the page is actually routed, not merely written', () => {
     expect(segmentAt).toBeGreaterThan(layoutAt);
   });
 
+  it('no ready slug collides with a route App.tsx already declares literally', () => {
+    /*
+     * Segment routes are GENERATED from readySegments(), so flipping `ready` to true is
+     * enough to mount a path. That is convenient and it is also how a segment could
+     * silently shadow an existing page. C5.1 checked slug freedom by hand once; this keeps
+     * checking it for every segment that ships afterwards.
+     */
+    const declared = new Set(
+      [...APP.matchAll(/path="\/?([a-z0-9-]+)"/g)].map((m) => m[1]),
+    );
+    for (const s of readySegments()) {
+      expect(declared.has(s.slug)).toBe(false);
+    }
+  });
+
   it('uses static routes rather than a :slug param that would shadow other pages', () => {
     // A dynamic /:slug would have to sit above /proof, /platform and the rest, and would
     // swallow them. Static routes plus an explicit prop cannot.
@@ -70,8 +85,12 @@ describe('the page is actually routed, not merely written', () => {
 });
 
 describe('only ready segments reach a visitor', () => {
-  it('routes higher education, which Ali chose first on 18 October 2026', () => {
-    expect(readySegments().map((s) => s.slug)).toEqual(['higher-education']);
+  it('routes the three segments Ali approved on 18 October 2026, in IA order', () => {
+    // Higher education first as the C2.5 beachhead, then enterprise (C5.5) and workforce
+    // (C5.6). This list changes only when a segment actually SHIPS, which is a real
+    // behaviour change, and that is why the assertion is exact rather than a length check.
+    expect(readySegments().map((s) => s.slug))
+      .toEqual(['higher-education', 'enterprise', 'workforce']);
   });
 
   it('renders nothing at all for a segment that is not ready', () => {
@@ -85,7 +104,9 @@ describe('only ready segments reach a visitor', () => {
   });
 
   it('getSegment refuses an unready slug even when it is spelled correctly', () => {
-    expect(getSegment('enterprise')).toBeUndefined();
+    // Was 'enterprise' until C5.5 shipped it. 'government' is the current unready case:
+    // Ali approved that it gets its own section, and no page has been written yet.
+    expect(getSegment('government')).toBeUndefined();
     expect(getSegment('higher-education')).toBeDefined();
   });
 });
@@ -131,6 +152,86 @@ describe('the higher education page', () => {
   it('renders three things a buyer gets, not five', () => {
     expect(seg.gets).toHaveLength(3);
     for (const g of seg.gets) expect(textOf(h)).toContain(g.h);
+  });
+});
+
+/*
+ * The guards above were written against higher education when it was the only page. They
+ * are not specific to it, so they run against EVERY ready segment here: a future segment
+ * inherits them by existing rather than by someone remembering to copy a test.
+ */
+describe.each(readySegments().map((s) => [s.slug, s] as const))(
+  'every ready segment: %s',
+  (slug, seg) => {
+    const h = html(slug);
+    const text = textOf(h).toLowerCase();
+
+    it('renders, and leads with its own category noun', () => {
+      expect(h).not.toBe('');
+      expect(h).toContain('<h1');
+      expect(text).toContain(seg.noun.toLowerCase());
+    });
+
+    it('prints no price anywhere', () => {
+      // C2.3's numbers are approved internally and have no row in the C0.6 registry, and
+      // the registry is the gate for anything externally visible.
+      expect(textOf(h)).not.toMatch(/\$\s?\d/);
+    });
+
+    it('never uses wording the claim registry prohibits', () => {
+      expect(text).not.toMatch(/\bfree\b/);       // CLM-027, TWC 40 TAC 807.172(d)
+      expect(text).not.toMatch(/\bautonomous\b/); // CLM-009
+      expect(text).not.toMatch(/we certify|colaberry certifies|certified by colaberry/); // CLM-026
+      expect(text).not.toMatch(/\bguarantee\b/);
+    });
+
+    it('does not describe cohort one as complete', () => {
+      expect(text).not.toContain('demo day');
+      expect(text).not.toMatch(/first cohort (has )?(completed|graduated)/);
+    });
+
+    it('offers exactly one path to enquiry, carrying its own segment for attribution', () => {
+      expect(hrefs(h).filter((x) => x.startsWith('/contact')))
+        .toEqual([`/contact?segment=${slug}`]);
+    });
+
+    it('sends the reader to the published records', () => {
+      expect(hrefs(h)).toContain('/proof');
+    });
+
+    it('offers three things a buyer gets, not five', () => {
+      expect(seg.gets).toHaveLength(3);
+      for (const g of seg.gets) expect(textOf(h)).toContain(g.h);
+    });
+
+    it('uses American spelling', () => {
+      // "license is a product name in the C2.3 price list", and the rule is repo-wide.
+      expect(text).not.toMatch(/programme|licence|organisation|centre\b|behaviour|analyse/);
+    });
+  },
+);
+
+describe('the segments argue differently, which is the point of having more than one', () => {
+  const ready = readySegments();
+
+  it('gives each segment a distinct lede and proof band', () => {
+    // Sharing a template stops five different arguments. It is not permission to ship the
+    // same page three times, so the two bands that carry the argument must differ.
+    expect(new Set(ready.map((s) => s.lede)).size).toBe(ready.length);
+    expect(new Set(ready.map((s) => s.proof)).size).toBe(ready.length);
+  });
+
+  it('gives each segment a distinct call to action and set of headings', () => {
+    expect(new Set(ready.map((s) => s.ctaLabel)).size).toBe(ready.length);
+    const allHeadings = ready.flatMap((s) => s.gets.map((g) => g.h));
+    expect(new Set(allHeadings).size).toBe(allHeadings.length);
+  });
+
+  it('frames each proof band for the person who actually checks it', () => {
+    const bySlug = Object.fromEntries(ready.map((s) => [s.slug, s.proof.toLowerCase()]));
+    expect(bySlug['higher-education']).toContain('higher education');
+    expect(bySlug.enterprise).toContain('sponsor');
+    expect(bySlug.workforce).toContain('funder');
   });
 });
 

@@ -7,15 +7,24 @@
  * moves by segment per C2.1, the promise underneath does not. Keeping the words in a config
  * and the layout in one component is what makes that structural instead of a convention.
  *
- * WHY ONLY ONE IS READY. Ali decided on 18 October 2026 that higher education is built
- * first, because C2.5 approved it as the beachhead: the continuing education unit is
- * self-funded and its dean signs without a faculty senate. The other four carry `ready:
- * false` and are not routed, so a half-written page cannot reach a visitor by accident.
+ * WHICH ARE READY. Ali decided on 18 October 2026 that higher education is built first,
+ * because C2.5 approved it as the beachhead: the continuing education unit is self-funded
+ * and its dean signs without a faculty senate. Enterprise (C5.5) and workforce (C5.6)
+ * followed the same day. Government and the ecosystem partners still carry `ready: false`
+ * and are not routed, so a half-written page cannot reach a visitor by accident. Ali also
+ * decided on 18 October that government gets its own section rather than folding into
+ * workforce; that page still needs a ticket raised in group 05.
+ *
+ * WHY THE SEGMENTS MUST NOT READ ALIKE. Sharing a template is what stops five different
+ * arguments; it is not permission to ship the same page five times. Each segment moves the
+ * category noun per C2.1 and frames the proof band as THAT buyer would check it: a dean is
+ * asked to evidence outcomes, a sponsor is asked what changed, a workforce board answers
+ * to a funder. A test asserts the ledes and proof bands are distinct, for that reason.
  *
  * NO PRICES HERE, DELIBERATELY. ServicesV2 set the precedent on 7 August 2026 and asserts
  * it with a test: a named tier with the price behind a conversation beats a number a
  * prospect can anchor on. There is a second reason on this page. C2.3 approved a self-paced
- * licence at $150 a learner and an entry block of 60 learners at $9,000, which sits inside
+ * license at $150 a learner and an entry block of 60 learners at $9,000, which sits inside
  * the $10,000 a public buyer can spend with no competition and no board vote. That is a
  * genuinely strong fact for this buyer and it has no row in the C0.6 claim registry, and
  * the registry is the gate for anything externally visible. It should get a row; until it
@@ -94,32 +103,92 @@ export const SEGMENTS: Segment[] = [
     ctaLabel: 'Talk to us about a cohort',
   },
 
-  // ── Not routed yet. C5.5, C5.6, C5.8 and the government page Ali approved on
-  //    18 October 2026, which still needs a ticket raised in group 05.
   {
     slug: 'enterprise',
     name: 'Enterprise',
-    ready: false,
+    ready: true,
     noun: 'AI enablement',
-    seoTitle: '',
-    seoDescription: '',
-    lede: '',
-    gets: [],
-    proof: '',
-    ctaLabel: '',
+    seoTitle: 'AI enablement for enterprise teams',
+    seoDescription:
+      'Your own people build working AI systems against your own business problems, and '
+      + 'you get proof of what each one built, verified against the code they wrote.',
+    lede:
+      'Your own people build working AI systems against your own business problems, and '
+      + 'you keep both the software and the people who built it.',
+    gets: [
+      {
+        h: 'Your problems, not a training catalog',
+        body:
+          'Participants build against business problems you name, owned by people on your '
+          + 'side who can answer questions while the build is happening. The output is '
+          + 'software aimed at your work, not an exercise.',
+      },
+      {
+        h: 'Capability that stays after we leave',
+        body:
+          'You are not renting a vendor team. The people who built it still work for you '
+          + 'when the engagement ends, which is the difference between buying a system and '
+          + 'being able to build the next one.',
+      },
+      {
+        h: 'A record per person, not a completion rate',
+        body:
+          'You can show what one named participant built, linked to the commit behind it. '
+          + 'That is the question a sponsor is asked, and a cohort-level number cannot '
+          + 'answer it.',
+      },
+    ],
+    proof:
+      'An executive sponsor is eventually asked what changed, and a training report does '
+      + 'not answer that. This is the part worth checking rather than believing: open a '
+      + 'published record and follow it to the commit.',
+    ctaLabel: 'Talk to us about your team',
   },
   {
     slug: 'workforce',
     name: 'Workforce and economic development',
-    ready: false,
+    ready: true,
     noun: 'workforce readiness',
-    seoTitle: '',
-    seoDescription: '',
-    lede: '',
-    gets: [],
-    proof: '',
-    ctaLabel: '',
+    seoTitle: 'Workforce readiness you can evidence',
+    seoDescription:
+      'Participants finish with working software they built themselves, and every piece of '
+      + 'it links to the commit behind it, so completion is something a funder can open '
+      + 'rather than something you assert.',
+    lede:
+      'Participants finish with working software they built themselves, and every piece of '
+      + 'it can be opened and checked by the people you report to.',
+    gets: [
+      {
+        h: 'Outcomes a funder can open',
+        body:
+          'Every completed piece of work links to the commit behind it, in the '
+          + 'participant’s own repository. Someone reviewing your program can look at it '
+          + 'directly, without an account and without taking your word for it.',
+      },
+      {
+        h: 'Built for the reporting you already owe',
+        body:
+          'Your obligation is to evidence who completed and what they can now do. A record '
+          + 'per named participant answers both questions in the form they are asked, '
+          + 'rather than leaving you to assemble it afterwards.',
+      },
+      {
+        h: 'Participants leave with work, not a certificate',
+        body:
+          'They finish holding software they built, in a repository that is theirs. That '
+          + 'is what an employer asks to see, and it keeps working as evidence long after '
+          + 'the program ends.',
+      },
+    ],
+    proof:
+      'A workforce board answers to a funder who wants to know what participants can '
+      + 'actually do now. This is the part worth checking rather than believing: open a '
+      + 'published record and follow it to the commit.',
+    ctaLabel: 'Talk to us about a program',
   },
+
+  // ── Not routed yet. C5.8, and the government page Ali approved on 18 October 2026,
+  //    which still needs a ticket raised in group 05.
   {
     slug: 'government',
     name: 'Government',
