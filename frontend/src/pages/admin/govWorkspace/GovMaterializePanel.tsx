@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { materializeGovBuildProject, type GovMaterializeResult, type GovAssignableBuilder } from '../../../services/factoryApi';
+import React, { useEffect, useState } from 'react';
+import { materializeGovBuildProject, listActiveInterns, type GovMaterializeResult, type GovAssignableBuilder, type ActiveInternOption } from '../../../services/factoryApi';
 
 /**
  * GovMaterializePanel — the Build step's "create the monitored project" action. The operator picks the intern
@@ -9,10 +9,11 @@ import { materializeGovBuildProject, type GovMaterializeResult, type GovAssignab
  * This is an explicit WRITE to the student-project tables. It is idempotent (re-running reuses the pursuit's
  * linked project), and it surfaces typed errors plainly (e.g. the chosen builder is not an enrolled intern).
  */
-export function GovMaterializePanel({ canonical, deliveryProjectId, assignableBuilders, requirements, title, buyer, deadline }: {
+export function GovMaterializePanel({ canonical, deliveryProjectId, requirements, title, buyer, deadline }: {
   canonical: string;
   deliveryProjectId?: string | null;
-  assignableBuilders: GovAssignableBuilder[];
+  /** Accepted for compatibility; the picker now offers the full active-intern roster, not just project builders. */
+  assignableBuilders?: GovAssignableBuilder[];
   requirements: { id: string; text: string }[];
   title?: string | null;
   buyer?: string | null;
@@ -22,6 +23,15 @@ export function GovMaterializePanel({ canonical, deliveryProjectId, assignableBu
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [result, setResult] = useState<GovMaterializeResult | null>(null);
+  // The picker offers ALL active interns (unassigned first), not just this delivery project's current builders —
+  // materialize only needs an enrolled intern. Fetched once the delivery project exists.
+  const [interns, setInterns] = useState<ActiveInternOption[] | null>(null);
+  useEffect(() => {
+    if (!deliveryProjectId) return;
+    let alive = true;
+    listActiveInterns().then((r) => { if (alive) setInterns(r); }).catch(() => { if (alive) setInterns([]); });
+    return () => { alive = false; };
+  }, [deliveryProjectId]);
 
   if (!deliveryProjectId) {
     return <div className="small text-secondary"><i className="ri-information-line me-1" aria-hidden="true" />Approve the pursuit into a delivery project first — the monitored project is created against it.</div>;
@@ -44,16 +54,21 @@ export function GovMaterializePanel({ canonical, deliveryProjectId, assignableBu
     <div>
       <div className="d-flex flex-wrap gap-2 align-items-end">
         <label className="form-label small mb-0">Assign to intern
-          <select className="form-select form-select-sm" style={{ maxWidth: 280 }} value={assignee} onChange={(e) => setAssignee(e.target.value)} disabled={busy}>
-            <option value="">Choose an enrolled intern…</option>
-            {assignableBuilders.map((b) => <option key={b.identityId} value={b.identityId}>{b.email ?? b.identityId}</option>)}
+          <select className="form-select form-select-sm" style={{ maxWidth: 320 }} value={assignee} onChange={(e) => setAssignee(e.target.value)} disabled={busy || interns === null}>
+            <option value="">{interns === null ? 'Loading active interns…' : 'Choose an active intern…'}</option>
+            {(interns ?? []).map((b) => (
+              <option key={b.identityId} value={b.identityId}>
+                {b.name}{b.hasProject ? '' : ' (available)'}{b.email ? ` — ${b.email}` : ''}
+              </option>
+            ))}
           </select>
         </label>
         <button type="button" className="btn btn-primary btn-sm" disabled={busy || !assignee || requirements.length === 0} onClick={() => { void run(); }}>
           <i className="ri-rocket-2-line me-1" aria-hidden="true" />{busy ? 'Creating the project…' : 'Create monitored project'}
         </button>
       </div>
-      {assignableBuilders.length === 0 && <div className="small text-secondary mt-1">No assignable builders yet — add an intern to this delivery project first.</div>}
+      {interns !== null && interns.length === 0 && <div className="small text-secondary mt-1">No active interns found to assign.</div>}
+      {interns !== null && interns.length > 0 && <div className="small text-secondary mt-1">Any active intern can be assigned — those <strong>available</strong> (no current project) are listed first.</div>}
       {err && <div className="alert alert-warning py-2 mt-2 mb-0 small" role="status">{err}</div>}
       {result && (
         <div className="alert alert-success py-2 mt-2 mb-0 small" role="status">

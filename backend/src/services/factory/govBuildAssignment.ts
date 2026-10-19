@@ -143,3 +143,45 @@ export async function listAssignableBuilders(deliveryProjectId: string): Promise
 
   return builderIds.map((id) => ({ identityId: id, email: emailById.get(id) ?? null, roles: rolesByIdentity.get(id) ?? [] }));
 }
+
+export interface ActiveInternOption {
+  identityId: string;
+  email: string | null;
+  name: string;
+  /** False when the intern has no project — the people available to staff, listed first. */
+  hasProject: boolean;
+}
+
+/**
+ * ALL active interns a gov build can be assigned to at materialization — NOT just this delivery project's current
+ * builders. `materializeGovBuildProject` only needs the assignee to resolve to an ENROLLED intern (it creates the
+ * project under their enrollment; it does NOT require a delivery membership), so the picker should offer the whole
+ * active roster, UNASSIGNED first (the people available to staff). Each active intern (one row per enrollment) is
+ * resolved to their platform identity by email; one with no resolvable identity is dropped (it could not be
+ * assigned). Best-effort; a roster failure yields [] and never breaks the workspace.
+ */
+export async function listActiveInternsForAssignment(): Promise<ActiveInternOption[]> {
+  try {
+    const { getConsoleRoster } = await import('../internship/internConsoleRoster');
+    const { normalizeEmail } = await import('../../modules/identity/platformIdentityService');
+    const roster = await getConsoleRoster();
+    const emails = Array.from(new Set(roster.map((r) => normalizeEmail(r.email ?? '')).filter(Boolean)));
+    const idByEmail = new Map<string, string>();
+    if (emails.length) {
+      const identities: any[] = await PlatformIdentity.findAll({ where: { primary_email: emails } });
+      for (const i of identities) { if (i.primary_email && i.id) idByEmail.set(String(i.primary_email), String(i.id)); }
+    }
+    const out: ActiveInternOption[] = [];
+    for (const r of roster) {
+      const ne = normalizeEmail(r.email ?? '');
+      const identityId = ne ? idByEmail.get(ne) : undefined;
+      if (!identityId) continue; // only an intern with a resolvable platform identity can be assigned
+      out.push({ identityId, email: r.email, name: r.name, hasProject: r.project !== null });
+    }
+    // Unassigned (no project) first — the people available to staff — then by name within each band.
+    out.sort((a, b) => (a.hasProject === b.hasProject ? a.name.localeCompare(b.name) : (a.hasProject ? 1 : 0) - (b.hasProject ? 1 : 0)));
+    return out;
+  } catch {
+    return [];
+  }
+}
