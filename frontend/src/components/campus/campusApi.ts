@@ -41,7 +41,11 @@ export async function fetchCampusFlags(): Promise<CampusFlags> {
 
 // ---- C4: presence by building (same rules: own request, token attached, no redirect interceptor) ----
 
-export interface CampusPerson { enrollment_id: string; display_name: string; avatar_url: string | null; /** C5: may I message them (the DM rule). Absent from an older server = no. */ can_message?: boolean }
+export interface CampusPerson {
+  enrollment_id: string; display_name: string; avatar_url: string | null;
+  /** C5: may I message them (the DM rule). Absent from an older server = no. */ can_message?: boolean;
+  /** C9: their level (band rung) and the gear others may see. Absent when unknown. */ rung_name?: string; gear?: Record<string, string>;
+}
 export type CampusPresenceEntry = CampusPerson | { anonymous: true };
 export interface CampusAreaPresence { count: number; people: CampusPresenceEntry[] }
 export type CampusPresence = Record<string, CampusAreaPresence>;
@@ -91,4 +95,32 @@ export async function postTourComplete(): Promise<TourCompleteAnswer> {
   const d = data && typeof data === 'object' ? (data as { handoff?: unknown; reason?: unknown }) : {};
   if (typeof d.handoff !== 'boolean' || typeof d.reason !== 'string' || !TOUR_REASONS.includes(d.reason)) throw new Error('Malformed tour answer');
   return { handoff: d.handoff, reason: d.reason as TourCompleteReason };
+}
+
+// ---- C9: My look (same rules: own request, token attached, no redirect interceptor) ----
+
+export interface LookItem { id: string; name: string; slot: 'head' | 'face' | 'body' | 'neck' | 'ride'; threshold: number; unlocked: boolean }
+export interface CampusLook { points: number; rung_name: string; catalog: LookItem[]; equipped: Record<string, string> }
+
+function asLook(data: unknown): CampusLook {
+  const d = data && typeof data === 'object' ? (data as Partial<CampusLook>) : {};
+  if (typeof d.points !== 'number' || !Array.isArray(d.catalog) || !d.equipped || typeof d.equipped !== 'object') throw new Error('Malformed look');
+  return { points: d.points, rung_name: typeof d.rung_name === 'string' ? d.rung_name : '', catalog: d.catalog, equipped: d.equipped };
+}
+
+/** My points, level, the gear catalog with what I have earned, and what I wear. THROWS on any failure. */
+export async function fetchLook(): Promise<CampusLook> {
+  const { data } = await axios.get<unknown>(`${process.env.REACT_APP_API_URL || ''}/api/portal/campus/look`, { headers: authHeaders(), timeout: CAMPUS_FLAGS_TIMEOUT_MS });
+  return asLook(data);
+}
+
+/** Save the COMPLETE set (a slot not present = nothing worn there). THROWS with the server message on a refusal. */
+export async function putLook(equipped: Record<string, string | null>): Promise<CampusLook> {
+  try {
+    const { data } = await axios.put<unknown>(`${process.env.REACT_APP_API_URL || ''}/api/portal/campus/look`, { equipped }, { headers: authHeaders(), timeout: CAMPUS_FLAGS_TIMEOUT_MS });
+    return asLook(data);
+  } catch (err) {
+    const msg = (err as { response?: { data?: { error?: unknown } } })?.response?.data?.error;
+    throw new Error(typeof msg === 'string' && msg ? msg : 'We could not save your look. Try again.');
+  }
 }

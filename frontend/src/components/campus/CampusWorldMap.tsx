@@ -4,6 +4,9 @@ import { buildingName } from './campusMap';
 import { accessLabel } from './campusAccess';
 import PersonTokens from './PersonToken';
 import type { CampusPerson } from './campusApi';
+import { GearOnHead, RideUnder } from './AvatarGear';
+import { publicOnly } from './campusGear';
+import type { Equipped } from './campusGear';
 
 /**
  * The campus world (Campus C2): an SVG map drawn from the catalog. Original art only - simple
@@ -53,6 +56,8 @@ export interface CampusMapProps {
   walkRequest?: { id: BuildingId; seq: number } | null;
   /** C8: buildings whose room is on air now (from broadcast discovery). */
   onAir?: Set<string>;
+  /** C9: the learner's OWN equipped set, drawn on their pin (public slots) and, only while it travels, the ride. */
+  ownGear?: Equipped;
   /** C8: today's plan route, the unfinished stops' buildings in order (campusPlan.routeBuildings). Full map only. */
   route?: BuildingId[];
 }
@@ -137,13 +142,15 @@ function Building({ b, access, label, compact, count, onAir = false, onPick, set
   );
 }
 
-export default function CampusWorldMap({ buildings, accessOf, workplaceNames, reduceMotion, compact = false, initialTarget, onArrive, buildingRef, counts, people, onPickPerson, walkRequest, onAir, route }: CampusMapProps): React.ReactElement {
+export default function CampusWorldMap({ buildings, accessOf, workplaceNames, reduceMotion, compact = false, initialTarget, onArrive, buildingRef, counts, people, onPickPerson, walkRequest, onAir, route, ownGear }: CampusMapProps): React.ReactElement {
   const [pos, setPos] = useState<Pt>({ x: QUAD.x, y: 640 });
   const posRef = useRef(pos);
   const raf = useRef<number | null>(null);
   posRef.current = pos;
+  // C9: true only while a walk animates (never with reduce motion or on the compact map): the only time a ride is drawn.
+  const [moving, setMoving] = useState(false);
 
-  const stop = () => { if (raf.current !== null) { cancelAnimationFrame(raf.current); raf.current = null; } };
+  const stop = () => { if (raf.current !== null) { cancelAnimationFrame(raf.current); raf.current = null; } setMoving(false); };
   useEffect(() => stop, []);
 
   const walkTo = useCallback((id: BuildingId) => {
@@ -166,8 +173,9 @@ export default function CampusWorldMap({ buildings, accessOf, workplaceNames, re
       const f = seg[i] ? Math.min(1, (d - acc) / seg[i]) : 1;
       setPos({ x: pts[i].x + (pts[i + 1].x - pts[i].x) * f, y: pts[i].y + (pts[i + 1].y - pts[i].y) * f });
       if (d < total) raf.current = requestAnimationFrame(step);
-      else { raf.current = null; onArrive(id); }
+      else { raf.current = null; setMoving(false); onArrive(id); }
     };
+    setMoving(true);
     raf.current = requestAnimationFrame(step);
   }, [buildings, compact, reduceMotion, onArrive]);
 
@@ -210,6 +218,8 @@ export default function CampusWorldMap({ buildings, accessOf, workplaceNames, re
         <g className="cm-avatar" transform={`translate(${pos.x} ${pos.y}) scale(0.8)`} aria-hidden="true" data-testid="cm-avatar">
           <path className="cm-pin" d="M0 0 C -9 -12 -12 -18 -12 -24 A 12 12 0 1 1 12 -24 C 12 -18 9 -12 0 0 Z" />
           <circle className="cm-pin-dot" cx={0} cy={-24} r={5} />
+          {ownGear && <GearOnHead gear={publicOnly(ownGear)} cx={0} cy={-24} r={12} />}
+          {ownGear?.ride && moving && !reduceMotion && <RideUnder ride={ownGear.ride} />}
         </g>
       )}
     </svg>

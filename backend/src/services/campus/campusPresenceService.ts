@@ -8,6 +8,7 @@ import { isCampusArea, CampusArea } from './campusAreas';
 import { canDmMany } from '../communityRooms/dmEligibility';
 import { campusAudienceFor } from './campusAudience';
 import { teamEnrollmentIdsFor } from './campusTeam';
+import { looksFor } from './campusLookService';
 
 /**
  * Who is in each campus building right now (Colaberry Campus C4).
@@ -47,7 +48,12 @@ export const VISIBLE_TTL_MS = 60_000;
 export const VISIBLE_CACHE_MAX = 2_000;
 
 export interface CampusPerson { enrollment_id: string; display_name: string; avatar_url: string | null }
-export interface CampusPersonOut extends CampusPerson { can_message: boolean }
+/** C9: the person's level (band rung) and the gear others may see (never a ride). Absent when the look read failed. */
+export interface CampusPersonOut extends CampusPerson {
+  can_message: boolean;
+  rung_name?: string;
+  gear?: Partial<Record<'head' | 'face' | 'body' | 'neck', string>>;
+}
 export type CampusPresenceEntry = CampusPersonOut | { anonymous: true };
 export interface CampusPresenceAreas { areas: Partial<Record<CampusArea, { count: number; people: CampusPresenceEntry[] }>> }
 
@@ -137,7 +143,23 @@ export async function getCampusPresence(viewer: string, cohort: string | null, n
     slot.people.push(named ? { ...named, can_message: false } : { anonymous: true });
   }
   await markCanMessage(viewer, cohort, areas);
+  await markLook(areas);
   return { areas };
+}
+
+/**
+ * C9: level and public gear on every NAMED entry, in place (anonymous entries are never touched). One cached batch
+ * (campusLookService.looksFor, 60 s); it never throws, and a person it could not read simply has no level or gear.
+ */
+async function markLook(areas: CampusPresenceAreas['areas']): Promise<void> {
+  const named = Object.values(areas).flatMap((a) => (a ? a.people : [])).filter((p): p is CampusPersonOut => !('anonymous' in p));
+  if (!named.length) return;
+  const looks = await looksFor(Array.from(new Set(named.map((p) => p.enrollment_id))));
+  for (const p of named) {
+    const l = looks.get(p.enrollment_id);
+    if (l?.rung_name) p.rung_name = l.rung_name;
+    if (l?.gear) p.gear = l.gear;
+  }
 }
 
 /** Sets can_message on every named entry in place. One batched lookup; any failure leaves them all false. */

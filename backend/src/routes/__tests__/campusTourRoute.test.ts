@@ -8,6 +8,7 @@ let mockAudience: () => Promise<string> = () => Promise.resolve('explorer');
 let mockHandoffCalls: string[] = [];
 let mockHandoffResult: { handoff: boolean; reason: string } = { handoff: true, reason: 'created' };
 jest.mock('../../services/campus/campusAudience', () => ({ campusAudienceFor: () => mockAudience() }));
+jest.mock('../../services/campus/campusLookService', () => ({ getLook: jest.fn(), setLook: jest.fn(), looksFor: jest.fn(async () => new Map()) }));
 jest.mock('../../services/campus/campusTourHandoff', () => ({
   requestTourHandoff: (id: string) => { mockHandoffCalls.push(id); return Promise.resolve(mockHandoffResult); },
 }));

@@ -8,6 +8,8 @@ import CampusTour from './CampusTour';
 import CampusTourEnd from './CampusTourEnd';
 import { tourFor } from './tourSteps';
 import { explorerPath } from './campusPath';
+import MyLook from './MyLook';
+import './campusLook.css';
 import './campusTour.css';
 import { routeBuildings } from './campusPlan';
 import './campusPeople.css';
@@ -37,7 +39,7 @@ function useReturnFocus(open: boolean): void {
 
 export function CampusMapOverlay(): React.ReactElement | null {
   const { layer, mapFocus, settings, closeLayer, openList, presence, presenceError, enterThroughDoor,
-    staffDesks, personCard, openPersonCard, closePersonCard, planStops, tourIndex, startTour, setTourIndex, endTour } = useCampus();
+    staffDesks, personCard, openPersonCard, closePersonCard, planStops, tourIndex, startTour, setTourIndex, endTour, look, lookError, saveLook, lockerOpen, openLocker, closeLocker } = useCampus();
   const { audience, hasFullAccess, buildings, accessOf, isExplorer } = useCampusView();
   const { buildings: onAir } = useCampusOnAir();
   const route = planStops ? routeBuildings(planStops) : undefined;
@@ -53,7 +55,7 @@ export function CampusMapOverlay(): React.ReactElement | null {
   useReturnFocus(open);
   // C7: opening straight into a tour leaves focus on the tour card's heading (CampusTour focuses it; this parent effect runs after).
   const touringRef = useRef(false);
-  touringRef.current = tourIndex !== null;
+  touringRef.current = tourIndex !== null || lockerOpen; // C9: the locker focuses its own heading too
   useEffect(() => { if (open && !touringRef.current) dialog.current?.focus(); }, [open]);
   if (!open) return null;
   return (
@@ -64,6 +66,7 @@ export function CampusMapOverlay(): React.ReactElement | null {
         <span className="cm-layer-hint">Pick a building, or press Tab to move between them.</span>
         {presenceError && <span className="cm-layer-warn" role="status" data-testid="cm-presence-broken">We can't load who's online right now.</span>}
         {tour && touring === null && <button type="button" className="cm-link" onClick={startTour} data-testid="cm-tour-start-bar">Take the tour</button>}
+        {!lockerOpen && touring === null && <button type="button" className="cm-link" onClick={openLocker} data-testid="cm-look-open-bar">My look</button>}
         <button type="button" className="cm-link" onClick={openList}>List view</button>
         <button type="button" className="cm-btn is-secondary" onClick={closeLayer} aria-label="Close campus map">Close</button>
       </div>
@@ -73,6 +76,8 @@ export function CampusMapOverlay(): React.ReactElement | null {
         staffDesks={staffDesks} personCard={personCard} onOpenPerson={openPersonCard} onClosePerson={closePersonCard} onAir={onAir} route={route}
         tour={tour && touring !== null ? { target: tourTarget, onEnd: endTour, card: <CampusTour tour={tour} index={touring} onIndex={setTourIndex} onEnd={endTour}
           explorerEnd={<CampusTourEnd pathModel={explorerPath(buildings, accessOf, settings.workplaceNames, false)} onNavigate={closeLayer} />} /> } : undefined}
+        panel={lockerOpen ? { onClose: closeLocker, card: <MyLook look={look} lookError={lookError} onSave={saveLook} onClose={closeLocker} /> } : undefined}
+        ownGear={look?.equipped}
         onEnterRoom={(route, from) => enterThroughDoor(route, from ? { left: from.left, top: from.top, width: from.width, height: from.height } : null)} />
     </div>
   );

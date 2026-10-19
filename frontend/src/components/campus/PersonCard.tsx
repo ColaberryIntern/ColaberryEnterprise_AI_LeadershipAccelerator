@@ -5,6 +5,10 @@ import { initialsOf } from './WhoIsHere';
 import { hasDmHost, openDmThroughShell } from './dmHost';
 import { postWave } from './campusPeopleApi';
 import { MESSAGE_BLOCKED_NOTE } from './campusPeople';
+import { publicOnly, GEAR_NAMES } from './campusGear';
+import { rungTone } from '../../services/bandLadder';
+import '../../styles/rungTones.css';
+
 
 /**
  * A person's card on the campus (Colaberry Campus C5): Message, Wave, Walk over.
@@ -53,6 +57,13 @@ export default function PersonCard({ person: p, buildingLabel, onClose, onWalkOv
         <div>
           <h2 className="cm-card-title">{p.display_name}</h2>
           <p className="cm-who-note">In {buildingLabel}</p>
+          {p.rung_name && (
+            <p className={`cm-person-level rung-${rungTone(p.rung_name)}`} data-testid="cm-person-level"
+              style={{ background: 'var(--rung-bg)', color: 'var(--rung-fg)', borderColor: 'var(--rung-line)' }}>{p.rung_name}</p>
+          )}
+          {Object.keys(publicOnly(p.gear)).length > 0 && (
+            <p className="cm-who-note" data-testid="cm-person-gear">Wearing: {Object.values(publicOnly(p.gear)).map((id) => GEAR_NAMES[id] ?? id).join(', ')}</p>
+          )}
         </div>
       </div>
 

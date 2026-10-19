@@ -12,6 +12,7 @@ import { tokensFor, desksForBuilding } from './campusPeople';
 import { buildingName } from './campusMap';
 import ExplorerPath from './ExplorerPath';
 import { explorerPath } from './campusPath';
+import type { Equipped } from './campusGear';
 
 /**
  * Map + building card, with the keyboard contract (Campus C2):
@@ -49,9 +50,13 @@ export interface CampusWorldProps {
   route?: BuildingId[];
   /** C7: a tour in progress: walk to `target` whenever it changes, show `card` instead of the building card, Esc ends the tour. */
   tour?: { target: BuildingId | null; card: React.ReactNode; onEnd: () => void };
+  /** C9: a panel shown instead of the building card (the My look locker); Esc closes it. */
+  panel?: { card: React.ReactNode; onClose: () => void };
+  /** C9: the learner's own equipped set, drawn on their pin. */
+  ownGear?: Equipped;
 }
 
-export default function CampusWorld({ buildings, audience, hasFullAccess, accessOf: accessOfProp, isExplorer = false, workplaceNames, reduceMotion, initialTarget, onExit, onNavigate, presence, presenceError = false, onEnterRoom, staffDesks, personCard, onOpenPerson, onClosePerson, onAir, route, tour }: CampusWorldProps): React.ReactElement {
+export default function CampusWorld({ buildings, audience, hasFullAccess, accessOf: accessOfProp, isExplorer = false, workplaceNames, reduceMotion, initialTarget, onExit, onNavigate, presence, presenceError = false, onEnterRoom, staffDesks, personCard, onOpenPerson, onClosePerson, onAir, route, tour, panel, ownGear }: CampusWorldProps): React.ReactElement {
   const counts = useMemo(() => {
     const out: Record<string, number> = {};
     if (presence) for (const [id, a] of Object.entries(presence)) out[id] = a.count;
@@ -88,7 +93,7 @@ export default function CampusWorld({ buildings, audience, hasFullAccess, access
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (e.key !== 'Escape') return;
     e.stopPropagation();
-    if (tour) tour.onEnd(); else if (personCard) onClosePerson?.(); else if (open) closeCard(); else onExit();
+    if (tour) tour.onEnd(); else if (panel) panel.onClose(); else if (personCard) onClosePerson?.(); else if (open) closeCard(); else onExit();
   };
 
   // On phones the map is wider than the screen (campus.css); start centered on the quad.
@@ -103,15 +108,16 @@ export default function CampusWorld({ buildings, audience, hasFullAccess, access
     <div className="cm-world" onKeyDown={onKeyDown} ref={world}>
       <CampusWorldMap buildings={buildings} accessOf={accessOf} workplaceNames={workplaceNames} reduceMotion={reduceMotion}
         initialTarget={initialTarget} onArrive={onArrive} buildingRef={registerEl} counts={presenceError ? undefined : counts}
-        people={people} onPickPerson={onOpenPerson ? pickPerson : undefined} walkRequest={walkRequest} onAir={onAir} route={route} />
+        people={people} onPickPerson={onOpenPerson ? pickPerson : undefined} walkRequest={walkRequest} onAir={onAir} route={route} ownGear={ownGear} />
       {tour && tour.card}
-      {!tour && personCard && (() => {
+      {!tour && panel && panel.card}
+      {!tour && !panel && personCard && (() => {
         const pb = buildings.find((x) => x.id === personCard.buildingId);
         return <PersonCard person={personCard.person} buildingLabel={pb ? buildingName(pb, workplaceNames) : 'the campus'} onClose={() => onClosePerson?.()}
           onMessaged={onNavigate}
           onWalkOver={() => { const id = personCard.buildingId; onClosePerson?.(); setWalkRequest((w) => ({ id, seq: (w?.seq ?? 0) + 1 })); }} />;
       })()}
-      {!tour && b && !personCard && <BuildingCard building={b} access={accessOf(b)} workplaceNames={workplaceNames} onClose={closeCard} onNavigate={onNavigate}
+      {!tour && !panel && b && !personCard && <BuildingCard building={b} access={accessOf(b)} workplaceNames={workplaceNames} onClose={closeCard} onNavigate={onNavigate}
         onEnterRoom={onEnterRoom ? (route) => onEnterRoom(route, els.current.get(b.id)?.getBoundingClientRect() ?? null) : undefined}
         desks={staffDesks ? desksForBuilding(staffDesks, b.id, audience) : undefined}
         children={b.id === 'gate' && isExplorer ? <ExplorerPath onNavigate={onNavigate}
