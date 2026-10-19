@@ -57,7 +57,7 @@ Two refinements the first scan needed, both recorded because they changed the an
    consumer into the reporting bucket, where it would never have been given a behaviour test. A
    rule was added for that form and the file is now row 29. Branching: 31 → 28 → **29**.
 
-## BRANCHING — 35 files
+## BRANCHING — 36 files
 
 **Row 17 is retired, and why is worth recording.** It was `services/freeSignupService.ts`, which
 used to decide `tier: 'guest'` itself. T202b made it delegate to the canonical service, so it no
@@ -106,6 +106,7 @@ any row does not.
 | 34 | `scripts/backfillExplorerEnteredAt.ts` | `WHERE enrollment_type = 'explorer' AND tier = 'guest'` | writer | writer | **Added by M21. A WRITER, and it RAN against production 2026-10-16 on Ali's authorisation: 56 rows, `explorer_entered_at` NULL went 56 to 0.** It is a SHAPE match on this scan: the literal appears in a `WHERE` that SELECTS the population, and the only column it assigns is `explorer_entered_at`. It never touches `enrollment_type` or `tier`, so it cannot move anybody into or out of a programme — population B is untouched by construction. **Both population cells read `writer` anyway**, following row 19: the tally parses those cells, and a row spelled any other way counts as nothing at all. The cells mark it a writer; this determination says what it writes. Dry run is the default; every `UPDATE` is pinned to `explorer_entered_at IS NULL` so a row that gained a date between the plan and the commit is left alone; the ledger is validated before any of it reaches SQL; and the inverse is pinned to the value written. The date semantic was taken from the live writers rather than chosen — `backend/src/services/freeAccountRegistration.ts:85` → "explorer_entered_at: programme === 'learner' ? new Date() : null," — so a backfilled row means the same thing as a registered one. |
 | 34 | `scripts/lib/freeAccountCoherenceBackfill.ts` | pure predicate; `enrollment_type` only in prose | — | — | **Added by T207, and it is in this table by judgement rather than by the scan.** The write-site scanner does NOT match it: its only `enrollment_type: 'standard'` occurrence is inside a docblock, and the scanner strips comments before matching -- correctly, and my own `grep` disagreed with it until I checked which of us was reading code. It is listed anyway because it is where the backfill's decision actually lives: the pure predicate that classifies every row, excludes six populations and requires POSITIVE free-signup provenance before moving anything onto the learner programme. A reader looking for "what decides" would otherwise find only the CLI. Writes nothing; returns a ledger the CLI applies. |
 | 35 | `scripts/srsDistributionReport.ts` | `enrollment_type = 'explorer'` inside a `SELECT` | unchanged | unchanged | **Added by M25, and it is the weakest match in this table: a READER that writes nothing at all.** The literal appears only in the `SELECT` that chooses which population to report on. It reads each person through the normal Person 360 reader, computes the Sales Readiness Score in memory, prints a distribution and persists nothing — there is no `INSERT`, `UPDATE` or `DELETE` anywhere in it, and it assigns `enrollment_type` nowhere, so neither population moves and **both population cells read `unchanged`**, not `writer` and not a dash, so the tally can account for it. It scores through the real reader rather than a faster bespoke query so that what is measured is what the product would score, absences included, which is also why it runs sequentially under a `LIMIT` and is a report rather than a batch job. **Ran read-only against production 2026-10-17 over 250 rows: nothing written, no score persisted, nothing sent.** The same two writer tripwires carry it with the same determination. |
+| 36 | `services/agentDomain/domainAgentIdentitySeed.ts` | writes `'standard'` | unchanged | unchanged | **Added by AF3.1.** Seeds the ten Agent Factory domain agents, one `Enrollment` each, as `'standard'` with `portal_enabled: false` so none of them appears as a learner. Same reasoning as rows 25 to 27: an agent identity is not a free account, neither population moves, and the T207 backfill skips it. One difference is worth recording rather than inheriting. These addresses are **derived** from the domain key at runtime, not written as string literals, so `AGENT_IDENTITY_EMAILS` cannot pin them and the drift guard that re-derives that list from the seed files finds nothing here to pin. What actually excludes them is the `staff_email` and `staff_role` terms, which is the open-ended case `freeAccountCoherenceBackfill.test.ts` already covers by name. |
 
 **Tallies, counted from the table's own cells rather than by hand** — the first draft said "12 for
 A" and "9 unchanged", both off by one in **compensating** directions, so the two wrong numbers
@@ -117,8 +118,8 @@ asserts them from the parsed cells so they cannot drift again:
 | Changes for population A | **14** | `grep -cE '^\| [0-9]+ \| ` + "`[^`]+`" + ` \| [^\|]*\| \*\*CHANGES\*\* \|'` |
 | Changes for population B | **3** (rows 1, 13 and 32) | `grep -cE '\| — \| \*\*CHANGES\*\* \|'` |
 | Writers | **6** | `grep -c "\| writer \| writer \|"` |
-| Unchanged, with a stated reason | **12** | `grep -c "\| unchanged \| unchanged \|"` |
-| **Total** | **35** | matches the generator's `BRANCHING` count |
+| Unchanged, with a stated reason | **13** | `grep -c "\| unchanged \| unchanged \|"` |
+| **Total** | **36** | matches the generator's `BRANCHING` count |
 
 ## REPORTING — 19 files
 

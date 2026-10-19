@@ -4,6 +4,7 @@ import { seedReeseIdentity } from './reese/reeseIdentitySeed';
 import { seedTicketCreatorIdentities } from './agentBlueprint/ticketCreatorIdentitySeed';
 import { REESE_PERSONA_BLOCK } from './reese/reeseSystemPrompt';
 import { seedDaraIdentity } from './curriculum/daraIdentitySeed';
+import { seedDomainAgentIdentities } from './agentDomain/domainAgentIdentitySeed';
 import { DARA_PERSONA_BLOCK } from './curriculum/daraPersona';
 import { repointCurriculumLegacyBehaviors } from './curriculum/repointLegacyBehaviors';
 import { recordPersonaVersionChangeIfNeeded } from './agentPersonaVersionHistoryService';
@@ -3248,6 +3249,19 @@ export async function seedAgentRegistry(): Promise<void> {
     await repointCurriculumLegacyBehaviors();
   } catch (err: any) {
     console.warn('[AI Ops] repointCurriculumLegacyBehaviors failed:', err?.message);
+  }
+
+  // AI Employee Consolidation Program, employees #2-#10 (AF3.1 Release Zero) -- the ten
+  // Agent Factory domain agents. Runs AFTER the AGENT_REGISTRY loop so their AiAgent rows
+  // exist; seedAgentIdentity throws without one, by design.
+  //
+  // Same fail-open posture as every identity seed above: ten missing identities must never
+  // block boot. The seeder also carries per-agent failures internally, so one bad row
+  // leaves the other nine seeded rather than aborting the set.
+  try {
+    await seedDomainAgentIdentities();
+  } catch (err: any) {
+    console.warn('[AI Ops] domain agent identity seed failed:', err?.message);
   }
 
   // Agent Registration Stage 1 — identity-only registrations for the 5

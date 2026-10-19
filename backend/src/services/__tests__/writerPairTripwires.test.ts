@@ -118,6 +118,12 @@ const PAID_FILES: Record<string, string> = {
   'services/agentBlueprint/agentIdentitySeed.ts': 'AGENT IDENTITY, not a person. Seeds an agent enrolment.',
   'services/agentBlueprint/ticketCreatorIdentitySeed.ts': 'AGENT IDENTITY, not a person.',
   'services/curriculum/daraIdentitySeed.ts': 'AGENT IDENTITY, not a person.',
+  'services/agentDomain/domainAgentIdentitySeed.ts':
+    'TEN AGENT IDENTITIES, not people (AF3.1). Seeds the ten Agent Factory domain '
+    + 'agents as paid + standard, the same posture as Dara and Reese below. Their addresses '
+    + 'are DERIVED from the domain key rather than written as literals, so the pinned '
+    + 'AGENT_IDENTITY_EMAILS list cannot name them; the staff_email and staff_role exclusion '
+    + 'terms are what keep them out of the T207 backfill.',
   'services/reese/reeseIdentitySeed.ts': 'AGENT IDENTITY, not a person. The row reeseWelcomeService refuses to greet.',
 };
 
@@ -170,6 +176,11 @@ const OFF_EXPLORER_FILES: Record<string, string> = {
   'services/agentBlueprint/ticketCreatorIdentitySeed.ts': 'AGENT IDENTITY, not a person.',
   'services/curriculum/daraIdentitySeed.ts': 'AGENT IDENTITY, not a person.',
   'services/reese/reeseIdentitySeed.ts': 'AGENT IDENTITY, not a person.',
+  'services/agentDomain/domainAgentIdentitySeed.ts':
+    'TEN AGENT IDENTITIES, not people (AF3.1). Writes enrollment_type standard at CREATE, '
+    + 'which is a resting state and not a transition: these rows do not exist before this '
+    + 'file makes them, so there is no explorer for anybody to be moved off. portal_enabled '
+    + 'is false on every one, so none of them is a learner either.',
   'scripts/backfillExplorerEnteredAt.ts':
     'SHAPE MATCH, NOT A TRANSITION (M21). It matches because its WHERE clause reads '
     + "enrollment_type = 'explorer' to SELECT the population. It writes one column, "
