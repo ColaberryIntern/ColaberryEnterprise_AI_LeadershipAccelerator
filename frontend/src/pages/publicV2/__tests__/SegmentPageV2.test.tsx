@@ -86,11 +86,12 @@ describe('the page is actually routed, not merely written', () => {
 
 describe('only ready segments reach a visitor', () => {
   it('routes the three segments Ali approved on 18 October 2026, in IA order', () => {
-    // Higher education first as the C2.5 beachhead, then enterprise (C5.5) and workforce
-    // (C5.6). This list changes only when a segment actually SHIPS, which is a real
-    // behaviour change, and that is why the assertion is exact rather than a length check.
+    // Higher education first as the C2.5 beachhead, then enterprise (C5.5), workforce
+    // (C5.6) and the ecosystem partners (C5.8). This list changes only when a segment
+    // actually SHIPS, which is a real behaviour change, and that is why the assertion is
+    // exact rather than a length check. Government is the one door still unwritten.
     expect(readySegments().map((s) => s.slug))
-      .toEqual(['higher-education', 'enterprise', 'workforce']);
+      .toEqual(['higher-education', 'enterprise', 'workforce', 'ecosystem']);
   });
 
   it('renders nothing at all for a segment that is not ready', () => {
@@ -185,6 +186,19 @@ describe.each(readySegments().map((s) => [s.slug, s] as const))(
       expect(text).not.toMatch(/\bguarantee\b/);
     });
 
+    it('never claims a partnership with a frontier lab', () => {
+      /*
+       * `anthropic.partner` is DO_NOT_PUBLISH in the registry: no contract, badge asset or
+       * authorization was ever located for it. The ecosystem page is literally about
+       * partnering, which is exactly where that claim would slip back in, so the guard runs
+       * against every segment rather than only that one.
+       */
+      expect(text).not.toMatch(/anthropic\s+(partner|partnership)/);
+      expect(text).not.toMatch(/claude\s+code\s+partner/);
+      expect(text).not.toMatch(/\bofficial\s+partner\b/);
+      expect(text).not.toMatch(/\bpartnered\s+with\s+(anthropic|openai)\b/);
+    });
+
     it('does not describe cohort one as complete', () => {
       expect(text).not.toContain('demo day');
       expect(text).not.toMatch(/first cohort (has )?(completed|graduated)/);
@@ -232,6 +246,16 @@ describe('the segments argue differently, which is the point of having more than
     expect(bySlug['higher-education']).toContain('higher education');
     expect(bySlug.enterprise).toContain('sponsor');
     expect(bySlug.workforce).toContain('funder');
+    expect(bySlug.ecosystem).toContain('client');
+  });
+
+  it('answers the partner question a partner actually asks first', () => {
+    // A partner's opening fear is losing the client relationship, not capability. If the
+    // ecosystem page does not answer that in its own words it is a customer page wearing
+    // a partner label.
+    const eco = getSegment('ecosystem')!;
+    const blob = `${eco.lede} ${eco.gets.map((g) => `${g.h} ${g.body}`).join(' ')}`.toLowerCase();
+    expect(blob).toMatch(/your account stays yours|relationship/);
   });
 });
 

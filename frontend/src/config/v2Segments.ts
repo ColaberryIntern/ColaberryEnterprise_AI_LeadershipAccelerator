@@ -10,16 +10,24 @@
  * WHICH ARE READY. Ali decided on 18 October 2026 that higher education is built first,
  * because C2.5 approved it as the beachhead: the continuing education unit is self-funded
  * and its dean signs without a faculty senate. Enterprise (C5.5) and workforce (C5.6)
- * followed the same day. Government and the ecosystem partners still carry `ready: false`
- * and are not routed, so a half-written page cannot reach a visitor by accident. Ali also
- * decided on 18 October that government gets its own section rather than folding into
- * workforce; that page still needs a ticket raised in group 05.
+ * followed the same day, and the ecosystem partners page (C5.8) on 19 October. Only
+ * government still carries `ready: false` and is not routed, so a half-written page cannot
+ * reach a visitor by accident. Ali decided on 18 October that government gets its own
+ * section rather than folding into workforce; that page still needs a ticket raised in
+ * group 05, and it is now the last unwritten door in the C5.1 information architecture.
  *
  * WHY THE SEGMENTS MUST NOT READ ALIKE. Sharing a template is what stops five different
  * arguments; it is not permission to ship the same page five times. Each segment moves the
  * category noun per C2.1 and frames the proof band as THAT buyer would check it: a dean is
  * asked to evidence outcomes, a sponsor is asked what changed, a workforce board answers
- * to a funder. A test asserts the ledes and proof bands are distinct, for that reason.
+ * to a funder, and a partner is judged on what the client can do once they have left. A
+ * test asserts the ledes and proof bands are distinct, for that reason.
+ *
+ * THE ECOSYSTEM PAGE CARRIES A SPECIFIC RISK. It is a page about partnering, and
+ * `anthropic.partner` is DO_NOT_PUBLISH in the C0.6 registry: no contract, badge or
+ * authorization was ever located for it. So the page never claims a partnership with a
+ * lab. It uses `anthropic.capability`, whose approved wording is the plain statement of
+ * what we build with, and a test asserts no segment claims an Anthropic partnership.
  *
  * NO PRICES HERE, DELIBERATELY. ServicesV2 set the precedent on 7 August 2026 and asserts
  * it with a test: a named tier with the price behind a conversation beats a number a
@@ -204,14 +212,42 @@ export const SEGMENTS: Segment[] = [
   {
     slug: 'ecosystem',
     name: 'Strategic AI ecosystem partners',
-    ready: false,
+    ready: true,
     noun: 'AI enablement',
-    seoTitle: '',
-    seoDescription: '',
-    lede: '',
-    gets: [],
-    proof: '',
-    ctaLabel: '',
+    seoTitle: 'AI enablement your clients can verify',
+    seoDescription:
+      'Deliver capability building under your own relationship, and end the engagement '
+      + 'with evidence your client can open and check rather than a satisfaction score.',
+    lede:
+      'You hold the client relationship. We build the capability underneath it, and your '
+      + 'client ends up with proof they can check rather than a report they have to trust.',
+    gets: [
+      {
+        h: 'Your account stays yours',
+        body:
+          'We deliver the capability build and nothing else. No parallel relationship with '
+          + 'your client, no attempt to sell past you, and no competing scope. That is the '
+          + 'first question every partner asks and it deserves the first answer.',
+      },
+      {
+        h: 'An engagement that ends in evidence',
+        body:
+          'Every completed piece of work links to the commit behind it, in the '
+          + 'participant’s own repository. You can show a sponsor what each named '
+          + 'person built instead of attendance and a feedback form.',
+      },
+      {
+        h: 'Built on the tooling your clients are already asking about',
+        body:
+          'We build on Claude and Claude Code. Your clients are raising it in meetings '
+          + 'already, and the work your people deliver is done with it rather than about it.',
+      },
+    ],
+    proof:
+      'A partner is judged on what the client can do once you have left, which is a harder '
+      + 'bar than whether the engagement went well. This is the part worth checking rather '
+      + 'than believing: open a published record and follow it to the commit.',
+    ctaLabel: 'Talk to us about partnering',
   },
 ];
 
