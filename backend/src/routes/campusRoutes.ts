@@ -7,6 +7,8 @@ import { isCampusArea } from '../services/campus/campusAreas';
 import { touchCampusArea, getCampusPresence } from '../services/campus/campusPresenceService';
 import { getStaffDesks } from '../services/campus/campusStaffDesks';
 import { waveAt } from '../services/campus/campusWave';
+import { campusAudienceFor } from '../services/campus/campusAudience';
+import { requestTourHandoff } from '../services/campus/campusTourHandoff';
 
 /**
  * Colaberry Campus learner endpoints (Basecamp C1 onward). Mounted with the
@@ -140,11 +142,39 @@ export async function postWaveRoute(req: Request, res: Response): Promise<void> 
   }
 }
 
+// ---- C7: the Explorer tour's opt-in admissions handoff (see campusTourHandoff.ts) ----
+const TourCompleteBody = z.object({ tour: z.literal('explorer') }).strict();
+export const TourCompleteResponse = z.object({
+  handoff: z.boolean(),
+  reason: z.enum(['created', 'already_open', 'closed', 'disabled', 'unavailable']),
+}).strict();
+
+/** POST /api/portal/campus/tour/complete {tour:'explorer'} - the "Have admissions reach out to me" click (Ali: the click is the
+ *  consent). Pilot only; Explorers only (the same audience rule the campus uses); the subject comes ONLY from the token. Read-only
+ *  "view as" tokens are refused for every POST by requireParticipant. A failing audience lookup writes nothing (500). */
+export async function postTourCompleteRoute(req: Request, res: Response): Promise<void> {
+  const parsed = TourCompleteBody.safeParse(req.body ?? {});
+  if (!parsed.success) { res.status(400).json({ error: 'Invalid body', error_class: 'ValidationFailed' }); return; }
+  if (!campusOnFor(req)) { res.status(403).json({ error: 'The campus is not enabled for this account', error_class: 'CampusNotEnabled' }); return; }
+  const enrollmentId = req.participant!.sub;
+  let audience: string;
+  try {
+    audience = await campusAudienceFor(enrollmentId);
+  } catch (err) {
+    logFailure('campus_tour_audience_failed', err);
+    res.status(500).json({ error: 'Could not check this account', error_class: 'CampusAudienceUnavailable' });
+    return;
+  }
+  if (audience !== 'explorer') { res.status(403).json({ error: 'Only Explorer accounts can ask admissions from the tour', error_class: 'NotExplorer' }); return; }
+  sendValidated(res, TourCompleteResponse, await requestTourHandoff(enrollmentId), 'campus_tour_complete');
+}
+
 const router = Router();
 router.get('/api/portal/campus/flags', requireParticipant, getCampusFlags);
 router.post('/api/portal/campus/here', requireParticipant, postCampusHere);
 router.get('/api/portal/campus/presence', requireParticipant, getCampusPresenceRoute);
 router.get('/api/portal/campus/staff-desks', requireParticipant, getStaffDesksRoute);
 router.post('/api/portal/campus/wave', requireParticipant, postWaveRoute);
+router.post('/api/portal/campus/tour/complete', requireParticipant, postTourCompleteRoute);
 
 export default router;

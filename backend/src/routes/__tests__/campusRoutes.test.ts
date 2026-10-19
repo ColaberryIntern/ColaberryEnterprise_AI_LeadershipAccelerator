@@ -17,6 +17,10 @@ const mockGetDesks = jest.fn();
 jest.mock('../../services/campus/campusStaffDesks', () => ({ getStaffDesks: (...a: unknown[]) => mockGetDesks(...a) }));
 const mockWave = jest.fn();
 jest.mock('../../services/campus/campusWave', () => ({ waveAt: (...a: unknown[]) => mockWave(...a) }));
+// C7: the tour route loads the audience rule and the handoff writer; mocked here (campusTourRoute.test covers them) so each
+// isolated router stays cheap to load.
+jest.mock('../../services/campus/campusAudience', () => ({ campusAudienceFor: jest.fn() }));
+jest.mock('../../services/campus/campusTourHandoff', () => ({ requestTourHandoff: jest.fn() }));
 
 import express from 'express';
 import request from 'supertest';

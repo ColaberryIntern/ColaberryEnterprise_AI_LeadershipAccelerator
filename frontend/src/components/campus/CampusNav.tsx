@@ -7,6 +7,7 @@ import { useCampus } from './CampusContext';
 import { useCampusView } from './useCampusView';
 import { accessLabel } from './campusAccess';
 import { buildingForPath, buildingName } from './campusMap';
+import { tourFor } from './tourSteps';
 
 /**
  * The campus in the portal's left column (Campus C2), in place of nav.te-nav when the campus
@@ -14,8 +15,9 @@ import { buildingForPath, buildingName } from './campusMap';
  * one-click link to its main page, and the way back to the classic menu.
  */
 export default function CampusNav({ active }: { active: string }): React.ReactElement {
-  const { settings, openMap, openList, updateSettings, presence, presenceError } = useCampus();
-  const { buildings, accessOf } = useCampusView();
+  const { settings, openMap, openList, updateSettings, presence, presenceError, startTour } = useCampus();
+  const { buildings, accessOf, audience } = useCampusView();
+  const hasTour = !!tourFor(audience, buildings, accessOf, settings.workplaceNames); // C7: everyone but staff
   const { buildings: onAir } = useCampusOnAir();
   const here = buildingForPath(active);
   const counts: Record<string, number> = {};
@@ -27,6 +29,7 @@ export default function CampusNav({ active }: { active: string }): React.ReactEl
           workplaceNames={settings.workplaceNames} reduceMotion={settings.reduceMotion} compact onArrive={(id) => openMap(id)} counts={counts} onAir={onAir} />
       </div>
       <button type="button" className="cm-btn cm-nav-open" onClick={() => openMap()} data-testid="cm-open-map">Open campus map</button>
+      {hasTour && <button type="button" className="cm-link cm-nav-tour" onClick={startTour} data-testid="cm-tour-start">Take the tour</button>}
       <div className="grp">Buildings</div>
       <ul className="cm-nav-list">
         {buildings.filter((b) => b.id !== 'gate').map((b) => {

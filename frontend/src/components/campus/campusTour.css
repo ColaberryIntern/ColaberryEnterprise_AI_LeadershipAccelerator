@@ -1,0 +1,27 @@
+/* Colaberry Campus C7: the guided tour card and the Explorer end. Shell tokens only, no hex. */
+
+.cm-tour{max-width:380px}
+.cm-tour-kick{font-size:12px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.cm-tour-count{margin-top:4px;font-size:13px;color:var(--muted)}
+.cm-tour .cm-card-title:focus{outline:none}
+.cm-tour .cm-card-title:focus-visible{outline:3px solid var(--berry);outline-offset:2px;border-radius:var(--r-12)}
+.cm-tour-tag{display:inline-block;align-self:flex-start;width:fit-content;margin:4px 0 2px;padding:2px 10px;border-radius:var(--r-pill);font-size:12px;font-weight:800;
+  background:var(--sunken);color:var(--strong);border:1px solid var(--border-sub)}
+.cm-tour-tag.is-open{background:var(--leaf-deep);border-color:var(--leaf-deep);color:var(--surface)}
+.cm-tour-tag.is-preview,.cm-tour-tag.is-demo{background:var(--amber);border-color:var(--amber);color:var(--strong)}
+.cm-tour-tag.is-locked{background:var(--strong);border-color:var(--strong);color:var(--surface)}
+.cm-tour-title{margin:8px 0 4px;font-weight:700;font-size:16px;color:var(--strong)}
+.cm-tour-what{margin:0 0 8px;font-size:14px;line-height:1.5;color:var(--body)}
+.cm-tour-can{margin:4px 0 8px;padding-left:20px;font-size:14px;line-height:1.6}
+.cm-tour-tip{margin:8px 0 0;padding:8px 10px;border-radius:var(--r-12);background:var(--sunken);font-size:13px;line-height:1.45;color:var(--body)}
+/* The card scrolls when it is taller than its box (phones cap it at 55%); Back / Next stay pinned to its bottom edge. */
+.cm-tour-nav{display:flex;align-items:center;gap:8px;margin-top:14px;position:sticky;bottom:-1px;padding:8px 0;background:var(--surface)}
+.cm-tour-dots{display:flex;gap:4px;margin:0 auto}
+.cm-tour-dots i{width:7px;height:7px;border-radius:50%;background:var(--border)}
+.cm-tour-dots i.done{background:var(--muted)}
+.cm-tour-dots i.on{background:var(--berry)}
+.cm-tour-x{display:block;margin:10px auto 0;font-size:13px}
+.cm-tour-endopts{display:flex;flex-direction:column;align-items:flex-start;gap:8px}
+.cm-tour-done-line{margin:8px 0;padding:10px 12px;border-radius:var(--r-12);border-left:4px solid var(--leaf-deep);background:var(--sunken);
+  font-size:14px;line-height:1.5;color:var(--strong)}
+.cm-nav-tour{display:block;margin:6px auto 0;font-size:14px}

@@ -9,7 +9,7 @@ import path from 'path';
 const DIR = path.join(__dirname, '..');
 const TOKENS = path.join(__dirname, '..', '..', '..', 'colaberry', 'tokens');
 const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, '');
-const CSS = ['campus.css', 'campusBanner.css', 'campusPeople.css', 'campusAudiences.css', 'campusLive.css'].map((f) => strip(fs.readFileSync(path.join(DIR, f), 'utf8'))).join('\n');
+const CSS = ['campus.css', 'campusBanner.css', 'campusPeople.css', 'campusAudiences.css', 'campusLive.css', 'campusTour.css'].map((f) => strip(fs.readFileSync(path.join(DIR, f), 'utf8'))).join('\n');
 const GLOBAL = fs.readdirSync(TOKENS).filter((f) => f.endsWith('.css')).map((f) => fs.readFileSync(path.join(TOKENS, f), 'utf8')).join('\n');
 
 const scopeBody = (css: string) => (css.match(/\.cm-scope\{([^}]*)\}/) ?? [])[1] ?? '';
