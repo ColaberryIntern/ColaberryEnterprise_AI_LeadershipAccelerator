@@ -1005,10 +1005,21 @@ export interface RequirementItem {
   dueAt?: string | null;
 }
 
+/** Per-file extraction outcome — the server's "honesty rail": one row per file in the ZIP so nothing is silently
+ *  dropped. Mirrors the backend ExtractedFileOutcome; lets the UI explain WHY an extraction yielded no candidates. */
+export interface ExtractedFileOutcome {
+  name: string;
+  status: 'extracted' | 'empty' | 'unsupported' | 'unreadable' | 'image_only_pdf' | 'skipped_budget';
+  chars: number;
+  truncated: boolean;
+  warning: string | null;
+}
+
 /** READ-ONLY: upload the solicitation ZIP and get back the extractor's candidate requirements for the reviewer to
  *  confirm. Persists nothing server-side — establishment stays the deliberate, confirmed write. `items` is the same
- *  candidates grouped into the 4-category map; `candidates` stays the Raw/Checklist view. */
-export async function extractGovQualificationRequirements(canonicalOpportunityId: string, file: File): Promise<{ candidates: ExtractedRequirementCandidate[]; items?: RequirementItem[]; fileCount: number }> {
+ *  candidates grouped into the 4-category map; `candidates` stays the Raw/Checklist view. `files` is the per-file
+ *  outcome rail (optional for back-compat), used to explain a zero-candidate extraction. */
+export async function extractGovQualificationRequirements(canonicalOpportunityId: string, file: File): Promise<{ candidates: ExtractedRequirementCandidate[]; items?: RequirementItem[]; fileCount: number; files?: ExtractedFileOutcome[] }> {
   const form = new FormData();
   form.append('document', file);
   const { data } = await api.post(qUrl(canonicalOpportunityId, '/extract-requirements'), form, { headers: { 'Content-Type': 'multipart/form-data' } });

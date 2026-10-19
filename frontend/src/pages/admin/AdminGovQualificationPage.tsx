@@ -9,7 +9,7 @@ import {
   assignGovBuildStory, unassignGovBuildStory,
   saveGovProposalResponse, reviewGovProposalResponse, addGovProposalFigure, removeGovProposalFigure, saveGovProposalDraft, resolveGovProposalGap, draftGovProposalWithAI, recordGovProposalAmendment,
   exportGovSubmission, downloadGovSubmissionPackage, recordGovSubmissionReceipt, acknowledgeGovSubmission, reopenGovSubmission, recordGovOutcome,
-  type GovQualificationWorkspace, type QualRequirementEval, type GovCandidatesResult, type EstablishedRequirement,
+  type GovQualificationWorkspace, type QualRequirementEval, type GovCandidatesResult, type EstablishedRequirement, type ExtractedFileOutcome,
   type ServiceMatch, type ExtractedRequirementCandidate, type RequirementItem, type ReqItemCategory, type GovOpportunity, type GovDossier, type GovRelationship,
   type GovResponseSlot, type GovBuildPlan, type GovBuildStory, type GovAssignableBuilder,
   type GovResponseFigure, type GovResponseGap, type GovProposalAmendment, type GovSubmission, type GovSubmissionReadiness,
@@ -45,6 +45,27 @@ type OppDetail = { opportunity: GovOpportunity | null; source: 'live' | 'snapsho
 
 /** Per-candidate reviewer choices while confirming extracted requirements into established ones. */
 interface CandidateRow { checked: boolean; applicability: string; dueStage: string; }
+
+/** When an extraction yields ZERO candidates, explain WHY from the per-file outcomes so "add them by hand" is an
+ *  informed choice, not a shrug. Returns null to let the generic copy stand. PURE. */
+function noCandidatesReason(files: ExtractedFileOutcome[] | null): string | null {
+  if (!files || files.length === 0) return null;
+  const has = (s: ExtractedFileOutcome['status']): boolean => files.some((f) => f.status === s);
+  const readable = files.filter((f) => f.status === 'extracted');
+  if (files.every((f) => f.status === 'unreadable')) {
+    return 'The upload did not open as a readable ZIP (it may be password-protected, an encrypted/ZIP64 archive, or not a ZIP at all). Re-export the solicitation ZIP from the source, or add the requirements by hand below.';
+  }
+  if (readable.length === 0 && has('image_only_pdf')) {
+    return 'The PDF(s) in this ZIP have no selectable text — they look scanned / image-only, so nothing could be read. Add the requirements by hand below (or run the files through OCR first).';
+  }
+  if (readable.length === 0 && has('unsupported')) {
+    return 'None of the files in this ZIP are a supported type (PDF, DOCX, XLSX, TXT), so nothing could be read. Add the requirements by hand below.';
+  }
+  if (readable.length > 0) {
+    return 'The documents were read, but no requirement-style phrasing (shall / must / should / responsible for / describe …) was found. Add the requirements by hand below.';
+  }
+  return null;
+}
 
 const AUTHORITATIVE_ROLES = ['solicitation', 'final_pws_sow', 'amendment'];
 
@@ -988,6 +1009,8 @@ export default function AdminGovQualificationPage(): React.ReactElement {
   const [candidates, setCandidates] = useState<ExtractedRequirementCandidate[] | null>(null);
   const [items, setItems] = useState<RequirementItem[] | null>(null);
   const [candRows, setCandRows] = useState<Record<string, CandidateRow>>({});
+  // Per-file extraction outcomes (the server's honesty rail) — drives a specific reason when 0 candidates come back.
+  const [extractOutcomes, setExtractOutcomes] = useState<ExtractedFileOutcome[] | null>(null);
   const [solView, setSolView] = useState<SolView>('map');
   const [extractBusy, setExtractBusy] = useState(false);
   const [extractError, setExtractError] = useState<string | null>(null);
@@ -1062,6 +1085,7 @@ export default function AdminGovQualificationPage(): React.ReactElement {
     try {
       const r = await extractGovQualificationRequirements(canonical, extractFile);
       setCandidates(r.candidates);
+      setExtractOutcomes(r.files ?? null);
       const its = r.items ?? null;
       setItems(its);
       // Default each candidate's due-stage from its item category when the taxonomy is present (scope -> delivery,
@@ -1079,6 +1103,7 @@ export default function AdminGovQualificationPage(): React.ReactElement {
       setExtractError(err?.response?.data?.error ?? 'Could not extract requirements from the document.');
       setCandidates(null);
       setItems(null);
+      setExtractOutcomes(null);
       return false;
     } finally {
       setExtractBusy(false);
@@ -1136,7 +1161,7 @@ export default function AdminGovQualificationPage(): React.ReactElement {
     const merged = Array.from(byId.values());
     void run(async () => {
       await recordGovQualificationDecision(canonical, { biddingEntity, expectedVersion: version, decision: 'needs_evidence', establishedRequirements: merged });
-      setCandidates(null); setItems(null); setCandRows({});
+      setCandidates(null); setItems(null); setCandRows({}); setExtractOutcomes(null);
     }, `Established ${mapped.length} requirement(s) from the solicitation.`);
   };
 
@@ -1413,7 +1438,10 @@ export default function AdminGovQualificationPage(): React.ReactElement {
               {extractError && <div className="alert alert-danger py-2" role="alert">{extractError}</div>}
               {candidates !== null && candidates.length === 0 && (
                 <>
-                  <div className="text-secondary small mb-0"><i className="ri-information-line me-1" aria-hidden="true" />No requirements detected in that ZIP (it may be a scanned PDF, or the obligations may be phrased without the usual shall/must/will triggers). Establish at least one by hand below.</div>
+                  <div className="alert alert-warning py-2 small mb-0" role="status">
+                    <i className="ri-information-line me-1" aria-hidden="true" />
+                    {noCandidatesReason(extractOutcomes) ?? 'No requirements detected in that ZIP. Establish at least one by hand below.'}
+                  </div>
                   <ManualRequirementForm busy={busy} noRecord={!record} onEstablish={establishManual} />
                 </>
               )}
