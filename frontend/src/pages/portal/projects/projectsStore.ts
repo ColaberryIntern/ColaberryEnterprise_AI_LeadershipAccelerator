@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react';
 import salonData from './salonData.json';
 import { adoptServerIds, isUuid } from './projectIdentity';
+import {
+  VIEW_AS_TOKEN_KEY, decodeParticipantClaims, getParticipantToken,
+} from '../../../utils/participantToken';
 
 // ============================================================================
 // Portal-native project store — the student's "builds" live HERE (not Basecamp),
@@ -173,7 +176,67 @@ export type NewBuildAnswers = {
 };
 
 // ── persistence ────────────────────────────────────────────────────────────
-const KEY = 'te_projects_v1';
+//
+// SCOPED TO THE PERSON WHOSE PORTAL IS ON SCREEN, not to the browser.
+//
+// This used to be one flat key. localStorage is per-ORIGIN, so a single slot
+// meant "whoever last used this browser", and an admin opening "View as
+// <member>" saw their OWN builds rendered under that member's name and points.
+// Reported 2026-10-19: viewing as Kalkidan Bezabeh showed Ali's three builds.
+// The server was right the whole time — she has zero projects and he has three
+// — so nothing leaked out of the API; the browser cache simply answered first
+// and the page believed it.
+//
+// Two rules now:
+//   1. The key carries the subject of the token the page is actually using, so
+//      two identities in one browser cannot land in the same slot.
+//   2. A "View as" preview reads and writes sessionStorage instead of
+//      localStorage. That is the same reasoning the view-as TOKEN already uses
+//      (utils/participantToken.ts): tab-scoped, gone when the tab closes, and
+//      it keeps one member's build data from being parked in an admin's
+//      browser indefinitely by a feature whose banner promises read-only.
+const LEGACY_KEY = 'te_projects_v1';
+const KEY_PREFIX = 'te_projects_v1__';
+
+/** Where this tab's project cache lives, and under what name. */
+function storageSlot(): { area: Storage; key: string; isViewAs: boolean } {
+  try {
+    const viewAs = sessionStorage.getItem(VIEW_AS_TOKEN_KEY);
+    const sub = decodeParticipantClaims(getParticipantToken())?.sub;
+    if (viewAs) {
+      // Unknown subject still gets its own slot rather than the shared one: a
+      // preview must never be able to read or write the admin's own builds.
+      return { area: sessionStorage, key: KEY_PREFIX + (sub || 'viewas'), isViewAs: true };
+    }
+    // No identity yet (signed out, or a token we cannot read) keeps the legacy
+    // slot, so an existing signed-in student sees no change at all.
+    return { area: localStorage, key: sub ? KEY_PREFIX + sub : LEGACY_KEY, isViewAs: false };
+  } catch {
+    // Private mode / storage disabled. read() and write() both handle a
+    // throwing area already; returning localStorage keeps that single path.
+    return { area: localStorage, key: LEGACY_KEY, isViewAs: false };
+  }
+}
+
+/**
+ * Move a signed-in student's existing builds into their own slot, once.
+ *
+ * Without this every current student would open the portal to an empty page
+ * until the backend sync refilled it, and any build that never reached the
+ * server would be gone for good. Deliberately NOT done for a view-as preview:
+ * the legacy blob belongs to whoever owns this browser, and copying it into the
+ * impersonated member's slot would recreate the exact bug this fixes.
+ */
+function adoptLegacy(slot: { area: Storage; key: string; isViewAs: boolean }): void {
+  if (slot.isViewAs || slot.key === LEGACY_KEY) return;
+  try {
+    if (slot.area.getItem(slot.key) !== null) return;   // already has its own
+    const legacy = localStorage.getItem(LEGACY_KEY);
+    if (legacy === null) return;
+    slot.area.setItem(slot.key, legacy);
+    localStorage.removeItem(LEGACY_KEY);
+  } catch { /* quota / private mode — the backend sync is authoritative anyway */ }
+}
 
 /**
  * Move any storage keyed on a project id that just changed.
@@ -215,7 +278,9 @@ function healProjectIds(list: StudentProject[]): StudentProject[] {
 
 function read(): StudentProject[] {
   try {
-    const raw = localStorage.getItem(KEY);
+    const slot = storageSlot();
+    adoptLegacy(slot);
+    const raw = slot.area.getItem(slot.key);
     if (raw) {
       const list = JSON.parse(raw) as StudentProject[];
       // migrate: (re)seed the training sample when it is MISSING or STALE. A
@@ -278,7 +343,8 @@ function logStoreFailure(event: string, err: unknown): void {
  */
 function write(list: StudentProject[]): boolean {
   try {
-    localStorage.setItem(KEY, JSON.stringify(list));
+    const slot = storageSlot();
+    slot.area.setItem(slot.key, JSON.stringify(list));
     return true;
   } catch (err) {
     logStoreFailure('projects_cache_write_failed', err);
