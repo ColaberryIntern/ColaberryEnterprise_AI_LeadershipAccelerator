@@ -563,6 +563,7 @@ const proposalSummaryBody = z.object({
   requirements: z.array(z.object({ id: z.string().max(60), text: z.string().max(4000) })).max(200),
   title: z.string().max(300).nullable().optional(),
   buyer: z.string().max(200).nullable().optional(),
+  synopsis: z.string().max(8000).nullable().optional(),
 });
 
 /** POST …/proposal-summary — "what they want / what we'd build" from the established requirement statements. */

@@ -134,6 +134,17 @@ export function byNeediest(a: InternRow, b: InternRow): number {
   return rank(b) - rank(a);
 }
 
+/**
+ * Sort the roster with UNASSIGNED interns (no project) first - the people available to staff onto
+ * something - then by neediest within each group so the triage signal is preserved inside each band.
+ */
+export function byUnassignedFirst(a: InternRow, b: InternRow): number {
+  const ap = a.project === null ? 0 : 1;
+  const bp = b.project === null ? 0 : 1;
+  if (ap !== bp) return ap - bp; // no-project (0) ahead of has-project (1)
+  return byNeediest(a, b);
+}
+
 /** Weeks 0-10, the span the design's strip covers. */
 export const STRIP_WEEKS: readonly number[] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 

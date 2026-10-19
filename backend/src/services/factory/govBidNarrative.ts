@@ -109,7 +109,7 @@ export async function generateRiskNarrative(facts: RiskNarrativeFacts): Promise<
   }
 }
 
-export interface ProposalSummaryRequest { requirements: { id: string; text: string }[]; title?: string | null; buyer?: string | null; }
+export interface ProposalSummaryRequest { requirements: { id: string; text: string }[]; title?: string | null; buyer?: string | null; synopsis?: string | null; }
 export interface ProposalSummaryResult { whatTheyWant: string; whatWedBuild: string; cached: boolean; generatedAt: string; error?: string; }
 
 export async function generateProposalSummary(req: ProposalSummaryRequest): Promise<ProposalSummaryResult> {
@@ -118,19 +118,26 @@ export async function generateProposalSummary(req: ProposalSummaryRequest): Prom
     return { whatTheyWant: '', whatWedBuild: '', cached: false, generatedAt: now(), error: 'AI summary is unavailable (no API key configured).' };
   }
   const reqs = (Array.isArray(req.requirements) ? req.requirements : []).slice(0, 120); // bound prompt size
-  if (reqs.length === 0) {
+  // At the Snapshot step no requirements are established yet, so fall back to the opportunity's own synopsis (the
+  // preliminary summary already shown on the opportunity details). Only truly empty input - no requirements AND no
+  // synopsis - still errors.
+  const synopsis = clampStr(req.synopsis, 6000);
+  if (reqs.length === 0 && !synopsis) {
     return { whatTheyWant: '', whatWedBuild: '', cached: false, generatedAt: now(), error: 'No established requirements to summarize yet.' };
   }
-  const key = 'prop:' + hash({ reqs, t: req.title ?? null, b: req.buyer ?? null });
+  const key = 'prop:' + hash({ reqs, syn: synopsis || null, t: req.title ?? null, b: req.buyer ?? null });
   const hit = cacheGet<ProposalSummaryResult>(key);
   if (hit) return { ...hit, cached: true };
 
   const system =
-    'You summarize a government solicitation for a small firm deciding what to build. Work ONLY from the requirement statements provided — ' +
-    'never invent requirements, scope, numbers, or capabilities the requirements do not imply. Return strict JSON ' +
-    '{"whatTheyWant": string, "whatWedBuild": string}. whatTheyWant: 3-5 sentences on what the buyer is asking for. ' +
-    'whatWedBuild: 3-5 sentences on the solution we would deliver to satisfy these requirements, concrete about the system and the work. Plain prose, no markdown.';
-  const user = `Opportunity: ${req.title || '(untitled)'}${req.buyer ? ` — ${req.buyer}` : ''}\nRequirements (${reqs.length}):\n${reqs.map((r) => `- ${r.id}: ${r.text}`).join('\n')}`;
+    'You summarize a government solicitation for a small firm deciding what to build. Work ONLY from the requirement statements provided, ' +
+    'or, when no requirements are given, from the opportunity synopsis provided - never invent requirements, scope, numbers, or capabilities the inputs do not imply. ' +
+    'Return strict JSON {"whatTheyWant": string, "whatWedBuild": string}. whatTheyWant: 3-5 sentences on what the buyer is asking for. ' +
+    'whatWedBuild: 3-5 sentences on the solution we would deliver to satisfy it, concrete about the system and the work. Plain prose, no markdown.';
+  const basis = reqs.length > 0
+    ? `Requirements (${reqs.length}):\n${reqs.map((r) => `- ${r.id}: ${r.text}`).join('\n')}`
+    : `Opportunity synopsis (no requirements established yet):\n${synopsis}`;
+  const user = `Opportunity: ${req.title || '(untitled)'}${req.buyer ? ` — ${req.buyer}` : ''}\n${basis}`;
 
   try {
     const client = getInstrumentedOpenAI({ workflow_id: 'gov_proposal_summary' }, { timeout: 60000, maxRetries: 1 });

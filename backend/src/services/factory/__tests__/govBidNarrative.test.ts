@@ -72,6 +72,23 @@ describe('govBidNarrative (advisory AI, downstream of the deterministic engine)'
     expect(call.messages[1].content).toContain('Provide an AI IVR solution');
   });
 
+  it('proposal summary: summarizes the opportunity SYNOPSIS when no requirements are established yet (Snapshot)', async () => {
+    const client = mockClient(JSON.stringify({ whatTheyWant: 'A K-12 assessment platform.', whatWedBuild: 'We build an assessment system.' }));
+    (getInstrumentedOpenAI as jest.Mock).mockReturnValue(client);
+    const r = await generateProposalSummary({ requirements: [], synopsis: 'Northside ISD seeks a K-12 assessment, analysis and learning management platform.', title: 'K-12 Assessment', buyer: 'Northside ISD' });
+    expect(r.error).toBeUndefined();
+    expect(r.whatTheyWant).toContain('assessment');
+    const call = client.chat.completions.create.mock.calls[0][0];
+    expect(call.messages[1].content).toContain('Opportunity synopsis'); // sourced from the synopsis, not requirements
+    expect(call.messages[1].content).toContain('K-12 assessment');
+  });
+
+  it('proposal summary: still errors (no model call) when there is neither a requirement NOR a synopsis', async () => {
+    const r = await generateProposalSummary({ requirements: [], synopsis: '   ' });
+    expect(r.error).toBeTruthy();
+    expect(getInstrumentedOpenAI).not.toHaveBeenCalled();
+  });
+
   it('clarifications: errors (no throw) with no requirements, and never calls the model', async () => {
     const r = await generateClarificationQuestions({ requirements: [] });
     expect(r.error).toBeTruthy();

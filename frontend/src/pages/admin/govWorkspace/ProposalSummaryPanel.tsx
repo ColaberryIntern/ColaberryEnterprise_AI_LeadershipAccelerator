@@ -6,16 +6,20 @@ import { getGovProposalSummary, type GovProposalSummary } from '../../../service
  * Advisory only: it is generated from the ESTABLISHED requirement statements and nothing else, so it
  * never invents scope. It changes no gate and does not author any response.
  */
-export function ProposalSummaryPanel({ canonical, requirements, title, buyer }: {
+export function ProposalSummaryPanel({ canonical, requirements, title, buyer, synopsis }: {
   canonical: string;
   requirements: { id: string; text: string }[];
   title?: string | null;
   buyer?: string | null;
+  /** The opportunity's existing synopsis (its preliminary summary). Lets the summary run at Snapshot, before any
+   *  requirement is established — it summarizes what already exists rather than requiring the requirement set. */
+  synopsis?: string | null;
 }): React.ReactElement {
   const storeKey = `govProposalSummary:${canonical}`;
   const [summary, setSummary] = useState<GovProposalSummary | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const canSummarize = requirements.length > 0 || !!(synopsis && synopsis.trim());
   // Keep the previously-generated summary (per-viewer convenience) so a revisit does not force a re-run.
   useEffect(() => {
     try { const raw = localStorage.getItem(storeKey); if (raw) setSummary(JSON.parse(raw) as GovProposalSummary); } catch { /* storage may be unavailable */ }
@@ -23,7 +27,7 @@ export function ProposalSummaryPanel({ canonical, requirements, title, buyer }: 
   const run = async (): Promise<void> => {
     setBusy(true); setErr(null);
     try {
-      const s = await getGovProposalSummary(canonical, { requirements, title: title ?? null, buyer: buyer ?? null });
+      const s = await getGovProposalSummary(canonical, { requirements, title: title ?? null, buyer: buyer ?? null, synopsis: synopsis ?? null });
       setSummary(s);
       try { localStorage.setItem(storeKey, JSON.stringify(s)); } catch { /* ignore */ }
     } catch { setErr('Could not generate the summary right now.'); }
@@ -31,10 +35,10 @@ export function ProposalSummaryPanel({ canonical, requirements, title, buyer }: 
   };
   return (
     <div className="mb-3">
-      <button type="button" className="btn btn-outline-primary btn-sm" disabled={busy || requirements.length === 0} onClick={() => { void run(); }}>
+      <button type="button" className="btn btn-outline-primary btn-sm" disabled={busy || !canSummarize} onClick={() => { void run(); }}>
         <i className="ri-sparkling-2-line me-1" aria-hidden="true" />{busy ? 'Summarizing…' : summary ? 'Re-run AI summary' : 'Summarize this opportunity (AI)'}
       </button>
-      {requirements.length === 0 && <div className="small text-secondary mt-1">Establish the cited requirements first — the summary reads from them.</div>}
+      {!canSummarize && <div className="small text-secondary mt-1">Nothing to summarize yet — this opportunity has no synopsis, so establish the cited requirements first.</div>}
       {err && <div className="alert alert-warning py-2 mt-2 mb-0 small" role="status">{err}</div>}
       {summary && (summary.whatTheyWant || summary.whatWedBuild) && (
         <div className="row g-3 mt-1">

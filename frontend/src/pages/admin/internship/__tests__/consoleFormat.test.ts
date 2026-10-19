@@ -11,7 +11,7 @@
  *     10 real interns have no pace at all because their cohort has no sessions.
  */
 import {
-  ago, paceLabel, certLabel, needsAttention, matchesFilter, byNeediest,
+  ago, paceLabel, certLabel, needsAttention, matchesFilter, byNeediest, byUnassignedFirst,
   stripCells, gateCleared, LEVEL_ORDER, LEVEL_LABEL, STRIP_WEEKS,
 } from '../consoleFormat';
 import { InternRow, WeekRow } from '../../../../services/adminInternConsoleApi';
@@ -176,6 +176,15 @@ describe('sorting the neediest first', () => {
 
     expect([fresh, long, never].sort(byNeediest).map((r) => r.enrollment_id))
       .toEqual(['never', 'long', 'fresh']);
+  });
+
+  it('byUnassignedFirst puts interns with NO project first, neediest within each group', () => {
+    const proj = { project_id: 'p', name: 'x', stage: 'implementation', tasks_total: 1, tasks_complete: 0, tasks_pct: 0, has_repo: false, command_center_url: null };
+    const uStale = row({ enrollment_id: 'u-stale', project: null, activity: { ...row().activity, days_since: 30, level: 'black' } });
+    const uFresh = row({ enrollment_id: 'u-fresh', project: null, activity: { ...row().activity, days_since: 1, level: 'green' } });
+    const aStale = row({ enrollment_id: 'a-stale', project: proj, activity: { ...row().activity, days_since: 99, level: 'black' } });
+    const out = [aStale, uFresh, uStale].sort(byUnassignedFirst).map((r) => r.enrollment_id);
+    expect(out).toEqual(['u-stale', 'u-fresh', 'a-stale']); // both unassigned ahead of the (stalest) assigned; neediest within
   });
 });
 

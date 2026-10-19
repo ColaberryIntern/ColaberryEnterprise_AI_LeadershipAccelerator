@@ -1500,9 +1500,13 @@ export default function AdminGovQualificationPage(): React.ReactElement {
 
           {(ws.source || isDecoupled) && (
             <SectionCard title="What they want / what we&apos;d build (AI)" icon="sparkling-2-line"
-              subtitle="An advisory read of the opportunity, generated from the established requirements to frame the proposal. It authors nothing and changes no gate.">
+              subtitle="An advisory read of the opportunity. Before any requirement is established it summarizes the opportunity's own synopsis; once requirements are established it reads from them. Authors nothing, changes no gate.">
+              {oppDetail?.opportunity?.preliminarySummary && (
+                <div className="small mb-2"><span className="text-secondary">From the opportunity listing: </span>{oppDetail.opportunity.preliminarySummary}</div>
+              )}
               <ProposalSummaryPanel canonical={canonical}
                 requirements={(established ?? []).map((r) => ({ id: r.id, text: r.text }))}
+                synopsis={oppDetail?.opportunity?.preliminarySummary ?? null}
                 title={oppDetail?.opportunity?.title ?? null} buyer={oppDetail?.opportunity?.agency ?? null} />
             </SectionCard>
           )}
@@ -1822,6 +1826,15 @@ export default function AdminGovQualificationPage(): React.ReactElement {
                     } else if (s.key === 'solicitation') {
                       facts.push(`${ws.evaluation?.evals.length ?? 0} requirements established`);
                       if (ws.zipAttestation && ws.zipAttestation.sha256) facts.push('ZIP attested');
+                    } else if (s.key === 'fit') {
+                      const caps = record?.requirements_json?.capabilities?.decisions ?? [];
+                      if (caps.length > 0) {
+                        facts.push(`${caps.length} capabilit${caps.length === 1 ? 'y' : 'ies'} assessed`);
+                        const have = caps.filter((c) => c.assessment === 'have').length;
+                        const partial = caps.filter((c) => c.assessment === 'partial').length;
+                        const neu = caps.filter((c) => c.assessment === 'new').length;
+                        facts.push(`${have} we have · ${partial} partial · ${neu} new`);
+                      }
                     } else if (s.key === 'decide' && record) {
                       facts.push(`Decision: ${record.decision.replace(/_/g, ' ')}`);
                     } else if (s.key === 'build' && ws.build?.deliveryProjectId) {
