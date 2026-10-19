@@ -1,6 +1,6 @@
 // Each router is a sentinel: this suite is about the ORDER the module mounts them in, not what they serve, and importing the
 // real routers would pull their controllers, models and half the service graph.
-const ROUTERS = ['participantRoutes', 'capePortalRoutes', 'careerPortfolioRoutes', 'explorerSignalRoutes', 'journeyNudgeRoutes', 'consentPromptRoutes', 'campusRoutes'] as const;
+const ROUTERS = ['participantRoutes', 'capePortalRoutes', 'careerPortfolioRoutes', 'explorerSignalRoutes', 'journeyNudgeRoutes', 'consentPromptRoutes', 'campusRoutes', 'gameRoomRoutes'] as const;
 jest.mock('../participantRoutes', () => ({ __esModule: true, default: 'participantRoutes' }));
 jest.mock('../capePortalRoutes', () => ({ __esModule: true, default: 'capePortalRoutes' }));
 jest.mock('../careerPortfolioRoutes', () => ({ __esModule: true, default: 'careerPortfolioRoutes' }));
@@ -8,6 +8,7 @@ jest.mock('../explorerSignalRoutes', () => ({ __esModule: true, default: 'explor
 jest.mock('../journeyNudgeRoutes', () => ({ __esModule: true, default: 'journeyNudgeRoutes' }));
 jest.mock('../consentPromptRoutes', () => ({ __esModule: true, default: 'consentPromptRoutes' }));
 jest.mock('../campusRoutes', () => ({ __esModule: true, default: 'campusRoutes' }));
+jest.mock('../gameRoomRoutes', () => ({ __esModule: true, default: 'gameRoomRoutes' }));
 
 import fs from 'fs';
 import path from 'path';
@@ -91,7 +92,8 @@ describe('the mount order, driven for real', () => {
 
   it('mounts the campus router last, after the consent prompt (Basecamp C1)', () => {
     const order = mounted();
-    expect(order[order.length - 1]).toBe('campusRoutes');
+    expect(order[order.length - 1]).toBe('gameRoomRoutes');
+    expect(order.indexOf('gameRoomRoutes')).toBe(order.indexOf('campusRoutes') + 1);
     expect(order.indexOf('campusRoutes')).toBe(order.indexOf('consentPromptRoutes') + 1);
   });
 

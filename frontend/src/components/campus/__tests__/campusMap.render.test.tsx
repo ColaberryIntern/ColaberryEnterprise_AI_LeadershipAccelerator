@@ -44,11 +44,11 @@ describe('campus map and building card', () => {
     }
   });
 
-  it('a planned route shows as opening soon, never as a link', async () => {
+  it('the Game Room (C10) is open: its card links to /portal/game-room and says nothing about opening soon', async () => {
     await mount();
     act(() => { bld('arcade').dispatchEvent(new MouseEvent('click', { bubbles: true })); });
-    expect(card()!.querySelector('a[href="/portal/game-room"]')).toBeNull();
-    expect(card()!.textContent).toMatch(/opening soon/i);
+    expect(card()!.querySelector('a[href="/portal/game-room"]')).not.toBeNull();
+    expect(card()!.textContent).not.toMatch(/opening soon/i);
   });
 
   it('an Explorer without a seat sees the members-only notice and the enroll link on a locked building', async () => {

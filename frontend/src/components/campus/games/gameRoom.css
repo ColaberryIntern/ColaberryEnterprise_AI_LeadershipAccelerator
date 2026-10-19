@@ -1,0 +1,31 @@
+/* Colaberry Campus C10: the Game Room page and cabinet. Shell tokens only, no hex. */
+
+.gr-layout{display:grid;grid-template-columns:minmax(0,1fr) 280px;gap:16px;align-items:start}
+@media (max-width:900px){ .gr-layout{grid-template-columns:1fr} }
+.gr-main{padding:16px}
+.gr-top{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.gr-pick{display:flex;gap:6px;flex-wrap:wrap}
+.gr-tab{padding:8px 14px;border-radius:var(--r-pill);border:1px solid var(--border);background:var(--surface);color:var(--strong);font:inherit;font-weight:700;cursor:pointer}
+.gr-tab.is-on{background:var(--berry);border-color:var(--berry);color:var(--surface)}
+.gr-tab:disabled{cursor:not-allowed;opacity:.6}
+.gr-tab:focus-visible{outline:3px solid var(--berry);outline-offset:2px}
+.gr-time{font-weight:800;color:var(--strong);font-variant-numeric:tabular-nums}
+.gr-blurb{margin:10px 0;color:var(--body);font-size:14px}
+.gr-cabinet{display:flex;flex-direction:column;gap:8px}
+.gr-canvas{width:100%;max-width:720px;aspect-ratio:4/3;border-radius:var(--r-12);border:1px solid var(--border-sub);background:var(--surface);touch-action:none}
+.gr-hud{display:flex;gap:16px;font-weight:700;font-size:14px;color:var(--strong);font-variant-numeric:tabular-nums}
+.gr-hint{margin:0;color:var(--muted);font-size:13px}
+.gr-start{padding:24px 0}
+.gr-done{display:flex;flex-direction:column;gap:4px;padding:16px;border-radius:var(--r-12);background:var(--sunken);border-left:4px solid var(--berry)}
+.gr-done strong{font-size:18px;color:var(--strong)}
+.gr-warn{margin:8px 0;padding:8px 10px;border-radius:var(--r-12);background:var(--sunken);border-left:4px solid var(--amber);font-size:13px;color:var(--strong)}
+.gr-result{margin:10px 0 0;font-weight:700;color:var(--strong)}
+.gr-note{padding:16px}
+.gr-board{padding:16px}
+.gr-board-h{margin:0 0 10px;font-size:15px;color:var(--strong)}
+.gr-muted{color:var(--muted);font-size:13px}
+.gr-rows{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:4px}
+.gr-rows li{display:grid;grid-template-columns:28px 1fr auto;gap:8px;padding:6px 8px;border-radius:var(--r-12);font-size:14px}
+.gr-rows li.is-you{background:var(--sunken);font-weight:700}
+.gr-rank{color:var(--muted);font-variant-numeric:tabular-nums}
+.gr-score{font-variant-numeric:tabular-nums;font-weight:700}

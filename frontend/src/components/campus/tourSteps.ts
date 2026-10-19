@@ -27,7 +27,7 @@ const MEMBER: CopyTable = {
   commons: { title: 'Never stuck alone', what: 'Live rooms, the community feed and the people in your program.', can: ['Drop into a live room', 'Post or reply in the community', 'Message people you are allowed to message'], tip: 'Reese, the AI mentor, has a desk here when you are stuck.' },
   gallery: { title: 'Your portfolio', what: 'Your work collected into a portfolio, with a preview of how others see it.', can: ['Preview your portfolio', 'Browse the showcase'], tip: 'Check the preview before you share your portfolio with anyone.' },
   career: { title: 'Real client work', what: 'The AI internship: client work, standups and handoffs.', can: ['Open your internship', 'Follow your engagement'], tip: 'Internship work is the experience employers ask about.' },
-  arcade: { title: 'Take a real break', what: 'A room for short game breaks between lessons.', can: [], tip: 'It is not open yet. The map will show it open when it is ready.' },
+  arcade: { title: 'Take a real break', what: 'Three short games for a break between lessons, with a weekly leaderboard for your cohort.', can: ['Play Byte Chase, Launch Lab or Bug Breaker', 'See how your cohort scored this week'], tip: 'Breaks are capped at fifteen minutes a day, and games never change your learning points.' },
 };
 
 const EXPLORER: CopyTable = {

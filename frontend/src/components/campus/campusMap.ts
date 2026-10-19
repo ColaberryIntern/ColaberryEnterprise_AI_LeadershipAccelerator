@@ -106,7 +106,7 @@ export const CAMPUS_BUILDINGS: readonly CampusBuilding[] = [
     explorer: 'open', audiences: EVERYONE, pos: { x: 870, y: 546, w: 116, h: 76 } },
   { id: 'arcade', name: 'Game Room', workplaceName: 'Break Room',
     primary: { label: 'Games and leaderboards', route: '/portal/game-room' },
-    rooms: [{ label: 'Game Room', route: '/portal/game-room', planned: 'C10' }],
+    rooms: [{ label: 'Game Room', route: '/portal/game-room' }],
     prefixes: ['/portal/game-room'], explorer: 'open', audiences: EVERYONE, pos: { x: 210, y: 448, w: 108, h: 50 } },
   { id: 'gate', name: 'Main Gate', workplaceName: 'Visitor Entrance',
     primary: { label: 'Start on Today', route: '/portal/today' }, // C6: Maya's desk is in this card now; the button goes to Today, so it says so

@@ -6,6 +6,7 @@ import explorerSignalRoutes from './explorerSignalRoutes';
 import journeyNudgeRoutes from './journeyNudgeRoutes';
 import consentPromptRoutes from './consentPromptRoutes';
 import campusRoutes from './campusRoutes';
+import gameRoomRoutes from './gameRoomRoutes';
 
 /**
  * The learner-portal mounts, out of `server.ts` (Phase 5 T514).
@@ -39,4 +40,6 @@ export function mountLearnerPortalRoutes(app: Express): void {
   // Colaberry Campus (participant-authed, per route). Dark until CAMPUS_ENABLED
   // is allowlist or all; with it off the flags route answers {campus:false}.
   app.use(campusRoutes);
+  // Colaberry Campus Game Room (C10; participant-authed per route, behind the same campus pilot gate).
+  app.use(gameRoomRoutes);
 }

@@ -63,7 +63,10 @@ describe('names and copy', () => {
       expect({ stop: s.buildingId, free: /\bfree\b/i.test(text), digits: /\d/.test(text) }).toEqual({ stop: s.buildingId, free: false, digits: false });
     }
   });
-  it('the Game Room stop says it is not open yet (C10 has not shipped)', () => {
-    expect(tour('member')!.stops.find((s) => s.buildingId === 'arcade')!.tip).toMatch(/not open yet/);
+  it('the Game Room stop (C10 shipped) names the games, the 15-minute cap and that points never change', () => {
+    const stop = tour('member')!.stops.find((s) => s.buildingId === 'arcade')!;
+    expect(stop.can.join(' ')).toMatch(/Byte Chase, Launch Lab or Bug Breaker/);
+    expect(stop.tip).toMatch(/fifteen minutes a day/);
+    expect(stop.tip).toMatch(/never change your learning points/);
   });
 });

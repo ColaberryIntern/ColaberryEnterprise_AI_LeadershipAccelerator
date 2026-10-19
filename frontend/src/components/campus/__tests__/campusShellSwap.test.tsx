@@ -101,8 +101,8 @@ describe('PortalShell nav swap', () => {
     expect(container.textContent).toContain('Page body');
     // You are in the Library: its building is marked as the current page.
     expect(container.querySelector('.cm-nav-item.active')!.getAttribute('href')).toBe('/portal/library');
-    // A planned route (Game Room, C10) is never a link in the side nav.
-    expect(container.querySelector('nav.cm-nav a[href="/portal/game-room"]')).toBeNull();
+    // C10 shipped the Game Room: the side nav links to it.
+    expect(container.querySelector('nav.cm-nav a[href="/portal/game-room"]')).not.toBeNull();
     expect(container.querySelector('nav.cm-nav')!.textContent).toContain('Game Room');
   });
 
