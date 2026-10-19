@@ -52,6 +52,7 @@ import {
   handleReverseEngineer,
   handleRebuildCampaign,
 } from '../../controllers/adminCampaignController';
+import { handleCuratedEnrollment } from '../../controllers/adminCuratedEnrollmentController';
 import {
   handleCreateICPProfile,
   handleListICPProfiles,
@@ -135,6 +136,11 @@ router.delete('/api/admin/campaigns/:id', requireAdmin, handleDeleteCampaign);
 router.post('/api/admin/campaigns/:id/activate', requireAdmin, handleActivateCampaign);
 router.post('/api/admin/campaigns/:id/pause', requireAdmin, handlePauseCampaign);
 router.post('/api/admin/campaigns/:id/complete', requireAdmin, handleCompleteCampaign);
+// C6.6. Declared BEFORE the ':id' routes so "curated-enrollment" is never read as a
+// campaign id. It takes no id at all: the campaign is resolved by name and type inside the
+// service, because scoping this path to the one executive outreach campaign is a
+// requirement rather than a caller's choice.
+router.post('/api/admin/campaigns/curated-enrollment', requireAdmin, handleCuratedEnrollment);
 router.post('/api/admin/campaigns/:id/enroll-leads', requireAdmin, handleEnrollLeads);
 router.delete('/api/admin/campaigns/:id/leads/:leadId', requireAdmin, handleRemoveLeadFromCampaign);
 router.get('/api/admin/campaigns/:id/matching-leads', requireAdmin, handleGetMatchingLeads);
