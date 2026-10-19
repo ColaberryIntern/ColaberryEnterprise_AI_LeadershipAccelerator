@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { STATE_TAG } from './tourSteps';
 import type { Tour } from './tourSteps';
+import { useCardFocus } from './useCardFocus';
 
 /**
  * The guided tour card (Colaberry Campus C7), shown on the full map in place of the building card while the avatar walks from
@@ -20,6 +21,7 @@ export interface CampusTourProps {
 
 export default function CampusTour({ tour, index, onIndex, onEnd, explorerEnd }: CampusTourProps): React.ReactElement {
   const heading = useRef<HTMLHeadingElement | null>(null);
+  useCardFocus(heading); // C11: when the tour ends, focus goes back to its opener, or to the map
   useEffect(() => { heading.current?.focus(); }, [index]);
   const n = tour.stops.length;
   const atEnd = index >= n;

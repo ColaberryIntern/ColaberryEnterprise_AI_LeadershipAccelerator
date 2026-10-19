@@ -86,9 +86,12 @@ export default function StaffDesk({ desk: d, onMessaged }: StaffDeskProps): Reac
           </>
         ))}
       {isMaya && mayaOpen && (
-        <Suspense fallback={null}>
-          <MayaChatWidget mode="embedded" open onClose={() => setMayaOpen(false)} />
-        </Suspense>
+        // C11: Esc inside Maya's chat closes the chat, not the building card and map around it.
+        <div onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); setMayaOpen(false); } }} data-testid="cm-maya-chat">
+          <Suspense fallback={null}>
+            <MayaChatWidget mode="embedded" open onClose={() => setMayaOpen(false)} />
+          </Suspense>
+        </div>
       )}
       {note && <p className="cm-who-note" role="status">{note}</p>}
     </div>

@@ -12,19 +12,35 @@
 
    Each class only sets four custom properties; components style themselves
    from the variables, so a tint and its text stay paired wherever they are
-   used. Text colours were chosen to hold AA on white over their tint.
+   used. Text colours hold AA over their tint and solids hold 3:1 on the surface,
+   in light and dark (C11: three light text colours and two solids fell short and
+   were deepened within their hue; components/campus/__tests__/campusContrast.test.ts).
    Class names come from services/bandLadder.rungTone. */
 
 .rung-aware-1    { --rung-fg: #6B6B6B; --rung-bg: rgba(107,107,107,.10); --rung-line: rgba(107,107,107,.22); --rung-solid: #8C8C8C; }
 .rung-aware-2    { --rung-fg: #4F4F4F; --rung-bg: rgba(107,107,107,.18); --rung-line: rgba(107,107,107,.32); --rung-solid: #6B6B6B; }
-.rung-enabled-1  { --rung-fg: #367895; --rung-bg: rgba(54,120,149,.12);  --rung-line: rgba(54,120,149,.26);  --rung-solid: #4A8DAA; }
+.rung-enabled-1  { --rung-fg: #2E6A86; --rung-bg: rgba(54,120,149,.12);  --rung-line: rgba(54,120,149,.26);  --rung-solid: #4A8DAA; }
 .rung-enabled-2  { --rung-fg: #2A5F78; --rung-bg: rgba(54,120,149,.22);  --rung-line: rgba(54,120,149,.38);  --rung-solid: #367895; }
-.rung-builder-1  { --rung-fg: #468A2E; --rung-bg: rgba(70,138,46,.12);   --rung-line: rgba(70,138,46,.26);   --rung-solid: #6DB552; }
-.rung-builder-2  { --rung-fg: #3B7A25; --rung-bg: rgba(70,138,46,.20);   --rung-line: rgba(70,138,46,.36);   --rung-solid: #5BA63C; }
+.rung-builder-1  { --rung-fg: #3B7A25; --rung-bg: rgba(70,138,46,.12);   --rung-line: rgba(70,138,46,.26);   --rung-solid: #55A036; }
+.rung-builder-2  { --rung-fg: #326B20; --rung-bg: rgba(70,138,46,.20);   --rung-line: rgba(70,138,46,.36);   --rung-solid: #4E9A33; }
 .rung-builder-3  { --rung-fg: #2E6A1C; --rung-bg: rgba(70,138,46,.30);   --rung-line: rgba(70,138,46,.48);   --rung-solid: #468A2E; }
-.rung-builder-4  { --rung-fg: #8A5200; --rung-bg: rgba(232,146,12,.18);  --rung-line: rgba(232,146,12,.42);  --rung-solid: #E8920C; }
+.rung-builder-4  { --rung-fg: #8A5200; --rung-bg: rgba(232,146,12,.18);  --rung-line: rgba(232,146,12,.42);  --rung-solid: #C77A06; }
 .rung-architect  { --rung-fg: #C8102E; --rung-bg: rgba(229,18,29,.12);   --rung-line: rgba(229,18,29,.28);   --rung-solid: #E5121D; }
 .rung-senior     { --rung-fg: #6B2D5C; --rung-bg: rgba(107,45,92,.14);   --rung-line: rgba(107,45,92,.32);   --rung-solid: #6B2D5C; }
+
+/* Dark theme (C11): the light text colours above sit at ~2-3:1 on the dark surface. Lighter tints of the same hues hold
+   AA over their tint on the dark surface, and the solid (rings, bars) holds 3:1. Checked by
+   components/campus/__tests__/campusContrast.test.ts in both themes. */
+[data-theme="dark"] .rung-aware-1    { --rung-fg: #B0B0B0; --rung-solid: #8C8C8C; }
+[data-theme="dark"] .rung-aware-2    { --rung-fg: #C8C8C8; --rung-solid: #9C9C9C; }
+[data-theme="dark"] .rung-enabled-1  { --rung-fg: #8FBBD0; --rung-solid: #6F9DB6; }
+[data-theme="dark"] .rung-enabled-2  { --rung-fg: #A9CCDD; --rung-solid: #8FBBD0; }
+[data-theme="dark"] .rung-builder-1  { --rung-fg: #8CCB72; --rung-solid: #6DB552; }
+[data-theme="dark"] .rung-builder-2  { --rung-fg: #9DD585; --rung-solid: #77BB4A; }
+[data-theme="dark"] .rung-builder-3  { --rung-fg: #B0DE9B; --rung-solid: #8AC759; }
+[data-theme="dark"] .rung-builder-4  { --rung-fg: #F2B451; --rung-solid: #E8920C; }
+[data-theme="dark"] .rung-architect  { --rung-fg: #FF7A80; --rung-solid: #FD5760; }
+[data-theme="dark"] .rung-senior     { --rung-fg: #D79BC6; --rung-solid: #B5609F; }
 
 /* A pill that wears its rung: any element with .rung-pill + a tone class. */
 .rung-pill { color: var(--rung-fg); background: var(--rung-bg); border: 1px solid var(--rung-line); }

@@ -6,6 +6,10 @@
 .cm-token-face{fill:var(--sunken)}
 .cm-token-initials{font:700 9px var(--sans);fill:var(--strong);pointer-events:none}
 .cm-token:focus-visible .cm-token-ring,.cm-token:hover .cm-token-ring{stroke:var(--strong);stroke-width:3}
+/* C11: the target and the focus ring. The hit circle takes the clicks between and around the small drawn token. */
+.cm-token-hit{fill:transparent;pointer-events:all}
+.cm-token-focus{fill:none;stroke:none;pointer-events:none}
+.cm-token:focus-visible .cm-token-focus{stroke:var(--berry);stroke-width:3}
 .cm-token-more{font:700 11px var(--sans);fill:var(--muted)}
 
 /* Who's here chips that open a card. */
@@ -26,7 +30,7 @@
 .cm-desk-head{display:flex;align-items:center;gap:10px;margin-bottom:8px}
 .cm-desk-name{font-weight:700;color:var(--strong)}
 .cm-ai-ring{width:36px;height:36px;font-size:12px;box-shadow:0 0 0 2px var(--surface),0 0 0 4px var(--berry)}
-.cm-ai-tag{display:inline-block;margin-left:6px;padding:1px 7px;border-radius:var(--r-pill);background:var(--berry);color:var(--surface);
+.cm-ai-tag{display:inline-block;margin-left:6px;padding:1px 7px;border-radius:var(--r-pill);background:var(--cm-info);color:var(--cm-on-accent);
   font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;vertical-align:middle}
 .cm-desk-prompts{list-style:none;margin:8px 0 0;padding:0;display:grid;gap:4px}
 .cm-desk-prompts .cm-link{text-align:left;text-decoration:none}
@@ -38,4 +42,6 @@
 .cm-dm-toast .cm-card-x{position:static}
 @media(max-width:820px){
   .cm-dm-toast{left:12px;right:12px;bottom:76px}
+  /* C11: over the map or a tour the bottom of the screen holds the card and its actions (Back/Next, Message); the toast goes up top. */
+  .cm-dm-toast.is-over-layer{top:64px;bottom:auto}
 }

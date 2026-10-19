@@ -1,5 +1,5 @@
 import type { CampusBuilding } from './campusMap';
-import { buildingName } from './campusMap';
+import { buildingName, roomLabel } from './campusMap';
 
 /**
  * The banner trail "Campus > Building > Room" for the current route (Colaberry Campus C3).
@@ -20,7 +20,7 @@ export function trailFor(pathname: string, buildings: CampusBuilding[], workplac
   const campus: Crumb = { label: 'Campus' };
   for (const b of buildings) {
     const room = b.rooms.find((r) => !r.planned && !r.admin && r.route === pathname);
-    if (room) return [campus, { label: buildingName(b, workplaceNames), buildingId: b.id }, { label: room.label, route: room.route }];
+    if (room) return [campus, { label: buildingName(b, workplaceNames), buildingId: b.id }, { label: roomLabel(room, workplaceNames), route: room.route }];
   }
   let best: CampusBuilding | null = null;
   let bestLen = -1;

@@ -94,6 +94,8 @@ tmp/c6*_contacts.json
 # each person. It was very nearly written into a tracked generator file instead; the
 # data lives here and the generator reads it, exactly as the C6.4 generator does.
 tmp/c6*_messages.json
+# Campus e2e seed output: participant JWTs for the local throwaway stack (seedCampusE2E.ts).
+tmp/campus-e2e-*
 backend/tmp/
 docs/reports/
 docs/gov-contracts-daily-*.html

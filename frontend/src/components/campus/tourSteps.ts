@@ -31,7 +31,7 @@ const MEMBER: CopyTable = {
 };
 
 const EXPLORER: CopyTable = {
-  commons: { title: 'Start here: the community', what: 'Live rooms, the community feed and other learners.', can: ['Drop into a live room', 'Post or reply in the community'], tip: 'Maya at the Main Gate answers questions about enrolling.' },
+  commons: { title: 'Start here: the community', what: 'Live rooms, the community feed and other learners.', can: ['Drop into a live room', 'Post or reply in the community'], tip: 'Maya at the {gate} answers questions about enrolling.' },
   library: { title: 'Reference on demand', what: 'Documents shared with everyone in the program.', can: ['Read the guides and reference material'], tip: 'A good place to see the kind of material the program uses.' },
   amphi: { title: 'Open events', what: 'Open houses, demos and talks.', can: ['See upcoming events', 'RSVP to the ones you want'], tip: 'An open house is the quickest way to ask everything at once.' },
   lecture: { title: 'Live classes', what: 'Members get the weekly lessons and live sessions of the program.', can: ['See how a week of the program is laid out'], tip: 'Enrolled members can join every live session and check in for attendance.' },
@@ -69,12 +69,16 @@ export function tourFor(
   if (audience === 'staff') return null;
   const def = ORDER[audience];
   const stops: TourStop[] = [];
+  const gate = buildings.find((x) => x.id === 'gate');
+  const gateName = gate ? buildingName(gate, workplaceNames) : (workplaceNames ? 'Visitor Entrance' : 'Main Gate');
   for (const id of def.stops) {
     const b = buildings.find((x) => x.id === id);
     const copy = def.table[id];
     if (!b || !copy) continue;
     const state = audience === 'explorer' ? accessOf(b) : null;
-    stops.push({ ...copy, buildingId: id, name: buildingName(b, workplaceNames), state, note: state && state !== 'open' ? STATE_NOTE[state] : null });
+    // C11: copy that names another building uses its setting-aware name ({gate}), never a hard-coded campus name.
+    const tip = copy.tip.replace('{gate}', gateName);
+    stops.push({ ...copy, tip, buildingId: id, name: buildingName(b, workplaceNames), state, note: state && state !== 'open' ? STATE_NOTE[state] : null });
   }
   return { audience, name: def.name, stops };
 }

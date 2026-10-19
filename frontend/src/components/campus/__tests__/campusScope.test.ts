@@ -9,8 +9,11 @@ import path from 'path';
 const DIR = path.join(__dirname, '..');
 const TOKENS = path.join(__dirname, '..', '..', '..', 'colaberry', 'tokens');
 const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, '');
-const CSS = ['campus.css', 'campusBanner.css', 'campusPeople.css', 'campusAudiences.css', 'campusLive.css', 'campusTour.css', 'campusLook.css'].map((f) => strip(fs.readFileSync(path.join(DIR, f), 'utf8'))).join('\n');
-const GLOBAL = fs.readdirSync(TOKENS).filter((f) => f.endsWith('.css')).map((f) => fs.readFileSync(path.join(TOKENS, f), 'utf8')).join('\n');
+const CSS = ['campus.css', 'campusBanner.css', 'campusPeople.css', 'campusAudiences.css', 'campusLive.css', 'campusTour.css', 'campusLook.css', 'campusSettings.css'].map((f) => strip(fs.readFileSync(path.join(DIR, f), 'utf8'))).join('\n');
+// C11: campusTokens.css defines campus-owned contrast tokens on :root (pointing at the global palette), so they count as global.
+const CAMPUS_TOKENS = strip(fs.readFileSync(path.join(DIR, 'campusTokens.css'), 'utf8'));
+const PALETTE = fs.readdirSync(TOKENS).filter((f) => f.endsWith('.css')).map((f) => fs.readFileSync(path.join(TOKENS, f), 'utf8')).join('\n');
+const GLOBAL = `${PALETTE}\n${CAMPUS_TOKENS}`;
 
 const scopeBody = (css: string) => (css.match(/\.cm-scope\{([^}]*)\}/) ?? [])[1] ?? '';
 const declared = (body: string) => new Map(Array.from(body.matchAll(/(--[\w-]+):([^;]+);/g)).map((m) => [m[1], m[2].trim()]));
@@ -38,6 +41,14 @@ describe('.cm-scope maps the campus onto global tokens', () => {
       const target = value.match(/^var\((--[\w-]+)\)$/);
       if (!target) continue; // shadow is a literal rgba (no hex), checked by campusNoHex
       expect({ name, target: target[1], exists: definedGlobally(target[1]) }).toEqual({ name, target: target[1], exists: true });
+    }
+  });
+
+  it('every campus contrast token points at a palette token that exists', () => {
+    const tokens = Array.from(CAMPUS_TOKENS.matchAll(/(--[\w-]+):var\((--[\w-]+)\)/g));
+    expect(tokens.length).toBeGreaterThan(6);
+    for (const [, name, target] of tokens) {
+      expect({ name, target, exists: new RegExp(`${target}\\s*:`).test(PALETTE) }).toEqual({ name, target, exists: true });
     }
   });
 

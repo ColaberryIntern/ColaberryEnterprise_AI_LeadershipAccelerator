@@ -8,6 +8,7 @@ import { useCampusView } from './useCampusView';
 import { accessLabel } from './campusAccess';
 import { buildingForPath, buildingName } from './campusMap';
 import { tourFor } from './tourSteps';
+import CampusSettingsPanel from './CampusSettingsPanel';
 
 /**
  * The campus in the portal's left column (Campus C2), in place of nav.te-nav when the campus
@@ -51,6 +52,7 @@ export default function CampusNav({ active }: { active: string }): React.ReactEl
       <div className="cm-nav-foot">
         <button type="button" className="cm-link" onClick={openList}>List view</button>
         <button type="button" className="cm-link" onClick={() => updateSettings({ nav: 'classic' })} data-testid="cm-use-classic">Use classic menu</button>
+        <CampusSettingsPanel variant="nav" />
       </div>
     </nav>
   );

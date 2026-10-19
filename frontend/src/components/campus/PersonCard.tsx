@@ -8,7 +8,7 @@ import { MESSAGE_BLOCKED_NOTE } from './campusPeople';
 import { publicOnly, GEAR_NAMES } from './campusGear';
 import { rungTone } from '../../services/bandLadder';
 import '../../styles/rungTones.css';
-
+import { useCardFocus } from './useCardFocus';
 
 /**
  * A person's card on the campus (Colaberry Campus C5): Message, Wave, Walk over.
@@ -36,6 +36,8 @@ export default function PersonCard({ person: p, buildingLabel, onClose, onWalkOv
   const host = hasDmHost();
   const [wave, setWave] = useState<WaveState>({ kind: 'idle' });
   const inFlight = useRef(false);
+  const heading = useRef<HTMLHeadingElement | null>(null);
+  useCardFocus(heading);
 
   const doWave = () => {
     if (!can || inFlight.current) return;
@@ -55,7 +57,7 @@ export default function PersonCard({ person: p, buildingLabel, onClose, onWalkOv
           ? <img className="cm-face is-large" src={p.avatar_url} alt="" />
           : <span className="cm-face cm-initials is-large" aria-hidden="true" data-testid="cm-person-initials">{initialsOf(p.display_name)}</span>}
         <div>
-          <h2 className="cm-card-title">{p.display_name}</h2>
+          <h2 className="cm-card-title" tabIndex={-1} ref={heading}>{p.display_name}</h2>
           <p className="cm-who-note">In {buildingLabel}</p>
           {p.rung_name && (
             <p className={`cm-person-level rung-${rungTone(p.rung_name)}`} data-testid="cm-person-level"
