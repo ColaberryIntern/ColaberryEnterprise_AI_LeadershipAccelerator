@@ -203,6 +203,17 @@ export async function postPlaybackGrant(req: Request, res: Response): Promise<vo
           // position on renewal — doing so replays the last stretch, every renewal, which is
           // what the 15 Oct 2026 airing found. The server is the only honest authority here.
           is_live: occurrence.editorial_state === 'live',
+          // Whether this viewer may END the broadcast. Server-decided from the same staff
+          // context the producer commands use, for the same reason as is_live: the client
+          // must never infer a capability it could simply assert. `is_producer` is on the
+          // forbidden-client-supplied list — that governs what a client may SEND, and this is
+          // the server answering, which is the only trustworthy direction.
+          is_producer: isStaff(req),
+          // The occurrence version, so a producer control can issue a version-guarded command
+          // without a second round trip. Not a secret: the command route already REQUIRES the
+          // caller to supply it, so the design always intended the client to hold it. A stale
+          // one is the guard working - it answers 409 and the client re-grants.
+          version: occurrence.version,
           grant: decision.grant,
           preview_seconds_remaining: decision.previewSecondsRemaining ?? null,
         });
@@ -251,6 +262,10 @@ export async function postPlaybackGrant(req: Request, res: Response): Promise<vo
       // occurrence has ended. Sent explicitly rather than omitted so the two branches answer
       // the same question in the same shape.
       is_live: occurrence.editorial_state === 'live',
+      // Same field on the replay path, and normally false for a different reason: a replay has
+      // no broadcast left to end. Sent explicitly so both branches answer the same question.
+      is_producer: isStaff(req),
+      version: occurrence.version,
       grant: decision.grant,
       preview_seconds_remaining: decision.previewSecondsRemaining ?? null,
     });

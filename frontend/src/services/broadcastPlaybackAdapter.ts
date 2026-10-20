@@ -96,6 +96,23 @@ export interface GrantResponse {
    * one would lose the viewer's place.
    */
   is_live?: boolean;
+  /**
+   * Whether this viewer may end the broadcast.
+   *
+   * Server-decided from the same staff context the producer commands use. Optional, and
+   * absent means NO: an older server that omits it must not grant a capability, and the
+   * control it gates is irreversible. The safe default here is the opposite of `is_live`'s
+   * precisely because the consequences are opposite — a missing replay-restore loses a
+   * viewer's place, while a wrongly-offered End button ends a class in front of everyone.
+   */
+  is_producer?: boolean;
+  /**
+   * The occurrence version, for a version-guarded producer command. Optional: without it the
+   * End control simply is not offered, which is the correct degradation — a command sent with
+   * a guessed version would either be refused or, worse, act on a state the producer has not
+   * seen.
+   */
+  version?: number;
 }
 
 /** The subset of HTMLVideoElement this adapter touches. */
