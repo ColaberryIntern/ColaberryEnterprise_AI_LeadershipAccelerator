@@ -191,6 +191,36 @@ describe('postPlaybackGrant', () => {
     expect(body.expires_at).toBeLessThanOrEqual(live().content_started_at.getTime() + 900_000);
   });
 
+  /**
+   * L7.4: the producer End control is gated on these two fields, and both are SERVER-decided.
+   * `is_producer` is on the forbidden-client-supplied list, which governs what a client may
+   * send; this asserts the server answers for itself, which is the only trustworthy direction.
+   */
+  it('reports is_producer from the staff context, not from the body', async () => {
+    findByPk.mockResolvedValue(live());
+    const res = mockRes();
+    await postPlaybackGrant(
+      req({ body: { asset: 'master.m3u8' }, participant: { sub: 'enr-1', isStaff: true } }),
+      res,
+    );
+    expect(res.json.mock.calls[0][0].is_producer).toBe(true);
+  });
+
+  it('reports is_producer false for an ordinary viewer who claims otherwise', async () => {
+    findByPk.mockResolvedValue(live());
+    const res = mockRes();
+    // The claim in the body is not merely ignored - the route rejects an unknown key outright.
+    await postPlaybackGrant(req({ body: { asset: 'master.m3u8' } }), res);
+    expect(res.json.mock.calls[0][0].is_producer).toBe(false);
+  });
+
+  it('carries the occurrence version, so a producer command can be version-guarded', async () => {
+    findByPk.mockResolvedValue(live({ version: 12 }));
+    const res = mockRes();
+    await postPlaybackGrant(req({ body: { asset: 'master.m3u8' } }), res);
+    expect(res.json.mock.calls[0][0].version).toBe(12);
+  });
+
   it('DENIES with no url once the preview window is spent', async () => {
     findByPk.mockResolvedValue(live({ content_started_at: new Date(Date.now() - 901_000) }));
     const res = mockRes();

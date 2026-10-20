@@ -12,6 +12,7 @@ import {
   postPlaybackHeartbeat,
   HeartbeatBody,
 } from '../../services/broadcastHeartbeat';
+import { endBroadcast as endBroadcastRequest, EndResult } from '../../services/broadcastProducer';
 import { usePlayerPresentation } from './usePlayerPresentation';
 import './liveMiniPlayer.css';
 
@@ -49,6 +50,8 @@ export interface LiveMiniPlayerProps {
   fetchGrant?: (occurrenceId: string, asset: string) => Promise<GrantResponse>;
   /** Injected in tests. Production posts the real playback heartbeat. */
   postHeartbeat?: (occurrenceId: string, body: HeartbeatBody) => Promise<void>;
+  /** Injected in tests. Production issues the real version-guarded end command. */
+  endBroadcast?: (occurrenceId: string, expectedVersion: number) => Promise<EndResult>;
 }
 
 const INITIAL: PlaybackSnapshot = {
@@ -85,7 +88,7 @@ function previewLabel(seconds: number | null): string | null {
   return `Preview — about ${whole} min left`;
 }
 
-export default function LiveMiniPlayer({ fetchGrant, postHeartbeat }: LiveMiniPlayerProps): React.ReactElement | null {
+export default function LiveMiniPlayer({ fetchGrant, postHeartbeat, endBroadcast }: LiveMiniPlayerProps): React.ReactElement | null {
   const { session, close } = useBroadcastPlayer();
   const frameRef = useRef<HTMLElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -108,12 +111,51 @@ export default function LiveMiniPlayer({ fetchGrant, postHeartbeat }: LiveMiniPl
   const grantFetcher = fetchGrant ?? requestPlaybackGrant;
   const heartbeatPoster = postHeartbeat ?? postPlaybackHeartbeat;
 
+  const endCommand = endBroadcast ?? endBroadcastRequest;
+
+  /**
+   * Producer capability and the version to act on, both taken from the GRANT rather than
+   * inferred. Held here rather than in the adapter because broadcastPlaybackAdapter.ts is
+   * already at the file ceiling in CLAUDE.md, where the rule is that the next change splits
+   * before it adds. The component owns the fetcher it injects, so observing it is free.
+   */
+  const [producer, setProducer] = useState<{ canEnd: boolean; version: number | null }>(
+    { canEnd: false, version: null },
+  );
+  const [confirmEnd, setConfirmEnd] = useState(false);
+  const [endError, setEndError] = useState<string | null>(null);
+
+  const observingFetcher = useCallback(async (occ: string, wanted: string): Promise<GrantResponse> => {
+    const granted = await grantFetcher(occ, wanted);
+    setProducer({
+      // Absent means NO. An older server that omits the field must never be read as granting
+      // an irreversible capability, and there is no un-end command.
+      canEnd: granted.is_producer === true && granted.is_live === true,
+      version: typeof granted.version === 'number' ? granted.version : null,
+    });
+    return granted;
+  }, [grantFetcher]);
+
+  const onEndConfirmed = useCallback(async () => {
+    if (producer.version === null) { setEndError('Cannot end: no version to act on.'); return; }
+    setConfirmEnd(false);
+    const result = await endCommand(occurrenceId as string, producer.version);
+    if (result.outcome === 'ended') { close(); return; }
+    setEndError(
+      result.outcome === 'conflict'
+        ? 'The broadcast changed while you were looking. Nothing was ended - reopen and try again.'
+        : result.outcome === 'forbidden'
+          ? 'You do not have permission to end this broadcast.'
+          : 'Could not end the broadcast. It is still live.',
+    );
+  }, [endCommand, occurrenceId, producer.version, close]);
+
   useEffect(() => {
     const media = videoRef.current;
     if (!occurrenceId || !asset || !media) return undefined;
 
     const adapter = createPlaybackAdapter(occurrenceId, asset, {
-      fetchGrant: grantFetcher,
+      fetchGrant: observingFetcher,
       media,
       onChange: setSnapshot,
     });
@@ -123,7 +165,7 @@ export default function LiveMiniPlayer({ fetchGrant, postHeartbeat }: LiveMiniPl
       adapter.stop();
       adapterRef.current = null;
     };
-  }, [occurrenceId, asset, grantFetcher]);
+  }, [occurrenceId, asset, observingFetcher]);
 
   /**
    * Playback telemetry (L4.9). Separate from the adapter effect on purpose: measurement must
@@ -331,6 +373,46 @@ export default function LiveMiniPlayer({ fetchGrant, postHeartbeat }: LiveMiniPl
         >
           Close
         </button>
+        {/*
+          The producer's End control (L7.4). Rendered only when the SERVER said this viewer is
+          a producer and gave a version to act on — a client must never infer a capability it
+          could simply assert, and a command without a version would act on a state the
+          producer has not seen.
+
+          Two clicks, not one. Ending is terminal: there is no un-end command, and a stray
+          click during a class would end it in front of everyone.
+        */}
+        {producer.canEnd && (
+          confirmEnd ? (
+            <>
+              <button
+                type="button"
+                className="lmp-btn lmp-btn-danger"
+                data-testid="lmp-end-confirm"
+                onClick={onEndConfirmed}
+              >
+                End for everyone
+              </button>
+              <button
+                type="button"
+                className="lmp-btn"
+                data-testid="lmp-end-cancel"
+                onClick={() => setConfirmEnd(false)}
+              >
+                Keep broadcasting
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              className="lmp-btn"
+              data-testid="lmp-end"
+              onClick={() => setConfirmEnd(true)}
+            >
+              End broadcast
+            </button>
+          )
+        )}
       </div>
 
       {preview && !stopped && <p className="lmp-preview">{preview}</p>}
@@ -340,7 +422,9 @@ export default function LiveMiniPlayer({ fetchGrant, postHeartbeat }: LiveMiniPl
         DOM at the same moment it gains text is frequently not announced at all.
       */}
       <p className="lmp-status" role="status" aria-live="polite" data-testid="lmp-status">
-        {needsGesture
+        {endError
+          ? endError
+          : needsGesture
           ? 'Ready to play — press Play to start. Your browser blocked playback from starting on its own.'
           : (captionsFailed ? 'Captions are unavailable for this broadcast.' : status)}
         {status && snapshot.offerUpgrade && (

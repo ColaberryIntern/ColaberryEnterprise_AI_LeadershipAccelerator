@@ -219,3 +219,15 @@
 .lmp.is-still {
   transition: none;
 }
+
+/* The producer End control (L7.4). Red because it is terminal and affects everyone. */
+.lmp-btn-danger {
+  background: #b5121b;
+  border-color: #b5121b;
+  color: #fff;
+}
+.lmp-btn-danger:hover,
+.lmp-btn-danger:focus-visible {
+  background: #8e0e15;
+  border-color: #8e0e15;
+}
