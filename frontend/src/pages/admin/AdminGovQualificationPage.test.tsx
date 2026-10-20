@@ -464,14 +464,14 @@ describe('AdminGovQualificationPage — journey', () => {
     expect(openBtn.disabled).toBe(false);                                      // enabled even though sourceAvailable:false
   });
 
-  it('Step bar: renders the seven numbered pursuit steps and marks the current one (replaces the journey strip)', async () => {
+  it('Step bar: renders the eight numbered pursuit steps and marks the current one (replaces the journey strip)', async () => {
     (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(decoupledWs({
       qualification: { id: 'q1', bidding_entity: 'colaberry', decision: 'needs_evidence', version: 1, rationale: null, source_snapshot_version: null, reviewer_identity_id: 'rev', requirements_json: { established: [] } },
     }));
     await renderAt(`?gws=${encodeURIComponent(GWS)}&tab=solicitation`);
     await flush();
     const steps = Array.from(container.querySelectorAll('[role="tab"]')).map((b) => (b.textContent ?? '').trim());
-    for (const s of ['Snapshot', 'Solicitation', 'Fit', 'Decide', 'Build the bid', 'Submit', 'Outcome']) {
+    for (const s of ['Snapshot', 'Solicitation', 'Fit', 'Decide', 'Build', 'Proposal', 'Submit', 'Outcome']) {
       expect(steps.some((l) => l.includes(s))).toBe(true);
     }
     const current = container.querySelector('[role="tab"][aria-current="step"]');
@@ -730,12 +730,12 @@ describe('AdminGovQualificationPage — journey', () => {
   const navTabs = () => Array.from(container.querySelectorAll('[role="tab"]')) as HTMLButtonElement[];
   const tabByLabel = (label: string) => navTabs().find((b) => b.textContent?.includes(label)) as HTMLButtonElement;
 
-  it('Step bar: renders all seven pursuit steps with Solicitation active by default', async () => {
+  it('Step bar: renders all eight pursuit steps with Solicitation active by default', async () => {
     (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(cleanWs());
     await renderAt(`?canonical=${CANON}&tab=solicitation`);
     await flush();
     const labels = navTabs().map((b) => (b.textContent ?? '').trim());
-    for (const t of ['Snapshot', 'Solicitation', 'Fit', 'Decide', 'Build the bid', 'Submit', 'Outcome']) {
+    for (const t of ['Snapshot', 'Solicitation', 'Fit', 'Decide', 'Build', 'Proposal', 'Submit', 'Outcome']) {
       expect(labels.some((l) => l.includes(t))).toBe(true);
     }
     expect(tabByLabel('Solicitation').getAttribute('aria-selected')).toBe('true');

@@ -2,9 +2,10 @@
  * workspaceSteps — the Gov pursuit's seven steps (the 2026-10 redesign, P1).
  *
  * The flow is a left-to-right pursuit, one question and one primary action per step:
- *   1 Snapshot → 2 Solicitation → 3 Fit → 4 Decide → 5 Build → 6 Submit → 7 Outcome.
- * Steps 1–4 are qualification (cheap, reversible). APPROVAL IS THE HINGE: steps 5–7 are LOCKED
- * previews until a second admin approves the pursuit.
+ *   1 Snapshot → 2 Solicitation → 3 Fit → 4 Decide → 5 Build → 6 Proposal → 7 Submit → 8 Outcome.
+ * Steps 1–4 are qualification (cheap, reversible). APPROVAL IS THE HINGE: steps 5–8 are LOCKED
+ * previews until a second admin approves the pursuit. Build (the software product) and Proposal
+ * (the bid response) are deliberately separate: Build is what we would deliver, Proposal is what we submit.
  *
  * PURE module — no React, no I/O. The step a viewer is on lives in the URL (`?tab=<step>`) so a
  * reload restores it and the view is shareable; legacy tab values still resolve (old links keep
@@ -19,6 +20,7 @@ export type WorkspaceStep =
   | 'fit'
   | 'decide'
   | 'build'
+  | 'proposal'
   | 'submit'
   | 'outcome';
 
@@ -28,7 +30,7 @@ export interface WorkspaceStepDef {
   label: string;
   /** One-line question the step answers (shown under the label in the step bar). */
   question: string;
-  /** Rough time to spend, shown in the step intro ("Step N of 7 · about X"). */
+  /** Rough time to spend, shown in the step intro ("Step N of 8 · about X"). */
   minutes: string;
   icon: string; // RemixIcon name (sans the `ri-` prefix)
 }
@@ -39,22 +41,23 @@ export const WORKSPACE_STEPS: WorkspaceStepDef[] = [
   { key: 'solicitation', n: 2, label: 'Solicitation', question: 'What do we submit, under what rules?', minutes: '10 minutes', icon: 'folder-zip-line' },
   { key: 'fit', n: 3, label: 'Fit', question: 'Can we deliver, and what would we learn?', minutes: '10 minutes', icon: 'scales-3-line' },
   { key: 'decide', n: 4, label: 'Decide', question: 'Should we bid?', minutes: '5 minutes', icon: 'thumb-up-line' },
-  { key: 'build', n: 5, label: 'Build the bid', question: 'What is the product, and is the bid ready?', minutes: 'weeks', icon: 'tools-line' },
-  { key: 'submit', n: 6, label: 'Submit', question: 'Is it out the door?', minutes: '1 hour', icon: 'send-plane-line' },
-  { key: 'outcome', n: 7, label: 'Outcome', question: 'Did we win?', minutes: '5 minutes', icon: 'trophy-line' },
+  { key: 'build', n: 5, label: 'Build', question: 'What is the product we would build?', minutes: 'weeks', icon: 'tools-line' },
+  { key: 'proposal', n: 6, label: 'Proposal', question: 'Is the bid response written and ready?', minutes: 'hours', icon: 'draft-line' },
+  { key: 'submit', n: 7, label: 'Submit', question: 'Is it out the door?', minutes: '1 hour', icon: 'send-plane-line' },
+  { key: 'outcome', n: 8, label: 'Outcome', question: 'Did we win?', minutes: '5 minutes', icon: 'trophy-line' },
 ];
 
 const STEP_KEYS: ReadonlySet<string> = new Set(WORKSPACE_STEPS.map((s) => s.key));
 
 /** Steps that stay LOCKED (preview only) until the pursuit is approved. */
-const POST_APPROVAL_STEPS: ReadonlySet<WorkspaceStep> = new Set(['build', 'submit', 'outcome']);
+const POST_APPROVAL_STEPS: ReadonlySet<WorkspaceStep> = new Set(['build', 'proposal', 'submit', 'outcome']);
 
 /**
  * Legacy `?tab=` values → new step, so bookmarked/pasted links keep working. The pre-redesign
  * flow was solicitation/requirements/gono/proposal/build/submit/outcome; `requirements` folds into
- * the new Solicitation, `gono` → Decide, `proposal` → Build. overview/documents/dates collapse onto
- * Solicitation; `submission` → Submit. New keys (snapshot/fit/decide/solicitation/build/submit/
- * outcome) resolve directly.
+ * the new Solicitation, `gono` → Decide. overview/documents/dates collapse onto Solicitation;
+ * `submission` → Submit. `proposal` is now its OWN step, so it resolves directly (no alias). New
+ * keys (snapshot/fit/decide/solicitation/build/proposal/submit/outcome) resolve directly.
  */
 export const LEGACY_TAB_TO_STEP: Record<string, WorkspaceStep> = {
   overview: 'solicitation',
@@ -62,7 +65,6 @@ export const LEGACY_TAB_TO_STEP: Record<string, WorkspaceStep> = {
   dates: 'solicitation',
   requirements: 'solicitation',
   gono: 'decide',
-  proposal: 'build',
   submission: 'submit',
 };
 
@@ -96,7 +98,7 @@ export interface StepModel {
   statuses: Record<WorkspaceStep, StepStatus>;
   /** First unfinished, actionable step — where a fresh load should land (not step 1). */
   frontier: WorkspaceStep;
-  /** True once the pursuit is approved: unlocks steps 5–7. */
+  /** True once the pursuit is approved: unlocks steps 5–8. */
   approved: boolean;
 }
 
@@ -117,7 +119,11 @@ export function deriveStepState(activeStep: WorkspaceStep, input: StepStateInput
     // Fit has no dedicated server signal until P3; a terminal decision implies fit was worked through.
     fit: !!input.decision,
     decide: !!input.decision && TERMINAL_DECISIONS.has(input.decision),
-    build: approved && input.proposalContentReady, // never done before approval
+    // Build (the software product) is complete for flow purposes once the pursuit is approved — the plan exists and
+    // the actual build runs post-award over weeks (advisory). Proposal (the bid RESPONSE) is its own step now, and
+    // is done only when every response slot is approved. Neither can show done before approval (they are locked).
+    build: approved,
+    proposal: approved && input.proposalContentReady,
     submit: !!input.submissionStatus && SUBMITTED_STATUSES.has(input.submissionStatus),
     outcome: !!input.outcome && input.outcome !== 'pending' && input.outcome !== 'unknown',
   };

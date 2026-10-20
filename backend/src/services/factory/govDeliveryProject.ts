@@ -26,6 +26,13 @@ const TRACK_TYPES = ['proposal', 'solution_build'] as const;
 
 const GWS_RE = /^gws:([0-9a-f-]{36})$/i;
 
+/** A canonical UUID. `created_by_identity_id` is a uuid column, but the approver reaches us as the admin's EMAIL
+ *  (actorIdentity → email), which Postgres rejects ("invalid input syntax for type uuid"). Guard it: a real uuid
+ *  passes through, anything else (an email) becomes null, so the project still creates with no creator attribution
+ *  rather than failing the whole delivery-project creation. */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const asIdentityId = (v: unknown): string | null => (typeof v === 'string' && UUID_RE.test(v) ? v : null);
+
 /**
  * Deterministic, tenant-unique project slug for an opportunity. A decoupled key `gws:<uuid>` maps to
  * `gov-<uuid>` (matching the Phase-1 start route's slug), any other canonical id is sanitized. `delivery_projects`
@@ -153,7 +160,7 @@ export async function ensureGovTwoTrackProject(input: EnsureGovTwoTrackProjectIn
         slug,
         project_class: 'government_public_sector',
         status: 'discovery',
-        created_by_identity_id: input.approverIdentityId || null,
+        created_by_identity_id: asIdentityId(input.approverIdentityId),
       }, { transaction });
       created = true;
     }

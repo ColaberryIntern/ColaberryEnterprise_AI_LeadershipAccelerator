@@ -41,7 +41,7 @@ export function GovMaterializePanel({ canonical, deliveryProjectId, requirements
     if (!assignee) return;
     setBusy(true); setErr(null);
     let buildSpec: string | null = null;
-    try { const raw = localStorage.getItem(`govBuildSpec:${canonical}`); if (raw) { const s = JSON.parse(raw); buildSpec = [s?.spec, s?.research].filter(Boolean).join('\n\n') || null; } } catch { /* ignore */ }
+    try { const raw = localStorage.getItem(`govBuildSpec:v2:${canonical}`); if (raw) { const s = JSON.parse(raw); buildSpec = [s?.spec, s?.research].filter(Boolean).join('\n\n') || null; } } catch { /* ignore */ }
     try {
       const r = await materializeGovBuildProject(canonical, { deliveryProjectId, assigneeIdentityId: assignee, requirements, title: title ?? null, buyer: buyer ?? null, buildSpec, deadline: deadline ?? null });
       setResult(r);
