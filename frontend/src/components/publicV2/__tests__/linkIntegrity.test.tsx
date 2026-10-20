@@ -29,6 +29,7 @@ import StoriesV2 from '../../../pages/publicV2/StoriesV2';
 import StoryDetailV2 from '../../../pages/publicV2/StoryDetailV2';
 import PublicHeaderV2, { V2_NAV } from '../PublicHeaderV2';
 import PublicFooterV2 from '../PublicFooterV2';
+import { readySegments } from '../../../config/v2Segments';
 import { SERVICE_DETAILS } from '../../../config/v2Services';
 import { CASE_STUDY_SURFACES, caseStudyDetailPath } from '../../../config/caseStudySurfaces';
 
@@ -57,6 +58,10 @@ const V2_ROUTES = [
   '/stories',
   '/stories/:slug',
   ...SERVICE_DETAILS.map((s) => `/services/${s.slug}`),
+  // The homepage's segment doors (C5.2) link to these. GENERATED from the same call
+  // App.tsx maps to routes, so this list cannot drift out of step with the routes -
+  // which is the whole reason the doors are generated rather than hand-written.
+  ...readySegments().map((s) => `/${s.slug}`),
 ];
 
 /** Routes outside the V2 tree that exist in publicRoutes/portalRoutes. */

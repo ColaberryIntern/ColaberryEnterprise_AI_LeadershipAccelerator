@@ -1,21 +1,19 @@
-import React, { useState, useRef } from 'react';
+import React from 'react';
 import { Link } from 'react-router-dom';
 import SeoV2 from '../../components/publicV2/SeoV2';
 import CtaInterrupt from '../../components/publicV2/CtaInterrupt';
 import HeroV8 from '../../components/publicV2/HeroV8';
 import EngineModel from '../../components/publicV2/EngineModel';
-import GoalDiagram, { GoalKey } from '../../components/publicV2/GoalDiagram';
 import { Claim, canShow, SampleBadge } from '../../components/publicV2/Claim';
 import Icon from '../../components/publicV2/Icon';
 import Accolades from '../../components/publicV2/Accolades';
+import SegmentDoors from '../../components/publicV2/SegmentDoors';
 // ENGINE was imported here and never used, from before this split. Removed rather than
 // carried across, since a dead import is one more thing a reader has to rule out.
-import { GOALS } from '../../config/v2Content';
 import { BuildPipelineSection, ServicesSection } from './homeV2Sections';
 import './homeV2.css';
 import '../../components/publicV2/heroV8.css';
 import '../../components/publicV2/engineModel.css';
-import '../../components/publicV2/goalDiagram.css';
 
 /**
  * HomeV2 — the V2 homepage.
@@ -36,35 +34,6 @@ import '../../components/publicV2/goalDiagram.css';
 const ROUTE = '/';
 
 function HomeV2(): React.ReactElement {
-  const [goalKey, setGoalKey] = useState<string>(GOALS[0].key);
-  const goal = GOALS.find((g) => g.key === goalKey) ?? GOALS[0];
-  const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
-
-  /**
-   * Keyboard navigation for the goal tablist, per the WAI-ARIA tabs pattern.
-   *
-   * Arrows wrap in both directions and Home/End jump to the ends. Selection
-   * follows focus (the panel changes as you arrow), which is the right choice
-   * here because switching panels is instant and local -- nothing is fetched, so
-   * there is no cost to landing on a tab you did not want.
-   *
-   * Vertical arrows are handled as well as horizontal because this row collapses
-   * to a single column on narrow screens, where Down is the direction the layout
-   * implies.
-   */
-  const onTabKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>, index: number): void => {
-    const last = GOALS.length - 1;
-    let next: number | null = null;
-    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') next = index === last ? 0 : index + 1;
-    else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') next = index === 0 ? last : index - 1;
-    else if (e.key === 'Home') next = 0;
-    else if (e.key === 'End') next = last;
-    if (next === null) return;
-    e.preventDefault(); // stop Arrow/Home/End from scrolling the page instead
-    setGoalKey(GOALS[next].key);
-    tabRefs.current[next]?.focus();
-  };
-
   return (
     <>
       <SeoV2
@@ -197,117 +166,29 @@ function HomeV2(): React.ReactElement {
         body="The workspace opens on sample data so there is something to look at on day one. No credit card, and no procurement conversation required to look."
       />
 
-      <section className="cbv2-rv cbv2-section" aria-labelledby="cbv2-goal-title">
+      {/*
+        THE FIVE DOORS, replacing the goal picker (C5.2).
+
+        The picker asked "what are you trying to accomplish?" and routed by GOAL. The C5.1
+        information architecture routes by SEGMENT, so it was the right job on the wrong
+        axis. The section budget's standing rule is that the next section added must replace
+        one rather than raise the count a third time, so this is a swap and the budget holds
+        at twelve.
+
+        The doors are GENERATED from readySegments(), the same source App.tsx maps to routes,
+        so a door cannot point at a page that is not mounted.
+      */}
+      <section className="cbv2-rv cbv2-section" aria-labelledby="cbv2-doors-title">
         <div className="cbv2-wrap">
           <div className="cbv2-section__head">
             <p className="cbv2-eyebrow">Start where you are</p>
-            <h2 id="cbv2-goal-title">What are you trying to accomplish?</h2>
+            <h2 id="cbv2-doors-title">Who is this for?</h2>
             <p className="cbv2-lede">
-              Pick the outcome you need next. The recommended service, the proof we would show
-              you, and the next step all adapt.
+              Four ways in, each written for the people who run that kind of program. They
+              differ in what counts as proof, not in what we do.
             </p>
           </div>
-
-          {/*
-            Tabs rather than four loose buttons: the selected one connects to the
-            panel below with a notch, so the answer is visibly the consequence of
-            the choice. `role="tablist"` because that is what this is -- one
-            selection revealing one panel.
-
-            The role is a PROMISE about keyboard behaviour, not a free upgrade:
-            declaring it tells a screen-reader user "arrows move between tabs and
-            Tab leaves the group", so both halves have to be built by hand --
-            onKeyDown below, and the roving tabindex that makes the group a
-            single tab stop. Shipped without them, the role is worse than no role
-            at all, because it advertises navigation that does not respond.
-          */}
-          <div className="cbv2-goalpicker" role="tablist" aria-label="Choose a goal">
-            {GOALS.map((g, i) => (
-              <button
-                key={g.key}
-                type="button"
-                role="tab"
-                id={`cbv2-goal-tab-${g.key}`}
-                ref={(el) => { tabRefs.current[i] = el; }}
-                aria-selected={g.key === goalKey}
-                aria-controls="cbv2-goal-panel"
-                tabIndex={g.key === goalKey ? 0 : -1}
-                className={`cbv2-goalcard${g.key === goalKey ? ' is-active' : ''}`}
-                onClick={() => setGoalKey(g.key)}
-                onKeyDown={(e) => onTabKeyDown(e, i)}
-              >
-                <span className="cbv2-goalcard__icon">
-                  <Icon name={g.icon} size={22} />
-                </span>
-                <span className="cbv2-goalcard__label">{g.label}</span>
-                <span className="cbv2-goalcard__hint">{g.hint}</span>
-              </button>
-            ))}
-          </div>
-
-          {/*
-            One composed answer rather than four equal boxes. The previous version
-            put each field in its own card of equal height, which left the short
-            ones (the service name) with a large hole beneath the text. Here the
-            recommendation leads at display size, the reasoning and the proof sit
-            beside it as a numbered read, and the next step is its own footer.
-
-            `key={goal.key}` re-mounts the panel on change, which is what drives
-            the entrance animation -- and it means the animation cannot get stuck
-            mid-transition if someone clicks quickly.
-          */}
-          <div
-            className="cbv2-answer"
-            id="cbv2-goal-panel"
-            role="tabpanel"
-            aria-labelledby={`cbv2-goal-tab-${goal.key}`}
-            aria-live="polite"
-            key={goal.key}
-          >
-            <div className="cbv2-answer__lead">
-              <p className="cbv2-answer__eyebrow">Recommended</p>
-              <p className="cbv2-answer__service">{goal.service}</p>
-              <p className="cbv2-answer__why">{goal.explain}</p>
-
-              {/*
-                The figure for this goal. It draws the SHAPE of the engagement --
-                no numbers, no outcomes -- because it sits directly under a
-                recommended service, where a diagram implying more than the
-                service delivers would be a claim like any other.
-              */}
-              <GoalDiagram goal={goal.key as GoalKey} />
-            </div>
-
-            <div className="cbv2-answer__side">
-              <div className="cbv2-answer__row">
-                <span className="cbv2-answer__n" aria-hidden="true">
-                  <Icon name="check" size={14} />
-                </span>
-                <div>
-                  <h3>What you would get</h3>
-                  <p>{goal.proof}</p>
-                </div>
-              </div>
-              <div className="cbv2-answer__row">
-                <span className="cbv2-answer__n" aria-hidden="true">
-                  <Icon name="arrowRight" size={14} />
-                </span>
-                <div>
-                  <h3>Suggested next step</h3>
-                  <p>{goal.next}</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="cbv2-answer__foot">
-              <Link className="cbv2-btn cbv2-btn--primary" to={goal.ctaRoute}>
-                {goal.cta}
-              </Link>
-              <Link className="cbv2-btn cbv2-btn--ghost" to="/services">
-                Compare all five services
-              </Link>
-            </div>
-          </div>
+          <SegmentDoors />
         </div>
       </section>
 
@@ -361,12 +242,12 @@ function HomeV2(): React.ReactElement {
         eyebrow="Still with us?"
         title="The fastest way to judge this is to open it."
         body="Both experiences in one account: the management view, and the one your team actually works in. Invite people when it has earned it."
-        primary={{ label: 'Open my free company workspace', to: '/try' }}
+        primary={{ label: 'Open my company workspace at $0', to: '/try' }}
       />
 
         <ServicesSection />
 
-      {/* 6 ────────────────────────────────────────────── free workspace ────── */}
+      {/* 6 ──────────────────────────────────────── workspace at $0 ────── */}
       {canShow('surface.free.workspace', ROUTE) ? (
         <section
           className="cbv2-rv cbv2-section cbv2-section--sunken cbv2-section--spot"

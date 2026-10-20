@@ -128,7 +128,7 @@ function PlatformV2(): React.ReactElement {
         eyebrow="Your team, your numbers"
         title="Everything above starts empty until someone does the work."
         body="The demo workspace is furnished so there is something to look at. Your people, your repositories and every competency score begin at zero and move only on verified evidence."
-        primary={{ label: 'Open my free company workspace', to: '/try' }}
+        primary={{ label: 'Open my company workspace at $0', to: '/try' }}
       />
 
       <CapabilityEarned />
