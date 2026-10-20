@@ -25,6 +25,7 @@ import PlatformV2 from '../../../pages/publicV2/PlatformV2';
 import OpportunityLabV2 from '../../../pages/publicV2/OpportunityLabV2';
 import TryV2 from '../../../pages/publicV2/TryV2';
 import PrivacyV2 from '../../../pages/publicV2/PrivacyV2';
+import DemoV2 from '../../../pages/publicV2/DemoV2';
 import StoriesV2 from '../../../pages/publicV2/StoriesV2';
 import StoryDetailV2 from '../../../pages/publicV2/StoryDetailV2';
 import PublicHeaderV2, { V2_NAV } from '../PublicHeaderV2';
@@ -52,6 +53,7 @@ const V2_ROUTES = [
   '/lab',
   '/try',
   '/privacy',
+  '/demo',
   '/free-workspace',
   '/start',
   '/pricing',
@@ -97,6 +99,9 @@ const PAGES: [string, React.ReactElement, string][] = [
   ['OpportunityLabV2', <OpportunityLabV2 />, '/lab'],
   ['TryV2', <TryV2 />, '/try'],
   ['PrivacyV2', <PrivacyV2 />, '/privacy'],
+  // C5.9. Renders from constants and fetches nothing, so a static render IS the whole
+  // page and every href it carries is provable here rather than only in its own suite.
+  ['DemoV2', <DemoV2 />, '/demo'],
   // StoriesV2 was the only V2 page this suite had never walked. It renders its
   // records from an API, so a static render reaches the loading state - which is
   // exactly the state whose links (the closing CTA) are hardcoded and therefore

@@ -1,0 +1,133 @@
+/*
+ * demoV2.css — page-scoped styles for /demo (C5.9).
+ *
+ * Every value resolves to a token from colaberry/tokens/*, per the rule stated at the top
+ * of publicV2.css. No raw hex and no second palette.
+ *
+ * The sample panel deliberately does NOT look like the product. A faithful mock of a real
+ * board is the CompanyMomentumDashboard defect: sample and live modes that differ only by a
+ * badge string, so a screenshot of one is indistinguishable from the other. This renders
+ * the sample record as plainly marked text in a dashed frame instead.
+ */
+
+.cbv2-demo__hero h1 {
+  margin: var(--space-2) 0 var(--space-3);
+}
+
+.cbv2-demo__notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin: var(--space-4) 0 0;
+  padding: var(--space-3);
+  background: var(--surface-warn-subtle);
+  border-left: 3px solid var(--status-warning);
+  border-radius: var(--radius-xs);
+  font-size: var(--fs-body-sm);
+  color: var(--text-strong);
+}
+
+.cbv2-demo__steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-6);
+}
+
+.cbv2-demo__step {
+  padding: 0;
+}
+
+.cbv2-demo__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.cbv2-demo__n {
+  flex: 0 0 auto;
+  width: 1.75rem;
+  height: 1.75rem;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-pill);
+  background: var(--surface-card);
+  border: 1px solid var(--border-default);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  font-size: var(--fs-caption);
+  color: var(--text-muted);
+}
+
+.cbv2-demo__title {
+  margin: 0;
+  font-size: var(--fs-h4);
+}
+
+.cbv2-demo__screen {
+  margin: var(--space-2) 0 var(--space-3);
+  color: var(--text-strong);
+}
+
+/* The dashed frame marks this as an illustration, matching .cbv2-sample's dashed border. */
+.cbv2-demo__panel {
+  border: 1px dashed var(--border-default);
+  border-radius: var(--radius-sm);
+  background: var(--surface-sunken);
+  overflow: hidden;
+}
+
+.cbv2-demo__panelbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px dashed var(--border-default);
+}
+
+.cbv2-demo__panelk {
+  font-size: var(--fs-overline);
+  letter-spacing: var(--ls-wide);
+  text-transform: uppercase;
+  color: var(--text-subtle);
+  font-weight: 700;
+}
+
+.cbv2-demo__detail {
+  list-style: none;
+  margin: 0;
+  padding: var(--space-3);
+  display: grid;
+  gap: var(--space-2);
+}
+
+.cbv2-demo__detail code {
+  font-size: var(--fs-body-sm);
+  color: var(--text-muted);
+  word-break: break-word;
+}
+
+.cbv2-demo__meaning {
+  margin: var(--space-3) 0 0;
+  color: var(--text-muted);
+}
+
+.cbv2-demo__limits {
+  margin: var(--space-3) 0 var(--space-4);
+  padding-left: var(--space-5);
+  color: var(--text-muted);
+}
+
+.cbv2-demo__limits li {
+  margin: var(--space-2) 0;
+}
+
+@media (max-width: 40rem) {
+  .cbv2-demo__panelbar {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
