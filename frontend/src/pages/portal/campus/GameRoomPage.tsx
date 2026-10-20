@@ -10,6 +10,11 @@ import { bugBreaker } from '../../../components/campus/games/engine/bugBreakerEn
 import type { Engine } from '../../../components/campus/games/engine/engineTypes';
 import type { GameId } from '../../../components/campus/games/engine/gameRules';
 import '../../../components/campus/games/gameRoom.css';
+import { useCampus } from '../../../components/campus/CampusContext';
+import { CAMPUS_BUILDINGS, buildingName } from '../../../components/campus/campusMap';
+
+// C11: the page's name follows Workplace names, like every other campus surface (Game Room / Break Room).
+const ARCADE = CAMPUS_BUILDINGS.find((b) => b.id === 'arcade')!;
 
 /**
  * The Game Room (Colaberry Campus C10) at /portal/game-room: three short original games, 15 minutes of credited play a day (the server
@@ -27,6 +32,7 @@ const centralTime = (iso: string) => new Intl.DateTimeFormat('en-US', { timeZone
 
 export default function GameRoomPage(): React.ReactElement {
   const cap = useGameTimeCap();
+  const roomName = buildingName(ARCADE, useCampus().settings.workplaceNames);
   const [game, setGame] = useState<GameId>('byte-chase');
   const [result, setResult] = useState<string | null>(null);
   const [board, setBoard] = useState<Board | null>(null);
@@ -62,18 +68,18 @@ export default function GameRoomPage(): React.ReactElement {
     <PortalShell>
       <div className="te-page-h">
         <div className="crumb">Campus</div>
-        <h1>Game Room</h1>
+        <h1>{roomName}</h1>
         <div className="sub">15 minutes a day, resets at midnight Central. Games never change your learning points.</div>
       </div>
       {cap.status === 'pilot-off' ? (
-        <section className="te-card gr-note" data-testid="gr-pilot-off"><p>The Game Room opens with the campus.</p></section>
+        <section className="te-card gr-note" data-testid="gr-pilot-off"><p>The {roomName} opens with the campus.</p></section>
       ) : (
         <div className="gr-layout">
           <section className="te-card gr-main">
             <div className="gr-top">
-              <div className="gr-pick" role="tablist" aria-label="Games">
+              <div className="gr-pick" role="group" aria-label="Choose a game">
                 {GAMES.map((g) => (
-                  <button key={g.id} type="button" role="tab" aria-selected={g.id === game} className={`gr-tab${g.id === game ? ' is-on' : ''}`}
+                  <button key={g.id} type="button" aria-pressed={g.id === game} className={`gr-tab${g.id === game ? ' is-on' : ''}`}
                     disabled={cap.status === 'playing'} data-testid={`gr-pick-${g.id}`} onClick={() => setGame(g.id)}>{g.name}</button>
                 ))}
               </div>
@@ -94,7 +100,7 @@ export default function GameRoomPage(): React.ReactElement {
               </div>
             )}
             {(result || cap.message) && <p className="gr-result" role="status" data-testid="gr-result">{result ?? cap.message}</p>}
-            {cap.status === 'unavailable' && <p className="gr-warn" data-testid="gr-unavailable">The Game Room is not answering right now.</p>}
+            {cap.status === 'unavailable' && <p className="gr-warn" data-testid="gr-unavailable">The {roomName} is not answering right now.</p>}
           </section>
           <GameRoomBoard title={active.name} board={board} error={boardError} />
         </div>

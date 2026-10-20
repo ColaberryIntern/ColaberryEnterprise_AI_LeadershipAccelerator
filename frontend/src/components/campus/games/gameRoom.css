@@ -6,7 +6,7 @@
 .gr-top{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
 .gr-pick{display:flex;gap:6px;flex-wrap:wrap}
 .gr-tab{padding:8px 14px;border-radius:var(--r-pill);border:1px solid var(--border);background:var(--surface);color:var(--strong);font:inherit;font-weight:700;cursor:pointer}
-.gr-tab.is-on{background:var(--berry);border-color:var(--berry);color:var(--surface)}
+.gr-tab.is-on{background:var(--cm-info);border-color:var(--cm-info);color:var(--cm-on-accent)}
 .gr-tab:disabled{cursor:not-allowed;opacity:.6}
 .gr-tab:focus-visible{outline:3px solid var(--berry);outline-offset:2px}
 .gr-time{font-weight:800;color:var(--strong);font-variant-numeric:tabular-nums}
@@ -14,7 +14,9 @@
 .gr-cabinet{display:flex;flex-direction:column;gap:8px}
 .gr-canvas{width:100%;max-width:720px;aspect-ratio:4/3;border-radius:var(--r-12);border:1px solid var(--border-sub);background:var(--surface);touch-action:none}
 .gr-hud{display:flex;gap:16px;font-weight:700;font-size:14px;color:var(--strong);font-variant-numeric:tabular-nums}
+.gr-canvas:focus-visible{outline:3px solid var(--berry);outline-offset:2px}
 .gr-hint{margin:0;color:var(--muted);font-size:13px}
+.gr-sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 .gr-start{padding:24px 0}
 .gr-done{display:flex;flex-direction:column;gap:4px;padding:16px;border-radius:var(--r-12);background:var(--sunken);border-left:4px solid var(--berry)}
 .gr-done strong{font-size:18px;color:var(--strong)}

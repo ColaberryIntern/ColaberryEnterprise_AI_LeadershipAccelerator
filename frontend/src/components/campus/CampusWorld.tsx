@@ -68,6 +68,11 @@ export default function CampusWorld({ buildings, audience, hasFullAccess, access
     ? accessOfProp(b)
     : buildingState(b, { isStaff: false, hasFullAccess, isExplorer: audience === 'explorer' })), [accessOfProp, audience, hasFullAccess]);
   const registerEl = useCallback((id: BuildingId, el: SVGGElement | null) => { if (el) els.current.set(id, el); else els.current.delete(id); }, []);
+  // C11: on phones the map is wider than the screen; bring the destination into view (instantly with reduce motion).
+  // On wide screens nothing overflows, so this is a no-op there.
+  const revealBuilding = useCallback((id: BuildingId) => {
+    els.current.get(id)?.scrollIntoView?.({ block: 'nearest', inline: 'center', behavior: reduceMotion ? 'auto' : 'smooth' });
+  }, [reduceMotion]);
 
   const closeCard = useCallback(() => {
     const id = open;
@@ -78,10 +83,10 @@ export default function CampusWorld({ buildings, audience, hasFullAccess, access
   const [walkRequest, setWalkRequest] = useState<{ id: BuildingId; seq: number } | null>(null);
   const tourTarget = tour?.target ?? null;
   useEffect(() => {
-    if (tourTarget) { setOpen(null); setWalkRequest((w) => ({ id: tourTarget, seq: (w?.seq ?? 0) + 1 })); }
-  }, [tourTarget]);
+    if (tourTarget) { setOpen(null); revealBuilding(tourTarget); setWalkRequest((w) => ({ id: tourTarget, seq: (w?.seq ?? 0) + 1 })); }
+  }, [tourTarget]); // runs per tour step only (revealBuilding is stable for a given reduceMotion)
   const touring = !!tour;
-  const onArrive = useCallback((id: BuildingId) => { if (!touring) setOpen(id); }, [touring]);
+  const onArrive = useCallback((id: BuildingId) => { revealBuilding(id); if (!touring) setOpen(id); }, [touring, revealBuilding]);
   const people = useMemo(() => {
     if (!presence || presenceError || !onOpenPerson) return undefined;
     const out: Record<string, ReturnType<typeof tokensFor>> = {};

@@ -1,0 +1,15 @@
+/* Colaberry Campus C11: the settings disclosure (map bar and side nav). Shell tokens only, no hex. */
+.cm-settings{position:relative;display:inline-flex}
+.cm-settings-panel{position:absolute;top:calc(100% + 6px);right:0;z-index:65;width:min(300px,calc(100vw - 32px));padding:12px;
+  display:flex;flex-direction:column;gap:10px;background:var(--surface);border:1px solid var(--border-sub);border-radius:var(--r-12);
+  box-shadow:var(--shadow-lg);font-family:var(--sans);font-size:14px;color:var(--body);text-align:left}
+/* The side nav scrolls (overflow:auto), which would clip an absolute panel: in the nav it opens fixed to the viewport. */
+.cm-settings.is-nav .cm-settings-panel{position:fixed;top:auto;right:auto;left:12px;bottom:16px}
+.cm-settings-row{display:flex;gap:10px;align-items:flex-start;margin:0;padding:0;border:0}
+.cm-settings-row span{display:flex;flex-direction:column;gap:2px;color:var(--strong)}
+.cm-settings-row small{color:var(--muted);font-size:12px}
+fieldset.cm-settings-row{flex-direction:column;gap:6px}
+.cm-settings-row legend{font-weight:600;color:var(--strong);margin-bottom:4px;padding:0}
+.cm-settings-choice{display:flex;gap:8px;align-items:center;min-height:24px;color:var(--body)}
+.cm-settings input{width:18px;height:18px;margin:2px 0 0;accent-color:var(--berry)}
+.cm-settings-done{align-self:flex-end}

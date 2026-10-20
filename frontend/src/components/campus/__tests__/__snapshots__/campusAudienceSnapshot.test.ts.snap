@@ -119,7 +119,7 @@ Array [
     "rooms": Array [
       "Company -> /portal/company",
     ],
-    "workplaceName": "Engagements",
+    "workplaceName": "Client Office",
   },
   Object {
     "explorer": "open",
@@ -535,7 +535,7 @@ Array [
       "People -> /portal/mgmt-enter?next=%2Fadmin%2Fpeople (admin, new tab)",
       "View as a learner -> /portal/mgmt-enter?next=%2Fadmin%2Faccelerator (admin, new tab)",
     ],
-    "workplaceName": "Engagements",
+    "workplaceName": "Operations Office",
   },
   Object {
     "explorer": "open",

@@ -19,18 +19,18 @@
 .cm-nav-chip{font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin-left:6px}
 .cm-nav-item.active .cm-nav-chip{color:var(--surface)}
 .cm-dot{width:10px;height:10px;border-radius:50%;flex:none;background:var(--cm-c)}
-.cm-nav-foot{margin-top:auto;display:flex;justify-content:space-between;gap:8px;padding:10px 8px 2px;border-top:1px solid var(--border-sub)}
+.cm-nav-foot{margin-top:auto;display:flex;flex-wrap:wrap;align-items:center;gap:2px 14px;padding:10px 8px 2px;border-top:1px solid var(--border-sub)}
 .te-shell.collapsed .cm-nav .lb,.te-shell.collapsed .cm-nav .grp,.te-shell.collapsed .cm-nav-chip,
 .te-shell.collapsed .cm-nav-foot,.te-shell.collapsed .cm-nav-open{display:none}
 
 /* ---- buttons and links ---- */
 .cm-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:10px 16px;border-radius:var(--r-pill);
-  background:var(--cherry);color:var(--surface);font-weight:700;font-size:14px;border:none;cursor:pointer;text-decoration:none}
-.cm-btn:hover{background:var(--cherry-deep);color:var(--surface)}
+  background:var(--cm-accent);color:var(--cm-on-accent);font-weight:700;font-size:14px;border:none;cursor:pointer;text-decoration:none}
+.cm-btn:hover{background:var(--cm-accent-hover);color:var(--cm-on-accent)}
 .cm-btn.is-secondary{background:var(--surface);color:var(--strong);border:1px solid var(--border)}
 .cm-btn.is-secondary:hover{background:var(--sunken)}
 .cm-btn.is-disabled{background:var(--sunken);color:var(--muted);cursor:default}
-.cm-link{background:none;border:none;padding:4px 2px;color:var(--berry);font-weight:600;font-size:13px;cursor:pointer;text-decoration:underline}
+.cm-link{background:none;border:none;padding:4px 2px;color:var(--cm-link);font-weight:600;font-size:13px;cursor:pointer;text-decoration:underline}
 .te-nav .cm-switch-back{margin:10px 12px 0;text-align:left}
 .te-shell.collapsed .te-nav .cm-switch-back{display:none}
 .cm-btn:focus-visible,.cm-link:focus-visible,.cm-nav-item:focus-visible,.cm-tab:focus-visible{outline:3px solid var(--berry);outline-offset:2px}
@@ -52,6 +52,9 @@
 .cm-bld:hover .cm-body,.cm-bld:focus .cm-body{stroke-width:5}
 .cm-bld:focus{outline:none}
 .cm-bld:focus-visible .cm-body{stroke:var(--berry);stroke-width:6}
+/* C11: the Main Gate has no body; its arch and footprint show focus instead. */
+.cm-bld.cm-b-gate:focus-visible .cm-roof{stroke:var(--berry)}
+.cm-bld.cm-b-gate:focus-visible .cm-hit{stroke:var(--berry);stroke-width:4;stroke-dasharray:10 8}
 .cm-label{font-size:17px;font-weight:700;fill:var(--strong);paint-order:stroke;stroke:var(--surface);stroke-width:5px}
 .cm-chip{font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;fill:var(--muted)}
 /* The avatar is decoration (aria-hidden): it must never take a click from the building under it (found in C5 screenshots:
@@ -80,14 +83,18 @@
 .cm-layer-bar{display:flex;align-items:center;gap:14px;padding:12px 20px;background:var(--surface);border-bottom:1px solid var(--border)}
 .cm-layer-bar strong{font-family:var(--logo);font-size:18px;color:var(--strong)}
 .cm-layer-hint{flex:1;color:var(--muted);font-size:13px}
+/* C11: the bar's secondary actions. Inline on wide screens; behind "More" on phones (one set of buttons, CampusMapBarActions). */
+.cm-bar-actions{position:relative;display:flex;align-items:center}
+.cm-bar-items{display:flex;align-items:center;gap:14px}
+.cm-bar-more{display:none}
 .cm-world{position:relative;flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:12px}
 .cm-world .cm-map{max-height:100%;max-width:min(100%,1200px);border-radius:var(--r-16)}
 
 /* ---- C4: live head count and Who's here ---- */
-.cm-count rect{fill:var(--leaf-deep)}
-.cm-count text{fill:var(--surface);font-size:15px;font-weight:700}
+.cm-count rect{fill:var(--cm-live)}
+.cm-count text{fill:var(--cm-on-accent);font-size:15px;font-weight:700}
 .cm-map.is-compact .cm-count text{font-size:54px}
-.cm-layer-warn{color:var(--amber-deep);font-size:13px;font-weight:600}
+.cm-layer-warn{color:var(--strong);font-size:13px;font-weight:600;padding-left:8px;border-left:4px solid var(--amber)}
 .cm-who{display:flex;flex-direction:column;gap:6px}
 .cm-people{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:8px}
 .cm-person{display:flex;align-items:center;gap:8px;padding:4px 10px 4px 4px;border:1px solid var(--border-sub);border-radius:var(--r-pill);font-size:13px;color:var(--strong)}
@@ -99,7 +106,10 @@
 .cm-card{position:absolute;top:20px;right:20px;width:min(360px,calc(100% - 40px));max-height:calc(100% - 40px);overflow:auto;
   background:var(--surface);border:1px solid var(--border);border-top:6px solid var(--cm-c);border-radius:var(--r-16);
   box-shadow:var(--shadow-lg);padding:18px 20px;display:flex;flex-direction:column;gap:10px}
-.cm-card-x{position:absolute;top:10px;right:12px;background:none;border:none;font-size:24px;line-height:1;color:var(--muted);cursor:pointer}
+.cm-card-x{position:absolute;top:6px;right:8px;display:inline-flex;align-items:center;justify-content:center;min-width:32px;min-height:32px;
+  padding:0;background:none;border:none;border-radius:var(--r-pill);font-size:24px;line-height:1;color:var(--muted);cursor:pointer}
+.cm-card-x:hover{background:var(--sunken)}
+.cm-card-x:focus-visible{outline:3px solid var(--berry);outline-offset:1px}
 .cm-card-chip{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
 .cm-card-title{margin:0;font-size:24px;color:var(--strong)}
 .cm-card-note{background:var(--sunken);border-radius:var(--r-12);padding:12px 14px;display:flex;flex-direction:column;gap:10px}
@@ -114,9 +124,15 @@
 .cm-filter{flex:1;min-width:0;padding:9px 14px;border:1px solid var(--border);border-radius:var(--r-pill);font-size:14px;background:var(--surface);color:var(--body)}
 .cm-list-body{flex:1;overflow:auto;padding:18px 20px;display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;align-content:start}
 .cm-list-bld{background:var(--surface);border:1px solid var(--border-sub);border-radius:var(--r-12);padding:12px 16px}
-.cm-list-bld h3{margin:0 0 6px;font-size:16px;color:var(--strong)}
+.cm-list-bld h2{margin:0 0 6px;font-size:16px;color:var(--strong)}
+/* C11 list parity: the facts the map shows as badges, as words. */
+.cm-list-bld{display:flex;flex-direction:column;gap:6px;border-top:4px solid var(--cm-c)}
+.cm-list-fact{margin:0;font-size:13px;font-weight:700;color:var(--strong)}
+.cm-list-fact.is-live{color:var(--cm-cherry-text)}
+.cm-list-room.is-disabled{color:var(--muted)}
+.cm-list-warn{margin:12px 20px 0}
 .cm-list-bld ul{margin:0;padding-left:18px}
-.cm-list-bld a{color:var(--berry)}
+.cm-list-bld a{color:var(--cm-link)}
 .cm-empty{color:var(--muted)}
 
 /* ---- phone tab bar ---- */
@@ -124,7 +140,7 @@
   padding:6px 2px calc(6px + env(safe-area-inset-bottom));justify-content:space-around}
 .cm-tab{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:2px;color:var(--muted);font-size:10px;font-weight:600;
   text-decoration:none;padding:4px 0;background:none;border:none;cursor:pointer}
-.cm-tab.active{color:var(--cherry-text)}
+.cm-tab.active{color:var(--cm-cherry-text)}
 .cm-tab-ic{width:22px;height:22px;display:flex;align-items:center;justify-content:center}
 .cm-tab-ic svg{width:22px;height:22px}
 .cm-tab-dot{width:8px;height:8px;border-radius:50%;background:currentColor}
@@ -133,6 +149,14 @@
   .cm-nav{display:none}
   .cm-tabbar{display:flex}
   .cm-layer-hint{display:none}
+  .cm-layer-bar{gap:8px;padding:10px 12px;flex-wrap:wrap}
+  .cm-layer-bar strong{flex:1 1 auto;min-width:0;font-size:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .cm-layer-warn{order:9;flex:1 1 100%}
+  .cm-bar-more{display:inline-flex;align-items:center;min-height:32px}
+  .cm-bar-items{display:none}
+  .cm-bar-actions.is-open .cm-bar-items{display:flex;flex-direction:column;align-items:flex-start;gap:4px;position:absolute;top:calc(100% + 6px);right:0;z-index:66;
+    min-width:200px;padding:8px 10px;background:var(--surface);border:1px solid var(--border-sub);border-radius:var(--r-12);box-shadow:var(--shadow-lg)}
+  .cm-bar-items .cm-link{min-height:32px}
   .cm-card{position:fixed;top:auto;bottom:12px;right:12px;left:12px;width:auto;max-height:55%}
   /* Phones: the map fills the screen height and pans sideways, so labels stay readable
      instead of shrinking the whole campus into a 250px strip. CampusWorld centers it. */

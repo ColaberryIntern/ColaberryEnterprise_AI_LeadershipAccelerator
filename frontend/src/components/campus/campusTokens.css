@@ -1,0 +1,21 @@
+/* Colaberry Campus C11: contrast tokens. Every pair below is checked in BOTH themes, for the shell and the legacy
+   .cm-scope, by __tests__/campusContrast.test.ts (4.5:1 text, 3:1 graphics).
+
+   Why these exist. The campus drew text on colored fills with `--surface`, which is white in light mode but #1E1E1E in
+   dark, so dark text landed on cherry, berry and green; and brand cherry (#FB2832) is too light for white text (3.85:1).
+   These point at the global palette (colaberry/tokens/colors.css), defined on :root so the shell and legacy pages both
+   get them. No hex here (campusNoHex). */
+:root{
+  --cm-on-accent:var(--neutral-0);          /* text and marks on a colored fill, always light */
+  --cm-accent:var(--red-700);            /* primary button, on-air badge */
+  --cm-accent-hover:var(--red-800);
+  --cm-info:var(--blue-600);             /* route stops, AI staff tag, picked game */
+  --cm-live:var(--green-800);            /* head-count chip, open tour tag */
+  --cm-link:var(--blue-600);             /* links on surface, page and sunken */
+  --cm-cherry-text:var(--red-700);       /* "On air:" and the active tab */
+  --cm-on-warn:var(--neutral-900);       /* text on amber, always dark (light text on amber fails in either theme) */
+}
+[data-theme="dark"]{
+  --cm-link:var(--blue-200);
+  --cm-cherry-text:var(--red-300);
+}

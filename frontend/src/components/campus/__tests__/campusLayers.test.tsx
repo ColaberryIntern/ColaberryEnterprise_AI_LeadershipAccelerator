@@ -95,7 +95,7 @@ describe('campus list view', () => {
     expect(list.querySelector('a[href="/portal/game-room"]')).not.toBeNull();
     // The career building shows the audience face.
     const face = { member: 'Career Center', explorer: 'Career Center', business: 'Partner Office', staff: 'Staff Office' }[aud];
-    expect(list.querySelector('[data-building="career"] h3')!.textContent).toContain(face);
+    expect(list.querySelector('[data-building="career"] h2')!.textContent).toContain(face); // C11: buildings are h2 in the list dialog
   });
 
   it('the filter narrows to matching buildings and rooms, and Esc closes', async () => {

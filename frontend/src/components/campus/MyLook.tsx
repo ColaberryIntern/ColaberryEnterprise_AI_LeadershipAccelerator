@@ -1,5 +1,6 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useRef, useState } from 'react';
 import type { CampusLook, LookItem } from './campusApi';
+import { useCardFocus } from './useCardFocus';
 import { SLOT_LABEL, SLOT_ORDER } from './campusGear';
 
 /**
@@ -19,7 +20,7 @@ export default function MyLook({ look, lookError, onSave, onClose }: MyLookProps
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const heading = useRef<HTMLHeadingElement | null>(null);
-  useEffect(() => { heading.current?.focus(); }, []);
+  useCardFocus(heading); // C11: focus the heading on open, hand it back to the "My look" button on close
 
   const toggle = async (item: LookItem) => {
     if (!look || busy || !item.unlocked) return;

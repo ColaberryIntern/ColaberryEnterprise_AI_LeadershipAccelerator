@@ -12,12 +12,18 @@ export interface GameCanvasProps<S> { engine: Engine<S>; running: boolean; onOve
 export default function GameCanvas<S>({ engine, running, onOver, onScore, label }: GameCanvasProps<S>): React.ReactElement {
   const { canvasRef, hud } = useCanvasGame(engine, running, onOver);
   React.useEffect(() => { onScore?.(hud.score); }, [hud.score, onScore]);
+  const livesWord = engine.id === 'launch-lab' ? 'Orbs' : 'Lives';
+  // C11: the score changes many times a second; announcing it buried everything else. Only level, lives and the end are spoken.
+  const spoken = hud.over ? `Game over. Score ${hud.score}.` : running ? `Level ${hud.level}. ${livesWord} ${hud.lives}.` : '';
   return (
     <div className="gr-cabinet">
-      <canvas ref={canvasRef} width={W} height={H} className="gr-canvas" role="img" aria-label={`${label} game area`} data-testid="gr-canvas" />
-      <div className="gr-hud" aria-live="polite" data-testid="gr-hud">
-        <span>Score {hud.score}</span><span>Level {hud.level}</span><span>{engine.id === 'launch-lab' ? 'Orbs' : 'Lives'} {hud.lives}</span>
+      {/* Focusable so the game's keys are read here and nowhere else (useCanvasGame); focused when a game starts. */}
+      <canvas ref={canvasRef} width={W} height={H} className="gr-canvas" tabIndex={0} role="application"
+        aria-label={`${label} game area. Arrow keys or W A S D to move, Space to act.`} data-testid="gr-canvas" />
+      <div className="gr-hud" data-testid="gr-hud">
+        <span>Score {hud.score}</span><span>Level {hud.level}</span><span>{livesWord} {hud.lives}</span>
       </div>
+      <p className="gr-sr-only" aria-live="polite" data-testid="gr-announce">{spoken}</p>
       {hud.hint && <p className="gr-hint">{hud.hint}</p>}
     </div>
   );

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { BuildingId, CampusBuilding, ExplorerAccess } from './campusMap';
 import { buildingName } from './campusMap';
 import { accessLabel } from './campusAccess';
@@ -111,7 +111,8 @@ function CountChip({ b, count, compact }: { b: CampusBuilding; count: number; co
   );
 }
 
-function Building({ b, access, label, compact, count, onAir = false, onPick, setRef }: {
+// C11 (the map stays light): memoized, so a walking avatar (one state update per frame) does not re-render every building.
+const Building = memo(function Building({ b, access, label, compact, count, onAir = false, onPick, setRef }: {
   b: CampusBuilding; access: ExplorerAccess; label: string; compact: boolean; count: number; onAir?: boolean;
   onPick: (id: BuildingId) => void; setRef?: (id: BuildingId, el: SVGGElement | null) => void;
 }): React.ReactElement {
@@ -121,12 +122,16 @@ function Building({ b, access, label, compact, count, onAir = false, onPick, set
     if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onPick(b.id); }
   };
   const aria = [label, onAir ? 'on air now' : null, chip, count > 0 ? `${count} here now` : null].filter(Boolean).join(', ');
+  // C11: compact maps (banner, side nav) are pictures, not controls. The banner's map sits inside its own button and the
+  // side nav lists every building as a link right below, so focusable buildings there were 12 duplicate, unlabeled-in-
+  // context tab stops (inside aria-hidden in the banner). A pointer click on the nav map still opens the full map.
+  const a11y = compact ? {} : { role: 'button', tabIndex: 0, 'aria-label': aria, onKeyDown };
   return (
     <g
       ref={(el) => setRef?.(b.id, el)}
       className={`cm-bld cm-b-${b.id}${access === 'locked' ? ' is-locked' : ''}`}
-      role="button" tabIndex={0} aria-label={aria}
-      data-building={b.id} onClick={() => onPick(b.id)} onKeyDown={onKeyDown}
+      {...a11y}
+      data-building={b.id} onClick={() => onPick(b.id)}
     >
       {b.id !== 'gate' && <rect className="cm-body" x={x - w / 2} y={y - h / 2} width={w} height={h} rx={4} />}
       {/* The gate is only an arch outline; this invisible area makes its whole footprint clickable (found in C5
@@ -140,7 +145,7 @@ function Building({ b, access, label, compact, count, onAir = false, onPick, set
       {onAir && <OnAirBadge b={b} compact={compact} />}
     </g>
   );
-}
+});
 
 export default function CampusWorldMap({ buildings, accessOf, workplaceNames, reduceMotion, compact = false, initialTarget, onArrive, buildingRef, counts, people, onPickPerson, walkRequest, onAir, route, ownGear }: CampusMapProps): React.ReactElement {
   const [pos, setPos] = useState<Pt>({ x: QUAD.x, y: 640 });
@@ -179,6 +184,13 @@ export default function CampusWorldMap({ buildings, accessOf, workplaceNames, re
     raf.current = requestAnimationFrame(step);
   }, [buildings, compact, reduceMotion, onArrive]);
 
+  // One stable pick handler per building, so the memoized token groups do not re-render on every walk frame.
+  const pickers = useMemo(() => {
+    const out: Partial<Record<BuildingId, (p: CampusPerson) => void>> = {};
+    if (onPickPerson) for (const b of buildings) out[b.id] = (p: CampusPerson) => onPickPerson(p, b.id);
+    return out;
+  }, [buildings, onPickPerson]);
+
   const started = useRef(false);
   useEffect(() => {
     if (initialTarget && !started.current) { started.current = true; walkTo(initialTarget); }
@@ -189,7 +201,8 @@ export default function CampusWorldMap({ buildings, accessOf, workplaceNames, re
   }, [walkRequest, walkTo]);
 
   return (
-    <svg className={`cm-map${compact ? ' is-compact' : ''}`} viewBox={`0 0 ${WORLD.w} ${WORLD.h}`} role="group" aria-label="Campus map">
+    <svg className={`cm-map${compact ? ' is-compact' : ''}`} viewBox={`0 0 ${WORLD.w} ${WORLD.h}`}
+      {...(compact ? { 'aria-hidden': true, focusable: 'false' } : { role: 'group', 'aria-label': 'Campus map' })}>
       <rect className="cm-ground" x={0} y={0} width={WORLD.w} height={WORLD.h} rx={compact ? 18 : 0} />
       {buildings.map((b) => { const d = doorOf(b); return <path key={'p-' + b.id} className="cm-path" d={`M${QUAD.x} ${QUAD.y} L${d.x} ${d.y}`} />; })}
       {!compact && route && route.map((id) => {
@@ -212,7 +225,7 @@ export default function CampusWorldMap({ buildings, accessOf, workplaceNames, re
       })}
       {!compact && people && onPickPerson && buildings.map((b) => {
         const t = people[b.id];
-        return t ? <PersonTokens key={'t-' + b.id} b={b} shown={t.shown} more={t.more} maxY={WORLD.h} onPick={(p) => onPickPerson(p, b.id)} /> : null;
+        return t ? <PersonTokens key={'t-' + b.id} b={b} shown={t.shown} more={t.more} maxY={WORLD.h} onPick={pickers[b.id]!} /> : null;
       })}
       {!compact && (
         <g className="cm-avatar" transform={`translate(${pos.x} ${pos.y}) scale(0.8)`} aria-hidden="true" data-testid="cm-avatar">

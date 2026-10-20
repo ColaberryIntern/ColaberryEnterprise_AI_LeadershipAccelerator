@@ -27,7 +27,7 @@
   border:1px solid var(--border);background:var(--surface);color:var(--strong);font:inherit;font-size:14px;text-align:left;cursor:pointer}
 .cm-look-item small{color:var(--muted);font-size:12px}
 .cm-look-item.is-worn{border-color:var(--berry);background:var(--sunken)}
-.cm-look-item.is-worn small{color:var(--berry);font-weight:700}
+.cm-look-item.is-worn small{color:var(--cm-link);font-weight:700}
 .cm-look-item:disabled{cursor:not-allowed;opacity:.65}
 .cm-look-item:focus-visible{outline:3px solid var(--berry);outline-offset:2px}
 .cm-look-error{margin:8px 0 0;padding:8px 10px;border-radius:var(--r-12);border-left:4px solid var(--cherry);background:var(--sunken);

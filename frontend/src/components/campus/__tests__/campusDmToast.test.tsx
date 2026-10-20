@@ -29,8 +29,8 @@ import { registerDmHost } from '../dmHost';
 
 /** The hook (CampusProvider runs it) + the view, as the app wires them. */
 function Harness(): React.ReactElement | null {
-  const { toast, dismiss } = useCampusDmToasts(mockActive);
-  return <DmToastView toast={toast} onDismiss={dismiss} />;
+  const { toast, dismiss, hold, release } = useCampusDmToasts(mockActive);
+  return <DmToastView toast={toast} onDismiss={dismiss} onHold={hold} onRelease={release} />;
 }
 
 const convo = (roomId: string, peer: string, lastAt: string, unread = true, peerId = 'p-' + roomId): Convo =>
@@ -104,7 +104,8 @@ describe('CampusDmToast', () => {
     expect(toast()).toBeNull();
   });
 
-  it('hides itself after 8 seconds', async () => {
+  it('hides itself after TOAST_MS (12 seconds, C11)', async () => {
+    expect(TOAST_MS).toBe(12_000);
     await mount();
     mockConvos = [convo('r1', 'Mia', '2026-10-18T10:05:00Z')];
     await tick();
@@ -136,5 +137,52 @@ describe('CampusDmToast', () => {
     await mount();
     await tick();
     expect(mockReads).toBe(0);
+  });
+});
+
+describe('C11: the toast stays while it is being used (WCAG 2.2.1)', () => {
+  const raise = async () => {
+    await mount();
+    mockConvos = [convo('r1', 'Mia', '2026-10-18T10:05:00Z')];
+    await tick();
+    expect(toast()).not.toBeNull();
+  };
+  const fire = async (el: Element, type: string) => { await act(async () => { el.dispatchEvent(new MouseEvent(type, { bubbles: true })); }); };
+  const later = async (ms = TOAST_MS + 1000) => { await act(async () => { jest.advanceTimersByTime(ms); }); };
+
+  it('stays while focus is inside, even when the pointer passes over and leaves', async () => {
+    await raise();
+    const open = toast()!.querySelector('button') as HTMLButtonElement;
+    await act(async () => { open.focus(); });
+    await later();
+    expect(toast()).not.toBeNull();
+    // React listens for mouseover/mouseout to synthesize enter/leave.
+    await fire(toast()!, 'mouseover');
+    await fire(toast()!, 'mouseout');
+    await later();
+    expect(toast()).not.toBeNull();
+    expect(document.activeElement).toBe(open);
+  });
+
+  it('stays while hovered, even when focus leaves', async () => {
+    await raise();
+    await fire(toast()!, 'mouseover');
+    const open = toast()!.querySelector('button') as HTMLButtonElement;
+    await act(async () => { open.focus(); });
+    await act(async () => { open.blur(); });
+    await later();
+    expect(toast()).not.toBeNull();
+  });
+
+  it('once neither hovered nor focused, the full TOAST_MS runs again and it hides', async () => {
+    await raise();
+    const open = toast()!.querySelector('button') as HTMLButtonElement;
+    await act(async () => { open.focus(); });
+    await later();
+    await act(async () => { open.blur(); });
+    await later(TOAST_MS - 500);
+    expect(toast()).not.toBeNull();
+    await later(1000);
+    expect(toast()).toBeNull();
   });
 });
