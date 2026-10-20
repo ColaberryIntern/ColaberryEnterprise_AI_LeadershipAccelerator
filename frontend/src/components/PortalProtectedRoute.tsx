@@ -2,6 +2,7 @@ import React from 'react';
 import { Navigate, Outlet } from 'react-router-dom';
 import { useParticipantAuth } from '../contexts/ParticipantAuthContext';
 import { usePortalTracking } from '../hooks/usePortalTracking';
+import { useCampusLanding } from './campus/useCampusLanding';
 
 function PortalProtectedRoute() {
   const { isAuthenticated } = useParticipantAuth();
@@ -16,6 +17,8 @@ function PortalProtectedRoute() {
   // `isAuthenticated` branch below because hooks cannot be called conditionally, and it
   // exits on its own when there is no participant token.
   usePortalTracking();
+  // C11b: a tab's first visit to Today goes to the campus home when the campus is on (no-op otherwise; see the hook).
+  useCampusLanding();
 
   if (!isAuthenticated) {
     return <Navigate to="/portal/login" replace />;

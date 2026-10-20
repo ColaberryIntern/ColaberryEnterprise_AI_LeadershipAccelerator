@@ -44,8 +44,17 @@
   --cm-art-flagpole:#5b4a3a; --cm-art-flag:#e31b23; --cm-art-dome-slit:#f3d58a; --cm-art-clock-face:#ffffff; --cm-art-clock-hand:#1f1b16;
   --cm-art-arcade-body:#2b1a3d; --cm-art-arcade-edge:#4a2f6b; --cm-art-neon-1:#ff4fa3; --cm-art-neon-2:#3de0ff; --cm-art-neon-3:#ffd23d;
   --cm-art-neon-4:#7dff6b; --cm-art-neon-sign:#14091f; --cm-art-neon-text:#ffd6ee; --cm-art-joystick:#1b1622;
+  /* home chrome (prototype .cc, .pulse, .helpdesk, .plan-card, .pass, .lv-chip, .acct-chip, .livecard) */
+  --cm-art-card:#ffffff; --cm-art-red-tint:rgba(227,27,35,.15); --cm-art-live-tint:rgba(31,138,76,.15);
+  --cm-art-help-bg:#fff8e6; --cm-art-help-edge:#ecd9a8; --cm-art-help-hover:#b07a00;
+  --cm-art-plan-bg:#f2faf8; --cm-art-plan-edge:#cde4df; --cm-art-plan:#0f766e; --cm-art-plan-hover:#eaf5f2;
+  --cm-art-pass-bg:#f5fbf7; --cm-art-pass-edge:#cfe7d6; --cm-art-explorer-tint:#e8f5ec; --cm-art-business-tint:#e6eef6;
+  --cm-art-level:#ffd23d; --cm-art-level-ink:#1b1622; --cm-art-live-card:#17131c; --cm-art-on-dark:#ffffff;
 }
 [data-theme="dark"]{
   --cm-art-paper:#1e1e1e; --cm-art-ink:#f4f4f4; --cm-art-muted:#b5ad9f; --cm-art-line:#3a352d;
+  --cm-art-card:#262421; --cm-art-help-bg:#3a3018; --cm-art-help-edge:#6b5524; --cm-art-help-hover:#e0b54a;
+  --cm-art-plan-bg:#16302c; --cm-art-plan-edge:#2b5a52; --cm-art-plan:#5fd0c0; --cm-art-plan-hover:#1d3d38;
+  --cm-art-pass-bg:#16301f; --cm-art-pass-edge:#2b5a3a; --cm-art-explorer-tint:#1b3a26; --cm-art-business-tint:#1b2c3e;
   --cm-art-shadow:0 10px 30px rgba(0,0,0,.45),0 2px 6px rgba(0,0,0,.3);
 }

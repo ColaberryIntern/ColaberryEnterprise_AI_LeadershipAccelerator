@@ -12,7 +12,8 @@ import type { BuildingId } from './campusMap';
  *  - ArrowDown/ArrowUp move, Enter picks, Esc closes the list and keeps focus; a second Esc blurs.
  * Picking a room zooms through its building's door; a building or a person opens the map there.
  */
-export default function WhereTo(): React.ReactElement {
+/** C11b: the campus home's top bar asks the prototype's "Where are you headed?"; the banner keeps "Where to?". */
+export default function WhereTo({ placeholder = 'Where to?' }: { placeholder?: string } = {}): React.ReactElement {
   const { settings, presence, enterThroughDoor, openMap } = useCampus();
   const { buildings } = useCampusView();
   const [q, setQ] = useState('');
@@ -42,7 +43,7 @@ export default function WhereTo(): React.ReactElement {
   return (
     <div className="cm-whereto">
       <input
-        className="cm-whereto-input" type="text" placeholder="Where to?" aria-label="Where to? Search buildings, rooms and people"
+        className="cm-whereto-input" type="text" placeholder={placeholder} aria-label={`${placeholder} Search buildings, rooms and people`}
         role="combobox" aria-autocomplete="list" aria-expanded={expanded} aria-controls={listId}
         aria-activedescendant={expanded && results[active] ? optionId(active) : undefined}
         value={q} onChange={(e) => { setQ(e.target.value); setOpen(true); setActive(0); }} onKeyDown={onKeyDown}

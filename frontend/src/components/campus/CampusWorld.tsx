@@ -13,7 +13,7 @@ import { buildingName } from './campusMap';
 import ExplorerPath from './ExplorerPath';
 import { explorerPath } from './campusPath';
 import type { Equipped } from './campusGear';
-import type { CameraApi } from './useCampusCamera';
+import type { CameraApi, InsetsOf } from './useCampusCamera';
 import type { Viewport } from './campusCamera';
 import CampusZoomControls from './CampusZoomControls';
 
@@ -57,9 +57,13 @@ export interface CampusWorldProps {
   panel?: { card: React.ReactNode; onClose: () => void };
   /** C9: the learner's own equipped set, drawn on their pin. */
   ownGear?: Equipped;
+  /** C11b: screen px the caller's panels cover (the campus home's concierge and top bar), for the camera's whole-campus view. */
+  insets?: InsetsOf;
+  /** C11b: walk to this building now, from outside the map (the home's pulse, plan and search). A new seq means a new walk. */
+  walkTo?: { id: BuildingId; seq: number } | null;
 }
 
-export default function CampusWorld({ buildings, audience, hasFullAccess, accessOf: accessOfProp, isExplorer = false, workplaceNames, reduceMotion, initialTarget, onExit, onNavigate, presence, presenceError = false, onEnterRoom, staffDesks, personCard, onOpenPerson, onClosePerson, onAir, route, tour, panel, ownGear }: CampusWorldProps): React.ReactElement {
+export default function CampusWorld({ buildings, audience, hasFullAccess, accessOf: accessOfProp, isExplorer = false, workplaceNames, reduceMotion, initialTarget, onExit, onNavigate, presence, presenceError = false, onEnterRoom, staffDesks, personCard, onOpenPerson, onClosePerson, onAir, route, tour, panel, ownGear, insets, walkTo }: CampusWorldProps): React.ReactElement {
   const counts = useMemo(() => {
     const out: Record<string, number> = {};
     if (presence) for (const [id, a] of Object.entries(presence)) out[id] = a.count;
@@ -107,7 +111,11 @@ export default function CampusWorld({ buildings, audience, hasFullAccess, access
   // C11b: the prototype camera frames the campus (no more sideways scrolling on phones); the arrival card covers the right
   // 380 px on wide screens and up to 55% of the height on phones, so a framed building sits beside or above it.
   const camApi = useRef<CameraApi | null>(null);
-  const camera = useMemo(() => ({ apiRef: camApi, focusInsets: (v: Viewport) => (v.W <= 760 ? { left: 0, top: 0, right: 0, bottom: v.H * 0.55 } : { left: 0, top: 0, right: 400, bottom: 0 }) }), []);
+  const camera = useMemo(() => ({ apiRef: camApi, insets, focusInsets: (v: Viewport) => (v.W <= 760 ? { left: 0, top: 0, right: 0, bottom: v.H * 0.55 } : { left: 0, top: 0, right: 400, bottom: 0 }) }), [insets]);
+  const lastOutside = useRef(0);
+  useEffect(() => {
+    if (walkTo && walkTo.seq !== lastOutside.current) { lastOutside.current = walkTo.seq; setOpen(null); setWalkRequest((w) => ({ id: walkTo.id, seq: (w?.seq ?? 0) + 1 })); }
+  }, [walkTo]);
 
   const b = open ? buildings.find((x) => x.id === open) : undefined;
   return (
