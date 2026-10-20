@@ -70,7 +70,10 @@ export function BuildSpecPanel({ canonical, requirements, title, buyer, daysLeft
   buyer?: string | null;
   daysLeft?: number | null;
 }): React.ReactElement {
-  const storeKey = `govBuildSpec:${canonical}`;
+  // v2: the key is versioned so specs generated BEFORE the build plan filtered to solution_build requirements are
+  // dropped. A stale pre-filter spec still describes bid-submission capabilities and, because the plan reuses the
+  // persisted spec as its grounding brief, would keep re-seeding "submit proposal" build stories.
+  const storeKey = `govBuildSpec:v2:${canonical}`;
   const [spec, setSpec] = useState<GovBuildSpec | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);

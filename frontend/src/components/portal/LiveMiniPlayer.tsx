@@ -7,6 +7,11 @@ import {
   PlaybackSnapshot,
   PlaybackAdapter,
 } from '../../services/broadcastPlaybackAdapter';
+import {
+  createPlaybackHeartbeat,
+  postPlaybackHeartbeat,
+  HeartbeatBody,
+} from '../../services/broadcastHeartbeat';
 import { usePlayerPresentation } from './usePlayerPresentation';
 import './liveMiniPlayer.css';
 
@@ -42,6 +47,8 @@ import './liveMiniPlayer.css';
 export interface LiveMiniPlayerProps {
   /** Injected in tests. Production uses the real signed-grant request. */
   fetchGrant?: (occurrenceId: string, asset: string) => Promise<GrantResponse>;
+  /** Injected in tests. Production posts the real playback heartbeat. */
+  postHeartbeat?: (occurrenceId: string, body: HeartbeatBody) => Promise<void>;
 }
 
 const INITIAL: PlaybackSnapshot = {
@@ -78,7 +85,7 @@ function previewLabel(seconds: number | null): string | null {
   return `Preview — about ${whole} min left`;
 }
 
-export default function LiveMiniPlayer({ fetchGrant }: LiveMiniPlayerProps): React.ReactElement | null {
+export default function LiveMiniPlayer({ fetchGrant, postHeartbeat }: LiveMiniPlayerProps): React.ReactElement | null {
   const { session, close } = useBroadcastPlayer();
   const frameRef = useRef<HTMLElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -99,6 +106,7 @@ export default function LiveMiniPlayer({ fetchGrant }: LiveMiniPlayerProps): Rea
   const asset = session?.asset ?? null;
   const captionsAsset = session?.captionsAsset ?? null;
   const grantFetcher = fetchGrant ?? requestPlaybackGrant;
+  const heartbeatPoster = postHeartbeat ?? postPlaybackHeartbeat;
 
   useEffect(() => {
     const media = videoRef.current;
@@ -116,6 +124,54 @@ export default function LiveMiniPlayer({ fetchGrant }: LiveMiniPlayerProps): Rea
       adapterRef.current = null;
     };
   }, [occurrenceId, asset, grantFetcher]);
+
+  /**
+   * Playback telemetry (L4.9). Separate from the adapter effect on purpose: measurement must
+   * be able to fail, restart or be absent entirely without touching the thing that plays the
+   * video. L4.6 shipped the whole server half of this and nothing ever called it, so a real
+   * airing recorded zero viewers while people were demonstrably watching.
+   *
+   * Driven by the media element's own events rather than by the adapter's phase, because the
+   * question being answered is "is a human watching right now", and only the element knows
+   * whether pixels are moving.
+   */
+  useEffect(() => {
+    const media = videoRef.current;
+    if (!occurrenceId || !media) return undefined;
+
+    const beat = createPlaybackHeartbeat({
+      post: (body) => heartbeatPoster(occurrenceId, body),
+    });
+
+    const onPlay = () => beat.report('playing');
+    const onPause = () => beat.report('paused');
+    const onWaiting = () => beat.report('buffering');
+    const onEnded = () => beat.report('ended');
+    // A backgrounded tab keeps a <video> "playing". Reporting paused on hide stops it being
+    // counted as an audience member who is not, in fact, in the room.
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') beat.report('paused', 'auto');
+      else if (!media.paused) beat.report('playing', 'auto');
+    };
+
+    media.addEventListener('play', onPlay);
+    media.addEventListener('pause', onPause);
+    media.addEventListener('waiting', onWaiting);
+    media.addEventListener('ended', onEnded);
+    document.addEventListener('visibilitychange', onVisibility);
+    // Already playing when this mounted (a re-render mid-session) would otherwise go unbeaten
+    // until the next transition, which may never come.
+    if (!media.paused) beat.report('playing', 'auto');
+
+    return () => {
+      media.removeEventListener('play', onPlay);
+      media.removeEventListener('pause', onPause);
+      media.removeEventListener('waiting', onWaiting);
+      media.removeEventListener('ended', onEnded);
+      document.removeEventListener('visibilitychange', onVisibility);
+      beat.stop();
+    };
+  }, [occurrenceId, heartbeatPoster]);
 
   // A new session starts with captions off and no stale url from the previous one.
   useEffect(() => {

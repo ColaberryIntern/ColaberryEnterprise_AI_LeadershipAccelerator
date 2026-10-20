@@ -148,7 +148,11 @@ router.get('/api/admin/factory/qualification/:canonicalOpportunityId', requireSe
   // DECOUPLED (discovery-ZIP) workspace: no OP source re-fetch; the uploaded ZIP is the evidence source.
   if (isGwsKey(canonicalOpportunityId)) {
     try {
-      res.json(await getDecoupledWorkspace(scope.tenantId, canonicalOpportunityId, be.success && be.data ? be.data : undefined));
+      const biddingEntity = be.success && be.data ? be.data : undefined;
+      // Retry a delivery project that failed to create at approval time, BEFORE building the workspace, so the
+      // response already reflects the healed state (unlocks the Build step on the same load).
+      await healGovDeliveryProjectIfNeeded(scope.tenantId, canonicalOpportunityId, biddingEntity, actorIdentity(req));
+      res.json(await getDecoupledWorkspace(scope.tenantId, canonicalOpportunityId, biddingEntity));
     } catch (err: any) {
       logFail('gov_qualification_decoupled_view_failed', err, { canonicalOpportunityId });
       res.status(500).json({ error: 'Could not load the qualification workspace.' });
@@ -156,6 +160,7 @@ router.get('/api/admin/factory/qualification/:canonicalOpportunityId', requireSe
     return;
   }
   try {
+    await healGovDeliveryProjectIfNeeded(scope.tenantId, canonicalOpportunityId, be.success && be.data ? be.data : undefined, actorIdentity(req));
     // Server-authoritative source-state (available / degraded / snapshot_unrecorded / unavailable / auth_failed /
     // malformed). The browser never supplies source facts, and the approve control is only offered when the
     // source is genuinely approvable — mirroring the server-side gate so the UI cannot imply an unusable action.
@@ -1134,6 +1139,32 @@ async function createTwoTrackProjectAfterApproval(q: any, canonicalOpportunityId
   } catch (projErr: any) {
     logFail('gov_two_track_project_create_failed', projErr, { canonicalOpportunityId });
     return 'The pursuit was approved, but creating its delivery project failed; it will be retried.';
+  }
+}
+
+/**
+ * Self-heal, invoked on every workspace load: if a pursuit is APPROVED but still has no delivery project — the
+ * best-effort creation at approval time failed (e.g. the gov container had not been provisioned yet, before it was
+ * made self-provisioning) — retry the creation now. This is the "it will be retried" the approve-time warning
+ * promised. Without it an approved-but-project-less pursuit is stuck forever: the Decide step hides the Approve
+ * button once approved, so the operator cannot re-trigger it, and every Build card stays locked on "no delivery
+ * project". Idempotent, self-limiting (once delivery_project_id is set the condition is false), and NEVER throws
+ * (so it can never break the read path it runs inside).
+ */
+async function healGovDeliveryProjectIfNeeded(tenantId: string, canonicalOpportunityId: string, biddingEntity: string | undefined, approverIdentityId: string): Promise<void> {
+  try {
+    if (!FLAGS.govIngestion) return;
+    const { default: GovQualification } = await import('../../models/GovQualification');
+    const where: any = { canonical_opportunity_id: canonicalOpportunityId, tenant_id: tenantId, status: 'active' };
+    if (biddingEntity) where.bidding_entity = biddingEntity;
+    const record: any = await GovQualification.findOne({ where, order: [['version', 'DESC']] });
+    if (!record) return;
+    const q = record.get();
+    const approved = q.decision === 'approved_bid_pursuit' || q.decision === 'rfi_response';
+    if (!approved || q.delivery_project_id) return; // only an approved pursuit that is missing its project
+    await createTwoTrackProjectAfterApproval(q, canonicalOpportunityId, approverIdentityId);
+  } catch (err: any) {
+    logFail('gov_delivery_project_self_heal_failed', err, { canonicalOpportunityId });
   }
 }
 

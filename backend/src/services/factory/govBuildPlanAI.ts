@@ -23,6 +23,7 @@ import { buildSchedule, type CohortWindow } from '../sbp/buildSchedule';
 import type { BuildPlan } from '../sbp/planContract';
 import { COMMAND_CENTER_STORY_ID, COMMAND_CENTER_TITLE, COMMAND_CENTER_NARRATIVE, COMMAND_CENTER_ACCEPTANCE } from '../sbp/commandCenterStory';
 import { generateBuildSpec } from './govBuildSpec';
+import { selectsSolutionBuild } from './govDeliveryProject';
 import { govShipByDate, rescaleScheduleToDeadline } from './govScheduleWindow';
 
 interface CacheEntry<T> { value: T; at: number; }
@@ -194,9 +195,16 @@ export async function decomposeGovBuildPlanRaw(req: GovRawPlanRequest): Promise<
   if (!process.env.OPENAI_API_KEY) {
     return { plan: null, cached: false, error: 'AI build plan is unavailable (no API key configured).' };
   }
-  const reqs = (Array.isArray(req.requirements) ? req.requirements : []).slice(0, 200);
-  if (reqs.length === 0) {
+  const established = (Array.isArray(req.requirements) ? req.requirements : []).slice(0, 200);
+  if (established.length === 0) {
     return { plan: null, cached: false, error: 'No established requirements to plan a build from yet.' };
+  }
+  // Plan ONLY the solution — the "what they're buying" requirements. Bid-submission and administrative obligations
+  // belong in the proposal responses, not in a build story (feeding them here is what produced "Submit Proposal" as
+  // a build step). Same classifier the deterministic projection and the coverage cross-check use.
+  const reqs = established.filter(selectsSolutionBuild);
+  if (reqs.length === 0) {
+    return { plan: null, cached: false, error: 'No requirement carries a build signal — there is no software to plan; this pursuit is delivered through the proposal responses.' };
   }
 
   // Our solution/product to build. Use the spec the operator already generated; otherwise generate one now so
@@ -220,7 +228,7 @@ export async function decomposeGovBuildPlanRaw(req: GovRawPlanRequest): Promise<
     reqs.map((r) => `- ${r.id}: ${r.text}`).join('\n'),
   ].join('\n');
 
-  const key = 'rawplan:v3:' + hash({ brief, document }); // v3: decompose our solution (spec) — invalidates older cached plans
+  const key = 'rawplan:v4:' + hash({ brief, document }); // v4: plan only solution_build requirements — invalidates pre-filter cached plans
   const hit = cacheGet<BuildPlan>(key);
   if (hit) return { plan: hit, cached: true };
 
