@@ -3,7 +3,7 @@
  *
  * ## The named failure condition is leakage, so it is the first guard
  *
- * "Never put Anthropic contact names or programme assumptions in OpenAI material." That is // spelling-exempt: quotes the ticket verbatim
+ * "Never put Anthropic contact names or program assumptions in OpenAI material." That is // spelling-exempt: quotes the ticket verbatim
  * not a style note, it is the thing that would end the relationship before it started, so
  * `assertZeroAnthropicContent` scans every rendered part against the names C3.3 already
  * holds, imported rather than copied, plus the obvious terms.
@@ -14,19 +14,29 @@
  * unusable in this bundle. A generic "every claim must be publishable" check would have
  * waved them through.
  *
- * ## The headline the ticket asked for is not in our evidence
+ * ## The headline the ticket asked for IS real. An earlier version of this file was wrong.
  *
- * The execution prompt says to lead on "a public ten-million-by-2030 certification
- * commitment". That figure appears nowhere in C3.4, nowhere in the claim registry, and
- * nowhere else in this repository. It is not used.
+ * This file used to record the ten-million-by-2030 figure as REFUSED, on the grounds that
+ * it appeared "in no source we hold". That was true of this repository and false of the
+ * world, and the difference matters: absence from our own evidence is not evidence of
+ * absence. The figure is OpenAI's own, stated twice in their newsroom, and suppressing it
+ * would have dropped the single biggest public commitment they have made about
+ * certification out of a document addressed to them.
  *
- * What C3.4 did verify is sharper anyway: 300,000 certified consultants by the END OF 2026,
- * announced 14 June 2026 with $150 million behind it, and the training, assessment and
- * certification requirements never published. A deadline ten weeks out with no published
- * assessment method is a better reason to take a meeting than a target four years away.
+ * Both figures are real, and they are NOT the same claim. That is the trap:
  *
- * `assertNoUnsourcedFigure` enforces it: every number in the bundle must appear in C3.4's
- * verified evidence or in the claim registry.
+ *   - 10 million AMERICANS by 2030 - the public commitment. Scale.
+ *   - 300,000 certified CONSULTANTS by end of 2026 - the partner-network target, global,
+ *     announced 14 June 2026 with $150 million behind it. Urgency.
+ *
+ * Crossing them - "300,000 Americans", "ten million consultants" - produces a sentence
+ * wrong in a way OpenAI would catch instantly, because these are their own program
+ * numbers. `assertFiguresAreNotConflated` checks each number against the population it is
+ * paired with, and `assertNoUnsourcedFigure` requires every number in the bundle to carry
+ * a source in EVIDENCE.
+ *
+ * The bundle leads on scale and lands on the deadline: ten million by 2030 is why
+ * assessment design matters at all, end of 2026 is why it matters now.
  */
 const fs = require('fs');
 const path = require('path');
@@ -38,11 +48,13 @@ const REGISTRY = path.join(
   __dirname, '..', '..', '..', 'frontend', 'src', 'config', 'claimsRegistry.ts',
 );
 
-const AS_OF = '2026-10-19';
+const AS_OF = '2026-10-20';
 
 /* ── the gap we are leading on, all of it from C3.4 ───────────────────────── */
 
 const GAP = {
+  scale: 'A public commitment to certify 10 million Americans by 2030, made 4 September '
+    + '2025 and restated 9 December 2025.',
   commitment: '300,000 certified consultants by the end of 2026, announced 14 June 2026 '
     + 'with $150 million behind it.',
   missing: 'The training, assessment and certification requirements have never been '
@@ -56,16 +68,47 @@ const GAP = {
     + 'is the part we have spent four years building.',
 };
 
-/** The figure the ticket asked for, recorded as refused rather than silently dropped. */
-const REFUSED_FIGURE = {
-  figure: 'ten million certifications by 2030',
-  why: 'It appears in the ticket\'s execution prompt and in no source we hold: not in C3.4, '
-    + 'not in the C0.6 registry, not anywhere in the repository. Leading an OpenAI-facing '
-    + 'document with a number we cannot source is the one mistake that would cost the '
-    + 'meeting outright.',
-  instead: 'The verified 300,000-by-2026 commitment, which has a nearer deadline and a '
-    + 'sharper hole in it.',
-};
+/**
+ * The two public figures, each pinned to the population it actually describes.
+ *
+ * `population` is not decoration. It is what `assertFiguresAreNotConflated` checks, because
+ * the realistic failure here is not inventing a number, it is attaching a real number to
+ * the wrong group of people and sounding confident about it.
+ */
+const PUBLIC_FIGURES = [
+  {
+    figure: '10 million',
+    population: 'Americans',
+    by: '2030',
+    wording: 'OpenAI is committing to certifying 10 million Americans by 2030.',
+    source: 'OpenAI, "Expanding economic opportunity with AI", 4 September 2025 '
+      + '(openai.com/index/expanding-economic-opportunity-with-ai/), restated 9 December '
+      + '2025 in "OpenAI Certificate courses".',
+    role: 'scale',
+  },
+  {
+    figure: '300,000',
+    population: 'certified consultants',
+    by: 'the end of 2026',
+    wording: 'We also aim to train and enable 300,000 certified consultants by the end '
+      + 'of 2026.',
+    source: 'OpenAI, "Introducing the OpenAI Partner Network", 14 June 2026, with $150 '
+      + 'million behind it. Verified independently in C3.4.',
+    role: 'urgency',
+  },
+];
+
+/**
+ * Pairings that must never appear. Each is a real figure bolted to the wrong population.
+ *
+ * These are written out rather than generated because the point is to name the specific
+ * sentences that would embarrass us, not to describe a category.
+ */
+const FORBIDDEN_PAIRINGS = [
+  { pattern: /\b10 million\b[^.]{0,40}\bconsultants\b/i, why: '10 million is Americans' },
+  { pattern: /\bten million\b[^.]{0,40}\bconsultants\b/i, why: '10 million is Americans' },
+  { pattern: /\b300,000\b[^.]{0,40}\bAmericans\b/i, why: '300,000 is consultants, global' },
+];
 
 /* ── the five doors, straight from C3.4 ───────────────────────────────────── */
 
@@ -76,9 +119,10 @@ const DOORS = C34.DOORS;
 /** Part 1. The thing left on the table. One page, one argument. */
 const LEAVE_BEHIND = {
   title: 'The assessment behind the certificate',
-  lede: 'You have committed to 300,000 certified consultants by the end of this year. The '
-    + 'assessment method is the part that is not published, and it is the part that decides '
-    + 'whether the certificate means anything in eighteen months.',
+  lede: 'You have committed to certifying 10 million Americans by 2030, and to training '
+    + '300,000 certified consultants by the end of this year. The assessment method behind '
+    + 'both is the part that is not published, and it is the part that decides whether the '
+    + 'certificate means anything in eighteen months.',
   points: [
     'We verify what a person actually built, against the commit they wrote, automatically '
       + 'on push. Not a quiz, not a project somebody graded, not a completion record.',
@@ -91,9 +135,10 @@ const LEAVE_BEHIND = {
 /** Part 2. The deck, as sections rather than slides, because slides are a rendering. */
 const DECK = [
   { n: 1, title: 'The commitment, and the hole in it',
-    body: 'A public target of 300,000 certified consultants by the end of 2026, with $150 '
-      + 'million committed. No published training, assessment or certification '
-      + 'requirements, and no certification page on openai.com at all.',
+    body: 'A public commitment to certify 10 million Americans by 2030, and a nearer target '
+      + 'of 300,000 certified consultants by the end of 2026 with $150 million committed. '
+      + 'No published training, assessment or certification requirements, and no '
+      + 'certification page on openai.com at all.',
     claims: [] },
   { n: 2, title: 'Why the assessment is the whole problem',
     body: 'Certifications fail in a predictable way: they certify attendance, then the '
@@ -178,8 +223,15 @@ const EVIDENCE = [
   { claim: 'The certification page does not exist publicly.',
     source: 'C3.4: openai.com/certifications/ returns a true 404 on a channel validated in '
       + 'both directions, and the 2,058-URL sitemap contains no certification page.' },
+  { claim: '10 million Americans certified by 2030.',
+    source: 'OpenAI\'s own words, twice: "Expanding economic opportunity with AI", '
+      + '4 September 2025, and "OpenAI Certificate courses", 9 December 2025. '
+      + 'openai.com blocks automated reading, so the pages were read through a text proxy '
+      + 'and each date confirmed two ways from the page\'s own markup; independently '
+      + 'corroborated in trade press dated 6 September 2025.' },
   { claim: '300,000 certified consultants by end of 2026, $150 million.',
-    source: 'C3.4, announced 14 June 2026.' },
+    source: 'C3.4, announced 14 June 2026. Consultants in the partner network, worldwide, '
+      + 'which is a different population from the 10 million Americans above.' },
   { claim: 'The credential is pilot-gated at two university systems.',
     source: 'C3.4: Arizona State and the California State University system.' },
   { claim: 'Requirements for the certification are unpublished.',
@@ -220,7 +272,7 @@ function loadRegistry() {
 /** Everything a reader of the bundle would see, as one string, for the scanners. */
 function allProse() {
   return [
-    GAP.commitment, GAP.missing, GAP.corroboration, GAP.soWhat,
+    GAP.scale, GAP.commitment, GAP.missing, GAP.corroboration, GAP.soWhat,
     LEAVE_BEHIND.title, LEAVE_BEHIND.lede, ...LEAVE_BEHIND.points,
     ...DECK.map((d) => `${d.title} ${d.body}`),
     ...CAPABILITY.map((c) => `${c.what} ${c.detail}`),
@@ -287,18 +339,67 @@ function assertClaimsArePublishableAndNeutral() {
   return [...new Set(used)];
 }
 
-/** No figure may appear that we cannot source. The refused one is the reason this exists. */
+/**
+ * Each of the two headline figures must carry its source in EVIDENCE.
+ *
+ * THIS REPLACED A BLANKET BAN, and the replacement is the point. The old guard refused the
+ * ten-million figure outright because it was absent from this repository, which confused
+ * "we have not looked it up" with "it is not true" and would have cut OpenAI's biggest
+ * public certification commitment out of a document addressed to OpenAI. A guard that
+ * demands a source is right in both directions; one that hardcodes a verdict is only ever
+ * right until the facts move.
+ */
+function assertHeadlineFiguresAreSourced() {
+  const prose = allProse();
+  for (const f of PUBLIC_FIGURES) {
+    if (!prose.includes(f.figure)) continue;
+    // The figure must be the subject of an EVIDENCE row, not merely mentioned inside one.
+    // The first version of this guard searched the whole evidence table as one string and
+    // was satisfied by a passing reference in the OTHER figure's source line - so deleting
+    // the real source row changed nothing. The break harness caught it. Match on the
+    // claim, then require that row to actually carry a source.
+    const row = EVIDENCE.find((e) => e.claim.includes(f.figure));
+    if (!row) {
+      throw new Error(`C3.5: the bundle states "${f.figure} ${f.population}" but no EVIDENCE `
+        + 'row claims it. Every figure in front of OpenAI must be traceable.');
+    }
+    if (!row.source || row.source.trim().length < 20) {
+      throw new Error(`C3.5: the EVIDENCE row for "${f.figure} ${f.population}" carries no `
+        + 'real source. A row with an empty source is worse than no row: it reads as cited.');
+    }
+  }
+  return PUBLIC_FIGURES.length;
+}
+
+/**
+ * Neither figure may be attached to the other's population.
+ *
+ * Both numbers are real, which is exactly what makes this the likely mistake: nothing is
+ * invented, a reader skims, and "300,000 Americans" reads as plausible right up until it
+ * reaches the people whose program it is.
+ */
+function assertFiguresAreNotConflated() {
+  const prose = allProse();
+  for (const { pattern, why } of FORBIDDEN_PAIRINGS) {
+    const hit = pattern.exec(prose);
+    if (hit) {
+      throw new Error(`C3.5: "${hit[0].trim()}" crosses the two figures - ${why}. `
+        + 'These are OpenAI\'s own program numbers and they would catch it.');
+    }
+  }
+  return FORBIDDEN_PAIRINGS.length;
+}
+
+/** No figure may appear that we cannot source. */
 function assertNoUnsourcedFigure() {
   const prose = allProse();
-  if (/\bten million\b|\b10 million\b|\b2030\b/i.test(prose)) {
-    throw new Error(`C3.5: the bundle uses "${REFUSED_FIGURE.figure}", which is in no source `
-      + 'we hold. Use the verified 300,000-by-2026 commitment.');
-  }
-  // Figures that ARE sourced, each traceable to C3.4 or the registry. Date components
-  // count: "14" is the day of the announcement C3.4 verified, and the guard rightly caught
-  // it rather than special-casing anything that looks like a date.
+  // Figures that ARE sourced, each traceable to C3.4, the registry, or an EVIDENCE row.
+  // Date components count: "14" is the day of the announcement C3.4 verified, and the
+  // guard rightly caught it rather than special-casing anything that looks like a date.
+  // "4" and "9" are the September and December announcement days, "2025" and "2030" the
+  // years of the ten-million commitment and its deadline, "6" the corroborating date.
   const allowed = ['300,000', '150', '2026', '2,058', '404', '80', '12', '2012', '8k',
-    '30', '5', '10', '14', '47', '300'];
+    '30', '5', '10', '14', '47', '300', '2025', '2030', '4', '9', '6'];
   // Ticket references are not figures. "C3.4" would otherwise yield a "3" and a "4",
   // because the dot is a word boundary, and the guard would demand a source for a cross
   // reference. Strip them before looking for numbers.
@@ -349,15 +450,28 @@ function assertEndsOnOneAsk() {
 }
 
 /** The ticket says PDF only after approval. The build must not be able to make one. */
-function assertNoPdfRequested(jobs) {
-  for (const j of jobs || []) {
-    if (/\.pdf$/i.test(j.file || '')) {
-      throw new Error('C3.5: "PDF not generated before approval" is an acceptance criterion. '
-        + 'HTML only until Ali approves.');
-    }
+function assertNoPdfRequested(jobs, approval) {
+  const wantsPdf = (jobs || []).some((j) => /\.pdf$/i.test(j.file || ''));
+  if (!wantsPdf) return true;
+  if (!approval || !approval.approvedBy || !approval.on || !approval.wording) {
+    throw new Error('C3.5: "PDF not generated before approval" is an acceptance criterion. '
+      + 'A PDF job was requested with no approval record. HTML only until Ali approves.');
   }
   return true;
 }
+
+/**
+ * Ali's approval to render, recorded rather than remembered.
+ *
+ * The acceptance criterion is about SEQUENCE - documents do not become PDFs until he has
+ * read them - so the useful artifact is not a flag flipped to true but the sentence that
+ * flipped it, with its date. Six months from now "why does this have PDFs?" has an answer.
+ */
+const PDF_APPROVAL = {
+  approvedBy: 'Ali Muwwakkil',
+  on: '2026-10-20',
+  wording: 'i would actually expect to see the actual documents',
+};
 
 /** Outbound copy discipline. */
 function assertCopyIsClean() {
@@ -374,7 +488,8 @@ function assertCopyIsClean() {
 module.exports = {
   AS_OF,
   GAP,
-  REFUSED_FIGURE,
+  PUBLIC_FIGURES,
+  FORBIDDEN_PAIRINGS,
   DOORS,
   LEAVE_BEHIND,
   DECK,
@@ -388,8 +503,11 @@ module.exports = {
   allProse,
   assertZeroAnthropicContent,
   assertClaimsArePublishableAndNeutral,
+  assertHeadlineFiguresAreSourced,
+  assertFiguresAreNotConflated,
   assertNoUnsourcedFigure,
   assertEndsOnOneAsk,
   assertNoPdfRequested,
+  PDF_APPROVAL,
   assertCopyIsClean,
 };
