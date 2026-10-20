@@ -122,17 +122,24 @@ describe('ensureGovTwoTrackProject (orchestration, mocked models)', () => {
     const res = await ensureGovTwoTrackProject({
       qualificationId: 'q-1', canonicalOpportunityId: GWS,
       established: [{ id: 'REQ-001', text: 'Register in SAM.gov', bindingStatus: 'binding_solicitation_requirement' }, { id: 'REQ-002', text: 'Provide a plan' }],
-      provenance: { title: 'RFP IVR', agency: 'Fort Worth' }, approverIdentityId: 'approver-1',
+      provenance: { title: 'RFP IVR', agency: 'Fort Worth' }, approverIdentityId: '11111111-1111-4111-8111-111111111111',
     });
     expect(res).toMatchObject({ deliveryProjectId: 'dp-1', created: true, tracks: 2, requirements: 2 });
     expect(dpCreate).toHaveBeenCalledTimes(1);
     expect(dpCreate.mock.calls[0][0]).toMatchObject({
       slug: 'gov-04ac1711-c3f6-418a-9d9b-c5e6211295ec', project_class: 'government_public_sector',
-      tenant_id: 'ten-1', organization_id: 'org-1', engagement_id: 'eng-1', name: 'RFP IVR', created_by_identity_id: 'approver-1', status: 'discovery',
+      tenant_id: 'ten-1', organization_id: 'org-1', engagement_id: 'eng-1', name: 'RFP IVR', created_by_identity_id: '11111111-1111-4111-8111-111111111111', status: 'discovery',
     });
     expect(ctFindOrCreate.mock.calls.map((c) => c[0].defaults.track_type).sort()).toEqual(['proposal', 'solution_build']);
     expect(crCreate).toHaveBeenCalledTimes(2);
     expect(gqUpdate).toHaveBeenCalledWith({ delivery_project_id: 'dp-1' }, expect.objectContaining({ where: { id: 'q-1' } }));
+  });
+
+  it('guards created_by_identity_id: a non-uuid approver (the admin EMAIL) becomes null — the create no longer 500s on a uuid column', async () => {
+    dpFindOne.mockResolvedValue(null);
+    await ensureGovTwoTrackProject({ qualificationId: 'q-9', canonicalOpportunityId: GWS, established: [], provenance: null, approverIdentityId: 'ali@colaberry.com' });
+    expect(dpCreate).toHaveBeenCalledTimes(1);
+    expect(dpCreate.mock.calls[0][0].created_by_identity_id).toBeNull();
   });
 
   it('idempotent: reuses an existing project (no create), still upserts the tracks', async () => {
