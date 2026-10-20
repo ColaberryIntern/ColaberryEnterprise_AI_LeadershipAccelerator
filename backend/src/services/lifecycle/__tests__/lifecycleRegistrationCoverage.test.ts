@@ -254,9 +254,9 @@ describe('LC-01 — the set of project-creation sites is derived, not listed', (
       'services/agentDomain/agentDomainProvisioner.ts:213 Project.findOrCreate(',
       'services/businessProcessSeedService.ts:135 Project.findOrCreate(',
       'services/delivery/leadConversion.ts:175 DeliveryProject.create(',
-      // Moved 134 -> 147: the `selectsSolutionBuild` helper was added above this call site
-      // (CC-20261015-g4w7). Same creation site, same mechanism; re-pinned, not loosened.
-      'services/factory/govDeliveryProject.ts:147 DeliveryProject.create(',
+      // Moved 134 -> 147 -> 154: helpers added above this call site (selectsSolutionBuild, then the asIdentityId
+      // uuid guard — CC-20261015-g4w7). Same creation site, same mechanism; re-pinned, not loosened.
+      'services/factory/govDeliveryProject.ts:154 DeliveryProject.create(',
       'services/projectService.ts:67 Project.create(',
     ]);
   });
