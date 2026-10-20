@@ -1,10 +1,12 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { Link } from 'react-router-dom';
+import { useCardFocus } from './useCardFocus';
 import type { CampusBuilding, ExplorerAccess } from './campusMap';
-import { buildingName } from './campusMap';
+import { buildingName, roomLabel } from './campusMap';
 import { accessLabel, enrollCta } from './campusAccess';
 import { GATED_FEATURES } from '../paywall/gatedFeatures';
 import { useIsMgmt } from './campusMgmt';
+import AdminLink from './AdminLink';
 import WhoIsHere, { WhoIsHereProps } from './WhoIsHere';
 import StaffDesk from './StaffDesk';
 import type { StaffDesk as Desk } from './campusPeopleApi';
@@ -62,17 +64,17 @@ export default function BuildingCard({ building: b, access, workplaceNames, onCl
   const chip = accessLabel(access);
   // C6: admin links (Staff Office) work only through the Management Portal bridge; without that access they are disabled.
   const isMgmt = useIsMgmt();
-  const adminLink = (label: string, route: string, cls: string, key?: string) => (isMgmt
-    ? <a key={key} className={cls} href={route} target="_blank" rel="noopener noreferrer" data-admin="true">{label}</a>
-    : <span key={key} className={`${cls} is-disabled`} aria-disabled="true" data-admin="true">{label}</span>);
+  const adminLink = (label: string, route: string, cls: string, key?: string) => <AdminLink key={key} label={label} route={route} className={cls} isMgmt={isMgmt} />;
   const hasAdmin = !!b.primary.admin || b.rooms.some((r) => r.admin);
   const primaryPlanned = b.rooms.find((r) => r.route === b.primary.route)?.planned;
   const headingId = `cm-card-${b.id}`;
+  const heading = useRef<HTMLHeadingElement | null>(null);
+  useCardFocus(heading);
   return (
     <section className={`cm-card cm-b-${b.id}`} aria-labelledby={headingId} data-testid="cm-card" data-building={b.id}>
       <button type="button" className="cm-card-x" onClick={onClose} aria-label={`Close ${name}`}>×</button>
       {chip && <div className="cm-card-chip">{chip}</div>}
-      <h2 id={headingId} className="cm-card-title">{name}</h2>
+      <h2 id={headingId} className="cm-card-title" tabIndex={-1} ref={heading}>{name}</h2>
 
       {b.primary.admin ? adminLink(b.primary.label, b.primary.route, 'cm-btn') : primaryPlanned
         ? <span className="cm-btn is-disabled" aria-disabled="true">{b.primary.label} - opening soon</span>
@@ -94,9 +96,9 @@ export default function BuildingCard({ building: b, access, workplaceNames, onCl
           <ul className="cm-rooms">
             {b.rooms.map((r) => (
               <li key={r.route}>
-                {r.admin ? adminLink(r.label, r.route, 'cm-room') : r.planned
-                  ? <span className="cm-room is-disabled" aria-disabled="true">{r.label} <small>opening soon</small></span>
-                  : <Link className="cm-room" to={r.route} onClick={go(r.route)}>{r.label}</Link>}
+                {r.admin ? adminLink(roomLabel(r, workplaceNames), r.route, 'cm-room') : r.planned
+                  ? <span className="cm-room is-disabled" aria-disabled="true">{roomLabel(r, workplaceNames)} <small>opening soon</small></span>
+                  : <Link className="cm-room" to={r.route} onClick={go(r.route)}>{roomLabel(r, workplaceNames)}</Link>}
               </li>
             ))}
           </ul>

@@ -47,6 +47,8 @@ The `backend/src/db/__tests__/` suite is worth knowing about: each `ensure*Schem
 | `resolveWorkTabSmoke.e2e.js` | Resolve work tab smoke test |
 | `v2-page-health.js` | Visits every route **both** directly and via client-side navigation |
 | `storyHeroMeasure.js`, `storyVisualReview.js` | Story surface measurement and visual review |
+| `campus.e2e.js` | Colaberry Campus for member, Explorer, business and staff: opens on the campus, every building opens its page with the banner, presence, desks, keyboard, tour, My look, list view, Game Room time, classic switch; `CAMPUS_E2E_MODE=off` proves the flag-off portal. **Local stack only** (refuses any non-localhost URL and checks a seeded marker): set-up in `systemV2/campus-stack.md` |
+| `lib/localOnly.js`, `lib/localServe.js` | The localhost guard (unit-tested by `node --test tests/systemV2/lib/localOnly.test.js`) and the build-plus-API-proxy server the campus e2e runs against |
 | `logs/run-1.md` | Historical run log |
 
 ### How these run — read before adding one

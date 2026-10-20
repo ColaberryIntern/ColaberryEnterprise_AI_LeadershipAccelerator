@@ -21,6 +21,17 @@ export interface CampusPresenceState {
  * not depend on router context. A failed write is non-fatal (the read still runs); a failed read
  * sets presenceError and keeps the last good data off screen rather than pretending it is fresh.
  */
+/**
+ * True when two presence answers say the same thing. The server builds them deterministically (same areas, same order), so a
+ * structural compare is exact. After a failed read presence is null, so the next good read always renders, even if its data
+ * matches what was shown before the failure.
+ */
+export function samePresence(a: CampusPresence | null, b: CampusPresence | null): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
 export function useCampusPresencePoll(active: boolean): CampusPresenceState {
   const [presence, setPresence] = useState<CampusPresence | null>(null);
   const [presenceError, setPresenceError] = useState(false);
@@ -40,7 +51,8 @@ export function useCampusPresencePoll(active: boolean): CampusPresenceState {
           await postCampusHere(area).catch(() => undefined);
         }
         const next = await fetchCampusPresence();
-        if (alive) { setPresence(next); setPresenceError(false); }
+        // C11 (the map stays light): an unchanged answer keeps the SAME object, so nothing re-renders every 30 s.
+        if (alive) { setPresence((prev) => (samePresence(prev, next) ? prev : next)); setPresenceError(false); }
       } catch {
         if (alive) { setPresence(null); setPresenceError(true); }
       } finally {

@@ -15,20 +15,34 @@ import { myEnrollmentId } from '../../services/dmApi';
 // 45 s, the notification bell's cadence (contract D7, amended in revision 3 from 30 s). Polled from CampusProvider (persistent across pages), so navigating never
 // re-baselines it or refetches per page.
 export const DM_TOAST_POLL_MS = 45_000;
-export const TOAST_MS = 8_000;
+// C11: 12 s (was 8 s), and paused while the toast has focus or the pointer (WCAG 2.2.1).
+export const TOAST_MS = 12_000;
 
 export interface DmToast { key: string; peerId: string; peerName: string }
 
-export function useCampusDmToasts(active: boolean): { toast: DmToast | null; dismiss: () => void } {
+/** Why the toast is being held open: the pointer is over it, or focus is inside it. Tracked separately (C11). */
+export type ToastHold = 'hover' | 'focus';
+export interface DmToastControls { toast: DmToast | null; dismiss: () => void; hold: (why: ToastHold) => void; release: (why: ToastHold) => void }
+
+export function useCampusDmToasts(active: boolean): DmToastControls {
   const [toast, setToast] = useState<DmToast | null>(null);
   const seen = useRef<Map<string, string> | null>(null); // roomId -> lastAt; null until the baseline
   const toasted = useRef(new Set<string>());
   const hideTimer = useRef<number | null>(null);
+  // Two flags, not one: a pointer leaving must not restart the timer while focus is still inside (and vice versa).
+  const held = useRef<Record<ToastHold, boolean>>({ hover: false, focus: false });
+  const isHeld = () => held.current.hover || held.current.focus;
 
-  const dismiss = useCallback(() => {
-    if (hideTimer.current !== null) { window.clearTimeout(hideTimer.current); hideTimer.current = null; }
-    setToast(null);
-  }, []);
+  const clearHide = () => { if (hideTimer.current !== null) { window.clearTimeout(hideTimer.current); hideTimer.current = null; } };
+  const scheduleHide = () => {
+    clearHide();
+    if (!isHeld()) hideTimer.current = window.setTimeout(() => { hideTimer.current = null; setToast(null); }, TOAST_MS);
+  };
+  const dismiss = useCallback(() => { clearHide(); held.current = { hover: false, focus: false }; setToast(null); }, []);
+  // C11 (WCAG 2.2.1): a toast with an action must not vanish under a learner reading it or tabbing to Open. While it has focus
+  // or the pointer, the timer stops; when both leave, the full TOAST_MS starts again.
+  const hold = useCallback((why: ToastHold) => { held.current = { ...held.current, [why]: true }; clearHide(); }, []);
+  const release = useCallback((why: ToastHold) => { held.current = { ...held.current, [why]: false }; scheduleHide(); }, []); // the timer helpers only touch refs and the stable setToast
 
   useEffect(() => {
     if (!active) { seen.current = null; return undefined; }
@@ -55,8 +69,7 @@ export function useCampusDmToasts(active: boolean): { toast: DmToast | null; dis
         const key = top.roomId + '|' + top.lastAt;
         toasted.current.add(key);
         setToast({ key, peerId: top.peerId, peerName: top.peerName });
-        if (hideTimer.current !== null) window.clearTimeout(hideTimer.current);
-        hideTimer.current = window.setTimeout(() => { hideTimer.current = null; setToast(null); }, TOAST_MS);
+        scheduleHide();
       } catch {
         // Silent by design: retried next tick; the inbox elsewhere still shows unread.
       } finally {
@@ -70,5 +83,5 @@ export function useCampusDmToasts(active: boolean): { toast: DmToast | null; dis
   }, [active]);
 
   useEffect(() => () => { if (hideTimer.current !== null) window.clearTimeout(hideTimer.current); }, []);
-  return { toast, dismiss };
+  return { toast, dismiss, hold, release };
 }

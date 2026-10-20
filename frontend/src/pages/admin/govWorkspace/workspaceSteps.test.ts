@@ -9,9 +9,9 @@ const base: StepStateInput = {
 };
 
 describe('workspaceSteps (pure, advisory)', () => {
-  it('has the 7 redesign steps in order, each with a one-line question', () => {
+  it('has the 8 redesign steps in order, each with a one-line question', () => {
     expect(WORKSPACE_STEPS.map((s) => s.key)).toEqual(
-      ['snapshot', 'solicitation', 'fit', 'decide', 'build', 'submit', 'outcome'],
+      ['snapshot', 'solicitation', 'fit', 'decide', 'build', 'proposal', 'submit', 'outcome'],
     );
     expect(WORKSPACE_STEPS.every((s) => s.question.length > 0 && s.label.length > 0)).toBe(true);
   });
@@ -19,7 +19,7 @@ describe('workspaceSteps (pure, advisory)', () => {
   it('resolveStep maps legacy tabs forward and unknown → snapshot', () => {
     expect(resolveStep('requirements')).toBe('solicitation'); // folded into Solicitation
     expect(resolveStep('gono')).toBe('decide');
-    expect(resolveStep('proposal')).toBe('build');
+    expect(resolveStep('proposal')).toBe('proposal'); // now its OWN step, no longer a Build alias
     expect(resolveStep('submission')).toBe('submit');
     expect(resolveStep('documents')).toBe('solicitation');
     expect(resolveStep('build')).toBe('build');       // a current key resolves directly
@@ -32,22 +32,28 @@ describe('workspaceSteps (pure, advisory)', () => {
     }
   });
 
-  it('steps 5–7 are LOCKED until approval; Build never shows done before approval', () => {
+  it('steps 5–8 are LOCKED until approval; Build never shows done before approval', () => {
     // An AI plan exists (hasBuild) and proposal content is ready, but NOT approved.
     const m = deriveStepState('snapshot', { ...base, zipAttested: true, establishedCount: 3, hasBuild: true, proposalContentReady: true, decision: null });
     expect(m.approved).toBe(false);
     expect(m.statuses.build).toBe('locked');
+    expect(m.statuses.proposal).toBe('locked');
     expect(m.statuses.submit).toBe('locked');
     expect(m.statuses.outcome).toBe('locked');
     expect(m.statuses.build).not.toBe('done'); // the pre-redesign bug: Build showed done from an AI plan
   });
 
-  it('approval unlocks 5–7; Build can then be done', () => {
-    const m = deriveStepState('build', { ...base, zipAttested: true, establishedCount: 3, decision: 'approved_bid_pursuit', proposalContentReady: true });
+  it('approval unlocks 5–8; Build is done at approval, Proposal only when every response is approved', () => {
+    // Viewing Build, just approved, proposal not written yet.
+    const m = deriveStepState('build', { ...base, zipAttested: true, establishedCount: 3, decision: 'approved_bid_pursuit', proposalContentReady: false });
     expect(m.approved).toBe(true);
-    expect(m.statuses.build).toBe('current'); // being viewed
+    expect(m.statuses.build).toBe('current');   // being viewed
+    expect(m.statuses.proposal).toBe('todo');   // unlocked, not done (no approved responses yet)
+    expect(m.statuses.submit).toBe('todo');     // unlocked, not done
+    // Viewing Submit, approved, every response approved → Build and Proposal both done.
     const m2 = deriveStepState('submit', { ...base, zipAttested: true, establishedCount: 3, decision: 'approved_bid_pursuit', proposalContentReady: true });
-    expect(m2.statuses.build).toBe('done');
+    expect(m2.statuses.build).toBe('done');     // done once approved (the build runs post-award)
+    expect(m2.statuses.proposal).toBe('done');  // responses approved
     expect(m2.statuses.submit).toBe('current');
   });
 
@@ -66,7 +72,7 @@ describe('workspaceSteps (pure, advisory)', () => {
     expect(afterReqs.frontier).toBe('fit');
     // locked steps are never the frontier before approval
     const notApproved = deriveStepState('snapshot', { ...base, zipAttested: true, establishedCount: 2, hasBuild: true });
-    expect((['build', 'submit', 'outcome'] as WorkspaceStep[]).includes(notApproved.frontier)).toBe(false);
+    expect((['build', 'proposal', 'submit', 'outcome'] as WorkspaceStep[]).includes(notApproved.frontier)).toBe(false);
   });
 
   it('the viewed step is current even if done elsewhere', () => {

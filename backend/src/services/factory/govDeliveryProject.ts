@@ -26,6 +26,13 @@ const TRACK_TYPES = ['proposal', 'solution_build'] as const;
 
 const GWS_RE = /^gws:([0-9a-f-]{36})$/i;
 
+/** A canonical UUID. `created_by_identity_id` is a uuid column, but the approver reaches us as the admin's EMAIL
+ *  (actorIdentity → email), which Postgres rejects ("invalid input syntax for type uuid"). Guard it: a real uuid
+ *  passes through, anything else (an email) becomes null, so the project still creates with no creator attribution
+ *  rather than failing the whole delivery-project creation. */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const asIdentityId = (v: unknown): string | null => (typeof v === 'string' && UUID_RE.test(v) ? v : null);
+
 /**
  * Deterministic, tenant-unique project slug for an opportunity. A decoupled key `gws:<uuid>` maps to
  * `gov-<uuid>` (matching the Phase-1 start route's slug), any other canonical id is sanitized. `delivery_projects`
@@ -54,6 +61,19 @@ const BUILD_SIGNAL_RE = /\b(system|software|application|platform|database|integr
 export function classifyRequirementTracks(est: any): string[] {
   const hay = `${String(est?.text ?? '')} ${String(est?.section ?? '')} ${String(est?.kind ?? '')}`.toLowerCase();
   return BUILD_SIGNAL_RE.test(hay) ? ['proposal', 'solution_build'] : ['proposal'];
+}
+
+/**
+ * Does this requirement belong on the solution_build track — i.e. is it part of WHAT WE BUILD, not WHAT WE SUBMIT?
+ * Prefers the requirement's already-established `tracks` (the reviewer's classification) when present, and otherwise
+ * falls back to deterministic text classification. This is the gate that keeps bid-submission and administrative
+ * rules ("submit a redacted copy", "include a statement of reasons", pricing/registration forms) OUT of the AI
+ * build spec/plan: they are proposal obligations, never software to build. PURE + total.
+ */
+export function selectsSolutionBuild(req: any): boolean {
+  const tracks = req?.tracks;
+  if (Array.isArray(tracks)) return tracks.includes('solution_build');
+  return classifyRequirementTracks(req).includes('solution_build');
 }
 
 /**
@@ -140,7 +160,7 @@ export async function ensureGovTwoTrackProject(input: EnsureGovTwoTrackProjectIn
         slug,
         project_class: 'government_public_sector',
         status: 'discovery',
-        created_by_identity_id: input.approverIdentityId || null,
+        created_by_identity_id: asIdentityId(input.approverIdentityId),
       }, { transaction });
       created = true;
     }

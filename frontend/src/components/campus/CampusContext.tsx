@@ -7,11 +7,13 @@ import { useCampusPlan } from './useCampusPlan';
 import { useCampusLook } from './useCampusLook';
 import type { CampusLook } from './campusApi';
 import type { PlanStop } from './campusPlan';
-import { useCampusDmToasts, DmToast } from './useCampusDmToasts';
+import { useCampusDmToasts, DmToast, ToastHold } from './useCampusDmToasts';
 import type { StaffDesk } from './campusPeopleApi';
 import { useParticipantAuth } from '../../contexts/ParticipantAuthContext';
 import type { BuildingId } from './campusMap';
-import { CampusSettings, readCampusSettings, writeCampusSettings } from './campusSettings';
+import { CampusSettings, CampusSettingsView, readCampusSettings, writeCampusSettings } from './campusSettings';
+import { useEffectiveReduceMotion } from './useEffectiveReduceMotion';
+import './campusTokens.css'; // C11: contrast tokens on :root; the provider wraps every portal route, so every campus surface has them
 
 /**
  * CampusContext - the one place campus state lives (Basecamp C1).
@@ -35,7 +37,8 @@ export interface CampusState {
   enabled: boolean;
   /** True once the flag request has settled (either way). */
   ready: boolean;
-  settings: CampusSettings;
+  /** Stored choices plus `reduceMotion`, the effective value (choice, else the live device preference). */
+  settings: CampusSettingsView;
   /** enabled && settings.nav === 'campus'. */
   active: boolean;
   updateSettings: (patch: Partial<CampusSettings>) => void;
@@ -66,6 +69,9 @@ export interface CampusState {
   /** C5: the current "new message" toast (polled here, so it survives navigation), and its dismiss. */
   dmToast: DmToast | null;
   dismissDmToast: () => void;
+  /** C11: pause / resume the toast's auto-hide while it has focus or the pointer. */
+  holdDmToast: (why: ToastHold) => void;
+  releaseDmToast: (why: ToastHold) => void;
   /** C8: today's plan as campus stops (null when the plan is off, failed, or the campus is off). */
   planStops: PlanStop[] | null;
   /** C7: the guided tour's position (null = no tour; stops.length = the end card). Starting opens the map; closing the map ends it. */
@@ -93,11 +99,11 @@ export type DoorState =
 const noop = () => { /* no provider */ };
 const OFF: CampusState = {
   enabled: false, ready: false, active: false,
-  settings: { nav: 'campus', workplaceNames: false, reduceMotion: false },
+  settings: { nav: 'campus', workplaceNames: false, motion: 'device', reduceMotion: false },
   updateSettings: noop, layer: 'none', mapFocus: null, openMap: noop, openList: noop, closeLayer: noop,
   presence: null, presenceError: false, door: null, enterThroughDoor: noop, stepOutside: noop, clearDoor: noop,
   staffDesks: [], staffDesksError: false, personCard: null, openPersonCard: noop, closePersonCard: noop,
-  dmToast: null, dismissDmToast: noop, planStops: null, tourIndex: null, startTour: noop, setTourIndex: noop, endTour: noop,
+  dmToast: null, dismissDmToast: noop, holdDmToast: noop, releaseDmToast: noop, planStops: null, tourIndex: null, startTour: noop, setTourIndex: noop, endTour: noop,
   look: null, lookError: false, saveLook: () => Promise.reject(new Error('The campus is off')), lockerOpen: false, openLocker: noop, closeLocker: noop,
 };
 
@@ -106,7 +112,7 @@ const Ctx = createContext<CampusState>(OFF);
 export function CampusProvider({ children }: { children?: React.ReactNode }): React.ReactElement {
   const [enabled, setEnabled] = useState(false);
   const [ready, setReady] = useState(false);
-  const [settings, setSettings] = useState<CampusSettings>(() => readCampusSettings());
+  const [stored, setStored] = useState<CampusSettings>(() => readCampusSettings());
 
   // Signed out (login, signup, verify, handoff, class-checkin all share this layout): no request at
   // all, campus off. Re-runs when sign-in state changes, so signing in without a reload still reads
@@ -120,7 +126,7 @@ export function CampusProvider({ children }: { children?: React.ReactNode }): Re
   }, [isAuthenticated]);
 
   const updateSettings = useCallback((patch: Partial<CampusSettings>) => {
-    setSettings((prev) => { const next = { ...prev, ...patch }; writeCampusSettings(next); return next; });
+    setStored((prev) => { const next = { ...prev, ...patch }; writeCampusSettings(next); return next; });
   }, []);
 
   const [layer, setLayer] = useState<CampusLayer>('none');
@@ -137,7 +143,9 @@ export function CampusProvider({ children }: { children?: React.ReactNode }): Re
   const setTourIndex = useCallback((i: number) => setTourIndexState(Math.max(0, i)), []);
   const endTour = useCallback(() => setTourIndexState(null), []);
 
-  const active = enabled && settings.nav === 'campus';
+  const active = enabled && stored.nav === 'campus';
+  const reduceMotion = useEffectiveReduceMotion(stored.motion, active);
+  const settings = useMemo<CampusSettingsView>(() => ({ ...stored, reduceMotion }), [stored, reduceMotion]);
   const { presence, presenceError } = useCampusPresencePoll(active);
 
   // C3 door transitions. The context only records the request; CampusDoorTransition (inside the router)
@@ -154,7 +162,7 @@ export function CampusProvider({ children }: { children?: React.ReactNode }): Re
 
   // C5: AI staff desks (read once while active) and the open person card.
   const { staffDesks, staffDesksError } = useStaffDesks(active);
-  const { toast: dmToast, dismiss: dismissDmToast } = useCampusDmToasts(active);
+  const { toast: dmToast, dismiss: dismissDmToast, hold: holdDmToast, release: releaseDmToast } = useCampusDmToasts(active);
   const planStops = useCampusPlan(active, layer === 'map');
   const { look, lookError, saveLook } = useCampusLook(active);
   const openPersonCard = useCallback((t: PersonCardTarget) => setPersonCard(t), []);
@@ -162,9 +170,9 @@ export function CampusProvider({ children }: { children?: React.ReactNode }): Re
 
   const value = useMemo<CampusState>(
     () => ({ enabled, ready, settings, active, updateSettings, layer, mapFocus, openMap, openList, closeLayer, presence, presenceError,
-      door, enterThroughDoor, stepOutside, clearDoor, staffDesks, staffDesksError, personCard, openPersonCard, closePersonCard, dmToast, dismissDmToast, planStops, tourIndex, startTour, setTourIndex, endTour, look, lookError, saveLook, lockerOpen, openLocker, closeLocker }),
+      door, enterThroughDoor, stepOutside, clearDoor, staffDesks, staffDesksError, personCard, openPersonCard, closePersonCard, dmToast, dismissDmToast, holdDmToast, releaseDmToast, planStops, tourIndex, startTour, setTourIndex, endTour, look, lookError, saveLook, lockerOpen, openLocker, closeLocker }),
     [enabled, ready, settings, active, updateSettings, layer, mapFocus, openMap, openList, closeLayer, presence, presenceError,
-      door, enterThroughDoor, stepOutside, clearDoor, staffDesks, staffDesksError, personCard, openPersonCard, closePersonCard, dmToast, dismissDmToast, planStops, tourIndex, startTour, setTourIndex, endTour, look, lookError, saveLook, lockerOpen, openLocker, closeLocker],
+      door, enterThroughDoor, stepOutside, clearDoor, staffDesks, staffDesksError, personCard, openPersonCard, closePersonCard, dmToast, dismissDmToast, holdDmToast, releaseDmToast, planStops, tourIndex, startTour, setTourIndex, endTour, look, lookError, saveLook, lockerOpen, openLocker, closeLocker],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

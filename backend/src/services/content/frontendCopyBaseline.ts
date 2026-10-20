@@ -48,7 +48,6 @@ export const FRONTEND_COPY_BASELINE: Readonly<Record<string, number>> = {
   'frontend/src/components/membership/OpenHouseModal.tsx': 2,
   'frontend/src/components/membership/personaContent.ts': 13,
   'frontend/src/components/portal/lesson/ImplementationTask.tsx': 1,
-  'frontend/src/components/publicV2/CtaInterrupt.tsx': 1,
   'frontend/src/components/publicV2/HeroPlatformV8.tsx': 1,
   'frontend/src/components/publicV2/HeroPricingV8.tsx': 7,
   'frontend/src/components/publicV2/HeroServicesV8.tsx': 1,
@@ -103,8 +102,8 @@ export const FRONTEND_COPY_BASELINE: Readonly<Record<string, number>> = {
   'frontend/src/pages/portal/settings/SubscriptionSection.tsx': 4,
   'frontend/src/pages/portal/settings/TeamSection.tsx': 1,
   'frontend/src/pages/portal/today/TodayShell.tsx': 7,
-  'frontend/src/pages/publicV2/HomeV2.tsx': 5,
-  'frontend/src/pages/publicV2/PlatformV2.tsx': 3,
+  'frontend/src/pages/publicV2/HomeV2.tsx': 4,
+  'frontend/src/pages/publicV2/PlatformV2.tsx': 2,
   'frontend/src/pages/publicV2/PricingV2.tsx': 5,
   'frontend/src/pages/publicV2/SignupV2.tsx': 3,
   'frontend/src/pages/publicV2/TryV2.tsx': 9,
@@ -116,7 +115,7 @@ export const FRONTEND_COPY_BASELINE: Readonly<Record<string, number>> = {
  * 287 when first measured on 2026-10-06; **278** since 2026-10-13, when EnrollPage.tsx went to
  * zero. This number may only ever go DOWN.
  */
-export const FRONTEND_COPY_BASELINE_TOTAL = 278;
+export const FRONTEND_COPY_BASELINE_TOTAL = 275;
 
 /**
  * The scope the baseline was measured over. Anything outside it is NOT covered, and the

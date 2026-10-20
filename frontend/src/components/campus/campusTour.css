@@ -7,8 +7,8 @@
 .cm-tour .cm-card-title:focus-visible{outline:3px solid var(--berry);outline-offset:2px;border-radius:var(--r-12)}
 .cm-tour-tag{display:inline-block;align-self:flex-start;width:fit-content;margin:4px 0 2px;padding:2px 10px;border-radius:var(--r-pill);font-size:12px;font-weight:800;
   background:var(--sunken);color:var(--strong);border:1px solid var(--border-sub)}
-.cm-tour-tag.is-open{background:var(--leaf-deep);border-color:var(--leaf-deep);color:var(--surface)}
-.cm-tour-tag.is-preview,.cm-tour-tag.is-demo{background:var(--amber);border-color:var(--amber);color:var(--strong)}
+.cm-tour-tag.is-open{background:var(--cm-live);border-color:var(--cm-live);color:var(--cm-on-accent)}
+.cm-tour-tag.is-preview,.cm-tour-tag.is-demo{background:var(--amber);border-color:var(--amber);color:var(--cm-on-warn)}
 .cm-tour-tag.is-locked{background:var(--strong);border-color:var(--strong);color:var(--surface)}
 .cm-tour-title{margin:8px 0 4px;font-weight:700;font-size:16px;color:var(--strong)}
 .cm-tour-what{margin:0 0 8px;font-size:14px;line-height:1.5;color:var(--body)}

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 import type { CampusPerson } from './campusApi';
 import type { CampusBuilding } from './campusMap';
 import { initialsOf } from './WhoIsHere';
@@ -24,9 +24,11 @@ export interface PersonTokensProps {
 }
 
 const R = 11;
-const GAP = 24;
+/** C11: the tap/click target (a transparent circle), at least 24 px across at the map's usual scale; tokens are spaced so targets never overlap. */
+export const TOKEN_HIT_R = 16;
+const GAP = TOKEN_HIT_R * 2 + 2;
 
-export default function PersonTokens({ b, shown, more, onPick, maxY }: PersonTokensProps): React.ReactElement | null {
+function PersonTokens({ b, shown, more, onPick, maxY }: PersonTokensProps): React.ReactElement | null {
   if (!shown.length) return null;
   // A centered row UNDER the building's name, clear of the roof and the head-count chip (both sit up top; tokens beside
   // the roof covered the chip in the first screenshots). Kept inside the world's bottom edge.
@@ -43,6 +45,9 @@ export default function PersonTokens({ b, shown, more, onPick, maxY }: PersonTok
           <g key={p.enrollment_id} className="cm-token" role="button" tabIndex={0} aria-label={`${p.display_name}${p.rung_name ? `, ${p.rung_name}` : ''}, open their card`}
             data-enrollment={p.enrollment_id} onClick={(e) => { e.stopPropagation(); pick(); }}
             onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); pick(); } }}>
+            <circle className="cm-token-hit" cx={cx} cy={y0} r={TOKEN_HIT_R} />
+            {/* C11: focus gets its OWN ring outside the level ring; the level ring's inline stroke can never hide it. */}
+            <circle className="cm-token-focus" cx={cx} cy={y0} r={R + 6} data-testid="cm-token-focus" />
             {/* C9: the ring takes the level's tone (the portal's rung colors); the rung is in the label and on the card. */}
             {p.rung_name
               ? <circle className={`cm-token-ring is-level rung-${rungTone(p.rung_name)}`} style={{ stroke: 'var(--rung-solid)' }} cx={cx} cy={y0} r={R + 2} data-rung={p.rung_name} />
@@ -67,3 +72,6 @@ export default function PersonTokens({ b, shown, more, onPick, maxY }: PersonTok
     </g>
   );
 }
+
+// C11: memoized (the map stays light); the map passes one stable onPick per building.
+export default memo(PersonTokens);

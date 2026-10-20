@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import App from './App';
 import { initGA } from './utils/analytics';
+import { applySavedPortalTheme } from './utils/portalTheme';
 // Self-hosted faces. Must load before the design-system stylesheets so the
 // families are declared by the time anything asks for them.
 import './fonts/fonts.css';
@@ -25,6 +26,9 @@ import './styles/brand-bridge.css';
 import './styles/admin-shell.css';
 
 initGA();
+
+// Portal pages only: the learner's saved light/dark choice, before the first paint (utils/portalTheme.ts).
+applySavedPortalTheme(window.location.pathname, (() => { try { return window.localStorage; } catch { return null; } })(), document.documentElement);
 
 const root = ReactDOM.createRoot(
   document.getElementById('root') as HTMLElement

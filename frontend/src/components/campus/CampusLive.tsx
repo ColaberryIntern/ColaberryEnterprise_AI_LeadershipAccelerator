@@ -22,9 +22,11 @@ export default function CampusLive(): React.ReactElement | null {
   const building = buildings.find((x) => x.id === LIVE_ROOM_BUILDING);
   const count = route && presence && !presenceError ? presence[LIVE_ROOM_BUILDING]?.count ?? 0 : 0;
   return (
-    <div className="cm-live" role="status" data-testid="cm-live">
+    // C11: only the title is a live region. Wrapping the buttons in role=status made a screen reader re-read them, and the
+    // head count (which moves every poll) is not announced at all.
+    <div className="cm-live" data-testid="cm-live">
       <span className="cm-onair-dot" aria-hidden="true" />
-      <span className="cm-live-text"><strong>On air:</strong> {b.title}</span>
+      <span className="cm-live-text" role="status"><strong>On air:</strong> {b.title}</span>
       {count > 0 && building && (
         <span className="cm-live-crowd" data-testid="cm-live-crowd">{count} in the {buildingName(building, settings.workplaceNames)} now</span>
       )}

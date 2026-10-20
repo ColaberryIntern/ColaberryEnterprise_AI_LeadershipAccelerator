@@ -58,7 +58,8 @@
      on one line instead of stranding the room on a second row. */
   .cm-trail{flex:1 1 0}
   .cm-trail ol{flex-wrap:nowrap}
-  .cm-trail li:first-child{display:none}
+  /* C11: only when there is more than "Campus"; on a page outside every building the lone crumb stays, so the trail is never blank. */
+  .cm-trail li:first-child:not(:only-child){display:none}
   .cm-trail li:nth-child(2)::before{display:none}
   .cm-trail li:last-child{overflow:hidden}
   .cm-trail li:last-child span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -67,3 +68,4 @@
 @media(prefers-reduced-motion:reduce){
   .cm-door-panel{display:none}
 }
+.cm-reduced .cm-door-panel{display:none}

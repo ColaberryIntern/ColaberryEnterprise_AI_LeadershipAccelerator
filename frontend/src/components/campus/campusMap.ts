@@ -35,6 +35,8 @@ export interface CampusRoom {
   /** C6: an admin page reached through the Management Portal bridge. Opens in a new tab, never a door zoom; not a campus
    *  place, so search, the trail and route coverage skip it. */
   admin?: boolean;
+  /** C11: the room's name under Workplace names, when its campus name would contradict the building ("Game Room" inside the Break Room). */
+  workplaceLabel?: string;
 }
 
 export interface CampusBuilding {
@@ -59,16 +61,16 @@ const EVERYONE: CampusAudience[] = ['member', 'explorer', 'business', 'staff'];
 export const CAMPUS_BUILDINGS: readonly CampusBuilding[] = [
   { id: 'lecture', name: 'Classroom', workplaceName: 'Training Room',
     primary: { label: "Continue this week's lessons", route: '/portal/classroom' },
-    rooms: [{ label: 'Classroom', route: '/portal/classroom' }, { label: 'Live sessions', route: '/portal/sessions' }],
+    rooms: [{ label: 'Classroom', workplaceLabel: 'Training', route: '/portal/classroom' }, { label: 'Live sessions', route: '/portal/sessions' }],
     prefixes: ['/portal/classroom', '/portal/sessions', '/portal/class-checkin'],
     explorer: 'preview', gate: 'classroom', audiences: EVERYONE, pos: { x: 500, y: 185, w: 150, h: 78 } },
   { id: 'library', name: 'Library', workplaceName: 'Knowledge Base',
     primary: { label: 'Browse the library', route: '/portal/library' },
-    rooms: [{ label: 'Library', route: '/portal/library' }],
+    rooms: [{ label: 'Library', workplaceLabel: 'Knowledge base', route: '/portal/library' }],
     prefixes: ['/portal/library'], explorer: 'open', audiences: EVERYONE, pos: { x: 250, y: 215, w: 130, h: 64 } },
   { id: 'tower', name: 'Schedule', workplaceName: 'Calendar',
     primary: { label: 'Open my schedule', route: '/portal/schedule' },
-    rooms: [{ label: 'Today', route: '/portal/today' }, { label: 'Schedule', route: '/portal/schedule' }],
+    rooms: [{ label: 'Today', route: '/portal/today' }, { label: 'Schedule', workplaceLabel: 'Calendar', route: '/portal/schedule' }],
     prefixes: ['/portal/today', '/portal/schedule'], explorer: 'open', audiences: EVERYONE, pos: { x: 395, y: 270, w: 52, h: 96 } },
   { id: 'studio', name: 'Project Studio', workplaceName: 'Project Studio',
     primary: { label: 'Open my projects', route: '/portal/projects' },
@@ -81,7 +83,7 @@ export const CAMPUS_BUILDINGS: readonly CampusBuilding[] = [
     prefixes: ['/portal/events'], explorer: 'open', audiences: EVERYONE, pos: { x: 700, y: 350, w: 132, h: 62 } },
   { id: 'testing', name: 'Cert Prep Center', workplaceName: 'Certification Center',
     primary: { label: 'Start the knowledge check', route: '/portal/cert-prep' },
-    rooms: [{ label: 'Cert prep', route: '/portal/cert-prep' }],
+    rooms: [{ label: 'Cert prep', workplaceLabel: 'Certification prep', route: '/portal/cert-prep' }],
     prefixes: ['/portal/cert-prep'], explorer: 'open', gate: 'cert-prep', audiences: EVERYONE, pos: { x: 150, y: 330, w: 104, h: 62 } },
   { id: 'observatory', name: 'My Progress', workplaceName: 'My Performance',
     primary: { label: 'View my path', route: '/portal/path' },
@@ -106,7 +108,7 @@ export const CAMPUS_BUILDINGS: readonly CampusBuilding[] = [
     explorer: 'open', audiences: EVERYONE, pos: { x: 870, y: 546, w: 116, h: 76 } },
   { id: 'arcade', name: 'Game Room', workplaceName: 'Break Room',
     primary: { label: 'Games and leaderboards', route: '/portal/game-room' },
-    rooms: [{ label: 'Game Room', route: '/portal/game-room' }],
+    rooms: [{ label: 'Game Room', workplaceLabel: 'Games', route: '/portal/game-room' }],
     prefixes: ['/portal/game-room'], explorer: 'open', audiences: EVERYONE, pos: { x: 210, y: 448, w: 108, h: 50 } },
   { id: 'gate', name: 'Main Gate', workplaceName: 'Visitor Entrance',
     primary: { label: 'Start on Today', route: '/portal/today' }, // C6: Maya's desk is in this card now; the button goes to Today, so it says so
@@ -116,13 +118,15 @@ export const CAMPUS_BUILDINGS: readonly CampusBuilding[] = [
 /** The career building's face per audience (D4 career row). C6: the Staff Office links go to existing admin pages THROUGH
  *  the Management Portal bridge (a direct /admin link lands on the admin login without a bridged session), and the old
  *  /portal/view-as link is gone: that page needs a token minted by an admin and showed an error when browsed to. */
-export function careerBuildingFor(audience: CampusAudience): Pick<CampusBuilding, 'name' | 'primary' | 'rooms'> {
+export function careerBuildingFor(audience: CampusAudience): Pick<CampusBuilding, 'name' | 'workplaceName' | 'primary' | 'rooms'> {
+  // C11: each face has its own Workplace name (all three used to read "Engagements", the internship's).
   if (audience === 'business') {
-    return { name: 'Partner Office', primary: { label: 'Open your company', route: '/portal/company' }, rooms: [{ label: 'Company', route: '/portal/company' }] };
+    return { name: 'Partner Office', workplaceName: 'Client Office', primary: { label: 'Open your company', route: '/portal/company' }, rooms: [{ label: 'Company', route: '/portal/company' }] };
   }
   if (audience === 'staff') {
     return {
       name: 'Staff Office',
+      workplaceName: 'Operations Office',
       primary: { label: 'Open the Management Portal', route: '/portal/mgmt-enter', admin: true },
       rooms: [
         { label: 'Handoffs', route: mgmtBridgeTo('/admin/growth-journey?tab=handoffs'), admin: true },
@@ -132,7 +136,7 @@ export function careerBuildingFor(audience: CampusAudience): Pick<CampusBuilding
     };
   }
   const b = CAMPUS_BUILDINGS.find((x) => x.id === 'career') as CampusBuilding;
-  return { name: b.name, primary: b.primary, rooms: b.rooms };
+  return { name: b.name, workplaceName: b.workplaceName, primary: b.primary, rooms: b.rooms };
 }
 
 /** Buildings this audience can see on the map. */
@@ -150,6 +154,11 @@ export function buildingForPath(pathname: string): CampusBuilding | null {
     }
   }
   return best;
+}
+
+/** A room's display label honoring the Workplace names setting (C11). */
+export function roomLabel(r: Pick<CampusRoom, 'label' | 'workplaceLabel'>, workplaceNames: boolean): string {
+  return workplaceNames && r.workplaceLabel ? r.workplaceLabel : r.label;
 }
 
 /** Display name honoring the Workplace names setting. */
