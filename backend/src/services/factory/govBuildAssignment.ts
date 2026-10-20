@@ -182,7 +182,7 @@ export async function listActiveInternsForAssignment(): Promise<ActiveInternOpti
         // no identity row were silently dropped here -> the "Assign to intern" picker came up EMPTY. Ensure one
         // (idempotent on normalized email) so every active intern is assignable, instead of hiding them.
         try {
-          const ens = await ensurePlatformIdentity({ email: r.email, displayName: r.name });
+          const ens = await ensurePlatformIdentity({ email: ne, displayName: r.name });
           identityId = String(ens.identity.id);
           idByEmail.set(ne, identityId);
         } catch { continue; } // if even the ensure fails, skip this one rather than break the whole picker
