@@ -176,9 +176,16 @@ function BookedSlot(
               {take.partNo > 1 ? ` · part ${take.partNo}, Zoom split this one` : ''}
             </p>
           )}
+          {/* A POSTER HERE TOO, not only in the community feed.
+              This is the page a learner actually reviews their takes on, and it
+              showed black rectangles while the thumbnail route and the
+              frame-scoring both already existed — built for the card and never
+              wired to the page that needed it most. `preload="none"` once a
+              poster exists: nothing about the video is needed to draw the list. */}
           <video
             controls
-            preload="metadata"
+            poster={take.thumbnailUrl || undefined}
+            preload={take.thumbnailUrl ? 'none' : 'metadata'}
             style={{ width: '100%', borderRadius: 8, background: '#000' }}
             src={take.playbackUrl}
           >

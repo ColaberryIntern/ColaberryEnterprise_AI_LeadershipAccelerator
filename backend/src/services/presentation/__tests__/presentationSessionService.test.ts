@@ -295,3 +295,49 @@ describe('each take knows how far IT has got towards being public', () => {
     expect(showcases.findAll).toHaveBeenCalled();
   });
 });
+
+describe('each take carries a poster, not just a player', () => {
+  /**
+   * The Practice panel rendered black rectangles for days while the thumbnail
+   * route and the frame-scoring both already existed. They were wired to the
+   * community card and not to the page a learner actually reviews their takes on
+   * — the same "correct unit, unchecked wiring" shape as the resolver with no
+   * callers and the feed DTO that never carried `ritual_meta`.
+   *
+   * So these assert the URLs, which is the part that was missing.
+   */
+  const take = { id: 'aaaaaaa1-1111-4111-8111-111111111111', part_no: 1, created_at: new Date() };
+  const ticketFor = { enrollmentId: 'e1', projectId: 'p1', storyId: 'PREP-4' };
+
+  it('offers a thumbnail url beside the playback url', async () => {
+    recordings.findAll.mockResolvedValue([take]);
+    const out = await recordingsForAttempt('a1', ticketFor);
+    expect(out[0].playbackUrl).toContain('/recordings/' + take.id + '/file?t=');
+    expect(out[0].thumbnailUrl).toContain('/recordings/' + take.id + '/thumbnail?t=');
+  });
+
+  it('does NOT produce /file/thumbnail — the base ends at the recording', async () => {
+    // The bug in the first version of this fix. Both leaves hang off the
+    // recording, and a base that already ended in `/file` produced a 404 path.
+    recordings.findAll.mockResolvedValue([take]);
+    const out = await recordingsForAttempt('a1', ticketFor);
+    expect(out[0].thumbnailUrl).not.toContain('/file/');
+    expect(out[0].playbackUrl).not.toContain('/file/file');
+  });
+
+  it('both urls carry a ticket, because neither can send a bearer', async () => {
+    recordings.findAll.mockResolvedValue([take]);
+    const out = await recordingsForAttempt('a1', ticketFor);
+    expect(out[0].playbackUrl).toMatch(/\?t=.+/);
+    expect(out[0].thumbnailUrl).toMatch(/\?t=.+/);
+  });
+
+  it('emits empty urls rather than unsigned ones when no viewer is given', async () => {
+    // A caller that did not pass `ticketFor` must not get a URL that would 404 or,
+    // worse, look like it should work without authority.
+    recordings.findAll.mockResolvedValue([take]);
+    const out = await recordingsForAttempt('a1');
+    expect(out[0].playbackUrl).toBe('');
+    expect(out[0].thumbnailUrl).toBe('');
+  });
+});
