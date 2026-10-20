@@ -42,7 +42,7 @@ import type { Profile } from './personTypes';
 
 export type TabKey = 'timeline' | 'journey' | 'acquisition' | 'notes' | 'strategy'
   | 'communications' | 'class' | 'work' | 'account' | 'growth'
-  | 'engagement' | 'learning' | 'billing' | 'activity' | 'trust' | 'explorer';
+  | 'engagement' | 'learning' | 'billing' | 'activity' | 'trust' | 'explorer' | 'readiness';
 
 export interface PersonTab {
   key: TabKey;
@@ -110,6 +110,13 @@ export function buildPersonTabs(
   // confusion this panel exists to avoid.
   if (profile.explorerScore !== undefined) {
     t.push({ key: 'explorer', label: 'Explorer score' });
+  }
+  // M26: the Sales Readiness Score. Gated on PRESENCE for the same reason as the panel above,
+  // and with no count: the number people want is the score, and a factor count beside it would
+  // read as the score. The tab itself carries the per-factor explanation, because a score without
+  // its reasons is a number a rep cannot argue with or act on.
+  if (profile.salesReadiness !== undefined) {
+    t.push({ key: 'readiness', label: 'Sales readiness' });
   }
   if (profile.appointments !== undefined || profile.automation !== undefined) {
     t.push({

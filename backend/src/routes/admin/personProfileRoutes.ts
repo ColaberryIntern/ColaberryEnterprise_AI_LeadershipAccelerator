@@ -10,6 +10,9 @@ import { loadCcppHistory } from '../../services/adminOs/panels/historyPanels';
 import { mayReadPanel, resolvePersonIdentity } from '../../services/adminOs/personProfileService';
 import { fetchMessageAsSent, mandrillPoster } from '../../services/adminOs/mandrillMessageContent';
 import { env } from '../../config/env';
+import { scoreReadiness } from '../../services/salesReadiness/srsEngine';
+import { inputsFromProfile } from '../../services/salesReadiness/srsInputs';
+import { assessFreshness } from '../../services/salesReadiness/srsFreshness';
 
 /**
  * One person's 360° profile.
@@ -85,7 +88,26 @@ router.get('/api/admin/people/profile', requireAdmin, async (req: Request, res: 
       return;
     }
 
-    res.json(profile);
+    // ── M26: the Sales Readiness Score, composed HERE and not in the profile ──
+    //
+    // The scorer reads the PersonProfile type, so computing it inside personProfileService would
+    // make that module import a module that imports it back. CLAUDE.md forbids the cycle, and the
+    // cycle is also the wrong shape: the profile is EVIDENCE, the score is a view over it. The
+    // route already depends on both, so composition belongs here.
+    //
+    // It issues no query of its own. A caller who could not see a panel cannot see it through the
+    // score either; the factor reports absent with its reason, which is why this cannot open a
+    // permission path that the profile itself does not already allow.
+    //
+    // The clock is read at this boundary and passed IN, so the engine stays a pure function and
+    // two calls a second apart differ only in `computedAt` and in recency.
+    const computedAt = new Date().toISOString();
+    const salesReadiness = scoreReadiness(inputsFromProfile(profile), computedAt);
+    const freshness = assessFreshness(
+      { computedAt, oldestEvidenceAt: salesReadiness.oldestEvidenceAt }, computedAt,
+    );
+
+    res.json({ ...profile, salesReadiness, salesReadinessFreshness: freshness });
   } catch (error) {
     res.status(500).json({
       error: 'Could not read this profile.',

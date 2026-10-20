@@ -118,6 +118,50 @@ export interface TrustPanel {
  * Render null as absent, never as 0. The daysKnown and intentScore treatment already in
  * PersonProfilePage is the pattern.
  */
+/**
+ * M26 - one factor's contribution, mirroring the backend's FactorResult.
+ *
+ * `points` is null when `state` is 'absent', never 0. A zero means the factor was scored and
+ * contributed nothing; an absence means there was no evidence to score. Rendering the two the
+ * same way is the failure this panel exists to avoid, and the reason the backend carries a
+ * `reason` string for every absence.
+ */
+export interface SalesReadinessFactor {
+  key: string;
+  label: string;
+  band: 'commitment' | 'passive' | 'context';
+  evidenceGroup: string;
+  state: 'scored' | 'absent';
+  points: number | null;
+  max: number;
+  reason: string | null;
+}
+
+export interface SalesReadinessScore {
+  rulesetVersion: string;
+  computedAt: string;
+  total: number;
+  /** The most THIS person could have scored, given which factors had evidence. */
+  scoreableMax: number;
+  /** The most anyone could score under this ruleset. */
+  rulesetMax: number;
+  /** Scored factors over total factors: the honesty dial beside the number. */
+  coverage: number;
+  factors: SalesReadinessFactor[];
+  frictionFlag: boolean;
+  oldestEvidenceAt: string | null;
+}
+
+export interface SalesReadinessFreshness {
+  state: 'fresh' | 'aging' | 'stale' | 'unknown';
+  effectiveAsOf: string | null;
+  ageHours: number | null;
+  boundBy: 'computation' | 'evidence' | 'none';
+  label: string;
+  clockSkew: boolean;
+  rulesetVersion: string;
+}
+
 export interface Journey {
   firstTouch: string | null; lastActivity: string | null; daysKnown: number | null;
   sessions: number | null; pageEvents: number | null;
@@ -414,6 +458,16 @@ export interface Profile {
   profileContext?: ProfileContextPanel | null;
   intentSuppressedReason?: string;
   explorerScore?: ExplorerScorePanel | null;
+  /**
+   * M26 - the Sales Readiness Score and its per-factor explanation.
+   *
+   * Composed by the route from the panels this caller was permitted, so it opens no permission
+   * path of its own: a factor whose evidence was withheld reports `absent` with its reason, and
+   * `points` is null rather than 0. The same distinction the rest of this file turns on.
+   */
+  salesReadiness?: SalesReadinessScore;
+  /** M27 - how old the score is, and what bounded that age. */
+  salesReadinessFreshness?: SalesReadinessFreshness;
   trust?: TrustPanel;
   journey?: Journey;
   timeline?: TimelineEvent[];
