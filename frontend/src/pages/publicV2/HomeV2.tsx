@@ -242,12 +242,12 @@ function HomeV2(): React.ReactElement {
         eyebrow="Still with us?"
         title="The fastest way to judge this is to open it."
         body="Both experiences in one account: the management view, and the one your team actually works in. Invite people when it has earned it."
-        primary={{ label: 'Open my company workspace at $0', to: '/try' }}
+        primary={{ label: 'Open my company workspace, no card needed', to: '/try' }}
       />
 
         <ServicesSection />
 
-      {/* 6 ──────────────────────────────────────── workspace at $0 ────── */}
+      {/* 6 ────────────────────────────────────────── workspace ────── */}
       {canShow('surface.free.workspace', ROUTE) ? (
         <section
           className="cbv2-rv cbv2-section cbv2-section--sunken cbv2-section--spot"
