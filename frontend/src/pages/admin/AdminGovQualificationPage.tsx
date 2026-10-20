@@ -1793,6 +1793,11 @@ export default function AdminGovQualificationPage(): React.ReactElement {
           </SectionCard>
           )}
 
+          </GovTabPanel>{/* end Build */}
+
+          {/* Proposal — its OWN step/page (step 6): Build above is the software product we would deliver; this is the
+              bid RESPONSE we submit. Unlocked after approval, same as Build. */}
+          <GovTabPanel active={activeStep === 'proposal'}>
           {(
             <SectionCard title="Proposal responses" icon="draft-line"
               subtitle="One slot per established requirement the proposal must answer, each citing its source. Draft each response, then take it through review → approval; a material amendment reopens an affected answer.">
@@ -1810,7 +1815,7 @@ export default function AdminGovQualificationPage(): React.ReactElement {
             </SectionCard>
           )}
 
-          </GovTabPanel>{/* end Build */}
+          </GovTabPanel>{/* end Proposal */}
 
           <GovTabPanel active={activeStep === 'submit'}>
           {/* P7: at-a-glance submit tiles (deadline / readiness / package / confirmation) — advisory, derived. */}
