@@ -657,6 +657,36 @@ describe('step 6 — two-track project creation on approval (behind FLAGS.govIng
     expect(r.body.projectWarning).toBeUndefined();
   });
 
+  const healWs = { canonicalOpportunityId: GWS, source: null, sourceState: 'zip_workspace', sourceAvailable: false, canApprove: false, evaluation: { evals: [], blocking: [], byDueStage: {}, canApproveBid: true }, coverage: { sufficient: true, reasons: [] }, qualification: { id: 'q-approved', decision: 'approved_bid_pursuit' }, provenance: null };
+
+  it('GET self-heal: flag ON, an APPROVED pursuit with NO delivery project retries the creation on workspace load', async () => {
+    (FLAGS as any).govIngestion = true;
+    getDecoupledWorkspace.mockResolvedValue(healWs);
+    govQualFindOne.mockResolvedValue({ get: () => ({ id: 'q-approved', decision: 'approved_bid_pursuit', delivery_project_id: null, requirements_json: { established: [{ id: 'REQ-1', text: 't' }], provenance: { title: 'RFP IVR' } } }) });
+    ensureGovTwoTrackProject.mockResolvedValue({ deliveryProjectId: 'dp-healed', created: true, tracks: 2, requirements: 1 });
+    const res = await request(app).get(`/api/admin/factory/qualification/${encodeURIComponent(GWS)}?biddingEntity=colaberry`);
+    expect(res.status).toBe(200);
+    expect(ensureGovTwoTrackProject).toHaveBeenCalledWith(expect.objectContaining({ qualificationId: 'q-approved' }));
+  });
+
+  it('GET self-heal: does NOT retry when the approved pursuit already HAS a delivery project', async () => {
+    (FLAGS as any).govIngestion = true;
+    getDecoupledWorkspace.mockResolvedValue(healWs);
+    govQualFindOne.mockResolvedValue({ get: () => ({ id: 'q-approved', decision: 'approved_bid_pursuit', delivery_project_id: 'dp-existing', requirements_json: { established: [] } }) });
+    const res = await request(app).get(`/api/admin/factory/qualification/${encodeURIComponent(GWS)}?biddingEntity=colaberry`);
+    expect(res.status).toBe(200);
+    expect(ensureGovTwoTrackProject).not.toHaveBeenCalled();
+  });
+
+  it('GET self-heal: does NOT retry a pursuit that is not yet approved', async () => {
+    (FLAGS as any).govIngestion = true;
+    getDecoupledWorkspace.mockResolvedValue(healWs);
+    govQualFindOne.mockResolvedValue({ get: () => ({ id: 'q-pending', decision: 'needs_evidence', delivery_project_id: null, requirements_json: { established: [] } }) });
+    const res = await request(app).get(`/api/admin/factory/qualification/${encodeURIComponent(GWS)}?biddingEntity=colaberry`);
+    expect(res.status).toBe(200);
+    expect(ensureGovTwoTrackProject).not.toHaveBeenCalled();
+  });
+
   it('flag ON: approval creates the two-track project from the established requirements', async () => {
     (FLAGS as any).govIngestion = true;
     approveDecoupledQualification.mockResolvedValue(approvedQ);

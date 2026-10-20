@@ -52,6 +52,29 @@ describe('govBuildSpec (advisory AI, downstream of the deterministic build proje
     expect(call.messages[1].content).toContain('TxDOT');                // the buyer is passed in
   });
 
+  it('feeds the model ONLY the solution requirements — a bid-submission rule is dropped, not specced', async () => {
+    const client = mockClient(JSON.stringify({ spec: 'Capability: operator dashboard (REQ-001).', research: 'Verify: the platform.' }));
+    (getInstrumentedOpenAI as jest.Mock).mockReturnValue(client);
+    await generateBuildSpec({ ...req, requirements: [
+      { id: 'REQ-001', text: 'Provide an operator dashboard with role-based access' },                          // build
+      { id: 'SUB-001', text: 'A claimant MUST submit a redacted and non-redacted version of their proposal' },   // bid-submission
+    ] });
+    const call = client.chat.completions.create.mock.calls[0][0];
+    expect(call.messages[1].content).toContain('REQ-001');                 // the solution requirement is specced
+    expect(call.messages[1].content).not.toContain('SUB-001');             // the bid-submission rule is NOT
+    expect(call.messages[1].content).not.toMatch(/redacted and non-redacted/i);
+  });
+
+  it('errors (no throw) and never calls the model when NO requirement carries a build signal', async () => {
+    const r = await generateBuildSpec({ ...req, requirements: [
+      { id: 'SUB-001', text: 'A claimant MUST submit a redacted and non-redacted version of their proposal' },
+      { id: 'SUB-002', text: 'A claim must include a concise statement of reasons supporting the claim' },
+    ] });
+    expect(r.error).toMatch(/no software to build|build signal/i);
+    expect(r.spec).toBe('');
+    expect(getInstrumentedOpenAI).not.toHaveBeenCalled();
+  });
+
   it('caches by input hash — a second identical call does not re-call the model', async () => {
     const client = mockClient(JSON.stringify({ spec: 'cached spec', research: 'cached research' }));
     (getInstrumentedOpenAI as jest.Mock).mockReturnValue(client);

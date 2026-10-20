@@ -1,0 +1,73 @@
+/*
+ * segmentDoors.css — the homepage segment doors (C5.2).
+ *
+ * Every value resolves to a token from colaberry/tokens/*, per the rule at the top of
+ * publicV2.css. No raw hex, no second palette.
+ *
+ * Deliberately plainer than the goal picker it replaced. That band was a tablist with a
+ * composed answer panel and a diagram, because it was answering a question. These are
+ * doors: the visitor already knows which one they are, and the job is to be unmistakable
+ * rather than clever.
+ */
+
+.cbv2-doors {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: var(--space-3);
+  margin: var(--space-5) 0 0;
+}
+
+.cbv2-door {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-rows: auto auto;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 120ms ease, transform 120ms ease;
+}
+
+.cbv2-door:hover,
+.cbv2-door:focus-visible {
+  border-color: var(--brand-tertiary);
+  transform: translateY(-2px);
+}
+
+/* The transform is decoration; motion preferences win. */
+@media (prefers-reduced-motion: reduce) {
+  .cbv2-door {
+    transition: border-color 120ms ease;
+  }
+
+  .cbv2-door:hover,
+  .cbv2-door:focus-visible {
+    transform: none;
+  }
+}
+
+.cbv2-door__name {
+  grid-column: 1;
+  font-family: var(--font-display);
+  font-size: var(--fs-h4);
+  font-weight: 700;
+  color: var(--text-strong);
+}
+
+.cbv2-door__noun {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  font-size: var(--fs-body-sm);
+  color: var(--text-muted);
+}
+
+.cbv2-door__go {
+  grid-column: 2;
+  grid-row: 1;
+  font-size: var(--fs-h4);
+  color: var(--brand-tertiary);
+}

@@ -38,7 +38,7 @@ export function GovBuildPlanAIPanel({ canonical, requirements, title, buyer, dea
     setBusy(true); setErr(null);
     // Best-effort: feed the already-generated build spec as the expansion document (grounding stays the requirements).
     let buildSpec: string | null = null;
-    try { const raw = localStorage.getItem(`govBuildSpec:${canonical}`); if (raw) { const s = JSON.parse(raw); buildSpec = [s?.spec, s?.research].filter(Boolean).join('\n\n') || null; } } catch { /* ignore */ }
+    try { const raw = localStorage.getItem(`govBuildSpec:v2:${canonical}`); if (raw) { const s = JSON.parse(raw); buildSpec = [s?.spec, s?.research].filter(Boolean).join('\n\n') || null; } } catch { /* ignore */ }
     try {
       const r = await getGovBuildPlanAI(canonical, { requirements, title: title ?? null, buyer: buyer ?? null, buildSpec, deadline: deadline ?? null });
       setResult(r);
