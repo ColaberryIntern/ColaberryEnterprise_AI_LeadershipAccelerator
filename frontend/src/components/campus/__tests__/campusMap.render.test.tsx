@@ -65,7 +65,7 @@ describe('campus map and building card', () => {
     await mount({ audience: 'member', full: true });
     act(() => { bld('testing').dispatchEvent(new MouseEvent('click', { bubbles: true })); });
     expect(card()!.textContent).not.toContain('Members only');
-    expect(container.querySelector('.cm-chip')).toBeNull();
+    expect(container.querySelector('[data-testid^="cm-badge-"]')).toBeNull(); // C11b: no access badge anywhere
   });
 
   it('a member without full access sees the paywalled Cert Prep Center as locked, as PageGate would show it', async () => {

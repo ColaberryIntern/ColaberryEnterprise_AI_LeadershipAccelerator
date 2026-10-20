@@ -69,9 +69,6 @@
 .cm-world .cm-map{max-height:100%;max-width:min(100%,1200px);border-radius:var(--r-16)}
 
 /* ---- C4: live head count and Who's here ---- */
-.cm-count rect{fill:var(--cm-live)}
-.cm-count text{fill:var(--cm-on-accent);font-size:15px;font-weight:700}
-.cm-map.is-compact .cm-count text{font-size:54px}
 .cm-layer-warn{color:var(--strong);font-size:13px;font-weight:600;padding-left:8px;border-left:4px solid var(--amber)}
 .cm-who{display:flex;flex-direction:column;gap:6px}
 .cm-people{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:8px}

@@ -36,6 +36,8 @@
   /* shared building parts */
   --cm-art-bld-shadow:rgba(60,70,40,.18); --cm-art-wall:#fbf6ee; --cm-art-wall-edge:#d9cdb8; --cm-art-window:#bcd3dc;
   --cm-art-step:#e6dccb; --cm-art-label:#ffffff; --cm-art-label-edge:#e6dccb;
+  /* ink INSIDE the picture (name pills, chips, badges): fixed in both themes, unlike the chrome --cm-art-ink */
+  --cm-art-pic-ink:#1f1b16; --cm-art-pic-muted:#9a8f7e;
   --cm-art-office-wall:#dfe9f0; --cm-art-office-edge:#9fb3c2; --cm-art-office-glass:#8fb2c8; --cm-art-office-lobby:#cbdbe6;
   --cm-art-office-door:#6f93ab; --cm-art-antenna:#5d6876; --cm-art-white:#ffffff;
   --cm-art-pavilion-wall:#cfe5ee; --cm-art-screen-frame:#1f2a33; --cm-art-screen-1:#e8a17f; --cm-art-screen-2:#9fd0c4; --cm-art-screen-3:#f3c76b;

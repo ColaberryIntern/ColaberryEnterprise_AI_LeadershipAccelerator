@@ -11,15 +11,22 @@
 .cm-bld .body-g{transition:transform .25s cubic-bezier(.3,1.4,.5,1)}
 .cm-bld:hover .body-g,.cm-bld:focus-visible .body-g,.cm-bld.is-here .body-g{transform:translateY(-4px)}
 .cm-bld .lbl rect{fill:var(--cm-art-label);stroke:var(--cm-art-label-edge)}
-.cm-bld .lbl text{font:700 11px 'DM Sans',var(--sans),sans-serif;fill:var(--cm-art-ink)}
-.cm-bld:hover .lbl rect,.cm-bld:focus-visible .lbl rect,.cm-bld.is-here .lbl rect{fill:var(--cm-art-ink);stroke:var(--cm-art-ink)}
+.cm-bld .lbl text{font:700 11px 'DM Sans',var(--sans),sans-serif;fill:var(--cm-art-pic-ink)}
+.cm-bld:hover .lbl rect,.cm-bld:focus-visible .lbl rect,.cm-bld.is-here .lbl rect{fill:var(--cm-art-pic-ink);stroke:var(--cm-art-pic-ink)}
 .cm-bld:hover .lbl text,.cm-bld:focus-visible .lbl text,.cm-bld.is-here .lbl text{fill:var(--cm-art-white)}
 /* keyboard focus also gets a ring that does not depend on the lift (WCAG 2.4.7) */
 .cm-bld:focus-visible .lbl rect{stroke:var(--cm-art-red);stroke-width:3}
 .cm-bld.cm-b-gate:focus-visible .cm-hit{stroke:var(--cm-art-red);stroke-width:3;stroke-dasharray:8 6}
 .cm-bld.is-locked .body-g{opacity:.55}
-.cm-chip{font:700 10px 'DM Sans',var(--sans),sans-serif;letter-spacing:.06em;text-transform:uppercase;fill:var(--cm-art-ink);
-  paint-order:stroke;stroke:var(--cm-art-label);stroke-width:4px}
+/* the prototype markers (art/BuildingBadges.tsx): people chip, status badge, stop badge */
+.cm-count rect{fill:var(--cm-art-label);stroke:var(--cm-art-label-edge)}
+.cm-count text{font:700 9.5px 'DM Sans',var(--sans),sans-serif;fill:var(--cm-art-pic-ink)}
+.cm-count-dot{fill:var(--cm-art-pic-muted);stroke:var(--cm-art-white);stroke-width:1.2}
+.cm-count-dot[class*="rung-"]{fill:var(--rung-solid)}
+.cm-badge rect{fill:var(--cm-art-pic-ink)}
+.cm-badge text{font:700 9px 'DM Sans',var(--sans),sans-serif;fill:var(--cm-art-white)}
+.cm-badge.is-hot rect{fill:var(--cm-art-red)}
+.cm-badge.is-live rect{fill:var(--cm-art-live)}
 
 /* the walk-route line (today's plan) and the numbered stops */
 .cm-route-line{fill:none;stroke:var(--cm-art-red);stroke-width:3;stroke-dasharray:2 7;stroke-linecap:round;opacity:.85;animation:cm-march 1s linear infinite}
@@ -38,3 +45,15 @@
 /* reduceMotion is the EFFECTIVE setting (campus Settings, else the OS), passed in as .is-reduced on the svg */
 .cm-map.is-reduced .water,.cm-map.is-reduced .cm-route-line,.cm-map.is-reduced .cm-avatar .bob{animation:none}
 .cm-map.is-reduced .cm-bld .body-g{transition:none}
+
+/* the camera (useCampusCamera): the map fills its frame and is panned by drag, wheel, keys or the zoom buttons */
+.cm-world .cm-map.has-camera{width:100%;height:100%;max-width:none;max-height:none;border-radius:0;flex:1;touch-action:none;cursor:grab;
+  background:var(--cm-art-ground)}
+.cm-world:has(.has-camera){padding:0;overflow:hidden;align-items:stretch;justify-content:stretch;background:var(--cm-art-ground)}
+.cm-zoom{position:absolute;left:14px;bottom:14px;z-index:5;display:flex;flex-direction:column;border-radius:12px;overflow:hidden;
+  background:var(--cm-art-label);box-shadow:var(--cm-art-shadow)}
+.cm-zoom button{width:36px;height:36px;border:0;background:transparent;color:var(--cm-art-pic-ink);font:700 18px 'DM Sans',var(--sans),sans-serif;
+  display:flex;align-items:center;justify-content:center;cursor:pointer}
+.cm-zoom button+button{border-top:1px solid var(--cm-art-label-edge)}
+.cm-zoom button:hover{background:var(--cm-art-paving)}
+.cm-zoom button:focus-visible{outline:3px solid var(--cm-art-red);outline-offset:-3px}

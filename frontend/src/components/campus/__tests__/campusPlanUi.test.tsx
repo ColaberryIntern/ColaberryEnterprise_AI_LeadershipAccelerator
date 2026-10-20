@@ -137,7 +137,10 @@ describe('the route on the full map', () => {
     act(() => { campus().openMap(); });
     await flush();
     const stops = Array.from(container.querySelectorAll('[data-testid^="cm-route-stop-"]')).map((g) => [g.getAttribute('data-testid'), g.textContent]);
-    expect(stops).toEqual([['cm-route-stop-tower', '1'], ['cm-route-stop-studio', '2']]);
+    expect(stops).toEqual([['cm-route-stop-tower', 'STOP 1'], ['cm-route-stop-studio', 'STOP 2']]);
+    // the next stop is the green one, as the prototype's tour badges
+    expect(container.querySelector('[data-testid="cm-route-stop-tower"]')!.getAttribute('class')).toContain('is-live');
+    expect(container.querySelector('[data-testid="cm-route-stop-studio"]')!.getAttribute('class')).not.toContain('is-live');
     expect(container.querySelector('[data-testid="cm-route-tower"]')?.getAttribute('class')).toBe('cm-route-line');
   });
   it('the mini-map in the banner draws no route', async () => {

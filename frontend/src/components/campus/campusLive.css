@@ -1,9 +1,6 @@
 /* Colaberry Campus C8: on-air badge, the "On air" strip, today's plan route and the Next button. Shell tokens only, no hex. */
 
 /* On-air badge on a building (map and mini-map). Cherry = live, the same signal the portal uses for broadcasts. */
-.cm-onair rect{fill:var(--cm-accent)}
-.cm-onair text{fill:var(--cm-on-accent);font-size:12px;font-weight:800;letter-spacing:.08em}
-.cm-map.is-compact .cm-onair text{font-size:46px}
 
 /* The "On air" strip under the banner. */
 .cm-live{display:flex;align-items:center;flex-wrap:wrap;gap:8px 12px;flex-basis:100%;padding:8px 12px;
@@ -21,8 +18,6 @@
 .cm-reduced .cm-onair-dot{animation:none}
 
 /* Today's plan: highlighted spokes from the quad to each stop, numbered in plan order (full map only). */
-.cm-route-stop circle{fill:var(--cm-info);stroke:var(--cm-on-accent);stroke-width:3}
-.cm-route-stop text{fill:var(--cm-on-accent);font-size:13px;font-weight:800;font-family:var(--sans)}
 
 /* Next: the banner's primary call to the first unfinished step elsewhere. Long titles truncate. */
 .cm-next{max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

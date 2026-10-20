@@ -13,6 +13,9 @@ import { buildingName } from './campusMap';
 import ExplorerPath from './ExplorerPath';
 import { explorerPath } from './campusPath';
 import type { Equipped } from './campusGear';
+import type { CameraApi } from './useCampusCamera';
+import type { Viewport } from './campusCamera';
+import CampusZoomControls from './CampusZoomControls';
 
 /**
  * Map + building card, with the keyboard contract (Campus C2):
@@ -101,19 +104,18 @@ export default function CampusWorld({ buildings, audience, hasFullAccess, access
     if (tour) tour.onEnd(); else if (panel) panel.onClose(); else if (personCard) onClosePerson?.(); else if (open) closeCard(); else onExit();
   };
 
-  // On phones the map is wider than the screen (campus.css); start centered on the quad.
-  const world = useRef<HTMLDivElement | null>(null);
-  useEffect(() => {
-    const el = world.current;
-    if (el && el.scrollWidth > el.clientWidth) el.scrollLeft = (el.scrollWidth - el.clientWidth) / 2;
-  }, []);
+  // C11b: the prototype camera frames the campus (no more sideways scrolling on phones); the arrival card covers the right
+  // 380 px on wide screens and up to 55% of the height on phones, so a framed building sits beside or above it.
+  const camApi = useRef<CameraApi | null>(null);
+  const camera = useMemo(() => ({ apiRef: camApi, focusInsets: (v: Viewport) => (v.W <= 760 ? { left: 0, top: 0, right: 0, bottom: v.H * 0.55 } : { left: 0, top: 0, right: 400, bottom: 0 }) }), []);
 
   const b = open ? buildings.find((x) => x.id === open) : undefined;
   return (
-    <div className="cm-world" onKeyDown={onKeyDown} ref={world}>
+    <div className="cm-world" onKeyDown={onKeyDown}>
       <CampusWorldMap buildings={buildings} accessOf={accessOf} workplaceNames={workplaceNames} reduceMotion={reduceMotion}
         initialTarget={initialTarget} onArrive={onArrive} buildingRef={registerEl} counts={presenceError ? undefined : counts}
-        people={people} onPickPerson={onOpenPerson ? pickPerson : undefined} walkRequest={walkRequest} onAir={onAir} route={route} ownGear={ownGear} />
+        people={people} onPickPerson={onOpenPerson ? pickPerson : undefined} walkRequest={walkRequest} onAir={onAir} route={route} ownGear={ownGear} showOpen={audience === 'explorer'} camera={camera} />
+      <CampusZoomControls apiRef={camApi} />
       {tour && tour.card}
       {!tour && panel && panel.card}
       {!tour && !panel && personCard && (() => {

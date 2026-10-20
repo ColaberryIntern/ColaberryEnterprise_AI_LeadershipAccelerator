@@ -9,10 +9,13 @@ import { publicOnly } from './campusGear';
 import type { Equipped } from './campusGear';
 import BuildingArt from './art/BuildingArt';
 import { MainGateArt } from './art/MainGate';
+import { PeopleChip, StatusBadge, StopBadge, statusOf } from './art/BuildingBadges';
 import { GroundPatterns, Ground, QuadAndPaths, District, Trees, AVE, GATE, HUB } from './art/grounds';
 import type { PathDoor } from './art/grounds';
 import { doorOf, routeTo, START } from './walkPath';
 import type { Here, Pt } from './walkPath';
+import { useCampusCamera } from './useCampusCamera';
+import type { CameraApi, InsetsOf } from './useCampusCamera';
 import './campusMapArt.css';
 
 /**
@@ -29,21 +32,6 @@ import './campusMapArt.css';
 export { doorOf } from './walkPath';
 export const WORLD = { w: 1000, h: 700 };
 const SPEED = 900; // world units per second
-
-/** How far above the ground line a building's roof reaches (local frame), so chips sit clear of it. Mirrors art/roofs*.tsx. */
-function roofTop(b: CampusBuilding): number {
-  const { w, h } = b.pos;
-  switch (b.kind) {
-    case 'pediment': return -h - 28;
-    case 'gable': return -h - 32;
-    case 'tower': return -h - 34;
-    case 'dome': return -h - w / 2;
-    case 'office': return -h - 15;
-    case 'arcade': return -h - 20;
-    case 'gate': return -48;
-    default: return -h - 8;
-  }
-}
 
 export interface CampusMapProps {
   buildings: CampusBuilding[];
@@ -69,38 +57,16 @@ export interface CampusMapProps {
   ownGear?: Equipped;
   /** C8: today's plan route, the unfinished stops' buildings in order (campusPlan.routeBuildings). Full map only. */
   route?: BuildingId[];
-}
-
-/** C8: a building whose room is on air: the prototype's badge spot, right of the roof (the head count sits left). */
-function OnAirBadge({ b, compact }: { b: CampusBuilding; compact: boolean }): React.ReactElement {
-  const hw = b.pos.w / 2;
-  const bw = compact ? 170 : 54, bh = compact ? 70 : 18;
-  const y = b.kind === 'amphi' ? -30 : -b.pos.h + 14;
-  return (
-    <g className="cm-onair" aria-hidden="true" data-testid={`cm-onair-${b.id}`} transform={`translate(${hw + 6} ${y - (compact ? 40 : 0)})`}>
-      <rect x={0} y={-bh / 2} width={bw} height={bh} rx={bh / 2} />
-      <text x={bw / 2} y={compact ? 17 : 3.5} textAnchor="middle">ON AIR</text>
-    </g>
-  );
-}
-
-/** Live head count on a building (C4), at the prototype's people-chip spot (right-aligned left of the body). Real counts above zero only. */
-function CountChip({ b, count, compact }: { b: CampusBuilding; count: number; compact: boolean }): React.ReactElement {
-  const hw = b.pos.w / 2;
-  // The side-column map renders the 1000-unit world at about a fifth of its size, so its chip is drawn large enough to read there.
-  const cw = compact ? 110 : 30, ch = compact ? 76 : 18;
-  const y = b.kind === 'office' ? -34 : b.kind === 'amphi' ? -30 : -b.pos.h + 14;
-  return (
-    <g className="cm-count" data-count={count} aria-hidden="true" transform={`translate(${-hw - 6} ${y - (compact ? 40 : 0)})`}>
-      <rect x={-cw} y={-ch / 2} width={cw} height={ch} rx={ch / 2} />
-      <text x={-cw / 2} y={compact ? 19 : 3.5} textAnchor="middle">{count}</text>
-    </g>
-  );
+  /** C11b: the Explorer view's OPEN badges (the prototype shows OPEN on every building an Explorer may use). */
+  showOpen?: boolean;
+  /** C11b: the prototype camera (full map only): panels' insets for framing, and a handle for the zoom buttons. */
+  camera?: { insets?: InsetsOf; focusInsets?: InsetsOf; apiRef?: React.MutableRefObject<CameraApi | null> };
 }
 
 // C11 (the map stays light): memoized, so a walking avatar (one state update per frame) does not re-render every building.
-const Building = memo(function Building({ b, access, label, compact, count, onAir = false, here = false, onPick, setRef }: {
-  b: CampusBuilding; access: ExplorerAccess; label: string; compact: boolean; count: number; onAir?: boolean; here?: boolean;
+const Building = memo(function Building({ b, access, label, compact, count, shown, onAir = false, here = false, showOpen = false, stop, onPick, setRef }: {
+  b: CampusBuilding; access: ExplorerAccess; label: string; compact: boolean; count: number; shown?: CampusPerson[]; onAir?: boolean; here?: boolean;
+  showOpen?: boolean; stop?: number;
   onPick: (id: BuildingId) => void; setRef?: (id: BuildingId, el: SVGGElement | null) => void;
 }): React.ReactElement {
   const chip = accessLabel(access);
@@ -112,6 +78,7 @@ const Building = memo(function Building({ b, access, label, compact, count, onAi
   // nav lists every building as a link right below. A pointer click on the nav map still opens the full map.
   const a11y = compact ? {} : { role: 'button', tabIndex: 0, 'aria-label': aria, onKeyDown };
   const isGate = b.kind === 'gate';
+  const status = statusOf(access, onAir, showOpen);
   return (
     <g
       ref={(el) => setRef?.(b.id, el)}
@@ -121,9 +88,9 @@ const Building = memo(function Building({ b, access, label, compact, count, onAi
       transform={`translate(${isGate ? GATE.x : b.pos.x} ${isGate ? GATE.y : b.pos.y})`}
     >
       {isGate ? <MainGateArt /> : <BuildingArt id={b.id} kind={b.kind as Exclude<CampusBuilding['kind'], 'gate'>} w={b.pos.w} h={b.pos.h} label={compact ? undefined : label} />}
-      {!compact && chip && <text className="cm-chip" x={0} y={roofTop(b) - 8} textAnchor="middle">{chip}</text>}
-      {count > 0 && <CountChip b={b} count={count} compact={compact} />}
-      {onAir && <OnAirBadge b={b} compact={compact} />}
+      {count > 0 && <PeopleChip b={b} count={count} shown={shown} compact={compact} />}
+      {status && <StatusBadge b={b} status={status} compact={compact} />}
+      {stop !== undefined && <StopBadge b={b} n={stop + 1} next={stop === 0} />}
     </g>
   );
 });
@@ -151,9 +118,12 @@ function routeSegment(b: CampusBuilding): string {
   return `M${HUB.x} ${AVE}L${GATE.x} ${GATE.y}`;
 }
 
-export default function CampusWorldMap({ buildings, accessOf, workplaceNames, reduceMotion, compact = false, initialTarget, onArrive, buildingRef, counts, people, onPickPerson, walkRequest, onAir, route, ownGear }: CampusMapProps): React.ReactElement {
+export default function CampusWorldMap({ buildings, accessOf, workplaceNames, reduceMotion, compact = false, initialTarget, onArrive, buildingRef, counts, people, onPickPerson, walkRequest, onAir, route, ownGear, showOpen = false, camera }: CampusMapProps): React.ReactElement {
   const [pos, setPos] = useState<Pt>({ x: START.x, y: START.y });
   const hereRef = useRef<Here>(START);
+  const svgRef = useRef<SVGSVGElement>(null);
+  const locate = useCallback((id: string) => { const b = buildings.find((x) => x.id === id); return b ? (b.kind === 'gate' ? GATE : { x: b.pos.x, y: b.pos.y }) : null; }, [buildings]);
+  const cam = useCampusCamera(svgRef, { enabled: !compact && !!camera, insets: camera?.insets, focusInsets: camera?.focusInsets, avatarRef: hereRef, locate, reduceMotion, apiRef: camera?.apiRef });
   const raf = useRef<number | null>(null);
   // C9: true only while a walk animates (never with reduce motion or on the compact map): the only time a ride is drawn.
   const [moving, setMoving] = useState(false);
@@ -168,7 +138,7 @@ export default function CampusWorldMap({ buildings, accessOf, workplaceNames, re
     stop();
     if (compact) { onArrive(id); return; }
     const door = doorOf(b);
-    const arrive = () => { hereRef.current = { ...door, zone: b.zone }; setAtId(id); onArrive(id); };
+    const arrive = () => { hereRef.current = { ...door, zone: b.zone }; setAtId(id); cam.focus(b.kind === 'gate' ? { ...GATE, h: 50 } : { x: b.pos.x, y: b.pos.y, h: b.pos.h }); onArrive(id); };
     if (reduceMotion) { setPos(door); arrive(); return; }
     // A walk cancelled midway starts from where the avatar stands, in the zone it was heading for.
     const from = hereRef.current;
@@ -191,8 +161,9 @@ export default function CampusWorldMap({ buildings, accessOf, workplaceNames, re
       else { raf.current = null; setMoving(false); arrive(); }
     };
     setMoving(true);
+    cam.follow();
     raf.current = requestAnimationFrame(step);
-  }, [buildings, compact, reduceMotion, onArrive]);
+  }, [buildings, compact, reduceMotion, onArrive, cam]);
 
   // One stable pick handler per building, so the memoized token groups do not re-render on every walk frame.
   const pickers = useMemo(() => {
@@ -213,7 +184,7 @@ export default function CampusWorldMap({ buildings, accessOf, workplaceNames, re
   }, [walkRequest, walkTo]);
 
   return (
-    <svg className={`cm-map${compact ? ' is-compact' : ''}${reduceMotion ? ' is-reduced' : ''}`} viewBox={`0 0 ${WORLD.w} ${WORLD.h}`} data-testid={compact ? undefined : 'cm-world'}
+    <svg ref={svgRef} className={`cm-map${compact ? ' is-compact' : ''}${reduceMotion ? ' is-reduced' : ''}${camera && !compact ? ' has-camera' : ''}`} viewBox={`0 0 ${WORLD.w} ${WORLD.h}`} data-testid={compact ? undefined : 'cm-world'}
       {...(compact ? { 'aria-hidden': true, focusable: 'false' } : { role: 'group', 'aria-label': 'Campus map' })}>
       <Scenery doors={doors} gateIsBuilding={gateIsBuilding} />
       {!compact && route && route.map((id) => {
@@ -222,19 +193,9 @@ export default function CampusWorldMap({ buildings, accessOf, workplaceNames, re
       })}
       {buildings.map((b) => (
         <Building key={b.id} b={b} access={accessOf(b)} label={buildingName(b, workplaceNames)} compact={compact} count={counts?.[b.id] ?? 0}
-          onAir={!!onAir?.has(b.id)} here={!compact && atId === b.id} onPick={walkTo} setRef={buildingRef} />
+          shown={people?.[b.id]?.shown} onAir={!!onAir?.has(b.id)} here={!compact && atId === b.id} showOpen={showOpen}
+          stop={!compact && route && route.includes(b.id) ? route.indexOf(b.id) : undefined} onPick={walkTo} setRef={buildingRef} />
       ))}
-      {!compact && route && route.map((id, i) => {
-        const b = buildings.find((x) => x.id === id); if (!b) return null;
-        // right of the body, half way up: clear of the name pill (below) and the chips (top corners)
-        const n = b.kind === 'gate' ? { x: GATE.x + 46, y: GATE.y - 20 } : { x: b.pos.x + b.pos.w / 2 + 14, y: b.pos.y - b.pos.h / 2 };
-        return (
-          <g key={'n-' + id} className="cm-route-stop" data-testid={`cm-route-stop-${id}`} aria-hidden="true">
-            <circle cx={n.x} cy={n.y} r={12} />
-            <text x={n.x} y={n.y + 5} textAnchor="middle">{i + 1}</text>
-          </g>
-        );
-      })}
       {!compact && people && onPickPerson && buildings.map((b) => {
         const t = people[b.id];
         return t ? <PersonTokens key={'t-' + b.id} b={b} shown={t.shown} more={t.more} maxY={WORLD.h} onPick={pickers[b.id]!} /> : null;
