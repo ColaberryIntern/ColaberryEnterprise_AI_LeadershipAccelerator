@@ -113,6 +113,16 @@ export interface PracticeTake {
   presentationType: string | null;
   presentationTypeLabel: string | null;
   typeSource: 'take' | 'task' | 'unset';
+  /**
+   * Poster frame for this take, on the same signed ticket as the video.
+   *
+   * The Practice panel showed black rectangles until 2026-10-20: the thumbnail
+   * route and the frame-scoring existed, and the only page a learner actually
+   * reviews their takes on never asked for one. Built for the community card and
+   * not wired here — the same "correct unit, unchecked wiring" shape as the rest
+   * of this week.
+   */
+  thumbnailUrl: string;
 }
 
 export type SessionResult =
@@ -223,13 +233,16 @@ export async function recordingsForAttempt(
     // The URL carries its own authority, because a <video> element cannot send a
     // bearer header. Minted per read, so it expires shortly after the page does.
     const ticket = ticketFor ? createRecordingTicket(id, ticketFor.enrollmentId) : '';
+    // Ends at the RECORDING, not at `/file`: two leaves hang off it now, the video
+    // and its poster, and both must carry the same ticket.
     const base = ticketFor
-      ? `/api/portal/projects/${encodeURIComponent(ticketFor.projectId)}/tasks/${encodeURIComponent(ticketFor.storyId)}/recordings/${encodeURIComponent(id)}/file`
+      ? `/api/portal/projects/${encodeURIComponent(ticketFor.projectId)}/tasks/${encodeURIComponent(ticketFor.storyId)}/recordings/${encodeURIComponent(id)}`
       : '';
     return {
       id,
       partNo: Number(r.part_no) || 1,
-      playbackUrl: base ? `${base}?t=${encodeURIComponent(ticket)}` : '',
+      playbackUrl: base ? `${base}/file?t=${encodeURIComponent(ticket)}` : '',
+      thumbnailUrl: base ? `${base}/thumbnail?t=${encodeURIComponent(ticket)}` : '',
       // Absent from the map means no live showcase names this take: private.
       shareState: stateByRecording.get(id) ?? 'private',
       showcaseId: showcaseByRecording.get(id) ?? null,

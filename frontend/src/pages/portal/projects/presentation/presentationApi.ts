@@ -181,6 +181,8 @@ export interface PracticeSession {
     presentationTypeLabel?: string | null;
     /** Where that answer came from, so the page never shows inherited as chosen. */
     typeSource?: 'take' | 'task' | 'unset';
+    /** Poster frame, same ticket. May 404 when no frame is worth showing. */
+    thumbnailUrl?: string | null;
     /** The live showcase, so the switch can turn sharing back off. */
     showcaseId?: string | null;
     viewCount?: number;
