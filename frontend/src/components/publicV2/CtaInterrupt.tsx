@@ -27,14 +27,20 @@ interface Props {
   eyebrow: string;
   title: string;
   body: string;
-  /** Defaults to the free workspace. Overridable for a placement that warrants it. */
+  /**
+   * Defaults to the workspace, with "no card needed" rather than a price.
+   *
+   * The label deliberately avoids the word "free": TWC 40 TAC 807.172(d) prohibits
+   * advertising it, and this component's default puts its label on every page that does not
+   * override it, so the default is the one that matters most.
+   */
   primary?: { label: string; to: string };
   secondary?: { label: string; to: string };
 }
 
 export default function CtaInterrupt({
   eyebrow, title, body,
-  primary = { label: 'Open the free workspace', to: '/try' },
+  primary = { label: 'Open the workspace, no card needed', to: '/try' },
   secondary = { label: 'Talk to an architect', to: '/contact' },
 }: Props): React.ReactElement {
   return (

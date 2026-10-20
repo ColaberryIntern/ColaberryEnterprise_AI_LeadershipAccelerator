@@ -6,12 +6,16 @@
  * section budget is respected, and every figure carries an evidence class.
  */
 import React from 'react';
+import fs from 'fs';
+import path from 'path';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { createRoot, type Root } from 'react-dom/client';
-import { act } from 'react-dom/test-utils';
 import { MemoryRouter } from 'react-router-dom';
 import HomeV2 from '../HomeV2';
-import { GOALS, SERVICES } from '../../../config/v2Content';
+import { SERVICES } from '../../../config/v2Content';
+import { SEGMENTS, readySegments } from '../../../config/v2Segments';
+
+/** Read off disk, because a door is only safe if the route it points at is declared. */
+const APP = fs.readFileSync(path.join(__dirname, '..', '..', '..', 'App.tsx'), 'utf8');
 
 const html = (): string =>
   renderToStaticMarkup(
@@ -21,33 +25,6 @@ const html = (): string =>
   );
 
 const textOf = (h: string): string => h.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
-
-/**
- * Live-DOM mount for the interaction tests below. Uses createRoot + act, the
- * pattern already established across this repo's interaction suites (see
- * portal/today/__tests__/TodayFeedV2.filter.test.tsx) -- @testing-library is not
- * a dependency here, and adding one to test a keyboard handler is not a trade
- * worth making.
- */
-function mount(): { container: HTMLElement; root: Root } {
-  const container = document.createElement('div');
-  document.body.appendChild(container);
-  const root = createRoot(container);
-  act(() => {
-    root.render(
-      <MemoryRouter initialEntries={['/']}>
-        <HomeV2 />
-      </MemoryRouter>,
-    );
-  });
-  return { container, root };
-}
-
-const press = (el: Element, key: string): void => {
-  act(() => {
-    el.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
-  });
-};
 
 describe('HomeV2 — governance guarantees', () => {
   it('renders no blocked claim anywhere on the page', () => {
@@ -143,6 +120,14 @@ describe('HomeV2 — structure', () => {
    *
    * The rule stands: the next section to be added should replace one, not
    * extend this again.
+   *
+   * 2026-10-20, C5.2: HONORED, the first time. C5.1's segment doors needed a
+   * home and the page was already at twelve, so the goal picker was REPLACED
+   * rather than the ceiling raised a third time. Ali chose the swap from three
+   * options put to him: swap, raise to thirteen, or a full five-band rewrite.
+   * The picker asked the visitor to self-identify by GOAL where the IA routes
+   * by SEGMENT, so it was the right job on the wrong axis and the natural thing
+   * to give up. One section out, one in; the count is unchanged.
    */
   it('stays within the twelve-section budget', () => {
     const count = (html().match(/<section/g) || []).length;
@@ -156,105 +141,54 @@ describe('HomeV2 — structure', () => {
     expect(text).toContain('Map an AI Opportunity');
   });
 
-  it('renders all four goal options', () => {
-    const text = textOf(html());
-    GOALS.forEach((g) => expect(text).toContain(g.label));
-  });
-
   /**
-   * The chooser moved from four toggle buttons (`aria-pressed`) to a proper
-   * tablist: one selection revealing one panel is what tabs are for, and it
-   * gives arrow-key navigation in assistive tech for free. The intent this
-   * guards is unchanged -- a goal is selected on arrival, so the panel below is
-   * never empty -- and it now also checks that the panel is wired to the tab
-   * that selected it, which the old markup did not express at all.
+   * THE FIVE DOORS replaced the goal picker on 2026-10-20 (C5.2).
+   *
+   * This is the first time the budget's own rule - "the next section to be added
+   * should replace one, not extend this again" - has actually been honored. The
+   * picker asked the visitor to self-identify by GOAL; the C5.1 information
+   * architecture routes by SEGMENT, so it was the right job on the wrong axis.
+   * The count stays at twelve.
+   *
+   * The tests below are about the property that makes the swap safe: the doors
+   * are GENERATED from readySegments(), the same source App.tsx maps to routes,
+   * so a door cannot point at a page that is not mounted.
    */
-  it('defaults the goal chooser to the first option and wires it to the panel', () => {
-    const h = html();
-    expect(h).toContain('role="tablist"');
-    expect(h).toContain('aria-selected="true"');
-    expect(h).toContain('role="tabpanel"');
-    expect(h).toContain('aria-controls="cbv2-goal-panel"');
-    // exactly one tab may be selected at a time
-    expect((h.match(/aria-selected="true"/g) || []).length).toBe(1);
-  });
-
-  /**
-   * The role="tablist" assertion above passes on markup that does nothing when
-   * you press an arrow key -- which is exactly what shipped first, and a browser
-   * check caught it rather than this file. Declaring the role tells assistive
-   * tech that arrows navigate the group and Tab exits it; both halves of that
-   * promise are behaviour, so both are asserted here.
-   */
-  it('makes the tablist a single tab stop via a roving tabindex', () => {
-    const h = html();
-    const tabIndexes = (h.match(/role="tab"[^>]*tabindex="(-?\d)"/g) || []).map((m) =>
-      (m.match(/tabindex="(-?\d)"/) as RegExpMatchArray)[1],
-    );
-    expect(tabIndexes.length).toBe(GOALS.length);
-    expect(tabIndexes.filter((t) => t === '0').length).toBe(1);
-    expect(tabIndexes.filter((t) => t === '-1').length).toBe(GOALS.length - 1);
-  });
-
-  it('moves selection with arrow keys, wrapping at both ends', () => {
-    const { container, root } = mount();
-    const tabs = (): HTMLElement[] => Array.from(container.querySelectorAll('[role="tab"]'));
-    const selected = (): string => (tabs().find((t) => t.getAttribute('aria-selected') === 'true')
-      ?.textContent ?? '');
-    const last = GOALS.length - 1;
-
-    expect(selected()).toContain(GOALS[0].label);
-    press(tabs()[0], 'ArrowRight');
-    expect(selected()).toContain(GOALS[1].label);
-    // wraps backwards off the first tab rather than dead-ending
-    press(tabs()[1], 'ArrowLeft');
-    press(tabs()[0], 'ArrowLeft');
-    expect(selected()).toContain(GOALS[last].label);
-    // and forwards off the last
-    press(tabs()[last], 'ArrowRight');
-    expect(selected()).toContain(GOALS[0].label);
-    press(tabs()[0], 'End');
-    expect(selected()).toContain(GOALS[last].label);
-    press(tabs()[last], 'Home');
-    expect(selected()).toContain(GOALS[0].label);
-
-    act(() => { root.unmount(); });
-    document.body.removeChild(container);
-  });
-
-  it('keeps focus with the selection so the next arrow press continues', () => {
-    // Without moving focus, arrowing twice would return to the tab the user
-    // started on -- the selection would appear to bounce.
-    const { container, root } = mount();
-    const tabs = Array.from(container.querySelectorAll('[role="tab"]'));
-    (tabs[0] as HTMLElement).focus();
-    press(tabs[0], 'ArrowRight');
-    expect(document.activeElement).toBe(tabs[1]);
-    press(document.activeElement as Element, 'ArrowRight');
-    expect(tabs[2].getAttribute('aria-selected')).toBe('true');
-
-    act(() => { root.unmount(); });
-    document.body.removeChild(container);
-  });
-
-  it('swaps the panel contents with the selected goal, not just the tab state', () => {
-    const { container, root } = mount();
-    const panel = (): string => container.querySelector('[role="tabpanel"]')?.textContent ?? '';
-    const lastGoal = GOALS[GOALS.length - 1];
-
-    expect(panel()).toContain(GOALS[0].service);
-    press(container.querySelectorAll('[role="tab"]')[0], 'End');
-    expect(panel()).toContain(lastGoal.service);
-    expect(panel()).toContain(lastGoal.proof);
-
-    act(() => { root.unmount(); });
-    document.body.removeChild(container);
-  });
-
-  it('shows an answer for the default goal, so the panel is never empty', () => {
+  it('renders a door for every ready segment, and no others', () => {
     const text = textOf(html());
-    expect(text).toContain(GOALS[0].service);
-    expect(text).toContain(GOALS[0].proof);
+    readySegments().forEach((s) => expect(text).toContain(s.name));
+    expect(readySegments().length).toBeGreaterThan(0);
+  });
+
+  it('renders exactly as many doors as there are ready segments', () => {
+    const h = html();
+    const doors = (h.match(/class="cbv2-door"/g) || []).length;
+    expect(doors).toBe(readySegments().length);
+  });
+
+  it('does not render a door for a segment that is not ready', () => {
+    const text = textOf(html());
+    const unready = SEGMENTS.filter((s) => !s.ready);
+    // Guards the guard: if every segment were ready this would pass vacuously.
+    expect(unready.length).toBeGreaterThan(0);
+    unready.forEach((s) => expect(text).not.toContain(s.name));
+  });
+
+  it('points every door at a route App.tsx actually mounts', () => {
+    const h = html();
+    readySegments().forEach((s) => {
+      expect(h).toContain(`href="/${s.slug}"`);
+    });
+    // The routes are generated from the same call, so this asserts the pairing
+    // rather than a hand-maintained list.
+    expect(APP).toContain('readySegments().map');
+  });
+
+  it('instruments each door', () => {
+    const h = html();
+    readySegments().forEach((s) => {
+      expect(h).toContain(`data-track="home_door_${s.slug}"`);
+    });
   });
 
   it('links every service to its detail route', () => {
