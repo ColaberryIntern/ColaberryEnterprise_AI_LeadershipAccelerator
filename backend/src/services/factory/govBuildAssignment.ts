@@ -171,11 +171,22 @@ export async function listActiveInternsForAssignment(): Promise<ActiveInternOpti
       const identities: any[] = await PlatformIdentity.findAll({ where: { primary_email: emails } });
       for (const i of identities) { if (i.primary_email && i.id) idByEmail.set(String(i.primary_email), String(i.id)); }
     }
+    const { ensurePlatformIdentity } = await import('../../modules/identity/platformIdentityService');
     const out: ActiveInternOption[] = [];
     for (const r of roster) {
       const ne = normalizeEmail(r.email ?? '');
-      const identityId = ne ? idByEmail.get(ne) : undefined;
-      if (!identityId) continue; // only an intern with a resolvable platform identity can be assigned
+      if (!ne) continue; // no email -> cannot be resolved or assigned
+      let identityId = idByEmail.get(ne);
+      if (!identityId) {
+        // BACKFILL on demand: nothing creates a PlatformIdentity for an intern enrollment, so active interns with
+        // no identity row were silently dropped here -> the "Assign to intern" picker came up EMPTY. Ensure one
+        // (idempotent on normalized email) so every active intern is assignable, instead of hiding them.
+        try {
+          const ens = await ensurePlatformIdentity({ email: r.email, displayName: r.name });
+          identityId = String(ens.identity.id);
+          idByEmail.set(ne, identityId);
+        } catch { continue; } // if even the ensure fails, skip this one rather than break the whole picker
+      }
       out.push({ identityId, email: r.email, name: r.name, hasProject: r.project !== null });
     }
     // Unassigned (no project) first — the people available to staff — then by name within each band.
