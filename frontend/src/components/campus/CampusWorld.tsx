@@ -18,6 +18,11 @@ import type { Viewport } from './campusCamera';
 import CampusZoomControls from './CampusZoomControls';
 import { happeningAt, zoneLabelOf } from './campusArrival';
 import { buildingLine } from './tourSteps';
+import CampusInside from './interior/CampusInside';
+import { ROOMS } from './interior/roomModel';
+
+const GOING_MS = 900;
+const hasRoom = (id: BuildingId) => !!ROOMS[id];
 
 /**
  * Map + building card, with the keyboard contract (Campus C2):
@@ -127,7 +132,19 @@ export default function CampusWorld({ buildings, audience, hasFullAccess, access
     setOpen(null);
     document.querySelector<HTMLInputElement>('.cm-whereto-input')?.focus();
   }, []);
+  // C11b door reveal (the prototype's "going"): through the glowing back door, the room zooms in under "Opening...", then the existing
+  // door transition opens the page. Only from inside a building with a room, and never with reduce motion.
+  const [going, setGoing] = useState<string | null>(null);
+  const goTimer = useRef<number | null>(null);
+  useEffect(() => () => { if (goTimer.current !== null) window.clearTimeout(goTimer.current); }, []);
   const b = open ? buildings.find((x) => x.id === open) : undefined;
+  const enterRoom = (r: string) => {
+    if (!onEnterRoom || !b) return;
+    const rect = els.current.get(b.id)?.getBoundingClientRect() ?? null;
+    if (reduceMotion || !hasRoom(b.id)) { onEnterRoom(r, rect); return; }
+    setGoing(r);
+    goTimer.current = window.setTimeout(() => { goTimer.current = null; setGoing(null); onEnterRoom(r, rect); }, GOING_MS);
+  };
   const anyCard = !!tour || !!panel || !!personCard || !!b;
   const cardBuilding = !tour && !panel && !personCard && b ? b.id : null;
   const onCardRef = useRef(onCard); onCardRef.current = onCard;
@@ -146,10 +163,15 @@ export default function CampusWorld({ buildings, audience, hasFullAccess, access
           onMessaged={onNavigate}
           onWalkOver={() => { const id = personCard.buildingId; onClosePerson?.(); setWalkRequest((w) => ({ id, seq: (w?.seq ?? 0) + 1 })); }} />;
       })()}
+      {/* C11b: inside the building you arrived at, behind its arrival panel (the prototype's flyIn) */}
+      {!tour && !panel && b && !personCard && <CampusInside building={b} buildingName={buildingName(b, workplaceNames)} audience={audience} access={accessOf(b)}
+        presence={presenceError ? undefined : presence} onAir={!!onAir?.has(b.id)} reduceMotion={reduceMotion} onStepOutside={closeCard} going={going}
+        onPickPerson={onOpenPerson ? (p) => pickPerson(p, b.id) : undefined}
+        desk={staffDesks ? desksForBuilding(staffDesks, b.id, audience).find((d) => d.on_duty) ?? null : null} />}
       {!tour && !panel && b && !personCard && <BuildingCard building={b} access={accessOf(b)} workplaceNames={workplaceNames} onClose={closeCard} onNavigate={onNavigate}
         zoneLabel={zoneLabelOf(b)} line={buildingLine(audience, b.id)} onElsewhere={elsewhere}
         happening={happeningAt(b.id, { onAir: !!onAir?.has(b.id), routeIndex: route ? route.indexOf(b.id) : -1, count: presence ? counts[b.id] ?? 0 : null, presenceError })}
-        onEnterRoom={onEnterRoom ? (route) => onEnterRoom(route, els.current.get(b.id)?.getBoundingClientRect() ?? null) : undefined}
+        onEnterRoom={onEnterRoom ? enterRoom : undefined}
         desks={staffDesks ? desksForBuilding(staffDesks, b.id, audience) : undefined}
         children={b.id === 'gate' && isExplorer ? <ExplorerPath onNavigate={onNavigate}
           model={explorerPath(buildings, accessOf, workplaceNames, !!staffDesks?.some((d) => d.id === 'maya' && d.on_duty))} /> : undefined}

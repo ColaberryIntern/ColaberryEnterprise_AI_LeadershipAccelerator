@@ -7,9 +7,12 @@ import type { Happening } from './BuildingCard';
  * building is quiet, never an invented event.
  */
 /** The gate's own card has no place line (it IS the place, and Workplace names rename it). */
-export function zoneLabelOf(b: Pick<CampusBuilding, 'zone'>): string | undefined {
+/** The prototype's place names: the Business District (the paved Colaberry Works blocks), North Campus, South Avenue. */
+const DISTRICT = new Set(['studio', 'gallery', 'career']);
+export function zoneLabelOf(b: Pick<CampusBuilding, 'zone' | 'id'>): string | undefined {
   if (b.zone === 'gate') return undefined;
-  return b.zone === 'ave' ? 'South Avenue' : 'The Quad';
+  if (DISTRICT.has(b.id)) return 'Business District';
+  return b.zone === 'ave' ? 'South Avenue' : 'North Campus';
 }
 
 export function happeningAt(id: BuildingId, s: { onAir: boolean; routeIndex: number; count: number | null; presenceError: boolean }): Happening[] {

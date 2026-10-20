@@ -6,7 +6,7 @@
 @import './campusArtTokens.css';
 @import './campusFonts.css';
 
-.cm-card.cm-arrive{top:16px;right:16px;bottom:16px;width:min(400px,calc(100% - 32px));max-height:none;padding:0;border:0;border-radius:22px;
+.cm-card.cm-arrive{z-index:4;top:16px;right:16px;bottom:16px;width:min(400px,calc(100% - 32px));max-height:none;padding:0;border:0;border-radius:22px;
   background:var(--cm-art-paper);box-shadow:var(--cm-art-shadow);display:flex;flex-direction:column;overflow:hidden;color:var(--cm-art-ink);
   font-family:'DM Sans',var(--sans),system-ui,sans-serif;animation:cm-arrive-in .55s cubic-bezier(.2,.9,.2,1)}
 @keyframes cm-arrive-in{from{transform:translateX(calc(100% + 30px))}}

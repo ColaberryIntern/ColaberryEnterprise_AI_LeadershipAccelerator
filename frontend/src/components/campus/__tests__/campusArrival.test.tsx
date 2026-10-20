@@ -17,7 +17,8 @@ const b = (id: string) => CAMPUS_BUILDINGS.find((x) => x.id === id)!;
 describe('arrival data', () => {
   it('place names by zone; the gate card has none', () => {
     expect(zoneLabelOf(b('commons'))).toBe('South Avenue');
-    expect(zoneLabelOf(b('library'))).toBe('The Quad');
+    expect(zoneLabelOf(b('library'))).toBe('North Campus');
+    expect(zoneLabelOf(b('studio'))).toBe('Business District');
     expect(zoneLabelOf(b('gate'))).toBeUndefined();
   });
 
