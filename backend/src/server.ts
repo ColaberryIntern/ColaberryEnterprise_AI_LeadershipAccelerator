@@ -44,6 +44,7 @@ import publicCareerPortfolioRoutes from './routes/publicCareerPortfolioRoutes';
 import { previewProxyMiddleware } from './middlewares/previewProxyMiddleware';
 import { startScheduler } from './services/schedulerService';
 import { startRepoTreeRefresh } from './services/repoTree/repoTreeRefreshService';
+import { startBroadcastHealthLoop } from './services/broadcast/broadcastHealthLoop';
 import { UPLOAD_DIR } from './config/upload';
 import { seedProgramCurriculum } from './seeds/seedProgramCurriculum';
 import { seedDepartments } from './seeds/seedDepartments';
@@ -3438,6 +3439,18 @@ async function start(): Promise<void> {
       console.error('[Intelligence] Scheduled discovery failed:', err?.message)
     );
   });
+
+  /**
+   * Colaberry Live provider health (L5.5). Without this nothing ever tells an occurrence the
+   * stream is alive: provider_health stays "unknown", go_live is always refused with
+   * ProviderNotReady, and a dropped class is never marked reconnecting. Self-gating on the
+   * broadcast flag, and idempotent.
+   */
+  try {
+    startBroadcastHealthLoop();
+  } catch (err: any) {
+    console.warn('[Broadcast] health loop failed to start (non-fatal):', err?.message);
+  }
 
   // AI Ops Command Center metrics_daily rollup — runs on the 5-minute
   // cadence so the Today's Pulse tile stays fresh during the day. The
