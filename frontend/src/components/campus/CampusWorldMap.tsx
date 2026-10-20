@@ -10,6 +10,7 @@ import type { Equipped } from './campusGear';
 import BuildingArt from './art/BuildingArt';
 import { MainGateArt } from './art/MainGate';
 import { PeopleChip, StatusBadge, StopBadge, statusOf } from './art/BuildingBadges';
+import { LiveBack, LiveFront } from './art/LiveDressing';
 import { GroundPatterns, Ground, QuadAndPaths, District, Trees, AVE, GATE, HUB } from './art/grounds';
 import type { PathDoor } from './art/grounds';
 import { doorOf, routeTo, START } from './walkPath';
@@ -172,6 +173,9 @@ export default function CampusWorldMap({ buildings, accessOf, workplaceNames, re
     return out;
   }, [buildings, onPickPerson]);
   const gateIsBuilding = buildings.some((b) => b.kind === 'gate');
+  // C11b Colaberry Live: evening over the full map while a building is really on air, and the path from you to it.
+  const live = useMemo(() => (compact || !onAir ? [] : buildings.filter((b) => b.kind !== 'gate' && onAir.has(b.id))), [buildings, onAir, compact]);
+  const livePath = live.length && atId !== live[0].id ? [{ x: pos.x, y: pos.y }, ...routeTo(hereRef.current, live[0])] : null;
   const doors = useMemo<PathDoor[]>(() => buildings.filter((b) => b.kind !== 'gate').map((b) => ({ id: b.id, x: b.pos.x, y: b.pos.y, zone: b.zone })), [buildings]);
 
   const started = useRef(false);
@@ -184,9 +188,10 @@ export default function CampusWorldMap({ buildings, accessOf, workplaceNames, re
   }, [walkRequest, walkTo]);
 
   return (
-    <svg ref={svgRef} className={`cm-map${compact ? ' is-compact' : ''}${reduceMotion ? ' is-reduced' : ''}${camera && !compact ? ' has-camera' : ''}`} viewBox={`0 0 ${WORLD.w} ${WORLD.h}`} data-testid={compact ? undefined : 'cm-world'}
+    <svg ref={svgRef} className={`cm-map${compact ? ' is-compact' : ''}${reduceMotion ? ' is-reduced' : ''}${camera && !compact ? ' has-camera' : ''}${live.length ? ' is-evening' : ''}`} viewBox={`0 0 ${WORLD.w} ${WORLD.h}`} data-testid={compact ? undefined : 'cm-world'}
       {...(compact ? { 'aria-hidden': true, focusable: 'false' } : { role: 'group', 'aria-label': 'Campus map' })}>
       <Scenery doors={doors} gateIsBuilding={gateIsBuilding} />
+      {live.length > 0 && <LiveBack buildings={live} path={livePath} />}
       {!compact && route && route.map((id) => {
         const b = buildings.find((x) => x.id === id); if (!b) return null;
         return <path key={'r-' + id} className="cm-route-line" data-testid={`cm-route-${id}`} d={routeSegment(b)} aria-hidden="true" />;
@@ -196,6 +201,7 @@ export default function CampusWorldMap({ buildings, accessOf, workplaceNames, re
           shown={people?.[b.id]?.shown} onAir={!!onAir?.has(b.id)} here={!compact && atId === b.id} showOpen={showOpen}
           stop={!compact && route && route.includes(b.id) ? route.indexOf(b.id) : undefined} onPick={walkTo} setRef={buildingRef} />
       ))}
+      {live.length > 0 && <LiveFront buildings={live} />}
       {!compact && people && onPickPerson && buildings.map((b) => {
         const t = people[b.id];
         return t ? <PersonTokens key={'t-' + b.id} b={b} shown={t.shown} more={t.more} maxY={WORLD.h} onPick={pickers[b.id]!} /> : null;

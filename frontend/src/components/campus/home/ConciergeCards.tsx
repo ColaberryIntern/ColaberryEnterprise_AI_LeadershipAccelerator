@@ -86,10 +86,10 @@ export function ExplorerPass({ buildings, accessOf, workplaceNames, path }: {
 /** COLABERRY LIVE: shown only while a broadcast is on air; Walk in walks to its building. */
 export function LiveCard({ title, buildingId, onWalk }: { title: string; buildingId: BuildingId | null; onWalk: Walk }): React.ReactElement {
   return (
-    <div className="cm-live" data-testid="cm-cc-live">
-      <div className="cm-live-brand"><span aria-hidden="true">{'● '}</span>On air now</div>
-      <div className="cm-live-title">{title}</div>
-      {buildingId && <div className="cm-live-row"><button type="button" className="cm-btn-red" onClick={() => onWalk(buildingId)} data-testid="cm-cc-live-walk">Walk in</button></div>}
+    <div className="cm-cc-livecard" data-testid="cm-cc-live">
+      <div className="cm-cc-livecard-brand"><span aria-hidden="true">{'● '}</span>On air now</div>
+      <div className="cm-cc-livecard-title">{title}</div>
+      {buildingId && <div className="cm-cc-livecard-row"><button type="button" className="cm-btn-red" onClick={() => onWalk(buildingId)} data-testid="cm-cc-live-walk">Walk in</button></div>}
     </div>
   );
 }

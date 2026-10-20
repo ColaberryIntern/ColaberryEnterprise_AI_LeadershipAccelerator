@@ -57,6 +57,13 @@ export function pulseOf(presence: CampusPresence | null, buildings: CampusBuildi
   return { total, busiest, busiestCount };
 }
 
+/** While Colaberry Live is on air the concierge says so, as the prototype's "Colaberry Live · Thursday night" (Central time). */
+export function liveKicker(now: Date): string {
+  const day = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago', weekday: 'long' }).format(now);
+  const hour = Number(new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago', hour: 'numeric', hourCycle: 'h23' }).format(now));
+  return `Colaberry Live · ${day}${hour >= 17 ? ' night' : ''}`;
+}
+
 function leadFor(p: ConciergeProps, next: PlanStop | null): string {
   if (p.live) return 'Colaberry Live is on air right now.';
   if (next) return `Next on your plan: ${next.title}.`;
@@ -74,7 +81,7 @@ export default function CampusConcierge(p: ConciergeProps): React.ReactElement {
   const greeting = `${greetingFor(p.now.getHours())}${p.firstName ? `, ${p.firstName}` : ''}.`;
   return (
     <aside className={`cm-cc${p.tucked ? ' is-tucked' : ''}`} aria-label="Campus concierge" data-testid="cm-concierge" hidden={p.tucked}>
-      <div className="cm-kicker" data-testid="cm-cc-where">At the {p.hereName}</div>
+      <div className="cm-kicker" data-testid="cm-cc-where">{p.live ? liveKicker(p.now) : `At the ${p.hereName}`}</div>
       <h1 data-testid="cm-cc-greeting">{greeting}</h1>
       <p className="cm-lead" data-testid="cm-cc-lead">{leadFor(p, next)}</p>
 

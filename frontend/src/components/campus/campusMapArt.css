@@ -42,8 +42,23 @@
 .cm-map .water{animation:cm-shimmer 3s ease-in-out infinite alternate}
 @keyframes cm-shimmer{to{opacity:.55}}
 
+/* Colaberry Live: the campus turns to evening while a broadcast is on air (prototype #map.evening) */
+.cm-map .dimmable,.cm-map .cm-bld .body-g{transition:filter 1.2s,transform .25s cubic-bezier(.3,1.4,.5,1)}
+.cm-map.is-evening .dimmable{filter:brightness(.52) saturate(.75) hue-rotate(-10deg)}
+.cm-map.is-evening .cm-bld:not(.onair) .body-g{filter:brightness(.7) saturate(.85)}
+.cm-map.is-evening .win{fill:var(--cm-art-lit)}
+.cm-map.is-evening .cm-bld.onair .body-g{filter:drop-shadow(0 0 14px var(--cm-art-onair-glow))}
+.cm-beam{transform-box:fill-box;transform-origin:50% 100%;opacity:.5;mix-blend-mode:screen}
+.cm-beam.b1{animation:cm-sweep1 6s ease-in-out infinite alternate}.cm-beam.b2{animation:cm-sweep2 7s ease-in-out infinite alternate}
+@keyframes cm-sweep1{from{transform:rotate(-34deg)}to{transform:rotate(6deg)}}
+@keyframes cm-sweep2{from{transform:rotate(30deg)}to{transform:rotate(-8deg)}}
+.cm-wave{fill:none;stroke:var(--cm-art-wave);stroke-width:2.5;opacity:0;transform-box:fill-box;transform-origin:center;animation:cm-wave 2.4s ease-out infinite}
+@keyframes cm-wave{0%{opacity:.85;transform:scale(1)}100%{opacity:0;transform:scale(4.2)}}
+.cm-live-path{fill:none;stroke:var(--cm-art-live-path);stroke-width:5;stroke-linecap:round;stroke-dasharray:1 10;animation:cm-march .9s linear infinite;filter:drop-shadow(0 0 4px var(--cm-art-live-path-glow))}
+
 /* reduceMotion is the EFFECTIVE setting (campus Settings, else the OS), passed in as .is-reduced on the svg */
-.cm-map.is-reduced .water,.cm-map.is-reduced .cm-route-line,.cm-map.is-reduced .cm-avatar .bob{animation:none}
+.cm-map.is-reduced .water,.cm-map.is-reduced .cm-route-line,.cm-map.is-reduced .cm-avatar .bob,.cm-map.is-reduced .cm-beam,.cm-map.is-reduced .cm-live-path{animation:none}
+.cm-map.is-reduced .cm-wave{animation:none;opacity:0}
 .cm-map.is-reduced .cm-bld .body-g{transition:none}
 
 /* the camera (useCampusCamera): the map fills its frame and is panned by drag, wheel, keys or the zoom buttons */
