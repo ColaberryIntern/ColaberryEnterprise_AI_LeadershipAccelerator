@@ -16,6 +16,7 @@ import PlatformV2 from './pages/publicV2/PlatformV2';
 import SegmentPageV2 from './pages/publicV2/SegmentPageV2';
 import HowItWorksV2 from './pages/publicV2/HowItWorksV2';
 import AcceleratorV2 from './pages/publicV2/AcceleratorV2';
+import DemoV2 from './pages/publicV2/DemoV2';
 import { readySegments } from './config/v2Segments';
 import OpportunityLabV2 from './pages/publicV2/OpportunityLabV2';
 import TryV2 from './pages/publicV2/TryV2';
@@ -113,6 +114,9 @@ function App() {
             */}
             <Route path="how-it-works" element={<HowItWorksV2 />} />
             <Route path="accelerator" element={<AcceleratorV2 />} />
+            {/* C5.9. Reads nothing from the backend, by design: a page that cannot reach
+                a tenant cannot leak one. */}
+            <Route path="demo" element={<DemoV2 />} />
             {readySegments().map((s) => (
               <Route key={s.slug} path={s.slug} element={<SegmentPageV2 slug={s.slug} />} />
             ))}
