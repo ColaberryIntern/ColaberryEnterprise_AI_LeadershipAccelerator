@@ -236,7 +236,11 @@ export async function linkGovBuildToStudentProject(input: {
     deliveryProjectId: input.deliveryProjectId,
     studentProjectId: input.studentProjectId,
     reason: input.reason,
-    actorIdentityId: input.actorIdentityId ?? null,
+    // Same uuid trap as created_by_identity_id above: the actor reaches us as the admin's EMAIL, but
+    // linkStudentProject writes this straight into DeliveryProjectSourceLink.linked_by_identity_id (a uuid
+    // column). Guard it so an email becomes null — the link still records, with no actor attribution, rather
+    // than failing the whole materialize with "invalid input syntax for type uuid".
+    actorIdentityId: asIdentityId(input.actorIdentityId),
     models: { DeliveryProject, Project, DeliveryProjectSourceLink },
   });
   if (!link.ok) return link; // refusal: no such delivery/student project, or reason required — wire nothing.

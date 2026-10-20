@@ -236,4 +236,19 @@ describe('linkGovBuildToStudentProject — sets the build link ONLY on a real, e
     expect(res).toMatchObject({ ok: true, created: false });
     expect(ctUpdate).toHaveBeenCalledTimes(1);
   });
+
+  it('guards actorIdentityId: a non-uuid actor (the admin EMAIL) becomes null — the source-link write no longer 500s on linked_by_identity_id (a uuid column)', async () => {
+    linkStudentProject.mockResolvedValue({ ok: true, linkId: 'L1', created: true });
+    ctUpdate.mockResolvedValue([1]);
+    await linkGovBuildToStudentProject({ deliveryProjectId: 'dp', studentProjectId: 'sp', reason: 'r', actorIdentityId: 'ali@colaberry.com' });
+    // Reverting the guard to `?? null` lets the email through and fails here — this is the materialize 500 reproduced.
+    expect(linkStudentProject.mock.calls[0][0].actorIdentityId).toBeNull();
+  });
+
+  it('passes a real uuid actor through unchanged — attribution is preserved when the actor resolves to an identity', async () => {
+    linkStudentProject.mockResolvedValue({ ok: true, linkId: 'L1', created: true });
+    ctUpdate.mockResolvedValue([1]);
+    await linkGovBuildToStudentProject({ deliveryProjectId: 'dp', studentProjectId: 'sp', reason: 'r', actorIdentityId: '11111111-1111-4111-8111-111111111111' });
+    expect(linkStudentProject.mock.calls[0][0].actorIdentityId).toBe('11111111-1111-4111-8111-111111111111');
+  });
 });
