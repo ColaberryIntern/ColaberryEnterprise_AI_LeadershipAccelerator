@@ -22,7 +22,8 @@ const idFindAll = jest.fn();
 jest.mock('../../../models/PlatformIdentity', () => ({ __esModule: true, default: { findAll: (...a: any[]) => idFindAll(...a) } }));
 const getConsoleRoster = jest.fn();
 jest.mock('../../internship/internConsoleRoster', () => ({ __esModule: true, getConsoleRoster: (...a: any[]) => getConsoleRoster(...a) }));
-jest.mock('../../../modules/identity/platformIdentityService', () => ({ __esModule: true, normalizeEmail: (e: any) => String(e ?? '').trim().toLowerCase() }));
+const ensurePlatformIdentity = jest.fn();
+jest.mock('../../../modules/identity/platformIdentityService', () => ({ __esModule: true, normalizeEmail: (e: any) => String(e ?? '').trim().toLowerCase(), ensurePlatformIdentity: (...a: any[]) => ensurePlatformIdentity(...a) }));
 
 // Keep the REAL permission logic (hasDeliveryPermission + the role grant map); stub ONLY the membership read so the
 // test controls the assignee's roles. A mutant that drops the story.execute check therefore fails a real-grant test.
@@ -126,21 +127,24 @@ describe('listAssignableBuilders — only real builders, via the real grant map'
 });
 
 describe('listActiveInternsForAssignment — all active interns, UNASSIGNED first', () => {
-  it('resolves interns to platform identities by email, drops the unresolvable, and lists no-project first', async () => {
+  it('resolves existing identities by email AND backfills a missing one so every active intern is assignable (no-project first)', async () => {
     getConsoleRoster.mockResolvedValue([
       { enrollment_id: 'e1', name: 'Zoe Assigned', email: 'Zoe@x.com', project: { project_id: 'p1' } },
       { enrollment_id: 'e2', name: 'Amy Available', email: 'amy@x.com', project: null },
-      { enrollment_id: 'e3', name: 'Ghost NoIdentity', email: 'ghost@x.com', project: null }, // no identity -> dropped
+      { enrollment_id: 'e3', name: 'Ghost NoIdentity', email: 'ghost@x.com', project: null }, // no identity row -> backfilled, not dropped
     ]);
     idFindAll.mockResolvedValue([
       { id: 'id-zoe', primary_email: 'zoe@x.com' },
       { id: 'id-amy', primary_email: 'amy@x.com' },
     ]);
+    ensurePlatformIdentity.mockImplementation(async ({ email }: any) => ({ identity: { id: 'id-' + String(email).split('@')[0] }, created: true }));
     const out = await listActiveInternsForAssignment();
-    expect(out.map((o) => o.name)).toEqual(['Amy Available', 'Zoe Assigned']); // no-project (Amy) first
+    expect(out.map((o) => o.name)).toEqual(['Amy Available', 'Ghost NoIdentity', 'Zoe Assigned']); // both no-project first, by name
     expect(out.find((o) => o.name === 'Amy Available')).toMatchObject({ identityId: 'id-amy', hasProject: false });
     expect(out.find((o) => o.name === 'Zoe Assigned')).toMatchObject({ identityId: 'id-zoe', hasProject: true });
-    expect(out.some((o) => o.email === 'ghost@x.com')).toBe(false); // unresolvable identity is dropped
+    // the intern with no identity row is BACKFILLED (ensurePlatformIdentity) and appears, instead of silently dropped
+    expect(out.find((o) => o.name === 'Ghost NoIdentity')).toMatchObject({ identityId: 'id-ghost', hasProject: false });
+    expect(ensurePlatformIdentity).toHaveBeenCalledWith(expect.objectContaining({ email: 'ghost@x.com' }));
   });
 
   it('is best-effort — a roster failure yields an empty list, never throws', async () => {
