@@ -5,6 +5,7 @@ import CampusTopBar from '../../../components/campus/home/CampusTopBar';
 import CampusConcierge from '../../../components/campus/home/CampusConcierge';
 import { pulseOf } from '../../../components/campus/home/CampusConcierge';
 import { useHomeFacts } from '../../../components/campus/home/useHomeFacts';
+import CampusGate, { gateSeen } from '../../../components/campus/home/CampusGate';
 import { useCampus } from '../../../components/campus/CampusContext';
 import { useCampusView } from '../../../components/campus/useCampusView';
 import { useCampusWorldProps } from '../../../components/campus/useCampusWorldProps';
@@ -48,6 +49,8 @@ export default function CampusHomePage(): React.ReactElement {
   const [walk, setWalk] = useState<{ id: BuildingId; seq: number } | null>(null);
   const [hereId, setHereId] = useState<BuildingId | null>(null);
   const [cardOpen, setCardOpen] = useState(false);
+  // D7: the entry gate, once per Central day (decided once, on the first render of the page).
+  const [gateOpen, setGateOpen] = useState(() => !gateSeen(new Date()));
   // A card on the map (building, person, tour, locker) tucks the concierge away, as the prototype does; the building whose card
   // opened is where you now are.
   const onCard = useCallback((s: { open: boolean; building: BuildingId | null }) => { setCardOpen(s.open); if (s.building) setHereId(s.building); }, []);
@@ -74,6 +77,9 @@ export default function CampusHomePage(): React.ReactElement {
   const reduce = campus.settings.reduceMotion;
   return (
     <div className={`cm-home cm-scope${reduce ? ' is-reduced' : ''}`} data-testid="cm-home">
+      {gateOpen && <CampusGate audience={audience} firstName={facts.firstName} fullName={facts.fullName} initials={facts.initials || readParticipant().initials}
+        rung={campus.look?.rung_name || null} points={campus.look?.points ?? null} streak={facts.streak} online={online} workplace={campus.settings.workplaceNames}
+        hasTour={!!tour} reduceMotion={reduce} now={new Date()} onEnter={(t) => { setGateOpen(false); if (t) campus.startTour(); }} />}
       <CampusWorld {...props} insets={HOME_INSETS} walkTo={walk} onCard={onCard} />
       <CampusTopBar audience={audience} online={online} points={campus.look?.points ?? null} rung={campus.look?.rung_name || null}
         streak={facts.streak} initials={facts.initials || readParticipant().initials} onList={campus.openList} />

@@ -6,11 +6,12 @@ import { fetchOnboardingProfile, fetchStreak } from '../../../services/onboardin
  * greeting and, for enrolled learners, their streak. Both are reads (GET), so a view-as session is safe. Either can fail on its
  * own: no name means a greeting without one (never the email prefix, as TodayShell), no streak means no streak in the top bar.
  */
-export interface HomeFacts { firstName: string; initials: string; streak: number | null }
+export interface HomeFacts { firstName: string; fullName: string; initials: string; streak: number | null }
 
 export function useHomeFacts(wantStreak: boolean): HomeFacts {
   const [firstName, setFirstName] = useState('');
   const [initials, setInitials] = useState('');
+  const [fullName, setFullName] = useState('');
   const [streak, setStreak] = useState<number | null>(null);
   useEffect(() => {
     let alive = true;
@@ -19,6 +20,7 @@ export function useHomeFacts(wantStreak: boolean): HomeFacts {
         if (!alive) return;
         const parts = (p?.profile?.full_name ?? '').trim().split(/\s+/).filter(Boolean);
         setFirstName(parts[0] || '');
+        setFullName(parts.join(' '));
         setInitials(parts.length ? (parts[0][0] + (parts.length > 1 ? parts[parts.length - 1][0] : '')).toUpperCase() : '');
       })
       .catch(() => { /* no name: the greeting goes without one */ });
@@ -29,7 +31,7 @@ export function useHomeFacts(wantStreak: boolean): HomeFacts {
     }
     return () => { alive = false; };
   }, [wantStreak]);
-  return { firstName, initials, streak };
+  return { firstName, fullName, initials, streak };
 }
 
 /** "Good morning" / "Good afternoon" / "Good evening" from the hour (the viewer's own clock, as the prototype's greeting). */
