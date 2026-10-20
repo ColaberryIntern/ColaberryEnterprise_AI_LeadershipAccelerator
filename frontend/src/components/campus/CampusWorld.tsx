@@ -16,6 +16,8 @@ import type { Equipped } from './campusGear';
 import type { CameraApi, InsetsOf } from './useCampusCamera';
 import type { Viewport } from './campusCamera';
 import CampusZoomControls from './CampusZoomControls';
+import { happeningAt, zoneLabelOf } from './campusArrival';
+import { buildingLine } from './tourSteps';
 
 /**
  * Map + building card, with the keyboard contract (Campus C2):
@@ -61,9 +63,12 @@ export interface CampusWorldProps {
   insets?: InsetsOf;
   /** C11b: walk to this building now, from outside the map (the home's pulse, plan and search). A new seq means a new walk. */
   walkTo?: { id: BuildingId; seq: number } | null;
+  /** C11b: told whenever a card opens or closes (a building card, a person card, the tour, a panel), with the building whose card is
+   *  open (null for the others), so the home can tuck its concierge and say where you are. */
+  onCard?: (state: { open: boolean; building: BuildingId | null }) => void;
 }
 
-export default function CampusWorld({ buildings, audience, hasFullAccess, accessOf: accessOfProp, isExplorer = false, workplaceNames, reduceMotion, initialTarget, onExit, onNavigate, presence, presenceError = false, onEnterRoom, staffDesks, personCard, onOpenPerson, onClosePerson, onAir, route, tour, panel, ownGear, insets, walkTo }: CampusWorldProps): React.ReactElement {
+export default function CampusWorld({ buildings, audience, hasFullAccess, accessOf: accessOfProp, isExplorer = false, workplaceNames, reduceMotion, initialTarget, onExit, onNavigate, presence, presenceError = false, onEnterRoom, staffDesks, personCard, onOpenPerson, onClosePerson, onAir, route, tour, panel, ownGear, insets, walkTo, onCard }: CampusWorldProps): React.ReactElement {
   const counts = useMemo(() => {
     const out: Record<string, number> = {};
     if (presence) for (const [id, a] of Object.entries(presence)) out[id] = a.count;
@@ -117,9 +122,18 @@ export default function CampusWorld({ buildings, audience, hasFullAccess, access
     if (walkTo && walkTo.seq !== lastOutside.current) { lastOutside.current = walkTo.seq; setOpen(null); setWalkRequest((w) => ({ id: walkTo.id, seq: (w?.seq ?? 0) + 1 })); }
   }, [walkTo]);
 
+  // "Go somewhere else": close the card and put the caret in the campus search (the home's top bar, or a page banner).
+  const elsewhere = useCallback(() => {
+    setOpen(null);
+    document.querySelector<HTMLInputElement>('.cm-whereto-input')?.focus();
+  }, []);
   const b = open ? buildings.find((x) => x.id === open) : undefined;
+  const anyCard = !!tour || !!panel || !!personCard || !!b;
+  const cardBuilding = !tour && !panel && !personCard && b ? b.id : null;
+  const onCardRef = useRef(onCard); onCardRef.current = onCard;
+  useEffect(() => { onCardRef.current?.({ open: anyCard, building: cardBuilding }); }, [anyCard, cardBuilding]);
   return (
-    <div className="cm-world" onKeyDown={onKeyDown}>
+    <div className={`cm-world${anyCard ? ' has-card' : ''}`} onKeyDown={onKeyDown}>
       <CampusWorldMap buildings={buildings} accessOf={accessOf} workplaceNames={workplaceNames} reduceMotion={reduceMotion}
         initialTarget={initialTarget} onArrive={onArrive} buildingRef={registerEl} counts={presenceError ? undefined : counts}
         people={people} onPickPerson={onOpenPerson ? pickPerson : undefined} walkRequest={walkRequest} onAir={onAir} route={route} ownGear={ownGear} showOpen={audience === 'explorer'} camera={camera} />
@@ -133,6 +147,8 @@ export default function CampusWorld({ buildings, audience, hasFullAccess, access
           onWalkOver={() => { const id = personCard.buildingId; onClosePerson?.(); setWalkRequest((w) => ({ id, seq: (w?.seq ?? 0) + 1 })); }} />;
       })()}
       {!tour && !panel && b && !personCard && <BuildingCard building={b} access={accessOf(b)} workplaceNames={workplaceNames} onClose={closeCard} onNavigate={onNavigate}
+        zoneLabel={zoneLabelOf(b)} line={buildingLine(audience, b.id)} onElsewhere={elsewhere}
+        happening={happeningAt(b.id, { onAir: !!onAir?.has(b.id), routeIndex: route ? route.indexOf(b.id) : -1, count: presence ? counts[b.id] ?? 0 : null, presenceError })}
         onEnterRoom={onEnterRoom ? (route) => onEnterRoom(route, els.current.get(b.id)?.getBoundingClientRect() ?? null) : undefined}
         desks={staffDesks ? desksForBuilding(staffDesks, b.id, audience) : undefined}
         children={b.id === 'gate' && isExplorer ? <ExplorerPath onNavigate={onNavigate}

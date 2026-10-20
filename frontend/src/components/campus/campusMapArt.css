@@ -57,3 +57,4 @@
 .cm-zoom button+button{border-top:1px solid var(--cm-art-label-edge)}
 .cm-zoom button:hover{background:var(--cm-art-paving)}
 .cm-zoom button:focus-visible{outline:3px solid var(--cm-art-red);outline-offset:-3px}
+.cm-world.has-card .cm-zoom{display:none}

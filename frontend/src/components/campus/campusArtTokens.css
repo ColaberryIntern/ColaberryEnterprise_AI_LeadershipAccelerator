@@ -49,6 +49,8 @@
   --cm-art-help-bg:#fff8e6; --cm-art-help-edge:#ecd9a8; --cm-art-help-hover:#b07a00;
   --cm-art-plan-bg:#f2faf8; --cm-art-plan-edge:#cde4df; --cm-art-plan:#0f766e; --cm-art-plan-hover:#eaf5f2;
   --cm-art-pass-bg:#f5fbf7; --cm-art-pass-edge:#cfe7d6; --cm-art-explorer-tint:#e8f5ec; --cm-art-business-tint:#e6eef6;
+  /* arrival-panel heroes: each building's hue, darkened until white text reaches 4.5:1 (computed; WCAG AA) */
+  --cm-art-hero-lecture:#c0392b; --cm-art-hero-library:#3d4a66; --cm-art-hero-tower:#7a4a7a; --cm-art-hero-studio:#2f6f73; --cm-art-hero-amphi:#98691e; --cm-art-hero-testing:#2b5d8a; --cm-art-hero-observatory:#465a8c; --cm-art-hero-commons:#98691e; --cm-art-hero-gallery:#b4533a; --cm-art-hero-career:#1f4f7a; --cm-art-hero-arcade:#6b2fa0; --cm-art-hero-gate:#2a221b;
   --cm-art-level:#ffd23d; --cm-art-level-ink:#1b1622; --cm-art-live-card:#17131c; --cm-art-on-dark:#ffffff;
 }
 [data-theme="dark"]{

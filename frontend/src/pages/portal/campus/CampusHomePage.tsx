@@ -47,6 +47,10 @@ export default function CampusHomePage(): React.ReactElement {
   const facts = useHomeFacts(audience === 'member');
   const [walk, setWalk] = useState<{ id: BuildingId; seq: number } | null>(null);
   const [hereId, setHereId] = useState<BuildingId | null>(null);
+  const [cardOpen, setCardOpen] = useState(false);
+  // A card on the map (building, person, tour, locker) tucks the concierge away, as the prototype does; the building whose card
+  // opened is where you now are.
+  const onCard = useCallback((s: { open: boolean; building: BuildingId | null }) => { setCardOpen(s.open); if (s.building) setHereId(s.building); }, []);
   const goTo = useCallback((id: BuildingId) => { setHereId(id); setWalk((w) => ({ id, seq: (w?.seq ?? 0) + 1 })); }, []);
   const stay = useCallback(() => undefined, []);
   const { props, tour } = useCampusWorldProps(stay, stay, null);
@@ -70,10 +74,10 @@ export default function CampusHomePage(): React.ReactElement {
   const reduce = campus.settings.reduceMotion;
   return (
     <div className={`cm-home cm-scope${reduce ? ' is-reduced' : ''}`} data-testid="cm-home">
-      <CampusWorld {...props} insets={HOME_INSETS} walkTo={walk} />
+      <CampusWorld {...props} insets={HOME_INSETS} walkTo={walk} onCard={onCard} />
       <CampusTopBar audience={audience} online={online} points={campus.look?.points ?? null} rung={campus.look?.rung_name || null}
         streak={facts.streak} initials={facts.initials || readParticipant().initials} onList={campus.openList} />
-      <CampusConcierge audience={audience} firstName={facts.firstName} hereName={here ? buildingName(here, campus.settings.workplaceNames) : 'main gate'}
+      <CampusConcierge tucked={cardOpen} audience={audience} firstName={facts.firstName} hereName={here ? buildingName(here, campus.settings.workplaceNames) : 'main gate'}
         buildings={buildings} accessOf={accessOf} workplaceNames={campus.settings.workplaceNames} presence={campus.presence} presenceError={campus.presenceError}
         desks={campus.staffDesks} stops={campus.planStops} live={live} hasTour={!!tour && campus.tourIndex === null} now={new Date()}
         onWalk={goTo} onTour={campus.startTour} />

@@ -15,6 +15,8 @@ import { greetingFor } from './useHomeFacts';
  * "I want to..." chips that walk to a building. Everything comes from the campus state; nothing is staged.
  */
 export interface ConciergeProps {
+  /** Hidden while a card is open on the map (the prototype's .cc.tucked). */
+  tucked?: boolean;
   audience: CampusAudience;
   firstName: string;
   hereName: string;
@@ -71,7 +73,7 @@ export default function CampusConcierge(p: ConciergeProps): React.ReactElement {
   const who = audience === 'member' ? 'classmates' : 'people';
   const greeting = `${greetingFor(p.now.getHours())}${p.firstName ? `, ${p.firstName}` : ''}.`;
   return (
-    <aside className="cm-cc" aria-label="Campus concierge" data-testid="cm-concierge">
+    <aside className={`cm-cc${p.tucked ? ' is-tucked' : ''}`} aria-label="Campus concierge" data-testid="cm-concierge" hidden={p.tucked}>
       <div className="cm-kicker" data-testid="cm-cc-where">At the {p.hereName}</div>
       <h1 data-testid="cm-cc-greeting">{greeting}</h1>
       <p className="cm-lead" data-testid="cm-cc-lead">{leadFor(p, next)}</p>

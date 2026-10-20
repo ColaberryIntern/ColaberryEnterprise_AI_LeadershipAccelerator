@@ -61,7 +61,7 @@ const flush = async () => { for (let i = 0; i < 8; i += 1) await act(async () =>
 const q = (s: string) => container.querySelector(s);
 
 async function mount(path: string, nav: 'campus' | 'classic' = 'campus'): Promise<void> {
-  window.localStorage.setItem(CAMPUS_SETTINGS_KEY, JSON.stringify({ nav, workplaceNames: false, motion: 'off' }));
+  window.localStorage.setItem(CAMPUS_SETTINGS_KEY, JSON.stringify({ nav, workplaceNames: false, motion: 'on' })); // 'on' = reduce motion: arrivals are instant
   container = document.createElement('div');
   document.body.appendChild(container);
   await act(async () => {
@@ -179,6 +179,19 @@ describe('the campus home', () => {
     await flush();
     expect(q('[data-testid="cm-overlay"]')).toBeNull();
     expect(q('[data-testid="cm-cc-where"]')!.textContent).toBe('At the Library');
+  });
+
+  it('arriving opens the arrival panel and tucks the concierge away; closing it brings the concierge back', async () => {
+    await mount('/portal/campus');
+    act(() => { q('[data-testid="cm-bld-commons"]')!.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+    await flush();
+    expect(q('[data-testid="cm-card"]')).not.toBeNull();
+    expect((q('[data-testid="cm-concierge"]') as HTMLElement).hidden).toBe(true);
+    expect(q('[data-testid="cm-cc-where"]')!.textContent).toBe('At the Community Lounge');
+    act(() => { (q('[data-testid="cm-arrive-back"]') as HTMLButtonElement).click(); });
+    await flush();
+    expect(q('[data-testid="cm-card"]')).toBeNull();
+    expect((q('[data-testid="cm-concierge"]') as HTMLElement).hidden).toBe(false);
   });
 
   it('a concierge chip walks to its building', async () => {
