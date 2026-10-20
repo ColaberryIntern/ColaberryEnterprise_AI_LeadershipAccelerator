@@ -36,6 +36,7 @@ import AppointmentsAutomationTab from '../../components/admin/person/Appointment
 import DataTrustTab from '../../components/admin/person/DataTrustTab';
 import EnrolmentsTab from '../../components/admin/person/EnrolmentsTab';
 import ExplorerScoreTab from '../../components/admin/person/ExplorerScoreTab';
+import SalesReadinessTab from '../../components/admin/person/SalesReadinessTab';
 import PaymentRecordTab from '../../components/admin/person/PaymentRecordTab';
 import SiteActivityTab from '../../components/admin/person/SiteActivityTab';
 
@@ -362,6 +363,12 @@ export default function PersonProfilePage() {
 
           {/* ── Explorer score (T212) ────────────────────────────────────── */}
           {tab === 'explorer' && <ExplorerScoreTab panel={profile.explorerScore} />}
+          {tab === 'readiness' && (
+            <SalesReadinessTab
+              score={profile.salesReadiness}
+              freshness={profile.salesReadinessFreshness}
+            />
+          )}
 
           {/* ── Notes & activity ─────────────────────────────────────────── */}
           {tab === 'notes' && acq?.leadId && (

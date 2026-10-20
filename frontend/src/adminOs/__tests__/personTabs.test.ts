@@ -152,3 +152,47 @@ describe('tab ORDER is the nav order, and is not alphabetical', () => {
     expect(keys[keys.length - 1]).toBe('trust');
   });
 });
+
+/**
+ * M26 - the Sales Readiness tab obeys the same gate as the Explorer one.
+ *
+ * The score is composed by the route from panels the caller was already permitted, so an absent
+ * key means the role could not see the evidence it would need, and the tab should not appear.
+ * A present score always earns the tab, even a thin one, because the panel's own job is to say
+ * which factors had no evidence.
+ */
+const readiness = {
+  rulesetVersion: 'srs-v2-provisional-2026-10-18',
+  computedAt: '2026-10-18T12:00:00.000Z',
+  total: 0,
+  scoreableMax: 0,
+  rulesetMax: 197,
+  coverage: 0,
+  factors: [],
+  frictionFlag: false,
+  oldestEvidenceAt: null,
+} as NonNullable<Profile['salesReadiness']>;
+
+describe('the Sales readiness tab', () => {
+  it('appears for a score with NO evidence at all, rather than hiding', () => {
+    // The load-bearing case, and the mirror of the Explorer one. A person we know nothing about
+    // still earns the tab, so the panel can say "no evidence" factor by factor. Hiding it would
+    // make an unscoreable person look like one whose role withheld the evidence.
+    expect(keysOf({ ...base, salesReadiness: readiness })).toContain('readiness');
+  });
+
+  it('appears for a populated score', () => {
+    const scored = { ...readiness, total: 61, scoreableMax: 92, coverage: 0.77 };
+    expect(keysOf({ ...base, salesReadiness: scored })).toContain('readiness');
+  });
+
+  it('is ABSENT when the key is undefined', () => {
+    expect(keysOf(base)).not.toContain('readiness');
+  });
+
+  it('carries no count, because a factor count beside a score reads as the score', () => {
+    const tab = buildPersonTabs({ ...base, salesReadiness: readiness }, null, null)
+      .find((t) => t.key === 'readiness');
+    expect(tab?.count).toBeUndefined();
+  });
+});
