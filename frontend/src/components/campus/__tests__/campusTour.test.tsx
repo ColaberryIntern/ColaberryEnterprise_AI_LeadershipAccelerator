@@ -71,6 +71,10 @@ const click = async (id: string) => { await act(async () => { q(id)!.click(); })
 const avatarAt = () => container.querySelector('[data-testid="cm-avatar"]')?.getAttribute('transform') ?? '';
 const doorFor = (id: string) => { const d = doorOf(CAMPUS_BUILDINGS.find((b) => b.id === id)!); return `translate(${d.x} ${d.y})`; };
 
+// C11b: the illustrated map is ~5x the DOM of the C2 outlines (377 vs 77 nodes; trees, paths, windows), and these suites mount
+// the whole campus (up to three maps) and some run axe over it; a cold first render under parallel jest can pass 5 s.
+jest.setTimeout(15000);
+
 describe('starting the tour', () => {
   it('the side column button opens the map on stop 1 of 9, focus on the stop heading, the avatar at its door', async () => {
     await mount();

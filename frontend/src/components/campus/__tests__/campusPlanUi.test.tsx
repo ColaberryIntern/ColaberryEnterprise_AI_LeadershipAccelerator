@@ -84,6 +84,10 @@ afterEach(() => { act(() => root.unmount()); container.remove(); window.localSto
 const loc = () => container.querySelector('[data-testid="loc"]')?.textContent;
 const next = () => container.querySelector('[data-testid="cm-next"]') as HTMLButtonElement | null;
 
+// C11b: the illustrated map is ~5x the DOM of the C2 outlines (377 vs 77 nodes; trees, paths, windows), and these suites mount
+// the whole campus (up to three maps) and some run axe over it; a cold first render under parallel jest can pass 5 s.
+jest.setTimeout(15000);
+
 describe('when the plan is read', () => {
   it('flag off: no plan request at all, no Next', async () => {
     mockPlanFlag = false;
@@ -134,7 +138,7 @@ describe('the route on the full map', () => {
     await flush();
     const stops = Array.from(container.querySelectorAll('[data-testid^="cm-route-stop-"]')).map((g) => [g.getAttribute('data-testid'), g.textContent]);
     expect(stops).toEqual([['cm-route-stop-tower', '1'], ['cm-route-stop-studio', '2']]);
-    expect(container.querySelector('[data-testid="cm-route-tower"]')?.getAttribute('class')).toBe('cm-path is-route');
+    expect(container.querySelector('[data-testid="cm-route-tower"]')?.getAttribute('class')).toBe('cm-route-line');
   });
   it('the mini-map in the banner draws no route', async () => {
     await mount('/portal/library');

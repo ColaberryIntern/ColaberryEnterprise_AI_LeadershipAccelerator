@@ -53,6 +53,10 @@ const q = (sel: string) => container.querySelector(sel) as HTMLElement | null;
 const click = (el: Element) => act(() => { el.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
 const esc = (el: Element) => act(() => { el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); });
 
+// C11b: the illustrated map is ~5x the DOM of the C2 outlines (377 vs 77 nodes; trees, paths, windows), and these suites mount
+// the whole campus (up to three maps) and some run axe over it; a cold first render under parallel jest can pass 5 s.
+jest.setTimeout(15000);
+
 describe('campus map overlay', () => {
   it('Esc closes the open card first, then the overlay, and focus returns to the opener', async () => {
     mockAudience = 'member';

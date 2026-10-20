@@ -76,6 +76,10 @@ afterEach(() => {
   delete (HTMLElement.prototype as unknown as { animate?: unknown }).animate;
 });
 
+// C11b: the illustrated map is ~5x the DOM of the C2 outlines (377 vs 77 nodes; trees, paths, windows), and these suites mount
+// the whole campus (up to three maps) and some run axe over it; a cold first render under parallel jest can pass 5 s.
+jest.setTimeout(15000);
+
 describe('enter through the door', () => {
   it('with motion: shows the panel, animates, and navigates once when the animation finishes', async () => {
     await mount(false);

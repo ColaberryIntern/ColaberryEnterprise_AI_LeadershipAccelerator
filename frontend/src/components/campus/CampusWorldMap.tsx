@@ -7,33 +7,42 @@ import type { CampusPerson } from './campusApi';
 import { GearOnHead, RideUnder } from './AvatarGear';
 import { publicOnly } from './campusGear';
 import type { Equipped } from './campusGear';
+import BuildingArt from './art/BuildingArt';
+import { MainGateArt } from './art/MainGate';
+import { GroundPatterns, Ground, QuadAndPaths, District, Trees, AVE, GATE, HUB } from './art/grounds';
+import type { PathDoor } from './art/grounds';
+import { doorOf, routeTo, START } from './walkPath';
+import type { Here, Pt } from './walkPath';
+import './campusMapArt.css';
 
 /**
- * The campus world (Campus C2): an SVG map drawn from the catalog. Original art only - simple
- * pediment, tower, block, amphitheater and arcade shapes, colored by shell tokens in campus.css.
+ * The campus world, drawn as the prototype draws it (C11b; docs/design/campus/colaberry-campus.html): grass, the paved business
+ * district, the quad with its fountain, two-tone paths, trees, and every building in its own roof family, standing on its ground
+ * line with a name pill below. Colors are art tokens only (campusArtTokens.css).
  *
- * Buildings are real buttons (role=button, in Tab order, Enter/Space activate) so the map is
- * usable without a pointer. In full mode a pick walks the avatar along the paths to the door
- * (requestAnimationFrame) and then calls onArrive; with reduce motion it arrives at once and
- * never schedules a frame. Compact mode (the side column) has no avatar: a pick is reported
- * straight away so the caller can open the full map at that building.
+ * Buildings are real buttons (role=button, in Tab order, Enter/Space activate) so the map is usable without a pointer. In full
+ * mode a pick walks the avatar along the paths (walkPath.routeTo: hub for the upper campus, the avenue for the lower one) to the
+ * door (requestAnimationFrame) and then calls onArrive; with reduce motion it arrives at once and never schedules a frame.
+ * Compact mode (the side column, the banner) is a picture: no avatar, no labels, no tab stops; a pick is reported straight away.
  */
 
+export { doorOf } from './walkPath';
 export const WORLD = { w: 1000, h: 700 };
-export const QUAD = { x: 500, y: 430 };
 const SPEED = 900; // world units per second
 
-type Pt = { x: number; y: number };
-// The avatar stands on the door step (the pin's tip is its position), above the building's label.
-export const doorOf = (b: Pick<CampusBuilding, 'pos'>): Pt => ({ x: b.pos.x, y: b.pos.y + b.pos.h / 2 + 2 });
-
-/** How far a building's roof rises above its body, so the access chip sits clear of it. */
-function roofRise(b: CampusBuilding): number {
-  const { h } = b.pos;
-  if (b.id === 'lecture' || b.id === 'library' || b.id === 'testing' || b.id === 'amphi') return h * 0.45;
-  if (b.id === 'observatory') return h * 0.7;
-  if (b.id === 'arcade') return 14;
-  return 6;
+/** How far above the ground line a building's roof reaches (local frame), so chips sit clear of it. Mirrors art/roofs*.tsx. */
+function roofTop(b: CampusBuilding): number {
+  const { w, h } = b.pos;
+  switch (b.kind) {
+    case 'pediment': return -h - 28;
+    case 'gable': return -h - 32;
+    case 'tower': return -h - 34;
+    case 'dome': return -h - w / 2;
+    case 'office': return -h - 15;
+    case 'arcade': return -h - 20;
+    case 'gate': return -48;
+    default: return -h - 8;
+  }
 }
 
 export interface CampusMapProps {
@@ -62,98 +71,93 @@ export interface CampusMapProps {
   route?: BuildingId[];
 }
 
-function Roof({ b }: { b: CampusBuilding }): React.ReactElement {
-  const { x, y, w, h } = b.pos;
-  const left = x - w / 2, top = y - h / 2;
-  switch (b.id) {
-    case 'lecture': case 'library': case 'testing': case 'observatory':
-      return b.id === 'observatory'
-        ? <path className="cm-roof" d={`M${left} ${top} A ${w / 2} ${h * 0.7} 0 0 1 ${left + w} ${top} Z`} />
-        : <polygon className="cm-roof" points={`${left - 6},${top} ${x},${top - h * 0.45} ${left + w + 6},${top}`} />;
-    case 'tower':
-      return <circle className="cm-detail" cx={x} cy={top + 18} r={12} />;
-    case 'amphi':
-      return <path className="cm-roof cm-arch" d={`M${left} ${top + h * 0.2} A ${w / 2} ${h * 0.65} 0 0 1 ${left + w} ${top + h * 0.2}`} />;
-    case 'arcade':
-      return <rect className="cm-roof" x={left} y={top - 14} width={w} height={16} rx={3} />;
-    case 'gate':
-      return <path className="cm-roof cm-arch" d={`M${left} ${top + h} V ${top + 10} A ${w / 2} 18 0 0 1 ${left + w} ${top + 10} V ${top + h}`} />;
-    default:
-      return <rect className="cm-roof" x={left} y={top - 6} width={w} height={8} />;
-  }
-}
-
-/** C8: a building whose room is on air. Drawn at the roof's left (the head count sits at the right), large on the small maps. */
+/** C8: a building whose room is on air: the prototype's badge spot, right of the roof (the head count sits left). */
 function OnAirBadge({ b, compact }: { b: CampusBuilding; compact: boolean }): React.ReactElement {
-  const { x, y, w, h } = b.pos;
-  const bw = compact ? 170 : 62, bh = compact ? 70 : 22;
-  const bx = x - w / 2 - 6, by = y - h / 2 - bh / 2 - (compact ? 10 : 0);
+  const hw = b.pos.w / 2;
+  const bw = compact ? 170 : 54, bh = compact ? 70 : 18;
+  const y = b.kind === 'amphi' ? -30 : -b.pos.h + 14;
   return (
-    <g className="cm-onair" aria-hidden="true" data-testid={`cm-onair-${b.id}`}>
-      <rect x={bx} y={by} width={bw} height={bh} rx={bh / 2} />
-      <text x={bx + bw / 2} y={by + bh / 2 + (compact ? 17 : 4)} textAnchor="middle">ON AIR</text>
+    <g className="cm-onair" aria-hidden="true" data-testid={`cm-onair-${b.id}`} transform={`translate(${hw + 6} ${y - (compact ? 40 : 0)})`}>
+      <rect x={0} y={-bh / 2} width={bw} height={bh} rx={bh / 2} />
+      <text x={bw / 2} y={compact ? 17 : 3.5} textAnchor="middle">ON AIR</text>
     </g>
   );
 }
 
-/** Live head count on a building (C4). Rendered only for a real count above zero. */
+/** Live head count on a building (C4), at the prototype's people-chip spot (right-aligned left of the body). Real counts above zero only. */
 function CountChip({ b, count, compact }: { b: CampusBuilding; count: number; compact: boolean }): React.ReactElement {
-  const { x, y, w, h } = b.pos;
-  // The side-column map renders the 1000-unit world at about a fifth of its size, so its chip is
-  // drawn large enough to read there (about 24 x 16 px on screen).
-  const cw = compact ? 110 : 40, ch = compact ? 76 : 24;
-  const cx = x + w / 2 - cw / 2 + 6, cy = y - h / 2 - ch / 2 - (compact ? 10 : 0);
+  const hw = b.pos.w / 2;
+  // The side-column map renders the 1000-unit world at about a fifth of its size, so its chip is drawn large enough to read there.
+  const cw = compact ? 110 : 30, ch = compact ? 76 : 18;
+  const y = b.kind === 'office' ? -34 : b.kind === 'amphi' ? -30 : -b.pos.h + 14;
   return (
-    <g className="cm-count" data-count={count} aria-hidden="true">
-      <rect x={cx} y={cy} width={cw} height={ch} rx={ch / 2} />
-      <text x={cx + cw / 2} y={cy + ch / 2 + (compact ? 19 : 5)} textAnchor="middle">{count}</text>
+    <g className="cm-count" data-count={count} aria-hidden="true" transform={`translate(${-hw - 6} ${y - (compact ? 40 : 0)})`}>
+      <rect x={-cw} y={-ch / 2} width={cw} height={ch} rx={ch / 2} />
+      <text x={-cw / 2} y={compact ? 19 : 3.5} textAnchor="middle">{count}</text>
     </g>
   );
 }
 
 // C11 (the map stays light): memoized, so a walking avatar (one state update per frame) does not re-render every building.
-const Building = memo(function Building({ b, access, label, compact, count, onAir = false, onPick, setRef }: {
-  b: CampusBuilding; access: ExplorerAccess; label: string; compact: boolean; count: number; onAir?: boolean;
+const Building = memo(function Building({ b, access, label, compact, count, onAir = false, here = false, onPick, setRef }: {
+  b: CampusBuilding; access: ExplorerAccess; label: string; compact: boolean; count: number; onAir?: boolean; here?: boolean;
   onPick: (id: BuildingId) => void; setRef?: (id: BuildingId, el: SVGGElement | null) => void;
 }): React.ReactElement {
-  const { x, y, w, h } = b.pos;
   const chip = accessLabel(access);
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onPick(b.id); }
   };
   const aria = [label, onAir ? 'on air now' : null, chip, count > 0 ? `${count} here now` : null].filter(Boolean).join(', ');
-  // C11: compact maps (banner, side nav) are pictures, not controls. The banner's map sits inside its own button and the
-  // side nav lists every building as a link right below, so focusable buildings there were 12 duplicate, unlabeled-in-
-  // context tab stops (inside aria-hidden in the banner). A pointer click on the nav map still opens the full map.
+  // C11: compact maps (banner, side nav) are pictures, not controls: the banner's map sits inside its own button and the side
+  // nav lists every building as a link right below. A pointer click on the nav map still opens the full map.
   const a11y = compact ? {} : { role: 'button', tabIndex: 0, 'aria-label': aria, onKeyDown };
+  const isGate = b.kind === 'gate';
   return (
     <g
       ref={(el) => setRef?.(b.id, el)}
-      className={`cm-bld cm-b-${b.id}${access === 'locked' ? ' is-locked' : ''}`}
+      className={`cm-bld cm-b-${b.id}${access === 'locked' ? ' is-locked' : ''}${here ? ' is-here' : ''}${onAir ? ' onair' : ''}`}
       {...a11y}
-      data-building={b.id} onClick={() => onPick(b.id)}
+      data-building={b.id} data-testid={`cm-bld-${b.id}`} onClick={() => onPick(b.id)}
+      transform={`translate(${isGate ? GATE.x : b.pos.x} ${isGate ? GATE.y : b.pos.y})`}
     >
-      {b.id !== 'gate' && <rect className="cm-body" x={x - w / 2} y={y - h / 2} width={w} height={h} rx={4} />}
-      {/* The gate is only an arch outline; this invisible area makes its whole footprint clickable (found in C5
-          screenshots: clicks inside the arch fell through to the path behind it). */}
-      {b.id === 'gate' && <rect className="cm-hit" x={x - w / 2} y={y - h / 2 - 18} width={w} height={h + 18} />}
-      <Roof b={b} />
-      {b.id !== 'gate' && <rect className="cm-door" x={x - 7} y={y + h / 2 - 16} width={14} height={16} rx={2} />}
-      {!compact && <text className="cm-label" x={x} y={y + h / 2 + 22} textAnchor="middle">{label}</text>}
-      {!compact && chip && <text className="cm-chip" x={x} y={y - h / 2 - roofRise(b) - 10} textAnchor="middle">{chip}</text>}
+      {isGate ? <MainGateArt /> : <BuildingArt id={b.id} kind={b.kind as Exclude<CampusBuilding['kind'], 'gate'>} w={b.pos.w} h={b.pos.h} label={compact ? undefined : label} />}
+      {!compact && chip && <text className="cm-chip" x={0} y={roofTop(b) - 8} textAnchor="middle">{chip}</text>}
       {count > 0 && <CountChip b={b} count={count} compact={compact} />}
       {onAir && <OnAirBadge b={b} compact={compact} />}
     </g>
   );
 });
 
+// The grounds never change during a walk: one memoized group, so a walk frame or a presence poll does not re-render ~200 nodes.
+const Scenery = memo(function Scenery({ doors, gateIsBuilding }: { doors: PathDoor[]; gateIsBuilding: boolean }): React.ReactElement {
+  return (
+    <>
+      <GroundPatterns />
+      <Ground />
+      <QuadAndPaths doors={doors} />
+      <District />
+      <Trees />
+      {/* The gate is scenery for everyone (the prototype always draws it); only Explorers and staff get it as a building. */}
+      {!gateIsBuilding && <g transform={`translate(${GATE.x} ${GATE.y})`}><MainGateArt /></g>}
+    </>
+  );
+});
+
+/** The plan route's path to one stop's door, along the campus paths (a spoke from the hub, or up from the avenue). */
+function routeSegment(b: CampusBuilding): string {
+  const d = doorOf(b);
+  if (b.zone === 'up') return `M${HUB.x} ${HUB.y}L${d.x} ${d.y}`;
+  if (b.zone === 'ave') return `M${HUB.x} ${AVE}L${d.x} ${AVE}L${d.x} ${d.y}`;
+  return `M${HUB.x} ${AVE}L${GATE.x} ${GATE.y}`;
+}
+
 export default function CampusWorldMap({ buildings, accessOf, workplaceNames, reduceMotion, compact = false, initialTarget, onArrive, buildingRef, counts, people, onPickPerson, walkRequest, onAir, route, ownGear }: CampusMapProps): React.ReactElement {
-  const [pos, setPos] = useState<Pt>({ x: QUAD.x, y: 640 });
-  const posRef = useRef(pos);
+  const [pos, setPos] = useState<Pt>({ x: START.x, y: START.y });
+  const hereRef = useRef<Here>(START);
   const raf = useRef<number | null>(null);
-  posRef.current = pos;
   // C9: true only while a walk animates (never with reduce motion or on the compact map): the only time a ride is drawn.
   const [moving, setMoving] = useState(false);
+  const [atId, setAtId] = useState<BuildingId | null>(null);
 
   const stop = () => { if (raf.current !== null) { cancelAnimationFrame(raf.current); raf.current = null; } setMoving(false); };
   useEffect(() => stop, []);
@@ -162,13 +166,17 @@ export default function CampusWorldMap({ buildings, accessOf, workplaceNames, re
     const b = buildings.find((x) => x.id === id);
     if (!b) return;
     stop();
-    const door = doorOf(b);
     if (compact) { onArrive(id); return; }
-    if (reduceMotion) { setPos(door); onArrive(id); return; }
-    const pts: Pt[] = [posRef.current, QUAD, door];
+    const door = doorOf(b);
+    const arrive = () => { hereRef.current = { ...door, zone: b.zone }; setAtId(id); onArrive(id); };
+    if (reduceMotion) { setPos(door); arrive(); return; }
+    // A walk cancelled midway starts from where the avatar stands, in the zone it was heading for.
+    const from = hereRef.current;
+    const pts: Pt[] = [{ x: from.x, y: from.y }, ...routeTo(from, b)];
     const seg = pts.slice(1).map((p, i) => Math.hypot(p.x - pts[i].x, p.y - pts[i].y));
     const total = seg.reduce((a, c) => a + c, 0) || 1;
     const duration = (total / SPEED) * 1000;
+    setAtId(null);
     let start: number | null = null;
     const step = (t: number) => {
       if (start === null) start = t;
@@ -176,9 +184,11 @@ export default function CampusWorldMap({ buildings, accessOf, workplaceNames, re
       let acc = 0, i = 0;
       while (i < seg.length - 1 && acc + seg[i] < d) { acc += seg[i]; i += 1; }
       const f = seg[i] ? Math.min(1, (d - acc) / seg[i]) : 1;
-      setPos({ x: pts[i].x + (pts[i + 1].x - pts[i].x) * f, y: pts[i].y + (pts[i + 1].y - pts[i].y) * f });
+      const p = { x: pts[i].x + (pts[i + 1].x - pts[i].x) * f, y: pts[i].y + (pts[i + 1].y - pts[i].y) * f };
+      hereRef.current = { ...p, zone: b.zone };
+      setPos(p);
       if (d < total) raf.current = requestAnimationFrame(step);
-      else { raf.current = null; setMoving(false); onArrive(id); }
+      else { raf.current = null; setMoving(false); arrive(); }
     };
     setMoving(true);
     raf.current = requestAnimationFrame(step);
@@ -190,6 +200,8 @@ export default function CampusWorldMap({ buildings, accessOf, workplaceNames, re
     if (onPickPerson) for (const b of buildings) out[b.id] = (p: CampusPerson) => onPickPerson(p, b.id);
     return out;
   }, [buildings, onPickPerson]);
+  const gateIsBuilding = buildings.some((b) => b.kind === 'gate');
+  const doors = useMemo<PathDoor[]>(() => buildings.filter((b) => b.kind !== 'gate').map((b) => ({ id: b.id, x: b.pos.x, y: b.pos.y, zone: b.zone })), [buildings]);
 
   const started = useRef(false);
   useEffect(() => {
@@ -201,21 +213,21 @@ export default function CampusWorldMap({ buildings, accessOf, workplaceNames, re
   }, [walkRequest, walkTo]);
 
   return (
-    <svg className={`cm-map${compact ? ' is-compact' : ''}`} viewBox={`0 0 ${WORLD.w} ${WORLD.h}`}
+    <svg className={`cm-map${compact ? ' is-compact' : ''}${reduceMotion ? ' is-reduced' : ''}`} viewBox={`0 0 ${WORLD.w} ${WORLD.h}`} data-testid={compact ? undefined : 'cm-world'}
       {...(compact ? { 'aria-hidden': true, focusable: 'false' } : { role: 'group', 'aria-label': 'Campus map' })}>
-      <rect className="cm-ground" x={0} y={0} width={WORLD.w} height={WORLD.h} rx={compact ? 18 : 0} />
-      {buildings.map((b) => { const d = doorOf(b); return <path key={'p-' + b.id} className="cm-path" d={`M${QUAD.x} ${QUAD.y} L${d.x} ${d.y}`} />; })}
+      <Scenery doors={doors} gateIsBuilding={gateIsBuilding} />
       {!compact && route && route.map((id) => {
-        const b = buildings.find((x) => x.id === id); if (!b) return null; const d = doorOf(b);
-        return <path key={'r-' + id} className="cm-path is-route" data-testid={`cm-route-${id}`} d={`M${QUAD.x} ${QUAD.y} L${d.x} ${d.y}`} />;
+        const b = buildings.find((x) => x.id === id); if (!b) return null;
+        return <path key={'r-' + id} className="cm-route-line" data-testid={`cm-route-${id}`} d={routeSegment(b)} aria-hidden="true" />;
       })}
-      <circle className="cm-quad" cx={QUAD.x} cy={QUAD.y} r={compact ? 34 : 28} />
       {buildings.map((b) => (
-        <Building key={b.id} b={b} access={accessOf(b)} label={buildingName(b, workplaceNames)} compact={compact} count={counts?.[b.id] ?? 0} onAir={!!onAir?.has(b.id)} onPick={walkTo} setRef={buildingRef} />
+        <Building key={b.id} b={b} access={accessOf(b)} label={buildingName(b, workplaceNames)} compact={compact} count={counts?.[b.id] ?? 0}
+          onAir={!!onAir?.has(b.id)} here={!compact && atId === b.id} onPick={walkTo} setRef={buildingRef} />
       ))}
       {!compact && route && route.map((id, i) => {
         const b = buildings.find((x) => x.id === id); if (!b) return null;
-        const n = { x: b.pos.x + b.pos.w / 2, y: b.pos.y }; // the right edge: clear of the label (below) and the chips (top corners)
+        // right of the body, half way up: clear of the name pill (below) and the chips (top corners)
+        const n = b.kind === 'gate' ? { x: GATE.x + 46, y: GATE.y - 20 } : { x: b.pos.x + b.pos.w / 2 + 14, y: b.pos.y - b.pos.h / 2 };
         return (
           <g key={'n-' + id} className="cm-route-stop" data-testid={`cm-route-stop-${id}`} aria-hidden="true">
             <circle cx={n.x} cy={n.y} r={12} />
@@ -228,11 +240,14 @@ export default function CampusWorldMap({ buildings, accessOf, workplaceNames, re
         return t ? <PersonTokens key={'t-' + b.id} b={b} shown={t.shown} more={t.more} maxY={WORLD.h} onPick={pickers[b.id]!} /> : null;
       })}
       {!compact && (
-        <g className="cm-avatar" transform={`translate(${pos.x} ${pos.y}) scale(0.8)`} aria-hidden="true" data-testid="cm-avatar">
-          <path className="cm-pin" d="M0 0 C -9 -12 -12 -18 -12 -24 A 12 12 0 1 1 12 -24 C 12 -18 9 -12 0 0 Z" />
-          <circle className="cm-pin-dot" cx={0} cy={-24} r={5} />
-          {ownGear && <GearOnHead gear={publicOnly(ownGear)} cx={0} cy={-24} r={12} />}
-          {ownGear?.ride && moving && !reduceMotion && <RideUnder ride={ownGear.ride} />}
+        <g className={`cm-avatar${moving ? ' is-walking' : ''}`} transform={`translate(${pos.x} ${pos.y})`} aria-hidden="true" data-testid="cm-avatar">
+          <ellipse className="cm-pin-shadow" cx={0} cy={3} rx={7} ry={2.5} />
+          <g className="bob">
+            {ownGear?.ride && moving && !reduceMotion && <RideUnder ride={ownGear.ride} />}
+            <path className="cm-pin" d="M0 2 L-7 -12 A9 9 0 1 1 7 -12 Z" />
+            <circle className="cm-pin-dot" cx={0} cy={-17.7} r={3.6} />
+            {ownGear && <GearOnHead gear={publicOnly(ownGear)} cx={0} cy={-17.7} r={9} />}
+          </g>
         </g>
       )}
     </svg>

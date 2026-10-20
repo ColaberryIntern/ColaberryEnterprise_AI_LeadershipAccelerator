@@ -55,6 +55,10 @@ async function mount(campus: boolean, path = '/portal/sessions'): Promise<void> 
 }
 afterEach(() => { act(() => root.unmount()); container.remove(); });
 
+// C11b: the illustrated map is ~5x the DOM of the C2 outlines (377 vs 77 nodes; trees, paths, windows), and these suites mount
+// the whole campus (up to three maps) and some run axe over it; a cold first render under parallel jest can pass 5 s.
+jest.setTimeout(15000);
+
 describe('PortalLayout with the campus off', () => {
   it('renders exactly as before C3 (snapshot recorded before the change)', async () => {
     await mount(false);

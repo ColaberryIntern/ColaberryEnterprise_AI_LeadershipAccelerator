@@ -74,6 +74,10 @@ const esc = async (el: Element) => { await act(async () => { el.dispatchEvent(ne
 
 afterEach(() => { if (root) act(() => root.unmount()); container?.remove(); window.localStorage.clear(); jest.restoreAllMocks(); });
 
+// C11b: the illustrated map is ~5x the DOM of the C2 outlines (377 vs 77 nodes; trees, paths, windows), and these suites mount
+// the whole campus (up to three maps) and some run axe over it; a cold first render under parallel jest can pass 5 s.
+jest.setTimeout(15000);
+
 describe('map bar: More on phones', () => {
   it('one set of actions: Tour, My look, List view and Settings each render exactly once', async () => {
     await mountCampus();

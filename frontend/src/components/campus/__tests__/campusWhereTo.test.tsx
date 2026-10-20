@@ -78,6 +78,10 @@ async function type(text: string): Promise<void> {
 }
 const key = (k: string) => act(() => { input().dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true })); });
 
+// C11b: the illustrated map is ~5x the DOM of the C2 outlines (377 vs 77 nodes; trees, paths, windows), and these suites mount
+// the whole campus (up to three maps) and some run axe over it; a cold first render under parallel jest can pass 5 s.
+jest.setTimeout(15000);
+
 describe('combobox semantics', () => {
   it('starts collapsed with the combobox wiring in place', async () => {
     await mount();

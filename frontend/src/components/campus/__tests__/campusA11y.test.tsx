@@ -83,6 +83,10 @@ const PERSON = { enrollment_id: 'p-1', display_name: 'Avery Stone', avatar_url: 
 beforeEach(() => { window.localStorage.clear(); document.documentElement.removeAttribute('data-theme'); });
 afterEach(() => { act(() => root.unmount()); container.remove(); window.localStorage.clear(); document.documentElement.removeAttribute('data-theme'); });
 
+// C11b: the illustrated map is ~5x the DOM of the C2 outlines (377 vs 77 nodes; trees, paths, windows), and these suites mount
+// the whole campus (up to three maps) and some run axe over it; a cold first render under parallel jest can pass 5 s.
+jest.setTimeout(15000);
+
 describe('1. compact maps are pictures, not 12 extra tab stops', () => {
   it('the compact map has no tabbable building and is hidden from assistive tech; the full map keeps all of them', async () => {
     const props = { buildings: [...CAMPUS_BUILDINGS], accessOf: () => 'open' as const, workplaceNames: false, reduceMotion: true, onArrive: () => undefined };

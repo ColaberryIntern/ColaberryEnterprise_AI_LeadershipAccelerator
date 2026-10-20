@@ -1,0 +1,49 @@
+/* Colaberry Campus C11b: the prototype's art palette as tokens.
+
+   THE ONE FILE IN components/campus ALLOWED TO HOLD HEX COLORS (campusNoHex names it by exact path; Ali's decision 2026-10-20).
+   Every color here comes from the prototype (docs/design/campus/colaberry-campus.html: :root, drawGround, drawPaths, drawTrees,
+   drawDistrictDecor, drawGate, drawBuilding, renderRoom). Components use var(--cm-art-*) only. The illustration keeps its own
+   colors in both themes (it is a picture); the chrome tokens (paper, ink, line, muted) switch in dark mode.
+
+   Grows with each ported module; a token here that nothing uses is removed in the same change. */
+:root{
+  /* chrome (prototype :root) */
+  --cm-art-red:#e31b23; --cm-art-red-d:#b8141a; --cm-art-ink:#1f1b16; --cm-art-muted:#6d655b;
+  --cm-art-paper:#fffdf8; --cm-art-line:#ece3d4;
+  --cm-art-shadow:0 10px 30px rgba(40,35,20,.16),0 2px 6px rgba(40,35,20,.08);
+  --cm-art-live:#1f8a4c; --cm-art-gold:#d4a017; --cm-art-gold-ring:#f3c64a; --cm-art-explorer:#1f7a45; --cm-art-business:#1f4f7a;
+  /* grounds */
+  --cm-art-ground:#e3ecd2; --cm-art-ground-dot:#cddcb4; --cm-art-lawn:#d4e3bd; --cm-art-lawn-gate:#d8e5c3;
+  --cm-art-path:#f7eedf; --cm-art-path-edge:#e2d2b6;
+  --cm-art-paving:#e6e2da; --cm-art-paving-line:#d5cec2; --cm-art-district-edge:#cfc7b9;
+  --cm-art-water:#a9d1d6; --cm-art-water-hi:#c8e6ea; --cm-art-quad-text:#7d8a6a; --cm-art-fountain:#9fcbd2;
+  --cm-art-lamp-post:#4a5560; --cm-art-lamp:#ffe9a8; --cm-art-sign:#14202a; --cm-art-sign-base:#9aa6b0; --cm-art-sign-sub:#9fc0d6;
+  --cm-art-tree-1:#6d9b52; --cm-art-tree-2:#7fae5f; --cm-art-tree-hi:#9cc47c; --cm-art-tree-shadow:rgba(50,70,30,.18);
+  --cm-art-gate-post:#3a2f26; --cm-art-gate-cap:#2a221b; --cm-art-desk:#6b4a2e; --cm-art-maya:#b0306a;
+  --cm-art-token-shadow:rgba(0,0,0,.18);
+  /* buildings (drawBuilding): per-building color and the prototype's shade() variants */
+  --cm-art-lecture:#c0392b; --cm-art-lecture-d25:#a72012; --cm-art-lecture-d35:#9d1608;
+  --cm-art-library:#3d4a66; --cm-art-library-d25:#24314d; --cm-art-library-d35:#1a2743;
+  --cm-art-tower:#7a4a7a; --cm-art-tower-d35:#572757;
+  --cm-art-studio:#2f6f73;
+  --cm-art-amphi:#d9962b; --cm-art-amphi-d20:#c58217;
+  --cm-art-testing:#2b5d8a; --cm-art-testing-d35:#083a67;
+  --cm-art-observatory:#465a8c; --cm-art-observatory-d25:#2d4173; --cm-art-observatory-d35:#233769;
+  --cm-art-commons:#d9962b; --cm-art-commons-d30:#bb780d; --cm-art-commons-d35:#b67308;
+  --cm-art-gallery:#b4533a;
+  --cm-art-career:#1f4f7a;
+  --cm-art-arcade:#6b2fa0;
+  /* shared building parts */
+  --cm-art-bld-shadow:rgba(60,70,40,.18); --cm-art-wall:#fbf6ee; --cm-art-wall-edge:#d9cdb8; --cm-art-window:#bcd3dc;
+  --cm-art-step:#e6dccb; --cm-art-label:#ffffff; --cm-art-label-edge:#e6dccb;
+  --cm-art-office-wall:#dfe9f0; --cm-art-office-edge:#9fb3c2; --cm-art-office-glass:#8fb2c8; --cm-art-office-lobby:#cbdbe6;
+  --cm-art-office-door:#6f93ab; --cm-art-antenna:#5d6876; --cm-art-white:#ffffff;
+  --cm-art-pavilion-wall:#cfe5ee; --cm-art-screen-frame:#1f2a33; --cm-art-screen-1:#e8a17f; --cm-art-screen-2:#9fd0c4; --cm-art-screen-3:#f3c76b;
+  --cm-art-flagpole:#5b4a3a; --cm-art-flag:#e31b23; --cm-art-dome-slit:#f3d58a; --cm-art-clock-face:#ffffff; --cm-art-clock-hand:#1f1b16;
+  --cm-art-arcade-body:#2b1a3d; --cm-art-arcade-edge:#4a2f6b; --cm-art-neon-1:#ff4fa3; --cm-art-neon-2:#3de0ff; --cm-art-neon-3:#ffd23d;
+  --cm-art-neon-4:#7dff6b; --cm-art-neon-sign:#14091f; --cm-art-neon-text:#ffd6ee; --cm-art-joystick:#1b1622;
+}
+[data-theme="dark"]{
+  --cm-art-paper:#1e1e1e; --cm-art-ink:#f4f4f4; --cm-art-muted:#b5ad9f; --cm-art-line:#3a352d;
+  --cm-art-shadow:0 10px 30px rgba(0,0,0,.45),0 2px 6px rgba(0,0,0,.3);
+}

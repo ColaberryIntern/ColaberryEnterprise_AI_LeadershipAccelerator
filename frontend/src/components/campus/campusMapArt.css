@@ -1,0 +1,40 @@
+/* ============================================================
+   Colaberry Campus C11b: the map drawn as the prototype draws it (docs/design/campus/colaberry-campus.html, "MAP" CSS).
+   Colors come only from campusArtTokens.css (var(--cm-art-*)); type is the prototype's DM Sans, self-hosted (campusFonts.css).
+   Every animation here stops under reduce motion (.is-reduced on the map).
+   ============================================================ */
+@import './campusArtTokens.css';
+@import './campusFonts.css';
+
+.cm-map{font-family:'DM Sans',var(--sans),system-ui,sans-serif}
+.cm-bld{cursor:pointer;outline:none}
+.cm-bld .body-g{transition:transform .25s cubic-bezier(.3,1.4,.5,1)}
+.cm-bld:hover .body-g,.cm-bld:focus-visible .body-g,.cm-bld.is-here .body-g{transform:translateY(-4px)}
+.cm-bld .lbl rect{fill:var(--cm-art-label);stroke:var(--cm-art-label-edge)}
+.cm-bld .lbl text{font:700 11px 'DM Sans',var(--sans),sans-serif;fill:var(--cm-art-ink)}
+.cm-bld:hover .lbl rect,.cm-bld:focus-visible .lbl rect,.cm-bld.is-here .lbl rect{fill:var(--cm-art-ink);stroke:var(--cm-art-ink)}
+.cm-bld:hover .lbl text,.cm-bld:focus-visible .lbl text,.cm-bld.is-here .lbl text{fill:var(--cm-art-white)}
+/* keyboard focus also gets a ring that does not depend on the lift (WCAG 2.4.7) */
+.cm-bld:focus-visible .lbl rect{stroke:var(--cm-art-red);stroke-width:3}
+.cm-bld.cm-b-gate:focus-visible .cm-hit{stroke:var(--cm-art-red);stroke-width:3;stroke-dasharray:8 6}
+.cm-bld.is-locked .body-g{opacity:.55}
+.cm-chip{font:700 10px 'DM Sans',var(--sans),sans-serif;letter-spacing:.06em;text-transform:uppercase;fill:var(--cm-art-ink);
+  paint-order:stroke;stroke:var(--cm-art-label);stroke-width:4px}
+
+/* the walk-route line (today's plan) and the numbered stops */
+.cm-route-line{fill:none;stroke:var(--cm-art-red);stroke-width:3;stroke-dasharray:2 7;stroke-linecap:round;opacity:.85;animation:cm-march 1s linear infinite}
+@keyframes cm-march{to{stroke-dashoffset:-18}}
+
+/* the avatar: the prototype's red teardrop; it bobs only while walking */
+.cm-avatar .cm-pin{fill:var(--cm-art-red);stroke:var(--cm-art-white);stroke-width:2.5}
+.cm-avatar .cm-pin-dot{fill:var(--cm-art-white)}
+.cm-avatar .cm-pin-shadow{fill:var(--cm-art-token-shadow)}
+.cm-avatar.is-walking .bob{animation:cm-bob .32s ease-in-out infinite alternate}
+@keyframes cm-bob{from{transform:translateY(0)}to{transform:translateY(-3px)}}
+
+.cm-map .water{animation:cm-shimmer 3s ease-in-out infinite alternate}
+@keyframes cm-shimmer{to{opacity:.55}}
+
+/* reduceMotion is the EFFECTIVE setting (campus Settings, else the OS), passed in as .is-reduced on the svg */
+.cm-map.is-reduced .water,.cm-map.is-reduced .cm-route-line,.cm-map.is-reduced .cm-avatar .bob{animation:none}
+.cm-map.is-reduced .cm-bld .body-g{transition:none}

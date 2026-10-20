@@ -56,6 +56,10 @@ beforeEach(() => {
 });
 afterEach(() => { if (root) act(() => root!.unmount()); root = undefined; container?.remove(); unhost?.(); unhost = null; jest.useRealTimers(); });
 
+// C11b: the illustrated map is ~5x the DOM of the C2 outlines (377 vs 77 nodes; trees, paths, windows), and these suites mount
+// the whole campus (up to three maps) and some run axe over it; a cold first render under parallel jest can pass 5 s.
+jest.setTimeout(15000);
+
 describe('CampusDmToast', () => {
   it('unread messages already there at the first read raise no toast (baseline)', async () => {
     mockConvos = [convo('r1', 'Mia', '2026-10-18T10:00:00Z')];

@@ -30,12 +30,12 @@ const GAP = TOKEN_HIT_R * 2 + 2;
 
 function PersonTokens({ b, shown, more, onPick, maxY }: PersonTokensProps): React.ReactElement | null {
   if (!shown.length) return null;
-  // A centered row UNDER the building's name, clear of the roof and the head-count chip (both sit up top; tokens beside
-  // the roof covered the chip in the first screenshots). Kept inside the world's bottom edge.
-  const { x, y, h } = b.pos;
+  // A centered row UNDER the building's name pill (C11b: pos.y is the ground line, the pill sits 12..32 below it), clear of
+  // the roof and the head-count chip up top. Kept inside the world's bottom edge.
+  const { x, y } = b.pos;
   const n = shown.length + (more > 0 ? 1 : 0);
   const x0 = x - ((n - 1) * GAP) / 2;
-  const y0 = Math.min(y + h / 2 + 44, maxY - R - 4);
+  const y0 = Math.min(y + 50, maxY - R - 4);
   return (
     <g className="cm-tokens" data-testid={`cm-tokens-${b.id}`}>
       {shown.map((p, i) => {

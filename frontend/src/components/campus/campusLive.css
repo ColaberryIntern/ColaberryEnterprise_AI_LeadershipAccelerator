@@ -21,7 +21,6 @@
 .cm-reduced .cm-onair-dot{animation:none}
 
 /* Today's plan: highlighted spokes from the quad to each stop, numbered in plan order (full map only). */
-.cm-path.is-route{stroke:var(--berry);stroke-width:6;stroke-dasharray:2 12;opacity:.9}
 .cm-route-stop circle{fill:var(--cm-info);stroke:var(--cm-on-accent);stroke-width:3}
 .cm-route-stop text{fill:var(--cm-on-accent);font-size:13px;font-weight:800;font-family:var(--sans)}
 

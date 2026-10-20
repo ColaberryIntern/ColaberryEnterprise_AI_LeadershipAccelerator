@@ -78,6 +78,10 @@ afterEach(() => { act(() => root.unmount()); container.remove(); window.localSto
 const q = (id: string) => container.querySelector(`[data-testid="${id}"]`) as HTMLButtonElement | null;
 const click = async (id: string) => { await act(async () => { q(id)!.click(); }); await flush(); };
 
+// C11b: the illustrated map is ~5x the DOM of the C2 outlines (377 vs 77 nodes; trees, paths, windows), and these suites mount
+// the whole campus (up to three maps) and some run axe over it; a cold first render under parallel jest can pass 5 s.
+jest.setTimeout(15000);
+
 describe('the locker', () => {
   it('opens from the side column on the map: points, level, earned vs locked', async () => {
     await mount();
