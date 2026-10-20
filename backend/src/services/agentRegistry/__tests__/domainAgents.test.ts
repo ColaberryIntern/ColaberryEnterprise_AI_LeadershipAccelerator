@@ -1,5 +1,9 @@
 /**
- * AF3.1 — the ten domain employees are registered, and none of them is alive.
+ * AF3.1 — the NINE domain employees are registered, and none of them is alive.
+ *
+ * Nine, not ten, since 20 Oct 2026. There are still TEN DOMAINS; curriculum's employee
+ * already existed and is called Dara, so Release Zero never needed to mint one for it.
+ * Every assertion on AGENT_DOMAINS elsewhere still reads ten and is untouched.
  *
  * These entries create REAL rows the moment this merges and deploys: the seed's findOrCreate
  * loop runs at boot. So the assertions below are the gate between a reviewed diff and ten live
@@ -13,14 +17,22 @@ import { GROWTH_JOURNEY_AGENT_ENTRIES } from '../growthJourneyAgents';
 
 const NAMES = DOMAIN_AGENT_ENTRIES.map((e) => e.agent_name);
 
-describe('AF3.1 ten domain employees, one per provisioned domain', () => {
-  it('registers exactly ten', () => {
-    expect(DOMAIN_AGENT_ENTRIES).toHaveLength(10);
+describe('AF3.1 nine domain employees, for the nine domains that needed one', () => {
+  it('registers exactly nine', () => {
+    expect(DOMAIN_AGENT_ENTRIES).toHaveLength(9);
+  });
+
+  it('does NOT register curriculum, because Dara already is it', () => {
+    // The pin on Ali's 20 Oct decision. Re-adding an entry named for curriculum would
+    // recreate the second agent on the next boot, since the seed findOrCreates on
+    // agent_name. Checked by category as well as by name so a rename does not slip past.
+    expect(NAMES).not.toContain('CurriculumDomainAgent');
+    expect(DOMAIN_AGENT_ENTRIES.map((e) => e.category)).not.toContain('curriculum');
   });
 
   it('covers every provisioned domain, named consistently', () => {
     expect([...NAMES].sort()).toEqual([
-      'AdmissionsDomainAgent', 'CurriculumDomainAgent', 'ExecutiveDomainAgent',
+      'AdmissionsDomainAgent', 'ExecutiveDomainAgent',
       'InternshipDomainAgent', 'LearnerSuccessDomainAgent', 'MarketingDomainAgent',
       'PlatformDomainAgent', 'ProductExperienceDomainAgent', 'SalesDomainAgent',
       'WebsiteDomainAgent',

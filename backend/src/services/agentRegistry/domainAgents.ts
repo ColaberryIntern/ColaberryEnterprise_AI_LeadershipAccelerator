@@ -90,17 +90,25 @@ export const DOMAIN_AGENT_ENTRIES: AgentSeedEntry[] = [
       'brands, content, campaigns, communications, landing pages, publishing and the '
       + 'performance read behind them.'),
   },
-  {
-    ...releaseZero(),
-    agent_name: 'CurriculumDomainAgent',
-    module: 'agentDomain',
-    source_file: 'backend/src/services/agentDomain/',
-    category: 'curriculum',
-    description: describe('Curriculum',
-      'cohorts, components, the composer, capabilities and certification prep. Distinct from '
-      + 'Dara, who owns curriculum integrity platform-wide; this one is the domain employee for '
-      + 'the Agent Factory project.'),
-  },
+  // CURRICULUM HAS NO ENTRY HERE, AND THAT IS THE POINT.
+  //
+  // Its employee already exists and is called Dara (`agentRegistrySeed.ts`, agent_name
+  // 'Dara', module 'curriculum', record_kind 'employee'). She is enabled, at
+  // autonomy:communicate with 6 tools, carries 101 activity records and has already
+  // absorbed 4 legacy behaviours. She is the only record_kind='employee' row in the whole
+  // registry, which makes her the finished version of what the other nine are meant to
+  // become rather than a conflict with them.
+  //
+  // An entry DID sit here until 20 Oct 2026, and its own description read "Distinct from
+  // Dara, who owns curriculum integrity platform-wide; this one is the domain employee for
+  // the Agent Factory project." That sentence is the mistake written down: the overlap was
+  // noticed and then argued past, and the result was two agents for one domain. Ali's call,
+  // 20 Oct: they are the same agent, Dara is simply further along.
+  //
+  // `agent_domain_projects.curriculum.agent_id` already pointed at Dara, so nothing ever
+  // referenced the second row. Re-adding an entry here would recreate it on the next boot,
+  // because the seed findOrCreates on agent_name. `domainAgents.test.ts` fails if anyone
+  // does.
   {
     ...releaseZero(),
     agent_name: 'AdmissionsDomainAgent',
