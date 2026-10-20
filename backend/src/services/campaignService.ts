@@ -262,6 +262,21 @@ export async function activateCampaign(id: string) {
     throw new Error(`Cannot activate campaign in '${campaign.status}' status`);
   }
 
+  /*
+   * C6.10. THIS IS THE DOOR THAT WAS UNLOCKED.
+   *
+   * goLive() has always run validateCampaignForPublish, which requires an approval. This
+   * function checked `status` and nothing else, and it is what the admin route, the
+   * recovery service and the go-live scripts all call. Measured in production on
+   * 2026-10-20: six campaigns were `active` with `approval_status='draft'` - live, having
+   * never been approved.
+   *
+   * The gate throws ActivationBlockedError carrying the failed checks, so a caller can
+   * show a human exactly what is missing rather than a bare refusal.
+   */
+  const { assertActivationAllowed } = await import('./campaignActivationGate');
+  await assertActivationAllowed(id);
+
   await campaign.update({
     status: 'active',
     started_at: campaign.started_at || new Date(),
