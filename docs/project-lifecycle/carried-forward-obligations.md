@@ -2495,3 +2495,89 @@ failure the lock prevents, and a mutation of the production code that makes the 
 Ports 55433-55439 are now taken by the disposable-Postgres suites, which all run side by side.
 None of them runs in CI, because CI provisions no Postgres - they are **visible** skips that
 print their reason. That remains the open item it already was above.
+
+## THE INTEGRATION TIER NOW RUNS ON MERGE, and sharing one database was the real blocker
+
+The register's CI item said a Postgres service container was "a two-line change" that would be
+"wrong on its own", blocked behind the ESCALATE-tier DDL decision. Measured, that is half right:
+the two-line version is wrong, but not for the reason recorded.
+
+### What the measurement actually found
+
+| | |
+|---|---|
+| All 25 integration suites at one shared database | **15 fail** |
+| Dominant cause | **collision, not missing schema** |
+| The same suites, one database each | **22 of 22 green, 174 tests, ~6 min** |
+
+The collision: two suites each create `projects` their own way, the second
+`CREATE TABLE IF NOT EXISTS` is a no-op, and the loser then indexes a column that is not there -
+`column "enrollment_id" does not exist`. `--runInBand` does not help, because the conflict is
+over persistent state rather than timing. Every suite that passed on the shared database owns
+its tables under unique names; every one that failed shares the identity tables.
+
+These suites were each written to own a disposable database - every docblock says so, with its
+own `docker run` and its own port. So CI gives each one its own, and no suite needed editing.
+
+**`scripts/ci/runIntegrationSuites.js` plus an `integration-tier` job.** It reports; it does not
+gate merges unless branch protection is configured to require it.
+
+### Three things the job refuses to do quietly
+
+- **A SKIP IS A FAILURE.** Every suite in this set self-skips when its environment is missing,
+  and this job is the environment, so a green run over skipped suites is the thing it exists to
+  stop. Observed: a deliberately skipping probe fails the job, exit 1.
+- **AN EXCLUSION CANNOT ROT.** A named exclusion whose path no longer exists stops the run
+  before any suite runs. Observed, exit 2.
+- **A SUITE CANNOT HANG THE JOB.** Each child process has a wall-clock cap, because jest's own
+  timeout only covers work inside a test or hook body - and two of these suites block elsewhere.
+
+### What giving them a database revealed
+
+Three suites are excluded by name, with evidence, on the same must-shrink contract as
+`backend/jest.ci.config.ts`:
+
+- **`multiProjectIsolation` has never run anywhere** - it is gated on `SBP_INTEGRATION_DB` as
+  well as `DATABASE_URL`. Enabled, it does not terminate: 420s on `postgres:16-alpine`, 480s on
+  the `pgvector/pgvector:pg16` image its own docblock asks for, alone, where every other suite
+  finishes inside 26s. Its `jest.setTimeout(180_000)` never fires, so whatever blocks sits
+  outside a test body.
+- **`ensurePublishingSchema` does not terminate against an EMPTY database.** On the shared one it
+  failed in 5.7s, because the tables it wanted already existed in another suite's shape. The old
+  failure was hiding the real behaviour.
+- **`lifecyclePlanReads`** has one test that writes a second `published` build_plans row to
+  recreate a legacy state, and the real schema now rejects that write. 7 of its 8 pass. It is a
+  disagreement between the suite and the schema, not a flake.
+
+Also: `multiProjectIsolation` refuses to run against a database whose name lacks a
+`test`/`scratch`/`throwaway` segment, and an early `itier_…` naming tripped it. The guard is
+right, and every database this runner creates is now named `test_itier_…`.
+
+### The register's own numbers have gone stale
+
+Re-measured against today's `main`, the full backend suite against a bare Postgres fails **158
+tests across 53 suites**, in three classes, not one:
+
+| Cause | Count |
+|---|---|
+| Missing tables | 74, across 14 distinct tables |
+| Missing COLUMNS on tables the boot path does create | 63 (55 of them one column, `password_hash`) |
+| Shared-database interference | 10 hook timeouts and 1 deadlock |
+
+**`student_tasks` and `github_connections` are no longer the gap.** The register recorded them as
+the whole of it (11 and 6 failures); today `student_tasks` does not appear and
+`github_connections` appears once, while the top three - `ux_remediation_outcomes`,
+`consent_records`, `ai_events` - were not on the list. And a table-level sweep cannot see the
+63 column failures at all.
+
+So the DDL item's scope is not 20 tables; it is 14 different tables, a column population nobody
+has enumerated, and per-suite isolation. The first of those three is now solved.
+
+### Still open
+
+The **second** population. About 25 more database-backed suites sit on
+`backend/jest.ci.config.ts`'s ignore-list, hard-failing without a database and excluded from CI
+entirely - their coverage is zero, not skipped. That file says entries should come off the list
+"at which point" a Postgres service exists. It now does. Taking them off is the next piece, and
+it is a different kind of work: those suites instantiate models directly and were never written
+to own a database.

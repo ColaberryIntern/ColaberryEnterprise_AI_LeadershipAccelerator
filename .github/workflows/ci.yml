@@ -255,3 +255,54 @@ jobs:
         run: npx jest src/services/content/__tests__/testTypecheckRatchet.test.ts --ci
       - name: Typecheck test files against the frozen baseline
         run: node scripts/checkTestTypecheck.js
+
+  integration-tier:
+    name: Integration tier (Postgres)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    # The database-backed suites. Until this job existed they ran in CI and SELF-SKIPPED,
+    # printing their reason, so "all checks green" was a statement about the unit tier only -
+    # and the seven concurrency-lock suites among them could not catch a regression.
+    #
+    # ONE DATABASE PER SUITE, not one shared database. Measured 2026-10-18: pointing all 25 at
+    # a single database fails 15 of them, and the dominant cause is COLLISION rather than
+    # missing schema - two suites each create `projects` their own way, the second
+    # CREATE TABLE IF NOT EXISTS is a no-op, and the loser then indexes a column that is not
+    # there. --runInBand does not help, because the conflict is over persistent state, not
+    # timing. Three lock suites that failed that way pass unchanged when each gets its own
+    # database. scripts/ci/runIntegrationSuites.js carries the detail.
+    #
+    # Like every other job in this workflow, this one REPORTS. It does not gate merges unless
+    # branch protection is later configured to require it.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        # trust auth, so there is no credential in this file to leak or to scan. The server
+        # lives and dies with the runner, and the script CREATEs and DROPs databases on it,
+        # so it must never be a real one.
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+          POSTGRES_USER: ci
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ci -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      # Root deps first, for the same reason the typecheck and unit-test jobs do it: some
+      # backend suites import deps hoisted to the ROOT package.json.
+      - name: Install deps (root + backend)
+        run: |
+          npm install --no-audit --no-fund
+          cd backend && npm install --no-audit --no-fund
+      - name: Integration suites, one database each
+        env:
+          DATABASE_URL: postgres://ci@127.0.0.1:5432/postgres
+        run: node scripts/ci/runIntegrationSuites.js
