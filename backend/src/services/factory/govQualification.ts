@@ -256,6 +256,10 @@ export async function getDecoupledWorkspace(tenantId: string, gwsKey: string, bi
   const zipAttestation = (Array.isArray(reviewedDocuments) ? reviewedDocuments : []).find((d: any) => d && d.method === 'solicitation_zip') || null;
   // Phase 2 dossier (contacts/meetings/key-dates/NAICS) parsed from the ZIP at attest; reference info, never a gate.
   const dossier = (recordJson && recordJson.requirements_json && recordJson.requirements_json.dossier) || null;
+  // Pursuit kind (software vs services). Default 'software' so existing pursuits are unchanged; 'services' gates
+  // off the software-build machinery on the frontend and is why the delivery project got a proposal track only.
+  const pursuitKind: 'software' | 'services' =
+    (recordJson && recordJson.requirements_json && recordJson.requirements_json.pursuitKind) === 'services' ? 'services' : 'software';
   const evaluation = evaluateRequirements(established);
   const coverage = evaluateZipCoverage(established, reviewedDocuments);
   // deliveryProjectId: set once the pursuit is approved into a project — the key to overlaying all persisted state
@@ -339,6 +343,7 @@ export async function getDecoupledWorkspace(tenantId: string, gwsKey: string, bi
     dossier,
     responseSlots,
     build,
+    pursuitKind,
     amendments,
     submission,
     submissionReadiness,
@@ -480,6 +485,32 @@ export async function recordCapabilityDecisions(input: RecordCapabilityDecisions
     effort_cap: current.effort_cap,
     reassessment_conditions: current.reassessment_conditions,
     requirements_json: { ...(current.requirements_json || {}), capabilities: input.capabilities ?? null },
+  });
+}
+
+export interface SetGovPursuitKindInput {
+  canonicalOpportunityId: string; biddingEntity: string; expectedVersion: number;
+  /** 'services' = a consulting bid (no software to build) -> proposal track only, no build machinery.
+   *  'software' = the current behavior (proposal + solution_build). */
+  pursuitKind: 'software' | 'services';
+}
+
+/** Persist the pursuit KIND (software vs services) on the record (requirements_json.pursuitKind). ADVISORY routing
+ *  signal only; sets no gate. Fork-on-edit, preserving decision / establisher / evidence exactly like
+ *  recordCapabilityDecisions, so marking a pursuit "services" never un-approves it or moves the establisher. */
+export async function setGovPursuitKind(input: SetGovPursuitKindInput): Promise<any> {
+  if (input.pursuitKind !== 'software' && input.pursuitKind !== 'services') throw new Error(`unknown pursuitKind ${input.pursuitKind}`);
+  const current = await loadCurrent(input.canonicalOpportunityId, input.biddingEntity);
+  if (!current) throw new QualificationNotFoundError();
+  if (current.version !== input.expectedVersion) throw new QualificationConflictError(current.version);
+  return forkNewVersion(current, {
+    reviewer_identity_id: current.reviewer_identity_id,
+    decision: current.decision,
+    rationale: current.rationale,
+    evidence_json: current.evidence_json,
+    effort_cap: current.effort_cap,
+    reassessment_conditions: current.reassessment_conditions,
+    requirements_json: { ...(current.requirements_json || {}), pursuitKind: input.pursuitKind },
   });
 }
 

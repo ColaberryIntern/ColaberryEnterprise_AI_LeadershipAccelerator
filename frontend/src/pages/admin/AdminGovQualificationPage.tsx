@@ -4,7 +4,7 @@ import { PageHeader, SectionCard, StatCard, StatusBadge, EmptyState } from '../.
 import {
   getGovQualificationWorkspace, createGovQualification, recordGovQualificationDecision, approveGovQualification,
   requestGovApproval, sendBackGovApproval,
-  authorizeGovBuild, getGovOpportunityCandidates, reviewGovQualificationDocuments, matchServicesToOpportunity,
+  authorizeGovBuild, setGovPursuitKind, getGovOpportunityCandidates, reviewGovQualificationDocuments, matchServicesToOpportunity,
   extractGovQualificationRequirements, getGovOpportunityDetail, attestSolicitationZip,
   assignGovBuildStory, unassignGovBuildStory,
   saveGovProposalResponse, reviewGovProposalResponse, addGovProposalFigure, removeGovProposalFigure, saveGovProposalDraft, resolveGovProposalGap, draftGovProposalWithAI, recordGovProposalAmendment,
@@ -1699,6 +1699,29 @@ export default function AdminGovQualificationPage(): React.ReactElement {
               bidding-entity field + the establish-a-requirement form live on their own steps now. */}
 
           <GovTabPanel active={activeStep === 'build'}>
+          {/* Pursuit type — a services (consulting) bid has no software to build, so the build machinery is hidden. */}
+          <SectionCard title="Pursuit type" icon="route-line"
+            subtitle="Is this a software build or a services (consulting) engagement? A services pursuit has no software to build; the proposal is the deliverable, and the build spec / plan / materialize steps do not apply.">
+            <div className="btn-group btn-group-sm" role="group" aria-label="Pursuit type">
+              <button type="button" className={`btn ${ws.pursuitKind === 'services' ? 'btn-outline-secondary' : 'btn-primary'}`} disabled={busy || ws.pursuitKind !== 'services'}
+                onClick={() => run(() => setGovPursuitKind(canonical, { biddingEntity, expectedVersion: version, pursuitKind: 'software' }), 'Marked as a software build.')}>
+                <i className="ri-code-s-slash-line me-1" aria-hidden="true" />Software build
+              </button>
+              <button type="button" className={`btn ${ws.pursuitKind === 'services' ? 'btn-primary' : 'btn-outline-secondary'}`} disabled={busy || ws.pursuitKind === 'services'}
+                onClick={() => run(() => setGovPursuitKind(canonical, { biddingEntity, expectedVersion: version, pursuitKind: 'services' }), 'Marked as a services engagement; the proposal is the deliverable.')}>
+                <i className="ri-briefcase-line me-1" aria-hidden="true" />Services engagement
+              </button>
+            </div>
+          </SectionCard>
+          {ws.pursuitKind === 'services' ? (
+            <SectionCard title="Services engagement - no software build" icon="briefcase-line"
+              subtitle="This is a consulting engagement: the proposal is the deliverable.">
+              <div className="small text-secondary">
+                <i className="ri-information-line me-1" aria-hidden="true" />
+                There is no software to build: no build spec, build plan, or monitored student project. Everything you must submit lives on the <strong>Proposal</strong> step. Switch to "Software build" above if this pursuit does involve development.
+              </div>
+            </SectionCard>
+          ) : (<>
           {/* P5: the countdown band — are we going to make it? Deterministic on-time probability from the deadline,
               remaining build work, and items waiting on a human answer (see govCountdown). */}
           <CountdownBand
@@ -1805,6 +1828,7 @@ export default function AdminGovQualificationPage(): React.ReactElement {
           </SectionCard>
           )}
 
+          </>)}
           </GovTabPanel>{/* end Build */}
 
           {/* Proposal — its OWN step/page (step 6): Build above is the software product we would deliver; this is the

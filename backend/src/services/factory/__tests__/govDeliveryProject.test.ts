@@ -135,6 +135,23 @@ describe('ensureGovTwoTrackProject (orchestration, mocked models)', () => {
     expect(gqUpdate).toHaveBeenCalledWith({ delivery_project_id: 'dp-1' }, expect.objectContaining({ where: { id: 'q-1' } }));
   });
 
+  it('a SERVICES pursuit creates the proposal track ONLY (no solution_build) — a consulting bid has no phantom build', async () => {
+    dpFindOne.mockResolvedValue(null);
+    const res = await ensureGovTwoTrackProject({
+      qualificationId: 'q-s', canonicalOpportunityId: GWS, established: [], provenance: null,
+      approverIdentityId: '11111111-1111-4111-8111-111111111111', pursuitKind: 'services',
+    });
+    expect(res.tracks).toBe(1);
+    expect(ctFindOrCreate.mock.calls.map((c) => c[0].defaults.track_type)).toEqual(['proposal']); // NOT solution_build
+  });
+
+  it('a SOFTWARE pursuit (and the default/unset) still creates BOTH tracks', async () => {
+    dpFindOne.mockResolvedValue(null);
+    const res = await ensureGovTwoTrackProject({ qualificationId: 'q-w', canonicalOpportunityId: GWS, established: [], provenance: null, pursuitKind: 'software' });
+    expect(res.tracks).toBe(2);
+    expect(ctFindOrCreate.mock.calls.map((c) => c[0].defaults.track_type).sort()).toEqual(['proposal', 'solution_build']);
+  });
+
   it('guards created_by_identity_id: a non-uuid approver (the admin EMAIL) becomes null — the create no longer 500s on a uuid column', async () => {
     dpFindOne.mockResolvedValue(null);
     await ensureGovTwoTrackProject({ qualificationId: 'q-9', canonicalOpportunityId: GWS, established: [], provenance: null, approverIdentityId: 'ali@colaberry.com' });

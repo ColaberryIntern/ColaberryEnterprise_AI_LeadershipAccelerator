@@ -112,6 +112,9 @@ export interface EnsureGovTwoTrackProjectInput {
   established: any[];
   provenance?: { title?: string | null; agency?: string | null } | null;
   approverIdentityId?: string | null;
+  /** 'services' creates only the proposal track — a consulting bid has no software to build, so no empty
+   *  solution_build track (and no phantom build stories). Default / 'software' keeps both tracks. */
+  pursuitKind?: 'software' | 'services' | null;
 }
 
 export interface EnsureGovTwoTrackProjectResult {
@@ -166,9 +169,13 @@ export async function ensureGovTwoTrackProject(input: EnsureGovTwoTrackProjectIn
     }
     const deliveryProjectId = project.id as string;
 
+    // A services (consulting) pursuit gets the proposal track ONLY — no software to build, so no empty
+    // solution_build track and no phantom build stories. Default/software keeps both. Idempotent either way:
+    // a pre-existing solution_build track (from an earlier software classification) is left untouched.
+    const trackTypes: readonly string[] = input.pursuitKind === 'services' ? ['proposal'] : TRACK_TYPES;
     // Create-if-absent. A re-approval must NEVER reset an existing track's owner, student-build link, or status
     // (ingestion runs live in prod — a blind upsert here erased them). findOrCreate inserts only when missing.
-    for (const trackType of TRACK_TYPES) {
+    for (const trackType of trackTypes) {
       const trackId = factoryId('track', [deliveryProjectId, trackType]);
       await ContractTrack.findOrCreate({
         where: { id: trackId },
@@ -207,7 +214,7 @@ export async function ensureGovTwoTrackProject(input: EnsureGovTwoTrackProjectIn
 
     await GovQualification.update({ delivery_project_id: deliveryProjectId }, { where: { id: input.qualificationId }, transaction });
 
-    return { deliveryProjectId, created, tracks: TRACK_TYPES.length, requirements };
+    return { deliveryProjectId, created, tracks: trackTypes.length, requirements };
   });
 }
 
