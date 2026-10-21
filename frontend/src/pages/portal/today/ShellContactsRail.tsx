@@ -32,6 +32,55 @@ export interface ShellContactsRailProps {
   openChat: (c: CohortContact) => void;
 }
 
+/** The find-people view: the full cohort directory, reachable by clicking "Find people" and dismissed with the back arrow. */
+type FindProps = Pick<ShellContactsRailProps, 'onBackToPeople' | 'findQuery' | 'setFindQuery' | 'findFiltered' | 'onAddFriend' | 'onRespondFriend'>;
+function FindPeopleView({ onBackToPeople, findQuery, setFindQuery, findFiltered, onAddFriend, onRespondFriend }: FindProps): React.ReactElement {
+  return (
+    <>
+      {/* Find-people view — the full cohort directory, reachable by clicking
+          "Find people" and dismissed with the back arrow. */}
+      <div className="te-ct-head">
+        <button type="button" className="te-ct-back" onClick={onBackToPeople} aria-label="Back to contacts" title="Back">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+        </button>
+        <h3>Find people</h3>
+      </div>
+      <div className="te-ct-search-wrap">
+        <svg viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" /><path d="M21 21l-4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
+        <input
+          className="te-ct-search"
+          type="text"
+          autoFocus
+          value={findQuery}
+          onChange={(e) => setFindQuery(e.target.value)}
+          placeholder="Search your cohort…"
+          aria-label="Search people"
+        />
+      </div>
+      <div className="te-ct-list">
+        {findFiltered.map((c) => (
+          <div key={c.id} className="te-ctrow te-ctrow-static" title={c.name}>
+            <span className="te-ctav" style={{ background: c.color }}>{c.avatarUrl ? <img src={c.avatarUrl} alt="" /> : c.initials}<span className={`te-ctpres ${c.presence}`} /></span>
+            <span className="te-ctname">{c.name}</span>
+            {c.friendshipStatus === 'friend' ? (
+              <span className="te-ct-added">Friends</span>
+            ) : c.friendshipStatus === 'requested' ? (
+              <button type="button" className="te-ct-add" disabled>Requested</button>
+            ) : c.friendshipStatus === 'incoming' ? (
+              <button type="button" className="te-ct-add" onClick={() => onRespondFriend(c.id, true)}>Accept</button>
+            ) : (
+              <button type="button" className="te-ct-add" onClick={() => onAddFriend(c.id)}>Add</button>
+            )}
+          </div>
+        ))}
+        {findFiltered.length === 0 && (
+          <div className="te-ct-empty">{findQuery.trim() ? `No one matches “${findQuery.trim()}”.` : 'No one from your cohort is here yet.'}</div>
+        )}
+      </div>
+    </>
+  );
+}
+
 export default function ShellContactsRail({
   panel, contactsCollapsed, onToggleCollapsed, openPerson, showFind, onBackToPeople, onOpenFind, findQuery, setFindQuery,
   findFiltered, onAddFriend, onRespondFriend, incoming, people, cohortName, onlineNow, contactsCount, openChat,
@@ -50,48 +99,8 @@ export default function ShellContactsRail({
             onOpenPerson={openPerson}
           />
         ) : showFind ? (
-          <>
-            {/* Find-people view — the full cohort directory, reachable by clicking
-                "Find people" and dismissed with the back arrow. */}
-            <div className="te-ct-head">
-              <button type="button" className="te-ct-back" onClick={onBackToPeople} aria-label="Back to contacts" title="Back">
-                <svg viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
-              </button>
-              <h3>Find people</h3>
-            </div>
-            <div className="te-ct-search-wrap">
-              <svg viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" /><path d="M21 21l-4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
-              <input
-                className="te-ct-search"
-                type="text"
-                autoFocus
-                value={findQuery}
-                onChange={(e) => setFindQuery(e.target.value)}
-                placeholder="Search your cohort…"
-                aria-label="Search people"
-              />
-            </div>
-            <div className="te-ct-list">
-              {findFiltered.map((c) => (
-                <div key={c.id} className="te-ctrow te-ctrow-static" title={c.name}>
-                  <span className="te-ctav" style={{ background: c.color }}>{c.avatarUrl ? <img src={c.avatarUrl} alt="" /> : c.initials}<span className={`te-ctpres ${c.presence}`} /></span>
-                  <span className="te-ctname">{c.name}</span>
-                  {c.friendshipStatus === 'friend' ? (
-                    <span className="te-ct-added">Friends</span>
-                  ) : c.friendshipStatus === 'requested' ? (
-                    <button type="button" className="te-ct-add" disabled>Requested</button>
-                  ) : c.friendshipStatus === 'incoming' ? (
-                    <button type="button" className="te-ct-add" onClick={() => onRespondFriend(c.id, true)}>Accept</button>
-                  ) : (
-                    <button type="button" className="te-ct-add" onClick={() => onAddFriend(c.id)}>Add</button>
-                  )}
-                </div>
-              ))}
-              {findFiltered.length === 0 && (
-                <div className="te-ct-empty">{findQuery.trim() ? `No one matches “${findQuery.trim()}”.` : 'No one from your cohort is here yet.'}</div>
-              )}
-            </div>
-          </>
+          <FindPeopleView onBackToPeople={onBackToPeople} findQuery={findQuery} setFindQuery={setFindQuery}
+            findFiltered={findFiltered} onAddFriend={onAddFriend} onRespondFriend={onRespondFriend} />
         ) : (
           <>
             {/* Default view — up to RAIL_MAX faces, most-active first. */}

@@ -41,6 +41,33 @@ const EASE_FOCUS = 0.13;
 const DRAG_PX = 6;
 const KEY_PAN_PX = 80;
 
+/** addEventListener that hands back its own removal. */
+function listen(t: EventTarget, type: string, fn: EventListener, opts?: AddEventListenerOptions): () => void {
+  t.addEventListener(type, fn, opts);
+  return () => t.removeEventListener(type, fn, opts);
+}
+
+/**
+ * Drag to pan: past a 6 px threshold the pointer moves the world (onPan gets screen px), and the click that ends a drag is swallowed
+ * so it never picks the building under the pointer. A smaller wobble stays a click.
+ */
+function bindDrag(el: Element, onPan: (dx: number, dy: number) => void): () => void {
+  let drag: { x: number; y: number; moved: boolean } | null = null;
+  const down = (e: Event) => { const p = e as PointerEvent; drag = { x: p.clientX, y: p.clientY, moved: false }; };
+  const move = (e: Event) => {
+    const p = e as PointerEvent;
+    if (!drag) return;
+    const dx = p.clientX - drag.x, dy = p.clientY - drag.y;
+    if (!drag.moved && Math.hypot(dx, dy) < DRAG_PX) return;
+    drag.moved = true; drag.x = p.clientX; drag.y = p.clientY;
+    onPan(dx, dy);
+  };
+  const up = () => { window.setTimeout(() => { drag = null; }, 0); };
+  const click = (e: Event) => { if (drag?.moved) { e.stopPropagation(); e.preventDefault(); } };
+  const off = [listen(el, 'pointerdown', down), listen(window, 'pointermove', move), listen(window, 'pointerup', up), listen(el, 'click', click, { capture: true })];
+  return () => off.forEach((u) => u());
+}
+
 export function useCampusCamera(svgRef: RefObject<SVGSVGElement>, opts: CameraOptions): CameraApi {
   const o = useRef(opts);
   o.current = opts;
@@ -89,20 +116,13 @@ export function useCampusCamera(svgRef: RefObject<SVGSVGElement>, opts: CameraOp
     const v0 = vp();
     if (v0) { cam.current = baseView(v0, resolve(o.current.insets, v0)); target.current = cam.current; write(v0); }
 
-    let drag: { x: number; y: number; moved: boolean } | null = null;
-    const down = (e: PointerEvent) => { drag = { x: e.clientX, y: e.clientY, moved: false }; };
-    const move = (e: PointerEvent) => {
+    const pan = (dx: number, dy: number) => {
       const v = vp();
-      if (!drag || !v || !cam.current) return;
-      const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
-      if (!drag.moved && Math.hypot(dx, dy) < DRAG_PX) return;
-      drag.moved = true; mode.current = 'free';
+      if (!v || !cam.current) return;
+      mode.current = 'free';
       cam.current = panBy(cam.current, v, dx, dy); target.current = cam.current;
-      drag.x = e.clientX; drag.y = e.clientY;
       write(v);
     };
-    const up = () => { window.setTimeout(() => { drag = null; }, 0); };
-    const click = (e: MouseEvent) => { if (drag?.moved) { e.stopPropagation(); e.preventDefault(); } };
     const wheel = (e: WheelEvent) => { e.preventDefault(); api.zoom(Math.exp(e.deltaY * 0.0015)); };
     const key = (e: KeyboardEvent) => {
       const d: Record<string, [number, number]> = { ArrowLeft: [KEY_PAN_PX, 0], ArrowRight: [-KEY_PAN_PX, 0], ArrowUp: [0, KEY_PAN_PX], ArrowDown: [0, -KEY_PAN_PX] };
@@ -120,23 +140,10 @@ export function useCampusCamera(svgRef: RefObject<SVGSVGElement>, opts: CameraOp
       go({ ...(target.current ?? cam.current), cx: p.x, cy: p.y - 40 });
     };
     const resize = () => { const v = vp(); if (v && mode.current === 'base') { cam.current = baseView(v, resolve(o.current.insets, v)); target.current = cam.current; write(v); } else if (v) write(v); };
-    el.addEventListener('pointerdown', down);
-    window.addEventListener('pointermove', move);
-    window.addEventListener('pointerup', up);
-    el.addEventListener('click', click, true);
-    el.addEventListener('wheel', wheel, { passive: false });
-    el.addEventListener('keydown', key);
-    el.addEventListener('focusin', focusIn);
-    window.addEventListener('resize', resize);
+    const unbind = [bindDrag(el, pan), listen(el, 'wheel', wheel as EventListener, { passive: false }), listen(el, 'keydown', key as EventListener),
+      listen(el, 'focusin', focusIn as EventListener), listen(window, 'resize', resize)];
     return () => {
-      el.removeEventListener('pointerdown', down);
-      window.removeEventListener('pointermove', move);
-      window.removeEventListener('pointerup', up);
-      el.removeEventListener('click', click, true);
-      el.removeEventListener('wheel', wheel);
-      el.removeEventListener('keydown', key);
-      el.removeEventListener('focusin', focusIn);
-      window.removeEventListener('resize', resize);
+      unbind.forEach((u) => u());
       if (raf.current !== null) cancelAnimationFrame(raf.current);
     };
   }, [api, go]);

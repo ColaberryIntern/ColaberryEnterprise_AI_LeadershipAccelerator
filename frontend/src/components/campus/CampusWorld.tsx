@@ -8,22 +8,17 @@ import type { ExplorerAccess } from './campusMap';
 import PersonCard from './PersonCard';
 import type { PersonCardTarget } from './CampusContext';
 import type { StaffDesk } from './campusPeopleApi';
-import { tokensFor, desksForBuilding, mayaAllowedFor } from './campusPeople';
-import { readParticipant } from '../../pages/portal/today/shellUtils';
+import { tokensFor, desksForBuilding } from './campusPeople';
 import { buildingName } from './campusMap';
 import ExplorerPath from './ExplorerPath';
 import { explorerPath } from './campusPath';
 import type { Equipped } from './campusGear';
-import type { CameraApi, InsetsOf } from './useCampusCamera';
-import type { Viewport } from './campusCamera';
+import type { InsetsOf } from './useCampusCamera';
 import CampusZoomControls from './CampusZoomControls';
 import { happeningAt, zoneLabelOf } from './campusArrival';
 import { buildingLine } from './tourSteps';
 import CampusInside from './interior/CampusInside';
-import { ROOMS } from './interior/roomModel';
-
-const GOING_MS = 900;
-const hasRoom = (id: BuildingId) => !!ROOMS[id];
+import { useMapStage, useDoorReveal } from './useWorldStage';
 
 /**
  * Map + building card, with the keyboard contract (Campus C2):
@@ -119,13 +114,9 @@ export default function CampusWorld({ buildings, audience, hasFullAccess, access
     if (tour) tour.onEnd(); else if (panel) panel.onClose(); else if (personCard) onClosePerson?.(); else if (open) closeCard(); else onExit();
   };
 
-  // C11b: the prototype camera frames the campus (no more sideways scrolling on phones); the arrival card covers the right
-  // 380 px on wide screens and up to 55% of the height on phones, so a framed building sits beside or above it.
-  const camApi = useRef<CameraApi | null>(null);
-  // C11b: the desks on duty for this viewer (Maya only where the server and the audience rule allow), and your initials for the pin.
-  const mapDesks = useMemo(() => (staffDesks ?? []).filter((d) => d.on_duty && (d.id !== 'maya' || mayaAllowedFor(audience))).map((d) => ({ id: d.id, name: d.name, building: d.building })), [staffDesks, audience]);
-  const meInitials = useMemo(() => readParticipant().initials, []);
-  const camera = useMemo(() => ({ apiRef: camApi, insets, focusInsets: (v: Viewport) => (v.W <= 760 ? { left: 0, top: 0, right: 0, bottom: v.H * 0.55 } : { left: 0, top: 0, right: 400, bottom: 0 }) }), [insets]);
+  // C11b staging: the camera, the desks and your initials for the map, and the door reveal (useWorldStage).
+  const { camApi, camera, mapDesks, meInitials } = useMapStage(staffDesks, audience, insets);
+  const door = useDoorReveal(onEnterRoom, reduceMotion);
   const lastOutside = useRef(0);
   useEffect(() => {
     if (walkTo && walkTo.seq !== lastOutside.current) { lastOutside.current = walkTo.seq; setOpen(null); setWalkRequest((w) => ({ id: walkTo.id, seq: (w?.seq ?? 0) + 1 })); }
@@ -136,19 +127,8 @@ export default function CampusWorld({ buildings, audience, hasFullAccess, access
     setOpen(null);
     document.querySelector<HTMLInputElement>('.cm-whereto-input')?.focus();
   }, []);
-  // C11b door reveal (the prototype's "going"): through the glowing back door, the room zooms in under "Opening...", then the existing
-  // door transition opens the page. Only from inside a building with a room, and never with reduce motion.
-  const [going, setGoing] = useState<string | null>(null);
-  const goTimer = useRef<number | null>(null);
-  useEffect(() => () => { if (goTimer.current !== null) window.clearTimeout(goTimer.current); }, []);
   const b = open ? buildings.find((x) => x.id === open) : undefined;
-  const enterRoom = (r: string) => {
-    if (!onEnterRoom || !b) return;
-    const rect = els.current.get(b.id)?.getBoundingClientRect() ?? null;
-    if (reduceMotion || !hasRoom(b.id)) { onEnterRoom(r, rect); return; }
-    setGoing(r);
-    goTimer.current = window.setTimeout(() => { goTimer.current = null; setGoing(null); onEnterRoom(r, rect); }, GOING_MS);
-  };
+  const enterRoom = (r: string) => { if (b) door.enter(r, b.id, els.current.get(b.id)?.getBoundingClientRect() ?? null); };
   const anyCard = !!tour || !!panel || !!personCard || !!b;
   const cardBuilding = !tour && !panel && !personCard && b ? b.id : null;
   const onCardRef = useRef(onCard); onCardRef.current = onCard;
@@ -170,7 +150,7 @@ export default function CampusWorld({ buildings, audience, hasFullAccess, access
       })()}
       {/* C11b: inside the building you arrived at, behind its arrival panel (the prototype's flyIn) */}
       {!tour && !panel && b && !personCard && <CampusInside building={b} buildingName={buildingName(b, workplaceNames)} audience={audience} access={accessOf(b)}
-        presence={presenceError ? undefined : presence} onAir={!!onAir?.has(b.id)} reduceMotion={reduceMotion} onStepOutside={closeCard} going={going}
+        presence={presenceError ? undefined : presence} onAir={!!onAir?.has(b.id)} reduceMotion={reduceMotion} onStepOutside={closeCard} going={door.going}
         onPickPerson={onOpenPerson ? (p) => pickPerson(p, b.id) : undefined}
         desk={staffDesks ? desksForBuilding(staffDesks, b.id, audience).find((d) => d.on_duty) ?? null : null} />}
       {!tour && !panel && b && !personCard && <BuildingCard building={b} access={accessOf(b)} workplaceNames={workplaceNames} onClose={closeCard} onNavigate={onNavigate}

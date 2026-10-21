@@ -125,6 +125,31 @@ function routeSegment(b: CampusBuilding): string {
   return `M${HUB.x} ${AVE}L${GATE.x} ${GATE.y}`;
 }
 
+/** Today's plan route: a dotted line along the paths to each unfinished stop. */
+function RouteLines({ route, buildings }: { route: BuildingId[]; buildings: CampusBuilding[] }): React.ReactElement {
+  return <>{route.map((id) => {
+    const b = buildings.find((x) => x.id === id); if (!b) return null;
+    return <path key={'r-' + id} className="cm-route-line" data-testid={`cm-route-${id}`} d={routeSegment(b)} aria-hidden="true" />;
+  })}</>;
+}
+
+/** You: the prototype's red teardrop with your initials, your public gear on its head, and your ride only while you travel. */
+function AvatarPin({ pos, moving, reduceMotion, ownGear, initials }: { pos: Pt; moving: boolean; reduceMotion: boolean; ownGear?: Equipped; initials?: string }): React.ReactElement {
+  return (
+    <g className={`cm-avatar${moving ? ' is-walking' : ''}`} transform={`translate(${pos.x} ${pos.y})`} aria-hidden="true" data-testid="cm-avatar">
+      <ellipse className="cm-pin-shadow" cx={0} cy={3} rx={7} ry={2.5} />
+      <g className="bob">
+        {ownGear?.ride && moving && !reduceMotion && <RideUnder ride={ownGear.ride} />}
+        <path className="cm-pin" d="M0 2 L-7 -12 A9 9 0 1 1 7 -12 Z" />
+        {initials
+          ? <text className="cm-pin-initials" x={0} y={-15.2} textAnchor="middle">{initials.slice(0, 2)}</text>
+          : <circle className="cm-pin-dot" cx={0} cy={-17.7} r={3.6} />}
+        {ownGear && <GearOnHead gear={publicOnly(ownGear)} cx={0} cy={-17.7} r={9} />}
+      </g>
+    </g>
+  );
+}
+
 export default function CampusWorldMap({ buildings, accessOf, workplaceNames, reduceMotion, compact = false, initialTarget, onArrive, buildingRef, counts, people, onPickPerson, walkRequest, onAir, route, ownGear, showOpen = false, camera, desks, me }: CampusMapProps): React.ReactElement {
   const [pos, setPos] = useState<Pt>({ x: START.x, y: START.y });
   const hereRef = useRef<Here>(START);
@@ -198,10 +223,7 @@ export default function CampusWorldMap({ buildings, accessOf, workplaceNames, re
       {...(compact ? { 'aria-hidden': true, focusable: 'false' } : { role: 'group', 'aria-label': 'Campus map' })}>
       <Scenery doors={doors} gateIsBuilding={gateIsBuilding} />
       {live.length > 0 && <LiveBack buildings={live} path={livePath} />}
-      {!compact && route && route.map((id) => {
-        const b = buildings.find((x) => x.id === id); if (!b) return null;
-        return <path key={'r-' + id} className="cm-route-line" data-testid={`cm-route-${id}`} d={routeSegment(b)} aria-hidden="true" />;
-      })}
+      {!compact && route && <RouteLines route={route} buildings={buildings} />}
       {buildings.map((b) => (
         <Building key={b.id} b={b} access={accessOf(b)} label={buildingName(b, workplaceNames)} compact={compact} count={counts?.[b.id] ?? 0}
           shown={people?.[b.id]?.shown} onAir={!!onAir?.has(b.id)} here={!compact && atId === b.id} showOpen={showOpen}
@@ -213,19 +235,7 @@ export default function CampusWorldMap({ buildings, accessOf, workplaceNames, re
         const t = people[b.id];
         return t ? <PersonTokens key={'t-' + b.id} b={b} shown={t.shown} more={t.more} maxY={WORLD.h} onPick={pickers[b.id]!} /> : null;
       })}
-      {!compact && (
-        <g className={`cm-avatar${moving ? ' is-walking' : ''}`} transform={`translate(${pos.x} ${pos.y})`} aria-hidden="true" data-testid="cm-avatar">
-          <ellipse className="cm-pin-shadow" cx={0} cy={3} rx={7} ry={2.5} />
-          <g className="bob">
-            {ownGear?.ride && moving && !reduceMotion && <RideUnder ride={ownGear.ride} />}
-            <path className="cm-pin" d="M0 2 L-7 -12 A9 9 0 1 1 7 -12 Z" />
-            {me?.initials
-              ? <text className="cm-pin-initials" x={0} y={-15.2} textAnchor="middle">{me.initials.slice(0, 2)}</text>
-              : <circle className="cm-pin-dot" cx={0} cy={-17.7} r={3.6} />}
-            {ownGear && <GearOnHead gear={publicOnly(ownGear)} cx={0} cy={-17.7} r={9} />}
-          </g>
-        </g>
-      )}
+      {!compact && <AvatarPin pos={pos} moving={moving} reduceMotion={reduceMotion} ownGear={ownGear} initials={me?.initials} />}
     </svg>
   );
 }
