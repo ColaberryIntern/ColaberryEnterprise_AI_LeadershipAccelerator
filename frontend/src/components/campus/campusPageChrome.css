@@ -96,3 +96,7 @@
 .cm-nav .cm-dot.cm-b-arcade{background:var(--cm-art-arcade)}
 /* the nav column is a fixed-height flex column: never let the mini-map shrink when the rooms section adds height */
 .cm-nav .cm-nav-map{flex:none}
+
+/* fix round 2: the hint never covers the page: bottom-left of the screen, as the prototype .page-hint */
+.cm-page-hint{position:fixed;top:auto;left:20px;bottom:20px;z-index:40}
+@media (max-width:760px){ .cm-page-hint{left:10px;right:10px;bottom:84px;max-width:none} }

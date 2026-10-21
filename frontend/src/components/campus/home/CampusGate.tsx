@@ -89,7 +89,7 @@ export default function CampusGate(p: GateProps): React.ReactElement {
             <div className="ph" aria-hidden="true">{p.initials || '·'}</div>
             <div>
               <b>{p.fullName || (explorer ? 'Explorer' : 'Welcome')}</b>
-              <small>{explorer ? 'Explorer · visitor pass' : partner ? 'Business partner' : staff ? 'Program staff · Colaberry' : 'AI Systems Architect Accelerator'}</small>
+              <small>{explorer ? 'Explorer · visitor pass' : partner ? 'Partner account' : staff ? 'Program staff · Colaberry' : 'AI Systems Architect Accelerator'}</small>
               {explorer && <small>No card needed</small>}
               {staff && <span className="tier">STAFF</span>}
               {partner && <span className="tier">Business partner</span>}

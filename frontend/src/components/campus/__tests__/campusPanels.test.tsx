@@ -68,6 +68,8 @@ describe('the Me panel', () => {
     expect(q('[data-testid="cm-me"]')!.textContent).toContain('Ali Muwwakkil');
     expect(q('[data-testid="cm-me-level"]')!.textContent).toBe('AI Enabled II · 1,252 pts');
     expect(q('[data-testid="cm-me"]')!.textContent).not.toMatch(/which building I/i);
+    // no locked item in this catalog: no progress line (nothing invented)
+    expect(q('[data-testid="cm-me-next"]')).toBeNull();
     act(() => { (q('[data-testid="cm-me-classic"]') as HTMLButtonElement).click(); });
     expect(campus.settings.nav).toBe('classic');
     act(() => { const s = q('[data-testid="cm-me-entrance"]') as HTMLSelectElement; s.value = 'skip'; s.dispatchEvent(new Event('change', { bubbles: true })); });

@@ -43,3 +43,6 @@
 .cm-in-go .bar{width:180px;height:4px;border-radius:4px;background:var(--cm-art-line);margin:16px auto 0;overflow:hidden}
 .cm-in-go .bar i{display:block;height:100%;width:0;background:var(--cm-art-red);animation:cm-in-load .8s .5s forwards}
 @keyframes cm-in-load{to{width:100%}}
+
+/* fix round 2: on phones the room gets the top half, and Step outside sits in its top-right corner */
+@media (max-width:820px){ .cm-in-frame{bottom:52%} .cm-home .cm-in-frame{top:110px;bottom:calc(52% + 66px)} .cm-in-hud{top:8px;left:auto;right:8px} .cm-in-count{display:none} }

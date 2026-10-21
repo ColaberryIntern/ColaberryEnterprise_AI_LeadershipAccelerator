@@ -107,7 +107,7 @@ export function StaffTools({ buildings, workplaceNames }: { buildings: CampusBui
   return (
     <div className="cm-staff-tools" data-testid="cm-cc-staff-tools">
       <div className="cm-plan-h"><b>Staff tools</b><small>{isMgmt ? 'Opens the Management Portal' : 'Needs Management Portal access'}</small></div>
-      <div className="cm-staff-grid">{links.map((l) => <AdminLink key={l.route} label={l.label} route={l.route} className="cm-staff-tile" isMgmt={isMgmt} />)}</div>
+      <div className="cm-staff-grid">{links.map((l, i) => <AdminLink key={l.route} label={l.label} route={l.route} className={`cm-staff-tile is-${i}`} isMgmt={isMgmt} />)}</div>
     </div>
   );
 }

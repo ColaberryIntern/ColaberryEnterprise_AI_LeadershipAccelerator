@@ -29,6 +29,10 @@ import './campusPanels.css';
  * enrolling. The bar offers the tour, My look and Settings, as the map's bar does. A filter narrows buildings and rooms and
  * announces the count.
  */
+/** C11b: the prototype directory's building icons (the catalog's own icon field in the prototype). */
+const LIST_ICON: Partial<Record<string, string>> = { lecture: '\u{1F393}', library: '\u{1F4DA}', tower: '\u{1F570}', studio: '\u{1F6E0}', amphi: '\u{1F3AA}', testing: '\u2705',
+  observatory: '\u{1F52D}', commons: '\u2615', gallery: '\u{1F5BC}', career: '\u{1F4BC}', arcade: '\u{1F579}', gate: '\u{1F6AA}' };
+
 export default function CampusListView(): React.ReactElement | null {
   const { layer, settings, closeLayer, presence, presenceError, staffDesks, planStops, startTour, openLocker, openMap, enterThroughDoor } = useCampus();
   const { buildings, accessOf, audience, isExplorer } = useCampusView();
@@ -87,7 +91,7 @@ export default function CampusListView(): React.ReactElement | null {
           const desks = desksForBuilding(staffDesks, b.id, audience);
           return (
             <section key={b.id} className={`cm-list-bld cm-b-${b.id}`} data-building={b.id} aria-labelledby={`cm-list-h-${b.id}`}>
-              <h2 id={`cm-list-h-${b.id}`}>{name}{chip && <small className="cm-nav-chip">{chip}</small>}</h2>
+              <h2 id={`cm-list-h-${b.id}`}><span className="cm-list-ic" aria-hidden="true">{LIST_ICON[b.id] ?? ''}</span>{name}{chip && <small className="cm-nav-chip">{chip}</small>}</h2>
               {buildingLine(audience, b.id) && <p className="cm-list-line">{buildingLine(audience, b.id)}</p>}
               {facts(b)}
               <WhoIsHere presence={presence?.[b.id]} error={presenceError} loading={presence === null && !presenceError} />

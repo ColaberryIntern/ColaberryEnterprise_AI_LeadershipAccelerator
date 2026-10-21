@@ -166,11 +166,13 @@ describe('the campus home', () => {
     mockAudience = 'staff';
     await mount('/portal/campus');
     expect(q('[data-testid="cm-cc-staff-tools"]')).not.toBeNull();
+    expect(q('[data-testid="cm-cc-where"]')!.textContent).toBe('Staff view · every building');
     expect(q('[data-testid="cm-cc-chips"]')).toBeNull();
     { const r = root!; act(() => r.unmount()); root = null; container.remove(); }
     mockAudience = 'business';
     await mount('/portal/campus');
     expect(q('[data-testid="cm-cc-tour"]')!.textContent).toContain('Start the partner tour');
+    expect(q('[data-testid="cm-cc-where"]')!.textContent).toBe('Partner visit');
     expect(q('[data-testid="cm-cc-staff-tools"]')).toBeNull();
   });
 

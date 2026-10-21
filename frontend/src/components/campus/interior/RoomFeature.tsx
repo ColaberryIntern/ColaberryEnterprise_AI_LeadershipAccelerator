@@ -117,6 +117,49 @@ export default function RoomFeature({ feature, onAir, name }: { feature: Feature
         <text x={661} y={176} textAnchor="middle" fontSize={11} fill={art('in-city-board-sub')} fontFamily={F}>Client work</text>
       </g>
     );
+    case 'sprint': return (
+      <g>
+        <rect x={196} y={82} width={552} height={220} rx={6} fill={art('white')} stroke={art('in-kanban-edge')} strokeWidth={3} />
+        <text x={212} y={102} fontSize={10} fontWeight={800} fill={art('studio')} fontFamily={F} letterSpacing={1.5}>SPRINT BOARD</text>
+        {(['BACKLOG', 'IN PROGRESS', 'REVIEW', 'SHIPPED'] as const).map((col, i) => (
+          <g key={col}>
+            <rect x={206 + i * 134} y={110} width={126} height={184} rx={4} fill={art('in-ticket-col')} />
+            <text x={214 + i * 134} y={126} fontSize={9} fontWeight={800} fill={art(['sign-base', 'red', 'amphi', 'live'][i])} fontFamily={F} letterSpacing={1}>{col}</text>
+            {[0, 1].slice(0, i === 3 ? 1 : 2).map((r) => (
+              <g key={r}><rect x={212 + i * 134} y={134 + r * 52} width={114} height={44} rx={4} fill={art('white')} stroke={art('in-ticket-edge')} />
+                <rect x={212 + i * 134} y={134 + r * 52} width={4} height={44} fill={PCOL[(i * 2 + r) % PCOL.length]} />
+                <rect x={222 + i * 134} y={146 + r * 52} width={60} height={6} rx={2} fill={art('in-ticket-edge')} />
+                <rect x={222 + i * 134} y={160 + r * 52} width={88} height={7} rx={2} fill={art('in-ticket-edge')} /></g>
+            ))}
+          </g>
+        ))}
+        <polygon points="18,118 150,136 150,302 18,330" fill={art('in-glass')} stroke={art('in-glass-edge')} strokeWidth={3} />
+        <line x1={84} y1={127} x2={84} y2={316} stroke={art('in-glass-edge')} strokeWidth={2} />
+        <text x={30} y={196} fontSize={10} fontWeight={800} fill={art('library')} fontFamily={F}>STANDUP</text>
+      </g>
+    );
+    case 'clients': return (
+      <g>
+        <rect x={196} y={88} width={270} height={180} fill={art('in-city-sky')} />
+        {[[204, 60], [236, 118], [268, 84], [302, 140], [340, 72], [374, 104], [410, 150], [440, 96]].map(([x, h]) => <rect key={x} x={x} y={268 - h} width={26} height={h} fill={art('in-city-bldg')} />)}
+        <rect x={196} y={88} width={270} height={180} fill="none" stroke={art('white')} strokeWidth={8} />
+        <rect x={490} y={96} width={250} height={168} rx={6} fill={art('sign')} />
+        <text x={506} y={120} fontSize={10} fontWeight={800} fill={art('sign-sub')} fontFamily={F} letterSpacing={1.5}>CLIENT ENGAGEMENTS</text>
+        {[0, 1, 2].map((i) => <g key={i}><circle cx={512} cy={146 + i * 40} r={5} fill={art(['in-lounge-dot', 'neon-3', 'sign-sub'][i])} /><rect x={524} y={140 + i * 40} width={140 - i * 20} height={9} rx={2} fill={art('sign-sub')} opacity={0.5} /></g>)}
+      </g>
+    );
+    case 'screens': return (
+      <g>
+        {[214, 398, 582].map((x, i) => (
+          <g key={x}><rect x={x} y={104} width={164} height={104} rx={5} fill={art('screen-frame')} /><rect x={x + 8} y={112} width={148} height={88} fill={art('white')} />
+            <rect x={x + 8} y={112} width={148} height={14} fill={art(['screen-1', 'screen-2', 'screen-3'][i])} /><rect x={x + 16} y={134} width={60} height={58} fill={art('in-ticket-col')} />
+            <rect x={x + 84} y={134} width={64} height={8} fill={art('in-ticket-edge')} /><rect x={x + 84} y={148} width={50} height={8} fill={art('in-ticket-edge')} />
+            <rect x={x + 74} y={208} width={16} height={22} fill={art('antenna')} /></g>
+        ))}
+        <rect x={300} y={268} width={360} height={40} rx={4} fill={art('gallery')} />
+        <text x={480} y={294} textAnchor="middle" fontSize={13} fontWeight={800} fill={art('white')} fontFamily={F} letterSpacing={2}>{name.toUpperCase()}</text>
+      </g>
+    );
     default: return <g />;
   }
 }

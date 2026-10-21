@@ -157,3 +157,22 @@ describe('the door reveal', () => {
     expect(entered).toEqual([b('commons').primary.route]);
   });
 });
+
+describe('the business district rooms (prototype INTERIOR_BIZ)', () => {
+  let container: HTMLDivElement;
+  let root: Root;
+  beforeEach(() => { container = document.createElement('div'); document.body.appendChild(container); root = createRoot(container); });
+  afterEach(() => { act(() => root.unmount()); container.remove(); });
+  const you = { key: 'you', name: 'You', initials: 'AM', photo: null, you: true, tone: 'red' };
+  it('the Career Center has the board table and the client wall; the Project Studio has desk pods and the sprint wall', () => {
+    expect(ROOMS.career).toEqual({ layout: 'board', feature: 'clients', dark: false });
+    expect(ROOMS.studio).toEqual({ layout: 'pods', feature: 'sprint', dark: false });
+    expect(spotsFor('board').all).toHaveLength(10);
+    expect(spotsFor('pods').all).toHaveLength(12);
+    act(() => { root.render(<BuildingInterior id="career" people={[]} you={you} doorSign="TEAM VIEW" name="Partner Office" onAir={false} />); });
+    expect(container.textContent).toContain('CLIENT ENGAGEMENTS');
+    act(() => { root.render(<BuildingInterior id="studio" people={[]} you={you} doorSign="YOUR PAGE" name="Project Studio" onAir={false} />); });
+    expect(container.textContent).toContain('SPRINT BOARD');
+    expect(container.textContent).not.toMatch(/STORY-|TASK-|PropertyPulse|Lakeshore/);
+  });
+});

@@ -24,6 +24,8 @@ export default function CampusMePanel({ audience, fullName, initials, onClose }:
   const { settings, updateSettings, look, lookError, saveLook, openList } = useCampus();
   const [entrance, setEntrance] = useState(readEntrance);
   const heading = useRef<HTMLHeadingElement | null>(null);
+  // The prototype's "3 pts to Gold chain": the next locker item still locked, from the real catalog thresholds.
+  const next = look ? look.catalog.filter((i) => !i.unlocked).sort((a, b) => a.threshold - b.threshold)[0] : undefined;
   useCardFocus(heading);
   const setGate = (v: 'daily' | 'skip') => {
     setEntrance(v);
@@ -42,6 +44,12 @@ export default function CampusMePanel({ audience, fullName, initials, onClose }:
           <div className="cm-kicker">{ACCOUNT[audience]}</div>
           <h2 id="cm-me-name" tabIndex={-1} ref={heading}>{fullName || 'You'}</h2>
           {look && (look.rung_name || look.points) ? <span className="cm-lv" data-testid="cm-me-level">{[look.rung_name, `${look.points.toLocaleString('en-US')} pts`].filter(Boolean).join(' · ')}</span> : null}
+          {look && next && (
+            <div className="cm-me-next" data-testid="cm-me-next">
+              <div className="cm-me-bar" aria-hidden="true"><i style={{ width: `${Math.min(100, Math.round((look.points / next.threshold) * 100))}%` }} /></div>
+              <small>{next.threshold - look.points} pts to {next.name}</small>
+            </div>
+          )}
         </div>
       </div>
       <MyLook look={look} lookError={lookError} onSave={saveLook} onClose={onClose} />

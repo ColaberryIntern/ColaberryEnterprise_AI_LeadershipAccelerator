@@ -67,3 +67,6 @@
 
 .cm-gate.is-reduced .door,.cm-gate.is-reduced .cm-gate-c,.cm-gate.is-reduced .cm-idcard{transition:none}
 @media (max-width:760px){ .cm-gate .arch span{font-size:11px;letter-spacing:.3em} }
+
+/* fix round 2: one focus ring */
+.cm-gate .cm-tap:focus-visible{outline:3px solid var(--cm-art-on-dark);outline-offset:3px;box-shadow:none}

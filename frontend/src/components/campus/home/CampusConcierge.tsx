@@ -83,7 +83,7 @@ export default function CampusConcierge(p: ConciergeProps): React.ReactElement {
   const greeting = `${greetingFor(p.now.getHours())}${p.firstName ? `, ${p.firstName}` : ''}.`;
   return (
     <aside className={`cm-cc${p.tucked ? ' is-tucked' : ''}`} aria-label="Campus concierge" data-testid="cm-concierge" hidden={p.tucked}>
-      <div className="cm-kicker" data-testid="cm-cc-where">{p.live ? liveKicker(p.now) : `At the ${p.hereName}`}</div>
+      <div className="cm-kicker" data-testid="cm-cc-where">{p.live ? liveKicker(p.now) : p.hereName === 'main gate' && audience === 'business' ? 'Partner visit' : p.hereName === 'main gate' && audience === 'staff' ? 'Staff view \u00b7 every building' : `At the ${p.hereName}`}</div>
       <h1 data-testid="cm-cc-greeting">{greeting}</h1>
       <p className="cm-lead" data-testid="cm-cc-lead">{leadFor(p, next)}</p>
 

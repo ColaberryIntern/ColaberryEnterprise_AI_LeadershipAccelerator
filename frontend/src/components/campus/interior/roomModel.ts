@@ -5,8 +5,8 @@ import type { BuildingId, CampusAudience, ExplorerAccess } from '../campusMap';
  * pure data: each building's layout and wall feature, the room's perspective, and where people can sit or stand. The room is a
  * 1000 x 620 picture: a back wall from x 170 to 830 (y 70 to 330) and a floor widening to the full width at the front.
  */
-export type Layout = 'rows' | 'tables' | 'desks' | 'benches' | 'circle' | 'standing';
-export type Feature = 'arcade' | 'screen' | 'shelves' | 'schedule' | 'kanban' | 'stage' | 'quiet' | 'stars' | 'lounge' | 'frames' | 'city';
+export type Layout = 'rows' | 'tables' | 'desks' | 'benches' | 'circle' | 'standing' | 'pods' | 'board';
+export type Feature = 'arcade' | 'screen' | 'shelves' | 'schedule' | 'kanban' | 'stage' | 'quiet' | 'stars' | 'lounge' | 'frames' | 'city' | 'sprint' | 'clients' | 'screens';
 export interface RoomDef { layout: Layout; feature: Feature; dark: boolean }
 
 /** The prototype's INTERIOR table (colors live in campusArtTokens.css as --cm-art-in-<id>-wall / -floor). The Main Gate has no inside. */
@@ -15,13 +15,14 @@ export const ROOMS: Partial<Record<BuildingId, RoomDef>> = {
   lecture: { layout: 'rows', feature: 'screen', dark: false },
   library: { layout: 'tables', feature: 'shelves', dark: false },
   tower: { layout: 'standing', feature: 'schedule', dark: false },
-  studio: { layout: 'benches', feature: 'kanban', dark: false },
+  // the prototype's INTERIOR_BIZ rooms win for these three (base = INTERIOR_BIZ[id] || INTERIOR[id])
+  studio: { layout: 'pods', feature: 'sprint', dark: false },
   amphi: { layout: 'rows', feature: 'stage', dark: false },
   testing: { layout: 'desks', feature: 'quiet', dark: false },
   observatory: { layout: 'standing', feature: 'stars', dark: true },
   commons: { layout: 'tables', feature: 'lounge', dark: false },
-  gallery: { layout: 'standing', feature: 'frames', dark: false },
-  career: { layout: 'circle', feature: 'city', dark: false },
+  gallery: { layout: 'standing', feature: 'screens', dark: false },
+  career: { layout: 'board', feature: 'clients', dark: false },
 };
 
 /** Floor position (u across, t from back wall to front) to picture x, y and the figure scale (prototype P). */
@@ -30,7 +31,7 @@ export function P(u: number, t: number): { x: number; y: number; s: number } {
   return { x: l + u * (r - l), y: 330 + 290 * t, s: 0.62 + 0.55 * t };
 }
 
-export interface Spot { u: number; t: number; pose: 'sit' | 'stand'; row?: number; bench?: boolean; table?: [number, number]; desk?: boolean }
+export interface Spot { u: number; t: number; pose: 'sit' | 'stand'; row?: number; bench?: boolean; table?: [number, number]; desk?: boolean; dual?: boolean; board?: boolean }
 
 /** Every seat or standing spot of a layout, and a fixed shuffled order to fill them in (prototype spotsFor). */
 export function spotsFor(layout: Layout): { all: Spot[]; order: Spot[] } {
@@ -40,6 +41,8 @@ export function spotsFor(layout: Layout): { all: Spot[]; order: Spot[] } {
     .forEach(([u, t]) => [[-0.07, -0.07], [0.07, -0.07], [-0.09, 0.05], [0.09, 0.05]].forEach(([du, dt]) => S.push({ u: u + du, t: t + dt, pose: 'sit', table: [u, t] })));
   else if (layout === 'desks') [0.25, 0.5, 0.75].forEach((t) => [0.2, 0.4, 0.6, 0.8].forEach((u) => S.push({ u, t, pose: 'sit', desk: true })));
   else if (layout === 'benches') [0.36, 0.72].forEach((t) => [0.22, 0.34, 0.46, 0.58, 0.7, 0.82].forEach((u) => S.push({ u, t, pose: 'sit', row: t, bench: true })));
+  else if (layout === 'pods') [0.3, 0.64].forEach((t) => [0.17, 0.29, 0.45, 0.57, 0.73, 0.85].forEach((u) => S.push({ u, t, pose: 'sit', desk: true, dual: true })));
+  else if (layout === 'board') { [0.3, 0.4, 0.5, 0.6, 0.7].forEach((u) => S.push({ u, t: 0.47, pose: 'sit', board: true })); [0.3, 0.4, 0.5, 0.6, 0.7].forEach((u) => S.push({ u, t: 0.66, pose: 'sit', board: true })); }
   else if (layout === 'circle') for (let i = 0; i < 11; i++) { const a = (i / 11) * Math.PI * 2; S.push({ u: 0.5 + Math.cos(a) * 0.2, t: 0.5 + Math.sin(a) * 0.22, pose: 'stand' }); }
   else ([[0.3, 0.2], [0.62, 0.18], [0.45, 0.35], [0.2, 0.48], [0.75, 0.42], [0.55, 0.55], [0.35, 0.66], [0.82, 0.66], [0.15, 0.8], [0.62, 0.82], [0.44, 0.9], [0.9, 0.26]] as [number, number][])
     .forEach(([u, t]) => S.push({ u, t, pose: 'stand' }));
@@ -51,7 +54,7 @@ export function spotsFor(layout: Layout): { all: Spot[]; order: Spot[] } {
 export function youSpotFor(layout: Layout, taken: number): Spot {
   const { all, order } = spotsFor(layout);
   if (layout === 'circle') return order[taken] ?? { u: 0.5, t: 0.85, pose: 'stand' };
-  if (['rows', 'benches', 'desks'].includes(layout)) return order[taken] ?? all[all.length - 1];
+  if (['rows', 'benches', 'desks', 'pods', 'board'].includes(layout)) return order[taken] ?? all[all.length - 1];
   return { u: 0.5, t: 0.92, pose: 'stand' };
 }
 
