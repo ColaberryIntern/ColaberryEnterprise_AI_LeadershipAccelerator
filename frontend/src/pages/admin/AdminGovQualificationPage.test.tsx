@@ -778,13 +778,13 @@ describe('AdminGovQualificationPage — journey', () => {
   it('Proposal tab: renders the response checklist from responseSlots, each citing its requirement source', async () => {
     (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(cleanWs({
       responseSlots: [
-        { requirementId: 'R1', statement: 'Offeror shall register in SAM.', sourceRef: 'SOLICITATION', status: 'unanswered' },
+        { requirementId: 'R1', statement: 'Offeror shall register in SAM.', sourceRef: 'SOLICITATION', status: 'unanswered', bucket: 'certs' },
       ],
     }));
     await renderAt(`?canonical=${CANON}&tab=proposal`);
     await flush();
     const text = container.textContent ?? '';
-    expect(text).toContain('Proposal responses');
+    expect(text).toContain('What we submit');
     expect(text).toContain('Offeror shall register in SAM.');
     expect(text).toContain('cites SOLICITATION');   // the citation anchor is shown
     expect(text).toContain('unanswered');            // honest status, never a fabricated "done"

@@ -24,6 +24,7 @@ import { ClarificationDraftPanel } from './govWorkspace/ClarificationDraftPanel'
 import { BuildSpecPanel } from './govWorkspace/BuildSpecPanel';
 import { GovBuildPlanAIPanel } from './govWorkspace/GovBuildPlanAIPanel';
 import { GovMaterializePanel } from './govWorkspace/GovMaterializePanel';
+import { ProposalSubmittalAudit, SubmittalBucketSection, groupSlotsByBucket } from './govWorkspace/proposalSubmittal';
 import { SubmissionReadinessPanel } from './govWorkspace/SubmissionReadinessPanel';
 import { AssignmentOverviewPanel } from './govWorkspace/AssignmentOverviewPanel';
 import { WORKSPACE_STEPS, resolveStep, deriveStepState, type WorkspaceStep, type StepStateInput } from './govWorkspace/workspaceSteps';
@@ -1817,19 +1818,30 @@ export default function AdminGovQualificationPage(): React.ReactElement {
             </div>
           )}
           {(
-            <SectionCard title="Proposal responses" icon="draft-line"
-              subtitle="One slot per established requirement the proposal must answer, each citing its source. Draft each response, then take it through review → approval; a material amendment reopens an affected answer.">
-              <ResponseSlotsChecklist slots={ws.responseSlots ?? []} authoring={{
-                canAuthor: !!ws.build?.deliveryProjectId,
-                busy,
-                onSave: (rid, content) => run(() => saveGovProposalResponse(canonical, rid, content), 'Response saved.'),
-                onReview: (rid, decision) => run(() => reviewGovProposalResponse(canonical, rid, decision), 'Response updated.'),
-                onAddFigure: (rid, fig) => run(() => addGovProposalFigure(canonical, rid, fig), 'Figure attached.'),
-                onRemoveFigure: (rid, ref) => run(() => removeGovProposalFigure(canonical, rid, ref), 'Figure removed.'),
-                onResolveGap: (rid, gapId, resolution, answer) => run(() => resolveGovProposalGap(canonical, rid, gapId, resolution, answer), resolution === 'filler' ? 'Marked filler (blocks export).' : 'Gap answered.'),
-                onMarkFiller: (rid, content) => run(() => saveGovProposalDraft(canonical, rid, content, [{ id: 'needs-input', question: 'This response needs input before it can ship.', suggestions: [], resolution: 'filler' }]), 'Flagged: needs input (filler).'),
-                onDraftAI: (rid, requirementText) => run(() => draftGovProposalWithAI(canonical, rid, requirementText, oppDetail?.opportunity?.title ?? null, oppDetail?.opportunity?.agency ?? null), 'AI draft generated — review it and answer any gaps.'),
-              }} />
+            <SectionCard title="What we submit" icon="draft-line"
+              subtitle="The bid response, grouped into the submittal categories a government proposal is organized into (what you actually hand in) instead of one flat list. Draft each response, then take it through review → approval; a material amendment reopens an affected answer.">
+              {(ws.responseSlots ?? []).length === 0 ? (
+                <ResponseSlotsChecklist slots={[]} />
+              ) : (
+                <>
+                  <ProposalSubmittalAudit slots={ws.responseSlots ?? []} />
+                  {groupSlotsByBucket(ws.responseSlots ?? []).map(({ bucket, slots }) => (
+                    <SubmittalBucketSection key={bucket.key} bucket={bucket} slots={slots}>
+                      <ResponseSlotsChecklist slots={slots} authoring={{
+                        canAuthor: !!ws.build?.deliveryProjectId,
+                        busy,
+                        onSave: (rid, content) => run(() => saveGovProposalResponse(canonical, rid, content), 'Response saved.'),
+                        onReview: (rid, decision) => run(() => reviewGovProposalResponse(canonical, rid, decision), 'Response updated.'),
+                        onAddFigure: (rid, fig) => run(() => addGovProposalFigure(canonical, rid, fig), 'Figure attached.'),
+                        onRemoveFigure: (rid, ref) => run(() => removeGovProposalFigure(canonical, rid, ref), 'Figure removed.'),
+                        onResolveGap: (rid, gapId, resolution, answer) => run(() => resolveGovProposalGap(canonical, rid, gapId, resolution, answer), resolution === 'filler' ? 'Marked filler (blocks export).' : 'Gap answered.'),
+                        onMarkFiller: (rid, content) => run(() => saveGovProposalDraft(canonical, rid, content, [{ id: 'needs-input', question: 'This response needs input before it can ship.', suggestions: [], resolution: 'filler' }]), 'Flagged: needs input (filler).'),
+                        onDraftAI: (rid, requirementText) => run(() => draftGovProposalWithAI(canonical, rid, requirementText, oppDetail?.opportunity?.title ?? null, oppDetail?.opportunity?.agency ?? null), 'AI draft generated — review it and answer any gaps.'),
+                      }} />
+                    </SubmittalBucketSection>
+                  ))}
+                </>
+              )}
             </SectionCard>
           )}
 

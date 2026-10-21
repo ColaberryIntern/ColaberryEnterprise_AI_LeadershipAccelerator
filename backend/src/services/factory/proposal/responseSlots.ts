@@ -11,6 +11,7 @@
  *
  * PURE + TOTAL: no I/O, never throws; a non-array / garbage input yields [].
  */
+import { classifySubmittalBucket, type SubmittalBucketKey } from './submittalBuckets';
 /**
  * A slot is `unanswered` until a response is authored; then it carries the response's review lifecycle. The agent
  * never fabricates a reviewed/approved state — `reviewed`/`approved` are set only by explicit human review, and a
@@ -47,6 +48,10 @@ export interface ResponseSlot {
   sourceRef: string | null;
   /** `unanswered` when no response is authored; otherwise the authored response's lifecycle status. */
   status: ProposalResponseStatus;
+  /** Which of the 8 SUBMITTAL categories this response belongs to (the proposal volume/tab model), so the flat
+   *  checklist groups into a manageable <=10 set. Derived deterministically from the requirement text + section.
+   *  Optional at the type level (resilience for externally-built slot literals); deriveResponseSlots always sets it. */
+  bucket?: SubmittalBucketKey;
   /** The authored response content (only when a response exists). */
   content?: string;
   /** Commit-bound figures on the response. */
@@ -83,11 +88,13 @@ export function deriveResponseSlots(established: any[]): ResponseSlot[] {
     const ref = r.evidenceRef ?? r.evidence_ref ?? null;
     const docId = ref && (ref.docId ?? ref.doc_id);
     const sourceRef = docId ? String(docId) : null;
+    const statement = String(r.text ?? r.statement ?? '');
     slots.push({
       requirementId,
-      statement: String(r.text ?? r.statement ?? ''),
+      statement,
       sourceRef,
       status: 'unanswered',
+      bucket: classifySubmittalBucket({ text: statement, section: r.section ?? r.sectionRef ?? null }),
     });
   }
   return slots;
