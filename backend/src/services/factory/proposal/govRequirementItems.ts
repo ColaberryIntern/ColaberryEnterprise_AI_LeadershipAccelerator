@@ -53,7 +53,8 @@ const SIGNALS: Record<ReqItemCategory, RegExp> = {
 // `scope` is full of common words (system/support/host) and would otherwise out-vote a clear `submit` or
 // `after_award` signal. "The proposal must include ... the system" is a submit, not a scope.
 const PRECEDENCE: ReqItemCategory[] = ['submit', 'after_award', 'rule', 'scope'];
-const DATE_RE = /\b(\d{1,2}[/-]\d{1,2}[/-]\d{2,4}|(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+\d{1,2},?\s+\d{2,4})\b/i;
+// Mirrors proposalExtractor DATE_RE — accepts ordinal day forms ("Nov. 6th, 2026") real RFPs use. Keep in sync.
+const DATE_RE = /\b(\d{1,2}[/-]\d{1,2}[/-]\d{2,4}|(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+\d{1,2}(?:st|nd|rd|th)?,?\s+\d{2,4})\b/i;
 
 /** Classify one requirement's text into a category by precedence (first match wins), so a strong submit or
  *  after-award signal beats incidental scope keywords. No signal at all -> 'rule' (a generic obligation you

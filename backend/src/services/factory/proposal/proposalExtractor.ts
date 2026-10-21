@@ -13,8 +13,12 @@ import { docxToText, xlsxToText } from './ooxmlText';
 // tsc from rejecting it (TS7016), matching backend/src/scripts/lib/govBidContentExtractor.js.
 const AdmZip = require('adm-zip');
 
-const CHARS_PER_FILE = 8000;
-const CHARS_TOTAL = 80000;
+// Safety ceilings, NOT comprehension limits. The old 8,000 / 80,000 caps read only the first ~16% of a real
+// 25-page RFP (it stopped mid-page 4), missing the insurance, performance bond, budget cap, required
+// deliverables, references, and evaluation criteria — the very things that decide a bid. Read the WHOLE
+// document; truncate only to protect memory against a pathological upload (a 1,000-page scanned appendix).
+const CHARS_PER_FILE = 400_000;
+const CHARS_TOTAL = 1_500_000;
 const MAX_REQUIREMENTS = 200;
 const MIN_SENTENCE_LEN = 12;
 /** The file types the extractor can pull text from. Anything else is recorded as 'unsupported', never silently dropped. */
@@ -109,24 +113,37 @@ const NIGP_RE = /\bNIGP\b[^\d]{0,20}?(\d{3}[-\s]?\d{2})\b/gi;
 const MEETING_RE = /\b(pre[- ]?bid|pre[- ]?proposal|pre[- ]?submittal|site\s+visit|site\s+inspection|q\s*&\s*a|question\s+and\s+answer|industry\s+day|walk[- ]?through)\b/i;
 // Anchored on the reliable date-announcing tokens; "due" covers "proposals/questions/responses ARE due", "due date",
 // "due by". The key-date path ALSO requires a literal date in the same sentence, so these loose anchors never fire alone.
-const KEYDATE_RE = /\b(due|deadline|closing\s+date|closes|submission\s+deadline|inquir(?:y|ies)|no\s+later\s+than)\b/i;
-const DATE_RE = /\b(\d{1,2}[/-]\d{1,2}[/-]\d{2,4}|(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+\d{1,2},?\s+\d{2,4})\b/i;
+const KEYDATE_RE = /\b(due|deadline|closing\s+date|closes|submission\s+deadline|inquir(?:y|ies)|no\s+later\s+than|received\s+by|submitted\s+by|must\s+be\s+received)\b/i;
+// Accepts "03/15/2026", "March 15, 2026", and ORDINAL forms real RFPs use — "Nov. 6th, 2026",
+// "November 6th 2026" — which the non-ordinal pattern silently missed (the Snow RFP's "Nov. 6th" deadline).
+const DATE_RE = /\b(\d{1,2}[/-]\d{1,2}[/-]\d{2,4}|(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+\d{1,2}(?:st|nd|rd|th)?,?\s+\d{2,4})\b/i;
 // Time-of-day: "2:00 PM", "14:00", "2:00", "2 p.m.", "2pm". Best-effort; within a key-date sentence a "2:00" is a time.
 const TIME_RE = /\b(\d{1,2}:\d{2}\s*(?:[ap]\.?m\.?)?|\d{1,2}\s*[ap]\.?m\.?)\b/i;
 // Timezone: ONLY unambiguous forms. The 3-letter US zones (CST/CDT/EST/EDT/MST/MDT/PST/PDT), UTC/GMT, and the
-// spelled-out "<Region> Time". Deliberately NOT the 2-letter CT/ET/MT/PT — those collide with ordinary words
-// (CT=Connecticut/court, ET=et al.), and a false zone is worse than a null that tells the reviewer to verify.
+// spelled-out "<Region> Time". Deliberately NOT the bare 2-letter CT/ET/MT/PT in free text — those collide with
+// ordinary words (CT=Connecticut/court, ET=et al.), and a false zone is worse than a null that says "verify".
 const TZ_RE = /\b(C[SD]T|E[SD]T|M[SD]T|P[SD]T|UTC|GMT|(?:Central|Eastern|Mountain|Pacific)(?:\s+(?:Standard|Daylight))?\s+Time)\b/i;
+// The ONE place a 2-letter zone is trustworthy: immediately after a real time of day (with :MM or am/pm),
+// "5:00 p.m. MT". The adjacency removes the free-text collision, so we accept CT/ET/MT/PT there and only there.
+// This is the Snow-RFP deadline ("5:00 p.m. MT") the unambiguous-only rule above otherwise left zone-less.
+const TIME_ADJ_TZ_RE = /\d{1,2}(?::\d{2}\s*(?:[ap]\.?m\.?)?|\s*[ap]\.?m\.?)\s*\b([CEMP]T)\b/i;
 
 /** PURE: pull the first stated date, time, and (only if unambiguous) timezone from one line of text. */
 function whenOf(str: string): { date: string | null; time: string | null; timezone: string | null } {
   const dateM = str.match(DATE_RE);
   const timeM = str.match(TIME_RE);
   const tzM = str.match(TZ_RE);
+  let timezone = tzM ? tzM[1].replace(/\s+/g, ' ').trim() : null;
+  if (!timezone) {
+    // No unambiguous zone — fall back to a 2-letter zone ONLY when it sits right after a time (TIME_ADJ_TZ_RE),
+    // never in free text. "5:00 p.m. MT" → "MT"; a bare "CT" elsewhere stays null (verify).
+    const adj = str.match(TIME_ADJ_TZ_RE);
+    if (adj) timezone = adj[1].toUpperCase();
+  }
   return {
     date: dateM ? dateM[1] : null,
     time: timeM ? timeM[1].replace(/\s+/g, ' ').trim() : null,
-    timezone: tzM ? tzM[1].replace(/\s+/g, ' ').trim() : null,
+    timezone,
   };
 }
 

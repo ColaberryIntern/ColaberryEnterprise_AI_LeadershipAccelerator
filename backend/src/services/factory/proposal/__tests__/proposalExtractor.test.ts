@@ -230,10 +230,23 @@ describe('extractDossier — deadline time + timezone (never fabricated; a misse
     expect(d.keyDates[0].timezone).toBeNull();
   });
 
-  it('does NOT match the ambiguous 2-letter zone "CT" — leaves it null to force verification', () => {
+  it('matches a 2-letter zone when ADJACENT to a time ("2:00 PM CT") — the real-RFP case', () => {
     const d = extractDossier([ctx('Proposals are due March 15, 2026 at 2:00 PM CT.')]);
     expect(d.keyDates[0].time).toBe('2:00 PM');
-    expect(d.keyDates[0].timezone).toBeNull(); // CT deliberately unmatched (Connecticut/court collision)
+    expect(d.keyDates[0].timezone).toBe('CT'); // adjacency to a real time removes the Connecticut/court collision
+  });
+
+  it('parses an ORDINAL date + a time-adjacent 2-letter zone together (the Snow RFP "Nov. 6th … 5:00 p.m. MT")', () => {
+    const d = extractDossier([ctx('Proposals must be received by 5:00 p.m. MT on November 6th, 2026.')]);
+    const k = d.keyDates[0];
+    expect(k.date).toBe('November 6th, 2026'); // ordinal day now parses
+    expect(k.time).toMatch(/^5:00\s*p\.?m\.?$/i);
+    expect(k.timezone).toBe('MT');             // 2-letter zone accepted next to the time
+  });
+
+  it('still leaves a BARE 2-letter zone null when NOT adjacent to a time (keeps the free-text collision guard)', () => {
+    const d = extractDossier([ctx('Proposals are due 03/15/2026; hand-deliver to the CT procurement office.')]);
+    expect(d.keyDates[0].timezone).toBeNull(); // "CT" here is not after a time — stays null
   });
 
   it('leaves both time and timezone null when only a date is stated (never invents a time)', () => {
@@ -266,13 +279,18 @@ describe('extractProposal — per-file outcome (the honesty rail: no silent loss
     expect(fileCount).toBe(1); // only the file that yielded text counts
   });
 
-  it('flags truncation when a file exceeds the per-file character budget', async () => {
-    const big = 'The vendor shall do a thing. '.repeat(1000); // well over 8000 chars
+  it('now reads a long multi-page file in FULL (the 8KB cap is gone) and still flags truncation past the safety ceiling', async () => {
+    const big = 'The vendor shall do a thing. '.repeat(1600); // ~46,400 chars — a realistic 25-page RFP, far past the OLD 8KB cap
     const { files } = await extractProposal(makeZip({ 'long.txt': big }));
     expect(files[0].status).toBe('extracted');
-    expect(files[0].truncated).toBe(true);
-    expect(files[0].chars).toBe(8000); // CHARS_PER_FILE
-    expect(files[0].warning).toMatch(/first .* characters/i);
+    expect(files[0].truncated).toBe(false);         // fully read now — NOT cut at 8000 (the 16%-of-the-RFP bug)
+    expect(files[0].chars).toBe(big.length);
+    expect(files[0].warning).toBeNull();
+    // The high safety ceiling still truncates a pathological upload to protect memory.
+    const { files: f2 } = await extractProposal(makeZip({ 'huge.txt': 'x'.repeat(450_000) }));
+    expect(f2[0].truncated).toBe(true);
+    expect(f2[0].chars).toBe(400_000);              // CHARS_PER_FILE ceiling
+    expect(f2[0].warning).toMatch(/first .* characters/i);
   });
 
   it('a fully-extracted file reports truncated:false and a null warning', async () => {
