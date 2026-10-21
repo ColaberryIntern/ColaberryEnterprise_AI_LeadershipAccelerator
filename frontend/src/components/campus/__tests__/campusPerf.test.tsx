@@ -48,6 +48,10 @@ import { PARTICIPANT_TOKEN_KEY } from '../../../utils/participantToken';
 
 const answer = (): CampusPresence => ({ commons: { count: 2, people: [{ enrollment_id: 'p1', display_name: 'Avery Stone', avatar_url: null }, { anonymous: true }] } });
 
+// C11b: the illustrated map is ~5x the DOM of the C2 outlines (377 vs 77 nodes; trees, paths, windows), and these suites mount
+// the whole campus (up to three maps) and some run axe over it; a cold first render under parallel jest can pass 5 s.
+jest.setTimeout(15000);
+
 describe('samePresence', () => {
   it('equal content is the same; any difference, or null on one side, is not', () => {
     expect(samePresence(answer(), answer())).toBe(true);

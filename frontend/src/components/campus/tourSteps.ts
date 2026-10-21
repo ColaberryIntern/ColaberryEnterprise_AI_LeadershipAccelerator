@@ -82,3 +82,10 @@ export function tourFor(
   }
   return { audience, name: def.name, stops };
 }
+
+/** C11b: the building's one-line description for this viewer (the arrival panel's subtitle): the same tour copy, so the panel and
+ *  the tour never disagree. Staff read the member copy; a building with no copy for this audience has no line. */
+export function buildingLine(audience: CampusAudience, id: BuildingId): string | null {
+  const table = ORDER[audience === 'staff' ? 'member' : audience].table;
+  return table[id]?.what ?? MEMBER[id]?.what ?? null;
+}

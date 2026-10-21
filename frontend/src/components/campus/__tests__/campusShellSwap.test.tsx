@@ -91,6 +91,10 @@ afterEach(() => { act(() => root.unmount()); container.remove(); });
 
 const has = (sel: string) => !!container.querySelector(sel);
 
+// C11b: the illustrated map is ~5x the DOM of the C2 outlines (377 vs 77 nodes; trees, paths, windows), and these suites mount
+// the whole campus (up to three maps) and some run axe over it; a cold first render under parallel jest can pass 5 s.
+jest.setTimeout(15000);
+
 describe('PortalShell nav swap', () => {
   it('campus active: the campus nav and tab bar replace the classic ones', async () => {
     await mount({ campus: true });

@@ -64,6 +64,10 @@ const banner = () => container.querySelector('[data-testid="cm-banner"]');
 const trail = () => Array.from(container.querySelectorAll('[data-testid="cm-trail"] li')).map((li) => li.textContent);
 const esc = (init: KeyboardEventInit = {}) => act(() => { window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true, ...init })); });
 
+// C11b: the illustrated map is ~5x the DOM of the C2 outlines (377 vs 77 nodes; trees, paths, windows), and these suites mount
+// the whole campus (up to three maps) and some run axe over it; a cold first render under parallel jest can pass 5 s.
+jest.setTimeout(15000);
+
 describe('banner visibility', () => {
   it('renders when the campus is active', async () => {
     await mount('/portal/today');

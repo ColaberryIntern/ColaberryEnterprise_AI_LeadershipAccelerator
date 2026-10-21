@@ -1,0 +1,75 @@
+/* ============================================================
+   Colaberry Campus C11b: the entry gate (prototype .gate, .sun, .ground, .door, .arch, .idwrap, .idcard, .tap, .tap-alt, and the
+   Workplace lobby variant .gate.work). Opening swings the two iron doors back in 3D; reduce motion skips straight to the campus.
+   Colors: campusArtTokens.css only.
+   ============================================================ */
+@import './campusArtTokens.css';
+@import './campusFonts.css';
+
+.cm-gate{position:fixed;inset:0;z-index:60;perspective:1600px;overflow:hidden;font-family:'DM Sans',var(--sans),system-ui,sans-serif;
+  background:linear-gradient(var(--cm-art-gate-sky-1) 0%,var(--cm-art-gate-sky-2) 45%,var(--cm-art-gate-sky-3) 78%,var(--cm-art-gate-sky-4) 100%)}
+.cm-gate .sun{position:absolute;left:50%;bottom:18%;width:260px;height:260px;border-radius:50%;transform:translateX(-50%);
+  background:radial-gradient(circle,var(--cm-art-gate-sun-1),var(--cm-art-gate-sun-2) 60%,transparent 70%);opacity:.85}
+.cm-gate .ground{position:absolute;left:0;right:0;bottom:0;height:20%;background:var(--cm-art-gate-ground)}
+.cm-gate .door{position:absolute;top:0;bottom:0;width:50%;transition:transform 1.5s cubic-bezier(.6,0,.2,1);background:
+  repeating-linear-gradient(90deg,transparent 0 34px,var(--cm-art-gate-iron) 34px 40px),
+  linear-gradient(var(--cm-art-gate-iron),var(--cm-art-gate-iron)) 0 22%/100% 8px no-repeat,
+  linear-gradient(var(--cm-art-gate-iron),var(--cm-art-gate-iron)) 0 78%/100% 8px no-repeat}
+.cm-gate .door.l{left:0;transform-origin:left center;border-right:6px solid var(--cm-art-gate-iron)}
+.cm-gate .door.r{right:0;transform-origin:right center;border-left:6px solid var(--cm-art-gate-iron)}
+.cm-gate.is-opening .door.l{transform:rotateY(80deg)}
+.cm-gate.is-opening .door.r{transform:rotateY(-80deg)}
+.cm-gate .arch{position:absolute;left:50%;top:0;transform:translateX(-50%);width:min(760px,92vw);height:120px;border-radius:0 0 50% 50%/0 0 100% 100%;
+  border:10px solid var(--cm-art-gate-iron);border-top:0;display:grid;place-items:center;color:var(--cm-art-gate-arch-text);z-index:2}
+.cm-gate .arch span{font:700 14px 'DM Sans',var(--sans),sans-serif;letter-spacing:.42em;text-transform:uppercase;margin-top:-20px;text-align:center}
+.cm-gate-c{position:absolute;inset:0;display:grid;place-items:center;z-index:3;padding:20px;transition:opacity .6s,transform .9s;overflow:auto}
+.cm-gate.is-opening .cm-gate-c{opacity:0;transform:translateY(-30px) scale(.96)}
+.cm-gate.is-done{opacity:0;transition:opacity .7s;pointer-events:none}
+.cm-gate-logo{width:min(230px,56vw);height:auto;display:block;margin:0 auto 20px;background:var(--cm-art-paper);padding:12px 22px;border-radius:999px;box-shadow:0 10px 30px var(--cm-art-gate-shadow)}
+.cm-idwrap{text-align:center;color:var(--cm-art-on-dark)}
+.cm-idwrap h1{font-family:'Fraunces',Georgia,serif;font-size:clamp(30px,5vw,52px);margin:0 0 6px;letter-spacing:-.02em;text-shadow:0 2px 20px var(--cm-art-gate-text-shadow);color:var(--cm-art-on-dark)}
+.cm-idwrap p{margin:0 0 18px}
+.cm-gate-streak{display:inline-flex;gap:6px;align-items:center;border:1px solid var(--cm-art-gate-arch-text);border-radius:999px;padding:6px 14px;font-size:13px;margin:0 0 22px}
+.cm-idcard{width:340px;max-width:88vw;margin:0 auto 22px;background:var(--cm-art-paper);color:var(--cm-art-ink);border-radius:18px;padding:16px;display:flex;gap:14px;text-align:left;
+  box-shadow:0 20px 50px var(--cm-art-gate-shadow);transform:rotate(-2deg);position:relative;overflow:hidden;transition:transform .9s}
+.cm-idcard::before{content:"";position:absolute;left:0;top:0;bottom:0;width:6px;background:var(--cm-art-red)}
+.cm-idcard.is-explorer::before{background:var(--cm-art-explorer)}
+.cm-gate.is-opening .cm-idcard{transform:translateY(-12px) rotate(0)}
+.cm-idcard .ph{width:64px;height:78px;border-radius:10px;background:linear-gradient(135deg,var(--cm-art-gate-photo-1),var(--cm-art-gate-photo-2));color:var(--cm-art-on-dark);
+  display:grid;place-items:center;font:700 20px 'Fraunces',Georgia,serif;flex:none;overflow:hidden}
+.cm-idcard.is-explorer .ph{background:var(--cm-art-explorer)}
+.cm-idcard.is-partner::before,.cm-idcard.is-partner .ph{background:var(--cm-art-business)}
+.cm-idcard.is-staff::before{background:var(--cm-art-gold)}
+.cm-idcard.is-staff .ph{background:var(--cm-art-explorer)}
+.cm-idcard.is-staff .tier{background:var(--cm-art-explorer-tint);color:var(--cm-art-explorer)}
+.cm-idcard.is-partner .tier{background:var(--cm-art-business-tint);color:var(--cm-art-business)}
+.cm-idcard .ph img{width:100%;height:100%;object-fit:cover}
+.cm-idcard b{font-family:'Fraunces',Georgia,serif;font-size:19px;display:block}
+.cm-idcard small{display:block;color:var(--cm-art-muted);font-size:12px;line-height:1.5}
+.cm-idcard .tier{display:inline-block;margin-top:6px;background:var(--cm-art-gate-tier-bg);color:var(--cm-art-gate-tier);border-radius:999px;padding:2px 8px;font-size:11px;font-weight:700}
+.cm-idcard.is-explorer .tier{background:var(--cm-art-explorer-tint);color:var(--cm-art-explorer)}
+.cm-tap{background:var(--cm-art-white);color:var(--cm-art-pic-ink);border:0;border-radius:999px;padding:14px 26px;font-weight:700;font-size:15px;box-shadow:0 10px 30px var(--cm-art-gate-shadow);cursor:pointer}
+.cm-tap:hover{transform:translateY(-2px)}
+.cm-tap-alt{display:block;margin:12px auto 0;border:0;background:transparent;color:var(--cm-art-on-dark);font-weight:700;font-size:14px;text-decoration:underline;text-underline-offset:4px;cursor:pointer}
+.cm-gate button:focus-visible{outline:3px solid var(--cm-art-on-dark);outline-offset:3px}
+
+/* Workplace names: the lobby (prototype .gate.work) */
+.cm-gate.is-work{background:linear-gradient(var(--cm-art-gate-work-1) 0%,var(--cm-art-gate-work-2) 52%,var(--cm-art-gate-work-3) 100%)}
+.cm-gate.is-work .sun{display:none}
+.cm-gate.is-work .ground{background:var(--cm-art-gate-work-ground)}
+.cm-gate.is-work .door{background:linear-gradient(90deg,var(--cm-art-gate-work-glass-1),var(--cm-art-gate-work-glass-2)),
+  repeating-linear-gradient(90deg,transparent 0 160px,var(--cm-art-gate-work-frame) 160px 168px);border-color:var(--cm-art-gate-work-frame)}
+.cm-gate.is-work .arch{border:0;background:var(--cm-art-gate-work-arch);height:62px;border-radius:0 0 18px 18px;width:min(560px,92vw)}
+.cm-gate.is-work .arch span{margin-top:0;letter-spacing:.3em;font-size:12px}
+.cm-gate.is-work .cm-idwrap h1,.cm-gate.is-work .cm-idwrap p{color:var(--cm-art-gate-work-ink);text-shadow:none}
+.cm-gate.is-work .cm-tap{background:var(--cm-art-gate-work-ink);color:var(--cm-art-on-dark)}
+.cm-gate.is-work .cm-tap-alt,.cm-gate.is-work .cm-gate-streak{color:var(--cm-art-gate-work-ink);border-color:var(--cm-art-gate-work-ink)}
+
+.cm-gate.is-reduced .door,.cm-gate.is-reduced .cm-gate-c,.cm-gate.is-reduced .cm-idcard{transition:none}
+@media (max-width:760px){ .cm-gate .arch span{font-size:11px;letter-spacing:.3em} }
+
+/* fix round 2: one focus ring */
+.cm-gate .cm-tap:focus-visible{outline:3px solid var(--cm-art-on-dark);outline-offset:3px;box-shadow:none}
+
+/* fix round 3: one tight ring on the focused Enter (a white halo on a white button read as two) */
+.cm-gate .cm-tap:focus-visible{outline:3px solid var(--cm-art-gate-sky-1);outline-offset:-3px}

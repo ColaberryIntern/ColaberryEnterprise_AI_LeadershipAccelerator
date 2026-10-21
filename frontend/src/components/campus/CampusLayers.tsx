@@ -2,25 +2,18 @@ import React, { useEffect, useRef } from 'react';
 import CampusWorld from './CampusWorld';
 import CampusDoorTransition from './CampusDoorTransition';
 import CampusDmToast from './CampusDmToast';
-import { useCampusOnAir } from './campusOnAir';
-import CampusTour from './CampusTour';
-import CampusTourEnd from './CampusTourEnd';
-import { tourFor } from './tourSteps';
-import { explorerPath } from './campusPath';
-import MyLook from './MyLook';
 import CampusMapBarActions from './CampusMapBarActions';
 import { trapTab } from './focusTrap';
 import { useReturnFocus } from './useReturnFocus';
 import CampusListView from './CampusListView';
 import './campusLook.css';
 import './campusTour.css';
-import { routeBuildings } from './campusPlan';
 import './campusPeople.css';
 import './campusAudiences.css';
 import './campus.css';
 import './campusLive.css';
 import { useCampus } from './CampusContext';
-import { useCampusView } from './useCampusView';
+import { useCampusWorldProps } from './useCampusWorldProps';
 
 /**
  * The full-screen campus layers (Campus C2): the walkable map and the list view. Rendered once
@@ -30,18 +23,8 @@ import { useCampusView } from './useCampusView';
  */
 export { CampusListView };
 export function CampusMapOverlay(): React.ReactElement | null {
-  const { layer, mapFocus, settings, closeLayer, openList, presence, presenceError, enterThroughDoor,
-    staffDesks, personCard, openPersonCard, closePersonCard, planStops, tourIndex, startTour, setTourIndex, endTour, look, lookError, saveLook, lockerOpen, openLocker, closeLocker } = useCampus();
-  const { audience, hasFullAccess, buildings, accessOf, isExplorer } = useCampusView();
-  const { buildings: onAir } = useCampusOnAir();
-  const route = planStops ? routeBuildings(planStops) : undefined;
-  // C7: the guided tour for THIS viewer's campus (null for staff). The end card walks to the Main Gate where it exists (Maya's desk).
-  const tour = tourFor(audience, buildings, accessOf, settings.workplaceNames);
-  const touring = tour && tourIndex !== null ? Math.min(tourIndex, tour.stops.length) : null;
-  const tourTarget = tour && touring !== null
-    ? (touring < tour.stops.length ? tour.stops[touring].buildingId : (buildings.some((x) => x.id === 'gate') ? 'gate' : tour.stops[tour.stops.length - 1]?.buildingId ?? null))
-    : null;
-  // The path's "Ask Maya at her desk below" line is for the Main Gate card; the tour card has no desk below it, so it is off here.
+  const { layer, mapFocus, closeLayer, openList, presenceError, tourIndex, startTour, lockerOpen, openLocker } = useCampus();
+  const { props, tour, touring } = useCampusWorldProps(closeLayer, closeLayer, mapFocus);
   const open = layer === 'map';
   const dialog = useRef<HTMLDivElement | null>(null);
   useReturnFocus(open);
@@ -61,15 +44,7 @@ export function CampusMapOverlay(): React.ReactElement | null {
           onTour={startTour} onLook={openLocker} onList={openList} />
         <button type="button" className="cm-btn is-secondary" onClick={closeLayer} aria-label="Close campus map">Close</button>
       </div>
-      <CampusWorld buildings={buildings} audience={audience} hasFullAccess={hasFullAccess} accessOf={accessOf} isExplorer={isExplorer} workplaceNames={settings.workplaceNames}
-        reduceMotion={settings.reduceMotion} initialTarget={mapFocus} onExit={closeLayer} onNavigate={closeLayer}
-        presence={presence} presenceError={presenceError}
-        staffDesks={staffDesks} personCard={personCard} onOpenPerson={openPersonCard} onClosePerson={closePersonCard} onAir={onAir} route={route}
-        tour={tour && touring !== null ? { target: tourTarget, onEnd: endTour, card: <CampusTour tour={tour} index={touring} onIndex={setTourIndex} onEnd={endTour}
-          explorerEnd={<CampusTourEnd pathModel={explorerPath(buildings, accessOf, settings.workplaceNames, false)} onNavigate={closeLayer} />} /> } : undefined}
-        panel={lockerOpen ? { onClose: closeLocker, card: <MyLook look={look} lookError={lookError} onSave={saveLook} onClose={closeLocker} /> } : undefined}
-        ownGear={look?.equipped}
-        onEnterRoom={(route, from) => enterThroughDoor(route, from ? { left: from.left, top: from.top, width: from.width, height: from.height } : null)} />
+      <CampusWorld {...props} />
     </div>
   );
 }

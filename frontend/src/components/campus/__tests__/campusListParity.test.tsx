@@ -123,6 +123,10 @@ describe.each(['member', 'explorer', 'business', 'staff'] as const)('list view p
   });
 });
 
+// C11b: the illustrated map is ~5x the DOM of the C2 outlines (377 vs 77 nodes; trees, paths, windows), and these suites mount
+// the whole campus (up to three maps) and some run axe over it; a cold first render under parallel jest can pass 5 s.
+jest.setTimeout(15000);
+
 describe('the Main Gate and admin rooms', () => {
   it('an Explorer gets the path to enrolling in the Main Gate entry', async () => {
     mockAudience = 'explorer';

@@ -45,7 +45,7 @@ export default function MyLook({ look, lookError, onSave, onClose }: MyLookProps
             const items = look.catalog.filter((i) => i.slot === slot);
             if (!items.length) return null;
             return (
-              <div key={slot} className="cm-look-slot">
+              <div key={slot} className="cm-look-slot" data-slot={slot}>
                 <h3 className="cm-card-h">{SLOT_LABEL[slot]}{slot === 'ride' ? ' (only you see it, while you travel)' : ''}</h3>
                 <ul className="cm-look-items">
                   {items.map((i) => {

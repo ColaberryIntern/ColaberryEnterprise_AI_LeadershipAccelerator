@@ -61,8 +61,16 @@ async function newPage(browser, jwt, viewport = { width: 1440, height: 900 }) {
 async function runAudience(browser, audience, jwt) {
   const { page, context, errors } = await newPage(browser, jwt);
   try {
-    await step(audience, 'the portal opens on the campus', async () => {
+    await step(audience, 'the first visit to Today opens the campus home (C11b, D1)', async () => {
       await page.goto(`${urls.base}/portal/today`, { waitUntil: 'domcontentloaded' });
+      await page.waitForURL((u) => u.pathname === '/portal/campus', { timeout: 30_000 });
+      await page.waitForSelector('[data-testid="cm-home"] [data-testid="cm-world"]', { timeout: 30_000 });
+      await page.waitForSelector('[data-testid="cm-concierge"]', { timeout: 30_000 });
+      await page.waitForSelector('[data-testid="cm-topbar"]', { timeout: 30_000 });
+    });
+
+    await step(audience, 'Today stays reachable (later visits and ?stay=1 keep the campus nav)', async () => {
+      await page.goto(`${urls.base}/portal/today?stay=1`, { waitUntil: 'domcontentloaded' });
       await page.waitForSelector('nav.cm-nav[aria-label="Campus"]', { timeout: 30_000 });
       must(await page.locator('[data-testid="cm-banner"]').count() > 0 || await page.locator('nav.cm-nav').count() > 0, 'no campus');
     });

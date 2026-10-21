@@ -1,0 +1,75 @@
+/* Colaberry Campus C11b: the prototype's art palette as tokens.
+
+   THE ONE FILE IN components/campus ALLOWED TO HOLD HEX COLORS (campusNoHex names it by exact path; Ali's decision 2026-10-20).
+   Every color here comes from the prototype (docs/design/campus/colaberry-campus.html: :root, drawGround, drawPaths, drawTrees,
+   drawDistrictDecor, drawGate, drawBuilding, renderRoom). Components use var(--cm-art-*) only. The illustration keeps its own
+   colors in both themes (it is a picture); the chrome tokens (paper, ink, line, muted) switch in dark mode.
+
+   Grows with each ported module; a token here that nothing uses is removed in the same change. */
+:root{
+  /* chrome (prototype :root) */
+  --cm-art-red:#e31b23; --cm-art-red-d:#b8141a; --cm-art-ink:#1f1b16; --cm-art-muted:#6d655b;
+  --cm-art-paper:#fffdf8; --cm-art-line:#ece3d4;
+  --cm-art-shadow:0 10px 30px rgba(40,35,20,.16),0 2px 6px rgba(40,35,20,.08);
+  --cm-art-live:#1f8a4c; --cm-art-gold:#d4a017; --cm-art-gold-ring:#f3c64a; --cm-art-explorer:#1f7a45; --cm-art-business:#1f4f7a;
+  /* grounds */
+  --cm-art-ground:#e3ecd2; --cm-art-ground-dot:#cddcb4; --cm-art-lawn:#d4e3bd; --cm-art-lawn-gate:#d8e5c3;
+  --cm-art-path:#f7eedf; --cm-art-path-edge:#e2d2b6;
+  --cm-art-paving:#e6e2da; --cm-art-paving-line:#d5cec2; --cm-art-district-edge:#cfc7b9;
+  --cm-art-water:#a9d1d6; --cm-art-water-hi:#c8e6ea; --cm-art-quad-text:#7d8a6a; --cm-art-fountain:#9fcbd2;
+  --cm-art-lamp-post:#4a5560; --cm-art-lamp:#ffe9a8; --cm-art-sign:#14202a; --cm-art-sign-base:#9aa6b0; --cm-art-sign-sub:#9fc0d6;
+  --cm-art-tree-1:#6d9b52; --cm-art-tree-2:#7fae5f; --cm-art-tree-hi:#9cc47c; --cm-art-tree-shadow:rgba(50,70,30,.18);
+  --cm-art-staff-reese:#b07a00; --cm-art-staff-dara:#c46a1b; --cm-art-gate-post:#3a2f26; --cm-art-gate-cap:#2a221b; --cm-art-desk:#6b4a2e; --cm-art-maya:#b0306a;
+  --cm-art-token-shadow:rgba(0,0,0,.18);
+  /* buildings (drawBuilding): per-building color and the prototype's shade() variants */
+  --cm-art-lecture:#c0392b; --cm-art-lecture-d25:#a72012; --cm-art-lecture-d35:#9d1608;
+  --cm-art-library:#3d4a66; --cm-art-library-d25:#24314d; --cm-art-library-d35:#1a2743;
+  --cm-art-tower:#7a4a7a; --cm-art-tower-d35:#572757;
+  --cm-art-studio:#2f6f73;
+  --cm-art-amphi:#d9962b; --cm-art-amphi-d20:#c58217;
+  --cm-art-testing:#2b5d8a; --cm-art-testing-d35:#083a67;
+  --cm-art-observatory:#465a8c; --cm-art-observatory-d25:#2d4173; --cm-art-observatory-d35:#233769;
+  --cm-art-commons:#d9962b; --cm-art-commons-d30:#bb780d; --cm-art-commons-d35:#b67308;
+  --cm-art-gallery:#b4533a;
+  --cm-art-career:#1f4f7a;
+  --cm-art-arcade:#6b2fa0;
+  /* shared building parts */
+  --cm-art-bld-shadow:rgba(60,70,40,.18); --cm-art-wall:#fbf6ee; --cm-art-wall-edge:#d9cdb8; --cm-art-window:#bcd3dc;
+  --cm-art-step:#e6dccb; --cm-art-label:#ffffff; --cm-art-label-edge:#e6dccb;
+  /* ink INSIDE the picture (name pills, chips, badges): fixed in both themes, unlike the chrome --cm-art-ink */
+  --cm-art-pic-ink:#1f1b16; --cm-art-pic-muted:#9a8f7e;
+  --cm-art-office-wall:#dfe9f0; --cm-art-office-edge:#9fb3c2; --cm-art-office-glass:#8fb2c8; --cm-art-office-lobby:#cbdbe6;
+  --cm-art-office-door:#6f93ab; --cm-art-antenna:#5d6876; --cm-art-white:#ffffff;
+  --cm-art-pavilion-wall:#cfe5ee; --cm-art-screen-frame:#1f2a33; --cm-art-screen-1:#e8a17f; --cm-art-screen-2:#9fd0c4; --cm-art-screen-3:#f3c76b;
+  --cm-art-flagpole:#5b4a3a; --cm-art-flag:#e31b23; --cm-art-dome-slit:#f3d58a; --cm-art-clock-face:#ffffff; --cm-art-clock-hand:#1f1b16;
+  --cm-art-arcade-body:#2b1a3d; --cm-art-arcade-edge:#4a2f6b; --cm-art-neon-1:#ff4fa3; --cm-art-neon-2:#3de0ff; --cm-art-neon-3:#ffd23d;
+  --cm-art-neon-4:#7dff6b; --cm-art-neon-sign:#14091f; --cm-art-neon-text:#ffd6ee; --cm-art-joystick:#1b1622;
+  /* interiors (prototype INTERIOR + renderRoom + featureSVG + furnitureSVG; shades via the prototype's shade()) */
+  --cm-art-in-arcade-wall:#2b1a3d; --cm-art-in-arcade-wall-d16:#1b0a2d; --cm-art-in-arcade-wall-d28:#0f0021; --cm-art-in-arcade-floor:#3a2d52; --cm-art-in-arcade-door:#4d1182; --cm-art-in-arcade-sign:#430778; --cm-art-in-lecture-wall:#f3e3df; --cm-art-in-lecture-wall-d16:#e3d3cf; --cm-art-in-lecture-wall-d28:#d7c7c3; --cm-art-in-lecture-floor:#b98d63; --cm-art-in-lecture-door:#a21b0d; --cm-art-in-lecture-sign:#981103; --cm-art-in-library-wall:#e6e8ef; --cm-art-in-library-wall-d16:#d6d8df; --cm-art-in-library-wall-d28:#caccd3; --cm-art-in-library-floor:#9c7a5b; --cm-art-in-library-door:#1f2c48; --cm-art-in-library-sign:#15223e; --cm-art-in-tower-wall:#efe4ef; --cm-art-in-tower-wall-d16:#dfd4df; --cm-art-in-tower-wall-d28:#d3c8d3; --cm-art-in-tower-floor:#8f8a96; --cm-art-in-tower-door:#5c2c5c; --cm-art-in-tower-sign:#522252; --cm-art-in-studio-door:#115155; --cm-art-in-studio-sign:#07474b; --cm-art-in-amphi-wall:#f6ead6; --cm-art-in-amphi-wall-d16:#e6dac6; --cm-art-in-amphi-wall-d28:#daceba; --cm-art-in-amphi-floor:#b98d63; --cm-art-in-amphi-door:#bb780d; --cm-art-in-amphi-sign:#b16e03; --cm-art-in-testing-wall:#e3ebf3; --cm-art-in-testing-wall-d16:#d3dbe3; --cm-art-in-testing-wall-d28:#c7cfd7; --cm-art-in-testing-floor:#a9b1ba; --cm-art-in-testing-door:#0d3f6c; --cm-art-in-testing-sign:#033562; --cm-art-in-observatory-wall:#2a3150; --cm-art-in-observatory-wall-d16:#1a2140; --cm-art-in-observatory-wall-d28:#0e1534; --cm-art-in-observatory-floor:#3b3f55; --cm-art-in-observatory-door:#283c6e; --cm-art-in-observatory-sign:#1e3264; --cm-art-in-commons-wall:#f7ead2; --cm-art-in-commons-wall-d16:#e7dac2; --cm-art-in-commons-wall-d28:#dbceb6; --cm-art-in-commons-floor:#c49a6c; --cm-art-in-commons-door:#bb780d; --cm-art-in-commons-sign:#b16e03; --cm-art-in-gallery-door:#96351c; --cm-art-in-gallery-sign:#8c2b12; --cm-art-in-career-door:#01315c; --cm-art-in-career-sign:#002752; --cm-art-in-grain:rgba(0,0,0,.08); --cm-art-in-light:#fff7d6; --cm-art-in-light-dark:#8fa0ff; --cm-art-in-door-glow:#fff6d6; --cm-art-in-door-knob:#ffd36e; --cm-art-in-legs:#2a2430; --cm-art-in-fig-shadow:rgba(0,0,0,.18); --cm-art-in-wood:#6b4a33; --cm-art-in-wood-d:#4a3324; --cm-art-in-board:#16131a; --cm-art-in-board-amber:#ffcf5a; --cm-art-in-board-text:#ffd98a; --cm-art-in-board-ok:#7fe0a0; --cm-art-in-kanban-edge:#c9d3d4; --cm-art-in-note-1:#ffe08a; --cm-art-in-note-2:#ffc2b8; --cm-art-in-note-3:#c4ecd9; --cm-art-in-stage:#d9962b; --cm-art-in-stage-floor:#8a5a3c; --cm-art-in-stage-dark:#3a2f26; --cm-art-in-quiet:#2b5d8a; --cm-art-in-sky:#0d1230; --cm-art-in-sky-rim:#6b7bb8; --cm-art-in-star-gold:#ffcf5a; --cm-art-in-star-tint:rgba(255,207,90,.15); --cm-art-in-lounge-panel:#ffd98a; --cm-art-in-lounge-neon:#ff4f8b; --cm-art-in-lounge-dot:#3ddc84; --cm-art-in-frame:#3a2f26; --cm-art-in-city-sky:#bfe0ea; --cm-art-in-city-bldg:#5d7f8a; --cm-art-in-city-board:#1f7a5a; --cm-art-in-city-board-sub:#c4ecd9; --cm-art-in-screen:#1a1620; --cm-art-in-screen-dim:rgba(15,12,18,.55); --cm-art-in-cab-1:#3a1f5c; --cm-art-in-cab-2:#173b4f; --cm-art-in-cab-3:#4f1730; --cm-art-in-cab-1-d:#21063f; --cm-art-in-cab-2-d:#002236; --cm-art-in-cab-3-d:#360017; --cm-art-in-cab-screen:#0b0712; --cm-art-in-bench:#6c7a7d; --cm-art-in-bench-top:#90a0a3; --cm-art-in-row:#7a5038; --cm-art-in-row-top:#9a6a4a; --cm-art-in-laptop:#2a2e33; --cm-art-in-table:#f2e6d2; --cm-art-in-table-leg:#9a7a5a; --cm-art-in-desk:#b8c2cc; --cm-art-in-p1:#c0392b; --cm-art-in-p2:#2f6f73; --cm-art-in-p3:#3d4a66; --cm-art-in-p4:#d9962b; --cm-art-in-p5:#7a4a7a; --cm-art-in-p6:#1f7a5a; --cm-art-in-p7:#b4533a; --cm-art-in-p8:#465a8c; --cm-art-in-p9:#2b5d8a; --cm-art-in-p10:#8e5b3a; --cm-art-in-you:#e31b23; --cm-art-in-name-bg:#17131c; --cm-art-in-glass:rgba(186,218,232,.55); --cm-art-in-glass-edge:#9fb7c6;
+  /* the entry gate (prototype .gate, .door, .arch, .idcard, .tap; the Workplace lobby variant) */
+  --cm-art-gate-sky-1:#2a1f3d; --cm-art-gate-sky-2:#7a3b4a; --cm-art-gate-sky-3:#e8875b; --cm-art-gate-sky-4:#f6c47a; --cm-art-gate-sun-1:#ffe2a6; --cm-art-gate-sun-2:#f6a55e; --cm-art-gate-ground:#2c3b25; --cm-art-gate-iron:#1b1612; --cm-art-gate-arch-text:#f7e6c8; --cm-art-gate-photo-1:#3a2d24; --cm-art-gate-photo-2:#6b4f3a; --cm-art-gate-tier-bg:#fff3d6; --cm-art-gate-tier:#9a5b00; --cm-art-gate-shadow:rgba(0,0,0,.35); --cm-art-gate-text-shadow:rgba(0,0,0,.35); --cm-art-gate-work-1:#e6eff5; --cm-art-gate-work-2:#b9cfdd; --cm-art-gate-work-3:#7d9bb0; --cm-art-gate-work-ground:#3c4852; --cm-art-gate-work-frame:#2c3a44; --cm-art-gate-work-arch:#23303a; --cm-art-gate-work-ink:#14202a; --cm-art-gate-work-glass-1:rgba(255,255,255,.28); --cm-art-gate-work-glass-2:rgba(255,255,255,.06);
+  /* business rooms (prototype INTERIOR_BIZ: board table, desk pods, ticket wall) */
+  --cm-art-in-board-top:#3b3229; --cm-art-in-board-side:#2a231c; --cm-art-in-board-pc:#cfd8df; --cm-art-in-pod:#e9edf0; --cm-art-in-pod-edge:#b7c0c8;
+  --cm-art-in-monitor:#22303a; --cm-art-in-monitor-1:#3ddc84; --cm-art-in-monitor-2:#9fc0d6; --cm-art-in-ticket-col:#f2f4f6; --cm-art-in-ticket-edge:#dde3e8;
+  --cm-art-in-studio-wall:#eef2f5; --cm-art-in-studio-wall-d16:#dee2e5; --cm-art-in-studio-wall-d28:#d2d6d9; --cm-art-in-studio-floor:#858e99;
+  --cm-art-in-career-wall:#e9eef2; --cm-art-in-career-wall-d16:#d9dee2; --cm-art-in-career-wall-d28:#cdd2d6; --cm-art-in-career-floor:#7b8591;
+  --cm-art-in-gallery-wall:#f2f4f6; --cm-art-in-gallery-wall-d16:#e2e4e6; --cm-art-in-gallery-wall-d28:#d6d8da; --cm-art-in-gallery-floor:#c4cbd1;
+  /* home chrome (prototype .cc, .pulse, .helpdesk, .plan-card, .pass, .lv-chip, .acct-chip, .livecard) */
+  --cm-art-card:#ffffff; --cm-art-red-tint:rgba(227,27,35,.15); --cm-art-live-tint:rgba(31,138,76,.15);
+  --cm-art-help-bg:#fff8e6; --cm-art-help-edge:#ecd9a8; --cm-art-help-hover:#b07a00;
+  --cm-art-plan-bg:#f2faf8; --cm-art-plan-edge:#cde4df; --cm-art-plan:#0f766e; --cm-art-plan-hover:#eaf5f2;
+  --cm-art-pass-bg:#f5fbf7; --cm-art-pass-edge:#cfe7d6; --cm-art-explorer-tint:#e8f5ec; --cm-art-business-tint:#e6eef6;
+  /* arrival-panel heroes: each building's hue, darkened until white text reaches 4.5:1 (computed; WCAG AA) */
+  --cm-art-hero-lecture:#c0392b; --cm-art-hero-library:#3d4a66; --cm-art-hero-tower:#7a4a7a; --cm-art-hero-studio:#2f6f73; --cm-art-hero-amphi:#98691e; --cm-art-hero-testing:#2b5d8a; --cm-art-hero-observatory:#465a8c; --cm-art-hero-commons:#98691e; --cm-art-hero-gallery:#b4533a; --cm-art-hero-career:#1f4f7a; --cm-art-hero-arcade:#6b2fa0; --cm-art-hero-gate:#2a221b;
+  --cm-art-dim:rgba(18,15,20,.85); --cm-art-hero-shade:rgba(0,0,0,.32);
+  /* Colaberry Live evening (prototype #map.evening, .beam, .wave, .live-path) */
+  --cm-art-beam:#fff3c4; --cm-art-lit:#ffd36e; --cm-art-onair-glow:rgba(255,80,60,.8); --cm-art-wave:#ff4d4d; --cm-art-live-path:#ffcf5a; --cm-art-live-path-glow:rgba(255,207,90,.9);
+  --cm-art-level:#ffd23d; --cm-art-level-ink:#1b1622; --cm-art-live-card:#17131c; --cm-art-on-dark:#ffffff;
+}
+[data-theme="dark"]{
+  --cm-art-paper:#1e1e1e; --cm-art-ink:#f4f4f4; --cm-art-muted:#b5ad9f; --cm-art-line:#3a352d;
+  --cm-art-card:#262421; --cm-art-help-bg:#3a3018; --cm-art-help-edge:#6b5524; --cm-art-help-hover:#e0b54a;
+  --cm-art-plan-bg:#16302c; --cm-art-plan-edge:#2b5a52; --cm-art-plan:#5fd0c0; --cm-art-plan-hover:#1d3d38;
+  --cm-art-pass-bg:#16301f; --cm-art-pass-edge:#2b5a3a; --cm-art-explorer-tint:#1b3a26; --cm-art-business-tint:#1b2c3e;
+  --cm-art-shadow:0 10px 30px rgba(0,0,0,.45),0 2px 6px rgba(0,0,0,.3);
+}

@@ -1,0 +1,91 @@
+/* ============================================================
+   Colaberry Campus C11b: the building card as the prototype's arrival panel (.arr, .arr-hero, .now, .cta, .rooms, .arr-foot in
+   docs/design/campus/colaberry-campus.html). A right-hand panel on wide screens, a bottom sheet on phones (campus.css keeps the
+   phone placement). Colors: campusArtTokens.css only. The hero uses each building's hue darkened to 4.5:1 for white text.
+   ============================================================ */
+@import './campusArtTokens.css';
+@import './campusFonts.css';
+
+.cm-card.cm-arrive{z-index:4;top:16px;right:16px;bottom:16px;width:min(400px,calc(100% - 32px));max-height:none;padding:0;border:0;border-radius:22px;
+  background:var(--cm-art-paper);box-shadow:var(--cm-art-shadow);display:flex;flex-direction:column;overflow:hidden;color:var(--cm-art-ink);
+  font-family:'DM Sans',var(--sans),system-ui,sans-serif;animation:cm-arrive-in .55s cubic-bezier(.2,.9,.2,1)}
+@keyframes cm-arrive-in{from{transform:translateX(calc(100% + 30px))}}
+.cm-home .cm-card.cm-arrive{top:76px}
+.cm-arrive-hero{position:relative;padding:22px 56px 18px 22px;color:var(--cm-art-on-dark);background:var(--cm-art-hero-lecture)}
+.cm-arrive-hero .cm-kicker{color:var(--cm-art-on-dark)}
+.cm-arrive-hero .cm-card-title{font-family:'Fraunces',Georgia,serif;font-size:32px;font-weight:700;margin:6px 0 4px;letter-spacing:-.02em;line-height:1.05;color:var(--cm-art-on-dark)}
+.cm-arrive-line{margin:0;font-size:14px;line-height:1.4}
+.cm-arrive-hero .cm-card-chip{display:inline-block;margin-top:10px;background:var(--cm-art-on-dark);color:var(--cm-art-pic-ink);border-radius:999px;padding:3px 10px;
+  font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase}
+.cm-arrive-hero .cm-card-x{position:absolute;top:14px;right:14px;width:34px;height:34px;border-radius:50%;border:0;background:var(--cm-art-on-dark);
+  color:var(--cm-art-pic-ink);font-size:18px;line-height:1;cursor:pointer}
+.cm-arrive-hero .cm-card-x:focus-visible{outline:3px solid var(--cm-art-on-dark);outline-offset:2px}
+.cm-arrive-body{padding:18px 22px 22px;overflow:auto;flex:1}
+.cm-arrive .cm-card-h{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--cm-art-muted);font-weight:700;margin:16px 0 8px}
+.cm-arrive-body>.cm-card-h:first-child{margin-top:0}
+
+.cm-now{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.cm-now li{display:flex;gap:10px;align-items:flex-start;background:var(--cm-art-card);border:1px solid var(--cm-art-line);border-radius:12px;padding:10px 12px}
+.cm-now .dot{width:8px;height:8px;border-radius:50%;margin-top:6px;flex:none;background:var(--cm-art-pic-muted)}
+.cm-now .dot.is-live{background:var(--cm-art-live);box-shadow:0 0 0 4px var(--cm-art-live-tint)}
+.cm-now .dot.is-hot{background:var(--cm-art-red);box-shadow:0 0 0 4px var(--cm-art-red-tint)}
+.cm-now b{display:block;font-size:14px}
+.cm-now span{font-size:12px;color:var(--cm-art-muted)}
+
+.cm-arrive .cm-btn.cm-cta{display:flex;justify-content:space-between;align-items:center;margin-top:16px;padding:14px 16px;border-radius:14px;background:var(--cm-art-red);
+  color:var(--cm-art-on-dark);font-weight:700;font-size:15px;width:100%}
+.cm-arrive .cm-btn.cm-cta:hover{background:var(--cm-art-red-d)}
+.cm-arrive .cm-btn.cm-cta.is-disabled{background:var(--cm-art-line);color:var(--cm-art-muted)}
+.cm-arrive-route{font:500 11px ui-monospace,Menlo,monospace;color:var(--cm-art-muted);margin-top:6px}
+
+.cm-arrive .cm-rooms{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.cm-arrive .cm-room{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:11px 12px;border-radius:12px;border:1px solid var(--cm-art-line);
+  background:var(--cm-art-card);text-decoration:none;font-size:14px;font-weight:500;color:var(--cm-art-ink)}
+.cm-arrive .cm-room:hover{border-color:var(--cm-art-ink)}
+.cm-arrive .cm-room small{color:var(--cm-art-muted);font:500 11px ui-monospace,Menlo,monospace}
+.cm-arrive .cm-room.is-disabled{color:var(--cm-art-muted)}
+.cm-arrive-foot{display:flex;gap:8px;margin-top:18px;flex-wrap:wrap}
+.cm-arrive a:focus-visible,.cm-arrive button:focus-visible{outline:3px solid var(--cm-art-red);outline-offset:2px}
+
+/* each building's hero */
+.cm-arrive.cm-b-lecture .cm-arrive-hero{background:var(--cm-art-hero-lecture)}
+.cm-arrive.cm-b-library .cm-arrive-hero{background:var(--cm-art-hero-library)}
+.cm-arrive.cm-b-tower .cm-arrive-hero{background:var(--cm-art-hero-tower)}
+.cm-arrive.cm-b-studio .cm-arrive-hero{background:var(--cm-art-hero-studio)}
+.cm-arrive.cm-b-amphi .cm-arrive-hero{background:var(--cm-art-hero-amphi)}
+.cm-arrive.cm-b-testing .cm-arrive-hero{background:var(--cm-art-hero-testing)}
+.cm-arrive.cm-b-observatory .cm-arrive-hero{background:var(--cm-art-hero-observatory)}
+.cm-arrive.cm-b-commons .cm-arrive-hero{background:var(--cm-art-hero-commons)}
+.cm-arrive.cm-b-gallery .cm-arrive-hero{background:var(--cm-art-hero-gallery)}
+.cm-arrive.cm-b-career .cm-arrive-hero{background:var(--cm-art-hero-career)}
+.cm-arrive.cm-b-arcade .cm-arrive-hero{background:var(--cm-art-hero-arcade)}
+.cm-arrive.cm-b-gate .cm-arrive-hero{background:var(--cm-art-hero-gate)}
+
+@media (max-width:820px){
+  .cm-card.cm-arrive,.cm-home .cm-card.cm-arrive{top:auto;left:10px;right:10px;bottom:10px;width:auto;max-height:62%;border-radius:18px}
+  .cm-arrive-hero .cm-card-title{font-size:26px}
+  .cm-home .cm-card.cm-arrive{bottom:66px} /* above the campus tab bar */
+}
+.cm-reduced .cm-card.cm-arrive{animation:none}
+
+/* the prototype hero is a gradient from the building color to a deeper shade; the title is focused by script, so no ring on it */
+.cm-arrive-hero{background-image:linear-gradient(135deg,transparent 0%,var(--cm-art-dim) 260%)}
+.cm-arrive .cm-card-title:focus{outline:none}
+
+/* fix round 2 */
+.cm-arrive .cm-card-title:focus-visible{outline:none}
+@media (max-width:820px){ .cm-card.cm-arrive,.cm-home .cm-card.cm-arrive{max-height:52%} }
+
+/* fix round 3: the script-focused title also loses the global focus shadow */
+.cm-arrive .cm-card-title:focus{box-shadow:none}
+
+.cm-arrive-hero{background-image:linear-gradient(135deg,transparent 0%,var(--cm-art-hero-shade) 100%)}
+
+/* partners: the navy main action (prototype partner arrivals) */
+.cm-arrive.is-partner .cm-btn.cm-cta{background:var(--cm-art-business)}
+/* an Explorer at a building that is not open: the unlock leads (red, first), the page action follows as the secondary */
+.cm-arrive.is-unlock-first .cm-arrive-body{display:flex;flex-direction:column}
+.cm-arrive.is-unlock-first .cm-card-note{order:-1;margin:0 0 6px}
+.cm-arrive.is-unlock-first .cm-arrive-body>.cm-card-h:first-child,.cm-arrive.is-unlock-first .cm-now{order:-2}
+.cm-arrive.is-unlock-first .cm-card-note .cm-btn{background:var(--cm-art-red);color:var(--cm-art-on-dark);border-color:var(--cm-art-red);display:flex;justify-content:center;width:100%;padding:13px 16px;border-radius:14px;font-size:15px}
+.cm-arrive.is-unlock-first .cm-btn.cm-cta{background:var(--cm-art-card);color:var(--cm-art-ink);border:1px solid var(--cm-art-line)}

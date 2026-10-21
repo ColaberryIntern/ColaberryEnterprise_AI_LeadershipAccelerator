@@ -1,0 +1,106 @@
+/* ============================================================
+   Colaberry Campus C11b: the campus chrome on building pages, as the prototype's page (.pg-nav, .hall, .page-hint, the left
+   minimap + rooms, the right rail). The banner becomes the dark bar under the portal header: the square mini-map, the trail with
+   each building's color, then Step outside, Where to? and the red Next. Colors: campusArtTokens.css only.
+   ============================================================ */
+@import './campusArtTokens.css';
+@import './campusFonts.css';
+
+.cm-banner.cm-pagebar{position:relative;background:var(--cm-art-pic-ink);color:var(--cm-art-on-dark);border:0;border-radius:14px;padding:10px 20px;gap:10px;
+  font-family:'DM Sans',var(--sans),system-ui,sans-serif}
+/* inside PortalShell the bar runs flush under the header, edge to edge of the page column (.te-main padding is 26px 34px) */
+.te-main>.cm-banner.cm-pagebar{margin:-26px -34px 22px;border-radius:0;position:sticky;top:var(--te-top-h,0);z-index:20}
+.cm-pagebar .cm-banner-mini{width:46px;height:46px;border-radius:10px;border:2px solid var(--cm-art-on-dark);background:var(--cm-art-ground);order:0}
+.cm-pagebar .cm-trail{order:1;flex:1 1 220px}
+.cm-pagebar .cm-trail ol{font-size:14px;font-weight:700}
+.cm-pagebar .cm-trail li+li::before{color:var(--cm-art-pic-muted)}
+.cm-pagebar .cm-trail [aria-current="page"]{color:var(--cm-art-on-dark)}
+.cm-pagebar .cm-trail .cm-link{color:var(--cm-art-on-dark);font-weight:700}
+.cm-pagebar .cm-crumb-home .cm-link::before{content:'\2302';margin-right:5px}
+.cm-pagebar .cm-crumb-b .cm-link::before,.cm-pagebar .cm-crumb-b>span::before{content:'';display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;
+  background:var(--cm-crumb,var(--cm-art-pic-muted));vertical-align:-1px}
+.cm-pagebar .cm-crumb-b.cm-b-lecture{--cm-crumb:var(--cm-art-lecture)}
+.cm-pagebar .cm-crumb-b.cm-b-library{--cm-crumb:var(--cm-art-library)}
+.cm-pagebar .cm-crumb-b.cm-b-tower{--cm-crumb:var(--cm-art-tower)}
+.cm-pagebar .cm-crumb-b.cm-b-studio{--cm-crumb:var(--cm-art-studio)}
+.cm-pagebar .cm-crumb-b.cm-b-amphi{--cm-crumb:var(--cm-art-amphi)}
+.cm-pagebar .cm-crumb-b.cm-b-testing{--cm-crumb:var(--cm-art-testing)}
+.cm-pagebar .cm-crumb-b.cm-b-observatory{--cm-crumb:var(--cm-art-observatory)}
+.cm-pagebar .cm-crumb-b.cm-b-commons{--cm-crumb:var(--cm-art-commons)}
+.cm-pagebar .cm-crumb-b.cm-b-gallery{--cm-crumb:var(--cm-art-gallery)}
+.cm-pagebar .cm-crumb-b.cm-b-career{--cm-crumb:var(--cm-art-career)}
+.cm-pagebar .cm-crumb-b.cm-b-arcade{--cm-crumb:var(--cm-art-arcade)}
+.cm-pagebar .cm-crumb-b.cm-b-gate{--cm-crumb:var(--cm-art-gate-cap)}
+.cm-pagebar .cm-step-out{order:3;background:var(--cm-art-in-name-bg);color:var(--cm-art-on-dark);border:1px solid var(--cm-art-pic-muted);border-radius:999px;font-weight:700}
+.cm-pagebar .cm-step-out::before{content:'\2190  '}
+.cm-pagebar .cm-whereto{order:4;flex:0 1 200px}
+.cm-pagebar .cm-whereto-input{background:var(--cm-art-in-name-bg);border:1px solid var(--cm-art-pic-muted);color:var(--cm-art-on-dark);font-weight:700}
+.cm-pagebar .cm-whereto-input::placeholder{color:var(--cm-art-on-dark);opacity:.9}
+.cm-pagebar .cm-whereto-list{color:var(--cm-art-ink)}
+.cm-pagebar .cm-next{order:5;background:var(--cm-art-red);color:var(--cm-art-on-dark);border-radius:999px;font-weight:700;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cm-pagebar .cm-next::after{content:' \2192'}
+.cm-pagebar .cm-next:hover{background:var(--cm-art-red-d)}
+.cm-pagebar [data-testid="cm-your-path"]{order:2;color:var(--cm-art-on-dark)}
+.cm-pagebar .cm-live{order:6;flex-basis:100%;color:var(--cm-art-on-dark)}
+.cm-pagebar button:focus-visible,.cm-pagebar input:focus-visible{outline:3px solid var(--cm-art-on-dark);outline-offset:2px}
+
+/* the first-visit hint under the bar (prototype .page-hint) */
+.cm-page-hint{position:absolute;left:14px;top:calc(100% + 10px);z-index:21;display:flex;align-items:center;gap:10px;max-width:min(560px,calc(100% - 28px));
+  background:var(--cm-art-card);color:var(--cm-art-ink);border:1px solid var(--cm-art-line);border-radius:12px;padding:10px 12px 10px 14px;font-size:13px;
+  box-shadow:var(--cm-art-shadow);font-weight:500}
+.cm-page-hint b{font-weight:700}
+.cm-page-hint-x{border:0;background:transparent;font-size:18px;color:var(--cm-art-muted);cursor:pointer;min-width:28px;min-height:28px}
+
+@media (max-width:760px){
+  .te-main>.cm-banner.cm-pagebar{margin:-18px -14px 18px;padding:8px 12px}
+  .cm-pagebar .cm-whereto{flex:1 1 100%;order:6}
+  .cm-pagebar .cm-next{max-width:100%}
+}
+
+/* the right rail's campus sections (prototype page rail) */
+.cm-rail{padding:14px 16px 4px;border-bottom:1px solid var(--cm-art-line);font-family:'DM Sans',var(--sans),system-ui,sans-serif;color:var(--cm-art-ink)}
+.cm-rail section+section{margin-top:14px}
+.cm-rail-h{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--cm-art-muted);font-weight:700;margin:0 0 8px}
+.cm-rail-people,.cm-rail-plan{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.cm-rail-people li,.cm-rail-people button{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--cm-art-ink);background:none;border:0;padding:0;cursor:pointer;text-align:left}
+.cm-rail-av{width:28px;height:28px;border-radius:50%;background:var(--cm-art-library);color:var(--cm-art-on-dark);display:grid;place-items:center;font-size:10px;font-weight:800;overflow:hidden;flex:none}
+.cm-rail-av img{width:100%;height:100%;object-fit:cover}
+.cm-rail-av.is-staff{background:var(--cm-art-help-hover);box-shadow:0 0 0 2px var(--cm-art-white),0 0 0 3.5px var(--cm-art-gold)}
+.cm-rail-tag{background:var(--cm-art-gold);color:var(--cm-art-on-dark);border-radius:4px;padding:1px 5px;font-size:9px;font-weight:800;letter-spacing:.06em}
+.cm-rail-lv{font-size:10px;font-weight:800;border-radius:999px;padding:1px 6px;background:var(--rung-soft,var(--cm-art-level));color:var(--rung-ink,var(--cm-art-level-ink))}
+.cm-rail-quiet{color:var(--cm-art-muted);font-size:13px}
+.cm-rail-plan button{display:flex;gap:10px;align-items:flex-start;background:none;border:0;padding:2px 0;text-align:left;color:var(--cm-art-ink);cursor:pointer;width:100%}
+.cm-rail-plan b{display:block;font-size:13px;font-weight:500;line-height:1.3}
+.cm-rail-plan small{color:var(--cm-art-muted);font-size:11.5px}
+.cm-rail-plan .is-done b{text-decoration:line-through;color:var(--cm-art-muted)}
+.cm-rail .cm-pl-n{width:22px;height:22px;border-radius:50%;flex:none;display:grid;place-items:center;font-size:11px;font-weight:900;border:2px solid var(--cm-art-plan);color:var(--cm-art-plan);background:var(--cm-art-card)}
+.cm-rail .is-done .cm-pl-n{background:var(--cm-art-live);border-color:var(--cm-art-live);color:var(--cm-art-on-dark)}
+.cm-rail-desks{display:flex;flex-wrap:wrap;gap:6px}
+.cm-rail .cm-sbtn{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--cm-art-help-edge);background:var(--cm-art-help-bg);border-radius:999px;padding:4px 12px 4px 4px;font-size:13px;font-weight:700;color:var(--cm-art-ink);cursor:pointer}
+.cm-rail .cm-sav{width:26px;height:26px;border-radius:50%;color:var(--cm-art-on-dark);display:grid;place-items:center;font-size:10px;font-weight:800;background:var(--cm-art-help-hover);box-shadow:0 0 0 2px var(--cm-art-white),0 0 0 3.5px var(--cm-art-gold)}
+.cm-rail button:focus-visible{outline:3px solid var(--cm-art-red);outline-offset:2px}
+
+/* the left column: a square-ish mini-map with its caption, the rooms of this building, building dots in their art colors */
+.cm-nav-map-cap{text-align:center;font-size:12px;color:var(--cm-art-muted);padding:6px 0 8px;background:var(--cm-art-card)}
+.cm-nav-rooms{margin:4px 0 6px}
+.cm-nav .cm-dot.cm-b-lecture{background:var(--cm-art-lecture)}
+.cm-nav .cm-dot.cm-b-library{background:var(--cm-art-library)}
+.cm-nav .cm-dot.cm-b-tower{background:var(--cm-art-tower)}
+.cm-nav .cm-dot.cm-b-studio{background:var(--cm-art-studio)}
+.cm-nav .cm-dot.cm-b-amphi{background:var(--cm-art-amphi)}
+.cm-nav .cm-dot.cm-b-testing{background:var(--cm-art-testing)}
+.cm-nav .cm-dot.cm-b-observatory{background:var(--cm-art-observatory)}
+.cm-nav .cm-dot.cm-b-commons{background:var(--cm-art-commons)}
+.cm-nav .cm-dot.cm-b-gallery{background:var(--cm-art-gallery)}
+.cm-nav .cm-dot.cm-b-career{background:var(--cm-art-career)}
+.cm-nav .cm-dot.cm-b-arcade{background:var(--cm-art-arcade)}
+/* the nav column is a fixed-height flex column: never let the mini-map shrink when the rooms section adds height */
+.cm-nav .cm-nav-map{flex:none}
+
+/* fix round 2: the hint never covers the page: bottom-left of the screen, as the prototype .page-hint */
+.cm-page-hint{position:fixed;top:auto;left:20px;bottom:20px;z-index:40}
+@media (max-width:760px){ .cm-page-hint{left:10px;right:10px;bottom:84px;max-width:none} }
+
+/* fix round 3: bottom center, clear of the left nav and the right rail */
+.cm-page-hint{left:50%;transform:translateX(-50%);right:auto}
+@media (max-width:760px){ .cm-page-hint{left:10px;right:10px;transform:none} }

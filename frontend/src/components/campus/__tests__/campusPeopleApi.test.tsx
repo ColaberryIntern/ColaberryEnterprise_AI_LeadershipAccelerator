@@ -46,6 +46,10 @@ const httpErr = (status: number, error?: string) => Object.assign(new Error('htt
 
 beforeEach(() => { mockCalls.length = 0; mockGet = async () => ({ data: {} }); mockPost = async () => ({ data: {} }); mockOpenDm = async () => 'room-7'; });
 
+// C11b: the illustrated map is ~5x the DOM of the C2 outlines (377 vs 77 nodes; trees, paths, windows), and these suites mount
+// the whole campus (up to three maps) and some run axe over it; a cold first render under parallel jest can pass 5 s.
+jest.setTimeout(15000);
+
 describe('client', () => {
   it('fetchStaffDesks returns well-formed desks', async () => {
     mockGet = async () => ({ data: { desks: [reese] } });

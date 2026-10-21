@@ -34,6 +34,7 @@ const SchedulePage = lazy(() => import('../pages/portal/schedule/SchedulePage'))
 const EventsPage = lazy(() => import('../pages/portal/events/EventsPage'));
 const PointsPage = lazy(() => import('../pages/portal/points/PointsPage'));
 const GameRoomPage = lazy(() => import('../pages/portal/campus/GameRoomPage'));
+const CampusHomePage = lazy(() => import('../pages/portal/campus/CampusHomePage'));
 const ProjectsPage = lazy(() => import('../pages/portal/projects/ProjectsPage'));
 const PortfolioPage = lazy(() => import('../pages/portal/portfolio/PortfolioPage'));
 const PortfolioPreviewPage = lazy(() => import('../pages/portal/portfolio/PortfolioPreviewPage'));
@@ -137,6 +138,8 @@ const portalRoutes = (
       <Route path="/portal/points" element={<PointsPage />} />
       {/* Colaberry Campus Game Room (C10): no PageGate (the arcade building has no gate); its API is behind the campus pilot. */}
       <Route path="/portal/game-room" element={<GameRoomPage />} />
+      {/* C11b: the campus home (full-bleed, no PortalShell, no PageGate: every learner has a campus; it sends anyone without one to Today). */}
+      <Route path="/portal/campus" element={<CampusHomePage />} />
       <Route path="/portal/projects" element={<PageGate feature="projects"><ProjectsPage /></PageGate>} />
       {/* Living Career Portfolio — the private Career Studio. Gated like its
           siblings; the resume prerequisite inside it is enforced server-side. */}

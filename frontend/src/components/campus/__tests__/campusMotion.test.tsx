@@ -72,6 +72,10 @@ const q = (sel: string) => container.querySelector(sel) as HTMLElement | null;
 beforeEach(() => { deviceReduces = false; listeners = []; installMatchMedia(); window.localStorage.clear(); html().remove(REDUCED_CLASS); });
 afterEach(() => { act(() => root.unmount()); container.remove(); window.localStorage.clear(); });
 
+// C11b: the illustrated map is ~5x the DOM of the C2 outlines (377 vs 77 nodes; trees, paths, windows), and these suites mount
+// the whole campus (up to three maps) and some run axe over it; a cold first render under parallel jest can pass 5 s.
+jest.setTimeout(15000);
+
 describe('effective reduce motion in the provider', () => {
   const cases: [string, Record<string, unknown> | null, boolean, boolean][] = [
     ['unset, device full motion', null, false, false],

@@ -73,6 +73,10 @@ function campusOnlyNames(buildings: CampusBuilding[]): string[] {
 }
 const wordIn = (text: string, name: string) => new RegExp(`(^|[^A-Za-z])${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}([^A-Za-z]|$)`).test(text);
 
+// C11b: the illustrated map is ~5x the DOM of the C2 outlines (377 vs 77 nodes; trees, paths, windows), and these suites mount
+// the whole campus (up to three maps) and some run axe over it; a cold first render under parallel jest can pass 5 s.
+jest.setTimeout(15000);
+
 describe('catalog', () => {
   it('each career face has its own Workplace name', () => {
     expect(careerBuildingFor('member').workplaceName).toBe('Engagements');

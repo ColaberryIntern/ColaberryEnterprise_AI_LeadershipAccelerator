@@ -16,6 +16,7 @@
  *    GatedFeatureKey that already decides it (components/paywall/gatedFeatures).
  */
 import type { GatedFeatureKey } from '../paywall/gatedFeatures';
+import type { RoofKind } from './art/artColor';
 import { mgmtBridgeTo } from '../../pages/portal/mgmtNext';
 
 export type CampusAudience = 'member' | 'explorer' | 'business' | 'staff';
@@ -53,7 +54,12 @@ export interface CampusBuilding {
   /** The page's PageGate key, if its route is wrapped in PageGate (routes/portalRoutes.tsx). Absent = not paywalled. */
   gate?: GatedFeatureKey;
   audiences: CampusAudience[];
+  /** C11b: x is the building's center line, y its GROUND line (the body spans y - h .. y), as the prototype draws it. */
   pos: { x: number; y: number; w: number; h: number };
+  /** C11b: the prototype's roof family (art/artColor.ts RoofKind); 'gate' is the Main Gate, drawn by the grounds. */
+  kind: RoofKind | 'gate';
+  /** C11b: which path a building's door joins: 'up' to the hub by the fountain, 'ave' to the avenue; the gate to both. */
+  zone: 'up' | 'ave' | 'gate';
 }
 
 const EVERYONE: CampusAudience[] = ['member', 'explorer', 'business', 'staff'];
@@ -63,41 +69,41 @@ export const CAMPUS_BUILDINGS: readonly CampusBuilding[] = [
     primary: { label: "Continue this week's lessons", route: '/portal/classroom' },
     rooms: [{ label: 'Classroom', workplaceLabel: 'Training', route: '/portal/classroom' }, { label: 'Live sessions', route: '/portal/sessions' }],
     prefixes: ['/portal/classroom', '/portal/sessions', '/portal/class-checkin'],
-    explorer: 'preview', gate: 'classroom', audiences: EVERYONE, pos: { x: 500, y: 185, w: 150, h: 78 } },
+    explorer: 'preview', gate: 'classroom', audiences: EVERYONE, pos: { x: 500, y: 185, w: 150, h: 78 }, kind: 'pediment', zone: 'up' },
   { id: 'library', name: 'Library', workplaceName: 'Knowledge Base',
     primary: { label: 'Browse the library', route: '/portal/library' },
     rooms: [{ label: 'Library', workplaceLabel: 'Knowledge base', route: '/portal/library' }],
-    prefixes: ['/portal/library'], explorer: 'open', audiences: EVERYONE, pos: { x: 250, y: 215, w: 130, h: 64 } },
+    prefixes: ['/portal/library'], explorer: 'open', audiences: EVERYONE, pos: { x: 250, y: 215, w: 130, h: 64 }, kind: 'pediment', zone: 'up' },
   { id: 'tower', name: 'Schedule', workplaceName: 'Calendar',
     primary: { label: 'Open my schedule', route: '/portal/schedule' },
     rooms: [{ label: 'Today', route: '/portal/today' }, { label: 'Schedule', workplaceLabel: 'Calendar', route: '/portal/schedule' }],
-    prefixes: ['/portal/today', '/portal/schedule'], explorer: 'open', audiences: EVERYONE, pos: { x: 395, y: 270, w: 52, h: 96 } },
+    prefixes: ['/portal/today', '/portal/schedule'], explorer: 'open', audiences: EVERYONE, pos: { x: 395, y: 270, w: 52, h: 96 }, kind: 'tower', zone: 'up' },
   { id: 'studio', name: 'Project Studio', workplaceName: 'Project Studio',
     primary: { label: 'Open my projects', route: '/portal/projects' },
     rooms: [{ label: 'Projects', route: '/portal/projects' }, { label: 'Assignments', route: '/portal/assignments' }],
     prefixes: ['/portal/projects', '/portal/assignments'],
-    explorer: 'demo', gate: 'projects', audiences: EVERYONE, pos: { x: 755, y: 215, w: 150, h: 70 } },
+    explorer: 'demo', gate: 'projects', audiences: EVERYONE, pos: { x: 755, y: 215, w: 128, h: 116 }, kind: 'office', zone: 'up' },
   { id: 'amphi', name: 'Events Hall', workplaceName: 'Town Hall',
     primary: { label: 'See events and RSVP', route: '/portal/events' },
     rooms: [{ label: 'Events', route: '/portal/events' }],
-    prefixes: ['/portal/events'], explorer: 'open', audiences: EVERYONE, pos: { x: 700, y: 350, w: 132, h: 62 } },
+    prefixes: ['/portal/events'], explorer: 'open', audiences: EVERYONE, pos: { x: 700, y: 350, w: 132, h: 62 }, kind: 'amphi', zone: 'up' },
   { id: 'testing', name: 'Cert Prep Center', workplaceName: 'Certification Center',
     primary: { label: 'Start the knowledge check', route: '/portal/cert-prep' },
     rooms: [{ label: 'Cert prep', workplaceLabel: 'Certification prep', route: '/portal/cert-prep' }],
-    prefixes: ['/portal/cert-prep'], explorer: 'open', gate: 'cert-prep', audiences: EVERYONE, pos: { x: 150, y: 330, w: 104, h: 62 } },
+    prefixes: ['/portal/cert-prep'], explorer: 'open', gate: 'cert-prep', audiences: EVERYONE, pos: { x: 150, y: 330, w: 104, h: 62 }, kind: 'flat', zone: 'up' },
   { id: 'observatory', name: 'My Progress', workplaceName: 'My Performance',
     primary: { label: 'View my path', route: '/portal/path' },
     rooms: [{ label: 'Path', route: '/portal/path' }, { label: 'Progress', route: '/portal/progress' }, { label: 'Points', route: '/portal/points' }],
-    prefixes: ['/portal/path', '/portal/progress', '/portal/points'], explorer: 'open', audiences: EVERYONE, pos: { x: 130, y: 546, w: 96, h: 54 } },
+    prefixes: ['/portal/path', '/portal/progress', '/portal/points'], explorer: 'open', audiences: EVERYONE, pos: { x: 130, y: 546, w: 96, h: 54 }, kind: 'dome', zone: 'ave' },
   { id: 'commons', name: 'Community Lounge', workplaceName: 'Collab Cafe',
     primary: { label: 'Open live rooms', route: '/portal/rooms' },
     rooms: [{ label: 'Rooms', route: '/portal/rooms' }, { label: 'Community', route: '/portal/community' }, { label: 'People', route: '/portal/community/people' }],
-    prefixes: ['/portal/rooms', '/portal/community'], explorer: 'open', audiences: EVERYONE, pos: { x: 310, y: 546, w: 124, h: 62 } },
+    prefixes: ['/portal/rooms', '/portal/community'], explorer: 'open', audiences: EVERYONE, pos: { x: 310, y: 546, w: 124, h: 62 }, kind: 'gable', zone: 'ave' },
   { id: 'gallery', name: 'Showcase Gallery', workplaceName: 'Portfolio Gallery',
     primary: { label: 'Open my portfolio', route: '/portal/portfolio' },
     rooms: [{ label: 'Portfolio', route: '/portal/portfolio' }, { label: 'Preview', route: '/portal/portfolio/preview' }, { label: 'Showcase', route: '/portal/showcase' }],
     prefixes: ['/portal/portfolio', '/portal/showcase'],
-    explorer: 'open', gate: 'portfolio', audiences: EVERYONE, pos: { x: 690, y: 546, w: 120, h: 56 } },
+    explorer: 'open', gate: 'portfolio', audiences: EVERYONE, pos: { x: 690, y: 546, w: 128, h: 58 }, kind: 'pavilion', zone: 'ave' },
   // One building, three faces: Career Center for members and interns, Partner Office for
   // org managers, Staff Office for staff. careerBuildingFor() picks the face.
   { id: 'career', name: 'Career Center', workplaceName: 'Engagements',
@@ -105,14 +111,14 @@ export const CAMPUS_BUILDINGS: readonly CampusBuilding[] = [
     rooms: [{ label: 'Internship', route: '/portal/internship' }],
     prefixes: ['/portal/internship', '/portal/company'],
     // C6: open. Neither /portal/internship nor /portal/company is paywalled; C2's 'locked' here was a rule the campus invented.
-    explorer: 'open', audiences: EVERYONE, pos: { x: 870, y: 546, w: 116, h: 76 } },
+    explorer: 'open', audiences: EVERYONE, pos: { x: 870, y: 546, w: 100, h: 126 }, kind: 'office', zone: 'ave' },
   { id: 'arcade', name: 'Game Room', workplaceName: 'Break Room',
     primary: { label: 'Games and leaderboards', route: '/portal/game-room' },
     rooms: [{ label: 'Game Room', workplaceLabel: 'Games', route: '/portal/game-room' }],
-    prefixes: ['/portal/game-room'], explorer: 'open', audiences: EVERYONE, pos: { x: 210, y: 448, w: 108, h: 50 } },
+    prefixes: ['/portal/game-room'], explorer: 'open', audiences: EVERYONE, pos: { x: 210, y: 448, w: 108, h: 50 }, kind: 'arcade', zone: 'up' },
   { id: 'gate', name: 'Main Gate', workplaceName: 'Visitor Entrance',
     primary: { label: 'Start on Today', route: '/portal/today' }, // C6: Maya's desk is in this card now; the button goes to Today, so it says so
-    rooms: [], prefixes: [], explorer: 'open', audiences: ['explorer', 'staff'], pos: { x: 500, y: 622, w: 90, h: 50 } },
+    rooms: [], prefixes: [], explorer: 'open', audiences: ['explorer', 'staff'], pos: { x: 500, y: 640, w: 90, h: 50 }, kind: 'gate', zone: 'gate' },
 ];
 
 /** The career building's face per audience (D4 career row). C6: the Staff Office links go to existing admin pages THROUGH

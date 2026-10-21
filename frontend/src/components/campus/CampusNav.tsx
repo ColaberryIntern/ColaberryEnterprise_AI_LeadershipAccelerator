@@ -3,10 +3,11 @@ import { useCampusOnAir } from './campusOnAir';
 import { Link } from 'react-router-dom';
 import CampusWorldMap from './CampusWorldMap';
 import './campus.css';
+import './campusPageChrome.css';
 import { useCampus } from './CampusContext';
 import { useCampusView } from './useCampusView';
 import { accessLabel } from './campusAccess';
-import { buildingForPath, buildingName } from './campusMap';
+import { buildingForPath, buildingName, roomLabel } from './campusMap';
 import { tourFor } from './tourSteps';
 import CampusSettingsPanel from './CampusSettingsPanel';
 import AdminLink from './AdminLink';
@@ -31,7 +32,20 @@ export default function CampusNav({ active }: { active: string }): React.ReactEl
       <div className="cm-nav-map">
         <CampusWorldMap buildings={buildings} accessOf={accessOf}
           workplaceNames={settings.workplaceNames} reduceMotion={settings.reduceMotion} compact onArrive={(id) => openMap(id)} counts={counts} onAir={onAir} />
+        <div className="cm-nav-map-cap" aria-hidden="true">Tap a building to walk there</div>
       </div>
+      {/* C11b: the rooms of the building you are in (the prototype's left side on a page) */}
+      {here && here.rooms.some((r) => !r.admin && !r.planned) && (
+        <section className="cm-nav-rooms" aria-label={`In ${buildingName(here, settings.workplaceNames)}`} data-testid="cm-page-side">
+          <div className="grp">In {buildingName(here, settings.workplaceNames)}</div>
+          <ul className="cm-nav-list">
+            {here.rooms.filter((r) => !r.admin && !r.planned).map((r) => (
+              <li key={r.route}><Link className={`cm-nav-item${active === r.route ? ' active' : ''}`} to={r.route} aria-current={active === r.route ? 'page' : undefined}>
+                <span className="lb">{roomLabel(r, settings.workplaceNames)}</span></Link></li>
+            ))}
+          </ul>
+        </section>
+      )}
       <button type="button" className="cm-btn cm-nav-open" onClick={() => openMap()} data-testid="cm-open-map">Open campus map</button>
       {hasTour && <button type="button" className="cm-link cm-nav-tour" onClick={startTour} data-testid="cm-tour-start">Take the tour</button>}
       <button type="button" className="cm-link cm-nav-tour" onClick={openLocker} data-testid="cm-look-open">My look</button>

@@ -89,6 +89,10 @@ afterEach(() => { act(() => root.unmount()); container.remove(); window.localSto
 
 const trailEnd = () => Array.from(container.querySelectorAll('[data-testid="cm-trail"] li')).map((li) => li.textContent).pop();
 
+// C11b: the illustrated map is ~5x the DOM of the C2 outlines (377 vs 77 nodes; trees, paths, windows), and these suites mount
+// the whole campus (up to three maps) and some run axe over it; a cold first render under parallel jest can pass 5 s.
+jest.setTimeout(15000);
+
 describe('one campus across rooms and chromes', () => {
   it('reads the flag once and runs one presence poll while walking Today -> Sessions (PortalLayout) -> Library', async () => {
     expect(trailEnd()).toBe('Today');

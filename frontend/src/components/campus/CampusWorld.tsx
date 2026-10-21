@@ -13,6 +13,12 @@ import { buildingName } from './campusMap';
 import ExplorerPath from './ExplorerPath';
 import { explorerPath } from './campusPath';
 import type { Equipped } from './campusGear';
+import type { InsetsOf } from './useCampusCamera';
+import CampusZoomControls from './CampusZoomControls';
+import { happeningAt, zoneLabelOf } from './campusArrival';
+import { buildingLine } from './tourSteps';
+import CampusInside from './interior/CampusInside';
+import { useMapStage, useDoorReveal } from './useWorldStage';
 
 /**
  * Map + building card, with the keyboard contract (Campus C2):
@@ -54,9 +60,16 @@ export interface CampusWorldProps {
   panel?: { card: React.ReactNode; onClose: () => void };
   /** C9: the learner's own equipped set, drawn on their pin. */
   ownGear?: Equipped;
+  /** C11b: screen px the caller's panels cover (the campus home's concierge and top bar), for the camera's whole-campus view. */
+  insets?: InsetsOf;
+  /** C11b: walk to this building now, from outside the map (the home's pulse, plan and search). A new seq means a new walk. */
+  walkTo?: { id: BuildingId; seq: number } | null;
+  /** C11b: told whenever a card opens or closes (a building card, a person card, the tour, a panel), with the building whose card is
+   *  open (null for the others), so the home can tuck its concierge and say where you are. */
+  onCard?: (state: { open: boolean; building: BuildingId | null }) => void;
 }
 
-export default function CampusWorld({ buildings, audience, hasFullAccess, accessOf: accessOfProp, isExplorer = false, workplaceNames, reduceMotion, initialTarget, onExit, onNavigate, presence, presenceError = false, onEnterRoom, staffDesks, personCard, onOpenPerson, onClosePerson, onAir, route, tour, panel, ownGear }: CampusWorldProps): React.ReactElement {
+export default function CampusWorld({ buildings, audience, hasFullAccess, accessOf: accessOfProp, isExplorer = false, workplaceNames, reduceMotion, initialTarget, onExit, onNavigate, presence, presenceError = false, onEnterRoom, staffDesks, personCard, onOpenPerson, onClosePerson, onAir, route, tour, panel, ownGear, insets, walkTo, onCard }: CampusWorldProps): React.ReactElement {
   const counts = useMemo(() => {
     const out: Record<string, number> = {};
     if (presence) for (const [id, a] of Object.entries(presence)) out[id] = a.count;
@@ -101,19 +114,32 @@ export default function CampusWorld({ buildings, audience, hasFullAccess, access
     if (tour) tour.onEnd(); else if (panel) panel.onClose(); else if (personCard) onClosePerson?.(); else if (open) closeCard(); else onExit();
   };
 
-  // On phones the map is wider than the screen (campus.css); start centered on the quad.
-  const world = useRef<HTMLDivElement | null>(null);
+  // C11b staging: the camera, the desks and your initials for the map, and the door reveal (useWorldStage).
+  const { camApi, camera, mapDesks, meInitials } = useMapStage(staffDesks, audience, insets);
+  const door = useDoorReveal(onEnterRoom, reduceMotion);
+  const lastOutside = useRef(0);
   useEffect(() => {
-    const el = world.current;
-    if (el && el.scrollWidth > el.clientWidth) el.scrollLeft = (el.scrollWidth - el.clientWidth) / 2;
-  }, []);
+    if (walkTo && walkTo.seq !== lastOutside.current) { lastOutside.current = walkTo.seq; setOpen(null); setWalkRequest((w) => ({ id: walkTo.id, seq: (w?.seq ?? 0) + 1 })); }
+  }, [walkTo]);
 
+  // "Go somewhere else": close the card and put the caret in the campus search (the home's top bar, or a page banner).
+  const elsewhere = useCallback(() => {
+    setOpen(null);
+    document.querySelector<HTMLInputElement>('.cm-whereto-input')?.focus();
+  }, []);
   const b = open ? buildings.find((x) => x.id === open) : undefined;
+  const enterRoom = (r: string) => { if (b) door.enter(r, b.id, els.current.get(b.id)?.getBoundingClientRect() ?? null); };
+  const anyCard = !!tour || !!panel || !!personCard || !!b;
+  const cardBuilding = !tour && !panel && !personCard && b ? b.id : null;
+  const onCardRef = useRef(onCard); onCardRef.current = onCard;
+  useEffect(() => { onCardRef.current?.({ open: anyCard, building: cardBuilding }); }, [anyCard, cardBuilding]);
   return (
-    <div className="cm-world" onKeyDown={onKeyDown} ref={world}>
+    <div className={`cm-world${anyCard ? ' has-card' : ''}`} onKeyDown={onKeyDown}>
       <CampusWorldMap buildings={buildings} accessOf={accessOf} workplaceNames={workplaceNames} reduceMotion={reduceMotion}
         initialTarget={initialTarget} onArrive={onArrive} buildingRef={registerEl} counts={presenceError ? undefined : counts}
-        people={people} onPickPerson={onOpenPerson ? pickPerson : undefined} walkRequest={walkRequest} onAir={onAir} route={route} ownGear={ownGear} />
+        people={people} onPickPerson={onOpenPerson ? pickPerson : undefined} walkRequest={walkRequest} onAir={onAir} route={route} ownGear={ownGear} showOpen={audience === 'explorer'} camera={camera}
+        desks={mapDesks} me={meInitials ? { initials: meInitials } : null} />
+      <CampusZoomControls apiRef={camApi} />
       {tour && tour.card}
       {!tour && panel && panel.card}
       {!tour && !panel && personCard && (() => {
@@ -122,8 +148,15 @@ export default function CampusWorld({ buildings, audience, hasFullAccess, access
           onMessaged={onNavigate}
           onWalkOver={() => { const id = personCard.buildingId; onClosePerson?.(); setWalkRequest((w) => ({ id, seq: (w?.seq ?? 0) + 1 })); }} />;
       })()}
+      {/* C11b: inside the building you arrived at, behind its arrival panel (the prototype's flyIn) */}
+      {!tour && !panel && b && !personCard && <CampusInside building={b} buildingName={buildingName(b, workplaceNames)} audience={audience} access={accessOf(b)}
+        presence={presenceError ? undefined : presence} onAir={!!onAir?.has(b.id)} reduceMotion={reduceMotion} onStepOutside={closeCard} going={door.going}
+        onPickPerson={onOpenPerson ? (p) => pickPerson(p, b.id) : undefined}
+        desk={staffDesks ? desksForBuilding(staffDesks, b.id, audience).find((d) => d.on_duty) ?? null : null} />}
       {!tour && !panel && b && !personCard && <BuildingCard building={b} access={accessOf(b)} workplaceNames={workplaceNames} onClose={closeCard} onNavigate={onNavigate}
-        onEnterRoom={onEnterRoom ? (route) => onEnterRoom(route, els.current.get(b.id)?.getBoundingClientRect() ?? null) : undefined}
+        zoneLabel={zoneLabelOf(b)} line={buildingLine(audience, b.id)} onElsewhere={elsewhere} audience={audience}
+        happening={happeningAt(b.id, { onAir: !!onAir?.has(b.id), routeIndex: route ? route.indexOf(b.id) : -1, count: presence ? counts[b.id] ?? 0 : null, presenceError })}
+        onEnterRoom={onEnterRoom ? enterRoom : undefined}
         desks={staffDesks ? desksForBuilding(staffDesks, b.id, audience) : undefined}
         children={b.id === 'gate' && isExplorer ? <ExplorerPath onNavigate={onNavigate}
           model={explorerPath(buildings, accessOf, workplaceNames, !!staffDesks?.some((d) => d.id === 'maya' && d.on_duty))} /> : undefined}

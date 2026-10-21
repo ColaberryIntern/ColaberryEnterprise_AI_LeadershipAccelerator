@@ -36,33 +36,11 @@
 .cm-btn:focus-visible,.cm-link:focus-visible,.cm-nav-item:focus-visible,.cm-tab:focus-visible{outline:3px solid var(--berry);outline-offset:2px}
 
 /* ---- the map ---- */
-.cm-map{display:block;width:100%;height:auto;font-family:var(--sans)}
-.cm-ground{fill:var(--sunken)}
-.cm-path{stroke:var(--border);stroke-width:14;stroke-linecap:round;fill:none}
-.cm-map.is-compact .cm-path{stroke-width:18}
-.cm-quad{fill:var(--surface);stroke:var(--border);stroke-width:3}
-.cm-bld{cursor:pointer}
-.cm-bld .cm-body{fill:var(--surface);stroke:var(--cm-c);stroke-width:3}
-.cm-bld .cm-roof{fill:var(--cm-c);stroke:var(--cm-c)}
-.cm-bld .cm-detail{fill:var(--surface);stroke:var(--cm-c);stroke-width:3}
-/* outline-only shapes (amphitheater arch, gate): the class wins over the .cm-roof fill */
-.cm-bld .cm-roof.cm-arch{fill:none;stroke-width:9;stroke-linecap:round}
-.cm-bld .cm-door{fill:var(--cm-c)}
-.cm-bld.is-locked .cm-body,.cm-bld.is-locked .cm-roof,.cm-bld.is-locked .cm-door{opacity:.55}
-.cm-bld:hover .cm-body,.cm-bld:focus .cm-body{stroke-width:5}
-.cm-bld:focus{outline:none}
-.cm-bld:focus-visible .cm-body{stroke:var(--berry);stroke-width:6}
-/* C11: the Main Gate has no body; its arch and footprint show focus instead. */
-.cm-bld.cm-b-gate:focus-visible .cm-roof{stroke:var(--berry)}
-.cm-bld.cm-b-gate:focus-visible .cm-hit{stroke:var(--berry);stroke-width:4;stroke-dasharray:10 8}
-.cm-label{font-size:17px;font-weight:700;fill:var(--strong);paint-order:stroke;stroke:var(--surface);stroke-width:5px}
-.cm-chip{font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;fill:var(--muted)}
+.cm-map{display:block;width:100%;height:auto}
 /* The avatar is decoration (aria-hidden): it must never take a click from the building under it (found in C5 screenshots:
    the pin starts on the Main Gate and swallowed its clicks). */
 .cm-avatar{pointer-events:none}
 .cm-hit{fill:transparent;pointer-events:all}
-.cm-pin{fill:var(--cherry);stroke:var(--surface);stroke-width:2}
-.cm-pin-dot{fill:var(--surface)}
 
 /* building colors: shell tokens only */
 .cm-b-lecture{--cm-c:var(--cherry)}
@@ -91,9 +69,6 @@
 .cm-world .cm-map{max-height:100%;max-width:min(100%,1200px);border-radius:var(--r-16)}
 
 /* ---- C4: live head count and Who's here ---- */
-.cm-count rect{fill:var(--cm-live)}
-.cm-count text{fill:var(--cm-on-accent);font-size:15px;font-weight:700}
-.cm-map.is-compact .cm-count text{font-size:54px}
 .cm-layer-warn{color:var(--strong);font-size:13px;font-weight:600;padding-left:8px;border-left:4px solid var(--amber)}
 .cm-who{display:flex;flex-direction:column;gap:6px}
 .cm-people{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:8px}
