@@ -72,3 +72,25 @@ describe('the arrival panel', () => {
     expect(container.querySelector('[data-testid="cm-arrive-back"]')).not.toBeNull();
   });
 });
+
+describe('who leads the arrival (C11b fix round 3)', () => {
+  let container: HTMLDivElement;
+  let root: Root;
+  beforeEach(() => { container = document.createElement('div'); document.body.appendChild(container); root = createRoot(container); });
+  afterEach(() => { act(() => root.unmount()); container.remove(); });
+  const card = (audience: string, access: 'open' | 'preview' | 'locked') => act(() => {
+    root.render(<MemoryRouter><BuildingCard building={b('lecture')} access={access} workplaceNames={false} onClose={() => undefined} onNavigate={() => undefined} audience={audience} /></MemoryRouter>);
+  });
+  it('an Explorer at a building that is not open is led by the unlock; at an open one, by the page', () => {
+    card('explorer', 'preview');
+    expect(container.querySelector('.cm-arrive')!.getAttribute('class')).toContain('is-unlock-first');
+    card('explorer', 'open');
+    expect(container.querySelector('.cm-arrive')!.getAttribute('class')).not.toContain('is-unlock-first');
+  });
+  it('a partner gets the partner-styled arrival; a member does not', () => {
+    card('business', 'open');
+    expect(container.querySelector('.cm-arrive')!.getAttribute('class')).toContain('is-partner');
+    card('member', 'open');
+    expect(container.querySelector('.cm-arrive')!.getAttribute('class')).not.toContain('is-partner');
+  });
+});

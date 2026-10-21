@@ -43,6 +43,8 @@ export interface BuildingCardProps {
   zoneLabel?: string;
   line?: string | null;
   happening?: Happening[];
+  /** C11b: who is looking (partners get the navy action; an Explorer on a not-open building is led by the unlock). */
+  audience?: string;
   /** C11b: "Go somewhere else" (the home focuses its search). Absent = the button is not shown. */
   onElsewhere?: () => void;
 }
@@ -64,7 +66,7 @@ function LockedNotice({ b }: { b: CampusBuilding }): React.ReactElement {
   );
 }
 
-export default function BuildingCard({ building: b, access, workplaceNames, onClose, onNavigate, whoIsHere, onEnterRoom, desks, children, zoneLabel, line, happening, onElsewhere }: BuildingCardProps): React.ReactElement {
+export default function BuildingCard({ building: b, access, workplaceNames, onClose, onNavigate, whoIsHere, onEnterRoom, desks, children, zoneLabel, line, happening, onElsewhere, audience }: BuildingCardProps): React.ReactElement {
   const name = buildingName(b, workplaceNames);
   // A plain click goes through the door; a modified click (new tab, etc.) stays a normal link.
   const go = (route: string) => (e: React.MouseEvent) => {
@@ -81,7 +83,7 @@ export default function BuildingCard({ building: b, access, workplaceNames, onCl
   const heading = useRef<HTMLHeadingElement | null>(null);
   useCardFocus(heading);
   return (
-    <section className={`cm-card cm-arrive cm-b-${b.id}`} aria-labelledby={headingId} data-testid="cm-card" data-building={b.id}>
+    <section className={`cm-card cm-arrive cm-b-${b.id}${audience === 'business' ? ' is-partner' : ''}${audience === 'explorer' && access !== 'open' ? ' is-unlock-first' : ''}`} aria-labelledby={headingId} data-testid="cm-card" data-building={b.id}>
       <div className="cm-arrive-hero" data-testid="cm-arrive-hero">
         <div className="cm-kicker">You&rsquo;ve arrived{zoneLabel ? <> &middot; {zoneLabel}</> : null}</div>
         <h2 id={headingId} className="cm-card-title" tabIndex={-1} ref={heading}>{name}</h2>

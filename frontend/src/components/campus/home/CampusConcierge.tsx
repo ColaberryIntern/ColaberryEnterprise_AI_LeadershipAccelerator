@@ -71,6 +71,7 @@ function leadFor(p: ConciergeProps, next: PlanStop | null): string {
   if (next) return `Next on your plan: ${next.title}.`;
   if (p.audience === 'explorer') return 'Have a look around. Everything marked OPEN is yours to use.';
   if (p.audience === 'staff') return 'Here is where everyone is right now.';
+  if (p.audience === 'business') return 'See where your team learns and builds. Pick a building, or take the partner tour.';
   return 'You are on campus. Pick a building, or ask the help desk.';
 }
 

@@ -70,3 +70,6 @@
 
 /* fix round 2: one focus ring */
 .cm-gate .cm-tap:focus-visible{outline:3px solid var(--cm-art-on-dark);outline-offset:3px;box-shadow:none}
+
+/* fix round 3: one tight ring on the focused Enter (a white halo on a white button read as two) */
+.cm-gate .cm-tap:focus-visible{outline:3px solid var(--cm-art-gate-sky-1);outline-offset:-3px}

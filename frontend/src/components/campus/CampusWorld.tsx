@@ -154,7 +154,7 @@ export default function CampusWorld({ buildings, audience, hasFullAccess, access
         onPickPerson={onOpenPerson ? (p) => pickPerson(p, b.id) : undefined}
         desk={staffDesks ? desksForBuilding(staffDesks, b.id, audience).find((d) => d.on_duty) ?? null : null} />}
       {!tour && !panel && b && !personCard && <BuildingCard building={b} access={accessOf(b)} workplaceNames={workplaceNames} onClose={closeCard} onNavigate={onNavigate}
-        zoneLabel={zoneLabelOf(b)} line={buildingLine(audience, b.id)} onElsewhere={elsewhere}
+        zoneLabel={zoneLabelOf(b)} line={buildingLine(audience, b.id)} onElsewhere={elsewhere} audience={audience}
         happening={happeningAt(b.id, { onAir: !!onAir?.has(b.id), routeIndex: route ? route.indexOf(b.id) : -1, count: presence ? counts[b.id] ?? 0 : null, presenceError })}
         onEnterRoom={onEnterRoom ? enterRoom : undefined}
         desks={staffDesks ? desksForBuilding(staffDesks, b.id, audience) : undefined}
