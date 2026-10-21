@@ -73,7 +73,7 @@ export function useCampusCamera(svgRef: RefObject<SVGSVGElement>, opts: CameraOp
   o.current = opts;
   const cam = useRef<Cam | null>(null);
   const target = useRef<Cam | null>(null);
-  const mode = useRef<'free' | 'base' | 'follow'>('base');
+  const mode = useRef<'manual' | 'base' | 'follow'>('base');
   const ease = useRef(EASE);
   const raf = useRef<number | null>(null);
 
@@ -103,9 +103,9 @@ export function useCampusCamera(svgRef: RefObject<SVGSVGElement>, opts: CameraOp
 
   const api = useMemo<CameraApi>(() => ({
     base: () => { const v = vp(); if (!v) return; mode.current = 'base'; go(baseView(v, resolve(o.current.insets, v))); },
-    focus: (b) => { const v = vp(); if (!v) return; mode.current = 'free'; go(focusView(v, b, resolve(o.current.focusInsets ?? o.current.insets, v)), EASE_FOCUS); },
+    focus: (b) => { const v = vp(); if (!v) return; mode.current = 'manual'; go(focusView(v, b, resolve(o.current.focusInsets ?? o.current.insets, v)), EASE_FOCUS); },
     follow: () => { if (!vp()) return; mode.current = 'follow'; go(target.current ?? cam.current!, EASE); },
-    zoom: (f) => { const v = vp(); if (!v || !cam.current) return; mode.current = 'free'; go(zoomBy(target.current ?? cam.current, f)); },
+    zoom: (f) => { const v = vp(); if (!v || !cam.current) return; mode.current = 'manual'; go(zoomBy(target.current ?? cam.current, f)); },
   }), [go]);
   if (opts.apiRef) opts.apiRef.current = api;
 
@@ -119,7 +119,7 @@ export function useCampusCamera(svgRef: RefObject<SVGSVGElement>, opts: CameraOp
     const pan = (dx: number, dy: number) => {
       const v = vp();
       if (!v || !cam.current) return;
-      mode.current = 'free';
+      mode.current = 'manual';
       cam.current = panBy(cam.current, v, dx, dy); target.current = cam.current;
       write(v);
     };
@@ -128,7 +128,7 @@ export function useCampusCamera(svgRef: RefObject<SVGSVGElement>, opts: CameraOp
       const d: Record<string, [number, number]> = { ArrowLeft: [KEY_PAN_PX, 0], ArrowRight: [-KEY_PAN_PX, 0], ArrowUp: [0, KEY_PAN_PX], ArrowDown: [0, -KEY_PAN_PX] };
       const v = vp();
       if (!d[e.key] || !v || !cam.current) return;
-      e.preventDefault(); mode.current = 'free';
+      e.preventDefault(); mode.current = 'manual';
       go(panBy(target.current ?? cam.current, v, d[e.key][0], d[e.key][1]));
     };
     const focusIn = (e: FocusEvent) => {
@@ -136,7 +136,7 @@ export function useCampusCamera(svgRef: RefObject<SVGSVGElement>, opts: CameraOp
       const id = (e.target as Element | null)?.closest?.('[data-building]')?.getAttribute('data-building');
       const p = id ? o.current.locate(id) : null;
       if (!v || !p || !cam.current || inView(target.current ?? cam.current, v, p)) return;
-      mode.current = 'free';
+      mode.current = 'manual';
       go({ ...(target.current ?? cam.current), cx: p.x, cy: p.y - 40 });
     };
     const resize = () => { const v = vp(); if (v && mode.current === 'base') { cam.current = baseView(v, resolve(o.current.insets, v)); target.current = cam.current; write(v); } else if (v) write(v); };
