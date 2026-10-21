@@ -50,7 +50,9 @@ describe('the table is complete and well-formed', () => {
   });
 
   it('has 18 distinct criteria with no copy-paste duplication across families', () => {
-    const all = RESEARCH_FAMILIES.flatMap((f) => RESEARCH_ACCEPTANCE[f]);
+    // `f` is annotated because the module is required from JavaScript, so
+    // RESEARCH_FAMILIES is `any` and the callback gets no contextual type.
+    const all = RESEARCH_FAMILIES.flatMap((f: string) => RESEARCH_ACCEPTANCE[f]);
     expect(all).toHaveLength(18);
     expect(new Set(all).size).toBe(18);
   });
