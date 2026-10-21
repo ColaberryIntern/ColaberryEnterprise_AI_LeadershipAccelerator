@@ -9,7 +9,7 @@ import { materializeGovBuildProject, listActiveInterns, type GovMaterializeResul
  * This is an explicit WRITE to the student-project tables. It is idempotent (re-running reuses the pursuit's
  * linked project), and it surfaces typed errors plainly (e.g. the chosen builder is not an enrolled intern).
  */
-export function GovMaterializePanel({ canonical, deliveryProjectId, requirements, title, buyer, deadline }: {
+export function GovMaterializePanel({ canonical, deliveryProjectId, requirements, title, buyer, deadline, onCreated }: {
   canonical: string;
   deliveryProjectId?: string | null;
   /** Accepted for compatibility; the picker now offers the full active-intern roster, not just project builders. */
@@ -18,6 +18,9 @@ export function GovMaterializePanel({ canonical, deliveryProjectId, requirements
   title?: string | null;
   buyer?: string | null;
   deadline?: string | null;
+  /** Fired after a successful create with the result, so the page can record the build authorization and
+   *  navigate to the Proposal step. Optional: the panel still works standalone. */
+  onCreated?: (r: GovMaterializeResult) => void;
 }): React.ReactElement {
   const [assignee, setAssignee] = useState('');
   const [busy, setBusy] = useState(false);
@@ -45,6 +48,7 @@ export function GovMaterializePanel({ canonical, deliveryProjectId, requirements
     try {
       const r = await materializeGovBuildProject(canonical, { deliveryProjectId, assigneeIdentityId: assignee, requirements, title: title ?? null, buyer: buyer ?? null, buildSpec, deadline: deadline ?? null });
       setResult(r);
+      onCreated?.(r);
     } catch (e: any) {
       setErr(e?.response?.data?.error ?? 'Could not create the monitored project right now.');
     } finally { setBusy(false); }
@@ -74,7 +78,7 @@ export function GovMaterializePanel({ canonical, deliveryProjectId, requirements
         <div className="alert alert-success py-2 mt-2 mb-0 small" role="status">
           <i className="ri-check-double-line me-1" aria-hidden="true" />
           {result.created ? 'Monitored project created' : 'Updated the existing monitored project'} — {result.releaseCount} release{result.releaseCount === 1 ? '' : 's'}, {result.storyCount} stor{result.storyCount === 1 ? 'y' : 'ies'}, {result.tasks} task{result.tasks === 1 ? '' : 's'}.{' '}
-          <a href="/admin/projects">Open it on the Project Delivery board</a> to monitor progress.
+          <a href={`/admin/projects?interns=1&project=${result.projectId}`}>Open it on the intern projects board</a> to monitor progress.
         </div>
       )}
       <div className="small text-secondary mt-2"><i className="ri-information-line me-1" aria-hidden="true" />Creates (or updates) a real project under the intern's profile, monitored like the Command Center. Safe to run again — it reuses the same project and never duplicates work.</div>

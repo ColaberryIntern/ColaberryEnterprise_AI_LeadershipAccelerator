@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import api from '../../utils/api';
 import AdminPreviewStackPanel from '../../components/admin/AdminPreviewStackPanel';
 import { PageHeader, StatCard, StatusBadge, SectionCard } from '../../components/admin/shell';
@@ -41,6 +42,10 @@ interface ProjectOverviewProps {
 function AdminProjectOverview({ initialCohortId }: ProjectOverviewProps = {}) {
   // Delivery leads; the legacy cohort roll-up stays reachable rather than deleted.
   const [view, setView] = useState<'delivery' | 'cohorts'>('delivery');
+  // ?interns=1 opens the board on the intern audience (with the class/unenrolled toggle still available) instead
+  // of the cohort roll-up. The gov workspace links here after it creates an intern's monitored project.
+  const [searchParams] = useSearchParams();
+  const internsView = searchParams.get('interns') === '1';
   const [stats, setStats] = useState<CohortProjectStats[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -171,7 +176,7 @@ function AdminProjectOverview({ initialCohortId }: ProjectOverviewProps = {}) {
         </li>
       </ul>
 
-      {view === 'delivery' && <ProjectDeliveryView cohortId={initialCohortId} />}
+      {view === 'delivery' && <ProjectDeliveryView cohortId={internsView ? undefined : initialCohortId} internsOnly={internsView || undefined} audienceFilter={internsView || undefined} />}
 
       {view === 'cohorts' && loading && (
         <div className="text-center py-5">
