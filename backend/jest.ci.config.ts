@@ -41,6 +41,33 @@ import base from './jest.config';
  *
  * MAINTENANCE: adding a suite here must come with a reason. If the list grows
  * without one, the gate is being narrowed back to where it started.
+ *
+ * ── MEASURED 2026-10-21, and the paragraph above is wrong ────────────────────
+ *
+ * The `integration-tier` CI job now provides exactly what this file said it was
+ * waiting for: a Postgres service container. So every suite on this list was run
+ * against its OWN fresh database, one at a time (the same per-suite isolation
+ * `scripts/ci/runIntegrationSuites.js` uses, because sharing one database makes
+ * suites collide over `projects`). Of 24:
+ *
+ *   PASS  2      FAIL  20      HUNG  2
+ *
+ * A database is NOT what they were missing. `assessmentService` was run with and
+ * without `DATABASE_URL` and fails IDENTICALLY both ways -
+ * `TypeError: Cannot read properties of undefined (reading 'define')` at
+ * `StudentPointsEvent.init` - while the suite itself already mocks
+ * `config/database` with a stub that HAS `define`. So the cause is in how these
+ * suites mock the model layer, not in CI's environment, and giving CI a database
+ * does not let them come off this list. Fixing them is per-suite work.
+ *
+ * The two that DID pass turned out never to have needed a database: both pass
+ * with `DATABASE_URL` unset. They were on this list by mistake, and they are off
+ * it now - `explorerEnrollmentWelcome` (5 tests) and `requireBuildEntitlement`
+ * (23 tests), 28 tests of coverage that the gate was silently skipping.
+ *
+ * Two HANG rather than fail, which no previous run could have shown because the
+ * list meant they never ran: `communityCommentsLikesProfiles` and
+ * `systemStateEngine/phase10_5`, both killed at a 90 s cap.
  */
 const ciConfig: Config = {
   ...base,
@@ -55,7 +82,6 @@ const ciConfig: Config = {
     'src/__tests__/services/cohortPresenceService\\.test\\.ts',
     'src/__tests__/services/duplicateAccountSweepService\\.test\\.ts',
     'src/__tests__/services/explorerCohortRouting\\.test\\.ts',
-    'src/__tests__/services/explorerEnrollmentWelcome\\.test\\.ts',
     'src/__tests__/services/participantMagicLink\\.test\\.ts',
     'src/__tests__/services/ticketServiceReeseTypes\\.test\\.ts',
     'src/services/__tests__/portalEnrollmentService\\.test\\.ts',
@@ -70,7 +96,6 @@ const ciConfig: Config = {
 
     // Middleware + seeds + timeline admin — all read model metadata at import.
     'src/middlewares/__tests__/mgmtRbac\\.test\\.ts',
-    'src/middlewares/__tests__/requireBuildEntitlement\\.test\\.ts',
     'src/seeds/__tests__/seedCurriculumCourseLinks\\.test\\.ts',
     'src/services/timeline/__tests__/timelineAdminService\\.test\\.ts',
     'src/services/timeline/__tests__/typeLaunchGate\\.test\\.ts',
