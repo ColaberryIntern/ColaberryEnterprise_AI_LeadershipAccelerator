@@ -260,8 +260,19 @@ function isHardStart(line: string): boolean {
  * When `joinWraps` is false (.docx / .xlsx, where ooxmlText has already made table rows and spreadsheet
  * cells the boundaries), behaviour is UNCHANGED: every newline splits, so cells never re-fuse.
  */
+// A period inside an abbreviation is NOT a sentence boundary. "due by 5:00 p.m. MT on Nov. 6th, 2026" must stay
+// ONE sentence, or the splitter shatters the time/zone away from the date and the deadline is never captured.
+// Mask the abbreviation periods (a.m./p.m. and month abbreviations) with a sentinel before the split, and restore
+// them to a real '.' before any sentence is returned — so requirement text stays verbatim.
+const ABBR_SENTINEL = '';
+function protectAbbrevPeriods(s: string): string {
+  return s
+    .replace(/\b([ap])\.m\./gi, `$1${ABBR_SENTINEL}m${ABBR_SENTINEL}`)
+    .replace(/\b(Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sept?|Oct|Nov|Dec)\./gi, `$1${ABBR_SENTINEL}`);
+}
+
 function sentences(text: string, joinWraps = false): string[] {
-  const normalized = text.replace(/\r\n?/g, '\n');
+  const normalized = protectAbbrevPeriods(text.replace(/\r\n?/g, '\n'));
   let logicalText = normalized;
   if (joinWraps) {
     const logical: string[] = [];
@@ -281,7 +292,7 @@ function sentences(text: string, joinWraps = false): string[] {
   }
   return logicalText
     .split(/(?<=[.;:])\s+|\n+/)
-    .map((s) => s.trim())
+    .map((s) => s.split(ABBR_SENTINEL).join('.').trim())   // restore the protected abbreviation periods
     .filter((s) => s.length >= MIN_SENTENCE_LEN);
 }
 
