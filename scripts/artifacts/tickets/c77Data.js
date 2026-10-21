@@ -311,9 +311,17 @@ const STRENGTHS = [
  * CERTIFICATIONS AND CLAIMS
  * ------------------------------------------------------------------ */
 
+// CORRECTED 21 October 2026. These rows read "NOT HELD. No report, no audit in progress,
+// no auditor engaged." and "NOT HELD." The assessment was assembled from the codebase and
+// from production, where a consulting engagement leaves no trace, so it missed a funded
+// SOC 2 Type II and ISO 27001 program running since July 2026. "No auditor engaged" is
+// still true and is the part that matters to a buyer; "no audit in progress" conflated an
+// implementation with an attestation and understated our posture.
 const CERTS = [
-  ['SOC 2 Type I or II', 'NOT HELD. No report, no audit in progress, no auditor engaged.'],
-  ['ISO 27001', 'NOT HELD.'],
+  ['SOC 2 Type I or II', 'NOT HELD. No report and no auditor engaged. A Type II readiness '
+    + 'implementation has run with an external consultancy since July 2026.'],
+  ['ISO 27001', 'NOT HELD. A 27001:2022 implementation has run since July 2026; no '
+    + 'certification body is engaged.'],
   ['HIPAA', 'NOT APPLICABLE and not attested. No BAA is in place.'],
   ['PCI DSS', 'NOT HELD. Card data is handled by PaySimple; we do not store card numbers.'],
   ['FedRAMP', 'NOT HELD. Also not a prerequisite for the state and local work in C7.0; '
