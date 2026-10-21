@@ -2,6 +2,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import type { CampusAudience } from '../campusMap';
 import WhereTo from '../WhereTo';
+import '../campusPanels.css';
 import NotificationBell from '../../../pages/portal/community/NotificationBell';
 
 /**
@@ -21,6 +22,8 @@ export interface TopBarProps {
   streak: number | null;
   initials: string;
   onList: () => void;
+  /** Opens the Me panel (look and campus settings). */
+  onMe: () => void;
 }
 
 const ACCT: Partial<Record<CampusAudience, { label: string; cls: string }>> = {
@@ -29,7 +32,7 @@ const ACCT: Partial<Record<CampusAudience, { label: string; cls: string }>> = {
   staff: { label: 'Staff', cls: 'is-staff' },
 };
 
-export default function CampusTopBar({ audience, online, points, rung, streak, initials, onList }: TopBarProps): React.ReactElement {
+export default function CampusTopBar({ audience, online, points, rung, streak, initials, onList, onMe }: TopBarProps): React.ReactElement {
   const acct = ACCT[audience];
   const learner = audience === 'member' || audience === 'explorer';
   return (
@@ -60,7 +63,7 @@ export default function CampusTopBar({ audience, online, points, rung, streak, i
             <span data-testid="cm-stats-streak" title="Day streak"><span aria-hidden="true">{'🔥 '}</span>{streak}<span className="cm-sr"> day streak</span></span></>
         )}
         <NotificationBell />
-        <Link to="/portal/settings" className="cm-me" aria-label="Your profile and settings" data-testid="cm-stats-me">{initials}</Link>
+        <button type="button" className="cm-me" onClick={onMe} aria-label="You: your look and campus settings" data-testid="cm-stats-me">{initials}</button>
       </div>
     </div>
   );

@@ -6,6 +6,7 @@ import CampusConcierge from '../../../components/campus/home/CampusConcierge';
 import { pulseOf } from '../../../components/campus/home/CampusConcierge';
 import { useHomeFacts } from '../../../components/campus/home/useHomeFacts';
 import CampusGate, { gateSeen } from '../../../components/campus/home/CampusGate';
+import CampusMePanel from '../../../components/campus/home/CampusMePanel';
 import { useCampus } from '../../../components/campus/CampusContext';
 import { useCampusView } from '../../../components/campus/useCampusView';
 import { useCampusWorldProps } from '../../../components/campus/useCampusWorldProps';
@@ -50,6 +51,7 @@ export default function CampusHomePage(): React.ReactElement {
   const [hereId, setHereId] = useState<BuildingId | null>(null);
   const [cardOpen, setCardOpen] = useState(false);
   // D7: the entry gate, once per Central day (decided once, on the first render of the page).
+  const [meOpen, setMeOpen] = useState(false);
   const [gateOpen, setGateOpen] = useState(() => !gateSeen(new Date()));
   // A card on the map (building, person, tour, locker) tucks the concierge away, as the prototype does; the building whose card
   // opened is where you now are.
@@ -82,7 +84,8 @@ export default function CampusHomePage(): React.ReactElement {
         hasTour={!!tour} reduceMotion={reduce} now={new Date()} onEnter={(t) => { setGateOpen(false); if (t) campus.startTour(); }} />}
       <CampusWorld {...props} insets={HOME_INSETS} walkTo={walk} onCard={onCard} />
       <CampusTopBar audience={audience} online={online} points={campus.look?.points ?? null} rung={campus.look?.rung_name || null}
-        streak={facts.streak} initials={facts.initials || readParticipant().initials} onList={campus.openList} />
+        streak={facts.streak} initials={facts.initials || readParticipant().initials} onList={campus.openList} onMe={() => setMeOpen((v) => !v)} />
+      {meOpen && <CampusMePanel audience={audience} fullName={facts.fullName} initials={facts.initials || readParticipant().initials} onClose={() => setMeOpen(false)} />}
       <CampusConcierge tucked={cardOpen} audience={audience} firstName={facts.firstName} hereName={here ? buildingName(here, campus.settings.workplaceNames) : 'main gate'}
         buildings={buildings} accessOf={accessOf} workplaceNames={campus.settings.workplaceNames} presence={campus.presence} presenceError={campus.presenceError}
         desks={campus.staffDesks} stops={campus.planStops} live={live} hasTour={!!tour && campus.tourIndex === null} now={new Date()}

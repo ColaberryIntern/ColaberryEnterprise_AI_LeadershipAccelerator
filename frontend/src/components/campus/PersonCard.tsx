@@ -8,6 +8,7 @@ import { MESSAGE_BLOCKED_NOTE } from './campusPeople';
 import { publicOnly, GEAR_NAMES } from './campusGear';
 import { rungTone } from '../../services/bandLadder';
 import '../../styles/rungTones.css';
+import './campusPanels.css';
 import { useCardFocus } from './useCardFocus';
 
 /**

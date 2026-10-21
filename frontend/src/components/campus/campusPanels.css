@@ -1,0 +1,74 @@
+/* ============================================================
+   Colaberry Campus C11b: the panels, as the prototype draws them (.pcard, .pc-*, the list directory, .nt-* notifications, .toast,
+   the Me panel). Restyles the existing components; their behavior and tests are unchanged. Colors: campusArtTokens.css only.
+   ============================================================ */
+@import './campusArtTokens.css';
+@import './campusFonts.css';
+
+/* ---- person card (prototype .pcard) ---- */
+.cm-card.cm-person-card{width:min(300px,calc(100% - 32px));border-radius:22px;border:0;padding:18px;background:var(--cm-art-paper);box-shadow:var(--cm-art-shadow);
+  color:var(--cm-art-ink);font-family:'DM Sans',var(--sans),system-ui,sans-serif;z-index:5}
+.cm-person-card .cm-person-head{display:flex;gap:12px;align-items:center}
+.cm-person-card .cm-face.is-large{width:52px;height:52px;border-radius:50%;flex:none;font-size:17px;font-weight:800}
+.cm-person-card .cm-card-title{font-size:17px;font-weight:800;line-height:1.2;margin:0;font-family:'DM Sans',var(--sans),sans-serif}
+.cm-person-card .cm-person-head .cm-who-note{margin:2px 0 0;font-size:12px;color:var(--cm-art-muted)}
+.cm-person-card .cm-person-level{display:inline-block;margin:5px 0 0;border:1px solid;border-radius:999px;padding:1px 8px;font-size:11px;font-weight:800}
+.cm-person-card .cm-person-actions{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:12px}
+.cm-person-card .cm-person-actions>:first-child{grid-column:1/-1;background:var(--cm-art-red);border-color:var(--cm-art-red);color:var(--cm-art-on-dark)}
+.cm-person-card .cm-person-actions .cm-btn{border-radius:12px;padding:10px;font-weight:700;font-size:13px;text-align:center;justify-content:center}
+.cm-person-card .cm-person-actions .cm-btn.is-secondary{background:var(--cm-art-card);border:1px solid var(--cm-art-line);color:var(--cm-art-ink)}
+.cm-person-card .cm-person-actions .cm-btn.is-disabled{background:var(--cm-art-line);border-color:var(--cm-art-line);color:var(--cm-art-muted)}
+.cm-person-card .cm-card-x{border:0;background:transparent;font-size:18px;color:var(--cm-art-muted)}
+
+/* ---- the list view as the prototype's "Campus directory" ---- */
+.cm-layer.cm-list{background:var(--cm-art-dim);align-items:center;justify-content:flex-start;padding:56px 16px;overflow:auto}
+.cm-list .cm-layer-bar{width:min(820px,100%);background:var(--cm-art-paper);border:0;border-radius:22px 22px 0 0;padding:22px 22px 10px;flex-wrap:wrap;gap:10px}
+.cm-list .cm-layer-bar strong{font-family:'Fraunces',Georgia,serif;font-size:30px;letter-spacing:-.01em;flex:1 1 auto;color:var(--cm-art-ink)}
+.cm-list .cm-filter{border:2px solid var(--cm-art-pic-ink);border-radius:999px;padding:10px 14px;font-size:14px;min-width:240px}
+.cm-list .cm-list-intro{width:min(820px,100%);background:var(--cm-art-paper);margin:0;padding:0 22px 14px;color:var(--cm-art-muted);font-size:15px;line-height:1.45}
+.cm-list .cm-list-body{width:min(820px,100%);background:var(--cm-art-paper);border-radius:0 0 22px 22px;padding:0 22px 22px;display:grid;grid-template-columns:1fr 1fr;gap:12px;overflow:visible;flex:none}
+.cm-list .cm-list-bld{border:1px solid var(--cm-art-line);border-radius:14px;padding:14px;background:var(--cm-art-card)}
+.cm-list .cm-list-bld h2{font-size:17px;font-weight:700;margin:0;color:var(--cm-art-ink)}
+.cm-list .cm-list-line{margin:2px 0 8px;font-size:12.5px;color:var(--cm-art-muted)}
+.cm-list .cm-list-bld ul{list-style:none;margin:8px 0;padding:0;display:flex;flex-direction:column;gap:6px}
+.cm-list .cm-list-bld a{color:var(--cm-art-ink);font-weight:700;text-decoration:underline;text-underline-offset:3px}
+.cm-list .cm-list-walk{border:1px solid var(--cm-art-line);background:var(--cm-art-card);border-radius:999px;padding:6px 12px;font-size:12px;font-weight:700;color:var(--cm-art-ink);cursor:pointer;margin-top:4px}
+.cm-list .cm-list-plan{grid-column:1/-1;border:1.5px solid var(--cm-art-plan-edge);background:linear-gradient(var(--cm-art-plan-bg),var(--cm-art-card));border-radius:14px;padding:14px}
+.cm-list .cm-list-plan h2{font-size:17px;margin:0 0 6px}
+.cm-list .cm-list-plan ol{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:4px}
+.cm-list .cm-empty{grid-column:1/-1}
+@media (max-width:760px){ .cm-list .cm-list-body{grid-template-columns:1fr} .cm-list .cm-layer-bar strong{font-size:24px} }
+
+/* ---- notifications from the bell in the campus top bar (prototype .notifs) ---- */
+.cm-topbar .cm-bell-panel{border-radius:18px;border:0;box-shadow:var(--cm-art-shadow);background:var(--cm-art-paper);padding:14px 10px 10px;min-width:320px;color:var(--cm-art-ink)}
+.cm-topbar .cm-bell-head{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--cm-art-muted);font-weight:700;padding:0 8px 8px}
+.cm-topbar .cm-bell-badge{background:var(--cm-art-red);color:var(--cm-art-on-dark)}
+.cm-topbar .cm-bell-btn{border:0;background:transparent;color:var(--cm-art-ink)}
+
+/* ---- the new-message toast (prototype .toast): Reply / Walk over ---- */
+.cm-dm-toast{border-radius:16px;border:0;background:var(--cm-art-pic-ink);color:var(--cm-art-on-dark);box-shadow:var(--cm-art-shadow);padding:12px 12px 12px 16px;gap:10px;font-family:'DM Sans',var(--sans),sans-serif}
+.cm-dm-toast .cm-link{color:var(--cm-art-on-dark);font-weight:700;background:var(--cm-art-in-name-bg);border:1px solid var(--cm-art-pic-muted);border-radius:999px;padding:6px 12px;text-decoration:none}
+.cm-dm-toast .cm-card-x{color:var(--cm-art-on-dark);background:transparent;border:0;font-size:18px}
+
+/* ---- the Me panel (prototype .me-panel) ---- */
+.cm-me-panel{position:absolute;top:76px;right:16px;bottom:16px;width:min(400px,calc(100% - 32px));z-index:12;background:var(--cm-art-paper);border-radius:22px;box-shadow:var(--cm-art-shadow);
+  padding:20px;overflow:auto;color:var(--cm-art-ink);font-family:'DM Sans',var(--sans),system-ui,sans-serif}
+.cm-me-head{display:flex;gap:14px;align-items:center}
+.cm-me-face{width:76px;height:96px;border-radius:14px;background:linear-gradient(135deg,var(--cm-art-gate-photo-1),var(--cm-art-gate-photo-2));color:var(--cm-art-on-dark);display:grid;place-items:center;font:700 24px 'Fraunces',Georgia,serif;flex:none}
+.cm-me-head h2{font-family:'Fraunces',Georgia,serif;font-size:22px;margin:2px 0 6px}
+.cm-me-x{position:absolute;top:14px;right:14px;width:34px;height:34px;border-radius:50%;border:1px solid var(--cm-art-line);background:var(--cm-art-card);color:var(--cm-art-ink);font-size:18px;cursor:pointer}
+.cm-me-panel .cm-card.cm-look{position:static;width:auto;max-height:none;box-shadow:none;border:0;padding:0;margin-top:14px;background:transparent}
+.cm-me-panel .cm-look .cm-card-x{display:none}
+.cm-me-rows{margin-top:10px;display:flex;flex-direction:column}
+.cm-me-row{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--cm-art-line)}
+.cm-me-row b{display:block;font-size:15px}
+.cm-me-row small{display:block;color:var(--cm-art-muted);font-size:12.5px;line-height:1.4}
+.cm-me-seg{display:inline-flex;border:1px solid var(--cm-art-line);border-radius:999px;padding:3px;gap:2px;flex:none}
+.cm-me-seg button{border:0;background:transparent;border-radius:999px;padding:6px 12px;font-weight:700;font-size:13px;color:var(--cm-art-ink);cursor:pointer}
+.cm-me-seg button[aria-pressed="true"]{background:var(--cm-art-pic-ink);color:var(--cm-art-on-dark)}
+.cm-me-panel select{border:1px solid var(--cm-art-line);border-radius:10px;padding:8px 10px;font:600 13px 'DM Sans',var(--sans),sans-serif;background:var(--cm-art-card);color:var(--cm-art-ink)}
+.cm-me-panel button:focus-visible,.cm-me-panel select:focus-visible,.cm-me-panel a:focus-visible{outline:3px solid var(--cm-art-red);outline-offset:2px}
+@media (max-width:760px){ .cm-me-panel{top:auto;left:10px;right:10px;bottom:66px;width:auto;max-height:80%} }
+.cm-list .cm-layer-bar>.cm-btn.is-secondary:last-child{width:36px;height:36px;min-height:36px;padding:0;border-radius:50%;font-size:0;flex:none;margin-left:auto;order:9}
+.cm-list .cm-layer-bar>.cm-btn.is-secondary:last-child::before{content:" d7";font-size:20px;line-height:1}
+.cm-list .cm-layer-bar .cm-link{order:5;color:var(--cm-art-ink)}
