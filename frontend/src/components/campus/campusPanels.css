@@ -70,5 +70,5 @@
 .cm-me-panel button:focus-visible,.cm-me-panel select:focus-visible,.cm-me-panel a:focus-visible{outline:3px solid var(--cm-art-red);outline-offset:2px}
 @media (max-width:760px){ .cm-me-panel{top:auto;left:10px;right:10px;bottom:66px;width:auto;max-height:80%} }
 .cm-list .cm-layer-bar>.cm-btn.is-secondary:last-child{width:36px;height:36px;min-height:36px;padding:0;border-radius:50%;font-size:0;flex:none;margin-left:auto;order:9}
-.cm-list .cm-layer-bar>.cm-btn.is-secondary:last-child::before{content:" d7";font-size:20px;line-height:1}
+.cm-list .cm-layer-bar>.cm-btn.is-secondary:last-child::before{content:"\00d7";font-size:20px;line-height:1}
 .cm-list .cm-layer-bar .cm-link{order:5;color:var(--cm-art-ink)}
