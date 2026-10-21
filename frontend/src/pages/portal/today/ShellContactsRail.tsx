@@ -2,6 +2,7 @@ import React from 'react';
 import type { CohortContact } from '../../../services/cohortPresenceApi';
 import type { PeoplePanel } from '../../../services/peoplePanelApi';
 import PeoplePanelRail from './PeoplePanelRail';
+import CampusRail from '../../../components/campus/CampusRail';
 
 /**
  * The portal's right contacts rail (Facebook-style cohort presence). Moved out of PortalShell.tsx
@@ -37,6 +38,8 @@ export default function ShellContactsRail({
 }: ShellContactsRailProps): React.ReactElement {
   return (
       <aside className="te-contacts" aria-label="Cohort contacts">
+        {/* C11b: the campus sections (who is in this building, today's plan, help desk); renders nothing unless the campus is active. */}
+        {!contactsCollapsed && <CampusRail />}
         {panel ? (
           // Role-aware People panel (PEOPLE_PANEL_ROLES_ENABLED=true). When null (flag
           // OFF or fetch error) the legacy cohort-presence rail below renders unchanged.

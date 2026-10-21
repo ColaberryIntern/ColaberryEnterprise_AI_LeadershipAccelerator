@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import CampusWorldMap from './CampusWorldMap';
 import WhereTo from './WhereTo';
@@ -12,6 +12,7 @@ import { nextStop } from './campusPlan';
 import type { BuildingId } from './campusMap';
 import './campus.css';
 import './campusBanner.css';
+import './campusPageChrome.css';
 import './campusLive.css';
 
 /**
@@ -24,6 +25,20 @@ import './campusLive.css';
  * navigation. Rendered by both page chromes (PortalShell and the legacy PortalLayout) and by the
  * Showcase page, only while the campus is active. "Next" (C8) is the first unfinished step of today's plan outside this building.
  */
+/** C11b: the prototype's first-visit hint under the page bar, until you dismiss it once (per browser). */
+export const PAGE_HINT_KEY = 'colaberry.campus.hint.page';
+function PageHint(): React.ReactElement | null {
+  const [show, setShow] = useState(() => { try { return window.localStorage.getItem(PAGE_HINT_KEY) !== '1'; } catch { return false; } });
+  if (!show) return null;
+  const close = () => { setShow(false); try { window.localStorage.setItem(PAGE_HINT_KEY, '1'); } catch { /* no storage */ } };
+  return (
+    <div className="cm-page-hint" role="note" data-testid="cm-page-hint">
+      <span>You&rsquo;re still on campus. <b>Step outside</b>, tap a building on the map, or press Esc to go back out.</span>
+      <button type="button" className="cm-page-hint-x" onClick={close} aria-label="Dismiss the campus hint">×</button>
+    </div>
+  );
+}
+
 export default function CampusBanner(): React.ReactElement {
   const { settings, presence, presenceError, layer, openMap, stepOutside, enterThroughDoor, planStops } = useCampus();
   const { buildings, accessOf, isExplorer } = useCampusView();
@@ -45,7 +60,7 @@ export default function CampusBanner(): React.ReactElement {
   if (presence && !presenceError) for (const [id, a] of Object.entries(presence)) counts[id] = a.count;
 
   return (
-    <div className="cm-banner" data-testid="cm-banner">
+    <div className="cm-banner cm-pagebar" data-testid="cm-banner">
       <button type="button" className="cm-banner-mini" onClick={() => openMap(here ?? undefined)} aria-label="Open the campus map">
         <span aria-hidden="true" className="cm-banner-mini-map">
           <CampusWorldMap buildings={buildings} accessOf={accessOf} workplaceNames={settings.workplaceNames}
@@ -57,7 +72,7 @@ export default function CampusBanner(): React.ReactElement {
           {crumbs.map((c, i) => {
             const last = i === crumbs.length - 1;
             return (
-              <li key={i}>
+              <li key={i} className={c.buildingId ? `cm-crumb-b cm-b-${c.buildingId}` : i === 0 ? 'cm-crumb-home' : undefined}>
                 {last
                   ? <span aria-current="page">{c.label}</span>
                   : <button type="button" className="cm-link" onClick={() => openMap((c.buildingId ?? undefined) as BuildingId | undefined)}>{c.label}</button>}
@@ -80,6 +95,7 @@ export default function CampusBanner(): React.ReactElement {
       </button>
       {/* C8: what is on air now (renders nothing when nothing is) */}
       <CampusLive />
+      <PageHint />
     </div>
   );
 }
