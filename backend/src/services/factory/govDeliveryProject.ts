@@ -172,7 +172,7 @@ export async function ensureGovTwoTrackProject(input: EnsureGovTwoTrackProjectIn
     // A services (consulting) pursuit gets the proposal track ONLY — no software to build, so no empty
     // solution_build track and no phantom build stories. Default/software keeps both. Idempotent either way:
     // a pre-existing solution_build track (from an earlier software classification) is left untouched.
-    const trackTypes: readonly string[] = input.pursuitKind === 'services' ? ['proposal'] : TRACK_TYPES;
+    const trackTypes: readonly ('proposal' | 'solution_build')[] = input.pursuitKind === 'services' ? ['proposal'] : TRACK_TYPES;
     // Create-if-absent. A re-approval must NEVER reset an existing track's owner, student-build link, or status
     // (ingestion runs live in prod — a blind upsert here erased them). findOrCreate inserts only when missing.
     for (const trackType of trackTypes) {

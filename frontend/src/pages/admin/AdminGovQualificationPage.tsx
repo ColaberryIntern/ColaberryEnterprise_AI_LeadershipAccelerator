@@ -1701,7 +1701,7 @@ export default function AdminGovQualificationPage(): React.ReactElement {
           <GovTabPanel active={activeStep === 'build'}>
           {/* Pursuit type — a services (consulting) bid has no software to build, so the build machinery is hidden. */}
           <SectionCard title="Pursuit type" icon="route-line"
-            subtitle="Is this a software build or a services (consulting) engagement? A services pursuit has no software to build; the proposal is the deliverable, and the build spec / plan / materialize steps do not apply.">
+            subtitle="Is this a software build or a services (consulting) engagement? A services pursuit builds no software; the proposal is the deliverable, and the build spec / plan / materialize steps do not apply.">
             <div className="btn-group btn-group-sm" role="group" aria-label="Pursuit type">
               <button type="button" className={`btn ${ws.pursuitKind === 'services' ? 'btn-outline-secondary' : 'btn-primary'}`} disabled={busy || ws.pursuitKind !== 'services'}
                 onClick={() => run(() => setGovPursuitKind(canonical, { biddingEntity, expectedVersion: version, pursuitKind: 'software' }), 'Marked as a software build.')}>
@@ -1718,7 +1718,7 @@ export default function AdminGovQualificationPage(): React.ReactElement {
               subtitle="This is a consulting engagement: the proposal is the deliverable.">
               <div className="small text-secondary">
                 <i className="ri-information-line me-1" aria-hidden="true" />
-                There is no software to build: no build spec, build plan, or monitored student project. Everything you must submit lives on the <strong>Proposal</strong> step. Switch to "Software build" above if this pursuit does involve development.
+                A consulting bid builds no software: no build spec, build plan, or monitored student project. Everything you must submit lives on the <strong>Proposal</strong> step. Switch to "Software build" above if this pursuit does involve development.
               </div>
             </SectionCard>
           ) : (<>
