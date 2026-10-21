@@ -20,8 +20,8 @@ const STATS = {
   staff: ['cm-stats-acct-staff', 'cm-stats-online', 'cm-stats-bell', 'cm-stats-me'],
 };
 const TOPBAR = ['cm-topbar', 'cm-topbar-brand', 'cm-topbar-search', 'cm-topbar-list'];
-const CONCIERGE = ['cm-concierge', 'cm-cc-where', 'cm-cc-greeting', 'cm-cc-lead', 'cm-cc-helpdesk', 'cm-cc-chips'];
-const CONCIERGE_BY = { member: ['cm-cc-tour'], explorer: ['cm-cc-pass', 'cm-cc-enroll', 'cm-cc-tour'], business: ['cm-cc-tour'], staff: [] };
+const CONCIERGE = ['cm-concierge', 'cm-cc-where', 'cm-cc-greeting', 'cm-cc-lead', 'cm-cc-helpdesk'];
+const CONCIERGE_BY = { member: ['cm-cc-tour', 'cm-cc-chips'], explorer: ['cm-cc-pass', 'cm-cc-enroll', 'cm-cc-tour', 'cm-cc-chips'], business: ['cm-cc-tour', 'cm-cc-chips'], staff: ['cm-cc-staff-tools'] };
 const SIGNATURE = { member: 'commons', explorer: 'lecture', business: 'career', staff: 'career' };
 /** Tap a building even when the phone framing leaves it off screen (a real user pans to it first). */
 const tap = (id) => ({ evaluate: `document.querySelector('[data-testid="cm-bld-${id}"]').dispatchEvent(new MouseEvent('click', { bubbles: true }))` });
