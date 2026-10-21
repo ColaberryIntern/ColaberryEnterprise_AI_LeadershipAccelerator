@@ -8,7 +8,8 @@ import type { ExplorerAccess } from './campusMap';
 import PersonCard from './PersonCard';
 import type { PersonCardTarget } from './CampusContext';
 import type { StaffDesk } from './campusPeopleApi';
-import { tokensFor, desksForBuilding } from './campusPeople';
+import { tokensFor, desksForBuilding, mayaAllowedFor } from './campusPeople';
+import { readParticipant } from '../../pages/portal/today/shellUtils';
 import { buildingName } from './campusMap';
 import ExplorerPath from './ExplorerPath';
 import { explorerPath } from './campusPath';
@@ -121,6 +122,9 @@ export default function CampusWorld({ buildings, audience, hasFullAccess, access
   // C11b: the prototype camera frames the campus (no more sideways scrolling on phones); the arrival card covers the right
   // 380 px on wide screens and up to 55% of the height on phones, so a framed building sits beside or above it.
   const camApi = useRef<CameraApi | null>(null);
+  // C11b: the desks on duty for this viewer (Maya only where the server and the audience rule allow), and your initials for the pin.
+  const mapDesks = useMemo(() => (staffDesks ?? []).filter((d) => d.on_duty && (d.id !== 'maya' || mayaAllowedFor(audience))).map((d) => ({ id: d.id, name: d.name, building: d.building })), [staffDesks, audience]);
+  const meInitials = useMemo(() => readParticipant().initials, []);
   const camera = useMemo(() => ({ apiRef: camApi, insets, focusInsets: (v: Viewport) => (v.W <= 760 ? { left: 0, top: 0, right: 0, bottom: v.H * 0.55 } : { left: 0, top: 0, right: 400, bottom: 0 }) }), [insets]);
   const lastOutside = useRef(0);
   useEffect(() => {
@@ -153,7 +157,8 @@ export default function CampusWorld({ buildings, audience, hasFullAccess, access
     <div className={`cm-world${anyCard ? ' has-card' : ''}`} onKeyDown={onKeyDown}>
       <CampusWorldMap buildings={buildings} accessOf={accessOf} workplaceNames={workplaceNames} reduceMotion={reduceMotion}
         initialTarget={initialTarget} onArrive={onArrive} buildingRef={registerEl} counts={presenceError ? undefined : counts}
-        people={people} onPickPerson={onOpenPerson ? pickPerson : undefined} walkRequest={walkRequest} onAir={onAir} route={route} ownGear={ownGear} showOpen={audience === 'explorer'} camera={camera} />
+        people={people} onPickPerson={onOpenPerson ? pickPerson : undefined} walkRequest={walkRequest} onAir={onAir} route={route} ownGear={ownGear} showOpen={audience === 'explorer'} camera={camera}
+        desks={mapDesks} me={meInitials ? { initials: meInitials } : null} />
       <CampusZoomControls apiRef={camApi} />
       {tour && tour.card}
       {!tour && panel && panel.card}

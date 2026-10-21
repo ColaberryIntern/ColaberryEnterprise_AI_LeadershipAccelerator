@@ -104,3 +104,30 @@ describe('the map is drawn as the prototype draws it', () => {
     } finally { spy.mockRestore(); }
   });
 });
+
+describe('people on the map (C11b F13)', () => {
+  it('the on-duty AI desks stand at their buildings with a STAFF tag; Maya at her welcome desk by the gate; a press walks there', () => {
+    const arrived: string[] = [];
+    render({ desks: [{ id: 'reese', name: 'Reese', building: 'commons' }, { id: 'maya', name: 'Maya', building: 'gate' }], onArrive: (id) => arrived.push(id) });
+    const reese = q('[data-testid="cm-staff-reese"]')!;
+    expect(reese.textContent).toContain('STAFF');
+    expect(reese.getAttribute('aria-label')).toContain('Reese');
+    expect(q('[data-testid="cm-maya-desk"]')).not.toBeNull();
+    act(() => { reese.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+    expect(arrived).toEqual(['commons']);
+  });
+
+  it('no desks listed, no staff tokens; none on the compact maps', () => {
+    render({ desks: [] });
+    expect(q('[data-testid="cm-staff-tokens"]')).toBeNull();
+    render({ compact: true, desks: [{ id: 'reese', name: 'Reese', building: 'commons' }] });
+    expect(q('[data-testid="cm-staff-tokens"]')).toBeNull();
+  });
+
+  it('your initials are in your pin when known', () => {
+    render({ me: { initials: 'AM' } });
+    expect(q('[data-testid="cm-avatar"] .cm-pin-initials')!.textContent).toBe('AM');
+    render({ me: null });
+    expect(q('[data-testid="cm-avatar"] .cm-pin-initials')).toBeNull();
+  });
+});

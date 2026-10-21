@@ -73,3 +73,10 @@
 .cm-zoom button:hover{background:var(--cm-art-paving)}
 .cm-zoom button:focus-visible{outline:3px solid var(--cm-art-red);outline-offset:-3px}
 .cm-world.has-card .cm-zoom{display:none}
+
+/* C11b: your initials in the pin; the AI staff tokens (prototype .staff-tok) */
+.cm-avatar .cm-pin-initials{font:800 7.2px 'DM Sans',var(--sans),sans-serif;fill:var(--cm-art-white)}
+.cm-staff-tok{cursor:pointer}
+.cm-staff-tok:hover .ring,.cm-staff-tok:focus-visible .ring{stroke-width:3.5}
+.cm-staff-tok:focus-visible{outline:none}
+.cm-staff-tok:focus-visible .ring{stroke:var(--cm-art-red)}

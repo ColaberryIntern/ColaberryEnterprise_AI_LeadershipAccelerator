@@ -11,6 +11,8 @@ import BuildingArt from './art/BuildingArt';
 import { MainGateArt } from './art/MainGate';
 import { PeopleChip, StatusBadge, StopBadge, statusOf } from './art/BuildingBadges';
 import { LiveBack, LiveFront } from './art/LiveDressing';
+import StaffTokens from './art/StaffTokens';
+import type { MapDesk } from './art/StaffTokens';
 import { GroundPatterns, Ground, QuadAndPaths, District, Trees, AVE, GATE, HUB } from './art/grounds';
 import type { PathDoor } from './art/grounds';
 import { doorOf, routeTo, START } from './walkPath';
@@ -60,6 +62,10 @@ export interface CampusMapProps {
   route?: BuildingId[];
   /** C11b: the Explorer view's OPEN badges (the prototype shows OPEN on every building an Explorer may use). */
   showOpen?: boolean;
+  /** C11b: the AI staff desks on duty for this viewer, drawn at their buildings (full map only). */
+  desks?: MapDesk[];
+  /** C11b: your initials, drawn in your pin's head as the prototype does. */
+  me?: { initials: string } | null;
   /** C11b: the prototype camera (full map only): panels' insets for framing, and a handle for the zoom buttons. */
   camera?: { insets?: InsetsOf; focusInsets?: InsetsOf; apiRef?: React.MutableRefObject<CameraApi | null> };
 }
@@ -119,7 +125,7 @@ function routeSegment(b: CampusBuilding): string {
   return `M${HUB.x} ${AVE}L${GATE.x} ${GATE.y}`;
 }
 
-export default function CampusWorldMap({ buildings, accessOf, workplaceNames, reduceMotion, compact = false, initialTarget, onArrive, buildingRef, counts, people, onPickPerson, walkRequest, onAir, route, ownGear, showOpen = false, camera }: CampusMapProps): React.ReactElement {
+export default function CampusWorldMap({ buildings, accessOf, workplaceNames, reduceMotion, compact = false, initialTarget, onArrive, buildingRef, counts, people, onPickPerson, walkRequest, onAir, route, ownGear, showOpen = false, camera, desks, me }: CampusMapProps): React.ReactElement {
   const [pos, setPos] = useState<Pt>({ x: START.x, y: START.y });
   const hereRef = useRef<Here>(START);
   const svgRef = useRef<SVGSVGElement>(null);
@@ -202,6 +208,7 @@ export default function CampusWorldMap({ buildings, accessOf, workplaceNames, re
           stop={!compact && route && route.includes(b.id) ? route.indexOf(b.id) : undefined} onPick={walkTo} setRef={buildingRef} />
       ))}
       {live.length > 0 && <LiveFront buildings={live} />}
+      {!compact && desks && desks.length > 0 && <StaffTokens desks={desks} buildings={buildings} onPick={walkTo} />}
       {!compact && people && onPickPerson && buildings.map((b) => {
         const t = people[b.id];
         return t ? <PersonTokens key={'t-' + b.id} b={b} shown={t.shown} more={t.more} maxY={WORLD.h} onPick={pickers[b.id]!} /> : null;
@@ -212,7 +219,9 @@ export default function CampusWorldMap({ buildings, accessOf, workplaceNames, re
           <g className="bob">
             {ownGear?.ride && moving && !reduceMotion && <RideUnder ride={ownGear.ride} />}
             <path className="cm-pin" d="M0 2 L-7 -12 A9 9 0 1 1 7 -12 Z" />
-            <circle className="cm-pin-dot" cx={0} cy={-17.7} r={3.6} />
+            {me?.initials
+              ? <text className="cm-pin-initials" x={0} y={-15.2} textAnchor="middle">{me.initials.slice(0, 2)}</text>
+              : <circle className="cm-pin-dot" cx={0} cy={-17.7} r={3.6} />}
             {ownGear && <GearOnHead gear={publicOnly(ownGear)} cx={0} cy={-17.7} r={9} />}
           </g>
         </g>
