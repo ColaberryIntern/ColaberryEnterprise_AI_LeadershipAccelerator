@@ -28,7 +28,7 @@
 const C77 = require('./c77Data');
 const { findBritishSpelling, americanForm } = require('../britishSpellings');
 
-const AS_OF = '2026-10-19';
+const AS_OF = '2026-10-21';
 
 /** Every id a line may cite. Built from C7.7 rather than restated. */
 const VALID_REFS = new Set([
@@ -80,10 +80,48 @@ const CRITICAL_DISCLOSURES = [
   },
 ];
 
+/**
+ * The certification work that IS under way. Added 21 October 2026 after a correction.
+ *
+ * This module was built on the belief that there was nothing to report. Ali's answer to
+ * C7.8 was "do a wider search through email and bc - we have started on some certs", and
+ * the search found a funded, CEO-sponsored program running since July. The page said
+ * "no certifications" and was literally accurate and materially incomplete: it omitted a
+ * real, checkable differentiator.
+ *
+ * SO THIS MODULE NOW GUARDS BOTH DIRECTIONS. Overstating a certification loses a customer
+ * later and is the worse failure, which is why it was guarded first. Understating one
+ * loses the deal now, for nothing. `assertProgramIsNotOmitted` is the second half.
+ *
+ * The distinction the old copy collapsed, and the reason it read as wrong: there is no
+ * AUDIT in progress, and there IS an IMPLEMENTATION in progress. Those are different
+ * stages and a procurement reader knows the difference.
+ */
+const IN_PROGRESS = {
+  what: 'SOC 2 Type II readiness and ISO/IEC 27001:2022 implementation',
+  since: 'July 2026',
+  scope: 'ISMS for the India and USA offices, plus SOC 2 readiness and compliance '
+    + 'consulting for the USA office.',
+  stage: 'Control documentation and as-is process discovery.',
+  // Each of these is a thing a buyer will ask for and we cannot produce. Naming them is
+  // what keeps the paragraph above from reading as a certification by implication.
+  notYet: [
+    'No independent audit firm is engaged.',
+    'No Type II observation window has a start date.',
+    'No readiness report or gap assessment has been delivered to us.',
+    'No compliance platform is in place.',
+  ],
+  // Written down because the honest version of "are you on track" is "we do not say".
+  honesty: 'The implementation roadmap targeted October 2026. We are not claiming that '
+    + 'target was met, and we will not give a certification date until an auditor gives '
+    + 'us one.',
+};
+
 /** What a buyer should take from the page. */
-const POSITION = 'We are a small team with a real audit trail and no certifications. For a '
-  + 'pilot with non-regulated data that is usually acceptable, and it should be your '
-  + 'decision with these facts in front of you rather than ours by omission.';
+const POSITION = 'We are a small team with a real audit trail, no certifications yet, and '
+  + 'a SOC 2 Type II and ISO 27001 implementation under way since July 2026 that has not '
+  + 'reached audit. For a pilot with non-regulated data that is usually acceptable, and it '
+  + 'should be your decision with these facts in front of you rather than ours by omission.';
 
 /* ── C7.9: the procurement FAQ ────────────────────────────────────────────── */
 
@@ -95,10 +133,14 @@ const POSITION = 'We are a small team with a real audit trail and no certificati
  * reads like neither.
  */
 const FAQ = [
-  { q: 'Do you have SOC 2?', state: 'NOT YET',
-    a: 'No report, no audit in progress, no auditor engaged. We will not describe ourselves '
-      + 'as SOC 2 aligned, and if you have seen that phrase on one of our pages it is wrong '
-      + 'and is being removed.',
+  { q: 'Do you have SOC 2?', state: 'IN PROGRESS',
+    a: 'No report and no auditor engaged, so the answer to "do you have it" is no. What we '
+      + 'do have is a SOC 2 Type II readiness and ISO 27001:2022 implementation running '
+      + 'with an external consultancy since July 2026, currently in control documentation. '
+      + 'No independent audit firm is engaged and no Type II observation window has a start '
+      + 'date, which are the two things that would let us give you a date. We will not '
+      + 'describe ourselves as SOC 2 aligned, and if you have seen that phrase on one of our '
+      + 'pages it is wrong and is being removed.',
     from: ['CERT:SOC 2 Type I or II'] },
   { q: 'Do you support SSO?', state: 'NOT YET',
     a: 'No SAML, no OIDC and no SCIM. Accounts are created and removed by us on request.',
@@ -199,24 +241,113 @@ function assertEveryLineTracesToC77() {
   return { lines: lines.length, refs: checked, available: VALID_REFS.size };
 }
 
-/** We hold nothing. Nothing may read as though we do. */
-function assertNoUnheldCertificationImplied() {
-  const prose = [
+/**
+ * Everything a buyer reads, as one string.
+ *
+ * Exposed and injectable because a guard whose input cannot be varied cannot be proven.
+ * `POSITION` is a module-level const, so a test cannot reach it by reassigning the export,
+ * and a break harness that tried would silently test nothing - which is exactly what
+ * happened before this seam existed. The build always calls the guards with no argument.
+ */
+function buyerFacingProse() {
+  return [
     ...STRONG.map((s) => `${s.line} ${s.caveat || ''}`),
     ...CRITICAL_DISCLOSURES.map((d) => d.answer),
     ...FAQ.map((f) => f.a),
     POSITION,
   ].join(' ');
+}
+
+/** We hold nothing. Nothing may read as though we do. */
+function assertNoUnheldCertificationImplied(proseIn) {
+  const prose = proseIn === undefined ? buyerFacingProse() : proseIn;
   // First-person constructions only: naming a standard in order to deny holding it is the
   // entire job of this document, so a bare mention must not fail.
   const bad = /\b(we|our|colaberry)\b[^.]{0,40}\b(are|is|am)\s+(soc\s*2|iso\s*27001|hipaa|pci|fedramp)[^.]{0,20}\b(compliant|certified|aligned|ready)\b/i;
   if (bad.test(prose)) {
     throw new Error('C7.8/C7.9: the copy implies a certification we do not hold');
   }
-  if (!/no report, no audit in progress/i.test(prose)) {
-    throw new Error('C7.8/C7.9: the SOC 2 answer must stay explicit about holding nothing');
+  // The SOC 2 answer must still open by denying the thing asked for. This used to require
+  // the exact phrase "no report, no audit in progress", which was retired because the
+  // middle clause was false: no AUDIT is in progress, but an IMPLEMENTATION is. Pinning a
+  // guard to one sentence made the sentence unfixable without deleting the guard.
+  const soc2 = FAQ.find((f) => /do you have soc 2/i.test(f.q));
+  if (!soc2 || !/no report and no auditor engaged/i.test(soc2.a)) {
+    throw new Error('C7.8/C7.9: the SOC 2 answer must still say plainly that there is no '
+      + 'report and no auditor. An in-progress program does not soften that.');
   }
   return true;
+}
+
+/**
+ * The other direction: a real certification program may not be omitted.
+ *
+ * WHY THIS EXISTS. This module shipped claiming "no certifications" full stop, which read
+ * as complete and was not: a funded SOC 2 Type II and ISO 27001 implementation had been
+ * running since July. Understating is a quieter failure than overstating and it was
+ * ungarded entirely, so the page lost a real differentiator for nothing.
+ *
+ * It checks BOTH halves, because either alone is a misrepresentation. Mentioning the
+ * program without the four things we cannot produce turns a status into a promise.
+ */
+function assertProgramIsNotOmitted(proseIn) {
+  const prose = proseIn === undefined ? [POSITION, ...FAQ.map((f) => f.a)].join(' ') : proseIn;
+
+  if (!/soc 2[^.]{0,60}iso 27001|iso 27001[^.]{0,60}soc 2/i.test(prose)) {
+    throw new Error('C7.8/C7.9: the in-progress SOC 2 and ISO 27001 program is not '
+      + 'mentioned. Omitting it understates our posture to a buyer.');
+  }
+  if (!/july 2026|since july/i.test(prose)) {
+    throw new Error('C7.8/C7.9: the program is mentioned without when it started. '
+      + '"We are working on it" with no date is what every vendor says.');
+  }
+  // The limits are the half that keeps a status from reading as a promise.
+  const limits = [
+    { re: /no (independent )?audit(or)? firm is engaged|no auditor engaged/i,
+      what: 'that no audit firm is engaged' },
+    { re: /no type ii observation window/i, what: 'that no observation window has started' },
+  ];
+  for (const l of limits) {
+    if (!l.re.test(prose)) {
+      throw new Error(`C7.8/C7.9: the program is described without saying ${l.what}. `
+        + 'A program stated without its limits reads as a certification in waiting.');
+    }
+  }
+  // A date we cannot stand behind is worse than no date.
+  const promised = /\b(certified|certification)\b[^.]{0,30}\bby\s+(Q[1-4]|January|February|March|April|May|June|July|August|September|October|November|December|20\d\d)/i;
+  if (promised.test(prose)) {
+    throw new Error('C7.8/C7.9: the copy promises a certification date. No auditor has '
+      + 'given us one, so we cannot give a buyer one.');
+  }
+  return IN_PROGRESS.notYet.length;
+}
+
+/**
+ * The certification table and the in-progress panel sit inches apart. They may not disagree.
+ *
+ * WHY: the table is generated from C7.7's CERTS and the panel from IN_PROGRESS, two
+ * sources that are edited at different times for different reasons. After the program was
+ * added to the panel, the table still said "no audit in progress" directly above it. Both
+ * statements were on the same page, in the same section, contradicting each other - and a
+ * procurement reader is exactly the reader who notices.
+ */
+function assertTableAgreesWithProgram() {
+  const table = HOLD_NOTHING.map((c) => `${c.name} ${c.state}`).join(' ');
+
+  // The phrase the panel contradicts. It is checked by meaning, not by equality, because
+  // the next person to reword it will not reword it identically.
+  if (/\bno\b[^.]{0,20}\baudit\b[^.]{0,20}\bin progress\b/i.test(table)) {
+    throw new Error('C7.8/C7.9: the certification table still says no audit is in progress '
+      + 'while the panel beside it describes an implementation running since '
+      + `${IN_PROGRESS.since}. One of the two is wrong and a buyer will see both.`);
+  }
+  // The table must not claim anything is held either.
+  const soc2Row = HOLD_NOTHING.find((c) => /soc 2/i.test(c.name));
+  if (!soc2Row || !/NOT HELD/i.test(soc2Row.state)) {
+    throw new Error('C7.8/C7.9: the SOC 2 row must say NOT HELD. An implementation under '
+      + 'way is not a certification held.');
+  }
+  return HOLD_NOTHING.length;
 }
 
 /** Gaps marked, not glossed: every CRITICAL finding must appear by name. */
@@ -296,6 +427,7 @@ module.exports = {
   C77,
   VALID_REFS,
   HOLD_NOTHING,
+  IN_PROGRESS,
   STRONG,
   CRITICAL_DISCLOSURES,
   POSITION,
@@ -303,7 +435,10 @@ module.exports = {
   SUBPROCESSORS,
   BUYER_CHECKLIST,
   assertEveryLineTracesToC77,
+  buyerFacingProse,
   assertNoUnheldCertificationImplied,
+  assertProgramIsNotOmitted,
+  assertTableAgreesWithProgram,
   assertEveryCriticalGapIsDisclosed,
   assertSubprocessorsAreDisclosedHonestly,
   assertCopyIsClean,
