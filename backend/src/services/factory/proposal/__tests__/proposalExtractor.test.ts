@@ -448,3 +448,60 @@ describe('extractProposal — Herriman wrap-join (soft line wraps must not shatt
     expect(requirements.some((r) => r.extractedText.includes('asset management and Unrelated note'))).toBe(false);
   });
 });
+
+/**
+ * T1b — document classification. A W-9's tax instructions and a boilerplate T&C template must NOT become dozens of
+ * candidates; a form becomes ONE "complete and submit" item, a T&C contributes only its material clauses, and a
+ * duplicate PDF/DOCX pair is read once. This is the ~45%-noise fix.
+ */
+describe('extractProposal — document classification cuts the noise', () => {
+  it('a W-9 (tax form) yields ONE "complete and submit" item, not one per instruction line', async () => {
+    const w9 = [
+      'Give Form to the requester. Do not send to the IRS.',
+      'You must enter your TIN in the appropriate box.',
+      'An LLC should check the appropriate box for its tax classification.',
+      'You are required to provide your correct TIN.',
+    ].join('\n');
+    const { requirements, files } = await extractProposal(makeZip({ 'W9-2024.txt': w9 }));
+    const fromW9 = requirements.filter((r) => r.sourceDocument === 'W9-2024.txt');
+    expect(fromW9).toHaveLength(1);                                  // not 4 (one per instruction line)
+    expect(fromW9[0].statement.toLowerCase()).toContain('complete and submit');
+    expect(files.find((f) => f.name === 'W9-2024.txt')!.role).toBe('tax_form');
+    expect(fromW9[0].extractedText.length).toBeGreaterThan(0);       // honesty rail: cited by a verbatim line
+  });
+
+  it('a Terms & Conditions file yields a "review" item + only MATERIAL clauses, not every boilerplate sentence', async () => {
+    const terms = [
+      'Master Standard Terms and Conditions for Goods and Services.',               // title -> the "review" item
+      'The parties shall execute this Agreement in counterparts upon award.',        // obligation, NOT material -> dropped
+      'The Contractor shall maintain general liability insurance of $2,000,000.',    // material -> kept
+      'The Contractor shall indemnify the College against all third-party claims.',  // material -> kept
+    ].join('\n');
+    const { requirements, files } = await extractProposal(makeZip({ 'Master - Standard Terms and Conditions.txt': terms }));
+    const fromTerms = requirements.filter((r) => r.sourceDocument.includes('Terms'));
+    expect(files.find((f) => f.name.includes('Terms'))!.role).toBe('contract_terms');
+    expect(fromTerms).toHaveLength(3); // review item + the 2 material clauses; the non-material obligation is dropped
+    expect(fromTerms.some((r) => /review .* exceptions/i.test(r.statement))).toBe(true);
+    expect(fromTerms.some((r) => /liability insurance/i.test(r.extractedText))).toBe(true);
+    expect(fromTerms.some((r) => /indemnify/i.test(r.extractedText))).toBe(true);
+    expect(fromTerms.some((r) => /execute this Agreement/i.test(r.extractedText))).toBe(false); // boilerplate dropped
+  });
+
+  it('a duplicate PDF/DOCX pair is read ONCE — the second is flagged duplicate and not re-extracted', async () => {
+    const body = Array.from({ length: 40 }, (_, i) => `The vendor shall provide capability number ${i} to the system.`).join(' ');
+    const { requirements, files } = await extractProposal(makeZip({ 'RFP-copy-a.txt': body, 'RFP-copy-b.txt': body }));
+    expect(files.find((f) => f.name === 'RFP-copy-a.txt')!.status).toBe('extracted');
+    expect(files.find((f) => f.name === 'RFP-copy-b.txt')!.status).toBe('duplicate');
+    // requirements come only from the first copy — not doubled
+    expect(requirements.length).toBeGreaterThan(0);
+    expect(requirements.every((r) => r.sourceDocument === 'RFP-copy-a.txt')).toBe(true);
+  });
+
+  it('still fully scans the RFP body (solicitation role) — classification never suppresses real requirements', async () => {
+    const { requirements, files } = await extractProposal(makeZip({
+      'RFP-SNOC26271024.txt': 'The offeror shall provide six deliverables. The proposal must include three references. Offerors are required to carry insurance.',
+    }));
+    expect(files[0].role).toBe('solicitation');
+    expect(requirements.length).toBe(3); // all three obligations captured, as before
+  });
+});
