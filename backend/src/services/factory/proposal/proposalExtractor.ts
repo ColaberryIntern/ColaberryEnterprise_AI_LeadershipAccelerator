@@ -228,7 +228,10 @@ function firstMeaningfulLine(text: string): string | null {
 }
 // Material contract clauses — the ones in a Terms & Conditions template that actually create an obligation. A T&C
 // file contributes these (plus one "review and note exceptions" item) instead of every boilerplate sentence.
-const MATERIAL_TERM_RE = /\b(insurance|bond(?:ed|ing)?|indemnif|liabilit|licens|E-?Verify|prevailing\s+wage|non[-\s]?collusion|conflict\s+of\s+interest|confidential|non[-\s]?disclosure|warrant(?:y|ies)|terminat|data\s+(?:security|privacy|protection)|HIPAA|FERPA|SOC\s*2|background\s+check|compliance\s+with|equal\s+(?:employment\s+)?opportunity|prohibited|debarment)\b/i;
+// Leading \b only, NO trailing \b: these are STEMS that must match their inflections (indemnif->indemnify,
+// liabilit->liability, licens->license/licensed, terminat->termination, warrant->warranty, bond->bonded/bonding).
+// A trailing \b broke that — "indemnif\b" does not match "indemnify" (no boundary between f and y).
+const MATERIAL_TERM_RE = /\b(?:insurance|bond|indemnif|liabilit|licens|E-?Verify|prevailing\s+wage|non[-\s]?collusion|conflict\s+of\s+interest|confidential|non[-\s]?disclosure|warrant|terminat|data\s+(?:security|privacy|protection)|HIPAA|FERPA|SOC\s*2|background\s+check|compliance\s+with|equal\s+(?:employment\s+)?opportunity|prohibited|debarment)/i;
 
 /** Text out of one in-zip file buffer, by extension. Never throws — returns '' on unreadable/unsupported.
  *  .docx/.xlsx delegate to the structure-aware ooxmlText reader so table rows and spreadsheet cells keep
