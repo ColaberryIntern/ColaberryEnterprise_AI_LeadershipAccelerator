@@ -2581,3 +2581,56 @@ entirely - their coverage is zero, not skipped. That file says entries should co
 "at which point" a Postgres service exists. It now does. Taking them off is the next piece, and
 it is a different kind of work: those suites instantiate models directly and were never written
 to own a database.
+
+## A DATABASE WAS NOT WHAT THE IGNORE-LIST SUITES WERE MISSING
+
+The previous entry left this open: about 25 database-backed suites sit on
+`backend/jest.ci.config.ts`'s ignore-list, hard-failing without a database and excluded from CI
+entirely, and that file says entries come off the list "at which point" a Postgres service
+container exists. The `integration-tier` job now provides exactly that - it passed on the runner
+in 2m24s - so the promise was testable.
+
+**It does not hold.** All 24 entries were run against their OWN fresh database, one at a time:
+
+| | |
+|---|---|
+| PASS | **2** |
+| FAIL | **20** |
+| HUNG | **2** |
+
+### The control that settles it
+
+`assessmentService` fails IDENTICALLY with and without `DATABASE_URL`:
+`TypeError: Cannot read properties of undefined (reading 'define')` at
+`StudentPointsEvent.init`. And the suite already mocks `config/database` itself, with a stub that
+HAS `define`. So the cause lies in how these suites mock the model layer, not in CI's
+environment, and the ignore-list's stated reason - "with no database configured the model layer
+never initialises" - is not the reason. Fixing them is per-suite work, 20 suites of it.
+
+### The two that passed had never needed a database
+
+Both pass with `DATABASE_URL` unset: `explorerEnrollmentWelcome` (5 tests) and
+`requireBuildEntitlement` (23 tests). They were on the list by mistake, and they are off it now -
+**28 tests the gate was silently skipping.** Proven both ways: under `main`'s config those two
+paths report "No tests found, exiting with code 1"; under the corrected config they run and pass.
+
+So the net effect of giving CI a database, for this population, is **zero**. The 28 tests are a
+mislabelling fix, not a database win, and the entry above should not be read as having unblocked
+anything here.
+
+### Two of them HANG, which nothing could have shown before
+
+`communityCommentsLikesProfiles` and `systemStateEngine/phase10_5` do not fail - they run until
+killed, at a 90s cap. Being on the ignore-list meant they had never run at all, so this is the
+first observation of their actual behaviour. That makes four suites in this programme now known
+to hang when finally executed, after `multiProjectIsolation` and `ensurePublishingSchema`.
+
+### What is still open, stated precisely
+
+- **20 suites** on the ignore-list fail for reasons a database does not address. Their CI
+  coverage is zero, and several cover auth. Per-suite work.
+- **4 suites hang** when run: `multiProjectIsolation`, `ensurePublishingSchema`,
+  `communityCommentsLikesProfiles`, `phase10_5`.
+- The **DDL item** is untouched by any of this, and its scope is still what the previous entry
+  measured: 14 missing tables, an unenumerated column population, and 63 column failures that no
+  table-level sweep can see.
