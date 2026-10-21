@@ -258,14 +258,14 @@ graph TD
     <tr><td><strong>Authored</strong></td><td>${aut.stories}</td><td>${esc(aut.source)}</td></tr>
   </tbody></table>
   <p>A migration and an authoring decision deserve separate review. Collapsing them into one change
-  would have hidden a judgement call inside a data move, so they shipped as two scripts and two
+  would have hidden a judgment call inside a data move, so they shipped as two scripts and two
   pull requests.</p>
 
   <h3>The migration parsed cleanly</h3>
   <p>${mig.parsed} of ${mig.stories} parsed, <strong>${mig.unparsable} unparsable</strong>. Criterion
   length ran from ${mig.criterionLen.min} to ${mig.criterionLen.max} characters, median
   ${mig.criterionLen.median}. The extractor returns nothing rather than a guess when it does not
-  recognise a story's shape, so an unparsable story would have been reported rather than skipped.</p>
+  recognize a story's shape, so an unparsable story would have been reported rather than skipped.</p>
 
   <h3>Criteria are stored verbatim, not split into a false Given/When/Then</h3>
   <p>Each migrated criterion is one array element holding the human's exact sentence. The column's
