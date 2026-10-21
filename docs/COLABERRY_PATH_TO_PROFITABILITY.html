@@ -1,0 +1,755 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Colaberry: the path to profitability</title>
+<style>
+  :root{--ink:#0f172a;--mid:#334155;--soft:#64748b;--line:#e2e8f0;--bg:#ffffff;
+    --accent:#0f766e;--warn:#b45309;--bad:#b91c1c;--good:#15803d;--panel:#f8fafc}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  .wrap{max-width:900px;margin:0 auto;padding:40px 24px 80px}
+  h1{font-size:30px;line-height:1.2;margin:0 0 6px;letter-spacing:-.02em}
+  h2{font-size:21px;margin:44px 0 10px;padding-top:18px;border-top:2px solid var(--line);
+    letter-spacing:-.01em}
+  h3{font-size:16px;margin:26px 0 8px}
+  p{margin:0 0 12px}
+  .sub{color:var(--soft);font-size:13px;margin:0 0 28px}
+  .lede{font-size:17px;line-height:1.55}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;
+    margin:22px 0}
+  .kpi{border:1px solid var(--line);border-radius:10px;padding:14px 16px;background:var(--panel)}
+  .kpi .n{font-size:26px;font-weight:700;letter-spacing:-.02em;line-height:1.1}
+  .kpi .l{font-size:11px;color:var(--soft);text-transform:uppercase;letter-spacing:.06em;
+    margin-top:4px}
+  .kpi .f{font-size:11px;color:var(--soft);margin-top:6px}
+  .kpi.bad .n{color:var(--bad)} .kpi.good .n{color:var(--good)}
+  .kpi.warn .n{color:var(--warn)}
+  .callout{border-left:4px solid var(--warn);background:#fffbeb;padding:14px 16px;
+    border-radius:0 8px 8px 0;margin:18px 0}
+  .callout.bad{border-color:var(--bad);background:#fef2f2}
+  .callout.good{border-color:var(--good);background:#f0fdf4}
+  table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13.5px}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);
+    vertical-align:top}
+  th{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--soft);
+    border-bottom:2px solid var(--line)}
+  td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .chart{width:100%;height:auto;margin:10px 0 4px}
+  .cap{font-size:11.5px;color:var(--soft);margin:0 0 18px}
+  .tl-phase{border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin:16px 0;
+    background:var(--panel)}
+  .tl-head{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+  .tl-id{background:var(--accent);color:#fff;font-size:11px;font-weight:700;
+    padding:2px 8px;border-radius:20px}
+  .tl-win{color:var(--soft);font-size:12px}
+  .tl-thesis{font-size:13.5px;color:var(--mid);margin:8px 0 12px}
+  .tl-items{list-style:none;margin:0;padding:0}
+  .tl-items li{display:flex;gap:14px;padding:12px 0;border-top:1px solid var(--line)}
+  .tl-items li.hard{background:#fef2f2;margin:0 -10px;padding:12px 10px;border-radius:6px}
+  .tl-date{font-size:12px;color:var(--soft);min-width:84px;font-variant-numeric:tabular-nums}
+  .tl-dec{font-weight:600;margin-bottom:5px}
+  .tl-body p{font-size:13px;margin:0 0 6px;color:var(--mid)}
+  .tl-body .meta{font-size:11.5px;color:var(--soft)}
+  .chip{display:inline-block;background:#e2e8f0;color:var(--mid);font-size:10px;
+    font-weight:700;padding:1px 6px;border-radius:4px;margin-right:6px;vertical-align:1px}
+  .irr{display:inline-block;background:var(--bad);color:#fff;font-size:10px;font-weight:700;
+    padding:1px 7px;border-radius:4px;margin-left:8px;text-transform:uppercase}
+  .tl-exit{font-size:12.5px;color:var(--mid);margin:12px 0 0;padding-top:10px;
+    border-top:1px dashed var(--line)}
+  .tag{display:inline-block;font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;
+    text-transform:uppercase;letter-spacing:.04em}
+  .tag.live{background:#dcfce7;color:#166534}
+  .tag.no{background:#fee2e2;color:#991b1b}
+  .tag.risk{background:#fef3c7;color:#92400e}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  .card{border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+  .src{font-size:11px;color:var(--soft);font-style:italic}
+  ul{margin:6px 0 12px 20px;padding:0} li{margin:4px 0}
+  @media (max-width:720px){.two{grid-template-columns:1fr}.wrap{padding:24px 16px 60px}
+    .tl-items li{flex-direction:column;gap:4px}}
+  @media print{.tl-items li.hard{background:#fff;border:1px solid var(--bad)}
+    h2{page-break-after:avoid}.tl-phase{page-break-inside:avoid}}
+  </style></head><body>
+<div class="wrap">
+  <h1>Colaberry: the path to profitability</h1>
+  <p class="sub">Prepared for Ram &middot; 2026-10-21 &middot; every figure measured,
+    every source named &middot; nothing here has been decided</p>
+
+  <p class="lede">The school's books look healthy. They are being held up by a
+  <strong>$13,877 a month subscription book that nobody is managing as a subscription
+  book</strong>, attached to a program we are about to switch off. The new business earns
+  $3,581 a month from 19 people. The whole
+  plan turns on not destroying the first while building the second.</p>
+
+  <div class="kpis">
+    <div class="kpi"><div class="n">$53,711</div>
+      <div class="l">Net income, Jan&ndash;Aug</div>
+      <div class="f">Looks fine. Read the next three.</div></div>
+    <div class="kpi warn"><div class="n">$13,877</div>
+      <div class="l">Legacy book, per month</div>
+      <div class="f">124 live schedules, realized</div></div>
+    <div class="kpi bad"><div class="n">$3,581</div>
+      <div class="l">New business, per month</div>
+      <div class="f">19 paying people</div></div>
+    <div class="kpi bad"><div class="n">26%</div>
+      <div class="l">Coverage of the old by the new</div>
+      <div class="f">Gap of $10,296 a month</div></div>
+  </div>
+
+  <h2>1. The finding that changes the question</h2>
+
+  <div class="callout bad">
+    <p><strong>Account "4300 ISA Placement Income" is not an ISA placement book.</strong>
+    It carries $151,841 over eight months.
+    $17,211 of that &mdash;
+    11.3% &mdash; is traceable placement-fee
+    cash, from four named students. The rest looks like legacy
+    <strong>$250-a-month training subscriptions</strong> booked into an account named
+    after something else.</p>
+    <p style="margin:0">Everything else settling through PaySimple in 2026 is $100, $149, $181.82, $199, $250 and $400 recurring training-subscription and membership drafts, plus $500 and $3,000 enrollment down payments. Those are tuition.</p>
+  </div>
+
+  <div class="callout">
+    <p style="margin:0 0 8px"><strong>Why the name misleads, precisely.</strong>
+    The workbook organizes income by PAYMENT PROCESSOR, not by what was sold. The account is literally &quot;4300 ISA Placement Income (Paysimple)&quot; sitting under a column headed &quot;ISA Placement (Paysimple)&quot;, and its sibling is &quot;4200 Training Platform Revenue (Paypal)&quot; under &quot;Tuition &amp; Training (Paypal)&quot;. Account 4300 means &quot;cash that arrived through PaySimple&quot;. That is all it means.</p>
+    <p style="margin:0">Real ISA placement income is about
+    <strong>$2,150 a month</strong> and ends
+    May 2027. It is a line item, not the business.</p>
+  </div>
+
+  <h3>What is actually inside account 4300</h3>
+  <table>
+    <thead><tr><th>Component</th><th class="num">Share</th><th class="num">Jan&ndash;Aug</th></tr></thead>
+    <tbody><tr>
+      <td>Recurring training-subscription and membership drafts</td>
+      <td class="num">63.0%</td>
+      <td class="num">$95,000</td></tr><tr>
+      <td>Enrollment down payments and one-offs</td>
+      <td class="num">16.0%</td>
+      <td class="num">$25,000</td></tr><tr>
+      <td>Actual post-placement ISA placement fees</td>
+      <td class="num">11.3%</td>
+      <td class="num">$17,211</td></tr><tr>
+      <td>QuickBooks timing and netting difference</td>
+      <td class="num">10.0%</td>
+      <td class="num">$15,000</td></tr></tbody>
+  </table>
+  <p class="cap">Cross-check against the processor: September settled
+  $16,354, October to the 21st
+  $11,535. The projection sits slightly below recent actuals because actuals still include one-off down payments, and those go to near zero now that legacy enrollment has stopped.</p>
+
+  <div class="callout bad">
+    <p style="margin:0"><strong>The other channel has stopped.</strong> Account 4200, the
+    PayPal column, went from $18,301 in January to
+    $1,254 in August, and was
+    <strong>negative $2,150</strong> in June on
+    refunds. One processor is carrying almost everything.</p>
+  </div>
+
+  <p>This matters because the two have opposite risk shapes, and the plan you write is
+  different in each case.</p>
+
+  <div class="two">
+    <div class="card"><h3 style="margin-top:0">If it were an ISA book</h3>
+      <p style="font-size:13.5px;margin:0">It winds down on a schedule you can forecast.
+      You know the end date, you plan around it, and nothing you do changes the curve.
+      The real ISA run-off does behave this way &mdash; and it is nearly over:
+      <strong>$7,877 scheduled across
+      3 contracts, gone by
+      May 2027</strong>.</p></div>
+    <div class="card" style="border-color:var(--bad)">
+      <h3 style="margin-top:0">What it actually is</h3>
+      <p style="font-size:13.5px;margin:0">A subscription book that keeps paying
+      indefinitely &mdash; some schedules run to 2034 &mdash; and can stop
+      <strong>all at once</strong>, the moment subscribers decide they are no longer
+      receiving anything. It does not expire. It cancels.</p></div>
+  </div>
+
+  <h3>The legacy book, month by month</h3>
+  <svg viewBox="0 0 720 240" class="chart" role="img"
+    aria-label="Legacy subscription book realized monthly against the new business">
+    <rect x="40.0" y="40.0" width="70.0"
+      height="160.0" rx="3" fill="#0f766e" opacity="0.85"/>
+      <text x="75.0" y="35.0"
+        text-anchor="middle" font-size="9" fill="#0f766e">$13,877</text>
+      <text x="75.0" y="218" text-anchor="middle"
+        font-size="9" fill="#64748b">Nov</text>
+      <text x="75.0" y="230" text-anchor="middle"
+        font-size="9" fill="#94a3b8">2026</text><rect x="120.0" y="51.6" width="70.0"
+      height="148.4" rx="3" fill="#0f766e" opacity="0.85"/>
+      <text x="155.0" y="46.6"
+        text-anchor="middle" font-size="9" fill="#0f766e">$12,869</text>
+      <text x="155.0" y="218" text-anchor="middle"
+        font-size="9" fill="#64748b">Dec</text>
+      <text x="155.0" y="230" text-anchor="middle"
+        font-size="9" fill="#94a3b8">2026</text><rect x="200.0" y="53.0" width="70.0"
+      height="147.0" rx="3" fill="#0f766e" opacity="0.85"/>
+      <text x="235.0" y="48.0"
+        text-anchor="middle" font-size="9" fill="#0f766e">$12,753</text>
+      <text x="235.0" y="218" text-anchor="middle"
+        font-size="9" fill="#64748b">Mar</text>
+      <text x="235.0" y="230" text-anchor="middle"
+        font-size="9" fill="#94a3b8">2027</text><rect x="280.0" y="60.6" width="70.0"
+      height="139.4" rx="3" fill="#0f766e" opacity="0.85"/>
+      <text x="315.0" y="55.6"
+        text-anchor="middle" font-size="9" fill="#0f766e">$12,090</text>
+      <text x="315.0" y="218" text-anchor="middle"
+        font-size="9" fill="#64748b">Jun</text>
+      <text x="315.0" y="230" text-anchor="middle"
+        font-size="9" fill="#94a3b8">2027</text><rect x="360.0" y="64.6" width="70.0"
+      height="135.4" rx="3" fill="#0f766e" opacity="0.85"/>
+      <text x="395.0" y="59.6"
+        text-anchor="middle" font-size="9" fill="#0f766e">$11,743</text>
+      <text x="395.0" y="218" text-anchor="middle"
+        font-size="9" fill="#64748b">Sep</text>
+      <text x="395.0" y="230" text-anchor="middle"
+        font-size="9" fill="#94a3b8">2027</text><rect x="440.0" y="73.9" width="70.0"
+      height="126.1" rx="3" fill="#0f766e" opacity="0.85"/>
+      <text x="475.0" y="68.9"
+        text-anchor="middle" font-size="9" fill="#0f766e">$10,933</text>
+      <text x="475.0" y="218" text-anchor="middle"
+        font-size="9" fill="#64748b">Dec</text>
+      <text x="475.0" y="230" text-anchor="middle"
+        font-size="9" fill="#94a3b8">2027</text><rect x="520.0" y="104.6" width="70.0"
+      height="95.4" rx="3" fill="#0f766e" opacity="0.85"/>
+      <text x="555.0" y="99.6"
+        text-anchor="middle" font-size="9" fill="#0f766e">$8,271</text>
+      <text x="555.0" y="218" text-anchor="middle"
+        font-size="9" fill="#64748b">Jun</text>
+      <text x="555.0" y="230" text-anchor="middle"
+        font-size="9" fill="#94a3b8">2028</text><rect x="600.0" y="123.3" width="70.0"
+      height="76.7" rx="3" fill="#0f766e" opacity="0.85"/>
+      <text x="635.0" y="118.3"
+        text-anchor="middle" font-size="9" fill="#0f766e">$6,650</text>
+      <text x="635.0" y="218" text-anchor="middle"
+        font-size="9" fill="#64748b">Dec</text>
+      <text x="635.0" y="230" text-anchor="middle"
+        font-size="9" fill="#94a3b8">2028</text><line x1="40" y1="158.71153707573683" x2="680" y2="158.71153707573683"
+    stroke="#b91c1c" stroke-width="2" stroke-dasharray="5 4"/>
+    <text x="680" y="152.7" text-anchor="end" font-size="10"
+      fill="#b91c1c">new business today, $3,581</text></svg>
+  <p class="cap">Realized at the measured 46.3%
+  collection rate, not scheduled face value. Dashed line is the entire new business today.
+  <span class="src">CCPP read-only SELECTs and live PaySimple schedule reads, 2026-10-21</span></p>
+
+  <div class="callout">
+    <p style="margin:0"><strong>The assumption doing all the work:</strong>
+    If the program ends and service visibly stops, this book is exposed to mass cancellation and the real decay is far steeper than the end dates imply. No dataset can settle this. It is a service-delivery
+    question, and it is the single largest financial risk in this plan.</p>
+  </div>
+
+  <h2>2. What the P&amp;L shows, and what it hides</h2>
+
+  <svg viewBox="0 0 720 220" class="chart" role="img"
+    aria-label="Account 4300 (the subscription book) and Tuition and training by month">
+    <line x1="38" y1="173.60298315072276" x2="682" y2="173.60298315072276"
+    stroke="#cbd5e1" stroke-dasharray="3 3"/><path d="M38.0,92.4 L130.0,91.7 L222.0,81.9 L314.0,38.0 L406.0,113.7 L498.0,105.9 L590.0,82.1 L682.0,112.0" fill="none" stroke="#0f766e" stroke-width="2"
+      stroke-linejoin="round"/><circle cx="38.0" cy="92.4" r="3" fill="#0f766e"/><circle cx="130.0" cy="91.7" r="3" fill="#0f766e"/><circle cx="222.0" cy="81.9" r="3" fill="#0f766e"/><circle cx="314.0" cy="38.0" r="3" fill="#0f766e"/><circle cx="406.0" cy="113.7" r="3" fill="#0f766e"/><circle cx="498.0" cy="105.9" r="3" fill="#0f766e"/><circle cx="590.0" cy="82.1" r="3" fill="#0f766e"/><circle cx="682.0" cy="112.0" r="3" fill="#0f766e"/><path d="M38.0,91.5 L130.0,156.5 L222.0,119.9 L314.0,150.3 L406.0,167.2 L498.0,182.0 L590.0,172.9 L682.0,159.0" fill="none" stroke="#b45309" stroke-width="2"
+      stroke-linejoin="round"/><circle cx="38.0" cy="91.5" r="3" fill="#b45309"/><circle cx="130.0" cy="156.5" r="3" fill="#b45309"/><circle cx="222.0" cy="119.9" r="3" fill="#b45309"/><circle cx="314.0" cy="150.3" r="3" fill="#b45309"/><circle cx="406.0" cy="167.2" r="3" fill="#b45309"/><circle cx="498.0" cy="182.0" r="3" fill="#b45309"/><circle cx="590.0" cy="172.9" r="3" fill="#b45309"/><circle cx="682.0" cy="159.0" r="3" fill="#b45309"/><text x="38.0" y="208" text-anchor="middle"
+      font-size="10" fill="#64748b">Jan</text><text x="130.0" y="208" text-anchor="middle"
+      font-size="10" fill="#64748b">Feb</text><text x="222.0" y="208" text-anchor="middle"
+      font-size="10" fill="#64748b">Mar</text><text x="314.0" y="208" text-anchor="middle"
+      font-size="10" fill="#64748b">Apr</text><text x="406.0" y="208" text-anchor="middle"
+      font-size="10" fill="#64748b">May</text><text x="498.0" y="208" text-anchor="middle"
+      font-size="10" fill="#64748b">Jun</text><text x="590.0" y="208" text-anchor="middle"
+      font-size="10" fill="#64748b">Jul</text><text x="682.0" y="208" text-anchor="middle"
+      font-size="10" fill="#64748b">Aug</text><g transform="translate(38,14)">
+      <rect width="10" height="10" rx="2" fill="#0f766e"/>
+      <text x="15" y="9" font-size="11" fill="#334155">Account 4300 (the subscription book)</text></g><g transform="translate(228,14)">
+      <rect width="10" height="10" rx="2" fill="#b45309"/>
+      <text x="15" y="9" font-size="11" fill="#334155">Tuition and training</text></g></svg>
+  <p class="cap">Tuition fell from $18,571 in January to
+  $3,304 in August; June is negative on refunds. The upper line is the
+  book that is actually paying the bills.
+  <span class="src">School monthly p&amp;l.xlsx, accrual basis, read 2026-10-21</span></p>
+
+  <table>
+    <thead><tr><th>What</th><th class="num">Amount</th><th>Reading</th></tr></thead>
+    <tbody>
+      <tr><td>Total income, Jan&ndash;Aug</td>
+        <td class="num">$194,839</td>
+        <td>78% of it arrived through one payment processor</td></tr>
+      <tr><td>Steady-state monthly cost</td>
+        <td class="num">$10,757</td>
+        <td>One-offs removed: Computer &amp; Software, Legal Fees, Training Contractors</td></tr>
+      <tr><td>Commission actually paid</td>
+        <td class="num">$90,614</td>
+        <td>Measured from the commission runs</td></tr>
+      <tr><td>Commission in this P&amp;L</td>
+        <td class="num">$31,827</td>
+        <td>The difference is a coding decision, not missing money</td></tr>
+      <tr><td><strong>Unexplained coding gap</strong></td>
+        <td class="num"><strong>$58,787</strong></td>
+        <td><strong>Until someone says which class it went to, the school's true cost base
+          is unknown</strong></td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout bad">
+    <p style="margin:0"><strong>Less than half of every drafted dollar clears.</strong>
+    Realization is 46.3% &mdash;
+    $136,777 settled against $295,141
+    attempted. 38 to 42 payments a month return or NSF, mostly $250 drafts. Planning on scheduled amounts overstates cash by about 2.2 times.</p>
+  </div>
+
+  <h2>3. The new business, honestly</h2>
+
+  <p>Delivery capacity is not the problem. The portal, 1,815 timeline cards and a working curriculum exist. Acquisition is, and a free tier that gives the paid product away makes it worse.</p>
+
+  <div class="kpis">
+    <div class="kpi"><div class="n">54</div><div class="l">rows read "active"</div>
+      <div class="f">the number usually quoted</div></div>
+    <div class="kpi bad"><div class="n">26</div><div class="l">are complimentary</div>
+      <div class="f">more free seats than payers</div></div>
+    <div class="kpi bad"><div class="n">19</div><div class="l">actually bill</div>
+      <div class="f">9 more have lapsed periods</div></div>
+    <div class="kpi bad"><div class="n">1</div>
+      <div class="l">new paid in October</div>
+      <div class="f">down from 63 in July</div></div>
+  </div>
+
+  <p>Lifetime cash collected by the new business, across its entire existence:
+  <strong>$15,608</strong>. That is not a monthly figure.
+  76 of roughly
+  130 subscriptions ever started have canceled.</p>
+
+  <h3>Three defects leaking money from a funnel that already works</h3>
+  <table>
+    <thead><tr><th>#</th><th>Defect</th><th>Effect</th></tr></thead>
+    <tbody><tr>
+      <td><span class="chip">X1</span></td>
+      <td><strong>The free Explorer tier has no paywall.</strong><br>
+        <span style="font-size:12.5px;color:var(--mid)">396 explorers are served the entire curriculum, so there is no material thing to upgrade to. The free tier is not a funnel into the product. It is the product, given away.</span></td>
+      <td style="font-size:12.5px">Caps conversion structurally, whatever is spent on acquisition.</td></tr><tr>
+      <td><span class="chip">X2</span></td>
+      <td><strong>New checkouts create one-time payments, not recurring schedules.</strong><br>
+        <span style="font-size:12.5px;color:var(--mid)">Only 12 of 24 monthly members are on autopay; the rest are migrated by hand every month. The service says so in its own header comment.</span></td>
+      <td style="font-size:12.5px">A leak that grows with every new member.</td></tr><tr>
+      <td><span class="chip">X3</span></td>
+      <td><strong>The site advertises $149 &quot;cancel anytime&quot; in roughly 70 places.</strong><br>
+        <span style="font-size:12.5px;color:var(--mid)">The month-to-month rate is $199; $149 is the committed rate. Every new month-to-month member is sold at a discount nobody chose to offer, on a price advertised under TWC rules.</span></td>
+      <td style="font-size:12.5px">A 25 percent price leak on the only engine that earns anything.</td></tr></tbody>
+  </table>
+  <p class="cap">None of these needs a new product, a new hire, or a dollar of marketing.</p>
+
+  <h2>4. The engines: eight listed, one earning</h2>
+  <table>
+    <thead><tr><th>Engine</th><th>Earning?</th><th class="num">Today</th>
+      <th>Earliest honest revenue</th></tr></thead>
+    <tbody><tr>
+      <td><strong>Individual membership</strong><br>
+        <span style="font-size:12px;color:var(--soft)">LIVE and stalling. New paid enrollments fell 63, 35, 5, 1 across July to October.</span></td>
+      <td><span class="tag live">yes</span></td>
+      <td class="num">$3,581/mo</td>
+      <td style="font-size:12.5px">already live<br>
+        <span style="color:var(--mid)">The only engine where January revenue is a forecast rather than a hope.</span></td></tr><tr>
+      <td><strong>Enterprise and B2B seats</strong><br>
+        <span style="font-size:12px;color:var(--soft)">Org accounts, sponsor seats and redemption are shipped. Zero companies have ever bought. The one sponsor row is a demo seed.</span></td>
+      <td><span class="tag no">no</span></td>
+      <td class="num">$0</td>
+      <td style="font-size:12.5px">Q1 2027 if someone owns a quota<br>
+        <span style="color:var(--mid)">The only engine whose economics reach 10,000 people. Selling 100 companies 100 seats is a motion this company has run for 14 years.</span></td></tr><tr>
+      <td><strong>Colaberry Live</strong><br>
+        <span style="font-size:12px;color:var(--soft)">21 of 61 tickets done, target 31 October. Two broadcasts exist, both engineering tests. Zero viewer sessions. The paywall has never been exercised.</span></td>
+      <td><span class="tag no">no</span></td>
+      <td class="num">$0</td>
+      <td style="font-size:12.5px">audience Nov or Dec 2026; a paid product is unstarted<br>
+        <span style="color:var(--mid)">Run it as a funnel. Its 2027 revenue line should read zero direct.</span></td></tr><tr>
+      <td><strong>YouTube and live classes</strong><br>
+        <span style="font-size:12px;color:var(--soft)">No funnel running. The two tickets that would create one are open, one overdue.</span></td>
+      <td><span class="tag no">no</span></td>
+      <td class="num">$0</td>
+      <td style="font-size:12.5px">Q1 2027 as a funnel; no product plan exists<br>
+        <span style="color:var(--mid)">Top of funnel at best.</span></td></tr><tr>
+      <td><strong>Government contracts</strong><br>
+        <span style="font-size:12px;color:var(--soft)">Zero submissions, zero contracts, zero revenue in the system. The one real bid, DOL AI Literacy via Essnova, was lost. Three &quot;proposals&quot; describe themselves as rehearsals assuming a SOC 2 we do not hold.</span></td>
+      <td><span class="tag no">no</span></td>
+      <td class="num">$0</td>
+      <td style="font-size:12.5px">Q3 2027, and only as an Essnova subcontract<br>
+        <span style="color:var(--mid)">THE EXPENSIVE DISTRACTION. It feels like current business because of its Basecamp footprint. One owner, capped budget, out of the 2027 revenue plan.</span></td></tr><tr>
+      <td><strong>Certification preparation</strong><br>
+        <span style="font-size:12px;color:var(--soft)">302 questions and a scoring engine exist. Five people have ever completed a practice exam. It is bundled free inside membership.</span></td>
+      <td><span class="tag no">no</span></td>
+      <td class="num">$0</td>
+      <td style="font-size:12.5px">priceable in about 30 days<br>
+        <span style="color:var(--mid)">A reason to stay a member, not a reason to pay separately. We issue nothing.</span></td></tr><tr>
+      <td><strong>The ten agents</strong><br>
+        <span style="font-size:12px;color:var(--soft)">266 agents, 175 enabled, 765,305 executions in 30 days, all internal operations tooling. No SKU, no price, no external customer, no packaging ticket.</span></td>
+      <td><span class="tag no">no</span></td>
+      <td class="num">$0</td>
+      <td style="font-size:12.5px">not a product<br>
+        <span style="color:var(--mid)">Margin and headcount avoidance. The moment it appears as ARR the plan loses credibility.</span></td></tr><tr>
+      <td><strong>Live cohorts as a priced SKU</strong><br>
+        <span style="font-size:12px;color:var(--soft)">A $4,500 price sits in settings. No enrollment has ever been recorded at it.</span></td>
+      <td><span class="tag no">no</span></td>
+      <td class="num">$0</td>
+      <td style="font-size:12.5px">needs a decision, not a build<br>
+        <span style="color:var(--mid)">There is no cohort SKU today. Membership is the only purchasable thing.</span></td></tr></tbody>
+  </table>
+
+  <h2>5. Do we need to lay people off?</h2>
+
+  <div class="callout good">
+    <p style="margin:0"><strong>Largely, it has already happened by attrition.</strong>
+    Commission cost has fallen 78%
+    since 2023 &mdash; from $27,690 a month across
+    40 to 50 people to $6,175 across
+    14. Teaching and TA commission reached
+    <strong>zero in August</strong> with nobody dismissed: the classes ended and the cost
+    went with them.</p>
+  </div>
+
+  <table>
+    <thead><tr><th>Component</th><th class="num">Monthly</th><th>Type</th><th>Reading</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><strong>Mentor retainer</strong></td><td class="num">$3,500</td>
+        <td><span class="tag risk">FIXED</span></td>
+        <td style="font-size:12.5px">A flat $350 per mentor across ten mentors. Verified NOT performance-scaled: mentors at zero activity and zero logins still receive it in full. It behaves like salary despite being 1099, and it is the only line a decision can remove.</td></tr><tr>
+        <td><strong>Session commission</strong></td><td class="num">$2,250</td>
+        <td><span class="tag live">PER-SESSION</span></td>
+        <td style="font-size:12.5px">Stops when sessions stop. Every paid session in the last live detail was Data Analytics or IPBC content. Not one AI-program session appears.</td></tr><tr>
+        <td><strong>Teaching and TA</strong></td><td class="num">$0</td>
+        <td><span class="tag live">ALREADY ZERO</span></td>
+        <td style="font-size:12.5px">Was $3,000 to $5,200 a month in early 2026. Reached zero in August when the last two instructors came off. Nobody was dismissed; the work ended.</td></tr>
+      <tr>
+        <td>Ali placement commission</td><td class="num">$1,979</td>
+        <td><span class="tag no">survives</span></td>
+        <td style="font-size:12.5px">A percentage of collections, so it tracks the book, not the classroom.</td></tr><tr>
+        <td>1099 contractors, admin</td><td class="num">$3,400</td>
+        <td><span class="tag no">survives</span></td>
+        <td style="font-size:12.5px">Corporate admin.</td></tr><tr>
+        <td>Health, dental, life, disability</td><td class="num">$1,519</td>
+        <td><span class="tag no">survives</span></td>
+        <td style="font-size:12.5px">THE TELL. You cannot insure people who do not exist. W2 employees exist and their wages are coded to a class other than the school.</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout bad">
+    <p style="margin:0"><strong>Do not cut the mentors in isolation.</strong> The retainer
+    is $3,500 a month and the book
+    those mentors support pays
+    4&times; that every month. Saving
+    $3,500 and triggering a cancellation wave is the most
+    expensive economy available here. The wind-down has to be sequenced against the book,
+    not run independently.</p>
+  </div>
+
+  <p><strong>The real decision is invisible in this P&amp;L.</strong>
+  $58,787 of commission sits outside the school class, and the health
+  insurance line of $1,519 a month proves W2 employees
+  exist whose wages do not appear here at all. No salaried decision should be taken before
+  that register arrives.</p>
+
+  <h2>6. Ten thousand learners: what the arithmetic allows</h2>
+
+  <p>417 learners a month for 24 months. The
+  July cohort was 48 and November is 37. At fifty
+  per cohort that is eight concurrent cohorts starting every month, which is a different
+  company. Selling it one subscription at a time is worse: October produced
+  1.</p>
+
+  <table>
+    <thead><tr><th>Channel</th><th class="num">Learners</th><th class="num">Revenue</th>
+      <th>Gated by</th></tr></thead>
+    <tbody><tr>
+      <td><strong>Institutional seat blocks</strong><br>
+        <span style="font-size:12px;color:var(--soft)">Higher-ed continuing education is already the named beachhead, and blocks are the only shape that reaches five figures of learners inside two years.</span></td>
+      <td class="num">8,000</td>
+      <td class="num">$2,400,000</td>
+      <td style="font-size:12.5px">A reference customer. There is none, so deal one is the whole risk.</td></tr><tr>
+      <td><strong>Self-serve and async</strong><br>
+        <span style="font-size:12px;color:var(--soft)">Carries the long tail at near-zero marginal delivery cost.</span></td>
+      <td class="num">1,500</td>
+      <td class="num">$298,500</td>
+      <td style="font-size:12.5px">A paywall. Today the free tier serves the entire curriculum.</td></tr><tr>
+      <td><strong>Live cohorts</strong><br>
+        <span style="font-size:12px;color:var(--soft)">The premium tier and the proof engine. Case studies come from here, and they are what make the other two sellable.</span></td>
+      <td class="num">500</td>
+      <td class="num">$894,000</td>
+      <td style="font-size:12.5px">Instructor time, the one input that does not scale.</td></tr>
+      <tr><td><strong>Total</strong></td>
+        <td class="num"><strong>10,000</strong></td>
+        <td class="num"><strong>$3,592,500</strong></td>
+        <td style="font-size:12.5px">$149,688 a month averaged</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout">
+    <p style="margin:0"><strong>Eighty percent of the target arrives in blocks.</strong>
+    Sixteen institutional deals. Selling 100 companies 100 seats is a motion this company
+    has run for fourteen years; selling 10,000 individuals one at a time is not. Live
+    cohorts can only be 5% of
+    volume before instructor time breaks.</p>
+  </div>
+
+  <h2>7. What we sell</h2>
+  <table>
+    <thead><tr><th>Tier</th><th>Price</th><th>Status</th><th>Role</th></tr></thead>
+    <tbody><tr>
+      <td><strong>Explorer</strong><br>
+        <span style="font-size:12px;color:var(--soft)">Anyone</span></td>
+      <td style="font-size:12.5px">$0</td>
+      <td><span class="tag live">LIVE</span></td>
+      <td style="font-size:12.5px">Top of funnel. 396 people sit here and currently receive the entire curriculum, which is the problem D5 fixes.</td></tr><tr>
+      <td><strong>Membership</strong><br>
+        <span style="font-size:12px;color:var(--soft)">Individual learners</span></td>
+      <td style="font-size:12.5px">$199 monthly, $1,788 annually</td>
+      <td><span class="tag live">LIVE</span></td>
+      <td style="font-size:12.5px">The only thing anyone can buy today. 19 people pay for it.</td></tr><tr>
+      <td><strong>Legacy training subscription</strong><br>
+        <span style="font-size:12px;color:var(--soft)">124 existing subscribers</span></td>
+      <td style="font-size:12.5px">mostly $250 monthly</td>
+      <td><span class="tag risk">LIVE AND AT RISK</span></td>
+      <td style="font-size:12.5px">About $13.9k a month realized. Four times the new business. Protecting it is phase one.</td></tr><tr>
+      <td><strong>Live cohort</strong><br>
+        <span style="font-size:12px;color:var(--soft)">Individuals who want teaching</span></td>
+      <td style="font-size:12.5px">$1,788</td>
+      <td><span class="tag live">LIVE</span></td>
+      <td style="font-size:12.5px">The proof engine. Produces the case studies the other tiers need.</td></tr><tr>
+      <td><strong>Institutional seat block</strong><br>
+        <span style="font-size:12px;color:var(--soft)">Higher-ed continuing education units</span></td>
+      <td style="font-size:12.5px">$300 a seat in 500-seat blocks</td>
+      <td><span class="tag no">NEVER SOLD</span></td>
+      <td style="font-size:12.5px">Carries 80 percent of the 10,000 target. This is the plan.</td></tr><tr>
+      <td><strong>Certification preparation</strong><br>
+        <span style="font-size:12px;color:var(--soft)">Members and institutions</span></td>
+      <td style="font-size:12.5px">unpriced</td>
+      <td><span class="tag no">BUNDLED FREE</span></td>
+      <td style="font-size:12.5px">A retention feature with five users. We issue nothing.</td></tr></tbody>
+  </table>
+
+  <h2>8. The timeline, and every decision on it</h2>
+  <p>12 decisions.
+  4 of them cannot be undone and are
+  marked. Those are where the attention belongs.</p>
+  
+    <div class="tl-phase">
+      <div class="tl-head">
+        <span class="tl-id">P1</span>
+        <strong>Protect the book and stop the leaks</strong>
+        <span class="tl-win">Now to 30 November 2026</span>
+      </div>
+      <p class="tl-thesis">The cheapest money in this plan is revenue already agreed and leaking. None of it needs a new product, a new hire, or a dollar of marketing.</p>
+      <ol class="tl-items">
+        <li class="">
+          <div class="tl-date">2026-10-28</div>
+          <div class="tl-body">
+            <div class="tl-dec"><span class="chip">D1</span>
+              Suspend PaySimple schedule 4319082 before the 2 November draft.
+              </div>
+            <p>Fikru Cheklie settled at $12,000 and is closed as Paid Off Early, but the schedule is still live with one draft queued. Collecting past a settlement we granted is the kind of thing that ends up in a complaint rather than a ledger.</p>
+            <p class="meta"><strong>Owner:</strong> Ali &nbsp;·&nbsp;
+              <strong>If wrong:</strong> Low to act, genuinely bad not to. &nbsp;·&nbsp;
+              <strong>Unblocks:</strong> Nothing. It is simply wrong and it is three weeks from happening.</p>
+          </div></li><li class="">
+          <div class="tl-date">2026-10-31</div>
+          <div class="tl-body">
+            <div class="tl-dec"><span class="chip">D2</span>
+              Get the QuickBooks transaction detail for account 4300 and the payroll register by employee, both with class coding.
+              </div>
+            <p>Eighty-nine percent of the largest income line has no traceable source, and $58,787 of commission is booked outside the school class. Both are one report each from Aishwarya C and Durga Siralam, and Ram already has a thread open.</p>
+            <p class="meta"><strong>Owner:</strong> Ali &nbsp;·&nbsp;
+              <strong>If wrong:</strong> None to ask. Everything to skip - no staffing decision should be taken before these land. &nbsp;·&nbsp;
+              <strong>Unblocks:</strong> Every number in this plan that currently carries a caveat.</p>
+          </div></li><li class="">
+          <div class="tl-date">2026-11-07</div>
+          <div class="tl-body">
+            <div class="tl-dec"><span class="chip">D3</span>
+              Migrate every monthly member onto a recurring schedule, and correct the advertised price from $149 &quot;cancel anytime&quot; to $199 month-to-month.
+              </div>
+            <p>Only 12 of 24 monthly members are on autopay; the rest are re-collected by hand each month, forever. The price appears wrong in roughly 70 places, which is a 25 percent leak on the one engine that earns, and it is an advertised price under TWC rules.</p>
+            <p class="meta"><strong>Owner:</strong> Ali &nbsp;·&nbsp;
+              <strong>If wrong:</strong> Low. These are corrections, not pricing experiments. &nbsp;·&nbsp;
+              <strong>Unblocks:</strong> Makes every later revenue projection trustworthy.</p>
+          </div></li><li class="hard">
+          <div class="tl-date">2026-11-07</div>
+          <div class="tl-body">
+            <div class="tl-dec"><span class="chip">D4</span>
+              Put a retention offer in front of all 124 legacy subscribers before any sunset announcement reaches them.
+              <span class="irr">irreversible</span></div>
+            <p>THIS IS THE HIGHEST-VALUE ACTION IN THE PLAN. The book is worth about $13.9k a month realized and runs into 2028 on paper. It is not protected by its end dates; it is protected by subscribers believing they still receive something. Offer migration into the AI membership before they hear the program is ending.</p>
+            <p class="meta"><strong>Owner:</strong> Ali &nbsp;·&nbsp;
+              <strong>If wrong:</strong> HIGH AND IRREVERSIBLE. A cancellation wave cannot be recalled, and this book is roughly four times the new business. &nbsp;·&nbsp;
+              <strong>Unblocks:</strong> The runway that funds everything else.</p>
+          </div></li><li class="">
+          <div class="tl-date">2026-11-14</div>
+          <div class="tl-body">
+            <div class="tl-dec"><span class="chip">D5</span>
+              Put a paywall between the free Explorer tier and the paid curriculum.
+              </div>
+            <p>396 explorers are served the entire curriculum today. There is nothing material to upgrade to, which caps conversion no matter what is spent on acquisition. This is why the funnel converts at roughly one in twenty.</p>
+            <p class="meta"><strong>Owner:</strong> Ali &nbsp;·&nbsp;
+              <strong>If wrong:</strong> Medium. Drawing the line too high suppresses the top of funnel; it is tunable within a fortnight. &nbsp;·&nbsp;
+              <strong>Unblocks:</strong> Self-serve as a channel. Without it there is no product to buy.</p>
+          </div></li>
+      </ol>
+      <p class="tl-exit"><strong>Phase is done when:</strong> Autopay migration done, the price corrected, the Cheklie schedule suspended, and a retention offer in front of every legacy subscriber.</p>
+    </div>
+    <div class="tl-phase">
+      <div class="tl-head">
+        <span class="tl-id">P2</span>
+        <strong>Land the transition without breaking trust</strong>
+        <span class="tl-win">1 November 2026 to 31 January 2027</span>
+      </div>
+      <p class="tl-thesis">Teach out Data Analytics in a way that keeps subscribers paying, and start the November AI cohort properly.</p>
+      <ol class="tl-items">
+        <li class="hard">
+          <div class="tl-date">2026-11-05</div>
+          <div class="tl-body">
+            <div class="tl-dec"><span class="chip">D6</span>
+              Confirm the November AI cohort starts on 12 November as scheduled.
+              <span class="irr">irreversible</span></div>
+            <p>THIS CONFLICTS WITH THE BRIEF AS WRITTEN. &quot;End the class by the end of the year&quot; is right for Data Analytics and wrong for this cohort: 37 learners are enrolled, 12 have paid, and a cohort starting 12 November does not finish in December. Canceling it to hit a calendar date would refund the only new revenue in the building and destroy the delivered-cohort proof the 2027 plan needs.</p>
+            <p class="meta"><strong>Owner:</strong> Ram and Ali &nbsp;·&nbsp;
+              <strong>If wrong:</strong> HIGH AND IRREVERSIBLE. &nbsp;·&nbsp;
+              <strong>Unblocks:</strong> Everything in P3. Without a delivered cohort there is nothing to sell.</p>
+          </div></li><li class="hard">
+          <div class="tl-date">2026-11-21</div>
+          <div class="tl-body">
+            <div class="tl-dec"><span class="chip">D7</span>
+              Publish a dated Data Analytics teach-out plan to every remaining learner and subscriber, with what they keep.
+              <span class="irr">irreversible</span></div>
+            <p>The sunset is correct. How it is communicated decides whether the legacy book keeps paying, because those are the same people. &quot;The program is ending&quot; with no offer attached is a cancellation notice we wrote ourselves.</p>
+            <p class="meta"><strong>Owner:</strong> Ali &nbsp;·&nbsp;
+              <strong>If wrong:</strong> HIGH AND IRREVERSIBLE. It directly attacks the one asset still producing cash. &nbsp;·&nbsp;
+              <strong>Unblocks:</strong> A clean close that protects the run-off while it funds the transition.</p>
+          </div></li><li class="hard">
+          <div class="tl-date">2026-11-30</div>
+          <div class="tl-body">
+            <div class="tl-dec"><span class="chip">D8</span>
+              Take the headcount question once, on the fixed-versus-variable split, not across the board.
+              <span class="irr">irreversible</span></div>
+            <p>On the measured side there is very little left to cut. Commission is down 78 percent since 2023 and teaching reached zero in August without anyone being dismissed. Of $5,750 a month, $3,500 is ten mentor retainers and those mentors support the learners inside the book that pays four times their cost. The real decision lives on the salaried side, which this P&amp;L does not show.</p>
+            <p class="meta"><strong>Owner:</strong> Ram &nbsp;·&nbsp;
+              <strong>If wrong:</strong> HIGHEST IN THE PLAN AND IRREVERSIBLE. People do not come back, and cutting mentors to save $3,500 could strand $13,877. &nbsp;·&nbsp;
+              <strong>Unblocks:</strong> A cost base that matches the business we are becoming.</p>
+          </div></li>
+      </ol>
+      <p class="tl-exit"><strong>Phase is done when:</strong> Every remaining learner has accepted a dated close-out, the AI cohort is running, and legacy cancellations have not spiked.</p>
+    </div>
+    <div class="tl-phase">
+      <div class="tl-head">
+        <span class="tl-id">P3</span>
+        <strong>Prove the institutional sale</strong>
+        <span class="tl-win">January to June 2027</span>
+      </div>
+      <p class="tl-thesis">One reference customer in higher-ed continuing education. Everything in the scale plan depends on deal one existing and nothing substitutes for it.</p>
+      <ol class="tl-items">
+        <li class="">
+          <div class="tl-date">2027-01-15</div>
+          <div class="tl-body">
+            <div class="tl-dec"><span class="chip">D9</span>
+              Commit to higher-education continuing education and name the first ten target institutions.
+              </div>
+            <p>Sixteen seat-block deals carry 80 percent of the 10,000-learner target and no other channel comes close. Selling 100 companies 100 seats is a motion this company has run for 14 years; selling 10,000 individuals one at a time is not.</p>
+            <p class="meta"><strong>Owner:</strong> Ali &nbsp;·&nbsp;
+              <strong>If wrong:</strong> Medium. A wrong segment costs two quarters, not the company. &nbsp;·&nbsp;
+              <strong>Unblocks:</strong> The entire scale plan.</p>
+          </div></li><li class="">
+          <div class="tl-date">2027-02-28</div>
+          <div class="tl-body">
+            <div class="tl-dec"><span class="chip">D10</span>
+              Fund one enterprise seller, or accept that the institutional motion runs at the speed of the founders.
+              </div>
+            <p>Sixteen block deals in twenty-four months is one closed every six weeks. That is a job. The honest alternative is a smaller target, not the same target with nobody selling. It sits after deal one on purpose.</p>
+            <p class="meta"><strong>Owner:</strong> Ram &nbsp;·&nbsp;
+              <strong>If wrong:</strong> Medium, and deliberately sequenced behind proof. &nbsp;·&nbsp;
+              <strong>Unblocks:</strong> Deal two onward.</p>
+          </div></li><li class="">
+          <div class="tl-date">2027-03-31</div>
+          <div class="tl-body">
+            <div class="tl-dec"><span class="chip">D11</span>
+              Cap government contracts at one owner and a fixed budget, and keep it out of the 2027 revenue plan.
+              </div>
+            <p>It has zero submissions, zero contracts and zero revenue in the system. The one real bid was lost. Three &quot;proposals&quot; describe themselves as rehearsals assuming a SOC 2 we do not hold. It feels like current business because of its Basecamp footprint, and that is exactly what makes it expensive to keep believing in.</p>
+            <p class="meta"><strong>Owner:</strong> Ali &nbsp;·&nbsp;
+              <strong>If wrong:</strong> Low to cap. High to leave uncapped, because it consumes the attention the institutional motion needs. &nbsp;·&nbsp;
+              <strong>Unblocks:</strong> Focus, which is the scarcest input here.</p>
+          </div></li>
+      </ol>
+      <p class="tl-exit"><strong>Phase is done when:</strong> A signed seat-block agreement and a cohort delivered inside an institution.</p>
+    </div>
+    <div class="tl-phase">
+      <div class="tl-head">
+        <span class="tl-id">P4</span>
+        <strong>Scale on blocks</strong>
+        <span class="tl-win">mid-2027 onward</span>
+      </div>
+      <p class="tl-thesis">Repeat the institutional motion while self-serve carries the tail. The only shape in which 10,000 learners is arithmetic rather than ambition.</p>
+      <ol class="tl-items">
+        <li class="">
+          <div class="tl-date">2027-06-30</div>
+          <div class="tl-body">
+            <div class="tl-dec"><span class="chip">D12</span>
+              Go or no-go on the 10,000-learner target against measured conversion.
+              </div>
+            <p>By mid-2027 there will be real numbers for seat-block close rate and self-serve conversion. Hold the target if they support it; restate it publicly if they do not. A target nobody believes is worse than a smaller one everybody does.</p>
+            <p class="meta"><strong>Owner:</strong> Ram and Ali &nbsp;·&nbsp;
+              <strong>If wrong:</strong> Low if taken on evidence, high if deferred indefinitely. &nbsp;·&nbsp;
+              <strong>Unblocks:</strong> Credibility, internally and with partners.</p>
+          </div></li>
+      </ol>
+      <p class="tl-exit"><strong>Phase is done when:</strong> Four institutional customers live and self-serve enrolling without staff.</p>
+    </div>
+
+  <h2>9. Survive, and thrive</h2>
+  <div class="two">
+    <div class="card">
+      <h3 style="margin-top:0">Survive</h3>
+      <p style="font-size:13.5px"><strong>Shape.</strong> Protect the legacy book, correct the leaks, teach out cleanly, hold the cost base flat and let membership grow without new investment.</p>
+      <p style="font-size:13.5px"><strong>Requires.</strong> No new hiring. The retention offer landing before the sunset news. The November cohort delivered.</p>
+      <p style="font-size:13.5px"><strong>Outcome.</strong> A smaller business that is still here, funded by a book that keeps paying because subscribers still receive something.</p>
+      <p style="font-size:13.5px;margin:0"><strong>Risk.</strong> The book is one badly-worded announcement away from a cancellation wave.</p>
+    </div><div class="card">
+      <h3 style="margin-top:0">Thrive</h3>
+      <p style="font-size:13.5px"><strong>Shape.</strong> Everything in Survive, plus one institutional reference customer in the first half of 2027 and a seller funded on the back of it.</p>
+      <p style="font-size:13.5px"><strong>Requires.</strong> Deal one. A paywall, so there is something to sell. The discipline to keep taught delivery under 15 percent of volume.</p>
+      <p style="font-size:13.5px"><strong>Outcome.</strong> 10,000 learners becomes arithmetic rather than ambition.</p>
+      <p style="font-size:13.5px;margin:0"><strong>Risk.</strong> Deal one is a single point of failure and nothing substitutes for it.</p>
+    </div>
+  </div>
+
+  <h2>10. This week</h2>
+  <table>
+    <thead><tr><th>#</th><th>What</th><th>Why it cannot wait</th></tr></thead>
+    <tbody><tr>
+      <td><span class="tag risk">ACT THIS WEEK</span></td>
+      <td><strong>Suspend schedule 4319082 before 2 November.</strong><br>
+        <span style="font-size:12.5px;color:var(--mid)">Fikru Cheklie is closed as Paid Off Early with $12,000 collected, exactly the settlement figure, yet PaySimple schedule 4319082 is still Active with another $1,000 draft queued for 2 November.</span></td>
+      <td style="font-size:12.5px">If it clears, we have collected past a settlement we granted.</td></tr><tr>
+      <td><span class="tag risk">ASK THIS WEEK</span></td>
+      <td><strong>Ask Aishwarya C and Durga Siralam, copying Ram.</strong><br>
+        <span style="font-size:12.5px;color:var(--mid)">QuickBooks transaction detail for account 4300, Jan to Aug 2026, with payee and memo.</span></td>
+      <td style="font-size:12.5px">Until it exists, every runway number built on that $151,841 is unsupported.</td></tr><tr>
+      <td><span class="tag risk">ASK THIS WEEK</span></td>
+      <td><strong>Pull the QuickBooks transaction detail for 4300 in April specifically.</strong><br>
+        <span style="font-size:12.5px;color:var(--mid)">April shows $30,683 in account 4300, which is $14,497 above everything traceable in PaySimple that month. It is the only month that diverges that hard.</span></td>
+      <td style="font-size:12.5px">April is what makes the second quarter look healthy. If it is a timing artifact rather than cash, the eight-month trend is worse than it reads.</td></tr><tr>
+      <td><span class="tag risk">ASK THIS WEEK</span></td>
+      <td><strong>Same ask, same people, same thread.</strong><br>
+        <span style="font-size:12.5px;color:var(--mid)">The January to October payroll register by employee, with class coding.</span></td>
+      <td style="font-size:12.5px">$58,787 of eight-month commission sits outside the school class and salaried wages are invisible, so no salaried decision can be made on evidence.</td></tr></tbody>
+  </table>
+
+  <h2>11. What we still do not know</h2>
+  <p>Three things are unmeasured. Each is named rather than estimated, because a guess
+  here becomes a decision about someone's job.</p>
+  <table>
+    <thead><tr><th>Unknown</th><th>Why it matters</th><th>Where it lives</th></tr></thead>
+    <tbody><tr>
+      <td><strong>The composition of P&amp;L account 4300</strong></td>
+      <td style="font-size:12.5px">89 percent of the largest income line has no traceable placement-fee source. Until the QuickBooks detail exists, every runway number built on it is unsupported.</td>
+      <td style="font-size:12.5px">QuickBooks transaction detail, Jan to Aug 2026, with payee and memo</td></tr><tr>
+      <td><strong>The W2 payroll register by employee, with class coding</strong></td>
+      <td style="font-size:12.5px">$58,787 of eight-month commission sits outside the school class and salaried wages are invisible. No salaried decision can be made on evidence without it.</td>
+      <td style="font-size:12.5px">QuickBooks, via Aishwarya C and Durga Siralam</td></tr><tr>
+      <td><strong>Whether the 124-schedule subscription book survives the sunset</strong></td>
+      <td style="font-size:12.5px">It is roughly $13.9k a month realized and the single largest financial risk. No dataset can answer it; it depends on what service subscribers still receive.</td>
+      <td style="font-size:12.5px">a business decision, informed by what delivery continues</td></tr></tbody>
+  </table>
+
+  <p class="src" style="margin-top:32px">Sources: School monthly p&amp;l.xlsx, accrual basis, read 2026-10-21; CCPP read-only SELECTs and live PaySimple schedule reads, 2026-10-21;
+  production Postgres, read-only, 2026-10-21; monthly ColaberryTrainingCommissions workbooks reconciled against scripts/commission/ledger.json; 44 monthly workbooks, 2023-01 to 2026-09. Prepared 2026-10-21.
+  No decision in this document has been taken.</p>
+</div></body></html>
