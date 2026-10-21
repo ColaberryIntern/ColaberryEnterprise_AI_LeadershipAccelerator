@@ -9,6 +9,7 @@
  * NOT human-confirmed, for a person to assess. Real comprehension is the later (separately-approved) LLM step.
  */
 import { docxToText, xlsxToText } from './ooxmlText';
+import { classifyDocuments, SINGLE_ITEM_ROLES, roleLabel, type DocRole } from './documentClassifier';
 // adm-zip is an undeclared/untyped dep (resolves via hoisted node_modules); the require() form keeps strict
 // tsc from rejecting it (TS7016), matching backend/src/scripts/lib/govBidContentExtractor.js.
 const AdmZip = require('adm-zip');
@@ -82,10 +83,13 @@ export interface ExtractedDossier {
  *  every file and exactly what happened to it (extracted / empty / unsupported / unreadable / scanned PDF /
  *  not-read-because-the-budget-filled), plus whether the text was truncated. */
 export type FileExtractStatus =
-  | 'extracted' | 'empty' | 'unsupported' | 'unreadable' | 'image_only_pdf' | 'skipped_budget';
+  | 'extracted' | 'empty' | 'unsupported' | 'unreadable' | 'image_only_pdf' | 'skipped_budget' | 'duplicate';
 export interface ExtractedFileOutcome {
   name: string;
   status: FileExtractStatus;
+  /** The classified role of this file (solicitation / form / tax_form / contract_terms / …), so the UI can group
+   *  files and the reviewer sees WHY a form yielded one item while the RFP yielded many. Absent for an unread file. */
+  role?: DocRole;
   /** Characters captured (after truncation). 0 for anything not extracted. */
   chars: number;
   /** True when the captured text was cut short by the per-file or total char budget. */
@@ -214,6 +218,17 @@ export function extractDossier(blocks: ExtractedBlock[]): ExtractedDossier {
 
 const slug = (s: string): string => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '').slice(0, 60) || 'file';
 const truncate = (s: string, n: number): string => (s.length > n ? s.slice(0, n - 1).trimEnd() + '…' : s);
+// A fill-and-sign form / tax form becomes ONE item, cited by a verbatim line from the file — its first real line.
+function firstMeaningfulLine(text: string): string | null {
+  for (const raw of String(text).split(/\r?\n/)) {
+    const line = raw.trim();
+    if (line.length >= 8 && /[A-Za-z]/.test(line)) return truncate(line, 200);
+  }
+  return null;
+}
+// Material contract clauses — the ones in a Terms & Conditions template that actually create an obligation. A T&C
+// file contributes these (plus one "review and note exceptions" item) instead of every boilerplate sentence.
+const MATERIAL_TERM_RE = /\b(insurance|bond(?:ed|ing)?|indemnif|liabilit|licens|E-?Verify|prevailing\s+wage|non[-\s]?collusion|conflict\s+of\s+interest|confidential|non[-\s]?disclosure|warrant(?:y|ies)|terminat|data\s+(?:security|privacy|protection)|HIPAA|FERPA|SOC\s*2|background\s+check|compliance\s+with|equal\s+(?:employment\s+)?opportunity|prohibited|debarment)\b/i;
 
 /** Text out of one in-zip file buffer, by extension. Never throws — returns '' on unreadable/unsupported.
  *  .docx/.xlsx delegate to the structure-aware ooxmlText reader so table rows and spreadsheet cells keep
@@ -341,6 +356,8 @@ export async function extractProposal(zipBuffer: Buffer): Promise<ProposalExtrac
 
   // pdf-parse required lazily (only when a PDF is present); undeclared/untyped -> require() form.
   let PDFParse: any = null;
+  // PASS 1 reads every file's text; classification + per-role extraction happen AFTER, over the whole set.
+  const readFiles: Array<{ name: string; ext: string; text: string; ctxId: string }> = [];
 
   for (const entry of entries) {
     const name: string = entry.entryName;
@@ -398,36 +415,76 @@ export async function extractProposal(zipBuffer: Buffer): Promise<ProposalExtrac
 
     const ctxId = `blk-ctx-${slug(name)}`;
     blocks.push({ id: ctxId, locator: name, text, kind: 'context' });
+    // Defer extraction: a W-9's tax instructions and a boilerplate T&C template must NOT be scanned like the RFP
+    // body. Collect the file now; classify the whole set and extract per role below.
+    readFiles.push({ name, ext, text, ctxId });
+  }
 
-    // Rejoin soft-wrapped lines for plain text and PDFs (renderer wraps mid-sentence). For .docx/.xlsx
-    // the ooxmlText reader already made rows/cells the boundaries, so DON'T join or the cells re-fuse.
-    const joinWraps = ext === 'pdf' || ext === 'txt' || ext === 'md';
-    for (const s of sentences(text, joinWraps)) {
-      if (requirements.length >= MAX_REQUIREMENTS) break;
-      if (!OBLIGATION.test(s)) continue;
-      const norm = s.toLowerCase().replace(/\s+/g, ' ');
-      if (seen.has(norm)) continue;
-      seen.add(norm);
-      reqN += 1;
-      const reqId = `REQ-${String(reqN).padStart(3, '0')}`;
-      const blkId = `blk-${reqId}`;
-      blocks.push({ id: blkId, locator: name, text: s, kind: 'requirement' });
-      requirements.push({
-        canonicalReqId: reqId,
-        statement: truncate(s, 500),
-        kind: 'compliance',
-        priority: 'must',
-        tracks: ['proposal', 'solution_build'],
-        sourceDocument: name,
-        section: name,
-        extractedText: s,
-        interpretation: null,
-        humanConfirmed: false,
-        evidenceState: 'unassessed',
-        sourceEvidence: [blkId],
-      });
+  // CLASSIFY every read file — role + near-duplicate flag.
+  const classified = classifyDocuments(readFiles.map((f) => ({ name: f.name, text: f.text })));
+  const byName = new Map(classified.map((c) => [c.name, c]));
+  const dupNames = new Set(classified.filter((c) => c.duplicateOf).map((c) => c.name));
+  for (const c of classified) {
+    const outcome = files.find((f) => f.name === c.name);
+    if (!outcome) continue;
+    outcome.role = c.role;
+    if (c.duplicateOf) {
+      outcome.status = 'duplicate';
+      outcome.warning = `Duplicate of ${c.duplicateOf} — read once, not re-extracted.`;
     }
   }
 
-  return { blocks, requirements, dossier: extractDossier(blocks), fileCount, files };
+  // Emit one requirement, de-duplicated by its VERBATIM text across all files. The honesty rail holds:
+  // extractedText is always literal text from the zip (a sentence, or a form's own title line).
+  const pushReq = (locator: string, statement: string, extractedText: string, tracks: string[]): void => {
+    if (requirements.length >= MAX_REQUIREMENTS) return;
+    const norm = extractedText.toLowerCase().replace(/\s+/g, ' ').trim();
+    if (!norm || seen.has(norm)) return;
+    seen.add(norm);
+    reqN += 1;
+    const reqId = `REQ-${String(reqN).padStart(3, '0')}`;
+    const blkId = `blk-${reqId}`;
+    blocks.push({ id: blkId, locator, text: extractedText, kind: 'requirement' });
+    requirements.push({
+      canonicalReqId: reqId, statement: truncate(statement, 500), kind: 'compliance', priority: 'must',
+      tracks, sourceDocument: locator, section: locator, extractedText,
+      interpretation: null, humanConfirmed: false, evidenceState: 'unassessed', sourceEvidence: [blkId],
+    });
+  };
+
+  // PASS 2 — extract per role.
+  for (const f of readFiles) {
+    if (requirements.length >= MAX_REQUIREMENTS) break;
+    const c = byName.get(f.name);
+    if (!c || c.duplicateOf) continue;                 // a duplicate is read once, never re-extracted
+    // Rejoin soft-wrapped lines for plain text and PDFs (renderer wraps mid-sentence). For .docx/.xlsx the
+    // ooxmlText reader already made rows/cells the boundaries, so DON'T join or the cells re-fuse.
+    const joinWraps = f.ext === 'pdf' || f.ext === 'txt' || f.ext === 'md';
+
+    if (SINGLE_ITEM_ROLES.has(c.role)) {
+      // A fill-and-sign form / W-9 / price sheet becomes ONE "complete and submit" item — not 14 candidates
+      // from its own instructions. Cited by a verbatim line from the file (its title), or its name.
+      pushReq(f.name, `Complete and submit the ${roleLabel(c.role)}: ${f.name}`, firstMeaningfulLine(f.text) || f.name, ['proposal']);
+      continue;
+    }
+    if (c.role === 'contract_terms') {
+      // One "review and note exceptions" item, PLUS only the MATERIAL clauses (insurance, bond, indemnity,
+      // compliance, licensing...) — not every sentence of the boilerplate template.
+      pushReq(f.name, `Review ${f.name} and state any exceptions in the proposal`, firstMeaningfulLine(f.text) || f.name, ['proposal']);
+      for (const s of sentences(f.text, joinWraps)) {
+        if (requirements.length >= MAX_REQUIREMENTS) break;
+        if (OBLIGATION.test(s) && MATERIAL_TERM_RE.test(s)) pushReq(f.name, s, s, ['proposal']);
+      }
+      continue;
+    }
+    // solicitation / addendum / reference — the full obligation scan (unchanged behavior).
+    for (const s of sentences(f.text, joinWraps)) {
+      if (requirements.length >= MAX_REQUIREMENTS) break;
+      if (OBLIGATION.test(s)) pushReq(f.name, s, s, ['proposal', 'solution_build']);
+    }
+  }
+
+  // The dossier ignores a duplicate file's context so contacts/dates are not double-counted.
+  const dossier = extractDossier(blocks.filter((b) => !(b.kind === 'context' && dupNames.has(b.locator))));
+  return { blocks, requirements, dossier, fileCount, files };
 }
