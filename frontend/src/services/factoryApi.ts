@@ -549,6 +549,9 @@ export interface GovResponseSlot {
   sourceRef: string | null;
   /** `unanswered` until authored; then the response's lifecycle. `filler` (P5) blocks export. */
   status: 'unanswered' | 'draft' | 'reviewed' | 'approved' | 'revision_required' | 'filler';
+  /** Which of the 8 submittal categories this response belongs to (groups the flat checklist into <=10). Optional
+   *  for resilience against older payloads; the UI defaults a missing bucket to `technical`. */
+  bucket?: 'admin' | 'certs' | 'technical' | 'management' | 'experience' | 'price' | 'financial' | 'socioeconomic';
   content?: string;
   figures?: GovResponseFigure[];
   /** P5 Draft-with-AI gaps on this response; a `filler` gap blocks export. */

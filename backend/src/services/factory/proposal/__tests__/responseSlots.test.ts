@@ -17,6 +17,15 @@ describe('deriveResponseSlots', () => {
     expect(slots[0].statement).toBe('Offeror shall register in SAM.');
   });
 
+  it('assigns a submittal bucket to each slot (so the flat list groups into <=10 categories)', () => {
+    const slots = deriveResponseSlots([
+      req('R1', 'Offeror shall register in SAM.gov.', 'D1'),
+      req('R2', 'Submit the Cost Proposal on Form 3.', 'D2'),
+      req('R3', 'Provide resumes for all key personnel.', 'D3'),
+    ]);
+    expect(slots.map((s) => s.bucket)).toEqual(['certs', 'price', 'management']);
+  });
+
   it('CITES the requirement\'s own source reference (evidenceRef.docId), verbatim', () => {
     const slots = deriveResponseSlots([req('R1', 'x', 'SOLICITATION-BASE')]);
     expect(slots[0].sourceRef).toBe('SOLICITATION-BASE');
@@ -64,6 +73,13 @@ describe('applyResponsesToSlots (P4 overlay)', () => {
     expect(r1.figures).toHaveLength(1);
     expect(r2.status).toBe('unanswered');   // the honesty rail: no response ⇒ unanswered
     expect(r2.content).toBe('');
+  });
+
+  it('preserves the slot bucket through the response overlay', () => {
+    const s = deriveResponseSlots([req('R1', 'Submit three references.', 'D1')]);
+    expect(s[0].bucket).toBe('experience');
+    const out = applyResponsesToSlots(s, [{ requirementId: 'R1', status: 'draft', content: 'x', figures: [], gaps: [], authoredByIdentityId: null, reviewedByIdentityId: null, updatedAt: null }]);
+    expect(out[0].bucket).toBe('experience');
   });
 
   it('NEVER fabricates a status — a slot with no matching response is unanswered with empty content/figures', () => {
