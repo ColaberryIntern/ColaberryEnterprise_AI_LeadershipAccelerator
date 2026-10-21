@@ -50,13 +50,20 @@ function buildC78OnePager() {
     Every statement on this page comes from an internal assessment of the running system,
     not from a questionnaire.</p>
 
-    <h2>What we hold</h2>
-    <p style="font-size:11.5px;margin:4px 0 8px"><strong>No certifications.</strong> We would
-    rather you learn that here than in week six of a procurement review.</p>
+    <h2>What we hold, and what is under way</h2>
+    <p style="font-size:11.5px;margin:4px 0 8px"><strong>No certifications yet.</strong> We
+    would rather you learn that here than in week six of a procurement review.</p>
     <table><tbody>${D.HOLD_NOTHING.map((c) => `<tr>
       <td style="width:30%"><strong>${esc(c.name)}</strong></td>
       <td>${esc(c.state)}</td>
     </tr>`).join('')}</tbody></table>
+    <div class="flag" style="margin-top:8px"><strong>${esc(D.IN_PROGRESS.what)}</strong> has
+    been running with an external consultancy since ${esc(D.IN_PROGRESS.since)}, currently at
+    ${esc(D.IN_PROGRESS.stage.toLowerCase().replace(/\.$/, ''))}. The office-by-office scope
+    is in the procurement FAQ.
+    <strong>What that does not mean yet:</strong>
+    ${esc(D.IN_PROGRESS.notYet.map((n) => n.replace(/^No /, 'no ').replace(/\.$/, ''))
+    .join('; '))}. ${esc(D.IN_PROGRESS.honesty)}</div>
 
     <h2>What is genuinely in place</h2>
     <ul>${D.STRONG.map((s) => `<li>${esc(s.line)}${s.caveat
