@@ -36,11 +36,16 @@ const REGIONS = { topbar: 'cm-topbar', concierge: 'cm-concierge', arrive: 'cm-ar
   pageSide: 'cm-page-side', pageRail: 'cm-page-rail', gateId: 'cm-gate-id', inside: 'cm-inside' };
 
 async function visibleBox(page, id) {
-  const el = page.locator(`[data-testid="${id}"]`).first();
+  // a test id, or (for components without one) a CSS selector starting with '.', '[' or a tag
+  const sel = /^[.[#]|^[a-z]+[.[ ]/.test(id) ? id : `[data-testid="${id}"]`;
+  const el = page.locator(sel).first();
   if (!(await el.count())) return null;
   const box = await el.boundingBox();
   return box && box.width > 0 && box.height > 0 && (await el.isVisible()) ? box : null;
 }
+
+const LIVE_MOCK = { states: ['live'], broadcasts: [{ id: 'b1', title: 'Colaberry AI Sessions', access_mode: 'paid', editorial_state: 'live', room_id: 'r1',
+  content_started_at: Date.now() - 60000, scheduled_start_at: null, can_watch: true, reason: 'ok', offer_upgrade: false, preview_seconds_remaining: null }] };
 
 async function runFidelity(browser) {
   const { ACCOUNTS, VIEWS } = require('../tests/systemV2/lib/campusFidelityViews');
@@ -49,6 +54,7 @@ async function runFidelity(browser) {
     for (const account of ACCOUNTS) {
       for (const view of VIEWS) {
         if (view.accounts && !view.accounts.includes(account)) continue;
+        if (view.desktopOnly && size.name !== 'desktop') continue;
         const ctx = await createSafeContext(browser, { token: TOKENS.users[account].jwt, viewport: { width: size.width, height: size.height, deviceScaleFactor: 1 } });
         await ctx.addInitScript((fresh) => {
           try {
@@ -59,7 +65,9 @@ async function runFidelity(browser) {
           } catch { /* no storage */ }
         }, !!view.fresh);
         const page = await ctx.newPage();
-        const row = { account, size: size.name, view: view.name, missing: [], regions: {}, error: null };
+        // Live views: broadcast discovery is MOCKED here (capture only) so a live broadcast exists on the local stack.
+        if (view.needsLive) await page.route('**/api/portal/broadcasts/active', (r) => r.fulfill({ contentType: 'application/json', body: JSON.stringify(LIVE_MOCK) }));
+        const row = { account, size: size.name, view: view.name, missing: [], known: view.known ? view.known(account, size.name) : [], regions: {}, error: null };
         try {
           await page.goto(base + view.route, { waitUntil: 'networkidle', timeout: 60_000 });
           await page.waitForTimeout(1200);
@@ -76,7 +84,7 @@ async function runFidelity(browser) {
         try { await safeScreenshot(page, file); } catch { /* page gone */ }
         row.file = path.basename(file);
         results.push(row);
-        console.log(`${row.missing.length || row.error ? 'MISS' : 'OK  '} ${account} ${size.name} ${view.name}${row.missing.length ? ' (' + row.missing.length + ' missing)' : ''}${row.error ? ' ERROR ' + row.error : ''}`);
+        console.log(`${row.missing.length || row.error ? 'MISS' : 'OK  '} ${account} ${size.name} ${view.name}${row.missing.length ? ' (missing: ' + row.missing.join(', ') + ')' : ''}${row.known.length ? ' [known: ' + row.known.join('; ') + ']' : ''}${row.error ? ' ERROR ' + row.error : ''}`);
         await ctx.close();
       }
     }
@@ -106,7 +114,8 @@ async function runFidelity(browser) {
         });
         const page = await ctx.newPage();
         try {
-          await page.goto(`${base}/portal/today`, { waitUntil: 'networkidle', timeout: 60_000 });
+          // ?stay=1: since C11b a tab's first visit to Today opens the campus home (D1)
+          await page.goto(`${base}/portal/today?stay=1`, { waitUntil: 'networkidle', timeout: 60_000 });
           await page.waitForSelector(size.name === 'desktop' ? 'nav.cm-nav' : 'nav.cm-tabbar', { timeout: 30_000 });
           await page.waitForSelector('[data-testid="cm-banner"]', { timeout: 30_000 });
           const home = path.join(OUT, `${audience}-${size.name}-home.png`);

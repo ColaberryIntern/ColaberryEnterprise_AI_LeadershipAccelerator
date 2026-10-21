@@ -72,3 +72,32 @@
 .cm-list .cm-layer-bar>.cm-btn.is-secondary:last-child{width:36px;height:36px;min-height:36px;padding:0;border-radius:50%;font-size:0;flex:none;margin-left:auto;order:9}
 .cm-list .cm-layer-bar>.cm-btn.is-secondary:last-child::before{content:"\00d7";font-size:20px;line-height:1}
 .cm-list .cm-layer-bar .cm-link{order:5;color:var(--cm-art-ink)}
+
+/* the locker inside the Me panel: one grid of tiles, as the prototype's "Your locker" */
+.cm-me-backdrop{position:absolute;inset:0;z-index:11;background:var(--cm-art-dim);opacity:.35}
+.cm-me-panel .cm-look{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.cm-me-panel .cm-look>*:not(.cm-look-slot){grid-column:1/-1}
+.cm-me-panel .cm-look .cm-card-title{font:700 11px 'DM Sans',var(--sans),sans-serif;letter-spacing:.14em;text-transform:uppercase;color:var(--cm-art-muted);margin:6px 0 0}
+.cm-me-panel .cm-look .cm-who-note{font-size:12px;color:var(--cm-art-muted);margin:0}
+.cm-me-panel .cm-look-slot,.cm-me-panel .cm-look-items{display:contents}
+.cm-me-panel .cm-look-slot h3{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.cm-me-panel .cm-look-items li{list-style:none}
+.cm-me-panel .cm-look-item{width:100%;min-width:0;height:100%;align-items:center;text-align:center;padding:10px 6px;border-radius:12px;border:1.5px solid var(--cm-art-line);background:var(--cm-art-card);color:var(--cm-art-ink)}
+.cm-me-panel .cm-look-item::before{display:block;font-size:22px;line-height:1.2;margin-bottom:4px}
+.cm-me-panel [data-slot="head"] .cm-look-item::before{content:"\1F9E2"}
+.cm-me-panel [data-slot="face"] .cm-look-item::before{content:"\1F576"}
+.cm-me-panel [data-slot="body"] .cm-look-item::before{content:"\1F9E5"}
+.cm-me-panel [data-slot="neck"] .cm-look-item::before{content:"\1F4FF"}
+.cm-me-panel [data-slot="ride"] .cm-look-item::before{content:"\1F6F9"}
+.cm-me-panel .cm-look-name{font-size:12px;font-weight:700}
+.cm-me-panel .cm-look-item small{font-size:10.5px}
+.cm-me-panel .cm-look-item.is-worn{border-color:var(--cm-art-live);background:var(--cm-art-pass-bg)}
+.cm-me-panel .cm-look-item.is-worn small{color:var(--cm-art-live)}
+.cm-me-panel .cm-look-item:disabled{opacity:.55}
+
+/* C11b fix round: the directory header on two rows (title, filter, close; then the links), as the prototype header */
+.cm-list .cm-layer-bar>.cm-btn.is-secondary:last-child{order:3;margin-left:0}
+.cm-list .cm-layer-bar strong{order:1}.cm-list .cm-filter{order:2}
+.cm-list .cm-layer-bar::after{content:'';order:4;flex-basis:100%;height:0}
+.cm-list .cm-layer-bar .cm-link,.cm-list .cm-layer-bar .cm-settings{order:5}
+@media (max-width:760px){ .cm-list .cm-filter{min-width:0;flex:1 1 100%;order:4} }

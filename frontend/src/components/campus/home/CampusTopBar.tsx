@@ -62,7 +62,7 @@ export default function CampusTopBar({ audience, online, points, rung, streak, i
           <><span className="sep hide-m" aria-hidden="true" />
             <span data-testid="cm-stats-streak" title="Day streak"><span aria-hidden="true">{'🔥 '}</span>{streak}<span className="cm-sr"> day streak</span></span></>
         )}
-        <NotificationBell />
+        <span className="cm-stats-bell" data-testid="cm-stats-bell"><NotificationBell /></span>
         <button type="button" className="cm-me" onClick={onMe} aria-label="You: your look and campus settings" data-testid="cm-stats-me">{initials}</button>
       </div>
     </div>

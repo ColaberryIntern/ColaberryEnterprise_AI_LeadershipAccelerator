@@ -38,7 +38,8 @@ export default function CampusInside({ building: b, buildingName, audience, acce
   const area = presence?.[b.id];
   const named = useMemo(() => (area?.people ?? []).filter((p): p is CampusPerson => 'enrollment_id' in p && !!(p as CampusPerson).display_name), [area]);
   const people: FigurePerson[] = named.map((p) => ({ key: p.enrollment_id, name: p.display_name, initials: initialsOf(p.display_name), photo: p.avatar_url, level: p.rung_name ?? null, tone: toneFor(p.enrollment_id) }));
-  const you: FigurePerson = { key: 'you', name: 'You', initials: readParticipant().initials, photo: null, you: true, tone: art('in-you') };
+  const you: FigurePerson = { key: 'you', name: 'You', initials: readParticipant().initials, photo: null, you: true,
+    tone: art(audience === 'business' ? 'business' : audience === 'staff' ? 'explorer' : 'in-you') };
   if (!ROOMS[b.id]) return null;
   const locked = audience === 'explorer' && access === 'locked';
   const tag = audience === 'explorer' && access === 'demo' ? 'DEMO MODE · LOOK AROUND' : audience === 'explorer' && access === 'preview' ? 'PREVIEW' : null;

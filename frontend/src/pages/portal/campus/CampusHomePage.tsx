@@ -18,6 +18,7 @@ import CampusListView from '../../../components/campus/CampusListView';
 import CampusDoorTransition from '../../../components/campus/CampusDoorTransition';
 import CampusDmToast from '../../../components/campus/CampusDmToast';
 import CampusTabBar from '../../../components/campus/CampusTabBar';
+import CampusLive from '../../../components/campus/CampusLive';
 import { readParticipant } from '../today/shellUtils';
 import '../../../components/campus/campus.css';
 import '../../../components/campus/campusLive.css';
@@ -62,6 +63,8 @@ export default function CampusHomePage(): React.ReactElement {
 
   // Requests to open the overlay map become walks here.
   const { layer, mapFocus, closeLayer } = campus;
+  // The home shows Colaberry Live as the prototype's top pill (CampusLive below), so the portal-wide live-now badge steps aside here.
+  useEffect(() => { document.documentElement.classList.add('cm-on-home'); return () => document.documentElement.classList.remove('cm-on-home'); }, []);
   const layerRef = useRef(layer); layerRef.current = layer;
   const closeRef = useRef(closeLayer); closeRef.current = closeLayer;
   useEffect(() => { if (layer === 'map' && mapFocus) goTo(mapFocus); }, [layer, mapFocus, goTo]);
@@ -88,8 +91,9 @@ export default function CampusHomePage(): React.ReactElement {
       {meOpen && <CampusMePanel audience={audience} fullName={facts.fullName} initials={facts.initials || readParticipant().initials} onClose={() => setMeOpen(false)} />}
       <CampusConcierge tucked={cardOpen} audience={audience} firstName={facts.firstName} hereName={here ? buildingName(here, campus.settings.workplaceNames) : 'main gate'}
         buildings={buildings} accessOf={accessOf} workplaceNames={campus.settings.workplaceNames} presence={campus.presence} presenceError={campus.presenceError}
-        desks={campus.staffDesks} stops={campus.planStops} live={live} hasTour={!!tour && campus.tourIndex === null} now={new Date()}
+        desks={campus.staffDesks} stops={campus.planStops} live={live} hasTour={!!tour && campus.tourIndex === null} tourStops={tour?.stops.length} now={new Date()}
         onWalk={goTo} onTour={campus.startTour} />
+      <div className="cm-home-livebar"><CampusLive /></div>
       <CampusTabBar active="/portal/campus" />
       <CampusListView />
       <CampusDoorTransition />

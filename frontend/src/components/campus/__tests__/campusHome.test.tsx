@@ -162,6 +162,18 @@ describe('the campus home', () => {
     expect(container.querySelector('[data-testid="cm-cc-pass"] .cm-pass-more')).not.toBeNull();
   });
 
+  it('staff get staff tools (no learner chips); a partner gets the partner tour card', async () => {
+    mockAudience = 'staff';
+    await mount('/portal/campus');
+    expect(q('[data-testid="cm-cc-staff-tools"]')).not.toBeNull();
+    expect(q('[data-testid="cm-cc-chips"]')).toBeNull();
+    { const r = root!; act(() => r.unmount()); root = null; container.remove(); }
+    mockAudience = 'business';
+    await mount('/portal/campus');
+    expect(q('[data-testid="cm-cc-tour"]')!.textContent).toContain('Start the partner tour');
+    expect(q('[data-testid="cm-cc-staff-tools"]')).toBeNull();
+  });
+
   it('business and staff see their account chip and no points', async () => {
     for (const a of ['business', 'staff'] as const) {
       mockAudience = a;

@@ -56,10 +56,15 @@ export default function CampusGate(p: GateProps): React.ReactElement {
     timer.current = window.setTimeout(() => p.onEnter(tour), OPEN_MS);
   };
   const greeting = `${greetingFor(p.now.getHours())}${p.firstName ? `, ${p.firstName}` : ''}.`;
-  const who = p.audience === 'member' ? 'classmates' : 'people';
+  const who = (n: number) => (p.audience === 'member' ? (n === 1 ? 'classmate' : 'classmates') : (n === 1 ? 'person' : 'people'));
+  const staff = p.audience === 'staff', partner = p.audience === 'business';
+  const here = p.online && p.online > 0 ? p.online : 0;
+  // Each entrance's line, as the prototype's renderGate, with only the facts we have (no company, seats or "could use a hand").
   const sub = explorer
     ? 'Your Explorer pass is ready. Wander anywhere: a few buildings are members-only, and you can still peek inside.'
-    : p.online && p.online > 0 ? `The campus is open. ${p.online} ${who} ${p.online === 1 ? 'is' : 'are'} already inside.` : 'The campus is open.';
+    : staff ? (here ? `${here} ${here === 1 ? 'learner is' : 'learners are'} on campus right now.` : 'The campus is open.')
+    : partner ? `See where your team learns and builds.${here ? ` ${here} ${here === 1 ? 'person is' : 'people are'} on campus right now.` : ''}`
+    : here ? `The campus is open. ${here} ${who(here)} ${here === 1 ? 'is' : 'are'} already inside.` : 'The campus is open.';
   // The prototype's arch per entrance (renderGate): learners, visitors, staff and partners each have their own; Workplace names say Colaberry Works.
   const house = p.workplace ? 'Colaberry Works' : 'Colaberry';
   const arch = explorer ? `${house} · Visitor entrance` : p.audience === 'staff' ? 'Colaberry · Staff entrance' : p.audience === 'business' ? `${house} · Partner entrance`
@@ -80,20 +85,23 @@ export default function CampusGate(p: GateProps): React.ReactElement {
           {p.audience === 'member' && p.streak !== null && p.streak > 0 && (
             <div className="cm-gate-streak" data-testid="cm-gate-streak"><span aria-hidden="true">{'\u{1F525}'}</span><b>Day {p.streak}</b> of your streak</div>
           )}
-          <div className={`cm-idcard${explorer ? ' is-explorer' : ''}`} data-testid="cm-gate-id">
+          <div className={`cm-idcard${explorer ? ' is-explorer' : staff ? ' is-staff' : partner ? ' is-partner' : ''}`} data-testid="cm-gate-id">
             <div className="ph" aria-hidden="true">{p.initials || '·'}</div>
             <div>
               <b>{p.fullName || (explorer ? 'Explorer' : 'Welcome')}</b>
-              <small>{explorer ? 'Explorer · visitor pass' : p.audience === 'business' ? 'Business account' : p.audience === 'staff' ? 'Program staff' : 'AI Systems Architect Accelerator'}</small>
+              <small>{explorer ? 'Explorer · visitor pass' : partner ? 'Business partner' : staff ? 'Program staff · Colaberry' : 'AI Systems Architect Accelerator'}</small>
               {explorer && <small>No card needed</small>}
-              {!explorer && (p.rung || p.points !== null) && <span className="tier">{'★'} {[p.rung, p.points !== null ? `${p.points.toLocaleString('en-US')} pts` : null].filter(Boolean).join(' · ')}</span>}
+              {staff && <span className="tier">STAFF</span>}
+              {partner && <span className="tier">Business partner</span>}
+              {!explorer && !staff && !partner && (p.rung || p.points !== null) && <span className="tier">{'★'} {[p.rung, p.points !== null ? `${p.points.toLocaleString('en-US')} pts` : null].filter(Boolean).join(' · ')}</span>}
               {explorer && <span className="tier">Explorer</span>}
             </div>
           </div>
-          <button type="button" className="cm-tap" ref={enterBtn} onClick={() => go(false)} data-testid="cm-gate-enter">
-            {explorer ? 'Pick up your pass and explore →' : p.workplace ? 'Tap your badge to enter HQ →' : 'Tap your ID to enter campus →'}
+          {/* The partner entrance leads with the partner tour (the prototype's "Start the partner tour"); everyone else enters, with the tour as the alternative. */}
+          <button type="button" className="cm-tap" ref={enterBtn} onClick={() => go(partner && p.hasTour)} data-testid="cm-gate-enter">
+            {explorer ? 'Pick up your pass and explore →' : staff ? 'Badge in →' : partner && p.hasTour ? 'Start the partner tour →' : p.workplace ? 'Tap your badge to enter HQ →' : 'Tap your ID to enter campus →'}
           </button>
-          {p.hasTour && <button type="button" className="cm-tap-alt" onClick={() => go(true)} data-testid="cm-gate-tour">{explorer ? 'Or take the short tour →' : 'New here? Enter with a guided tour →'}</button>}
+          {p.hasTour && !staff && <button type="button" className="cm-tap-alt" onClick={() => go(!partner)} data-testid="cm-gate-tour">{partner ? 'Or just look around on your own' : explorer ? 'Or take the short tour →' : 'New here? Enter with a guided tour →'}</button>}
         </div>
       </div>
     </div>

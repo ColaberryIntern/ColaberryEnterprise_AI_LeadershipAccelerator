@@ -38,6 +38,11 @@
 .cm-idcard .ph{width:64px;height:78px;border-radius:10px;background:linear-gradient(135deg,var(--cm-art-gate-photo-1),var(--cm-art-gate-photo-2));color:var(--cm-art-on-dark);
   display:grid;place-items:center;font:700 20px 'Fraunces',Georgia,serif;flex:none;overflow:hidden}
 .cm-idcard.is-explorer .ph{background:var(--cm-art-explorer)}
+.cm-idcard.is-partner::before,.cm-idcard.is-partner .ph{background:var(--cm-art-business)}
+.cm-idcard.is-staff::before{background:var(--cm-art-gold)}
+.cm-idcard.is-staff .ph{background:var(--cm-art-explorer)}
+.cm-idcard.is-staff .tier{background:var(--cm-art-explorer-tint);color:var(--cm-art-explorer)}
+.cm-idcard.is-partner .tier{background:var(--cm-art-business-tint);color:var(--cm-art-business)}
 .cm-idcard .ph img{width:100%;height:100%;object-fit:cover}
 .cm-idcard b{font-family:'Fraunces',Georgia,serif;font-size:19px;display:block}
 .cm-idcard small{display:block;color:var(--cm-art-muted);font-size:12px;line-height:1.5}

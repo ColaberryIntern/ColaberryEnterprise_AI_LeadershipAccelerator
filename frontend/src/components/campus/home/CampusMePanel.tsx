@@ -30,6 +30,9 @@ export default function CampusMePanel({ audience, fullName, initials, onClose }:
     try { if (v === 'skip') window.localStorage.setItem(GATE_SEEN_KEY, 'always'); else window.localStorage.removeItem(GATE_SEEN_KEY); } catch { /* no storage */ }
   };
   return (
+    <>
+    {/* the map dims behind the panel, as in the prototype; a press outside closes it */}
+    <div className="cm-me-backdrop" aria-hidden="true" onClick={onClose} data-testid="cm-me-backdrop" />
     <aside className="cm-me-panel" role="dialog" aria-modal="false" aria-labelledby="cm-me-name" data-testid="cm-me"
       onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); onClose(); } else trapTab(e); }}>
       <button type="button" className="cm-me-x" onClick={onClose} aria-label="Close">{'×'}</button>
@@ -83,5 +86,6 @@ export default function CampusMePanel({ audience, fullName, initials, onClose }:
         </div>
       </div>
     </aside>
+    </>
   );
 }

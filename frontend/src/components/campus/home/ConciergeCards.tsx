@@ -5,6 +5,9 @@ import { buildingName } from '../campusMap';
 import type { PlanStop } from '../campusPlan';
 import type { StaffDesk } from '../campusPeopleApi';
 import type { ExplorerPathModel } from '../campusPath';
+import AdminLink from '../AdminLink';
+import { useIsMgmt } from '../campusMgmt';
+import { roomLabel } from '../campusMap';
 
 /**
  * The concierge's cards (C11b), each the prototype's (.helpdesk, .plan-card, .pass, .livecard) fed by real campus data. A card
@@ -90,6 +93,21 @@ export function LiveCard({ title, buildingId, onWalk }: { title: string; buildin
       <div className="cm-cc-livecard-brand"><span aria-hidden="true">{'● '}</span>On air now</div>
       <div className="cm-cc-livecard-title">{title}</div>
       {buildingId && <div className="cm-cc-livecard-row"><button type="button" className="cm-btn-red" onClick={() => onWalk(buildingId)} data-testid="cm-cc-live-walk">Walk in</button></div>}
+    </div>
+  );
+}
+
+/** STAFF TOOLS (the prototype's staff "Needs attention" tiles, made of what exists): the Staff Office's Management Portal links,
+ *  opened in a new tab through the bridge, or disabled without Management Portal access (the AdminLink rule). */
+export function StaffTools({ buildings, workplaceNames }: { buildings: CampusBuilding[]; workplaceNames: boolean }): React.ReactElement | null {
+  const isMgmt = useIsMgmt();
+  const office = buildings.find((b) => b.rooms.some((r) => r.admin));
+  if (!office) return null;
+  const links = [{ label: office.primary.label, route: office.primary.route }, ...office.rooms.filter((r) => r.admin).map((r) => ({ label: roomLabel(r, workplaceNames), route: r.route }))];
+  return (
+    <div className="cm-staff-tools" data-testid="cm-cc-staff-tools">
+      <div className="cm-plan-h"><b>Staff tools</b><small>{isMgmt ? 'Opens the Management Portal' : 'Needs Management Portal access'}</small></div>
+      <div className="cm-staff-grid">{links.map((l) => <AdminLink key={l.route} label={l.label} route={l.route} className="cm-staff-tile" isMgmt={isMgmt} />)}</div>
     </div>
   );
 }

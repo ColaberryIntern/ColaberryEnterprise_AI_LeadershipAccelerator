@@ -100,3 +100,32 @@ describe('the gate', () => {
     expect(q('[data-testid="cm-gate-tour"]')).toBeNull();
   });
 });
+
+describe('role entrances (C11b fix round)', () => {
+  let container: HTMLDivElement;
+  let root: Root;
+  beforeEach(() => { container = document.createElement('div'); document.body.appendChild(container); root = createRoot(container); });
+  afterEach(() => { act(() => root.unmount()); container.remove(); window.localStorage.clear(); });
+  const base: GateProps = { audience: 'staff', firstName: 'Sam', fullName: 'Sam Staff', initials: 'SS', rung: null, points: null, streak: null, online: 4,
+    workplace: false, hasTour: false, reduceMotion: true, now: new Date('2026-10-20T20:00:00Z'), onEnter: () => undefined };
+  const q = (s: string) => container.querySelector(s);
+
+  it('staff badge in, see the real learner count, and carry no learner points or unproven claims', () => {
+    act(() => { root.render(<CampusGate {...base} />); });
+    expect(q('[data-testid="cm-gate-enter"]')!.textContent).toContain('Badge in');
+    expect(q('[data-testid="cm-gate-sub"]')!.textContent).toBe('4 learners are on campus right now.');
+    expect(q('.cm-idcard')!.getAttribute('class')).toContain('is-staff');
+    expect(container.textContent).not.toMatch(/all-access|could use a hand|pts/);
+  });
+
+  it('a partner starts with the partner tour, or looks around alone; no company or seat facts we do not have', () => {
+    const entered: boolean[] = [];
+    act(() => { root.render(<CampusGate {...base} audience="business" hasTour onEnter={(t) => entered.push(t)} />); });
+    expect(q('[data-testid="cm-gate-enter"]')!.textContent).toContain('Start the partner tour');
+    expect(q('[data-testid="cm-gate-tour"]')!.textContent).toBe('Or just look around on your own');
+    act(() => { (q('[data-testid="cm-gate-enter"]') as HTMLButtonElement).click(); });
+    act(() => { (q('[data-testid="cm-gate-tour"]') as HTMLButtonElement).click(); });
+    expect(entered).toEqual([true, false]);
+    expect(container.textContent).not.toMatch(/seats/);
+  });
+});

@@ -6,7 +6,7 @@ import type { PlanStop } from '../campusPlan';
 import type { StaffDesk } from '../campusPeopleApi';
 import { mayaAllowedFor } from '../campusPeople';
 import { explorerPath } from '../campusPath';
-import { HelpDesk, PlanCard, ExplorerPass, LiveCard } from './ConciergeCards';
+import { HelpDesk, PlanCard, ExplorerPass, LiveCard, StaffTools } from './ConciergeCards';
 import { greetingFor } from './useHomeFacts';
 
 /**
@@ -29,6 +29,8 @@ export interface ConciergeProps {
   stops: PlanStop[] | null;
   live: { title: string; buildingId: BuildingId | null } | null;
   hasTour: boolean;
+  /** How many stops this viewer's tour has (the partner tour card says it). */
+  tourStops?: number;
   now: Date;
   onWalk: (id: BuildingId) => void;
   onTour: () => void;
@@ -77,7 +79,7 @@ export default function CampusConcierge(p: ConciergeProps): React.ReactElement {
   const pulse = pulseOf(p.presence, buildings);
   const next = p.stops?.find((s) => !s.done && s.buildingId) ?? null;
   const desks = p.desks.filter((d) => d.id !== 'maya' || mayaAllowedFor(audience));
-  const who = audience === 'member' ? 'classmates' : 'people';
+  const who = (n: number) => (audience === 'member' ? (n === 1 ? 'classmate' : 'classmates') : (n === 1 ? 'person' : 'people'));
   const greeting = `${greetingFor(p.now.getHours())}${p.firstName ? `, ${p.firstName}` : ''}.`;
   return (
     <aside className={`cm-cc${p.tucked ? ' is-tucked' : ''}`} aria-label="Campus concierge" data-testid="cm-concierge" hidden={p.tucked}>
@@ -89,7 +91,7 @@ export default function CampusConcierge(p: ConciergeProps): React.ReactElement {
         ? <div className="cm-pulse" role="status" data-testid="cm-cc-pulse"><i className="dot is-quiet" aria-hidden="true" /><span><b>Live presence is unavailable</b> &middot; headcounts are hidden, not zero</span></div>
         : p.presence && (pulse.total > 0
           ? <button type="button" className="cm-pulse" onClick={() => pulse.busiest && p.onWalk(pulse.busiest.id)} data-testid="cm-cc-pulse">
-              <i className="dot" aria-hidden="true" /><span><b>{pulse.total} {who} on campus</b>{pulse.busiest && <> &middot; busiest: {buildingName(pulse.busiest, workplaceNames)} ({pulse.busiestCount})</>}</span>
+              <i className="dot" aria-hidden="true" /><span><b>{pulse.total} {who(pulse.total)} on campus</b>{pulse.busiest && <> &middot; busiest: {buildingName(pulse.busiest, workplaceNames)} ({pulse.busiestCount})</>}</span>
               <span style={{ marginLeft: 'auto' }} aria-hidden="true">&rarr;</span>
             </button>
           : <div className="cm-pulse" data-testid="cm-cc-pulse"><i className="dot is-quiet" aria-hidden="true" /><span><b>Quiet right now</b> &middot; nobody else is on campus{desks.some((d) => d.on_duty) ? ' · the help desk is on duty' : ''}</span></div>)}
@@ -99,7 +101,16 @@ export default function CampusConcierge(p: ConciergeProps): React.ReactElement {
       {audience === 'explorer' && <ExplorerPass buildings={buildings} accessOf={p.accessOf} workplaceNames={workplaceNames}
         path={explorerPath(buildings, p.accessOf, workplaceNames, desks.some((d) => d.id === 'maya' && d.on_duty))} />}
 
-      {p.hasTour && (
+      {audience === 'staff' && <StaffTools buildings={buildings} workplaceNames={workplaceNames} />}
+
+      {p.hasTour && audience === 'business' && (
+        <div className="cm-partner-tour" data-testid="cm-cc-tour">
+          <div className="t">See how your people learn and build</div>
+          <div className="d">A short walk through the places your team uses{p.tourStops ? `, ${p.tourStops} stops` : ''}.</div>
+          <button type="button" className="cm-btn-white" onClick={p.onTour} data-testid="cm-cc-tour-start">Start the partner tour →</button>
+        </div>
+      )}
+      {p.hasTour && audience !== 'business' && (
         <div className="cm-sg" data-testid="cm-cc-tour" style={{ cursor: 'default' }}>
           <div style={{ flex: 1 }}><div className="t">What&rsquo;s in your seat?</div><div className="d">A short walk through the places your {audience === 'explorer' ? 'pass opens' : 'enrollment unlocks'}.</div></div>
           <button type="button" className="cm-btn-red" onClick={p.onTour} data-testid="cm-cc-tour-start">Take the tour</button>
@@ -109,12 +120,17 @@ export default function CampusConcierge(p: ConciergeProps): React.ReactElement {
       {p.stops && <div style={{ marginTop: 14 }}><PlanCard stops={p.stops} buildings={buildings} workplaceNames={workplaceNames} onWalk={p.onWalk} /></div>}
       {p.live && <LiveCard title={p.live.title} buildingId={p.live.buildingId} onWalk={p.onWalk} />}
 
-      <div className="cm-sec">{audience === 'business' ? 'See how your team…' : 'I want to…'}</div>
-      <div className="cm-chips" data-testid="cm-cc-chips">
-        {chipsFor(audience, workplaceNames, buildings).map(([label, id]) => (
-          <button key={id} type="button" onClick={() => p.onWalk(id)}>{label}</button>
-        ))}
-      </div>
+      {/* Staff have the staff tools card instead of the learner chips. */}
+      {audience !== 'staff' && (
+        <>
+          <div className="cm-sec">{audience === 'business' ? 'See how your team…' : 'I want to…'}</div>
+          <div className="cm-chips" data-testid="cm-cc-chips">
+            {chipsFor(audience, workplaceNames, buildings).map(([label, id]) => (
+              <button key={id} type="button" onClick={() => p.onWalk(id)}>{label}</button>
+            ))}
+          </div>
+        </>
+      )}
     </aside>
   );
 }
