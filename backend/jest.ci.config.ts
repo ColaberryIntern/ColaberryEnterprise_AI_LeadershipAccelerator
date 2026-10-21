@@ -60,6 +60,15 @@ import base from './jest.config';
  * suites mock the model layer, not in CI's environment, and giving CI a database
  * does not let them come off this list. Fixing them is per-suite work.
  *
+ * CORRECTION, same day: "in how these suites mock the model layer" is an
+ * INFERENCE, not a measurement. What is measured is only that the database is
+ * not the differentiator. Ruled out since: a mock factory missing
+ * `__esModule: true`, and module identity through the junctioned node_modules
+ * (both sides resolve under the same backend/src root). The open oddity is that
+ * a direct `require` of the mocked module receives the stub while a model
+ * importing the same module does not. Also: these numbers are from Windows and
+ * none of the 20 has been reproduced on the Linux runner.
+ *
  * The two that DID pass turned out never to have needed a database: both pass
  * with `DATABASE_URL` unset. They were on this list by mistake, and they are off
  * it now - `explorerEnrollmentWelcome` (5 tests) and `requireBuildEntitlement`
