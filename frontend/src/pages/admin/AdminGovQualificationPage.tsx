@@ -991,6 +991,9 @@ export default function AdminGovQualificationPage(): React.ReactElement {
   // "Open, decide & approve" drawer that held the field was replaced by <DecidePanel/> (P4).
   const [biddingEntity] = useState(params.get('biddingEntity') ?? 'colaberry');
   const [ws, setWs] = useState<GovQualificationWorkspace | null>(null);
+  // The just-created monitored project, surfaced as a persistent success strip on the Proposal step (where
+  // create now navigates) so the "open the intern's project" link is not lost when we leave the Build tab.
+  const [materialized, setMaterialized] = useState<{ projectId: string } | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<ActionError | null>(null);
@@ -1776,7 +1779,15 @@ export default function AdminGovQualificationPage(): React.ReactElement {
                 assignableBuilders={ws.build?.assignableBuilders ?? []}
                 requirements={(established ?? []).map((r) => ({ id: r.id, text: r.text }))}
                 title={oppDetail?.opportunity?.title ?? null} buyer={oppDetail?.opportunity?.agency ?? null}
-                deadline={oppDetail?.opportunity?.closeDate ?? ws.source?.deadline?.utc ?? null} />
+                deadline={oppDetail?.opportunity?.closeDate ?? ws.source?.deadline?.utc ?? null}
+                onCreated={(r) => {
+                  setMaterialized({ projectId: r.projectId });
+                  // One click: fold the (separate, audited) build authorization into create for an authorized
+                  // actor, then take the operator to the Proposal step. Best-effort: if the server enforces
+                  // separation of duties and refuses, the manual "Authorize a build" card remains the fallback.
+                  void authorizeGovBuild(canonical, { deliveryProjectId: ws.build!.deliveryProjectId!, scope: 'solution_build', resourceLimit: 'standard', govQualificationId: record?.id }).catch(() => { /* separation of duties */ });
+                  setStep('proposal');
+                }} />
             </SectionCard>
           )}
           {(
@@ -1798,6 +1809,13 @@ export default function AdminGovQualificationPage(): React.ReactElement {
           {/* Proposal — its OWN step/page (step 6): Build above is the software product we would deliver; this is the
               bid RESPONSE we submit. Unlocked after approval, same as Build. */}
           <GovTabPanel active={activeStep === 'proposal'}>
+          {materialized && (
+            <div className="alert alert-success d-flex flex-wrap align-items-center gap-2 py-2 px-3 small" role="status">
+              <i className="ri-check-double-line" aria-hidden="true" />
+              <span>Monitored project created under the intern and the build is authorized. This page is the bid RESPONSE to write and submit, separate from the software build.</span>
+              <a className="ms-auto fw-semibold text-decoration-none" href={`/admin/projects?interns=1&project=${materialized.projectId}`}>Open the intern's project board &rarr;</a>
+            </div>
+          )}
           {(
             <SectionCard title="Proposal responses" icon="draft-line"
               subtitle="One slot per established requirement the proposal must answer, each citing its source. Draft each response, then take it through review → approval; a material amendment reopens an affected answer.">
@@ -1943,6 +1961,9 @@ export default function AdminGovQualificationPage(): React.ReactElement {
                   )
                 }
                 messages={
+                  // Messages & amendments is a PROPOSAL concern (an amendment reopens affected proposal
+                  // responses), so keep it OFF the Build step: Build is the software product, kept separate.
+                  activeStep === 'build' ? null : (
                   <SectionCard title="Messages &amp; amendments" icon="chat-3-line"
                     subtitle="Record amendments and portal messages with their source. A recorded amendment reopens the responses for the requirements it affects — readiness is never silently kept across a change.">
                     <AmendmentInbox
@@ -1953,6 +1974,7 @@ export default function AdminGovQualificationPage(): React.ReactElement {
                       onRecord={(body) => run(() => recordGovProposalAmendment(canonical, body), 'Inbox entry recorded.')}
                     />
                   </SectionCard>
+                  )
                 }
                 team={{
                   biddingEntity,
