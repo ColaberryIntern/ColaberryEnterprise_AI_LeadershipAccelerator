@@ -2669,3 +2669,39 @@ either way.
 `node_modules`. None of the 20 has been reproduced on the Linux runner, and the cheap way to find
 out is to un-ignore one suite on a throwaway branch and read CI. Until that is done, "20 fail"
 is a local measurement.
+
+## IT REPRODUCES ON LINUX, so the ignore-list is hiding a real failure
+
+The correction above left one caveat open: every ignore-list number was measured on Windows with
+a junctioned `node_modules`, and none had been reproduced on the Linux runner. **Now one has.**
+
+A throwaway draft PR un-commented a single entry - `assessmentService` - and let CI run it. The
+result, from the `Backend unit tests` job:
+
+| | |
+|---|---|
+| Failing suites | **1 — `assessmentService`, "Test suite failed to run"** |
+| Passing | **2,082 suites, 34,407 tests** |
+| Skipped | 26 suites |
+
+So the Windows-artifact hypothesis is **dead** for this representative. The exclusion is hiding a
+real failure, and the 20 are worth fixing. (Nineteen remain unmeasured on Linux; what is
+established is that the failure class travels, not that all twenty do.)
+
+### Two things the run showed for free
+
+**The same error class is loose in the rest of the suite.** `Cannot read properties of undefined
+(reading 'define')` appears throughout the Linux log as *swallowed* warnings from services that
+catch and continue - `recording_composition_alert_failed`,
+`case_study_foundation_read_failed`. So whatever it is, it is not confined to the 24 excluded
+suites; elsewhere it is being logged and tolerated rather than failing a test. That is a better
+lead than anything the probes found, and it is where the next attempt should start.
+
+**`jest.ci.config.ts`'s own figures are stale by about 4x.** Its docblock reasons from "614
+suites" and "roughly 8,500 tests". The run measured **2,109 suites and 34,712 tests**. The
+argument it makes - that an allow-list of three suites checked 28 tests while thousands went
+unchecked - is still right, and the ratio it was defending has only grown.
+
+### The probe is closed
+
+Draft PR closed, branch deleted, nothing merged. It existed to answer one question and it did.

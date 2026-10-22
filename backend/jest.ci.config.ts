@@ -66,8 +66,14 @@ import base from './jest.config';
  * `__esModule: true`, and module identity through the junctioned node_modules
  * (both sides resolve under the same backend/src root). The open oddity is that
  * a direct `require` of the mocked module receives the stub while a model
- * importing the same module does not. Also: these numbers are from Windows and
- * none of the 20 has been reproduced on the Linux runner.
+ * importing the same module does not.
+ *
+ * REPRODUCED ON LINUX 2026-10-22. A throwaway draft PR un-commented
+ * assessmentService and let CI run it: that suite was the ONLY failure in
+ * the run, against 2,082 suites and 34,407 tests passing. So these are real
+ * failures, not a Windows artifact. The same error class also appears
+ * throughout that log as SWALLOWED warnings from other services, so it is
+ * not confined to the suites on this list - that is where to start.
  *
  * The two that DID pass turned out never to have needed a database: both pass
  * with `DATABASE_URL` unset. They were on this list by mistake, and they are off
