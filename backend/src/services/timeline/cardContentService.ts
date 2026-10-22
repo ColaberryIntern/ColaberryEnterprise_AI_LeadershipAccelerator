@@ -337,7 +337,8 @@ export async function ensureFreshContent(cardId: string): Promise<{ content: Car
     return { content: null, regenerated: false };
   }
 
-  // Hand-authored readings are LOCKED — never auto-regenerate over them.
+  // Hand-authored readings are LOCKED — never auto-regenerate over them. This is
+  // the HARD lock: it suppresses the roster reset below as well as the TTL.
   if ((meta as Record<string, unknown>).locked) return { content: existing, regenerated: false };
 
   // Roster-summary cards (announcement/overview) reset when the week's curriculum
@@ -356,6 +357,27 @@ export async function ensureFreshContent(cardId: string): Promise<{ content: Car
       }
     } catch { /* fall through to the TTL check — never block a student view */ }
   }
+
+  // Hand-authored content does not EXPIRE. Authorship is marked by two writers
+  // and only one of them honored the lock contract: `scripts/lib/authorTimelineCard`
+  // sets `locked: true` alongside `authored: true` (its own docblock says the lock
+  // is there "so ensureFreshContent never regenerates over the authored copy"),
+  // while the admin create/update path (timelineAdminService) stamps `authored`
+  // alone. The lock above read only `locked`, so every card written through the
+  // Experience Studio was left exposed to the 30-day TTL and silently paraphrased
+  // by the first student to open it past that window — 68 cards since 2026-07-20,
+  // 40 of them ending up with a body that named a different thing from the card's
+  // own title. Three Claude Studio weeks were the visible half: week 3's card said
+  // "Stakeholder and Requirements Studio" while the panel it opened described a
+  // "Business Workflow Assistant Studio", against a 85-minute header whose
+  // regenerated stages summed to 48.
+  //
+  // `authored` is the SOFT lock, checked here rather than beside `locked` so a
+  // roster-summary card still resets when the week's curriculum actually changes
+  // (above) — a real edit still propagates; only the clock is denied. Explicit
+  // regeneration is untouched: the admin Generate action calls generateCardContent
+  // directly, and this function's one caller is the student runtime path.
+  if ((meta as Record<string, unknown>).authored === true) return { content: existing, regenerated: false };
 
   const fresh = at !== null && !Number.isNaN(at) && Date.now() - at <= CONTENT_TTL_MS;
   if (fresh) return { content: existing, regenerated: false };
