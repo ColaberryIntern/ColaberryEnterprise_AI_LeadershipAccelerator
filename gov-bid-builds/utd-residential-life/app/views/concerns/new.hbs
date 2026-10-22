@@ -1,0 +1,161 @@
+<div class="d-flex align-items-start gap-3 mb-4">
+  <a href="/concerns" class="btn btn-outline-secondary btn-sm mt-1">
+    <i class="bi bi-arrow-left"></i>
+  </a>
+  <div>
+    <h2 class="mb-0">Flag Student of Concern</h2>
+    <p class="text-muted mb-0 small">
+      This flag is immediately routed to professional staff. Use it whenever you notice a student
+      who may need additional support.
+    </p>
+  </div>
+</div>
+
+{{#if (eq flash "missing_fields")}}
+<div class="alert alert-danger mb-4">
+  <i class="bi bi-exclamation-triangle me-2"></i>Please fill in all required fields.
+</div>
+{{/if}}
+
+<div class="row g-4">
+  <div class="col-lg-7">
+    <div class="card border-0 shadow-sm">
+      <div class="card-body p-4">
+        <form method="POST" action="/concerns">
+
+          <!-- Student -->
+          <div class="mb-4">
+            <label class="form-label fw-semibold">
+              Student <span class="text-danger">*</span>
+            </label>
+            <select class="form-select" name="resident_id" required>
+              <option value="">— Select student —</option>
+              {{#each residents}}
+              <option value="{{id}}" {{#if (eq id ../preselected)}}selected{{/if}}>
+                {{name}} — {{building}} Rm {{room}}
+              </option>
+              {{/each}}
+            </select>
+          </div>
+
+          <!-- Concern type -->
+          <div class="mb-4">
+            <label class="form-label fw-semibold">
+              Concern Type <span class="text-danger">*</span>
+            </label>
+            <div class="row g-2">
+              <div class="col-6 col-md-4">
+                <input type="radio" class="btn-check" name="concern_type" id="ct_academic" value="academic" required>
+                <label class="btn btn-outline-primary w-100" for="ct_academic">
+                  <i class="bi bi-book d-block mb-1 fs-5"></i>Academic
+                </label>
+              </div>
+              <div class="col-6 col-md-4">
+                <input type="radio" class="btn-check" name="concern_type" id="ct_mental_health" value="mental_health">
+                <label class="btn btn-outline-info w-100" for="ct_mental_health">
+                  <i class="bi bi-heart-pulse d-block mb-1 fs-5"></i>Mental Health
+                </label>
+              </div>
+              <div class="col-6 col-md-4">
+                <input type="radio" class="btn-check" name="concern_type" id="ct_safety" value="safety">
+                <label class="btn btn-outline-danger w-100" for="ct_safety">
+                  <i class="bi bi-shield-exclamation d-block mb-1 fs-5"></i>Safety
+                </label>
+              </div>
+              <div class="col-6 col-md-4">
+                <input type="radio" class="btn-check" name="concern_type" id="ct_financial" value="financial">
+                <label class="btn btn-outline-warning w-100" for="ct_financial">
+                  <i class="bi bi-currency-dollar d-block mb-1 fs-5"></i>Financial
+                </label>
+              </div>
+              <div class="col-6 col-md-4">
+                <input type="radio" class="btn-check" name="concern_type" id="ct_behavioral" value="behavioral">
+                <label class="btn btn-outline-secondary w-100" for="ct_behavioral">
+                  <i class="bi bi-exclamation-triangle d-block mb-1 fs-5"></i>Behavioral
+                </label>
+              </div>
+              <div class="col-6 col-md-4">
+                <input type="radio" class="btn-check" name="concern_type" id="ct_other" value="other">
+                <label class="btn btn-outline-secondary w-100" for="ct_other">
+                  <i class="bi bi-flag d-block mb-1 fs-5"></i>Other
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <!-- Urgency -->
+          <div class="mb-4">
+            <label class="form-label fw-semibold">Urgency</label>
+            <div class="d-flex gap-2 flex-wrap">
+              <div>
+                <input type="radio" class="btn-check" name="urgency" id="urg_low" value="low">
+                <label class="btn btn-outline-secondary btn-sm" for="urg_low">Low</label>
+              </div>
+              <div>
+                <input type="radio" class="btn-check" name="urgency" id="urg_medium" value="medium" checked>
+                <label class="btn btn-outline-warning btn-sm" for="urg_medium">Medium</label>
+              </div>
+              <div>
+                <input type="radio" class="btn-check" name="urgency" id="urg_high" value="high">
+                <label class="btn btn-outline-danger btn-sm" for="urg_high">High</label>
+              </div>
+              <div>
+                <input type="radio" class="btn-check" name="urgency" id="urg_critical" value="critical">
+                <label class="btn btn-outline-dark btn-sm" for="urg_critical">
+                  <i class="bi bi-exclamation-octagon me-1"></i>Critical
+                </label>
+              </div>
+            </div>
+            <div class="form-text">
+              Critical flags immediately notify the Residence Director.
+            </div>
+          </div>
+
+          <!-- Description -->
+          <div class="mb-4">
+            <label class="form-label fw-semibold">
+              What did you observe? <span class="text-danger">*</span>
+            </label>
+            <textarea class="form-control" name="description" rows="4" required
+              placeholder="Describe what you observed, when, and any context that would help professional staff follow up…"></textarea>
+          </div>
+
+          <button type="submit" class="btn btn-danger w-100">
+            <i class="bi bi-flag-fill me-2"></i>Submit Concern Flag
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sidebar: guidance -->
+  <div class="col-lg-5">
+    <div class="card border-0 shadow-sm border-start border-4 border-warning mb-3">
+      <div class="card-body">
+        <div class="fw-semibold mb-2">
+          <i class="bi bi-lightbulb me-2 text-warning"></i>When to use this flag
+        </div>
+        <ul class="small text-muted mb-0 ps-3">
+          <li class="mb-1">Student appears withdrawn, isolated, or distressed</li>
+          <li class="mb-1">Noticeably missing from hall activities or events</li>
+          <li class="mb-1">Academic stress beyond normal finals pressure</li>
+          <li class="mb-1">Comments that suggest financial or housing instability</li>
+          <li class="mb-1">Any behavior that worries you but doesn't meet the threshold for an incident report</li>
+        </ul>
+      </div>
+    </div>
+    <div class="card border-0 shadow-sm">
+      <div class="card-body">
+        <div class="fw-semibold mb-2">
+          <i class="bi bi-arrow-right-circle me-2 text-primary"></i>What happens next
+        </div>
+        <ol class="small text-muted mb-0 ps-3">
+          <li class="mb-1">Your CC and the RD are immediately notified</li>
+          <li class="mb-1">A professional staff member reviews the flag and takes ownership</li>
+          <li class="mb-1">Outreach is made to the student within 48 hours</li>
+          <li class="mb-1">You'll be notified when the flag is resolved</li>
+        </ol>
+      </div>
+    </div>
+  </div>
+</div>

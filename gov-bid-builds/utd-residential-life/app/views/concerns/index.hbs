@@ -1,0 +1,77 @@
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <h2 class="mb-0">Students of Concern</h2>
+    <p class="text-muted mb-0 small">
+      {{#if isRD}}All buildings{{else if canManage}}{{user.building}}{{else}}Flags you submitted{{/if}}
+    </p>
+  </div>
+  <div class="d-flex gap-2">
+    {{#if openCount}}
+    <span class="badge bg-danger px-3 py-2 fs-6">{{openCount}} active</span>
+    {{/if}}
+    <a href="/concerns/new" class="btn btn-danger btn-sm">
+      <i class="bi bi-flag-fill me-1"></i>Flag Student
+    </a>
+  </div>
+</div>
+
+<!-- Status filter tabs -->
+<ul class="nav nav-tabs mb-4">
+  <li class="nav-item">
+    <a class="nav-link {{#unless showAll}}active{{/unless}}" href="/concerns">
+      Active
+      {{#if openCount}}<span class="badge bg-danger ms-1">{{openCount}}</span>{{/if}}
+    </a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link {{#if showAll}}active{{/if}}" href="/concerns?status=all">All Flags</a>
+  </li>
+</ul>
+
+{{#if flags.length}}
+<div class="card border-0 shadow-sm">
+  <div class="list-group list-group-flush">
+    {{#each flags}}
+    <a href="/concerns/{{id}}" class="list-group-item list-group-item-action py-3">
+      <div class="d-flex justify-content-between align-items-start gap-3">
+        <div class="flex-grow-1">
+          <div class="d-flex align-items-center gap-2 mb-1 flex-wrap">
+            <i class="bi {{typeIcon}} text-muted"></i>
+            <span class="fw-semibold">{{resident_name}}</span>
+            <span class="text-muted small">{{building}} Rm {{room}}</span>
+            <span class="badge {{typeBadge}} small">{{typeLabel}}</span>
+            <span class="badge {{urgencyBadge}} small">{{urgencyLabel}}</span>
+          </div>
+          <p class="mb-1 small text-muted" style="max-width:560px">{{description}}</p>
+          <div class="d-flex gap-3 flex-wrap" style="font-size:.78rem">
+            <span class="text-muted">
+              <i class="bi bi-person me-1"></i>Flagged by {{flagged_by_name}}
+            </span>
+            <span class="text-muted">
+              <i class="bi bi-clock me-1"></i>{{formattedDate}}
+            </span>
+            {{#if assigned_to_name}}
+            <span class="text-muted">
+              <i class="bi bi-person-check me-1"></i>Assigned to {{assigned_to_name}}
+            </span>
+            {{/if}}
+          </div>
+        </div>
+        <span class="badge {{statusBadge}} flex-shrink-0">{{statusLabel}}</span>
+      </div>
+    </a>
+    {{/each}}
+  </div>
+</div>
+{{else}}
+<div class="card border-0 shadow-sm">
+  <div class="card-body text-center py-5">
+    <i class="bi bi-shield-check fs-1 text-success opacity-50 d-block mb-3"></i>
+    <div class="fw-semibold">No active concern flags</div>
+    <p class="text-muted small mb-3">All students in your area appear to be doing well.</p>
+    <a href="/concerns/new" class="btn btn-outline-danger btn-sm">
+      <i class="bi bi-flag me-1"></i>Flag a Student
+    </a>
+  </div>
+</div>
+{{/if}}

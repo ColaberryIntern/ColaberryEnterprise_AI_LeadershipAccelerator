@@ -1,0 +1,65 @@
+<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
+  <div>
+    <h2 class="mb-0"><i class="bi bi-calendar3 me-2 text-muted"></i>Schedule</h2>
+    <p class="text-muted mb-0 small">{{weekLabel}}</p>
+  </div>
+  <div class="d-flex align-items-center gap-2 flex-wrap">
+    <a href="/schedule?week={{prevWeek}}" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-chevron-left"></i>
+    </a>
+    <a href="/schedule" class="btn btn-outline-secondary btn-sm">Today</a>
+    <a href="/schedule?week={{nextWeek}}" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-chevron-right"></i>
+    </a>
+    {{#if canManage}}
+    <a href="/schedule/new?week={{currentWeek}}" class="btn btn-primary btn-sm ms-1">
+      <i class="bi bi-plus-circle me-1"></i>Add Shift
+    </a>
+    {{/if}}
+  </div>
+</div>
+
+<div class="row g-3">
+  {{#each days}}
+  <div class="col-sm-6 col-xl-4">
+    <div class="card border-0 shadow-sm h-100{{#if isToday}} border border-primary{{/if}}">
+      <div class="card-header py-2 d-flex align-items-center justify-content-between
+        {{#if isToday}}bg-primary text-white{{else}}{{#if isWeekend}}bg-light text-muted{{else}}bg-white{{/if}}{{/if}}">
+        <div>
+          <div class="fw-semibold small">{{dayLabel}}</div>
+          <div class="small opacity-75">{{dateLabel}}</div>
+        </div>
+        {{#if isToday}}<span class="badge bg-white text-primary small">Today</span>{{/if}}
+      </div>
+      <div class="card-body p-2">
+        {{#if shifts.length}}
+          {{#each shifts}}
+          <a href="/schedule/{{id}}" class="d-block text-decoration-none mb-1">
+            <div class="p-2 rounded-2 {{#if isMyShift}}border border-primary bg-primary bg-opacity-10{{else}}bg-light{{/if}}">
+              <div class="d-flex align-items-center gap-1 mb-1">
+                <span class="badge bg-{{typeBadge}} small">{{typeLabel}}</span>
+                {{#if (eq status "completed")}}<span class="badge bg-success bg-opacity-50 text-success small">Done</span>{{/if}}
+                {{#if (eq status "cancelled")}}<span class="badge bg-dark bg-opacity-25 text-secondary small">Cancelled</span>{{/if}}
+              </div>
+              <div class="small {{#if isMyShift}}fw-semibold text-primary{{else}}text-dark{{/if}} text-truncate">
+                {{assigned_user_name}}
+              </div>
+              <div class="small text-muted">{{timeRange}}</div>
+            </div>
+          </a>
+          {{/each}}
+        {{else}}
+          <p class="text-muted small p-2 mb-0 fst-italic">No shifts</p>
+        {{/if}}
+      </div>
+    </div>
+  </div>
+  {{/each}}
+</div>
+
+<div class="mt-4 pt-2 border-top d-flex flex-wrap gap-3 align-items-center small text-muted">
+  <span class="badge bg-primary">Front Desk</span> Front desk coverage
+  <span class="badge bg-danger ms-2">On-Call</span> Overnight on-call
+  <span class="badge bg-success ms-2">RA Duty</span> Daytime RA/CC duty
+  <span class="ms-3 text-primary fw-semibold">Blue highlight</span> = your shift
+</div>
