@@ -44,7 +44,8 @@ export function groupSlotsByBucket(slots: GovResponseSlot[]): Array<{ bucket: Su
   }
   return SUBMITTAL_BUCKETS
     .filter((b) => (by.get(b.key)?.length ?? 0) > 0)
-    .map((b) => ({ bucket: b, slots: by.get(b.key)! }));
+    // Pin the elimination-risk items to the TOP of their category — they are what cannot be missed.
+    .map((b) => ({ bucket: b, slots: [...by.get(b.key)!].sort((x, y) => (x.eliminationRisk ? 0 : 1) - (y.eliminationRisk ? 0 : 1)) }));
 }
 
 const approvedCount = (slots: GovResponseSlot[]): number => slots.filter((s) => s.status === 'approved').length;
@@ -59,26 +60,34 @@ export function ProposalSubmittalAudit({ slots }: { slots: GovResponseSlot[] }):
   const groups = groupSlotsByBucket(slots);
   const total = (slots ?? []).length;
   const approved = approvedCount(slots ?? []);
+  const atRisk = (slots ?? []).filter((s) => s.eliminationRisk).length;
   return (
     <div className="mb-3">
       <div className="small text-secondary mb-2">
         <i className="ri-list-check-2 me-1" aria-hidden="true" />
         What we must submit, grouped into {groups.length} categor{groups.length === 1 ? 'y' : 'ies'}:{' '}
         <strong style={{ fontVariantNumeric: 'tabular-nums' }}>{approved}</strong> of{' '}
-        <strong style={{ fontVariantNumeric: 'tabular-nums' }}>{total}</strong> responses approved. A{' '}
-        <span className="badge bg-warning-subtle text-warning-emphasis">gate</span> category is one a miss in which
+        <strong style={{ fontVariantNumeric: 'tabular-nums' }}>{total}</strong> responses approved.{' '}
+        {atRisk > 0 && (
+          <span className="text-danger-emphasis">
+            <strong style={{ fontVariantNumeric: 'tabular-nums' }}>{atRisk}</strong> item{atRisk === 1 ? '' : 's'} disqualif{atRisk === 1 ? 'ies' : 'y'} the bid if missed.{' '}
+          </span>
+        )}
+        A <span className="badge bg-warning-subtle text-warning-emphasis">gate</span> category is one a miss in which
         is usually a rejection, not a low score.
       </div>
       <div className="row g-2">
         {groups.map(({ bucket, slots: bs }) => {
           const a = approvedCount(bs);
           const pct = bs.length ? Math.round((a / bs.length) * 100) : 0;
+          const risk = bs.filter((s) => s.eliminationRisk).length;
           return (
             <div key={bucket.key} className="col-6 col-lg-3">
               <div className="border rounded p-2 h-100">
-                <div className="d-flex align-items-center gap-1 mb-1">
+                <div className="d-flex align-items-center gap-1 mb-1 flex-wrap">
                   <span className="small fw-semibold text-truncate" title={bucket.label}>{bucket.short}</span>
                   {bucket.gate && <span className="badge bg-warning-subtle text-warning-emphasis ms-auto" title="Pass/fail gate: typically a rejection if missing">gate</span>}
+                  {risk > 0 && <span className={`badge bg-danger-subtle text-danger-emphasis ${bucket.gate ? '' : 'ms-auto'}`} title="Items here that disqualify the bid if missed">{risk} at risk</span>}
                 </div>
                 <div className="small" style={{ fontVariantNumeric: 'tabular-nums' }}>{a}/{bs.length} approved</div>
                 <div className="progress mt-1" style={{ height: 4 }} role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} aria-label={`${bucket.short} approved`}>

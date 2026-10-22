@@ -687,7 +687,7 @@ describe('getDecoupledWorkspace — canApprove from ZIP coverage + requirement b
   it('Phase 2 (P2-T3): surfaces a response slot per established requirement, each citing its source ref, all unanswered', async () => {
     findOne.mockResolvedValue(rec({ established: estOk, reviewedDocuments: [zip] }));
     const ws = await getDecoupledWorkspace('t', GWS, 'colaberry');
-    expect(ws.responseSlots).toEqual([{ requirementId: 'R1', statement: 'x', sourceRef: 'D1', status: 'unanswered', bucket: 'technical' }]);
+    expect(ws.responseSlots).toEqual([{ requirementId: 'R1', statement: 'x', sourceRef: 'D1', status: 'unanswered', bucket: 'technical', eliminationRisk: false }]);
   });
 
   it('Phase 3 (P3-T1): surfaces the Build plan — a story per solution_build requirement (with its prompt), admin reqs excluded', async () => {

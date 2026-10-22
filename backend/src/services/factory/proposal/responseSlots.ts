@@ -12,6 +12,7 @@
  * PURE + TOTAL: no I/O, never throws; a non-array / garbage input yields [].
  */
 import { classifySubmittalBucket, type SubmittalBucketKey } from './submittalBuckets';
+import { isEliminationRisk } from './eliminationRisk';
 /**
  * A slot is `unanswered` until a response is authored; then it carries the response's review lifecycle. The agent
  * never fabricates a reviewed/approved state — `reviewed`/`approved` are set only by explicit human review, and a
@@ -52,6 +53,10 @@ export interface ResponseSlot {
    *  checklist groups into a manageable <=10 set. Derived deterministically from the requirement text + section.
    *  Optional at the type level (resilience for externally-built slot literals); deriveResponseSlots always sets it. */
   bucket?: SubmittalBucketKey;
+  /** True when the requirement's own text says missing it REJECTS the bid (non-responsive / disqualified /
+   *  material failure / pass-fail). Advisory flag so the checklist shows what CANNOT be missed; it never gates
+   *  export. Derived deterministically; optional at the type level like `bucket`. */
+  eliminationRisk?: boolean;
   /** The authored response content (only when a response exists). */
   content?: string;
   /** Commit-bound figures on the response. */
@@ -95,6 +100,7 @@ export function deriveResponseSlots(established: any[]): ResponseSlot[] {
       sourceRef,
       status: 'unanswered',
       bucket: classifySubmittalBucket({ text: statement, section: r.section ?? r.sectionRef ?? null }),
+      eliminationRisk: isEliminationRisk({ text: statement, section: r.section ?? r.sectionRef ?? null }),
     });
   }
   return slots;

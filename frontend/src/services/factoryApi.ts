@@ -565,6 +565,9 @@ export interface GovResponseSlot {
   /** Which of the 8 submittal categories this response belongs to (groups the flat checklist into <=10). Optional
    *  for resilience against older payloads; the UI defaults a missing bucket to `technical`. */
   bucket?: 'admin' | 'certs' | 'technical' | 'management' | 'experience' | 'price' | 'financial' | 'socioeconomic';
+  /** True when the requirement's own text says missing it REJECTS the bid (non-responsive / disqualified /
+   *  pass-fail). Advisory flag the UI pins/badges; never gates export. */
+  eliminationRisk?: boolean;
   content?: string;
   figures?: GovResponseFigure[];
   /** P5 Draft-with-AI gaps on this response; a `filler` gap blocks export. */

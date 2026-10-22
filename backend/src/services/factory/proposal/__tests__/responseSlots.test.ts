@@ -26,6 +26,15 @@ describe('deriveResponseSlots', () => {
     expect(slots.map((s) => s.bucket)).toEqual(['certs', 'price', 'management']);
   });
 
+  it('flags a slot as elimination-risk when its requirement says missing it rejects the bid', () => {
+    const slots = deriveResponseSlots([
+      req('R1', 'The HUB Subcontracting Plan shall be rejected if omitted.', 'D1'),
+      req('R2', 'Describe your technical approach.', 'D2'),
+    ]);
+    expect(slots.find((s) => s.requirementId === 'R1')!.eliminationRisk).toBe(true);
+    expect(slots.find((s) => s.requirementId === 'R2')!.eliminationRisk).toBe(false);
+  });
+
   it('CITES the requirement\'s own source reference (evidenceRef.docId), verbatim', () => {
     const slots = deriveResponseSlots([req('R1', 'x', 'SOLICITATION-BASE')]);
     expect(slots[0].sourceRef).toBe('SOLICITATION-BASE');
