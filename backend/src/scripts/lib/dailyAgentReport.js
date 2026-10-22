@@ -177,7 +177,162 @@ function buildReport({ agents, now, dueSoonDays = 2 }) {
   return { today, headline, rows, moved, quiet, never, stale, undetermined, totals };
 }
 
+/**
+ * A commit the platform made on the intern's behalf, which is not the intern working.
+ *
+ * Author and message are matched SEPARATELY and that is the whole point. The first version of
+ * this was one pattern, `/build bot|^chore\(colaberry\)/i`, tested against `author + ' ' +
+ * message` - so the `^` anchored to the start of the AUTHOR and the provisioner-chore half could
+ * never match anything. Only the author half was ever doing work, and a provisioner commit
+ * authored under any other name counted as the intern working. Pinned by a test.
+ */
+const PLATFORM_AUTHOR = /build bot/i;
+const PLATFORM_MESSAGE = /^chore\(colaberry\)/i;
+const isPlatformCommit = (c) => PLATFORM_AUTHOR.test(String(c.author == null ? '' : c.author))
+  || PLATFORM_MESSAGE.test(String(c.message == null ? '' : c.message).trim());
+
+/**
+ * Shorten a commit subject to fit the report's column, cutting at a word boundary.
+ *
+ * A hard `slice(0, 60)` left lines reading "document the rol" and "map the nine anatomy elem" in
+ * the first real report. Three characters of a word carry no meaning and read as a rendering
+ * fault, so the cut falls back to the last space and says it was cut.
+ */
+function clip(s, max) {
+  const text = String(s == null ? '' : s).replace(/\s+/g, ' ').trim();
+  if (text.length <= max) return text;
+  const cut = text.slice(0, max);
+  const space = cut.lastIndexOf(' ');
+  // Only respect the word boundary if it is not so early that it throws most of the line away.
+  return `${(space > max * 0.6 ? cut.slice(0, space) : cut).replace(/[,;:.]$/, '')}...`;
+}
+
+/**
+ * Turn the query's rows into `buildReport` input. PURE, and here rather than in the sender
+ * because the bot filter is load-bearing: the provisioner commits into every one of these
+ * repositories, so counting its commits as movement would show seven busy interns on a day
+ * nobody touched anything. That is the exact failure this whole report exists to prevent, so
+ * it belongs somewhere a test can hold it.
+ */
+function shapeAgentRows(rows, now) {
+  const cutoff = Date.parse(now) - 86400000;
+  return (rows || []).map((a) => {
+    const commits = Array.isArray(a.commits) ? a.commits : [];
+    const latest = commits.map((c) => c.date).filter(Boolean).sort().pop() || null;
+    const recentCommits = commits
+      .filter((c) => c.date && Date.parse(c.date) > cutoff)
+      .filter((c) => !isPlatformCommit(c))
+      .map((c) => `commit: ${clip(c.message, 60)}`);
+    return {
+      domain: a.domain,
+      agent: a.domain,
+      intern: a.intern,
+      stories: a.stories,
+      verified: a.verified,
+      joinedAt: a.joined_at,
+      lastCommitAt: latest,
+      lastSyncAt: a.last_sync_at,
+      repoUrl: a.repo_url,
+      dueDates: a.due_dates || [],
+      movedSinceYesterday: [...(a.moved || []), ...recentCommits],
+    };
+  });
+}
+
+const esc = (s) => String(s == null ? '' : s)
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+/** Color for an activity band. Matches the Intern Console's own reading of these words. */
+const BAND_COLOR = {
+  green: '#2f7d32', yellow: '#b26a00', orange: '#c2410c', red: '#b3261e',
+  black: '#1f2937', unknown: '#718096',
+};
+
+/**
+ * The report as the email body. Lives here rather than in the sender for one reason: the
+ * ticket artifact has to show the REPORT ALI ACTUALLY RECEIVES, and a second renderer written
+ * for the artifact would be free to drift into showing something nicer than the real thing.
+ * One definition means the picture on the ticket cannot flatter the email.
+ */
+function renderHtml(r, generatedAt) {
+  const row = (x) => `<tr>
+    <td style="padding:5px 9px;border-bottom:1px solid #e2e8f0"><strong>${esc(x.agent)}</strong><br>
+      <span style="color:#718096;font-size:12px">${esc(x.intern)}</span></td>
+    <td style="padding:5px 9px;border-bottom:1px solid #e2e8f0;text-align:right">
+      <strong>${x.verified}</strong> <span style="color:#718096">of ${x.stories}</span></td>
+    <td style="padding:5px 9px;border-bottom:1px solid #e2e8f0">
+      <span style="color:${BAND_COLOR[x.activity]};font-weight:700">${esc(x.activity)}</span>
+      ${x.graced ? '<span style="color:#718096;font-size:11px"> (new, capped)</span>' : ''}
+      <br><span style="color:#718096;font-size:11px">${x.daysSinceCommit === null ? 'no commit recorded'
+    : x.daysSinceCommit === 0 ? 'committed today' : `${x.daysSinceCommit}d since last commit`}</span></td>
+    <td style="padding:5px 9px;border-bottom:1px solid #e2e8f0;font-size:12px">
+      ${x.movedSinceYesterday.length ? x.movedSinceYesterday.map(esc).join('<br>') : '<span style="color:#718096">nothing</span>'}</td>
+    <td style="padding:5px 9px;border-bottom:1px solid #e2e8f0;text-align:right;font-size:12px">
+      ${x.overdue ? `<strong style="color:#b3261e">${x.overdue} overdue</strong><br>` : ''}
+      ${x.dueSoon ? `${x.dueSoon} due soon` : (x.overdue ? '' : '<span style="color:#718096">-</span>')}</td>
+  </tr>`;
+
+  const staleBlock = !r.stale.determinable
+    ? `<p style="color:#718096">Stale-sync watch could not run: ${esc(r.stale.reason)}</p>`
+    : r.stale.flagged.length
+      ? `<p><strong style="color:#b3261e">${r.stale.flagged.length} repository drifting behind the others.</strong>
+         A repository that goes private stops producing work with no error at all, and this drift is its only tell.</p>
+         <ul>${r.stale.flagged.map((f) => `<li><strong>${esc(f.domain)}</strong> (${esc(f.intern)}): last synced
+           <strong>${f.ageHours.toFixed(1)}h</strong> ago against a median of ${r.stale.medianAgeHours.toFixed(1)}h
+           &mdash; <a href="${esc(f.repoUrl)}">${esc(String(f.repoUrl).replace('https://github.com/', ''))}</a></li>`).join('')}</ul>`
+      : `<p style="color:#2f7d32">All repositories are syncing together. Median age
+         ${r.stale.medianAgeHours.toFixed(1)}h, nothing drifting more than ${r.stale.thresholdHours}h behind.</p>`;
+
+  return `<div style="font-family:arial,sans-serif;font-size:14px;color:#2d3748;line-height:1.55">
+<h2 style="color:#C20E1E;margin:0 0 4px">Agent Factory, ${esc(r.today)}</h2>
+<p style="font-size:15px;margin:0 0 14px"><strong>${esc(r.headline)}</strong></p>
+
+<p style="margin:0 0 4px"><strong>${r.totals.verified}</strong> stories verified of ${r.totals.stories} across
+${r.totals.agents} agents &middot; <strong>${r.totals.overdue}</strong> overdue &middot;
+<strong>${r.totals.dueSoon}</strong> due in the next two days</p>
+
+<table style="border-collapse:collapse;font-size:13px;margin-top:10px;width:100%">
+<tr style="text-align:left">
+  <th style="padding:5px 9px;border-bottom:2px solid #cbd5e0">Agent</th>
+  <th style="padding:5px 9px;border-bottom:2px solid #cbd5e0;text-align:right">Verified</th>
+  <th style="padding:5px 9px;border-bottom:2px solid #cbd5e0">Activity</th>
+  <th style="padding:5px 9px;border-bottom:2px solid #cbd5e0">Moved since yesterday</th>
+  <th style="padding:5px 9px;border-bottom:2px solid #cbd5e0;text-align:right">Dates</th>
+</tr>
+${r.rows.map(row).join('')}
+</table>
+
+<h3 style="color:#C20E1E;margin:16px 0 4px">Repository sync</h3>
+${staleBlock}
+
+${r.quiet.length ? `<h3 style="color:#C20E1E;margin:16px 0 4px">Gone quiet</h3>
+<ul>${r.quiet.map((x) => `<li><strong>${esc(x.intern)}</strong> (${esc(x.domain)}):
+  <span style="color:${BAND_COLOR[x.activity]}">${esc(x.activity)}</span>,
+  ${x.daysSinceCommit}d since their last commit</li>`).join('')}</ul>` : ''}
+
+${r.never.length ? `<h3 style="color:#C20E1E;margin:16px 0 4px">Never committed</h3>
+<ul>${r.never.map((x) => `<li><strong>${esc(x.intern)}</strong> (${esc(x.domain)}) has no recorded commit at all.
+  This is not softened by the new-intern grace, because it is the group always worth acting on.</li>`).join('')}</ul>` : ''}
+
+${r.undetermined.length ? `<h3 style="color:#C20E1E;margin:16px 0 4px">What this report could not determine</h3>
+<ul>${r.undetermined.map((u) => `<li>${esc(u)}</li>`).join('')}</ul>
+<p style="font-size:12px;color:#718096">Stated rather than omitted, because an omission reads as a zero.</p>` : ''}
+
+<h3 style="color:#C20E1E;margin:16px 0 4px">Where these numbers come from</h3>
+<ul style="font-size:12px;color:#718096">
+<li>Verified: <code>student_tasks.verified_at</code>, set by <code>build_pipeline:repo_verification</code></li>
+<li>Activity bands: last commit in <code>github_connections.commit_summary_json</code>, banded by the same rule the Intern Console uses</li>
+<li>Moved since yesterday: <code>verified_at</code> within 24h, and commits dated within 24h</li>
+<li>Dates: <code>student_tasks.due_on</code></li>
+<li>Sync drift: <code>github_connections.last_sync_at</code>, compared against the median of the others</li>
+</ul>
+<p style="font-size:11px;color:#718096">Generated ${esc(generatedAt)}. Sent every day, including quiet ones, so a
+silent day and a broken job cannot look the same.</p>
+</div>`;
+}
+
 module.exports = {
   buildReport, bandFor, withGrace, staleSyncWatch, daysBetween,
+  shapeAgentRows, renderHtml, BAND_COLOR,
   NEW_INTERN_GRACE_DAYS, SOFTENABLE,
 };
