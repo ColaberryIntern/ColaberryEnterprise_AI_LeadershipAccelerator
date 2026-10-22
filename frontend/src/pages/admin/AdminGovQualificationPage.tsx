@@ -446,6 +446,11 @@ function ResponseSlotRow({ slot, authoring }: { slot: GovResponseSlot; authoring
       <div className="d-flex flex-wrap align-items-center gap-2">
         <span className="fw-semibold small">{slot.requirementId}</span>
         <StatusBadge label={slot.status} tone={RESPONSE_TONE[slot.status] ?? 'neutral'} />
+        {slot.eliminationRisk && (
+          <span className="badge bg-danger-subtle text-danger-emphasis" title="The requirement's own text says the bid is rejected / non-responsive if this is missed">
+            <i className="ri-error-warning-line me-1" aria-hidden="true" />disqualifies if missed
+          </span>
+        )}
         {slot.sourceRef && <span className="small text-secondary" title="Cited source reference">· cites {slot.sourceRef}</span>}
       </div>
       <div className="small mb-1">{slot.statement}</div>
