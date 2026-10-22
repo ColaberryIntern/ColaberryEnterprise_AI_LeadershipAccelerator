@@ -8,7 +8,7 @@ import { requireSection } from '../../middlewares/authMiddleware';
 import { lookupGovContractsContainer } from '../../scripts/lib/factoryDemoContainer';
 // The qualification services lazy-load their models inside their functions, so these imports never init the ORM.
 import {
-  createQualification, recordDecision, recordCapabilityDecisions, approveGovQualification, recordDocumentReview,
+  createQualification, recordDecision, recordCapabilityDecisions, setGovPursuitKind, approveGovQualification, recordDocumentReview,
   createDecoupledQualification, getDecoupledWorkspace, recordZipAttestation, approveDecoupledQualification,
   requestApproval, sendBack, listPendingApprovals,
   evaluateRequirements, evaluateEvidenceCoverage, reviewedDocIdsFrom, resolveDecoupledDeliveryProjectId,
@@ -746,6 +746,35 @@ router.post('/api/admin/factory/qualification/:canonicalOpportunityId/capability
   }
 });
 
+const pursuitKindBody = z.object({
+  biddingEntity: biddingEntityField,
+  expectedVersion: z.coerce.number().int().min(1),
+  pursuitKind: z.enum(['software', 'services']),
+});
+
+/** POST …/pursuit-kind — mark the pursuit software vs services (requirements_json.pursuitKind). ADVISORY routing:
+ *  'services' = a consulting bid with no software to build, so the delivery project gets a proposal track only and
+ *  the build machinery is hidden. Fork-on-edit preserves the decision/establisher. */
+router.post('/api/admin/factory/qualification/:canonicalOpportunityId/pursuit-kind', requireSection('program'), async (req: Request, res: Response) => {
+  const p = qualKeyParam.safeParse(req.params);
+  if (!p.success) { res.status(400).json({ error: 'Invalid opportunity key.' }); return; }
+  const b = pursuitKindBody.safeParse(req.body ?? {});
+  if (!b.success) { res.status(400).json({ error: 'Invalid pursuit-kind body.', issues: b.error.issues }); return; }
+  const { canonicalOpportunityId } = p.data;
+  const scope = await scopeOrFail(res, 'gov_pursuit_kind_scope', { canonicalOpportunityId });
+  if (!scope) return;
+  try {
+    const q = await setGovPursuitKind({
+      canonicalOpportunityId, biddingEntity: b.data.biddingEntity, expectedVersion: b.data.expectedVersion,
+      pursuitKind: b.data.pursuitKind,
+    });
+    res.json({ qualification: q });
+  } catch (err: any) {
+    if (mapQualificationError(res, err)) return;
+    logFail('gov_pursuit_kind_failed', err, { canonicalOpportunityId }); res.status(500).json({ error: 'Could not set the pursuit kind.' });
+  }
+});
+
 const requestApprovalBody = z.object({
   biddingEntity: biddingEntityField,
   expectedVersion: z.coerce.number().int().min(1),
@@ -1134,6 +1163,9 @@ async function createTwoTrackProjectAfterApproval(q: any, canonicalOpportunityId
       established: (q.requirements_json && q.requirements_json.established) || [],
       provenance: (q.requirements_json && q.requirements_json.provenance) || null,
       approverIdentityId,
+      // A services pursuit gets the proposal track only (no phantom build). Read off the stored kind; the heal
+      // path reads the same record, so a pursuit marked services after approval is corrected on the next load.
+      pursuitKind: (q.requirements_json && q.requirements_json.pursuitKind) === 'services' ? 'services' : 'software',
     });
     return undefined;
   } catch (projErr: any) {

@@ -372,6 +372,16 @@ export async function recordCapabilityDecisions(
   return data;
 }
 
+/** Mark the pursuit software vs services (requirements_json.pursuitKind). 'services' = a consulting bid with no
+ *  software to build -> proposal track only + the Build machinery hidden. Returns the forked qualification. */
+export async function setGovPursuitKind(
+  canonicalOpportunityId: string,
+  body: { biddingEntity: string; expectedVersion: number; pursuitKind: 'software' | 'services' },
+): Promise<{ qualification: unknown }> {
+  const { data } = await api.post<{ qualification: unknown }>(qUrl(canonicalOpportunityId, '/pursuit-kind'), body);
+  return data;
+}
+
 /**
  * Phase 1: reachability of an EXISTING gov project only. New pursuits now require qualification, so the server
  * returns 409 { qualificationRequired } and creates nothing; the entry page no longer offers a create action.
@@ -503,6 +513,9 @@ export interface GovQualificationWorkspace {
   /** The Build-track plan (releases → stories → prompts) for the solution_build requirements. Mirrors the
    *  backend `deriveGovBuildPlan`; absent on older records / when no build requirements exist. */
   build?: GovBuildPlan;
+  /** software vs services. 'services' (a consulting bid) has no software to build: the delivery project got a
+   *  proposal track only and the Build machinery is hidden. Defaults to 'software'. */
+  pursuitKind?: 'software' | 'services';
   /** The dates/messages/amendment inbox (P4). An amendment's `affects` invalidates affected responses. */
   amendments?: GovProposalAmendment[];
   /** The submission + outcome state (P5). */
