@@ -10,7 +10,7 @@ import {
   saveGovProposalResponse, reviewGovProposalResponse, addGovProposalFigure, removeGovProposalFigure, saveGovProposalDraft, resolveGovProposalGap, draftGovProposalWithAI, recordGovProposalAmendment,
   exportGovSubmission, downloadGovSubmissionPackage, recordGovSubmissionReceipt, acknowledgeGovSubmission, reopenGovSubmission, recordGovOutcome,
   type GovQualificationWorkspace, type QualRequirementEval, type GovCandidatesResult, type EstablishedRequirement, type ExtractedFileOutcome,
-  type ServiceMatch, type ExtractedRequirementCandidate, type RequirementItem, type ReqItemCategory, type GovOpportunity, type GovDossier, type GovRelationship,
+  type ServiceMatch, type ExtractedRequirementCandidate, type RequirementItem, type ReqItemCategory, type GovExtractionMeta, type GovOpportunity, type GovDossier, type GovRelationship,
   type GovResponseSlot, type GovBuildPlan, type GovBuildStory, type GovAssignableBuilder,
   type GovResponseFigure, type GovResponseGap, type GovProposalAmendment, type GovSubmission, type GovSubmissionReadiness,
 } from '../../services/factoryApi';
@@ -1020,6 +1020,7 @@ export default function AdminGovQualificationPage(): React.ReactElement {
   const [candRows, setCandRows] = useState<Record<string, CandidateRow>>({});
   // Per-file extraction outcomes (the server's honesty rail) — drives a specific reason when 0 candidates come back.
   const [extractOutcomes, setExtractOutcomes] = useState<ExtractedFileOutcome[] | null>(null);
+  const [extractionMeta, setExtractionMeta] = useState<GovExtractionMeta | null>(null);
   const [solView, setSolView] = useState<SolView>('map');
   const [extractBusy, setExtractBusy] = useState(false);
   const [extractError, setExtractError] = useState<string | null>(null);
@@ -1095,6 +1096,7 @@ export default function AdminGovQualificationPage(): React.ReactElement {
       const r = await extractGovQualificationRequirements(canonical, extractFile);
       setCandidates(r.candidates);
       setExtractOutcomes(r.files ?? null);
+      setExtractionMeta(r.extraction ?? null);
       const its = r.items ?? null;
       setItems(its);
       // Default each candidate's due-stage from its item category when the taxonomy is present (scope -> delivery,
@@ -1113,6 +1115,7 @@ export default function AdminGovQualificationPage(): React.ReactElement {
       setCandidates(null);
       setItems(null);
       setExtractOutcomes(null);
+      setExtractionMeta(null);
       return false;
     } finally {
       setExtractBusy(false);
@@ -1456,6 +1459,14 @@ export default function AdminGovQualificationPage(): React.ReactElement {
               )}
               {candidates !== null && candidates.length > 0 && (
                 <>
+                  {extractionMeta?.mode === 'deterministic+ai' && (
+                    <div className="alert alert-info py-2 mb-2 small" role="status">
+                      <i className="ri-sparkling-2-line me-1" aria-hidden="true" />
+                      AI comprehension added <strong>{extractionMeta.aiKept}</strong> quote-verified requirement{extractionMeta.aiKept === 1 ? '' : 's'} the keyword pass missed
+                      {extractionMeta.aiDropped > 0 && <>, and dropped <strong>{extractionMeta.aiDropped}</strong> it could not cite in the documents (never shown)</>}.
+                      {extractionMeta.aiError && <span className="text-secondary"> {extractionMeta.aiError}</span>}
+                    </div>
+                  )}
                   <SolicitationItemsView
                     items={items} candidates={candidates} candRows={candRows}
                     onToggle={(cid, checked) => setCandRows((prev) => ({ ...prev, [cid]: { ...(prev[cid] ?? { checked: true, applicability: 'always', dueStage: 'submission' }), checked } }))}

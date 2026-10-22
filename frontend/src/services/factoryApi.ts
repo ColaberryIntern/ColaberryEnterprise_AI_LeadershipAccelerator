@@ -1038,7 +1038,10 @@ export interface ExtractedFileOutcome {
  *  confirm. Persists nothing server-side — establishment stays the deliberate, confirmed write. `items` is the same
  *  candidates grouped into the 4-category map; `candidates` stays the Raw/Checklist view. `files` is the per-file
  *  outcome rail (optional for back-compat), used to explain a zero-candidate extraction. */
-export async function extractGovQualificationRequirements(canonicalOpportunityId: string, file: File): Promise<{ candidates: ExtractedRequirementCandidate[]; items?: RequirementItem[]; fileCount: number; files?: ExtractedFileOutcome[] }> {
+/** The AI-comprehension pass's outcome (T4). `deterministic` when the flag is off (no AI ran); `deterministic+ai`
+ *  when it did — `aiKept` quote-verified rows were added, `aiDropped` were dropped for not citing the source. */
+export interface GovExtractionMeta { mode: 'deterministic' | 'deterministic+ai'; model: string | null; aiKept: number; aiDropped: number; aiError: string | null }
+export async function extractGovQualificationRequirements(canonicalOpportunityId: string, file: File): Promise<{ candidates: ExtractedRequirementCandidate[]; items?: RequirementItem[]; fileCount: number; files?: ExtractedFileOutcome[]; extraction?: GovExtractionMeta }> {
   const form = new FormData();
   form.append('document', file);
   const { data } = await api.post(qUrl(canonicalOpportunityId, '/extract-requirements'), form, { headers: { 'Content-Type': 'multipart/form-data' } });
