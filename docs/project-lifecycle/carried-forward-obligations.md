@@ -2799,3 +2799,52 @@ The design's §8 questions are unanswered: whether `operating` (`release.deploy`
 automatic, and whether to ship behind a flag. Neither blocks §9 step 1 - the readiness table and
 its pure computation - because neither the table's shape nor the computation depends on them. Both
 block steps 2 and 3.
+
+## THE READINESS COMPUTATION EXISTS, and its fingerprint is controlled both ways
+
+Step 1 of `readiness-and-approval-separation.md` §9, split: **the pure computation now, the
+persistence next.** `lifecycle_stage_readiness` and the `REQUIRED_TABLES` contract entry are
+deliberately NOT in this change, because adding a table to that contract couples the post-deploy
+schema verifier to a deploy — and the computation is the part that has to be right first.
+
+`lifecycleReadiness.ts`, pure: no I/O, no permissions, no writes. 11 tests.
+
+### It delegates, and a mutation proves it
+
+`prerequisiteGaps` stays the only authority on whether a stage is satisfied. The suite pins this
+module's answer to it across every stage on two evidence states, so the two cannot drift.
+**Mutation — give the module its own opinion (`satisfied: true`):** two tests fail, the delegation
+check and the NOT_ASSESSED check.
+
+### The fingerprint is controlled in BOTH directions
+
+The hash exists so an approval granted on one measurement can be compared against a later one.
+Two failures matter equally, and only testing one is the dangerous half:
+
+| | |
+|---|---|
+| It must NOT move when nothing meaningful moved | or every approval reads as stale, `needs_reapproval` fires constantly, and someone disables the check |
+| It MUST move when any field moved | or a **stale approval reads as current** — the direction that lets unauthorised work proceed |
+
+Stability is pinned against key order, Set iteration order, and id-list order. Movement is pinned
+by perturbing **every field in turn, derived from the object's own keys**, never a hand-written
+list. **Mutation — make a `Set` invisible to the hash:** the control fails and NAMES
+`assessedFields`, which is why it reports the offending field rather than a count.
+
+The canonicaliser walks the object for the same reason `evidenceFixture.ts` derives its
+`assessedFields` from its own keys: a hand-listed one goes stale the moment a field is added, and
+it fails in the worst direction — the new field is simply absent from the hash.
+
+### What it deliberately does not do
+
+- **It does not advance anything.** Guarded separately by `readinessIsNeverSufficient.test.ts`.
+- **It does not classify hops as automatic.** That is §8 Q1, still open. `requiredPermission` is
+  reported because it is a fact from `STAGE_PERMISSION`; what it means for automation is not
+  decided here.
+- **It carries no actor and no role.** A test asserts the absence of every field that could be
+  mistaken for an approval, because otherwise the separation is cosmetic.
+
+### Still gated
+
+§8 Q1 (is `operating` automatic?) and Q2 (flag?) remain unanswered. They block steps 2 and 3 —
+readiness on build events, and the automatic work hops.
