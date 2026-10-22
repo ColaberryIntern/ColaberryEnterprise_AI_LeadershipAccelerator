@@ -1,9 +1,10 @@
 import nodemailer from 'nodemailer';
 import { env } from '../config/env';
-import { getTestOverrides, getSetting, getSettingUpdatedAt } from './settingsService';
+import { getTestOverrides, getSetting, setSetting, getSettingUpdatedAt } from './settingsService';
 import {
   isTestModeExpired, testModeAgeHours, TEST_MODE_MAX_AGE_HOURS,
 } from './email/testModeWindow';
+import { maybeRaiseTestModeAlarm, ALARM_SETTING_KEY } from './email/testModeAlarm';
 import { isKillSwitchActive } from './launchSafety';
 import type { DigestData } from './digestService';
 import { redactForLogs } from '../utils/piiRedaction';
@@ -162,11 +163,50 @@ async function resolveTestRedirect(): Promise<string | null> {
       }));
       return null;
     }
+    // Test mode is live and fresh, and reaching this line proves it: a recipient is
+    // about to be rewritten. Announce it ONCE per activation. Fire-and-forget, because
+    // a safety message must never be able to delay or fail an email.
+    void raiseTestModeAlarm(enabledAt, test.email);
     return test.email;
   } catch {
     // If settings DB fails, don't block email sending
   }
   return null;
+}
+
+/**
+ * Wire the alarm decision to real storage and a real send. Kept out of
+ * `resolveTestRedirect` so the hot path stays readable and the decision stays
+ * unit-testable without a database.
+ *
+ * THE ALARM DOES NOT GO THROUGH `resolveEmailRecipient`, and that is the entire point:
+ * test mode is applied by each SENDER calling that function, not by the transport, so
+ * going straight to `guardedSendMail` means the alarm cannot be redirected into the
+ * mailbox it is complaining about. In the 2026-10-16 incident every alert that should
+ * have reported the problem was swallowed exactly that way.
+ *
+ * Known remaining gap, deliberately not fixed here: the kill switch still suppresses
+ * this, because `guardedSendMail` returns early when it is active. That is the same
+ * shape of defect for a different flag and wants its own change.
+ */
+async function raiseTestModeAlarm(enabledAt: Date | null, sink: string): Promise<void> {
+  await maybeRaiseTestModeAlarm(enabledAt, sink, TEST_MODE_MAX_AGE_HOURS, {
+    getLastAlarmedFor: async () => (await getSetting(ALARM_SETTING_KEY)) || null,
+    recordAlarmed: async (marker) => { await setSetting(ALARM_SETTING_KEY, marker); },
+    send: async (message) => {
+      console.warn(JSON.stringify({
+        service: 'backend', level: 'warn', event: 'test_mode.alarm_raised', outcome: 'success',
+        context: { sink: redactForLogs(sink), enabled_at: enabledAt ? enabledAt.toISOString() : null },
+      }));
+      await guardedSendMail({
+        from: env.emailFrom,
+        to: await getAdminRecipients(),
+        subject: message.subject,
+        html: message.html,
+        text: message.text,
+      });
+    },
+  });
 }
 
 /**
