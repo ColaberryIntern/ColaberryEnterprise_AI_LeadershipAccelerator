@@ -133,13 +133,20 @@ async function runAudience(browser, audience, jwt) {
     if (audience !== 'staff') {
       await step(audience, 'the tour runs to its end', async () => {
         await page.click('[data-testid="cm-concierge"] [data-testid="cm-cc-tour-start"]');
-        await page.waitForSelector('[data-testid="cm-tour"]', { timeout: 15_000 });
-        for (let i = 0; i < 12 && await page.locator('[data-testid="cm-tour-end"]').count() === 0; i += 1) {
+        // WP-2: the tour lives inside each stop's arrival panel, with the room behind it
+        await page.waitForSelector('[data-testid="cm-card"] [data-testid="cm-tour"]', { timeout: 15_000 });
+        must(await page.locator('[data-testid="cm-inside"]').count() === 1, 'no room behind the tour stop');
+        for (let i = 0; i < 12; i += 1) {
+          const label = (await page.locator('[data-testid="cm-tour-next"]').textContent()) || '';
           await page.click('[data-testid="cm-tour-next"]');
+          if (!label.startsWith('Next:')) break; // the last stop: Finish tour, or the Explorer's unlock sheet
+          await page.waitForSelector(`[data-testid="cm-card"] [data-testid="cm-tour"][data-stop="${i + 2}"]`, { timeout: 15_000 });
         }
-        await page.waitForSelector('[data-testid="cm-tour-end"]', { timeout: 15_000 });
-        await page.keyboard.press('Escape');
-        // WP-1: finishing the tour is remembered; the panel offers it again
+        if (audience === 'explorer') {
+          await page.waitForSelector('[data-testid="cm-unlock"] [data-testid="cm-tour-optin"]', { timeout: 15_000 });
+          await page.keyboard.press('Escape');
+        }
+        // finishing the tour is remembered; the panel offers it again
         await page.waitForSelector('[data-testid="cm-cc-tour"][data-state="done"]', { timeout: 15_000 });
       });
     } else {

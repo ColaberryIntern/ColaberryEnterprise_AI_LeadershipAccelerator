@@ -19,6 +19,8 @@ import CampusDoorTransition from '../../../components/campus/CampusDoorTransitio
 import CampusDmToast from '../../../components/campus/CampusDmToast';
 import CampusTabBar from '../../../components/campus/CampusTabBar';
 import CampusLive from '../../../components/campus/CampusLive';
+import CampusCheer from '../../../components/campus/CampusCheer';
+import { useLevelCheer } from '../../../components/campus/home/useLevelCheer';
 import { readParticipant } from '../today/shellUtils';
 import '../../../components/campus/campus.css';
 import '../../../components/campus/campusLive.css';
@@ -54,7 +56,8 @@ export default function CampusHomePage(): React.ReactElement {
   // The building whose card opened is where you now are.
   const onCard = useCallback((s: { open: boolean; building: BuildingId | null }) => { setCardOpen(s.open); if (s.building) setHere(s.building); }, [setHere]);
   const stay = useCallback(() => undefined, []);
-  const { props, tour, touring } = useCampusWorldProps(stay, stay, null);
+  const { props, tour, touring, extra } = useCampusWorldProps(stay, stay, null);
+  useLevelCheer(campus.look?.rung_name || null);
 
   // The home shows Colaberry Live as the prototype's top pill (CampusLive below), so the portal-wide live-now badge steps aside here.
   useEffect(() => { document.documentElement.classList.add('cm-on-home'); return () => document.documentElement.classList.remove('cm-on-home'); }, []);
@@ -84,13 +87,15 @@ export default function CampusHomePage(): React.ReactElement {
       <CampusConcierge cardOpen={cardOpen} audience={audience} firstName={facts.firstName} hereName={here ? buildingName(here, campus.settings.workplaceNames) : 'main gate'}
         hereId={here ? here.id : null} buildings={buildings} accessOf={accessOf} workplaceNames={campus.settings.workplaceNames} presence={campus.presence}
         presenceError={campus.presenceError} desks={campus.staffDesks} stops={campus.planStops} live={live} now={new Date()}
-        tourStops={tour ? tour.stops : null} touring={touring} tourProgress={campus.tourProgress}
+        tourStops={tour ? tour.stops : null} touring={touring} tourProgress={campus.tourProgress} justToured={campus.justToured}
         onWalk={map.goTo} onTour={campus.resumeTour} onEndTour={campus.endTour} onOpen={(r) => campus.enterThroughDoor(r, null)} />
       <div className="cm-home-livebar"><CampusLive /></div>
       <CampusTabBar active="/portal/campus" />
       <CampusListView />
       <CampusDoorTransition />
       <CampusDmToast />
+      <CampusCheer burst reduceMotion={reduce} />
+      {extra}
     </div>
   );
 }

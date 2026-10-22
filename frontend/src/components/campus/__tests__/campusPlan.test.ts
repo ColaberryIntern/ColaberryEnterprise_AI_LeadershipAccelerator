@@ -1,6 +1,7 @@
 /**
- * C8 plan stops and Next: each step happens where Today opens it (TodayShell.openCard), and Next is the first unfinished step
- * that is not in the learner's current building.
+ * C8 / WP-2 plan stops and Next: each step happens in the building its TYPE belongs to (a lesson in the Classroom, a post in the
+ * Community Lounge, a project task in the Studio); a curriculum card opens its own page, a project task its workspace, anything
+ * else Today's drawer (TodayShell.openCard); Next is the first unfinished step that is not in the learner's current building.
  */
 import fs from 'fs';
 import path from 'path';
@@ -15,17 +16,18 @@ const item = (o: Partial<TodayPlanItem>): TodayPlanItem => ({
 
 const project = item({ ref: 'project:1', title: 'Finish the data pipeline task', project_id: 'p1', project_task_id: 't1' });
 const post = item({ ref: 'community:9', title: 'Reply to the cohort thread', community_post_id: '9' });
-const lesson = item({ ref: 'card:l1', title: 'Watch the agents lesson' });
+const lesson = item({ ref: 'card:l1', card_id: 'l1', title: 'Watch the agents lesson' });
 
-describe('where a step happens (TodayShell.openCard exactly)', () => {
+describe('where a step happens and where it opens', () => {
   it('a project task goes to its workspace in the Project Studio', () => {
     expect(stopRoute(project)).toBe('/portal/projects/workspace/p1/t1');
-    expect(planStops([project])[0].buildingId).toBe('studio');
+    expect(planStops([project])[0]).toMatchObject({ buildingId: 'studio', route: '/portal/projects/workspace/p1/t1' });
   });
-  it('a community post opens in Today\'s drawer, so it happens on Today (the Schedule tower), like every other step', () => {
+  it('a community post happens in the Community Lounge and opens in Today\'s drawer; a lesson card is in the Classroom and opens its own page', () => {
     expect(stopRoute(post)).toBe(TODAY_ROUTE);
-    expect(stopRoute(lesson)).toBe(TODAY_ROUTE);
-    expect(planStops([post, lesson]).map((s) => s.buildingId)).toEqual(['tower', 'tower']);
+    const [p, l] = planStops([post, lesson]);
+    expect(p).toMatchObject({ buildingId: 'commons', route: TODAY_ROUTE });
+    expect(l).toMatchObject({ buildingId: 'lecture', route: '/portal/runtime/l1', cardId: 'l1' });
   });
   it('pins TodayShell.openCard: only a project workspace navigates away; everything else opens the drawer', () => {
     const src = fs.readFileSync(path.join(__dirname, '..', '..', '..', 'pages', 'portal', 'today', 'TodayShell.tsx'), 'utf8');
@@ -36,12 +38,12 @@ describe('where a step happens (TodayShell.openCard exactly)', () => {
 describe('Next', () => {
   it('the first unfinished step not in the current building', () => {
     const stops = planStops([item({ ...lesson, status: 'completed' }), post, project]);
-    expect(nextStop(stops, 'library')?.title).toBe('Reply to the cohort thread'); // elsewhere: back to Today
-    expect(nextStop(stops, 'tower')?.title).toBe('Finish the data pipeline task'); // on Today: only what is not here
+    expect(nextStop(stops, 'library')?.title).toBe('Reply to the cohort thread');
+    expect(nextStop(stops, 'commons')?.title).toBe('Finish the data pipeline task'); // in the Lounge: only what is not here
   });
   it.each([
     ['everything done', [item({ ...project, status: 'completed' })], 'library'],
-    ['every unfinished step is in this building', [post, lesson], 'tower'],
+    ['every unfinished step is in this building', [post, item({ ...post, ref: 'community:10' })], 'commons'],
     ['an empty plan', [], 'tower'],
   ])('none when %s', (_n, items, here) => {
     expect(nextStop(planStops(items as TodayPlanItem[]), here as never)).toBeNull();
@@ -53,7 +55,7 @@ describe('Next', () => {
 
 describe('the route drawn on the map', () => {
   it('the unfinished stops\' buildings in plan order, each once', () => {
-    expect(routeBuildings(planStops([project, post, lesson, item({ ...project, ref: 'project:2' })]))).toEqual(['studio', 'tower']);
-    expect(routeBuildings(planStops([item({ ...project, status: 'completed' }), post]))).toEqual(['tower']);
+    expect(routeBuildings(planStops([project, post, lesson, item({ ...project, ref: 'project:2' })]))).toEqual(['studio', 'commons', 'lecture']);
+    expect(routeBuildings(planStops([item({ ...project, status: 'completed' }), post]))).toEqual(['commons']);
   });
 });

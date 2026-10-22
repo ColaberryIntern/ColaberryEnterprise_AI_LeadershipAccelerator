@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import type { CampusAudience } from '../campusMap';
 import WhereTo from '../WhereTo';
 import '../campusPanels.css';
+import { levelOfRung } from '../../../services/bandLadder';
 import NotificationBell from '../../../pages/portal/community/NotificationBell';
 
 /**
@@ -50,7 +51,8 @@ export default function CampusTopBar({ audience, online, points, rung, streak, i
       </button>
       <div className="cm-pill cm-stats" data-testid="cm-stats">
         {acct && <span className={`cm-acct ${acct.cls}`} data-testid={`cm-stats-acct-${audience}`}>{acct.label}</span>}
-        {audience === 'member' && rung && <span className="cm-lv" data-testid="cm-stats-level">{rung}</span>}
+        {/* Q5: "Lv N" (the rung's place on the ladder), the rung name in the tooltip and, visually hidden, for screen readers */}
+        {audience === 'member' && rung && <span className="cm-lv" data-testid="cm-stats-level" title={rung}>{levelOfRung(rung) ? <>Lv {levelOfRung(rung)}<span className="cm-sr">, {rung}</span></> : rung}</span>}
         {learner && points !== null && <span className="hide-m" data-testid="cm-stats-points">{'★'} {points.toLocaleString('en-US')} pts</span>}
         {online !== null && (
           <><span className="sep hide-m" aria-hidden="true" />

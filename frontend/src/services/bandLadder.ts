@@ -118,6 +118,22 @@ export function rungTone(rungName: string | null | undefined): RungTone {
   return RUNG_TONES[rungName] ?? 'aware-1';
 }
 
+/**
+ * The whole ladder in order, lowest first: the free points rungs, then the build rungs. "Lv N" on the campus (decision Q5) is a
+ * rung's place here, counting from 1, so it always agrees with the rung name shown beside it.
+ */
+export const RUNG_ORDER: readonly string[] = [
+  ...BAND_RUNGS.map((r) => r.name),
+  'AI Builder I', 'AI Builder II', 'AI Builder III', 'AI Builder IV', 'AI Builder V', 'AI Builder VI', 'AI Architect', 'Senior AI Architect',
+];
+
+/** "AI Enabled II" -> 4; "AI Builder IV · Program Graduate" -> 8; an unknown or empty rung -> null (show no level, never a guess). */
+export function levelOfRung(rungName: string | null | undefined): number | null {
+  const name = (rungName ?? '').split(' · ')[0].trim();
+  const i = RUNG_ORDER.indexOf(name);
+  return i < 0 ? null : i + 1;
+}
+
 /** Copy for a points-capped learner at the AI Enabled ceiling, by entitlement. */
 export const CEILING_NEXT_ENTITLED = 'Ship your first build to reach AI Builder I';
 export const CEILING_NEXT_FREE = 'Join the program to unlock AI Builder';

@@ -130,3 +130,7 @@
 .cm-rail .cm-tour-offer{flex-direction:column;align-items:flex-start;gap:8px;margin:0 0 14px}
 .cm-rail .cm-tour-offer .d{font-size:12.5px}
 .cm-rail .cm-next-row{flex-wrap:wrap}
+
+/* WP-2: "Walk the route on the map" under Today's plan (prototype todayPage .b-red button, teal like the plan) */
+.cm-walk-route{margin-top:14px;border:0;border-radius:999px;padding:12px 20px;font-weight:700;font-size:14px;background:var(--cm-art-plan-solid);color:var(--cm-art-on-dark);cursor:pointer}
+.cm-walk-route:focus-visible{outline:3px solid var(--cm-art-red);outline-offset:2px}

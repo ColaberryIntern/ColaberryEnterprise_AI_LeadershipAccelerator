@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import type { BuildingId, CampusBuilding, ExplorerAccess } from '../campusMap';
 import { buildingName } from '../campusMap';
 import type { PlanStop } from '../campusPlan';
+import { stopDetail } from '../campusPlan';
 import type { StaffDesk } from '../campusPeopleApi';
 import type { ExplorerPathModel } from '../campusPath';
 import AdminLink from '../AdminLink';
@@ -41,13 +42,13 @@ export function PlanCard({ stops, buildings, workplaceNames, onWalk }: { stops: 
   const nameOf = (id: BuildingId | null) => { const b = id ? buildings.find((x) => x.id === id) : undefined; return b ? buildingName(b, workplaceNames) : null; };
   return (
     <div className="cm-plan" data-testid="cm-cc-plan">
-      <div className="cm-plan-h"><b>Today&rsquo;s plan</b><small>{done} of {stops.length} done</small></div>
+      <div className="cm-plan-h"><b><span aria-hidden="true">📋 </span>Today&rsquo;s plan</b><small>{done} of {stops.length} done</small></div>
       <ol>
         {stops.map((s, i) => (
           <li key={s.key} className={`${s.done ? 'is-done' : ''}${s === next ? ' is-next' : ''}`}>
             <button type="button" onClick={() => s.buildingId && onWalk(s.buildingId)} disabled={!s.buildingId}>
               <span className="cm-pl-n" aria-hidden="true">{s.done ? '✓' : i + 1}</span>
-              <span><b>{s.title}</b>{nameOf(s.buildingId) && <small>{nameOf(s.buildingId)}</small>}</span>
+              <span><b>{s.title}</b><small>{[nameOf(s.buildingId), stopDetail(s)].filter(Boolean).join(' · ')}</small></span>
               {s.done && <span className="cm-sr"> (done)</span>}
             </button>
           </li>
@@ -55,7 +56,7 @@ export function PlanCard({ stops, buildings, workplaceNames, onWalk }: { stops: 
       </ol>
       {next
         ? <button type="button" className="cm-plan-go" onClick={() => onWalk(next.buildingId!)} data-testid="cm-cc-plan-go">{done ? 'Continue' : 'Walk the route'} &rarr; {nameOf(next.buildingId)}</button>
-        : <div className="cm-lead" style={{ margin: '8px 0 0' }}>All done for today. Nice work.</div>}
+        : <div className="cm-lead" style={{ margin: '8px 0 0' }}>All done for today <span aria-hidden="true">🎉</span> Nice work.</div>}
     </div>
   );
 }

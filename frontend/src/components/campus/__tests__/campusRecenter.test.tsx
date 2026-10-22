@@ -14,6 +14,7 @@ import { CAMPUS_BUILDINGS } from '../campusMap';
 import type { CameraApi } from '../useCampusCamera';
 import { baseView, viewBoxOf } from '../campusCamera';
 import { GATE_CLOSE_UP } from '../home/useHomeMap';
+import { tourFor } from '../tourSteps';
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 Element.prototype.scrollIntoView = Element.prototype.scrollIntoView || (() => undefined);
@@ -105,11 +106,15 @@ describe('every return to the campus recenters (R1-R11)', () => {
     expectBase();
   });
 
-  it('R4: the tour ending', () => {
-    mount({ tour: { target: 'library', card: <div data-testid="tour-card" />, onEnd: () => undefined } });
-    runFrames(); disturb();
-    act(() => setExtra({}));
+  it('R4: the tour ending (End tour in the stop\'s arrival panel)', () => {
+    const model = tourFor('member', [...CAMPUS_BUILDINGS], () => 'open', false)!;
+    mount({ tour: { model, index: 1, onIndex: () => undefined, onEnd: () => setExtra({}), onFinish: () => undefined } });
     runFrames();
+    expect(container.querySelector('[data-testid="cm-card"] [data-testid="cm-tour"]')).not.toBeNull(); // the tour lives in the panel (WP-2)
+    disturb();
+    click('[data-testid="cm-tour-stop"]');
+    runFrames();
+    expect(container.querySelector('[data-testid="cm-card"]')).toBeNull();
     expectBase();
   });
 

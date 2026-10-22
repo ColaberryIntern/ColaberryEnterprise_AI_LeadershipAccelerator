@@ -89,3 +89,59 @@
 .cm-arrive.is-unlock-first .cm-arrive-body>.cm-card-h:first-child,.cm-arrive.is-unlock-first .cm-now{order:-2}
 .cm-arrive.is-unlock-first .cm-card-note .cm-btn{background:var(--cm-art-red);color:var(--cm-art-on-dark);border-color:var(--cm-art-red);display:flex;justify-content:center;width:100%;padding:13px 16px;border-radius:14px;font-size:15px}
 .cm-arrive.is-unlock-first .cm-btn.cm-cta{background:var(--cm-art-card);color:var(--cm-art-ink);border:1px solid var(--cm-art-line)}
+
+/* ---- WP-2: the arrival opens 420 ms after you reach the door (prototype arrive()), the tour lives inside it, today's plan box ---- */
+.cm-card.cm-arrive{animation:cm-arrive-in .55s .42s cubic-bezier(.2,.9,.2,1) both}
+.cm-btn.cm-cta.is-urgent{background:var(--cm-art-red)}
+/* the tour stop card (prototype .tour-card, .tc-k, .tc-n, .tc-tag, .tc-can, .tc-tip) */
+.cm-tc{border-radius:16px;padding:16px;margin-bottom:14px;background:linear-gradient(var(--cm-art-tour-bg),var(--cm-art-card));border:1.5px solid var(--cm-art-tour-edge)}
+.cm-tc.is-explorer{background:linear-gradient(var(--cm-art-tour-ex-bg),var(--cm-art-card));border-color:var(--cm-art-tour-ex-edge)}
+.cm-tc-k{display:flex;align-items:center;gap:8px;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--cm-art-muted);font-weight:800}
+.cm-tc-n{width:24px;height:24px;border-radius:50%;background:var(--cm-art-red);color:var(--cm-art-on-dark);display:grid;place-items:center;font-size:12px;letter-spacing:0}
+.cm-tc.is-explorer .cm-tc-n{background:var(--cm-art-explorer)}
+.cm-tc-tag{border-radius:999px;padding:3px 8px;font-size:10px;letter-spacing:.08em}
+.cm-tc-tag.is-open,.cm-tc-tag.is-preview{background:var(--cm-art-explorer-tint);color:var(--cm-art-explorer)}
+.cm-tc-tag.is-demo{background:var(--cm-art-tag-demo-bg);color:var(--cm-art-tag-demo)}
+.cm-tc-tag.is-lock{background:var(--cm-art-tag-lock-bg);color:var(--cm-art-tag-lock)}
+.cm-tc-t{font-size:21px;margin:10px 0 6px;line-height:1.2;color:var(--cm-art-ink)}
+.cm-tc-what{margin:0 0 10px;font-size:14.5px;line-height:1.5;color:var(--cm-art-tour-text)}
+.cm-tc-note{margin:0 0 8px;font-size:13px;color:var(--cm-art-muted)}
+.cm-tc-can{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--cm-art-muted)}
+.cm-tc ul{margin:6px 0 0;padding:0;list-style:none;font-size:14px;line-height:1.75}
+.cm-tc ul li::before{content:"\2192  ";color:var(--cm-art-red);font-weight:800}
+.cm-tc.is-explorer ul li::before{color:var(--cm-art-explorer)}
+.cm-tc-tip{margin-top:10px;font-size:13px;background:var(--cm-art-card);border:1px dashed var(--cm-art-tip-edge);border-radius:10px;padding:8px 10px;line-height:1.4}
+/* the tour nav above the footer (prototype .tour-nav in #arrTourNav) */
+.cm-tn{display:flex;align-items:center;gap:8px;margin:12px 0 4px;padding:12px;border-radius:14px;background:var(--cm-art-tour-nav)}
+.cm-tn button{border-radius:999px;padding:10px 14px;font-weight:700;font-size:13px;border:1px solid var(--cm-art-line);background:var(--cm-art-card);color:var(--cm-art-ink);cursor:pointer}
+.cm-tn button:focus-visible{outline:3px solid var(--cm-art-red);outline-offset:2px}
+.cm-tn .cm-tn-go{background:var(--cm-art-red);border-color:var(--cm-art-red);color:var(--cm-art-on-dark);margin-left:auto}
+.cm-tn .cm-tn-go.is-explorer{background:var(--cm-art-explorer);border-color:var(--cm-art-explorer)}
+.cm-tn .cm-tn-go.is-partner{background:var(--cm-art-business);border-color:var(--cm-art-business)}
+.cm-tn-dots{display:flex;gap:4px;margin:0 auto}
+.cm-tn-dots i{width:7px;height:7px;border-radius:50%;background:var(--cm-art-dot)}
+.cm-tn-dots i.on{background:var(--cm-art-dot-on)}
+.cm-tn-dots i.done{background:var(--cm-art-dot-done)}
+@media (max-width:420px){ .cm-tn{flex-wrap:wrap} .cm-tn .cm-tn-go{flex:1 1 100%} }
+/* today's plan box (prototype .plan-box, .pb-k, .pb-acts) */
+.cm-plan-box{border:1.5px solid var(--cm-art-plan-edge);background:linear-gradient(var(--cm-art-plan-bg),var(--cm-art-card));border-radius:16px;padding:14px;margin-bottom:14px}
+.cm-pb-k{display:flex;align-items:center;gap:8px;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--cm-art-plan);font-weight:800}
+.cm-arrive .cm-pl-n{width:22px;height:22px;border-radius:50%;flex:none;display:grid;place-items:center;font-size:11px;font-weight:900;border:2px solid var(--cm-art-plan-solid)}
+.cm-pb-k .cm-pl-n{background:var(--cm-art-plan-solid);color:var(--cm-art-on-dark)}
+.cm-plan-box h3{font-size:18px;margin:8px 0 4px;color:var(--cm-art-ink)}
+.cm-plan-box p{margin:0 0 10px;color:var(--cm-art-muted);font-size:13.5px}
+.cm-pb-acts{display:flex;gap:8px;flex-wrap:wrap}
+.cm-pb-acts button{border-radius:999px;padding:12px 20px;font-weight:700;font-size:14px;cursor:pointer}
+.cm-pb-open{background:var(--cm-art-plan-solid);color:var(--cm-art-on-dark);border:0}
+.cm-pb-done{background:var(--cm-art-btn-line-bg);border:1px solid var(--cm-art-btn-line-edge);color:var(--cm-art-ink)}
+.cm-pb-done:disabled{opacity:.7;cursor:progress}
+.cm-pb-acts button:focus-visible{outline:3px solid var(--cm-art-red);outline-offset:2px}
+.cm-plan-box .cm-pb-why{margin:10px 0 0;color:var(--cm-art-ink);font-size:13px}
+/* the Explorer unlock sheet (prototype #signup sheet, opened by "Finish · see what you'd unlock") */
+.cm-unlock-back{position:fixed;inset:0;z-index:65;background:var(--cm-art-dim);display:grid;place-items:center;padding:16px}
+.cm-unlock{position:relative;width:min(520px,100%);max-height:calc(100% - 32px);overflow:auto;background:var(--cm-art-paper);color:var(--cm-art-ink);border-radius:22px;padding:24px;
+  box-shadow:var(--cm-art-shadow);font-family:'DM Sans',var(--sans),system-ui,sans-serif;outline:none}
+.cm-unlock h2{font-family:'Fraunces',Georgia,serif;font-size:28px;margin:6px 0 4px}
+.cm-unlock-lead{color:var(--cm-art-muted);margin:0 0 14px}
+.cm-unlock-x{position:absolute;top:12px;right:12px;width:34px;height:34px;border-radius:50%;border:1px solid var(--cm-art-line);background:var(--cm-art-card);font-size:20px;cursor:pointer;color:var(--cm-art-ink)}
+.cm-reduced .cm-card.cm-arrive,.cm-home.is-reduced .cm-card.cm-arrive{animation:none}

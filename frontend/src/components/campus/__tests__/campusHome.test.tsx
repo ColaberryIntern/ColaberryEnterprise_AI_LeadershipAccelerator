@@ -134,7 +134,8 @@ describe('the campus home', () => {
   it('a member sees the world, the top bar with level, points, classmates and streak, and the concierge greeting by name', async () => {
     await mount('/portal/campus');
     for (const id of ['cm-home', 'cm-world', 'cm-topbar', 'cm-concierge', 'cm-cc-where', 'cm-cc-greeting', 'cm-cc-pulse', 'cm-cc-helpdesk']) expect(q(`[data-testid="${id}"]`)).not.toBeNull();
-    expect(q('[data-testid="cm-stats-level"]')!.textContent).toBe('AI Aware I');
+    expect(q('[data-testid="cm-stats-level"]')!.textContent).toBe('Lv 1, AI Aware I'); // Q5: Lv N, the rung for screen readers
+    expect(q('[data-testid="cm-stats-level"]')!.getAttribute('title')).toBe('AI Aware I');
     expect(q('[data-testid="cm-stats-points"]')!.textContent).toContain('1,257');
     expect(q('[data-testid="cm-stats-online"]')!.textContent).toContain('5');
     expect(q('[data-testid="cm-stats-streak"]')!.textContent).toContain('3');
