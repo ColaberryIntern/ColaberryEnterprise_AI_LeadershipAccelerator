@@ -12,7 +12,8 @@
 // quiet rather than empty, and what could not be determined being stated rather than omitted.
 
 const {
-  buildReport, bandFor, withGrace, staleSyncWatch, daysBetween, NEW_INTERN_GRACE_DAYS,
+  buildReport, bandFor, withGrace, staleSyncWatch, daysBetween, shapeAgentRows,
+  renderHtml, NEW_INTERN_GRACE_DAYS,
 } = require('../dailyAgentReport');
 import {
   bandFor as tsBandFor,
@@ -133,6 +134,100 @@ describe('it states what it could not determine', () => {
   it('says when the stale-sync watch could not run at all', () => {
     const r = buildReport({ agents: [{ ...base, repoUrl: 'u', lastCommitAt: now, lastSyncAt: now }], now });
     expect(r.undetermined.join(' ')).toMatch(/Stale-sync watch/);
+  });
+});
+
+describe('shaping does not mistake the platform for the intern', () => {
+  // The provisioner commits into EVERY one of these repositories. If its commits counted as
+  // movement the report would show seven busy interns on a day nobody touched anything, which
+  // is the precise failure this report exists to prevent.
+  const now = '2026-10-22T18:00:00Z';
+  const row = (commits: any[]) => ({
+    domain: 'marketing', intern: 'Sarbjit', stories: 70, verified: 0,
+    joined_at: '2026-10-14T00:00:00Z', repo_url: 'u', last_sync_at: now, commits,
+    due_dates: null, moved: null,
+  });
+
+  it('drops the build bot and the provisioner chore, keeps the intern commit', () => {
+    const [out] = shapeAgentRows([row([
+      { date: '2026-10-22T10:00:00Z', author: 'Colaberry Build Bot', message: 'sync' },
+      { date: '2026-10-22T11:00:00Z', author: 'Someone', message: 'chore(colaberry): provision' },
+      { date: '2026-10-22T12:00:00Z', author: 'Sarbjit', message: 'Add discovery notes' },
+    ])], now);
+    expect(out.movedSinceYesterday).toEqual(['commit: Add discovery notes']);
+  });
+
+  it('still uses a platform commit for the last-commit DATE, because the repo did sync', () => {
+    // Deliberate asymmetry: a bot commit is not the intern working, but it does prove the
+    // repository is reachable, which is what the activity band and the sync watch read.
+    const [out] = shapeAgentRows([row([
+      { date: '2026-10-22T10:00:00Z', author: 'Colaberry Build Bot', message: 'sync' },
+    ])], now);
+    expect(out.lastCommitAt).toBe('2026-10-22T10:00:00Z');
+    expect(out.movedSinceYesterday).toEqual([]);
+  });
+
+  it('cuts a long commit subject at a word boundary, not mid-word', () => {
+    // The first real report carried "document the rol" and "map the nine anatomy elem".
+    const [out] = shapeAgentRows([row([{
+      date: '2026-10-22T12:00:00Z',
+      author: 'QNinying',
+      message: 'platform.RESEARCH-3-ROLE-AND-DA-TRANSITION: document the role and which DA bits move',
+    }])], now);
+    const line = out.movedSinceYesterday[0];
+    expect(line.endsWith('...')).toBe(true);
+    expect(line).not.toMatch(/\srol\.\.\.$/);
+    expect(line.replace(/^commit: /, '').length).toBeLessThanOrEqual(63);
+  });
+
+  it('leaves a short subject completely alone, with no ellipsis', () => {
+    const [out] = shapeAgentRows([row([
+      { date: '2026-10-22T12:00:00Z', author: 'Sarbjit', message: 'Add discovery notes' },
+    ])], now);
+    expect(out.movedSinceYesterday).toEqual(['commit: Add discovery notes']);
+  });
+
+  it('ignores commits older than 24 hours and survives a null commit list', () => {
+    const [old] = shapeAgentRows([row([
+      { date: '2026-10-20T12:00:00Z', author: 'Sarbjit', message: 'Initial commit' },
+    ])], now);
+    expect(old.movedSinceYesterday).toEqual([]);
+    expect(old.lastCommitAt).toBe('2026-10-20T12:00:00Z');
+
+    const [none] = shapeAgentRows([{ ...row([]), commits: null }], now);
+    expect(none.lastCommitAt).toBeNull();
+    expect(none.movedSinceYesterday).toEqual([]);
+  });
+});
+
+describe('the rendered body states the things the ticket asked for', () => {
+  // The artifact on the ticket shows THIS output, so these assertions are also what keeps the
+  // picture on the ticket honest.
+  const now = '2026-10-22T18:00:00Z';
+  const render = (over: any = {}) => renderHtml(buildReport({
+    agents: [{
+      domain: 'marketing', agent: 'marketing', intern: 'Sarbjit', verified: 0, stories: 70,
+      movedSinceYesterday: [], lastCommitAt: '2026-10-20T12:00:00Z',
+      joinedAt: '2026-09-01T00:00:00Z', repoUrl: 'https://github.com/x/y',
+      lastSyncAt: now, dueDates: ['2026-10-20'], ...over,
+    }],
+    now,
+  }), now);
+
+  it('names the source of every number', () => {
+    const html = render();
+    for (const src of ['student_tasks.verified_at', 'commit_summary_json',
+      'student_tasks.due_on', 'github_connections.last_sync_at']) {
+      expect(html).toContain(src);
+    }
+  });
+
+  it('escapes an intern name so a stray angle bracket cannot break the email', () => {
+    expect(render({ intern: 'A <b>name' })).toContain('A &lt;b&gt;name');
+  });
+
+  it('says the quiet day out loud in the body, not just in the data', () => {
+    expect(render()).toMatch(/measured quiet day, not a missing report/);
   });
 });
 
