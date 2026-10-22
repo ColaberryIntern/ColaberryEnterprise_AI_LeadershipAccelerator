@@ -10,7 +10,7 @@ import {
   saveGovProposalResponse, reviewGovProposalResponse, addGovProposalFigure, removeGovProposalFigure, saveGovProposalDraft, resolveGovProposalGap, draftGovProposalWithAI, recordGovProposalAmendment,
   exportGovSubmission, downloadGovSubmissionPackage, recordGovSubmissionReceipt, acknowledgeGovSubmission, reopenGovSubmission, recordGovOutcome,
   type GovQualificationWorkspace, type QualRequirementEval, type GovCandidatesResult, type EstablishedRequirement, type ExtractedFileOutcome,
-  type ServiceMatch, type ExtractedRequirementCandidate, type RequirementItem, type ReqItemCategory, type GovExtractionMeta, type GovOpportunity, type GovDossier, type GovRelationship,
+  type ServiceMatch, type ExtractedRequirementCandidate, type RequirementItem, type ReqItemCategory, type GovExtractionMeta, type GovOpportunity, type GovDossier, type GovComplianceRule, type GovRelationship,
   type GovResponseSlot, type GovBuildPlan, type GovBuildStory, type GovAssignableBuilder,
   type GovResponseFigure, type GovResponseGap, type GovProposalAmendment, type GovSubmission, type GovSubmissionReadiness,
 } from '../../services/factoryApi';
@@ -166,7 +166,18 @@ function OpportunityDossier({ dossier }: { dossier: GovDossier }): React.ReactEl
   const codes = dossier.codes ?? naics.map((code) => ({ system: 'naics' as const, code, sourceDocument: '' }));
   const meetings = dossier.meetings ?? [];
   const keyDates = dossier.keyDates ?? [];
-  const empty = contacts.length === 0 && codes.length === 0 && meetings.length === 0 && keyDates.length === 0;
+  const complianceRules = dossier.complianceRules ?? [];
+  const empty = contacts.length === 0 && codes.length === 0 && meetings.length === 0 && keyDates.length === 0 && complianceRules.length === 0;
+  // Submission-mechanics obligations stated in the body — missing one makes the bid non-responsive, so they lead.
+  const ruleLabel: Record<GovComplianceRule['kind'], string> = {
+    separate_cost_file: 'Separate cost file required',
+    redacted_copy: 'Redacted copy required',
+    validity_period: 'Offer validity period',
+  };
+  const ruleDetail = (r: GovComplianceRule): string =>
+    r.kind === 'separate_cost_file' ? 'Price/cost must be submitted as a separate (often sealed) file or volume, apart from the technical proposal.'
+    : r.kind === 'redacted_copy' ? 'A redacted (public-records) copy of the proposal must be submitted alongside the full copy.'
+    : `Your offer must remain valid${typeof r.days === 'number' ? ` for ${r.days} days` : ''} after the deadline — build the schedule so it does not lapse.`;
   // A detected date line: the date, any literally-stated time, and (only if unambiguously stated) its timezone.
   // A stated time with no zone is flagged "verify tz" — never assume local; a missed-by-zone deadline loses the bid.
   const dateLine = (d: GovDossier['keyDates'][number]) => (
@@ -189,6 +200,21 @@ function OpportunityDossier({ dossier }: { dossier: GovDossier }): React.ReactEl
   }
   return (
     <>
+      {complianceRules.length > 0 && (
+        <div className="alert alert-danger py-2 px-3 mb-3" role="note">
+          <h3 className="h6 text-danger-emphasis text-uppercase small mb-2"><i className="ri-error-warning-line me-1" aria-hidden="true" />Submission mechanics — do not miss these</h3>
+          <ul className="list-unstyled mb-1">
+            {complianceRules.map((r, i) => (
+              <li key={`rule-${r.kind}-${i}`} className="mb-2">
+                <span className="badge bg-danger-subtle text-danger-emphasis me-2">{ruleLabel[r.kind]}</span>
+                <span className="small">{ruleDetail(r)}</span>
+                <q className="small text-secondary fst-italic d-block mt-1">{r.quote}</q>
+              </li>
+            ))}
+          </ul>
+          <div className="small text-danger-emphasis"><i className="ri-information-line me-1" aria-hidden="true" />Detected from the solicitation text — verify against the document. Missing any of these can make the bid non-responsive.</div>
+        </div>
+      )}
       <div className="row g-3">
         {(contacts.length > 0 || codes.length > 0) && (
           <div className="col-md-6">
