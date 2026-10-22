@@ -6,6 +6,13 @@
  * `known` lists, per view, prototype elements that were deliberately NOT built, each with its reason (the real-data rule, or a
  * server feature that does not exist). They are reported on every run, never silently dropped, and carried into the PR as the
  * allowed differences. Accounts use the e2e audiences ("sponsor" in the prototype = business here).
+ *
+ * WP-1 (owner requirements, docs/design/campus/CAMPUS_DESIGN_PARITY_PROMPT.md section 2):
+ *  - every view past the gate must show the side panel with the tour (or, on a phone with a card open, its peek strip; on a page,
+ *    the rail or, on a phone, the Next steps button): withPanel() adds it to each view's required list;
+ *  - 13-recenter drags and zooms the map, opens and closes a card, and asserts the viewBox is back on the whole campus;
+ *  - 14-step-outside starts on a page and asserts Step outside lands on /portal/campus inside the same building, panel visible.
+ * A view's `assert` is a page expression that returns '' when it holds, else what was wrong (reported as a miss).
  */
 const ACCOUNTS = ['member', 'explorer', 'business', 'staff'];
 
@@ -34,7 +41,18 @@ const HOME_KNOWN = (a, size) => [
   ...(a === 'explorer' ? ['top bar "Enroll" pill: the enroll link lives in the Explorer pass'] : []),
 ];
 
-/** A view: route to open, then steps (each a { click } or { evaluate }) and the required ids for an account and size. */
+/** The map's viewBox right now, and the drag / zoom that move it well away from the whole campus. */
+const VB = "document.querySelector('svg.cm-map.has-camera').getAttribute('viewBox')";
+const DISTURB = [
+  { evaluate: `window.__cmVb0 = ${VB}` },
+  { click: '[data-testid="cm-zoom-in"]' }, { click: '[data-testid="cm-zoom-in"]' },
+  { evaluate: "(() => { const s = document.querySelector('svg.cm-map.has-camera'); s.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: 500, clientY: 400 })); window.dispatchEvent(new PointerEvent('pointermove', { clientX: 800, clientY: 400 })); window.dispatchEvent(new PointerEvent('pointerup', {})); })()" },
+];
+const AT_BASE = `(() => { const a = ${VB}.split(' ').map(Number), b = String(window.__cmVb0 || '').split(' ').map(Number);
+  if (b.length !== 4) return 'no baseline'; return a.every((v, i) => Math.abs(v - b[i]) <= 1) ? '' : 'viewBox ' + a.join(' ') + ' is not the whole campus ' + b.join(' '); })()`;
+const CARD_VIEWS = ['03-arrive', '04-inside', '08-person-card', '09-chat', '14-step-outside', '15-panel-with-card'];
+
+/** A view: route to open, then steps (each a { click }, { evaluate } or { wait }) and the required ids for an account and size. */
 const VIEWS = [
   { name: '01-gate', fresh: true, route: '/portal/campus',
     required: (a) => ['cm-gate', 'cm-gate-arch-text', 'cm-gate-logo', 'cm-gate-greeting', 'cm-gate-sub', 'cm-gate-id', 'cm-gate-enter', ...(a === 'staff' ? [] : ['cm-gate-tour'])],
@@ -68,6 +86,26 @@ const VIEWS = [
   { name: '12-me', route: '/portal/campus', steps: () => [{ click: '[data-testid="cm-stats-me"]' }],
     required: () => ['cm-me', 'cm-me-entrance'], desktopOnly: true,
     known: () => ['"show which building I am in" is not offered: there is no server setting behind it'] },
+  { name: '13-recenter', route: '/portal/campus',
+    steps: (a) => [{ wait: 600 }, ...DISTURB, tap(SIGNATURE[a]), { wait: 600 }, { click: '[data-testid="cm-arrive-back"]' }, { wait: 1600 }],
+    required: () => ['cm-world'], assert: () => AT_BASE },
+  { name: '14-step-outside', route: '/portal/library',
+    steps: () => [{ click: '[data-testid="cm-step-out"]' }, { wait: 1500 }],
+    required: () => ['cm-home', 'cm-card', 'cm-inside'],
+    assert: () => "location.pathname === '/portal/campus' ? '' : 'still on ' + location.pathname" },
+  { name: '15-panel-with-card', route: '/portal/campus', steps: (a) => [tap(SIGNATURE[a])],
+    required: () => ['cm-card'] },
 ];
 
-module.exports = { ACCOUNTS, VIEWS, SIGNATURE, REFERENCE_ACCOUNT: { member: 'member', explorer: 'explorer', business: 'sponsor', staff: 'staff' } };
+/** WP-1: the side panel (and the tour in it) is required on every view past the gate. */
+function panelFor(view, a, size) {
+  if (view.name === '01-gate') return [];
+  const tour = a === 'staff' ? [] : ['cm-cc-tour'];
+  if (view.route !== '/portal/campus' && view.name !== '14-step-outside') return size === 'phone' ? ['cm-steps-open'] : ['cm-page-rail', ...tour.map((t) => `[data-testid="cm-page-rail"] [data-testid="${t}"]`)];
+  if (size === 'phone' && CARD_VIEWS.includes(view.name)) return ['cm-cc-peek'];
+  return ['cm-concierge', ...tour];
+}
+const withPanel = (view) => ({ ...view, required: (a, size) => [...view.required(a, size), ...panelFor(view, a, size)] });
+const ALL_VIEWS = VIEWS.map(withPanel);
+
+module.exports = { ACCOUNTS, VIEWS: ALL_VIEWS, SIGNATURE, REFERENCE_ACCOUNT: { member: 'member', explorer: 'explorer', business: 'sponsor', staff: 'staff' } };

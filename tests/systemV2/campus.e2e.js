@@ -50,6 +50,8 @@ async function newPage(browser, jwt, viewport = { width: 1440, height: 900 }) {
       if (!localStorage.getItem('colaberry.campus.settings.v1')) {
         localStorage.setItem('colaberry.campus.settings.v1', JSON.stringify({ nav: 'campus', workplaceNames: false, motion: 'on' }));
       }
+      // WP-1: map steps now run on the campus home; its once-a-day gate is covered by the fidelity gate view, so skip it here.
+      localStorage.setItem('colaberry.campus.gate.seen', 'always');
     } catch { /* storage blocked: the test will fail on the first assertion */ }
   }, [jwt]);
   const page = await context.newPage();
@@ -101,24 +103,26 @@ async function runAudience(browser, audience, jwt) {
       must(r.status === 200 && r.body && typeof r.body === 'object', `presence ${r.status}`);
       await page.goto(`${urls.base}/portal/today`, { waitUntil: 'domcontentloaded' });
       await page.click('[data-testid="cm-open-map"]');
-      await page.waitForSelector('[data-testid="cm-overlay"]', { timeout: 15_000 });
+      // WP-1, one map: opening the map from a page goes to the campus home, with its side panel.
+      await page.waitForSelector('[data-testid="cm-home"] [data-testid="cm-concierge"]', { timeout: 15_000 });
+      must(new URL(page.url()).pathname === '/portal/campus', `map opened at ${page.url()}`);
     });
 
     await step(audience, 'the staff desks this audience should see', async () => {
-      await page.click('[data-testid="cm-overlay"] g[data-building="commons"]');
+      await page.click('.cm-home g[data-building="commons"]');
       await page.waitForSelector('[data-testid="cm-desk-reese"]', { timeout: 15_000 });
       await page.keyboard.press('Escape'); // closes the card, not the map
-      const hasGate = await page.locator('[data-testid="cm-overlay"] g[data-building="gate"]').count() > 0;
+      const hasGate = await page.locator('.cm-home g[data-building="gate"]').count() > 0;
       must(hasGate === (audience === 'explorer' || audience === 'staff'), `Main Gate shown=${hasGate}`);
       if (hasGate) {
-        await page.click('[data-testid="cm-overlay"] g[data-building="gate"]');
+        await page.click('.cm-home g[data-building="gate"]');
         await page.waitForSelector('[data-testid="cm-desk-maya"]', { timeout: 15_000 });
         await page.keyboard.press('Escape');
       }
     });
 
     await step(audience, 'keyboard: Tab to a building, Enter opens its card with focus on the heading', async () => {
-      await page.locator('[data-testid="cm-overlay"] g[data-building="library"]').focus();
+      await page.locator('.cm-home g[data-building="library"]').focus();
       await page.keyboard.press('Enter');
       await page.waitForSelector('[data-testid="cm-card"][data-building="library"]', { timeout: 15_000 });
       const focused = await page.evaluate(() => document.activeElement?.classList.contains('cm-card-title'));
@@ -128,33 +132,42 @@ async function runAudience(browser, audience, jwt) {
 
     if (audience !== 'staff') {
       await step(audience, 'the tour runs to its end', async () => {
-        await page.click('[data-testid="cm-tour-start-bar"]');
+        await page.click('[data-testid="cm-concierge"] [data-testid="cm-cc-tour-start"]');
         await page.waitForSelector('[data-testid="cm-tour"]', { timeout: 15_000 });
         for (let i = 0; i < 12 && await page.locator('[data-testid="cm-tour-end"]').count() === 0; i += 1) {
           await page.click('[data-testid="cm-tour-next"]');
         }
         await page.waitForSelector('[data-testid="cm-tour-end"]', { timeout: 15_000 });
         await page.keyboard.press('Escape');
+        // WP-1: finishing the tour is remembered; the panel offers it again
+        await page.waitForSelector('[data-testid="cm-cc-tour"][data-state="done"]', { timeout: 15_000 });
       });
     } else {
       await step(audience, 'no tour is offered to staff', async () => {
-        must(await page.locator('[data-testid="cm-tour-start-bar"]').count() === 0, 'staff were offered a tour');
+        must(await page.locator('[data-testid="cm-cc-tour"]').count() === 0, 'staff were offered a tour');
       });
     }
 
     await step(audience, 'My look reads from the server', async () => {
       const r = await api('/api/portal/campus/look', jwt);
       must(r.status === 200 && Array.isArray(r.body?.catalog), `look ${r.status}`);
-      await page.click('[data-testid="cm-look-open-bar"]');
-      await page.waitForSelector('.cm-look', { timeout: 15_000 });
+      await page.click('[data-testid="cm-stats-me"]');
+      await page.waitForSelector('[data-testid="cm-me"] .cm-look', { timeout: 15_000 });
       await page.keyboard.press('Escape');
     });
 
     await step(audience, 'the list view lists the campus', async () => {
-      await page.click('[data-testid="cm-overlay"] button:has-text("List view")');
+      await page.click('[data-testid="cm-topbar-list"]');
       await page.waitForSelector('[data-testid="cm-list"] section[data-building]', { timeout: 15_000 });
       must(await page.locator('[data-testid="cm-list"] section[data-building]').count() >= 6, 'too few buildings in the list');
       await page.keyboard.press('Escape');
+    });
+
+    await step(audience, 'Step outside on a page lands inside that building on the campus home (WP-1)', async () => {
+      await page.goto(`${urls.base}/portal/library`, { waitUntil: 'domcontentloaded' });
+      await page.click('[data-testid="cm-step-out"]');
+      await page.waitForSelector('[data-testid="cm-home"] [data-testid="cm-card"][data-building="library"]', { timeout: 15_000 });
+      must(await page.locator('[data-testid="cm-concierge"]').isVisible(), 'the side panel is not visible');
     });
 
     await step(audience, 'the Game Room shows today\'s time from the server', async () => {

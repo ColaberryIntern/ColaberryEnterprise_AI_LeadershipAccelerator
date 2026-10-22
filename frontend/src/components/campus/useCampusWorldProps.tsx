@@ -25,7 +25,7 @@ export interface CampusWorldModel {
 
 export function useCampusWorldProps(onExit: () => void, onNavigate: () => void, initialTarget: CampusWorldProps['initialTarget'] = null): CampusWorldModel {
   const { settings, presence, presenceError, enterThroughDoor, staffDesks, personCard, openPersonCard, closePersonCard, planStops,
-    tourIndex, setTourIndex, endTour, look, lookError, saveLook, lockerOpen, closeLocker } = useCampus();
+    tourIndex, setTourIndex, endTour, finishTour, look, lookError, saveLook, lockerOpen, closeLocker } = useCampus();
   const { audience, hasFullAccess, buildings, accessOf, isExplorer } = useCampusView();
   const { buildings: onAir } = useCampusOnAir();
   const route = planStops ? routeBuildings(planStops) : undefined;
@@ -35,12 +35,14 @@ export function useCampusWorldProps(onExit: () => void, onNavigate: () => void, 
   const tourTarget = tour && touring !== null
     ? (touring < tour.stops.length ? tour.stops[touring].buildingId : (buildings.some((x) => x.id === 'gate') ? 'gate' : tour.stops[tour.stops.length - 1]?.buildingId ?? null))
     : null;
+  // WP-1: Done on the end card (or Esc there) means the tour was taken; End tour before that pauses it for Resume.
+  const onTourEnd = tour && touring !== null && touring >= tour.stops.length ? finishTour : endTour;
   const props: CampusWorldProps = {
     buildings, audience, hasFullAccess, accessOf, isExplorer, workplaceNames: settings.workplaceNames, reduceMotion: settings.reduceMotion,
     initialTarget, onExit, onNavigate, presence, presenceError, staffDesks, personCard, onOpenPerson: openPersonCard, onClosePerson: closePersonCard,
     onAir, route, ownGear: look?.equipped,
     // The path's "Ask Maya at her desk below" line is for the Main Gate card; the tour card has no desk below it, so it is off here.
-    tour: tour && touring !== null ? { target: tourTarget, onEnd: endTour, card: <CampusTour tour={tour} index={touring} onIndex={setTourIndex} onEnd={endTour}
+    tour: tour && touring !== null ? { target: tourTarget, onEnd: onTourEnd, card: <CampusTour tour={tour} index={touring} onIndex={setTourIndex} onEnd={onTourEnd}
       explorerEnd={<CampusTourEnd pathModel={explorerPath(buildings, accessOf, settings.workplaceNames, false)} onNavigate={onNavigate} />} /> } : undefined,
     panel: lockerOpen ? { onClose: closeLocker, card: <MyLook look={look} lookError={lookError} onSave={saveLook} onClose={closeLocker} /> } : undefined,
     onEnterRoom: (r, from) => enterThroughDoor(r, from ? { left: from.left, top: from.top, width: from.width, height: from.height } : null),

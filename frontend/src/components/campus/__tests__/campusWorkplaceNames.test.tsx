@@ -3,7 +3,7 @@
  *
  * "Campus-only" = a building name that differs from its Workplace name (Game Room vs Break Room), a room label that has a
  * Workplace label, and the phone tab "Lounge". The map (labels and aria), the cards, the list, search, the trail, the tour
- * and the tab bar are all checked, with the setting off as the control (the same names DO appear there).
+ * and the tab bar are all checked (the map is the campus home, WP-1's one map), with the setting off as the control (the same names DO appear there).
  */
 import React from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -17,6 +17,9 @@ jest.mock('../campusApi', () => ({
   fetchCampusPresence: () => Promise.resolve({}), postCampusHere: () => Promise.resolve(), isReadOnlySession: () => false,
   fetchLook: () => Promise.resolve({ points: 0, rung_name: 'AI Aware I', equipped: {}, catalog: [] }),
 }));
+// WP-1: the campus home (the one map) renders here too; its own services are mocked (no network).
+jest.mock('../../../services/onboardingApi', () => require('./testEnv/homeServiceMocks').onboardingApi(jest.requireActual('../../../services/onboardingApi')));
+jest.mock('../../../services/communityApi', () => require('./testEnv/homeServiceMocks').communityApi(jest.requireActual('../../../services/communityApi')));
 jest.mock('../useCampusView', () => {
   const actual = jest.requireActual('../useCampusView');
   return { ...actual, useCampusView: () => actual.campusViewFor(mockAudience, { isStaff: mockAudience === 'staff', hasFullAccess: true, isExplorer: mockAudience === 'explorer' }) };
@@ -53,7 +56,7 @@ import { CAMPUS_SETTINGS_KEY } from '../campusSettings';
 // eslint-disable-next-line import/first
 import { ParticipantAuthProvider } from '../../../contexts/ParticipantAuthContext';
 // eslint-disable-next-line import/first
-import { PARTICIPANT_TOKEN_KEY } from '../../../utils/participantToken';
+import { WithCampusHome, skipGate, signIn, where, Where } from './testEnv/WithCampusHome';
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -132,19 +135,20 @@ let campus: ReturnType<typeof useCampus>;
 function Controls(): null { campus = useCampus(); return null; }
 let container: HTMLDivElement;
 let root: Root;
-const flush = async () => { for (let i = 0; i < 6; i += 1) await act(async () => { await Promise.resolve(); }); };
+const flush = async () => { for (let i = 0; i < 8; i += 1) await act(async () => { await Promise.resolve(); }); };
 async function mount(workplaceNames: boolean): Promise<void> {
   window.localStorage.setItem(CAMPUS_SETTINGS_KEY, JSON.stringify({ nav: 'campus', workplaceNames, motion: 'on' }));
-  window.localStorage.setItem(PARTICIPANT_TOKEN_KEY, 'h.eyJlbWFpbCI6ImxlYXJuZXJAZXhhbXBsZS5jb20ifQ.s'); // gitleaks:allow (fake, unsigned)
+  skipGate();
+  signIn();
   container = document.createElement('div');
   document.body.appendChild(container);
   await act(async () => {
     root = createRoot(container);
-    root.render(<MemoryRouter><ParticipantAuthProvider><CampusProvider><Controls /><CampusTabBar active="/portal/today" /><CampusLayers /></CampusProvider></ParticipantAuthProvider></MemoryRouter>);
+    root.render(<MemoryRouter initialEntries={['/portal/today']}><ParticipantAuthProvider><CampusProvider><Controls /><Where /><WithCampusHome><CampusTabBar active="/portal/today" /><CampusLayers /></WithCampusHome></CampusProvider></ParticipantAuthProvider></MemoryRouter>);
   });
   await flush();
 }
-afterEach(() => { if (root) act(() => root.unmount()); container?.remove(); window.localStorage.clear(); });
+afterEach(() => { if (root) act(() => root.unmount()); container?.remove(); window.localStorage.clear(); window.sessionStorage.clear(); });
 
 /** Everything a learner can read or hear: each text node (kept apart, so words never run together) plus aria-labels. */
 const readable = (el: Element) => {
@@ -159,10 +163,12 @@ describe.each(AUDIENCES)('rendered surfaces with Workplace names on: %s', (audie
   beforeEach(() => { mockAudience = audience; });
   const banned = campusOnlyNames(viewFor(audience).buildings);
 
-  it('map (labels and aria), every building card, the list view and the tab bar', async () => {
+  it('map (labels and aria, on the campus home), every building card, the list view and the tab bar', async () => {
     await mount(true);
     await act(async () => { campus.openMap(); });
     await flush();
+    expect(where.path).toBe('/portal/campus');
+    expect(document.querySelector('[data-testid="cm-home"]')).not.toBeNull();
     let seen = readable(document.body);
     for (const b of viewFor(audience).buildings) {
       await act(async () => { campus.openMap(b.id); }); // instant arrival: reduce motion on
@@ -190,12 +196,13 @@ describe('the Game Room page and the person card', () => {
   beforeEach(() => { mockAudience = 'member'; });
   async function mountPage(workplaceNames: boolean): Promise<void> {
     window.localStorage.setItem(CAMPUS_SETTINGS_KEY, JSON.stringify({ nav: 'campus', workplaceNames, motion: 'on' }));
-    window.localStorage.setItem(PARTICIPANT_TOKEN_KEY, 'h.eyJlbWFpbCI6ImxlYXJuZXJAZXhhbXBsZS5jb20ifQ.s'); // gitleaks:allow (fake, unsigned)
+    skipGate();
+    signIn();
     container = document.createElement('div');
     document.body.appendChild(container);
     await act(async () => {
       root = createRoot(container);
-      root.render(<MemoryRouter><ParticipantAuthProvider><CampusProvider><Controls /><GameRoomPage /><CampusLayers /></CampusProvider></ParticipantAuthProvider></MemoryRouter>);
+      root.render(<MemoryRouter initialEntries={['/portal/game-room']}><ParticipantAuthProvider><CampusProvider><Controls /><Where /><WithCampusHome><GameRoomPage /><CampusLayers /></WithCampusHome></CampusProvider></ParticipantAuthProvider></MemoryRouter>);
     });
     await flush();
   }
@@ -216,6 +223,8 @@ describe('the Game Room page and the person card', () => {
   it('the person card says where they are in Workplace names', async () => {
     await mountPage(true);
     await act(async () => { campus.openMap(); });
+    await flush();
+    expect(where.path).toBe('/portal/campus');
     await act(async () => { campus.openPersonCard({ person: { enrollment_id: 'p1', display_name: 'Avery Stone', avatar_url: null }, buildingId: 'arcade' }); });
     await flush();
     const card = document.querySelector('[data-testid="cm-person-card"]')!;

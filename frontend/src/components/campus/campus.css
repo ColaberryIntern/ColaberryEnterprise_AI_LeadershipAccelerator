@@ -61,10 +61,6 @@
 .cm-layer-bar{display:flex;align-items:center;gap:14px;padding:12px 20px;background:var(--surface);border-bottom:1px solid var(--border)}
 .cm-layer-bar strong{font-family:var(--logo);font-size:18px;color:var(--strong)}
 .cm-layer-hint{flex:1;color:var(--muted);font-size:13px}
-/* C11: the bar's secondary actions. Inline on wide screens; behind "More" on phones (one set of buttons, CampusMapBarActions). */
-.cm-bar-actions{position:relative;display:flex;align-items:center}
-.cm-bar-items{display:flex;align-items:center;gap:14px}
-.cm-bar-more{display:none}
 .cm-world{position:relative;flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:12px}
 .cm-world .cm-map{max-height:100%;max-width:min(100%,1200px);border-radius:var(--r-16)}
 
@@ -127,11 +123,6 @@
   .cm-layer-bar{gap:8px;padding:10px 12px;flex-wrap:wrap}
   .cm-layer-bar strong{flex:1 1 auto;min-width:0;font-size:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .cm-layer-warn{order:9;flex:1 1 100%}
-  .cm-bar-more{display:inline-flex;align-items:center;min-height:32px}
-  .cm-bar-items{display:none}
-  .cm-bar-actions.is-open .cm-bar-items{display:flex;flex-direction:column;align-items:flex-start;gap:4px;position:absolute;top:calc(100% + 6px);right:0;z-index:66;
-    min-width:200px;padding:8px 10px;background:var(--surface);border:1px solid var(--border-sub);border-radius:var(--r-12);box-shadow:var(--shadow-lg)}
-  .cm-bar-items .cm-link{min-height:32px}
   .cm-card{position:fixed;top:auto;bottom:12px;right:12px;left:12px;width:auto;max-height:55%}
   /* Phones: the map fills the screen height and pans sideways, so labels stay readable
      instead of shrinking the whole campus into a 250px strip. CampusWorld centers it. */

@@ -6,7 +6,7 @@
 import React from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { act } from 'react-dom/test-utils';
-import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
+import { MemoryRouter, useLocation } from 'react-router-dom';
 
 // C5: the provider reads staff desks and polls the inbox while the campus is on; stubbed so no test touches the network.
 jest.mock('../campusPeopleApi', () => ({ fetchStaffDesks: () => Promise.resolve([]), fetchConversationsQuiet: () => Promise.resolve([]), postWave: () => Promise.resolve({ sent: true, reason: 'sent' }) }));
@@ -18,6 +18,9 @@ jest.mock('../useCampusView', () => {
   const actual = jest.requireActual('../useCampusView');
   return { ...actual, useCampusView: () => actual.campusViewFor('member', { isStaff: false, hasFullAccess: true, isExplorer: false }) };
 });
+// WP-1: Step outside lands on the campus home, rendered here too; its own services are mocked (no network).
+jest.mock('../../../services/onboardingApi', () => require('./testEnv/homeServiceMocks').onboardingApi(jest.requireActual('../../../services/onboardingApi')));
+jest.mock('../../../services/communityApi', () => require('./testEnv/homeServiceMocks').communityApi(jest.requireActual('../../../services/communityApi')));
 
 // eslint-disable-next-line import/first
 import { CampusProvider, useCampus } from '../CampusContext';
@@ -27,6 +30,10 @@ import CampusLayers from '../CampusLayers';
 import { CAMPUS_SETTINGS_KEY } from '../campusSettings';
 // eslint-disable-next-line import/first
 import { DOOR_FALLBACK_MS } from '../CampusDoorTransition';
+// eslint-disable-next-line import/first
+import { ParticipantAuthProvider } from '../../../contexts/ParticipantAuthContext';
+// eslint-disable-next-line import/first
+import { WithCampusHome, skipGate, signIn } from './testEnv/WithCampusHome';
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -45,22 +52,26 @@ let container: HTMLDivElement;
 let root: Root;
 async function mount(reduceMotion: boolean): Promise<void> {
   window.localStorage.setItem(CAMPUS_SETTINGS_KEY, JSON.stringify({ nav: 'campus', workplaceNames: false, reduceMotion }));
+  skipGate();
+  signIn();
   container = document.createElement('div');
   document.body.appendChild(container);
   await act(async () => {
     root = createRoot(container);
     root.render(
-      <MemoryRouter initialEntries={['/portal/today']}>
+      <MemoryRouter initialEntries={['/portal/today']}><ParticipantAuthProvider>
         <CampusProvider>
-          <Controls /><CampusLayers />
-          <Routes><Route path="*" element={<Where />} /></Routes>
+          <Controls /><Where />
+          {/* WP-1: a page mounts the layers; the campus home (/portal/campus) mounts its own door transition. */}
+          <WithCampusHome><CampusLayers /></WithCampusHome>
         </CampusProvider>
-      </MemoryRouter>,
+      </ParticipantAuthProvider></MemoryRouter>,
     );
   });
 }
 const flush = async () => { for (let i = 0; i < 4; i++) await act(async () => { await Promise.resolve(); }); };
 const rect = { left: 100, top: 100, width: 80, height: 60 };
+const where = () => paths[paths.length - 1];
 const navigatedTo = (p: string) => paths.filter((x, i) => x === p && paths[i - 1] !== p).length;
 
 beforeEach(() => {
@@ -72,7 +83,7 @@ beforeEach(() => {
   };
 });
 afterEach(() => {
-  act(() => root.unmount()); container.remove(); window.localStorage.clear(); jest.useRealTimers();
+  act(() => root.unmount()); container.remove(); window.localStorage.clear(); window.sessionStorage.clear(); jest.useRealTimers();
   delete (HTMLElement.prototype as unknown as { animate?: unknown }).animate;
 });
 
@@ -110,41 +121,62 @@ describe('enter through the door', () => {
 
   it('reduce motion: navigates at once, no panel, no animation, no timer', async () => {
     await mount(true);
+    await flush();
+    const timersBefore = jest.getTimerCount(); // WP-1: the campus is signed in now, so its own polls may hold timers; the door adds none
     await act(async () => { campus().enterThroughDoor('/portal/events', rect); });
     await flush();
     expect(navigatedTo('/portal/events')).toBe(1);
     expect(container.querySelector('[data-testid="cm-door"]')).toBeNull();
     expect(animateCalls).toBe(0);
-    expect(jest.getTimerCount()).toBe(0);
+    expect(jest.getTimerCount()).toBe(timersBefore);
   });
 
-  it('closes the map overlay when it enters', async () => {
+  it('from the campus home (the one map), enters the page and leaves the home', async () => {
     await mount(true);
+    await flush();
     await act(async () => { campus().openMap(); });
-    expect(container.querySelector('[data-testid="cm-overlay"]')).not.toBeNull();
+    await flush();
+    expect(where()).toBe('/portal/campus');
+    expect(container.querySelector('[data-testid="cm-home"]')).not.toBeNull();
     await act(async () => { campus().enterThroughDoor('/portal/library', rect); });
     await flush();
-    expect(container.querySelector('[data-testid="cm-overlay"]')).toBeNull();
+    expect(where()).toBe('/portal/library');
+    expect(navigatedTo('/portal/library')).toBe(1);
+    expect(container.querySelector('[data-testid="cm-home"]')).toBeNull();
+    expect(campus().layer).toBe('none');
   });
 });
 
-describe('step outside', () => {
-  it('with motion: opens the map at the building and zooms out once', async () => {
+describe('step outside (WP-1: lands on the campus home)', () => {
+  const card = () => container.querySelector('[data-testid="cm-card"]');
+  it('with motion: goes to the home with the building card open and zooms out into it once', async () => {
     await mount(false);
+    await flush();
     await act(async () => { campus().stepOutside('library'); });
-    expect(container.querySelector('[data-testid="cm-overlay"]')).not.toBeNull();
-    expect(campus().mapFocus).toBe('library');
+    await flush();
+    expect(where()).toBe('/portal/campus');
+    expect(navigatedTo('/portal/campus')).toBe(1);
+    expect(container.querySelector('[data-testid="cm-home"]')).not.toBeNull();
+    expect(card()?.getAttribute('data-building')).toBe('library');
     expect(animateCalls).toBe(1);
     await act(async () => { resolveFinished!(); });
     await flush();
     expect(container.querySelector('[data-testid="cm-door"]')).toBeNull();
+    expect(campus().door).toBeNull();
+    await act(async () => { jest.advanceTimersByTime(DOOR_FALLBACK_MS * 2); });
+    expect(animateCalls).toBe(1);
+    expect(navigatedTo('/portal/campus')).toBe(1);
   });
 
-  it('reduce motion: opens the map immediately, no animation', async () => {
+  it('reduce motion: goes to the home immediately, the building card open, no animation', async () => {
     await mount(true);
+    await flush();
     await act(async () => { campus().stepOutside('commons'); });
-    expect(container.querySelector('[data-testid="cm-overlay"]')).not.toBeNull();
-    expect(campus().mapFocus).toBe('commons');
+    await flush();
+    expect(where()).toBe('/portal/campus');
+    expect(card()?.getAttribute('data-building')).toBe('commons');
+    expect(container.querySelector('[data-testid="cm-door"]')).toBeNull();
+    expect(campus().door).toBeNull();
     expect(animateCalls).toBe(0);
   });
 });

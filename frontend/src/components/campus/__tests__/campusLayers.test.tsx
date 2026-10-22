@@ -1,6 +1,6 @@
 /**
- * The full-screen campus layers (C2): the overlay's two-step Escape and focus return, and the
- * list view's completeness per audience.
+ * The campus layers (C2) and WP-1's one map: opening the map from a page goes to the campus home (/portal/campus), where Esc
+ * closes an open card; and the list view's completeness per audience.
  */
 import React from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -20,14 +20,22 @@ jest.mock('../campusApi', () => ({ fetchCampusFlags: () => Promise.resolve({ cam
   // C4 presence: a quiet campus (no one in any building).
   fetchCampusPresence: () => Promise.resolve({}), postCampusHere: () => Promise.resolve(), isReadOnlySession: () => false }));
 
+// WP-1: the campus home renders here too; its own services are mocked (no network).
+jest.mock('../../../services/onboardingApi', () => require('./testEnv/homeServiceMocks').onboardingApi(jest.requireActual('../../../services/onboardingApi')));
+jest.mock('../../../services/communityApi', () => require('./testEnv/homeServiceMocks').communityApi(jest.requireActual('../../../services/communityApi')));
+
 // eslint-disable-next-line import/first
 import { CampusProvider, useCampus } from '../CampusContext';
+// eslint-disable-next-line import/first
+import { ParticipantAuthProvider } from '../../../contexts/ParticipantAuthContext';
 // eslint-disable-next-line import/first
 import CampusLayers from '../CampusLayers';
 // eslint-disable-next-line import/first
 import { campusBuildingsFor } from '../useCampusView';
 // eslint-disable-next-line import/first
 import { CAMPUS_SETTINGS_KEY } from '../campusSettings';
+// eslint-disable-next-line import/first
+import { WithCampusHome, skipGate, signIn, where, Where } from './testEnv/WithCampusHome';
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -40,13 +48,17 @@ let container: HTMLDivElement;
 let root: Root;
 async function mount(): Promise<void> {
   window.localStorage.setItem(CAMPUS_SETTINGS_KEY, JSON.stringify({ nav: 'campus', workplaceNames: false, reduceMotion: true }));
+  skipGate();
+  signIn();
   container = document.createElement('div');
   document.body.appendChild(container);
   await act(async () => {
     root = createRoot(container);
-    root.render(<MemoryRouter><CampusProvider><Openers /><CampusLayers /></CampusProvider></MemoryRouter>);
+    root.render(<MemoryRouter initialEntries={['/portal/library']}><ParticipantAuthProvider><CampusProvider><Where /><WithCampusHome><Openers /><CampusLayers /></WithCampusHome></CampusProvider></ParticipantAuthProvider></MemoryRouter>);
   });
+  for (let i = 0; i < 6; i += 1) await act(async () => { await Promise.resolve(); });
 }
+const settle = async () => { for (let i = 0; i < 6; i += 1) await act(async () => { await Promise.resolve(); }); };
 afterEach(() => { act(() => root.unmount()); container.remove(); window.localStorage.clear(); });
 
 const q = (sel: string) => container.querySelector(sel) as HTMLElement | null;
@@ -57,31 +69,38 @@ const esc = (el: Element) => act(() => { el.dispatchEvent(new KeyboardEvent('key
 // the whole campus (up to three maps) and some run axe over it; a cold first render under parallel jest can pass 5 s.
 jest.setTimeout(15000);
 
-describe('campus map overlay', () => {
-  it('Esc closes the open card first, then the overlay, and focus returns to the opener', async () => {
-    mockAudience = 'member';
-    await mount();
-    const opener = q('[data-testid="open-map"]')!;
-    act(() => opener.focus());
-    click(opener);
-    expect(q('[data-testid="cm-overlay"]')).not.toBeNull();
-    click(q('.cm-bld[data-building="library"]')!);
-    expect(q('[data-testid="cm-card"]')).not.toBeNull();
-    esc(q('[data-testid="cm-card"]')!);
-    expect(q('[data-testid="cm-card"]')).toBeNull();
-    expect(q('[data-testid="cm-overlay"]')).not.toBeNull();
-    esc(q('.cm-bld[data-building="library"]')!);
-    expect(q('[data-testid="cm-overlay"]')).toBeNull();
-    expect(document.activeElement).toBe(opener);
-  });
-
-  it('following a link out of a card closes the overlay', async () => {
+describe('one map (WP-1)', () => {
+  it('opening the map from a page goes to the campus home; Esc closes the open card and the side panel stays', async () => {
     mockAudience = 'member';
     await mount();
     click(q('[data-testid="open-map"]')!);
-    click(q('.cm-bld[data-building="library"]')!);
-    click(q('[data-testid="cm-card"] a.cm-room')!);
+    await settle();
+    expect(where.path).toBe('/portal/campus');
+    expect(q('[data-testid="cm-home"]')).not.toBeNull();
     expect(q('[data-testid="cm-overlay"]')).toBeNull();
+    click(q('.cm-bld[data-building="library"]')!);
+    await settle();
+    expect(q('[data-testid="cm-card"]')).not.toBeNull();
+    expect(q('[data-testid="cm-concierge"]')).not.toBeNull();
+    esc(q('[data-testid="cm-card"]')!);
+    await settle();
+    expect(q('[data-testid="cm-card"]')).toBeNull();
+    expect(q('[data-testid="cm-concierge"]')!.hasAttribute('hidden')).toBe(false);
+    expect(document.activeElement?.getAttribute('data-building')).toBe('library');
+  });
+
+  it('following a room link out of a card on the home opens that page', async () => {
+    mockAudience = 'member';
+    await mount();
+    click(q('[data-testid="open-map"]')!);
+    await settle();
+    click(q('.cm-bld[data-building="library"]')!);
+    await settle();
+    const room = q('[data-testid="cm-card"] a.cm-room')!;
+    const href = room.getAttribute('href');
+    click(room);
+    await settle();
+    expect(where.path).toBe(href);
   });
 });
 

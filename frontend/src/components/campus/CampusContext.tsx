@@ -13,6 +13,7 @@ import { useParticipantAuth } from '../../contexts/ParticipantAuthContext';
 import type { BuildingId } from './campusMap';
 import { CampusSettings, CampusSettingsView, readCampusSettings, writeCampusSettings } from './campusSettings';
 import { useEffectiveReduceMotion } from './useEffectiveReduceMotion';
+import { readParticipant } from '../../pages/portal/today/shellUtils';
 import './campusTokens.css'; // C11: contrast tokens on :root; the provider wraps every portal route, so every campus surface has them
 
 /**
@@ -46,7 +47,20 @@ export interface CampusState {
   layer: CampusLayer;
   /** Building the map should walk to when it opens, if any. */
   mapFocus: BuildingId | null;
-  openMap: (focus?: BuildingId) => void;
+  /** WP-1: how the campus home takes mapFocus: walk there, or stand inside it at once (Step outside from a page). */
+  mapHow: MapHow;
+  /** WP-1: every map request lands on the campus home (/portal/campus), which acknowledges it with ackMap. */
+  openMap: (focus?: BuildingId, how?: MapHow) => void;
+  ackMap: () => void;
+  /** WP-1: the building you are at (kept for the browser session, so a page visit does not send you back to the gate). */
+  here: BuildingId | null;
+  setHere: (id: BuildingId | null) => void;
+  /** WP-1: the tour's progress for this account (localStorage): where an unfinished tour stopped, and whether it was finished. */
+  tourProgress: TourProgress;
+  /** Starts the tour at stop `from` (Resume passes the paused stop). */
+  resumeTour: (from: number) => void;
+  /** The last stop is done: the tour counts as taken. */
+  finishTour: () => void;
   openList: () => void;
   closeLayer: () => void;
   /** C4: who is in each building (null until the first read), and whether the last read failed. */
@@ -91,6 +105,19 @@ export interface CampusState {
 export interface PersonCardTarget { person: CampusPerson; buildingId: BuildingId }
 
 export type CampusLayer = 'none' | 'map' | 'list';
+export type MapHow = 'walk' | 'inside';
+export interface TourProgress { paused: number | null; toured: boolean }
+export const HERE_KEY = 'colaberry.campus.here';
+export const tourKey = (): string => `colaberry.campus.tour.${readParticipant().email || 'anon'}`;
+function readTour(): TourProgress {
+  try {
+    const v = JSON.parse(window.localStorage.getItem(tourKey()) || 'null');
+    if (v && typeof v === 'object') return { paused: typeof v.paused === 'number' ? v.paused : null, toured: v.toured === true };
+  } catch { /* nothing stored */ }
+  return { paused: null, toured: false };
+}
+function writeTour(p: TourProgress): void { try { window.localStorage.setItem(tourKey(), JSON.stringify(p)); } catch { /* no storage */ } }
+function readHere(): BuildingId | null { try { return (window.sessionStorage.getItem(HERE_KEY) as BuildingId | null) || null; } catch { return null; } }
 export interface DoorRect { left: number; top: number; width: number; height: number }
 export type DoorState =
   | { phase: 'in'; route: string; from: DoorRect | null; id: number }
@@ -100,7 +127,8 @@ const noop = () => { /* no provider */ };
 const OFF: CampusState = {
   enabled: false, ready: false, active: false,
   settings: { nav: 'campus', workplaceNames: false, motion: 'device', reduceMotion: false },
-  updateSettings: noop, layer: 'none', mapFocus: null, openMap: noop, openList: noop, closeLayer: noop,
+  updateSettings: noop, layer: 'none', mapFocus: null, mapHow: 'walk', openMap: noop, ackMap: noop, here: null, setHere: noop,
+  tourProgress: { paused: null, toured: false }, resumeTour: noop, finishTour: noop, openList: noop, closeLayer: noop,
   presence: null, presenceError: false, door: null, enterThroughDoor: noop, stepOutside: noop, clearDoor: noop,
   staffDesks: [], staffDesksError: false, personCard: null, openPersonCard: noop, closePersonCard: noop,
   dmToast: null, dismissDmToast: noop, holdDmToast: noop, releaseDmToast: noop, planStops: null, tourIndex: null, startTour: noop, setTourIndex: noop, endTour: noop,
@@ -132,16 +160,36 @@ export function CampusProvider({ children }: { children?: React.ReactNode }): Re
   const [layer, setLayer] = useState<CampusLayer>('none');
   const [personCard, setPersonCard] = useState<PersonCardTarget | null>(null); // C5; closing the map closes it too
   const [mapFocus, setMapFocus] = useState<BuildingId | null>(null);
-  const openMap = useCallback((focus?: BuildingId) => { setMapFocus(focus ?? null); setLayer('map'); }, []);
+  const [mapHow, setMapHow] = useState<MapHow>('walk');
+  const openMap = useCallback((focus?: BuildingId, how: MapHow = 'walk') => { setMapFocus(focus ?? null); setMapHow(how); setLayer('map'); }, []);
+  const ackMap = useCallback(() => { setLayer((l) => (l === 'map' ? 'none' : l)); setMapFocus(null); }, []);
   const openList = useCallback(() => setLayer('list'), []);
+  const [here, setHereState] = useState<BuildingId | null>(() => readHere());
+  const setHere = useCallback((id: BuildingId | null) => {
+    setHereState(id);
+    try { if (id) window.sessionStorage.setItem(HERE_KEY, id); else window.sessionStorage.removeItem(HERE_KEY); } catch { /* no storage */ }
+  }, []);
+  const [tourProgress, setTourProgress] = useState<TourProgress>(() => readTour());
+  const saveTour = useCallback((p: TourProgress) => { setTourProgress(p); writeTour(p); }, []);
   const [tourIndex, setTourIndexState] = useState<number | null>(null);
+  // Leaving a tour before its end pauses it where it was (Resume picks it up there), rather than forgetting it.
+  const tourRef = React.useRef<number | null>(null);
+  tourRef.current = tourIndex;
+  const pauseTour = useCallback(() => {
+    if (tourRef.current !== null) saveTour({ ...readTour(), paused: tourRef.current });
+    setTourIndexState(null);
+  }, [saveTour]);
   const [lockerOpen, setLockerOpen] = useState(false);
-  const closeLayer = useCallback(() => { setLayer('none'); setMapFocus(null); setPersonCard(null); setTourIndexState(null); setLockerOpen(false); }, []);
+  const closeLayer = useCallback(() => { setLayer('none'); setMapFocus(null); setPersonCard(null); pauseTour(); setLockerOpen(false); }, [pauseTour]);
   const openLocker = useCallback(() => { setPersonCard(null); setTourIndexState(null); setLockerOpen(true); setLayer('map'); }, []);
   const closeLocker = useCallback(() => setLockerOpen(false), []);
-  const startTour = useCallback(() => { setPersonCard(null); setMapFocus(null); setLockerOpen(false); setTourIndexState(0); setLayer('map'); }, []);
+  const resumeTour = useCallback((from: number) => {
+    setPersonCard(null); setMapFocus(null); setLockerOpen(false); setTourIndexState(Math.max(0, from)); setLayer('map');
+  }, []);
+  const startTour = useCallback(() => resumeTour(0), [resumeTour]);
   const setTourIndex = useCallback((i: number) => setTourIndexState(Math.max(0, i)), []);
-  const endTour = useCallback(() => setTourIndexState(null), []);
+  const endTour = pauseTour;
+  const finishTour = useCallback(() => { saveTour({ paused: null, toured: true }); setTourIndexState(null); }, [saveTour]);
 
   const active = enabled && stored.nav === 'campus';
   const reduceMotion = useEffectiveReduceMotion(stored.motion, active);
@@ -169,9 +217,9 @@ export function CampusProvider({ children }: { children?: React.ReactNode }): Re
   const closePersonCard = useCallback(() => setPersonCard(null), []);
 
   const value = useMemo<CampusState>(
-    () => ({ enabled, ready, settings, active, updateSettings, layer, mapFocus, openMap, openList, closeLayer, presence, presenceError,
+    () => ({ enabled, ready, settings, active, updateSettings, layer, mapFocus, mapHow, openMap, ackMap, here, setHere, tourProgress, resumeTour, finishTour, openList, closeLayer, presence, presenceError,
       door, enterThroughDoor, stepOutside, clearDoor, staffDesks, staffDesksError, personCard, openPersonCard, closePersonCard, dmToast, dismissDmToast, holdDmToast, releaseDmToast, planStops, tourIndex, startTour, setTourIndex, endTour, look, lookError, saveLook, lockerOpen, openLocker, closeLocker }),
-    [enabled, ready, settings, active, updateSettings, layer, mapFocus, openMap, openList, closeLayer, presence, presenceError,
+    [enabled, ready, settings, active, updateSettings, layer, mapFocus, mapHow, openMap, ackMap, here, setHere, tourProgress, resumeTour, finishTour, openList, closeLayer, presence, presenceError,
       door, enterThroughDoor, stepOutside, clearDoor, staffDesks, staffDesksError, personCard, openPersonCard, closePersonCard, dmToast, dismissDmToast, holdDmToast, releaseDmToast, planStops, tourIndex, startTour, setTourIndex, endTour, look, lookError, saveLook, lockerOpen, openLocker, closeLocker],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

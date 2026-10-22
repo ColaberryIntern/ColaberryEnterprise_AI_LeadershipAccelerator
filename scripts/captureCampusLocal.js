@@ -74,8 +74,11 @@ async function runFidelity(browser) {
           for (const s of (view.steps ? view.steps(account) : [])) {
             if (s.click) { await page.locator(s.click).first().click({ timeout: 10_000 }); await page.waitForTimeout(900); }
             if (s.evaluate) { await page.evaluate(s.evaluate); await page.waitForTimeout(900); }
+            if (s.wait) await page.waitForTimeout(s.wait);
           }
           for (const id of view.required(account, size.name)) if (!(await visibleBox(page, id))) row.missing.push(id);
+          // WP-1: a view may assert a page fact (the camera back on the whole campus, the URL after Step outside).
+          if (view.assert) { const why = await page.evaluate(view.assert(account, size.name)); if (why) row.missing.push(`assert: ${why}`); }
           for (const [k, id] of Object.entries(REGIONS)) { const b = await visibleBox(page, id); if (b) row.regions[k] = b; }
         } catch (e) {
           row.error = e.message.split('\n')[0];
@@ -122,9 +125,10 @@ async function runFidelity(browser) {
           entries.push({ audience, size: size.name, view: 'home', ...(await safeScreenshot(page, home)) });
 
           await page.click(size.name === 'desktop' ? '[data-testid="cm-open-map"]' : 'nav.cm-tabbar button');
-          await page.waitForSelector('[data-testid="cm-overlay"]', { timeout: 15_000 });
+          // WP-1: the map is the campus home (one map), not an overlay on the page.
+          await page.waitForSelector('[data-testid="cm-home"]', { timeout: 15_000 });
           const sig = SIGNATURE[audience];
-          await page.locator(`[data-testid="cm-overlay"] g[data-building="${sig.building}"]`).click();
+          await page.locator(`.cm-home g[data-building="${sig.building}"]`).click();
           await page.waitForSelector(sig.check, { timeout: 15_000 });
           await page.waitForTimeout(300);
           const map = path.join(OUT, `${audience}-${size.name}-map.png`);

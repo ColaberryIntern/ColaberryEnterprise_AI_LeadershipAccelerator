@@ -1,12 +1,13 @@
 /**
- * C7 guided tour UI: "Take the tour" (side column and map bar) opens the map on stop 1; Next / Back / Finish / Done / End; the
- * avatar walks to each stop; the tour card replaces the building card; Esc ends the tour, not the map; closing the map ends it;
- * staff get no tour; member and business tours never call the server.
+ * C7 guided tour UI, on WP-1's one map: "Take the tour" (the page's side column, or the home's side panel) lands on the campus
+ * home on stop 1; Next / Back / Finish / Done / End; the avatar walks to each stop; the tour card replaces the building card; End
+ * tour and Esc pause the tour (Resume picks it up), Done finishes it; leaving the home pauses it; staff get no tour; member and
+ * business tours never call the server.
  */
 import React from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { act } from 'react-dom/test-utils';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, useNavigate } from 'react-router-dom';
 
 let mockAudience: 'member' | 'explorer' | 'business' | 'staff' = 'member';
 let tourPosts = 0;
@@ -16,14 +17,19 @@ jest.mock('../campusApi', () => ({
   fetchCampusPresence: () => Promise.resolve({}), postCampusHere: () => Promise.resolve(), isReadOnlySession: () => false,
   postTourComplete: () => { tourPosts += 1; return Promise.resolve({ handoff: true, reason: 'created' }); },
 }));
-jest.mock('../../../services/onboardingApi', () => ({ fetchPortalFlags: () => Promise.resolve({ today_redesign: true }) }));
+// WP-1: the campus home renders here too; its own services are mocked (no network). The suite's flag stays on.
+jest.mock('../../../services/onboardingApi', () => {
+  const m = require('./testEnv/homeServiceMocks').onboardingApi(jest.requireActual('../../../services/onboardingApi'));
+  return { ...m, fetchPortalFlags: () => Promise.resolve({ today_redesign: true }) };
+});
+jest.mock('../../../services/communityApi', () => require('./testEnv/homeServiceMocks').communityApi(jest.requireActual('../../../services/communityApi')));
 jest.mock('../useCampusView', () => {
   const actual = jest.requireActual('../useCampusView');
   return { ...actual, useCampusView: () => actual.campusViewFor(mockAudience, { isStaff: mockAudience === 'staff', hasFullAccess: true, isExplorer: mockAudience === 'explorer' }) };
 });
 
 // eslint-disable-next-line import/first
-import { CampusProvider, useCampus } from '../CampusContext';
+import { CampusProvider, useCampus, tourKey } from '../CampusContext';
 // eslint-disable-next-line import/first
 import CampusLayers from '../CampusLayers';
 // eslint-disable-next-line import/first
@@ -37,49 +43,60 @@ import { doorOf } from '../CampusWorldMap';
 // eslint-disable-next-line import/first
 import { ParticipantAuthProvider } from '../../../contexts/ParticipantAuthContext';
 // eslint-disable-next-line import/first
-import { PARTICIPANT_TOKEN_KEY } from '../../../utils/participantToken';
+import { WithCampusHome, skipGate, signIn, where, Where } from './testEnv/WithCampusHome';
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 Element.prototype.scrollIntoView = Element.prototype.scrollIntoView || (() => undefined);
 
+type Go = (to: string) => void;
+function Capture(): null {
+  const c = useCampus();
+  const navigate = useNavigate();
+  (window as unknown as { __campus: ReturnType<typeof useCampus>; __go: Go }).__campus = c;
+  (window as unknown as { __go: Go }).__go = navigate;
+  return null;
+}
 function Gated(): React.ReactElement | null {
   const c = useCampus();
-  (window as unknown as { __campus: ReturnType<typeof useCampus> }).__campus = c;
   return c.active ? <><CampusNav active="/portal/library" /><CampusLayers /></> : null;
 }
 const campus = () => (window as unknown as { __campus: ReturnType<typeof useCampus> }).__campus;
+const go = (to: string) => (window as unknown as { __go: Go }).__go(to);
 
 let container: HTMLDivElement;
 let root: Root;
-const flush = async () => { for (let i = 0; i < 6; i++) await act(async () => { await Promise.resolve(); }); };
+const flush = async () => { for (let i = 0; i < 8; i++) await act(async () => { await Promise.resolve(); }); };
 async function mount(): Promise<void> {
   window.localStorage.setItem(CAMPUS_SETTINGS_KEY, JSON.stringify({ nav: 'campus', workplaceNames: false, reduceMotion: true }));
-  window.localStorage.setItem(PARTICIPANT_TOKEN_KEY, 'h.eyJlbWFpbCI6ImxlYXJuZXJAZXhhbXBsZS5jb20ifQ.s'); // gitleaks:allow (fake, unsigned)
+  skipGate();
+  signIn();
   container = document.createElement('div');
   document.body.appendChild(container);
   await act(async () => {
     root = createRoot(container);
-    root.render(<MemoryRouter initialEntries={['/portal/library']}><ParticipantAuthProvider><CampusProvider><Gated /></CampusProvider></ParticipantAuthProvider></MemoryRouter>);
+    root.render(<MemoryRouter initialEntries={['/portal/library']}><ParticipantAuthProvider><CampusProvider><Where /><Capture /><WithCampusHome><Gated /></WithCampusHome></CampusProvider></ParticipantAuthProvider></MemoryRouter>);
   });
   await flush();
 }
 beforeEach(() => { mockAudience = 'member'; tourPosts = 0; });
-afterEach(() => { act(() => root.unmount()); container.remove(); window.localStorage.clear(); document.body.innerHTML = ''; });
+afterEach(() => { act(() => root.unmount()); container.remove(); window.localStorage.clear(); window.sessionStorage.clear(); document.body.innerHTML = ''; });
 
 const q = (id: string) => container.querySelector(`[data-testid="${id}"]`) as HTMLElement | null;
 const click = async (id: string) => { await act(async () => { q(id)!.click(); }); await flush(); };
 const avatarAt = () => container.querySelector('[data-testid="cm-avatar"]')?.getAttribute('transform') ?? '';
 const doorFor = (id: string) => { const d = doorOf(CAMPUS_BUILDINGS.find((b) => b.id === id)!); return `translate(${d.x} ${d.y})`; };
+const saved = () => JSON.parse(window.localStorage.getItem(tourKey()) || 'null') as { paused: number | null; toured: boolean } | null;
 
 // C11b: the illustrated map is ~5x the DOM of the C2 outlines (377 vs 77 nodes; trees, paths, windows), and these suites mount
 // the whole campus (up to three maps) and some run axe over it; a cold first render under parallel jest can pass 5 s.
 jest.setTimeout(15000);
 
 describe('starting the tour', () => {
-  it('the side column button opens the map on stop 1 of 9, focus on the stop heading, the avatar at its door', async () => {
+  it('the side column button lands on the campus home on stop 1 of 9, focus on the stop heading, the avatar at its door', async () => {
     await mount();
     await click('cm-tour-start');
-    expect(q('cm-overlay')).not.toBeNull();
+    expect(where.path).toBe('/portal/campus');
+    expect(q('cm-home')).not.toBeNull();
     expect(q('cm-tour-count')?.textContent).toBe('Stop 1 of 9');
     expect(container.querySelector('#cm-tour-h')?.textContent).toBe('Classroom');
     expect(document.activeElement?.id).toBe('cm-tour-h');
@@ -88,13 +105,16 @@ describe('starting the tour', () => {
     expect(q('cm-card')).toBeNull(); // the tour card replaces the building card
   });
 
-  it('the map bar offers it too, and hides it while touring', async () => {
+  it('the home side panel offers it too, and shows it running (no Start) while touring', async () => {
     await mount();
     act(() => { campus().openMap(); });
     await flush();
-    await click('cm-tour-start-bar');
+    expect(where.path).toBe('/portal/campus');
+    expect(q('cm-cc-tour')?.getAttribute('data-state')).toBe('idle');
+    await click('cm-cc-tour-start');
     expect(q('cm-tour-count')?.textContent).toBe('Stop 1 of 9');
-    expect(q('cm-tour-start-bar')).toBeNull();
+    expect(q('cm-cc-tour')?.getAttribute('data-state')).toBe('running');
+    expect(q('cm-cc-tour-start')).toBeNull();
   });
 
   it('staff: no tour button anywhere, and starting one shows nothing', async () => {
@@ -103,7 +123,8 @@ describe('starting the tour', () => {
     expect(q('cm-tour-start')).toBeNull();
     act(() => { campus().openMap(); });
     await flush();
-    expect(q('cm-tour-start-bar')).toBeNull();
+    expect(q('cm-home')).not.toBeNull();
+    expect(q('cm-cc-tour')).toBeNull();
     act(() => { campus().startTour(); });
     await flush();
     expect(q('cm-tour')).toBeNull();
@@ -125,7 +146,7 @@ describe('moving through it', () => {
     expect(avatarAt()).toContain(doorFor('lecture'));
   });
 
-  it('member: the last stop says Finish, then "That\'s the tour" with no server call; Done ends the tour and keeps the map', async () => {
+  it('member: the last stop says Finish, then "That\'s the tour" with no server call; Done finishes the tour and stays on the home', async () => {
     await mount();
     await click('cm-tour-start');
     for (let i = 0; i < 8; i++) await click('cm-tour-next');
@@ -136,7 +157,10 @@ describe('moving through it', () => {
     expect(q('cm-tour-optin')).toBeNull();
     await click('cm-tour-done');
     expect(campus().tourIndex).toBeNull();
-    expect(q('cm-overlay')).not.toBeNull();
+    expect(campus().tourProgress).toEqual({ paused: null, toured: true });
+    expect(saved()).toEqual({ paused: null, toured: true });
+    expect(q('cm-cc-tour')?.getAttribute('data-state')).toBe('done');
+    expect(where.path).toBe('/portal/campus');
     expect(tourPosts).toBe(0);
   });
 
@@ -168,28 +192,48 @@ describe('moving through it', () => {
 });
 
 describe('ending it', () => {
-  it('End tour stops the tour and keeps the map open', async () => {
+  it('End tour pauses the tour on its stop, stays on the home, and Resume picks it up there', async () => {
     await mount();
     await click('cm-tour-start');
+    await click('cm-tour-next');
     await click('cm-tour-stop');
     expect(q('cm-tour')).toBeNull();
-    expect(q('cm-overlay')).not.toBeNull();
+    expect(where.path).toBe('/portal/campus');
+    expect(campus().tourProgress.paused).toBe(1);
+    expect(saved()).toEqual({ paused: 1, toured: false });
+    expect(q('cm-cc-tour')?.getAttribute('data-state')).toBe('paused');
+    await click('cm-cc-tour-resume');
+    expect(q('cm-tour-count')?.textContent).toBe('Stop 2 of 9');
   });
 
-  it('Esc ends the tour, not the map', async () => {
+  it('the side panel End tour pauses it too', async () => {
+    await mount();
+    await click('cm-tour-start');
+    await click('cm-cc-tour-end');
+    expect(q('cm-tour')).toBeNull();
+    expect(campus().tourProgress.paused).toBe(0);
+  });
+
+  it('Esc ends (pauses) the tour and stays on the home', async () => {
     await mount();
     await click('cm-tour-start');
     await act(async () => { q('cm-tour')!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); });
     await flush();
     expect(q('cm-tour')).toBeNull();
-    expect(q('cm-overlay')).not.toBeNull();
+    expect(campus().tourProgress.paused).toBe(0);
+    expect(where.path).toBe('/portal/campus');
+    expect(q('cm-home')).not.toBeNull();
   });
 
-  it('closing the map ends the tour', async () => {
+  it('leaving the home pauses the tour', async () => {
     await mount();
     await click('cm-tour-start');
-    act(() => { campus().closeLayer(); });
+    await click('cm-tour-next');
+    await act(async () => { go('/portal/library'); });
+    await act(async () => { await new Promise((r) => setTimeout(r, 10)); }); // the home pauses one tick after it unmounts
     await flush();
+    expect(where.path).toBe('/portal/library');
     expect(campus().tourIndex).toBeNull();
+    expect(campus().tourProgress.paused).toBe(1);
   });
 });

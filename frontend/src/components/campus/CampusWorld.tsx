@@ -13,12 +13,16 @@ import { buildingName } from './campusMap';
 import ExplorerPath from './ExplorerPath';
 import { explorerPath } from './campusPath';
 import type { Equipped } from './campusGear';
-import type { InsetsOf } from './useCampusCamera';
+import type { CameraApi, InsetsOf } from './useCampusCamera';
+import type { Cam } from './campusCamera';
+import type { MutableRefObject } from 'react';
+import { GATE } from './art/grounds';
 import CampusZoomControls from './CampusZoomControls';
 import { happeningAt, zoneLabelOf } from './campusArrival';
 import { buildingLine } from './tourSteps';
 import CampusInside from './interior/CampusInside';
-import { useMapStage, useDoorReveal } from './useWorldStage';
+import { useMapStage, useDoorReveal, useReturnRecenter } from './useWorldStage';
+import type { Framed } from './useWorldStage';
 
 /**
  * Map + building card, with the keyboard contract (Campus C2):
@@ -63,13 +67,19 @@ export interface CampusWorldProps {
   /** C11b: screen px the caller's panels cover (the campus home's concierge and top bar), for the camera's whole-campus view. */
   insets?: InsetsOf;
   /** C11b: walk to this building now, from outside the map (the home's pulse, plan and search). A new seq means a new walk. */
-  walkTo?: { id: BuildingId; seq: number } | null;
+  walkTo?: { id: BuildingId; seq: number; instant?: boolean } | null;
+  /** WP-1: a handle on the camera for the caller (the home's gate fly-out), where the avatar starts (the building you were last at),
+   *  the first camera frame (the gate close-up), and a request to close every card and show the whole campus (a new seq each time). */
+  cameraRef?: MutableRefObject<CameraApi | null>;
+  startAt?: BuildingId | null;
+  startCam?: Cam;
+  recenter?: number;
   /** C11b: told whenever a card opens or closes (a building card, a person card, the tour, a panel), with the building whose card is
    *  open (null for the others), so the home can tuck its concierge and say where you are. */
   onCard?: (state: { open: boolean; building: BuildingId | null }) => void;
 }
 
-export default function CampusWorld({ buildings, audience, hasFullAccess, accessOf: accessOfProp, isExplorer = false, workplaceNames, reduceMotion, initialTarget, onExit, onNavigate, presence, presenceError = false, onEnterRoom, staffDesks, personCard, onOpenPerson, onClosePerson, onAir, route, tour, panel, ownGear, insets, walkTo, onCard }: CampusWorldProps): React.ReactElement {
+export default function CampusWorld({ buildings, audience, hasFullAccess, accessOf: accessOfProp, isExplorer = false, workplaceNames, reduceMotion, initialTarget, onExit, onNavigate, presence, presenceError = false, onEnterRoom, staffDesks, personCard, onOpenPerson, onClosePerson, onAir, route, tour, panel, ownGear, insets, walkTo, onCard, cameraRef, startAt, startCam, recenter }: CampusWorldProps): React.ReactElement {
   const counts = useMemo(() => {
     const out: Record<string, number> = {};
     if (presence) for (const [id, a] of Object.entries(presence)) out[id] = a.count;
@@ -93,7 +103,7 @@ export default function CampusWorld({ buildings, audience, hasFullAccess, access
     if (id) els.current.get(id)?.focus();
   }, [open]);
 
-  const [walkRequest, setWalkRequest] = useState<{ id: BuildingId; seq: number } | null>(null);
+  const [walkRequest, setWalkRequest] = useState<{ id: BuildingId; seq: number; instant?: boolean } | null>(null);
   const tourTarget = tour?.target ?? null;
   useEffect(() => {
     if (tourTarget) { setOpen(null); revealBuilding(tourTarget); setWalkRequest((w) => ({ id: tourTarget, seq: (w?.seq ?? 0) + 1 })); }
@@ -115,11 +125,12 @@ export default function CampusWorld({ buildings, audience, hasFullAccess, access
   };
 
   // C11b staging: the camera, the desks and your initials for the map, and the door reveal (useWorldStage).
-  const { camApi, camera, mapDesks, meInitials } = useMapStage(staffDesks, audience, insets);
+  const framedRef = useRef<Framed>(null);
+  const { camApi, camera, mapDesks, meInitials } = useMapStage(staffDesks, audience, insets, { camRef: cameraRef, framedRef, startCam });
   const door = useDoorReveal(onEnterRoom, reduceMotion);
   const lastOutside = useRef(0);
   useEffect(() => {
-    if (walkTo && walkTo.seq !== lastOutside.current) { lastOutside.current = walkTo.seq; setOpen(null); setWalkRequest((w) => ({ id: walkTo.id, seq: (w?.seq ?? 0) + 1 })); }
+    if (walkTo && walkTo.seq !== lastOutside.current) { lastOutside.current = walkTo.seq; setOpen(null); setWalkRequest((w) => ({ id: walkTo.id, seq: (w?.seq ?? 0) + 1, instant: walkTo.instant })); }
   }, [walkTo]);
 
   // "Go somewhere else": close the card and put the caret in the campus search (the home's top bar, or a page banner).
@@ -131,6 +142,9 @@ export default function CampusWorld({ buildings, audience, hasFullAccess, access
   const enterRoom = (r: string) => { if (b) door.enter(r, b.id, els.current.get(b.id)?.getBoundingClientRect() ?? null); };
   const anyCard = !!tour || !!panel || !!personCard || !!b;
   const cardBuilding = !tour && !panel && !personCard && b ? b.id : null;
+  // WP-1: the building a resize keeps framed (the open card's); every return to the campus recenters (useReturnRecenter).
+  framedRef.current = b && !tour && !panel && !personCard ? (b.kind === 'gate' ? { ...GATE, h: 50 } : { x: b.pos.x, y: b.pos.y, h: b.pos.h }) : null;
+  useReturnRecenter(camApi, anyCard, recenter, () => { setOpen(null); if (personCard) onClosePerson?.(); });
   const onCardRef = useRef(onCard); onCardRef.current = onCard;
   useEffect(() => { onCardRef.current?.({ open: anyCard, building: cardBuilding }); }, [anyCard, cardBuilding]);
   return (
@@ -138,7 +152,7 @@ export default function CampusWorld({ buildings, audience, hasFullAccess, access
       <CampusWorldMap buildings={buildings} accessOf={accessOf} workplaceNames={workplaceNames} reduceMotion={reduceMotion}
         initialTarget={initialTarget} onArrive={onArrive} buildingRef={registerEl} counts={presenceError ? undefined : counts}
         people={people} onPickPerson={onOpenPerson ? pickPerson : undefined} walkRequest={walkRequest} onAir={onAir} route={route} ownGear={ownGear} showOpen={audience === 'explorer'} camera={camera}
-        desks={mapDesks} me={meInitials ? { initials: meInitials } : null} />
+        desks={mapDesks} me={meInitials ? { initials: meInitials } : null} startAt={startAt} />
       <CampusZoomControls apiRef={camApi} />
       {tour && tour.card}
       {!tour && panel && panel.card}

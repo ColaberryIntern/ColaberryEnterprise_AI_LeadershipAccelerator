@@ -1,7 +1,7 @@
 /**
  * C9 My look: earned items can be worn (one per slot; clicking what you wear takes it off), locked ones say their points; every
  * change saves the complete set; a failed save keeps the previous look and says why; the copy never says "free" or "buy". The
- * locker opens from the side column and the map bar, and your avatar wears what you saved.
+ * locker opens from the side column (or the list view) onto WP-1's one map, the campus home, and your avatar wears what you saved.
  */
 import React from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -26,7 +26,12 @@ jest.mock('../campusApi', () => ({
   fetchLook: () => (mockFetchFails ? Promise.reject(new Error('down')) : Promise.resolve(mockLook)),
   putLook: (eq: Record<string, string | null>) => { puts.push(eq); return mockPut(eq); },
 }));
-jest.mock('../../../services/onboardingApi', () => ({ fetchPortalFlags: () => Promise.resolve({ today_redesign: true }) }));
+// WP-1: the campus home renders here too; its own services are mocked (no network). The suite's flag stays on.
+jest.mock('../../../services/onboardingApi', () => {
+  const m = require('./testEnv/homeServiceMocks').onboardingApi(jest.requireActual('../../../services/onboardingApi'));
+  return { ...m, fetchPortalFlags: () => Promise.resolve({ today_redesign: true }) };
+});
+jest.mock('../../../services/communityApi', () => require('./testEnv/homeServiceMocks').communityApi(jest.requireActual('../../../services/communityApi')));
 jest.mock('../useCampusView', () => {
   const actual = jest.requireActual('../useCampusView');
   return { ...actual, useCampusView: () => actual.campusViewFor('member', { isStaff: false, hasFullAccess: true, isExplorer: false }) };
@@ -43,28 +48,32 @@ import { CAMPUS_SETTINGS_KEY } from '../campusSettings';
 // eslint-disable-next-line import/first
 import { ParticipantAuthProvider } from '../../../contexts/ParticipantAuthContext';
 // eslint-disable-next-line import/first
-import { PARTICIPANT_TOKEN_KEY } from '../../../utils/participantToken';
+import { WithCampusHome, skipGate, signIn, where, Where } from './testEnv/WithCampusHome';
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
+function Capture(): null {
+  (window as unknown as { __campus: ReturnType<typeof useCampus> }).__campus = useCampus();
+  return null;
+}
 function Gated(): React.ReactElement | null {
   const c = useCampus();
-  (window as unknown as { __campus: ReturnType<typeof useCampus> }).__campus = c;
   return c.active ? <><CampusNav active="/portal/library" /><CampusLayers /></> : null;
 }
 const campus = () => (window as unknown as { __campus: ReturnType<typeof useCampus> }).__campus;
 
 let container: HTMLDivElement;
 let root: Root;
-const flush = async () => { for (let i = 0; i < 6; i++) await act(async () => { await Promise.resolve(); }); };
+const flush = async () => { for (let i = 0; i < 8; i++) await act(async () => { await Promise.resolve(); }); };
 async function mount(): Promise<void> {
   window.localStorage.setItem(CAMPUS_SETTINGS_KEY, JSON.stringify({ nav: 'campus', workplaceNames: false, reduceMotion: true }));
-  window.localStorage.setItem(PARTICIPANT_TOKEN_KEY, 'h.eyJlbWFpbCI6ImxlYXJuZXJAZXhhbXBsZS5jb20ifQ.s'); // gitleaks:allow (fake, unsigned)
+  skipGate();
+  signIn();
   container = document.createElement('div');
   document.body.appendChild(container);
   await act(async () => {
     root = createRoot(container);
-    root.render(<MemoryRouter initialEntries={['/portal/library']}><ParticipantAuthProvider><CampusProvider><Gated /></CampusProvider></ParticipantAuthProvider></MemoryRouter>);
+    root.render(<MemoryRouter initialEntries={['/portal/library']}><ParticipantAuthProvider><CampusProvider><Where /><Capture /><WithCampusHome><Gated /></WithCampusHome></CampusProvider></ParticipantAuthProvider></MemoryRouter>);
   });
   await flush();
 }
@@ -73,7 +82,7 @@ beforeEach(() => {
   mockPut = async (eq) => ({ ...mockLook, equipped: Object.fromEntries(Object.entries(eq).filter(([, v]) => v)) as Record<string, string> });
   puts.length = 0; mockFetchFails = false;
 });
-afterEach(() => { act(() => root.unmount()); container.remove(); window.localStorage.clear(); document.body.innerHTML = ''; });
+afterEach(() => { act(() => root.unmount()); container.remove(); window.localStorage.clear(); window.sessionStorage.clear(); document.body.innerHTML = ''; });
 
 const q = (id: string) => container.querySelector(`[data-testid="${id}"]`) as HTMLButtonElement | null;
 const click = async (id: string) => { await act(async () => { q(id)!.click(); }); await flush(); };
@@ -83,10 +92,11 @@ const click = async (id: string) => { await act(async () => { q(id)!.click(); })
 jest.setTimeout(15000);
 
 describe('the locker', () => {
-  it('opens from the side column on the map: points, level, earned vs locked', async () => {
+  it('opens from the side column on the campus home: points, level, earned vs locked', async () => {
     await mount();
     await click('cm-look-open');
-    expect(q('cm-overlay')).not.toBeNull();
+    expect(where.path).toBe('/portal/campus');
+    expect(q('cm-home')).not.toBeNull();
     expect(q('cm-look-points')?.textContent).toBe('AI Aware II · 200 points. Gear is earned with points, never bought.');
     expect(q('cm-look-item-cap')?.disabled).toBe(false);
     expect(q('cm-look-item-hoodie')?.disabled).toBe(true);
@@ -123,16 +133,20 @@ describe('the locker', () => {
     expect(q('cm-look-broken')?.textContent).toBe("We can't load your look right now.");
   });
 
-  it('opens from the map bar too; Esc closes the locker, not the map', async () => {
+  it('opens from the list view on the home too; Esc closes the locker and stays on the home', async () => {
     await mount();
     act(() => { campus().openMap(); });
     await flush();
-    await click('cm-look-open-bar');
+    expect(where.path).toBe('/portal/campus');
+    act(() => { campus().openList(); });
+    await flush();
+    await click('cm-list-look');
     expect(q('cm-look')).not.toBeNull();
     await act(async () => { q('cm-look')!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); });
     await flush();
     expect(q('cm-look')).toBeNull();
-    expect(q('cm-overlay')).not.toBeNull();
+    expect(where.path).toBe('/portal/campus');
+    expect(q('cm-home')).not.toBeNull();
   });
 
   it('copy never says "free" or "buy"', async () => {
