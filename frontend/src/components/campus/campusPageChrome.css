@@ -104,3 +104,29 @@
 /* fix round 3: bottom center, clear of the left nav and the right rail */
 .cm-page-hint{left:50%;transform:translateX(-50%);right:auto}
 @media (max-width:760px){ .cm-page-hint{left:10px;right:10px;transform:none} }
+
+/* ---- WP-1: your next steps are never out of reach ---- */
+/* the banner's Next steps button: shown where the rail column cannot be (narrow screens, pages without a rail) */
+.cm-pagebar .cm-steps-btn{order:3;display:none;background:var(--cm-art-in-name-bg);color:var(--cm-art-on-dark);border:1px solid var(--cm-art-pic-muted);border-radius:999px;font-weight:700}
+.cm-pagebar.has-steps .cm-steps-btn{display:inline-flex}
+.cm-steps-drawer{position:fixed;top:0;right:0;bottom:0;width:min(340px,100%);z-index:60;background:var(--cm-art-paper);color:var(--cm-art-ink);overflow:auto;
+  box-shadow:var(--cm-art-shadow);padding-top:44px}
+.cm-steps-drawer .cm-rail{border-bottom:0}
+.cm-steps-x{position:absolute;top:8px;right:8px;width:34px;height:34px;border-radius:50%;border:1px solid var(--cm-art-line);background:var(--cm-art-card);font-size:20px;color:var(--cm-art-ink);cursor:pointer}
+.cm-steps-x:focus-visible{outline:3px solid var(--cm-art-red);outline-offset:2px}
+/* the rail keeps its column even with the contacts collapsed (they stay avatar-only beneath it) */
+@media (min-width:1201px){
+  .te-shell.contacts-collapsed:has(.te-contacts .cm-rail){grid-template-columns:248px 1fr 300px}
+  .te-shell.collapsed.contacts-collapsed:has(.te-contacts .cm-rail){grid-template-columns:66px 1fr 300px}
+}
+/* too narrow for the column (it shrinks to avatars at 1200 px and goes at 820 px): the drawer instead */
+@media (max-width:1200px){ .cm-pagebar .cm-steps-btn{display:inline-flex} .te-contacts .cm-rail{display:none} }
+/* the legacy page layout: the campus side nav, the page, and the rail (prototype .pg-side / .pg-main / .pg-rail) */
+.cm-scoped-grid{display:grid;grid-template-columns:240px minmax(0,1fr) 280px;gap:20px;align-items:start}
+.cm-scoped-side,.cm-scoped-rail{position:sticky;top:12px;max-height:calc(100vh - 24px);overflow:auto;background:var(--cm-art-paper);border:1px solid var(--cm-art-line);border-radius:14px}
+.cm-scoped-side .cm-nav{height:auto}
+@media (max-width:1200px){ .cm-scoped-grid{grid-template-columns:minmax(0,1fr)} .cm-scoped-side,.cm-scoped-rail{display:none} }
+/* in the narrow rail the tour card and Up next stack (text above, button below) */
+.cm-rail .cm-tour-offer{flex-direction:column;align-items:flex-start;gap:8px;margin:0 0 14px}
+.cm-rail .cm-tour-offer .d{font-size:12.5px}
+.cm-rail .cm-next-row{flex-wrap:wrap}

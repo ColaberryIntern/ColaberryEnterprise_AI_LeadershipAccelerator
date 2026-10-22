@@ -187,25 +187,31 @@ describe('the campus home', () => {
     await mount('/portal/campus'); // afterEach unmounts this one
   });
 
-  it('"open the map" on the home walks here instead of opening the overlay', async () => {
+  it('"open the map" on the home walks here on this map (WP-1: the only map)', async () => {
     await mount('/portal/campus');
     act(() => { campus.openMap('library'); });
     await flush();
-    expect(q('[data-testid="cm-overlay"]')).toBeNull();
+    expect(where).toBe('/portal/campus');
+    expect(q('[data-testid="cm-home"]')).not.toBeNull();
     expect(q('[data-testid="cm-cc-where"]')!.textContent).toBe('At the Library');
   });
 
-  it('arriving opens the arrival panel and tucks the concierge away; closing it brings the concierge back', async () => {
+  it('arriving opens the arrival panel; the concierge stays visible and gets has-card; closing removes has-card', async () => {
     await mount('/portal/campus');
     act(() => { q('[data-testid="cm-bld-commons"]')!.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
     await flush();
     expect(q('[data-testid="cm-card"]')).not.toBeNull();
-    expect((q('[data-testid="cm-concierge"]') as HTMLElement).hidden).toBe(true);
+    const cc = () => q('[data-testid="cm-concierge"]') as HTMLElement;
+    expect(cc().hidden).toBe(false);
+    expect(cc().hasAttribute('hidden')).toBe(false);
+    expect(cc().classList.contains('is-tucked')).toBe(false);
+    expect(cc().classList.contains('has-card')).toBe(true);
     expect(q('[data-testid="cm-cc-where"]')!.textContent).toBe('At the Community Lounge');
     act(() => { (q('[data-testid="cm-arrive-back"]') as HTMLButtonElement).click(); });
     await flush();
     expect(q('[data-testid="cm-card"]')).toBeNull();
-    expect((q('[data-testid="cm-concierge"]') as HTMLElement).hidden).toBe(false);
+    expect(cc().hidden).toBe(false);
+    expect(cc().classList.contains('has-card')).toBe(false);
   });
 
   it('a concierge chip walks to its building', async () => {

@@ -88,7 +88,8 @@ export default function ShellContactsRail({
   return (
       <aside className="te-contacts" aria-label="Cohort contacts">
         {/* C11b: the campus sections (who is in this building, today's plan, help desk); renders nothing unless the campus is active. */}
-        {!contactsCollapsed && <CampusRail />}
+        {/* WP-1: the campus rail shows even with contacts collapsed (campusPageChrome.css keeps its column) */}
+        <CampusRail />
         {panel ? (
           // Role-aware People panel (PEOPLE_PANEL_ROLES_ENABLED=true). When null (flag
           // OFF or fetch error) the legacy cohort-presence rail below renders unchanged.

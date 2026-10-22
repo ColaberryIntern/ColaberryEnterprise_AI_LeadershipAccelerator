@@ -19,6 +19,7 @@ import { doorOf, routeTo, START } from './walkPath';
 import type { Here, Pt } from './walkPath';
 import { useCampusCamera } from './useCampusCamera';
 import type { CameraApi, InsetsOf } from './useCampusCamera';
+import type { Cam } from './campusCamera';
 import './campusMapArt.css';
 
 /**
@@ -52,8 +53,11 @@ export interface CampusMapProps {
   /** C5: named people per building id (tokens beside the building) and what a token click does. Full map only. */
   people?: Partial<Record<string, { shown: CampusPerson[]; more: number }>>;
   onPickPerson?: (p: CampusPerson, buildingId: BuildingId) => void;
-  /** C5: walk to this building now (Walk over). A new seq means a new walk. */
-  walkRequest?: { id: BuildingId; seq: number } | null;
+  /** C5: walk to this building now (Walk over). A new seq means a new walk. `instant` stands you at its door with no walk (coming
+   *  back from a page with Step outside, WP-1). */
+  walkRequest?: { id: BuildingId; seq: number; instant?: boolean } | null;
+  /** WP-1: where the avatar stands when the map mounts (the building you were last at), instead of the gate. */
+  startAt?: BuildingId | null;
   /** C8: buildings whose room is on air now (from broadcast discovery). */
   onAir?: Set<string>;
   /** C9: the learner's OWN equipped set, drawn on their pin (public slots) and, only while it travels, the ride. */
@@ -67,7 +71,8 @@ export interface CampusMapProps {
   /** C11b: your initials, drawn in your pin's head as the prototype does. */
   me?: { initials: string } | null;
   /** C11b: the prototype camera (full map only): panels' insets for framing, and a handle for the zoom buttons. */
-  camera?: { insets?: InsetsOf; focusInsets?: InsetsOf; apiRef?: React.MutableRefObject<CameraApi | null> };
+  camera?: { insets?: InsetsOf; focusInsets?: InsetsOf; apiRef?: React.MutableRefObject<CameraApi | null>;
+    framed?: () => { x: number; y: number; h: number } | null; startCam?: Cam };
 }
 
 // C11 (the map stays light): memoized, so a walking avatar (one state update per frame) does not re-render every building.
@@ -150,12 +155,15 @@ function AvatarPin({ pos, moving, reduceMotion, ownGear, initials }: { pos: Pt; 
   );
 }
 
-export default function CampusWorldMap({ buildings, accessOf, workplaceNames, reduceMotion, compact = false, initialTarget, onArrive, buildingRef, counts, people, onPickPerson, walkRequest, onAir, route, ownGear, showOpen = false, camera, desks, me }: CampusMapProps): React.ReactElement {
-  const [pos, setPos] = useState<Pt>({ x: START.x, y: START.y });
-  const hereRef = useRef<Here>(START);
+export default function CampusWorldMap({ buildings, accessOf, workplaceNames, reduceMotion, compact = false, initialTarget, onArrive, buildingRef, counts, people, onPickPerson, walkRequest, startAt, onAir, route, ownGear, showOpen = false, camera, desks, me }: CampusMapProps): React.ReactElement {
+  // WP-1: you start where you last were (the building's door), else at the gate.
+  const [first] = useState<Here>(() => { const b = startAt ? buildings.find((x) => x.id === startAt) : undefined; return b ? { ...doorOf(b), zone: b.zone } : START; });
+  const [pos, setPos] = useState<Pt>({ x: first.x, y: first.y });
+  const hereRef = useRef<Here>(first);
   const svgRef = useRef<SVGSVGElement>(null);
   const locate = useCallback((id: string) => { const b = buildings.find((x) => x.id === id); return b ? (b.kind === 'gate' ? GATE : { x: b.pos.x, y: b.pos.y }) : null; }, [buildings]);
-  const cam = useCampusCamera(svgRef, { enabled: !compact && !!camera, insets: camera?.insets, focusInsets: camera?.focusInsets, avatarRef: hereRef, locate, reduceMotion, apiRef: camera?.apiRef });
+  const cam = useCampusCamera(svgRef, { enabled: !compact && !!camera, insets: camera?.insets, focusInsets: camera?.focusInsets, avatarRef: hereRef, locate, reduceMotion,
+    apiRef: camera?.apiRef, framed: camera?.framed, startCam: camera?.startCam });
   const raf = useRef<number | null>(null);
   // C9: true only while a walk animates (never with reduce motion or on the compact map): the only time a ride is drawn.
   const [moving, setMoving] = useState(false);
@@ -164,14 +172,14 @@ export default function CampusWorldMap({ buildings, accessOf, workplaceNames, re
   const stop = () => { if (raf.current !== null) { cancelAnimationFrame(raf.current); raf.current = null; } setMoving(false); };
   useEffect(() => stop, []);
 
-  const walkTo = useCallback((id: BuildingId) => {
+  const walkTo = useCallback((id: BuildingId, instant = false) => {
     const b = buildings.find((x) => x.id === id);
     if (!b) return;
     stop();
     if (compact) { onArrive(id); return; }
     const door = doorOf(b);
     const arrive = () => { hereRef.current = { ...door, zone: b.zone }; setAtId(id); cam.focus(b.kind === 'gate' ? { ...GATE, h: 50 } : { x: b.pos.x, y: b.pos.y, h: b.pos.h }); onArrive(id); };
-    if (reduceMotion) { setPos(door); arrive(); return; }
+    if (reduceMotion || instant) { setPos(door); arrive(); return; }
     // A walk cancelled midway starts from where the avatar stands, in the zone it was heading for.
     const from = hereRef.current;
     const pts: Pt[] = [{ x: from.x, y: from.y }, ...routeTo(from, b)];
@@ -197,6 +205,7 @@ export default function CampusWorldMap({ buildings, accessOf, workplaceNames, re
     raf.current = requestAnimationFrame(step);
   }, [buildings, compact, reduceMotion, onArrive, cam]);
 
+  const pick = useCallback((id: BuildingId) => walkTo(id), [walkTo]);
   // One stable pick handler per building, so the memoized token groups do not re-render on every walk frame.
   const pickers = useMemo(() => {
     const out: Partial<Record<BuildingId, (p: CampusPerson) => void>> = {};
@@ -215,7 +224,7 @@ export default function CampusWorldMap({ buildings, accessOf, workplaceNames, re
   }, [initialTarget, walkTo]);
   const lastWalk = useRef(0);
   useEffect(() => {
-    if (walkRequest && walkRequest.seq !== lastWalk.current) { lastWalk.current = walkRequest.seq; walkTo(walkRequest.id); }
+    if (walkRequest && walkRequest.seq !== lastWalk.current) { lastWalk.current = walkRequest.seq; walkTo(walkRequest.id, !!walkRequest.instant); }
   }, [walkRequest, walkTo]);
 
   return (
@@ -227,10 +236,10 @@ export default function CampusWorldMap({ buildings, accessOf, workplaceNames, re
       {buildings.map((b) => (
         <Building key={b.id} b={b} access={accessOf(b)} label={buildingName(b, workplaceNames)} compact={compact} count={counts?.[b.id] ?? 0}
           shown={people?.[b.id]?.shown} onAir={!!onAir?.has(b.id)} here={!compact && atId === b.id} showOpen={showOpen}
-          stop={!compact && route && route.includes(b.id) ? route.indexOf(b.id) : undefined} onPick={walkTo} setRef={buildingRef} />
+          stop={!compact && route && route.includes(b.id) ? route.indexOf(b.id) : undefined} onPick={pick} setRef={buildingRef} />
       ))}
       {live.length > 0 && <LiveFront buildings={live} />}
-      {!compact && desks && desks.length > 0 && <StaffTokens desks={desks} buildings={buildings} onPick={walkTo} />}
+      {!compact && desks && desks.length > 0 && <StaffTokens desks={desks} buildings={buildings} onPick={pick} />}
       {!compact && people && onPickPerson && buildings.map((b) => {
         const t = people[b.id];
         return t ? <PersonTokens key={'t-' + b.id} b={b} shown={t.shown} more={t.more} maxY={WORLD.h} onPick={pickers[b.id]!} /> : null;

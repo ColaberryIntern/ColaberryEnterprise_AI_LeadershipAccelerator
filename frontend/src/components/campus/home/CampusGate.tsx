@@ -41,6 +41,8 @@ export interface GateProps {
   reduceMotion: boolean;
   now: Date;
   onEnter: (tour: boolean) => void;
+  /** WP-1: the doors start to swing (the home starts the camera's fly-out from the gate 900 ms later, as the prototype does). */
+  onOpening?: () => void;
 }
 
 export default function CampusGate(p: GateProps): React.ReactElement {
@@ -53,6 +55,7 @@ export default function CampusGate(p: GateProps): React.ReactElement {
     markGateSeen(p.now);
     if (p.reduceMotion) { p.onEnter(tour); return; }
     setOpening(true);
+    p.onOpening?.();
     timer.current = window.setTimeout(() => p.onEnter(tour), OPEN_MS);
   };
   const greeting = `${greetingFor(p.now.getHours())}${p.firstName ? `, ${p.firstName}` : ''}.`;

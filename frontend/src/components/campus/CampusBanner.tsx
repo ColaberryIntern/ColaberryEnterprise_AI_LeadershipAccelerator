@@ -7,6 +7,7 @@ import { useCampusView } from './useCampusView';
 import { trailFor } from './campusTrail';
 import { shouldStepOutside } from './campusEsc';
 import CampusLive from './CampusLive';
+import CampusRail from './CampusRail';
 import { useCampusOnAir } from './campusOnAir';
 import { nextStop } from './campusPlan';
 import type { BuildingId } from './campusMap';
@@ -39,7 +40,27 @@ function PageHint(): React.ReactElement | null {
   );
 }
 
-export default function CampusBanner(): React.ReactElement {
+/**
+ * WP-1: on screens too narrow for the rail column (and on pages with no rail of their own), the banner's "Next steps" button opens
+ * the same rail as a drawer, so your next steps and the tour are never more than one tap away. Esc or the close button shuts it.
+ */
+function NextStepsDrawer(): React.ReactElement {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button type="button" className="cm-btn is-secondary cm-steps-btn" onClick={() => setOpen(true)} aria-expanded={open} data-testid="cm-steps-open">Next steps</button>
+      {open && (
+        <div className="cm-steps-drawer" role="dialog" aria-modal="true" aria-label="Your next steps" data-testid="cm-steps-drawer"
+          onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); setOpen(false); } }}>
+          <button type="button" className="cm-steps-x" onClick={() => setOpen(false)} aria-label="Close your next steps" autoFocus>×</button>
+          <CampusRail />
+        </div>
+      )}
+    </>
+  );
+}
+
+export default function CampusBanner({ alwaysSteps = false }: { alwaysSteps?: boolean }): React.ReactElement {
   const { settings, presence, presenceError, layer, openMap, stepOutside, enterThroughDoor, planStops } = useCampus();
   const { buildings, accessOf, isExplorer } = useCampusView();
   const { buildings: onAir } = useCampusOnAir();
@@ -60,7 +81,7 @@ export default function CampusBanner(): React.ReactElement {
   if (presence && !presenceError) for (const [id, a] of Object.entries(presence)) counts[id] = a.count;
 
   return (
-    <div className="cm-banner cm-pagebar" data-testid="cm-banner">
+    <div className={`cm-banner cm-pagebar${alwaysSteps ? ' has-steps' : ''}`} data-testid="cm-banner">
       <button type="button" className="cm-banner-mini" onClick={() => openMap(here ?? undefined)} aria-label="Open the campus map">
         <span aria-hidden="true" className="cm-banner-mini-map">
           <CampusWorldMap buildings={buildings} accessOf={accessOf} workplaceNames={settings.workplaceNames}
@@ -93,6 +114,7 @@ export default function CampusBanner(): React.ReactElement {
       <button type="button" className="cm-btn is-secondary cm-step-out" onClick={() => stepOutside(here)} data-testid="cm-step-out">
         Step outside
       </button>
+      <NextStepsDrawer />
       {/* C8: what is on air now (renders nothing when nothing is) */}
       <CampusLive />
       <PageHint />

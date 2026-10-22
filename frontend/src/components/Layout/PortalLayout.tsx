@@ -74,10 +74,12 @@ function PortalLayout() {
       </nav>
 
       <main className="container py-4">
-        <CampusScopedChrome />
-        <div key={location.pathname} className="ws-surface-arrival">
-          <Outlet />
-        </div>
+        {/* WP-1: with the campus on, the page sits between the campus side nav and the rail */}
+        <CampusScopedChrome>
+          <div key={location.pathname} className="ws-surface-arrival">
+            <Outlet />
+          </div>
+        </CampusScopedChrome>
       </main>
       <style>{`
         .ws-surface-arrival { animation: wsFadeIn 220ms ease-out; }

@@ -11,8 +11,9 @@ import { MemoryRouter } from 'react-router-dom';
 
 // C5: the provider reads staff desks and polls the inbox while the campus is on; stubbed so no test touches the network.
 jest.mock('../campusPeopleApi', () => ({ fetchStaffDesks: () => Promise.resolve([]), fetchConversationsQuiet: () => Promise.resolve([]), postWave: () => Promise.resolve({ sent: true, reason: 'sent' }) }));
+// WP-1: the phone Map tab goes to the campus home (/portal/campus), rendered here too; its own services are mocked as well.
 jest.mock('../../../services/onboardingApi', () => ({
-  ...jest.requireActual('../../../services/onboardingApi'),
+  ...require('./testEnv/homeServiceMocks').onboardingApi(jest.requireActual('../../../services/onboardingApi')),
   fetchPoints: () => Promise.reject(new Error('offline in test')),
   fetchSchedule: () => Promise.reject(new Error('offline in test')),
 }));
@@ -31,7 +32,7 @@ jest.mock('../../../services/peoplePanelApi', () => ({
   ...jest.requireActual('../../../services/peoplePanelApi'),
   fetchPeoplePanel: () => Promise.reject(new Error('offline in test')),
 }));
-jest.mock('../../../services/communityApi', () => ({ ...jest.requireActual('../../../services/communityApi'), pingPresence: () => Promise.resolve() }));
+jest.mock('../../../services/communityApi', () => ({ ...require('./testEnv/homeServiceMocks').communityApi(jest.requireActual('../../../services/communityApi')), pingPresence: () => Promise.resolve() }));
 jest.mock('../../../services/dmApi', () => ({ ...jest.requireActual('../../../services/dmApi'), openDm: () => Promise.reject(new Error('offline in test')) }));
 jest.mock('../../../pages/portal/today/useNextLiveSession', () => ({ useNextLiveSession: () => ({ session: null, loading: false }) }));
 jest.mock('../../../pages/portal/useEntitlement', () => ({ useEntitlement: () => ({ isStaff: false, hasFullAccess: true, loading: false }) }));
@@ -64,6 +65,8 @@ import { ParticipantAuthProvider } from '../../../contexts/ParticipantAuthContex
 import { PARTICIPANT_TOKEN_KEY } from '../../../utils/participantToken';
 // eslint-disable-next-line import/first
 import { CAMPUS_SETTINGS_KEY } from '../campusSettings';
+// eslint-disable-next-line import/first
+import { WithCampusHome, skipGate, where, Where } from './testEnv/WithCampusHome';
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -75,13 +78,16 @@ async function mount(opts: { campus: boolean; nav?: 'campus' | 'classic' }): Pro
   // Fake, unsigned test token: its only payload is {"email":"learner@example.com"}. Not a credential.
   window.localStorage.setItem(PARTICIPANT_TOKEN_KEY, 'h.eyJlbWFpbCI6ImxlYXJuZXJAZXhhbXBsZS5jb20ifQ.s'); // gitleaks:allow
   if (opts.nav) window.localStorage.setItem(CAMPUS_SETTINGS_KEY, JSON.stringify({ nav: opts.nav, workplaceNames: false, reduceMotion: true }));
+  skipGate();
   container = document.createElement('div');
   document.body.appendChild(container);
   await act(async () => {
     root = createRoot(container);
     root.render(
       <MemoryRouter initialEntries={['/portal/library']}>
-        <ParticipantAuthProvider><CampusProvider><PortalShell><div>Page body</div></PortalShell></CampusProvider></ParticipantAuthProvider>
+        <ParticipantAuthProvider><CampusProvider><Where />
+          <WithCampusHome><PortalShell><div>Page body</div></PortalShell></WithCampusHome>
+        </CampusProvider></ParticipantAuthProvider>
       </MemoryRouter>,
     );
   });
@@ -154,9 +160,12 @@ describe('PortalShell nav swap', () => {
     expect(has('[data-testid="cm-use-campus"]')).toBe(false);
   });
 
-  it('the phone tab bar Map button opens the full campus map', async () => {
+  it('the phone tab bar Map button opens the campus map (WP-1: the campus home, /portal/campus)', async () => {
     await mount({ campus: true });
     act(() => { container.querySelector('nav.cm-tabbar button')!.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
-    expect(has('[data-testid="cm-overlay"]')).toBe(true);
+    for (let i = 0; i < 6; i++) await act(async () => { await Promise.resolve(); });
+    expect(where.path).toBe('/portal/campus');
+    expect(has('[data-testid="cm-home"]')).toBe(true);
+    expect(has('[data-testid="cm-overlay"]')).toBe(false);
   });
 });

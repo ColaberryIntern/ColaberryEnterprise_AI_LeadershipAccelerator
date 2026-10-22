@@ -17,7 +17,12 @@ jest.mock('../campusApi', () => ({
   fetchCampusFlags: () => Promise.resolve({ campus: true }), CAMPUS_FLAGS_TIMEOUT_MS: 10000,
   fetchCampusPresence: () => Promise.resolve(mockPresence), postCampusHere: () => Promise.resolve(), isReadOnlySession: () => false,
 }));
-jest.mock('../../../services/onboardingApi', () => ({ fetchPortalFlags: () => Promise.resolve({ today_redesign: true }) }));
+// WP-1: opening the map goes to the campus home, rendered here too; its own services are mocked (no network).
+jest.mock('../../../services/onboardingApi', () => ({
+  ...require('./testEnv/homeServiceMocks').onboardingApi(jest.requireActual('../../../services/onboardingApi')),
+  fetchPortalFlags: () => Promise.resolve({ today_redesign: true }),
+}));
+jest.mock('../../../services/communityApi', () => require('./testEnv/homeServiceMocks').communityApi(jest.requireActual('../../../services/communityApi')));
 jest.mock('../useCampusView', () => {
   const actual = jest.requireActual('../useCampusView');
   return { ...actual, useCampusView: () => actual.campusViewFor('member', { isStaff: false, hasFullAccess: true, isExplorer: false }) };
@@ -41,6 +46,8 @@ import { BroadcastDiscoveryProvider } from '../../../contexts/BroadcastDiscovery
 import { BroadcastPlayerProvider } from '../../../contexts/BroadcastPlayerContext';
 // eslint-disable-next-line import/first
 import { PARTICIPANT_TOKEN_KEY } from '../../../utils/participantToken';
+// eslint-disable-next-line import/first
+import { WithCampusHome, skipGate } from './testEnv/WithCampusHome';
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -61,7 +68,8 @@ function Where(): React.ReactElement { return <span data-testid="loc">{useLocati
 function Gated(): React.ReactElement | null {
   const c = useCampus();
   (window as unknown as { __campus: ReturnType<typeof useCampus> }).__campus = c;
-  return c.active ? <><CampusBanner /><CampusLayers /></> : null;
+  // WP-1: a page carries the banner and the layers; the campus home (/portal/campus) is its own page with the one map.
+  return c.active ? <WithCampusHome><CampusBanner /><CampusLayers /></WithCampusHome> : null;
 }
 const campus = () => (window as unknown as { __campus: ReturnType<typeof useCampus> }).__campus;
 
@@ -70,6 +78,7 @@ let root: Root;
 const flush = async () => { for (let i = 0; i < 8; i++) await act(async () => { await Promise.resolve(); }); };
 async function mount(pathname = '/portal/library'): Promise<void> {
   window.localStorage.setItem(CAMPUS_SETTINGS_KEY, JSON.stringify({ nav: 'campus', workplaceNames: false, reduceMotion: true }));
+  skipGate();
   window.localStorage.setItem(PARTICIPANT_TOKEN_KEY, 'h.eyJlbWFpbCI6ImxlYXJuZXJAZXhhbXBsZS5jb20ifQ.s'); // gitleaks:allow (fake, unsigned)
   container = document.createElement('div');
   document.body.appendChild(container);
@@ -84,7 +93,7 @@ async function mount(pathname = '/portal/library'): Promise<void> {
   await flush();
 }
 beforeEach(() => { mockPresence = {}; respond([]); });
-afterEach(() => { act(() => root.unmount()); container.remove(); window.localStorage.clear(); document.body.innerHTML = ''; });
+afterEach(() => { act(() => root.unmount()); container.remove(); window.localStorage.clear(); window.sessionStorage.clear(); document.body.innerHTML = ''; });
 
 const q = (id: string) => container.querySelector(`[data-testid="${id}"]`);
 
@@ -93,7 +102,7 @@ const q = (id: string) => container.querySelector(`[data-testid="${id}"]`);
 jest.setTimeout(15000);
 
 describe('on air, from discovery', () => {
-  it('a room broadcast lights the commons on the mini-map and the full map, and shows the strip with Watch and Go to the room', async () => {
+  it('a room broadcast lights the commons on the mini-map and the home map, and shows the strip with Watch and Go to the room', async () => {
     respond([LIVE]);
     await mount();
     expect(container.querySelector('.cm-banner [data-testid="cm-onair-commons"]')).not.toBeNull();
@@ -106,8 +115,10 @@ describe('on air, from discovery', () => {
     expect(q('loc')?.textContent).toBe('/portal/rooms/room-7');
     act(() => { campus().openMap(); });
     await flush();
-    expect(container.querySelector('[data-testid="cm-overlay"] [data-testid="cm-onair-commons"]')).not.toBeNull();
-    expect(container.querySelectorAll('[data-testid^="cm-onair-"]').length).toBe(2); // commons only, on both maps
+    // WP-1: the map is the campus home; the commons is lit there, and only the commons.
+    expect(q('loc')?.textContent).toBe('/portal/campus');
+    expect(container.querySelector('[data-testid="cm-home"] [data-testid="cm-onair-commons"]')).not.toBeNull();
+    expect(Array.from(container.querySelectorAll('[data-testid="cm-home"] [data-testid^="cm-onair-"]')).map((e) => e.getAttribute('data-testid'))).toEqual(['cm-onair-commons']);
   });
   it('a broadcast with no room: the strip names it, no building lights, no Go to the room', async () => {
     respond([ROOMLESS]);

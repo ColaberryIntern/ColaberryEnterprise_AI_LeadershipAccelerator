@@ -5,7 +5,7 @@
  *  1. compact maps (banner, side nav) expose no tabbable buildings;
  *  2. person tokens draw their own focus ring and a 16-unit hit circle;
  *  3. cards take focus on open and hand it back on close (to the dialog when the opener is gone);
- *  4. Tab and Shift+Tab wrap inside the map and list layers;
+ *  4. Tab and Shift+Tab wrap inside the list layer (WP-1: the map is the campus home, a page, not a modal);
  *  5. game keys are read from the canvas only (gameRoomA11y.test.tsx);
  *  6. contrast (campusContrast.test.ts: jsdom has no paint, so axe cannot compute it here).
  */
@@ -27,6 +27,9 @@ jest.mock('../useCampusView', () => {
   const actual = jest.requireActual('../useCampusView');
   return { ...actual, useCampusView: () => actual.campusViewFor('member', { isStaff: false, hasFullAccess: true, isExplorer: false }) };
 });
+// WP-1: the map is the campus home (/portal/campus) now; its own services are mocked (no network).
+jest.mock('../../../services/onboardingApi', () => require('./testEnv/homeServiceMocks').onboardingApi(jest.requireActual('../../../services/onboardingApi')));
+jest.mock('../../../services/communityApi', () => require('./testEnv/homeServiceMocks').communityApi(jest.requireActual('../../../services/communityApi')));
 
 // eslint-disable-next-line import/first
 import { CampusProvider, useCampus } from '../CampusContext';
@@ -47,7 +50,7 @@ import { CAMPUS_SETTINGS_KEY } from '../campusSettings';
 // eslint-disable-next-line import/first
 import { ParticipantAuthProvider } from '../../../contexts/ParticipantAuthContext';
 // eslint-disable-next-line import/first
-import { PARTICIPANT_TOKEN_KEY } from '../../../utils/participantToken';
+import { WithCampusHome, skipGate, signIn, where, Where } from './testEnv/WithCampusHome';
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -66,10 +69,12 @@ async function render(node: React.ReactNode): Promise<void> {
 async function mountCampus(extra?: React.ReactNode): Promise<void> {
   // Reduce motion on: arrivals are instant, so a building card opens in the same act().
   window.localStorage.setItem(CAMPUS_SETTINGS_KEY, JSON.stringify({ nav: 'campus', workplaceNames: false, motion: 'on' }));
-  window.localStorage.setItem(PARTICIPANT_TOKEN_KEY, 'h.eyJlbWFpbCI6ImxlYXJuZXJAZXhhbXBsZS5jb20ifQ.s'); // gitleaks:allow (fake, unsigned)
+  skipGate();
+  signIn();
+  // WP-1: a page at /portal/today; "open the map" goes to the real campus home at /portal/campus.
   await render(
     <MemoryRouter initialEntries={['/portal/today']}>
-      <ParticipantAuthProvider><CampusProvider><Controls />{extra}<CampusLayers /></CampusProvider></ParticipantAuthProvider>
+      <ParticipantAuthProvider><CampusProvider><Controls /><Where /><WithCampusHome>{extra}<CampusLayers /></WithCampusHome></CampusProvider></ParticipantAuthProvider>
     </MemoryRouter>,
   );
 }
@@ -153,32 +158,58 @@ describe('3. cards take focus and give it back', () => {
     expect(document.activeElement).toBe(q('[data-testid="dialog"]'));
   });
 
-  it('a building card opened from the map takes focus on its heading', async () => {
+  it('a building card opened from the map (the campus home) takes focus on its heading, and Esc gives it back to the building', async () => {
     await mountCampus();
     await act(async () => { campus.openMap('library'); });
     await flush();
+    expect(where.path).toBe('/portal/campus');
+    expect(q('[data-testid="cm-home"]')).not.toBeNull();
     expect(q('[data-testid="cm-card"]')).not.toBeNull();
     expect(document.activeElement?.classList.contains('cm-card-title')).toBe(true);
+    await press(document.activeElement!, 'Escape');
+    await flush();
+    expect(q('[data-testid="cm-card"]')).toBeNull();
+    expect(document.activeElement?.getAttribute('data-building')).toBe('library');
   });
 
-  it('a person card takes focus, and Esc hands it back inside the map', async () => {
+  // WP-1: on the home the openers are SVG (buildings, tokens); useCardFocus accepts them.
+  it('a person card takes focus, and Esc hands it back to its opener on the map (the campus home)', async () => {
     await mountCampus();
     await act(async () => { campus.openMap(); });
+    await flush();
+    expect(where.path).toBe('/portal/campus');
+    const opener = q('.cm-bld[data-building="commons"]')!;
+    opener.focus();
     await act(async () => { campus.openPersonCard({ person: PERSON, buildingId: 'commons' }); });
     await flush();
     expect(document.activeElement?.textContent).toBe('Avery Stone');
     await press(document.activeElement!, 'Escape');
     expect(q('[data-testid="cm-person-card"]')).toBeNull();
-    expect(q('[data-testid="cm-overlay"]')!.contains(document.activeElement)).toBe(true);
+    expect(document.activeElement).toBe(opener);
+  });
+
+  // WP-1: with no opener and no dialog (the home is a page), focus falls back to the map's first building.
+  it('a person card with no opener: Esc still hands focus back inside the map (the campus home), never <body>', async () => {
+    await mountCampus();
+    await act(async () => { campus.openMap(); });
+    await flush();
+    expect(where.path).toBe('/portal/campus');
+    await act(async () => { campus.openPersonCard({ person: PERSON, buildingId: 'commons' }); });
+    await flush();
+    expect(document.activeElement?.textContent).toBe('Avery Stone');
+    await press(document.activeElement!, 'Escape');
+    expect(q('[data-testid="cm-person-card"]')).toBeNull();
+    expect(q('[data-testid="cm-home"]')!.contains(document.activeElement)).toBe(true);
   });
 });
 
-describe('4. Tab stays inside the layers', () => {
-  it.each([['map', 'cm-overlay'], ['list', 'cm-list']])('%s layer: Tab from the last control wraps to the first, Shift+Tab back', async (which, testid) => {
+// WP-1: the map is the campus home, a page rather than a modal, so only the list layer (still a dialog) traps Tab.
+describe('4. Tab stays inside the list layer', () => {
+  it('list layer: Tab from the last control wraps to the first, Shift+Tab back', async () => {
     await mountCampus();
-    await act(async () => { if (which === 'map') campus.openMap(); else campus.openList(); });
+    await act(async () => { campus.openList(); });
     await flush();
-    const layer = q(`[data-testid="${testid}"]`)!;
+    const layer = q('[data-testid="cm-list"]')!;
     const items = Array.from(layer.querySelectorAll<HTMLElement>('a[href],button:not([disabled]),input,[tabindex]:not([tabindex="-1"])'))
       .filter((el) => !el.closest('[aria-hidden="true"]'));
     expect(items.length).toBeGreaterThan(2);
@@ -204,12 +235,13 @@ async function audit(el: Element): Promise<{ violations: string[]; unchecked: st
 }
 
 const SURFACES: [string, () => Promise<void>, string][] = [
-  ['map overlay', async () => { campus.openMap(); }, 'cm-overlay'],
+  // WP-1: the map, its cards, the tour and the locker all render on the campus home (cm-home) now.
+  ['campus home map', async () => { campus.openMap(); }, 'cm-home'],
   ['list view', async () => { campus.openList(); }, 'cm-list'],
-  ['building card', async () => { campus.openMap('commons'); }, 'cm-overlay'],
-  ['person card', async () => { campus.openMap(); await Promise.resolve(); campus.openPersonCard({ person: PERSON, buildingId: 'commons' }); }, 'cm-overlay'],
-  ['tour', async () => { campus.startTour(); }, 'cm-overlay'],
-  ['locker', async () => { campus.openLocker(); }, 'cm-overlay'],
+  ['building card', async () => { campus.openMap('commons'); }, 'cm-home'],
+  ['person card', async () => { campus.openMap(); await Promise.resolve(); campus.openPersonCard({ person: PERSON, buildingId: 'commons' }); }, 'cm-home'],
+  ['tour', async () => { campus.startTour(); }, 'cm-home'],
+  ['locker', async () => { campus.openLocker(); }, 'cm-home'],
 ];
 
 describe.each([['light', null], ['dark', 'dark']])('axe: zero wcag2a/wcag2aa violations (%s)', (_label, theme) => {
@@ -226,11 +258,11 @@ describe.each([['light', null], ['dark', 'dark']])('axe: zero wcag2a/wcag2aa vio
 });
 
 describe('the sweep is really running', () => {
-  it('evaluates a non-trivial number of rules on the map overlay', async () => {
+  it('evaluates a non-trivial number of rules on the campus home map', async () => {
     await mountCampus();
     await act(async () => { campus.openMap(); });
     await flush();
-    const r = await axe.run(q('[data-testid="cm-overlay"]')!, { runOnly: { type: 'tag', values: WCAG } });
+    const r = await axe.run(q('[data-testid="cm-home"]')!, { runOnly: { type: 'tag', values: WCAG } });
     expect(r.passes.length + r.violations.length + r.incomplete.length).toBeGreaterThan(5);
   }, 30_000);
 });

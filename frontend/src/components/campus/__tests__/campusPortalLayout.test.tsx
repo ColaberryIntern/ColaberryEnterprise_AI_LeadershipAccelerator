@@ -21,6 +21,9 @@ jest.mock('../useCampusView', () => {
   const actual = jest.requireActual('../useCampusView');
   return { ...actual, useCampusView: () => actual.campusViewFor('member', { isStaff: false, hasFullAccess: true, isExplorer: false }) };
 });
+// WP-1: Step outside goes to the campus home (/portal/campus), rendered here too; its own services are mocked (no network).
+jest.mock('../../../services/onboardingApi', () => require('./testEnv/homeServiceMocks').onboardingApi(jest.requireActual('../../../services/onboardingApi')));
+jest.mock('../../../services/communityApi', () => require('./testEnv/homeServiceMocks').communityApi(jest.requireActual('../../../services/communityApi')));
 
 // eslint-disable-next-line import/first
 import PortalLayout from '../../Layout/PortalLayout';
@@ -30,6 +33,10 @@ import { CampusProvider } from '../CampusContext';
 import { ParticipantAuthProvider } from '../../../contexts/ParticipantAuthContext';
 // eslint-disable-next-line import/first
 import { PARTICIPANT_TOKEN_KEY } from '../../../utils/participantToken';
+// eslint-disable-next-line import/first
+import { CAMPUS_SETTINGS_KEY } from '../campusSettings';
+// eslint-disable-next-line import/first
+import { WithCampusHome, skipGate, where, Where } from './testEnv/WithCampusHome';
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -39,20 +46,26 @@ async function mount(campus: boolean, path = '/portal/sessions'): Promise<void> 
   mockCampusOn = campus;
   window.localStorage.clear();
   window.localStorage.setItem(PARTICIPANT_TOKEN_KEY, 'h.eyJlbWFpbCI6ImxlYXJuZXJAZXhhbXBsZS5jb20ifQ.s'); // gitleaks:allow (fake, unsigned)
+  // Reduce motion on, so the door transition of Step outside is immediate; the gate is skipped (the map is under test).
+  window.localStorage.setItem(CAMPUS_SETTINGS_KEY, JSON.stringify({ nav: 'campus', workplaceNames: false, motion: 'on' }));
+  skipGate();
   container = document.createElement('div');
   document.body.appendChild(container);
   await act(async () => {
     root = createRoot(container);
     root.render(
       <MemoryRouter initialEntries={[path]}>
-        <ParticipantAuthProvider><CampusProvider>
-          <Routes><Route element={<PortalLayout />}><Route path="/portal/sessions" element={<div>Sessions page</div>} /></Route></Routes>
+        <ParticipantAuthProvider><CampusProvider><Where />
+          <WithCampusHome>
+            <Routes><Route element={<PortalLayout />}><Route path="/portal/sessions" element={<div>Sessions page</div>} /></Route></Routes>
+          </WithCampusHome>
         </CampusProvider></ParticipantAuthProvider>
       </MemoryRouter>,
     );
   });
   for (let i = 0; i < 5; i++) await act(async () => { await Promise.resolve(); });
 }
+const settle = async () => { for (let i = 0; i < 8; i++) await act(async () => { await Promise.resolve(); }); };
 afterEach(() => { act(() => root.unmount()); container.remove(); });
 
 // C11b: the illustrated map is ~5x the DOM of the C2 outlines (377 vs 77 nodes; trees, paths, windows), and these suites mount
@@ -79,10 +92,29 @@ describe('PortalLayout with the campus on', () => {
     expect(container.innerHTML.indexOf('cm-banner')).toBeLessThan(container.innerHTML.indexOf('Sessions page'));
   });
 
-  it('"Step outside" opens the campus map overlay on this layout too', async () => {
+  it('WP-1: lays the page out between the campus side nav and the rail (always a panel with your next steps)', async () => {
     await mount(true);
-    expect(container.querySelector('[data-testid="cm-overlay"]')).toBeNull();
+    const grid = container.querySelector('[data-testid="cm-scope"] .cm-scoped-grid')!;
+    expect(grid).not.toBeNull();
+    const side = grid.querySelector('[data-testid="cm-scoped-side"]')!;
+    expect(side.querySelector('nav.cm-nav')).not.toBeNull();
+    expect(grid.querySelector('[data-testid="cm-page-rail"]')).not.toBeNull();
+    const html = grid.innerHTML;
+    expect(html.indexOf('cm-scoped-side')).toBeLessThan(html.indexOf('Sessions page'));
+    expect(html.indexOf('Sessions page')).toBeLessThan(html.indexOf('cm-page-rail'));
+  });
+
+  it('"Step outside" goes to the campus home (WP-1), standing at this building with its card open', async () => {
+    await mount(true);
+    expect(where.path).toBe('/portal/sessions');
     await act(async () => { (container.querySelector('[data-testid="cm-step-out"]') as HTMLButtonElement).click(); });
-    expect(container.querySelector('[data-testid="cm-scope"] [data-testid="cm-overlay"]')).not.toBeNull();
+    await settle();
+    expect(where.path).toBe('/portal/campus');
+    expect(container.querySelector('[data-testid="cm-home"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="cm-overlay"]')).toBeNull();
+    // Live sessions is a room of the Classroom (lecture): you stand at its door with its card open, no walk.
+    const card = container.querySelector('[data-testid="cm-card"]');
+    expect(card).not.toBeNull();
+    expect(card!.textContent).toContain('Classroom');
   });
 });

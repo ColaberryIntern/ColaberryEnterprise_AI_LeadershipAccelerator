@@ -9,10 +9,21 @@ import type { Cam, Insets, Pt, Viewport } from './campusCamera';
  * frame loop forever). Pointer drag pans past a 6 px threshold and swallows the click that ends a drag; the wheel zooms; arrow keys
  * pan; a keyboard-focused building outside the view is brought into it. Reduce motion jumps (ease 1).
  *
+ * WP-1 (owner rule: the map recenters itself every time). `recenter` eases back to the whole campus unless the avatar is walking
+ * (the walk's follow camera wins); the world calls it whenever a card closes. A resize, or the tab becoming visible again, re-frames
+ * too: the open building when one is framed, otherwise the whole campus, whatever pan or zoom came before. While the avatar walks,
+ * drag, wheel, arrow keys and the zoom buttons are ignored (the prototype ignores a drag while traveling), so a walk never loses
+ * its camera.
+ *
  * An svg with no size (jsdom, a hidden layer) is left on its static viewBox: nothing here runs until it has a width.
  */
 export interface CameraApi {
-  base: () => void;
+  /** The whole campus, eased (`ease` overrides the rate: the gate fly-out uses the prototype's .035). */
+  base: (ease?: number) => void;
+  /** The whole campus, unless a walk is following the avatar. */
+  recenter: () => void;
+  /** Re-fit the whole campus to the panels as they are now, only while the view IS the whole campus (a panel changed size). */
+  refit: () => void;
   focus: (b: { x: number; y: number; h: number }) => void;
   follow: () => void;
   zoom: (f: number) => void;
@@ -34,6 +45,10 @@ export interface CameraOptions {
   locate: (id: string) => Pt | null;
   reduceMotion: boolean;
   apiRef?: MutableRefObject<CameraApi | null>;
+  /** The building framed now (an open card), or null: a resize re-frames it instead of the whole campus. */
+  framed?: () => { x: number; y: number; h: number } | null;
+  /** The first frame, when it is not the whole campus (the gate close-up the entry flies out of). */
+  startCam?: Cam;
 }
 
 const EASE = 0.06;
@@ -102,32 +117,36 @@ export function useCampusCamera(svgRef: RefObject<SVGSVGElement>, opts: CameraOp
   }, [tick]);
 
   const api = useMemo<CameraApi>(() => ({
-    base: () => { const v = vp(); if (!v) return; mode.current = 'base'; go(baseView(v, resolve(o.current.insets, v))); },
+    base: (e = EASE) => { const v = vp(); if (!v) return; mode.current = 'base'; go(baseView(v, resolve(o.current.insets, v)), e); },
+    recenter: () => { const v = vp(); if (!v || mode.current === 'follow') return; mode.current = 'base'; go(baseView(v, resolve(o.current.insets, v))); },
+    refit: () => { const v = vp(); if (!v || mode.current !== 'base') return; go(baseView(v, resolve(o.current.insets, v))); },
     focus: (b) => { const v = vp(); if (!v) return; mode.current = 'manual'; go(focusView(v, b, resolve(o.current.focusInsets ?? o.current.insets, v)), EASE_FOCUS); },
     follow: () => { if (!vp()) return; mode.current = 'follow'; go(target.current ?? cam.current!, EASE); },
-    zoom: (f) => { const v = vp(); if (!v || !cam.current) return; mode.current = 'manual'; go(zoomBy(target.current ?? cam.current, f)); },
+    zoom: (f) => { const v = vp(); if (!v || !cam.current || mode.current === 'follow') return; mode.current = 'manual'; go(zoomBy(target.current ?? cam.current, f)); },
   }), [go]);
   if (opts.apiRef) opts.apiRef.current = api;
 
   useEffect(() => {
     const el = svgRef.current;
     if (!el || !o.current.enabled) return undefined;
-    // First frame: the whole campus, at once.
+    // First frame: the whole campus at once (or the caller's start, the gate close-up).
     const v0 = vp();
-    if (v0) { cam.current = baseView(v0, resolve(o.current.insets, v0)); target.current = cam.current; write(v0); }
+    if (v0) { cam.current = o.current.startCam ?? baseView(v0, resolve(o.current.insets, v0)); target.current = cam.current; write(v0); }
+    if (o.current.startCam) mode.current = 'manual';
+    const walking = () => mode.current === 'follow';
 
     const pan = (dx: number, dy: number) => {
       const v = vp();
-      if (!v || !cam.current) return;
+      if (!v || !cam.current || walking()) return;
       mode.current = 'manual';
       cam.current = panBy(cam.current, v, dx, dy); target.current = cam.current;
       write(v);
     };
-    const wheel = (e: WheelEvent) => { e.preventDefault(); api.zoom(Math.exp(e.deltaY * 0.0015)); };
+    const wheel = (e: WheelEvent) => { e.preventDefault(); if (!walking()) api.zoom(Math.exp(e.deltaY * 0.0015)); };
     const key = (e: KeyboardEvent) => {
       const d: Record<string, [number, number]> = { ArrowLeft: [KEY_PAN_PX, 0], ArrowRight: [-KEY_PAN_PX, 0], ArrowUp: [0, KEY_PAN_PX], ArrowDown: [0, -KEY_PAN_PX] };
       const v = vp();
-      if (!d[e.key] || !v || !cam.current) return;
+      if (!d[e.key] || !v || !cam.current || walking()) return;
       e.preventDefault(); mode.current = 'manual';
       go(panBy(target.current ?? cam.current, v, d[e.key][0], d[e.key][1]));
     };
@@ -135,13 +154,25 @@ export function useCampusCamera(svgRef: RefObject<SVGSVGElement>, opts: CameraOp
       const v = vp();
       const id = (e.target as Element | null)?.closest?.('[data-building]')?.getAttribute('data-building');
       const p = id ? o.current.locate(id) : null;
-      if (!v || !p || !cam.current || inView(target.current ?? cam.current, v, p)) return;
+      if (!v || !p || !cam.current || walking() || inView(target.current ?? cam.current, v, p)) return;
       mode.current = 'manual';
       go({ ...(target.current ?? cam.current), cx: p.x, cy: p.y - 40 });
     };
-    const resize = () => { const v = vp(); if (v && mode.current === 'base') { cam.current = baseView(v, resolve(o.current.insets, v)); target.current = cam.current; write(v); } else if (v) write(v); };
+    // Every resize re-frames: the open building, else the whole campus (any earlier pan or zoom is dropped). A walk keeps following.
+    const reframe = () => {
+      const v = vp();
+      if (!v) return;
+      if (walking()) { write(v); return; }
+      const f = o.current.framed?.() ?? null;
+      if (f) { mode.current = 'manual'; cam.current = focusView(v, f, resolve(o.current.focusInsets ?? o.current.insets, v)); }
+      else { mode.current = 'base'; cam.current = baseView(v, resolve(o.current.insets, v)); }
+      target.current = cam.current;
+      write(v);
+    };
+    // Back to a hidden tab: the whole campus again, unless a card is framed.
+    const visible = () => { if (document.visibilityState === 'visible' && !o.current.framed?.()) api.recenter(); };
     const unbind = [bindDrag(el, pan), listen(el, 'wheel', wheel as EventListener, { passive: false }), listen(el, 'keydown', key as EventListener),
-      listen(el, 'focusin', focusIn as EventListener), listen(window, 'resize', resize)];
+      listen(el, 'focusin', focusIn as EventListener), listen(window, 'resize', reframe), listen(document, 'visibilitychange', visible)];
     return () => {
       unbind.forEach((u) => u());
       if (raf.current !== null) cancelAnimationFrame(raf.current);

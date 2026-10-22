@@ -19,9 +19,12 @@ jest.mock('../campusApi', () => ({
   fetchCampusFlags: () => Promise.resolve({ campus: mockCampusOn }), CAMPUS_FLAGS_TIMEOUT_MS: 10000,
   fetchCampusPresence: () => Promise.resolve({}), postCampusHere: () => Promise.resolve(), isReadOnlySession: () => false,
 }));
+// WP-1: the campus home renders here too; its own services are mocked (no network). The suite's counted flags read is kept.
 jest.mock('../../../services/onboardingApi', () => ({
+  ...require('./testEnv/homeServiceMocks').onboardingApi(jest.requireActual('../../../services/onboardingApi')),
   fetchPortalFlags: () => { flagCalls += 1; return Promise.resolve({ today_redesign: true, cape_today_plan: mockPlanFlag }); },
 }));
+jest.mock('../../../services/communityApi', () => require('./testEnv/homeServiceMocks').communityApi(jest.requireActual('../../../services/communityApi')));
 jest.mock('../../../services/capeApi', () => ({
   fetchTodayPlan: () => { planCalls += 1; return mockPlan === 'error' ? Promise.reject(new Error('boom')) : Promise.resolve(mockPlan); },
 }));
@@ -41,17 +44,20 @@ import { CAMPUS_SETTINGS_KEY } from '../campusSettings';
 // eslint-disable-next-line import/first
 import { ParticipantAuthProvider } from '../../../contexts/ParticipantAuthContext';
 // eslint-disable-next-line import/first
-import { PARTICIPANT_TOKEN_KEY } from '../../../utils/participantToken';
+import { WithCampusHome, skipGate, signIn } from './testEnv/WithCampusHome';
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 function Where(): React.ReactElement { return <span data-testid="loc">{useLocation().pathname}</span>; }
 let go: (path: string) => void = () => undefined;
+function Capture(): null {
+  const c = useCampus();
+  go = useNavigate();
+  (window as unknown as { __campus: ReturnType<typeof useCampus> }).__campus = c;
+  return null;
+}
 function Gated(): React.ReactElement | null {
   const c = useCampus();
-  const navigate = useNavigate();
-  go = navigate;
-  (window as unknown as { __campus: ReturnType<typeof useCampus> }).__campus = c;
   return c.active ? <><CampusBanner /><CampusLayers /></> : null;
 }
 const campus = () => (window as unknown as { __campus: ReturnType<typeof useCampus> }).__campus;
@@ -66,20 +72,21 @@ const PROJECT = item({ ref: 'project:1', title: 'Finish the data pipeline task',
 
 let container: HTMLDivElement;
 let root: Root;
-const flush = async () => { for (let i = 0; i < 6; i++) await act(async () => { await Promise.resolve(); }); };
+const flush = async () => { for (let i = 0; i < 8; i++) await act(async () => { await Promise.resolve(); }); };
 async function mount(path: string, nav: 'campus' | 'classic' = 'campus'): Promise<void> {
   window.localStorage.setItem(CAMPUS_SETTINGS_KEY, JSON.stringify({ nav, workplaceNames: false, reduceMotion: true }));
-  window.localStorage.setItem(PARTICIPANT_TOKEN_KEY, 'h.eyJlbWFpbCI6ImxlYXJuZXJAZXhhbXBsZS5jb20ifQ.s'); // gitleaks:allow (fake, unsigned)
+  skipGate();
+  signIn();
   container = document.createElement('div');
   document.body.appendChild(container);
   await act(async () => {
     root = createRoot(container);
-    root.render(<MemoryRouter initialEntries={[path]}><ParticipantAuthProvider><CampusProvider><Gated /><Where /></CampusProvider></ParticipantAuthProvider></MemoryRouter>);
+    root.render(<MemoryRouter initialEntries={[path]}><ParticipantAuthProvider><CampusProvider><Capture /><WithCampusHome><Gated /></WithCampusHome><Where /></CampusProvider></ParticipantAuthProvider></MemoryRouter>);
   });
   await flush();
 }
 beforeEach(() => { mockCampusOn = true; mockPlanFlag = true; mockPlan = plan([LESSON, PROJECT]); flagCalls = 0; planCalls = 0; });
-afterEach(() => { act(() => root.unmount()); container.remove(); window.localStorage.clear(); document.body.innerHTML = ''; });
+afterEach(() => { act(() => root.unmount()); container.remove(); window.localStorage.clear(); window.sessionStorage.clear(); document.body.innerHTML = ''; });
 
 const loc = () => container.querySelector('[data-testid="loc"]')?.textContent;
 const next = () => container.querySelector('[data-testid="cm-next"]') as HTMLButtonElement | null;
@@ -132,10 +139,12 @@ describe('Next', () => {
 });
 
 describe('the route on the full map', () => {
-  it('numbers the unfinished stops in plan order', async () => {
+  it('numbers the unfinished stops in plan order (on the campus home, the one map)', async () => {
     await mount('/portal/library');
     act(() => { campus().openMap(); });
     await flush();
+    expect(loc()).toBe('/portal/campus');
+    expect(container.querySelector('[data-testid="cm-home"]')).not.toBeNull();
     const stops = Array.from(container.querySelectorAll('[data-testid^="cm-route-stop-"]')).map((g) => [g.getAttribute('data-testid'), g.textContent]);
     expect(stops).toEqual([['cm-route-stop-tower', 'STOP 1'], ['cm-route-stop-studio', 'STOP 2']]);
     // the next stop is the green one, as the prototype's tour badges
@@ -159,6 +168,7 @@ describe('one read per campus session', () => {
     expect([flagCalls, planCalls]).toEqual([1, 1]);
     act(() => { campus().openMap(); });
     await flush();
+    expect(loc()).toBe('/portal/campus');
     expect([flagCalls, planCalls]).toEqual([1, 2]);
   });
 });

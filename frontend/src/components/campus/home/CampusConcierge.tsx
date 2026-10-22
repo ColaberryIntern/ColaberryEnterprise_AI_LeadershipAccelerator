@@ -7,16 +7,22 @@ import type { StaffDesk } from '../campusPeopleApi';
 import { mayaAllowedFor } from '../campusPeople';
 import { explorerPath } from '../campusPath';
 import { HelpDesk, PlanCard, ExplorerPass, LiveCard, StaffTools } from './ConciergeCards';
+import { UpNext, HereAt, TourOffer } from './NextSteps';
 import { greetingFor } from './useHomeFacts';
 
 /**
  * The campus concierge (C11b), the prototype's left panel (.cc): where you are, a greeting by name, one honest line about now,
  * the campus pulse, the help desk, the account's own card (the Explorer pass, the tour offer), today's plan, the live card, and
  * "I want to..." chips that walk to a building. Everything comes from the campus state; nothing is staged.
+ *
+ * WP-1 (owner rule, overriding the prototype's tuck): the panel is always there, with your next steps and the tour, in this order:
+ * where you are and the greeting, Up next, Here at <building> (while you are at one), the tour card in its three states, today's
+ * plan, live, the help desk and the chips. It never hides: while a card is open on a phone it shrinks to a peek strip (Next and
+ * the tour) that opens back up on a tap; on wide screens it stays beside the card.
  */
 export interface ConciergeProps {
-  /** Hidden while a card is open on the map (the prototype's .cc.tucked). */
-  tucked?: boolean;
+  /** A card is open on the map: on a phone the panel becomes its peek strip (never hidden). */
+  cardOpen?: boolean;
   audience: CampusAudience;
   firstName: string;
   hereName: string;
@@ -28,12 +34,19 @@ export interface ConciergeProps {
   desks: StaffDesk[];
   stops: PlanStop[] | null;
   live: { title: string; buildingId: BuildingId | null } | null;
-  hasTour: boolean;
-  /** How many stops this viewer's tour has (the partner tour card says it). */
-  tourStops?: number;
+  /** The building you are at (null at the gate). */
+  hereId?: BuildingId | null;
+  /** This viewer's tour stops (null: no tour, e.g. staff), the stop on screen while it runs, and its saved progress. */
+  tourStops: { buildingId: BuildingId }[] | null;
+  touring: number | null;
+  tourProgress: { paused: number | null; toured: boolean };
   now: Date;
   onWalk: (id: BuildingId) => void;
-  onTour: () => void;
+  /** Starts the tour at a stop (0, or the paused stop for Resume). */
+  onTour: (from: number) => void;
+  onEndTour?: () => void;
+  /** Opens a page through its building's door. */
+  onOpen: (route: string) => void;
 }
 
 /** The prototype's "I want to..." chips per account (CHIPS, CHIPS_EXP, CHIPS_SP, CHIPS_WORK), each a walk to a real building. The
@@ -82,8 +95,24 @@ export default function CampusConcierge(p: ConciergeProps): React.ReactElement {
   const desks = p.desks.filter((d) => d.id !== 'maya' || mayaAllowedFor(audience));
   const who = (n: number) => (audience === 'member' ? (n === 1 ? 'classmate' : 'classmates') : (n === 1 ? 'person' : 'people'));
   const greeting = `${greetingFor(p.now.getHours())}${p.firstName ? `, ${p.firstName}` : ''}.`;
+  const [expanded, setExpanded] = React.useState(false);
+  React.useEffect(() => { if (!p.cardOpen) setExpanded(false); }, [p.cardOpen]);
+  const hereB = p.hereId ? buildings.find((b) => b.id === p.hereId) ?? null : null;
+  const tourHere = p.tourStops && p.touring !== null && p.touring < p.tourStops.length ? { n: p.touring + 1, of: p.tourStops.length } : null;
+  const nextAny = p.stops?.find((s) => !s.done) ?? null;
+  const tourOffer = <TourOffer audience={audience} stops={p.tourStops} buildings={buildings} workplaceNames={workplaceNames} running={p.touring}
+    paused={p.tourProgress.paused} toured={p.tourProgress.toured} onStart={p.onTour} onEnd={p.onEndTour} />;
   return (
-    <aside className={`cm-cc${p.tucked ? ' is-tucked' : ''}`} aria-label="Campus concierge" data-testid="cm-concierge" hidden={p.tucked}>
+    <aside className={`cm-cc${p.cardOpen ? ' has-card' : ''}${expanded ? ' is-expanded' : ''}`} aria-label="Campus concierge" data-testid="cm-concierge">
+      {/* phones, while a card is open: the peek strip (CSS shows it only there) */}
+      <div className="cm-cc-peek" data-testid="cm-cc-peek">
+        <button type="button" className="cm-cc-handle" onClick={() => setExpanded((v) => !v)} aria-expanded={expanded}
+          aria-label={expanded ? 'Show less of your next steps' : 'Show all your next steps'}><i aria-hidden="true" /></button>
+        <span className="cm-cc-peek-t">{nextAny ? <>Next: <b>{nextAny.title}</b></> : <b>Your next steps</b>}</span>
+        {nextAny?.buildingId && <button type="button" className="cm-btn-red" onClick={() => p.onWalk(nextAny.buildingId!)}>Go</button>}
+        {p.tourStops && p.touring === null && <button type="button" className="cm-btn-line" onClick={() => p.onTour(p.tourProgress.paused ?? 0)}>Tour</button>}
+      </div>
+      <div className="cm-cc-body">
       <div className="cm-kicker" data-testid="cm-cc-where">{p.live ? liveKicker(p.now) : p.hereName === 'main gate' && audience === 'business' ? 'Partner visit' : p.hereName === 'main gate' && audience === 'staff' ? 'Staff view \u00b7 every building' : `At the ${p.hereName}`}</div>
       <h1 data-testid="cm-cc-greeting">{greeting}</h1>
       <p className="cm-lead" data-testid="cm-cc-lead">{leadFor(p, next)}</p>
@@ -97,26 +126,16 @@ export default function CampusConcierge(p: ConciergeProps): React.ReactElement {
             </button>
           : <div className="cm-pulse" data-testid="cm-cc-pulse"><i className="dot is-quiet" aria-hidden="true" /><span><b>Quiet right now</b> &middot; nobody else is on campus{desks.some((d) => d.on_duty) ? ' · the help desk is on duty' : ''}</span></div>)}
 
+      <UpNext stops={p.stops} buildings={buildings} workplaceNames={workplaceNames} hereId={p.hereId ?? null} onWalk={p.onWalk} onOpen={p.onOpen} />
+      <HereAt building={hereB} workplaceNames={workplaceNames} stops={p.stops} tourStop={tourHere} onOpen={p.onOpen} />
+      {tourOffer}
+
       <HelpDesk desks={desks} onWalk={p.onWalk} />
 
       {audience === 'explorer' && <ExplorerPass buildings={buildings} accessOf={p.accessOf} workplaceNames={workplaceNames}
         path={explorerPath(buildings, p.accessOf, workplaceNames, desks.some((d) => d.id === 'maya' && d.on_duty))} />}
 
       {audience === 'staff' && <StaffTools buildings={buildings} workplaceNames={workplaceNames} />}
-
-      {p.hasTour && audience === 'business' && (
-        <div className="cm-partner-tour" data-testid="cm-cc-tour">
-          <div className="t">See how your people learn and build</div>
-          <div className="d">A short walk through the places your team uses{p.tourStops ? `, ${p.tourStops} stops` : ''}.</div>
-          <button type="button" className="cm-btn-white" onClick={p.onTour} data-testid="cm-cc-tour-start">Start the partner tour →</button>
-        </div>
-      )}
-      {p.hasTour && audience !== 'business' && (
-        <div className="cm-sg" data-testid="cm-cc-tour" style={{ cursor: 'default' }}>
-          <div style={{ flex: 1 }}><div className="t">What&rsquo;s in your seat?</div><div className="d">A short walk through the places your {audience === 'explorer' ? 'pass opens' : 'enrollment unlocks'}.</div></div>
-          <button type="button" className="cm-btn-red" onClick={p.onTour} data-testid="cm-cc-tour-start">Take the tour</button>
-        </div>
-      )}
 
       {p.stops && <div style={{ marginTop: 14 }}><PlanCard stops={p.stops} buildings={buildings} workplaceNames={workplaceNames} onWalk={p.onWalk} /></div>}
       {p.live && <LiveCard title={p.live.title} buildingId={p.live.buildingId} onWalk={p.onWalk} />}
@@ -132,6 +151,7 @@ export default function CampusConcierge(p: ConciergeProps): React.ReactElement {
           </div>
         </>
       )}
+      </div>
     </aside>
   );
 }
