@@ -69,7 +69,7 @@ function dayBefore(iso: string | null | undefined): string | null {
 }
 
 export function SubmissionReadinessPanel({ readiness, slots, requirements, deadlineUtc, daysLeft }: {
-  readiness?: { ready: boolean; blocking: string[] } | null;
+  readiness?: { ready: boolean; blocking: string[]; warnings?: string[] } | null;
   slots: { requirementId: string; statement: string; status: SlotStatus }[];
   requirements: { id: string; text: string; dueStage?: string }[];
   deadlineUtc?: string | null;
