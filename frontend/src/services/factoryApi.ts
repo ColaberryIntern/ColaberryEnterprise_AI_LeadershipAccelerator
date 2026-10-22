@@ -525,7 +525,7 @@ export interface GovQualificationWorkspace {
 }
 
 /** Whether the proposal can be exported/submitted, with the blocking reasons when not. */
-export interface GovSubmissionReadiness { ready: boolean; blocking: string[] }
+export interface GovSubmissionReadiness { ready: boolean; blocking: string[]; warnings?: string[] }
 
 /** The submission + outcome state for a gov project (P5). Candidates are PRIVATE and never published. */
 export interface GovSubmission {
