@@ -11,6 +11,7 @@
 import { docxToText, xlsxToText } from './ooxmlText';
 import { classifyDocuments, SINGLE_ITEM_ROLES, roleLabel, type DocRole } from './documentClassifier';
 import { detectRfpComplianceRules, type RfpComplianceFinding } from './rfpComplianceRules';
+import { detectEvaluationCriteria, type EvaluationCriteria } from './evaluationCriteria';
 // adm-zip is an undeclared/untyped dep (resolves via hoisted node_modules); the require() form keeps strict
 // tsc from rejecting it (TS7016), matching backend/src/scripts/lib/govBidContentExtractor.js.
 const AdmZip = require('adm-zip');
@@ -82,6 +83,9 @@ export interface ExtractedDossier {
   /** Submission-mechanics obligations stated in the solicitation BODY (not on the response checklist): a required
    *  separate cost file, a required redacted copy, a stated offer-validity period. Each cites a literal quote. */
   complianceRules: RfpComplianceFinding[];
+  /** How the solicitation is scored — award basis, weighted factors (points/percent), total points — when stated.
+   *  null when the document names no evaluation scheme. Tells a drafter where the points are. */
+  evaluation: EvaluationCriteria | null;
 }
 /** Per-file extraction outcome — one row per file in the ZIP, so NOTHING is silently dropped. A reviewer sees
  *  every file and exactly what happened to it (extracted / empty / unsupported / unreadable / scanned PDF /
@@ -219,8 +223,12 @@ export function extractDossier(blocks: ExtractedBlock[]): ExtractedDossier {
   }
   // Submission-mechanics rules are detected over the WHOLE solicitation body (they are usually stated once, in the
   // instructions, not per-requirement), so run them on the joined context text rather than per block.
-  const complianceRules = detectRfpComplianceRules(ctx.map((b) => String(b.text ?? '')).join('\n'));
-  return { contacts, naics, codes, meetings, keyDates, complianceRules };
+  // Both the submission-mechanics rules and the scoring scheme are stated once in the body (instructions /
+  // evaluation section), not per-requirement, so detect them over the joined context text.
+  const bodyText = ctx.map((b) => String(b.text ?? '')).join('\n');
+  const complianceRules = detectRfpComplianceRules(bodyText);
+  const evaluation = detectEvaluationCriteria(bodyText);
+  return { contacts, naics, codes, meetings, keyDates, complianceRules, evaluation };
 }
 
 const slug = (s: string): string => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '').slice(0, 60) || 'file';
@@ -360,7 +368,7 @@ export async function extractProposal(zipBuffer: Buffer): Promise<ProposalExtrac
     // Record one legible outcome so the operator knows WHY and what to do.
     files.push({ name: 'upload', status: 'unreadable', chars: 0, truncated: false,
       warning: 'The upload did not open as a readable ZIP (it may be password-protected, an encrypted/ZIP64 archive, or not a ZIP at all). Re-export the solicitation ZIP from the source and upload again, or establish the requirements by hand.' });
-    return { blocks, requirements, dossier: { contacts: [], naics: [], codes: [], meetings: [], keyDates: [], complianceRules: [] }, fileCount: 0, files };
+    return { blocks, requirements, dossier: { contacts: [], naics: [], codes: [], meetings: [], keyDates: [], complianceRules: [], evaluation: null }, fileCount: 0, files };
   }
   entries.sort((a: any, b: any) => String(a.entryName).localeCompare(String(b.entryName)));
 

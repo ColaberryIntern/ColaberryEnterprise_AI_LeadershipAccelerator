@@ -637,6 +637,16 @@ export interface GovDossierLine { text: string; date: string | null; time?: stri
 export type GovComplianceRuleKind = 'separate_cost_file' | 'redacted_copy' | 'validity_period';
 export interface GovComplianceRule { kind: GovComplianceRuleKind; quote: string; days?: number }
 
+/** How the solicitation is scored — detected from the evaluation section. Advisory, source-cited. */
+export type GovAwardBasis = 'lpta' | 'trade_off' | 'best_value' | 'qualifications' | 'low_price';
+export interface GovEvaluationFactor { label: string; points?: number; percent?: number; quote: string }
+export interface GovEvaluationCriteria {
+  basis: GovAwardBasis | null;
+  basisQuote: string | null;
+  totalPoints: number | null;
+  factors: GovEvaluationFactor[];
+}
+
 /** An opportunity dossier detected from the solicitation ZIP — deterministic, source-cited, "detected — verify". */
 export interface GovDossier {
   contacts: { kind: 'email' | 'phone'; value: string; sourceDocument: string }[];
@@ -648,6 +658,8 @@ export interface GovDossier {
   keyDates: GovDossierLine[];
   /** Submission-mechanics rules detected in the solicitation body. Absent on records extracted before this shipped. */
   complianceRules?: GovComplianceRule[];
+  /** How the solicitation is scored (award basis, weighted factors, total points). Absent/null when not detected. */
+  evaluation?: GovEvaluationCriteria | null;
 }
 
 /** Prior pursuits of the same agency — advisory "possible prior work — verify". */
