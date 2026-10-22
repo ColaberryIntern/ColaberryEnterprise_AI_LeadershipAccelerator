@@ -10,7 +10,7 @@ import {
   saveGovProposalResponse, reviewGovProposalResponse, addGovProposalFigure, removeGovProposalFigure, saveGovProposalDraft, resolveGovProposalGap, draftGovProposalWithAI, recordGovProposalAmendment,
   exportGovSubmission, downloadGovSubmissionPackage, recordGovSubmissionReceipt, acknowledgeGovSubmission, reopenGovSubmission, recordGovOutcome,
   type GovQualificationWorkspace, type QualRequirementEval, type GovCandidatesResult, type EstablishedRequirement, type ExtractedFileOutcome,
-  type ServiceMatch, type ExtractedRequirementCandidate, type RequirementItem, type ReqItemCategory, type GovExtractionMeta, type GovOpportunity, type GovDossier, type GovComplianceRule, type GovRelationship,
+  type ServiceMatch, type ExtractedRequirementCandidate, type RequirementItem, type ReqItemCategory, type GovExtractionMeta, type GovOpportunity, type GovDossier, type GovComplianceRule, type GovAwardBasis, type GovRelationship,
   type GovResponseSlot, type GovBuildPlan, type GovBuildStory, type GovAssignableBuilder,
   type GovResponseFigure, type GovResponseGap, type GovProposalAmendment, type GovSubmission, type GovSubmissionReadiness,
 } from '../../services/factoryApi';
@@ -167,7 +167,16 @@ function OpportunityDossier({ dossier }: { dossier: GovDossier }): React.ReactEl
   const meetings = dossier.meetings ?? [];
   const keyDates = dossier.keyDates ?? [];
   const complianceRules = dossier.complianceRules ?? [];
-  const empty = contacts.length === 0 && codes.length === 0 && meetings.length === 0 && keyDates.length === 0 && complianceRules.length === 0;
+  const evaluation = dossier.evaluation ?? null;
+  const hasEvaluation = !!evaluation && (evaluation.basis !== null || evaluation.totalPoints !== null || evaluation.factors.length > 0);
+  const empty = contacts.length === 0 && codes.length === 0 && meetings.length === 0 && keyDates.length === 0 && complianceRules.length === 0 && !hasEvaluation;
+  const basisLabel: Record<GovAwardBasis, string> = {
+    lpta: 'Lowest price, technically acceptable',
+    trade_off: 'Best-value trade-off',
+    best_value: 'Best value',
+    qualifications: 'Qualifications-based',
+    low_price: 'Lowest price',
+  };
   // Submission-mechanics obligations stated in the body — missing one makes the bid non-responsive, so they lead.
   const ruleLabel: Record<GovComplianceRule['kind'], string> = {
     separate_cost_file: 'Separate cost file required',
@@ -213,6 +222,26 @@ function OpportunityDossier({ dossier }: { dossier: GovDossier }): React.ReactEl
             ))}
           </ul>
           <div className="small text-danger-emphasis"><i className="ri-information-line me-1" aria-hidden="true" />Detected from the solicitation text — verify against the document. Missing any of these can make the bid non-responsive.</div>
+        </div>
+      )}
+      {hasEvaluation && evaluation && (
+        <div className="alert alert-primary py-2 px-3 mb-3" role="note">
+          <h3 className="h6 text-primary-emphasis text-uppercase small mb-2"><i className="ri-bar-chart-2-line me-1" aria-hidden="true" />How this is scored — put effort where the points are</h3>
+          <div className="small mb-2">
+            {evaluation.basis && <span className="badge bg-primary-subtle text-primary-emphasis me-2">{basisLabel[evaluation.basis]}</span>}
+            {typeof evaluation.totalPoints === 'number' && <span className="text-secondary">{evaluation.totalPoints} points total</span>}
+          </div>
+          {evaluation.factors.length > 0 && (
+            <ul className="list-unstyled mb-1">
+              {evaluation.factors.map((f, i) => (
+                <li key={`ev-${f.label}-${i}`} className="mb-1">
+                  <span className="badge bg-primary-subtle text-primary-emphasis me-2">{typeof f.percent === 'number' ? `${f.percent}%` : `${f.points} pts`}</span>
+                  <span className="small">{f.label}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+          <div className="small text-secondary"><i className="ri-information-line me-1" aria-hidden="true" />Detected from the solicitation text — verify the weighting against the evaluation section before you rely on it.</div>
         </div>
       )}
       <div className="row g-3">
