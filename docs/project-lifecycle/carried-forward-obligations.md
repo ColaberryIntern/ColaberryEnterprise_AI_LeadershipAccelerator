@@ -2705,3 +2705,53 @@ unchecked - is still right, and the ratio it was defending has only grown.
 ### The probe is closed
 
 Draft PR closed, branch deleted, nothing merged. It existed to answer one question and it did.
+
+## THE STAGE MACHINE CANNOT BE AUTOMATED AS BUILT, and the permission table says why
+
+The DRI asked for lifecycle stages to advance automatically from build events, with humans only
+at approval gates. Measured against the code, that request has no room to land as stated, and
+the reason is worth recording because it is a design property rather than an oversight.
+
+**Every forward hop carries a named authority.** `STAGE_PERMISSION` maps all twelve forward hops
+to a permission, and only one of them (`awaiting_blueprint_approval`, `project.write`) is not an
+approval, review or work grant. The code is explicit that this is deliberate: *"a design reviewer
+can approve a design without also being able to approve a release."*
+
+So automating the chain as it stands requires a system identity holding `requirement.approve`,
+`architecture.approve`, `agent.approve`, `design.approve`, `contract.approve` and
+`release.approve` — an AI identity recording approvals, which `CLAUDE.md` and the claim register
+both prohibit and `approval-and-change-policy.md` contradicts on its own terms. **That option is
+rejected permanently.**
+
+### What the table actually supports
+
+Read by what each permission MEANS, the twelve hops are six **approvals**, two **reviews**, and
+four that describe **performing work** — `project.write`, `story.write`, `story.execute`,
+`release.deploy`. The build pipeline performs exactly those four acts. So the pipeline may
+advance a hop whose permission describes work it actually did, and may never advance an approval
+or a review. Four automatic, eight human.
+
+### The state this was measured against
+
+| | |
+|---|---|
+| Lifecycle rows in production | 19 |
+| Rows past `discovery` | **0** |
+| Of 14 student rows, how many have a published plan | **10** |
+| Evidence fields measured | 9 of ~29 |
+| First hop's prerequisites | **all four already measured** |
+
+The evidence layer was never the blocker. The stage is inert because advancing it has always
+required a human to go and click, and nothing tells anyone there is something to click.
+
+### Design written, decision pending
+
+`readiness-and-approval-separation.md` proposes separating *readiness* (automatic, measured,
+fingerprinted, never sufficient to advance) from *approval* (human, unchanged). Its load-bearing
+control is a mutation: force every readiness row true and show an approval-gated stage still
+refuses. Two questions are open for the DRI in its §8, and **no code has been written.**
+
+What the design does NOT buy, stated there and repeated here: it does not reduce the eight human
+acts. It makes each one a one-click confirmation of something measured. Whether all six approvals
+are genuinely required is a separate policy decision, and the readiness table is what would give
+it evidence.
