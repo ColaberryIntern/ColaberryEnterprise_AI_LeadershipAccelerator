@@ -41,6 +41,7 @@ import {
   type CapabilityRecord,
   type DomainCapabilityMatrix,
 } from './capabilityRecord';
+import { researchPromptFor } from './agentDomainResearchPrompts';
 
 export type StoryKind = 'research' | 'legacy_migration' | 'implementation';
 export type StoryStatus = 'draft' | 'ready';
@@ -80,6 +81,10 @@ const RELEASES: ReadonlyArray<GeneratedRelease> = [
   { cluster: 'r2', name: 'Capability development', position: 2 },
 ];
 
+/** The release's display name for a cluster key, for the prompt header. */
+const releaseName = (cluster: string): string =>
+  RELEASES.find((r) => r.cluster === cluster)?.name ?? cluster;
+
 /** The owner's five, verbatim in intent. Prefixes are stable; titles may be reworded. */
 const RESEARCH_PREFIXES = [
   'RESEARCH-1-SYSTEM-CLASSES',
@@ -101,20 +106,33 @@ function researchStories(d: AgentDomain, m: DomainCapabilityMatrix): GeneratedSt
   const legacyCount = m.legacy_dispositions.length;
   const capCount = m.capabilities.length;
 
-  const common = (prefix: string, title: string, body: string): GeneratedStory => ({
-    story_id: `${d.domain_key}.${prefix}`,
-    release_key: 'r0',
-    kind: 'research',
-    title,
-    status: 'draft',
-    body,
-    capability_id: null,
-    shared_foundation_reason:
-      'Research and manager-discovery work required of every domain by the owner, independent of any '
-      + 'single capability.',
-    validation_dependency: `${who} reviews the written output before any capability leaves draft.`,
-    claude_code_prompt: '',
-  });
+  const common = (prefix: string, title: string, body: string): GeneratedStory => {
+    const storyId = `${d.domain_key}.${prefix}`;
+    return {
+      story_id: storyId,
+      release_key: 'r0',
+      kind: 'research',
+      title,
+      status: 'draft',
+      body,
+      capability_id: null,
+      shared_foundation_reason:
+        'Research and manager-discovery work required of every domain by the owner, independent of any '
+        + 'single capability.',
+      validation_dependency: `${who} reviews the written output before any capability leaves draft.`,
+      // A research story is still CLAUDE CODE WORK; its product is a committed document rather
+      // than a feature. This used to be '' and `agentDomainProvisionPlan` substituted
+      // HUMAN_WORK_STATEMENT, which told the intern there was nothing to run. See
+      // `agentDomainResearchPrompts` for why that was wrong and what it cost.
+      claude_code_prompt: researchPromptFor(storyId, {
+        title,
+        domainTitle: d.title,
+        manager: m.accountable_human,
+        storyId,
+        release: releaseName('r0'),
+      }) ?? '',
+    };
+  };
 
   return [
     common(
@@ -239,7 +257,14 @@ function legacyMigrationStory(d: AgentDomain, m: DomainCapabilityMatrix): Genera
       + `The 21 legacy records whose \`proposed_owner_domain\` is \`unresolved\` belong to no domain `
       + `and are therefore not in any project's plan. Five of them are live production rows. They `
       + `need an owner decision, and naming that here is the point.`,
-    claude_code_prompt: '',
+    // Claude Code work, same as every other story. See the r0 note above.
+    claude_code_prompt: researchPromptFor(`${d.domain_key}.LEGACY-MIGRATION-PLAN`, {
+      title: 'Legacy migration plan',
+      domainTitle: d.title,
+      manager: m.accountable_human,
+      storyId: `${d.domain_key}.LEGACY-MIGRATION-PLAN`,
+      release: releaseName('r1'),
+    }) ?? '',
   };
 }
 

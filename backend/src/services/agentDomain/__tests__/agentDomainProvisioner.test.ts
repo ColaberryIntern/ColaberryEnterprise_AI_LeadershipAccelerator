@@ -278,18 +278,31 @@ describe('the plan covers all ten domains completely', () => {
     }
   });
 
-  it('a HUMAN-work story says so plainly instead of carrying an empty prompt', () => {
-    // An empty `build` would give the portal's "Copy prompt" button a blank box; a fabricated
-    // prompt would be worse. Both are refused in favour of saying what the story actually is.
-    const human = plans.flatMap((p) => p.stories).filter((s) => s.kind !== 'implementation');
-    expect(human.length).toBe(60); // 5 research + 1 legacy migration, per domain
-    for (const s of human) {
-      expect(s.build).toBe(HUMAN_WORK_STATEMENT);
-      expect(s.build.length).toBeGreaterThan(0);
+  it('EVERY story carries a real Claude Code prompt, including research and legacy migration', () => {
+    // This test used to assert the OPPOSITE: that these stories carried HUMAN_WORK_STATEMENT,
+    // on the reasoning that discovery is a conversation rather than a coding task. Ali settled
+    // it on 2026-10-21: there are no manual tasks in this programme, and every prompt is
+    // understood as something that will be run in Claude Code. A research story's product is a
+    // committed document rather than a feature, which does not make it human work.
+    //
+    // It is not a style preference. Mihret opened one of these, read that it was human work with
+    // no prompt, and could not tell whether she was meant to run anything; she asked instead of
+    // guessing, which is the only reason it surfaced rather than quietly costing her a day.
+    const research = plans.flatMap((p) => p.stories).filter((s) => s.kind !== 'implementation');
+    expect(research.length).toBe(60); // 5 research + 1 legacy migration, per domain
+    for (const s of research) {
+      expect(s.build).not.toBe(HUMAN_WORK_STATEMENT);
+      expect(s.build.length).toBeGreaterThan(1500);
+      expect(s.build).toContain('This is Claude Code work');
+      expect(s.build).not.toMatch(/no prompt on purpose/i);
     }
   });
 
-  it('the human-work statement forbids the outbound actions the owner excluded', () => {
+  it('the human-work statement is now a fallback that should never fire, and still says the right thing if it does', () => {
+    // `plannedStory` still substitutes this when `claude_code_prompt` is empty. Every generated
+    // story now carries one, so this is a safety net rather than a path: the test above proves
+    // nothing reaches it. Kept, and kept correct, because a silent empty prompt would be worse
+    // than this text.
     expect(HUMAN_WORK_STATEMENT).toMatch(/do not send an invitation/);
     expect(HUMAN_WORK_STATEMENT).toMatch(/not record a meeting as booked/);
     expect(HUMAN_WORK_STATEMENT).toMatch(/stays `draft`/);
