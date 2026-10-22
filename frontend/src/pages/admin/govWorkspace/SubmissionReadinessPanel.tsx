@@ -44,6 +44,16 @@ function blockingLabel(code: string): string {
   return BLOCKING_REASON[code] ?? code;
 }
 
+/** Advisory (non-blocking) pre-flight warnings — surfaced so a fatal-but-not-gated mistake is seen before submit. */
+function warningLabel(code: string): string {
+  if (code.startsWith('pricing_leak:')) {
+    const ids = (code.split(':')[1] || '').split(',').filter(Boolean);
+    const where = ids.length ? ` (${ids.join(', ')})` : '';
+    return `A dollar amount appears in a non-cost response${where}. In a government bid, price belongs in the separate cost volume; move it there or the bid may be judged non-responsive. Advisory only: it does not block export.`;
+  }
+  return code;
+}
+
 function fmtDate(iso: string | null | undefined): string | null {
   if (!iso) return null;
   const d = new Date(iso);
@@ -80,6 +90,7 @@ export function SubmissionReadinessPanel({ readiness, slots, requirements, deadl
 
   const ready = !!readiness?.ready;
   const blocking = readiness?.blocking ?? [];
+  const warnings = readiness?.warnings ?? [];
   const deadline = fmtDate(deadlineUtc);
   const shipBy = dayBefore(deadlineUtc);
 
@@ -96,6 +107,16 @@ export function SubmissionReadinessPanel({ readiness, slots, requirements, deadl
           <div className="fw-semibold mb-1"><i className="ri-error-warning-line me-1" aria-hidden="true" />{blocking.length} item{blocking.length === 1 ? '' : 's'} outstanding before this bid is complete</div>
           <ul className="mb-0 ps-3">
             {blocking.map((b, i) => <li key={i}>{blockingLabel(b)}</li>)}
+          </ul>
+        </div>
+      )}
+
+      {/* Advisory pre-flight warnings (never gate the bid; flagged so a fatal-but-not-blocked mistake is seen). */}
+      {warnings.length > 0 && (
+        <div className="alert alert-danger py-2 mb-3 small" role="status">
+          <div className="fw-semibold mb-1"><i className="ri-alarm-warning-line me-1" aria-hidden="true" />Check before you submit ({warnings.length})</div>
+          <ul className="mb-0 ps-3">
+            {warnings.map((w, i) => <li key={i}>{warningLabel(w)}</li>)}
           </ul>
         </div>
       )}

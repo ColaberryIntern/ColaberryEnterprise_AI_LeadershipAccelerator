@@ -10,7 +10,21 @@ const slot = (id: string, status: any, content = 'x', figures: any[] = []) =>
 
 describe('evaluateSubmissionReadiness', () => {
   it('is ready only when there is ≥1 slot, ALL approved, coverage sufficient, and nothing blocking', () => {
-    expect(evaluateSubmissionReadiness([slot('R1', 'approved'), slot('R2', 'approved')], true, true)).toEqual({ ready: true, blocking: [] });
+    expect(evaluateSubmissionReadiness([slot('R1', 'approved'), slot('R2', 'approved')], true, true)).toEqual({ ready: true, blocking: [], warnings: [] });
+  });
+
+  it('WARNS (never blocks) on a dollar amount in a non-cost response when a cost response exists', () => {
+    const priceSlot: any = { requirementId: 'P1', statement: 'cost', sourceRef: null, status: 'approved', content: 'See the Cost Proposal on Form 3.', figures: [], bucket: 'price' };
+    const techSlot: any = { requirementId: 'T1', statement: 'tech', sourceRef: null, status: 'approved', content: 'Our total price is $75,000 for the engagement.', figures: [], bucket: 'technical' };
+    const r = evaluateSubmissionReadiness([priceSlot, techSlot], true, true);
+    expect(r.ready).toBe(true);                                       // a warning does NOT gate submission
+    expect(r.warnings.some((w) => w.startsWith('pricing_leak') && w.includes('T1'))).toBe(true);
+    expect(r.warnings.some((w) => w.includes('P1'))).toBe(false);     // the cost response itself is not a leak
+  });
+
+  it('does NOT warn about a figure when there is no separate cost response (no price volume expected)', () => {
+    const techSlot: any = { requirementId: 'T1', statement: 'tech', sourceRef: null, status: 'approved', content: 'The budget cap is $75,000.', figures: [], bucket: 'technical' };
+    expect(evaluateSubmissionReadiness([techSlot], true, true).warnings).toEqual([]);
   });
 
   it('blocks when a response is not approved, NAMING the requirement', () => {

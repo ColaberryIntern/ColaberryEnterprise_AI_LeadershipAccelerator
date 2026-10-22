@@ -11,6 +11,25 @@ export interface SubmissionReadiness {
   ready: boolean;
   /** Human-reasoned blocking reasons; empty ⇒ ready. */
   blocking: string[];
+  /** Advisory, NON-blocking flags the operator should resolve but which do not gate export — e.g. a dollar amount
+   *  in a non-cost response (`pricing_leak:<ids>`), which is usually a non-responsive mistake but can be legitimate.
+   *  A false positive must never prevent a real submission, so these are warnings, not blockers. Empty when none. */
+  warnings: string[];
+}
+
+// A currency amount: "$2,000,000", "$75,000.00", or "75000 dollars/USD". Used to catch a price that leaked into a
+// NON-cost response (gov proposals keep price in a separate cost volume; a figure in the technical narrative is a
+// classic non-responsive mistake).
+const CURRENCY_RE = /\$\s?\d[\d,]*(?:\.\d{2})?|\b\d[\d,]{2,}(?:\.\d{2})?\s*(?:usd|dollars)\b/i;
+
+/** PURE: the ids of any NON-price response whose authored content contains a currency amount — but only when a
+ *  price/cost response exists (i.e. a separate cost volume IS expected). No price volume ⇒ a figure is not a leak. */
+function detectPricingLeak(rows: ResponseSlot[]): string[] {
+  const hasPriceVolume = rows.some((s) => s.bucket === 'price');
+  if (!hasPriceVolume) return [];
+  return rows
+    .filter((s) => s.bucket !== 'price' && typeof s.content === 'string' && CURRENCY_RE.test(s.content))
+    .map((s) => s.requirementId);
 }
 
 /**
@@ -34,7 +53,12 @@ export function evaluateSubmissionReadiness(slots: ResponseSlot[], coverageSuffi
   if (filler.length) blocking.push(`responses_filler:${filler.join(',')}`);
   if (!coverageSufficient) blocking.push('coverage_insufficient');
   if (!canApproveBid) blocking.push('requirements_blocking');
-  return { ready: blocking.length === 0, blocking };
+  // Advisory pre-flight (never gates `ready`): a dollar amount in a non-cost response is usually a non-responsive
+  // leak, but can be legitimate — so it warns, it does not block.
+  const warnings: string[] = [];
+  const leak = detectPricingLeak(rows);
+  if (leak.length) warnings.push(`pricing_leak:${leak.join(',')}`);
+  return { ready: blocking.length === 0, blocking, warnings };
 }
 
 export interface SubmissionManifestItem {
