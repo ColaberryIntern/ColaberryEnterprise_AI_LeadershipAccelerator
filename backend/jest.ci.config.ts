@@ -87,7 +87,8 @@ const ciConfig: Config = {
     'src/__tests__/models/reeseOutreachModel\\.test\\.ts',
     'src/__tests__/routes/adminRoutes\\.test\\.ts',
     'src/__tests__/services/adminEnrollmentPortalAccess\\.test\\.ts',
-    'src/__tests__/services/assessmentService\\.test\\.ts',
+    // PROBE, NOT FOR MERGE: does this suite fail on Linux as it does on Windows?
+    // 'src/__tests__/services/assessmentService\\.test\\.ts',
     'src/__tests__/services/cohortPresenceService\\.test\\.ts',
     'src/__tests__/services/duplicateAccountSweepService\\.test\\.ts',
     'src/__tests__/services/explorerCohortRouting\\.test\\.ts',
