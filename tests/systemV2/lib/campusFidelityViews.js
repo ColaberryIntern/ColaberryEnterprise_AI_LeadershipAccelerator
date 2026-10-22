@@ -50,7 +50,7 @@ const DISTURB = [
 ];
 const AT_BASE = `(() => { const a = ${VB}.split(' ').map(Number), b = String(window.__cmVb0 || '').split(' ').map(Number);
   if (b.length !== 4) return 'no baseline'; return a.every((v, i) => Math.abs(v - b[i]) <= 1) ? '' : 'viewBox ' + a.join(' ') + ' is not the whole campus ' + b.join(' '); })()`;
-const CARD_VIEWS = ['03-arrive', '04-inside', '08-person-card', '09-chat', '14-step-outside', '15-panel-with-card'];
+const CARD_VIEWS = ['03-arrive', '04-inside', '08-person-card', '09-chat', '14-step-outside', '15-panel-with-card', '16-tour'];
 
 /** A view: route to open, then steps (each a { click }, { evaluate } or { wait }) and the required ids for an account and size. */
 const VIEWS = [
@@ -95,6 +95,10 @@ const VIEWS = [
     assert: () => "location.pathname === '/portal/campus' ? '' : 'still on ' + location.pathname" },
   { name: '15-panel-with-card', route: '/portal/campus', steps: (a) => [tap(SIGNATURE[a])],
     required: () => ['cm-card'] },
+  // WP-2: the tour inside the stop's arrival panel (stop card on top, nav at the foot), the room behind it, STOP badges on the map
+  { name: '16-tour', route: '/portal/campus', accounts: ['member', 'explorer', 'business'],
+    steps: () => [{ click: '[data-testid="cm-cc-tour-start"]' }, { wait: 1500 }],
+    required: () => ['cm-card', '.cm-arrive [data-testid="cm-tour"]', 'cm-tour-nav', 'cm-tour-next', 'cm-inside', '.cm-tour-stop.is-live'] },
 ];
 
 /** WP-1: the side panel (and the tour in it) is required on every view past the gate. */

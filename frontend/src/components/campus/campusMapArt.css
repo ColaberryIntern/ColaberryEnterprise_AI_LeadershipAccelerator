@@ -80,3 +80,15 @@
 .cm-staff-tok:hover .ring,.cm-staff-tok:focus-visible .ring{stroke-width:3.5}
 .cm-staff-tok:focus-visible{outline:none}
 .cm-staff-tok:focus-visible .ring{stroke:var(--cm-art-red)}
+
+/* ---- WP-2: today's plan route and pins (prototype .plan-path, .plan-n), the dimmed buildings (.bld.dim) ---- */
+.cm-plan-path{fill:none;stroke:var(--cm-art-pic-plan);stroke-width:3.5;stroke-dasharray:1 8;stroke-linecap:round;opacity:.85;animation:cm-plan-march 1.2s linear infinite;pointer-events:none}
+@keyframes cm-plan-march{to{stroke-dashoffset:-18}}
+.cm-plan-pin circle{fill:var(--cm-art-white);stroke:var(--cm-art-pic-plan);stroke-width:2.2}
+.cm-plan-pin text{font:900 10px 'DM Sans',var(--sans),sans-serif;fill:var(--cm-art-pic-plan)}
+.cm-plan-pin.is-next circle{fill:var(--cm-art-pic-plan);stroke:var(--cm-art-white)}
+.cm-plan-pin.is-done circle{fill:var(--cm-art-live);stroke:var(--cm-art-white)}
+.cm-plan-pin.is-next text,.cm-plan-pin.is-done text{fill:var(--cm-art-white)}
+.cm-bld.is-dim{opacity:.45;transition:opacity .3s}
+.cm-map.is-reduced .cm-plan-path{animation:none}
+.cm-map.is-reduced .cm-bld.is-dim{transition:none}

@@ -1,0 +1,20 @@
+/* ============================================================
+   WP-2: the campus cheer and the points burst (prototype .cheer, .ch-big, .pt-burst, @keyframes burst). Colors: art tokens only.
+   ============================================================ */
+@import './campusArtTokens.css';
+
+.cm-cheer{position:fixed;top:72px;left:50%;transform:translate(-50%,-14px);opacity:0;z-index:70;background:var(--cm-art-live-card);color:var(--cm-art-on-dark);
+  border-radius:16px;padding:10px 14px;display:flex;align-items:center;gap:12px;font:13px 'DM Sans',var(--sans),system-ui,sans-serif;
+  box-shadow:0 16px 40px var(--cm-art-gate-shadow);transition:.35s;pointer-events:none;max-width:min(520px,92vw)}
+.cm-cheer:empty{display:none}
+.cm-cheer.is-on{opacity:1;transform:translate(-50%,0);pointer-events:auto}
+.cm-cheer.is-reduced{transition:none}
+.cm-cheer b{font-size:14px}
+.cm-cheer small{display:block;opacity:.75;font-size:12px;margin-top:2px}
+.cm-cheer-big{font-size:30px}
+.cm-cheer button{border:0;background:var(--cm-art-level);color:var(--cm-art-level-ink);border-radius:999px;padding:7px 12px;font-weight:800;font-size:12px;white-space:nowrap;cursor:pointer}
+.cm-cheer button:focus-visible{outline:3px solid var(--cm-art-on-dark);outline-offset:2px}
+.cm-pt-burst{position:fixed;z-index:71;transform:translateX(-50%);font:900 16px 'DM Sans',system-ui,sans-serif;color:var(--cm-art-live);background:var(--cm-art-explorer-tint);
+  border-radius:999px;padding:3px 10px;pointer-events:none;animation:cm-burst 1.6s ease-out forwards}
+@keyframes cm-burst{0%{opacity:0;transform:translate(-50%,6px) scale(.7)}20%{opacity:1;transform:translate(-50%,0) scale(1.1)}100%{opacity:0;transform:translate(-50%,-34px)}}
+@media (max-width:760px){ .cm-cheer{top:112px} }

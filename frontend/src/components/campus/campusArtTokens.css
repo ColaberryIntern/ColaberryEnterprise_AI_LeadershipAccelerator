@@ -65,6 +65,12 @@
   /* Colaberry Live evening (prototype #map.evening, .beam, .wave, .live-path) */
   --cm-art-beam:#fff3c4; --cm-art-lit:#ffd36e; --cm-art-onair-glow:rgba(255,80,60,.8); --cm-art-wave:#ff4d4d; --cm-art-live-path:#ffcf5a; --cm-art-live-path-glow:rgba(255,207,90,.9);
   --cm-art-level:#ffd23d; --cm-art-level-ink:#1b1622; --cm-art-live-card:#17131c; --cm-art-on-dark:#ffffff;
+  /* WP-2: the tour card, the plan box and the plan on the map (prototype .tour-card, .tc-tag, .tour-nav, .plan-box, .plan-path, .b-line) */
+  --cm-art-plan-solid:#0f766e; --cm-art-pic-plan:#0f766e;
+  --cm-art-tour-bg:#fff6f3; --cm-art-tour-edge:#f3c9c2; --cm-art-tour-ex-bg:#f3fbf6; --cm-art-tour-ex-edge:#cfe7d6; --cm-art-tour-text:#3d362d;
+  --cm-art-tag-demo-bg:#e6eef6; --cm-art-tag-demo:#1f4f7a; --cm-art-tag-lock-bg:#fff3d6; --cm-art-tag-lock:#7a5b00;
+  --cm-art-tip-edge:#e3d6c2; --cm-art-tour-nav:#f7f3ec; --cm-art-dot:#d8d0c2; --cm-art-dot-done:#9ab8a6; --cm-art-dot-on:#1f4f7a;
+  --cm-art-btn-line-bg:#f3f0ea; --cm-art-btn-line-edge:#e3dccf;
 }
 [data-theme="dark"]{
   --cm-art-paper:#1e1e1e; --cm-art-ink:#f4f4f4; --cm-art-muted:#b5ad9f; --cm-art-line:#3a352d;
@@ -72,4 +78,8 @@
   --cm-art-plan-bg:#16302c; --cm-art-plan-edge:#2b5a52; --cm-art-plan:#5fd0c0; --cm-art-plan-hover:#1d3d38;
   --cm-art-pass-bg:#16301f; --cm-art-pass-edge:#2b5a3a; --cm-art-explorer-tint:#1b3a26; --cm-art-business-tint:#1b2c3e;
   --cm-art-shadow:0 10px 30px rgba(0,0,0,.45),0 2px 6px rgba(0,0,0,.3);
+  --cm-art-tour-bg:#2e1f1c; --cm-art-tour-edge:#5a3530; --cm-art-tour-ex-bg:#16301f; --cm-art-tour-ex-edge:#2b5a3a; --cm-art-tour-text:#e6dfd3;
+  --cm-art-tag-demo-bg:#1b2c3e; --cm-art-tag-demo:#9cc3ea; --cm-art-tag-lock-bg:#3a3018; --cm-art-tag-lock:#e0b54a;
+  --cm-art-tip-edge:#4a4236; --cm-art-tour-nav:#2a2622; --cm-art-dot:#4a4438; --cm-art-dot-done:#5f7d6b; --cm-art-dot-on:#9cc3ea;
+  --cm-art-btn-line-bg:#2e2a25; --cm-art-btn-line-edge:#4a4236;
 }

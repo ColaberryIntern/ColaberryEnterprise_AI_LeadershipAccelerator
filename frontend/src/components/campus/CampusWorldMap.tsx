@@ -9,11 +9,12 @@ import { publicOnly } from './campusGear';
 import type { Equipped } from './campusGear';
 import BuildingArt from './art/BuildingArt';
 import { MainGateArt } from './art/MainGate';
-import { PeopleChip, StatusBadge, StopBadge, statusOf } from './art/BuildingBadges';
+import { PeopleChip, StatusBadge, TourBadge, PlanPin, statusOf } from './art/BuildingBadges';
+import type { PlanStop } from './campusPlan';
 import { LiveBack, LiveFront } from './art/LiveDressing';
 import StaffTokens from './art/StaffTokens';
 import type { MapDesk } from './art/StaffTokens';
-import { GroundPatterns, Ground, QuadAndPaths, District, Trees, AVE, GATE, HUB } from './art/grounds';
+import { GroundPatterns, Ground, QuadAndPaths, District, Trees, GATE } from './art/grounds';
 import type { PathDoor } from './art/grounds';
 import { doorOf, routeTo, START } from './walkPath';
 import type { Here, Pt } from './walkPath';
@@ -62,8 +63,13 @@ export interface CampusMapProps {
   onAir?: Set<string>;
   /** C9: the learner's OWN equipped set, drawn on their pin (public slots) and, only while it travels, the ride. */
   ownGear?: Equipped;
-  /** C8: today's plan route, the unfinished stops' buildings in order (campusPlan.routeBuildings). Full map only. */
-  route?: BuildingId[];
+  /** WP-2: today's plan: one teal route from where you stand through each unfinished stop, and a numbered pin per stop. Full map only;
+   *  the caller leaves it out during a tour and while Colaberry Live is on air (the prototype hides it then too). */
+  plan?: PlanStop[];
+  /** WP-2: the tour's stop badges (they replace the status badges while the tour runs). */
+  tourBadges?: { id: BuildingId; text: string; live: boolean }[];
+  /** WP-2: while a building's arrival panel is open, every other building dims (the prototype's .bld.dim). */
+  dimExcept?: BuildingId | null;
   /** C11b: the Explorer view's OPEN badges (the prototype shows OPEN on every building an Explorer may use). */
   showOpen?: boolean;
   /** C11b: the AI staff desks on duty for this viewer, drawn at their buildings (full map only). */
@@ -76,9 +82,9 @@ export interface CampusMapProps {
 }
 
 // C11 (the map stays light): memoized, so a walking avatar (one state update per frame) does not re-render every building.
-const Building = memo(function Building({ b, access, label, compact, count, shown, onAir = false, here = false, showOpen = false, stop, onPick, setRef }: {
+const Building = memo(function Building({ b, access, label, compact, count, shown, onAir = false, here = false, showOpen = false, pin, tourBadge, dim = false, onPick, setRef }: {
   b: CampusBuilding; access: ExplorerAccess; label: string; compact: boolean; count: number; shown?: CampusPerson[]; onAir?: boolean; here?: boolean;
-  showOpen?: boolean; stop?: number;
+  showOpen?: boolean; pin?: { n: number; done: boolean; next: boolean }; tourBadge?: { text: string; live: boolean }; dim?: boolean;
   onPick: (id: BuildingId) => void; setRef?: (id: BuildingId, el: SVGGElement | null) => void;
 }): React.ReactElement {
   const chip = accessLabel(access);
@@ -94,15 +100,16 @@ const Building = memo(function Building({ b, access, label, compact, count, show
   return (
     <g
       ref={(el) => setRef?.(b.id, el)}
-      className={`cm-bld cm-b-${b.id}${access === 'locked' ? ' is-locked' : ''}${here ? ' is-here' : ''}${onAir ? ' onair' : ''}`}
+      className={`cm-bld cm-b-${b.id}${access === 'locked' ? ' is-locked' : ''}${here ? ' is-here' : ''}${dim ? ' is-dim' : ''}${onAir ? ' onair' : ''}`}
       {...a11y}
       data-building={b.id} data-testid={`cm-bld-${b.id}`} onClick={() => onPick(b.id)}
       transform={`translate(${isGate ? GATE.x : b.pos.x} ${isGate ? GATE.y : b.pos.y})`}
     >
       {isGate ? <MainGateArt /> : <BuildingArt id={b.id} kind={b.kind as Exclude<CampusBuilding['kind'], 'gate'>} w={b.pos.w} h={b.pos.h} label={compact ? undefined : label} />}
       {count > 0 && <PeopleChip b={b} count={count} shown={shown} compact={compact} />}
-      {status && <StatusBadge b={b} status={status} compact={compact} />}
-      {stop !== undefined && <StopBadge b={b} n={stop + 1} next={stop === 0} />}
+      {status && !tourBadge && <StatusBadge b={b} status={status} compact={compact} />}
+      {tourBadge && <TourBadge b={b} text={tourBadge.text} live={tourBadge.live} />}
+      {pin && <PlanPin b={b} n={pin.n} done={pin.done} next={pin.next} />}
     </g>
   );
 });
@@ -122,20 +129,43 @@ const Scenery = memo(function Scenery({ doors, gateIsBuilding }: { doors: PathDo
   );
 });
 
-/** The plan route's path to one stop's door, along the campus paths (a spoke from the hub, or up from the avenue). */
-function routeSegment(b: CampusBuilding): string {
-  const d = doorOf(b);
-  if (b.zone === 'up') return `M${HUB.x} ${HUB.y}L${d.x} ${d.y}`;
-  if (b.zone === 'ave') return `M${HUB.x} ${AVE}L${d.x} ${AVE}L${d.x} ${d.y}`;
-  return `M${HUB.x} ${AVE}L${GATE.x} ${GATE.y}`;
+/**
+ * Today's plan as ONE route (the prototype's renderPlanMap): from where you stand, along the campus paths, through each unfinished
+ * stop in order (each leg starts at the previous stop's door).
+ */
+export function planPathD(from: Here, stops: Pick<CampusBuilding, 'pos' | 'zone'>[]): string | null {
+  if (!stops.length) return null;
+  let d = `M${from.x} ${from.y}`;
+  let prev = from;
+  for (const b of stops) {
+    for (const q of routeTo(prev, b)) d += `L${q.x} ${q.y}`;
+    prev = { ...doorOf(b), zone: b.zone };
+  }
+  return d;
 }
 
-/** Today's plan route: a dotted line along the paths to each unfinished stop. */
-function RouteLines({ route, buildings }: { route: BuildingId[]; buildings: CampusBuilding[] }): React.ReactElement {
-  return <>{route.map((id) => {
-    const b = buildings.find((x) => x.id === id); if (!b) return null;
-    return <path key={'r-' + id} className="cm-route-line" data-testid={`cm-route-${id}`} d={routeSegment(b)} aria-hidden="true" />;
-  })}</>;
+/** WP-2: the plan route (hidden while walking: it is redrawn from where you arrive), its pins, and the tour's badges by building. */
+function useMapOverlays(o: { plan?: PlanStop[]; tourBadges?: { id: BuildingId; text: string; live: boolean }[]; buildings: CampusBuilding[];
+  compact: boolean; moving: boolean; from: Here }): { pins: ReturnType<typeof pinsOf>; badges: Partial<Record<BuildingId, { text: string; live: boolean }>>; planD: string | null } {
+  const { plan, tourBadges, buildings, compact, moving, from } = o;
+  const pins = useMemo(() => pinsOf(plan), [plan]);
+  const badges = useMemo(() => Object.fromEntries((tourBadges ?? []).map((t) => [t.id, t])) as Partial<Record<BuildingId, { text: string; live: boolean }>>, [tourBadges]);
+  const { x, y, zone } = from;
+  const planD = useMemo(() => {
+    if (compact || moving || !plan) return null;
+    const ids: BuildingId[] = [];
+    for (const s of plan) if (!s.done && s.buildingId && !ids.includes(s.buildingId)) ids.push(s.buildingId);
+    return planPathD({ x, y, zone }, ids.map((id) => buildings.find((b) => b.id === id)).filter((b): b is CampusBuilding => !!b));
+  }, [compact, moving, plan, buildings, x, y, zone]);
+  return { pins, badges, planD };
+}
+
+/** Each plan step's building: its number, whether it is done, and whether it is the next one. */
+function pinsOf(plan: PlanStop[] | undefined): Partial<Record<BuildingId, { n: number; done: boolean; next: boolean }>> {
+  const out: Partial<Record<BuildingId, { n: number; done: boolean; next: boolean }>> = {};
+  const next = plan?.find((s) => !s.done && s.buildingId);
+  plan?.forEach((s, i) => { if (s.buildingId && !out[s.buildingId]) out[s.buildingId] = { n: i + 1, done: s.done, next: s === next }; });
+  return out;
 }
 
 /** You: the prototype's red teardrop with your initials, your public gear on its head, and your ride only while you travel. */
@@ -155,7 +185,7 @@ function AvatarPin({ pos, moving, reduceMotion, ownGear, initials }: { pos: Pt; 
   );
 }
 
-export default function CampusWorldMap({ buildings, accessOf, workplaceNames, reduceMotion, compact = false, initialTarget, onArrive, buildingRef, counts, people, onPickPerson, walkRequest, startAt, onAir, route, ownGear, showOpen = false, camera, desks, me }: CampusMapProps): React.ReactElement {
+export default function CampusWorldMap({ buildings, accessOf, workplaceNames, reduceMotion, compact = false, initialTarget, onArrive, buildingRef, counts, people, onPickPerson, walkRequest, startAt, onAir, plan, tourBadges, dimExcept, ownGear, showOpen = false, camera, desks, me }: CampusMapProps): React.ReactElement {
   // WP-1: you start where you last were (the building's door), else at the gate.
   const [first] = useState<Here>(() => { const b = startAt ? buildings.find((x) => x.id === startAt) : undefined; return b ? { ...doorOf(b), zone: b.zone } : START; });
   const [pos, setPos] = useState<Pt>({ x: first.x, y: first.y });
@@ -218,6 +248,7 @@ export default function CampusWorldMap({ buildings, accessOf, workplaceNames, re
   const livePath = live.length && atId !== live[0].id ? [{ x: pos.x, y: pos.y }, ...routeTo(hereRef.current, live[0])] : null;
   const doors = useMemo<PathDoor[]>(() => buildings.filter((b) => b.kind !== 'gate').map((b) => ({ id: b.id, x: b.pos.x, y: b.pos.y, zone: b.zone })), [buildings]);
 
+  const { pins, badges, planD } = useMapOverlays({ plan, tourBadges, buildings, compact, moving, from: { x: pos.x, y: pos.y, zone: hereRef.current.zone } });
   const started = useRef(false);
   useEffect(() => {
     if (initialTarget && !started.current) { started.current = true; walkTo(initialTarget); }
@@ -232,11 +263,12 @@ export default function CampusWorldMap({ buildings, accessOf, workplaceNames, re
       {...(compact ? { 'aria-hidden': true, focusable: 'false' } : { role: 'group', 'aria-label': 'Campus map' })}>
       <Scenery doors={doors} gateIsBuilding={gateIsBuilding} />
       {live.length > 0 && <LiveBack buildings={live} path={livePath} />}
-      {!compact && route && <RouteLines route={route} buildings={buildings} />}
+      {planD && <path className="cm-plan-path" d={planD} aria-hidden="true" data-testid="cm-plan-path" />}
       {buildings.map((b) => (
         <Building key={b.id} b={b} access={accessOf(b)} label={buildingName(b, workplaceNames)} compact={compact} count={counts?.[b.id] ?? 0}
           shown={people?.[b.id]?.shown} onAir={!!onAir?.has(b.id)} here={!compact && atId === b.id} showOpen={showOpen}
-          stop={!compact && route && route.includes(b.id) ? route.indexOf(b.id) : undefined} onPick={pick} setRef={buildingRef} />
+          pin={compact ? undefined : pins[b.id]} tourBadge={compact ? undefined : badges[b.id]} dim={!compact && !!dimExcept && dimExcept !== b.id}
+          onPick={pick} setRef={buildingRef} />
       ))}
       {live.length > 0 && <LiveFront buildings={live} />}
       {!compact && desks && desks.length > 0 && <StaffTokens desks={desks} buildings={buildings} onPick={pick} />}

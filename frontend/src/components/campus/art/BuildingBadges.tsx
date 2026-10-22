@@ -60,14 +60,27 @@ export function StatusBadge({ b, status, compact }: { b: CampusBuilding; status:
   );
 }
 
-export function StopBadge({ b, n, next }: { b: CampusBuilding; n: number; next: boolean }): React.ReactElement {
-  const text = `STOP ${n}`;
+/** WP-2: a tour stop above the roof (the prototype's renderMoment badges while touring: STOP n, or an Explorer's "n · OPEN"), the
+ *  current stop green. It takes the status badge's place while the tour runs. */
+export function TourBadge({ b, text, live }: { b: CampusBuilding; text: string; live: boolean }): React.ReactElement {
   const bw = badgeWidth(text);
   const lift = b.kind === 'gate' ? 64 : b.pos.h + (b.kind === 'amphi' ? 8 : b.kind === 'tower' ? 44 : 40);
   return (
-    <g className={`cm-badge cm-route-stop${next ? ' is-live' : ''}`} aria-hidden="true" data-testid={`cm-route-stop-${b.id}`} transform={`translate(${-bw / 2} ${-lift})`}>
+    <g className={`cm-badge cm-tour-stop${live ? ' is-live' : ''}`} aria-hidden="true" data-testid={`cm-tour-stop-${b.id}`} transform={`translate(${-bw / 2} ${-lift})`}>
       <rect x={0} y={-9} width={bw} height={18} rx={9} />
       <text x={8} y={3.5}>{text}</text>
+    </g>
+  );
+}
+
+/** WP-2: today's plan step at a building (the prototype's .plan-n pin at its top-left corner): its number, a tick once done, filled
+ *  for the next step. A press walks there (it sits inside the building's own button). */
+export function PlanPin({ b, n, done, next }: { b: CampusBuilding; n: number; done: boolean; next: boolean }): React.ReactElement {
+  const x = b.kind === 'gate' ? -30 : -b.pos.w / 2 + 6;
+  return (
+    <g className={`cm-plan-pin${done ? ' is-done' : next ? ' is-next' : ''}`} aria-hidden="true" data-testid={`cm-plan-pin-${b.id}`} transform={`translate(${x} -4)`}>
+      <circle r={9} />
+      <text y={3.6} textAnchor="middle">{done ? '✓' : n}</text>
     </g>
   );
 }

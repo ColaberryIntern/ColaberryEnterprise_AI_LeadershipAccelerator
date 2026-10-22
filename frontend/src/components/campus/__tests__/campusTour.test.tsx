@@ -92,17 +92,22 @@ const saved = () => JSON.parse(window.localStorage.getItem(tourKey()) || 'null')
 jest.setTimeout(15000);
 
 describe('starting the tour', () => {
-  it('the side column button lands on the campus home on stop 1 of 9, focus on the stop heading, the avatar at its door', async () => {
+  it('the side column button lands on the campus home on stop 1 of 9: the tour inside the arrival panel, the room behind it (WP-2)', async () => {
     await mount();
     await click('cm-tour-start');
     expect(where.path).toBe('/portal/campus');
     expect(q('cm-home')).not.toBeNull();
-    expect(q('cm-tour-count')?.textContent).toBe('Stop 1 of 9');
-    expect(container.querySelector('#cm-tour-h')?.textContent).toBe('Classroom');
-    expect(document.activeElement?.id).toBe('cm-tour-h');
-    expect(q('cm-tour-tip')?.textContent).toMatch(/^Tip:/);
+    expect(q('cm-card')?.getAttribute('data-building')).toBe('lecture');
+    expect(container.querySelector('[data-testid="cm-card"] [data-testid="cm-tour"]')).not.toBeNull();
+    expect(q('cm-arrive-kicker')?.textContent).toBe('What’s in your seat · stop 1 of 9');
+    expect(q('cm-tour-title')?.textContent).toBe('Your classroom');
+    expect(q('cm-tour-tip')?.textContent).toContain('replays');
+    expect(q('cm-tour-count')?.getAttribute('aria-label')).toBe('Stop 1 of 9');
+    expect(document.activeElement?.id).toBe('cm-card-lecture'); // the panel's heading takes focus at each stop
+    expect(q('cm-inside')).not.toBeNull(); // the room shows during the tour, as the prototype's flyIn
     expect(avatarAt()).toContain(doorFor('lecture'));
-    expect(q('cm-card')).toBeNull(); // the tour card replaces the building card
+    expect(q('cm-tour-stop-lecture')?.getAttribute('class')).toContain('is-live'); // STOP badges on the map, the current one green
+    expect(q('cm-tour-stop-arcade')?.textContent).toBe('STOP 9');
   });
 
   it('the home side panel offers it too, and shows it running (no Start) while touring', async () => {
@@ -112,7 +117,7 @@ describe('starting the tour', () => {
     expect(where.path).toBe('/portal/campus');
     expect(q('cm-cc-tour')?.getAttribute('data-state')).toBe('idle');
     await click('cm-cc-tour-start');
-    expect(q('cm-tour-count')?.textContent).toBe('Stop 1 of 9');
+    expect(q('cm-tour-count')?.getAttribute('aria-label')).toBe('Stop 1 of 9');
     expect(q('cm-cc-tour')?.getAttribute('data-state')).toBe('running');
     expect(q('cm-cc-tour-start')).toBeNull();
   });
@@ -132,30 +137,29 @@ describe('starting the tour', () => {
 });
 
 describe('moving through it', () => {
-  it('Next and Back walk between stops; Back is disabled on stop 1', async () => {
+  it('"Next: <building> →" walks to the next stop; there is no Back (the prototype has none)', async () => {
     await mount();
     await click('cm-tour-start');
-    expect((q('cm-tour-back') as HTMLButtonElement).disabled).toBe(true);
+    expect(q('cm-tour-back')).toBeNull();
+    expect(q('cm-tour-next')?.textContent).toBe('Next: Library →');
     await click('cm-tour-next');
-    expect(q('cm-tour-count')?.textContent).toBe('Stop 2 of 9');
-    expect(container.querySelector('#cm-tour-h')?.textContent).toBe('Library');
+    expect(q('cm-tour-count')?.getAttribute('aria-label')).toBe('Stop 2 of 9');
+    expect(q('cm-card')?.getAttribute('data-building')).toBe('library');
+    expect(q('cm-arrive-kicker')?.textContent).toBe('What’s in your seat · stop 2 of 9');
     expect(avatarAt()).toContain(doorFor('library'));
-    expect(document.activeElement?.id).toBe('cm-tour-h');
-    await click('cm-tour-back');
-    expect(q('cm-tour-count')?.textContent).toBe('Stop 1 of 9');
-    expect(avatarAt()).toContain(doorFor('lecture'));
+    expect(document.activeElement?.id).toBe('cm-card-library');
   });
 
-  it('member: the last stop says Finish, then "That\'s the tour" with no server call; Done finishes the tour and stays on the home', async () => {
+  it('member: the last stop says "Finish tour ✓"; finishing closes the panel, marks it taken, and the lead says so (no server call)', async () => {
     await mount();
     await click('cm-tour-start');
     for (let i = 0; i < 8; i++) await click('cm-tour-next');
-    expect(q('cm-tour-count')?.textContent).toBe('Stop 9 of 9');
-    expect(q('cm-tour-next')?.textContent).toBe('Finish');
+    expect(q('cm-tour-count')?.getAttribute('aria-label')).toBe('Stop 9 of 9');
+    expect(q('cm-tour-next')?.textContent).toBe('Finish tour ✓');
     await click('cm-tour-next');
-    expect(q('cm-tour-end')?.textContent).toContain("That's the tour");
+    expect(q('cm-card')).toBeNull();
     expect(q('cm-tour-optin')).toBeNull();
-    await click('cm-tour-done');
+    expect(q('cm-cc-lead')?.textContent).toContain('That’s everything in your seat');
     expect(campus().tourIndex).toBeNull();
     expect(campus().tourProgress).toEqual({ paused: null, toured: true });
     expect(saved()).toEqual({ paused: null, toured: true });
@@ -168,22 +172,26 @@ describe('moving through it', () => {
     mockAudience = 'business';
     await mount();
     await click('cm-tour-start');
-    expect(q('cm-tour-count')?.textContent).toBe('Stop 1 of 6');
+    expect(q('cm-tour-count')?.getAttribute('aria-label')).toBe('Stop 1 of 6');
     for (let i = 0; i < 5; i++) await click('cm-tour-next');
-    expect(container.querySelector('#cm-tour-h')?.textContent).toBe('Partner Office');
+    expect(container.querySelector('#cm-card-career')?.textContent).toBe('Partner Office');
+    expect(q('cm-tour-title')?.textContent).toBe('Your partner office');
     await click('cm-tour-next');
+    expect(campus().tourProgress.toured).toBe(true);
     expect(q('cm-tour-optin')).toBeNull();
     expect(tourPosts).toBe(0);
   });
 
-  it('Explorer: seven stops; the end card walks to the Main Gate and offers the opt-in', async () => {
+  it('Explorer: seven stops; "Finish · see what you\'d unlock" opens the unlock sheet with the opt-in (Q10)', async () => {
     mockAudience = 'explorer';
     await mount();
     await click('cm-tour-start');
-    expect(q('cm-tour-count')?.textContent).toBe('Stop 1 of 7');
-    for (let i = 0; i < 7; i++) await click('cm-tour-next');
+    expect(q('cm-tour-count')?.getAttribute('aria-label')).toBe('Stop 1 of 7');
+    for (let i = 0; i < 6; i++) await click('cm-tour-next');
+    expect(q('cm-tour-next')?.textContent).toBe('Finish · see what you’d unlock →');
+    await click('cm-tour-next');
+    expect(q('cm-unlock')).not.toBeNull();
     expect(q('cm-tour-optin')).not.toBeNull();
-    expect(avatarAt()).toContain(doorFor('gate'));
     expect(tourPosts).toBe(0); // nothing is sent until the learner clicks
     await click('cm-tour-signup');
     expect(q('cm-explorer-path')).not.toBeNull();
@@ -203,7 +211,7 @@ describe('ending it', () => {
     expect(saved()).toEqual({ paused: 1, toured: false });
     expect(q('cm-cc-tour')?.getAttribute('data-state')).toBe('paused');
     await click('cm-cc-tour-resume');
-    expect(q('cm-tour-count')?.textContent).toBe('Stop 2 of 9');
+    expect(q('cm-tour-count')?.getAttribute('aria-label')).toBe('Stop 2 of 9');
   });
 
   it('the side panel End tour pauses it too', async () => {

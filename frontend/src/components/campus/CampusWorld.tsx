@@ -1,34 +1,37 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { MutableRefObject } from 'react';
 import type { CampusPresence } from './campusApi';
 import CampusWorldMap from './CampusWorldMap';
-import BuildingCard from './BuildingCard';
 import type { BuildingId, CampusAudience, CampusBuilding } from './campusMap';
 import { buildingState } from './campusAccess';
 import type { ExplorerAccess } from './campusMap';
 import PersonCard from './PersonCard';
 import type { PersonCardTarget } from './CampusContext';
 import type { StaffDesk } from './campusPeopleApi';
-import { tokensFor, desksForBuilding } from './campusPeople';
+import { tokensFor } from './campusPeople';
 import { buildingName } from './campusMap';
-import ExplorerPath from './ExplorerPath';
-import { explorerPath } from './campusPath';
 import type { Equipped } from './campusGear';
 import type { CameraApi, InsetsOf } from './useCampusCamera';
 import type { Cam } from './campusCamera';
-import type { MutableRefObject } from 'react';
 import { GATE } from './art/grounds';
 import CampusZoomControls from './CampusZoomControls';
-import { happeningAt, zoneLabelOf } from './campusArrival';
-import { buildingLine } from './tourSteps';
-import CampusInside from './interior/CampusInside';
+import ArrivalPanel from './ArrivalPanel';
+import type { PlanStop } from './campusPlan';
+import type { CompleteResult } from './campusPlanApi';
+import type { LookFacts } from './campusFacts';
+import { useWorldTour } from './useWorldTour';
+import type { WorldTour } from './useWorldTour';
+import { STATE_TAG } from './tourSteps';
 import { useMapStage, useDoorReveal, useReturnRecenter } from './useWorldStage';
 import type { Framed } from './useWorldStage';
 
 /**
- * Map + building card, with the keyboard contract (Campus C2):
+ * Map + cards, with the keyboard contract (Campus C2):
  *  - Tab moves across buildings, Enter/Space walks there and opens the card;
  *  - Esc with a card open closes ONLY the card and returns focus to its building;
- *  - Esc with no card open calls onExit (the overlay closes).
+ *  - Esc with no card open calls onExit.
+ * WP-2: arriving opens the arrival panel (ArrivalPanel) for every building, during a tour too (the tour lives inside it), with
+ * today's plan box; the other buildings dim while it is open; the plan is drawn on the map as the prototype's teal route.
  */
 export interface CampusWorldProps {
   buildings: CampusBuilding[];
@@ -56,10 +59,12 @@ export interface CampusWorldProps {
   onClosePerson?: () => void;
   /** C8: buildings whose room is on air now. */
   onAir?: Set<string>;
-  /** C8: today's plan route (building ids in order). */
-  route?: BuildingId[];
-  /** C7: a tour in progress: walk to `target` whenever it changes, show `card` instead of the building card, Esc ends the tour. */
-  tour?: { target: BuildingId | null; card: React.ReactNode; onEnd: () => void };
+  /** WP-2: today's plan (drawn on the map; its box in the arrival panel; Mark done). Absent during a tour and while live. */
+  plan?: { stops: PlanStop[]; onComplete: (s: PlanStop) => Promise<CompleteResult> } | null;
+  /** WP-2: your points, rung and today's plan minutes, for "Happening here". */
+  look?: LookFacts;
+  /** C7 / WP-2: a tour in progress. Each step walks to its stop, whose arrival panel carries the tour; Esc ends (pauses) it. */
+  tour?: WorldTour;
   /** C9: a panel shown instead of the building card (the My look locker); Esc closes it. */
   panel?: { card: React.ReactNode; onClose: () => void };
   /** C9: the learner's own equipped set, drawn on their pin. */
@@ -74,12 +79,14 @@ export interface CampusWorldProps {
   startAt?: BuildingId | null;
   startCam?: Cam;
   recenter?: number;
-  /** C11b: told whenever a card opens or closes (a building card, a person card, the tour, a panel), with the building whose card is
-   *  open (null for the others), so the home can tuck its concierge and say where you are. */
+  /** C11b: told whenever a card opens or closes, with the building whose arrival panel is open (null for the others). */
   onCard?: (state: { open: boolean; building: BuildingId | null }) => void;
 }
 
-export default function CampusWorld({ buildings, audience, hasFullAccess, accessOf: accessOfProp, isExplorer = false, workplaceNames, reduceMotion, initialTarget, onExit, onNavigate, presence, presenceError = false, onEnterRoom, staffDesks, personCard, onOpenPerson, onClosePerson, onAir, route, tour, panel, ownGear, insets, walkTo, onCard, cameraRef, startAt, startCam, recenter }: CampusWorldProps): React.ReactElement {
+const NO_LOOK: LookFacts = { points: null, rung: null, planMinutes: null };
+
+export default function CampusWorld(p: CampusWorldProps): React.ReactElement {
+  const { buildings, audience, workplaceNames, reduceMotion, presence, presenceError = false, onOpenPerson, onClosePerson, personCard, tour, panel } = p;
   const counts = useMemo(() => {
     const out: Record<string, number> = {};
     if (presence) for (const [id, a] of Object.entries(presence)) out[id] = a.count;
@@ -87,96 +94,79 @@ export default function CampusWorld({ buildings, audience, hasFullAccess, access
   }, [presence]);
   const [open, setOpen] = useState<BuildingId | null>(null);
   const els = useRef(new Map<BuildingId, SVGGElement>());
+  const { accessOf: accessOfProp, hasFullAccess } = p;
   const accessOf = useCallback((b: CampusBuilding) => (accessOfProp
     ? accessOfProp(b)
     : buildingState(b, { isStaff: false, hasFullAccess, isExplorer: audience === 'explorer' })), [accessOfProp, audience, hasFullAccess]);
   const registerEl = useCallback((id: BuildingId, el: SVGGElement | null) => { if (el) els.current.set(id, el); else els.current.delete(id); }, []);
   // C11: on phones the map is wider than the screen; bring the destination into view (instantly with reduce motion).
-  // On wide screens nothing overflows, so this is a no-op there.
   const revealBuilding = useCallback((id: BuildingId) => {
     els.current.get(id)?.scrollIntoView?.({ block: 'nearest', inline: 'center', behavior: reduceMotion ? 'auto' : 'smooth' });
   }, [reduceMotion]);
-
-  const closeCard = useCallback(() => {
-    const id = open;
-    setOpen(null);
-    if (id) els.current.get(id)?.focus();
-  }, [open]);
+  const openRef = useRef(open);
+  openRef.current = open;
+  const closeCard = useCallback(() => { const id = openRef.current; setOpen(null); if (id) els.current.get(id)?.focus(); }, []);
 
   const [walkRequest, setWalkRequest] = useState<{ id: BuildingId; seq: number; instant?: boolean } | null>(null);
-  const tourTarget = tour?.target ?? null;
-  useEffect(() => {
-    if (tourTarget) { setOpen(null); revealBuilding(tourTarget); setWalkRequest((w) => ({ id: tourTarget, seq: (w?.seq ?? 0) + 1 })); }
-  }, [tourTarget]); // runs per tour step only (revealBuilding is stable for a given reduceMotion)
-  const touring = !!tour;
-  const onArrive = useCallback((id: BuildingId) => { revealBuilding(id); if (!touring) setOpen(id); }, [touring, revealBuilding]);
+  const walk = useCallback((id: BuildingId, instant?: boolean) => setWalkRequest((w) => ({ id, seq: (w?.seq ?? 0) + 1, instant })), []);
+  const t = useWorldTour(tour, closeCard, walk, revealBuilding);
+  const onArrive = useCallback((id: BuildingId) => { revealBuilding(id); setOpen(id); }, [revealBuilding]);
   const people = useMemo(() => {
     if (!presence || presenceError || !onOpenPerson) return undefined;
     const out: Record<string, ReturnType<typeof tokensFor>> = {};
-    for (const [id, a] of Object.entries(presence)) { const t = tokensFor(a); if (t.shown.length) out[id] = t; }
+    for (const [id, a] of Object.entries(presence)) { const tk = tokensFor(a); if (tk.shown.length) out[id] = tk; }
     return out;
   }, [presence, presenceError, onOpenPerson]);
-  const pickPerson = useCallback((p: PersonCardTarget['person'], buildingId: BuildingId) => { setOpen(null); onOpenPerson?.({ person: p, buildingId }); }, [onOpenPerson]);
+  const pickPerson = useCallback((pp: PersonCardTarget['person'], buildingId: BuildingId) => { setOpen(null); onOpenPerson?.({ person: pp, buildingId }); }, [onOpenPerson]);
 
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (e.key !== 'Escape') return;
     e.stopPropagation();
-    if (tour) tour.onEnd(); else if (panel) panel.onClose(); else if (personCard) onClosePerson?.(); else if (open) closeCard(); else onExit();
+    if (t.arrival) t.arrival.onEnd(); else if (panel) panel.onClose(); else if (personCard) onClosePerson?.(); else if (open) closeCard(); else p.onExit();
   };
 
   // C11b staging: the camera, the desks and your initials for the map, and the door reveal (useWorldStage).
   const framedRef = useRef<Framed>(null);
-  const { camApi, camera, mapDesks, meInitials } = useMapStage(staffDesks, audience, insets, { camRef: cameraRef, framedRef, startCam });
-  const door = useDoorReveal(onEnterRoom, reduceMotion);
+  const { camApi, camera, mapDesks, meInitials } = useMapStage(p.staffDesks, audience, p.insets, { camRef: p.cameraRef, framedRef, startCam: p.startCam });
+  const door = useDoorReveal(p.onEnterRoom, reduceMotion);
   const lastOutside = useRef(0);
+  const { walkTo } = p;
   useEffect(() => {
-    if (walkTo && walkTo.seq !== lastOutside.current) { lastOutside.current = walkTo.seq; setOpen(null); setWalkRequest((w) => ({ id: walkTo.id, seq: (w?.seq ?? 0) + 1, instant: walkTo.instant })); }
-  }, [walkTo]);
+    if (walkTo && walkTo.seq !== lastOutside.current) { lastOutside.current = walkTo.seq; setOpen(null); walk(walkTo.id, walkTo.instant); }
+  }, [walkTo, walk]);
 
   // "Go somewhere else": close the card and put the caret in the campus search (the home's top bar, or a page banner).
-  const elsewhere = useCallback(() => {
-    setOpen(null);
-    document.querySelector<HTMLInputElement>('.cm-whereto-input')?.focus();
-  }, []);
-  const b = open ? buildings.find((x) => x.id === open) : undefined;
-  const enterRoom = (r: string) => { if (b) door.enter(r, b.id, els.current.get(b.id)?.getBoundingClientRect() ?? null); };
+  const elsewhere = useCallback(() => { setOpen(null); document.querySelector<HTMLInputElement>('.cm-whereto-input')?.focus(); }, []);
+  const b = open && !panel && !personCard ? buildings.find((x) => x.id === open) : undefined;
   const anyCard = !!tour || !!panel || !!personCard || !!b;
-  const cardBuilding = !tour && !panel && !personCard && b ? b.id : null;
+  const cardBuilding = b ? b.id : null;
   // WP-1: the building a resize keeps framed (the open card's); every return to the campus recenters (useReturnRecenter).
-  framedRef.current = b && !tour && !panel && !personCard ? (b.kind === 'gate' ? { ...GATE, h: 50 } : { x: b.pos.x, y: b.pos.y, h: b.pos.h }) : null;
-  useReturnRecenter(camApi, anyCard, recenter, () => { setOpen(null); if (personCard) onClosePerson?.(); });
-  const onCardRef = useRef(onCard); onCardRef.current = onCard;
+  framedRef.current = b ? (b.kind === 'gate' ? { ...GATE, h: 50 } : { x: b.pos.x, y: b.pos.y, h: b.pos.h }) : null;
+  useReturnRecenter(camApi, anyCard, p.recenter, () => { setOpen(null); if (personCard) onClosePerson?.(); });
+  const onCardRef = useRef(p.onCard); onCardRef.current = p.onCard;
   useEffect(() => { onCardRef.current?.({ open: anyCard, building: cardBuilding }); }, [anyCard, cardBuilding]);
+  // The tour's STOP badges on the map (an Explorer's say what each stop is: "3 · OPEN"), the current stop green.
+  const tourBadges = tour ? tour.model.stops.map((s, i) => ({ id: s.buildingId, text: tour.model.audience === 'explorer' && s.state ? `${i + 1} · ${STATE_TAG[s.state].toUpperCase()}` : `STOP ${i + 1}`, live: i === tour.index })) : undefined;
   return (
     <div className={`cm-world${anyCard ? ' has-card' : ''}`} onKeyDown={onKeyDown}>
       <CampusWorldMap buildings={buildings} accessOf={accessOf} workplaceNames={workplaceNames} reduceMotion={reduceMotion}
-        initialTarget={initialTarget} onArrive={onArrive} buildingRef={registerEl} counts={presenceError ? undefined : counts}
-        people={people} onPickPerson={onOpenPerson ? pickPerson : undefined} walkRequest={walkRequest} onAir={onAir} route={route} ownGear={ownGear} showOpen={audience === 'explorer'} camera={camera}
-        desks={mapDesks} me={meInitials ? { initials: meInitials } : null} startAt={startAt} />
+        initialTarget={p.initialTarget} onArrive={onArrive} buildingRef={registerEl} counts={presenceError ? undefined : counts}
+        people={people} onPickPerson={onOpenPerson ? pickPerson : undefined} walkRequest={walkRequest} onAir={p.onAir} plan={p.plan?.stops} ownGear={p.ownGear}
+        showOpen={audience === 'explorer'} camera={camera} desks={mapDesks} me={meInitials ? { initials: meInitials } : null} startAt={p.startAt}
+        tourBadges={tourBadges} dimExcept={cardBuilding} />
       <CampusZoomControls apiRef={camApi} />
-      {tour && tour.card}
-      {!tour && panel && panel.card}
-      {!tour && !panel && personCard && (() => {
+      {panel && panel.card}
+      {!panel && personCard && (() => {
         const pb = buildings.find((x) => x.id === personCard.buildingId);
         return <PersonCard person={personCard.person} buildingLabel={pb ? buildingName(pb, workplaceNames) : 'the campus'} onClose={() => onClosePerson?.()}
-          onMessaged={onNavigate}
-          onWalkOver={() => { const id = personCard.buildingId; onClosePerson?.(); setWalkRequest((w) => ({ id, seq: (w?.seq ?? 0) + 1 })); }} />;
+          onMessaged={p.onNavigate} onWalkOver={() => { const id = personCard.buildingId; onClosePerson?.(); walk(id); }} />;
       })()}
-      {/* C11b: inside the building you arrived at, behind its arrival panel (the prototype's flyIn) */}
-      {!tour && !panel && b && !personCard && <CampusInside building={b} buildingName={buildingName(b, workplaceNames)} audience={audience} access={accessOf(b)}
-        presence={presenceError ? undefined : presence} onAir={!!onAir?.has(b.id)} reduceMotion={reduceMotion} onStepOutside={closeCard} going={door.going}
-        onPickPerson={onOpenPerson ? (p) => pickPerson(p, b.id) : undefined}
-        desk={staffDesks ? desksForBuilding(staffDesks, b.id, audience).find((d) => d.on_duty) ?? null : null} />}
-      {!tour && !panel && b && !personCard && <BuildingCard building={b} access={accessOf(b)} workplaceNames={workplaceNames} onClose={closeCard} onNavigate={onNavigate}
-        zoneLabel={zoneLabelOf(b)} line={buildingLine(audience, b.id)} onElsewhere={elsewhere} audience={audience}
-        happening={happeningAt(b.id, { onAir: !!onAir?.has(b.id), routeIndex: route ? route.indexOf(b.id) : -1, count: presence ? counts[b.id] ?? 0 : null, presenceError })}
-        onEnterRoom={onEnterRoom ? enterRoom : undefined}
-        desks={staffDesks ? desksForBuilding(staffDesks, b.id, audience) : undefined}
-        children={b.id === 'gate' && isExplorer ? <ExplorerPath onNavigate={onNavigate}
-          model={explorerPath(buildings, accessOf, workplaceNames, !!staffDesks?.some((d) => d.id === 'maya' && d.on_duty))} /> : undefined}
-        whoIsHere={presence === undefined && !presenceError ? undefined
-          : { presence: presence?.[b.id], error: presenceError, loading: presence === null && !presenceError,
-            onPick: onOpenPerson ? (p) => pickPerson(p, b.id) : undefined }} />}
+      {b && <ArrivalPanel b={b} buildings={buildings} audience={audience} isExplorer={!!p.isExplorer} accessOf={accessOf} workplaceNames={workplaceNames}
+        reduceMotion={reduceMotion} presence={presence} presenceError={presenceError} count={presence ? counts[b.id] ?? 0 : null} onAir={!!p.onAir?.has(b.id)}
+        staffDesks={p.staffDesks} going={door.going} look={p.look ?? NO_LOOK} tour={t.arrival} plan={p.plan}
+        onClose={closeCard} onNavigate={p.onNavigate} onElsewhere={elsewhere}
+        onEnterRoom={p.onEnterRoom ? (r) => door.enter(r, b.id, els.current.get(b.id)?.getBoundingClientRect() ?? null) : undefined}
+        onPickPerson={onOpenPerson ? (pp) => pickPerson(pp, b.id) : undefined} />}
     </div>
   );
 }

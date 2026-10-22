@@ -100,7 +100,7 @@ describe('the list view as the campus directory', () => {
     act(() => { campus.openList(); });
     await flush();
     expect(q('[data-testid="cm-list-plan"]')!.textContent).toContain('Lesson 2');
-    expect(q('[data-building="library"] .cm-list-line')!.textContent).toBe('Documents shared with everyone in the program.');
+    expect(q('[data-building="library"] .cm-list-line')!.textContent).toBe('Curriculum, lessons & reference'); // WP-2: the prototype's short line for the building
     act(() => { (q('[data-testid="cm-list-walk-library"]') as HTMLButtonElement).click(); });
     expect(campus.layer).toBe('map');
     expect(campus.mapFocus).toBe('library');

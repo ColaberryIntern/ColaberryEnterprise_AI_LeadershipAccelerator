@@ -31,10 +31,10 @@ jest.mock('../useCampusView', () => {
   return { ...actual, useCampusView: () => actual.campusViewFor(mockAudience, { isStaff: mockAudience === 'staff', hasFullAccess: mockAudience !== 'explorer', isExplorer: mockAudience === 'explorer' }) };
 });
 jest.mock('../useCampusPlan', () => ({
-  useCampusPlan: () => [
-    { key: 'a', title: 'Lesson', route: '/portal/classroom', buildingId: 'lecture', done: false },
-    { key: 'b', title: 'Task', route: '/portal/projects', buildingId: 'studio', done: false },
-  ],
+  useCampusPlan: () => ({ minutes: null, complete: () => Promise.resolve({ ok: true, points: 0 }), stops: [
+    { key: 'a', title: 'Lesson', route: '/portal/classroom', buildingId: 'lecture', done: false, type: 'deep_dive', label: 'Deep Dive', minutes: null, points: 0, ref: null, cardId: null },
+    { key: 'b', title: 'Task', route: '/portal/projects', buildingId: 'studio', done: false, type: 'project_task', label: 'Project Task', minutes: null, points: 0, ref: null, cardId: null },
+  ] }),
 }));
 jest.mock('../campusOnAir', () => {
   const actual = jest.requireActual('../campusOnAir');

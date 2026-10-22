@@ -67,7 +67,7 @@ const item = (o: Partial<TodayPlanItem>): TodayPlanItem => ({
   status: 'available', chips: { why_this: '', level: '', proof: '' }, ...o,
 } as unknown as TodayPlanItem);
 const plan = (items: TodayPlanItem[]): TodayPlanResponse => ({ mode: 'active', items, estimated_total_minutes: 30 } as unknown as TodayPlanResponse);
-const LESSON = item({ ref: 'card:l1', title: 'Watch the agents lesson' });
+const LESSON = item({ ref: 'card:l1', card_id: 'l1', title: 'Watch the agents lesson' });
 const PROJECT = item({ ref: 'project:1', title: 'Finish the data pipeline task', project_id: 'p1', project_task_id: 't1' });
 
 let container: HTMLDivElement;
@@ -117,15 +117,15 @@ describe('when the plan is read', () => {
 });
 
 describe('Next', () => {
-  it('outside the tower, Next is the first unfinished step and walks through the door to Today', async () => {
+  it('outside the Classroom, Next is the first unfinished step and goes through the door to the card\'s own page (WP-2)', async () => {
     await mount('/portal/library');
     expect(next()?.textContent).toBe('Next: Watch the agents lesson');
     act(() => { next()!.click(); });
     await flush();
-    expect(loc()).toBe('/portal/today');
+    expect(loc()).toBe('/portal/runtime/l1');
   });
-  it('on Today, Next skips the steps already on this page and goes to the project workspace', async () => {
-    await mount('/portal/today');
+  it('in the Classroom, Next skips the step that is already here and goes to the project workspace', async () => {
+    await mount('/portal/classroom');
     expect(next()?.textContent).toBe('Next: Finish the data pipeline task');
     act(() => { next()!.click(); });
     await flush();
@@ -145,16 +145,28 @@ describe('the route on the full map', () => {
     await flush();
     expect(loc()).toBe('/portal/campus');
     expect(container.querySelector('[data-testid="cm-home"]')).not.toBeNull();
-    const stops = Array.from(container.querySelectorAll('[data-testid^="cm-route-stop-"]')).map((g) => [g.getAttribute('data-testid'), g.textContent]);
-    expect(stops).toEqual([['cm-route-stop-tower', 'STOP 1'], ['cm-route-stop-studio', 'STOP 2']]);
-    // the next stop is the green one, as the prototype's tour badges
-    expect(container.querySelector('[data-testid="cm-route-stop-tower"]')!.getAttribute('class')).toContain('is-live');
-    expect(container.querySelector('[data-testid="cm-route-stop-studio"]')!.getAttribute('class')).not.toContain('is-live');
-    expect(container.querySelector('[data-testid="cm-route-tower"]')?.getAttribute('class')).toBe('cm-route-line');
+    // WP-2: numbered pins at each stop's building (the next one filled), and ONE teal route from the avatar (prototype renderPlanMap)
+    const pins = Array.from(container.querySelectorAll('[data-testid^="cm-plan-pin-"]')).map((g) => [g.getAttribute('data-testid'), g.textContent]);
+    expect(pins).toEqual([['cm-plan-pin-lecture', '1'], ['cm-plan-pin-studio', '2']]);
+    expect(container.querySelector('[data-testid="cm-plan-pin-lecture"]')!.getAttribute('class')).toContain('is-next');
+    expect(container.querySelector('[data-testid="cm-plan-pin-studio"]')!.getAttribute('class')).not.toContain('is-next');
+    expect(container.querySelectorAll('[data-testid="cm-plan-path"]').length).toBe(1);
+    expect(container.querySelector('[data-testid^="cm-route-stop-"]')).toBeNull();
+  });
+  it('a tour hides the plan (route and pins) and shows its STOP badges instead, as the prototype does (WP-2)', async () => {
+    await mount('/portal/library');
+    act(() => { campus().openMap(); });
+    await flush();
+    expect(container.querySelectorAll('[data-testid="cm-plan-path"]').length).toBe(1);
+    act(() => { campus().startTour(); });
+    await flush();
+    expect(container.querySelector('[data-testid="cm-plan-path"]')).toBeNull();
+    expect(container.querySelector('[data-testid^="cm-plan-pin-"]')).toBeNull();
+    expect(container.querySelector('[data-testid^="cm-tour-stop-"]')).not.toBeNull();
   });
   it('the mini-map in the banner draws no route', async () => {
     await mount('/portal/library');
-    expect(container.querySelector('.cm-banner [data-testid^="cm-route"]')).toBeNull();
+    expect(container.querySelector('.cm-banner [data-testid^="cm-plan"]')).toBeNull();
   });
 });
 

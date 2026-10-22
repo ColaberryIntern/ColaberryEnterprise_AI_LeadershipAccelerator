@@ -7,6 +7,8 @@ export interface CampusLookState {
   lookError: boolean;
   /** Save the COMPLETE set. Resolves with the saved look; rejects with a message (the previous look stays). */
   saveLook: (equipped: Record<string, string | null>) => Promise<CampusLook>;
+  /** WP-2: read it again (points were just earned on the campus). A failed re-read keeps the look already shown. */
+  reloadLook: () => void;
 }
 
 /**
@@ -31,5 +33,9 @@ export function useCampusLook(active: boolean): CampusLookState {
     setLookError(false);
     return saved;
   }, []);
-  return { look, lookError, saveLook };
+  const reloadLook = useCallback(() => {
+    Promise.resolve().then(() => fetchLook()).then((l) => { setLook(l); setLookError(false); })
+      .catch((e) => console.warn(JSON.stringify({ event: 'campus_look_reload_failed', error_class: (e as Error)?.name ?? 'Error' })));
+  }, []);
+  return { look, lookError, saveLook, reloadLook };
 }

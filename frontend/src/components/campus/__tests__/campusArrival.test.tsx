@@ -8,33 +8,32 @@ import { act } from 'react-dom/test-utils';
 import { MemoryRouter } from 'react-router-dom';
 import BuildingCard from '../BuildingCard';
 import { CAMPUS_BUILDINGS } from '../campusMap';
-import { happeningAt, zoneLabelOf } from '../campusArrival';
-import { buildingLine } from '../tourSteps';
+import { happeningAt, subOf, zoneLabelOf } from '../campusArrival';
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 const b = (id: string) => CAMPUS_BUILDINGS.find((x) => x.id === id)!;
 
 describe('arrival data', () => {
-  it('place names by zone; the gate card has none', () => {
-    expect(zoneLabelOf(b('commons'))).toBe('South Avenue');
-    expect(zoneLabelOf(b('library'))).toBe('North Campus');
+  it('place names by zone (the prototype\'s words); the gate card has none', () => {
+    expect(zoneLabelOf(b('commons'))).toBe('South avenue');
+    expect(zoneLabelOf(b('library'))).toBe('North campus');
     expect(zoneLabelOf(b('studio'))).toBe('Business District');
     expect(zoneLabelOf(b('gate'))).toBeUndefined();
   });
 
-  it('Happening here says only what is true, and quiet when nothing is', () => {
-    expect(happeningAt('commons', { onAir: true, routeIndex: 1, count: 3, presenceError: false }).map((h) => h.title))
-      .toEqual(['On air now', 'On today’s plan', '3 people here now']);
-    expect(happeningAt('commons', { onAir: false, routeIndex: 1, count: 3, presenceError: false })[0].detail).toBe('Stop 2 of your route');
-    expect(happeningAt('library', { onAir: false, routeIndex: -1, count: 1, presenceError: false })[0].title).toBe('1 person here now');
-    expect(happeningAt('library', { onAir: false, routeIndex: -1, count: 0, presenceError: false })[0].title).toBe('Quiet right now');
-    expect(happeningAt('library', { onAir: false, routeIndex: -1, count: null, presenceError: true })[0].title).toBe('Who is here is unavailable');
+  it('Happening here says only what is true (on air, the portal facts, presence), and quiet when nothing is', () => {
+    const facts = [{ title: 'Next live class', detail: 'Build Day · in 1d 3h', tone: '' as const }];
+    expect(happeningAt('commons', { onAir: true, count: 3, presenceError: false, facts }).map((h) => h.title))
+      .toEqual(['On air now', 'Next live class', '3 people here now']);
+    expect(happeningAt('library', { onAir: false, count: 1, presenceError: false })[0].title).toBe('1 person here now');
+    expect(happeningAt('library', { onAir: false, count: 0, presenceError: false })[0].title).toBe('Quiet right now');
+    expect(happeningAt('library', { onAir: false, count: null, presenceError: true })[0].title).toBe('Who is here is unavailable');
   });
 
-  it('the one-line description is the tour copy for this viewer', () => {
-    expect(buildingLine('member', 'library')).toBe('Documents shared with everyone in the program.');
-    expect(buildingLine('staff', 'commons')).toBe(buildingLine('member', 'commons'));
-    expect(buildingLine('business', 'lecture')).toContain('your people');
+  it('the one-line description is the prototype\'s short line for the building (Workplace and career faces too)', () => {
+    expect(subOf(b('library'), 'member')).toBe('Curriculum, lessons & reference');
+    expect(subOf(b('library'), 'member', true)).toBe('Playbooks, curriculum & docs');
+    expect(subOf(b('career'), 'staff')).toBe('Management Portal, handoffs & people');
   });
 });
 
@@ -57,7 +56,7 @@ describe('the arrival panel', () => {
     expect(q('[data-testid="cm-arrive-line"]')!.textContent).toContain('Live rooms');
     expect(q('[data-testid="cm-arrive-now"]')!.textContent).toContain('3 people here now');
     expect(q('[data-testid="cm-arrive-cta"]')!.getAttribute('href')).toBe(b('commons').primary.route);
-    expect(q('.cm-arrive-route')!.textContent).toBe(b('commons').primary.route);
+    expect(q('.cm-arrive-route')!.textContent).toBe(window.location.host + b('commons').primary.route); // WP-2: the address with its host
     const room = q('.cm-room small');
     expect(room!.getAttribute('aria-hidden')).toBe('true'); // the route is a visual hint, not part of the link's name
     act(() => { (q('[data-testid="cm-arrive-back"]') as HTMLButtonElement).click(); });

@@ -12,6 +12,7 @@
 import React, { useEffect, useState } from 'react';
 import { TimelineFeedCard } from '../../../components/timeline/TimelineCard';
 import TodayPlanCard from './TodayPlanCard';
+import CampusWalkRoute from '../../../components/campus/CampusWalkRoute';
 import { fetchTodayPlan, submitTodayPlanFeedback, startTestOut, type TodayPlanResponse, type TodayPlanFeedbackAction } from '../../../services/capeApi';
 
 interface Props {
@@ -89,6 +90,8 @@ const TodayPlan: React.FC<Props> = ({ onRefs, onOpen, onWorkspace, onComplete })
             onTestOut={handleTestOut}
           />
         ))}
+        {/* WP-2: with the campus on, walk this plan on the campus map (renders nothing otherwise) */}
+        <CampusWalkRoute />
       </div>
     </div>
   );

@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { useCardFocus } from './useCardFocus';
 import type { CampusBuilding, ExplorerAccess } from './campusMap';
 import { buildingName, roomLabel } from './campusMap';
-import { accessLabel, enrollCta } from './campusAccess';
+import { enrollCta } from './campusAccess';
 import { GATED_FEATURES } from '../paywall/gatedFeatures';
 import { useIsMgmt } from './campusMgmt';
 import AdminLink from './AdminLink';
@@ -47,7 +47,18 @@ export interface BuildingCardProps {
   audience?: string;
   /** C11b: "Go somewhere else" (the home focuses its search). Absent = the button is not shown. */
   onElsewhere?: () => void;
+  /** WP-2: the hero kicker as the prototype words it for this arrival (a tour stop, an Explorer at a locked building, a partner). */
+  kicker?: string;
+  /** WP-2: something starting here within 15 minutes takes over the main action ("<class> · go now"). */
+  urgent?: { label: string; route: string } | null;
+  /** WP-2: the tour stop card (top of the panel), today's plan box, and the tour nav (above the footer). */
+  tourTop?: React.ReactNode;
+  planBox?: React.ReactNode;
+  tourNav?: React.ReactNode;
 }
+
+/** The prototype prints the address under the main action ("enterprise.colaberry.ai/portal/..."); this is the real host. */
+const hostOf = (): string => (typeof window !== 'undefined' && window.location.host) || 'enterprise.colaberry.ai';
 
 // Demo and preview say what the Explorer can do here. A locked building shows its own paywall copy instead (contextual sign-up).
 const NOTICE: Record<'demo' | 'preview', string> = {
@@ -66,14 +77,13 @@ function LockedNotice({ b }: { b: CampusBuilding }): React.ReactElement {
   );
 }
 
-export default function BuildingCard({ building: b, access, workplaceNames, onClose, onNavigate, whoIsHere, onEnterRoom, desks, children, zoneLabel, line, happening, onElsewhere, audience }: BuildingCardProps): React.ReactElement {
+export default function BuildingCard({ building: b, access, workplaceNames, onClose, onNavigate, whoIsHere, onEnterRoom, desks, children, zoneLabel, line, happening, onElsewhere, audience, kicker, urgent, tourTop, planBox, tourNav }: BuildingCardProps): React.ReactElement {
   const name = buildingName(b, workplaceNames);
   // A plain click goes through the door; a modified click (new tab, etc.) stays a normal link.
   const go = (route: string) => (e: React.MouseEvent) => {
     if (onEnterRoom && e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey) { e.preventDefault(); onEnterRoom(route); return; }
     onNavigate();
   };
-  const chip = accessLabel(access);
   // C6: admin links (Staff Office) work only through the Management Portal bridge; without that access they are disabled.
   const isMgmt = useIsMgmt();
   const adminLink = (label: string, route: string, cls: string, key?: string) => <AdminLink key={key} label={label} route={route} className={cls} isMgmt={isMgmt} />;
@@ -85,13 +95,14 @@ export default function BuildingCard({ building: b, access, workplaceNames, onCl
   return (
     <section className={`cm-card cm-arrive cm-b-${b.id}${audience === 'business' ? ' is-partner' : ''}${audience === 'explorer' && access !== 'open' ? ' is-unlock-first' : ''}`} aria-labelledby={headingId} data-testid="cm-card" data-building={b.id}>
       <div className="cm-arrive-hero" data-testid="cm-arrive-hero">
-        <div className="cm-kicker">You&rsquo;ve arrived{zoneLabel ? <> &middot; {zoneLabel}</> : null}</div>
+        <div className="cm-kicker" data-testid="cm-arrive-kicker">{kicker ?? <>You&rsquo;ve arrived{zoneLabel ? <> &middot; {zoneLabel}</> : null}</>}</div>
         <h2 id={headingId} className="cm-card-title" tabIndex={-1} ref={heading}>{name}</h2>
         {line && <p className="cm-arrive-line" data-testid="cm-arrive-line">{line}</p>}
-        {chip && <div className="cm-card-chip">{chip}</div>}
         <button type="button" className="cm-card-x" onClick={onClose} aria-label={`Close ${name}`}>×</button>
       </div>
       <div className="cm-arrive-body">
+        {tourTop}
+        {planBox}
         {happening && (
           <>
             <h3 className="cm-card-h">Happening here</h3>
@@ -101,10 +112,12 @@ export default function BuildingCard({ building: b, access, workplaceNames, onCl
           </>
         )}
 
-        {b.primary.admin ? adminLink(b.primary.label, b.primary.route, 'cm-btn cm-cta') : primaryPlanned
+        {urgent && !b.primary.admin
+          ? <Link className="cm-btn cm-cta is-urgent" to={urgent.route} onClick={go(urgent.route)} data-testid="cm-arrive-cta"><span>{urgent.label}</span><span aria-hidden="true">&rarr;</span></Link>
+          : b.primary.admin ? adminLink(b.primary.label, b.primary.route, 'cm-btn cm-cta') : primaryPlanned
           ? <span className="cm-btn cm-cta is-disabled" aria-disabled="true">{b.primary.label} - opening soon</span>
           : <Link className="cm-btn cm-cta" to={b.primary.route} onClick={go(b.primary.route)} data-testid="cm-arrive-cta"><span>{b.primary.label}</span><span aria-hidden="true">&rarr;</span></Link>}
-        {!b.primary.admin && !primaryPlanned && <div className="cm-arrive-route" aria-hidden="true">{b.primary.route}</div>}
+        {!b.primary.admin && (urgent || !primaryPlanned) && <div className="cm-arrive-route" aria-hidden="true">{hostOf()}{urgent ? urgent.route : b.primary.route}</div>}
         {hasAdmin && (
           <p className="cm-who-note" data-testid="cm-admin-note">{isMgmt ? 'Opens the Management Portal in a new tab.' : 'Needs Management Portal access.'}</p>
         )}
@@ -142,6 +155,7 @@ export default function BuildingCard({ building: b, access, workplaceNames, onCl
 
         {children}
 
+        {tourNav}
         <div className="cm-arrive-foot">
           <button type="button" className="cm-btn-line" onClick={onClose} data-testid="cm-arrive-back">&larr; Back to the Quad</button>
           {onElsewhere && <button type="button" className="cm-btn-line" onClick={onElsewhere} data-testid="cm-arrive-elsewhere">Go somewhere else</button>}

@@ -18,7 +18,7 @@ import AdminLink from './AdminLink';
 import CampusSettingsPanel from './CampusSettingsPanel';
 import { trapTab } from './focusTrap';
 import { useReturnFocus } from './useReturnFocus';
-import { buildingLine } from './tourSteps';
+import { subOf } from './campusArrival';
 import type { BuildingId } from './campusMap';
 import './campusPanels.css';
 
@@ -92,7 +92,7 @@ export default function CampusListView(): React.ReactElement | null {
           return (
             <section key={b.id} className={`cm-list-bld cm-b-${b.id}`} data-building={b.id} aria-labelledby={`cm-list-h-${b.id}`}>
               <h2 id={`cm-list-h-${b.id}`}><span className="cm-list-ic" aria-hidden="true">{LIST_ICON[b.id] ?? ''}</span>{name}{chip && <small className="cm-nav-chip">{chip}</small>}</h2>
-              {buildingLine(audience, b.id) && <p className="cm-list-line">{buildingLine(audience, b.id)}</p>}
+              {subOf(b, audience, settings.workplaceNames) && <p className="cm-list-line">{subOf(b, audience, settings.workplaceNames)}</p>}
               {facts(b)}
               <WhoIsHere presence={presence?.[b.id]} error={presenceError} loading={presence === null && !presenceError} />
               {rooms.length > 0 && (

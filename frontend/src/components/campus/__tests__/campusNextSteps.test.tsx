@@ -24,10 +24,12 @@ afterEach(() => { act(() => root.unmount()); container.remove(); });
 const render = (el: React.ReactElement) => act(() => { root.render(el); });
 const q = (id: string) => container.querySelector(`[data-testid="${id}"]`) as HTMLElement | null;
 const buildings = [...CAMPUS_BUILDINGS];
+const stop = (o: Partial<PlanStop> & Pick<PlanStop, 'key' | 'title' | 'route' | 'buildingId' | 'done'>): PlanStop =>
+  ({ type: 'deep_dive', label: 'Deep Dive', minutes: null, points: 0, ref: null, cardId: null, ...o });
 const STOPS: PlanStop[] = [
-  { key: 'a', title: 'Watch the agents lesson', route: '/portal/classroom', buildingId: 'lecture', done: true },
-  { key: 'b', title: 'Finish STORY-002', route: '/portal/projects/1', buildingId: 'studio', done: false },
-  { key: 'c', title: 'Knowledge check', route: '/portal/cert-prep', buildingId: 'testing', done: false },
+  stop({ key: 'a', title: 'Watch the agents lesson', route: '/portal/classroom', buildingId: 'lecture', done: true }),
+  stop({ key: 'b', title: 'Finish STORY-002', route: '/portal/projects/1', buildingId: 'studio', done: false }),
+  stop({ key: 'c', title: 'Knowledge check', route: '/portal/cert-prep', buildingId: 'testing', done: false }),
 ];
 const TOUR = ['lecture', 'library', 'studio', 'testing', 'observatory', 'commons', 'gallery', 'career', 'arcade'].map((id) => ({ buildingId: id as BuildingId }));
 

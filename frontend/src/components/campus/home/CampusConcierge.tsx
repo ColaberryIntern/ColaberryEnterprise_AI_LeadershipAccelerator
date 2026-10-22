@@ -47,6 +47,8 @@ export interface ConciergeProps {
   onEndTour?: () => void;
   /** Opens a page through its building's door. */
   onOpen: (route: string) => void;
+  /** WP-2: the tour was just finished (the lead says what it covered and your next step). */
+  justToured?: boolean;
 }
 
 /** The prototype's "I want to..." chips per account (CHIPS, CHIPS_EXP, CHIPS_SP, CHIPS_WORK), each a walk to a real building. The
@@ -79,8 +81,18 @@ export function liveKicker(now: Date): string {
   return `Colaberry Live · ${day}${hour >= 17 ? ' night' : ''}`;
 }
 
+/** After the tour (the prototype's finishTour lead): what the tour covered, and your real next step if you have one. */
+function afterTourLead(p: ConciergeProps, next: PlanStop | null): string {
+  const you = p.firstName ? `, ${p.firstName}` : '';
+  if (p.audience === 'explorer') return `That’s the whole campus${you}. Everything marked OPEN is yours to keep using, and enrolling opens the rest.`;
+  if (p.audience === 'business') return 'Tour complete. Your company page is in the Partner Office whenever you need it.';
+  const b = next?.buildingId ? p.buildings.find((x) => x.id === next.buildingId) : undefined;
+  return `That’s everything in your seat${you}.${next && b ? ` Your next step, ${next.title}, is waiting in the ${buildingName(b, p.workplaceNames)}.` : ''}`;
+}
+
 function leadFor(p: ConciergeProps, next: PlanStop | null): string {
   if (p.live) return 'Colaberry Live is on air right now.';
+  if (p.justToured) return afterTourLead(p, next);
   if (next) return `Next on your plan: ${next.title}.`;
   if (p.audience === 'explorer') return 'Have a look around. Everything marked OPEN is yours to use.';
   if (p.audience === 'staff') return 'Here is where everyone is right now.';
