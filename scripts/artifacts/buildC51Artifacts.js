@@ -46,8 +46,14 @@ async function main() {
   console.log('  ' + 'C51_WIREFRAMES.html'.padEnd(38)
     + (fs.statSync(htmlPath).size / 1024).toFixed(0) + ' KB  -- the same content, scrollable');
 
+  const fulfilled = routes.fulfilled || [];
   console.log('\n  routes checked against the real tree : ' + routes.checked
-    + ' proposed, all free, against ' + routes.declared + ' declared');
+    + ' proposed against ' + routes.declared + ' declared, '
+    + (routes.checked - fulfilled.length) + ' still free, '
+    + fulfilled.length + ' now built at the route this IA proposed');
+  if (fulfilled.length) {
+    console.log('    fulfilled                          : ' + fulfilled.join(', '));
+  }
   console.log('  taken routes confirmed still taken   : ' + traps);
   console.log('  homepage names no segment            : assertion holds');
   console.log('  segments with exactly one inquiry    : ' + segments);
