@@ -2755,3 +2755,47 @@ What the design does NOT buy, stated there and repeated here: it does not reduce
 acts. It makes each one a one-click confirmation of something measured. Whether all six approvals
 are genuinely required is a separate policy decision, and the readiness table is what would give
 it evidence.
+
+## THE READINESS SAFETY PROPERTY IS NOW GUARDED, before the feature exists
+
+`readiness-and-approval-separation.md` (merged as #3306) rests on one property:
+
+> Readiness must never be sufficient to advance a stage.
+
+**That property is already true, structurally**, and nothing in the repository said so.
+`evaluateTransition` checks the actor's permission and returns early BEFORE it consults
+prerequisites at all, so the strongest possible readiness - every prerequisite satisfied, every
+field assessed - cannot get past an actor holding nothing.
+
+`readinessIsNeverSufficient.test.ts` pins it. Test only; `lifecycleTransition.ts` is byte-identical
+to HEAD. Six tests, all passing, written before the feature they guard.
+
+### Which test catches what, measured rather than assumed
+
+Both mutations were run before committing:
+
+| Mutation to `evaluateTransition` | Caught by |
+|---|---|
+| Permission check MOVED AFTER the prerequisite check | `an unauthorized caller learns nothing` **only** |
+| Permission check DELETED | `the strongest readiness is refused` (the hop becomes **allowed**) and the above |
+
+The first row is the one worth keeping. **A reorder is invisible to the fully-satisfied case**,
+because the prerequisite check then falls through and the permission check still refuses; only the
+nothing-assessed case exposes it. The first draft of the suite's docblock claimed the opposite, and
+running the mutation is what corrected it - the same failure this register has recorded twice
+before, caught this time before it shipped.
+
+### What else the suite pins
+
+- A refusal to an unauthorized caller carries **no gaps**, so it cannot leak what a project is
+  missing to someone with no standing.
+- The permission each of the twelve forward hops requires, as a factual snapshot. The design
+  classifies hops by what their permission MEANS, so a change to `STAGE_PERMISSION` changes which
+  hops could ever be automatic. That belongs in a review, not a silent diff.
+
+### Still gated
+
+The design's §8 questions are unanswered: whether `operating` (`release.deploy`) should really be
+automatic, and whether to ship behind a flag. Neither blocks §9 step 1 - the readiness table and
+its pure computation - because neither the table's shape nor the computation depends on them. Both
+block steps 2 and 3.
