@@ -2634,3 +2634,38 @@ to hang when finally executed, after `multiProjectIsolation` and `ensurePublishi
 - The **DDL item** is untouched by any of this, and its scope is still what the previous entry
   measured: 14 missing tables, an unenumerated column population, and 63 column failures that no
   table-level sweep can see.
+
+## CORRECTION: THE IGNORE-LIST CAUSE IS NOT IDENTIFIED
+
+The entry above says the 20 remaining failures are caused by "how these suites mock the model
+layer". **That is an inference, not a measurement, and it should not have been written as one.**
+
+What is measured, and stands:
+
+- 20 of 24 fail with a database, each against its own fresh one.
+- `assessmentService` fails **identically with and without `DATABASE_URL`** - so a Postgres
+  service does not unblock them, and the actionable conclusion is unchanged: this is per-suite
+  work, not an environment change.
+
+What is NOT established: the mechanism. Three hypotheses have been **ruled out**, which is worth
+more than the guess they replace:
+
+| Hypothesis | Result |
+|---|---|
+| The missing database | Ruled out - identical failure with and without it |
+| A mock factory missing `__esModule: true` | Ruled out - adding it changes nothing |
+| Module identity through the junctioned `node_modules` | Ruled out - both sides resolve under the same `backend/src` root |
+
+The live oddity, for whoever picks this up: inside a suite that mocks `config/database`, a
+**direct `require` of that module receives the stub** (an object whose `define` is a function),
+while **requiring a model that imports the same module throws** `Cannot read properties of
+undefined (reading 'define')`. The model does nothing exotic - `import { sequelize } from
+'../config/database'`, then `Model.init(attrs, { sequelize, ... })`. Same module, same registry,
+two different answers. That is the thread to pull, and it was not pulled here because the cost
+per probe was rising and the decision it informs - 20 suites of per-suite work - does not change
+either way.
+
+**One more thing not established:** every one of these numbers is from Windows with a junctioned
+`node_modules`. None of the 20 has been reproduced on the Linux runner, and the cheap way to find
+out is to un-ignore one suite on a throwaway branch and read CI. Until that is done, "20 fail"
+is a local measurement.
