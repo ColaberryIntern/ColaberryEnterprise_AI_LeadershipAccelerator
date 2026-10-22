@@ -204,18 +204,38 @@ const { checkRoute, declaredRoutes } = require('./c51Routes');
  * "Every page has a proposed route verified as free."
  *
  * Re-reads the real route tree. The homepage is exempt because it is a rewrite in place and
- * is supposed to be taken; every other page must be genuinely unclaimed.
+ * is supposed to be taken; every other page must be unclaimed BY SOMETHING ELSE.
+ *
+ * ## "Taken" and "collision" are not the same thing, and this guard used to confuse them
+ *
+ * This document proposes routes for pages other tickets will later build. When one of
+ * those tickets ships, the route becomes occupied - by the page this document asked for.
+ * The first version of this guard read that as a collision and failed the build, which
+ * meant the IA became unbuildable precisely because its proposals had succeeded.
+ * /how-it-works and /accelerator both did exactly that once C5.3 and C5.4 shipped.
+ *
+ * So a proposed route passes in two cases: nothing holds it, or the only thing holding it
+ * is the route this IA named. Anything else is a real collision and still fails.
  */
 function assertRoutesFree() {
   const declared = declaredRoutes();
   const bad = [];
+  const fulfilled = [];
   for (const p of PAGES) {
     if (p.route === '/') continue;
     const r = checkRoute(p.route, declared);
-    if (!r.free) bad.push(`${p.route} (${p.ticket}) is taken by ${r.takenBy.join(', ')}`);
+    if (r.free) continue;
+    const onlyItself = (r.takenBy || []).every((t) => t === p.route);
+    if (onlyItself) {
+      fulfilled.push(`${p.route} (${p.ticket})`);
+      continue;
+    }
+    bad.push(`${p.route} (${p.ticket}) is taken by ${r.takenBy.join(', ')}`);
   }
-  if (bad.length) throw new Error('C5.1: proposed route(s) not free: ' + bad.join('; '));
-  return { checked: PAGES.length - 1, declared: declared.size };
+  if (bad.length) {
+    throw new Error('C5.1: proposed route(s) collide with something else: ' + bad.join('; '));
+  }
+  return { checked: PAGES.length - 1, declared: declared.size, fulfilled };
 }
 
 /** The traps must really be traps, or the warning is noise. */
