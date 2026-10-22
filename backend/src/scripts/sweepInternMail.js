@@ -93,6 +93,88 @@ async function bc(method, p, body) {
 const esc = (s) => String(s == null ? '' : s)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
+/**
+ * Tell Ali what was just filed.
+ *
+ * FILING IS NOT TELLING. The sweep worked perfectly on 22 Oct: it caught Quincy's email within
+ * the half hour, flagged it as a problem, and filed it on Ellis's ticket. Ali found out thirteen
+ * hours later by opening his own inbox, and asked whether the sweeper was even on. A pipeline
+ * whose output nobody is looking at is indistinguishable from one that is switched off.
+ *
+ * Only fires when something was actually filed. A measured zero is the common case, every half
+ * hour, forever, and mailing that would train the notification into noise - at which point the
+ * one that matters gets skimmed past too.
+ *
+ * NEVER THROWS. The sweep's job is filing; notification is secondary. A Mandrill outage must not
+ * take down the thing that is working, and must not crash the cron.
+ */
+async function notifyAli(filed) {
+  const key = (process.env.MANDRILL_API_KEY || '').trim();
+  if (!key) {
+    console.log('  NOT NOTIFIED: MANDRILL_API_KEY absent. Filing succeeded; Ali was not told.');
+    return;
+  }
+  try {
+    // PLAIN require, not an absolute container path. The cron runs this from the HOST checkout
+    // at /opt/colaberry-accelerator, where /app does not exist, so an absolute path would make
+    // the notification work by hand inside the container and never once on schedule - exactly
+    // the trap this file's own header warns about for the mail source.
+    const nodemailer = require('nodemailer');
+    const flagged = filed.filter((f) => f.flags.length);
+    const n = filed.length;
+
+    const rows = filed.map((f) => `<tr>
+        <td style="padding:6px 10px;border-bottom:1px solid #e2e8f0">${esc(f.from)}</td>
+        <td style="padding:6px 10px;border-bottom:1px solid #e2e8f0">${esc(f.subject)}</td>
+        <td style="padding:6px 10px;border-bottom:1px solid #e2e8f0">${esc(f.agent)}</td>
+        <td style="padding:6px 10px;border-bottom:1px solid #e2e8f0">${f.flags.length
+    ? '<strong style="color:#b3261e">reads like a problem</strong>' : 'routine'}</td>
+        <td style="padding:6px 10px;border-bottom:1px solid #e2e8f0"><a href="https://app.basecamp.com/${ACCOUNT}/buckets/${BUCKET}/todos/${f.ticketId}">ticket</a></td>
+      </tr>`).join('');
+
+    const lead = flagged.length
+      ? `<p style="font-family:arial,sans-serif;font-size:14px;color:#2d3748"><strong>${flagged.length} of ${n} reads like a problem.</strong> ${esc(flagged[0].from)}: "${esc(flagged[0].subject)}"</p>`
+      : `<p style="font-family:arial,sans-serif;font-size:14px;color:#2d3748">None of them read like a problem.</p>`;
+
+    const html = `<div style="font-family:arial,sans-serif;font-size:14px;color:#2d3748;line-height:1.6">
+<p>${n} intern email${n === 1 ? '' : 's'} filed in the last sweep. Each is already on its agent ticket.</p>
+${lead}
+<table style="border-collapse:collapse;font-size:13px;margin-top:10px">
+<tr><th align="left" style="padding:6px 10px;border-bottom:2px solid #cbd5e0">From</th>
+<th align="left" style="padding:6px 10px;border-bottom:2px solid #cbd5e0">Subject</th>
+<th align="left" style="padding:6px 10px;border-bottom:2px solid #cbd5e0">Agent</th>
+<th align="left" style="padding:6px 10px;border-bottom:2px solid #cbd5e0">Read</th>
+<th align="left" style="padding:6px 10px;border-bottom:2px solid #cbd5e0"></th></tr>
+${rows}
+</table>
+<p style="font-size:12px;color:#718096;margin-top:12px">Nothing was replied to. The sweep files and never answers.</p>
+</div>`;
+
+    const text = filed.map((f) => `${f.received}  ${f.from}\n  "${f.subject}"  -> ${f.agent}`
+      + `${f.flags.length ? '  [READS LIKE A PROBLEM]' : ''}`).join('\n\n');
+
+    await nodemailer.createTransport({
+      host: 'smtp.mandrillapp.com',
+      port: 587,
+      auth: { user: process.env.MANDRILL_USERNAME || 'ali@colaberry.com', pass: key },
+    }).sendMail({
+      from: '"Colaberry Accelerator" <ali@colaberry.com>',
+      to: 'ali@colaberry.com',
+      // "Ali, here's" survives the inbox manager that files automated mail away unread.
+      subject: `Ali, here's ${n} intern email${n === 1 ? '' : 's'} filed`
+        + `${flagged.length ? ` (${flagged.length} reads like a problem)` : ''}`,
+      text: `${n} intern email(s) filed, each on its agent ticket.\n\n${text}\n\n`
+        + 'Nothing was replied to.',
+      html,
+      headers: { 'X-MC-Track': 'none', 'X-MC-AutoText': 'false' },
+    });
+    console.log(`  notified Ali: ${n} filed, ${flagged.length} flagged`);
+  } catch (e) {
+    // Deliberately swallowed, and deliberately LOUD in the log. Filing already succeeded.
+    console.log(`  NOT NOTIFIED: ${e.message}. Filing succeeded; Ali was not told.`);
+  }
+}
+
 const squash = (s) => String(s || '').replace(/\s+/g, ' ').trim();
 
 function troubleWords(subject, body) {
@@ -101,6 +183,20 @@ function troubleWords(subject, body) {
 }
 
 (async () => {
+  // `--notify-sample` proves the notification path works without waiting for an intern to write
+  // in. A notification that is only exercised by the event it exists to report is one you find
+  // out is broken at exactly the wrong moment.
+  if (process.argv.includes('--notify-sample')) {
+    console.log('=== notification path test. No mail is read and nothing is filed. ===');
+    await notifyAli([{
+      from: 'Sample Intern', received: new Date().toISOString(),
+      subject: 'SAMPLE - this is a test of the sweep notification',
+      agent: 'Ellis', ticketId: 10424318092, flags: ['sample'],
+      excerpt: 'If you are reading this, the sweep can reach you.',
+    }]);
+    process.exit(0);
+  }
+
   console.log(`=== AF10.1 intern mail sweep ===`);
   console.log(`mode: ${APPLY ? 'APPLY' : 'DRY RUN (nothing is posted)'}`);
   console.log(`window: last ${AMOUNT} ${UNIT}`);
@@ -148,6 +244,8 @@ function troubleWords(subject, body) {
   }
 
   let posted = 0; let skipped = 0; let unmatched = 0;
+  /** What was filed THIS run. Drives the notification; an empty list sends nothing. */
+  const filed = [];
 
   for (const m of mail) {
     const domain = domainOf.get(m.from_address);
@@ -186,12 +284,23 @@ ${flagLine}<div>${esc(excerpt) || '<em>no text body</em>'}</div>
       await bc('POST', `/buckets/${BUCKET}/recordings/${ticket.id}/comments.json`, { content });
     }
     posted++;
+    filed.push({
+      from: m.from_name || m.from_address,
+      received: m.received,
+      subject: squash(m.subject),
+      agent: ticket.agent,
+      ticketId: ticket.id,
+      flags,
+      excerpt: bodyText.slice(0, 280),
+    });
     console.log(`  ${APPLY ? 'POSTED  ' : 'WOULD   '}  ${label}  -> ${ticket.agent}${flags.length ? '  [FLAGGED]' : ''}`);
   }
 
   console.log(`\n=== result ===`);
   console.log(`  matched=${mail.length}  ${APPLY ? 'posted' : 'would post'}=${posted}  already filed=${skipped}  no ticket=${unmatched}`);
   if (!APPLY) console.log('\nDRY RUN. Re-run with --apply to file them.');
+
+  if (APPLY && filed.length) await notifyAli(filed);
 
   await sql.close();
   process.exit(0);
