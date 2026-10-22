@@ -62,6 +62,9 @@ const CreateSchema = z.object({
 
 const ReviseSchema = z.object({
   feedback: z.string().trim().min(3).max(4000),
+  // Optional, and absent means 'tweak' - the behaviour this route had before rebuild existed, so
+  // a client that predates the field keeps working. `.strict()` still rejects anything else.
+  mode: z.enum(['tweak', 'redesign']).optional(),
 }).strict();
 
 const PatchSchema = z.object({
@@ -234,9 +237,11 @@ router.post('/api/admin/landing-pages/:id/revise', requireAdmin, async (req: Req
       brandId: page.brand_id,
       previous: page.content as never,
       feedback: parsed.data.feedback,
+      mode: parsed.data.mode ?? 'tweak',
     });
 
     await page.update({ content: draft.content });
+    const { readsAsRedesignRequest, modeMismatchNotice } = await import('../../services/marketing/landingPageRevisionMode');
     res.json({
       page: summarise(page),
       content: draft.content,
@@ -245,6 +250,11 @@ router.post('/api/admin/landing-pages/:id/revise', requireAdmin, async (req: Req
       model: draft.model,
       repaired: draft.repaired,
       droppedSections: draft.droppedSections,
+      // Said rather than acted on: the operator asked for a rebuild while set to adjust, which
+      // is the case that used to silently produce almost no change at all.
+      modeNotice: (parsed.data.mode ?? 'tweak') === 'tweak' && readsAsRedesignRequest(parsed.data.feedback)
+        ? modeMismatchNotice()
+        : null,
     });
   } catch (err) { fail(res, err, 'landing_page_revise_failed'); }
 });

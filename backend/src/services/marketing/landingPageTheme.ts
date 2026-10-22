@@ -1,3 +1,5 @@
+import { liftForContrast, resolveToken } from './landingPageContrast';
+
 /**
  * The palette a hosted landing page renders in.
  *
@@ -313,7 +315,39 @@ export function themeForLandingPage(themeKey: string | null | undefined): Resolv
   // for each, so a light brand that declares none renders exactly as it did before surfaces
   // existed. Only a brand whose ground is not light needs to say anything here.
   const surfaces = (themeKey && SURFACE_PALETTES[themeKey]) || undefined;
-  return { theme: { ...base, ...extended, ...surfaces }, branded: true };
+  const theme = { ...base, ...extended, ...surfaces };
+  return { theme: { ...theme, ...onDarkAccents(theme) }, branded: true };
+}
+
+/**
+ * The two accents as they must appear ON THE INVERSE BAND, derived from the brand's own.
+ *
+ * WHY THIS EXISTS. `.band--inverse` repaints a section dark and then draws `--accent-2` on it for
+ * the eyebrow and `--accent` for the highlighted words in a heading. Measured 2026-10-22, that is
+ * unreadable for three of the five brands: CPN's eyebrow sits at 2.67:1 where AA wants 4.5, AI
+ * Flotation's at 3.23:1, and Enterprise's heading highlight at 2.92:1 where AA wants 3. The text
+ * is there, the page looks designed, and nobody can read it.
+ *
+ * WHY DERIVED AND NOT CHOSEN. Those accents are the brands' real documented colours and are
+ * correct everywhere else. `liftForContrast` blends toward white only as far as the threshold
+ * requires, so each value is reproducible from the brand's own hex, keeps its hue, and follows
+ * the brand if the accent ever changes. Nothing here is a hand-picked replacement, which is the
+ * same discipline the extended palette above is held to.
+ *
+ * WHY THE PASSING BRANDS DO NOT MOVE. The lift returns its input unchanged when the ratio already
+ * clears, so Training and Refactored resolve these to exactly their own accents and render
+ * byte-identically. Only the three brands that actually fail change.
+ */
+function onDarkAccents(theme: Readonly<Record<string, string>>): Record<string, string> {
+  // The band's ground: the brand's own where it declares one, the stylesheet's fallback
+  // otherwise - the same resolution the browser itself performs.
+  const ground = resolveToken(theme, '--contrast-bg') ?? '#1A1A1A';
+  return {
+    // The eyebrow is body-sized, so AA wants 4.5:1.
+    '--accent-2-on-dark': liftForContrast(theme['--accent-2'], ground, 4.5),
+    // The highlight sits inside an h1/h2, so it is large text and AA wants 3:1.
+    '--accent-on-dark': liftForContrast(theme['--accent'], ground, 3),
+  };
 }
 
 /**

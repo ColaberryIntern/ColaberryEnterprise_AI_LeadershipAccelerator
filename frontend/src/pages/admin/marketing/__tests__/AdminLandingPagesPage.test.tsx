@@ -271,7 +271,11 @@ describe('revising', () => {
     });
     await act(async () => { (q('lp-revise') as HTMLButtonElement).click(); });
 
-    expect(mockReviseLandingPage).toHaveBeenCalledWith('lp-1', 'Make the headline about the mentor review.');
+    // The 4th argument is the revision mode, and 'tweak' is the default - the behaviour this
+    // screen had before Rebuild existed. The 3rd is the optional re-sent brief, unused here.
+    expect(mockReviseLandingPage).toHaveBeenCalledWith(
+      'lp-1', 'Make the headline about the mentor review.', undefined, 'tweak',
+    );
     // Twice: once on selection, once after the change - otherwise the operator approves the old page.
     expect(mockPreviewLandingPage).toHaveBeenCalledTimes(2);
   });
@@ -391,5 +395,63 @@ describe('drilling into one page', () => {
 
     await act(async () => { q('lp-select-lp-1')!.click(); });
     expect(q('lp-detail-traffic')!.textContent).toContain('38');
+  });
+});
+
+/**
+ * Adjust versus Rebuild.
+ *
+ * The revise prompt always ended with "leave everything else alone", which is right for "drop the
+ * FAQ" and a contradiction for "rebuild this under the new design" - and the model resolved the
+ * contradiction by changing almost nothing. The control has to reach the request, or the fix is
+ * only in the prompt builder and the operator still gets the cap.
+ */
+describe('choosing how much a revision may change', () => {
+  const openAndType = async (text: string) => {
+    await render();
+    await act(async () => { q('lp-select-lp-1')!.click(); });
+    type(q('lp-feedback')!, text);
+    await act(async () => { await Promise.resolve(); });
+  };
+
+  it('starts on Adjust, so nothing rebuilds by accident', async () => {
+    await openAndType('Drop the FAQ');
+    expect(q('lp-mode-tweak')!.getAttribute('aria-pressed')).toBe('true');
+    expect(q('lp-mode-redesign')!.getAttribute('aria-pressed')).toBe('false');
+    expect(q('lp-revise')!.textContent).toBe('Apply the change');
+  });
+
+  it('sends redesign once Rebuild is chosen', async () => {
+    mockReviseLandingPage.mockResolvedValue({
+      page: page(), content: { v: 2 }, placeholders: [], unverifiedClaims: [], model: 'm', repaired: false,
+    });
+    await openAndType('Rebuild this under the new design');
+    await act(async () => { q('lp-mode-redesign')!.click(); });
+    expect(q('lp-revise')!.textContent).toBe('Rebuild the page');
+
+    await act(async () => { q('lp-revise')!.click(); });
+    expect(mockReviseLandingPage).toHaveBeenCalledWith(
+      'lp-1', 'Rebuild this under the new design', undefined, 'redesign',
+    );
+  });
+
+  it('says what each mode will do, before it is used', async () => {
+    await openAndType('Drop the FAQ');
+    expect(q('lp-mode-hint')!.textContent).toContain('leaves the rest of the page alone');
+    await act(async () => { q('lp-mode-redesign')!.click(); });
+    expect(q('lp-mode-hint')!.textContent).toContain('the facts cannot');
+  });
+
+  it('passes the server notice through when the two controls disagree', async () => {
+    // The case that used to be silent: a rebuild-shaped request answered as an adjustment.
+    mockReviseLandingPage.mockResolvedValue({
+      page: page(), content: { v: 2 }, placeholders: [], unverifiedClaims: [], model: 'm', repaired: false,
+      modeNotice: 'This reads like a request to rebuild the page, but the revision is set to adjust.',
+    });
+    await openAndType('Redesign the whole page');
+    await act(async () => { q('lp-revise')!.click(); });
+    await act(async () => { await Promise.resolve(); });
+
+    expect(text()).toContain('reads like a request to rebuild');
   });
 });

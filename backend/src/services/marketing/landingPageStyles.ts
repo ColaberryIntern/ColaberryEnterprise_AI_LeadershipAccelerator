@@ -75,7 +75,7 @@ p{margin:0 0 1rem}
 .eyebrow{font-size:.74rem;font-weight:700;letter-spacing:.13em;text-transform:uppercase;color:var(--accent);color:color-mix(in srgb,var(--accent) 76%,#000);margin:0 0 .85rem}
 /* Blue on light, green on dark: the other two logo colours, so a page is not one hue. */
 .eyebrow{color:var(--accent-3)}
-.band--inverse .eyebrow{color:var(--accent-2);opacity:1}
+.band--inverse .eyebrow{color:var(--accent-2-on-dark,var(--accent-2));opacity:1}
 .band--accent .eyebrow{color:currentColor;opacity:.8}
 /* The hero eyebrow is a pill with a dot rather than bare small caps. */
 .s-hero .eyebrow{display:inline-flex;align-items:center;gap:.45rem;background:var(--accent-soft);
@@ -85,7 +85,7 @@ p{margin:0 0 1rem}
 /* The accent SURVIVES on the dark band. Cherry on #1A1A1A measures above the 3:1 AA-large
    floor, and these are display sizes only - h1 and h2 - never body text. On the brand-coloured
    band it still inherits, because accent-on-accent is invisible. */
-.band--inverse h1 .hl,.band--inverse h2 .hl{color:var(--accent)}
+.band--inverse h1 .hl,.band--inverse h2 .hl{color:var(--accent-on-dark,var(--accent))}
 .band--accent .hl{color:inherit}
 .em{font-style:normal;font-weight:700;color:var(--accent-3)}
 .lede{font-size:clamp(1.05rem,1.6vw,1.2rem);color:var(--fg-muted);max-width:40rem}

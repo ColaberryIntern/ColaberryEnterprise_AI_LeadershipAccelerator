@@ -45,6 +45,11 @@ export interface LandingPageDraft {
    * INCOMPLETE - say so rather than letting it look finished.
    */
   droppedSections?: string[];
+  /**
+   * Set when the feedback asked for a rebuild while the revision was set to adjust. Advice, not
+   * an error: the request was still carried out as an adjustment.
+   */
+  modeNotice?: string | null;
 }
 
 export interface CreateLandingPageInput {
@@ -67,8 +72,19 @@ export async function createLandingPage(input: CreateLandingPageInput): Promise<
 }
 
 /** Apply feedback as a new revision. The brief is re-sent so this is a change, not a rewrite. */
-export async function reviseLandingPage(id: string, feedback: string, source?: string): Promise<LandingPageDraft> {
-  const res = await api.post(`/api/admin/landing-pages/${id}/revise`, { feedback, ...(source ? { source } : {}) });
+/** Adjust the page, or rebuild it. Omitted means adjust, which is how this behaved before. */
+export type RevisionMode = 'tweak' | 'redesign';
+
+export async function reviseLandingPage(
+  id: string, feedback: string, source?: string, mode?: RevisionMode,
+): Promise<LandingPageDraft> {
+  // `mode` is sent only when set: the route is `.strict()`, so a server deployed before this
+  // field existed would reject the whole request with a 400 rather than ignore the extra key.
+  const res = await api.post(`/api/admin/landing-pages/${id}/revise`, {
+    feedback,
+    ...(source ? { source } : {}),
+    ...(mode ? { mode } : {}),
+  });
   return res.data;
 }
 

@@ -3,6 +3,7 @@ import { getInstrumentedOpenAI } from '../openaiInstrumented';
 import { WorkflowError } from '../content/contentWorkflowService';
 import { findInventedSpecifics } from '../content/composerDraftService';
 import { normalizeHeadingCase } from './landingPageHeadingCase';
+import { revisionInstruction, type RevisionMode } from './landingPageRevisionMode';
 import {
   landingPageContentSchema,
   landingPageSectionSchema,
@@ -63,6 +64,11 @@ export interface LandingPageDraftRequest {
   brandId: string;
   /** On a revision: what the operator wants changed, in their words. */
   feedback?: string | null;
+  /**
+   * Whether a revision ADJUSTS the page or REBUILDS it. Defaults to adjusting, which is what
+   * every caller did before this existed, so nothing changes for a caller that omits it.
+   */
+  mode?: RevisionMode | null;
   /**
    * Where the buttons go, when the operator knows.
    *
@@ -289,9 +295,7 @@ function userMessage(input: LandingPageDraftRequest, brandName: string): string 
       '',
       'You previously produced this page:',
       JSON.stringify(input.previous),
-      '',
-      'The operator wants these changes. Apply them and leave everything else alone:',
-      input.feedback.trim(),
+      ...revisionInstruction(input.mode ?? 'tweak', input.feedback),
     );
   }
   return parts.join('\n');
