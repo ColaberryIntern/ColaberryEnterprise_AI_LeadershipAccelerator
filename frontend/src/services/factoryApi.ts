@@ -632,6 +632,11 @@ export interface GovDossierCode { system: 'naics' | 'nigp'; code: string; source
  *  deadline loses the bid). Never inferred. */
 export interface GovDossierLine { text: string; date: string | null; time?: string | null; timezone?: string | null; sourceDocument: string }
 
+/** A submission-mechanics obligation stated in the solicitation body (not on the response checklist): a required
+ *  separate cost file, a required redacted copy, or a stated offer-validity period. Each cites a literal quote. */
+export type GovComplianceRuleKind = 'separate_cost_file' | 'redacted_copy' | 'validity_period';
+export interface GovComplianceRule { kind: GovComplianceRuleKind; quote: string; days?: number }
+
 /** An opportunity dossier detected from the solicitation ZIP — deterministic, source-cited, "detected — verify". */
 export interface GovDossier {
   contacts: { kind: 'email' | 'phone'; value: string; sourceDocument: string }[];
@@ -641,6 +646,8 @@ export interface GovDossier {
   codes?: GovDossierCode[];
   meetings: GovDossierLine[];
   keyDates: GovDossierLine[];
+  /** Submission-mechanics rules detected in the solicitation body. Absent on records extracted before this shipped. */
+  complianceRules?: GovComplianceRule[];
 }
 
 /** Prior pursuits of the same agency — advisory "possible prior work — verify". */

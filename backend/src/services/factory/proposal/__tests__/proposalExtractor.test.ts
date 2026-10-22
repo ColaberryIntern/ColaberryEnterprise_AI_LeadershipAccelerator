@@ -95,7 +95,7 @@ describe('extractProposal', () => {
     expect(res.requirements).toEqual([]);
     expect(res.blocks).toEqual([]);
     expect(res.fileCount).toBe(0);
-    expect(res.dossier).toEqual({ contacts: [], naics: [], codes: [], meetings: [], keyDates: [] });
+    expect(res.dossier).toEqual({ contacts: [], naics: [], codes: [], meetings: [], keyDates: [], complianceRules: [] });
   });
 
   it('surfaces a dossier (contacts + key date) parsed from the same ZIP', async () => {
@@ -103,12 +103,15 @@ describe('extractProposal', () => {
       'RFP.txt': [
         'The vendor shall provide services. Questions are due by 03/15/2026.',
         'Direct all inquiries to Jane Doe at jane.doe@county.gov or (555) 123-4567.',
+        'Proposals shall remain valid for 90 calendar days after the submission deadline.',
       ].join('\n'),
     });
     const { dossier } = await extractProposal(zip);
     expect(dossier.contacts.some((c) => c.kind === 'email' && c.value === 'jane.doe@county.gov')).toBe(true);
     expect(dossier.contacts.some((c) => c.kind === 'phone')).toBe(true);
     expect(dossier.keyDates.some((k) => k.date === '03/15/2026')).toBe(true);
+    // the submission-mechanics rules flow through the dossier (detected over the whole body)
+    expect(dossier.complianceRules.some((r) => r.kind === 'validity_period' && r.days === 90)).toBe(true);
   });
 });
 
@@ -198,7 +201,7 @@ describe('extractDossier (pure)', () => {
 
   it('returns empty arrays when nothing matches and ignores non-context blocks', () => {
     const empty = extractDossier([ctx('This is a plain background paragraph with no contacts or dates.')]);
-    expect(empty).toEqual({ contacts: [], naics: [], codes: [], meetings: [], keyDates: [] });
+    expect(empty).toEqual({ contacts: [], naics: [], codes: [], meetings: [], keyDates: [], complianceRules: [] });
     const reqOnly = extractDossier([
       { id: 'blk-REQ-001', locator: 'RFP.txt', text: 'email in-a-requirement@agency.gov', kind: 'requirement' },
     ]);
@@ -206,7 +209,7 @@ describe('extractDossier (pure)', () => {
   });
 
   it('is total — never throws on a non-array/garbage input', () => {
-    expect(extractDossier(undefined as any)).toEqual({ contacts: [], naics: [], codes: [], meetings: [], keyDates: [] });
+    expect(extractDossier(undefined as any)).toEqual({ contacts: [], naics: [], codes: [], meetings: [], keyDates: [], complianceRules: [] });
   });
 });
 
