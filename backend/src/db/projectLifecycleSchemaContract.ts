@@ -26,6 +26,7 @@ export const REQUIRED_TABLES: ReadonlyArray<string> = [
   'blueprint_role_map',
   'blueprint_design_decisions',
   'blueprint_visual_contracts',
+  'lifecycle_stage_readiness',
 ];
 
 /**

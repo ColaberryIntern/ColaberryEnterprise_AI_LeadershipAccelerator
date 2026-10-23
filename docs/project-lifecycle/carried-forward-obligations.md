@@ -2848,3 +2848,60 @@ it fails in the worst direction — the new field is simply absent from the hash
 
 §8 Q1 (is `operating` automatic?) and Q2 (flag?) remain unanswered. They block steps 2 and 3 —
 readiness on build events, and the automatic work hops.
+
+## THE GOVERNANCE RULES ARE NOW CONSTRAINTS, not conventions
+
+`lifecycle_stage_readiness` ships with the readiness store. The table is the part worth reading:
+three of the design's rules are written as CHECK constraints rather than as conditionals in
+calling code, because a convention is one careless commit away from being untrue and this is the
+table a future automatic advancer will read.
+
+| Constraint | The rule it makes unfakeable |
+|---|---|
+| `measured_by LIKE 'system:%'` | a readiness row can **never** be attributed to a person |
+| `performed_act NOT LIKE '%.approve'` | readiness may record work the pipeline DID; it may never record an **approval** |
+| `satisfied = (gap_count = 0)` | a row cannot claim to be satisfied while carrying blocking gaps — readiness cannot lie about itself |
+
+### Each constraint is proved by watching it refuse
+
+Not by asserting the DDL text contains it. `lifecycleReadinessPersistence.integration.test.ts`
+runs against real Postgres, in the `Integration tier (Postgres)` job built earlier this session,
+and **each CHECK removed from the DDL fails exactly one test** — a 1:1 mapping, measured:
+
+| CHECK removed | Test that fails |
+|---|---|
+| `ck_readiness_measured_by_is_system` | REFUSES a row attributed to a PERSON |
+| `ck_readiness_never_an_approval` | REFUSES an approval as a performed act |
+| `ck_readiness_satisfied_iff_no_gaps` | REFUSES a row claiming satisfied with gaps |
+
+A positive control accepts a well-formed system measurement, and a second accepts
+`story.execute` as a performed act — so the refusals are not the table rejecting everything.
+
+### Idempotent by index, not by read-then-write
+
+`ON CONFLICT DO NOTHING` against `uq_readiness_measurement (lifecycle, stage, evidence hash)`.
+Re-measuring unchanged evidence is one row and the ORIGINAL `measured_at` survives, the same
+shape as a retried blueprint approval returning the original approver. A read-then-insert would
+leave the race open; the index closes it. Proven, including that the first timestamp survives.
+
+### Two existing guards caught things, which is the system working
+
+- **The tenant-scoping and table-count contract** in `ensureProjectLifecycleSchema.test.ts`
+  required the new table to carry `tenant_id` and to be added to `REQUIRED_TABLES`. Both done.
+- **The token census** in `ensureProjectLifecycleSchema.additive.test.ts` refused the change until
+  its four apparatus numbers were re-counted: PRIMARY KEY 7 to 8, UNIQUE 10 to 11, CHECK 6 to
+  **11**, NOT NULL 55 to 64. That jump in CHECKs is the governance rules arriving in the schema,
+  and the census is where it had to be declared rather than slipping in.
+
+### The suite had to be made replayable
+
+It passed, then failed every test on its second run: the first run's teardown died partway and
+left a lifecycle row that violated `uq_lifecycle_student_project` on re-insert. The teardown is
+now repeated as setup, and the suite is verified green **twice against the same database** — the
+same lesson the enrollment-lock suite taught with `sequelize.sync()`.
+
+### Still gated
+
+§8 Q1 and Q2 remain unanswered. Steps 2 and 3 — readiness on build events, and the automatic work
+hops — stay blocked. Nothing in this change writes a readiness row in production: there is no
+caller yet, by design.

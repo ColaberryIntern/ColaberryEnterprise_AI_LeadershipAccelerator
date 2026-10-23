@@ -51,10 +51,16 @@ describe('the project-lifecycle DDL is additive-only, bar one permitted ALTER', 
     const up = PROJECT_LIFECYCLE_STATEMENTS.map((s) => s.toUpperCase());
     const occurrences = (t: string) => up.reduce((n, s) => n + (s.split(t).length - 1), 0);
 
-    expect(occurrences('PRIMARY KEY')).toBe(7);
-    expect(occurrences('UNIQUE')).toBe(10);
-    expect(occurrences('CHECK')).toBe(6);
-    expect(occurrences('NOT NULL')).toBe(55);
+    // Raised by `lifecycle_stage_readiness` (readiness-and-approval-separation.md §4), which
+    // contributes one PRIMARY KEY, one UNIQUE index, FIVE CHECKs and nine NOT NULLs. The five
+    // CHECKs are the largest single jump this census has taken, and deliberately so: that table
+    // writes the design's governance rules as CONSTRAINTS rather than as conventions in calling
+    // code, so `measured_by` can never be a person, `performed_act` can never be an approval,
+    // and a row cannot claim to be satisfied while carrying blocking gaps.
+    expect(occurrences('PRIMARY KEY')).toBe(8);
+    expect(occurrences('UNIQUE')).toBe(11);
+    expect(occurrences('CHECK')).toBe(11);
+    expect(occurrences('NOT NULL')).toBe(64);
 
     // Every token the global check bans appears ZERO times in the real list, which is what
     // makes banning it free. If one ever appears, this test is where that surfaces.
