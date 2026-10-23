@@ -190,11 +190,20 @@ describe('the extended palette', () => {
   });
 
   it.each(['ai-flotation', 'training'])(
-    '%s resolves all thirteen, so no stylesheet rule reads an undefined custom property',
+    '%s resolves every token, so no stylesheet rule reads an undefined custom property',
     (key) => {
       const { theme } = themeForLandingPage(key);
       EXTENDED.forEach((t) => expect(theme[t as keyof typeof theme]).toMatch(/^#[0-9A-Fa-f]{3,8}$/));
-      expect(Object.keys(theme)).toHaveLength(13);
+
+      // Thirteen until 2026-10-22, when the inverse band gained two DERIVED accents. They are
+      // counted here rather than exempted, because the point of this assertion is that nothing
+      // joins the resolved theme by accident: a new token should fail this test once, on
+      // purpose, and then be added deliberately.
+      const derivedForDarkBand = ['--accent-on-dark', '--accent-2-on-dark'];
+      derivedForDarkBand.forEach((t) => {
+        expect(theme[t as keyof typeof theme]).toMatch(/^#[0-9A-Fa-f]{3,8}$/);
+      });
+      expect(Object.keys(theme)).toHaveLength(13 + derivedForDarkBand.length);
     },
   );
 });

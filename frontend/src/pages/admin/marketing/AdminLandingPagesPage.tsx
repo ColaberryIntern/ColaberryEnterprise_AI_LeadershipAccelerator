@@ -54,6 +54,7 @@ export default function AdminLandingPagesPage() {
   // Selected-page working state
   const [slugDraft, setSlugDraft] = useState('');
   const [feedback, setFeedback] = useState('');
+  const [mode, setMode] = useState<lp.RevisionMode>('tweak');
   const [draft, setDraft] = useState<lp.LandingPageDraft | null>(null);
   const [previewHtml, setPreviewHtml] = useState<string | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
@@ -192,7 +193,7 @@ export default function AdminLandingPagesPage() {
        * done the work. The feedback is kept on a no-op so it can be reworded rather than retyped.
        */
       const before = JSON.stringify(draft?.content ?? null);
-      const result = await lp.reviseLandingPage(selected.id, feedback);
+      const result = await lp.reviseLandingPage(selected.id, feedback, undefined, mode);
       const changed = JSON.stringify(result.content) !== before;
 
       setDraft(result);
@@ -201,7 +202,12 @@ export default function AdminLandingPagesPage() {
 
       if (changed) {
         setFeedback('');
-        say('success', 'Revised. Read it again before publishing.');
+        // The notice outranks "Revised": it explains why a rebuild-shaped request produced a
+        // small change, which is the question the operator is about to ask.
+        say(result.modeNotice ? 'info' : 'success',
+          result.modeNotice ?? 'Revised. Read it again before publishing.');
+      } else if (result.modeNotice) {
+        say('info', result.modeNotice);
       } else {
         say('info', 'The model returned the same page - nothing changed. Name the section and '
           + 'what it should say instead. (Images are not something it can add: a human adds those.)');
@@ -382,7 +388,7 @@ export default function AdminLandingPagesPage() {
                                   actions={actions}
                                   busy={busy}
                                   preview={{ html: previewHtml, error: previewError, openFullScreen, download: downloadPreview }}
-                                  revision={{ feedback, setFeedback, apply: revise }}
+                                  revision={{ feedback, setFeedback, apply: revise, mode, setMode }}
                                   publishing={{ slugDraft, setSlugDraft, publish, unpublish }}
                                 />
                               </td>

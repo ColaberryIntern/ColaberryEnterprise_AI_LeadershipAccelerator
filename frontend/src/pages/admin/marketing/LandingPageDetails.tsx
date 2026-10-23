@@ -1,5 +1,5 @@
 import React from 'react';
-import type { LandingPage, LandingPageTrafficRow } from '../../../services/landingPageApi';
+import type { LandingPage, LandingPageTrafficRow, RevisionMode } from '../../../services/landingPageApi';
 import { slugProblem, type PageActions } from './landingPageState';
 import { AudienceDisclosure, Metric, when } from './LandingPageAudience';
 
@@ -32,7 +32,11 @@ export interface LandingPageDetailsProps {
   actions: PageActions;
   busy: boolean;
   preview: { html: string | null; error: string | null; openFullScreen: () => void; download: () => void };
-  revision: { feedback: string; setFeedback: (v: string) => void; apply: () => void };
+  revision: {
+    feedback: string; setFeedback: (v: string) => void; apply: () => void;
+    /** Adjust the page, or rebuild it. Adjust is the default and the old behaviour. */
+    mode: RevisionMode; setMode: (m: RevisionMode) => void;
+  };
   publishing: {
     slugDraft: string; setSlugDraft: (v: string) => void; publish: () => void; unpublish: () => void;
   };
@@ -114,9 +118,41 @@ export default function LandingPageDetails({
               <textarea id="lp-feedback" className="form-control form-control-sm" rows={4} value={revision.feedback} disabled={busy}
                 placeholder="Make the headline about the mentor review, and drop the FAQ."
                 onChange={(e) => revision.setFeedback(e.target.value)} data-testid="lp-feedback" />
+
+              {/* Explicit, not inferred. A rebuild discards a page somebody may have spent an
+                  hour revising, so it is the operator's choice - but until this existed, asking
+                  for one in the box produced an adjustment and almost no visible change. */}
+              <div className="btn-group btn-group-sm mt-2 d-flex" role="group" aria-label="Revision mode">
+                <button
+                  type="button"
+                  className={`btn ${revision.mode === 'tweak' ? 'btn-secondary' : 'btn-outline-secondary'}`}
+                  onClick={() => revision.setMode('tweak')}
+                  aria-pressed={revision.mode === 'tweak'}
+                  disabled={busy}
+                  data-testid="lp-mode-tweak"
+                >
+                  Adjust
+                </button>
+                <button
+                  type="button"
+                  className={`btn ${revision.mode === 'redesign' ? 'btn-secondary' : 'btn-outline-secondary'}`}
+                  onClick={() => revision.setMode('redesign')}
+                  aria-pressed={revision.mode === 'redesign'}
+                  disabled={busy}
+                  data-testid="lp-mode-redesign"
+                >
+                  Rebuild
+                </button>
+              </div>
+              <div className="form-text small" data-testid="lp-mode-hint">
+                {revision.mode === 'tweak'
+                  ? 'Changes only what you ask for and leaves the rest of the page alone.'
+                  : 'Rewrites the page from the same brief. Structure and wording can change; the facts cannot.'}
+              </div>
+
               <button type="button" className="btn btn-sm btn-outline-primary mt-2" data-testid="lp-revise"
                 disabled={busy || !actions.canRevise || revision.feedback.trim().length < 3} onClick={revision.apply}>
-                Apply the change
+                {revision.mode === 'redesign' ? 'Rebuild the page' : 'Apply the change'}
               </button>
             </div>
 
