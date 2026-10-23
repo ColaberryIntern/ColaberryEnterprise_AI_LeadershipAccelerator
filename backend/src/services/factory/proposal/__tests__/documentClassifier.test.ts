@@ -35,6 +35,32 @@ describe('classifyDocuments — role by filename + text', () => {
     const body = 'Scope of Work. '.repeat(10) + 'Proposal evaluation criteria follow. '.repeat(400);
     expect(role('document.pdf', body)).toBe('solicitation');
   });
+  it('an RFP whose BODY mentions "cost proposal" is STILL the solicitation, not a pricing form (the real Snow bug)', () => {
+    // The real Snow RFP (file 6) read as a one-line pricing_form because its body says "cost proposal" and the
+    // text pricing signal was checked before the filename solicitation signal. The filename must win.
+    const rfpBody =
+      'Request for Proposals. '.repeat(20) +
+      'Offerors shall submit a cost proposal in a separate file. '.repeat(50) +
+      'Describe your technical approach, staffing plan, and past performance. '.repeat(300);
+    expect(role('6-RFP - Adult Learner Consulting - RFP SNOC26271024 - 10 2026.pdf', rfpBody)).toBe('solicitation');
+  });
+  it('a Terms & Conditions file whose BODY says "scope of work" is STILL contract_terms, not the solicitation', () => {
+    // The real Snow T&C (file 4) read as the solicitation because its body says "scope of work"; the filename wins.
+    const tcBody =
+      'Standard Terms and Conditions. '.repeat(20) +
+      'These terms govern any scope of work performed under the contract. '.repeat(50) +
+      'The Contractor shall indemnify the State and maintain insurance. '.repeat(200);
+    expect(role('4-Master - New Standard Terms and Conditions.pdf', tcBody)).toBe('contract_terms');
+  });
+  it('a LONG body with both pricing and solicitation language is the solicitation, never a price sheet', () => {
+    // Non-committal filename: the text fallbacks must put solicitation before pricing, and the length gate must
+    // keep a long "cost proposal"-mentioning body out of pricing_form.
+    const body =
+      'Scope of Work and evaluation criteria. '.repeat(50) +
+      'The cost proposal shall be submitted separately. '.repeat(50) +
+      'Vendor shall describe its approach. '.repeat(300);
+    expect(role('attachment-3.pdf', body)).toBe('solicitation');
+  });
   it('a substantial un-signalled document falls back to solicitation (so the RFP is never skipped); a short one is a reference', () => {
     expect(role('mystery.pdf', 'x '.repeat(3000))).toBe('solicitation'); // >= 4000 chars
     expect(role('note.txt', 'A short note with nothing to route on.')).toBe('reference');
