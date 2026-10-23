@@ -3072,3 +3072,80 @@ synthetic lifecycle row — sound because that reader locates evidence by `tenan
 **It first reported only a count** ("blocked by 4"), which is a signal, not a finding. Reporting
 the KIND is what turned it into one: `unmet` and `not_assessed` demand opposite actions, and the
 count hid which applied.
+
+## THE LIFECYCLE NEEDS AUTHORED DATA, NOT MORE CODE, measured on production
+
+The previous entry proved `operating_blueprint_manifests` is empty. This asks the next question:
+if someone wrote the caller that has never existed, would it have anything to call with? The
+answer is no, for three independent reasons, and only one of them is a missing module.
+
+### The route is live. That was the first hypothesis and it was WRONG
+
+`ENABLE_PROJECT_LIFECYCLE` is `true` in production, so `POST /:projectId/compose` is reachable.
+The flag was the obvious suspect and it is not the cause. Worth recording because "it ships dark"
+is the explanation everyone reaches for first.
+
+### 1. Nothing assembles the payload, and nothing ever has
+
+`composeBlueprint` is PURE. Every collection it validates arrives in the POST body, including the
+requirements: `buildRefs` reads `input.project.requirements`, never a table. So something has to
+gather a real project's records and build that body.
+
+Nothing does. There is no frontend (`projectLifecycleRoutes.ts` says so itself: "There is no
+frontend route yet"), no script and no service. Both adapters are pure functions and a
+`git grep` outside `adapters/` and `__tests__/` finds ZERO production callers of either.
+
+The persist call was wired on 2026-10-14 and the handler's own comment records what came before
+it. The endpoint, the persister, the writer and both adapters are all correct and all unreachable.
+
+### 2. Four of the inputs live in no database at all
+
+The route persists ONLY when `composeBlueprint` returns zero refusals, and `surfaceChecks` demands
+task-surface bindings, workspace-state declarations, control policies with known role ids, and a
+selected design. **`design === null` is a hard `DESIGN_NOT_SELECTED` refusal with no default.**
+
+These are product decisions, not records. A gatherer cannot gather them; they have to be authored.
+
+### 3. EVEN WITH A MANIFEST, THE FIRST HOP STAYS BLOCKED
+
+| Requirements on the 21 eligible projects | |
+|---|---|
+| Total | **387** |
+| `human_confirmed = true` | **387** |
+| With a source document | **0** |
+
+`factoryAdapter.ts:143` sets `provenanceKind` from `source_document` or `null`. With none
+recorded, every requirement is unprovenanced, `lifecycleEvidence.ts:198` collects all 387, and
+`requirement_without_provenance` refuses `requirements_ready`.
+
+**This one cannot be fixed in code, by design.** The adapter's own header: "`provenanceKind:
+null`, because null means unrecorded and THE REQUEST FORBIDS FILLING IT IN." Inferring provenance
+from `human_confirmed` is precisely what the architecture refuses, and it is right to: a confirmed
+requirement with no recorded source is confirmed by someone's memory.
+
+### The eligible set is 21, not 62 and not 19
+
+`persistComposedBlueprint` returns `no_lifecycle_row` for a project without one, so the 62 legacy
+projects cannot be filed against at all. Eligible: **6 delivery and 15 student, all at
+`discovery`**. All 6 delivery projects carry requirements (168, 83, 82, 47, 4, 3); 10 of the 15
+student projects have a published plan.
+
+Note the count: this programme has twice recorded "19 lifecycle rows". It is 21 now. A figure
+quoted from an earlier run is not a current measurement.
+
+### What this means, stated plainly
+
+Writing one manifest is achievable TODAY for a delivery candidate, but only by hand-authoring the
+four non-database inputs. It would convert the 248 `not_assessed` gaps into MEASURED ones, which
+is real knowledge, and the hop would still refuse on provenance. So a manifest is necessary and
+not sufficient.
+
+**The critical path is two items, and the second is not ours to decide:** build the gatherer, and
+decide what happens to 387 requirements with no recorded source. Neither is a code fix alone.
+
+### The instrument
+
+`scripts/lifecycle/measureComposeInputs.js`. SELECTs only: it never composes, never registers,
+never writes. Each query is wrapped so one missing table reports itself and the rest of the
+inventory still runs, because a single failed query taking the whole report down is how an
+inventory becomes a guess.
