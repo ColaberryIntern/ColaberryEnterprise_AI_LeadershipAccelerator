@@ -3004,3 +3004,71 @@ only in the hook's own suite.
 
 Step 4 (readiness surfaced in the workspace) and step 5 (the read-only legacy measurement over
 the 62 unregistered projects) remain. Neither is blocked.
+
+## NOTHING CAN ADVANCE BECAUSE NO BLUEPRINT MANIFEST EXISTS, measured on production
+
+§9 step 5, run read-only against production. It answers the backfill question and then answers a
+much better one.
+
+### The backfill answer, and it is not the one §7 predicted
+
+All **62** unregistered projects derive to `discovery`. §7 of the design said "47 of them already
+have a published plan, so the answer will not be `discovery`". **That prediction was wrong**, and
+the measurement is what corrected it.
+
+### The reason is the finding
+
+| | |
+|---|---|
+| Gaps blocking the first hop | **248** — 62 projects x 4 |
+| Of those, `unmet` | **0** |
+| Of those, `not_assessed` | **248** |
+
+Not one project has a single MEASURED failure. Every block is "nobody measured it". The four
+rules are the same for all 62: `no_requirements`, `requirement_without_provenance`,
+`source_block_uncited`, `source_block_unresolved`.
+
+**Why:** the evidence layer reads from the blueprint manifest, and
+`operating_blueprint_manifests` has **ZERO rows in production** — not for the 62, not for the 14
+registered ones, not for anyone. So every manifest-derived field is unassessed for every project
+in the system.
+
+### What this actually explains
+
+This programme has recorded twice that "all 19 lifecycle rows sit at `discovery`" and attributed
+it to nobody using the approval workspace. **That attribution was wrong.** Nobody clicking is not
+the cause: a click would be REFUSED. The first hop's prerequisites are unassessed, the
+NOT_MEASURED doctrine blocks on unassessed, and so `requestTransition` would return
+`prerequisites_unmet` to a reviewer who holds `requirement.approve` and does everything right.
+
+**The lifecycle is not idle. It is structurally unable to move**, and it has been since it
+shipped.
+
+### Where the chain stops
+
+`projectLifecycleRoutes.ts:305` -> `persistComposedBlueprint` -> `writeBlueprintManifest` ->
+`operating_blueprint_manifests`. The writer exists and IS wired to an admin route. It has simply
+never been exercised in production — so this is the fifth module in this programme found written,
+reviewed and effectively unused, but the first one whose disuse disables everything downstream.
+
+### What it means for the readiness work
+
+The readiness computation, table, advancer and hook are correct and will keep working. They will
+also report `not_assessed` for every project until a blueprint is composed for one. That is the
+doctrine behaving correctly — an unmeasured prerequisite is not a satisfied one — and it is worth
+stating plainly rather than discovering later as a disappointment.
+
+**The next thing that unblocks the lifecycle is not more lifecycle code.** It is composing a
+blueprint for one real project and seeing what the evidence layer then reports.
+
+### The instrument
+
+`scripts/lifecycle/measureLegacyLifecycleReadiness.js`. Read-only: it never records readiness,
+never registers a project, never advances a stage. It uses the REAL `readLifecycleEvidence` and
+`prerequisiteGaps` from the deployed build rather than a reimplementation, handing them a
+synthetic lifecycle row — sound because that reader locates evidence by `tenant_id` +
+`student_project_id` and never by the row's own id.
+
+**It first reported only a count** ("blocked by 4"), which is a signal, not a finding. Reporting
+the KIND is what turned it into one: `unmet` and `not_assessed` demand opposite actions, and the
+count hid which applied.
