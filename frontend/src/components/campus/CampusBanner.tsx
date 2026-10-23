@@ -10,10 +10,14 @@ import CampusLive from './CampusLive';
 import CampusRail from './CampusRail';
 import { nextStop } from './campusPlan';
 import type { BuildingId } from './campusMap';
+import CampusMeHost from './home/CampusMeHost';
+import { useMyPhoto } from './home/useMyPhoto';
+import { readParticipant } from '../../pages/portal/today/shellUtils';
 import './campus.css';
 import './campusBanner.css';
 import './campusPageChrome.css';
 import './campusLive.css';
+import './campusPanels.css'; // WP-7: the page bar's 'you' button and the Me panel
 
 /**
  * The campus banner on every campus page (Colaberry Campus C3): a mini-map (opens the full map at
@@ -60,7 +64,8 @@ function NextStepsDrawer(): React.ReactElement {
 }
 
 export default function CampusBanner({ alwaysSteps = false }: { alwaysSteps?: boolean }): React.ReactElement {
-  const { settings, layer, openMap, stepOutside, enterThroughDoor, planStops } = useCampus();
+  const { settings, layer, openMap, stepOutside, enterThroughDoor, planStops, openMe, active } = useCampus();
+  const photo = useMyPhoto(active, false); // WP-7 (PortalShell already reads it once): you, on the page bar (the prototype's .pg-head .me), opens the Me panel
   const { buildings, isExplorer } = useCampusView();
   const { pathname } = useLocation();
   const crumbs = trailFor(pathname, buildings, settings.workplaceNames);
@@ -111,6 +116,10 @@ export default function CampusBanner({ alwaysSteps = false }: { alwaysSteps?: bo
         Step outside
       </button>
       <NextStepsDrawer />
+      <button type="button" className="cm-me cm-banner-me" onClick={openMe} aria-label="You: your look, photo and campus settings" data-testid="cm-banner-me">
+        {photo ? <img src={photo} alt="" /> : readParticipant().initials}
+      </button>
+      <CampusMeHost />
       {/* C8: what is on air now (renders nothing when nothing is) */}
       <CampusLive />
       <PageHint />

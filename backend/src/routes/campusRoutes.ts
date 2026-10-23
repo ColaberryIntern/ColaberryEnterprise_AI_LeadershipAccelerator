@@ -3,13 +3,14 @@ import { z } from 'zod';
 import { requireParticipant } from '../middlewares/participantAuth';
 import { campusOnFor } from '../services/campus/campusPilot';
 import { isCampusArea } from '../services/campus/campusAreas';
-import { touchCampusArea, getCampusPresence } from '../services/campus/campusPresenceService';
+import { touchCampusArea, clearCampusArea, getCampusPresence } from '../services/campus/campusPresenceService';
 import { getStaffDesks } from '../services/campus/campusStaffDesks';
 import { waveAt } from '../services/campus/campusWave';
 import { campusAudienceFor } from '../services/campus/campusAudience';
 import { requestTourHandoff } from '../services/campus/campusTourHandoff';
 import { getLook, setLook } from '../services/campus/campusLookService';
 import { GEAR_SLOTS } from '../services/campus/campusUnlocks';
+import { mayPreviewAudiences } from '../services/campus/campusAudienceSwitch';
 
 /**
  * Colaberry Campus learner endpoints (Basecamp C1 onward). Mounted with the
@@ -56,7 +57,8 @@ export function getCampusFlags(req: Request, res: Response): void {
 }
 
 // ---- C4: presence by building ----
-const HereBody = z.object({ area: z.string().min(1).max(32) }).strict();
+// WP-7 (Q14): `share: false` = "Show which building I'm in" is off; the server forgets the learner's building instead of recording it.
+const HereBody = z.object({ area: z.string().min(1).max(32), share: z.boolean().optional() }).strict();
 // C9: gear others may see is a STRICT object of the four public slots: the response contract itself refuses a ride.
 const PublicGearSchema = z.object({ head: z.string(), face: z.string(), body: z.string(), neck: z.string() }).partial().strict();
 const PersonSchema = z.object({
@@ -79,7 +81,8 @@ export async function postCampusHere(req: Request, res: Response): Promise<void>
   if (!campusOnFor(req)) { res.status(204).end(); return; }
   if (!isCampusArea(parsed.data.area)) { res.status(400).json({ error: 'Unknown campus area', error_class: 'UnknownCampusArea' }); return; }
   try {
-    await touchCampusArea(req.participant!.sub, parsed.data.area);
+    if (parsed.data.share === false) await clearCampusArea(req.participant!.sub);
+    else await touchCampusArea(req.participant!.sub, parsed.data.area);
     res.status(204).end();
   } catch (err) {
     logFailure('campus_here_failed', err);
@@ -210,6 +213,13 @@ export async function putLookRoute(req: Request, res: Response): Promise<void> {
   }
 }
 
+/** WP-7: GET /api/portal/campus/audience-switch - may this account preview the campus as another account type? (campus pilot only) */
+const AudienceSwitchResponse = z.object({ allowed: z.boolean() }).strict();
+export async function getAudienceSwitchRoute(req: Request, res: Response): Promise<void> {
+  if (!campusOnFor(req)) { sendValidated(res, AudienceSwitchResponse, { allowed: false }, 'campus_audience_switch'); return; }
+  sendValidated(res, AudienceSwitchResponse, { allowed: await mayPreviewAudiences(req.participant!.sub) }, 'campus_audience_switch');
+}
+
 const router = Router();
 router.get('/api/portal/campus/flags', requireParticipant, getCampusFlags);
 router.post('/api/portal/campus/here', requireParticipant, postCampusHere);
@@ -219,5 +229,6 @@ router.post('/api/portal/campus/wave', requireParticipant, postWaveRoute);
 router.post('/api/portal/campus/tour/complete', requireParticipant, postTourCompleteRoute);
 router.get('/api/portal/campus/look', requireParticipant, getLookRoute);
 router.put('/api/portal/campus/look', requireParticipant, putLookRoute);
+router.get('/api/portal/campus/audience-switch', requireParticipant, getAudienceSwitchRoute);
 
 export default router;

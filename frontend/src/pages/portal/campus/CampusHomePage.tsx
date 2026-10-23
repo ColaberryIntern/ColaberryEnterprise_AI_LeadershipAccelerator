@@ -6,7 +6,7 @@ import CampusConcierge from '../../../components/campus/home/CampusConcierge';
 import { pulseOf } from '../../../components/campus/home/CampusConcierge';
 import { useHomeFacts } from '../../../components/campus/home/useHomeFacts';
 import CampusGate, { gateSeen } from '../../../components/campus/home/CampusGate';
-import CampusMePanel from '../../../components/campus/home/CampusMePanel';
+import CampusMeHost from '../../../components/campus/home/CampusMeHost';
 import Wayfinder from '../../../components/campus/home/Wayfinder';
 import { useHomeMap, homeInsets } from '../../../components/campus/home/useHomeMap';
 import { useHomeWayfinder } from '../../../components/campus/home/useHomeWayfinder';
@@ -29,6 +29,7 @@ import { useLevelCheer } from '../../../components/campus/home/useLevelCheer';
 import { useMyPhoto } from '../../../components/campus/home/useMyPhoto';
 import { useHomeAgenda, mapMoments } from '../../../components/campus/home/useMapMoments';
 import { useConciergeReveal } from '../../../components/campus/home/useConciergeReveal';
+import { useLiveCheckIn } from '../../../components/campus/home/useLiveCheckIn';
 import { levelOfRung } from '../../../services/bandLadder';
 import { readParticipant } from '../today/shellUtils';
 import '../../../components/campus/campus.css';
@@ -58,9 +59,9 @@ export default function CampusHomePage(): React.ReactElement {
   const campus = useCampus();
   const { audience, buildings, accessOf } = useCampusView();
   const liveNow = useLiveNow(); // WP-6: Colaberry Live's broadcast, state and one-second clock
+  useLiveCheckIn(audience, liveNow, campus.here ?? null); // WP-7 (Q2): walking into the live Classroom checks a member in
   const facts = useHomeFacts(audience === 'member');
   const [cardOpen, setCardOpen] = useState(false);
-  const [meOpen, setMeOpen] = useState(false);
   const [hover, setHover] = useState<BuildingId | null>(null);
   // D7: the entry gate, once per Central day (decided once, on the first render of the page).
   const [gateOpen, setGateOpen] = useState(() => !gateSeen(new Date()));
@@ -73,7 +74,7 @@ export default function CampusHomePage(): React.ReactElement {
   const stay = useCallback(() => undefined, []);
   const { props, tour, touring, extra } = useCampusWorldProps(stay, stay, null);
   useLevelCheer(look?.rung_name || null);
-  useUnlockCheer(look?.catalog, () => setMeOpen(true));
+  useUnlockCheer(look?.catalog, campus.openMe);
   useWelcomeBack({ audience, buildings, workplace: wp, skippedGate, here: campus.here, goTo: map.goTo });
   const claimStreak = useGateStreak({ audience, claimedToday: facts.claimedToday, onStreak: facts.streakNow, onPoints: reloadLook });
   // WP-3: you on the map (photo, level for those who earn points), a member's time badges, the night look, the concierge's entrance.
@@ -105,18 +106,18 @@ export default function CampusHomePage(): React.ReactElement {
         rung={look?.rung_name || null} points={look?.points ?? null} streak={facts.streak} online={online} workplace={wp}
         streakPoints={facts.claimedToday === false && !inViewAs() ? facts.nextPoints : null}
         live={liveB ? { place: buildingName(liveB, wp), preview: liveNow?.b.access_mode === 'preview' } : null}
-        hasTour={!!tour} reduceMotion={reduce} now={new Date()} onOpening={reveal.onOpening} onEnter={enter} />}
+        hasTour={!!tour} reduceMotion={reduce} now={new Date()} onOpening={reveal.onOpening} onEnter={enter} photo={photo} />}
       <CampusWorld {...props} insets={homeInsets} walkTo={map.walk} onCard={onCard} cameraRef={map.camRef} startAt={campus.here}
         startCam={map.startCam} recenter={map.recenter} me={{ initials, photo, level, tone: audience }} moments={mapMoments(audience, agenda)} quiet={quiet} hover={hover} liveNow={liveNow} />
       <CampusTopBar audience={audience} online={online} points={look?.points ?? null} rung={look?.rung_name || null} photo={photo} workplace={wp}
-        streak={facts.streak} initials={initials} onList={campus.openList} onFind={() => { openWayfinder(); }} onMe={() => setMeOpen((v) => !v)} />
-      {meOpen && <CampusMePanel audience={audience} fullName={facts.fullName} initials={initials} onClose={() => { setMeOpen(false); map.camRef.current?.recenter(); }} />}
+        streak={facts.streak} initials={initials} onList={campus.openList} onFind={() => { openWayfinder(); }} onMe={() => (campus.meOpen ? campus.closeMe() : campus.openMe())} />
+      <CampusMeHost fullName={facts.fullName} initials={initials} onClosed={() => map.camRef.current?.recenter()} />
       <CampusConcierge waiting={!reveal.shown} cardOpen={cardOpen} audience={audience} firstName={facts.firstName} hereId={campus.here ?? null}
         buildings={buildings} accessOf={accessOf} workplaceNames={wp} presence={presence} presenceError={presenceError} desks={staffDesks}
         stops={campus.planStops} planMinutes={campus.planMinutes} live={live} now={new Date()} agenda={agenda} urgent={urgent}
         tourStops={tour ? tour.stops : null} touring={touring} tourProgress={campus.tourProgress} justToured={campus.justToured}
         onWalk={map.goTo} onRun={(id) => map.goTo(id, { run: true })} onHover={setHover} onTour={campus.resumeTour} onEndTour={campus.endTour}
-        onOpen={(r) => campus.enterThroughDoor(r, null)} />
+        onOpen={(r) => campus.enterThroughDoor(r, null)} photo={photo} />
       <div className="cm-home-livebar"><CampusLive onWalk={(id, run) => map.goTo(id, { run })} hereId={campus.here ?? null} /></div>
       <CampusTabBar active="/portal/campus" />
       <CampusListView />

@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import type { CampusAudience } from '../campusMap';
 import { trapTab } from '../focusTrap';
 import { greetLine, wd } from './conciergeCopy';
+import { gateSeen, markGateSeen, centralDay, GATE_SEEN_KEY } from './campusEntrance';
 import '../campusGate.css';
 
 /**
@@ -14,21 +15,12 @@ import '../campusGate.css';
  * and the home makes the claim on Enter (useGateStreak), so this component still writes nothing itself. Real data only: the name,
  * level and points come from the profile and the campus look; a fact we do not have is left off the card.
  */
-export const GATE_SEEN_KEY = 'colaberry.campus.gate.seen';
+// WP-7: the entrance setting (daily / every time / never) and the day the gate was passed live in campusEntrance; re-exported here.
+export { gateSeen, markGateSeen, centralDay, GATE_SEEN_KEY };
 /** WP-3, the prototype's enter() timeline: the doors swing (1.5 s); at 1.3 s the gate starts its 0.7 s fade; it is gone at 2 s. */
 export const FADE_AT_MS = 1300;
 export const OPEN_MS = 2000;
 
-/** Today's date in Central time, YYYY-MM-DD (the portal's day boundary). */
-export function centralDay(now: Date): string {
-  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Chicago', year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
-}
-export function gateSeen(now: Date): boolean {
-  try { const v = window.localStorage.getItem(GATE_SEEN_KEY); return v === 'always' || v === centralDay(now); } catch { return true; } // no storage: never block
-}
-export function markGateSeen(now: Date): void {
-  try { if (window.localStorage.getItem(GATE_SEEN_KEY) !== 'always') window.localStorage.setItem(GATE_SEEN_KEY, centralDay(now)); } catch { /* no storage */ }
-}
 
 export interface GateProps {
   audience: CampusAudience;
@@ -50,6 +42,8 @@ export interface GateProps {
   onOpening?: () => void;
   /** WP-6: Colaberry Live is on air (where, and whether this viewer gets a preview): the gate's line says so, as the prototype's. */
   live?: { place: string; preview: boolean } | null;
+  /** WP-7: your uploaded photo on the ID card (the prototype's renderGate after a photo); initials without one. */
+  photo?: string | null;
 }
 
 export default function CampusGate(p: GateProps): React.ReactElement {
@@ -108,7 +102,7 @@ export default function CampusGate(p: GateProps): React.ReactElement {
             <div className="cm-gate-streak" data-testid="cm-gate-streak"><span aria-hidden="true">{'\u{1F525}'}</span><b>{p.streak}-day streak</b></div>
           ))}
           <div className={`cm-idcard${explorer ? ' is-explorer' : staff ? ' is-staff' : partner ? ' is-partner' : ''}`} data-testid="cm-gate-id">
-            <div className="ph" aria-hidden="true">{p.initials || '·'}</div>
+            <div className="ph" aria-hidden="true">{p.photo ? <img src={p.photo} alt="" data-testid="cm-gate-photo" /> : (p.initials || '·')}</div>
             <div>
               <b>{p.fullName || (explorer ? 'Explorer' : 'Welcome')}</b>
               <small>{explorer ? 'Explorer · visitor pass' : partner ? 'Partner account' : staff ? 'Program staff · Colaberry' : 'AI Systems Architect Accelerator'}</small>

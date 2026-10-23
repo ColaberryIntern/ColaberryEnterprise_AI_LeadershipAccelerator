@@ -32,7 +32,7 @@ import './campusPanels.css';
  */
 
 export default function CampusListView(): React.ReactElement | null {
-  const { layer, settings, closeLayer, presence, presenceError, staffDesks, planStops, startTour, openLocker, openMap, enterThroughDoor } = useCampus();
+  const { layer, settings, closeLayer, presence, presenceError, staffDesks, planStops, startTour, openMe, openMap, enterThroughDoor } = useCampus();
   const { buildings, accessOf, audience, isExplorer } = useCampusView();
   const { buildings: onAir } = useCampusOnAir();
   const isMgmt = useIsMgmt();
@@ -70,7 +70,7 @@ export default function CampusListView(): React.ReactElement | null {
         <strong>Campus directory</strong>
         <input ref={input} className="cm-filter" placeholder="Filter buildings and rooms" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Filter buildings and rooms" />
         {hasTour && <button type="button" className="cm-link" onClick={startTour} data-testid="cm-list-tour">Take the tour</button>}
-        <button type="button" className="cm-link" onClick={openLocker} data-testid="cm-list-look">My look</button>
+        <button type="button" className="cm-link" onClick={() => { closeLayer(); openMe(); }} data-testid="cm-list-look">My look</button>
         <CampusSettingsPanel variant="bar" />
         <button type="button" className="cm-btn is-secondary" onClick={closeLayer} aria-label="Close campus directory">Close</button>
       </div>

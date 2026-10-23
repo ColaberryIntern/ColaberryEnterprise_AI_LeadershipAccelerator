@@ -91,8 +91,10 @@ const VIEWS = [
   { name: '11-list', route: '/portal/campus', steps: () => [{ click: '[data-testid="cm-topbar-list"]' }],
     required: () => ['cm-list', '.cm-list-intro'] },
   { name: '12-me', route: '/portal/campus', steps: () => [{ click: '[data-testid="cm-stats-me"]' }],
-    required: () => ['cm-me', 'cm-me-entrance'], desktopOnly: true,
-    known: () => ['"show which building I am in" is not offered: there is no server setting behind it'] },
+    // WP-7: the figure, the photo button, the entrance and share settings for everyone; the locker tiles for learners
+    required: (a) => ['cm-me', 'cm-me-figure', 'cm-me-photo', 'cm-me-entrance', 'cm-me-share', ...(a === 'member' || a === 'explorer' ? ['cm-locker'] : ['cm-me-earners'])],
+    desktopOnly: true,
+    known: () => ["a partner's title and company are not shown: the campus does not know them"] },
   { name: '13-recenter', route: '/portal/campus',
     steps: (a) => [{ wait: 600 }, ...DISTURB, tap(SIGNATURE[a]), WALKED, { click: '[data-testid="cm-arrive-back"]' }, { wait: 1600 }],
     required: () => ['cm-world'], assert: () => AT_BASE },
@@ -124,7 +126,7 @@ const VIEWS = [
   // WP-6: arriving at the live building: the hero in the state's colour, the stage, the live room as the main action
   { name: '20-live-arrive', route: '/portal/campus', needsLive: true, steps: () => [tap('commons'), WALKED],
     required: () => ['.cm-arrive-hero.is-live', 'cm-stage', 'cm-arrive-cta'],
-    known: () => ['DOORS OPEN and REPLAY: discovery lists only live and reconnecting broadcasts today', 'auto check-in: a broadcast carries no class session yet (Q2)'] },
+    known: () => ['DOORS OPEN and REPLAY: discovery lists only live and reconnecting broadcasts today (kept out on purpose, #3346)', 'auto check-in needs a broadcast with a class session; the local seed has none'] },
 ];
 
 /** WP-1: the side panel (and the tour in it) is required on every view past the gate. */

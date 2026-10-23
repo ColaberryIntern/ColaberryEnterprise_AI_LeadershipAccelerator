@@ -4,6 +4,7 @@ import type { CampusAudience } from '../campusMap';
 import '../campusPanels.css';
 import { levelOfRung } from '../../../services/bandLadder';
 import NotificationBell from '../../../pages/portal/community/NotificationBell';
+import AccountChip from './AccountChip';
 
 /**
  * The campus home's top bar (C11b), the prototype's HUD (.topbar): the Colaberry mark with CAMPUS (HQ in Workplace names), the
@@ -32,15 +33,8 @@ export interface TopBarProps {
   onMe: () => void;
 }
 
-const ACCT: Partial<Record<CampusAudience, { label: string; cls: string }>> = {
-  explorer: { label: 'Explorer', cls: 'is-explorer' },
-  business: { label: 'Business', cls: 'is-business' },
-  staff: { label: 'Staff', cls: 'is-staff' },
-};
-
 export default function CampusTopBar(p: TopBarProps): React.ReactElement {
   const { audience, online, points, rung, streak, initials } = p;
-  const acct = ACCT[audience];
   const learner = audience === 'member' || audience === 'explorer';
   const level = learner && rung ? levelOfRung(rung) : null;
   return (
@@ -57,7 +51,7 @@ export default function CampusTopBar(p: TopBarProps): React.ReactElement {
         <span aria-hidden="true">{'☰'}</span><span className="hide-m"> List</span>
       </button>
       <div className="cm-pill cm-stats" data-testid="cm-stats">
-        {acct && <span className={`cm-acct ${acct.cls}`} data-testid={`cm-stats-acct-${audience}`}>{acct.label}</span>}
+        <AccountChip audience={audience} />
         {/* Q5: "Lv N" (the rung's place on the ladder), the rung name in the tooltip and, visually hidden, for screen readers */}
         {learner && rung && <span className="cm-lv" data-testid="cm-stats-level" title={rung}>{level ? <>Lv {level}<span className="cm-sr">, {rung}</span></> : rung}</span>}
         {learner && points !== null && <span className="hide-m" data-testid="cm-stats-points">{'★'} {points.toLocaleString('en-US')} pts</span>}

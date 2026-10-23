@@ -44,6 +44,8 @@ import CampusLayers from '../CampusLayers';
 // eslint-disable-next-line import/first
 import CampusNav from '../CampusNav';
 // eslint-disable-next-line import/first
+import CampusMeHost from '../home/CampusMeHost';
+// eslint-disable-next-line import/first
 import { CAMPUS_SETTINGS_KEY } from '../campusSettings';
 // eslint-disable-next-line import/first
 import { ParticipantAuthProvider } from '../../../contexts/ParticipantAuthContext';
@@ -58,7 +60,7 @@ function Capture(): null {
 }
 function Gated(): React.ReactElement | null {
   const c = useCampus();
-  return c.active ? <><CampusNav active="/portal/library" /><CampusLayers /></> : null;
+  return c.active ? <><CampusNav active="/portal/library" /><CampusLayers /><CampusMeHost /></> : null;
 }
 const campus = () => (window as unknown as { __campus: ReturnType<typeof useCampus> }).__campus;
 
@@ -92,28 +94,28 @@ const click = async (id: string) => { await act(async () => { q(id)!.click(); })
 jest.setTimeout(15000);
 
 describe('the locker', () => {
-  it('opens from the side column on the campus home: points, level, earned vs locked', async () => {
+  it('opens the Me panel where you are (WP-7): points, level, earned vs locked tiles', async () => {
     await mount();
     await click('cm-look-open');
-    expect(where.path).toBe('/portal/campus');
-    expect(q('cm-home')).not.toBeNull();
-    expect(q('cm-look-points')?.textContent).toBe('AI Aware II · 200 points. Gear is earned with points, never bought.');
+    expect(where.path).toBe('/portal/library');
+    expect(q('cm-me')).not.toBeNull();
+    expect(q('cm-me-level')?.textContent).toContain('AI Aware II · 200 pts');
     expect(q('cm-look-item-cap')?.disabled).toBe(false);
     expect(q('cm-look-item-hoodie')?.disabled).toBe(true);
-    expect(q('cm-look-item-hoodie')?.textContent).toContain('Earned at 400 points');
-    expect(document.activeElement?.id).toBe('cm-look-h');
+    expect(q('cm-look-item-hoodie')?.textContent).toContain('🔒 400 pts');
+    expect(document.activeElement?.id).toBe('cm-me-name');
   });
 
-  it('wearing an item saves the complete set and your avatar wears it; clicking it again takes it off', async () => {
+  it('wearing an item saves the complete set and your figure wears it; clicking it again takes it off', async () => {
     await mount();
     await click('cm-look-open');
     await click('cm-look-item-cap');
     expect(puts).toEqual([{ head: 'cap' }]);
     expect(q('cm-look-item-cap')?.getAttribute('aria-pressed')).toBe('true');
-    expect(container.querySelector('[data-testid="cm-avatar"] [data-gear="cap"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="cm-me-figure"] [data-gear="cap"]')).not.toBeNull();
     await click('cm-look-item-cap');
     expect(puts[1]).toEqual({ head: null });
-    expect(container.querySelector('[data-testid="cm-avatar"] [data-gear="cap"]')).toBeNull();
+    expect(container.querySelector('[data-testid="cm-me-figure"] [data-gear="cap"]')).toBeNull();
   });
 
   it('a refused save keeps the previous look and shows the server\'s reason', async () => {
@@ -130,10 +132,10 @@ describe('the locker', () => {
     mockFetchFails = true;
     await mount();
     await click('cm-look-open');
-    expect(q('cm-look-broken')?.textContent).toBe("We can't load your look right now.");
+    expect(q('cm-look-broken')?.textContent).toBe('We can’t load your locker right now.');
   });
 
-  it('opens from the list view on the home too; Esc closes the locker and stays on the home', async () => {
+  it('opens from the list view on the home too; Esc closes the panel and stays on the home', async () => {
     await mount();
     act(() => { campus().openMap(); });
     await flush();
@@ -141,10 +143,11 @@ describe('the locker', () => {
     act(() => { campus().openList(); });
     await flush();
     await click('cm-list-look');
+    expect(q('cm-me')).not.toBeNull();
     expect(q('cm-look')).not.toBeNull();
-    await act(async () => { q('cm-look')!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); });
+    await act(async () => { q('cm-me')!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); });
     await flush();
-    expect(q('cm-look')).toBeNull();
+    expect(q('cm-me')).toBeNull();
     expect(where.path).toBe('/portal/campus');
     expect(q('cm-home')).not.toBeNull();
   });

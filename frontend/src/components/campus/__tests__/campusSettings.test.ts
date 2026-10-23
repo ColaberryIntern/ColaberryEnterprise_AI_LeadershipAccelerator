@@ -9,9 +9,9 @@ describe('campusSettings', () => {
   });
 
   it('round-trips a saved choice and stores only the choices', () => {
-    expect(writeCampusSettings({ nav: 'classic', workplaceNames: true, motion: 'off' })).toBe(true);
-    expect(readCampusSettings()).toEqual({ nav: 'classic', workplaceNames: true, motion: 'off' });
-    expect(JSON.parse(window.localStorage.getItem(CAMPUS_SETTINGS_KEY) as string)).toEqual({ nav: 'classic', workplaceNames: true, motion: 'off' });
+    expect(writeCampusSettings({ nav: 'classic', workplaceNames: true, motion: 'off', shareBuilding: false })).toBe(true);
+    expect(readCampusSettings()).toEqual({ nav: 'classic', workplaceNames: true, motion: 'off', shareBuilding: false });
+    expect(JSON.parse(window.localStorage.getItem(CAMPUS_SETTINGS_KEY) as string)).toEqual({ nav: 'classic', workplaceNames: true, motion: 'off', shareBuilding: false });
   });
 
   it('migrates the pre-C11 boolean one way: true stays reduced, false follows the device', () => {

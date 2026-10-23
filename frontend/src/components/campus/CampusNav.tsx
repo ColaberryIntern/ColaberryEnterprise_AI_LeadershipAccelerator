@@ -18,7 +18,7 @@ import { useIsMgmt } from './campusMgmt';
  * one-click link to its main page, and the way back to the classic menu.
  */
 export default function CampusNav({ active }: { active: string }): React.ReactElement {
-  const { settings, openMap, openList, updateSettings, startTour, openLocker } = useCampus();
+  const { settings, openMap, openList, updateSettings, startTour, openMe } = useCampus();
   const { buildings, accessOf, audience } = useCampusView();
   const hasTour = !!tourFor(audience, buildings, accessOf, settings.workplaceNames); // C7: everyone but staff
   const here = buildingForPath(active);
@@ -45,7 +45,7 @@ export default function CampusNav({ active }: { active: string }): React.ReactEl
       )}
       <button type="button" className="cm-btn cm-nav-open" onClick={() => openMap()} data-testid="cm-open-map">Open campus map</button>
       {hasTour && <button type="button" className="cm-link cm-nav-tour" onClick={startTour} data-testid="cm-tour-start">Take the tour</button>}
-      <button type="button" className="cm-link cm-nav-tour" onClick={openLocker} data-testid="cm-look-open">My look</button>
+      <button type="button" className="cm-link cm-nav-tour" onClick={openMe} data-testid="cm-look-open">My look</button>
       <div className="grp">Buildings</div>
       <ul className="cm-nav-list">
         {buildings.filter((b) => b.id !== 'gate').map((b) => {

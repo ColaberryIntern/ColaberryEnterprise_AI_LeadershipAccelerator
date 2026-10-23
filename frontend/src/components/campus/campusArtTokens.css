@@ -90,6 +90,8 @@
   --cm-art-marquee-post:#2a221b; --cm-art-marquee-glow:rgba(255,60,60,.9); --cm-art-backstage-glow:rgba(255,190,80,.8);
   --cm-art-cue-ring:rgba(227,27,35,.9); --cm-art-cue-ring-0:rgba(227,27,35,0); --cm-art-stage:#0e0c12; --cm-art-stage-over:rgba(10,8,14,.45); --cm-art-stage-time:rgba(0,0,0,.5);
   --cm-art-hero-live-from:#1c1018;
+  /* WP-7: the Me panel's figure backdrop (the prototype's .me-prev rect) */
+  --cm-art-me-prev-bg:#f3ece0;
 }
 [data-theme="dark"]{
   --cm-art-paper:#1e1e1e; --cm-art-ink:#f4f4f4; --cm-art-muted:#b5ad9f; --cm-art-line:#3a352d;
@@ -103,4 +105,5 @@
   --cm-art-btn-line-bg:#2e2a25; --cm-art-btn-line-edge:#4a4236;
   --cm-art-wf-sel:#2e2a25; --cm-art-wf-backdrop:rgba(0,0,0,.5); --cm-art-flash:#4a3a14;
   --cm-art-prompt-bg:#2e2a1c; --cm-art-prompt-edge:#6b5a2e; --cm-art-kpi-bg:#1b2430; --cm-art-kpi-edge:#2c3a4a; --cm-art-pop-shadow:0 24px 60px rgba(0,0,0,.6);
+  --cm-art-me-prev-bg:#2e2a25;
 }

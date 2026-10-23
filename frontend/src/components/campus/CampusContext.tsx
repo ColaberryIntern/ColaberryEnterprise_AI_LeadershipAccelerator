@@ -6,6 +6,8 @@ import { useStaffDesks } from './useStaffDesks';
 import { useCampusPlan } from './useCampusPlan';
 import { useCampusLook } from './useCampusLook';
 import { useCampusTour } from './useCampusTour';
+import { useAudienceSwitch, AudienceSwitchContext } from './campusAudienceSwitch';
+import type { AudienceSwitchState } from './campusAudienceSwitch';
 import type { TourProgress } from './useCampusTour';
 import type { CompleteResult } from './campusPlanApi';
 import type { CampusLook } from './campusApi';
@@ -109,6 +111,14 @@ export interface CampusState {
   lockerOpen: boolean;
   openLocker: () => void;
   closeLocker: () => void;
+  /** WP-7: the Me panel (you, your locker, settings), one for the whole campus: the home's top bar, a page's banner, an unlock cheer. */
+  meOpen: boolean;
+  openMe: () => void;
+  closeMe: () => void;
+  /** WP-7: previewing the campus as another account type (staff, or an account the server lists). */
+  audienceSwitch: AudienceSwitchState['audienceSwitch'];
+  viewAs: AudienceSwitchState['viewAs'];
+  setViewAs: AudienceSwitchState['setViewAs'];
 }
 
 /** WP-5: `at` is where it was pressed (the card opens there, the prototype's openCard). */
@@ -128,14 +138,15 @@ export type DoorState =
 const noop = () => { /* no provider */ };
 const OFF: CampusState = {
   enabled: false, ready: false, active: false,
-  settings: { nav: 'campus', workplaceNames: false, motion: 'device', reduceMotion: false },
+  settings: { nav: 'campus', workplaceNames: false, motion: 'device', shareBuilding: true, reduceMotion: false },
   updateSettings: noop, layer: 'none', mapFocus: null, mapHow: 'walk', openMap: noop, ackMap: noop, here: null, setHere: noop,
   tourProgress: { paused: null, toured: false }, resumeTour: noop, finishTour: noop, openList: noop, closeLayer: noop,
   presence: null, presenceError: false, door: null, enterThroughDoor: noop, stepOutside: noop, clearDoor: noop,
   staffDesks: [], staffDesksError: false, personCard: null, openPersonCard: noop, closePersonCard: noop,
   dmToast: null, dismissDmToast: noop, holdDmToast: noop, releaseDmToast: noop, planStops: null, planMinutes: null,
   completePlanStop: () => Promise.resolve({ ok: false, reason: 'failed', message: 'The campus is off' }), justToured: false, tourIndex: null, startTour: noop, setTourIndex: noop, endTour: noop,
-  look: null, lookError: false, saveLook: () => Promise.reject(new Error('The campus is off')), reloadLook: noop, lockerOpen: false, openLocker: noop, closeLocker: noop,
+  look: null, lookError: false, saveLook: () => Promise.reject(new Error('The campus is off')), reloadLook: noop, lockerOpen: false, openLocker: noop, closeLocker: noop, meOpen: false, openMe: noop, closeMe: noop,
+  audienceSwitch: false, viewAs: null, setViewAs: noop,
 };
 
 const Ctx = createContext<CampusState>(OFF);
@@ -178,11 +189,16 @@ export function CampusProvider({ children }: { children?: React.ReactNode }): Re
   const closeLayer = useCallback(() => { setLayer('none'); setMapFocus(null); setPersonCard(null); endTour(); setLockerOpen(false); }, [endTour]);
   const openLocker = useCallback(() => { setPersonCard(null); clearTour(); setLockerOpen(true); setLayer('map'); }, [clearTour]);
   const closeLocker = useCallback(() => setLockerOpen(false), []);
+  const [meOpen, setMeOpen] = useState(false);
+  const openMe = useCallback(() => { setPersonCard(null); setMeOpen(true); }, []);
+  const closeMe = useCallback(() => setMeOpen(false), []);
 
   const active = enabled && stored.nav === 'campus';
   const reduceMotion = useEffectiveReduceMotion(stored.motion, active);
   const settings = useMemo<CampusSettingsView>(() => ({ ...stored, reduceMotion }), [stored, reduceMotion]);
-  const { presence, presenceError } = useCampusPresencePoll(active);
+  const { presence, presenceError } = useCampusPresencePoll(active, stored.shareBuilding);
+  const { audienceSwitch, viewAs, setViewAs } = useAudienceSwitch(active);
+  const switchValue = useMemo(() => ({ audienceSwitch, viewAs, setViewAs }), [audienceSwitch, viewAs, setViewAs]);
 
   // C3 door transitions. The context only records the request; CampusDoorTransition (inside the router)
   // plays it and performs the navigation, so this provider never needs router context.
@@ -206,11 +222,11 @@ export function CampusProvider({ children }: { children?: React.ReactNode }): Re
 
   const value = useMemo<CampusState>(
     () => ({ enabled, ready, settings, active, updateSettings, layer, mapFocus, mapHow, openMap, ackMap, here, setHere, tourProgress, resumeTour, finishTour, openList, closeLayer, presence, presenceError,
-      door, enterThroughDoor, stepOutside, clearDoor, staffDesks, staffDesksError, personCard, openPersonCard, closePersonCard, dmToast, dismissDmToast, holdDmToast, releaseDmToast, planStops, planMinutes, completePlanStop, justToured, tourIndex, startTour, setTourIndex, endTour, look, lookError, saveLook, reloadLook, lockerOpen, openLocker, closeLocker }),
+      door, enterThroughDoor, stepOutside, clearDoor, staffDesks, staffDesksError, personCard, openPersonCard, closePersonCard, dmToast, dismissDmToast, holdDmToast, releaseDmToast, planStops, planMinutes, completePlanStop, justToured, tourIndex, startTour, setTourIndex, endTour, look, lookError, saveLook, reloadLook, lockerOpen, openLocker, closeLocker, meOpen, openMe, closeMe, audienceSwitch, viewAs, setViewAs }),
     [enabled, ready, settings, active, updateSettings, layer, mapFocus, mapHow, openMap, ackMap, here, setHere, tourProgress, resumeTour, finishTour, openList, closeLayer, presence, presenceError,
-      door, enterThroughDoor, stepOutside, clearDoor, staffDesks, staffDesksError, personCard, openPersonCard, closePersonCard, dmToast, dismissDmToast, holdDmToast, releaseDmToast, planStops, planMinutes, completePlanStop, justToured, tourIndex, startTour, setTourIndex, endTour, look, lookError, saveLook, reloadLook, lockerOpen, openLocker, closeLocker],
+      door, enterThroughDoor, stepOutside, clearDoor, staffDesks, staffDesksError, personCard, openPersonCard, closePersonCard, dmToast, dismissDmToast, holdDmToast, releaseDmToast, planStops, planMinutes, completePlanStop, justToured, tourIndex, startTour, setTourIndex, endTour, look, lookError, saveLook, reloadLook, lockerOpen, openLocker, closeLocker, meOpen, openMe, closeMe, audienceSwitch, viewAs, setViewAs],
   );
-  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
+  return <Ctx.Provider value={value}><AudienceSwitchContext.Provider value={switchValue}>{children}</AudienceSwitchContext.Provider></Ctx.Provider>;
 }
 
 /** Campus state; outside a provider it reads as off, so any component can call it safely. */

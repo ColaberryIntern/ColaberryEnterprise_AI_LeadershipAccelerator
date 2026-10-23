@@ -32,7 +32,7 @@ export function samePresence(a: CampusPresence | null, b: CampusPresence | null)
   return JSON.stringify(a) === JSON.stringify(b);
 }
 
-export function useCampusPresencePoll(active: boolean): CampusPresenceState {
+export function useCampusPresencePoll(active: boolean, share = true): CampusPresenceState {
   const [presence, setPresence] = useState<CampusPresence | null>(null);
   const [presenceError, setPresenceError] = useState(false);
 
@@ -48,7 +48,8 @@ export function useCampusPresencePoll(active: boolean): CampusPresenceState {
         const area = buildingForPath(window.location.pathname)?.id;
         if (area && !isReadOnlySession()) {
           // Recording where I am must never block seeing who else is here; the server logs it.
-          await postCampusHere(area).catch(() => undefined);
+          // WP-7 (Q14): with sharing off this asks the server to FORGET my building, so no building counts me.
+          await postCampusHere(area, share).catch(() => undefined);
         }
         const next = await fetchCampusPresence();
         // C11 (the map stays light): an unchanged answer keeps the SAME object, so nothing re-renders every 30 s.
@@ -65,7 +66,7 @@ export function useCampusPresencePoll(active: boolean): CampusPresenceState {
     const onVisible = () => { if (document.visibilityState === 'visible') void tick(); };
     document.addEventListener('visibilitychange', onVisible);
     return () => { alive = false; window.clearInterval(timer); document.removeEventListener('visibilitychange', onVisible); };
-  }, [active]);
+  }, [active, share]);
 
   return { presence, presenceError };
 }

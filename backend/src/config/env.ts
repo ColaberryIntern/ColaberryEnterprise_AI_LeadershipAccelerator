@@ -260,6 +260,9 @@ export const env = {
   campusEnabled: (process.env.CAMPUS_ENABLED ?? 'off').trim(),
   campusEnrollmentIds: (process.env.CAMPUS_ENROLLMENT_IDS ?? '').trim(),
   campusCohortIds: (process.env.CAMPUS_COHORT_IDS ?? '').trim(),
+  // WP-7: enrollments that may preview the campus as another account type (CSV). Empty (default) = campus staff only.
+  // Parsed by services/campus/campusAudienceSwitch.ts.
+  campusAudienceSwitchIds: (process.env.CAMPUS_AUDIENCE_SWITCH_IDS ?? '').trim(),
   // Today aggregation — blend Project + Community cards into the Today feed
   // (Phase 2). Default OFF; the feed stays Class-only until enabled.
   todayAggregateSources: process.env.TODAY_AGGREGATE_SOURCES === 'true',
