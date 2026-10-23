@@ -17,6 +17,7 @@ import {
   nextStates,
   EDITORIAL_STATES,
   type OccurrenceState,
+  type CommandContext,
 } from '../broadcastStateMachine';
 
 const NOW = Date.parse('2026-07-23T23:30:00.000Z');
@@ -30,7 +31,7 @@ const base = (over: Partial<OccurrenceState> = {}): OccurrenceState => ({
   ...over,
 });
 
-const ctx = (over: Partial<{ expectedVersion: number; nowMs: number; isProducer: boolean }> = {}) => ({
+const ctx = (over: Partial<CommandContext> = {}): CommandContext => ({
   expectedVersion: 1, nowMs: NOW, isProducer: true, ...over,
 });
 
@@ -281,5 +282,44 @@ describe('the end instant', () => {
     }), 'go_live', ctx());
     expect(r.ok).toBe(true);
     expect(r.patch).not.toHaveProperty('ended_at');
+  });
+});
+
+/**
+ * L7.4 - WHY it ended, not just when.
+ *
+ * Once a broadcast can end itself after a sustained stream loss, an occurrence that ended at
+ * 14:09 looks identical whether Ali pressed End or whether the hotel wifi dropped. The ticket
+ * is explicit: six months from now, "why did this class end" must be answerable.
+ */
+describe('the end reason', () => {
+  const live = () => base({ editorial_state: 'live', provider_health: 'ready', content_started_at: new Date(NOW) });
+
+  it('records a person pressing End as producer, without being told', () => {
+    // Every caller that existed before the safety net was a person. A default of
+    // auto_stream_gone would misattribute all of them.
+    const r = applyProducerCommand(live(), 'end', ctx());
+    expect(r.patch!.end_reason).toBe('producer');
+  });
+
+  it('records the safety net as auto_stream_gone when it says so', () => {
+    const r = applyProducerCommand(live(), 'end', ctx({ endReason: 'auto_stream_gone' }));
+    expect(r.patch!.end_reason).toBe('auto_stream_gone');
+  });
+
+  it('is stamped in the same guard as the instant, so the two cannot disagree', () => {
+    const already = new Date(NOW - 60_000);
+    const r = applyProducerCommand(base({
+      editorial_state: 'live', provider_health: 'ready', content_started_at: new Date(NOW), ended_at: already,
+    }), 'end', ctx({ endReason: 'auto_stream_gone' }));
+    // A second end must not rewrite the reason any more than it rewrites the time, or an
+    // auto-end arriving a second after a producer's would steal the credit.
+    expect(r.patch).not.toHaveProperty('end_reason');
+    expect(r.patch).not.toHaveProperty('ended_at');
+  });
+
+  it('CANCELLING records no reason, because it never ended', () => {
+    const r = applyProducerCommand(base({ editorial_state: 'scheduled' }), 'cancel', ctx());
+    expect(r.patch).not.toHaveProperty('end_reason');
   });
 });

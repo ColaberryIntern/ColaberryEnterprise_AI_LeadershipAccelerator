@@ -95,6 +95,7 @@ import { ensureServiceOfferingSchema } from './db/ensureServiceOfferingSchema';
 import { ensureCaseStudyServiceLinkSchema } from './db/ensureCaseStudyServiceLinkSchema';
 import { ensureBroadcastSchema } from './db/ensureBroadcastSchema';
 import { ensureBroadcastTelemetrySchema } from './db/ensureBroadcastTelemetrySchema';
+import { ensureBroadcastEndReasonSchema } from './db/ensureBroadcastEndReasonSchema';
 import { ensureFactoryTaskSchema } from './db/ensureFactoryTaskSchema';
 import { ensureEmailSendLedgerSchema } from './db/ensureEmailSendLedgerSchema';
 import { ensureInternshipSchema } from './db/ensureInternshipSchema';
@@ -2964,6 +2965,10 @@ async function start(): Promise<void> {
   // After ensureBroadcastSchema, not before: the telemetry tables foreign-key into
   // broadcast_occurrences, so the parent has to exist first.
   await ensureBroadcastTelemetrySchema();
+  // L7.4 — end_reason on broadcast_occurrences, so an occurrence that ended itself after a
+  // sustained stream loss is distinguishable from one a producer ended. Alters an existing
+  // table, so it lives in its own file per ensureBroadcastSchema's header rule.
+  await ensureBroadcastEndReasonSchema();
   // Friendships (portal Contacts rail friend graph) — idempotent, additive, no flag.
   await ensureFriendshipSchema();
   // Messaging extras — DM read cursor + widened notification-type CHECK. Additive.
