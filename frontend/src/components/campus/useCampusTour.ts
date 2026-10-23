@@ -8,13 +8,21 @@ import { readParticipant } from '../../pages/portal/today/shellUtils';
  *  - Leaving a tour before its end PAUSES it where it was (Resume picks it up there); finishing marks it taken.
  *  - `justToured` is true from the moment the tour is finished until the next one starts: the side panel's lead then says so (the
  *    prototype's finishTour lead).
+ *  - C13 (round 3): a paused tour EXPIRES after 7 days (an old "Tour in progress" is noise, not a reminder) and can be dismissed
+ *    with ×; leaving on the last stop counts as finished (the card, which knows the tour's length, reads it so).
  */
-export interface TourProgress { paused: number | null; toured: boolean }
+export interface TourProgress { paused: number | null; toured: boolean; pausedAt?: number }
+export const PAUSE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 export const tourKey = (): string => `colaberry.campus.tour.${readParticipant().email || 'anon'}`;
-function readTour(): TourProgress {
+export function readTour(now: number = Date.now()): TourProgress {
   try {
     const v = JSON.parse(window.localStorage.getItem(tourKey()) || 'null');
-    if (v && typeof v === 'object') return { paused: typeof v.paused === 'number' ? v.paused : null, toured: v.toured === true };
+    if (v && typeof v === 'object') {
+      const pausedAt = typeof v.pausedAt === 'number' ? v.pausedAt : undefined;
+      // A pause with no time (stored before C13) or older than a week has expired.
+      const fresh = typeof v.paused === 'number' && pausedAt !== undefined && now - pausedAt < PAUSE_TTL_MS;
+      return { paused: fresh ? v.paused : null, toured: v.toured === true, ...(fresh ? { pausedAt } : {}) };
+    }
   } catch { /* nothing stored */ }
   return { paused: null, toured: false };
 }
@@ -32,6 +40,8 @@ export interface CampusTourState {
   finishTour: () => void;
   /** Drop the tour from the screen without touching its progress (the locker opening over it). */
   clearTour: () => void;
+  /** C13: × on a paused tour: forget where it stopped (the card goes back to the offer). */
+  dismissTour: () => void;
 }
 
 /** `onBegin` runs when a tour starts or resumes (the caller closes other cards and opens the map). */
@@ -46,7 +56,7 @@ export function useCampusTour(onBegin: () => void): CampusTourState {
   begin.current = onBegin;
 
   const endTour = useCallback(() => {
-    if (at.current !== null) save({ ...readTour(), paused: at.current });
+    if (at.current !== null) save({ ...readTour(), paused: at.current, pausedAt: Date.now() });
     setTourIndexState(null);
   }, [save]);
   const resumeTour = useCallback((from: number) => { begin.current(); setJustToured(false); setTourIndexState(Math.max(0, from)); }, []);
@@ -54,5 +64,6 @@ export function useCampusTour(onBegin: () => void): CampusTourState {
   const setTourIndex = useCallback((i: number) => setTourIndexState(Math.max(0, i)), []);
   const finishTour = useCallback(() => { save({ paused: null, toured: true }); setTourIndexState(null); setJustToured(true); }, [save]);
   const clearTour = useCallback(() => setTourIndexState(null), []);
-  return { tourIndex, tourProgress, justToured, resumeTour, startTour, setTourIndex, endTour, finishTour, clearTour };
+  const dismissTour = useCallback(() => { const p = readTour(); save({ paused: null, toured: p.toured }); }, [save]);
+  return { tourIndex, tourProgress, justToured, resumeTour, startTour, setTourIndex, endTour, finishTour, clearTour, dismissTour };
 }

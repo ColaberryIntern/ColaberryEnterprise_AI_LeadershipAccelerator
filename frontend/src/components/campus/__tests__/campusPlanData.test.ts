@@ -93,9 +93,11 @@ describe('Happening here and the urgent action, from real facts only', () => {
     expect(inLabel(now - 2 * 86400000, now)).toBe('Oct 20');
     expect(sessionStartMs(session)).toBe(new Date('2026-10-23T13:00:00').getTime());
   });
-  it('the Classroom says the plan minutes and the next class; nothing is said without a source', () => {
-    const rows = factsAt('lecture', { session }, { points: null, rung: null, planMinutes: 96 }, now);
-    expect(rows.map((r) => r.title)).toEqual(['Today’s plan', 'Next live class']);
+  it('the Classroom says ITS plan step (C13: never the day\'s total) and the next class; nothing is said without a source', () => {
+    const stops = [{ key: 'a', title: 'Deep Dive', route: '/portal/runtime/c1', buildingId: 'lecture' as const, done: false, type: 'deep_dive', label: 'Deep Dive', minutes: 6, points: 15, ref: null, cardId: 'c1' }];
+    const rows = factsAt('lecture', { session }, { points: null, rung: null, planMinutes: 96, stops }, now);
+    expect(rows.map((r) => r.title)).toEqual(['Today’s plan · step 1 of 1', 'Next live class']);
+    expect(rows[0].detail).toBe('Deep Dive · Deep Dive · 6 min');
     expect(rows[1].detail).toBe('Build Day · in 1d 3h');
     expect(factsAt('lecture', {}, { points: null, rung: null, planMinutes: null }, now)).toEqual([]);
     // WP-5: a session from an earlier day is never the "next" class

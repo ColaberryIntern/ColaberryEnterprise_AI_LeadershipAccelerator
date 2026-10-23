@@ -132,6 +132,9 @@ export function pulseOf(presence: CampusPresence | null, buildings: CampusBuildi
     named += (a?.people ?? []).filter((e) => 'enrollment_id' in e).length;
     if (n > busiestCount) { busiest = b; busiestCount = n; }
   }
+  // C13: people online with no building stand at the Quad: counted in the total, never the busiest building
+  const quad = presence?.quad;
+  if (quad) { total += quad.count; named += quad.people.filter((e) => 'enrollment_id' in e).length; }
   return { total, busiest, busiestCount, named };
 }
 

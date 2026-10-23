@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { fetchOnboardingProfile, fetchStreak } from '../../../services/onboardingApi';
 import type { StreakView } from '../../../services/onboardingApi';
+import { displayName, displayFirstName, nameInitials } from '../../../utils/personName';
 
 /**
  * The two facts the campus home shows that the campus state does not already carry (C11b): the learner's first name for the
@@ -32,10 +33,11 @@ export function useHomeFacts(wantStreak: boolean): HomeFacts {
     fetchOnboardingProfile()
       .then((p) => {
         if (!alive) return;
-        const parts = (p?.profile?.full_name ?? '').trim().split(/\s+/).filter(Boolean);
-        setFirstName(parts[0] || '');
-        setFullName(parts.join(' '));
-        setInitials(parts.length ? (parts[0][0] + (parts.length > 1 ? parts[parts.length - 1][0] : '')).toUpperCase() : '');
+        // C13: "Welcome, ALI." -> the shared name helper title-cases a name stored all upper or all lower case.
+        const full = displayName(p?.profile?.full_name);
+        setFirstName(displayFirstName(full));
+        setFullName(full);
+        setInitials(full ? nameInitials(full) : '');
       })
       .catch(() => { /* no name: the greeting goes without one */ });
     if (wantStreak) {

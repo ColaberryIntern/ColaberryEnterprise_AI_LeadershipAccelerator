@@ -7,6 +7,8 @@ import { parseSessionTimeToHHMM } from '../../utils/sessionTime';
 import type { BuildingId, CampusAudience } from './campusMap';
 import type { Happening } from './BuildingCard';
 import { levelOfRung } from '../../services/bandLadder';
+import { minutesLeft, stopDetail } from './campusPlan';
+import type { PlanStop } from './campusPlan';
 
 /**
  * What is really true about a building right now (WP-2, the prototype's "Happening here" rows and the urgent CTA), from the
@@ -27,7 +29,11 @@ export interface ArrivalData {
   certVerified?: { verified: number; total: number } | null;
   gameTime?: GameTime | null;
 }
-export interface LookFacts { points: number | null; rung: string | null; planMinutes: number | null }
+export interface LookFacts {
+  points: number | null; rung: string | null; planMinutes: number | null;
+  /** C13: today's steps, so a building shows ITS step and only Schedule shows what is left of the day. */
+  stops?: PlanStop[] | null;
+}
 
 const SOURCES: Partial<Record<BuildingId, (keyof ArrivalData)[]>> = {
   lecture: ['session'], tower: ['session', 'event'], amphi: ['event'], testing: ['certVerified'], arcade: ['gameTime'],
@@ -72,7 +78,12 @@ const fmt = (n: number) => n.toLocaleString('en-US');
 
 export function factsAt(id: BuildingId, d: ArrivalData, look: LookFacts, now: number): Happening[] {
   const out: Happening[] = [];
-  const plan = (look.planMinutes ?? 0) > 0 ? { title: 'Today’s plan', detail: `~${look.planMinutes} min waiting`, tone: 'live' as const } : null;
+  // C13: Schedule shows what is LEFT of the day (undone steps' minutes); any other building shows its own next step.
+  const left = minutesLeft(look.stops ?? null);
+  const plan = left ? { title: 'Today’s plan', detail: `~${left} min left`, tone: 'live' as const } : null;
+  const stops = look.stops ?? null;
+  const hereIdx = stops ? stops.findIndex((x) => !x.done && x.buildingId === id) : -1;
+  const step = stops && hereIdx >= 0 ? { title: `Today’s plan · step ${hereIdx + 1} of ${stops.length}`, detail: [stops[hereIdx].title, stopDetail(stops[hereIdx])].filter(Boolean).join(' · '), tone: 'live' as const } : null;
   const s = d.session;
   const start = s ? sessionStartMs(s) : null;
   // WP-5: a session from an earlier day is not the "next" class (stale data said "Next live class · Apr 2" on Oct 23)
@@ -80,7 +91,7 @@ export function factsAt(id: BuildingId, d: ArrivalData, look: LookFacts, now: nu
   const cls = s && !gone ? { title: 'Next live class', detail: s.status === 'live' ? `${s.title || 'Live class'} · live now` : `${s.title || 'Live class'}${start ? ` · ${inLabel(start, now)}` : ''}`, tone: (s.status === 'live' ? 'hot' : '') as Happening['tone'] } : null;
   const e = d.event;
   const ev = e ? { title: e.title, detail: inLabel(new Date(e.starts_at).getTime(), now), tone: '' as const } : null;
-  if (id === 'lecture') { if (plan) out.push(plan); if (cls) out.push(cls); }
+  if (id === 'lecture') { if (step) out.push(step); if (cls) out.push(cls); }
   if (id === 'tower') { if (plan) out.push({ ...plan, title: 'Today' }); if (cls) out.push(cls); if (ev) out.push({ ...ev, title: 'Next event', detail: `${e!.title} · ${ev.detail}` }); }
   if (id === 'amphi' && ev) out.push(ev);
   if (id === 'testing' && d.certVerified && d.certVerified.total > 0) {

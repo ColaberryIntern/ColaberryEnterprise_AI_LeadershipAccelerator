@@ -15,6 +15,8 @@ export interface CampusView {
   accessOf: (b: CampusBuilding) => ExplorerAccess;
   /** C6: the portal's is_explorer (useIsExplorer), for Explorer-only surfaces such as the path to enrolling. */
   isExplorer: boolean;
+  /** C13: the server has said which campus this is (audience-specific UI waits for it). Absent from the pure view = ready. */
+  ready?: boolean;
 }
 
 /** Pure part, so the audience faces are testable without hooks. */
@@ -40,10 +42,10 @@ export const PREVIEW_SIGNALS: Record<CampusAudience, AccessSignals> = {
 
 /** Everything the campus views need about the signed-in learner (Campus C2; C6 adds accessOf and isExplorer). */
 export function useCampusView(): CampusView {
-  const { audience, realAudience } = useCampusAudience();
+  const { audience, realAudience, ready = true } = useCampusAudience();
   const { isStaff, hasFullAccess } = useEntitlement(); // PageGate's own signals, not the campus's wider staff
   const isExplorer = useIsExplorer();
   const previewing = !!realAudience && realAudience !== audience;
-  return useMemo(() => campusViewFor(audience, previewing ? PREVIEW_SIGNALS[audience] : { isStaff, hasFullAccess, isExplorer }),
-    [audience, previewing, isStaff, hasFullAccess, isExplorer]);
+  return useMemo(() => ({ ...campusViewFor(audience, previewing ? PREVIEW_SIGNALS[audience] : { isStaff, hasFullAccess, isExplorer }), ready }),
+    [audience, previewing, isStaff, hasFullAccess, isExplorer, ready]);
 }

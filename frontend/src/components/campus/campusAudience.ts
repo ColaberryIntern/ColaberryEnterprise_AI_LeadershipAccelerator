@@ -22,6 +22,8 @@ export interface CampusAudienceResult {
   isIntern: boolean;
   /** WP-7: the account's own audience when a preview (another account type) is showing; absent from the pure rule. */
   realAudience?: CampusAudience;
+  /** C13: the server has answered (or failed, and the local signals stand): audience-specific UI may draw. */
+  ready?: boolean;
 }
 
 export function deriveCampusAudience(s: AudienceSignals): CampusAudienceResult {

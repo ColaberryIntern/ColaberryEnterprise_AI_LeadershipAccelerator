@@ -57,6 +57,17 @@ import '../../../components/campus/campusHome.css';
  */
 export default function CampusHomePage(): React.ReactElement {
   const campus = useCampus();
+  const { ready: audienceReady = true } = useCampusView();
+  // C13: nothing audience-specific (gate, top bar, panel, buildings) until the server has said which campus this is. The whole home
+  // mounts only then, so its camera, gate and timers start together with the map (holding just the map back left the phone camera
+  // short of the whole campus after a card closed).
+  if (!campus.ready || (campus.active && !audienceReady)) return <div className="cm-home" aria-busy="true" data-testid="cm-home-loading" />;
+  if (!campus.active) return <Navigate to="/portal/today?stay=1" replace />;
+  return <CampusHome />;
+}
+
+function CampusHome(): React.ReactElement {
+  const campus = useCampus();
   const { audience, buildings, accessOf } = useCampusView();
   const liveNow = useLiveNow(); // WP-6: Colaberry Live's broadcast, state and one-second clock
   useLiveCheckIn(audience, liveNow, campus.here ?? null); // WP-7 (Q2): walking into the live Classroom checks a member in
@@ -94,8 +105,6 @@ export default function CampusHomePage(): React.ReactElement {
   useEffect(() => { document.documentElement.classList.add('cm-on-home'); return () => document.documentElement.classList.remove('cm-on-home'); }, []);
   const online = useMemo(() => (presence && !presenceError ? pulseOf(presence, buildings).total : null), [presence, presenceError, buildings]);
 
-  if (!campus.ready) return <div className="cm-home" aria-busy="true" data-testid="cm-home-loading" />;
-  if (!campus.active) return <Navigate to="/portal/today?stay=1" replace />;
   const reduce = settings.reduceMotion;
   const initials = facts.initials || readParticipant().initials;
   const enter = (t: boolean) => { setGateOpen(false); reveal.show(); if (reduce) map.camRef.current?.base(); if (t) campus.startTour(); void claimStreak(); };
@@ -116,7 +125,7 @@ export default function CampusHomePage(): React.ReactElement {
         buildings={buildings} accessOf={accessOf} workplaceNames={wp} presence={presence} presenceError={presenceError} desks={staffDesks}
         stops={campus.planStops} planMinutes={campus.planMinutes} live={live} now={new Date()} agenda={agenda} urgent={urgent}
         tourStops={tour ? tour.stops : null} touring={touring} tourProgress={campus.tourProgress} justToured={campus.justToured}
-        onWalk={map.goTo} onRun={(id) => map.goTo(id, { run: true })} onHover={setHover} onTour={campus.resumeTour} onEndTour={campus.endTour}
+        onWalk={map.goTo} onRun={(id) => map.goTo(id, { run: true })} onHover={setHover} onTour={campus.resumeTour} onEndTour={campus.endTour} onDismissTour={campus.dismissTour}
         onOpen={(r) => campus.enterThroughDoor(r, null)} photo={photo} />
       <div className="cm-home-livebar"><CampusLive onWalk={(id, run) => map.goTo(id, { run })} hereId={campus.here ?? null} /></div>
       <CampusTabBar active="/portal/campus" />

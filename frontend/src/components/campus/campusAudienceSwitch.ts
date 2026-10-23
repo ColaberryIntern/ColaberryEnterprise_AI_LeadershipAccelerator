@@ -53,6 +53,8 @@ export interface AudienceSwitchState {
   /** The account type being previewed (null: your own). Only honored while audienceSwitch is true. */
   viewAs: CampusAudience | null;
   setViewAs: (v: CampusAudience | null) => void;
+  /** C13: the campus is on for this viewer (so the audience hook asks the server only then). */
+  active?: boolean;
 }
 
 /**

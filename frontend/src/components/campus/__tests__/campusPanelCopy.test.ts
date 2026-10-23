@@ -109,7 +109,7 @@ describe('Right now and the urgent card', () => {
     agenda: agenda(session('2026-10-23', '13:00'), 15), presence: PRESENCE, presenceError: false, live: false, urgent: null, ...o });
   it('a member: the plan, the next class, where people are (three at most, the event drops off)', () => {
     expect(rows({}).map((r) => [r.key, r.title, r.detail])).toEqual([
-      ['plan', 'Continue today’s plan', '~96 min · Week 5 lessons'], ['class', 'Next live class', 'Build Day · in 1d 3h'], ['people', 'Drop into the Community Lounge', '3 people here now'],
+      ['plan', 'Continue today’s plan', '20 min · Week 5 lessons'], ['class', 'Next live class', 'Build Day · in 1d 3h'], ['people', 'Drop into the Community Lounge', '3 people here now'],
     ]);
     expect(rows({ stops: [], presence: EMPTY }).map((r) => r.key)).toEqual(['class', 'event']);
     expect(rows({ stops: [], presence: EMPTY }).find((r) => r.key === 'event')!.detail).toBe('In 15d');

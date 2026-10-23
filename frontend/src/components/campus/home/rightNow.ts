@@ -48,7 +48,8 @@ export function rightNowRows(o: {
   const rows: NowRow[] = [];
   const next = o.stops?.find((s) => !s.done && s.buildingId) ?? null;
   if (next && o.audience === 'member') {
-    rows.push({ key: 'plan', buildingId: next.buildingId!, title: 'Continue today’s plan', detail: `${o.planMinutes ? `~${o.planMinutes} min · ` : ''}${next.title}` });
+    // C13: the step's OWN minutes (the plan total never shrank as steps got done)
+    rows.push({ key: 'plan', buildingId: next.buildingId!, title: 'Continue today’s plan', detail: `${next.minutes ? `${next.minutes} min · ` : ''}${next.title}` });
   }
   const s = o.agenda?.lecture.session;
   const start = s ? sessionStartMs(s) : null;
