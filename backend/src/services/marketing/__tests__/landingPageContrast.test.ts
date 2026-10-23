@@ -20,25 +20,43 @@ import { STYLES } from '../landingPageStyles';
 
 const BRANDS = Object.keys(LANDING_PAGE_THEMES);
 
+/**
+ * `contrastRatio` and `relativeLuminance` return `number | null` on purpose - null means "that
+ * was not a colour", which is a different answer from any ratio. These unwrap it for the cases
+ * that are asserting arithmetic, so a null fails loudly as a null rather than being cast into a
+ * number and compared. The null-handling cases below call the functions directly.
+ */
+function ratio(a: string, b: string): number {
+  const r = contrastRatio(a, b);
+  if (r === null) throw new Error(`expected a measurable pair, got null for ${a} on ${b}`);
+  return r;
+}
+
+function lum(hex: string): number {
+  const l = relativeLuminance(hex);
+  if (l === null) throw new Error(`expected a colour, got null for ${hex}`);
+  return l;
+}
+
 describe('the arithmetic', () => {
   it('matches the WCAG reference values', () => {
     // Black on white is the defined maximum, 21:1.
-    expect(contrastRatio('#000000', '#FFFFFF')).toBeCloseTo(21, 1);
-    expect(contrastRatio('#FFFFFF', '#FFFFFF')).toBeCloseTo(1, 5);
+    expect(ratio('#000000', '#FFFFFF')).toBeCloseTo(21, 1);
+    expect(ratio('#FFFFFF', '#FFFFFF')).toBeCloseTo(1, 5);
     // #767676 on white is the canonical "just passes AA" grey, 4.54:1.
-    expect(contrastRatio('#767676', '#FFFFFF')).toBeGreaterThanOrEqual(4.5);
-    expect(contrastRatio('#787878', '#FFFFFF')).toBeLessThan(4.5);
+    expect(ratio('#767676', '#FFFFFF')).toBeGreaterThanOrEqual(4.5);
+    expect(ratio('#787878', '#FFFFFF')).toBeLessThan(4.5);
     // A dark grey on black fails, which is the shape of the real bug this catches.
-    expect(contrastRatio('#555555', '#000000')).toBeLessThan(4.5);
+    expect(ratio('#555555', '#000000')).toBeLessThan(4.5);
   });
 
   it('is symmetric - which colour is the text does not change the ratio', () => {
-    expect(contrastRatio('#1D6A4C', '#1A1A1A')).toBeCloseTo(contrastRatio('#1A1A1A', '#1D6A4C')!, 6);
+    expect(ratio('#1D6A4C', '#1A1A1A')).toBeCloseTo(ratio('#1A1A1A', '#1D6A4C'), 6);
   });
 
   it('accepts short hex and is case-insensitive', () => {
-    expect(relativeLuminance('#fff')).toBeCloseTo(relativeLuminance('#FFFFFF')!, 6);
-    expect(relativeLuminance('abc')).toBeCloseTo(relativeLuminance('#AABBCC')!, 6);
+    expect(lum('#fff')).toBeCloseTo(lum('#FFFFFF'), 6);
+    expect(lum('abc')).toBeCloseTo(lum('#AABBCC'), 6);
   });
 
   it('returns null rather than a number for something that is not a colour', () => {
@@ -75,7 +93,7 @@ describe('lifting a colour only as far as it has to go', () => {
   it('lifts a failing colour until it just clears, and no further', () => {
     const lifted = liftForContrast('#1D6A4C', '#1A1A1A', 4.5);
     expect(lifted).not.toBe('#1D6A4C');
-    expect(contrastRatio(lifted, '#1A1A1A')!).toBeGreaterThanOrEqual(4.5);
+    expect(ratio(lifted, '#1A1A1A')).toBeGreaterThanOrEqual(4.5);
     // "No further": one step back down would fail. Proves it is minimal rather than just white.
     expect(lifted).not.toBe('#FFFFFF');
   });
