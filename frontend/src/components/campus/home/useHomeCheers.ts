@@ -3,6 +3,7 @@ import type { BuildingId, CampusAudience, CampusBuilding } from '../campusMap';
 import { buildingName } from '../campusMap';
 import type { LookItem } from '../campusApi';
 import { cheer } from '../campusCheerBus';
+import { GEAR_ICON } from '../campusGear';
 import { claimDailyStreak } from '../../../services/onboardingApi';
 import type { StreakView } from '../../../services/onboardingApi';
 import { emitPointsEarned } from '../../../services/pointsFx';
@@ -17,7 +18,7 @@ import { VIEW_AS_TOKEN_KEY } from '../../../utils/participantToken';
  *  - the daily streak claimed as you walk through the gate (decision Q9): "+n pts · 🔥 Day n streak claimed" and the "+n pts" burst.
  *    Never in a staff view-as session (a write would land on the learner's account), never twice (the server answers awarded:false).
  */
-export const UNLOCK_ICON: Record<string, string> = { cap: '🧢', shades: '🕶️', board: '🛹', hoodie: '🧥', cruiser: '🚗', chain: '📿' };
+export const UNLOCK_ICON = GEAR_ICON;
 
 export function useUnlockCheer(catalog: LookItem[] | undefined, onLocker: () => void): void {
   const seen = useRef<Set<string> | null>(null);

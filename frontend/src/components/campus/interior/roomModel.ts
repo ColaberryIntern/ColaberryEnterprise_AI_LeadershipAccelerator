@@ -60,7 +60,7 @@ export function youSpotFor(layout: Layout, taken: number): Spot {
 
 /** The back door's sign (prototype doorLabel): your page, or what an Explorer will find there. */
 export function doorLabel(audience: CampusAudience, access: ExplorerAccess): string {
-  if (audience === 'explorer' && access === 'locked') return 'MEMBERS ONLY';
+  if (audience === 'explorer' && access === 'locked') return 'MEMBERS ONLY 🔒'; // WP-5: the prototype's lock, at the end
   if (audience === 'explorer' && access === 'demo') return 'DEMO MODE →';
   if (audience === 'business') return 'TEAM VIEW →';
   return 'YOUR PAGE →';

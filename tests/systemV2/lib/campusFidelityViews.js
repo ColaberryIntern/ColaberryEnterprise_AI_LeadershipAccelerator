@@ -55,7 +55,8 @@ const DISTURB = [
 ];
 const AT_BASE = `(() => { const a = ${VB}.split(' ').map(Number), b = String(window.__cmVb0 || '').split(' ').map(Number);
   if (b.length !== 4) return 'no baseline'; return a.every((v, i) => Math.abs(v - b[i]) <= 1) ? '' : 'viewBox ' + a.join(' ') + ' is not the whole campus ' + b.join(' '); })()`;
-const CARD_VIEWS = ['03-arrive', '04-inside', '08-person-card', '09-chat', '14-step-outside', '15-panel-with-card', '16-tour'];
+// WP-5: the help desk opens the staff card (a popover, Q7), so 08 and 09 no longer open a building card
+const CARD_VIEWS = ['03-arrive', '04-inside', '14-step-outside', '15-panel-with-card', '16-tour', '19-room-wall'];
 
 /** A view: route to open, then steps (each a { click }, { evaluate } or { wait }) and the required ids for an account and size. */
 const VIEWS = [
@@ -78,11 +79,11 @@ const VIEWS = [
     known: () => ['the prototype crowd of walking dots was random: not drawn (the building head count is real)'] },
   { name: '07-notifications', route: '/portal/campus', steps: () => [{ click: '[data-testid="cm-stats-bell"] button' }],
     required: () => ['.cm-bell-panel'], desktopOnly: true },
-  { name: '08-person-card', route: '/portal/campus', accounts: ['member', 'explorer', 'staff'], steps: () => [{ click: '[data-testid="cm-cc-helpdesk"] button' }, WALKED],
-    required: () => ['cm-card', 'cm-arrive-hero', '.cm-desks'],
-    known: () => ['a help desk press walks to the desk building (its card holds the desk) instead of opening a staff popover'] },
-  { name: '09-chat', route: '/portal/campus', accounts: ['member', 'explorer', 'staff'], steps: () => [{ click: '[data-testid="cm-cc-helpdesk"] button' }, WALKED],
-    required: () => ['.cm-desks'],
+  { name: '08-person-card', route: '/portal/campus', accounts: ['member', 'explorer', 'staff'], steps: () => [{ click: '[data-testid="cm-cc-helpdesk"] button' }, { wait: 500 }],
+    required: () => ['cm-staff-card', '.cm-pc-tag', '.cm-pc-where', '.cm-pc-acts'],
+    known: () => ['the learner person card (a popover at the press) needs someone else on campus; covered by campusPeopleRooms'] },
+  { name: '09-chat', route: '/portal/campus', accounts: ['member', 'explorer', 'staff'], steps: () => [{ click: '[data-testid="cm-cc-helpdesk"] button' }, { wait: 500 }],
+    required: () => ['cm-staff-card'],
     known: () => ['chat with a desk opens through Today (the existing DM dock); not rebuilt on the home'] },
   { name: '10-toast', route: '/portal/campus', required: () => ['cm-world'],
     known: () => ['the DM toast (Reply, Walk over) needs a real incoming message; covered by campusPanels and campusDmToast tests'] },
@@ -116,6 +117,9 @@ const VIEWS = [
   { name: '18-wayfinder', route: '/portal/campus', steps: () => [{ click: '[data-testid="cm-topbar-search"]' }],
     required: (a, size) => ['cm-wayfinder', 'cm-wf-input', '[role="group"][aria-label="All buildings"]', '.cm-wf-item', ...(size === 'phone' ? [] : ['.cm-wf-hint'])],
     known: () => ['search logging for staff insights: decision Q11\'s separate project'] },
+  // WP-5: a room whose back wall carries real facts (the Schedule board: TODAY · <weekday>, the next session, event and plan)
+  { name: '19-room-wall', route: '/portal/campus', steps: () => [tap('tower'), WALKED],
+    required: () => ['cm-inside', 'cm-wall-schedule', 'cm-you-walk'] },
 ];
 
 /** WP-1: the side panel (and the tour in it) is required on every view past the gate. */

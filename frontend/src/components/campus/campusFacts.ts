@@ -75,7 +75,9 @@ export function factsAt(id: BuildingId, d: ArrivalData, look: LookFacts, now: nu
   const plan = (look.planMinutes ?? 0) > 0 ? { title: 'Today’s plan', detail: `~${look.planMinutes} min waiting`, tone: 'live' as const } : null;
   const s = d.session;
   const start = s ? sessionStartMs(s) : null;
-  const cls = s ? { title: 'Next live class', detail: s.status === 'live' ? `${s.title || 'Live class'} · live now` : `${s.title || 'Live class'}${start ? ` · ${inLabel(start, now)}` : ''}`, tone: (s.status === 'live' ? 'hot' : '') as Happening['tone'] } : null;
+  // WP-5: a session from an earlier day is not the "next" class (stale data said "Next live class · Apr 2" on Oct 23)
+  const gone = !!s && s.status !== 'live' && start !== null && start < now && new Date(start).toDateString() !== new Date(now).toDateString();
+  const cls = s && !gone ? { title: 'Next live class', detail: s.status === 'live' ? `${s.title || 'Live class'} · live now` : `${s.title || 'Live class'}${start ? ` · ${inLabel(start, now)}` : ''}`, tone: (s.status === 'live' ? 'hot' : '') as Happening['tone'] } : null;
   const e = d.event;
   const ev = e ? { title: e.title, detail: inLabel(new Date(e.starts_at).getTime(), now), tone: '' as const } : null;
   if (id === 'lecture') { if (plan) out.push(plan); if (cls) out.push(cls); }

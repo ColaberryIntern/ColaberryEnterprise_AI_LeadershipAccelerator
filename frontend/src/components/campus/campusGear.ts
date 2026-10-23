@@ -21,6 +21,9 @@ export const GEAR_NAMES: Record<string, string> = {
   cap: 'Cohort cap', shades: 'Shades', hoodie: 'Colaberry hoodie', chain: 'Gold chain', board: 'Skateboard', cruiser: 'Cherry Cruiser',
 };
 
+/** WP-4/5: each item's icon (the prototype's UNLOCKS icons): the unlock cheer and the person card's gear row. */
+export const GEAR_ICON: Record<string, string> = { cap: '🧢', shades: '🕶️', board: '🛹', hoodie: '🧥', cruiser: '🚗', chain: '📿' };
+
 /** WP-3: how a ride travels (the prototype's UNLOCKS speed and verb): faster, and the toast says so. The prototype's "car" is the
  *  Cherry Cruiser here; there is no jetpack (decision Q4). */
 export const RIDE_TRAVEL: Record<string, { speed: number; verb: string }> = {

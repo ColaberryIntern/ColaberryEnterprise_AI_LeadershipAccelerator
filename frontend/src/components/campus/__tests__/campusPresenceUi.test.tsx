@@ -60,23 +60,23 @@ describe('presence on the map', () => {
 });
 
 describe("Who's here in the card", () => {
-  it('names only the people the server named, with a photo only when uploaded, and summarises the rest', async () => {
+  it('names only the people the server named (first names, WP-5), with a photo only when uploaded, and "+N more" for the rest', async () => {
     await render(world(PRESENCE));
     openCard('library');
     const who = container.querySelector('[data-testid="cm-who"]')!;
     const names = Array.from(who.querySelectorAll('.cm-person-name')).map((n) => n.textContent);
-    expect(names).toEqual(['Mia Lopez', 'Ana']);
+    expect(names).toEqual(['Mia', 'Ana']);
     expect(who.querySelector('[data-enrollment="e1"] img')).toBeNull();
-    expect(who.querySelector('[data-enrollment="e1"] .cm-initials')!.textContent).toBe('ML');
+    expect(who.querySelector('[data-enrollment="e1"] .av')!.textContent).toBe('ML');
     expect(who.querySelector('[data-enrollment="e2"] img')!.getAttribute('src')).toBe('data:image/png;base64,AAAA');
-    expect(who.querySelector('[data-testid="cm-who-anon"]')!.textContent).toBe('3 other learners');
+    expect(who.querySelector('[data-testid="cm-who-more"]')!.textContent).toBe('+3 more');
     expect(who.querySelectorAll('img').length).toBe(1);
   });
 
   it('quiet: an empty building says so', async () => {
     await render(world(PRESENCE));
     openCard('studio');
-    expect(container.querySelector('[data-testid="cm-who-quiet"]')!.textContent).toBe('Nobody here right now.');
+    expect(container.querySelector('[data-testid="cm-who-quiet"]')!.textContent).toBe('Nobody yet. You’re first in.');
   });
 
   it('loading: before the first read answers, the card says it is checking (unknown is not empty)', async () => {
@@ -98,7 +98,8 @@ describe("Who's here in the card", () => {
     openCard('lecture');
     const who = container.querySelector('[data-testid="cm-who"]')!;
     expect(who.querySelector('.cm-person')).toBeNull();
-    expect(who.textContent).toContain("Who's here - 1");
+    expect(who.textContent).toContain('Who’s here · 1');
+    expect(who.querySelector('[data-testid="cm-who-more"]')!.textContent).toBe('+1 more');
   });
 });
 
@@ -110,8 +111,8 @@ describe('initialsOf', () => {
     expect(initialsOf('')).toBe('?');
   });
 
-  it('WhoIsHere renders a singular anonymous line', async () => {
+  it('WhoIsHere counts a private person as "+1 more", never by name', async () => {
     await render(<WhoIsHere presence={{ count: 1, people: [{ anonymous: true }] }} error={false} />);
-    expect(container.querySelector('[data-testid="cm-who-anon"]')!.textContent).toBe('1 other learner');
+    expect(container.querySelector('[data-testid="cm-who-more"]')!.textContent).toBe('+1 more');
   });
 });

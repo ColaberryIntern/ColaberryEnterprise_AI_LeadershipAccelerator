@@ -8,7 +8,6 @@ import { GATED_FEATURES } from '../paywall/gatedFeatures';
 import { useIsMgmt } from './campusMgmt';
 import AdminLink from './AdminLink';
 import WhoIsHere, { WhoIsHereProps } from './WhoIsHere';
-import StaffDesk from './StaffDesk';
 import type { StaffDesk as Desk } from './campusPeopleApi';
 import './campusArrival.css';
 
@@ -131,14 +130,8 @@ export default function BuildingCard({ building: b, access, workplaceNames, onCl
           </div>
         )}
 
-        {whoIsHere && <WhoIsHere presence={whoIsHere.presence} error={whoIsHere.error} loading={whoIsHere.loading} onPick={whoIsHere.onPick} />}
-
-        {desks && desks.length > 0 && (
-          <div className="cm-desks">
-            <h3 className="cm-card-h">Staff desks</h3>
-            {desks.map((d) => <StaffDesk key={d.id} desk={d} onMessaged={onNavigate} />)}
-          </div>
-        )}
+        {/* WP-5: the staff on duty here are chips at the head of Who's here (their card is a popover, Q7); without presence, just them */}
+        {(whoIsHere || (desks && desks.length > 0)) && <WhoIsHere {...(whoIsHere ?? { presence: undefined, error: false, peopleHidden: true })} desks={desks} />}
 
         {b.rooms.length > 0 && (
           <>
