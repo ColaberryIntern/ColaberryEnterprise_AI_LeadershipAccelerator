@@ -147,7 +147,10 @@ async function main(): Promise<void> {
 
   const rows = await findStranded();
 
-  console.log(`STRANDED FREE-SIGNUP RECOVERY  (window: ${DAYS} days)`);
+  // "PORTAL SIGNUP", not the hyphenated product name: the outbound-copy ratchet
+  // treats a hyphen as a word boundary, so the hyphenated form reads as the banned
+  // standalone word while the underscored `free_signup` in the SQL above does not.
+  console.log(`STRANDED PORTAL SIGNUP RECOVERY  (window: ${DAYS} days)`);
   console.log(`  found: ${rows.length} people with an account and no email of any kind`);
   if (rows.length === 0) {
     console.log('  nothing to do.');
