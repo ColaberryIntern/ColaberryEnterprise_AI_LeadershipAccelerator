@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import api from '../../../../utils/api';
+import ShowcaseReviewQueue from './ShowcaseReviewQueue';
 
 /**
  * Instructor controls for the Presentation Studio.
@@ -321,6 +322,13 @@ const PresentationStudioPanel: React.FC = () => {
           </div>
         </>
       )}
+
+      {/* NOT COHORT-SCOPED, unlike everything above it. A learner asking to share
+          a demo is waiting on any staff member, and hiding the queue behind a
+          cohort picker would mean a request goes unseen until somebody happens
+          to select the right cohort. Its own component: this file is already at
+          the size where the next addition should be an extraction. */}
+      <ShowcaseReviewQueue />
     </section>
   );
 };
