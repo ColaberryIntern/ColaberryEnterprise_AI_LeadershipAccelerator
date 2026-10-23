@@ -24,8 +24,28 @@ import { act } from 'react-dom/test-utils';
 jest.mock('../../../utils/portalApi', () => ({ __esModule: true, default: { get: jest.fn() } }));
 jest.mock('react-router-dom', () => ({ useParams: () => ({ sessionId: 'sess-1' }) }));
 
+// The contexts the companion surface reads. Mocked at the module seam so the page test does
+// not have to stand up the whole portal layout to ask one question about rendering.
+jest.mock('../../../contexts/ParticipantAuthContext', () => ({ useParticipantAuth: jest.fn() }));
+jest.mock('../../../contexts/BroadcastPlayerContext', () => ({ useBroadcastPlayer: jest.fn() }));
+// Stubbed so this file tests the PAGE's composition. The deck has its own suite, and the
+// watch button already has one.
+jest.mock('../../../components/portal/CompanionDeck', () => ({
+  __esModule: true,
+  default: ({ sessionId }: { sessionId: string }) => <div data-testid="deck-stub">{sessionId}</div>,
+}));
+jest.mock('../../../components/portal/BroadcastWatchButton', () => ({
+  __esModule: true,
+  default: ({ roomId }: { roomId: string | null }) => <div data-testid="watch-stub">{String(roomId)}</div>,
+}));
+
 import portalApi from '../../../utils/portalApi';
+import { useParticipantAuth } from '../../../contexts/ParticipantAuthContext';
+import { useBroadcastPlayer } from '../../../contexts/BroadcastPlayerContext';
 import LiveSessionPage from '../LiveSessionPage';
+
+const mockAuth = useParticipantAuth as unknown as jest.Mock;
+const mockPlayer = useBroadcastPlayer as unknown as jest.Mock;
 
 const mockGet = (portalApi as unknown as { get: jest.Mock }).get;
 
@@ -37,6 +57,11 @@ const INFO = {
 };
 
 /** Route the two endpoints the page calls; `moment` drives live-moment, `info` the title. */
+beforeEach(() => {
+  mockAuth.mockReturnValue({ isAuthenticated: true });
+  mockPlayer.mockReturnValue({ session: null, open: jest.fn(), close: jest.fn() });
+});
+
 function wire(moment: string, watchUrl: string | null = null, info: unknown = INFO) {
   mockGet.mockImplementation((url: string) => {
     if (url.includes('live-moment')) return Promise.resolve({ data: { moment, watch_url: watchUrl } });
@@ -50,12 +75,12 @@ function wire(moment: string, watchUrl: string | null = null, info: unknown = IN
 let container: HTMLDivElement;
 let root: Root;
 
-async function render() {
+async function render(companion = false) {
   container = document.createElement('div');
   document.body.appendChild(container);
   await act(async () => {
     root = createRoot(container);
-    root.render(<LiveSessionPage />);
+    root.render(<LiveSessionPage companion={companion} />);
   });
 }
 
@@ -175,5 +200,91 @@ describe('it looks like Colaberry', () => {
     expect(css).toContain('var(--surface-card)');
     // A hex literal here is what silently breaks one of the two themes.
     expect(css).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
+  });
+});
+
+describe('the phone companion (L4.7)', () => {
+  it('does not offer a link away from the only screen the viewer has', async () => {
+    // The laptop surface sends you to the workspace. On a phone the companion IS the place to
+    // watch, so "Watch now" would navigate the viewer off their own video.
+    wire('live', 'https://enterprise.colaberry.ai/portal/live/sess-1');
+    await render(true);
+
+    expect(container.querySelector('[data-testid="live-session-watch"]')).toBeNull();
+    expect(container.querySelector('[data-testid="companion-surface"]')).not.toBeNull();
+  });
+
+  it('CONTROL: the laptop surface still offers it', async () => {
+    wire('live', 'https://enterprise.colaberry.ai/portal/live/sess-1');
+    await render(false);
+
+    expect(container.querySelector('[data-testid="live-session-watch"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="companion-surface"]')).toBeNull();
+  });
+
+  it('hands the watch button the room id, which is the only key that finds the broadcast', async () => {
+    wire('live', null, { ...INFO, room_id: 'room-9' });
+    await render(true);
+
+    expect(container.querySelector('[data-testid="watch-stub"]')!.textContent).toBe('room-9');
+  });
+
+  it('shows the deck to someone signed in', async () => {
+    wire('live');
+    await render(true);
+
+    expect(container.querySelector('[data-testid="deck-stub"]')!.textContent).toBe('sess-1');
+  });
+
+  it('asks a signed-out viewer to sign in rather than showing a deck that cannot save', async () => {
+    mockAuth.mockReturnValue({ isAuthenticated: false });
+    wire('live');
+    await render(true);
+
+    expect(container.querySelector('[data-testid="deck-stub"]')).toBeNull();
+    expect(container.querySelector('[data-testid="companion-signed-out"]')).not.toBeNull();
+  });
+
+  it('shows nothing companion-shaped before the class is on air', async () => {
+    wire('not_started');
+    await render(true);
+
+    expect(container.querySelector('[data-testid="companion-surface"]')).toBeNull();
+  });
+});
+
+describe('the body flag that places the player', () => {
+  it('marks the page idle while nothing is playing', async () => {
+    wire('live');
+    await render(true);
+
+    expect(document.body.dataset.liveCompanion).toBe('idle');
+  });
+
+  it('marks it playing once the player is open, so the page clears the pinned video', async () => {
+    mockPlayer.mockReturnValue({ session: { occurrenceId: 'occ-1' }, open: jest.fn(), close: jest.fn() });
+    wire('live');
+    await render(true);
+
+    expect(document.body.dataset.liveCompanion).toBe('playing');
+  });
+
+  it('never sets it on the laptop surface', async () => {
+    wire('live');
+    await render(false);
+
+    expect(document.body.dataset.liveCompanion).toBeUndefined();
+  });
+
+  it('cleans up on unmount, so the rest of the portal is not left padded', async () => {
+    wire('live');
+    await render(true);
+    expect(document.body.dataset.liveCompanion).toBe('idle');
+
+    await act(async () => { root.unmount(); });
+    expect(document.body.dataset.liveCompanion).toBeUndefined();
+
+    // The shared afterEach unmounts again; make that a no-op rather than a double unmount.
+    root = { unmount: () => undefined } as unknown as Root;
   });
 });

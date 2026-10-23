@@ -1,6 +1,10 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import portalApi from '../../utils/portalApi';
+import { useParticipantAuth } from '../../contexts/ParticipantAuthContext';
+import { useBroadcastPlayer } from '../../contexts/BroadcastPlayerContext';
+import BroadcastWatchButton from '../../components/portal/BroadcastWatchButton';
+import CompanionDeck from '../../components/portal/CompanionDeck';
 
 /**
  * The landing page behind a session's persistent live link (L7.2).
@@ -26,8 +30,9 @@ import portalApi from '../../utils/portalApi';
  * class here exposes nothing that was not already exposed. If it fails, the page still works;
  * the moment is what matters and the title is a courtesy.
  *
- * The companion EXPERIENCE is L4.7. This renders the same honest states on a phone so the
- * generated companion URL is not a lie in the meantime.
+ * THE COMPANION IS THE SAME PAGE (L4.7). `companion` moves the persistent player to the top of
+ * the screen and puts the one-thumb deck underneath it, rather than introducing a second page
+ * that would have to repeat the moment resolution and get it subtly different.
  */
 
 type Moment = 'not_started' | 'live' | 'ended' | 'unknown';
@@ -39,6 +44,8 @@ interface MomentResponse {
 
 interface SessionInfo {
   title: string;
+  /** The only key that joins a session to what is airing. Used to find the broadcast. */
+  room_id: string | null;
   session_date: string;
   start_time: string;
   cohort_name: string;
@@ -90,11 +97,21 @@ function formatTime(t: string): string {
   return `${hour}:${m[2]} ${period}`;
 }
 
-export default function LiveSessionPage(): React.ReactElement {
+export interface LiveSessionPageProps {
+  /**
+   * The phone surface (L4.7). Passed by the route rather than sniffed from the URL, so the
+   * two routes are distinguishable in a test without faking a location.
+   */
+  companion?: boolean;
+}
+
+export default function LiveSessionPage({ companion = false }: LiveSessionPageProps = {}): React.ReactElement {
   const { sessionId = '' } = useParams<{ sessionId: string }>();
   const [moment, setMoment] = useState<Moment | null>(null);
   const [watchUrl, setWatchUrl] = useState<string | null>(null);
   const [info, setInfo] = useState<SessionInfo | null>(null);
+  const { isAuthenticated } = useParticipantAuth();
+  const { session: playing } = useBroadcastPlayer();
 
   const read = useCallback(async (): Promise<void> => {
     if (!sessionId) { setMoment('unknown'); return; }
@@ -128,6 +145,30 @@ export default function LiveSessionPage(): React.ReactElement {
       .catch(() => { /* page renders fine without it */ });
     return () => { alive = false; };
   }, [sessionId]);
+
+  /**
+   * Tell the persistent mini-player it is on a phone companion, for as long as this page is
+   * mounted.
+   *
+   * The player pins itself bottom-left-and-right above `.te-tabbar`, which owns the bottom
+   * edge inside the portal shell. This route is PUBLIC and has no tab bar, so that offset
+   * leaves a floating video over empty space — and a floating video is the wrong shape here
+   * anyway, because it covers the deck the viewer is meant to be tapping. The flag moves it to
+   * the top of the screen and lets the deck scroll underneath, which is what every phone
+   * companion people already use does.
+   *
+   * A body attribute rather than a prop because the player is mounted in the LAYOUT route, far
+   * above this page, and threading a prop down to it would mean the layout knowing which page
+   * is open.
+   */
+  useEffect(() => {
+    if (!companion) return undefined;
+    // 'playing' vs 'idle' rather than a `:has()` selector in the stylesheet: the page
+    // already knows whether anything is open, and a browser without `:has()` would have
+    // left a screen-height hole where the video was supposed to be.
+    document.body.dataset.liveCompanion = playing ? 'playing' : 'idle';
+    return () => { delete document.body.dataset.liveCompanion; };
+  }, [companion, playing]);
 
   const copy = moment ? COPY[moment] : null;
   const when = info
@@ -173,8 +214,33 @@ export default function LiveSessionPage(): React.ReactElement {
 
             <p className="clv-text" data-testid="live-session-body">{copy.body}</p>
 
-            {moment === 'live' && watchUrl && (
+            {/* The laptop surface sends the viewer to the workspace. The phone does NOT: it is
+                already the place to watch, and a link away from it would be a link away from
+                the only screen the viewer has. */}
+            {!companion && moment === 'live' && watchUrl && (
               <a className="clv-btn" href={watchUrl} data-testid="live-session-watch">Watch now</a>
+            )}
+
+            {companion && moment === 'live' && (
+              <div className="clv-companion" data-testid="companion-surface">
+                {/* Reused, not reimplemented. This component already answers all three
+                    questions a watch affordance needs - is anything airing for this room,
+                    may this viewer watch it, is it already playing - and renders nothing
+                    rather than offering a dead button. */}
+                <BroadcastWatchButton
+                  roomId={info ? info.room_id : null}
+                  className="clv-btn"
+                  label="&#9654; Watch here"
+                />
+
+                {isAuthenticated ? (
+                  <CompanionDeck sessionId={sessionId} />
+                ) : (
+                  <p className="clv-text clv-text-sub" data-testid="companion-signed-out">
+                    Sign in to answer polls and tell your instructor how you are getting on.
+                  </p>
+                )}
+              </div>
             )}
 
             {moment === 'unknown' && (
@@ -246,6 +312,11 @@ const CLV_CSS = `
 .clv-meta{ font-size:13.5px; color:var(--text-muted); margin:0 0 14px; }
 .clv-text{ font-size:14.5px; line-height:1.55; color:var(--text-muted); margin:0; }
 .clv-text-sub{ margin-top:16px; font-size:13px; color:var(--text-subtle); }
+
+.clv-companion{ width:100%; margin-top:18px; display:flex; flex-direction:column; gap:14px; }
+/* The deck is the reading order on a phone, so it is left-aligned even though the card above
+   it is centred. */
+.clv-companion{ text-align:left; }
 
 .clv-btn{
   width:100%; min-height:54px; margin-top:20px; padding:0 18px;
