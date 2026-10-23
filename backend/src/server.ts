@@ -3287,6 +3287,15 @@ async function start(): Promise<void> {
   } catch (err: any) {
     console.warn('[DB] strategic account schema ensure failed:', err?.message);
   }
+  // C8.5 - account artifact links. One table of POINTERS to canonical artifacts;
+  // nothing is copied into the app. Depends on `organizations` existing for its FK,
+  // so it runs after the strategic-account ensure above.
+  try {
+    const { ensureAccountArtifactLinkSchema } = await import('./db/ensureAccountArtifactLinkSchema');
+    await ensureAccountArtifactLinkSchema();
+  } catch (err: any) {
+    console.warn('[DB] account artifact link schema ensure failed:', err?.message);
+  }
   // Seed v0 automation rules (idempotent).
   try {
     const { seedDefaultAutomationRules } = await import('./services/ops/automationRulesService');

@@ -155,6 +155,57 @@ export async function removeCohortFromOrganization(
   await api.delete(`/api/admin/organizations/${id}/cohorts/${cohortId}`);
 }
 
+// --- C8.5: canonical artifact links -----------------------------------------
+// POINTERS ONLY. The artifact stays in its one canonical home (the Basecamp vault,
+// per C0.3); these endpoints say where that is. Nothing is uploaded through here.
+
+export type ArtifactKind =
+  | 'deck' | 'research' | 'account_brief' | 'proposal'
+  | 'contract' | 'pilot_outcome' | 'case_study';
+
+export interface AccountArtifactLink {
+  id: string;
+  organizationId: string;
+  artifactKind: ArtifactKind;
+  title: string;
+  canonicalUrl: string;
+  sourceType: 'basecamp_vault' | 'repo' | 'external';
+  sourceId: string | null;
+  linkedBy: string | null;
+  notes: string | null;
+  createdAt: string;
+  /** C0.3 naming verdict. A failing link is still shown, flagged rather than hidden. */
+  naming: { ok: boolean; reason?: string };
+}
+
+export async function getOrganizationArtifacts(
+  id: string,
+): Promise<AccountArtifactLink[]> {
+  const res = await api.get(`/api/admin/organizations/${id}/artifacts`);
+  return res.data?.links ?? [];
+}
+
+export async function linkArtifactToOrganization(
+  id: string,
+  input: {
+    artifact_kind: ArtifactKind;
+    title: string;
+    canonical_url: string;
+    source_type?: 'basecamp_vault' | 'repo' | 'external';
+    notes?: string | null;
+  },
+): Promise<{ link: AccountArtifactLink; created: boolean }> {
+  const res = await api.post(`/api/admin/organizations/${id}/artifacts`, input);
+  return res.data;
+}
+
+export async function unlinkArtifactFromOrganization(
+  id: string,
+  linkId: string,
+): Promise<void> {
+  await api.delete(`/api/admin/organizations/${id}/artifacts/${linkId}`);
+}
+
 export interface AdminCohortOption {
   id: string;
   name: string;

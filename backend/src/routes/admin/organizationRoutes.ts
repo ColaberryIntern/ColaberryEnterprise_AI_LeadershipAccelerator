@@ -7,6 +7,9 @@ import {
   handleAdminSetOrganizationStatus,
   handleAdminAddCohort,
   handleAdminRemoveCohort,
+  handleAdminListAccountArtifacts,
+  handleAdminLinkAccountArtifact,
+  handleAdminUnlinkAccountArtifact,
 } from '../../controllers/adminOrgController';
 
 /**
@@ -44,5 +47,9 @@ router.get('/api/admin/organizations/:id', requireAdmin, handleAdminGetOrganizat
 router.patch('/api/admin/organizations/:id/status', requireAdmin, handleAdminSetOrganizationStatus);
 router.post('/api/admin/organizations/:id/cohorts', requireAdmin, handleAdminAddCohort);
 router.delete('/api/admin/organizations/:id/cohorts/:cohortId', requireAdmin, handleAdminRemoveCohort);
+// C8.5 - canonical artifact links. Pointers only; nothing is uploaded or stored here.
+router.get('/api/admin/organizations/:id/artifacts', requireAdmin, handleAdminListAccountArtifacts);
+router.post('/api/admin/organizations/:id/artifacts', requireAdmin, handleAdminLinkAccountArtifact);
+router.delete('/api/admin/organizations/:id/artifacts/:linkId', requireAdmin, handleAdminUnlinkAccountArtifact);
 
 export default router;

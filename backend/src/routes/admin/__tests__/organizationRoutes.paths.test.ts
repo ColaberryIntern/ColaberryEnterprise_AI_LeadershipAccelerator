@@ -7,6 +7,13 @@ jest.mock('../../../controllers/adminOrgController', () => ({
   handleAdminSetOrganizationStatus: jest.fn(),
   handleAdminAddCohort: jest.fn(),
   handleAdminRemoveCohort: jest.fn(),
+  // C8.5. This factory is an EXPLICIT list, so a handler added to the controller and
+  // not added here arrives as undefined and the router throws at module load with
+  // "Route.get() requires a callback function" - which is how this suite caught the
+  // three routes below before they reached CI.
+  handleAdminListAccountArtifacts: jest.fn(),
+  handleAdminLinkAccountArtifact: jest.fn(),
+  handleAdminUnlinkAccountArtifact: jest.fn(),
 }));
 
 jest.mock('../../../middlewares/authMiddleware', () => ({
@@ -60,6 +67,10 @@ describe('admin organization routes — mount path', () => {
     expect(paths).toContain('/api/admin/organizations/:id/status');
     expect(paths).toContain('/api/admin/organizations/:id/cohorts');
     expect(paths).toContain('/api/admin/organizations/:id/cohorts/:cohortId');
+    // C8.5 - the canonical artifact links. Same duplication-on-purpose as above:
+    // these strings also live in frontend/src/services/adminOrgApi.ts.
+    expect(paths).toContain('/api/admin/organizations/:id/artifacts');
+    expect(paths).toContain('/api/admin/organizations/:id/artifacts/:linkId');
   });
 
   it('declares /stats before /:id, or Express matches "stats" as an id', () => {

@@ -4,6 +4,7 @@ import {
   orgListQuerySchema,
   orgStatusSchema,
   orgAddCohortSchema,
+  orgLinkArtifactSchema,
 } from '../schemas/adminOrgSchema';
 import {
   listOrganizations,
@@ -14,6 +15,12 @@ import {
   getOrganizationStats,
 } from '../services/adminOrgService';
 import type { OrganizationStatus } from '../models/Organization';
+import {
+  listAccountArtifacts,
+  linkArtifactToAccount,
+  unlinkArtifactFromAccount,
+  ArtifactLinkRejected,
+} from '../services/commercialization/accountArtifactLinkService';
 // Shared with the Memory Graph on purpose: one admin, one scope. If the account list and
 // the graph derived tenancy separately they would eventually disagree, and the looser of
 // the two would quietly become the real boundary.
@@ -180,6 +187,83 @@ export async function handleAdminRemoveCohort(
       res.status(404).json({ error: 'That cohort is not linked to this business account' });
       return;
     }
+    res.json({ removed: true });
+  } catch (error) {
+    next(error as Error);
+  }
+}
+
+/**
+ * C8.5 - the canonical artifacts linked to this account.
+ *
+ * Returns POINTERS. Nothing is fetched, cached or proxied: the artifact stays in the one
+ * canonical place C0.3 put it, and this endpoint says where that is. Each link carries a
+ * C0.3 naming verdict so a link filed under a dated or versioned name is visible as a
+ * problem rather than silently normal.
+ */
+export async function handleAdminListAccountArtifacts(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const links = await listAccountArtifacts(routeParam(req, 'id'));
+    res.json({ links });
+  } catch (error) {
+    next(error as Error);
+  }
+}
+
+export async function handleAdminLinkAccountArtifact(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const body = orgLinkArtifactSchema.parse(req.body);
+    const result = await linkArtifactToAccount({
+      organizationId: routeParam(req, 'id'),
+      artifactKind: body.artifact_kind,
+      title: body.title,
+      canonicalUrl: body.canonical_url,
+      sourceType: body.source_type,
+      sourceId: body.source_id ?? null,
+      linkedBy: actingAdmin(req),
+      notes: body.notes ?? null,
+    });
+
+    // 201 for a new link, 200 when it already existed - the (organization_id,
+    // canonical_url) unique index makes a repeat call a no-op rather than a duplicate,
+    // which is this ticket's metric ("nobody re-sends a document an account already has")
+    // expressed as behaviour rather than as a warning.
+    res.status(result.created ? 201 : 200).json(result);
+  } catch (error) {
+    if (error instanceof ArtifactLinkRejected) {
+      // 422, not 400: the request is well formed and the content is the problem. The
+      // commonest case is a filename carrying a date or REV marker, which C0.3 forbids.
+      res.status(422).json({ error: error.message, reason: error.reason });
+      return;
+    }
+    handleZod(error, res, next);
+  }
+}
+
+export async function handleAdminUnlinkAccountArtifact(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const { removed } = await unlinkArtifactFromAccount(
+      routeParam(req, 'id'),
+      routeParam(req, 'linkId'),
+    );
+    if (!removed) {
+      res.status(404).json({ error: 'That artifact is not linked to this business account' });
+      return;
+    }
+    // The artifact itself is untouched. We never held it, which is why removing the
+    // pointer is safe.
     res.json({ removed: true });
   } catch (error) {
     next(error as Error);

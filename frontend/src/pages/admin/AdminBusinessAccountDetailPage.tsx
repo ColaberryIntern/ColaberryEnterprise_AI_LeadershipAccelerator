@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { PageHeader, StatCard, StatusBadge, SectionCard } from '../../components/admin/shell';
+// C8.5 - canonical artifact links. Its own component so this page gains one line.
+import AccountArtifactsCard from '../../components/admin/account/AccountArtifactsCard';
 import {
   getOrganization,
   setOrganizationStatus,
@@ -480,6 +482,8 @@ function AdminBusinessAccountDetailPage(): React.ReactElement {
               )}
             </form>
           </SectionCard>
+
+          <AccountArtifactsCard organizationId={id} />
         </div>
 
         <div className="col-lg-4">
