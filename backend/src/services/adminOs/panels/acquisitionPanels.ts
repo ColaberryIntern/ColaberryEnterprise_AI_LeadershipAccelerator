@@ -57,6 +57,12 @@ export interface AcquisitionPanel {
    * rather than as a failure.
    */
   ghlContactId: string | null;
+  /**
+   * Deep link to this person in the CRM sub-account they actually live in. Null when there is no
+   * contact, or when the brand's key is not on file, because a link to the wrong account shows an
+   * empty record rather than an error and reads as missing data.
+   */
+  ghlContactUrl?: string | null;
   /** The denominator the Lead page shows beside the score. */
   leadScoreMax: number;
 }
@@ -125,7 +131,35 @@ export async function loadAcquisition(email: string): Promise<AcquisitionPanel |
   );
 
   const row = rows[0] ?? null;
-  if (row) row.leadScoreMax = LEAD_SCORE_MAX;
+  if (row) {
+    row.leadScoreMax = LEAD_SCORE_MAX;
+    // The deep link to this person in the CRM, resolved through the same routing the sync uses,
+    // so it points at the sub-account they are actually in. Null whenever we cannot say, which
+    // the UI renders as no link rather than as a link to an empty record.
+    /**
+     * The CRM deep link. BEST EFFORT, and lazily imported, for two separate reasons.
+     *
+     * Lazy, because the convention ghlService itself documents: a top-level import reaches
+     * settingsService -> SystemSetting -> config/database and constructs Sequelize at module
+     * load, which breaks every consumer without a DATABASE_URL. Importing it eagerly took this
+     * file's own suite from passing to zero tests collected.
+     *
+     * Best effort, because a convenience link must never be able to empty a person's profile.
+     * Moving the import to lazy only moved that failure from load time to call time, and three
+     * more suites went red. Logged with a class rather than swallowed, so a real outage is
+     * traceable instead of silently rendering every person as "not in the CRM".
+     */
+    try {
+      const { ghlContactUrl } = await import('../../leads/ghlContactLink');
+      row.ghlContactUrl = await ghlContactUrl(row.source, row.ghlContactId);
+    } catch (error) {
+      row.ghlContactUrl = null;
+      console.error('[acquisition] GHL contact link unavailable', {
+        error_class: error instanceof Error ? error.constructor.name : 'Unknown',
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
   return row;
 }
 

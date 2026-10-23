@@ -217,6 +217,35 @@ export default function PersonProfilePage() {
             {profile && !profile.tracedToLead && (
               <span className="badge text-bg-warning">No acquisition record</span>
             )}
+
+            {/*
+              Open this person in GoHighLevel.
+
+              Ali, 2026-10-23: "there should be a way in their 360 profile where they can open the
+              link to GHL... it was an orange logo. Bring that back and put it next to the name."
+              The contact id was already on the Acquisition tab, but as plain text a tab away, so
+              checking the CRM meant copying an id and hunting for it.
+
+              Rendered ONLY when the server resolved a URL. Which location holds a person depends
+              on their lead source, so a URL built here would eventually point at the wrong
+              sub-account - where GHL answers with an empty record rather than an error, and reads
+              as "not in the CRM" for somebody who is.
+            */}
+            {acq?.ghlContactUrl && (
+              <a
+                href={acq.ghlContactUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="btn btn-sm d-inline-flex align-items-center gap-1 text-white"
+                style={{ backgroundColor: '#FF7A00', borderColor: '#FF7A00' }}
+                title="Open this contact in GoHighLevel"
+                data-testid="ghl-contact-link"
+              >
+                <i className="ri-external-link-line" aria-hidden="true" />
+                GHL
+              </a>
+            )}
+
             {acq?.leadId && (
               <button type="button" className="btn btn-sm btn-outline-primary"
                 onClick={() => setShowAppointment(true)}>
