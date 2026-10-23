@@ -15,9 +15,10 @@ import { rightNowRows, urgentOf } from '../../../components/campus/home/rightNow
 import { useCampus } from '../../../components/campus/CampusContext';
 import { useCampusView } from '../../../components/campus/useCampusView';
 import { useCampusWorldProps } from '../../../components/campus/useCampusWorldProps';
-import { useCampusOnAir, headlineBroadcast } from '../../../components/campus/campusOnAir';
+import { useLiveNow } from '../../../components/campus/campusOnAir';
 import { openWayfinder } from '../../../components/campus/wayfinderHost';
 import type { BuildingId } from '../../../components/campus/campusMap';
+import { buildingName } from '../../../components/campus/campusMap';
 import CampusListView from '../../../components/campus/CampusListView';
 import CampusDoorTransition from '../../../components/campus/CampusDoorTransition';
 import CampusDmToast from '../../../components/campus/CampusDmToast';
@@ -56,7 +57,7 @@ import '../../../components/campus/campusHome.css';
 export default function CampusHomePage(): React.ReactElement {
   const campus = useCampus();
   const { audience, buildings, accessOf } = useCampusView();
-  const { broadcasts, buildings: onAirSet } = useCampusOnAir();
+  const liveNow = useLiveNow(); // WP-6: Colaberry Live's broadcast, state and one-second clock
   const facts = useHomeFacts(audience === 'member');
   const [cardOpen, setCardOpen] = useState(false);
   const [meOpen, setMeOpen] = useState(false);
@@ -80,10 +81,9 @@ export default function CampusHomePage(): React.ReactElement {
   const agenda = useHomeAgenda(audience, campus.active);
   const reveal = useConciergeReveal(gateOpen, map.onGateOpening);
   const quiet = !!presence && !presenceError && Object.values(presence).every((a) => a.people.length === 0);
-  const live = useMemo(() => {
-    const h = headlineBroadcast(broadcasts);
-    return h ? { title: h.title, buildingId: ([...onAirSet][0] ?? null) as BuildingId | null } : null;
-  }, [broadcasts, onAirSet]);
+  const liveKey = liveNow ? `${liveNow.b.id}|${liveNow.b.title}|${liveNow.building}|${liveNow.state}` : '';
+  const live = useMemo(() => (liveNow ? { title: liveNow.b.title, buildingId: liveNow.building, state: liveNow.state } : null), [liveKey]); // keyed on what the panel shows, so the one-second clock does not rebuild it
+  const liveB = live?.buildingId ? buildings.find((b) => b.id === live.buildingId) : undefined;
   const urgent = useMemo(() => urgentOf(audience, agenda, buildings, wp), [audience, agenda, buildings, wp]);
   const suggested = useMemo(() => rightNowRows({ audience, workplace: wp, buildings, stops: campus.planStops, planMinutes: campus.planMinutes, agenda, presence,
     presenceError, live: !!live, urgent }), [audience, wp, buildings, campus.planStops, campus.planMinutes, agenda, presence, presenceError, live, urgent]);
@@ -104,9 +104,10 @@ export default function CampusHomePage(): React.ReactElement {
       {gateOpen && <CampusGate audience={audience} firstName={facts.firstName} fullName={facts.fullName} initials={initials}
         rung={look?.rung_name || null} points={look?.points ?? null} streak={facts.streak} online={online} workplace={wp}
         streakPoints={facts.claimedToday === false && !inViewAs() ? facts.nextPoints : null}
+        live={liveB ? { place: buildingName(liveB, wp), preview: liveNow?.b.access_mode === 'preview' } : null}
         hasTour={!!tour} reduceMotion={reduce} now={new Date()} onOpening={reveal.onOpening} onEnter={enter} />}
       <CampusWorld {...props} insets={homeInsets} walkTo={map.walk} onCard={onCard} cameraRef={map.camRef} startAt={campus.here}
-        startCam={map.startCam} recenter={map.recenter} me={{ initials, photo, level, tone: audience }} moments={mapMoments(audience, agenda)} quiet={quiet} hover={hover} />
+        startCam={map.startCam} recenter={map.recenter} me={{ initials, photo, level, tone: audience }} moments={mapMoments(audience, agenda)} quiet={quiet} hover={hover} liveNow={liveNow} />
       <CampusTopBar audience={audience} online={online} points={look?.points ?? null} rung={look?.rung_name || null} photo={photo} workplace={wp}
         streak={facts.streak} initials={initials} onList={campus.openList} onFind={() => { openWayfinder(); }} onMe={() => setMeOpen((v) => !v)} />
       {meOpen && <CampusMePanel audience={audience} fullName={facts.fullName} initials={initials} onClose={() => { setMeOpen(false); map.camRef.current?.recenter(); }} />}
@@ -116,7 +117,7 @@ export default function CampusHomePage(): React.ReactElement {
         tourStops={tour ? tour.stops : null} touring={touring} tourProgress={campus.tourProgress} justToured={campus.justToured}
         onWalk={map.goTo} onRun={(id) => map.goTo(id, { run: true })} onHover={setHover} onTour={campus.resumeTour} onEndTour={campus.endTour}
         onOpen={(r) => campus.enterThroughDoor(r, null)} />
-      <div className="cm-home-livebar"><CampusLive /></div>
+      <div className="cm-home-livebar"><CampusLive onWalk={(id, run) => map.goTo(id, { run })} hereId={campus.here ?? null} /></div>
       <CampusTabBar active="/portal/campus" />
       <CampusListView />
       <CampusDoorTransition />

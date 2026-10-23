@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import type { CampusAudience } from '../campusMap';
 import { trapTab } from '../focusTrap';
-import { greetLine } from './conciergeCopy';
+import { greetLine, wd } from './conciergeCopy';
 import '../campusGate.css';
 
 /**
@@ -48,6 +48,8 @@ export interface GateProps {
   onEnter: (tour: boolean) => void;
   /** WP-1: the doors start to swing (the home starts the camera's fly-out from the gate 900 ms later, as the prototype does). */
   onOpening?: () => void;
+  /** WP-6: Colaberry Live is on air (where, and whether this viewer gets a preview): the gate's line says so, as the prototype's. */
+  live?: { place: string; preview: boolean } | null;
 }
 
 export default function CampusGate(p: GateProps): React.ReactElement {
@@ -74,11 +76,15 @@ export default function CampusGate(p: GateProps): React.ReactElement {
   const staff = p.audience === 'staff', partner = p.audience === 'business';
   const here = p.online && p.online > 0 ? p.online : 0;
   // Each entrance's line, as the prototype's renderGate, with only the facts we have (no company, seats or "could use a hand").
-  const sub = explorer
+  const liveLine = p.live && (p.audience === 'member' || explorer)
+    ? (explorer ? (p.live.preview ? 'Colaberry Live is on: you can watch a preview. Come on in.' : 'Colaberry Live is on air. Come on in.')
+      : wd(`Colaberry Live is on air. Your cohort is heading to the ${p.live.place}.`, p.workplace))
+    : null;
+  const sub = liveLine ?? (explorer
     ? 'Your Explorer pass is ready. Wander anywhere: a few buildings are members-only, and you can still peek inside.'
     : staff ? (here ? `${here} ${here === 1 ? 'learner is' : 'learners are'} on campus right now.` : 'The campus is open.')
     : partner ? `See where your team learns and builds.${here ? ` ${here} ${here === 1 ? 'person is' : 'people are'} on campus right now.` : ''}`
-    : here ? `The campus is open. ${here} ${who(here)} ${here === 1 ? 'is' : 'are'} already inside.` : 'The campus is open.';
+    : here ? `The campus is open. ${here} ${who(here)} ${here === 1 ? 'is' : 'are'} already inside.` : 'The campus is open.');
   // The prototype's arch per entrance (renderGate): learners, visitors, staff and partners each have their own; Workplace names say Colaberry Works.
   const house = p.workplace ? 'Colaberry Works' : 'Colaberry';
   const arch = explorer ? `${house} · Visitor entrance` : p.audience === 'staff' ? 'Colaberry · Staff entrance' : p.audience === 'business' ? `${house} · Partner entrance`

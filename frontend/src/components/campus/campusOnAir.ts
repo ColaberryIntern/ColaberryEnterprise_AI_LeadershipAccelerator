@@ -1,7 +1,9 @@
-import { useMemo } from 'react';
+import { useMemo, useRef } from 'react';
 import { useDiscoveryState } from '../../contexts/BroadcastDiscoveryContext';
 import type { DiscoveryBroadcast, DiscoveryState } from '../../hooks/useBroadcastDiscovery';
 import type { BuildingId } from './campusMap';
+import { liveStateOf, useLiveClock } from './campusLiveState';
+import type { LiveState } from './campusLiveState';
 
 /**
  * Live mode on the campus (Colaberry Campus C8), from the portal's existing broadcast discovery (useDiscoveryState: polled at the
@@ -40,4 +42,21 @@ export function useCampusOnAir(): { broadcasts: DiscoveryBroadcast[]; buildings:
     const broadcasts = onAirBroadcasts(state);
     return { broadcasts, buildings: onAirBuildings(broadcasts) };
   }, [state]);
+}
+
+/**
+ * WP-6: the headline broadcast with its state and a one-second clock, for every live surface (the marquee, the live bar, the
+ * concierge card, the arrival card, the gate). `polledAt` is when its preview count was last read, so an Explorer's preview can
+ * count down locally between polls.
+ */
+export interface CampusLiveNow { b: DiscoveryBroadcast; state: LiveState; now: number; polledAt: number; building: BuildingId | null }
+export function useLiveNow(): CampusLiveNow | null {
+  const { broadcasts, buildings } = useCampusOnAir();
+  const b = headlineBroadcast(broadcasts);
+  const now = useLiveClock(!!b);
+  const polled = useRef<{ key: string; at: number }>({ key: '', at: Date.now() });
+  const key = b ? `${b.id}:${b.preview_seconds_remaining ?? ''}:${b.reason}` : '';
+  if (polled.current.key !== key) polled.current = { key, at: Date.now() };
+  if (!b) return null;
+  return { b, state: liveStateOf(b), now, polledAt: polled.current.at, building: ([...buildings][0] ?? null) as BuildingId | null };
 }
