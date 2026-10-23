@@ -75,25 +75,48 @@
 
 /* the locker inside the Me panel: one grid of tiles, as the prototype's "Your locker" */
 .cm-me-backdrop{position:absolute;inset:0;z-index:11;background:var(--cm-art-dim);opacity:.35}
-.cm-me-panel .cm-look{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
-.cm-me-panel .cm-look>*:not(.cm-look-slot){grid-column:1/-1}
-.cm-me-panel .cm-look .cm-card-title{font:700 11px 'DM Sans',var(--sans),sans-serif;letter-spacing:.14em;text-transform:uppercase;color:var(--cm-art-muted);margin:6px 0 0}
-.cm-me-panel .cm-look .cm-who-note{font-size:12px;color:var(--cm-art-muted);margin:0}
-.cm-me-panel .cm-look-slot,.cm-me-panel .cm-look-items{display:contents}
-.cm-me-panel .cm-look-slot h3{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
-.cm-me-panel .cm-look-items li{list-style:none}
-.cm-me-panel .cm-look-item{width:100%;min-width:0;height:100%;align-items:center;text-align:center;padding:10px 6px;border-radius:12px;border:1.5px solid var(--cm-art-line);background:var(--cm-art-card);color:var(--cm-art-ink)}
-.cm-me-panel .cm-look-item::before{display:block;font-size:22px;line-height:1.2;margin-bottom:4px}
-.cm-me-panel [data-slot="head"] .cm-look-item::before{content:"\1F9E2"}
-.cm-me-panel [data-slot="face"] .cm-look-item::before{content:"\1F576"}
-.cm-me-panel [data-slot="body"] .cm-look-item::before{content:"\1F9E5"}
-.cm-me-panel [data-slot="neck"] .cm-look-item::before{content:"\1F4FF"}
-.cm-me-panel [data-slot="ride"] .cm-look-item::before{content:"\1F6F9"}
-.cm-me-panel .cm-look-name{font-size:12px;font-weight:700}
-.cm-me-panel .cm-look-item small{font-size:10.5px}
-.cm-me-panel .cm-look-item.is-worn{border-color:var(--cm-art-live);background:var(--cm-art-pass-bg)}
-.cm-me-panel .cm-look-item.is-worn small{color:var(--cm-art-live)}
-.cm-me-panel .cm-look-item:disabled{opacity:.55}
+/* WP-7: the locker tiles (the prototype's .locker / .lk-i), in the Me panel and the map's My look card */
+.cm-locker{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:6px 0 0;padding:0;list-style:none}
+.cm-locker li{list-style:none;min-width:0}
+.cm-lk{width:100%;height:100%;border:1px solid var(--cm-art-line);background:var(--cm-art-card);color:var(--cm-art-ink);border-radius:12px;padding:8px 4px;display:flex;flex-direction:column;align-items:center;gap:2px;text-align:center;cursor:pointer}
+.cm-lk b{font-size:11px;line-height:1.2}
+.cm-lk small{font-size:10px;color:var(--cm-art-muted)}
+.cm-lk-ic{font-size:24px;line-height:1.1}
+.cm-lk.is-worn{border-color:var(--cm-art-live);box-shadow:inset 0 0 0 1px var(--cm-art-live);background:var(--cm-art-pass-bg)}
+.cm-lk.is-worn small{color:var(--cm-art-live);font-weight:800}
+.cm-lk.is-locked{opacity:.5;filter:grayscale(1);cursor:default}
+.cm-lk:focus-visible{outline:3px solid var(--cm-art-red);outline-offset:2px}
+/* WP-7: the Me panel's top (the prototype's .me-top / .me-prev / .me-lv) */
+.cm-me-top{display:flex;gap:14px;align-items:center}
+.cm-me-prev{width:104px;height:130px;flex:none}
+.cm-me-prev .nm{display:none} /* the prototype draws the preview figure without a name tag */
+.cm-me-top h2{font-family:'Fraunces',Georgia,serif;font-size:20px;margin:2px 0 6px}
+.cm-me-lv{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;flex-wrap:wrap}
+.cm-lv.is-big{font-size:12px;padding:3px 9px}
+.cm-me-muted{display:block;color:var(--cm-art-muted);font-size:12px;margin-top:4px}
+.cm-me-actions{margin-top:10px;display:flex;gap:6px;flex-wrap:wrap}
+.cm-me-sec{margin:16px 0 4px;font:700 11px 'DM Sans',var(--sans),sans-serif;letter-spacing:.14em;text-transform:uppercase;color:var(--cm-art-muted)}
+.cm-me-sec small{text-transform:none;letter-spacing:0;font-weight:500}
+.cm-me-note{font-size:12.5px;color:var(--cm-art-muted);margin:6px 0 0}
+.cm-me-err{font-size:12.5px;color:var(--cm-art-red-d);margin:8px 0 0}
+.cm-tgl{width:44px;height:26px;border-radius:999px;border:1px solid var(--cm-art-line);background:var(--cm-art-line);position:relative;cursor:pointer;flex:none}
+.cm-tgl::after{content:'';position:absolute;top:2px;left:2px;width:20px;height:20px;border-radius:50%;background:var(--cm-art-white);transition:transform .15s}
+.cm-tgl[aria-checked="true"]{background:var(--cm-art-live);border-color:var(--cm-art-live)}
+.cm-tgl[aria-checked="true"]::after{transform:translateX(18px)}
+.is-reduced .cm-tgl::after{transition:none}
+/* WP-7: the photo prompt in the side panel (the prototype's .photo-p) */
+.cm-photo-p{display:flex;align-items:center;gap:10px;border:1px dashed var(--cm-art-prompt-edge);background:var(--cm-art-prompt-bg);border-radius:14px;padding:10px 12px;margin:0 0 14px}
+.cm-photo-p div{flex:1}
+.cm-photo-p b{display:block;font-size:13px}
+.cm-photo-p small{color:var(--cm-art-muted);font-size:12px;line-height:1.35;display:block;margin-top:2px}
+.cm-photo-p .pp-ic{font-size:22px}
+.cm-photo-p .pp-x{border:0;background:none;font-size:16px;color:var(--cm-art-muted);padding:0 2px;cursor:pointer}
+/* WP-7: you on the page bar (opens the Me panel); the panel itself is fixed over the page here, not inside the bar */
+.cm-banner-me{width:34px;height:34px;border-radius:50%;background:var(--cm-art-pic-ink);color:var(--cm-art-on-dark);display:grid;place-items:center;font-size:11px;font-weight:700;border:0;overflow:hidden;cursor:pointer;padding:0;flex:none}
+.cm-banner-me img{width:100%;height:100%;object-fit:cover}
+.cm-banner-me:focus-visible{outline:3px solid var(--cm-art-red);outline-offset:2px}
+.cm-banner .cm-me-panel{position:fixed;z-index:60}
+.cm-banner .cm-me-backdrop{position:fixed;z-index:59}
 
 /* C11b fix round: the directory header on two rows (title, filter, close; then the links), as the prototype header */
 .cm-list .cm-layer-bar>.cm-btn.is-secondary:last-child{order:3;margin-left:0}

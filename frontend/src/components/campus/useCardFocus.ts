@@ -18,8 +18,10 @@ const focusable = (el: Element | null): el is Focusable => (el instanceof HTMLEl
 export function useCardFocus(heading: RefObject<HTMLElement>): void {
   useEffect(() => {
     const opener = focusable(document.activeElement) ? document.activeElement : null;
-    const dialog: Focusable | null = heading.current?.closest<HTMLElement>('[role="dialog"]')
-      ?? heading.current?.closest('.cm-world')?.querySelector<SVGElement>('[data-building][tabindex="0"]') ?? null;
+    // WP-5: a popover card (.cm-pcard) is itself a dialog that goes away on close: look for the fallback outside it
+    const from = heading.current?.closest<HTMLElement>('.cm-pcard')?.parentElement ?? heading.current;
+    const dialog: Focusable | null = from?.closest<HTMLElement>('[role="dialog"]')
+      ?? from?.closest('.cm-world')?.querySelector<SVGElement>('[data-building][tabindex="0"]') ?? null;
     heading.current?.focus();
     return () => {
       const target = opener?.isConnected ? opener : dialog?.isConnected ? dialog : null;

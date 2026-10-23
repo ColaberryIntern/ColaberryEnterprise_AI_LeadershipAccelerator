@@ -60,9 +60,12 @@ export function isReadOnlySession(): boolean {
   return decodeParticipantClaims(getParticipantToken())?.read_only === true;
 }
 
-/** "I am in this building now." Throws on failure; the caller decides it is non-fatal. */
-export async function postCampusHere(area: string): Promise<void> {
-  await axios.post(`${process.env.REACT_APP_API_URL || ''}/api/portal/campus/here`, { area }, {
+/**
+ * "I am in this building now." Throws on failure; the caller decides it is non-fatal. WP-7 (Q14): with `share` false the server
+ * forgets your building instead of recording it ("Show which building I'm in" off).
+ */
+export async function postCampusHere(area: string, share = true): Promise<void> {
+  await axios.post(`${process.env.REACT_APP_API_URL || ''}/api/portal/campus/here`, share ? { area } : { area, share: false }, {
     headers: authHeaders(), timeout: CAMPUS_FLAGS_TIMEOUT_MS,
   });
 }

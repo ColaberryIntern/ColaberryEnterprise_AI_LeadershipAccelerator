@@ -326,6 +326,54 @@ export const PROJECT_LIFECYCLE_STATEMENTS: ReadonlyArray<string> = [
    )`,
   `CREATE UNIQUE INDEX IF NOT EXISTS uq_visual_contract_decision_revision
      ON blueprint_visual_contracts (tenant_id, decision_id, revision)`,
+
+  // READINESS: whether a stage's prerequisites are satisfied, and a fingerprint of the evidence
+  // that says so. Design: readiness-and-approval-separation.md §4.
+  //
+  // THE CHECKS ARE THE POINT. The design's governance rules are written here as CONSTRAINTS
+  // rather than left as conventions in calling code, because a convention is one careless commit
+  // away from being untrue, and this is the table a future automatic advancer will read:
+  //
+  //   measured_by LIKE 'system:%'   A readiness row can NEVER be attributed to a person. The
+  //                                 design says "a labelled system identity - never a person,
+  //                                 never a role that can approve"; this makes that unfakeable.
+  //   performed_act NOT LIKE
+  //     '%.approve'                 Readiness may record that the pipeline DID work
+  //                                 (story.execute, release.deploy). It may never record an
+  //                                 approval - the rule CLAUDE.md and the claim register state,
+  //                                 and which no AI identity may hold.
+  //   satisfied = (gap_count = 0)   `gaps` holds the BLOCKING gaps, so a row claiming to be
+  //                                 satisfied while carrying blocking gaps cannot be written at
+  //                                 all. Readiness cannot lie about itself.
+  //
+  // UNIQUE on (lifecycle, stage, evidence hash) is what makes re-measuring IDEMPOTENT per
+  // CLAUDE.md: the same evidence measured twice is one row and the ORIGINAL measured_at
+  // survives, the same reasoning as uq_blueprint_approval_revision above. A different hash means
+  // the evidence genuinely changed, so that is a new row and the history is the staleness record.
+  `CREATE TABLE IF NOT EXISTS lifecycle_stage_readiness (
+     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+     lifecycle_state_id UUID NOT NULL REFERENCES project_lifecycle_states(id) ON DELETE CASCADE,
+     target_stage TEXT NOT NULL,
+     satisfied BOOLEAN NOT NULL,
+     gap_count INTEGER NOT NULL DEFAULT 0,
+     gaps JSONB NOT NULL DEFAULT '[]'::jsonb,
+     evidence_sha256 TEXT NOT NULL,
+     measured_by TEXT NOT NULL,
+     performed_act TEXT,
+     measured_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+     CONSTRAINT ck_readiness_gaps_is_array CHECK (jsonb_typeof(gaps) = 'array'),
+     CONSTRAINT ck_readiness_gap_count_matches CHECK (gap_count = jsonb_array_length(gaps)),
+     CONSTRAINT ck_readiness_satisfied_iff_no_gaps CHECK (satisfied = (gap_count = 0)),
+     CONSTRAINT ck_readiness_measured_by_is_system CHECK (measured_by LIKE 'system:%'),
+     CONSTRAINT ck_readiness_never_an_approval CHECK (
+       performed_act IS NULL OR performed_act NOT LIKE '%.approve'
+     )
+   )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS uq_readiness_measurement
+     ON lifecycle_stage_readiness (lifecycle_state_id, target_stage, evidence_sha256)`,
+  `CREATE INDEX IF NOT EXISTS idx_readiness_latest
+     ON lifecycle_stage_readiness (lifecycle_state_id, target_stage, measured_at DESC)`,
 ];
 
 export async function ensureProjectLifecycleSchema(): Promise<void> {

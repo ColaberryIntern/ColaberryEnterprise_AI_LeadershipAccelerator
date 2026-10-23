@@ -109,14 +109,19 @@ async function runAudience(browser, audience, jwt) {
     });
 
     await step(audience, 'the staff desks this audience should see', async () => {
+      // WP-5: the staff are chips at the head of Who's here; a press opens their card (a popover, Q7)
       await page.click('.cm-home g[data-building="commons"]');
-      await page.waitForSelector('[data-testid="cm-desk-reese"]', { timeout: 15_000 });
-      await page.keyboard.press('Escape'); // closes the card, not the map
+      await page.click('[data-testid="cm-who-staff-reese"]', { timeout: 15_000 });
+      await page.waitForSelector('[data-testid="cm-staff-card"] [data-testid="cm-desk-reese"]', { timeout: 15_000 });
+      await page.keyboard.press('Escape'); // closes the staff card
+      await page.keyboard.press('Escape'); // then the building card, not the map
       const hasGate = await page.locator('.cm-home g[data-building="gate"]').count() > 0;
       must(hasGate === (audience === 'explorer' || audience === 'staff'), `Main Gate shown=${hasGate}`);
       if (hasGate) {
         await page.click('.cm-home g[data-building="gate"]');
-        await page.waitForSelector('[data-testid="cm-desk-maya"]', { timeout: 15_000 });
+        await page.click('[data-testid="cm-who-staff-maya"]', { timeout: 15_000 });
+        await page.waitForSelector('[data-testid="cm-staff-card"] [data-testid="cm-desk-maya"]', { timeout: 15_000 });
+        await page.keyboard.press('Escape');
         await page.keyboard.press('Escape');
       }
     });
@@ -159,8 +164,12 @@ async function runAudience(browser, audience, jwt) {
       const r = await api('/api/portal/campus/look', jwt);
       must(r.status === 200 && Array.isArray(r.body?.catalog), `look ${r.status}`);
       await page.click('[data-testid="cm-stats-me"]');
-      await page.waitForSelector('[data-testid="cm-me"] .cm-look', { timeout: 15_000 });
+      // WP-7: the Me panel carries the locker tiles for learners, the earners note for everyone else, and the photo button
+      const learner = audience === 'member' || audience === 'explorer';
+      await page.waitForSelector(`[data-testid="cm-me"] [data-testid="${learner ? 'cm-locker' : 'cm-me-earners'}"]`, { timeout: 15_000 });
+      must(await page.locator('[data-testid="cm-me-photo"]').count() === 1, 'no photo button in the Me panel');
       await page.keyboard.press('Escape');
+      await page.waitForSelector('[data-testid="cm-me"]', { state: 'detached', timeout: 5_000 });
     });
 
     await step(audience, 'the list view lists the campus', async () => {

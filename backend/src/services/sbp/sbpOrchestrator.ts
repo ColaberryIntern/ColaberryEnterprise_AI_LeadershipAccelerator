@@ -746,6 +746,24 @@ export async function publishBuild(
 
   const published = await publishPlan(projectId, draft.version, opts.expectedSha);
 
+  // MEASURE READINESS, now that the plan is committed.
+  //
+  // AFTER the publish, not inside it: `publishPlan` runs in a transaction with the project's
+  // rows locked, and measuring in there would read uncommitted evidence while holding those
+  // locks. It is best-effort and returns a result rather than throwing, so a failed measurement
+  // cannot fail a publish that already succeeded - there is a test for exactly that.
+  //
+  // `story.write` is the act, because publishing a plan IS the pipeline having written the
+  // stories, and that is the permission `blueprint_approved -> planning` requires. For a project
+  // anywhere else the advance is refused and only the measurement is kept - which is the common
+  // case today, since every lifecycle row in production is still at `discovery`.
+  const { measureReadinessOnBuildEvent } = await import('../lifecycle/lifecycleReadinessHook');
+  await measureReadinessOnBuildEvent({
+    studentProjectId: projectId,
+    event: 'plan.published',
+    performedAct: 'story.write',
+  });
+
   // THE WINDOW BELONGS TO THE BUILD, NOT TO THIS VERSION.
   //
   // The schedule floors on when the plan existed, so a plan published after its

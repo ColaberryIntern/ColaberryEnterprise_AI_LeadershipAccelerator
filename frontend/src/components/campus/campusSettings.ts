@@ -16,6 +16,9 @@
  * frozen, so a learner who turned reduce motion on in their OS later never got it. An old stored
  * `true` reads as "on" (never silently turn motion back on for someone who may need it off); an old
  * `false` reads as "follow my device".
+ *
+ * SHARE (WP-7, decision Q14): "Show which building I'm in". On by default (the campus has always shown where you are); off, the
+ * presence poll tells the server to forget your building, and classmates see you only as online.
  */
 
 export type CampusNavMode = 'campus' | 'classic';
@@ -26,6 +29,7 @@ export interface CampusSettings {
   nav: CampusNavMode;
   workplaceNames: boolean;
   motion: MotionChoice;
+  shareBuilding: boolean;
 }
 
 /** What the campus reads: the stored choices plus the effective reduce-motion value. */
@@ -36,7 +40,7 @@ export interface CampusSettingsView extends CampusSettings {
 export const CAMPUS_SETTINGS_KEY = 'colaberry.campus.settings.v1';
 export const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)';
 
-export const DEFAULT_CAMPUS_SETTINGS: CampusSettings = { nav: 'campus', workplaceNames: false, motion: 'device' };
+export const DEFAULT_CAMPUS_SETTINGS: CampusSettings = { nav: 'campus', workplaceNames: false, motion: 'device', shareBuilding: true };
 
 function motionQuery(): MediaQueryList | null {
   try {
@@ -92,13 +96,14 @@ export function readCampusSettings(): CampusSettings {
     nav: p.nav === 'classic' || p.nav === 'campus' ? p.nav : base.nav,
     workplaceNames: typeof p.workplaceNames === 'boolean' ? p.workplaceNames : base.workplaceNames,
     motion: readMotion(p),
+    shareBuilding: typeof p.shareBuilding === 'boolean' ? p.shareBuilding : base.shareBuilding,
   };
 }
 
 /** Persist settings. Returns false when storage refused the write (the in-memory value still applies). */
 export function writeCampusSettings(s: CampusSettings): boolean {
   try {
-    window.localStorage.setItem(CAMPUS_SETTINGS_KEY, JSON.stringify({ nav: s.nav, workplaceNames: s.workplaceNames, motion: s.motion }));
+    window.localStorage.setItem(CAMPUS_SETTINGS_KEY, JSON.stringify({ nav: s.nav, workplaceNames: s.workplaceNames, motion: s.motion, shareBuilding: s.shareBuilding }));
     return true;
   } catch {
     return false;

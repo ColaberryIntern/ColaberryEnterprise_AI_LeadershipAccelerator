@@ -79,6 +79,67 @@ const SQL = `
      AND r.ingest_status = 'ingested'
    LIMIT 1`;
 
+/**
+ * The same chain, by recording id alone, for a STAFF reviewer.
+ *
+ * `canView` has always said staff see everything — they approve it and they
+ * answer for it — so there is no audience predicate to apply here and pretending
+ * otherwise would just be ceremony. What there IS, is a narrower entry point:
+ * this takes no enrollment and no project, so it cannot be reached from a
+ * learner-facing route by passing different arguments. The authority comes from
+ * `requireAdmin` on the route plus a ticket that only the admin queue mints.
+ *
+ * NOT COUNTED AS A VIEW. A staff member checking a demo before approving it is
+ * not an audience; counting them would inflate the number the learner sees.
+ */
+export async function resolveStaffRecording(recordingId: string): Promise<PlaybackResolution> {
+  if (!isUuid(recordingId)) return { ok: false, reason: 'not_found' };
+
+  const sequelize = await db();
+  const [rows] = await sequelize.query(
+    `SELECT r.id               AS recording_id,
+            rr.storage_key     AS storage_key,
+            rr.mime_type       AS mime_type,
+            r.duration_seconds AS duration_seconds,
+            asg.story_id       AS story_id,
+            asg.enrollment_id  AS owner_enrollment_id
+       FROM presentation_recordings  r
+       JOIN presentation_attempts    a   ON a.id   = r.attempt_id
+       JOIN presentation_assignments asg ON asg.id = a.assignment_id
+       LEFT JOIN room_resources      rr  ON rr.id  = r.resource_id
+      WHERE r.id = :recordingId
+        AND r.ingest_status = 'ingested'
+      LIMIT 1`,
+    { replacements: { recordingId } },
+  ) as [Array<Record<string, any>>, unknown];
+
+  const row = rows?.[0];
+  if (!row) return { ok: false, reason: 'not_found' };
+
+  const key = row.storage_key ? String(row.storage_key) : '';
+  if (!key) return { ok: false, reason: 'file_missing' };
+
+  const safeName = path.basename(key);
+  const full = path.join(ROOM_RECORDING_DIR, safeName);
+  if (!fs.existsSync(full)) return { ok: false, reason: 'file_missing' };
+
+  const stat = fs.statSync(full);
+  return {
+    ok: true,
+    recording: {
+      recordingId: String(row.recording_id),
+      filePath: full,
+      sizeBytes: stat.size,
+      mimeType: row.mime_type ? String(row.mime_type) : 'video/mp4',
+      downloadName: `${row.story_id || 'rehearsal'}-review${path.extname(safeName) || '.mp4'}`,
+      ownerEnrollmentId: row.owner_enrollment_id ? String(row.owner_enrollment_id) : null,
+      durationSeconds: row.duration_seconds === null || row.duration_seconds === undefined
+        ? null
+        : Number(row.duration_seconds),
+    },
+  };
+}
+
 export async function resolvePlayableRecording(
   enrollmentId: string,
   projectId: string,

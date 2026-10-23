@@ -28,12 +28,23 @@ export function LiveBack({ buildings, path }: { buildings: CampusBuilding[]; pat
   );
 }
 
-export function LiveFront({ buildings }: { buildings: CampusBuilding[] }): React.ReactElement {
+/** WP-6: what the marquee says and its state (the prototype's #marquee: a pill on a post over the live building, D:2073-2076). */
+export interface LiveMark { state: string; text: string }
+
+export function LiveFront({ buildings, mark }: { buildings: CampusBuilding[]; mark?: LiveMark | null }): React.ReactElement {
+  const first = buildings[0];
   return (
     <g aria-hidden="true">
       {buildings.flatMap((b) => [0, 1, 2].map((i) => (
         <circle key={`${b.id}-${i}`} className="cm-wave" cx={b.pos.x} cy={b.pos.y - b.pos.h / 2} r={22} style={{ animationDelay: `${i * 0.8}s` }} />
       )))}
+      {mark && first && (
+        <g className={`cm-marquee is-${mark.state}`} transform={`translate(${first.pos.x} ${first.pos.y - first.pos.h - 50})`} data-testid="cm-marquee">
+          <line x1={0} y1={14} x2={0} y2={22} stroke={art('marquee-post')} strokeWidth={2} />
+          <rect x={-66} y={-14} width={132} height={28} rx={14} stroke={art('white')} strokeWidth={1.5} />
+          <text x={0} y={4.5} textAnchor="middle" data-testid="cm-marquee-text">{mark.text}</text>
+        </g>
+      )}
     </g>
   );
 }

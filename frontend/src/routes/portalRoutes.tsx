@@ -127,7 +127,7 @@ const portalRoutes = (
         before there is anything to watch. The server decides the moment; the page renders
         not-yet-started honestly rather than 404ing. Companion experience is L4.7. */}
     <Route path="/portal/live/:sessionId" element={<LiveSessionPage />} />
-    <Route path="/portal/live/:sessionId/companion" element={<LiveSessionPage />} />
+    <Route path="/portal/live/:sessionId/companion" element={<LiveSessionPage companion />} />
     <Route element={<PortalProtectedRoute />}>
       {/* Design E student surfaces — each renders its own PortalShell chrome,
           so they sit OUTSIDE PortalLayout. */}

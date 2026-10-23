@@ -13,7 +13,7 @@ import {
 
 const occ = (over: Partial<ObservableOccurrence> = {}): ObservableOccurrence => ({
   id: 'occ-1', editorial_state: 'live', provider: 'cloudflare',
-  provider_session_id: 'input-abc', ...over,
+  provider_session_id: 'input-abc', version: 1, ...over,
 });
 
 function harness(opts: {
@@ -23,15 +23,20 @@ function harness(opts: {
   threshold?: number;
 } = {}) {
   const applyEvent = opts.applyEvent ?? jest.fn().mockResolvedValue(undefined);
+  // Injected and never satisfied here: these cases are about health reporting, and an
+  // auto-end reaching the real producer command would make them depend on a database.
+  const endOccurrence = jest.fn().mockResolvedValue({ ok: true });
   const deps = {
     loadObservable: async () => opts.occurrences ?? [occ()],
     observe: opts.observe ?? (async () => true),
     applyEvent: (id: string, health: any, atMs: number) => applyEvent(id, health, atMs),
+    endOccurrence,
     now: () => 1_000_000,
     threshold: opts.threshold,
+    autoEndWindowMs: 5 * 60 * 1000,
     log: () => undefined,
   };
-  return { deps, applyEvent };
+  return { deps, applyEvent, endOccurrence };
 }
 
 beforeEach(() => { __resetHealthMemory(); });

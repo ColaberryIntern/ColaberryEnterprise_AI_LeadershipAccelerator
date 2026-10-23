@@ -6,6 +6,13 @@ interface LeadAttributes {
   name: string;
   email: string;
   company?: string;
+  /**
+   * C8.3: the account this person belongs to, per the C6.1 verdict that the
+   * account-to-person join is the one genuine structural gap. NULLABLE AND OFTEN
+   * NULL ON PURPOSE: when the company text matches more than one organization the
+   * link is refused rather than guessed. See strategicAccountService.
+   */
+  organization_id?: string | null;
   role?: string;
   phone?: string;
   title?: string;
@@ -70,6 +77,7 @@ class Lead extends Model<LeadAttributes> implements LeadAttributes {
   declare name: string;
   declare email: string;
   declare company: string;
+  declare organization_id: string | null;
   declare role: string;
   declare phone: string;
   declare title: string;
@@ -146,6 +154,12 @@ Lead.init(
     },
     company: {
       type: DataTypes.STRING(255),
+      allowNull: true,
+    },
+    // C8.3 — added by ensureStrategicAccountSchema. Declared here so Sequelize
+    // reads and writes it; a column in Postgres but not in the model drops writes.
+    organization_id: {
+      type: DataTypes.UUID,
       allowNull: true,
     },
     role: {

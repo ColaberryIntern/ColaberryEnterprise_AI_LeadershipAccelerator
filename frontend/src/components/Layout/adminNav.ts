@@ -50,6 +50,10 @@ export const NAV_GROUPS: NavGroup[] = [
   // 'leads', so this changes nothing for owner/admin/revenue identities.
   { label: 'Revenue', section: 'revenue', links: [
     { path: '/admin/revenue', label: 'Revenue', icon: 'money-dollar-circle-line' },
+    // C8.2. Listed here rather than in UNLISTED_PATH_SECTIONS deliberately: a nav entry
+    // maps the frontend half of the section contract through the group's own 'revenue'
+    // key, so the two gates cannot drift the way an unlisted surface can.
+    { path: '/admin/commercialization', label: 'Commercialization', icon: 'line-chart-line' },
     { path: '/admin/refunds', label: 'Refunds', icon: 'refund-2-line' },
     { path: '/admin/leads', label: 'Leads', icon: 'group-line', section: 'leads' },
     { path: '/admin/pipeline', label: 'Pipeline', icon: 'filter-3-line', section: 'leads' },

@@ -12,6 +12,7 @@ import AvatarPin from './art/AvatarPin';
 import type { Me } from './art/AvatarPin';
 import type { PlanStop } from './campusPlan';
 import { LiveBack, LiveFront } from './art/LiveDressing';
+import type { LiveMark } from './art/LiveDressing';
 import StaffTokens from './art/StaffTokens';
 import type { MapDesk } from './art/StaffTokens';
 import { GroundPatterns, Ground, QuadAndPaths, District, Trees, GATE } from './art/grounds';
@@ -85,6 +86,8 @@ export interface CampusMapProps {
   moments?: MapMoments;
   /** WP-3: nobody else is on campus right now (the prototype's quiet hours look). */
   quiet?: boolean;
+  /** WP-6: Colaberry Live's state and the marquee's words over the live building (beams and waves only while live). */
+  liveMark?: LiveMark | null;
   /** WP-4: lifted like a walk's destination (a Right now row in the side panel is hovered). */
   hover?: BuildingId | null;
   /** C11b: the Explorer view's OPEN badges. */
@@ -231,7 +234,7 @@ export default function CampusWorldMap(p: CampusMapProps): React.ReactElement {
 
   const quiet = !compact && !!p.quiet && !live.length;
   const urgent = live.length ? null : p.moments?.urgent ?? null; // the prototype drops the urgent ring while live
-  const cls = ['cm-map', compact && 'is-compact', reduceMotion && 'is-reduced', camera && !compact && 'has-camera', live.length && 'is-evening', quiet && 'is-quiet'].filter(Boolean).join(' ');
+  const cls = ['cm-map', compact && 'is-compact', reduceMotion && 'is-reduced', camera && !compact && 'has-camera', live.length && 'is-evening', live.length && `ls-${p.liveMark?.state ?? 'live'}`, quiet && 'is-quiet'].filter(Boolean).join(' ');
   return (
     <svg ref={svgRef} className={cls} viewBox={`0 0 ${WORLD.w} ${WORLD.h}`} data-testid={compact ? undefined : 'cm-world'}
       {...(compact ? { 'aria-hidden': true, focusable: 'false' } : { role: 'group', 'aria-label': 'Campus map' })}>
@@ -248,7 +251,7 @@ export default function CampusWorldMap(p: CampusMapProps): React.ReactElement {
           moment={compact ? undefined : p.moments?.badges[b.id]} urgent={!compact && urgent === b.id} yours={p.yours?.[b.id]} down={!compact && !!p.presenceDown}
           onPeek={compact ? undefined : p.onPeek} onPick={pick} setRef={p.buildingRef} />
       ))}
-      {live.length > 0 && <LiveFront buildings={live} />}
+      {live.length > 0 && <LiveFront buildings={live} mark={compact ? null : p.liveMark} />}
       {!compact && p.desks && p.desks.length > 0 && <StaffTokens desks={p.desks} buildings={buildings} onPick={pick} />}
       {!compact && <AvatarPin pos={pos} moving={moving} running={running} reduceMotion={reduceMotion} ownGear={p.ownGear} me={p.me} />}
     </svg>

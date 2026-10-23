@@ -16,7 +16,7 @@ import {
 } from '../../services/factoryApi';
 import { band, subtle, fmtValue, daysLeft, closeLabel } from './govOppFormat';
 import { derivePotentialDisqualifiers } from './govGaps';
-import { parseDeadline, countdownTo, deadlineTone, formatCountdown } from './govDeadline';
+import { parseDeadline, countdownTo, deadlineTone, formatCountdown, dossierDeadlineIso } from './govDeadline';
 import { deriveNextStep } from './govNextStep';
 import { BidDecisionDashboard } from './govWorkspace/BidDecisionDashboard';
 import { ProposalSummaryPanel } from './govWorkspace/ProposalSummaryPanel';
@@ -33,6 +33,7 @@ import { StepFooter } from './govWorkspace/StepFooter';
 import { PursuitBrief, type BriefSection } from './govWorkspace/PursuitBrief';
 import { RightRail } from './govWorkspace/RightRail';
 import { SolicitationItemsView, tracksForCategory, dueStageForCategory, type SolView } from './govWorkspace/SolicitationItemsView';
+import { KeyDatesTimeline } from './govWorkspace/KeyDatesTimeline';
 import { ManualRequirementForm } from './govWorkspace/ManualRequirementForm';
 import { FitCapabilitiesPanel } from './govWorkspace/FitCapabilitiesPanel';
 import { DecidePanel } from './govWorkspace/DecidePanel';
@@ -187,17 +188,6 @@ function OpportunityDossier({ dossier }: { dossier: GovDossier }): React.ReactEl
     r.kind === 'separate_cost_file' ? 'Price/cost must be submitted as a separate (often sealed) file or volume, apart from the technical proposal.'
     : r.kind === 'redacted_copy' ? 'A redacted (public-records) copy of the proposal must be submitted alongside the full copy.'
     : `Your offer must remain valid${typeof r.days === 'number' ? ` for ${r.days} days` : ''} after the deadline — build the schedule so it does not lapse.`;
-  // A detected date line: the date, any literally-stated time, and (only if unambiguously stated) its timezone.
-  // A stated time with no zone is flagged "verify tz" — never assume local; a missed-by-zone deadline loses the bid.
-  const dateLine = (d: GovDossier['keyDates'][number]) => (
-    <>
-      {d.date && <strong className="me-1">{d.date}</strong>}
-      {d.time && <span className="me-1">{d.time}{d.timezone ? ` ${d.timezone}` : ''}</span>}
-      {d.time && !d.timezone && <span className="badge bg-warning-subtle text-warning-emphasis me-1" title="No time zone was stated — verify before relying on the hour">verify tz</span>}
-      <span className="small">{d.text}</span>
-      <div className="small text-secondary">· {d.sourceDocument}</div>
-    </>
-  );
   if (empty) {
     return (
       <div className="small text-secondary">
@@ -279,20 +269,7 @@ function OpportunityDossier({ dossier }: { dossier: GovDossier }): React.ReactEl
         {(meetings.length > 0 || keyDates.length > 0) && (
           <div className="col-md-6">
             <h3 className="h6 text-secondary text-uppercase small mb-2"><i className="ri-calendar-event-line me-1" aria-hidden="true" />Meetings &amp; key dates</h3>
-            <ul className="list-unstyled mb-0">
-              {meetings.map((m, i) => (
-                <li key={`mtg-${i}`} className="mb-2">
-                  <span className="badge bg-info-subtle text-info-emphasis me-1">Meeting</span>
-                  {dateLine(m)}
-                </li>
-              ))}
-              {keyDates.map((k, i) => (
-                <li key={`kd-${i}`} className="mb-2">
-                  <span className="badge bg-warning-subtle text-warning-emphasis me-1">Key date</span>
-                  {dateLine(k)}
-                </li>
-              ))}
-            </ul>
+            <KeyDatesTimeline meetings={meetings} keyDates={keyDates} />
           </div>
         )}
       </div>
@@ -1229,7 +1206,12 @@ export default function AdminGovQualificationPage(): React.ReactElement {
     void run(async () => {
       await recordGovQualificationDecision(canonical, { biddingEntity, expectedVersion: version, decision: 'needs_evidence', establishedRequirements: merged });
       setCandidates(null); setItems(null); setCandRows({}); setExtractOutcomes(null);
-    }, `Established ${mapped.length} requirement(s) from the solicitation.`);
+    }, `Established ${mapped.length} requirement(s) from the solicitation.`, () => {
+      // Confirm the package -> assess fit: once requirements are established AND the ZIP is attested (the
+      // same gate the StepFooter's "Confirm the package" button enforces), advance straight to Fit so the
+      // reviewer isn't left scrolling back to the footer. On the decoupled path the upload already attested.
+      if (ws?.zipAttestation && ws.zipAttestation.sha256) setStep('fit');
+    });
   };
 
   // Manual fallback for the Solicitation step: establish ONE hand-typed requirement when the extractor missed it
@@ -1527,12 +1509,9 @@ export default function AdminGovQualificationPage(): React.ReactElement {
                     onToggle={(cid, checked) => setCandRows((prev) => ({ ...prev, [cid]: { ...(prev[cid] ?? { checked: true, applicability: 'always', dueStage: 'submission' }), checked } }))}
                     onSetField={(cid, field, value) => setCandRows((prev) => ({ ...prev, [cid]: { ...(prev[cid] ?? { checked: true, applicability: 'always', dueStage: 'submission' }), [field]: value } }))}
                     view={solView} onView={setSolView}
+                    establish={record ? { selectedCount: selectedCandidateCount, busy, onEstablish: establishSelected } : undefined}
                   />
-                  {record ? (
-                    <button type="button" className="btn btn-primary btn-sm" disabled={busy || selectedCandidateCount === 0} onClick={establishSelected}>
-                      <i className="ri-check-double-line me-1" aria-hidden="true" />Establish selected ({selectedCandidateCount})
-                    </button>
-                  ) : (
+                  {!record && (
                     <div className="alert alert-info py-2 mb-0" role="status">
                       <i className="ri-information-line me-1" aria-hidden="true" />Open the qualification on the <strong>Decide</strong> step to confirm these into established requirements.
                     </div>
@@ -1650,7 +1629,7 @@ export default function AdminGovQualificationPage(): React.ReactElement {
               subtitle="The quick read — value, timing and the legacy scores — so you can pass in two minutes if it is clearly not for us.">
               <div className="row g-3">
                 <div className="col-6 col-lg-3"><StatCard label="Estimated value" value={fmtValue(oppDetail?.opportunity?.estimatedValue ?? null)} icon="money-dollar-circle-line" tone="neutral" hint="unverified" /></div>
-                <div className="col-6 col-lg-3"><StatCard label="Closes" value={closeLabel(oppDetail?.opportunity?.closeDate ?? ws.source?.deadline?.utc ?? null)} icon="calendar-event-line" tone="neutral" hint={daysLeft(oppDetail?.opportunity?.closeDate ?? ws.source?.deadline?.utc ?? null) !== null ? `${daysLeft(oppDetail?.opportunity?.closeDate ?? ws.source?.deadline?.utc ?? null)} days` : undefined} /></div>
+                <div className="col-6 col-lg-3"><StatCard label="Closes" value={closeLabel(oppDetail?.opportunity?.closeDate ?? ws.source?.deadline?.utc ?? dossierDeadlineIso(ws.dossier?.keyDates ?? null))} icon="calendar-event-line" tone="neutral" hint={daysLeft(oppDetail?.opportunity?.closeDate ?? ws.source?.deadline?.utc ?? dossierDeadlineIso(ws.dossier?.keyDates ?? null)) !== null ? `${daysLeft(oppDetail?.opportunity?.closeDate ?? ws.source?.deadline?.utc ?? dossierDeadlineIso(ws.dossier?.keyDates ?? null))} days` : undefined} /></div>
                 <div className="col-6 col-lg-3"><StatCard label="Legacy priority" value={oppDetail?.opportunity?.priorityScore ?? '—'} icon="bar-chart-box-line" tone="neutral" hint="advisory" /></div>
                 <div className="col-6 col-lg-3"><StatCard label="Legacy fit" value={oppDetail?.opportunity?.fitScore ?? '—'} icon="scales-3-line" tone="neutral" hint="advisory" /></div>
               </div>
@@ -1796,7 +1775,7 @@ export default function AdminGovQualificationPage(): React.ReactElement {
           {/* P5: the countdown band — are we going to make it? Deterministic on-time probability from the deadline,
               remaining build work, and items waiting on a human answer (see govCountdown). */}
           <CountdownBand
-            deadline={oppDetail?.opportunity?.closeDate ?? ws.source?.deadline?.utc ?? null}
+            deadline={oppDetail?.opportunity?.closeDate ?? ws.source?.deadline?.utc ?? dossierDeadlineIso(ws.dossier?.keyDates ?? null)}
             remainingStoryCount={ws.build ? (ws.build.stories ?? []).length : null}
             humanBlockedCount={(ws.responseSlots ?? []).filter((s) => (s.gaps ?? []).some((g) => g.resolution === 'open' || g.resolution === 'filler')).length}
             submitTotal={(ws.responseSlots ?? []).length}
@@ -1815,11 +1794,11 @@ export default function AdminGovQualificationPage(): React.ReactElement {
           <SectionCard title="Spec &amp; MVP schedule (pre-submission)" icon="calendar-schedule-line"
             subtitle="Back-planned from the submission deadline: can we build a demo-able MVP before the bid is due? Deterministic and working-day aware. This is distinct from the post-award build timeline below.">
             <MvpScheduleBanner
-              deadline={oppDetail?.opportunity?.closeDate ?? ws.source?.deadline?.utc ?? null}
+              deadline={oppDetail?.opportunity?.closeDate ?? ws.source?.deadline?.utc ?? dossierDeadlineIso(ws.dossier?.keyDates ?? null)}
               mvpStoryCount={ws.build ? (ws.build.stories ?? []).length : null}
             />
             <PreSubmissionGantt
-              deadline={oppDetail?.opportunity?.closeDate ?? ws.source?.deadline?.utc ?? null}
+              deadline={oppDetail?.opportunity?.closeDate ?? ws.source?.deadline?.utc ?? dossierDeadlineIso(ws.dossier?.keyDates ?? null)}
               mvpStoryCount={ws.build ? (ws.build.stories ?? []).length : null}
             />
           </SectionCard>
@@ -1839,7 +1818,7 @@ export default function AdminGovQualificationPage(): React.ReactElement {
               <GovBuildPlanAIPanel canonical={canonical}
                 requirements={(established ?? []).map((r) => ({ id: r.id, text: r.text }))}
                 title={oppDetail?.opportunity?.title ?? null} buyer={oppDetail?.opportunity?.agency ?? null}
-                deadline={oppDetail?.opportunity?.closeDate ?? ws.source?.deadline?.utc ?? null}
+                deadline={oppDetail?.opportunity?.closeDate ?? ws.source?.deadline?.utc ?? dossierDeadlineIso(ws.dossier?.keyDates ?? null)}
                 onLoaded={setAiBuildSummary} />
               <details className="mt-3 pt-2 border-top">
                 <summary className="small fw-semibold text-secondary" style={{ cursor: 'pointer' }}>
@@ -1874,7 +1853,7 @@ export default function AdminGovQualificationPage(): React.ReactElement {
                 assignableBuilders={ws.build?.assignableBuilders ?? []}
                 requirements={(established ?? []).map((r) => ({ id: r.id, text: r.text }))}
                 title={oppDetail?.opportunity?.title ?? null} buyer={oppDetail?.opportunity?.agency ?? null}
-                deadline={oppDetail?.opportunity?.closeDate ?? ws.source?.deadline?.utc ?? null}
+                deadline={oppDetail?.opportunity?.closeDate ?? ws.source?.deadline?.utc ?? dossierDeadlineIso(ws.dossier?.keyDates ?? null)}
                 onCreated={(r) => {
                   setMaterialized({ projectId: r.projectId });
                   // One click: fold the (separate, audited) build authorization into create for an authorized
@@ -2012,7 +1991,7 @@ export default function AdminGovQualificationPage(): React.ReactElement {
                   if (state !== 'future') {
                     if (s.key === 'snapshot') {
                       if (oppDetail?.opportunity?.title) facts.push(oppDetail.opportunity.title);
-                      const dl = daysLeft(oppDetail?.opportunity?.closeDate ?? ws.source?.deadline?.utc ?? null);
+                      const dl = daysLeft(oppDetail?.opportunity?.closeDate ?? ws.source?.deadline?.utc ?? dossierDeadlineIso(ws.dossier?.keyDates ?? null));
                       if (dl !== null) facts.push(`${dl} days to close`);
                     } else if (s.key === 'solicitation') {
                       facts.push(`${ws.evaluation?.evals.length ?? 0} requirements established`);
@@ -2038,7 +2017,7 @@ export default function AdminGovQualificationPage(): React.ReactElement {
               <RightRail
                 deadline={
                   <DeadlineCard
-                    value={isDecoupled ? (oppDetail?.opportunity?.closeDate ?? null) : (ws.source?.deadline.utc ?? null)}
+                    value={isDecoupled ? (oppDetail?.opportunity?.closeDate ?? dossierDeadlineIso(ws.dossier?.keyDates ?? null)) : (ws.source?.deadline.utc ?? null)}
                     confidence={isDecoupled ? null : (ws.source?.deadline.utcConfidence ?? null)}
                     originalText={isDecoupled ? null : (ws.source?.deadline.originalText ?? null)}
                     loading={isDecoupled && oppDetail === null}

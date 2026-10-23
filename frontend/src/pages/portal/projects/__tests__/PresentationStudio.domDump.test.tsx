@@ -22,6 +22,16 @@ import type { ProjectTask } from '../projectsStore';
  * mockups would also be a lie, because nothing here is drawn by hand.
  *
  * Skipped unless PS_DOM_DUMP=1 so it never costs anything in CI.
+ *
+ * ONE TRAP, AND IT HAS ALREADY CAUGHT SOMEONE. jsdom's CSSOM silently DROPS any
+ * inline style whose value contains `var(...)` or a `conic-gradient`. React sets
+ * these through `element.style`, so they never reach the dumped HTML: a 2026-10-23
+ * capture showed the empty slots with no dashed border and the progress ring with
+ * no arc, and both were present in the source the whole time. Read structure,
+ * copy, order and layout out of these images. Do NOT read colour, borders or
+ * gradients out of them — anything token-driven and inline is simply absent.
+ * Styling that lives in `presentationStudio.css` is injected by the capture
+ * script and DOES render, which is one more reason to put it there.
  */
 
 const DUMP = process.env.PS_DOM_DUMP === '1';
@@ -134,6 +144,134 @@ const PROMPT = {
   missing: ['owner', 'style'],
 };
 
+/**
+ * The seven types, in the order the Learn list shows them, with ONE recorded.
+ *
+ * One, rather than none or seven, because the empty and full grids are the easy
+ * states — the interesting screen is the mixed one, where a filled slot sits
+ * beside six voids and the two have to read as the same grid.
+ *
+ * The poster is a flat slate rectangle, not a real frame. jsdom cannot reach the
+ * signed, audience-checked thumbnail route, and dropping a face in here would
+ * make the capture look like evidence for the thumbnail pipeline. That pipeline
+ * was verified separately, against production.
+ */
+const SLATE_POSTER = `data:image/svg+xml;utf8,${encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180">'
+  + '<rect width="320" height="180" fill="#1f2a37"/>'
+  + '<text x="160" y="96" font-family="system-ui" font-size="13" fill="#8fa0b4"'
+  + ' text-anchor="middle">poster placeholder</text></svg>',
+)}`;
+
+interface TypeFixture {
+  id: string;
+  label: string;
+  prominent: boolean;
+  outcome: string;
+  speaking_seconds: number;
+  qa_seconds: number;
+}
+
+/** The seven real templates, copied from backend/src/services/presentation/templates*.ts. */
+const TYPES: TypeFixture[] = [
+  {
+    id: 'project_introduction',
+    label: 'Project introduction',
+    prominent: true,
+    outcome: 'Explain what your project is for, and why it matters, to someone who has never heard of it.',
+    speaking_seconds: 90,
+    qa_seconds: 0,
+  },
+  {
+    id: 'ai_visual_presentation',
+    label: 'AI visual presentation',
+    prominent: true,
+    outcome: 'Make a visual argument that someone could follow with the sound off.',
+    speaking_seconds: 300,
+    qa_seconds: 120,
+  },
+  {
+    id: 'working_system_demo',
+    label: 'Working-system demo',
+    prominent: true,
+    outcome: 'Demonstrate one complete outcome end to end, including what happens when it fails.',
+    speaking_seconds: 420,
+    qa_seconds: 180,
+  },
+  {
+    id: 'final_showcase',
+    label: 'Final showcase',
+    prominent: true,
+    outcome: 'Combine the story, live proof, and your own judgement about the limits of what you built.',
+    speaking_seconds: 480,
+    qa_seconds: 300,
+  },
+  {
+    id: 'architecture_review',
+    label: 'Architecture review',
+    prominent: false,
+    outcome: 'Explain the choices you made, the ones you rejected, and what would make you change your mind.',
+    speaking_seconds: 480,
+    qa_seconds: 300,
+  },
+  {
+    id: 'stakeholder_update',
+    label: 'Stakeholder update',
+    prominent: false,
+    outcome: 'Tell a busy decision-maker what moved, what is stuck, and what you need from them.',
+    speaking_seconds: 180,
+    qa_seconds: 120,
+  },
+  {
+    id: 'client_handoff',
+    label: 'Client handoff',
+    prominent: false,
+    outcome: 'Teach someone else to run and own what you built, including when it misbehaves.',
+    speaking_seconds: 420,
+    qa_seconds: 300,
+  },
+];
+
+const TEMPLATE_SUMMARIES = TYPES;
+
+/** Same shape the backend's portfolio service builds its `timing` label in. */
+const timingLabel = (speaking: number, qa: number) => {
+  const main = speaking % 60 === 0 ? `${speaking / 60} min` : `${(speaking / 60).toFixed(1)} min`;
+  return qa > 0 ? `${main} + ${Math.round(qa / 60)} min Q&A` : main;
+};
+
+const RECORDED_TYPE = 'project_introduction';
+
+const PORTFOLIO = {
+  slots: TYPES.map(({ id: typeId, label: typeLabel, outcome: description, prominent, speaking_seconds: sp, qa_seconds: qa }) => {
+    const recorded = typeId === RECORDED_TYPE;
+    const timing = timingLabel(sp, qa);
+    return {
+      typeId,
+      typeLabel,
+      timing,
+      description,
+      prominent,
+      recorded,
+      recordingId: recorded ? 'rec-1' : null,
+      takeCount: recorded ? 2 : 0,
+      durationSeconds: recorded ? 94 : null,
+      recordedAt: recorded ? '2026-10-20T15:04:00.000Z' : null,
+      playbackUrl: recorded ? 'about:blank' : null,
+      thumbnailUrl: recorded ? SLATE_POSTER : null,
+      downloadUrl: recorded ? 'about:blank' : null,
+      shareState: recorded ? 'published' : 'private',
+      showcaseId: recorded ? 'show-1' : null,
+      viewCount: recorded ? 6 : 0,
+      viewLabel: recorded ? '6 people have watched it' : 'No views yet',
+    };
+  }),
+  recordedTypeCount: 1,
+  totalTypes: 7,
+  nextTypeId: 'ai_visual_presentation',
+  reflectionNotes: null,
+};
+
 let container: HTMLDivElement;
 let root: Root | null = null;
 
@@ -142,7 +280,11 @@ beforeEach(() => {
   document.body.appendChild(container);
   portalApi.get.mockImplementation((url: string) => {
     if (url.includes('presentation-assignment')) return Promise.resolve({ data: ASSIGNMENT });
-    if (url.includes('presentation-templates')) return Promise.resolve({ data: LESSON });
+    // The LIST and one LESSON share a prefix. Matching the prefix alone handed
+    // the type chooser a single lesson object and it died on `.filter`.
+    if (url.endsWith('/presentation-templates')) return Promise.resolve({ data: TEMPLATE_SUMMARIES });
+    if (url.includes('presentation-templates/')) return Promise.resolve({ data: LESSON });
+    if (url.includes('portfolio')) return Promise.resolve({ data: PORTFOLIO });
     return Promise.resolve({ data: PROMPT });
   });
   portalApi.patch.mockResolvedValue({ data: ASSIGNMENT });
@@ -152,7 +294,7 @@ afterEach(() => { act(() => root?.unmount()); root = null; container.remove(); }
 const flush = async () => { await act(async () => { await Promise.resolve(); await Promise.resolve(); }); };
 
 (DUMP ? describe : describe.skip)('capture: Studio DOM for screenshotting', () => {
-  it.each([['learn'], ['prepare'], ['build']])('dumps the %s stage', async (stage) => {
+  it.each([['learn'], ['prepare'], ['build'], ['present']])('dumps the %s stage', async (stage) => {
     const task = {
       id: 't1', storyId: 'PREP-3', title: 'Build the slides', state: 'todo', due: 'today',
     } as unknown as ProjectTask;

@@ -15,6 +15,7 @@ const AdminPipelinePage = lazy(() => import('../pages/admin/AdminPipelinePage'))
 
 const AdminImportPage = lazy(() => import('../pages/admin/AdminImportPage'));
 const AdminRevenueDashboardPage = lazy(() => import('../pages/admin/AdminRevenueDashboardPage'));
+const AdminCommercializationPage = lazy(() => import('../pages/admin/AdminCommercializationPage'));
 const AdminRefundsPage = lazy(() => import('../pages/admin/AdminRefundsPage'));
 const AdminSettingsPage = lazy(() => import('../pages/admin/AdminSettingsPage'));
 const AdminCapeSettingsPage = lazy(() => import('../pages/admin/AdminCapeSettingsPage'));
@@ -200,6 +201,7 @@ const adminRoutes = (
         <Route path="/admin/sequences" element={<Navigate to="/admin/campaigns" replace />} />
         <Route path="/admin/import" element={<AdminImportPage />} />
         <Route path="/admin/revenue" element={<AdminRevenueDashboardPage />} />
+        <Route path="/admin/commercialization" element={<AdminCommercializationPage />} />
         <Route path="/admin/refunds" element={<AdminRefundsPage />} />
         <Route path="/admin/settings" element={<AdminSettingsPage />} />
         <Route path="/admin/cape-settings" element={<AdminCapeSettingsPage />} />

@@ -59,7 +59,7 @@ describe('useCampusPresencePoll', () => {
 
   it('active: records the building for this page, then reads presence, every 30 s', async () => {
     await mount(true);
-    expect(mockPost).toHaveBeenCalledWith('library');
+    expect(mockPost).toHaveBeenCalledWith('library', true);
     expect(mockFetch).toHaveBeenCalledTimes(1);
     expect(mockPost.mock.invocationCallOrder[0]).toBeLessThan(mockFetch.mock.invocationCallOrder[0]);
     expect(seen.presence).toEqual({ library: { count: 2, people: [{ anonymous: true }] } });

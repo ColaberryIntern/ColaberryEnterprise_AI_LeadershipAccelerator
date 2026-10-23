@@ -10,25 +10,26 @@ import AdminLink from '../AdminLink';
 import { useIsMgmt } from '../campusMgmt';
 import { roomLabel } from '../campusMap';
 import { deskRole } from './conciergeCopy';
+import { openStaffCard } from '../staffCard';
 
 /**
- * The concierge's cards (C11b), each the prototype's (.helpdesk, .plan-card, .pass, .livecard) fed by real campus data. A card
+ * The concierge's cards (C11b), each the prototype's (.helpdesk, .plan-card, .pass) fed by real campus data (WP-6: the live card is LiveCard.tsx). A card
  * with nothing true to say is not drawn.
  */
 type Walk = (id: BuildingId) => void;
 const initialsOf = (name: string) => name.split(/\s+/).filter(Boolean).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
 
 /** HELP DESK: the AI staff on duty for this viewer, each with the prototype's role (Mentor / Curriculum / Admissions); a press
- *  walks to their desk (the building card shows it; the staff popover is decision Q7, WP-5). */
-export function HelpDesk({ desks, workplace = false, onWalk }: { desks: StaffDesk[]; workplace?: boolean; onWalk: Walk }): React.ReactElement | null {
+ *  opens their card where you pressed (decision Q7, WP-5), with "Visit the desk" to walk there. */
+export function HelpDesk({ desks, workplace = false }: { desks: StaffDesk[]; workplace?: boolean }): React.ReactElement | null {
   const on = desks.filter((d) => d.on_duty);
   if (!on.length) return null;
   return (
     <div className="cm-helpdesk" data-testid="cm-cc-helpdesk">
       <span>Help desk</span>
       {on.map((d) => (
-        <button key={d.id} type="button" className="cm-sbtn" onClick={() => onWalk(d.building as BuildingId)} data-testid={`cm-cc-desk-${d.id}`}
-          aria-label={`${d.name}, ${d.title}, walk to their desk`}>
+        <button key={d.id} type="button" className="cm-sbtn" onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); openStaffCard(d.id, { x: r.left + r.width / 2, y: r.bottom }); }}
+          data-testid={`cm-cc-desk-${d.id}`} aria-label={`${d.name}, ${d.title}, open their card`} aria-haspopup="dialog">
           <span className="cm-sav" aria-hidden="true">{initialsOf(d.name)}</span>{d.name} <small>{deskRole(d, workplace)}</small>
         </button>
       ))}
@@ -85,17 +86,6 @@ export function ExplorerPass({ buildings, accessOf, workplaceNames, path }: {
         <div><b>Enrolling opens</b>{list(path.opens, 'is-locked')}</div>
       </div>
       <Link to={path.cta.to} className="cm-btn-red" style={{ marginTop: 12 }} data-testid="cm-cc-enroll">{path.cta.label}</Link>
-    </div>
-  );
-}
-
-/** COLABERRY LIVE: shown only while a broadcast is on air; Walk in walks to its building. */
-export function LiveCard({ title, buildingId, onWalk }: { title: string; buildingId: BuildingId | null; onWalk: Walk }): React.ReactElement {
-  return (
-    <div className="cm-cc-livecard" data-testid="cm-cc-live">
-      <div className="cm-cc-livecard-brand"><span aria-hidden="true">{'● '}</span>On air now</div>
-      <div className="cm-cc-livecard-title">{title}</div>
-      {buildingId && <div className="cm-cc-livecard-row"><button type="button" className="cm-btn-red" onClick={() => onWalk(buildingId)} data-testid="cm-cc-live-walk">Walk in</button></div>}
     </div>
   );
 }

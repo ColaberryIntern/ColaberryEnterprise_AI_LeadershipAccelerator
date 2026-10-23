@@ -71,35 +71,6 @@ export function furniturePieces(all: Spot[]): { key: string; t: number; sp: Spot
   return out;
 }
 
-export interface FigurePerson { key: string; name: string; initials: string; photo: string | null; level?: string | null; you?: boolean; tone: string }
-
-/**
- * A person in the room (the prototype's personSVG): body, legs when standing, a head that is THEIR photo or their initials (never
- * a generated face), and a name tag ("You" in red for you). Others show their first name; a level ring color comes from the caller.
- */
-export function Figure({ x, y, s, p, pose, onPick, testId }: { x: number; y: number; s: number; p: FigurePerson; pose: 'sit' | 'stand'; onPick?: () => void; testId?: string }): React.ReactElement {
-  const k = s * 1.25;
-  const hy = pose === 'sit' ? y - 52 * k : y - 66 * k;
-  const clip = `cm-fig-${p.key}`;
-  const first = p.you ? 'You' : p.name.split(/\s+/)[0];
-  return (
-    <g className={`cm-fig${p.you ? ' is-you' : ''}`} data-testid={testId ?? (p.you ? 'cm-inside-you' : 'cm-inside-person')}
-      {...(onPick ? { role: 'button', tabIndex: 0, 'aria-label': `${p.name}, open their card`, onClick: onPick, onKeyDown: (e: React.KeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onPick(); } } } : { 'aria-hidden': true })}>
-      <ellipse cx={x} cy={y + 1} rx={15 * k} ry={4 * k} fill={art('in-fig-shadow')} />
-      {pose === 'sit'
-        ? <rect x={x - 13 * k} y={y - 42 * k} width={26 * k} height={30 * k} rx={11 * k} fill={p.tone} />
-        : <><rect x={x - 8 * k} y={y - 22 * k} width={6 * k} height={22 * k} rx={3 * k} fill={art('in-legs')} /><rect x={x + 2 * k} y={y - 22 * k} width={6 * k} height={22 * k} rx={3 * k} fill={art('in-legs')} />
-          <rect x={x - 13 * k} y={y - 56 * k} width={26 * k} height={38 * k} rx={11 * k} fill={p.tone} /></>}
-      {p.photo
-        ? <><clipPath id={clip}><circle cx={x} cy={hy} r={12 * k} /></clipPath>
-            <image href={p.photo} x={x - 12 * k} y={hy - 12 * k} width={24 * k} height={24 * k} preserveAspectRatio="xMidYMid slice" clipPath={`url(#${clip})`} />
-            <circle cx={x} cy={hy} r={12 * k} fill="none" stroke={art('white')} strokeWidth={2 * k} /></>
-        : <><circle cx={x} cy={hy} r={12 * k} fill={p.tone} stroke={art('white')} strokeWidth={2 * k} />
-            <text x={x} y={hy + 3.4 * k} textAnchor="middle" fontSize={9.5 * k} fontWeight={800} fill={art('white')} fontFamily="'DM Sans',system-ui,sans-serif">{p.initials}</text></>}
-      <g className="nm">
-        <rect x={x - 34 * k} y={hy - 30 * k} width={68 * k} height={15 * k} rx={7 * k} fill={art(p.you ? 'in-you' : 'in-name-bg')} />
-        <text x={x} y={hy - 19.5 * k} textAnchor="middle" fontSize={8.5 * k} fontWeight={700} fill={art('white')} fontFamily="'DM Sans',system-ui,sans-serif">{first}</text>
-      </g>
-    </g>
-  );
-}
+/** WP-5: the people moved to Figure.tsx (gear, level coin, rings, lanyards); re-exported for the room. */
+export { Figure } from './Figure';
+export type { FigurePerson } from './Figure';

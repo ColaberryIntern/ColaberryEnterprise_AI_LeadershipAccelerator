@@ -29,7 +29,7 @@ import { CampusProvider, useCampus } from '../CampusContext';
 // eslint-disable-next-line import/first
 import CampusMePanel from '../home/CampusMePanel';
 // eslint-disable-next-line import/first
-import { GATE_SEEN_KEY } from '../home/CampusGate';
+import { ENTRANCE_KEY } from '../home/campusEntrance';
 // eslint-disable-next-line import/first
 import { DmToastView } from '../CampusDmToast';
 // eslint-disable-next-line import/first
@@ -64,18 +64,18 @@ afterEach(() => { act(() => root.unmount()); container.remove(); window.localSto
 describe('the Me panel', () => {
   it('shows who you are and your level, and changes only real settings', async () => {
     const closed: number[] = [];
-    await mount(<CampusMePanel audience="member" fullName="Ali Muwwakkil" initials="AM" onClose={() => closed.push(1)} />);
+    await mount(<CampusMePanel audience="member" fullName="Ali Muwwakkil" initials="AM" photo={null} onClose={() => closed.push(1)} />);
     expect(q('[data-testid="cm-me"]')!.textContent).toContain('Ali Muwwakkil');
-    expect(q('[data-testid="cm-me-level"]')!.textContent).toBe('AI Enabled II · 1,252 pts');
-    expect(q('[data-testid="cm-me"]')!.textContent).not.toMatch(/which building I/i);
+    expect(q('[data-testid="cm-me-level"]')!.textContent).toContain('AI Enabled II · 1,252 pts');
+    expect(q('[data-testid="cm-me"]')!.textContent).toMatch(/which building I/i); // WP-7 (Q14): a real switch now
     // no locked item in this catalog: no progress line (nothing invented)
     expect(q('[data-testid="cm-me-next"]')).toBeNull();
     act(() => { (q('[data-testid="cm-me-classic"]') as HTMLButtonElement).click(); });
     expect(campus.settings.nav).toBe('classic');
-    act(() => { const s = q('[data-testid="cm-me-entrance"]') as HTMLSelectElement; s.value = 'skip'; s.dispatchEvent(new Event('change', { bubbles: true })); });
-    expect(window.localStorage.getItem(GATE_SEEN_KEY)).toBe('always');
-    act(() => { const s = q('[data-testid="cm-me-entrance"]') as HTMLSelectElement; s.value = 'daily'; s.dispatchEvent(new Event('change', { bubbles: true })); });
-    expect(window.localStorage.getItem(GATE_SEEN_KEY)).toBeNull();
+    act(() => { const s = q('[data-testid="cm-me-entrance"]') as HTMLSelectElement; s.value = 'never'; s.dispatchEvent(new Event('change', { bubbles: true })); });
+    expect(window.localStorage.getItem(ENTRANCE_KEY)).toBe('never'); // WP-7: daily / every time / never
+    act(() => { const s = q('[data-testid="cm-me-entrance"]') as HTMLSelectElement; s.value = 'always'; s.dispatchEvent(new Event('change', { bubbles: true })); });
+    expect(window.localStorage.getItem(ENTRANCE_KEY)).toBe('always');
     act(() => { q('[data-testid="cm-me"]')!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); });
     expect(closed).toEqual([1]);
   });

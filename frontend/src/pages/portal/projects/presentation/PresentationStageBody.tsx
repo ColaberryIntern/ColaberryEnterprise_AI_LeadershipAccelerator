@@ -4,6 +4,8 @@ import PromptPanel from './PromptPanel';
 import PreparePanel from './PreparePanel';
 import DeckPanel from './DeckPanel';
 import PracticePanel from './PracticePanel';
+import PresentAndSharePanel from './PresentAndSharePanel';
+import type { Portfolio } from './presentationApi';
 import LearnStage from './LearnStage';
 import { STAGE_META, type PresentationStage } from './presentationStages';
 
@@ -39,6 +41,18 @@ export interface PresentationStageBodyProps {
   stage: PresentationStage;
   /** The stage this task opens on — where the evidence panel is mounted. */
   evidenceStage: PresentationStage;
+  /** Jump to Learn with a type pre-selected, from an empty portfolio slot. */
+  onStartType: (typeId: string) => void;
+  /** The way back out of that jump — the return leg of `onStartType`. */
+  onBackToPortfolio: () => void;
+  /** A type the learner asked to start; Learn pre-selects it. */
+  pendingType?: string | null;
+  /**
+   * Owned by the Studio because the sidebar renders it too — fetched in both
+   * places the count could disagree with the grid.
+   */
+  portfolio: Portfolio | null;
+  onPortfolioChanged: () => void | Promise<void>;
   isDemoDay: boolean;
   task: any;
   projectId: string;
@@ -48,8 +62,11 @@ export interface PresentationStageBodyProps {
 }
 
 export default function PresentationStageBody(props: PresentationStageBodyProps) {
-  const { stage, evidenceStage, isDemoDay, task, projectId, taskId, points, demo } = props;
+  const { stage, evidenceStage, isDemoDay, task, projectId, taskId, points, demo, onStartType, onBackToPortfolio, pendingType, portfolio, onPortfolioChanged } = props;
   const onEvidenceStage = stage === evidenceStage;
+  // The chooser marks what is already in the portfolio. Derived from the same
+  // object the grid draws from, so the tick and the slot cannot disagree.
+  const recordedTypeIds = (portfolio?.slots || []).filter((s) => s.recorded).map((s) => s.typeId);
 
   return (
     <>
@@ -71,7 +88,14 @@ export default function PresentationStageBody(props: PresentationStageBodyProps)
       )}
 
       {stage === 'learn' && (
-        <LearnStage projectId={projectId} storyId={taskId} demo={demo} />
+        <LearnStage
+          pendingType={pendingType}
+          projectId={projectId}
+          storyId={taskId}
+          demo={demo}
+          recordedTypeIds={recordedTypeIds}
+          onBackToPortfolio={onBackToPortfolio}
+        />
       )}
 
       {/* Prepare is live on every task, not only the one that hands in here: the
@@ -106,17 +130,17 @@ export default function PresentationStageBody(props: PresentationStageBodyProps)
         <PracticePanel projectId={projectId} storyId={taskId} demo={demo} />
       )}
 
-      {stage === 'present' && !isDemoDay && (
-        <Pending
-          what="Joining your live slot from this page is not wired up yet."
-          when="Session launch arrives in the next phase."
-        />
-      )}
-
-      {stage === 'reflect' && !onEvidenceStage && (
-        <Pending
-          what="Choosing a final take and sharing it is not here yet."
-          when="Reviewed community sharing arrives after recording is attached."
+      {/* PRESENT & SHARE replaces two placeholders that each said "not built
+          yet" and read and wrote nothing. The portfolio and the rehearsal notes
+          both live here now. */}
+      {stage === 'present' && (
+        <PresentAndSharePanel
+          projectId={projectId}
+          storyId={taskId}
+          demo={demo}
+          onStartType={onStartType}
+          portfolio={portfolio}
+          onPortfolioChanged={onPortfolioChanged}
         />
       )}
     </>

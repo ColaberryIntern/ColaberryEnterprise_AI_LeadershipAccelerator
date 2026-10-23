@@ -12,7 +12,7 @@
 jest.spyOn(console, 'log').mockImplementation(() => {});
 jest.spyOn(console, 'error').mockImplementation(() => {});
 
-jest.mock('../../config/env', () => ({ env: {} }));
+jest.mock('../../config/env', () => require('../testSupport/configMocks').envModuleMock());
 jest.mock('../../models', () => ({
   __esModule: true,
   Cohort: { findOne: jest.fn(), create: jest.fn(), increment: jest.fn(), findByPk: jest.fn() },

@@ -15,7 +15,7 @@ import GovBuildStoryAssignment, { type GovBuildStoryAssignmentAttributes } from 
 import DeliveryProjectMember from '../../models/DeliveryProjectMember';
 import PlatformIdentity from '../../models/PlatformIdentity';
 import { buildDeliveryContext, hasDeliveryPermission } from '../../modules/delivery/deliveryAuthorization';
-import { rolesHaveDeliveryPermission, isKnownDeliveryRole } from '../../modules/delivery/deliveryRoles';
+import { rolesHaveDeliveryPermission, isKnownDeliveryRole, DELIVERY_ROLES } from '../../modules/delivery/deliveryRoles';
 
 export interface AssignmentView {
   id: string;
@@ -57,6 +57,42 @@ function toView(row: GovBuildStoryAssignmentAttributes): AssignmentView {
 }
 
 /**
+ * PROVISION-ON-ASSIGN (operator-gated): the admin's deliberate assignment of a build story IS their act of
+ * authorizing this person to build on this project. So, when the assignee has NO delivery membership here yet,
+ * grant them the least-privilege builder role — `associate_builder`, which confers `story.execute` and nothing
+ * architectural or review-bearing. This is what lets a freshly materialized gov intern receive build work: the
+ * gov approve/materialize flow creates their monitored project but never a delivery membership, so without this
+ * the engine gate below would always refuse them.
+ *
+ * SEPARATION OF DUTIES, PRESERVED: provision ONLY when there is no membership row at all for (project, identity).
+ * An existing membership — active or revoked, any role — is left untouched, so a client or reviewer is never
+ * silently promoted to builder, and a deliberately revoked builder is never silently reinstated by assigning them
+ * a story. In those cases the engine gate below still decides and still fails closed. Idempotent: if the member
+ * already exists it is a no-op, and a concurrent-create race is swallowed (the gate reads whichever row won).
+ */
+async function ensureAssigneeCanBuild(
+  deliveryProjectId: string,
+  assigneeIdentityId: string,
+  grantedByIdentityId: string | null,
+): Promise<void> {
+  const existing = await DeliveryProjectMember.findOne({
+    where: { delivery_project_id: deliveryProjectId, platform_identity_id: assigneeIdentityId },
+  });
+  if (existing) return; // never alter an existing membership — the engine gate decides
+  try {
+    await DeliveryProjectMember.create({
+      delivery_project_id: deliveryProjectId,
+      platform_identity_id: assigneeIdentityId,
+      delivery_role: DELIVERY_ROLES.ASSOCIATE_BUILDER,
+      granted_by_identity_id: grantedByIdentityId,
+    });
+  } catch {
+    // Race: a concurrent assign inserted the membership between our findOne and create (the unique index
+    // rejected ours). Idempotent — the engine gate below reads whichever row won; never fail the assign on this.
+  }
+}
+
+/**
  * Assign a story to a builder. The assignee MUST be an active delivery member of this project holding
  * `story.execute` (the engine check — the real gate), else `assignee_not_builder` (422). Idempotent upsert on
  * (delivery_project_id, story_id): a re-assign updates the existing row in place rather than stacking duplicates.
@@ -69,6 +105,12 @@ export async function assignBuildStory(input: AssignBuildStoryInput): Promise<As
   const assignedByIdentityId = input.assignedByIdentityId ? String(input.assignedByIdentityId).trim() || null : null;
   if (!deliveryProjectId || !storyId || !canonicalReqId) throw new AssignmentError('Missing story/project identifiers.', 'bad_input');
   if (!assigneeIdentityId) throw new AssignmentError('An assignee is required.', 'no_assignee');
+
+  // The admin's assign is the authorization: grant the assignee the least-privilege builder role here if they
+  // have no membership yet, so the engine gate below can recognise them. Provisions ONLY a brand-new membership;
+  // it never alters an existing one (see ensureAssigneeCanBuild), so the gate still fails closed on anyone it
+  // cannot provision (an existing client/reviewer, or a revoked builder).
+  await ensureAssigneeCanBuild(deliveryProjectId, assigneeIdentityId, assignedByIdentityId);
 
   // THE RAIL: the assignee must be a builder on this project (story.execute). Fails closed on a non-member,
   // a client, a reviewer-only member, or an unreadable membership table.

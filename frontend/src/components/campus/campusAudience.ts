@@ -20,6 +20,8 @@ export interface AudienceSignals {
 export interface CampusAudienceResult {
   audience: CampusAudience;
   isIntern: boolean;
+  /** WP-7: the account's own audience when a preview (another account type) is showing; absent from the pure rule. */
+  realAudience?: CampusAudience;
 }
 
 export function deriveCampusAudience(s: AudienceSignals): CampusAudienceResult {

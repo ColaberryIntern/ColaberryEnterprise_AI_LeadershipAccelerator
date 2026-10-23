@@ -8,7 +8,6 @@ import { GATED_FEATURES } from '../paywall/gatedFeatures';
 import { useIsMgmt } from './campusMgmt';
 import AdminLink from './AdminLink';
 import WhoIsHere, { WhoIsHereProps } from './WhoIsHere';
-import StaffDesk from './StaffDesk';
 import type { StaffDesk as Desk } from './campusPeopleApi';
 import './campusArrival.css';
 
@@ -57,6 +56,9 @@ export interface BuildingCardProps {
   tourNav?: React.ReactNode;
   /** WP-4: this room was picked in the Wayfinder: it flashes twice (the prototype's .rooms a.flash). */
   flashRoute?: string;
+  /** WP-6: Colaberry Live here: the hero in the state's colour and the stage under it. */
+  heroClass?: string;
+  stage?: React.ReactNode;
 }
 
 /** The prototype prints the address under the main action ("enterprise.colaberry.ai/portal/..."); this is the real host. */
@@ -79,7 +81,7 @@ function LockedNotice({ b }: { b: CampusBuilding }): React.ReactElement {
   );
 }
 
-export default function BuildingCard({ building: b, access, workplaceNames, onClose, onNavigate, whoIsHere, onEnterRoom, desks, children, zoneLabel, line, happening, onElsewhere, audience, kicker, urgent, tourTop, planBox, tourNav, flashRoute }: BuildingCardProps): React.ReactElement {
+export default function BuildingCard({ building: b, access, workplaceNames, onClose, onNavigate, whoIsHere, onEnterRoom, desks, children, zoneLabel, line, happening, onElsewhere, audience, kicker, urgent, tourTop, planBox, tourNav, flashRoute, heroClass, stage }: BuildingCardProps): React.ReactElement {
   const name = buildingName(b, workplaceNames);
   // A plain click goes through the door; a modified click (new tab, etc.) stays a normal link.
   const go = (route: string) => (e: React.MouseEvent) => {
@@ -96,7 +98,7 @@ export default function BuildingCard({ building: b, access, workplaceNames, onCl
   useCardFocus(heading);
   return (
     <section className={`cm-card cm-arrive cm-b-${b.id}${audience === 'business' ? ' is-partner' : ''}${audience === 'explorer' && access !== 'open' ? ' is-unlock-first' : ''}`} aria-labelledby={headingId} data-testid="cm-card" data-building={b.id}>
-      <div className="cm-arrive-hero" data-testid="cm-arrive-hero">
+      <div className={`cm-arrive-hero${heroClass ? ` ${heroClass}` : ''}`} data-testid="cm-arrive-hero">
         <div className="cm-kicker" data-testid="cm-arrive-kicker">{kicker ?? <>You&rsquo;ve arrived{zoneLabel ? <> &middot; {zoneLabel}</> : null}</>}</div>
         <h2 id={headingId} className="cm-card-title" tabIndex={-1} ref={heading}>{name}</h2>
         {line && <p className="cm-arrive-line" data-testid="cm-arrive-line">{line}</p>}
@@ -104,6 +106,7 @@ export default function BuildingCard({ building: b, access, workplaceNames, onCl
       </div>
       <div className="cm-arrive-body">
         {tourTop}
+        {stage}
         {planBox}
         {happening && (
           <>
@@ -131,14 +134,8 @@ export default function BuildingCard({ building: b, access, workplaceNames, onCl
           </div>
         )}
 
-        {whoIsHere && <WhoIsHere presence={whoIsHere.presence} error={whoIsHere.error} loading={whoIsHere.loading} onPick={whoIsHere.onPick} />}
-
-        {desks && desks.length > 0 && (
-          <div className="cm-desks">
-            <h3 className="cm-card-h">Staff desks</h3>
-            {desks.map((d) => <StaffDesk key={d.id} desk={d} onMessaged={onNavigate} />)}
-          </div>
-        )}
+        {/* WP-5: the staff on duty here are chips at the head of Who's here (their card is a popover, Q7); without presence, just them */}
+        {(whoIsHere || (desks && desks.length > 0)) && <WhoIsHere {...(whoIsHere ?? { presence: undefined, error: false, peopleHidden: true })} desks={desks} />}
 
         {b.rooms.length > 0 && (
           <>

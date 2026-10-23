@@ -27,10 +27,23 @@ export function campusViewFor(audience: CampusAudience, s: AccessSignals): Campu
   return { audience, hasFullAccess: s.hasFullAccess, buildings: campusBuildingsFor(audience), accessOf: (b) => buildingState(b, s), isExplorer: s.isExplorer };
 }
 
+/**
+ * WP-7: the lock signals a previewed account type is drawn with (an Explorer sees the locks, a member does not, staff see every
+ * building). Drawing only: opening a page still goes through PageGate with the real account.
+ */
+export const PREVIEW_SIGNALS: Record<CampusAudience, AccessSignals> = {
+  member: { isStaff: false, hasFullAccess: true, isExplorer: false },
+  explorer: { isStaff: false, hasFullAccess: false, isExplorer: true },
+  business: { isStaff: false, hasFullAccess: true, isExplorer: false },
+  staff: { isStaff: true, hasFullAccess: true, isExplorer: false },
+};
+
 /** Everything the campus views need about the signed-in learner (Campus C2; C6 adds accessOf and isExplorer). */
 export function useCampusView(): CampusView {
-  const { audience } = useCampusAudience();
+  const { audience, realAudience } = useCampusAudience();
   const { isStaff, hasFullAccess } = useEntitlement(); // PageGate's own signals, not the campus's wider staff
   const isExplorer = useIsExplorer();
-  return useMemo(() => campusViewFor(audience, { isStaff, hasFullAccess, isExplorer }), [audience, isStaff, hasFullAccess, isExplorer]);
+  const previewing = !!realAudience && realAudience !== audience;
+  return useMemo(() => campusViewFor(audience, previewing ? PREVIEW_SIGNALS[audience] : { isStaff, hasFullAccess, isExplorer }),
+    [audience, previewing, isStaff, hasFullAccess, isExplorer]);
 }

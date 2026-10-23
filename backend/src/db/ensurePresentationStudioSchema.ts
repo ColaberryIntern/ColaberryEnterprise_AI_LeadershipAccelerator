@@ -218,12 +218,24 @@ export const PRESENTATION_STUDIO_STATEMENTS: string[] = [
      attempt_state VARCHAR(30) NOT NULL DEFAULT 'draft',
      recording_state VARCHAR(30) NOT NULL DEFAULT 'expected',
      is_final_take BOOLEAN NOT NULL DEFAULT FALSE,
+     reflection_notes TEXT,
      join_intent_at TIMESTAMPTZ,
      started_at TIMESTAMPTZ,
      ended_at TIMESTAMPTZ,
      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
    )`,
+  // WHAT THE REHEARSAL PARTNER SAID, in the learner's own words.
+  //
+  // PREP-4 asks for "one real rehearsal in front of one real person" and then had
+  // nowhere to put what that person told you. The Reflect step was a placeholder
+  // reading and writing nothing, so the notes a partner gave lived in the
+  // learner's head or not at all.
+  //
+  // ON THE ATTEMPT, not the recording: the notes are about the rehearsal, which is
+  // the session, and a learner who records three takes in one sitting got one set
+  // of feedback.
+  `ALTER TABLE presentation_attempts ADD COLUMN IF NOT EXISTS reflection_notes TEXT`,
   `ALTER TABLE presentation_attempts ADD COLUMN IF NOT EXISTS assignment_id UUID`,
   `ALTER TABLE presentation_attempts ADD COLUMN IF NOT EXISTS attempt_no INTEGER`,
   `ALTER TABLE presentation_attempts ADD COLUMN IF NOT EXISTS mode VARCHAR(30) DEFAULT 'practice_solo'`,

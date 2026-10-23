@@ -82,6 +82,20 @@ export type ProducerCommand =
   | 'enter_backstage' | 'return_to_scheduled' | 'mark_content_started'
   | 'go_live' | 'end' | 'cancel';
 
+/**
+ * Who decided a broadcast was over.
+ *
+ * `producer` is a person pressing End. `auto_stream_gone` is the L7.4 safety net firing after
+ * the stream was CONTINUOUSLY absent past the configured window. They are recorded separately
+ * because they are different events with different follow-ups: one is a class finishing, the
+ * other is a class that may have been cut short by a dropped connection, and six months from
+ * now nobody will be able to tell them apart from `ended_at` alone.
+ *
+ * Must match the CHECK constraint in ensureBroadcastEndReasonSchema.ts.
+ */
+export const END_REASONS = ['producer', 'auto_stream_gone'] as const;
+export type EndReason = (typeof END_REASONS)[number];
+
 export interface OccurrenceState {
   editorial_state: EditorialState;
   provider_health: ProviderHealth;
@@ -93,6 +107,12 @@ export interface OccurrenceState {
    * rewrite the first end instant.
    */
   ended_at: Date | null;
+  /**
+   * WHY it ended, when it has. Lives here rather than only on the model for the same reason
+   * `ended_at` does: the transition owns the idempotency, and a second `end` must not rewrite
+   * the first answer.
+   */
+  end_reason?: EndReason | null;
 }
 
 export interface CommandContext {
@@ -102,6 +122,12 @@ export interface CommandContext {
   nowMs: number;
   /** Whether the caller is permitted to produce this occurrence. Decided upstream. */
   isProducer: boolean;
+  /**
+   * Who is ending it, recorded only on an `end`. Defaults to `producer`, because every caller
+   * that existed before the safety net was a person pressing a button, and a default of
+   * `auto_stream_gone` would misattribute all of them.
+   */
+  endReason?: EndReason;
 }
 
 export interface CommandOutcome {
@@ -201,6 +227,10 @@ export function applyProducerCommand(
    */
   if (target === 'ended' && !current.ended_at) {
     patch.ended_at = new Date(ctx.nowMs);
+    // Stamped in the SAME guard as the instant, so the two can never disagree about which end
+    // they describe. An occurrence with an `ended_at` and no reason is one that ended before
+    // L7.4 shipped, which is exactly what a null should mean.
+    patch.end_reason = ctx.endReason ?? 'producer';
   }
 
   return { ok: true, patch };

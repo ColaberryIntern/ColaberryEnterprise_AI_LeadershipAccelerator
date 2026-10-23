@@ -101,7 +101,7 @@ describe.each(['member', 'explorer', 'business', 'staff'] as const)('list view p
     expect(section(list, 'library')!.querySelector('[data-testid="cm-list-onair-library"]')).toBeNull();
     expect(section(list, 'lecture')!.textContent).toContain("Today's plan: stop 1");
     expect(section(list, 'studio')!.textContent).toContain("Today's plan: stop 2");
-    expect(section(list, 'commons')!.textContent).toContain('Avery Stone');
+    expect(section(list, 'commons')!.textContent).toContain('Avery'); // WP-5: Who's here shows first names, as the prototype
     expect(section(list, 'commons')!.textContent).toMatch(/3/);
   });
 

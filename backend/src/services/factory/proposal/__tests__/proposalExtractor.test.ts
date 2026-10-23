@@ -79,6 +79,23 @@ describe('extractProposal', () => {
     expect(text.some((s) => s.includes('plain background'))).toBe(false); // still never fabricates
   });
 
+  it('drops page furniture (page-break fragments, checkbox-table rows) from the scan, keeps real requirements', async () => {
+    // On the real Snow RFP these landed on the checklist as noise: a footer glued into a sentence, and a form-table
+    // row of empty checkboxes. They match an obligation keyword incidentally; isFurniture drops them.
+    const zip = makeZip({
+      'RFP.txt': [
+        'The supplier must describe all costs in a separate cost file.',                       // REAL → kept
+        'Supplier must keep accurate accounting records Page 8 of 25.',                         // page fragment → dropped
+        'Included Required item [ ] Executive summary [ ] Methodology plan must be provided.',  // checkbox row → dropped
+      ].join('\n'),
+    });
+    const { requirements } = await extractProposal(zip);
+    const texts = requirements.map((r) => r.extractedText);
+    expect(texts.some((s) => s.includes('describe all costs'))).toBe(true);
+    expect(texts.some((s) => /Page 8 of 25/.test(s))).toBe(false);
+    expect(texts.some((s) => /\[ \]/.test(s))).toBe(false);
+  });
+
   it('a LONE PDF (not a ZIP) is read as a single document, not reported as an unreadable archive', async () => {
     // adm-zip throws on a PDF (a PDF is not a zip). The %PDF- magic routes it to the single-PDF read path;
     // this buffer is not a valid PDF body, so pdf-parse yields no usable text — but the point is the ROUTING:
@@ -115,6 +132,16 @@ describe('extractProposal', () => {
     expect(dossier.complianceRules.some((r) => r.kind === 'validity_period' && r.days === 90)).toBe(true);
     // the scoring scheme flows through the dossier too
     expect(dossier.evaluation?.factors.some((f) => f.label === 'Technical Approach' && f.points === 70)).toBe(true);
+  });
+
+  it('excludes form / tax-form documents from the dossier (a W-9 anti-phishing address is NOT a contact)', async () => {
+    const zip = makeZip({
+      '6-RFP.txt': 'The vendor shall provide services. Direct all inquiries to jane.doe@county.gov.',
+      '2-W9-2024.txt': 'Form W-9 Request for Taxpayer Identification Number. Report phishing to phishing@irs.gov.',
+    });
+    const { dossier } = await extractProposal(zip);
+    expect(dossier.contacts.some((c) => c.value === 'jane.doe@county.gov')).toBe(true);   // from the solicitation
+    expect(dossier.contacts.some((c) => c.value === 'phishing@irs.gov')).toBe(false);     // W-9 is a form → excluded
   });
 });
 

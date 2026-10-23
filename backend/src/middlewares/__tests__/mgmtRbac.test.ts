@@ -1,5 +1,6 @@
 jest.mock('jsonwebtoken', () => ({ verify: jest.fn() }));
-jest.mock('../../config/env', () => ({ env: { jwtSecret: 'test-secret' } }));
+jest.mock('../../config/env', () => require('../../__tests__/testSupport/configMocks')
+  .envModuleMock({ jwtSecret: 'test-secret' }));
 
 import jwt from 'jsonwebtoken';
 import { requireSection, adminAllowedSections } from '../authMiddleware';

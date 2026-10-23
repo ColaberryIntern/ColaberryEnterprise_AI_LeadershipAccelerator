@@ -514,12 +514,23 @@ describe('T020 AC8 — the suite is inside CI\'s set', () => {
     // the value, so it is unescaped before being compiled back to a RegExp.
     const patterns = [...config.matchAll(/^\s*'([^']+)',\s*$/gm)]
       .map((m) => m[1].replace(/\\\\/g, '\\'));
-    expect(patterns.length).toBeGreaterThan(20);
+    // NOT a size floor. This used to require more than 20 entries, and the
+    // control below used to name `projectDnaService` as a known member — so
+    // when six suites were correctly un-ignored on 2026-10-23 this test failed
+    // for the one reason it should never fail: the list got SHORTER. A gate on
+    // the list's length is a gate against fixing the list.
+    expect(patterns.length).toBeGreaterThan(0);
     const suitePath = 'src/services/caseStudy/__tests__/caseStudyIntegration.test.ts';
     for (const pattern of patterns) expect(new RegExp(pattern).test(suitePath)).toBe(false);
-    // The extraction itself has to be able to fail, or the loop above is a
-    // no-op dressed as a gate: a path that IS on the list must match.
-    expect(patterns.some((p) => new RegExp(p)
-      .test('src/services/__tests__/projectDnaService.test.ts'))).toBe(true);
+    // The extraction itself still has to be able to fail, or the loop above is
+    // a no-op dressed as a gate. The control is now DERIVED FROM THE LIST
+    // instead of naming a member of it: every entry is a path with its dots
+    // escaped, so stripping the backslashes yields the literal path that entry
+    // was written for, and the pattern must match it. That proves the
+    // extraction found real patterns and that they compile and match, and it
+    // survives any entry coming off the list.
+    for (const pattern of patterns) {
+      expect(new RegExp(pattern).test(pattern.replace(/\\/g, ''))).toBe(true);
+    }
   });
 });

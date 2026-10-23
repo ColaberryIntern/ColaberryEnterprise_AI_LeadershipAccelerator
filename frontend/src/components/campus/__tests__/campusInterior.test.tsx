@@ -43,7 +43,7 @@ describe('roomModel: the prototype geometry', () => {
 
   it('the door sign says where it goes for this viewer', () => {
     expect(doorLabel('member', 'open')).toBe('YOUR PAGE →');
-    expect(doorLabel('explorer', 'locked')).toBe('MEMBERS ONLY');
+    expect(doorLabel('explorer', 'locked')).toBe('MEMBERS ONLY 🔒');
     expect(doorLabel('explorer', 'demo')).toBe('DEMO MODE →');
     expect(doorLabel('business', 'open')).toBe('TEAM VIEW →');
   });
@@ -73,7 +73,9 @@ describe('the rooms as drawn', () => {
     for (const id of Object.keys(ROOMS)) {
       act(() => { root.render(<BuildingInterior id={id as never} people={[]} you={you} doorSign="YOUR PAGE" name="Room" onAir={false} />); });
       const text = container.textContent ?? '';
-      for (const fake of ['PropertyPulse', 'Medical Courier', 'PromiseGuard', 'STORY-0', 'OCT 29', 'Week 5', 'THURSDAY', 'Open House', 'BEST ']) expect(text).not.toContain(fake);
+      for (const fake of ['PropertyPulse', 'Medical Courier', 'PromiseGuard', 'STORY-0', 'OCT 29', 'Week 5', 'THURSDAY', 'Open House']) expect(text).not.toContain(fake);
+      // WP-5: the arcade shows your best this week, or a dash when there is none; never an invented score
+      if (id === 'arcade') expect(text.match(/BEST (—|[\d,]+)/g)).toEqual(['BEST —', 'BEST —', 'BEST —']);
     }
   });
 
@@ -144,7 +146,9 @@ describe('the door reveal', () => {
     expect(container.querySelector('[data-testid="cm-inside"]')!.getAttribute('class')).toContain('is-going');
     expect(container.querySelector('[data-testid="cm-inside-going"]')!.textContent).toContain(b('commons').primary.route);
     expect(entered).toEqual([]);
-    act(() => { jest.advanceTimersByTime(900); });
+    act(() => { jest.advanceTimersByTime(1499); }); // WP-5: first the walk to the back door (600 ms), then the zoom
+    expect(entered).toEqual([]);
+    act(() => { jest.advanceTimersByTime(1); });
     expect(entered).toEqual([b('commons').primary.route]);
   });
 

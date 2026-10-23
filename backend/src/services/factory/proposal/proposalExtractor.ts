@@ -248,6 +248,29 @@ function firstMeaningfulLine(text: string): string | null {
 // A trailing \b broke that — "indemnif\b" does not match "indemnify" (no boundary between f and y).
 const MATERIAL_TERM_RE = /\b(?:insurance|bond|indemnif|liabilit|licens|E-?Verify|prevailing\s+wage|non[-\s]?collusion|conflict\s+of\s+interest|confidential|non[-\s]?disclosure|warrant|terminat|data\s+(?:security|privacy|protection)|HIPAA|FERPA|SOC\s*2|background\s+check|compliance\s+with|equal\s+(?:employment\s+)?opportunity|prohibited|debarment)/i;
 
+/**
+ * A captured obligation sentence that is really page FURNITURE, not a requirement — a section/appendix heading, an
+ * ALL-CAPS banner, a form-table row, or a sentence a page-break footer got interleaved into. These match the
+ * obligation keyword incidentally (a heading says "Required", a banner says "MUST"), so without this filter they
+ * land on the checklist as noise. PURE drop test: it never edits a kept sentence (the verbatim rail holds), it only
+ * drops the furniture. Deliberately conservative — a real requirement has lowercase prose and usually a period, so
+ * these shapes do not catch one.
+ */
+function isFurniture(s: string): boolean {
+  const t = s.trim();
+  const words = t.split(/\s+/).filter(Boolean).length;
+  // A page-break footer ("Page 5 of 25") interleaved into the sentence — a fragment, not a clean requirement.
+  if (/\bpage\s+\d+\s+of\s+\d+\b/i.test(t)) return true;
+  // A section / appendix / attachment / exhibit / part / schedule <id> heading: short and not sentence-punctuated.
+  if (/^(?:section|appendix|attachment|exhibit|part|schedule)\s+[0-9A-Z][.)\-:]?\b/i.test(t) && words <= 10 && !/[.?!]$/.test(t)) return true;
+  // An ALL-CAPS banner (e.g. "REQUIRED DELIVERABLES"): no real requirement sentence is entirely uppercase.
+  const letters = t.replace(/[^A-Za-z]/g, '');
+  if (letters.length >= 4 && letters === letters.toUpperCase() && words <= 14) return true;
+  // A form-table row mashed into one line: two or more empty checkboxes.
+  if ((t.match(/\[\s*\]/g) || []).length >= 2) return true;
+  return false;
+}
+
 /** Text out of one in-zip file buffer, by extension. Never throws — returns '' on unreadable/unsupported.
  *  .docx/.xlsx delegate to the structure-aware ooxmlText reader so table rows and spreadsheet cells keep
  *  their boundaries (a requirements matrix reads as rows, not one run-on blob). */
@@ -491,18 +514,26 @@ export async function extractProposal(zipBuffer: Buffer): Promise<ProposalExtrac
       pushReq(f.name, `Review ${f.name} and state any exceptions in the proposal`, firstMeaningfulLine(f.text) || f.name, ['proposal']);
       for (const s of sentences(f.text, joinWraps)) {
         if (requirements.length >= MAX_REQUIREMENTS) break;
-        if (OBLIGATION.test(s) && MATERIAL_TERM_RE.test(s)) pushReq(f.name, s, s, ['proposal']);
+        if (OBLIGATION.test(s) && MATERIAL_TERM_RE.test(s) && !isFurniture(s)) pushReq(f.name, s, s, ['proposal']);
       }
       continue;
     }
     // solicitation / addendum / reference — the full obligation scan (unchanged behavior).
     for (const s of sentences(f.text, joinWraps)) {
       if (requirements.length >= MAX_REQUIREMENTS) break;
-      if (OBLIGATION.test(s)) pushReq(f.name, s, s, ['proposal', 'solution_build']);
+      if (OBLIGATION.test(s) && !isFurniture(s)) pushReq(f.name, s, s, ['proposal', 'solution_build']);
     }
   }
 
-  // The dossier ignores a duplicate file's context so contacts/dates are not double-counted.
-  const dossier = extractDossier(blocks.filter((b) => !(b.kind === 'context' && dupNames.has(b.locator))));
+  // The dossier ignores a duplicate file's context so contacts/dates are not double-counted, AND it ignores
+  // single-item FORM / TAX-FORM / PRICING-FORM documents: a W-9's own instructions carry addresses like
+  // "phishing@irs.gov" and an IRS helpline that are NOT the solicitation's point of contact, and a form has no
+  // real meeting/key dates. Only the solicitation, addenda, terms, and reference docs feed the dossier.
+  const formNames = new Set(
+    readFiles.filter((f) => { const c = byName.get(f.name); return !!c && SINGLE_ITEM_ROLES.has(c.role); }).map((f) => f.name),
+  );
+  const dossier = extractDossier(
+    blocks.filter((b) => !(b.kind === 'context' && (dupNames.has(b.locator) || formNames.has(b.locator)))),
+  );
   return { blocks, requirements, dossier, fileCount, files };
 }

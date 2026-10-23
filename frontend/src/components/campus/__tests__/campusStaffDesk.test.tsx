@@ -47,15 +47,15 @@ afterEach(() => { if (root) act(() => root!.unmount()); root = undefined; contai
 const q = (sel: string) => container.querySelector(sel);
 
 describe('a desk', () => {
-  it('on duty with a DM host: AI staff label, initials in the AI ring, Message and three questions', async () => {
+  it('on duty with a DM host: the AI STAFF tag, initials in the gold ring, Message and three quoted questions (WP-5)', async () => {
     unhost = registerDmHost();
     await render(<StaffDesk desk={reese} />);
-    expect(q('.cm-ai-tag')?.textContent).toBe('AI staff');
-    expect(q('.cm-ai-ring')?.textContent).toBe('R');
+    expect(q('.cm-pc-tag')?.textContent).toBe('AI STAFF');
+    expect(q('.cm-pc-av.is-staff')?.textContent).toBe('R');
     expect(q('img')).toBeNull();
-    expect(q('[data-testid="cm-desk-status-reese"]')?.textContent).toBe('On duty around the clock, replies in seconds');
+    expect(q('[data-testid="cm-desk-status-reese"]')?.textContent).toBe('On duty 24/7 · replies in seconds');
     expect(q('[data-testid="cm-desk-message-reese"]')).not.toBeNull();
-    expect(container.querySelectorAll('.cm-desk-prompts button')).toHaveLength(3);
+    expect(Array.from(container.querySelectorAll('.cm-pc-q button')).map((b) => b.textContent)).toEqual(['“Q one”', '“Q two”', '“Q three”']);
   });
 
   it('a question opens the conversation and sends that question ONCE, then shows the dock via te-open-dm', async () => {
@@ -66,7 +66,7 @@ describe('a desk', () => {
     const on = (e: Event) => seen.push((e as CustomEvent).detail);
     window.addEventListener('te-open-dm', on);
     await render(<StaffDesk desk={reese} />);
-    const btn = q('.cm-desk-prompts button') as HTMLButtonElement;
+    const btn = q('.cm-pc-q button') as HTMLButtonElement;
     await act(async () => { btn.click(); btn.click(); });
     await act(async () => { release('room-9'); });
     window.removeEventListener('te-open-dm', on);
@@ -103,10 +103,11 @@ describe('desks inside building cards', () => {
       onExit={() => undefined} onNavigate={() => undefined} staffDesks={[reese, maya]} personCard={null} onOpenPerson={() => undefined} onClosePerson={() => undefined} />
   );
 
-  it('an Explorer sees Maya\'s desk at the Main Gate', async () => {
+  it('an Explorer sees Maya at the Main Gate: her chip in Who\'s here opens her card (WP-5)', async () => {
     await render(world('explorer'));
     expect(q('[data-testid="cm-card"]')?.getAttribute('data-building')).toBe('gate');
-    expect(q('[data-testid="cm-desk-maya"]')).not.toBeNull();
+    await act(async () => { (q('[data-testid="cm-who-staff-maya"]') as HTMLButtonElement).click(); });
+    expect(q('[data-testid="cm-staff-card"] [data-testid="cm-desk-maya"]')).not.toBeNull();
   });
 
   it('a business viewer never renders Maya, even if the server returned her and the gate were on their map', async () => {
@@ -114,11 +115,13 @@ describe('desks inside building cards', () => {
     await render(world('business', withGate));
     expect(q('[data-testid="cm-card"]')?.getAttribute('data-building')).toBe('gate');
     expect(q('[data-testid="cm-desk-maya"]')).toBeNull();
+    expect(q('[data-testid="cm-who-staff-maya"]')).toBeNull();
   });
 
   it('a member never renders Maya either (same independent check)', async () => {
     const withGate = [...campusBuildingsFor('member'), campusBuildingsFor('explorer').find((b) => b.id === 'gate')!];
     await render(world('member', withGate));
     expect(q('[data-testid="cm-desk-maya"]')).toBeNull();
+    expect(q('[data-testid="cm-who-staff-maya"]')).toBeNull();
   });
 });

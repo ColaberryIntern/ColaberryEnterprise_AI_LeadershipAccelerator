@@ -98,6 +98,8 @@ describe('Happening here and the urgent action, from real facts only', () => {
     expect(rows.map((r) => r.title)).toEqual(['Today’s plan', 'Next live class']);
     expect(rows[1].detail).toBe('Build Day · in 1d 3h');
     expect(factsAt('lecture', {}, { points: null, rung: null, planMinutes: null }, now)).toEqual([]);
+    // WP-5: a session from an earlier day is never the "next" class
+    expect(factsAt('lecture', { session: { ...session, session_date: '2026-04-02' } }, { points: null, rung: null, planMinutes: null }, now)).toEqual([]);
   });
   it('My Progress shows "Lv N · rung" and points; the Game Room the break left', () => {
     expect(factsAt('observatory', {}, { points: 1252, rung: 'AI Enabled II', planMinutes: null }, now)[0]).toMatchObject({ title: 'Lv 4 · AI Enabled II', detail: '1,252 pts' });

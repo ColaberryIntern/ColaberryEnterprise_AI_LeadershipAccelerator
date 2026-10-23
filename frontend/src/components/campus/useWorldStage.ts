@@ -70,7 +70,8 @@ export function useReturnRecenter(camApi: MutableRefObject<CameraApi | null>, an
   }, [recenter, camApi]);
 }
 
-export const GOING_MS = 900;
+/** WP-5: walk to the back door (600 ms), then the zoom and "Opening..." (900 ms), as the prototype's goThroughDoor. */
+export const GOING_MS = 1500;
 
 /**
  * The door reveal (the prototype's "going"): through the glowing back door, the room zooms in under "Opening...", then the existing

@@ -46,6 +46,13 @@ describe('a private broadcast is knowable only by someone eligible for its room'
     expect(items[0]).toMatchObject({ id: 'occ-1', title: TITLE, can_watch: true, reason: 'room_member' });
   });
 
+  it('carries the class session when the broadcast has one, and null (never undefined) when it does not', () => {
+    const [linked] = projectDiscovery([{ occurrence: occurrence({ session_id: 'ses-9' }), decision: full, roomEligible: true }]);
+    const [loose] = projectDiscovery([{ occurrence: occurrence(), decision: full, roomEligible: true }]);
+    expect(linked.session_id).toBe('ses-9');
+    expect(loose.session_id).toBeNull();
+  });
+
   it('omits it even when the decision somehow says full but the room says no', () => {
     // Belt and braces: the two inputs disagreeing is a bug somewhere upstream, and the safe
     // reading of a disagreement about a PRIVATE broadcast is to say nothing.
@@ -127,7 +134,8 @@ describe('the payload shape', () => {
     expect(Object.keys(items[0]).sort()).toEqual([
       'access_mode', 'can_watch', 'content_started_at', 'editorial_state', 'id',
       'offer_upgrade', 'preview_seconds_remaining', 'reason', 'room_id', 'scheduled_start_at',
-      'title',
+      // the class session: not a provider or policy field; it is the id the printed check-in QR already carries
+      'session_id', 'title',
     ]);
   });
 });

@@ -231,3 +231,38 @@
   background: #8e0e15;
   border-color: #8e0e15;
 }
+
+/*
+ * THE PHONE COMPANION (L4.7).
+ *
+ * `/portal/live/:sessionId/companion` sets `data-live-companion` on <body> while it is open.
+ * Two things are wrong with the default placement there. The route is PUBLIC and renders no
+ * `.te-tabbar`, so the 64px the mini rule reserves for one leaves the video floating above
+ * empty space. And a floating video COVERS the deck the viewer is meant to be tapping, which
+ * on a phone is the whole surface.
+ *
+ * So on that page the player pins to the top, full width, and the deck scrolls underneath —
+ * the shape every phone companion people already use has. The page pads itself to match.
+ */
+body[data-live-companion] .lmp.is-mini,
+body[data-live-companion] .lmp.is-theater {
+  top: 0;
+  right: 0;
+  left: 0;
+  bottom: auto;
+  width: auto;
+  max-width: none;
+  transform: none;
+  border-radius: 0;
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+/* Clear of the pinned player. 56.25% is the 16:9 video plus room for the control row. */
+body[data-live-companion="playing"] .clv-root {
+  align-items: flex-start;
+  padding-top: calc(56.25vw + 72px + env(safe-area-inset-top, 0px));
+}
+
+/* With nothing playing there is nothing pinned, so the page keeps its ordinary centring.
+   The page sets playing/idle itself; a `:has()` selector here would have left a
+   screen-height hole on any browser that does not support it. */

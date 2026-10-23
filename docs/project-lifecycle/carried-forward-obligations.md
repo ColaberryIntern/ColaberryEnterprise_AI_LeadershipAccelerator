@@ -2848,3 +2848,462 @@ it fails in the worst direction — the new field is simply absent from the hash
 
 §8 Q1 (is `operating` automatic?) and Q2 (flag?) remain unanswered. They block steps 2 and 3 —
 readiness on build events, and the automatic work hops.
+
+## THE GOVERNANCE RULES ARE NOW CONSTRAINTS, not conventions
+
+`lifecycle_stage_readiness` ships with the readiness store. The table is the part worth reading:
+three of the design's rules are written as CHECK constraints rather than as conditionals in
+calling code, because a convention is one careless commit away from being untrue and this is the
+table a future automatic advancer will read.
+
+| Constraint | The rule it makes unfakeable |
+|---|---|
+| `measured_by LIKE 'system:%'` | a readiness row can **never** be attributed to a person |
+| `performed_act NOT LIKE '%.approve'` | readiness may record work the pipeline DID; it may never record an **approval** |
+| `satisfied = (gap_count = 0)` | a row cannot claim to be satisfied while carrying blocking gaps — readiness cannot lie about itself |
+
+### Each constraint is proved by watching it refuse
+
+Not by asserting the DDL text contains it. `lifecycleReadinessPersistence.integration.test.ts`
+runs against real Postgres, in the `Integration tier (Postgres)` job built earlier this session,
+and **each CHECK removed from the DDL fails exactly one test** — a 1:1 mapping, measured:
+
+| CHECK removed | Test that fails |
+|---|---|
+| `ck_readiness_measured_by_is_system` | REFUSES a row attributed to a PERSON |
+| `ck_readiness_never_an_approval` | REFUSES an approval as a performed act |
+| `ck_readiness_satisfied_iff_no_gaps` | REFUSES a row claiming satisfied with gaps |
+
+A positive control accepts a well-formed system measurement, and a second accepts
+`story.execute` as a performed act — so the refusals are not the table rejecting everything.
+
+### Idempotent by index, not by read-then-write
+
+`ON CONFLICT DO NOTHING` against `uq_readiness_measurement (lifecycle, stage, evidence hash)`.
+Re-measuring unchanged evidence is one row and the ORIGINAL `measured_at` survives, the same
+shape as a retried blueprint approval returning the original approver. A read-then-insert would
+leave the race open; the index closes it. Proven, including that the first timestamp survives.
+
+### Two existing guards caught things, which is the system working
+
+- **The tenant-scoping and table-count contract** in `ensureProjectLifecycleSchema.test.ts`
+  required the new table to carry `tenant_id` and to be added to `REQUIRED_TABLES`. Both done.
+- **The token census** in `ensureProjectLifecycleSchema.additive.test.ts` refused the change until
+  its four apparatus numbers were re-counted: PRIMARY KEY 7 to 8, UNIQUE 10 to 11, CHECK 6 to
+  **11**, NOT NULL 55 to 64. That jump in CHECKs is the governance rules arriving in the schema,
+  and the census is where it had to be declared rather than slipping in.
+
+### The suite had to be made replayable
+
+It passed, then failed every test on its second run: the first run's teardown died partway and
+left a lifecycle row that violated `uq_lifecycle_student_project` on re-insert. The teardown is
+now repeated as setup, and the suite is verified green **twice against the same database** — the
+same lesson the enrollment-lock suite taught with `sequelize.sync()`.
+
+### Still gated
+
+§8 Q1 and Q2 remain unanswered. Steps 2 and 3 — readiness on build events, and the automatic work
+hops — stay blocked. Nothing in this change writes a readiness row in production: there is no
+caller yet, by design.
+
+## THE PIPELINE CANNOT BE POINTED AT AN APPROVAL, by construction
+
+Design §3, with the DRI's answers of 2026-10-23: **`operating` IS automatic (Q1: A)** and **there
+is no feature flag (Q2: B)**.
+
+### The implementation that was rejected
+
+The obvious one is to call `evaluateTransition` with `actorPermissions: [STAGE_PERMISSION[to]]` -
+the pipeline asserting it holds whatever the hop needs. It works, and it is wrong: a system
+identity passing a permission check by claiming the permission is one careless argument away from
+claiming `contract.approve`.
+
+`lifecycleAutoAdvance.ts` instead has `WORK_HOPS` as its entire universe of reachable targets, so
+an approval or a review is unreachable by STRUCTURE rather than by a conditional someone could
+invert. `evaluateTransition` keeps its permission check untouched, and the #3308 guard keeps
+protecting it.
+
+### Four automatic, eight human — derived, not hand-listed
+
+`WORK_HOPS` is built from `STAGE_PERMISSION` at module load, so the two cannot drift:
+
+| | |
+|---|---|
+| Automatic | `awaiting_blueprint_approval` (project.write), `planning` (story.write), `building` (story.execute), `operating` (release.deploy) |
+| Human | the other **eight** - six `*.approve`, two `*.review` |
+
+Two further refusals the design implies and the code enforces: the act must MATCH the hop (so
+`building` cannot be advanced by reporting `project.write`), and readiness still has to be
+satisfied. Automatic means nobody clicks, not that the evidence stopped mattering.
+
+### Proved end to end, not only as a pure function
+
+A decision that refuses correctly is worth nothing if the write beside it advances anyway. The
+integration suite therefore re-runs the approval case against a real row and asserts **the stage
+is unchanged in the database afterwards** - plus the compare-and-swap under two concurrent
+advances (one winner, one `stage_moved`), and idempotency.
+
+### Which test catches what, measured
+
+Mutation: add `contract.approve` to the work permissions, so the automatic surface grows to
+include the blueprint approval. **Three tests fail and the diff names `blueprint_approved`.**
+
+Worth recording which test does NOT fail: `REFUSES every approval and review hop`. It iterates
+the hops that are *not* in `WORK_HOPS`, so a hop leaking INTO the set simply stops being examined
+and its coverage shrinks silently. That is why the exact-set and the 4/8 count assertions exist.
+The refusal test guards a logic inversion inside the set; the set assertions guard the set itself
+growing. Neither is redundant, and only running the mutation showed which was which.
+
+### Nothing calls it yet
+
+This is §9 step 3 built ahead of step 2. Correct before reachable is the safe order: the command
+exists and is proved, and no build event invokes it until the hook lands.
+
+## READINESS IS NOW MEASURED ON A REAL BUILD EVENT, and §9 step 2 closes
+
+The computation, the table and the advancer all existed with no caller. `plan.published` is now
+one: `sbpOrchestrator` calls `measureReadinessOnBuildEvent` immediately after `publishPlan`
+returns, reporting `story.write` as the act performed.
+
+### Three decisions in the wiring, each with a reason
+
+**AFTER the transaction, not inside it.** `publishPlan` runs in `sequelize.transaction` with the
+project's rows locked. Measuring in there would read uncommitted evidence while holding those
+locks. The cost is a window where a crash loses the measurement, which is the right trade: a
+measurement is reconstructible from the evidence, a held lock is not free.
+
+**`story.write` is the act**, because publishing a plan IS the pipeline having written the
+stories, and that is the permission `blueprint_approved -> planning` requires.
+
+**One event, one act, one hop — it does not cascade.** Walking several hops from a single event
+would mean claiming work that event did not do, which is the thing `lifecycleAutoAdvance` exists
+to prevent.
+
+### What it will mostly do today, stated honestly
+
+**Measure, and refuse to advance.** Every lifecycle row in production is at `discovery`, whose
+next hop needs `requirement.approve` — a person. So the near-term value is not automation: it is
+that readiness becomes VISIBLE, which is what lets a surface say "three projects are waiting for
+your `requirement.approve`" instead of nobody knowing. That refusal is asserted as correct
+behaviour rather than recorded as a gap.
+
+### The test that makes this safe to put on a build path
+
+`A MEASUREMENT FAILURE DOES NOT PROPAGATE.` The suite renames the readiness table out from under
+the hook and requires the call to return `failed` rather than throw, with the stage untouched.
+A publish that already succeeded must never be turned into an error by its observer — and this
+programme has the scar for it: `recordPlaybackBeat` swallowed its own failure for nine days
+because nothing proved what the swallow did. The hook logs the error MESSAGE, not only the class,
+for the same reason.
+
+**Incidentally proven on the production path**: the six `sbpOrchestrator` suites (81 tests) run
+the new call with a mocked database, so the swallow is exercised where it actually lives, not
+only in the hook's own suite.
+
+### Still open
+
+Step 4 (readiness surfaced in the workspace) and step 5 (the read-only legacy measurement over
+the 62 unregistered projects) remain. Neither is blocked.
+
+## NOTHING CAN ADVANCE BECAUSE NO BLUEPRINT MANIFEST EXISTS, measured on production
+
+§9 step 5, run read-only against production. It answers the backfill question and then answers a
+much better one.
+
+### The backfill answer, and it is not the one §7 predicted
+
+All **62** unregistered projects derive to `discovery`. §7 of the design said "47 of them already
+have a published plan, so the answer will not be `discovery`". **That prediction was wrong**, and
+the measurement is what corrected it.
+
+### The reason is the finding
+
+| | |
+|---|---|
+| Gaps blocking the first hop | **248** — 62 projects x 4 |
+| Of those, `unmet` | **0** |
+| Of those, `not_assessed` | **248** |
+
+Not one project has a single MEASURED failure. Every block is "nobody measured it". The four
+rules are the same for all 62: `no_requirements`, `requirement_without_provenance`,
+`source_block_uncited`, `source_block_unresolved`.
+
+**Why:** the evidence layer reads from the blueprint manifest, and
+`operating_blueprint_manifests` has **ZERO rows in production** — not for the 62, not for the 14
+registered ones, not for anyone. So every manifest-derived field is unassessed for every project
+in the system.
+
+### What this actually explains
+
+This programme has recorded twice that "all 19 lifecycle rows sit at `discovery`" and attributed
+it to nobody using the approval workspace. **That attribution was wrong.** Nobody clicking is not
+the cause: a click would be REFUSED. The first hop's prerequisites are unassessed, the
+NOT_MEASURED doctrine blocks on unassessed, and so `requestTransition` would return
+`prerequisites_unmet` to a reviewer who holds `requirement.approve` and does everything right.
+
+**The lifecycle is not idle. It is structurally unable to move**, and it has been since it
+shipped.
+
+### Where the chain stops
+
+`projectLifecycleRoutes.ts:305` -> `persistComposedBlueprint` -> `writeBlueprintManifest` ->
+`operating_blueprint_manifests`. The writer exists and IS wired to an admin route. It has simply
+never been exercised in production — so this is the fifth module in this programme found written,
+reviewed and effectively unused, but the first one whose disuse disables everything downstream.
+
+### What it means for the readiness work
+
+The readiness computation, table, advancer and hook are correct and will keep working. They will
+also report `not_assessed` for every project until a blueprint is composed for one. That is the
+doctrine behaving correctly — an unmeasured prerequisite is not a satisfied one — and it is worth
+stating plainly rather than discovering later as a disappointment.
+
+**The next thing that unblocks the lifecycle is not more lifecycle code.** It is composing a
+blueprint for one real project and seeing what the evidence layer then reports.
+
+### The instrument
+
+`scripts/lifecycle/measureLegacyLifecycleReadiness.js`. Read-only: it never records readiness,
+never registers a project, never advances a stage. It uses the REAL `readLifecycleEvidence` and
+`prerequisiteGaps` from the deployed build rather than a reimplementation, handing them a
+synthetic lifecycle row — sound because that reader locates evidence by `tenant_id` +
+`student_project_id` and never by the row's own id.
+
+**It first reported only a count** ("blocked by 4"), which is a signal, not a finding. Reporting
+the KIND is what turned it into one: `unmet` and `not_assessed` demand opposite actions, and the
+count hid which applied.
+
+## THE LIFECYCLE NEEDS AUTHORED DATA, NOT MORE CODE, measured on production
+
+The previous entry proved `operating_blueprint_manifests` is empty. This asks the next question:
+if someone wrote the caller that has never existed, would it have anything to call with? The
+answer is no, for three independent reasons, and only one of them is a missing module.
+
+### The route is live. That was the first hypothesis and it was WRONG
+
+`ENABLE_PROJECT_LIFECYCLE` is `true` in production, so `POST /:projectId/compose` is reachable.
+The flag was the obvious suspect and it is not the cause. Worth recording because "it ships dark"
+is the explanation everyone reaches for first.
+
+### 1. Nothing assembles the payload, and nothing ever has
+
+`composeBlueprint` is PURE. Every collection it validates arrives in the POST body, including the
+requirements: `buildRefs` reads `input.project.requirements`, never a table. So something has to
+gather a real project's records and build that body.
+
+Nothing does. There is no frontend (`projectLifecycleRoutes.ts` says so itself: "There is no
+frontend route yet"), no script and no service. Both adapters are pure functions and a
+`git grep` outside `adapters/` and `__tests__/` finds ZERO production callers of either.
+
+The persist call was wired on 2026-10-14 and the handler's own comment records what came before
+it. The endpoint, the persister, the writer and both adapters are all correct and all unreachable.
+
+### 2. Four of the inputs live in no database at all
+
+The route persists ONLY when `composeBlueprint` returns zero refusals, and `surfaceChecks` demands
+task-surface bindings, workspace-state declarations, control policies with known role ids, and a
+selected design. **`design === null` is a hard `DESIGN_NOT_SELECTED` refusal with no default.**
+
+These are product decisions, not records. A gatherer cannot gather them; they have to be authored.
+
+### 3. EVEN WITH A MANIFEST, THE FIRST HOP STAYS BLOCKED
+
+| Requirements on the 21 eligible projects | |
+|---|---|
+| Total | **387** |
+| `human_confirmed = true` | **387** |
+| With a source document | **0** |
+
+`factoryAdapter.ts:143` sets `provenanceKind` from `source_document` or `null`. With none
+recorded, every requirement is unprovenanced, `lifecycleEvidence.ts:198` collects all 387, and
+`requirement_without_provenance` refuses `requirements_ready`.
+
+**This one cannot be fixed in code, by design.** The adapter's own header: "`provenanceKind:
+null`, because null means unrecorded and THE REQUEST FORBIDS FILLING IT IN." Inferring provenance
+from `human_confirmed` is precisely what the architecture refuses, and it is right to: a confirmed
+requirement with no recorded source is confirmed by someone's memory.
+
+### The eligible set is 21, not 62 and not 19
+
+`persistComposedBlueprint` returns `no_lifecycle_row` for a project without one, so the 62 legacy
+projects cannot be filed against at all. Eligible: **6 delivery and 15 student, all at
+`discovery`**. All 6 delivery projects carry requirements (168, 83, 82, 47, 4, 3); 10 of the 15
+student projects have a published plan.
+
+Note the count: this programme has twice recorded "19 lifecycle rows". It is 21 now. A figure
+quoted from an earlier run is not a current measurement.
+
+### What this means, stated plainly
+
+Writing one manifest is achievable TODAY for a delivery candidate, but only by hand-authoring the
+four non-database inputs. It would convert the 248 `not_assessed` gaps into MEASURED ones, which
+is real knowledge, and the hop would still refuse on provenance. So a manifest is necessary and
+not sufficient.
+
+**The critical path is two items, and the second is not ours to decide:** build the gatherer, and
+decide what happens to 387 requirements with no recorded source. Neither is a code fix alone.
+
+### The instrument
+
+`scripts/lifecycle/measureComposeInputs.js`. SELECTs only: it never composes, never registers,
+never writes. Each query is wrapped so one missing table reports itself and the rest of the
+inventory still runs, because a single failed query taking the whole report down is how an
+inventory becomes a guess.
+
+## THE CALLER THAT NEVER EXISTED: the composition gatherer
+
+The previous two entries proved `operating_blueprint_manifests` is empty, that the flag is ON,
+and that nothing assembles the compose payload. This is the missing half: a module that reads one
+delivery project's records and builds a `BlueprintCompositionInput`.
+
+### What it gathers, and what it refuses to invent
+
+From the database: the full `FactoryProject` - tracks, requirements, processes, tasks, roles,
+assignments, transitions, allocation, role_map, source_blocks - plus the document revision every
+pinned ref is read at.
+
+Typed as `AuthoredInputs` and NOT gathered: understanding, agents, effort, declaration, bindings,
+workspace states, policies, and the design selection. These are product decisions, not records.
+The module names them rather than pretending, and `missingAuthoredInputs` reports **every** absent
+one at once - the same reason `composeBlueprint` runs all four surface checks after generation has
+already refused. A caller learning one missing field per attempt is the round trip this avoids.
+
+### Two inputs that LOOK authored and are not
+
+- **`allocation`** comes from `project.allocation`, the same `AllocationRow[]` the generation
+  input wants. Asking a caller to retype it invites a second divergent copy.
+- **`roleIds`** is derived from `project.roles`. `validateControlSpec` checks policies against
+  "roles a policy may name", and hand-authoring that list is how every named role becomes unknown
+  and the `controls` stage refuses for no real reason.
+
+### THE TRAP THIS MODULE EXISTS TO NOT FALL INTO
+
+`reconstructFactoryProject` does `source_blocks: d.source_blocks ?? []`. Correct for a view model
+and WRONG as a composition input: `factoryToManifestRefs` treats an ABSENT `sourceBlocks` as
+coverage unmeasurable (`null`, prerequisite keeps blocking) and an EMPTY one as measured - no
+blocks, therefore none uncited, coverage CLEAN.
+
+So a gatherer built the obvious way would report SOURCE COVERAGE PASSED on a project nobody
+measured. Because the reconstruction has already flattened both cases into one array, the
+difference survives only in a flag read from the RAW `doc_json`, which is what `sourceBlocksPresent`
+is. Two tests pin it in BOTH directions: false when the field is omitted, true for an explicit
+`[]`. Neither test alone is sufficient, and the mutation below shows why.
+
+### A second copy, declared as one
+
+The track-selection rule - latest per track, prefer `solution_build`, else newest - is COPIED from
+`factoryRoutes`, which still has its own. Rewriting a working production read path is wider than
+this needed to be and CLAUDE.md's extract-on-the-third threshold is not met at two. The offset is
+a test pinning the rule explicitly, including that a newer row on another track does NOT win, so
+a drift becomes a visible test change rather than a silent difference between the view and the
+blueprint.
+
+### THE TEST-FILE TYPECHECK CAUGHT A DESIGN FLAW THE BUILD DID NOT
+
+The first version returned `GatheredProject | LoadFailure`, which reads fine and does not narrow:
+with no `ok` on the success member, `if ('ok' in r && r.ok === false)` leaves the compiler holding
+the whole union, so the production code had papered over it with a cast - and that compiled. Only
+the strict test-file typecheck surfaced it. Fixed properly by discriminating both sides
+(`LoadResult`), not by casting in the test. A cast at a boundary whose entire job is "loaded, or
+not" is the boundary failing to do its job.
+
+### Mutation tested, and one result worth keeping
+
+| Mutation | Caught by |
+|---|---|
+| `sourceBlocksPresent` read as if AFTER reconstruction (always true) | 3 tests, including the named one. The explicit-`[]` test correctly still PASSES - the pair validates the distinction in both directions, so neither is redundant |
+| `missingAuthoredInputs` returns only the FIRST missing field | exactly 2 tests. **All seven per-field `it.each` tests still passed**, because with one field missing a `slice(0, 1)` is a no-op |
+
+That second row is the lesson: the seven per-field tests LOOK like the thorough ones and are blind
+to the mutation. Only the assertion that names every missing field catches it.
+
+### Verification
+
+24 tests green. Backend `tsc --noEmit` clean (only pre-existing `playwright` resolution errors,
+unrelated). Test-file typecheck clean under `--strict` with no `--allowJs`. 284 lines, inside the
+300-line soft target.
+
+### Still not enough to move the lifecycle
+
+This closes blocker 1 of three. Blocker 2 (four inputs no table holds) is unchanged by design -
+the module names them. Blocker 3 is untouched and is not a code problem: 0 of 387 requirements on
+the eligible projects carry a source document, so `requirement_without_provenance` refuses the
+first hop whatever is composed.
+
+## THE IGNORE-LIST CAUSE IS IDENTIFIED, and six suites come off the list
+
+Two earlier entries left this open: the cause was recorded as UNIDENTIFIED after three ruled-out
+hypotheses, with one live oddity named as "the thread to pull". The thread is pulled.
+
+### It is ONE pattern, not twenty problems
+
+A **partial mock of a shared config module**, missing a field that some transitively-imported
+module needs **at import time**. The suite then dies before a single test runs, so it reports as
+"Test suite failed to run" with no test names attached - which is exactly why it looked like
+twenty unrelated failures.
+
+### The oddity had no contradiction in it
+
+The open question was: inside a suite that mocks `config/database`, a direct `require` of that
+module receives the stub, while requiring a model that imports the same module throws.
+
+**The two paths read different properties.** `Model.init` never looks at `sequelize.define`; it
+reads `this.sequelize.options.define` and then calls `this.sequelize.runHooks`
+(`sequelize/lib/model.js`, `static init`). Every one of these stubs supplied `define: jest.fn()`
+- the one key that looks exactly right and is never consulted. Same module, two answers, no
+mystery.
+
+The `config/env` stubs fail the same way one step further out: `{ env: {} }` or
+`{ env: { jwtSecret } }` leaves `env.databaseUrl` undefined, so anything transitively importing
+`config/database` reaches `new Sequelize(undefined)`.
+
+### Extending the stub is the wrong fix, and that was MEASURED
+
+Adding `options: { define: {} }` moved the error from `define` to `runHooks`. A treadmill: each
+missing internal reveals the next, and a hand-written stub cannot track Sequelize's internals
+across upgrades. `backend/src/__tests__/testSupport/configMocks.ts` instead starts from the REAL
+object - a Sequelize that never connects, because the constructor performs no I/O - and overrides
+only the methods a test asserts on.
+
+**Independent corroboration:** `reeseOutreachModel` already did exactly this, inline. Someone had
+found the same fix for one suite without it reaching the list's diagnosis.
+
+### Six suites recovered: 56 tests the gate was skipping
+
+`assessmentService`, `projectDnaService`, `ticketServiceReeseTypes`, `explorerCohortRouting`,
+`adminEnrollmentPortalAccess`, `portalEnrollmentService`. Ignore list 22 -> 16.
+
+Of 11 suites whose mocks were corrected, 6 fully pass and 5 moved past the import error into a
+different cause. Across all 22, tests that actually EXECUTE went from 233 to 267, and passing
+from 207 to 240 - the remaining failures were always there, hidden behind suites that never ran.
+
+### A MISTAKE OF MINE, caught by the measurement rather than by reasoning
+
+Overriding `getQueryInterface` with a bare `jest.fn()` returns `undefined`, and callers read
+`.queryGenerator` off the result - so it traded one import error for another in `typeLaunchGate`.
+The rule is now written into the helper: **only override a method whose return value nothing
+navigates into.** `query`, `authenticate`, `close` and `transaction` are safe; anything returning
+an object to reach through is not.
+
+### The sixteen that remain are NAMED, in two groups
+
+**Group 1, dies at import (7).** A model is mocked while the REAL association wiring runs:
+`models/index.ts:548` does `Cohort.hasMany(Enrollment, ...)`, and a suite that replaced
+`Enrollment` with a plain object gets "called with something that's not a subclass of
+Sequelize.Model" - or "<Model>.default.hasMany is not a function" when the mocked one is the
+subject. NOT a mock-shape fix: the per-suite move is to stop `jest.mock`-ing models and
+`jest.spyOn` the real ones, which is only POSSIBLE now that the helper supplies a Sequelize that
+`Model.init` accepts.
+
+**Group 2, the suite runs (9).** Genuine assertion failures. `participantMagicLink` is the
+clearest: 2 failures, both `Enrollment.findAll is not a function`, because its own `models` mock
+lacks `findAll` while the service now calls it. Whether the service or the test is wrong is a
+question about intended behaviour - and a stale test and a real bug look identical from outside,
+which is how the original inference got written. `communityCommentsLikesProfiles` and `phase10_5`
+HANG rather than fail, so their mode is unknown beyond that.
+
+### Verification
+
+Six suites, 56 tests, green. Backend `tsc --noEmit` clean. Test-file typecheck clean under
+`--strict` with no `--allowJs` across the helper and all 12 touched files. `--listTests` under
+`jest.ci.config.ts` confirms all six are now INCLUDED rather than merely un-listed.

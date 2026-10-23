@@ -26,5 +26,3 @@ export function desksForBuilding(desks: StaffDesk[], buildingId: string, audienc
   return desks.filter((d) => d.building === buildingId && (d.id !== 'maya' || mayaAllowedFor(audience)));
 }
 
-/** Why Message is unavailable for someone the server says you cannot DM (the rule allows your cohort and staff). */
-export const MESSAGE_BLOCKED_NOTE = 'Messages are open to people in your cohort.';

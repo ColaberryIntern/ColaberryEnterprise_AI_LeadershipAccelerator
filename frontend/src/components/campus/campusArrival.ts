@@ -56,9 +56,12 @@ export function kickerOf(o: { zone?: string; tour?: { name: string; n: number; o
   return `You’ve arrived${o.zone ? ` · ${o.zone}` : ''}`;
 }
 
-export function happeningAt(id: BuildingId, s: { onAir: boolean; count: number | null; presenceError: boolean; facts?: Happening[] }): Happening[] {
+export function happeningAt(id: BuildingId, s: { onAir: boolean; count: number | null; presenceError: boolean; facts?: Happening[]; live?: { state: string; title: string; sub: string } | null }): Happening[] {
   const out: Happening[] = [];
-  if (s.onAir) out.push({ title: 'On air now', detail: 'Colaberry Live is broadcasting here', tone: 'hot' });
+  // WP-6: the prototype's per-state rows (its "reactions are flowing" and "your cohort is arriving" were samples, not drawn)
+  if (s.live?.state === 'reconnecting') out.push({ title: 'Reconnecting to the stream', detail: 'Resumes automatically, nothing to refresh', tone: '' });
+  else if (s.live) out.push({ title: `On air · ${s.live.title}`, detail: s.live.sub, tone: 'hot' });
+  else if (s.onAir) out.push({ title: 'On air now', detail: 'Colaberry Live is broadcasting here', tone: 'hot' });
   out.push(...(s.facts ?? []));
   if (s.presenceError) out.push({ title: 'Who is here is unavailable', detail: 'Headcounts are hidden, not zero', tone: '' });
   else if (s.count && s.count > 0) out.push({ title: `${s.count} ${s.count === 1 ? 'person' : 'people'} here now`, detail: 'From live presence', tone: 'live' });

@@ -196,4 +196,132 @@ router.post('/api/admin/presentation/showcases/:showcaseId/approve', requireAdmi
   } catch (e) { fail(res, e, next); }
 });
 
+/**
+ * THE REVIEW QUEUE — what is waiting on a staff decision.
+ *
+ * `listPendingShowcases` was written on 2026-10-18 and had no route, no caller
+ * and no tests until this one. The approve endpoint above could act on an id;
+ * nothing could tell anybody WHICH ids. A learner flipping a take to Public saw
+ * "Waiting for staff approval" and waited indefinitely, because the only way to
+ * find their request was to query the database by hand — which is literally how
+ * the two demos live in production today were approved.
+ */
+router.get('/api/admin/presentation/showcases/pending', requireAdmin, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!gate(res)) return;
+    const staffIdentity = String((req as any).admin?.email || (req as any).admin?.sub || 'admin');
+    const { listPendingShowcases } = await import('../../services/presentation/showcaseReviewQueue');
+    const pending = await listPendingShowcases(staffIdentity);
+    res.json({ pending, count: pending.length });
+  } catch (e) { fail(res, e, next); }
+});
+
+/**
+ * DECLINE, with a reason the learner can act on.
+ *
+ * Without this the queue has one button, and refusing means leaving the request
+ * to rot — which a learner cannot tell apart from being forgotten.
+ */
+const declineBody = z.object({
+  reason: z.string().min(1).max(2000),
+}).strict();
+
+router.post('/api/admin/presentation/showcases/:showcaseId/decline', requireAdmin, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!gate(res)) return;
+    const b = declineBody.parse(req.body || {});
+    const staffIdentity = String((req as any).admin?.email || (req as any).admin?.sub || 'admin');
+    const { staffDecline } = await import('../../services/presentation/showcaseLifecycle');
+    const r = await staffDecline(String(req.params.showcaseId), staffIdentity, b.reason);
+    if (!r.ok) return res.status(409).json({ error: r.reason });
+    res.json({ showcase_id: String(req.params.showcaseId), declined: true });
+  } catch (e) { fail(res, e, next); }
+});
+
+/**
+ * WATCH THE DEMO BEING REVIEWED.
+ *
+ * A `<video src>` sends no Authorization header, so `requireAdmin` alone cannot
+ * guard a player — the URL has to carry its own authority. The ticket is minted
+ * by the queue above: signed, staff-scoped, and half an hour long, which is the
+ * length of the job rather than the ten minutes a learner's ticket gets.
+ *
+ * BOTH GUARDS APPLY. An admin session to GET the queue that mints the ticket,
+ * and the ticket to fetch the bytes. Neither alone is enough, and a learner's
+ * own ticket fails `isStaffTicket` here even though it is validly signed.
+ */
+async function serveStaffRecording(req: Request, res: Response, next: NextFunction, want: 'file' | 'thumbnail') {
+  try {
+    const { verifyRecordingTicket, isStaffTicket } = await import('../../services/presentation/recordingTicket');
+    const claims = verifyRecordingTicket(typeof req.query.t === 'string' ? req.query.t : null);
+    // Same 404 for every refusal: a distinct code would confirm that a guessed
+    // recording id is a real one.
+    if (!claims || !isStaffTicket(claims) || claims.recordingId !== String(req.params.recordingId)) {
+      return res.status(404).json({ error: 'Not found' });
+    }
+
+    const { resolveStaffRecording } = await import('../../services/presentation/recordingPlayback');
+    const r = await resolveStaffRecording(String(req.params.recordingId));
+    if (!r.ok) {
+      if (r.reason === 'file_missing') {
+        return res.status(409).json({ error: 'The recording row exists but the video file is not on disk.' });
+      }
+      return res.status(404).json({ error: 'Not found' });
+    }
+
+    const fs = await import('fs');
+
+    if (want === 'thumbnail') {
+      const { ensureThumbnail } = await import('../../services/presentation/recordingThumbnail');
+      const poster = await ensureThumbnail(
+        r.recording.recordingId, r.recording.filePath, r.recording.durationSeconds,
+      );
+      // A camera-off take has no frame worth showing. The card falls back to a
+      // poster-less player; nothing about review should break over a picture.
+      if (!poster) return res.status(404).json({ error: 'No thumbnail' });
+      res.setHeader('Content-Type', 'image/jpeg');
+      res.setHeader('Cache-Control', 'private, no-store');
+      return fs.createReadStream(poster.path).pipe(res);
+    }
+
+    const { filePath, sizeBytes, mimeType, downloadName } = r.recording;
+    const { parseRange, contentRangeHeader, rangeLength } = await import('../../services/presentation/byteRange');
+    const outcome = parseRange(req.headers.range, sizeBytes);
+
+    res.setHeader('Content-Type', mimeType);
+    res.setHeader('Accept-Ranges', 'bytes');
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.setHeader('Content-Disposition', `inline; filename="${downloadName}"`);
+
+    if (outcome.kind === 'unsatisfiable') {
+      res.setHeader('Content-Range', `bytes */${sizeBytes}`);
+      return res.status(416).end();
+    }
+    if (outcome.kind === 'partial') {
+      const { range } = outcome;
+      res.status(206);
+      res.setHeader('Content-Range', contentRangeHeader(range, sizeBytes));
+      res.setHeader('Content-Length', String(rangeLength(range)));
+      return fs.createReadStream(filePath, { start: range.start, end: range.end }).pipe(res);
+    }
+
+    res.setHeader('Content-Length', String(sizeBytes));
+    return fs.createReadStream(filePath).pipe(res);
+  } catch (e) { fail(res, e, next); }
+}
+
+// The flag check stays on each ROUTE rather than inside the shared helper, because
+// the suite next door asserts one `gate(res)` per registration — an invariant that
+// would quietly stop meaning anything the first time a route delegated its gate
+// to somewhere the per-route count could not see.
+router.get('/api/admin/presentation/recordings/:recordingId/file', requireAdmin, (req: Request, res: Response, next: NextFunction) => {
+  if (!gate(res)) return;
+  void serveStaffRecording(req, res, next, 'file');
+});
+
+router.get('/api/admin/presentation/recordings/:recordingId/thumbnail', requireAdmin, (req: Request, res: Response, next: NextFunction) => {
+  if (!gate(res)) return;
+  void serveStaffRecording(req, res, next, 'thumbnail');
+});
+
 export default router;

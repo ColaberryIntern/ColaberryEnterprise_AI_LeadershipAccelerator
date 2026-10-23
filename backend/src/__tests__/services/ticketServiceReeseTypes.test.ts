@@ -8,7 +8,8 @@ import { emitEvent } from '../../services/workLedger/workLedgerService';
 import { createTicket } from '../../services/ticketService';
 import { decisionRecordInputSchema } from '../../schemas/decisionRecordSchema';
 
-jest.mock('../../config/database', () => ({ sequelize: { query: jest.fn() } }));
+jest.mock('../../config/database', () => require('../testSupport/configMocks')
+  .databaseModuleMock(['query']));
 jest.mock('../../models', () => ({
   Ticket: { findOne: jest.fn(), create: jest.fn(), findByPk: jest.fn() },
   TicketActivity: { create: jest.fn() },

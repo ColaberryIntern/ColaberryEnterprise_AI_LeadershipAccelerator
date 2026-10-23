@@ -126,3 +126,17 @@
 .cm-map.is-quiet .dimmable{filter:brightness(.55) saturate(.7) hue-rotate(-15deg)}
 .cm-map.is-quiet .win{fill:var(--cm-art-lit)}
 .cm-map.is-reduced .cm-step,.cm-map.is-reduced .cm-ping,.cm-map.is-reduced .neon,.cm-map.is-reduced .cm-avatar .bob{animation:none}
+
+/* WP-6: Colaberry Live's states on the map (the prototype's ls-* classes): beams and waves only while on air; a marquee pill over the
+   live building in the state's colour (flickering while reconnecting); backstage glows amber */
+.cm-map:not(.ls-live) .cm-beam,.cm-map:not(.ls-live) .cm-wave{display:none}
+.cm-map.ls-backstage .cm-bld.onair .body-g{filter:drop-shadow(0 0 12px var(--cm-art-backstage-glow))}
+.cm-marquee text{font:800 11px 'DM Sans',var(--sans),sans-serif;fill:var(--cm-art-white);letter-spacing:.08em}
+.cm-marquee rect{fill:var(--cm-art-ls-live)}
+.cm-marquee.is-live rect{filter:drop-shadow(0 0 8px var(--cm-art-marquee-glow))}
+.cm-marquee.is-backstage rect{fill:var(--cm-art-ls-backstage)}
+.cm-marquee.is-reconnecting rect{fill:var(--cm-art-ls-reconnecting)}
+.cm-marquee.is-replay rect{fill:var(--cm-art-ls-replay)}
+.cm-marquee.is-reconnecting{animation:cm-flicker 1.4s steps(2) infinite}
+@keyframes cm-flicker{50%{opacity:.45}}
+.cm-map.is-reduced .cm-marquee{animation:none}
