@@ -24,6 +24,10 @@ const PATH_SECTION: Array<[string, SectionKey]> = [
   ['/api/admin/war-room', 'war_room'],
   ['/api/admin/revenue', 'revenue'], ['/api/admin/refunds', 'revenue'], ['/api/admin/pipeline', 'revenue'],
   ['/api/admin/opportunities', 'revenue'], ['/api/admin/leads', 'revenue'], ['/api/admin/funnel', 'revenue'],
+  // Commercialization Command Center (C8.2). Classified in the same change that mounts
+  // the router, because this gate is deny-by-default: an unmapped prefix 403s a scoped
+  // revenue identity with nothing in the response explaining why.
+  ['/api/admin/commercialization', 'revenue'],
   ['/api/admin/campaigns', 'campaigns'], ['/api/admin/communications', 'campaigns'],
   // BEFORE the broad marketing row below, deliberately: pathToSection returns the FIRST
   // match in array order, not the longest prefix, so a narrower path placed after it is

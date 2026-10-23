@@ -96,6 +96,7 @@ import missedOpportunitiesRoutes from './admin/missedOpportunitiesRoutes';
 import contentQueueRoutes from './admin/contentQueueRoutes';
 import sourceRoutes from './admin/sourceRoutes';
 import refundRoutes from './admin/refundRoutes';
+import commercializationRoutes from './admin/commercializationRoutes';
 import formDefinitionRoutes from './admin/formDefinitionRoutes';
 import routingRuleRoutes from './admin/routingRuleRoutes';
 import ingestLogRoutes from './admin/ingestLogRoutes';
@@ -306,6 +307,9 @@ router.use(missedOpportunitiesRoutes);
 router.use(contentQueueRoutes);
 router.use(sourceRoutes);
 router.use(refundRoutes);
+// Commercialization Command Center (C8.2). Read-only; its prefix is classified
+// 'revenue' in mgmtSectionGate PATH_SECTION, mounted in this same change.
+router.use(commercializationRoutes);
 router.use(podcastRoutes);
 router.use(formDefinitionRoutes);
 router.use(routingRuleRoutes);
