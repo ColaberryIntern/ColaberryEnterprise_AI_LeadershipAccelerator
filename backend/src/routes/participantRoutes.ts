@@ -53,6 +53,7 @@ import {
   handleGetDashboard, handleGetSessions, handleGetSessionDetail, handleGetNextSession, handleJoinSession, handleLeaveMeeting,
   handleGetSubmissions, handleCreateSubmission, handleUploadSubmission,
   handleGetProgress, handleGetCheckinInfo,
+  handleGetSessionMoment,
 } from '../controllers/participantController';
 import {
   handleGetCurriculum, handleGetModuleDetail, handleStartLesson,
@@ -118,6 +119,9 @@ router.get('/api/portal/handoff/exchange', handleExchangeHandoff);
 // Public check-in landing info (no auth): a not-yet-logged-in student who scans
 // the Class Kit QR can see which class they're checking in to. No meeting link.
 router.get('/api/portal/sessions/:id/checkin-info', handleGetCheckinInfo);
+// L7.2 — the current moment behind the persistent session link. Public for the same reason
+// as check-in: the QR is scanned before anyone signs in. Returns the moment only.
+router.get('/api/portal/sessions/:id/live-moment', handleGetSessionMoment);
 
 // Authenticated participant endpoints
 router.get('/api/portal/profile', requireParticipant, handleGetProfile);

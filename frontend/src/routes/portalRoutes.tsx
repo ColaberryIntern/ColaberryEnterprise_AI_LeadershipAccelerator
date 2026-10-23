@@ -7,6 +7,7 @@ const PortalLoginPage = lazy(() => import('../pages/portal/PortalLoginPage'));
 const PortalFreeSignupPage = lazy(() => import('../pages/portal/PortalFreeSignupPage'));
 const PortalVerifyPage = lazy(() => import('../pages/portal/PortalVerifyPage'));
 const PortalViewAsPage = lazy(() => import('../pages/portal/PortalViewAsPage'));
+const LiveSessionPage = lazy(() => import('../pages/portal/LiveSessionPage'));
 const PortalMgmtEnterPage = lazy(() => import('../pages/portal/PortalMgmtEnterPage'));
 import ReadOnlyBanner from '../components/portal/ReadOnlyBanner';
 import { BroadcastPlayerProvider } from '../contexts/BroadcastPlayerContext';
@@ -121,6 +122,12 @@ const portalRoutes = (
     {/* Live-class check-in — PUBLIC: a student may scan the room QR before signing
         in. Records attendance if signed in, else routes them to log in. */}
     <Route path="/portal/class-checkin/:sessionId" element={<ClassCheckinPage />} />
+    {/* L7.2 — the persistent live link. PUBLIC for the same reason check-in is: these
+        URLs are promoted and printed before the class exists, so they are clicked long
+        before there is anything to watch. The server decides the moment; the page renders
+        not-yet-started honestly rather than 404ing. Companion experience is L4.7. */}
+    <Route path="/portal/live/:sessionId" element={<LiveSessionPage />} />
+    <Route path="/portal/live/:sessionId/companion" element={<LiveSessionPage />} />
     <Route element={<PortalProtectedRoute />}>
       {/* Design E student surfaces — each renders its own PortalShell chrome,
           so they sit OUTSIDE PortalLayout. */}

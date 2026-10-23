@@ -11,6 +11,7 @@
 import QRCode from 'qrcode';
 import { env } from '../config/env';
 import { sessionCheckinUrl } from './email/sessionReminderEmail';
+import { buildSessionLinks } from './broadcast/broadcastSessionLinks';
 import { Cohort, CommunityRoom, Enrollment, LiveSession } from '../models';
 
 /**
@@ -37,6 +38,14 @@ export interface SessionKit {
   roster_count: number;
   checkin_url: string;
   qr_svg: string;
+  /**
+   * L7.2 — the audience-facing entry points, so a show can be promoted before it airs.
+   * String building only: this is on the hot path (the live-state endpoint polls the kit about
+   * every 2.5s), so resolving what is happening RIGHT NOW is deliberately not done here. That
+   * costs a query and lives in resolveSessionMoment.
+   */
+  workspace_url: string;
+  companion_url: string;
 }
 
 /**
@@ -53,7 +62,10 @@ export async function buildSessionKit(sessionId: string): Promise<SessionKit | n
   ]);
 
   const checkin_url = sessionCheckinUrl(String(session.id), appBaseUrl());
+  // The QR keeps encoding the EXISTING persistent url. A per-moment QR would make every
+  // already-printed or already-posted link wrong the instant the moment moved.
   const qr_svg = await QRCode.toString(checkin_url, { type: 'svg', margin: 1, width: 280 });
+  const links = buildSessionLinks(String(session.id), appBaseUrl());
 
   return {
     session: {
@@ -70,6 +82,8 @@ export async function buildSessionKit(sessionId: string): Promise<SessionKit | n
     roster_count,
     checkin_url,
     qr_svg,
+    workspace_url: links.workspace_url,
+    companion_url: links.companion_url,
   };
 }
 
