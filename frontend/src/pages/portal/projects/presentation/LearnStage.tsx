@@ -41,9 +41,15 @@ export interface LearnStageProps {
    * would be a lie about what the rest of the page is built from.
    */
   pendingType?: string | null;
+  /** Types already in the portfolio, so the chooser can mark them. */
+  recordedTypeIds?: string[];
+  /** Back to the grid this learner came from. */
+  onBackToPortfolio?: () => void;
 }
 
-export default function LearnStage({ projectId, storyId, demo, pendingType }: LearnStageProps) {
+export default function LearnStage({
+  projectId, storyId, demo, pendingType, recordedTypeIds, onBackToPortfolio,
+}: LearnStageProps) {
   const [templateId, setTemplateId] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
@@ -116,8 +122,8 @@ export default function LearnStage({ projectId, storyId, demo, pendingType }: Le
     if (pendingType !== templateId) chooseTemplate(pendingType);
   }, [demo, appliedPending, pendingType, templateId, chooseTemplate]);
 
-  if (demo) {
-    return (
+  if (demo) {
+    return (
       <div className="ps-pending" data-testid="ps-learn-demo">
         <strong>This is a preview account.</strong>
         Lessons are shown against a real student&rsquo;s own task, so there is nothing to load here.
@@ -140,11 +146,28 @@ export default function LearnStage({ projectId, storyId, demo, pendingType }: Le
             Getting ready to record: <strong>{pendingLabel}</strong>. Your checklist,
             timings and deck prompt now follow this type.
           </span>
+          {/* A WAY BACK, not only a way to hide the sentence. Dismiss alone left
+              someone who opened the wrong empty slot with no route to the grid
+              they came from, short of the browser's back button. */}
+          {onBackToPortfolio && (
+            <button
+              type="button"
+              className="ps-link"
+              data-testid="ps-learn-banner-back"
+              style={{
+                marginLeft: 'auto', background: 'none', border: 0, cursor: 'pointer',
+                fontWeight: 600, whiteSpace: 'nowrap', color: 'var(--ps-accent-soft, #2b6cb0)',
+              }}
+              onClick={onBackToPortfolio}
+            >
+              ← Back to portfolio
+            </button>
+          )}
           <button
             type="button"
             className="ps-btn ps-btn--quiet"
             data-testid="ps-learn-banner-dismiss"
-            style={{ marginLeft: 'auto' }}
+            style={onBackToPortfolio ? undefined : { marginLeft: 'auto' }}
             onClick={() => setBannerDismissed(true)}
           >
             Dismiss
@@ -153,7 +176,12 @@ export default function LearnStage({ projectId, storyId, demo, pendingType }: Le
       )}
       <div className="ps-card" data-testid="ps-type-first">
         <h3>Presentation type</h3>
-        <TemplateChooser value={templateId} onChange={chooseTemplate} disabled={saving} />
+        <TemplateChooser
+          value={templateId}
+          onChange={chooseTemplate}
+          disabled={saving}
+          recordedTypeIds={recordedTypeIds}
+        />
         {saveError && <p className="ps-note" role="alert" data-testid="ps-type-error">{saveError}</p>}
         <p className="ps-note ps-note--soft" style={{ marginTop: 10 }} data-testid="ps-type-why">
           This is the first question because it drives the rest: the lesson below, your

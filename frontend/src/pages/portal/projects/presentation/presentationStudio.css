@@ -351,3 +351,90 @@
 .rt[data-theme='dark'] .ps-studio .ps-btn { color: #1a202c; }
 :root[data-theme='dark'] .ps-studio .ps-btn--soft,
 .rt[data-theme='dark'] .ps-studio .ps-btn--soft { background: transparent; color: var(--ps-accent); border-color: var(--ps-accent); }
+
+/* ── the empty portfolio slot ─────────────────────────────────────────────────
+ * The hole in the grid is the thing that tells a learner there is more to record,
+ * so it has to read as deliberately empty rather than as a card that failed to
+ * load. Dashed edge plus a faint hatch does that; a plain bordered box does not.
+ *
+ * These live in the stylesheet rather than inline on the element because hover
+ * and :focus-visible cannot be expressed inline at all — the earlier version put
+ * the border inline and simply had no hover or focus state. */
+
+.ps-studio .ps-slot-void {
+  border: 2px dashed var(--ps-line);
+  background-color: var(--ps-surface-alt);
+  background-image: repeating-linear-gradient(
+    45deg,
+    rgba(113, 128, 150, .055) 0 6px,
+    transparent 6px 12px
+  );
+  transition: border-color .15s ease, background-color .15s ease;
+}
+
+.ps-studio .ps-slot-void:hover,
+.ps-studio .ps-slot-void:focus-visible {
+  border-color: var(--ps-accent);
+  background-color: var(--ps-surface);
+}
+
+/* The "+" fills in on hover, which is the affordance that says the whole tile is
+ * the button rather than the words at the bottom of it. */
+.ps-studio .ps-slot-void .ps-slot-plus {
+  border: 2px dashed var(--ps-line);
+  color: var(--ps-ink-soft);
+  transition: background-color .15s ease, border-color .15s ease, color .15s ease;
+}
+
+.ps-studio .ps-slot-void:hover .ps-slot-plus,
+.ps-studio .ps-slot-void:focus-visible .ps-slot-plus {
+  border-style: solid;
+  border-color: var(--ps-accent);
+  background: var(--ps-accent);
+  color: #ffffff;
+}
+
+.ps-studio .ps-slot-void:focus-visible {
+  outline: 3px solid var(--ps-accent-soft);
+  outline-offset: 2px;
+}
+
+/* Dark mode needs a lighter hatch; the light one disappears on a dark surface. */
+:root[data-theme='dark'] .ps-studio .ps-slot-void,
+.rt[data-theme='dark'] .ps-studio .ps-slot-void {
+  background-image: repeating-linear-gradient(
+    45deg,
+    rgba(226, 232, 240, .05) 0 6px,
+    transparent 6px 12px
+  );
+}
+
+:root[data-theme='dark'] .ps-studio .ps-slot-void:hover .ps-slot-plus,
+.rt[data-theme='dark'] .ps-studio .ps-slot-void:hover .ps-slot-plus,
+:root[data-theme='dark'] .ps-studio .ps-slot-void:focus-visible .ps-slot-plus,
+.rt[data-theme='dark'] .ps-studio .ps-slot-void:focus-visible .ps-slot-plus { color: #1a202c; }
+
+/* ── the filled slot's play affordance ────────────────────────────────────────
+ * A poster with native controls underneath still reads as a still image until
+ * you notice the control bar. The overlay says "this plays" at a glance, and it
+ * is pointer-events: none so the click still lands on the video itself. */
+.ps-studio .ps-slot-play {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
+.ps-studio .ps-slot-play span {
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  background: rgba(16, 24, 40, .55);
+  color: #ffffff;
+  font-size: 20px;
+  line-height: 54px;
+  text-align: center;
+  padding-left: 4px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, .3);
+}

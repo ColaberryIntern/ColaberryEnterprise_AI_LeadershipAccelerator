@@ -3,6 +3,7 @@ import {
   fetchPortfolio, saveReflection, type Portfolio, type PortfolioSlot,
 } from './presentationApi';
 import VisibilitySwitch from './VisibilitySwitch';
+import ShareSheet from './ShareSheet';
 
 /**
  * PRESENT & SHARE — what used to be two placeholder steps.
@@ -166,7 +167,11 @@ const PresentAndSharePanel: React.FC<PresentAndSharePanelProps> = ({
       <div
         className="ps-portfolio-grid"
         data-testid="ps-portfolio-grid"
-        style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))', gap: 14 }}
+        /* 300, not 230. At 230 the grid went four-up on a desktop and the cards
+           stopped reading as videos — a 16:9 poster 190px wide beside three
+           lines of description is a text tile with a picture on it. Three up,
+           and it reads the way the reference does. */
+        style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 14 }}
       >
         {slots.map((slot, i) => (
           slot.recorded
@@ -196,7 +201,7 @@ const PresentAndSharePanel: React.FC<PresentAndSharePanelProps> = ({
             {saveError}
           </p>
         )}
-        <div style={{ marginTop: 10 }}>
+        <div style={{ marginTop: 10, display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', gap: 10 }}>
           <button
             type="button"
             className="ps-btn"
@@ -206,6 +211,7 @@ const PresentAndSharePanel: React.FC<PresentAndSharePanelProps> = ({
           >
             {saving ? 'Saving…' : notesDirty ? 'Save reflection' : 'Saved'}
           </button>
+          <ShareSheet slots={slots} />
         </div>
       </div>
     </>
@@ -235,6 +241,11 @@ const FilledSlot: React.FC<{
         >
           {slot.playbackUrl && <a href={slot.playbackUrl}>Open this demo</a>}
         </video>
+        {slot.thumbnailUrl && (
+          <span className="ps-slot-play" aria-hidden="true" data-testid="ps-slot-play">
+            <span>▶</span>
+          </span>
+        )}
         {slot.takeCount > 1 && (
           <span data-testid="ps-slot-takes" style={{ position: 'absolute', left: 8, bottom: 8, color: '#fff', fontSize: 12, background: 'rgba(0,0,0,.5)', padding: '2px 6px', borderRadius: 4 }}>
             {slot.takeCount} takes
@@ -305,8 +316,7 @@ const VoidSlot: React.FC<{
     onClick={onStart}
     style={{
       display: 'flex', flexDirection: 'column', textAlign: 'left', padding: 0,
-      border: '2px dashed var(--slate-300, #c7ccd6)', borderRadius: 10, background: 'transparent',
-      cursor: 'pointer', minHeight: 262, color: 'inherit', font: 'inherit',
+      borderRadius: 10, cursor: 'pointer', minHeight: 262, color: 'inherit', font: 'inherit',
     }}
   >
     <span style={{ aspectRatio: '16 / 9', display: 'grid', placeItems: 'center', position: 'relative', width: '100%' }}>
@@ -315,9 +325,10 @@ const VoidSlot: React.FC<{
       </span>
       <span
         aria-hidden="true"
+        className="ps-slot-plus"
         style={{
-          width: 48, height: 48, borderRadius: '50%', border: '2px dashed var(--slate-300, #c7ccd6)',
-          display: 'grid', placeItems: 'center', fontSize: 26, color: 'var(--slate-500, #9ca3af)',
+          width: 48, height: 48, borderRadius: '50%',
+          display: 'grid', placeItems: 'center', fontSize: 26,
         }}
       >
         +
