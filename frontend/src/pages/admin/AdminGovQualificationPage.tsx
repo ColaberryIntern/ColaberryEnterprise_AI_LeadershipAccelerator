@@ -16,7 +16,7 @@ import {
 } from '../../services/factoryApi';
 import { band, subtle, fmtValue, daysLeft, closeLabel } from './govOppFormat';
 import { derivePotentialDisqualifiers } from './govGaps';
-import { parseDeadline, countdownTo, deadlineTone, formatCountdown } from './govDeadline';
+import { parseDeadline, countdownTo, deadlineTone, formatCountdown, dossierDeadlineIso } from './govDeadline';
 import { deriveNextStep } from './govNextStep';
 import { BidDecisionDashboard } from './govWorkspace/BidDecisionDashboard';
 import { ProposalSummaryPanel } from './govWorkspace/ProposalSummaryPanel';
@@ -1650,7 +1650,7 @@ export default function AdminGovQualificationPage(): React.ReactElement {
               subtitle="The quick read — value, timing and the legacy scores — so you can pass in two minutes if it is clearly not for us.">
               <div className="row g-3">
                 <div className="col-6 col-lg-3"><StatCard label="Estimated value" value={fmtValue(oppDetail?.opportunity?.estimatedValue ?? null)} icon="money-dollar-circle-line" tone="neutral" hint="unverified" /></div>
-                <div className="col-6 col-lg-3"><StatCard label="Closes" value={closeLabel(oppDetail?.opportunity?.closeDate ?? ws.source?.deadline?.utc ?? null)} icon="calendar-event-line" tone="neutral" hint={daysLeft(oppDetail?.opportunity?.closeDate ?? ws.source?.deadline?.utc ?? null) !== null ? `${daysLeft(oppDetail?.opportunity?.closeDate ?? ws.source?.deadline?.utc ?? null)} days` : undefined} /></div>
+                <div className="col-6 col-lg-3"><StatCard label="Closes" value={closeLabel(oppDetail?.opportunity?.closeDate ?? ws.source?.deadline?.utc ?? dossierDeadlineIso(ws.dossier?.keyDates ?? null))} icon="calendar-event-line" tone="neutral" hint={daysLeft(oppDetail?.opportunity?.closeDate ?? ws.source?.deadline?.utc ?? dossierDeadlineIso(ws.dossier?.keyDates ?? null)) !== null ? `${daysLeft(oppDetail?.opportunity?.closeDate ?? ws.source?.deadline?.utc ?? dossierDeadlineIso(ws.dossier?.keyDates ?? null))} days` : undefined} /></div>
                 <div className="col-6 col-lg-3"><StatCard label="Legacy priority" value={oppDetail?.opportunity?.priorityScore ?? '—'} icon="bar-chart-box-line" tone="neutral" hint="advisory" /></div>
                 <div className="col-6 col-lg-3"><StatCard label="Legacy fit" value={oppDetail?.opportunity?.fitScore ?? '—'} icon="scales-3-line" tone="neutral" hint="advisory" /></div>
               </div>
@@ -1796,7 +1796,7 @@ export default function AdminGovQualificationPage(): React.ReactElement {
           {/* P5: the countdown band — are we going to make it? Deterministic on-time probability from the deadline,
               remaining build work, and items waiting on a human answer (see govCountdown). */}
           <CountdownBand
-            deadline={oppDetail?.opportunity?.closeDate ?? ws.source?.deadline?.utc ?? null}
+            deadline={oppDetail?.opportunity?.closeDate ?? ws.source?.deadline?.utc ?? dossierDeadlineIso(ws.dossier?.keyDates ?? null)}
             remainingStoryCount={ws.build ? (ws.build.stories ?? []).length : null}
             humanBlockedCount={(ws.responseSlots ?? []).filter((s) => (s.gaps ?? []).some((g) => g.resolution === 'open' || g.resolution === 'filler')).length}
             submitTotal={(ws.responseSlots ?? []).length}
@@ -1815,11 +1815,11 @@ export default function AdminGovQualificationPage(): React.ReactElement {
           <SectionCard title="Spec &amp; MVP schedule (pre-submission)" icon="calendar-schedule-line"
             subtitle="Back-planned from the submission deadline: can we build a demo-able MVP before the bid is due? Deterministic and working-day aware. This is distinct from the post-award build timeline below.">
             <MvpScheduleBanner
-              deadline={oppDetail?.opportunity?.closeDate ?? ws.source?.deadline?.utc ?? null}
+              deadline={oppDetail?.opportunity?.closeDate ?? ws.source?.deadline?.utc ?? dossierDeadlineIso(ws.dossier?.keyDates ?? null)}
               mvpStoryCount={ws.build ? (ws.build.stories ?? []).length : null}
             />
             <PreSubmissionGantt
-              deadline={oppDetail?.opportunity?.closeDate ?? ws.source?.deadline?.utc ?? null}
+              deadline={oppDetail?.opportunity?.closeDate ?? ws.source?.deadline?.utc ?? dossierDeadlineIso(ws.dossier?.keyDates ?? null)}
               mvpStoryCount={ws.build ? (ws.build.stories ?? []).length : null}
             />
           </SectionCard>
@@ -1839,7 +1839,7 @@ export default function AdminGovQualificationPage(): React.ReactElement {
               <GovBuildPlanAIPanel canonical={canonical}
                 requirements={(established ?? []).map((r) => ({ id: r.id, text: r.text }))}
                 title={oppDetail?.opportunity?.title ?? null} buyer={oppDetail?.opportunity?.agency ?? null}
-                deadline={oppDetail?.opportunity?.closeDate ?? ws.source?.deadline?.utc ?? null}
+                deadline={oppDetail?.opportunity?.closeDate ?? ws.source?.deadline?.utc ?? dossierDeadlineIso(ws.dossier?.keyDates ?? null)}
                 onLoaded={setAiBuildSummary} />
               <details className="mt-3 pt-2 border-top">
                 <summary className="small fw-semibold text-secondary" style={{ cursor: 'pointer' }}>
@@ -1874,7 +1874,7 @@ export default function AdminGovQualificationPage(): React.ReactElement {
                 assignableBuilders={ws.build?.assignableBuilders ?? []}
                 requirements={(established ?? []).map((r) => ({ id: r.id, text: r.text }))}
                 title={oppDetail?.opportunity?.title ?? null} buyer={oppDetail?.opportunity?.agency ?? null}
-                deadline={oppDetail?.opportunity?.closeDate ?? ws.source?.deadline?.utc ?? null}
+                deadline={oppDetail?.opportunity?.closeDate ?? ws.source?.deadline?.utc ?? dossierDeadlineIso(ws.dossier?.keyDates ?? null)}
                 onCreated={(r) => {
                   setMaterialized({ projectId: r.projectId });
                   // One click: fold the (separate, audited) build authorization into create for an authorized
@@ -2012,7 +2012,7 @@ export default function AdminGovQualificationPage(): React.ReactElement {
                   if (state !== 'future') {
                     if (s.key === 'snapshot') {
                       if (oppDetail?.opportunity?.title) facts.push(oppDetail.opportunity.title);
-                      const dl = daysLeft(oppDetail?.opportunity?.closeDate ?? ws.source?.deadline?.utc ?? null);
+                      const dl = daysLeft(oppDetail?.opportunity?.closeDate ?? ws.source?.deadline?.utc ?? dossierDeadlineIso(ws.dossier?.keyDates ?? null));
                       if (dl !== null) facts.push(`${dl} days to close`);
                     } else if (s.key === 'solicitation') {
                       facts.push(`${ws.evaluation?.evals.length ?? 0} requirements established`);

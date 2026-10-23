@@ -133,6 +133,16 @@ describe('extractProposal', () => {
     // the scoring scheme flows through the dossier too
     expect(dossier.evaluation?.factors.some((f) => f.label === 'Technical Approach' && f.points === 70)).toBe(true);
   });
+
+  it('excludes form / tax-form documents from the dossier (a W-9 anti-phishing address is NOT a contact)', async () => {
+    const zip = makeZip({
+      '6-RFP.txt': 'The vendor shall provide services. Direct all inquiries to jane.doe@county.gov.',
+      '2-W9-2024.txt': 'Form W-9 Request for Taxpayer Identification Number. Report phishing to phishing@irs.gov.',
+    });
+    const { dossier } = await extractProposal(zip);
+    expect(dossier.contacts.some((c) => c.value === 'jane.doe@county.gov')).toBe(true);   // from the solicitation
+    expect(dossier.contacts.some((c) => c.value === 'phishing@irs.gov')).toBe(false);     // W-9 is a form → excluded
+  });
 });
 
 describe('extractDossier (pure)', () => {

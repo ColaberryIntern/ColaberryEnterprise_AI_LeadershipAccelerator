@@ -525,7 +525,15 @@ export async function extractProposal(zipBuffer: Buffer): Promise<ProposalExtrac
     }
   }
 
-  // The dossier ignores a duplicate file's context so contacts/dates are not double-counted.
-  const dossier = extractDossier(blocks.filter((b) => !(b.kind === 'context' && dupNames.has(b.locator))));
+  // The dossier ignores a duplicate file's context so contacts/dates are not double-counted, AND it ignores
+  // single-item FORM / TAX-FORM / PRICING-FORM documents: a W-9's own instructions carry addresses like
+  // "phishing@irs.gov" and an IRS helpline that are NOT the solicitation's point of contact, and a form has no
+  // real meeting/key dates. Only the solicitation, addenda, terms, and reference docs feed the dossier.
+  const formNames = new Set(
+    readFiles.filter((f) => { const c = byName.get(f.name); return !!c && SINGLE_ITEM_ROLES.has(c.role); }).map((f) => f.name),
+  );
+  const dossier = extractDossier(
+    blocks.filter((b) => !(b.kind === 'context' && (dupNames.has(b.locator) || formNames.has(b.locator)))),
+  );
   return { blocks, requirements, dossier, fileCount, files };
 }
