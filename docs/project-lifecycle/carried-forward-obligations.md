@@ -2905,3 +2905,56 @@ same lesson the enrollment-lock suite taught with `sequelize.sync()`.
 §8 Q1 and Q2 remain unanswered. Steps 2 and 3 — readiness on build events, and the automatic work
 hops — stay blocked. Nothing in this change writes a readiness row in production: there is no
 caller yet, by design.
+
+## THE PIPELINE CANNOT BE POINTED AT AN APPROVAL, by construction
+
+Design §3, with the DRI's answers of 2026-10-23: **`operating` IS automatic (Q1: A)** and **there
+is no feature flag (Q2: B)**.
+
+### The implementation that was rejected
+
+The obvious one is to call `evaluateTransition` with `actorPermissions: [STAGE_PERMISSION[to]]` -
+the pipeline asserting it holds whatever the hop needs. It works, and it is wrong: a system
+identity passing a permission check by claiming the permission is one careless argument away from
+claiming `contract.approve`.
+
+`lifecycleAutoAdvance.ts` instead has `WORK_HOPS` as its entire universe of reachable targets, so
+an approval or a review is unreachable by STRUCTURE rather than by a conditional someone could
+invert. `evaluateTransition` keeps its permission check untouched, and the #3308 guard keeps
+protecting it.
+
+### Four automatic, eight human — derived, not hand-listed
+
+`WORK_HOPS` is built from `STAGE_PERMISSION` at module load, so the two cannot drift:
+
+| | |
+|---|---|
+| Automatic | `awaiting_blueprint_approval` (project.write), `planning` (story.write), `building` (story.execute), `operating` (release.deploy) |
+| Human | the other **eight** - six `*.approve`, two `*.review` |
+
+Two further refusals the design implies and the code enforces: the act must MATCH the hop (so
+`building` cannot be advanced by reporting `project.write`), and readiness still has to be
+satisfied. Automatic means nobody clicks, not that the evidence stopped mattering.
+
+### Proved end to end, not only as a pure function
+
+A decision that refuses correctly is worth nothing if the write beside it advances anyway. The
+integration suite therefore re-runs the approval case against a real row and asserts **the stage
+is unchanged in the database afterwards** - plus the compare-and-swap under two concurrent
+advances (one winner, one `stage_moved`), and idempotency.
+
+### Which test catches what, measured
+
+Mutation: add `contract.approve` to the work permissions, so the automatic surface grows to
+include the blueprint approval. **Three tests fail and the diff names `blueprint_approved`.**
+
+Worth recording which test does NOT fail: `REFUSES every approval and review hop`. It iterates
+the hops that are *not* in `WORK_HOPS`, so a hop leaking INTO the set simply stops being examined
+and its coverage shrinks silently. That is why the exact-set and the 4/8 count assertions exist.
+The refusal test guards a logic inversion inside the set; the set assertions guard the set itself
+growing. Neither is redundant, and only running the mutation showed which was which.
+
+### Nothing calls it yet
+
+This is §9 step 3 built ahead of step 2. Correct before reachable is the safe order: the command
+exists and is proved, and no build event invokes it until the hook lands.
