@@ -1,4 +1,5 @@
 import AdmissionsKnowledgeEntry from '../models/AdmissionsKnowledgeEntry';
+import { membershipPriceSentence, quotesRetiredFact } from './admissionsPricing';
 
 interface SeedEntry {
   category: string;
@@ -8,7 +9,7 @@ interface SeedEntry {
   priority: number;
 }
 
-const SEED_ENTRIES: SeedEntry[] = [
+export const SEED_ENTRIES: SeedEntry[] = [
   // Program Core
   {
     category: 'program',
@@ -41,8 +42,9 @@ const SEED_ENTRIES: SeedEntry[] = [
   {
     category: 'program',
     title: 'Next Cohort',
-    content: 'The next cohort starts March 31, 2026. Sessions run on Tuesdays and Thursdays over 3 weeks. Cohort sizes are kept small to ensure hands-on attention. Visit the enrollment page or ask Maya to help you secure your spot.',
-    keywords: ['start', 'date', 'when', 'next', 'cohort', 'begin', 'march'],
+    // C22 (2026-10-23): no hard-coded start date; the old "March 31, 2026" had passed and was still being quoted.
+    content: 'New cohorts open regularly and cohort sizes are kept small for hands-on attention. For the next start date, book a call with admissions or ask Maya to connect you with a person; you can start for $0 while you wait.',
+    keywords: ['start', 'date', 'when', 'next', 'cohort', 'begin'],
     priority: 10,
   },
 
@@ -89,8 +91,9 @@ const SEED_ENTRIES: SeedEntry[] = [
   {
     category: 'pricing',
     title: 'Program Investment',
-    content: 'The Enterprise AI Leadership Accelerator is $4,500 per participant. This includes all 5 live sessions, hands-on exercises, expert-guided project work, enterprise AI architecture templates, governance frameworks, and ongoing access to the Advisory Labs peer network.',
-    keywords: ['price', 'cost', 'individual', 'enrollment', 'how much', 'investment', '$4500', '4500'],
+    // C22 (Ali, 2026-10-23): the membership price, built from the billing plans (admissionsPricing), never a typed figure.
+    content: `${membershipPriceSentence()} Group and corporate pricing: book a call with admissions.`,
+    keywords: ['price', 'cost', 'individual', 'enrollment', 'how much', 'investment', 'membership', 'monthly', 'annual', 'tuition', '149', '199', '$0'],
     priority: 10,
   },
   {
@@ -158,7 +161,7 @@ const SEED_ENTRIES: SeedEntry[] = [
   {
     category: 'logistics',
     title: 'Enrollment Process',
-    content: 'To enroll: (1) Book a strategy call or submit an interest form to discuss your goals, (2) Receive the executive briefing with full program details, (3) Complete enrollment and payment, (4) Start with your cohort on day one. The next cohort begins March 31.',
+    content: 'To enroll: (1) Book a strategy call or submit an interest form to discuss your goals, (2) Receive the executive briefing with full program details, (3) Complete enrollment and payment, (4) Start with your cohort on day one. You can start for $0, no card needed.',
     keywords: ['enroll', 'enrollment', 'process', 'steps', 'how to join', 'sign up', 'register'],
     priority: 9,
   },
@@ -218,7 +221,22 @@ export async function seedAdmissionsKnowledge(): Promise<void> {
       created++;
     }
   }
-  if (created > 0 || updated > 0) {
-    console.log(`[Admissions] Knowledge base: ${created} created, ${updated} updated`);
+  const retired = await retireStaleFacts();
+  if (created > 0 || updated > 0 || retired > 0) {
+    console.log(`[Admissions] Knowledge base: ${created} created, ${updated} updated, ${retired} retired`);
   }
+}
+
+/**
+ * C22: switch off every ACTIVE knowledge row that still quotes a retired fact (the old $4,500 offer, the past March 31, 2026
+ * cohort), whoever wrote it: this seed's old rows and the nightly page-sync agent's alike. Deactivated, never deleted, so the
+ * history stays and an admin can see what was retired. Idempotent: a second run finds nothing to do.
+ */
+export async function retireStaleFacts(): Promise<number> {
+  const rows = await AdmissionsKnowledgeEntry.findAll({ where: { active: true } });
+  let retired = 0;
+  for (const row of rows) {
+    if (quotesRetiredFact(`${row.title} ${row.content}`)) { await row.update({ active: false }); retired++; }
+  }
+  return retired;
 }
