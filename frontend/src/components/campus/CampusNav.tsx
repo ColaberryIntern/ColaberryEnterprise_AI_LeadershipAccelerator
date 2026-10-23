@@ -1,7 +1,6 @@
 import React from 'react';
-import { useCampusOnAir } from './campusOnAir';
 import { Link } from 'react-router-dom';
-import CampusWorldMap from './CampusWorldMap';
+import CampusMiniMap from './CampusMiniMap';
 import './campus.css';
 import './campusPageChrome.css';
 import { useCampus } from './CampusContext';
@@ -19,19 +18,17 @@ import { useIsMgmt } from './campusMgmt';
  * one-click link to its main page, and the way back to the classic menu.
  */
 export default function CampusNav({ active }: { active: string }): React.ReactElement {
-  const { settings, openMap, openList, updateSettings, presence, presenceError, startTour, openLocker } = useCampus();
+  const { settings, openMap, openList, updateSettings, startTour, openLocker } = useCampus();
   const { buildings, accessOf, audience } = useCampusView();
   const hasTour = !!tourFor(audience, buildings, accessOf, settings.workplaceNames); // C7: everyone but staff
-  const { buildings: onAir } = useCampusOnAir();
   const here = buildingForPath(active);
   const isMgmt = useIsMgmt();
-  const counts: Record<string, number> = {};
-  if (presence && !presenceError) for (const [id, a] of Object.entries(presence)) counts[id] = a.count;
   return (
     <nav className="cm-nav" aria-label="Campus">
       <div className="cm-nav-map">
-        <CampusWorldMap buildings={buildings} accessOf={accessOf}
-          workplaceNames={settings.workplaceNames} reduceMotion={settings.reduceMotion} compact onArrive={(id) => openMap(id)} counts={counts} onAir={onAir} />
+        {/* WP-3: the prototype's side map (campusMapSVG): tinted blocks with icons, locked grey, where you are outlined with a pin */}
+        <CampusMiniMap variant="side" buildings={buildings} here={here ? here.id : null} accessOf={accessOf} workplaceNames={settings.workplaceNames}
+          reduceMotion={settings.reduceMotion} onPick={(id) => openMap(id)} />
         <div className="cm-nav-map-cap" aria-hidden="true">Tap a building to walk there</div>
       </div>
       {/* C11b: the rooms of the building you are in (the prototype's left side on a page) */}

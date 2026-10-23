@@ -102,10 +102,12 @@ const q = (id: string) => container.querySelector(`[data-testid="${id}"]`);
 jest.setTimeout(15000);
 
 describe('on air, from discovery', () => {
-  it('a room broadcast lights the commons on the mini-map and the home map, and shows the strip with Watch and Go to the room', async () => {
+  it('a room broadcast lights the commons on the home map, and shows the strip with Watch and Go to the room', async () => {
     respond([LIVE]);
     await mount();
-    expect(container.querySelector('.cm-banner [data-testid="cm-onair-commons"]')).not.toBeNull();
+    // WP-3: the page bar's tile is the prototype's schematic (grey blocks and your pin), with no badges; the strip carries the news
+    expect(container.querySelector('.cm-banner [data-testid="cm-mini-tile"]')).not.toBeNull();
+    expect(container.querySelector('.cm-banner [data-testid^="cm-onair-"]')).toBeNull();
     expect(q('cm-live')?.textContent).toContain('Agents in production, live');
     expect(Array.from(container.querySelectorAll('[data-testid="cm-live"] button')).map((b) => b.textContent)).toEqual(
       expect.arrayContaining([expect.stringMatching(/watch/i), 'Go to the room']),

@@ -94,8 +94,12 @@ describe('the map is drawn as the prototype draws it', () => {
       expect(q('[data-testid="cm-avatar"]')!.getAttribute('class')).toContain('is-walking');
       act(() => { frames.shift()!(0); });
       act(() => { frames.shift()!(100); });
-      // 100 ms in at 900 units/s: 90 units up the spine from the gate (500,640), not yet at the door
-      expect(q('[data-testid="cm-avatar"]')!.getAttribute('transform')).toBe('translate(500 550)');
+      // WP-3: 100 ms into the prototype's eased walk (330 units/s, slow start): a little up the spine from the gate (500,640),
+      // nowhere near the door yet
+      const [, x, y] = /translate\(([\d.]+) ([\d.]+)\)/.exec(q('[data-testid="cm-avatar"]')!.getAttribute('transform')!)!.map(Number);
+      expect(x).toBe(500);
+      expect(y).toBeLessThan(640);
+      expect(y).toBeGreaterThan(620);
       expect(arrived).toEqual([]);
       act(() => { frames.shift()!(100000); });
       const d = doorOf(CAMPUS_BUILDINGS.find((b) => b.id === 'library')!);

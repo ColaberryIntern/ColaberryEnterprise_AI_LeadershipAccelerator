@@ -11,7 +11,6 @@
 .cm-ride-wheel{fill:var(--strong)}
 
 /* Level ring on a token: the stroke color comes from the portal's rung tone (set inline from --rung-solid) */
-.cm-token-ring.is-level{stroke-width:3}
 
 /* Person card level: the pill takes the portal's rung tone (background, text and border set inline from the rung-* variables) */
 .cm-person-level{display:inline-block;margin:4px 0 0;padding:2px 10px;border-radius:var(--r-pill);font-size:12px;font-weight:800;

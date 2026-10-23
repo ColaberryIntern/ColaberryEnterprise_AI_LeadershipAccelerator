@@ -190,3 +190,6 @@
   .cm-home .cm-world.has-card .cm-zoom{right:432px}
 }
 @media (max-width:760px){ .cm-home .cm-in-frame{top:182px} }
+
+/* WP-3: while the gate is up the panel waits (laid out, so the camera can measure it, but invisible); revealed, it slides in */
+.cm-cc.is-waiting{visibility:hidden;animation:none}

@@ -49,21 +49,25 @@ const LIVE_MOCK = { states: ['live'], broadcasts: [{ id: 'b1', title: 'Colaberry
 
 async function runFidelity(browser) {
   const { ACCOUNTS, VIEWS } = require('../tests/systemV2/lib/campusFidelityViews');
+  // --only=<view name> re-runs one view (all accounts and sizes)
+  const ONLY = (process.argv.find((a) => a.startsWith('--only=')) || '').slice('--only='.length) || null;
   const results = [];
   for (const size of SIZES) {
     for (const account of ACCOUNTS) {
       for (const view of VIEWS) {
+        if (ONLY && view.name !== ONLY) continue;
         if (view.accounts && !view.accounts.includes(account)) continue;
         if (view.desktopOnly && size.name !== 'desktop') continue;
         const ctx = await createSafeContext(browser, { token: TOKENS.users[account].jwt, viewport: { width: size.width, height: size.height, deviceScaleFactor: 1 } });
-        await ctx.addInitScript((fresh) => {
+        // motion is the REDUCE-motion choice: 'on' = arrivals are instant (stable shots); a view with reduceMotion: false walks
+        await ctx.addInitScript(({ fresh, motion }) => {
           try {
-            localStorage.setItem('colaberry.campus.settings.v1', JSON.stringify({ nav: 'campus', workplaceNames: false, motion: 'on' }));
+            localStorage.setItem('colaberry.campus.settings.v1', JSON.stringify({ nav: 'campus', workplaceNames: false, motion }));
             // Every view but the gate starts past today's gate; the gate view starts before it.
             for (const k of Object.keys(localStorage)) if (k.startsWith('colaberry.campus.gate.')) localStorage.removeItem(k);
             if (!fresh) localStorage.setItem('colaberry.campus.gate.seen', 'always');
           } catch { /* no storage */ }
-        }, !!view.fresh);
+        }, { fresh: !!view.fresh, motion: view.reduceMotion === false ? 'off' : 'on' });
         const page = await ctx.newPage();
         // Live views: broadcast discovery is MOCKED here (capture only) so a live broadcast exists on the local stack.
         if (view.needsLive) await page.route('**/api/portal/broadcasts/active', (r) => r.fulfill({ contentType: 'application/json', body: JSON.stringify(LIVE_MOCK) }));
@@ -73,7 +77,8 @@ async function runFidelity(browser) {
           await page.waitForTimeout(1200);
           for (const s of (view.steps ? view.steps(account) : [])) {
             if (s.click) { await page.locator(s.click).first().click({ timeout: 10_000 }); await page.waitForTimeout(900); }
-            if (s.evaluate) { await page.evaluate(s.evaluate); await page.waitForTimeout(900); }
+            // settle: a mid-animation view (WP-3 17-travel) checks before the usual 900 ms pause would let the walk finish
+            if (s.evaluate) { await page.evaluate(s.evaluate); await page.waitForTimeout(s.settle ?? 900); }
             if (s.wait) await page.waitForTimeout(s.wait);
           }
           for (const id of view.required(account, size.name)) if (!(await visibleBox(page, id))) row.missing.push(id);

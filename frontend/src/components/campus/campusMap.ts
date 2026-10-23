@@ -171,3 +171,7 @@ export function roomLabel(r: Pick<CampusRoom, 'label' | 'workplaceLabel'>, workp
 export function buildingName(b: Pick<CampusBuilding, 'name' | 'workplaceName'>, workplaceNames: boolean): string {
   return workplaceNames ? b.workplaceName : b.name;
 }
+
+/** The prototype's building icons (its catalog's icon field): the directory, the side mini map. */
+export const BUILDING_ICON: Partial<Record<string, string>> = { lecture: '🎓', library: '📚', tower: '🕰', studio: '🛠', amphi: '🎪', testing: '✅',
+  observatory: '🔭', commons: '☕', gallery: '🖼', career: '💼', arcade: '🕹', gate: '🚪' };

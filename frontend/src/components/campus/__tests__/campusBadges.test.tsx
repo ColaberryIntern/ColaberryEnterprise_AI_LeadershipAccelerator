@@ -36,7 +36,7 @@ describe('statusOf: the badge says only what is true', () => {
 
 describe('the markers on the map', () => {
   it('the people chip shows the real count, right-aligned left of the body, with at most three level-toned dots', () => {
-    render({ counts: { library: 5 }, people: { library: { shown: [person('a', 'AI Aware I'), person('b'), person('c'), person('d')], more: 1 } }, onPickPerson: () => undefined });
+    render({ counts: { library: 5 }, people: { library: { shown: [person('a', 'AI Aware I'), person('b'), person('c'), person('d')], more: 1 } }, onPeek: () => undefined });
     const chip = inBld('library', '.cm-count')!;
     expect(chip.getAttribute('data-count')).toBe('5');
     expect(chip.textContent).toBe('5');

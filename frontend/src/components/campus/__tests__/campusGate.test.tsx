@@ -82,7 +82,10 @@ describe('the gate', () => {
     act(() => { (q('[data-testid="cm-gate-enter"]') as HTMLButtonElement).click(); });
     expect(q('.cm-gate')!.getAttribute('class')).toContain('is-opening');
     expect(entered).toEqual([]);
-    act(() => { jest.advanceTimersByTime(1500); });
+    act(() => { jest.advanceTimersByTime(1500); }); // WP-3: the prototype's timeline; fading from 1.3 s, still up at 1.5 s
+    expect(q('.cm-gate')!.getAttribute('class')).toContain('is-done');
+    expect(entered).toEqual([]);
+    act(() => { jest.advanceTimersByTime(500); });
     expect(entered).toEqual([false]);
     expect(window.localStorage.getItem(GATE_SEEN_KEY)).toBe(centralDay(base.now));
   });

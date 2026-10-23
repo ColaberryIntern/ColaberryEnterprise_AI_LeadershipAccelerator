@@ -21,6 +21,10 @@ import CampusTabBar from '../../../components/campus/CampusTabBar';
 import CampusLive from '../../../components/campus/CampusLive';
 import CampusCheer from '../../../components/campus/CampusCheer';
 import { useLevelCheer } from '../../../components/campus/home/useLevelCheer';
+import { useMyPhoto } from '../../../components/campus/home/useMyPhoto';
+import { useMapMoments } from '../../../components/campus/home/useMapMoments';
+import { useConciergeReveal } from '../../../components/campus/home/useConciergeReveal';
+import { levelOfRung } from '../../../services/bandLadder';
 import { readParticipant } from '../today/shellUtils';
 import '../../../components/campus/campus.css';
 import '../../../components/campus/campusLive.css';
@@ -58,6 +62,11 @@ export default function CampusHomePage(): React.ReactElement {
   const stay = useCallback(() => undefined, []);
   const { props, tour, touring, extra } = useCampusWorldProps(stay, stay, null);
   useLevelCheer(campus.look?.rung_name || null);
+  // WP-3: you on the map (photo, level for those who earn points), a member's time badges, the night look, the concierge's entrance.
+  const photo = useMyPhoto(campus.active);
+  const moments = useMapMoments(audience, campus.active);
+  const reveal = useConciergeReveal(gateOpen, map.onGateOpening);
+  const quiet = !!campus.presence && !campus.presenceError && Object.values(campus.presence).every((a) => a.people.length === 0);
 
   // The home shows Colaberry Live as the prototype's top pill (CampusLive below), so the portal-wide live-now badge steps aside here.
   useEffect(() => { document.documentElement.classList.add('cm-on-home'); return () => document.documentElement.classList.remove('cm-on-home'); }, []);
@@ -73,18 +82,19 @@ export default function CampusHomePage(): React.ReactElement {
   const here = campus.here ? buildings.find((b) => b.id === campus.here) : undefined;
   const reduce = campus.settings.reduceMotion;
   const initials = facts.initials || readParticipant().initials;
-  const enter = (t: boolean) => { setGateOpen(false); if (reduce) map.camRef.current?.base(); if (t) campus.startTour(); };
+  const enter = (t: boolean) => { setGateOpen(false); reveal.show(); if (reduce) map.camRef.current?.base(); if (t) campus.startTour(); };
+  const level = audience === 'member' || audience === 'explorer' ? levelOfRung(campus.look?.rung_name) : null;
   return (
     <div className={`cm-home cm-scope${reduce ? ' is-reduced' : ''}`} data-testid="cm-home">
       {gateOpen && <CampusGate audience={audience} firstName={facts.firstName} fullName={facts.fullName} initials={initials}
         rung={campus.look?.rung_name || null} points={campus.look?.points ?? null} streak={facts.streak} online={online} workplace={campus.settings.workplaceNames}
-        hasTour={!!tour} reduceMotion={reduce} now={new Date()} onOpening={map.onGateOpening} onEnter={enter} />}
+        hasTour={!!tour} reduceMotion={reduce} now={new Date()} onOpening={reveal.onOpening} onEnter={enter} />}
       <CampusWorld {...props} insets={homeInsets} walkTo={map.walk} onCard={onCard} cameraRef={map.camRef} startAt={campus.here}
-        startCam={map.startCam} recenter={map.recenter} />
+        startCam={map.startCam} recenter={map.recenter} me={{ initials, photo, level, tone: audience }} moments={moments} quiet={quiet} />
       <CampusTopBar audience={audience} online={online} points={campus.look?.points ?? null} rung={campus.look?.rung_name || null}
         streak={facts.streak} initials={initials} onList={campus.openList} onMe={() => setMeOpen((v) => !v)} />
       {meOpen && <CampusMePanel audience={audience} fullName={facts.fullName} initials={initials} onClose={() => { setMeOpen(false); map.camRef.current?.recenter(); }} />}
-      <CampusConcierge cardOpen={cardOpen} audience={audience} firstName={facts.firstName} hereName={here ? buildingName(here, campus.settings.workplaceNames) : 'main gate'}
+      <CampusConcierge waiting={!reveal.shown} cardOpen={cardOpen} audience={audience} firstName={facts.firstName} hereName={here ? buildingName(here, campus.settings.workplaceNames) : 'main gate'}
         hereId={here ? here.id : null} buildings={buildings} accessOf={accessOf} workplaceNames={campus.settings.workplaceNames} presence={campus.presence}
         presenceError={campus.presenceError} desks={campus.staffDesks} stops={campus.planStops} live={live} now={new Date()}
         tourStops={tour ? tour.stops : null} touring={touring} tourProgress={campus.tourProgress} justToured={campus.justToured}

@@ -1,6 +1,6 @@
 /**
  * C9 gear drawing: every item the server catalog defines has a drawing in the right slot; your OWN ride shows only while your
- * avatar travels (never standing, never with reduce motion); nobody else's token ever shows a ride; tokens carry the level.
+ * avatar travels (never standing, never with reduce motion); nobody else's gear or ride is ever drawn; their chip dots carry the level.
  */
 import fs from 'fs';
 import path from 'path';
@@ -8,7 +8,6 @@ import React from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { act } from 'react-dom/test-utils';
 import CampusWorldMap from '../CampusWorldMap';
-import PersonTokens from '../PersonToken';
 import { GEAR_DRAWINGS, GEAR_NAMES, publicOnly } from '../campusGear';
 import { CAMPUS_BUILDINGS } from '../campusMap';
 import type { CampusPerson } from '../campusApi';
@@ -74,39 +73,26 @@ describe('your own ride, only while you travel', () => {
   });
 });
 
-describe('other people\'s tokens', () => {
-  const lib = CAMPUS_BUILDINGS.find((b) => b.id === 'library')!;
+describe('other people on the map (WP-3: level-toned dots on the chip, as the prototype; no tokens)', () => {
   const p = (o: Partial<CampusPerson>): CampusPerson => ({ enrollment_id: 'e1', display_name: 'Mia Lopez', avatar_url: null, ...o });
-  const tokens = (shown: CampusPerson[]) => (
-    <svg><PersonTokens b={lib} shown={shown} more={0} onPick={() => undefined} maxY={700} /></svg>
-  );
+  const withPeople = (people: CampusPerson[]) => map({ counts: { library: people.length }, people: { library: { shown: people, more: 0 } } });
 
-  it('never draw a ride, even if one arrived', () => {
+  it('never draw anyone else\'s ride or gear, even if it arrived', () => {
     root = createRoot(container);
-    render(tokens([p({ gear: { head: 'cap', ride: 'cruiser' } })]));
+    render(withPeople([p({ gear: { head: 'cap', ride: 'cruiser', face: 'shades' } })]));
     expect(container.querySelector('[data-ride]')).toBeNull();
-    expect(container.querySelector('[data-gear="cap"]')).not.toBeNull();
+    expect(container.querySelectorAll('[data-gear]')).toHaveLength(0); // no gear of your own either
   });
 
-  it('show only the head item (anything else would cover the initials on an 11 px token)', () => {
+  it('carry the level: the chip dot takes the rung tone', () => {
     root = createRoot(container);
-    render(tokens([p({ gear: { face: 'shades', neck: 'chain', body: 'hoodie' } })]));
-    expect(container.querySelector('[data-gear]')).toBeNull();
+    render(withPeople([p({ rung_name: 'AI Enabled II' })]));
+    expect(container.querySelector('[data-testid="cm-count-library"] .cm-count-dot')?.getAttribute('class')).toContain('rung-enabled-2');
   });
 
-  it('carry the level: a toned ring and the rung in the label', () => {
+  it('no level known: the plain dot', () => {
     root = createRoot(container);
-    render(tokens([p({ rung_name: 'AI Enabled II' })]));
-    const ring = container.querySelector('.cm-token-ring.is-level');
-    expect(ring?.getAttribute('data-rung')).toBe('AI Enabled II');
-    expect(ring?.getAttribute('class')).toContain('rung-enabled-2');
-    expect(container.querySelector('.cm-token')?.getAttribute('aria-label')).toBe('Mia Lopez, AI Enabled II, open their card');
-  });
-
-  it('no level known: the plain ring, no level in the label', () => {
-    root = createRoot(container);
-    render(tokens([p({})]));
-    expect(container.querySelector('.cm-token-ring.is-level')).toBeNull();
-    expect(container.querySelector('.cm-token')?.getAttribute('aria-label')).toBe('Mia Lopez, open their card');
+    render(withPeople([p({})]));
+    expect(container.querySelector('[data-testid="cm-count-library"] .cm-count-dot')?.getAttribute('class')).toBe('cm-count-dot');
   });
 });

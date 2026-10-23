@@ -40,7 +40,7 @@ import CampusNav from '../CampusNav';
 // eslint-disable-next-line import/first
 import CampusWorldMap from '../CampusWorldMap';
 // eslint-disable-next-line import/first
-import PersonTokens, { TOKEN_HIT_R } from '../PersonToken';
+import PeekCard from '../PeekCard';
 // eslint-disable-next-line import/first
 import { useCardFocus } from '../useCardFocus';
 // eslint-disable-next-line import/first
@@ -110,16 +110,24 @@ describe('1. compact maps are pictures, not 12 extra tab stops', () => {
   });
 });
 
-describe('2. person tokens: their own focus ring and a real target', () => {
-  it('draws a focus ring separate from the level ring, and a hit circle of TOKEN_HIT_R', async () => {
-    const b = CAMPUS_BUILDINGS.find((x) => x.id === 'commons')!;
-    await render(<svg><PersonTokens b={b} shown={[PERSON]} more={0} maxY={700} onPick={() => undefined} /></svg>);
-    const token = q('.cm-token')!;
-    const focus = token.querySelector('.cm-token-focus')!;
-    expect(focus).not.toBeNull();
-    expect(focus.getAttribute('style')).toBeNull(); // the level ring carries the inline stroke; the focus ring never does
-    expect(Number(token.querySelector('.cm-token-hit')!.getAttribute('r'))).toBe(TOKEN_HIT_R);
-    expect(TOKEN_HIT_R).toBeGreaterThanOrEqual(12);
+describe('2. people on the map (WP-3): the chip is a picture, the peek a labelled popover with real buttons', () => {
+  it('the chip adds no tab stop and is hidden from assistive tech (the building label already says the head count)', async () => {
+    const props = { buildings: [...CAMPUS_BUILDINGS], accessOf: () => 'open' as const, workplaceNames: false, reduceMotion: true, onArrive: () => undefined };
+    await render(<CampusWorldMap {...props} counts={{ commons: 2 }} people={{ commons: { shown: [PERSON], more: 0 } }} onPeek={() => undefined} />);
+    const chip = q('[data-testid="cm-count-commons"]')!;
+    expect(chip.getAttribute('aria-hidden')).toBe('true');
+    expect(chip.querySelector('[tabindex]')).toBeNull();
+  });
+
+  it('the peek is named for its building, takes focus, and every person in it is a button', async () => {
+    await render(<PeekCard buildingName="Community Lounge" count={2} people={[PERSON, { anonymous: true }]} desks={[]} word="classmates" x={50} y={50}
+      onPerson={() => undefined} onWalk={() => undefined} onClose={() => undefined} />);
+    const peek = q('[data-testid="cm-peek"]')!;
+    expect(peek.getAttribute('role')).toBe('dialog');
+    expect(peek.getAttribute('aria-label')).toBe('Who is in Community Lounge');
+    expect(document.activeElement).toBe(peek);
+    expect(q('[data-testid="cm-peek-person"]')!.tagName).toBe('BUTTON');
+    expect(q('[data-testid="cm-peek-anon"]')!.tagName).not.toBe('BUTTON'); // a private person has no card to open
   });
 });
 

@@ -32,6 +32,8 @@ const CONCIERGE_BY = { member: ['cm-cc-tour', 'cm-cc-chips'], explorer: ['cm-cc-
 const SIGNATURE = { member: 'commons', explorer: 'lecture', business: 'career', staff: 'career' };
 /** Tap a building even when the phone framing leaves it off screen (a real user pans to it first). */
 const tap = (id) => ({ evaluate: `document.querySelector('[data-testid="cm-bld-${id}"]').dispatchEvent(new MouseEvent('click', { bubbles: true }))` });
+/** WP-3: the prototype walk (330 units/s, eased, at least 600 ms): the longest walk on the campus settles inside this. */
+const WALKED = { wait: 2600 };
 
 const HOME_KNOWN = (a, size) => [
   ...(size === 'phone' ? ['phone: the stats pill is hidden as in the prototype phone layout; the campus tab bar has no Alerts tab yet'] : []),
@@ -60,9 +62,9 @@ const VIEWS = [
   { name: '02-home', route: '/portal/campus',
     required: (a, size) => [...MAP_ART, ...buildingIds(), ...TOPBAR, ...(size === 'phone' ? [] : ['cm-stats', ...STATS[a]]), ...CONCIERGE, ...CONCIERGE_BY[a], ...(size === 'phone' ? ['.cm-tabbar'] : [])],
     known: HOME_KNOWN },
-  { name: '03-arrive', route: '/portal/campus', steps: (a) => [tap(SIGNATURE[a])],
+  { name: '03-arrive', route: '/portal/campus', steps: (a) => [tap(SIGNATURE[a]), WALKED],
     required: () => ['cm-card', 'cm-arrive-hero', 'cm-arrive-now', '.cm-arrive .cm-cta', 'cm-arrive-back', 'cm-arrive-elsewhere', '.cm-arrive .cm-rooms'] },
-  { name: '04-inside', route: '/portal/campus', steps: (a) => [tap(SIGNATURE[a])],
+  { name: '04-inside', route: '/portal/campus', steps: (a) => [tap(SIGNATURE[a]), WALKED],
     required: () => ['cm-inside', 'cm-inside-room', 'cm-inside-you', 'cm-inside-door', 'cm-inside-out'],
     known: () => ['the room opens on arrival, as the prototype flyIn does (no separate "look inside" step)', 'the prototype interiors invented events, dates, client names and tickets: neutral signs instead'] },
   { name: '05-page', route: '/portal/library',
@@ -73,10 +75,10 @@ const VIEWS = [
     known: () => ['the prototype crowd of walking dots was random: not drawn (the building head count is real)'] },
   { name: '07-notifications', route: '/portal/campus', steps: () => [{ click: '[data-testid="cm-stats-bell"] button' }],
     required: () => ['.cm-bell-panel'], desktopOnly: true },
-  { name: '08-person-card', route: '/portal/campus', steps: () => [{ click: '[data-testid="cm-cc-helpdesk"] button' }],
+  { name: '08-person-card', route: '/portal/campus', steps: () => [{ click: '[data-testid="cm-cc-helpdesk"] button' }, WALKED],
     required: () => ['cm-card', 'cm-arrive-hero', '.cm-desks'],
     known: () => ['a help desk press walks to the desk building (its card holds the desk) instead of opening a staff popover'] },
-  { name: '09-chat', route: '/portal/campus', steps: () => [{ click: '[data-testid="cm-cc-helpdesk"] button' }],
+  { name: '09-chat', route: '/portal/campus', steps: () => [{ click: '[data-testid="cm-cc-helpdesk"] button' }, WALKED],
     required: () => ['.cm-desks'],
     known: () => ['chat with a desk opens through Today (the existing DM dock); not rebuilt on the home'] },
   { name: '10-toast', route: '/portal/campus', required: () => ['cm-world'],
@@ -87,18 +89,26 @@ const VIEWS = [
     required: () => ['cm-me', 'cm-me-entrance'], desktopOnly: true,
     known: () => ['"show which building I am in" is not offered: there is no server setting behind it'] },
   { name: '13-recenter', route: '/portal/campus',
-    steps: (a) => [{ wait: 600 }, ...DISTURB, tap(SIGNATURE[a]), { wait: 600 }, { click: '[data-testid="cm-arrive-back"]' }, { wait: 1600 }],
+    steps: (a) => [{ wait: 600 }, ...DISTURB, tap(SIGNATURE[a]), WALKED, { click: '[data-testid="cm-arrive-back"]' }, { wait: 1600 }],
     required: () => ['cm-world'], assert: () => AT_BASE },
   { name: '14-step-outside', route: '/portal/library',
-    steps: () => [{ click: '[data-testid="cm-step-out"]' }, { wait: 1500 }],
+    steps: () => [{ click: '[data-testid="cm-step-out"]' }, WALKED],
     required: () => ['cm-home', 'cm-card', 'cm-inside'],
     assert: () => "location.pathname === '/portal/campus' ? '' : 'still on ' + location.pathname" },
-  { name: '15-panel-with-card', route: '/portal/campus', steps: (a) => [tap(SIGNATURE[a])],
+  { name: '15-panel-with-card', route: '/portal/campus', steps: (a) => [tap(SIGNATURE[a]), WALKED],
     required: () => ['cm-card'] },
   // WP-2: the tour inside the stop's arrival panel (stop card on top, nav at the foot), the room behind it, STOP badges on the map
   { name: '16-tour', route: '/portal/campus', accounts: ['member', 'explorer', 'business'],
-    steps: () => [{ click: '[data-testid="cm-cc-tour-start"]' }, { wait: 1500 }],
+    steps: () => [{ click: '[data-testid="cm-cc-tour-start"]' }, WALKED],
     required: () => ['cm-card', '.cm-arrive [data-testid="cm-tour"]', 'cm-tour-nav', 'cm-tour-next', 'cm-inside', '.cm-tour-stop.is-live'] },
+  // WP-3: mid-walk, as the prototype's travelTo: the toast with Skip, the red route line, the destination highlighted
+  // reduceMotion: false: every other view runs with reduce motion ON (instant arrivals, stable shots); this one must walk
+  // the Library: the farthest walk from the gate (about 1.5 s), so every check lands mid-walk; a vertical route has a zero-width
+  // box, so the route is asserted by its path, not by visibility
+  { name: '17-travel', route: '/portal/campus', reduceMotion: false, steps: () => [{ ...tap('library'), settle: 150 }],
+    required: () => ['cm-travel-text', 'cm-travel-skip', '.cm-bld.is-hl[data-building="library"]'],
+    assert: () => "/^M500 640L/.test(document.querySelector('[data-testid=\"cm-route-line\"]')?.getAttribute('d') || '') ? '' : 'no route from the gate'",
+    known: () => ['the people-chip peek needs someone on campus; covered by the campusTravel and campusPeople tests'] },
 ];
 
 /** WP-1: the side panel (and the tour in it) is required on every view past the gate. */
