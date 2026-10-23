@@ -40,8 +40,13 @@ function wireDb(existing: any[] = []) {
   });
 }
 
+const UID = 'ed843de347601f51d2ae57374a645b8a';
+
 beforeEach(() => {
   jest.clearAllMocks();
+  // L5.4: creation now resolves a live input first and refuses without one.
+  process.env.CLOUDFLARE_STREAM_LIVE_INPUT_UID = UID;
+  delete process.env.BROADCAST_INPUT_STRATEGY;
   mockTransaction.mockImplementation(async (fn: any) => fn('TX'));
   mockCreate.mockResolvedValue({ id: 'occ-new' });
   wireDb([]);
@@ -91,6 +96,25 @@ describe('creation', () => {
     expect(fields.title).toBe('Week 3 Build Day');
     expect(fields.scheduled_start_at).toBeInstanceOf(Date);
     expect(opts).toEqual({ transaction: 'TX' });
+  });
+
+  it('binds the occurrence to a live input, or playback has nothing to sign', async () => {
+    await ensureOccurrenceForSession(SESSION, 'room-1');
+    const fields = mockCreate.mock.calls[0][0];
+    expect(fields.provider).toBe('cloudflare');
+    expect(fields.provider_session_id).toBe(UID);
+  });
+
+  it('REFUSES when no input is configured, rather than creating an unplayable occurrence', async () => {
+    // L7.1 shipped exactly this gap: an occurrence that is real, correctly gated, correctly
+    // timed, and cannot play. Refusing is the feature.
+    delete process.env.CLOUDFLARE_STREAM_LIVE_INPUT_UID;
+
+    const r = await ensureOccurrenceForSession(SESSION, 'room-1');
+
+    expect(r.outcome).toBe('refused');
+    expect(r.reason).toBe('no_live_input');
+    expect(mockCreate).not.toHaveBeenCalled();
   });
 
   it('keys the occurrence on the session and its start instant, floored to the minute', async () => {
