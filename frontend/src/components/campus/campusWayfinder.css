@@ -1,0 +1,72 @@
+/* ============================================================
+   WP-4: the Wayfinder (the prototype's #wf / .wf-box, D:139-152) and the panel's live sections (.urgent-card, .sugg / .sg,
+   .tav, .linkish, .dir; D:75-97, 647). Colors: campusArtTokens.css only.
+   ============================================================ */
+@import './campusArtTokens.css';
+
+.cm-wf{position:fixed;inset:0;z-index:30;background:var(--cm-art-wf-backdrop);backdrop-filter:blur(3px);display:flex;align-items:flex-start;justify-content:center;
+  padding:10vh 16px 16px;font-family:'DM Sans',var(--sans),system-ui,sans-serif}
+.cm-wf-box{width:100%;max-width:560px;background:var(--cm-art-paper);color:var(--cm-art-ink);border-radius:20px;box-shadow:var(--cm-art-wf-shadow);overflow:hidden;
+  animation:cm-wf-pop .3s;outline:none}
+@keyframes cm-wf-pop{from{transform:scale(.94);opacity:0}}
+.cm-wf-in{display:flex;align-items:center;gap:10px;padding:16px 18px;border-bottom:1px solid var(--cm-art-line);color:var(--cm-art-muted)}
+.cm-wf-in input{flex:1;border:0;outline:0;background:transparent;font:500 18px 'DM Sans',var(--sans),sans-serif;color:var(--cm-art-ink);box-shadow:none}
+.cm-wf-in input::placeholder{color:var(--cm-art-muted)}
+.cm-wf-res{max-height:52vh;overflow:auto;padding:8px}
+.cm-wf-grp{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--cm-art-muted);font-weight:700;padding:10px 10px 4px}
+.cm-wf-item{display:flex;align-items:center;gap:12px;padding:10px;border-radius:12px;cursor:pointer}
+.cm-wf-item.is-sel{background:var(--cm-art-wf-sel)}
+.cm-wf-item .ic{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;color:var(--cm-art-on-dark);font-size:13px;flex:none;object-fit:cover}
+.cm-wf-item .ic.is-urgent{background:var(--cm-art-red)}
+.cm-wf-item .ic.is-person{background:var(--cm-art-library);border-radius:50%;font-size:10px;font-weight:800}
+.cm-wf-item .ic.is-staff{background:var(--cm-art-help-hover);border-radius:50%;font-size:10px;font-weight:800;box-shadow:0 0 0 2px var(--cm-art-white),0 0 0 3.5px var(--cm-art-gold)}
+.cm-wf-item b{display:block;font-size:14px}
+.cm-wf-item span{font-size:12px;color:var(--cm-art-muted)}
+.cm-wf-item em{margin-left:auto;font-style:normal;font-size:11px;color:var(--cm-art-muted);white-space:nowrap}
+.cm-wf-none{padding:18px;color:var(--cm-art-muted);font-size:14px}
+.cm-wf-hint{padding:10px 18px;border-top:1px solid var(--cm-art-line);font-size:12px;color:var(--cm-art-muted);display:flex;gap:14px}
+@media (max-width:760px){ .cm-wf{padding-top:72px} .cm-wf-hint{display:none} }
+.is-reduced .cm-wf-box,.cm-reduced .cm-wf-box{animation:none}
+
+/* the panel's urgent card (.urgent-card) */
+.cm-urgent{background:var(--cm-art-red);color:var(--cm-art-on-dark);border-radius:16px;padding:14px 14px 12px;margin:14px 0;position:relative;overflow:hidden;
+  animation:cm-urgent-pop .5s cubic-bezier(.2,1.4,.4,1)}
+@keyframes cm-urgent-pop{from{transform:scale(.94);opacity:0}}
+.cm-urgent .t{font-weight:700;font-size:16px}
+.cm-urgent .d{font-size:13px;opacity:.9;margin:2px 0 10px}
+.cm-urgent .row{display:flex;gap:8px;flex-wrap:wrap}
+.cm-btn-white,.cm-btn-ghost-w{border:0;border-radius:999px;padding:9px 14px;font-weight:700;font-size:13px;display:inline-flex;gap:6px;cursor:pointer}
+.cm-btn-white{background:var(--cm-art-white);color:var(--cm-art-red)}
+.cm-btn-ghost-w{background:var(--cm-art-ghost-w);color:var(--cm-art-on-dark)}
+.cm-urgent button:focus-visible{outline:3px solid var(--cm-art-on-dark);outline-offset:2px}
+.is-reduced .cm-urgent,.cm-reduced .cm-urgent{animation:none}
+
+/* "Right now" (.sugg / .sg) and a partner's team rows (.tav, teal ring) */
+.cm-sugg{display:flex;flex-direction:column;gap:6px}
+.cm-sg{display:flex;align-items:center;gap:12px;width:100%;text-align:left;border:1px solid var(--cm-art-line);background:var(--cm-art-card);color:var(--cm-art-ink);
+  border-radius:14px;padding:10px 12px;transition:border-color .2s,transform .2s;cursor:pointer;font:inherit}
+.cm-sg:hover,.cm-sg:focus-visible{border-color:var(--cm-art-ink);transform:translateX(3px)}
+.cm-sg .ic{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;color:var(--cm-art-on-dark);font-size:15px;flex:none}
+.cm-sg .t{display:block;font-weight:700;font-size:14px;line-height:1.2}
+.cm-sg .d{display:block;font-size:12px;color:var(--cm-art-muted);margin-top:2px}
+.cm-sg .go{margin-left:auto;font-size:11px;color:var(--cm-art-muted);white-space:nowrap}
+.cm-tav{width:34px;height:34px;border-radius:50%;background:var(--cm-art-business);color:var(--cm-art-on-dark);display:grid;place-items:center;font-size:11px;font-weight:800;
+  flex:none;object-fit:cover;box-shadow:0 0 0 2px var(--cm-art-white),0 0 0 3.5px var(--cm-art-team)}
+.cm-pc-note{color:var(--cm-art-muted);font-size:13px;padding:4px 0}
+.is-reduced .cm-sg,.cm-reduced .cm-sg{transition:none;transform:none}
+
+/* the campus directory (.linkish + .dir) */
+.cm-linkish{display:block;background:none;border:0;padding:0;color:var(--cm-art-muted);font-size:12px;text-decoration:underline;text-underline-offset:3px;margin-top:12px;cursor:pointer}
+.cm-dir{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px}
+.cm-dir button{border:1px solid var(--cm-art-line);background:var(--cm-art-card);color:var(--cm-art-ink);border-radius:12px;padding:8px 10px;text-align:left;font-size:12px;cursor:pointer}
+.cm-dir button b{display:block;font-size:13px}
+.cm-dir button span{color:var(--cm-art-muted)}
+
+/* the pulse's dots: a partner's team (teal), presence down (amber) */
+.cm-pulse .dot.is-team{background:var(--cm-art-team);box-shadow:0 0 0 4px var(--cm-art-live-tint)}
+.cm-pulse .dot.is-down{background:var(--cm-art-pulse-down);box-shadow:none}
+
+/* a room picked in the Wayfinder flashes twice in its building's card (the prototype's .rooms a.flash) */
+.cm-room.is-flash{animation:cm-room-flash 1.4s 2}
+@keyframes cm-room-flash{50%{background:var(--cm-art-flash);border-color:var(--cm-art-flash-edge)}}
+.is-reduced .cm-room.is-flash,.cm-reduced .cm-room.is-flash{animation:none;background:var(--cm-art-flash);border-color:var(--cm-art-flash-edge)}

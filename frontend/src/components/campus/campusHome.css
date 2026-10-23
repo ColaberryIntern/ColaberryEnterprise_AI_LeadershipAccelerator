@@ -18,7 +18,8 @@
 .cm-topbar-brand img{height:24px;width:auto;display:block}
 .cm-topbar-brand small{font-size:10px;color:var(--cm-art-muted);letter-spacing:.12em;text-transform:uppercase;font-weight:700;padding-left:10px;border-left:1px solid var(--cm-art-line)}
 .cm-topbar-search{flex:1;max-width:520px;margin:0 auto;justify-content:flex-start;color:var(--cm-art-muted);font-size:15px;cursor:pointer}
-.cm-topbar-search kbd{margin-left:auto;font:600 11px 'DM Sans',var(--sans),sans-serif;border:1px solid var(--cm-art-line);border-radius:6px;padding:2px 7px;color:var(--cm-art-muted)}
+.cm-topbar-search kbd{margin-left:auto;font:600 11px 'DM Sans',var(--sans),sans-serif;border:1px solid var(--cm-art-line);border-radius:6px;padding:2px 7px;color:var(--cm-art-muted);
+  background:transparent;box-shadow:none} /* Bootstrap fills <kbd> dark; the prototype's is an outline */
 .cm-topbar-list{font-weight:700;font-size:14px;cursor:pointer}
 .cm-stats{font-size:13px;font-weight:700;gap:12px}
 .cm-stats .sep{width:1px;height:20px;background:var(--cm-art-line)}
@@ -110,18 +111,17 @@
 .cm-chips button{border:1px solid var(--cm-art-line);background:var(--cm-art-card);border-radius:999px;padding:7px 12px;font-size:13px;font-weight:500;color:var(--cm-art-ink);cursor:pointer}
 .cm-chips button:hover{background:var(--cm-art-pic-ink);color:var(--cm-art-on-dark);border-color:var(--cm-art-pic-ink)}
 
-/* zoom buttons clear of the concierge; the search pill IS the WhereTo combobox */
+/* zoom buttons clear of the concierge; WP-4: the search pill is a button that opens the Wayfinder (the prototype's .wayfind) */
 .cm-home .cm-zoom{left:auto;right:16px;bottom:16px}
-.cm-topbar-search{padding:0 14px 0 16px;gap:8px}
-.cm-topbar-search .cm-whereto{flex:1;min-width:0;margin:0;position:relative}
-.cm-topbar-search .cm-whereto input{width:100%;border:0;background:transparent;font:500 15px 'DM Sans',var(--sans),sans-serif;color:var(--cm-art-ink);padding:10px 0;outline:none;box-shadow:none}
-.cm-topbar-search .cm-whereto input::placeholder{color:var(--cm-art-muted)}
-.cm-topbar-search:focus-within{box-shadow:var(--cm-art-shadow),0 0 0 3px var(--cm-art-red)}
+.cm-topbar-search{padding:0 14px 0 16px;gap:8px;font:500 15px 'DM Sans',var(--sans),sans-serif;text-align:left}
+.cm-topbar-search span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cm-topbar-search:focus-visible{outline:none;box-shadow:var(--cm-art-shadow),0 0 0 3px var(--cm-art-red)}
 
 /* ---- phones (prototype max-width 760: wrapped top bar, concierge as a bottom sheet above the tab bar) ---- */
 @media (max-width:760px){
   .cm-topbar{top:10px;left:10px;right:10px;gap:8px;flex-wrap:wrap}
   .cm-topbar-search{order:3;flex-basis:100%;max-width:none}
+  .cm-topbar-search kbd{display:none}
   .cm-topbar-brand small,.cm-topbar-list .hide-m,.cm-stats{display:none}
   .cm-cc{top:auto;left:10px;right:10px;bottom:66px;width:auto;max-height:40%;padding:16px}
   .cm-cc h1{font-size:23px}

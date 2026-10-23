@@ -7,12 +7,16 @@ import { pulseOf } from '../../../components/campus/home/CampusConcierge';
 import { useHomeFacts } from '../../../components/campus/home/useHomeFacts';
 import CampusGate, { gateSeen } from '../../../components/campus/home/CampusGate';
 import CampusMePanel from '../../../components/campus/home/CampusMePanel';
+import Wayfinder from '../../../components/campus/home/Wayfinder';
 import { useHomeMap, homeInsets } from '../../../components/campus/home/useHomeMap';
+import { useHomeWayfinder } from '../../../components/campus/home/useHomeWayfinder';
+import { useUnlockCheer, useWelcomeBack, useGateStreak, inViewAs } from '../../../components/campus/home/useHomeCheers';
+import { rightNowRows, urgentOf } from '../../../components/campus/home/rightNow';
 import { useCampus } from '../../../components/campus/CampusContext';
 import { useCampusView } from '../../../components/campus/useCampusView';
 import { useCampusWorldProps } from '../../../components/campus/useCampusWorldProps';
 import { useCampusOnAir, headlineBroadcast } from '../../../components/campus/campusOnAir';
-import { buildingName } from '../../../components/campus/campusMap';
+import { openWayfinder } from '../../../components/campus/wayfinderHost';
 import type { BuildingId } from '../../../components/campus/campusMap';
 import CampusListView from '../../../components/campus/CampusListView';
 import CampusDoorTransition from '../../../components/campus/CampusDoorTransition';
@@ -22,7 +26,7 @@ import CampusLive from '../../../components/campus/CampusLive';
 import CampusCheer from '../../../components/campus/CampusCheer';
 import { useLevelCheer } from '../../../components/campus/home/useLevelCheer';
 import { useMyPhoto } from '../../../components/campus/home/useMyPhoto';
-import { useMapMoments } from '../../../components/campus/home/useMapMoments';
+import { useHomeAgenda, mapMoments } from '../../../components/campus/home/useMapMoments';
 import { useConciergeReveal } from '../../../components/campus/home/useConciergeReveal';
 import { levelOfRung } from '../../../services/bandLadder';
 import { readParticipant } from '../today/shellUtils';
@@ -44,6 +48,9 @@ import '../../../components/campus/campusHome.css';
  * side panel is always visible (a peek strip on a phone while a card is open); the camera recenters on every return to the campus;
  * and where you are survives a page visit (CampusContext.here), so coming back never restarts you at the gate.
  *
+ * WP-4: the Wayfinder (the pill, "/", Ctrl/Cmd+K), what is coming up (useHomeAgenda: the map's badges, the panel's Right now and
+ * urgent card), and the points feedback: the streak claimed at the gate (Q9), unlock cheers, and welcome back.
+ *
  * With the campus off (flag, or the learner chose the classic menu) the page is not a campus: it goes to Today.
  */
 export default function CampusHomePage(): React.ReactElement {
@@ -53,58 +60,69 @@ export default function CampusHomePage(): React.ReactElement {
   const facts = useHomeFacts(audience === 'member');
   const [cardOpen, setCardOpen] = useState(false);
   const [meOpen, setMeOpen] = useState(false);
+  const [hover, setHover] = useState<BuildingId | null>(null);
   // D7: the entry gate, once per Central day (decided once, on the first render of the page).
   const [gateOpen, setGateOpen] = useState(() => !gateSeen(new Date()));
+  const [skippedGate] = useState(() => !gateOpen);
   const map = useHomeMap(gateOpen);
-  const { setHere } = campus;
+  const { setHere, settings, presence, presenceError, staffDesks, look, reloadLook } = campus;
+  const wp = settings.workplaceNames;
   // The building whose card opened is where you now are.
   const onCard = useCallback((s: { open: boolean; building: BuildingId | null }) => { setCardOpen(s.open); if (s.building) setHere(s.building); }, [setHere]);
   const stay = useCallback(() => undefined, []);
   const { props, tour, touring, extra } = useCampusWorldProps(stay, stay, null);
-  useLevelCheer(campus.look?.rung_name || null);
+  useLevelCheer(look?.rung_name || null);
+  useUnlockCheer(look?.catalog, () => setMeOpen(true));
+  useWelcomeBack({ audience, buildings, workplace: wp, skippedGate, here: campus.here, goTo: map.goTo });
+  const claimStreak = useGateStreak({ audience, claimedToday: facts.claimedToday, onStreak: facts.streakNow, onPoints: reloadLook });
   // WP-3: you on the map (photo, level for those who earn points), a member's time badges, the night look, the concierge's entrance.
   const photo = useMyPhoto(campus.active);
-  const moments = useMapMoments(audience, campus.active);
+  const agenda = useHomeAgenda(audience, campus.active);
   const reveal = useConciergeReveal(gateOpen, map.onGateOpening);
-  const quiet = !!campus.presence && !campus.presenceError && Object.values(campus.presence).every((a) => a.people.length === 0);
-
-  // The home shows Colaberry Live as the prototype's top pill (CampusLive below), so the portal-wide live-now badge steps aside here.
-  useEffect(() => { document.documentElement.classList.add('cm-on-home'); return () => document.documentElement.classList.remove('cm-on-home'); }, []);
-
-  const online = useMemo(() => (campus.presence && !campus.presenceError ? pulseOf(campus.presence, buildings).total : null), [campus.presence, campus.presenceError, buildings]);
+  const quiet = !!presence && !presenceError && Object.values(presence).every((a) => a.people.length === 0);
   const live = useMemo(() => {
     const h = headlineBroadcast(broadcasts);
     return h ? { title: h.title, buildingId: ([...onAirSet][0] ?? null) as BuildingId | null } : null;
   }, [broadcasts, onAirSet]);
+  const urgent = useMemo(() => urgentOf(audience, agenda, buildings, wp), [audience, agenda, buildings, wp]);
+  const suggested = useMemo(() => rightNowRows({ audience, workplace: wp, buildings, stops: campus.planStops, planMinutes: campus.planMinutes, agenda, presence,
+    presenceError, live: !!live, urgent }), [audience, wp, buildings, campus.planStops, campus.planMinutes, agenda, presence, presenceError, live, urgent]);
+  const wf = useHomeWayfinder({ audience, workplace: wp, buildings, accessOf, presence, presenceError, desks: staffDesks, urgent, suggested, goTo: map.goTo, openPerson: campus.openPersonCard });
+
+  // The home shows Colaberry Live as the prototype's top pill (CampusLive below), so the portal-wide live-now badge steps aside here.
+  useEffect(() => { document.documentElement.classList.add('cm-on-home'); return () => document.documentElement.classList.remove('cm-on-home'); }, []);
+  const online = useMemo(() => (presence && !presenceError ? pulseOf(presence, buildings).total : null), [presence, presenceError, buildings]);
 
   if (!campus.ready) return <div className="cm-home" aria-busy="true" data-testid="cm-home-loading" />;
   if (!campus.active) return <Navigate to="/portal/today?stay=1" replace />;
-  const here = campus.here ? buildings.find((b) => b.id === campus.here) : undefined;
-  const reduce = campus.settings.reduceMotion;
+  const reduce = settings.reduceMotion;
   const initials = facts.initials || readParticipant().initials;
-  const enter = (t: boolean) => { setGateOpen(false); reveal.show(); if (reduce) map.camRef.current?.base(); if (t) campus.startTour(); };
-  const level = audience === 'member' || audience === 'explorer' ? levelOfRung(campus.look?.rung_name) : null;
+  const enter = (t: boolean) => { setGateOpen(false); reveal.show(); if (reduce) map.camRef.current?.base(); if (t) campus.startTour(); void claimStreak(); };
+  const level = audience === 'member' || audience === 'explorer' ? levelOfRung(look?.rung_name) : null;
   return (
     <div className={`cm-home cm-scope${reduce ? ' is-reduced' : ''}`} data-testid="cm-home">
       {gateOpen && <CampusGate audience={audience} firstName={facts.firstName} fullName={facts.fullName} initials={initials}
-        rung={campus.look?.rung_name || null} points={campus.look?.points ?? null} streak={facts.streak} online={online} workplace={campus.settings.workplaceNames}
+        rung={look?.rung_name || null} points={look?.points ?? null} streak={facts.streak} online={online} workplace={wp}
+        streakPoints={facts.claimedToday === false && !inViewAs() ? facts.nextPoints : null}
         hasTour={!!tour} reduceMotion={reduce} now={new Date()} onOpening={reveal.onOpening} onEnter={enter} />}
       <CampusWorld {...props} insets={homeInsets} walkTo={map.walk} onCard={onCard} cameraRef={map.camRef} startAt={campus.here}
-        startCam={map.startCam} recenter={map.recenter} me={{ initials, photo, level, tone: audience }} moments={moments} quiet={quiet} />
-      <CampusTopBar audience={audience} online={online} points={campus.look?.points ?? null} rung={campus.look?.rung_name || null}
-        streak={facts.streak} initials={initials} onList={campus.openList} onMe={() => setMeOpen((v) => !v)} />
+        startCam={map.startCam} recenter={map.recenter} me={{ initials, photo, level, tone: audience }} moments={mapMoments(audience, agenda)} quiet={quiet} hover={hover} />
+      <CampusTopBar audience={audience} online={online} points={look?.points ?? null} rung={look?.rung_name || null} photo={photo} workplace={wp}
+        streak={facts.streak} initials={initials} onList={campus.openList} onFind={() => { openWayfinder(); }} onMe={() => setMeOpen((v) => !v)} />
       {meOpen && <CampusMePanel audience={audience} fullName={facts.fullName} initials={initials} onClose={() => { setMeOpen(false); map.camRef.current?.recenter(); }} />}
-      <CampusConcierge waiting={!reveal.shown} cardOpen={cardOpen} audience={audience} firstName={facts.firstName} hereName={here ? buildingName(here, campus.settings.workplaceNames) : 'main gate'}
-        hereId={here ? here.id : null} buildings={buildings} accessOf={accessOf} workplaceNames={campus.settings.workplaceNames} presence={campus.presence}
-        presenceError={campus.presenceError} desks={campus.staffDesks} stops={campus.planStops} live={live} now={new Date()}
+      <CampusConcierge waiting={!reveal.shown} cardOpen={cardOpen} audience={audience} firstName={facts.firstName} hereId={campus.here ?? null}
+        buildings={buildings} accessOf={accessOf} workplaceNames={wp} presence={presence} presenceError={presenceError} desks={staffDesks}
+        stops={campus.planStops} planMinutes={campus.planMinutes} live={live} now={new Date()} agenda={agenda} urgent={urgent}
         tourStops={tour ? tour.stops : null} touring={touring} tourProgress={campus.tourProgress} justToured={campus.justToured}
-        onWalk={map.goTo} onTour={campus.resumeTour} onEndTour={campus.endTour} onOpen={(r) => campus.enterThroughDoor(r, null)} />
+        onWalk={map.goTo} onRun={(id) => map.goTo(id, { run: true })} onHover={setHover} onTour={campus.resumeTour} onEndTour={campus.endTour}
+        onOpen={(r) => campus.enterThroughDoor(r, null)} />
       <div className="cm-home-livebar"><CampusLive /></div>
       <CampusTabBar active="/portal/campus" />
       <CampusListView />
       <CampusDoorTransition />
       <CampusDmToast />
       <CampusCheer burst reduceMotion={reduce} />
+      <Wayfinder ctx={wf.ctx} onPick={wf.onPick} />
       {extra}
     </div>
   );

@@ -146,12 +146,12 @@ describe('the campus home', () => {
     expect(q('[data-testid="cm-cc-pass"]')).toBeNull();
   });
 
-  it('an Explorer sees the EXPLORER chip and the pass with its enroll link, and no streak or level', async () => {
+  it('an Explorer sees the EXPLORER chip, their level (WP-4, as the prototype), the pass with its enroll link, and no streak', async () => {
     mockAudience = 'explorer';
     await mount('/portal/campus');
     expect(q('[data-testid="cm-stats-acct-explorer"]')).not.toBeNull();
     expect(q('[data-testid="cm-stats-streak"]')).toBeNull();
-    expect(q('[data-testid="cm-stats-level"]')).toBeNull();
+    expect(q('[data-testid="cm-stats-level"]')!.textContent).toMatch(/^Lv \d/);
     expect(q('[data-testid="cm-cc-pass"]')).not.toBeNull();
     expect(q('[data-testid="cm-cc-enroll"]')!.getAttribute('href')).toBeTruthy();
     expect(q('[data-testid="cm-cc-pulse"]')!.textContent).toContain('people on campus');
@@ -163,12 +163,12 @@ describe('the campus home', () => {
     expect(container.querySelector('[data-testid="cm-cc-pass"] .cm-pass-more')).not.toBeNull();
   });
 
-  it('staff get staff tools (no learner chips); a partner gets the partner tour card', async () => {
+  it('staff get staff tools and the prototype\'s chips (WP-4); a partner gets the partner tour card', async () => {
     mockAudience = 'staff';
     await mount('/portal/campus');
     expect(q('[data-testid="cm-cc-staff-tools"]')).not.toBeNull();
     expect(q('[data-testid="cm-cc-where"]')!.textContent).toBe('Staff view · every building');
-    expect(q('[data-testid="cm-cc-chips"]')).toBeNull();
+    expect(q('[data-testid="cm-cc-chips"]')!.textContent).toContain('Learn');
     { const r = root!; act(() => r.unmount()); root = null; container.remove(); }
     mockAudience = 'business';
     await mount('/portal/campus');

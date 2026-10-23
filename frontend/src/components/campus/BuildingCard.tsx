@@ -55,6 +55,8 @@ export interface BuildingCardProps {
   tourTop?: React.ReactNode;
   planBox?: React.ReactNode;
   tourNav?: React.ReactNode;
+  /** WP-4: this room was picked in the Wayfinder: it flashes twice (the prototype's .rooms a.flash). */
+  flashRoute?: string;
 }
 
 /** The prototype prints the address under the main action ("enterprise.colaberry.ai/portal/..."); this is the real host. */
@@ -77,7 +79,7 @@ function LockedNotice({ b }: { b: CampusBuilding }): React.ReactElement {
   );
 }
 
-export default function BuildingCard({ building: b, access, workplaceNames, onClose, onNavigate, whoIsHere, onEnterRoom, desks, children, zoneLabel, line, happening, onElsewhere, audience, kicker, urgent, tourTop, planBox, tourNav }: BuildingCardProps): React.ReactElement {
+export default function BuildingCard({ building: b, access, workplaceNames, onClose, onNavigate, whoIsHere, onEnterRoom, desks, children, zoneLabel, line, happening, onElsewhere, audience, kicker, urgent, tourTop, planBox, tourNav, flashRoute }: BuildingCardProps): React.ReactElement {
   const name = buildingName(b, workplaceNames);
   // A plain click goes through the door; a modified click (new tab, etc.) stays a normal link.
   const go = (route: string) => (e: React.MouseEvent) => {
@@ -146,7 +148,7 @@ export default function BuildingCard({ building: b, access, workplaceNames, onCl
                 <li key={r.route}>
                   {r.admin ? adminLink(roomLabel(r, workplaceNames), r.route, 'cm-room') : r.planned
                     ? <span className="cm-room is-disabled" aria-disabled="true">{roomLabel(r, workplaceNames)} <small>opening soon</small></span>
-                    : <Link className="cm-room" to={r.route} onClick={go(r.route)}>{roomLabel(r, workplaceNames)}<small aria-hidden="true">{r.route}</small></Link>}
+                    : <Link className={`cm-room${r.route === flashRoute ? ' is-flash' : ''}`} to={r.route} onClick={go(r.route)}>{roomLabel(r, workplaceNames)}<small aria-hidden="true">{r.route}</small></Link>}
                 </li>
               ))}
             </ul>

@@ -41,16 +41,25 @@ export function momentsFrom(lecture: ArrivalData, amphi: ArrivalData, now: numbe
   return out;
 }
 
-export function useMapMoments(audience: CampusAudience, active: boolean): MapMoments | undefined {
+/** WP-4: what is coming up, for the map's badges and the panel's Right now and urgent card: a member's next live class and, for
+ *  everyone, the next event. Re-read on the tick (the facts are cached a minute, campusFacts). */
+export interface HomeAgenda { lecture: ArrivalData; amphi: ArrivalData; now: number }
+export function useHomeAgenda(audience: CampusAudience, active: boolean): HomeAgenda | null {
   const [data, setData] = useState<{ lecture: ArrivalData; amphi: ArrivalData } | null>(null);
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
-    if (!active || audience !== 'member') return undefined;
+    if (!active) return undefined;
     let alive = true;
-    const load = () => Promise.all([loadArrival('lecture', audience), loadArrival('amphi', audience)]).then(([lecture, amphi]) => { if (alive) setData({ lecture, amphi }); });
+    const load = () => Promise.all([audience === 'member' ? loadArrival('lecture', audience) : Promise.resolve<ArrivalData>({}), loadArrival('amphi', audience)])
+      .then(([lecture, amphi]) => { if (alive) setData({ lecture, amphi }); });
     load();
-    const t = window.setInterval(() => { setNow(Date.now()); load(); }, TICK_MS); // facts are cached a minute (campusFacts)
+    const t = window.setInterval(() => { setNow(Date.now()); load(); }, TICK_MS);
     return () => { alive = false; window.clearInterval(t); };
   }, [audience, active]);
-  return data ? momentsFrom(data.lecture, data.amphi, now) : undefined;
+  return data ? { ...data, now } : null;
+}
+
+/** The map's moments: members only, as in the prototype (Explorers keep their access badges). */
+export function mapMoments(audience: CampusAudience, agenda: HomeAgenda | null): MapMoments | undefined {
+  return audience === 'member' && agenda ? momentsFrom(agenda.lecture, agenda.amphi, agenda.now) : undefined;
 }

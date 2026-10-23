@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import type { CampusAudience } from '../campusMap';
 import { trapTab } from '../focusTrap';
-import { greetingFor } from './useHomeFacts';
+import { greetLine } from './conciergeCopy';
 import '../campusGate.css';
 
 /**
@@ -9,8 +9,9 @@ import '../campusGate.css';
  * greeting by name, your ID card and Enter. Explorers come in by the visitor entrance with a green visitor pass; Workplace names
  * turn the gate into an office lobby. Enter swings the doors open (or, with reduce motion, simply lets you in).
  *
- * Shown once per Central day (localStorage, gateSeen below): it is a welcome, not a wall, so Esc and "Enter" both get you in, and
- * nothing here writes to the server (the streak line is information only; claiming stays on Today). Real data only: the name,
+ * Shown once per Central day (localStorage, gateSeen below): it is a welcome, not a wall, so Esc and "Enter" both get you in.
+ * WP-4 (decision Q9): walking in claims today's streak, as the prototype's; the gate says what it will award (the server's figure)
+ * and the home makes the claim on Enter (useGateStreak), so this component still writes nothing itself. Real data only: the name,
  * level and points come from the profile and the campus look; a fact we do not have is left off the card.
  */
 export const GATE_SEEN_KEY = 'colaberry.campus.gate.seen';
@@ -37,6 +38,8 @@ export interface GateProps {
   rung: string | null;
   points: number | null;
   streak: number | null;
+  /** WP-4 (Q9): what walking in claims today (the server's next_points; 0 or absent once claimed). */
+  streakPoints?: number | null;
   online: number | null;
   workplace: boolean;
   hasTour: boolean;
@@ -66,7 +69,7 @@ export default function CampusGate(p: GateProps): React.ReactElement {
     fade.current = window.setTimeout(() => setDone(true), FADE_AT_MS);
     timer.current = window.setTimeout(() => p.onEnter(tour), OPEN_MS);
   };
-  const greeting = `${greetingFor(p.now.getHours())}${p.firstName ? `, ${p.firstName}` : ''}.`;
+  const greeting = greetLine(p.audience, p.firstName, p.now.getHours(), false);
   const who = (n: number) => (p.audience === 'member' ? (n === 1 ? 'classmate' : 'classmates') : (n === 1 ? 'person' : 'people'));
   const staff = p.audience === 'staff', partner = p.audience === 'business';
   const here = p.online && p.online > 0 ? p.online : 0;
@@ -93,9 +96,11 @@ export default function CampusGate(p: GateProps): React.ReactElement {
           <img className="cm-gate-logo" src="/colaberry-horizontal.png" alt="Colaberry" width={230} height={54} data-testid="cm-gate-logo" />
           <h1 id="cm-gate-greeting" data-testid="cm-gate-greeting">{greeting}</h1>
           <p data-testid="cm-gate-sub">{sub}</p>
-          {p.audience === 'member' && p.streak !== null && p.streak > 0 && (
-            <div className="cm-gate-streak" data-testid="cm-gate-streak"><span aria-hidden="true">{'\u{1F525}'}</span><b>Day {p.streak}</b> of your streak</div>
-          )}
+          {p.audience === 'member' && p.streak !== null && (p.streakPoints ? (
+            <div className="cm-gate-streak" data-testid="cm-gate-streak"><span aria-hidden="true">{'\u{1F525}'}</span>{p.streak > 0 ? <><b>{p.streak}-day streak</b> — tap in to keep it going</> : 'Tap in to start a streak'} (+{p.streakPoints} pts)</div>
+          ) : p.streak > 0 && (
+            <div className="cm-gate-streak" data-testid="cm-gate-streak"><span aria-hidden="true">{'\u{1F525}'}</span><b>{p.streak}-day streak</b></div>
+          ))}
           <div className={`cm-idcard${explorer ? ' is-explorer' : staff ? ' is-staff' : partner ? ' is-partner' : ''}`} data-testid="cm-gate-id">
             <div className="ph" aria-hidden="true">{p.initials || '·'}</div>
             <div>

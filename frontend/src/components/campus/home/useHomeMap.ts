@@ -32,9 +32,10 @@ export function homeInsets(v: Viewport): Insets {
 export interface HomeMap {
   camRef: MutableRefObject<CameraApi | null>;
   startCam: Cam | undefined;
-  walk: { id: BuildingId; seq: number; instant?: boolean } | null;
+  walk: { id: BuildingId; seq: number; instant?: boolean; run?: boolean; flashRoom?: string | null } | null;
   recenter: number;
-  goTo: (id: BuildingId) => void;
+  /** WP-4: run (the urgent card), or flash a room in the card on arrival (a Wayfinder room pick). */
+  goTo: (id: BuildingId, how?: { run?: boolean; flashRoom?: string | null }) => void;
   /** Close every card and ease back to the whole campus (R7, R10). */
   backToCampus: () => void;
   /** The gate's doors started opening. */
@@ -49,7 +50,9 @@ export function useHomeMap(gateShown: boolean): HomeMap {
   const [recenter, setRecenter] = useState(0);
   const { setHere, layer, mapFocus, mapHow, ackMap, tourIndex, lockerOpen, closeLayer } = campus;
 
-  const goTo = useCallback((id: BuildingId) => { setHere(id); setWalk((w) => ({ id, seq: (w?.seq ?? 0) + 1 })); }, [setHere]);
+  const goTo = useCallback((id: BuildingId, how: { run?: boolean; flashRoom?: string | null } = {}) => {
+    setHere(id); setWalk((w) => ({ id, seq: (w?.seq ?? 0) + 1, run: how.run, flashRoom: how.flashRoom }));
+  }, [setHere]);
   const backToCampus = useCallback(() => setRecenter((n) => n + 1), []);
 
   // A map request: walk there, stand inside it, or (nothing named, no tour or locker opening) the whole campus. Then acknowledge.
