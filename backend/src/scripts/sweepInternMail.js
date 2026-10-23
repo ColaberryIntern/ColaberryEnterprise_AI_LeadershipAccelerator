@@ -39,6 +39,7 @@
  *   node dist/scripts/sweepInternMail.js --since 48h --apply
  */
 const { Sequelize, QueryTypes } = require('sequelize');
+const R = require('./lib/agentRoster');
 
 const ACCOUNT = '3945211';
 const API = `https://3.basecampapi.com/${ACCOUNT}`;
@@ -201,29 +202,36 @@ function troubleWords(subject, body) {
   console.log(`mode: ${APPLY ? 'APPLY' : 'DRY RUN (nothing is posted)'}`);
   console.log(`window: last ${AMOUNT} ${UNIT}`);
 
-  // ── the roster, derived ────────────────────────────────────────────────
-  const roster = await q(
-    `SELECT lower(e.email) AS email, p.domain_key, p.intended_builder
-       FROM agent_domain_projects p
-       JOIN projects pr ON pr.id = p.student_project_id
-       JOIN enrollments e ON e.id = pr.enrollment_id
-      WHERE p.intended_builder IS NOT NULL
-      ORDER BY p.domain_key`);
-  console.log(`\nroster resolved from project ownership: ${roster.length} intern(s)`);
-  for (const r of roster) console.log(`  ${r.email.padEnd(30)} ${r.domain_key.padEnd(20)} ${r.intended_builder}`);
-  if (!roster.length) { console.log('\nNo roster. Nothing to sweep.'); await sql.close(); process.exit(1); }
+  // ── the roster ─────────────────────────────────────────────────────────
+  // Resolved by `lib/agentRoster.js`, which every one of these scripts now reads, so adding an
+  // intern is one repoint of `agent_domain_projects.student_project_id` and nothing here changes.
+  const roster = await R.loadRoster(q);
+  const routable = R.assigned(roster);
+  console.log(`\nroster: ${roster.length} domains, ${routable.length} with an intern on them`);
+  for (const r of routable) console.log(`  ${r.email.padEnd(30)} ${r.domain.padEnd(20)} ${r.builder}`);
+  for (const r of roster.filter((x) => !x.assigned)) {
+    console.log(`  ${'(no intern)'.padEnd(30)} ${r.domain.padEnd(20)} ${r.backed ? `project owned by ${r.email}` : 'no enrollment'}`);
+  }
+  if (!routable.length) { console.log('\nNo roster. Nothing to sweep.'); await sql.close(); process.exit(1); }
 
-  const emails = roster.map((r) => r.email);
-  const domainOf = new Map(roster.map((r) => [r.email, r.domain_key]));
+  // Mail routes on ASSIGNED only. A domain whose project is owned by staff is deliberately not
+  // routable: filing a staff member's email onto an agent ticket is worse than filing nothing.
+  const byEmail = R.byEmail(roster);
+  const emails = [...byEmail.keys()];
+
+  // One address can hold several domains, so this is reported rather than silently resolved to
+  // whichever the map happened to keep. Nobody in the assigned set holds two today.
+  for (const c of R.ownerCollisions(roster)) {
+    console.log(`  NOTE: ${c.email} is on ${c.domains.length} domains (${c.domains.join(', ')}); their mail files to the first`);
+  }
 
   // ── the agent tickets ──────────────────────────────────────────────────
   const todos = await bc('GET', `/buckets/${BUCKET}/todolists/${AGENT_GROUP}/todos.json?status=all`);
-  const ticketForDomain = new Map();
-  for (const t of todos) {
-    const m = String(t.title).match(/^(\S+)\s+-\s+the\s+(.+?)\s+agent/i);
-    if (m) ticketForDomain.set(m[2].trim().replace(/\s+/g, '_'), { id: t.id, title: t.title, agent: m[1] });
-  }
+  const { byDomain: ticketForDomain, problems } = R.matchTickets(todos, roster);
   console.log(`\nagent tickets found: ${ticketForDomain.size}`);
+  // Previously a domain with no ticket was one skipped log line. An agent that stops being
+  // reported on looks exactly like an agent with nothing to report, so say it out loud.
+  for (const p of problems) console.log(`  PROBLEM ${p.kind}: ${JSON.stringify(p)}`);
 
   // ── the mail ───────────────────────────────────────────────────────────
   const mail = await q(
@@ -248,7 +256,11 @@ function troubleWords(subject, body) {
   const filed = [];
 
   for (const m of mail) {
-    const domain = domainOf.get(m.from_address);
+    // `byEmail` holds an ARRAY per address, because one person can be on several domains. Taking
+    // the first is a deliberate choice for a case that does not exist in the assigned set today;
+    // it is logged above when it ever does, rather than being resolved silently.
+    const owned = byEmail.get(m.from_address);
+    const domain = owned && owned.length ? owned[0].domain : null;
     const ticket = domain ? ticketForDomain.get(domain) : null;
     const flags = troubleWords(m.subject, m.body);
     const label = `${m.received}  ${m.from_address}  "${squash(m.subject).slice(0, 60)}"`;

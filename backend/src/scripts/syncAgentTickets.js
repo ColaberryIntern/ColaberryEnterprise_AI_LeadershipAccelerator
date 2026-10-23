@@ -37,6 +37,7 @@
  *      `node backend/src/scripts/syncAgentTickets.js --apply`   (posts and shifts)
  */
 const { Sequelize, QueryTypes } = require('sequelize');
+const R = require('./lib/agentRoster');
 const { buildDigest, dueDateShiftDays, FINGERPRINT_TAG } = require('./lib/agentTicketDigest');
 
 const ACCOUNT = '3945211';
@@ -109,23 +110,31 @@ function lastSeen(comments) {
 async function main() {
   console.log(APPLY ? '*** APPLYING ***\n' : '*** DRY RUN - nothing is posted or written ***\n');
 
+  // Who is building what comes from `lib/agentRoster.js`, the one definition the sweep and the
+  // daily report also read. Adding an intern is one repoint of one column and nothing here moves.
+  const roster = await R.loadRoster(q);
   const todos = await bc('GET', `/buckets/${BUCKET}/todolists/${AGENT_GROUP}/todos.json?status=all`);
-  const ticketForDomain = new Map();
-  for (const t of todos) {
-    const m = String(t.title).match(/^(\S+)\s+-\s+the\s+(.+?)\s+agent/i);
-    if (m) {
-      ticketForDomain.set(m[2].trim().replace(/\s+/g, '_'), { id: t.id, agent: m[1], due_on: t.due_on || null });
-    }
+  const { byDomain: ticketForDomain, problems } = R.matchTickets(todos, roster);
+  console.log(`agent tickets: ${ticketForDomain.size}`);
+  // A domain with no ticket used to be one line in a cron log nobody reads, and an agent that
+  // stops being reported on looks identical to an agent with nothing to report.
+  for (const p of problems) console.log(`  PROBLEM ${p.kind}: ${JSON.stringify(p)}`);
+  for (const d of R.builderDrift(roster)) {
+    console.log(`  PROBLEM builder_drift: ${d.domain} stored "${d.stored}" vs enrollment "${d.enrollment}"`);
   }
-  console.log(`agent tickets: ${ticketForDomain.size}\n`);
+  console.log('');
 
-  const domains = await q(`
+  // The per-domain build state. Keyed on the roster's project ids rather than re-deriving the
+  // join, so the two can never disagree about which project belongs to which domain.
+  const pids = R.assigned(roster).map((r) => r.projectId);
+  const rows = await q(`
     SELECT d.domain_key, d.student_project_id::text AS pid, d.intended_builder,
            g.repo_url, g.file_count, g.commit_summary_json AS commits
       FROM agent_domain_projects d
       LEFT JOIN github_connections g ON g.project_id = d.student_project_id
-     WHERE d.intended_builder IS NOT NULL
-     ORDER BY d.domain_key`);
+     WHERE d.student_project_id::text = ANY($1)
+     ORDER BY d.domain_key`, [pids]);
+  const domains = rows;
 
   let posted = 0; let unchanged = 0; let shifted = 0;
 
@@ -160,7 +169,7 @@ async function main() {
       dated: s.dated,
       repoUrl: dom.repo_url || null,
       fileCount: dom.file_count,
-      ticketDueOn: ticket.due_on,
+      ticketDueOn: ticket.dueOn,
       commits: Array.isArray(dom.commits) ? dom.commits : [],
       verifiedStories: verifiedStories.map((v) => ({
         storyId: v.story_id, passed: v.passed, total: v.total, sha: v.sha,
@@ -172,12 +181,12 @@ async function main() {
     const seen = lastSeen(comments);
 
     // --- BASECAMP -> PLATFORM: due dates only ---------------------------------
-    const shift = dueDateShiftDays(seen.due, ticket.due_on);
+    const shift = dueDateShiftDays(seen.due, ticket.dueOn);
     if (shift !== 0) {
       const [n] = await q(`
         SELECT count(*)::int AS n FROM student_tasks
          WHERE project_id = $1::uuid AND due_on IS NOT NULL AND verified_at IS NULL`, [dom.pid]);
-      console.log(`  ${dom.domain_key}: ticket date moved ${seen.due} -> ${ticket.due_on}`
+      console.log(`  ${dom.domain_key}: ticket date moved ${seen.due} -> ${ticket.dueOn}`
         + ` (${shift > 0 ? '+' : ''}${shift}d), would shift ${n.n} unverified dated stor${n.n === 1 ? 'y' : 'ies'}`);
       if (APPLY && n.n > 0) {
         await sql.query(
@@ -196,7 +205,7 @@ async function main() {
       continue;
     }
 
-    const content = `${html}<div style="display:none">af103-due:${ticket.due_on || 'none'}</div>`;
+    const content = `${html}<div style="display:none">af103-due:${ticket.dueOn || 'none'}</div>`;
     if (APPLY) await bc('POST', `/buckets/${BUCKET}/recordings/${ticket.id}/comments.json`, { content });
     posted += 1;
     console.log(`  ${dom.domain_key}: ${APPLY ? 'POSTED' : 'WOULD POST'} ${seen.fingerprint || '(first)'} -> ${fingerprint}`);
