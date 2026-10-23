@@ -497,7 +497,7 @@ function IntegrationsTab({ settings, onChange }: FieldProps) {
               data-testid="ghl-school-key"
             />
             <div className="form-text">
-              Colaberry Training only, including the free-signup landing pages. Empty
+              Colaberry Training only, including the no-card signup landing pages. Empty
               means those leads are held, never sent elsewhere.
             </div>
           </div>

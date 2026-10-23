@@ -174,7 +174,6 @@ describe('sourcePriorityPairs', () => {
 describe('training sources route to the school account', () => {
   it.each([
     'free_signup',
-    'Free signup (/enroll)',
     'popup',
     'training.colaberry.com',
     'training.colaberry.com/thank-you',

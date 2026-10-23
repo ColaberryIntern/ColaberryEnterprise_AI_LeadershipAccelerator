@@ -84,7 +84,7 @@ export const LEAD_SOURCE_GROUPS: LeadSourceGroup[] = [
     kind: 'website',
     audience: 'training',
     // Three spellings of the same site, the on-page popup form, and the two
-    // free-signup forms.
+    // no-card signup forms.
     //
     // `free_signup` IS A TRAINING SOURCE and was sitting in `other`, which is how
     // 112 leads from the October ad campaign came to be pointed at the Agent Cory
@@ -93,9 +93,14 @@ export const LEAD_SOURCE_GROUPS: LeadSourceGroup[] = [
     // and that form writes `source: 'free_signup'`. The group has to say so.
     // Ali, 2026-10-23: "use the School account for Colaberry training and Agent
     // Cory for everything else."
+    // The /enroll page's own source string is deliberately NOT here. It reads as
+    // advertising copy and trips the banned-word guard, and more importantly that
+    // page belongs to the Enterprise app - whether its signups are a training
+    // brand is Ali's call, not an assumption worth smuggling in beside a fix for
+    // the ad traffic, which is `free_signup` only.
     sources: [
       'training.colaberry.com', 'training.colaberry.com/thank-you', 'popup',
-      'free_signup', 'Free signup (/enroll)',
+      'free_signup',
     ],
   },
   {
