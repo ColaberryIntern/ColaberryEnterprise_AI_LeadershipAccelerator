@@ -26,11 +26,20 @@ export interface TemplateChooserProps {
   /** Persisted by the caller, which owns the save and the authoritative response. */
   onChange: (templateId: string) => void;
   disabled?: boolean;
+  /**
+   * Types the learner already has a recording for. Marked, not hidden and not
+   * disabled: re-recording a type is a normal thing to do, and the mark is there
+   * to help someone pick the one they have NOT done rather than to forbid a
+   * second take.
+   */
+  recordedTypeIds?: string[];
 }
 
 const mins = (s: number) => (s % 60 === 0 ? `${s / 60} min` : `${s}s`);
 
-export default function TemplateChooser({ value, onChange, disabled }: TemplateChooserProps) {
+export default function TemplateChooser({
+  value, onChange, disabled, recordedTypeIds,
+}: TemplateChooserProps) {
   const [templates, setTemplates] = useState<TemplateSummary[] | null>(null);
   const [error, setError] = useState('');
   const [showAll, setShowAll] = useState(false);
@@ -51,6 +60,8 @@ export default function TemplateChooser({ value, onChange, disabled }: TemplateC
 
   // The current selection is always shown, even if it is not one of the prominent
   // four — hiding a student's own choice behind "more" would be disorienting.
+  const recorded = new Set(recordedTypeIds || []);
+
   const visible = showAll
     ? templates
     : templates.filter((t) => t.prominent || t.id === value);
@@ -78,7 +89,18 @@ export default function TemplateChooser({ value, onChange, disabled }: TemplateC
                 data-testid={`ps-choice-${t.id}`}
               >
                 <span className="ps-choice-top">
-                  <span className="ps-choice-label">{t.label}</span>
+                  <span className="ps-choice-label">
+                    {t.label}
+                    {recorded.has(t.id) && (
+                      <span
+                        className="ps-choice-recorded"
+                        data-testid={`ps-choice-recorded-${t.id}`}
+                        style={{ marginLeft: 8, fontWeight: 600, fontSize: 12, color: 'var(--ps-ok, #2f855a)' }}
+                      >
+                        ✓ recorded
+                      </span>
+                    )}
+                  </span>
                   <span className="ps-choice-time">
                     {mins(t.speaking_seconds)}
                     {t.qa_seconds > 0 && <> + {mins(t.qa_seconds)} Q&amp;A</>}

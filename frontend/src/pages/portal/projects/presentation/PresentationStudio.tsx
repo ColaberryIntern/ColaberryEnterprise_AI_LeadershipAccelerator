@@ -182,6 +182,7 @@ export default function PresentationStudio(props: PresentationStudioProps) {
             points={points}
             demo={demo}
             onStartType={startType}
+            onBackToPortfolio={() => go('present')}
             pendingType={pendingType}
             portfolio={portfolio}
             onPortfolioChanged={reloadPortfolio}
