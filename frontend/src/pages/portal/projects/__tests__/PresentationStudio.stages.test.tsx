@@ -2,7 +2,7 @@ import React from 'react';
 import { createRoot, Root } from 'react-dom/client';
 import { act } from 'react-dom/test-utils';
 import PresentationStudio from '../presentation/PresentationStudio';
-import { PRESENTATION_STAGES, readSavedStage, studentTitleFor } from '../presentation/presentationStages';
+import { PRESENTATION_STAGES, STAGE_META, readSavedStage, studentTitleFor } from '../presentation/presentationStages';
 import type { ProjectTask } from '../projectsStore';
 
 // `get` is mocked too now that the Build stage fetches the deck prompt. Spread the
@@ -124,16 +124,20 @@ const currentStage = () => container.querySelector('[aria-current="step"]')?.tex
 /**
  * The Studio is a workspace laid OVER a demo-prep task. The thing most worth proving
  * is not that the new chrome renders — it is that none of the old guarantees were
- * quietly dropped on the way: the evidence panel still does the handing in, PREP-6 is
- * still staff-only, and a stage with no machinery yet offers no button that lies.
+ * quietly dropped on the way: the evidence panel still does the handing in, and PREP-6
+ * is still staff-only.
  */
-describe('Presentation Studio — six stages over the existing prep task', () => {
-  it('renders all six stages, in order, as a navigable rail', () => {
+describe('Presentation Studio — five stages over the existing prep task', () => {
+  it('renders all five stages, in order, as a navigable rail', () => {
     mount('PREP-3');
     const labels = Array.from(container.querySelectorAll('.ps-rail button'))
       .map((b) => (b.textContent || '').replace(/Step \d+/, '').trim());
-    expect(labels).toEqual(['Learn', 'Prepare', 'Build', 'Practice', 'Present', 'Reflect & Share']);
-    expect(PRESENTATION_STAGES).toHaveLength(6);
+    // Present and Reflect & Share were folded into one shipped stage, Present &
+    // Share. The rail is driven by PRESENTATION_STAGES, so the length is asserted
+    // against the same list the component maps — a rail that silently lost a stage
+    // would pass a bare `toHaveLength(labels.length)`.
+    expect(labels).toEqual(['Learn', 'Prepare', 'Build', 'Practice', 'Present & Share']);
+    expect(PRESENTATION_STAGES).toHaveLength(5);
   });
 
   it.each([
@@ -176,14 +180,26 @@ describe('Presentation Studio — six stages over the existing prep task', () =>
     expect(currentStage()).toContain('Learn');
   });
 
-  it('a stage whose machinery has not shipped says so and offers NO control', () => {
+  it('NO stage is a placeholder any more — every one renders real machinery', () => {
+    // THIS TEST REPLACED ITS OWN OPPOSITE, and that is the point. It used to click
+    // `present` and REQUIRE the "not shipped yet" notice, because Present and
+    // Reflect & Share were both placeholders. Folding them into Present & Share
+    // shipped the last one, so the old assertion became a demand that a working
+    // stage be broken.
+    //
+    // Asserting the absence over the WHOLE list rather than naming a stage is what
+    // keeps it from inverting a second time: a stage added as a placeholder fails
+    // here on the commit that adds it, and a placeholder that ships flips nothing.
     mount('PREP-3');
-    click(stageBtn('present'));
-    const pending = container.querySelector('[data-testid="ps-pending"]');
-    expect(pending).not.toBeNull();
-    // Nothing clickable inside the honest placeholder — a dead button teaches a
-    // student the platform is broken; a plain sentence does not.
-    expect(pending!.querySelector('button, a, input')).toBeNull();
+    for (const stage of PRESENTATION_STAGES) {
+      const btn = stageBtn(stage);
+      // Positive control. Without it a typo'd testid yields null, the click is a
+      // no-op, and the assertion below passes while proving nothing.
+      expect(btn).not.toBeNull();
+      click(btn);
+      expect(currentStage()).toContain(STAGE_META[stage].label);
+      expect(container.querySelector('[data-testid="ps-pending"]')).toBeNull();
+    }
   });
 
   it('boundary: an unrecognised story id still renders a usable workspace', () => {
@@ -261,7 +277,7 @@ describe('Presentation Studio — six stages over the existing prep task', () =>
     expect(err).not.toBeNull();
     expect(err!.getAttribute('role')).toBe('alert');
     // The rail still works — one failed fetch must not strand the student.
-    expect(container.querySelectorAll('.ps-rail button')).toHaveLength(6);
+    expect(container.querySelectorAll('.ps-rail button')).toHaveLength(PRESENTATION_STAGES.length);
   });
 
   it('a preview account never calls the API for a prompt', async () => {
@@ -497,7 +513,7 @@ describe('Presentation Studio — six stages over the existing prep task', () =>
     const nav = container.querySelector('nav[aria-label="Presentation stages"]');
     expect(nav).not.toBeNull();
     const buttons = container.querySelectorAll('.ps-rail button');
-    expect(buttons).toHaveLength(6);
+    expect(buttons).toHaveLength(PRESENTATION_STAGES.length);
     buttons.forEach((b) => {
       expect(b.tagName).toBe('BUTTON');            // focusable natively, not a div
       expect((b.textContent || '').trim().length).toBeGreaterThan(0);

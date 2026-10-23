@@ -1,5 +1,5 @@
 /**
- * The six stages of the Presentation Studio, and which one a given demo-prep task
+ * The five stages of the Presentation Studio, and which one a given demo-prep task
  * opens on.
  *
  * WHY A MAP AND NOT A RENAME. PREP-1..PREP-6 keep their ids, their titles, their

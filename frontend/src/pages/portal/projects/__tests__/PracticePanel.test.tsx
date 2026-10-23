@@ -242,8 +242,23 @@ describe('the practice panel is mounted on the Practice stage of every prep task
     expect(src).not.toContain("stage === 'practice' && !onEvidenceStage");
   });
 
-  it('still gates the not-shipped placeholders, which SHOULD defer to a hand-in form', () => {
-    // Keeps the fix from being over-applied: the guard is right for a notice.
-    expect(src).toContain("stage === 'reflect' && !onEvidenceStage");
+  it('does not gate ANY stage panel on the task handing in elsewhere', () => {
+    // THE OVER-APPLICATION CONTROL, GENERALIZED. It used to assert that `reflect`
+    // KEPT the guard, as proof the practice fix had not been copied everywhere.
+    // `reflect` is retired, so that assertion could only ever fail again — and
+    // naming one stage never covered the next one anyway.
+    //
+    // The guard was only ever right for a "not shipped yet" notice, and no stage
+    // renders one now. So the rule is simply: no stage panel is gated on it. This
+    // catches the original PREP-4 regression and the same regression on any stage
+    // added later, including ones that do not exist yet.
+    expect(src.match(/stage === '[a-z]+' && !onEvidenceStage/g)).toBeNull();
+  });
+
+  it('still uses onEvidenceStage — for the evidence panel, which is its only job', () => {
+    // Without this, the test above would pass by the flag being deleted outright,
+    // which would also delete the hand-in panel's own mounting condition.
+    expect(src).toContain('const onEvidenceStage = stage === evidenceStage');
+    expect(src).toContain('{onEvidenceStage && (');
   });
 });
