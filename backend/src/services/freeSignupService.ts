@@ -126,7 +126,7 @@ async function captureGuestAsLead(
   acquisition: FreeSignupInput['acquisition'],
 ): Promise<void> {
   try {
-    await Lead.findOrCreate({
+    const [lead] = await Lead.findOrCreate({
       where: { email: clean.email },
       defaults: {
         name: clean.full_name,
@@ -153,6 +153,33 @@ async function captureGuestAsLead(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Sequelize creation attrs
       } as any,
     });
+
+    /**
+     * Push to the CRM so admissions and the callers can actually reach them.
+     *
+     * THIS CALL WAS MISSING AND IT COST 112 LEADS. Every other capture path syncs
+     * - adminLeadController, calendarController, apolloService, csvImportService
+     * and enrollmentService all call it - and this one, the path every
+     * landing-page CTA points at, never did. Measured on production 2026-10-23:
+     * of 112 leads from the first ad campaign, zero had a `ghl_contact_id`.
+     *
+     * It is the SAME omission `enrollmentService` already documents against
+     * itself ("this path captured leads for months without ever calling the
+     * sync, which is why 490 open-house leads had no GHL contact"). Twice now,
+     * which is why the test added alongside this asserts the call rather than
+     * trusting the next reader to notice.
+     *
+     * Fire-and-forget and routing-aware, matching every other call site:
+     * `syncNewLeadToGhl` resolves the destination through `ghlAccountRouting`,
+     * so a training lead reaches the school account and never the dialer, and a
+     * missing key withholds rather than misfiling.
+     */
+    const { syncNewLeadToGhl } = await import('./ghlService');
+    syncNewLeadToGhl(lead as never).catch((e: unknown) =>
+      console.error('[freeSignup] GHL sync error', {
+        error_class: e instanceof Error ? e.constructor.name : 'Unknown',
+        message: e instanceof Error ? e.message : String(e),
+      }));
   } catch (error) {
     // Never allowed to affect signup. Logged with a class so the failure is
     // traceable rather than swallowed — a silent catch here would recreate the

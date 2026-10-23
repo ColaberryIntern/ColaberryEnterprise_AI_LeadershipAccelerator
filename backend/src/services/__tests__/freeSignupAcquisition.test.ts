@@ -20,6 +20,12 @@ jest.mock('../../config/env', () => ({
 jest.mock('../participantService', () => ({ signParticipantJwt: () => 'jwt' }));
 jest.mock('../reese/reeseWelcomeService', () => ({ maybeSendWelcomes: jest.fn() }), { virtual: true });
 
+// The CRM push this path was missing. Mocked because the real module reaches
+// settingsService and then Sequelize; asserted below because the absence of this
+// call IS the defect - 112 production leads with no `ghl_contact_id`.
+const syncNewLeadToGhl = jest.fn();
+jest.mock('../ghlService', () => ({ syncNewLeadToGhl: (...a: unknown[]) => syncNewLeadToGhl(...a) }));
+
 import { createFreeAccount } from '../freeSignupService';
 // The REAL model, not the mock above. `jest.mock('../../models')` replaces the
 // barrel; importing the model file directly gives the genuine Sequelize class, and
@@ -373,5 +379,60 @@ describe('T204 — acquisition evidence reaches the lead', () => {
     expect(res.jwt).toBe('jwt');
     expect(spy).toHaveBeenCalled();
     spy.mockRestore();
+  });
+});
+
+/**
+ * The CRM push, which this path did not have.
+ *
+ * Measured on production 2026-10-23: of 112 leads from the first paid ad campaign,
+ * ZERO carried a `ghl_contact_id`. Every other capture path in the codebase syncs -
+ * adminLeadController, calendarController, apolloService, csvImportService and
+ * enrollmentService - and this one, the path every landing-page CTA points at,
+ * silently did not. `enrollmentService` already carries a docblock about the exact
+ * same omission costing 490 open-house leads, so this is the second occurrence,
+ * which is why it is now asserted rather than left to the next reader to notice.
+ */
+describe('the new lead reaches the CRM', () => {
+  const acquisition = { source: 'free_signup', form_type: 'free_signup' };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    findAll.mockResolvedValue([]);
+    create.mockImplementation(async (attrs: any) => ({ id: 'enr-1', ...attrs }));
+    findOrCreate.mockResolvedValue([{ id: 'lead-1' }, true]);
+  });
+
+  it('hands the lead row to the routing-aware sync', async () => {
+    await createFreeAccount({ full_name: 'Maya', email: 'maya@example.com', programme: 'learner', acquisition });
+
+    expect(syncNewLeadToGhl).toHaveBeenCalledTimes(1);
+    // The LEAD, not the enrollment and not an email: routing resolves the
+    // destination account from the lead's source.
+    expect(syncNewLeadToGhl).toHaveBeenCalledWith({ id: 'lead-1' });
+  });
+
+  it('still creates the account when the CRM sync rejects', async () => {
+    // Fire-and-forget, like every other call site. A CRM outage must never cost
+    // somebody their account - that trade is the whole reason this is best-effort.
+    syncNewLeadToGhl.mockRejectedValueOnce(new Error('GHL 500'));
+
+    const result = await createFreeAccount({
+      full_name: 'Maya', email: 'maya@example.com', programme: 'learner', acquisition,
+    });
+
+    expect(result).toBeTruthy();
+    expect(syncNewLeadToGhl).toHaveBeenCalled();
+  });
+
+  it('syncs a returning guest too, because the first attempt may have been withheld', async () => {
+    // findOrCreate reports created=false for someone who signed up before. Their
+    // lead may still have no GHL contact - which is exactly the state the 112 are
+    // in - so the push is attempted on reuse rather than only on first creation.
+    findOrCreate.mockResolvedValue([{ id: 'lead-existing' }, false]);
+
+    await createFreeAccount({ full_name: 'Maya', email: 'maya@example.com', programme: 'learner', acquisition });
+
+    expect(syncNewLeadToGhl).toHaveBeenCalledWith({ id: 'lead-existing' });
   });
 });

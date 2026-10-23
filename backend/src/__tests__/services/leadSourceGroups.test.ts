@@ -159,3 +159,36 @@ describe('sourcePriorityPairs', () => {
     }
   });
 });
+
+/**
+ * Which GHL account a lead's brand sends it to.
+ *
+ * Ali, 2026-10-23: "use the School account for Colaberry training and Agent Cory
+ * for everything else." The routes map sends the `training_colaberry` and
+ * `open_house` groups to the school; everything else falls through to the default
+ * account. So which GROUP a source lands in decides which CRM a person appears in,
+ * and `free_signup` - the source every landing-page CTA produces - was in `other`.
+ * That is how 112 leads from the first paid campaign came to be pointed at the
+ * dialer instead of the school.
+ */
+describe('training sources route to the school account', () => {
+  it.each([
+    'free_signup',
+    'popup',
+    'training.colaberry.com',
+    'training.colaberry.com/thank-you',
+  ])('%s is a training source', (source) => {
+    expect(groupForSource(source)).toBe('training_colaberry');
+  });
+
+  it.each([
+    ['ai-flotation', 'another brand entirely'],
+    ['trustbeforeintelligence', 'the enterprise book funnel'],
+    ['advisory', 'the workforce designer'],
+  ])('%s is NOT training (%s)', (source) => {
+    // The other half of the instruction. Widening the training group until it
+    // swallowed every source would put other brands in the school CRM, which is
+    // the mirror image of the bug being fixed.
+    expect(groupForSource(source)).not.toBe('training_colaberry');
+  });
+});
