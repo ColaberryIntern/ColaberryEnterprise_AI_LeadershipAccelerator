@@ -26,7 +26,11 @@ import type { HomeAgenda } from './useMapMoments';
  * WP-4: the prototype's words for each account (conciergeCopy), the urgent card, "Right now" (a partner: their team on campus), the
  * help desk's role labels (not for partners, as in the prototype), the campus directory and "I'm running late".
  */
+import PhotoPrompt from './PhotoPrompt';
+
 export interface ConciergeProps {
+  /** WP-7: your photo (null: none), for the photo prompt at the foot of the panel. */
+  photo?: string | null;
   /** A card is open on the map: on a phone the panel becomes its peek strip (never hidden). */
   cardOpen?: boolean;
   /** WP-3: the gate is still up: the panel waits (laid out, invisible) and slides in when it is revealed. */
@@ -155,6 +159,7 @@ export default function CampusConcierge(p: ConciergeProps): React.ReactElement {
         {chipsFor(audience, wp, buildings).map(([label, id]) => <button key={id} type="button" onClick={() => chip(id)}>{label}</button>)}
       </div>
       <Directory buildings={buildings} audience={audience} workplace={wp} onWalk={p.onWalk} />
+      {p.photo !== undefined && <PhotoPrompt audience={audience} photo={p.photo} />}
       </div>
     </aside>
   );

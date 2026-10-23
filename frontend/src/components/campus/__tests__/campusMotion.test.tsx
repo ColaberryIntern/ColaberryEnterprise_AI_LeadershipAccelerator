@@ -140,7 +140,7 @@ describe('the settings panel', () => {
     expect(seen.settings.reduceMotion).toBe(true);
     await act(async () => { (q('[data-testid="cm-setting-workplace"]') as HTMLInputElement).click(); });
     expect(seen.settings.workplaceNames).toBe(true);
-    expect(JSON.parse(window.localStorage.getItem(CAMPUS_SETTINGS_KEY) as string)).toEqual({ nav: 'campus', workplaceNames: true, motion: 'on' });
+    expect(JSON.parse(window.localStorage.getItem(CAMPUS_SETTINGS_KEY) as string)).toEqual({ nav: 'campus', workplaceNames: true, motion: 'on', shareBuilding: true });
 
     const panel = q('[data-testid="cm-settings-panel"]') as HTMLElement;
     await act(async () => { panel.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); });

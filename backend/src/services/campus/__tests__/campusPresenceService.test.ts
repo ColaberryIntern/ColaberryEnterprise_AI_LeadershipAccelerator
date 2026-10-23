@@ -1,7 +1,7 @@
 const mockEnv = { peoplePanelRolesEnabled: true };
 jest.mock('../../../config/env', () => ({ env: mockEnv }));
 jest.mock('../../../db/ensureCampusPresenceSchema', () => ({ ensureCampusPresenceSchema: jest.fn() }));
-jest.mock('../../../models/CampusPresence', () => ({ __esModule: true, default: { findAll: jest.fn(), upsert: jest.fn() } }));
+jest.mock('../../../models/CampusPresence', () => ({ __esModule: true, default: { findAll: jest.fn(), upsert: jest.fn(), destroy: jest.fn() } }));
 jest.mock('../../peoplePanelService', () => ({ getPeoplePanel: jest.fn() }));
 jest.mock('../../cohortPresenceService', () => ({ getCohortPresence: jest.fn() }));
 jest.mock('../../communityRooms/dmEligibility', () => ({ canDmMany: jest.fn() }));
@@ -19,7 +19,7 @@ import { getPeoplePanel } from '../../peoplePanelService';
 import { getCohortPresence } from '../../cohortPresenceService';
 import { canDmMany } from '../../communityRooms/dmEligibility';
 import {
-  getCampusPresence, touchCampusArea, visibleSetFor, CampusAreaError, FRESH_MS, VISIBLE_CACHE_MAX, type CampusPersonOut,
+  getCampusPresence, touchCampusArea, clearCampusArea, visibleSetFor, CampusAreaError, FRESH_MS, VISIBLE_CACHE_MAX, type CampusPersonOut,
   __resetCampusPresenceCacheForTests, __campusPresenceCacheSize,
 } from '../campusPresenceService';
 
@@ -59,6 +59,18 @@ describe('touchCampusArea', () => {
     await touchCampusArea('enr-1', 'library');
     expect(upsert).toHaveBeenCalledTimes(1);
     expect(upsert.mock.calls[0][0]).toMatchObject({ enrollment_id: 'enr-1', area: 'library' });
+  });
+});
+
+describe('clearCampusArea (WP-7, Q14: "Show which building I am in" off)', () => {
+  it('deletes only this enrollment\'s row, and clearing twice is the same end state', async () => {
+    const destroy = CampusPresence.destroy as unknown as jest.Mock;
+    destroy.mockReset(); destroy.mockResolvedValue(0);
+    await clearCampusArea('enr-1');
+    await clearCampusArea('enr-1');
+    expect(destroy).toHaveBeenCalledTimes(2);
+    expect(destroy.mock.calls.every((c) => JSON.stringify(c[0]) === JSON.stringify({ where: { enrollment_id: 'enr-1' } }))).toBe(true);
+    expect(upsert).not.toHaveBeenCalled();
   });
 });
 

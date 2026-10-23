@@ -8,9 +8,11 @@ jest.mock('../../middlewares/authFailureLog', () => ({
 // The presence service is mocked so these tests cover routing, gating and validation only. The
 // factory delegates to outer `mock*` fns so every isolateModules registry shares them.
 const mockTouch = jest.fn();
+const mockClear = jest.fn();
 const mockGetPresence = jest.fn();
 jest.mock('../../services/campus/campusPresenceService', () => ({
   touchCampusArea: (...a: unknown[]) => mockTouch(...a),
+  clearCampusArea: (...a: unknown[]) => mockClear(...a),
   getCampusPresence: (...a: unknown[]) => mockGetPresence(...a),
 }));
 const mockGetDesks = jest.fn();
@@ -38,8 +40,8 @@ function token(extra: Partial<ParticipantPayload> = {}): string {
   return jwt.sign({ sub: 'enr-1', email: 'learner@example.com', cohort_id: 'coh-1', role: 'participant', ...extra }, SECRET);
 }
 
-type CampusEnv = { CAMPUS_ENABLED?: string; CAMPUS_ENROLLMENT_IDS?: string; CAMPUS_COHORT_IDS?: string };
-const KEYS = ['CAMPUS_ENABLED', 'CAMPUS_ENROLLMENT_IDS', 'CAMPUS_COHORT_IDS'] as const;
+type CampusEnv = { CAMPUS_ENABLED?: string; CAMPUS_ENROLLMENT_IDS?: string; CAMPUS_COHORT_IDS?: string; CAMPUS_AUDIENCE_SWITCH_IDS?: string };
+const KEYS = ['CAMPUS_ENABLED', 'CAMPUS_ENROLLMENT_IDS', 'CAMPUS_COHORT_IDS', 'CAMPUS_AUDIENCE_SWITCH_IDS'] as const;
 
 /** A fresh module registry per app so config/env re-reads the campus variables. */
 function buildApp(vars: CampusEnv = {}): express.Express {
@@ -147,11 +149,49 @@ describe('POST /api/portal/campus/here (C4)', () => {
     expect(mockTouch).not.toHaveBeenCalled();
   });
 
+  it('WP-7 (Q14) share: false forgets the building for the TOKEN enrollment and records nothing', async () => {
+    mockClear.mockReset(); mockClear.mockResolvedValue(undefined);
+    const app = buildApp({ CAMPUS_ENABLED: 'allowlist', CAMPUS_ENROLLMENT_IDS: 'enr-1' });
+    const res = await request(app).post(HERE).set('Authorization', `Bearer ${token()}`).send({ area: 'library', share: false });
+    expect(res.status).toBe(204);
+    expect(mockClear).toHaveBeenCalledWith('enr-1');
+    expect(mockTouch).not.toHaveBeenCalled();
+    // share: true (or absent) records as before
+    await request(app).post(HERE).set('Authorization', `Bearer ${token()}`).send({ area: 'library', share: true });
+    expect(mockTouch).toHaveBeenCalledWith('enr-1', 'library');
+  });
+
+  it('WP-7 (Q14) share must be a boolean, and the off switch is still gated by the pilot and the area', async () => {
+    mockClear.mockReset();
+    const on = buildApp({ CAMPUS_ENABLED: 'all' });
+    expect((await request(on).post(HERE).set('Authorization', `Bearer ${token()}`).send({ area: 'library', share: 'no' })).status).toBe(400);
+    expect((await request(on).post(HERE).set('Authorization', `Bearer ${token()}`).send({ area: 'dungeon', share: false })).status).toBe(400);
+    expect((await request(buildApp()).post(HERE).set('Authorization', `Bearer ${token()}`).send({ area: 'library', share: false })).status).toBe(204);
+    expect(mockClear).not.toHaveBeenCalled();
+  });
+
   it('a storage failure answers 500 CampusPresenceUnavailable', async () => {
     mockTouch.mockRejectedValue(new Error('db down'));
     const res = await request(buildApp({ CAMPUS_ENABLED: 'all' })).post(HERE).set('Authorization', `Bearer ${token()}`).send({ area: 'library' });
     expect(res.status).toBe(500);
     expect(res.body.error_class).toBe('CampusPresenceUnavailable');
+  });
+});
+
+describe('GET /api/portal/campus/audience-switch (WP-7)', () => {
+  const SW = '/api/portal/campus/audience-switch';
+  it('401s without a token', async () => {
+    expect((await request(buildApp({ CAMPUS_ENABLED: 'all' })).get(SW)).status).toBe(401);
+  });
+  it('a listed enrollment may switch; an unlisted non-staff one may not', async () => {
+    const app = buildApp({ CAMPUS_ENABLED: 'all', CAMPUS_AUDIENCE_SWITCH_IDS: 'enr-1' });
+    expect((await request(app).get(SW).set('Authorization', `Bearer ${token()}`)).body).toEqual({ allowed: true });
+    expect((await request(app).get(SW).set('Authorization', `Bearer ${token({ sub: 'enr-2' })}`)).body).toEqual({ allowed: false });
+  });
+  it('outside the campus pilot: never allowed, even when listed', async () => {
+    const res = await request(buildApp({ CAMPUS_AUDIENCE_SWITCH_IDS: 'enr-1' })).get(SW).set('Authorization', `Bearer ${token()}`);
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ allowed: false });
   });
 });
 

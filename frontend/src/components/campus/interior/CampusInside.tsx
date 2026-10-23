@@ -10,6 +10,8 @@ import type { FigurePerson } from './RoomFurniture';
 import type { WallFacts } from './RoomWalls';
 import { doorLabel, ROOMS } from './roomModel';
 import { readParticipant } from '../../../pages/portal/today/shellUtils';
+import { useCampus } from '../CampusContext';
+import { useMyPhoto } from '../home/useMyPhoto';
 import '../campusInside.css';
 
 /**
@@ -62,7 +64,12 @@ export default function CampusInside(p: CampusInsideProps): React.ReactElement |
   const named = useMemo(() => (area?.people ?? []).filter((x): x is CampusPerson => 'enrollment_id' in x && !!(x as CampusPerson).display_name), [area]);
   const people: FigurePerson[] = named.map((x) => ({ key: x.enrollment_id, name: x.display_name, initials: initialsOf(x.display_name), photo: x.avatar_url,
     level: x.rung_name ?? null, levelN: levelOfRung(x.rung_name), gear: publicOnly(x.gear), team: audience === 'business', tone: toneFor(x.enrollment_id) }));
-  const you: FigurePerson = { key: 'you', name: 'You', initials: readParticipant().initials, photo: null, you: true,
+  // WP-7: you, as others see you: your photo, your public gear and, for learners, your level coin (it was initials only).
+  const { look } = useCampus();
+  const myPhoto = useMyPhoto(true, false);
+  const earns = audience === 'member' || audience === 'explorer';
+  const you: FigurePerson = { key: 'you', name: 'You', initials: readParticipant().initials, photo: myPhoto, you: true,
+    gear: earns && look ? publicOnly(look.equipped) : undefined, levelN: earns && look ? levelOfRung(look.rung_name) : null,
     tone: art(audience === 'business' ? 'business' : audience === 'staff' ? 'explorer' : 'in-you') };
   if (!ROOMS[b.id]) return null;
   const locked = audience === 'explorer' && access === 'locked';

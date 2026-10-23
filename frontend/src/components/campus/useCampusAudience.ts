@@ -5,6 +5,7 @@ import { useIsExplorer } from '../../pages/portal/useIsExplorer';
 import { useInternshipNav } from '../../pages/portal/useInternshipNav';
 import { deriveCampusAudience, CampusAudienceResult } from './campusAudience';
 import { useIsMgmt } from './campusMgmt';
+import { effectiveAudience, useAudienceSwitchState } from './campusAudienceSwitch';
 
 /**
  * The signed-in learner's campus audience. Reuses the exact hooks PortalShell
@@ -14,6 +15,9 @@ import { useIsMgmt } from './campusMgmt';
  * C6: campus STAFF = is_staff OR the Management Portal bridge's status (role staff AND a valid mgmt_role), because the Staff
  * Office's links only work through that bridge. The backend audience (campusStaffDesks.campusAudienceFor) uses the same pair.
  * Page locks never use this wider staff: they use PageGate's own isStaff (see useCampusView).
+ *
+ * WP-7: an account the server allows (staff, or one listed) may preview another account type from the top bar's account chip;
+ * the campus then draws that audience. `realAudience` stays the account's own.
  */
 export function useCampusAudience(): CampusAudienceResult {
   const { isStaff: pageStaff } = useEntitlement();
@@ -22,8 +26,9 @@ export function useCampusAudience(): CampusAudienceResult {
   const { isManager } = useOrgManager();
   const isExplorer = useIsExplorer();
   const { isIntern } = useInternshipNav();
-  return useMemo(
-    () => deriveCampusAudience({ isStaff, isOrgManager: isManager, isExplorer, isIntern }),
-    [isStaff, isManager, isExplorer, isIntern],
-  );
+  const { audienceSwitch, viewAs } = useAudienceSwitchState();
+  return useMemo(() => {
+    const real = deriveCampusAudience({ isStaff, isOrgManager: isManager, isExplorer, isIntern });
+    return { ...real, audience: effectiveAudience(real.audience, audienceSwitch, viewAs), realAudience: real.audience };
+  }, [isStaff, isManager, isExplorer, isIntern, audienceSwitch, viewAs]);
 }

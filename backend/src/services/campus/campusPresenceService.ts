@@ -69,6 +69,15 @@ export async function touchCampusArea(enrollmentId: string, area: unknown): Prom
   await CampusPresence.upsert({ enrollment_id: enrollmentId, area, updated_at: new Date() });
 }
 
+/**
+ * WP-7 (decision Q14, "Show which building I'm in" off): forget where this learner is, so no building counts them. Classmates still
+ * see them online through the community heartbeat, which this does not touch. Idempotent: clearing twice leaves the same state.
+ */
+export async function clearCampusArea(enrollmentId: string): Promise<void> {
+  await ensureCampusPresenceSchema();
+  await CampusPresence.destroy({ where: { enrollment_id: enrollmentId } });
+}
+
 const pick = (enrollment_id: string, display_name: string, avatar_url: string | null | undefined): CampusPerson =>
   ({ enrollment_id, display_name, avatar_url: avatar_url ?? null });
 

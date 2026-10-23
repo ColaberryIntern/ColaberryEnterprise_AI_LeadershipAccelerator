@@ -28,6 +28,20 @@
 .cm-acct.is-explorer{background:var(--cm-art-explorer-tint);color:var(--cm-art-explorer)}
 .cm-acct.is-business{background:var(--cm-art-business-tint);color:var(--cm-art-business)}
 .cm-acct.is-staff{background:var(--cm-art-help-bg);color:var(--cm-art-help-hover)}
+/* WP-7: the account chip as a switch (staff, or a listed account), and its menu */
+.cm-acct.is-member{background:var(--cm-art-red-tint);color:var(--cm-art-red-d)}
+.cm-acct-switch{position:relative;display:inline-flex}
+.cm-acct.is-button{border:0;cursor:pointer;font-family:inherit}
+.cm-acct.is-button:focus-visible{outline:3px solid var(--cm-art-red);outline-offset:2px}
+.cm-acct.is-preview{box-shadow:inset 0 0 0 1.5px currentColor}
+.cm-acct-menu{position:absolute;top:calc(100% + 8px);left:0;z-index:40;min-width:210px;display:flex;flex-direction:column;gap:2px;padding:8px;background:var(--cm-art-paper);border:1px solid var(--cm-art-line);border-radius:14px;box-shadow:var(--cm-art-pop-shadow)}
+.cm-acct-menu small{font-size:11px;color:var(--cm-art-muted);padding:2px 8px}
+.cm-acct-menu .cm-acct-note{padding-top:6px;line-height:1.35}
+.cm-acct-menu button{border:0;background:transparent;text-align:left;font:600 13px 'DM Sans',var(--sans),sans-serif;color:var(--cm-art-ink);padding:7px 8px;border-radius:9px;cursor:pointer}
+.cm-acct-menu button:hover,.cm-acct-menu button:focus-visible{background:var(--cm-art-red-tint)}
+.cm-acct-menu button[aria-checked="true"]{font-weight:800;color:var(--cm-art-red-d)}
+.cm-acct-menu button[aria-checked="true"]::after{content:' ✓'}
+.cm-acct-menu .is-reset{color:var(--cm-art-red);border-top:1px solid var(--cm-art-line);border-radius:0 0 9px 9px;margin-top:4px}
 .cm-imbtn{position:relative;border:0;background:transparent;font-size:16px;padding:2px 4px;color:var(--cm-art-ink);cursor:pointer;display:inline-flex}
 .cm-imbtn i{position:absolute;top:-4px;right:-6px;min-width:16px;height:16px;border-radius:8px;background:var(--cm-art-red);color:var(--cm-art-on-dark);
   font:700 10px/16px 'DM Sans',var(--sans),sans-serif;font-style:normal;padding:0 4px}

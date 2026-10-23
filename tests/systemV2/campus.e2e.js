@@ -164,8 +164,12 @@ async function runAudience(browser, audience, jwt) {
       const r = await api('/api/portal/campus/look', jwt);
       must(r.status === 200 && Array.isArray(r.body?.catalog), `look ${r.status}`);
       await page.click('[data-testid="cm-stats-me"]');
-      await page.waitForSelector('[data-testid="cm-me"] .cm-look', { timeout: 15_000 });
+      // WP-7: the Me panel carries the locker tiles for learners, the earners note for everyone else, and the photo button
+      const learner = audience === 'member' || audience === 'explorer';
+      await page.waitForSelector(`[data-testid="cm-me"] [data-testid="${learner ? 'cm-locker' : 'cm-me-earners'}"]`, { timeout: 15_000 });
+      must(await page.locator('[data-testid="cm-me-photo"]').count() === 1, 'no photo button in the Me panel');
       await page.keyboard.press('Escape');
+      await page.waitForSelector('[data-testid="cm-me"]', { state: 'detached', timeout: 5_000 });
     });
 
     await step(audience, 'the list view lists the campus', async () => {
