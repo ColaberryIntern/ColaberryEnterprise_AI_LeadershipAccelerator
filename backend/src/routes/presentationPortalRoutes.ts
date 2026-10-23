@@ -378,6 +378,11 @@ router.post('/api/portal/projects/:projectId/tasks/:storyId/deck', requirePartic
 // column and a separate act; a demo reaches the feed only when both exist. The
 // audience stays `private` until that happens, so an unapproved request is invisible
 // to everyone but its owner and staff.
+const reflectionSchema = z.object({
+  // Empty is allowed: clearing what you wrote is a legitimate edit.
+  notes: z.string().max(4000),
+}).strict();
+
 const takeTypeSchema = z.object({
   presentation_type: z.string().trim().min(1).max(40),
 }).strict();
@@ -589,6 +594,65 @@ router.get('/api/portal/presentation-types', requireParticipant, async (_req: Re
     if (!env.presentationStudioEnabled) return res.status(404).json({ error: 'Presentation Studio not enabled' });
     const { presentationTypeOptions } = await import('../services/presentation/takePresentationType');
     res.json({ types: presentationTypeOptions() });
+  } catch (e) { fail(res, e, next); }
+});
+
+// THE PORTFOLIO: seven slots, filled or empty.
+//
+// What replaced the two placeholder steps. A learner accumulates one video per
+// kind of presentation, and the empty slots are the point - they are what says
+// there are six more to practise.
+router.get('/api/portal/projects/:projectId/tasks/:storyId/portfolio', requireParticipant, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!gate(res)) return;
+    if (!env.presentationStudioEnabled) return res.status(404).json({ error: 'Presentation Studio not enabled' });
+
+    const { getPortfolio } = await import('../services/presentation/presentationPortfolio');
+    const portfolio = await getPortfolio(eid(req), String(req.params.projectId), String(req.params.storyId));
+    // Ownership is proved inside the query; not theirs reads as not there.
+    if (!portfolio) return res.status(404).json({ error: 'Not found' });
+    res.json(portfolio);
+  } catch (e) { fail(res, e, next); }
+});
+
+// WHAT THE REHEARSAL PARTNER SAID.
+//
+// PREP-4 asks for a rehearsal in front of a real person and, until now, gave the
+// learner nowhere to record what that person told them. Stored on the attempt,
+// because the notes are about the session rather than any one take.
+router.put('/api/portal/projects/:projectId/tasks/:storyId/reflection', requireParticipant, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!gate(res)) return;
+    if (!env.presentationStudioEnabled) return res.status(404).json({ error: 'Presentation Studio not enabled' });
+    const body = reflectionSchema.parse(req.body || {});
+
+    const { sequelize } = await import('../config/database');
+    // Ownership inside the UPDATE, and the newest attempt carries the notes: a
+    // learner writing up a rehearsal means the one they just did.
+    const [rows] = await sequelize.query(
+      `UPDATE presentation_attempts a
+          SET reflection_notes = :notes, updated_at = NOW()
+         FROM presentation_assignments asg
+        WHERE asg.id = a.assignment_id
+          AND asg.enrollment_id = :eid
+          AND asg.project_id    = :projectId
+          AND asg.story_id      = :storyId
+          AND a.id = (SELECT a2.id FROM presentation_attempts a2
+                       WHERE a2.assignment_id = asg.id
+                       ORDER BY a2.attempt_no DESC LIMIT 1)
+        RETURNING a.id`,
+      {
+        replacements: {
+          notes: body.notes,
+          eid: eid(req),
+          projectId: String(req.params.projectId),
+          storyId: String(req.params.storyId),
+        },
+      },
+    ) as [Array<{ id: string }>, unknown];
+
+    if (!rows?.length) return res.status(404).json({ error: 'Not found' });
+    res.json({ saved: true });
   } catch (e) { fail(res, e, next); }
 });
 

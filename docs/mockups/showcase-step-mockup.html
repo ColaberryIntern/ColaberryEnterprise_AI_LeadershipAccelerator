@@ -1,0 +1,375 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Showcase Step Mockup</title>
+<style>
+  :root{
+    --navy:#1b2f52; --navy-2:#24406e; --ink:#111827; --muted:#6b7280; --muted-2:#9ca3af;
+    --line:#e5e7eb; --bg:#f5f6f8; --card:#fff; --green:#1f8a4c; --green-bg:#e8f6ee;
+    --amber:#b7791f; --amber-bg:#fdf6e7; --void:#eef0f4; --void-line:#c7ccd6; --chat:#e6eef1;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--ink)}
+  button{font:inherit;cursor:pointer}
+
+  /* top bar */
+  .top{display:flex;align-items:center;gap:14px;padding:12px 18px;background:#fff;border-bottom:1px solid var(--line)}
+  .back{width:36px;height:36px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--muted);font-size:18px}
+  .crumb{font-family:var(--mono);font-size:12px;letter-spacing:.06em;color:#2f6db0}
+  .title{font-weight:700;font-size:17px;margin-top:2px}
+  .done-pill{margin-left:auto;font-family:var(--mono);font-size:12px;color:var(--green);background:var(--green-bg);padding:6px 12px;border-radius:999px;font-weight:700}
+
+  .shell{display:grid;grid-template-columns:1fr 340px;min-height:calc(100vh - 62px)}
+  .main{padding:28px 24px 60px;overflow:auto}
+  .wrap{max-width:1000px;margin:0 auto}
+  .page-h{font-weight:600;font-size:18px;margin:0 0 10px}
+
+  /* stepper */
+  .steps{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;padding-bottom:14px;border-bottom:1px solid var(--line)}
+  .step{border:1px solid var(--line);background:#fff;border-radius:6px;padding:9px 12px;text-align:left;color:var(--muted)}
+  .step small{display:block;font-size:11px;letter-spacing:.06em;text-transform:uppercase;margin-bottom:3px}
+  .step span{font-size:14px}
+  .step.active{background:var(--navy);border-color:var(--navy);color:#fff;font-weight:700}
+  .step.active small{color:#cfd8e8}
+  .step .new{font-size:10px;background:#ffd66b;color:#5a4300;border-radius:4px;padding:1px 5px;margin-left:6px;font-weight:700;vertical-align:2px}
+
+  .cols{display:grid;grid-template-columns:1fr 280px;gap:22px;margin-top:22px}
+  h2{font-size:21px;color:var(--navy);margin:0}
+  .sub{color:var(--muted);margin:6px 0 18px}
+
+  /* progress hero */
+  .hero{background:#fff;border:1px solid var(--line);border-radius:10px;padding:18px 20px;display:flex;gap:20px;align-items:center;margin-bottom:18px}
+  .ring{--p:14;width:78px;height:78px;border-radius:50%;flex:none;display:grid;place-items:center;
+        background:conic-gradient(var(--navy) calc(var(--p)*1%), #e7eaf0 0)}
+  .ring div{width:62px;height:62px;border-radius:50%;background:#fff;display:grid;place-items:center;text-align:center;line-height:1.05}
+  .ring b{font-size:20px} .ring em{font-style:normal;font-size:11px;color:var(--muted)}
+  .hero h3{margin:0 0 4px;font-size:16px}
+  .hero p{margin:0;color:var(--muted);font-size:14px;line-height:1.5}
+  .pips{display:flex;gap:5px;margin-top:10px}
+  .pip{width:28px;height:6px;border-radius:3px;background:#e2e5eb}
+  .pip.on{background:var(--navy)}
+
+  .label{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:700;margin:22px 0 10px;display:flex;justify-content:space-between}
+  .label a{color:#2f6db0;text-decoration:none;text-transform:none;letter-spacing:0;font-weight:600}
+
+  /* gallery */
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px}
+  .tile{border-radius:10px;overflow:hidden;display:flex;flex-direction:column;min-height:262px}
+  .tile.done{background:#fff;border:1px solid var(--line)}
+  .thumb{position:relative;aspect-ratio:16/9;background:
+      linear-gradient(180deg,#7fb4e6 0%,#a9d1ef 45%,#3fa2a6 46%,#1c6f7a 100%);}
+  .thumb::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,transparent 55%,rgba(0,0,0,.55))}
+  .thumb .play{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:44px;height:44px;border-radius:50%;
+      background:rgba(255,255,255,.92);display:grid;place-items:center;z-index:1;border:0}
+  .thumb .play::before{content:"";border-left:13px solid var(--navy);border-top:8px solid transparent;border-bottom:8px solid transparent;margin-left:3px}
+  .thumb .dur{position:absolute;right:8px;bottom:8px;z-index:1;color:#fff;font-size:12px;font-family:var(--mono);background:rgba(0,0,0,.5);padding:2px 6px;border-radius:4px}
+  .thumb .takes{position:absolute;left:8px;bottom:8px;z-index:1;color:#fff;font-size:12px}
+  .tbody{padding:12px 14px;display:flex;flex-direction:column;gap:8px;flex:1}
+  .trow{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+  .tname{font-weight:700;font-size:15px}
+  .ttime{font-size:12px;color:var(--muted);white-space:nowrap}
+  .badge{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;padding:3px 9px;border-radius:999px}
+  .badge.ok{background:var(--green-bg);color:var(--green)}
+  .badge.notes{background:var(--amber-bg);color:var(--amber)}
+  .tfoot{margin-top:auto;display:flex;align-items:center;justify-content:space-between;font-size:13px;color:var(--muted)}
+  .toggle{display:flex;align-items:center;gap:7px;cursor:pointer}
+  .sw{width:32px;height:18px;border-radius:9px;background:#d5d9e0;position:relative;transition:.2s}
+  .sw::after{content:"";position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:#fff;transition:.2s}
+  .toggle.on .sw{background:var(--green)} .toggle.on .sw::after{left:16px}
+
+  /* the empty void */
+  .tile.void{border:2px dashed var(--void-line);background:
+      repeating-linear-gradient(135deg,var(--void) 0 10px,#f4f5f8 10px 20px);
+      cursor:pointer;text-align:left;padding:0;transition:border-color .15s,transform .15s,box-shadow .15s;color:inherit}
+  .tile.void:hover,.tile.void:focus-visible{border-color:var(--navy);transform:translateY(-2px);box-shadow:0 6px 18px rgba(27,47,82,.12);outline:none}
+  .void .hole{aspect-ratio:16/9;display:grid;place-items:center;position:relative}
+  .void .hole .plus{width:48px;height:48px;border-radius:50%;border:2px dashed var(--void-line);display:grid;place-items:center;
+       color:var(--muted-2);font-size:26px;font-weight:300;background:rgba(255,255,255,.6);transition:.15s}
+  .tile.void:hover .plus{border-style:solid;border-color:var(--navy);color:#fff;background:var(--navy)}
+  .void .hole .idx{position:absolute;left:10px;top:8px;font-family:var(--mono);font-size:11px;color:var(--muted-2)}
+  .void .tbody{background:rgba(255,255,255,.75)}
+  .void .tname{color:#4b5563}
+  .void .desc{font-size:13px;color:var(--muted);line-height:1.45}
+  .void .cta{margin-top:auto;font-size:13px;font-weight:700;color:var(--navy);opacity:.55;transition:.15s}
+  .tile.void:hover .cta{opacity:1}
+
+  /* reflect */
+  .card{background:#fff;border:1px solid var(--line);border-radius:10px;padding:16px 18px}
+  .card h4{margin:0 0 4px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+  .card p{margin:0;color:var(--muted);font-size:14px;line-height:1.5}
+  textarea{width:100%;margin-top:10px;border:1px solid var(--line);border-radius:8px;padding:10px 12px;font:inherit;font-size:14px;min-height:74px;resize:vertical}
+  .share-row{display:flex;gap:10px;margin-top:12px;flex-wrap:wrap}
+  .btn{border-radius:8px;padding:9px 16px;font-weight:600;font-size:14px;border:1px solid var(--navy)}
+  .btn.primary{background:var(--navy);color:#fff} .btn.ghost{background:#fff;color:var(--navy)}
+  .btn[disabled]{opacity:.45;cursor:not-allowed}
+
+  /* side cards */
+  .side{display:flex;flex-direction:column;gap:14px}
+  .side .card div.k{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:700;margin-top:12px}
+  .side .card div.k:first-of-type{margin-top:8px}
+  .side .v{font-size:15px;margin-top:4px}
+  .chip{display:inline-block;margin-top:5px;font-size:12px;font-weight:600;background:var(--green-bg);color:var(--green);border:1px solid #bfe5cd;padding:3px 9px;border-radius:999px}
+  .typelist{list-style:none;padding:0;margin:8px 0 0;font-size:14px}
+  .typelist li{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px dashed var(--line)}
+  .typelist li:last-child{border:0}
+  .typelist .y{color:var(--green);font-weight:700} .typelist .n{color:var(--muted-2)}
+
+  /* mentor panel */
+  .mentor{background:#fff;border-left:1px solid var(--line);display:flex;flex-direction:column}
+  .mentor .hd{padding:16px 18px;border-bottom:1px solid var(--line);font-weight:700;display:flex;align-items:center;gap:8px}
+  .dot{width:8px;height:8px;border-radius:50%;background:#3bb34a}
+  .bubble{margin:16px;background:var(--chat);border-radius:10px;padding:12px 14px;font-size:14px;line-height:1.55}
+  .mentor .ft{margin-top:auto;padding:12px;border-top:1px solid var(--line)}
+  .shortcuts{display:flex;gap:6px;margin-bottom:10px}
+  .shortcuts span{font-family:var(--mono);font-size:11px;font-weight:700;border:1px solid var(--line);border-radius:999px;padding:5px 10px}
+  .input{display:flex;gap:6px}
+  .input div{flex:1;border:1px solid var(--line);border-radius:8px;padding:9px 12px;color:var(--muted-2);font-size:14px}
+  .input b{background:#9ec3d3;color:#fff;border-radius:8px;padding:9px 14px;font-size:14px}
+
+  /* Learn view (simulated destination) */
+  #learn{display:none}
+  .banner{display:flex;align-items:center;gap:12px;background:#fff7dc;border:1px solid #f1dc93;border-radius:10px;padding:12px 14px;margin-bottom:16px;font-size:14px}
+  .banner b{color:#5a4300}
+  .banner button{margin-left:auto;border:0;background:none;color:var(--navy);font-weight:700}
+  .types{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .type{background:#fff;border:1px solid var(--line);border-radius:8px;padding:12px 14px;text-align:left;color:inherit;position:relative}
+  .type .trow{margin-bottom:6px}
+  .type p{margin:0;font-size:13px;color:var(--muted);line-height:1.45}
+  .type.sel{border:2px solid var(--navy);box-shadow:0 0 0 4px rgba(27,47,82,.08)}
+  .type .have{position:absolute;right:10px;bottom:8px;font-size:11px;color:var(--green);font-weight:700}
+  .pulse{animation:pulse 1.4s ease-out 2}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(27,47,82,.35)}100%{box-shadow:0 0 0 14px rgba(27,47,82,0)}}
+
+  .note{font-size:12px;color:var(--muted);margin-top:26px;border-top:1px solid var(--line);padding-top:12px}
+  .note code{font-family:var(--mono);background:#eef0f4;padding:1px 5px;border-radius:4px}
+
+  @media (max-width:1100px){.shell{grid-template-columns:1fr}.mentor{display:none}}
+  @media (max-width:820px){.cols{grid-template-columns:1fr}.steps{grid-template-columns:repeat(3,1fr)}.types{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <button class="back" aria-label="Back">‹</button>
+  <div>
+    <div class="crumb">DEMO PREP · THE DEDICATED WEEK · PREP-4</div>
+    <div class="title">Rehearse with one other person and take their notes</div>
+  </div>
+  <div class="done-pill">✓ Completed</div>
+</header>
+
+<div class="shell">
+  <main class="main">
+    <div class="wrap">
+      <p class="page-h">Rehearse with one other person and take their notes</p>
+      <nav class="steps" id="steps">
+        <button class="step" data-go="learn"><small>Step 1</small><span>Learn</span></button>
+        <button class="step"><small>Step 2</small><span>Prepare</span></button>
+        <button class="step"><small>Step 3</small><span>Build</span></button>
+        <button class="step"><small>Step 4</small><span>Practice</span></button>
+        <button class="step active" data-go="showcase"><small>Step 5</small><span>Present &amp; Share<i class="new">NEW</i></span></button>
+      </nav>
+
+      <!-- ============ FINAL STEP: PRESENT & SHARE ============ -->
+      <section id="showcase">
+        <div class="cols">
+          <div>
+            <h2>Present &amp; Share</h2>
+            <p class="sub">Your presentation portfolio. One video for each of the seven types — empty slots are the ones still to make.</p>
+
+            <div class="hero">
+              <div class="ring" id="ring"><div><b id="countBig">1</b><em>of 7</em></div></div>
+              <div>
+                <h3 id="heroTitle">1 of 7 presentation types recorded</h3>
+                <p>Every type you record becomes part of your project. Click any empty slot to start that one — it opens Learn with the type already picked.</p>
+                <div class="pips" id="pips"></div>
+              </div>
+            </div>
+
+            <div class="label"><span>Your videos · by type</span><a href="#" id="nextLink">Start the next one →</a></div>
+            <div class="grid" id="grid"></div>
+
+            <div class="label"><span>Reflect &amp; share</span></div>
+            <div class="card">
+              <h4>What did your rehearsal partner tell you?</h4>
+              <p>Write down their notes and one thing you'll change before the day. This goes alongside whichever videos you share.</p>
+              <textarea placeholder="e.g. Sam said the cost number came too late — move it to the first 20 seconds."></textarea>
+              <div class="share-row">
+                <button class="btn primary">Save reflection</button>
+                <button class="btn ghost" id="shareBtn">Share 1 public video</button>
+              </div>
+            </div>
+          </div>
+
+          <aside class="side">
+            <div class="card">
+              <h4>This task</h4>
+              <div class="k">Task</div><div class="v">Rehearse With an Audience <span style="color:var(--muted)">· PREP-4</span></div>
+              <div class="k">Hand-in</div><span class="chip">Handed in</span>
+              <div class="k">Pays</div><div class="v">+40 pts</div>
+            </div>
+            <div class="card">
+              <h4>Portfolio</h4>
+              <ul class="typelist" id="typelist"></ul>
+            </div>
+            <div class="card">
+              <h4>What this asks for</h4>
+              <p style="color:var(--ink)">One real rehearsal in front of one real person, before the day.</p>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <!-- ============ SIMULATED DESTINATION: LEARN ============ -->
+      <section id="learn">
+        <div class="cols">
+          <div>
+            <div class="banner" id="banner">
+              <span>🎬</span>
+              <span>Getting ready to record: <b id="bannerType"></b>. Checklist, timings and deck prompt now follow this type.</span>
+              <button id="backToShowcase">← Back to portfolio</button>
+            </div>
+            <h2>Learn</h2>
+            <p class="sub">Pick the kind of presentation this is, then see what good looks like for it.</p>
+            <div class="card">
+              <h4>Presentation type</h4>
+              <p style="margin-bottom:14px">What kind of presentation is this? Changing it changes your checklist, your timings and the deck prompt.</p>
+              <div class="types" id="types"></div>
+            </div>
+          </div>
+          <aside class="side">
+            <div class="card">
+              <h4>Next up</h4>
+              <p>After you pick, move to <b>Prepare</b> → <b>Build</b> → <b>Practice</b>. Your recording lands back in the portfolio automatically.</p>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <p class="note">Mockup notes — Steps 5 &amp; 6 are merged into <code>Present &amp; Share</code>. Slots are ordered to match the Learn list. A filled slot = at least one recording tagged with that type; an empty slot deep-links to <code>…/PREP-4?step=learn&amp;type=working_system_demo</code>. Use the controls below to preview different states.
+        <br><br>
+        Preview: <button class="btn ghost" style="padding:4px 10px" data-n="0">0 done</button>
+        <button class="btn ghost" style="padding:4px 10px" data-n="1">1 done</button>
+        <button class="btn ghost" style="padding:4px 10px" data-n="4">4 done</button>
+        <button class="btn ghost" style="padding:4px 10px" data-n="7">7 done</button>
+      </p>
+    </div>
+  </main>
+
+  <aside class="mentor">
+    <div class="hd"><span class="dot"></span>Cory</div>
+    <div class="bubble">Nice — your <b>Project introduction</b> is in. Six types to go. The <b>Stakeholder update</b> is the shortest next one (3 min), and it reuses most of what you just said. Want a hint on where to start?</div>
+    <div class="ft">
+      <div class="shortcuts"><span>HINT</span><span>EXPLAIN</span><span>REVIEW</span></div>
+      <div class="input"><div>Ask your mentor, or paste a screenshot</div><b>Send</b></div>
+    </div>
+  </aside>
+</div>
+
+<script>
+const TYPES = [
+  {id:"project_introduction", name:"Project introduction", time:"90s", desc:"Explain what your project is for, and why it matters, to someone who has never heard of it."},
+  {id:"ai_visual_presentation", name:"AI visual presentation", time:"5 min + 2 min Q&A", desc:"Make a visual argument that someone could follow with the sound off."},
+  {id:"working_system_demo", name:"Working-system demo", time:"7 min + 3 min Q&A", desc:"Demonstrate one complete outcome end to end, including what happens when it fails."},
+  {id:"final_showcase", name:"Final showcase", time:"8 min + 5 min Q&A", desc:"Combine the story, live proof, and your own judgement about the limits of what you built."},
+  {id:"architecture_review", name:"Architecture review", time:"8 min + 5 min Q&A", desc:"Explain the choices you made, the ones you rejected, and what would make you change your mind."},
+  {id:"stakeholder_update", name:"Stakeholder update", time:"3 min + 2 min Q&A", desc:"Tell a busy decision-maker what moved, what is stuck, and what you need from them."},
+  {id:"client_handoff", name:"Client handoff", time:"7 min + 5 min Q&A", desc:"Teach someone else to run and own what you built, including when it misbehaves."},
+];
+const DURS = ["1:28","5:12","7:40","8:05","7:51","3:02","6:58"];
+const TAKES = [3,2,1,2,1,1,2];
+let doneCount = 1;
+const shared = new Set();
+
+const $ = s => document.querySelector(s);
+
+function render(){
+  const grid = $("#grid"); grid.innerHTML = "";
+  const list = $("#typelist"); list.innerHTML = "";
+  const pips = $("#pips"); pips.innerHTML = "";
+  TYPES.forEach((t,i) => {
+    const done = i < doneCount;
+    pips.insertAdjacentHTML("beforeend", `<span class="pip ${done?'on':''}"></span>`);
+    list.insertAdjacentHTML("beforeend",
+      `<li><span>${t.name}</span>${done?'<span class="y">✓</span>':'<span class="n">—</span>'}</li>`);
+    if(done){
+      const on = shared.has(t.id);
+      grid.insertAdjacentHTML("beforeend", `
+        <article class="tile done">
+          <div class="thumb"><button class="play" aria-label="Play ${t.name}"></button>
+            <span class="takes">${TAKES[i]} take${TAKES[i]>1?'s':''}</span><span class="dur">${DURS[i]}</span></div>
+          <div class="tbody">
+            <div class="trow"><span class="tname">${t.name}</span><span class="ttime">${t.time}</span></div>
+            <div>${i%2===0?'<span class="badge ok">✓ Rehearsed with partner</span>':'<span class="badge notes">✎ 2 notes to address</span>'}</div>
+            <div class="tfoot">
+              <span>Oct ${12+i}</span>
+              <span class="toggle ${on?'on':''}" data-share="${t.id}"><span class="sw"></span>${on?'Shared':'Private'}</span>
+            </div>
+          </div>
+        </article>`);
+    } else {
+      grid.insertAdjacentHTML("beforeend", `
+        <button class="tile void" data-type="${t.id}" aria-label="Start ${t.name}">
+          <div class="hole"><span class="idx">${i+1} / 7</span><span class="plus">+</span></div>
+          <div class="tbody">
+            <div class="trow"><span class="tname">${t.name}</span><span class="ttime">${t.time}</span></div>
+            <div class="desc">${t.desc}</div>
+            <div class="cta">Not recorded yet · Start this one →</div>
+          </div>
+        </button>`);
+    }
+  });
+  $("#countBig").textContent = doneCount;
+  $("#ring").style.setProperty("--p", Math.round(doneCount/7*100));
+  $("#heroTitle").textContent = doneCount===7 ? "All 7 presentation types recorded 🎉"
+      : `${doneCount} of 7 presentation types recorded`;
+  const next = TYPES[doneCount];
+  $("#nextLink").style.visibility = next ? "visible" : "hidden";
+  if(next) $("#nextLink").dataset.type = next.id;
+  $("#shareBtn").textContent = shared.size ? `Share ${shared.size} public video${shared.size>1?'s':''}` : "Share videos";
+  $("#shareBtn").disabled = shared.size === 0;
+}
+
+function goLearn(typeId){
+  const t = TYPES.find(x=>x.id===typeId);
+  $("#showcase").style.display="none"; $("#learn").style.display="block";
+  document.querySelectorAll(".step").forEach(s=>s.classList.toggle("active", s.dataset.go==="learn"));
+  $("#bannerType").textContent = t.name;
+  $("#banner").style.display = "flex";
+  const box = $("#types"); box.innerHTML="";
+  TYPES.forEach((x,i)=>{
+    box.insertAdjacentHTML("beforeend",`
+      <button class="type ${x.id===typeId?'sel pulse':''}" data-pick="${x.id}">
+        <div class="trow"><span class="tname">${x.name}</span><span class="ttime">${x.time}</span></div>
+        <p>${x.desc}</p>${i<doneCount?'<span class="have">✓ recorded</span>':''}
+      </button>`);
+  });
+  window.scrollTo({top:0,behavior:"smooth"});
+}
+function goShowcase(){
+  $("#learn").style.display="none"; $("#showcase").style.display="block";
+  document.querySelectorAll(".step").forEach(s=>s.classList.toggle("active", s.dataset.go==="showcase"));
+}
+
+document.addEventListener("click", e=>{
+  const v = e.target.closest("[data-type]");
+  if(v){ e.preventDefault(); goLearn(v.dataset.type); return; }
+  const sh = e.target.closest("[data-share]");
+  if(sh){ const id=sh.dataset.share; shared.has(id)?shared.delete(id):shared.add(id); render(); return; }
+  const p = e.target.closest("[data-pick]");
+  if(p){ document.querySelectorAll(".type").forEach(b=>b.classList.remove("sel","pulse")); p.classList.add("sel");
+         $("#bannerType").textContent = TYPES.find(x=>x.id===p.dataset.pick).name; return; }
+  const n = e.target.closest("[data-n]");
+  if(n){ doneCount = +n.dataset.n; shared.clear(); goShowcase(); render(); return; }
+  const st = e.target.closest(".step");
+  if(st && st.dataset.go==="showcase") goShowcase();
+  if(st && st.dataset.go==="learn"){ goLearn("project_introduction"); $("#banner").style.display="none"; }
+});
+$("#backToShowcase").addEventListener("click", goShowcase);
+render();
+</script>
+</body>
+</html>

@@ -425,3 +425,47 @@ export async function setTakeType(
     { presentation_type: presentationType },
   );
 }
+
+/** One of the seven portfolio slots: a type, recorded or not. */
+export interface PortfolioSlot {
+  typeId: string;
+  typeLabel: string;
+  timing: string;
+  description: string;
+  prominent: boolean;
+  recorded: boolean;
+  recordingId: string | null;
+  takeCount: number;
+  durationSeconds: number | null;
+  recordedAt: string | null;
+  playbackUrl: string | null;
+  thumbnailUrl: string | null;
+  /** How a demo reaches social: the learner posts the file themselves. */
+  downloadUrl: string | null;
+  shareState: TakeShareState;
+  showcaseId: string | null;
+  viewCount: number;
+  viewLabel: string;
+}
+
+export interface Portfolio {
+  slots: PortfolioSlot[];
+  recordedTypeCount: number;
+  totalTypes: number;
+  nextTypeId: string | null;
+  reflectionNotes: string | null;
+}
+
+export async function fetchPortfolio(projectId: string, storyId: string): Promise<Portfolio> {
+  const { data } = await portalApi.get<Portfolio>(taskPath(projectId, storyId, 'portfolio'));
+  return data;
+}
+
+/** What the rehearsal partner said. Empty clears it, which is a real edit. */
+export async function saveReflection(
+  projectId: string,
+  storyId: string,
+  notes: string,
+): Promise<void> {
+  await portalApi.put(taskPath(projectId, storyId, 'reflection'), { notes });
+}

@@ -1,11 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import PresentationStageBody from './PresentationStageBody';
 import PresentationTaskAside from './PresentationTaskAside';
+import { fetchPortfolio, type Portfolio } from './presentationApi';
 import {
   PRESENTATION_STAGES,
   STAGE_META,
   openingStageFor,
   readSavedStage,
+  resolveStage,
   saveStage,
   type PresentationStage,
 } from './presentationStages';
@@ -59,13 +61,88 @@ export default function PresentationStudio(props: PresentationStudioProps) {
   // that throws takes the whole workspace down with it.
   const [stage, setStage] = useState<PresentationStage>(opening);
   const [restored, setRestored] = useState(false);
+  /**
+   * The type a learner asked to start, from an empty portfolio slot or a `?type=`
+   * link. Passed DOWN as a prop rather than broadcast: it is a fact this parent
+   * knows and exactly one child needs, and an event bus would make it invisible
+   * to anyone reading either end.
+   */
+  const [pendingType, setPendingType] = useState<string | null>(null);
+  /**
+   * THE PORTFOLIO LIVES HERE, not in the panel, because two things render it:
+   * the grid and the sidebar card. Fetched twice they could disagree — the card
+   * saying 2 of 7 while the grid shows 3 — and a learner would have no way to
+   * know which was right. One fetch, one answer, passed to both.
+   */
+  const [portfolio, setPortfolio] = useState<Portfolio | null>(null);
 
-  // Resume where the student left off. Runs once per task.
+  const reloadPortfolio = useCallback(async () => {
+    if (demo || !projectId || !storyId) return;
+    try {
+      setPortfolio(await fetchPortfolio(projectId, storyId));
+    } catch {
+      // The panel renders its own error state; the sidebar simply omits the card.
+      setPortfolio(null);
+    }
+  }, [demo, projectId, storyId]);
+
+  // Only on the step that shows it. Every other stage would be paying for a read
+  // nothing on screen uses.
+  useEffect(() => {
+    if (stage === 'present') void reloadPortfolio();
+  }, [stage, reloadPortfolio]);
+
+  // Resume where the student left off — unless the URL says otherwise.
+  //
+  // A `?step=` in the link BEATS the saved cursor, because the link is a thing
+  // somebody just clicked and the cursor is where they happened to be last time.
+  // The portfolio's empty slots deep-link to `?step=learn&type=<id>`, and landing
+  // on the previously-open step instead would make that link look broken.
+  //
+  // `resolveStage` rather than a membership test, so a bookmark pointing at the
+  // retired `reflect` step still lands on Present & Share.
   useEffect(() => {
     if (!projectId || !storyId) { setRestored(true); return; }
-    const saved = readSavedStage(projectId, storyId);
-    if (saved) setStage(saved);
+    let fromUrl: PresentationStage | null = null;
+    try {
+      fromUrl = resolveStage(new URLSearchParams(window.location.search).get('step'));
+    } catch {
+      /* a malformed query string is not a reason to fail to render the page */
+    }
+    try {
+      const t = new URLSearchParams(window.location.search).get('type');
+      if (t) setPendingType(t);
+    } catch { /* see above */ }
+    if (fromUrl) {
+      setStage(fromUrl);
+      // Written through, so the cursor agrees with what the learner is looking at.
+      saveStage(projectId, storyId, fromUrl);
+    } else {
+      const saved = readSavedStage(projectId, storyId);
+      if (saved) setStage(saved);
+    }
     setRestored(true);
+  }, [projectId, storyId]);
+
+  /**
+   * Start a specific kind of presentation, from an empty portfolio slot.
+   *
+   * Goes to Learn AND puts the type in the URL. The param is what Learn reads to
+   * pre-select the card, and leaving it there means a refresh keeps the learner's
+   * intent instead of dropping them on whatever was selected before.
+   */
+  const startType = useCallback((typeId: string) => {
+    setPendingType(typeId);
+    setStage('learn');
+    if (projectId && storyId) saveStage(projectId, storyId, 'learn');
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.set('step', 'learn');
+      url.searchParams.set('type', typeId);
+      window.history.replaceState({}, '', url);
+    } catch {
+      /* a history API failure must not stop the stage change */
+    }
   }, [projectId, storyId]);
 
   const go = useCallback((next: PresentationStage) => {
@@ -104,6 +181,10 @@ export default function PresentationStudio(props: PresentationStudioProps) {
             taskId={taskId}
             points={points}
             demo={demo}
+            onStartType={startType}
+            pendingType={pendingType}
+            portfolio={portfolio}
+            onPortfolioChanged={reloadPortfolio}
           />
         </div>
 
@@ -113,6 +194,10 @@ export default function PresentationStudio(props: PresentationStudioProps) {
           handedIn={Boolean(task?.verifiedAt)}
           points={points}
           storedTitle={task?.title}
+          stage={stage}
+          portfolio={portfolio?.slots.map((x) => ({
+            typeId: x.typeId, typeLabel: x.typeLabel, recorded: x.recorded,
+          }))}
         />
       </div>
 
