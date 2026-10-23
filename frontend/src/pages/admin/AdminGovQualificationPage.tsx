@@ -33,6 +33,7 @@ import { StepFooter } from './govWorkspace/StepFooter';
 import { PursuitBrief, type BriefSection } from './govWorkspace/PursuitBrief';
 import { RightRail } from './govWorkspace/RightRail';
 import { SolicitationItemsView, tracksForCategory, dueStageForCategory, type SolView } from './govWorkspace/SolicitationItemsView';
+import { KeyDatesTimeline } from './govWorkspace/KeyDatesTimeline';
 import { ManualRequirementForm } from './govWorkspace/ManualRequirementForm';
 import { FitCapabilitiesPanel } from './govWorkspace/FitCapabilitiesPanel';
 import { DecidePanel } from './govWorkspace/DecidePanel';
@@ -187,17 +188,6 @@ function OpportunityDossier({ dossier }: { dossier: GovDossier }): React.ReactEl
     r.kind === 'separate_cost_file' ? 'Price/cost must be submitted as a separate (often sealed) file or volume, apart from the technical proposal.'
     : r.kind === 'redacted_copy' ? 'A redacted (public-records) copy of the proposal must be submitted alongside the full copy.'
     : `Your offer must remain valid${typeof r.days === 'number' ? ` for ${r.days} days` : ''} after the deadline — build the schedule so it does not lapse.`;
-  // A detected date line: the date, any literally-stated time, and (only if unambiguously stated) its timezone.
-  // A stated time with no zone is flagged "verify tz" — never assume local; a missed-by-zone deadline loses the bid.
-  const dateLine = (d: GovDossier['keyDates'][number]) => (
-    <>
-      {d.date && <strong className="me-1">{d.date}</strong>}
-      {d.time && <span className="me-1">{d.time}{d.timezone ? ` ${d.timezone}` : ''}</span>}
-      {d.time && !d.timezone && <span className="badge bg-warning-subtle text-warning-emphasis me-1" title="No time zone was stated — verify before relying on the hour">verify tz</span>}
-      <span className="small">{d.text}</span>
-      <div className="small text-secondary">· {d.sourceDocument}</div>
-    </>
-  );
   if (empty) {
     return (
       <div className="small text-secondary">
@@ -279,20 +269,7 @@ function OpportunityDossier({ dossier }: { dossier: GovDossier }): React.ReactEl
         {(meetings.length > 0 || keyDates.length > 0) && (
           <div className="col-md-6">
             <h3 className="h6 text-secondary text-uppercase small mb-2"><i className="ri-calendar-event-line me-1" aria-hidden="true" />Meetings &amp; key dates</h3>
-            <ul className="list-unstyled mb-0">
-              {meetings.map((m, i) => (
-                <li key={`mtg-${i}`} className="mb-2">
-                  <span className="badge bg-info-subtle text-info-emphasis me-1">Meeting</span>
-                  {dateLine(m)}
-                </li>
-              ))}
-              {keyDates.map((k, i) => (
-                <li key={`kd-${i}`} className="mb-2">
-                  <span className="badge bg-warning-subtle text-warning-emphasis me-1">Key date</span>
-                  {dateLine(k)}
-                </li>
-              ))}
-            </ul>
+            <KeyDatesTimeline meetings={meetings} keyDates={keyDates} />
           </div>
         )}
       </div>
@@ -1229,7 +1206,12 @@ export default function AdminGovQualificationPage(): React.ReactElement {
     void run(async () => {
       await recordGovQualificationDecision(canonical, { biddingEntity, expectedVersion: version, decision: 'needs_evidence', establishedRequirements: merged });
       setCandidates(null); setItems(null); setCandRows({}); setExtractOutcomes(null);
-    }, `Established ${mapped.length} requirement(s) from the solicitation.`);
+    }, `Established ${mapped.length} requirement(s) from the solicitation.`, () => {
+      // Confirm the package -> assess fit: once requirements are established AND the ZIP is attested (the
+      // same gate the StepFooter's "Confirm the package" button enforces), advance straight to Fit so the
+      // reviewer isn't left scrolling back to the footer. On the decoupled path the upload already attested.
+      if (ws?.zipAttestation && ws.zipAttestation.sha256) setStep('fit');
+    });
   };
 
   // Manual fallback for the Solicitation step: establish ONE hand-typed requirement when the extractor missed it
@@ -1527,12 +1509,9 @@ export default function AdminGovQualificationPage(): React.ReactElement {
                     onToggle={(cid, checked) => setCandRows((prev) => ({ ...prev, [cid]: { ...(prev[cid] ?? { checked: true, applicability: 'always', dueStage: 'submission' }), checked } }))}
                     onSetField={(cid, field, value) => setCandRows((prev) => ({ ...prev, [cid]: { ...(prev[cid] ?? { checked: true, applicability: 'always', dueStage: 'submission' }), [field]: value } }))}
                     view={solView} onView={setSolView}
+                    establish={record ? { selectedCount: selectedCandidateCount, busy, onEstablish: establishSelected } : undefined}
                   />
-                  {record ? (
-                    <button type="button" className="btn btn-primary btn-sm" disabled={busy || selectedCandidateCount === 0} onClick={establishSelected}>
-                      <i className="ri-check-double-line me-1" aria-hidden="true" />Establish selected ({selectedCandidateCount})
-                    </button>
-                  ) : (
+                  {!record && (
                     <div className="alert alert-info py-2 mb-0" role="status">
                       <i className="ri-information-line me-1" aria-hidden="true" />Open the qualification on the <strong>Decide</strong> step to confirm these into established requirements.
                     </div>
