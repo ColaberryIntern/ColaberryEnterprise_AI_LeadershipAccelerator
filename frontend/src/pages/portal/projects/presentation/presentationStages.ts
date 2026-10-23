@@ -14,10 +14,35 @@
  */
 
 export const PRESENTATION_STAGES = [
-  'learn', 'prepare', 'build', 'practice', 'present', 'reflect',
+  'learn', 'prepare', 'build', 'practice', 'present',
 ] as const;
 
 export type PresentationStage = (typeof PRESENTATION_STAGES)[number];
+
+/**
+ * `reflect` WAS A STAGE AND IS NOT ANY MORE.
+ *
+ * Present and Reflect & Share were two placeholder steps that each rendered a
+ * "not built yet" notice and read and wrote nothing. They are now one step,
+ * Present & Share, which holds the portfolio and the rehearsal notes.
+ *
+ * The id has to keep resolving rather than 404 or silently fall back to Learn.
+ * Three things still point at it: bookmarks, `readSavedStage` in a learner's
+ * localStorage, and PREP-5's own opening stage. Mapping it is one line; failing
+ * to map it drops a student on the wrong screen with no explanation.
+ */
+const RETIRED_STAGES: Record<string, PresentationStage> = {
+  reflect: 'present',
+};
+
+/** A current stage id, or the stage a retired id now means. Null if neither. */
+export function resolveStage(value: unknown): PresentationStage | null {
+  if (typeof value !== 'string') return null;
+  if ((PRESENTATION_STAGES as readonly string[]).includes(value)) {
+    return value as PresentationStage;
+  }
+  return RETIRED_STAGES[value] ?? null;
+}
 
 export interface StageMeta {
   id: PresentationStage;
@@ -49,13 +74,10 @@ export const STAGE_META: Record<PresentationStage, StageMeta> = {
   },
   present: {
     id: 'present',
-    label: 'Present',
-    blurb: 'Deliver it live to the audience you prepared for.',
-  },
-  reflect: {
-    id: 'reflect',
-    label: 'Reflect & Share',
-    blurb: 'Pick the take you are proud of, and decide who gets to see it.',
+    label: 'Present & Share',
+    // Both halves of what used to be two steps: the portfolio of what you have
+    // recorded, and the decision about who sees each one.
+    blurb: 'Your portfolio, one video per kind of presentation — and who gets to see each.',
   },
 };
 
@@ -69,7 +91,7 @@ const OPENS_ON: Record<string, PresentationStage> = {
   'PREP-2': 'practice', // first recorded walkthrough
   'PREP-3': 'build',    // the slides
   'PREP-4': 'practice', // rehearse with a person
-  'PREP-5': 'reflect',  // the portfolio take, and who sees it
+  'PREP-5': 'present',  // the portfolio take, and who sees it - 'reflect' was merged in
   'PREP-6': 'present',  // Demo Day itself
 };
 
@@ -128,7 +150,10 @@ const key = (projectId: string, storyId: string) => `cb.studio.stage.${projectId
 export function readSavedStage(projectId: string, storyId: string): PresentationStage | null {
   try {
     const v = window.localStorage.getItem(key(projectId, storyId));
-    return isPresentationStage(v) ? v : null;
+    // `resolveStage`, not `isPresentationStage`: a learner who last had Reflect
+    // open has `reflect` sitting in their browser, and discarding it would drop
+    // them back on Learn with no explanation.
+    return resolveStage(v);
   } catch {
     return null;
   }

@@ -22,10 +22,18 @@ export interface PresentationTaskAsideProps {
   points?: number;
   /** The stored task title, used whenever there is no student-facing override. */
   storedTitle?: string;
+  /**
+   * Which stage is open. The sidebar is not stage-agnostic any more: the SESSION
+   * card points at Practice, which is noise on the step that is ABOUT the
+   * portfolio, and the Portfolio card only makes sense there.
+   */
+  stage?: string;
+  /** Seven types and whether each is recorded, for the Portfolio card. */
+  portfolio?: Array<{ typeId: string; typeLabel: string; recorded: boolean }>;
 }
 
 export default function PresentationTaskAside(props: PresentationTaskAsideProps) {
-  const { storyId, isDemoDay, handedIn, points, storedTitle } = props;
+  const { storyId, isDemoDay, handedIn, points, storedTitle, stage, portfolio } = props;
   const guide = guideFor(storyId);
   // Display override only. Falls back to the stored title — never to an invented one.
   const title = studentTitleFor(storyId) || storedTitle || 'Demo prep';
@@ -70,6 +78,10 @@ export default function PresentationTaskAside(props: PresentationTaskAsideProps)
         </div>
       )}
 
+      {/* HIDDEN ON PRESENT & SHARE. That step is about the portfolio, and a card
+          sending the learner back to Practice is advice they did not ask for in
+          the one place it is least relevant. */}
+      {stage !== 'present' && (
       <div className="ps-card">
         <h3>Session</h3>
         {/* Points at the stage that owns rooms rather than asserting a state this
@@ -81,6 +93,29 @@ export default function PresentationTaskAside(props: PresentationTaskAsideProps)
           Reserve or join your practice room on the Practice stage.
         </p>
       </div>
+      )}
+
+      {/* The portfolio at a glance, so a learner can see what is left without
+          scrolling the grid. Shown only where it means something. */}
+      {stage === 'present' && portfolio && portfolio.length > 0 && (
+        <div className="ps-card" data-testid="ps-aside-portfolio">
+          <h3>Portfolio</h3>
+          <ul style={{ listStyle: 'none', padding: 0, margin: '8px 0 0' }}>
+            {portfolio.map((p) => (
+              <li
+                key={p.typeId}
+                data-testid={`ps-aside-portfolio-${p.typeId}`}
+                style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', borderBottom: '1px dashed var(--slate-200, #e5e7eb)' }}
+              >
+                <span>{p.typeLabel}</span>
+                <span aria-label={p.recorded ? 'recorded' : 'not recorded'} style={{ fontWeight: 700, color: p.recorded ? 'var(--teal-600, #1f8a4c)' : 'var(--slate-400, #9ca3af)' }}>
+                  {p.recorded ? '✓' : '—'}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </aside>
   );
 }

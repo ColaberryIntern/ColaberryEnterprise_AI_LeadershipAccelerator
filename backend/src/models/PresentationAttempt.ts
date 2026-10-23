@@ -39,6 +39,8 @@ export interface PresentationAttemptAttributes {
   attempt_state?: PresentationAttemptState;
   recording_state?: PresentationRecordingState;
   is_final_take?: boolean;
+  /** What the rehearsal partner said, in the learner's own words. */
+  reflection_notes?: string | null;
   join_intent_at?: Date | null;
   started_at?: Date | null;
   ended_at?: Date | null;
@@ -62,6 +64,7 @@ class PresentationAttempt
   declare attempt_state: PresentationAttemptState;
   declare recording_state: PresentationRecordingState;
   declare is_final_take: boolean;
+  declare reflection_notes: string | null;
   declare join_intent_at: Date | null;
   declare started_at: Date | null;
   declare ended_at: Date | null;
@@ -88,6 +91,7 @@ PresentationAttempt.init(
     // yet produced anything playable.
     recording_state: { type: DataTypes.STRING(30), allowNull: false, defaultValue: 'expected' },
     is_final_take: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+    reflection_notes: { type: DataTypes.TEXT, allowNull: true },
     // Join intent is NOT attendance and NOT a verified presentation. Three separate facts.
     join_intent_at: { type: DataTypes.DATE, allowNull: true },
     started_at: { type: DataTypes.DATE, allowNull: true },

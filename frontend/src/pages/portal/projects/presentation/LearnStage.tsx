@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import LearnPanel from './LearnPanel';
 import TemplateChooser from './TemplateChooser';
+import { fetchPresentationTypes } from './presentationApi';
 import { fetchAssignment, saveAssignment } from './presentationApi';
 
 /**
@@ -33,13 +34,39 @@ export interface LearnStageProps {
   projectId: string;
   storyId: string;
   demo?: boolean;
+  /**
+   * A type the learner asked to start, from an empty portfolio slot. Pre-selected
+   * and PERSISTED exactly as a manual click would be, so the checklist, timings
+   * and deck prompt all follow — a pre-selection that only highlighted a card
+   * would be a lie about what the rest of the page is built from.
+   */
+  pendingType?: string | null;
 }
 
-export default function LearnStage({ projectId, storyId, demo }: LearnStageProps) {
+export default function LearnStage({ projectId, storyId, demo, pendingType }: LearnStageProps) {
   const [templateId, setTemplateId] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
+  // Dismissed per visit, not stored: the banner explains why the page looks the
+  // way it does right now, and a learner returning later does not need it again.
+  const [bannerDismissed, setBannerDismissed] = useState(false);
+  const [appliedPending, setAppliedPending] = useState(false);
+  // The banner needs a human label for the id in the URL. Fetched from the same
+  // registry the chooser uses, rather than a second hardcoded map that would
+  // drift from it.
+  const [pendingLabel, setPendingLabel] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (demo || !pendingType) { setPendingLabel(null); return; }
+    let live = true;
+    fetchPresentationTypes()
+      .then((types) => {
+        if (live) setPendingLabel(types.find((t) => t.id === pendingType)?.label ?? null);
+      })
+      .catch(() => { /* no banner is better than a banner naming a raw id */ });
+    return () => { live = false; };
+  }, [demo, pendingType]);
 
   useEffect(() => {
     if (demo) return;
@@ -75,8 +102,22 @@ export default function LearnStage({ projectId, storyId, demo }: LearnStageProps
       .finally(() => { setSaving(false); });
   }, [projectId, storyId, demo, templateId]);
 
-  if (demo) {
-    return (
+  /**
+   * Honour the deep link, ONCE, and only after the current value is known.
+   *
+   * Running before the assignment loads would compare against a null template and
+   * save a type the learner already had, and running more than once would fight a
+   * learner who changed their mind on this very screen.
+   */
+  useEffect(() => {
+    if (demo || appliedPending || !pendingType) return;
+    if (templateId === null) return;
+    setAppliedPending(true);
+    if (pendingType !== templateId) chooseTemplate(pendingType);
+  }, [demo, appliedPending, pendingType, templateId, chooseTemplate]);
+
+  if (demo) {
+    return (
       <div className="ps-pending" data-testid="ps-learn-demo">
         <strong>This is a preview account.</strong>
         Lessons are shown against a real student&rsquo;s own task, so there is nothing to load here.
@@ -88,6 +129,28 @@ export default function LearnStage({ projectId, storyId, demo }: LearnStageProps
 
   return (
     <div data-testid="ps-learn-stage">
+      {/* SAYS WHY THE PAGE LOOKS LIKE THIS. A learner arriving from an empty
+          portfolio slot finds a type already chosen and the whole lesson changed
+          under them; without a line explaining that, it reads as the page having
+          decided something on its own. */}
+      {pendingLabel && !bannerDismissed && (
+        <div className="ps-card" data-testid="ps-learn-type-banner" style={{ marginBottom: 14, display: 'flex', alignItems: 'center', gap: 12 }}>
+          <span aria-hidden="true">🎬</span>
+          <span>
+            Getting ready to record: <strong>{pendingLabel}</strong>. Your checklist,
+            timings and deck prompt now follow this type.
+          </span>
+          <button
+            type="button"
+            className="ps-btn ps-btn--quiet"
+            data-testid="ps-learn-banner-dismiss"
+            style={{ marginLeft: 'auto' }}
+            onClick={() => setBannerDismissed(true)}
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
       <div className="ps-card" data-testid="ps-type-first">
         <h3>Presentation type</h3>
         <TemplateChooser value={templateId} onChange={chooseTemplate} disabled={saving} />

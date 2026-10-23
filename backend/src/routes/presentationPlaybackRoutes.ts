@@ -166,4 +166,58 @@ router.get('/api/portal/projects/:projectId/tasks/:storyId/recordings/:recording
   } catch (e) { fail(res, e, next); }
 });
 
+/**
+ * DOWNLOAD THE FILE, so a learner can post it wherever they like.
+ *
+ * Ali asked for sharing to social platforms. A demo is served through a signed,
+ * short-lived, audience-checked URL, which LinkedIn and X cannot play — so the
+ * options were a genuinely public, indexable, permanent URL, or handing the
+ * learner their own file. He chose the file, and it is the right call: nothing
+ * about this makes a student's rehearsal reachable by anyone we did not intend,
+ * and the video ends up posted under their own account rather than ours.
+ *
+ * SAME TICKET, SAME AUDIENCE RULE as playback. The only differences are the
+ * `attachment` disposition and the surface name — `canView`'s `download` surface
+ * exists precisely so a policy could one day allow watching but not keeping, and
+ * routing through it means that decision has somewhere to live.
+ *
+ * NO RANGE HANDLING, deliberately: a download is one sequential read, and the
+ * partial-content path exists for a player seeking, which this is not.
+ */
+router.get('/api/portal/projects/:projectId/tasks/:storyId/recordings/:recordingId/download', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!gate(res)) return;
+    if (!env.presentationStudioEnabled) return res.status(404).json({ error: 'Presentation Studio not enabled' });
+
+    const { verifyRecordingTicket } = await import('../services/presentation/recordingTicket');
+    const claims = verifyRecordingTicket(typeof req.query.t === 'string' ? req.query.t : null);
+    if (!claims || claims.recordingId !== String(req.params.recordingId)) {
+      return res.status(404).json({ error: 'Not found' });
+    }
+
+    const { resolveViewableRecording } = await import('../services/presentation/recordingPlayback');
+    const r = await resolveViewableRecording(
+      claims.enrollmentId,
+      String(req.params.projectId),
+      String(req.params.storyId),
+      String(req.params.recordingId),
+    );
+    if (!r.ok) {
+      if (r.reason === 'file_missing') {
+        return res.status(409).json({ error: 'This take is recorded but the video file is not available.' });
+      }
+      return res.status(404).json({ error: 'Not found' });
+    }
+
+    const { filePath, sizeBytes, mimeType, downloadName } = r.recording;
+    res.setHeader('Content-Type', mimeType);
+    res.setHeader('Content-Length', String(sizeBytes));
+    res.setHeader('Cache-Control', 'private, no-store');
+    // `attachment` is the whole difference from playback: the browser saves it
+    // rather than playing it inline.
+    res.setHeader('Content-Disposition', `attachment; filename="${downloadName}"`);
+    return fs.createReadStream(filePath).pipe(res);
+  } catch (e) { fail(res, e, next); }
+});
+
 export default router;
