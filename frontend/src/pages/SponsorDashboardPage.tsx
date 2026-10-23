@@ -75,6 +75,49 @@ interface SponsorDashboard {
   participants: Participant[];
 }
 
+// ------------------------------- Provenance -------------------------------
+// Every figure on this page says where it came from, beside the figure itself.
+//
+// WHY PER-FIGURE AND NOT ONE BANNER. This page already told the visitor once,
+// in a line near the top, that they were looking at sample data. That is the
+// defect the shared Claim primitives were written against: "a dashboard whose
+// sample and live modes are visually IDENTICAL except for a badge string, so a
+// screenshot of demo data is indistinguishable from a customer's real data."
+// A sponsor screenshotting the seat count to forward to their CFO takes the
+// number and leaves the banner behind.
+//
+// WHY NOT IMPORT <Metric> FROM publicV2/Claim. That is the right semantic and
+// the wrong stylesheet: it emits cbv2-* classes, and this page ships its own
+// scoped <style> block, so the badge would render unstyled and invisible. An
+// invisible honesty badge is worse than none, so this mirrors that component's
+// rules - text plus glyph, never colour alone - using the design-system Badge
+// this page already imports.
+type Provenance =
+  | 'measured'          // read from our systems for this sponsor
+  | 'target'            // a goal agreed with the sponsor, not an observation
+  | 'not-yet-measured'  // we will measure it and cannot yet
+  | 'sample';           // invented, for a visitor with no session
+
+const PROVENANCE: Record<Provenance, { glyph: string; label: string; tone: BadgeTone }> = {
+  measured: { glyph: '✔', label: 'Measured', tone: 'green' },
+  target: { glyph: '◎', label: 'Target', tone: 'blue' },
+  'not-yet-measured': { glyph: '◷', label: 'Not yet measured', tone: 'neutral' },
+  sample: { glyph: '◆', label: 'Sample data', tone: 'warning' },
+};
+
+type BadgeTone = 'neutral' | 'red' | 'green' | 'blue' | 'warning';
+
+function Provenance({ of }: { of: Provenance }): React.ReactElement {
+  const p = PROVENANCE[of];
+  return (
+    <div className="cbsd-prov" data-provenance={of}>
+      <Badge tone={p.tone} outline>
+        <span aria-hidden="true">{p.glyph}</span> {p.label}
+      </Badge>
+    </div>
+  );
+}
+
 // ----------------------------- Sample fallback ----------------------------
 // Realistic data shown only if the endpoint is unreachable. Mirrors the
 // contract exactly so the live view drops in with no shape changes.
@@ -226,6 +269,8 @@ const CSS = `
 .cbsd-stat .label{font-size:var(--fs-caption);font-weight:var(--fw-bold);letter-spacing:var(--ls-overline);text-transform:uppercase;color:var(--text-muted)}
 .cbsd-stat .value{font-family:var(--font-display);font-weight:var(--fw-black);font-size:var(--fs-h2);line-height:1;color:var(--text-strong);margin-top:var(--space-3)}
 .cbsd-stat .hint{font-size:var(--fs-caption);color:var(--text-subtle);margin-top:var(--space-2)}
+.cbsd-prov{margin-top:var(--space-3)}
+.cbsd-prov [data-provenance]{display:inline-flex}
 .cbsd-stat.accent .value{color:var(--brand-accent)}
 
 /* SECTION HEADERS */
@@ -482,19 +527,26 @@ function SponsorDashboardPage() {
       render: (v: number) => <span title={`${v} shipped`}>{v}</span>,
     },
     {
+      // WE DO NOT CERTIFY ANYONE, and this column used to say we did. It read
+      // "Cert", with the states "Certified" and "Not yet certified", which claims
+      // a credential Colaberry does not issue: the exam belongs to Anthropic and
+      // we sell preparation for it. A sponsor reading "Certified" beside their own
+      // employee's name would reasonably believe we had awarded something. What
+      // the underlying field records is whether that person finished our
+      // preparation track, so that is what it now says.
       key: 'certified',
-      header: 'Cert',
+      header: 'Prep',
       align: 'right' as const,
       render: (_v: boolean, row: Participant) =>
         row.certified ? (
-          <span className="cbsd-cert-yes">
+          <span className="cbsd-cert-yes" title="Preparation track complete">
             <span aria-hidden="true">✓</span>
-            <span className="cb-sr-only">Certified</span>
+            <span className="cb-sr-only">Preparation complete</span>
           </span>
         ) : (
-          <span className="cbsd-cert-no">
+          <span className="cbsd-cert-no" title="Preparation track not yet complete">
             <span aria-hidden="true">—</span>
-            <span className="cb-sr-only">Not yet certified</span>
+            <span className="cb-sr-only">Preparation not yet complete</span>
           </span>
         ),
     },
@@ -599,21 +651,25 @@ function SponsorDashboardPage() {
               <div className="label">Seats purchased</div>
               <div className="value">{view.seatsPurchased}</div>
               <div className="hint">Annual seats on your plan</div>
+              <Provenance of={usingSample ? 'sample' : 'measured'} />
             </Card>
             <Card className="cbsd-stat" elevation="sm">
               <div className="label">Seats redeemed</div>
               <div className="value">{view.seatsRedeemed}</div>
               <div className="hint">Codes claimed by your team</div>
+              <Provenance of={usingSample ? 'sample' : 'measured'} />
             </Card>
             <Card className="cbsd-stat" elevation="sm" accent="green">
               <div className="label">Available</div>
               <div className="value">{view.seatsAvailable}</div>
               <div className="hint">Unassigned — ready to invite</div>
+              <Provenance of={usingSample ? 'sample' : 'measured'} />
             </Card>
             <Card className="cbsd-stat accent" elevation="sm" accent="red">
               <div className="label">Reassignable</div>
               <div className="value">{view.seatsReassignable}</div>
               <div className="hint">Inactive seats you can reclaim</div>
+              <Provenance of={usingSample ? 'sample' : 'measured'} />
             </Card>
           </div>
         )}
