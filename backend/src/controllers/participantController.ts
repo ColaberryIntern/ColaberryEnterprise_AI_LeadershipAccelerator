@@ -38,6 +38,24 @@ export async function handleGetCheckinInfo(req: Request, res: Response, next: Ne
   } catch (err) { next(err); }
 }
 
+/**
+ * L7.2 — what the persistent session link should show right now.
+ *
+ * PUBLIC, like its sibling check-in endpoint: a viewer scans a printed QR before signing in,
+ * and meeting a 401 there reads as "this link is broken".
+ *
+ * Deliberately minimal: the moment and, when there is one, somewhere to go. NOT the occurrence
+ * id, the title, or anything about who may watch — a private broadcast's existence should not
+ * be enumerable from an unauthenticated endpoint.
+ */
+export async function handleGetSessionMoment(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { resolveSessionMoment } = await import('../services/broadcast/broadcastSessionLinks');
+    const result = await resolveSessionMoment(req.params.id as string);
+    res.json({ moment: result.moment, watch_url: result.watchUrl });
+  } catch (err) { next(err); }
+}
+
 export async function handleIngestBackground(req: Request, res: Response, next: NextFunction) {
   try {
     const { resume_text, linkedin_url } = req.body || {};
