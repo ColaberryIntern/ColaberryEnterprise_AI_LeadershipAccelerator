@@ -36,6 +36,8 @@ export interface DiscoverableOccurrence {
   editorial_state: EditorialState;
   scheduled_start_at: Date | null;
   content_started_at: Date | null;
+  /** The class session this broadcast airs (its `live_session` source ref), when it has one. */
+  session_id?: string | null;
 }
 
 export interface DiscoveryEntry {
@@ -59,6 +61,8 @@ export interface DiscoveryItem {
   reason: BroadcastAccessDecision['reason'];
   offer_upgrade: boolean;
   preview_seconds_remaining: number | null;
+  /** The class session, so a surface can check the viewer in when they walk into the room. Null for a broadcast with no session. */
+  session_id: string | null;
 }
 
 /** A private occurrence is knowable only by someone eligible for its room. */
@@ -82,5 +86,6 @@ export function projectDiscovery(entries: ReadonlyArray<DiscoveryEntry>): Discov
     // null, never 0, when the clock has not started — the distinction broadcastMetrics and
     // the entitlement layer both preserve, and collapsing it here would undo that.
     preview_seconds_remaining: decision.previewSecondsRemaining ?? null,
+    session_id: occurrence.session_id ?? null,
   }));
 }

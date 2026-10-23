@@ -1,14 +1,18 @@
 jest.mock('../../../models/BroadcastOccurrence', () => ({ __esModule: true, default: { findAll: jest.fn() } }));
+jest.mock('../../../config/database', () => ({ sequelize: { query: jest.fn() } }));
 
 import BroadcastOccurrence from '../../../models/BroadcastOccurrence';
+import { sequelize } from '../../../config/database';
 import {
   ACTIVE_DISCOVERY_STATES,
   ACTIVE_DISCOVERY_LIMIT,
   findActiveOccurrences,
+  findSessionIds,
 } from '../broadcastActiveQuery';
 import { BROADCAST_STATEMENTS } from '../../../db/ensureBroadcastSchema';
 
 const findAll = (BroadcastOccurrence as unknown as { findAll: jest.Mock }).findAll;
+const query = (sequelize as unknown as { query: jest.Mock }).query;
 
 /**
  * The "what is airing" read, and the one property that is invisible until production is slow.
@@ -78,13 +82,14 @@ describe('findActiveOccurrences', () => {
       editorial_state: 'live', scheduled_start_at: null, content_started_at: started,
       preview_seconds: 900,
     }]);
+    query.mockResolvedValue([]);
 
     const rows = await findActiveOccurrences();
 
     expect(rows).toEqual([{
       id: 'occ-1', title: 'Week 9', room_id: 'room-1', access_mode: 'private',
       editorial_state: 'live', scheduled_start_at: null, content_started_at: started,
-      preview_seconds: 900,
+      preview_seconds: 900, session_id: null,
     }]);
   });
 
@@ -92,5 +97,62 @@ describe('findActiveOccurrences', () => {
     findAll.mockResolvedValue([]);
     await findActiveOccurrences(5);
     expect(findAll.mock.calls[0][0].limit).toBe(5);
+  });
+});
+
+describe('the class session behind each airing broadcast (auto check-in, decision Q2)', () => {
+  const row = (id: string) => ({
+    id, title: id, room_id: null, access_mode: 'free', editorial_state: 'live',
+    scheduled_start_at: null, content_started_at: null, preview_seconds: 0,
+  });
+  beforeEach(() => jest.clearAllMocks());
+
+  it('attaches the live_session ref to its broadcast, null where there is none, in one query', async () => {
+    findAll.mockResolvedValue([row('occ-1'), row('occ-2')]);
+    query.mockResolvedValue([{ occurrence_id: 'occ-1', source_id: 'ses-1' }]);
+
+    const rows = await findActiveOccurrences();
+
+    expect(rows.map((r) => r.session_id)).toEqual(['ses-1', null]);
+    expect(query).toHaveBeenCalledTimes(1);
+    const [sql, opts] = query.mock.calls[0];
+    expect(sql).toContain("source_type = 'live_session'");
+    expect(opts.replacements.ids).toEqual(['occ-1', 'occ-2']);
+  });
+
+  it('keeps the authoritative ref when a broadcast has two', async () => {
+    // The SQL orders authoritative first; the first one seen wins.
+    query.mockResolvedValue([
+      { occurrence_id: 'occ-1', source_id: 'ses-auth' },
+      { occurrence_id: 'occ-1', source_id: 'ses-other' },
+    ]);
+    expect((await findSessionIds(['occ-1'])).get('occ-1')).toBe('ses-auth');
+    expect(query.mock.calls[0][0]).toContain('ORDER BY is_authoritative DESC');
+  });
+
+  it('asks nothing when nothing is airing', async () => {
+    findAll.mockResolvedValue([]);
+    await findActiveOccurrences();
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  it('a failed session read still lists what is airing, without session ids, and logs it', async () => {
+    findAll.mockResolvedValue([row('occ-1')]);
+    query.mockRejectedValue(Object.assign(new Error('connection reset'), { name: 'SequelizeConnectionError' }));
+    const log = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    const rows = await findActiveOccurrences();
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0].session_id).toBeNull();
+    const line = JSON.parse(String(log.mock.calls[0][0]));
+    expect(line).toMatchObject({ event: 'broadcast_discovery_session_ids', outcome: 'partial', error_class: 'SequelizeConnectionError' });
+    log.mockRestore();
+  });
+
+  it('is idempotent: the same airing list reads the same sessions twice', async () => {
+    findAll.mockResolvedValue([row('occ-1')]);
+    query.mockResolvedValue([{ occurrence_id: 'occ-1', source_id: 'ses-1' }]);
+    expect(await findActiveOccurrences()).toEqual(await findActiveOccurrences());
   });
 });

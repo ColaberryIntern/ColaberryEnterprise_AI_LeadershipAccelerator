@@ -53,6 +53,8 @@ export interface DiscoveryBroadcast {
   reason: string;
   offer_upgrade: boolean;
   preview_seconds_remaining: number | null;
+  /** The class session this broadcast airs, or null. Optional: an older backend does not send it. */
+  session_id?: string | null;
 }
 
 export interface DiscoveryResponse {
