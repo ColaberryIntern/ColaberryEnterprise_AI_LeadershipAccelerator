@@ -1,7 +1,8 @@
 import { getEnrollmentView, selectCohort } from '../portalEnrollmentService';
 import { Enrollment, Cohort } from '../../models';
 
-jest.mock('../../config/env', () => ({ env: { paysimpleApiUser: 'u', paysimpleApiKey: 'k', paymentMode: 'test' } }));
+jest.mock('../../config/env', () => require('../../__tests__/testSupport/configMocks')
+  .envModuleMock({ paysimpleApiUser: 'u', paysimpleApiKey: 'k', paymentMode: 'test' }));
 jest.mock('../../models', () => ({
   Enrollment: { findByPk: jest.fn() },
   Cohort: { findByPk: jest.fn(), findAll: jest.fn() },

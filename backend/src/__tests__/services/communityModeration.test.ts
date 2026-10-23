@@ -4,10 +4,8 @@
  * (communityModerationService.ts). No DB I/O — models mocked.
  */
 
-jest.mock('../../config/database', () => ({
-  sequelize: { authenticate: jest.fn(), close: jest.fn(), query: jest.fn(), define: jest.fn() },
-  connectDatabase: jest.fn(),
-}));
+jest.mock('../../config/database', () => require('../testSupport/configMocks')
+  .databaseModuleMock(['authenticate', 'close', 'query']));
 
 jest.mock('../../models/Enrollment', () => ({ findByPk: jest.fn() }));
 jest.mock('../../models/CommunityMember', () => ({ findOrCreate: jest.fn(), findAll: jest.fn() }));

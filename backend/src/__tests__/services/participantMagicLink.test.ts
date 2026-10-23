@@ -8,7 +8,8 @@
 
 jest.spyOn(process.stdout, 'write').mockImplementation(() => true as any);
 
-jest.mock('../../config/env', () => ({ env: { jwtSecret: 'test-secret', frontendUrl: 'https://enterprise.colaberry.ai' } }));
+jest.mock('../../config/env', () => require('../testSupport/configMocks')
+  .envModuleMock({ jwtSecret: 'test-secret', frontendUrl: 'https://enterprise.colaberry.ai' }));
 
 jest.mock('../../models', () => ({
   __esModule: true,

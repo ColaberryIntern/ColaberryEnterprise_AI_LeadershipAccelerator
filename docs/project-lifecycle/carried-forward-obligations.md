@@ -3229,3 +3229,81 @@ This closes blocker 1 of three. Blocker 2 (four inputs no table holds) is unchan
 the module names them. Blocker 3 is untouched and is not a code problem: 0 of 387 requirements on
 the eligible projects carry a source document, so `requirement_without_provenance` refuses the
 first hop whatever is composed.
+
+## THE IGNORE-LIST CAUSE IS IDENTIFIED, and six suites come off the list
+
+Two earlier entries left this open: the cause was recorded as UNIDENTIFIED after three ruled-out
+hypotheses, with one live oddity named as "the thread to pull". The thread is pulled.
+
+### It is ONE pattern, not twenty problems
+
+A **partial mock of a shared config module**, missing a field that some transitively-imported
+module needs **at import time**. The suite then dies before a single test runs, so it reports as
+"Test suite failed to run" with no test names attached - which is exactly why it looked like
+twenty unrelated failures.
+
+### The oddity had no contradiction in it
+
+The open question was: inside a suite that mocks `config/database`, a direct `require` of that
+module receives the stub, while requiring a model that imports the same module throws.
+
+**The two paths read different properties.** `Model.init` never looks at `sequelize.define`; it
+reads `this.sequelize.options.define` and then calls `this.sequelize.runHooks`
+(`sequelize/lib/model.js`, `static init`). Every one of these stubs supplied `define: jest.fn()`
+- the one key that looks exactly right and is never consulted. Same module, two answers, no
+mystery.
+
+The `config/env` stubs fail the same way one step further out: `{ env: {} }` or
+`{ env: { jwtSecret } }` leaves `env.databaseUrl` undefined, so anything transitively importing
+`config/database` reaches `new Sequelize(undefined)`.
+
+### Extending the stub is the wrong fix, and that was MEASURED
+
+Adding `options: { define: {} }` moved the error from `define` to `runHooks`. A treadmill: each
+missing internal reveals the next, and a hand-written stub cannot track Sequelize's internals
+across upgrades. `backend/src/__tests__/testSupport/configMocks.ts` instead starts from the REAL
+object - a Sequelize that never connects, because the constructor performs no I/O - and overrides
+only the methods a test asserts on.
+
+**Independent corroboration:** `reeseOutreachModel` already did exactly this, inline. Someone had
+found the same fix for one suite without it reaching the list's diagnosis.
+
+### Six suites recovered: 56 tests the gate was skipping
+
+`assessmentService`, `projectDnaService`, `ticketServiceReeseTypes`, `explorerCohortRouting`,
+`adminEnrollmentPortalAccess`, `portalEnrollmentService`. Ignore list 22 -> 16.
+
+Of 11 suites whose mocks were corrected, 6 fully pass and 5 moved past the import error into a
+different cause. Across all 22, tests that actually EXECUTE went from 233 to 267, and passing
+from 207 to 240 - the remaining failures were always there, hidden behind suites that never ran.
+
+### A MISTAKE OF MINE, caught by the measurement rather than by reasoning
+
+Overriding `getQueryInterface` with a bare `jest.fn()` returns `undefined`, and callers read
+`.queryGenerator` off the result - so it traded one import error for another in `typeLaunchGate`.
+The rule is now written into the helper: **only override a method whose return value nothing
+navigates into.** `query`, `authenticate`, `close` and `transaction` are safe; anything returning
+an object to reach through is not.
+
+### The sixteen that remain are NAMED, in two groups
+
+**Group 1, dies at import (7).** A model is mocked while the REAL association wiring runs:
+`models/index.ts:548` does `Cohort.hasMany(Enrollment, ...)`, and a suite that replaced
+`Enrollment` with a plain object gets "called with something that's not a subclass of
+Sequelize.Model" - or "<Model>.default.hasMany is not a function" when the mocked one is the
+subject. NOT a mock-shape fix: the per-suite move is to stop `jest.mock`-ing models and
+`jest.spyOn` the real ones, which is only POSSIBLE now that the helper supplies a Sequelize that
+`Model.init` accepts.
+
+**Group 2, the suite runs (9).** Genuine assertion failures. `participantMagicLink` is the
+clearest: 2 failures, both `Enrollment.findAll is not a function`, because its own `models` mock
+lacks `findAll` while the service now calls it. Whether the service or the test is wrong is a
+question about intended behaviour - and a stale test and a real bug look identical from outside,
+which is how the original inference got written. `communityCommentsLikesProfiles` and `phase10_5`
+HANG rather than fail, so their mode is unknown beyond that.
+
+### Verification
+
+Six suites, 56 tests, green. Backend `tsc --noEmit` clean. Test-file typecheck clean under
+`--strict` with no `--allowJs` across the helper and all 12 touched files. `--listTests` under
+`jest.ci.config.ts` confirms all six are now INCLUDED rather than merely un-listed.

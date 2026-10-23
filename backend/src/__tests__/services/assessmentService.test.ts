@@ -13,10 +13,11 @@ const mockLessonInstanceFindOne = jest.fn();
 const mockLessonInstanceUpdate = jest.fn().mockResolvedValue(undefined);
 
 // Mock all Sequelize model files to avoid Model.init() calls during module load.
-jest.mock('../../config/database', () => ({
-  sequelize: { authenticate: jest.fn(), close: jest.fn(), query: jest.fn(), define: jest.fn() },
-  connectDatabase: jest.fn(),
-}));
+// A REAL Sequelize that never connects, not a hand-written stub — see `configMocks` for why the
+// stub this replaced could not work: `Model.init` reads `sequelize.options.define` and calls
+// `sequelize.runHooks`, neither of which a `{ define: jest.fn() }` stub has.
+jest.mock('../../config/database', () => require('../testSupport/configMocks')
+  .databaseModuleMock(['authenticate', 'close', 'query']));
 
 jest.mock('../../models/LessonInstance', () => ({
   __esModule: true,
