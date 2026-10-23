@@ -17,7 +17,13 @@ jest.mock('../../../models/GovBuildStoryAssignment', () => ({
   },
 }));
 const memFindAll = jest.fn();
-jest.mock('../../../models/DeliveryProjectMember', () => ({ __esModule: true, default: { findAll: (...a: any[]) => memFindAll(...a) } }));
+const memFindOne = jest.fn();
+const memCreate = jest.fn();
+jest.mock('../../../models/DeliveryProjectMember', () => ({ __esModule: true, default: {
+  findAll: (...a: any[]) => memFindAll(...a),
+  findOne: (...a: any[]) => memFindOne(...a),
+  create: (...a: any[]) => memCreate(...a),
+} }));
 const idFindAll = jest.fn();
 jest.mock('../../../models/PlatformIdentity', () => ({ __esModule: true, default: { findAll: (...a: any[]) => idFindAll(...a) } }));
 const getConsoleRoster = jest.fn();
@@ -39,7 +45,13 @@ const ctxWithRoles = (roles: string[]) => ({ platformIdentityId: 'who', delivery
 const rowFrom = (v: any) => ({ get: () => ({ id: 'as-1', assigned_at: new Date('2026-10-08T00:00:00Z'), ...v }) });
 const input = (over: any = {}) => ({ deliveryProjectId: 'dp-1', storyId: 'STORY-R1', canonicalReqId: 'R1', assigneeIdentityId: 'builder-7', assignedByIdentityId: 'op-1', ...over });
 
-beforeEach(() => { jest.clearAllMocks(); });
+beforeEach(() => {
+  jest.clearAllMocks();
+  // Default: the assignee already has a membership on this project, so provision-on-assign is a no-op.
+  // Tests that exercise provisioning (a brand-new builder) override memFindOne to resolve null.
+  memFindOne.mockResolvedValue({ id: 'm-existing', delivery_role: 'associate_builder' });
+  memCreate.mockImplementation(async (v: any) => ({ id: 'm-new', ...v }));
+});
 
 describe('assignBuildStory — the assignee MUST be a builder (story.execute)', () => {
   it('assigns when the assignee holds story.execute (associate_builder), creating the row with the assignee + assigner', async () => {
@@ -62,10 +74,17 @@ describe('assignBuildStory — the assignee MUST be a builder (story.execute)', 
     expect(asFindOne).not.toHaveBeenCalled();
   });
 
-  it('REFUSES to assign to a non-member (no roles) — assignee_not_builder, nothing written', async () => {
-    buildCtx.mockResolvedValue(ctxWithRoles([]));
-    await expect(assignBuildStory(input())).rejects.toMatchObject({ reason: 'assignee_not_builder' });
-    expect(asCreate).not.toHaveBeenCalled();
+  it('PROVISIONS a brand-new builder membership when the assignee has none, then assigns (provision-on-assign)', async () => {
+    memFindOne.mockResolvedValue(null); // a freshly materialized gov intern: no delivery membership yet
+    buildCtx.mockResolvedValue(ctxWithRoles(['associate_builder'])); // after provisioning, the engine sees the role
+    asFindOne.mockResolvedValue(null);
+    asCreate.mockImplementation(async (v: any) => rowFrom(v));
+    const r = await assignBuildStory(input());
+    expect(memCreate).toHaveBeenCalledTimes(1);
+    expect(memCreate.mock.calls[0][0]).toMatchObject({
+      delivery_project_id: 'dp-1', platform_identity_id: 'builder-7', delivery_role: 'associate_builder', granted_by_identity_id: 'op-1',
+    });
+    expect(r.assigneeIdentityId).toBe('builder-7');
   });
 
   it('is idempotent: re-assigning an existing story UPDATES in place, never a duplicate row', async () => {
@@ -91,6 +110,43 @@ describe('assignBuildStory — the assignee MUST be a builder (story.execute)', 
     const r = await assignBuildStory(input({ assignedByIdentityId: null }));
     expect(asCreate.mock.calls[0][0].assigned_by_identity_id).toBeNull();
     expect(r.assigneeIdentityId).toBe('builder-7');
+  });
+});
+
+describe('provision-on-assign — keeps the gate and preserves separation of duties', () => {
+  it('does NOT provision (or duplicate) when the assignee already has a membership here', async () => {
+    memFindOne.mockResolvedValue({ id: 'm-1', delivery_role: 'associate_builder' });
+    buildCtx.mockResolvedValue(ctxWithRoles(['associate_builder']));
+    asFindOne.mockResolvedValue(null);
+    asCreate.mockImplementation(async (v: any) => rowFrom(v));
+    const r = await assignBuildStory(input());
+    expect(memCreate).not.toHaveBeenCalled();
+    expect(r.assigneeIdentityId).toBe('builder-7');
+  });
+
+  it('does NOT promote an existing non-builder member (a reviewer) — refused, no membership written', async () => {
+    memFindOne.mockResolvedValue({ id: 'm-r', delivery_role: 'qa_reviewer' }); // existing membership -> left untouched
+    buildCtx.mockResolvedValue(ctxWithRoles(['qa_reviewer']));                 // real grant map: no story.execute
+    await expect(assignBuildStory(input())).rejects.toMatchObject({ reason: 'assignee_not_builder' });
+    expect(memCreate).not.toHaveBeenCalled();
+    expect(asCreate).not.toHaveBeenCalled();
+  });
+
+  it('does NOT reinstate a revoked builder — refused, no membership written', async () => {
+    memFindOne.mockResolvedValue({ id: 'm-x', delivery_role: 'associate_builder', status: 'revoked' }); // row exists -> untouched
+    buildCtx.mockResolvedValue(ctxWithRoles([])); // buildDeliveryContext counts only ACTIVE members -> no roles
+    await expect(assignBuildStory(input())).rejects.toMatchObject({ reason: 'assignee_not_builder' });
+    expect(memCreate).not.toHaveBeenCalled();
+  });
+
+  it('swallows a provisioning race (unique-constraint create failure) and still assigns', async () => {
+    memFindOne.mockResolvedValue(null);
+    memCreate.mockRejectedValue(new Error('duplicate key value violates unique constraint'));
+    buildCtx.mockResolvedValue(ctxWithRoles(['associate_builder'])); // the racer's row is now visible to the gate
+    asFindOne.mockResolvedValue(null);
+    asCreate.mockImplementation(async (v: any) => rowFrom(v));
+    const r = await assignBuildStory(input());
+    expect(r.assigneeIdentityId).toBe('builder-7'); // did not throw; assignment proceeded
   });
 });
 
