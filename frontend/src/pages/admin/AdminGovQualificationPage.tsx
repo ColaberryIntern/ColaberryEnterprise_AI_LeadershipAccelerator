@@ -2038,7 +2038,7 @@ export default function AdminGovQualificationPage(): React.ReactElement {
               <RightRail
                 deadline={
                   <DeadlineCard
-                    value={isDecoupled ? (oppDetail?.opportunity?.closeDate ?? null) : (ws.source?.deadline.utc ?? null)}
+                    value={isDecoupled ? (oppDetail?.opportunity?.closeDate ?? dossierDeadlineIso(ws.dossier?.keyDates ?? null)) : (ws.source?.deadline.utc ?? null)}
                     confidence={isDecoupled ? null : (ws.source?.deadline.utcConfidence ?? null)}
                     originalText={isDecoupled ? null : (ws.source?.deadline.originalText ?? null)}
                     loading={isDecoupled && oppDetail === null}
