@@ -3158,6 +3158,13 @@ async function start(): Promise<void> {
       const Subscription = (await import('./models/Subscription')).default;
       const AccountCredit = (await import('./models/AccountCredit')).default;
       const Refund = (await import('./models/Refund')).default;
+      // C8.3 — the strategic-account columns land here rather than as boot-path DDL.
+      // Nothing the boot path runs CREATEs `leads`, so an `ALTER TABLE leads ADD COLUMN`
+      // would fail on a pristine database, be swallowed by its catch, and leave a column
+      // that only looks added (bootSchemaCreatable.test.ts rejected exactly that). This
+      // reconciler skips a table that does not exist and adds the column where it does.
+      const Organization = (await import('./models/Organization')).default;
+      const Lead = (await import('./models/Lead')).default;
       const r = await reconcileMissingColumns([
         Enrollment,
         TimelineCard,
@@ -3167,6 +3174,8 @@ async function start(): Promise<void> {
         Subscription,
         AccountCredit,
         Refund,
+        Organization,
+        Lead,
       ]);
       if (r.added.length) {
         console.log(
@@ -3262,6 +3271,16 @@ async function start(): Promise<void> {
     await ensureApolloCreditGuardSchema();
   } catch (err: any) {
     console.warn('[DB] apollo_credit_usage schema ensure failed:', err?.message);
+  }
+  // C8.3 — strategic accounts, implementing the C6.1 reuse verdict: attribute columns on
+  // `organizations`, `organization_id` on `leads`, and the one new table C6.1 justified
+  // (account_warm_paths). Must run before the port opens: the Organization and Lead
+  // models now declare those columns, and a SELECT would 500 on a database without them.
+  try {
+    const { ensureStrategicAccountSchema } = await import('./db/ensureStrategicAccountSchema');
+    await ensureStrategicAccountSchema();
+  } catch (err: any) {
+    console.warn('[DB] strategic account schema ensure failed:', err?.message);
   }
   // Seed v0 automation rules (idempotent).
   try {
