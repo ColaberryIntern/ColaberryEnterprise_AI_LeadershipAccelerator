@@ -2958,3 +2958,49 @@ growing. Neither is redundant, and only running the mutation showed which was wh
 
 This is §9 step 3 built ahead of step 2. Correct before reachable is the safe order: the command
 exists and is proved, and no build event invokes it until the hook lands.
+
+## READINESS IS NOW MEASURED ON A REAL BUILD EVENT, and §9 step 2 closes
+
+The computation, the table and the advancer all existed with no caller. `plan.published` is now
+one: `sbpOrchestrator` calls `measureReadinessOnBuildEvent` immediately after `publishPlan`
+returns, reporting `story.write` as the act performed.
+
+### Three decisions in the wiring, each with a reason
+
+**AFTER the transaction, not inside it.** `publishPlan` runs in `sequelize.transaction` with the
+project's rows locked. Measuring in there would read uncommitted evidence while holding those
+locks. The cost is a window where a crash loses the measurement, which is the right trade: a
+measurement is reconstructible from the evidence, a held lock is not free.
+
+**`story.write` is the act**, because publishing a plan IS the pipeline having written the
+stories, and that is the permission `blueprint_approved -> planning` requires.
+
+**One event, one act, one hop — it does not cascade.** Walking several hops from a single event
+would mean claiming work that event did not do, which is the thing `lifecycleAutoAdvance` exists
+to prevent.
+
+### What it will mostly do today, stated honestly
+
+**Measure, and refuse to advance.** Every lifecycle row in production is at `discovery`, whose
+next hop needs `requirement.approve` — a person. So the near-term value is not automation: it is
+that readiness becomes VISIBLE, which is what lets a surface say "three projects are waiting for
+your `requirement.approve`" instead of nobody knowing. That refusal is asserted as correct
+behaviour rather than recorded as a gap.
+
+### The test that makes this safe to put on a build path
+
+`A MEASUREMENT FAILURE DOES NOT PROPAGATE.` The suite renames the readiness table out from under
+the hook and requires the call to return `failed` rather than throw, with the stage untouched.
+A publish that already succeeded must never be turned into an error by its observer — and this
+programme has the scar for it: `recordPlaybackBeat` swallowed its own failure for nine days
+because nothing proved what the swallow did. The hook logs the error MESSAGE, not only the class,
+for the same reason.
+
+**Incidentally proven on the production path**: the six `sbpOrchestrator` suites (81 tests) run
+the new call with a mocked database, so the swallow is exercised where it actually lives, not
+only in the hook's own suite.
+
+### Still open
+
+Step 4 (readiness surfaced in the workspace) and step 5 (the read-only legacy measurement over
+the 62 unregistered projects) remain. Neither is blocked.
