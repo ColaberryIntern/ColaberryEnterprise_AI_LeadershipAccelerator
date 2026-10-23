@@ -2,9 +2,8 @@
 // (todo 9985688697): which weeks deep-link to a confirmed Skilljar URL, which are
 // pending Kes's URL confirmation, and which are Colaberry-original (no Skilljar course).
 // config/database is mocked so importing the seed module never touches a real DB.
-jest.mock('../../config/database', () => ({
-  sequelize: { query: jest.fn(), authenticate: jest.fn(), close: jest.fn() },
-}));
+jest.mock('../../config/database', () => require('../../__tests__/testSupport/configMocks')
+  .databaseModuleMock(['query', 'authenticate', 'close']));
 
 import { COURSE_LINK_ROWS } from '../seedCurriculumCourseLinks';
 

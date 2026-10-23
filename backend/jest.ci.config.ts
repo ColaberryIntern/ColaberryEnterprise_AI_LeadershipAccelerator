@@ -83,37 +83,88 @@ import base from './jest.config';
  * Two HANG rather than fail, which no previous run could have shown because the
  * list meant they never ran: `communityCommentsLikesProfiles` and
  * `systemStateEngine/phase10_5`, both killed at a 90 s cap.
+ *
+ * ── CAUSE IDENTIFIED 2026-10-23, and SIX SUITES COME OFF THE LIST ────────────
+ *
+ * It is ONE pattern, not twenty problems: a PARTIAL MOCK OF A SHARED CONFIG
+ * MODULE, missing a field that some transitively-imported module needs AT IMPORT
+ * TIME. The suite then dies before a single test runs, which is why it reports as
+ * "Test suite failed to run" with no test names and looked like twenty unrelated
+ * failures.
+ *
+ * The open oddity above - a direct `require` of the mocked module receiving the
+ * stub while a model importing the same module does not - has no contradiction in
+ * it. THE TWO PATHS READ DIFFERENT PROPERTIES. `Model.init` never looks at
+ * `sequelize.define`; it reads `this.sequelize.options.define` and then calls
+ * `this.sequelize.runHooks` (`sequelize/lib/model.js`, `static init`). Every one
+ * of these stubs supplied `define: jest.fn()` - the one key that looks exactly
+ * right and is never consulted.
+ *
+ * The `config/env` stubs fail the same way one step out: `{ env: {} }` or
+ * `{ env: { jwtSecret } }` leaves `env.databaseUrl` undefined, so anything that
+ * transitively imports `config/database` hits `new Sequelize(undefined)`.
+ *
+ * EXTENDING THE STUB IS THE WRONG FIX, and that was measured rather than
+ * reasoned: adding `options: { define: {} }` moved the error from `define` to
+ * `runHooks`. `src/__tests__/testSupport/configMocks.ts` instead starts from the
+ * REAL object and overrides only the methods a test asserts on, so there is
+ * nothing to keep in sync as Sequelize changes.
+ *
+ * SIX SUITES NOW PASS and are off this list - 56 tests the gate was skipping:
+ * `assessmentService`, `projectDnaService`, `ticketServiceReeseTypes`,
+ * `explorerCohortRouting`, `adminEnrollmentPortalAccess`,
+ * `portalEnrollmentService`.
+ *
+ * THE SIXTEEN THAT REMAIN ARE NOW NAMED, in two groups below, and neither group's
+ * cause is the environment. Note that the "same environmental reason" paragraph
+ * near the top of this docblock is the claim all of this disproves; it is left in
+ * place because the correction history is the useful part of this file.
  */
 const ciConfig: Config = {
   ...base,
   testPathIgnorePatterns: [
     ...(base.testPathIgnorePatterns ?? ['/node_modules/']),
 
-    // Sequelize models instantiated directly — needs a live database.
-    'src/__tests__/models/reeseOutreachModel\\.test\\.ts',
+    // ── GROUP 1: DIES AT IMPORT — a model is mocked while the REAL association
+    // wiring runs. `models/index.ts:548` does `Cohort.hasMany(Enrollment, ...)`,
+    // and a suite that replaced `Enrollment` with a plain object gets
+    // "called with something that's not a subclass of Sequelize.Model", or
+    // "<Model>.default.hasMany is not a function" when the mocked one is the
+    // subject rather than the target.
+    //
+    // NOT fixable by a better config mock — the suites in group 1 and the six
+    // that came off the list differ in kind. The fix is per-suite: stop
+    // `jest.mock`-ing models and `jest.spyOn` the real ones, which is now
+    // possible because `configMocks` gives a real (unconnected) Sequelize that
+    // `Model.init` accepts. That is genuine test refactoring, not a mock tweak.
     'src/__tests__/routes/adminRoutes\\.test\\.ts',
-    'src/__tests__/services/adminEnrollmentPortalAccess\\.test\\.ts',
-    'src/__tests__/services/assessmentService\\.test\\.ts',
     'src/__tests__/services/cohortPresenceService\\.test\\.ts',
-    'src/__tests__/services/duplicateAccountSweepService\\.test\\.ts',
-    'src/__tests__/services/explorerCohortRouting\\.test\\.ts',
-    'src/__tests__/services/participantMagicLink\\.test\\.ts',
-    'src/__tests__/services/ticketServiceReeseTypes\\.test\\.ts',
-    'src/services/__tests__/portalEnrollmentService\\.test\\.ts',
-    'src/services/__tests__/projectDnaService\\.test\\.ts',
-
-    // Community surface — same cause, grouped because they move together.
     'src/__tests__/services/communityCalendarService\\.test\\.ts',
-    'src/__tests__/services/communityCommentsLikesProfiles\\.test\\.ts',
     'src/__tests__/services/communityModeration\\.test\\.ts',
     'src/__tests__/services/communityNotificationService\\.test\\.ts',
     'src/__tests__/services/communityService\\.test\\.ts',
+    'src/services/timeline/__tests__/typeLaunchGate\\.test\\.ts',
 
-    // Middleware + seeds + timeline admin — all read model metadata at import.
+    // ── GROUP 2: THE SUITE RUNS — these are genuine assertion failures, not
+    // wiring. They import cleanly and execute, and the tests disagree with the
+    // code. Each needs reading on its own merits: a stale test and a real bug
+    // look identical from here, and guessing which is how the inference at the
+    // top of this file got written.
+    //
+    // `participantMagicLink` is the clearest example: 2 failures, both
+    // "Enrollment.findAll is not a function", because its own `models` mock
+    // lacks `findAll` while the service now calls it. Whether the service or
+    // the test is wrong is a question about intended behaviour.
+    //
+    // `communityCommentsLikesProfiles` and `phase10_5` HANG rather than fail
+    // (killed at a 90 s cap), so their failure mode is unknown beyond that.
+    'src/__tests__/models/reeseOutreachModel\\.test\\.ts',
+    'src/__tests__/services/communityCommentsLikesProfiles\\.test\\.ts',
+    'src/__tests__/services/duplicateAccountSweepService\\.test\\.ts',
+    'src/__tests__/services/participantMagicLink\\.test\\.ts',
     'src/middlewares/__tests__/mgmtRbac\\.test\\.ts',
     'src/seeds/__tests__/seedCurriculumCourseLinks\\.test\\.ts',
     'src/services/timeline/__tests__/timelineAdminService\\.test\\.ts',
-    'src/services/timeline/__tests__/typeLaunchGate\\.test\\.ts',
     'src/services/timeline/__tests__/typeRegistry\\.test\\.ts',
     'src/intelligence/systemStateEngine/__tests__/phase10_5\\.test\\.ts',
   ],

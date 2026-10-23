@@ -9,7 +9,8 @@
  * did not.
  */
 
-jest.mock('../../config/env', () => ({ env: { jwtSecret: 'test-secret', frontendUrl: 'https://enterprise.colaberry.ai' } }));
+jest.mock('../../config/env', () => require('../testSupport/configMocks')
+  .envModuleMock({ jwtSecret: 'test-secret', frontendUrl: 'https://enterprise.colaberry.ai' }));
 
 const mockCreate = jest.fn();
 const mockFindOne = jest.fn();

@@ -18,7 +18,14 @@ jest.mock('../../../models/CurriculumTypeDefinition', () => ({
   __esModule: true,
   default: { findAll: jest.fn(), findOne: jest.fn() },
 }));
-jest.mock('../../../config/database', () => ({ sequelize: { getQueryInterface: jest.fn(), transaction: jest.fn() } }));
+// `getQueryInterface` IS DELIBERATELY NOT OVERRIDDEN, though the stub this replaced did stub it.
+// A bare `jest.fn()` returns `undefined` and callers read `.queryGenerator` off the result, so
+// overriding it just trades the old import error for `Cannot read properties of undefined
+// (reading 'queryGenerator')`. The real instance's own returns a proper QueryInterface, which is
+// the whole advantage of starting from a real Sequelize: only override a method whose return
+// value nothing navigates into.
+jest.mock('../../../config/database', () => require('../../../__tests__/testSupport/configMocks')
+  .databaseModuleMock(['transaction']));
 jest.mock('../timelineService', () => ({ normalizeCapabilities: (c: any) => (Array.isArray(c) ? c : []) }));
 
 const COHORT = '11111111-1111-1111-1111-111111111111';

@@ -3,9 +3,8 @@ import ProjectDna from '../../models/ProjectDna';
 import { sequelize } from '../../config/database';
 
 jest.mock('../../models/ProjectDna');
-jest.mock('../../config/database', () => ({
-  sequelize: { query: jest.fn() },
-}));
+jest.mock('../../config/database', () => require('../../__tests__/testSupport/configMocks')
+  .databaseModuleMock(['query']));
 
 const VALID_INPUT: ProjectDnaInput = {
   businessProblem: 'Support team spends 4 hours/day on repetitive questions',
