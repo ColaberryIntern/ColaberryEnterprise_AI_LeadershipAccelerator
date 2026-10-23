@@ -3149,3 +3149,83 @@ decide what happens to 387 requirements with no recorded source. Neither is a co
 never writes. Each query is wrapped so one missing table reports itself and the rest of the
 inventory still runs, because a single failed query taking the whole report down is how an
 inventory becomes a guess.
+
+## THE CALLER THAT NEVER EXISTED: the composition gatherer
+
+The previous two entries proved `operating_blueprint_manifests` is empty, that the flag is ON,
+and that nothing assembles the compose payload. This is the missing half: a module that reads one
+delivery project's records and builds a `BlueprintCompositionInput`.
+
+### What it gathers, and what it refuses to invent
+
+From the database: the full `FactoryProject` - tracks, requirements, processes, tasks, roles,
+assignments, transitions, allocation, role_map, source_blocks - plus the document revision every
+pinned ref is read at.
+
+Typed as `AuthoredInputs` and NOT gathered: understanding, agents, effort, declaration, bindings,
+workspace states, policies, and the design selection. These are product decisions, not records.
+The module names them rather than pretending, and `missingAuthoredInputs` reports **every** absent
+one at once - the same reason `composeBlueprint` runs all four surface checks after generation has
+already refused. A caller learning one missing field per attempt is the round trip this avoids.
+
+### Two inputs that LOOK authored and are not
+
+- **`allocation`** comes from `project.allocation`, the same `AllocationRow[]` the generation
+  input wants. Asking a caller to retype it invites a second divergent copy.
+- **`roleIds`** is derived from `project.roles`. `validateControlSpec` checks policies against
+  "roles a policy may name", and hand-authoring that list is how every named role becomes unknown
+  and the `controls` stage refuses for no real reason.
+
+### THE TRAP THIS MODULE EXISTS TO NOT FALL INTO
+
+`reconstructFactoryProject` does `source_blocks: d.source_blocks ?? []`. Correct for a view model
+and WRONG as a composition input: `factoryToManifestRefs` treats an ABSENT `sourceBlocks` as
+coverage unmeasurable (`null`, prerequisite keeps blocking) and an EMPTY one as measured - no
+blocks, therefore none uncited, coverage CLEAN.
+
+So a gatherer built the obvious way would report SOURCE COVERAGE PASSED on a project nobody
+measured. Because the reconstruction has already flattened both cases into one array, the
+difference survives only in a flag read from the RAW `doc_json`, which is what `sourceBlocksPresent`
+is. Two tests pin it in BOTH directions: false when the field is omitted, true for an explicit
+`[]`. Neither test alone is sufficient, and the mutation below shows why.
+
+### A second copy, declared as one
+
+The track-selection rule - latest per track, prefer `solution_build`, else newest - is COPIED from
+`factoryRoutes`, which still has its own. Rewriting a working production read path is wider than
+this needed to be and CLAUDE.md's extract-on-the-third threshold is not met at two. The offset is
+a test pinning the rule explicitly, including that a newer row on another track does NOT win, so
+a drift becomes a visible test change rather than a silent difference between the view and the
+blueprint.
+
+### THE TEST-FILE TYPECHECK CAUGHT A DESIGN FLAW THE BUILD DID NOT
+
+The first version returned `GatheredProject | LoadFailure`, which reads fine and does not narrow:
+with no `ok` on the success member, `if ('ok' in r && r.ok === false)` leaves the compiler holding
+the whole union, so the production code had papered over it with a cast - and that compiled. Only
+the strict test-file typecheck surfaced it. Fixed properly by discriminating both sides
+(`LoadResult`), not by casting in the test. A cast at a boundary whose entire job is "loaded, or
+not" is the boundary failing to do its job.
+
+### Mutation tested, and one result worth keeping
+
+| Mutation | Caught by |
+|---|---|
+| `sourceBlocksPresent` read as if AFTER reconstruction (always true) | 3 tests, including the named one. The explicit-`[]` test correctly still PASSES - the pair validates the distinction in both directions, so neither is redundant |
+| `missingAuthoredInputs` returns only the FIRST missing field | exactly 2 tests. **All seven per-field `it.each` tests still passed**, because with one field missing a `slice(0, 1)` is a no-op |
+
+That second row is the lesson: the seven per-field tests LOOK like the thorough ones and are blind
+to the mutation. Only the assertion that names every missing field catches it.
+
+### Verification
+
+24 tests green. Backend `tsc --noEmit` clean (only pre-existing `playwright` resolution errors,
+unrelated). Test-file typecheck clean under `--strict` with no `--allowJs`. 284 lines, inside the
+300-line soft target.
+
+### Still not enough to move the lifecycle
+
+This closes blocker 1 of three. Blocker 2 (four inputs no table holds) is unchanged by design -
+the module names them. Blocker 3 is untouched and is not a code problem: 0 of 387 requirements on
+the eligible projects carry a source document, so `requirement_without_provenance` refuses the
+first hop whatever is composed.
