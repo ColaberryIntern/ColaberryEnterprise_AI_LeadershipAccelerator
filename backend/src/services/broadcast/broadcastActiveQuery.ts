@@ -1,4 +1,5 @@
-import { Op } from 'sequelize';
+import { Op, QueryTypes } from 'sequelize';
+import { sequelize } from '../../config/database';
 import BroadcastOccurrence from '../../models/BroadcastOccurrence';
 import type { DiscoverableOccurrence } from './broadcastDiscovery';
 
@@ -47,6 +48,8 @@ export async function findActiveOccurrences(
     limit,
   });
 
+  const sessions = await findSessionIds(rows.map((row) => row.id));
+
   // Mapped explicitly rather than spread. Spreading a Sequelize instance loses every column,
   // because the values live behind getters on the prototype rather than on the instance.
   return rows.map((row) => ({
@@ -58,5 +61,37 @@ export async function findActiveOccurrences(
     scheduled_start_at: row.scheduled_start_at,
     content_started_at: row.content_started_at,
     preview_seconds: row.preview_seconds,
+    session_id: sessions.get(row.id) ?? null,
   }));
+}
+
+/**
+ * The class session each airing broadcast belongs to: its `live_session` source ref (UNIQUE per
+ * session, indexed on occurrence_id), the authoritative one first. One query for the whole page.
+ *
+ * AN ENRICHMENT, NOT THE ANSWER. If this read fails, discovery still lists what is airing, with no
+ * session ids, and the failure is logged: a missing check-in link must not take the live badge down
+ * (which is what letting it throw into the controller's 503 would do). Not handled: a session ref
+ * pointing at a deleted session; the check-in endpoint refuses that itself.
+ */
+export async function findSessionIds(occurrenceIds: readonly string[]): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  if (!occurrenceIds.length) return out;
+  try {
+    const rows = await sequelize.query<{ occurrence_id: string; source_id: string }>(
+      `SELECT occurrence_id, source_id
+         FROM broadcast_source_refs
+        WHERE source_type = 'live_session' AND occurrence_id IN (:ids)
+        ORDER BY is_authoritative DESC`,
+      { replacements: { ids: [...occurrenceIds] }, type: QueryTypes.SELECT },
+    );
+    for (const r of rows) if (!out.has(r.occurrence_id)) out.set(r.occurrence_id, r.source_id);
+  } catch (err) {
+    const e = err as { name?: string; message?: string };
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(), level: 'error', service: 'backend', event: 'broadcast_discovery_session_ids',
+      outcome: 'partial', error_class: e?.name || 'UnknownError', context: { occurrences: occurrenceIds.length, message: String(e?.message ?? '').slice(0, 200) },
+    }));
+  }
+  return out;
 }
