@@ -53,21 +53,38 @@ function looksLikeBlankForm(text: string): boolean {
   return blanks >= 4 && /\bsignature\b/i.test(text);
 }
 
+// A price sheet / cost form is a short document. Above this length a "cost proposal" mention is the RFP body
+// talking about its cost volume, not a price sheet — so a text-only pricing signal applies only below it.
+const PRICING_TEXT_MAX_CHARS = 8000;
+
 function classifyOne(name: string, text: string): { role: DocRole; signals: string[] } {
   const fn = name;
   const t = text;
   const sig: string[] = [];
   const hit = (label: string) => { sig.push(label); return sig; };
 
-  // Precedence: most specific first. Solicitation is checked BEFORE contract_terms so the RFP body (which quotes
-  // terms language) is not mistaken for a T&C template; the dedicated terms file has no RFP/scope signal.
-  if (FN.tax.test(fn) || TX.tax.test(t)) return { role: 'tax_form', signals: hit('tax_form') };
+  // FILENAME SIGNALS FIRST — strongest and least ambiguous. A file NAMED as the RFP is the solicitation even
+  // though its body quotes "cost proposal" and terms language (every RFP does); a file NAMED "...Terms and
+  // Conditions" is a T&C template even though its body says "scope of work". Ordering the TEXT fallbacks ahead of
+  // these is the bug that made the real Snow RFP read as a one-line pricing form (its body says "cost proposal")
+  // while the T&C was scanned as the solicitation (its body says "scope of work").
+  if (FN.tax.test(fn)) return { role: 'tax_form', signals: hit('fn:tax') };
   if (FN.addendum.test(fn)) return { role: 'addendum', signals: hit('fn:addendum') };
-  if (FN.pricing.test(fn) || TX.pricing.test(t)) return { role: 'pricing_form', signals: hit('pricing') };
+  if (FN.pricing.test(fn)) return { role: 'pricing_form', signals: hit('fn:pricing') };
   if (FN.solicitation.test(fn)) return { role: 'solicitation', signals: hit('fn:solicitation') };
+  if (FN.terms.test(fn)) return { role: 'contract_terms', signals: hit('fn:terms') };
+  if (FN.form.test(fn)) return { role: 'form', signals: hit('fn:form') };
+
+  // TEXT FALLBACKS — only when the filename said nothing. A long body with RFP/scope/evaluation language is the
+  // solicitation, checked BEFORE pricing so a long body is never a price sheet. pricing_form by TEXT applies only
+  // to a SHORT document: a real price sheet is short, whereas the RFP body merely mentions "cost proposal" in
+  // passing — the length gate stops the body from being mistaken for a price sheet.
+  if (TX.tax.test(t)) return { role: 'tax_form', signals: hit('tx:tax') };
   if (TX.solicitation.test(t) && t.length >= 4000) return { role: 'solicitation', signals: hit('tx:solicitation') };
-  if (FN.terms.test(fn) || TX.terms.test(t)) return { role: 'contract_terms', signals: hit('contract_terms') };
-  if (FN.form.test(fn) || looksLikeBlankForm(t)) return { role: 'form', signals: hit('form') };
+  if (TX.pricing.test(t) && t.length < PRICING_TEXT_MAX_CHARS) return { role: 'pricing_form', signals: hit('tx:pricing') };
+  if (TX.terms.test(t)) return { role: 'contract_terms', signals: hit('tx:terms') };
+  if (looksLikeBlankForm(t)) return { role: 'form', signals: hit('tx:blankform') };
+
   // Fallback. A substantial un-signalled document is almost certainly the RFP body (so we do NOT skip it); a short
   // one is a genuine reference. Either way 'reference' is fully scanned downstream, so nothing is silently dropped.
   return { role: t.length >= 4000 ? 'solicitation' : 'reference', signals: hit(t.length >= 4000 ? 'fallback:long->solicitation' : 'fallback:reference') };
