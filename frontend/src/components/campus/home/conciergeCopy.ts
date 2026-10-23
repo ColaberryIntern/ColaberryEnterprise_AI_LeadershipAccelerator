@@ -82,6 +82,8 @@ export interface LeadInput {
   tourStops: number | null;
   /** Staff: learners on campus right now (null: unknown). */
   onCampus: number | null;
+  /** WP-6: Colaberry Live's state (the prototype's per-state lead). */
+  liveState?: string;
 }
 
 /** After the tour (the prototype's finishTour lead): what the tour covered, and your real next step if you have one. */
@@ -109,7 +111,9 @@ export function leadFor(i: LeadInput): string {
   }
   const duty = i.dutyNames.length ? ` ${andList(i.dutyNames)} ${i.dutyNames.length === 1 ? 'is' : 'are'} still on duty if you need them.` : '';
   const line: Record<Exclude<Moment, 'toured'>, string> = {
-    live: `Colaberry Live is on air. Follow the lit path to the ${at}, or watch from anywhere on campus.`,
+    live: i.liveState === 'reconnecting' ? 'The broadcast hit a snag and is reconnecting on its own. Stay put, there is nothing to refresh.'
+      : i.liveState === 'backstage' ? `Colaberry Live opens in a moment. The ${at} doors are open and your cohort is heading in.`
+      : `Colaberry Live is on air. Follow the lit path to the ${at}, or watch from anywhere on campus.`,
     down: 'We can’t load who’s online right now. Everything else works — buildings, pages and messages.',
     soon: 'Live class starts in a few minutes.',
     quiet: `It’s quiet on campus right now — nobody else is online.${duty}`,

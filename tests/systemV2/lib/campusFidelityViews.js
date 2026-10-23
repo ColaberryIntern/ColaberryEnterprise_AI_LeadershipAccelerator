@@ -56,7 +56,7 @@ const DISTURB = [
 const AT_BASE = `(() => { const a = ${VB}.split(' ').map(Number), b = String(window.__cmVb0 || '').split(' ').map(Number);
   if (b.length !== 4) return 'no baseline'; return a.every((v, i) => Math.abs(v - b[i]) <= 1) ? '' : 'viewBox ' + a.join(' ') + ' is not the whole campus ' + b.join(' '); })()`;
 // WP-5: the help desk opens the staff card (a popover, Q7), so 08 and 09 no longer open a building card
-const CARD_VIEWS = ['03-arrive', '04-inside', '14-step-outside', '15-panel-with-card', '16-tour', '19-room-wall'];
+const CARD_VIEWS = ['03-arrive', '04-inside', '14-step-outside', '15-panel-with-card', '16-tour', '19-room-wall', '20-live-arrive'];
 
 /** A view: route to open, then steps (each a { click }, { evaluate } or { wait }) and the required ids for an account and size. */
 const VIEWS = [
@@ -75,7 +75,8 @@ const VIEWS = [
     required: (a, size) => ['cm-banner', 'cm-trail', 'cm-step-out', '.cm-banner .cm-whereto', ...(size === 'phone' ? [] : ['cm-page-side', 'cm-page-rail'])],
     known: () => ['the page countdown header (next class / next event) is the existing portal header, not rebuilt'] },
   { name: '06-live', route: '/portal/campus', needsLive: true,
-    required: () => ['cm-world', 'cm-cc-live', 'cm-beams', 'svg.cm-map.is-evening'],
+    // WP-6: the marquee over the live building, the bar's state chip and clock, the card's chip and chime
+    required: (a, size) => ['cm-world', 'cm-cc-live', 'cm-beams', 'svg.cm-map.is-evening.ls-live', 'cm-marquee', 'cm-live-chip', ...(size === 'phone' ? [] : ['cm-live-sub']), 'cm-cc-live-chime'],
     known: () => ['the prototype crowd of walking dots was random: not drawn (the building head count is real)'] },
   { name: '07-notifications', route: '/portal/campus', steps: () => [{ click: '[data-testid="cm-stats-bell"] button' }],
     required: () => ['.cm-bell-panel'], desktopOnly: true },
@@ -120,6 +121,10 @@ const VIEWS = [
   // WP-5: a room whose back wall carries real facts (the Schedule board: TODAY · <weekday>, the next session, event and plan)
   { name: '19-room-wall', route: '/portal/campus', steps: () => [tap('tower'), WALKED],
     required: () => ['cm-inside', 'cm-wall-schedule', 'cm-you-walk'] },
+  // WP-6: arriving at the live building: the hero in the state's colour, the stage, the live room as the main action
+  { name: '20-live-arrive', route: '/portal/campus', needsLive: true, steps: () => [tap('commons'), WALKED],
+    required: () => ['.cm-arrive-hero.is-live', 'cm-stage', 'cm-arrive-cta'],
+    known: () => ['DOORS OPEN and REPLAY: discovery lists only live and reconnecting broadcasts today', 'auto check-in: a broadcast carries no class session yet (Q2)'] },
 ];
 
 /** WP-1: the side panel (and the tour in it) is required on every view past the gate. */

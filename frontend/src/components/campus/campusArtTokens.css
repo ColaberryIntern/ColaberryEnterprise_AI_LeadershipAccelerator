@@ -85,6 +85,11 @@
   --cm-art-cab-hover:rgba(255,255,255,.08); --cm-art-staff-maya:#b0306a; --cm-art-staff-reese:#b07a00; --cm-art-staff-dara:#c46a1b;
   --cm-art-pop-shadow:0 24px 60px rgba(20,15,10,.28); --cm-art-prompt-edge:#d9c79a; --cm-art-prompt-bg:#fffaf0; --cm-art-prompt-hover:#b07a00;
   --cm-art-kpi-bg:#f4f8fc; --cm-art-kpi-edge:#e1e8ef; --cm-art-online:#1f8a4c;
+  /* WP-6: Colaberry Live's states (the prototype's LSTATES), the marquee's post and glows, the launch cue's ring, the stage */
+  --cm-art-ls-backstage:#e8961e; --cm-art-ls-live:#e31b23; --cm-art-ls-reconnecting:#7d8291; --cm-art-ls-replay:#4a4356;
+  --cm-art-marquee-post:#2a221b; --cm-art-marquee-glow:rgba(255,60,60,.9); --cm-art-backstage-glow:rgba(255,190,80,.8);
+  --cm-art-cue-ring:rgba(227,27,35,.9); --cm-art-cue-ring-0:rgba(227,27,35,0); --cm-art-stage:#0e0c12; --cm-art-stage-over:rgba(10,8,14,.45); --cm-art-stage-time:rgba(0,0,0,.5);
+  --cm-art-hero-live-from:#1c1018;
 }
 [data-theme="dark"]{
   --cm-art-paper:#1e1e1e; --cm-art-ink:#f4f4f4; --cm-art-muted:#b5ad9f; --cm-art-line:#3a352d;

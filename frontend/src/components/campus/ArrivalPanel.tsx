@@ -19,6 +19,11 @@ import type { CompleteResult } from './campusPlanApi';
 import type { At } from './usePopover';
 import { openStaffCard } from './staffCard';
 import { useRoomWall } from './interior/useRoomWall';
+import LiveStage from './LiveStage';
+import type { CampusLiveNow } from './campusOnAir';
+import { roomRoute } from './campusOnAir';
+import { LIVE_STATES, liveSub } from './campusLiveState';
+import { enrollCta } from './campusAccess';
 
 /**
  * Arriving at a building (C11b; WP-2): the room behind, and the arrival panel in front, as the prototype's arrive() builds it:
@@ -61,6 +66,8 @@ export interface ArrivalPanelProps {
   fromDoor?: boolean;
   /** WP-4: the room a Wayfinder pick flashes in the card (the prototype's flashRoom). */
   flashRoute?: string;
+  /** WP-6: Colaberry Live is in this building now (its state and clock): the card dresses for it (the prototype's dressLivePanel). */
+  live?: CampusLiveNow | null;
 }
 
 /** The portal facts for the open building, read when it opens (campusFacts caches each source for a minute). */
@@ -89,6 +96,10 @@ export default function ArrivalPanel(p: ArrivalPanelProps): React.ReactElement {
   const desks = p.staffDesks ? desksForBuilding(p.staffDesks, b.id, audience) : undefined;
   const desk = desks?.find((d) => d.on_duty) ?? null;
   const wall = useRoomWall(b.id, audience, data, plan ? plan.stops : null);
+  // WP-6: the live building's main action joins the live room (audio and Q&A), as the prototype's per-state CTA
+  const live = p.live ?? null;
+  const liveRoute = live ? roomRoute(live.b) : null;
+  const liveCta = live && liveRoute && live.state !== 'replay' ? { label: live.state === 'live' ? 'Join the live room · audio & Q&A' : 'Join the live room', route: liveRoute } : null;
   return (
     <>
       <CampusInside building={b} buildingName={buildingName(b, wp)} audience={audience} access={access}
@@ -96,9 +107,11 @@ export default function ArrivalPanel(p: ArrivalPanelProps): React.ReactElement {
         onPickPerson={p.onPickPerson} desk={desk} onDesk={desk ? (at) => openStaffCard(desk.id, at) : undefined} wall={wall} workplace={wp} fromDoor={p.fromDoor}
         onGame={p.onEnterRoom ? (g) => open(`/portal/game-room?game=${g}`) : undefined} />
       <BuildingCard key={b.id} building={b} access={access} workplaceNames={wp} onClose={p.onClose} onNavigate={p.onNavigate} audience={audience}
-        kicker={kickerOf({ zone: zoneLabelOf(b, wp), access, audience, tour: isStop ? { name: tour!.model.name, n: tourIdx + 1, of: tour!.model.stops.length } : null })}
-        line={subOf(b, audience, wp)} onElsewhere={p.onElsewhere} urgent={urgentAt(b.id, data, now)} flashRoute={p.flashRoute}
-        happening={happeningAt(b.id, { onAir: p.onAir, count: p.count, presenceError: p.presenceError, facts: factsAt(b.id, data, p.look, now) })}
+        kicker={live && !isStop ? `${LIVE_STATES[live.state].chip} · Colaberry Live` : kickerOf({ zone: zoneLabelOf(b, wp), access, audience, tour: isStop ? { name: tour!.model.name, n: tourIdx + 1, of: tour!.model.stops.length } : null })}
+        line={subOf(b, audience, wp)} onElsewhere={p.onElsewhere} urgent={liveCta ?? urgentAt(b.id, data, now)} flashRoute={p.flashRoute}
+        heroClass={live ? `is-live is-${live.state}` : undefined} stage={live ? <LiveStage live={live} audience={audience} enrollTo={enrollCta(b).to} /> : undefined}
+        happening={happeningAt(b.id, { onAir: p.onAir, count: p.count, presenceError: p.presenceError, facts: factsAt(b.id, data, p.look, now),
+          live: live ? { state: live.state, title: live.b.title, sub: liveSub(live.b, live.now) } : null })}
         onEnterRoom={p.onEnterRoom} desks={desks}
         tourTop={isStop ? <TourStopCard tour={tour!.model} index={tourIdx} /> : undefined}
         planBox={stepIdx >= 0 ? <PlanBox stop={plan!.stops[stepIdx]} index={stepIdx} total={plan!.stops.length} onOpen={open} onDone={plan!.onComplete} /> : undefined}

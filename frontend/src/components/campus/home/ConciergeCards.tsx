@@ -13,7 +13,7 @@ import { deskRole } from './conciergeCopy';
 import { openStaffCard } from '../staffCard';
 
 /**
- * The concierge's cards (C11b), each the prototype's (.helpdesk, .plan-card, .pass, .livecard) fed by real campus data. A card
+ * The concierge's cards (C11b), each the prototype's (.helpdesk, .plan-card, .pass) fed by real campus data (WP-6: the live card is LiveCard.tsx). A card
  * with nothing true to say is not drawn.
  */
 type Walk = (id: BuildingId) => void;
@@ -86,17 +86,6 @@ export function ExplorerPass({ buildings, accessOf, workplaceNames, path }: {
         <div><b>Enrolling opens</b>{list(path.opens, 'is-locked')}</div>
       </div>
       <Link to={path.cta.to} className="cm-btn-red" style={{ marginTop: 12 }} data-testid="cm-cc-enroll">{path.cta.label}</Link>
-    </div>
-  );
-}
-
-/** COLABERRY LIVE: shown only while a broadcast is on air; Walk in walks to its building. */
-export function LiveCard({ title, buildingId, onWalk }: { title: string; buildingId: BuildingId | null; onWalk: Walk }): React.ReactElement {
-  return (
-    <div className="cm-cc-livecard" data-testid="cm-cc-live">
-      <div className="cm-cc-livecard-brand"><span aria-hidden="true">{'● '}</span>On air now</div>
-      <div className="cm-cc-livecard-title">{title}</div>
-      {buildingId && <div className="cm-cc-livecard-row"><button type="button" className="cm-btn-red" onClick={() => onWalk(buildingId)} data-testid="cm-cc-live-walk">Walk in</button></div>}
     </div>
   );
 }

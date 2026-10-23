@@ -1,0 +1,62 @@
+/* ============================================================
+   WP-6: Colaberry Live's states (the prototype's LSTATES chips, .livebar .lb-*, the launch cue, .livecard .lc-*, the stage .st-*;
+   D:213-268). Colors: campusArtTokens.css only.
+   ============================================================ */
+@import './campusArtTokens.css';
+
+/* the state chip (bar, card, stage, arrival hero) */
+.cm-lb-chip{flex:none;font:800 10px 'DM Sans',var(--sans),sans-serif;letter-spacing:.1em;padding:5px 9px;border-radius:999px;color:var(--cm-art-white);background:var(--cm-art-ls-live)}
+.cm-lb-chip.ls-backstage{background:var(--cm-art-ls-backstage)}
+.cm-lb-chip.ls-reconnecting{background:var(--cm-art-ls-reconnecting)}
+.cm-lb-chip.ls-replay{background:var(--cm-art-ls-replay)}
+.cm-lb-sub{opacity:.75;font-weight:400}
+
+/* the bar's buttons: on a page banner they sit in the portal look; on the home in the prototype's dark pill */
+.cm-lb-btn{border:1px solid var(--cm-art-line);border-radius:999px;padding:7px 12px;font:700 12px 'DM Sans',var(--sans),sans-serif;background:var(--cm-art-white);color:var(--cm-art-live-card);cursor:pointer}
+.cm-lb-here{font-size:12px;font-weight:700;opacity:.85;padding:0 6px}
+.cm-lb-x{border:0;background:transparent;color:inherit;opacity:.6;font-size:18px;width:28px;cursor:pointer}
+.cm-lb-x:hover{opacity:1}
+.cm-home-livebar .cm-live .cm-lb-btn.is-ghost{background:var(--cm-art-on-dark-soft);color:var(--cm-art-on-dark)}
+.cm-home-livebar .cm-live .cm-lb-x{background:transparent;color:var(--cm-art-on-dark);padding:0}
+.cm-live button:focus-visible{outline:3px solid var(--cm-art-red);outline-offset:2px}
+.cm-live.is-cue{animation:cm-cue 1.1s cubic-bezier(.2,1.5,.4,1)}
+@keyframes cm-cue{0%{box-shadow:0 0 0 0 var(--cm-art-cue-ring)}40%{transform:scale(1.07)}100%{box-shadow:0 0 0 22px var(--cm-art-cue-ring-0)}}
+.cm-home-livebar .cm-live.is-cue{animation-name:cm-cue-home}
+@keyframes cm-cue-home{0%{box-shadow:0 0 0 0 var(--cm-art-cue-ring)}100%{box-shadow:0 0 0 22px var(--cm-art-cue-ring-0)}}
+.cm-reduced .cm-live.is-cue,.is-reduced .cm-live.is-cue{animation:none}
+.cm-lb-btn,.cm-lb-here{flex:none;white-space:nowrap}
+/* phone: one line. The arrival card already says "you're here", so the bar drops it; the title takes what is left, with an ellipsis. */
+@media (max-width:760px){
+  .cm-lb-sub,.cm-lb-x,.cm-live-crowd,.cm-lb-here{display:none}
+  .cm-live .cm-live-text{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+}
+
+/* the concierge's live card (.livecard) */
+.cm-cc-livecard .cm-lc-top{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.cm-lc-brand{font-size:11px;letter-spacing:.14em;text-transform:uppercase;opacity:.7}
+.cm-lc-title{font-family:'Fraunces',Georgia,serif;font-size:21px;font-weight:700;line-height:1.15}
+.cm-lc-sub{font-size:12px;opacity:.75;margin-top:2px}
+.cm-lc-row{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+.cm-lc-chime{display:block;margin-top:10px;border:0;background:none;padding:0;font-size:12px;opacity:.7;color:inherit;cursor:pointer;text-align:left}
+.cm-lc-chime:hover{opacity:1}
+.cm-lc-note{font-size:12px;opacity:.75;margin-top:6px}
+
+/* the stage in the arrival card (.stage, .st-*) */
+.cm-stage{position:relative;aspect-ratio:16/9;border-radius:12px;background:var(--cm-art-stage);overflow:hidden;margin:12px 0;color:var(--cm-art-white)}
+.cm-st-tag{position:absolute;top:8px;left:8px;font:800 10px 'DM Sans',var(--sans),sans-serif;letter-spacing:.08em;padding:4px 8px;border-radius:6px;background:var(--cm-art-ls-live)}
+.cm-stage.is-reconnecting .cm-st-tag{background:var(--cm-art-ls-reconnecting)}
+.cm-stage.is-backstage .cm-st-tag{background:var(--cm-art-ls-backstage)}
+.cm-stage.is-live .cm-st-tag{animation:cm-st-blink 1.6s steps(2) infinite}
+@keyframes cm-st-blink{50%{opacity:.55}}
+.cm-st-time{position:absolute;top:8px;right:8px;font:600 11px ui-monospace,Menlo,monospace;background:var(--cm-art-stage-time);padding:3px 7px;border-radius:6px}
+.cm-st-time.is-preview{right:auto;left:50%;transform:translateX(-50%);background:var(--cm-art-explorer)}
+.cm-st-over{position:absolute;inset:0;background:var(--cm-art-stage-over);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;text-align:center;padding:12px}
+.cm-st-over b{font-size:15px}
+.cm-st-over small{font-size:12px;opacity:.85}
+.cm-st-play{width:50px;height:50px;border-radius:50%;border:0;background:var(--cm-art-white);color:var(--cm-art-red);font-size:18px;cursor:pointer}
+.cm-st-spin{width:26px;height:26px;border:3px solid var(--cm-art-on-dark-soft);border-top-color:var(--cm-art-white);border-radius:50%;animation:cm-spin 1s linear infinite}
+@keyframes cm-spin{to{transform:rotate(360deg)}}
+.cm-stage button:focus-visible,.cm-stage a:focus-visible{outline:3px solid var(--cm-art-white);outline-offset:2px}
+.cm-reduced .cm-stage *,.is-reduced .cm-stage *{animation:none !important}
+.cm-arrive-hero.is-live{background:linear-gradient(135deg,var(--cm-art-hero-live-from),var(--cm-art-ls-live)) !important}
+.cm-arrive-hero.is-live.is-reconnecting{background:linear-gradient(135deg,var(--cm-art-hero-live-from),var(--cm-art-ls-reconnecting)) !important}

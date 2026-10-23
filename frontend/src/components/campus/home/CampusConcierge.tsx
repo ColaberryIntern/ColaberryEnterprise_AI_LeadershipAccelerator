@@ -6,7 +6,8 @@ import type { PlanStop } from '../campusPlan';
 import type { StaffDesk } from '../campusPeopleApi';
 import { mayaAllowedFor } from '../campusPeople';
 import { explorerPath } from '../campusPath';
-import { HelpDesk, PlanCard, ExplorerPass, LiveCard, StaffTools } from './ConciergeCards';
+import { HelpDesk, PlanCard, ExplorerPass, StaffTools } from './ConciergeCards';
+import LiveCard from './LiveCard';
 import { UpNext, HereAt, TourOffer } from './NextSteps';
 import { UrgentCard, RightNow, TeamNow, Directory } from './PanelNow';
 import { greetLine, kickerFor, leadFor, momentOf, pulseLine, pulseOf } from './conciergeCopy';
@@ -40,7 +41,7 @@ export interface ConciergeProps {
   desks: StaffDesk[];
   stops: PlanStop[] | null;
   planMinutes?: number | null;
-  live: { title: string; buildingId: BuildingId | null } | null;
+  live: { title: string; buildingId: BuildingId | null; state?: string } | null;
   /** The building you are at (null at the gate). */
   hereId?: BuildingId | null;
   /** This viewer's tour stops (null: no tour, e.g. staff), the stop on screen while it runs, and its saved progress. */
@@ -104,7 +105,7 @@ export default function CampusConcierge(p: ConciergeProps): React.ReactElement {
   const liveB = p.live?.buildingId ? buildings.find((b) => b.id === p.live!.buildingId) : undefined;
   const moment = momentOf({ live: !!p.live, justToured: !!p.justToured, presenceError: p.presenceError, classSoon: !!p.urgent, quiet });
   const lead = leadFor({ audience, moment, firstName: p.firstName, workplace: wp, buildings, liveAt: liveB ? buildingName(liveB, wp) : null, next,
-    dutyNames: desks.filter((d) => d.on_duty).map((d) => d.name), tourStops: p.tourStops?.length ?? null,
+    dutyNames: desks.filter((d) => d.on_duty).map((d) => d.name), tourStops: p.tourStops?.length ?? null, liveState: p.live?.state,
     onCampus: p.presence && !p.presenceError ? pulseOf(p.presence, buildings).total : null });
   const tourHere = p.tourStops && p.touring !== null && p.touring < p.tourStops.length ? { n: p.touring + 1, of: p.tourStops.length } : null;
   const nextAny = p.stops?.find((s) => !s.done) ?? null;
@@ -140,7 +141,9 @@ export default function CampusConcierge(p: ConciergeProps): React.ReactElement {
       {audience === 'staff' && <StaffTools buildings={buildings} workplaceNames={wp} />}
 
       {p.stops && <div style={{ marginTop: 14 }}><PlanCard stops={p.stops} buildings={buildings} workplaceNames={wp} onWalk={p.onWalk} /></div>}
-      {p.live && <LiveCard title={p.live.title} buildingId={p.live.buildingId} onWalk={p.onWalk} />}
+      {p.live && <LiveCard title={p.live.title} buildingId={p.live.buildingId} place={liveB ? buildingName(liveB, wp) : null} audience={audience}
+        teamHere={liveB && p.presence && !p.presenceError ? (p.presence[liveB.id]?.people ?? []).filter((e) => 'enrollment_id' in e).length : null}
+        onWalk={(id, r) => (r ? run(id) : p.onWalk(id))} />}
       {p.urgent && !p.live && <UrgentCard u={p.urgent} onRun={() => run(p.urgent!.buildingId)} onSkip={() => p.onOpen(p.urgent!.route)} />}
 
       {audience === 'business'

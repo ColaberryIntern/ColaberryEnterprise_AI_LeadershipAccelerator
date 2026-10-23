@@ -31,6 +31,8 @@ import type { Me } from './art/AvatarPin';
 import type { MapMoments } from './CampusWorldMap';
 import type { Framed } from './useWorldStage';
 import { openWayfinder } from './wayfinderHost';
+import type { CampusLiveNow } from './campusOnAir';
+import { marqueeText } from './campusLiveState';
 
 /**
  * Map + cards, with the keyboard contract (Campus C2):
@@ -82,6 +84,8 @@ export interface CampusWorldProps {
   walkTo?: { id: BuildingId; seq: number; instant?: boolean; run?: boolean; flashRoom?: string | null } | null;
   /** WP-4: a building the side panel points at (a Right now row is hovered): lifted on the map. */
   hover?: BuildingId | null;
+  /** WP-6: Colaberry Live now (its state and clock): the marquee over its building and the arrival card's live dressing. */
+  liveNow?: CampusLiveNow | null;
   /** WP-1: a handle on the camera for the caller (the home's gate fly-out), where the avatar starts (the building you were last at),
    *  the first camera frame (the gate close-up), and a request to close every card and show the whole campus (a new seq each time). */
   cameraRef?: MutableRefObject<CameraApi | null>;
@@ -172,7 +176,8 @@ export default function CampusWorld(p: CampusWorldProps): React.ReactElement {
         initialTarget={p.initialTarget} onArrive={onArrive} buildingRef={registerEl} counts={presenceError ? undefined : counts}
         people={pp.people} yours={pp.yours} onPeek={pp.openPeek} presenceDown={presenceError && presence !== undefined} walkRequest={walkRequest} onTravel={setTravel}
         onAir={p.onAir} plan={p.plan?.stops} ownGear={p.ownGear} showOpen={audience === 'explorer'} camera={camera} desks={mapDesks}
-        me={p.me ?? (meInitials ? { initials: meInitials } : null)} hover={p.hover} startAt={p.startAt} tourBadges={tourBadges} dimExcept={cardBuilding} moments={p.moments} quiet={p.quiet} />
+        me={p.me ?? (meInitials ? { initials: meInitials } : null)} hover={p.hover} startAt={p.startAt}
+        liveMark={p.liveNow ? { state: p.liveNow.state, text: marqueeText(p.liveNow.b, p.liveNow.now) } : null} tourBadges={tourBadges} dimExcept={cardBuilding} moments={p.moments} quiet={p.quiet} />
       <CampusZoomControls apiRef={camApi} />
       <TravelToast text={travel ? `${travel.verb} to ${buildingName(buildings.find((x) => x.id === travel.id) ?? buildings[0], workplaceNames)}…` : null}
         onSkip={() => { if (travel) walk(travel.id, true); }} />
@@ -187,6 +192,7 @@ export default function CampusWorld(p: CampusWorldProps): React.ReactElement {
         staffDesks={p.staffDesks} going={door.going} look={p.look ?? NO_LOOK} tour={t.arrival} plan={p.plan} flashRoute={flash?.id === b.id ? flash.route : undefined}
         onClose={closeCard} onNavigate={p.onNavigate} onElsewhere={elsewhere}
         onEnterRoom={p.onEnterRoom ? (r) => door.enter(r, b.id, doorRect() ?? els.current.get(b.id)?.getBoundingClientRect() ?? null) : undefined} fromDoor={fromDoor}
+        live={p.liveNow && p.liveNow.building === b.id ? p.liveNow : null}
         onPickPerson={onOpenPerson ? (x, at) => pickPerson(x, b.id, at) : undefined} onMore={(at) => pp.openPeek(b.id, at.x, at.y)} />}
     </div>
   );
