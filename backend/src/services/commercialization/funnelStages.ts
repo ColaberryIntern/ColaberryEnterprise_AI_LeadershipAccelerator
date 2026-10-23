@@ -79,7 +79,7 @@ export const FUNNEL_STAGES: readonly FunnelStage[] = [
       + 'shipped it. Merged is not deployed: neither column is in production yet, so this '
       + 'stage reports as undeployed rather than as zero.',
     excludes:
-      'leads.company free text. 2,584 leads carry a company string, but C8.3 proved it '
+      'The unvalidated leads.company string. 2,584 leads carry one, but C8.3 proved it '
       + 'cannot identify an account on its own: three organizations are named "Colaberry" '
       + 'and twelve leads match all three.',
   },
