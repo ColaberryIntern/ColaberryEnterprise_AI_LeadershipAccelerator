@@ -24,7 +24,7 @@ export const HEALTH_CRON = '* * * * *';
  */
 export async function loadObservableOccurrences(): Promise<ObservableOccurrence[]> {
   const [rows] = await sequelize.query(
-    `SELECT id, editorial_state, provider, provider_session_id
+    `SELECT id, editorial_state, provider, provider_session_id, version
        FROM broadcast_occurrences
       WHERE editorial_state IN (:states)
       ORDER BY scheduled_start_at NULLS LAST

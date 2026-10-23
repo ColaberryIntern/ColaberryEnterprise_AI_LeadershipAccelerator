@@ -1,6 +1,6 @@
 import { DataTypes, Model, Optional } from 'sequelize';
 import { sequelize } from '../config/database';
-import type { EditorialState, ProviderHealth } from '../services/broadcast/broadcastStateMachine';
+import type { EditorialState, EndReason, ProviderHealth } from '../services/broadcast/broadcastStateMachine';
 
 /**
  * One airing. The table is created by db/ensureBroadcastSchema.ts — this model is the
@@ -32,6 +32,8 @@ export interface BroadcastOccurrenceAttributes {
   scheduled_end_at: Date | null;
   content_started_at: Date | null;
   ended_at: Date | null;
+  /** Why it ended (L7.4). Null for anything that ended before the column existed. */
+  end_reason: EndReason | null;
   access_mode: BroadcastAccessMode;
   preview_seconds: number;
   access_policy_snapshot: Record<string, unknown>;
@@ -47,7 +49,7 @@ export type BroadcastOccurrenceCreation = Optional<
   BroadcastOccurrenceAttributes,
   | 'id' | 'series_id' | 'room_id' | 'editorial_state' | 'provider_health' | 'provider'
   | 'provider_session_id' | 'provider_instance_uuid' | 'scheduled_start_at' | 'scheduled_end_at'
-  | 'content_started_at' | 'ended_at' | 'access_mode' | 'preview_seconds'
+  | 'content_started_at' | 'ended_at' | 'end_reason' | 'access_mode' | 'preview_seconds'
   | 'access_policy_snapshot' | 'access_policy_version' | 'version' | 'timezone'
   | 'created_by_enrollment_id' | 'created_at' | 'updated_at'
 >;
@@ -69,6 +71,7 @@ class BroadcastOccurrence
   declare scheduled_end_at: Date | null;
   declare content_started_at: Date | null;
   declare ended_at: Date | null;
+  declare end_reason: EndReason | null;
   declare access_mode: BroadcastAccessMode;
   declare preview_seconds: number;
   declare access_policy_snapshot: Record<string, unknown>;
@@ -96,6 +99,7 @@ BroadcastOccurrence.init(
     scheduled_end_at: { type: DataTypes.DATE, allowNull: true },
     content_started_at: { type: DataTypes.DATE, allowNull: true },
     ended_at: { type: DataTypes.DATE, allowNull: true },
+    end_reason: { type: DataTypes.TEXT, allowNull: true },
     access_mode: { type: DataTypes.STRING(20), allowNull: false, defaultValue: 'private' },
     preview_seconds: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 900 },
     access_policy_snapshot: { type: DataTypes.JSONB, allowNull: false, defaultValue: {} },

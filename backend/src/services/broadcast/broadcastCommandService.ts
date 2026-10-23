@@ -33,6 +33,7 @@ import {
   type ProducerCommand,
   type ProviderEvent,
   type OccurrenceState,
+  type EndReason,
 } from './broadcastStateMachine';
 
 export interface CommandRequest {
@@ -41,6 +42,11 @@ export interface CommandRequest {
   expectedVersion: number;
   isProducer: boolean;
   nowMs?: number;
+  /**
+   * Who is ending it, on an `end` command. Omitted means a person pressed the button, which is
+   * what every caller before L7.4's safety net was.
+   */
+  endReason?: EndReason;
 }
 
 export interface CommandResponse {
@@ -63,6 +69,7 @@ function toState(o: BroadcastOccurrence): OccurrenceState {
     version: o.version,
     content_started_at: o.content_started_at,
     ended_at: o.ended_at,
+    end_reason: o.end_reason,
   };
 }
 
@@ -83,6 +90,7 @@ export async function runProducerCommand(req: CommandRequest): Promise<CommandRe
     expectedVersion: req.expectedVersion,
     nowMs,
     isProducer: req.isProducer,
+    endReason: req.endReason,
   });
 
   if (!decision.ok) {
