@@ -1,4 +1,4 @@
-import { LANDING_PAGE_THEMES, themeForLandingPage } from '../landingPageTheme';
+import { LANDING_PAGE_THEMES, themeForLandingPage, LandingPageTheme } from '../landingPageTheme';
 import {
   auditInverseBand, contrastRatio, describeMiss, liftForContrast, relativeLuminance,
   resolveToken, stylesheetFallback,
@@ -117,10 +117,28 @@ describe('lifting a colour only as far as it has to go', () => {
   });
 });
 
+/**
+ * A theme as a plain token map.
+ *
+ * `LandingPageTheme` is a specific object type with optional members, not an index signature, so
+ * `theme as Record<string, string>` is a conversion TypeScript rejects outright: the two types do
+ * not overlap enough. `as unknown as` would silence it by asserting something false - that every
+ * declared token is present and is a string, when `Partial<SurfacePalette>` says several may be
+ * undefined.
+ *
+ * This drops the absent ones instead, which is both type-correct without any assertion about the
+ * values and a truer description of what `auditInverseBand` receives.
+ */
+function tokens(theme: LandingPageTheme): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(theme)) if (typeof v === 'string') out[k] = v;
+  return out;
+}
+
 describe('every brand, every pair on the inverse band', () => {
   it.each(BRANDS)('%s meets WCAG AA', (key) => {
     const { theme } = themeForLandingPage(key);
-    const misses = auditInverseBand(theme as Record<string, string>)
+    const misses = auditInverseBand(tokens(theme))
       .filter((p) => !p.passes)
       .map((p) => describeMiss(key, p));
     expect(misses).toEqual([]);
@@ -130,7 +148,7 @@ describe('every brand, every pair on the inverse band', () => {
     // The control. If `auditInverseBand` silently returned [] the test above would pass for
     // every brand forever, which is the failure mode of a green suite that checks nothing.
     const { theme } = themeForLandingPage('cpn');
-    const pairs = auditInverseBand(theme as Record<string, string>);
+    const pairs = auditInverseBand(tokens(theme));
     expect(pairs.length).toBeGreaterThanOrEqual(5);
     expect(pairs.every((p) => p.ratio > 1)).toBe(true);
   });
@@ -145,13 +163,13 @@ describe('every brand, every pair on the inverse band', () => {
 
 describe('the brands that were already fine did not move', () => {
   it.each(['training', 'refactored'])('%s keeps its own accent on the dark band', (key) => {
-    const { theme } = themeForLandingPage(key) as { theme: Record<string, string> };
-    expect(theme['--accent-on-dark']).toBe(theme['--accent']);
-    expect(theme['--accent-2-on-dark']).toBe(theme['--accent-2']);
+    const t = tokens(themeForLandingPage(key).theme);
+    expect(t['--accent-on-dark']).toBe(t['--accent']);
+    expect(t['--accent-2-on-dark']).toBe(t['--accent-2']);
   });
 
   it.each(['cpn', 'ai-flotation'])('%s gets a lifted eyebrow, because its own failed', (key) => {
-    const { theme } = themeForLandingPage(key) as { theme: Record<string, string> };
-    expect(theme['--accent-2-on-dark']).not.toBe(theme['--accent-2']);
+    const t = tokens(themeForLandingPage(key).theme);
+    expect(t['--accent-2-on-dark']).not.toBe(t['--accent-2']);
   });
 });
