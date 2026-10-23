@@ -148,6 +148,52 @@ export async function staffApprove(showcaseId: string, staffIdentity: string): P
   return changed;
 }
 
+/**
+ * Staff decline. The other half of a review, and the half that was missing.
+ *
+ * A queue with only an Approve button is not a review — it is a formality with a
+ * delay, because the only way to refuse is to leave the request sitting there,
+ * which the learner experiences as silence rather than as an answer.
+ *
+ * Declining WITHDRAWS rather than deletes: `withdrawn_at` plus `withdrawn_reason`
+ * is already how a take stops being public, the partial unique index is scoped to
+ * `withdrawn_at IS NULL` so the learner can fix the problem and ask again, and the
+ * refused request stays on the record instead of vanishing.
+ *
+ * A REASON IS REQUIRED. "No" with no sentence attached tells a learner nothing
+ * they can act on, and the staff member is the one who knows why.
+ */
+export async function staffDecline(
+  showcaseId: string,
+  staffIdentity: string,
+  reason: string,
+): Promise<{ ok: true } | { ok: false; reason: string }> {
+  const note = (reason || '').trim();
+  if (!note) return { ok: false, reason: 'A decline needs a reason the learner can act on.' };
+
+  const sequelize = await db();
+  const [rows] = await sequelize.query(
+    `UPDATE presentation_showcases
+        SET withdrawn_at      = NOW(),
+            withdrawn_reason  = :note,
+            staff_approved_by = :by,
+            updated_at        = NOW()
+      WHERE id = :id
+        AND withdrawn_at IS NULL
+        -- Already published is a DIFFERENT operation. Taking down something a
+        -- cohort has already seen is a withdrawal, and it is not what this is.
+        AND published_at IS NULL
+     RETURNING id`,
+    { replacements: { id: showcaseId, by: staffIdentity, note } },
+  ) as [Array<{ id: string }>, unknown];
+
+  const changed = (rows?.length || 0) > 0;
+  log('showcase_staff_declined', { showcaseId, by: staffIdentity, changed });
+  return changed
+    ? { ok: true }
+    : { ok: false, reason: 'That request is no longer pending — it may already be published or withdrawn.' };
+}
+
 export interface AnnounceInput {
   showcaseId: string;
   memberId: string;

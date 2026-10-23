@@ -40,6 +40,17 @@ export interface TicketClaims {
   enrollmentId: string;
   /** Unix seconds. */
   exp: number;
+  /**
+   * Minted for a STAFF reviewer rather than a learner. Present only on tickets
+   * from `createStaffRecordingTicket`, which only the admin review queue calls.
+   *
+   * It lives INSIDE the signed body, so a learner cannot add it to their own
+   * ticket — changing one byte of the body invalidates the signature. There is
+   * no code path that sets it from request input.
+   */
+  staff?: true;
+  /** Who the staff ticket was issued to, for the audit line. Staff tickets only. */
+  staffIdentity?: string;
 }
 
 function sign(body: string): string {
@@ -64,6 +75,37 @@ export function createRecordingTicket(
   const claims: TicketClaims = {
     recordingId,
     enrollmentId,
+    exp: Math.floor(now.getTime() / 1000) + ttlSeconds,
+  };
+  const body = b64url(JSON.stringify(claims));
+  return `${body}.${sign(body)}`;
+}
+
+/**
+ * A ticket for a STAFF reviewer watching a demo they are about to approve.
+ *
+ * Separate function, not a flag on the one above, so that the staff claim can
+ * only be set from a call site that chose it. `createRecordingTicket` has no
+ * parameter that could carry it, which means no learner-facing route can mint
+ * one by accident or by a crafted request.
+ *
+ * Longer-lived by default than a learner's ticket because the job is different:
+ * a reviewer watches the whole thing before deciding, and a ticket that expires
+ * mid-review sends them back to the queue to start again.
+ */
+export function createStaffRecordingTicket(
+  recordingId: string,
+  staffIdentity: string,
+  ttlSeconds: number = DEFAULT_TICKET_TTL_SECONDS,
+  now: Date = new Date(),
+): string {
+  const claims: TicketClaims = {
+    recordingId,
+    // No enrollment: a staff reviewer is not a learner, and putting one here
+    // would make the ticket indistinguishable from that learner's own.
+    enrollmentId: '',
+    staff: true,
+    staffIdentity,
     exp: Math.floor(now.getTime() / 1000) + ttlSeconds,
   };
   const body = b64url(JSON.stringify(claims));
@@ -106,6 +148,16 @@ export function verifyRecordingTicket(
   if (!claims || typeof claims.recordingId !== 'string' || typeof claims.enrollmentId !== 'string') return null;
   if (typeof claims.exp !== 'number' || !Number.isFinite(claims.exp)) return null;
   if (Math.floor(now.getTime() / 1000) >= claims.exp) return null;
+  // The staff claim is the one that skips the ownership check, so it is exact or
+  // it is nothing. The signature already makes a forged body impossible; this
+  // makes a future call site that sets `staff: 1` fail loudly instead of passing.
+  if ('staff' in claims && claims.staff !== true) return null;
+  if (claims.staff === true && !claims.staffIdentity) return null;
 
   return claims;
+}
+
+/** A learner's ticket is bound to their enrollment; a staff one is not bound at all. */
+export function isStaffTicket(claims: TicketClaims | null): boolean {
+  return Boolean(claims && claims.staff === true && claims.staffIdentity);
 }
