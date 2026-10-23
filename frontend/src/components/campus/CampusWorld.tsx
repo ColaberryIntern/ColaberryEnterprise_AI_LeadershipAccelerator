@@ -28,6 +28,7 @@ import type { Travel } from './useWalk';
 import type { Me } from './art/AvatarPin';
 import type { MapMoments } from './CampusWorldMap';
 import type { Framed } from './useWorldStage';
+import { openWayfinder } from './wayfinderHost';
 
 /**
  * Map + cards, with the keyboard contract (Campus C2):
@@ -76,7 +77,9 @@ export interface CampusWorldProps {
   /** C11b: screen px the caller's panels cover (the campus home's concierge and top bar), for the camera's whole-campus view. */
   insets?: InsetsOf;
   /** C11b: walk to this building now, from outside the map (the home's pulse, plan and search). A new seq means a new walk. */
-  walkTo?: { id: BuildingId; seq: number; instant?: boolean; run?: boolean } | null;
+  walkTo?: { id: BuildingId; seq: number; instant?: boolean; run?: boolean; flashRoom?: string | null } | null;
+  /** WP-4: a building the side panel points at (a Right now row is hovered): lifted on the map. */
+  hover?: BuildingId | null;
   /** WP-1: a handle on the camera for the caller (the home's gate fly-out), where the avatar starts (the building you were last at),
    *  the first camera frame (the gate close-up), and a request to close every card and show the whole campus (a new seq each time). */
   cameraRef?: MutableRefObject<CameraApi | null>;
@@ -135,13 +138,15 @@ export default function CampusWorld(p: CampusWorldProps): React.ReactElement {
   const { camApi, camera, mapDesks, meInitials } = useMapStage(p.staffDesks, audience, p.insets, { camRef: p.cameraRef, framedRef, startCam: p.startCam });
   const door = useDoorReveal(p.onEnterRoom, reduceMotion);
   const lastOutside = useRef(0);
+  const [flash, setFlash] = useState<{ id: BuildingId; route: string } | null>(null); // WP-4: the room a Wayfinder pick flashes
   const { walkTo } = p;
   useEffect(() => {
-    if (walkTo && walkTo.seq !== lastOutside.current) { lastOutside.current = walkTo.seq; setOpen(null); walk(walkTo.id, walkTo.instant, walkTo.run); }
+    if (!walkTo || walkTo.seq === lastOutside.current) return;
+    lastOutside.current = walkTo.seq; setOpen(null); setFlash(walkTo.flashRoom ? { id: walkTo.id, route: walkTo.flashRoom } : null); walk(walkTo.id, walkTo.instant, walkTo.run);
   }, [walkTo, walk]);
 
   // "Go somewhere else": close the card and put the caret in the campus search (the home's top bar, or a page banner).
-  const elsewhere = useCallback(() => { setOpen(null); document.querySelector<HTMLInputElement>('.cm-whereto-input')?.focus(); }, []);
+  const elsewhere = useCallback(() => { setOpen(null); if (!openWayfinder()) document.querySelector<HTMLInputElement>('.cm-whereto-input')?.focus(); }, []);
   const b = open && !panel && !personCard ? buildings.find((x) => x.id === open) : undefined;
   const anyCard = !!tour || !!panel || !!personCard || !!b; // the peek is a light popover: it neither moves the camera nor tucks the panel
   const cardBuilding = b ? b.id : null;
@@ -158,7 +163,7 @@ export default function CampusWorld(p: CampusWorldProps): React.ReactElement {
         initialTarget={p.initialTarget} onArrive={onArrive} buildingRef={registerEl} counts={presenceError ? undefined : counts}
         people={pp.people} yours={pp.yours} onPeek={pp.openPeek} presenceDown={presenceError && presence !== undefined} walkRequest={walkRequest} onTravel={setTravel}
         onAir={p.onAir} plan={p.plan?.stops} ownGear={p.ownGear} showOpen={audience === 'explorer'} camera={camera} desks={mapDesks}
-        me={p.me ?? (meInitials ? { initials: meInitials } : null)} startAt={p.startAt} tourBadges={tourBadges} dimExcept={cardBuilding} moments={p.moments} quiet={p.quiet} />
+        me={p.me ?? (meInitials ? { initials: meInitials } : null)} hover={p.hover} startAt={p.startAt} tourBadges={tourBadges} dimExcept={cardBuilding} moments={p.moments} quiet={p.quiet} />
       <CampusZoomControls apiRef={camApi} />
       <TravelToast text={travel ? `${travel.verb} to ${buildingName(buildings.find((x) => x.id === travel.id) ?? buildings[0], workplaceNames)}…` : null}
         onSkip={() => { if (travel) walk(travel.id, true); }} />
@@ -171,7 +176,7 @@ export default function CampusWorld(p: CampusWorldProps): React.ReactElement {
       })()}
       {b && <ArrivalPanel b={b} buildings={buildings} audience={audience} isExplorer={!!p.isExplorer} accessOf={accessOf} workplaceNames={workplaceNames}
         reduceMotion={reduceMotion} presence={presence} presenceError={presenceError} count={presence ? counts[b.id] ?? 0 : null} onAir={!!p.onAir?.has(b.id)}
-        staffDesks={p.staffDesks} going={door.going} look={p.look ?? NO_LOOK} tour={t.arrival} plan={p.plan}
+        staffDesks={p.staffDesks} going={door.going} look={p.look ?? NO_LOOK} tour={t.arrival} plan={p.plan} flashRoute={flash?.id === b.id ? flash.route : undefined}
         onClose={closeCard} onNavigate={p.onNavigate} onElsewhere={elsewhere}
         onEnterRoom={p.onEnterRoom ? (r) => door.enter(r, b.id, els.current.get(b.id)?.getBoundingClientRect() ?? null) : undefined}
         onPickPerson={onOpenPerson ? (pp) => pickPerson(pp, b.id) : undefined} />}

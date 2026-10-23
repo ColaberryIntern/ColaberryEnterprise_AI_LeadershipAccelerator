@@ -27,7 +27,9 @@ const STATS = {
   staff: ['cm-stats-acct-staff', 'cm-stats-online', 'cm-stats-bell', 'cm-stats-me'],
 };
 const TOPBAR = ['cm-topbar', 'cm-topbar-brand', 'cm-topbar-search', 'cm-topbar-list'];
-const CONCIERGE = ['cm-concierge', 'cm-cc-where', 'cm-cc-greeting', 'cm-cc-lead', 'cm-cc-helpdesk'];
+const CONCIERGE = ['cm-concierge', 'cm-cc-where', 'cm-cc-greeting', 'cm-cc-lead'];
+/** WP-4: the prototype hides the help desk from partners (renderHelpdesk); everyone else has it. */
+const HELPDESK = (a) => (a === 'business' ? [] : ['cm-cc-helpdesk']);
 const CONCIERGE_BY = { member: ['cm-cc-tour', 'cm-cc-chips'], explorer: ['cm-cc-pass', 'cm-cc-enroll', 'cm-cc-tour', 'cm-cc-chips'], business: ['cm-cc-tour', 'cm-cc-chips'], staff: ['cm-cc-staff-tools'] };
 const SIGNATURE = { member: 'commons', explorer: 'lecture', business: 'career', staff: 'career' };
 /** Tap a building even when the phone framing leaves it off screen (a real user pans to it first). */
@@ -37,9 +39,10 @@ const WALKED = { wait: 2600 };
 
 const HOME_KNOWN = (a, size) => [
   ...(size === 'phone' ? ['phone: the stats pill is hidden as in the prototype phone layout; the campus tab bar has no Alerts tab yet'] : []),
-  'top bar messages icon: not built (the home has no DM inbox host; messages stay on Today)',
-  'concierge "Right now" list: folded into the plan and live cards (one place per fact)',
-  ...(a === 'business' ? ['partner company / seats / invite chips: no real partner data on this account'] : []),
+  'top bar messages icon: comes with the chat on the home (decision Q6, WP-10)',
+  'concierge "Right now": real rows only (plan, next class, busiest building, next event); a quiet local stack may have none',
+  ...(a === 'explorer' ? ['pulse "K Explorers like you": needs an Explorer tag in presence (WP-9)'] : []),
+  ...(a === 'business' ? ['partner company / seats / invite chips and "of your N people": no team size or company endpoint yet (WP-9)'] : []),
   ...(a === 'explorer' ? ['top bar "Enroll" pill: the enroll link lives in the Explorer pass'] : []),
 ];
 
@@ -58,9 +61,9 @@ const CARD_VIEWS = ['03-arrive', '04-inside', '08-person-card', '09-chat', '14-s
 const VIEWS = [
   { name: '01-gate', fresh: true, route: '/portal/campus',
     required: (a) => ['cm-gate', 'cm-gate-arch-text', 'cm-gate-logo', 'cm-gate-greeting', 'cm-gate-sub', 'cm-gate-id', 'cm-gate-enter', ...(a === 'staff' ? [] : ['cm-gate-tour'])],
-    known: () => ['the gate streak line claims nothing: it is information only (claiming stays on Today)'] },
+    known: () => ['WP-4 (Q9): Enter claims today\'s streak; the line shows the server\'s points and appears only for a member with an unclaimed or running streak'] },
   { name: '02-home', route: '/portal/campus',
-    required: (a, size) => [...MAP_ART, ...buildingIds(), ...TOPBAR, ...(size === 'phone' ? [] : ['cm-stats', ...STATS[a]]), ...CONCIERGE, ...CONCIERGE_BY[a], ...(size === 'phone' ? ['.cm-tabbar'] : [])],
+    required: (a, size) => [...MAP_ART, ...buildingIds(), ...TOPBAR, ...(size === 'phone' ? [] : ['cm-stats', ...STATS[a]]), ...CONCIERGE, ...HELPDESK(a), ...CONCIERGE_BY[a], ...(size === 'phone' ? ['.cm-tabbar'] : [])],
     known: HOME_KNOWN },
   { name: '03-arrive', route: '/portal/campus', steps: (a) => [tap(SIGNATURE[a]), WALKED],
     required: () => ['cm-card', 'cm-arrive-hero', 'cm-arrive-now', '.cm-arrive .cm-cta', 'cm-arrive-back', 'cm-arrive-elsewhere', '.cm-arrive .cm-rooms'] },
@@ -75,10 +78,10 @@ const VIEWS = [
     known: () => ['the prototype crowd of walking dots was random: not drawn (the building head count is real)'] },
   { name: '07-notifications', route: '/portal/campus', steps: () => [{ click: '[data-testid="cm-stats-bell"] button' }],
     required: () => ['.cm-bell-panel'], desktopOnly: true },
-  { name: '08-person-card', route: '/portal/campus', steps: () => [{ click: '[data-testid="cm-cc-helpdesk"] button' }, WALKED],
+  { name: '08-person-card', route: '/portal/campus', accounts: ['member', 'explorer', 'staff'], steps: () => [{ click: '[data-testid="cm-cc-helpdesk"] button' }, WALKED],
     required: () => ['cm-card', 'cm-arrive-hero', '.cm-desks'],
     known: () => ['a help desk press walks to the desk building (its card holds the desk) instead of opening a staff popover'] },
-  { name: '09-chat', route: '/portal/campus', steps: () => [{ click: '[data-testid="cm-cc-helpdesk"] button' }, WALKED],
+  { name: '09-chat', route: '/portal/campus', accounts: ['member', 'explorer', 'staff'], steps: () => [{ click: '[data-testid="cm-cc-helpdesk"] button' }, WALKED],
     required: () => ['.cm-desks'],
     known: () => ['chat with a desk opens through Today (the existing DM dock); not rebuilt on the home'] },
   { name: '10-toast', route: '/portal/campus', required: () => ['cm-world'],
@@ -109,6 +112,10 @@ const VIEWS = [
     required: () => ['cm-travel-text', 'cm-travel-skip', '.cm-bld.is-hl[data-building="library"]'],
     assert: () => "/^M500 640L/.test(document.querySelector('[data-testid=\"cm-route-line\"]')?.getAttribute('d') || '') ? '' : 'no route from the gate'",
     known: () => ['the people-chip peek needs someone on campus; covered by the campusTravel and campusPeople tests'] },
+  // WP-4: the Wayfinder from the top bar pill: the palette over the blurred campus, grouped results, the footer hints
+  { name: '18-wayfinder', route: '/portal/campus', steps: () => [{ click: '[data-testid="cm-topbar-search"]' }],
+    required: (a, size) => ['cm-wayfinder', 'cm-wf-input', '[role="group"][aria-label="All buildings"]', '.cm-wf-item', ...(size === 'phone' ? [] : ['.cm-wf-hint'])],
+    known: () => ['search logging for staff insights: decision Q11\'s separate project'] },
 ];
 
 /** WP-1: the side panel (and the tour in it) is required on every view past the gate. */

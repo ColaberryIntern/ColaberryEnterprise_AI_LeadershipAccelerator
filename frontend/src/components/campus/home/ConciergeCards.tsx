@@ -9,6 +9,7 @@ import type { ExplorerPathModel } from '../campusPath';
 import AdminLink from '../AdminLink';
 import { useIsMgmt } from '../campusMgmt';
 import { roomLabel } from '../campusMap';
+import { deskRole } from './conciergeCopy';
 
 /**
  * The concierge's cards (C11b), each the prototype's (.helpdesk, .plan-card, .pass, .livecard) fed by real campus data. A card
@@ -17,8 +18,9 @@ import { roomLabel } from '../campusMap';
 type Walk = (id: BuildingId) => void;
 const initialsOf = (name: string) => name.split(/\s+/).filter(Boolean).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
 
-/** HELP DESK: the AI staff on duty for this viewer; a press walks to their desk (the building card shows it). */
-export function HelpDesk({ desks, onWalk }: { desks: StaffDesk[]; onWalk: Walk }): React.ReactElement | null {
+/** HELP DESK: the AI staff on duty for this viewer, each with the prototype's role (Mentor / Curriculum / Admissions); a press
+ *  walks to their desk (the building card shows it; the staff popover is decision Q7, WP-5). */
+export function HelpDesk({ desks, workplace = false, onWalk }: { desks: StaffDesk[]; workplace?: boolean; onWalk: Walk }): React.ReactElement | null {
   const on = desks.filter((d) => d.on_duty);
   if (!on.length) return null;
   return (
@@ -27,7 +29,7 @@ export function HelpDesk({ desks, onWalk }: { desks: StaffDesk[]; onWalk: Walk }
       {on.map((d) => (
         <button key={d.id} type="button" className="cm-sbtn" onClick={() => onWalk(d.building as BuildingId)} data-testid={`cm-cc-desk-${d.id}`}
           aria-label={`${d.name}, ${d.title}, walk to their desk`}>
-          <span className="cm-sav" aria-hidden="true">{initialsOf(d.name)}</span>{d.name} <small>{d.title}</small>
+          <span className="cm-sav" aria-hidden="true">{initialsOf(d.name)}</span>{d.name} <small>{deskRole(d, workplace)}</small>
         </button>
       ))}
     </div>

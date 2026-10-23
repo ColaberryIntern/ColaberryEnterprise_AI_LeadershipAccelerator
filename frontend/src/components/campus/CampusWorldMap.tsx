@@ -85,6 +85,8 @@ export interface CampusMapProps {
   moments?: MapMoments;
   /** WP-3: nobody else is on campus right now (the prototype's quiet hours look). */
   quiet?: boolean;
+  /** WP-4: lifted like a walk's destination (a Right now row in the side panel is hovered). */
+  hover?: BuildingId | null;
   /** C11b: the Explorer view's OPEN badges. */
   showOpen?: boolean;
   /** C11b: the AI staff desks on duty for this viewer, drawn at their buildings (full map only). */
@@ -241,7 +243,7 @@ export default function CampusWorldMap(p: CampusMapProps): React.ReactElement {
       {!compact && <HitAreas buildings={buildings} onPick={pick} />}
       {buildings.map((b) => (
         <Building key={b.id} b={b} access={accessOf(b)} label={buildingName(b, workplaceNames)} compact={compact} count={counts?.[b.id] ?? 0}
-          shown={people?.[b.id]?.shown} onAir={!!onAir?.has(b.id)} here={!compact && atId === b.id} hl={!compact && targetId === b.id} showOpen={p.showOpen}
+          shown={people?.[b.id]?.shown} onAir={!!onAir?.has(b.id)} here={!compact && atId === b.id} hl={!compact && (targetId === b.id || p.hover === b.id)} showOpen={p.showOpen}
           pin={compact ? undefined : pins[b.id]} tourBadge={compact ? undefined : badges[b.id]} dim={!compact && !!p.dimExcept && p.dimExcept !== b.id}
           moment={compact ? undefined : p.moments?.badges[b.id]} urgent={!compact && urgent === b.id} yours={p.yours?.[b.id]} down={!compact && !!p.presenceDown}
           onPeek={compact ? undefined : p.onPeek} onPick={pick} setRef={p.buildingRef} />

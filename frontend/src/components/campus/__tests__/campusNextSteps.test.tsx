@@ -35,7 +35,7 @@ const TOUR = ['lecture', 'library', 'studio', 'testing', 'observatory', 'commons
 
 function concierge(over: Partial<ConciergeProps> = {}): React.ReactElement {
   const p: ConciergeProps = {
-    audience: 'member', firstName: 'Ali', hereName: 'main gate', buildings, accessOf: () => 'open', workplaceNames: false, presence: null,
+    audience: 'member', firstName: 'Ali', buildings, accessOf: () => 'open', workplaceNames: false, presence: null,
     presenceError: false, desks: [], stops: STOPS, live: null, now: new Date('2026-10-22T15:00:00Z'), tourStops: TOUR, touring: null,
     tourProgress: { paused: null, toured: false }, onWalk: () => undefined, onTour: () => undefined, onOpen: () => undefined, ...over,
   };
@@ -53,7 +53,7 @@ describe('the side panel is never hidden', () => {
   });
 
   it('always offers a next step and the tour, in the prompt order: Up next, Here at, the tour', () => {
-    render(concierge({ hereId: 'studio', hereName: 'Project Studio' }));
+    render(concierge({ hereId: 'studio' }));
     const order = ['cm-up-next', 'cm-here-at', 'cm-cc-tour'].map((id) => q(id));
     order.forEach((el) => expect(el).not.toBeNull());
     expect(order[0]!.compareDocumentPosition(order[1]!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();

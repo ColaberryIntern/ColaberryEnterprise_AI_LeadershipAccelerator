@@ -52,6 +52,8 @@ export interface ArrivalPanelProps {
   onElsewhere: () => void;
   onEnterRoom?: (route: string) => void;
   onPickPerson?: (p: CampusPerson) => void;
+  /** WP-4: the room a Wayfinder pick flashes in the card (the prototype's flashRoom). */
+  flashRoute?: string;
 }
 
 /** The portal facts for the open building, read when it opens (campusFacts caches each source for a minute). */
@@ -85,7 +87,7 @@ export default function ArrivalPanel(p: ArrivalPanelProps): React.ReactElement {
         onPickPerson={p.onPickPerson} desk={desks?.find((d) => d.on_duty) ?? null} />
       <BuildingCard key={b.id} building={b} access={access} workplaceNames={wp} onClose={p.onClose} onNavigate={p.onNavigate} audience={audience}
         kicker={kickerOf({ zone: zoneLabelOf(b, wp), access, audience, tour: isStop ? { name: tour!.model.name, n: tourIdx + 1, of: tour!.model.stops.length } : null })}
-        line={subOf(b, audience, wp)} onElsewhere={p.onElsewhere} urgent={urgentAt(b.id, data, now)}
+        line={subOf(b, audience, wp)} onElsewhere={p.onElsewhere} urgent={urgentAt(b.id, data, now)} flashRoute={p.flashRoute}
         happening={happeningAt(b.id, { onAir: p.onAir, count: p.count, presenceError: p.presenceError, facts: factsAt(b.id, data, p.look, now) })}
         onEnterRoom={p.onEnterRoom} desks={desks}
         tourTop={isStop ? <TourStopCard tour={tour!.model} index={tourIdx} /> : undefined}

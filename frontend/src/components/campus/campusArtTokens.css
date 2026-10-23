@@ -75,6 +75,10 @@
      rows in the peek, and the mini maps (grey blocks, the hub lawn) */
   --cm-art-step-dot:#b9a684; --cm-art-staff-pin:#0f5132; --cm-art-team:#14b8a6; --cm-art-chip-down:#f3efe8; --cm-art-anon:#bdb5a8;
   --cm-art-mini-block:#c9c2b4; --cm-art-mini-hub:#cfe0c0; --cm-art-on-dark-soft:rgba(255,255,255,.16);
+  /* WP-4: the Wayfinder (#wf: backdrop, selected row, its shadow), the pulse's "down" dot, the urgent card's ghost button and the
+     room flash (.rooms a.flash) */
+  --cm-art-wf-backdrop:rgba(31,27,22,.35); --cm-art-wf-sel:#f3ece0; --cm-art-wf-shadow:0 30px 80px rgba(0,0,0,.3);
+  --cm-art-pulse-down:#d9962b; --cm-art-ghost-w:rgba(255,255,255,.18); --cm-art-flash:#fff1c9; --cm-art-flash-edge:#d9962b;
 }
 [data-theme="dark"]{
   --cm-art-paper:#1e1e1e; --cm-art-ink:#f4f4f4; --cm-art-muted:#b5ad9f; --cm-art-line:#3a352d;
@@ -86,4 +90,5 @@
   --cm-art-tag-demo-bg:#1b2c3e; --cm-art-tag-demo:#9cc3ea; --cm-art-tag-lock-bg:#3a3018; --cm-art-tag-lock:#e0b54a;
   --cm-art-tip-edge:#4a4236; --cm-art-tour-nav:#2a2622; --cm-art-dot:#4a4438; --cm-art-dot-done:#5f7d6b; --cm-art-dot-on:#9cc3ea;
   --cm-art-btn-line-bg:#2e2a25; --cm-art-btn-line-edge:#4a4236;
+  --cm-art-wf-sel:#2e2a25; --cm-art-wf-backdrop:rgba(0,0,0,.5); --cm-art-flash:#4a3a14;
 }

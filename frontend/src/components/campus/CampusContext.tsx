@@ -104,6 +104,8 @@ export interface CampusState {
   look: CampusLook | null;
   lookError: boolean;
   saveLook: (equipped: Record<string, string | null>) => Promise<CampusLook>;
+  /** WP-4: read the look again (the gate just claimed the streak: new points, maybe an unlock). */
+  reloadLook: () => void;
   lockerOpen: boolean;
   openLocker: () => void;
   closeLocker: () => void;
@@ -132,7 +134,7 @@ const OFF: CampusState = {
   staffDesks: [], staffDesksError: false, personCard: null, openPersonCard: noop, closePersonCard: noop,
   dmToast: null, dismissDmToast: noop, holdDmToast: noop, releaseDmToast: noop, planStops: null, planMinutes: null,
   completePlanStop: () => Promise.resolve({ ok: false, reason: 'failed', message: 'The campus is off' }), justToured: false, tourIndex: null, startTour: noop, setTourIndex: noop, endTour: noop,
-  look: null, lookError: false, saveLook: () => Promise.reject(new Error('The campus is off')), lockerOpen: false, openLocker: noop, closeLocker: noop,
+  look: null, lookError: false, saveLook: () => Promise.reject(new Error('The campus is off')), reloadLook: noop, lockerOpen: false, openLocker: noop, closeLocker: noop,
 };
 
 const Ctx = createContext<CampusState>(OFF);
@@ -203,9 +205,9 @@ export function CampusProvider({ children }: { children?: React.ReactNode }): Re
 
   const value = useMemo<CampusState>(
     () => ({ enabled, ready, settings, active, updateSettings, layer, mapFocus, mapHow, openMap, ackMap, here, setHere, tourProgress, resumeTour, finishTour, openList, closeLayer, presence, presenceError,
-      door, enterThroughDoor, stepOutside, clearDoor, staffDesks, staffDesksError, personCard, openPersonCard, closePersonCard, dmToast, dismissDmToast, holdDmToast, releaseDmToast, planStops, planMinutes, completePlanStop, justToured, tourIndex, startTour, setTourIndex, endTour, look, lookError, saveLook, lockerOpen, openLocker, closeLocker }),
+      door, enterThroughDoor, stepOutside, clearDoor, staffDesks, staffDesksError, personCard, openPersonCard, closePersonCard, dmToast, dismissDmToast, holdDmToast, releaseDmToast, planStops, planMinutes, completePlanStop, justToured, tourIndex, startTour, setTourIndex, endTour, look, lookError, saveLook, reloadLook, lockerOpen, openLocker, closeLocker }),
     [enabled, ready, settings, active, updateSettings, layer, mapFocus, mapHow, openMap, ackMap, here, setHere, tourProgress, resumeTour, finishTour, openList, closeLayer, presence, presenceError,
-      door, enterThroughDoor, stepOutside, clearDoor, staffDesks, staffDesksError, personCard, openPersonCard, closePersonCard, dmToast, dismissDmToast, holdDmToast, releaseDmToast, planStops, planMinutes, completePlanStop, justToured, tourIndex, startTour, setTourIndex, endTour, look, lookError, saveLook, lockerOpen, openLocker, closeLocker],
+      door, enterThroughDoor, stepOutside, clearDoor, staffDesks, staffDesksError, personCard, openPersonCard, closePersonCard, dmToast, dismissDmToast, holdDmToast, releaseDmToast, planStops, planMinutes, completePlanStop, justToured, tourIndex, startTour, setTourIndex, endTour, look, lookError, saveLook, reloadLook, lockerOpen, openLocker, closeLocker],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
