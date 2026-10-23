@@ -47,9 +47,33 @@ export interface OrganizationAttributes {
    */
   tenant_id?: string | null;
   brand_id?: string | null;
-  /** enterprise_customer | community_partner | church | nonprofit_partner | client | internal | sponsor */
+  /**
+   * enterprise_customer | community_partner | church | nonprofit_partner | client |
+   * internal | sponsor | strategic_account
+   *
+   * `strategic_account` is C8.3's addition, per the C6.1 verdict that a commercial
+   * account EXTENDS this table rather than getting one of its own. The column is a plain
+   * varchar with no enum and no CHECK (measured on prod 2026-10-23), so it needs no DDL.
+   */
   organization_type?: string | null;
   lead_id?: number | null;
+
+  // --- C8.3 strategic-account attributes (C6.1 rows 4, 5, 6, 8, 9, 10) ---------
+  // Declared here because ensureStrategicAccountSchema adds the columns and Sequelize
+  // only touches attributes the model knows about — the same reason given for the
+  // multi-tenant block below.
+  /** The customer initiative this account is being pursued against. C6.1 row 4. */
+  initiative?: string | null;
+  /** The C2.5 ICP segment SLUG only; the scoring stays in the scorecard. C6.1 row 5. */
+  icp_segment?: string | null;
+  funding_probability?: number | null;
+  next_action?: string | null;
+  next_action_due_on?: Date | string | null;
+  /** ONE number, from C7.1's lighthouse scorecard, not per-dimension columns. C6.1 row 6. */
+  account_score?: number | null;
+  /** Attributes a strategic-account program discovers as it runs. C6.1 row 10. */
+  attributes?: Record<string, unknown> | null;
+
   created_at?: Date;
   updated_at?: Date;
 }
@@ -66,6 +90,13 @@ class Organization extends Model<OrganizationAttributes> implements Organization
   declare brand_id: string | null;
   declare organization_type: string | null;
   declare lead_id: number | null;
+  declare initiative: string | null;
+  declare icp_segment: string | null;
+  declare funding_probability: number | null;
+  declare next_action: string | null;
+  declare next_action_due_on: Date | string | null;
+  declare account_score: number | null;
+  declare attributes: Record<string, unknown> | null;
   declare created_at: Date;
   declare updated_at: Date;
 }
@@ -122,6 +153,16 @@ Organization.init(
     tenant_id: { type: DataTypes.UUID, allowNull: true },
     brand_id: { type: DataTypes.UUID, allowNull: true },
     organization_type: { type: DataTypes.STRING(40), allowNull: true },
+    // --- C8.3 strategic-account attributes -----------------------------------
+    // Same reason as the block above: ensureStrategicAccountSchema adds these columns,
+    // and a column in Postgres but not here reads back undefined and drops writes.
+    initiative: { type: DataTypes.TEXT, allowNull: true },
+    icp_segment: { type: DataTypes.STRING(60), allowNull: true },
+    funding_probability: { type: DataTypes.SMALLINT, allowNull: true },
+    next_action: { type: DataTypes.TEXT, allowNull: true },
+    next_action_due_on: { type: DataTypes.DATEONLY, allowNull: true },
+    account_score: { type: DataTypes.SMALLINT, allowNull: true },
+    attributes: { type: DataTypes.JSONB, allowNull: true },
   },
   {
     sequelize,
