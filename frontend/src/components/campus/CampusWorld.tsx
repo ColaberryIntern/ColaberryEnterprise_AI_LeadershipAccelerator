@@ -8,7 +8,6 @@ import type { ExplorerAccess } from './campusMap';
 import PersonCard from './PersonCard';
 import type { PersonCardTarget } from './CampusContext';
 import type { StaffDesk } from './campusPeopleApi';
-import { tokensFor } from './campusPeople';
 import { buildingName } from './campusMap';
 import type { Equipped } from './campusGear';
 import type { CameraApi, InsetsOf } from './useCampusCamera';
@@ -23,6 +22,11 @@ import { useWorldTour } from './useWorldTour';
 import type { WorldTour } from './useWorldTour';
 import { STATE_TAG } from './tourSteps';
 import { useMapStage, useDoorReveal, useReturnRecenter } from './useWorldStage';
+import { useMapPeople } from './useMapPeople';
+import TravelToast from './TravelToast';
+import type { Travel } from './useWalk';
+import type { Me } from './art/AvatarPin';
+import type { MapMoments } from './CampusWorldMap';
 import type { Framed } from './useWorldStage';
 
 /**
@@ -72,7 +76,7 @@ export interface CampusWorldProps {
   /** C11b: screen px the caller's panels cover (the campus home's concierge and top bar), for the camera's whole-campus view. */
   insets?: InsetsOf;
   /** C11b: walk to this building now, from outside the map (the home's pulse, plan and search). A new seq means a new walk. */
-  walkTo?: { id: BuildingId; seq: number; instant?: boolean } | null;
+  walkTo?: { id: BuildingId; seq: number; instant?: boolean; run?: boolean } | null;
   /** WP-1: a handle on the camera for the caller (the home's gate fly-out), where the avatar starts (the building you were last at),
    *  the first camera frame (the gate close-up), and a request to close every card and show the whole campus (a new seq each time). */
   cameraRef?: MutableRefObject<CameraApi | null>;
@@ -81,6 +85,11 @@ export interface CampusWorldProps {
   recenter?: number;
   /** C11b: told whenever a card opens or closes, with the building whose arrival panel is open (null for the others). */
   onCard?: (state: { open: boolean; building: BuildingId | null }) => void;
+  /** WP-3: you on the map (initials from your name, photo, level, account colour); a member's time badges and urgent building;
+   *  whether nobody else is on campus (the night look). */
+  me?: Me | null;
+  moments?: MapMoments;
+  quiet?: boolean;
 }
 
 const NO_LOOK: LookFacts = { points: null, rung: null, planMinutes: null };
@@ -107,22 +116,18 @@ export default function CampusWorld(p: CampusWorldProps): React.ReactElement {
   openRef.current = open;
   const closeCard = useCallback(() => { const id = openRef.current; setOpen(null); if (id) els.current.get(id)?.focus(); }, []);
 
-  const [walkRequest, setWalkRequest] = useState<{ id: BuildingId; seq: number; instant?: boolean } | null>(null);
-  const walk = useCallback((id: BuildingId, instant?: boolean) => setWalkRequest((w) => ({ id, seq: (w?.seq ?? 0) + 1, instant })), []);
+  const [walkRequest, setWalkRequest] = useState<{ id: BuildingId; seq: number; instant?: boolean; run?: boolean } | null>(null);
+  const walk = useCallback((id: BuildingId, instant?: boolean, run?: boolean) => setWalkRequest((w) => ({ id, seq: (w?.seq ?? 0) + 1, instant, run })), []);
+  const [travel, setTravel] = useState<Travel | null>(null);
   const t = useWorldTour(tour, closeCard, walk, revealBuilding);
   const onArrive = useCallback((id: BuildingId) => { revealBuilding(id); setOpen(id); }, [revealBuilding]);
-  const people = useMemo(() => {
-    if (!presence || presenceError || !onOpenPerson) return undefined;
-    const out: Record<string, ReturnType<typeof tokensFor>> = {};
-    for (const [id, a] of Object.entries(presence)) { const tk = tokensFor(a); if (tk.shown.length) out[id] = tk; }
-    return out;
-  }, [presence, presenceError, onOpenPerson]);
   const pickPerson = useCallback((pp: PersonCardTarget['person'], buildingId: BuildingId) => { setOpen(null); onOpenPerson?.({ person: pp, buildingId }); }, [onOpenPerson]);
+  const pp = useMapPeople({ presence, presenceError, audience, buildings, workplaceNames, staffDesks: p.staffDesks, onPerson: onOpenPerson ? pickPerson : undefined, walk });
 
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (e.key !== 'Escape') return;
     e.stopPropagation();
-    if (t.arrival) t.arrival.onEnd(); else if (panel) panel.onClose(); else if (personCard) onClosePerson?.(); else if (open) closeCard(); else p.onExit();
+    if (pp.peekOpen) pp.closePeek(); else if (t.arrival) t.arrival.onEnd(); else if (panel) panel.onClose(); else if (personCard) onClosePerson?.(); else if (open) closeCard(); else p.onExit();
   };
 
   // C11b staging: the camera, the desks and your initials for the map, and the door reveal (useWorldStage).
@@ -132,13 +137,13 @@ export default function CampusWorld(p: CampusWorldProps): React.ReactElement {
   const lastOutside = useRef(0);
   const { walkTo } = p;
   useEffect(() => {
-    if (walkTo && walkTo.seq !== lastOutside.current) { lastOutside.current = walkTo.seq; setOpen(null); walk(walkTo.id, walkTo.instant); }
+    if (walkTo && walkTo.seq !== lastOutside.current) { lastOutside.current = walkTo.seq; setOpen(null); walk(walkTo.id, walkTo.instant, walkTo.run); }
   }, [walkTo, walk]);
 
   // "Go somewhere else": close the card and put the caret in the campus search (the home's top bar, or a page banner).
   const elsewhere = useCallback(() => { setOpen(null); document.querySelector<HTMLInputElement>('.cm-whereto-input')?.focus(); }, []);
   const b = open && !panel && !personCard ? buildings.find((x) => x.id === open) : undefined;
-  const anyCard = !!tour || !!panel || !!personCard || !!b;
+  const anyCard = !!tour || !!panel || !!personCard || !!b; // the peek is a light popover: it neither moves the camera nor tucks the panel
   const cardBuilding = b ? b.id : null;
   // WP-1: the building a resize keeps framed (the open card's); every return to the campus recenters (useReturnRecenter).
   framedRef.current = b ? (b.kind === 'gate' ? { ...GATE, h: 50 } : { x: b.pos.x, y: b.pos.y, h: b.pos.h }) : null;
@@ -151,10 +156,13 @@ export default function CampusWorld(p: CampusWorldProps): React.ReactElement {
     <div className={`cm-world${anyCard ? ' has-card' : ''}`} onKeyDown={onKeyDown}>
       <CampusWorldMap buildings={buildings} accessOf={accessOf} workplaceNames={workplaceNames} reduceMotion={reduceMotion}
         initialTarget={p.initialTarget} onArrive={onArrive} buildingRef={registerEl} counts={presenceError ? undefined : counts}
-        people={people} onPickPerson={onOpenPerson ? pickPerson : undefined} walkRequest={walkRequest} onAir={p.onAir} plan={p.plan?.stops} ownGear={p.ownGear}
-        showOpen={audience === 'explorer'} camera={camera} desks={mapDesks} me={meInitials ? { initials: meInitials } : null} startAt={p.startAt}
-        tourBadges={tourBadges} dimExcept={cardBuilding} />
+        people={pp.people} yours={pp.yours} onPeek={pp.openPeek} presenceDown={presenceError && presence !== undefined} walkRequest={walkRequest} onTravel={setTravel}
+        onAir={p.onAir} plan={p.plan?.stops} ownGear={p.ownGear} showOpen={audience === 'explorer'} camera={camera} desks={mapDesks}
+        me={p.me ?? (meInitials ? { initials: meInitials } : null)} startAt={p.startAt} tourBadges={tourBadges} dimExcept={cardBuilding} moments={p.moments} quiet={p.quiet} />
       <CampusZoomControls apiRef={camApi} />
+      <TravelToast text={travel ? `${travel.verb} to ${buildingName(buildings.find((x) => x.id === travel.id) ?? buildings[0], workplaceNames)}…` : null}
+        onSkip={() => { if (travel) walk(travel.id, true); }} />
+      {pp.peek}
       {panel && panel.card}
       {!panel && personCard && (() => {
         const pb = buildings.find((x) => x.id === personCard.buildingId);

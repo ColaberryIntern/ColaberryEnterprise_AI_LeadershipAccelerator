@@ -43,9 +43,12 @@ describe('presence on the map', () => {
     expect(container.querySelector('.cm-bld[data-building="library"]')!.getAttribute('aria-label')).toContain('5 here now');
   });
 
-  it('no chips at all when presence failed (a stale number is worse than none)', async () => {
+  it('presence failed: every chip reads "—" (unknown, never a stale number or a zero) and opens no peek', async () => {
     await render(world(PRESENCE, true));
-    expect(container.querySelector('.cm-count')).toBeNull();
+    const chips = Array.from(container.querySelectorAll('.cm-count'));
+    expect(chips.length).toBeGreaterThan(0);
+    expect(chips.every((c) => c.textContent === '—' && c.getAttribute('class')!.includes('is-down') && !c.hasAttribute('data-count'))).toBe(true);
+    expect(container.querySelector('.cm-count.is-peekable')).toBeNull();
   });
 
   it('presence not wired (C2 behavior): no chips and no Who\'s here section', async () => {

@@ -1,0 +1,56 @@
+import { useEffect, useState } from 'react';
+import type { CampusAudience } from '../campusMap';
+import type { MapMoments } from '../CampusWorldMap';
+import { loadArrival, sessionStartMs, urgentAt } from '../campusFacts';
+import type { ArrivalData } from '../campusFacts';
+
+/**
+ * What a member's map says is next (WP-3; the prototype's moment badges and urgent ring), from real data only:
+ *  - the Classroom: "Live now" while the class is live, "Class in 12 min" (red, and the urgent ring) within 15 minutes, else
+ *    "Class in 1d 3h";
+ *  - the Events Hall: the next event, "In 15d" / "In 3h" / "Today".
+ * A source that fails or has nothing to say draws no badge. The clock ticks every 30 s so the ring starts on time. Members only, as
+ * in the prototype (Explorers keep their access badges).
+ */
+const TICK_MS = 30_000;
+
+/** "1d 3h" / "3h 20m" / "12 min" (null when it is in the past). */
+export function shortIn(ms: number, now: number): string | null {
+  const m = Math.round((ms - now) / 60000);
+  if (m < 0) return null;
+  if (m < 60) return `${m} min`;
+  const h = Math.floor(m / 60);
+  return h < 24 ? `${h}h ${m % 60}m` : `${Math.floor(h / 24)}d ${h % 24}h`;
+}
+
+export function momentsFrom(lecture: ArrivalData, amphi: ArrivalData, now: number): MapMoments {
+  const out: MapMoments = { urgent: null, badges: {} };
+  const s = lecture.session;
+  if (s) {
+    const start = sessionStartMs(s);
+    const left = start !== null ? shortIn(start, now) : null;
+    if (s.status === 'live') out.badges.lecture = { text: 'Live now', tone: 'hot' };
+    else if (left) out.badges.lecture = { text: `Class in ${left}`, tone: start! - now <= 15 * 60000 ? 'hot' : '' };
+    if (urgentAt('lecture', lecture, now)) out.urgent = 'lecture';
+  }
+  const e = amphi.event;
+  if (e) {
+    const m = Math.round((new Date(e.starts_at).getTime() - now) / 60000);
+    if (m >= 0) out.badges.amphi = { text: m >= 1440 ? `In ${Math.floor(m / 1440)}d` : m >= 60 ? `In ${Math.floor(m / 60)}h` : 'Today', tone: '' };
+  }
+  return out;
+}
+
+export function useMapMoments(audience: CampusAudience, active: boolean): MapMoments | undefined {
+  const [data, setData] = useState<{ lecture: ArrivalData; amphi: ArrivalData } | null>(null);
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!active || audience !== 'member') return undefined;
+    let alive = true;
+    const load = () => Promise.all([loadArrival('lecture', audience), loadArrival('amphi', audience)]).then(([lecture, amphi]) => { if (alive) setData({ lecture, amphi }); });
+    load();
+    const t = window.setInterval(() => { setNow(Date.now()); load(); }, TICK_MS); // facts are cached a minute (campusFacts)
+    return () => { alive = false; window.clearInterval(t); };
+  }, [audience, active]);
+  return data ? momentsFrom(data.lecture, data.amphi, now) : undefined;
+}

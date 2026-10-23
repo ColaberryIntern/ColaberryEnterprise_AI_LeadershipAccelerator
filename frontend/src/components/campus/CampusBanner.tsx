@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
-import CampusWorldMap from './CampusWorldMap';
+import CampusMiniMap from './CampusMiniMap';
 import WhereTo from './WhereTo';
 import { useCampus } from './CampusContext';
 import { useCampusView } from './useCampusView';
@@ -8,7 +8,6 @@ import { trailFor } from './campusTrail';
 import { shouldStepOutside } from './campusEsc';
 import CampusLive from './CampusLive';
 import CampusRail from './CampusRail';
-import { useCampusOnAir } from './campusOnAir';
 import { nextStop } from './campusPlan';
 import type { BuildingId } from './campusMap';
 import './campus.css';
@@ -61,9 +60,8 @@ function NextStepsDrawer(): React.ReactElement {
 }
 
 export default function CampusBanner({ alwaysSteps = false }: { alwaysSteps?: boolean }): React.ReactElement {
-  const { settings, presence, presenceError, layer, openMap, stepOutside, enterThroughDoor, planStops } = useCampus();
-  const { buildings, accessOf, isExplorer } = useCampusView();
-  const { buildings: onAir } = useCampusOnAir();
+  const { settings, layer, openMap, stepOutside, enterThroughDoor, planStops } = useCampus();
+  const { buildings, isExplorer } = useCampusView();
   const { pathname } = useLocation();
   const crumbs = trailFor(pathname, buildings, settings.workplaceNames);
   const here = (crumbs[1]?.buildingId ?? null) as BuildingId | null;
@@ -77,15 +75,13 @@ export default function CampusBanner({ alwaysSteps = false }: { alwaysSteps?: bo
   // C8: Next = the first unfinished plan step not in this building (campusPlan). Absent when there is no plan.
   const next = planStops ? nextStop(planStops, here) : null;
 
-  const counts: Record<string, number> = {};
-  if (presence && !presenceError) for (const [id, a] of Object.entries(presence)) counts[id] = a.count;
 
   return (
     <div className={`cm-banner cm-pagebar${alwaysSteps ? ' has-steps' : ''}`} data-testid="cm-banner">
       <button type="button" className="cm-banner-mini" onClick={() => openMap(here ?? undefined)} aria-label="Open the campus map">
         <span aria-hidden="true" className="cm-banner-mini-map">
-          <CampusWorldMap buildings={buildings} accessOf={accessOf} workplaceNames={settings.workplaceNames}
-            reduceMotion compact onArrive={() => undefined} counts={counts} onAir={onAir} />
+          {/* WP-3: the prototype's schematic tile (miniMapSVG): grey blocks, this building in its colour, a red pin */}
+          <CampusMiniMap variant="tile" buildings={buildings} here={here} workplaceNames={settings.workplaceNames} reduceMotion={settings.reduceMotion} />
         </span>
       </button>
       <nav className="cm-trail" aria-label="Where you are on campus">

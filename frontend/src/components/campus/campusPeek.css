@@ -1,0 +1,35 @@
+/* ============================================================
+   WP-3: the peek (prototype .pcard + .peek-row, opened from a people chip) and the travel toast (prototype .tt, "Walking to X…
+   Skip"). Colors: campusArtTokens.css only.
+   ============================================================ */
+@import './campusArtTokens.css';
+
+.cm-peek{position:fixed;z-index:29;width:300px;background:var(--cm-art-paper);color:var(--cm-art-ink);border-radius:18px;box-shadow:var(--cm-art-shadow);
+  border:1px solid var(--cm-art-line);padding:16px;font-family:'DM Sans',var(--sans),system-ui,sans-serif;animation:cm-pop .25s;outline:none}
+@keyframes cm-pop{from{transform:scale(.94);opacity:0}}
+.cm-peek-x{position:absolute;top:10px;right:10px;border:0;background:transparent;font-size:18px;color:var(--cm-art-muted);cursor:pointer;min-width:28px;min-height:28px}
+.cm-peek-name{font-weight:800;font-size:17px;line-height:1.2;margin-bottom:2px}
+.cm-peek-sub{font-size:12px;color:var(--cm-art-muted);margin-top:2px}
+.cm-peek-rows{margin-top:8px;max-height:260px;overflow:auto}
+.cm-peek-row{display:flex;align-items:center;gap:10px;padding:8px 0;border:0;border-bottom:1px solid var(--cm-art-line);background:none;width:100%;text-align:left;color:var(--cm-art-ink);font:inherit}
+button.cm-peek-row{cursor:pointer}
+.cm-peek-row:last-child{border-bottom:0}
+.cm-peek-row .av{width:30px;height:30px;border-radius:50%;background:var(--cm-art-library);color:var(--cm-art-on-dark);display:grid;place-items:center;font-size:10px;font-weight:800;overflow:hidden;flex:none}
+.cm-peek-row .av img{width:100%;height:100%;object-fit:cover}
+.cm-peek-row.is-staff .av{background:var(--cm-art-help-hover);box-shadow:0 0 0 2px var(--cm-art-white),0 0 0 3.5px var(--cm-art-gold)}
+.cm-peek-row.is-anon .av{background:var(--cm-art-anon)}
+.cm-peek-row div{flex:1;min-width:0;font-size:13px}
+.cm-peek-row small{display:block;color:var(--cm-art-muted);font-size:11px}
+.cm-peek-tag{background:var(--cm-art-gold);color:var(--cm-art-on-dark);border-radius:4px;padding:1px 5px;font-size:9px;font-weight:800;letter-spacing:.06em}
+.cm-peek-note{color:var(--cm-art-muted);font-size:13px;padding:6px 0}
+.cm-peek-walk{margin-top:12px;width:100%;border:0;border-radius:12px;padding:10px;font-weight:700;font-size:13px;background:var(--cm-art-red);color:var(--cm-art-on-dark);cursor:pointer}
+.cm-peek-walk:hover{background:var(--cm-art-red-d)}
+.cm-peek button:focus-visible{outline:3px solid var(--cm-art-red);outline-offset:2px}
+
+.cm-tt{position:fixed;top:126px;left:50%;transform:translate(-50%,-20px);opacity:0;z-index:24;background:var(--cm-art-pic-ink);color:var(--cm-art-on-dark);
+  border-radius:999px;padding:8px 8px 8px 16px;font:13px 'DM Sans',var(--sans),system-ui,sans-serif;display:flex;align-items:center;gap:10px;transition:.3s;pointer-events:none}
+.cm-tt:empty{display:none}
+.cm-tt.is-on{opacity:1;transform:translate(-50%,0);pointer-events:auto}
+.cm-tt button{border:0;background:var(--cm-art-on-dark-soft);color:var(--cm-art-on-dark);border-radius:999px;padding:5px 10px;font-size:12px;font-weight:700;cursor:pointer}
+.cm-tt button:focus-visible{outline:3px solid var(--cm-art-on-dark);outline-offset:2px}
+@media (max-width:760px){ .cm-tt{top:164px} }

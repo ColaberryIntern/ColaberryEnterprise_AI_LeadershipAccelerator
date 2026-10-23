@@ -17,7 +17,7 @@ jest.mock('../campusPeopleApi', () => ({
 // eslint-disable-next-line import/first
 import PersonCard from '../PersonCard';
 // eslint-disable-next-line import/first
-import PersonTokens from '../PersonToken';
+import PeekCard from '../PeekCard';
 // eslint-disable-next-line import/first
 import WhoIsHere from '../WhoIsHere';
 // eslint-disable-next-line import/first
@@ -51,7 +51,7 @@ let unhost: (() => void) | null = null;
 beforeEach(() => { mockWave = async () => ({ sent: true, reason: 'sent' }); mockWaveCalls = []; });
 afterEach(() => { if (root) act(() => root.unmount()); container?.remove(); root = undefined as unknown as Root; unhost?.(); unhost = null; });
 const q = (sel: string) => container.querySelector(sel);
-const click = async (sel: string) => { await act(async () => { (q(sel) as HTMLElement).click(); }); };
+const click = async (sel: string) => { await act(async () => { q(sel)!.dispatchEvent(new MouseEvent("click", { bubbles: true })); }); }; // an SVG chip has no .click()
 
 describe('pure helpers', () => {
   it('tokensFor lists named people only, capped at 3, with the rest as +N', () => {
@@ -84,18 +84,18 @@ describe('dm host', () => {
   });
 });
 
-describe('PersonTokens (no generated faces)', () => {
-  const lib = campusBuildingsFor('member').find((b) => b.id === 'library')!;
-  it('initials when there is no photo, the uploaded photo otherwise, and +N for the rest', async () => {
+describe('the peek (WP-3, in place of the person tokens; no generated faces)', () => {
+  it('initials when there is no photo, the uploaded photo otherwise, private people as Learner; a press picks that person', async () => {
     const picked: string[] = [];
-    await render(<svg><PersonTokens b={lib} shown={[mia, ana]} more={4} maxY={700} onPick={(p) => picked.push(p.enrollment_id)} /></svg>);
-    const toks = container.querySelectorAll('.cm-token');
-    expect(toks).toHaveLength(2);
-    expect(toks[0].querySelector('text')?.textContent).toBe('ML');
-    expect(toks[0].querySelector('image')).toBeNull();
-    expect(toks[1].querySelector('image')?.getAttribute('href')).toBe(ana.avatar_url);
-    expect(q('[data-testid="cm-tokens-more-library"]')?.textContent).toBe('+4');
-    await act(async () => { (toks[1] as unknown as HTMLElement).dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+    await render(<PeekCard buildingName="Library" count={3} people={[mia, ana, { anonymous: true }]} x={100} y={100} desks={[]} word="classmates"
+      onPerson={(p) => picked.push(p.enrollment_id)} onWalk={() => undefined} onClose={() => undefined} />);
+    const rows = container.querySelectorAll('[data-testid="cm-peek-person"]');
+    expect(rows).toHaveLength(2);
+    expect(rows[0].querySelector('.av')?.textContent).toBe('ML');
+    expect(rows[0].querySelector('img')).toBeNull();
+    expect(rows[1].querySelector('img')?.getAttribute('src')).toBe(ana.avatar_url);
+    expect(container.querySelectorAll('[data-testid="cm-peek-anon"]')).toHaveLength(1);
+    await act(async () => { (rows[1] as HTMLElement).dispatchEvent(new MouseEvent('click', { bubbles: true })); });
     expect(picked).toEqual(['e-ana']);
   });
 });
@@ -176,7 +176,7 @@ describe('PersonCard', () => {
   });
 });
 
-describe('on the map: token -> card -> Walk over', () => {
+describe('on the map: chip -> peek -> card -> Walk over', () => {
   function Harness(): React.ReactElement {
     const [pc, setPc] = React.useState<PersonCardTarget | null>(null);
     return (
@@ -186,10 +186,10 @@ describe('on the map: token -> card -> Walk over', () => {
         staffDesks={[]} personCard={pc} onOpenPerson={setPc} onClosePerson={() => setPc(null)} />
     );
   }
-  it('a token opens that person\'s card; Walk over closes it and walks to their building, whose card opens', async () => {
+  it('a name in the peek opens that person\'s card; Walk over closes it and walks to their building, whose card opens', async () => {
     await render(<Harness />);
-    const tok = q('[data-testid="cm-tokens-library"] .cm-token') as unknown as HTMLElement;
-    await act(async () => { tok.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+    await click('[data-testid="cm-count-library"]');
+    await click('[data-testid="cm-peek-person"]');
     expect(q('[data-testid="cm-person-card"]')?.getAttribute('data-enrollment')).toBe('e-mia');
     expect(q('[data-testid="cm-card"]')).toBeNull();
     await click('[data-testid="cm-walk-over"]');
@@ -197,9 +197,11 @@ describe('on the map: token -> card -> Walk over', () => {
     expect(q('[data-testid="cm-card"]')?.getAttribute('data-building')).toBe('library');
   });
 
-  it('the viewer is never drawn (the server never lists them) and anonymous people get no token', async () => {
+  it('the viewer is never listed (the server never lists them) and anonymous people stay unnamed', async () => {
     await render(<Harness />);
-    expect(container.querySelectorAll('[data-testid="cm-tokens-library"] .cm-token')).toHaveLength(1);
+    await click('[data-testid="cm-count-library"]');
+    expect(container.querySelectorAll('[data-testid="cm-peek-person"]')).toHaveLength(1);
+    expect(container.querySelectorAll('[data-testid="cm-peek-anon"]')).toHaveLength(1);
   });
 });
 

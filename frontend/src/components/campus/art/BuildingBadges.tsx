@@ -12,6 +12,11 @@ import '../../../styles/rungTones.css';
  *    (OPEN in green for Explorers, PREVIEW, DEMO, or a lock), never an invented event;
  *  - the stop badge, centered above the roof: STOP n for today's plan route (the next stop green), as the prototype's tour.
  * All three are aria-hidden: the building's own aria-label already says on air, the access and the head count.
+ *
+ * WP-3: a press on the people chip opens the peek (who is in there; pointer only: the arrival panel's Who's here is the keyboard
+ * way to the same people); while presence is down every chip reads "—" (unknown, not zero); a partner sees "N · M yours" with their
+ * teammates' dots in teal; a member's badge slot can carry what is next there ("Class in 1d 3h"), and the urgent ring pulses on a
+ * building whose class starts within 15 minutes.
  */
 type Kind = CampusBuilding['kind'];
 const chipY = (kind: Kind, h: number) => (kind === 'office' ? -34 : kind === 'amphi' ? -30 : -h + 14);
@@ -19,33 +24,44 @@ const badgeY = (kind: Kind, h: number) => (kind === 'amphi' ? -30 : kind === 'ga
 /** Compact maps are drawn at about a fifth of their size: their markers are scaled up to stay readable. */
 const COMPACT_SCALE = 3.2;
 
-export function PeopleChip({ b, count, shown = [], compact }: { b: CampusBuilding; count: number; shown?: CampusPerson[]; compact: boolean }): React.ReactElement {
+export function PeopleChip({ b, count, shown = [], compact, yours = 0, down = false, onPeek }: {
+  b: CampusBuilding; count: number; shown?: CampusPerson[]; compact: boolean; yours?: number; down?: boolean;
+  onPeek?: (e: React.MouseEvent) => void;
+}): React.ReactElement {
   const hw = b.kind === 'gate' ? 40 : b.pos.w / 2;
-  const dots = compact ? [] : shown.slice(0, 3);
-  const txt = String(count);
-  const wd = 14 + dots.length * 6 + txt.length * 5.6;
+  const dots = compact || down ? [] : shown.slice(0, 3);
+  const txt = down ? '—' : yours > 0 ? `${count} · ${yours} yours` : String(count);
+  const wd = down ? 24 : 14 + dots.length * 6 + txt.length * 5.6;
+  const peek = onPeek && !down ? (e: React.MouseEvent) => { e.stopPropagation(); onPeek(e); } : undefined;
   return (
-    <g className="cm-count" data-count={count} aria-hidden="true"
-      transform={`translate(${-hw - 6} ${b.kind === 'gate' ? -40 : chipY(b.kind, b.pos.h)})${compact ? ` scale(${COMPACT_SCALE})` : ''}`}>
+    <g className={`cm-count${down ? ' is-down' : ''}${peek ? ' is-peekable' : ''}`} data-count={down ? undefined : count} aria-hidden="true" data-testid={`cm-count-${b.id}`}
+      onClick={peek} transform={`translate(${-hw - 6} ${b.kind === 'gate' ? -40 : chipY(b.kind, b.pos.h)})${compact ? ` scale(${COMPACT_SCALE})` : ''}`}>
       <rect x={-wd} y={-9} width={wd} height={18} rx={9} />
       {dots.map((p, i) => (
-        <circle key={p.enrollment_id} className={`cm-count-dot${p.rung_name ? ` rung-${rungTone(p.rung_name)}` : ''}`} cx={-wd + 9 + i * 6} cy={0} r={4.2} />
+        <circle key={p.enrollment_id} className={`cm-count-dot${yours > 0 ? ' is-team' : p.rung_name ? ` rung-${rungTone(p.rung_name)}` : ''}`} cx={-wd + 9 + i * 6} cy={0} r={4.2} />
       ))}
-      <text x={-6} y={3.4} textAnchor="end">{txt}</text>
+      <text x={down ? -12 : -6} y={3.4} textAnchor={down ? 'middle' : 'end'}>{txt}</text>
     </g>
   );
 }
 
 /** The status badge's words and tone; null = no badge. OPEN is shown only where the Explorer view asks for it. */
-export function statusOf(access: ExplorerAccess, onAir: boolean, showOpen: boolean): { text: string; tone: '' | 'hot' | 'live' } | null {
+export type BadgeStatus = { text: string; tone: '' | 'hot' | 'live' };
+export function statusOf(access: ExplorerAccess, onAir: boolean, showOpen: boolean, moment?: BadgeStatus | null): BadgeStatus | null {
   if (onAir) return { text: 'ON AIR', tone: 'hot' };
-  if (access === 'open') return showOpen ? { text: 'OPEN', tone: 'live' } : null;
+  if (access === 'open') return moment ?? (showOpen ? { text: 'OPEN', tone: 'live' } : null);
   if (access === 'preview') return { text: 'PREVIEW', tone: '' };
   if (access === 'demo') return { text: 'DEMO', tone: '' };
   return { text: '\u{1F512}', tone: '' };
 }
 
 const badgeWidth = (text: string) => text.length * 5.2 + 16;
+
+/** WP-3: the urgent ring (the prototype's .ping): a red circle round the building that pulses while something starts within 15
+ *  minutes there (CSS animates it only on .cm-bld.is-urgent). */
+export function UrgentPing({ b }: { b: CampusBuilding }): React.ReactElement {
+  return <circle className="cm-ping" cx={0} cy={-b.pos.h / 2} r={Math.max(b.pos.w, b.pos.h) * 0.62} aria-hidden="true" />;
+}
 
 export function StatusBadge({ b, status, compact }: { b: CampusBuilding; status: { text: string; tone: string }; compact: boolean }): React.ReactElement {
   const hw = b.kind === 'gate' ? 40 : b.pos.w / 2;

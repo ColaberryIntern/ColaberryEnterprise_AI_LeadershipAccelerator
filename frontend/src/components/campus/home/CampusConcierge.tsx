@@ -23,6 +23,8 @@ import { greetingFor } from './useHomeFacts';
 export interface ConciergeProps {
   /** A card is open on the map: on a phone the panel becomes its peek strip (never hidden). */
   cardOpen?: boolean;
+  /** WP-3: the gate is still up: the panel waits (laid out, invisible) and slides in when it is revealed. */
+  waiting?: boolean;
   audience: CampusAudience;
   firstName: string;
   hereName: string;
@@ -115,7 +117,7 @@ export default function CampusConcierge(p: ConciergeProps): React.ReactElement {
   const tourOffer = <TourOffer audience={audience} stops={p.tourStops} buildings={buildings} workplaceNames={workplaceNames} running={p.touring}
     paused={p.tourProgress.paused} toured={p.tourProgress.toured} onStart={p.onTour} onEnd={p.onEndTour} />;
   return (
-    <aside className={`cm-cc${p.cardOpen ? ' has-card' : ''}${expanded ? ' is-expanded' : ''}`} aria-label="Campus concierge" data-testid="cm-concierge">
+    <aside className={`cm-cc${p.cardOpen ? ' has-card' : ''}${p.waiting ? ' is-waiting' : ''}${expanded ? ' is-expanded' : ''}`} aria-label="Campus concierge" data-testid="cm-concierge">
       {/* phones, while a card is open: the peek strip (CSS shows it only there) */}
       <div className="cm-cc-peek" data-testid="cm-cc-peek">
         <button type="button" className="cm-cc-handle" onClick={() => setExpanded((v) => !v)} aria-expanded={expanded}

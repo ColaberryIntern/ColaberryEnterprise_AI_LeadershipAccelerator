@@ -14,7 +14,9 @@ import '../campusGate.css';
  * level and points come from the profile and the campus look; a fact we do not have is left off the card.
  */
 export const GATE_SEEN_KEY = 'colaberry.campus.gate.seen';
-const OPEN_MS = 1500;
+/** WP-3, the prototype's enter() timeline: the doors swing (1.5 s); at 1.3 s the gate starts its 0.7 s fade; it is gone at 2 s. */
+export const FADE_AT_MS = 1300;
+export const OPEN_MS = 2000;
 
 /** Today's date in Central time, YYYY-MM-DD (the portal's day boundary). */
 export function centralDay(now: Date): string {
@@ -47,15 +49,21 @@ export interface GateProps {
 
 export default function CampusGate(p: GateProps): React.ReactElement {
   const [opening, setOpening] = useState(false);
+  const [done, setDone] = useState(false);
   const enterBtn = useRef<HTMLButtonElement | null>(null);
   const timer = useRef<number | null>(null);
-  useEffect(() => { enterBtn.current?.focus(); return () => { if (timer.current !== null) window.clearTimeout(timer.current); }; }, []);
+  const fade = useRef<number | null>(null);
+  useEffect(() => {
+    enterBtn.current?.focus();
+    return () => { if (timer.current !== null) window.clearTimeout(timer.current); if (fade.current !== null) window.clearTimeout(fade.current); };
+  }, []);
   const explorer = p.audience === 'explorer';
   const go = (tour: boolean) => {
     markGateSeen(p.now);
     if (p.reduceMotion) { p.onEnter(tour); return; }
     setOpening(true);
     p.onOpening?.();
+    fade.current = window.setTimeout(() => setDone(true), FADE_AT_MS);
     timer.current = window.setTimeout(() => p.onEnter(tour), OPEN_MS);
   };
   const greeting = `${greetingFor(p.now.getHours())}${p.firstName ? `, ${p.firstName}` : ''}.`;
@@ -73,7 +81,7 @@ export default function CampusGate(p: GateProps): React.ReactElement {
   const arch = explorer ? `${house} · Visitor entrance` : p.audience === 'staff' ? 'Colaberry · Staff entrance' : p.audience === 'business' ? `${house} · Partner entrance`
     : p.workplace ? 'Colaberry Works · HQ Lobby' : 'Colaberry · AI Systems Architect Accelerator';
   return (
-    <div className={`cm-gate${opening ? ' is-opening' : ''}${p.workplace ? ' is-work' : ''}${p.reduceMotion ? ' is-reduced' : ''}`} role="dialog" aria-modal="true"
+    <div className={`cm-gate${opening ? ' is-opening' : ''}${done ? ' is-done' : ''}${p.workplace ? ' is-work' : ''}${p.reduceMotion ? ' is-reduced' : ''}`} role="dialog" aria-modal="true"
       aria-labelledby="cm-gate-greeting" data-testid="cm-gate"
       onKeyDown={(e) => { if (e.key === 'Escape') { e.preventDefault(); go(false); } else trapTab(e); }}>
       <div className="sun" aria-hidden="true" />

@@ -1,16 +1,5 @@
-/* Colaberry Campus C5: person tokens, person card, AI staff desks, the new-message toast. Shell tokens only, no hex. */
+/* Colaberry Campus C5: person card, AI staff desks, the new-message toast. Shell tokens only, no hex. */
 
-/* Tokens beside a building on the full map. */
-.cm-token{cursor:pointer;outline:none}
-.cm-token-ring{fill:var(--surface);stroke:var(--berry);stroke-width:2}
-.cm-token-face{fill:var(--sunken)}
-.cm-token-initials{font:700 9px var(--sans);fill:var(--strong);pointer-events:none}
-.cm-token:focus-visible .cm-token-ring,.cm-token:hover .cm-token-ring{stroke:var(--strong);stroke-width:3}
-/* C11: the target and the focus ring. The hit circle takes the clicks between and around the small drawn token. */
-.cm-token-hit{fill:transparent;pointer-events:all}
-.cm-token-focus{fill:none;stroke:none;pointer-events:none}
-.cm-token:focus-visible .cm-token-focus{stroke:var(--berry);stroke-width:3}
-.cm-token-more{font:700 11px var(--sans);fill:var(--muted)}
 
 /* Who's here chips that open a card. */
 .cm-person-btn{display:flex;align-items:center;gap:8px;background:none;border:none;padding:0;margin:0;font:inherit;color:inherit;cursor:pointer}

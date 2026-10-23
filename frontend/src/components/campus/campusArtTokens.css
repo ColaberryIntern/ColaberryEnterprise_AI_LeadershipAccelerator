@@ -71,6 +71,10 @@
   --cm-art-tag-demo-bg:#e6eef6; --cm-art-tag-demo:#1f4f7a; --cm-art-tag-lock-bg:#fff3d6; --cm-art-tag-lock:#7a5b00;
   --cm-art-tip-edge:#e3d6c2; --cm-art-tour-nav:#f7f3ec; --cm-art-dot:#d8d0c2; --cm-art-dot-done:#9ab8a6; --cm-art-dot-on:#1f4f7a;
   --cm-art-btn-line-bg:#f3f0ea; --cm-art-btn-line-edge:#e3dccf;
+  /* WP-3: walking (footsteps), the account colours of your pin (staff dark green), a partner's teammates (teal), the "—" chip, private
+     rows in the peek, and the mini maps (grey blocks, the hub lawn) */
+  --cm-art-step-dot:#b9a684; --cm-art-staff-pin:#0f5132; --cm-art-team:#14b8a6; --cm-art-chip-down:#f3efe8; --cm-art-anon:#bdb5a8;
+  --cm-art-mini-block:#c9c2b4; --cm-art-mini-hub:#cfe0c0; --cm-art-on-dark-soft:rgba(255,255,255,.16);
 }
 [data-theme="dark"]{
   --cm-art-paper:#1e1e1e; --cm-art-ink:#f4f4f4; --cm-art-muted:#b5ad9f; --cm-art-line:#3a352d;

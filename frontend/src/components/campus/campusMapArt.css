@@ -92,3 +92,37 @@
 .cm-bld.is-dim{opacity:.45;transition:opacity .3s}
 .cm-map.is-reduced .cm-plan-path{animation:none}
 .cm-map.is-reduced .cm-bld.is-dim{transition:none}
+
+/* ---- WP-3: walking (prototype .route-line, .step, .bld.hl, #avatar.running), the click area, the urgent ring (.ping), the arcade's
+   neon (.neon), Explorer-locked buildings desaturated (.bld.locked), your pin's colour and level, the people chip's peek and "—",
+   and the quiet-hours look (#map.quiet) ---- */
+.cm-steps .cm-step{fill:var(--cm-art-step-dot);animation:cm-step-fade 1.6s forwards;pointer-events:none}
+@keyframes cm-step-fade{to{opacity:0}}
+.cm-route-line{pointer-events:none}
+.cm-bld.is-hl .body-g{transform:translateY(-4px)}
+.cm-bld.is-hl .lbl rect{fill:var(--cm-art-pic-ink);stroke:var(--cm-art-pic-ink)}
+.cm-bld.is-hl .lbl text{fill:var(--cm-art-white)}
+.cm-hit-area{cursor:pointer}
+.cm-ping{fill:none;stroke:var(--cm-art-red);stroke-width:3;opacity:0;transform-box:fill-box;transform-origin:center;pointer-events:none}
+.cm-bld.is-urgent .cm-ping{animation:cm-ping 1.6s ease-out infinite}
+@keyframes cm-ping{0%{opacity:.9;transform:scale(.6)}100%{opacity:0;transform:scale(1.5)}}
+.cm-map .neon{animation:cm-neon 2.4s ease-in-out infinite}
+.cm-map .neon-t{filter:drop-shadow(0 0 4px var(--cm-art-neon-1))}
+@keyframes cm-neon{50%{stroke:var(--cm-art-neon-2)}}
+.cm-bld.is-locked .body-g{opacity:1;filter:saturate(.35) brightness(1.06)}
+.cm-bld.is-locked:hover .body-g{filter:saturate(.8)}
+.cm-map.is-evening .cm-bld.is-locked:not(.onair) .body-g{filter:brightness(.7) saturate(.3)}
+.cm-avatar.is-explorer .cm-pin{fill:var(--cm-art-explorer)}
+.cm-avatar.is-business .cm-pin{fill:var(--cm-art-business)}
+.cm-avatar.is-staff .cm-pin{fill:var(--cm-art-staff-pin)}
+.cm-avatar.is-running .bob{animation:cm-bob .18s ease-in-out infinite alternate}
+.cm-pin-lv rect{fill:var(--cm-art-level);stroke:var(--cm-art-level-ink);stroke-width:.8}
+.cm-pin-lv text{font:900 6.2px 'DM Sans',var(--sans),sans-serif;fill:var(--cm-art-level-ink)}
+.cm-count.is-peekable{cursor:pointer}
+.cm-count.is-peekable:hover rect{stroke:var(--cm-art-pic-ink)}
+.cm-count.is-down rect{fill:var(--cm-art-chip-down);stroke:var(--cm-art-wall-edge)}
+.cm-count.is-down text{fill:var(--cm-art-pic-muted)}
+.cm-count-dot.is-team{fill:var(--cm-art-team)}
+.cm-map.is-quiet .dimmable{filter:brightness(.55) saturate(.7) hue-rotate(-15deg)}
+.cm-map.is-quiet .win{fill:var(--cm-art-lit)}
+.cm-map.is-reduced .cm-step,.cm-map.is-reduced .cm-ping,.cm-map.is-reduced .neon,.cm-map.is-reduced .cm-avatar .bob{animation:none}
