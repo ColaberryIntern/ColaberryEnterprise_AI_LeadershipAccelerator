@@ -128,7 +128,7 @@ export default function CampusConcierge(p: ConciergeProps): React.ReactElement {
       <h1 data-testid="cm-cc-greeting">{greetLine(audience, p.firstName, p.now.getHours(), quiet)}</h1>
       <p className="cm-lead" data-testid="cm-cc-lead">{lead}</p>
       <Pulse p={p} />
-      {audience !== 'business' && <HelpDesk desks={desks} workplace={wp} onWalk={p.onWalk} />}
+      {audience !== 'business' && <HelpDesk desks={desks} workplace={wp} />}
 
       <UpNext stops={p.stops} buildings={buildings} workplaceNames={wp} hereId={p.hereId ?? null} onWalk={p.onWalk} onOpen={p.onOpen} />
       <HereAt building={hereB} workplaceNames={wp} stops={p.stops} tourStop={tourHere} onOpen={p.onOpen} />

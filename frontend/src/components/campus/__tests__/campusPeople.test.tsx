@@ -15,7 +15,7 @@ jest.mock('../campusPeopleApi', () => ({
 }));
 
 // eslint-disable-next-line import/first
-import PersonCard from '../PersonCard';
+import PersonPop from '../PersonPop';
 // eslint-disable-next-line import/first
 import PeekCard from '../PeekCard';
 // eslint-disable-next-line import/first
@@ -112,16 +112,16 @@ describe('Who\'s here chips', () => {
   });
 });
 
-describe('PersonCard', () => {
-  const card = (p: CampusPerson, extra: Partial<React.ComponentProps<typeof PersonCard>> = {}) =>
-    <PersonCard person={p} buildingLabel="Library" onClose={() => undefined} onWalkOver={() => undefined} {...extra} />;
+describe('the person card (WP-5: a popover where you pressed)', () => {
+  const card = (p: CampusPerson, extra: Partial<React.ComponentProps<typeof PersonPop>> = {}) =>
+    <PersonPop person={p} place="Library" here={false} audience="member" onClose={() => undefined} onWalkOver={() => undefined} {...extra} />;
 
   it('cannot message: Message and Wave are disabled with the reason, never hidden', async () => {
     await render(card(ana));
     expect(q('[data-testid="cm-message-blocked"]')).not.toBeNull();
     expect(q('[data-testid="cm-message"]')).toBeNull();
     expect((q('[data-testid="cm-wave"]') as HTMLButtonElement).disabled).toBe(true);
-    expect(q('[data-testid="cm-message-note"]')?.textContent).toBe('Messages are open to people in your cohort.');
+    expect(q('[data-testid="cm-message-note"]')?.textContent).toBe('You can only message people in your cohort. Walk over to their room.');
     await click('[data-testid="cm-wave"]');
     expect(mockWaveCalls).toEqual([]);
   });

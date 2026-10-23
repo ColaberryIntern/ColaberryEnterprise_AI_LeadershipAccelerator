@@ -109,14 +109,19 @@ async function runAudience(browser, audience, jwt) {
     });
 
     await step(audience, 'the staff desks this audience should see', async () => {
+      // WP-5: the staff are chips at the head of Who's here; a press opens their card (a popover, Q7)
       await page.click('.cm-home g[data-building="commons"]');
-      await page.waitForSelector('[data-testid="cm-desk-reese"]', { timeout: 15_000 });
-      await page.keyboard.press('Escape'); // closes the card, not the map
+      await page.click('[data-testid="cm-who-staff-reese"]', { timeout: 15_000 });
+      await page.waitForSelector('[data-testid="cm-staff-card"] [data-testid="cm-desk-reese"]', { timeout: 15_000 });
+      await page.keyboard.press('Escape'); // closes the staff card
+      await page.keyboard.press('Escape'); // then the building card, not the map
       const hasGate = await page.locator('.cm-home g[data-building="gate"]').count() > 0;
       must(hasGate === (audience === 'explorer' || audience === 'staff'), `Main Gate shown=${hasGate}`);
       if (hasGate) {
         await page.click('.cm-home g[data-building="gate"]');
-        await page.waitForSelector('[data-testid="cm-desk-maya"]', { timeout: 15_000 });
+        await page.click('[data-testid="cm-who-staff-maya"]', { timeout: 15_000 });
+        await page.waitForSelector('[data-testid="cm-staff-card"] [data-testid="cm-desk-maya"]', { timeout: 15_000 });
+        await page.keyboard.press('Escape');
         await page.keyboard.press('Escape');
       }
     });

@@ -111,7 +111,8 @@ export interface CampusState {
   closeLocker: () => void;
 }
 
-export interface PersonCardTarget { person: CampusPerson; buildingId: BuildingId }
+/** WP-5: `at` is where it was pressed (the card opens there, the prototype's openCard). */
+export interface PersonCardTarget { person: CampusPerson; buildingId: BuildingId; at?: { x: number; y: number } }
 
 export type CampusLayer = 'none' | 'map' | 'list';
 export type MapHow = 'walk' | 'inside';

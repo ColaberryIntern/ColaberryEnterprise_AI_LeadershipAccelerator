@@ -1,0 +1,59 @@
+/* ============================================================
+   WP-5: the person, staff and partner cards as the prototype's popover (.pcard, .pc-*, .sp-kpis; D:510-531, 822, 585) and the
+   arrival card's Who's here chips (.who .p, .tag, .lv-chip, .more; D:292, 505-507, 820). Colors: campusArtTokens.css only.
+   ============================================================ */
+@import './campusArtTokens.css';
+
+.cm-pcard{position:fixed;z-index:29;width:300px;background:var(--cm-art-paper);color:var(--cm-art-ink);border-radius:18px;box-shadow:var(--cm-art-pop-shadow);
+  border:1px solid var(--cm-art-line);padding:16px;font-family:'DM Sans',var(--sans),system-ui,sans-serif;animation:cm-pc-pop .25s;outline:none;max-height:calc(100vh - 86px);overflow:auto}
+@keyframes cm-pc-pop{from{transform:scale(.94);opacity:0}}
+.cm-pc-x{position:absolute;top:10px;right:10px;border:0;background:transparent;font-size:18px;color:var(--cm-art-muted);cursor:pointer;min-width:28px;min-height:28px}
+.cm-pc-top{display:flex;gap:12px;align-items:center;padding-right:22px}
+.cm-pc-av{position:relative;width:52px;height:52px;border-radius:50%;background:var(--cm-art-library);color:var(--cm-art-on-dark);display:grid;place-items:center;
+  font-size:17px;font-weight:800;flex:none}
+.cm-pc-av img{width:100%;height:100%;border-radius:50%;object-fit:cover}
+.cm-pc-av.is-staff{box-shadow:0 0 0 3px var(--cm-art-white),0 0 0 5.5px var(--cm-art-gold)}
+.cm-pcard.is-team .cm-pc-av{box-shadow:0 0 0 3px var(--cm-art-white),0 0 0 5.5px var(--cm-art-team)}
+.cm-pc-on{position:absolute;right:0;bottom:0;width:13px;height:13px;border-radius:50%;background:var(--cm-art-online);border:2.5px solid var(--cm-art-paper)}
+.cm-pc-name{font-size:17px;font-weight:800;line-height:1.2;margin:0;outline:none}
+.cm-pc-tag{font-size:9px;font-weight:800;letter-spacing:.08em;background:var(--cm-art-gold);color:var(--cm-art-on-dark);border-radius:4px;padding:1px 5px;margin-left:2px;vertical-align:middle}
+.cm-pc-sub{font-size:12px;color:var(--cm-art-muted);margin-top:2px}
+.cm-pc-clout{display:flex;gap:6px;flex-wrap:wrap;align-items:center;font-size:12px;color:var(--cm-art-muted);margin-top:4px}
+.cm-lv-chip{background:var(--cm-art-level);color:var(--cm-art-level-ink);border-radius:999px;padding:1px 6px;font-size:10px;font-weight:900}
+.cm-pc-where{background:var(--cm-art-card);border:1px solid var(--cm-art-line);border-radius:12px;padding:10px 12px;font-size:13px;margin-top:12px}
+.cm-pc-muted{display:block;color:var(--cm-art-muted);margin-top:2px}
+.cm-pc-q{display:flex;flex-direction:column;gap:5px;margin-top:10px}
+.cm-pc-q button{border:1px dashed var(--cm-art-prompt-edge);background:var(--cm-art-prompt-bg);color:var(--cm-art-ink);border-radius:10px;padding:8px 10px;text-align:left;font-size:13px;cursor:pointer}
+.cm-pc-q button:hover{border-style:solid;border-color:var(--cm-art-prompt-hover)}
+.cm-pc-acts{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:12px}
+.cm-pc-acts>*{border:1px solid var(--cm-art-line);background:var(--cm-art-card);color:var(--cm-art-ink);border-radius:12px;padding:10px;font-size:13px;font-weight:700;
+  text-align:center;text-decoration:none;cursor:pointer;font-family:inherit}
+.cm-pc-acts>*:hover{border-color:var(--cm-art-ink)}
+.cm-pc-acts .is-pri{grid-column:1 / -1;background:var(--cm-art-red);border-color:var(--cm-art-red);color:var(--cm-art-on-dark)}
+.cm-pc-acts .is-pri:hover{background:var(--cm-art-red-d)}
+.cm-pc-acts .is-pri.is-navy{background:var(--cm-art-business);border-color:var(--cm-art-business)}
+.cm-pc-acts .is-disabled,.cm-pc-acts :disabled{opacity:.45;cursor:not-allowed}
+.cm-pc-note{font-size:12px;color:var(--cm-art-muted);margin:10px 0 0}
+.cm-pcard button:focus-visible,.cm-pcard a:focus-visible{outline:3px solid var(--cm-art-red);outline-offset:2px}
+.cm-sp-kpis{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0 0}
+.cm-sp-kpis div{background:var(--cm-art-kpi-bg);border:1px solid var(--cm-art-kpi-edge);border-radius:12px;padding:10px 12px}
+.cm-sp-kpis b{display:block;font-size:22px;color:var(--cm-art-business)}
+.cm-sp-kpis small{font-size:12px;color:var(--cm-art-muted)}
+.cm-pcard .cm-desk{border:0;padding:0;margin:0;background:none}
+@media (max-width:760px){ .cm-pcard{left:10px !important;right:10px;width:auto;top:auto !important;bottom:10px} }
+.is-reduced .cm-pcard,.cm-reduced .cm-pcard{animation:none}
+
+/* Who's here: staff first with the gold STAFF tag, first names with their level, "+N more" opens the peek */
+.cm-who-chips{display:flex;flex-wrap:wrap;gap:6px;list-style:none;margin:0;padding:0}
+.cm-who-chips .p{display:inline-flex;align-items:center;gap:6px;background:var(--cm-art-card);color:var(--cm-art-ink);border:1px solid var(--cm-art-line);border-radius:999px;
+  padding:3px 10px 3px 3px;font-size:12px;cursor:pointer;font-family:inherit}
+.cm-who-chips .p:hover{border-color:var(--cm-art-ink)}
+.cm-who-chips .p.is-staff{background:var(--cm-art-help-bg);border-color:var(--cm-art-help-edge)}
+.cm-who-chips .p.is-plain{cursor:default}
+.cm-who-chips .av{width:24px;height:24px;border-radius:50%;background:var(--cm-art-library);color:var(--cm-art-on-dark);display:grid;place-items:center;font-size:9px;font-weight:700;overflow:hidden;flex:none}
+.cm-who-chips .av img{width:100%;height:100%;object-fit:cover}
+.cm-who-chips .tag{font-size:9px;font-weight:800;letter-spacing:.08em;background:var(--cm-art-gold);color:var(--cm-art-on-dark);border-radius:4px;padding:1px 5px;margin-left:2px}
+.cm-who-chips .cm-lv-chip{margin-left:-1px}
+.cm-who-chips .more{padding:6px 10px;color:var(--cm-art-muted);font-size:12px;border:0;background:none;font-family:inherit}
+.cm-who-chips button.more{cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+.cm-who-chips .p:focus-visible,.cm-who-chips button.more:focus-visible{outline:3px solid var(--cm-art-red);outline-offset:2px}
