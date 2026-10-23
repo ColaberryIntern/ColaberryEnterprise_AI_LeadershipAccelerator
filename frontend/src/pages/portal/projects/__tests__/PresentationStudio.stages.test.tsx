@@ -127,13 +127,16 @@ const currentStage = () => container.querySelector('[aria-current="step"]')?.tex
  * quietly dropped on the way: the evidence panel still does the handing in, PREP-6 is
  * still staff-only, and a stage with no machinery yet offers no button that lies.
  */
-describe('Presentation Studio — six stages over the existing prep task', () => {
-  it('renders all six stages, in order, as a navigable rail', () => {
+describe('Presentation Studio — five stages over the existing prep task', () => {
+  it('renders all five stages, in order, as a navigable rail', () => {
     mount('PREP-3');
     const labels = Array.from(container.querySelectorAll('.ps-rail button'))
       .map((b) => (b.textContent || '').replace(/Step \d+/, '').trim());
-    expect(labels).toEqual(['Learn', 'Prepare', 'Build', 'Practice', 'Present', 'Reflect & Share']);
-    expect(PRESENTATION_STAGES).toHaveLength(6);
+    // Present & Share is one step now. It was two placeholders that each rendered
+    // a "not built yet" notice and read and wrote nothing; the merged step holds
+    // the portfolio and the rehearsal notes.
+    expect(labels).toEqual(['Learn', 'Prepare', 'Build', 'Practice', 'Present & Share']);
+    expect(PRESENTATION_STAGES).toHaveLength(5);
   });
 
   it.each([
@@ -176,14 +179,16 @@ describe('Presentation Studio — six stages over the existing prep task', () =>
     expect(currentStage()).toContain('Learn');
   });
 
-  it('a stage whose machinery has not shipped says so and offers NO control', () => {
+  it('NO STAGE IS A PLACEHOLDER ANY MORE', () => {
+    // This test used to assert that Present rendered an honest "not built yet"
+    // notice with nothing clickable in it. Present & Share ships, so the
+    // placeholder has no subject — and the component behind it is deleted rather
+    // than left as dead code waiting to be mistaken for a feature.
     mount('PREP-3');
-    click(stageBtn('present'));
-    const pending = container.querySelector('[data-testid="ps-pending"]');
-    expect(pending).not.toBeNull();
-    // Nothing clickable inside the honest placeholder — a dead button teaches a
-    // student the platform is broken; a plain sentence does not.
-    expect(pending!.querySelector('button, a, input')).toBeNull();
+    for (const id of ['learn', 'prepare', 'build', 'practice', 'present']) {
+      click(stageBtn(id));
+      expect(container.querySelector('[data-testid="ps-pending"]')).toBeNull();
+    }
   });
 
   it('boundary: an unrecognised story id still renders a usable workspace', () => {
@@ -261,7 +266,7 @@ describe('Presentation Studio — six stages over the existing prep task', () =>
     expect(err).not.toBeNull();
     expect(err!.getAttribute('role')).toBe('alert');
     // The rail still works — one failed fetch must not strand the student.
-    expect(container.querySelectorAll('.ps-rail button')).toHaveLength(6);
+    expect(container.querySelectorAll('.ps-rail button')).toHaveLength(5);
   });
 
   it('a preview account never calls the API for a prompt', async () => {
@@ -497,7 +502,7 @@ describe('Presentation Studio — six stages over the existing prep task', () =>
     const nav = container.querySelector('nav[aria-label="Presentation stages"]');
     expect(nav).not.toBeNull();
     const buttons = container.querySelectorAll('.ps-rail button');
-    expect(buttons).toHaveLength(6);
+    expect(buttons).toHaveLength(5);
     buttons.forEach((b) => {
       expect(b.tagName).toBe('BUTTON');            // focusable natively, not a div
       expect((b.textContent || '').trim().length).toBeGreaterThan(0);

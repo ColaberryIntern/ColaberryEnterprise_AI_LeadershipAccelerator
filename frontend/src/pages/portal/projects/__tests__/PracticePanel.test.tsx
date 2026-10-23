@@ -242,8 +242,19 @@ describe('the practice panel is mounted on the Practice stage of every prep task
     expect(src).not.toContain("stage === 'practice' && !onEvidenceStage");
   });
 
-  it('still gates the not-shipped placeholders, which SHOULD defer to a hand-in form', () => {
-    // Keeps the fix from being over-applied: the guard is right for a notice.
-    expect(src).toContain("stage === 'reflect' && !onEvidenceStage");
+  it('mounts PRESENT & SHARE unconditionally too, for the same reason', () => {
+    // This test used to assert the opposite about a DIFFERENT thing: that the
+    // not-shipped placeholders stayed gated on `!onEvidenceStage`, which kept the
+    // practice-panel fix from being over-applied. Both placeholders are gone —
+    // Present & Share ships — so the half of the intent that survives is the one
+    // that mattered: a stage holding a learner's own work is never hidden because
+    // the task happens to hand in there. PREP-5 hands in ON this stage.
+    expect(src).toContain("{stage === 'present' && (");
+    expect(src).not.toContain("stage === 'present' && !onEvidenceStage");
+  });
+
+  it('no stage defers to a hand-in form any more, because none is a placeholder', () => {
+    expect(src).not.toContain("'reflect'");
+    expect(src).not.toContain('Pending');
   });
 });
