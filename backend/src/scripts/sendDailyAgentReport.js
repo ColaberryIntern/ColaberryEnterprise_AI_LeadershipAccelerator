@@ -22,6 +22,7 @@
  * report Ali actually receives rather than a drawing of it. It never sends.
  */
 const { Sequelize, QueryTypes } = require('sequelize');
+const R = require('./lib/agentRoster');
 const { buildReport, shapeAgentRows, renderHtml } = require('./lib/dailyAgentReport');
 
 const ARGS = process.argv.slice(2);
@@ -41,6 +42,13 @@ async function main() {
   const nowRow = await q('SELECT now()::text AS now');
   const now = nowRow[0].now;
 
+  // Who is on which domain comes from `lib/agentRoster.js`, the one definition the mail sweep and
+  // the Basecamp sync also read, so adding an intern is one repoint of one column and this file
+  // does not change. The metrics below stay here, keyed on the roster's project ids: the roster
+  // owns WHO, this script owns WHAT ABOUT THEM.
+  const roster = await R.loadRoster(q);
+  const pids = R.assigned(roster).map((r) => r.projectId);
+
   const agents = await q(`
     SELECT d.domain_key AS domain, d.intended_builder AS intern,
            e.created_at::text AS joined_at,
@@ -58,8 +66,8 @@ async function main() {
       JOIN projects p ON p.id = d.student_project_id
       JOIN enrollments e ON e.id = p.enrollment_id
       LEFT JOIN github_connections g ON g.project_id = d.student_project_id
-     WHERE d.intended_builder IS NOT NULL
-     ORDER BY d.domain_key`);
+     WHERE d.student_project_id::text = ANY($1)
+     ORDER BY d.domain_key`, [pids]);
 
   const shaped = shapeAgentRows(agents, now);
 
