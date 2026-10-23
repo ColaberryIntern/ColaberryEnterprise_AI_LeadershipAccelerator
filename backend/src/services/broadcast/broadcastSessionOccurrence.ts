@@ -25,6 +25,7 @@
 import { sequelize } from '../../config/database';
 import BroadcastOccurrence from '../../models/BroadcastOccurrence';
 import { deriveStartInstant, occurrenceKeyFor } from './broadcastIdentity';
+import { resolveLiveInput } from './broadcastInputBinding';
 
 /** States in which re-timing an occurrence is still honest. */
 const RETIMEABLE = new Set(['scheduled', 'backstage']);
@@ -34,7 +35,9 @@ export type EnsureOutcome = 'created' | 'retimed' | 'unchanged' | 'refused';
 export type EnsureRefusal =
   | 'no_room'
   | 'undeterminable_start'
-  | 'already_aired';
+  | 'already_aired'
+  /** No live input could be resolved, so the occurrence would be unplayable. L5.4. */
+  | 'no_live_input';
 
 export interface EnsureOccurrenceResult {
   outcome: EnsureOutcome;
@@ -95,6 +98,8 @@ async function createLinked(
   roomId: string,
   key: string,
   startsAt: Date,
+  provider: string,
+  providerSessionId: string,
 ): Promise<string> {
   let createdId = '';
   await sequelize.transaction(async (tx) => {
@@ -110,6 +115,12 @@ async function createLinked(
         // default that has since been changed.
         access_mode: 'private',
         editorial_state: 'scheduled',
+        // L5.4: without these, playback has nothing telling it which live input to sign, and
+        // the occurrence is real, correctly gated, and unplayable.
+        provider,
+        provider_session_id: providerSessionId,
+        // L5.4: without these, playback has nothing telling it which live input to sign, and
+        // the occurrence is real, correctly gated, and unplayable.
       } as any,
       { transaction: tx },
     );
@@ -165,11 +176,27 @@ export async function ensureOccurrenceForSession(
   }
 
   const key = occurrenceKeyFor('live_session', session.id, instant.startsAt);
+
+  // Resolved BEFORE anything is written. An occurrence that looks fine and cannot play is
+  // worse than no occurrence: it is discovered by an audience rather than by an admin.
+  const binding = resolveLiveInput();
+  if (!binding.bound) {
+    log('broadcast_occurrence_refused', 'failure', {
+      sessionId: session.id, reason: 'no_live_input', detail: binding.reason,
+    });
+    return {
+      outcome: 'refused', occurrenceId: null,
+      reason: 'no_live_input', detail: binding.reason,
+    };
+  }
+
   const existing = await findExisting(session.id);
 
   if (!existing) {
     try {
-      const id = await createLinked(session, roomId, key, instant.startsAt);
+      const id = await createLinked(
+        session, roomId, key, instant.startsAt, binding.provider, binding.providerSessionId,
+      );
       log('broadcast_occurrence_created', 'success', { sessionId: session.id, occurrenceId: id, key });
       return { outcome: 'created', occurrenceId: id };
     } catch (err: any) {
