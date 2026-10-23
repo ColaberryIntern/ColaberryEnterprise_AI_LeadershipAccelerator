@@ -112,11 +112,15 @@ const VisibilitySwitch: React.FC<VisibilitySwitchProps> = ({
         </span>
       </button>
 
-      {/* Only once it is actually public. See the header note. */}
+      {/* Only once it is actually public. See the header note.
+          ON ITS OWN LINE, not beside the label. Inline, inside a 300px portfolio
+          card, the count wrapped into the middle of the sentence and the two read
+          as one run-on: "Public — your cohort can watch this 6 people have
+          watched it". */}
       {isPublic && (
-        <span className="ps-note ps-note--soft" data-testid="ps-visibility-views" style={{ marginLeft: 12 }}>
+        <div className="ps-note ps-note--soft" data-testid="ps-visibility-views" style={{ marginTop: 4 }}>
           {viewLabel}
-        </span>
+        </div>
       )}
 
       {isPending && (

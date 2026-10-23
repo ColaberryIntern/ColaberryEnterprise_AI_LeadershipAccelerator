@@ -43,6 +43,8 @@ export interface PresentationStageBodyProps {
   evidenceStage: PresentationStage;
   /** Jump to Learn with a type pre-selected, from an empty portfolio slot. */
   onStartType: (typeId: string) => void;
+  /** The way back out of that jump — the return leg of `onStartType`. */
+  onBackToPortfolio: () => void;
   /** A type the learner asked to start; Learn pre-selects it. */
   pendingType?: string | null;
   /**
@@ -60,8 +62,11 @@ export interface PresentationStageBodyProps {
 }
 
 export default function PresentationStageBody(props: PresentationStageBodyProps) {
-  const { stage, evidenceStage, isDemoDay, task, projectId, taskId, points, demo, onStartType, pendingType, portfolio, onPortfolioChanged } = props;
+  const { stage, evidenceStage, isDemoDay, task, projectId, taskId, points, demo, onStartType, onBackToPortfolio, pendingType, portfolio, onPortfolioChanged } = props;
   const onEvidenceStage = stage === evidenceStage;
+  // The chooser marks what is already in the portfolio. Derived from the same
+  // object the grid draws from, so the tick and the slot cannot disagree.
+  const recordedTypeIds = (portfolio?.slots || []).filter((s) => s.recorded).map((s) => s.typeId);
 
   return (
     <>
@@ -83,7 +88,14 @@ export default function PresentationStageBody(props: PresentationStageBodyProps)
       )}
 
       {stage === 'learn' && (
-        <LearnStage pendingType={pendingType} projectId={projectId} storyId={taskId} demo={demo} />
+        <LearnStage
+          pendingType={pendingType}
+          projectId={projectId}
+          storyId={taskId}
+          demo={demo}
+          recordedTypeIds={recordedTypeIds}
+          onBackToPortfolio={onBackToPortfolio}
+        />
       )}
 
       {/* Prepare is live on every task, not only the one that hands in here: the
