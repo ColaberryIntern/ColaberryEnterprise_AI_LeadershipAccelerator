@@ -463,7 +463,9 @@ function IntegrationsTab({ settings, onChange }: FieldProps) {
             </div>
           </div>
           <div className="col-md-4">
-            <label className="form-label small">GHL API Key</label>
+            <label className="form-label small">
+              GHL API Key <span className="text-muted">(Agent Cory, default)</span>
+            </label>
             <input
               type="password"
               className="form-control"
@@ -472,6 +474,32 @@ function IntegrationsTab({ settings, onChange }: FieldProps) {
               placeholder="Bearer token from GHL"
               disabled={!settings.ghl_enabled}
             />
+            <div className="form-text">Every brand except Colaberry Training lands here.</div>
+          </div>
+
+          {/*
+            The school sub-account. Training leads route here; with no key on file
+            they are WITHHELD rather than misfiled into the dialer above, which is
+            what the routing layer exists to guarantee. There was no field for this
+            key before, so it could only be set by writing to the database by hand.
+          */}
+          <div className="col-md-4">
+            <label className="form-label small">
+              GHL API Key <span className="text-muted">(School of Data &amp; AI)</span>
+            </label>
+            <input
+              type="password"
+              className="form-control"
+              value={settings.ghl_api_key_school_of_data_analytics ?? ''}
+              onChange={(e) => onChange('ghl_api_key_school_of_data_analytics', e.target.value)}
+              placeholder="Bearer token from the school sub-account"
+              disabled={!settings.ghl_enabled}
+              data-testid="ghl-school-key"
+            />
+            <div className="form-text">
+              Colaberry Training only, including the free-signup landing pages. Empty
+              means those leads are held, never sent elsewhere.
+            </div>
           </div>
           <div className="col-md-4">
             <label className="form-label small">GHL Location ID</label>

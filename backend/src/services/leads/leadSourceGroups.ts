@@ -83,8 +83,20 @@ export const LEAD_SOURCE_GROUPS: LeadSourceGroup[] = [
     domain: 'training.colaberry.com',
     kind: 'website',
     audience: 'training',
-    // Three spellings of the same site, plus the on-page popup form.
-    sources: ['training.colaberry.com', 'training.colaberry.com/thank-you', 'popup'],
+    // Three spellings of the same site, the on-page popup form, and the two
+    // free-signup forms.
+    //
+    // `free_signup` IS A TRAINING SOURCE and was sitting in `other`, which is how
+    // 112 leads from the October ad campaign came to be pointed at the Agent Cory
+    // dialer instead of the school. Every step of that path is the training brand:
+    // the ads land on /lp/colaberry-training/..., its CTA goes to /portal/signup,
+    // and that form writes `source: 'free_signup'`. The group has to say so.
+    // Ali, 2026-10-23: "use the School account for Colaberry training and Agent
+    // Cory for everything else."
+    sources: [
+      'training.colaberry.com', 'training.colaberry.com/thank-you', 'popup',
+      'free_signup', 'Free signup (/enroll)',
+    ],
   },
   {
     key: 'advisor',
