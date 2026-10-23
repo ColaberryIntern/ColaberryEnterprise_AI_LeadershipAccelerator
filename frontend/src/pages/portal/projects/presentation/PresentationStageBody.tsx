@@ -20,23 +20,6 @@ import { STAGE_META, type PresentationStage } from './presentationStages';
  * here, each well inside the limit and each with one responsibility.
  */
 
-/**
- * A stage whose machinery has not shipped yet.
- *
- * Renders a sentence and NO control, deliberately. A button that looks live and does
- * nothing teaches a student that the platform is broken; an honest "not yet" does not.
- * A test asserts this block contains no button, link or input.
- */
-export function Pending({ what, when }: { what: string; when: string }) {
-  return (
-    <div className="ps-pending" data-testid="ps-pending">
-      <strong>{what}</strong>
-      {when} Until then, everything you need for this task is on the stage it opens on,
-      and nothing here is required to finish it.
-    </div>
-  );
-}
-
 export interface PresentationStageBodyProps {
   stage: PresentationStage;
   /** The stage this task opens on — where the evidence panel is mounted. */

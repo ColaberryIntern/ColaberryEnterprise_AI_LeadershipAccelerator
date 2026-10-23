@@ -25,7 +25,7 @@ import './presentationStudio.css';
  * was, done by the same code. The Studio adds context around it; it removes nothing.
  *
  * HONESTY ABOUT WHAT HAS NOT SHIPPED. Stages whose machinery lands in later phases
- * render a sentence and no control. See `Pending` in `PresentationStageBody`.
+ * render a sentence and no control. Every stage ships now, so none remains.
  *
  * This component is behind `PRESENTATION_STUDIO_ENABLED`, default OFF. With the flag
  * off the caller renders `DemoEvidencePanel` directly and this file is never mounted,
