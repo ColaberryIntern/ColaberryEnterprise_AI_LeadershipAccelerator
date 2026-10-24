@@ -124,7 +124,7 @@ export function guestEnrollmentDefaults(clean: FreeAccountIdentity) {
 async function captureGuestAsLead(
   clean: FreeAccountIdentity,
   acquisition: FreeSignupInput['acquisition'],
-): Promise<void> {
+): Promise<number | null> {
   try {
     const [lead] = await Lead.findOrCreate({
       where: { email: clean.email },
@@ -180,6 +180,14 @@ async function captureGuestAsLead(
         error_class: e instanceof Error ? e.constructor.name : 'Unknown',
         message: e instanceof Error ? e.message : String(e),
       }));
+
+    // Returned so the welcome's CommunicationLog row can be attached to the person
+    // rather than floating with a null lead_id. Null stays null on failure: an
+    // invented id would be worse than an honest absence.
+    //
+    // AFTER the CRM sync above, which is fire-and-forget and must still be kicked
+    // off on every capture. Returning first would skip it entirely.
+    return (lead as unknown as { id?: number }).id ?? null;
   } catch (error) {
     // Never allowed to affect signup. Logged with a class so the failure is
     // traceable rather than swallowed — a silent catch here would recreate the
@@ -188,6 +196,7 @@ async function captureGuestAsLead(
       error_class: error instanceof Error ? error.constructor.name : 'Unknown',
       message: error instanceof Error ? error.message : String(error),
     });
+    return null;
   }
 }
 
@@ -226,7 +235,7 @@ export async function createFreeAccount(input: FreeSignupInput): Promise<FreeSig
     } catch { /* never allowed to affect signup */ }
   })();
 
-  await captureGuestAsLead(clean, input.acquisition);
+  const leadId = await captureGuestAsLead(clean, input.acquisition);
 
   // T205: the Explorer journey profile, AT REGISTRATION rather than overnight.
   //
@@ -241,6 +250,37 @@ export async function createFreeAccount(input: FreeSignupInput): Promise<FreeSig
   // on the input, so a reused non-learner row is also correctly skipped.
   if (enrollment.enrollment_type === 'explorer') {
     await bridgeExplorerProfileAtRegistration(enrollment.id, 'portal_free_signup');
+  }
+
+  // The sign-in link. THIS IS THE BUG THIS CHANGE FIXES.
+  //
+  // This door never emailed anybody. Measured in production on 2026-10-23: 113
+  // paid-ad signups over three days, all with enrollment rows, and zero
+  // `communication_logs` rows between them. Its sibling door
+  // (`enrollmentService.createExplorerEnrollment`, reached via
+  // /api/create-free-account) has always sent this.
+  //
+  // Nobody was locked out at signup - `signParticipantJwt` below signs them in on
+  // the spot - but with no email they had no way back in on a second device and
+  // nothing in their inbox recording that the account exists.
+  //
+  // ONLY ON CREATION. A reused account has already been welcomed, and
+  // `sendPortalWelcome` independently refuses to mail an address that has a `sent`
+  // welcome row, so a retried signup cannot double-send even if this guard were
+  // wrong.
+  //
+  // AWAITED, unlike Reese's intro above. The response tells the person to check
+  // their email, so returning before the send is decided is how you get a promise
+  // in the body of a response that nothing kept. It cannot throw and it cannot fail
+  // the signup.
+  //
+  // NOT a marketing send, which is what makes it exempt from the decision recorded
+  // on `captureGuestAsLead` above: free guests are deliberately excluded from
+  // nurture segments. A login link is transactional, carries no campaign_id, and
+  // therefore passes neither the brand gate nor the marketing-consent gate.
+  if (disposition === 'created') {
+    const { sendPortalWelcome } = await import('./welcome/sendPortalWelcome');
+    await sendPortalWelcome({ enrollment, leadId });
   }
 
   return {
