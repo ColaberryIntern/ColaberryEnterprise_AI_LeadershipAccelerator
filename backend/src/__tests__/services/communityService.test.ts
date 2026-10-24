@@ -21,6 +21,30 @@ jest.mock('../../services/pointsService', () => ({
   levelForPoints: jest.fn(() => ({ level: 1, name: 'Apprentice' })),
 }));
 jest.mock('../../services/progression/communityXpService', () => ({ awardCommunityXp: jest.fn(async () => {}) }));
+// MOCKED AT THE SERVICE BOUNDARY, not the model layer. `communityService` imports
+// `subscriptionService`, whose own line 2 is `import { Enrollment, Cohort, Subscription } from
+// '../models'` - so importing it executes `models/index.ts`, and line 548 there runs
+// `Cohort.hasMany(Enrollment, ...)` against the plain object this file mocks as a model.
+// Sequelize refuses it and the suite dies at IMPORT, before a single test, which is how it ended
+// up on `jest.ci.config.ts`'s ignore list with no test names ever attached to the failure.
+// Mocking a model harder cannot fix that; the index associates whatever it is handed.
+jest.mock('../../services/subscriptionService', () => ({
+  activeCompEnrollmentIds: jest.fn(async () => new Set<string>()),
+}));
+// A HANG IS NOT SOMETHING A SWALLOW CAN PROTECT AGAINST, which is why this mock is needed and
+// why the failure looked nothing like the others.
+//
+// `createPost` calls `rungNamesFor`, which `await import`s this service and is wrapped in a
+// try/catch that logs and returns an empty Map. That catch handles a THROW. What actually happens
+// without this mock is a real model query against a database nobody is listening on, so the call
+// neither resolves nor rejects — it sits there until jest's 5 s limit kills the test. The
+// swallow never runs.
+//
+// The suite reaches this only now: before the `subscriptionService` mock above it died at import
+// and ran zero tests, so the hang had never been observable.
+jest.mock('../../services/progression/progressionService', () => ({
+  getRungNamesForEnrollments: jest.fn(async () => new Map<string, string>()),
+}));
 
 import { createPost, listPosts, togglePin, getOrCreateMember, derivePresence, touchPresence, levelFor } from '../../services/communityService';
 import { env } from '../../config/env';
