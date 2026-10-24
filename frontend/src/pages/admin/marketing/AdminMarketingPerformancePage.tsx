@@ -20,6 +20,7 @@ import {
 } from './campaignTableViews';
 
 const MarketingFunnelGraph = lazy(() => import('../../../components/admin/marketing/MarketingFunnelGraph'));
+const AcquisitionFunnelPanel = lazy(() => import('./AcquisitionFunnelPanel'));
 const OpenclawTab = lazy(() => import('../../../components/admin/intelligence/tabs/OpenclawTab'));
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -1396,6 +1397,18 @@ function AdminMarketingPerformancePage() {
               </div>
             </div>
           }>
+            {/*
+              The acquisition funnel comes FIRST because it is the one that has data.
+
+              The graph below is campaign-driven and has shown "No marketing funnel data
+              available yet" since the campaign engine was paused in August - which is not
+              wrong, but reads as "nothing is happening" while ads are running. This panel
+              reads the tracking data and answers what the tab is actually opened to find out:
+              who clicked, who signed up, and whether any of them came back.
+            */}
+            <AcquisitionFunnelPanel days={30} />
+
+            <h3 className="h6 text-muted mt-4 mb-2">Campaign graph</h3>
             <MarketingFunnelGraph />
           </Suspense>
         </div>
