@@ -8,7 +8,8 @@ import { mayaAllowedFor } from '../campusPeople';
 import { explorerPath } from '../campusPath';
 import { HelpDesk, PlanCard, ExplorerPass, StaffTools } from './ConciergeCards';
 import LiveCard from './LiveCard';
-import { UpNext, HereAt, TourOffer } from './NextSteps';
+import { UpNext, RoomsHere, TourOffer } from './NextSteps';
+import type { CompleteResult } from '../campusPlanApi';
 import { UrgentCard, RightNow, TeamNow, Directory } from './PanelNow';
 import { greetLine, kickerFor, leadFor, momentOf, pulseLine, pulseOf } from './conciergeCopy';
 import { rightNowRows, teamRows } from './rightNow';
@@ -66,6 +67,8 @@ export interface ConciergeProps {
   onEndTour?: () => void;
   /** C13: × on a paused tour. */
   onDismissTour?: () => void;
+  /** C15: Mark done from Up next (the arrival card's own completion: points, "Next: … [Go]", plan pins). */
+  onDone?: (stop: PlanStop) => Promise<CompleteResult>;
   /** Opens a page through its building's door. */
   onOpen: (route: string) => void;
   /** WP-2: the tour was just finished (the lead says what it covered and your next step). */
@@ -113,12 +116,11 @@ export default function CampusConcierge(p: ConciergeProps): React.ReactElement {
   const lead = leadFor({ audience, moment, firstName: p.firstName, workplace: wp, buildings, liveAt: liveB ? buildingName(liveB, wp) : null, next,
     dutyNames: desks.filter((d) => d.on_duty).map((d) => d.name), tourStops: p.tourStops?.length ?? null, liveState: p.live?.state,
     onCampus: p.presence && !p.presenceError ? pulseOf(p.presence, buildings).total : null });
-  const tourHere = p.tourStops && p.touring !== null && p.touring < p.tourStops.length ? { n: p.touring + 1, of: p.tourStops.length } : null;
   const nextAny = p.stops?.find((s) => !s.done) ?? null;
   const hover = p.onHover ?? (() => undefined);
   const run = (id: BuildingId) => (p.onRun ?? p.onWalk)(id);
   const rows = rightNowRows({ audience, workplace: wp, buildings, stops: p.stops, planMinutes: p.planMinutes ?? null, agenda: p.agenda ?? null,
-    presence: p.presence, presenceError: p.presenceError, live: !!p.live, urgent: p.urgent ?? null });
+    presence: p.presence, presenceError: p.presenceError, live: !!p.live, urgent: p.urgent ?? null, skipPlan: true });
   const chip = (id: BuildingId | typeof LATE) => (id === LATE ? (p.urgent ? run(p.urgent.buildingId) : p.onWalk('tower')) : p.onWalk(id));
   return (
     <aside className={`cm-cc${p.cardOpen ? ' has-card' : ''}${p.waiting ? ' is-waiting' : ''}${expanded ? ' is-expanded' : ''}`} aria-label="Campus concierge" data-testid="cm-concierge">
@@ -135,26 +137,29 @@ export default function CampusConcierge(p: ConciergeProps): React.ReactElement {
       <h1 data-testid="cm-cc-greeting">{greetLine(audience, p.firstName, p.now.getHours(), quiet)}</h1>
       <p className="cm-lead" data-testid="cm-cc-lead">{lead}</p>
       <Pulse p={p} />
-      {audience !== 'business' && <HelpDesk desks={desks} workplace={wp} />}
 
-      <UpNext stops={p.stops} buildings={buildings} workplaceNames={wp} hereId={p.hereId ?? null} onWalk={p.onWalk} onOpen={p.onOpen} />
-      <HereAt building={hereB} workplaceNames={wp} stops={p.stops} tourStop={tourHere} onOpen={p.onOpen} />
+      {/* C15 (v3 2.6), each fact once, in this order: Up next (the urgent card takes its slot), Live, the tour, the rooms here,
+          today's plan (the Up next step tagged, not repeated), right now, the help desk, I want to… */}
+      {p.urgent && !p.live
+        ? <UrgentCard u={p.urgent} onRun={() => run(p.urgent!.buildingId)} onSkip={() => p.onOpen(p.urgent!.route)} />
+        : <UpNext stops={p.stops} buildings={buildings} workplaceNames={wp} hereId={p.hereId ?? null} onWalk={p.onWalk} onOpen={p.onOpen} onDone={p.onDone} />}
+      {p.live && <LiveCard title={p.live.title} buildingId={p.live.buildingId} place={liveB ? buildingName(liveB, wp) : null} audience={audience}
+        teamHere={liveB && p.presence && !p.presenceError ? (p.presence[liveB.id]?.people ?? []).filter((e) => 'enrollment_id' in e).length : null}
+        onWalk={(id, r) => (r ? run(id) : p.onWalk(id))} />}
       <TourOffer audience={audience} stops={p.tourStops} buildings={buildings} workplaceNames={wp} running={p.touring}
         paused={p.tourProgress.paused} toured={p.tourProgress.toured} onStart={p.onTour} onEnd={p.onEndTour} onDismiss={p.onDismissTour} />
+      <RoomsHere building={hereB} workplaceNames={wp} onOpen={p.onOpen} />
 
       {audience === 'explorer' && <ExplorerPass buildings={buildings} accessOf={p.accessOf} workplaceNames={wp}
         path={explorerPath(buildings, p.accessOf, wp, desks.some((d) => d.id === 'maya' && d.on_duty))} />}
       {audience === 'staff' && <StaffTools buildings={buildings} workplaceNames={wp} />}
 
       {p.stops && <div style={{ marginTop: 14 }}><PlanCard stops={p.stops} buildings={buildings} workplaceNames={wp} onWalk={p.onWalk} /></div>}
-      {p.live && <LiveCard title={p.live.title} buildingId={p.live.buildingId} place={liveB ? buildingName(liveB, wp) : null} audience={audience}
-        teamHere={liveB && p.presence && !p.presenceError ? (p.presence[liveB.id]?.people ?? []).filter((e) => 'enrollment_id' in e).length : null}
-        onWalk={(id, r) => (r ? run(id) : p.onWalk(id))} />}
-      {p.urgent && !p.live && <UrgentCard u={p.urgent} onRun={() => run(p.urgent!.buildingId)} onSkip={() => p.onOpen(p.urgent!.route)} />}
 
       {audience === 'business'
         ? <TeamNow rows={teamRows(p.presence, p.presenceError, buildings, wp)} buildings={buildings} workplace={wp} onWalk={p.onWalk} onHover={hover} />
         : <RightNow rows={rows} buildings={buildings} workplace={wp} onWalk={p.onWalk} onHover={hover} />}
+      {audience !== 'business' && <HelpDesk desks={desks} workplace={wp} />}
 
       <div className="cm-sec">{audience === 'business' ? 'See where your team…' : 'I want to…'}</div>
       <div className="cm-chips" data-testid="cm-cc-chips">

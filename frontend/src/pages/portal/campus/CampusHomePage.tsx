@@ -83,7 +83,7 @@ function CampusHome(): React.ReactElement {
   // The building whose card opened is where you now are.
   const onCard = useCallback((s: { open: boolean; building: BuildingId | null }) => { setCardOpen(s.open); if (s.building) setHere(s.building); }, [setHere]);
   const stay = useCallback(() => undefined, []);
-  const { props, tour, touring, extra } = useCampusWorldProps(stay, stay, null);
+  const { props, tour, touring, extra, onComplete } = useCampusWorldProps(stay, stay, null);
   useLevelCheer(look?.rung_name || null);
   useUnlockCheer(look?.catalog, campus.openMe);
   useWelcomeBack({ audience, buildings, workplace: wp, skippedGate, here: campus.here, goTo: map.goTo });
@@ -125,7 +125,7 @@ function CampusHome(): React.ReactElement {
         buildings={buildings} accessOf={accessOf} workplaceNames={wp} presence={presence} presenceError={presenceError} desks={staffDesks}
         stops={campus.planStops} planMinutes={campus.planMinutes} live={live} now={new Date()} agenda={agenda} urgent={urgent}
         tourStops={tour ? tour.stops : null} touring={touring} tourProgress={campus.tourProgress} justToured={campus.justToured}
-        onWalk={map.goTo} onRun={(id) => map.goTo(id, { run: true })} onHover={setHover} onTour={campus.resumeTour} onEndTour={campus.endTour} onDismissTour={campus.dismissTour}
+        onWalk={map.goTo} onRun={(id) => map.goTo(id, { run: true })} onHover={setHover} onTour={campus.resumeTour} onEndTour={campus.endTour} onDismissTour={campus.dismissTour} onDone={onComplete}
         onOpen={(r) => campus.enterThroughDoor(r, null)} photo={photo} />
       <div className="cm-home-livebar"><CampusLive onWalk={(id, run) => map.goTo(id, { run })} hereId={campus.here ?? null} /></div>
       <CampusTabBar active="/portal/campus" />

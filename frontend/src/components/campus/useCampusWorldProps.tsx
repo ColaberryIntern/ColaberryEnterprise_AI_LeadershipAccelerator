@@ -11,6 +11,7 @@ import UnlockSheet from './UnlockSheet';
 import { cheer } from './campusCheerBus';
 import { stopDetail } from './campusPlan';
 import type { PlanStop } from './campusPlan';
+import type { CompleteResult } from './campusPlanApi';
 import { buildingName } from './campusMap';
 
 /**
@@ -28,6 +29,8 @@ export interface CampusWorldModel {
   touring: number | null;
   /** The Explorer's unlock sheet, while open. */
   extra: React.ReactNode;
+  /** C15: Mark done (points cheer, "Next: … [Go]"), shared by the arrival card and the side panel's Up next. */
+  onComplete: (s: PlanStop) => Promise<CompleteResult>;
 }
 
 export function useCampusWorldProps(onExit: () => void, onNavigate: () => void, initialTarget: CampusWorldProps['initialTarget'] = null): CampusWorldModel {
@@ -69,5 +72,5 @@ export function useCampusWorldProps(onExit: () => void, onNavigate: () => void, 
   const extra = unlock
     ? <UnlockSheet pathModel={explorerPath(buildings, accessOf, settings.workplaceNames, false)} onNavigate={onNavigate} onClose={() => setUnlock(false)} />
     : null;
-  return { props, tour, touring, extra };
+  return { props, tour, touring, extra, onComplete }; // C15: the panel's Mark done is the same as the arrival card's
 }

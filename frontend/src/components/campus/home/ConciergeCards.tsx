@@ -42,6 +42,7 @@ export function PlanCard({ stops, buildings, workplaceNames, onWalk }: { stops: 
   if (!stops.length) return null;
   const done = stops.filter((s) => s.done).length;
   const next = stops.find((s) => !s.done && s.buildingId) ?? null;
+  const upNext = stops.find((s) => !s.done) ?? null; // C15: the step Up next names, tagged here and not repeated as another card
   const nameOf = (id: BuildingId | null) => { const b = id ? buildings.find((x) => x.id === id) : undefined; return b ? buildingName(b, workplaceNames) : null; };
   return (
     <div className="cm-plan" data-testid="cm-cc-plan">
@@ -52,6 +53,7 @@ export function PlanCard({ stops, buildings, workplaceNames, onWalk }: { stops: 
             <button type="button" onClick={() => s.buildingId && onWalk(s.buildingId)} disabled={!s.buildingId}>
               <span className="cm-pl-n" aria-hidden="true">{s.done ? '✓' : i + 1}</span>
               <span><b>{s.title}</b><small>{[nameOf(s.buildingId), stopDetail(s)].filter(Boolean).join(' · ')}</small></span>
+              {s === upNext && <span className="cm-pl-tag" data-testid="cm-plan-upnext">UP NEXT</span>}
               {s.done && <span className="cm-sr"> (done)</span>}
             </button>
           </li>

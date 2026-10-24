@@ -190,6 +190,8 @@
 .cm-upnext .cm-next-t b{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;white-space:normal;overflow-wrap:anywhere}
 .cm-upnext-actions{flex:1 1 100%;display:flex;gap:8px;flex-wrap:wrap;padding-left:34px}
 .cm-upnext-actions>*{white-space:nowrap}
+/* C15: the current step in Today's plan, tagged rather than repeated */
+.cm-pl-tag{margin-left:auto;flex:none;align-self:center;font:800 10px 'DM Sans',var(--sans),sans-serif;letter-spacing:.1em;padding:3px 7px;border-radius:999px;background:var(--cm-art-plan-bg);color:var(--cm-art-plan);border:1px solid var(--cm-art-plan-edge)}
 .cm-next-t small{color:var(--cm-art-muted);font-size:12px}
 .cm-here{margin-bottom:6px}
 .cm-here-tour{font-size:12px;font-weight:700;color:var(--cm-art-red);margin:-2px 0 6px}
