@@ -4,6 +4,7 @@ import { BUILDING_ICON, buildingName } from '../campusMap';
 import { subOf } from '../campusArrival';
 import { art } from '../art/artColor';
 import type { NowRow, TeamRow, Urgent } from './rightNow';
+import { nameInitials } from '../../../utils/personName';
 import '../campusWayfinder.css';
 
 /**
@@ -12,7 +13,7 @@ import '../campusWayfinder.css';
  * map), a partner's "Your team on campus right now", and the campus directory toggle (every building, a press walks there).
  */
 type Walk = (id: BuildingId) => void;
-const initialsOf = (name: string) => name.split(/\s+/).filter(Boolean).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
+const initialsOf = (name: string) => nameInitials(name); // C13: the shared helper
 
 export function UrgentCard({ u, onRun, onSkip }: { u: Urgent; onRun: () => void; onSkip: () => void }): React.ReactElement {
   return (

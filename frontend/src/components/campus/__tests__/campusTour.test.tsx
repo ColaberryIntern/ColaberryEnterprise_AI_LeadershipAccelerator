@@ -208,7 +208,7 @@ describe('ending it', () => {
     expect(q('cm-tour')).toBeNull();
     expect(where.path).toBe('/portal/campus');
     expect(campus().tourProgress.paused).toBe(1);
-    expect(saved()).toEqual({ paused: 1, toured: false });
+    expect(saved()).toMatchObject({ paused: 1, toured: false }); // C13: plus pausedAt (a pause expires after 7 days)
     expect(q('cm-cc-tour')?.getAttribute('data-state')).toBe('paused');
     await click('cm-cc-tour-resume');
     expect(q('cm-tour-count')?.getAttribute('aria-label')).toBe('Stop 2 of 9');

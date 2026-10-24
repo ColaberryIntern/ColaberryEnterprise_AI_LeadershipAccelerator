@@ -55,7 +55,9 @@ export interface CampusPersonOut extends CampusPerson {
   gear?: Partial<Record<'head' | 'face' | 'body' | 'neck', string>>;
 }
 export type CampusPresenceEntry = CampusPersonOut | { anonymous: true };
-export interface CampusPresenceAreas { areas: Partial<Record<CampusArea, { count: number; people: CampusPresenceEntry[] }>> }
+/** C13: 'quad' = online (by the People panel) with no fresh building: the open middle of the map, not a building one can enter. */
+export const QUAD = 'quad' as const;
+export interface CampusPresenceAreas { areas: Partial<Record<CampusArea | typeof QUAD, { count: number; people: CampusPresenceEntry[] }>> }
 
 export class CampusAreaError extends Error {
   readonly error_class = 'UnknownCampusArea';
@@ -145,12 +147,17 @@ export async function getCampusPresence(viewer: string, cohort: string | null, n
   for (const r of rows) {
     if (new Date(r.updated_at).getTime() < since.getTime()) continue; // defensive: the query already bounds it
     if (!isCampusArea(r.area)) continue; // a retired building id is ignored, not shown
+    if (r.enrollment_id === viewer) continue; // C13: you are neither counted nor listed (the count is "others on campus")
     const slot = areas[r.area] ?? (areas[r.area] = { count: 0, people: [] });
     slot.count += 1;
-    if (r.enrollment_id === viewer) continue; // you are counted, not listed
     const named = visible.get(r.enrollment_id);
     slot.people.push(named ? { ...named, can_message: false } : { anonymous: true });
   }
+  // C13: everyone the People panel shows this viewer as online who is in no building right now counts at the Quad, so the campus
+  // total equals the panel's count minus you. Only people the viewer may see by name are added (the panel's own set).
+  const placed = new Set(rows.map((r) => r.enrollment_id));
+  const quad = Array.from(visible.values()).filter((p) => p.enrollment_id !== viewer && !placed.has(p.enrollment_id));
+  if (quad.length) areas[QUAD] = { count: quad.length, people: quad.map((p) => ({ ...p, can_message: false })) };
   await markCanMessage(viewer, cohort, areas);
   await markLook(areas);
   return { areas };

@@ -72,13 +72,14 @@ export const CampusPresenceResponse = z.object({
 
 /**
  * POST /api/portal/campus/here {area} - "I am in this building now". Its own endpoint, so the
- * community heartbeat is never affected by a bad area. Not in the pilot: 204, nothing written.
+ * community heartbeat is never affected by a bad area. C13 (round 3): written for EVERY signed-in
+ * learner, pilot or not (the campus count was 0 while the People panel said 13, because only pilot
+ * accounts were recorded); READING presence stays pilot-only.
  * The enrollment comes ONLY from the token (req.participant.sub); the body cannot set it.
  */
 export async function postCampusHere(req: Request, res: Response): Promise<void> {
   const parsed = HereBody.safeParse(req.body ?? {});
   if (!parsed.success) { res.status(400).json({ error: 'Invalid body', error_class: 'ValidationFailed' }); return; }
-  if (!campusOnFor(req)) { res.status(204).end(); return; }
   if (!isCampusArea(parsed.data.area)) { res.status(400).json({ error: 'Unknown campus area', error_class: 'UnknownCampusArea' }); return; }
   try {
     if (parsed.data.share === false) await clearCampusArea(req.participant!.sub);
@@ -213,6 +214,18 @@ export async function putLookRoute(req: Request, res: Response): Promise<void> {
   }
 }
 
+/** C13: GET /api/portal/campus/audience - which campus this account gets (the server's word; the frontend waits for it). Pilot only. */
+const AudienceResponse = z.object({ audience: z.enum(['staff', 'business', 'explorer', 'member']) }).strict();
+export async function getAudienceRoute(req: Request, res: Response): Promise<void> {
+  if (!campusOnFor(req)) { notEnabled(res); return; }
+  try {
+    sendValidated(res, AudienceResponse, { audience: await campusAudienceFor(req.participant!.sub) }, 'campus_audience');
+  } catch (err) {
+    logFailure('campus_audience_failed', err);
+    res.status(500).json({ error: 'Could not resolve the campus audience', error_class: 'CampusAudienceUnavailable' });
+  }
+}
+
 /** WP-7: GET /api/portal/campus/audience-switch - may this account preview the campus as another account type? (campus pilot only) */
 const AudienceSwitchResponse = z.object({ allowed: z.boolean() }).strict();
 export async function getAudienceSwitchRoute(req: Request, res: Response): Promise<void> {
@@ -230,5 +243,6 @@ router.post('/api/portal/campus/tour/complete', requireParticipant, postTourComp
 router.get('/api/portal/campus/look', requireParticipant, getLookRoute);
 router.put('/api/portal/campus/look', requireParticipant, putLookRoute);
 router.get('/api/portal/campus/audience-switch', requireParticipant, getAudienceSwitchRoute);
+router.get('/api/portal/campus/audience', requireParticipant, getAudienceRoute);
 
 export default router;

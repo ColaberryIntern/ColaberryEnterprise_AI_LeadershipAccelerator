@@ -31,14 +31,17 @@ export function UpNext({ stops, buildings, workplaceNames, hereId, onWalk, onOpe
   const b = s.buildingId ? buildings.find((x) => x.id === s.buildingId) : undefined;
   const at = !!b && b.id === hereId;
   return (
-    <section className="cm-next" aria-label="Up next" data-testid="cm-up-next">
+    <section className="cm-upnext" aria-label="Up next" data-testid="cm-up-next">
       <div className="cm-sec">Up next</div>
       <div className="cm-next-row">
         <span className="cm-pl-n" aria-hidden="true">{i + 1}</span>
-        <span className="cm-next-t"><b>{s.title}</b><small>Step {i + 1} of {stops.length}{b ? ` · ${buildingName(b, workplaceNames)}` : ''}</small></span>
-        {b && !at
-          ? <button type="button" className="cm-btn-red" onClick={() => onWalk(b.id)} data-testid="cm-up-next-go">Go</button>
-          : <button type="button" className="cm-btn-red" onClick={() => onOpen(s.route)} data-testid="cm-up-next-open">Open</button>}
+        <span className="cm-next-t"><b data-testid="cm-up-next-title">{s.title}</b><small>Step {i + 1} of {stops.length}{b ? ` · ${buildingName(b, workplaceNames)}` : ''}</small></span>
+        {/* C13: the title wraps (two lines at most) and the buttons sit on their own row, so nothing covers it */}
+        <span className="cm-upnext-actions">
+          {b && !at
+            ? <button type="button" className="cm-btn-red" onClick={() => onWalk(b.id)} data-testid="cm-up-next-go">Walk there &rarr;</button>
+            : <button type="button" className="cm-btn-red" onClick={() => onOpen(s.route)} data-testid="cm-up-next-open">Open</button>}
+        </span>
       </div>
     </section>
   );
@@ -86,6 +89,8 @@ export interface TourOfferProps {
   toured: boolean;
   onStart: (from: number) => void;
   onEnd?: () => void;
+  /** C13: × on a paused tour. */
+  onDismiss?: () => void;
 }
 export function TourOffer(p: TourOfferProps): React.ReactElement | null {
   if (!p.stops || !p.stops.length) return null;
@@ -93,8 +98,10 @@ export function TourOffer(p: TourOfferProps): React.ReactElement | null {
   const name = (i: number) => { const b = p.buildings.find((x) => x.id === p.stops![Math.min(i, n - 1)].buildingId); return b ? buildingName(b, p.workplaceNames) : ''; };
   const partner = p.audience === 'business';
   const cls = partner ? 'cm-partner-tour cm-tour-offer' : 'cm-sg cm-tour-offer';
-  const at = p.running ?? (p.paused !== null && p.paused < n ? p.paused : null);
-  const state = p.running !== null ? 'running' : at !== null ? 'paused' : p.toured ? 'done' : 'idle';
+  // C13: a tour left on its LAST stop counts as finished: never "Stop N of N" with Resume.
+  const lastLeft = p.running === null && p.paused !== null && p.paused >= n - 1;
+  const at = p.running ?? (p.paused !== null && p.paused < n - 1 ? p.paused : null);
+  const state = p.running !== null ? 'running' : at !== null ? 'paused' : p.toured || lastLeft ? 'done' : 'idle';
   const btn = partner ? 'cm-btn-white' : 'cm-btn-red';
   if (state === 'running' || state === 'paused') {
     return (
@@ -103,6 +110,9 @@ export function TourOffer(p: TourOfferProps): React.ReactElement | null {
         {state === 'paused'
           ? <button type="button" className={btn} onClick={() => p.onStart(at!)} data-testid="cm-cc-tour-resume">Resume</button>
           : p.onEnd && <button type="button" className={partner ? 'cm-btn-white' : 'cm-btn-line'} onClick={p.onEnd} data-testid="cm-cc-tour-end">End tour</button>}
+        {state === 'paused' && p.onDismiss && (
+          <button type="button" className="cm-tour-x" onClick={p.onDismiss} aria-label="Dismiss the paused tour" data-testid="cm-cc-tour-dismiss">{'×'}</button>
+        )}
       </div>
     );
   }

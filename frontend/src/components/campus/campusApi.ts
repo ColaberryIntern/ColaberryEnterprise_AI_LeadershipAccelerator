@@ -55,6 +55,22 @@ const authHeaders = (): Record<string, string> => {
   return token ? { Authorization: `Bearer ${token}` } : {};
 };
 
+/**
+ * C13: which campus this account gets, decided by the server (GET /api/portal/campus/audience: staff incl. an admin login by email,
+ * then business, Explorer, member). Null on any failure (not in the pilot, network, odd body): the caller falls back to its own
+ * signals rather than drawing nothing forever.
+ */
+export async function fetchCampusAudience(): Promise<'staff' | 'business' | 'explorer' | 'member' | null> {
+  if (!getParticipantToken()) return null;
+  try {
+    const { data } = await axios.get<unknown>(`${process.env.REACT_APP_API_URL || ''}/api/portal/campus/audience`, { headers: authHeaders(), timeout: CAMPUS_FLAGS_TIMEOUT_MS });
+    const a = data && typeof data === 'object' ? (data as { audience?: unknown }).audience : null;
+    return a === 'staff' || a === 'business' || a === 'explorer' || a === 'member' ? a : null;
+  } catch {
+    return null;
+  }
+}
+
 /** True for an admin's read-only "view as" session: it may read presence but never record it. */
 export function isReadOnlySession(): boolean {
   return decodeParticipantClaims(getParticipantToken())?.read_only === true;

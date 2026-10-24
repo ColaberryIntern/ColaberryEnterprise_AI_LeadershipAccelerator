@@ -5,6 +5,7 @@ import { levelOfRung } from '../../services/bandLadder';
 import { art } from './art/artColor';
 import { openStaffCard, staffTone } from './staffCard';
 import type { At } from './usePopover';
+import { nameInitials } from '../../utils/personName';
 import './campusPop.css';
 
 /**
@@ -20,9 +21,7 @@ const isNamed = (e: CampusPresenceEntry): e is CampusPerson => !('anonymous' in 
 export const WHO_MAX = 8;
 
 export function initialsOf(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return '?';
-  return ((parts[0][0] ?? '') + (parts.length > 1 ? parts[parts.length - 1][0] ?? '' : '')).toUpperCase();
+  return nameInitials(name); // C13: the shared helper
 }
 
 const atOf = (e: React.MouseEvent<HTMLElement>): At => {

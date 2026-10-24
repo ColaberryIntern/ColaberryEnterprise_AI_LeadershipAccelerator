@@ -95,6 +95,17 @@ export function planStops(items: TodayPlanItem[]): PlanStop[] {
   });
 }
 
+/**
+ * C13: what is LEFT of today's plan, in minutes: the sum over steps not done yet (null when none of them carries a time). The server's
+ * estimated_total_minutes is the whole day's estimate and never shrinks as steps get done, which is how a 6-minute step read
+ * "~96 min waiting".
+ */
+export function minutesLeft(stops: Pick<PlanStop, 'done' | 'minutes'>[] | null): number | null {
+  if (!stops) return null;
+  const left = stops.filter((s) => !s.done && s.minutes);
+  return left.length ? left.reduce((sum, s) => sum + (s.minutes ?? 0), 0) : null;
+}
+
 /** "Video · 18 min · +10 pts": the prototype's step detail, from what the plan really says. */
 export function stopDetail(s: Pick<PlanStop, 'label' | 'minutes' | 'points'>, withPoints = false): string {
   return [s.label, s.minutes ? `${s.minutes} min` : null, withPoints && s.points ? `+${s.points} pts` : null].filter(Boolean).join(' · ');

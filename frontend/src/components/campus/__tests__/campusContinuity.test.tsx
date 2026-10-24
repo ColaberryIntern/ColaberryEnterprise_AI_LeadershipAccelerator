@@ -31,8 +31,8 @@ describe('the tour remembers where you stopped', () => {
     act(() => campus.setTourIndex(3));
     act(() => campus.endTour());
     expect(campus.tourIndex).toBeNull();
-    expect(campus.tourProgress).toEqual({ paused: 3, toured: false });
-    expect(JSON.parse(window.localStorage.getItem(tourKey())!)).toEqual({ paused: 3, toured: false });
+    expect(campus.tourProgress).toMatchObject({ paused: 3, toured: false }); // C13: plus pausedAt
+    expect(JSON.parse(window.localStorage.getItem(tourKey())!)).toMatchObject({ paused: 3, toured: false });
     act(() => campus.resumeTour(campus.tourProgress.paused!));
     expect(campus.tourIndex).toBe(3);
     expect(campus.layer).toBe('map');

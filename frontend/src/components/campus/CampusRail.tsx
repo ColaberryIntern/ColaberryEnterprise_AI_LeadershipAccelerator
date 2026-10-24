@@ -10,6 +10,7 @@ import { desksForBuilding } from './campusPeople';
 import { rungTone } from '../../services/bandLadder';
 import { tourFor } from './tourSteps';
 import { UpNext, TourOffer } from './home/NextSteps';
+import { displayFirstName } from '../../utils/personName';
 import './campusPageChrome.css';
 
 /**
@@ -22,7 +23,7 @@ import './campusPageChrome.css';
  * contacts collapsed), beside the page on the legacy layout, and in the banner's "Next steps" drawer on narrow screens.
  */
 export default function CampusRail(): React.ReactElement | null {
-  const { active, settings, presence, presenceError, staffDesks, planStops, openPersonCard, openMap, enterThroughDoor, tourProgress, resumeTour } = useCampus();
+  const { active, settings, presence, presenceError, staffDesks, planStops, openPersonCard, openMap, enterThroughDoor, tourProgress, resumeTour, dismissTour } = useCampus();
   const { buildings, audience, accessOf } = useCampusView();
   const { pathname } = useLocation();
   if (!active) return null;
@@ -38,7 +39,7 @@ export default function CampusRail(): React.ReactElement | null {
       <UpNext stops={planStops} buildings={buildings} workplaceNames={settings.workplaceNames} hereId={b ? b.id : null}
         onWalk={(id) => openMap(id)} onOpen={(r) => enterThroughDoor(r, null)} />
       <TourOffer audience={audience} stops={tour ? tour.stops : null} buildings={buildings} workplaceNames={settings.workplaceNames}
-        running={null} paused={tourProgress.paused} toured={tourProgress.toured} onStart={resumeTour} />
+        running={null} paused={tourProgress.paused} toured={tourProgress.toured} onStart={resumeTour} onDismiss={dismissTour} />
       {b && (
         <section aria-label={`In ${buildingName(b, settings.workplaceNames)}`}>
           <h3 className="cm-rail-h">In {buildingName(b, settings.workplaceNames)}{presence && !presenceError ? ` · ${presence[b.id]?.count ?? 0}` : ''}{deskHere.length ? ' + staff' : ''}</h3>
@@ -48,7 +49,7 @@ export default function CampusRail(): React.ReactElement | null {
               <li key={p.enrollment_id}>
                 <button type="button" onClick={() => openPersonCard({ person: p, buildingId: b.id })} aria-label={`${p.display_name}, open their card`}>
                   <span className="cm-rail-av" aria-hidden="true">{p.avatar_url ? <img src={p.avatar_url} alt="" /> : initialsOf(p.display_name)}</span>
-                  {p.display_name.split(/\s+/)[0]}
+                  {displayFirstName(p.display_name)}
                   {p.rung_name && <span className={`cm-rail-lv rung-${rungTone(p.rung_name)}`}>{p.rung_name}</span>}
                 </button>
               </li>

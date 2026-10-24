@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { fetchCampusPresence, postCampusHere, isReadOnlySession, CampusPresence } from './campusApi';
 import { buildingForPath } from './campusMap';
 
@@ -32,7 +32,10 @@ export function samePresence(a: CampusPresence | null, b: CampusPresence | null)
   return JSON.stringify(a) === JSON.stringify(b);
 }
 
-export function useCampusPresencePoll(active: boolean, share = true): CampusPresenceState {
+export function useCampusPresencePoll(active: boolean, share = true, here: string | null = null): CampusPresenceState {
+  // C13: on the campus home (no building in the URL) the building you are at on the map is where you are
+  const hereRef = useRef(here);
+  hereRef.current = here;
   const [presence, setPresence] = useState<CampusPresence | null>(null);
   const [presenceError, setPresenceError] = useState(false);
 
@@ -45,7 +48,7 @@ export function useCampusPresencePoll(active: boolean, share = true): CampusPres
       if (inflight || document.visibilityState === 'hidden') return;
       inflight = true;
       try {
-        const area = buildingForPath(window.location.pathname)?.id;
+        const area = buildingForPath(window.location.pathname)?.id ?? (window.location.pathname.startsWith('/portal/campus') ? hereRef.current : null);
         if (area && !isReadOnlySession()) {
           // Recording where I am must never block seeing who else is here; the server logs it.
           // WP-7 (Q14): with sharing off this asks the server to FORGET my building, so no building counts me.

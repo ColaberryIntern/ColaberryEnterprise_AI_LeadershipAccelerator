@@ -64,6 +64,8 @@ export interface ConciergeProps {
   /** Starts the tour at a stop (0, or the paused stop for Resume). */
   onTour: (from: number) => void;
   onEndTour?: () => void;
+  /** C13: × on a paused tour. */
+  onDismissTour?: () => void;
   /** Opens a page through its building's door. */
   onOpen: (route: string) => void;
   /** WP-2: the tour was just finished (the lead says what it covered and your next step). */
@@ -138,7 +140,7 @@ export default function CampusConcierge(p: ConciergeProps): React.ReactElement {
       <UpNext stops={p.stops} buildings={buildings} workplaceNames={wp} hereId={p.hereId ?? null} onWalk={p.onWalk} onOpen={p.onOpen} />
       <HereAt building={hereB} workplaceNames={wp} stops={p.stops} tourStop={tourHere} onOpen={p.onOpen} />
       <TourOffer audience={audience} stops={p.tourStops} buildings={buildings} workplaceNames={wp} running={p.touring}
-        paused={p.tourProgress.paused} toured={p.tourProgress.toured} onStart={p.onTour} onEnd={p.onEndTour} />
+        paused={p.tourProgress.paused} toured={p.tourProgress.toured} onStart={p.onTour} onEnd={p.onEndTour} onDismiss={p.onDismissTour} />
 
       {audience === 'explorer' && <ExplorerPass buildings={buildings} accessOf={p.accessOf} workplaceNames={wp}
         path={explorerPath(buildings, p.accessOf, wp, desks.some((d) => d.id === 'maya' && d.on_duty))} />}

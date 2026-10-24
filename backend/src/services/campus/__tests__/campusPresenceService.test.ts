@@ -74,6 +74,27 @@ describe('clearCampusArea (WP-7, Q14: "Show which building I am in" off)', () =>
   });
 });
 
+describe('C13: the campus count equals the People panel minus you', () => {
+  const NOW2 = new Date('2026-10-23T18:00:00Z');
+  it('online people with no building stand at the Quad, named as the panel names them; you are never counted', async () => {
+    findAll.mockResolvedValue([
+      { enrollment_id: 'me', area: 'library', updated_at: new Date(NOW2.getTime() - 1000) },
+      { enrollment_id: 'mate', area: 'library', updated_at: new Date(NOW2.getTime() - 2000) },
+    ]);
+    panel.mockResolvedValue({ viewer_role: 'student', my_class: [person('mate', 'Mia'), person('me', 'Me'), person('roamer', 'Rae')], active_now: [person('idle', 'Ida')] });
+    const { areas } = await getCampusPresence('me', 'coh-1', NOW2);
+    expect(areas.library!.count).toBe(1);
+    expect(areas.quad!.count).toBe(2);
+    expect(areas.quad!.people.map((p) => ('anonymous' in p ? 'anon' : p.display_name)).sort()).toEqual(['Ida', 'Rae']);
+  });
+  it('nobody online without a building: no Quad entry at all', async () => {
+    findAll.mockResolvedValue([]);
+    panel.mockResolvedValue({ viewer_role: 'student', my_class: [], active_now: [] });
+    const { areas } = await getCampusPresence('me', 'coh-1', NOW2);
+    expect(areas.quad).toBeUndefined();
+  });
+});
+
 describe('getCampusPresence visibility parity', () => {
   const rows = [
     { enrollment_id: 'me', area: 'library', updated_at: at(1000) },
@@ -83,11 +104,11 @@ describe('getCampusPresence visibility parity', () => {
     { enrollment_id: 'mate2', area: 'lecture', updated_at: at(5000) },
   ];
 
-  it('student, panel ON: names exactly my_class + active_now; everyone else anonymous; viewer counted not listed', async () => {
+  it('student, panel ON: names exactly my_class + active_now; everyone else anonymous; the viewer is neither counted nor listed (C13)', async () => {
     findAll.mockResolvedValue(rows);
     panel.mockResolvedValue({ viewer_role: 'student', my_class: [person('mate', 'Mia'), person('mate2', 'Max')], active_now: [person('active', 'Ana')] });
     const { areas } = await getCampusPresence('me', 'coh-1', NOW);
-    expect(areas.library!.count).toBe(4);
+    expect(areas.library!.count).toBe(3); // C13: "others on campus" (it was 4, with the viewer)
     expect(areas.library!.people).toEqual([
       { enrollment_id: 'mate', display_name: 'Mia', avatar_url: null, can_message: true },
       { enrollment_id: 'active', display_name: 'Ana', avatar_url: null, can_message: false },
@@ -224,6 +245,7 @@ describe('can_message (C5): the one DM rule, per viewer, fail closed', () => {
   });
 
   it('nobody named: the rule is not asked at all', async () => {
+    panel.mockResolvedValue({ viewer_role: 'student', my_class: [], active_now: [] }); // C13: nobody online either, so no Quad names
     findAll.mockResolvedValue([rows[3]]);
     await getCampusPresence('me', 'coh-1', NOW);
     expect(canDm).not.toHaveBeenCalled();

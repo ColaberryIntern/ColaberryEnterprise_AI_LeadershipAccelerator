@@ -20,7 +20,7 @@
 /* Today's plan: highlighted spokes from the quad to each stop, numbered in plan order (full map only). */
 
 /* Next: the banner's primary call to the first unfinished step elsewhere. Long titles truncate. */
-.cm-next{max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cm-btn.cm-next{max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap} /* the banner's Next button only (C13: it leaked onto the Up next section) */
 @media (max-width:640px){
-  .cm-next{max-width:100%;flex:1 1 100%}
+  .cm-btn.cm-next{max-width:100%;flex:1 1 100%}
 }

@@ -65,6 +65,8 @@ export interface CampusState {
   resumeTour: (from: number) => void;
   /** The last stop is done: the tour counts as taken. */
   finishTour: () => void;
+  /** C13: × on a paused tour forgets where it stopped. */
+  dismissTour: () => void;
   openList: () => void;
   closeLayer: () => void;
   /** C4: who is in each building (null until the first read), and whether the last read failed. */
@@ -140,7 +142,7 @@ const OFF: CampusState = {
   enabled: false, ready: false, active: false,
   settings: { nav: 'campus', workplaceNames: false, motion: 'device', shareBuilding: true, reduceMotion: false },
   updateSettings: noop, layer: 'none', mapFocus: null, mapHow: 'walk', openMap: noop, ackMap: noop, here: null, setHere: noop,
-  tourProgress: { paused: null, toured: false }, resumeTour: noop, finishTour: noop, openList: noop, closeLayer: noop,
+  tourProgress: { paused: null, toured: false }, resumeTour: noop, finishTour: noop, dismissTour: noop, openList: noop, closeLayer: noop,
   presence: null, presenceError: false, door: null, enterThroughDoor: noop, stepOutside: noop, clearDoor: noop,
   staffDesks: [], staffDesksError: false, personCard: null, openPersonCard: noop, closePersonCard: noop,
   dmToast: null, dismissDmToast: noop, holdDmToast: noop, releaseDmToast: noop, planStops: null, planMinutes: null,
@@ -184,7 +186,7 @@ export function CampusProvider({ children }: { children?: React.ReactNode }): Re
     try { if (id) window.sessionStorage.setItem(HERE_KEY, id); else window.sessionStorage.removeItem(HERE_KEY); } catch { /* no storage */ }
   }, []);
   const [lockerOpen, setLockerOpen] = useState(false);
-  const { tourIndex, tourProgress, justToured, resumeTour, startTour, setTourIndex, endTour, finishTour, clearTour } = useCampusTour(
+  const { tourIndex, tourProgress, justToured, resumeTour, startTour, setTourIndex, endTour, finishTour, clearTour, dismissTour } = useCampusTour(
     useCallback(() => { setPersonCard(null); setMapFocus(null); setLockerOpen(false); setLayer('map'); }, []));
   const closeLayer = useCallback(() => { setLayer('none'); setMapFocus(null); setPersonCard(null); endTour(); setLockerOpen(false); }, [endTour]);
   const openLocker = useCallback(() => { setPersonCard(null); clearTour(); setLockerOpen(true); setLayer('map'); }, [clearTour]);
@@ -196,9 +198,9 @@ export function CampusProvider({ children }: { children?: React.ReactNode }): Re
   const active = enabled && stored.nav === 'campus';
   const reduceMotion = useEffectiveReduceMotion(stored.motion, active);
   const settings = useMemo<CampusSettingsView>(() => ({ ...stored, reduceMotion }), [stored, reduceMotion]);
-  const { presence, presenceError } = useCampusPresencePoll(active, stored.shareBuilding);
+  const { presence, presenceError } = useCampusPresencePoll(active, stored.shareBuilding, here);
   const { audienceSwitch, viewAs, setViewAs } = useAudienceSwitch(active);
-  const switchValue = useMemo(() => ({ audienceSwitch, viewAs, setViewAs }), [audienceSwitch, viewAs, setViewAs]);
+  const switchValue = useMemo(() => ({ audienceSwitch, viewAs, setViewAs, active }), [audienceSwitch, viewAs, setViewAs, active]);
 
   // C3 door transitions. The context only records the request; CampusDoorTransition (inside the router)
   // plays it and performs the navigation, so this provider never needs router context.
@@ -221,9 +223,9 @@ export function CampusProvider({ children }: { children?: React.ReactNode }): Re
   const closePersonCard = useCallback(() => setPersonCard(null), []);
 
   const value = useMemo<CampusState>(
-    () => ({ enabled, ready, settings, active, updateSettings, layer, mapFocus, mapHow, openMap, ackMap, here, setHere, tourProgress, resumeTour, finishTour, openList, closeLayer, presence, presenceError,
+    () => ({ enabled, ready, settings, active, updateSettings, layer, mapFocus, mapHow, openMap, ackMap, here, setHere, tourProgress, resumeTour, finishTour, dismissTour, openList, closeLayer, presence, presenceError,
       door, enterThroughDoor, stepOutside, clearDoor, staffDesks, staffDesksError, personCard, openPersonCard, closePersonCard, dmToast, dismissDmToast, holdDmToast, releaseDmToast, planStops, planMinutes, completePlanStop, justToured, tourIndex, startTour, setTourIndex, endTour, look, lookError, saveLook, reloadLook, lockerOpen, openLocker, closeLocker, meOpen, openMe, closeMe, audienceSwitch, viewAs, setViewAs }),
-    [enabled, ready, settings, active, updateSettings, layer, mapFocus, mapHow, openMap, ackMap, here, setHere, tourProgress, resumeTour, finishTour, openList, closeLayer, presence, presenceError,
+    [enabled, ready, settings, active, updateSettings, layer, mapFocus, mapHow, openMap, ackMap, here, setHere, tourProgress, resumeTour, finishTour, dismissTour, openList, closeLayer, presence, presenceError,
       door, enterThroughDoor, stepOutside, clearDoor, staffDesks, staffDesksError, personCard, openPersonCard, closePersonCard, dmToast, dismissDmToast, holdDmToast, releaseDmToast, planStops, planMinutes, completePlanStop, justToured, tourIndex, startTour, setTourIndex, endTour, look, lookError, saveLook, reloadLook, lockerOpen, openLocker, closeLocker, meOpen, openMe, closeMe, audienceSwitch, viewAs, setViewAs],
   );
   return <Ctx.Provider value={value}><AudienceSwitchContext.Provider value={switchValue}>{children}</AudienceSwitchContext.Provider></Ctx.Provider>;

@@ -117,10 +117,10 @@ describe('POST /api/portal/campus/here (C4)', () => {
     expect(mockTouch).not.toHaveBeenCalled();
   });
 
-  it('not in the pilot: 204 and nothing written', async () => {
+  it('C13: written for every signed-in learner, pilot or not (reading stays pilot-only)', async () => {
     const res = await request(buildApp()).post(HERE).set('Authorization', `Bearer ${token()}`).send({ area: 'library' });
     expect(res.status).toBe(204);
-    expect(mockTouch).not.toHaveBeenCalled();
+    expect(mockTouch).toHaveBeenCalledWith('enr-1', 'library');
   });
 
   it('unknown area: 400 UnknownCampusArea and nothing written', async () => {
@@ -161,13 +161,14 @@ describe('POST /api/portal/campus/here (C4)', () => {
     expect(mockTouch).toHaveBeenCalledWith('enr-1', 'library');
   });
 
-  it('WP-7 (Q14) share must be a boolean, and the off switch is still gated by the pilot and the area', async () => {
-    mockClear.mockReset();
+  it('WP-7 (Q14) share must be a boolean, and the off switch still needs a real area; it works outside the pilot too (C13)', async () => {
+    mockClear.mockReset(); mockClear.mockResolvedValue(undefined);
     const on = buildApp({ CAMPUS_ENABLED: 'all' });
     expect((await request(on).post(HERE).set('Authorization', `Bearer ${token()}`).send({ area: 'library', share: 'no' })).status).toBe(400);
     expect((await request(on).post(HERE).set('Authorization', `Bearer ${token()}`).send({ area: 'dungeon', share: false })).status).toBe(400);
-    expect((await request(buildApp()).post(HERE).set('Authorization', `Bearer ${token()}`).send({ area: 'library', share: false })).status).toBe(204);
     expect(mockClear).not.toHaveBeenCalled();
+    expect((await request(buildApp()).post(HERE).set('Authorization', `Bearer ${token()}`).send({ area: 'library', share: false })).status).toBe(204);
+    expect(mockClear).toHaveBeenCalledWith('enr-1');
   });
 
   it('a storage failure answers 500 CampusPresenceUnavailable', async () => {
@@ -175,6 +176,28 @@ describe('POST /api/portal/campus/here (C4)', () => {
     const res = await request(buildApp({ CAMPUS_ENABLED: 'all' })).post(HERE).set('Authorization', `Bearer ${token()}`).send({ area: 'library' });
     expect(res.status).toBe(500);
     expect(res.body.error_class).toBe('CampusPresenceUnavailable');
+  });
+});
+
+describe('GET /api/portal/campus/audience (C13)', () => {
+  const AUD = '/api/portal/campus/audience';
+  const audienceFor = () => (jest.requireMock('../../services/campus/campusAudience') as { campusAudienceFor: jest.Mock }).campusAudienceFor;
+  it('401 without a token; 403 outside the pilot', async () => {
+    expect((await request(buildApp({ CAMPUS_ENABLED: 'all' })).get(AUD)).status).toBe(401);
+    expect((await request(buildApp()).get(AUD).set('Authorization', `Bearer ${token()}`)).status).toBe(403);
+  });
+  it('answers the server rule for the TOKEN enrollment', async () => {
+    audienceFor().mockResolvedValue('staff');
+    const res = await request(buildApp({ CAMPUS_ENABLED: 'all' })).get(AUD).set('Authorization', `Bearer ${token()}`);
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ audience: 'staff' });
+    expect(audienceFor()).toHaveBeenCalledWith('enr-1');
+  });
+  it('a failed rule answers 500 CampusAudienceUnavailable (the frontend then falls back to its own signals)', async () => {
+    audienceFor().mockRejectedValue(new Error('db down'));
+    const res = await request(buildApp({ CAMPUS_ENABLED: 'all' })).get(AUD).set('Authorization', `Bearer ${token()}`);
+    expect(res.status).toBe(500);
+    expect(res.body.error_class).toBe('CampusAudienceUnavailable');
   });
 });
 

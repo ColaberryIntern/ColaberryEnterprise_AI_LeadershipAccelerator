@@ -29,6 +29,7 @@ import CampusNav from '../../../components/campus/CampusNav';
 import CampusTabBar from '../../../components/campus/CampusTabBar';
 import CampusLayers from '../../../components/campus/CampusLayers';
 import CampusBanner from '../../../components/campus/CampusBanner';
+import { pingCampusBuilding } from '../../../components/campus/campusPing';
 import type { NavItem, NavGroup } from './ShellNav';
 import { useScrollCondense } from '../../../hooks/useScrollCondense';
 
@@ -297,10 +298,12 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge, condens
     refreshContacts();
     refreshPanel();
     pingPresence().catch(() => { /* non-fatal */ });
+    pingCampusBuilding();
     const id = window.setInterval(() => {
       refreshContacts();
       refreshPanel();
       pingPresence().catch(() => { /* non-fatal */ });
+      pingCampusBuilding();
     }, 60_000);
     return () => window.clearInterval(id);
   }, [refreshContacts, refreshPanel]);
@@ -455,8 +458,9 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge, condens
         {/* Scroll-condensed slot — whatever the current page hands us via
             condensedSlot "sucks up" into this gap once condensed is true.
             Falsy condensedSlot keeps this at zero width regardless of scroll. */}
-        <div className={`te-condensed-slot${condensed && condensedSlot ? ' is-visible' : ''}`}>
-          <div className="te-condensed-inner">{condensedSlot}</div>
+        {/* C13: the campus has its own location bar and rail, so the page's condensed 'YOUR NEXT STEP' never jumps into the header */}
+        <div className={`te-condensed-slot${condensed && condensedSlot && !campus.active ? ' is-visible' : ''}`}>
+          <div className="te-condensed-inner">{campus.active ? null : condensedSlot}</div>
         </div>
         <div className="te-top-right">
           <div className="te-rail">
