@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { getStudentGovProject, submitBuildStoryEvidence, verifyBuildStoryEvidence, type StudentGovProjectView, type StudentGovBuildStory } from '../../../services/govProjectPortalApi';
+import { getStudentGovProject, submitBuildStoryEvidence, verifyBuildStoryEvidence, saveGovProposalResponse, resolveGovProposalGap, type StudentGovProjectView, type StudentGovBuildStory, type SharedProposalResponse } from '../../../services/govProjectPortalApi';
 
 /**
  * GovProjectPortalPage — the STUDENT view of an assigned government project (restricted shell).
@@ -106,6 +106,95 @@ function StudentBuildStoryRow(
   );
 }
 
+/** One open gap on a proposal response: the question plus controls for an EDIT-shared intern to answer it or mark
+ *  it filler (a visible placeholder that blocks export until replaced). Resolving recomputes the response status. */
+function ProposalGapRow(
+  { gap, busy, onResolve }: { gap: NonNullable<SharedProposalResponse['gaps']>[number]; busy: boolean; onResolve: (resolution: 'answered' | 'filler', answer?: string) => void },
+): React.ReactElement {
+  const [answer, setAnswer] = useState('');
+  return (
+    <li className="py-1 border-top">
+      <div className="small">{gap.question}{gap.resolution === 'filler' ? ' (filler — needs a real answer)' : ''}</div>
+      <div className="d-flex flex-wrap gap-1 align-items-center mt-1">
+        <input className="form-control form-control-sm" style={{ maxWidth: 280 }} value={answer} placeholder="answer this question"
+          onChange={(e) => setAnswer(e.target.value)} />
+        <button type="button" className="btn btn-outline-primary btn-sm" disabled={busy || !answer.trim()} onClick={() => onResolve('answered', answer)}>Save answer</button>
+        <button type="button" className="btn btn-outline-secondary btn-sm" disabled={busy} onClick={() => onResolve('filler')}>Mark filler</button>
+      </div>
+    </li>
+  );
+}
+
+/**
+ * One proposal response for an EDIT-shared intern: the requirement, the current draft, and an editor. Saving lands
+ * the answer as `draft` (a reviewer approves it — the intern cannot). Open gaps can be answered or marked filler.
+ * Its own busy/error state; calls onSaved() (reload) after any write. Mirrors StudentBuildStoryRow.
+ */
+function ProposalEditableResponse(
+  { response, projectId, onSaved }: { response: SharedProposalResponse; projectId: string; onSaved: () => void },
+): React.ReactElement {
+  const [editing, setEditing] = useState(false);
+  const [content, setContent] = useState(response.content);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const save = async () => {
+    setBusy(true); setError(null);
+    try { await saveGovProposalResponse(projectId, response.requirementId, content); setEditing(false); onSaved(); }
+    catch { setError('Could not save your answer. Try again.'); }
+    finally { setBusy(false); }
+  };
+  const resolveGap = async (gapId: string, resolution: 'answered' | 'filler', answer?: string) => {
+    setBusy(true); setError(null);
+    try { await resolveGovProposalGap(projectId, response.requirementId, gapId, resolution, answer); onSaved(); }
+    catch { setError('Could not update the question. Try again.'); }
+    finally { setBusy(false); }
+  };
+
+  const openGaps = (response.gaps ?? []).filter((g) => g.resolution === 'open' || g.resolution === 'filler');
+
+  return (
+    <li className="list-group-item">
+      <div className="d-flex flex-wrap align-items-start gap-2 mb-1">
+        <span className="badge bg-secondary-subtle text-secondary-emphasis">{response.requirementId}</span>
+        <span className="flex-grow-1">{response.statement}</span>
+        <span className="badge bg-light text-dark border">{response.status}</span>
+        {response.openGapCount > 0 && <span className="badge bg-warning-subtle text-warning-emphasis">{response.openGapCount} open question{response.openGapCount === 1 ? '' : 's'}</span>}
+      </div>
+      {!editing ? (
+        <>
+          {response.content
+            ? <div className="small mt-1" style={{ whiteSpace: 'pre-wrap' }}>{response.content}</div>
+            : <div className="small text-secondary fst-italic">Not drafted yet.</div>}
+          <button type="button" className="btn btn-outline-primary btn-sm mt-1" onClick={() => { setContent(response.content); setEditing(true); }}>
+            <i className="ri-edit-line me-1" aria-hidden="true" />{response.content ? 'Edit response' : 'Draft response'}
+          </button>
+        </>
+      ) : (
+        <div className="mt-1">
+          <textarea className="form-control form-control-sm mb-1" rows={5} value={content}
+            placeholder="Draft the response to this requirement…" onChange={(e) => setContent(e.target.value)} />
+          <div className="d-flex flex-wrap gap-2 align-items-center">
+            <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={() => void save()}>
+              <i className="ri-save-line me-1" aria-hidden="true" />{busy ? 'Saving…' : 'Save draft'}
+            </button>
+            <button type="button" className="btn btn-outline-secondary btn-sm" disabled={busy} onClick={() => { setContent(response.content); setEditing(false); setError(null); }}>Cancel</button>
+            <span className="small text-secondary">Saving marks it a draft — a reviewer approves it.</span>
+          </div>
+        </div>
+      )}
+      {openGaps.length > 0 && (
+        <ul className="list-unstyled small mt-2 mb-0">
+          {openGaps.map((g) => (
+            <ProposalGapRow key={g.id} gap={g} busy={busy} onResolve={(res, ans) => void resolveGap(g.id, res, ans)} />
+          ))}
+        </ul>
+      )}
+      {error && <div className="small text-danger mt-1" role="alert">{error}</div>}
+    </li>
+  );
+}
+
 export default function GovProjectPortalPage(): React.ReactElement {
   const { projectId = '' } = useParams();
   const [view, setView] = useState<StudentGovProjectView | null>(null);
@@ -204,7 +293,13 @@ export default function GovProjectPortalPage(): React.ReactElement {
             <span className="small text-secondary">shared with you: {proposal.level === 'edit' ? 'can edit' : proposal.level === 'comment' ? 'can comment' : 'view only'}</span>
           </div>
           {proposal.responses.length === 0 ? (
-            <p className="text-secondary small">No responses have been drafted yet.</p>
+            <p className="text-secondary small">No responses to draft yet.</p>
+          ) : proposal.canEdit ? (
+            <ul className="list-group">
+              {proposal.responses.map((r) => (
+                <ProposalEditableResponse key={r.requirementId} response={r} projectId={projectId} onSaved={load} />
+              ))}
+            </ul>
           ) : (
             <ul className="list-group">
               {proposal.responses.map((r) => (
