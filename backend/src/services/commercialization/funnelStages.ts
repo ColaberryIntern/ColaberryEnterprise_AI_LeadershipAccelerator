@@ -73,11 +73,13 @@ export const FUNNEL_STAGES: readonly FunnelStage[] = [
     trigger:
       'a leads row with organization_id = the account, or an account_warm_paths row',
     source: 'leads.organization_id, account_warm_paths',
-    evidence: 'undeployed',
+    evidence: 'empty',
     rationale:
       'C6.1 called the account-to-person join the only genuine structural gap, and C8.3 '
-      + 'shipped it. Merged is not deployed: neither column is in production yet, so this '
-      + 'stage reports as undeployed rather than as zero.',
+      + 'shipped it. This read `undeployed` when C8.4 was written, because merged is not '
+      + 'deployed; the deploy landed on 2026-10-24 and leads.organization_id is now live '
+      + 'and empty. The SERVICE always decided this dynamically, so only this label was '
+      + 'stale - but a stale label on a board about honest measurement is its own defect.',
     excludes:
       'The unvalidated leads.company string. 2,584 leads carry one, but C8.3 proved it '
       + 'cannot identify an account on its own: three organizations are named "Colaberry" '

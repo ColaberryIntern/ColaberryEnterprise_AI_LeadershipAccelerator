@@ -4,6 +4,7 @@
  */
 import { Request, Response } from 'express';
 import { getCommercializationBoard } from '../services/commercialization/commercializationBoardService';
+import { getHypothesisHealth } from '../services/commercialization/hypothesisHealthService';
 
 export async function handleGetCommercializationBoard(
   _req: Request,
@@ -28,5 +29,31 @@ export async function handleGetCommercializationBoard(
       success: false,
       error: 'Could not build the commercialization board.',
     });
+  }
+}
+
+/**
+ * C8.6 - which revenue hypotheses are gaining evidence and which are dying.
+ *
+ * Read-only, and every count comes from the C8.4 funnel rather than from manual entry,
+ * which is an acceptance criterion on that ticket rather than a preference.
+ */
+export async function handleGetHypothesisHealth(
+  _req: Request,
+  res: Response,
+): Promise<void> {
+  try {
+    res.json({ success: true, data: await getHypothesisHealth() });
+  } catch (error) {
+    const err = error as Error;
+    console.error(JSON.stringify({
+      level: 'error',
+      service: 'commercialization-hypotheses',
+      event: 'hypothesis_health_failed',
+      error_class: err.name || 'UnknownError',
+      outcome: 'failure',
+      message: err.message,
+    }));
+    res.status(500).json({ success: false, error: 'Could not read hypothesis health.' });
   }
 }
