@@ -3370,3 +3370,72 @@ shorter.
 
 5 suites / **66 tests** green together. AC8 guard green at 11 entries. Test-file typecheck clean
 under `--strict` with no `--allowJs` across all five changed files.
+
+## 43 OUTBOUND CALLS HAVE NO TIMEOUT, and the count took three attempts to get right
+
+CLAUDE.md's Security Enforcement Layer: "Every outbound call to an external API MUST include
+explicit timeout (5-30s default, never unbounded)." It is not met in 43 places.
+
+### First, a correction to the entry above
+
+That entry said a defensive `catch` around awaited I/O "buys nothing without a timeout", with the
+hanging `communityService` DB call as the example. **The DB call was bounded.**
+`config/database.ts` sets `pool: { acquire: 30000 }`, so it fails after ~30s. The test hung
+because 30s exceeds jest's 5s limit, not because nothing bounded it.
+
+The lesson survives in weaker form - the catch still never ran, and a 30-second hang in a request
+path is its own defect - but "unbounded" was wrong for the database. Outbound HTTP is where
+unbounded means unbounded, and that is what this entry measures.
+
+### THE COUNT WAS WRONG TWICE, in opposite directions
+
+| Method | Result | Why it was wrong |
+|---|---|---|
+| File-level grep: "does this file mention `AbortSignal`?" | 39 sites, 13 files | Cannot see a file that bounds one call and not another. **Seven files do exactly that.** |
+| Raw-source scan per call site | 68 sites, 29 files | Matched `fetch(` inside STRING LITERALS. `data/weeks/week2.ts` and `classTeachWeeks.ts` carry curriculum prompt text reading "no ES modules and no fetch() of local files" - a sweep driven by this would have "fixed" lesson content. |
+| Tokenized: strings, templates and comments skipped | **43 sites, 17 files** | Control: **zero** call sites in `data/`. |
+
+The `data/` zero is kept as a LIVE CONTROL in the test, because it is the assertion that would
+have caught the second mistake. A second control asserts the scanner still finds BOUNDED calls
+(>20), because a broken scanner would report every count as zero and the ratchet would pass while
+measuring nothing.
+
+**Two independent implementations agree.** A throwaway Python scanner and the TypeScript one in
+the test produce identical per-file counts across all 17 files, which is why the baseline passed
+on the first run.
+
+### A RATCHET, NOT A FIX, and that is deliberate
+
+The 43 span GitHub, Apollo, Basecamp, Zoom, PaySimple, Slack and the architect proxy. Retiming
+them all would be a behaviour change to seventeen production integrations on one guess at the
+right number - and **a 15s ceiling on a call that legitimately takes 60s breaks it in a way no
+test here would catch.** `repoProjectImport` and the large GitHub repo reads are exactly the
+calls that might be legitimately slow.
+
+So the guard freezes the per-file count and fails on anything NEW: zero behavioural risk now, and
+the baseline burns down as each integration gets a timeout chosen by someone who knows what that
+call does. It follows the `bannedWordOutboundCopy` idiom already in this repo - the comparison is
+a PURE function driven with synthetic inputs, because the real tree is clean by construction the
+moment a baseline is pasted in, so proving the ratchet can fail needs inputs the tree cannot
+supply.
+
+The ratchet also fails when a file reaches zero and its entry is left behind, so retired entries
+cannot accumulate and quietly stop measuring anything.
+
+### Controlled both ways end to end
+
+| Mutation | Result |
+|---|---|
+| An unbounded `fetch` in a file not on the baseline | Fails, naming the file and quoting the fix |
+| The SAME new file with `signal: AbortSignal.timeout(5000)` | **Passes** - so it detects a missing timeout, not the presence of `fetch` |
+
+### Verification
+
+15 tests green. Backend `tsc --noEmit` clean. Test-file typecheck clean under the exact CI flags
+(`--strict`, no `--allowJs`, no `dom` lib).
+
+### What is left
+
+The 43 themselves, as a burn-down. `paysimpleService` is flagged in the baseline as PAYMENTS and
+should be retimed with the most care; `repoProjectImport` and the GitHub reads need a number that
+reflects how slow they legitimately are.
