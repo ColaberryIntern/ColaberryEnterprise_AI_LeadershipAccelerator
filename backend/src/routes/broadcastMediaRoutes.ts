@@ -34,9 +34,17 @@ const router = Router();
 
 /**
  * Resolves a verified key to a file on disk. Injected so the route is testable without a
- * database, and because the occurrence-to-recording BINDING is P6-01's job, not this route's.
- * Until P6-01 lands, the default resolver returns null and says so — the route is complete
- * and tested, but not yet reachable with real media, which is a different thing from broken.
+ * database, and because the occurrence-to-recording BINDING is not this route's job.
+ *
+ * L8.4 DECIDED THIS ROUTE IS NOT THE CLOUDFLARE REPLAY PATH, and that is why the default
+ * still resolves nothing. A Cloudflare occurrence never reaches here: the grant controller
+ * branches on `provider === 'cloudflare'` and signs a Cloudflare url, now for the RECORDING
+ * once the show has ended. Routing those through `/bm/` would have meant downloading every
+ * class to this box to re-serve what Cloudflare's edge already serves, signed.
+ *
+ * So this route waits on a recording that genuinely sits on local disk — a downloaded Zoom
+ * cloud recording, or an OBS capture. The route is complete and tested and has no such
+ * source yet, which is a different thing from broken.
  */
 export type RecordingResolver = (
   occurrenceId: string,
@@ -47,14 +55,18 @@ const notYetBound: RecordingResolver = async (occurrenceId, asset) => {
   console.warn(JSON.stringify({
     timestamp: new Date().toISOString(), level: 'warn', service: 'broadcast',
     event: 'broadcast_media_unbound', outcome: 'failure', error_class: 'RecordingNotBound',
-    context: { occurrenceId, asset, remedy: 'P6-01 binds recordings to occurrences; until then nothing resolves.' },
+    context: {
+      occurrenceId,
+      asset,
+      remedy: 'L8.4: Cloudflare replay is signed by the grant controller, not served here. This route resolves nothing until a recording exists on local disk.',
+    },
   }));
   return null;
 };
 
 let resolver: RecordingResolver = notYetBound;
 
-/** P6-01 calls this at wiring time. Exported for tests, which inject a stub. */
+/** Called at wiring time by whatever supplies on-disk recordings. Tests inject a stub. */
 export function setRecordingResolver(next: RecordingResolver): void {
   resolver = next;
 }

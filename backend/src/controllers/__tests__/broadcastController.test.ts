@@ -514,6 +514,69 @@ describe('postPlaybackGrant — the Cloudflare provider branch', () => {
     expect(res.json.mock.calls[0][0]).toMatchObject({ reason: 'live_input_not_bound' });
   });
 
+  /**
+   * L8.4 — an occurrence that is no longer on air must not be handed its live input.
+   *
+   * The shipped behaviour signed `provider_session_id` for any state, so a replay grant
+   * returned a correctly signed, correctly expiring manifest for an input that had stopped
+   * streaming days earlier. Well-formed and wrong.
+   *
+   * Which uid is chosen is pinned purely in broadcastRecordingBinding.test.ts; what these pin
+   * is that the controller asks, and that the two refusals stay distinguishable — one sends a
+   * producer to configuration, the other to a show whose recording was never captured.
+   */
+  /**
+   * `replay_ready`, not `ended`.
+   *
+   * Writing these against `ended` first was instructive: they came back 403, because
+   * entitlement's WATCHABLE set is live / reconnecting / replay_ready. An ended occurrence
+   * is refused before any playback target is resolved, so `ended` could never have
+   * exercised this branch. The fixture was wrong, not the code.
+   */
+  const replayCf = (over: any = {}) => liveCf({
+    editorial_state: 'replay_ready',
+    provider_instance_uuid: 'a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6',
+    ...over,
+  });
+
+  it('says recording_not_bound for a replay-ready occurrence with no recording', async () => {
+    // NOT live_input_not_bound: the input is configured and irrelevant. Absence of a recording
+    // has to be distinguishable from absence of configuration.
+    findByPk.mockResolvedValue(replayCf({ provider_instance_uuid: null }));
+    const res = mockRes();
+    await postPlaybackGrant(req({ body: { asset: 'master.m3u8' } }), res);
+    expect(res.status).toHaveBeenCalledWith(503);
+    expect(res.json.mock.calls[0][0]).toMatchObject({ reason: 'recording_not_bound' });
+  });
+
+  it('does NOT fall back to the live input when the recording is missing', async () => {
+    // The fallback is the bug. A viewer would get a playable-looking url for dead air.
+    findByPk.mockResolvedValue(replayCf({ provider_instance_uuid: null }));
+    const res = mockRes();
+    await postPlaybackGrant(req({ body: { asset: 'master.m3u8' } }), res);
+    expect(res.json.mock.calls[0][0]).not.toHaveProperty('url');
+    expect(res.json.mock.calls[0][0].reason).not.toBe('live_input_not_bound');
+  });
+
+  it('CONTROL: with a recording bound it gets past target resolution to the signer', async () => {
+    // Reaching live_playback_unavailable means the target resolved and signing was attempted
+    // (the provider env is deleted by this block's beforeEach). Without this, the two tests
+    // above could pass against a branch that never resolves anything.
+    findByPk.mockResolvedValue(replayCf());
+    const res = mockRes();
+    await postPlaybackGrant(req({ body: { asset: 'master.m3u8' } }), res);
+    expect(res.status).toHaveBeenCalledWith(503);
+    expect(res.json.mock.calls[0][0]).toMatchObject({ reason: 'live_playback_unavailable' });
+  });
+
+  it('still reports is_live false for a replay-ready occurrence', async () => {
+    findByPk.mockResolvedValue(replayCf());
+    const res = mockRes();
+    await postPlaybackGrant(req({ body: { asset: 'master.m3u8' } }), res);
+    // It never reaches the success payload here, but the refusal must not be a 200 either.
+    expect(res.status).not.toHaveBeenCalledWith(200);
+  });
+
   it('still denies a spent preview window BEFORE it ever reaches the provider', async () => {
     findByPk.mockResolvedValue(liveCf({ content_started_at: new Date(Date.now() - 901_000) }));
     const res = mockRes();
