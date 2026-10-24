@@ -3,6 +3,12 @@ jest.mock('../../../models/PresentationRecordingView', () => ({
   __esModule: true,
   default: { findAll: jest.fn().mockResolvedValue([]) },
 }));
+// The per-type rate the grid advertises is read from points config, which reaches
+// the real ORM. That is a different unit and this suite is about the seven slots,
+// so it is stubbed rather than dragging model initialisation into a grid test.
+jest.mock('../presentationRecordingPoints', () => ({
+  recordedTypeRate: jest.fn().mockResolvedValue({ builder: 30, community: 10 }),
+}));
 
 import { sequelize } from '../../../config/database';
 import PresentationRecordingView from '../../../models/PresentationRecordingView';

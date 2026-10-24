@@ -454,6 +454,12 @@ export interface Portfolio {
   totalTypes: number;
   nextTypeId: string | null;
   reflectionNotes: string | null;
+  /**
+   * What recording one more type pays. Optional because an older backend does
+   * not send it; 0 or absent means unpriced, and the UI shows no badge rather
+   * than "0 pts".
+   */
+  perTypeBuilderXp?: number;
 }
 
 export async function fetchPortfolio(projectId: string, storyId: string): Promise<Portfolio> {

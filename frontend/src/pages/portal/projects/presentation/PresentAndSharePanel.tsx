@@ -102,6 +102,9 @@ const PresentAndSharePanel: React.FC<PresentAndSharePanelProps> = ({
   }
 
   const { slots, recordedTypeCount, totalTypes, nextTypeId } = portfolio;
+  // 0 or absent means unpriced. No badge at all in that case, rather than a
+  // "+0 pts" that reads as the work being worth nothing.
+  const perType = portfolio.perTypeBuilderXp || 0;
   const pct = totalTypes > 0 ? Math.round((recordedTypeCount / totalTypes) * 100) : 0;
 
   return (
@@ -176,7 +179,7 @@ const PresentAndSharePanel: React.FC<PresentAndSharePanelProps> = ({
         {slots.map((slot, i) => (
           slot.recorded
             ? <FilledSlot key={slot.typeId} slot={slot} projectId={projectId} storyId={storyId} onChanged={() => void load()} />
-            : <VoidSlot key={slot.typeId} slot={slot} index={i} total={slots.length} onStart={() => onStartType(slot.typeId)} />
+            : <VoidSlot key={slot.typeId} slot={slot} index={i} total={slots.length} perTypeXp={perType} onStart={() => onStartType(slot.typeId)} />
         ))}
       </div>
 
@@ -306,8 +309,10 @@ const VoidSlot: React.FC<{
   slot: PortfolioSlot;
   index: number;
   total: number;
+  /** What recording this one pays. 0 = unpriced, so no badge. */
+  perTypeXp: number;
   onStart: () => void;
-}> = ({ slot, index, total, onStart }) => (
+}> = ({ slot, index, total, perTypeXp, onStart }) => (
   <button
     type="button"
     className="ps-slot-void"
@@ -342,7 +347,19 @@ const VoidSlot: React.FC<{
       {slot.description && (
         <span className="ps-note ps-note--soft">{slot.description}</span>
       )}
-      <span style={{ marginTop: 'auto', fontWeight: 700, color: 'var(--navy, #1b2f52)' }}>
+      {/* WHAT IT PAYS, BEFORE THEY COMMIT TO DOING IT. The whole prep week used
+          to pay on hand-in only, so recording a seventh kind of presentation
+          looked like unpaid extra work. Shown on the EMPTY slot because that is
+          where the decision to record one is made. */}
+      {perTypeXp > 0 && (
+        <span
+          data-testid={`ps-slot-pays-${slot.typeId}`}
+          style={{ marginTop: 'auto', fontSize: 12, fontWeight: 600, color: 'var(--teal-700, #0F7B6C)' }}
+        >
+          +{perTypeXp} pts the first time
+        </span>
+      )}
+      <span style={{ marginTop: perTypeXp > 0 ? 0 : 'auto', fontWeight: 700, color: 'var(--navy, #1b2f52)' }}>
         Not recorded yet · Start this one →
       </span>
     </span>

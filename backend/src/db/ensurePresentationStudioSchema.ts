@@ -333,6 +333,51 @@ export const PRESENTATION_STUDIO_STATEMENTS: string[] = [
   // takes against it and may deliberately record a short project introduction and a
   // full showcase in the same booked room.
   `ALTER TABLE presentation_recordings ADD COLUMN IF NOT EXISTS presentation_type VARCHAR(40)`,
+  // THE BACKFILL THE COLUMN SHIPPED WITHOUT, AND WHY IT IS NOT COSMETIC.
+  //
+  // The column was added and left NULL on every existing row. Readers fall back to
+  // the TASK's current template when a take has no type of its own — which is right
+  // for display and catastrophic as a resting state, because the task's template
+  // MOVES. Clicking an empty portfolio slot deep-links to Learn and persists that
+  // type onto the assignment, exactly as the spec asks. The side effect nobody
+  // intended: every unclassified take on that task silently re-labels itself.
+  //
+  // Observed in production on 2026-10-23. Three takes recorded as
+  // `project_introduction` moved to `ai_visual_presentation` the moment an empty
+  // slot was clicked, and the portfolio's filled slot jumped with them.
+  //
+  // A take's type is a fact about the day it was recorded. Freezing it is what
+  // makes it a fact rather than a view of whatever the task points at today — and
+  // it is a precondition for paying points per type, because a type that moves is
+  // a type that can be collected twice.
+  //
+  // Idempotent: only ever touches rows that have no type, so a re-run is a no-op
+  // and a learner's own re-classification is never overwritten.
+  `UPDATE presentation_recordings r
+      SET presentation_type = asg.template_slug
+     FROM presentation_attempts a
+     JOIN presentation_assignments asg ON asg.id = a.assignment_id
+    WHERE a.id = r.attempt_id
+      AND r.presentation_type IS NULL
+      AND asg.template_slug IS NOT NULL`,
+  // WHAT ONE RECORDED PRESENTATION TYPE PAYS.
+  //
+  // Ali, 2026-10-23: "give them points for every one of these videos they do."
+  // The whole prep week paid on hand-in only, so recording seven different kinds
+  // of presentation — the actual work the portfolio asks for — paid nothing.
+  //
+  // 30 builder / 10 community is not invented. It is `ai_video_feedback`'s
+  // builder rate, which is the nearest existing row for "a video the learner
+  // records", and `demo`'s community rate. Seven types is therefore 210 builder
+  // at most: well under one verified story (800), and in the same range as the
+  // five prep hand-ins it sits beside (40 each).
+  //
+  // A ROW, NOT A CONSTANT, so the rate is one admin edit rather than a deploy.
+  // ON CONFLICT DO NOTHING means a rate Ali has already tuned always wins, and a
+  // re-run never resets it.
+  `INSERT INTO points_config (scope, key, learning_xp, builder_xp, community_xp, is_active)
+        VALUES ('type_default', 'presentation_recording', 0, 30, 10, true)
+   ON CONFLICT (scope, key) DO NOTHING`,
   `ALTER TABLE presentation_recordings ADD COLUMN IF NOT EXISTS has_audio BOOLEAN`,
   `ALTER TABLE presentation_recordings ADD COLUMN IF NOT EXISTS has_shared_screen BOOLEAN`,
   `ALTER TABLE presentation_recordings ADD COLUMN IF NOT EXISTS review_reason TEXT`,

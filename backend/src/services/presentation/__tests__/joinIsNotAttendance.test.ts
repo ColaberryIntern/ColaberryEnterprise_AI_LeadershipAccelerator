@@ -89,13 +89,54 @@ describe('nothing in the Presentation Studio can complete a task', () => {
     expect(re.test(' * NOTHING HERE COMPLETES A TASK. ' + COMPLETION_WRITER + ' remains the only writer.')).toBe(false);
   });
 
-  it('no presentation service awards points', () => {
-    // Points follow completion. A rehearsal that paid out would make practice
-    // farmable, which is the same hole the attendance award had.
+  /**
+   * ONE presentation service may award points, and it is named here.
+   *
+   * This guard used to read "no presentation service awards points", which was
+   * right while the whole prep week paid on hand-in only. Ali changed that on
+   * 2026-10-23: "give them points for every one of these videos they do."
+   *
+   * The invariant that still matters is unchanged, and it is the one the
+   * attendance incident taught — REHEARSING, JOINING AND BOOKING MUST NOT PAY.
+   * A learner can mint a practice room and hit record as often as they like, so
+   * anything that pays per action is farmable. Recording a presentation TYPE
+   * pays once per type, which is a fixed ceiling of seven rather than a faucet.
+   *
+   * So the exception is a single named file, and the test below it pins the
+   * property that makes the exception safe. Widening this list is a decision,
+   * not a fix.
+   */
+  const POINTS_AWARDING_ALLOWED = ['presentationRecordingPoints.ts'];
+
+  it('no presentation service awards points, except the one that is allowed to', () => {
+    // A CALL or an IMPORT, never a mention — the same standard the completion
+    // guard above holds itself to. The earlier version matched a bare word, so a
+    // doc comment naming `payPrepTask` registered as an offender.
+    const awardsPoints = /(\b(payPrepTask|awardPoints|award)\s*\()|(import[^;]*\b(award|payPrepTask)\b[^;]*from)/;
     const offenders = PRESENTATION_FILES
-      .filter((f) => /\bpayPrepTask\b|\bawardPoints\b/.test(fs.readFileSync(f, 'utf8')))
-      .map((f) => path.relative(SRC, f));
+      .filter((f) => awardsPoints.test(fs.readFileSync(f, 'utf8')))
+      .map((f) => path.basename(f))
+      .filter((f) => !POINTS_AWARDING_ALLOWED.includes(f));
     expect(offenders).toEqual([]);
+  });
+
+  it('that points check can tell a call from a mention', () => {
+    // POSITIVE CONTROL. A regex that matched nothing would make the test above
+    // pass whatever shipped — which is exactly how the completion guard was
+    // once silently broken.
+    const awardsPoints = /(\b(payPrepTask|awardPoints|award)\s*\()|(import[^;]*\b(award|payPrepTask)\b[^;]*from)/;
+    expect(awardsPoints.test('await award(enrollmentId, { eventType: x });')).toBe(true);
+    expect(awardsPoints.test("import { award } from '../pointsService';")).toBe(true);
+    expect(awardsPoints.test(' * Fails closed, matching payPrepTask in demoEvidenceService.')).toBe(false);
+  });
+
+  it('the allowed file pays per TYPE, which is what stops it being a faucet', () => {
+    // The exception is only safe because the idempotency key is the presentation
+    // type. Keyed on the recording instead, "record, stop, repeat" would print
+    // points — the attendance hole with a record button.
+    const src = fs.readFileSync(path.join(PRESENTATION, 'presentationRecordingPoints.ts'), 'utf8');
+    expect(src).toContain('eventKey: `presentation_type:${typeId}`');
+    expect(src).not.toMatch(/eventKey:\s*`[^`]*\$\{recordingId\}/);
   });
 
   it('the launch path records intent and nothing stronger', () => {
