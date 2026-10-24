@@ -30,10 +30,29 @@ export interface PresentationTaskAsideProps {
   stage?: string;
   /** Seven types and whether each is recorded, for the Portfolio card. */
   portfolio?: Array<{ typeId: string; typeLabel: string; recorded: boolean }>;
+  /**
+   * The step that actually holds the hand-in, and how to open it.
+   *
+   * "Pays +40 pts" shows on every step; the control that earns it exists on
+   * exactly one. A learner standing on Practice reading "+40 pts" with no way
+   * to claim it has been told about a reward and not about the door — asked
+   * directly on 2026-10-24: "I don't see how to collect the pts."
+   */
+  handInStage?: string;
+  handInStageLabel?: string;
+  onGoToHandIn?: () => void;
 }
 
 export default function PresentationTaskAside(props: PresentationTaskAsideProps) {
-  const { storyId, isDemoDay, handedIn, points, storedTitle, stage, portfolio } = props;
+  const {
+    storyId, isDemoDay, handedIn, points, storedTitle, stage, portfolio,
+    handInStage, handInStageLabel, onGoToHandIn,
+  } = props;
+  // Only worth saying when they are NOT already looking at it, and not when
+  // staff do the marking — "go and hand in" is a lie on Demo Day.
+  const showHandInRoute = Boolean(
+    !isDemoDay && !handedIn && handInStage && handInStage !== stage && onGoToHandIn,
+  );
   const guide = guideFor(storyId);
   // Display override only. Falls back to the stored title — never to an invented one.
   const title = studentTitleFor(storyId) || storedTitle || 'Demo prep';
@@ -63,7 +82,26 @@ export default function PresentationTaskAside(props: PresentationTaskAsideProps)
           {typeof points === 'number' && points > 0 && (
             <>
               <dt>Pays</dt>
-              <dd>+{points} pts</dd>
+              <dd>
+                +{points} pts
+                {showHandInRoute && (
+                  <>
+                    {' '}
+                    <button
+                      type="button"
+                      className="ps-link"
+                      data-testid="ps-aside-handin-route"
+                      onClick={onGoToHandIn}
+                      style={{
+                        background: 'none', border: 0, padding: 0, cursor: 'pointer',
+                        fontWeight: 600, color: 'var(--ps-accent-soft, #2b6cb0)',
+                      }}
+                    >
+                      Hand in on {handInStageLabel} →
+                    </button>
+                  </>
+                )}
+              </dd>
             </>
           )}
         </dl>

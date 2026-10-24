@@ -158,6 +158,24 @@ function BookedSlot(
           `partNo` distinguishes the halves of ONE recording that Zoom split, which is a
           different thing — labelling two independent takes "Part 1 of 2" was wrong and
           is what the numbering below avoids. */}
+      {/* WHAT THIS STEP IS, WHEN THERE IS NOTHING ON IT YET.
+          With no takes, everything below collapses to a date field and a
+          "Reserve this time" button — which is exactly the pre-Studio screen,
+          and reads as one. Ali, 2026-10-24, looking at a task with no
+          recordings: "Why does this old setup still exist. I don't see the
+          checkbox with the 2 selections."
+          Those controls are per TAKE. The honest fix is to say so, rather than
+          to show an empty frame of them. */}
+      {!demo && (session.recordings || []).filter((t) => t.playbackUrl).length === 0 && (
+        <div className="ps-card" data-testid="ps-practice-no-takes" style={{ marginTop: 12 }}>
+          <h4 style={{ margin: '0 0 4px' }}>No takes yet</h4>
+          <p className="ps-note ps-note--soft" style={{ margin: 0 }}>
+            Reserve a room below and record a run-through. Each take then appears here to
+            watch back, with two choices on it: <strong>what kind of presentation it is</strong>,
+            and <strong>who can see it</strong> — private to you, or shared with your cohort.
+          </p>
+        </div>
+      )}
       {!demo && (session.recordings || []).filter((t) => t.playbackUrl).map((take, i, all) => (
         <div key={take.id} className="ps-card" data-testid={`ps-practice-player-${i + 1}`} style={{ marginTop: 12 }}>
           {/* SAID ON THE VIDEO ITSELF, not only in the notice before the room.
