@@ -43,7 +43,8 @@ jest.mock('../../../pages/portal/useIsOrgManager', () => ({
 }));
 jest.mock('../../../pages/portal/useMgmtStatus', () => ({ useMgmtStatus: () => ({ is_mgmt: false, role: null, label: null }) }));
 jest.mock('../../../pages/portal/useInternshipNav', () => ({ useInternshipNav: () => ({ isIntern: false }) }));
-jest.mock('../../../hooks/useScrollCondense', () => ({ useScrollCondense: () => false }));
+let mockCondensed = false; // scrolled past the page's hero
+jest.mock('../../../hooks/useScrollCondense', () => ({ useScrollCondense: () => mockCondensed }));
 jest.mock('../../../pages/portal/community/NotificationBell', () => ({ __esModule: true, default: () => null }));
 jest.mock('../../../pages/portal/projects/BuildToast', () => ({ __esModule: true, default: () => null }));
 jest.mock('../../../pages/portal/today/PeoplePanelRail', () => ({ __esModule: true, default: () => null }));
@@ -72,8 +73,10 @@ import { WithCampusHome, skipGate, where, Where } from './testEnv/WithCampusHome
 
 let container: HTMLDivElement;
 let root: Root;
-async function mount(opts: { campus: boolean; nav?: 'campus' | 'classic' }): Promise<void> {
+const SLOT = <div className="te-condensed" data-testid="page-next"><span className="te-cmini-tx"><span className="val">Watch the agents lesson</span></span></div>;
+async function mount(opts: { campus: boolean; nav?: 'campus' | 'classic'; condensed?: boolean; slot?: boolean }): Promise<void> {
   mockCampusOn = opts.campus;
+  mockCondensed = !!opts.condensed;
   window.localStorage.clear();
   // Fake, unsigned test token: its only payload is {"email":"learner@example.com"}. Not a credential.
   window.localStorage.setItem(PARTICIPANT_TOKEN_KEY, 'h.eyJlbWFpbCI6ImxlYXJuZXJAZXhhbXBsZS5jb20ifQ.s'); // gitleaks:allow
@@ -86,7 +89,7 @@ async function mount(opts: { campus: boolean; nav?: 'campus' | 'classic' }): Pro
     root.render(
       <MemoryRouter initialEntries={['/portal/library']}>
         <ParticipantAuthProvider><CampusProvider><Where />
-          <WithCampusHome><PortalShell><div>Page body</div></PortalShell></WithCampusHome>
+          <WithCampusHome><PortalShell condensedSlot={opts.slot ? SLOT : undefined}><div>Page body</div></PortalShell></WithCampusHome>
         </CampusProvider></ParticipantAuthProvider>
       </MemoryRouter>,
     );
@@ -131,6 +134,24 @@ describe('PortalShell nav swap', () => {
     expect(bar.parentElement).toBe(shell);
     expect(bar.previousElementSibling?.tagName).toBe('HEADER');
     expect(container.querySelector('main.te-main [data-testid="cm-locbar"]')).toBeNull();
+  });
+
+  it('Ali 2026-10-24: scrolled down, the page\'s sticky next task shows IN the location bar (not the header); at the top it does not', async () => {
+    await mount({ campus: true, slot: true, condensed: true });
+    const inBar = container.querySelector('[data-testid="cm-locbar"] [data-testid="cm-lb-next"] [data-testid="page-next"]');
+    expect(inBar).not.toBeNull();
+    expect(container.querySelectorAll('[data-testid="page-next"]').length).toBe(1); // never also in the header
+    expect(container.querySelector('header [data-testid="page-next"]')).toBeNull();
+    act(() => root.unmount()); container.remove();
+    await mount({ campus: true, slot: true, condensed: false });
+    expect(container.querySelector('[data-testid="page-next"]')).toBeNull();
+    expect(container.querySelector('[data-testid="cm-trail"]')).not.toBeNull();
+  });
+
+  it('classic menu: the sticky next task rides in the header exactly as before (no location bar)', async () => {
+    await mount({ campus: true, nav: 'classic', slot: true, condensed: true });
+    expect(container.querySelector('[data-testid="cm-locbar"]')).toBeNull();
+    expect(container.querySelector('.te-condensed-slot.is-visible [data-testid="page-next"]')).not.toBeNull();
   });
 
   it('campus on but the learner chose the classic menu: classic nav', async () => {

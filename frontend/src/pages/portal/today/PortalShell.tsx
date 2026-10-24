@@ -397,7 +397,8 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge, condens
       </header>
 
       {/* C16 (round 3 §2.4): the campus location bar, its own full-width row under the header */}
-      {campus.active && <CampusLocationBar />}
+      {/* Ali, 2026-10-24: the page's sticky next task rides IN the bar once scrolled (it used to ride in the header) */}
+      {campus.active && <CampusLocationBar next={condensed ? condensedSlot ?? null : null} />}
 
       {/* ── nav ── Colaberry Campus replaces the classic rail when active (flag on + not chosen classic) */}
       {campus.active ? <CampusNav active={active} /> : (
