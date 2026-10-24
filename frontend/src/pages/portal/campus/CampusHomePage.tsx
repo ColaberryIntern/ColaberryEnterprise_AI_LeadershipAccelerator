@@ -81,7 +81,13 @@ function CampusHome(): React.ReactElement {
   const { setHere, settings, presence, presenceError, staffDesks, look, reloadLook } = campus;
   const wp = settings.workplaceNames;
   // The building whose card opened is where you now are.
-  const onCard = useCallback((s: { open: boolean; building: BuildingId | null }) => { setCardOpen(s.open); if (s.building) setHere(s.building); }, [setHere]);
+  // C17: out on the grass after a click-to-walk (the kicker reads "On campus" until you next arrive somewhere).
+  const [onLawn, setOnLawn] = useState(false);
+  const onCard = useCallback((s: { open: boolean; building: BuildingId | null }) => {
+    setCardOpen(s.open); if (s.building) { setHere(s.building); setOnLawn(false); }
+  }, [setHere]);
+  // C17: walking to a spot on the grass leaves every building: "here" clears (the side panel shows the whole campus again).
+  const onGround = useCallback(() => { setHere(null); setOnLawn(true); }, [setHere]);
   const stay = useCallback(() => undefined, []);
   const { props, tour, touring, extra, onComplete } = useCampusWorldProps(stay, stay, null);
   useLevelCheer(look?.rung_name || null);
@@ -117,11 +123,11 @@ function CampusHome(): React.ReactElement {
         live={liveB ? { place: buildingName(liveB, wp), preview: liveNow?.b.access_mode === 'preview' } : null}
         hasTour={!!tour} reduceMotion={reduce} now={new Date()} onOpening={reveal.onOpening} onEnter={enter} photo={photo} />}
       <CampusWorld {...props} insets={homeInsets} walkTo={map.walk} onCard={onCard} cameraRef={map.camRef} startAt={campus.here}
-        startCam={map.startCam} recenter={map.recenter} me={{ initials, photo, level, tone: audience }} moments={mapMoments(audience, agenda)} quiet={quiet} hover={hover} liveNow={liveNow} />
+        startCam={map.startCam} recenter={map.recenter} me={{ initials, photo, level, tone: audience }} moments={mapMoments(audience, agenda)} quiet={quiet} hover={hover} liveNow={liveNow} onGround={onGround} />
       <CampusTopBar audience={audience} online={online} points={look?.points ?? null} rung={look?.rung_name || null} photo={photo} workplace={wp}
         streak={facts.streak} initials={initials} onList={campus.openList} onFind={() => { openWayfinder(); }} onMe={() => (campus.meOpen ? campus.closeMe() : campus.openMe())} />
       <CampusMeHost fullName={facts.fullName} initials={initials} onClosed={() => map.camRef.current?.recenter()} />
-      <CampusConcierge waiting={!reveal.shown} cardOpen={cardOpen} audience={audience} firstName={facts.firstName} hereId={campus.here ?? null}
+      <CampusConcierge waiting={!reveal.shown} cardOpen={cardOpen} audience={audience} firstName={facts.firstName} hereId={campus.here ?? null} onLawn={onLawn}
         buildings={buildings} accessOf={accessOf} workplaceNames={wp} presence={presence} presenceError={presenceError} desks={staffDesks}
         stops={campus.planStops} planMinutes={campus.planMinutes} live={live} now={new Date()} agenda={agenda} urgent={urgent}
         tourStops={tour ? tour.stops : null} touring={touring} tourProgress={campus.tourProgress} justToured={campus.justToured}

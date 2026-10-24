@@ -32,11 +32,14 @@ export function liveKicker(now: Date): string {
 }
 
 /** The kicker: an Explorer, a partner and staff always see their own (D:1854); a member sees where they are, or Colaberry Live. */
-export function kickerFor(o: { audience: CampusAudience; here: CampusBuilding | null; workplace: boolean; live: boolean; now: Date; company?: string | null }): string {
+export function kickerFor(o: { audience: CampusAudience; here: CampusBuilding | null; workplace: boolean; live: boolean; now: Date; company?: string | null;
+  onLawn?: boolean }): string {
   if (o.audience === 'explorer') return 'Explorer · visitor pass';
   if (o.audience === 'staff') return 'Staff view · every building';
   if (o.audience === 'business') return `Partner visit${o.company ? ` · ${o.company}` : ''}`;
   if (o.live) return liveKicker(o.now);
+  // C17: walked out onto the grass (no building, not at the gate either): the prototype's "On campus".
+  if (!o.here && o.onLawn) return 'On campus';
   if (!o.here || o.here.kind === 'gate') return o.workplace ? 'In the lobby' : 'At the main gate';
   return `At ${DISTRICT.includes(o.here.id) ? '' : 'the '}${buildingName(o.here, o.workplace)}`;
 }
