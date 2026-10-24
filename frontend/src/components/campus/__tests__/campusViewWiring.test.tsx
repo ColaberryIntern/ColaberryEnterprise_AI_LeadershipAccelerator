@@ -74,7 +74,7 @@ describe('the nav\'s "Your path" link (C16: it moved from the old banner)', () =
     expect(mockOpened).toEqual(['gate']);
   });
 
-  it('staff do not see it: their campus has the Main Gate, but the path to enrolling is an Explorer's', async () => {
+  it('staff do not see it: their campus has the Main Gate, but the path to enrolling is for Explorers only', async () => {
     set({ mgmt: true });
     await render(<CampusNav active="/portal/library" />);
     expect(container.querySelector('[data-testid="cm-your-path"]')).toBeNull();

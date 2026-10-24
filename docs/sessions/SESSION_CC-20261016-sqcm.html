@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Friday, October 23, 2026 at 10:44 PM</div>
-    <div><span class="sid">CC-20261016-sqcm</span><span class="count">22 changes</span></div>
+    <div class="meta">Generated Saturday, October 24, 2026 at 5:36 AM</div>
+    <div><span class="sid">CC-20261016-sqcm</span><span class="count">23 changes</span></div>
   </header>
   <main>
     
@@ -386,6 +386,21 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">frontend tsc 0 project errors; `CI=true` build compiled; test typecheck baseline matched exactly; whole frontend jest (CI command) 6,998 passed, 0 failed; campus + portal 2,303 passed after the final fixes; 39 older tests migrated to the bar (trail / Step outside / Where to / mini map read from it; tour from the rail; My look and classic from the Me panel; Your path from the nav; the banner&#39;s Next tests now assert the rail&#39;s Up next); NEW tests: the bar&#39;s parts and no Next, the coach mark once per session, the shell&#39;s bar row (never inside main), staff without Your path; MUTATION 5 of 5 caught (the shell row, coach once, Here now, Step outside in the bar, Your path for Explorers only; the last first survived and got its test); LOCAL E2E (throwaway Postgres, never production) 53/53; fidelity 22-page-nav 8/8 (1440 + 1920), 05-page, 14-step-outside, 13-recenter, 02-home 8/8; screenshots at 1440, 1920 and phone compared with the prototype&#39;s location bar.</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">(1) FOUND BY THE E2E: &quot;Full map&quot; first opened the map focused on the page&#39;s building, so a card was open when the next click came; the prototype&#39;s Full map opens the whole campus, restored. (2) FOUND BY THE SCREENSHOTS: the bar&#39;s &quot;you&quot; initials rendered dark on dark (a generic button colour rule outranked it), &quot;←Step outside&quot; had no gap, and &quot;Classroom › Classroom&quot; repeated; all fixed. (3) The &quot;📅 Talk to a person&quot; chip waits for C20&#39;s booking. (4) The phone portal header squeezes the program name: existing, not this change.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">23</span>
+          <h2>**C16 fix: PR #3365 CI red (Frontend typecheck + Frontend unit tests)**</h2>
+          <span class="badge">2026-10-24</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">TEST ONLY. `campusViewWiring.test.tsx`: the staff &quot;Your path&quot; test I added last had an apostrophe (&quot;Explorer&#39;s&quot;) inside a single-quoted string, so the file did not parse; reworded to &quot;for Explorers only&quot;.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">frontend tsc 0 errors; campusViewWiring 7/7; test typecheck baseline matched exactly; mutation rerun with a HARDENED harness 5/5 killed (baseline must pass first; a kill counts only on &quot;Tests: N failed&quot;, never on a suite that failed to compile).</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">ROOT CAUSE OF THE MISS: the test was added after the full jest and tsc runs, and the old mutation harness counted any non-zero exit as a kill, so the parse error read as &quot;caught&quot;. The earlier &quot;5 of 5&quot; claim was therefore wrong for that one mutant; it is genuinely 5/5 now. Lesson: rerun the gates after the LAST edit, and a mutation harness needs a passing baseline.</span></div>
           
         </div>
       </article>
