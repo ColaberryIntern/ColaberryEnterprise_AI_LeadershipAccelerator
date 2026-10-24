@@ -33,3 +33,22 @@ export const orgAddCohortSchema = z.object({
 export type OrgListQuery = z.infer<typeof orgListQuerySchema>;
 export type OrgStatusBody = z.infer<typeof orgStatusSchema>;
 export type OrgAddCohortBody = z.infer<typeof orgAddCohortSchema>;
+// C8.5 - linking a canonical artifact to an account. LINKS ONLY: there is
+// deliberately no field here that could carry a document, because copying an
+// artifact into the app is the failure mode the ticket names.
+export const orgLinkArtifactSchema = z.object({
+  artifact_kind: z.enum([
+    'deck', 'research', 'account_brief', 'proposal',
+    'contract', 'pilot_outcome', 'case_study',
+  ]),
+  title: z.string().trim().min(1).max(300),
+  // The pointer to the one canonical copy. Validated as a URL here and checked
+  // against the C0.3 naming rule in the service.
+  canonical_url: z.string().trim().url().max(2048),
+  source_type: z.enum(['basecamp_vault', 'repo', 'external']).optional(),
+  source_id: z.string().trim().max(64).nullable().optional(),
+  notes: z.string().trim().max(2000).nullable().optional(),
+});
+
+export type OrgLinkArtifactBody = z.infer<typeof orgLinkArtifactSchema>;
+
