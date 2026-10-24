@@ -1,5 +1,6 @@
 import { getSetting, getTestOverrides } from './settingsService';
 import { resolveGhlAccountForSource } from './leads/ghlAccountRouting';
+import { provenanceTagsFor } from './leads/ghlProvenanceTags';
 import { logActivity } from './activityService';
 import Lead from '../models/Lead';
 import { redactForLogs } from '../utils/piiRedaction';
@@ -335,6 +336,23 @@ export async function syncLeadToGhl(
           metadata: { action: 'ghl_sync', status: 'existing', ghl_contact_id: lead.ghl_contact_id, email: effectiveEmail },
         });
       }
+      /**
+       * Backfill provenance onto a contact linked BEFORE tagging existed.
+       *
+       * This path returns early for anyone already synced, so without this a contact created in
+       * the window between the sync fix and the tagging would stay unlabelled for ever - and
+       * re-running the sync, the obvious remedy, would do nothing. Tags are idempotent in GHL,
+       * so a contact that already carries them is unchanged.
+       */
+      for (const tag of provenanceTagsFor(lead)) {
+        // eslint-disable-next-line no-await-in-loop -- GHL v1 has no bulk tag endpoint
+        await addContactTag(lead.ghl_contact_id, tag, apiKey).catch((e: unknown) =>
+          console.error('[GHL] tag not applied', {
+            error_class: e instanceof Error ? e.constructor.name : 'Unknown',
+            lead_id: lead.id, tag,
+          }));
+      }
+
       return { contactId: lead.ghl_contact_id, isTestMode };
     }
 
@@ -393,6 +411,27 @@ export async function syncLeadToGhl(
     }
 
     if (contactId) {
+      /**
+       * Where this person came from, as tags on the contact.
+       *
+       * Measured 2026-10-23: we held `utm_source` and `utm_campaign` for 117 of 121 leads from
+       * the first paid campaign and pushed none of it, so in GHL an ad lead looked exactly like
+       * a referral or a cold import. Applied HERE, once, rather than threaded through the four
+       * branches above, so a contact that was created, matched by email or matched by phone all
+       * end up labelled the same way.
+       *
+       * Best effort per tag: a tag that will not apply must not cost the person their sync,
+       * which is already linked by this point.
+       */
+      for (const tag of provenanceTagsFor(lead)) {
+        // eslint-disable-next-line no-await-in-loop -- GHL v1 has no bulk tag endpoint
+        await addContactTag(contactId, tag, apiKey).catch((e: unknown) =>
+          console.error('[GHL] tag not applied', {
+            error_class: e instanceof Error ? e.constructor.name : 'Unknown',
+            lead_id: lead.id, tag,
+          }));
+      }
+
       // Only add note for newly created contacts — don't cross-contaminate existing ones
       if (isNewContact) {
         await addContactNote(
