@@ -199,7 +199,7 @@ window.HUB_DATA = {
     // ---------- pricing ----------
     { id:"prc1", category:"pricing", doc:"program-fact-sheet.html", tags:["price","cost","tuition","how much"],
       q:"What does it cost?",
-      a:"Founding pricing, confirmed by Ali on 2026-06-25, is $149/mo on the annual rate and $199/mo monthly. Pricing is revealed at the Open House, so keep it out of awareness posts and use it in reference and sales contexts only." },
+      a:"Founding pricing, confirmed by Ali on 2026-06-25, is $149/mo on the annual rate; lead with it alone (a $199/mo monthly plan exists, mention it only if they push back). Pricing is revealed at the Open House, so keep it out of awareness posts and use it in reference and sales contexts only." },
     { id:"prc2", category:"pricing", doc:"faq-objections.html", tags:["when price","reveal","open house"],
       q:"When do we reveal pricing?",
       a:"At the Open House. Awareness content, social posts, captions, and the calendar stay price-free and drive to the free event. Reference docs like the fact sheet and FAQ may state pricing, labeled as revealed at the Open House." },

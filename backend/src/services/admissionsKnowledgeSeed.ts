@@ -1,5 +1,5 @@
 import AdmissionsKnowledgeEntry from '../models/AdmissionsKnowledgeEntry';
-import { membershipPriceSentence, quotesRetiredFact } from './admissionsPricing';
+import { membershipPitchSentence, monthToMonthSentence, quotesRetiredFact } from './admissionsPricing';
 
 interface SeedEntry {
   category: string;
@@ -92,9 +92,19 @@ export const SEED_ENTRIES: SeedEntry[] = [
     category: 'pricing',
     title: 'Program Investment',
     // C22 (Ali, 2026-10-23): the membership price, built from the billing plans (admissionsPricing), never a typed figure.
-    content: `${membershipPriceSentence()} Group and corporate pricing: book a call with admissions.`,
-    keywords: ['price', 'cost', 'individual', 'enrollment', 'how much', 'investment', 'membership', 'monthly', 'annual', 'tuition', '149', '199', '$0'],
+    // Ali, 2026-10-24: lead with the annual membership ALONE; the month-to-month plan is its own entry, offered only on pushback.
+    content: `${membershipPitchSentence()} Group and corporate pricing: book a call with admissions. `
+      + 'Quote the annual membership on its own; do not mention any other plan unless the person pushes back on the price or the commitment.',
+    keywords: ['price', 'cost', 'individual', 'enrollment', 'how much', 'investment', 'membership', 'annual', 'tuition', '149', '$0'],
     priority: 10,
+  },
+  {
+    category: 'pricing',
+    title: 'Month-to-Month Option (only on pushback)',
+    content: 'Offer this ONLY if the person pushes back on the price or the commitment, or asks directly for a monthly or cancel-anytime option; '
+      + `never volunteer it with the annual price. ${monthToMonthSentence()}`,
+    keywords: ['month to month', 'month-to-month', 'monthly plan', 'cancel anytime', 'commitment', 'too expensive', 'cheaper', 'without a contract', '199'],
+    priority: 8,
   },
   {
     category: 'pricing',

@@ -85,7 +85,7 @@
   {
    "category": "program-basics",
    "q": "What does it cost?",
-   "a": "It's $149 a month billed annually, which is our best-value founding rate, or $199 a month month-to-month with cancel anytime. Founding members lock the $149 rate for as long as their membership stays active, even as prices rise for later cohorts.",
+   "a": "It's $149 a month billed annually, which is our best-value founding rate. Founding members lock the $149 rate for as long as their membership stays active, even as prices rise for later cohorts.",
    "detail": "The $149/mo founding rate is the recommended option and stays locked while the membership remains active.",
    "tags": [
     "pricing",
@@ -145,8 +145,8 @@
   {
    "category": "pricing-billing",
    "q": "How much does the program cost?",
-   "a": "It is one membership at $149 a month billed annually, which is our best value and locks in the founding rate. If you prefer to pay monthly and cancel anytime, it is $199 a month. That one price includes everything in the program.",
-   "detail": "$149/mo billed annually (founding rate, best value) vs $199/mo monthly. ONE membership covers all four Architect Intensives, Anthropic certification prep, the internship experience, and guided GitHub portfolio projects.",
+   "a": "It is one membership at $149 a month billed annually, which is our best value and locks in the founding rate. That one price includes everything in the program.",
+   "detail": "$149/mo billed annually (founding rate, best value). Lead with the annual rate on its own; mention the $199/mo monthly, cancel-anytime plan only if they push back on the price or the commitment. ONE membership covers all four Architect Intensives, Anthropic certification prep, the internship experience, and guided GitHub portfolio projects.",
    "tags": [
     "price",
     "membership",
@@ -644,7 +644,7 @@
    "category": "certification",
    "q": "Is the certification prep included or is it an extra cost?",
    "a": "It is fully included. One membership covers everything: all four Architect Intensives, Anthropic Architect certification prep, a full-time internship experience, and guided GitHub portfolio projects. There are no separate course or certification fees.",
-   "detail": "Membership is $149/mo billed annually at the founding rate or $199/mo monthly. Founding members lock the $149/mo rate for as long as the membership stays active.",
+   "detail": "Membership is $149/mo billed annually at the founding rate. Founding members lock the $149/mo rate for as long as the membership stays active. (A $199/mo monthly plan exists; mention it only if they push back.)",
    "tags": [
     "pricing",
     "included",
@@ -920,7 +920,7 @@
    "category": "objections-comparisons",
    "q": "Bootcamps cost way more than this. Why is it so cheap, and what's the catch?",
    "a": "There's no catch. It's one membership at $149 a month billed annually, the founding rate, and it includes everything: all four Architect Intensives, Anthropic Architect certification prep, a full-time internship experience, and guided GitHub portfolio projects. No separate course fees. The founding cohort is capped at 40 seats, and founding members lock that $149 rate for as long as their membership stays active, even as the price rises for later cohorts.",
-   "detail": "Monthly option is $199/mo, cancel anytime. Use the 40-seat cap and locked founding rate to create urgency honestly. Enroll at training.colaberry.com.",
+   "detail": "Only if they push back on the commitment: the monthly option is $199/mo, cancel anytime. Use the 40-seat cap and locked founding rate to create urgency honestly. Enroll at training.colaberry.com.",
    "tags": [
     "pricing",
     "bootcamp",
