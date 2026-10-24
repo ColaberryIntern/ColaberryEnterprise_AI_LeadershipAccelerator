@@ -330,7 +330,7 @@
       "category": "Program basics & format",
       "category_key": "program-basics",
       "question": "What does it cost?",
-      "answer": "It's $149 a month billed annually, which is our best-value founding rate, or $199 a month month-to-month with cancel anytime. Founding members lock the $149 rate for as long as their membership stays active, even as prices rise for later cohorts.",
+      "answer": "It's $149 a month billed annually, which is our best-value founding rate. Founding members lock the $149 rate for as long as their membership stays active, even as prices rise for later cohorts.",
       "detail": "The $149/mo founding rate is the recommended option and stays locked while the membership remains active.",
       "tags": [
         "pricing",
@@ -415,8 +415,8 @@
       "category": "Pricing & billing",
       "category_key": "pricing-billing",
       "question": "How much does the program cost?",
-      "answer": "It is one membership at $149 a month billed annually, which is our best value and locks in the founding rate. If you prefer to pay monthly and cancel anytime, it is $199 a month. That one price includes everything in the program.",
-      "detail": "$149/mo billed annually (founding rate, best value) vs $199/mo monthly. ONE membership covers all four Architect Intensives, Anthropic certification prep, the internship experience, and guided GitHub portfolio projects.",
+      "answer": "It is one membership at $149 a month billed annually, which is our best value and locks in the founding rate. That one price includes everything in the program.",
+      "detail": "$149/mo billed annually (founding rate, best value). Lead with the annual rate on its own; mention the $199/mo monthly, cancel-anytime plan only if they push back on the price or the commitment. ONE membership covers all four Architect Intensives, Anthropic certification prep, the internship experience, and guided GitHub portfolio projects.",
       "tags": [
         "price",
         "membership",
@@ -1119,7 +1119,7 @@
       "category_key": "certification",
       "question": "Is the certification prep included or is it an extra cost?",
       "answer": "It is fully included. One membership covers everything: all four Architect Intensives, Anthropic Architect certification prep, a full-time internship experience, and guided GitHub portfolio projects. There are no separate course or certification fees.",
-      "detail": "Membership is $149/mo billed annually at the founding rate or $199/mo monthly. Founding members lock the $149/mo rate for as long as the membership stays active.",
+      "detail": "Membership is $149/mo billed annually at the founding rate. Founding members lock the $149/mo rate for as long as the membership stays active. (A $199/mo monthly plan exists; mention it only if they push back.)",
       "tags": [
         "pricing",
         "included",
@@ -1528,7 +1528,7 @@
       "category_key": "objections-comparisons",
       "question": "Bootcamps cost way more than this. Why is it so cheap, and what's the catch?",
       "answer": "There's no catch. It's one membership at $149 a month billed annually, the founding rate, and it includes everything: all four Architect Intensives, Anthropic Architect certification prep, a full-time internship experience, and guided GitHub portfolio projects. No separate course fees. The founding cohort is capped at 40 seats, and founding members lock that $149 rate for as long as their membership stays active, even as the price rises for later cohorts.",
-      "detail": "Monthly option is $199/mo, cancel anytime. Use the 40-seat cap and locked founding rate to create urgency honestly. Enroll at training.colaberry.com.",
+      "detail": "Only if they push back on the commitment: the monthly option is $199/mo, cancel anytime. Use the 40-seat cap and locked founding rate to create urgency honestly. Enroll at training.colaberry.com.",
       "tags": [
         "pricing",
         "bootcamp",
@@ -2422,7 +2422,7 @@
       "category": "Pricing & student costs",
       "category_key": "pricing",
       "question": "What does it cost?",
-      "answer": "Founding pricing, confirmed by Ali on 2026-06-25, is $149/mo on the annual rate and $199/mo monthly. Pricing is revealed at the Open House, so keep it out of awareness posts and use it in reference and sales contexts only.",
+      "answer": "Founding pricing, confirmed by Ali on 2026-06-25, is $149/mo on the annual rate; lead with it alone (a $199/mo monthly plan exists, mention it only if they push back). Pricing is revealed at the Open House, so keep it out of awareness posts and use it in reference and sales contexts only.",
       "detail": "",
       "tags": [
         "price",
@@ -3735,7 +3735,7 @@
       "category": "Format, schedule & dates",
       "category_key": "logistics",
       "question": "What is included and what does it cost to join?",
-      "answer": "All four intensives, certification prep, the full-time internship, and the guided portfolio are included in the Colaberry AI Membership. The founding rate is $149 a month billed annually, or $199 a month month to month. You also cover your own third-party tool costs, an Anthropic subscription for Claude Code (about $20 a month) and light LLM API usage (most projects under $10 a month), paid directly to those providers.",
+      "answer": "All four intensives, certification prep, the full-time internship, and the guided portfolio are included in the Colaberry AI Membership. The founding rate is $149 a month billed annually, locked for as long as your membership stays active. You also cover your own third-party tool costs, an Anthropic subscription for Claude Code (about $20 a month) and light LLM API usage (most projects under $10 a month), paid directly to those providers.",
       "detail": "",
       "tags": [
         "cost",
@@ -3825,7 +3825,7 @@
       "category": "The membership & what's included",
       "category_key": "membership",
       "question": "What are the plans and pricing?",
-      "answer": "Two plans. $149 a month billed annually, the founding rate that locks for the life of your membership, or $199 a month month to month, which you can cancel anytime. The Founding Cohort is the first cohort at the locked founding rate.",
+      "answer": "Membership is $149 a month billed annually, the founding rate that locks for the life of your membership. The Founding Cohort is the first cohort at the locked founding rate.",
       "detail": "",
       "tags": [
         "pricing",

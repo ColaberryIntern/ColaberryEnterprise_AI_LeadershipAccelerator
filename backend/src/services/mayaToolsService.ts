@@ -27,7 +27,7 @@ import { getTestOverrides } from './settingsService';
 import StrategyCall from '../models/StrategyCall';
 import type { MayaActionResult } from './mayaActionService';
 import { updateBookingState } from './mayaConversationIntelligenceService';
-import { membershipPriceLine } from './admissionsPricing';
+import { pricingPitchRule } from './admissionsPricing';
 
 const { Op } = require('sequelize');
 
@@ -387,7 +387,7 @@ export async function initiateVoiceCall(
 
 CRITICAL PROGRAM FACTS — use these exact figures, never approximate or guess:
 - Program name: Enterprise AI Leadership Accelerator
-- Price: ${membershipPriceLine()} (say "one forty-nine a month billed annually, or one ninety-nine month-to-month"); group and corporate pricing comes from a person in admissions
+- ${pricingPitchRule()} Group and corporate pricing comes from a person in admissions
 - Duration: 3 weeks, 5 live sessions
 - Format: Live, hands-on, with expert-guided project work
 - Payment: card for membership; corporate invoice through admissions

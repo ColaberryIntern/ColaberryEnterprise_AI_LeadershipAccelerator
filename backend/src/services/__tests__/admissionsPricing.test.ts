@@ -6,12 +6,16 @@ jest.mock('../../models/AdmissionsKnowledgeEntry', () => ({
   default: { findAll: (...a: unknown[]) => mockFindAll(...a), findOne: (...a: unknown[]) => mockFindOne(...a), create: (...a: unknown[]) => mockCreate(...a) },
 }));
 
-import { MEMBERSHIP, membershipPriceSentence, membershipPriceLine, quotesRetiredFact } from '../admissionsPricing';
+jest.mock('../aiEventService', () => ({ emitRetrieval: () => Promise.resolve() }));
+
+import { MEMBERSHIP, membershipPitchSentence, membershipPitchLine, monthToMonthSentence, pricingPitchRule, quotesRetiredFact } from '../admissionsPricing';
 import { SEED_ENTRIES, seedAdmissionsKnowledge, retireStaleFacts } from '../admissionsKnowledgeSeed';
+import { findRelevantKnowledge } from '../admissionsKnowledgeService';
 
 /**
- * C22 (Ali, 2026-10-23): Maya quotes $149/month billed annually, $199/month month-to-month and "start for $0"; the retired $4,500
- * offer and the past March 31, 2026 cohort are never quoted, and rows that still say them are switched off on every boot.
+ * C22 (Ali, 2026-10-23): $149/month billed annually, $199/month month-to-month and "start for $0"; the retired $4,500 offer and the
+ * past March 31, 2026 cohort are never quoted, and rows that still say them are switched off on every boot.
+ * Ali, 2026-10-24: lead with the annual membership ALONE; the month-to-month plan only when the person pushes back.
  */
 describe('the price Maya quotes', () => {
   it('CONTRACT: equals what checkout charges (subscriptionService PLANS)', () => {
@@ -23,15 +27,32 @@ describe('the price Maya quotes', () => {
     expect(MEMBERSHIP.annualPerYear).toBe(MEMBERSHIP.annualPerMonth * 12);
   });
 
-  it('says $149 annually, $199 month-to-month and start for $0; never "free", never a retired fact', () => {
-    for (const s of [membershipPriceSentence(), membershipPriceLine()]) {
+  it('the pitch is the annual membership ALONE: $149 billed annually and start for $0, never $199', () => {
+    for (const s of [membershipPitchSentence(), membershipPitchLine()]) {
       expect(s).toContain('$149');
-      expect(s).toContain('$199');
+      expect(s).toMatch(/billed annually/);
       expect(s).toContain('$0');
+      expect(s).not.toContain('$199');
+      expect(s).not.toMatch(/month-to-month|cancel anytime/i);
       expect(s).not.toMatch(/\bfree\b/i);
       expect(quotesRetiredFact(s)).toBe(false);
     }
-    expect(membershipPriceSentence()).toContain('$1,788 a year');
+    expect(membershipPitchSentence()).toContain('$1,788 a year');
+  });
+
+  it('the pushback answer is the month-to-month plan: $199, cancel anytime, and what the annual plan saves', () => {
+    const s = monthToMonthSentence();
+    expect(s).toContain('$199 per month');
+    expect(s).toMatch(/cancel anytime/);
+    expect(s).toContain('$600 a year'); // (199 - 149) x 12
+    expect(s).not.toMatch(/\bfree\b/i);
+  });
+
+  it('the voice rule leads with the annual price and keeps month-to-month for pushback, never both in one breath', () => {
+    const r = pricingPitchRule();
+    expect(r.indexOf('$149')).toBeLessThan(r.indexOf('$199'));
+    expect(r).toMatch(/Do NOT mention the month-to-month plan unless they push back/);
+    expect(r).toMatch(/Never give both prices in the same breath/);
   });
 
   it('recognises the retired facts in the shapes they were written', () => {
@@ -47,11 +68,26 @@ describe('the price Maya quotes', () => {
 describe('the admissions knowledge seed', () => {
   beforeEach(() => { mockFindAll.mockReset(); mockFindOne.mockReset(); mockCreate.mockReset(); });
 
-  it('no seeded row quotes a retired fact, and the pricing row is the membership sentence', () => {
+  it('no seeded row quotes a retired fact; the pricing row is the annual pitch only; month-to-month is its own pushback row', () => {
     for (const e of SEED_ENTRIES) expect(quotesRetiredFact(`${e.title} ${e.content}`)).toBe(false);
     const pricing = SEED_ENTRIES.find((e) => e.title === 'Program Investment')!;
-    expect(pricing.content).toContain(membershipPriceSentence());
+    expect(pricing.content).toContain(membershipPitchSentence());
+    expect(pricing.content).not.toContain('$199');
     expect(pricing.keywords).not.toContain('4500');
+    expect(pricing.keywords).not.toContain('199');
+    const m2m = SEED_ENTRIES.find((e) => e.title.startsWith('Month-to-Month Option'))!;
+    expect(m2m.content).toContain(monthToMonthSentence());
+    expect(m2m.content).toMatch(/^Offer this ONLY if the person pushes back/);
+    expect(m2m.priority).toBeLessThan(pricing.priority);
+  });
+
+  it('Maya\'s retrieval: a price question surfaces the annual pitch first; a month-to-month question surfaces the pushback row', async () => {
+    mockFindAll.mockResolvedValue(SEED_ENTRIES.map((e) => ({ ...e })));
+    const first = async (q: string) => (await findRelevantKnowledge({ query: q, pageCategory: 'pricing', limit: 4 }))[0]?.title;
+    expect(await first('how much does it cost')).toBe('Program Investment');
+    expect(await first('what is the price of the membership')).toBe('Program Investment');
+    expect(await first('is there a month to month option, a year is too much commitment')).toMatch(/^Month-to-Month Option/);
+    expect(await first('can I cancel anytime')).toMatch(/^Month-to-Month Option/);
   });
 
   it('switches off every active row that quotes a retired fact, whoever wrote it; leaves the rest; deletes nothing', async () => {

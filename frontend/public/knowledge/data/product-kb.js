@@ -36,7 +36,7 @@ window.PRODUCT_DATA = {
       a:"It is the product that gives you the full AI Systems Architect Accelerator: all four intensives, certification prep, the full-time internship, and a guided portfolio, with no separate course fees. The membership is the program." },
     { category:"membership", tags:["pricing","plans","founding","149","199"],
       q:"What are the plans and pricing?",
-      a:"Two plans. $149 a month billed annually, the founding rate that locks for the life of your membership, or $199 a month month to month, which you can cancel anytime. The Founding Cohort is the first cohort at the locked founding rate." },
+      a:"Membership is $149 a month billed annually, the founding rate that locks for the life of your membership. The Founding Cohort is the first cohort at the locked founding rate." },
     { category:"membership", tags:["bundle","per course","499","1497","replaced"],
       q:"Is there still a separate per-course or bundle fee?",
       a:"No. The membership replaced the older per-intensive and bundle pricing. One membership covers the whole program." },

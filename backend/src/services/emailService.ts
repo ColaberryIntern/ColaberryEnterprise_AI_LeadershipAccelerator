@@ -13,7 +13,7 @@ import { SessionReminderData, buildSessionReminderHtml } from './email/sessionRe
 import { isDev } from '../config/featureFlags';
 import { decideDevEmailRouting } from './devEmailGuard';
 import { buildLeadAlert, decideNotify, type AlertLead } from './leadAlertMessage';
-import { membershipPriceLine } from './admissionsPricing';
+import { membershipPitchLine } from './admissionsPricing';
 
 // Prefer Mandrill SMTP relay when API key is set, fall back to generic SMTP
 const transporter = env.mandrillApiKey
@@ -1156,7 +1156,7 @@ function buildExecutiveOverviewHtml(data: ExecutiveOverviewEmailData): string {
   <div class="highlight">
     <strong>Format:</strong> 5-Day Executive AI Build Accelerator<br>
     <strong>Designed For:</strong> Directors, VPs, CTOs, and Technical Leaders<br>
-    <strong>Investment:</strong> ${membershipPriceLine()}<br>
+    <strong>Investment:</strong> ${membershipPitchLine()}<br>
     <strong>Outcome:</strong> Working AI POC + Executive Deck + 90-Day Roadmap
   </div>
 
@@ -1285,7 +1285,7 @@ function buildInterestHtml(data: InterestEmailData): string {
   <div class="highlight">
     <strong>Duration:</strong> 3 weeks (6 core sessions + optional labs)<br>
     <strong>Format:</strong> Live, instructor-led with hands-on projects<br>
-    <strong>Investment:</strong> ${membershipPriceLine()}<br>
+    <strong>Investment:</strong> ${membershipPitchLine()}<br>
     <strong>Outcome:</strong> Working AI Proof of Capability + Executive Presentation + 90-Day Roadmap
   </div>
 
