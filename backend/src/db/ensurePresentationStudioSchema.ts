@@ -378,6 +378,54 @@ export const PRESENTATION_STUDIO_STATEMENTS: string[] = [
   `INSERT INTO points_config (scope, key, learning_xp, builder_xp, community_xp, is_active)
         VALUES ('type_default', 'presentation_recording', 0, 30, 10, true)
    ON CONFLICT (scope, key) DO NOTHING`,
+  // THE SHARING BONUS. Ali, 2026-10-24: "give extra points to encourage sharing."
+  //
+  // 15, half the recording rate. Deliberately smaller than the thing it is a
+  // bonus on: putting your face in front of the cohort should be rewarded, and
+  // it must never be so valuable that declining feels like a penalty. Seven
+  // types is 105 builder at most on top of the 210 for recording them.
+  `INSERT INTO points_config (scope, key, learning_xp, builder_xp, community_xp, is_active)
+        VALUES ('type_default', 'presentation_shared', 0, 15, 10, true)
+   ON CONFLICT (scope, key) DO NOTHING`,
+  // THE TEXT HAND-IN NOW PAYS NOTHING. Ali, 2026-10-24: "The points should be
+  // moved from here. This is not a good place to collect points."
+  //
+  // Seeded explicitly at zero rather than left absent, so the row is visible in
+  // admin and turning the hand-in back on is an edit rather than a deploy. A
+  // zero-priced task drops out of `prepPointsMap`, and every surface already
+  // reads that as "no badge" — so "Submit · +40 pts" simply stops claiming it.
+  `INSERT INTO points_config (scope, key, learning_xp, builder_xp, community_xp, is_active)
+        VALUES ('type_default', 'prep_handin', 0, 0, 0, true)
+   ON CONFLICT (scope, key) DO NOTHING`,
+  // ONE PREP TASK, ONE PRESENTATION TYPE — the backfill Ali asked for on
+  // 2026-10-24: "make sure they match one per presentation type."
+  //
+  // `template_slug` is written by the UI as a side effect of navigating, so it
+  // drifted into nonsense: one project had PREP-1 ("Write the demo narrative")
+  // carrying `architecture_review`. The pairing is a curriculum fact and now
+  // lives in `prepTaskVideoTypes.ts`; this aligns the stored rows to it.
+  //
+  // THE VALUES ARE REPEATED HERE AS LITERALS ON PURPOSE. A boot-time DDL list
+  // cannot import application code, and generating this string from the module
+  // would make a schema migration depend on a service that may be refactored
+  // under it. `prepTaskVideoTypes.canonicalBackfillMatchesSchema` is the test
+  // that keeps the two copies honest, and it fails loudly when they diverge.
+  //
+  // RECORDINGS ARE NOT TOUCHED. A take's own `presentation_type` is frozen at
+  // ingest and is a fact about the day it was recorded; re-pointing the task it
+  // belongs to must never retroactively re-label footage that already exists.
+  `UPDATE presentation_assignments SET template_slug = v.type_id, updated_at = NOW()
+     FROM (VALUES
+       ('PREP-1', 'project_introduction'),
+       ('PREP-2', 'working_system_demo'),
+       ('PREP-3', 'ai_visual_presentation'),
+       ('PREP-4', 'stakeholder_update'),
+       ('PREP-5', 'final_showcase'),
+       ('PREP-6', 'architecture_review'),
+       ('PREP-7', 'client_handoff')
+     ) AS v(story_id, type_id)
+    WHERE presentation_assignments.story_id = v.story_id
+      AND presentation_assignments.template_slug IS DISTINCT FROM v.type_id`,
   `ALTER TABLE presentation_recordings ADD COLUMN IF NOT EXISTS has_audio BOOLEAN`,
   `ALTER TABLE presentation_recordings ADD COLUMN IF NOT EXISTS has_shared_screen BOOLEAN`,
   `ALTER TABLE presentation_recordings ADD COLUMN IF NOT EXISTS review_reason TEXT`,

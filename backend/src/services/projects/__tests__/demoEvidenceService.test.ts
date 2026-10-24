@@ -59,7 +59,7 @@ beforeEach(() => {
   mockProjectFindByPk.mockResolvedValue({ id: PROJECT, enrollment_id: ENROLLMENT });
   mockTaskUpdate.mockResolvedValue([1]);
   mockAward.mockResolvedValue({ awarded: true, points: 40 });
-  mockGetTypeXp.mockImplementation(async (key: string) => ({ learning: 0, community: 0, builder: key === 'presentation' ? 60 : key === 'demo' ? 40 : 0 }));
+  mockGetTypeXp.mockImplementation(async (key: string) => ({ learning: 0, community: 0, builder: key === 'presentation' ? 60 : key === 'prep_handin' ? 40 : 0 }));
 });
 afterEach(() => { (console.log as jest.Mock).mockRestore?.(); });
 
@@ -145,7 +145,7 @@ describe('submitDemoEvidence', () => {
     expect(attrs.verification_json).toMatchObject({ kind: 'link', value: 'https://youtu.be/run1' });
     expect(attrs.verified_at).toBeInstanceOf(Date);
     // Paid from the `demo` row, keyed exactly as the Today feed refs the tile.
-    expect(mockAward).toHaveBeenCalledWith(ENROLLMENT, expect.objectContaining({ eventType: 'demo', eventKey: 'project:task-1', points: 40 }));
+    expect(mockAward).toHaveBeenCalledWith(ENROLLMENT, expect.objectContaining({ eventType: 'prep_handin', eventKey: 'project:task-1', points: 40 }));
   });
 
   it('refuses a STORY: those are verified from the repo, and this must not become a second way in', async () => {
@@ -357,7 +357,7 @@ describe('an internal recording is first-class evidence', () => {
     mockTaskFindOne.mockResolvedValue(task({ story_id: 'PREP-2' }));
     mockResolveRecording.mockResolvedValue(resolved);
     await submitDemoEvidence(ENROLLMENT, PROJECT, 'PREP-2', { kind: 'recording', value: ATTEMPT });
-    expect(mockAward).toHaveBeenCalledWith(ENROLLMENT, expect.objectContaining({ eventKey: 'project:task-1', eventType: 'demo' }));
+    expect(mockAward).toHaveBeenCalledWith(ENROLLMENT, expect.objectContaining({ eventKey: 'project:task-1', eventType: 'prep_handin' }));
   });
 
   it('still refuses Demo Day, which only staff may mark', async () => {
