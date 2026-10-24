@@ -135,6 +135,31 @@ async function runAudience(browser, audience, jwt) {
       await page.keyboard.press('Escape');
     });
 
+    await step(audience, 'scrolled down, each page\'s sticky next task rides IN the location bar, never the header (Ali 2026-10-24)', async () => {
+      // The 13 pages that hand PortalShell a condensedSlot. A page shows one only when it has a next step for this viewer.
+      const pages = ['/portal/today?stay=1', '/portal/classroom', '/portal/projects', '/portal/cert-prep', '/portal/library', '/portal/schedule', '/portal/events',
+        '/portal/rooms', '/portal/community', '/portal/internship', '/portal/path', '/portal/points', '/portal/portfolio'];
+      const shown = [];
+      for (const p of pages) {
+        await page.goto(urls.base + p, { waitUntil: 'domcontentloaded' });
+        await page.waitForSelector('[data-testid="cm-locbar"]', { timeout: 30_000 });
+        await page.waitForTimeout(1200); // the page's data lands
+        await page.evaluate(() => window.scrollTo(0, 800));
+        await page.waitForTimeout(500);
+        const r = await page.evaluate(() => ({
+          inBar: !!document.querySelector('[data-testid="cm-locbar"] [data-testid="cm-lb-next"] .te-condensed'),
+          inHeader: !!document.querySelector('.te-condensed-slot.is-visible .te-condensed'),
+          barTop: Math.round(document.querySelector('[data-testid="cm-locbar"]').getBoundingClientRect().top),
+          scrolled: window.scrollY > 200,
+        }));
+        must(!r.inHeader, `${p}: the next task jumped into the header`);
+        if (r.scrolled) must(r.barTop === 0, `${p}: the bar is not stuck to the top (${r.barTop})`);
+        if (r.inBar) shown.push(p);
+      }
+      must(shown.length > 0, 'no page put its next task in the bar');
+      console.log(`      [${audience}] next task in the bar on ${shown.length}/${pages.length}: ${shown.join(' ')}`);
+    });
+
     await step(audience, 'click-to-walk: three grass points, each ends within 4 units, no card, the whole campus (C17)', async () => {
       const settle = () => page.waitForFunction(() => !document.querySelector('[data-testid="cm-travel-text"]'), null, { timeout: 20_000 });
       const vb = () => page.evaluate(() => document.querySelector('.cm-home svg.cm-map').getAttribute('viewBox').split(' ').map(Number));
