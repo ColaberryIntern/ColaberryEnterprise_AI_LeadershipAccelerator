@@ -135,6 +135,31 @@ async function runAudience(browser, audience, jwt) {
       await page.keyboard.press('Escape');
     });
 
+    if (audience === 'member') {
+      await step(audience, 'v6 D1 (C24): in the Studio the spot and the board\'s main button reach the same page; "See all" reaches the section', async () => {
+        const enterStudio = async () => {
+          await page.goto(`${urls.base}/portal/campus`, { waitUntil: 'domcontentloaded' });
+          await page.waitForSelector('[data-testid="cm-concierge"]', { timeout: 30_000 });
+          await page.evaluate(() => document.querySelector('[data-testid="cm-bld-studio"]').dispatchEvent(new MouseEvent('click', { bubbles: true })));
+          await page.waitForSelector('[data-testid="cm-room3d"][data-room="studio"] .cm-r3-spot', { timeout: 15_000 });
+          must(await page.locator('[data-testid="cm-inside-door"]').count() === 0, 'a door element is still in the room');
+        };
+        const landAfter = async (sel) => {
+          await page.click(sel);
+          await page.waitForURL((u) => u.pathname !== '/portal/campus', { timeout: 15_000 });
+          return new URL(page.url()).pathname;
+        };
+        await enterStudio();
+        const viaSpot = await landAfter('[data-testid="cm-spot-desk"]');
+        await enterStudio();
+        const viaBoard = await landAfter('[data-testid="cm-board-primary"]');
+        must(viaSpot === viaBoard, `spot -> ${viaSpot}, board button -> ${viaBoard}`);
+        await enterStudio();
+        const viaSection = await landAfter('[data-testid="cm-board-section"]');
+        must(viaSection === '/portal/projects', `See all -> ${viaSection}`);
+      });
+    }
+
     await step(audience, 'scrolled down, each page\'s sticky next task rides IN the location bar, never the header (Ali 2026-10-24)', async () => {
       // The 13 pages that hand PortalShell a condensedSlot. A page shows one only when it has a next step for this viewer.
       const pages = ['/portal/today?stay=1', '/portal/classroom', '/portal/projects', '/portal/cert-prep', '/portal/library', '/portal/schedule', '/portal/events',

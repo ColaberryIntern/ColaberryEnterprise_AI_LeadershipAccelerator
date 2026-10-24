@@ -215,8 +215,8 @@ function travelPlace(t: Travel, buildings: CampusBuilding[], workplace: boolean)
   return b ? buildingName(b, workplace) : 'this spot';
 }
 
-/** The prototype's goThroughDoor zooms from the room's own back door, not the building on the map. */
-const doorRect = (): DOMRect | null => document.querySelector('[data-testid="cm-inside-door"] rect')?.getBoundingClientRect() ?? null;
+/** v6 D1: the page or workstation grows out of what you went through: your spot when you sat down, otherwise the board. */
+const doorRect = (): DOMRect | null => (document.querySelector('.cm-r3-spot.is-sit') ?? document.querySelector('[data-testid="cm-board"]'))?.getBoundingClientRect() ?? null;
 
 function PersonPopFor({ t, buildings, workplace, audience, here, reese, onClose, onWalkOver, onMessaged }: {
   t: PersonCardTarget; buildings: CampusBuilding[]; workplace: boolean; audience: CampusAudience; here: boolean; reese: boolean;

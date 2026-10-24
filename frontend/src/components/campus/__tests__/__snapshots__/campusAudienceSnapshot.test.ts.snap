@@ -65,7 +65,7 @@ Array [
     "gate": "cert-prep",
     "id": "testing",
     "name": "Cert Prep Center",
-    "primary": "Start the knowledge check -> /portal/cert-prep",
+    "primary": "Take the diagnostic or practice -> /portal/cert-prep",
     "rooms": Array [
       "Cert prep -> /portal/cert-prep",
     ],
@@ -200,7 +200,7 @@ Array [
     "gate": "cert-prep",
     "id": "testing",
     "name": "Cert Prep Center",
-    "primary": "Start the knowledge check -> /portal/cert-prep",
+    "primary": "Take the diagnostic or practice -> /portal/cert-prep",
     "rooms": Array [
       "Cert prep -> /portal/cert-prep",
     ],
@@ -344,7 +344,7 @@ Array [
     "gate": "cert-prep",
     "id": "testing",
     "name": "Cert Prep Center",
-    "primary": "Start the knowledge check -> /portal/cert-prep",
+    "primary": "Take the diagnostic or practice -> /portal/cert-prep",
     "rooms": Array [
       "Cert prep -> /portal/cert-prep",
     ],
@@ -479,7 +479,7 @@ Array [
     "gate": "cert-prep",
     "id": "testing",
     "name": "Cert Prep Center",
-    "primary": "Start the knowledge check -> /portal/cert-prep",
+    "primary": "Take the diagnostic or practice -> /portal/cert-prep",
     "rooms": Array [
       "Cert prep -> /portal/cert-prep",
     ],

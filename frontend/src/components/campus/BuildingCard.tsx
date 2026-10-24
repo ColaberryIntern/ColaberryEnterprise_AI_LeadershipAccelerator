@@ -59,6 +59,8 @@ export interface BuildingCardProps {
   /** WP-6: Colaberry Live here: the hero in the state's colour and the stage under it. */
   heroClass?: string;
   stage?: React.ReactNode;
+  /** v6 D1: the two ways in (the board / your spot), under the tour block. They replace the single main action (an urgent one still wins). */
+  ways?: React.ReactNode;
 }
 
 /** The prototype prints the address under the main action ("enterprise.colaberry.ai/portal/..."); this is the real host. */
@@ -81,7 +83,7 @@ function LockedNotice({ b }: { b: CampusBuilding }): React.ReactElement {
   );
 }
 
-export default function BuildingCard({ building: b, access, workplaceNames, onClose, onNavigate, whoIsHere, onEnterRoom, desks, children, zoneLabel, line, happening, onElsewhere, audience, kicker, urgent, tourTop, planBox, tourNav, flashRoute, heroClass, stage }: BuildingCardProps): React.ReactElement {
+export default function BuildingCard({ building: b, access, workplaceNames, onClose, onNavigate, whoIsHere, onEnterRoom, desks, children, zoneLabel, line, happening, onElsewhere, audience, kicker, urgent, tourTop, planBox, tourNav, flashRoute, heroClass, stage, ways }: BuildingCardProps): React.ReactElement {
   const name = buildingName(b, workplaceNames);
   // A plain click goes through the door; a modified click (new tab, etc.) stays a normal link.
   const go = (route: string) => (e: React.MouseEvent) => {
@@ -106,6 +108,7 @@ export default function BuildingCard({ building: b, access, workplaceNames, onCl
       </div>
       <div className="cm-arrive-body">
         {tourTop}
+        {ways}
         {stage}
         {planBox}
         {happening && (
@@ -117,12 +120,12 @@ export default function BuildingCard({ building: b, access, workplaceNames, onCl
           </>
         )}
 
-        {urgent && !b.primary.admin
+        {ways && !urgent ? null : urgent && !b.primary.admin
           ? <Link className="cm-btn cm-cta is-urgent" to={urgent.route} onClick={go(urgent.route)} data-testid="cm-arrive-cta"><span>{urgent.label}</span><span aria-hidden="true">&rarr;</span></Link>
           : b.primary.admin ? adminLink(b.primary.label, b.primary.route, 'cm-btn cm-cta') : primaryPlanned
           ? <span className="cm-btn cm-cta is-disabled" aria-disabled="true">{b.primary.label} - opening soon</span>
           : <Link className="cm-btn cm-cta" to={b.primary.route} onClick={go(b.primary.route)} data-testid="cm-arrive-cta"><span>{b.primary.label}</span><span aria-hidden="true">&rarr;</span></Link>}
-        {!b.primary.admin && (urgent || !primaryPlanned) && <div className="cm-arrive-route" aria-hidden="true">{hostOf()}{urgent ? urgent.route : b.primary.route}</div>}
+        {!b.primary.admin && (urgent || (!primaryPlanned && !ways)) && <div className="cm-arrive-route" aria-hidden="true">{hostOf()}{urgent ? urgent.route : b.primary.route}</div>}
         {hasAdmin && (
           <p className="cm-who-note" data-testid="cm-admin-note">{isMgmt ? 'Opens the Management Portal in a new tab.' : 'Needs Management Portal access.'}</p>
         )}

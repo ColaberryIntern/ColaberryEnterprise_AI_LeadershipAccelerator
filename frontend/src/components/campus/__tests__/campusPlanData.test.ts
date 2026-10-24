@@ -30,12 +30,12 @@ describe('plan steps', () => {
     expect(canComplete(s)).toBe(true);
   });
 
-  it('a knowledge check is at Cert Prep; a project task in the Studio opens its workspace and is done there', () => {
+  it('a knowledge check is in the Classroom (part of the week, not certification: Ali 2026-10-24); a project task in the Studio opens its workspace', () => {
     const [kc, proj] = planStops([
       item({ type: 'knowledge_check', ref: 'card:k1', card_id: 'k1', student_label: 'Knowledge check' }),
       item({ type: 'project_task', ref: 'project:t9', card_id: null, project_id: 'p1', project_task_id: 't9', estimated_time: null, points: { builder: 50 } }),
     ]);
-    expect(kc).toMatchObject({ buildingId: 'testing', label: 'Knowledge check' });
+    expect(kc).toMatchObject({ buildingId: 'lecture', label: 'Knowledge check' });
     expect(proj).toMatchObject({ buildingId: 'studio', cardId: null, minutes: null, points: 50 });
     expect(proj.route).toMatch(/^\/portal\/projects\/workspace\//);
     expect(canComplete(proj)).toBe(false);

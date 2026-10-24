@@ -24,6 +24,10 @@ import type { CampusLiveNow } from './campusOnAir';
 import { roomRoute } from './campusOnAir';
 import { LIVE_STATES, liveSub } from './campusLiveState';
 import { enrollCta } from './campusAccess';
+import { usePageSummary } from './interior/usePageSummary';
+import { spotOf } from './interior/roomSpots';
+import { ROOMS } from './interior/roomModel';
+import ArrivalWays from './ArrivalWays';
 
 /**
  * Arriving at a building (C11b; WP-2): the room behind, and the arrival panel in front, as the prototype's arrive() builds it:
@@ -92,10 +96,18 @@ export default function ArrivalPanel(p: ArrivalPanelProps): React.ReactElement {
   const nextB = tour && isStop ? p.buildings.find((x) => x.id === tour.model.stops[tourIdx + 1]?.buildingId) : undefined;
   // The plan box: your next unfinished step in this building (never during a tour, as in the prototype).
   const stepIdx = plan && !tour ? plan.stops.findIndex((s) => !s.done && s.buildingId === b.id) : -1;
+  // v6 D6: the box only when this building's step is NOT the panel's Up next (else it would say the same thing twice).
+  const upNextIdx = plan ? plan.stops.findIndex((s) => !s.done) : -1;
+  const showPlanBox = stepIdx >= 0 && stepIdx !== upNextIdx;
   const open = (r: string) => p.onEnterRoom?.(r);
   const desks = p.staffDesks ? desksForBuilding(p.staffDesks, b.id, audience) : undefined;
   const desk = desks?.find((d) => d.on_duty) ?? null;
   const wall = useRoomWall(b.id, audience, data, plan ? plan.stops : null);
+  // v6 D1: the board (this building page's Next step and side card) and your spot, for a room you can use.
+  const inRoom = access === 'open' && !!ROOMS[b.id];
+  const summary = usePageSummary(b.id, inRoom, buildingName(b, wp));
+  const spot = inRoom ? spotOf(b.id) : null;
+  const sitAtSpot = () => { const el = document.querySelector<HTMLElement>('.cm-r3-spot'); if (el) el.click(); else if (summary?.card) open(summary.card); };
   // WP-6: the live building's main action joins the live room (audio and Q&A), as the prototype's per-state CTA
   const live = p.live ?? null;
   const liveRoute = live ? roomRoute(live.b) : null;
@@ -105,7 +117,8 @@ export default function ArrivalPanel(p: ArrivalPanelProps): React.ReactElement {
       <CampusInside building={b} buildingName={buildingName(b, wp)} audience={audience} access={access}
         presence={p.presenceError ? undefined : p.presence} onAir={p.onAir} reduceMotion={p.reduceMotion} onStepOutside={p.onClose} going={p.going}
         onPickPerson={p.onPickPerson} desk={desk} onDesk={desk ? (at) => openStaffCard(desk.id, at) : undefined} wall={wall} workplace={wp} fromDoor={p.fromDoor}
-        onGame={p.onEnterRoom ? (g) => open(`/portal/game-room?game=${g}`) : undefined} />
+        onGame={p.onEnterRoom ? (g) => open(`/portal/game-room?game=${g}`) : undefined}
+        summary={summary} planStep={stepIdx >= 0 ? plan!.stops[stepIdx] : null} spot={spot} sectionRoute={b.primary.route} onOpen={open} />
       <BuildingCard key={b.id} building={b} access={access} workplaceNames={wp} onClose={p.onClose} onNavigate={p.onNavigate} audience={audience}
         kicker={live && !isStop ? `${LIVE_STATES[live.state].chip} · Colaberry Live` : kickerOf({ zone: zoneLabelOf(b, wp), access, audience, tour: isStop ? { name: tour!.model.name, n: tourIdx + 1, of: tour!.model.stops.length } : null })}
         line={subOf(b, audience, wp)} onElsewhere={p.onElsewhere} urgent={liveCta ?? urgentAt(b.id, data, now)} flashRoute={p.flashRoute}
@@ -114,7 +127,8 @@ export default function ArrivalPanel(p: ArrivalPanelProps): React.ReactElement {
           live: live ? { state: live.state, title: live.b.title, sub: liveSub(live.b, live.now) } : null })}
         onEnterRoom={p.onEnterRoom} desks={desks}
         tourTop={isStop ? <TourStopCard tour={tour!.model} index={tourIdx} /> : undefined}
-        planBox={stepIdx >= 0 ? <PlanBox stop={plan!.stops[stepIdx]} index={stepIdx} total={plan!.stops.length} onOpen={open} onDone={plan!.onComplete} /> : undefined}
+        ways={inRoom ? <ArrivalWays spot={spot} summary={summary} name={buildingName(b, wp)} primaryLabel={b.primary.label} onSection={() => open(b.primary.route)} onSpot={sitAtSpot} /> : undefined}
+        planBox={showPlanBox ? <PlanBox stop={plan!.stops[stepIdx]} index={stepIdx} total={plan!.stops.length} onOpen={open} onDone={plan!.onComplete} /> : undefined}
         tourNav={tour ? <TourNav tour={tour.model} index={tourIdx} hereStop={isStop} nextName={nextB ? buildingName(nextB, wp) : null}
           onNext={tour.onNext} onBack={tour.onBack} onEnd={tour.onEnd} /> : undefined}
         children={b.id === 'gate' && p.isExplorer ? <ExplorerPath onNavigate={p.onNavigate}

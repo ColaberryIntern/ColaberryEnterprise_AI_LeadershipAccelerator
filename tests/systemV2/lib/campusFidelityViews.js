@@ -33,7 +33,8 @@ const HELPDESK = (a) => (a === 'business' ? [] : ['cm-cc-helpdesk']);
 const CONCIERGE_BY = { member: ['cm-cc-tour', 'cm-cc-chips'], explorer: ['cm-cc-pass', 'cm-cc-enroll', 'cm-cc-tour', 'cm-cc-chips'], business: ['cm-cc-tour', 'cm-cc-chips'], staff: ['cm-cc-staff-tools'] };
 const SIGNATURE = { member: 'commons', explorer: 'lecture', business: 'career', staff: 'career' };
 /** Tap a building even when the phone framing leaves it off screen (a real user pans to it first). */
-const tap = (id) => ({ evaluate: `document.querySelector('[data-testid="cm-bld-${id}"]').dispatchEvent(new MouseEvent('click', { bubbles: true }))` });
+// waits up to 10 s for the building: the map can render after the concierge, and a null tap failed at random accounts
+const tap = (id) => ({ evaluate: `(async () => { for (let i = 0; i < 50; i++) { const el = document.querySelector('[data-testid="cm-bld-${id}"]'); if (el) { el.dispatchEvent(new MouseEvent('click', { bubbles: true })); return; } await new Promise((r) => setTimeout(r, 200)); } throw new Error('no building ${id}'); })()` });
 /** WP-3: the prototype walk (330 units/s, eased, at least 600 ms): the longest walk on the campus settles inside this. */
 const WALKED = { wait: 2600 };
 
@@ -45,6 +46,24 @@ const HOME_KNOWN = (a, size) => [
   ...(a === 'business' ? ['partner company / seats / invite chips and "of your N people": no team size or company endpoint yet (WP-9)'] : []),
   ...(a === 'explorer' ? ['top bar "Enroll" pill: the enroll link lives in the Explorer pass'] : []),
 ];
+
+/** v6 D1 (C24): no door anywhere in a room; the room's spot (or none), at most one left-wall board, and the board itself. */
+const NO_DOOR = "document.querySelector('[data-testid=\"cm-inside-door\"]') ? 'a door element is still in the room' : ''";
+const roomOk = (id, spots) => `(() => {
+  const r = document.querySelector('[data-testid="cm-room3d"]');
+  if (!r) return 'no 3D room';
+  if (r.getAttribute('data-room') !== '${id}') return 'room is ' + r.getAttribute('data-room');
+  if (document.querySelector('[data-testid="cm-inside-door"]')) return 'a door element is still in the room';
+  const n = document.querySelectorAll('.cm-r3-spot').length;
+  if (n !== ${spots}) return 'spots: ' + n + ' (want ${spots})';
+  if (document.querySelectorAll('[data-testid="cm-wall-board"]').length > 1) return 'more than one left-wall board';
+  if (!document.querySelector('[data-testid="cm-board-title"]')) return 'the board has no title';
+  return '';
+})()`;
+/** v6 D1 fidelity view 21-room: the five rooms the ticket names, as a member (the click-throughs are in campus.e2e.js). */
+const ROOM_VIEWS = [['lecture', 1], ['studio', 1], ['testing', 1], ['library', 1], ['amphi', 0]].map(([id, spots]) => ({
+  name: `21-room-${id}`, route: '/portal/campus', accounts: ['member'], steps: () => [tap(id), WALKED],
+  required: () => ['cm-inside', 'cm-room3d', 'cm-board', 'cm-ways', ...(spots ? ['.cm-r3-spot'] : [])], assert: () => roomOk(id, spots) }));
 
 /** The map's viewBox right now, and the drag / zoom that move it well away from the whole campus. */
 const VB = "document.querySelector('svg.cm-map.has-camera').getAttribute('viewBox')";
@@ -79,9 +98,10 @@ const VIEWS = [
     required: (a, size) => [...MAP_ART, ...buildingIds(), ...TOPBAR, ...(size === 'phone' ? [] : ['cm-stats', ...STATS[a]]), ...CONCIERGE, ...HELPDESK(a), ...CONCIERGE_BY[a], ...(size === 'phone' ? ['.cm-tabbar'] : [])],
     known: HOME_KNOWN },
   { name: '03-arrive', route: '/portal/campus', steps: (a) => [tap(SIGNATURE[a]), WALKED],
-    required: () => ['cm-card', 'cm-arrive-hero', 'cm-arrive-now', '.cm-arrive .cm-cta', 'cm-arrive-back', 'cm-arrive-elsewhere', '.cm-arrive .cm-rooms'] },
+    required: (a) => ['cm-card', 'cm-arrive-hero', 'cm-arrive-now', ...(a === 'explorer' ? [] : ['cm-ways', 'cm-way-board']), 'cm-arrive-back', 'cm-arrive-elsewhere', '.cm-arrive .cm-rooms'] }, // v6 D1: the two ways in replace the single action (an explorer's lecture preview is locked: no ways, the enroll action stays)
   { name: '04-inside', route: '/portal/campus', steps: (a) => [tap(SIGNATURE[a]), WALKED],
-    required: () => ['cm-inside', 'cm-inside-room', 'cm-inside-you', 'cm-inside-door', 'cm-inside-out'],
+    required: () => ['cm-inside', 'cm-room3d', 'cm-board', 'cm-inside-you', 'cm-inside-out'], // v6 D1: the CSS 3D room; the board replaced the door
+    assert: () => NO_DOOR,
     known: () => ['the room opens on arrival, as the prototype flyIn does (no separate "look inside" step)', 'the prototype interiors invented events, dates, client names and tickets: neutral signs instead'] },
   { name: '05-page', route: '/portal/library',
     required: (a, size) => ['cm-locbar', 'cm-trail', 'cm-step-out', '.cm-locbar .cm-whereto', ...(size === 'phone' ? [] : ['cm-page-side', 'cm-page-rail'])], // C16: the bar
@@ -134,7 +154,8 @@ const VIEWS = [
     known: () => ['search logging for staff insights: decision Q11\'s separate project'] },
   // WP-5: a room whose back wall carries real facts (the Schedule board: TODAY · <weekday>, the next session, event and plan)
   { name: '19-room-wall', route: '/portal/campus', steps: () => [tap('tower'), WALKED],
-    required: () => ['cm-inside', 'cm-wall-schedule', 'cm-you-walk'] },
+    required: () => ['cm-inside', 'cm-room3d', 'cm-board', 'cm-r3-you'], assert: () => roomOk('tower', 0) }, // v6 D1: Schedule has a board, no spot
+  ...ROOM_VIEWS,
   // WP-6: arriving at the live building: the hero in the state's colour, the stage, the live room as the main action
   // C16 (round 3 §2.4): the light location bar on a page at 1440 and 1920: it spans the viewport, no control's text overflows, and
   // after scrolling 800 px it is at the top with the rail's Up next in view and no "YOUR NEXT STEP" inside the header.
@@ -152,7 +173,7 @@ function panelFor(view, a, size) {
   if (view.name === '01-gate') return [];
   const tour = a === 'staff' ? [] : ['cm-cc-tour'];
   if (view.route !== '/portal/campus' && view.name !== '14-step-outside') return size === 'phone' ? ['cm-steps-open'] : ['cm-page-rail', ...tour.map((t) => `[data-testid="cm-page-rail"] [data-testid="${t}"]`)];
-  if (size === 'phone' && CARD_VIEWS.includes(view.name)) return ['cm-cc-peek'];
+  if (size === 'phone' && (CARD_VIEWS.includes(view.name) || view.name.startsWith('21-room-'))) return ['cm-cc-peek'];
   return ['cm-concierge', ...tour];
 }
 const withPanel = (view) => ({ ...view, required: (a, size) => [...view.required(a, size), ...panelFor(view, a, size)] });

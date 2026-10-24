@@ -54,6 +54,20 @@
   --cm-art-in-studio-wall:#eef2f5; --cm-art-in-studio-wall-d16:#dee2e5; --cm-art-in-studio-wall-d28:#d2d6d9; --cm-art-in-studio-floor:#858e99;
   --cm-art-in-career-wall:#e9eef2; --cm-art-in-career-wall-d16:#d9dee2; --cm-art-in-career-wall-d28:#cdd2d6; --cm-art-in-career-floor:#7b8591;
   --cm-art-in-gallery-wall:#f2f4f6; --cm-art-in-gallery-wall-d16:#e2e4e6; --cm-art-in-gallery-wall-d28:#d6d8da; --cm-art-in-gallery-floor:#c4cbd1;
+  /* v6 D1: "your spot" furniture (prototype DESK_SVG / SPOT_SVG) and the cubicles (D2) */
+  --cm-art-sp-shadow:rgba(0,0,0,.22); --cm-art-sp-ink:#1f1b16; --cm-art-sp-paper:#fbf7f0; --cm-art-sp-card:#fffdf6; --cm-art-sp-card-edge:#d9cdb8; --cm-art-sp-rule:#cfc4b4;
+  --cm-art-sp-wood:#b98557; --cm-art-sp-wood-edge:#8a5e40; --cm-art-sp-wood-leg:#6e4a32; --cm-art-sp-bench:#9a6a4a; --cm-art-sp-bench-front:#7a5038; --cm-art-sp-bench-leg:#5e3e2a;
+  --cm-art-sp-carrel:#7a5038; --cm-art-sp-carrel-in:#8f6446; --cm-art-sp-carrel-side:#6a4630;
+  --cm-art-sp-lamp-arm:#3a332c; --cm-art-sp-lamp:#e3a43a; --cm-art-sp-lamp-glow:#ffe6a8; --cm-art-sp-lamp-cone:rgba(255,226,150,.28); --cm-art-sp-brass:#b8860b; --cm-art-sp-lamp-green:#1f7a45; --cm-art-sp-glow-warm:#fff3b0; --cm-art-sp-cone-warm:rgba(255,236,170,.35);
+  --cm-art-sp-monitor:#0e0c0b; --cm-art-sp-term:#121010; --cm-art-sp-code-green:#7ee2a8; --cm-art-sp-code-grey:#cfc7bb; --cm-art-sp-code-amber:#f2b632; --cm-art-sp-stand:#2b2622;
+  --cm-art-sp-keys:#2b2e33; --cm-art-sp-key:#4a4f57; --cm-art-sp-chair:#1f2226; --cm-art-sp-chair-seat:#2b2e33; --cm-art-sp-headset:#2a2430;
+  --cm-art-sp-pot:#c46a1b; --cm-art-sp-leaf-1:#6d9b52; --cm-art-sp-leaf-2:#7fae5f; --cm-art-sp-leaf-3:#9cc47c; --cm-art-sp-steam:#ffffff;
+  --cm-art-sp-notebook:#2f6f73; --cm-art-sp-bottle:#7cc4ff; --cm-art-sp-bottle-cap:#2b5d8a; --cm-art-sp-dark-screen:#3a3f46;
+  --cm-art-sp-booth:#b7c3cf; --cm-art-sp-booth-in:#c9d3dc; --cm-art-sp-booth-side:#a3b0bd; --cm-art-sp-booth-desk:#d7dee5; --cm-art-sp-booth-front:#aeb9c4; --cm-art-sp-booth-leg:#8a96a2; --cm-art-sp-blue:#2b5d8a;
+  --cm-art-sp-cab:#2b1a3d; --cm-art-sp-cab-top:#14091f; --cm-art-sp-cab-panel:#3a2752; --cm-art-sp-cab-stick:#1b1622; --cm-art-sp-cab-screen:#0b0712; --cm-art-sp-cab-title:#ffd6ee;
+  --cm-art-sp-neon-pink:#ff4fa3; --cm-art-sp-neon-cyan:#3de0ff; --cm-art-sp-neon-yellow:#ffd23d; --cm-art-sp-neon-green:#7dff6b;
+  --cm-art-sp-meet-chair:#7a4a7a; --cm-art-sp-meet-chair-in:#8f5a8f; --cm-art-sp-meet-table:#d9c3a5; --cm-art-sp-meet-table-edge:#9a7a5a; --cm-art-sp-meet-foot:#7a5a3a; --cm-art-sp-call:#e9f1fb; --cm-art-sp-maya:#b0306a; --cm-art-sp-live:#1f8a4c;
+  --cm-art-sp-cub-desk:#c9d6e0; --cm-art-sp-cub-desk-side:#9fb3c2; --cm-art-sp-cub-lit:#7cc4ff;
   /* home chrome (prototype .cc, .pulse, .helpdesk, .plan-card, .pass, .lv-chip, .acct-chip, .livecard) */
   --cm-art-card:#ffffff; --cm-art-red-tint:rgba(227,27,35,.15); --cm-art-live-tint:rgba(31,138,76,.15);
   --cm-art-help-bg:#fff8e6; --cm-art-help-edge:#ecd9a8; --cm-art-help-hover:#b07a00;

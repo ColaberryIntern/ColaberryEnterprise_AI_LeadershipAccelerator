@@ -88,7 +88,7 @@ export const CAMPUS_BUILDINGS: readonly CampusBuilding[] = [
     rooms: [{ label: 'Events', route: '/portal/events' }],
     prefixes: ['/portal/events'], explorer: 'open', audiences: EVERYONE, pos: { x: 700, y: 350, w: 132, h: 62 }, kind: 'amphi', zone: 'up' },
   { id: 'testing', name: 'Cert Prep Center', workplaceName: 'Certification Center',
-    primary: { label: 'Start the knowledge check', route: '/portal/cert-prep' },
+    primary: { label: 'Take the diagnostic or practice', route: '/portal/cert-prep' },
     rooms: [{ label: 'Cert prep', workplaceLabel: 'Certification prep', route: '/portal/cert-prep' }],
     prefixes: ['/portal/cert-prep'], explorer: 'open', gate: 'cert-prep', audiences: EVERYONE, pos: { x: 150, y: 330, w: 104, h: 62 }, kind: 'flat', zone: 'up' },
   { id: 'observatory', name: 'My Progress', workplaceName: 'My Performance',
