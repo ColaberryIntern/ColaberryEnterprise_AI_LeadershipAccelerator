@@ -111,6 +111,29 @@ async function findStranded(): Promise<StrandedRow[]> {
   );
 }
 
+/**
+ * The span the roster actually covers: MIN and MAX over the dates, not the first
+ * and last ROWS.
+ *
+ * `findStranded` ends `ORDER BY lower(l.email), e.created_at DESC`, because
+ * `DISTINCT ON` requires its key to lead the sort. The result is therefore
+ * alphabetical by address, and `rows[0]` is simply whoever sorts first. Reading the
+ * range off the ends printed two arbitrary timestamps as though they bounded the
+ * population: the real 2026-10-24 run spanned four days and announced a ten-hour
+ * window. Nothing was sent wrongly, but a dry run exists to be believed before a
+ * send, and a line that quietly understates the blast radius is the wrong thing to
+ * have in one.
+ *
+ * Exported so the ordering assumption is pinned by a test rather than by the next
+ * reader noticing.
+ */
+export function signupDateRange(
+  rows: ReadonlyArray<{ created_at: Date | string }>,
+): { first: Date; last: Date } {
+  const times = rows.map((r) => new Date(r.created_at).getTime());
+  return { first: new Date(Math.min(...times)), last: new Date(Math.max(...times)) };
+}
+
 function writePreview(row: StrandedRow): void {
   const html = buildTrainingWelcomeHtml({
     to: row.email,
@@ -157,8 +180,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  const first = new Date(rows[0].created_at);
-  const last = new Date(rows[rows.length - 1].created_at);
+  const { first, last } = signupDateRange(rows);
   console.log(`  signed up between ${first.toISOString()} and ${last.toISOString()}`);
 
   writePreview(rows[0]);
@@ -206,6 +228,19 @@ async function main(): Promise<void> {
   }
 }
 
-main()
-  .catch((e) => { console.error('FAILED:', e instanceof Error ? e.message : e); process.exitCode = 1; })
-  .finally(async () => { await sequelize.close(); });
+/**
+ * RUN ONLY WHEN INVOKED DIRECTLY.
+ *
+ * This guard is a safety control, not a style preference. `main()` used to run at
+ * module load, so merely IMPORTING this file executed it - and with `SEND=1` in the
+ * environment, an import from a test could have mailed 142 real people. Nothing
+ * imported it while that was true, which is luck rather than design.
+ *
+ * `npx ts-node src/scripts/...` and `node dist/scripts/...` both still run it; a
+ * test that imports `signupDateRange` now gets the function and nothing else.
+ */
+if (require.main === module) {
+  main()
+    .catch((e) => { console.error('FAILED:', e instanceof Error ? e.message : e); process.exitCode = 1; })
+    .finally(async () => { await sequelize.close(); });
+}
