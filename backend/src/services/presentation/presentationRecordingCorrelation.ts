@@ -150,12 +150,30 @@ async function recordPart(
 ): Promise<boolean> {
   const sequelize = await db();
   const [rows] = await sequelize.query(
+    // THE TYPE IS FROZEN HERE, at the moment the take comes into existence.
+    //
+    // Readers fall back to the task's CURRENT template when a take carries no type
+    // of its own, and that template moves: clicking an empty portfolio slot
+    // deep-links to Learn and persists a new type onto the assignment. A take left
+    // unclassified therefore re-labels itself later — observed in production on
+    // 2026-10-23, where three takes recorded as `project_introduction` became
+    // `ai_visual_presentation` on a single click. Stamping on the way in makes the
+    // type a fact about the day it was recorded.
+    //
+    // A review row is parked on the zero uuid with no owning attempt, so the
+    // subquery yields NULL. That is correct: an unmatched recording belongs to
+    // nobody yet and has no task to take a type from.
     `INSERT INTO presentation_recordings
        (attempt_id, occurrence_uuid, provider_file_id, recording_type,
         starts_at, ends_at, ingest_status, ingest_provenance, review_reason,
-        has_audio, has_shared_screen, duration_seconds, resource_id)
+        has_audio, has_shared_screen, duration_seconds, resource_id,
+        presentation_type)
      VALUES (:aid, :uuid, :fid, :rtype, :s, :e, :status, :prov, :reason,
-             :audio, :screen, :dur, :resource)
+             :audio, :screen, :dur, :resource,
+             (SELECT asg.template_slug
+                FROM presentation_attempts    a
+                JOIN presentation_assignments asg ON asg.id = a.assignment_id
+               WHERE a.id = :aid))
      ON CONFLICT (occurrence_uuid, provider_file_id) DO NOTHING
      RETURNING id`,
     {
@@ -182,7 +200,60 @@ async function recordPart(
       },
     },
   ) as [Array<{ id: string }>, unknown];
-  return (rows?.length || 0) > 0;
+
+  const created = (rows?.length || 0) > 0;
+
+  // PAY FOR THE VIDEO, ONCE PER TYPE, and only for a take that really landed.
+  //
+  // Here rather than in the five call sites above, because this is the one place
+  // that knows whether THIS call created the row — `ON CONFLICT DO NOTHING` makes
+  // a redelivered webhook a no-op, and the award has to be a no-op with it. A
+  // multi-part recording also arrives as several rows; paying per type rather
+  // than per row is what stops three parts paying three times.
+  //
+  // A `review` row is parked on nobody and has no type, so it pays nothing until
+  // it is matched to an attempt. Fail-soft: `payForRecordedType` swallows and
+  // logs its own failures, so the ingest cannot be lost over a points row.
+  if (created && status === 'ingested' && attemptId) {
+    await payForRecordedTake(attemptId, String(rows[0].id));
+  }
+
+  return created;
+}
+
+/**
+ * Resolve who owns this take and what kind it is, then pay for the kind.
+ *
+ * The lookup is here rather than inside the points module so that the module
+ * stays a pure "pay this person for this type" and can be tested without a
+ * database — and so the owner is resolved from the same attempt row the
+ * recording was just written against, rather than inferred separately.
+ */
+async function payForRecordedTake(attemptId: string, recordingId: string): Promise<void> {
+  try {
+    const sequelize = await db();
+    const [rows] = await sequelize.query(
+      `SELECT asg.enrollment_id, asg.story_id, r.presentation_type
+         FROM presentation_recordings  r
+         JOIN presentation_attempts    a   ON a.id   = r.attempt_id
+         JOIN presentation_assignments asg ON asg.id = a.assignment_id
+        WHERE r.id = :recordingId
+        LIMIT 1`,
+      { replacements: { recordingId } },
+    ) as [Array<Record<string, any>>, unknown];
+
+    const row = rows?.[0];
+    if (!row) return;
+
+    const { payForRecordedType } = await import('./presentationRecordingPoints');
+    await payForRecordedType(
+      row.enrollment_id ? String(row.enrollment_id) : null,
+      row.presentation_type ? String(row.presentation_type) : null,
+      { recordingId, storyId: row.story_id ?? null },
+    );
+  } catch {
+    // The take is ingested and real. Points are a mirror of that, never a gate.
+  }
 }
 
 /**

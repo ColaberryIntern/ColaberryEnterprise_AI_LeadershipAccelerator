@@ -56,6 +56,15 @@ export interface Portfolio {
   /** The first missing type, for the "Start the next one" link. Null when complete. */
   nextTypeId: string | null;
   reflectionNotes: string | null;
+  /**
+   * What recording one more type is worth, so an empty slot can say so before a
+   * learner commits to doing it.
+   *
+   * Zero when the rate is unpriced or awards are switched off, and the UI shows
+   * no badge at all in that case rather than "0 pts" — the same fail-closed rule
+   * `prepPoints` states for an unpriced task.
+   */
+  perTypeBuilderXp: number;
 }
 
 /** "5 min + 2 min Q&A", or "90s" for anything under two minutes. */
@@ -131,7 +140,9 @@ export async function getPortfolio(
 
   const { viewCounts, describeViews } = await import('./recordingViews');
   const { createRecordingTicket } = await import('./recordingTicket');
+  const { recordedTypeRate } = await import('./presentationRecordingPoints');
   const counts = await viewCounts((rows || []).map((r) => String(r.recording_id)));
+  const rate = await recordedTypeRate();
 
   const slots: PortfolioSlot[] = PRESENTATION_TEMPLATES.map((t) => {
     const takes = byType.get(t.id) || [];
@@ -179,5 +190,6 @@ export async function getPortfolio(
     totalTypes: slots.length,
     nextTypeId: missing[0]?.typeId ?? null,
     reflectionNotes: assignment.reflection_notes ?? null,
+    perTypeBuilderXp: rate.builder,
   };
 }
