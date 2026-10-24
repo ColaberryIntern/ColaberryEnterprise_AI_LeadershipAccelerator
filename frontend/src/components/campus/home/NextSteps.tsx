@@ -2,13 +2,15 @@ import React from 'react';
 import type { BuildingId, CampusAudience, CampusBuilding } from '../campusMap';
 import { buildingName } from '../campusMap';
 import type { PlanStop } from '../campusPlan';
+import { canComplete } from '../campusPlan';
+import type { CompleteResult } from '../campusPlanApi';
 import '../campusHome.css'; // the panel's card styles, shared by the page rail (all selectors are cm- scoped)
 
 /**
  * WP-1 (owner rule: there is always a side panel with your next steps and the tours). The three pieces the campus home's side panel
  * and every page's rail share, so a step or the tour's state can never read differently in the two:
- *  - UpNext: the next unfinished step of today's plan, with Go (walk there) or, when you are already in its building, Open;
- *  - HereAt: what you can do in the building you are at (its main action, your plan step there, the tour stop);
+ *  - UpNext: the next unfinished step of today's plan: Walk there + Open now, or in its building Open the card + Mark done (C15);
+ *  - RoomsHere: the rooms of the building you are in (C15: replaced HereAt, which repeated Up next);
  *  - TourOffer: the tour card in its three states (the prototype's renderAcctCard): offer, in progress / Resume, and taken.
  * Real data only: steps come from today's plan, stop counts from the viewer's own tour; a piece with nothing true to say is not drawn.
  */
@@ -23,8 +25,12 @@ export interface UpNextProps {
   hereId: BuildingId | null;
   onWalk: (id: BuildingId) => void;
   onOpen: (route: string) => void;
+  /** C15: Mark done (in the step's building), the same path as the arrival card's: points burst, "Next: … [Go]", plan pins. */
+  onDone?: (stop: PlanStop) => Promise<CompleteResult>;
 }
-export function UpNext({ stops, buildings, workplaceNames, hereId, onWalk, onOpen }: UpNextProps): React.ReactElement | null {
+export function UpNext({ stops, buildings, workplaceNames, hereId, onWalk, onOpen, onDone }: UpNextProps): React.ReactElement | null {
+  const [busy, setBusy] = React.useState(false);
+  const [why, setWhy] = React.useState<string | null>(null);
   const i = stops ? stops.findIndex((s) => !s.done) : -1;
   if (!stops || i < 0) return null;
   const s = stops[i];
@@ -37,42 +43,49 @@ export function UpNext({ stops, buildings, workplaceNames, hereId, onWalk, onOpe
         <span className="cm-pl-n" aria-hidden="true">{i + 1}</span>
         <span className="cm-next-t"><b data-testid="cm-up-next-title">{s.title}</b><small>Step {i + 1} of {stops.length}{b ? ` · ${buildingName(b, workplaceNames)}` : ''}</small></span>
         {/* C13: the title wraps (two lines at most) and the buttons sit on their own row, so nothing covers it */}
+        {/* C15 (v3 2.6): away from its building "Walk there →" + "Open now"; in it "Open the card →" + "Mark done" */}
         <span className="cm-upnext-actions">
-          {b && !at
-            ? <button type="button" className="cm-btn-red" onClick={() => onWalk(b.id)} data-testid="cm-up-next-go">Walk there &rarr;</button>
-            : <button type="button" className="cm-btn-red" onClick={() => onOpen(s.route)} data-testid="cm-up-next-open">Open</button>}
+          {b && !at ? (
+            <>
+              <button type="button" className="cm-btn-red" onClick={() => onWalk(b.id)} data-testid="cm-up-next-go">Walk there &rarr;</button>
+              <button type="button" className="cm-btn-line" onClick={() => onOpen(s.route)} data-testid="cm-up-next-now">Open now</button>
+            </>
+          ) : (
+            <>
+              <button type="button" className="cm-btn-red" onClick={() => onOpen(s.route)} data-testid="cm-up-next-open">Open the card &rarr;</button>
+              {onDone && canComplete(s) && (
+                <button type="button" className="cm-btn-line" disabled={busy} data-testid="cm-up-next-done"
+                  onClick={async () => { setBusy(true); setWhy(null); const r = await onDone(s); setBusy(false); if (!r.ok) setWhy(r.message); }}>
+                  {busy ? 'Marking…' : 'Mark done'}
+                </button>
+              )}
+            </>
+          )}
         </span>
       </div>
+      {why && <p className="cm-pb-why" role="alert" data-testid="cm-up-next-why">{why}</p>}
     </section>
   );
 }
 
-export interface HereAtProps {
-  building: CampusBuilding | null;
-  workplaceNames: boolean;
-  stops: PlanStop[] | null;
-  /** The tour stop at this building while a tour runs (1-based), and the tour's length. */
-  tourStop: { n: number; of: number } | null;
-  onOpen: (route: string) => void;
-}
-export function HereAt({ building: b, workplaceNames, stops, tourStop, onOpen }: HereAtProps): React.ReactElement | null {
-  if (!b || b.kind === 'gate') return null;
-  const planned = b.rooms.find((r) => r.route === b.primary.route)?.planned;
-  const stepIdx = stops ? stops.findIndex((s) => !s.done && s.buildingId === b.id) : -1;
-  const step = stops && stepIdx >= 0 ? stops[stepIdx] : null;
+/**
+ * C15 (v3 2.6): "Rooms in the <building>", only while you are in one: the building's rooms (a room whose page does not exist yet is
+ * left out), each opening through the door. Replaces "Here at …", which repeated Up next.
+ */
+export function RoomsHere({ building: b, workplaceNames, onOpen }: { building: CampusBuilding | null; workplaceNames: boolean; onOpen: (route: string) => void }): React.ReactElement | null {
+  if (!b) return null;
+  const rooms = b.rooms.filter((r) => !r.planned); // the Main Gate has no live rooms, so nothing shows there
+  if (!rooms.length) return null;
   return (
-    <section className="cm-here" aria-label={`Here at ${buildingName(b, workplaceNames)}`} data-testid="cm-here-at">
-      <div className="cm-sec">Here at {buildingName(b, workplaceNames)}</div>
-      {tourStop && <div className="cm-here-tour" data-testid="cm-here-tour">Tour stop {tourStop.n} of {tourStop.of}</div>}
-      {step && (
-        <button type="button" className="cm-sg cm-here-step" onClick={() => onOpen(step.route)} data-testid="cm-here-step">
-          <span style={{ flex: 1 }}><span className="t">{step.title}</span><span className="d">Today&rsquo;s plan &middot; step {stepIdx + 1} of {stops!.length}</span></span>
-          <span className="go">Open the card &rarr;</span>
-        </button>
-      )}
-      {!b.primary.admin && !planned && (
-        <button type="button" className="cm-btn-line cm-here-cta" onClick={() => onOpen(b.primary.route)} data-testid="cm-here-cta">{b.primary.label} &rarr;</button>
-      )}
+    <section className="cm-rooms-here" aria-label={`Rooms in the ${buildingName(b, workplaceNames)}`} data-testid="cm-rooms-here">
+      <div className="cm-sec">Rooms in the {buildingName(b, workplaceNames)}</div>
+      <div className="cm-chips">
+        {rooms.map((r) => (
+          <button key={r.route} type="button" onClick={() => onOpen(r.route)} data-testid="cm-rooms-here-room">
+            {workplaceNames && r.workplaceLabel ? r.workplaceLabel : r.label} <span aria-hidden="true">&rarr;</span>
+          </button>
+        ))}
+      </div>
     </section>
   );
 }

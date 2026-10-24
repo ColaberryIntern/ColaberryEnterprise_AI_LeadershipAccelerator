@@ -42,12 +42,14 @@ export function urgentOf(audience: CampusAudience, agenda: HomeAgenda | null, bu
 export function rightNowRows(o: {
   audience: CampusAudience; workplace: boolean; buildings: CampusBuilding[]; stops: PlanStop[] | null; planMinutes: number | null;
   agenda: HomeAgenda | null; presence: CampusPresence | null; presenceError: boolean; live: boolean; urgent: Urgent | null;
+  /** C15: the side panel already shows the step in Up next, so its Right now leaves the plan row out (the Wayfinder keeps it). */
+  skipPlan?: boolean;
 }): NowRow[] {
   if (o.live || o.audience === 'business') return [];
   const has = (id: BuildingId) => o.buildings.some((b) => b.id === id);
   const rows: NowRow[] = [];
   const next = o.stops?.find((s) => !s.done && s.buildingId) ?? null;
-  if (next && o.audience === 'member') {
+  if (next && o.audience === 'member' && !o.skipPlan) {
     // C13: the step's OWN minutes (the plan total never shrank as steps got done)
     rows.push({ key: 'plan', buildingId: next.buildingId!, title: 'Continue today’s plan', detail: `${next.minutes ? `${next.minutes} min · ` : ''}${next.title}` });
   }

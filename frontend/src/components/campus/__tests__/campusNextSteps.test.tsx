@@ -10,7 +10,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { act } from 'react-dom/test-utils';
 import CampusConcierge from '../home/CampusConcierge';
 import type { ConciergeProps } from '../home/CampusConcierge';
-import { TourOffer, UpNext, HereAt, tourMinutes } from '../home/NextSteps';
+import { TourOffer, UpNext, RoomsHere, tourMinutes } from '../home/NextSteps';
 import { CAMPUS_BUILDINGS } from '../campusMap';
 import type { BuildingId } from '../campusMap';
 import type { PlanStop } from '../campusPlan';
@@ -52,9 +52,9 @@ describe('the side panel is never hidden', () => {
     expect(q('cm-cc-peek')!.textContent).toContain('Finish STORY-002');
   });
 
-  it('always offers a next step and the tour, in the prompt order: Up next, Here at, the tour', () => {
+  it('always offers a next step and the tour, in the v3 order: Up next, the tour, the rooms here (C15)', () => {
     render(concierge({ hereId: 'studio' }));
-    const order = ['cm-up-next', 'cm-here-at', 'cm-cc-tour'].map((id) => q(id));
+    const order = ['cm-up-next', 'cm-cc-tour', 'cm-rooms-here'].map((id) => q(id));
     order.forEach((el) => expect(el).not.toBeNull());
     expect(order[0]!.compareDocumentPosition(order[1]!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(order[1]!.compareDocumentPosition(order[2]!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
@@ -62,13 +62,16 @@ describe('the side panel is never hidden', () => {
 });
 
 describe('Up next', () => {
-  it('names the next unfinished step and Go walks to its building', () => {
+  it('names the next unfinished step; Walk there walks to its building, Open now opens it (C15)', () => {
     const walked: string[] = [];
-    render(<UpNext stops={STOPS} buildings={buildings} workplaceNames={false} hereId={null} onWalk={(id) => walked.push(id)} onOpen={() => undefined} />);
+    const opened: string[] = [];
+    render(<UpNext stops={STOPS} buildings={buildings} workplaceNames={false} hereId={null} onWalk={(id) => walked.push(id)} onOpen={(r) => opened.push(r)} />);
     expect(q('cm-up-next')!.textContent).toContain('Finish STORY-002');
     expect(q('cm-up-next')!.textContent).toContain('Step 2 of 3');
     act(() => { q('cm-up-next-go')!.click(); });
+    act(() => { q('cm-up-next-now')!.click(); });
     expect(walked).toEqual(['studio']);
+    expect(opened).toEqual(['/portal/projects/1']);
   });
 
   it('already in that building: Open goes straight to the step', () => {
@@ -86,21 +89,21 @@ describe('Up next', () => {
   });
 });
 
-describe('Here at <building>', () => {
+describe('Rooms in the <building> (C15, replaces "Here at")', () => {
   const studio = buildings.find((b) => b.id === 'studio')!;
-  it('the building main action, your plan step there and the tour stop', () => {
+  it('lists the building\'s rooms, each opening its page', () => {
     const opened: string[] = [];
-    render(<HereAt building={studio} workplaceNames={false} stops={STOPS} tourStop={{ n: 3, of: 9 }} onOpen={(r) => opened.push(r)} />);
-    expect(q('cm-here-at')!.textContent).toContain('Here at Project Studio');
-    expect(q('cm-here-tour')!.textContent).toBe('Tour stop 3 of 9');
-    act(() => { q('cm-here-step')!.click(); });
-    act(() => { q('cm-here-cta')!.click(); });
-    expect(opened).toEqual(['/portal/projects/1', studio.primary.route]);
+    render(<RoomsHere building={studio} workplaceNames={false} onOpen={(r) => opened.push(r)} />);
+    expect(q('cm-rooms-here')!.textContent).toContain('Rooms in the Project Studio');
+    act(() => { (container.querySelector('[data-testid="cm-rooms-here-room"]') as HTMLButtonElement).click(); });
+    expect(opened).toEqual([studio.rooms.filter((r) => !r.planned)[0].route]);
   });
 
-  it('at the gate, nothing', () => {
-    render(<HereAt building={buildings.find((b) => b.id === 'gate') ?? null} workplaceNames={false} stops={STOPS} tourStop={null} onOpen={() => undefined} />);
-    expect(q('cm-here-at')).toBeNull();
+  it('at the gate, or outside every building, nothing', () => {
+    render(<RoomsHere building={buildings.find((b) => b.id === 'gate') ?? null} workplaceNames={false} onOpen={() => undefined} />);
+    expect(q('cm-rooms-here')).toBeNull();
+    render(<RoomsHere building={null} workplaceNames={false} onOpen={() => undefined} />);
+    expect(q('cm-rooms-here')).toBeNull();
   });
 });
 
@@ -150,5 +153,48 @@ describe('the tour card, three states', () => {
     expect(q('cm-cc-tour')!.textContent).toContain('Start the partner tour');
     render(offer({ audience: 'staff', stops: null }));
     expect(q('cm-cc-tour')).toBeNull();
+  });
+});
+
+describe('C15 (v3 2.6): each fact once', () => {
+  const titleCount = (title: string, outsidePlan = true) => Array.from(container.querySelectorAll('b, .t, span'))
+    // the phone peek strip is the panel's collapsed form (shown INSTEAD of the body while a card is open), so it is not a repeat
+    .filter((el) => el.children.length === 0 && el.textContent === title && !el.closest('[data-testid="cm-cc-peek"]')
+      && (!outsidePlan || !el.closest('[data-testid="cm-cc-plan"]'))).length;
+
+  it('the Up next step appears once outside the plan list, and the plan tags it UP NEXT instead of repeating it', () => {
+    render(concierge({ hereId: 'lecture', agenda: null }));
+    expect(titleCount('Finish STORY-002')).toBe(1);
+    expect(q('cm-plan-upnext')!.closest('li')!.textContent).toContain('Finish STORY-002');
+    expect(container.querySelectorAll('[data-testid="cm-plan-upnext"]').length).toBe(1);
+    expect(q('cm-here-at')).toBeNull();
+  });
+
+  it('in the step\'s building: Open the card + Mark done, through the same completion as the arrival card', async () => {
+    const done: string[] = [];
+    const stops = STOPS.map((s) => (s.key === 'b' ? { ...s, cardId: 'card-1' } : s));
+    render(concierge({ stops, hereId: 'studio', onDone: async (s) => { done.push(s.key); return { ok: true, points: 10 } as never; } }));
+    expect(q('cm-up-next-open')!.textContent).toContain('Open the card');
+    await act(async () => { q('cm-up-next-done')!.click(); });
+    expect(done).toEqual(['b']);
+  });
+
+  it('a refused Mark done shows the server\'s reason and ticks nothing', async () => {
+    const stops = STOPS.map((s) => (s.key === 'b' ? { ...s, cardId: 'card-1' } : s));
+    render(concierge({ stops, hereId: 'studio', onDone: async () => ({ ok: false, reason: 'gate', message: 'Watch 75% first' }) as never }));
+    await act(async () => { q('cm-up-next-done')!.click(); });
+    expect(q('cm-up-next-why')!.textContent).toBe('Watch 75% first');
+  });
+
+  it('the urgent card takes the Up next slot', () => {
+    render(concierge({ urgent: { buildingId: 'lecture', title: 'Build Day', detail: 'starts in 10 min', route: '/portal/sessions' } as never }));
+    expect(q('cm-up-next')).toBeNull();
+  });
+
+  it('rooms in the building only while you are in one', () => {
+    render(concierge({ hereId: null }));
+    expect(q('cm-rooms-here')).toBeNull();
+    render(concierge({ hereId: 'library' }));
+    expect(q('cm-rooms-here')).not.toBeNull();
   });
 });
