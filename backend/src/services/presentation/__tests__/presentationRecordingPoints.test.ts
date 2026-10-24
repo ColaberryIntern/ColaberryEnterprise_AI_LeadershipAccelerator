@@ -7,8 +7,11 @@ import { getTypeXp } from '../../progression/pointsConfigService';
 import { env } from '../../../config/env';
 import {
   payForRecordedType,
+  payForSharedType,
   recordedTypeRate,
+  sharedTypeRate,
   PRESENTATION_RECORDING_XP_KEY,
+  PRESENTATION_SHARE_XP_KEY,
 } from '../presentationRecordingPoints';
 
 const mockAward = award as unknown as jest.Mock;
@@ -138,6 +141,76 @@ describe('what it pays', () => {
     const r = await payForRecordedType(ENROL, 'client_handoff');
     expect(r.builder).toBe(45);
     expect(mockRate).toHaveBeenCalledWith(PRESENTATION_RECORDING_XP_KEY);
+  });
+});
+
+describe('the sharing bonus', () => {
+  beforeEach(() => {
+    mockRate.mockResolvedValue({ learning: 0, builder: 15, community: 10 });
+    mockAward.mockResolvedValue({ awarded: true, points: 15 });
+  });
+
+  it('pays on its own key, so sharing is extra rather than instead', async () => {
+    const r = await payForSharedType(ENROL, 'working_system_demo', { showcaseId: 'show-1' });
+    expect(r).toEqual({ awarded: true, builder: 15, community: 10 });
+    expect(mockAward).toHaveBeenCalledWith(ENROL, expect.objectContaining({
+      eventType: PRESENTATION_SHARE_XP_KEY,
+      eventKey: 'presentation_shared:working_system_demo',
+    }));
+  });
+
+  it('does not collide with the recording award for the same type', async () => {
+    await payForRecordedType(ENROL, 'working_system_demo');
+    await payForSharedType(ENROL, 'working_system_demo');
+    const keys = mockAward.mock.calls.map((c) => c[1].eventKey);
+    expect(keys[0]).not.toBe(keys[1]);
+  });
+
+  it('is capped at seven too — sharing, withdrawing and re-sharing pays once', async () => {
+    await payForSharedType(ENROL, 'final_showcase', { showcaseId: 'show-1' });
+    await payForSharedType(ENROL, 'final_showcase', { showcaseId: 'show-2' });
+    const keys = mockAward.mock.calls.map((c) => c[1].eventKey);
+    expect(keys).toEqual(['presentation_shared:final_showcase', 'presentation_shared:final_showcase']);
+  });
+
+  it('pays nothing when the bonus row is missing or zero', async () => {
+    mockRate.mockResolvedValue({ learning: 0, builder: 0, community: 0 });
+    expect(await payForSharedType(ENROL, 'final_showcase')).toEqual({ awarded: false, builder: 0, community: 0 });
+    expect(mockAward).not.toHaveBeenCalled();
+  });
+
+  it('pays nothing when awards are off, or the owner or type is unknown', async () => {
+    mutableEnv.portalPointsAwardEnabled = false;
+    await payForSharedType(ENROL, 'final_showcase');
+    mutableEnv.portalPointsAwardEnabled = true;
+    await payForSharedType(null, 'final_showcase');
+    await payForSharedType(ENROL, null);
+    expect(mockAward).not.toHaveBeenCalled();
+  });
+
+  it('never unpublishes a demo over a points failure', async () => {
+    mockAward.mockRejectedValue(new Error('points table locked'));
+    await expect(payForSharedType(ENROL, 'final_showcase', { showcaseId: 'show-1' }))
+      .resolves.toEqual({ awarded: false, builder: 0, community: 0 });
+  });
+
+  it('records the showcase it was paid for', async () => {
+    await payForSharedType(ENROL, 'client_handoff', { showcaseId: 'show-3', recordingId: 'rec-3' });
+    expect(mockAward.mock.calls[0][1].metadata).toEqual({
+      presentation_type: 'client_handoff', showcase_id: 'show-3', recording_id: 'rec-3',
+    });
+  });
+});
+
+describe('sharedTypeRate', () => {
+  it('reports the bonus so the UI can advertise it', async () => {
+    mockRate.mockResolvedValue({ learning: 0, builder: 15, community: 10 });
+    await expect(sharedTypeRate()).resolves.toEqual({ builder: 15, community: 10 });
+  });
+
+  it('reports zero when config is unreachable', async () => {
+    mockRate.mockRejectedValue(new Error('db down'));
+    await expect(sharedTypeRate()).resolves.toEqual({ builder: 0, community: 0 });
   });
 });
 

@@ -314,6 +314,35 @@ export async function approveAndPublish(
   );
   if (!published.ok) return { ok: false, reason: published.reason };
 
+  // THE SHARING BONUS, PAID WHEN IT ACTUALLY GOES LIVE.
+  //
+  // Here rather than in `requestShare`, because paying on the request would pay
+  // for asking — and a request a staff member later declines would have bought
+  // points for a video nobody ever saw. Publication is the event worth paying
+  // for, and it is the one a learner cannot grant themselves.
+  //
+  // Fail-soft like every other award in this subtree: the demo is published and
+  // the cohort can see it, so a missing points row is a reporting gap and never
+  // a reason to unpublish. `payForSharedType` swallows and logs its own failures.
+  if (row.recording_id) {
+    const [typeRows] = await sequelize.query(
+      `SELECT COALESCE(r.presentation_type, asg.template_slug) AS type_id
+         FROM presentation_recordings  r
+         JOIN presentation_attempts    a   ON a.id   = r.attempt_id
+         JOIN presentation_assignments asg ON asg.id = a.assignment_id
+        WHERE r.id = :recordingId
+        LIMIT 1`,
+      { replacements: { recordingId: String(row.recording_id) } },
+    ) as [Array<Record<string, any>>, unknown];
+
+    const { payForSharedType } = await import('./presentationRecordingPoints');
+    await payForSharedType(
+      String(row.owner_enrollment_id),
+      typeRows?.[0]?.type_id ? String(typeRows[0].type_id) : null,
+      { showcaseId: String(row.id), recordingId: String(row.recording_id) },
+    );
+  }
+
   // The author's community identity. No member row means they were never onboarded
   // to the feed; the showcase stays published and simply has no post.
   const { default: CommunityMember } = await import('../../models/CommunityMember');
