@@ -1,20 +1,16 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import './TodayShell.css';
-import { fetchPoints, fetchSchedule, PointsSummary, OnboardingSchedule, rungTone } from '../../../services/onboardingApi';
+import { rungTone } from '../../../services/onboardingApi';
 import '../../../styles/rungTones.css';
 import { hudView } from './pointsHud';
 import { fetchSettings, readCachedAvatar } from '../../../services/portalSettingsApi';
-import { onPointsEarned } from '../../../services/pointsFx';
 import { readParticipant, countdown, firstClassTargetMs } from './shellUtils';
 import { useNextLiveSession } from './useNextLiveSession';
 import { parseSessionTimeToHHMM } from '../../../utils/sessionTime';
 import NotificationBell from '../community/NotificationBell';
 import BuildToast from '../projects/BuildToast';
-import { CohortContact, fetchCohortPresence, sendFriendRequest, respondToFriendRequest } from '../../../services/cohortPresenceApi';
-import { fetchPeoplePanel, PeoplePanel } from '../../../services/peoplePanelApi';
 import ShellContactsRail from './ShellContactsRail';
-import { pingPresence } from '../../../services/communityApi';
 import ChatDock from './ChatDock';
 import { useShellDms } from './useShellDms';
 import MessagesButton from './MessagesButton';
@@ -29,9 +25,12 @@ import CampusNav from '../../../components/campus/CampusNav';
 import CampusTabBar from '../../../components/campus/CampusTabBar';
 import CampusLayers from '../../../components/campus/CampusLayers';
 import CampusBanner from '../../../components/campus/CampusBanner';
-import { pingCampusBuilding } from '../../../components/campus/campusPing';
+import CampusLocationBar from '../../../components/campus/CampusLocationBar';
 import type { NavItem, NavGroup } from './ShellNav';
 import { useScrollCondense } from '../../../hooks/useScrollCondense';
+import { useShellPrefs } from './useShellPrefs';
+import { useShellPeople } from './useShellPeople';
+import { useShellPoints } from './useShellPoints';
 
 // Sidebar nav — mirrors the Design E mockup: three grouped sections, one SVG
 // icon per item. Every destination now navigates. Cert Prep was a dimmed "Soon"
@@ -200,8 +199,7 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge, condens
     () => groups.flatMap((g) => g.items).filter((i) => i.to && !i.soon),
     [groups],
   );
-  const [points, setPoints] = useState<PointsSummary | null>(null);
-  const [schedule, setSchedule] = useState<OnboardingSchedule | null>(null);
+  const { points, schedule, displayTotal, fx } = useShellPoints(); // C16: points, schedule and the earn burst (useShellPoints)
   const [now, setNow] = useState<number>(() => Date.now());
   // Real per-session schedule (live_sessions), same source as the Today "Next
   // live class" card and the Classroom sidebar — the topbar "Next class" pill
@@ -210,9 +208,6 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge, condens
   // next session's real start time. Falls back to that cohort-level countdown
   // when there's no live session (e.g. Explorer/guest with none scheduled).
   const { session: nextLiveSessionHud } = useNextLiveSession();
-  // Points-earned FX: displayTotal counts UP to the real total; `fx` drives the
-  // "+N" burst + a brief scale-pulse on the HUD when points land.
-  const [displayTotal, setDisplayTotal] = useState(0);
   /**
    * The app bar is sticky at top:0 and its height is content-driven, so any
    * sticky element below it has to know how tall it is or it parks underneath.
@@ -240,147 +235,20 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge, condens
     return () => ro.disconnect();
   }, []);
 
-  const displayRef = useRef(0);
-  const [fx, setFx] = useState<{ delta: number; key: number } | null>(null);
-  const fxKeyRef = useRef(0);
   const me = useMemo(readParticipant, []);
   const [avatar, setAvatar] = useState<string | null>(() => readCachedAvatar());
-  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
-    try { return (localStorage.getItem('te-theme') as 'light' | 'dark') || 'light'; } catch { return 'light'; }
-  });
-  useEffect(() => {
-    try {
-      document.documentElement.setAttribute('data-theme', theme);
-      localStorage.setItem('te-theme', theme);
-    } catch { /* ignore */ }
-  }, [theme]);
-  const toggleTheme = () => setTheme((t) => (t === 'dark' ? 'light' : 'dark'));
-  const [navCollapsed, setNavCollapsed] = useState<boolean>(() => {
-    try { return localStorage.getItem('te_nav_collapsed') === '1'; } catch { return false; }
-  });
-  useEffect(() => {
-    try { localStorage.setItem('te_nav_collapsed', navCollapsed ? '1' : '0'); } catch { /* ignore */ }
-  }, [navCollapsed]);
-  // Per-group "More" expansion, keyed by group name and remembered across
-  // navigations so a learner who opens Belong once does not have to reopen it on
-  // every page. Storage is best-effort: a private window that throws on read
-  // falls back to all groups collapsed, which is the correct default anyway.
-  const [navExpanded, setNavExpanded] = useState<Record<string, boolean>>(() => {
-    try { return JSON.parse(localStorage.getItem('te_nav_expanded') || '{}') || {}; } catch { return {}; }
-  });
-  useEffect(() => {
-    try { localStorage.setItem('te_nav_expanded', JSON.stringify(navExpanded)); } catch { /* ignore */ }
-  }, [navExpanded]);
-  // Right contacts rail collapse — mirrors navCollapsed. On narrow viewports the
-  // rail auto-collapses (CSS) regardless of this flag; this drives the manual
-  // toggle + persistence at full width.
-  const [contactsCollapsed, setContactsCollapsed] = useState<boolean>(() => {
-    try { return localStorage.getItem('te_contacts_collapsed') === '1'; } catch { return false; }
-  });
-  useEffect(() => {
-    try { localStorage.setItem('te_contacts_collapsed', contactsCollapsed ? '1' : '0'); } catch { /* ignore */ }
-  }, [contactsCollapsed]);
-  // Cohort contacts rail — real presence from GET /api/portal/cohort/presence on
-  // a light 60s poll. Also ping our own presence so cohort-mates see us online
-  // while we're anywhere in the portal (not just the Community tab). Fail-soft:
-  // any error keeps the last roster and never breaks the shell.
-  const [contacts, setContacts] = useState<CohortContact[]>([]);
-  // Role-aware People panel (flag-gated server-side). null = flag OFF or error, in
-  // which case the rail falls back to the legacy cohort-presence view below.
-  const [panel, setPanel] = useState<PeoplePanel | null>(null);
-  const refreshContacts = useCallback(() => {
-    fetchCohortPresence().then(setContacts).catch(() => { /* keep last roster */ });
-  }, []);
-  const refreshPanel = useCallback(() => {
-    fetchPeoplePanel().then(setPanel).catch(() => { /* fall back to cohort rail */ });
-  }, []);
-  useEffect(() => {
-    refreshContacts();
-    refreshPanel();
-    pingPresence().catch(() => { /* non-fatal */ });
-    pingCampusBuilding();
-    const id = window.setInterval(() => {
-      refreshContacts();
-      refreshPanel();
-      pingPresence().catch(() => { /* non-fatal */ });
-      pingCampusBuilding();
-    }, 60_000);
-    return () => window.clearInterval(id);
-  }, [refreshContacts, refreshPanel]);
-  // Friend actions — fire, then refetch so friendshipStatus (and the friends-first
-  // order) update. Fail-soft: an error just leaves the person addable.
-  const onAddFriend = useCallback((id: string) => {
-    sendFriendRequest(id).then(refreshContacts).catch(() => { /* stays addable */ });
-  }, [refreshContacts]);
-  const onRespondFriend = useCallback((requesterId: string, accept: boolean) => {
-    respondToFriendRequest(requesterId, accept).then(refreshContacts).catch(() => { /* keep request */ });
-  }, [refreshContacts]);
+  // C16: theme and the remembered nav / rail collapse (useShellPrefs)
+  const { theme, toggleTheme, navCollapsed, setNavCollapsed, navExpanded, setNavExpanded, contactsCollapsed, setContactsCollapsed } = useShellPrefs();
+  // C16: contacts, the People panel, presence pings and friend actions (useShellPeople)
+  const { contacts, panel, onAddFriend, onRespondFriend } = useShellPeople();
   // Direct messages: docks, the open-failed flash, the openers and the te-open-dm bridge (moved to useShellDms).
   const { chats, openChatTarget, closeChat, dmError, openChat, openPerson } = useShellDms();
 
-  /**
-   * Two INDEPENDENT reads, settled independently.
-   *
-   * MEASURED 2026-08-15 on production: GET /api/portal/points answers in ~7ms
-   * (median), GET /api/portal/onboarding/schedule in ~2,090ms — the schedule
-   * handler opens a fresh MSSQL connection to CCPP per request. These used to
-   * share one `await Promise.allSettled([...])`, which resolves only when BOTH
-   * settle, so the fast read was held hostage by the slow one and the header sat
-   * in its unresolved state for two seconds on every single page load.
-   *
-   * Awaiting them separately costs nothing — they were already in flight
-   * concurrently — and lets the points HUD paint as soon as its own data lands.
-   * The schedule's latency is a real problem, but it is the schedule's problem;
-   * it should not be the header's.
-   */
-  const load = useCallback(async () => {
-    const points = fetchPoints().then(setPoints, () => { /* stays unknown; never falls back to 0 */ });
-    const schedule = fetchSchedule().then(setSchedule, () => { /* non-fatal */ });
-    await Promise.allSettled([points, schedule]);
-  }, []);
-
-  useEffect(() => { load(); }, [load]);
   useEffect(() => {
     const id = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(id);
   }, []);
 
-  // Count the HUD total UP to its current value (on load, and after each earn).
-  useEffect(() => {
-    const end = points?.total ?? 0;
-    const start = displayRef.current;
-    if (start === end) return;
-    const reduce = !!window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    if (reduce) { displayRef.current = end; setDisplayTotal(end); return; }
-    let raf = 0;
-    const t0 = performance.now();
-    const dur = 700;
-    const tick = (t: number) => {
-      const p = Math.min(1, (t - t0) / dur);
-      const eased = 1 - Math.pow(1 - p, 3);
-      const v = Math.round(start + (end - start) * eased);
-      displayRef.current = v;
-      setDisplayTotal(v);
-      if (p < 1) raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [points]);
-
-  // When points are earned anywhere in the portal, refetch the authoritative
-  // total (so the bar + level are exact) and fire the "+N" burst + pulse.
-  useEffect(() => {
-    return onPointsEarned((d) => {
-      void load();
-      fxKeyRef.current += 1;
-      setFx({ delta: d.delta, key: fxKeyRef.current });
-    });
-  }, [load]);
-  useEffect(() => {
-    if (!fx) return;
-    const id = window.setTimeout(() => setFx(null), 1100);
-    return () => window.clearTimeout(id);
-  }, [fx]);
 
   // Profile photo for the topbar avatar. Read the per-session cache first for an
   // instant paint; fetch once if it hasn't been populated yet this session.
@@ -441,7 +309,7 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge, condens
   const showFind = railView === 'find' && !contactsCollapsed;
 
   return (
-    <div ref={shellRef} className={`te-shell${navCollapsed ? ' collapsed' : ''}${contactsCollapsed ? ' contacts-collapsed' : ''}`}>
+    <div ref={shellRef} className={`te-shell${navCollapsed ? ' collapsed' : ''}${contactsCollapsed ? ' contacts-collapsed' : ''}${campus.active ? ' has-locbar' : ''}`}>
       {/* Points celebration — confetti splash scaled by the award, fires on the timeline
           (and anywhere in the shell) when points land. */}
       <ConfettiCelebration />
@@ -527,6 +395,9 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge, condens
           </Link>
         </div>
       </header>
+
+      {/* C16 (round 3 §2.4): the campus location bar, its own full-width row under the header */}
+      {campus.active && <CampusLocationBar />}
 
       {/* ── nav ── Colaberry Campus replaces the classic rail when active (flag on + not chosen classic) */}
       {campus.active ? <CampusNav active={active} /> : (

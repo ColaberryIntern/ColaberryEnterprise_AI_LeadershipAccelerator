@@ -25,6 +25,8 @@ const SIGNATURE = {
   staff: { building: 'career', check: '[data-testid="cm-card"][data-building="career"]' },
 };
 const SIZES = [{ name: 'desktop', width: 1440, height: 900 }, { name: 'phone', width: 390, height: 844 }];
+// C16: 1920 wide, only for the fidelity views that name it in `sizes` (22-page-nav checks the bar at 1440 and 1920)
+const WIDE = { name: 'wide', width: 1920, height: 1080 };
 
 /**
  * --fidelity (C11b): drive the build into the 12 fidelity views for every account and size, assert each view's required
@@ -52,10 +54,11 @@ async function runFidelity(browser) {
   // --only=<view name> re-runs one view (all accounts and sizes)
   const ONLY = (process.argv.find((a) => a.startsWith('--only=')) || '').slice('--only='.length) || null;
   const results = [];
-  for (const size of SIZES) {
+  for (const size of [...SIZES, WIDE]) {
     for (const account of ACCOUNTS) {
       for (const view of VIEWS) {
         if (ONLY && view.name !== ONLY) continue;
+        if (!(view.sizes ?? ['desktop', 'phone']).includes(size.name)) continue;
         if (view.accounts && !view.accounts.includes(account)) continue;
         if (view.desktopOnly && size.name !== 'desktop') continue;
         const ctx = await createSafeContext(browser, { token: TOKENS.users[account].jwt, viewport: { width: size.width, height: size.height, deviceScaleFactor: 1 } });

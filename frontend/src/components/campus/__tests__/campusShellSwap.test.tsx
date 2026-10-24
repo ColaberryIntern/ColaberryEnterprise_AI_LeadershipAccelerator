@@ -123,11 +123,23 @@ describe('PortalShell nav swap', () => {
     expect(main.textContent).toContain('Page body');
   });
 
+  it('C16: the location bar is its own full-width row under the header (the shell gains has-locbar), never inside <main>', async () => {
+    await mount({ campus: true });
+    const shell = container.querySelector('.te-shell')!;
+    expect(shell.classList.contains('has-locbar')).toBe(true);
+    const bar = container.querySelector('[data-testid="cm-locbar"]')!;
+    expect(bar.parentElement).toBe(shell);
+    expect(bar.previousElementSibling?.tagName).toBe('HEADER');
+    expect(container.querySelector('main.te-main [data-testid="cm-locbar"]')).toBeNull();
+  });
+
   it('campus on but the learner chose the classic menu: classic nav', async () => {
     await mount({ campus: true, nav: 'classic' });
     expect(has('nav.te-nav')).toBe(true);
     expect(has('nav.cm-nav')).toBe(false);
     expect(has('[data-testid="cm-banner"]')).toBe(false);
+    expect(has('[data-testid="cm-locbar"]')).toBe(false);
+    expect(container.querySelector('.te-shell')!.classList.contains('has-locbar')).toBe(false);
   });
 
   it('campus off: classic nav and tab bar', async () => {
@@ -138,9 +150,10 @@ describe('PortalShell nav swap', () => {
     expect(has('[data-testid="cm-banner"]')).toBe(false);
   });
 
-  it('"Use classic menu" switches back at once and is remembered', async () => {
+  it('"Classic" in the Me panel switches back at once and is remembered (C16: it left the nav)', async () => {
     await mount({ campus: true });
-    act(() => { container.querySelector('[data-testid="cm-use-classic"]')!.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+    act(() => { container.querySelector('[data-testid="cm-banner-me"]')!.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+    act(() => { container.querySelector('[data-testid="cm-me-classic"]')!.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
     expect(has('nav.te-nav')).toBe(true);
     expect(has('nav.cm-nav')).toBe(false);
     expect(JSON.parse(window.localStorage.getItem(CAMPUS_SETTINGS_KEY)!).nav).toBe('classic');

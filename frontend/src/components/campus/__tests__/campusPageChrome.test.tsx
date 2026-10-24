@@ -27,7 +27,8 @@ jest.mock('../useCampusView', () => {
 // eslint-disable-next-line import/first
 import { CampusProvider } from '../CampusContext';
 // eslint-disable-next-line import/first
-import CampusBanner, { PAGE_HINT_KEY } from '../CampusBanner';
+import CampusBanner from '../CampusBanner';
+import CampusLocationBar, { COACH_KEY, COACH_DELAY_MS } from '../CampusLocationBar';
 // eslint-disable-next-line import/first
 import CampusNav from '../CampusNav';
 // eslint-disable-next-line import/first
@@ -55,7 +56,7 @@ async function mount(path: string): Promise<void> {
   await act(async () => {
     root = createRoot(container);
     root.render(<MemoryRouter initialEntries={[path]}><ParticipantAuthProvider><CampusProvider>
-      <CampusBanner /><CampusNav active={path} /><CampusRail />
+      <CampusLocationBar /><CampusBanner /><CampusNav active={path} /><CampusRail />
     </CampusProvider></ParticipantAuthProvider></MemoryRouter>);
   });
   await flush();
@@ -63,20 +64,32 @@ async function mount(path: string): Promise<void> {
 beforeEach(() => { mockFlag = true; });
 afterEach(() => { act(() => root.unmount()); container.remove(); window.localStorage.clear(); });
 
-describe('the page bar and its hint', () => {
-  it('is the dark page bar with the building color in the trail', async () => {
+describe('the location bar and its coach mark (C16, round 3 2.4)', () => {
+  it('is the light location bar: Campus map, the trail with the building color, Step outside, Where to, you; no Next button', async () => {
     await mount('/portal/rooms');
-    expect(q('[data-testid="cm-banner"]')!.getAttribute('class')).toContain('cm-pagebar');
-    expect(q('.cm-trail .cm-crumb-b.cm-b-commons')).not.toBeNull();
-    expect(q('.cm-trail .cm-crumb-home')).not.toBeNull();
+    const bar = q('[data-testid="cm-locbar"]')!;
+    expect(bar.querySelector('[data-testid="cm-locbar-map"]')!.textContent).toContain('Campus map');
+    expect(q('.cm-lb-crumbs .cm-crumb-b.cm-b-commons')).not.toBeNull();
+    expect(q('.cm-lb-crumbs .cm-crumb-home')).not.toBeNull();
+    expect(bar.querySelector('[data-testid="cm-step-out"]')).not.toBeNull();
+    expect(bar.querySelector('[data-testid="cm-whereto"]')).not.toBeNull();
+    expect(bar.querySelector('[data-testid="cm-banner-me"]')).not.toBeNull();
+    expect(q('[data-testid="cm-next"]')).toBeNull();
+    expect(q('[data-testid="cm-page-hint"]')).toBeNull(); // replaced by the coach mark
   });
 
-  it('the first-visit hint shows until it is dismissed once', async () => {
+  it('the coach mark shows once per session, 800 ms after the first page, and not again', async () => {
+    window.sessionStorage.removeItem(COACH_KEY);
     await mount('/portal/rooms');
-    expect(q('[data-testid="cm-page-hint"]')!.textContent).toContain('still on campus');
-    act(() => { (q('.cm-page-hint-x') as HTMLButtonElement).click(); });
-    expect(q('[data-testid="cm-page-hint"]')).toBeNull();
-    expect(window.localStorage.getItem(PAGE_HINT_KEY)).toBe('1');
+    expect(q('[data-testid="cm-coach"]')).toBeNull();
+    await act(async () => { await new Promise((r) => setTimeout(r, COACH_DELAY_MS + 100)); });
+    expect(q('[data-testid="cm-coach"]')!.textContent).toContain('Step outside');
+    expect(window.sessionStorage.getItem(COACH_KEY)).toBe('1');
+    act(() => root.unmount()); container.remove();
+    await mount('/portal/library');
+    await act(async () => { await new Promise((r) => setTimeout(r, COACH_DELAY_MS + 100)); });
+    expect(q('[data-testid="cm-coach"]')).toBeNull();
+    window.sessionStorage.removeItem(COACH_KEY);
   });
 });
 
@@ -97,7 +110,7 @@ describe('the right rail', () => {
   it('who is here (named people and the staff desk), and the help desk, from campus data', async () => {
     await mount('/portal/rooms');
     const rail = q('[data-testid="cm-page-rail"]')!;
-    expect(rail.textContent).toContain('In Community Lounge · 2 + staff');
+    expect(rail.textContent).toContain('Here now · 3'); // C16: two people and the staff desk
     expect(rail.textContent).toContain('Avery');
     expect(rail.textContent).toContain('Reese');
     expect(rail.textContent).toContain('Help desk');

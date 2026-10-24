@@ -25,6 +25,8 @@ import { CampusProvider, useCampus } from '../CampusContext';
 // eslint-disable-next-line import/first
 import CampusBanner from '../CampusBanner';
 // eslint-disable-next-line import/first
+import CampusLocationBar from '../CampusLocationBar';
+// eslint-disable-next-line import/first
 import CampusLayers from '../CampusLayers';
 // eslint-disable-next-line import/first
 import { CAMPUS_SETTINGS_KEY } from '../campusSettings';
@@ -40,7 +42,7 @@ import { PARTICIPANT_TOKEN_KEY } from '../../../utils/participantToken';
 function Gated(): React.ReactElement | null {
   const c = useCampus();
   (window as unknown as { __campus: ReturnType<typeof useCampus> }).__campus = c;
-  return c.active ? <><CampusBanner /><CampusLayers /></> : null; // every real page renders both
+  return c.active ? <><CampusLocationBar /><CampusBanner /><CampusLayers /></> : null; // every real page renders all three (C16: the bar is its own row)
 }
 const campus = () => (window as unknown as { __campus: ReturnType<typeof useCampus> }).__campus;
 
@@ -95,7 +97,7 @@ describe('trail and map buttons', () => {
   });
   it('the mini-map opens the map focused on this building', async () => {
     await mount('/portal/library');
-    await act(async () => { (container.querySelector('.cm-banner-mini') as HTMLButtonElement).click(); });
+    await act(async () => { (container.querySelector('[data-testid="cm-locbar-map"]') as HTMLButtonElement).click(); });
     expect(campus().layer).toBe('map');
     expect(campus().mapFocus).toBe('library');
   });

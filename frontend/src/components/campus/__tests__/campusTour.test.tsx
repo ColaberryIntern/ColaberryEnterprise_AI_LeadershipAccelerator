@@ -35,6 +35,8 @@ import CampusLayers from '../CampusLayers';
 // eslint-disable-next-line import/first
 import CampusNav from '../CampusNav';
 // eslint-disable-next-line import/first
+import CampusRail from '../CampusRail';
+// eslint-disable-next-line import/first
 import { CAMPUS_SETTINGS_KEY } from '../campusSettings';
 // eslint-disable-next-line import/first
 import { CAMPUS_BUILDINGS } from '../campusMap';
@@ -58,7 +60,7 @@ function Capture(): null {
 }
 function Gated(): React.ReactElement | null {
   const c = useCampus();
-  return c.active ? <><CampusNav active="/portal/library" /><CampusLayers /></> : null;
+  return c.active ? <><CampusNav active="/portal/library" /><CampusRail /><CampusLayers /></> : null;
 }
 const campus = () => (window as unknown as { __campus: ReturnType<typeof useCampus> }).__campus;
 const go = (to: string) => (window as unknown as { __go: Go }).__go(to);
@@ -92,9 +94,9 @@ const saved = () => JSON.parse(window.localStorage.getItem(tourKey()) || 'null')
 jest.setTimeout(15000);
 
 describe('starting the tour', () => {
-  it('the side column button lands on the campus home on stop 1 of 9: the tour inside the arrival panel, the room behind it (WP-2)', async () => {
+  it('the rail\'s tour card lands on the campus home on stop 1 of 9: the tour inside the arrival panel, the room behind it (WP-2; C16)', async () => {
     await mount();
-    await click('cm-tour-start');
+    await click('cm-cc-tour-start');
     expect(where.path).toBe('/portal/campus');
     expect(q('cm-home')).not.toBeNull();
     expect(q('cm-card')?.getAttribute('data-building')).toBe('lecture');
@@ -125,7 +127,7 @@ describe('starting the tour', () => {
   it('staff: no tour button anywhere, and starting one shows nothing', async () => {
     mockAudience = 'staff';
     await mount();
-    expect(q('cm-tour-start')).toBeNull();
+    expect(q('cm-cc-tour-start')).toBeNull();
     act(() => { campus().openMap(); });
     await flush();
     expect(q('cm-home')).not.toBeNull();
@@ -139,7 +141,7 @@ describe('starting the tour', () => {
 describe('moving through it', () => {
   it('"Next: <building> →" walks to the next stop; there is no Back (the prototype has none)', async () => {
     await mount();
-    await click('cm-tour-start');
+    await click('cm-cc-tour-start');
     expect(q('cm-tour-back')).toBeNull();
     expect(q('cm-tour-next')?.textContent).toBe('Next: Library →');
     await click('cm-tour-next');
@@ -152,7 +154,7 @@ describe('moving through it', () => {
 
   it('member: the last stop says "Finish tour ✓"; finishing closes the panel, marks it taken, and the lead says so (no server call)', async () => {
     await mount();
-    await click('cm-tour-start');
+    await click('cm-cc-tour-start');
     for (let i = 0; i < 8; i++) await click('cm-tour-next');
     expect(q('cm-tour-count')?.getAttribute('aria-label')).toBe('Stop 9 of 9');
     expect(q('cm-tour-next')?.textContent).toBe('Finish tour ✓');
@@ -171,7 +173,7 @@ describe('moving through it', () => {
   it('business: six stops ending at the Partner Office, no server call', async () => {
     mockAudience = 'business';
     await mount();
-    await click('cm-tour-start');
+    await click('cm-cc-tour-start');
     expect(q('cm-tour-count')?.getAttribute('aria-label')).toBe('Stop 1 of 6');
     for (let i = 0; i < 5; i++) await click('cm-tour-next');
     expect(container.querySelector('#cm-card-career')?.textContent).toBe('Partner Office');
@@ -185,7 +187,7 @@ describe('moving through it', () => {
   it('Explorer: seven stops; "Finish · see what you\'d unlock" opens the unlock sheet with the opt-in (Q10)', async () => {
     mockAudience = 'explorer';
     await mount();
-    await click('cm-tour-start');
+    await click('cm-cc-tour-start');
     expect(q('cm-tour-count')?.getAttribute('aria-label')).toBe('Stop 1 of 7');
     for (let i = 0; i < 6; i++) await click('cm-tour-next');
     expect(q('cm-tour-next')?.textContent).toBe('Finish · see what you’d unlock →');
@@ -202,7 +204,7 @@ describe('moving through it', () => {
 describe('ending it', () => {
   it('End tour pauses the tour on its stop, stays on the home, and Resume picks it up there', async () => {
     await mount();
-    await click('cm-tour-start');
+    await click('cm-cc-tour-start');
     await click('cm-tour-next');
     await click('cm-tour-stop');
     expect(q('cm-tour')).toBeNull();
@@ -216,7 +218,7 @@ describe('ending it', () => {
 
   it('the side panel End tour pauses it too', async () => {
     await mount();
-    await click('cm-tour-start');
+    await click('cm-cc-tour-start');
     await click('cm-cc-tour-end');
     expect(q('cm-tour')).toBeNull();
     expect(campus().tourProgress.paused).toBe(0);
@@ -224,7 +226,7 @@ describe('ending it', () => {
 
   it('Esc ends (pauses) the tour and stays on the home', async () => {
     await mount();
-    await click('cm-tour-start');
+    await click('cm-cc-tour-start');
     await act(async () => { q('cm-tour')!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); });
     await flush();
     expect(q('cm-tour')).toBeNull();
@@ -235,7 +237,7 @@ describe('ending it', () => {
 
   it('leaving the home pauses the tour', async () => {
     await mount();
-    await click('cm-tour-start');
+    await click('cm-cc-tour-start');
     await click('cm-tour-next');
     await act(async () => { go('/portal/library'); });
     await act(async () => { await new Promise((r) => setTimeout(r, 10)); }); // the home pauses one tick after it unmounts

@@ -38,7 +38,11 @@ import { CampusProvider, useCampus } from '../CampusContext';
 // eslint-disable-next-line import/first
 import CampusBanner from '../CampusBanner';
 // eslint-disable-next-line import/first
+import CampusLocationBar from '../CampusLocationBar';
+// eslint-disable-next-line import/first
 import CampusLayers from '../CampusLayers';
+// eslint-disable-next-line import/first
+import CampusRail from '../CampusRail';
 // eslint-disable-next-line import/first
 import { CAMPUS_SETTINGS_KEY } from '../campusSettings';
 // eslint-disable-next-line import/first
@@ -58,7 +62,7 @@ function Capture(): null {
 }
 function Gated(): React.ReactElement | null {
   const c = useCampus();
-  return c.active ? <><CampusBanner /><CampusLayers /></> : null;
+  return c.active ? <><CampusLocationBar /><CampusBanner /><CampusRail /><CampusLayers /></> : null; // C16: Up next lives in the rail
 }
 const campus = () => (window as unknown as { __campus: ReturnType<typeof useCampus> }).__campus;
 
@@ -116,20 +120,21 @@ describe('when the plan is read', () => {
   });
 });
 
-describe('Next', () => {
-  it('outside the Classroom, Next is the first unfinished step and goes through the door to the card\'s own page (WP-2)', async () => {
+describe('Next (C16: no Next button in the bar; the rail\'s Up next carries the step)', () => {
+  const upNext = (id: string) => container.querySelector(`[data-testid="cm-page-rail"] [data-testid="${id}"]`) as HTMLButtonElement | null;
+  it('outside the Classroom, Up next names the first unfinished step and Open now goes through the door to the card\'s own page (WP-2)', async () => {
     await mount('/portal/library');
-    expect(next()?.textContent).toBe('Next: Watch the agents lesson');
-    act(() => { next()!.click(); });
+    expect(next()).toBeNull();
+    expect(container.querySelector('[data-testid="cm-page-rail"] [data-testid="cm-up-next-title"]')?.textContent).toBe('Watch the agents lesson');
+    act(() => { upNext('cm-up-next-now')!.click(); });
     await flush();
     expect(loc()).toBe('/portal/runtime/l1');
   });
-  it('in the Classroom, Next skips the step that is already here and goes to the project workspace', async () => {
+  it('in the Classroom, Up next opens this building\'s own step with Open the card', async () => {
     await mount('/portal/classroom');
-    expect(next()?.textContent).toBe('Next: Finish the data pipeline task');
-    act(() => { next()!.click(); });
+    act(() => { upNext('cm-up-next-open')!.click(); });
     await flush();
-    expect(loc()).toBe('/portal/projects/workspace/p1/t1');
+    expect(loc()).toBe('/portal/runtime/l1');
   });
   it('no Next once every step is done', async () => {
     mockPlan = plan([item({ ...LESSON, status: 'completed' }), item({ ...PROJECT, status: 'completed' })]);

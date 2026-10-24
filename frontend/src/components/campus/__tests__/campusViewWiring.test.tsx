@@ -23,7 +23,7 @@ jest.mock('../CampusContext', () => ({
 // eslint-disable-next-line import/first
 import { useCampusView, CampusView } from '../useCampusView';
 // eslint-disable-next-line import/first
-import CampusBanner from '../CampusBanner';
+import CampusNav from '../CampusNav';
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -64,24 +64,30 @@ describe('useCampusView wiring', () => {
   });
 });
 
-describe('the banner "Your path" link', () => {
+describe('the nav\'s "Your path" link (C16: it moved from the old banner)', () => {
   it('an Explorer sees it, and it opens the map at the Main Gate', async () => {
     set({ explorer: true });
-    await render(<CampusBanner />);
+    await render(<CampusNav active="/portal/library" />);
     const btn = container.querySelector('[data-testid="cm-your-path"]') as HTMLButtonElement;
     expect(btn).not.toBeNull();
     await act(async () => { btn.click(); });
     expect(mockOpened).toEqual(['gate']);
   });
 
+  it('staff do not see it: their campus has the Main Gate, but the path to enrolling is for Explorers only', async () => {
+    set({ mgmt: true });
+    await render(<CampusNav active="/portal/library" />);
+    expect(container.querySelector('[data-testid="cm-your-path"]')).toBeNull();
+  });
+
   it('a member does not see it', async () => {
-    await render(<CampusBanner />);
+    await render(<CampusNav active="/portal/library" />);
     expect(container.querySelector('[data-testid="cm-your-path"]')).toBeNull();
   });
 
   it('a business viewer on an Explorer account does not see it (their campus has no Main Gate, so no path)', async () => {
     set({ manager: true, explorer: true });
-    await render(<CampusBanner />);
+    await render(<CampusNav active="/portal/library" />);
     expect(container.querySelector('[data-testid="cm-your-path"]')).toBeNull();
   });
 });

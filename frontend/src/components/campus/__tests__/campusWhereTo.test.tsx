@@ -26,6 +26,8 @@ import { CampusProvider, useCampus } from '../CampusContext';
 // eslint-disable-next-line import/first
 import CampusBanner from '../CampusBanner';
 // eslint-disable-next-line import/first
+import CampusLocationBar from '../CampusLocationBar';
+// eslint-disable-next-line import/first
 import CampusLayers from '../CampusLayers';
 // eslint-disable-next-line import/first
 import { CAMPUS_SETTINGS_KEY } from '../campusSettings';
@@ -41,7 +43,7 @@ function Where(): null { paths.push(useLocation().pathname); return null; }
 function Probe(): React.ReactElement | null {
   const c = useCampus();
   (window as unknown as { __campus: ReturnType<typeof useCampus> }).__campus = c;
-  return c.active ? <><CampusBanner /><CampusLayers /></> : null; // the banner hosts Where to and the page Esc listener
+  return c.active ? <><CampusLocationBar /><CampusBanner /><CampusLayers /></> : null; // C16: the location bar hosts Where to and the page Esc listener
 }
 const campus = () => (window as unknown as { __campus: ReturnType<typeof useCampus> }).__campus;
 
