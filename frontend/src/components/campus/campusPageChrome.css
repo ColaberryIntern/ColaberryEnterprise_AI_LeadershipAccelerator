@@ -81,7 +81,8 @@
 .cm-rail button:focus-visible{outline:3px solid var(--cm-art-red);outline-offset:2px}
 
 /* the left column: a square-ish mini-map with its caption, the rooms of this building, building dots in their art colors */
-.cm-nav-map-cap{text-align:center;font-size:12px;color:var(--cm-art-muted);padding:6px 0 8px;background:var(--cm-art-card)}
+.cm-nav-map-cap{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:12px;color:var(--cm-art-muted);padding:6px 10px 8px;background:var(--cm-art-card)}
+.cm-nav-map-cap .cm-link{font-size:12px;font-weight:700;white-space:nowrap}
 .cm-nav-rooms{margin:4px 0 6px}
 .cm-nav .cm-dot.cm-b-lecture{background:var(--cm-art-lecture)}
 .cm-nav .cm-dot.cm-b-library{background:var(--cm-art-library)}
@@ -107,8 +108,10 @@
 
 /* ---- WP-1: your next steps are never out of reach ---- */
 /* the banner's Next steps button: shown where the rail column cannot be (narrow screens, pages without a rail) */
-.cm-pagebar .cm-steps-btn{order:3;display:none;background:var(--cm-art-in-name-bg);color:var(--cm-art-on-dark);border:1px solid var(--cm-art-pic-muted);border-radius:999px;font-weight:700}
-.cm-pagebar.has-steps .cm-steps-btn{display:inline-flex}
+/* C16: the bar moved out (CampusLocationBar); what stays at the top of the page column (Next steps, Colaberry Live) */
+.cm-banner.cm-pagebits{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 14px}
+.cm-pagebits .cm-steps-btn{display:none;height:36px;padding:0 14px;background:var(--cm-art-card);color:var(--cm-art-ink);border:1px solid var(--cm-art-line);border-radius:18px;font-weight:700;white-space:nowrap}
+.cm-pagebits.has-steps .cm-steps-btn{display:inline-flex;align-items:center}
 .cm-steps-drawer{position:fixed;top:0;right:0;bottom:0;width:min(340px,100%);z-index:60;background:var(--cm-art-paper);color:var(--cm-art-ink);overflow:auto;
   box-shadow:var(--cm-art-shadow);padding-top:44px}
 .cm-steps-drawer .cm-rail{border-bottom:0}
@@ -120,7 +123,7 @@
   .te-shell.collapsed.contacts-collapsed:has(.te-contacts .cm-rail){grid-template-columns:66px 1fr 300px}
 }
 /* too narrow for the column (it shrinks to avatars at 1200 px and goes at 820 px): the drawer instead */
-@media (max-width:1200px){ .cm-pagebar .cm-steps-btn{display:inline-flex} .te-contacts .cm-rail{display:none} }
+@media (max-width:1200px){ .cm-pagebits .cm-steps-btn{display:inline-flex;align-items:center} .te-contacts .cm-rail{display:none} }
 /* the legacy page layout: the campus side nav, the page, and the rail (prototype .pg-side / .pg-main / .pg-rail) */
 .cm-scoped-grid{display:grid;grid-template-columns:240px minmax(0,1fr) 280px;gap:20px;align-items:start}
 .cm-scoped-side,.cm-scoped-rail{position:sticky;top:12px;max-height:calc(100vh - 24px);overflow:auto;background:var(--cm-art-paper);border:1px solid var(--cm-art-line);border-radius:14px}
@@ -130,6 +133,8 @@
 .cm-rail .cm-tour-offer{flex-direction:column;align-items:flex-start;gap:8px;margin:0 0 14px}
 .cm-rail .cm-tour-offer .d{font-size:12.5px}
 .cm-rail .cm-next-row{flex-wrap:wrap}
+/* C16: 💬 on every person in Here now (their card, with Message) */
+.cm-rail-msg{margin-left:auto;font-size:13px;opacity:.75}
 
 /* WP-2: "Walk the route on the map" under Today's plan (prototype todayPage .b-red button, teal like the plan) */
 .cm-walk-route{margin-top:14px;border:0;border-radius:999px;padding:12px 20px;font-weight:700;font-size:14px;background:var(--cm-art-plan-solid);color:var(--cm-art-on-dark);cursor:pointer}

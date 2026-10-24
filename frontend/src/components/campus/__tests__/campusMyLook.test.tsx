@@ -46,6 +46,8 @@ import CampusNav from '../CampusNav';
 // eslint-disable-next-line import/first
 import CampusMeHost from '../home/CampusMeHost';
 // eslint-disable-next-line import/first
+import CampusLocationBar from '../CampusLocationBar';
+// eslint-disable-next-line import/first
 import { CAMPUS_SETTINGS_KEY } from '../campusSettings';
 // eslint-disable-next-line import/first
 import { ParticipantAuthProvider } from '../../../contexts/ParticipantAuthContext';
@@ -60,7 +62,7 @@ function Capture(): null {
 }
 function Gated(): React.ReactElement | null {
   const c = useCampus();
-  return c.active ? <><CampusNav active="/portal/library" /><CampusLayers /><CampusMeHost /></> : null;
+  return c.active ? <><CampusLocationBar /><CampusNav active="/portal/library" /><CampusLayers /><CampusMeHost /></> : null;
 }
 const campus = () => (window as unknown as { __campus: ReturnType<typeof useCampus> }).__campus;
 
@@ -96,7 +98,7 @@ jest.setTimeout(15000);
 describe('the locker', () => {
   it('opens the Me panel where you are (WP-7): points, level, earned vs locked tiles', async () => {
     await mount();
-    await click('cm-look-open');
+    await click('cm-banner-me');
     expect(where.path).toBe('/portal/library');
     expect(q('cm-me')).not.toBeNull();
     expect(q('cm-me-level')?.textContent).toContain('AI Aware II · 200 pts');
@@ -108,7 +110,7 @@ describe('the locker', () => {
 
   it('wearing an item saves the complete set and your figure wears it; clicking it again takes it off', async () => {
     await mount();
-    await click('cm-look-open');
+    await click('cm-banner-me');
     await click('cm-look-item-cap');
     expect(puts).toEqual([{ head: 'cap' }]);
     expect(q('cm-look-item-cap')?.getAttribute('aria-pressed')).toBe('true');
@@ -121,7 +123,7 @@ describe('the locker', () => {
   it('a refused save keeps the previous look and shows the server\'s reason', async () => {
     mockPut = () => Promise.reject(new Error('Cohort cap is earned at 150 points'));
     await mount();
-    await click('cm-look-open');
+    await click('cm-banner-me');
     await click('cm-look-item-cap');
     expect(q('cm-look-error')?.textContent).toBe('Cohort cap is earned at 150 points');
     expect(q('cm-look-item-cap')?.getAttribute('aria-pressed')).toBe('false');
@@ -131,7 +133,7 @@ describe('the locker', () => {
   it('a failed read: the locker says so, the map still works', async () => {
     mockFetchFails = true;
     await mount();
-    await click('cm-look-open');
+    await click('cm-banner-me');
     expect(q('cm-look-broken')?.textContent).toBe('We can’t load your locker right now.');
   });
 
@@ -154,7 +156,7 @@ describe('the locker', () => {
 
   it('copy never says "free" or "buy"', async () => {
     await mount();
-    await click('cm-look-open');
+    await click('cm-banner-me');
     expect(q('cm-look')?.textContent).not.toMatch(/\bfree\b|\bbuy\b/i);
   });
 });

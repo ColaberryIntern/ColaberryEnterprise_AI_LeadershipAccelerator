@@ -194,8 +194,10 @@ async function runAudience(browser, audience, jwt) {
     });
 
     await step(audience, 'Use classic menu switches to the classic portal, and back', async () => {
+      // C16: the classic choice lives in the Me panel (the bar's you button), not the left nav
       await page.goto(`${urls.base}/portal/today`, { waitUntil: 'domcontentloaded' });
-      await page.click('[data-testid="cm-use-classic"]');
+      await page.click('[data-testid="cm-banner-me"]');
+      await page.click('[data-testid="cm-me-classic"]');
       await page.waitForSelector('nav.te-nav', { timeout: 15_000 });
       await page.click('[data-testid="cm-use-campus"]');
       await page.waitForSelector('nav.cm-nav', { timeout: 15_000 });

@@ -1,0 +1,83 @@
+/* ============================================================
+   Campus round 3 §2.4: the light location bar (the prototype's .locbar) and the page layout around it.
+   One bar, 56 px, the full width under the portal header (its own grid row, not capped by .te-main); every control 36 px,
+   13.5 px, never wrapping. The header scrolls away and the bar sticks to the top; the nav and the rail stick under it.
+   Colors: campusArtTokens.css only.
+   ============================================================ */
+@import './campusArtTokens.css';
+@import './campusFonts.css';
+
+/* the shell gains a row for the bar between the header and the columns; the header no longer sticks (the bar does) */
+.te-shell.has-locbar{grid-template-rows:auto auto 1fr;grid-template-areas:"top top top" "loc loc loc" "nav main contacts";--te-side-top:76px}
+.te-shell.has-locbar .te-top{position:relative}
+.te-shell.has-locbar .cm-nav,.te-shell.has-locbar .te-contacts{top:56px;height:calc(100vh - 56px)}
+@media (max-width:820px){ .te-shell.has-locbar{grid-template-areas:"top" "loc" "main"} }
+
+.cm-locbar{grid-area:loc;position:sticky;top:0;z-index:21;height:56px;box-sizing:border-box;display:grid;
+  grid-template-columns:232px minmax(0,1fr) auto;align-items:center;column-gap:28px;padding:0 22px;
+  background:var(--cm-art-locbar-bg);backdrop-filter:blur(8px);border-bottom:1px solid var(--cm-art-line);
+  font:500 13.5px 'DM Sans',var(--sans),system-ui,sans-serif;color:var(--cm-art-ink);transition:box-shadow .2s}
+.cm-locbar.is-scrolled{box-shadow:var(--cm-art-locbar-shadow)}
+.cm-locbar button{font:inherit;color:inherit;cursor:pointer}
+.cm-locbar button:focus-visible,.cm-locbar input:focus-visible{outline:3px solid var(--cm-art-red);outline-offset:2px}
+/* every label: one line, an ellipsis when it does not fit */
+.cm-lb-t{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+.cm-lb-map{display:flex;align-items:center;gap:10px;height:36px;max-width:100%;width:max-content;border-radius:18px;border:1px solid var(--cm-art-line);
+  background:var(--cm-art-card);padding:0 12px 0 4px;font-weight:700;font-size:13px;white-space:nowrap}
+.cm-lb-map:hover{background:var(--cm-art-locbar-hover)}
+.cm-lb-mm{width:28px;height:28px;border-radius:50%;overflow:hidden;flex:none;background:var(--cm-art-locbar-grass);display:block}
+.cm-lb-mm svg{width:100%;height:100%;display:block}
+
+.cm-lb-crumbs{display:flex;align-items:center;gap:6px;min-width:0;margin:0;padding:0;list-style:none;color:var(--cm-art-muted);white-space:nowrap}
+.cm-lb-crumbs li{display:flex;align-items:center;gap:6px;min-width:0}
+.cm-lb-crumbs li:last-child{flex:1 1 auto}
+.cm-lb-crumbs button{height:30px;border:0;background:transparent;border-radius:15px;padding:0 10px;font-weight:600;color:var(--cm-art-muted);
+  display:inline-flex;align-items:center;gap:6px;max-width:260px;min-width:0}
+.cm-lb-crumbs button:hover{background:var(--cm-art-locbar-hover);color:var(--cm-art-ink)}
+.cm-lb-crumbs .cur{color:var(--cm-art-ink);font-weight:700;display:inline-flex;align-items:center;gap:6px;min-width:0;padding:0 4px}
+/* the chevrons and the home mark are drawn, not text, so each crumb reads as just its name */
+.cm-lb-crumbs li+li::before{content:'\203A';color:var(--cm-art-locbar-faint);flex:none}
+.cm-crumb-home button::before{content:'\2302';margin-right:2px}
+.cm-lb-crumbs .sq{width:9px;height:9px;border-radius:3px;flex:none;background:var(--cm-crumb,var(--cm-art-muted))}
+.cm-crumb-b.cm-b-lecture{--cm-crumb:var(--cm-art-lecture)} .cm-crumb-b.cm-b-library{--cm-crumb:var(--cm-art-library)}
+.cm-crumb-b.cm-b-tower{--cm-crumb:var(--cm-art-tower)} .cm-crumb-b.cm-b-studio{--cm-crumb:var(--cm-art-studio)}
+.cm-crumb-b.cm-b-amphi{--cm-crumb:var(--cm-art-amphi)} .cm-crumb-b.cm-b-testing{--cm-crumb:var(--cm-art-testing)}
+.cm-crumb-b.cm-b-observatory{--cm-crumb:var(--cm-art-observatory)} .cm-crumb-b.cm-b-commons{--cm-crumb:var(--cm-art-commons)}
+.cm-crumb-b.cm-b-gallery{--cm-crumb:var(--cm-art-gallery)} .cm-crumb-b.cm-b-career{--cm-crumb:var(--cm-art-career)}
+.cm-crumb-b.cm-b-arcade{--cm-crumb:var(--cm-art-arcade)}
+
+.cm-lb-acts{display:flex;align-items:center;gap:8px;justify-content:flex-end;min-width:0}
+.cm-lb-btn{display:inline-flex;align-items:center;height:36px;border-radius:18px;border:1px solid var(--cm-art-line);background:var(--cm-art-card);
+  padding:0 14px;font-weight:600;white-space:nowrap;flex:none}
+.cm-lb-btn:hover{background:var(--cm-art-locbar-hover)}
+/* Where to? is the pages' inline search (it hosts their Wayfinder), dressed as the bar's 36 px pill */
+.cm-lb-where{flex:0 1 200px;min-width:150px}
+.cm-lb-where .cm-whereto{flex:none;min-width:0;width:100%}
+.cm-lb-where .cm-whereto-input{height:36px;border-radius:18px;border:1px solid var(--cm-art-line);background:var(--cm-art-card);color:var(--cm-art-ink);
+  padding:0 14px 0 34px;font:600 13.5px 'DM Sans',var(--sans),system-ui,sans-serif;
+  background-image:linear-gradient(transparent,transparent);position:relative}
+.cm-lb-where{position:relative}
+.cm-lb-where::before{content:'\1F50D';position:absolute;left:12px;top:50%;transform:translateY(-50%);font-size:13px;z-index:1;pointer-events:none}
+.cm-locbar .cm-lb-me{width:36px;height:36px;border-radius:50%;border:0;padding:0;overflow:hidden;flex:none;display:grid;place-items:center;
+  background:var(--cm-art-pic-ink);color:var(--cm-art-on-dark);font-weight:700;font-size:11px}
+.cm-lb-ic{margin-right:6px}
+.cm-locbar .cm-lb-me img{width:100%;height:100%;object-fit:cover}
+
+/* the coach mark, once per session, under the bar's right side */
+.cm-coach{position:absolute;right:24px;top:62px;z-index:22;background:var(--cm-art-ink);color:var(--cm-art-paper);border-radius:12px;padding:10px 14px;
+  font-size:12.5px;max-width:320px;line-height:1.45;box-shadow:var(--cm-art-pop-shadow)}
+.cm-coach::before{content:'';position:absolute;top:-6px;right:60px;border:6px solid transparent;border-top:0;border-bottom-color:var(--cm-art-ink)}
+
+/* narrower: the bar keeps the map icon, where you are, Step outside and the search */
+@media (max-width:1000px){ .cm-locbar{grid-template-columns:auto minmax(0,1fr) auto;column-gap:12px;padding:0 12px} }
+@media (max-width:820px){
+  .cm-lb-map .cm-lb-t,.cm-lb-btn .cm-lb-t,.cm-lb-crumbs li:first-child .cm-lb-t{display:none}
+  .cm-lb-map{padding:0 4px}
+  .cm-lb-btn{padding:0 12px}
+  .cm-lb-where{flex:0 0 40px;min-width:40px}
+  .cm-lb-where .cm-whereto-input{padding:0;width:36px;color:transparent}
+  .cm-lb-where .cm-whereto-input::placeholder{color:transparent}
+  .cm-lb-where .cm-whereto-input:focus{width:200px;padding:0 12px 0 34px;color:var(--cm-art-ink);position:absolute;right:0;top:-18px}
+}
+@media (prefers-reduced-motion:reduce){ .cm-locbar{transition:none} }

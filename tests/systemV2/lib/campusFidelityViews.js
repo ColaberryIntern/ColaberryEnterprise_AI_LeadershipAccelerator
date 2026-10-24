@@ -55,6 +55,18 @@ const DISTURB = [
 ];
 const AT_BASE = `(() => { const a = ${VB}.split(' ').map(Number), b = String(window.__cmVb0 || '').split(' ').map(Number);
   if (b.length !== 4) return 'no baseline'; return a.every((v, i) => Math.abs(v - b[i]) <= 1) ? '' : 'viewBox ' + a.join(' ') + ' is not the whole campus ' + b.join(' '); })()`;
+// C16: what 22-page-nav asserts on the page (an empty string = all good)
+const PAGE_NAV_OK = `(() => {
+  const bar = document.querySelector('[data-testid="cm-locbar"]'); if (!bar) return 'no location bar';
+  const r = bar.getBoundingClientRect(); const out = [];
+  if (Math.abs(r.width - document.documentElement.clientWidth) > 2) out.push('bar is ' + Math.round(r.width) + ' wide, the viewport ' + document.documentElement.clientWidth);
+  if (Math.abs(r.top) > 1) out.push('after scrolling the bar is at ' + Math.round(r.top) + ', not the top');
+  bar.querySelectorAll('button, .cm-lb-t, input').forEach((el) => { if (el.scrollWidth > el.clientWidth + 1 && !el.matches('.cm-lb-t')) out.push('overflow: ' + (el.textContent || el.getAttribute('placeholder') || el.tagName).trim().slice(0, 30)); });
+  const head = document.querySelector('.te-top'); if (head && /YOUR NEXT STEP/i.test(head.textContent || '')) out.push('"YOUR NEXT STEP" is inside the header');
+  const up = document.querySelector('[data-testid="cm-page-rail"] [data-testid="cm-up-next"]');
+  if (up) { const u = up.getBoundingClientRect(); if (u.bottom < 0 || u.top > innerHeight) out.push('the rail Up next is not in view after scrolling'); }
+  return out.join('; ');
+})()`;
 // WP-5: the help desk opens the staff card (a popover, Q7), so 08 and 09 no longer open a building card
 const CARD_VIEWS = ['03-arrive', '04-inside', '14-step-outside', '15-panel-with-card', '16-tour', '19-room-wall', '20-live-arrive'];
 
@@ -72,7 +84,7 @@ const VIEWS = [
     required: () => ['cm-inside', 'cm-inside-room', 'cm-inside-you', 'cm-inside-door', 'cm-inside-out'],
     known: () => ['the room opens on arrival, as the prototype flyIn does (no separate "look inside" step)', 'the prototype interiors invented events, dates, client names and tickets: neutral signs instead'] },
   { name: '05-page', route: '/portal/library',
-    required: (a, size) => ['cm-banner', 'cm-trail', 'cm-step-out', '.cm-banner .cm-whereto', ...(size === 'phone' ? [] : ['cm-page-side', 'cm-page-rail'])],
+    required: (a, size) => ['cm-locbar', 'cm-trail', 'cm-step-out', '.cm-locbar .cm-whereto', ...(size === 'phone' ? [] : ['cm-page-side', 'cm-page-rail'])], // C16: the bar
     known: () => ['the page countdown header (next class / next event) is the existing portal header, not rebuilt'] },
   { name: '06-live', route: '/portal/campus', needsLive: true,
     // WP-6: the marquee over the live building, the bar's state chip and clock, the card's chip and chime
@@ -124,6 +136,12 @@ const VIEWS = [
   { name: '19-room-wall', route: '/portal/campus', steps: () => [tap('tower'), WALKED],
     required: () => ['cm-inside', 'cm-wall-schedule', 'cm-you-walk'] },
   // WP-6: arriving at the live building: the hero in the state's colour, the stage, the live room as the main action
+  // C16 (round 3 §2.4): the light location bar on a page at 1440 and 1920: it spans the viewport, no control's text overflows, and
+  // after scrolling 800 px it is at the top with the rail's Up next in view and no "YOUR NEXT STEP" inside the header.
+  { name: '22-page-nav', route: '/portal/classroom', sizes: ['desktop', 'wide'],
+    steps: () => [{ wait: 900 }, { evaluate: 'window.scrollTo(0, 800)', settle: 900 }],
+    required: () => ['cm-locbar', 'cm-locbar-map', 'cm-trail', 'cm-step-out', 'cm-whereto', 'cm-page-rail'],
+    assert: () => PAGE_NAV_OK },
   { name: '20-live-arrive', route: '/portal/campus', needsLive: true, steps: () => [tap('commons'), WALKED],
     required: () => ['.cm-arrive-hero.is-live', 'cm-stage', 'cm-arrive-cta'],
     known: () => ['DOORS OPEN and REPLAY: discovery lists only live and reconnecting broadcasts today (kept out on purpose, #3346)', 'auto check-in needs a broadcast with a class session; the local seed has none'] },

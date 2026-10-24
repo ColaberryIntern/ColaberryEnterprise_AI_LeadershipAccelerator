@@ -7,20 +7,21 @@ import { useCampus } from './CampusContext';
 import { useCampusView } from './useCampusView';
 import { accessLabel } from './campusAccess';
 import { buildingForPath, buildingName, roomLabel } from './campusMap';
-import { tourFor } from './tourSteps';
-import CampusSettingsPanel from './CampusSettingsPanel';
 import AdminLink from './AdminLink';
 import { useIsMgmt } from './campusMgmt';
 
 /**
  * The campus in the portal's left column (Campus C2), in place of nav.te-nav when the campus
- * is active: a compact map (pick a building to open the full map there), every building as a
- * one-click link to its main page, and the way back to the classic menu.
+ * is active: a compact map (pick a building to open the full map there), the rooms of the building you are in, and every
+ * building as a one-click link to its main page.
+ *
+ * C16 (round 3 §2.4): nothing else. "Open campus map" is the location bar's Campus map and the card's Full map; the tour is the
+ * rail's; My look and the classic menu are in the Me panel; the list view is the home's. An Explorer keeps "Your path" here
+ * (it used to sit in the old banner).
  */
 export default function CampusNav({ active }: { active: string }): React.ReactElement {
-  const { settings, openMap, openList, updateSettings, startTour, openMe } = useCampus();
-  const { buildings, accessOf, audience } = useCampusView();
-  const hasTour = !!tourFor(audience, buildings, accessOf, settings.workplaceNames); // C7: everyone but staff
+  const { settings, openMap } = useCampus();
+  const { buildings, accessOf, isExplorer } = useCampusView();
   const here = buildingForPath(active);
   const isMgmt = useIsMgmt();
   return (
@@ -29,8 +30,12 @@ export default function CampusNav({ active }: { active: string }): React.ReactEl
         {/* WP-3: the prototype's side map (campusMapSVG): tinted blocks with icons, locked grey, where you are outlined with a pin */}
         <CampusMiniMap variant="side" buildings={buildings} here={here ? here.id : null} accessOf={accessOf} workplaceNames={settings.workplaceNames}
           reduceMotion={settings.reduceMotion} onPick={(id) => openMap(id)} />
-        <div className="cm-nav-map-cap" aria-hidden="true">Tap a building to walk there</div>
+        <div className="cm-nav-map-cap"><span aria-hidden="true">Tap a building to walk there</span>
+          <button type="button" className="cm-link" onClick={() => openMap()} data-testid="cm-open-map">Full map</button></div>
       </div>
+      {isExplorer && buildings.some((b) => b.id === 'gate') && (
+        <button type="button" className="cm-link cm-nav-tour" onClick={() => openMap('gate')} data-testid="cm-your-path">Your path to enrolling</button>
+      )}
       {/* C11b: the rooms of the building you are in (the prototype's left side on a page) */}
       {here && here.rooms.some((r) => !r.admin && !r.planned) && (
         <section className="cm-nav-rooms" aria-label={`In ${buildingName(here, settings.workplaceNames)}`} data-testid="cm-page-side">
@@ -43,9 +48,6 @@ export default function CampusNav({ active }: { active: string }): React.ReactEl
           </ul>
         </section>
       )}
-      <button type="button" className="cm-btn cm-nav-open" onClick={() => openMap()} data-testid="cm-open-map">Open campus map</button>
-      {hasTour && <button type="button" className="cm-link cm-nav-tour" onClick={startTour} data-testid="cm-tour-start">Take the tour</button>}
-      <button type="button" className="cm-link cm-nav-tour" onClick={openMe} data-testid="cm-look-open">My look</button>
       <div className="grp">Buildings</div>
       <ul className="cm-nav-list">
         {buildings.filter((b) => b.id !== 'gate').map((b) => {
@@ -66,11 +68,6 @@ export default function CampusNav({ active }: { active: string }): React.ReactEl
           );
         })}
       </ul>
-      <div className="cm-nav-foot">
-        <button type="button" className="cm-link" onClick={openList}>List view</button>
-        <button type="button" className="cm-link" onClick={() => updateSettings({ nav: 'classic' })} data-testid="cm-use-classic">Use classic menu</button>
-        <CampusSettingsPanel variant="nav" />
-      </div>
     </nav>
   );
 }

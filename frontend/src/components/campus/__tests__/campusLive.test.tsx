@@ -33,6 +33,8 @@ import { CampusProvider, useCampus } from '../CampusContext';
 // eslint-disable-next-line import/first
 import CampusBanner from '../CampusBanner';
 // eslint-disable-next-line import/first
+import CampusLocationBar from '../CampusLocationBar';
+// eslint-disable-next-line import/first
 import CampusLayers from '../CampusLayers';
 // eslint-disable-next-line import/first
 import { CAMPUS_SETTINGS_KEY } from '../campusSettings';
@@ -69,7 +71,7 @@ function Gated(): React.ReactElement | null {
   const c = useCampus();
   (window as unknown as { __campus: ReturnType<typeof useCampus> }).__campus = c;
   // WP-1: a page carries the banner and the layers; the campus home (/portal/campus) is its own page with the one map.
-  return c.active ? <WithCampusHome><CampusBanner /><CampusLayers /></WithCampusHome> : null;
+  return c.active ? <WithCampusHome><CampusLocationBar /><CampusBanner /><CampusLayers /></WithCampusHome> : null;
 }
 const campus = () => (window as unknown as { __campus: ReturnType<typeof useCampus> }).__campus;
 
@@ -106,8 +108,8 @@ describe('on air, from discovery', () => {
     respond([LIVE]);
     await mount();
     // WP-3: the page bar's tile is the prototype's schematic (grey blocks and your pin), with no badges; the strip carries the news
-    expect(container.querySelector('.cm-banner [data-testid="cm-mini-tile"]')).not.toBeNull();
-    expect(container.querySelector('.cm-banner [data-testid^="cm-onair-"]')).toBeNull();
+    expect(container.querySelector('[data-testid="cm-locbar"] [data-testid="cm-mini-tile"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="cm-locbar"] [data-testid^="cm-onair-"]')).toBeNull();
     expect(q('cm-live')?.textContent).toContain('Agents in production, live');
     expect(Array.from(container.querySelectorAll('[data-testid="cm-live"] button')).map((b) => b.textContent)).toEqual(
       expect.arrayContaining([expect.stringMatching(/watch/i), 'Go to the room']),

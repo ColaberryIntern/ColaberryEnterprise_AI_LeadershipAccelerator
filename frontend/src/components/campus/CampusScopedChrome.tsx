@@ -1,6 +1,7 @@
 import React from 'react';
 import { useLocation } from 'react-router-dom';
 import CampusBanner from './CampusBanner';
+import CampusLocationBar from './CampusLocationBar';
 import CampusLayers from './CampusLayers';
 import CampusNav from './CampusNav';
 import CampusRail from './CampusRail';
@@ -26,6 +27,7 @@ export default function CampusScopedChrome({ children }: { children?: React.Reac
   if (!children) {
     return (
       <div className="cm-scope" data-testid="cm-scope">
+        <CampusLocationBar />
         <CampusBanner alwaysSteps />
         <CampusLayers />
       </div>
@@ -33,6 +35,7 @@ export default function CampusScopedChrome({ children }: { children?: React.Reac
   }
   return (
     <div className="cm-scope" data-testid="cm-scope">
+      <CampusLocationBar />
       <CampusBanner />
       <CampusLayers />
       <div className="cm-scoped-grid">

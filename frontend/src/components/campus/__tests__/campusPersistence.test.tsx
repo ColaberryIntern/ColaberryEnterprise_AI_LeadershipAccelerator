@@ -29,6 +29,8 @@ import { CampusProvider, useCampus } from '../CampusContext';
 // eslint-disable-next-line import/first
 import CampusBanner from '../CampusBanner';
 // eslint-disable-next-line import/first
+import CampusLocationBar from '../CampusLocationBar';
+// eslint-disable-next-line import/first
 import PortalLayout from '../../Layout/PortalLayout';
 // eslint-disable-next-line import/first
 import { PRESENCE_POLL_MS } from '../useCampusPresencePoll';
@@ -48,7 +50,7 @@ function Nav(): null { const n = useNavigate(); go = n; return null; }
 /** Stands in for a PortalShell page: renders the banner at the top of its main, as PortalShell does. */
 function ShellPage({ name }: { name: string }): React.ReactElement {
   const { active } = useCampus();
-  return <main>{active && <CampusBanner />}<p>{name}</p></main>;
+  return <main>{active && <><CampusLocationBar /><CampusBanner /></>}<p>{name}</p></main>;
 }
 function Layout(): React.ReactElement { return <CampusProvider><Nav /><Outlet /></CampusProvider>; }
 

@@ -92,6 +92,9 @@
   --cm-art-hero-live-from:#1c1018;
   /* WP-7: the Me panel's figure backdrop (the prototype's .me-prev rect) */
   --cm-art-me-prev-bg:#f3ece0;
+  /* C16: the light location bar */
+  --cm-art-locbar-bg:rgba(251,247,240,.94); --cm-art-locbar-hover:#efe8dc; --cm-art-locbar-faint:#b7ad9e; --cm-art-locbar-grass:#cfe0b4;
+  --cm-art-locbar-shadow:0 6px 18px rgba(40,30,20,.08);
 }
 [data-theme="dark"]{
   --cm-art-paper:#1e1e1e; --cm-art-ink:#f4f4f4; --cm-art-muted:#b5ad9f; --cm-art-line:#3a352d;
@@ -106,4 +109,6 @@
   --cm-art-wf-sel:#2e2a25; --cm-art-wf-backdrop:rgba(0,0,0,.5); --cm-art-flash:#4a3a14;
   --cm-art-prompt-bg:#2e2a1c; --cm-art-prompt-edge:#6b5a2e; --cm-art-kpi-bg:#1b2430; --cm-art-kpi-edge:#2c3a4a; --cm-art-pop-shadow:0 24px 60px rgba(0,0,0,.6);
   --cm-art-me-prev-bg:#2e2a25;
+  --cm-art-locbar-bg:rgba(30,30,30,.94); --cm-art-locbar-hover:#2e2a25; --cm-art-locbar-faint:#6b6458; --cm-art-locbar-grass:#3b4a2e;
+  --cm-art-locbar-shadow:0 6px 18px rgba(0,0,0,.4);
 }
