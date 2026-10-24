@@ -18,6 +18,7 @@ import { projectDiscovery, DiscoveryEntry } from '../services/broadcast/broadcas
 import { ACTIVE_DISCOVERY_STATES, findActiveOccurrences } from '../services/broadcast/broadcastActiveQuery';
 import { resolvePollAfterMs } from '../services/broadcast/broadcastPollPolicy';
 import { signPlayback, computeGrantExpiry } from '../services/broadcast/broadcastPlaybackGrant';
+import { resolvePlaybackTarget } from '../services/broadcast/broadcastRecordingBinding';
 import { signLivePlayback, CloudflareStreamError } from '../services/broadcast/providers/cloudflareStreamProvider';
 import BroadcastOccurrence from '../models/BroadcastOccurrence';
 
@@ -185,15 +186,30 @@ export async function postPlaybackGrant(req: Request, res: Response): Promise<vo
         res.status(403).json({ error: 'NotEntitled', reason: 'preview_expired', offer_upgrade: true });
         return;
       }
-      if (!occurrence.provider_session_id) {
-        // Configured for Cloudflare but no live input bound yet. 503, not 404: the occurrence
-        // exists and the viewer is entitled — the provider side is simply not ready, and
-        // saying "not found" would send a producer looking for the wrong fault.
-        res.status(503).json({ error: 'ProviderNotReady', reason: 'live_input_not_bound' });
+      /**
+       * WHICH UID GETS SIGNED (L8.4).
+       *
+       * This used to sign `provider_session_id` — the LIVE INPUT — unconditionally, for any
+       * state. So a replay grant for an ended occurrence returned a correctly signed, correctly
+       * expiring manifest for an input that had stopped streaming days earlier. Well-formed and
+       * wrong, which is the hardest kind of broken to notice.
+       *
+       * On air plays from the input; anything else plays from the recording captured while it
+       * aired. Cloudflare's signed-url shape is identical for the two - the uid rides in the
+       * token's `sub` - so one signer serves both and the name is the only live-specific thing
+       * about it.
+       */
+      const target = resolvePlaybackTarget(occurrence);
+      if (target.kind === 'none') {
+        // 503, not 404: the occurrence exists and the viewer is entitled — the provider side is
+        // simply not ready, and saying "not found" would send a producer looking for the wrong
+        // fault. The two reasons are kept apart because they send you to different places:
+        // one is configuration, the other is a show whose recording has not been captured.
+        res.status(503).json({ error: 'ProviderNotReady', reason: target.reason });
         return;
       }
       try {
-        const live = signLivePlayback(occurrence.provider_session_id, expiresAt);
+        const live = signLivePlayback(target.uid, expiresAt);
         res.json({
           url: live.url,
           expires_at: live.expiresAt,

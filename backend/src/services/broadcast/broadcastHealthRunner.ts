@@ -22,6 +22,7 @@
 import { runProducerCommand, runProviderEvent } from './broadcastCommandService';
 import { decideHealth, DEFAULT_MISS_THRESHOLD, Observation, ObservedState } from './broadcastHealthPolicy';
 import { decideAutoEnd, resolveAutoEndWindowMs } from './broadcastAutoEndPolicy';
+import { decideRecordingBinding, type LifecycleObservation } from './broadcastRecordingBinding';
 import type { ProviderHealth } from './broadcastStateMachine';
 
 /** The occurrences worth observing. Terminal ones are never polled. */
@@ -34,13 +35,21 @@ export interface ObservableOccurrence {
   provider_session_id: string | null;
   /** Needed to end it: producer commands are version-guarded, and a stale version is a 409. */
   version: number;
+  /** The recording captured while this aired, if it has been seen yet (L8.4). */
+  provider_instance_uuid: string | null;
 }
 
 export interface HealthRunnerDeps {
   /** Occurrences currently worth observing. Injected so a tick needs no database in tests. */
   loadObservable: () => Promise<ObservableOccurrence[]>;
-  /** Ask the provider whether a stream is arriving. Rejection means unreadable, not absent. */
-  observe: (occurrence: ObservableOccurrence) => Promise<boolean>;
+  /**
+   * Ask the provider what it sees. A rejection means unreadable, not absent.
+   *
+   * Returns the whole lifecycle rather than a boolean because the SAME call already carries
+   * the per-broadcast video uid, and narrowing it on the way out is what left every
+   * recording unbound (L8.4).
+   */
+  observe: (occurrence: ObservableOccurrence) => Promise<LifecycleObservation>;
   /** Fold a health event in. Defaults to the real command service. */
   applyEvent?: (occurrenceId: string, health: ProviderHealth, atMs: number) => Promise<unknown>;
   /**
@@ -52,6 +61,8 @@ export interface HealthRunnerDeps {
   threshold?: number;
   /** How long the stream must be continuously gone. Defaults to the configured window. */
   autoEndWindowMs?: number;
+  /** Persist the recording uid against the occurrence (L8.4). */
+  bindRecording?: (occurrenceId: string, videoUid: string) => Promise<void>;
   log?: (line: string) => void;
 }
 
@@ -63,6 +74,8 @@ export interface TickResult {
   failed: number;
   /** Occurrences this tick ended because the stream had been gone past the window. */
   ended: number;
+  /** Occurrences whose recording uid was captured for the first time this tick. */
+  bound: number;
 }
 
 /** Consecutive non-live observations, per occurrence. Cleared when an occurrence goes quiet. */
@@ -137,7 +150,9 @@ export async function runHealthTick(deps: HealthRunnerDeps): Promise<TickResult>
       return { ok: r.ok, reason: r.reason };
     });
 
-  const result: TickResult = { observed: 0, reported: 0, held: 0, skipped: 0, failed: 0, ended: 0 };
+  const bindRecording = deps.bindRecording ?? (async () => undefined);
+
+  const result: TickResult = { observed: 0, reported: 0, held: 0, skipped: 0, failed: 0, ended: 0, bound: 0 };
 
   let occurrences: ObservableOccurrence[];
   try {
@@ -163,10 +178,44 @@ export async function runHealthTick(deps: HealthRunnerDeps): Promise<TickResult>
 
     result.observed += 1;
     let observation: Observation;
+    let lifecycle: LifecycleObservation | null = null;
     try {
-      observation = (await deps.observe(occ)) ? 'live' : 'absent';
+      lifecycle = await deps.observe(occ);
+      observation = lifecycle.live ? 'live' : 'absent';
     } catch {
       observation = 'unreadable';
+    }
+
+    /**
+     * Capture the recording while the show is still running (L8.4).
+     *
+     * Before the health decision, because it is independent of it and must happen even on
+     * the tick that ends the broadcast — that tick is the LAST chance to see the uid, and
+     * an occurrence that ends with no recording bound has no replay at all.
+     *
+     * The write deliberately does not touch `version`, so the version this tick is holding
+     * stays valid for a producer command issued further down.
+     */
+    if (lifecycle) {
+      const binding = decideRecordingBinding(occ, lifecycle);
+      if (binding.capture) {
+        try {
+          await bindRecording(occ.id, binding.capture);
+          result.bound += 1;
+          log(logLine('broadcast_recording_bound', {
+            occurrenceId: occ.id, videoUid: binding.capture, from: occ.editorial_state,
+          }));
+        } catch (err: any) {
+          result.failed += 1;
+          log(logLine('broadcast_recording_bind_failed', {
+            occurrenceId: occ.id, error: err?.message ?? 'unknown',
+          }, 'failure'));
+        }
+      } else if (binding.reason === 'conflict') {
+        log(logLine('broadcast_recording_conflict', {
+          occurrenceId: occ.id, bound: occ.provider_instance_uuid, seen: lifecycle.videoUid,
+        }, 'failure'));
+      }
     }
 
     const decision = decideHealth(

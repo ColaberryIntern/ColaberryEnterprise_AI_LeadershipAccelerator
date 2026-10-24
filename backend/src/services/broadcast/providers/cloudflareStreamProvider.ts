@@ -327,6 +327,21 @@ export async function readLiveInput(uid: string, opts: CloudflareCallOptions = {
   return toLiveInput(await callApi<RawLiveInput>('GET', `/stream/live_inputs/${safe}`, undefined, opts));
 }
 
+/**
+ * The state of a RECORDING, as opposed to a live input (L8.4).
+ *
+ * Returns Cloudflare's raw `status.state` string rather than a narrowed enum, because the
+ * narrowing is a rule and rules in this subsystem live in pure policy files that can be
+ * argued with in a test. `broadcastReplayPolicy.narrowRecordingState` owns that mapping,
+ * including what to do with a value Cloudflare has not documented yet.
+ */
+export async function readVideoState(uid: string, opts: CloudflareCallOptions = {}): Promise<string | null> {
+  const safe = assertSafeUid(uid);
+  const raw = await callApi<{ status?: { state?: unknown } }>('GET', `/stream/${safe}`, undefined, opts);
+  const state = raw && raw.status ? raw.status.state : null;
+  return typeof state === 'string' ? state : null;
+}
+
 export interface LiveLifecycle {
   live: boolean;
   /** A NEW video uid per broadcast; null while the input is idle. */

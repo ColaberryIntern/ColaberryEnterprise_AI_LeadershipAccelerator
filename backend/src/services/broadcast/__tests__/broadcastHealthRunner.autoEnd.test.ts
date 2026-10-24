@@ -19,7 +19,7 @@ const START = 1_000_000;
 
 const occ = (over: Partial<ObservableOccurrence> = {}): ObservableOccurrence => ({
   id: 'occ-1', editorial_state: 'live', provider: 'cloudflare',
-  provider_session_id: 'input-abc', version: 7, ...over,
+  provider_session_id: 'input-abc', version: 7, provider_instance_uuid: null, ...over,
 });
 
 /**
@@ -38,7 +38,9 @@ function harness(opts: { occurrences?: ObservableOccurrence[]; streamLive?: () =
     observe: async () => {
       const v = streamLive();
       if (v === 'throw') throw new Error('provider unreachable');
-      return v;
+      // videoUid stays null: these cases are about ending, and a capture would drag the
+      // recording-binding write into tests that are not about it.
+      return { live: v, videoUid: null };
     },
     applyEvent: (id: string, health: any, atMs: number) => applyEvent(id, health, atMs),
     endOccurrence: (o: ObservableOccurrence, atMs: number) => endOccurrence(o, atMs),

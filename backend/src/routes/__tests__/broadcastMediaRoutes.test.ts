@@ -553,7 +553,7 @@ describe('module-level wiring', () => {
     expect((await request(appWithOrder(true, router)).get(signedPath())).status).toBe(200);
   });
 
-  it('the SHIPPED default resolver resolves nothing and says why — P6-01 has not bound recordings yet', async () => {
+  it('the SHIPPED default resolver resolves nothing and says why — L8.4 routes Cloudflare replay elsewhere', async () => {
     const warns: string[] = [];
     jest.spyOn(console, 'warn').mockImplementation((s: unknown) => { warns.push(String(s)); });
     try {
@@ -563,7 +563,12 @@ describe('module-level wiring', () => {
       expect(JSON.parse(warns[0])).toMatchObject({
         error_class: 'RecordingNotBound', event: 'broadcast_media_unbound',
       });
-      expect(JSON.parse(warns[0]).context.remedy).toMatch(/P6-01/);
+      // L8.4 decided this route is NOT the Cloudflare replay path, so the default still
+      // resolves nothing — but the remedy must now name that decision rather than a phase key
+      // with no ticket behind it. A reader hitting this log needs somewhere real to go.
+      const remedy = JSON.parse(warns[0]).context.remedy;
+      expect(remedy).toMatch(/L8\.4/);
+      expect(remedy).not.toMatch(/P6-01/);
     } finally {
       jest.restoreAllMocks();
     }

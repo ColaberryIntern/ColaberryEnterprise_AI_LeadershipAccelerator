@@ -80,7 +80,20 @@ export function isOnAir(state: EditorialState): boolean {
 
 export type ProducerCommand =
   | 'enter_backstage' | 'return_to_scheduled' | 'mark_content_started'
-  | 'go_live' | 'end' | 'cancel';
+  | 'go_live' | 'end' | 'cancel'
+  /**
+   * The replay half of the lifecycle (L8.4).
+   *
+   * `ended -> processing -> replay_ready` has been in the transition table since the table
+   * was written and had NO COMMAND THAT REACHES IT. Both states were legal and unreachable,
+   * so every finished broadcast stopped at `ended` — which entitlement does not consider
+   * watchable, so no recording could ever be played.
+   *
+   * These are producer commands rather than provider events on purpose: publishing a replay
+   * is a publishing decision, and the rule that a provider may never publish content is the
+   * same rule that keeps a webhook from putting a class on air.
+   */
+  | 'begin_processing' | 'publish_replay';
 
 /**
  * Who decided a broadcast was over.
@@ -147,6 +160,8 @@ const COMMAND_TARGET: Record<ProducerCommand, EditorialState | null> = {
   go_live: 'live',
   end: 'ended',
   cancel: 'cancelled',
+  begin_processing: 'processing',
+  publish_replay: 'replay_ready',
   mark_content_started: null, // does not move state; sets the preview anchor
 };
 
