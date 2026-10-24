@@ -27,6 +27,7 @@ import { getTestOverrides } from './settingsService';
 import StrategyCall from '../models/StrategyCall';
 import type { MayaActionResult } from './mayaActionService';
 import { updateBookingState } from './mayaConversationIntelligenceService';
+import { membershipPriceLine } from './admissionsPricing';
 
 const { Op } = require('sequelize');
 
@@ -386,11 +387,10 @@ export async function initiateVoiceCall(
 
 CRITICAL PROGRAM FACTS — use these exact figures, never approximate or guess:
 - Program name: Enterprise AI Leadership Accelerator
-- Price: $4,500 per participant (NOT $5,000 — always say forty-five hundred or four thousand five hundred)
+- Price: ${membershipPriceLine()} (say "one forty-nine a month billed annually, or one ninety-nine month-to-month"); group and corporate pricing comes from a person in admissions
 - Duration: 3 weeks, 5 live sessions
 - Format: Live, hands-on, with expert-guided project work
-- Payment: Credit card or corporate invoice
-- Corporate group pricing available
+- Payment: card for membership; corporate invoice through admissions
 - What participants get: Enterprise AI architecture templates, governance frameworks, production-ready AI proof of capability, 90-day expansion roadmap
 - Target audience: Directors and VPs of Engineering, Technology, or Data; CTOs and CDOs; Senior Technical Architects responsible for AI adoption; any technical leader whose team is being asked to deliver AI outcomes — this program is for builders and decision-makers at every level, not just C-suite executives
 - ROI framing: Organizations typically invest 6-12 months to achieve similar outcomes through traditional approaches. The Accelerator compresses this to 3 weeks
