@@ -215,6 +215,28 @@ describe('the campus home', () => {
     expect(cc().classList.contains('has-card')).toBe(false);
   });
 
+  it('C17: walking onto the grass leaves the building: "here" clears (a first ground click only closes the open room)', async () => {
+    const proto = SVGElement.prototype as unknown as Record<string, unknown>;
+    proto.getScreenCTM = () => ({ inverse: () => ({}) });
+    proto.createSVGPoint = () => ({ x: 0, y: 0, matrixTransform(this: { x: number; y: number }) { return { x: this.x, y: this.y }; } });
+    try {
+      await mount('/portal/campus');
+      const ground = () => act(() => { q('svg.cm-map')!.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: 720, clientY: 520 })); });
+      act(() => { q('[data-testid="cm-bld-commons"]')!.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+      await flush();
+      expect(campus.here).toBe('commons');
+      ground(); // the room is open: this closes it, you stay
+      await flush();
+      expect(q('[data-testid="cm-card"]')).toBeNull();
+      expect(campus.here).toBe('commons');
+      ground(); // now you walk (instantly: reduce motion is on here)
+      await flush();
+      expect(campus.here).toBeNull();
+      expect(q('[data-testid="cm-card"]')).toBeNull();
+      expect(q('[data-testid="cm-cc-where"]')!.textContent).toBe('On campus'); // not "At the main gate": you are on the lawn
+    } finally { delete proto.getScreenCTM; delete proto.createSVGPoint; }
+  });
+
   it('a concierge chip walks to its building', async () => {
     await mount('/portal/campus');
     const chip = Array.from(container.querySelectorAll('[data-testid="cm-cc-chips"] button')).find((b) => b.textContent && b.textContent.length > 0) as HTMLButtonElement;

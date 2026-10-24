@@ -40,6 +40,12 @@ describe('the kicker (D:1851-1854)', () => {
     expect(k({ here: bld('studio') })).toBe('At Project Studio');
     expect(k({ here: bld('library'), live: true })).toMatch(/^Colaberry Live · Thursday/);
   });
+  it('C17: out on the grass a member is "On campus" (never "At the main gate"); a building, or Live, still wins', () => {
+    expect(k({ onLawn: true })).toBe('On campus');
+    expect(k({ onLawn: true, workplace: true })).toBe('On campus');
+    expect(k({ onLawn: true, here: bld('library') })).toBe('At the Library');
+    expect(k({ onLawn: true, live: true })).toMatch(/^Colaberry Live/);
+  });
 });
 
 describe('the greeting (D:1844-1848)', () => {

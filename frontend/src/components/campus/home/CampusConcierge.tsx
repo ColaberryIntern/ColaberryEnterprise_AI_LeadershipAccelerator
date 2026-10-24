@@ -49,6 +49,8 @@ export interface ConciergeProps {
   live: { title: string; buildingId: BuildingId | null; state?: string } | null;
   /** The building you are at (null at the gate). */
   hereId?: BuildingId | null;
+  /** C17: you walked out onto the grass (no building and not at the gate): the kicker reads "On campus". */
+  onLawn?: boolean;
   /** This viewer's tour stops (null: no tour, e.g. staff), the stop on screen while it runs, and its saved progress. */
   tourStops: { buildingId: BuildingId }[] | null;
   touring: number | null;
@@ -133,7 +135,7 @@ export default function CampusConcierge(p: ConciergeProps): React.ReactElement {
         {p.tourStops && p.touring === null && <button type="button" className="cm-btn-line" onClick={() => p.onTour(p.tourProgress.paused ?? 0)}>Tour</button>}
       </div>
       <div className="cm-cc-body">
-      <div className="cm-kicker" data-testid="cm-cc-where">{kickerFor({ audience, here: hereB, workplace: wp, live: !!p.live, now: p.now })}</div>
+      <div className="cm-kicker" data-testid="cm-cc-where">{kickerFor({ audience, here: hereB, workplace: wp, live: !!p.live, now: p.now, onLawn: p.onLawn })}</div>
       <h1 data-testid="cm-cc-greeting">{greetLine(audience, p.firstName, p.now.getHours(), quiet)}</h1>
       <p className="cm-lead" data-testid="cm-cc-lead">{lead}</p>
       <Pulse p={p} />

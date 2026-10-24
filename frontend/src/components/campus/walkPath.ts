@@ -7,7 +7,8 @@ import { HUB, AVE, GATE } from './art/grounds';
  * the route is unit-tested without a browser.
  */
 export type Pt = { x: number; y: number };
-export type Zone = 'up' | 'ave' | 'gate';
+/** 'ground': standing on the grass after a click-to-walk (C17); a walk from there goes onto the paths first (walkGraph.routeFrom). */
+export type Zone = 'up' | 'ave' | 'gate' | 'ground';
 export interface Here extends Pt { zone: Zone }
 
 /** The door step a building's avatar stands on: just below its ground line (the gate: the gate itself). */
