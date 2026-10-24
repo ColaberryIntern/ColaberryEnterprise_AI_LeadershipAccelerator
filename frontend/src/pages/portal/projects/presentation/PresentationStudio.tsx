@@ -199,6 +199,11 @@ export default function PresentationStudio(props: PresentationStudioProps) {
           portfolio={portfolio?.slots.map((x) => ({
             typeId: x.typeId, typeLabel: x.typeLabel, recorded: x.recorded,
           }))}
+          // `opening` is already the stage the evidence panel mounts on, so the
+          // route can never drift from where the hand-in actually is.
+          handInStage={opening}
+          handInStageLabel={STAGE_META[opening].label}
+          onGoToHandIn={() => go(opening)}
         />
       </div>
 
