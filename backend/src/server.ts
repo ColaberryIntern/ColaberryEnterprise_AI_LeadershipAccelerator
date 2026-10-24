@@ -96,6 +96,7 @@ import { ensureCaseStudyServiceLinkSchema } from './db/ensureCaseStudyServiceLin
 import { ensureBroadcastSchema } from './db/ensureBroadcastSchema';
 import { ensureBroadcastTelemetrySchema } from './db/ensureBroadcastTelemetrySchema';
 import { ensureBroadcastEndReasonSchema } from './db/ensureBroadcastEndReasonSchema';
+import { ensureBroadcastClipMarkerSchema } from './db/ensureBroadcastClipMarkerSchema';
 import { ensureFactoryTaskSchema } from './db/ensureFactoryTaskSchema';
 import { ensureEmailSendLedgerSchema } from './db/ensureEmailSendLedgerSchema';
 import { ensureInternshipSchema } from './db/ensureInternshipSchema';
@@ -2969,6 +2970,9 @@ async function start(): Promise<void> {
   // sustained stream loss is distinguishable from one a producer ended. Alters an existing
   // table, so it lives in its own file per ensureBroadcastSchema's header rule.
   await ensureBroadcastEndReasonSchema();
+  // L7.3 - clip markers, recorded while the show runs. After the end_reason ensure because
+  // both alter or hang off broadcast_occurrences, which must exist first.
+  await ensureBroadcastClipMarkerSchema();
   // Friendships (portal Contacts rail friend graph) — idempotent, additive, no flag.
   await ensureFriendshipSchema();
   // Messaging extras — DM read cursor + widened notification-type CHECK. Additive.

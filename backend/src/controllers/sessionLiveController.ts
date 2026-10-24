@@ -5,6 +5,7 @@ import {
   getPresenterNotes,
 } from '../services/sessionLiveStateService';
 import { renderPresenterPage } from '../services/sessionKitDocService';
+import { recordClipMarker } from '../services/broadcast/broadcastClipMarkerService';
 
 // Resource-ownership guard for participant live endpoints: the caller must be in
 // the session's cohort. Returns true after sending 403 when they are not.
@@ -115,7 +116,27 @@ export async function handleSetBroadcast(req: Request, res: Response, next: Next
       seq: Number.isFinite(Number(b.seq)) && b.seq !== undefined && b.seq !== null ? Number(b.seq) : undefined,
       deck_id: typeof b.deck_id === 'string' && b.deck_id.length <= 64 ? b.deck_id : undefined,
     };
-    await setBroadcast(req.params.id as string, state);
+    const sessionId = req.params.id as string;
+    await setBroadcast(sessionId, state);
+
+    /**
+     * L7.3 - mark where this moment starts in the recording.
+     *
+     * DELIBERATELY NOT AWAITED. This is the request the instructor's deck makes to move the
+     * class forward, and it fires on every single advance. A clip marker is a by-product; the
+     * advance is the thing that matters. Awaiting it would put a database round trip and a
+     * spec build between the instructor pressing the arrow key and the room seeing the next
+     * slide, and a failure would surface as the show not advancing.
+     *
+     * `recordClipMarker` never throws by design, so the catch is belt and braces against an
+     * unhandled rejection rather than a path anyone expects to take.
+     */
+    void recordClipMarker({
+      sessionId,
+      slideIndex: state.slide_index,
+      deckTitle: state.title || null,
+    }).catch(() => undefined);
+
     res.json({ success: true });
   } catch (err) { next(err); }
 }

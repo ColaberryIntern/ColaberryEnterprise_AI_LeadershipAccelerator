@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { requireAdmin } from '../../middlewares/authMiddleware';
+import { handleGetSessionClipList } from '../../controllers/broadcastClipListController';
 import {
   handleListSessions, handleGetSession, handleCreateSession, handleUpdateSession, handleDeleteSession,
   handleSkipSession, handleUnskipDate, handleGetSessionCurriculum,
@@ -129,6 +130,10 @@ router.get('/api/admin/accelerator/sessions/:id/kit', requireAdmin, handleGetSes
 router.get('/api/admin/accelerator/sessions/:id/presenter-link', requireAdmin, handleGetPresenterLink);
 // Full interactive Class Kit teaching deck (HTML) — opened in a new tab to run the class.
 router.get('/api/admin/accelerator/sessions/:id/kit-doc', requireAdmin, handleGetSessionKitDoc);
+// L7.3 - the clip list for a class that aired: every moment the instructor advanced to, with
+// its position in the recording. Admin only; it is editorial material about a private
+// broadcast, not something a viewer should be able to enumerate.
+router.get('/api/admin/accelerator/sessions/:id/clip-list', requireAdmin, handleGetSessionClipList);
 // Plain-language class outline (teaching plan) — review / prepare / print.
 router.get('/api/admin/accelerator/sessions/:id/outline', requireAdmin, handleGetSessionOutline);
 // Instructor readiness report (prep + source/evidence ledger).
