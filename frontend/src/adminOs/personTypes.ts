@@ -34,6 +34,12 @@ export interface AcquisitionPanel {
    * should see on their line.
    */
   ghlContactId: string | null;
+  /**
+   * Deep link to this person in the CRM sub-account they are actually in. Resolved server-side,
+   * because which location holds them depends on their lead source, so the UI must not build
+   * this itself. Absent or null means we cannot say where they are, and no link is shown.
+   */
+  ghlContactUrl?: string | null;
 }
 
 /**
