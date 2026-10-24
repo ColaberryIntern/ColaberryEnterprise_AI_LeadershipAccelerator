@@ -45,7 +45,15 @@ export default function AccountArtifactsCard({ organizationId }: { organizationI
 
   const load = useCallback(async () => {
     try {
-      setLinks(await getOrganizationArtifacts(organizationId));
+      const next = await getOrganizationArtifacts(organizationId);
+      // A SHAPE WE DID NOT EXPECT IS A FAILED LOAD, NOT AN EMPTY ONE. The page this card
+      // sits on exists to keep those two apart - its suite opens by saying "a failed load
+      // and an empty result must not render the same", after an admin page showed
+      // "No leads yet" against 24,244 real rows. Setting state to a non-array also threw
+      // inside the render and took the whole account page down with it, which is how
+      // this was found.
+      if (!Array.isArray(next)) throw new Error('unexpected response shape');
+      setLinks(next);
       setError(null);
     } catch (e) {
       // Degrade rather than break the page: the account is still worth reading without
