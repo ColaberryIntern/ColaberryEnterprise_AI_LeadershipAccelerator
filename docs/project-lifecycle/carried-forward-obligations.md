@@ -3307,3 +3307,66 @@ HANG rather than fail, so their mode is unknown beyond that.
 Six suites, 56 tests, green. Backend `tsc --noEmit` clean. Test-file typecheck clean under
 `--strict` with no `--allowJs` across the helper and all 12 touched files. `--listTests` under
 `jest.ci.config.ts` confirms all six are now INCLUDED rather than merely un-listed.
+
+## FIVE MORE SUITES COME OFF THE IGNORE LIST, and A SWALLOW CANNOT CATCH A HANG
+
+Group 1 of the previous entry was the structural group: a model is mocked while the REAL
+association wiring runs. Five of the seven are fixed. **66 tests, every one of which previously
+never ran.** Ignore list 16 -> 11.
+
+### The fix was the SERVICE boundary, not the model layer
+
+`subscriptionService:2` is `import { Enrollment, Cohort, Subscription } from '../models'`. So
+importing it executes `models/index.ts`, and line 548 runs `Cohort.hasMany(Enrollment, ...)`
+against the plain object the suite mocked as a model. Sequelize refuses it and the suite dies at
+import, before any test, which is why these sat on the list with no test names ever attached.
+
+**Mocking a model harder cannot fix that** - the index associates whatever it is handed. Mocking
+`subscriptionService` stops the index being imported at all, and it is the right boundary on its
+own merits: these suites test community behaviour, and whether an enrollment is comped is
+subscription behaviour with its own tests.
+
+**MY EARLIER PRESCRIPTION WAS WRONG.** The previous entry and the config comment both said the
+fix was to "stop `jest.mock`-ing models and `jest.spyOn` the real ones". That is a far larger
+refactor than the problem needed, and it is not what worked. The structural READ was right; the
+remedy was not.
+
+### A SWALLOW CANNOT CATCH A HANG
+
+After the import fix, `communityService` still failed - but on a **5 second TIMEOUT**, not an
+assertion. `createPost` calls `rungNamesFor`, which `await import`s `progressionService` inside a
+try/catch that logs and returns an empty Map.
+
+That catch handles a THROW. What actually happened was a real model query against a database
+nobody is listening on, so the call **neither resolved nor rejected**: it sat there until jest
+killed the test, and the swallow never ran.
+
+This programme has repeatedly found swallowed errors hiding problems. This is the inverse and
+worth keeping as its own lesson: **a defensive `catch` around an awaited I/O call buys nothing
+without a timeout.** It looks like the failure path is covered, and for the hang case it is not.
+
+It was only observable now, too - before the import fix the suite ran zero tests, so the hang had
+never been reachable.
+
+### Why the last two are different in kind, not merely unfinished
+
+`adminRoutes` and `typeLaunchGate` have no single service to mock: the first reaches the index
+through `adminRoutes.ts:6 -> authRoutes.ts:18`, the second through `contentEntitlement.ts:1`,
+both landing on `models/index.ts:1835`.
+
+Nor can their mocks be shimmed with a no-op `hasMany`. That satisfies the call when the MOCK is
+the source, but line 1837 is `Enrollment.hasMany(TimelineCardProgress)` where the source is REAL
+and the target is mocked - and **Sequelize validates that a target is a `Model` subclass**, which
+no plain object can satisfy. These two need their models real, or the index itself mocked.
+
+### The AC8 fix paid for itself immediately
+
+`caseStudyIntegration`'s guard reads the ignore list. Shortening it 16 -> 11 passes (11 tests)
+**because** the previous change replaced its `toBeGreaterThan(20)` floor and its named-member
+control. The original form would have failed again here, on the same wrong reason: the list got
+shorter.
+
+### Verification
+
+5 suites / **66 tests** green together. AC8 guard green at 11 entries. Test-file typecheck clean
+under `--strict` with no `--allowJs` across all five changed files.

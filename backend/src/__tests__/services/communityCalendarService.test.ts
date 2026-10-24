@@ -16,6 +16,16 @@ jest.mock('../../models/CommunityPointsEvent', () => ({}));
 jest.mock('../../models/LiveSession', () => ({ findAll: jest.fn() }));
 jest.mock('../../models/OpenHouseEvent', () => ({ findAll: jest.fn() }));
 jest.mock('../../models/CommunityEvent', () => ({ findAll: jest.fn() }));
+// MOCKED AT THE SERVICE BOUNDARY, not the model layer. `communityService` imports
+// `subscriptionService`, whose own line 2 is `import { Enrollment, Cohort, Subscription } from
+// '../models'` - so importing it executes `models/index.ts`, and line 548 there runs
+// `Cohort.hasMany(Enrollment, ...)` against the plain object this file mocks as a model.
+// Sequelize refuses it and the suite dies at IMPORT, before a single test, which is how it ended
+// up on `jest.ci.config.ts`'s ignore list with no test names ever attached to the failure.
+// Mocking a model harder cannot fix that; the index associates whatever it is handed.
+jest.mock('../../services/subscriptionService', () => ({
+  activeCompEnrollmentIds: jest.fn(async () => new Set<string>()),
+}));
 
 import { Op } from 'sequelize';
 import { getUpcomingEvents } from '../../services/communityCalendarService';
