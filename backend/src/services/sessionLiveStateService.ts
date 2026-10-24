@@ -334,7 +334,14 @@ export interface PresenterNotes {
 const SPEC_TTL_MS = 30_000;
 const specCache = new Map<string, { at: number; slides: KitSlide[] }>();
 
-async function slidesForSession(sessionId: string): Promise<KitSlide[] | null> {
+/**
+ * The live slide list for a session, cached briefly.
+ *
+ * Exported for L7.3: the clip marker resolves the same slide from the same spec, and a
+ * second copy of this would mean two caches that can disagree about what slide 12 is —
+ * which is precisely the drift this function exists to detect.
+ */
+export async function slidesForSession(sessionId: string): Promise<KitSlide[] | null> {
   const hit = specCache.get(sessionId);
   const now = Date.now();
   if (hit && now - hit.at < SPEC_TTL_MS) return hit.slides;
