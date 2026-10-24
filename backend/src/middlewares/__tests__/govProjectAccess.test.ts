@@ -17,7 +17,8 @@ const buildRequestContext = jest.fn();
 jest.mock('../../modules/tenancy/tenantAuthorization', () => ({ buildRequestContext: (...a: any[]) => buildRequestContext(...a) }));
 const requireTenantAccessAudited = jest.fn();
 jest.mock('../../modules/tenancy/tenantAccessGuards', () => ({ requireTenantAccessAudited: (...a: any[]) => requireTenantAccessAudited(...a) }));
-jest.mock('../authFailureLog', () => ({ logAuthFailure: jest.fn() }));
+jest.mock('../authFailureLog', () => ({ logAuthFailure: jest.fn(), describeCaller: jest.fn(() => ({ forwarded_for: null, user_agent: null })) }));
+jest.mock('../../services/aiEventService', () => ({ emitAiEvent: jest.fn().mockResolvedValue(undefined) }));
 
 import { requireGovProjectAccess } from '../govProjectAccess';
 
@@ -66,9 +67,13 @@ describe('requireGovProjectAccess', () => {
     expect(next).not.toHaveBeenCalled();
   });
 
-  it('404 for a NON-MEMBER (enumeration defense — never 403)', async () => {
+  it('404 for a NON-MEMBER (enumeration defense — never 403); tenant guard runs first, then delivery 404s', async () => {
+    // A genuine non-member has NO delivery roles, so the tenant guard applies (here it allows, an in-tenant
+    // operator), and the delivery check then 404s for the missing membership.
+    buildDeliveryContext.mockResolvedValue({ platformIdentityId: 'pid-1', deliveryProjectId: 'proj-A', projectTenantId: 'ten-1', roles: [], isClientOnly: false });
     requireDeliveryPermission.mockImplementation(() => { throw { status: 404, reason: 'not_a_project_member' }; });
     const { res, next } = await run(okReq());
+    expect(requireTenantAccessAudited).toHaveBeenCalledTimes(1); // non-member -> tenant guard DID run
     expect(res.statusCode).toBe(404);
     expect(res.body).toEqual({ error: 'Not found' });
     expect(next).not.toHaveBeenCalled();
@@ -81,11 +86,37 @@ describe('requireGovProjectAccess', () => {
     expect(next).not.toHaveBeenCalled();
   });
 
-  it('TENANT FIRST: a cross-tenant caller is 404 and the delivery permission is NEVER consulted', async () => {
+  it('NON-MEMBER cross-tenant caller: tenant guard runs FIRST and 404s; delivery permission is NEVER consulted', async () => {
+    // Non-member (no delivery roles) from a foreign tenant: the tenant guard denies before the delivery layer
+    // reveals whether the project exists. Ordering is the security property for a non-member.
+    buildDeliveryContext.mockResolvedValue({ platformIdentityId: 'pid-1', deliveryProjectId: 'proj-A', projectTenantId: 'ten-1', roles: [], isClientOnly: false });
     requireTenantAccessAudited.mockRejectedValue({ status: 404, reason: 'cross_tenant_denied' });
     const { res, next } = await run(okReq());
     expect(res.statusCode).toBe(404);
-    expect(requireDeliveryPermission).not.toHaveBeenCalled(); // ordering is the security property
+    expect(requireDeliveryPermission).not.toHaveBeenCalled();
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it('MEMBER with NO tenant membership is ALLOWED — the tenant guard is bypassed for a confirmed member', async () => {
+    // roles non-empty (default) = a confirmed active DeliveryProjectMember (an assigned student). Even though
+    // the tenant guard WOULD deny (the student has no TenantMembership), it must never be consulted: project
+    // membership is the authorization. The delivery-permission check still runs.
+    requireTenantAccessAudited.mockRejectedValue({ status: 404, reason: 'cross_tenant_denied' });
+    const req = okReq({ admin: undefined, participant: { email: 'student@colaberry.com' } });
+    const { res, next } = await run(req);
+    expect(requireTenantAccessAudited).not.toHaveBeenCalled(); // tenant membership NOT required for a member
+    expect(buildRequestContext).not.toHaveBeenCalled();
+    expect(requireDeliveryPermission).toHaveBeenCalledTimes(1); // the permission check still runs
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(res.status).not.toHaveBeenCalled();
+    expect(req.deliveryContext).toMatchObject({ roles: ['associate_builder'] });
+  });
+
+  it('a MEMBER lacking the permission is still 403 even though the tenant guard was bypassed', async () => {
+    requireDeliveryPermission.mockImplementation(() => { throw { status: 403, reason: 'missing_permission' }; });
+    const { res, next } = await run(okReq());
+    expect(requireTenantAccessAudited).not.toHaveBeenCalled(); // member path skips the tenant guard
+    expect(res.statusCode).toBe(403);
     expect(next).not.toHaveBeenCalled();
   });
 

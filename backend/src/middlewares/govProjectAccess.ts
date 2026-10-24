@@ -9,7 +9,7 @@ import {
 import type { DeliveryPermission } from '../modules/delivery/deliveryRoles';
 import { buildRequestContext } from '../modules/tenancy/tenantAuthorization';
 import { requireTenantAccessAudited } from '../modules/tenancy/tenantAccessGuards';
-import { logAuthFailure } from './authFailureLog';
+import { logAuthFailure, describeCaller } from './authFailureLog';
 
 /**
  * govProjectAccess — the project-scoped guard for a GOVERNMENT delivery project.
@@ -50,9 +50,47 @@ export async function resolveGovProjectActor(req: Request): Promise<{ platformId
 }
 
 /**
+ * Fire-and-forget audit that a confirmed ACTIVE delivery member reached a gov project via their project
+ * membership, with the tenant-membership requirement bypassed. A member accessing their own project is not a
+ * tenant-isolation violation (so it does not belong on the tenant audit), but the access is still recorded
+ * here so bypassing `requireTenantAccessAudited` for a member does not lose the trail. Never blocks the
+ * request: telemetry must never break or slow the access it describes.
+ */
+function auditGovProjectMemberAccess(
+  actor: { platformIdentityId: string; email: string },
+  projectId: string,
+  projectTenantId: string | null,
+  permission: DeliveryPermission,
+  roles: string[],
+  req: GovProjectRequest,
+): void {
+  import('../services/aiEventService')
+    .then(({ emitAiEvent }) =>
+      emitAiEvent({
+        event_type: 'gov_project_access_via_membership',
+        outcome: 'success',
+        actor_type: 'gov_project',
+        metadata: {
+          platform_identity_id: actor.platformIdentityId,
+          project_id: projectId,
+          project_tenant_id: projectTenantId,
+          permission,
+          delivery_roles: roles,
+          ...describeCaller(req),
+        },
+      }),
+    )
+    .catch(() => { /* audit is fire-and-forget; telemetry must never break access */ });
+}
+
+/**
  * Require that the authenticated actor holds `permission` on the gov delivery project named by the route param.
  * On allow, attaches `req.deliveryContext`. On deny: 400 (bad/repeated param), 401 (no resolvable identity),
  * 404 (non-member / cross-tenant / any unexpected failure), 403 (member lacking the permission).
+ *
+ * A confirmed ACTIVE delivery member of the project is authorized by that project-scoped membership alone and
+ * does NOT additionally require tenant membership (see the member branch below). A non-member still goes
+ * through the tenant-isolation guard first, unchanged.
  */
 export function requireGovProjectAccess(permission: DeliveryPermission, paramName = 'projectId') {
   return async (req: GovProjectRequest, res: Response, next: NextFunction): Promise<void> => {
@@ -82,18 +120,32 @@ export function requireGovProjectAccess(permission: DeliveryPermission, paramNam
     try {
       const ctx = await buildDeliveryContext({ platformIdentityId: actor.platformIdentityId, deliveryProjectId: projectId });
 
-      // TENANT FIRST (audited). A caller from another tenant is denied + recorded before the delivery layer
-      // reveals membership. The audited guard throws 404 on a foreign tenant, exactly like the unaudited one.
-      const tenantCtx = await buildRequestContext({ platformIdentityId: actor.platformIdentityId });
-      await requireTenantAccessAudited(tenantCtx, ctx.projectTenantId, {
-        resourceType: 'delivery_project',
-        resourceId: projectId,
-        action: 'read',
-        actorEmail: actor.email,
-        ipAddress: req.ip ?? null,
-      });
+      // A confirmed ACTIVE delivery member of THIS project (ctx.roles is built from active DeliveryProjectMember
+      // rows) is authorized at the project scope: that membership IS the grant, and it does not additionally
+      // require tenant membership. An assigned student holds such a row (minted by provision-on-assign) but has
+      // no TenantMembership, so the tenant-first guard would otherwise 404 them out of their own assigned
+      // project — and out of the evidence hand-in / reviewer routes this same guard fronts. Project-scoped
+      // authorization is the right axis for an internal delivery actor; a tenant-WIDE membership is not. A
+      // member bypasses ONLY the tenant-membership requirement — the delivery-permission check still runs below
+      // (403 if they lack this permission), and the access is recorded so the audit trail is not lost.
+      const isActiveMember = ctx.roles.length > 0;
 
-      // DELIVERY SECOND. 404 for a non-member (enumeration defense); 403 for a member who lacks the permission.
+      if (isActiveMember) {
+        auditGovProjectMemberAccess(actor, projectId, ctx.projectTenantId, permission, ctx.roles, req);
+      } else {
+        // NON-member path, UNCHANGED. TENANT FIRST (audited): a caller from another tenant is denied + recorded
+        // before the delivery layer reveals membership. The audited guard throws 404 on a foreign tenant.
+        const tenantCtx = await buildRequestContext({ platformIdentityId: actor.platformIdentityId });
+        await requireTenantAccessAudited(tenantCtx, ctx.projectTenantId, {
+          resourceType: 'delivery_project',
+          resourceId: projectId,
+          action: 'read',
+          actorEmail: actor.email,
+          ipAddress: req.ip ?? null,
+        });
+      }
+
+      // DELIVERY. 404 for a non-member (enumeration defense); 403 for a member who lacks the permission.
       requireDeliveryPermission(ctx, permission);
 
       req.deliveryContext = ctx;
