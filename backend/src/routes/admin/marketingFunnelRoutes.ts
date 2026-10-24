@@ -37,4 +37,23 @@ router.get('/api/admin/marketing/funnel/graph/node-leads', requireAdmin, async (
   }
 });
 
+// ── Acquisition funnel ──────────────────────────────────────────────────────
+//
+// Separate from the graph above, which is CAMPAIGN-driven and has reported "no data available"
+// since the campaign engine was paused in August, however much ad traffic actually arrives. This
+// one reads the tracking data, so it shows what happened to the people who clicked.
+
+router.get('/api/admin/marketing/funnel/acquisition', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    // Clamped rather than trusted: this value reaches interval arithmetic in SQL.
+    const raw = parseInt(String(req.query.days ?? '30'), 10);
+    const days = Number.isFinite(raw) ? Math.min(365, Math.max(1, raw)) : 30;
+    const { acquisitionFunnel } = await import('../../services/marketing/acquisitionFunnel');
+    res.json(await acquisitionFunnel(days));
+  } catch (err: any) {
+    console.error('[marketing] acquisition funnel error:', err?.message);
+    res.status(500).json({ error: 'Failed to load the acquisition funnel', error_class: 'InternalError' });
+  }
+});
+
 export default router;
