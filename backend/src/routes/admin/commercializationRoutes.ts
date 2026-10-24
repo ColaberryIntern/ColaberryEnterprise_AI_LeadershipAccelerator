@@ -9,10 +9,15 @@
  */
 import { Router } from 'express';
 import { requireAdmin } from '../../middlewares/authMiddleware';
-import { handleGetCommercializationBoard } from '../../controllers/commercializationController';
+import {
+  handleGetCommercializationBoard,
+  handleGetHypothesisHealth,
+} from '../../controllers/commercializationController';
 
 const router = Router();
 
 router.get('/api/admin/commercialization/board', requireAdmin, handleGetCommercializationBoard);
+// C8.6 - hypothesis health, computed from the C8.4 funnel.
+router.get('/api/admin/commercialization/hypotheses', requireAdmin, handleGetHypothesisHealth);
 
 export default router;

@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import api from '../../utils/api';
 import { PageHeader, SectionCard } from '../../components/admin/shell';
+// C8.6 - hypothesis health, on this command center rather than a page of its own.
+import HypothesisHealthPanel from '../../components/admin/commercialization/HypothesisHealthPanel';
 import type { TrustSignal } from '../../components/admin/shell';
 
 /**
@@ -234,6 +236,8 @@ export default function AdminCommercializationPage() {
               </div>
             ))}
           </div>
+
+          <HypothesisHealthPanel />
         </>
       )}
     </div>

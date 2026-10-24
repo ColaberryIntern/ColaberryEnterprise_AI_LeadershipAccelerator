@@ -43,7 +43,10 @@ describe('the funnel is ten ordered stages, each with a definition', () => {
     // The distinction C8.2 established and this ticket depends on: an empty table is a
     // measured zero with an unfilled pipe, not a missing capability.
     const empty = FUNNEL_STAGES.filter((s) => s.evidence === 'empty');
-    expect(empty.map((s) => s.key)).toEqual(['pilot_proposed', 'contract', 'expansion']);
+    // `mapped` joined this list on 2026-10-24 when C8.3's deploy landed: the column
+    // is live and empty, where it had been declared undeployed.
+    expect(empty.map((s) => s.key))
+      .toEqual(['mapped', 'pilot_proposed', 'contract', 'expansion']);
     for (const s of empty) expect(s.source).toBeTruthy();
   });
 });
@@ -113,22 +116,27 @@ describe('what is countable today is stated, not implied', () => {
     // Asserted by KEY rather than by length: a count that drifts tells you something is
     // wrong, and the keys tell you what.
     expect(COUNTABLE_STAGES.map((s) => s.key)).toEqual([
-      'target', 'contacted', 'engaged', 'meeting_booked',
+      'target', 'mapped', 'contacted', 'engaged', 'meeting_booked',
       'pilot_proposed', 'contract', 'expansion',
     ]);
     const byState = (state: string) =>
       FUNNEL_STAGES.filter((s) => s.evidence === state).map((s) => s.key);
-    expect(byState('undeployed')).toEqual(['mapped']);
+    // Nothing is undeployed any more: C8.3's deploy landed on 2026-10-24. The
+    // `undeployed` state stays in the type because it is the honest answer
+    // whenever merged code has not reached production, which recurs.
+    expect(byState('undeployed')).toEqual([]);
     expect(byState('absent')).toEqual(['demo_delivered', 'pilot_running']);
-    // 7 countable + 1 undeployed + 2 absent accounts for all ten.
-    expect(COUNTABLE_STAGES.length + 1 + 2).toBe(FUNNEL_STAGES.length);
+    // 8 countable + 0 undeployed + 2 absent accounts for all ten.
+    expect(COUNTABLE_STAGES.length + 0 + 2).toBe(FUNNEL_STAGES.length);
   });
 
-  it('marks the stage C8.3 shipped but production has not taken as undeployed', () => {
-    // Not "empty". An undeployed source is a different fact from an empty one, and
-    // reporting zero mapped accounts would be wrong rather than merely unhelpful.
+  it('records that mapped moved from undeployed to empty when the deploy landed', () => {
+    // It read `undeployed` when C8.4 shipped, which was true then. The deploy landed
+    // on 2026-10-24. The SERVICE always decided this dynamically from the live
+    // schema, so behavior never depended on the label - but a stale label on a board
+    // whose whole subject is honest measurement is a defect of its own.
     const mapped = FUNNEL_STAGES.find((s) => s.key === 'mapped')!;
-    expect(mapped.evidence).toBe('undeployed');
-    expect(mapped.rationale).toMatch(/[Mm]erged is not deployed/);
+    expect(mapped.evidence).toBe('empty');
+    expect(mapped.rationale).toMatch(/deploy landed on 2026-10-24/);
   });
 });
