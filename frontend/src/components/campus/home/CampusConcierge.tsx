@@ -29,6 +29,8 @@ import type { HomeAgenda } from './useMapMoments';
  */
 import PhotoPrompt from './PhotoPrompt';
 import { ComingUpCall } from '../admissions/BookCallHost';
+import { OpenHouseCard } from '../events/OpenHouseCard';
+import type { OpenHouseView } from '../../../services/onboardingApi';
 import type { AdmissionsBooking } from '../admissions/admissionsCallApi';
 import { ComingUpAgenda } from '../events/Agenda';
 import { openBoard } from '../board/boardApi';
@@ -88,6 +90,8 @@ export interface ConciergeProps {
   call?: AdmissionsBooking | null;
   /** C33 (v7 R6): Coming up = your next classes, the events you signed up for (C27) and the sessions you booked (C29), with Walk there. */
   coming?: AgendaItem[];
+  /** C47: the next Open House (Explorers asked to sign up until they do; members share it; staff reminded). */
+  openHouse?: { ev: OpenHouseView | null; registered: boolean };
   /** C37 (v9 W4): the weather line under the lead (null while weather is off, or something urgent or live is on). */
   weatherLine?: string | null;
 }
@@ -168,6 +172,7 @@ export default function CampusConcierge(p: ConciergeProps): React.ReactElement {
       {p.weatherLine && <p className="cm-lead cm-lead-wx" data-testid="cm-cc-weather">{p.weatherLine}</p>}
       <Pulse p={p} />
       {/* C20 (v3 2.6 #2): Coming up, a booked admissions call, above Up next */}
+      <OpenHouseCard audience={audience} ev={p.openHouse?.ev ?? null} registered={!!p.openHouse?.registered} now={p.now} />
       <ComingUpCall booking={p.call ?? null} now={p.now} />
       <ComingUpAgenda items={p.coming ?? []} place={(id) => { const x = buildings.find((b) => b.id === id); return x ? buildingName(x, wp) : id; }} onWalk={p.onWalk} />
 
