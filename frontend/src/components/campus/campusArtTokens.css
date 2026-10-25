@@ -68,6 +68,13 @@
   --cm-art-sp-neon-pink:#ff4fa3; --cm-art-sp-neon-cyan:#3de0ff; --cm-art-sp-neon-yellow:#ffd23d; --cm-art-sp-neon-green:#7dff6b;
   --cm-art-sp-meet-chair:#7a4a7a; --cm-art-sp-meet-chair-in:#8f5a8f; --cm-art-sp-meet-table:#d9c3a5; --cm-art-sp-meet-table-edge:#9a7a5a; --cm-art-sp-meet-foot:#7a5a3a; --cm-art-sp-call:#e9f1fb; --cm-art-sp-maya:#b0306a; --cm-art-sp-live:#1f8a4c;
   --cm-art-sp-cub-desk:#c9d6e0; --cm-art-sp-cub-desk-side:#9fb3c2; --cm-art-sp-cub-lit:#7cc4ff;
+  /* the workstation (round 3 §2.3 + v6, the prototype's #ws: warm dark desk, cork bench, bezels, status bar) */
+  --cm-art-ws-bg:#211c18; --cm-art-ws-ink:#f2ebe1; --cm-art-ws-glow:rgba(255,210,130,.20); --cm-art-ws-peg:rgba(255,255,255,.035);
+  --cm-art-ws-cork:#a87c52; --cm-art-ws-cork-2:#94693f; --cm-art-ws-cork-ink:#fff6e6; --cm-art-ws-active-ring:rgba(242,182,50,.25);
+  --cm-art-ws-bezel-edge:#2e2924; --cm-art-ws-neck:#3a332c; --cm-art-ws-desk-3:#7c5338; --cm-art-ws-desk-hi:rgba(255,255,255,.18);
+  --cm-art-ws-bar:#0f0d0c; --cm-art-ws-bar-ink:#efe8de; --cm-art-ws-ok:#3ddc84; --cm-art-ws-link:#7cc4ff;
+  --cm-art-ws-term-line:#2c2622; --cm-art-ws-term-dim:#7d756b; --cm-art-ws-term-text:#b9b2a8;
+  --cm-art-ws-nb-rule:#e7ddd0; --cm-art-ws-muted:#7a7166; --cm-art-ws-green:#1f8a4c; --cm-art-ws-tl-r:#ff5f57; --cm-art-ws-tl-y:#febc2e;
   /* home chrome (prototype .cc, .pulse, .helpdesk, .plan-card, .pass, .lv-chip, .acct-chip, .livecard) */
   --cm-art-card:#ffffff; --cm-art-red-tint:rgba(227,27,35,.15); --cm-art-live-tint:rgba(31,138,76,.15);
   --cm-art-help-bg:#fff8e6; --cm-art-help-edge:#ecd9a8; --cm-art-help-hover:#b07a00;

@@ -1,10 +1,11 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { runtimeApi, RtOpen, Readiness, PromptEval, CardComment, BlogReaderContent } from './runtimeApi';
-import VideoEmbed, { WatchBeatPayload } from '../../../components/timeline/VideoEmbed';
+import { runtimeApi, RtOpen, Readiness, PromptEval } from './runtimeApi';
+import { RuntimeHero, RuntimeVideo, PromptLabPanel, RuntimeReadinessStats } from './runtimeActivityPanels';
+import RuntimeBlogPanel from './RuntimeBlogPanel';
+import type { WatchBeatPayload } from '../../../components/timeline/VideoEmbed';
 import AssessmentPanel from './AssessmentPanel';
-import { lessonDoc, readerDoc, blogReaderDoc, READER_SANDBOX } from '../../../components/timeline/CardDetailBody';
-import { parseVideoUrl, videoThumbnail } from '../../../utils/videoEmbed';
+import RuntimeFillReader from './RuntimeFillReader';
 import { runtimeCss } from './runtimeKit';
 import CardSurveyExperience from '../../../components/timeline/CardSurveyExperience';
 import PeerWinsPanel from '../../../components/timeline/PeerWinsPanel';
@@ -19,10 +20,13 @@ import ClaudeStudioRender from '../../../components/timeline/ClaudeStudioRender'
 import ArchitectTimeMachine from '../../../components/timeline/ArchitectTimeMachine';
 import BuildArtifactsRender from '../../../components/timeline/BuildArtifactsRender';
 import ReflectionReview from '../../../components/timeline/ReflectionReview';
-import {
-  useAgentAttachments, AttachButton, AttachmentTray, DropOverlay, SentAttachments,
-  type SentAttachment,
-} from '../../../components/portal/AgentAttachments';
+import { useAgentAttachments } from '../../../components/portal/AgentAttachments';
+import MentorRail, { type MentorMsg } from '../../../components/portal/workspace/MentorRail';
+import RuntimeComments from './RuntimeComments';
+import { useCampus } from '../../../components/campus/CampusContext';
+import WorkstationShell from '../../../components/campus/workstation/WorkstationShell';
+import LessonNotebook from '../../../components/campus/workstation/LessonNotebook';
+import { planBench, workstationBuilding, workstationPlace } from '../../../components/campus/workstation/workstationModel';
 
 /**
  * RuntimeWorkspace — the Learning Runtime Intelligence student OS. Opens a
@@ -33,7 +37,7 @@ import {
  * — with no admin work. Route: /portal/runtime/:cardId.
  */
 
-type Msg = { role: 'user' | 'assistant'; content: string; kind?: string; attachments?: SentAttachment[] };
+type Msg = MentorMsg & { kind?: string };
 const VIDEO_BANDS = ['media', 'live_class', 'video_feedback'];
 
 const RuntimeWorkspace: React.FC = () => {
@@ -71,8 +75,6 @@ const RuntimeWorkspace: React.FC = () => {
   const [completed, setCompleted] = useState(false);
   // Server-truth watch state for the 75% gate (video/testimonial/podcast).
   const [watch, setWatch] = useState<{ watched_pct: number; required_pct: number | null; met: boolean } | null>(null);
-  // In-workspace blog reader payload (fetched + sanitized server-side).
-  const [blogReader, setBlogReader] = useState<BlogReaderContent | null>(null);
 
   // mentor
   const [msgs, setMsgs] = useState<Msg[]>([]);
@@ -82,13 +84,11 @@ const RuntimeWorkspace: React.FC = () => {
   // Screenshots the student hands Cory — drag, paste, or click. Same hook the
   // project workspace and Reese's DMs use, so the gesture is identical everywhere.
   const attach = useAgentAttachments();
+  // C19: with the campus on, the same page is drawn as the workstation (the shell only arranges what is built below).
+  const campus = useCampus();
   // A screenshot with no caption is a perfectly good message, so Send unlocks
   // on text OR a finished upload — but never while one is still in flight.
   const canSend = (mentorInput.trim().length > 0 || attach.refs().length > 0) && !attach.busy;
-
-  // cohort comments (media cards) — newest first
-  const [comments, setComments] = useState<CardComment[]>([]);
-  const [commentInput, setCommentInput] = useState('');
 
   useEffect(() => {
     (async () => {
@@ -99,8 +99,6 @@ const RuntimeWorkspace: React.FC = () => {
         // paperclip nobody notices is the same as no paperclip, and this is the
         // one place every student actually reads.
         setMsgs([{ role: 'assistant', content: `I'm Cory, your mentor for "${open.card.week_title || open.card.content?.title || open.card.title}". Ask me anything, or hit a shortcut below — I'll coach, not hand you answers. Stuck on an error? Paste or drag a screenshot straight in and I'll read it.`, kind: 'intro' }]);
-        // Every card type has a cohort comment thread in its workspace.
-        runtimeApi.comments(cardId).then((r) => setComments(r.comments)).catch(() => { /* comments are optional */ });
         // Proactive nudge — if the student looks stuck on this card, the mentor offers help first.
         runtimeApi.nudge(cardId).then((n) => setNudge(n.message)).catch(() => { /* nudge is optional */ });
       } catch { setError('Could not open this activity.'); }
@@ -169,16 +167,6 @@ const RuntimeWorkspace: React.FC = () => {
   const isLesson = !isVideo && !isLab && !isReflect && !isSurvey && !isAssessment && !isReader && !isDeepDive && !isSetupLab && !isPromptCatalog && !isClaudeStudio && !isBuildArtifacts && !isPeerWins && !!card?.content?.body_html;
   const fill = isReader || isLesson || isDeepDive;
 
-  // Load the post's article for the in-workspace reader (fail-soft: ok:false → link).
-  useEffect(() => {
-    if (!isBlog || !blogId) { setBlogReader(null); return; }
-    let alive = true;
-    setBlogReader(null);
-    runtimeApi.blogReader(blogId)
-      .then((c) => { if (alive) setBlogReader(c); })
-      .catch(() => { if (alive) setBlogReader({ ok: false, title: null, body_html: null, excerpt: null, author: null, featured_image: null, source_url: null }); });
-    return () => { alive = false; };
-  }, [isBlog, blogId]);
 
   const ask = useCallback(async (mode: string, message: string) => {
     if (!card) return;
@@ -194,17 +182,6 @@ const RuntimeWorkspace: React.FC = () => {
       setMsgs((m) => [...m, { role: 'assistant', content: r.reply, kind: r.kind }]);
     } catch { setMsgs((m) => [...m, { role: 'assistant', content: 'I had trouble reaching you — try again.', kind: 'error' }]); } finally { setBusy(''); }
   }, [card, msgs, attach]);
-
-  const postComment = async () => {
-    const body = commentInput.trim();
-    if (!card || !body) return;
-    setBusy('comment');
-    try {
-      const r = await runtimeApi.comment(card.id, body);
-      setComments((c) => [r.comment, ...c]);   // newest first
-      setCommentInput('');
-    } catch { /* keep the draft in the input */ } finally { setBusy(''); }
-  };
 
   const runLab = async () => {
     if (!card || !prompt.trim()) return; setBusy('lab');
@@ -243,8 +220,6 @@ const RuntimeWorkspace: React.FC = () => {
   if (error) return <div className="rt" data-theme={theme}><style>{runtimeCss}</style><div className="rt-mid" style={{ padding: 40 }}>{error} <button className="rt-btn" onClick={goBack}>← {backTo.includes('/today') ? 'Timeline' : 'Classroom'}</button></div></div>;
   if (!card) return <div className="rt" data-theme={theme}><style>{runtimeCss}</style><div className="rt-mid" style={{ padding: 40 }}>Loading your workspace…</div></div>;
 
-  const emp = readiness?.employment; const cert = readiness?.certification; const jr = readiness?.journey; const evd = readiness?.evidence;
-
   // Complete gate + comments are shared so Self Study can host them in the reader foot /
   // right rail (single-scroll layout) while every other card keeps them in the center.
   const completeLabel = busy === 'complete' ? 'Generating evidence…'
@@ -270,84 +245,20 @@ const RuntimeWorkspace: React.FC = () => {
       : <button className="rt-btn cta" disabled={busy === 'complete'} onClick={collectBlogPts}>{(card.points?.learning ?? 0) > 0 ? `Collect +${card.points?.learning} pts` : 'Mark complete'}</button>;
   // Comments always render in the right rail now (every card type), so the center is a
   // single, clean scroll.
-  const commentsBlock = (
-    <section className="rt-comments rt-comments--rail">
-      <div className="rt-lab">Comments</div>
-      <div className="rt-cpost">
-        <input className="rt-in" value={commentInput} onChange={(e) => setCommentInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && commentInput.trim() && postComment()} placeholder="Share a thought with your cohort…" />
-        <button className="rt-btn pri" disabled={busy === 'comment' || !commentInput.trim()} onClick={postComment}>Post</button>
-      </div>
-      {comments.length === 0
-        ? <p className="rt-muted" style={{ margin: '8px 2px' }}>No comments yet — be the first.</p>
-        : comments.map((cm) => (
-            <div key={cm.id} className="rt-comment">
-              <div className="rt-cwho"><b>{cm.mine ? 'You' : cm.author}</b><span>{new Date(cm.created_at).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span></div>
-              <p>{cm.body}</p>
-            </div>
-          ))}
-    </section>
-  );
+  const commentsBlock = <RuntimeComments cardId={cardId} postId={card.id} />;
 
-  return (
-    <div className="rt" data-theme={theme}>
-      <style>{runtimeCss}</style>
-      <header className="rt-top">
-        <button className="rt-back" onClick={goBack} aria-label={backLabel} title={backLabel}><svg viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg></button>
-        <div><div className="rt-kick">{card.student_label}{card.estimated_time ? ` · ${card.estimated_time} min` : ''}</div><div className="rt-title">{displayTitle}</div></div>
-        <span className={`rt-pill ${completed ? 'done' : ''}`} style={{ marginLeft: 'auto' }}>{completed ? '✓ Completed' : 'In progress'}</span>
-      </header>
+  const reader = fill || isBlog || isSetupLab || isPromptCatalog || isClaudeStudio || isArchitectMindset || isBuildArtifacts;
+  const pill = <span className={`rt-pill ${completed ? 'done' : ''}`} style={{ marginLeft: 'auto' }}>{completed ? '✓ Completed' : 'In progress'}</span>;
 
-      <div className="rt-body">
-        {/* CENTER — activity */}
-        <main className={`rt-mid${fill || isBlog || isSetupLab || isPromptCatalog || isClaudeStudio || isArchitectMindset || isBuildArtifacts ? ' rt-mid--reader' : ''}`}>
+  // CENTER — activity
+  const centre = (<>
           {/* Hero — the type's picture with the lesson title ON the image. Video bands keep
               their player; fill (reader/lesson) content fills the panel, so skip the hero. */}
-          {!isVideo && !isSkillsJar && !fill && !isBlog && !isSetupLab && !isPromptCatalog && !isClaudeStudio && !isArchitectMindset && !isBuildArtifacts && card.type_thumbnail && (
-            <div style={{ position: 'relative', borderRadius: 12, overflow: 'hidden', marginBottom: 14 }}>
-              <img src={card.type_thumbnail} alt="" style={{ width: '100%', display: 'block', maxHeight: 240, objectFit: 'cover' }} />
-              <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, rgba(4,25,29,0) 42%, rgba(4,25,29,.74) 100%)' }} />
-              <div style={{ position: 'absolute', left: 16, right: 16, bottom: 12, color: '#fff', fontWeight: 800, fontSize: 20, lineHeight: 1.25, textShadow: '0 1px 3px rgba(0,0,0,.45)' }}>{displayTitle}</div>
-            </div>
-          )}
+          {!isVideo && !isSkillsJar && !fill && !isBlog && !isSetupLab && !isPromptCatalog && !isClaudeStudio && !isArchitectMindset && !isBuildArtifacts && card.type_thumbnail && <RuntimeHero src={card.type_thumbnail} title={displayTitle} />}
 
-          {isVideo && (
-            <>
-              <VideoEmbed
-                source={parseVideoUrl(card.video?.url)}
-                title={card.video?.title || card.title}
-                poster={card.video?.poster || videoThumbnail(parseVideoUrl(card.video?.url))}
-                badge={card.type === 'testimonial' ? 'Testimonial' : card.type === 'podcast' ? 'Podcast' : null}
-                onWatchBeat={onWatchBeat}
-                fallbackDurationS={card.video?.duration_seconds || (card.estimated_time ? card.estimated_time * 60 : null)}
-              />
-              {!completed && card.video?.url && (
-                <div className="tlv-watch">
-                  <div className="tlv-watchbar"><i style={{ width: `${Math.min(100, watch?.watched_pct ?? 0)}%` }} /></div>
-                  <span className="tlv-watchpct">
-                    {watch?.required_pct != null
-                      ? (watch.met ? '✓ Watched — points unlocked' : `Watched ${watch?.watched_pct ?? 0}% · reach ${watch.required_pct}% to collect your points`)
-                      : `Watched ${watch?.watched_pct ?? 0}%`}
-                  </span>
-                </div>
-              )}
-            </>
-          )}
+          {isVideo && <RuntimeVideo card={card} completed={completed} watch={watch} onWatchBeat={onWatchBeat} />}
 
-          {isLab && (
-            <div>
-              <div className="rt-lab">Your prompt</div>
-              <textarea className="rt-in mono" style={{ minHeight: 150 }} value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="Write your prompt. The mentor won't hand you the answer — draft, run, iterate." />
-              <div className="rt-row"><button className="rt-btn pri" disabled={busy === 'lab' || !prompt.trim()} onClick={runLab}>{busy === 'lab' ? 'Evaluating…' : '▶ Run & evaluate'}</button>{evalResult && <button className="rt-btn" onClick={() => setPrompt(evalResult.better_prompt)}>Use improved version</button>}</div>
-              {evalResult && (
-                <div className="rt-card">
-                  <div className="rt-scores"><div><b>{evalResult.score}</b><span>craft</span></div><div><b>{evalResult.architect_score}</b><span>architect</span></div></div>
-                  {evalResult.strengths.length > 0 && <><div className="rt-lab">Strengths</div><ul className="rt-list ok">{evalResult.strengths.map((s, i) => <li key={i}>{s}</li>)}</ul></>}
-                  {evalResult.gaps.length > 0 && <><div className="rt-lab">Gaps</div><ul className="rt-list warn">{evalResult.gaps.map((s, i) => <li key={i}>{s}</li>)}</ul></>}
-                  {evalResult.suggestions.length > 0 && <><div className="rt-lab">Suggestions</div><ul className="rt-list">{evalResult.suggestions.map((s, i) => <li key={i}>{s}</li>)}</ul></>}
-                </div>
-              )}
-            </div>
-          )}
+          {isLab && <PromptLabPanel prompt={prompt} onPrompt={setPrompt} busy={busy === 'lab'} onRun={runLab} evalResult={evalResult} />}
 
           {/* Weekly feedback survey — the bespoke live experience (same component
               the right-side drawer uses), captured + stored on submit. */}
@@ -394,26 +305,7 @@ const RuntimeWorkspace: React.FC = () => {
               sandboxed frame so the student never leaves the system (the training site
               refuses to be iframed). Fills the center as the single scroll; the read
               gate + collect live in the slim foot. Falls back to the external link. */}
-          {isBlog && (
-            <div className="rt-readerwrap">
-              {blogReader === null ? (
-                <div className="rt-muted" style={{ padding: 40 }}>Loading the post…</div>
-              ) : blogReader.ok && blogReader.body_html ? (
-                <iframe
-                  className="rt-readerframe"
-                  title="Blog post"
-                  sandbox="allow-scripts allow-popups"
-                  srcDoc={blogReaderDoc(blogReader.body_html, blogReader.title || card.blog?.title || displayTitle, { featuredImage: blogReader.featured_image, author: blogReader.author, sourceUrl: blogReader.source_url })}
-                />
-              ) : (
-                <div style={{ padding: 28, display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'flex-start' }}>
-                  <p className="rt-muted" style={{ margin: 0 }}>We couldn't load this post inside the workspace.</p>
-                  {card.blog?.url && <a className="rt-btn pri" href={card.blog.url} target="_blank" rel="noopener noreferrer">Read on the training site ↗</a>}
-                </div>
-              )}
-              <div className="rt-readerfoot">{blogCompleteGate}</div>
-            </div>
-          )}
+          {isBlog && <RuntimeBlogPanel blogId={blogId} card={card} displayTitle={displayTitle} gate={blogCompleteGate} />}
 
           {/* Content-in-iframe cards (the Self Study immersive reader OR a generic lesson)
               FILL the center as the single scroll, with the complete gate in a slim foot —
@@ -422,24 +314,8 @@ const RuntimeWorkspace: React.FC = () => {
               (AI News Flash etc.) which embed a real source <a href> and need allow-popups
               or the click is silently swallowed by the sandbox. */}
           {fill && (
-            <div className="rt-readerwrap">
-              <iframe
-                ref={isDeepDive ? ddIframeRef : undefined}
-                className="rt-readerframe"
-                title={isReader ? 'Self Study reading' : isDeepDive ? 'Field Guide' : 'Lesson'}
-                sandbox={isReader ? READER_SANDBOX : isDeepDive ? 'allow-scripts allow-modals' : band === 'intel' ? 'allow-popups' : ''}
-                srcDoc={isReader
-                  ? readerDoc(card.content?.body_html || '', card.content?.title || card.title, { cardId: card.id, doneIds: readerProg.initialDoneIds })
-                  : isDeepDive
-                    ? (card.content?.body_html || '')
-                    : lessonDoc(card.content?.body_html || '')}
-              />
-              <div className="rt-readerfoot">
-                {isDeepDive && dd.message && <span className="rt-muted" style={{ marginRight: 'auto' }}>{dd.message}</span>}
-                {isDeepDive && <input ref={dd.fileInputRef} type="file" accept=".html,.htm,text/html" hidden onChange={dd.onFileChange} />}
-                {completeGate}
-              </div>
-            </div>
+            <RuntimeFillReader card={card} kind={isReader ? 'reader' : isDeepDive ? 'deepdive' : 'lesson'} band={band}
+              doneIds={readerProg.initialDoneIds} frameRef={ddIframeRef} dd={dd} gate={completeGate} />
           )}
           {/* Setup Lab (Claude Code enablement) — dark native panel with per-<pre> Copy
               buttons, filling the center as a single scroll; the complete gate sits in the
@@ -518,67 +394,93 @@ const RuntimeWorkspace: React.FC = () => {
           {!isSurvey && !isAssessment && !isSkillsJar && !fill && !isSetupLab && !isPromptCatalog && !isClaudeStudio && !isArchitectMindset && !isBuildArtifacts && !isReflection && (
             <div className="rt-complete">{completeGate}</div>
           )}
+  </>);
+
+  // RIGHT — AI Mentor (MentorRail: the whole rail takes a drop).
+  const mentor = (
+    <MentorRail
+      msgs={msgs}
+      busy={busy === 'mentor'}
+      attach={attach}
+      input={mentorInput}
+      onInput={setMentorInput}
+      canSend={canSend}
+      onAsk={ask}
+      shortcut={(mo) => (mo === 'review' ? (isLab ? prompt : reflectionText) || 'Review my work.' : `Give me a ${mo}.`)}
+      endRef={mentorEnd}
+      subtitle={campus.active ? `Your mentor for ${displayTitle}` : undefined}
+      top={<>
+        {isSetupLab && (labCopied || completed) && (
+          <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--line)' }}>
+            {!completed && <div className="rt-lab" style={{ marginBottom: 8 }}>Finished in Claude Code?</div>}
+            {completeGate}
+          </div>
+        )}
+        {isPromptCatalog && (allPromptsCopied || completed) && (
+          <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--line)' }}>
+            {!completed && <div className="rt-lab" style={{ marginBottom: 8 }}>Built one in Claude Code?</div>}
+            {completeGate}
+          </div>
+        )}
+      </>}
+      beforeModes={<>
+        {nudge && (
+          <div className="rt-nudge">
+            <div className="rt-nudge-msg">{nudge}</div>
+            <div className="rt-nudge-actions">
+              <button className="rt-btn pri" disabled={busy === 'mentor'} onClick={() => { setNudge(null); ask('ask', 'Yes — walk me through the next step, one at a time.'); }}>Yes, walk me through it</button>
+              <button className="rt-btn" onClick={() => setNudge(null)}>Not now</button>
+            </div>
+          </div>
+        )}
+      </>}
+      after={commentsBlock}
+    />
+  );
+
+  // BOTTOM — Evidence & Readiness
+  const stats = <RuntimeReadinessStats readiness={readiness} />;
+
+  if (campus.active) {
+    return (
+      <WorkstationShell
+        theme={theme}
+        place={workstationPlace(workstationBuilding(backTo, 'lecture'), campus.settings.workplaceNames)}
+        cardTitle={displayTitle}
+        heading={{ kicker: `${card.student_label || ''}${card.estimated_time ? ` · ${card.estimated_time} min` : ''}`, title: displayTitle }}
+        pill={pill}
+        bench={planBench(campus.planStops, card.id)}
+        left={<LessonNotebook cardId={card.id} />}
+        mentor={mentor}
+        status={stats}
+        mainClass={reader ? 'rt-mid--reader' : undefined}
+      >
+        {centre}
+      </WorkstationShell>
+    );
+  }
+
+  return (
+    <div className="rt" data-theme={theme}>
+      <style>{runtimeCss}</style>
+      <header className="rt-top">
+        <button className="rt-back" onClick={goBack} aria-label={backLabel} title={backLabel}><svg viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg></button>
+        <div><div className="rt-kick">{card.student_label}{card.estimated_time ? ` · ${card.estimated_time} min` : ''}</div><div className="rt-title">{displayTitle}</div></div>
+        {pill}
+      </header>
+
+      <div className="rt-body">
+        {/* CENTER — activity */}
+        <main className={`rt-mid${reader ? ' rt-mid--reader' : ''}`}>
+          {centre}
         </main>
 
-        {/* RIGHT — AI Mentor. The whole rail takes a drop: a student dragging a
-            screenshot aims at the conversation, not at the 34px text box. */}
-        <aside className="rt-mentor" style={{ position: 'relative' }} {...attach.dropProps}>
-          <DropOverlay active={attach.dragging} label="Drop to show Cory" />
-          <div className="rt-mentor-h"><span className="rt-dot" /> Cory</div>
-          {isSetupLab && (labCopied || completed) && (
-            <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--line)' }}>
-              {!completed && <div className="rt-lab" style={{ marginBottom: 8 }}>Finished in Claude Code?</div>}
-              {completeGate}
-            </div>
-          )}
-          {isPromptCatalog && (allPromptsCopied || completed) && (
-            <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--line)' }}>
-              {!completed && <div className="rt-lab" style={{ marginBottom: 8 }}>Built one in Claude Code?</div>}
-              {completeGate}
-            </div>
-          )}
-          <div className="rt-thread">
-            {msgs.map((m, i) => (
-              <div key={i} className={`rt-msg ${m.role}`}>
-                {m.content}
-                <SentAttachments items={m.attachments} />
-              </div>
-            ))}
-            <div ref={mentorEnd} />
-          </div>
-          {nudge && (
-            <div className="rt-nudge">
-              <div className="rt-nudge-msg">{nudge}</div>
-              <div className="rt-nudge-actions">
-                <button className="rt-btn pri" disabled={busy === 'mentor'} onClick={() => { setNudge(null); ask('ask', 'Yes — walk me through the next step, one at a time.'); }}>Yes, walk me through it</button>
-                <button className="rt-btn" onClick={() => setNudge(null)}>Not now</button>
-              </div>
-            </div>
-          )}
-          <div className="rt-modes">
-            {(['hint', 'explain', 'review'] as const).map((mo) => <button key={mo} className="rt-chip" disabled={busy === 'mentor'} onClick={() => ask(mo, mo === 'review' ? (isLab ? prompt : reflectionText) || 'Review my work.' : `Give me a ${mo}.`)}>{mo}</button>)}
-          </div>
-          <AttachmentTray items={attach.items} notice={attach.notice} onRemove={attach.remove} />
-          <div className="rt-ask">
-            <AttachButton onFiles={attach.addFiles} disabled={busy === 'mentor'} />
-            <input className="rt-in" value={mentorInput} onChange={(e) => setMentorInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && canSend && ask('ask', mentorInput || 'Take a look at this.')} placeholder="Ask your mentor, or paste a screenshot…" {...attach.pasteProps} />
-            <button className="rt-btn pri" disabled={busy === 'mentor' || !canSend} onClick={() => ask('ask', mentorInput || 'Take a look at this.')}>Send</button>
-          </div>
-          {/* Cohort comments live in the rail for every card type, so the center is a
-              single clean scroll (no comments stacked under a tall activity). */}
-          {commentsBlock}
-        </aside>
+        {mentor}
       </div>
 
       {/* BOTTOM — Evidence & Readiness */}
       <footer className="rt-bar">
-        {emp && <div className="rt-stat"><span className="l">Employment</span><span className="v">{emp.overall}<small>/100 · {emp.band}</small></span></div>}
-        {cert && <div className="rt-stat"><span className="l">Cert pass prob.</span><span className="v">{Math.round(cert.pass_probability * 100)}%</span></div>}
-        {jr && <div className="rt-stat"><span className="l">Architect stage</span><span className="v sm">{jr.focus_stage}</span></div>}
-        {evd && <div className="rt-stat"><span className="l">GitHub</span><span className="v">{evd.github.commits}<small> commits</small></span></div>}
-        {evd && <div className="rt-stat"><span className="l">Portfolio</span><span className="v">{evd.portfolio.entries}</span></div>}
-        {readiness && <div className="rt-stat"><span className="l">Builder XP</span><span className="v">{readiness.progression.xp.builder}</span></div>}
-        {emp && emp.employer_gaps[0] && <div className="rt-gap">Employers still want: <b>{emp.employer_gaps[0].need}</b></div>}
+        {stats}
       </footer>
     </div>
   );

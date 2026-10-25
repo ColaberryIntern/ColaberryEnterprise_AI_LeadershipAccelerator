@@ -158,6 +158,30 @@ async function runAudience(browser, audience, jwt) {
         const viaSection = await landAfter('[data-testid="cm-board-section"]');
         must(viaSection === '/portal/projects', `See all -> ${viaSection}`);
       });
+
+      await step(audience, 'C19: sitting at your desk opens the workstation (bench, two monitors, Cory, status bar); Stand up returns you into the Studio', async () => {
+        await page.goto(`${urls.base}/portal/campus`, { waitUntil: 'domcontentloaded' });
+        await page.waitForSelector('[data-testid="cm-concierge"]', { timeout: 30_000 });
+        await page.evaluate(() => document.querySelector('[data-testid="cm-bld-studio"]').dispatchEvent(new MouseEvent('click', { bubbles: true })));
+        await page.waitForSelector('[data-testid="cm-room3d"][data-room="studio"] .cm-r3-spot', { timeout: 15_000 });
+        await page.click('[data-testid="cm-spot-desk"]');
+        await page.waitForSelector('[data-testid="cm-ws"]', { timeout: 15_000 });
+        const ws = await page.evaluate(() => ({
+          bezels: document.querySelectorAll('.cm-ws-bezel').length,
+          trail: document.querySelector('[data-testid="cm-ws-trail"]')?.textContent || '',
+          tickets: document.querySelectorAll('[data-testid="cm-ws-ticket"]').length,
+          active: document.querySelectorAll('.cm-ws-ticket.is-active').length,
+          parts: ['cm-ws-desk', 'cm-ws-cory', 'cm-ws-status', 'cm-ws-term'].filter((t) => !document.querySelector(`[data-testid="${t}"]`)),
+        }));
+        must(ws.bezels === 2, `bezels ${ws.bezels}`);
+        must(ws.trail.startsWith('Your desk · '), `trail "${ws.trail}"`);
+        must(ws.tickets >= 1 && ws.active === 1, `bench: ${ws.tickets} tickets, ${ws.active} on the desk`);
+        must(ws.parts.length === 0, `missing ${ws.parts.join(', ')}`);
+        await page.click('[data-testid="cm-ws-standup"]');
+        await page.waitForURL((u) => u.pathname === '/portal/campus', { timeout: 15_000 });
+        await page.waitForSelector('[data-testid="cm-room3d"][data-room="studio"]', { timeout: 15_000 });
+      });
+
     }
 
     await step(audience, 'scrolled down, each page\'s sticky next task rides IN the location bar, never the header (Ali 2026-10-24)', async () => {

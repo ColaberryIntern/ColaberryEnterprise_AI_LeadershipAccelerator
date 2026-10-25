@@ -156,6 +156,13 @@ const VIEWS = [
   { name: '19-room-wall', route: '/portal/campus', steps: () => [tap('tower'), WALKED],
     required: () => ['cm-inside', 'cm-room3d', 'cm-board', 'cm-r3-you'], assert: () => roomOk('tower', 0) }, // v6 D1: Schedule has a board, no spot
   ...ROOM_VIEWS,
+  // C19 (round 3 §2.3 + v6 D1): the workstation, reached the real way (into the Studio, sit at your desk). A story as a member:
+  // the throwaway seed has a project but no Classroom week, so the lesson workstation is covered by its unit test instead.
+  { name: '23-workstation', route: '/portal/campus', accounts: ['member'], steps: () => [tap('studio'), WALKED, { click: '.cm-r3-spot' }, { wait: 2600 }],
+    // under 1100 px the angled side monitor folds away (the prototype's .mon.side{display:none}), so the terminal is wide-only
+    required: (a, size) => ['cm-ws', 'cm-ws-trail', 'cm-ws-section', 'cm-ws-standup', 'cm-ws-bench', 'cm-ws-desk', 'cm-ws-cory', 'cm-ws-status', ...(size === 'phone' ? [] : ['cm-ws-term'])],
+    assert: () => `(() => { const n = document.querySelectorAll('.cm-ws-bezel').length; if (n !== 2) return 'bezels: ' + n + ' (want 2)';
+      const t = document.querySelector('[data-testid="cm-ws-trail"]').textContent; return t.startsWith('Your desk · ') ? '' : 'trail: ' + t; })()` },
   // WP-6: arriving at the live building: the hero in the state's colour, the stage, the live room as the main action
   // C16 (round 3 §2.4): the light location bar on a page at 1440 and 1920: it spans the viewport, no control's text overflows, and
   // after scrolling 800 px it is at the top with the rail's Up next in view and no "YOUR NEXT STEP" inside the header.
@@ -170,7 +177,7 @@ const VIEWS = [
 
 /** WP-1: the side panel (and the tour in it) is required on every view past the gate. */
 function panelFor(view, a, size) {
-  if (view.name === '01-gate') return [];
+  if (view.name === '01-gate' || view.name === '23-workstation') return []; // the workstation is full screen, as the prototype's #ws
   const tour = a === 'staff' ? [] : ['cm-cc-tour'];
   if (view.route !== '/portal/campus' && view.name !== '14-step-outside') return size === 'phone' ? ['cm-steps-open'] : ['cm-page-rail', ...tour.map((t) => `[data-testid="cm-page-rail"] [data-testid="${t}"]`)];
   if (size === 'phone' && (CARD_VIEWS.includes(view.name) || view.name.startsWith('21-room-'))) return ['cm-cc-peek'];
