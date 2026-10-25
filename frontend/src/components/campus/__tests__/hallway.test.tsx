@@ -1,5 +1,5 @@
 /**
- * C29 (v7 R2): the Meeting Rooms hallway. Door order (live rooms with a friend, other live rooms, your bookings, your free rooms),
+ * C29 (v7 R2): the Meeting Rooms hallway. Door order (live rooms with a friend, other live rooms, your bookings, your idle rooms),
  * at most six doors with "More rooms →", the teal friends glow, the door signs, the Central time slots (DST-correct), and the
  * sheets: the peek's Join, + New room and Book a session through the existing rooms endpoints (one booking per sheet).
  */
@@ -37,12 +37,12 @@ const booking = (id: string, roomId: string, start: string) => ({ booking_id: id
 
 describe('the door rules', () => {
   const h = H([
-    room('free', { mine: true }), room('live1', { inside_count: 5, inside: [person('a')] }), room('bk'),
+    room('mine', { mine: true }), room('live1', { inside_count: 5, inside: [person('a')] }), room('bk'),
     room('friendly', { inside_count: 2, inside: [person('b', true)] }), room('idle-not-mine'),
   ], [booking('b2', 'bk', '2026-10-28T15:00:00.000Z')]);
 
-  it('orders live rooms with a friend, other live rooms, your bookings, then your free rooms; idle rooms that are not yours have no door', () => {
-    expect(orderedDoors(h).map((d) => `${d.roomId}:${d.state}`)).toEqual(['friendly:live', 'live1:live', 'bk:booked', 'free:free']);
+  it('orders live rooms with a friend, other live rooms, your bookings, then your idle rooms; idle rooms that are not yours have no door', () => {
+    expect(orderedDoors(h).map((d) => `${d.roomId}:${d.state}`)).toEqual(['friendly:live', 'live1:live', 'bk:booked', 'mine:idle']);
     expect(orderedDoors(h)[0].friends).toBe(true);
     expect(orderedDoors(h)[2].name).toBe('Session b2'); // a booked door shows the session's title
   });
@@ -57,12 +57,12 @@ describe('the door rules', () => {
     expect(hallwayDoors(H([]))).toEqual([]); // an empty campus has no invented doors
   });
 
-  it('signs: "● n inside", "Booked · Wed 10:00 AM" (Central), "Free"', () => {
+  it('signs: "● n inside", "Booked · Wed 10:00 AM" (Central), "Available"', () => {
     const [f, l, b, fr] = hallwayDoors(h) as Door[];
     expect(doorSign(f)).toBe('● 2 inside');
     expect(doorSign(l)).toBe('● 5 inside');
     expect(doorSign(b)).toBe('Booked · Wed 10:00 AM');
-    expect(doorSign(fr)).toBe('Free');
+    expect(doorSign(fr)).toBe('Available');
   });
 
   it('a Central slot is the right instant either side of the DST change; days skip the weekend and start tomorrow', () => {

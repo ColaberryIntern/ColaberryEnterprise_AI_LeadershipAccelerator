@@ -108,7 +108,7 @@ export function HallwayRows({ hallway, error, onOpen }: { hallway: Hallway | nul
               <span className="tx"><b>{d.name}</b><small>{rowLine(d)}</small></span>
               {d.state === 'live' && <button type="button" className="cm-btn-line pri" onClick={() => onOpen(roomPath(d.roomId))}>Join</button>}
               {d.state === 'booked' && <button type="button" className="cm-btn-line" onClick={() => openMeetSheet({ mode: 'peek', roomId: d.roomId })}>Details</button>}
-              {d.state === 'free' && <button type="button" className="cm-btn-line" onClick={() => onOpen(roomPath(d.roomId))}>Open</button>}
+              {d.state === 'idle' && <button type="button" className="cm-btn-line" onClick={() => onOpen(roomPath(d.roomId))}>Open</button>}
             </li>
           ))}
         </ol>

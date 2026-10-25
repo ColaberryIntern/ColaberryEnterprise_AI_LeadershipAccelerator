@@ -59,7 +59,7 @@ function Peek({ door, onClose, onGo }: { door: Door; onClose: () => void; onGo: 
           <span className="cm-book-hint">{door.state === 'booked' && door.booking ? `${door.booking.hosting ? 'Booked by you' : 'You are going'} · ${centralWhen(door.booking.start_at)}` : 'Audio, video, screen share and chat'}</span>
           {door.state === 'live' && <button type="button" className="cm-book-btn pri" onClick={() => onGo(roomPath(door.roomId))} data-testid="cm-meet-join">Join the room &rarr;</button>}
           {door.state === 'booked' && door.booking && <button type="button" className="cm-book-btn" onClick={() => onGo(roomPath(door.roomId))}>Opens {doorSign(door).replace('Booked · ', '')}</button>}
-          {door.state === 'free' && <button type="button" className="cm-book-btn pri" onClick={() => onGo(roomPath(door.roomId))}>Open this room &rarr;</button>}
+          {door.state === 'idle' && <button type="button" className="cm-book-btn pri" onClick={() => onGo(roomPath(door.roomId))}>Open this room &rarr;</button>}
         </div>
       </div>
     </>

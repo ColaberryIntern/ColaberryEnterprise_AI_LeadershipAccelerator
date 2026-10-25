@@ -2,13 +2,13 @@ import type { Hallway, HallwayBooking, HallwayPerson, HallwayRoom } from './hall
 
 /**
  * The hallway's rules (C29, v7 R2), pure so each is tested. The prototype's MROOMS are illustrative; every door here is a real room:
- *  - a door per live room (someone inside), per upcoming booking of yours, then your own idle rooms ("Free");
- *  - order: live rooms with a friend inside, other live rooms, your bookings (soonest first), free rooms;
+ *  - a door per live room (someone inside), per upcoming booking of yours, then your own idle rooms ("Available");
+ *  - order: live rooms with a friend inside, other live rooms, your bookings (soonest first), your idle rooms;
  *  - at most six doors (three per side wall); with more, the sixth is "More rooms →" (the full list on /portal/rooms).
  */
 export const MAX_DOORS = 6;
 export const TZ = 'America/Chicago';
-export type DoorState = 'live' | 'booked' | 'free';
+export type DoorState = 'live' | 'booked' | 'idle';
 export interface Door {
   more: false; n: number; key: string; roomId: string; name: string; sub: string; emoji: string | null;
   state: DoorState; insideCount: number; inside: HallwayPerson[]; friends: boolean; booking: HallwayBooking | null;
@@ -30,11 +30,11 @@ export function orderedDoors(h: Hallway): Omit<Door, 'n'>[] {
   for (const b of [...h.bookings].sort((a, c) => a.start_at.localeCompare(c.start_at))) if (!firstBooking.has(b.room_id)) firstBooking.set(b.room_id, b);
   const booked = Array.from(firstBooking.values()).filter((b) => !liveIds.has(b.room_id) && byId.has(b.room_id));
   const bookedIds = new Set(booked.map((b) => b.room_id));
-  const free = h.rooms.filter((r) => r.mine && !liveIds.has(r.room_id) && !bookedIds.has(r.room_id));
+  const idle = h.rooms.filter((r) => r.mine && !liveIds.has(r.room_id) && !bookedIds.has(r.room_id));
   const liveDoors = live.map((r) => door(r, 'live', firstBooking.get(r.room_id) ?? null));
   return [
     ...liveDoors.filter((d) => d.friends), ...liveDoors.filter((d) => !d.friends),
-    ...booked.map((b) => door(byId.get(b.room_id)!, 'booked', b)), ...free.map((r) => door(r, 'free', null)),
+    ...booked.map((b) => door(byId.get(b.room_id)!, 'booked', b)), ...idle.map((r) => door(r, 'idle', null)),
   ];
 }
 
@@ -56,14 +56,14 @@ export function centralWhen(iso: string): string {
   return `${d.toLocaleDateString('en-US', { timeZone: TZ, weekday: 'short' })} ${d.toLocaleTimeString('en-US', { timeZone: TZ, hour: 'numeric', minute: '2-digit' })}`;
 }
 
-/** The door sign's state line: "● 3 inside", "Booked · Tue 10:30 AM" or "Free". */
+/** The door sign's state line: "● 3 inside", "Booked · Tue 10:30 AM" or "Available". */
 export function doorSign(d: Door): string {
   if (d.state === 'live') return `● ${d.insideCount} inside`;
   if (d.state === 'booked' && d.booking) return `Booked · ${centralWhen(d.booking.start_at)}`;
-  return 'Free';
+  return 'Available';
 }
 
-/** The arrival card row's line: "3 inside · sub", "Booked · Tue 10:30 AM" or "Free". */
+/** The arrival card row's line: "3 inside · sub", "Booked · Tue 10:30 AM" or "Available". */
 export function rowLine(d: Door): string {
   if (d.state === 'live') return [`${d.insideCount} inside`, d.sub].filter(Boolean).join(' · ');
   return doorSign(d);
