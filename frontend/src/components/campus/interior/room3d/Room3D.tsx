@@ -74,12 +74,16 @@ function useRoomSize(ref: React.RefObject<HTMLDivElement>): { fw: number; fh: nu
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return undefined;
-    const read = () => { const r = el.getBoundingClientRect(); if (r.width > 0 && r.height > 0) setSize({ fw: r.width, fh: r.height }); };
+    // C41 (room fix F1): the LAYOUT box, never getBoundingClientRect. The room mounts while .cm-in-frame plays cm-in-reveal
+    // (scale 1.5 down to 1); a painted rect includes that transform, so the room was built 1.5x too wide and the ResizeObserver
+    // never corrected it (a transform does not resize the box). Re-measure when the reveal ends, belt and braces.
+    const read = () => { const w = el.clientWidth, h = el.clientHeight; if (w > 0 && h > 0) setSize({ fw: w, fh: h }); };
     read();
-    if (typeof ResizeObserver === 'undefined') return undefined;
-    const ro = new ResizeObserver(read);
-    ro.observe(el);
-    return () => ro.disconnect();
+    const frame = el.closest('.cm-in-frame');
+    frame?.addEventListener('animationend', read);
+    const ro = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(read);
+    ro?.observe(el);
+    return () => { ro?.disconnect(); frame?.removeEventListener('animationend', read); };
   }, [ref]);
   return size;
 }
