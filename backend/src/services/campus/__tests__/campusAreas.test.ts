@@ -12,7 +12,7 @@ const frontendIds = (): string[] => {
 describe('CAMPUS_AREAS', () => {
   it('equals the frontend catalog building ids exactly (no drift either way)', () => {
     const ids = frontendIds();
-    expect(ids.length).toBe(12);
+    expect(ids.length).toBe(13); // C21: + admissions
     expect([...CAMPUS_AREAS].sort()).toEqual([...ids].sort());
   });
 

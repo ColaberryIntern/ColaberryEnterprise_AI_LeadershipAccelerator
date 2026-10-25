@@ -94,7 +94,7 @@ describe('Rooms in the <building> (C15, replaces "Here at")', () => {
   it('lists the building\'s rooms, each opening its page', () => {
     const opened: string[] = [];
     render(<RoomsHere building={studio} workplaceNames={false} onOpen={(r) => opened.push(r)} />);
-    expect(q('cm-rooms-here')!.textContent).toContain('Rooms in the Project Studio');
+    expect(q('cm-rooms-here')!.textContent).toContain('Rooms in Project Studio'); // the business district takes no article, as the kicker
     act(() => { (container.querySelector('[data-testid="cm-rooms-here-room"]') as HTMLButtonElement).click(); });
     expect(opened).toEqual([studio.rooms.filter((r) => !r.planned)[0].route]);
   });

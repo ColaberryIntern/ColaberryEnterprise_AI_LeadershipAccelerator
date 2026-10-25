@@ -141,12 +141,12 @@ describe('the staff card (Q7)', () => {
     expect(walked).toEqual(['commons']);
     expect(q('[data-testid="cm-staff-card"]')).toBeNull();
   });
-  it('no Visit when you are there; Maya opens only for Explorers and staff', () => {
+  it('no Visit when you are there; C21 (v6 D3): Maya opens for every audience, members included', () => {
     render(<Host here="commons" />);
     act(() => openStaffCard('reese'));
     expect(q('[data-testid="cm-desk-visit-reese"]')).toBeNull();
     act(() => openStaffCard('maya'));
-    expect(q('[data-testid="cm-desk-maya"]')).toBeNull();
+    expect(q('[data-testid="cm-desk-maya"]')).not.toBeNull();
     expect(staffRole({ id: 'dara', title: 'x' }, true)).toBe('AI guide · Learning & certification');
     expect([placeName(B.find((b) => b.kind === 'gate'), false), placeName(undefined, true)]).toEqual(['the Main Gate', 'the Plaza']);
   });

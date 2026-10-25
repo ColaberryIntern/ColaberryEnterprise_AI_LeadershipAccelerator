@@ -33,6 +33,10 @@
   --cm-art-gallery:#b4533a;
   --cm-art-career:#1f4f7a;
   --cm-art-arcade:#6b2fa0;
+  /* C21 (v6 D3): Admissions, Maya's rose; the pink-walled lobby inside */
+  --cm-art-admissions:#b0306a; --cm-art-admissions-d30:#7e0038; --cm-art-hero-admissions:#b0306a;
+  --cm-art-in-admissions-wall:#f8e4ec; --cm-art-in-admissions-wall-d16:#e8d4dc; --cm-art-in-admissions-wall-d28:#dcc8d0; --cm-art-in-admissions-floor:#c9a58c;
+  --cm-art-in-admissions-door:#7e0038; --cm-art-in-admissions-sign:#74002e;
   /* shared building parts */
   --cm-art-bld-shadow:rgba(60,70,40,.18); --cm-art-wall:#fbf6ee; --cm-art-wall-edge:#d9cdb8; --cm-art-window:#bcd3dc;
   --cm-art-step:#e6dccb; --cm-art-label:#ffffff; --cm-art-label-edge:#e6dccb;

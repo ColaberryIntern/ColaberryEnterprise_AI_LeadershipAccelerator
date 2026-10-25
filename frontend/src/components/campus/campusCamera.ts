@@ -30,9 +30,9 @@ export function baseView(vp: Viewport, insets: Insets = NO_INSETS): Cam {
   if (isMobileWidth(vp.W)) return place(vp, 500, 390, vp.W / 2, (f.y0 + f.y1) / 2, Math.min(vp.W / 640, 1));
   // The prototype fits 550 world units of height around y 392, which only holds while its 420 px panel makes the fit
   // width-bound; with no side panel the fit is height-bound and that cut the roofs off. Fit the art's real extent instead:
-  // the tallest roof (about y 80) to the gate path (about y 670), centered on y 380.
-  const s = Math.min((f.x1 - f.x0 - 30) / 1010, (f.y1 - f.y0 - 20) / 600, 1.6);
-  return place(vp, 530, 380, (f.x0 + f.x1) / 2, (f.y0 + f.y1) / 2, s);
+  // the tallest roof (about y 80) to the Admissions building's name pill beside the gate (C21, about y 700), centered on y 390.
+  const s = Math.min((f.x1 - f.x0 - 30) / 1010, (f.y1 - f.y0 - 20) / 640, 1.6);
+  return place(vp, 530, 390, (f.x0 + f.x1) / 2, (f.y0 + f.y1) / 2, s);
 }
 
 /** One building, framed beside its arrival panel (prototype focusBuilding). b: center x, ground line y, height. */

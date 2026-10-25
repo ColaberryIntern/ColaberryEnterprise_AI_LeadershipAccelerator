@@ -62,6 +62,8 @@ export function QuadAndPaths({ doors }: { doors: PathDoor[] }): React.ReactEleme
       <Seg d={`M100 ${AVE}L900 ${AVE}`} w={16} />
       {doors.filter((b) => b.zone === 'ave').map((b) => <Seg key={`a-${b.id}`} d={`M${b.x} ${b.y + 6}L${b.x} ${AVE}`} w={12} />)}
       <Seg d={`M500 ${HUB.y}L500 ${GATE.y + 30}`} w={18} />
+      {/* C21: a building beside the gate (Admissions) joins the spine at the gate */}
+      {doors.filter((b) => b.zone === 'gate' && b.id !== 'gate').map((b) => <Seg key={`g-${b.id}`} d={`M${GATE.x} ${b.y + 6}L${b.x} ${b.y + 6}`} w={12} />)}
       <g data-testid="cm-fountain">
         <circle cx={500} cy={400} r={34} fill={art('path-edge')} />
         <circle cx={500} cy={400} r={28} fill={art('fountain')} />
@@ -98,7 +100,10 @@ export function District(): React.ReactElement {
 const TREE_SPOTS: [number, number][] = [[60, 190], [92, 222], [372, 150], [624, 140], [652, 168], [905, 300], [935, 330], [950, 420], [55, 420], [88, 452],
   [410, 480], [592, 482], [332, 410], [640, 470], [960, 610], [40, 610], [420, 640], [580, 640], [870, 120], [60, 300], [220, 400], [790, 420], [825, 450], [180, 140]];
 const inDistrict = (x: number, y: number) => (x >= 628 && y <= 300) || (x >= 800 && y <= 480) || (x >= 590 && y >= 460);
-const PLANTERS: [number, number][] = [[700, 140], [960, 250], [965, 470], [620, 650]];
+// C21: [620,650] moved east of the Admissions building
+const PLANTERS: [number, number][] = [[700, 140], [960, 250], [965, 470], [700, 652]];
+/** C21 (v6 D3): the Admissions building beside the gate keeps its footprint clear of trees. */
+const onAdmissions = (x: number, y: number) => Math.abs(x - 614) < 72 && Math.abs(y - 645) < 42;
 
 /** The prototype's fixed trees (none inside the district or on the Game Room), and the district's planters. */
 export function Trees(): React.ReactElement {
@@ -119,7 +124,7 @@ export function Trees(): React.ReactElement {
         }))}
       </defs>
       {TREE_SPOTS.map(([x, y], i) => {
-        if (inDistrict(x, y) || (Math.abs(x - 210) < 80 && Math.abs(y - 428) < 62)) return null;
+        if (inDistrict(x, y) || onAdmissions(x, y) || (Math.abs(x - 210) < 80 && Math.abs(y - 428) < 62)) return null;
         return <use key={`t${i}`} className="cm-tree" href={`#cm-tree-${i % 3}-${i % 2}`} x={x} y={y} />;
       })}
       {PLANTERS.map(([x, y]) => (

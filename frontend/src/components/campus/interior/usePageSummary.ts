@@ -5,6 +5,7 @@ import { useProjectsList } from '../../../pages/portal/projects/projectsStore';
 import type { BuildingId } from '../campusMap';
 import { certPrepSummary, classroomSummary, plainSummary, projectsSummary } from './pageSummary';
 import type { ClassroomFeed, PageSummary } from './pageSummary';
+import { accountRows, useAccountFacts } from '../admissions/accountFacts';
 
 /**
  * The room's board for the building you are in (v6 D1): its page's Next step, the card to its right, and what your spot opens,
@@ -34,6 +35,7 @@ export const clearSummaryCache = (): void => cache.clear();
  */
 export function usePageSummary(id: BuildingId, open: boolean, name: string): PageSummary | null {
   const projects = useProjectsList(); // a local store read (cheap); the page uses the same list
+  const account = useAccountFacts(open && id === 'admissions'); // C21: the Admissions room's "Your account" wall board
   const [fetched, setFetched] = useState<{ id: BuildingId; s: PageSummary } | null>(null);
   useEffect(() => {
     if (!open || (id !== 'lecture' && id !== 'testing')) return undefined;
@@ -53,5 +55,7 @@ export function usePageSummary(id: BuildingId, open: boolean, name: string): Pag
   if (id === 'studio') return { ...projectsSummary(projects), doorName: name };
   if (id === 'testing') return fetched?.id === id ? { ...fetched.s, doorName: name } : null;
   if (id === 'lecture') return fetched?.id === id ? fetched.s : null;
+  // C21: Admissions draws its own board (plans & pricing); the summary carries only the left wall's "Your account"
+  if (id === 'admissions') return { ...plainSummary(name), sideTop: account ? accountRows(account) : null };
   return plainSummary(name);
 }

@@ -7,6 +7,7 @@
 export const CAMPUS_AREAS = [
   'lecture', 'library', 'tower', 'studio', 'amphi', 'testing',
   'observatory', 'commons', 'gallery', 'career', 'arcade', 'gate',
+  'admissions', // C21 (v6 D3): Maya's building beside the main gate
 ] as const;
 
 export type CampusArea = (typeof CAMPUS_AREAS)[number];

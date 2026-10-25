@@ -132,6 +132,17 @@ Array [
     ],
     "workplaceName": "Break Room",
   },
+  Object {
+    "explorer": "open",
+    "gate": null,
+    "id": "admissions",
+    "name": "Admissions",
+    "primary": "See plans & services -> /portal/plans",
+    "rooms": Array [
+      "Plans & pricing -> /portal/plans",
+    ],
+    "workplaceName": "Admissions",
+  },
 ]
 `;
 
@@ -276,6 +287,17 @@ Array [
     "rooms": Array [],
     "workplaceName": "Visitor Entrance",
   },
+  Object {
+    "explorer": "open",
+    "gate": null,
+    "id": "admissions",
+    "name": "Admissions",
+    "primary": "See plans & services -> /portal/plans",
+    "rooms": Array [
+      "Plans & pricing -> /portal/plans",
+    ],
+    "workplaceName": "Admissions",
+  },
 ]
 `;
 
@@ -410,6 +432,17 @@ Array [
       "Game Room -> /portal/game-room",
     ],
     "workplaceName": "Break Room",
+  },
+  Object {
+    "explorer": "open",
+    "gate": null,
+    "id": "admissions",
+    "name": "Admissions",
+    "primary": "See plans & services -> /portal/plans",
+    "rooms": Array [
+      "Plans & pricing -> /portal/plans",
+    ],
+    "workplaceName": "Admissions",
   },
 ]
 `;
@@ -556,6 +589,17 @@ Array [
     "primary": "Start on Today -> /portal/today",
     "rooms": Array [],
     "workplaceName": "Visitor Entrance",
+  },
+  Object {
+    "explorer": "open",
+    "gate": null,
+    "id": "admissions",
+    "name": "Admissions",
+    "primary": "See plans & services -> /portal/plans",
+    "rooms": Array [
+      "Plans & pricing -> /portal/plans",
+    ],
+    "workplaceName": "Admissions",
   },
 ]
 `;

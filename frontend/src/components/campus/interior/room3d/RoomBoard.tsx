@@ -18,16 +18,20 @@ export interface BoardProps {
   onSection: () => void;
   onCard: (() => void) | null;
   onPlan?: (route: string) => void;
+  /** A building's own board in place of the Next step (C21: Admissions' plans & pricing). */
+  custom?: React.ReactNode;
 }
 
 const stop = (fn: () => void) => (e: React.MouseEvent) => { e.stopPropagation(); fn(); };
 
-export function RoomScreen({ summary, name, planStep, onSection, onCard, onPlan }: BoardProps): React.ReactElement {
+export function RoomScreen({ summary, name, planStep, onSection, onCard, onPlan, custom }: BoardProps): React.ReactElement {
   const next = summary?.next ?? null;
   const [copied, setCopied] = useState(false);
   const copy = (text: string) => { void navigator.clipboard?.writeText(text).then(() => setCopied(true), () => setCopied(false)); };
   let body: React.ReactNode;
-  if (next) {
+  if (custom) {
+    body = custom;
+  } else if (next) {
     body = (
       <>
         <div className="k">{next.kicker}{next.points > 0 && <span className="pts">+{next.points} PTS</span>}</div>

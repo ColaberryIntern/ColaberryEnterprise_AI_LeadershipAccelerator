@@ -23,6 +23,8 @@ export const ROOMS: Partial<Record<BuildingId, RoomDef>> = {
   commons: { layout: 'tables', feature: 'lounge', dark: false },
   gallery: { layout: 'standing', feature: 'screens', dark: false },
   career: { layout: 'board', feature: 'clients', dark: false },
+  // C21 (v6 D3): the pink-walled Admissions lobby: people stand; the board carries plans & pricing (the 3D room's own board)
+  admissions: { layout: 'standing', feature: 'screen', dark: false },
 };
 
 /** Floor position (u across, t from back wall to front) to picture x, y and the figure scale (prototype P). */

@@ -27,6 +27,7 @@ import { enrollCta } from './campusAccess';
 import { usePageSummary } from './interior/usePageSummary';
 import { spotOf } from './interior/roomSpots';
 import { ROOMS } from './interior/roomModel';
+import AdmissionsServices from './admissions/AdmissionsServices';
 import ArrivalWays from './ArrivalWays';
 
 /**
@@ -132,7 +133,8 @@ export default function ArrivalPanel(p: ArrivalPanelProps): React.ReactElement {
         tourNav={tour ? <TourNav tour={tour.model} index={tourIdx} hereStop={isStop} nextName={nextB ? buildingName(nextB, wp) : null}
           onNext={tour.onNext} onBack={tour.onBack} onEnd={tour.onEnd} /> : undefined}
         children={b.id === 'gate' && p.isExplorer ? <ExplorerPath onNavigate={p.onNavigate}
-          model={explorerPath(p.buildings, p.accessOf, wp, !!p.staffDesks?.some((d) => d.id === 'maya' && d.on_duty))} /> : undefined}
+          model={explorerPath(p.buildings, p.accessOf, wp, !!p.staffDesks?.some((d) => d.id === 'maya' && d.on_duty))} />
+          : b.id === 'admissions' ? <AdmissionsServices audience={audience} onNavigate={open} /> : undefined}
         whoIsHere={p.presence === undefined && !p.presenceError ? undefined
           : { presence: p.presence?.[b.id], error: p.presenceError, loading: p.presence === null && !p.presenceError, onPick: p.onPickPerson, onMore: p.onMore }} />
     </>

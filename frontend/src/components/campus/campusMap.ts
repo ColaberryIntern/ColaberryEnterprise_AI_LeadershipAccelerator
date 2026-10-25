@@ -26,7 +26,7 @@ export type ExplorerAccess = 'open' | 'preview' | 'demo' | 'locked';
 export type ExplorerMode = 'open' | 'preview' | 'demo';
 export type BuildingId =
   | 'lecture' | 'library' | 'tower' | 'studio' | 'amphi' | 'testing'
-  | 'observatory' | 'commons' | 'gallery' | 'career' | 'arcade' | 'gate';
+  | 'observatory' | 'commons' | 'gallery' | 'career' | 'arcade' | 'gate' | 'admissions';
 
 export interface CampusRoom {
   label: string;
@@ -119,6 +119,13 @@ export const CAMPUS_BUILDINGS: readonly CampusBuilding[] = [
   { id: 'gate', name: 'Main Gate', workplaceName: 'Visitor Entrance',
     primary: { label: 'Start on Today', route: '/portal/today' }, // C6: Maya's desk is in this card now; the button goes to Today, so it says so
     rooms: [], prefixes: [], explorer: 'open', audiences: ['explorer', 'staff'], pos: { x: 500, y: 640, w: 90, h: 50 }, kind: 'gate', zone: 'gate' },
+  // C21 (v6 D3): Admissions, Maya's building just right of the gate, for every audience; its door joins the path at the gate
+  // (zone 'gate'). "Admissions" is the team's name in both looks. Subscription, billing and enrollment stay Settings tabs, reached
+  // from the arrival card's service rows and the plans page (a room must be a routed page with the campus chrome).
+  { id: 'admissions', name: 'Admissions', workplaceName: 'Admissions',
+    primary: { label: 'See plans & services', route: '/portal/plans' },
+    rooms: [{ label: 'Plans & pricing', route: '/portal/plans' }],
+    prefixes: ['/portal/plans'], explorer: 'open', audiences: EVERYONE, pos: { x: 614, y: 668, w: 104, h: 54 }, kind: 'gable', zone: 'gate' },
 ];
 
 /** The career building's face per audience (D4 career row). C6: the Staff Office links go to existing admin pages THROUGH
@@ -174,4 +181,4 @@ export function buildingName(b: Pick<CampusBuilding, 'name' | 'workplaceName'>, 
 
 /** The prototype's building icons (its catalog's icon field): the directory, the side mini map. */
 export const BUILDING_ICON: Partial<Record<string, string>> = { lecture: '🎓', library: '📚', tower: '🕰', studio: '🛠', amphi: '🎪', testing: '✅',
-  observatory: '🔭', commons: '☕', gallery: '🖼', career: '💼', arcade: '🕹', gate: '🚪' };
+  observatory: '🔭', commons: '☕', gallery: '🖼', career: '💼', arcade: '🕹', gate: '🚪', admissions: '📋' };

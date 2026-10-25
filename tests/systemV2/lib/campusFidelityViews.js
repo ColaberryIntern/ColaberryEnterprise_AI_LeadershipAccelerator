@@ -163,6 +163,15 @@ const VIEWS = [
     required: (a, size) => ['cm-ws', 'cm-ws-trail', 'cm-ws-section', 'cm-ws-standup', 'cm-ws-bench', 'cm-ws-desk', 'cm-ws-cory', 'cm-ws-status', ...(size === 'phone' ? [] : ['cm-ws-term'])],
     assert: () => `(() => { const n = document.querySelectorAll('.cm-ws-bezel').length; if (n !== 2) return 'bezels: ' + n + ' (want 2)';
       const t = document.querySelector('[data-testid="cm-ws-trail"]').textContent; return t.startsWith('Your desk · ') ? '' : 'trail: ' + t; })()` },
+  // C21 (v6 D3): Admissions beside the gate: the board's four prices come from the claims registry and $199 is absent; the
+  // service rows render for a member and a business viewer; /portal/plans renders the four cards.
+  { name: '24-admissions', route: '/portal/campus', accounts: ['member', 'business'], steps: () => [tap('admissions'), WALKED],
+    required: () => ['cm-room3d', 'cm-board-plans', 'cm-board-talk', 'cm-adm-services', 'cm-adm-maya', '.cm-r3-spot'],
+    assert: () => `(() => { const b = document.querySelector('[data-testid="cm-board-plans"]').textContent;
+      for (const want of ['$149', '$1,200', 'Scoped on a call', 'No card needed']) if (!b.includes(want)) return 'board lacks ' + want;
+      return document.body.textContent.includes('$199') ? '$199 is on the page' : ''; })()` },
+  { name: '24-plans', route: '/portal/plans', accounts: ['member', 'business'], steps: () => [{ wait: 1500 }],
+    required: () => ['cm-plans', 'cm-plan-explorer', 'cm-plan-individual', 'cm-plan-team', 'cm-plan-services', 'cm-plans-account', 'cm-plans-talk'] },
   // WP-6: arriving at the live building: the hero in the state's colour, the stage, the live room as the main action
   // C16 (round 3 §2.4): the light location bar on a page at 1440 and 1920: it spans the viewport, no control's text overflows, and
   // after scrolling 800 px it is at the top with the rail's Up next in view and no "YOUR NEXT STEP" inside the header.
@@ -180,7 +189,7 @@ function panelFor(view, a, size) {
   if (view.name === '01-gate' || view.name === '23-workstation') return []; // the workstation is full screen, as the prototype's #ws
   const tour = a === 'staff' ? [] : ['cm-cc-tour'];
   if (view.route !== '/portal/campus' && view.name !== '14-step-outside') return size === 'phone' ? ['cm-steps-open'] : ['cm-page-rail', ...tour.map((t) => `[data-testid="cm-page-rail"] [data-testid="${t}"]`)];
-  if (size === 'phone' && (CARD_VIEWS.includes(view.name) || view.name.startsWith('21-room-'))) return ['cm-cc-peek'];
+  if (size === 'phone' && (CARD_VIEWS.includes(view.name) || view.name.startsWith('21-room-') || view.name === '24-admissions')) return ['cm-cc-peek'];
   return ['cm-concierge', ...tour];
 }
 const withPanel = (view) => ({ ...view, required: (a, size) => [...view.required(a, size), ...panelFor(view, a, size)] });

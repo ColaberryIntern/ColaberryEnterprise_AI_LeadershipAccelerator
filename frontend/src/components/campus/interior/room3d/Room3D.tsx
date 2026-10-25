@@ -9,6 +9,8 @@ import { SpotArt } from '../spots';
 import type { PageSummary } from '../pageSummary';
 import type { PlanStop } from '../../campusPlan';
 import { RoomScreen, WallBoard } from './RoomBoard';
+import PlansBoard from '../../admissions/PlansBoard';
+import { openBookCall } from '../../admissions/admissionsCallApi';
 import { DESK_AT, STAFF_AT, YOU_AT, YOU_FROM, furnitureOf, peoplePlaces, roomDepth } from './roomPlaces';
 import type { Place } from './roomPlaces';
 import './room3d.css';
@@ -93,7 +95,7 @@ export default function Room3D(p: Room3DProps): React.ReactElement | null {
   const cardRoute = spot?.opens === 'page' ? p.sectionRoute : summary?.card ?? null;
   // The spot, the screen's primary button and "Open the card" all land on the same workstation.
   const sitDown = () => {
-    if (spot?.opens === 'book') { p.onBook?.(); return; }
+    if (spot?.opens === 'book') { (p.onBook ?? (() => openBookCall()))(); return; } // C21: the meeting table opens the booking sheet
     if (!cardRoute) { section(); return; }
     if (reduceMotion || !spot) { p.onOpen(cardRoute); return; }
     setWalkMs(WALK_MS); setYouAt([spot.x, Math.max(0, spot.z - 0.1)]);
@@ -114,7 +116,7 @@ export default function Room3D(p: Room3DProps): React.ReactElement | null {
           <div className="face floor" aria-hidden="true" />
           <div className="face back"><div className="wainscot" aria-hidden="true" />
             <RoomScreen summary={summary} name={p.name} planStep={p.planStep} onSection={section} onCard={cardRoute && spot?.opens !== 'book' ? sitDown : null}
-              onPlan={(r) => p.onOpen(r)} />
+              onPlan={(r) => p.onOpen(r)} custom={id === 'admissions' ? <PlansBoard onSection={section} /> : undefined} />
           </div>
           <div className="face left"><div className="wainscot" aria-hidden="true" />
             {summary?.sideTop && <div className="cm-r3-wallslot"><WallBoard side={summary.sideTop} onSection={section} /></div>}

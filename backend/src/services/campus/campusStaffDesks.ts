@@ -55,14 +55,17 @@ async function agentDesk(
 }
 
 /** Maya's desk: on duty iff the public site chat is on (her chat endpoints answer 204 otherwise). No enrollment: she is not
- *  a portal DM agent, and no prompts: her own widget offers its quick replies. */
+ *  a portal DM agent, and no prompts: her own widget offers its quick replies. C21 (v6 D3): her desk is in the Admissions
+ *  building beside the gate, no longer a bench at the gate. */
 function mayaDesk(): StaffDesk {
   const on = env.enableChat === true;
-  return { id: 'maya', name: 'Maya', title: 'Welcome desk', building: 'gate', ai: true, on_duty: on, enrollment_id: null, opens: on ? null : 'site_chat_off', prompts: [] };
+  return { id: 'maya', name: 'Maya', title: 'Welcome desk', building: 'admissions', ai: true, on_duty: on, enrollment_id: null, opens: on ? null : 'site_chat_off', prompts: [] };
 }
 
+/** C21 (v6 D3): Maya is always in her Admissions building and on every help desk, for every audience (it replaces C6's
+ *  Explorer-and-staff rule; her chat is still the site widget, the C6 decision). */
 export function mayaVisibleTo(audience: CampusAudienceKind): boolean {
-  return audience === 'staff' || audience === 'explorer';
+  return ['staff', 'explorer', 'member', 'business'].includes(audience);
 }
 
 export async function getStaffDesks(enrollmentId: string): Promise<{ audience: CampusAudienceKind; desks: StaffDesk[] }> {

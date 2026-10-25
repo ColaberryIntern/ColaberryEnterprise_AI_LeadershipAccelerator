@@ -12,10 +12,15 @@ const allRoutes = (): { route: string; planned?: string; where: string }[] => CA
 ]);
 
 describe('campus catalog', () => {
-  it('has the 12 buildings of the D4 catalog, each id once', () => {
+  it('has the 13 buildings (the D4 catalog + C21 Admissions), each id once', () => {
     const ids = CAMPUS_BUILDINGS.map((b) => b.id);
     expect(new Set(ids).size).toBe(ids.length);
-    expect(ids.sort()).toEqual(['amphi', 'arcade', 'career', 'commons', 'gallery', 'gate', 'lecture', 'library', 'observatory', 'studio', 'testing', 'tower']);
+    expect(ids.sort()).toEqual(['admissions', 'amphi', 'arcade', 'career', 'commons', 'gallery', 'gate', 'lecture', 'library', 'observatory', 'studio', 'testing', 'tower']);
+  });
+
+  it('C21: Admissions is on every campus, beside the gate (its door joins the path there), its page /portal/plans', () => {
+    for (const a of ['member', 'explorer', 'business', 'staff'] as const) expect(buildingsFor(a).some((b) => b.id === 'admissions')).toBe(true);
+    expect(CAMPUS_BUILDINGS.find((b) => b.id === 'admissions')).toMatchObject({ zone: 'gate', prefixes: ['/portal/plans'], primary: { route: '/portal/plans' } });
   });
 
   it('points only at routes that are routed today, unless a route is marked planned with its ticket', () => {
@@ -45,10 +50,10 @@ describe('campus catalog', () => {
   it('matches the Explorer mode column (what each page does for an Explorer)', () => {
     const access = Object.fromEntries(CAMPUS_BUILDINGS.map((b) => [b.id, b.explorer]));
     expect(access).toEqual({ lecture: 'preview', library: 'open', tower: 'open', studio: 'demo', amphi: 'open', testing: 'open',
-      observatory: 'open', commons: 'open', gallery: 'open', career: 'open', arcade: 'open', gate: 'open' });
+      observatory: 'open', commons: 'open', gallery: 'open', career: 'open', arcade: 'open', gate: 'open', admissions: 'open' });
   });
 
-  it('shows the Main Gate (Maya\'s desk) only to Explorers and staff', () => {
+  it('shows the Main Gate only to Explorers and staff (Maya moved to Admissions in C21)', () => {
     expect(buildingsFor('explorer').some((b) => b.id === 'gate')).toBe(true);
     expect(buildingsFor('staff').some((b) => b.id === 'gate')).toBe(true);
     expect(buildingsFor('member').some((b) => b.id === 'gate')).toBe(false);

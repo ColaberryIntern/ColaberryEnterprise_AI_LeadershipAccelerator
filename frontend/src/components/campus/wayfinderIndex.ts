@@ -42,6 +42,7 @@ export const WF_KEYS: Partial<Record<BuildingId, string>> = {
   gallery: 'portfolio showcase gallery work share resume demo show showroom demos client clients present',
   career: 'internship intern standup stand-up meeting company job career team orientation handoff client clients engagement engagements management portal employee company office tower',
   arcade: 'game games arcade play break relax fun chase maze slingshot launch breakout bricks score scores leaderboard rest',
+  admissions: 'admissions plans plan pricing price cost subscription billing enroll enrollment seats seat license licenses team maya welcome',
 };
 const STAFF_KEYS = 'staff help mentor stuck question curriculum certification';
 const MAYA_KEYS = 'admissions enroll enrolling price cost pay sponsor employer apply join person call';

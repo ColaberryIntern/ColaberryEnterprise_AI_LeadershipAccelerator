@@ -117,13 +117,12 @@ async function runAudience(browser, audience, jwt) {
       await page.keyboard.press('Escape'); // then the building card, not the map
       const hasGate = await page.locator('.cm-home g[data-building="gate"]').count() > 0;
       must(hasGate === (audience === 'explorer' || audience === 'staff'), `Main Gate shown=${hasGate}`);
-      if (hasGate) {
-        await page.click('.cm-home g[data-building="gate"]');
-        await page.click('[data-testid="cm-who-staff-maya"]', { timeout: 15_000 });
-        await page.waitForSelector('[data-testid="cm-staff-card"] [data-testid="cm-desk-maya"]', { timeout: 15_000 });
-        await page.keyboard.press('Escape');
-        await page.keyboard.press('Escape');
-      }
+      // C21 (v6 D3): Maya's desk is in Admissions, beside the gate, for every audience
+      await page.click('.cm-home g[data-building="admissions"]');
+      await page.click('[data-testid="cm-who-staff-maya"]', { timeout: 15_000 });
+      await page.waitForSelector('[data-testid="cm-staff-card"] [data-testid="cm-desk-maya"]', { timeout: 15_000 });
+      await page.keyboard.press('Escape');
+      await page.keyboard.press('Escape');
     });
 
     await step(audience, 'keyboard: Tab to a building, Enter opens its card with focus on the heading', async () => {
@@ -203,6 +202,24 @@ async function runAudience(browser, audience, jwt) {
         await page.waitForSelector('[data-testid="cm-book-slots"]', { timeout: 15_000 });
         await page.keyboard.press('Escape');
         await page.waitForSelector('[data-testid="cm-cc-coming"]', { state: 'detached', timeout: 15_000 });
+      });
+
+      await step(audience, 'C21: Admissions beside the gate: the board prices come from the claims registry ($199 absent), the meeting table opens the booking sheet, /portal/plans has four cards', async () => {
+        await page.goto(`${urls.base}/portal/campus`, { waitUntil: 'domcontentloaded' });
+        await page.waitForSelector('[data-testid="cm-concierge"]', { timeout: 30_000 });
+        await page.evaluate(() => document.querySelector('[data-testid="cm-bld-admissions"]').dispatchEvent(new MouseEvent('click', { bubbles: true })));
+        await page.waitForSelector('[data-testid="cm-room3d"][data-room="admissions"] [data-testid="cm-board-plans"]', { timeout: 15_000 });
+        const board = await page.textContent('[data-testid="cm-board-plans"]');
+        for (const want of ['$149', '$1,200', 'Scoped on a call', 'No card needed']) must((board || '').includes(want), `board lacks ${want}: "${board}"`);
+        must(!(await page.textContent('body')).includes('$199'), '$199 is on the page');
+        must(await page.locator('[data-testid="cm-adm-services"]').count() === 1, 'no service rows in the arrival card');
+        await page.click('[data-testid="cm-room3d"] .cm-r3-spot');
+        await page.waitForSelector('[data-testid="cm-book"]', { timeout: 15_000 });
+        await page.keyboard.press('Escape');
+        await page.goto(`${urls.base}/portal/plans`, { waitUntil: 'domcontentloaded' });
+        await page.waitForSelector('[data-testid="cm-plans"]', { timeout: 30_000 });
+        const cards = await page.evaluate(() => ['explorer', 'individual', 'team', 'services'].filter((id) => document.querySelector(`[data-testid="cm-plan-${id}"]`)).length);
+        must(cards === 4, `plans page shows ${cards} of 4 cards`);
       });
 
     }
