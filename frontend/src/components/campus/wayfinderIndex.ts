@@ -3,6 +3,7 @@ import { BUILDING_ICON, buildingName, roomLabel } from './campusMap';
 import type { CampusPerson, CampusPresence } from './campusApi';
 import type { StaffDesk } from './campusPeopleApi';
 import { subOf } from './campusArrival';
+import { BOARD_WORDS } from './board/boardModel';
 
 /**
  * The Wayfinder's search (WP-4; the prototype's buildDest + matcher, D:1897-1945). Pure.
@@ -13,7 +14,7 @@ import { subOf } from './campusArrival';
  *  - an empty query lists Happening now, Suggested for you, Staff · always on and All buildings.
  * Anonymous presence is never searchable, so the Wayfinder cannot reveal anyone the people lists would not.
  */
-export type WfKind = 'urgent' | 'building' | 'room' | 'person' | 'staff' | 'suggested' | 'book';
+export type WfKind = 'urgent' | 'building' | 'room' | 'person' | 'staff' | 'suggested' | 'book' | 'board';
 export interface WfItem {
   key: string;
   kind: WfKind;
@@ -52,7 +53,10 @@ function bookItem(c: WfContext): (WfItem & { keys: string }) | null {
   if (c.audience !== 'member' && c.audience !== 'explorer') return null;
   return { key: 'book', kind: 'book', title: 'Book a call with admissions', sub: 'A real person · 30 minutes on Google Meet', buildingId: 'gate', action: 'Book →', group: 'Help', keys: BOOK_KEYS };
 }
-const URGENT_WORDS = ['late', 'now', 'standup', 'class', 'meeting', 'hurry'];
+/** C30 (v7 R3): the Community Board on the Quad (not a building; its pick walks there and opens it). */
+const BOARD_ITEM: WfItem & { keys: string } = { key: 'board', kind: 'board', title: 'Community Board', sub: 'on the Quad · posts and questions', buildingId: 'commons', action: 'Walk →', group: 'Places',
+  keys: BOARD_WORDS.join(' ') + ' notice noticeboard' };
+const URGENT_WORDS =['late', 'now', 'standup', 'class', 'meeting', 'hurry'];
 export const WF_LIMIT = 9;
 const PEOPLE_LIMIT = 5;
 
@@ -134,10 +138,10 @@ export function wayfinderSearch(query: string, c: WfContext): WfItem[] {
   const places = placeItems(c).filter((x) => matches(x.keys)).sort((a, b) => scoreOf(b, tokens) - scoreOf(a, tokens)).slice(0, WF_LIMIT);
   const people = [...staffItems(c), ...peopleItems(c)].filter((x) => matches(x.keys)).slice(0, PEOPLE_LIMIT);
   const book = bookItem(c);
-  const help = book && matches(book.keys) ? [book] : [];
+  const help = [...(book && matches(book.keys) ? [book] : []), ...(tokens.some((t) => BOARD_ITEM.keys.split(' ').some((k) => k.startsWith(t) && t.length >= 3)) ? [BOARD_ITEM] : [])];
   const u = urgentItem(c);
   const urgentFirst = u && tokens.some((t) => URGENT_WORDS.includes(t)) ? [u] : [];
   return [...urgentFirst, ...help, ...people, ...places].map(({ keys, ...it }: WfItem & { keys?: string }) => it);
 }
 
-export const wfIcon = (it: WfItem): string => (it.kind === 'urgent' ? '⏰' : it.kind === 'book' ? '📅' : BUILDING_ICON[it.buildingId] ?? '');
+export const wfIcon = (it: WfItem): string => (it.kind === 'urgent' ? '⏰' : it.kind === 'book' ? '📅' : it.kind === 'board' ? '📌' : BUILDING_ICON[it.buildingId] ?? '');

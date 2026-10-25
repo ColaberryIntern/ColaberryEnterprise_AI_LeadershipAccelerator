@@ -4,6 +4,7 @@ import { useCampusView } from './useCampusView';
 import { searchCampus, SearchResult } from './campusSearch';
 import type { BuildingId } from './campusMap';
 import { openBookCall } from './admissions/admissionsCallApi';
+import { openBoard } from './board/boardApi';
 
 /**
  * "Where to?" (Colaberry Campus C3): a WAI-ARIA combobox over buildings, rooms and the people the
@@ -29,6 +30,7 @@ export default function WhereTo({ placeholder = 'Where to?' }: { placeholder?: s
   const pick = (r: SearchResult) => {
     setOpen(false); setQ('');
     if (r.kind === 'book') openBookCall();
+    else if (r.kind === 'board') openBoard({ walk: true }); // C30: the Community Board (on a page it opens in place)
     else if (r.kind === 'room' && r.navigable) enterThroughDoor(r.route, null);
     else openMap(r.buildingId as BuildingId);
   };

@@ -6,8 +6,9 @@ import CampusConcierge from '../../../components/campus/home/CampusConcierge';
 import { pulseOf, talksToAdmissions } from '../../../components/campus/home/CampusConcierge';
 import BookCallHost, { useAdmissionsCall } from '../../../components/campus/admissions/BookCallHost';
 import MeetingSheetHost from '../../../components/campus/hallway/MeetingSheet';
-import { useCampusEvents } from '../../../components/campus/events/EventSignup';
-import { goingTo } from '../../../components/campus/events/eventsModel';
+import CommunityBoardHost from '../../../components/campus/board/CommunityBoard';
+import { useAgenda } from '../../../components/campus/events/Agenda';
+import { comingUpOf } from '../../../components/campus/events/agendaModel';
 import { useHomeFacts } from '../../../components/campus/home/useHomeFacts';
 import CampusGate, { gateSeen } from '../../../components/campus/home/CampusGate';
 import CampusMeHost from '../../../components/campus/home/CampusMeHost';
@@ -111,8 +112,9 @@ function CampusHome(): React.ReactElement {
     presenceError, live: !!live, urgent }), [audience, wp, buildings, campus.planStops, campus.planMinutes, agenda, presence, presenceError, live, urgent]);
   const wf = useHomeWayfinder({ audience, workplace: wp, buildings, accessOf, presence, presenceError, desks: staffDesks, urgent, suggested, goTo: map.goTo, openPerson: campus.openPersonCard });
   const call = useAdmissionsCall(talksToAdmissions(audience)); // C20: Coming up
-  const campusEvents = useCampusEvents(true); // C27: Coming up also lists the events you are registered for
-  const going = useMemo(() => goingTo(campusEvents ?? [], new Date()), [campusEvents]);
+  // C33 (v7 R6): Coming up = your next classes, the events you signed up for and the meeting rooms you booked
+  const schedule = useAgenda(true);
+  const coming = useMemo(() => comingUpOf(schedule ?? [], new Date()), [schedule]);
 
   // The home shows Colaberry Live as the prototype's top pill (CampusLive below), so the portal-wide live-now badge steps aside here.
   useEffect(() => { document.documentElement.classList.add('cm-on-home'); return () => document.documentElement.classList.remove('cm-on-home'); }, []);
@@ -139,7 +141,7 @@ function CampusHome(): React.ReactElement {
         stops={campus.planStops} planMinutes={campus.planMinutes} live={live} now={new Date()} agenda={agenda} urgent={urgent}
         tourStops={tour ? tour.stops : null} touring={touring} tourProgress={campus.tourProgress} justToured={campus.justToured}
         onWalk={map.goTo} onRun={(id) => map.goTo(id, { run: true })} onHover={setHover} onTour={campus.resumeTour} onEndTour={campus.endTour} onDismissTour={campus.dismissTour} onDone={onComplete}
-        onOpen={(r) => campus.enterThroughDoor(r, null)} photo={photo} call={call} going={going} />
+        onOpen={(r) => campus.enterThroughDoor(r, null)} photo={photo} call={call} coming={coming} />
       <div className="cm-home-livebar"><CampusLive onWalk={(id, run) => map.goTo(id, { run })} hereId={campus.here ?? null} /></div>
       <CampusTabBar active="/portal/campus" />
       <CampusListView />
@@ -147,6 +149,7 @@ function CampusHome(): React.ReactElement {
       <CampusDmToast />
       <BookCallHost />
       <MeetingSheetHost />
+      <CommunityBoardHost reduceMotion={reduce} />
       <CampusCheer burst reduceMotion={reduce} />
       <Wayfinder ctx={wf.ctx} onPick={wf.onPick} />
       {extra}

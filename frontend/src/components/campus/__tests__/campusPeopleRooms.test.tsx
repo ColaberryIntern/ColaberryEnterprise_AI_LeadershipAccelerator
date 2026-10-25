@@ -136,7 +136,7 @@ describe('the staff card (Q7)', () => {
     render(<Host />);
     act(() => openStaffCard('reese', { x: 300, y: 300 }));
     expect(q('[data-testid="cm-staff-card"]')!.textContent).toContain('AI mentor · Student success');
-    expect(q('[data-testid="cm-staff-card"]')!.textContent).toContain('Reese desk in the Community Lounge');
+    expect(q('[data-testid="cm-staff-card"]')!.textContent).toContain('Reese desk in the Meeting Rooms');
     act(() => { q('[data-testid="cm-desk-visit-reese"]')!.click(); });
     expect(walked).toEqual(['commons']);
     expect(q('[data-testid="cm-staff-card"]')).toBeNull();

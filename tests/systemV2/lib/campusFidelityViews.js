@@ -172,7 +172,7 @@ const VIEWS = [
       return document.body.textContent.includes('$199') ? '$199 is on the page' : ''; })()` },
   // C27 (v6 D5): the Schedule room's board is the week strip and upcoming events (Sign up / You're going); the arrival card lists them.
   { name: '25-schedule', route: '/portal/campus', accounts: ['member'], steps: () => [tap('tower'), WALKED, { wait: 1500 }],
-    required: () => ['cm-room3d', 'cm-board-strip', 'cm-ev-upcoming'],
+    required: () => ['cm-room3d', 'cm-board-strip', 'cm-ag-rows'], // C33: one list of classes, events and booked sessions
     assert: () => `(() => { const n = document.querySelectorAll('[data-testid="cm-board-strip"] .d').length; if (n !== 7) return 'strip days: ' + n;
       return document.querySelectorAll('[data-testid="cm-board-strip"] .d.is-today').length === 1 ? '' : 'today not marked once'; })()` },
   // C29 (v7 R2): Meeting Rooms is a hallway: at most six doors (live rooms, your bookings, your rooms), each matching its card row
@@ -186,6 +186,18 @@ const VIEWS = [
         if (d.classList.contains('is-live') !== !!row.querySelector('.dot')) return 'door ' + n + ' live state differs from its row'; }
       const rows = document.querySelectorAll('[data-testid^="cm-hall-row-"]').length; const real = doors.filter((d) => !d.classList.contains('is-more')).length;
       return rows === real ? '' : 'rows ' + rows + ' vs doors ' + real; })()` },
+  // C30 (v7 R3): the Community Board on the Quad: the noticeboard is on the map; clicking it walks there and opens the cork board with
+  // its four tabs and the real notes from the community feed.
+  { name: '27-community-board', route: '/portal/campus', accounts: ['member'], steps: () => [{ click: '[data-testid="cm-cboard-sign"]' }, { wait: 2200 }],
+    required: () => ['cm-cboard-sign', 'cm-cboard', 'cm-cb-tab-all', 'cm-cb-tab-q', 'cm-cb-tab-post', 'cm-cb-tab-ann', 'cm-cb-feed'],
+    assert: () => `(() => { const n = document.querySelectorAll('[data-testid="cm-cboard"] [role="tab"]').length; return n === 4 ? '' : 'tabs: ' + n; })()` },
+  // C34 (v8 G1): the Game Room page: the hero, both side cards, five game cards, the leaderboard, recent highs and the side column; no
+  // control's text overflows its box.
+  { name: '29-game-room', route: '/portal/game-room', accounts: ['member'], steps: () => [{ wait: 2500 }],
+    required: () => ['gr-hero', 'gr-hero-time', 'gr-your-week', 'gr-champions', 'gr-games', 'gr-leaderboards', 'gr-recent', 'gr-playing', 'gr-challenge'],
+    assert: () => `(() => { const n = document.querySelectorAll('[data-testid^="gr-card-"]').length; if (n !== 5) return 'cards: ' + n;
+      const over = Array.from(document.querySelectorAll('.gr-page button, .gr-page a')).filter((el) => el.scrollWidth > el.clientWidth + 1).map((el) => el.textContent.trim());
+      return over.length ? 'text overflows: ' + over.slice(0, 3).join(' | ') : ''; })()` },
   { name: '24-plans', route: '/portal/plans', accounts: ['member', 'business'], steps: () => [{ wait: 1500 }],
     required: () => ['cm-plans', 'cm-plan-explorer', 'cm-plan-individual', 'cm-plan-team', 'cm-plan-services', 'cm-plans-account', 'cm-plans-talk'] },
   // WP-6: arriving at the live building: the hero in the state's colour, the stage, the live room as the main action
@@ -199,6 +211,17 @@ const VIEWS = [
   { name: '20-live-arrive', route: '/portal/campus', needsLive: true, steps: () => [tap('amphi'), WALKED],
     required: () => ['.cm-arrive-hero.is-live', 'cm-stage', 'cm-arrive-cta'],
     known: () => ['DOORS OPEN and REPLAY: discovery lists only live and reconnecting broadcasts today (kept out on purpose, #3346)', 'auto check-in needs a broadcast with a class session; the local seed has none'] },
+  // C31 (v7 R4): on air (stubbed discovery): the marquee sits on the Events Hall's map group, "Happening now" is the first thing in the
+  // side panel, the hall's screen shows the ON AIR chip, and the arrival tile reads COLABERRY LIVE.
+  { name: '28-live', route: '/portal/campus', needsLive: true, accounts: ['member'], steps: () => [tap('amphi'), WALKED, { wait: 1500 }],
+    // on a phone an open card folds the side panel to its peek strip (like every room view), so Happening now is checked on desktop
+    required: (a, size) => ['cm-board-onair', 'cm-arrive-live-tile', ...(size === 'phone' ? [] : ['cm-cc-live-kicker'])],
+    assert: () => `(() => { const m = document.querySelector('[data-testid="cm-marquee"]'); if (!m) return 'no marquee';
+      const t = m.getAttribute('transform') || ''; if (!/^translate\\(700 /.test(t)) return 'marquee not over the Events Hall (x 700): ' + t;
+      const body = document.querySelector('.cm-cc-body'); const first = body && body.firstElementChild;
+      if (body && body.offsetParent !== null && (!first || first.getAttribute('data-testid') !== 'cm-cc-live')) return 'Happening now is not first';
+      if (!document.querySelector('[data-testid="cm-board-onair"]').textContent.includes('ON AIR')) return 'screen chip lacks ON AIR';
+      return document.querySelector('[data-testid="cm-arrive-live-tile"]').textContent.includes('COLABERRY LIVE') ? '' : 'tile lacks COLABERRY LIVE'; })()` },
 ];
 
 /** WP-1: the side panel (and the tour in it) is required on every view past the gate. */
@@ -206,7 +229,7 @@ function panelFor(view, a, size) {
   if (view.name === '01-gate' || view.name === '23-workstation') return []; // the workstation is full screen, as the prototype's #ws
   const tour = a === 'staff' ? [] : ['cm-cc-tour'];
   if (view.route !== '/portal/campus' && view.name !== '14-step-outside') return size === 'phone' ? ['cm-steps-open'] : ['cm-page-rail', ...tour.map((t) => `[data-testid="cm-page-rail"] [data-testid="${t}"]`)];
-  if (size === 'phone' && (CARD_VIEWS.includes(view.name) || view.name.startsWith('21-room-') || view.name === '24-admissions' || view.name === '25-schedule' || view.name === '26-meeting-rooms')) return ['cm-cc-peek'];
+  if (size === 'phone' && (CARD_VIEWS.includes(view.name) || view.name.startsWith('21-room-') || view.name === '24-admissions' || view.name === '25-schedule' || view.name === '26-meeting-rooms' || view.name === '28-live')) return ['cm-cc-peek'];
   return ['cm-concierge', ...tour];
 }
 const withPanel = (view) => ({ ...view, required: (a, size) => [...view.required(a, size), ...panelFor(view, a, size)] });

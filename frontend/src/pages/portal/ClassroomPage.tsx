@@ -26,6 +26,7 @@ import { useNextLiveSession } from './today/useNextLiveSession';
 import { useCountdown } from '../../hooks/useCountdown';
 import { parseSessionTimeToHHMM, tzAbbrev, formatSessionTimeRange } from '../../utils/sessionTime';
 import type { Band } from '../../services/bandLadder';
+import ClassSessions, { useMySessions } from '../../components/campus/classroom/ClassSessions';
 
 /**
  * ClassroomPage — the student Classroom as a Colaberry Design E timeline feed.
@@ -224,6 +225,8 @@ const ClassroomPage: React.FC = () => {
   );
 
   const sectionsOn = useMemo(() => classroomSectionsEnabled() && tokenizeQuery(query).length === 0, [query]);
+  // C32 (v7 R5): Live classes and replays live in the Classroom now (moved from /portal/rooms)
+  const mySessions = useMySessions(true);
 
   const visibleCards = useMemo(() => filterCardsByQuery(weekCards, query), [weekCards, query]);
   const searching = searchTokens.length > 0;
@@ -327,6 +330,8 @@ const ClassroomPage: React.FC = () => {
           <button type="button" className="tl-btn primary sm" onClick={() => navigate('/portal/settings?tab=subscription')}>Enroll to unlock →</button>
         </div>
       )}
+
+      {!feed.is_explorer && <div className="cm-cls-page"><ClassSessions sessions={mySessions} onOpen={navigate} /></div>}
 
       {weeks.length > 1 && (
         <div className="tl-weeknav">

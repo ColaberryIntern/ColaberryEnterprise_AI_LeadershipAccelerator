@@ -119,7 +119,7 @@ describe('the left column', () => {
   it('lists the rooms of the building you are in, the current one marked', async () => {
     await mount('/portal/rooms');
     const side = q('[data-testid="cm-page-side"]')!;
-    expect(side.textContent).toContain('In Community Lounge');
+    expect(side.textContent).toContain('In Meeting Rooms');
     expect(side.querySelector('[aria-current="page"]')!.getAttribute('href')).toBe('/portal/rooms');
   });
   it('on a page outside any building, no rooms section', async () => {

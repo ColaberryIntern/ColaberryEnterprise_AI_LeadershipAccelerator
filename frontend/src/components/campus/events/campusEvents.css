@@ -27,3 +27,14 @@
 .cm-coming-ev{display:flex;flex-direction:column;gap:2px;padding:8px 0;border-top:1px solid var(--cm-art-line)}
 .cm-coming-ev b{font-size:13.5px}
 .cm-coming-ev span{font-size:12.5px;color:var(--cm-art-muted)}
+/* C33 (v7 R6): the one list (classes, events, booked sessions) */
+.cm-ag-row{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--cm-art-line);font-size:13.5px}
+.cm-ag-row .ic{flex:none;width:20px;text-align:center}
+.cm-ag-row .tx{flex:1;min-width:0}
+.cm-ag-row .tx b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cm-ag-row .tx small{display:block;color:var(--cm-art-muted);font-size:12px}
+.cm-ag-act{flex:none;height:30px;padding:0 12px;border-radius:15px;border:1px solid var(--cm-art-line);background:var(--cm-art-card);color:var(--cm-art-ink);font:700 12.5px 'DM Sans',system-ui,sans-serif;cursor:pointer;white-space:nowrap}
+.cm-ag-act:focus-visible,.cm-ag-walk:focus-visible{outline:3px solid var(--cm-art-red);outline-offset:2px}
+.cm-ag-walk{align-self:flex-start;background:none;border:0;padding:2px 0 0;color:var(--cm-art-red);font:700 12.5px 'DM Sans',system-ui,sans-serif;cursor:pointer}
+.cm-r3-screen .cm-ev-board-rows .cm-ag-row{font-size:calc(var(--fw) * .014);padding:calc(var(--fw) * .005) 0;color:var(--cm-art-sp-ink)}
+.cm-r3-screen .cm-ag-act{height:calc(var(--fw) * .03);font-size:calc(var(--fw) * .013);padding:0 calc(var(--fw) * .012)}

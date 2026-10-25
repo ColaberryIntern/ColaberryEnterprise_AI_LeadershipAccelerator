@@ -11,12 +11,19 @@ import type { PageSummary } from '../pageSummary';
 import type { PlanStop } from '../../campusPlan';
 import { RoomScreen, WallBoard } from './RoomBoard';
 import PlansBoard from '../../admissions/PlansBoard';
-import { ScheduleBoard, NextEventBoard } from '../../events/EventRows';
+import { NextEventBoard } from '../../events/EventRows';
 import { useCampusEvents } from '../../events/EventSignup';
 import { upcoming } from '../../events/eventsModel';
 import { openBookCall } from '../../admissions/admissionsCallApi';
 import { HallwayBoard, HallwayWall, useHallway } from '../../hallway/Hallway';
 import { hallwayDoors } from '../../hallway/hallwayModel';
+import { LiveScreen } from '../../events/LiveScreen';
+import { AgendaBoard, useAgenda } from '../../events/Agenda';
+import { useCampus } from '../../CampusContext';
+import { CAMPUS_BUILDINGS } from '../../campusMap';
+
+const placeName = (b: BuildingId): string => CAMPUS_BUILDINGS.find((x) => x.id === b)?.name ?? b;
+import { useLiveNow } from '../../campusOnAir';
 import { YOU_AT, YOU_FROM, roomDepth } from './roomPlaces';
 import type { Place } from './roomPlaces';
 import './room3d.css';
@@ -83,11 +90,16 @@ export default function Room3D(p: Room3DProps): React.ReactElement | null {
   const [zoom, setZoom] = useState<string | null>(null);
   const timers = useRef<number[]>([]);
   // C27 (v6 D5): the Schedule board's week and upcoming events; C26: the Events Hall board's next event
-  const events = useCampusEvents(id === 'tower' || id === 'amphi');
+  const events = useCampusEvents(id === 'amphi');
   // C29 (v7 R2): Meeting Rooms is a hallway: doors on both side walls, the open rooms on the board
   const hall = id === 'commons';
   const { hallway } = useHallway(hall);
   const doors = hall && hallway ? hallwayDoors(hallway) : [];
+  // C31 (v7 R4): while Colaberry Live is on air, the Events Hall's screen is the broadcast
+  const live = useLiveNow();
+  // C33 (v7 R6): the Schedule's board is one list: classes, events and booked sessions
+  const agendaItems = useAgenda(id === 'tower');
+  const { openMap } = useCampus();
   useEffect(() => {
     if (reduceMotion) return undefined;
     const t = window.requestAnimationFrame(() => window.requestAnimationFrame(() => setYouAt(YOU_AT)));
@@ -122,7 +134,8 @@ export default function Room3D(p: Room3DProps): React.ReactElement | null {
           <div className="face back"><div className="wainscot" aria-hidden="true" />
             <RoomScreen summary={summary} name={p.name} planStep={p.planStep} onSection={section} onCard={cardRoute && spot?.opens !== 'book' ? sitDown : null}
               onPlan={(r) => p.onOpen(r)} custom={id === 'admissions' ? <PlansBoard onSection={section} />
-                : id === 'tower' && events ? <ScheduleBoard events={upcoming(events, new Date(), 3)} all={events} now={new Date()} onSection={section} />
+                : id === 'tower' && agendaItems ? <AgendaBoard items={agendaItems} now={new Date()} place={placeName} onWalk={(b) => openMap(b)} onSection={section} />
+                : id === 'amphi' && live ? <LiveScreen live={live} hereCount={people.length} onJoin={p.onOpen} />
                 : id === 'amphi' && events ? <NextEventBoard event={upcoming(events, new Date(), 1)[0] ?? null} onSection={section} />
                 : hall ? <HallwayBoard hallway={hallway} onOpen={p.onOpen} /> : undefined} />
             {tiers && <div className="cm-r3-platform" aria-hidden="true" data-testid="cm-r3-stage" />}

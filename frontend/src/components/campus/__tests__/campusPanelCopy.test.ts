@@ -87,7 +87,7 @@ describe('the lead (MOMENTS, finishTour)', () => {
 describe('the pulse (renderPresence)', () => {
   const pl = (o: Partial<Parameters<typeof pulseLine>[0]>) => pulseLine({ audience: 'member', workplace: false, presence: PRESENCE, presenceError: false, buildings: B, staffOnDuty: true, ...o });
   it('member, Explorer, partner (their named people of all), quiet, down, unknown', () => {
-    expect(pl({})).toEqual({ tone: 'live', bold: '4 classmates on campus', rest: 'busiest: Community Lounge (3)', walk: true });
+    expect(pl({})).toEqual({ tone: 'live', bold: '4 classmates on campus', rest: 'busiest: Meeting Rooms (3)', walk: true });
     expect(pl({ audience: 'explorer' })!.bold).toBe('4 people on campus');
     expect(pl({ audience: 'business' })).toEqual({ tone: 'team', bold: '1 of your people on campus', rest: '4 learners in all', walk: true });
     expect(pl({ presence: EMPTY })).toEqual({ tone: 'quiet', bold: 'Quiet hours', rest: 'nobody else on campus · staff on duty 24/7', walk: false });
@@ -115,7 +115,7 @@ describe('Right now and the urgent card', () => {
     agenda: agenda(session('2026-10-23', '13:00'), 15), presence: PRESENCE, presenceError: false, live: false, urgent: null, ...o });
   it('a member: the plan, the next class, where people are (three at most, the event drops off)', () => {
     expect(rows({}).map((r) => [r.key, r.title, r.detail])).toEqual([
-      ['plan', 'Continue today’s plan', '20 min · Week 5 lessons'], ['class', 'Next live class', 'Build Day · in 1d 3h'], ['people', 'Drop into the Community Lounge', '3 people here now'],
+      ['plan', 'Continue today’s plan', '20 min · Week 5 lessons'], ['class', 'Next live class', 'Build Day · in 1d 3h'], ['people', 'Drop into the Meeting Rooms', '3 people here now'],
     ]);
     expect(rows({ stops: [], presence: EMPTY }).map((r) => r.key)).toEqual(['class', 'event']);
     expect(rows({ stops: [], presence: EMPTY }).find((r) => r.key === 'event')!.detail).toBe('In 15d');
@@ -135,7 +135,7 @@ describe('Right now and the urgent card', () => {
     expect(eventIn(new Date(T0 - 60000).toISOString(), T0)).toBeNull();
   });
   it('a partner\'s team: every named (teammate) entry, with where they are', () => {
-    expect(teamRows(PRESENCE, false, B, false).map((r) => [r.name, r.detail])).toEqual([['Mia Lopez', 'In Community Lounge']]);
+    expect(teamRows(PRESENCE, false, B, false).map((r) => [r.name, r.detail])).toEqual([['Mia Lopez', 'In Meeting Rooms']]);
     expect(teamRows(PRESENCE, true, B, false)).toEqual([]);
   });
 });

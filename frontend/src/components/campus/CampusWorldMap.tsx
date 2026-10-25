@@ -26,6 +26,9 @@ import type { CameraApi, InsetsOf } from './useCampusCamera';
 import type { Cam } from './campusCamera';
 import { useWalk } from './useWalk';
 import type { Travel } from './useWalk';
+import BoardSign from './board/BoardSign';
+import { onBoard } from './board/boardApi';
+import { BOARD_SPOT } from './board/boardModel';
 import './campusMapArt.css';
 
 /**
@@ -213,7 +216,7 @@ function pinsOf(plan: PlanStop[] | undefined): Partial<Record<BuildingId, { n: n
 }
 
 /** C17: what a click must NOT be on to count as ground: a building (or its click area), a staff desk, or you. */
-const NOT_GROUND = '.cm-bld, .cm-hit-area, .cm-staff-tok, .cm-avatar';
+const NOT_GROUND = '.cm-bld, .cm-hit-area, .cm-staff-tok, .cm-avatar, .cm-cboard-sign';
 /** A screen point in world units, through the map's current viewBox (null where the browser cannot say, e.g. jsdom). */
 function toWorld(svg: SVGSVGElement | null, x: number, y: number): Pt | null {
   const m = svg?.getScreenCTM?.();
@@ -265,6 +268,9 @@ export default function CampusWorldMap(p: CampusMapProps): React.ReactElement {
     if (walkRequest.spot) walkToSpot(walkRequest.spot, how); else if (walkRequest.id) walkTo(walkRequest.id, how);
   }, [walkRequest, walkTo, walkToSpot]);
 
+  // C30 (v7 R3): opening the Community Board with a walk (the board, the chip, Where to?) walks you to it first
+  useEffect(() => (compact ? undefined : onBoard((o) => { if (o.walk) walkToSpot({ ...BOARD_SPOT }, { instant: false, run: false }); })), [compact, walkToSpot]);
+
   const quiet = !compact && !!p.quiet && !live.length;
   const urgent = live.length ? null : p.moments?.urgent ?? null; // the prototype drops the urgent ring while live
   const cls = ['cm-map', compact && 'is-compact', reduceMotion && 'is-reduced', camera && !compact && 'has-camera', live.length && 'is-evening', live.length && `ls-${p.liveMark?.state ?? 'live'}`, quiet && 'is-quiet'].filter(Boolean).join(' ');
@@ -290,6 +296,7 @@ export default function CampusWorldMap(p: CampusMapProps): React.ReactElement {
           onPeek={compact ? undefined : p.onPeek} onPick={pick} setRef={p.buildingRef} />
       ))}
       {live.length > 0 && <LiveFront buildings={live} mark={compact ? null : p.liveMark} />}
+      {!compact && <BoardSign />}
       {!compact && p.desks && p.desks.length > 0 && <StaffTokens desks={p.desks} buildings={buildings} onPick={pick} />}
       {!compact && <AvatarPin pos={pos} moving={moving} running={running} reduceMotion={reduceMotion} ownGear={p.ownGear} me={p.me} />}
     </svg>

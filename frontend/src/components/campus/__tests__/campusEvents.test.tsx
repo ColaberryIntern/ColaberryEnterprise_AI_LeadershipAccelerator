@@ -12,7 +12,7 @@ import { act } from 'react-dom/test-utils';
 import type { OpenHouseView } from '../../../services/onboardingApi';
 import { signupOf, upcoming, goingTo, weekStrip, centralDay } from '../events/eventsModel';
 import { EventSignup } from '../events/EventSignup';
-import { ScheduleBoard, ComingUpEvents, UpcomingEvents } from '../events/EventRows';
+import { UpcomingEvents } from '../events/EventRows';
 import { buildSchedule, dkey, itemClass } from '../../../pages/portal/schedule/scheduleModel';
 
 const NOW = new Date('2026-10-26T15:00:00Z'); // Monday 10:00 CDT
@@ -68,24 +68,8 @@ describe('rendered', () => {
     expect(t('cm-ev-signup-a')!.textContent).toContain('Finish on Eventbrite');
   });
 
-  it('the board: strip, upcoming rows with their buttons, and Open my schedule', () => {
-    const open = jest.fn();
-    act(() => { root.render(<div className="cm-r3-screen"><ScheduleBoard events={[A, B]} all={[A, B, C]} now={NOW} onSection={open} /></div>); });
-    expect(container.querySelectorAll('[data-testid="cm-board-strip"] .d')).toHaveLength(7);
-    expect(container.querySelectorAll('[data-testid="cm-board-strip"] .d.is-today')).toHaveLength(1);
-    expect(t('cm-board-ev-a')!.textContent).toContain('Tue, Oct 27');
-    expect(t('cm-board-ev-a')!.querySelector('[data-testid="cm-ev-signup-a"]')).not.toBeNull();
-    expect(t('cm-board-ev-b')!.textContent).toContain('You’re going');
-    t('cm-board-primary')!.click();
-    expect(open).toHaveBeenCalledTimes(1);
-  });
-
-  it('Coming up lists the events you are going to; nothing when none; the arrival rows say when there are none', () => {
-    act(() => { root.render(<ComingUpEvents events={goingTo([A, B, C], NOW)} />); });
-    expect(t('cm-cc-coming-events')!.textContent).toContain('Event b');
-    expect(t('cm-cc-coming-events')!.textContent).not.toContain('Event a');
-    act(() => { root.render(<ComingUpEvents events={[]} />); });
-    expect(t('cm-cc-coming-events')).toBeNull();
+  // C33: the Schedule board and Coming up became one list (classes, events, sessions): agenda.test covers them.
+  it('the arrival rows say when there are no events', () => {
     act(() => { root.render(<UpcomingEvents events={[]} />); });
     expect(t('cm-ev-upcoming')!.textContent).toContain('No events on the calendar');
   });

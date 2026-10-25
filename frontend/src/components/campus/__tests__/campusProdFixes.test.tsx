@@ -141,10 +141,10 @@ describe('the campus count', () => {
 describe('every signed-in learner\'s building is recorded (C13)', () => {
   it('records the page\'s building with the share choice; nothing without a token, a building, or in a read-only session', () => {
     pingCampusBuilding('/portal/library');
-    expect(mockPost).toHaveBeenLastCalledWith('library', true);
+    expect(mockPost).toHaveBeenLastCalledWith('library', true, null); // C28: no room id off a room page
     window.localStorage.setItem(CAMPUS_SETTINGS_KEY, JSON.stringify({ ...DEFAULT_CAMPUS_SETTINGS, shareBuilding: false }));
     pingCampusBuilding('/portal/library');
-    expect(mockPost).toHaveBeenLastCalledWith('library', false);
+    expect(mockPost).toHaveBeenLastCalledWith('library', false, null);
     mockPost.mockClear();
     pingCampusBuilding('/portal/settings');
     mockReadOnly = true; pingCampusBuilding('/portal/library');

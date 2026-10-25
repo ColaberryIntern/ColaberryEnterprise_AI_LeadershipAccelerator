@@ -8,6 +8,7 @@ import { fmtCentralTime, centralParts } from '../today/shellUtils';
 import { useCampus } from '../../../components/campus/CampusContext';
 import { EventSignup } from '../../../components/campus/events/EventSignup';
 import '../../../components/campus/events/campusEvents.css';
+import { useHallway } from '../../../components/campus/hallway/Hallway';
 import {
   type SessionItem, type SchedEvent, type Mode, DAY_MS, dkey, mondayOf, parseYmd, itemClass, labelForPointsEvent, buildSchedule, slotForHour, TG_SLOTS,
 } from './scheduleModel';
@@ -92,8 +93,11 @@ const SchedulePage: React.FC = () => {
     return () => { cancelled = true; };
   }, []);
 
-  const { planStops } = useCampus(); // C27: today's plan joins the week in teal (none with the campus off)
-  const sched = useMemo(() => buildSchedule(sessions, events, firstClass, today, planStops ?? []), [sessions, events, firstClass, today, planStops]);
+  const { planStops, active: campusOn } = useCampus(); // C27: today's plan joins the week in teal (none with the campus off)
+  // C33 (v7 R6): the meeting rooms you booked or are going to join the calendar (the campus hallway's bookings; none off the campus)
+  const { hallway } = useHallway(!!campusOn);
+  const booked = hallway?.bookings;
+  const sched = useMemo(() => buildSchedule(sessions, events, firstClass, today, planStops ?? [], booked ?? []), [sessions, events, firstClass, today, planStops, booked]);
   const totalItems = useMemo(() => Object.values(sched).reduce((n, arr) => n + arr.length, 0), [sched]);
 
   // Points history bucketed by Central day: a per-day total (for the month/week
@@ -311,7 +315,7 @@ const SchedulePage: React.FC = () => {
                   <span className="qbody">
                     <span className="qtitle">{ev.title}</span>
                     <span className="qmeta">
-                      <span className={`chip ${itemClass(ev)}`}><span className="sw" />{ev.registered ? 'Registered' : ev.kind === 'class' ? 'Class' : ev.kind === 'plan' ? 'Today’s plan' : 'Event'}</span>
+                      <span className={`chip ${itemClass(ev)}`}><span className="sw" />{ev.registered ? 'Registered' : ev.kind === 'class' ? 'Class' : ev.kind === 'plan' ? 'Today’s plan' : ev.kind === 'session' ? 'Booked' : 'Event'}</span>
                       {ev.time ? <span className="ptbadge">{ev.time}</span> : null}
                       {' · '}{ev.sub}{ev.state === 'live' ? ' · live now' : ''}
                     </span>

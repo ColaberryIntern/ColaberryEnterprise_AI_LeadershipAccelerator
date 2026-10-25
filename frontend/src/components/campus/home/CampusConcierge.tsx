@@ -30,8 +30,9 @@ import type { HomeAgenda } from './useMapMoments';
 import PhotoPrompt from './PhotoPrompt';
 import { ComingUpCall } from '../admissions/BookCallHost';
 import type { AdmissionsBooking } from '../admissions/admissionsCallApi';
-import { ComingUpEvents } from '../events/EventRows';
-import type { OpenHouseView } from '../../../services/onboardingApi';
+import { ComingUpAgenda } from '../events/Agenda';
+import { openBoard } from '../board/boardApi';
+import type { AgendaItem } from '../events/agendaModel';
 
 /** C20: who gets "📅 Talk to a person" on the help desk (learners and Explorers; partners and staff have their own channels). */
 export const talksToAdmissions = (a: CampusAudience): boolean => a === 'member' || a === 'explorer';
@@ -84,22 +85,25 @@ export interface ConciergeProps {
   justToured?: boolean;
   /** C20: this learner's booked admissions call, shown as Coming up at the top (null: none). */
   call?: AdmissionsBooking | null;
-  /** C27 (v6 D5): the events this learner is registered for (Eventbrite), also under Coming up. */
-  going?: OpenHouseView[];
+  /** C33 (v7 R6): Coming up = your next classes, the events you signed up for (C27) and the sessions you booked (C29), with Walk there. */
+  coming?: AgendaItem[];
 }
 
 /** The prototype's "I want to..." chips per account (CHIPS, CHIPS_EXP, CHIPS_SP, CHIPS_WORK), each a walk to a real building. "I'm
  *  running late" runs to the urgent class, or walks to the Schedule; the Explorer's sign-up shortcut waits for the sign-up sheet. */
 export const LATE = 'late';
-export const CHIPS: Record<'member' | 'explorer' | 'business' | 'work', [string, BuildingId | typeof LATE][]> = {
-  member: [['Learn', 'lecture'], ['Build', 'studio'], ['Prep for cert', 'testing'], ['Meet people', 'commons'], ['See my progress', 'observatory'], ['Show my work', 'gallery'], ['Find events', 'amphi'], ['I’m running late', LATE]],
-  explorer: [['Try the course', 'library'], ['Meet people', 'commons'], ['Upcoming events', 'amphi'], ['See how projects work', 'studio']],
+/** C30 (v7 R3): "📌 Ask the community" walks to the Community Board and opens it on a question. */
+export const BOARD = 'board';
+type ChipTo = BuildingId | typeof LATE | typeof BOARD;
+export const CHIPS: Record<'member' | 'explorer' | 'business' | 'work', [string, ChipTo][]> = {
+  member: [['Learn', 'lecture'], ['Build', 'studio'], ['Prep for cert', 'testing'], ['Meet people', 'commons'], ['📌 Ask the community', BOARD], ['See my progress', 'observatory'], ['Show my work', 'gallery'], ['Find events', 'amphi'], ['I’m running late', LATE]],
+  explorer: [['Try the course', 'library'], ['Meet people', 'commons'], ['📌 Ask the community', BOARD], ['Upcoming events', 'amphi'], ['See how projects work', 'studio']],
   business: [['…learns', 'lecture'], ['…builds', 'studio'], ['…gets certified', 'testing'], ['…connects', 'commons'], ['…shows their work', 'gallery'], ['Seats & reporting', 'career']],
   work: [['Upskill', 'lecture'], ['Ship work', 'studio'], ['Get certified', 'testing'], ['Meet the team', 'commons'], ['My performance', 'observatory'], ['Show clients', 'gallery'], ['Town halls', 'amphi'], ['I’m running late', LATE]],
 };
-export function chipsFor(audience: CampusAudience, workplaceNames: boolean, buildings: CampusBuilding[]): [string, BuildingId | typeof LATE][] {
+export function chipsFor(audience: CampusAudience, workplaceNames: boolean, buildings: CampusBuilding[]): [string, ChipTo][] {
   const set = audience === 'explorer' ? CHIPS.explorer : audience === 'business' ? CHIPS.business : workplaceNames ? CHIPS.work : CHIPS.member;
-  return set.filter(([, id]) => (id === LATE ? buildings.some((b) => b.id === 'tower') : buildings.some((b) => b.id === id)));
+  return set.filter(([, id]) => (id === BOARD ? true : id === LATE ? buildings.some((b) => b.id === 'tower') : buildings.some((b) => b.id === id)));
 }
 
 export { pulseOf, liveKicker } from './conciergeCopy';
@@ -134,7 +138,7 @@ export default function CampusConcierge(p: ConciergeProps): React.ReactElement {
   const run = (id: BuildingId) => (p.onRun ?? p.onWalk)(id);
   const rows = rightNowRows({ audience, workplace: wp, buildings, stops: p.stops, planMinutes: p.planMinutes ?? null, agenda: p.agenda ?? null,
     presence: p.presence, presenceError: p.presenceError, live: !!p.live, urgent: p.urgent ?? null, skipPlan: true });
-  const chip = (id: BuildingId | typeof LATE) => (id === LATE ? (p.urgent ? run(p.urgent.buildingId) : p.onWalk('tower')) : p.onWalk(id));
+  const chip = (id: ChipTo) => (id === BOARD ? openBoard({ walk: true, compose: 'q' }) : id === LATE ? (p.urgent ? run(p.urgent.buildingId) : p.onWalk('tower')) : p.onWalk(id));
   return (
     <aside className={`cm-cc${p.cardOpen ? ' has-card' : ''}${p.waiting ? ' is-waiting' : ''}${expanded ? ' is-expanded' : ''}`} aria-label="Campus concierge" data-testid="cm-concierge">
       {/* phones, while a card is open: the peek strip (CSS shows it only there) */}
@@ -146,22 +150,23 @@ export default function CampusConcierge(p: ConciergeProps): React.ReactElement {
         {p.tourStops && p.touring === null && <button type="button" className="cm-btn-line" onClick={() => p.onTour(p.tourProgress.paused ?? 0)}>Tour</button>}
       </div>
       <div className="cm-cc-body">
+      {/* C31 (v7 R4): while Colaberry Live is on air, "Happening now" sits at the very top */}
+      {p.live && <LiveCard title={p.live.title} buildingId={p.live.buildingId} place={liveB ? buildingName(liveB, wp) : null} audience={audience}
+        teamHere={liveB && p.presence && !p.presenceError ? (p.presence[liveB.id]?.people ?? []).filter((e) => 'enrollment_id' in e).length : null}
+        onWalk={(id, r) => (r ? run(id) : p.onWalk(id))} />}
       <div className="cm-kicker" data-testid="cm-cc-where">{kickerFor({ audience, here: hereB, workplace: wp, live: !!p.live, now: p.now, onLawn: p.onLawn })}</div>
       <h1 data-testid="cm-cc-greeting">{greetLine(audience, p.firstName, p.now.getHours(), quiet)}</h1>
       <p className="cm-lead" data-testid="cm-cc-lead">{lead}</p>
       <Pulse p={p} />
       {/* C20 (v3 2.6 #2): Coming up, a booked admissions call, above Up next */}
       <ComingUpCall booking={p.call ?? null} now={p.now} />
-      <ComingUpEvents events={p.going ?? []} />
+      <ComingUpAgenda items={p.coming ?? []} place={(id) => { const x = buildings.find((b) => b.id === id); return x ? buildingName(x, wp) : id; }} onWalk={p.onWalk} />
 
       {/* C15 (v3 2.6), each fact once, in this order: Up next (the urgent card takes its slot), Live, the tour, the rooms here,
           today's plan (the Up next step tagged, not repeated), right now, the help desk, I want to… */}
       {p.urgent && !p.live
         ? <UrgentCard u={p.urgent} onRun={() => run(p.urgent!.buildingId)} onSkip={() => p.onOpen(p.urgent!.route)} />
         : <UpNext stops={p.stops} buildings={buildings} workplaceNames={wp} hereId={p.hereId ?? null} onWalk={p.onWalk} onOpen={p.onOpen} onDone={p.onDone} />}
-      {p.live && <LiveCard title={p.live.title} buildingId={p.live.buildingId} place={liveB ? buildingName(liveB, wp) : null} audience={audience}
-        teamHere={liveB && p.presence && !p.presenceError ? (p.presence[liveB.id]?.people ?? []).filter((e) => 'enrollment_id' in e).length : null}
-        onWalk={(id, r) => (r ? run(id) : p.onWalk(id))} />}
       <TourOffer audience={audience} stops={p.tourStops} buildings={buildings} workplaceNames={wp} running={p.touring}
         paused={p.tourProgress.paused} toured={p.tourProgress.toured} onStart={p.onTour} onEnd={p.onEndTour} onDismiss={p.onDismissTour} />
       <RoomsHere building={hereB} workplaceNames={wp} onOpen={p.onOpen} />

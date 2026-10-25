@@ -42,6 +42,11 @@
 /* An event THIS learner registered for — leaf, so their own commitments stand
    out from the many program events everyone can see. */
 .sch-root .chip.registered{background:rgba(91,166,60,.16);color:var(--leaf-text)} .sch-root .chip.registered .sw{background:var(--leaf-action)}
+/* C33 (v7 R6): a meeting-room session you booked (Meeting Rooms' amber) */
+.sch-root .chip.booked{background:rgba(232,146,12,.16);color:var(--amber-deep)} .sch-root .chip.booked .sw{background:var(--amber)}
+.sch-root .tg-ev.booked{border-color:var(--amber);background:rgba(232,146,12,.1)}
+.sch-root .tk.booked{background:rgba(232,146,12,.1);border-color:var(--amber)}
+.sch-root .mdot.booked{border-color:var(--amber)}
 
 /* ===== Today button (self-contained ghost/sm) ===== */
 .sch-root .sch-btn{border:none;border-radius:var(--r-pill);font-family:inherit;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:8px}

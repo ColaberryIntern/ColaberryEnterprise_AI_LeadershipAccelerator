@@ -1,7 +1,7 @@
 import React from 'react';
 import type { OpenHouseView } from '../../../services/onboardingApi';
 import { EventSignup } from './EventSignup';
-import { eventWhen, weekStrip } from './eventsModel';
+import { eventWhen } from './eventsModel';
 import './campusEvents.css';
 
 /**
@@ -20,25 +20,13 @@ export function EventRow({ e, testId }: { e: OpenHouseView; testId?: string }): 
   );
 }
 
-/** COMING UP, events (v6 D5): the events you are going to, at the top of the side panel ("on your calendar" per Eventbrite). */
-export function ComingUpEvents({ events }: { events: OpenHouseView[] }): React.ReactElement | null {
-  if (!events.length) return null;
-  return (
-    <div className="cm-coming" data-testid="cm-cc-coming-events">
-      <small>COMING UP</small>
-      {events.map((e) => {
-        const w = eventWhen(e.starts_at);
-        return <div key={e.id} className="cm-coming-ev"><b><span aria-hidden="true">🎪 </span>{e.title}</b><span>{w.day} · {w.time} · you&rsquo;re registered</span></div>;
-      })}
-    </div>
-  );
-}
+// C33 (v7 R6): Coming up and the Schedule board are one list now (Agenda.tsx: classes, events and booked sessions).
 
-export function UpcomingEvents({ events }: { events: OpenHouseView[] | null }): React.ReactElement | null {
+export function UpcomingEvents({ events, heading = 'Upcoming events · one tap to sign up' }: { events: OpenHouseView[] | null; heading?: string }): React.ReactElement | null {
   if (events === null) return null;
   return (
     <div className="cm-ev" data-testid="cm-ev-upcoming">
-      <div className="cm-sec">Upcoming events · one tap to sign up</div>
+      <div className="cm-sec">{heading}</div>
       {events.length ? <ul className="cm-ev-rows">{events.map((e) => <EventRow key={e.id} e={e} />)}</ul>
         : <p className="cm-ev-none">No events on the calendar in the next 30 days.</p>}
     </div>
@@ -66,26 +54,6 @@ export function NextEventBoard({ event, onSection }: { event: OpenHouseView | nu
         <EventSignup event={event} />
         <button type="button" className="b" onClick={stop(onSection)} data-testid="cm-board-section">All events</button>
       </div>
-    </>
-  );
-}
-
-export function ScheduleBoard({ events, all, now, onSection }: { events: OpenHouseView[]; all: OpenHouseView[]; now: Date; onSection: () => void }): React.ReactElement {
-  return (
-    <>
-      <div className="k">Your week · upcoming events</div>
-      <div className="cm-ev-strip" data-testid="cm-board-strip">
-        {weekStrip(all, now).map((d) => (
-          <span key={d.ymd} className={`d${d.today ? ' is-today' : ''}`} data-has-event={d.hasEvent || undefined}>
-            <small>{d.wd}</small><b>{d.d}</b>{d.hasEvent && <i aria-label="an event that day" />}
-          </span>
-        ))}
-      </div>
-      <h3 className="cm-ev-board-h" data-testid="cm-board-title">{events.length ? 'Coming up' : 'Nothing on the calendar this week'}</h3>
-      <ul className="cm-ev-board-rows" onClick={(ev) => ev.stopPropagation()}>
-        {events.map((e) => <EventRow key={e.id} e={e} testId={`cm-board-ev-${e.id}`} />)}
-      </ul>
-      <div className="row"><button type="button" className="b red" onClick={stop(onSection)} data-testid="cm-board-primary">Open my schedule &rarr;</button></div>
     </>
   );
 }

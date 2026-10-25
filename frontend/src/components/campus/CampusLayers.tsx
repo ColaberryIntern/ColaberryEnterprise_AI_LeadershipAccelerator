@@ -5,6 +5,7 @@ import CampusDmToast from './CampusDmToast';
 import CampusListView from './CampusListView';
 import BookCallHost from './admissions/BookCallHost';
 import MeetingSheetHost from './hallway/MeetingSheet';
+import CommunityBoardHost from './board/CommunityBoard';
 import './campusLook.css';
 import './campusTour.css';
 import './campusPeople.css';
@@ -36,6 +37,6 @@ export function CampusMapRoute(): null {
 
 export default function CampusLayers(): React.ReactElement {
   // C20: the booking sheet's host, so "Talk to a person" (Where to?, the rail's help desk) opens it on any page; C29: the meeting
-  // rooms sheets' host, likewise
-  return <><CampusMapRoute /><CampusListView /><CampusDoorTransition /><CampusDmToast /><BookCallHost /><MeetingSheetHost /></>;
+  // rooms sheets' host, likewise; C30: the Community Board's host (on a page it opens in place: there is no map to walk)
+  return <><CampusMapRoute /><CampusListView /><CampusDoorTransition /><CampusDmToast /><BookCallHost /><MeetingSheetHost /><CommunityBoardHost reduceMotion /></>;
 }

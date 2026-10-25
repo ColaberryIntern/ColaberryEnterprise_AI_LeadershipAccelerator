@@ -1,6 +1,7 @@
 import type { CampusBuilding } from './campusMap';
 import { buildingName, roomLabel } from './campusMap';
 import type { CampusPresence, CampusPerson } from './campusApi';
+import { means as meansBoard } from './board/boardModel';
 
 /**
  * "Where to?" search across the campus (Colaberry Campus C3). Pure.
@@ -13,7 +14,8 @@ export type SearchResult =
   | { kind: 'building'; id: string; label: string; buildingId: string }
   | { kind: 'room'; id: string; label: string; buildingId: string; route: string; navigable: boolean; detail: string }
   | { kind: 'person'; id: string; label: string; buildingId: string; detail: string }
-  | { kind: 'book'; id: string; label: string; buildingId: string; detail: string };
+  | { kind: 'book'; id: string; label: string; buildingId: string; detail: string }
+  | { kind: 'board'; id: string; label: string; buildingId: string; detail: string };
 
 export const SEARCH_LIMIT = 8;
 /** C20 (round 3 §2.7): searches that mean "talk to a person" find "Book a call with admissions". */
@@ -24,12 +26,20 @@ export const meansBooking = (q: string): boolean => {
   return t.length >= 3 && BOOK_WORDS.some((w) => w.startsWith(t) || t.split(/\s+/).includes(w));
 };
 
+/** C30 (v7 R3): "community", "post", "question", "ask", "board" or "forum" offer the Community Board on the Quad. */
+export const BOARD_RESULT: SearchResult = { kind: 'board', id: 'board', label: 'Community Board', buildingId: '', detail: 'on the Quad · Walk →' };
+
 const isNamed = (e: unknown): e is CampusPerson => !!e && typeof e === 'object' && !('anonymous' in (e as object));
 
 export function searchCampus(query: string, buildings: CampusBuilding[], presence: CampusPresence | null, workplaceNames: boolean, admissions = false): SearchResult[] {
   const q = query.trim().toLowerCase();
   if (!q) return [];
   if (admissions && meansBooking(q)) return [BOOK_RESULT, ...searchCampus(query, buildings, presence, workplaceNames)].slice(0, SEARCH_LIMIT);
+  if (meansBoard(q)) return [BOARD_RESULT, ...plainSearch(q, buildings, presence, workplaceNames)].slice(0, SEARCH_LIMIT);
+  return plainSearch(q, buildings, presence, workplaceNames);
+}
+
+function plainSearch(q: string, buildings: CampusBuilding[], presence: CampusPresence | null, workplaceNames: boolean): SearchResult[] {
   const hit = (s: string) => s.toLowerCase().includes(q);
   const out: SearchResult[] = [];
   for (const b of buildings) {

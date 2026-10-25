@@ -33,6 +33,10 @@ import { useCampusEvents } from './events/EventSignup';
 import { upcoming } from './events/eventsModel';
 import ArrivalWays from './ArrivalWays';
 import { HallwayRows, useHallway } from './hallway/Hallway';
+import ClassSessions, { useMySessions } from './classroom/ClassSessions';
+import { LiveTile } from './events/LiveScreen';
+import { AgendaRows, useAgenda } from './events/Agenda';
+import { useCampus } from './CampusContext';
 
 /**
  * Arriving at a building (C11b; WP-2): the room behind, and the arrival panel in front, as the prototype's arrive() builds it:
@@ -118,9 +122,13 @@ export default function ArrivalPanel(p: ArrivalPanelProps): React.ReactElement {
   const classLive = b.id === 'lecture' ? liveClassOf(broadcasts) : null;
   const classLiveRoute = classLive ? roomRoute(classLive) : null;
   // C27 (v6 D5): the Schedule and the Events Hall list the upcoming events with one-tap sign up (Eventbrite is the record)
-  const evs = useCampusEvents(b.id === 'tower' || b.id === 'amphi');
+  const evs = useCampusEvents(b.id === 'amphi');
+  const agendaItems = useAgenda(b.id === 'tower');
+  const { openMap } = useCampus();
   // C29 (v7 R2): Meeting Rooms lists the hallway's doors with Join / Details / Open
   const hall = useHallway(b.id === 'commons' && access === 'open');
+  // C32 (v7 R5): the Classroom lists the next class (Check in / Join) and the replays
+  const classes = useMySessions(b.id === 'lecture' && access === 'open');
   const sitAtSpot =() => { const el = document.querySelector<HTMLElement>('.cm-r3-spot'); if (el) el.click(); else if (summary?.card) open(summary.card); };
   // WP-6: the live building's main action joins the live room (audio and Q&A), as the prototype's per-state CTA
   const live = p.live ?? null;
@@ -141,7 +149,7 @@ export default function ArrivalPanel(p: ArrivalPanelProps): React.ReactElement {
           live: live ? { state: live.state, title: live.b.title, sub: liveSub(live.b, live.now) } : null })}
         onEnterRoom={p.onEnterRoom} desks={desks}
         tourTop={isStop ? <TourStopCard tour={tour!.model} index={tourIdx} /> : undefined}
-        ways={inRoom ? <ArrivalWays spot={spot} summary={summary} name={buildingName(b, wp)} primaryLabel={b.primary.label} onSection={() => open(b.primary.route)} onSpot={sitAtSpot} /> : undefined}
+        ways={b.id === 'amphi' && live && live.state !== 'replay' ? <LiveTile live={live} onJoin={open} /> : inRoom ? <ArrivalWays spot={spot} summary={summary} name={buildingName(b, wp)} primaryLabel={b.primary.label} onSection={() => open(b.primary.route)} onSpot={sitAtSpot} /> : undefined}
         planBox={showPlanBox ? <PlanBox stop={plan!.stops[stepIdx]} index={stepIdx} total={plan!.stops.length} onOpen={open} onDone={plan!.onComplete} /> : undefined}
         tourNav={tour ? <TourNav tour={tour.model} index={tourIdx} hereStop={isStop} nextName={nextB ? buildingName(nextB, wp) : null}
           onNext={tour.onNext} onBack={tour.onBack} onEnd={tour.onEnd} /> : undefined}
@@ -149,7 +157,11 @@ export default function ArrivalPanel(p: ArrivalPanelProps): React.ReactElement {
           model={explorerPath(p.buildings, p.accessOf, wp, !!p.staffDesks?.some((d) => d.id === 'maya' && d.on_duty))} />
           : b.id === 'admissions' ? <AdmissionsServices audience={audience} onNavigate={open} />
           : b.id === 'commons' && access === 'open' ? <HallwayRows hallway={hall.hallway} error={hall.error} onOpen={open} />
-          : (b.id === 'tower' || b.id === 'amphi') ? <UpcomingEvents events={evs ? upcoming(evs, new Date(), 4) : null} /> : undefined}
+          : b.id === 'lecture' && access === 'open' ? <ClassSessions sessions={classes} onOpen={open} broadcastRoute={classLiveRoute} />
+          // C33 (v7 R6): the Schedule lists classes, events and booked sessions together
+          : b.id === 'tower' ? <AgendaRows items={agendaItems} place={(id) => { const x = p.buildings.find((y) => y.id === id); return x ? buildingName(x, wp) : id; }} onWalk={(id) => openMap(id)} />
+          // C31 (v7 R4): every event happens in the Events Hall (all of them, one tap to sign up)
+          : b.id === 'amphi' ? <UpcomingEvents events={evs ? upcoming(evs, new Date(), 20) : null} heading="Every event happens here · one tap to sign up" /> : undefined}
         whoIsHere={p.presence === undefined && !p.presenceError ? undefined
           : { presence: p.presence?.[b.id], error: p.presenceError, loading: p.presence === null && !p.presenceError, onPick: p.onPickPerson, onMore: p.onMore }} />
     </>

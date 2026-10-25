@@ -127,6 +127,13 @@
   --cm-art-door:#8a5a35; --cm-art-door-inset:rgba(0,0,0,.18); --cm-art-door-glass:#dfe9ee; --cm-art-door-glass-live:#fff6d6;
   --cm-art-door-glass-glow:rgba(255,214,120,.8); --cm-art-door-friends:#14b8a6; --cm-art-door-friends-glow:rgba(20,184,166,.7);
   --cm-art-door-plate:#fffdf6; --cm-art-door-booked:#b8860b; --cm-art-door-knob:#ffd36e; --cm-art-door-more:#5b4a3a;
+  /* C30 (v7 R3): the Community Board (prototype #cboard): cork, its frame and little roof, and the pinned notes (questions yellow,
+     posts white, announcements teal) */
+  --cm-art-cork:#c99a63; --cm-art-cork-frame:#7a5230; --cm-art-cork-roof:#5b3d24;
+  --cm-art-note-q:#fff3a8; --cm-art-note-post:#ffffff; --cm-art-note-ann:#c9f0e8;
+  /* C34 (v8 G2): the arcade cabinet (dark body, neon edge and title, the screen, the game-over sheet) */
+  --cm-art-cab-bg:#1b1430; --cm-art-cab-edge:#6b2fa0; --cm-art-cab-neon:#5ef2c8; --cm-art-cab-screen:#0d0a18; --cm-art-cab-sheet:rgba(13,10,24,.9);
+  --cm-art-gr-accent:#6b2fa0; --cm-art-gr-week:#1f8a4c; --cm-art-gr-champ:#1f4f7a; --cm-art-gr-you:#fdecec; --cm-art-gr-gold:#d4a017;
 }
 [data-theme="dark"]{
   --cm-art-paper:#1e1e1e; --cm-art-ink:#f4f4f4; --cm-art-muted:#b5ad9f; --cm-art-line:#3a352d;

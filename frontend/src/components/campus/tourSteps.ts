@@ -24,14 +24,14 @@ const MEMBER: CopyTable = {
   studio: { title: 'Where you build', what: 'Your real AI projects, worked task by task in the project workspace, like a real team.', can: ['Work your next project task', 'See what is due in your assignments'], tip: 'Every shipped build becomes evidence in your portfolio.' },
   testing: { title: 'Prove what you know', what: 'Knowledge checks and practice that prepare you for certification.', can: ['Take a knowledge check', 'Practice before the exam'], tip: 'Short checks along the way show you where to focus.' },
   observatory: { title: 'Your path & points', what: 'Where you stand: your level, your points and your streak.', can: ['See what unlocks your next level', 'Keep your daily streak going', 'Check your points and what earns them'], tip: 'Come back here after a big week to see it add up.' },
-  commons: { title: 'Meet anyone', what: 'A hallway of live rooms: study groups, pair work, 1:1s. Open one now or book one for later.', can: ['Join a live room', 'Open a room or book one for later', 'Ask Reese at the mentor desk, around the clock'], tip: 'Doors that glow teal have your friends inside.' },
+  commons: { title: 'Meet anyone', what: 'A hallway of live rooms: study groups, pair work, one-on-ones. Open one now or book one for later.', can: ['Join a live room', 'Open a room or book one for later', 'Ask Reese at the mentor desk, around the clock'], tip: 'Doors that glow teal have your friends inside.' },
   gallery: { title: 'Your portfolio builds itself', what: 'Your class work and builds become a portfolio others can view.', can: ['Preview your portfolio', 'Browse the showcase'], tip: 'You don’t write it. It fills in as you ship.' },
   career: { title: 'Real client work', what: 'The AI internship: client work, standups and handoffs.', can: ['Open your internship', 'Follow your engagement'], tip: 'Internship work is the experience employers ask about.' },
   arcade: { title: 'Take a real break', what: 'Three short games for a break between lessons, with a weekly leaderboard for your cohort.', can: ['Play Byte Chase, Launch Lab or Bug Breaker', 'See how your cohort scored this week'], tip: 'Breaks are capped at fifteen minutes a day, and games never change your learning points.' },
 };
 
 const EXPLORER: CopyTable = {
-  commons: { title: 'Start here: meet anyone', what: 'A hallway of live rooms: study groups, pair work, 1:1s.', can: ['Join a live room', 'Open a room or book one for later'], tip: 'Maya at the {gate} answers questions about enrolling.' },
+  commons: { title: 'Start here: meet anyone', what: 'A hallway of live rooms: study groups, pair work, one-on-ones.', can: ['Join a live room', 'Open a room or book one for later'], tip: 'Maya at the {gate} answers questions about enrolling.' },
   library: { title: 'Reference on demand', what: 'Documents shared with everyone in the program.', can: ['Read the guides and reference material'], tip: 'A good place to see the kind of material the program uses.' },
   amphi: { title: 'Open events', what: 'Open houses, demos and talks.', can: ['See upcoming events', 'RSVP to the ones you want'], tip: 'An open house is the quickest way to ask everything at once.' },
   lecture: { title: 'Live classes', what: 'Members get the weekly lessons and live sessions of the program.', can: ['See how a week of the program is laid out'], tip: 'Enrolled members can join every live session and check in for attendance.' },
@@ -44,7 +44,7 @@ const BUSINESS: CopyTable = {
   lecture: { title: 'Where they learn', what: 'The weekly lessons and live sessions your people attend. Their check-ins record attendance.', can: ['See how the program is laid out'], tip: 'Attendance comes from check-ins during live sessions.' },
   studio: { title: 'Where they build', what: 'Your people work real projects task by task, the way an engineering team works.', can: ['See how project work is organized'], tip: 'Shipped work becomes evidence in their portfolios.' },
   testing: { title: 'Where they get certification-ready', what: 'Knowledge checks and practice that prepare them for certification.', can: ['See the knowledge checks they take'], tip: 'Short checks show where each person should focus.' },
-  commons: { title: 'Where they connect', what: 'A hallway of live rooms for study groups, pair work and 1:1s, and AI staff desks for help.', can: ['Join a live room'], tip: 'Reese, the AI mentor, helps your people when they are stuck.' },
+  commons: { title: 'Where they connect', what: 'A hallway of live rooms for study groups, pair work and one-on-ones, and AI staff desks for help.', can: ['Join a live room'], tip: 'Reese, the AI mentor, helps your people when they are stuck.' },
   gallery: { title: 'Where they show their work', what: 'Each person\'s work collected into a portfolio others can view.', can: ['Browse the showcase'], tip: 'Portfolios fill in as they ship project work.' },
   career: { title: 'Your partner office', what: 'Your company room in the portal.', can: ['Open your company page'], tip: 'Last stop. Your team\'s campus is the same one you just walked.' },
 };

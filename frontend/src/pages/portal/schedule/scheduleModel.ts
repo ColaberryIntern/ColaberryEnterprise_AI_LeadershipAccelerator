@@ -20,7 +20,10 @@ export type SessionItem = {
   room_id?: string | null; // linked Colaberry Commons room, when one exists
 };
 
-export type EvKind = 'class' | 'event' | 'plan'; // class = cohort session, event = public event, plan = today's plan item
+// class = cohort session, event = public event, plan = today's plan item, session = a meeting room you booked or are going to (C33)
+export type EvKind = 'class' | 'event' | 'plan' | 'session';
+/** C33 (v7 R6): a booked meeting-room session as the calendar needs it (the campus hallway's bookings). */
+export interface BookedSession { booking_id: string; room_id: string; title: string; start_at: string }
 export type EvState = 'done' | 'live' | 'up';
 export type SchedEvent = {
   id: string;
@@ -69,7 +72,7 @@ export function hourOf(t: string | null | undefined, from?: Date): number {
   return -1;
 }
 
-const KIND_CLASS: Record<EvKind, string> = { class: 'learning', event: 'event', plan: 'plan' };
+const KIND_CLASS: Record<EvKind, string> = { class: 'learning', event: 'event', plan: 'plan', session: 'booked' };
 
 /**
  * Colour token for one calendar item (pure). A public event the learner has registered for gets its own `registered` treatment
@@ -96,7 +99,7 @@ function stateForSession(status: string, day: Date, today: Date): EvState {
   return day.getTime() < today.getTime() ? 'done' : 'up';
 }
 
-export function buildSchedule(sessions: SessionItem[], events: OpenHouseView[], firstClass: FirstClassView | null, today: Date, plan: PlanItem[] = []): SchedMap {
+export function buildSchedule(sessions: SessionItem[], events: OpenHouseView[], firstClass: FirstClassView | null, today: Date, plan: PlanItem[] = [], booked: BookedSession[] = []): SchedMap {
   const sched: SchedMap = {};
   const add = (d: Date, ev: SchedEvent): void => { const k = dkey(d); (sched[k] = sched[k] || []).push(ev); };
 
@@ -126,6 +129,15 @@ export function buildSchedule(sessions: SessionItem[], events: OpenHouseView[], 
       sub: e.is_registered ? 'Registered' : (/open house/i.test(e.title) ? 'Open House' : 'Event'),
       registered: e.is_registered,
       event: e,
+    });
+  }
+  // C33 (v7 R6): booked meeting-room sessions, in Central like events; each opens its room
+  for (const b of booked) {
+    const cp = centralParts(b.start_at);
+    if (!cp) continue;
+    add(new Date(cp.y, cp.mo, cp.d), {
+      id: `booking-${b.booking_id}`, kind: 'session', title: b.title, time: fmtCentralTime(b.start_at), hour: cp.h, state: 'up',
+      href: `/portal/rooms/${b.room_id}`, sub: '🚪 Booked · Meeting Rooms',
     });
   }
   // C27: today's plan items, in teal, on today (the campus's plan; nothing when the campus is off).
