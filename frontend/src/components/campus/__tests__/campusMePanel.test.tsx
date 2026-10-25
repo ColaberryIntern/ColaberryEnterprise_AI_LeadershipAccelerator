@@ -62,7 +62,7 @@ const LOOK = (points: number, equipped: Record<string, string> = {}): CampusLook
   points, rung_name: 'AI Enabled II', equipped,
   catalog: [
     { id: 'cap', name: 'Red cap', slot: 'head', threshold: 150, unlocked: points >= 150 },
-    { id: 'board', name: 'Skateboard', slot: 'ride', threshold: 150, unlocked: points >= 150 },
+    { id: 'jacket', name: 'Campus jacket', slot: 'body', threshold: 150, unlocked: points >= 150 },
     { id: 'hoodie', name: 'Hoodie', slot: 'body', threshold: 400, unlocked: points >= 400 },
     { id: 'chain', name: 'Gold chain', slot: 'neck', threshold: 900, unlocked: points >= 900 },
   ],
@@ -139,11 +139,12 @@ describe('the bar from the last unlock to the next (E M2)', () => {
 });
 
 describe('the locker tiles (E M6)', () => {
-  it('says ✓ Wearing / Wear it / Ride it / 🔒 n pts', () => {
+  it('says ✓ Wearing / Wear it / 🔒 n pts (C46: never Ride it)', () => {
     const l = LOOK(500, { head: 'cap' });
     expect(tileState(l.catalog[0], true)).toBe('✓ Wearing');
     expect(tileState(l.catalog[2], false)).toBe('Wear it');
-    expect(tileState(l.catalog[1], false)).toBe('Ride it');
+    expect(tileState(l.catalog[1], false)).toBe('Wear it');
+    expect(l.catalog.map((i) => tileState(i, false))).not.toContain('Ride it');
     expect(tileState(l.catalog[3], false)).toBe('🔒 900 pts');
   });
   it('wears an item, takes it off, and a locked one cannot be pressed', async () => {

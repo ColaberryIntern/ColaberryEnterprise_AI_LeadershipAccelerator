@@ -34,7 +34,7 @@ describe('getLook / setLook', () => {
     const look = await getLook('a');
     expect(look.points).toBe(400);
     expect(look.rung_name).toBe('AI Enabled I');
-    expect(look.catalog.filter((i) => i.unlocked).map((i) => i.id)).toEqual(['cap', 'board', 'hoodie', 'shades']);
+    expect(look.catalog.filter((i) => i.unlocked).map((i) => i.id)).toEqual(['cap', 'jacket', 'hoodie', 'shades']);
     expect(look.equipped).toEqual({ head: 'cap' });
     expect(calls.schema).toBeGreaterThan(0);
   });
@@ -75,7 +75,7 @@ describe('getLook / setLook', () => {
 });
 
 describe('looksFor (what other people see)', () => {
-  it('rung and public gear for each id, never the ride, in one batch', async () => {
+  it('rung and public gear for each id, a saved ride dropped (C46), in one batch', async () => {
     rows.b = { head: 'cap', ride: 'cruiser', neck: 'chain' };
     const out = await looksFor(['a', 'b']);
     expect(out.get('b')).toEqual({ rung_name: 'AI Enabled I', gear: { head: 'cap', neck: 'chain' } });

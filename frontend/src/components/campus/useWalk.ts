@@ -11,11 +11,11 @@ import type { CameraApi } from './useCampusCamera';
 /**
  * Walking the avatar (WP-3; the prototype's travelTo / finishTravel D:1766-1804), out of CampusWorldMap so the map stays about
  * drawing:
- *  - speed 330 world units a second (560 running) times the ride's (Skateboard 1.35, Cherry Cruiser 1.9), ease-in-out over the
- *    whole route, never under 600 ms;
+ *  - speed 330 world units a second (560 running; C46: no rides, everyone walks), ease-in-out over the whole route, never under
+ *    600 ms;
  *  - while walking: the red dashed route line, a footstep every 140 ms (90 running) that fades over 1.6 s (at most 60 on the
  *    ground; added straight to the DOM so a step never re-renders the map), the destination highlighted, and `onTravel` told what
- *    the toast should say ("Skating to Library…");
+ *    the toast should say ("Walking to Library…", "Running to …");
  *  - reduce motion, or an `instant` request (Skip, Step outside), stands you at the door at once.
  * A walk started mid-walk starts from where the avatar stands, in the zone it was heading for.
  *
@@ -27,7 +27,6 @@ export interface WalkOptions {
   buildings: CampusBuilding[];
   compact: boolean;
   reduceMotion: boolean;
-  ride?: string;
   hereRef: MutableRefObject<Here>;
   setPos: (p: Pt) => void;
   cam: CameraApi;
@@ -47,7 +46,7 @@ const SVG_NS = 'http://www.w3.org/2000/svg';
 /** The prototype's ease-in-out quad. */
 export const easeInOut = (d: number): number => (d < 0.5 ? 2 * d * d : 1 - Math.pow(-2 * d + 2, 2) / 2);
 /** How long a walk of `total` world units takes. */
-export const walkMs = (total: number, ride?: string, run = false): number => Math.max(MIN_WALK_MS, (total / travelSpeed(ride, run)) * 1000);
+export const walkMs = (total: number, run = false): number => Math.max(MIN_WALK_MS, (total / travelSpeed(run)) * 1000);
 
 export function useWalk(o: WalkOptions): {
   walkTo: (id: BuildingId, how?: How) => void;
@@ -87,10 +86,10 @@ export function useWalk(o: WalkOptions): {
 
   /** Animate along `pts` (the first is where you stand), in `zone` while moving, then `arrive`. */
   const animate = useCallback((pts: Pt[], zone: Here['zone'], run: boolean, arrive: () => void) => {
-    const { ride, hereRef, setPos, cam } = opts.current;
+    const { hereRef, setPos, cam } = opts.current;
     const seg = pts.slice(1).map((p, i) => Math.hypot(p.x - pts[i].x, p.y - pts[i].y));
     const total = seg.reduce((a, c) => a + c, 0) || 1;
-    const duration = walkMs(total, ride, run);
+    const duration = walkMs(total, run);
     setRunning(run);
     setRouteD('M' + pts.map((p) => `${p.x} ${p.y}`).join('L'));
     let start: number | null = null;
@@ -114,7 +113,7 @@ export function useWalk(o: WalkOptions): {
   }, []);
 
   const walkTo = useCallback((id: BuildingId, how: How = {}) => {
-    const { buildings, compact, reduceMotion, ride, hereRef, setPos, cam, onArrive, onTravel } = opts.current;
+    const { buildings, compact, reduceMotion, hereRef, setPos, cam, onArrive, onTravel } = opts.current;
     const b = buildings.find((x) => x.id === id);
     if (!b) return;
     stop();
@@ -131,12 +130,12 @@ export function useWalk(o: WalkOptions): {
     const from = hereRef.current;
     const pts: Pt[] = [{ x: from.x, y: from.y }, ...routeFrom(graphRef.current, from, b)];
     setAtId(null); setTargetId(id);
-    onTravel?.({ id, verb: travelVerb(ride, !!how.run) });
+    onTravel?.({ id, verb: travelVerb(!!how.run) });
     animate(pts, b.zone, !!how.run, arrive);
   }, [stop, animate]);
 
   const walkToSpot = useCallback((to: Pt, how: How = {}) => {
-    const { compact, reduceMotion, ride, hereRef, setPos, cam, onTravel, onGround } = opts.current;
+    const { compact, reduceMotion, hereRef, setPos, cam, onTravel, onGround } = opts.current;
     if (compact) return;
     stop();
     const arrive = () => {
@@ -151,7 +150,7 @@ export function useWalk(o: WalkOptions): {
     const pts: Pt[] = [{ x: from.x, y: from.y }, ...routeToPoint(graphRef.current, from, to)];
     if (pts.length < 2) { arrive(); return; } // already there
     setSpot(to);
-    onTravel?.({ id: null, verb: travelVerb(ride, !!how.run), spot: to });
+    onTravel?.({ id: null, verb: travelVerb(!!how.run), spot: to });
     animate(pts, 'ground', !!how.run, arrive);
   }, [stop, animate]);
 

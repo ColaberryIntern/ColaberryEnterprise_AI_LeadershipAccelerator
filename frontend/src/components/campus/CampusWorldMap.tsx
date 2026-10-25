@@ -86,7 +86,7 @@ export interface CampusMapProps {
   startAt?: BuildingId | null;
   /** C8: buildings whose room is on air now (from broadcast discovery). */
   onAir?: Set<string>;
-  /** C9: the learner's OWN equipped set, drawn on their pin (public slots) and, only while it travels, the ride. */
+  /** C9: the learner's OWN equipped set, drawn on their pin. */
   ownGear?: Equipped;
   /** WP-2: today's plan (route and pins); absent during a tour and while live. */
   plan?: PlanStop[];
@@ -238,7 +238,7 @@ export default function CampusWorldMap(p: CampusMapProps): React.ReactElement {
   const locate = useCallback((id: string) => { const b = buildings.find((x) => x.id === id); return b ? (b.kind === 'gate' ? GATE : { x: b.pos.x, y: b.pos.y }) : null; }, [buildings]);
   const cam = useCampusCamera(svgRef, { enabled: !compact && !!camera, insets: camera?.insets, focusInsets: camera?.focusInsets, avatarRef: hereRef, locate, reduceMotion,
     apiRef: camera?.apiRef, framed: camera?.framed, startCam: camera?.startCam });
-  const { walkTo, walkToSpot, moving, running, atId, targetId, routeD, spot } = useWalk({ buildings, compact, reduceMotion, ride: p.ownGear?.ride, hereRef, setPos, cam, stepsRef,
+  const { walkTo, walkToSpot, moving, running, atId, targetId, routeD, spot } = useWalk({ buildings, compact, reduceMotion, hereRef, setPos, cam, stepsRef,
     onArrive, onTravel: p.onTravel, onGround: p.onGround });
   const graph = useMemo(() => campusGraph(buildings), [buildings]);
 

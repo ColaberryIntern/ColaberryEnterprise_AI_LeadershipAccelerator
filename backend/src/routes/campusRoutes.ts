@@ -182,8 +182,10 @@ export async function postTourCompleteRoute(req: Request, res: Response): Promis
 const SlotEnum = z.enum(GEAR_SLOTS);
 /** The COMPLETE equipped set: a slot not present means nothing worn there. At most one entry per slot. */
 const ItemId = z.string().max(40).nullable();
+// C46: rides are retired. `ride` is still ACCEPTED and ignored on the way in (a cached older page may send it for a few hours after
+// the deploy) but never sent back.
 const LookBody = z.object({ equipped: z.object({ head: ItemId, face: ItemId, body: ItemId, neck: ItemId, ride: ItemId }).partial().strict() }).strict();
-const EquippedSchema = z.object({ head: z.string(), face: z.string(), body: z.string(), neck: z.string(), ride: z.string() }).partial().strict();
+const EquippedSchema = z.object({ head: z.string(), face: z.string(), body: z.string(), neck: z.string() }).partial().strict();
 export const LookResponse = z.object({
   points: z.number().int().nonnegative(),
   rung_name: z.string(),

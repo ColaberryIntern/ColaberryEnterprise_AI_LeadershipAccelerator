@@ -113,6 +113,7 @@
   --cm-art-pulse-down:#d9962b; --cm-art-ghost-w:rgba(255,255,255,.18); --cm-art-flash:#fff1c9; --cm-art-flash-edge:#d9962b;
   /* WP-5: gear on room figures (accSVG), the business rooms' lanyard badge, a partner's teammate tag, a cabinet under the pointer, the
      AI staff (per-desk colors from the prototype's STAFF), the person card popover, the staff card's quoted prompts, a partner's KPIs */
+  --cm-art-jacket:#1f3b5c; --cm-art-jacket-zip:#c9d3dc; --cm-art-architect:#d4a017; --cm-art-architect-ink:#3a2a00;
   --cm-art-hoodie:#b3242a; --cm-art-chain:#f5c542; --cm-art-shades:#111111; --cm-art-badge-edge:#9aa6b0; --cm-art-team-tag:#0f766e;
   --cm-art-cab-hover:rgba(255,255,255,.08); --cm-art-staff-maya:#b0306a; --cm-art-staff-reese:#b07a00; --cm-art-staff-dara:#c46a1b;
   --cm-art-pop-shadow:0 24px 60px rgba(20,15,10,.28); --cm-art-prompt-edge:#d9c79a; --cm-art-prompt-bg:#fffaf0; --cm-art-prompt-hover:#b07a00;
