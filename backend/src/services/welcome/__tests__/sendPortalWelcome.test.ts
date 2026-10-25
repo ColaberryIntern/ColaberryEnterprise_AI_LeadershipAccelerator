@@ -189,6 +189,47 @@ describe('sendPortalWelcome - idempotency, which the recovery run depends on', (
   });
 });
 
+describe('sendPortalWelcome - the per-caller event name', () => {
+  it('defaults to portal_welcome', async () => {
+    const { enrollment } = enrollmentFake();
+    await sendPortalWelcome({ enrollment });
+
+    expect((logCommunication.mock.calls[0][0] as { metadata: { event: string } }).metadata.event)
+      .toBe('portal_welcome');
+  });
+
+  it('writes the caller\'s event when given, so a migrating door keeps its history', async () => {
+    const { enrollment } = enrollmentFake();
+    await sendPortalWelcome({ enrollment, event: 'open_house_welcome' });
+
+    expect((logCommunication.mock.calls[0][0] as { metadata: { event: string } }).metadata.event)
+      .toBe('open_house_welcome');
+  });
+
+  it('STILL READS BOTH NAMES when deciding to send, whatever it writes', async () => {
+    // The asymmetry that makes the guard work. If the read were scoped to the
+    // caller's own event, two doors could each welcome the same person once -
+    // which is precisely the defect the open-house door is being migrated to fix.
+    findAll.mockResolvedValue([{ id: 20, metadata: { event: 'portal_welcome' } }]);
+    const { enrollment } = enrollmentFake();
+
+    const r = await sendPortalWelcome({ enrollment, event: 'open_house_welcome' });
+
+    expect(r.skipped).toBe(true);
+    expect(sendTrainingWelcome).not.toHaveBeenCalled();
+  });
+
+  it('and the converse: a prior open-house welcome blocks a portal send', async () => {
+    findAll.mockResolvedValue([{ id: 21, metadata: { event: 'open_house_welcome' } }]);
+    const { enrollment } = enrollmentFake();
+
+    const r = await sendPortalWelcome({ enrollment, event: 'portal_welcome' });
+
+    expect(r.skipped).toBe(true);
+    expect(sendTrainingWelcome).not.toHaveBeenCalled();
+  });
+});
+
 describe('sendPortalWelcome - failure paths', () => {
   it('FAILS CLOSED: an unevaluable guard refuses the send rather than risking a double', async () => {
     findAll.mockRejectedValue(new Error('db gone'));

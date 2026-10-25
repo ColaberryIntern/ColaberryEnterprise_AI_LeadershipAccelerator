@@ -81,6 +81,20 @@ export interface SendPortalWelcomeInput {
   hideHighlights?: boolean;
   /** An extra paragraph after the sign-in link. */
   closing?: string;
+  /**
+   * Which event name to WRITE. Defaults to `portal_welcome`.
+   *
+   * It exists so the open-house door can adopt this module without renaming the
+   * event it has been writing since it was built. Anything downstream reading
+   * `open_house_welcome` keeps working, and the migration changes behaviour in
+   * exactly one way: that door gains the idempotency guard it never had.
+   *
+   * Note the asymmetry, which is deliberate. What this writes is per-caller; what
+   * it READS when deciding whether to send is always the full `WELCOME_EVENTS`
+   * set. A per-caller read would let two doors welcome the same person once each,
+   * which is the bug being fixed rather than a feature.
+   */
+  event?: string;
 }
 
 export interface SendPortalWelcomeResult {
@@ -129,7 +143,10 @@ export async function alreadyWelcomed(email: string): Promise<boolean> {
 export async function sendPortalWelcome(
   input: SendPortalWelcomeInput,
 ): Promise<SendPortalWelcomeResult> {
-  const { enrollment, leadId = null, subjectOverride, intro, hideHighlights, closing } = input;
+  const {
+    enrollment, leadId = null, subjectOverride, intro, hideHighlights, closing,
+    event = PORTAL_WELCOME_EVENT,
+  } = input;
   const email = enrollment.email;
 
   try {
@@ -195,7 +212,7 @@ export async function sendPortalWelcome(
       provider: 'mandrill',
       provider_message_id: messageId,
       error_message: errorMessage,
-      metadata: { event: PORTAL_WELCOME_EVENT, enrollment_id: enrollment.id },
+      metadata: { event, enrollment_id: enrollment.id },
       // eslint-disable-next-line @typescript-eslint/no-explicit-any -- log params are loose
     } as any);
   } catch (err: unknown) {
