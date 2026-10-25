@@ -106,6 +106,8 @@ export async function ensureSbpSchema(): Promise<void> {
     // across rows. Nullable, no default — same catalog-only, lock-free change.
     `ALTER TABLE student_tasks ADD COLUMN IF NOT EXISTS verification_json JSONB`,
 
+
+
     `ALTER TABLE build_intake ADD COLUMN IF NOT EXISTS answers JSONB`,
     // Why the last generation failed: { error_class, message, at }. Null while
     // generating and after a success. Until 2026-09-16 the only record of a
