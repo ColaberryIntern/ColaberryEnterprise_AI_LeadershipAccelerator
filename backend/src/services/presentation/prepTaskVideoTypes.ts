@@ -34,8 +34,34 @@ import { PRESENTATION_TEMPLATE_IDS } from '.';
  * technical one. Nothing else in the codebase hardcodes the pairing.
  */
 
-/** Demo Day is live and staff-marked. It is not a video and has no type. */
-export const DEMO_DAY_PREP_ID = 'PREP-8';
+/**
+ * Demo Day is live and staff-marked. It is not a video and has no type.
+ *
+ * STILL PREP-6 TODAY. The ladder this table was written for puts Demo Day at
+ * PREP-8 and makes 6 and 7 video tasks — but `PREP-6` is hardcoded as Demo Day
+ * in eight non-test places across both stacks (points, the evidence panel,
+ * instructor metrics, the staff marking route, the prompt service, the admin
+ * panel default, and two spots in the Studio). Moving it is a cross-cutting
+ * refactor where a single missed reference silently stops Demo Day being
+ * staff-verified, so it gets its own change rather than riding along here.
+ */
+export const DEMO_DAY_PREP_ID = 'PREP-6';
+
+/**
+ * THE TWO TYPES WITH NO TASK YET, and why that is stated rather than hidden.
+ *
+ * Seven types, five task slots: PREP-1..5 are videos, PREP-6 is Demo Day. Until
+ * Demo Day moves, `architecture_review` and `client_handoff` are recordable
+ * from an empty portfolio slot and paid exactly like the rest — they simply
+ * have no task of their own asking for them.
+ *
+ * A PREVIOUS VERSION OF THIS TABLE MAPPED PREP-6 TO `architecture_review` while
+ * the rest of the system still treated PREP-6 as Demo Day. That shipped on
+ * 2026-10-24 and made one task claim both things at once: "Staff marks this
+ * one", paying 60, while the Studio coached an Architecture Review video on it.
+ * Listing the gap is how that stays impossible to reintroduce by accident.
+ */
+export const TYPES_WITHOUT_A_TASK: readonly string[] = ['architecture_review', 'client_handoff'];
 
 export const PREP_TASK_VIDEO_TYPES: ReadonlyArray<{ storyId: string; typeId: string }> = [
   { storyId: 'PREP-1', typeId: 'project_introduction' },
@@ -43,8 +69,6 @@ export const PREP_TASK_VIDEO_TYPES: ReadonlyArray<{ storyId: string; typeId: str
   { storyId: 'PREP-3', typeId: 'ai_visual_presentation' },
   { storyId: 'PREP-4', typeId: 'stakeholder_update' },
   { storyId: 'PREP-5', typeId: 'final_showcase' },
-  { storyId: 'PREP-6', typeId: 'architecture_review' },
-  { storyId: 'PREP-7', typeId: 'client_handoff' },
 ];
 
 /** The type a prep task is about, or null for Demo Day and anything unknown. */
@@ -75,8 +99,21 @@ export function mappingProblems(): string[] {
   for (const t of mapped) {
     if (!known.has(t)) problems.push(`unknown type: ${t}`);
   }
+  // Every type is either on a task or on the declared gap list. A type that is
+  // on neither has been forgotten, which is the failure worth catching.
   for (const t of known) {
-    if (!mapped.includes(t)) problems.push(`type with no task: ${t}`);
+    if (!mapped.includes(t) && !TYPES_WITHOUT_A_TASK.includes(t)) {
+      problems.push(`type with no task and not declared as a gap: ${t}`);
+    }
+  }
+  for (const t of TYPES_WITHOUT_A_TASK) {
+    if (!known.has(t)) problems.push(`gap names a type that does not exist: ${t}`);
+    if (mapped.includes(t)) problems.push(`type is both mapped and declared a gap: ${t}`);
+  }
+  // Demo Day is not a video. A table that gave it one is what produced the
+  // 2026-10-24 contradiction described above.
+  if (PREP_TASK_VIDEO_TYPES.some((r) => r.storyId === DEMO_DAY_PREP_ID)) {
+    problems.push(`${DEMO_DAY_PREP_ID} is Demo Day and must not carry a video type`);
   }
   const seenType = new Set<string>();
   for (const t of mapped) {
