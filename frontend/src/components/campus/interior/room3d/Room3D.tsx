@@ -15,6 +15,8 @@ import { ScheduleBoard, NextEventBoard } from '../../events/EventRows';
 import { useCampusEvents } from '../../events/EventSignup';
 import { upcoming } from '../../events/eventsModel';
 import { openBookCall } from '../../admissions/admissionsCallApi';
+import { HallwayBoard, HallwayWall, useHallway } from '../../hallway/Hallway';
+import { hallwayDoors } from '../../hallway/hallwayModel';
 import { YOU_AT, YOU_FROM, roomDepth } from './roomPlaces';
 import type { Place } from './roomPlaces';
 import './room3d.css';
@@ -82,6 +84,10 @@ export default function Room3D(p: Room3DProps): React.ReactElement | null {
   const timers = useRef<number[]>([]);
   // C27 (v6 D5): the Schedule board's week and upcoming events; C26: the Events Hall board's next event
   const events = useCampusEvents(id === 'tower' || id === 'amphi');
+  // C29 (v7 R2): Meeting Rooms is a hallway: doors on both side walls, the open rooms on the board
+  const hall = id === 'commons';
+  const { hallway } = useHallway(hall);
+  const doors = hall && hallway ? hallwayDoors(hallway) : [];
   useEffect(() => {
     if (reduceMotion) return undefined;
     const t = window.requestAnimationFrame(() => window.requestAnimationFrame(() => setYouAt(YOU_AT)));
@@ -117,13 +123,17 @@ export default function Room3D(p: Room3DProps): React.ReactElement | null {
             <RoomScreen summary={summary} name={p.name} planStep={p.planStep} onSection={section} onCard={cardRoute && spot?.opens !== 'book' ? sitDown : null}
               onPlan={(r) => p.onOpen(r)} custom={id === 'admissions' ? <PlansBoard onSection={section} />
                 : id === 'tower' && events ? <ScheduleBoard events={upcoming(events, new Date(), 3)} all={events} now={new Date()} onSection={section} />
-                : id === 'amphi' && events ? <NextEventBoard event={upcoming(events, new Date(), 1)[0] ?? null} onSection={section} /> : undefined} />
+                : id === 'amphi' && events ? <NextEventBoard event={upcoming(events, new Date(), 1)[0] ?? null} onSection={section} />
+                : hall ? <HallwayBoard hallway={hallway} onOpen={p.onOpen} /> : undefined} />
             {tiers && <div className="cm-r3-platform" aria-hidden="true" data-testid="cm-r3-stage" />}
           </div>
           <div className="face left"><div className="wainscot" aria-hidden="true" />
-            {summary?.sideTop && <div className="cm-r3-wallslot"><WallBoard side={summary.sideTop} onSection={section} /></div>}
+            {hall ? <HallwayWall doors={doors} side="left" onOpen={p.onOpen} />
+              : summary?.sideTop && <div className="cm-r3-wallslot"><WallBoard side={summary.sideTop} onSection={section} /></div>}
           </div>
-          <div className="face right" aria-hidden="true"><div className="wainscot" /></div>
+          <div className="face right" aria-hidden={hall ? undefined : true}><div className="wainscot" aria-hidden="true" />
+            {hall && <HallwayWall doors={doors} side="right" onOpen={p.onOpen} />}
+          </div>
           <div className="cm-r3-floorlayer">
             <RoomCrowd layout={room.layout} spot={spot} people={people} desk={p.desk} onDesk={p.onDesk} onPick={p.onPick} lanyard={p.lanyard} fw={fw} fh={fh} d={d} />
             {spot && (

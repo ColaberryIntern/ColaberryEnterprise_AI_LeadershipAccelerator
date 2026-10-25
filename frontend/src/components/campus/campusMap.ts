@@ -95,9 +95,11 @@ export const CAMPUS_BUILDINGS: readonly CampusBuilding[] = [
     primary: { label: 'View my path', route: '/portal/path' },
     rooms: [{ label: 'Path', route: '/portal/path' }, { label: 'Progress', route: '/portal/progress' }, { label: 'Points', route: '/portal/points' }],
     prefixes: ['/portal/path', '/portal/progress', '/portal/points'], explorer: 'open', audiences: EVERYONE, pos: { x: 130, y: 546, w: 96, h: 54 }, kind: 'dome', zone: 'ave' },
-  { id: 'commons', name: 'Community Lounge', workplaceName: 'Collab Cafe',
+  // C29 (v7 R2): renamed from the Community Lounge; "Meeting Rooms" in both looks. Community stays a room here until the Community
+  // Board (C30, v7 R3) gives /portal/community its own place on the Quad.
+  { id: 'commons', name: 'Meeting Rooms', workplaceName: 'Meeting Rooms',
     primary: { label: 'Open live rooms', route: '/portal/rooms' },
-    rooms: [{ label: 'Rooms', route: '/portal/rooms' }, { label: 'Community', route: '/portal/community' }, { label: 'People', route: '/portal/community/people' }],
+    rooms: [{ label: 'Meeting rooms', route: '/portal/rooms' }, { label: 'Community', route: '/portal/community' }, { label: 'People', route: '/portal/community/people' }],
     prefixes: ['/portal/rooms', '/portal/community'], explorer: 'open', audiences: EVERYONE, pos: { x: 310, y: 546, w: 124, h: 62 }, kind: 'gable', zone: 'ave' },
   { id: 'gallery', name: 'Showcase Gallery', workplaceName: 'Portfolio Gallery',
     primary: { label: 'Open my portfolio', route: '/portal/portfolio' },
@@ -181,4 +183,4 @@ export function buildingName(b: Pick<CampusBuilding, 'name' | 'workplaceName'>, 
 
 /** The prototype's building icons (its catalog's icon field): the directory, the side mini map. */
 export const BUILDING_ICON: Partial<Record<string, string>> = { lecture: '🎓', library: '📚', tower: '🕰', studio: '🛠', amphi: '🎪', testing: '✅',
-  observatory: '🔭', commons: '☕', gallery: '🖼', career: '💼', arcade: '🕹', gate: '🚪', admissions: '📋' };
+  observatory: '🔭', commons: '🚪', gallery: '🖼', career: '💼', arcade: '🕹', gate: '🚪', admissions: '📋' };

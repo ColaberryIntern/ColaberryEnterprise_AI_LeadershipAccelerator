@@ -106,8 +106,11 @@ describe('buildingForPath', () => {
 
 describe('buildingName', () => {
   it('uses the Workplace name only when the setting is on', () => {
-    const lounge = CAMPUS_BUILDINGS.find((b) => b.id === 'commons')!;
-    expect(buildingName(lounge, false)).toBe('Community Lounge');
-    expect(buildingName(lounge, true)).toBe('Collab Cafe');
+    const room = CAMPUS_BUILDINGS.find((b) => b.id === 'lecture')!;
+    expect(buildingName(room, false)).toBe('Classroom');
+    expect(buildingName(room, true)).toBe('Training Room');
+    // C29 (v7 R2): Meeting Rooms is the same name in both looks
+    const meet = CAMPUS_BUILDINGS.find((b) => b.id === 'commons')!;
+    expect([buildingName(meet, false), buildingName(meet, true)]).toEqual(['Meeting Rooms', 'Meeting Rooms']);
   });
 });

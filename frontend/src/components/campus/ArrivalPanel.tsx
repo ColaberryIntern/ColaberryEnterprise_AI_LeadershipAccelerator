@@ -21,7 +21,7 @@ import { openStaffCard } from './staffCard';
 import { useRoomWall } from './interior/useRoomWall';
 import LiveStage from './LiveStage';
 import type { CampusLiveNow } from './campusOnAir';
-import { roomRoute } from './campusOnAir';
+import { roomRoute, liveClassOf, useCampusOnAir } from './campusOnAir';
 import { LIVE_STATES, liveSub } from './campusLiveState';
 import { enrollCta } from './campusAccess';
 import { usePageSummary } from './interior/usePageSummary';
@@ -32,6 +32,7 @@ import { UpcomingEvents } from './events/EventRows';
 import { useCampusEvents } from './events/EventSignup';
 import { upcoming } from './events/eventsModel';
 import ArrivalWays from './ArrivalWays';
+import { HallwayRows, useHallway } from './hallway/Hallway';
 
 /**
  * Arriving at a building (C11b; WP-2): the room behind, and the arrival panel in front, as the prototype's arrive() builds it:
@@ -112,8 +113,14 @@ export default function ArrivalPanel(p: ArrivalPanelProps): React.ReactElement {
   const inRoom = access === 'open' && !!ROOMS[b.id];
   const summary = usePageSummary(b.id, inRoom, buildingName(b, wp));
   const spot = inRoom ? spotOf(b.id) : null;
+  // C28 (v7 R1): a class broadcast airs in the Events Hall; the Classroom says so, with Walk in (its live page)
+  const { broadcasts } = useCampusOnAir();
+  const classLive = b.id === 'lecture' ? liveClassOf(broadcasts) : null;
+  const classLiveRoute = classLive ? roomRoute(classLive) : null;
   // C27 (v6 D5): the Schedule and the Events Hall list the upcoming events with one-tap sign up (Eventbrite is the record)
   const evs = useCampusEvents(b.id === 'tower' || b.id === 'amphi');
+  // C29 (v7 R2): Meeting Rooms lists the hallway's doors with Join / Details / Open
+  const hall = useHallway(b.id === 'commons' && access === 'open');
   const sitAtSpot =() => { const el = document.querySelector<HTMLElement>('.cm-r3-spot'); if (el) el.click(); else if (summary?.card) open(summary.card); };
   // WP-6: the live building's main action joins the live room (audio and Q&A), as the prototype's per-state CTA
   const live = p.live ?? null;
@@ -128,7 +135,7 @@ export default function ArrivalPanel(p: ArrivalPanelProps): React.ReactElement {
         summary={summary} planStep={stepIdx >= 0 ? plan!.stops[stepIdx] : null} spot={spot} sectionRoute={b.primary.route} onOpen={open} />
       <BuildingCard key={b.id} building={b} access={access} workplaceNames={wp} onClose={p.onClose} onNavigate={p.onNavigate} audience={audience}
         kicker={live && !isStop ? `${LIVE_STATES[live.state].chip} · Colaberry Live` : kickerOf({ zone: zoneLabelOf(b, wp), access, audience, tour: isStop ? { name: tour!.model.name, n: tourIdx + 1, of: tour!.model.stops.length } : null })}
-        line={subOf(b, audience, wp)} onElsewhere={p.onElsewhere} urgent={liveCta ?? urgentAt(b.id, data, now)} flashRoute={p.flashRoute}
+        line={subOf(b, audience, wp)} onElsewhere={p.onElsewhere} urgent={liveCta ?? (classLiveRoute ? { label: 'Your class is live in the Events Hall · Walk in', route: classLiveRoute } : urgentAt(b.id, data, now))} flashRoute={p.flashRoute}
         heroClass={live ? `is-live is-${live.state}` : undefined} stage={live ? <LiveStage live={live} audience={audience} enrollTo={enrollCta(b).to} /> : undefined}
         happening={happeningAt(b.id, { onAir: p.onAir, count: p.count, presenceError: p.presenceError, facts: factsAt(b.id, data, p.look, now),
           live: live ? { state: live.state, title: live.b.title, sub: liveSub(live.b, live.now) } : null })}
@@ -141,6 +148,7 @@ export default function ArrivalPanel(p: ArrivalPanelProps): React.ReactElement {
         children={b.id === 'gate' && p.isExplorer ? <ExplorerPath onNavigate={p.onNavigate}
           model={explorerPath(p.buildings, p.accessOf, wp, !!p.staffDesks?.some((d) => d.id === 'maya' && d.on_duty))} />
           : b.id === 'admissions' ? <AdmissionsServices audience={audience} onNavigate={open} />
+          : b.id === 'commons' && access === 'open' ? <HallwayRows hallway={hall.hallway} error={hall.error} onOpen={open} />
           : (b.id === 'tower' || b.id === 'amphi') ? <UpcomingEvents events={evs ? upcoming(evs, new Date(), 4) : null} /> : undefined}
         whoIsHere={p.presence === undefined && !p.presenceError ? undefined
           : { presence: p.presence?.[b.id], error: p.presenceError, loading: p.presence === null && !p.presenceError, onPick: p.onPickPerson, onMore: p.onMore }} />

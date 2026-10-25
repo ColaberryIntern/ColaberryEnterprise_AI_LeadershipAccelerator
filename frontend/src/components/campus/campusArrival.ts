@@ -29,7 +29,8 @@ const SUB: Partial<Record<BuildingId, [string, string | null]>> = {
   amphi: ['Events, open houses & demos', 'Town halls, events & demos'],
   testing: ['Cert prep & knowledge checks', 'Skill verification & knowledge checks'],
   observatory: ['Your path, progress & points', 'Growth path, progress & points'],
-  commons: ['Community, people & live rooms', 'Colleagues, coffee & live rooms'],
+  commons: ['Live rooms, study groups & 1:1s', null], // C29 (v7 R2): Meeting Rooms
+
   gallery: ['Portfolio & client demos', null],
   career: ['Engagements, internship & company work', null],
   arcade: ['Three quick games · 15 min a day', null],

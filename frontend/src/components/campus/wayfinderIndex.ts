@@ -38,7 +38,7 @@ export const WF_KEYS: Partial<Record<BuildingId, string>> = {
   amphi: 'event events open house rsvp demo talk meetup amphitheater',
   testing: 'cert certification prep exam test quiz knowledge check claude code verify skills proficiency',
   observatory: 'path progress points streak tier level rank skills radar me my growth observatory',
-  commons: 'community people classmates chat rooms room hang lounge social time break commons friends',
+  commons: 'community people classmates chat rooms room meeting meetings hallway door doors study group pair 1:1 one-on-one book session hang lounge social commons friends',
   gallery: 'portfolio showcase gallery work share resume demo show showroom demos client clients present',
   career: 'internship intern standup stand-up meeting company job career team orientation handoff client clients engagement engagements management portal employee company office tower',
   arcade: 'game games arcade play break relax fun chase maze slingshot launch breakout bricks score scores leaderboard rest',

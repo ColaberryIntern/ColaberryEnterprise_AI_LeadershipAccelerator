@@ -4,6 +4,7 @@ import type { DiscoveryBroadcast, DiscoveryState } from '../../hooks/useBroadcas
 import type { BuildingId } from './campusMap';
 import { liveStateOf, useLiveClock } from './campusLiveState';
 import type { LiveState } from './campusLiveState';
+import { ROOM_BUILDING } from './campusRoomKind';
 
 /**
  * Live mode on the campus (Colaberry Campus C8), from the portal's existing broadcast discovery (useDiscoveryState: polled at the
@@ -11,26 +12,29 @@ import type { LiveState } from './campusLiveState';
  *
  *  - What is on air: whatever discovery lists (the server returns only live and reconnecting broadcasts). Disabled or
  *    unavailable discovery shows nothing, never a stale "on air".
- *  - Where (decision Q2, WP-7): a broadcast that carries its class session (session_id, #3346) airs in the CLASSROOM, and its
- *    room is the session's live page; otherwise one with a room_id lights the commons (/portal/rooms is a commons prefix). One
- *    with neither has no building; the banner still names it.
+ *  - Where (C28, v7 R1, completing round-1 Q2): EVERY broadcast airs in the EVENTS HALL (an event room, campusRoomKind). One tied
+ *    to a class session (session_id) still airs there, and the Classroom shows "Your class is live in the Events Hall · Walk in".
+ *    LIVE_ROOM_BUILDING ('commons') is retired: a broadcast never lights the commons. Its join route is unchanged (the class
+ *    session's live page, else its room).
  */
-export const LIVE_ROOM_BUILDING: BuildingId = 'commons';
-export const LIVE_CLASS_BUILDING: BuildingId = 'lecture';
+export const LIVE_BUILDING: BuildingId = ROOM_BUILDING.event;
 
-/** Where a broadcast airs on the campus (Q2): the Classroom for a class session, the commons for a room, else nowhere. */
-export function liveBuildingOf(b: Pick<DiscoveryBroadcast, 'room_id' | 'session_id'>): BuildingId | null {
-  if (b.session_id) return LIVE_CLASS_BUILDING;
-  return b.room_id ? LIVE_ROOM_BUILDING : null;
+/** Where a broadcast airs on the campus: always the Events Hall (C28). */
+export function liveBuildingOf(_b: Pick<DiscoveryBroadcast, 'room_id' | 'session_id'>): BuildingId {
+  return LIVE_BUILDING;
 }
+
+/** C28: a live broadcast of a class session (the Classroom's "Your class is live in the Events Hall" line), else null. */
+export const liveClassOf = (list: DiscoveryBroadcast[]): DiscoveryBroadcast | null => list.find((b) => !!b.session_id) ?? null;
 
 export function onAirBroadcasts(s: Pick<DiscoveryState, 'broadcasts' | 'disabled' | 'unavailable'>): DiscoveryBroadcast[] {
   if (s.disabled || s.unavailable) return [];
   return s.broadcasts;
 }
 
+/** The buildings to light: the Events Hall, once any broadcast has a place to walk into (a roomless one lights nothing). */
 export function onAirBuildings(list: DiscoveryBroadcast[]): Set<string> {
-  return new Set(list.map(liveBuildingOf).filter((x): x is BuildingId => !!x));
+  return new Set(list.filter((b) => roomRoute(b) !== null).map(liveBuildingOf));
 }
 
 /** Where to join a broadcast, as a portal route: the class session's live page (Q2), else its room, else null. */
@@ -41,7 +45,7 @@ export function roomRoute(b: Pick<DiscoveryBroadcast, 'room_id' | 'session_id'>)
 
 /** The broadcast the banner names: one with a place to go first (a class session or a room), else the first listed. */
 export function headlineBroadcast(list: DiscoveryBroadcast[]): DiscoveryBroadcast | null {
-  return list.find((b) => !!liveBuildingOf(b)) ?? list[0] ?? null;
+  return list.find((b) => !!(b.session_id || b.room_id)) ?? list[0] ?? null; // one with a place to go first
 }
 
 /** What is on air now and which buildings show it. */

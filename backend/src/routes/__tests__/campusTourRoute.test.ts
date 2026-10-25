@@ -15,6 +15,7 @@ jest.mock('../../services/campus/campusTourHandoff', () => ({
 jest.mock('../../services/campus/campusPresenceService', () => ({ touchCampusArea: jest.fn(), getCampusPresence: jest.fn() }));
 jest.mock('../../services/campus/campusStaffDesks', () => ({ getStaffDesks: jest.fn() }));
 jest.mock('../../services/campus/campusWave', () => ({ waveAt: jest.fn() }));
+jest.mock('../../services/campus/campusRoomBuilding', () => ({ roomBuildingFor: async () => null }));
 
 import express from 'express';
 import request from 'supertest';

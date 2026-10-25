@@ -13,7 +13,7 @@ import type { StaffDesk } from '../campusPeopleApi';
 
 /** The prototype's WRULES (D:1440-1444): in Workplace names the panel speaks of colleagues and HQ, not classmates and a campus. */
 const WRULES: [RegExp, string][] = [
-  [/Community Lounge/g, 'Collab Café'], [/Classroom/g, 'Training Room'], [/Cert Prep Center/g, 'Certification Center'], [/Events Hall/g, 'Town Hall'],
+  [/Classroom/g, 'Training Room'], [/Cert Prep Center/g, 'Certification Center'], [/Events Hall/g, 'Town Hall'],
   [/My Progress/g, 'My Performance'], [/Game Room/g, 'Break Room'], [/\bSchedule\b/g, 'Calendar'], [/\bLibrary\b/g, 'Knowledge Base'],
   [/classmates/g, 'colleagues'], [/Classmates/g, 'Colleagues'], [/anywhere on campus/g, 'anywhere at HQ'], [/on campus/g, 'at HQ'], [/Campus/g, 'HQ'],
   [/campus/g, 'HQ'], [/Your cohort/g, 'Your team'], [/your cohort/g, 'your team'], [/Live class/g, 'Live session'], [/live class/g, 'live session'],

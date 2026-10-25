@@ -2,6 +2,7 @@ import { postCampusHere, isReadOnlySession } from './campusApi';
 import { buildingForPath } from './campusMap';
 import { readCampusSettings } from './campusSettings';
 import { getParticipantToken } from '../../utils/participantToken';
+import { roomIdOfPath } from './campusRoomKind';
 
 /**
  * C13 (round 3): record the building for the page this learner is on, for EVERY signed-in learner (not only campus pilot accounts),
@@ -16,7 +17,8 @@ export function pingCampusBuilding(path: string = window.location.pathname): voi
     if (!getParticipantToken() || isReadOnlySession()) return;
     const area = buildingForPath(path)?.id;
     if (!area) return;
-    postCampusHere(area, readCampusSettings().shareBuilding).catch(() => undefined);
+    // C28 (v7 R1): on a room page, send the room too: the server counts you in that room's building (an event room is the Events Hall)
+    postCampusHere(area, readCampusSettings().shareBuilding, roomIdOfPath(path)).catch(() => undefined);
   } catch {
     // Fire-and-forget beside the portal heartbeat: recording a building must never break the page that asked.
   }

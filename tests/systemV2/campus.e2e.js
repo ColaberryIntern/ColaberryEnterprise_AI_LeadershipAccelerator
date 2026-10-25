@@ -239,6 +239,32 @@ async function runAudience(browser, audience, jwt) {
         must(await page.locator('.sch-root .tg-dayhead').count() === 7, 'the week view is not seven days');
       });
 
+      await step(audience, 'C29: Meeting Rooms: doors match the card rows; "+ New room" opens a real room (local DB) and it gets a door', async () => {
+        const toHall = async () => {
+          await page.goto(`${urls.base}/portal/campus`, { waitUntil: 'domcontentloaded' });
+          await page.waitForSelector('[data-testid="cm-concierge"]', { timeout: 30_000 });
+          await page.evaluate(() => document.querySelector('[data-testid="cm-bld-commons"]').dispatchEvent(new MouseEvent('click', { bubbles: true })));
+          await page.waitForSelector('[data-testid="cm-room3d"][data-room="commons"] [data-testid="cm-board-new-room"]', { timeout: 15_000 });
+          await page.waitForSelector('[data-testid="cm-hall-rows"] .cm-hall-rows, [data-testid="cm-hall-rows"] .cm-hall-muted', { timeout: 15_000 });
+          await page.waitForTimeout(800);
+        };
+        const doors = () => page.evaluate(() => Array.from(document.querySelectorAll('[data-testid="cm-room3d"] .cm-mdoor')).map((d) => d.textContent));
+        await toHall();
+        const before = await doors();
+        const rows = await page.locator('[data-testid^="cm-hall-row-"]').count();
+        must(before.filter((t) => !t.includes('More rooms')).length === rows, `doors ${before.length} != card rows ${rows}`);
+        must(before.length <= 6, `${before.length} doors (max 6)`);
+        const name = `E2E hallway ${Date.now().toString(36)}`;
+        await page.click('[data-testid="cm-board-new-room"]');
+        await page.waitForSelector('[data-testid="cm-meet-new"]', { timeout: 10_000 });
+        await page.fill('[data-testid="cm-meet-name"]', name);
+        await page.click('[data-testid="cm-meet-go"]');
+        await page.waitForURL(/\/portal\/rooms\/[0-9a-f-]{36}/, { timeout: 15_000 });
+        await toHall();
+        const after = await doors();
+        must(after.some((t) => t.includes(name)) || (before.length === 6 && after.some((t) => t.includes('More rooms'))), `no door for the new room: ${after.join(' | ')}`);
+      });
+
     }
 
     await step(audience, 'scrolled down, each page\'s sticky next task rides IN the location bar, never the header (Ali 2026-10-24)', async () => {
@@ -281,7 +307,14 @@ async function runAudience(browser, audience, jwt) {
       await page.waitForSelector('[data-testid="cm-home"] [data-testid="cm-concierge"]', { timeout: 30_000 });
       await settle();
       await page.waitForTimeout(1500); // the camera eases back to the whole campus after the card closed
-      const base = await vb();
+      // The whole-campus view, read once it has stopped moving (the ease can still be finishing after the wait above).
+      let base = await vb();
+      for (let i = 0; i < 10; i++) {
+        await page.waitForTimeout(400);
+        const again = await vb();
+        if (JSON.stringify(again) === JSON.stringify(base)) break;
+        base = again;
+      }
       // Grass the viewer can actually click: world points in view whose top element is the map's ground (not a building, a desk,
       // you, or a panel over the map), spread over the campus.
       const spots = await page.evaluate(() => {
@@ -308,7 +341,8 @@ async function runAudience(browser, audience, jwt) {
         // The camera eases home: wait for the view to SETTLE on the whole campus (it must get there, not merely head there).
         const home = await page.waitForFunction((b) => {
           const v = document.querySelector('.cm-home svg.cm-map').getAttribute('viewBox').split(' ').map(Number);
-          return v.every((x, i) => Math.abs(x - b[i]) <= 2);
+          // within 4 units: since C21 the base fit is around y 390 and the eased-home view lands 2-3 units off on a 1460-wide box
+          return v.every((x, i) => Math.abs(x - b[i]) <= 4);
         }, base, { timeout: 8_000 }).then(() => true, () => false);
         must(home, `view ${await vb()} never settled on the whole campus ${base}`);
       }

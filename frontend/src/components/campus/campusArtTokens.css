@@ -122,6 +122,11 @@
   /* C16: the light location bar */
   --cm-art-locbar-bg:rgba(251,247,240,.94); --cm-art-locbar-hover:#efe8dc; --cm-art-locbar-faint:#b7ad9e; --cm-art-locbar-grass:#cfe0b4;
   --cm-art-locbar-shadow:0 6px 18px rgba(40,30,20,.08);
+  /* C29 (v7 R2): the Meeting Rooms hallway (prototype .mdoor): door wood, its inset, the glass (lit warm when live), the friends' teal
+     glow, the sign plate, the booked amber and the knob */
+  --cm-art-door:#8a5a35; --cm-art-door-inset:rgba(0,0,0,.18); --cm-art-door-glass:#dfe9ee; --cm-art-door-glass-live:#fff6d6;
+  --cm-art-door-glass-glow:rgba(255,214,120,.8); --cm-art-door-friends:#14b8a6; --cm-art-door-friends-glow:rgba(20,184,166,.7);
+  --cm-art-door-plate:#fffdf6; --cm-art-door-booked:#b8860b; --cm-art-door-knob:#ffd36e; --cm-art-door-more:#5b4a3a;
 }
 [data-theme="dark"]{
   --cm-art-paper:#1e1e1e; --cm-art-ink:#f4f4f4; --cm-art-muted:#b5ad9f; --cm-art-line:#3a352d;

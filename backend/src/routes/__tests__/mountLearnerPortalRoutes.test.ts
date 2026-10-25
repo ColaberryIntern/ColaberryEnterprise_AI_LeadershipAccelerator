@@ -1,6 +1,6 @@
 // Each router is a sentinel: this suite is about the ORDER the module mounts them in, not what they serve, and importing the
 // real routers would pull their controllers, models and half the service graph.
-const ROUTERS = ['participantRoutes', 'capePortalRoutes', 'careerPortfolioRoutes', 'explorerSignalRoutes', 'journeyNudgeRoutes', 'consentPromptRoutes', 'campusRoutes', 'gameRoomRoutes', 'campusAdmissionsCallRoutes'] as const;
+const ROUTERS = ['participantRoutes', 'capePortalRoutes', 'careerPortfolioRoutes', 'explorerSignalRoutes', 'journeyNudgeRoutes', 'consentPromptRoutes', 'campusRoutes', 'gameRoomRoutes', 'campusAdmissionsCallRoutes', 'campusHallwayRoutes'] as const;
 jest.mock('../participantRoutes', () => ({ __esModule: true, default: 'participantRoutes' }));
 jest.mock('../capePortalRoutes', () => ({ __esModule: true, default: 'capePortalRoutes' }));
 jest.mock('../careerPortfolioRoutes', () => ({ __esModule: true, default: 'careerPortfolioRoutes' }));
@@ -10,6 +10,7 @@ jest.mock('../consentPromptRoutes', () => ({ __esModule: true, default: 'consent
 jest.mock('../campusRoutes', () => ({ __esModule: true, default: 'campusRoutes' }));
 jest.mock('../gameRoomRoutes', () => ({ __esModule: true, default: 'gameRoomRoutes' }));
 jest.mock('../campusAdmissionsCallRoutes', () => ({ __esModule: true, default: 'campusAdmissionsCallRoutes' }));
+jest.mock('../campusHallwayRoutes', () => ({ __esModule: true, default: 'campusHallwayRoutes' }));
 
 import fs from 'fs';
 import path from 'path';
@@ -91,9 +92,10 @@ describe('the mount order, driven for real', () => {
     expect(order.indexOf('consentPromptRoutes')).toBe(order.indexOf('journeyNudgeRoutes') + 1);
   });
 
-  it('mounts the campus routers last, after the consent prompt (Basecamp C1; the Game Room C10, then the admissions call C20)', () => {
+  it('mounts the campus routers last, after the consent prompt (Basecamp C1; the Game Room C10, the admissions call C20, the hallway C29)', () => {
     const order = mounted();
-    expect(order[order.length - 1]).toBe('campusAdmissionsCallRoutes');
+    expect(order[order.length - 1]).toBe('campusHallwayRoutes');
+    expect(order.indexOf('campusHallwayRoutes')).toBe(order.indexOf('campusAdmissionsCallRoutes') + 1);
     expect(order.indexOf('campusAdmissionsCallRoutes')).toBe(order.indexOf('gameRoomRoutes') + 1);
     expect(order.indexOf('gameRoomRoutes')).toBe(order.indexOf('campusRoutes') + 1);
     expect(order.indexOf('campusRoutes')).toBe(order.indexOf('consentPromptRoutes') + 1);

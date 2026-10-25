@@ -175,6 +175,17 @@ const VIEWS = [
     required: () => ['cm-room3d', 'cm-board-strip', 'cm-ev-upcoming'],
     assert: () => `(() => { const n = document.querySelectorAll('[data-testid="cm-board-strip"] .d').length; if (n !== 7) return 'strip days: ' + n;
       return document.querySelectorAll('[data-testid="cm-board-strip"] .d.is-today').length === 1 ? '' : 'today not marked once'; })()` },
+  // C29 (v7 R2): Meeting Rooms is a hallway: at most six doors (live rooms, your bookings, your rooms), each matching its card row
+  // in the same order and state; the board counts the open rooms; + New room and Book a session are on the board and the card.
+  { name: '26-meeting-rooms', route: '/portal/campus', accounts: ['member'], steps: () => [tap('commons'), WALKED, { wait: 2000 }],
+    required: () => ['cm-room3d', 'cm-board-new-room', 'cm-board-book-room', 'cm-hall-rows', 'cm-hall-new', 'cm-hall-book'],
+    assert: () => `(() => { const doors = Array.from(document.querySelectorAll('[data-testid="cm-room3d"] .cm-mdoor')); if (doors.length > 6) return 'doors: ' + doors.length;
+      for (const d of doors) { if (d.classList.contains('is-more')) continue; const n = d.getAttribute('data-testid').replace('cm-door-', '');
+        const row = document.querySelector('[data-testid="cm-hall-row-' + n + '"]'); if (!row) return 'no card row for door ' + n;
+        const name = d.querySelector('.plate b').textContent; if (!row.textContent.includes(name)) return 'door ' + n + ' (' + name + ') is not row ' + n;
+        if (d.classList.contains('is-live') !== !!row.querySelector('.dot')) return 'door ' + n + ' live state differs from its row'; }
+      const rows = document.querySelectorAll('[data-testid^="cm-hall-row-"]').length; const real = doors.filter((d) => !d.classList.contains('is-more')).length;
+      return rows === real ? '' : 'rows ' + rows + ' vs doors ' + real; })()` },
   { name: '24-plans', route: '/portal/plans', accounts: ['member', 'business'], steps: () => [{ wait: 1500 }],
     required: () => ['cm-plans', 'cm-plan-explorer', 'cm-plan-individual', 'cm-plan-team', 'cm-plan-services', 'cm-plans-account', 'cm-plans-talk'] },
   // WP-6: arriving at the live building: the hero in the state's colour, the stage, the live room as the main action
@@ -184,7 +195,8 @@ const VIEWS = [
     steps: () => [{ wait: 900 }, { evaluate: 'window.scrollTo(0, 800)', settle: 900 }],
     required: () => ['cm-locbar', 'cm-locbar-map', 'cm-trail', 'cm-step-out', 'cm-whereto', 'cm-page-rail'],
     assert: () => PAGE_NAV_OK },
-  { name: '20-live-arrive', route: '/portal/campus', needsLive: true, steps: () => [tap('commons'), WALKED],
+  // C28 (v7 R1): every broadcast airs in the Events Hall
+  { name: '20-live-arrive', route: '/portal/campus', needsLive: true, steps: () => [tap('amphi'), WALKED],
     required: () => ['.cm-arrive-hero.is-live', 'cm-stage', 'cm-arrive-cta'],
     known: () => ['DOORS OPEN and REPLAY: discovery lists only live and reconnecting broadcasts today (kept out on purpose, #3346)', 'auto check-in needs a broadcast with a class session; the local seed has none'] },
 ];
@@ -194,7 +206,7 @@ function panelFor(view, a, size) {
   if (view.name === '01-gate' || view.name === '23-workstation') return []; // the workstation is full screen, as the prototype's #ws
   const tour = a === 'staff' ? [] : ['cm-cc-tour'];
   if (view.route !== '/portal/campus' && view.name !== '14-step-outside') return size === 'phone' ? ['cm-steps-open'] : ['cm-page-rail', ...tour.map((t) => `[data-testid="cm-page-rail"] [data-testid="${t}"]`)];
-  if (size === 'phone' && (CARD_VIEWS.includes(view.name) || view.name.startsWith('21-room-') || view.name === '24-admissions' || view.name === '25-schedule')) return ['cm-cc-peek'];
+  if (size === 'phone' && (CARD_VIEWS.includes(view.name) || view.name.startsWith('21-room-') || view.name === '24-admissions' || view.name === '25-schedule' || view.name === '26-meeting-rooms')) return ['cm-cc-peek'];
   return ['cm-concierge', ...tour];
 }
 const withPanel = (view) => ({ ...view, required: (a, size) => [...view.required(a, size), ...panelFor(view, a, size)] });

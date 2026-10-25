@@ -11,6 +11,7 @@ import { requestTourHandoff } from '../services/campus/campusTourHandoff';
 import { getLook, setLook } from '../services/campus/campusLookService';
 import { GEAR_SLOTS } from '../services/campus/campusUnlocks';
 import { mayPreviewAudiences } from '../services/campus/campusAudienceSwitch';
+import { roomBuildingFor } from '../services/campus/campusRoomBuilding';
 
 /**
  * Colaberry Campus learner endpoints (Basecamp C1 onward). Mounted with the
@@ -58,7 +59,8 @@ export function getCampusFlags(req: Request, res: Response): void {
 
 // ---- C4: presence by building ----
 // WP-7 (Q14): `share: false` = "Show which building I'm in" is off; the server forgets the learner's building instead of recording it.
-const HereBody = z.object({ area: z.string().min(1).max(32), share: z.boolean().optional() }).strict();
+// C28 (v7 R1): on a room page the client also sends the room; the server counts the person in that room's building.
+const HereBody = z.object({ area: z.string().min(1).max(32), share: z.boolean().optional(), room_id: z.string().uuid().optional() }).strict();
 // C9: gear others may see is a STRICT object of the four public slots: the response contract itself refuses a ride.
 const PublicGearSchema = z.object({ head: z.string(), face: z.string(), body: z.string(), neck: z.string() }).partial().strict();
 const PersonSchema = z.object({
@@ -83,7 +85,11 @@ export async function postCampusHere(req: Request, res: Response): Promise<void>
   if (!isCampusArea(parsed.data.area)) { res.status(400).json({ error: 'Unknown campus area', error_class: 'UnknownCampusArea' }); return; }
   try {
     if (parsed.data.share === false) await clearCampusArea(req.participant!.sub);
-    else await touchCampusArea(req.participant!.sub, parsed.data.area);
+    else {
+      // C28: a room's own building wins (an event room counts in the Events Hall); any failure keeps the area the client sent
+      const roomArea = parsed.data.room_id ? await roomBuildingFor(parsed.data.room_id).catch((e) => { logFailure('campus_room_building_failed', e); return null; }) : null;
+      await touchCampusArea(req.participant!.sub, roomArea ?? parsed.data.area);
+    }
     res.status(204).end();
   } catch (err) {
     logFailure('campus_here_failed', err);

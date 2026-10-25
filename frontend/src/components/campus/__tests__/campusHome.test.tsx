@@ -141,7 +141,7 @@ describe('the campus home', () => {
     expect(q('[data-testid="cm-stats-streak"]')!.textContent).toContain('3');
     expect(q('[data-testid="cm-cc-greeting"]')!.textContent).toMatch(/, Ali\.$/);
     expect(q('[data-testid="cm-cc-pulse"]')!.textContent).toContain('5 classmates on campus');
-    expect(q('[data-testid="cm-cc-pulse"]')!.textContent).toContain('busiest: Community Lounge (3)');
+    expect(q('[data-testid="cm-cc-pulse"]')!.textContent).toContain('busiest: Meeting Rooms (3)');
     expect(q('[data-testid="cm-cc-where"]')!.textContent).toBe('At the main gate');
     expect(q('[data-testid="cm-cc-pass"]')).toBeNull();
   });
@@ -207,7 +207,7 @@ describe('the campus home', () => {
     expect(cc().hasAttribute('hidden')).toBe(false);
     expect(cc().classList.contains('is-tucked')).toBe(false);
     expect(cc().classList.contains('has-card')).toBe(true);
-    expect(q('[data-testid="cm-cc-where"]')!.textContent).toBe('At the Community Lounge');
+    expect(q('[data-testid="cm-cc-where"]')!.textContent).toBe('At the Meeting Rooms');
     act(() => { (q('[data-testid="cm-arrive-back"]') as HTMLButtonElement).click(); });
     await flush();
     expect(q('[data-testid="cm-card"]')).toBeNull();

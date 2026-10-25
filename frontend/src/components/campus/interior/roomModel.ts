@@ -21,7 +21,8 @@ export const ROOMS: Partial<Record<BuildingId, RoomDef>> = {
   amphi: { layout: 'tiers', feature: 'stage', dark: true },
   testing: { layout: 'desks', feature: 'quiet', dark: false },
   observatory: { layout: 'standing', feature: 'stars', dark: true },
-  commons: { layout: 'tables', feature: 'lounge', dark: false },
+  // C29 (v7 R2): Meeting Rooms is a hallway of doors: people stand in it (no tables, no couch)
+  commons: { layout: 'standing', feature: 'lounge', dark: false },
   gallery: { layout: 'standing', feature: 'screens', dark: false },
   career: { layout: 'board', feature: 'clients', dark: false },
   // C21 (v6 D3): the pink-walled Admissions lobby: people stand; the board carries plans & pricing (the 3D room's own board)

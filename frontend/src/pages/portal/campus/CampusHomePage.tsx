@@ -5,6 +5,7 @@ import CampusTopBar from '../../../components/campus/home/CampusTopBar';
 import CampusConcierge from '../../../components/campus/home/CampusConcierge';
 import { pulseOf, talksToAdmissions } from '../../../components/campus/home/CampusConcierge';
 import BookCallHost, { useAdmissionsCall } from '../../../components/campus/admissions/BookCallHost';
+import MeetingSheetHost from '../../../components/campus/hallway/MeetingSheet';
 import { useCampusEvents } from '../../../components/campus/events/EventSignup';
 import { goingTo } from '../../../components/campus/events/eventsModel';
 import { useHomeFacts } from '../../../components/campus/home/useHomeFacts';
@@ -145,6 +146,7 @@ function CampusHome(): React.ReactElement {
       <CampusDoorTransition />
       <CampusDmToast />
       <BookCallHost />
+      <MeetingSheetHost />
       <CampusCheer burst reduceMotion={reduce} />
       <Wayfinder ctx={wf.ctx} onPick={wf.onPick} />
       {extra}
