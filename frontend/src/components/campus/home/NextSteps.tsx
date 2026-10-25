@@ -4,6 +4,7 @@ import { buildingName } from '../campusMap';
 import type { PlanStop } from '../campusPlan';
 import { canComplete } from '../campusPlan';
 import type { CompleteResult } from '../campusPlanApi';
+import { theName } from './conciergeCopy';
 import '../campusHome.css'; // the panel's card styles, shared by the page rail (all selectors are cm- scoped)
 
 /**
@@ -77,8 +78,8 @@ export function RoomsHere({ building: b, workplaceNames, onOpen }: { building: C
   const rooms = b.rooms.filter((r) => !r.planned); // the Main Gate has no live rooms, so nothing shows there
   if (!rooms.length) return null;
   return (
-    <section className="cm-rooms-here" aria-label={`Rooms in the ${buildingName(b, workplaceNames)}`} data-testid="cm-rooms-here">
-      <div className="cm-sec">Rooms in the {buildingName(b, workplaceNames)}</div>
+    <section className="cm-rooms-here" aria-label={`Rooms in ${theName(b, workplaceNames)}`} data-testid="cm-rooms-here">
+      <div className="cm-sec">Rooms in {theName(b, workplaceNames)}</div>
       <div className="cm-chips">
         {rooms.map((r) => (
           <button key={r.route} type="button" onClick={() => onOpen(r.route)} data-testid="cm-rooms-here-room">

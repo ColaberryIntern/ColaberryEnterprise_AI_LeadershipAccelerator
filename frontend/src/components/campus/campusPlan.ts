@@ -39,8 +39,9 @@ export interface PlanStop {
 /** Type slug -> the building it happens in (slugs from todayCategoryFilter and the CAPE plan service). */
 const TYPE_BUILDING: Record<string, BuildingId> = {};
 const place = (b: BuildingId, types: string[]) => types.forEach((t) => { TYPE_BUILDING[t] = b; });
-place('lecture', ['deep_dive', 'warmup', 'reflection', 'announcement', 'live_class', 'lesson', 'video']);
-place('testing', ['knowledge_check', 'survey', 'question', 'evaluation', 'certification_exercise']);
+// Ali, 2026-10-24: a knowledge check is part of the week (the Classroom feed), not certification; Cert Prep is the diagnostic and practice.
+place('lecture', ['deep_dive', 'warmup', 'reflection', 'announcement', 'live_class', 'lesson', 'video', 'knowledge_check', 'survey', 'question', 'evaluation']);
+place('testing', ['certification_exercise']);
 place('studio', ['implementation_task', 'project_task', 'build_story', 'setup_lab', 'artifact_submission', 'prompt_lab', 'prompt_challenge']);
 place('career', ['internship_activity']);
 place('commons', ['community_discussion', 'discussion', 'study_session', 'community_live_session', 'community_post']);

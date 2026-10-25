@@ -33,7 +33,8 @@ const HELPDESK = (a) => (a === 'business' ? [] : ['cm-cc-helpdesk']);
 const CONCIERGE_BY = { member: ['cm-cc-tour', 'cm-cc-chips'], explorer: ['cm-cc-pass', 'cm-cc-enroll', 'cm-cc-tour', 'cm-cc-chips'], business: ['cm-cc-tour', 'cm-cc-chips'], staff: ['cm-cc-staff-tools'] };
 const SIGNATURE = { member: 'commons', explorer: 'lecture', business: 'career', staff: 'career' };
 /** Tap a building even when the phone framing leaves it off screen (a real user pans to it first). */
-const tap = (id) => ({ evaluate: `document.querySelector('[data-testid="cm-bld-${id}"]').dispatchEvent(new MouseEvent('click', { bubbles: true }))` });
+// waits up to 10 s for the building: the map can render after the concierge, and a null tap failed at random accounts
+const tap = (id) => ({ evaluate: `(async () => { for (let i = 0; i < 50; i++) { const el = document.querySelector('[data-testid="cm-bld-${id}"]'); if (el) { el.dispatchEvent(new MouseEvent('click', { bubbles: true })); return; } await new Promise((r) => setTimeout(r, 200)); } throw new Error('no building ${id}'); })()` });
 /** WP-3: the prototype walk (330 units/s, eased, at least 600 ms): the longest walk on the campus settles inside this. */
 const WALKED = { wait: 2600 };
 
@@ -45,6 +46,24 @@ const HOME_KNOWN = (a, size) => [
   ...(a === 'business' ? ['partner company / seats / invite chips and "of your N people": no team size or company endpoint yet (WP-9)'] : []),
   ...(a === 'explorer' ? ['top bar "Enroll" pill: the enroll link lives in the Explorer pass'] : []),
 ];
+
+/** v6 D1 (C24): no door anywhere in a room; the room's spot (or none), at most one left-wall board, and the board itself. */
+const NO_DOOR = "document.querySelector('[data-testid=\"cm-inside-door\"]') ? 'a door element is still in the room' : ''";
+const roomOk = (id, spots) => `(() => {
+  const r = document.querySelector('[data-testid="cm-room3d"]');
+  if (!r) return 'no 3D room';
+  if (r.getAttribute('data-room') !== '${id}') return 'room is ' + r.getAttribute('data-room');
+  if (document.querySelector('[data-testid="cm-inside-door"]')) return 'a door element is still in the room';
+  const n = document.querySelectorAll('.cm-r3-spot').length;
+  if (n !== ${spots}) return 'spots: ' + n + ' (want ${spots})';
+  if (document.querySelectorAll('[data-testid="cm-wall-board"]').length > 1) return 'more than one left-wall board';
+  if (!document.querySelector('[data-testid="cm-board-title"]')) return 'the board has no title';
+  return '';
+})()`;
+/** v6 D1 fidelity view 21-room: the five rooms the ticket names, as a member (the click-throughs are in campus.e2e.js). */
+const ROOM_VIEWS = [['lecture', 1], ['studio', 1], ['testing', 1], ['library', 1], ['amphi', 0]].map(([id, spots]) => ({
+  name: `21-room-${id}`, route: '/portal/campus', accounts: ['member'], steps: () => [tap(id), WALKED],
+  required: () => ['cm-inside', 'cm-room3d', 'cm-board', 'cm-ways', ...(spots ? ['.cm-r3-spot'] : [])], assert: () => roomOk(id, spots) }));
 
 /** The map's viewBox right now, and the drag / zoom that move it well away from the whole campus. */
 const VB = "document.querySelector('svg.cm-map.has-camera').getAttribute('viewBox')";
@@ -79,9 +98,10 @@ const VIEWS = [
     required: (a, size) => [...MAP_ART, ...buildingIds(), ...TOPBAR, ...(size === 'phone' ? [] : ['cm-stats', ...STATS[a]]), ...CONCIERGE, ...HELPDESK(a), ...CONCIERGE_BY[a], ...(size === 'phone' ? ['.cm-tabbar'] : [])],
     known: HOME_KNOWN },
   { name: '03-arrive', route: '/portal/campus', steps: (a) => [tap(SIGNATURE[a]), WALKED],
-    required: () => ['cm-card', 'cm-arrive-hero', 'cm-arrive-now', '.cm-arrive .cm-cta', 'cm-arrive-back', 'cm-arrive-elsewhere', '.cm-arrive .cm-rooms'] },
+    required: (a) => ['cm-card', 'cm-arrive-hero', 'cm-arrive-now', ...(a === 'explorer' ? [] : ['cm-ways', 'cm-way-board']), 'cm-arrive-back', 'cm-arrive-elsewhere', '.cm-arrive .cm-rooms'] }, // v6 D1: the two ways in replace the single action (an explorer's lecture preview is locked: no ways, the enroll action stays)
   { name: '04-inside', route: '/portal/campus', steps: (a) => [tap(SIGNATURE[a]), WALKED],
-    required: () => ['cm-inside', 'cm-inside-room', 'cm-inside-you', 'cm-inside-door', 'cm-inside-out'],
+    required: () => ['cm-inside', 'cm-room3d', 'cm-board', 'cm-inside-you', 'cm-inside-out'], // v6 D1: the CSS 3D room; the board replaced the door
+    assert: () => NO_DOOR,
     known: () => ['the room opens on arrival, as the prototype flyIn does (no separate "look inside" step)', 'the prototype interiors invented events, dates, client names and tickets: neutral signs instead'] },
   { name: '05-page', route: '/portal/library',
     required: (a, size) => ['cm-locbar', 'cm-trail', 'cm-step-out', '.cm-locbar .cm-whereto', ...(size === 'phone' ? [] : ['cm-page-side', 'cm-page-rail'])], // C16: the bar
@@ -134,7 +154,75 @@ const VIEWS = [
     known: () => ['search logging for staff insights: decision Q11\'s separate project'] },
   // WP-5: a room whose back wall carries real facts (the Schedule board: TODAY · <weekday>, the next session, event and plan)
   { name: '19-room-wall', route: '/portal/campus', steps: () => [tap('tower'), WALKED],
-    required: () => ['cm-inside', 'cm-wall-schedule', 'cm-you-walk'] },
+    required: () => ['cm-inside', 'cm-room3d', 'cm-board', 'cm-r3-you'], assert: () => roomOk('tower', 0) }, // v6 D1: Schedule has a board, no spot
+  ...ROOM_VIEWS,
+  // C19 (round 3 §2.3 + v6 D1): the workstation, reached the real way (into the Studio, sit at your desk). A story as a member:
+  // the throwaway seed has a project but no Classroom week, so the lesson workstation is covered by its unit test instead.
+  { name: '23-workstation', route: '/portal/campus', accounts: ['member'], steps: () => [tap('studio'), WALKED, { click: '.cm-r3-spot' }, { wait: 2600 }],
+    // under 1100 px the angled side monitor folds away (the prototype's .mon.side{display:none}), so the terminal is wide-only
+    required: (a, size) => ['cm-ws', 'cm-ws-trail', 'cm-ws-section', 'cm-ws-standup', 'cm-ws-bench', 'cm-ws-desk', 'cm-ws-cory', 'cm-ws-status', ...(size === 'phone' ? [] : ['cm-ws-term'])],
+    assert: () => `(() => { const n = document.querySelectorAll('.cm-ws-bezel').length; if (n !== 2) return 'bezels: ' + n + ' (want 2)';
+      const t = document.querySelector('[data-testid="cm-ws-trail"]').textContent; return t.startsWith('Your desk · ') ? '' : 'trail: ' + t; })()` },
+  // C21 (v6 D3): Admissions beside the gate: the board's four prices come from the claims registry and $199 is absent; the
+  // service rows render for a member and a business viewer; /portal/plans renders the four cards.
+  { name: '24-admissions', route: '/portal/campus', accounts: ['member', 'business'], steps: () => [tap('admissions'), WALKED],
+    required: () => ['cm-room3d', 'cm-board-plans', 'cm-board-talk', 'cm-adm-services', 'cm-adm-maya', '.cm-r3-spot'],
+    assert: () => `(() => { const b = document.querySelector('[data-testid="cm-board-plans"]').textContent;
+      for (const want of ['$149', '$1,200', 'Scoped on a call', 'No card needed']) if (!b.includes(want)) return 'board lacks ' + want;
+      return document.body.textContent.includes('$199') ? '$199 is on the page' : ''; })()` },
+  // C27 (v6 D5): the Schedule room's board is the week strip and upcoming events (Sign up / You're going); the arrival card lists them.
+  { name: '25-schedule', route: '/portal/campus', accounts: ['member'], steps: () => [tap('tower'), WALKED, { wait: 1500 }],
+    required: () => ['cm-room3d', 'cm-board-strip', 'cm-ag-rows'], // C33: one list of classes, events and booked sessions
+    assert: () => `(() => { const n = document.querySelectorAll('[data-testid="cm-board-strip"] .d').length; if (n !== 7) return 'strip days: ' + n;
+      return document.querySelectorAll('[data-testid="cm-board-strip"] .d.is-today').length === 1 ? '' : 'today not marked once'; })()` },
+  // C29 (v7 R2): Meeting Rooms is a hallway: at most six doors (live rooms, your bookings, your rooms), each matching its card row
+  // in the same order and state; the board counts the open rooms; + New room and Book a session are on the board and the card.
+  { name: '26-meeting-rooms', route: '/portal/campus', accounts: ['member'], steps: () => [tap('commons'), WALKED, { wait: 2000 }],
+    required: () => ['cm-room3d', 'cm-board-new-room', 'cm-board-book-room', 'cm-hall-rows', 'cm-hall-new', 'cm-hall-book'],
+    assert: () => `(() => { const doors = Array.from(document.querySelectorAll('[data-testid="cm-room3d"] .cm-mdoor')); if (doors.length > 6) return 'doors: ' + doors.length;
+      for (const d of doors) { if (d.classList.contains('is-more')) continue; const n = d.getAttribute('data-testid').replace('cm-door-', '');
+        const row = document.querySelector('[data-testid="cm-hall-row-' + n + '"]'); if (!row) return 'no card row for door ' + n;
+        const name = d.querySelector('.plate b').textContent; if (!row.textContent.includes(name)) return 'door ' + n + ' (' + name + ') is not row ' + n;
+        if (d.classList.contains('is-live') !== !!row.querySelector('.dot')) return 'door ' + n + ' live state differs from its row'; }
+      const rows = document.querySelectorAll('[data-testid^="cm-hall-row-"]').length; const real = doors.filter((d) => !d.classList.contains('is-more')).length;
+      return rows === real ? '' : 'rows ' + rows + ' vs doors ' + real; })()` },
+  // C30 (v7 R3): the Community Board on the Quad: the noticeboard is on the map; clicking it walks there and opens the cork board with
+  // its four tabs and the real notes from the community feed.
+  { name: '27-community-board', route: '/portal/campus', accounts: ['member'], steps: () => [{ click: '[data-testid="cm-cboard-sign"]' }, { wait: 2200 }],
+    required: () => ['cm-cboard-sign', 'cm-cboard', 'cm-cb-tab-all', 'cm-cb-tab-q', 'cm-cb-tab-post', 'cm-cb-tab-ann', 'cm-cb-feed'],
+    assert: () => `(() => { const n = document.querySelectorAll('[data-testid="cm-cboard"] [role="tab"]').length; return n === 4 ? '' : 'tabs: ' + n; })()` },
+  // C34 (v8 G1): the Game Room page: the hero, both side cards, five game cards, the leaderboard, recent highs and the side column; no
+  // control's text overflows its box.
+  { name: '29-game-room', route: '/portal/game-room', accounts: ['member'], steps: () => [{ wait: 2500 }],
+    required: () => ['gr-hero', 'gr-hero-time', 'gr-your-week', 'gr-champions', 'gr-games', 'gr-leaderboards', 'gr-recent', 'gr-playing', 'gr-challenge'],
+    assert: () => `(() => { const n = document.querySelectorAll('[data-testid^="gr-card-"]').length; if (n !== 5) return 'cards: ' + n;
+      const over = Array.from(document.querySelectorAll('.gr-page button, .gr-page a')).filter((el) => el.scrollWidth > el.clientWidth + 1).map((el) => el.textContent.trim());
+      return over.length ? 'text overflows: ' + over.slice(0, 3).join(' | ') : ''; })()` },
+  // C36 (v8 G5): the Game Room interior: five cabinets in an aisle, the champions wall with a row per game, the card's meter and games;
+  // clicking the Bug Breaker cabinet opens the cabinet modal for Bug Breaker.
+  { name: '30-game-room-interior', route: '/portal/campus', accounts: ['member'], steps: () => [tap('arcade'), WALKED, { wait: 2000 }, { click: '[data-testid="cm-cabinet-bug-breaker"]' }, { wait: 2500 }],
+    required: () => ['cm-room3d', 'cm-champions', 'cm-arc-card', 'cm-arc-meter', 'gr-cabinet', 'gr-cab-title'],
+    assert: () => `(() => { const n = document.querySelectorAll('[data-testid^="cm-cabinet-"][role="button"]').length; if (n !== 5) return 'cabinets: ' + n;
+      const rows = document.querySelectorAll('[data-testid="cm-champions"] .r').length; if (rows !== 5) return 'champion rows: ' + rows;
+      const t = document.querySelector('[data-testid="gr-cab-title"]').textContent; return t === 'BUG BREAKER' ? '' : 'cabinet title: ' + t; })()` },
+  // C39 (v11): Chow Hall left of the gate; the room's craving screen, chalkboard, counter and window; the counter opens the order sheet
+  // (chips and app cards) without leaving /portal/campus; no control's text overflows.
+  { name: '30-chow-hall', route: '/portal/campus', accounts: ['member'], steps: () => [tap('chow'), WALKED, { wait: 2000 }, { click: '[data-testid="cm-spot-counter"]' }, { wait: 1200 }],
+    required: () => ['cm-bld-chow', 'cm-room3d', 'cm-crave-screen', 'cm-chalkboard', 'cm-spot-counter', 'cm-room-window', 'cm-order', 'cm-order-apps', 'cm-crave-pizza'],
+    assert: () => `(() => { if (location.pathname !== '/portal/campus') return 'path changed: ' + location.pathname;
+      const gate = document.querySelector('[data-testid="cm-bld-gate"]'), chow = document.querySelector('[data-testid="cm-bld-chow"]');
+      if (gate && chow && chow.getBoundingClientRect().left >= gate.getBoundingClientRect().left) return 'Chow Hall is not left of the gate';
+      if (document.querySelectorAll('[data-testid="cm-order-apps"] a').length < 1) return 'no app cards';
+      const over = Array.from(document.querySelectorAll('[data-testid="cm-order"] button, [data-testid="cm-order"] a')).filter((el) => el.scrollWidth > el.clientWidth + 1).map((el) => el.textContent.trim());
+      return over.length ? 'text overflows: ' + over.slice(0, 3).join(' | ') : ''; })()` },
+  // C37/C38 (v9, v10): the sky layer and the weather chip on the map (the clock alone while CAMPUS_WEATHER_ENABLED is off), and in the
+  // Classroom the window on the right wall with the real view east ("Looking out at ...").
+  { name: '31-weather', route: '/portal/campus', accounts: ['member'], steps: () => [tap('lecture'), WALKED, { wait: 2000 }],
+    required: (a, size) => ['cm-wx', 'cm-room-window', 'cm-win-looking', ...(size === 'phone' ? [] : ['cm-wx-chip'])],
+    assert: () => `(() => { const l = document.querySelector('[data-testid="cm-win-looking"]').textContent; if (!/^Looking out at /.test(l)) return 'window sign: ' + l;
+      const tod = document.querySelector('[data-testid="cm-wx"]').getAttribute('data-tod'); return ['dawn', 'day', 'dusk', 'night'].includes(tod) ? '' : 'time of day: ' + tod; })()` },
+  { name: '24-plans', route: '/portal/plans', accounts: ['member', 'business'], steps: () => [{ wait: 1500 }],
+    required: () => ['cm-plans', 'cm-plan-explorer', 'cm-plan-individual', 'cm-plan-team', 'cm-plan-services', 'cm-plans-account', 'cm-plans-talk'] },
   // WP-6: arriving at the live building: the hero in the state's colour, the stage, the live room as the main action
   // C16 (round 3 §2.4): the light location bar on a page at 1440 and 1920: it spans the viewport, no control's text overflows, and
   // after scrolling 800 px it is at the top with the rail's Up next in view and no "YOUR NEXT STEP" inside the header.
@@ -142,17 +230,29 @@ const VIEWS = [
     steps: () => [{ wait: 900 }, { evaluate: 'window.scrollTo(0, 800)', settle: 900 }],
     required: () => ['cm-locbar', 'cm-locbar-map', 'cm-trail', 'cm-step-out', 'cm-whereto', 'cm-page-rail'],
     assert: () => PAGE_NAV_OK },
-  { name: '20-live-arrive', route: '/portal/campus', needsLive: true, steps: () => [tap('commons'), WALKED],
+  // C28 (v7 R1): every broadcast airs in the Events Hall
+  { name: '20-live-arrive', route: '/portal/campus', needsLive: true, steps: () => [tap('amphi'), WALKED],
     required: () => ['.cm-arrive-hero.is-live', 'cm-stage', 'cm-arrive-cta'],
     known: () => ['DOORS OPEN and REPLAY: discovery lists only live and reconnecting broadcasts today (kept out on purpose, #3346)', 'auto check-in needs a broadcast with a class session; the local seed has none'] },
+  // C31 (v7 R4): on air (stubbed discovery): the marquee sits on the Events Hall's map group, "Happening now" is the first thing in the
+  // side panel, the hall's screen shows the ON AIR chip, and the arrival tile reads COLABERRY LIVE.
+  { name: '28-live', route: '/portal/campus', needsLive: true, accounts: ['member'], steps: () => [tap('amphi'), WALKED, { wait: 1500 }],
+    // on a phone an open card folds the side panel to its peek strip (like every room view), so Happening now is checked on desktop
+    required: (a, size) => ['cm-board-onair', 'cm-arrive-live-tile', ...(size === 'phone' ? [] : ['cm-cc-live-kicker'])],
+    assert: () => `(() => { const m = document.querySelector('[data-testid="cm-marquee"]'); if (!m) return 'no marquee';
+      const t = m.getAttribute('transform') || ''; if (!/^translate\\(700 /.test(t)) return 'marquee not over the Events Hall (x 700): ' + t;
+      const body = document.querySelector('.cm-cc-body'); const first = body && body.firstElementChild;
+      if (body && body.offsetParent !== null && (!first || first.getAttribute('data-testid') !== 'cm-cc-live')) return 'Happening now is not first';
+      if (!document.querySelector('[data-testid="cm-board-onair"]').textContent.includes('ON AIR')) return 'screen chip lacks ON AIR';
+      return document.querySelector('[data-testid="cm-arrive-live-tile"]').textContent.includes('COLABERRY LIVE') ? '' : 'tile lacks COLABERRY LIVE'; })()` },
 ];
 
 /** WP-1: the side panel (and the tour in it) is required on every view past the gate. */
 function panelFor(view, a, size) {
-  if (view.name === '01-gate') return [];
+  if (view.name === '01-gate' || view.name === '23-workstation') return []; // the workstation is full screen, as the prototype's #ws
   const tour = a === 'staff' ? [] : ['cm-cc-tour'];
   if (view.route !== '/portal/campus' && view.name !== '14-step-outside') return size === 'phone' ? ['cm-steps-open'] : ['cm-page-rail', ...tour.map((t) => `[data-testid="cm-page-rail"] [data-testid="${t}"]`)];
-  if (size === 'phone' && CARD_VIEWS.includes(view.name)) return ['cm-cc-peek'];
+  if (size === 'phone' && (CARD_VIEWS.includes(view.name) || view.name.startsWith('21-room-') || view.name === '24-admissions' || view.name === '25-schedule' || view.name === '26-meeting-rooms' || view.name === '28-live' || view.name === '30-game-room-interior' || view.name === '30-chow-hall' || view.name === '31-weather')) return ['cm-cc-peek'];
   return ['cm-concierge', ...tour];
 }
 const withPanel = (view) => ({ ...view, required: (a, size) => [...view.required(a, size), ...panelFor(view, a, size)] });

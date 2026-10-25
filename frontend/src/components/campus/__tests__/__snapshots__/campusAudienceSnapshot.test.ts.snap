@@ -65,7 +65,7 @@ Array [
     "gate": "cert-prep",
     "id": "testing",
     "name": "Cert Prep Center",
-    "primary": "Start the knowledge check -> /portal/cert-prep",
+    "primary": "Take the diagnostic or practice -> /portal/cert-prep",
     "rooms": Array [
       "Cert prep -> /portal/cert-prep",
     ],
@@ -88,14 +88,14 @@ Array [
     "explorer": "open",
     "gate": null,
     "id": "commons",
-    "name": "Community Lounge",
+    "name": "Meeting Rooms",
     "primary": "Open live rooms -> /portal/rooms",
     "rooms": Array [
-      "Rooms -> /portal/rooms",
+      "Meeting rooms -> /portal/rooms",
       "Community -> /portal/community",
       "People -> /portal/community/people",
     ],
-    "workplaceName": "Collab Cafe",
+    "workplaceName": "Meeting Rooms",
   },
   Object {
     "explorer": "open",
@@ -131,6 +131,26 @@ Array [
       "Game Room -> /portal/game-room",
     ],
     "workplaceName": "Break Room",
+  },
+  Object {
+    "explorer": "open",
+    "gate": null,
+    "id": "admissions",
+    "name": "Admissions",
+    "primary": "See plans & services -> /portal/plans",
+    "rooms": Array [
+      "Plans & pricing -> /portal/plans",
+    ],
+    "workplaceName": "Admissions",
+  },
+  Object {
+    "explorer": "open",
+    "gate": null,
+    "id": "chow",
+    "name": "Chow Hall",
+    "primary": "Order food ↗ -> /campus/chow",
+    "rooms": Array [],
+    "workplaceName": "Chow Hall",
   },
 ]
 `;
@@ -200,7 +220,7 @@ Array [
     "gate": "cert-prep",
     "id": "testing",
     "name": "Cert Prep Center",
-    "primary": "Start the knowledge check -> /portal/cert-prep",
+    "primary": "Take the diagnostic or practice -> /portal/cert-prep",
     "rooms": Array [
       "Cert prep -> /portal/cert-prep",
     ],
@@ -223,14 +243,14 @@ Array [
     "explorer": "open",
     "gate": null,
     "id": "commons",
-    "name": "Community Lounge",
+    "name": "Meeting Rooms",
     "primary": "Open live rooms -> /portal/rooms",
     "rooms": Array [
-      "Rooms -> /portal/rooms",
+      "Meeting rooms -> /portal/rooms",
       "Community -> /portal/community",
       "People -> /portal/community/people",
     ],
-    "workplaceName": "Collab Cafe",
+    "workplaceName": "Meeting Rooms",
   },
   Object {
     "explorer": "open",
@@ -275,6 +295,26 @@ Array [
     "primary": "Start on Today -> /portal/today",
     "rooms": Array [],
     "workplaceName": "Visitor Entrance",
+  },
+  Object {
+    "explorer": "open",
+    "gate": null,
+    "id": "admissions",
+    "name": "Admissions",
+    "primary": "See plans & services -> /portal/plans",
+    "rooms": Array [
+      "Plans & pricing -> /portal/plans",
+    ],
+    "workplaceName": "Admissions",
+  },
+  Object {
+    "explorer": "open",
+    "gate": null,
+    "id": "chow",
+    "name": "Chow Hall",
+    "primary": "Order food ↗ -> /campus/chow",
+    "rooms": Array [],
+    "workplaceName": "Chow Hall",
   },
 ]
 `;
@@ -344,7 +384,7 @@ Array [
     "gate": "cert-prep",
     "id": "testing",
     "name": "Cert Prep Center",
-    "primary": "Start the knowledge check -> /portal/cert-prep",
+    "primary": "Take the diagnostic or practice -> /portal/cert-prep",
     "rooms": Array [
       "Cert prep -> /portal/cert-prep",
     ],
@@ -367,14 +407,14 @@ Array [
     "explorer": "open",
     "gate": null,
     "id": "commons",
-    "name": "Community Lounge",
+    "name": "Meeting Rooms",
     "primary": "Open live rooms -> /portal/rooms",
     "rooms": Array [
-      "Rooms -> /portal/rooms",
+      "Meeting rooms -> /portal/rooms",
       "Community -> /portal/community",
       "People -> /portal/community/people",
     ],
-    "workplaceName": "Collab Cafe",
+    "workplaceName": "Meeting Rooms",
   },
   Object {
     "explorer": "open",
@@ -410,6 +450,26 @@ Array [
       "Game Room -> /portal/game-room",
     ],
     "workplaceName": "Break Room",
+  },
+  Object {
+    "explorer": "open",
+    "gate": null,
+    "id": "admissions",
+    "name": "Admissions",
+    "primary": "See plans & services -> /portal/plans",
+    "rooms": Array [
+      "Plans & pricing -> /portal/plans",
+    ],
+    "workplaceName": "Admissions",
+  },
+  Object {
+    "explorer": "open",
+    "gate": null,
+    "id": "chow",
+    "name": "Chow Hall",
+    "primary": "Order food ↗ -> /campus/chow",
+    "rooms": Array [],
+    "workplaceName": "Chow Hall",
   },
 ]
 `;
@@ -479,7 +539,7 @@ Array [
     "gate": "cert-prep",
     "id": "testing",
     "name": "Cert Prep Center",
-    "primary": "Start the knowledge check -> /portal/cert-prep",
+    "primary": "Take the diagnostic or practice -> /portal/cert-prep",
     "rooms": Array [
       "Cert prep -> /portal/cert-prep",
     ],
@@ -502,14 +562,14 @@ Array [
     "explorer": "open",
     "gate": null,
     "id": "commons",
-    "name": "Community Lounge",
+    "name": "Meeting Rooms",
     "primary": "Open live rooms -> /portal/rooms",
     "rooms": Array [
-      "Rooms -> /portal/rooms",
+      "Meeting rooms -> /portal/rooms",
       "Community -> /portal/community",
       "People -> /portal/community/people",
     ],
-    "workplaceName": "Collab Cafe",
+    "workplaceName": "Meeting Rooms",
   },
   Object {
     "explorer": "open",
@@ -556,6 +616,26 @@ Array [
     "primary": "Start on Today -> /portal/today",
     "rooms": Array [],
     "workplaceName": "Visitor Entrance",
+  },
+  Object {
+    "explorer": "open",
+    "gate": null,
+    "id": "admissions",
+    "name": "Admissions",
+    "primary": "See plans & services -> /portal/plans",
+    "rooms": Array [
+      "Plans & pricing -> /portal/plans",
+    ],
+    "workplaceName": "Admissions",
+  },
+  Object {
+    "explorer": "open",
+    "gate": null,
+    "id": "chow",
+    "name": "Chow Hall",
+    "primary": "Order food ↗ -> /campus/chow",
+    "rooms": Array [],
+    "workplaceName": "Chow Hall",
   },
 ]
 `;

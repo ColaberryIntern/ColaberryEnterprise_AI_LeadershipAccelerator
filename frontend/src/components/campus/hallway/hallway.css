@@ -1,0 +1,63 @@
+/* C29 (v7 R2): the Meeting Rooms hallway (prototype .mdoor, docs/design/campus/colaberry-campus-v7.html). Art tokens only.
+   Doors sit on the room's side walls (.cm-r3 .face.left / .face.right), sized by the room (--fw) like the board's text. */
+.cm-mdoor{pointer-events:auto;position:absolute;bottom:0;width:26%;height:66%;padding:0;border:0;background:var(--cm-art-door);border-radius:8px 8px 0 0;cursor:pointer;
+  box-shadow:inset 0 0 0 6px var(--cm-art-door-inset);transition:filter .2s;font-family:'DM Sans',system-ui,sans-serif;color:var(--cm-art-ink)}
+.cm-mdoor:hover{filter:brightness(1.12)}
+.cm-mdoor:focus-visible{outline:4px solid var(--cm-art-red);outline-offset:2px}
+.cm-mdoor .glass{position:absolute;left:14%;right:14%;top:10%;height:30%;background:var(--cm-art-door-glass);border-radius:6px;display:flex;flex-wrap:wrap;gap:4px;
+  align-content:center;justify-content:center;padding:4px;box-shadow:inset 0 0 0 4px var(--cm-art-door-inset)}
+.cm-mdoor .glass i{width:30%;aspect-ratio:1;border-radius:50%;border:2px solid var(--cm-art-white);background:var(--cm-art-ink);color:var(--cm-art-white);
+  font:800 calc(var(--fw, 900px) * .011) 'DM Sans',system-ui,sans-serif;display:grid;place-items:center;font-style:normal}
+.cm-mdoor .glass i.is-friend{background:var(--cm-art-door-friends)}
+.cm-mdoor.is-live .glass{background:var(--cm-art-door-glass-live);box-shadow:inset 0 0 0 4px var(--cm-art-door-inset),0 0 30px var(--cm-art-door-glass-glow)}
+.cm-mdoor.is-friends{box-shadow:inset 0 0 0 6px var(--cm-art-door-inset),0 0 0 6px var(--cm-art-door-friends),0 0 34px var(--cm-art-door-friends-glow)}
+.cm-mdoor.is-more{background:var(--cm-art-door-more)}
+.cm-mdoor .plate{position:absolute;left:8%;right:8%;top:46%;background:var(--cm-art-door-plate);border-radius:6px;padding:6px 8px;text-align:center;box-shadow:0 2px 6px var(--cm-art-door-inset)}
+.cm-mdoor .plate b{display:block;font-weight:800;font-size:calc(var(--fw, 900px) * .014);line-height:1.15;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cm-mdoor .plate small{display:block;font-weight:700;font-size:calc(var(--fw, 900px) * .011);color:var(--cm-art-muted);margin-top:2px}
+.cm-mdoor .plate .st-live{color:var(--cm-art-live)}
+.cm-mdoor .plate .st-booked{color:var(--cm-art-door-booked)}
+.cm-mdoor .knob{position:absolute;right:10%;top:62%;width:14px;height:14px;border-radius:50%;background:var(--cm-art-door-knob)}
+.cm-mdoor .num{position:absolute;top:-30px;left:50%;transform:translateX(-50%);font:800 calc(var(--fw, 900px) * .017) ui-monospace,monospace;color:var(--cm-art-ink);
+  background:var(--cm-art-door-plate);border-radius:6px;padding:0 10px}
+
+/* the back-wall board (inside .cm-r3-screen: scales with the room) */
+.cm-r3-screen .cm-hall-board-rows{list-style:none;margin:calc(var(--fw) * .006) 0;padding:0}
+.cm-hall-board-rows li{display:flex;align-items:center;gap:calc(var(--fw) * .01);padding:calc(var(--fw) * .005) 0;border-bottom:1px solid var(--cm-art-line);font-size:calc(var(--fw) * .014);color:var(--cm-art-sp-ink)}
+.cm-hall-board-rows .tx{flex:1;min-width:0}
+.cm-hall-board-rows .tx b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cm-hall-board-rows .tx small{display:block;color:var(--cm-art-muted);font-size:.85em}
+.cm-hall-board-rows .av{display:flex}
+.cm-hall-board-rows .av i{width:calc(var(--fw) * .024);height:calc(var(--fw) * .024);margin-left:-6px;border-radius:50%;border:2px solid var(--cm-art-white);background:var(--cm-art-ink);
+  color:var(--cm-art-white);font:800 calc(var(--fw) * .009) 'DM Sans',system-ui,sans-serif;display:grid;place-items:center;font-style:normal}
+.cm-hall-board-rows .av i.is-friend{background:var(--cm-art-door-friends)}
+
+/* the arrival card's "Rooms in the hallway" */
+.cm-hall{margin-top:12px}
+.cm-hall-rows{list-style:none;margin:0 0 10px;padding:0;border:1px solid var(--cm-art-line);border-radius:12px;overflow:hidden}
+.cm-hall-rows li{display:flex;align-items:center;gap:10px;padding:9px 12px;font-size:13.5px}
+.cm-hall-rows li+li{border-top:1px solid var(--cm-art-line)}
+.cm-hall-rows .n{font:800 12px ui-monospace,monospace;color:var(--cm-art-muted);width:14px}
+.cm-hall-rows .dot{width:8px;height:8px;border-radius:50%;background:var(--cm-art-live);flex:none}
+.cm-hall-rows .tx{flex:1;min-width:0}
+.cm-hall-rows .tx b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cm-hall-rows .tx small{display:block;color:var(--cm-art-muted);font-size:12.5px}
+.cm-hall-rows .cm-btn-line{padding:6px 12px;font-size:12.5px}
+.cm-btn-line.pri{background:var(--cm-art-red);border-color:var(--cm-art-red);color:var(--cm-art-white)}
+.cm-hall-acts{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 10px}
+.cm-hall-muted{color:var(--cm-art-muted);font-size:13.5px;margin:0 0 10px}
+.cm-hall-board{font-size:13px;color:var(--cm-art-muted);margin:0}
+.cm-hall-link{background:none;border:0;padding:0;color:var(--cm-art-red);font:inherit;font-weight:700;cursor:pointer}
+
+/* the sheets (peek, + New room, Book a session) reuse the booking sheet's frame (.cm-book) */
+.cm-meet-people{list-style:none;margin:0 0 12px;padding:0}
+.cm-meet-people li{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--cm-art-line)}
+.cm-meet-people .av{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;background:var(--cm-art-ink);color:var(--cm-art-paper);font-size:11px;font-weight:800;flex:none}
+.cm-meet-people .av.is-friend{background:var(--cm-art-door-friends)}
+.cm-meet-people .tx{flex:1;min-width:0}
+.cm-meet-people small{display:block;color:var(--cm-art-muted);font-size:12.5px}
+.cm-meet-input{display:block;width:100%;height:40px;border-radius:12px;border:1px solid var(--cm-art-line);background:var(--cm-art-card);color:var(--cm-art-ink);padding:0 12px;font:inherit}
+.cm-meet-input:focus-visible{outline:3px solid var(--cm-art-red);outline-offset:2px}
+.cm-book-chip .av{display:inline-grid;place-items:center;width:20px;height:20px;margin-right:6px;border-radius:50%;background:var(--cm-art-ink);color:var(--cm-art-paper);font-size:9px;font-weight:800}
+.cm-book-chip.on .av{background:var(--cm-art-paper);color:var(--cm-art-ink)}
+.cm-book-chip .av.is-staff{background:var(--cm-art-staff-reese);color:var(--cm-art-white)}

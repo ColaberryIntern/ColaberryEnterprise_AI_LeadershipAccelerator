@@ -42,6 +42,11 @@
 /* An event THIS learner registered for — leaf, so their own commitments stand
    out from the many program events everyone can see. */
 .sch-root .chip.registered{background:rgba(91,166,60,.16);color:var(--leaf-text)} .sch-root .chip.registered .sw{background:var(--leaf-action)}
+/* C33 (v7 R6): a meeting-room session you booked (Meeting Rooms' amber) */
+.sch-root .chip.booked{background:rgba(232,146,12,.16);color:var(--amber-deep)} .sch-root .chip.booked .sw{background:var(--amber)}
+.sch-root .tg-ev.booked{border-color:var(--amber);background:rgba(232,146,12,.1)}
+.sch-root .tk.booked{background:rgba(232,146,12,.1);border-color:var(--amber)}
+.sch-root .mdot.booked{border-color:var(--amber)}
 
 /* ===== Today button (self-contained ghost/sm) ===== */
 .sch-root .sch-btn{border:none;border-radius:var(--r-pill);font-family:inherit;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:8px}
@@ -55,7 +60,7 @@
 .sch-root .toggle button.active{background:var(--surface-page);color:var(--text-strong);box-shadow:var(--shadow-md)}
 
 /* time-grid week view */
-.sch-root .timegrid{display:grid;grid-template-columns:64px repeat(5,1fr);gap:8px;margin-top:16px;overflow-x:auto}
+.sch-root .timegrid{display:grid;grid-template-columns:64px repeat(7,minmax(110px,1fr));gap:8px;margin-top:16px;overflow-x:auto}
 .sch-root .tg-corner{}
 .sch-root .tg-dayhead{text-align:center;padding:8px 4px;border-radius:var(--r-12);background:var(--surface-sunken);border:1px solid var(--border-subtle)}
 .sch-root .tg-dayhead .d{font-size:13px;color:var(--text-muted);font-weight:500} .sch-root .tg-dayhead .n{font-size:18px;font-weight:700;color:var(--text-strong)}
@@ -162,3 +167,11 @@
   .sch-root .mcell{min-height:72px}
   .sch-root .schtoolbar{gap:8px} .sch-root .periodlbl{min-width:0;font-size:15px} .sch-root .ptsbank{margin-left:0;width:100%}
 }
+
+/* C27 (v6 D5): today's plan in teal, and one-tap Sign up / You're going on each event (Eventbrite is the record) */
+.sch-root .chip.plan{background:rgba(15,118,110,.12);color:rgb(15,118,110)} .sch-root .chip.plan .sw{background:rgb(15,118,110)}
+.sch-root .tg-ev.plan{border-color:rgb(15,118,110);background:rgba(15,118,110,.08)}
+.sch-root .mdot.plan{border-color:rgb(15,118,110)}
+.sch-root .sch-signup{display:block;margin-top:6px}
+.sch-root .mdot .sch-signup{display:none}
+.sch-root .qtask .sch-signup{margin:0 0 0 auto;flex:none}

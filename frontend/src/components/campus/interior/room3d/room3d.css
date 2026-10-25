@@ -1,0 +1,90 @@
+/* The CSS 3D room (v3 §2.1 + v6 D1; prototype #roomWrap / .stage / .room / .screen / .board / .bb / .mydesk). Colors are art tokens only. */
+.cm-r3{position:absolute;inset:0;overflow:hidden;background:var(--cm-art-in-stage-dark);border-radius:inherit}
+.cm-r3-stage{position:absolute;inset:0;perspective:var(--persp,1000px);perspective-origin:68% 40%;overflow:hidden;transition:transform .52s cubic-bezier(.5,0,.3,1)}
+.cm-r3.is-zoom .cm-r3-stage{transform:scale(2.6);transform-origin:var(--zo,50% 70%)}
+/* The room's own box sits at z = 0, in front of everything placed back into the scene: it must not take clicks, or it swallows
+   the spot, the people and the board (found by the e2e). Only the walls that carry controls and the floor's billboards do. */
+.cm-r3-room{position:absolute;inset:0;transform-style:preserve-3d;pointer-events:none}
+.cm-r3 .face{position:absolute;backface-visibility:hidden;pointer-events:none}
+.cm-r3 .face.back,.cm-r3 .face.left{pointer-events:auto}
+.cm-r3 .back{left:0;top:0;width:var(--fw);height:var(--fh);transform:translateZ(calc(var(--d) * -1));background:var(--wall)}
+.cm-r3 .left{left:0;top:0;width:var(--d);height:var(--fh);transform-origin:left center;transform:rotateY(90deg);background:var(--wall-s)}
+.cm-r3 .right{right:0;top:0;width:var(--d);height:var(--fh);transform-origin:right center;transform:rotateY(-90deg);background:var(--wall-s)}
+.cm-r3 .floor{left:0;bottom:0;width:var(--fw);height:var(--d);transform-origin:bottom center;transform:rotateX(90deg);
+  background:repeating-linear-gradient(90deg,var(--cm-art-in-grain) 0 2px,transparent 2px 90px),var(--floor)}
+.cm-r3 .ceil{left:0;top:0;width:var(--fw);height:var(--d);transform-origin:top center;transform:rotateX(-90deg);background:var(--ceil)}
+.cm-r3 .ceil i{position:absolute;top:40%;width:150px;height:46px;border-radius:50%;background:var(--cm-art-in-light);box-shadow:0 0 40px 10px var(--cm-art-in-light)}
+.cm-r3.is-dark .ceil i{background:var(--cm-art-in-light-dark);box-shadow:0 0 40px 10px var(--cm-art-in-light-dark)}
+.cm-r3 .wainscot{position:absolute;left:0;right:0;bottom:0;height:16%;background:var(--cm-art-in-grain);border-top:3px solid var(--cm-art-in-grain)}
+
+/* the board: the page's Next step on the back wall */
+.cm-r3-screen{position:absolute;left:13%;right:13%;top:8%;height:60%;cursor:zoom-in;background:var(--cm-art-in-screen);border-radius:18px;padding:12px;box-shadow:0 18px 40px var(--cm-art-sp-shadow)}
+.cm-r3-screen:focus-visible{outline:4px solid var(--cm-art-red);outline-offset:4px}
+.cm-r3-screen .inner{width:100%;height:100%;border-radius:10px;background:var(--cm-art-white);color:var(--cm-art-sp-ink);display:flex;flex-direction:column;justify-content:center;padding:4% 5%;position:relative;overflow:hidden}
+.cm-r3-screen .inner::before{content:"";position:absolute;left:0;top:0;right:0;height:7px;background:var(--bc)}
+.cm-r3-screen .k{font-size:calc(var(--fw) * .019);font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--cm-art-red);display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.cm-r3-screen .pts{font-size:calc(var(--fw) * .018);font-weight:700;letter-spacing:0;color:var(--cm-art-live);background:var(--cm-art-live-tint);border-radius:8px;padding:3px 8px;font-family:ui-monospace,Menlo,monospace}
+.cm-r3-screen h3{font-size:calc(var(--fw) * .034);line-height:1.12;margin:12px 0 10px;letter-spacing:-.01em;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.cm-r3-screen h3.plain{font-size:calc(var(--fw) * .045);text-align:center}
+.cm-r3-screen p{font-size:calc(var(--fw) * .019);color:var(--cm-art-muted);margin:0 0 16px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.cm-r3-screen .row{display:flex;gap:10px;flex-wrap:wrap}
+.cm-r3-screen .b{height:calc(var(--fw) * .052);font-size:calc(var(--fw) * .02);padding:0 calc(var(--fw) * .022);border-radius:999px;border:1px solid var(--cm-art-line);background:var(--cm-art-white);
+  font-weight:700;color:var(--cm-art-sp-ink);cursor:pointer;white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+.cm-r3-screen .b.red{background:var(--cm-art-red);border-color:var(--cm-art-red);color:var(--cm-art-white)}
+.cm-r3-screen .stand{position:absolute;left:50%;bottom:-38px;width:12px;height:38px;background:var(--cm-art-in-stage-dark);transform:translateX(-50%)}
+
+/* the left-wall board (prototype .board, sized for the side wall) */
+.cm-r3-wallslot{position:absolute;left:9%;right:9%;top:13%;height:60%}
+.cm-r3-wallboard{position:absolute;inset:0;text-align:left;background:var(--cm-art-white);color:var(--cm-art-sp-ink);border-radius:16px;padding:22px 26px;box-shadow:0 10px 24px var(--cm-art-sp-shadow);
+  border:6px solid var(--cm-art-in-frame);cursor:zoom-in;display:flex;flex-direction:column;overflow:hidden;font:inherit}
+.cm-r3-wallboard:hover{filter:brightness(1.04)}
+.cm-r3-wallboard .pin{position:absolute;top:-14px;left:50%;width:20px;height:20px;border-radius:50%;background:var(--cm-art-red);transform:translateX(-50%)}
+.cm-r3-wallboard h4{margin:0 0 8px;font-size:36px}
+.cm-r3-wallboard .r{display:flex;justify-content:space-between;gap:12px;font-size:27px;padding:5px 0;border-bottom:2px solid var(--cm-art-line)}
+.cm-r3-wallboard .r b{font-family:ui-monospace,Menlo,monospace}
+.cm-r3-wallboard .bar{display:block;height:12px;border-radius:6px;background:var(--cm-art-line);margin:6px 0 10px;overflow:hidden}
+.cm-r3-wallboard .bar i{display:block;height:100%;background:var(--cm-art-red)}
+.cm-r3-flat{position:absolute;inset:0;z-index:6;background:var(--cm-art-in-screen-dim);display:grid;place-items:center}
+.cm-r3-flat .card{background:var(--cm-art-card);color:var(--cm-art-sp-ink);border-radius:22px;width:min(420px,90%);padding:22px}
+.cm-r3-flat h3{margin:0 0 12px}
+.cm-r3-flat .kv{display:flex;justify-content:space-between;padding:7px 0;font-size:14px;border-bottom:1px solid var(--cm-art-line)}
+.cm-r3-flat .row{display:flex;gap:8px;margin-top:16px;flex-wrap:wrap}
+
+/* the floor: billboards (people, furniture, the staff desk, your spot, you) */
+.cm-r3-floorlayer{position:absolute;inset:0;transform-style:preserve-3d;pointer-events:none}
+.cm-r3-bb{position:absolute;left:0;top:0;transform-style:preserve-3d;pointer-events:auto}
+.cm-r3-bb svg{display:block;overflow:visible}
+.cm-r3-row{background:linear-gradient(var(--cm-art-in-row-top) 0 18%,var(--cm-art-in-row) 18%);border-radius:4px;pointer-events:none}
+.cm-r3-bench{background:linear-gradient(var(--cm-art-in-bench-top) 0 18%,var(--cm-art-in-bench) 18%);border-radius:4px;pointer-events:none}
+.cm-r3-table{pointer-events:none}
+.cm-r3-table::before{content:"";position:absolute;left:0;right:0;top:0;height:30px;border-radius:50%;background:var(--cm-art-in-table);border:3px solid var(--cm-art-in-table-leg)}
+.cm-r3-table::after{content:"";position:absolute;left:50%;top:28px;width:10px;height:28px;margin-left:-5px;background:var(--cm-art-in-table-leg)}
+.cm-r3-desk{background:var(--cm-art-gold);border-radius:6px;color:var(--cm-art-white);font:800 13px 'DM Sans',system-ui,sans-serif;display:grid;place-items:center;letter-spacing:.08em;pointer-events:none}
+.cm-r3-spot{cursor:pointer}
+.cm-r3-spot svg{width:100%;height:100%;transition:filter .25s}
+.cm-r3-spot:hover svg,.cm-r3-spot:focus-visible svg,.cm-r3-spot.is-sit svg{filter:drop-shadow(0 0 14px var(--cm-art-sp-lamp-glow))}
+.cm-r3-spot:focus-visible{outline:none}
+.cm-r3-spot .steam path{animation:cm-r3-steam 2.6s ease-in-out infinite;opacity:0}
+.cm-r3-spot .steam path:nth-child(2){animation-delay:1.3s}
+@keyframes cm-r3-steam{0%{opacity:0;transform:translateY(4px)}40%{opacity:.7}100%{opacity:0;transform:translateY(-10px)}}
+.cm-r3-spot .scrglow{animation:cm-r3-scr 3s ease-in-out infinite}
+@keyframes cm-r3-scr{50%{opacity:.75}}
+.cm-r3-fig.is-you{pointer-events:none}
+.cm-r3-fig.is-you.is-gone{opacity:0;transition:opacity .2s}
+@media (prefers-reduced-motion:reduce){.cm-r3-stage{transition:none}.cm-r3-spot .steam path,.cm-r3-spot .scrglow{animation:none}}
+
+/* C26 (v6 D4): the Events Hall auditorium: six tiered rows of red seats (each row a little taller, so they read as tiers), the
+   raised stage under the screen, and a head per person really here (no invented crowd) */
+.cm-r3-tier{pointer-events:none;border-radius:6px 6px 2px 2px;border-top:4px solid var(--cm-art-in-seat-edge);
+  background:repeating-linear-gradient(90deg,var(--cm-art-in-seat) 0 22px,var(--cm-art-in-seat-back) 22px 26px)}
+.cm-r3-platform{position:absolute;left:8%;right:8%;bottom:0;height:9%;background:var(--cm-art-in-stage);border-top:5px solid var(--cm-art-in-stage-floor);
+  box-shadow:0 -6px 18px var(--cm-art-sp-shadow);pointer-events:none}
+.cm-r3-head{display:flex;align-items:flex-start;justify-content:center}
+.cm-r3-head .h{width:28px;height:28px;border-radius:50%;border:2px solid var(--cm-art-in-seat-edge);background:var(--cm-art-in-head);color:var(--cm-art-in-head-ink);
+  font:800 10px 'DM Sans',system-ui,sans-serif;display:grid;place-items:center;padding:0;cursor:pointer}
+.cm-r3-head .h:focus-visible{outline:3px solid var(--cm-art-red);outline-offset:2px}
+
+/* C25 (v6 D2): the cubicles down the left side; an occupied one has a lit monitor and its person standing at it */
+.cm-cub{pointer-events:none}
+.cm-cub svg{display:block;width:100%;height:100%}
+.cm-cub.is-occupied .scr{filter:drop-shadow(0 0 6px var(--cm-art-sp-cub-lit))}

@@ -6,7 +6,8 @@ import './campusPageChrome.css';
 import { useCampus } from './CampusContext';
 import { useCampusView } from './useCampusView';
 import { accessLabel } from './campusAccess';
-import { buildingForPath, buildingName, roomLabel } from './campusMap';
+import { buildingForPath, buildingName, roomLabel, CHOW_ROUTE } from './campusMap';
+import { openOrderSheet } from './chow/OrderSheet';
 import AdminLink from './AdminLink';
 import { useIsMgmt } from './campusMgmt';
 
@@ -61,6 +62,8 @@ export default function CampusNav({ active }: { active: string }): React.ReactEl
               {/* C11: an admin building (the Staff Office) follows the card's rule: a new tab through the bridge, or disabled. */}
               {b.primary.admin
                 ? <AdminLink label={name} route={b.primary.route} className="cm-nav-item" isMgmt={isMgmt}>{inner}</AdminLink>
+                : b.primary.route === CHOW_ROUTE // C39: Chow Hall has no page; it opens the order sheet
+                ? <button type="button" className="cm-nav-item" onClick={() => openOrderSheet()}>{inner}</button>
                 : planned
                 ? <span className="cm-nav-item is-disabled" aria-disabled="true">{inner}<small className="cm-nav-chip">Soon</small></span>
                 : <Link className={`cm-nav-item${isHere ? ' active' : ''}`} to={b.primary.route} aria-current={isHere ? 'page' : undefined}>{inner}</Link>}

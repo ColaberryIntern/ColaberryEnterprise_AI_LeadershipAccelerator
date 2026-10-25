@@ -329,6 +329,106 @@ export async function createBooking(data: BookingInput): Promise<BookingResult> 
   };
 }
 
+// ── Campus admissions calls (Basecamp C20) ──────────────────────────────────
+// Additive primitives for campusAdmissionsCall.ts. They use the SAME calendar and
+// auth as the strategy-call booking above but none of its side effects: no
+// strategy-call title, no fixed staff invite list, no email/nudge/GHL (those live
+// in the controller that wraps createBooking, which campus never calls). Every
+// request carries an explicit timeout; a timeout or API error throws, and the
+// caller fails closed (no booking is claimed that the calendar did not confirm).
+
+const CAMPUS_CALENDAR_TIMEOUT_MS = 15_000;
+
+export interface CampusCalendarEvent {
+  eventId: string;
+  startTime: string;
+  endTime: string;
+  meetLink: string;
+  /** The event's private extended properties (campus_enrollment_id, campus_topic). */
+  props: Record<string, string>;
+  created: string;
+}
+
+function toCampusEvent(e: { id?: string | null; start?: { dateTime?: string | null } | null; end?: { dateTime?: string | null } | null;
+  hangoutLink?: string | null; created?: string | null; conferenceData?: { entryPoints?: Array<{ entryPointType?: string | null; uri?: string | null }> | null } | null;
+  extendedProperties?: { private?: Record<string, string> | null } | null }): CampusCalendarEvent {
+  return {
+    eventId: e.id || '',
+    startTime: e.start?.dateTime ? new Date(e.start.dateTime).toISOString() : '',
+    endTime: e.end?.dateTime ? new Date(e.end.dateTime).toISOString() : '',
+    meetLink: e.conferenceData?.entryPoints?.find((ep) => ep.entryPointType === 'video')?.uri || e.hangoutLink || '',
+    props: e.extendedProperties?.private || {},
+    created: e.created || '',
+  };
+}
+
+/** Upcoming (not cancelled) events carrying a private property, oldest first. */
+export async function findEventsByPrivateProperty(key: string, value: string, timeMin: Date): Promise<CampusCalendarEvent[]> {
+  const calendar = getCalendarClient();
+  const res = await calendar.events.list({
+    calendarId: env.googleCalendarId,
+    privateExtendedProperty: [`${key}=${value}`],
+    timeMin: timeMin.toISOString(),
+    singleEvents: true,
+    orderBy: 'startTime',
+    maxResults: 20,
+  }, { timeout: CAMPUS_CALENDAR_TIMEOUT_MS });
+  return (res.data.items || []).filter((e) => e.status !== 'cancelled' && e.start?.dateTime).map(toCampusEvent);
+}
+
+/** True when no timed event overlaps [start, end) (all-day, free and cancelled events ignored, as createBooking). */
+export async function isSlotFree(start: Date, end: Date): Promise<boolean> {
+  return (await getTimedBusyBlocks(getCalendarClient(), start, end)).length === 0;
+}
+
+export interface CampusEventInput {
+  summary: string;
+  description: string;
+  slotStart: Date;
+  attendees: Array<{ email: string; displayName?: string }>;
+  privateProps: Record<string, string>;
+  /** Stable per (enrollment, slot): Google dedups conference creation on it. */
+  requestId: string;
+}
+
+/** Insert a 30-minute event with a Meet link (plain event if Meet creation fails), invites sent. */
+export async function insertCampusEvent(input: CampusEventInput): Promise<CampusCalendarEvent> {
+  const calendar = getCalendarClient();
+  const end = new Date(input.slotStart.getTime() + SLOT_DURATION_MINUTES * 60 * 1000);
+  const base = {
+    summary: input.summary,
+    description: input.description,
+    start: { dateTime: input.slotStart.toISOString(), timeZone: BUSINESS_TIMEZONE },
+    end: { dateTime: end.toISOString(), timeZone: BUSINESS_TIMEZONE },
+    attendees: input.attendees,
+    extendedProperties: { private: input.privateProps },
+    reminders: { useDefault: false, overrides: [{ method: 'email', minutes: 60 }, { method: 'popup', minutes: 15 }] },
+  };
+  try {
+    const ev = await calendar.events.insert({
+      calendarId: env.googleCalendarId, conferenceDataVersion: 1, sendUpdates: 'all',
+      requestBody: { ...base, conferenceData: { createRequest: { requestId: input.requestId, conferenceSolutionKey: { type: 'hangoutsMeet' } } } },
+    }, { timeout: CAMPUS_CALENDAR_TIMEOUT_MS });
+    return toCampusEvent(ev.data);
+  } catch (meetErr: any) {
+    console.warn('[Calendar] campus event: Meet link creation failed, creating without conference:', meetErr?.message);
+    const ev = await calendar.events.insert({ calendarId: env.googleCalendarId, sendUpdates: 'all', requestBody: base }, { timeout: CAMPUS_CALENDAR_TIMEOUT_MS });
+    return toCampusEvent(ev.data);
+  }
+}
+
+/** Cancel (delete) an event and notify its attendees. A 404/410 means it is already gone, which is the goal. */
+export async function cancelCalendarEvent(eventId: string): Promise<void> {
+  const calendar = getCalendarClient();
+  try {
+    await calendar.events.delete({ calendarId: env.googleCalendarId, eventId, sendUpdates: 'all' }, { timeout: CAMPUS_CALENDAR_TIMEOUT_MS });
+  } catch (err: any) {
+    const code = err?.code ?? err?.status;
+    if (code === 404 || code === 410) return;
+    throw err;
+  }
+}
+
 export async function updateCalendarEvent(eventId: string, description: string): Promise<void> {
   try {
     const auth = getAuthClient();

@@ -26,7 +26,7 @@ export type ExplorerAccess = 'open' | 'preview' | 'demo' | 'locked';
 export type ExplorerMode = 'open' | 'preview' | 'demo';
 export type BuildingId =
   | 'lecture' | 'library' | 'tower' | 'studio' | 'amphi' | 'testing'
-  | 'observatory' | 'commons' | 'gallery' | 'career' | 'arcade' | 'gate';
+  | 'observatory' | 'commons' | 'gallery' | 'career' | 'arcade' | 'gate' | 'admissions' | 'chow';
 
 export interface CampusRoom {
   label: string;
@@ -64,6 +64,9 @@ export interface CampusBuilding {
 
 const EVERYONE: CampusAudience[] = ['member', 'explorer', 'business', 'staff'];
 
+/** C39: Chow Hall's door target; never a page (the door opens the order sheet). */
+export const CHOW_ROUTE = '/campus/chow';
+
 export const CAMPUS_BUILDINGS: readonly CampusBuilding[] = [
   { id: 'lecture', name: 'Classroom', workplaceName: 'Training Room',
     primary: { label: "Continue this week's lessons", route: '/portal/classroom' },
@@ -88,16 +91,18 @@ export const CAMPUS_BUILDINGS: readonly CampusBuilding[] = [
     rooms: [{ label: 'Events', route: '/portal/events' }],
     prefixes: ['/portal/events'], explorer: 'open', audiences: EVERYONE, pos: { x: 700, y: 350, w: 132, h: 62 }, kind: 'amphi', zone: 'up' },
   { id: 'testing', name: 'Cert Prep Center', workplaceName: 'Certification Center',
-    primary: { label: 'Start the knowledge check', route: '/portal/cert-prep' },
+    primary: { label: 'Take the diagnostic or practice', route: '/portal/cert-prep' },
     rooms: [{ label: 'Cert prep', workplaceLabel: 'Certification prep', route: '/portal/cert-prep' }],
     prefixes: ['/portal/cert-prep'], explorer: 'open', gate: 'cert-prep', audiences: EVERYONE, pos: { x: 150, y: 330, w: 104, h: 62 }, kind: 'flat', zone: 'up' },
   { id: 'observatory', name: 'My Progress', workplaceName: 'My Performance',
     primary: { label: 'View my path', route: '/portal/path' },
     rooms: [{ label: 'Path', route: '/portal/path' }, { label: 'Progress', route: '/portal/progress' }, { label: 'Points', route: '/portal/points' }],
     prefixes: ['/portal/path', '/portal/progress', '/portal/points'], explorer: 'open', audiences: EVERYONE, pos: { x: 130, y: 546, w: 96, h: 54 }, kind: 'dome', zone: 'ave' },
-  { id: 'commons', name: 'Community Lounge', workplaceName: 'Collab Cafe',
+  // C29 (v7 R2): renamed from the Community Lounge; "Meeting Rooms" in both looks. Community stays a room here until the Community
+  // Board (C30, v7 R3) gives /portal/community its own place on the Quad.
+  { id: 'commons', name: 'Meeting Rooms', workplaceName: 'Meeting Rooms',
     primary: { label: 'Open live rooms', route: '/portal/rooms' },
-    rooms: [{ label: 'Rooms', route: '/portal/rooms' }, { label: 'Community', route: '/portal/community' }, { label: 'People', route: '/portal/community/people' }],
+    rooms: [{ label: 'Meeting rooms', route: '/portal/rooms' }, { label: 'Community', route: '/portal/community' }, { label: 'People', route: '/portal/community/people' }],
     prefixes: ['/portal/rooms', '/portal/community'], explorer: 'open', audiences: EVERYONE, pos: { x: 310, y: 546, w: 124, h: 62 }, kind: 'gable', zone: 'ave' },
   { id: 'gallery', name: 'Showcase Gallery', workplaceName: 'Portfolio Gallery',
     primary: { label: 'Open my portfolio', route: '/portal/portfolio' },
@@ -119,6 +124,18 @@ export const CAMPUS_BUILDINGS: readonly CampusBuilding[] = [
   { id: 'gate', name: 'Main Gate', workplaceName: 'Visitor Entrance',
     primary: { label: 'Start on Today', route: '/portal/today' }, // C6: Maya's desk is in this card now; the button goes to Today, so it says so
     rooms: [], prefixes: [], explorer: 'open', audiences: ['explorer', 'staff'], pos: { x: 500, y: 640, w: 90, h: 50 }, kind: 'gate', zone: 'gate' },
+  // C21 (v6 D3): Admissions, Maya's building just right of the gate, for every audience; its door joins the path at the gate
+  // (zone 'gate'). "Admissions" is the team's name in both looks. Subscription, billing and enrollment stay Settings tabs, reached
+  // from the arrival card's service rows and the plans page (a room must be a routed page with the campus chrome).
+  { id: 'admissions', name: 'Admissions', workplaceName: 'Admissions',
+    primary: { label: 'See plans & services', route: '/portal/plans' },
+    rooms: [{ label: 'Plans & pricing', route: '/portal/plans' }],
+    prefixes: ['/portal/plans'], explorer: 'open', audiences: EVERYONE, pos: { x: 614, y: 668, w: 104, h: 54 }, kind: 'gable', zone: 'gate' },
+  // C39 (v11): Chow Hall, left of the gate mirroring Admissions. A room with no page: its door, screen, chalkboard and counter open the
+  // order sheet (outbound links to delivery apps; Colaberry takes no orders or payments). /campus/chow is a door target only.
+  { id: 'chow', name: 'Chow Hall', workplaceName: 'Chow Hall',
+    primary: { label: 'Order food ↗', route: CHOW_ROUTE },
+    rooms: [], prefixes: [], explorer: 'open', audiences: EVERYONE, pos: { x: 300, y: 668, w: 116, h: 56 }, kind: 'gable', zone: 'gate' },
 ];
 
 /** The career building's face per audience (D4 career row). C6: the Staff Office links go to existing admin pages THROUGH
@@ -174,4 +191,4 @@ export function buildingName(b: Pick<CampusBuilding, 'name' | 'workplaceName'>, 
 
 /** The prototype's building icons (its catalog's icon field): the directory, the side mini map. */
 export const BUILDING_ICON: Partial<Record<string, string>> = { lecture: '🎓', library: '📚', tower: '🕰', studio: '🛠', amphi: '🎪', testing: '✅',
-  observatory: '🔭', commons: '☕', gallery: '🖼', career: '💼', arcade: '🕹', gate: '🚪' };
+  observatory: '🔭', commons: '🚪', gallery: '🖼', career: '💼', arcade: '🕹', gate: '🚪', admissions: '📋', chow: '🍔' };

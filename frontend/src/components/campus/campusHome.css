@@ -206,9 +206,9 @@
 .cm-cc-peek .cm-btn-red,.cm-cc-peek .cm-btn-line{padding:7px 12px;font-size:12px}
 .cm-cc-handle{width:32px;height:32px;border:0;background:none;display:grid;place-items:center;cursor:pointer;flex:none}
 .cm-cc-handle i{display:block;width:22px;height:4px;border-radius:4px;background:var(--cm-art-line)}
-/* the room as a window at the art's own aspect (1000 x 620) between the panel and the card, so nothing is cropped */
+/* v6 D1: the CSS 3D room fills the space between the panel and the card, top to bottom (prototype #roomWrap: top 76, bottom 12) */
 @media (min-width:821px){
-  .cm-home .cm-in-frame{left:416px;right:432px;top:76px;bottom:auto;height:min(calc(100% - 92px),calc((100vw - 848px) * .62));border-radius:22px;box-shadow:var(--cm-art-shadow)}
+  .cm-home .cm-in-frame{left:416px;right:432px;top:76px;bottom:12px;border-radius:22px;box-shadow:var(--cm-art-shadow)}
   .cm-home .cm-in-frame .cm-in-tag{top:16px}
   .cm-home .cm-world.has-card .cm-zoom{right:432px}
 }

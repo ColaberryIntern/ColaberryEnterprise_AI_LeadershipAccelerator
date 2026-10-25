@@ -99,7 +99,9 @@ describe('1. compact maps are pictures, not 12 extra tab stops', () => {
     const compact = q('[data-testid="compact"]')!;
     expect(compact.querySelectorAll('[tabindex], [role="button"]')).toHaveLength(0);
     expect(compact.querySelector('svg')?.getAttribute('aria-hidden')).toBe('true');
-    expect(q('[data-testid="full"]')!.querySelectorAll('[role="button"][tabindex="0"]')).toHaveLength(CAMPUS_BUILDINGS.length);
+    // every building, plus the Community Board (C30: focusable, Enter opens it)
+    expect(q('[data-testid="full"]')!.querySelectorAll('[role="button"][tabindex="0"]')).toHaveLength(CAMPUS_BUILDINGS.length + 1);
+    expect(q('[data-testid="full"] [data-testid="cm-cboard-sign"]')!.getAttribute('tabindex')).toBe('0');
   });
 
   it('the side nav reaches every building through its links, with no focusable map building', async () => {

@@ -18,8 +18,8 @@ jest.mock('../../curriculum/daraIdentitySeed', () => ({ isDaraEnabled: jest.fn(a
 import { campusAudienceFor, getStaffDesks } from '../campusStaffDesks';
 
 describe('page gate off', () => {
-  it('a staff-role enrollment is a member for the campus, so Maya is not listed', async () => {
+  it('a staff-role enrollment is a member for the campus (Maya, C21: listed for every audience)', async () => {
     await expect(campusAudienceFor('staff-enr')).resolves.toBe('member');
-    expect((await getStaffDesks('staff-enr')).desks.map((d) => d.id)).toEqual(['reese', 'dara']);
+    expect((await getStaffDesks('staff-enr')).desks.map((d) => d.id)).toEqual(['reese', 'dara', 'maya']);
   });
 });

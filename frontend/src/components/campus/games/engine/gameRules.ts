@@ -7,9 +7,11 @@ export const GAME_RULES = {
   'byte-chase': { ceilingPerSecond: 200, burst: 1500, absoluteCap: 200000 },
   'launch-lab': { ceilingPerSecond: 2000, burst: 4000, absoluteCap: 200000 },
   'bug-breaker': { ceilingPerSecond: 250, burst: 1000, absoluteCap: 200000 },
+  'stack-drop': { ceilingPerSecond: 2200, burst: 4000, absoluteCap: 2000000 },
+  'token-trail': { ceilingPerSecond: 800, burst: 1000, absoluteCap: 2000000 },
 } as const;
 export type GameId = keyof typeof GAME_RULES;
-export const GAME_IDS: GameId[] = ['byte-chase', 'launch-lab', 'bug-breaker'];
+export const GAME_IDS: GameId[] = ['byte-chase', 'launch-lab', 'bug-breaker', 'stack-drop', 'token-trail'];
 
 export function maxScoreFor(game: GameId, secondsUsed: number): number {
   const r = GAME_RULES[game];

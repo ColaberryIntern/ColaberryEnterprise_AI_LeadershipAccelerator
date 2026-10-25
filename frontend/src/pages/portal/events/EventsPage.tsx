@@ -153,7 +153,11 @@ const EventCard: React.FC<{ ev: OpenHouseView; focused?: boolean }> = ({ ev, foc
         )}
       </div>
 
-      {ev.registration_url && (
+      {/* C27 (v6 D5): one-tap Sign up (Eventbrite is the record), or "You're going" once Eventbrite has you */}
+      {ev.is_registered && (
+        <div className="evt-foot"><span className="evt-going" data-testid={`evt-going-${ev.id}`}>✓ You&rsquo;re going</span></div>
+      )}
+      {ev.registration_url && !ev.is_registered && (
         <div className="evt-foot">
           <a
             className="evt-btn"
@@ -161,7 +165,7 @@ const EventCard: React.FC<{ ev: OpenHouseView; focused?: boolean }> = ({ ev, foc
             target="_blank"
             rel="noopener noreferrer"
           >
-            Register
+            Sign up
             <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
               <path d="M5 12h13M13 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
             </svg>

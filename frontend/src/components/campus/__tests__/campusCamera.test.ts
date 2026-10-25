@@ -18,9 +18,9 @@ describe('campusCamera: the prototype framing, as pure functions', () => {
 
   it('desktop base view: the whole campus centered in the area the panels leave free (prototype: 420 px left, 70 px top)', () => {
     const c = baseView(desk, { left: 420, top: 70, right: 0, bottom: 0 });
-    const s = Math.min((1440 - 450) / 1010, (900 - 90) / 600, 1.6);
+    const s = Math.min((1440 - 450) / 1010, (900 - 90) / 640, 1.6); // C21: the extent reaches the Admissions pill (y 700)
     expect(c.w).toBeCloseTo(1440 / s);
-    const p = onScreen(c, desk, { x: 530, y: 380 });
+    const p = onScreen(c, desk, { x: 530, y: 390 });
     expect(p.x).toBeCloseTo((420 + 1440) / 2); expect(p.y).toBeCloseTo((70 + 900) / 2);
     // every building's ground line is on screen, right of the panel
     for (const x of [100, 900]) expect(onScreen(c, desk, { x, y: 400 }).x).toBeGreaterThan(420);
@@ -31,6 +31,7 @@ describe('campusCamera: the prototype framing, as pure functions', () => {
     const c = baseView(vp);
     expect(onScreen(c, vp, { x: 500, y: 80 }).y).toBeGreaterThan(0);
     expect(onScreen(c, vp, { x: 500, y: 670 }).y).toBeLessThan(vp.H);
+    expect(onScreen(c, vp, { x: 614, y: 700 }).y).toBeLessThan(vp.H); // C21: the Admissions building and its name pill
   });
 
   it('phone base view: fits 640 world units across, centered above the bottom sheet', () => {

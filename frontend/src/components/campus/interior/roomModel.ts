@@ -5,7 +5,7 @@ import type { BuildingId, CampusAudience, ExplorerAccess } from '../campusMap';
  * pure data: each building's layout and wall feature, the room's perspective, and where people can sit or stand. The room is a
  * 1000 x 620 picture: a back wall from x 170 to 830 (y 70 to 330) and a floor widening to the full width at the front.
  */
-export type Layout = 'rows' | 'tables' | 'desks' | 'benches' | 'circle' | 'standing' | 'pods' | 'board';
+export type Layout = 'rows' | 'tables' | 'desks' | 'benches' | 'circle' | 'standing' | 'pods' | 'board' | 'tiers';
 export type Feature = 'arcade' | 'screen' | 'shelves' | 'schedule' | 'kanban' | 'stage' | 'quiet' | 'stars' | 'lounge' | 'frames' | 'city' | 'sprint' | 'clients' | 'screens';
 export interface RoomDef { layout: Layout; feature: Feature; dark: boolean }
 
@@ -17,12 +17,18 @@ export const ROOMS: Partial<Record<BuildingId, RoomDef>> = {
   tower: { layout: 'standing', feature: 'schedule', dark: false },
   // the prototype's INTERIOR_BIZ rooms win for these three (base = INTERIOR_BIZ[id] || INTERIOR[id])
   studio: { layout: 'pods', feature: 'sprint', dark: false },
-  amphi: { layout: 'rows', feature: 'stage', dark: false },
+  // C26 (v6 D4): an auditorium: dark walls, a raised stage, six tiered rows of red seats, heads only for people really here
+  amphi: { layout: 'tiers', feature: 'stage', dark: true },
   testing: { layout: 'desks', feature: 'quiet', dark: false },
   observatory: { layout: 'standing', feature: 'stars', dark: true },
-  commons: { layout: 'tables', feature: 'lounge', dark: false },
+  // C29 (v7 R2): Meeting Rooms is a hallway of doors: people stand in it (no tables, no couch)
+  commons: { layout: 'standing', feature: 'lounge', dark: false },
   gallery: { layout: 'standing', feature: 'screens', dark: false },
   career: { layout: 'board', feature: 'clients', dark: false },
+  // C21 (v6 D3): the pink-walled Admissions lobby: people stand; the board carries plans & pricing (the 3D room's own board)
+  admissions: { layout: 'standing', feature: 'screen', dark: false },
+  // C39 (v11): Chow Hall, cafe tables and stools; the screen carries the craving grid, the left wall the chalkboard
+  chow: { layout: 'tables', feature: 'screen', dark: false },
 };
 
 /** Floor position (u across, t from back wall to front) to picture x, y and the figure scale (prototype P). */

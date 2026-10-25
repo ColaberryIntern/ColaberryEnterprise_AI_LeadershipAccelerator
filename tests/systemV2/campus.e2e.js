@@ -20,7 +20,8 @@ const { chromium } = require(process.env.PW_PATH || 'playwright');
 const MODE = process.env.CAMPUS_E2E_MODE === 'off' ? 'off' : 'on';
 const TOKENS_FILE = path.resolve(process.env.TOKENS_FILE || path.join(__dirname, '..', '..', 'tmp', 'campus-e2e-tokens.json'));
 const MARKER = 'campus-e2e-marker';
-const AUDIENCES = ['member', 'explorer', 'business', 'staff'];
+// CAMPUS_E2E_AUDIENCES=business,staff reruns some audiences only (to check one failing step); unset runs all four.
+const AUDIENCES = ['member', 'explorer', 'business', 'staff'].filter((a) => !process.env.CAMPUS_E2E_AUDIENCES || process.env.CAMPUS_E2E_AUDIENCES.split(',').includes(a));
 
 const results = [];
 async function step(audience, name, fn) {
@@ -41,8 +42,8 @@ async function api(pathname, jwt) {
   return { status: r.status, body: r.headers.get('content-type')?.includes('json') ? await r.json() : null };
 }
 
-async function newPage(browser, jwt, viewport = { width: 1440, height: 900 }) {
-  const context = await browser.newContext({ viewport });
+async function newPage(browser, jwt, viewport = { width: 1440, height: 900 }, timezoneId = undefined) {
+  const context = await browser.newContext({ viewport, ...(timezoneId ? { timezoneId } : {}) });
   // Reduce motion on: walks and door zooms are instant, so steps never race an animation.
   await context.addInitScript(([t]) => {
     try {
@@ -117,13 +118,12 @@ async function runAudience(browser, audience, jwt) {
       await page.keyboard.press('Escape'); // then the building card, not the map
       const hasGate = await page.locator('.cm-home g[data-building="gate"]').count() > 0;
       must(hasGate === (audience === 'explorer' || audience === 'staff'), `Main Gate shown=${hasGate}`);
-      if (hasGate) {
-        await page.click('.cm-home g[data-building="gate"]');
-        await page.click('[data-testid="cm-who-staff-maya"]', { timeout: 15_000 });
-        await page.waitForSelector('[data-testid="cm-staff-card"] [data-testid="cm-desk-maya"]', { timeout: 15_000 });
-        await page.keyboard.press('Escape');
-        await page.keyboard.press('Escape');
-      }
+      // C21 (v6 D3): Maya's desk is in Admissions, beside the gate, for every audience
+      await page.click('.cm-home g[data-building="admissions"]');
+      await page.click('[data-testid="cm-who-staff-maya"]', { timeout: 15_000 });
+      await page.waitForSelector('[data-testid="cm-staff-card"] [data-testid="cm-desk-maya"]', { timeout: 15_000 });
+      await page.keyboard.press('Escape');
+      await page.keyboard.press('Escape');
     });
 
     await step(audience, 'keyboard: Tab to a building, Enter opens its card with focus on the heading', async () => {
@@ -134,6 +134,206 @@ async function runAudience(browser, audience, jwt) {
       must(focused, 'focus did not move to the card heading');
       await page.keyboard.press('Escape');
     });
+
+    if (audience === 'member') {
+      await step(audience, 'v6 D1 (C24): in the Studio the spot and the board\'s main button reach the same page; "See all" reaches the section', async () => {
+        const enterStudio = async () => {
+          await page.goto(`${urls.base}/portal/campus`, { waitUntil: 'domcontentloaded' });
+          await page.waitForSelector('[data-testid="cm-concierge"]', { timeout: 30_000 });
+          await page.evaluate(() => document.querySelector('[data-testid="cm-bld-studio"]').dispatchEvent(new MouseEvent('click', { bubbles: true })));
+          await page.waitForSelector('[data-testid="cm-room3d"][data-room="studio"] .cm-r3-spot', { timeout: 15_000 });
+          must(await page.locator('[data-testid="cm-inside-door"]').count() === 0, 'a door element is still in the room');
+        };
+        const landAfter = async (sel) => {
+          await page.click(sel);
+          await page.waitForURL((u) => u.pathname !== '/portal/campus', { timeout: 15_000 });
+          return new URL(page.url()).pathname;
+        };
+        await enterStudio();
+        const viaSpot = await landAfter('[data-testid="cm-spot-desk"]');
+        await enterStudio();
+        const viaBoard = await landAfter('[data-testid="cm-board-primary"]');
+        must(viaSpot === viaBoard, `spot -> ${viaSpot}, board button -> ${viaBoard}`);
+        await enterStudio();
+        const viaSection = await landAfter('[data-testid="cm-board-section"]');
+        must(viaSection === '/portal/projects', `See all -> ${viaSection}`);
+      });
+
+      await step(audience, 'C19: sitting at your desk opens the workstation (bench, two monitors, Cory, status bar); Stand up returns you into the Studio', async () => {
+        await page.goto(`${urls.base}/portal/campus`, { waitUntil: 'domcontentloaded' });
+        await page.waitForSelector('[data-testid="cm-concierge"]', { timeout: 30_000 });
+        await page.evaluate(() => document.querySelector('[data-testid="cm-bld-studio"]').dispatchEvent(new MouseEvent('click', { bubbles: true })));
+        await page.waitForSelector('[data-testid="cm-room3d"][data-room="studio"] .cm-r3-spot', { timeout: 15_000 });
+        await page.click('[data-testid="cm-spot-desk"]');
+        await page.waitForSelector('[data-testid="cm-ws"]', { timeout: 15_000 });
+        const ws = await page.evaluate(() => ({
+          bezels: document.querySelectorAll('.cm-ws-bezel').length,
+          trail: document.querySelector('[data-testid="cm-ws-trail"]')?.textContent || '',
+          tickets: document.querySelectorAll('[data-testid="cm-ws-ticket"]').length,
+          active: document.querySelectorAll('.cm-ws-ticket.is-active').length,
+          parts: ['cm-ws-desk', 'cm-ws-cory', 'cm-ws-status', 'cm-ws-term'].filter((t) => !document.querySelector(`[data-testid="${t}"]`)),
+        }));
+        must(ws.bezels === 2, `bezels ${ws.bezels}`);
+        must(ws.trail.startsWith('Your desk · '), `trail "${ws.trail}"`);
+        must(ws.tickets >= 1 && ws.active === 1, `bench: ${ws.tickets} tickets, ${ws.active} on the desk`);
+        must(ws.parts.length === 0, `missing ${ws.parts.join(', ')}`);
+        await page.click('[data-testid="cm-ws-standup"]');
+        await page.waitForURL((u) => u.pathname === '/portal/campus', { timeout: 15_000 });
+        await page.waitForSelector('[data-testid="cm-room3d"][data-room="studio"]', { timeout: 15_000 });
+      });
+
+      // C20: needs the backend's in-memory admissions calendar (CAMPUS_CALENDAR_STUB=1, refused in production): no Google, no invite.
+      await step(audience, 'C20: "Talk to a person" books a call with admissions; the confirmation shows and Coming up appears; Reschedule cancels it', async () => {
+        await page.goto(`${urls.base}/portal/campus`, { waitUntil: 'domcontentloaded' });
+        await page.waitForSelector('[data-testid="cm-cc-talk"]', { timeout: 30_000 });
+        await page.click('[data-testid="cm-cc-talk"]');
+        await page.waitForSelector('[data-testid="cm-book"] [data-testid="cm-book-slots"] button', { timeout: 15_000 });
+        await page.click('[data-testid="cm-book-topic-enroll"]');
+        await page.click('[data-testid="cm-book-slots"] button');
+        await page.click('[data-testid="cm-book-submit"]');
+        await page.waitForSelector('[data-testid="cm-book-confirmed"]', { timeout: 15_000 });
+        const when = await page.textContent('[data-testid="cm-book-when"]');
+        must(/(CDT|CST) · 30 minutes on Google Meet$/.test(when || ''), `confirmation "${when}"`);
+        await page.click('[data-testid="cm-book-confirmed"] button.pri');
+        await page.waitForSelector('[data-testid="cm-cc-coming"]', { timeout: 15_000 });
+        // clean up so a rerun starts empty: Coming up's Reschedule opens on the call; Reschedule cancels it
+        await page.click('[data-testid="cm-cc-coming-reschedule"]');
+        await page.waitForSelector('[data-testid="cm-book-already"]', { timeout: 15_000 });
+        await page.click('[data-testid="cm-book-reschedule"]');
+        await page.waitForSelector('[data-testid="cm-book-slots"]', { timeout: 15_000 });
+        await page.keyboard.press('Escape');
+        await page.waitForSelector('[data-testid="cm-cc-coming"]', { state: 'detached', timeout: 15_000 });
+      });
+
+      await step(audience, 'C21: Admissions beside the gate: the board prices come from the claims registry ($199 absent), the meeting table opens the booking sheet, /portal/plans has four cards', async () => {
+        await page.goto(`${urls.base}/portal/campus`, { waitUntil: 'domcontentloaded' });
+        await page.waitForSelector('[data-testid="cm-concierge"]', { timeout: 30_000 });
+        await page.evaluate(() => document.querySelector('[data-testid="cm-bld-admissions"]').dispatchEvent(new MouseEvent('click', { bubbles: true })));
+        await page.waitForSelector('[data-testid="cm-room3d"][data-room="admissions"] [data-testid="cm-board-plans"]', { timeout: 15_000 });
+        const board = await page.textContent('[data-testid="cm-board-plans"]');
+        for (const want of ['$149', '$1,200', 'Scoped on a call', 'No card needed']) must((board || '').includes(want), `board lacks ${want}: "${board}"`);
+        must(!(await page.textContent('body')).includes('$199'), '$199 is on the page');
+        must(await page.locator('[data-testid="cm-adm-services"]').count() === 1, 'no service rows in the arrival card');
+        await page.click('[data-testid="cm-room3d"] .cm-r3-spot');
+        await page.waitForSelector('[data-testid="cm-book"]', { timeout: 15_000 });
+        await page.keyboard.press('Escape');
+        await page.goto(`${urls.base}/portal/plans`, { waitUntil: 'domcontentloaded' });
+        await page.waitForSelector('[data-testid="cm-plans"]', { timeout: 30_000 });
+        const cards = await page.evaluate(() => ['explorer', 'individual', 'team', 'services'].filter((id) => document.querySelector(`[data-testid="cm-plan-${id}"]`)).length);
+        must(cards === 4, `plans page shows ${cards} of 4 cards`);
+      });
+
+      await step(audience, 'C39: Chow Hall: the counter, the screen and the door each open the order sheet (path unchanged); Pizza links; new tab + noopener; all 8 apps; Esc closes; London lists Deliveroo / Just Eat / Uber Eats', async () => {
+        for (const tz of ['America/Chicago', 'Europe/London']) {
+          const { page: p2, context: c2 } = await newPage(browser, jwt, undefined, tz);
+          try {
+            await p2.goto(`${urls.base}/portal/campus`, { waitUntil: 'domcontentloaded' });
+            await p2.waitForSelector('[data-testid="cm-concierge"]', { timeout: 30_000 });
+            await p2.evaluate(() => document.querySelector('[data-testid="cm-bld-chow"]').dispatchEvent(new MouseEvent('click', { bubbles: true })));
+            await p2.waitForSelector('[data-testid="cm-room3d"][data-room="chow"] [data-testid="cm-crave-screen"]', { timeout: 15_000 });
+            const opens = async (sel) => {
+              await p2.click(sel);
+              await p2.waitForSelector('[data-testid="cm-order"]', { timeout: 10_000 });
+              must(new URL(p2.url()).pathname === '/portal/campus', `${sel} changed the path to ${new URL(p2.url()).pathname}`);
+            };
+            const close = async () => { await p2.keyboard.press('Escape'); await p2.waitForSelector('[data-testid="cm-order"]', { state: 'detached', timeout: 5_000 }); };
+            if (tz === 'America/Chicago') {
+              for (const sel of ['[data-testid="cm-spot-counter"]', '[data-testid="cm-crave-order"]', '[data-testid="cm-way-board"]']) { await opens(sel); await close(); }
+              await opens('[data-testid="cm-spot-counter"]');
+              await p2.click('[data-testid="cm-crave-pizza"]');
+              const dd = await p2.getAttribute('[data-testid="cm-app-doordash"]', 'href'), ue = await p2.getAttribute('[data-testid="cm-app-uber-eats"]', 'href');
+              must(dd === 'https://www.doordash.com/search/store/pizza/', `DoorDash href ${dd}`);
+              must(ue === 'https://www.ubereats.com/search?q=pizza', `Uber Eats href ${ue}`);
+              await p2.click('[data-testid="cm-order-all"]');
+              const links = await p2.$$eval('[data-testid="cm-order-apps"] a', (as) => as.map((a) => [a.getAttribute('target'), a.getAttribute('rel') || '']));
+              must(links.length === 8, `Show all apps lists ${links.length}`);
+              must(links.every(([t, r]) => t === '_blank' && r.includes('noopener')), 'a link lacks target=_blank or noopener');
+              await close();
+            } else {
+              await opens('[data-testid="cm-spot-counter"]');
+              const names = (await p2.$$eval('[data-testid="cm-order-apps"] b', (bs) => bs.map((b) => b.textContent))).sort();
+              must(JSON.stringify(names) === JSON.stringify(['Deliveroo', 'Just Eat', 'Uber Eats']), `London apps: ${names.join(', ')}`);
+            }
+          } finally { await c2.close(); }
+        }
+      });
+
+      await step(audience, 'C37: /campus/weather answers the clock-only reading while CAMPUS_WEATHER_ENABLED is off, and 401 without a token', async () => {
+        const r = await api('/api/portal/campus/weather?lat=32.78&lon=-96.8&city=Dallas', jwt);
+        must(r.status === 200 && r.body && r.body.condition === null, `weather: ${r.status} ${JSON.stringify(r.body)}`);
+        const anon = await fetch(urls.api + '/api/portal/campus/weather?lat=32.78&lon=-96.8', { signal: AbortSignal.timeout(15_000) });
+        must(anon.status === 401, `no token: ${anon.status}`);
+      });
+
+      await step(audience, 'C27: the Schedule room shows the week strip and upcoming events; the Schedule page week has seven day columns', async () => {
+        await page.goto(`${urls.base}/portal/campus`, { waitUntil: 'domcontentloaded' });
+        await page.waitForSelector('[data-testid="cm-concierge"]', { timeout: 30_000 });
+        await page.evaluate(() => document.querySelector('[data-testid="cm-bld-tower"]').dispatchEvent(new MouseEvent('click', { bubbles: true })));
+        await page.waitForSelector('[data-testid="cm-room3d"][data-room="tower"] [data-testid="cm-board-strip"]', { timeout: 15_000 });
+        must(await page.locator('[data-testid="cm-board-strip"] .d').count() === 7, 'the strip is not seven days');
+        await page.waitForSelector('[data-testid="cm-ag-rows"]', { timeout: 15_000 }); // C33: classes, events and sessions in one list
+        // every Sign up on the campus opens Eventbrite in a new tab (the record); none is a portal RSVP
+        const bad = await page.evaluate(() => Array.from(document.querySelectorAll('[data-testid^="cm-ev-signup-"]')).filter((a) => a.getAttribute('target') !== '_blank').length);
+        must(bad === 0, `${bad} sign-up links do not open a new tab`);
+        await page.goto(`${urls.base}/portal/schedule`, { waitUntil: 'domcontentloaded' });
+        await page.waitForSelector('.sch-root .schtoolbar', { timeout: 30_000 });
+        await page.click('.sch-root .toggle button:nth-child(2)');
+        await page.waitForSelector('.sch-root .timegrid', { timeout: 15_000 });
+        must(await page.locator('.sch-root .tg-dayhead').count() === 7, 'the week view is not seven days');
+      });
+
+      await step(audience, 'C30: the Community Board: Tab to it on the map, Enter opens four tabs; a post pins to the top after a reload (local DB)', async () => {
+        await page.goto(`${urls.base}/portal/campus`, { waitUntil: 'domcontentloaded' });
+        await page.waitForSelector('[data-testid="cm-cboard-sign"]', { timeout: 30_000 });
+        await page.focus('[data-testid="cm-cboard-sign"]');
+        await page.keyboard.press('Enter');
+        await page.waitForSelector('[data-testid="cm-cboard"]', { timeout: 10_000 });
+        must(await page.locator('[data-testid="cm-cboard"] [role="tab"]').count() === 4, 'the board does not have four tabs');
+        // the feed's own rule: a post needs at least 15 words
+        const body = `E2E board post ${Date.now().toString(36)}: a short note pinned by the campus check to prove posting from the board reaches the feed.`;
+        await page.click('[data-testid="cm-cb-post"]');
+        await page.fill('[data-testid="cm-cb-compose"] textarea', body);
+        await page.click('[data-testid="cm-cb-pin"]');
+        await page.waitForSelector('[data-testid="cm-cb-compose"]', { state: 'detached', timeout: 15_000 });
+        await page.reload({ waitUntil: 'domcontentloaded' });
+        await page.waitForSelector('[data-testid="cm-cboard-sign"]', { timeout: 30_000 });
+        await page.click('[data-testid="cm-cboard-sign"]');
+        await page.waitForSelector('[data-testid="cm-cboard"] .cm-cb-note', { timeout: 15_000 });
+        const first = await page.textContent('[data-testid="cm-cboard"] .cm-cb-note');
+        must((first || '').includes(body), `the new post is not first: "${first}"`);
+        await page.keyboard.press('Escape');
+      });
+
+      await step(audience, 'C29: Meeting Rooms: doors match the card rows; "+ New room" opens a real room (local DB) and it gets a door', async () => {
+        const toHall = async () => {
+          await page.goto(`${urls.base}/portal/campus`, { waitUntil: 'domcontentloaded' });
+          await page.waitForSelector('[data-testid="cm-concierge"]', { timeout: 30_000 });
+          await page.evaluate(() => document.querySelector('[data-testid="cm-bld-commons"]').dispatchEvent(new MouseEvent('click', { bubbles: true })));
+          await page.waitForSelector('[data-testid="cm-room3d"][data-room="commons"] [data-testid="cm-board-new-room"]', { timeout: 15_000 });
+          // the list, or "No rooms are open yet" (loading and error lines are role=status, so they do not count as loaded)
+          await page.waitForSelector('[data-testid="cm-hall-rows"] .cm-hall-rows, [data-testid="cm-hall-rows"] .cm-hall-muted:not([role="status"])', { timeout: 15_000 });
+          await page.waitForTimeout(800);
+        };
+        const doors = () => page.evaluate(() => Array.from(document.querySelectorAll('[data-testid="cm-room3d"] .cm-mdoor')).map((d) => d.textContent));
+        await toHall();
+        const before = await doors();
+        const rows = await page.locator('[data-testid^="cm-hall-row-"]').count();
+        must(before.filter((t) => !t.includes('More rooms')).length === rows, `doors ${before.length} != card rows ${rows}`);
+        must(before.length <= 6, `${before.length} doors (max 6)`);
+        const name = `E2E hallway ${Date.now().toString(36)}`;
+        await page.click('[data-testid="cm-board-new-room"]');
+        await page.waitForSelector('[data-testid="cm-meet-new"]', { timeout: 10_000 });
+        await page.fill('[data-testid="cm-meet-name"]', name);
+        await page.click('[data-testid="cm-meet-go"]');
+        await page.waitForURL(/\/portal\/rooms\/[0-9a-f-]{36}/, { timeout: 15_000 });
+        await toHall();
+        // the room just created is yours, so there is at least one door: wait for the hallway to draw it (its read can be slow under load)
+        await page.waitForSelector('[data-testid="cm-room3d"] .cm-mdoor', { timeout: 15_000 });
+        const after = await doors();
+        must(after.some((t) => t.includes(name)) || (before.length === 6 && after.some((t) => t.includes('More rooms'))), `no door for the new room: ${after.join(' | ')}`);
+      });
+
+    }
 
     await step(audience, 'scrolled down, each page\'s sticky next task rides IN the location bar, never the header (Ali 2026-10-24)', async () => {
       // The 13 pages that hand PortalShell a condensedSlot. A page shows one only when it has a next step for this viewer.
@@ -175,7 +375,14 @@ async function runAudience(browser, audience, jwt) {
       await page.waitForSelector('[data-testid="cm-home"] [data-testid="cm-concierge"]', { timeout: 30_000 });
       await settle();
       await page.waitForTimeout(1500); // the camera eases back to the whole campus after the card closed
-      const base = await vb();
+      // The whole-campus view, read once it has stopped moving (the ease can still be finishing after the wait above).
+      let base = await vb();
+      for (let i = 0; i < 10; i++) {
+        await page.waitForTimeout(400);
+        const again = await vb();
+        if (JSON.stringify(again) === JSON.stringify(base)) break;
+        base = again;
+      }
       // Grass the viewer can actually click: world points in view whose top element is the map's ground (not a building, a desk,
       // you, or a panel over the map), spread over the campus.
       const spots = await page.evaluate(() => {
@@ -202,7 +409,8 @@ async function runAudience(browser, audience, jwt) {
         // The camera eases home: wait for the view to SETTLE on the whole campus (it must get there, not merely head there).
         const home = await page.waitForFunction((b) => {
           const v = document.querySelector('.cm-home svg.cm-map').getAttribute('viewBox').split(' ').map(Number);
-          return v.every((x, i) => Math.abs(x - b[i]) <= 2);
+          // within 4 units: since C21 the base fit is around y 390 and the eased-home view lands 2-3 units off on a 1460-wide box
+          return v.every((x, i) => Math.abs(x - b[i]) <= 4);
         }, base, { timeout: 8_000 }).then(() => true, () => false);
         must(home, `view ${await vb()} never settled on the whole campus ${base}`);
       }
@@ -267,8 +475,29 @@ async function runAudience(browser, audience, jwt) {
       const r = await api('/api/portal/game-room/time', jwt);
       must(r.status === 200 && typeof r.body?.left_s === 'number', `game time ${r.status}`);
       await page.goto(`${urls.base}/portal/game-room`, { waitUntil: 'domcontentloaded' });
-      await page.waitForFunction(() => /left today/.test(document.querySelector('[data-testid="gr-time"]')?.textContent || ''), null, { timeout: 30_000 });
+      // C34: the hero's "break left today" in mono, from the server's left_s
+      await page.waitForFunction(() => /^\d+:\d\d$/.test((document.querySelector('[data-testid="gr-hero-time"]')?.textContent || '').trim()), null, { timeout: 30_000 });
     });
+
+    if (audience === 'member') {
+      await step(audience, 'C34/C35: the Game Room page: five game cards, the podium board, Stack Drop in the cabinet: hard-drop to game over, the sheet shows the score; /scores returns me', async () => {
+        await page.goto(`${urls.base}/portal/game-room`, { waitUntil: 'domcontentloaded' });
+        await page.waitForSelector('[data-testid="gr-games"]', { timeout: 30_000 });
+        must(await page.locator('[data-testid^="gr-card-"]').count() === 5, 'not five game cards');
+        await page.waitForSelector('[data-testid="gr-leaderboards"]', { timeout: 15_000 });
+        await page.click('[data-testid="gr-play-stack-drop"]');
+        await page.waitForSelector('[data-testid="gr-cabinet"] canvas', { timeout: 20_000 });
+        must((await page.textContent('[data-testid="gr-cab-title"]')) === 'STACK DROP', 'the cabinet is not Stack Drop');
+        await page.focus('[data-testid="gr-cabinet"] canvas');
+        for (let i = 0; i < 40; i += 1) { await page.keyboard.press('Space'); await page.waitForTimeout(80); if (await page.locator('[data-testid="gr-cab-over"]').count()) break; }
+        await page.waitForSelector('[data-testid="gr-cab-over"]', { timeout: 20_000 });
+        const sheet = await page.textContent('[data-testid="gr-cab-over"]');
+        must(/GAME OVER|NEW PERSONAL BEST/.test(sheet || '') && /\d/.test(sheet || ''), `sheet: ${sheet}`);
+        const b = await api('/api/portal/game-room/scores?game=stack-drop', jwt);
+        must(b.status === 200 && b.body?.me && typeof b.body.me.best === 'number', `scores me: ${JSON.stringify(b.body?.me)}`);
+        await page.keyboard.press('Escape');
+      });
+    }
 
     await step(audience, 'Use classic menu switches to the classic portal, and back', async () => {
       // C16: the classic choice lives in the Me panel (the bar's you button), not the left nav

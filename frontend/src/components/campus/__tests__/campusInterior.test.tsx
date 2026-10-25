@@ -95,11 +95,11 @@ describe('the inside layer', () => {
   afterEach(() => { act(() => root.unmount()); container.remove(); });
   const presence: CampusPresence = { commons: { count: 3, people: [{ enrollment_id: 'e1', display_name: 'Avery Stone', avatar_url: null }, { anonymous: true }, { anonymous: true }] } };
 
-  it('counts everyone, draws only the named, and a person opens their card; Step outside closes', () => {
+  it('draws only the named (no floating head count: v3 2.1, v6 D6), a person opens their card; Step outside closes', () => {
     const picked: string[] = []; let out = 0;
     act(() => { root.render(<CampusInside building={b('commons')} buildingName="Community Lounge" audience="member" access="open" presence={presence} onAir={false}
       reduceMotion onStepOutside={() => { out += 1; }} onPickPerson={(p) => picked.push(p.display_name)} />); });
-    expect(container.querySelector('[data-testid="cm-inside-count"]')!.textContent).toContain('3 here');
+    expect(container.querySelector('[data-testid="cm-inside-count"]')).toBeNull();
     expect(container.querySelectorAll('[data-testid="cm-inside-person"]')).toHaveLength(1);
     act(() => { container.querySelector('[data-testid="cm-inside-person"]')!.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
     expect(picked).toEqual(['Avery Stone']);
@@ -137,12 +137,12 @@ describe('the door reveal', () => {
     act(() => { jest.advanceTimersByTime(5000); });
   };
 
-  it('with motion on, the main action walks through the back door under "Opening..." before the page opens', () => {
+  it('with motion on, "The board" tile goes through under "Opening..." before the page opens (v6 D1: the board replaced the door)', () => {
     const entered: string[] = [];
     mountWorld(false, entered);
     arriveAtCommons();
     expect(container.querySelector('[data-testid="cm-inside"]')).not.toBeNull();
-    act(() => { container.querySelector('[data-testid="cm-arrive-cta"]')!.dispatchEvent(new MouseEvent('click', { bubbles: true, button: 0 })); });
+    act(() => { container.querySelector('[data-testid="cm-way-board"]')!.dispatchEvent(new MouseEvent('click', { bubbles: true, button: 0 })); });
     expect(container.querySelector('[data-testid="cm-inside"]')!.getAttribute('class')).toContain('is-going');
     expect(container.querySelector('[data-testid="cm-inside-going"]')!.textContent).toContain(b('commons').primary.route);
     expect(entered).toEqual([]);
@@ -156,7 +156,7 @@ describe('the door reveal', () => {
     const entered: string[] = [];
     mountWorld(true, entered);
     arriveAtCommons();
-    act(() => { container.querySelector('[data-testid="cm-arrive-cta"]')!.dispatchEvent(new MouseEvent('click', { bubbles: true, button: 0 })); });
+    act(() => { container.querySelector('[data-testid="cm-way-board"]')!.dispatchEvent(new MouseEvent('click', { bubbles: true, button: 0 })); });
     expect(container.querySelector('[data-testid="cm-inside-going"]')).toBeNull();
     expect(entered).toEqual([b('commons').primary.route]);
   });

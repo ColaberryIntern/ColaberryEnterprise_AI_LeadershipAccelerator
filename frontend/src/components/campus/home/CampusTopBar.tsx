@@ -31,6 +31,8 @@ export interface TopBarProps {
   onFind: () => void;
   /** Opens the Me panel (look and campus settings). */
   onMe: () => void;
+  /** C37 (v9 W4): the weather chip ("‹emoji› ‹temp›°", the clock alone while weather is off). */
+  weather?: React.ReactNode;
 }
 
 export default function CampusTopBar(p: TopBarProps): React.ReactElement {
@@ -65,6 +67,7 @@ export default function CampusTopBar(p: TopBarProps): React.ReactElement {
           <><span className="sep hide-m" aria-hidden="true" />
             <span data-testid="cm-stats-streak" title="Day streak"><span aria-hidden="true">{'🔥 '}</span>{streak}<span className="cm-sr"> day streak</span></span></>
         )}
+        {p.weather && <><span className="sep hide-m" aria-hidden="true" />{p.weather}</>}
         <span className="cm-stats-bell" data-testid="cm-stats-bell"><NotificationBell /></span>
         <button type="button" className="cm-me" onClick={p.onMe} aria-label="You: your look and campus settings" data-testid="cm-stats-me">
           {p.photo ? <img src={p.photo} alt="" data-testid="cm-stats-photo" /> : initials}

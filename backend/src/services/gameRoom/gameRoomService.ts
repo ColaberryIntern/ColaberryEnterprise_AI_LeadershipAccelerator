@@ -24,6 +24,8 @@ let storeOverride: GameRoomStore | null = null;
 /** Test seam. */
 export function __setGameRoomStoreForTests(s: GameRoomStore | null): void { storeOverride = s; }
 const store = (): GameRoomStore => storeOverride ?? productionStore();
+/** C35: the same store (and test seam) for the boards and the challenge (gameRoomBoards, gameRoomChallenge). */
+export const gameRoomStore = store;
 
 const lockKey = (enrollmentId: string, date: string) => `game_room:${enrollmentId}:${date}`;
 const timeView = (used: number, nowMs: number): TimeView => ({
