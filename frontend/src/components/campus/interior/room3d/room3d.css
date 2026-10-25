@@ -72,3 +72,14 @@
 .cm-r3-fig.is-you{pointer-events:none}
 .cm-r3-fig.is-you.is-gone{opacity:0;transition:opacity .2s}
 @media (prefers-reduced-motion:reduce){.cm-r3-stage{transition:none}.cm-r3-spot .steam path,.cm-r3-spot .scrglow{animation:none}}
+
+/* C26 (v6 D4): the Events Hall auditorium: six tiered rows of red seats (each row a little taller, so they read as tiers), the
+   raised stage under the screen, and a head per person really here (no invented crowd) */
+.cm-r3-tier{pointer-events:none;border-radius:6px 6px 2px 2px;border-top:4px solid var(--cm-art-in-seat-edge);
+  background:repeating-linear-gradient(90deg,var(--cm-art-in-seat) 0 22px,var(--cm-art-in-seat-back) 22px 26px)}
+.cm-r3-platform{position:absolute;left:8%;right:8%;bottom:0;height:9%;background:var(--cm-art-in-stage);border-top:5px solid var(--cm-art-in-stage-floor);
+  box-shadow:0 -6px 18px var(--cm-art-sp-shadow);pointer-events:none}
+.cm-r3-head{display:flex;align-items:flex-start;justify-content:center}
+.cm-r3-head .h{width:28px;height:28px;border-radius:50%;border:2px solid var(--cm-art-in-seat-edge);background:var(--cm-art-in-head);color:var(--cm-art-in-head-ink);
+  font:800 10px 'DM Sans',system-ui,sans-serif;display:grid;place-items:center;padding:0;cursor:pointer}
+.cm-r3-head .h:focus-visible{outline:3px solid var(--cm-art-red);outline-offset:2px}

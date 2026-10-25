@@ -28,6 +28,9 @@ import { usePageSummary } from './interior/usePageSummary';
 import { spotOf } from './interior/roomSpots';
 import { ROOMS } from './interior/roomModel';
 import AdmissionsServices from './admissions/AdmissionsServices';
+import { UpcomingEvents } from './events/EventRows';
+import { useCampusEvents } from './events/EventSignup';
+import { upcoming } from './events/eventsModel';
 import ArrivalWays from './ArrivalWays';
 
 /**
@@ -99,7 +102,8 @@ export default function ArrivalPanel(p: ArrivalPanelProps): React.ReactElement {
   const stepIdx = plan && !tour ? plan.stops.findIndex((s) => !s.done && s.buildingId === b.id) : -1;
   // v6 D6: the box only when this building's step is NOT the panel's Up next (else it would say the same thing twice).
   const upNextIdx = plan ? plan.stops.findIndex((s) => !s.done) : -1;
-  const showPlanBox = stepIdx >= 0 && stepIdx !== upNextIdx;
+  // C26 (v6 D4): in the Events Hall the upcoming events (one tap to sign up) take the plan box's place
+  const showPlanBox = stepIdx >= 0 && stepIdx !== upNextIdx && b.id !== 'amphi';
   const open = (r: string) => p.onEnterRoom?.(r);
   const desks = p.staffDesks ? desksForBuilding(p.staffDesks, b.id, audience) : undefined;
   const desk = desks?.find((d) => d.on_duty) ?? null;
@@ -108,7 +112,9 @@ export default function ArrivalPanel(p: ArrivalPanelProps): React.ReactElement {
   const inRoom = access === 'open' && !!ROOMS[b.id];
   const summary = usePageSummary(b.id, inRoom, buildingName(b, wp));
   const spot = inRoom ? spotOf(b.id) : null;
-  const sitAtSpot = () => { const el = document.querySelector<HTMLElement>('.cm-r3-spot'); if (el) el.click(); else if (summary?.card) open(summary.card); };
+  // C27 (v6 D5): the Schedule and the Events Hall list the upcoming events with one-tap sign up (Eventbrite is the record)
+  const evs = useCampusEvents(b.id === 'tower' || b.id === 'amphi');
+  const sitAtSpot =() => { const el = document.querySelector<HTMLElement>('.cm-r3-spot'); if (el) el.click(); else if (summary?.card) open(summary.card); };
   // WP-6: the live building's main action joins the live room (audio and Q&A), as the prototype's per-state CTA
   const live = p.live ?? null;
   const liveRoute = live ? roomRoute(live.b) : null;
@@ -134,7 +140,8 @@ export default function ArrivalPanel(p: ArrivalPanelProps): React.ReactElement {
           onNext={tour.onNext} onBack={tour.onBack} onEnd={tour.onEnd} /> : undefined}
         children={b.id === 'gate' && p.isExplorer ? <ExplorerPath onNavigate={p.onNavigate}
           model={explorerPath(p.buildings, p.accessOf, wp, !!p.staffDesks?.some((d) => d.id === 'maya' && d.on_duty))} />
-          : b.id === 'admissions' ? <AdmissionsServices audience={audience} onNavigate={open} /> : undefined}
+          : b.id === 'admissions' ? <AdmissionsServices audience={audience} onNavigate={open} />
+          : (b.id === 'tower' || b.id === 'amphi') ? <UpcomingEvents events={evs ? upcoming(evs, new Date(), 4) : null} /> : undefined}
         whoIsHere={p.presence === undefined && !p.presenceError ? undefined
           : { presence: p.presence?.[b.id], error: p.presenceError, loading: p.presence === null && !p.presenceError, onPick: p.onPickPerson, onMore: p.onMore }} />
     </>

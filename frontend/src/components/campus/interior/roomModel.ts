@@ -5,7 +5,7 @@ import type { BuildingId, CampusAudience, ExplorerAccess } from '../campusMap';
  * pure data: each building's layout and wall feature, the room's perspective, and where people can sit or stand. The room is a
  * 1000 x 620 picture: a back wall from x 170 to 830 (y 70 to 330) and a floor widening to the full width at the front.
  */
-export type Layout = 'rows' | 'tables' | 'desks' | 'benches' | 'circle' | 'standing' | 'pods' | 'board';
+export type Layout = 'rows' | 'tables' | 'desks' | 'benches' | 'circle' | 'standing' | 'pods' | 'board' | 'tiers';
 export type Feature = 'arcade' | 'screen' | 'shelves' | 'schedule' | 'kanban' | 'stage' | 'quiet' | 'stars' | 'lounge' | 'frames' | 'city' | 'sprint' | 'clients' | 'screens';
 export interface RoomDef { layout: Layout; feature: Feature; dark: boolean }
 
@@ -17,7 +17,8 @@ export const ROOMS: Partial<Record<BuildingId, RoomDef>> = {
   tower: { layout: 'standing', feature: 'schedule', dark: false },
   // the prototype's INTERIOR_BIZ rooms win for these three (base = INTERIOR_BIZ[id] || INTERIOR[id])
   studio: { layout: 'pods', feature: 'sprint', dark: false },
-  amphi: { layout: 'rows', feature: 'stage', dark: false },
+  // C26 (v6 D4): an auditorium: dark walls, a raised stage, six tiered rows of red seats, heads only for people really here
+  amphi: { layout: 'tiers', feature: 'stage', dark: true },
   testing: { layout: 'desks', feature: 'quiet', dark: false },
   observatory: { layout: 'standing', feature: 'stars', dark: true },
   commons: { layout: 'tables', feature: 'lounge', dark: false },

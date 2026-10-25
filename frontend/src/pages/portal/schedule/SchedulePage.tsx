@@ -5,6 +5,14 @@ import CondensedHeaderCard from '../today/CondensedHeaderCard';
 import portalApi from '../../../utils/portalApi';
 import { fetchSchedule, fetchPublicEvents, fetchPoints, joinSession, OpenHouseView, FirstClassView, PointsEvent } from '../../../services/onboardingApi';
 import { fmtCentralTime, centralParts } from '../today/shellUtils';
+import { useCampus } from '../../../components/campus/CampusContext';
+import { EventSignup } from '../../../components/campus/events/EventSignup';
+import '../../../components/campus/events/campusEvents.css';
+import {
+  type SessionItem, type SchedEvent, type Mode, DAY_MS, dkey, mondayOf, parseYmd, itemClass, labelForPointsEvent, buildSchedule, slotForHour, TG_SLOTS,
+} from './scheduleModel';
+
+export { itemClass } from './scheduleModel';
 import { useNextLiveSession } from '../today/useNextLiveSession';
 import { useCountdown } from '../../../hooks/useCountdown';
 import { parseSessionTimeToHHMM } from '../../../utils/sessionTime';
@@ -21,168 +29,21 @@ import './SchedulePage.css';
  * runs at module top-level — every "now" is computed inside the component/hooks.
  */
 
-type SessionItem = {
-  id: string;
-  session_number: number;
-  title: string;
-  session_date: string;   // YYYY-MM-DD
-  start_time: string | null;
-  status: string;         // scheduled | live | completed | cancelled
-  session_type: string;
-  room_id?: string | null; // linked Colaberry Commons room, when one exists
-};
-
-type EvKind = 'class' | 'event'; // class = cohort session, event = public open house
-type EvState = 'done' | 'live' | 'up';
-type SchedEvent = {
-  id: string;
-  kind: EvKind;
-  title: string;
-  time: string;   // display time ('' if none)
-  hour: number;   // 0..23 for time-grid slotting, -1 if unknown
-  state: EvState;
-  href?: string;
-  external?: boolean;
-  sub: string;    // session_type or 'Open House'
-  /** This learner has registered on Eventbrite (public events only). */
-  registered?: boolean;
-};
-type SchedMap = Record<string, SchedEvent[]>;
-type Mode = 'month' | 'week' | 'agenda';
-
-const DAY_MS = 7 * 864e5;
-
-const dkey = (d: Date): string => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
-const mondayOf = (d: Date): Date => { const x = new Date(d); x.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return x; };
-
-/** Parse a DATEONLY 'YYYY-MM-DD' as a LOCAL date (avoids a UTC off-by-one). */
-function parseYmd(s: string | null | undefined): Date | null {
-  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s || '');
-  return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : null;
-}
-
-/** '13:00[:00]' or a Date -> '1:00 PM'. */
-function fmtTime(t: string | null | undefined, from?: Date): string {
-  let h: number, min: number;
-  if (from) { h = from.getHours(); min = from.getMinutes(); }
-  else if (t && /^\d{1,2}:\d{2}/.test(t)) { const [hh, mm] = t.split(':'); h = Number(hh); min = Number(mm); }
-  else return '';
-  const ap = h >= 12 ? 'PM' : 'AM';
-  const h12 = h % 12 === 0 ? 12 : h % 12;
-  return `${h12}:${String(min).padStart(2, '0')} ${ap}`;
-}
-function hourOf(t: string | null | undefined, from?: Date): number {
-  if (from) return from.getHours();
-  if (t && /^\d{1,2}:/.test(t)) return Number(t.split(':')[0]);
-  return -1;
-}
-
-const KIND_CLASS: Record<EvKind, string> = { class: 'learning', event: 'event' };
-
 /**
- * Colour token for one calendar item (pure). A public event the learner has
- * registered for gets its own `registered` treatment (leaf) so their own
- * commitments stand out from the ~46 events everyone can see; everything else
- * falls back to its kind.
+ * Wrap a calendar item: a session -> in-app Link, today's plan item -> Link, a public event -> its row with one-tap Sign up / You're
+ * going (C27: no longer the whole item as a link to Eventbrite, so the button is the one place that registers), else a plain div.
  */
-export function itemClass(ev: { kind: EvKind; registered?: boolean }): string {
-  return ev.registered ? 'registered' : KIND_CLASS[ev.kind];
-}
-
-/** A human label for a points-ledger event, from its type/metadata. */
-function labelForPointsEvent(e: PointsEvent): string {
-  const OVERRIDES: Record<string, string> = {
-    open_house_rsvp: 'Open House RSVP',
-    daily_streak: 'Daily streak',
-    profile_complete: 'Profile completed',
-    background_added: 'Background added',
-    first_login: 'First login',
-    card_complete: 'Lesson completed',
-    lesson_complete: 'Lesson completed',
-  };
-  if (OVERRIDES[e.event_type]) return OVERRIDES[e.event_type];
-  const t = (e.event_type || 'Points').replace(/[_:]+/g, ' ').trim();
-  return t.charAt(0).toUpperCase() + t.slice(1);
-}
-
-function stateForSession(status: string, day: Date, today: Date): EvState {
-  if (status === 'completed') return 'done';
-  if (status === 'live') return 'live';
-  return day.getTime() < today.getTime() ? 'done' : 'up';
-}
-
-function buildSchedule(sessions: SessionItem[], events: OpenHouseView[], firstClass: FirstClassView | null, today: Date): SchedMap {
-  const sched: SchedMap = {};
-  const add = (d: Date, ev: SchedEvent): void => { const k = dkey(d); (sched[k] = sched[k] || []).push(ev); };
-
-  for (const s of sessions) {
-    if (s.status === 'cancelled') continue;
-    const d = parseYmd(s.session_date);
-    if (!d) continue;
-    add(d, {
-      id: s.id, kind: 'class', title: `#${s.session_number} · ${s.title}`,
-      time: fmtTime(s.start_time), hour: hourOf(s.start_time),
-      state: stateForSession(s.status, d, today),
-      // Sessions link into their Colaberry Commons room, not the retired
-      // /portal/sessions/:id detail page. A session only has a room once
-      // Community Rooms has provisioned one for it (ensureRoomForSession);
-      // until then the item renders as plain (unclickable) text rather than
-      // pointing at a dead route.
-      href: s.room_id ? `/portal/rooms/${s.room_id}` : undefined,
-      sub: (s.session_type || 'session').replace(/_/g, ' '),
-    });
-  }
-  for (const e of events) {
-    // Bucket + label events in Central time (program-canonical), regardless of viewer tz.
-    const cp = centralParts(e.starts_at);
-    if (!cp) continue;
-    add(new Date(cp.y, cp.mo, cp.d), {
-      id: e.id, kind: 'event', title: e.title,
-      time: fmtCentralTime(e.starts_at), hour: cp.h, state: 'up',
-      href: e.registration_url || undefined, external: true,
-      // Registered events read as "Registered" rather than the generic kind, so
-      // a learner can pick their own commitments out of a busy month at a glance.
-      sub: e.is_registered ? 'Registered' : (/open house/i.test(e.title) ? 'Open House' : 'Event'),
-      registered: e.is_registered,
-    });
-  }
-  // Cohort kickoff: the countdown's "next class". Surface it on the calendar
-  // even when no per-session rows exist yet, so the class-start day is visible.
-  if (firstClass?.start_date) {
-    const d = parseYmd(firstClass.start_date);
-    if (d) {
-      const hasClass = (sched[dkey(d)] || []).some((e) => e.kind === 'class');
-      if (!hasClass) {
-        add(d, {
-          id: 'class-start', kind: 'class',
-          title: `Class starts · ${firstClass.cohort_name || 'Your cohort'}`,
-          time: '', hour: -1,
-          state: d.getTime() < today.getTime() ? 'done' : 'up',
-          sub: 'Cohort kickoff',
-        });
-      }
-    }
-  }
-  Object.keys(sched).forEach((k) =>
-    sched[k].sort((a, b) => (a.hour - b.hour) || a.title.localeCompare(b.title)));
-  return sched;
-}
-
-/** Wrap a calendar item: external event -> new-tab link, session -> in-app Link, else a plain div. */
 function renderItem(ev: SchedEvent, className: string, inner: React.ReactNode, block?: boolean): React.ReactNode {
   const style: React.CSSProperties = { textDecoration: 'none', color: 'inherit' };
   if (block) style.display = 'block';
-  if (ev.href && ev.external) {
-    return <a key={ev.id} href={ev.href} target="_blank" rel="noopener noreferrer" className={className} title={ev.title} style={style}>{inner}</a>;
+  if (ev.event) {
+    return <div key={ev.id} className={className} title={ev.title} data-testid={`sch-ev-${ev.id}`}>{inner}<span className="sch-signup"><EventSignup event={ev.event} compact /></span></div>;
   }
   if (ev.href) {
     return <Link key={ev.id} to={ev.href} className={className} title={ev.title} style={style}>{inner}</Link>;
   }
   return <div key={ev.id} className={className} title={ev.title}>{inner}</div>;
 }
-
-const slotForHour = (h: number): number => (h < 10 ? 0 : h < 13 ? 1 : h < 16 ? 2 : 3);
-const TG_SLOTS = ['Morning', 'Midday', 'Afternoon', 'Evening'];
 
 // ── small SVG helpers (no emoji; inline SVG per design system) ──
 const CheckIcon: React.FC<{ w?: number; h?: number; stroke?: string }> = ({ w = 13, h = 13, stroke = 'var(--leaf-action)' }) => (
@@ -231,7 +92,8 @@ const SchedulePage: React.FC = () => {
     return () => { cancelled = true; };
   }, []);
 
-  const sched = useMemo(() => buildSchedule(sessions, events, firstClass, today), [sessions, events, firstClass, today]);
+  const { planStops } = useCampus(); // C27: today's plan joins the week in teal (none with the campus off)
+  const sched = useMemo(() => buildSchedule(sessions, events, firstClass, today, planStops ?? []), [sessions, events, firstClass, today, planStops]);
   const totalItems = useMemo(() => Object.values(sched).reduce((n, arr) => n + arr.length, 0), [sched]);
 
   // Points history bucketed by Central day: a per-day total (for the month/week
@@ -280,7 +142,7 @@ const SchedulePage: React.FC = () => {
 
   const periodLabel = useMemo((): string => {
     if (mode === 'month') return cursor.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-    const ws = mondayOf(cursor), we = new Date(ws); we.setDate(ws.getDate() + 4);
+    const ws = mondayOf(cursor), we = new Date(ws); we.setDate(ws.getDate() + 6);
     const wk = weekNumFor(cursor);
     return (wk ? 'Week ' + wk + ' · ' : '')
       + ws.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
@@ -346,11 +208,11 @@ const SchedulePage: React.FC = () => {
 
   // ── WEEK (time grid) ──
   const renderWeek = (): React.ReactNode => {
-    const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+    const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']; // C27 (v6 D5): the whole week, events land on weekends too
     const wk = weekNumFor(cursor);
     const ws = mondayOf(cursor);
     const buckets: Record<string, SchedEvent[]> = {};
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 7; i++) {
       const d = new Date(ws); d.setDate(ws.getDate() + i);
       (sched[dkey(d)] || []).forEach((ev) => {
         const key = i + '-' + slotForHour(ev.hour);
@@ -449,7 +311,7 @@ const SchedulePage: React.FC = () => {
                   <span className="qbody">
                     <span className="qtitle">{ev.title}</span>
                     <span className="qmeta">
-                      <span className={`chip ${itemClass(ev)}`}><span className="sw" />{ev.registered ? 'Registered' : ev.kind === 'class' ? 'Class' : 'Event'}</span>
+                      <span className={`chip ${itemClass(ev)}`}><span className="sw" />{ev.registered ? 'Registered' : ev.kind === 'class' ? 'Class' : ev.kind === 'plan' ? 'Today’s plan' : 'Event'}</span>
                       {ev.time ? <span className="ptbadge">{ev.time}</span> : null}
                       {' · '}{ev.sub}{ev.state === 'live' ? ' · live now' : ''}
                     </span>
@@ -550,6 +412,7 @@ const SchedulePage: React.FC = () => {
           <span><span className="chip learning"><span className="sw" style={{ background: 'var(--dv-learning)' }} />Class session</span></span>
           <span><span className="chip event"><span className="sw" />Program event</span></span>
           <span><span className="chip registered"><span className="sw" />You are registered</span></span>
+          <span><span className="chip plan"><span className="sw" />Today&rsquo;s plan</span></span>
           <span style={{ marginLeft: 8, display: 'inline-flex', gap: 6, alignItems: 'center' }}><CheckIcon /> done</span>
           <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}><LiveIcon /> live</span>
           <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}><TodoIcon /> upcoming</span>

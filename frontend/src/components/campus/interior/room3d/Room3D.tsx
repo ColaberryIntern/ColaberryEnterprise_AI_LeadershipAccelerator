@@ -10,6 +10,9 @@ import type { PageSummary } from '../pageSummary';
 import type { PlanStop } from '../../campusPlan';
 import { RoomScreen, WallBoard } from './RoomBoard';
 import PlansBoard from '../../admissions/PlansBoard';
+import { ScheduleBoard, NextEventBoard } from '../../events/EventRows';
+import { useCampusEvents } from '../../events/EventSignup';
+import { upcoming } from '../../events/eventsModel';
 import { openBookCall } from '../../admissions/admissionsCallApi';
 import { DESK_AT, STAFF_AT, YOU_AT, YOU_FROM, furnitureOf, peoplePlaces, roomDepth } from './roomPlaces';
 import type { Place } from './roomPlaces';
@@ -76,11 +79,14 @@ export default function Room3D(p: Room3DProps): React.ReactElement | null {
   const { id, people, you, summary, spot, reduceMotion } = p;
   const wrap = useRef<HTMLDivElement>(null);
   const { fw, fh } = useRoomSize(wrap);
-  const d = roomDepth(fw);
+  const tiers = ROOMS[id]?.layout === 'tiers'; // C26 (v6 D4): the Events Hall auditorium, a deeper room
+  const d = roomDepth(fw, tiers);
   const [youAt, setYouAt] = useState<Place>(reduceMotion ? YOU_AT : YOU_FROM);
   const [walkMs, setWalkMs] = useState(1100);
   const [zoom, setZoom] = useState<string | null>(null);
   const timers = useRef<number[]>([]);
+  // C27 (v6 D5): the Schedule board's week and upcoming events; C26: the Events Hall board's next event
+  const events = useCampusEvents(id === 'tower' || id === 'amphi');
   useEffect(() => {
     if (reduceMotion) return undefined;
     const t = window.requestAnimationFrame(() => window.requestAnimationFrame(() => setYouAt(YOU_AT)));
@@ -116,7 +122,10 @@ export default function Room3D(p: Room3DProps): React.ReactElement | null {
           <div className="face floor" aria-hidden="true" />
           <div className="face back"><div className="wainscot" aria-hidden="true" />
             <RoomScreen summary={summary} name={p.name} planStep={p.planStep} onSection={section} onCard={cardRoute && spot?.opens !== 'book' ? sitDown : null}
-              onPlan={(r) => p.onOpen(r)} custom={id === 'admissions' ? <PlansBoard onSection={section} /> : undefined} />
+              onPlan={(r) => p.onOpen(r)} custom={id === 'admissions' ? <PlansBoard onSection={section} />
+                : id === 'tower' && events ? <ScheduleBoard events={upcoming(events, new Date(), 3)} all={events} now={new Date()} onSection={section} />
+                : id === 'amphi' && events ? <NextEventBoard event={upcoming(events, new Date(), 1)[0] ?? null} onSection={section} /> : undefined} />
+            {tiers && <div className="cm-r3-platform" aria-hidden="true" data-testid="cm-r3-stage" />}
           </div>
           <div className="face left"><div className="wainscot" aria-hidden="true" />
             {summary?.sideTop && <div className="cm-r3-wallslot"><WallBoard side={summary.sideTop} onSection={section} /></div>}
@@ -124,8 +133,9 @@ export default function Room3D(p: Room3DProps): React.ReactElement | null {
           <div className="face right" aria-hidden="true"><div className="wainscot" /></div>
           <div className="cm-r3-floorlayer">
             {furnitureOf(room.layout, !!spot).map((f, i) => (
-              <Billboard key={`f${i}`} x={f.x} z={f.z - (f.kind === 'table' ? 0.02 : 0.015)} w={f.kind === 'table' ? 150 : fw * f.w} h={f.kind === 'table' ? 56 : 40} fw={fw} fh={fh} d={d}
-                className={`cm-r3-${f.kind}`} aria-hidden="true">{null}</Billboard>
+              <Billboard key={`f${i}`} x={f.x} z={f.z - (f.kind === 'table' ? 0.02 : 0.015)} w={f.kind === 'table' ? 150 : fw * f.w}
+                h={f.kind === 'table' ? 56 : f.kind === 'tier' ? 34 + i * 12 : 40} fw={fw} fh={fh} d={d}
+                className={`cm-r3-${f.kind}`} aria-hidden="true" data-testid={f.kind === 'tier' ? 'cm-r3-tier' : undefined}>{null}</Billboard>
             ))}
             {p.desk && (
               <>
@@ -135,11 +145,17 @@ export default function Room3D(p: Room3DProps): React.ReactElement | null {
                 </Billboard>
               </>
             )}
-            {shown.map((per, i) => (
+            {shown.map((per, i) => (tiers ? (
+              // C26: in the auditorium a person present is a head in a seat (one per person; the other seats stay empty)
+              <Billboard key={per.key} x={places[i][0]} z={places[i][1]} w={30} h={34 + Math.floor(i / 7) * 12 + 22} fw={fw} fh={fh} d={d} className="cm-r3-head" data-testid="cm-inside-person">
+                <button type="button" className="h" aria-label={`${per.name}, open their card`} title={per.name}
+                  onClick={p.onPick ? (e) => p.onPick!(per.key, { x: e.clientX, y: e.clientY }) : undefined}>{per.initials}</button>
+              </Billboard>
+            ) : (
               <Billboard key={per.key} x={places[i][0]} z={places[i][1]} w={70} h={130} fw={fw} fh={fh} d={d} className="cm-r3-fig">
                 {person(per, p.lanyard, p.onPick ? (at) => p.onPick!(per.key, at) : undefined, 'cm-inside-person')}
               </Billboard>
-            ))}
+            )))}
             {spot && (
               <Billboard x={spot.x} z={spot.z} w={spot.w} h={spot.h} fw={fw} fh={fh} d={d} className={`cm-r3-spot${zoom ? ' is-sit' : ''}`}
                 role="button" tabIndex={0} aria-label={`${spot.tile.replace(/^\S+\s/, '')}: ${spot.sub}`} data-testid={`cm-spot-${spot.kind}`}

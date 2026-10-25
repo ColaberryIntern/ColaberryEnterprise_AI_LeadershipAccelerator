@@ -1,0 +1,29 @@
+/* C27 (v6 D5): one-tap event sign up (Eventbrite is the record). Art tokens only. */
+.cm-ev-signup{display:inline-flex;align-items:center;height:30px;padding:0 12px;border-radius:15px;background:var(--cm-art-red);color:var(--cm-art-white);
+  font-weight:700;font-size:12.5px;text-decoration:none;white-space:nowrap;flex:none}
+.cm-ev-signup:hover{background:var(--cm-art-red-d);color:var(--cm-art-white)}
+.cm-ev-signup:focus-visible{outline:3px solid var(--cm-art-red);outline-offset:2px}
+.cm-ev-going{display:inline-flex;align-items:center;height:30px;padding:0 12px;border-radius:15px;background:var(--cm-art-live-tint);color:var(--cm-art-live);
+  font-weight:800;font-size:12.5px;white-space:nowrap;flex:none}
+.cm-ev{margin-top:12px}
+.cm-ev-rows,.cm-ev-board-rows{list-style:none;margin:0;padding:0}
+.cm-ev-row{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--cm-art-line);font-size:13.5px}
+.cm-ev-row .when{display:flex;flex-direction:column;flex:none;width:86px}
+.cm-ev-row .when small{color:var(--cm-art-muted);font-size:12px}
+.cm-ev-row .what{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.cm-ev-none{color:var(--cm-art-muted);font-size:13.5px;margin:6px 0}
+/* on the room's board (inside .cm-r3-screen: scales with the room) */
+.cm-ev-strip{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:calc(var(--fw) * .006);margin:calc(var(--fw) * .008) 0}
+.cm-ev-strip .d{position:relative;display:flex;flex-direction:column;align-items:center;padding:calc(var(--fw) * .005) 0;border-radius:8px;border:1px solid var(--cm-art-line);color:var(--cm-art-sp-ink)}
+.cm-ev-strip .d small{font-size:calc(var(--fw) * .012)}
+.cm-ev-strip .d b{font-size:calc(var(--fw) * .02)}
+.cm-ev-strip .d.is-today{background:var(--cm-art-sp-ink);color:var(--cm-art-white);border-color:var(--cm-art-sp-ink)}
+.cm-ev-strip .d i{position:absolute;top:3px;right:5px;width:6px;height:6px;border-radius:50%;background:var(--cm-art-red)}
+.cm-r3-screen .cm-ev-board-h{font-size:calc(var(--fw) * .022);margin:calc(var(--fw) * .006) 0}
+.cm-r3-screen .cm-ev-board-rows .cm-ev-row{font-size:calc(var(--fw) * .014);padding:calc(var(--fw) * .005) 0;color:var(--cm-art-sp-ink)}
+.cm-r3-screen .cm-ev-board-rows .cm-ev-row .when{width:calc(var(--fw) * .1)}
+.cm-r3-screen .cm-ev-signup,.cm-r3-screen .cm-ev-going{height:calc(var(--fw) * .03);font-size:calc(var(--fw) * .013);padding:0 calc(var(--fw) * .012)}
+/* the side panel's Coming up, events */
+.cm-coming-ev{display:flex;flex-direction:column;gap:2px;padding:8px 0;border-top:1px solid var(--cm-art-line)}
+.cm-coming-ev b{font-size:13.5px}
+.cm-coming-ev span{font-size:12.5px;color:var(--cm-art-muted)}

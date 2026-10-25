@@ -30,6 +30,8 @@ import type { HomeAgenda } from './useMapMoments';
 import PhotoPrompt from './PhotoPrompt';
 import { ComingUpCall } from '../admissions/BookCallHost';
 import type { AdmissionsBooking } from '../admissions/admissionsCallApi';
+import { ComingUpEvents } from '../events/EventRows';
+import type { OpenHouseView } from '../../../services/onboardingApi';
 
 /** C20: who gets "📅 Talk to a person" on the help desk (learners and Explorers; partners and staff have their own channels). */
 export const talksToAdmissions = (a: CampusAudience): boolean => a === 'member' || a === 'explorer';
@@ -82,6 +84,8 @@ export interface ConciergeProps {
   justToured?: boolean;
   /** C20: this learner's booked admissions call, shown as Coming up at the top (null: none). */
   call?: AdmissionsBooking | null;
+  /** C27 (v6 D5): the events this learner is registered for (Eventbrite), also under Coming up. */
+  going?: OpenHouseView[];
 }
 
 /** The prototype's "I want to..." chips per account (CHIPS, CHIPS_EXP, CHIPS_SP, CHIPS_WORK), each a walk to a real building. "I'm
@@ -148,6 +152,7 @@ export default function CampusConcierge(p: ConciergeProps): React.ReactElement {
       <Pulse p={p} />
       {/* C20 (v3 2.6 #2): Coming up, a booked admissions call, above Up next */}
       <ComingUpCall booking={p.call ?? null} now={p.now} />
+      <ComingUpEvents events={p.going ?? []} />
 
       {/* C15 (v3 2.6), each fact once, in this order: Up next (the urgent card takes its slot), Live, the tour, the rooms here,
           today's plan (the Up next step tagged, not repeated), right now, the help desk, I want to… */}

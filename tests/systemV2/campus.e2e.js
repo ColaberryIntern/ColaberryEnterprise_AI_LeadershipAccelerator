@@ -222,6 +222,23 @@ async function runAudience(browser, audience, jwt) {
         must(cards === 4, `plans page shows ${cards} of 4 cards`);
       });
 
+      await step(audience, 'C27: the Schedule room shows the week strip and upcoming events; the Schedule page week has seven day columns', async () => {
+        await page.goto(`${urls.base}/portal/campus`, { waitUntil: 'domcontentloaded' });
+        await page.waitForSelector('[data-testid="cm-concierge"]', { timeout: 30_000 });
+        await page.evaluate(() => document.querySelector('[data-testid="cm-bld-tower"]').dispatchEvent(new MouseEvent('click', { bubbles: true })));
+        await page.waitForSelector('[data-testid="cm-room3d"][data-room="tower"] [data-testid="cm-board-strip"]', { timeout: 15_000 });
+        must(await page.locator('[data-testid="cm-board-strip"] .d').count() === 7, 'the strip is not seven days');
+        await page.waitForSelector('[data-testid="cm-ev-upcoming"]', { timeout: 15_000 });
+        // every Sign up on the campus opens Eventbrite in a new tab (the record); none is a portal RSVP
+        const bad = await page.evaluate(() => Array.from(document.querySelectorAll('[data-testid^="cm-ev-signup-"]')).filter((a) => a.getAttribute('target') !== '_blank').length);
+        must(bad === 0, `${bad} sign-up links do not open a new tab`);
+        await page.goto(`${urls.base}/portal/schedule`, { waitUntil: 'domcontentloaded' });
+        await page.waitForSelector('.sch-root .schtoolbar', { timeout: 30_000 });
+        await page.click('.sch-root .toggle button:nth-child(2)');
+        await page.waitForSelector('.sch-root .timegrid', { timeout: 15_000 });
+        must(await page.locator('.sch-root .tg-dayhead').count() === 7, 'the week view is not seven days');
+      });
+
     }
 
     await step(audience, 'scrolled down, each page\'s sticky next task rides IN the location bar, never the header (Ali 2026-10-24)', async () => {

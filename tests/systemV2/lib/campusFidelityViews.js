@@ -170,6 +170,11 @@ const VIEWS = [
     assert: () => `(() => { const b = document.querySelector('[data-testid="cm-board-plans"]').textContent;
       for (const want of ['$149', '$1,200', 'Scoped on a call', 'No card needed']) if (!b.includes(want)) return 'board lacks ' + want;
       return document.body.textContent.includes('$199') ? '$199 is on the page' : ''; })()` },
+  // C27 (v6 D5): the Schedule room's board is the week strip and upcoming events (Sign up / You're going); the arrival card lists them.
+  { name: '25-schedule', route: '/portal/campus', accounts: ['member'], steps: () => [tap('tower'), WALKED, { wait: 1500 }],
+    required: () => ['cm-room3d', 'cm-board-strip', 'cm-ev-upcoming'],
+    assert: () => `(() => { const n = document.querySelectorAll('[data-testid="cm-board-strip"] .d').length; if (n !== 7) return 'strip days: ' + n;
+      return document.querySelectorAll('[data-testid="cm-board-strip"] .d.is-today').length === 1 ? '' : 'today not marked once'; })()` },
   { name: '24-plans', route: '/portal/plans', accounts: ['member', 'business'], steps: () => [{ wait: 1500 }],
     required: () => ['cm-plans', 'cm-plan-explorer', 'cm-plan-individual', 'cm-plan-team', 'cm-plan-services', 'cm-plans-account', 'cm-plans-talk'] },
   // WP-6: arriving at the live building: the hero in the state's colour, the stage, the live room as the main action
@@ -189,7 +194,7 @@ function panelFor(view, a, size) {
   if (view.name === '01-gate' || view.name === '23-workstation') return []; // the workstation is full screen, as the prototype's #ws
   const tour = a === 'staff' ? [] : ['cm-cc-tour'];
   if (view.route !== '/portal/campus' && view.name !== '14-step-outside') return size === 'phone' ? ['cm-steps-open'] : ['cm-page-rail', ...tour.map((t) => `[data-testid="cm-page-rail"] [data-testid="${t}"]`)];
-  if (size === 'phone' && (CARD_VIEWS.includes(view.name) || view.name.startsWith('21-room-') || view.name === '24-admissions')) return ['cm-cc-peek'];
+  if (size === 'phone' && (CARD_VIEWS.includes(view.name) || view.name.startsWith('21-room-') || view.name === '24-admissions' || view.name === '25-schedule')) return ['cm-cc-peek'];
   return ['cm-concierge', ...tour];
 }
 const withPanel = (view) => ({ ...view, required: (a, size) => [...view.required(a, size), ...panelFor(view, a, size)] });
