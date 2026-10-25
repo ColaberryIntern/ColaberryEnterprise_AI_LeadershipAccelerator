@@ -3,7 +3,8 @@ import { Navigate } from 'react-router-dom';
 import CampusWorld from '../../../components/campus/CampusWorld';
 import CampusTopBar from '../../../components/campus/home/CampusTopBar';
 import CampusConcierge from '../../../components/campus/home/CampusConcierge';
-import { pulseOf } from '../../../components/campus/home/CampusConcierge';
+import { pulseOf, talksToAdmissions } from '../../../components/campus/home/CampusConcierge';
+import BookCallHost, { useAdmissionsCall } from '../../../components/campus/admissions/BookCallHost';
 import { useHomeFacts } from '../../../components/campus/home/useHomeFacts';
 import CampusGate, { gateSeen } from '../../../components/campus/home/CampusGate';
 import CampusMeHost from '../../../components/campus/home/CampusMeHost';
@@ -106,6 +107,7 @@ function CampusHome(): React.ReactElement {
   const suggested = useMemo(() => rightNowRows({ audience, workplace: wp, buildings, stops: campus.planStops, planMinutes: campus.planMinutes, agenda, presence,
     presenceError, live: !!live, urgent }), [audience, wp, buildings, campus.planStops, campus.planMinutes, agenda, presence, presenceError, live, urgent]);
   const wf = useHomeWayfinder({ audience, workplace: wp, buildings, accessOf, presence, presenceError, desks: staffDesks, urgent, suggested, goTo: map.goTo, openPerson: campus.openPersonCard });
+  const call = useAdmissionsCall(talksToAdmissions(audience)); // C20: Coming up
 
   // The home shows Colaberry Live as the prototype's top pill (CampusLive below), so the portal-wide live-now badge steps aside here.
   useEffect(() => { document.documentElement.classList.add('cm-on-home'); return () => document.documentElement.classList.remove('cm-on-home'); }, []);
@@ -132,12 +134,13 @@ function CampusHome(): React.ReactElement {
         stops={campus.planStops} planMinutes={campus.planMinutes} live={live} now={new Date()} agenda={agenda} urgent={urgent}
         tourStops={tour ? tour.stops : null} touring={touring} tourProgress={campus.tourProgress} justToured={campus.justToured}
         onWalk={map.goTo} onRun={(id) => map.goTo(id, { run: true })} onHover={setHover} onTour={campus.resumeTour} onEndTour={campus.endTour} onDismissTour={campus.dismissTour} onDone={onComplete}
-        onOpen={(r) => campus.enterThroughDoor(r, null)} photo={photo} />
+        onOpen={(r) => campus.enterThroughDoor(r, null)} photo={photo} call={call} />
       <div className="cm-home-livebar"><CampusLive onWalk={(id, run) => map.goTo(id, { run })} hereId={campus.here ?? null} /></div>
       <CampusTabBar active="/portal/campus" />
       <CampusListView />
       <CampusDoorTransition />
       <CampusDmToast />
+      <BookCallHost />
       <CampusCheer burst reduceMotion={reduce} />
       <Wayfinder ctx={wf.ctx} onPick={wf.onPick} />
       {extra}

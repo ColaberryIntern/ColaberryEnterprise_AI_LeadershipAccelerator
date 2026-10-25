@@ -182,6 +182,29 @@ async function runAudience(browser, audience, jwt) {
         await page.waitForSelector('[data-testid="cm-room3d"][data-room="studio"]', { timeout: 15_000 });
       });
 
+      // C20: needs the backend's in-memory admissions calendar (CAMPUS_CALENDAR_STUB=1, refused in production): no Google, no invite.
+      await step(audience, 'C20: "Talk to a person" books a call with admissions; the confirmation shows and Coming up appears; Reschedule cancels it', async () => {
+        await page.goto(`${urls.base}/portal/campus`, { waitUntil: 'domcontentloaded' });
+        await page.waitForSelector('[data-testid="cm-cc-talk"]', { timeout: 30_000 });
+        await page.click('[data-testid="cm-cc-talk"]');
+        await page.waitForSelector('[data-testid="cm-book"] [data-testid="cm-book-slots"] button', { timeout: 15_000 });
+        await page.click('[data-testid="cm-book-topic-enroll"]');
+        await page.click('[data-testid="cm-book-slots"] button');
+        await page.click('[data-testid="cm-book-submit"]');
+        await page.waitForSelector('[data-testid="cm-book-confirmed"]', { timeout: 15_000 });
+        const when = await page.textContent('[data-testid="cm-book-when"]');
+        must(/(CDT|CST) · 30 minutes on Google Meet$/.test(when || ''), `confirmation "${when}"`);
+        await page.click('[data-testid="cm-book-confirmed"] button.pri');
+        await page.waitForSelector('[data-testid="cm-cc-coming"]', { timeout: 15_000 });
+        // clean up so a rerun starts empty: Coming up's Reschedule opens on the call; Reschedule cancels it
+        await page.click('[data-testid="cm-cc-coming-reschedule"]');
+        await page.waitForSelector('[data-testid="cm-book-already"]', { timeout: 15_000 });
+        await page.click('[data-testid="cm-book-reschedule"]');
+        await page.waitForSelector('[data-testid="cm-book-slots"]', { timeout: 15_000 });
+        await page.keyboard.press('Escape');
+        await page.waitForSelector('[data-testid="cm-cc-coming"]', { state: 'detached', timeout: 15_000 });
+      });
+
     }
 
     await step(audience, 'scrolled down, each page\'s sticky next task rides IN the location bar, never the header (Ali 2026-10-24)', async () => {

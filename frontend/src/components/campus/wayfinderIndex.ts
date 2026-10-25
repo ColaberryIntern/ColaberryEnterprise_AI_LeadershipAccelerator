@@ -13,7 +13,7 @@ import { subOf } from './campusArrival';
  *  - an empty query lists Happening now, Suggested for you, Staff · always on and All buildings.
  * Anonymous presence is never searchable, so the Wayfinder cannot reveal anyone the people lists would not.
  */
-export type WfKind = 'urgent' | 'building' | 'room' | 'person' | 'staff' | 'suggested';
+export type WfKind = 'urgent' | 'building' | 'room' | 'person' | 'staff' | 'suggested' | 'book';
 export interface WfItem {
   key: string;
   kind: WfKind;
@@ -45,6 +45,12 @@ export const WF_KEYS: Partial<Record<BuildingId, string>> = {
 };
 const STAFF_KEYS = 'staff help mentor stuck question curriculum certification';
 const MAYA_KEYS = 'admissions enroll enrolling price cost pay sponsor employer apply join person call';
+/** C20 (round 3 §2.7): 'Book a call with admissions' for learners and Explorers, under Help; its words as the spec lists them. */
+const BOOK_KEYS = 'book call admissions person talk enroll human appointment real';
+function bookItem(c: WfContext): (WfItem & { keys: string }) | null {
+  if (c.audience !== 'member' && c.audience !== 'explorer') return null;
+  return { key: 'book', kind: 'book', title: 'Book a call with admissions', sub: 'A real person · 30 minutes on Google Meet', buildingId: 'gate', action: 'Book →', group: 'Help', keys: BOOK_KEYS };
+}
 const URGENT_WORDS = ['late', 'now', 'standup', 'class', 'meeting', 'hurry'];
 export const WF_LIMIT = 9;
 const PEOPLE_LIMIT = 5;
@@ -116,7 +122,8 @@ export function wayfinderEmpty(c: WfContext): WfItem[] {
   const sugg = c.suggested.map((s): WfItem => ({ key: 'g:' + s.key, kind: 'suggested', title: s.title, sub: `${s.detail} · ${nameOf(c, s.buildingId)}`, buildingId: s.buildingId, action: walkLabel(c, s.buildingId), group: 'Suggested for you' }));
   const staff = staffItems(c).map(({ keys, ...it }) => ({ ...it, group: 'Staff · always on' }));
   const all = placeItems(c).filter((x) => x.kind === 'building').map(({ keys, ...it }) => ({ ...it, group: 'All buildings' }));
-  return [...(u ? [u] : []), ...sugg, ...staff, ...all];
+  const help = [bookItem(c)].filter((x): x is WfItem & { keys: string } => !!x).map(({ keys, ...it }) => it);
+  return [...(u ? [u] : []), ...sugg, ...staff, ...help, ...all];
 }
 
 export function wayfinderSearch(query: string, c: WfContext): WfItem[] {
@@ -125,9 +132,11 @@ export function wayfinderSearch(query: string, c: WfContext): WfItem[] {
   const matches = (keys: string) => tokens.every((t) => keys.includes(t));
   const places = placeItems(c).filter((x) => matches(x.keys)).sort((a, b) => scoreOf(b, tokens) - scoreOf(a, tokens)).slice(0, WF_LIMIT);
   const people = [...staffItems(c), ...peopleItems(c)].filter((x) => matches(x.keys)).slice(0, PEOPLE_LIMIT);
+  const book = bookItem(c);
+  const help = book && matches(book.keys) ? [book] : [];
   const u = urgentItem(c);
   const urgentFirst = u && tokens.some((t) => URGENT_WORDS.includes(t)) ? [u] : [];
-  return [...urgentFirst, ...people, ...places].map(({ keys, ...it }: WfItem & { keys?: string }) => it);
+  return [...urgentFirst, ...help, ...people, ...places].map(({ keys, ...it }: WfItem & { keys?: string }) => it);
 }
 
-export const wfIcon = (it: WfItem): string => (it.kind === 'urgent' ? '⏰' : BUILDING_ICON[it.buildingId] ?? '');
+export const wfIcon = (it: WfItem): string => (it.kind === 'urgent' ? '⏰' : it.kind === 'book' ? '📅' : BUILDING_ICON[it.buildingId] ?? '');

@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import CampusDoorTransition from './CampusDoorTransition';
 import CampusDmToast from './CampusDmToast';
 import CampusListView from './CampusListView';
+import BookCallHost from './admissions/BookCallHost';
 import './campusLook.css';
 import './campusTour.css';
 import './campusPeople.css';
@@ -33,5 +34,6 @@ export function CampusMapRoute(): null {
 }
 
 export default function CampusLayers(): React.ReactElement {
-  return <><CampusMapRoute /><CampusListView /><CampusDoorTransition /><CampusDmToast /></>;
+  // C20: the booking sheet's host, so "Talk to a person" (Where to?, the rail's help desk) opens it on any page
+  return <><CampusMapRoute /><CampusListView /><CampusDoorTransition /><CampusDmToast /><BookCallHost /></>;
 }

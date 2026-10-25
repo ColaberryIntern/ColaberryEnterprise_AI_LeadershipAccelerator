@@ -167,11 +167,11 @@ describe('the Wayfinder search (buildDest + matcher)', () => {
     expect(wayfinderSearch('cert', ctx({ audience: 'explorer', accessOf: (b) => (b.id === 'testing' ? 'locked' : 'open') })).find((r) => r.kind === 'building')!.action).toBe('🔒 Peek');
     expect(wayfinderSearch('a', ctx()).length).toBeLessThanOrEqual(WF_LIMIT + 5);
   });
-  it('"late" puts what is starting first; the empty Wayfinder groups Happening now, Suggested, Staff, All buildings', () => {
+  it('"late" puts what is starting first; the empty Wayfinder groups Happening now, Suggested, Staff, Help (C20), All buildings', () => {
     const urgent = { buildingId: 'lecture' as const, title: 'Live class starts in 4 min', detail: 'Build Day · Classroom' };
     expect(wayfinderSearch('late', ctx({ urgent }))[0]).toMatchObject({ kind: 'urgent', action: 'Run →', run: true });
     const groups = Array.from(new Set(wayfinderEmpty(ctx({ urgent, suggested: [{ key: 'plan', buildingId: 'lecture', title: 'Continue today’s plan', detail: '~96 min' }] })).map((r) => r.group)));
-    expect(groups).toEqual(['Happening now', 'Suggested for you', 'Staff · always on', 'All buildings']);
+    expect(groups).toEqual(['Happening now', 'Suggested for you', 'Staff · always on', 'Help', 'All buildings']);
     expect(wayfinderEmpty(ctx()).filter((r) => r.group === 'All buildings')).toHaveLength(B.length);
   });
 });

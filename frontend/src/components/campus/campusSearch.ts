@@ -12,15 +12,24 @@ import type { CampusPresence, CampusPerson } from './campusApi';
 export type SearchResult =
   | { kind: 'building'; id: string; label: string; buildingId: string }
   | { kind: 'room'; id: string; label: string; buildingId: string; route: string; navigable: boolean; detail: string }
-  | { kind: 'person'; id: string; label: string; buildingId: string; detail: string };
+  | { kind: 'person'; id: string; label: string; buildingId: string; detail: string }
+  | { kind: 'book'; id: string; label: string; buildingId: string; detail: string };
 
 export const SEARCH_LIMIT = 8;
+/** C20 (round 3 §2.7): searches that mean "talk to a person" find "Book a call with admissions". */
+export const BOOK_WORDS = ['book', 'call', 'admissions', 'person', 'talk', 'enroll', 'human', 'appointment'];
+export const BOOK_RESULT: SearchResult = { kind: 'book', id: 'book', label: 'Book a call with admissions', buildingId: '', detail: 'A real person · 30 minutes on Google Meet' };
+export const meansBooking = (q: string): boolean => {
+  const t = q.trim().toLowerCase();
+  return t.length >= 3 && BOOK_WORDS.some((w) => w.startsWith(t) || t.split(/\s+/).includes(w));
+};
 
 const isNamed = (e: unknown): e is CampusPerson => !!e && typeof e === 'object' && !('anonymous' in (e as object));
 
-export function searchCampus(query: string, buildings: CampusBuilding[], presence: CampusPresence | null, workplaceNames: boolean): SearchResult[] {
+export function searchCampus(query: string, buildings: CampusBuilding[], presence: CampusPresence | null, workplaceNames: boolean, admissions = false): SearchResult[] {
   const q = query.trim().toLowerCase();
   if (!q) return [];
+  if (admissions && meansBooking(q)) return [BOOK_RESULT, ...searchCampus(query, buildings, presence, workplaceNames)].slice(0, SEARCH_LIMIT);
   const hit = (s: string) => s.toLowerCase().includes(q);
   const out: SearchResult[] = [];
   for (const b of buildings) {

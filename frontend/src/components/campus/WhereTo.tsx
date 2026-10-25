@@ -3,6 +3,7 @@ import { useCampus } from './CampusContext';
 import { useCampusView } from './useCampusView';
 import { searchCampus, SearchResult } from './campusSearch';
 import type { BuildingId } from './campusMap';
+import { openBookCall } from './admissions/admissionsCallApi';
 
 /**
  * "Where to?" (Colaberry Campus C3): a WAI-ARIA combobox over buildings, rooms and the people the
@@ -15,18 +16,20 @@ import type { BuildingId } from './campusMap';
 /** C11b: the campus home's top bar asks the prototype's "Where are you headed?"; the banner keeps "Where to?". */
 export default function WhereTo({ placeholder = 'Where to?' }: { placeholder?: string } = {}): React.ReactElement {
   const { settings, presence, enterThroughDoor, openMap } = useCampus();
-  const { buildings } = useCampusView();
+  const { buildings, audience } = useCampusView();
   const [q, setQ] = useState('');
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
   const listId = useId();
-  const results = useMemo(() => searchCampus(q, buildings, presence, settings.workplaceNames), [q, buildings, presence, settings.workplaceNames]);
+  const talk = audience === 'member' || audience === 'explorer'; // C20: "Book a call with admissions" for learners and Explorers
+  const results = useMemo(() => searchCampus(q, buildings, presence, settings.workplaceNames, talk), [q, buildings, presence, settings.workplaceNames, talk]);
   const expanded = open && results.length > 0;
   const optionId = (i: number) => `${listId}-opt-${i}`;
 
   const pick = (r: SearchResult) => {
     setOpen(false); setQ('');
-    if (r.kind === 'room' && r.navigable) enterThroughDoor(r.route, null);
+    if (r.kind === 'book') openBookCall();
+    else if (r.kind === 'room' && r.navigable) enterThroughDoor(r.route, null);
     else openMap(r.buildingId as BuildingId);
   };
 
@@ -54,7 +57,7 @@ export default function WhereTo({ placeholder = 'Where to?' }: { placeholder?: s
           <li key={r.id} id={optionId(i)} role="option" aria-selected={i === active} className={`cm-whereto-opt${i === active ? ' is-active' : ''}`}
             onMouseDown={(e) => { e.preventDefault(); pick(r); }} onMouseEnter={() => setActive(i)} data-kind={r.kind}>
             <span className="cm-whereto-label">{r.label}</span>
-            <small className="cm-whereto-detail">{r.kind === 'building' ? 'Building' : r.kind === 'person' ? r.detail : `${r.detail}${r.navigable ? '' : ' - opening soon'}`}</small>
+            <small className="cm-whereto-detail">{r.kind === 'building' ? 'Building' : r.kind === 'room' ? `${r.detail}${r.navigable ? '' : ' - opening soon'}` : r.detail}</small>
           </li>
         ))}
       </ul>

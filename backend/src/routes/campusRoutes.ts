@@ -34,7 +34,7 @@ export type CampusFlagsResponse = z.infer<typeof CampusFlagsResponse>;
  * Validate the outbound shape at the boundary: fail loud in development and
  * test, log and continue in production (CLAUDE.md Contract Enforcement).
  */
-function sendValidated<T>(res: Response, schema: z.ZodType<T>, body: T, event: string): void {
+export function sendValidated<T>(res: Response, schema: z.ZodType<T>, body: T, event: string): void {
   const parsed = schema.safeParse(body);
   if (!parsed.success) {
     if (process.env.NODE_ENV !== 'production') throw new Error(`ContractViolation: ${event} ` + parsed.error.message);
@@ -44,7 +44,7 @@ function sendValidated<T>(res: Response, schema: z.ZodType<T>, body: T, event: s
   res.json(body);
 }
 
-function logFailure(event: string, err: unknown): void {
+export function logFailure(event: string, err: unknown): void {
   const e = err as { name?: string; error_class?: string; message?: string };
   console.error(JSON.stringify({ timestamp: new Date().toISOString(), level: 'error', service: 'backend', event, outcome: 'failure',
     error_class: e?.error_class ?? e?.name ?? 'UnknownError', context: { message: String(e?.message ?? '').slice(0, 200) } }));
