@@ -83,3 +83,8 @@
 .cm-r3-head .h{width:28px;height:28px;border-radius:50%;border:2px solid var(--cm-art-in-seat-edge);background:var(--cm-art-in-head);color:var(--cm-art-in-head-ink);
   font:800 10px 'DM Sans',system-ui,sans-serif;display:grid;place-items:center;padding:0;cursor:pointer}
 .cm-r3-head .h:focus-visible{outline:3px solid var(--cm-art-red);outline-offset:2px}
+
+/* C25 (v6 D2): the cubicles down the left side; an occupied one has a lit monitor and its person standing at it */
+.cm-cub{pointer-events:none}
+.cm-cub svg{display:block;width:100%;height:100%}
+.cm-cub.is-occupied .scr{filter:drop-shadow(0 0 6px var(--cm-art-sp-cub-lit))}
