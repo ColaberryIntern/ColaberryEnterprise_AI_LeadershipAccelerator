@@ -73,7 +73,17 @@ describe('command_center_url reaches the device that built it', () => {
     // already held the build), so a tree named differently from the local
     // project is a genuine change and would make this a test of naming rather
     // than of the URL no-op it is here to check.
-    const r = reconcileProjects(local(), bTree([bTask('STORY-000')], { name: 'p1' }));
+    //
+    // `title: 't1'` matches the local fixture's task title for exactly the
+    // same reason. Since 2026-10-25 the overlay also adopts the server's TASK
+    // NAMES — the demo-prep rename reached the database and no device, because
+    // this overlay copied status, points and verification but not the title —
+    // so a server task named differently from the local one is a genuine
+    // change too.
+    const r = reconcileProjects(
+      local(),
+      bTree([bTask('STORY-000', { title: 't1' })], { name: 'p1' }),
+    );
     expect(r.changed).toBe(false);
     expect(r.mode).toBe('noop');
   });
