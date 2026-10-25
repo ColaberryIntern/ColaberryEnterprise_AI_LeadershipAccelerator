@@ -81,6 +81,35 @@ router.get(
 );
 
 /**
+ * POST /api/portal/gov-projects/:projectId/copilot — the Build Cockpit's project copilot. Guarded by project.read
+ * (a member of THIS project), it loads the SAME student-safe projection the page renders and answers
+ * DETERMINISTICALLY from it (govCopilot) — so the copilot can only ever repeat what the caller already sees; there
+ * is no path by which it exposes an admin/internal field or another member's identity. Body: { question }.
+ */
+router.post(
+  '/api/portal/gov-projects/:projectId/copilot',
+  requireParticipant,
+  requireGovProjectAccess('project.read'),
+  async (req: GovProjectRequest, res: Response) => {
+    const projectId = req.params.projectId;
+    if (typeof projectId !== 'string' || !projectId) { res.status(400).json({ error: 'Project id is required' }); return; }
+    const question = String((req.body ?? {}).question ?? '').trim();
+    if (!question) { res.status(400).json({ error: 'A question is required' }); return; }
+    try {
+      const { hasDeliveryPermission } = await import('../modules/delivery/deliveryAuthorization');
+      const viewerCanVerify = !!(req.deliveryContext && hasDeliveryPermission(req.deliveryContext, 'evidence.verify'));
+      const viewerIdentityId = req.deliveryContext?.platformIdentityId ?? null;
+      const view = await getStudentGovProjectView(projectId, viewerCanVerify, viewerIdentityId);
+      if (!view) { res.status(404).json({ error: 'Not found' }); return; }
+      const { answerCopilot } = await import('../services/factory/govCopilot');
+      res.json(answerCopilot(view, question));
+    } catch {
+      res.status(500).json({ error: 'Could not answer right now.' });
+    }
+  },
+);
+
+/**
  * POST /api/portal/gov-projects/:projectId/build-stories/:storyId/evidence — the student's completion HAND-IN for
  * a Build story. Guarded by requireGovProjectAccess('story.execute'): an assigned associate_builder holds
  * story.execute, so they may submit; they do NOT hold evidence.verify, so they can never self-verify — the

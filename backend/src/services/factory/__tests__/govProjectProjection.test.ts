@@ -17,6 +17,8 @@ const gprFindAll = jest.fn();
 jest.mock('../../../models/GovProposalResponse', () => ({ __esModule: true, default: { findAll: (...a: any[]) => gprFindAll(...a), findOne: jest.fn() } }));
 const gpsgFindOne = jest.fn();
 jest.mock('../../../models/GovProposalShareGrant', () => ({ __esModule: true, default: { findOne: (...a: any[]) => gpsgFindOne(...a) } }));
+const gqFindOne = jest.fn();
+jest.mock('../../../models/GovQualification', () => ({ __esModule: true, default: { findOne: (...a: any[]) => gqFindOne(...a) } }));
 const plain = (v: any) => ({ get: () => ({ ...v }) });
 
 import { toStudentGovProjectView, getStudentGovProjectView, toStudentSubmissionChecklist } from '../govProjectProjection';
@@ -115,6 +117,14 @@ describe('toStudentSubmissionChecklist (pure) — PRICE-FREE', () => {
     expect(c.items.find((i) => i.requirementId === 'REQ-2')!.approved).toBe(false); // a filler gap blocks it
     expect(c.counts).toEqual({ total: 2, approved: 1, remaining: 1 });
     expect(c.ready).toBe(false);
+    // COCKPIT: proposal tasks are human-owned; approved ⇒ `done`, an in-progress draft ⇒ `build`; never `matched`.
+    expect(c.items.find((i) => i.requirementId === 'REQ-1')!).toMatchObject({ stage: 'done', owner: 'human' });
+    expect(c.items.find((i) => i.requirementId === 'REQ-2')!.stage).toBe('build');
+  });
+
+  it('COCKPIT: `mine` tracks the viewer\'s edit grant (canEdit)', () => {
+    expect(toStudentSubmissionChecklist(slots, established, true).items.every((i) => i.mine === true)).toBe(true);
+    expect(toStudentSubmissionChecklist(slots, established, false).items.every((i) => i.mine === false)).toBe(true);
   });
 
   it('is ready only when every non-pricing response is approved with no open/filler gap', () => {
@@ -131,7 +141,7 @@ describe('toStudentSubmissionChecklist (pure) — PRICE-FREE', () => {
 });
 
 describe('getStudentGovProjectView (loader) — only a non-archived government project', () => {
-  beforeEach(() => { jest.clearAllMocks(); ctFindAll.mockResolvedValue(trackRows); crFindAll.mockResolvedValue(reqRows); evFindAll.mockResolvedValue([]); asFindAll.mockResolvedValue([]); gprFindAll.mockResolvedValue([]); gpsgFindOne.mockResolvedValue(null); });
+  beforeEach(() => { jest.clearAllMocks(); ctFindAll.mockResolvedValue(trackRows); crFindAll.mockResolvedValue(reqRows); evFindAll.mockResolvedValue([]); asFindAll.mockResolvedValue([]); gprFindAll.mockResolvedValue([]); gpsgFindOne.mockResolvedValue(null); gqFindOne.mockResolvedValue(null); });
 
   it('returns the view for a government_public_sector project', async () => {
     dpFindByPk.mockResolvedValue(projectRow);
@@ -159,6 +169,39 @@ describe('getStudentGovProjectView (loader) — only a non-archived government p
     expect(v!.build.orphanedStories.map((s) => s.id)).toEqual(['STORY-REQ-GONE']);
     expect(v!.build.orphanedStories[0].orphaned).toBe(true);
     expect(v!.build.orphanedStories[0].evidence.map((e) => e.id)).toEqual(['ev-2']);
+    // COCKPIT: verified evidence ⇒ stage `done`; owner is `ai`; no viewer ⇒ not mine; no github_push ⇒ no commit/feed.
+    expect(story.stage).toBe('done');
+    expect(story.owner).toBe('ai');
+    expect(story.mine).toBe(false);
+    expect(story.commit).toBeNull();
+    expect(v!.commitFeed).toEqual([]); // ev-1/ev-2 are manual hand-ins (source `student`), not pushes
+  });
+
+  it('COCKPIT: a github_push evidence row makes the story `matched`, carries the commit, and shows in the feed; mine is true for the assignee-viewer', async () => {
+    dpFindByPk.mockResolvedValue(projectRow);
+    asFindAll.mockResolvedValue([plain({ id: 'as-1', story_id: 'STORY-REQ-1', canonical_req_id: 'REQ-1', assignee_identity_id: 'viewer-1', assigned_by_identity_id: 'op-1', assigned_at: new Date('2026-10-08T00:00:00Z') })]);
+    evFindAll.mockResolvedValue([
+      plain({ id: 'ev-1', story_id: 'STORY-REQ-1', canonical_req_id: 'REQ-1', description: 'feat: search [REQ-1]', artifact_ref: 'https://github.com/o/r/commit/abc123', status: 'submitted', source: 'github_push', commit_sha: 'abc123', submitted_by_identity_id: 'viewer-1', submitted_at: new Date('2026-10-09T00:00:00Z') }),
+    ]);
+    const v = await getStudentGovProjectView('dp-1', false, 'viewer-1'); // the viewer IS the assignee
+    const story = v!.build.stories.find((s) => s.id === 'STORY-REQ-1')!;
+    expect(story.stage).toBe('matched');                        // a commit proposes completion — matched, not done
+    expect(story.commit).toEqual({ sha: 'abc123', message: 'feat: search [REQ-1]' });
+    expect(story.mine).toBe(true);                              // viewer === assignee
+    expect(story.assigneeIdentityId).toBeNull();               // but the id itself is still stripped
+    expect(v!.commitFeed).toEqual([{ sha: 'abc123', message: 'feat: search [REQ-1]', storyKey: 'REQ-1', at: '2026-10-09T00:00:00.000Z', verified: false }]);
+  });
+
+  it('COCKPIT: surfaces the agency + key dates from the qualification (public facts only)', async () => {
+    dpFindByPk.mockResolvedValue(projectRow);
+    gqFindOne.mockResolvedValue({ requirements_json: {
+      provenance: { agency: 'TxDOT Office of General Counsel' },
+      dossier: { keyDates: [{ date: '2026-11-06', text: 'Proposals due' }], contacts: [{ email: 'phishing@irs.gov' }] },
+    } });
+    const v = await getStudentGovProjectView('dp-1', false, 'id-1');
+    expect(v!.agency).toBe('TxDOT Office of General Counsel');
+    expect(v!.keyDates).toEqual([{ date: '2026-11-06', text: 'Proposals due' }]);
+    expect(JSON.stringify(v)).not.toContain('phishing@irs.gov'); // dossier contacts are NOT carried to the student
   });
 
   it('returns null for a NON-government project class (this surface serves only gov projects)', async () => {

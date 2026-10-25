@@ -1,207 +1,21 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { getStudentGovProject, submitBuildStoryEvidence, verifyBuildStoryEvidence, saveGovProposalResponse, resolveGovProposalGap, type StudentGovProjectView, type StudentGovBuildStory, type SharedProposalResponse } from '../../../services/govProjectPortalApi';
+import { getStudentGovProject, type StudentGovProjectView } from '../../../services/govProjectPortalApi';
+import CockpitView from './govCockpit/CockpitView';
 
 /**
- * GovProjectPortalPage — the STUDENT view of an assigned government project (restricted shell).
+ * GovProjectPortalPage — the STUDENT entry to an assigned government project, rendered as the Build Cockpit.
  *
- * It renders only the student-safe projection the backend returns (project, the two tracks, the compliance
- * requirements) and no admin navigation. A project the student is not assigned to resolves to 404 server-side,
- * shown here as an honest "not found" rather than a leak of its existence. This is the student-facing half of
- * the gov workspace's two entry points; the admin facade is separate.
+ * It owns only the load + state machine (loading / ready / not_found / error) and hands the one student-safe
+ * projection to CockpitView, which arranges the task board, commit feed and copilot. A project the student is not
+ * assigned to answers 404 server-side, shown here as an honest "not found" rather than a leak of its existence.
  */
-
-const TRACK_LABEL: Record<string, string> = { proposal: 'Proposal', solution_build: 'Build' };
-const EVIDENCE_TONE: Record<string, string> = { verified: 'success', unassessed: 'secondary' };
-
-const BUILD_EVIDENCE_TONE: Record<string, string> = { submitted: 'info', verified: 'success', rejected: 'danger' };
-
-/**
- * One build story for the student: its requirement citation, acceptance, the Claude Code prompt they run, the
- * evidence they have submitted, and a hand-in form. Submitting records the evidence as `submitted` — the student
- * cannot mark it verified (that is a reviewer-only act, enforced server-side).
- */
-function StudentBuildStoryRow(
-  { story, projectId, canVerify, onSubmitted }: { story: StudentGovBuildStory; projectId: string; canVerify: boolean; onSubmitted: () => void },
-): React.ReactElement {
-  const [showPrompt, setShowPrompt] = useState(false);
-  const [description, setDescription] = useState('');
-  const [artifactRef, setArtifactRef] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const decide = async (evidenceId: string, decision: 'verified' | 'rejected') => {
-    setBusy(true); setError(null);
-    try { await verifyBuildStoryEvidence(projectId, evidenceId, decision); onSubmitted(); }
-    catch { setError('Could not record your decision. Try again.'); }
-    finally { setBusy(false); }
-  };
-
-  const submit = async () => {
-    if (!description.trim()) { setError('Add a short description of what you built.'); return; }
-    setBusy(true); setError(null);
-    try {
-      await submitBuildStoryEvidence(projectId, story.id, { canonicalReqId: story.requirementId, description, artifactRef: artifactRef || null });
-      setDescription(''); setArtifactRef('');
-      onSubmitted();
-    } catch {
-      setError('Could not submit your evidence. Try again.');
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <li className="list-group-item">
-      <div className="d-flex flex-wrap align-items-center gap-2 mb-1">
-        <span className="badge bg-secondary-subtle text-secondary-emphasis">{story.id}</span>
-        <span className="flex-grow-1 fw-semibold">{story.title}</span>
-        <span className="badge bg-light text-dark border">{story.status}</span>
-        <span className="small text-secondary">from {story.requirementId}</span>
-      </div>
-      <div className="small mb-1">{story.statement}</div>
-      {story.acceptance.length > 0 && (
-        <ul className="small text-secondary mb-1">{story.acceptance.map((a, i) => <li key={i}>{a}</li>)}</ul>
-      )}
-      <button type="button" className="btn btn-outline-primary btn-sm me-2" onClick={() => setShowPrompt((v) => !v)} aria-expanded={showPrompt}>
-        <i className={`ri-${showPrompt ? 'arrow-down-s-line' : 'terminal-box-line'} me-1`} aria-hidden="true" />
-        {showPrompt ? 'Hide prompt' : 'Open the build prompt'}
-      </button>
-      {showPrompt && <pre className="small bg-body-secondary rounded p-2 mt-2 mb-0" style={{ whiteSpace: 'pre-wrap' }}>{story.prompt}</pre>}
-
-      {story.evidence.length > 0 && (
-        <ul className="list-unstyled small mt-2 mb-0">
-          {story.evidence.map((e) => (
-            <li key={e.id} className="d-flex flex-wrap align-items-center gap-2 py-1 border-top">
-              <span className={`badge bg-${BUILD_EVIDENCE_TONE[e.status] ?? 'secondary'}-subtle text-${BUILD_EVIDENCE_TONE[e.status] ?? 'secondary'}-emphasis`}>{e.status}</span>
-              <span className="flex-grow-1">{e.description}</span>
-              {e.artifactRef && <a href={e.artifactRef} target="_blank" rel="noopener noreferrer">artifact</a>}
-              {canVerify && e.status === 'submitted' && (
-                <span className="d-flex gap-1">
-                  <button type="button" className="btn btn-success btn-sm" disabled={busy} onClick={() => void decide(e.id, 'verified')}>Verify</button>
-                  <button type="button" className="btn btn-outline-danger btn-sm" disabled={busy} onClick={() => void decide(e.id, 'rejected')}>Reject</button>
-                </span>
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
-
-      {!canVerify && (
-        <div className="mt-2">
-          <label className="form-label small mb-1">Hand in your evidence <span className="text-secondary">(a reviewer verifies it — you can’t mark it done yourself)</span></label>
-          <textarea className="form-control form-control-sm mb-1" rows={2} value={description} placeholder="What did you build? How does it meet the requirement?"
-            onChange={(e) => setDescription(e.target.value)} />
-          <div className="d-flex flex-wrap gap-2 align-items-center">
-            <input className="form-control form-control-sm" style={{ maxWidth: 320 }} value={artifactRef} placeholder="link to repo PR / screenshot (optional)"
-              onChange={(e) => setArtifactRef(e.target.value)} />
-            <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={() => void submit()}>
-              <i className="ri-upload-2-line me-1" aria-hidden="true" />{busy ? 'Submitting…' : 'Submit evidence'}
-            </button>
-          </div>
-        </div>
-      )}
-      {error && <div className="small text-danger mt-1" role="alert">{error}</div>}
-    </li>
-  );
-}
-
-/** One open gap on a proposal response: the question plus controls for an EDIT-shared intern to answer it or mark
- *  it filler (a visible placeholder that blocks export until replaced). Resolving recomputes the response status. */
-function ProposalGapRow(
-  { gap, busy, onResolve }: { gap: NonNullable<SharedProposalResponse['gaps']>[number]; busy: boolean; onResolve: (resolution: 'answered' | 'filler', answer?: string) => void },
-): React.ReactElement {
-  const [answer, setAnswer] = useState('');
-  return (
-    <li className="py-1 border-top">
-      <div className="small">{gap.question}{gap.resolution === 'filler' ? ' (filler — needs a real answer)' : ''}</div>
-      <div className="d-flex flex-wrap gap-1 align-items-center mt-1">
-        <input className="form-control form-control-sm" style={{ maxWidth: 280 }} value={answer} placeholder="answer this question"
-          onChange={(e) => setAnswer(e.target.value)} />
-        <button type="button" className="btn btn-outline-primary btn-sm" disabled={busy || !answer.trim()} onClick={() => onResolve('answered', answer)}>Save answer</button>
-        <button type="button" className="btn btn-outline-secondary btn-sm" disabled={busy} onClick={() => onResolve('filler')}>Mark filler</button>
-      </div>
-    </li>
-  );
-}
-
-/**
- * One proposal response for an EDIT-shared intern: the requirement, the current draft, and an editor. Saving lands
- * the answer as `draft` (a reviewer approves it — the intern cannot). Open gaps can be answered or marked filler.
- * Its own busy/error state; calls onSaved() (reload) after any write. Mirrors StudentBuildStoryRow.
- */
-function ProposalEditableResponse(
-  { response, projectId, onSaved }: { response: SharedProposalResponse; projectId: string; onSaved: () => void },
-): React.ReactElement {
-  const [editing, setEditing] = useState(false);
-  const [content, setContent] = useState(response.content);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const save = async () => {
-    setBusy(true); setError(null);
-    try { await saveGovProposalResponse(projectId, response.requirementId, content); setEditing(false); onSaved(); }
-    catch { setError('Could not save your answer. Try again.'); }
-    finally { setBusy(false); }
-  };
-  const resolveGap = async (gapId: string, resolution: 'answered' | 'filler', answer?: string) => {
-    setBusy(true); setError(null);
-    try { await resolveGovProposalGap(projectId, response.requirementId, gapId, resolution, answer); onSaved(); }
-    catch { setError('Could not update the question. Try again.'); }
-    finally { setBusy(false); }
-  };
-
-  const openGaps = (response.gaps ?? []).filter((g) => g.resolution === 'open' || g.resolution === 'filler');
-
-  return (
-    <li className="list-group-item">
-      <div className="d-flex flex-wrap align-items-start gap-2 mb-1">
-        <span className="badge bg-secondary-subtle text-secondary-emphasis">{response.requirementId}</span>
-        <span className="flex-grow-1">{response.statement}</span>
-        <span className="badge bg-light text-dark border">{response.status}</span>
-        {response.openGapCount > 0 && <span className="badge bg-warning-subtle text-warning-emphasis">{response.openGapCount} open question{response.openGapCount === 1 ? '' : 's'}</span>}
-      </div>
-      {!editing ? (
-        <>
-          {response.content
-            ? <div className="small mt-1" style={{ whiteSpace: 'pre-wrap' }}>{response.content}</div>
-            : <div className="small text-secondary fst-italic">Not drafted yet.</div>}
-          <button type="button" className="btn btn-outline-primary btn-sm mt-1" onClick={() => { setContent(response.content); setEditing(true); }}>
-            <i className="ri-edit-line me-1" aria-hidden="true" />{response.content ? 'Edit response' : 'Draft response'}
-          </button>
-        </>
-      ) : (
-        <div className="mt-1">
-          <textarea className="form-control form-control-sm mb-1" rows={5} value={content}
-            placeholder="Draft the response to this requirement…" onChange={(e) => setContent(e.target.value)} />
-          <div className="d-flex flex-wrap gap-2 align-items-center">
-            <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={() => void save()}>
-              <i className="ri-save-line me-1" aria-hidden="true" />{busy ? 'Saving…' : 'Save draft'}
-            </button>
-            <button type="button" className="btn btn-outline-secondary btn-sm" disabled={busy} onClick={() => { setContent(response.content); setEditing(false); setError(null); }}>Cancel</button>
-            <span className="small text-secondary">Saving marks it a draft — a reviewer approves it.</span>
-          </div>
-        </div>
-      )}
-      {openGaps.length > 0 && (
-        <ul className="list-unstyled small mt-2 mb-0">
-          {openGaps.map((g) => (
-            <ProposalGapRow key={g.id} gap={g} busy={busy} onResolve={(res, ans) => void resolveGap(g.id, res, ans)} />
-          ))}
-        </ul>
-      )}
-      {error && <div className="small text-danger mt-1" role="alert">{error}</div>}
-    </li>
-  );
-}
-
 export default function GovProjectPortalPage(): React.ReactElement {
   const { projectId = '' } = useParams();
   const [view, setView] = useState<StudentGovProjectView | null>(null);
   const [state, setState] = useState<'loading' | 'ready' | 'not_found' | 'error'>('loading');
 
   const load = useCallback(async () => {
-    setState('loading');
     try {
       setView(await getStudentGovProject(projectId));
       setState('ready');
@@ -213,171 +27,28 @@ export default function GovProjectPortalPage(): React.ReactElement {
   useEffect(() => { void load(); }, [load]);
 
   if (state === 'loading') {
-    return <div className="container py-5 text-secondary" data-testid="gov-project-loading">Loading your project…</div>;
+    return <div className="container py-5 text-secondary" data-testid="gov-project-loading">Loading your project&hellip;</div>;
   }
   if (state === 'not_found') {
     return (
       <div className="container py-5" data-testid="gov-project-not-found">
         <h1 className="h4">Project not found</h1>
-        <p className="text-secondary">This government project isn’t assigned to you, or it doesn’t exist.</p>
+        <p className="text-secondary">This government project isn&rsquo;t assigned to you, or it doesn&rsquo;t exist.</p>
       </div>
     );
   }
   if (state === 'error' || !view) {
     return (
       <div className="container py-5" data-testid="gov-project-error">
-        <p className="text-danger" role="alert">Couldn’t load this project.</p>
-        <button type="button" className="btn btn-outline-secondary btn-sm" onClick={() => void load()}>Try again</button>
+        <p className="text-danger" role="alert">Couldn&rsquo;t load this project.</p>
+        <button type="button" className="btn btn-outline-secondary btn-sm" onClick={() => { setState('loading'); void load(); }}>Try again</button>
       </div>
     );
   }
 
-  // P6: the proposal is shown only when it is shared with this viewer (level !== 'none'); the checklist is price-free.
-  const proposal = view.proposal;
-  const checklist = view.submissionChecklist;
-
   return (
-    <div className="container py-4" data-testid="gov-project-view">
-      <div className="d-flex flex-wrap align-items-center gap-2 mb-1">
-        <span className="badge bg-danger-subtle text-danger-emphasis"><i className="ri-government-line me-1" aria-hidden="true" />Government project</span>
-        <span className="badge bg-secondary-subtle text-secondary-emphasis">{view.status}</span>
-      </div>
-      <h1 className="h3 mb-3">{view.name}</h1>
-
-      <div className="row g-3 mb-4">
-        {view.tracks.map((t) => (
-          <div className="col-md-6" key={t.trackType}>
-            <div className="card h-100">
-              <div className="card-body">
-                <h2 className="h6 text-uppercase text-secondary mb-2">{TRACK_LABEL[t.trackType] ?? t.trackType} track</h2>
-                <div className="d-flex align-items-center gap-2">
-                  <span className="badge bg-light text-dark border">{t.status}</span>
-                  {t.trackType === 'solution_build' && (
-                    <span className={`small ${t.hasBuild ? 'text-success' : 'text-secondary'}`}>
-                      <i className={`me-1 ${t.hasBuild ? 'ri-git-repository-line' : 'ri-time-line'}`} aria-hidden="true" />
-                      {t.hasBuild ? 'Build project linked' : 'No build linked yet'}
-                    </span>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      <div className="d-flex flex-wrap align-items-baseline gap-2 mb-2">
-        <h2 className="h5 mb-0">Requirements</h2>
-        <span className="small text-secondary">{view.requirementCounts.total} total · {view.requirementCounts.proposal} proposal · {view.requirementCounts.build} build</span>
-      </div>
-      {view.requirements.length === 0 ? (
-        <p className="text-secondary small">No requirements have been established yet.</p>
-      ) : (
-        <ul className="list-group">
-          {view.requirements.map((r) => (
-            <li className="list-group-item d-flex flex-wrap align-items-start gap-2" key={r.canonicalReqId}>
-              <span className="badge bg-secondary-subtle text-secondary-emphasis">{r.canonicalReqId}</span>
-              <span className="flex-grow-1">{r.statement}</span>
-              {r.tracks.map((tk) => (
-                <span className="badge bg-light text-dark border" key={tk}>{TRACK_LABEL[tk] ?? tk}</span>
-              ))}
-              <span className={`badge bg-${EVIDENCE_TONE[r.evidenceState] ?? 'secondary'}-subtle text-${EVIDENCE_TONE[r.evidenceState] ?? 'secondary'}-emphasis`}>{r.evidenceState}</span>
-            </li>
-          ))}
-        </ul>
-      )}
-
-      {proposal && proposal.level !== 'none' && (
-        <section className="mt-4" data-testid="gov-project-proposal">
-          <div className="d-flex flex-wrap align-items-baseline gap-2 mb-2">
-            <h2 className="h5 mb-0">Proposal</h2>
-            <span className="small text-secondary">shared with you: {proposal.level === 'edit' ? 'can edit' : proposal.level === 'comment' ? 'can comment' : 'view only'}</span>
-          </div>
-          {proposal.responses.length === 0 ? (
-            <p className="text-secondary small">No responses to draft yet.</p>
-          ) : proposal.canEdit ? (
-            <ul className="list-group">
-              {proposal.responses.map((r) => (
-                <ProposalEditableResponse key={r.requirementId} response={r} projectId={projectId} onSaved={load} />
-              ))}
-            </ul>
-          ) : (
-            <ul className="list-group">
-              {proposal.responses.map((r) => (
-                <li className="list-group-item" key={r.requirementId}>
-                  <div className="d-flex flex-wrap align-items-start gap-2">
-                    <span className="badge bg-secondary-subtle text-secondary-emphasis">{r.requirementId}</span>
-                    <span className="flex-grow-1">{r.statement}</span>
-                    <span className="badge bg-light text-dark border">{r.status}</span>
-                    {r.openGapCount > 0 && <span className="badge bg-warning-subtle text-warning-emphasis">{r.openGapCount} open gap{r.openGapCount === 1 ? '' : 's'}</span>}
-                  </div>
-                  {r.content && <div className="small mt-1" style={{ whiteSpace: 'pre-wrap' }}>{r.content}</div>}
-                  {proposal.canComment && (r.gaps?.length ?? 0) > 0 && (
-                    <ul className="small text-secondary mt-1 mb-0">
-                      {r.gaps!.map((g) => (
-                        <li key={g.id}>{g.question}{g.resolution === 'filler' ? ' (filler — needs a real answer)' : g.resolution === 'answered' ? ' (answered)' : ''}</li>
-                      ))}
-                    </ul>
-                  )}
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-      )}
-
-      {checklist && checklist.items.length > 0 && (
-        <section className="mt-4" data-testid="gov-project-submission-checklist">
-          <div className="d-flex flex-wrap align-items-baseline gap-2 mb-2">
-            <h2 className="h5 mb-0">Submission checklist</h2>
-            <span className="small text-secondary">{checklist.counts.approved} of {checklist.counts.total} ready{checklist.counts.remaining > 0 ? ` · ${checklist.counts.remaining} still owed` : ''}</span>
-            {checklist.ready && <span className="badge bg-success-subtle text-success-emphasis">ready to submit</span>}
-          </div>
-          <ul className="list-group">
-            {checklist.items.map((i) => (
-              <li className="list-group-item d-flex flex-wrap align-items-center gap-2" key={i.requirementId}>
-                <i className={i.approved ? 'ri-checkbox-circle-line text-success' : 'ri-checkbox-blank-circle-line text-secondary'} aria-hidden="true" />
-                <span className="badge bg-secondary-subtle text-secondary-emphasis">{i.requirementId}</span>
-                <span className="flex-grow-1">{i.statement}</span>
-                <span className="badge bg-light text-dark border">{i.status}</span>
-                {i.openGapCount > 0 && <span className="badge bg-warning-subtle text-warning-emphasis">{i.openGapCount} gap{i.openGapCount === 1 ? '' : 's'}</span>}
-              </li>
-            ))}
-          </ul>
-          <p className="small text-secondary mt-1"><i className="ri-information-line me-1" aria-hidden="true" />Pricing is handled by your admin and is not shown here.</p>
-        </section>
-      )}
-
-      <div className="d-flex flex-wrap align-items-baseline gap-2 mb-2 mt-4">
-        <h2 className="h5 mb-0">Build stories</h2>
-        <span className="small text-secondary">{view.build.buildStoryCount} to build — each with a prompt to run</span>
-      </div>
-      {view.build.stories.length === 0 ? (
-        <p className="text-secondary small">No requirement-cited build stories — this project’s deliverables are handled through the proposal, not a per-requirement software build. Any build work is tracked on your project, not here.</p>
-      ) : (
-        view.build.releases.map((rel) => (
-          <div className="mb-3" key={rel.key}>
-            <h3 className="h6 text-uppercase text-secondary small mb-2">{rel.name}</h3>
-            <ul className="list-group">
-              {rel.storyIds.map((sid) => {
-                const s = view.build.stories.find((x) => x.id === sid);
-                return s ? <StudentBuildStoryRow key={sid} story={s} projectId={view.projectId} canVerify={view.viewerCanVerify} onSubmitted={() => void load()} /> : null;
-              })}
-            </ul>
-          </div>
-        ))
-      )}
-
-      {(view.build.orphanedStories?.length ?? 0) > 0 && (
-        <div className="mb-3 mt-3 pt-2 border-top">
-          <h3 className="h6 text-uppercase small mb-1 text-warning-emphasis"><i className="ri-alert-line me-1" aria-hidden="true" />Preserved work</h3>
-          <p className="small text-secondary mb-2">A requirement changed, so these stories are no longer in the current plan — but your submitted work is kept here, not lost.</p>
-          <ul className="list-group">
-            {view.build.orphanedStories!.map((s) => (
-              <StudentBuildStoryRow key={s.id} story={s} projectId={view.projectId} canVerify={view.viewerCanVerify} onSubmitted={() => void load()} />
-            ))}
-          </ul>
-        </div>
-      )}
+    <div className="container-fluid py-4" data-testid="gov-project-view">
+      <CockpitView view={view} projectId={view.projectId} onReload={() => void load()} />
     </div>
   );
 }

@@ -175,3 +175,35 @@ describe('POST /api/portal/gov-projects/:projectId/proposal/:requirementId/gaps/
     expect(resolveProposalGap).not.toHaveBeenCalled();
   });
 });
+
+describe('POST /api/portal/gov-projects/:projectId/copilot (project copilot)', () => {
+  it('a member asks a question: 200 with a classified, grounded answer from the SAME student-safe projection', async () => {
+    const res = await request(app).post('/api/portal/gov-projects/dp-A/copilot').send({ question: 'what should I do next?' });
+    expect(res.status).toBe(200);
+    expect(res.body.intent).toBe('next');
+    expect(typeof res.body.answer).toBe('string');
+    expect(res.body.answer.length).toBeGreaterThan(0);
+    // The copilot is grounded in the SAME projection the page renders (its own trust boundary) — the viewer's
+    // identity threads through (null here, from the mocked ctx).
+    expect(getStudentGovProjectView).toHaveBeenCalledWith('dp-A', false, null);
+  });
+
+  it('an empty question is 400 — the projection is never consulted', async () => {
+    const res = await request(app).post('/api/portal/gov-projects/dp-A/copilot').send({ question: '   ' });
+    expect(res.status).toBe(400);
+    expect(getStudentGovProjectView).not.toHaveBeenCalled();
+  });
+
+  it('a NON-MEMBER is 404 (the guard denies first) — the projection is never consulted', async () => {
+    guardAllows = false;
+    const res = await request(app).post('/api/portal/gov-projects/dp-OTHER/copilot').send({ question: 'next?' });
+    expect(res.status).toBe(404);
+    expect(getStudentGovProjectView).not.toHaveBeenCalled();
+  });
+
+  it('a member on a non-gov / archived project (projection null) is 404', async () => {
+    getStudentGovProjectView.mockResolvedValue(null);
+    const res = await request(app).post('/api/portal/gov-projects/dp-A/copilot').send({ question: 'next?' });
+    expect(res.status).toBe(404);
+  });
+});
