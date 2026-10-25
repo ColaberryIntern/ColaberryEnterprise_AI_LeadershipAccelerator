@@ -145,6 +145,31 @@ describe('GovProjectPortalPage (student restricted view)', () => {
     expect(text).toContain('Pricing is handled by your admin');
   });
 
+  it('P6 edit: an EDIT-shared intern gets a per-response editor, and Save draft calls saveGovProposalResponse', async () => {
+    (api.getStudentGovProject as jest.Mock).mockResolvedValue({
+      ...VIEW,
+      proposal: {
+        level: 'edit', canComment: true, canEdit: true,
+        responses: [{ requirementId: 'REQ-1', statement: 'Provide a claims search database', status: 'unanswered', content: '', openGapCount: 0 }],
+      },
+    });
+    (api.saveGovProposalResponse as jest.Mock).mockResolvedValue(undefined);
+    await render();
+    expect(container.textContent ?? '').toContain('can edit');
+    // the editor is collapsed until opened — no proposal textarea yet
+    expect(container.querySelector('[data-testid="gov-project-proposal"] textarea')).toBeNull();
+    const openBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('Draft response')) as HTMLButtonElement;
+    expect(openBtn).toBeTruthy();
+    await act(async () => { openBtn.dispatchEvent(new MouseEvent('click', { bubbles: true })); await Promise.resolve(); });
+    const textarea = container.querySelector('[data-testid="gov-project-proposal"] textarea') as HTMLTextAreaElement;
+    expect(textarea).toBeTruthy();
+    const setValue = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')!.set!;
+    await act(async () => { setValue.call(textarea, 'We will deliver a claims search database.'); textarea.dispatchEvent(new Event('input', { bubbles: true })); await Promise.resolve(); });
+    const saveBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('Save draft')) as HTMLButtonElement;
+    await act(async () => { saveBtn.dispatchEvent(new MouseEvent('click', { bubbles: true })); await Promise.resolve(); });
+    expect(api.saveGovProposalResponse).toHaveBeenCalledWith('dp-A', 'REQ-1', 'We will deliver a claims search database.');
+  });
+
   it('P6: hides the Proposal section entirely when it is not shared (level none)', async () => {
     (api.getStudentGovProject as jest.Mock).mockResolvedValue({
       ...VIEW,

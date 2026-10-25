@@ -97,6 +97,28 @@ export async function submitBuildStoryEvidence(
   return data.evidence;
 }
 
+/**
+ * P6: an EDIT-shared intern drafts/edits the proposal response for one requirement. Any save lands `draft` (a
+ * changed answer is not reviewed/approved); the intern cannot review or approve (admin-only, 403 server-side). The
+ * caller reloads the project after to show the new status. A non-edit viewer is refused server-side.
+ */
+export async function saveGovProposalResponse(projectId: string, requirementId: string, content: string): Promise<void> {
+  await portalApi.post(
+    `/api/portal/gov-projects/${encodeURIComponent(projectId)}/proposal/${encodeURIComponent(requirementId)}`,
+    { content },
+  );
+}
+
+/** P6: an EDIT-shared intern resolves a draft gap on a proposal response (answered | filler | open). */
+export async function resolveGovProposalGap(
+  projectId: string, requirementId: string, gapId: string, resolution: 'open' | 'answered' | 'filler', answer?: string,
+): Promise<void> {
+  await portalApi.post(
+    `/api/portal/gov-projects/${encodeURIComponent(projectId)}/proposal/${encodeURIComponent(requirementId)}/gaps/${encodeURIComponent(gapId)}`,
+    { resolution, answer: answer ?? null },
+  );
+}
+
 /** A reviewer (evidence.verify) decides a submitted hand-in. Students get 403 server-side; the UI hides it from them. */
 export async function verifyBuildStoryEvidence(
   projectId: string, evidenceId: string, decision: 'verified' | 'rejected',
