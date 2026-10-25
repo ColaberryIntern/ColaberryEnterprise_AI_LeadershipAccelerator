@@ -1,0 +1,32 @@
+/* C34 (v8 G2): the cabinet modal and the Game Room page. Art tokens only; the cabinet's pixel title uses Press Start 2P (Google Fonts, OFL). */
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+@import '../campusArtTokens.css';
+.gr-cab-scrim{position:fixed;inset:0;z-index:85;display:grid;place-items:center;padding:16px;background:var(--cm-art-in-screen-dim)}
+.gr-cab{position:relative;width:min(560px,100%);max-height:calc(100vh - 32px);overflow:auto;border-radius:20px;padding:14px;background:var(--cm-art-cab-bg);color:var(--cm-art-on-dark);
+  box-shadow:0 0 0 3px var(--cm-art-cab-edge),0 24px 60px var(--cm-art-sp-shadow);font-family:'DM Sans',system-ui,sans-serif}
+.gr-cab-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding-right:40px;margin:0 0 10px}
+.gr-cab-top .pill{display:inline-flex;align-items:center;height:28px;padding:0 10px;border-radius:14px;background:var(--cm-art-on-dark-soft);font:800 13px ui-monospace,monospace}
+.gr-cab-top .pill.title{font:400 11px 'Press Start 2P',ui-monospace,monospace;color:var(--cm-art-cab-neon)}
+.gr-cab-top .pill.time.is-low{background:var(--cm-art-red);animation:gr-pulse 1s ease-in-out infinite}
+.gr-cab-x{position:absolute;top:12px;right:12px;width:32px;height:32px;border-radius:50%;border:0;background:var(--cm-art-on-dark-soft);color:var(--cm-art-on-dark);font-size:15px;cursor:pointer}
+.gr-cab-screen{position:relative;min-height:260px;border-radius:12px;background:var(--cm-art-cab-screen);overflow:hidden;display:grid;place-items:center}
+.gr-cab-screen .gr-cabinet{width:100%}
+.gr-cab-screen .gr-canvas{display:block;width:100%;height:auto;aspect-ratio:480/360}
+.gr-cab-note{margin:24px;font-size:14px;text-align:center;opacity:.85}
+.gr-cab-over{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:18px;text-align:center;background:var(--cm-art-cab-sheet)}
+.gr-cab-over h3{margin:0;font:400 16px 'Press Start 2P',ui-monospace,monospace;color:var(--cm-art-cab-neon);line-height:1.4}
+.gr-cab-over .big{font:800 40px ui-monospace,monospace}
+.gr-cab-over p{margin:0;font-size:13.5px;opacity:.85}
+.gr-cab-over .row{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin-top:8px}
+.gr-cab-btn{min-height:36px;padding:0 14px;border-radius:18px;border:1px solid var(--cm-art-on-dark-soft);background:transparent;color:var(--cm-art-on-dark);font:700 13.5px 'DM Sans',system-ui,sans-serif;cursor:pointer}
+.gr-cab-btn.pri{background:var(--cm-art-red);border-color:var(--cm-art-red);color:var(--cm-art-white)}
+.gr-cab-btn:disabled{opacity:.45;cursor:not-allowed}
+.gr-cab button:focus-visible{outline:3px solid var(--cm-art-cab-neon);outline-offset:2px}
+.gr-cab-warn{margin:10px 0 0;padding:8px 10px;border-radius:10px;background:var(--cm-art-on-dark-soft);font-size:13px}
+.gr-cab-foot{display:flex;justify-content:space-between;gap:10px;margin-top:10px;font-size:12.5px;opacity:.75}
+.gr-cab-pad{display:none;justify-content:center;gap:10px;margin-top:12px}
+.gr-cab-pad button{width:52px;height:52px;border-radius:14px;border:1px solid var(--cm-art-on-dark-soft);background:var(--cm-art-on-dark-soft);color:var(--cm-art-on-dark);font-size:20px;touch-action:none}
+@media (max-width:760px),(pointer:coarse){.gr-cab-pad{display:flex}}
+@media (max-width:760px){.gr-cab-scrim{padding:0;align-items:end}.gr-cab{border-radius:20px 20px 0 0;max-height:96vh}}
+@keyframes gr-pulse{50%{opacity:.6}}
+@media (prefers-reduced-motion:reduce){.gr-cab-top .pill.time.is-low{animation:none}}

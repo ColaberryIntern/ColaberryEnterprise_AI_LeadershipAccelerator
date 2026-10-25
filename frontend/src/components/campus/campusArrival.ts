@@ -33,9 +33,10 @@ const SUB: Partial<Record<BuildingId, [string, string | null]>> = {
 
   gallery: ['Portfolio & client demos', null],
   career: ['Engagements, internship & company work', null],
-  arcade: ['Three quick games · 15 min a day', null],
+  arcade: ['Five quick games · 15 min a day', null], // C36 (v8 G5)
   gate: ['The way in to the campus', null],
   admissions: ['Plans, enrollment & talking to a person', 'Plans, seats & billing'], // C21: Maya's building
+  chow: ['Food, coffee & treats · order from your favorite app', null], // C39 (v11)
 };
 /** The career building changes face per account (campusMap.careerBuildingFor); its line follows the face. */
 const CAREER_FACE: Partial<Record<CampusAudience, string>> = {

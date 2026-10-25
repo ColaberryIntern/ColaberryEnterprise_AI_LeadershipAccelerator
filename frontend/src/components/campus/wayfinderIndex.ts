@@ -14,7 +14,7 @@ import { BOARD_WORDS } from './board/boardModel';
  *  - an empty query lists Happening now, Suggested for you, Staff · always on and All buildings.
  * Anonymous presence is never searchable, so the Wayfinder cannot reveal anyone the people lists would not.
  */
-export type WfKind = 'urgent' | 'building' | 'room' | 'person' | 'staff' | 'suggested' | 'book' | 'board';
+export type WfKind = 'urgent' | 'building' | 'room' | 'person' | 'staff' | 'suggested' | 'book' | 'board' | 'food';
 export interface WfItem {
   key: string;
   kind: WfKind;
@@ -44,6 +44,8 @@ export const WF_KEYS: Partial<Record<BuildingId, string>> = {
   career: 'internship intern standup stand-up meeting company job career team orientation handoff client clients engagement engagements management portal employee company office tower',
   arcade: 'game games arcade play break relax fun chase maze slingshot launch breakout bricks score scores leaderboard rest',
   admissions: 'admissions plans plan pricing price cost subscription billing enroll enrollment seats seat license licenses team maya welcome',
+  // C39 (v11 C1): the spec's words
+  chow: 'food eat lunch dinner snack coffee hungry pizza delivery doordash ubereats grubhub chow hall',
 };
 const STAFF_KEYS = 'staff help mentor stuck question curriculum certification';
 const MAYA_KEYS = 'admissions enroll enrolling price cost pay sponsor employer apply join person call';
@@ -54,6 +56,9 @@ function bookItem(c: WfContext): (WfItem & { keys: string }) | null {
   return { key: 'book', kind: 'book', title: 'Book a call with admissions', sub: 'A real person · 30 minutes on Google Meet', buildingId: 'gate', action: 'Book →', group: 'Help', keys: BOOK_KEYS };
 }
 /** C30 (v7 R3): the Community Board on the Quad (not a building; its pick walks there and opens it). */
+/** C39 (v11 C1): the FOOD group: "Order food" walks to Chow Hall and opens the order sheet. */
+const FOOD_ITEM: WfItem & { keys: string } = { key: 'food', kind: 'food', title: 'Order food', sub: 'Chow Hall · pick a craving, then your delivery app', buildingId: 'chow', action: 'Order ↗', group: 'Food',
+  keys: WF_KEYS.chow as string };
 const BOARD_ITEM: WfItem & { keys: string } = { key: 'board', kind: 'board', title: 'Community Board', sub: 'on the Quad · posts and questions', buildingId: 'commons', action: 'Walk →', group: 'Places',
   keys: BOARD_WORDS.join(' ') + ' notice noticeboard' };
 const URGENT_WORDS =['late', 'now', 'standup', 'class', 'meeting', 'hurry'];
@@ -139,9 +144,10 @@ export function wayfinderSearch(query: string, c: WfContext): WfItem[] {
   const people = [...staffItems(c), ...peopleItems(c)].filter((x) => matches(x.keys)).slice(0, PEOPLE_LIMIT);
   const book = bookItem(c);
   const help = [...(book && matches(book.keys) ? [book] : []), ...(tokens.some((t) => BOARD_ITEM.keys.split(' ').some((k) => k.startsWith(t) && t.length >= 3)) ? [BOARD_ITEM] : [])];
+  const food = c.buildings.some((b) => b.id === 'chow') && tokens.some((t) => t.length >= 3 && FOOD_ITEM.keys.split(' ').some((k) => k.startsWith(t))) ? [FOOD_ITEM] : [];
   const u = urgentItem(c);
   const urgentFirst = u && tokens.some((t) => URGENT_WORDS.includes(t)) ? [u] : [];
-  return [...urgentFirst, ...help, ...people, ...places].map(({ keys, ...it }: WfItem & { keys?: string }) => it);
+  return [...urgentFirst, ...help, ...food, ...people, ...places].map(({ keys, ...it }: WfItem & { keys?: string }) => it);
 }
 
 export const wfIcon = (it: WfItem): string => (it.kind === 'urgent' ? '⏰' : it.kind === 'book' ? '📅' : it.kind === 'board' ? '📌' : BUILDING_ICON[it.buildingId] ?? '');

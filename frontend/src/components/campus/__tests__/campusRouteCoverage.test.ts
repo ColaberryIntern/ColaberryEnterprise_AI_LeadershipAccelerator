@@ -11,6 +11,7 @@ import fs from 'fs';
 import path from 'path';
 import { campusBuildingsFor } from '../useCampusView';
 import type { CampusAudience } from '../campusMap';
+import { CHOW_ROUTE, CAMPUS_BUILDINGS } from '../campusMap';
 
 const SRC_ROOT = path.join(__dirname, '..', '..', '..');
 const ROUTES_FILE = path.join(SRC_ROOT, 'routes', 'portalRoutes.tsx');
@@ -23,7 +24,8 @@ function roomRoutes(): string[] {
   const all = new Set<string>();
   for (const a of AUDIENCES) for (const b of campusBuildingsFor(a)) {
     // C6: admin links (Staff Office) are not campus pages; they open the Management Portal in a new tab.
-    if (!b.primary.admin && !b.rooms.find((r) => r.route === b.primary.route)?.planned) all.add(b.primary.route);
+    // C39: Chow Hall's door opens the order sheet; it has no page (checked below)
+    if (!b.primary.admin && b.primary.route !== CHOW_ROUTE && !b.rooms.find((r) => r.route === b.primary.route)?.planned) all.add(b.primary.route);
     for (const r of b.rooms) if (!r.planned && !r.admin) all.add(r.route);
   }
   return Array.from(all).sort();
@@ -80,4 +82,11 @@ describe('every walkable room shows the campus banner (D2, D2a)', () => {
     expect(EXCLUDED).toEqual(['/portal/portfolio/preview']);
     for (const r of EXCLUDED) expect(routes).toContain(r);
   });
+});
+
+it('C39: Chow Hall has no page: the router declares no route for its door target, and it has no rooms', () => {
+  expect(ROUTES_SRC.includes('/campus/chow')).toBe(false);
+  expect(ROUTES_SRC).not.toMatch(/ChowHallPage/);
+  const chow = CAMPUS_BUILDINGS.find((b) => b.id === 'chow')!;
+  expect([chow.primary.route, chow.rooms, chow.prefixes]).toEqual([CHOW_ROUTE, [], []]);
 });

@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { CAMPUS_BUILDINGS, buildingForPath, buildingsFor, buildingName, careerBuildingFor } from '../campusMap';
+import { CAMPUS_BUILDINGS, buildingForPath, buildingsFor, buildingName, careerBuildingFor, CHOW_ROUTE } from '../campusMap';
 
 // The catalog must only point at routes that exist. Read the route tree as text: importing it
 // would pull every page component into this unit suite.
@@ -12,10 +12,10 @@ const allRoutes = (): { route: string; planned?: string; where: string }[] => CA
 ]);
 
 describe('campus catalog', () => {
-  it('has the 13 buildings (the D4 catalog + C21 Admissions), each id once', () => {
+  it('has the 14 buildings (the D4 catalog + C21 Admissions + C39 Chow Hall), each id once', () => {
     const ids = CAMPUS_BUILDINGS.map((b) => b.id);
     expect(new Set(ids).size).toBe(ids.length);
-    expect(ids.sort()).toEqual(['admissions', 'amphi', 'arcade', 'career', 'commons', 'gallery', 'gate', 'lecture', 'library', 'observatory', 'studio', 'testing', 'tower']);
+    expect(ids.sort()).toEqual(['admissions', 'amphi', 'arcade', 'career', 'chow', 'commons', 'gallery', 'gate', 'lecture', 'library', 'observatory', 'studio', 'testing', 'tower']);
   });
 
   it('C21: Admissions is on every campus, beside the gate (its door joins the path there), its page /portal/plans', () => {
@@ -26,6 +26,7 @@ describe('campus catalog', () => {
   it('points only at routes that are routed today, unless a route is marked planned with its ticket', () => {
     expect(ROUTED.size).toBeGreaterThan(20); // the regex really read the route tree
     for (const r of allRoutes()) {
+      if (r.route === CHOW_ROUTE) continue; // C39: Chow Hall's door opens the order sheet; no page (campusRouteCoverage checks it has none)
       if (r.planned) { expect(r.planned).toMatch(/^C\d+$/); expect(ROUTED.has(r.route)).toBe(false); continue; }
       expect({ where: r.where, routed: ROUTED.has(r.route) }).toEqual({ where: r.where, routed: true });
     }
@@ -50,7 +51,7 @@ describe('campus catalog', () => {
   it('matches the Explorer mode column (what each page does for an Explorer)', () => {
     const access = Object.fromEntries(CAMPUS_BUILDINGS.map((b) => [b.id, b.explorer]));
     expect(access).toEqual({ lecture: 'preview', library: 'open', tower: 'open', studio: 'demo', amphi: 'open', testing: 'open',
-      observatory: 'open', commons: 'open', gallery: 'open', career: 'open', arcade: 'open', gate: 'open', admissions: 'open' });
+      observatory: 'open', commons: 'open', gallery: 'open', career: 'open', arcade: 'open', gate: 'open', admissions: 'open', chow: 'open' });
   });
 
   it('shows the Main Gate only to Explorers and staff (Maya moved to Admissions in C21)', () => {

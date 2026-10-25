@@ -2,7 +2,8 @@ import React, { useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { useCardFocus } from './useCardFocus';
 import type { CampusBuilding, ExplorerAccess } from './campusMap';
-import { buildingName, roomLabel } from './campusMap';
+import { buildingName, roomLabel, CHOW_ROUTE } from './campusMap';
+import { openOrderSheet } from './chow/OrderSheet';
 import { enrollCta } from './campusAccess';
 import { GATED_FEATURES } from '../paywall/gatedFeatures';
 import { useIsMgmt } from './campusMgmt';
@@ -124,8 +125,10 @@ export default function BuildingCard({ building: b, access, workplaceNames, onCl
           ? <Link className="cm-btn cm-cta is-urgent" to={urgent.route} onClick={go(urgent.route)} data-testid="cm-arrive-cta"><span>{urgent.label}</span><span aria-hidden="true">&rarr;</span></Link>
           : b.primary.admin ? adminLink(b.primary.label, b.primary.route, 'cm-btn cm-cta') : primaryPlanned
           ? <span className="cm-btn cm-cta is-disabled" aria-disabled="true">{b.primary.label} - opening soon</span>
+          : b.primary.route === CHOW_ROUTE // C39: Chow Hall has no page; its button opens the order sheet
+          ? <button type="button" className="cm-btn cm-cta" onClick={() => openOrderSheet()} data-testid="cm-arrive-cta"><span>{b.primary.label}</span></button>
           : <Link className="cm-btn cm-cta" to={b.primary.route} onClick={go(b.primary.route)} data-testid="cm-arrive-cta"><span>{b.primary.label}</span><span aria-hidden="true">&rarr;</span></Link>}
-        {!b.primary.admin && (urgent || (!primaryPlanned && !ways)) && <div className="cm-arrive-route" aria-hidden="true">{hostOf()}{urgent ? urgent.route : b.primary.route}</div>}
+        {!b.primary.admin && b.primary.route !== CHOW_ROUTE && (urgent || (!primaryPlanned && !ways)) && <div className="cm-arrive-route" aria-hidden="true">{hostOf()}{urgent ? urgent.route : b.primary.route}</div>}
         {hasAdmin && (
           <p className="cm-who-note" data-testid="cm-admin-note">{isMgmt ? 'Opens the Management Portal in a new tab.' : 'Needs Management Portal access.'}</p>
         )}

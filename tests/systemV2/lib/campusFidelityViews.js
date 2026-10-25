@@ -198,6 +198,29 @@ const VIEWS = [
     assert: () => `(() => { const n = document.querySelectorAll('[data-testid^="gr-card-"]').length; if (n !== 5) return 'cards: ' + n;
       const over = Array.from(document.querySelectorAll('.gr-page button, .gr-page a')).filter((el) => el.scrollWidth > el.clientWidth + 1).map((el) => el.textContent.trim());
       return over.length ? 'text overflows: ' + over.slice(0, 3).join(' | ') : ''; })()` },
+  // C36 (v8 G5): the Game Room interior: five cabinets in an aisle, the champions wall with a row per game, the card's meter and games;
+  // clicking the Bug Breaker cabinet opens the cabinet modal for Bug Breaker.
+  { name: '30-game-room-interior', route: '/portal/campus', accounts: ['member'], steps: () => [tap('arcade'), WALKED, { wait: 2000 }, { click: '[data-testid="cm-cabinet-bug-breaker"]' }, { wait: 2500 }],
+    required: () => ['cm-room3d', 'cm-champions', 'cm-arc-card', 'cm-arc-meter', 'gr-cabinet', 'gr-cab-title'],
+    assert: () => `(() => { const n = document.querySelectorAll('[data-testid^="cm-cabinet-"][role="button"]').length; if (n !== 5) return 'cabinets: ' + n;
+      const rows = document.querySelectorAll('[data-testid="cm-champions"] .r').length; if (rows !== 5) return 'champion rows: ' + rows;
+      const t = document.querySelector('[data-testid="gr-cab-title"]').textContent; return t === 'BUG BREAKER' ? '' : 'cabinet title: ' + t; })()` },
+  // C39 (v11): Chow Hall left of the gate; the room's craving screen, chalkboard, counter and window; the counter opens the order sheet
+  // (chips and app cards) without leaving /portal/campus; no control's text overflows.
+  { name: '30-chow-hall', route: '/portal/campus', accounts: ['member'], steps: () => [tap('chow'), WALKED, { wait: 2000 }, { click: '[data-testid="cm-spot-counter"]' }, { wait: 1200 }],
+    required: () => ['cm-bld-chow', 'cm-room3d', 'cm-crave-screen', 'cm-chalkboard', 'cm-spot-counter', 'cm-room-window', 'cm-order', 'cm-order-apps', 'cm-crave-pizza'],
+    assert: () => `(() => { if (location.pathname !== '/portal/campus') return 'path changed: ' + location.pathname;
+      const gate = document.querySelector('[data-testid="cm-bld-gate"]'), chow = document.querySelector('[data-testid="cm-bld-chow"]');
+      if (gate && chow && chow.getBoundingClientRect().left >= gate.getBoundingClientRect().left) return 'Chow Hall is not left of the gate';
+      if (document.querySelectorAll('[data-testid="cm-order-apps"] a').length < 1) return 'no app cards';
+      const over = Array.from(document.querySelectorAll('[data-testid="cm-order"] button, [data-testid="cm-order"] a')).filter((el) => el.scrollWidth > el.clientWidth + 1).map((el) => el.textContent.trim());
+      return over.length ? 'text overflows: ' + over.slice(0, 3).join(' | ') : ''; })()` },
+  // C37/C38 (v9, v10): the sky layer and the weather chip on the map (the clock alone while CAMPUS_WEATHER_ENABLED is off), and in the
+  // Classroom the window on the right wall with the real view east ("Looking out at ...").
+  { name: '31-weather', route: '/portal/campus', accounts: ['member'], steps: () => [tap('lecture'), WALKED, { wait: 2000 }],
+    required: (a, size) => ['cm-wx', 'cm-room-window', 'cm-win-looking', ...(size === 'phone' ? [] : ['cm-wx-chip'])],
+    assert: () => `(() => { const l = document.querySelector('[data-testid="cm-win-looking"]').textContent; if (!/^Looking out at /.test(l)) return 'window sign: ' + l;
+      const tod = document.querySelector('[data-testid="cm-wx"]').getAttribute('data-tod'); return ['dawn', 'day', 'dusk', 'night'].includes(tod) ? '' : 'time of day: ' + tod; })()` },
   { name: '24-plans', route: '/portal/plans', accounts: ['member', 'business'], steps: () => [{ wait: 1500 }],
     required: () => ['cm-plans', 'cm-plan-explorer', 'cm-plan-individual', 'cm-plan-team', 'cm-plan-services', 'cm-plans-account', 'cm-plans-talk'] },
   // WP-6: arriving at the live building: the hero in the state's colour, the stage, the live room as the main action
@@ -229,7 +252,7 @@ function panelFor(view, a, size) {
   if (view.name === '01-gate' || view.name === '23-workstation') return []; // the workstation is full screen, as the prototype's #ws
   const tour = a === 'staff' ? [] : ['cm-cc-tour'];
   if (view.route !== '/portal/campus' && view.name !== '14-step-outside') return size === 'phone' ? ['cm-steps-open'] : ['cm-page-rail', ...tour.map((t) => `[data-testid="cm-page-rail"] [data-testid="${t}"]`)];
-  if (size === 'phone' && (CARD_VIEWS.includes(view.name) || view.name.startsWith('21-room-') || view.name === '24-admissions' || view.name === '25-schedule' || view.name === '26-meeting-rooms' || view.name === '28-live')) return ['cm-cc-peek'];
+  if (size === 'phone' && (CARD_VIEWS.includes(view.name) || view.name.startsWith('21-room-') || view.name === '24-admissions' || view.name === '25-schedule' || view.name === '26-meeting-rooms' || view.name === '28-live' || view.name === '30-game-room-interior' || view.name === '30-chow-hall' || view.name === '31-weather')) return ['cm-cc-peek'];
   return ['cm-concierge', ...tour];
 }
 const withPanel = (view) => ({ ...view, required: (a, size) => [...view.required(a, size), ...panelFor(view, a, size)] });

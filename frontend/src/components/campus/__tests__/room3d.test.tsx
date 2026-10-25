@@ -100,13 +100,13 @@ describe('your spot', () => {
     expect(onOpen).toHaveBeenCalledWith('/portal/projects/workspace/p1/STORY-001');
   });
 
-  it('reduce motion: it opens at once; the cabinet opens the page; rooms where nobody works have no spot', () => {
+  it('reduce motion: it opens at once; the Game Room is an aisle of five cabinets (C36); rooms where nobody works have no spot', () => {
     const onOpen = mount({ reduceMotion: true });
     click('[data-testid="cm-spot-desk"]');
     expect(onOpen).toHaveBeenLastCalledWith('/portal/projects/workspace/p1/STORY-001');
-    const onGame = mount({ id: 'arcade', spot: spotOf('arcade'), sectionRoute: '/portal/game-room', reduceMotion: true });
-    click('[data-testid="cm-spot-cabinet"]');
-    expect(onGame).toHaveBeenLastCalledWith('/portal/game-room');
+    mount({ id: 'arcade', spot: spotOf('arcade'), sectionRoute: '/portal/game-room', reduceMotion: true });
+    expect(q('.cm-r3-spot')).toBeNull();
+    expect(container.querySelectorAll('[data-testid^="cm-cabinet-"][role="button"]')).toHaveLength(5);
     mount({ id: 'amphi', spot: null });
     expect(q('.cm-r3-spot')).toBeNull();
   });

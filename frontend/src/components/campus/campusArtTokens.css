@@ -39,6 +39,11 @@
   --cm-art-admissions:#b0306a; --cm-art-admissions-d30:#7e0038; --cm-art-hero-admissions:#b0306a;
   --cm-art-in-admissions-wall:#f8e4ec; --cm-art-in-admissions-wall-d16:#e8d4dc; --cm-art-in-admissions-wall-d28:#dcc8d0; --cm-art-in-admissions-floor:#c9a58c;
   --cm-art-in-admissions-door:#7e0038; --cm-art-in-admissions-sign:#74002e;
+  /* C39 (v11): Chow Hall, orange gable; cream walls, warm wood floor; the chalkboard */
+  --cm-art-chow:#e07a1f; --cm-art-chow-d30:#a64a00; --cm-art-hero-chow:#e07a1f;
+  --cm-art-in-chow-wall:#fbe9d2; --cm-art-in-chow-wall-d16:#ebd9c2; --cm-art-in-chow-wall-d28:#dfcdb6; --cm-art-in-chow-floor:#b9805a;
+  --cm-art-in-chow-door:#a64a00; --cm-art-in-chow-sign:#9c4000;
+  --cm-art-chalk:#2f3a33; --cm-art-chow-frame:#8a5a3c; --cm-art-chow-case:rgba(220,236,244,.7); --cm-art-chow-base:#c0392b;
   /* shared building parts */
   --cm-art-bld-shadow:rgba(60,70,40,.18); --cm-art-wall:#fbf6ee; --cm-art-wall-edge:#d9cdb8; --cm-art-window:#bcd3dc;
   --cm-art-step:#e6dccb; --cm-art-label:#ffffff; --cm-art-label-edge:#e6dccb;
@@ -133,6 +138,13 @@
   --cm-art-note-q:#fff3a8; --cm-art-note-post:#ffffff; --cm-art-note-ann:#c9f0e8;
   /* C34 (v8 G2): the arcade cabinet (dark body, neon edge and title, the screen, the game-over sheet) */
   --cm-art-cab-bg:#1b1430; --cm-art-cab-edge:#6b2fa0; --cm-art-cab-neon:#5ef2c8; --cm-art-cab-screen:#0d0a18; --cm-art-cab-sheet:rgba(13,10,24,.9);
+  /* C37 (v9 W2-W3): the sky: tints over the map, the window's skies by time of day and weather, sun, moon, clouds, hills, the frame */
+  --cm-art-wx-night:rgba(14,22,56,.42); --cm-art-wx-dusk-a:rgba(255,140,60,.18); --cm-art-wx-dusk-b:rgba(110,60,150,.22); --cm-art-wx-dawn:rgba(255,190,160,.18);
+  --cm-art-wx-overcast:rgba(150,155,165,.22); --cm-art-wx-flash:rgba(255,255,255,.55); --cm-art-wx-drop:#dfe8f5;
+  --cm-art-sky-day:#8ecdf2; --cm-art-sky-day2:#d8efff; --cm-art-sky-dawn:#f6b98f; --cm-art-sky-dawn2:#fde3c8; --cm-art-sky-dusk:#7a4c9a; --cm-art-sky-dusk2:#f59a5b;
+  --cm-art-sky-night:#0e1638; --cm-art-sky-night2:#26305e; --cm-art-sky-grey:#9aa3ad; --cm-art-sky-grey2:#c9ced4; --cm-art-sky-snow:#d6dbe0;
+  --cm-art-sun:#ffd23d; --cm-art-sun-glow:rgba(255,210,61,.6); --cm-art-moon:#f3efd9; --cm-art-cloud:#ffffff; --cm-art-cloud-rain:#8d96a1; --cm-art-cloud-night:#3a4466;
+  --cm-art-hills:#5f8f5a; --cm-art-hills-night:#22324a; --cm-art-win-frame:#f4ead7; --cm-art-win-frame-edge:#c9b896;
   --cm-art-gr-accent:#6b2fa0; --cm-art-gr-week:#1f8a4c; --cm-art-gr-champ:#1f4f7a; --cm-art-gr-you:#fdecec; --cm-art-gr-gold:#d4a017;
 }
 [data-theme="dark"]{

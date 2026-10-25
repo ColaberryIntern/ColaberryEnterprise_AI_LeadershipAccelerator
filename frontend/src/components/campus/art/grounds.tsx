@@ -104,6 +104,8 @@ const inDistrict = (x: number, y: number) => (x >= 628 && y <= 300) || (x >= 800
 const PLANTERS: [number, number][] = [[700, 140], [960, 250], [965, 470], [700, 652]];
 /** C21 (v6 D3): the Admissions building beside the gate keeps its footprint clear of trees. */
 const onAdmissions = (x: number, y: number) => Math.abs(x - 614) < 72 && Math.abs(y - 645) < 42;
+/** C39 (v11): so does Chow Hall, its mirror left of the gate. */
+const onChow = (x: number, y: number) => Math.abs(x - 300) < 76 && Math.abs(y - 645) < 42;
 
 /** The prototype's fixed trees (none inside the district or on the Game Room), and the district's planters. */
 export function Trees(): React.ReactElement {
@@ -124,7 +126,7 @@ export function Trees(): React.ReactElement {
         }))}
       </defs>
       {TREE_SPOTS.map(([x, y], i) => {
-        if (inDistrict(x, y) || onAdmissions(x, y) || (Math.abs(x - 210) < 80 && Math.abs(y - 428) < 62)) return null;
+        if (inDistrict(x, y) || onAdmissions(x, y) || onChow(x, y) || (Math.abs(x - 210) < 80 && Math.abs(y - 428) < 62)) return null;
         return <use key={`t${i}`} className="cm-tree" href={`#cm-tree-${i % 3}-${i % 2}`} x={x} y={y} />;
       })}
       {PLANTERS.map(([x, y]) => (

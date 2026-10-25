@@ -1,0 +1,87 @@
+/* C34 (v8 G1): the Game Room page laid out like the other campus pages. Art tokens only. */
+@import '../campusArtTokens.css';
+.gr-page{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:18px;align-items:start}
+.gr-main-col{display:flex;flex-direction:column;gap:18px;min-width:0}
+.gr-sec-h{display:flex;align-items:baseline;justify-content:space-between;gap:10px;flex-wrap:wrap;margin:0 0 10px}
+.gr-sec-h h2{margin:0;font-size:18px}
+.gr-sec-h small{color:var(--muted);font-size:12.5px}
+.gr-muted{color:var(--muted);font-size:13.5px;margin:6px 0}
+.gr-new{display:inline-block;margin-left:6px;padding:1px 6px;border-radius:6px;background:var(--cm-art-red);color:var(--cm-art-white);font:800 10px 'DM Sans',system-ui,sans-serif;font-style:normal;letter-spacing:.06em}
+.gr-link{background:none;border:0;padding:0;color:var(--cm-art-red);font:inherit;font-weight:700;cursor:pointer;text-decoration:underline}
+
+/* the hero */
+/* fidelity 29: the hero sits in the page's main column, whose width is not the viewport's, so it wraps by its own width: the time block,
+   the game (never narrower than 260px), then the art, which drops below when there is no room beside them */
+.gr-hero{display:flex;flex-wrap:wrap;gap:18px;align-items:center;border-top:4px solid var(--cm-art-gr-accent);padding:18px}
+.gr-hero-left{flex:0 0 190px;display:flex;flex-direction:column;gap:6px;padding-right:16px;border-right:1px solid var(--border)}
+.gr-hero-left small,.gr-hero-right small{font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.gr-hero-time{font:800 40px ui-monospace,monospace;line-height:1}
+.gr-hero-left span{font-size:12.5px;color:var(--muted)}
+.gr-bar{height:8px;border-radius:4px;background:var(--sunken);overflow:hidden}
+.gr-bar i{display:block;height:100%;background:var(--cm-art-gr-accent)}
+.gr-hero-right h2{margin:4px 0 4px;font-size:22px}
+.gr-hero-right p{margin:0 0 10px;color:var(--muted);font-size:14px}
+.gr-hero-right .row{display:flex;gap:10px;flex-wrap:wrap}
+/* fidelity 29: a narrow middle column wraps the buttons' text instead of overflowing them */
+.gr-hero-right .row>*{max-width:100%;white-space:normal;text-align:center}
+.gr-hero-right{flex:1 1 260px;min-width:0}
+.gr-art{display:block;width:100%;height:auto;border-radius:10px;background:var(--cm-art-cab-screen)}
+.gr-hero-art{flex:0 0 160px;max-width:160px;margin-left:auto}
+
+/* the side cards */
+.gr-sides{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
+.gr-side{padding:16px;border-top:4px solid var(--cm-art-gr-week)}
+.gr-side.is-champs{border-top-color:var(--cm-art-gr-champ)}
+.gr-side h3{margin:0 0 10px;font-size:15px}
+.gr-side ul{list-style:none;margin:0;padding:0}
+.gr-side li{display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px solid var(--border);font-size:13.5px}
+.gr-side li b{text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:60%}
+
+/* the game grid */
+.gr-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:14px}
+.gr-card{display:flex;flex-direction:column;gap:6px;padding:12px}
+.gr-card-art{position:relative}
+.gr-card-art .gr-new{position:absolute;top:8px;left:8px;margin:0}
+.gr-card h3{margin:4px 0 0;font-size:15px}
+.gr-card p{margin:0;font-size:13px;color:var(--muted);flex:1}
+.gr-card small{font-size:12.5px}
+
+/* leaderboards */
+.gr-lb{padding:16px}
+.gr-lb-tabs{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 10px}
+.gr-lb-tabs button,.gr-lb-toggles button{height:32px;padding:0 12px;border-radius:16px;border:1px solid var(--border);background:var(--surface);color:var(--strong);font:700 13px 'DM Sans',system-ui,sans-serif;cursor:pointer}
+.gr-lb-tabs button.on,.gr-lb-toggles button.on{background:var(--strong);border-color:var(--strong);color:var(--surface)}
+.gr-lb-toggles{display:flex;gap:12px;flex-wrap:wrap;margin:0 0 14px}
+.gr-lb-toggles .seg{display:inline-flex;gap:4px}
+.gr-podium{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;align-items:end;margin:0 0 12px}
+.gr-podium .step{display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 6px;border-radius:12px;background:var(--sunken);min-width:0}
+.gr-podium .step.s1{padding-top:22px;background:var(--cm-art-help-bg)}
+.gr-podium .step.is-you{box-shadow:0 0 0 2px var(--cm-art-red)}
+.gr-podium .step.is-empty{visibility:hidden}
+.gr-podium .medal{font-size:22px}
+.gr-podium b{font-size:13.5px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gr-podium .sc,.gr-lb-rows .sc{font:800 13px ui-monospace,monospace}
+.gr-av{display:inline-grid;place-items:center;width:30px;height:30px;border-radius:50%;background:var(--strong);color:var(--surface);font:800 11px 'DM Sans',system-ui,sans-serif;object-fit:cover;flex:none}
+.gr-lb-rows{list-style:none;margin:0;padding:0}
+.gr-lb-rows li{display:flex;align-items:center;gap:10px;padding:7px 8px;border-radius:8px;font-size:13.5px}
+.gr-lb-rows li.is-you{background:var(--cm-art-gr-you)}
+.gr-lb-rows li.gap{justify-content:center;color:var(--muted)}
+.gr-lb-rows .rk{width:32px;font:800 12px ui-monospace,monospace;color:var(--muted)}
+.gr-lb-rows .who{flex:1;min-width:0}
+.gr-lb-rows .who b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gr-lb-rows .who small{display:block;color:var(--muted);font-size:12px}
+.gr-lb-rows .lv{font-size:11.5px;padding:1px 8px;border-radius:10px;background:var(--sunken);white-space:nowrap}
+.gr-lb-none{font-size:13.5px;margin:8px 0 0}
+
+/* recent highs and the side column */
+.gr-recent{padding:16px}
+.gr-recent ul{list-style:none;margin:0;padding:0}
+.gr-recent li{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);font-size:13.5px}
+.gr-rail{display:flex;flex-direction:column;gap:14px}
+.gr-rail .te-card{padding:14px}
+.gr-rail h3{margin:0 0 8px;font-size:15px}
+.gr-play-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 0;font-size:13.5px}
+.gr-field{display:flex;flex-direction:column;gap:4px;margin:0 0 10px;font-size:12.5px;font-weight:700;color:var(--muted)}
+.gr-field select{height:36px;border-radius:10px;border:1px solid var(--border);background:var(--surface);color:var(--strong);padding:0 8px;font:500 13.5px 'DM Sans',system-ui,sans-serif}
+@media (max-width:1100px){.gr-page{grid-template-columns:minmax(0,1fr)}.gr-hero-left{flex-basis:100%;border-right:0;padding-right:0}.gr-hero-art{display:none}}
+@media (max-width:760px){.gr-sides{grid-template-columns:minmax(0,1fr)}}

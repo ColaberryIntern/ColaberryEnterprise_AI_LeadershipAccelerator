@@ -20,7 +20,8 @@ const { chromium } = require(process.env.PW_PATH || 'playwright');
 const MODE = process.env.CAMPUS_E2E_MODE === 'off' ? 'off' : 'on';
 const TOKENS_FILE = path.resolve(process.env.TOKENS_FILE || path.join(__dirname, '..', '..', 'tmp', 'campus-e2e-tokens.json'));
 const MARKER = 'campus-e2e-marker';
-const AUDIENCES = ['member', 'explorer', 'business', 'staff'];
+// CAMPUS_E2E_AUDIENCES=business,staff reruns some audiences only (to check one failing step); unset runs all four.
+const AUDIENCES = ['member', 'explorer', 'business', 'staff'].filter((a) => !process.env.CAMPUS_E2E_AUDIENCES || process.env.CAMPUS_E2E_AUDIENCES.split(',').includes(a));
 
 const results = [];
 async function step(audience, name, fn) {
@@ -41,8 +42,8 @@ async function api(pathname, jwt) {
   return { status: r.status, body: r.headers.get('content-type')?.includes('json') ? await r.json() : null };
 }
 
-async function newPage(browser, jwt, viewport = { width: 1440, height: 900 }) {
-  const context = await browser.newContext({ viewport });
+async function newPage(browser, jwt, viewport = { width: 1440, height: 900 }, timezoneId = undefined) {
+  const context = await browser.newContext({ viewport, ...(timezoneId ? { timezoneId } : {}) });
   // Reduce motion on: walks and door zooms are instant, so steps never race an animation.
   await context.addInitScript(([t]) => {
     try {
@@ -220,6 +221,48 @@ async function runAudience(browser, audience, jwt) {
         await page.waitForSelector('[data-testid="cm-plans"]', { timeout: 30_000 });
         const cards = await page.evaluate(() => ['explorer', 'individual', 'team', 'services'].filter((id) => document.querySelector(`[data-testid="cm-plan-${id}"]`)).length);
         must(cards === 4, `plans page shows ${cards} of 4 cards`);
+      });
+
+      await step(audience, 'C39: Chow Hall: the counter, the screen and the door each open the order sheet (path unchanged); Pizza links; new tab + noopener; all 8 apps; Esc closes; London lists Deliveroo / Just Eat / Uber Eats', async () => {
+        for (const tz of ['America/Chicago', 'Europe/London']) {
+          const { page: p2, context: c2 } = await newPage(browser, jwt, undefined, tz);
+          try {
+            await p2.goto(`${urls.base}/portal/campus`, { waitUntil: 'domcontentloaded' });
+            await p2.waitForSelector('[data-testid="cm-concierge"]', { timeout: 30_000 });
+            await p2.evaluate(() => document.querySelector('[data-testid="cm-bld-chow"]').dispatchEvent(new MouseEvent('click', { bubbles: true })));
+            await p2.waitForSelector('[data-testid="cm-room3d"][data-room="chow"] [data-testid="cm-crave-screen"]', { timeout: 15_000 });
+            const opens = async (sel) => {
+              await p2.click(sel);
+              await p2.waitForSelector('[data-testid="cm-order"]', { timeout: 10_000 });
+              must(new URL(p2.url()).pathname === '/portal/campus', `${sel} changed the path to ${new URL(p2.url()).pathname}`);
+            };
+            const close = async () => { await p2.keyboard.press('Escape'); await p2.waitForSelector('[data-testid="cm-order"]', { state: 'detached', timeout: 5_000 }); };
+            if (tz === 'America/Chicago') {
+              for (const sel of ['[data-testid="cm-spot-counter"]', '[data-testid="cm-crave-order"]', '[data-testid="cm-way-board"]']) { await opens(sel); await close(); }
+              await opens('[data-testid="cm-spot-counter"]');
+              await p2.click('[data-testid="cm-crave-pizza"]');
+              const dd = await p2.getAttribute('[data-testid="cm-app-doordash"]', 'href'), ue = await p2.getAttribute('[data-testid="cm-app-uber-eats"]', 'href');
+              must(dd === 'https://www.doordash.com/search/store/pizza/', `DoorDash href ${dd}`);
+              must(ue === 'https://www.ubereats.com/search?q=pizza', `Uber Eats href ${ue}`);
+              await p2.click('[data-testid="cm-order-all"]');
+              const links = await p2.$$eval('[data-testid="cm-order-apps"] a', (as) => as.map((a) => [a.getAttribute('target'), a.getAttribute('rel') || '']));
+              must(links.length === 8, `Show all apps lists ${links.length}`);
+              must(links.every(([t, r]) => t === '_blank' && r.includes('noopener')), 'a link lacks target=_blank or noopener');
+              await close();
+            } else {
+              await opens('[data-testid="cm-spot-counter"]');
+              const names = (await p2.$$eval('[data-testid="cm-order-apps"] b', (bs) => bs.map((b) => b.textContent))).sort();
+              must(JSON.stringify(names) === JSON.stringify(['Deliveroo', 'Just Eat', 'Uber Eats']), `London apps: ${names.join(', ')}`);
+            }
+          } finally { await c2.close(); }
+        }
+      });
+
+      await step(audience, 'C37: /campus/weather answers the clock-only reading while CAMPUS_WEATHER_ENABLED is off, and 401 without a token', async () => {
+        const r = await api('/api/portal/campus/weather?lat=32.78&lon=-96.8&city=Dallas', jwt);
+        must(r.status === 200 && r.body && r.body.condition === null, `weather: ${r.status} ${JSON.stringify(r.body)}`);
+        const anon = await fetch(urls.api + '/api/portal/campus/weather?lat=32.78&lon=-96.8', { signal: AbortSignal.timeout(15_000) });
+        must(anon.status === 401, `no token: ${anon.status}`);
       });
 
       await step(audience, 'C27: the Schedule room shows the week strip and upcoming events; the Schedule page week has seven day columns', async () => {

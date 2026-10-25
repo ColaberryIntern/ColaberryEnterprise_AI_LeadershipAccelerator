@@ -37,15 +37,17 @@ export default function ArrivalWays({ spot, summary, name, primaryLabel, onSecti
       </section>
     );
   }
-  const backTitle = spot.opens === 'book' ? 'Book a call with admissions' : spot.opens === 'page' ? primaryLabel : next?.title ?? `Open ${section}`;
-  const backGo = spot.opens === 'book' ? 'Pick a time' : spot.opens === 'page' ? 'Step up' : 'Open the card';
+  const backTitle = spot.opens === 'order' ? 'Order food ↗' : spot.opens === 'book' ? 'Book a call with admissions' : spot.opens === 'page' ? primaryLabel : next?.title ?? `Open ${section}`;
+  const backGo = spot.opens === 'order' ? 'Pick a craving' : spot.opens === 'book' ? 'Pick a time' : spot.opens === 'page' ? 'Step up' : 'Open the card';
   return (
     <section className="cm-ways" data-testid="cm-ways">
       <h3 className="cm-ways-h">{waysHeading(spot)}</h3>
       <div className="cm-ways-grid">
         <button type="button" className="cm-way is-front" onClick={onSection} data-testid="cm-way-board">
-          <span className="wk">📺 The board</span><b>{section}</b><small>The whole section: every card, in order</small>
-          <span className="go">See all of {section} &rarr;</span>
+          {spot.opens === 'order' // C39: Chow Hall's screen is the craving grid, not a section
+            ? <><span className="wk">📺 The screen</span><b>What are you craving?</b><small>Pizza, tacos, coffee and more</small><span className="go">Order food ↗</span></>
+            : <><span className="wk">📺 The board</span><b>{section}</b><small>The whole section: every card, in order</small>
+              <span className="go">See all of {section} &rarr;</span></>}
         </button>
         <button type="button" className="cm-way is-back" onClick={onSpot} data-testid="cm-way-spot">
           <span className="wk">{spot.tile}</span><b>{backTitle}</b><small>{spot.sub}</small>

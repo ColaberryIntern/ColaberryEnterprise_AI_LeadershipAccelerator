@@ -26,7 +26,7 @@ export type ExplorerAccess = 'open' | 'preview' | 'demo' | 'locked';
 export type ExplorerMode = 'open' | 'preview' | 'demo';
 export type BuildingId =
   | 'lecture' | 'library' | 'tower' | 'studio' | 'amphi' | 'testing'
-  | 'observatory' | 'commons' | 'gallery' | 'career' | 'arcade' | 'gate' | 'admissions';
+  | 'observatory' | 'commons' | 'gallery' | 'career' | 'arcade' | 'gate' | 'admissions' | 'chow';
 
 export interface CampusRoom {
   label: string;
@@ -63,6 +63,9 @@ export interface CampusBuilding {
 }
 
 const EVERYONE: CampusAudience[] = ['member', 'explorer', 'business', 'staff'];
+
+/** C39: Chow Hall's door target; never a page (the door opens the order sheet). */
+export const CHOW_ROUTE = '/campus/chow';
 
 export const CAMPUS_BUILDINGS: readonly CampusBuilding[] = [
   { id: 'lecture', name: 'Classroom', workplaceName: 'Training Room',
@@ -128,6 +131,11 @@ export const CAMPUS_BUILDINGS: readonly CampusBuilding[] = [
     primary: { label: 'See plans & services', route: '/portal/plans' },
     rooms: [{ label: 'Plans & pricing', route: '/portal/plans' }],
     prefixes: ['/portal/plans'], explorer: 'open', audiences: EVERYONE, pos: { x: 614, y: 668, w: 104, h: 54 }, kind: 'gable', zone: 'gate' },
+  // C39 (v11): Chow Hall, left of the gate mirroring Admissions. A room with no page: its door, screen, chalkboard and counter open the
+  // order sheet (outbound links to delivery apps; Colaberry takes no orders or payments). /campus/chow is a door target only.
+  { id: 'chow', name: 'Chow Hall', workplaceName: 'Chow Hall',
+    primary: { label: 'Order food ↗', route: CHOW_ROUTE },
+    rooms: [], prefixes: [], explorer: 'open', audiences: EVERYONE, pos: { x: 300, y: 668, w: 116, h: 56 }, kind: 'gable', zone: 'gate' },
 ];
 
 /** The career building's face per audience (D4 career row). C6: the Staff Office links go to existing admin pages THROUGH
@@ -183,4 +191,4 @@ export function buildingName(b: Pick<CampusBuilding, 'name' | 'workplaceName'>, 
 
 /** The prototype's building icons (its catalog's icon field): the directory, the side mini map. */
 export const BUILDING_ICON: Partial<Record<string, string>> = { lecture: '🎓', library: '📚', tower: '🕰', studio: '🛠', amphi: '🎪', testing: '✅',
-  observatory: '🔭', commons: '🚪', gallery: '🖼', career: '💼', arcade: '🕹', gate: '🚪', admissions: '📋' };
+  observatory: '🔭', commons: '🚪', gallery: '🖼', career: '💼', arcade: '🕹', gate: '🚪', admissions: '📋', chow: '🍔' };

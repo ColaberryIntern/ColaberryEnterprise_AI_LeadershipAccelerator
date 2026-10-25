@@ -12,6 +12,8 @@ import type { StaffDesk } from './campusPeopleApi';
 import { desksForBuilding } from './campusPeople';
 import { explorerPath } from './campusPath';
 import { happeningAt, kickerOf, subOf, zoneLabelOf } from './campusArrival';
+import { useCampusWeather } from './weather/useCampusWeather';
+import { foodLead } from './chow/deliveryApps';
 import { factsAt, loadArrival, urgentAt } from './campusFacts';
 import type { ArrivalData, LookFacts } from './campusFacts';
 import type { PlanStop } from './campusPlan';
@@ -36,6 +38,8 @@ import { HallwayRows, useHallway } from './hallway/Hallway';
 import ClassSessions, { useMySessions } from './classroom/ClassSessions';
 import { LiveTile } from './events/LiveScreen';
 import { AgendaRows, useAgenda } from './events/Agenda';
+import { ArcadeCard } from './games/ArcadeRoom';
+import { useGameRoomData } from './games/GameRoomSections';
 import { useCampus } from './CampusContext';
 
 /**
@@ -129,6 +133,10 @@ export default function ArrivalPanel(p: ArrivalPanelProps): React.ReactElement {
   const hall = useHallway(b.id === 'commons' && access === 'open');
   // C32 (v7 R5): the Classroom lists the next class (Check in / Join) and the replays
   const classes = useMySessions(b.id === 'lecture' && access === 'open');
+  // C36 (v8 G5): the Game Room's card (Look up or step up, Break time, Games, the cohort leaderboard)
+  const games = useGameRoomData(b.id === 'arcade' && access === 'open');
+  // C39 (v11 C2): Chow Hall's line is the meal-time lead, from the same weather reading as the room's window (one shared request)
+  const wx = useCampusWeather(b.id === 'chow');
   const sitAtSpot =() => { const el = document.querySelector<HTMLElement>('.cm-r3-spot'); if (el) el.click(); else if (summary?.card) open(summary.card); };
   // WP-6: the live building's main action joins the live room (audio and Q&A), as the prototype's per-state CTA
   const live = p.live ?? null;
@@ -143,13 +151,13 @@ export default function ArrivalPanel(p: ArrivalPanelProps): React.ReactElement {
         summary={summary} planStep={stepIdx >= 0 ? plan!.stops[stepIdx] : null} spot={spot} sectionRoute={b.primary.route} onOpen={open} />
       <BuildingCard key={b.id} building={b} access={access} workplaceNames={wp} onClose={p.onClose} onNavigate={p.onNavigate} audience={audience}
         kicker={live && !isStop ? `${LIVE_STATES[live.state].chip} · Colaberry Live` : kickerOf({ zone: zoneLabelOf(b, wp), access, audience, tour: isStop ? { name: tour!.model.name, n: tourIdx + 1, of: tour!.model.stops.length } : null })}
-        line={subOf(b, audience, wp)} onElsewhere={p.onElsewhere} urgent={liveCta ?? (classLiveRoute ? { label: 'Your class is live in the Events Hall · Walk in', route: classLiveRoute } : urgentAt(b.id, data, now))} flashRoute={p.flashRoute}
+        line={b.id === 'chow' ? foodLead(wx.now, wx.w.condition) : subOf(b, audience, wp)} onElsewhere={p.onElsewhere} urgent={liveCta ?? (classLiveRoute ? { label: 'Your class is live in the Events Hall · Walk in', route: classLiveRoute } : urgentAt(b.id, data, now))} flashRoute={p.flashRoute}
         heroClass={live ? `is-live is-${live.state}` : undefined} stage={live ? <LiveStage live={live} audience={audience} enrollTo={enrollCta(b).to} /> : undefined}
         happening={happeningAt(b.id, { onAir: p.onAir, count: p.count, presenceError: p.presenceError, facts: factsAt(b.id, data, p.look, now),
           live: live ? { state: live.state, title: live.b.title, sub: liveSub(live.b, live.now) } : null })}
         onEnterRoom={p.onEnterRoom} desks={desks}
         tourTop={isStop ? <TourStopCard tour={tour!.model} index={tourIdx} /> : undefined}
-        ways={b.id === 'amphi' && live && live.state !== 'replay' ? <LiveTile live={live} onJoin={open} /> : inRoom ? <ArrivalWays spot={spot} summary={summary} name={buildingName(b, wp)} primaryLabel={b.primary.label} onSection={() => open(b.primary.route)} onSpot={sitAtSpot} /> : undefined}
+        ways={b.id === 'amphi' && live && live.state !== 'replay' ? <LiveTile live={live} onJoin={open} /> : b.id === 'arcade' ? undefined : inRoom ? <ArrivalWays spot={spot} summary={summary} name={buildingName(b, wp)} primaryLabel={b.primary.label} onSection={() => open(b.primary.route)} onSpot={sitAtSpot} /> : undefined}
         planBox={showPlanBox ? <PlanBox stop={plan!.stops[stepIdx]} index={stepIdx} total={plan!.stops.length} onOpen={open} onDone={plan!.onComplete} /> : undefined}
         tourNav={tour ? <TourNav tour={tour.model} index={tourIdx} hereStop={isStop} nextName={nextB ? buildingName(nextB, wp) : null}
           onNext={tour.onNext} onBack={tour.onBack} onEnd={tour.onEnd} /> : undefined}
@@ -158,6 +166,7 @@ export default function ArrivalPanel(p: ArrivalPanelProps): React.ReactElement {
           : b.id === 'admissions' ? <AdmissionsServices audience={audience} onNavigate={open} />
           : b.id === 'commons' && access === 'open' ? <HallwayRows hallway={hall.hallway} error={hall.error} onOpen={open} />
           : b.id === 'lecture' && access === 'open' ? <ClassSessions sessions={classes} onOpen={open} broadcastRoute={classLiveRoute} />
+          : b.id === 'arcade' && access === 'open' ? <ArcadeCard d={games} onOpen={open} place={buildingName(b, wp)} />
           // C33 (v7 R6): the Schedule lists classes, events and booked sessions together
           : b.id === 'tower' ? <AgendaRows items={agendaItems} place={(id) => { const x = p.buildings.find((y) => y.id === id); return x ? buildingName(x, wp) : id; }} onWalk={(id) => openMap(id)} />
           // C31 (v7 R4): every event happens in the Events Hall (all of them, one tap to sign up)

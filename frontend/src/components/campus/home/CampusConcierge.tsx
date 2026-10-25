@@ -32,6 +32,7 @@ import { ComingUpCall } from '../admissions/BookCallHost';
 import type { AdmissionsBooking } from '../admissions/admissionsCallApi';
 import { ComingUpAgenda } from '../events/Agenda';
 import { openBoard } from '../board/boardApi';
+import { openOrderSheet } from '../chow/OrderSheet';
 import type { AgendaItem } from '../events/agendaModel';
 
 /** C20: who gets "📅 Talk to a person" on the help desk (learners and Explorers; partners and staff have their own channels). */
@@ -87,6 +88,8 @@ export interface ConciergeProps {
   call?: AdmissionsBooking | null;
   /** C33 (v7 R6): Coming up = your next classes, the events you signed up for (C27) and the sessions you booked (C29), with Walk there. */
   coming?: AgendaItem[];
+  /** C37 (v9 W4): the weather line under the lead (null while weather is off, or something urgent or live is on). */
+  weatherLine?: string | null;
 }
 
 /** The prototype's "I want to..." chips per account (CHIPS, CHIPS_EXP, CHIPS_SP, CHIPS_WORK), each a walk to a real building. "I'm
@@ -94,16 +97,18 @@ export interface ConciergeProps {
 export const LATE = 'late';
 /** C30 (v7 R3): "📌 Ask the community" walks to the Community Board and opens it on a question. */
 export const BOARD = 'board';
-type ChipTo = BuildingId | typeof LATE | typeof BOARD;
+/** C39 (v11): "🍔 Grab food" walks to Chow Hall and opens the order sheet. */
+export const FOOD = 'food';
+type ChipTo = BuildingId | typeof LATE | typeof BOARD | typeof FOOD;
 export const CHIPS: Record<'member' | 'explorer' | 'business' | 'work', [string, ChipTo][]> = {
-  member: [['Learn', 'lecture'], ['Build', 'studio'], ['Prep for cert', 'testing'], ['Meet people', 'commons'], ['📌 Ask the community', BOARD], ['See my progress', 'observatory'], ['Show my work', 'gallery'], ['Find events', 'amphi'], ['I’m running late', LATE]],
-  explorer: [['Try the course', 'library'], ['Meet people', 'commons'], ['📌 Ask the community', BOARD], ['Upcoming events', 'amphi'], ['See how projects work', 'studio']],
-  business: [['…learns', 'lecture'], ['…builds', 'studio'], ['…gets certified', 'testing'], ['…connects', 'commons'], ['…shows their work', 'gallery'], ['Seats & reporting', 'career']],
-  work: [['Upskill', 'lecture'], ['Ship work', 'studio'], ['Get certified', 'testing'], ['Meet the team', 'commons'], ['My performance', 'observatory'], ['Show clients', 'gallery'], ['Town halls', 'amphi'], ['I’m running late', LATE]],
+  member: [['Learn', 'lecture'], ['Build', 'studio'], ['Prep for cert', 'testing'], ['Meet people', 'commons'], ['📌 Ask the community', BOARD], ['See my progress', 'observatory'], ['Show my work', 'gallery'], ['Find events', 'amphi'], ['🍔 Grab food', FOOD], ['I’m running late', LATE]],
+  explorer: [['Try the course', 'library'], ['Meet people', 'commons'], ['📌 Ask the community', BOARD], ['Upcoming events', 'amphi'], ['See how projects work', 'studio'], ['🍔 Grab food', FOOD]],
+  business: [['…learns', 'lecture'], ['…builds', 'studio'], ['…gets certified', 'testing'], ['…connects', 'commons'], ['…shows their work', 'gallery'], ['Seats & reporting', 'career'], ['🍔 Grab food', FOOD]],
+  work: [['Upskill', 'lecture'], ['Ship work', 'studio'], ['Get certified', 'testing'], ['Meet the team', 'commons'], ['My performance', 'observatory'], ['Show clients', 'gallery'], ['Town halls', 'amphi'], ['🍔 Grab food', FOOD], ['I’m running late', LATE]],
 };
 export function chipsFor(audience: CampusAudience, workplaceNames: boolean, buildings: CampusBuilding[]): [string, ChipTo][] {
   const set = audience === 'explorer' ? CHIPS.explorer : audience === 'business' ? CHIPS.business : workplaceNames ? CHIPS.work : CHIPS.member;
-  return set.filter(([, id]) => (id === BOARD ? true : id === LATE ? buildings.some((b) => b.id === 'tower') : buildings.some((b) => b.id === id)));
+  return set.filter(([, id]) => (id === BOARD ? true : id === FOOD ? buildings.some((b) => b.id === 'chow') : id === LATE ? buildings.some((b) => b.id === 'tower') : buildings.some((b) => b.id === id)));
 }
 
 export { pulseOf, liveKicker } from './conciergeCopy';
@@ -138,7 +143,10 @@ export default function CampusConcierge(p: ConciergeProps): React.ReactElement {
   const run = (id: BuildingId) => (p.onRun ?? p.onWalk)(id);
   const rows = rightNowRows({ audience, workplace: wp, buildings, stops: p.stops, planMinutes: p.planMinutes ?? null, agenda: p.agenda ?? null,
     presence: p.presence, presenceError: p.presenceError, live: !!p.live, urgent: p.urgent ?? null, skipPlan: true });
-  const chip = (id: ChipTo) => (id === BOARD ? openBoard({ walk: true, compose: 'q' }) : id === LATE ? (p.urgent ? run(p.urgent.buildingId) : p.onWalk('tower')) : p.onWalk(id));
+  const chip = (id: ChipTo) => {
+    if (id === FOOD) { p.onWalk('chow'); openOrderSheet(); return; }
+    if (id === BOARD) openBoard({ walk: true, compose: 'q' }); else if (id === LATE) { if (p.urgent) run(p.urgent.buildingId); else p.onWalk('tower'); } else p.onWalk(id);
+  };
   return (
     <aside className={`cm-cc${p.cardOpen ? ' has-card' : ''}${p.waiting ? ' is-waiting' : ''}${expanded ? ' is-expanded' : ''}`} aria-label="Campus concierge" data-testid="cm-concierge">
       {/* phones, while a card is open: the peek strip (CSS shows it only there) */}
@@ -157,6 +165,7 @@ export default function CampusConcierge(p: ConciergeProps): React.ReactElement {
       <div className="cm-kicker" data-testid="cm-cc-where">{kickerFor({ audience, here: hereB, workplace: wp, live: !!p.live, now: p.now, onLawn: p.onLawn })}</div>
       <h1 data-testid="cm-cc-greeting">{greetLine(audience, p.firstName, p.now.getHours(), quiet)}</h1>
       <p className="cm-lead" data-testid="cm-cc-lead">{lead}</p>
+      {p.weatherLine && <p className="cm-lead cm-lead-wx" data-testid="cm-cc-weather">{p.weatherLine}</p>}
       <Pulse p={p} />
       {/* C20 (v3 2.6 #2): Coming up, a booked admissions call, above Up next */}
       <ComingUpCall booking={p.call ?? null} now={p.now} />

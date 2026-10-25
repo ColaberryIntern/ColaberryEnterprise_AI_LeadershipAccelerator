@@ -9,7 +9,7 @@ describe('your spot per building (the prototype SPOTS table)', () => {
     expect(spotOf('lecture')).toMatchObject({ kind: 'seat', opens: 'ws', tile: '💺 Your seat' });
     expect(spotOf('library')).toMatchObject({ kind: 'carrel', opens: 'ws', tile: '📚 Your carrel' });
     expect(spotOf('testing')).toMatchObject({ kind: 'booth', opens: 'ws', tile: '🎧 Your booth' });
-    expect(spotOf('arcade')).toMatchObject({ kind: 'cabinet', opens: 'page', tile: '🕹 The cabinet' });
+    expect(spotOf('arcade')).toBeNull(); // C36 (v8 G5): five cabinets in an aisle instead of one spot
     expect(spotOf('admissions')).toMatchObject({ kind: 'meet', opens: 'book', tile: '📅 Meet a person' });
   });
 
@@ -20,7 +20,6 @@ describe('your spot per building (the prototype SPOTS table)', () => {
   it('positions match the prototype (front right, its size)', () => {
     expect(SPOTS.studio).toMatchObject({ x: 0.74, z: 0.16, w: 340, h: 250 });
     expect(SPOTS.lecture).toMatchObject({ x: 0.74, z: 0.18, w: 300, h: 215 });
-    expect(SPOTS.arcade).toMatchObject({ x: 0.78, z: 0.28, w: 170, h: 300 });
   });
 
   it('Cert Prep\'s booth is for practice and the diagnostic, never a knowledge check (Ali 2026-10-24)', () => {
@@ -31,7 +30,7 @@ describe('your spot per building (the prototype SPOTS table)', () => {
   it('the arrival heading, the trail words and the cubicle rooms', () => {
     expect(waysHeading(SPOTS.studio!)).toBe('Look up, or sit down');
     expect(waysHeading(SPOTS.admissions!)).toBe('Look up, or sit down with a person');
-    expect(waysHeading(SPOTS.arcade!)).toBe('Look up, or jump in');
+    expect(waysHeading({ ...SPOTS.studio!, opens: 'page' })).toBe('Look up, or jump in');
     expect(spotWords(SPOTS.testing!)).toBe('Your booth');
     expect(hasCubicles(spotOf('studio'))).toBe(true);
     expect(hasCubicles(spotOf('lecture'))).toBe(false);

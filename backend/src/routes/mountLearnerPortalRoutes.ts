@@ -9,6 +9,7 @@ import campusRoutes from './campusRoutes';
 import gameRoomRoutes from './gameRoomRoutes';
 import campusAdmissionsCallRoutes from './campusAdmissionsCallRoutes';
 import campusHallwayRoutes from './campusHallwayRoutes';
+import campusWeatherRoutes from './campusWeatherRoutes';
 
 /**
  * The learner-portal mounts, out of `server.ts` (Phase 5 T514).
@@ -48,4 +49,6 @@ export function mountLearnerPortalRoutes(app: Express): void {
   app.use(campusAdmissionsCallRoutes);
   // Colaberry Campus: the Meeting Rooms hallway (C29; read-only, participant-authed per route, behind the same campus pilot gate).
   app.use(campusHallwayRoutes);
+  // Colaberry Campus: the local weather (C37; participant-authed per route, behind the pilot; dark until CAMPUS_WEATHER_ENABLED).
+  app.use(campusWeatherRoutes);
 }

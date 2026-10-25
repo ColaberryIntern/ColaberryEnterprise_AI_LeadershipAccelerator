@@ -19,7 +19,14 @@ import { HallwayBoard, HallwayWall, useHallway } from '../../hallway/Hallway';
 import { hallwayDoors } from '../../hallway/hallwayModel';
 import { LiveScreen } from '../../events/LiveScreen';
 import { AgendaBoard, useAgenda } from '../../events/Agenda';
+import { ArcadeBoard, ArcadeCabinets, ChampionsWall } from '../../games/ArcadeRoom';
+import { useGameRoomData } from '../../games/GameRoomSections';
 import { useCampus } from '../../CampusContext';
+import { useCampusWeather } from '../../weather/useCampusWeather';
+import { RoomWindow } from '../../weather/WeatherViews';
+import { viewFrom } from '../../weather/windowView';
+import { CravingScreen, Chalkboard } from '../../chow/ChowRoom';
+import { openOrderSheet } from '../../chow/OrderSheet';
 import { CAMPUS_BUILDINGS } from '../../campusMap';
 
 const placeName = (b: BuildingId): string => CAMPUS_BUILDINGS.find((x) => x.id === b)?.name ?? b;
@@ -99,7 +106,13 @@ export default function Room3D(p: Room3DProps): React.ReactElement | null {
   const live = useLiveNow();
   // C33 (v7 R6): the Schedule's board is one list: classes, events and booked sessions
   const agendaItems = useAgenda(id === 'tower');
-  const { openMap } = useCampus();
+  // C36 (v8 G5): the Game Room is an arcade aisle (five cabinets, the champions wall, the break board), refreshed after each game
+  const arcade = id === 'arcade';
+  const games = useGameRoomData(arcade);
+  const { openMap, settings } = useCampus();
+  // C37/C38 (v9 W5, v10 W5): the right wall's window: the weather and time of day outside, and the real buildings east of this one
+  const wx = useCampusWeather(true);
+  const view = React.useMemo(() => viewFrom(id, settings.workplaceNames), [id, settings.workplaceNames]);
   useEffect(() => {
     if (reduceMotion) return undefined;
     const t = window.requestAnimationFrame(() => window.requestAnimationFrame(() => setYouAt(YOU_AT)));
@@ -112,6 +125,7 @@ export default function Room3D(p: Room3DProps): React.ReactElement | null {
   const cardRoute = spot?.opens === 'page' ? p.sectionRoute : summary?.card ?? null;
   // The spot, the screen's primary button and "Open the card" all land on the same workstation.
   const sitDown = () => {
+    if (spot?.opens === 'order') { openOrderSheet(); return; } // C39: the Chow Hall counter opens the order sheet
     if (spot?.opens === 'book') { (p.onBook ?? (() => openBookCall()))(); return; } // C21: the meeting table opens the booking sheet
     if (!cardRoute) { section(); return; }
     if (reduceMotion || !spot) { p.onOpen(cardRoute); return; }
@@ -132,23 +146,29 @@ export default function Room3D(p: Room3DProps): React.ReactElement | null {
           <div className="face ceil" aria-hidden="true">{[0.2, 0.5, 0.8].map((x) => <i key={x} style={{ left: `calc(${x * 100}% - 75px)` }} />)}</div>
           <div className="face floor" aria-hidden="true" />
           <div className="face back"><div className="wainscot" aria-hidden="true" />
-            <RoomScreen summary={summary} name={p.name} planStep={p.planStep} onSection={section} onCard={cardRoute && spot?.opens !== 'book' ? sitDown : null}
+            <RoomScreen summary={summary} name={p.name} planStep={p.planStep} onSection={section} onCard={cardRoute && spot?.opens !== 'book' && spot?.opens !== 'order' ? sitDown : null}
               onPlan={(r) => p.onOpen(r)} custom={id === 'admissions' ? <PlansBoard onSection={section} />
+                : id === 'chow' ? <CravingScreen now={wx.now} condition={wx.w.condition} />
                 : id === 'tower' && agendaItems ? <AgendaBoard items={agendaItems} now={new Date()} place={placeName} onWalk={(b) => openMap(b)} onSection={section} />
                 : id === 'amphi' && live ? <LiveScreen live={live} hereCount={people.length} onJoin={p.onOpen} />
                 : id === 'amphi' && events ? <NextEventBoard event={upcoming(events, new Date(), 1)[0] ?? null} onSection={section} />
-                : hall ? <HallwayBoard hallway={hallway} onOpen={p.onOpen} /> : undefined} />
+                : hall ? <HallwayBoard hallway={hallway} onOpen={p.onOpen} />
+                : arcade ? <ArcadeBoard d={games} onOpen={p.onOpen} /> : undefined} />
             {tiers && <div className="cm-r3-platform" aria-hidden="true" data-testid="cm-r3-stage" />}
           </div>
           <div className="face left"><div className="wainscot" aria-hidden="true" />
             {hall ? <HallwayWall doors={doors} side="left" onOpen={p.onOpen} />
+              : arcade ? <div className="cm-r3-wallslot"><ChampionsWall d={games} onOpen={p.onOpen} /></div>
+              : id === 'chow' ? <div className="cm-r3-wallslot"><Chalkboard now={wx.now} condition={wx.w.condition} /></div>
               : summary?.sideTop && <div className="cm-r3-wallslot"><WallBoard side={summary.sideTop} onSection={section} /></div>}
           </div>
-          <div className="face right" aria-hidden={hall ? undefined : true}><div className="wainscot" aria-hidden="true" />
+          <div className="face right"><div className="wainscot" aria-hidden="true" />
+            <RoomWindow wx={wx} small={hall} view={view} />
             {hall && <HallwayWall doors={doors} side="right" onOpen={p.onOpen} />}
           </div>
           <div className="cm-r3-floorlayer">
             <RoomCrowd layout={room.layout} spot={spot} people={people} desk={p.desk} onDesk={p.onDesk} onPick={p.onPick} lanyard={p.lanyard} fw={fw} fh={fh} d={d} />
+            {arcade && <ArcadeCabinets d={games} fw={fw} fh={fh} depth={d} />}
             {spot && (
               <Billboard x={spot.x} z={spot.z} w={spot.w} h={spot.h} fw={fw} fh={fh} d={d} className={`cm-r3-spot${zoom ? ' is-sit' : ''}`}
                 role="button" tabIndex={0} aria-label={`${spot.tile.replace(/^\S+\s/, '')}: ${spot.sub}`} data-testid={`cm-spot-${spot.kind}`}

@@ -143,6 +143,15 @@ Array [
     ],
     "workplaceName": "Admissions",
   },
+  Object {
+    "explorer": "open",
+    "gate": null,
+    "id": "chow",
+    "name": "Chow Hall",
+    "primary": "Order food ↗ -> /campus/chow",
+    "rooms": Array [],
+    "workplaceName": "Chow Hall",
+  },
 ]
 `;
 
@@ -298,6 +307,15 @@ Array [
     ],
     "workplaceName": "Admissions",
   },
+  Object {
+    "explorer": "open",
+    "gate": null,
+    "id": "chow",
+    "name": "Chow Hall",
+    "primary": "Order food ↗ -> /campus/chow",
+    "rooms": Array [],
+    "workplaceName": "Chow Hall",
+  },
 ]
 `;
 
@@ -443,6 +461,15 @@ Array [
       "Plans & pricing -> /portal/plans",
     ],
     "workplaceName": "Admissions",
+  },
+  Object {
+    "explorer": "open",
+    "gate": null,
+    "id": "chow",
+    "name": "Chow Hall",
+    "primary": "Order food ↗ -> /campus/chow",
+    "rooms": Array [],
+    "workplaceName": "Chow Hall",
   },
 ]
 `;
@@ -600,6 +627,15 @@ Array [
       "Plans & pricing -> /portal/plans",
     ],
     "workplaceName": "Admissions",
+  },
+  Object {
+    "explorer": "open",
+    "gate": null,
+    "id": "chow",
+    "name": "Chow Hall",
+    "primary": "Order food ↗ -> /campus/chow",
+    "rooms": Array [],
+    "workplaceName": "Chow Hall",
   },
 ]
 `;

@@ -6,15 +6,16 @@ import type { BuildingId } from '../campusMap';
  * board") replaces the front door. Clicking a spot does what it opens:
  *  - 'ws': the workstation for the screen's card (walk to it, the camera drops in, then the workstation);
  *  - 'page': the building's page (the Game Room cabinet);
- *  - 'book': the "Book a call with admissions" sheet (the Admissions meeting table, v6 D3).
+ *  - 'book': the "Book a call with admissions" sheet (the Admissions meeting table, v6 D3);
+ *  - 'order': the order sheet (the Chow Hall counter, v11 C2).
  * Buildings where nobody works (Events Hall, My Progress, Schedule) have no spot; their board's button does the action.
  * v7 R2 wins over v6 for the Community Lounge (now Meeting Rooms): no couch, it gets a hallway of doors instead.
  *
  * x and z place the spot on the floor (share of the room's width from the left, share of its depth from the front), w and h are
  * its size in px, as the prototype's billboards.
  */
-export type SpotKind = 'desk' | 'seat' | 'carrel' | 'booth' | 'cabinet' | 'meet';
-export type SpotOpens = 'ws' | 'page' | 'book';
+export type SpotKind = 'desk' | 'seat' | 'carrel' | 'booth' | 'cabinet' | 'meet' | 'counter';
+export type SpotOpens = 'ws' | 'page' | 'book' | 'order';
 export interface SpotDef {
   kind: SpotKind;
   x: number; z: number; w: number; h: number;
@@ -31,8 +32,10 @@ export const SPOTS: Partial<Record<BuildingId | 'admissions', SpotDef>> = {
   lecture: { kind: 'seat', x: 0.74, z: 0.18, w: 300, h: 215, opens: 'ws', tile: '💺 Your seat', sub: 'Take your seat and work on this card' },
   library: { kind: 'carrel', x: 0.75, z: 0.16, w: 300, h: 250, opens: 'ws', tile: '📚 Your carrel', sub: 'A quiet carrel for this guide' },
   testing: { kind: 'booth', x: 0.74, z: 0.16, w: 300, h: 260, opens: 'ws', tile: '🎧 Your booth', sub: 'A quiet booth for practice and the diagnostic' },
-  arcade: { kind: 'cabinet', x: 0.78, z: 0.28, w: 170, h: 300, opens: 'page', tile: '🕹 The cabinet', sub: 'Step up and play' },
+  // C36 (v8 G5): the Game Room has five cabinets in an aisle instead of one spot (games/ArcadeRoom)
   admissions: { kind: 'meet', x: 0.7, z: 0.2, w: 330, h: 220, opens: 'book', tile: '📅 Meet a person', sub: 'Book time with the admissions team' },
+  // C39 (v11 C2): the Chow Hall service counter opens the order sheet
+  chow: { kind: 'counter', x: 0.72, z: 0.2, w: 330, h: 230, opens: 'order', tile: '🛎 The counter', sub: 'Pick a craving, then your delivery app' },
 };
 
 export const spotOf = (id: string): SpotDef | null => (SPOTS as Record<string, SpotDef | undefined>)[id] ?? null;
