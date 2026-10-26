@@ -12,6 +12,7 @@ import { requireAdmin } from '../../middlewares/authMiddleware';
 import {
   handleGetCommercializationBoard,
   handleGetHypothesisHealth,
+  handleGetLivePopulation,
 } from '../../controllers/commercializationController';
 
 const router = Router();
@@ -19,5 +20,10 @@ const router = Router();
 router.get('/api/admin/commercialization/board', requireAdmin, handleGetCommercializationBoard);
 // C8.6 - hypothesis health, computed from the C8.4 funnel.
 router.get('/api/admin/commercialization/hypotheses', requireAdmin, handleGetHypothesisHealth);
+// C8.10 - Colaberry Live population and delivered minutes for one month. Mounted under
+// this prefix deliberately rather than under a new /api/admin/live one: the figure exists
+// to make the C2.3 license break-even falsifiable, which is commercialization work, and
+// the prefix is already classified in the deny-by-default section gate.
+router.get('/api/admin/commercialization/live-population', requireAdmin, handleGetLivePopulation);
 
 export default router;
