@@ -15,6 +15,9 @@ import AgentWriteAudit from '../models/AgentWriteAudit';
 import ProposedAgentAction from '../models/ProposedAgentAction';
 import { AiAgent } from '../models';
 import { authorizeAgentAction } from './agentAuthorizationService';
+// One list, three consumers: this allowlist, the agent that logs the actions, and the AI Ops
+// "Repairs Today" counter that has to recognize them. See agents/repairActions.ts.
+import { ORCHESTRATION_REPAIR_ACTIONS } from './agents/repairActions';
 
 // ---------------------------------------------------------------------------
 // Permission Tiers
@@ -55,7 +58,7 @@ const AGENT_PERMISSIONS: Record<string, AgentPermission> = {
   CampaignRepairAgent: { tier: 'write_with_audit', allowedTables: ['scheduled_emails', 'campaign_errors'], allowedOperations: ['retry_failed_send', 'detect_stalled_campaign', 'auto_resolve_errors'], requiresEvaluateSend: false },
   CampaignSelfHealingAgent: { tier: 'write_with_audit', allowedTables: ['scheduled_emails'], allowedOperations: ['retry_failed_email', 'post_repair_retest'], requiresEvaluateSend: false },
   CampaignQAAgent: { tier: 'write_with_audit', allowedTables: ['campaign_test_runs', 'campaign_test_steps'], allowedOperations: ['run_qa_test'], requiresEvaluateSend: false },
-  OrchestrationAutoRepairAgent: { tier: 'write_with_audit', allowedTables: ['prompt_templates', 'mini_sections', 'artifact_definitions'], allowedOperations: ['reactivate_prompt', 'null_broken_fk', 'null_broken_artifact_fk'], requiresEvaluateSend: false },
+  OrchestrationAutoRepairAgent: { tier: 'write_with_audit', allowedTables: ['prompt_templates', 'mini_sections', 'artifact_definitions'], allowedOperations: [...ORCHESTRATION_REPAIR_ACTIONS], requiresEvaluateSend: false },
   WebsiteAutoRepairAgent: { tier: 'write_with_audit', allowedTables: ['website_issues'], allowedOperations: ['auto_repair'], requiresEvaluateSend: false },
   ExecutionAgent: { tier: 'write_with_audit', allowedTables: ['ai_agents', 'intelligence_decisions'], allowedOperations: ['update_agent_config', 'modify_agent_schedule', 'update_campaign_config', 'adjust_lead_scoring', 'launch_ab_test', 'pause_campaign'], requiresEvaluateSend: false },
 

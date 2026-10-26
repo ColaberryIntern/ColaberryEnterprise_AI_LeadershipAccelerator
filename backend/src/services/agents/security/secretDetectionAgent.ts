@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { Department, DepartmentEvent } from '../../../models';
 import { createTicket } from '../../ticketService';
+import { resolveProjectRoot } from './sourceTreeRoot';
 import type { AgentExecutionResult, AgentAction } from '../types';
 
 const AGENT_NAME = 'SecretDetectionAgent';
@@ -47,12 +48,24 @@ function walkDir(dir: string, files: string[] = []): string[] {
   return files;
 }
 
+/**
+ * A finding carries WHERE the secret is, never the secret.
+ *
+ * This used to keep `snippet`: the first 80 characters of the matching line. Up to five of those
+ * went into the ticket's metadata, so the ticket raised to report a leaked key could contain the
+ * key — in a record that is broader-read than the file it came from, and against the platform's
+ * own policy, where `secret_exfiltration` is default-denied (executionPolicy.ts). Quincy found
+ * this on 2026-10-26 while building Ellis's security posture capability.
+ *
+ * The field is gone rather than redacted at the point of use. `file` and `line` are enough to
+ * find the secret, triage needs nothing more, and a field that never holds the secret cannot be
+ * copied into a new sink by the next person to add a report here.
+ */
 interface SecretFinding {
   file: string;
   line: number;
   pattern_name: string;
   severity: 'critical' | 'high' | 'medium';
-  snippet: string;
 }
 
 export async function runSecretDetectionAgent(
@@ -65,8 +78,43 @@ export async function runSecretDetectionAgent(
   const findings: SecretFinding[] = [];
 
   try {
-    // Determine project root (in Docker: /app, locally: a few levels up)
-    const projectRoot = process.env.PROJECT_ROOT || path.resolve(__dirname, '../../../../..');
+    /**
+     * No source tree means SKIPPED, not clean.
+     *
+     * The old `process.env.PROJECT_ROOT || path.resolve(__dirname, '../../../../..')` resolved to
+     * `/` inside the production container, so every run looked for `/backend/src`, found nothing,
+     * scanned zero files and recorded "Clean scan — no secrets detected in 0 files". A clean bill
+     * of health from a scan that never happened is worse than no scan at all, because it answers
+     * the question it never asked. `codeSecurityAuditAgent` was moved onto `resolveProjectRoot`
+     * for exactly this reason; the secret and dependency scanners were left behind. Quincy found
+     * that on 2026-10-26.
+     */
+    const projectRoot = resolveProjectRoot();
+    if (projectRoot === null) {
+      console.warn(JSON.stringify({
+        level: 'warn', service: 'backend', event: 'source_scan_skipped_no_source_tree',
+        outcome: 'partial', context: { agent: AGENT_NAME },
+      }));
+      actions.push({
+        campaign_id: null,
+        action: 'scan_skipped_no_source',
+        reason: 'Source tree not present in this runtime (compiled build) — secret scanning is a CI-time check.',
+        confidence: 1,
+        before_state: null,
+        after_state: { skipped: true },
+        result: 'skipped',
+        entity_type: 'system',
+      } as AgentAction);
+      return {
+        agent_name: AGENT_NAME,
+        campaigns_processed: 0,
+        actions_taken: actions,
+        errors,
+        duration_ms: Date.now() - start,
+        entities_processed: 0,
+      };
+    }
+
     const scanDirs = [
       path.join(projectRoot, 'backend', 'src'),
       path.join(projectRoot, 'frontend', 'src'),
@@ -101,7 +149,6 @@ export async function runSecretDetectionAgent(
                   line: i + 1,
                   pattern_name: sp.name,
                   severity: sp.severity,
-                  snippet: line.trim().substring(0, 80) + (line.trim().length > 80 ? '...' : ''),
                 });
                 break; // One finding per line
               }
@@ -138,7 +185,12 @@ export async function runSecretDetectionAgent(
         title: `Secret Scan: ${findings.length} finding(s) in ${filesScanned} files`,
         description: findings.length > 0
           ? `Found ${findings.length} potential secret(s): ${[...new Set(findings.map((f) => f.pattern_name))].join(', ')}`
-          : `Clean scan — no secrets detected in ${filesScanned} files`,
+          // Zero findings over zero files is not a clean scan. The source-tree skip above is the
+          // main way that used to happen, and this keeps the record honest if it happens any
+          // other way.
+          : filesScanned === 0
+            ? 'UNKNOWN — no files were read, so this is not a clean result'
+            : `Clean scan — no secrets detected in ${filesScanned} files`,
         severity,
         metadata: {
           agent: AGENT_NAME,
@@ -164,7 +216,15 @@ export async function runSecretDetectionAgent(
             created_by_id: agentId,
             entity_type: 'system',
             entity_id: deptId,
-            metadata: { threat_type: secretType, findings: typeFindings.slice(0, 5) },
+            // Explicitly named fields, not the finding object. `SecretFinding` no longer carries
+          // the matched text, and spelling the fields out here keeps it that way should anyone
+          // widen that type again.
+          metadata: {
+            threat_type: secretType,
+            findings: typeFindings.slice(0, 5).map((f) => ({
+              file: f.file, line: f.line, type: f.pattern_name, severity: f.severity,
+            })),
+          },
           });
         } catch (err: any) {
           errors.push(`Ticket creation failed for ${secretType}: ${err.message?.slice(0, 100)}`);

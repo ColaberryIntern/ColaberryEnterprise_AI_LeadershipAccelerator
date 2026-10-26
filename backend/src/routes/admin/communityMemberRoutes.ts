@@ -89,6 +89,13 @@ router.delete('/api/admin/community/members/:memberId/free-access', requireAdmin
  * Assign (or clear, with null) the management-portal role for a staff member.
  * Only a 'staff' member may hold a mgmt role. Drives admin-section access via
  * mgmtRoles.ts + the student→admin bridge.
+ *
+ * `requireAdmin` alone was NOT enough here, and this is the one route on which that mattered.
+ * A bridge-minted staff token reaches `/api/admin/community` through the `program` section, so
+ * every scoped role holding `program` could write this field — and `mgmt_role: 'owner'` is the
+ * only role that reaches `inbox_content`. See `services/access/mgmtRoleGrant.ts` for the
+ * no-escalation rule that now gates the write, and why it is a subset test rather than
+ * owner-only.
  */
 router.patch('/api/admin/community/members/:memberId/mgmt-role', requireAdmin, async (req: Request, res: Response) => {
   try {
@@ -106,6 +113,32 @@ router.patch('/api/admin/community/members/:memberId/mgmt-role', requireAdmin, a
       res.status(400).json({ error: 'Member must be Staff to hold a management role' });
       return;
     }
+
+    // No escalation: the role being granted, and the role the target holds right now, must both
+    // be within the caller's own access. Checked AFTER the member is loaded because the current
+    // role is half the question, and BEFORE the write because this is access control.
+    const { canGrantMgmtRole } = await import('../../services/access/mgmtRoleGrant');
+    const { adminAllowedSections } = await import('../../middlewares/authMiddleware');
+    const verdict = canGrantMgmtRole({
+      // `requireAdmin` has already set req.admin, but an absent role resolves to no sections,
+      // so the failure direction here is deny rather than grant.
+      callerSections: adminAllowedSections({ role: req.admin?.role ?? '', mgmt_role: req.admin?.mgmt_role }),
+      currentRole: member.mgmt_role ?? null,
+      newRole: mgmt_role,
+    });
+    if (!verdict.allowed) {
+      console.warn(JSON.stringify({
+        level: 'warn', service: 'backend', event: 'mgmt_role_grant_denied',
+        outcome: 'failure', error_class: 'AuthorizationError',
+        context: {
+          caller_role: req.admin?.role, caller_mgmt_role: req.admin?.mgmt_role ?? null,
+          target_member_id: req.params.memberId, requested_role: mgmt_role, blocked_by: verdict.blockedBy,
+        },
+      }));
+      res.status(403).json({ error: verdict.reason });
+      return;
+    }
+
     await member.update({ mgmt_role });
     res.json({ member: { id: member.id, mgmt_role } });
   } catch (err: any) {
