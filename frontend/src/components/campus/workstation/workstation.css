@@ -2,7 +2,7 @@
    .cory, .wsstatus). Colors are art tokens only. It wraps the runtime's own .rt-* pieces, so layout rules here override runtimeCss. */
 .rt.cm-ws{position:fixed;inset:0;display:flex;flex-direction:column;background:var(--cm-art-ws-bg);color:var(--cm-art-ws-ink);
   background-image:radial-gradient(var(--cm-art-ws-peg) 1.5px,transparent 1.6px);background-size:22px 22px}
-.cm-ws-top{flex:none;display:flex;align-items:center;gap:10px;padding:10px 18px;background:var(--cm-art-locbar-bg);color:var(--cm-art-ink);
+.cm-ws-top{flex:none;display:flex;align-items:center;gap:8px;padding:6px 12px;background:var(--cm-art-locbar-bg);color:var(--cm-art-ink);
   box-shadow:0 2px 10px var(--cm-art-sp-shadow)}
 .cm-ws-trail{flex:1;min-width:0;display:flex;align-items:center;gap:8px;font-size:14px;white-space:nowrap;overflow:hidden;border:0;background:none;padding:0}
 .cm-ws-trail .b{flex:none;display:inline-flex;align-items:center;gap:6px;border:0;background:none;padding:4px 2px;font:600 14px 'DM Sans',system-ui,sans-serif;color:var(--cm-art-ink);cursor:pointer}
@@ -38,53 +38,53 @@
 .rt.cm-ws .rt-mentor-h{flex-wrap:wrap;color:var(--ink);font-weight:800;font-size:15px;row-gap:2px}
 .rt.cm-ws .rt-mentor-sub{flex-basis:100%;margin-left:0;max-width:none;padding-left:16px}
 .cm-ws-pill{flex:none}
-.cm-ws-btn{flex:none;height:36px;border-radius:18px;padding:0 14px;border:1px solid var(--cm-art-line);background:var(--cm-art-paper);
+.cm-ws-btn{flex:none;height:32px;border-radius:16px;padding:0 12px;border:1px solid var(--cm-art-line);background:var(--cm-art-paper);
   color:var(--cm-art-ink);font:700 13.5px 'DM Sans',system-ui,sans-serif;cursor:pointer;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
 .cm-ws-btn:hover{background:var(--cm-art-locbar-hover)}
 .cm-ws-btn:focus-visible,.cm-ws-ticket:focus-visible{outline:3px solid var(--cm-art-red);outline-offset:2px}
 
-.cm-ws-body{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) 360px;grid-template-rows:auto minmax(0,1fr);gap:14px;padding:14px 18px}
-.cm-ws-bench{grid-column:1;display:flex;gap:14px;align-items:stretch;min-width:0;border-radius:14px;padding:12px 14px;
+/* C40: the frame gets out of the way; the card is the work */
+.cm-ws-body{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) 300px;grid-template-rows:auto minmax(0,1fr);gap:8px;padding:8px 10px}
+.cm-ws-bench{grid-column:1;display:flex;gap:10px;align-items:center;min-width:0;border-radius:10px;padding:4px 10px;
   background:linear-gradient(var(--cm-art-ws-cork),var(--cm-art-ws-cork-2));box-shadow:inset 0 2px 0 var(--cm-art-ws-desk-hi),0 6px 18px var(--cm-art-sp-shadow)}
 /* the tickets scroll on their own so the desk tools always stay in view */
-.cm-ws-tickets{flex:1;min-width:0;display:flex;gap:14px;align-items:stretch;overflow-x:auto;padding:6px 4px}
-.cm-ws-bench .bl{flex:none;display:flex;flex-direction:column;justify-content:center;color:var(--cm-art-ws-cork-ink);padding-right:6px}
+.cm-ws-tickets{flex:1;min-width:0;display:flex;gap:8px;align-items:center;overflow-x:auto;padding:2px}
+.cm-ws-bench .bl{flex:none;display:flex;flex-direction:row;align-items:baseline;gap:4px;color:var(--cm-art-ws-cork-ink);padding-right:2px}
 .cm-ws-bench .bl small{font-size:10.5px;font-weight:800;letter-spacing:.14em;opacity:.85}
-.cm-ws-bench .bl b{font-size:14px}
-.cm-ws-ticket{position:relative;flex:none;width:180px;text-align:left;font:inherit;font-size:12.5px;line-height:1.3;border:0;border-radius:4px;padding:10px 12px 9px;
-  background:var(--cm-art-sp-card);color:var(--cm-art-sp-ink);box-shadow:0 4px 10px var(--cm-art-sp-shadow);transform:rotate(var(--rot,0deg))}
+.cm-ws-bench .bl b{font-size:12px}
+.cm-ws-ticket{position:relative;flex:none;display:flex;align-items:baseline;gap:6px;max-width:260px;text-align:left;font:inherit;font-size:12.5px;line-height:1.2;border:0;border-radius:14px;padding:5px 10px;
+  background:var(--cm-art-sp-card);color:var(--cm-art-sp-ink);box-shadow:0 1px 3px var(--cm-art-sp-shadow)}
 button.cm-ws-ticket{cursor:pointer}
-button.cm-ws-ticket:hover{transform:rotate(0deg) translateY(-2px)}
-.cm-ws-ticket .st{display:block;font-size:10px;font-weight:800;letter-spacing:.1em;margin-bottom:4px;text-transform:uppercase}
-.cm-ws-ticket b{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-.cm-ws-ticket small{display:block;margin-top:4px;font-size:11px;color:var(--cm-art-ws-muted)}
+button.cm-ws-ticket:hover{transform:translateY(-1px)}
+.cm-ws-ticket .st{flex:none;font-size:9.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase}
+.cm-ws-ticket b{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cm-ws-ticket small{display:none}
 .cm-ws-ticket.is-done{opacity:.8}
 .cm-ws-ticket.is-done .st{color:var(--cm-art-ws-green)}
 .cm-ws-ticket.is-done b{text-decoration:line-through;color:var(--cm-art-ws-muted)}
-.cm-ws-ticket.is-active{outline:3px solid var(--cm-art-sp-code-amber);box-shadow:0 0 0 6px var(--cm-art-ws-active-ring),0 6px 14px var(--cm-art-sp-shadow)}
+.cm-ws-ticket.is-active{outline:2px solid var(--cm-art-sp-code-amber);box-shadow:0 0 0 3px var(--cm-art-ws-active-ring)}
 .cm-ws-ticket.is-active .st{color:var(--cm-art-sp-brass)}
 .cm-ws-ticket.is-queued .st{color:var(--cm-art-ws-muted)}
 
 .cm-ws-deskarea{grid-column:1;grid-row:2;position:relative;display:flex;flex-direction:column;min-height:0}
 .cm-ws-deskarea::before{content:"";position:absolute;left:-40px;top:-30px;width:520px;height:420px;pointer-events:none;
   background:radial-gradient(ellipse at 20% 10%,var(--cm-art-ws-glow),transparent 65%)}
-.cm-ws-monitors{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,.4fr) minmax(0,.6fr);gap:16px;perspective:1600px;padding:0 8px}
+.cm-ws-monitors{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,.34fr) minmax(0,.66fr);gap:10px;perspective:1600px;padding:0}
 .cm-ws-mon{display:flex;flex-direction:column;min-height:0}
 .cm-ws-mon.side{transform:rotateY(10deg);transform-origin:right center}
-.cm-ws-bezel{flex:1;min-height:0;position:relative;display:flex;border-radius:14px;padding:10px 10px 16px;background:var(--cm-art-sp-monitor);
-  box-shadow:0 16px 40px var(--cm-art-sp-shadow),inset 0 0 0 1px var(--cm-art-ws-bezel-edge)}
-.cm-ws-bezel::after{content:"";position:absolute;bottom:5px;left:50%;width:6px;height:6px;margin-left:-3px;border-radius:50%;background:var(--cm-art-ws-ok);opacity:.8}
-.cm-ws-bezel>*{flex:1;min-width:0;border-radius:8px}
-.cm-ws-mon .neck{width:34px;height:26px;margin:0 auto;background:linear-gradient(90deg,var(--cm-art-sp-stand),var(--cm-art-ws-neck),var(--cm-art-sp-stand))}
-.cm-ws-mon .base{width:150px;height:10px;margin:0 auto;border-radius:6px 6px 2px 2px;background:var(--cm-art-sp-stand);box-shadow:0 4px 8px var(--cm-art-sp-shadow)}
+.cm-ws-bezel{flex:1;min-height:0;position:relative;display:flex;border-radius:10px;padding:5px;background:var(--cm-art-sp-monitor);
+  box-shadow:0 6px 16px var(--cm-art-sp-shadow),inset 0 0 0 1px var(--cm-art-ws-bezel-edge)}
+.cm-ws-bezel>*{flex:1;min-width:0;border-radius:6px}
 /* the main monitor's screen is the page's own centre column (.rt-mid), kept light so the card reads as it does on the page */
 .rt.cm-ws .cm-ws-screen{max-width:none;margin:0;padding:22px;overflow-y:auto;background:var(--paper);color:var(--ink)}
 .rt.cm-ws .cm-ws-screen.rt-mid--reader{padding:0;display:flex;flex-direction:column}
 
-.cm-ws-desk{flex:none;height:104px;margin-top:-4px;display:flex;align-items:flex-end;justify-content:space-between;gap:10px;padding:0 18px 10px;border-radius:12px;
+.cm-ws-desk{flex:none;height:60px;margin-top:6px;display:flex;align-items:flex-end;justify-content:space-between;gap:10px;padding:0 18px 10px;border-radius:12px;
   background:linear-gradient(var(--cm-art-sp-wood),var(--cm-art-sp-bench) 70%,var(--cm-art-ws-desk-3));box-shadow:inset 0 2px 0 var(--cm-art-ws-desk-hi),0 10px 24px var(--cm-art-sp-shadow)}
 .cm-ws-desk svg{flex:none;overflow:visible}
-.cm-ws-desk .kb{flex:1;max-width:420px;height:58px}
+/* C40: the props scale to the shorter desk (their viewBox keeps the proportions), never cropped */
+.cm-ws-desk svg:not(.kb){height:48px;width:auto}
+.cm-ws-desk .kb{flex:1;max-width:360px;height:40px}
 .cm-ws-desk .steam path{animation:cm-ws-steam 2.6s ease-in-out infinite}
 .cm-ws-desk .steam path:nth-child(2){animation-delay:1.3s}
 @keyframes cm-ws-steam{0%{opacity:0;transform:translateY(4px)}40%{opacity:.7}100%{opacity:0;transform:translateY(-10px)}}
@@ -93,7 +93,8 @@ button.cm-ws-ticket:hover{transform:rotate(0deg) translateY(-2px)}
 .rt.cm-ws .cm-ws-cory .rt-mentor{width:100%;border:0;border-radius:18px;overflow:hidden;box-shadow:0 12px 30px var(--cm-art-sp-shadow)}
 .rt-mentor-sub{display:block;margin-left:auto;font-weight:500;font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:62%}
 
-.rt.cm-ws .cm-ws-status{background:var(--cm-art-ws-bar);color:var(--cm-art-ws-bar-ink);font-family:ui-monospace,Menlo,monospace;gap:30px;flex-wrap:nowrap;overflow-x:auto;white-space:nowrap}
+.rt.cm-ws .cm-ws-status{background:var(--cm-art-ws-bar);color:var(--cm-art-ws-bar-ink);font-family:ui-monospace,Menlo,monospace;gap:22px;flex-wrap:nowrap;overflow-x:auto;white-space:nowrap;padding-top:4px;padding-bottom:4px;min-height:0;max-height:36px}
+.cm-ws-cory-toggle{display:none}
 
 /* left monitor: the repo terminal */
 .cm-ws-term{display:flex;flex-direction:column;min-height:0;overflow:hidden;background:var(--cm-art-sp-term);color:var(--cm-art-sp-code-grey)}
@@ -118,17 +119,25 @@ button.cm-ws-ticket:hover{transform:rotate(0deg) translateY(-2px)}
 .cm-ws-nb .nb-f{display:flex;align-items:center;gap:10px;padding:8px 16px;font-size:11.5px;color:var(--cm-art-ws-muted);background:var(--cm-art-sp-card);border-top:1px solid var(--cm-art-ws-nb-rule)}
 .cm-ws-nb .nb-list{margin:0;padding:6px 16px 12px 30px;max-height:30%;overflow:auto;font-size:12.5px;background:var(--cm-art-sp-card)}
 
-@media (max-width:1100px){.cm-ws-body{grid-template-columns:minmax(0,1fr) 320px}.cm-ws-mon.side{display:none}.cm-ws-monitors{grid-template-columns:minmax(0,1fr)}}
+/* the angled side monitor only where there is room for it (C40: from 1600 px, so a 1440 laptop gives the card the width) */
+@media (max-width:1599px){.cm-ws-mon.side{display:none}.cm-ws-monitors{grid-template-columns:minmax(0,1fr)}}
+/* C40: below 1200 px Cory is a drawer (the top bar's Cory button) and the desk props go, so the card takes the full width */
+@media (max-width:1199px){
+  .cm-ws-body{grid-template-columns:minmax(0,1fr)}
+  .cm-ws-desk{display:none}
+  .cm-ws-cory-toggle{display:inline-flex}
+  .cm-ws-cory{position:fixed;top:46px;right:0;bottom:0;z-index:40;width:min(380px,92vw);transform:translateX(102%);transition:transform .22s ease;grid-column:auto;grid-row:auto}
+  .cm-ws-cory.is-open{transform:none}
+}
 @media (max-width:760px){
   .rt.cm-ws{overflow-x:hidden}
   .cm-ws-body{grid-template-columns:minmax(0,1fr);grid-template-rows:auto auto auto;overflow:auto;overflow-x:hidden;padding:12px}
-  .cm-ws-bench,.cm-ws-deskarea,.cm-ws-cory{grid-column:1;grid-row:auto;min-width:0}
+  .cm-ws-bench,.cm-ws-deskarea{grid-column:1;grid-row:auto;min-width:0}
   .cm-ws-trail{flex-basis:100%}
   .cm-ws-bench{flex-wrap:wrap}
   .cm-ws-tickets,.cm-ws-tools{flex-basis:100%;min-width:0}
   .cm-ws-deskarea{min-height:72vh}
-  .cm-ws-cory{min-height:420px}
   .cm-ws-desk .opt{display:none}
   .cm-ws-top{flex-wrap:wrap}
 }
-@media (prefers-reduced-motion:reduce){.cm-ws-desk .steam path{animation:none}button.cm-ws-ticket:hover{transform:rotate(var(--rot,0deg))}}
+@media (prefers-reduced-motion:reduce){.cm-ws-desk .steam path{animation:none}button.cm-ws-ticket:hover{transform:none}.cm-ws-cory{transition:none}}

@@ -158,11 +158,19 @@ const VIEWS = [
   ...ROOM_VIEWS,
   // C19 (round 3 §2.3 + v6 D1): the workstation, reached the real way (into the Studio, sit at your desk). A story as a member:
   // the throwaway seed has a project but no Classroom week, so the lesson workstation is covered by its unit test instead.
-  { name: '23-workstation', route: '/portal/campus', accounts: ['member'], steps: () => [tap('studio'), WALKED, { click: '.cm-r3-spot' }, { wait: 2600 }],
-    // under 1100 px the angled side monitor folds away (the prototype's .mon.side{display:none}), so the terminal is wide-only
-    required: (a, size) => ['cm-ws', 'cm-ws-trail', 'cm-ws-section', 'cm-ws-standup', 'cm-ws-bench', 'cm-ws-desk', 'cm-ws-cory', 'cm-ws-status', ...(size === 'phone' ? [] : ['cm-ws-term'])],
+  // C40: the frame gets out of the way. Under 1600 px the angled side monitor folds away; under 1200 px Cory is a drawer (closed) and
+  // the desk props go. The card's screen must get at least 70% of the height everywhere it is checked, and 75% of the width once
+  // Cory is a drawer (half a laptop screen, 1100 x 1000: the Claude Code layout); at 1440 the side monitor and Cory share the width.
+  { name: '23-workstation', route: '/portal/campus', accounts: ['member'], sizes: ['desktop', 'half', 'phone'], steps: () => [tap('studio'), WALKED, { click: '.cm-r3-spot' }, { wait: 2600 }],
+    required: (a, size) => ['cm-ws', 'cm-ws-trail', 'cm-ws-section', 'cm-ws-standup', 'cm-ws-bench', 'cm-ws-cory', 'cm-ws-status', ...(size === 'desktop' ? ['cm-ws-desk'] : ['cm-ws-cory-toggle'])],
     assert: () => `(() => { const n = document.querySelectorAll('.cm-ws-bezel').length; if (n !== 2) return 'bezels: ' + n + ' (want 2)';
-      const t = document.querySelector('[data-testid="cm-ws-trail"]').textContent; return t.startsWith('Your desk · ') ? '' : 'trail: ' + t; })()` },
+      const t = document.querySelector('[data-testid="cm-ws-trail"]').textContent; if (!t.startsWith('Your desk · ')) return 'trail: ' + t;
+      const vw = innerWidth, vh = innerHeight; if (vw < 700) return '';
+      const r = document.querySelector('.cm-ws-screen').getBoundingClientRect();
+      const needW = vw < 1200 ? 0.75 : vw < 1600 ? 0.7 : 0.5; // 75% with Cory in a drawer, 70% on a 1440 laptop beside Cory, 50% wide (side monitor) if (r.width < vw * needW) return 'screen width ' + Math.round(r.width) + ' < ' + Math.round(needW * 100) + '% of ' + vw;
+      if (r.height < vh * 0.7) return 'screen height ' + Math.round(r.height) + ' < 70% of ' + vh;
+      const cory = document.querySelector('[data-testid="cm-ws-cory"]').getBoundingClientRect();
+      return vw < 1200 && cory.left < vw - 2 ? 'Cory drawer is open on arrival' : ''; })()` },
   // C21 (v6 D3): Admissions beside the gate: the board's four prices come from the claims registry and $199 is absent; the
   // service rows render for a member and a business viewer; /portal/plans renders the four cards.
   { name: '24-admissions', route: '/portal/campus', accounts: ['member', 'business'], steps: () => [tap('admissions'), WALKED],
