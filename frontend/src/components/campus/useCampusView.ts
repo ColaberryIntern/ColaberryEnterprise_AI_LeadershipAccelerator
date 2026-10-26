@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { useEntitlement } from '../../pages/portal/useEntitlement';
 import { useIsExplorer } from '../../pages/portal/useIsExplorer';
 import { useCampusAudience } from './useCampusAudience';
-import { buildingsFor, careerBuildingFor } from './campusMap';
+import { buildingsFor, careerBuildingFor, towerPrimaryFor } from './campusMap';
 import type { CampusAudience, CampusBuilding, ExplorerAccess } from './campusMap';
 import { buildingState, AccessSignals } from './campusAccess';
 
@@ -21,7 +21,12 @@ export interface CampusView {
 
 /** Pure part, so the audience faces are testable without hooks. */
 export function campusBuildingsFor(audience: CampusAudience): CampusBuilding[] {
-  return buildingsFor(audience).map((b) => (b.id === 'career' ? { ...b, ...careerBuildingFor(audience) } : b));
+  const towerPrimary = towerPrimaryFor(audience);
+  return buildingsFor(audience).map((b) => {
+    if (b.id === 'career') return { ...b, ...careerBuildingFor(audience) };
+    if (b.id === 'tower' && towerPrimary) return { ...b, primary: towerPrimary };
+    return b;
+  });
 }
 
 /** Pure: the whole view for an audience and the page signals (the hook below uses it; tests build views with it too). */

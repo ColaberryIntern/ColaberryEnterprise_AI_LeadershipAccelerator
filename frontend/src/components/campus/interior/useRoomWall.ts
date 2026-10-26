@@ -32,7 +32,7 @@ export function useRoomWall(id: BuildingId, audience: CampusAudience, data: Arri
         .then((r) => { const items = Array.isArray(r.data?.items) ? (r.data.items as { title?: string }[]) : []; if (alive) setExtra({ screens: items.map((i) => i.title || '').filter(Boolean).slice(0, 3) }); })
         .catch(warn('campus_wall_showcases_failed'));
     } else if (id === 'arcade' && (audience === 'member' || audience === 'explorer')) {
-      Promise.all(GAME_IDS.map((g) => fetchGameBoard(g).then((b) => [g, b.rows.find((r) => r.you)?.score] as const).catch(() => [g, undefined] as const)))
+      Promise.all(GAME_IDS.map((g) => fetchGameBoard(g).then((b) => [g, b.me?.best ?? b.rows.find((r) => r.you)?.score] as const).catch(() => [g, undefined] as const)))
         .then((pairs) => { if (alive) setExtra({ best: Object.fromEntries(pairs.filter(([, v]) => typeof v === 'number')) }); });
     }
     return () => { alive = false; };

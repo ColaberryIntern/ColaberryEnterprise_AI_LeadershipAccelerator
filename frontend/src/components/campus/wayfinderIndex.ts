@@ -3,6 +3,7 @@ import { BUILDING_ICON, buildingName, roomLabel } from './campusMap';
 import type { CampusPerson, CampusPresence } from './campusApi';
 import type { StaffDesk } from './campusPeopleApi';
 import { subOf } from './campusArrival';
+import { BOARD_WORDS } from './board/boardModel';
 
 /**
  * The Wayfinder's search (WP-4; the prototype's buildDest + matcher, D:1897-1945). Pure.
@@ -13,7 +14,7 @@ import { subOf } from './campusArrival';
  *  - an empty query lists Happening now, Suggested for you, Staff · always on and All buildings.
  * Anonymous presence is never searchable, so the Wayfinder cannot reveal anyone the people lists would not.
  */
-export type WfKind = 'urgent' | 'building' | 'room' | 'person' | 'staff' | 'suggested';
+export type WfKind = 'urgent' | 'building' | 'room' | 'person' | 'staff' | 'suggested' | 'book' | 'board' | 'food';
 export interface WfItem {
   key: string;
   kind: WfKind;
@@ -38,14 +39,29 @@ export const WF_KEYS: Partial<Record<BuildingId, string>> = {
   amphi: 'event events open house rsvp demo talk meetup amphitheater',
   testing: 'cert certification prep exam test quiz knowledge check claude code verify skills proficiency',
   observatory: 'path progress points streak tier level rank skills radar me my growth observatory',
-  commons: 'community people classmates chat rooms room hang lounge social time break commons friends',
+  commons: 'community people classmates chat rooms room meeting meetings hallway door doors study group pair 1:1 one-on-one book session hang lounge social commons friends',
   gallery: 'portfolio showcase gallery work share resume demo show showroom demos client clients present',
   career: 'internship intern standup stand-up meeting company job career team orientation handoff client clients engagement engagements management portal employee company office tower',
   arcade: 'game games arcade play break relax fun chase maze slingshot launch breakout bricks score scores leaderboard rest',
+  admissions: 'admissions plans plan pricing price cost subscription billing enroll enrollment seats seat license licenses team maya welcome',
+  // C39 (v11 C1): the spec's words
+  chow: 'food eat lunch dinner snack coffee hungry pizza delivery doordash ubereats grubhub chow hall',
 };
 const STAFF_KEYS = 'staff help mentor stuck question curriculum certification';
 const MAYA_KEYS = 'admissions enroll enrolling price cost pay sponsor employer apply join person call';
-const URGENT_WORDS = ['late', 'now', 'standup', 'class', 'meeting', 'hurry'];
+/** C20 (round 3 §2.7): 'Book a call with admissions' for learners and Explorers, under Help; its words as the spec lists them. */
+const BOOK_KEYS = 'book call admissions person talk enroll human appointment real';
+function bookItem(c: WfContext): (WfItem & { keys: string }) | null {
+  if (c.audience !== 'member' && c.audience !== 'explorer') return null;
+  return { key: 'book', kind: 'book', title: 'Book a call with admissions', sub: 'A real person · 30 minutes on Google Meet', buildingId: 'gate', action: 'Book →', group: 'Help', keys: BOOK_KEYS };
+}
+/** C30 (v7 R3): the Community Board on the Quad (not a building; its pick walks there and opens it). */
+/** C39 (v11 C1): the FOOD group: "Order food" walks to Chow Hall and opens the order sheet. */
+const FOOD_ITEM: WfItem & { keys: string } = { key: 'food', kind: 'food', title: 'Order food', sub: 'Chow Hall · pick a craving, then your delivery app', buildingId: 'chow', action: 'Order ↗', group: 'Food',
+  keys: WF_KEYS.chow as string };
+const BOARD_ITEM: WfItem & { keys: string } = { key: 'board', kind: 'board', title: 'Community Board', sub: 'on the Quad · posts and questions', buildingId: 'commons', action: 'Walk →', group: 'Places',
+  keys: BOARD_WORDS.join(' ') + ' notice noticeboard' };
+const URGENT_WORDS =['late', 'now', 'standup', 'class', 'meeting', 'hurry'];
 export const WF_LIMIT = 9;
 const PEOPLE_LIMIT = 5;
 
@@ -116,7 +132,8 @@ export function wayfinderEmpty(c: WfContext): WfItem[] {
   const sugg = c.suggested.map((s): WfItem => ({ key: 'g:' + s.key, kind: 'suggested', title: s.title, sub: `${s.detail} · ${nameOf(c, s.buildingId)}`, buildingId: s.buildingId, action: walkLabel(c, s.buildingId), group: 'Suggested for you' }));
   const staff = staffItems(c).map(({ keys, ...it }) => ({ ...it, group: 'Staff · always on' }));
   const all = placeItems(c).filter((x) => x.kind === 'building').map(({ keys, ...it }) => ({ ...it, group: 'All buildings' }));
-  return [...(u ? [u] : []), ...sugg, ...staff, ...all];
+  const help = [bookItem(c)].filter((x): x is WfItem & { keys: string } => !!x).map(({ keys, ...it }) => it);
+  return [...(u ? [u] : []), ...sugg, ...staff, ...help, ...all];
 }
 
 export function wayfinderSearch(query: string, c: WfContext): WfItem[] {
@@ -125,9 +142,12 @@ export function wayfinderSearch(query: string, c: WfContext): WfItem[] {
   const matches = (keys: string) => tokens.every((t) => keys.includes(t));
   const places = placeItems(c).filter((x) => matches(x.keys)).sort((a, b) => scoreOf(b, tokens) - scoreOf(a, tokens)).slice(0, WF_LIMIT);
   const people = [...staffItems(c), ...peopleItems(c)].filter((x) => matches(x.keys)).slice(0, PEOPLE_LIMIT);
+  const book = bookItem(c);
+  const help = [...(book && matches(book.keys) ? [book] : []), ...(tokens.some((t) => BOARD_ITEM.keys.split(' ').some((k) => k.startsWith(t) && t.length >= 3)) ? [BOARD_ITEM] : [])];
+  const food = c.buildings.some((b) => b.id === 'chow') && tokens.some((t) => t.length >= 3 && FOOD_ITEM.keys.split(' ').some((k) => k.startsWith(t))) ? [FOOD_ITEM] : [];
   const u = urgentItem(c);
   const urgentFirst = u && tokens.some((t) => URGENT_WORDS.includes(t)) ? [u] : [];
-  return [...urgentFirst, ...people, ...places].map(({ keys, ...it }: WfItem & { keys?: string }) => it);
+  return [...urgentFirst, ...help, ...food, ...people, ...places].map(({ keys, ...it }: WfItem & { keys?: string }) => it);
 }
 
-export const wfIcon = (it: WfItem): string => (it.kind === 'urgent' ? '⏰' : BUILDING_ICON[it.buildingId] ?? '');
+export const wfIcon = (it: WfItem): string => (it.kind === 'urgent' ? '⏰' : it.kind === 'book' ? '📅' : it.kind === 'board' ? '📌' : BUILDING_ICON[it.buildingId] ?? '');

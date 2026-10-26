@@ -224,16 +224,16 @@ describe('Presentation Studio — five stages over the existing prep task', () =
     // points are untouched. The id stays on screen so a student saying "PREP-3" to a
     // mentor and a mentor searching for it still meet in the middle.
     mount('PREP-3', { title: 'Build the slides — what it does, who for, the number it moves' } as any);
-    expect(container.textContent).toContain('Build Your AI Presentation');
+    expect(container.textContent).toContain('Record Your AI Visual Presentation');
     expect(container.textContent).toContain('PREP-3');
   });
 
   it.each([
-    ['PREP-1', "Tell Your Project's Story"],
-    ['PREP-2', 'Your First Recorded Walkthrough'],
-    ['PREP-4', 'Rehearse With an Audience'],
-    ['PREP-5', 'Create Your Portfolio Demo'],
-    ['PREP-6', 'Present Your Project Live'],
+    ['PREP-1', "Record Your Project Introduction"],
+    ['PREP-2', 'Record Your Working-System Demo'],
+    ['PREP-4', 'Record Your Stakeholder Update'],
+    ['PREP-5', 'Record Your Final Showcase'],
+    ['PREP-6', 'Present at Demo Day'],
   ])('%s shows its student-facing title', (storyId, expected) => {
     mount(storyId);
     expect(container.textContent).toContain(expected);

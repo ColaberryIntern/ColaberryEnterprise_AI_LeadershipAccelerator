@@ -1,6 +1,6 @@
 import type { CampusBuilding } from './campusMap';
 import { HUB, AVE, GATE } from './art/grounds';
-import { doorOf, routeTo } from './walkPath';
+import { doorOf, isTheGate, routeTo } from './walkPath';
 import type { Here, Pt } from './walkPath';
 
 /**
@@ -22,10 +22,11 @@ export function campusGraph(buildings: Pick<CampusBuilding, 'id' | 'pos' | 'zone
   const edges: [string, string][] = [['hub', 'aveC'], ['aveC', 'gate']];
   const aveKey = (x: number) => (x === HUB.x ? 'aveC' : `ave${x}`);
   for (const b of buildings) {
-    if (b.zone === 'gate') continue; // the gate's door is the gate node itself
+    if (isTheGate(b)) continue; // the gate's door is the gate node itself
     const door = `door_${b.id}`;
     nodes[door] = doorOf(b);
-    if (b.zone === 'up') edges.push(['hub', door]);
+    if (b.zone === 'gate') edges.push(['gate', door]); // C21: a building beside the gate (Admissions) joins the path there
+    else if (b.zone === 'up') edges.push(['hub', door]);
     else { nodes[aveKey(b.pos.x)] = { x: b.pos.x, y: AVE }; edges.push([door, aveKey(b.pos.x)]); }
   }
   // The avenue: every point on it, left to right, joined in order.

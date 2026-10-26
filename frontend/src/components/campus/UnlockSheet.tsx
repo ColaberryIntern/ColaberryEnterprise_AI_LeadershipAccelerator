@@ -16,7 +16,7 @@ export default function UnlockSheet({ pathModel, onNavigate, onClose }: { pathMo
       <div className="cm-unlock" role="dialog" aria-modal="true" aria-labelledby="cm-unlock-h" tabIndex={-1} ref={box} data-testid="cm-unlock"
         onClick={(e) => e.stopPropagation()} onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); onClose(); } else trapTab(e); }}>
         <button type="button" className="cm-unlock-x" onClick={onClose} aria-label="Close">×</button>
-        <div className="cm-kicker">Explorer campus tour</div>
+        <div className="cm-kicker">Explorer tour</div>
         <h2 id="cm-unlock-h">That&rsquo;s the whole campus</h2>
         <p className="cm-unlock-lead">Everything marked OPEN is yours to keep using. Enrolling opens the rest.</p>
         <CampusTourEnd pathModel={pathModel} onNavigate={onNavigate} />

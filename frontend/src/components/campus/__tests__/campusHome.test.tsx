@@ -141,7 +141,7 @@ describe('the campus home', () => {
     expect(q('[data-testid="cm-stats-streak"]')!.textContent).toContain('3');
     expect(q('[data-testid="cm-cc-greeting"]')!.textContent).toMatch(/, Ali\.$/);
     expect(q('[data-testid="cm-cc-pulse"]')!.textContent).toContain('5 classmates on campus');
-    expect(q('[data-testid="cm-cc-pulse"]')!.textContent).toContain('busiest: Community Lounge (3)');
+    expect(q('[data-testid="cm-cc-pulse"]')!.textContent).toContain('busiest: Meeting Rooms (3)');
     expect(q('[data-testid="cm-cc-where"]')!.textContent).toBe('At the main gate');
     expect(q('[data-testid="cm-cc-pass"]')).toBeNull();
   });
@@ -207,7 +207,7 @@ describe('the campus home', () => {
     expect(cc().hasAttribute('hidden')).toBe(false);
     expect(cc().classList.contains('is-tucked')).toBe(false);
     expect(cc().classList.contains('has-card')).toBe(true);
-    expect(q('[data-testid="cm-cc-where"]')!.textContent).toBe('At the Community Lounge');
+    expect(q('[data-testid="cm-cc-where"]')!.textContent).toBe('At the Meeting Rooms');
     act(() => { (q('[data-testid="cm-arrive-back"]') as HTMLButtonElement).click(); });
     await flush();
     expect(q('[data-testid="cm-card"]')).toBeNull();
@@ -215,7 +215,7 @@ describe('the campus home', () => {
     expect(cc().classList.contains('has-card')).toBe(false);
   });
 
-  it('C17: walking onto the grass leaves the building: "here" clears (a first ground click only closes the open room)', async () => {
+  it('C56: a ground click closes the open room and you stay in the building; a second ground click does nothing (no walk to grass)', async () => {
     const proto = SVGElement.prototype as unknown as Record<string, unknown>;
     proto.getScreenCTM = () => ({ inverse: () => ({}) });
     proto.createSVGPoint = () => ({ x: 0, y: 0, matrixTransform(this: { x: number; y: number }) { return { x: this.x, y: this.y }; } });
@@ -229,11 +229,11 @@ describe('the campus home', () => {
       await flush();
       expect(q('[data-testid="cm-card"]')).toBeNull();
       expect(campus.here).toBe('commons');
-      ground(); // now you walk (instantly: reduce motion is on here)
+      ground(); // C56: grass is not a place, so nothing walks and you are still in the building
       await flush();
-      expect(campus.here).toBeNull();
+      expect(campus.here).toBe('commons');
       expect(q('[data-testid="cm-card"]')).toBeNull();
-      expect(q('[data-testid="cm-cc-where"]')!.textContent).toBe('On campus'); // not "At the main gate": you are on the lawn
+      expect(q('[data-testid="cm-drop-pin"]')).toBeNull();
     } finally { delete proto.getScreenCTM; delete proto.createSVGPoint; }
   });
 

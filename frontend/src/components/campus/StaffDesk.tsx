@@ -1,4 +1,4 @@
-import React, { Suspense, lazy, useRef, useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { StaffDesk as Desk } from './campusPeopleApi';
 import { initialsOf } from './WhoIsHere';
@@ -6,22 +6,10 @@ import { hasDmHost, openDmThroughShell } from './dmHost';
 import { openDm, sendDmMessage } from '../../services/dmApi';
 import { art } from './art/artColor';
 import { staffRole, staffTone } from './staffCard';
+import AskMaya from './AskMaya';
 
-// C6: Maya is the website's admissions chat. Loaded only when a learner asks, so portal pages do not carry it otherwise.
-const MayaChatWidget = lazy(() => import('../MayaChatWidget'));
-
-/** True when this browser already has the public site's visitor id (written only by the site's own tracker). The campus
- *  only READS it: creating one in the portal would be a tracking/consent change, which is Ali's decision. */
-export function hasSiteVisitorId(): boolean {
-  try { return !!window.localStorage.getItem('cb_visitor_fp'); } catch { return false; }
-}
-
-/** The widget hides itself entirely for Do Not Track browsers (site and campus alike); the desk says so instead. */
-export function doNotTrackOn(): boolean {
-  return typeof navigator !== 'undefined' && navigator.doNotTrack === '1';
-}
-
-const ENROLL_PAGE = '/enroll';
+// C6: Maya's chat (and the visitor-id and Do Not Track checks) live in AskMaya since C54, shared with the Explorer's pass on Today.
+export { hasSiteVisitorId, doNotTrackOn } from './AskMaya';
 
 /**
  * An AI staff member's card (Colaberry Campus C5; WP-5 the prototype's staff popover, D:2578-2583): Reese (Commons), Dara
@@ -47,7 +35,6 @@ export default function StaffDesk({ desk: d, onMessaged, place, here = false, wo
   const host = hasDmHost();
   const live = d.on_duty && !!d.enrollment_id && host;
   const [note, setNote] = useState('');
-  const [mayaOpen, setMayaOpen] = useState(false);
   const isMaya = d.id === 'maya';
   const busy = useRef(false);
 
@@ -86,25 +73,7 @@ export default function StaffDesk({ desk: d, onMessaged, place, here = false, wo
         <a href="/portal/community/people" target="_blank" rel="noopener noreferrer">Profile <span aria-hidden="true">↗</span></a>
       </div>}
       {d.on_duty && !host && !isMaya && <p className="cm-pc-note">Open <Link to="/portal/today">Today</Link> to message {d.name}.</p>}
-      {isMaya && d.on_duty && doNotTrackOn() && (
-        <p className="cm-pc-note" data-testid="cm-maya-dnt">Your browser asks sites not to track you, so Maya's chat stays hidden.</p>
-      )}
-      {isMaya && d.on_duty && !doNotTrackOn() && (hasSiteVisitorId()
-        ? <button type="button" className="cm-btn is-secondary" data-testid="cm-ask-maya" onClick={() => setMayaOpen(true)}>Ask Maya about enrolling</button>
-        : (
-          <>
-            <a className="cm-btn is-secondary" href={ENROLL_PAGE} target="_blank" rel="noopener noreferrer" data-testid="cm-ask-maya-site">Ask Maya about enrolling</a>
-            <p className="cm-pc-note">Maya chats on our enrollment page; it opens in a new tab.</p>
-          </>
-        ))}
-      {isMaya && mayaOpen && (
-        // C11: Esc inside Maya's chat closes the chat, not the card and map around it.
-        <div onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); setMayaOpen(false); } }} data-testid="cm-maya-chat">
-          <Suspense fallback={null}>
-            <MayaChatWidget mode="embedded" open onClose={() => setMayaOpen(false)} />
-          </Suspense>
-        </div>
-      )}
+      {isMaya && d.on_duty && <AskMaya />}
       {note && <p className="cm-pc-note" role="status">{note}</p>}
     </div>
   );

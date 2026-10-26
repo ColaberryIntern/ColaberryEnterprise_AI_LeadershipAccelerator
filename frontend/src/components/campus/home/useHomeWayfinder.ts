@@ -6,6 +6,9 @@ import type { PersonCardTarget } from '../CampusContext';
 import type { WfContext, WfItem } from '../wayfinderIndex';
 import { mayaAllowedFor } from '../campusPeople';
 import type { NowRow, Urgent } from './rightNow';
+import { openBookCall } from '../admissions/admissionsCallApi';
+import { openBoard } from '../board/boardApi';
+import { openOrderSheet } from '../chow/OrderSheet';
 
 /**
  * What the campus home's Wayfinder searches and what a pick does (WP-4): its context (the buildings and rooms this viewer has,
@@ -24,7 +27,10 @@ export function useHomeWayfinder(o: {
     desks: desks.filter((d) => d.id !== 'maya' || mayaAllowedFor(audience)), urgent, suggested,
   }), [audience, workplace, buildings, accessOf, presence, presenceError, desks, urgent, suggested]);
   const onPick = useCallback((it: WfItem) => {
-    if (it.kind === 'person' && it.person) openPerson({ person: it.person, buildingId: it.buildingId });
+    if (it.kind === 'book') openBookCall();
+    else if (it.kind === 'board') openBoard({ walk: true }); // C30: walk to the Community Board and open it
+    else if (it.kind === 'food') { goTo('chow'); openOrderSheet(); } // C39: walk to Chow Hall and open the order sheet
+    else if (it.kind === 'person' && it.person) openPerson({ person: it.person, buildingId: it.buildingId });
     else goTo(it.buildingId, { run: !!it.run, flashRoom: it.kind === 'room' ? it.route ?? null : null });
   }, [goTo, openPerson]);
   return { ctx, onPick };

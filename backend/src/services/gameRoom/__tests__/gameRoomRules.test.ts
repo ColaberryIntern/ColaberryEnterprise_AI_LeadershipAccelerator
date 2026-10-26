@@ -23,8 +23,9 @@ describe('acceptScore', () => {
   it('accepts zero', () => { expect(acceptScore('launch-lab', 0, 0)).toBe(true); });
 });
 
-it('isGame knows exactly the three games', () => {
-  expect(GAMES).toEqual(['byte-chase', 'launch-lab', 'bug-breaker']);
+it('isGame knows exactly the five games (C35 added Stack Drop and Token Trail)', () => {
+  expect(GAMES).toEqual(['byte-chase', 'launch-lab', 'bug-breaker', 'stack-drop', 'token-trail']);
+  expect(isGame('stack-drop')).toBe(true);
   expect(isGame('byte-chase')).toBe(true);
   expect(isGame('pac')).toBe(false);
   expect(isGame(3)).toBe(false);

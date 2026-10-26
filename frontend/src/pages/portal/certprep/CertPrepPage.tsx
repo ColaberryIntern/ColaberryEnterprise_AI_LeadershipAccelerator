@@ -15,6 +15,7 @@ import {
   getCertPrepSummary,
   getCertDomains,
 } from '../../../services/certPrepApi';
+import { certPrepNextAction } from './certPrepNextAction';
 import './certPrep.css';
 
 /**
@@ -117,26 +118,8 @@ const CertPrepPage: React.FC = () => {
 
   useEffect(() => { void load(); }, [load]);
 
-  /** The single recommended action, derived from the weakest sampled domain. */
-  const nextAction = useMemo(() => {
-    if (!readiness || readiness.overall_state === 'not_measured') {
-      return { label: 'Take the baseline diagnostic', mode: 'diagnostic' as const, domainIds: undefined };
-    }
-    const sampled = readiness.domain_breakdown.filter((d) => d.answered > 0 && d.knowledge_pct !== null);
-    const unsampled = readiness.domain_breakdown.find((d) => d.answered === 0);
-    // An untouched domain outranks a merely weak one: breadth is what moves
-    // confidence, and confidence is what gates the badge.
-    if (unsampled) {
-      const label = domains.find((d) => d.domain_id === unsampled.domain_id)?.label ?? unsampled.domain_id;
-      return { label: `Practise ${label}`, mode: 'practice' as const, domainIds: [unsampled.domain_id] };
-    }
-    if (sampled.length > 0) {
-      const weakest = sampled.reduce((a, b) => ((a.knowledge_pct ?? 1) <= (b.knowledge_pct ?? 1) ? a : b));
-      const label = domains.find((d) => d.domain_id === weakest.domain_id)?.label ?? weakest.domain_id;
-      return { label: `Drill ${label}`, mode: 'practice' as const, domainIds: [weakest.domain_id] };
-    }
-    return { label: 'Start a practice set', mode: 'practice' as const, domainIds: undefined };
-  }, [readiness, domains]);
+  /** The single recommended action (certPrepNextAction: shared with the campus room's board). */
+  const nextAction = useMemo(() => certPrepNextAction(readiness, domains), [readiness, domains]);
 
   const startRun = (mode: 'diagnostic' | 'practice' | 'mock', domainIds?: string[]) => {
     setRunnerDomains(domainIds);

@@ -28,6 +28,10 @@ export interface GovBuildStoryEvidenceAttributes {
   submitted_at?: Date;
   reviewed_by_identity_id: string | null;
   reviewed_at: Date | null;
+  /** Where the hand-in came from: a student's manual submission, or an auto-match of a build-repo push. */
+  source?: 'student' | 'github_push';
+  /** The commit this evidence matched (github_push only); null for a manual hand-in. Unique per (story, commit). */
+  commit_sha?: string | null;
 }
 
 class GovBuildStoryEvidence extends Model<GovBuildStoryEvidenceAttributes> implements GovBuildStoryEvidenceAttributes {
@@ -42,6 +46,8 @@ class GovBuildStoryEvidence extends Model<GovBuildStoryEvidenceAttributes> imple
   declare submitted_at: Date;
   declare reviewed_by_identity_id: string | null;
   declare reviewed_at: Date | null;
+  declare source: 'student' | 'github_push';
+  declare commit_sha: string | null;
 }
 
 GovBuildStoryEvidence.init(
@@ -57,6 +63,8 @@ GovBuildStoryEvidence.init(
     submitted_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
     reviewed_by_identity_id: { type: DataTypes.UUID, allowNull: true },
     reviewed_at: { type: DataTypes.DATE, allowNull: true },
+    source: { type: DataTypes.STRING(20), allowNull: false, defaultValue: 'student' },
+    commit_sha: { type: DataTypes.STRING(64), allowNull: true },
   },
   {
     sequelize,

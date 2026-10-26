@@ -9,7 +9,9 @@ import {
 import {
   WorkspaceRepoView, ConnectStateView, getWorkspaceRepo,
 } from '../../../services/workspaceRepoApi';
-import WorkspaceRepoPanel, { repoConnectionState } from './WorkspaceRepoPanel';
+import { foldConnect } from './foldConnect';
+import { repoConnectionState } from './WorkspaceRepoPanel';
+import HowToBuild from './HowToBuild';
 import { refreshProjectsFromBackend } from './projectSync';
 import { useStoryVerification } from './useStoryVerification';
 import AcceptanceChecklist from './AcceptanceChecklist';
@@ -18,12 +20,13 @@ import DemoEvidencePanel, { isPrepStory } from './DemoEvidencePanel';
 import PresentationStudio from './presentation/PresentationStudio';
 import { usePortalFlags } from '../../../hooks/usePortalFlags';
 import { useIsExplorer } from '../useIsExplorer';
-import {
-  useAgentAttachments, AttachButton, AttachmentTray, DropOverlay, SentAttachments,
-  type SentAttachment,
-} from '../../../components/portal/AgentAttachments';
-import { copyText } from '../../../utils/clipboard';
-import { troubleshootingPrompt } from './troubleshootingPrompt';
+import { useAgentAttachments } from '../../../components/portal/AgentAttachments';
+import MentorRail, { type MentorMsg, type MentorMode } from '../../../components/portal/workspace/MentorRail';
+import WorkspaceStuckHelp from './WorkspaceStuckHelp';
+import { useCampus } from '../../../components/campus/CampusContext';
+import WorkstationShell from '../../../components/campus/workstation/WorkstationShell';
+import RepoTerminal from '../../../components/campus/workstation/RepoTerminal';
+import { storyBench, storyTitle, workstationBuilding, workstationPlace } from '../../../components/campus/workstation/workstationModel';
 
 /**
  * ProjectWorkspacePage — the build-side twin of the classroom's RuntimeWorkspace.
@@ -46,8 +49,8 @@ import { troubleshootingPrompt } from './troubleshootingPrompt';
  * <=760px block in runtimeCss for the matching density pass.
  */
 
-type Msg = { role: 'user' | 'assistant'; content: string; attachments?: SentAttachment[] };
-type Mode = 'ask' | 'hint' | 'explain' | 'review';
+type Msg = MentorMsg;
+type Mode = MentorMode;
 
 const ProjectWorkspacePage: React.FC = () => {
   const { projectId: routeProjectId = '', taskId = '' } = useParams();
@@ -73,9 +76,6 @@ const ProjectWorkspacePage: React.FC = () => {
 
   const [project, setProject] = useState<StudentProject | null>(null);
   const [tick, setTick] = useState(0);          // bumped after a store mutation
-  const [copied, setCopied] = useState(false);
-  const [helpCopied, setHelpCopied] = useState(false);
-  const [helpOpen, setHelpOpen] = useState(false);
   const [busy, setBusy] = useState('');
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [mentorInput, setMentorInput] = useState('');
@@ -88,14 +88,6 @@ const ProjectWorkspacePage: React.FC = () => {
   // on text OR a finished upload — but never while one is still in flight,
   // which would send a turn missing the very thing it is about.
   const canSend = (mentorInput.trim().length > 0 || attach.refs().length > 0) && !attach.busy;
-
-  // The prompt opens CLOSED. At half screen — the posture this page is actually
-  // used in, editor in the other half — a 340px <pre> IS the column, so the page
-  // led with the thing a student pastes instead of the thing they have to
-  // understand before pasting it. Reset per task so every story reads the same
-  // way the last one did.
-  const [promptOpen, setPromptOpen] = useState(false);
-  useEffect(() => { setPromptOpen(false); }, [taskId]);
 
   // Acceptance ticks are the student's own working memory ("have I got that one
   // yet?"), so they survive a reload. Deliberately localStorage and NOT the
@@ -226,26 +218,8 @@ const ProjectWorkspacePage: React.FC = () => {
     }
   }, [msgs, projectId, task, attach]);
 
-  /**
-   * The connect endpoints answer with the CONNECT state, not the whole workspace
-   * view. Folding it onto the view the page already holds keeps one source of
-   * truth for "where is this repo up to" — the panel reads `repo.connect` and
-   * nothing has to reconcile two objects that describe one repo.
-   */
-  const applyConnect = useCallback((next: ConnectStateView) => {
-    setRepo((prev) => ({
-      connected: Boolean(next.owner && next.repo && next.state === 'connected'),
-      provisioned: Boolean(next.owner && next.repo && next.state === 'connected'),
-      repo_url: next.url ?? prev?.repo_url ?? null,
-      repo_owner: next.state === 'connected' ? next.owner : prev?.repo_owner ?? null,
-      repo_name: next.state === 'connected' ? next.repo : prev?.repo_name ?? null,
-      student_github_login: prev?.student_github_login ?? null,
-      file_count: prev?.file_count ?? null,
-      last_sync: prev?.last_sync ?? null,
-      recent_commits: prev?.recent_commits ?? [],
-      connect: next,
-    }));
-  }, []);
+  // Fold the connect endpoints' CONNECT state onto the view (foldConnect: one source of truth for the repo).
+  const applyConnect = useCallback((next: ConnectStateView) => { setRepo((prev) => foldConnect(prev, next)); }, []);
 
   // Hook: above the early return below, as every hook must be.
   const demo = useIsExplorer();   // Explorer = demo mode: nothing is handed in for real
@@ -256,6 +230,8 @@ const ProjectWorkspacePage: React.FC = () => {
   // and would lock onto "flag off" permanently even after the real value arrives.
   const { flags } = usePortalFlags();
   const studioOn = flags?.presentation_studio ?? false;
+  // C19: with the campus on, the same page is drawn as the workstation (the shell only arranges what is built below).
+  const campus = useCampus();
   if (!project || !task) {
     return (
       <div className="rt" data-theme={theme}>
@@ -305,62 +281,21 @@ const ProjectWorkspacePage: React.FC = () => {
   // a lone step numbered 2 reads like something failed to load.
   const buildStepNo = acceptance.length ? 2 : 1;
 
-  const copyPrompt = () => {
-    if (navigator.clipboard && prompt) navigator.clipboard.writeText(prompt);
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 1600);
-  };
+  // Only rendered once the student's Command Center is actually running.
+  // An <a> rather than a <button> because it navigates: middle-click,
+  // copy-link and the screen-reader link role all come free, and a
+  // button faking navigation gives up all three. The URL is
+  // https-validated server-side (projectTreeDto.commandCenterUrl), so
+  // there is nothing left to check here. 
+  const commandCenter = project.commandCenterUrl ? (
+    <a className="rt-btn" href={project.commandCenterUrl} target="_blank" rel="noopener noreferrer" title="Open your Command Center in a new tab">
+      Command Center ↗
+    </a>
+  ) : null;
+  const pill = <span className={`rt-pill ${done ? 'done' : ''}`}>{done ? '✓ Completed' : blocked.blocked ? 'Waiting on another task' : 'In progress'}</span>;
 
-  // The troubleshooting prompt names the open story so the student does not have
-  // to explain which piece of work they are on.
-  const helpPrompt = troubleshootingPrompt(task.title);
-  const copyTroubleshooting = () => {
-    // `copyText`, not `navigator.clipboard` directly: the latter is undefined on
-    // a plain-http origin and would no-op silently, which for a stuck student
-    // reads as one more thing that does not work.
-    copyText(helpPrompt).catch(() => { /* the prompt is on screen to select by hand */ });
-    setHelpCopied(true);
-    window.setTimeout(() => setHelpCopied(false), 1600);
-  };
-
-  return (
-    <div className="rt" data-theme={theme}>
-      <style>{runtimeCss}</style>
-
-      <header className="rt-top">
-        <button className="rt-back" onClick={goBack} aria-label="Back to Projects" title="Back to Projects">
-          <svg viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
-        </button>
-        <div>
-          <div className="rt-kick">{listName || project.name}{task.storyId ? ` · ${task.storyId}` : ''}</div>
-          <div className="rt-title">{task.title}</div>
-        </div>
-        <div className="rt-topright">
-          {/* Only rendered once the student's Command Center is actually running.
-              An <a> rather than a <button> because it navigates: middle-click,
-              copy-link and the screen-reader link role all come free, and a
-              button faking navigation gives up all three. The URL is
-              https-validated server-side (projectTreeDto.commandCenterUrl), so
-              there is nothing left to check here. */}
-          {project.commandCenterUrl && (
-            <a
-              className="rt-btn"
-              href={project.commandCenterUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              title="Open your Command Center in a new tab"
-            >
-              Command Center ↗
-            </a>
-          )}
-          <span className={`rt-pill ${done ? 'done' : ''}`}>{done ? '✓ Completed' : blocked.blocked ? 'Waiting on another task' : 'In progress'}</span>
-        </div>
-      </header>
-
-      <div className="rt-body">
-        {/* CENTER — read in one order: what this story is, what done means,
-            then how to build it. */}
-        <main className="rt-mid">
+  // CENTER — read in one order: what this story is, what done means, then how to build it.
+  const centre = (<>
           {blocked.blocked && (
             <div className="rt-card" style={{ marginBottom: 14 }}>
               <div className="rt-lab">Not yet</div>
@@ -424,153 +359,14 @@ const ProjectWorkspacePage: React.FC = () => {
             repoConnected={repoConnectionState(repo) === 'connected'}
           />
 
-          {/* HOW TO BUILD IT — the prompt and the repo are the same job (get to
-              work), so they sit under one heading instead of reading as two
-              more peers of the story.
-              ── THE REPO COMES FIRST, AND THAT ORDER IS LOAD-BEARING ──────────
-              This section used to render the prompt above the connect panel,
-              which invited the student to read top-to-bottom and paste the
-              prompt before connecting anything. STORY-000's prompt opens with
-              "Step 1 — let the platform see your pushes", and that step tells
-              the agent to find the panel **Let the platform see your pushes**
-              in the workspace. That panel is rendered by WorkspaceRepoPanel
-              ONLY in its `connected` branch, so on an unconnected project it
-              does not exist yet: the very first instruction of the prompt
-              pointed at something the page had not drawn. Swati Raman, running
-              STORY-000 herself as curriculum owner, reported exactly this on
-              2026-08-19 — repository setup should come first, then the build
-              prompt. Connect first and the prompt's Step 1 has a panel to find.
-              Keep the repo panel above the prompt. */}
-          <section className="rt-step">
-            <div className="rt-step-h">
-              <span className="rt-step-n">{buildStepNo}</span>
-              <span className="rt-step-t">How to build it</span>
-            </div>
-
-            {/* The connect step. Owns its own busy/error state because it is a
-                small state machine (validate → prove → bind) and threading that
-                through the page's single `busy` string made both harder to read. */}
-            <WorkspaceRepoPanel
-              projectId={projectId}
-              repo={repo}
-              onRepoChange={setRepo}
-              onConnectChange={applyConnect}
-            />
-
-            <div className="rt-card">
-              <div className="rt-prompt-h">
-                <div className="rt-lab" style={{ margin: 0 }}>Your Claude Code prompt</div>
-                <div className="rt-prompt-acts">
-                  {/* Copy is ALWAYS visible: collapsing the prompt must not cost
-                      the student the one action they came here for. */}
-                  <button className={`rt-btn${copied ? ' pri' : ''}`} onClick={copyPrompt} disabled={!prompt}>
-                    {copied ? 'Copied' : 'Copy'}
-                  </button>
-                  <button
-                    className="rt-btn"
-                    onClick={() => setPromptOpen((o) => !o)}
-                    aria-expanded={promptOpen}
-                    aria-controls="rt-prompt-body"
-                    disabled={!prompt}
-                  >
-                    {promptOpen ? 'Hide the full prompt' : 'Show the full prompt'}
-                  </button>
-                </div>
-              </div>
-              {promptOpen ? (
-                <pre id="rt-prompt-body" className="rt-in mono rt-prompt-full">
-                  {prompt || 'This task has no prompt yet.'}
-                </pre>
-              ) : (
-                // A two-line clamp, so the student can still recognise the
-                // prompt without it swallowing the column.
-                <p id="rt-prompt-body" className="rt-prompt-peek">
-                  {prompt || 'This task has no prompt yet.'}
-                </p>
-              )}
-            </div>
-          </section>
+          {/* HOW TO BUILD IT — the repo first, then the prompt: see HowToBuild. */}
+          <HowToBuild stepNo={buildStepNo} projectId={projectId} taskId={taskId} prompt={prompt} repo={repo} onRepoChange={setRepo} onConnectChange={applyConnect} />
 
           {/* Two doors, named by the KIND OF PROBLEM rather than by the tool,
               because a student who knew which tool to pick was never stuck in
               the first place. Rendered even on a blocked story: being blocked is
               one of the things people need to ask about. */}
-          <section className="rt-step" aria-labelledby="rt-help-h">
-            <div className="rt-step-h">
-              <span className="rt-step-t" id="rt-help-h">If you get stuck</span>
-            </div>
-
-            <p className="rt-help-lead">
-              You can ask <strong>either Cory or Claude</strong>. When the trouble is inside the
-              project you are building, <strong>Claude Code</strong> is the more direct route,
-              because it can read and change the code on your computer. <strong>Cory</strong> can
-              see this page, your story, your steps, and what the portal has recorded.
-            </p>
-
-            <div className="rt-doors">
-              <div className="rt-door">
-                <div className="rt-door-h">Something on this page looks wrong</div>
-                <p className="rt-door-p">Ask Cory, in the chat box on this page.</p>
-                <ul className="rt-door-eg">
-                  <li>The page says 0 of 3 finished, but you think you are done.</li>
-                  <li>A step is locked and you do not know why.</li>
-                  <li>You cannot work out what the story is asking you for.</li>
-                  <li>A button does not seem to do anything.</li>
-                </ul>
-                <p className="rt-door-p">
-                  You do not have to type the problem out. Take a screenshot and paste it straight
-                  into Cory&apos;s box, or drag the image onto it, and Cory will read it.
-                </p>
-              </div>
-
-              <div className="rt-door">
-                <div className="rt-door-h">Your own code is not working</div>
-                <p className="rt-door-p">Ask Claude Code, in the terminal where you build.</p>
-                <ul className="rt-door-eg">
-                  <li>You get an error when you run your project.</li>
-                  <li>A test will not pass.</li>
-                  <li>Something you wrote does not do what you expected.</li>
-                </ul>
-                <p className="rt-door-p">
-                  Copy the prompt below, paste it into Claude Code, and fill in the two lines it
-                  asks you for.
-                </p>
-                {/* Collapsed on arrival for the same reason the build prompt is:
-                    at half screen a tall slab of text IS the column. Copy stays
-                    visible, so collapsing costs the student nothing. */}
-                {helpOpen && (
-                  <pre id="rt-troubleshoot-prompt" className="rt-in mono rt-troubleshoot">
-                    {helpPrompt}
-                  </pre>
-                )}
-                <div className="rt-door-acts">
-                  <button
-                    className={`rt-btn${helpCopied ? ' pri' : ''}`}
-                    onClick={copyTroubleshooting}
-                  >
-                    {helpCopied ? 'Copied' : 'Copy the troubleshooting prompt'}
-                  </button>
-                  <button
-                    className="rt-btn"
-                    onClick={() => setHelpOpen((o) => !o)}
-                    aria-expanded={helpOpen}
-                    aria-controls="rt-troubleshoot-prompt"
-                  >
-                    {helpOpen ? 'Hide the prompt' : 'Show the prompt'}
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* The caveat, kept deliberately as a short note rather than a warning.
-                It has to point a portal question at Cory without reading as a
-                reason to avoid Claude Code, which is what the previous wording
-                did — reviewed and approved by Swati Raman. */}
-            <p className="rt-door-warn">
-              One note: Claude Code cannot see the portal, so if your question is about what this
-              page is showing you, ask Cory instead.
-            </p>
-          </section>
+          <WorkspaceStuckHelp taskTitle={task.title} />
 
           {!blocked.blocked && (
             <StoryCompletionPanel
@@ -594,61 +390,84 @@ const ProjectWorkspacePage: React.FC = () => {
             />
           )}
           </>)}
-        </main>
+  </>);
 
-        {/* RIGHT — the mentor, same coach the classroom uses */}
-        {/* The drop target is the whole mentor rail, not just the input: a
-            student dragging a screenshot aims at the conversation, which is
-            the big obvious target, not at a 34px text box. */}
-        <aside className="rt-mentor" style={{ position: 'relative' }} {...attach.dropProps}>
-          <DropOverlay active={attach.dragging} label="Drop to show Cory" />
-          <div className="rt-mentor-h"><span className="rt-dot" /> Cory</div>
-          <div className="rt-thread">
-            {msgs.map((m, i) => (
-              <div key={i} className={`rt-msg ${m.role}`}>
-                {m.content}
-                <SentAttachments items={m.attachments} />
-              </div>
-            ))}
-            <div ref={mentorEnd} />
-          </div>
-          <div className="rt-modes">
-            {(['hint', 'explain', 'review'] as const).map((mo) => (
-              <button
-                key={mo}
-                className="rt-chip"
-                disabled={busy === 'mentor'}
-                onClick={() => ask(mo, mo === 'review'
-                  ? 'Review what I have built for this story so far.'
-                  : `Give me a ${mo} for this story.`)}
-              >
-                {mo}
-              </button>
-            ))}
-          </div>
-          <AttachmentTray items={attach.items} notice={attach.notice} onRemove={attach.remove} />
-          <div className="rt-ask">
-            <AttachButton onFiles={attach.addFiles} disabled={busy === 'mentor'} />
-            <input
-              className="rt-in"
-              value={mentorInput}
-              onChange={(e) => setMentorInput(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && canSend && ask('ask', mentorInput || 'Take a look at this.')}
-              placeholder="Ask your mentor, or paste a screenshot…"
-              {...attach.pasteProps}
-            />
-            <button className="rt-btn pri" disabled={busy === 'mentor' || !canSend} onClick={() => ask('ask', mentorInput || 'Take a look at this.')}>Send</button>
-          </div>
-        </aside>
-      </div>
+  // RIGHT — the mentor, same coach the classroom uses.
+  const mentor = (
+    <MentorRail
+      msgs={msgs}
+      busy={busy === 'mentor'}
+      attach={attach}
+      input={mentorInput}
+      onInput={setMentorInput}
+      canSend={canSend}
+      onAsk={ask}
+      shortcut={(mo) => (mo === 'review' ? 'Review what I have built for this story so far.' : `Give me a ${mo} for this story.`)}
+      endRef={mentorEnd}
+      subtitle={campus.active ? `Your mentor for ${task.storyId || task.title}` : undefined}
+    />
+  );
 
-      {/* BOTTOM — where this build stands */}
-      <footer className="rt-bar">
+  // BOTTOM — where this build stands.
+  const stats = (<>
         <div className="rt-stat"><span className="l">Build</span><span className="v sm">{project.name}</span></div>
         <div className="rt-stat"><span className="l">Release</span><span className="v sm">{listName || '—'}</span></div>
         <div className="rt-stat"><span className="l">Tasks done</span><span className="v">{prog.done}<small>/{prog.total}</small></span></div>
         <div className="rt-stat"><span className="l">Progress</span><span className="v">{prog.pct}%</span></div>
         {repo?.provisioned && <div className="rt-stat"><span className="l">GitHub</span><span className="v">{repo.recent_commits?.length ?? 0}<small> commits</small></span></div>}
+  </>);
+
+  if (campus.active) {
+    const release = project.lists.find((l) => l.tasks.some((t) => t.id === task.id))?.tasks ?? [task];
+    return (
+      <WorkstationShell
+        theme={theme}
+        place={workstationPlace(workstationBuilding(backTo, 'studio'), campus.settings.workplaceNames)}
+        cardTitle={storyTitle(task.storyId, task.title)}
+        heading={{ kicker: `${listName || project.name}${task.points ? ` · +${task.points} pts` : ''}`, title: storyTitle(task.storyId, task.title) }}
+        pill={pill}
+        actions={commandCenter}
+        bench={storyBench(release, task.id, (t) => `/portal/projects/workspace/${project.id}/${encodeURIComponent(t.storyId || t.id)}`)}
+        left={<RepoTerminal repo={repo} />}
+        mentor={mentor}
+        status={stats}
+      >
+        {centre}
+      </WorkstationShell>
+    );
+  }
+
+  return (
+    <div className="rt" data-theme={theme}>
+      <style>{runtimeCss}</style>
+
+      <header className="rt-top">
+        <button className="rt-back" onClick={goBack} aria-label="Back to Projects" title="Back to Projects">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+        </button>
+        <div>
+          <div className="rt-kick">{listName || project.name}{task.storyId ? ` · ${task.storyId}` : ''}</div>
+          <div className="rt-title">{task.title}</div>
+        </div>
+        <div className="rt-topright">
+          {commandCenter}
+          {pill}
+        </div>
+      </header>
+
+      <div className="rt-body">
+        {/* CENTER — read in one order: what this story is, what done means,
+            then how to build it. */}
+        <main className="rt-mid">
+          {centre}
+        </main>
+
+        {mentor}
+      </div>
+
+      {/* BOTTOM — where this build stands */}
+      <footer className="rt-bar">
+        {stats}
       </footer>
     </div>
   );

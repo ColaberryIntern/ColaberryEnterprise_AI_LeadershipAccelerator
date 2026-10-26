@@ -4,6 +4,7 @@ import { buildingName } from '../campusMap';
 import type { PlanStop } from '../campusPlan';
 import { canComplete } from '../campusPlan';
 import type { CompleteResult } from '../campusPlanApi';
+import { theName } from './conciergeCopy';
 import '../campusHome.css'; // the panel's card styles, shared by the page rail (all selectors are cm- scoped)
 
 /**
@@ -77,8 +78,8 @@ export function RoomsHere({ building: b, workplaceNames, onOpen }: { building: C
   const rooms = b.rooms.filter((r) => !r.planned); // the Main Gate has no live rooms, so nothing shows there
   if (!rooms.length) return null;
   return (
-    <section className="cm-rooms-here" aria-label={`Rooms in the ${buildingName(b, workplaceNames)}`} data-testid="cm-rooms-here">
-      <div className="cm-sec">Rooms in the {buildingName(b, workplaceNames)}</div>
+    <section className="cm-rooms-here" aria-label={`Rooms in ${theName(b, workplaceNames)}`} data-testid="cm-rooms-here">
+      <div className="cm-sec">Rooms in {theName(b, workplaceNames)}</div>
       <div className="cm-chips">
         {rooms.map((r) => (
           <button key={r.route} type="button" onClick={() => onOpen(r.route)} data-testid="cm-rooms-here-room">
@@ -138,9 +139,9 @@ export function TourOffer(p: TourOfferProps): React.ReactElement | null {
     );
   }
   const min = tourMinutes(n);
-  const head = partner ? '▶ Start the partner tour' : p.audience === 'explorer' ? '🧭 Take the tour' : '🧭 What’s in your seat?';
+  const head = partner ? '▶ Start the partner tour' : p.audience === 'explorer' ? '🧭 Take the explorer tour' : '🧭 What’s in your seat?';
   const body = partner ? `${n} stops, about ${min} min. See where your people learn and build.`
-    : p.audience === 'explorer' ? `${n} stops, about ${min} min. See what your pass opens and what enrolling adds.`
+    : p.audience === 'explorer' ? `A ${min}-minute walk through ${n} places. It starts at Today, your home base.` // C53 (v13 T5)
       : `A ${min}-minute walk through the ${n} places your enrollment unlocks, including a few most people miss.`;
   return (
     <div className={cls} data-testid="cm-cc-tour" data-state="idle">

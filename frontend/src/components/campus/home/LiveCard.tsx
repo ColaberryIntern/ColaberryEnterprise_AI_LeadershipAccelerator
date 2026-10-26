@@ -55,12 +55,14 @@ export default function LiveCard({ title, buildingId, place = null, audience = '
   const sub = [place, live ? liveSub(live.b, live.now) : null].filter(Boolean).join(' · ');
   return (
     <div className="cm-cc-livecard" data-testid="cm-cc-live">
-      <div className="cm-lc-top"><span className={`cm-lb-chip ${chip.tone}`}>{chip.chip}</span><span className="cm-lc-brand">Colaberry Live</span></div>
+      {/* C31 (v7 R4): "Happening now", the very top of the side panel while Colaberry Live is on air */}
+      <div className="cm-lc-kicker" data-testid="cm-cc-live-kicker">Happening now</div>
+      <div className="cm-lc-top"><span className={`cm-lb-chip ${chip.tone}`}>{chip.chip}</span><span className="cm-lc-brand">Colaberry Live {state === 'live' ? 'is on air' : ''}</span></div>
       <div className="cm-lc-title">{title}</div>
       {(sub || suffix) && <div className="cm-lc-sub" data-testid="cm-cc-live-sub"><span aria-hidden="true">{sub}</span>{suffix}</div>}
       <div className="cm-lc-row">
         {buildingId && <button type="button" className="cm-btn-red" onClick={() => onWalk(buildingId, state === 'live')} data-testid="cm-cc-live-walk">
-          {state === 'backstage' ? 'Walk in early →' : 'Run to the hall →'}</button>}
+          {state === 'backstage' ? 'Walk in early →' : 'Walk in →'}</button>}
         {live?.b.can_watch && state !== 'backstage' && (watching
           ? <button type="button" className="cm-btn-ghost-w" onClick={close} data-testid="cm-cc-live-stop">⏸ Stop</button>
           : <button type="button" className="cm-btn-ghost-w" onClick={() => open({ occurrenceId: live.b.id, asset: 'master.m3u8', title: live.b.title })} data-testid="cm-cc-live-watch">▶ Watch here</button>)}

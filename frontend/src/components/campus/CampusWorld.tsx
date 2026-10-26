@@ -170,13 +170,14 @@ export default function CampusWorld(p: CampusWorldProps): React.ReactElement {
   // WP-1 R10 with WP-5's popover: a person card closing is a return to the campus too (when no other card is open)
   const hadPerson = useRef(false);
   useEffect(() => { if (hadPerson.current && !personCard && !anyCard) camApi.current?.recenter(); hadPerson.current = !!personCard; }, [personCard, anyCard, camApi]);
-  // C17 (round 3 §2.5): a click on open ground first closes whatever is open, in Esc's order (a popover, the locker, the room; the
-  // return recenters), else walks you there. Never during a tour: its stops are its route.
-  const onGroundClick = useCallback((spot: Pt) => {
+  // A click on open ground closes whatever is open, in Esc's order (a popover, the locker, the room; the return recenters). C49b
+  // (Ali, 2026-10-25: "If I click on something that is not a building or Community Board, don't try to navigate there. You should
+  // not be able to show navigating to a non place."): it never walks you to a patch of grass. Only places are walked to.
+  const onGroundClick = useCallback(() => {
     if (tour) return;
     if (pp.peekOpen) pp.closePeek(); else if (staff.open) staff.close(); else if (personCard) onClosePerson?.();
-    else if (panel) panel.onClose(); else if (openRef.current) setOpen(null); else walkSpot(spot);
-  }, [tour, pp, staff, personCard, onClosePerson, panel, walkSpot]);
+    else if (panel) panel.onClose(); else if (openRef.current) setOpen(null);
+  }, [tour, pp, staff, personCard, onClosePerson, panel]);
   const onCardRef = useRef(p.onCard); onCardRef.current = p.onCard;
   useEffect(() => { onCardRef.current?.({ open: anyCard, building: cardBuilding }); }, [anyCard, cardBuilding]);
   // The tour's STOP badges on the map (an Explorer's say what each stop is: "3 · OPEN"), the current stop green.
@@ -186,7 +187,7 @@ export default function CampusWorld(p: CampusWorldProps): React.ReactElement {
       <CampusWorldMap buildings={buildings} accessOf={accessOf} workplaceNames={workplaceNames} reduceMotion={reduceMotion}
         initialTarget={p.initialTarget} onArrive={onArrive} buildingRef={registerEl} counts={presenceError ? undefined : counts}
         people={pp.people} yours={pp.yours} onPeek={pp.openPeek} presenceDown={presenceError && presence !== undefined} walkRequest={walkRequest} onTravel={setTravel} onGroundClick={onGroundClick} onGround={p.onGround}
-        onAir={p.onAir} plan={p.plan?.stops} ownGear={p.ownGear} showOpen={audience === 'explorer'} camera={camera} desks={mapDesks}
+        onAir={p.onAir} plan={p.plan?.stops} ownGear={p.ownGear} showOpen={audience === 'explorer'} todayFlag={audience === 'explorer'} camera={camera} desks={mapDesks}
         me={p.me ?? (meInitials ? { initials: meInitials } : null)} hover={p.hover} startAt={p.startAt}
         liveMark={p.liveNow ? { state: p.liveNow.state, text: marqueeText(p.liveNow.b, p.liveNow.now) } : null} tourBadges={tourBadges} dimExcept={cardBuilding} moments={p.moments} quiet={p.quiet} />
       <CampusZoomControls apiRef={camApi} />
@@ -215,8 +216,8 @@ function travelPlace(t: Travel, buildings: CampusBuilding[], workplace: boolean)
   return b ? buildingName(b, workplace) : 'this spot';
 }
 
-/** The prototype's goThroughDoor zooms from the room's own back door, not the building on the map. */
-const doorRect = (): DOMRect | null => document.querySelector('[data-testid="cm-inside-door"] rect')?.getBoundingClientRect() ?? null;
+/** v6 D1: the page or workstation grows out of what you went through: your spot when you sat down, otherwise the board. */
+const doorRect = (): DOMRect | null => (document.querySelector('.cm-r3-spot.is-sit') ?? document.querySelector('[data-testid="cm-board"]'))?.getBoundingClientRect() ?? null;
 
 function PersonPopFor({ t, buildings, workplace, audience, here, reese, onClose, onWalkOver, onMessaged }: {
   t: PersonCardTarget; buildings: CampusBuilding[]; workplace: boolean; audience: CampusAudience; here: boolean; reese: boolean;

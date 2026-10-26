@@ -104,7 +104,7 @@ const q = (id: string) => container.querySelector(`[data-testid="${id}"]`);
 jest.setTimeout(15000);
 
 describe('on air, from discovery', () => {
-  it('a room broadcast lights the commons on the home map, and shows the strip with Watch and Go to the room', async () => {
+  it('a room broadcast lights the Events Hall on the home map (C28), and shows the strip with Watch and Go to the room', async () => {
     respond([LIVE]);
     await mount();
     // WP-3: the page bar's tile is the prototype's schematic (grey blocks and your pin), with no badges; the strip carries the news
@@ -119,10 +119,10 @@ describe('on air, from discovery', () => {
     expect(q('loc')?.textContent).toBe('/portal/rooms/room-7');
     act(() => { campus().openMap(); });
     await flush();
-    // WP-1: the map is the campus home; the commons is lit there, and only the commons.
+    // WP-1: the map is the campus home; C28: every broadcast airs in the Events Hall, lit there and only there.
     expect(q('loc')?.textContent).toBe('/portal/campus');
-    expect(container.querySelector('[data-testid="cm-home"] [data-testid="cm-onair-commons"]')).not.toBeNull();
-    expect(Array.from(container.querySelectorAll('[data-testid="cm-home"] [data-testid^="cm-onair-"]')).map((e) => e.getAttribute('data-testid'))).toEqual(['cm-onair-commons']);
+    expect(container.querySelector('[data-testid="cm-home"] [data-testid="cm-onair-amphi"]')).not.toBeNull();
+    expect(Array.from(container.querySelectorAll('[data-testid="cm-home"] [data-testid^="cm-onair-"]')).map((e) => e.getAttribute('data-testid'))).toEqual(['cm-onair-amphi']);
   });
   it('a broadcast with no room: the strip names it, no building lights, no Go to the room', async () => {
     respond([ROOMLESS]);
@@ -145,13 +145,13 @@ describe('on air, from discovery', () => {
 });
 
 describe('the crowd line', () => {
-  it('names the commons head count when someone is there', async () => {
+  it('names the Events Hall head count when someone is there (C28)', async () => {
     respond([LIVE]);
-    mockPresence = { commons: { count: 3 } };
+    mockPresence = { amphi: { count: 3 } };
     await mount();
-    expect(q('cm-live-crowd')?.textContent).toBe('3 in the Community Lounge now');
+    expect(q('cm-live-crowd')?.textContent).toBe('3 in the Events Hall now');
   });
-  it('is hidden when the commons count is unknown (no entry)', async () => {
+  it('is hidden when the hall count is unknown (no entry)', async () => {
     respond([LIVE]);
     mockPresence = { library: { count: 4 } };
     await mount();
@@ -160,7 +160,7 @@ describe('the crowd line', () => {
   });
   it('is hidden at zero', async () => {
     respond([LIVE]);
-    mockPresence = { commons: { count: 0 } };
+    mockPresence = { amphi: { count: 0 } };
     await mount();
     expect(q('cm-live')).not.toBeNull();
     expect(q('cm-live-crowd')).toBeNull();
@@ -175,7 +175,7 @@ describe('the pure rules', () => {
   });
   it('only a room broadcast has a building and a route; the headline prefers one with a room', () => {
     expect(Array.from(onAirBuildings([ROOMLESS]))).toEqual([]);
-    expect(Array.from(onAirBuildings([ROOMLESS, LIVE]))).toEqual(['commons']);
+    expect(Array.from(onAirBuildings([ROOMLESS, LIVE]))).toEqual(['amphi']);
     expect(roomRoute(ROOMLESS)).toBeNull();
     expect(roomRoute({ room_id: 'a b' })).toBe('/portal/rooms/a%20b');
     expect(headlineBroadcast([ROOMLESS, LIVE])).toBe(LIVE);

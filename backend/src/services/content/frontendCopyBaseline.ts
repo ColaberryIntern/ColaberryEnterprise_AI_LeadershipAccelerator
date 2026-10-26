@@ -101,7 +101,7 @@ export const FRONTEND_COPY_BASELINE: Readonly<Record<string, number>> = {
   'frontend/src/pages/portal/settings/SettingsPage.tsx': 1,
   'frontend/src/pages/portal/settings/SubscriptionSection.tsx': 4,
   'frontend/src/pages/portal/settings/TeamSection.tsx': 1,
-  'frontend/src/pages/portal/today/TodayShell.tsx': 7,
+  'frontend/src/pages/portal/today/TodayShell.tsx': 6,
   'frontend/src/pages/publicV2/HomeV2.tsx': 4,
   'frontend/src/pages/publicV2/PlatformV2.tsx': 2,
   'frontend/src/pages/publicV2/PricingV2.tsx': 5,
@@ -115,7 +115,7 @@ export const FRONTEND_COPY_BASELINE: Readonly<Record<string, number>> = {
  * 287 when first measured on 2026-10-06; **278** since 2026-10-13, when EnrollPage.tsx went to
  * zero. This number may only ever go DOWN.
  */
-export const FRONTEND_COPY_BASELINE_TOTAL = 275;
+export const FRONTEND_COPY_BASELINE_TOTAL = 274;
 
 /**
  * The scope the baseline was measured over. Anything outside it is NOT covered, and the

@@ -1,6 +1,6 @@
 /**
- * C9 gear drawing: every item the server catalog defines has a drawing in the right slot; your OWN ride shows only while your
- * avatar travels (never standing, never with reduce motion); nobody else's gear or ride is ever drawn; their chip dots carry the level.
+ * C9 gear drawing: every item the server catalog defines has a drawing in the right slot; C46: there are no rides, and an old saved
+ * ride draws nothing; nobody else's gear is drawn on the map; their chip dots carry the level.
  */
 import fs from 'fs';
 import path from 'path';
@@ -22,7 +22,7 @@ describe('the server catalog and the drawings agree', () => {
   it('found the catalog', () => { expect(items.length).toBeGreaterThanOrEqual(6); });
   it.each(items)('%s draws in its %s slot', (id, slot) => { expect(GEAR_DRAWINGS[id]).toBe(slot); });
   it.each(names)('%s is called %s, as on the server', (id, name) => { expect(GEAR_NAMES[id]).toBe(name); });
-  it('publicOnly drops a ride and anything in the wrong slot', () => {
+  it('publicOnly drops an old saved ride, unknown ids and anything in the wrong slot', () => {
     expect(publicOnly({ head: 'cap', ride: 'cruiser', face: 'board', neck: 'chain' })).toEqual({ head: 'cap', neck: 'chain' });
     expect(publicOnly(undefined)).toEqual({});
   });
@@ -47,29 +47,22 @@ const render = (el: React.ReactElement) => act(() => { root = root ?? createRoot
 const runFrames = (t: number) => act(() => { const fs2 = frames; frames = []; fs2.forEach((f) => f(t)); });
 const ride = () => container.querySelector('[data-testid="cm-ride"]');
 
-describe('your own ride, only while you travel', () => {
-  it('standing: gear on your pin, no ride; walking: the ride; arrived: gone', () => {
+describe('C46: walking only, no ride ever drawn', () => {
+  it('your pin keeps its gear while walking, and an old saved ride draws nothing', () => {
     root = createRoot(container);
-    render(map({ ownGear: { head: 'cap', ride: 'board' } }));
+    const oldLook = { head: 'cap', ride: 'board' } as unknown as React.ComponentProps<typeof CampusWorldMap>['ownGear'];
+    render(map({ ownGear: oldLook, walkRequest: { id: 'library', seq: 1 } }));
     expect(container.querySelector('[data-testid="cm-avatar"] [data-gear="cap"]')).not.toBeNull();
     expect(ride()).toBeNull();
-    render(map({ ownGear: { head: 'cap', ride: 'board' }, walkRequest: { id: 'library', seq: 1 } }));
-    expect(ride()?.getAttribute('data-ride')).toBe('board');
-    runFrames(0);
-    runFrames(100000); // far past the walk's duration: arrived
-    expect(ride()).toBeNull();
+    expect(container.querySelector('[data-ride]')).toBeNull();
   });
 
-  it('reduce motion: never a ride, even on a walk', () => {
+  it('the two jackets draw on your pin as a collar in their own colour', () => {
     root = createRoot(container);
-    render(map({ reduceMotion: true, ownGear: { ride: 'cruiser' }, walkRequest: { id: 'library', seq: 1 } }));
-    expect(ride()).toBeNull();
-  });
-
-  it('no ride equipped: nothing drawn under the pin while walking', () => {
-    root = createRoot(container);
-    render(map({ ownGear: { head: 'cap' }, walkRequest: { id: 'library', seq: 1 } }));
-    expect(ride()).toBeNull();
+    render(map({ ownGear: { body: 'architect' } }));
+    expect(container.querySelector('[data-testid="cm-avatar"] [data-gear="architect"]')?.getAttribute('class')).toBe('cm-gear-architect');
+    render(map({ ownGear: { body: 'jacket' } }));
+    expect(container.querySelector('[data-testid="cm-avatar"] [data-gear="jacket"]')?.getAttribute('class')).toBe('cm-gear-jacket');
   });
 });
 

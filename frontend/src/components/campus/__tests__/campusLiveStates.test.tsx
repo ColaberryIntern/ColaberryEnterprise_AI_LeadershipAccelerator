@@ -108,8 +108,8 @@ describe('the live bar', () => {
     tick(2000);
     expect(q('[data-testid="cm-live-sub"]')!.textContent).toBe('· on air for 4:14');
     click('[data-testid="cm-live-walk"]');
-    expect(walks).toEqual([['commons', true]]);
-    render(<CampusLive onWalk={() => undefined} hereId="commons" />);
+    expect(walks).toEqual([['amphi', true]]); // C28: the Events Hall
+    render(<CampusLive onWalk={() => undefined} hereId="amphi" />);
     expect(q('[data-testid="cm-live-here"]')!.textContent).toBe('You’re here');
   });
   it('on a page: Go to the room through the door; reconnecting: no run', () => {

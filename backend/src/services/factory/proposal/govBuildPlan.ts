@@ -124,6 +124,9 @@ export function buildGovStoryPrompt(story: GovBuildStory): string {
     '',
     '## Evidence to hand in',
     `A short description and screenshot(s) showing the requirement is met, traced back to ${story.requirementId}.`,
+    '',
+    '## When done',
+    `Commit your work in the build repo with \`${story.requirementId}\` in the commit message. The build cockpit matches that commit to this task and files it as evidence for your reviewer to verify — a matched commit proposes completion, it does not self-approve.`,
   ].join('\n');
 }
 

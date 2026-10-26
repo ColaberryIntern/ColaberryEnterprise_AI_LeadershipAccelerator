@@ -254,6 +254,12 @@ export const learnerSeriesQuerySchema = z
   .strict()
   .transform((q) => ({ days: q.days ?? 90 }));
 
+/** `GET /outreach` — the staff outreach list (2026-10-26): who to reach out to now, or who is most engaged. */
+export const outreachQuerySchema = z
+  .object({ view: z.enum(['reach_out', 'engaged']).optional(), limit: numericParam('limit', 1, 200).optional() })
+  .strict()
+  .transform((q) => ({ view: q.view ?? 'reach_out', limit: q.limit ?? 25 }));
+
 // ─── Inferred types — the contract as consumed by controllers ────────────────
 
 export type LearnerParams = z.infer<typeof learnerParamsSchema>;

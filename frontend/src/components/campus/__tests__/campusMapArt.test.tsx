@@ -110,15 +110,19 @@ describe('the map is drawn as the prototype draws it', () => {
 });
 
 describe('people on the map (C11b F13)', () => {
-  it('the on-duty AI desks stand at their buildings with a STAFF tag; Maya at her welcome desk by the gate; a press walks there', () => {
+  it('the on-duty AI desks stand at their buildings with a STAFF tag; C21: Maya on the Admissions building (no bench at the gate); a press walks there', () => {
     const arrived: string[] = [];
+    // an older server still says 'gate' for Maya: she is drawn on Admissions all the same
     render({ desks: [{ id: 'reese', name: 'Reese', building: 'commons' }, { id: 'maya', name: 'Maya', building: 'gate' }], onArrive: (id) => arrived.push(id) });
     const reese = q('[data-testid="cm-staff-reese"]')!;
     expect(reese.textContent).toContain('STAFF');
     expect(reese.getAttribute('aria-label')).toContain('Reese');
-    expect(q('[data-testid="cm-maya-desk"]')).not.toBeNull();
+    expect(q('[data-testid="cm-maya-desk"]')).toBeNull();
+    const maya = q('[data-testid="cm-staff-maya"]')!;
+    expect(maya.getAttribute('transform')).toMatch(/^translate\(6\d\d /); // on the Admissions building (x 614), not the gate (500)
     act(() => { reese.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
-    expect(arrived).toEqual(['commons']);
+    act(() => { maya.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+    expect(arrived).toEqual(['commons', 'admissions']);
   });
 
   it('no desks listed, no staff tokens; none on the compact maps', () => {

@@ -1,6 +1,6 @@
 /**
  * C5 AI staff desks: labelled as AI, initials in an AI ring (never a face), on duty vs "Back soon", Maya "opens soon",
- * a suggested question sent once, and Maya never rendered for members or business viewers even if the server sent her.
+ * a suggested question sent once. C21 (v6 D3): Maya sits in Admissions and is seen by every audience.
  */
 import React from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -16,6 +16,9 @@ jest.mock('../../../services/dmApi', () => ({
   myEnrollmentId: () => 'me',
 }));
 jest.mock('../campusPeopleApi', () => ({ postWave: () => Promise.resolve({ sent: true, reason: 'sent' }), fetchStaffDesks: () => Promise.resolve([]), fetchConversationsQuiet: () => Promise.resolve([]) }));
+// C21: the Admissions room reads "Your account" (Settings' sources); offline here, so its wall board simply does not draw
+jest.mock('../../../services/portalEnrollmentApi', () => ({ fetchEnrollment: () => Promise.reject(new Error('offline')) }));
+jest.mock('../../../services/subscriptionApi', () => ({ fetchSubscription: () => Promise.reject(new Error('offline')) }));
 
 // eslint-disable-next-line import/first
 import StaffDesk from '../StaffDesk';
@@ -98,23 +101,25 @@ describe('a desk', () => {
 });
 
 describe('desks inside building cards', () => {
-  const world = (audience: 'member' | 'business' | 'explorer', buildings = campusBuildingsFor(audience)) => (
-    <CampusWorld buildings={buildings} audience={audience} hasFullAccess workplaceNames={false} reduceMotion initialTarget={'gate'}
+  const world = (audience: 'member' | 'business' | 'explorer', buildings = campusBuildingsFor(audience), at: 'gate' | 'admissions' = 'gate') => (
+    <CampusWorld buildings={buildings} audience={audience} hasFullAccess workplaceNames={false} reduceMotion initialTarget={at}
       onExit={() => undefined} onNavigate={() => undefined} staffDesks={[reese, maya]} personCard={null} onOpenPerson={() => undefined} onClosePerson={() => undefined} />
   );
 
-  it('an Explorer sees Maya at the Main Gate: her chip in Who\'s here opens her card (WP-5)', async () => {
-    await render(world('explorer'));
-    expect(q('[data-testid="cm-card"]')?.getAttribute('data-building')).toBe('gate');
+  it('C21: an Explorer finds Maya in Admissions (an older server\'s gate desk counts there): her chip in Who\'s here opens her card', async () => {
+    await render(world('explorer', undefined, 'admissions'));
+    expect(q('[data-testid="cm-card"]')?.getAttribute('data-building')).toBe('admissions');
     await act(async () => { (q('[data-testid="cm-who-staff-maya"]') as HTMLButtonElement).click(); });
     expect(q('[data-testid="cm-staff-card"] [data-testid="cm-desk-maya"]')).not.toBeNull();
   });
 
-  it('a business viewer never renders Maya, even if the server returned her and the gate were on their map', async () => {
-    const withGate = [...campusBuildingsFor('business'), campusBuildingsFor('explorer').find((b) => b.id === 'gate')!];
-    await render(world('business', withGate));
+  it('C21 (v6 D3): a business viewer sees Maya in Admissions too, and nobody sees her at the gate', async () => {
+    await render(world('business', undefined, 'admissions'));
+    expect(q('[data-testid="cm-card"]')?.getAttribute('data-building')).toBe('admissions');
+    expect(q('[data-testid="cm-who-staff-maya"]')).not.toBeNull();
+    act(() => root!.unmount()); root = undefined; container.remove();
+    await render(world('explorer'));
     expect(q('[data-testid="cm-card"]')?.getAttribute('data-building')).toBe('gate');
-    expect(q('[data-testid="cm-desk-maya"]')).toBeNull();
     expect(q('[data-testid="cm-who-staff-maya"]')).toBeNull();
   });
 

@@ -23,21 +23,3 @@ export function MainGateArt(): React.ReactElement {
   );
 }
 
-/**
- * Maya's welcome desk beside the gate (prototype #mayaTok): a desk, her gold-ringed initials token and a WELCOME DESK pill.
- * Shown only when the server listed her desk for this viewer (Explorers and staff); clicking opens her desk card.
- */
-export function MayaDeskToken({ onOpen }: { onOpen: () => void }): React.ReactElement {
-  return (
-    <g transform="translate(588,638)" role="button" tabIndex={0} aria-label="Maya, AI admissions, welcome desk" className="cm-staff-tok" data-testid="cm-maya-desk"
-      onClick={(e) => { e.stopPropagation(); onOpen(); }}
-      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(); } }}>
-      <rect x={-16} y={2} width={32} height={9} rx={2} fill={art('desk')} />
-      <ellipse cx={0} cy={13} rx={16} ry={3} fill={art('token-shadow')} />
-      <circle className="ring" cx={0} cy={-6} r={10} fill={art('maya')} stroke={art('gold-ring')} strokeWidth={2.5} />
-      <text x={0} y={-3} textAnchor="middle" fontSize={7.5} fontWeight={800} fill={art('white')}>MA</text>
-      <rect x={-26} y={-29} width={52} height={11} rx={5.5} fill={art('maya')} />
-      <text x={0} y={-21} textAnchor="middle" fontSize={6} fontWeight={800} fill={art('white')} letterSpacing={0.4}>WELCOME DESK</text>
-    </g>
-  );
-}

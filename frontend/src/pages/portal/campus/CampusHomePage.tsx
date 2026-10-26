@@ -3,7 +3,18 @@ import { Navigate } from 'react-router-dom';
 import CampusWorld from '../../../components/campus/CampusWorld';
 import CampusTopBar from '../../../components/campus/home/CampusTopBar';
 import CampusConcierge from '../../../components/campus/home/CampusConcierge';
-import { pulseOf } from '../../../components/campus/home/CampusConcierge';
+import { pulseOf, talksToAdmissions } from '../../../components/campus/home/CampusConcierge';
+import BookCallHost, { useAdmissionsCall } from '../../../components/campus/admissions/BookCallHost';
+import MeetingSheetHost from '../../../components/campus/hallway/MeetingSheet';
+import CommunityBoardHost from '../../../components/campus/board/CommunityBoard';
+import CabinetHost from '../../../components/campus/games/CabinetModal';
+import OrderSheetHost from '../../../components/campus/chow/OrderSheet';
+import { useAgenda } from '../../../components/campus/events/Agenda';
+import { comingUpOf } from '../../../components/campus/events/agendaModel';
+import { useNextOpenHouse } from '../../../components/campus/events/OpenHouseCard';
+import { useCampusWeather } from '../../../components/campus/weather/useCampusWeather';
+import { WeatherSky, WeatherChip } from '../../../components/campus/weather/WeatherViews';
+import { weatherLead } from '../../../components/campus/weather/weatherModel';
 import { useHomeFacts } from '../../../components/campus/home/useHomeFacts';
 import CampusGate, { gateSeen } from '../../../components/campus/home/CampusGate';
 import CampusMeHost from '../../../components/campus/home/CampusMeHost';
@@ -106,12 +117,23 @@ function CampusHome(): React.ReactElement {
   const suggested = useMemo(() => rightNowRows({ audience, workplace: wp, buildings, stops: campus.planStops, planMinutes: campus.planMinutes, agenda, presence,
     presenceError, live: !!live, urgent }), [audience, wp, buildings, campus.planStops, campus.planMinutes, agenda, presence, presenceError, live, urgent]);
   const wf = useHomeWayfinder({ audience, workplace: wp, buildings, accessOf, presence, presenceError, desks: staffDesks, urgent, suggested, goTo: map.goTo, openPerson: campus.openPersonCard });
+  const call = useAdmissionsCall(talksToAdmissions(audience)); // C20: Coming up
+  // C33 (v7 R6): Coming up = your next classes, the events you signed up for and the meeting rooms you booked
+  const schedule = useAgenda(true);
+  const coming = useMemo(() => comingUpOf(schedule ?? [], new Date()), [schedule]);
+  // C47: the next Open House (Explorers sign up, members share, staff are reminded)
+  const openHouse = useNextOpenHouse(audience === 'explorer' || audience === 'member' || audience === 'staff');
+  // C37 (v9 W1-W4): the local weather and time of day; the clock alone while CAMPUS_WEATHER_ENABLED is off
+  const wx = useCampusWeather(true);
+  const wxLine = urgent || live ? null : weatherLead(wx.w, wx.tod, wx.celsius);
 
   // The home shows Colaberry Live as the prototype's top pill (CampusLive below), so the portal-wide live-now badge steps aside here.
   useEffect(() => { document.documentElement.classList.add('cm-on-home'); return () => document.documentElement.classList.remove('cm-on-home'); }, []);
   const online = useMemo(() => (presence && !presenceError ? pulseOf(presence, buildings).total : null), [presence, presenceError, buildings]);
 
   const reduce = settings.reduceMotion;
+  // C49 (v13 T1): the Today button's "<done> of <total>", from the same plan as the side panel's Today's plan
+  const todayCount = campus.planStops && campus.planStops.length ? { done: campus.planStops.filter((s) => s.done).length, total: campus.planStops.length } : null;
   const initials = facts.initials || readParticipant().initials;
   const enter = (t: boolean) => { setGateOpen(false); reveal.show(); if (reduce) map.camRef.current?.base(); if (t) campus.startTour(); void claimStreak(); };
   const level = audience === 'member' || audience === 'explorer' ? levelOfRung(look?.rung_name) : null;
@@ -124,20 +146,26 @@ function CampusHome(): React.ReactElement {
         hasTour={!!tour} reduceMotion={reduce} now={new Date()} onOpening={reveal.onOpening} onEnter={enter} photo={photo} />}
       <CampusWorld {...props} insets={homeInsets} walkTo={map.walk} onCard={onCard} cameraRef={map.camRef} startAt={campus.here}
         startCam={map.startCam} recenter={map.recenter} me={{ initials, photo, level, tone: audience }} moments={mapMoments(audience, agenda)} quiet={quiet} hover={hover} liveNow={liveNow} onGround={onGround} />
-      <CampusTopBar audience={audience} online={online} points={look?.points ?? null} rung={look?.rung_name || null} photo={photo} workplace={wp}
-        streak={facts.streak} initials={initials} onList={campus.openList} onFind={() => { openWayfinder(); }} onMe={() => (campus.meOpen ? campus.closeMe() : campus.openMe())} />
+      <WeatherSky wx={wx} reduceMotion={reduce} paused={gateOpen} />
+      <CampusTopBar today={todayCount} audience={audience} online={online} points={look?.points ?? null} rung={look?.rung_name || null} photo={photo} workplace={wp}
+        streak={facts.streak} initials={initials} onList={campus.openList} onFind={() => { openWayfinder(); }} onMe={() => (campus.meOpen ? campus.closeMe() : campus.openMe())} weather={<WeatherChip wx={wx} />} />
       <CampusMeHost fullName={facts.fullName} initials={initials} onClosed={() => map.camRef.current?.recenter()} />
       <CampusConcierge waiting={!reveal.shown} cardOpen={cardOpen} audience={audience} firstName={facts.firstName} hereId={campus.here ?? null} onLawn={onLawn}
         buildings={buildings} accessOf={accessOf} workplaceNames={wp} presence={presence} presenceError={presenceError} desks={staffDesks}
         stops={campus.planStops} planMinutes={campus.planMinutes} live={live} now={new Date()} agenda={agenda} urgent={urgent}
         tourStops={tour ? tour.stops : null} touring={touring} tourProgress={campus.tourProgress} justToured={campus.justToured}
         onWalk={map.goTo} onRun={(id) => map.goTo(id, { run: true })} onHover={setHover} onTour={campus.resumeTour} onEndTour={campus.endTour} onDismissTour={campus.dismissTour} onDone={onComplete}
-        onOpen={(r) => campus.enterThroughDoor(r, null)} photo={photo} />
+        onOpen={(r) => campus.enterThroughDoor(r, null)} photo={photo} call={call} coming={coming} openHouse={openHouse} weatherLine={wxLine} />
       <div className="cm-home-livebar"><CampusLive onWalk={(id, run) => map.goTo(id, { run })} hereId={campus.here ?? null} /></div>
       <CampusTabBar active="/portal/campus" />
       <CampusListView />
       <CampusDoorTransition />
       <CampusDmToast />
+      <BookCallHost />
+      <MeetingSheetHost />
+      <CommunityBoardHost reduceMotion={reduce} />
+      <CabinetHost />
+      <OrderSheetHost />
       <CampusCheer burst reduceMotion={reduce} />
       <Wayfinder ctx={wf.ctx} onPick={wf.onPick} />
       {extra}

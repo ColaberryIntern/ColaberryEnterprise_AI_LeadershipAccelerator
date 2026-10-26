@@ -77,11 +77,11 @@ describe('audience: the frontend\'s sources, the frontend\'s precedence', () => 
   });
 });
 
-describe('Maya: staff and Explorers only', () => {
+describe('Maya: every audience (C21, v6 D3; it replaced the C6 rule of staff and Explorers only)', () => {
   it.each([
-    [{}, ['reese', 'dara']],
-    [{ manager: true }, ['reese', 'dara']],
-    [{ manager: true, explorer: true }, ['reese', 'dara']],
+    [{}, ['reese', 'dara', 'maya']],
+    [{ manager: true }, ['reese', 'dara', 'maya']],
+    [{ manager: true, explorer: true }, ['reese', 'dara', 'maya']],
     [{ explorer: true }, ['reese', 'dara', 'maya']],
     [{ staff: true }, ['reese', 'dara', 'maya']],
   ])('%j -> %j', async (o, want) => {
@@ -89,14 +89,14 @@ describe('Maya: staff and Explorers only', () => {
     expect(await ids()).toEqual(want);
   });
 
-  it('mayaVisibleTo is exactly staff and explorer', () => {
-    expect(['staff', 'business', 'explorer', 'member'].filter((a) => mayaVisibleTo(a as never))).toEqual(['staff', 'explorer']);
+  it('mayaVisibleTo is every audience', () => {
+    expect(['staff', 'business', 'explorer', 'member'].filter((a) => mayaVisibleTo(a as never))).toEqual(['staff', 'business', 'explorer', 'member']);
   });
 
   it('C6: with the site chat OFF her desk is not open (opens soon), with no prompts and no enrollment', async () => {
     set({ explorer: true }); mockEnv.enableChat = false;
     const maya = (await getStaffDesks('enr-1')).desks.find((d) => d.id === 'maya')!;
-    expect(maya).toMatchObject({ building: 'gate', title: 'Welcome desk', ai: true, on_duty: false, opens: 'site_chat_off', enrollment_id: null, prompts: [] });
+    expect(maya).toMatchObject({ building: 'admissions', title: 'Welcome desk', ai: true, on_duty: false, opens: 'site_chat_off', enrollment_id: null, prompts: [] });
   });
 
   it('C6: with the site chat ON (ENABLE_CHAT) she is on duty, still with no enrollment (she is the website chat, not a DM agent)', async () => {
@@ -109,8 +109,8 @@ describe('Maya: staff and Explorers only', () => {
 
 describe('on duty', () => {
   it('Reese and Dara on duty: their buildings, enrollment ids and three questions each', async () => {
-    const { desks } = await getStaffDesks('enr-1');
-    expect(desks.map((d) => [d.id, d.building, d.on_duty, d.enrollment_id, d.prompts.length])).toEqual([
+    const { desks } = (await getStaffDesks('enr-1'));
+    expect(desks.filter((d) => d.id !== 'maya').map((d) => [d.id, d.building, d.on_duty, d.enrollment_id, d.prompts.length])).toEqual([
       ['reese', 'commons', true, 'reese-1', 3], ['dara', 'library', true, 'dara-1', 3],
     ]);
     expect(desks.every((d) => d.ai === true)).toBe(true);

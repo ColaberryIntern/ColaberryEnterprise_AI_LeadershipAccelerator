@@ -44,7 +44,7 @@ export type Ctx = Pick<CanvasRenderingContext2D,
 export interface Hud { score: number; lives: number; level: number; over: boolean; hint: string }
 
 export interface Engine<S> {
-  id: 'byte-chase' | 'launch-lab' | 'bug-breaker';
+  id: 'byte-chase' | 'launch-lab' | 'bug-breaker' | 'stack-drop' | 'token-trail';
   init: (rng: Rng) => S;
   update: (s: S, dt: number, input: Input, rng: Rng) => void;
   draw: (ctx: Ctx, s: S, p: Palette) => void;

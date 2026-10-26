@@ -6,22 +6,23 @@
  * bandLadder POINTS_SUBLEVELS: 150 / 400 / 900), so a new item arrives with each points rung. Nothing above the top points rung:
  * the prototype's higher items (crown, jetpack) would need a ladder that does not exist. Unlocks are computed, never stored.
  *
- * Five slots, one item each. A ride is the learner's OWN: it is drawn only on their own avatar while it travels, and is never
- * sent to anyone else (campusLookService strips it).
+ * Four slots, one item worn in each. C46 (2026-10-25, Ali: "I think it should be walking"): the campus says walk everywhere, so
+ * there are no rides; the Skateboard (150) and Cherry Cruiser (900) became the Campus jacket and the Gold Architect jacket, keeping
+ * both milestones. A saved ride from before is ignored (wearable / validateEquip only read these slots), never an error.
  */
-export const GEAR_SLOTS = ['head', 'face', 'body', 'neck', 'ride'] as const;
+export const GEAR_SLOTS = ['head', 'face', 'body', 'neck'] as const;
 export type GearSlot = typeof GEAR_SLOTS[number];
-/** The slots other people may see. */
-export const PUBLIC_SLOTS: readonly GearSlot[] = ['head', 'face', 'body', 'neck'];
+/** The slots other people may see: all of them since C46. */
+export const PUBLIC_SLOTS: readonly GearSlot[] = GEAR_SLOTS;
 
 export interface GearItem { id: string; name: string; slot: GearSlot; threshold: number }
 
 export const GEAR_CATALOG: readonly GearItem[] = [
   { id: 'cap', name: 'Cohort cap', slot: 'head', threshold: 150 },
-  { id: 'board', name: 'Skateboard', slot: 'ride', threshold: 150 },
+  { id: 'jacket', name: 'Campus jacket', slot: 'body', threshold: 150 },
   { id: 'hoodie', name: 'Colaberry hoodie', slot: 'body', threshold: 400 },
   { id: 'shades', name: 'Shades', slot: 'face', threshold: 400 },
-  { id: 'cruiser', name: 'Cherry Cruiser', slot: 'ride', threshold: 900 },
+  { id: 'architect', name: 'Gold Architect jacket', slot: 'body', threshold: 900 },
   { id: 'chain', name: 'Gold chain', slot: 'neck', threshold: 900 },
 ];
 
@@ -65,7 +66,7 @@ export function wearable(points: number, stored: unknown): Equipped {
   return out;
 }
 
-/** The part of a set other people may see: never the ride. */
+/** The part of a set other people may see. */
 export function publicGear(set: Equipped): Partial<Record<'head' | 'face' | 'body' | 'neck', string>> {
   const out: Partial<Record<'head' | 'face' | 'body' | 'neck', string>> = {};
   for (const slot of PUBLIC_SLOTS) if (set[slot]) out[slot as 'head'] = set[slot];

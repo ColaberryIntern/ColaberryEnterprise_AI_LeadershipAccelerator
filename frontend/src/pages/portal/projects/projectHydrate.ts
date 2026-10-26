@@ -290,10 +290,25 @@ export function overlayCompletions(p: StudentProject, tree: BackendProjectTree):
   // carried points (or before the plan was published) have none; the overlay
   // is how they get one without a reinstall. Same-reference when nothing moved.
   const price = new Map<string, number>();
+  // The server's NAME per story. A task's title comes from the plan and the
+  // curriculum; this device never authors one, so the server owns it.
+  //
+  // THE THIRD FIELD THIS OVERLAY FORGOT — the comments above describe the first
+  // two. On 2026-10-25 the six demo-prep tasks were renamed after the video
+  // each one asks for. 250 rows changed, verified in the database, and every
+  // device that already held the project went on showing "Write the Demo
+  // Narrative…", because adoption only ADDS stories a device LACKS and this
+  // overlay copied status, points and verification but not the name.
+  //
+  // A reload does not fix that: the stale copy is in localStorage, which
+  // outlives a refresh. Without this line the rename is invisible to every
+  // existing student forever.
+  const name = new Map<string, string>();
   for (const l of tree.lists) for (const t of l.tasks) {
     if (t.status === 'complete' && t.story_id) done.add(t.story_id);
     if (typeof t.points === 'number' && t.points > 0) price.set(t.story_id || t.id, t.points);
     if (t.verified_at) verified.set(t.story_id || t.id, t.verified_at);
+    if (t.title) name.set(t.story_id || t.id, t.title);
   }
   let changed = false;
   const lists = withServerTasks.lists.map((l) => {
@@ -315,6 +330,15 @@ export function overlayCompletions(p: StudentProject, tree: BackendProjectTree):
       if (vAt && t.verifiedAt !== vAt) {
         changed = true;
         next = { ...next, verifiedAt: vAt };
+      }
+      // Set from the server, never cleared by it — same rule as the stamp
+      // above. A server that returns no title for a story says nothing about
+      // the name this device already shows, and blanking the card on that
+      // basis would be worse than a stale name.
+      const serverName = name.get(taskKey(t));
+      if (serverName && t.title !== serverName) {
+        changed = true;
+        next = { ...next, title: serverName };
       }
       return next;
     });

@@ -52,7 +52,7 @@ describe('the arrival panel', () => {
     });
     const q = (s: string) => container.querySelector(s);
     expect(q('[data-testid="cm-arrive-hero"]')!.textContent).toContain('You’ve arrived · South Avenue');
-    expect(q('.cm-card-title')!.textContent).toBe('Community Lounge');
+    expect(q('.cm-card-title')!.textContent).toBe('Meeting Rooms'); // C29 (v7 R2)
     expect(q('[data-testid="cm-arrive-line"]')!.textContent).toContain('Live rooms');
     expect(q('[data-testid="cm-arrive-now"]')!.textContent).toContain('3 people here now');
     expect(q('[data-testid="cm-arrive-cta"]')!.getAttribute('href')).toBe(b('commons').primary.route);

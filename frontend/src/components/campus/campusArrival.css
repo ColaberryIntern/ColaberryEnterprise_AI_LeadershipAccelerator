@@ -110,9 +110,11 @@
 .cm-tc ul{margin:6px 0 0;padding:0;list-style:none;font-size:14px;line-height:1.75}
 .cm-tc ul li::before{content:"\2192  ";color:var(--cm-art-red);font-weight:800}
 .cm-tc.is-explorer ul li::before{color:var(--cm-art-explorer)}
+.cm-tc-today{margin-top:10px;width:100%;justify-content:center}
 .cm-tc-tip{margin-top:10px;font-size:13px;background:var(--cm-art-card);border:1px dashed var(--cm-art-tip-edge);border-radius:10px;padding:8px 10px;line-height:1.4}
 /* the tour nav above the footer (prototype .tour-nav in #arrTourNav) */
-.cm-tn{display:flex;align-items:center;gap:8px;margin:12px 0 4px;padding:12px;border-radius:14px;background:var(--cm-art-tour-nav)}
+/* C48: at the top of the card, and it stays there while the card scrolls */
+.cm-tn{display:flex;align-items:center;gap:8px;margin:12px 0 4px;padding:12px;border-radius:14px;background:var(--cm-art-tour-nav);position:sticky;top:0;z-index:2}
 .cm-tn button{border-radius:999px;padding:10px 14px;font-weight:700;font-size:13px;border:1px solid var(--cm-art-line);background:var(--cm-art-card);color:var(--cm-art-ink);cursor:pointer}
 .cm-tn button:focus-visible{outline:3px solid var(--cm-art-red);outline-offset:2px}
 .cm-tn .cm-tn-go{background:var(--cm-art-red);border-color:var(--cm-art-red);color:var(--cm-art-on-dark);margin-left:auto}

@@ -151,3 +151,6 @@
   .evt-root .evt-card:hover{transform:none}
   .evt-root .evt-spinner{animation-duration:2.4s}
 }
+
+/* C27 (v6 D5): registered, in place of the Sign up button */
+.evt-root .evt-going{display:inline-flex;align-items:center;gap:6px;font-weight:800;font-size:13px;color:var(--leaf-text);background:var(--leaf-bg);border-radius:999px;padding:7px 12px}

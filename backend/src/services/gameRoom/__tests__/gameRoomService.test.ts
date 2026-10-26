@@ -39,6 +39,11 @@ const memStore: GameRoomStore = {
     .filter((r) => r.game === game && r.central_date >= since && r.score !== null && (cohortId ? r.cohort_id === cohortId : r.enrollment_id === enrollmentId))
     .map((r) => ({ enrollment_id: r.enrollment_id, score: r.score as number })),
   namesFor: async (ids) => new Map(ids.filter((i) => names.has(i)).map((i) => [i, names.get(i) as string])),
+  // C35's reads (gameRoomBoards.test drives them through gameRoomMemoryStore); unused here
+  runsSince: async () => [],
+  bestsBefore: async () => new Map(),
+  activeSince: async () => [],
+  profilesFor: async () => new Map(),
 };
 
 const T = (iso: string) => Date.parse(iso);

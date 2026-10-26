@@ -13,7 +13,7 @@ import type { StaffDesk } from '../campusPeopleApi';
 
 /** The prototype's WRULES (D:1440-1444): in Workplace names the panel speaks of colleagues and HQ, not classmates and a campus. */
 const WRULES: [RegExp, string][] = [
-  [/Community Lounge/g, 'Collab Café'], [/Classroom/g, 'Training Room'], [/Cert Prep Center/g, 'Certification Center'], [/Events Hall/g, 'Town Hall'],
+  [/Classroom/g, 'Training Room'], [/Cert Prep Center/g, 'Certification Center'], [/Events Hall/g, 'Town Hall'],
   [/My Progress/g, 'My Performance'], [/Game Room/g, 'Break Room'], [/\bSchedule\b/g, 'Calendar'], [/\bLibrary\b/g, 'Knowledge Base'],
   [/classmates/g, 'colleagues'], [/Classmates/g, 'Colleagues'], [/anywhere on campus/g, 'anywhere at HQ'], [/on campus/g, 'at HQ'], [/Campus/g, 'HQ'],
   [/campus/g, 'HQ'], [/Your cohort/g, 'Your team'], [/your cohort/g, 'your team'], [/Live class/g, 'Live session'], [/live class/g, 'live session'],
@@ -21,8 +21,10 @@ const WRULES: [RegExp, string][] = [
 ];
 export const wd = (s: string, workplace: boolean): string => (workplace ? WRULES.reduce((a, [r, t]) => a.replace(r, t), s) : s);
 
-/** The business district (the prototype's biz:true): "At Project Studio", never "At the Project Studio". */
-const DISTRICT: BuildingId[] = ['studio', 'career', 'gallery'];
+/** The business district (the prototype's biz:true): "At Project Studio", never "At the Project Studio"; C21: "At Admissions". */
+const DISTRICT: BuildingId[] = ['studio', 'career', 'gallery', 'admissions'];
+/** "the Library" / "Project Studio" / "Admissions": a building's name as it reads after "at" or "in". */
+export const theName = (b: CampusBuilding, workplace: boolean): string => `${DISTRICT.includes(b.id) ? '' : 'the '}${buildingName(b, workplace)}`;
 
 /** "Colaberry Live · Thursday night" (Central time), while a broadcast is on air. */
 export function liveKicker(now: Date): string {
@@ -41,7 +43,7 @@ export function kickerFor(o: { audience: CampusAudience; here: CampusBuilding | 
   // C17: walked out onto the grass (no building, not at the gate either): the prototype's "On campus".
   if (!o.here && o.onLawn) return 'On campus';
   if (!o.here || o.here.kind === 'gate') return o.workplace ? 'In the lobby' : 'At the main gate';
-  return `At ${DISTRICT.includes(o.here.id) ? '' : 'the '}${buildingName(o.here, o.workplace)}`;
+  return `At ${theName(o.here, o.workplace)}`;
 }
 
 /** "Good morning" before noon (the small hours too, as the prototype's partOfDay), "Good afternoon" before 5 PM, else evening. */

@@ -1,6 +1,6 @@
 /**
- * C9 earned gear: unlocked iff real points reach the threshold (on the points ladder 150 / 400 / 900); one item per slot; a ride is
- * never part of what others see.
+ * C9 earned gear: unlocked iff real points reach the threshold (on the points ladder 150 / 400 / 900); one item per slot. C46: no ride
+ * slot; the two milestones that were rides are now the Campus jacket (150) and the Gold Architect jacket (900); a saved ride is ignored.
  */
 import { GEAR_CATALOG, GEAR_SLOTS, isUnlocked, validateEquip, wearable, publicGear, GearError } from '../campusUnlocks';
 import { LEVELS } from '../../pointsService';
@@ -11,12 +11,12 @@ describe('unlock by points, at every boundary', () => {
   it.each([
     [0, []],
     [149, []],
-    [150, ['cap', 'board']],
-    [399, ['cap', 'board']],
-    [400, ['cap', 'board', 'hoodie', 'shades']],
-    [899, ['cap', 'board', 'hoodie', 'shades']],
-    [900, ['cap', 'board', 'hoodie', 'shades', 'cruiser', 'chain']],
-    [100000, ['cap', 'board', 'hoodie', 'shades', 'cruiser', 'chain']],
+    [150, ['cap', 'jacket']],
+    [399, ['cap', 'jacket']],
+    [400, ['cap', 'jacket', 'hoodie', 'shades']],
+    [899, ['cap', 'jacket', 'hoodie', 'shades']],
+    [900, ['cap', 'jacket', 'hoodie', 'shades', 'architect', 'chain']],
+    [100000, ['cap', 'jacket', 'hoodie', 'shades', 'architect', 'chain']],
   ])('%i points unlock %j', (points, ids) => {
     expect(GEAR_CATALOG.filter((i) => isUnlocked(i, points)).map((i) => i.id)).toEqual(ids);
   });
@@ -42,7 +42,8 @@ describe('validateEquip (the complete set)', () => {
   });
   it.each([
     ['an unknown id', 900, { head: 'crown' }, 'GearUnknown'],
-    ['the wrong slot', 900, { head: 'board' }, 'GearWrongSlot'],
+    ['the wrong slot', 900, { head: 'jacket' }, 'GearWrongSlot'],
+    ['a retired ride id', 900, { body: 'cruiser' }, 'GearUnknown'],
     ['a locked item, one point short', 399, { body: 'hoodie' }, 'GearLocked'],
   ])('refuses %s', (_n, points, set, cls) => {
     expect(() => validateEquip(points, set as Record<string, string>)).toThrow(GearError);
@@ -55,12 +56,16 @@ describe('validateEquip (the complete set)', () => {
 
 describe('what a stored set still allows, and what others see', () => {
   it('drops items that are unknown, in the wrong slot, or not earned', () => {
-    expect(wearable(150, { head: 'cap', body: 'hoodie', face: 'board', neck: 'nope', ride: 'board' })).toEqual({ head: 'cap', ride: 'board' });
+    expect(wearable(150, { head: 'cap', body: 'hoodie', face: 'jacket', neck: 'nope' })).toEqual({ head: 'cap' });
     expect(wearable(150, null)).toEqual({});
     expect(wearable(150, 'garbage')).toEqual({});
   });
-  it('others never see the ride', () => {
-    expect(publicGear({ head: 'cap', ride: 'cruiser', neck: 'chain' })).toEqual({ head: 'cap', neck: 'chain' });
-    expect(by('cruiser').slot).toBe('ride');
+  it('C46: a saved ride from before is ignored, never an error; there is no ride slot; both milestones still reward a jacket', () => {
+    expect(wearable(900, { head: 'cap', ride: 'cruiser', body: 'architect' })).toEqual({ head: 'cap', body: 'architect' });
+    expect(validateEquip(900, { ride: 'board', body: 'jacket' })).toEqual({ body: 'jacket' });
+    expect(publicGear({ head: 'cap', body: 'jacket', neck: 'chain' })).toEqual({ head: 'cap', body: 'jacket', neck: 'chain' });
+    expect(GEAR_SLOTS as readonly string[]).not.toContain('ride');
+    expect([by('jacket').slot, by('jacket').threshold, by('architect').slot, by('architect').threshold]).toEqual(['body', 150, 'body', 900]);
+    expect(GEAR_CATALOG.some((i) => i.id === 'board' || i.id === 'cruiser')).toBe(false);
   });
 });

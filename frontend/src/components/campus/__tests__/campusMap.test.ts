@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { CAMPUS_BUILDINGS, buildingForPath, buildingsFor, buildingName, careerBuildingFor } from '../campusMap';
+import { CAMPUS_BUILDINGS, buildingForPath, buildingsFor, buildingName, careerBuildingFor, CHOW_ROUTE } from '../campusMap';
 
 // The catalog must only point at routes that exist. Read the route tree as text: importing it
 // would pull every page component into this unit suite.
@@ -12,15 +12,21 @@ const allRoutes = (): { route: string; planned?: string; where: string }[] => CA
 ]);
 
 describe('campus catalog', () => {
-  it('has the 12 buildings of the D4 catalog, each id once', () => {
+  it('has the 14 buildings (the D4 catalog + C21 Admissions + C39 Chow Hall), each id once', () => {
     const ids = CAMPUS_BUILDINGS.map((b) => b.id);
     expect(new Set(ids).size).toBe(ids.length);
-    expect(ids.sort()).toEqual(['amphi', 'arcade', 'career', 'commons', 'gallery', 'gate', 'lecture', 'library', 'observatory', 'studio', 'testing', 'tower']);
+    expect(ids.sort()).toEqual(['admissions', 'amphi', 'arcade', 'career', 'chow', 'commons', 'gallery', 'gate', 'lecture', 'library', 'observatory', 'studio', 'testing', 'tower']);
+  });
+
+  it('C21: Admissions is on every campus, beside the gate (its door joins the path there), its page /portal/plans', () => {
+    for (const a of ['member', 'explorer', 'business', 'staff'] as const) expect(buildingsFor(a).some((b) => b.id === 'admissions')).toBe(true);
+    expect(CAMPUS_BUILDINGS.find((b) => b.id === 'admissions')).toMatchObject({ zone: 'gate', prefixes: ['/portal/plans'], primary: { route: '/portal/plans' } });
   });
 
   it('points only at routes that are routed today, unless a route is marked planned with its ticket', () => {
     expect(ROUTED.size).toBeGreaterThan(20); // the regex really read the route tree
     for (const r of allRoutes()) {
+      if (r.route === CHOW_ROUTE) continue; // C39: Chow Hall's door opens the order sheet; no page (campusRouteCoverage checks it has none)
       if (r.planned) { expect(r.planned).toMatch(/^C\d+$/); expect(ROUTED.has(r.route)).toBe(false); continue; }
       expect({ where: r.where, routed: ROUTED.has(r.route) }).toEqual({ where: r.where, routed: true });
     }
@@ -45,10 +51,10 @@ describe('campus catalog', () => {
   it('matches the Explorer mode column (what each page does for an Explorer)', () => {
     const access = Object.fromEntries(CAMPUS_BUILDINGS.map((b) => [b.id, b.explorer]));
     expect(access).toEqual({ lecture: 'preview', library: 'open', tower: 'open', studio: 'demo', amphi: 'open', testing: 'open',
-      observatory: 'open', commons: 'open', gallery: 'open', career: 'open', arcade: 'open', gate: 'open' });
+      observatory: 'open', commons: 'open', gallery: 'open', career: 'open', arcade: 'open', gate: 'open', admissions: 'open', chow: 'open' });
   });
 
-  it('shows the Main Gate (Maya\'s desk) only to Explorers and staff', () => {
+  it('shows the Main Gate only to Explorers and staff (Maya moved to Admissions in C21)', () => {
     expect(buildingsFor('explorer').some((b) => b.id === 'gate')).toBe(true);
     expect(buildingsFor('staff').some((b) => b.id === 'gate')).toBe(true);
     expect(buildingsFor('member').some((b) => b.id === 'gate')).toBe(false);
@@ -101,8 +107,11 @@ describe('buildingForPath', () => {
 
 describe('buildingName', () => {
   it('uses the Workplace name only when the setting is on', () => {
-    const lounge = CAMPUS_BUILDINGS.find((b) => b.id === 'commons')!;
-    expect(buildingName(lounge, false)).toBe('Community Lounge');
-    expect(buildingName(lounge, true)).toBe('Collab Cafe');
+    const room = CAMPUS_BUILDINGS.find((b) => b.id === 'lecture')!;
+    expect(buildingName(room, false)).toBe('Classroom');
+    expect(buildingName(room, true)).toBe('Training Room');
+    // C29 (v7 R2): Meeting Rooms is the same name in both looks
+    const meet = CAMPUS_BUILDINGS.find((b) => b.id === 'commons')!;
+    expect([buildingName(meet, false), buildingName(meet, true)]).toEqual(['Meeting Rooms', 'Meeting Rooms']);
   });
 });

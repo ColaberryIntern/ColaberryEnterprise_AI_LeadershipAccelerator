@@ -10,11 +10,26 @@ const defaults = (): Record<string, (...a: unknown[]) => Promise<unknown>> => ({
   startRun: async () => ({ run_id: RUN, left_s: 840 }),
   beat: async () => ({ left_s: 825 }),
   submitScore: async () => ({ score: 120, seconds_used: 30, replayed: false }),
-  leaderboard: async () => ({ week_start: '2026-10-19', rows: [{ rank: 1, name: 'Alex', score: 500, you: true }] }),
+  board: async () => ({ week_start: '2026-10-19', me: { best: 500, rank: 1 },
+    rows: [{ rank: 1, name: 'Alex', display_name: 'Alex', avatar_url: null, rung_name: 'AI Aware I', cohort_name: 'Cohort 7', score: 500, you: true }] }),
+  summary: async () => ({ week_start: '2026-10-19', your_week: { played: 2, best_game: 'stack-drop', best_score: 900, best_rank: 1 },
+    champions: [{ game: 'stack-drop', name: 'Alex', avatar_url: null, score: 900 }, { game: 'token-trail', name: null, avatar_url: null, score: null }],
+    recent: [{ kind: 'top', name: 'Alex', enrollment_id: 'enr-g', game: 'stack-drop', score: 900, at: '2026-10-20T15:00:00.000Z' }] }),
+  playingNow: async () => ({ count: 2, people: [{ name: 'Sam', game: 'token-trail' }] }),
+  challenge: async () => ({ sent: true, reason: 'sent' }),
 });
 jest.mock('../../services/gameRoom/gameRoomService', () => {
   const wrap = (name: string) => (...a: unknown[]) => { mockCalls.push([name, a]); return mockImpl[name](...a); };
-  return { timeFor: wrap('timeFor'), startRun: wrap('startRun'), beat: wrap('beat'), submitScore: wrap('submitScore'), leaderboard: wrap('leaderboard') };
+  return { timeFor: wrap('timeFor'), startRun: wrap('startRun'), beat: wrap('beat'), submitScore: wrap('submitScore') };
+});
+// C35: the boards and the challenge (gameRoomBoards.test / gameRoomChallenge.test cover them)
+jest.mock('../../services/gameRoom/gameRoomBoards', () => {
+  const wrap = (name: string) => (...a: unknown[]) => { mockCalls.push([name, a]); return mockImpl[name](...a); };
+  return { board: wrap('board'), summary: wrap('summary'), playingNow: wrap('playingNow') };
+});
+jest.mock('../../services/gameRoom/gameRoomChallenge', () => {
+  const wrap = (name: string) => (...a: unknown[]) => { mockCalls.push([name, a]); return mockImpl[name](...a); };
+  return { challenge: wrap('challenge') };
 });
 
 import express from 'express';
@@ -64,7 +79,36 @@ describe('happy paths: the token identity, validated answers', () => {
   it('GET /scores?game= with no cohort passes null', async () => {
     const res = await request(buildApp()).get('/api/portal/game-room/scores?game=bug-breaker').set(auth(token({ cohort_id: null as unknown as string })));
     expect(res.status).toBe(200);
-    expect(mockCalls[0]).toEqual(['leaderboard', ['enr-g', null, 'bug-breaker']]);
+    expect(mockCalls[0]).toEqual(['board', ['enr-g', null, 'bug-breaker', 'cohort', 'week']]);
+    expect(res.body.me).toEqual({ best: 500, rank: 1 });
+  });
+  it('C35: GET /scores takes a scope and a period; the new games are known', async () => {
+    const res = await request(buildApp()).get('/api/portal/game-room/scores?game=stack-drop&scope=all&period=all').set(auth());
+    expect(res.status).toBe(200);
+    expect(mockCalls[0]).toEqual(['board', ['enr-g', 'coh-1', 'stack-drop', 'all', 'all']]);
+    expect((await request(buildApp()).get('/api/portal/game-room/scores?game=token-trail&scope=planet').set(auth())).status).toBe(400);
+  });
+  it('C35: GET /summary and /playing answer for the token learner', async () => {
+    const app = buildApp();
+    const sum = await request(app).get('/api/portal/game-room/summary').set(auth());
+    expect(sum.status).toBe(200);
+    expect(sum.body.your_week).toEqual({ played: 2, best_game: 'stack-drop', best_score: 900, best_rank: 1 });
+    const play = await request(app).get('/api/portal/game-room/playing').set(auth());
+    expect(play.body).toEqual({ count: 2, people: [{ name: 'Sam', game: 'token-trail' }] });
+    expect(mockCalls.map((c) => c[0])).toEqual(['summary', 'playingNow']);
+  });
+  it('C35: POST /challenge sends through the service with the token sender; refusals map to 400', async () => {
+    const to = '22222222-2222-4222-8222-222222222222';
+    const ok = await request(buildApp()).post('/api/portal/game-room/challenge').set(auth()).send({ to, game: 'stack-drop', score: 900 });
+    expect(ok.body).toEqual({ sent: true, reason: 'sent' });
+    expect(mockCalls[0]).toEqual(['challenge', ['enr-g', 'coh-1', to, 'stack-drop', 900]]);
+    mockImpl.challenge = async () => { throw Object.assign(new Error('not allowed'), { name: 'DmError' }); };
+    expect((await request(buildApp()).post('/api/portal/game-room/challenge').set(auth()).send({ to, game: 'stack-drop', score: 900 })).body.error_class).toBe('DmNotAllowed');
+    mockImpl.challenge = async () => { throw Object.assign(new Error('no'), { name: 'ChallengeError', error_class: 'ChallengeToAiStaff' }); };
+    const ai = await request(buildApp()).post('/api/portal/game-room/challenge').set(auth()).send({ to, game: 'stack-drop', score: 900 });
+    expect([ai.status, ai.body.error_class]).toEqual([400, 'ChallengeToAiStaff']);
+    expect((await request(buildApp()).post('/api/portal/game-room/challenge').set(auth()).send({ to: 'x', game: 'stack-drop', score: 1 })).status).toBe(400);
+    expect((await request(buildApp()).post('/api/portal/game-room/challenge').set(auth(token({ read_only: true, impersonated_by: 'a' }))).send({ to, game: 'stack-drop', score: 1 })).status).toBe(403);
   });
 });
 

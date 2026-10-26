@@ -26,6 +26,10 @@ import type { CameraApi, InsetsOf } from './useCampusCamera';
 import type { Cam } from './campusCamera';
 import { useWalk } from './useWalk';
 import type { Travel } from './useWalk';
+import BoardSign from './board/BoardSign';
+import TodayFlag, { GateTodaySign } from './art/TodayFlag';
+import { onBoard } from './board/boardApi';
+import { BOARD_SPOT } from './board/boardModel';
 import './campusMapArt.css';
 
 /**
@@ -83,7 +87,7 @@ export interface CampusMapProps {
   startAt?: BuildingId | null;
   /** C8: buildings whose room is on air now (from broadcast discovery). */
   onAir?: Set<string>;
-  /** C9: the learner's OWN equipped set, drawn on their pin (public slots) and, only while it travels, the ride. */
+  /** C9: the learner's OWN equipped set, drawn on their pin. */
   ownGear?: Equipped;
   /** WP-2: today's plan (route and pins); absent during a tour and while live. */
   plan?: PlanStop[];
@@ -101,6 +105,8 @@ export interface CampusMapProps {
   hover?: BuildingId | null;
   /** C11b: the Explorer view's OPEN badges. */
   showOpen?: boolean;
+  /** C51 / C52 (v13 T3, T4): the Explorer's TODAY flag over the Schedule tower and START HERE sign at the gate (open Today, no walk). */
+  todayFlag?: boolean;
   /** C11b: the AI staff desks on duty for this viewer, drawn at their buildings (full map only). */
   desks?: MapDesk[];
   /** C11b / WP-3: you: initials (from your name), photo, level and account colour. */
@@ -213,7 +219,7 @@ function pinsOf(plan: PlanStop[] | undefined): Partial<Record<BuildingId, { n: n
 }
 
 /** C17: what a click must NOT be on to count as ground: a building (or its click area), a staff desk, or you. */
-const NOT_GROUND = '.cm-bld, .cm-hit-area, .cm-staff-tok, .cm-avatar';
+const NOT_GROUND = '.cm-bld, .cm-hit-area, .cm-staff-tok, .cm-avatar, .cm-cboard-sign, .cm-today-flag, .cm-gate-today';
 /** A screen point in world units, through the map's current viewBox (null where the browser cannot say, e.g. jsdom). */
 function toWorld(svg: SVGSVGElement | null, x: number, y: number): Pt | null {
   const m = svg?.getScreenCTM?.();
@@ -235,7 +241,7 @@ export default function CampusWorldMap(p: CampusMapProps): React.ReactElement {
   const locate = useCallback((id: string) => { const b = buildings.find((x) => x.id === id); return b ? (b.kind === 'gate' ? GATE : { x: b.pos.x, y: b.pos.y }) : null; }, [buildings]);
   const cam = useCampusCamera(svgRef, { enabled: !compact && !!camera, insets: camera?.insets, focusInsets: camera?.focusInsets, avatarRef: hereRef, locate, reduceMotion,
     apiRef: camera?.apiRef, framed: camera?.framed, startCam: camera?.startCam });
-  const { walkTo, walkToSpot, moving, running, atId, targetId, routeD, spot } = useWalk({ buildings, compact, reduceMotion, ride: p.ownGear?.ride, hereRef, setPos, cam, stepsRef,
+  const { walkTo, walkToSpot, moving, running, atId, targetId, routeD, spot } = useWalk({ buildings, compact, reduceMotion, hereRef, setPos, cam, stepsRef,
     onArrive, onTravel: p.onTravel, onGround: p.onGround });
   const graph = useMemo(() => campusGraph(buildings), [buildings]);
 
@@ -248,6 +254,7 @@ export default function CampusWorldMap(p: CampusMapProps): React.ReactElement {
     if (w) onGroundClick(clampGround(w));
   }, [onGroundClick]);
   const gateIsBuilding = buildings.some((b) => b.kind === 'gate');
+  const tower = buildings.find((b) => b.id === 'tower');
   // C11b Colaberry Live: evening over the full map while a building is really on air, and the path from you to it.
   const live = useMemo(() => (compact || !onAir ? [] : buildings.filter((b) => b.kind !== 'gate' && onAir.has(b.id))), [buildings, onAir, compact]);
   const livePath = live.length && atId !== live[0].id ? [{ x: pos.x, y: pos.y }, ...routeFrom(graph, hereRef.current, live[0])] : null;
@@ -264,6 +271,9 @@ export default function CampusWorldMap(p: CampusMapProps): React.ReactElement {
     const how = { instant: !!walkRequest.instant, run: !!walkRequest.run };
     if (walkRequest.spot) walkToSpot(walkRequest.spot, how); else if (walkRequest.id) walkTo(walkRequest.id, how);
   }, [walkRequest, walkTo, walkToSpot]);
+
+  // C30 (v7 R3): opening the Community Board with a walk (the board, the chip, Where to?) walks you to it first
+  useEffect(() => (compact ? undefined : onBoard((o) => { if (o.walk) walkToSpot({ ...BOARD_SPOT }, { instant: false, run: false }); })), [compact, walkToSpot]);
 
   const quiet = !compact && !!p.quiet && !live.length;
   const urgent = live.length ? null : p.moments?.urgent ?? null; // the prototype drops the urgent ring while live
@@ -290,6 +300,9 @@ export default function CampusWorldMap(p: CampusMapProps): React.ReactElement {
           onPeek={compact ? undefined : p.onPeek} onPick={pick} setRef={p.buildingRef} />
       ))}
       {live.length > 0 && <LiveFront buildings={live} mark={compact ? null : p.liveMark} />}
+      {!compact && <BoardSign />}
+      {!compact && p.todayFlag && tower && <TodayFlag tower={tower} />}
+      {!compact && p.todayFlag && gateIsBuilding && <GateTodaySign />}
       {!compact && p.desks && p.desks.length > 0 && <StaffTokens desks={p.desks} buildings={buildings} onPick={pick} />}
       {!compact && <AvatarPin pos={pos} moving={moving} running={running} reduceMotion={reduceMotion} ownGear={p.ownGear} me={p.me} />}
     </svg>

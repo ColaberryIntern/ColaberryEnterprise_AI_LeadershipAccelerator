@@ -44,6 +44,7 @@ const CommunityPage = lazy(() => import('../pages/portal/community/CommunityPage
 const PeopleDirectoryPage = lazy(() => import('../pages/portal/community/PeopleDirectoryPage'));
 const RoomsPage = lazy(() => import('../pages/portal/rooms/RoomsPage'));
 const GlobalLibraryPage = lazy(() => import('../pages/portal/library/GlobalLibraryPage'));
+const PlansPage = lazy(() => import('../pages/portal/plans/PlansPage')); // C21: the Admissions building's page
 const CompanyPage = lazy(() => import('../pages/portal/company/CompanyPage'));
 const ClassroomWeekPage = lazy(() => import('../pages/portal/ClassroomWeekPage'));
 
@@ -175,6 +176,7 @@ const portalRoutes = (
       <Route path="/portal/rooms" element={<RoomsPage />} />
       <Route path="/portal/rooms/:roomId" element={<RoomsPage />} />
       <Route path="/portal/library" element={<GlobalLibraryPage />} />
+      <Route path="/portal/plans" element={<PlansPage />} />
       {/* Manager surface — renders its own PortalShell chrome; the shell adds the
           "Your company" nav group only for org managers, and the page itself
           shows a friendly error if a non-manager reaches it. */}

@@ -5,7 +5,7 @@ import type { PublicGear } from '../campusGear';
 /**
  * A person in the room (the prototype's personSVG + accSVG, D:2236-2258): body, legs when standing, a head that is THEIR photo or
  * their initials (never a generated face), and, WP-5:
- *  - the gear they earned and wear (cap, shades, hoodie, chain; a ride is only ever drawn on the map, under your own pin);
+ *  - the gear they earned and wear (cap, shades, a jacket / hoodie / Gold Architect jacket, chain);
  *  - their level as a numbered coin by the head (the rung's place on the ladder, decision Q5);
  *  - the ring round the head: gold for AI staff, teal (thicker) for a partner's own teammates, white otherwise;
  *  - a red lanyard and badge in the business rooms (Project Studio, Career Center, Showcase Gallery, and every room in Workplace
@@ -42,6 +42,8 @@ export const pointOf = (e: React.MouseEvent | React.KeyboardEvent): { x: number;
 function Dress({ x, top, hy, k, gear }: { x: number; top: number; hy: number; k: number; gear: PublicGear }): React.ReactElement {
   return (
     <g className="cm-fig-gear" aria-hidden="true">
+      {gear.body === 'architect' && <text data-gear="architect" x={x} y={top + 16 * k} textAnchor="middle" fontSize={9 * k} fontWeight={900} fill={art('architect-ink')} fontFamily={FONT}>A</text>}
+      {gear.body === 'jacket' && <path data-gear="jacket" d={`M${x} ${top + 2 * k} V${top + 20 * k}`} stroke={art('jacket-zip')} strokeWidth={1.4 * k} />}
       {gear.body === 'hoodie' && <text data-gear="hoodie" x={x} y={top + 16 * k} textAnchor="middle" fontSize={9 * k} fontWeight={900} fill={art('white')} fontFamily={FONT}>C</text>}
       {gear.neck === 'chain' && <g data-gear="chain">
         <path d={`M${x - 8 * k} ${top + 2 * k} Q${x} ${top + 10 * k} ${x + 8 * k} ${top + 2 * k}`} fill="none" stroke={art('chain')} strokeWidth={1.6 * k} />
@@ -67,7 +69,7 @@ export function Figure({ x, y, s, p, pose, onPick, testId, lanyard = false }: {
   const clip = `cm-fig-${p.key}`;
   const first = p.you ? 'You' : p.name.split(/\s+/)[0];
   const gear = p.staff ? {} : p.gear ?? {};
-  const body = gear.body === 'hoodie' ? art('hoodie') : p.tone;
+  const body = gear.body === 'hoodie' ? art('hoodie') : gear.body === 'jacket' ? art('jacket') : gear.body === 'architect' ? art('architect') : p.tone;
   const ring = p.staff ? { c: art('gold-ring'), w: 2 * k } : p.team ? { c: art('team'), w: 3 * k } : { c: art('white'), w: 2 * k };
   const pinned = p.you || p.team;
   return (

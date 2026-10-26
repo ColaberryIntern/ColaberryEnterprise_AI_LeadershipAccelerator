@@ -1,0 +1,18 @@
+/* v6 D1: the arrival card's two ways in (prototype .ways / .way). Tokens only. */
+.cm-ways{margin:0 0 14px}
+.cm-ways-h{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--cm-art-muted);font-weight:800;margin:0 0 8px}
+.cm-ways-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.cm-ways-grid.is-one{grid-template-columns:1fr}
+.cm-way{border-radius:16px;padding:12px;text-align:left;display:flex;flex-direction:column;gap:6px;min-width:0;border:1px solid var(--cm-art-line);background:var(--cm-art-card);
+  color:var(--cm-art-sp-ink);font:inherit;cursor:pointer}
+.cm-way:hover{filter:brightness(.98)}
+.cm-way:focus-visible{outline:3px solid var(--cm-art-red);outline-offset:2px}
+.cm-way .wk{font-size:10.5px;font-weight:800;letter-spacing:.14em;text-transform:uppercase}
+.cm-way b{font-size:13.5px;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.cm-way small{color:var(--cm-art-muted);font-size:12px;line-height:1.35}
+.cm-way .go{margin-top:auto;font-weight:800;font-size:12.5px}
+.cm-way.is-front .wk,.cm-way.is-front .go{color:var(--cm-art-red)}
+.cm-way.is-back{background:var(--cm-art-sp-keys);border-color:var(--cm-art-sp-keys);color:var(--cm-art-sp-card)}
+.cm-way.is-back .wk{color:var(--cm-art-sp-code-amber)}
+.cm-way.is-back small{color:var(--cm-art-sp-code-grey)}
+.cm-way.is-back .go{color:var(--cm-art-sp-lamp-glow)}

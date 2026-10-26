@@ -129,11 +129,24 @@ export function prepTasks(prepStart: Date, demoDay: Date): Array<{ key: string; 
   const span = Math.max(1, Math.round((demoDay.getTime() - prepStart.getTime()) / DAY));
   const at = (fraction: number) => addDays(prepStart, Math.round(span * fraction));
   return [
-    { key: 'PREP-1', title: 'Write the demo narrative: the problem, the one moment, the guardrail', dueOn: at(0.15) },
-    { key: 'PREP-2', title: 'Record a first run-through and watch it back', dueOn: at(0.35) },
-    { key: 'PREP-3', title: 'Build the slides — what it does, who for, the number it moves', dueOn: at(0.55) },
-    { key: 'PREP-4', title: 'Rehearse with one other person and take their notes', dueOn: at(0.75) },
-    { key: 'PREP-5', title: 'Record the final demo video', dueOn: at(0.9) },
+    // ONE TASK, ONE VIDEO — and the name says which video.
+    //
+    // These used to describe stages of a single demo: write the narrative,
+    // record a run-through, build the slides, rehearse, record the final. Each
+    // task now asks for one specific KIND of presentation, so the old names
+    // described work the task no longer asks for. Ali, 2026-10-24, looking at
+    // the Projects list: "The step names don't match the video names."
+    //
+    // The pairing itself lives in `presentation/prepTaskVideoTypes.ts` and a
+    // test asserts these titles agree with it. Existing projects are renamed by
+    // a backfill in `ensurePresentationStudioSchema`: changing only this
+    // function would leave a cohort mid-programme split between old names and
+    // new, which is worse than either alone.
+    { key: 'PREP-1', title: 'Record Your Project Introduction', dueOn: at(0.15) },
+    { key: 'PREP-2', title: 'Record Your Working-System Demo', dueOn: at(0.35) },
+    { key: 'PREP-3', title: 'Record Your AI Visual Presentation', dueOn: at(0.55) },
+    { key: 'PREP-4', title: 'Record Your Stakeholder Update', dueOn: at(0.75) },
+    { key: 'PREP-5', title: 'Record Your Final Showcase', dueOn: at(0.9) },
     { key: 'PREP-6', title: 'Present at Demo Day', dueOn: demoDay },
   ];
 }

@@ -1,21 +1,21 @@
 import React from 'react';
 import { art } from './artColor';
 import type { BuildingId, CampusBuilding } from '../campusMap';
-import { MayaDeskToken } from './MainGate';
 
 /**
- * The AI staff on the map (C11b, the prototype's .staff-tok and #mayaTok): each desk the server lists as on duty for this viewer
- * stands at its building, a gold-ringed initials token with a STAFF tag; Maya stands at her welcome desk beside the Main Gate.
- * A press walks you to that building, whose card has the desk. Real data only: no desk listed, no token.
+ * The AI staff on the map (C11b, the prototype's .staff-tok): each desk the server lists as on duty for this viewer stands at its
+ * building, a gold-ringed initials token with a STAFF tag. C21 (v6 D3): Maya stands on the Admissions building like the others (the
+ * welcome bench at the gate is gone); a desk an older server still places at the gate is drawn on Admissions. A press walks you to
+ * that building, whose card has the desk. Real data only: no desk listed, no token.
  */
 export interface MapDesk { id: string; name: string; building: string }
 const TONE: Record<string, string> = { reese: 'staff-reese', dara: 'staff-dara', maya: 'maya' };
 const initials = (name: string) => name.slice(0, 2).toUpperCase();
+export const deskBuilding = (d: MapDesk): string => (d.id === 'maya' && d.building === 'gate' ? 'admissions' : d.building);
 
 export default function StaffTokens({ desks, buildings, onPick }: { desks: MapDesk[]; buildings: CampusBuilding[]; onPick: (id: BuildingId) => void }): React.ReactElement {
   const byBuilding = new Map<string, MapDesk[]>();
-  for (const d of desks) if (d.id !== 'maya') byBuilding.set(d.building, [...(byBuilding.get(d.building) ?? []), d]);
-  const maya = desks.find((d) => d.id === 'maya');
+  for (const d of desks) byBuilding.set(deskBuilding(d), [...(byBuilding.get(deskBuilding(d)) ?? []), d]);
   return (
     <g data-testid="cm-staff-tokens">
       {[...byBuilding.entries()].map(([bid, list]) => {
@@ -35,7 +35,6 @@ export default function StaffTokens({ desks, buildings, onPick }: { desks: MapDe
           </g>
         ));
       })}
-      {maya && <MayaDeskToken onOpen={() => onPick('gate')} />}
     </g>
   );
 }

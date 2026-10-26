@@ -421,11 +421,20 @@ export const PRESENTATION_STUDIO_STATEMENTS: string[] = [
        ('PREP-3', 'ai_visual_presentation'),
        ('PREP-4', 'stakeholder_update'),
        ('PREP-5', 'final_showcase'),
-       ('PREP-6', 'architecture_review'),
-       ('PREP-7', 'client_handoff')
+       -- PREP-6 IS DEMO DAY AND TAKES NO VIDEO TYPE.
+       --
+       -- An earlier version of this list gave it architecture_review while the
+       -- rest of the system still treated PREP-6 as Demo Day, so one task
+       -- claimed both: "Staff marks this one", paying 60, with the Studio
+       -- coaching an Architecture Review video on it. That shipped, and this
+       -- row is what corrects it. architecture_review and client_handoff have
+       -- no task of their own until Demo Day is relocated.
+       ('PREP-6', 'final_showcase')
      ) AS v(story_id, type_id)
     WHERE presentation_assignments.story_id = v.story_id
       AND presentation_assignments.template_slug IS DISTINCT FROM v.type_id`,
+
+
   `ALTER TABLE presentation_recordings ADD COLUMN IF NOT EXISTS has_audio BOOLEAN`,
   `ALTER TABLE presentation_recordings ADD COLUMN IF NOT EXISTS has_shared_screen BOOLEAN`,
   `ALTER TABLE presentation_recordings ADD COLUMN IF NOT EXISTS review_reason TEXT`,

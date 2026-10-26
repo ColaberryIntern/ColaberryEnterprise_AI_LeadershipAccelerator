@@ -6,6 +6,7 @@ import type { TrustSignal } from '../../components/admin/shell/trust';
 import AsyncPanel from '../../components/explorerGrowth/AsyncPanel';
 import { useExplorerData } from '../../components/explorerGrowth/useExplorerData';
 import OverviewTab from '../../components/explorerGrowth/OverviewTab';
+import CampusTab from '../../components/explorerGrowth/CampusTab';
 import JourneyTab from '../../components/explorerGrowth/JourneyTab';
 import DecisionsTab from '../../components/explorerGrowth/DecisionsTab';
 import ShadowTab from '../../components/explorerGrowth/ShadowTab';
@@ -34,10 +35,12 @@ import { getSummary } from '../../services/explorerGrowthApi';
  * that is not coming.
  */
 
-type TabKey = 'overview' | 'journey' | 'decisions' | 'shadow' | 'content' | 'settings';
+type TabKey = 'overview' | 'campus' | 'journey' | 'decisions' | 'shadow' | 'content' | 'settings';
 
 const TABS: { key: TabKey; label: string; icon: string }[] = [
   { key: 'overview', label: 'Overview', icon: 'dashboard-line' },
+  // 2026-10-26: what explorers do on the campus, and who staff should reach out to
+  { key: 'campus', label: 'Campus & outreach', icon: 'user-voice-line' },
   { key: 'journey', label: 'Journey', icon: 'route-line' },
   { key: 'decisions', label: 'Decisions', icon: 'git-branch-line' },
   { key: 'shadow', label: 'Shadow', icon: 'eye-line' },
@@ -188,6 +191,7 @@ export default function ExplorerGrowthPage() {
       </ul>
 
       {tab === 'overview' && <OverviewTab />}
+      {tab === 'campus' && <CampusTab />}
       {tab === 'journey' && <JourneyTab />}
       {tab === 'decisions' && <DecisionsTab />}
       {tab === 'shadow' && <ShadowTab />}
