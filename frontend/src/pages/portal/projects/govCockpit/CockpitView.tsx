@@ -1,50 +1,50 @@
 import React, { useMemo, useState } from 'react';
-import type { StudentGovProjectView } from '../../../../services/govProjectPortalApi';
+import type { StudentGovProjectView, GovProposalDocument } from '../../../../services/govProjectPortalApi';
 import { parseDeadline, countdownTo, formatCountdown, dossierDeadlineIso } from '../../../admin/govDeadline';
-import { buildTasks, summarize, type CockpitTask } from './cockpitModel';
-import TaskBoard, { type BoardFilter } from './TaskBoard';
+import BuildReleases from './BuildReleases';
+import ProposalDocuments from './ProposalDocuments';
+import ProposalDocumentDrawer from './ProposalDocumentDrawer';
 import CommitFeed from './CommitFeed';
 import HowItWorks from './HowItWorks';
 import CopilotRail from './CopilotRail';
-import TaskDrawer from './TaskDrawer';
 import './govCockpit.css';
 
 /**
- * CockpitView — the Build Cockpit shell: a project bar (agency + close countdown), the progress/stat summary, the
- * three tabs (task board / commit sync / how it works) and the copilot rail, with a task drawer over the top. All
- * data comes from the one student-safe projection; this component only arranges it and owns the view-local UI state
- * (tab, filter, which task is open). Every write goes through the drawer and calls onReload to refresh the view.
+ * CockpitView (v2) — the Build Cockpit shell, now TWO clear workstreams. The intern owns the whole project, so there
+ * is no per-story assignment here: the BUILD tab shows the real releases → stories (summary + deep-link), and the
+ * PROPOSAL tab shows the named documents the AI drafts and a reviewer accepts. The project bar shows the overall %
+ * (verified build stories + accepted documents), the agency and the close countdown. The copilot rail is grounded in
+ * the same student-safe projection. All data comes from one projection; this only arranges it + holds view state.
  */
-type Tab = 'board' | 'commits' | 'how';
+type Tab = 'build' | 'proposal' | 'commits' | 'how';
 
 export default function CockpitView(
   { view, projectId, onReload }: { view: StudentGovProjectView; projectId: string; onReload: () => void },
 ): React.ReactElement {
-  const [tab, setTab] = useState<Tab>('board');
-  const [filter, setFilter] = useState<BoardFilter>('all');
-  const [openKey, setOpenKey] = useState<string | null>(null);
+  const [tab, setTab] = useState<Tab>('build');
+  const [openDocKey, setOpenDocKey] = useState<string | null>(null);
 
-  const tasks = useMemo(() => buildTasks(view), [view]);
-  const summary = useMemo(() => summarize(tasks), [tasks]);
+  const docs = useMemo(() => view.proposalDocuments ?? [], [view.proposalDocuments]);
   const feed = view.commitFeed ?? [];
-  const open: CockpitTask | null = openKey ? tasks.find((t) => t.track + ':' + t.key === openKey) ?? null : null;
+  const progress = view.overallProgress ?? { buildVerified: 0, buildTotal: 0, docsAccepted: 0, docsTotal: 0, pct: 0 };
+  const openDoc: GovProposalDocument | null = openDocKey ? docs.find((d) => d.key === openDocKey) ?? null : null;
+  const docsNeedReview = docs.filter((d) => d.status === 'drafted').length;
 
-  // Close countdown — reuse the admin Qualify workspace's govDeadline helpers over the detected key dates (public).
   const closeIso = dossierDeadlineIso(view.keyDates ?? []);
   const parsed = parseDeadline(closeIso);
   const countdown = parsed ? formatCountdown(countdownTo(parsed.ms, Date.now()), parsed.hasTime) : null;
 
-  const greeting = summary.reviewCount > 0
-    ? `${summary.reviewCount} commit${summary.reviewCount === 1 ? '' : 's'} matched ${summary.reviewCount === 1 ? 'a task' : 'tasks'} and ${summary.reviewCount === 1 ? 'is' : 'are'} waiting for your review. Ask me what to do next, or open any task.`
-    : 'Ask me what to do next, review the matched commits, or open any task.';
+  const greeting = (progress.docsAccepted + progress.buildVerified) === 0
+    ? 'Start the build in the workspace, and draft the proposal documents here. Ask me what to do next.'
+    : `${progress.buildVerified}/${progress.buildTotal} build stories verified and ${progress.docsAccepted}/${progress.docsTotal} documents accepted. Ask me what to do next, or what's at risk.`;
 
-  const seg: Array<[keyof typeof summary.counts, string]> = [['done', 'ok'], ['matched', 'warn'], ['build', 'ai'], ['todo', 'line']];
+  const donePct = progress.pct;
 
   return (
     <div className="gck">
       <header className="gck-bar">
         <div>
-          <span className="gck-eyebrow">Gov project &middot; Solution build + proposal</span>
+          <span className="gck-eyebrow">Gov project &middot; Build + Proposal</span>
           <h1>{view.name}</h1>
         </div>
         <div className="gck-meta">
@@ -56,42 +56,40 @@ export default function CockpitView(
 
       <section className="gck-summary" aria-label="Progress summary">
         <div className="gck-panel">
-          <div className="gck-prog-label"><span className="gck-eyebrow">Requirements verified</span><span className="gck-big gck-num">{summary.pct}%</span></div>
+          <div className="gck-prog-label"><span className="gck-eyebrow">Overall completion</span><span className="gck-big gck-num">{donePct}%</span></div>
           <div className="gck-track">
-            {seg.map(([k, c]) => summary.counts[k] > 0 && (
-              <span key={k} style={{ width: `${(summary.counts[k] / summary.total) * 100}%`, background: `var(--${c})` }} title={`${summary.counts[k]}`} />
-            ))}
+            {progress.buildVerified > 0 && <span style={{ width: `${(progress.buildVerified / Math.max(1, progress.buildTotal + progress.docsTotal)) * 100}%`, background: 'var(--ai)' }} title="verified build stories" />}
+            {progress.docsAccepted > 0 && <span style={{ width: `${(progress.docsAccepted / Math.max(1, progress.buildTotal + progress.docsTotal)) * 100}%`, background: 'var(--ok)' }} title="accepted documents" />}
           </div>
           <div className="gck-legend">
-            <span><i style={{ background: 'var(--ok)' }} />Verified</span>
-            <span><i style={{ background: 'var(--warn)' }} />Commit matched</span>
-            <span><i style={{ background: 'var(--ai)' }} />In build</span>
-            <span><i style={{ background: 'var(--line)' }} />Not started</span>
+            <span><i style={{ background: 'var(--ai)' }} />Build stories verified</span>
+            <span><i style={{ background: 'var(--ok)' }} />Documents accepted</span>
+            <span><i style={{ background: 'var(--line)' }} />Remaining</span>
           </div>
         </div>
-        <div className="gck-panel gck-stat"><div className="k">AI build tasks</div><div className="v gck-num">{summary.aiCount}</div><div className="s">close from commits in the build repo</div></div>
-        <div className="gck-panel gck-stat"><div className="k">Your tasks</div><div className="v gck-num">{summary.humanCount}</div><div className="s">reviews, proposal, demo</div></div>
-        <div className="gck-panel gck-stat"><div className="k">Waiting on you</div><div className="v gck-num" style={{ color: summary.reviewCount ? 'var(--warn)' : undefined }}>{summary.reviewCount}</div><div className="s">commit matches to review</div></div>
+        <div className="gck-panel gck-stat"><div className="k">Build stories</div><div className="v gck-num">{progress.buildVerified}/{progress.buildTotal}</div><div className="s">verified from commits</div></div>
+        <div className="gck-panel gck-stat"><div className="k">Proposal documents</div><div className="v gck-num">{progress.docsAccepted}/{progress.docsTotal}</div><div className="s">accepted</div></div>
+        <div className="gck-panel gck-stat"><div className="k">Documents to review</div><div className="v gck-num" style={{ color: docsNeedReview ? 'var(--warn)' : undefined }}>{docsNeedReview}</div><div className="s">drafted, awaiting a decision</div></div>
       </section>
 
       <nav className="gck-tabs" role="tablist">
-        <button className="gck-tab" role="tab" aria-selected={tab === 'board'} onClick={() => setTab('board')}>Task board</button>
+        <button className="gck-tab" role="tab" aria-selected={tab === 'build'} onClick={() => setTab('build')}>Build</button>
+        <button className="gck-tab" role="tab" aria-selected={tab === 'proposal'} onClick={() => setTab('proposal')}>Proposal<span className="n">{docs.length}</span></button>
         <button className="gck-tab" role="tab" aria-selected={tab === 'commits'} onClick={() => setTab('commits')}>Commit sync<span className="n">{feed.length}</span></button>
         <button className="gck-tab" role="tab" aria-selected={tab === 'how'} onClick={() => setTab('how')}>How it works</button>
       </nav>
 
       <div className="gck-main">
         <div style={{ minWidth: 0 }}>
-          {tab === 'board' && (tasks.length === 0
-            ? <p className="gck-empty">No requirement-cited tasks yet. Build work is tracked here once requirements are established and assigned.</p>
-            : <TaskBoard tasks={tasks} filter={filter} onFilter={setFilter} onOpen={(t) => setOpenKey(t.track + ':' + t.key)} />)}
+          {tab === 'build' && <BuildReleases summary={view.buildSummary} />}
+          {tab === 'proposal' && <ProposalDocuments docs={docs} onOpen={(d) => setOpenDocKey(d.key)} />}
           {tab === 'commits' && <CommitFeed feed={feed} />}
           {tab === 'how' && <HowItWorks />}
         </div>
         <CopilotRail projectId={projectId} greeting={greeting} />
       </div>
 
-      {open && <TaskDrawer task={open} view={view} projectId={projectId} onReload={onReload} onClose={() => setOpenKey(null)} />}
+      {openDoc && <ProposalDocumentDrawer doc={openDoc} projectId={projectId} canVerify={view.viewerCanVerify} onReload={onReload} onClose={() => setOpenDocKey(null)} />}
     </div>
   );
 }

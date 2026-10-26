@@ -4,7 +4,7 @@
  * submitted evidence, never from a commit's mere presence. The feed carries public commit facts and no identity;
  * the provenance reader carries only the agency + key dates, never the dossier's contacts.
  */
-import { deriveBuildStoryStage, deriveProposalStage, toCommitFeed, readGovProvenanceFacts } from '../govCockpit';
+import { deriveBuildStoryStage, deriveProposalStage, toCommitFeed, readGovProvenanceFacts, computeOverallProgress } from '../govCockpit';
 import type { EvidenceView } from '../govBuildEvidence';
 
 const ev = (over: Partial<EvidenceView> = {}): EvidenceView => ({
@@ -62,6 +62,20 @@ describe('toCommitFeed — only github_push rows with a sha, newest-first order 
   it('is total on garbage', () => {
     expect(toCommitFeed(undefined)).toEqual([]);
     expect(toCommitFeed([null as any])).toEqual([]);
+  });
+});
+
+describe('computeOverallProgress — verified stories + accepted documents, equal weight', () => {
+  it('combines build + docs into one honest percent (only verified/accepted count)', () => {
+    expect(computeOverallProgress({ buildVerified: 2, buildTotal: 4, docsAccepted: 1, docsTotal: 4 })).toMatchObject({ pct: 38 }); // 3 of 8
+    expect(computeOverallProgress({ buildVerified: 0, buildTotal: 0, docsAccepted: 0, docsTotal: 0 }).pct).toBe(0); // no divide-by-zero
+    expect(computeOverallProgress({ buildVerified: 3, buildTotal: 3, docsAccepted: 2, docsTotal: 2 }).pct).toBe(100);
+  });
+  it('clamps garbage (verified never exceeds total; negatives floored)', () => {
+    const r = computeOverallProgress({ buildVerified: 99, buildTotal: 2, docsAccepted: -5, docsTotal: 3 });
+    expect(r.buildVerified).toBe(2); // clamped to total
+    expect(r.docsAccepted).toBe(0);  // floored
+    expect(r.pct).toBe(40);          // 2 of 5
   });
 });
 

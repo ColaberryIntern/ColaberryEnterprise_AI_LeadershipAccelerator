@@ -79,6 +79,27 @@ export function toCommitFeed(evidence: EvidenceView[] | null | undefined): Commi
     }));
 }
 
+/** The cockpit's overall completion: verified build stories + accepted proposal documents, each item weighted
+ *  equally. This is the number the project bar shows and that only ADVANCES as a reviewer verifies a story or
+ *  accepts a document — never from a draft or a commit alone. */
+export interface GovOverallProgress {
+  buildVerified: number; buildTotal: number;
+  docsAccepted: number; docsTotal: number;
+  /** Combined percent across build stories + proposal documents (0 when there is nothing yet). */
+  pct: number;
+}
+
+/** PURE + total: combine build-story verification and document acceptance into one honest completion percent. */
+export function computeOverallProgress(input: { buildVerified: number; buildTotal: number; docsAccepted: number; docsTotal: number }): GovOverallProgress {
+  const buildTotal = Math.max(0, Number(input?.buildTotal) || 0);
+  const buildVerified = Math.min(buildTotal, Math.max(0, Number(input?.buildVerified) || 0));
+  const docsTotal = Math.max(0, Number(input?.docsTotal) || 0);
+  const docsAccepted = Math.min(docsTotal, Math.max(0, Number(input?.docsAccepted) || 0));
+  const total = buildTotal + docsTotal;
+  const done = buildVerified + docsAccepted;
+  return { buildVerified, buildTotal, docsAccepted, docsTotal, pct: total ? Math.round((done / total) * 100) : 0 };
+}
+
 /** The two public solicitation facts the cockpit's project bar shows: the agency, and the detected key dates the
  *  frontend's existing govDeadline helper turns into a "closes in N days" countdown. Both live in the qualification's
  *  `requirements_json` (provenance + dossier), not in any admin-only field. */

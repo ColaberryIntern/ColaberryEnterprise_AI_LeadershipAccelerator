@@ -15,8 +15,16 @@
 import { deriveGovBuildPlan, buildGovStoryPrompt, reconcileGovBuildPlan, type GovBuildStory, type GovBuildRelease } from './proposal/govBuildPlan';
 import type { EvidenceView } from './govBuildEvidence';
 import type { SharedProposalView, ProposalShareLevel } from './govProposalShare';
-import { deriveBuildStoryStage, deriveProposalStage, toCommitFeed, readGovProvenanceFacts, type BuildStage, type ProposalStage, type CommitFeedItem } from './govCockpit';
+import { deriveBuildStoryStage, deriveProposalStage, toCommitFeed, readGovProvenanceFacts, computeOverallProgress, type BuildStage, type ProposalStage, type CommitFeedItem, type GovOverallProgress } from './govCockpit';
 import type { GovBuildSummary } from './govBuildSummary';
+
+/** v2 Proposal view: one named document a bid must submit, projected student-safe (no comment-author identities). */
+export interface StudentProposalDocumentComment { body: string; at: string; }
+export interface StudentProposalDocument {
+  key: string; title: string; status: string; contentHtml: string | null;
+  version: number; gate: boolean; order: number; requirementIds: string[];
+  comments: StudentProposalDocumentComment[]; draftedAt: string | null; acceptedAt: string | null;
+}
 
 export interface StudentGovTrackView { trackType: string; status: string; hasBuild: boolean; }
 export interface StudentGovRequirementView {
@@ -85,6 +93,11 @@ export interface StudentGovProjectView {
   /** v2 Build view: the SBP build summary (releases -> stories + progress) and the linked project id for the
    *  deep-link to the build workspace. Null when no build is linked yet. */
   buildSummary: GovBuildSummary | null;
+  /** v2 Proposal view: the named documents a bid must submit (AI-drafted, reviewer-accepted). Admin-only docs
+   *  (pricing) are dropped for non-reviewers. */
+  proposalDocuments: StudentProposalDocument[];
+  /** v2: combined completion across verified build stories + accepted proposal documents — the honest project %. */
+  overallProgress: GovOverallProgress;
 }
 
 /**
@@ -171,6 +184,8 @@ export function toStudentGovProjectView(project: any, tracks: any[], requirement
     keyDates: [],
     commitFeed: [],
     buildSummary: null, // filled by the async loader from the materialized SBP build
+    proposalDocuments: [], // filled by the async loader from the derived + synced documents
+    overallProgress: computeOverallProgress({ buildVerified: 0, buildTotal: 0, docsAccepted: 0, docsTotal: 0 }),
   };
 }
 
@@ -250,6 +265,29 @@ export async function getStudentGovProjectView(deliveryProjectId: string, viewer
     const { getGovBuildSummary } = await import('./govBuildSummary');
     view.buildSummary = await getGovBuildSummary(deliveryProjectId);
   } catch { /* additive; buildSummary stays null */ }
+
+  // v2 Proposal view: derive the named documents from the established requirements, SYNC them into the store
+  // (preserving authored state), and project student-safe — admin-only (pricing) documents are dropped for a
+  // non-reviewer, and comment-author identities are stripped. The overall project % counts ALL documents + build
+  // stories (so it is the same honest number for everyone), while the CARD list is viewer-filtered. Best-effort.
+  try {
+    const { deriveProposalDocuments } = await import('./proposal/govProposalDocuments');
+    const { syncProposalDocuments } = await import('./proposal/govProposalDocumentStore');
+    const docs = await syncProposalDocuments(deliveryProjectId, deriveProposalDocuments(requirements));
+    view.proposalDocuments = docs
+      .filter((d) => viewerCanVerify || !d.adminOnly)
+      .map((d) => ({
+        key: d.key, title: d.title, status: d.status, contentHtml: d.contentHtml, version: d.version,
+        gate: d.gate, order: d.order, requirementIds: d.requirementIds,
+        comments: d.comments.map((c) => ({ body: c.body, at: c.at })), draftedAt: d.draftedAt, acceptedAt: d.acceptedAt,
+      }));
+    view.overallProgress = computeOverallProgress({
+      buildVerified: view.buildSummary?.rollup.verified ?? 0,
+      buildTotal: view.buildSummary?.rollup.total ?? 0,
+      docsAccepted: docs.filter((d) => d.status === 'accepted').length,
+      docsTotal: docs.length,
+    });
+  } catch { /* additive; proposalDocuments/overallProgress stay at defaults */ }
 
   // P6: the shared proposal (projected to THIS viewer's grant level) + the price-free submission checklist. Built
   // from the SAME response slots the admin workspace uses (deriveResponseSlots + the persisted responses), then run
