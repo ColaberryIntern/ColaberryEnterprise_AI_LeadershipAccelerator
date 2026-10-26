@@ -6,7 +6,11 @@
 import React from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { act } from 'react-dom/test-utils';
+const mockRsvp = jest.fn();
+jest.mock('../../../services/onboardingApi', () => ({ ...jest.requireActual('../../../services/onboardingApi'), rsvpOpenHouse: (...a: unknown[]) => mockRsvp(...a) }));
+// eslint-disable-next-line import/first
 import { OpenHouseCard, openHouseVariant } from '../events/OpenHouseCard';
+// eslint-disable-next-line import/first
 import type { OpenHouseView } from '../../../services/onboardingApi';
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -64,4 +68,29 @@ it('staff: the reminder to tell everyone, with the link to copy; business: no ca
 
 it('never says "free"', () => {
   for (const a of ['explorer', 'member', 'staff']) { show(a); expect(container.textContent).not.toMatch(/\bfree\b/i); }
+});
+
+it('Save my seat records the RSVP on the same click and tells the page, so the card can flip to "You are going" (Ali: recognise the sign-up)', async () => {
+  mockRsvp.mockResolvedValue({ ok: true, awarded: true, points: 25 });
+  const onRegistered = jest.fn();
+  act(() => { root.render(<OpenHouseCard audience="explorer" ev={EV} registered={false} now={NOW} onRegistered={onRegistered} />); });
+  const a = q('[data-testid="cm-oh-signup"]') as HTMLAnchorElement;
+  a.addEventListener('click', (e) => e.preventDefault()); // jsdom cannot open the new tab
+  await act(async () => { a.click(); });
+  expect(mockRsvp).toHaveBeenCalledWith('oh-1');
+  expect(onRegistered).toHaveBeenCalledTimes(1);
+  act(() => { root.render(<OpenHouseCard audience="explorer" ev={EV} registered now={NOW} onRegistered={onRegistered} />); });
+  expect(q('[data-testid="cm-oh-signup"]')).toBeNull();
+  expect(q('[data-testid="cm-oh-going"]')).not.toBeNull();
+});
+
+it('a failed RSVP leaves Save my seat so they can try again', async () => {
+  mockRsvp.mockRejectedValue(new Error('UpstreamUnavailable'));
+  const onRegistered = jest.fn();
+  act(() => { root.render(<OpenHouseCard audience="explorer" ev={EV} registered={false} now={NOW} onRegistered={onRegistered} />); });
+  const a = q('[data-testid="cm-oh-signup"]') as HTMLAnchorElement;
+  a.addEventListener('click', (e) => e.preventDefault());
+  await act(async () => { a.click(); });
+  expect(onRegistered).not.toHaveBeenCalled();
+  expect(q('[data-testid="cm-oh-signup"]')).not.toBeNull();
 });
