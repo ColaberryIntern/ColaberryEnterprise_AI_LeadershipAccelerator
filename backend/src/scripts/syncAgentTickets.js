@@ -37,6 +37,7 @@
  *      `node backend/src/scripts/syncAgentTickets.js --apply`   (posts and shifts)
  */
 const { Sequelize, QueryTypes } = require('sequelize');
+const { fetchAllPages } = require('./lib/basecampPaging');
 const R = require('./lib/agentRoster');
 const { buildDigest, dueDateShiftDays, FINGERPRINT_TAG } = require('./lib/agentTicketDigest');
 
@@ -93,6 +94,11 @@ async function bc(method, p, body, retried = false) {
   if (!r.ok) throw new Error(`${method} ${p} -> ${r.status} ${(await r.text()).slice(0, 160)}`);
   return r.status === 204 ? {} : r.json();
 }
+
+/** Every comment on a ticket. Paginated, because `comments.json` returns the OLDEST 15. */
+const allComments = (recordingId) => fetchAllPages(
+  (page) => bc('GET', `/buckets/${BUCKET}/recordings/${recordingId}/comments.json?page=${page}`),
+);
 
 /** The last fingerprint and due date this job recorded on a ticket, or nulls. */
 function lastSeen(comments) {
@@ -177,7 +183,7 @@ async function main() {
     };
 
     const { fingerprint, html, headline } = buildDigest(state);
-    const comments = await bc('GET', `/buckets/${BUCKET}/recordings/${ticket.id}/comments.json`);
+    const comments = await allComments(ticket.id);
     const seen = lastSeen(comments);
 
     // --- BASECAMP -> PLATFORM: due dates only ---------------------------------
