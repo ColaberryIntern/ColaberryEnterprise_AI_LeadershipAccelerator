@@ -63,7 +63,18 @@ const roomOk = (id, spots) => `(() => {
 /** v6 D1 fidelity view 21-room: the five rooms the ticket names, as a member (the click-throughs are in campus.e2e.js). */
 const ROOM_VIEWS = [['lecture', 1], ['studio', 1], ['testing', 1], ['library', 1], ['amphi', 0]].map(([id, spots]) => ({
   name: `21-room-${id}`, route: '/portal/campus', accounts: ['member'], steps: () => [tap(id), WALKED],
-  required: () => ['cm-inside', 'cm-room3d', 'cm-board', 'cm-ways', ...(spots ? ['.cm-r3-spot'] : [])], assert: () => roomOk(id, spots) }));
+  required: () => ['cm-inside', 'cm-room3d', 'cm-board', 'cm-ways', ...(spots ? ['.cm-r3-spot'] : []), ...(id === 'library' || id === 'amphi' ? ['cm-wall-board'] : [])], assert: () => roomOk(id, spots) }));
+/** C43 (room fix F3): every room has its left-wall board (from real data, or its empty line); these four had a blank wall. */
+/** C45 (room fix F5): the window is big and shows the neighbours as themselves (Classroom, Library; Meeting Rooms' high strip). */
+const WINDOW_VIEWS = [['lecture', 0.6], ['library', 0.6], ['commons', 0.2]].map(([id, minH]) => ({
+  name: `31-room-windows-${id}`, route: '/portal/campus', accounts: ['member'], steps: () => [tap(id), WALKED, { wait: 800 }],
+  required: () => ['cm-room3d', 'cm-room-window', ...(id === 'commons' ? [] : ['[data-mini]'])],
+  assert: () => `(() => { const w = document.querySelector('[data-testid=\"cm-room-window\"]'); const f = w.closest('.face'); if (!f) return 'window not on a wall';
+    const r = w.offsetHeight / f.offsetHeight; return r >= ${minH} ? '' : 'window is ' + Math.round(r * 100) + '% of the wall height'; })()` }));
+const WALL_VIEWS = ['tower', 'observatory', 'gallery', 'career'].map((id) => ({
+  name: `21-room-wall-${id}`, route: '/portal/campus', accounts: ['member'], steps: () => [tap(id), WALKED],
+  required: () => ['cm-room3d', 'cm-wall-board'],
+  assert: () => "(() => document.querySelector('[data-testid=\"cm-room3d\"] .face.left [data-testid=\"cm-wall-board\"]') ? '' : 'no board on the left wall')()" }));
 
 /** The map's viewBox right now, and the drag / zoom that move it well away from the whole campus. */
 const VB = "document.querySelector('svg.cm-map.has-camera').getAttribute('viewBox')";
@@ -155,7 +166,7 @@ const VIEWS = [
   // WP-5: a room whose back wall carries real facts (the Schedule board: TODAY · <weekday>, the next session, event and plan)
   { name: '19-room-wall', route: '/portal/campus', steps: () => [tap('tower'), WALKED],
     required: () => ['cm-inside', 'cm-room3d', 'cm-board', 'cm-r3-you'], assert: () => roomOk('tower', 0) }, // v6 D1: Schedule has a board, no spot
-  ...ROOM_VIEWS,
+  ...ROOM_VIEWS, ...WALL_VIEWS, ...WINDOW_VIEWS,
   // C19 (round 3 §2.3 + v6 D1): the workstation, reached the real way (into the Studio, sit at your desk). A story as a member:
   // the throwaway seed has a project but no Classroom week, so the lesson workstation is covered by its unit test instead.
   // C40: the frame gets out of the way. Under 1600 px the angled side monitor folds away; under 1200 px Cory is a drawer (closed) and
@@ -261,7 +272,7 @@ function panelFor(view, a, size) {
   if (view.name === '01-gate' || view.name === '23-workstation') return []; // the workstation is full screen, as the prototype's #ws
   const tour = a === 'staff' ? [] : ['cm-cc-tour'];
   if (view.route !== '/portal/campus' && view.name !== '14-step-outside') return size === 'phone' ? ['cm-steps-open'] : ['cm-page-rail', ...tour.map((t) => `[data-testid="cm-page-rail"] [data-testid="${t}"]`)];
-  if (size === 'phone' && (CARD_VIEWS.includes(view.name) || view.name.startsWith('21-room-') || view.name === '24-admissions' || view.name === '25-schedule' || view.name === '26-meeting-rooms' || view.name === '28-live' || view.name === '30-game-room-interior' || view.name === '30-chow-hall' || view.name === '31-weather')) return ['cm-cc-peek'];
+  if (size === 'phone' && (CARD_VIEWS.includes(view.name) || view.name.startsWith('21-room-') || view.name.startsWith('31-room-windows-') || view.name === '24-admissions' || view.name === '25-schedule' || view.name === '26-meeting-rooms' || view.name === '28-live' || view.name === '30-game-room-interior' || view.name === '30-chow-hall' || view.name === '31-weather')) return ['cm-cc-peek'];
   return ['cm-concierge', ...tour];
 }
 const withPanel = (view) => ({ ...view, required: (a, size) => [...view.required(a, size), ...panelFor(view, a, size)] });

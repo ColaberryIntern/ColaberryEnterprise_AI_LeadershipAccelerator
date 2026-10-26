@@ -46,3 +46,23 @@ it('with Workplace names on, the view uses the Workplace names (never a campus-o
     if (b) expect(i.name).toBe(b.workplaceName);
   }
 });
+
+it('C45 sanity table: the nearest item in each window (the map decides; Meeting Rooms sees the Main Gate first, nearer than the fountain)', () => {
+  const first = (id: Parameters<typeof viewFrom>[0]) => viewFrom(id)[0]?.id ?? 'skyline';
+  expect([first('lecture'), first('library'), first('tower'), first('commons'), first('chow'), first('career')]).toEqual(['studio', 'tower', 'lecture', 'gate-lm', 'gate-lm', 'skyline']);
+});
+
+it('C45: each neighbour is its own drawing: roof by kind, panes lit at night, landmarks drawn as themselves; buildings keep their map proportions', () => {
+  const el = document.createElement('div');
+  const root = createRoot(el);
+  act(() => { root.render(<WindowView items={viewFrom('library')} lit={false} />); });
+  expect(el.querySelector('[data-view="tower"] [data-mini="tower"]')?.getAttribute('data-kind')).toBe('tower');
+  expect(el.querySelector('[data-view="fountain"] [data-mini="fountain"]')).not.toBeNull();
+  expect(el.querySelector('[data-mini="tower"] rect[rx]')!.getAttribute('fill')).toBe('var(--cm-art-mini-win)');
+  act(() => { root.render(<WindowView items={viewFrom('library')} lit />); });
+  expect(el.querySelector('[data-mini="tower"] rect[rx]')!.getAttribute('fill')).toBe('var(--cm-art-lit)');
+  const tower = viewFrom('library').find((i) => i.id === 'tower')!;
+  const b = CAMPUS_BUILDINGS.find((x) => x.id === 'tower')!;
+  expect(tower.ratio).toBeCloseTo(b.pos.h / b.pos.w, 5);
+  act(() => root.unmount());
+});

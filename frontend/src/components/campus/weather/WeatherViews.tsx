@@ -105,7 +105,8 @@ export function RoomWindow({ wx, small = false, view }: { wx: CampusWeather; sma
           <span className="stars" data-testid="cm-win-stars" />
         </>}
         {Array.from({ length: CLOUDS[c as Condition] ?? 0 }, (_, i) => <i key={i} className={`cloud c${i}`} />)}
-        {view ? <WindowView items={view} lit={wx.tod === 'dusk' || wx.tod === 'night'} /> : <i className="hills" />}
+        <i className="hills" />
+        {view && <WindowView items={view} lit={wx.tod === 'dusk' || wx.tod === 'night'} />}
         {(c === 'rain' || c === 'storm') && <span className="rain" data-testid="cm-win-rain" />}
         {c === 'snow' && <span className="snow" />}
         {c === 'fog' && <span className="fog" />}
