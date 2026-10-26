@@ -4,6 +4,7 @@ import { createRoot } from 'react-dom/client';
 import { act } from 'react-dom/test-utils';
 import { CAMPUS_BUILDINGS } from '../campusMap';
 import { viewFrom, lookingOut, viewTitle, WindowView } from '../weather/windowView';
+import { MiniBuilding, MiniLandmark } from '../weather/miniArt';
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -64,5 +65,32 @@ it('C45: each neighbour is its own drawing: roof by kind, panes lit at night, la
   const tower = viewFrom('library').find((i) => i.id === 'tower')!;
   const b = CAMPUS_BUILDINGS.find((x) => x.id === 'tower')!;
   expect(tower.ratio).toBeCloseTo(b.pos.h / b.pos.w, 5);
+  act(() => root.unmount());
+});
+
+// C45 (verifier follow-up): every roof family on the map draws its own roof, and the wall colour follows the kind
+const KINDS = Array.from(new Set(CAMPUS_BUILDINGS.filter((b) => b.kind !== 'gate').map((b) => b.kind)));
+const ROOF: Record<string, [string, number]> = { pediment: ['polygon', 1], gable: ['polygon', 1], tower: ['polygon', 1], dome: ['path', 1], arcade: ['rect', 1], amphi: ['path', 2], flat: ['rect', 1], office: ['rect', 1], pavilion: ['rect', 1] };
+const WALL: Record<string, string> = { office: 'mini-glass', pavilion: 'mini-glass', arcade: 'mini-arcade' };
+it.each(KINDS)('C45: the %s roof family draws its own roof and wall', (kind) => {
+  const el = document.createElement('div');
+  const root = createRoot(el);
+  const b = CAMPUS_BUILDINGS.find((x) => x.kind === kind)!;
+  act(() => { root.render(<MiniBuilding id={b.id} kind={kind} ratio={b.pos.h / b.pos.w} lit={false} />); });
+  const svg = el.querySelector(`[data-mini="${b.id}"]`)!;
+  expect(svg.getAttribute('data-kind')).toBe(kind);
+  const roofs = svg.querySelectorAll('[data-part="roof"]');
+  expect([kind, roofs.length, roofs[0].tagName.toLowerCase()]).toEqual([kind, ROOF[kind][1], ROOF[kind][0]]);
+  if (kind === 'arcade') expect(roofs[0].getAttribute('stroke')).toBe('var(--cm-art-mini-neon)');
+  else expect(roofs[0].getAttribute(kind === 'amphi' ? 'stroke' : 'fill')).toBe(`var(--cm-art-${b.id})`);
+  if (kind !== 'amphi') expect(svg.querySelector('[data-part="wall"]')!.getAttribute('fill')).toBe(`var(--cm-art-${WALL[kind] ?? 'mini-wall'})`);
+  act(() => root.unmount());
+});
+
+it.each(['pond', 'fountain', 'board', 'gate'])('C45: the %s landmark has its own drawing', (kind) => {
+  const el = document.createElement('div');
+  const root = createRoot(el);
+  act(() => { root.render(<MiniLandmark kind={kind} />); });
+  expect(el.querySelector(`[data-mini="${kind}"]`)!.children.length).toBeGreaterThan(1);
   act(() => root.unmount());
 });

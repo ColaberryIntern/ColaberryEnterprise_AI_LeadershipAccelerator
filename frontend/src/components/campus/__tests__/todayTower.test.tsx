@@ -14,6 +14,8 @@ import { TowerTodayTile } from '../home/TodayCard';
 import type { CampusAudience } from '../campusMap';
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+// mounting the whole campus map takes several seconds on a busy machine (a verifier saw one 5 s timeout): give each test room
+jest.setTimeout(30_000);
 const tower = (a: CampusAudience) => campusBuildingsFor(a).find((b) => b.id === 'tower')!;
 
 it('the tower opens Today for Explorers and the schedule for everyone else; name and rooms do not change', () => {

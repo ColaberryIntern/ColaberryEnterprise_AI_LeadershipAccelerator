@@ -14,9 +14,9 @@ export function MiniBuilding({ id, kind, ratio, lit }: { id: string; kind: strin
   const c = art(id);
   if (kind === 'amphi') {
     return (
-      <svg viewBox="-60 -50 220 70" data-mini={id}>
-        <path d="M-50 15A100 60 0 0 1 150 15" stroke={c} strokeWidth={16} fill="none" />
-        <path d="M-25 15A75 44 0 0 1 125 15" stroke={art(`${id}-d20`)} strokeWidth={14} fill="none" />
+      <svg viewBox="-60 -50 220 70" data-mini={id} data-kind="amphi">
+        <path data-part="roof" d="M-50 15A100 60 0 0 1 150 15" stroke={c} strokeWidth={16} fill="none" />
+        <path data-part="roof" d="M-25 15A75 44 0 0 1 125 15" stroke={art(`${id}-d20`)} strokeWidth={14} fill="none" />
         <rect x={25} y={-2} width={50} height={17} fill={art('mini-wall')} />
       </svg>
     );
@@ -32,13 +32,13 @@ export function MiniBuilding({ id, kind, ratio, lit }: { id: string; kind: strin
     }
   }
   let roof: React.ReactElement;
-  if (kind === 'pediment' || kind === 'gable' || kind === 'tower') roof = <polygon points={`-6,0 ${W + 6},0 ${W / 2},${-Math.min(40, W * 0.3)}`} fill={c} />;
-  else if (kind === 'dome') roof = <path d={`M${W * 0.15} 0A${W * 0.35} ${W * 0.35} 0 0 1 ${W * 0.85} 0Z`} fill={c} />;
-  else if (kind === 'arcade') roof = <rect x={-4} y={-16} width={W + 8} height={16} rx={4} fill={art('mini-arcade-roof')} stroke={art('mini-neon')} strokeWidth={3} />;
-  else roof = <rect x={-3} y={-8} width={W + 6} height={9} fill={c} />;
+  if (kind === 'pediment' || kind === 'gable' || kind === 'tower') roof = <polygon data-part="roof" points={`-6,0 ${W + 6},0 ${W / 2},${-Math.min(40, W * 0.3)}`} fill={c} />;
+  else if (kind === 'dome') roof = <path data-part="roof" d={`M${W * 0.15} 0A${W * 0.35} ${W * 0.35} 0 0 1 ${W * 0.85} 0Z`} fill={c} />;
+  else if (kind === 'arcade') roof = <rect data-part="roof" x={-4} y={-16} width={W + 8} height={16} rx={4} fill={art('mini-arcade-roof')} stroke={art('mini-neon')} strokeWidth={3} />;
+  else roof = <rect data-part="roof" x={-3} y={-8} width={W + 6} height={9} fill={c} />;
   return (
     <svg viewBox={`-8 -44 116 ${H + 48}`} data-mini={id} data-kind={kind}>
-      <rect width={W} height={H} fill={wall} stroke={art('mini-edge')} />
+      <rect data-part="wall" width={W} height={H} fill={wall} stroke={art('mini-edge')} />
       {panes}
       {roof}
     </svg>
