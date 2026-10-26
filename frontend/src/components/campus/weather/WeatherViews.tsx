@@ -113,7 +113,11 @@ export function RoomWindow({ wx, small = false, view }: { wx: CampusWeather; sma
         <i className="mullion v" /><i className="mullion h" />
       </div>
       <div className="sill" />
-      <div className="sign">{emojiFor(c, wx.tod)}{t !== null ? ` ${t}°` : ''}{wx.w.city ? ` · ${wx.w.city}` : ''}{view && <small data-testid="cm-win-looking">{lookingOut(view)}</small>}</div>
+      {/* Ali, 2026-10-26: location, temperature and time under the window. The temperature only exists while weather is on
+          (CAMPUS_WEATHER_ENABLED); the place (the browser's time-zone city, or "your area") and the local time always show. */}
+      <div className="sign" data-testid="cm-win-sign">{emojiFor(c, wx.tod)}{t !== null ? ` ${t}°` : ''}{wx.w.city ? ` · ${wx.w.city}` : ''}
+        {' · '}<span data-testid="cm-win-time">{wx.now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}</span>
+        {view && <small data-testid="cm-win-looking">{lookingOut(view)}</small>}</div>
     </div>
   );
 }
