@@ -162,6 +162,11 @@ export function careerBuildingFor(audience: CampusAudience): Pick<CampusBuilding
   return { name: b.name, workplaceName: b.workplaceName, primary: b.primary, rooms: b.rooms };
 }
 
+/** C51 (v13 T3): Today is the Explorer's home base, so the Schedule tower's main button opens it for them. Name and rooms stay. */
+export function towerPrimaryFor(audience: CampusAudience): CampusBuilding['primary'] | null {
+  return audience === 'explorer' ? { label: 'Open Today', route: '/portal/today?stay=1' } : null;
+}
+
 /** Buildings this audience can see on the map. */
 export function buildingsFor(audience: CampusAudience): CampusBuilding[] {
   return CAMPUS_BUILDINGS.filter((b) => b.audiences.includes(audience));

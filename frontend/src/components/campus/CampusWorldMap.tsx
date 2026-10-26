@@ -27,6 +27,7 @@ import type { Cam } from './campusCamera';
 import { useWalk } from './useWalk';
 import type { Travel } from './useWalk';
 import BoardSign from './board/BoardSign';
+import TodayFlag, { GateTodaySign } from './art/TodayFlag';
 import { onBoard } from './board/boardApi';
 import { BOARD_SPOT } from './board/boardModel';
 import './campusMapArt.css';
@@ -104,6 +105,8 @@ export interface CampusMapProps {
   hover?: BuildingId | null;
   /** C11b: the Explorer view's OPEN badges. */
   showOpen?: boolean;
+  /** C51 / C52 (v13 T3, T4): the Explorer's TODAY flag over the Schedule tower and START HERE sign at the gate (open Today, no walk). */
+  todayFlag?: boolean;
   /** C11b: the AI staff desks on duty for this viewer, drawn at their buildings (full map only). */
   desks?: MapDesk[];
   /** C11b / WP-3: you: initials (from your name), photo, level and account colour. */
@@ -216,7 +219,7 @@ function pinsOf(plan: PlanStop[] | undefined): Partial<Record<BuildingId, { n: n
 }
 
 /** C17: what a click must NOT be on to count as ground: a building (or its click area), a staff desk, or you. */
-const NOT_GROUND = '.cm-bld, .cm-hit-area, .cm-staff-tok, .cm-avatar, .cm-cboard-sign';
+const NOT_GROUND = '.cm-bld, .cm-hit-area, .cm-staff-tok, .cm-avatar, .cm-cboard-sign, .cm-today-flag, .cm-gate-today';
 /** A screen point in world units, through the map's current viewBox (null where the browser cannot say, e.g. jsdom). */
 function toWorld(svg: SVGSVGElement | null, x: number, y: number): Pt | null {
   const m = svg?.getScreenCTM?.();
@@ -251,6 +254,7 @@ export default function CampusWorldMap(p: CampusMapProps): React.ReactElement {
     if (w) onGroundClick(clampGround(w));
   }, [onGroundClick]);
   const gateIsBuilding = buildings.some((b) => b.kind === 'gate');
+  const tower = buildings.find((b) => b.id === 'tower');
   // C11b Colaberry Live: evening over the full map while a building is really on air, and the path from you to it.
   const live = useMemo(() => (compact || !onAir ? [] : buildings.filter((b) => b.kind !== 'gate' && onAir.has(b.id))), [buildings, onAir, compact]);
   const livePath = live.length && atId !== live[0].id ? [{ x: pos.x, y: pos.y }, ...routeFrom(graph, hereRef.current, live[0])] : null;
@@ -297,6 +301,8 @@ export default function CampusWorldMap(p: CampusMapProps): React.ReactElement {
       ))}
       {live.length > 0 && <LiveFront buildings={live} mark={compact ? null : p.liveMark} />}
       {!compact && <BoardSign />}
+      {!compact && p.todayFlag && tower && <TodayFlag tower={tower} />}
+      {!compact && p.todayFlag && gateIsBuilding && <GateTodaySign />}
       {!compact && p.desks && p.desks.length > 0 && <StaffTokens desks={p.desks} buildings={buildings} onPick={pick} />}
       {!compact && <AvatarPin pos={pos} moving={moving} running={running} reduceMotion={reduceMotion} ownGear={p.ownGear} me={p.me} />}
     </svg>

@@ -185,7 +185,7 @@ Array [
     "gate": null,
     "id": "tower",
     "name": "Schedule",
-    "primary": "Open my schedule -> /portal/schedule",
+    "primary": "Open Today -> /portal/today?stay=1",
     "rooms": Array [
       "Today -> /portal/today",
       "Schedule -> /portal/schedule",
