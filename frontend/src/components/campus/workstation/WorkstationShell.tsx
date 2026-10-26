@@ -16,8 +16,10 @@ import './workstation.css';
  * the status bar. It only ARRANGES: each page keeps every piece of its own logic (Cory, the repo, Done means from
  * .colaberry/progress.json, completion) and hands the shell the nodes it already renders in the classic layout.
  *
- * Stand up returns you to the room: the same "stand inside it" request every map entry uses (openMap(building, 'inside')), so
- * the home opens the room the workstation belongs to.
+ * Stand up returns you to WHERE YOU CAME FROM (Ali, 2026-10-26: "when you go to Today and then navigate out of there, you should go
+ * back to the Today page"): `returnTo` is the page that opened the workstation (Today, the Classroom page, one project). Entered from
+ * the campus map (or a deep link) there is no page to return to, so it stands you inside the room the workstation belongs to: the
+ * same "stand inside it" request every map entry uses (openMap(building, 'inside')).
  *
  * C40 (Ali, 2026-10-25: "I'm more concerned with getting the content on the screen comfortably"): the frame gets out of the way.
  * A slim pinned strip, thin bezels with no stands, the desk props only from 1200 px, a one-line status bar, Cory in a 300 px column,
@@ -45,6 +47,23 @@ export interface WorkstationShellProps {
   mainClass?: string;
   /** The card's kicker and title at the top of the main monitor (the classic page carries them in its own header). */
   heading?: { kicker: string; title: string };
+  /** The page that opened the workstation (not the campus home); Stand up returns there. Null: stand inside the room on the map. */
+  returnTo?: string | null;
+}
+
+/** A bench hop keeps the origin: a page stays the place to return to; from the map, the section picks the room and Stand up stays the map. */
+export function benchState(returnTo: string | null | undefined, sectionRoute: string): WorkstationOrigin {
+  return returnTo ? { from: returnTo } : { from: sectionRoute, fromCampus: true };
+}
+
+/** `location.state` as the workstation pages read it. */
+export interface WorkstationOrigin { from?: string; fromCampus?: boolean }
+
+/** The page to return to, or null when the learner came from the campus map (or a deep link). */
+export function returnToOf(state: unknown): string | null {
+  const s = (state ?? {}) as WorkstationOrigin;
+  if (!s.from || s.fromCampus || s.from === CAMPUS_HOME || s.from.startsWith(`${CAMPUS_HOME}?`)) return null;
+  return s.from;
 }
 
 function nameCardOf(full: string, first: string): string {
@@ -57,7 +76,10 @@ export default function WorkstationShell(p: WorkstationShellProps): React.ReactE
   const navigate = useNavigate();
   const { openMap, presence } = useCampus();
   const facts = useHomeFacts(false);
-  const standUp = () => { openMap(p.place.buildingId, 'inside'); navigate(CAMPUS_HOME); };
+  const standUp = () => {
+    if (p.returnTo) { navigate(p.returnTo); return; }
+    openMap(p.place.buildingId, 'inside'); navigate(CAMPUS_HOME);
+  };
   const goSection = () => navigate(p.place.sectionRoute);
   const [coryOpen, setCoryOpen] = useState(false);
   useEffect(() => {
@@ -97,7 +119,7 @@ export default function WorkstationShell(p: WorkstationShellProps): React.ReactE
             const body = <><span className="st">{t.tag}</span><b>{t.title}</b><small>{t.note}</small></>;
             const cls = `cm-ws-ticket is-${t.state}`;
             return t.route
-              ? <button key={t.key} type="button" className={cls} onClick={() => navigate(t.route as string, { state: { from: p.place.sectionRoute } })} data-testid="cm-ws-ticket">{body}</button>
+              ? <button key={t.key} type="button" className={cls} onClick={() => navigate(t.route as string, { state: benchState(p.returnTo, p.place.sectionRoute) })} data-testid="cm-ws-ticket">{body}</button>
               : <div key={t.key} className={cls} aria-current="step" data-testid="cm-ws-ticket">{body}</div>;
           })}
           </div>

@@ -31,6 +31,8 @@ import { useScrollCondense } from '../../../hooks/useScrollCondense';
 import { useShellPrefs } from './useShellPrefs';
 import { useShellPeople } from './useShellPeople';
 import { useShellPoints } from './useShellPoints';
+import { promotable } from '../../../components/campus/events/eventsModel';
+import { useCampusView } from '../../../components/campus/useCampusView';
 
 // Sidebar nav — mirrors the Design E mockup: three grouped sections, one SVG
 // icon per item. Every destination now navigates. Cert Prep was a dimmed "Soon"
@@ -273,7 +275,9 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge, condens
   // `schedule` is null both while loading AND when there is genuinely nothing
   // scheduled; the chips must not render an em dash for the first case.
   const scheduleKnown = schedule !== null;
-  const oh = schedule?.next_open_house || null;
+  // business accounts are never shown an Open House (Ali, 2026-10-26; eventsModel.promotable)
+  const { audience: campusAudience } = useCampusView();
+  const oh = promotable(campusAudience, schedule?.next_open_house);
   const ohCd = countdown(oh ? new Date(oh.starts_at).getTime() : null, now);
   const nextLiveSessionTargetMs = (() => {
     if (!nextLiveSessionHud) return null;

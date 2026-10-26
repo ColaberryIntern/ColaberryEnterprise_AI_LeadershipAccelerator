@@ -33,6 +33,7 @@ import { buildingName } from '../../../components/campus/campusMap';
 import CampusListView from '../../../components/campus/CampusListView';
 import CampusDoorTransition from '../../../components/campus/CampusDoorTransition';
 import CampusDmToast from '../../../components/campus/CampusDmToast';
+import CampusDmDock from '../../../components/campus/CampusDmDock';
 import CampusTabBar from '../../../components/campus/CampusTabBar';
 import CampusLive from '../../../components/campus/CampusLive';
 import CampusCheer from '../../../components/campus/CampusCheer';
@@ -161,6 +162,8 @@ function CampusHome(): React.ReactElement {
       <CampusListView />
       <CampusDoorTransition />
       <CampusDmToast />
+      {/* 2026-10-26: Message opens the chat right here, not on Today (the campus home had no DM host) */}
+      <CampusDmDock />
       <BookCallHost />
       <MeetingSheetHost />
       <CommunityBoardHost reduceMotion={reduce} />

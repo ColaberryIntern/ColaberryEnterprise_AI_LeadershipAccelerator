@@ -40,6 +40,23 @@ export function upcoming(events: OpenHouseView[], now: Date, limit = Infinity): 
     .slice(0, limit);
 }
 
+/** An Open House (the title says so; CCPP has no event type). */
+export const isOpenHouse = (e: Pick<OpenHouseView, 'title'>): boolean => /open house/i.test(e.title);
+
+/**
+ * What this account is shown (Ali, 2026-10-26: "Open house should not be promoted for business accounts"). Every campus events source
+ * runs through this, so no board, list, badge or banner can promote one to a partner account.
+ */
+export function eventsFor(audience: string | null | undefined, events: OpenHouseView[]): OpenHouseView[] {
+  return audience === 'business' ? events.filter((e) => !isOpenHouse(e)) : events;
+}
+
+/** One event a page would promote (the next Open House strip, the Next event chip), or null when this account must not see it. */
+export function promotable<T extends Pick<OpenHouseView, 'title'>>(audience: string | null | undefined, e: T | null | undefined): T | null {
+  if (!e) return null;
+  return audience === 'business' && isOpenHouse(e) ? null : e;
+}
+
 /** The registered ones (the side panel's Coming up). */
 export const goingTo = (events: OpenHouseView[], now: Date, limit = 3): OpenHouseView[] => upcoming(events.filter((e) => e.is_registered), now, limit);
 

@@ -30,7 +30,8 @@ jest.mock('../../today/PortalShell', () => ({
     <div>{typeof children === 'function' ? children(false) : children}</div>
   ),
 }));
-jest.mock('react-router-dom', () => ({ useNavigate: () => () => {} }));
+// useSearchParams: the page reads ?project= (back from a task workspace, 2026-10-26)
+jest.mock('react-router-dom', () => ({ useNavigate: () => () => {}, useSearchParams: () => [new URLSearchParams(), () => {}] }));
 // No network from a unit test: the page kicks a backend sync on mount.
 jest.mock('../projectSync', () => ({
   syncProjectsWithBackend: jest.fn(() => Promise.resolve()),

@@ -13,13 +13,14 @@ import { act } from 'react-dom/test-utils';
 let mockActive = true;
 const mockNav: string[] = [];
 const mockOpenMap: Array<[unknown, unknown]> = [];
+let mockLocState: { from?: string } | null = { from: '/portal/classroom' };
 const mockSaved: Array<[string, string]> = [];
 
 jest.mock('react-router-dom', () => ({
   __esModule: true,
   useParams: () => ({ cardId: 'c2' }),
   useNavigate: () => (to: string) => { mockNav.push(to); },
-  useLocation: () => ({ state: { from: '/portal/classroom' } }),
+  useLocation: () => ({ state: mockLocState }),
 }));
 jest.mock('../runtimeApi', () => ({
   __esModule: true,
@@ -71,7 +72,7 @@ const t = (s: string) => q(`[data-testid="${s}"]`);
 const flush = () => act(async () => { await new Promise((r) => setTimeout(r, 0)); });
 
 beforeEach(() => {
-  mockActive = true; mockNav.length = 0; mockOpenMap.length = 0; mockSaved.length = 0;
+  mockActive = true; mockNav.length = 0; mockOpenMap.length = 0; mockSaved.length = 0; mockLocState = { from: '/portal/classroom' };
   container = document.createElement('div'); document.body.appendChild(container);
 });
 afterEach(() => { act(() => { root.unmount(); }); container.remove(); });
@@ -111,7 +112,23 @@ it("the notebook shows this card's notes only and saves a new one through the no
   expect(nb.textContent).toContain('Saved to your notebook');
 });
 
-it('Stand up stands you inside the Classroom on the campus', async () => {
+// Ali, 2026-10-26: back out returns where you came from
+it('Stand up returns to the page that opened the workstation (the Classroom page)', async () => {
+  await mount();
+  act(() => { t('cm-ws-standup')!.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+  expect(mockOpenMap).toEqual([]);
+  expect(mockNav[mockNav.length - 1]).toBe('/portal/classroom');
+});
+
+it('opened from Today, Stand up returns to Today', async () => {
+  mockLocState = { from: '/portal/today' };
+  await mount();
+  act(() => { t('cm-ws-standup')!.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+  expect(mockNav[mockNav.length - 1]).toBe('/portal/today');
+});
+
+it('opened from the campus map, Stand up stands you inside the Classroom on the campus', async () => {
+  mockLocState = { from: '/portal/campus' };
   await mount();
   act(() => { t('cm-ws-standup')!.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
   expect(mockOpenMap).toEqual([['lecture', 'inside']]);

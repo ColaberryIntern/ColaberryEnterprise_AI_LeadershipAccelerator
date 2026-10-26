@@ -9,6 +9,7 @@ import type { Happening } from './BuildingCard';
 import { levelOfRung } from '../../services/bandLadder';
 import { minutesLeft, stopDetail } from './campusPlan';
 import type { PlanStop } from './campusPlan';
+import { eventsFor } from './events/eventsModel';
 
 /**
  * What is really true about a building right now (WP-2, the prototype's "Happening here" rows and the urgent CTA), from the
@@ -113,8 +114,9 @@ const TTL_MS = 60_000;
 const cache = new Map<keyof ArrivalData, { at: number; p: Promise<unknown> }>();
 const LOADERS: Record<keyof ArrivalData, () => Promise<unknown>> = {
   session: () => getNextSession(),
+  // every upcoming event, soonest first; loadArrival picks this account's next one (business never gets an Open House)
   event: () => fetchPublicEvents(30).then((evs) => evs.filter((x) => new Date(x.starts_at).getTime() > Date.now())
-    .sort((a, b) => new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime())[0] ?? null),
+    .sort((a, b) => new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime())),
   certVerified: () => getCertEvidence().then((r) => ({ verified: r.data.verified, total: r.data.total })),
   gameTime: () => fetchGameTime(),
 };
@@ -131,7 +133,7 @@ function load(k: keyof ArrivalData): Promise<unknown> {
 export async function loadArrival(id: BuildingId, audience: CampusAudience, open = true): Promise<ArrivalData> {
   const keys = sourcesFor(id, audience, open);
   const vals = await Promise.all(keys.map(load));
-  return Object.fromEntries(keys.map((k, i) => [k, vals[i]])) as ArrivalData;
+  return Object.fromEntries(keys.map((k, i) => [k, k === 'event' ? (Array.isArray(vals[i]) ? eventsFor(audience, vals[i] as OpenHouseView[])[0] ?? null : null) : vals[i]])) as ArrivalData;
 }
 /** Tests only: forget cached reads. */
 export function resetArrivalCache(): void { cache.clear(); }

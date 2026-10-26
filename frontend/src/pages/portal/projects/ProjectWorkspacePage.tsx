@@ -24,7 +24,7 @@ import { useAgentAttachments } from '../../../components/portal/AgentAttachments
 import MentorRail, { type MentorMsg, type MentorMode } from '../../../components/portal/workspace/MentorRail';
 import WorkspaceStuckHelp from './WorkspaceStuckHelp';
 import { useCampus } from '../../../components/campus/CampusContext';
-import WorkstationShell from '../../../components/campus/workstation/WorkstationShell';
+import WorkstationShell, { returnToOf } from '../../../components/campus/workstation/WorkstationShell';
 import RepoTerminal from '../../../components/campus/workstation/RepoTerminal';
 import { storyBench, storyTitle, workstationBuilding, workstationPlace } from '../../../components/campus/workstation/workstationModel';
 
@@ -62,7 +62,8 @@ const ProjectWorkspacePage: React.FC = () => {
   const projectId = canonicalProjectId(routeProjectId);
   const navigate = useNavigate();
   const location = useLocation();
-  const backTo = ((location.state as { from?: string } | null)?.from) || '/portal/projects';
+  // Back out to THAT project, not the list (Ali, 2026-10-26): ProjectsPage opens the project named by ?project=.
+  const backTo = ((location.state as { from?: string } | null)?.from) || `/portal/projects?project=${encodeURIComponent(projectId)}`;
   const goBack = useCallback(() => navigate(backTo), [navigate, backTo]);
 
   // Same theme handling as the runtime: this page renders its own chrome rather
@@ -423,6 +424,7 @@ const ProjectWorkspacePage: React.FC = () => {
       <WorkstationShell
         theme={theme}
         place={workstationPlace(workstationBuilding(backTo, 'studio'), campus.settings.workplaceNames)}
+        returnTo={returnToOf(location.state)}
         cardTitle={storyTitle(task.storyId, task.title)}
         heading={{ kicker: `${listName || project.name}${task.points ? ` · +${task.points} pts` : ''}`, title: storyTitle(task.storyId, task.title) }}
         pill={pill}

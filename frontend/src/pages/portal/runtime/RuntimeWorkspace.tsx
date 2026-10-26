@@ -24,7 +24,7 @@ import { useAgentAttachments } from '../../../components/portal/AgentAttachments
 import MentorRail, { type MentorMsg } from '../../../components/portal/workspace/MentorRail';
 import RuntimeComments from './RuntimeComments';
 import { useCampus } from '../../../components/campus/CampusContext';
-import WorkstationShell from '../../../components/campus/workstation/WorkstationShell';
+import WorkstationShell, { returnToOf } from '../../../components/campus/workstation/WorkstationShell';
 import LessonNotebook from '../../../components/campus/workstation/LessonNotebook';
 import { planBench, workstationBuilding, workstationPlace } from '../../../components/campus/workstation/workstationModel';
 
@@ -446,6 +446,7 @@ const RuntimeWorkspace: React.FC = () => {
       <WorkstationShell
         theme={theme}
         place={workstationPlace(workstationBuilding(backTo, 'lecture'), campus.settings.workplaceNames)}
+        returnTo={returnToOf(location.state)}
         cardTitle={displayTitle}
         heading={{ kicker: `${card.student_label || ''}${card.estimated_time ? ` · ${card.estimated_time} min` : ''}`, title: displayTitle }}
         pill={pill}

@@ -252,10 +252,19 @@ const ClassroomPage: React.FC = () => {
    *
    * Tiles from other rails are left alone; their anchors navigate as before.
    */
-  const openRailTile = useCallback((tile: RailTile, rail: Rail) => {
-    if (rail.surface !== 'community') return;   // every other rail navigates
+  const openRailTile = useCallback((tile: RailTile, rail: Rail, e?: React.MouseEvent | React.KeyboardEvent) => {
+    if (rail.surface !== 'community') {
+      // A workspace tile (a project build) opens IN the app with this page as its origin, so backing out returns to the Classroom
+      // (Ali, 2026-10-26). A plain anchor reloaded the page with no origin and backed out to the Project Studio.
+      const href = tile.action?.href ?? '';
+      if (e && href.startsWith('/portal/') && /\/workspace\//.test(href)) {
+        e.preventDefault();
+        navigate(href, { state: { from: `${window.location.pathname}${window.location.search}` } });
+      }
+      return;                                     // every other rail navigates
+    }
     setSelectedCard(railTileToPostCard(tile));
-  }, []);
+  }, [navigate]);
   const completeCard = useCallback(async (card: TimelineFeedCard) => {
     // No swallow: a gate rejection (422 watch / 423 lock) must propagate so the
     // caller can surface "watch it first" instead of the tile falsely flipping to

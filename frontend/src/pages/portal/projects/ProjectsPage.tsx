@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import PortalShell from '../today/PortalShell';
 import ProjectWizard from './ProjectWizard';
 import { useIsExplorer } from '../useIsExplorer';
@@ -410,6 +410,20 @@ const ProjectsPage: React.FC = () => {
     // already changed and a failed preference write must not undo that.
     if (target && !target.sample) void pushActiveProject(target.pipelineProjectId || target.id);
   };
+  // Coming back from a task workspace (Ali, 2026-10-26: "you should be in that specific project"): ?project=<id> opens it through
+  // openInterior (so the review gate still applies) once the list has it, then the parameter is dropped so the overview stays the
+  // overview after a refresh or Back to projects. An id the list does not have is dropped too (the overview is the safe place).
+  const [searchParams, setSearchParams] = useSearchParams();
+  const returnProject = searchParams.get('project');
+  useEffect(() => {
+    if (!returnProject || !projects.length) return;
+    const match = projects.find((x) => x.id === returnProject || x.pipelineProjectId === returnProject);
+    if (match) openInterior(match.id);
+    const next = new URLSearchParams(searchParams);
+    next.delete('project');
+    setSearchParams(next, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs when the return target or the list arrives, not on every openInterior identity
+  }, [returnProject, projects.length]);
   /**
    * Open a task in the project WORKSPACE — the full page with the mentor on the
    * right, the build-side twin of the classroom runtime. This used to open a
@@ -429,8 +443,9 @@ const ProjectsPage: React.FC = () => {
       return;
     }
     const key = task.storyId || task.id;
+    // Back out lands in THIS project (Ali, 2026-10-26), not the list: the effect below opens ?project= on return
     navigate(`/portal/projects/workspace/${projectId}/${encodeURIComponent(key)}`,
-      { state: { from: window.location.pathname } });
+      { state: { from: `/portal/projects?project=${encodeURIComponent(owner?.id ?? projectId)}` } });
   };
   const openTaskById = (projectId: string, taskId: string | null) => {
     if (!taskId) return;

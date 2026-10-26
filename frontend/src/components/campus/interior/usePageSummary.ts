@@ -4,6 +4,7 @@ import { getCertDomains, getCertPrepSummary } from '../../../services/certPrepAp
 import { useProjectsList } from '../../../pages/portal/projects/projectsStore';
 import type { BuildingId, CampusAudience } from '../campusMap';
 import { fetchLibrary } from '../../../services/roomsApi';
+import { eventsFor } from '../events/eventsModel';
 import { fetchPublicEvents } from '../../../services/onboardingApi';
 import { fetchCareerProfile } from '../../../services/careerApi';
 import { fetchInternshipDashboard } from '../../../services/internshipApi';
@@ -41,9 +42,9 @@ export const clearSummaryCache = (): void => cache.clear();
  * except the Classroom's "Week N", which is the week, not a building name.
  */
 /** C43: the rooms whose left-wall board comes from wallBoards.ts (each from the data its page reads). */
-const WALL_FETCH: Partial<Record<BuildingId, (section: string) => Promise<SideTop>>> = {
+const WALL_FETCH: Partial<Record<BuildingId, (section: string, audience?: CampusAudience) => Promise<SideTop>>> = {
   library: (s) => cached('library', fetchLibrary).then((v) => libraryBoard(v, s), () => libraryBoard(null, s)),
-  amphi: (s) => cached('events-30', () => fetchPublicEvents(30)).then((e) => eventsBoard(e, new Date(), s), () => eventsBoard(null, new Date(), s)),
+  amphi: (s, a) => cached('events-30', () => fetchPublicEvents(30)).then((e) => eventsBoard(eventsFor(a, e), new Date(), s), () => eventsBoard(null, new Date(), s)),
   observatory: (s) => cached('classroom', () => portalApi.get('/api/portal/classroom').then((r) => r.data as ClassroomFeed)).then((f) => progressBoard(f, s), () => progressBoard(null, s)),
   gallery: (s) => cached('career-profile', fetchCareerProfile).then((p) => portfolioBoard(p, s), () => portfolioBoard(null, s)),
   // a non-intern gets a 404 from the dashboard: the empty state, not an error
@@ -58,9 +59,9 @@ export function usePageSummary(id: BuildingId, open: boolean, name: string, audi
   useEffect(() => {
     if (!open || !wallFetch) return undefined;
     let alive = true;
-    wallFetch(name).then((side) => { if (alive) setWall({ id, side }); });
+    wallFetch(name, audience).then((side) => { if (alive) setWall({ id, side }); });
     return () => { alive = false; };
-  }, [id, open, name, wallFetch]);
+  }, [id, open, name, wallFetch, audience]);
   const projects = useProjectsList(); // a local store read (cheap); the page uses the same list
   const account = useAccountFacts(open && id === 'admissions'); // C21: the Admissions room's "Your account" wall board
   const [fetched, setFetched] = useState<{ id: BuildingId; s: PageSummary } | null>(null);
