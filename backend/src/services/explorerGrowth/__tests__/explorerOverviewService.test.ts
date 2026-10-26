@@ -123,6 +123,21 @@ describe('getDistribution', () => {
     expect(q()[1]).not.toContain('explorer_journey_profiles');
   });
 
+  it('orders the trend newest day first (Ali, 2026-10-26), and keeps that order through the grouping', async () => {
+    await getDistribution(30);
+    expect(q()[1]).toMatch(/ORDER BY 1 DESC/);
+    query.mockReset();
+    query
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        { as_of_date: '2026-10-26', primary_state: 'ACTIVATING', count: '340' },
+        { as_of_date: '2026-10-25', primary_state: 'ACTIVATING', count: '274' },
+      ])
+      .mockResolvedValueOnce([]);
+    const d = await getDistribution(30);
+    expect(d.trend.map((p) => p.as_of_date)).toEqual(['2026-10-26', '2026-10-25']);
+  });
+
   it('binds the window rather than interpolating it', async () => {
     await getDistribution(30);
     expect(q()[1]).toContain('CAST(:days AS integer)');

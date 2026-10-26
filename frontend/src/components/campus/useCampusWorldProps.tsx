@@ -1,4 +1,5 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
+import { postTourProgress } from './campusTourProgress';
 import type { CampusWorldProps } from './CampusWorld';
 import { useCampus } from './CampusContext';
 import { useCampusView } from './useCampusView';
@@ -44,12 +45,19 @@ export function useCampusWorldProps(onExit: () => void, onNavigate: () => void, 
   const tour = tourFor(audience, buildings, accessOf, settings.workplaceNames);
   const touring = tour && tourIndex !== null ? Math.min(tourIndex, tour.stops.length - 1) : null;
   const [unlock, setUnlock] = useState(false);
+  // Explorer Growth (2026-10-26): report each stop reached and the finish (staff have no tour)
+  const tourAudience = tour ? (audience === 'staff' ? null : audience) : null;
+  const tourTotal = tour ? tour.stops.length : 0;
+  useEffect(() => {
+    if (touring !== null && tourAudience) postTourProgress({ tour: tourAudience, stop: touring + 1, total: tourTotal });
+  }, [touring, tourAudience, tourTotal]);
   const onFinish = useCallback(() => {
+    if (tourAudience && tourTotal) postTourProgress({ tour: tourAudience, stop: tourTotal, total: tourTotal, finished: true });
     finishTour();
     if (audience !== 'explorer') return;
     setUnlock(true);
     cheer({ big: '📅', title: explorerFinishLine(firstName), detail: 'Maya at the welcome desk answers anything about enrolling.', ms: 5200 }); // C53 (v13 T5)
-  }, [finishTour, audience, firstName]);
+  }, [finishTour, audience, firstName, tourAudience, tourTotal]);
   // Mark done (the prototype's completePlan): the points cheer, then "Next: <step> · <building> [Go]" (Go walks there), or all done.
   const onComplete = useCallback(async (s: PlanStop) => {
     const r = await completePlanStop(s);
