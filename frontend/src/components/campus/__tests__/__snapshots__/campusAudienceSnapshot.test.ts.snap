@@ -54,10 +54,8 @@ Array [
     "gate": null,
     "id": "amphi",
     "name": "Events Hall",
-    "primary": "See events and RSVP -> /portal/events",
-    "rooms": Array [
-      "Events -> /portal/events",
-    ],
+    "primary": "See what is coming up -> /portal/events",
+    "rooms": Array [],
     "workplaceName": "Town Hall",
   },
   Object {
@@ -92,6 +90,7 @@ Array [
     "primary": "Open live rooms -> /portal/rooms",
     "rooms": Array [
       "Meeting rooms -> /portal/rooms",
+      "Events -> /portal/events",
       "Community -> /portal/community",
       "People -> /portal/community/people",
     ],
@@ -209,10 +208,8 @@ Array [
     "gate": null,
     "id": "amphi",
     "name": "Events Hall",
-    "primary": "See events and RSVP -> /portal/events",
-    "rooms": Array [
-      "Events -> /portal/events",
-    ],
+    "primary": "See what is coming up -> /portal/events",
+    "rooms": Array [],
     "workplaceName": "Town Hall",
   },
   Object {
@@ -247,6 +244,7 @@ Array [
     "primary": "Open live rooms -> /portal/rooms",
     "rooms": Array [
       "Meeting rooms -> /portal/rooms",
+      "Events -> /portal/events",
       "Community -> /portal/community",
       "People -> /portal/community/people",
     ],
@@ -373,10 +371,8 @@ Array [
     "gate": null,
     "id": "amphi",
     "name": "Events Hall",
-    "primary": "See events and RSVP -> /portal/events",
-    "rooms": Array [
-      "Events -> /portal/events",
-    ],
+    "primary": "See what is coming up -> /portal/events",
+    "rooms": Array [],
     "workplaceName": "Town Hall",
   },
   Object {
@@ -411,6 +407,7 @@ Array [
     "primary": "Open live rooms -> /portal/rooms",
     "rooms": Array [
       "Meeting rooms -> /portal/rooms",
+      "Events -> /portal/events",
       "Community -> /portal/community",
       "People -> /portal/community/people",
     ],
@@ -528,10 +525,8 @@ Array [
     "gate": null,
     "id": "amphi",
     "name": "Events Hall",
-    "primary": "See events and RSVP -> /portal/events",
-    "rooms": Array [
-      "Events -> /portal/events",
-    ],
+    "primary": "See what is coming up -> /portal/events",
+    "rooms": Array [],
     "workplaceName": "Town Hall",
   },
   Object {
@@ -566,6 +561,7 @@ Array [
     "primary": "Open live rooms -> /portal/rooms",
     "rooms": Array [
       "Meeting rooms -> /portal/rooms",
+      "Events -> /portal/events",
       "Community -> /portal/community",
       "People -> /portal/community/people",
     ],

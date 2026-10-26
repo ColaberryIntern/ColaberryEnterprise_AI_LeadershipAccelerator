@@ -100,7 +100,8 @@ export default function Room3D(p: Room3DProps): React.ReactElement | null {
   const [walkMs, setWalkMs] = useState(1100);
   const [zoom, setZoom] = useState<string | null>(null);
   const timers = useRef<number[]>([]);
-  // C27 (v6 D5): the Schedule board's week and upcoming events; C26: the Events Hall board's next event
+  // C27 (v6 D5): the Schedule board's week and upcoming events; C26: the Events Hall board's next event (C62: off air only; events
+  // themselves are on the Meeting Rooms' wall board and banner)
   const events = useCampusEvents(id === 'amphi');
   // C29 (v7 R2): Meeting Rooms is a hallway: doors on both side walls, the open rooms on the board
   const hall = id === 'commons';

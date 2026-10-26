@@ -33,9 +33,9 @@ const MEMBER: CopyTable = {
 const EXPLORER: CopyTable = {
   // C53 (v13 T5): the Explorer tour starts at Today, their home base (the Schedule tower)
   tower: { title: 'Start here: Today', what: 'Today is your home base. Your next step, today’s plan, events coming up and Maya are all on one page.', can: [], tip: 'The red 📅 Today button at the top brings you back here from anywhere on campus.' },
-  commons: { title: 'Start here: meet anyone', what: 'A hallway of live rooms: study groups, pair work, one-on-ones.', can: ['Join a live room', 'Open a room or book one for later'], tip: 'Maya at the {gate} answers questions about enrolling.' },
+  commons: { title: 'Start here: meet anyone', what: 'A hallway of live rooms: events, study groups, pair work, one-on-ones.', can: ['Join a live room', 'See upcoming events and RSVP', 'Open a room or book one for later'], tip: 'Maya at the {gate} answers questions about enrolling.' },
   library: { title: 'Reference on demand', what: 'Documents shared with everyone in the program.', can: ['Read the guides and reference material'], tip: 'A good place to see the kind of material the program uses.' },
-  amphi: { title: 'Open events', what: 'Open houses, demos and talks.', can: ['See upcoming events', 'RSVP to the ones you want'], tip: 'An open house is the quickest way to ask everything at once.' },
+  amphi: { title: 'Colaberry Live', what: 'When Colaberry goes live, everyone gathers here.', can: ['Walk in when a broadcast is on air', 'Join the live room for audio and Q&A'], tip: 'Open houses and other events happen in the Meeting Rooms.' },
   lecture: { title: 'Live classes', what: 'Members get the weekly lessons and live sessions of the program.', can: ['See how a week of the program is laid out'], tip: 'Enrolled members can join every live session and check in for attendance.' },
   studio: { title: 'Real AI projects', what: 'Members build real projects task by task in the project workspace.', can: ['Walk through how a project is organized'], tip: 'Building for real starts the day you enroll.' },
   testing: { title: 'Certification', what: 'Knowledge checks and practice that prepare members for certification.', can: [], tip: 'The sign-up view shows exactly what enrolling opens here.' },

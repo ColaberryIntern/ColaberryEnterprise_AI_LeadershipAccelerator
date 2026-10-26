@@ -14,6 +14,13 @@ import type { CampusAudience } from './campusMap';
 export const VIEW_AS_KEY = 'colaberry.campus.viewAs';
 export const AUDIENCES: CampusAudience[] = ['member', 'explorer', 'business', 'staff'];
 export const AUDIENCE_LABEL: Record<CampusAudience, string> = { member: 'Member', explorer: 'Explorer', business: 'Business', staff: 'Staff' };
+/**
+ * C63: the preview choices. 'intern' is not an account type of its own: it is the member campus with the intern's weekly sessions (the
+ * Monday call included, which the server sends to an allowed previewer only).
+ */
+export type ViewAs = CampusAudience | 'intern';
+export const VIEW_AS_OPTIONS: ViewAs[] = ['member', 'intern', 'explorer', 'business', 'staff'];
+export const VIEW_AS_LABEL: Record<ViewAs, string> = { ...AUDIENCE_LABEL, intern: 'Intern' };
 
 /** May this account switch? Any failure (signed out, network, refusal, odd body) is "no". */
 export async function fetchAudienceSwitch(): Promise<boolean> {
@@ -29,30 +36,34 @@ export async function fetchAudienceSwitch(): Promise<boolean> {
   }
 }
 
-export function readViewAs(): CampusAudience | null {
+export function readViewAs(): ViewAs | null {
   try {
     const v = window.localStorage.getItem(VIEW_AS_KEY);
-    return AUDIENCES.includes(v as CampusAudience) ? (v as CampusAudience) : null;
+    return VIEW_AS_OPTIONS.includes(v as ViewAs) ? (v as ViewAs) : null;
   } catch {
     return null;
   }
 }
 
-export function writeViewAs(v: CampusAudience | null): void {
+export function writeViewAs(v: ViewAs | null): void {
   try { if (v) window.localStorage.setItem(VIEW_AS_KEY, v); else window.localStorage.removeItem(VIEW_AS_KEY); } catch { /* no storage: the choice lasts this visit */ }
 }
 
 /** The audience the campus draws: the preview when allowed and chosen, otherwise the real one. */
-export function effectiveAudience(real: CampusAudience, allowed: boolean, viewAs: CampusAudience | null): CampusAudience {
-  return allowed && viewAs ? viewAs : real;
+export function effectiveAudience(real: CampusAudience, allowed: boolean, viewAs: ViewAs | null): CampusAudience {
+  if (!allowed || !viewAs) return real;
+  return viewAs === 'intern' ? 'member' : viewAs;
 }
+
+/** C63: is this the staff preview of the intern view? */
+export const previewingIntern = (allowed: boolean, viewAs: ViewAs | null): boolean => allowed && viewAs === 'intern';
 
 export interface AudienceSwitchState {
   /** The server says this account may switch. */
   audienceSwitch: boolean;
   /** The account type being previewed (null: your own). Only honored while audienceSwitch is true. */
-  viewAs: CampusAudience | null;
-  setViewAs: (v: CampusAudience | null) => void;
+  viewAs: ViewAs | null;
+  setViewAs: (v: ViewAs | null) => void;
   /** C13: the campus is on for this viewer (so the audience hook asks the server only then). */
   active?: boolean;
 }
@@ -67,13 +78,13 @@ export const useAudienceSwitchState = (): AudienceSwitchState => useContext(Audi
 /** Asks the server once per campus session; until it answers, nobody is previewing. */
 export function useAudienceSwitch(active: boolean): AudienceSwitchState {
   const [audienceSwitch, setAudienceSwitch] = useState(false);
-  const [viewAs, setViewAsState] = useState<CampusAudience | null>(() => readViewAs());
+  const [viewAs, setViewAsState] = useState<ViewAs | null>(() => readViewAs());
   useEffect(() => {
     if (!active) { setAudienceSwitch(false); return undefined; }
     let alive = true;
     fetchAudienceSwitch().then((ok) => { if (alive) setAudienceSwitch(ok); });
     return () => { alive = false; };
   }, [active]);
-  const setViewAs = useCallback((v: CampusAudience | null) => { writeViewAs(v); setViewAsState(v); }, []);
+  const setViewAs = useCallback((v: ViewAs | null) => { writeViewAs(v); setViewAsState(v); }, []);
   return { audienceSwitch, viewAs, setViewAs };
 }

@@ -44,8 +44,8 @@ place('lecture', ['deep_dive', 'warmup', 'reflection', 'announcement', 'live_cla
 place('testing', ['certification_exercise']);
 place('studio', ['implementation_task', 'project_task', 'build_story', 'setup_lab', 'artifact_submission', 'prompt_lab', 'prompt_challenge']);
 place('career', ['internship_activity']);
-place('commons', ['community_discussion', 'discussion', 'study_session', 'community_live_session', 'community_post']);
-place('amphi', ['event', 'demo_tuesday', 'kes_wednesday', 'marketing_friday']);
+// C62: events and the weekday sessions happen in the Meeting Rooms (Colaberry Live is the Events Hall's, from broadcast discovery)
+place('commons', ['community_discussion', 'discussion', 'study_session', 'community_live_session', 'community_post', 'event', 'demo_tuesday', 'kes_wednesday', 'marketing_friday']);
 place('library', ['blog', 'podcast', 'testimonial', 'build_breakdown', 'mcp_server_spotlight', 'claude_code_technique', 'market_intelligence']);
 
 export function buildingForType(type: string, ref: string | null, route: string): BuildingId | null {

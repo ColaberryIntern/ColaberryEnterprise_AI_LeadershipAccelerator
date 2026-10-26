@@ -84,5 +84,5 @@ it('the live card is the first thing in the side panel while on air; the hall li
   expect(cc.indexOf('<LiveCard', body)).toBeLessThan(cc.indexOf('data-testid="cm-cc-where"', body));
   expect(cc.split('<LiveCard').length - 1).toBe(1);
   const ap = fs.readFileSync(path.join(__dirname, '../ArrivalPanel.tsx'), 'utf8');
-  expect(ap).toContain('Every event happens here · one tap to sign up');
+  expect(ap).toContain('Events happen here · one tap to sign up'); // C62: in the Meeting Rooms
 });
