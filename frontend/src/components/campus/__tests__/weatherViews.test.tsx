@@ -39,7 +39,7 @@ it('clear at 23:00: the night tint, a moon and stars in the window, the sign say
   expect(q('[data-testid="cm-wx"]')!.className).toContain('wx-night');
   expect(q('[data-testid="cm-win-moon"]')).not.toBeNull();
   expect(q('[data-testid="cm-win-stars"]')).not.toBeNull();
-  expect(q('.cm-win .sign')!.textContent).toBe('🌙 72° · Dallas');
+  expect(q('.cm-win .sign')!.textContent).toBe('🌙 72° · Dallas · 11:00 PM'); // the local time joined the sign (2026-10-26)
 });
 
 it('reduced motion or effects off: no moving canvas (effects off also drops the tint); no reading: time of day only', () => {
@@ -64,4 +64,14 @@ it('the chip shows emoji and temperature; its popover offers exact location and 
   expect(wx.useExact).toHaveBeenCalled();
   act(() => { (q('[data-testid="cm-wx-pop"] input[type="checkbox"]') as HTMLInputElement).click(); });
   expect(wx.setEffects).toHaveBeenCalledWith(false);
+});
+
+// Ali, 2026-10-26: location, temperature and time under the window
+it('the window sign shows the place, the temperature and the local time; with weather off, the place and the time', () => {
+  render(<RoomWindow wx={wxAt(14)} />);
+  expect(q('[data-testid="cm-win-sign"]')!.textContent).toContain('72° · Dallas · 2:00 PM');
+  render(<RoomWindow wx={wxAt(9, { condition: null, temp_f: null, temp_c: null })} />);
+  const sign = q('[data-testid="cm-win-sign"]')!.textContent!;
+  expect(sign).toContain('Dallas · 9:00 AM');
+  expect(sign).not.toMatch(/°/);
 });

@@ -49,7 +49,8 @@ export function useCampusWeather(enabled = true): CampusWeather {
   const load = useCallback(() => {
     if (!enabled) return;
     const p = placeOf();
-    fetchWeatherShared(p).then(setW).catch(() => setW(NONE)); // clock only
+    // clock only on a failure, but the place still shows under the window (Ali, 2026-10-26: location, temp and time)
+    fetchWeatherShared(p).then(setW).catch(() => setW({ ...NONE, city: p.city === 'your area' ? null : p.city }));
   }, [enabled]);
   useEffect(() => { load(); const id = window.setInterval(load, WEATHER_MS); return () => window.clearInterval(id); }, [load, tick]);
   useEffect(() => { const id = window.setInterval(() => setNow(new Date()), 60_000); return () => window.clearInterval(id); }, []);
