@@ -276,4 +276,113 @@ router.post(
   },
 );
 
+// ── v2 PROPOSAL DOCUMENTS — AI-drafted, reviewer-accepted named documents ─────────────────────────────────────
+const DOC_ERR_STATUS: Record<string, number> = { not_found: 404, empty: 422, no_reviewer: 401, not_drafted: 422, already_accepted: 409, no_author: 401 };
+
+/**
+ * POST /api/portal/gov-projects/:projectId/documents/:docKey/draft — draft a proposal document. With { contentHtml }
+ * it saves a manual edit (sanitized); without it, the AI drafts the whole document from its requirements. Either way
+ * the result lands `drafted`, NEVER `accepted` (the maker never accepts its own work). A member may draft; an
+ * admin-only (pricing) document requires a reviewer. Gated by project.read.
+ */
+router.post(
+  '/api/portal/gov-projects/:projectId/documents/:docKey/draft',
+  requireParticipant,
+  requireGovProjectAccess('project.read'),
+  async (req: GovProjectRequest, res: Response) => {
+    const projectId = req.params.projectId; const docKey = req.params.docKey;
+    if (typeof projectId !== 'string' || !projectId || typeof docKey !== 'string' || !docKey) { res.status(400).json({ error: 'Project and document ids are required' }); return; }
+    const me = req.deliveryContext?.platformIdentityId ?? null;
+    if (!me) { res.status(401).json({ error: 'No resolvable identity' }); return; }
+    try {
+      const { hasDeliveryPermission } = await import('../modules/delivery/deliveryAuthorization');
+      const canVerify = !!(req.deliveryContext && hasDeliveryPermission(req.deliveryContext, 'evidence.verify'));
+      const store = await import('../services/factory/proposal/govProposalDocumentStore');
+      const { sanitizeProposalHtml, generateProposalDocumentDraftAI } = await import('../services/factory/proposal/govProposalDocumentDraftAI');
+      const existing = (await store.listProposalDocuments(projectId)).find((d) => d.key === docKey);
+      if (!existing) { res.status(404).json({ error: 'Not found' }); return; }
+      if (existing.adminOnly && !canVerify) { res.status(403).json({ error: 'Forbidden' }); return; } // an intern never drafts pricing
+
+      const manual = typeof (req.body ?? {}).contentHtml === 'string' ? (req.body as any).contentHtml : null;
+      if (manual !== null) {
+        const doc = await store.saveProposalDocumentDraft(projectId, docKey, sanitizeProposalHtml(manual), me);
+        res.json({ document: doc }); return;
+      }
+      // AI draft: re-derive to get this document's requirement statements for grounding.
+      const { default: ContractRequirement } = await import('../models/ContractRequirement');
+      const { deriveProposalDocuments } = await import('../services/factory/proposal/govProposalDocuments');
+      const reqRows: any[] = await ContractRequirement.findAll({ where: { delivery_project_id: projectId } });
+      const derived = deriveProposalDocuments(reqRows.map((r) => (r && r.get ? r.get({ plain: true }) : r))).find((d) => d.key === docKey);
+      await store.markProposalDocumentDrafting(projectId, docKey).catch(() => {});
+      const result = await generateProposalDocumentDraftAI({ docKey, title: existing.title, requirements: derived?.requirements ?? [] });
+      if (result.error || !result.html) { res.status(502).json({ error: result.error || 'The AI draft could not be generated.' }); return; }
+      const doc = await store.saveProposalDocumentDraft(projectId, docKey, result.html, me);
+      res.json({ document: doc });
+    } catch (err: any) {
+      if (err?.name === 'ProposalDocumentError') { res.status(DOC_ERR_STATUS[err.reason] ?? 400).json({ error: err.message, reason: err.reason }); return; }
+      res.status(500).json({ error: 'Could not draft the document.' });
+    }
+  },
+);
+
+/** POST .../documents/:docKey/accept — a REVIEWER accepts a drafted document (the only path to `accepted`). */
+router.post(
+  '/api/portal/gov-projects/:projectId/documents/:docKey/accept',
+  requireParticipant,
+  requireGovProjectAccess('evidence.verify'),
+  async (req: GovProjectRequest, res: Response) => {
+    const projectId = req.params.projectId; const docKey = req.params.docKey;
+    if (typeof projectId !== 'string' || !projectId || typeof docKey !== 'string' || !docKey) { res.status(400).json({ error: 'Project and document ids are required' }); return; }
+    const me = req.deliveryContext?.platformIdentityId ?? null;
+    if (!me) { res.status(401).json({ error: 'No resolvable identity' }); return; }
+    try {
+      const { acceptProposalDocument } = await import('../services/factory/proposal/govProposalDocumentStore');
+      res.json({ document: await acceptProposalDocument(projectId, docKey, me) });
+    } catch (err: any) {
+      if (err?.name === 'ProposalDocumentError') { res.status(DOC_ERR_STATUS[err.reason] ?? 400).json({ error: err.message, reason: err.reason }); return; }
+      res.status(500).json({ error: 'Could not accept the document.' });
+    }
+  },
+);
+
+/** POST .../documents/:docKey/request-changes — a REVIEWER sends it back with a note (appended to the thread). */
+router.post(
+  '/api/portal/gov-projects/:projectId/documents/:docKey/request-changes',
+  requireParticipant,
+  requireGovProjectAccess('evidence.verify'),
+  async (req: GovProjectRequest, res: Response) => {
+    const projectId = req.params.projectId; const docKey = req.params.docKey;
+    if (typeof projectId !== 'string' || !projectId || typeof docKey !== 'string' || !docKey) { res.status(400).json({ error: 'Project and document ids are required' }); return; }
+    const me = req.deliveryContext?.platformIdentityId ?? null;
+    if (!me) { res.status(401).json({ error: 'No resolvable identity' }); return; }
+    try {
+      const { requestChangesProposalDocument } = await import('../services/factory/proposal/govProposalDocumentStore');
+      res.json({ document: await requestChangesProposalDocument(projectId, docKey, me, String((req.body ?? {}).note ?? '')) });
+    } catch (err: any) {
+      if (err?.name === 'ProposalDocumentError') { res.status(DOC_ERR_STATUS[err.reason] ?? 400).json({ error: err.message, reason: err.reason }); return; }
+      res.status(500).json({ error: 'Could not update the document.' });
+    }
+  },
+);
+
+/** POST .../documents/:docKey/comment — any member adds a comment to a document's review thread. */
+router.post(
+  '/api/portal/gov-projects/:projectId/documents/:docKey/comment',
+  requireParticipant,
+  requireGovProjectAccess('project.read'),
+  async (req: GovProjectRequest, res: Response) => {
+    const projectId = req.params.projectId; const docKey = req.params.docKey;
+    if (typeof projectId !== 'string' || !projectId || typeof docKey !== 'string' || !docKey) { res.status(400).json({ error: 'Project and document ids are required' }); return; }
+    const me = req.deliveryContext?.platformIdentityId ?? null;
+    if (!me) { res.status(401).json({ error: 'No resolvable identity' }); return; }
+    try {
+      const { addProposalDocumentComment } = await import('../services/factory/proposal/govProposalDocumentStore');
+      res.json({ document: await addProposalDocumentComment(projectId, docKey, me, String((req.body ?? {}).body ?? '')) });
+    } catch (err: any) {
+      if (err?.name === 'ProposalDocumentError') { res.status(DOC_ERR_STATUS[err.reason] ?? 400).json({ error: err.message, reason: err.reason }); return; }
+      res.status(500).json({ error: 'Could not add the comment.' });
+    }
+  },
+);
+
 export default router;

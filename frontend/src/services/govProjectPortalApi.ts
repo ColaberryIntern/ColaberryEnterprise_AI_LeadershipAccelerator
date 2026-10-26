@@ -100,10 +100,31 @@ export interface StudentGovProjectView {
   keyDates?: Array<{ date: string | null; text: string | null }>;
   /** Cockpit: the build-repo commit feed (matched pushes, newest first). Optional (older backends). */
   commitFeed?: GovCommitFeedItem[];
+  /** v2 Build view: releases → stories + progress + the linked project id for the deep-link. Optional (older backends). */
+  buildSummary?: GovBuildSummary | null;
+  /** v2 Proposal view: the named documents a bid must submit (admin-only pricing dropped for non-reviewers). Optional. */
+  proposalDocuments?: GovProposalDocument[];
+  /** v2: combined completion across verified build stories + accepted documents. Optional (older backends). */
+  overallProgress?: GovOverallProgress;
 }
 
 /** The project copilot's grounded answer to a question (deterministic, from the student-safe projection). */
 export interface GovCopilotAnswer { intent: 'next' | 'review' | 'risk' | 'proposal' | 'other'; answer: string; }
+
+// ── v2: the Build summary (releases → stories) and the Proposal documents ──────────────────────────────────────
+export interface GovBuildStorySummary { storyId: string; title: string; releaseKey: string; status: string; verified: boolean; }
+export interface GovBuildReleaseSummary { key: string; name: string; status: string; stories: GovBuildStorySummary[]; }
+export interface GovBuildRollup { total: number; verified: number; complete: number; inProgress: number; blocked: number; notStarted: number; pct: number; }
+export interface GovBuildSummary { studentProjectId: string; releases: GovBuildReleaseSummary[]; rollup: GovBuildRollup; }
+
+export interface GovProposalDocumentComment { body: string; at: string; }
+export type GovProposalDocumentStatus = 'not_started' | 'drafting' | 'drafted' | 'changes_requested' | 'accepted';
+export interface GovProposalDocument {
+  key: string; title: string; status: GovProposalDocumentStatus; contentHtml: string | null;
+  version: number; gate: boolean; order: number; requirementIds: string[];
+  comments: GovProposalDocumentComment[]; draftedAt: string | null; acceptedAt: string | null;
+}
+export interface GovOverallProgress { buildVerified: number; buildTotal: number; docsAccepted: number; docsTotal: number; pct: number; }
 
 /** P6: a card for a gov project the intern is assigned to — minimal fields for the "on your profile" surface. */
 export interface MyGovProjectCard { projectId: string; name: string; status: string; }
@@ -172,4 +193,30 @@ export async function askGovCopilot(projectId: string, question: string): Promis
     { question },
   );
   return data;
+}
+
+// ── v2 Proposal document actions ───────────────────────────────────────────────────────────────────────────────
+const docUrl = (projectId: string, docKey: string, action: string) =>
+  `/api/portal/gov-projects/${encodeURIComponent(projectId)}/documents/${encodeURIComponent(docKey)}/${action}`;
+
+/** Draft a proposal document. With `contentHtml` it saves a manual edit (sanitized server-side); without it, the AI
+ *  drafts the whole document from its requirements. Either way it lands `drafted` — never accepted. */
+export async function draftGovProposalDocument(projectId: string, docKey: string, contentHtml?: string): Promise<GovProposalDocument> {
+  const { data } = await portalApi.post<{ document: GovProposalDocument }>(docUrl(projectId, docKey, 'draft'), contentHtml !== undefined ? { contentHtml } : {});
+  return data.document;
+}
+/** A reviewer accepts a drafted document — the only path to `accepted`. Students get 403 server-side. */
+export async function acceptGovProposalDocument(projectId: string, docKey: string): Promise<GovProposalDocument> {
+  const { data } = await portalApi.post<{ document: GovProposalDocument }>(docUrl(projectId, docKey, 'accept'), {});
+  return data.document;
+}
+/** A reviewer sends a document back with a note (appended to the review thread). */
+export async function requestChangesGovProposalDocument(projectId: string, docKey: string, note: string): Promise<GovProposalDocument> {
+  const { data } = await portalApi.post<{ document: GovProposalDocument }>(docUrl(projectId, docKey, 'request-changes'), { note });
+  return data.document;
+}
+/** Add a comment to a document's review thread. */
+export async function commentGovProposalDocument(projectId: string, docKey: string, body: string): Promise<GovProposalDocument> {
+  const { data } = await portalApi.post<{ document: GovProposalDocument }>(docUrl(projectId, docKey, 'comment'), { body });
+  return data.document;
 }
