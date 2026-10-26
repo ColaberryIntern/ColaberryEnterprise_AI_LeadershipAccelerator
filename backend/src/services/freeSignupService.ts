@@ -75,6 +75,20 @@ export interface FreeSignupInput {
   marketingOptIn?: boolean;
 
   /**
+   * Phone and permission to CALL OR TEXT, which is separate from marketingOptIn.
+   *
+   * `phone` IS a Lead column so it could have ridden in `acquisition`, but it is kept here
+   * beside the consent it depends on: a number stored without the permission to use it is the
+   * state that gets somebody called who never agreed to be. The two move together.
+   *
+   * The number is stored whether or not consent was given - it is still useful for support and
+   * for a person who asks to be called later - but `consent_contact` is written ONLY from an
+   * explicit tick.
+   */
+  phone?: string;
+  phoneConsent?: boolean;
+
+  /**
    * Which `lead_sources` row this DOOR is, as a slug.
    *
    * The door names itself and the server resolves the slug to a tenant and brand
@@ -157,6 +171,7 @@ async function captureGuestAsLead(
   acquisition: FreeSignupInput['acquisition'],
   resolvedSourceId: string | null,
   consentContact: boolean,
+  phone: string | null,
 ): Promise<number | null> {
   try {
     const [lead] = await Lead.findOrCreate({
@@ -176,6 +191,10 @@ async function captureGuestAsLead(
         // returning person's new consent is recorded on the brand relationship
         // instead, which is the row the send gate actually reads.
         consent_contact: consentContact,
+        // The number, when they gave one. Stored whether or not they ticked the call box: it is
+        // still useful for support and for somebody who later asks to be called, and the
+        // permission to USE it lives in consent records rather than in the presence of a value.
+        ...(phone ? { phone } : {}),
         // The caller's own source wins when supplied, so a signup that arrived
         // through a named entry point keeps that provenance. `free_signup` stays
         // the fallback, and is still what makes these rows identifiable and
@@ -308,12 +327,49 @@ export async function createFreeAccount(input: FreeSignupInput): Promise<FreeSig
     : null;
 
   const consented = input.marketingOptIn === true;
+  const phone = typeof input.phone === 'string' && input.phone.trim() !== ''
+    ? input.phone.trim()
+    : null;
+
   const leadId = await captureGuestAsLead(
     clean,
     input.acquisition,
     context?.sourceId ?? null,
     consented,
+    phone,
   );
+
+  /**
+   * Phone permission, recorded per channel and keyed on the NUMBER.
+   *
+   * Not `leads.consent_contact`: that column is written from the email checkbox above, and
+   * `brandPreferenceGate` reads consent without distinguishing channel - so reusing it would let
+   * "Email me about Colaberry courses" authorise a phone call. Not
+   * `communication_preferences` either: its tenant_id and brand_id are NOT NULL, and a
+   * landing-page signup usually resolves no brand, so writing there would mean inventing the
+   * relationship this file's own docblock forbids inventing.
+   *
+   * The consent service already keys sms and voice on the phone and stores the exact wording
+   * shown, which is what evidence means. Two records rather than one, because a single grant
+   * cannot honestly cover only whichever channel we later prefer.
+   *
+   * Swallow-safe and awaited, exactly like the email capture: a consent write must never cost
+   * somebody their account, and an unticked box records nothing rather than a revocation.
+   */
+  if (phone && input.phoneConsent === true) {
+    const { captureSignupConsent, PHONE_CONSENT_TEXT } = await import('./consent/captureSignupConsent');
+    for (const channel of ['voice', 'sms'] as const) {
+      // eslint-disable-next-line no-await-in-loop -- two writes, and order is irrelevant
+      await captureSignupConsent({
+        email: clean.email,
+        phone,
+        channel,
+        marketingOptIn: true,
+        source: 'free_signup',
+        consentText: PHONE_CONSENT_TEXT,
+      });
+    }
+  }
 
   // T205: the Explorer journey profile, AT REGISTRATION rather than overnight.
   //

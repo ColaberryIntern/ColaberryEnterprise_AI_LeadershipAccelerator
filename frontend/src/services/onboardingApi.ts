@@ -123,7 +123,15 @@ export interface FreeSignupResult {
  * default to be flipped on: an affirmative act is the only thing that counts.
  */
 export async function freeSignup(
-  body: { full_name: string; email: string; marketing_opt_in?: boolean },
+  body: {
+    full_name: string;
+    email: string;
+    marketing_opt_in?: boolean;
+    /** Optional, and only sent when given: the route is `.strict()`. */
+    phone?: string;
+    /** Permission to call or text. Separate from `marketing_opt_in`, which is email only. */
+    phone_consent?: boolean;
+  },
 ): Promise<FreeSignupResult> {
   const { data } = await portalApi.post<FreeSignupResult>('/api/portal/free-signup', body);
   return data;

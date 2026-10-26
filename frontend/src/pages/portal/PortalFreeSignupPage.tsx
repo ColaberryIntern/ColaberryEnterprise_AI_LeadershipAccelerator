@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useParticipantAuth } from '../../contexts/ParticipantAuthContext';
 import { freeSignup } from '../../services/onboardingApi';
 import { identifyVisitor } from '../../utils/tracker';
-import { SIGNUP_CONSENT_TEXT } from '../../config/consentText';
+import { SIGNUP_CONSENT_TEXT, PHONE_CONSENT_TEXT } from '../../config/consentText';
 
 // Public "Start for $0" front door. Creates a $0 guest account (0 points), logs
 // the visitor straight in, and drops them on the Today shell — the top of the
@@ -21,6 +21,10 @@ const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 function PortalFreeSignupPage() {
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
+  // Optional. 270 signups in thirty days produced zero numbers because the form never asked, so
+  // nobody could be called; requiring it would cost signups on a page converting at 41.6%.
+  const [phone, setPhone] = useState('');
+  const [phoneConsent, setPhoneConsent] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   // UNCHECKED by default, and NOT required to submit.
@@ -47,6 +51,10 @@ function PortalFreeSignupPage() {
         full_name: fullName.trim(),
         email: email.trim(),
         marketing_opt_in: marketingOptIn,
+        // Sent only when given. The route is `.strict()`, so a server deployed before these
+        // fields existed would reject the whole signup rather than ignore the extra keys.
+        ...(phone.trim() ? { phone: phone.trim() } : {}),
+        ...(phone.trim() && phoneConsent ? { phone_consent: true } : {}),
       });
 
       /**
@@ -110,6 +118,30 @@ function PortalFreeSignupPage() {
             placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)}
             disabled={loading}
           />
+          <label className="cbfs-label" htmlFor="cbfs-phone">Phone (optional)</label>
+          <input
+            id="cbfs-phone" className="cbfs-input" type="tel" autoComplete="tel"
+            placeholder="(555) 555-5555" value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            disabled={loading}
+          />
+
+          {/*
+            Shown only once a number is typed. Permission to call somebody we have no number for
+            grants nothing, and asking up front reads as a condition of signing up, which it is
+            not. Never pre-ticked.
+          */}
+          {phone.trim() !== '' && (
+            <label className="cbfs-consent" htmlFor="cbfs-phone-consent">
+              <input
+                id="cbfs-phone-consent" className="cbfs-check" type="checkbox"
+                checked={phoneConsent} onChange={(e) => setPhoneConsent(e.target.checked)}
+                disabled={loading}
+              />
+              <span>{PHONE_CONSENT_TEXT}</span>
+            </label>
+          )}
+
           <label className="cbfs-consent" htmlFor="cbfs-consent">
             <input
               id="cbfs-consent" className="cbfs-check" type="checkbox"
