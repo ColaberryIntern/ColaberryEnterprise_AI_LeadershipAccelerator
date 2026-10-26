@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { SIGNUP_CONSENT_TEXT } from '../captureSignupConsent';
+import { SIGNUP_CONSENT_TEXT, PHONE_CONSENT_TEXT } from '../captureSignupConsent';
 
 /**
  * The wording shown at signup must be the wording recorded as consent.
@@ -36,8 +36,10 @@ const FRONTEND_CONSENT = path.join(
  * single string. The capture is anchored on the export name so a renamed constant
  * fails loudly here rather than matching some other string in the file.
  */
-function readFrontendConsentText(src: string): string | null {
-  const m = /export const SIGNUP_CONSENT_TEXT\s*=\s*\r?\n?\s*'([^']*)'/.exec(src);
+function readFrontendConsentText(src: string, name = 'SIGNUP_CONSENT_TEXT'): string | null {
+  // Built from the export NAME so one extractor serves every constant here, rather than growing a
+  // near-identical copy per string - which is the same duplication this file exists to catch.
+  const m = new RegExp(`export const ${name}\\s*=\\s*\\r?\\n?\\s*'([^']*)'`).exec(src);
   return m ? m[1] : null;
 }
 
@@ -79,5 +81,38 @@ describe('signup consent wording, backend and frontend', () => {
     // would mean the stored evidence and the shown text can differ per request.
     expect(readFrontendConsentText(src)).not.toContain('${');
     expect(SIGNUP_CONSENT_TEXT).not.toContain('${');
+  });
+});
+
+/**
+ * The phone grant, added 2026-10-26 alongside the optional phone field.
+ *
+ * It needs this guard MORE than the email one, not less: the record it backs attests that
+ * somebody agreed to be telephoned, and an AI voice agent may be what places the call. A drifted
+ * string here is a good-faith attestation to permission in words nobody was ever shown.
+ */
+describe('phone consent wording, backend and frontend', () => {
+  const frontend = () => readFrontendConsentText(
+    fs.readFileSync(FRONTEND_CONSENT, 'utf8'), 'PHONE_CONSENT_TEXT',
+  );
+
+  it('extracts the literal from the frontend module', () => {
+    // Fail on the instrument before trusting it, exactly as above.
+    expect(frontend()).not.toBeNull();
+    expect((frontend() as string).length).toBeGreaterThan(20);
+  });
+
+  it('IS IDENTICAL to the string recorded as consent', () => {
+    expect(frontend()).toBe(PHONE_CONSENT_TEXT);
+  });
+
+  it('is NOT the email wording, which is the reason it exists', () => {
+    // One sentence covering both would mean a single tick authorising email and telephone.
+    expect(PHONE_CONSENT_TEXT).not.toBe(SIGNUP_CONSENT_TEXT);
+  });
+
+  it('names calls and texts, so the record says what was agreed to', () => {
+    expect(PHONE_CONSENT_TEXT.toLowerCase()).toContain('call');
+    expect(PHONE_CONSENT_TEXT.toLowerCase()).toContain('text');
   });
 });

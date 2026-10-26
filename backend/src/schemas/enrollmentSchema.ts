@@ -192,6 +192,32 @@ export const portalFreeSignupSchema = z.object({
   // field cannot be sent until this schema is deployed, and it cannot be required
   // until every caller sends it. The frontend and this change ship together.
   marketing_opt_in: z.boolean().optional(),
+
+  /**
+   * Phone, OPTIONAL, and 50 to match `Lead.phone` STRING(50) rather than any opinion about how
+   * long a phone number is.
+   *
+   * Measured 2026-10-26: of 270 landing-page signups in thirty days, ZERO had a phone, because
+   * the form never asked. Open House, which does ask, collected 48 of 53. Nobody can be called
+   * without this, so it is the field that unblocks every phone-based follow-up.
+   *
+   * It stays optional on purpose. Requiring it would cost signups on a page converting at 41.6%,
+   * and the whole value of this entry point is how little it asks for.
+   */
+  phone: z.string().trim().max(50).optional(),
+
+  /**
+   * Permission to CALL OR TEXT, which is a different permission from `marketing_opt_in`.
+   *
+   * The existing checkbox says "Email me about Colaberry courses, events and AI resources" - that
+   * is email consent and cannot be read as agreement to a phone call, least of all one placed by
+   * an AI agent. Conflating them would mean inferring phone consent from an email checkbox, which
+   * is the kind of inference this field exists to make unnecessary.
+   *
+   * Absent means no consent recorded, never a revocation, and the same `.strict()` deploy-order
+   * caveat as `marketing_opt_in` applies: the frontend and this ship together.
+   */
+  phone_consent: z.boolean().optional(),
 }).strict();
 
 export type PortalFreeSignupInput = z.infer<typeof portalFreeSignupSchema>;

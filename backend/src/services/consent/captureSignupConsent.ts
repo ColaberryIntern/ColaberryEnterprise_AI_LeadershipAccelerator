@@ -180,3 +180,23 @@ export const CALLBACK_CONSENT_TTL_DAYS = 30;
 /** The wording to render. Kept here so every surface shows the same thing. */
 export const SIGNUP_CONSENT_TEXT =
   'Email me about Colaberry courses, events and AI resources. You can unsubscribe at any time.';
+
+/**
+ * Permission to call or text, asked for at signup.
+ *
+ * SEPARATE FROM SIGNUP_CONSENT_TEXT, which is the entire point. The email wording says "Email me",
+ * and that cannot be read as agreement to a phone call. Until now the landing page collected no
+ * phone at all - 270 signups in thirty days, zero numbers - so there was nothing to be
+ * over-permissive with. The moment a number is collected the distinction becomes load bearing.
+ *
+ * WEAKER THAN CALLBACK_CONSENT_TEXT ON PURPOSE. That one records an affirmative request ("I asked
+ * Colaberry to call me") and carries a 30 day lapse. This is a standing permission granted before
+ * the person has any question to ask, so it says what it is: permission to reach out, not a
+ * request for contact. A surface that needs the stronger grant should ask at the moment of need
+ * and record CALLBACK_CONSENT_TEXT instead.
+ *
+ * It names calls AND texts, because one checkbox cannot honestly authorise only whichever channel
+ * turns out to be convenient later.
+ */
+export const PHONE_CONSENT_TEXT =
+  'You can call or text me about getting started. Message and data rates may apply, and you can ask us to stop at any time.';

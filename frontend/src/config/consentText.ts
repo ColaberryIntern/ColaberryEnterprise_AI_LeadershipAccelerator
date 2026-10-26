@@ -21,4 +21,15 @@
 export const SIGNUP_CONSENT_TEXT =
   'Email me about Colaberry courses, events and AI resources. You can unsubscribe at any time.';
 
+/**
+ * Permission to call or text, shown beside the optional phone field.
+ *
+ * Same pinning rule as above, for the same reason: the backend stores this exact string as
+ * evidence of what the person was shown. It is a SEPARATE permission from the email wording and so
+ * must be a separate string - a record attesting "Email me about Colaberry courses" cannot stand
+ * as evidence that somebody agreed to a phone call.
+ */
+export const PHONE_CONSENT_TEXT =
+  'You can call or text me about getting started. Message and data rates may apply, and you can ask us to stop at any time.';
+
 export default SIGNUP_CONSENT_TEXT;
