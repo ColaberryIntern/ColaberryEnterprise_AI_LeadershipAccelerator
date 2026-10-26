@@ -11,6 +11,12 @@
 .cm-home .cm-serif{font-family:'Fraunces',Georgia,serif}
 
 /* ---- top bar (prototype .topbar / .pill) ---- */
+/* C49 (v13 T1): the Today pill; red for Explorers (the one primary control in the bar) */
+.cm-topbar-today{pointer-events:auto;display:inline-flex;align-items:center;gap:6px;flex:none;padding:0 14px;height:44px;font-weight:800;font-size:14px;color:var(--cm-art-ink);text-decoration:none;white-space:nowrap}
+.cm-topbar-today.is-primary{background:var(--cm-art-red);color:var(--cm-art-white);border-color:var(--cm-art-red)}
+.cm-topbar-today .cm-today-count{font:800 11px ui-monospace,Menlo,monospace;padding:2px 7px;border-radius:999px;background:var(--cm-art-line)}
+.cm-topbar-today.is-primary .cm-today-count{background:var(--cm-art-red-d);color:var(--cm-art-white)}
+.cm-topbar-today:focus-visible{outline:3px solid var(--cm-art-ink);outline-offset:2px}
 .cm-topbar{position:absolute;top:14px;left:14px;right:14px;display:flex;align-items:center;gap:12px;pointer-events:none;z-index:10}
 .cm-topbar>*{pointer-events:auto}
 .cm-pill{background:var(--cm-art-paper);border-radius:999px;box-shadow:var(--cm-art-shadow);display:flex;align-items:center;gap:10px;padding:8px 14px;height:46px;border:0;color:var(--cm-art-ink)}

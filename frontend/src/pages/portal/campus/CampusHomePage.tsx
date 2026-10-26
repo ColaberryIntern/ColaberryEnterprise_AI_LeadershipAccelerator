@@ -132,6 +132,8 @@ function CampusHome(): React.ReactElement {
   const online = useMemo(() => (presence && !presenceError ? pulseOf(presence, buildings).total : null), [presence, presenceError, buildings]);
 
   const reduce = settings.reduceMotion;
+  // C49 (v13 T1): the Today button's "<done> of <total>", from the same plan as the side panel's Today's plan
+  const todayCount = campus.planStops && campus.planStops.length ? { done: campus.planStops.filter((s) => s.done).length, total: campus.planStops.length } : null;
   const initials = facts.initials || readParticipant().initials;
   const enter = (t: boolean) => { setGateOpen(false); reveal.show(); if (reduce) map.camRef.current?.base(); if (t) campus.startTour(); void claimStreak(); };
   const level = audience === 'member' || audience === 'explorer' ? levelOfRung(look?.rung_name) : null;
@@ -145,7 +147,7 @@ function CampusHome(): React.ReactElement {
       <CampusWorld {...props} insets={homeInsets} walkTo={map.walk} onCard={onCard} cameraRef={map.camRef} startAt={campus.here}
         startCam={map.startCam} recenter={map.recenter} me={{ initials, photo, level, tone: audience }} moments={mapMoments(audience, agenda)} quiet={quiet} hover={hover} liveNow={liveNow} onGround={onGround} />
       <WeatherSky wx={wx} reduceMotion={reduce} paused={gateOpen} />
-      <CampusTopBar audience={audience} online={online} points={look?.points ?? null} rung={look?.rung_name || null} photo={photo} workplace={wp}
+      <CampusTopBar today={todayCount} audience={audience} online={online} points={look?.points ?? null} rung={look?.rung_name || null} photo={photo} workplace={wp}
         streak={facts.streak} initials={initials} onList={campus.openList} onFind={() => { openWayfinder(); }} onMe={() => (campus.meOpen ? campus.closeMe() : campus.openMe())} weather={<WeatherChip wx={wx} />} />
       <CampusMeHost fullName={facts.fullName} initials={initials} onClosed={() => map.camRef.current?.recenter()} />
       <CampusConcierge waiting={!reveal.shown} cardOpen={cardOpen} audience={audience} firstName={facts.firstName} hereId={campus.here ?? null} onLawn={onLawn}
