@@ -78,7 +78,8 @@ export function reasonsFor(s: OutreachSignals, now: number): string[] {
   const seen = daysSince(s.last_seen, now);
   if (seen !== null) out.push(seen <= 0 ? 'Active today' : seen === 1 ? 'Active yesterday' : `Last active ${seen} days ago`);
   const contacted = daysSince(s.last_contacted_at, now);
-  out.push(contacted === null ? 'Not contacted yet' : `Last contacted ${contacted === 0 ? 'today' : `${contacted} days ago`}`);
+  // "per portal records": a staff call / meeting / note or Ali's personal outreach logged here; GHL's own history is not read yet
+  out.push(contacted === null ? 'No contact in portal records' : `Last contacted ${contacted === 0 ? 'today' : `${contacted} days ago`} (portal records)`);
   return out;
 }
 

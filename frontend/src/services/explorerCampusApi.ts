@@ -36,6 +36,9 @@ export interface OutreachRow {
   last_contacted_at: string | null;
   score: number;
   reasons: string[];
+  /** 2026-10-26: the 360 and GHL links. */
+  lead_id: number | null;
+  ghl_url: string | null;
 }
 
 export interface OutreachList { view: OutreachView; rows: OutreachRow[]; tracked_since: string }
