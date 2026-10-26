@@ -29,9 +29,9 @@ describe('where a step happens and where it opens', () => {
     expect(p).toMatchObject({ buildingId: 'commons', route: TODAY_ROUTE });
     expect(l).toMatchObject({ buildingId: 'lecture', route: '/portal/runtime/l1', cardId: 'l1' });
   });
-  it('pins TodayShell.openCard: only a project workspace navigates away; everything else opens the drawer', () => {
+  it('pins TodayShell.openCard: only a project workspace navigates away (stamped from Today, so backing out returns there); everything else opens the drawer', () => {
     const src = fs.readFileSync(path.join(__dirname, '..', '..', '..', 'pages', 'portal', 'today', 'TodayShell.tsx'), 'utf8');
-    expect(src).toMatch(/const workspace = projectWorkspacePath\(card\);\s*\n\s*if \(workspace\) \{ navigate\(workspace\); return; \}\s*\n\s*setSelectedCard\(card\);/);
+    expect(src).toMatch(/const workspace = projectWorkspacePath\(card\);\s*\n(?:\s*\/\/[^\n]*\n)?\s*if \(workspace\) \{ navigate\(workspace, \{ state: \{ from: '\/portal\/today' \} \}\); return; \}\s*\n\s*setSelectedCard\(card\);/);
   });
 });
 

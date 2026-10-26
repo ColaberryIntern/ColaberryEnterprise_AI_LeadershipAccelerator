@@ -32,6 +32,8 @@ import CommunityPulse from './CommunityPulse';
 import TodayStreakCard from './TodayStreakCard';
 import TodayDayCard from './TodayDayCard';
 import { ExplorerKicker, ExplorerRailCards, useExplorerHomeBase } from './ExplorerHomeBase';
+import { promotable } from '../../../components/campus/events/eventsModel';
+import { useCampusView } from '../../../components/campus/useCampusView';
 import TodayJourneyNudges from './TodayJourneyNudges';
 import NextLiveClassCard from './NextLiveClassCard';
 import InternshipOpportunityCard from './InternshipOpportunityCard';
@@ -105,7 +107,8 @@ const TodayShell: React.FC = () => {
   // by containers with no Router and must stay presentational.
   const openCard = useCallback((card: TimelineFeedCard) => {
     const workspace = projectWorkspacePath(card);
-    if (workspace) { navigate(workspace); return; }
+    // Backing out returns to Today (Ali, 2026-10-26), as the drawer's Enter workspace already does
+    if (workspace) { navigate(workspace, { state: { from: '/portal/today' } }); return; }
     setSelectedCard(card);
   }, [navigate]);
   // CAPE Phase 0-1 profile (drives SkillMeter + Readiness); Phase 5 filter-chip counts + skill-drawer selection.
@@ -185,7 +188,9 @@ const TodayShell: React.FC = () => {
   // hardcoded 0/100 literal. Rounds the same overall_proficiency SkillMeter renders,
   // so the ring and the radar can never disagree (design doc §2, §11, §17 AC 10).
   const readiness = capeProfile ? Math.round(capeProfile.overall_proficiency) : 0;
-  const oh = schedule?.next_open_house || null;
+  // business accounts are never shown an Open House (Ali, 2026-10-26; eventsModel.promotable)
+  const { audience: campusAudience } = useCampusView();
+  const oh = promotable(campusAudience, schedule?.next_open_house);
   const ohCd = countdown(oh ? new Date(oh.starts_at).getTime() : null, now);
   const fcCd = countdown(firstClassTargetMs(schedule?.first_class ?? null), now);
   const hasBackground = !!(profile && (profile.has_resume || profile.linkedin_url));

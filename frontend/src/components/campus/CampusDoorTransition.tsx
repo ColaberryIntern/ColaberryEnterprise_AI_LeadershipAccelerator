@@ -33,7 +33,11 @@ const centerRect = (): Rect => ({ left: window.innerWidth / 2 - 40, top: window.
 export default function CampusDoorTransition(): React.ReactElement | null {
   const { door, clearDoor, settings, openMap, closeLayer } = useCampus();
   const navigate = useNavigate();
-  const onHome = useLocation().pathname === '/portal/campus';
+  const loc = useLocation();
+  const onHome = loc.pathname === '/portal/campus';
+  // Where the door was opened from travels with it (Ali, 2026-10-26: backing out returns where you came from). From the campus home,
+  // the workstation's Stand up still stands you in the room (returnToOf treats the home as no page).
+  const fromHere = `${loc.pathname}${loc.search}`;
   const panel = useRef<HTMLDivElement | null>(null);
   const reduce = settings.reduceMotion;
 
@@ -44,7 +48,7 @@ export default function CampusDoorTransition(): React.ReactElement | null {
     const once = (fn: () => void) => () => { if (done) return; done = true; if (timer !== undefined) window.clearTimeout(timer); fn(); clearDoor(); };
 
     if (door.phase === 'in') {
-      const finish = once(() => { closeLayer(); navigate(door.route); });
+      const finish = once(() => { closeLayer(); navigate(door.route, { state: { from: fromHere } }); });
       const el = panel.current;
       if (reduce || !el || typeof el.animate !== 'function') { finish(); return undefined; }
       timer = window.setTimeout(finish, DOOR_FALLBACK_MS);
@@ -66,7 +70,7 @@ export default function CampusDoorTransition(): React.ReactElement | null {
     anim.finished.then(finish, finish);
     return () => { done = true; if (timer !== undefined) window.clearTimeout(timer); };
     // door.id changes per request; the other deps are stable callbacks / settings.
-  }, [door, reduce, clearDoor, closeLayer, navigate, openMap, onHome]);
+  }, [door, reduce, clearDoor, closeLayer, navigate, openMap, onHome, fromHere]);
 
   if (!door || reduce) return null;
   return <div ref={panel} className="cm-door-panel" data-testid="cm-door" aria-hidden="true" />;

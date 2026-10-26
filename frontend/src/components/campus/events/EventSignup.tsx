@@ -1,6 +1,7 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { fetchPublicEvents, type OpenHouseView } from '../../../services/onboardingApi';
-import { signupOf } from './eventsModel';
+import { eventsFor, signupOf } from './eventsModel';
+import { useCampusView } from '../useCampusView';
 
 /**
  * C27 (v6 D5): the one-tap event button and the events every campus surface shares. "Sign up" opens Eventbrite (a new tab, the
@@ -34,5 +35,7 @@ export function useCampusEvents(enabled: boolean, days = 30): OpenHouseView[] | 
     window.addEventListener('focus', onFocus);
     return () => { document.removeEventListener('visibilitychange', onFocus); window.removeEventListener('focus', onFocus); };
   }, [load]);
-  return events;
+  // business accounts never see an Open House (eventsModel.eventsFor)
+  const { audience } = useCampusView();
+  return useMemo(() => (events ? eventsFor(audience, events) : events), [events, audience]);
 }

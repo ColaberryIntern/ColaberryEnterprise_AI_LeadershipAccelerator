@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { fetchSchedule, OnboardingSchedule } from '../../../services/onboardingApi';
 import { countdown, firstClassTargetMs, fmtCentralDateTime } from '../today/shellUtils';
+import { promotable } from '../../../components/campus/events/eventsModel';
+import { useCampusView } from '../../../components/campus/useCampusView';
 
 // The "next live event (session)" strip — the same beat every page carries just
 // under its hero, matching the Today page. Reuses the cohort schedule so the
@@ -17,7 +19,9 @@ const NextSessionStrip: React.FC = () => {
     return () => window.clearInterval(id);
   }, []);
 
-  const oh = schedule?.next_open_house || null;
+  // business accounts are never shown an Open House (Ali, 2026-10-26; eventsModel.promotable)
+  const { audience } = useCampusView();
+  const oh = promotable(audience, schedule?.next_open_house);
   const fc = schedule?.first_class || null;
   const title = oh?.title || (fc ? `${fc.cohort_name || 'Your cohort'} · first class` : null);
   if (!title) return null;

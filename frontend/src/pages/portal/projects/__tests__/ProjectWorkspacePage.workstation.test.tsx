@@ -17,12 +17,13 @@ let mockProject: StudentProject | null = null;
 let mockActive = true;
 const mockNav: Array<[string, unknown]> = [];
 const mockOpenMap: Array<[unknown, unknown]> = [];
+let mockLocState: { from?: string } | null = { from: '/portal/projects?project=p1' };
 
 jest.mock('react-router-dom', () => ({
   __esModule: true,
   useParams: () => ({ projectId: 'p1', taskId: 'STORY-001' }),
   useNavigate: () => (to: string, opts?: unknown) => { mockNav.push([to, opts]); },
-  useLocation: () => ({ state: { from: '/portal/projects' } }),
+  useLocation: () => ({ state: mockLocState }),
 }));
 jest.mock('../projectSync', () => ({ __esModule: true, refreshProjectsFromBackend: () => Promise.resolve(), syncProjectsWithBackend: () => Promise.resolve() }));
 jest.mock('../../../../utils/portalApi', () => ({ __esModule: true, default: { post: () => Promise.resolve({ data: { reply: 'ok' } }), get: () => Promise.resolve({ data: {} }) } }));
@@ -77,6 +78,7 @@ beforeEach(() => {
   mockActive = true;
   mockNav.length = 0;
   mockOpenMap.length = 0;
+  mockLocState = { from: '/portal/projects?project=p1' };
   container = document.createElement('div');
   document.body.appendChild(container);
 });
@@ -123,18 +125,28 @@ it('keeps the page itself on the main monitor (story, Done means, How to build i
   expect(term.textContent).toContain('watching .colaberry/progress.json');
 });
 
-it('Stand up stands you inside the Studio on the campus; All of opens the section; a queued ticket opens that story', async () => {
+// Ali, 2026-10-26: backing out of a project's workspace lands in THAT project
+it('Stand up returns to the project it was opened from; All of opens the section; a queued ticket opens that story', async () => {
   await mount();
   click(t('cm-ws-standup'));
-  expect(mockOpenMap).toEqual([['studio', 'inside']]);
-  expect(mockNav[mockNav.length - 1][0]).toBe('/portal/campus');
+  expect(mockOpenMap).toEqual([]);
+  expect(mockNav[mockNav.length - 1][0]).toBe('/portal/projects?project=p1');
   click(t('cm-ws-crumb-building')); // the building crumb in the trail does the same
-  expect(mockOpenMap).toEqual([['studio', 'inside'], ['studio', 'inside']]);
+  expect(mockNav[mockNav.length - 1][0]).toBe('/portal/projects?project=p1');
   click(t('cm-ws-section'));
   expect(mockNav[mockNav.length - 1][0]).toBe('/portal/projects');
   const queued = container.querySelector('.cm-ws-ticket.is-queued') as HTMLElement;
   click(queued);
   expect(mockNav[mockNav.length - 1][0]).toBe('/portal/projects/workspace/p1/STORY-002');
+  expect(mockNav[mockNav.length - 1][1]).toEqual({ state: { from: '/portal/projects?project=p1' } }); // the hop keeps the origin
+});
+
+it('opened from the campus map (or a deep link), Stand up stands you inside the Studio', async () => {
+  mockLocState = null;
+  await mount();
+  click(t('cm-ws-standup'));
+  expect(mockOpenMap).toEqual([['studio', 'inside']]);
+  expect(mockNav[mockNav.length - 1][0]).toBe('/portal/campus');
 });
 
 it('with the campus off renders the classic workspace and no shell', async () => {
