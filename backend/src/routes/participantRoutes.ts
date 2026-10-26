@@ -968,10 +968,12 @@ router.get('/api/portal/community/posts', requireParticipant, async (req, res) =
       (posts as any[]).map((p) => String(p.id)),
     );
 
+    // Campus v14 B1 (C65): every post says which weekly ritual it answered (postRituals.withRituals, best effort)
+    const { withRituals } = await import('../services/community/postRituals');
     res.json({
-      posts: (posts as any[]).map((p) => (demos[String(p.id)]
+      posts: await withRituals((posts as any[]).map((p) => (demos[String(p.id)]
         ? { ...p, demo: demos[String(p.id)] }
-        : p)),
+        : p))),
       next_cursor,
     });
   } catch (err: any) {

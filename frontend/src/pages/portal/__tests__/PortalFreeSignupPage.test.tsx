@@ -230,12 +230,103 @@ describe('marketing consent', () => {
   });
 
   it('does not disturb the name and email fields it sits beside', async () => {
-    // `fillAndSubmit` destructures `[nameEl, emailEl] = inputs()`, so a checkbox
-    // inserted ABOVE them would silently retarget every other test in this file.
+    // `fillAndSubmit` destructures `[nameEl, emailEl] = inputs()`, so a field inserted ABOVE
+    // them would silently retarget every other test in this file. This guard caught exactly
+    // that when the optional phone field was added: it failed with "Expected checkbox,
+    // Received tel", which is the guard working rather than the change being wrong.
+    //
+    // The phone CONSENT checkbox is deliberately absent here - it renders only once a number
+    // has been typed, so at mount the marketing checkbox is still the last input.
     await mount();
-    const [first, second, third] = inputs();
+    const [first, second, third, fourth] = inputs();
     expect(first.type).toBe('text');
     expect(second.type).toBe('email');
-    expect(third.type).toBe('checkbox');
+    expect(third.type).toBe('tel');
+    expect(fourth.type).toBe('checkbox');
+  });
+});
+
+describe('phone and permission to call', () => {
+  /**
+   * Measured 2026-10-26: 270 landing-page signups in thirty days, ZERO phone numbers, because
+   * this form never asked. Open House, which does ask, collected 48 of 53. Nobody could be
+   * called, so no amount of CRM or dialer work could reach these people.
+   *
+   * It stays OPTIONAL. The page converts at 41.6% precisely because of how little it asks for,
+   * and a required number would be paid for in signups.
+   */
+  const phoneField = () => inputs().find((i) => i.type === 'tel')!;
+  const phoneConsentBox = () =>
+    container.querySelector<HTMLInputElement>('#cbfs-phone-consent');
+
+  it('offers a phone field that is not required', async () => {
+    await mount();
+    expect(phoneField()).toBeTruthy();
+    expect(phoneField().required).toBe(false);
+  });
+
+  it('does not send a phone when none is given', async () => {
+    await mount();
+    await fillAndSubmit();
+    const body = mockFreeSignup.mock.calls[0][0];
+    expect(body.phone).toBeUndefined();
+    expect(body.phone_consent).toBeUndefined();
+  });
+
+  it('hides the call permission until there is a number to call', async () => {
+    // A box granting permission to ring a number we do not have authorises nothing, and asking
+    // up front reads as a condition of signing up.
+    await mount();
+    expect(phoneConsentBox()).toBeNull();
+
+    await act(async () => { type(phoneField(), '555-0100'); });
+    expect(phoneConsentBox()).not.toBeNull();
+  });
+
+  it('leaves the call permission UNTICKED, because a pre-ticked box is not an affirmative act', async () => {
+    await mount();
+    await act(async () => { type(phoneField(), '555-0100'); });
+    expect(phoneConsentBox()!.checked).toBe(false);
+  });
+
+  it('sends the number without permission when the box is left alone', async () => {
+    // The number is still useful for support and for somebody who later asks to be called. What
+    // it must NOT do is imply permission, so phone_consent stays absent.
+    await mount();
+    await act(async () => { type(phoneField(), '555-0100'); });
+    await fillAndSubmit();
+
+    const body = mockFreeSignup.mock.calls[0][0];
+    expect(body.phone).toBe('555-0100');
+    expect(body.phone_consent).toBeUndefined();
+  });
+
+  it('sends both once the number and the permission are given', async () => {
+    await mount();
+    await act(async () => { type(phoneField(), '555-0100'); });
+    await act(async () => { phoneConsentBox()!.click(); });
+    await fillAndSubmit();
+
+    const body = mockFreeSignup.mock.calls[0][0];
+    expect(body.phone).toBe('555-0100');
+    expect(body.phone_consent).toBe(true);
+  });
+
+  it('shows wording about calls and texts, separate from the email consent', async () => {
+    // A record attesting "Email me about Colaberry courses" cannot stand as evidence that
+    // somebody agreed to a phone call, so the two sentences must not be the same sentence.
+    await mount();
+    await act(async () => { type(phoneField(), '555-0100'); });
+
+    const shown = phoneConsentBox()!.closest('label')!.textContent!;
+    expect(shown.toLowerCase()).toContain('call');
+    expect(shown.toLowerCase()).toContain('text');
+    expect(shown).not.toBe(SIGNUP_CONSENT_TEXT);
+  });
+
+  it('does not block submission when no number is typed at all', async () => {
+    await mount();
+    await fillAndSubmit();
+    expect(mockFreeSignup).toHaveBeenCalledTimes(1);
   });
 });

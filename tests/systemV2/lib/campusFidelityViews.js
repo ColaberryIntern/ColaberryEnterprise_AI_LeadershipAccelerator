@@ -207,10 +207,15 @@ const VIEWS = [
       const rows = document.querySelectorAll('[data-testid^="cm-hall-row-"]').length; const real = doors.filter((d) => !d.classList.contains('is-more') && !d.classList.contains('is-empty')).length;
       return rows === real ? '' : 'rows ' + rows + ' vs doors ' + real; })()` },
   // C30 (v7 R3): the Community Board on the Quad: the noticeboard is on the map; clicking it walks there and opens the cork board with
-  // its four tabs and the real notes from the community feed.
-  { name: '27-community-board', route: '/portal/campus', accounts: ['member'], steps: () => [{ click: '[data-testid="cm-cboard-sign"]' }, { wait: 2200 }],
-    required: () => ['cm-cboard-sign', 'cm-cboard', 'cm-cb-tab-all', 'cm-cb-tab-q', 'cm-cb-tab-post', 'cm-cb-tab-ann', 'cm-cb-feed'],
-    assert: () => `(() => { const n = document.querySelectorAll('[data-testid="cm-cboard"] [role="tab"]').length; return n === 4 ? '' : 'tabs: ' + n; })()` },
+  // the real notes from the community feed. v14 (C67-C71): the board in sections: the header (status, search, Add a note, the Community
+  // page), the ritual bar, nine sections, and Everything's Fresh grid; the drawer and the composer have their own views below.
+  { name: '27-community-board', route: '/portal/campus', accounts: ['member'], sizes: ['desktop', 'half', 'phone'], steps: () => [{ click: '[data-testid="cm-cboard-sign"]' }, { wait: 2200 }],
+    required: () => ['cm-cboard-sign', 'cm-cboard', 'cb-status', 'cb-search', 'cb-add', 'cm-cb-feed', 'cb-lanes'],
+    assert: () => `(() => { const n = document.querySelectorAll('[data-testid="cb-lanes"] [data-testid^="cb-lane-"]').length; return n === 9 ? '' : 'sections: ' + n; })()` },
+  { name: '33-board-compose', route: '/portal/campus', accounts: ['member'], steps: () => [{ click: '[data-testid="cm-cboard-sign"]' }, { wait: 2200 }, { click: '[data-testid="cb-add"]' }, { wait: 400 }],
+    required: () => ['cb-compose', 'cb-type-q', 'cb-type-post', 'cb-compose-where', 'cb-compose-body', 'cb-compose-post'] },
+  { name: '33-board-your-notes', route: '/portal/campus', accounts: ['member'], steps: () => [{ click: '[data-testid="cm-cboard-sign"]' }, { wait: 2200 }, { click: '[data-testid="cb-lane-mine"]' }, { wait: 1200 }],
+    required: () => ['cb-lanes'] },
   // C34 (v8 G1): the Game Room page: the hero, both side cards, five game cards, the leaderboard, recent highs and the side column; no
   // control's text overflows its box.
   { name: '29-game-room', route: '/portal/game-room', accounts: ['member'], steps: () => [{ wait: 2500 }],

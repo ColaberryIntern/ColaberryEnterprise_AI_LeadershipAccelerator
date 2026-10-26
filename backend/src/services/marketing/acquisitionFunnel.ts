@@ -85,7 +85,13 @@ async function downstream(days: number): Promise<DownstreamRow> {
     `WITH landing_leads AS (
        SELECT l.id, lower(btrim(l.email)) AS email, l.ghl_contact_id
        FROM leads l
-       WHERE l.source = ANY(:sources)
+       -- IN (:list), NOT = ANY(:list). Sequelize expands a replacement array into a
+       -- comma-separated list, so ANY(...) receives ANY('a','b','c') and Postgres rejects it
+       -- with "syntax error at or near ,". This shipped to production and 500'd the endpoint:
+       -- the tests mock sequelize.query, so no test could see the SQL, and the manual check
+       -- against prod used a literal ARRAY[...] rather than the parameterised form the code
+       -- actually sends - validating the shape of the query but not the thing being run.
+       WHERE l.source IN (:sources)
          AND l.created_at >= now() - (:days || ' days')::interval
          -- Test fixtures are not people. The e2e suite writes these into production.
          AND lower(l.email) NOT LIKE 'e2e-%'
@@ -114,7 +120,8 @@ async function byCampaign(days: number): Promise<FunnelCampaignRow[]> {
             count(*) FILTER (WHERE l.ghl_contact_id IS NOT NULL)::int AS in_crm
      FROM leads l
      LEFT JOIN enrollments e ON lower(btrim(e.email)) = lower(btrim(l.email))
-     WHERE l.source = ANY(:sources)
+     -- See the note above: IN, not ANY, because of how replacements expand.
+     WHERE l.source IN (:sources)
        AND l.created_at >= now() - (:days || ' days')::interval
        AND lower(l.email) NOT LIKE 'e2e-%'
        AND lower(l.email) NOT LIKE '%@colaberry-test.local'

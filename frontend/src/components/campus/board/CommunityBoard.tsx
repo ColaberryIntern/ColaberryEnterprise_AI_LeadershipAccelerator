@@ -1,106 +1,162 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { createPost, fetchPosts, type CommunityPost } from '../../../services/communityApi';
-import { BOARD_TABS, BOARD_WALK_MS, POST_CATEGORY, QUESTION_CATEGORY, firstName, noteCount, noteKind, onTab, tiltOf, writeSeen, type BoardTab } from './boardModel';
+import { getBoard, markBoardSeen, type BoardPost, type BoardResponse, type Lane, type PostLane } from './boardData';
+import { BOARD_WALK_MS, clearLegacySeen, readSeen } from './boardModel';
 import { onBoard, type BoardOpen } from './boardApi';
+import { laneMeta, LANE_META, shortCentral } from './boardTime';
+import { Everything, Section, YourNotes } from './BoardViews';
+import BoardDrawer from './BoardDrawer';
+import BoardComposer, { type ComposeType } from './BoardComposer';
 import './communityBoard.css';
 
 /**
- * The Community Board (C30, v7 R3; the prototype's #cboard): a cork dialog. "📌 Community Board", the line, the four tabs, "❓ Ask a
- * question" / "✏️ Post something" opening an inline composer ("Pin it to the board" posts through the existing community endpoint),
- * the notes as pinned paper (questions yellow with answers, posts white with likes, announcements teal; the author's initials and
- * first name), and "Open the full Community feed →". A note opens the Community feed. Failures say so; nothing is claimed.
+ * The Community Board 2.0 (Campus v14 B2-B5, Basecamp C67-C71; the prototype's #cboard in docs/design/campus/colaberry-campus-v14.html):
+ * a wide cork dialog. Header (n new since you looked, total notes, search debounced 250 ms, one Add a note, the Community page),
+ * this week's ritual bar (hidden without a cohort week), the Sections column (counts, red new dots, Questions "n open", Your notes
+ * "n new"; a row of chips on phones), and the middle column (Everything / a section / Your notes). Notes open the thread drawer.
+ *
+ * "New since" lives on the server: the board is marked seen after it loads (the header keeps showing what was new on THIS look), and
+ * the old localStorage mark is migrated once (only when the server has none). Ages refresh every 60 s. Esc closes the drawer first.
  */
-export function useBoardPosts(enabled: boolean): { posts: CommunityPost[] | null; error: boolean; reload: () => void } {
-  const [posts, setPosts] = useState<CommunityPost[] | null>(null);
-  const [error, setError] = useState(false);
-  const reload = useCallback(() => {
-    if (!enabled) return;
-    fetchPosts({ limit: 30 }).then((p) => { setPosts(p.posts); setError(false); }).catch(() => setError(true));
-  }, [enabled]);
-  useEffect(() => { reload(); }, [reload]);
-  return { posts, error, reload };
-}
-
-/** The community feed's own minimum (backend communitySchemas): said up front so a short post is not a surprise. */
-export const MIN_WORDS = 15;
-const initials = (n: string) => n.split(/\s+/).filter(Boolean).map((w) => w[0]).slice(0, 2).join('').toUpperCase() || '?';
-
-function Composer({ kind, onPosted, onCancel }: { kind: 'q' | 'post'; onPosted: () => void; onCancel: () => void }): React.ReactElement {
-  const [body, setBody] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState('');
-  const inFlight = useRef(false);
-  const ref = useRef<HTMLTextAreaElement>(null);
-  useEffect(() => { ref.current?.focus(); }, [kind]);
-  const pin = async () => {
-    if (inFlight.current || !body.trim()) return;
-    inFlight.current = true; setBusy(true); setMessage('');
-    try { await createPost({ body: body.trim(), category: kind === 'q' ? QUESTION_CATEGORY : POST_CATEGORY }); onPosted(); }
-    catch (e: unknown) {
-      inFlight.current = false; setBusy(false);
-      // the feed's own rules (for example "Posts need at least 15 words") are said as the server says them
-      const d = (e as { response?: { data?: { details?: { fieldErrors?: { body?: string[] } }; error?: string } } }).response?.data;
-      setMessage(d?.details?.fieldErrors?.body?.[0] ?? 'Could not pin it right now. Please try again.');
-    }
-  };
-  const words = body.trim() ? body.trim().split(/\s+/).length : 0;
-  return (
-    <div className={`cm-cb-compose is-${kind}`} data-testid="cm-cb-compose">
-      <textarea ref={ref} value={body} maxLength={4000} rows={3} onChange={(e) => setBody(e.target.value)}
-        placeholder={kind === 'q' ? 'What do you want to ask everyone?' : 'Share something with everyone on campus'} aria-label={kind === 'q' ? 'Your question' : 'Your post'} />
-      {message && <p className="cm-cb-msg" role="alert">{message}</p>}
-      <div className="cm-cb-row">
-        <small className="cm-cb-words" data-testid="cm-cb-words">{words} {words === 1 ? 'word' : 'words'} · posts need at least {MIN_WORDS}</small>
-        <button type="button" className="cm-cb-btn" onClick={onCancel}>Cancel</button>
-        <button type="button" className="cm-cb-btn pri" disabled={busy || !body.trim()} onClick={pin} data-testid="cm-cb-pin">{busy ? 'Pinning…' : 'Pin it to the board'}</button>
-      </div>
-    </div>
-  );
-}
+const SEARCH_MS = 250;
+const TICK_MS = 60_000;
 
 export function CommunityBoard({ compose = null, onClose }: { compose?: 'q' | 'post' | null; onClose: () => void }): React.ReactElement {
   const navigate = useNavigate();
-  const [tab, setTab] = useState<BoardTab>('all');
-  const [composing, setComposing] = useState<'q' | 'post' | null>(compose);
-  const { posts, error, reload } = useBoardPosts(true);
-  useEffect(() => { writeSeen(Date.now()); }, []); // opening the board clears the badge
+  const [lane, setLane] = useState<Lane>('all');
+  const [query, setQuery] = useState('');
+  const [q, setQ] = useState('');
+  const [data, setData] = useState<BoardResponse | null>(null);
+  const [error, setError] = useState(false);
+  const [seenAt, setSeenAt] = useState<string | null>(null);
+  const [older, setOlder] = useState<{ posts: BoardPost[]; next: string | null; started: boolean }>({ posts: [], next: null, started: false });
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const [open, setOpen] = useState<BoardPost | null>(null);
+  const [composing, setComposing] = useState<ComposeType | null>(compose === 'q' ? 'q' : compose === 'post' ? 'post' : null);
+  const [glowId, setGlowId] = useState<string | null>(null);
+  const [toast, setToast] = useState('');
+  const [now, setNow] = useState(() => Date.now());
+  const opener = useRef<HTMLElement | null>(null);
+  const main = useRef<HTMLDivElement>(null);
+  const marked = useRef(false);
+
+  useEffect(() => { const id = window.setInterval(() => setNow(Date.now()), TICK_MS); return () => window.clearInterval(id); }, []);
+  useEffect(() => { const id = window.setTimeout(() => setQ(query), SEARCH_MS); return () => window.clearTimeout(id); }, [query]);
+
+  const load = useCallback(async (): Promise<void> => {
+    try {
+      const d = await getBoard({ lane, q });
+      setData(d); setError(false); setOlder({ posts: [], next: null, started: false });
+    } catch { setError(true); }
+  }, [lane, q]);
+  useEffect(() => { void load(); }, [load]);
+
+  // Once per opening: keep this look's "new since", migrate the old browser mark, then mark the board seen on the server.
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    if (!data || marked.current) return;
+    marked.current = true;
+    setSeenAt(data.new_since.at);
+    const legacy = readSeen();
+    const migrate = !data.new_since.at && legacy ? markBoardSeen({ at: new Date(legacy).toISOString(), migrate: true }) : Promise.resolve(null);
+    migrate.catch(() => null).then(() => { clearLegacySeen(); return markBoardSeen(); }).catch(() => { /* the next look marks it */ });
+  }, [data]);
+
+  const closeDrawer = useCallback(() => { setOpen(null); window.setTimeout(() => opener.current?.focus(), 0); }, []);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key !== 'Escape') return; if (open) closeDrawer(); else onClose(); };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
-  const go = (route: string) => { onClose(); navigate(route); };
-  const shown = posts ? onTab(posts, tab) : [];
+  }, [open, onClose, closeDrawer]);
+
+  const openPost = (p: BoardPost) => { opener.current = document.activeElement as HTMLElement | null; setOpen(p); };
+  const patch = (p: BoardPost) => {
+    setOpen((o) => (o && o.id === p.id ? p : o));
+    setData((d) => {
+      if (!d) return d;
+      const before = [...d.fresh, ...d.this_week, ...d.last_week, ...d.older.posts].find((x) => x.id === p.id)?.new_replies ?? 0;
+      const up = (xs: BoardPost[]) => xs.map((x) => (x.id === p.id ? p : x));
+      return {
+        ...d, my_new_replies: Math.max(0, d.my_new_replies - (before - p.new_replies)),
+        pinned: up(d.pinned), unanswered: up(d.unanswered), fresh: up(d.fresh), this_week: up(d.this_week), last_week: up(d.last_week),
+        older: { ...d.older, posts: up(d.older.posts) },
+      };
+    });
+  };
+  const loadOlder = async () => {
+    setLoadingOlder(true);
+    try {
+      const d = await getBoard({ lane, q, olderCursor: older.started ? older.next : '' });
+      setOlder((o) => ({ posts: [...o.posts, ...d.older.posts], next: d.older.next_cursor, started: true }));
+    } catch { setToast('Could not load older notes right now.'); }
+    finally { setLoadingOlder(false); }
+  };
+  const posted = async (into: PostLane) => {
+    setComposing(null); setLane('all'); setQuery(''); setQ('');
+    main.current?.scrollTo?.({ top: 0 });
+    try {
+      const d = await getBoard({});
+      setData(d);
+      const mine = d.fresh.find((p) => p.mine);
+      if (mine) { setGlowId(mine.id); window.setTimeout(() => setGlowId(null), 3400); }
+    } catch { /* the post is saved; the board shows it on the next load */ }
+    setToast(`📌 Pinned to the top of Fresh and filed in ${laneMeta(into).label}. You’ll get a notification when someone replies.`);
+    window.setTimeout(() => setToast(''), 6000);
+  };
+  const toFeed = () => { onClose(); navigate('/portal/community'); };
+
+  const ritual = data?.week_ritual ?? null;
+  const viewProps = data ? {
+    lane, data, now, seenAt, glowId, older: older.posts, olderCursor: older.started ? older.next : 'start', loadingOlder,
+    onOpen: openPost, onLane: setLane, onOlder: loadOlder,
+  } : null;
   return (
     <div className="cm-cb-scrim" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="cm-cb" role="dialog" aria-modal="true" aria-labelledby="cm-cb-h" data-testid="cm-cboard">
+      <div className="cm-cb cb2" role="dialog" aria-modal="true" aria-labelledby="cm-cb-h" data-testid="cm-cboard">
         <button type="button" className="cm-cb-x" onClick={onClose} aria-label="Close">×</button>
-        <h2 id="cm-cb-h"><span aria-hidden="true">📌 </span>Community Board</h2>
-        <p className="cm-cb-lead">Posts and questions from everyone on campus. Read anytime, answer anytime. For live conversations, head to Meeting Rooms.</p>
-        <div className="cm-cb-tabs" role="tablist">
-          {BOARD_TABS.map(([k, label]) => (
-            <button key={k} type="button" role="tab" aria-selected={tab === k} className={`cm-cb-tab${tab === k ? ' on' : ''}`} onClick={() => setTab(k)} data-testid={`cm-cb-tab-${k}`}>{label}</button>
-          ))}
-          <span className="cm-cb-gap" />
-          <button type="button" className="cm-cb-btn" onClick={() => setComposing('q')} data-testid="cm-cb-ask">❓ Ask a question</button>
-          <button type="button" className="cm-cb-btn" onClick={() => setComposing('post')} data-testid="cm-cb-post">✏️ Post something</button>
+        <header className="cb-head">
+          <div className="ttl">
+            <h2 id="cm-cb-h"><span aria-hidden="true">📌 </span>Community Board</h2>
+            {data && (
+              <p className="sub" data-testid="cb-status">
+                {seenAt ? <>{data.new_since.count ? <b>{data.new_since.count} new</b> : 'Nothing new'} since you looked on {shortCentral(seenAt)} · </> : null}
+                {data.counts.all} notes from everyone on campus
+              </p>
+            )}
+          </div>
+          <input className="cb-search" type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="🔍 Search notes" aria-label="Search the board" data-testid="cb-search" />
+          <button type="button" className="cb-add" onClick={() => setComposing('q')} data-testid="cb-add">＋ Add a note</button>
+          <button type="button" className="cb-feedlink" onClick={toFeed} data-testid="cm-cb-feed">Open the Community page ↗</button>
+        </header>
+        {ritual && (
+          <div className="cb-ritual" data-testid="cb-ritual">
+            <span className="ic" aria-hidden="true">{ritual.ritual.icon}</span>
+            <span className="tx"><b>This week · Week {ritual.week} · {ritual.ritual.name}</b>{ritual.ritual.ask}<small className="posted"> · {ritual.posted} posted this week</small></span>
+            <button type="button" className="cb-btn gold" onClick={() => setComposing('ritual')} data-testid="cb-ritual-add">Add yours</button>
+          </div>
+        )}
+        <div className="cb-body">
+          <nav className="cb-lanes" aria-label="Sections" data-testid="cb-lanes">
+            {LANE_META.map((l, i) => (
+              <React.Fragment key={l.key}>
+                {i === 2 && <span className="lbl">SECTIONS</span>}
+                <button type="button" className={lane === l.key ? 'on' : ''} data-lane={l.key} aria-current={lane === l.key ? 'true' : undefined} onClick={() => setLane(l.key)} data-testid={`cb-lane-${l.key}`}>
+                  <span className="ic" aria-hidden="true">{l.icon}</span>{l.label}
+                  {data && l.key !== 'all' && l.key !== 'mine' && (data.new_since.by_lane[l.key] ?? 0) > 0 && <span className="nw" aria-label="new notes" />}
+                  <span className="ct">{!data ? '' : l.key === 'q' && data.open_questions > 0 ? `${data.open_questions} open`
+                    : l.key === 'mine' && data.my_new_replies > 0 ? `${data.my_new_replies} new` : data.counts[l.key]}</span>
+                </button>
+              </React.Fragment>
+            ))}
+          </nav>
+          <div className="cb-main" ref={main}>
+            {composing && <BoardComposer initial={composing} weekRitual={ritual} onCancel={() => setComposing(null)} onPosted={posted} />}
+            {error && <p className="cb-msg" role="status">We can&rsquo;t load the board right now.</p>}
+            {!error && !data && <p className="cb-muted" role="status">Loading the board…</p>}
+            {viewProps && (lane === 'all' ? <Everything {...viewProps} /> : lane === 'mine' ? <YourNotes {...viewProps} /> : <Section {...viewProps} />)}
+          </div>
         </div>
-        {composing && <Composer key={composing} kind={composing} onCancel={() => setComposing(null)} onPosted={() => { setComposing(null); setTab('all'); reload(); }} />}
-        {error && <p className="cm-cb-msg" role="status">We can&rsquo;t load the board right now.</p>}
-        {!error && posts === null && <p className="cm-cb-muted" role="status">Loading the board&hellip;</p>}
-        {posts && !shown.length && <p className="cm-cb-muted">Nothing pinned here yet.</p>}
-        <div className="cm-cb-notes" data-testid="cm-cb-notes">
-          {shown.map((p) => (
-            <button key={p.id} type="button" className={`cm-cb-note is-${noteKind(p)}`} style={{ transform: `rotate(${tiltOf(p.id)}deg)` }}
-              onClick={() => go('/portal/community')} data-testid={`cm-cb-note-${p.id}`}>
-              <span className="pin" aria-hidden="true" />
-              <span className="body">{(p.body || '').slice(0, 180)}</span>
-              <span className="by"><i aria-hidden="true">{initials(p.member.display_name)}</i>{firstName(p.member.display_name)}<small>{noteCount(p)}</small></span>
-            </button>
-          ))}
-        </div>
-        <button type="button" className="cm-cb-feed" onClick={() => go('/portal/community')} data-testid="cm-cb-feed">Open the full Community feed &rarr;</button>
+        {open && <BoardDrawer p={open} now={now} onClose={closeDrawer} onChanged={patch} onFeed={toFeed} />}
+        {toast && <div className="cb-toast" role="status" data-testid="cb-toast">{toast}</div>}
       </div>
     </div>
   );
@@ -108,14 +164,14 @@ export function CommunityBoard({ compose = null, onClose }: { compose?: 'q' | 'p
 
 /** The one host: mounted on the campus home and with the campus layers. A walk-and-open waits for the avatar to arrive. */
 export default function CommunityBoardHost({ reduceMotion = false }: { reduceMotion?: boolean }): React.ReactElement | null {
-  const [open, setOpen] = useState<BoardOpen | null>(null);
+  const [openReq, setOpenReq] = useState<BoardOpen | null>(null);
   const timer = useRef<number | null>(null);
   useEffect(() => onBoard((o) => {
     if (timer.current) window.clearTimeout(timer.current);
-    if (o.walk && !reduceMotion) timer.current = window.setTimeout(() => setOpen(o), BOARD_WALK_MS);
-    else setOpen(o);
+    if (o.walk && !reduceMotion) timer.current = window.setTimeout(() => setOpenReq(o), BOARD_WALK_MS);
+    else setOpenReq(o);
   }), [reduceMotion]);
   useEffect(() => () => { if (timer.current) window.clearTimeout(timer.current); }, []);
-  const close = useCallback(() => setOpen(null), []);
-  return open ? <CommunityBoard compose={open.compose ?? null} onClose={close} /> : null;
+  const close = useCallback(() => setOpenReq(null), []);
+  return openReq ? <CommunityBoard compose={openReq.compose ?? null} onClose={close} /> : null;
 }

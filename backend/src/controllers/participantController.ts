@@ -269,7 +269,13 @@ export async function handleFreeSignup(req: Request, res: Response, next: NextFu
     // it were left in the spread, Sequelize would silently drop it and the consent
     // would be lost with nothing reporting it, which is the failure mode this whole
     // change exists to end.
-    const { full_name, email, marketing_opt_in, ...acquisition } = parsed.data;
+    // `phone_consent` is pulled OUT of the rest deliberately: everything left in `acquisition` is
+    // written to a Lead column by `captureGuestAsLead`, and consent is not one. Leaving it in that
+    // object would have Sequelize silently drop it. `phone` IS a column, but it travels with the
+    // consent it depends on rather than as acquisition evidence.
+    const {
+      full_name, email, marketing_opt_in, phone, phone_consent, ...acquisition
+    } = parsed.data;
 
     // 'learner': this is the public free-AI signup, so the account joins the
     // Explorer programme and is visible to Explorer Growth from the moment it
@@ -289,6 +295,8 @@ export async function handleFreeSignup(req: Request, res: Response, next: NextFu
       programme: 'learner',
       acquisition,
       marketingOptIn: marketing_opt_in,
+      phone,
+      phoneConsent: phone_consent === true,
       sourceSlug: 'training',
       requestMeta: {
         ipAddress: req.ip ?? null,
