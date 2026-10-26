@@ -2400,6 +2400,23 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     description: 'Generates and sends the weekly strategic briefing email.',
   },
   {
+    // C8.10 note for whoever reads this next: the row exists even though the job ships
+    // DARK behind COMMERCIAL_WEEKLY_REPORT_ENABLED. Invariant (ii) of the cron registry
+    // ratchet is "nothing a timer can fire runs without a seed row to track it", and the
+    // timer is registered regardless of the flag - the flag decides what the run DOES,
+    // not whether it fires. A disabled job with no seed row is still a run tracked
+    // against nothing the day somebody sets the flag.
+    agent_name: 'CommercializationWeeklyReport',
+    agent_type: 'reporting',
+    module: 'aiOpsScheduler',
+    source_file: 'backend/src/services/commercialization/weeklyCommercialReportJob.ts',
+    trigger_type: 'cron',
+    schedule: '15 8 * * 1',
+    category: 'reporting',
+    description: 'Weekly commercialization report. Dark until '
+      + 'COMMERCIAL_WEEKLY_REPORT_ENABLED is set on exactly one scheduler instance.',
+  },
+  {
     agent_name: 'ExecutiveAwarenessEveningDigest',
     agent_type: 'digest',
     module: 'aiOpsScheduler',
