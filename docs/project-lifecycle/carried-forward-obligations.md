@@ -3439,3 +3439,63 @@ cannot accumulate and quietly stop measuring anything.
 The 43 themselves, as a burn-down. `paysimpleService` is flagged in the baseline as PAYMENTS and
 should be retimed with the most care; `repoProjectImport` and the GitHub reads need a number that
 reflects how slow they legitimately are.
+
+## MY OWN GUARD WOULD HAVE SENT SOMEONE TO FIX THE BEST CODE IN THE REPO
+
+First burn-down pass on the 43. Two were real. **Three were never unbounded at all**, and the
+measurement error was mine.
+
+### The false positives
+
+`services/ops/basecampClient.ts` passes the signal as an ES6 **shorthand property** -
+`fetch(u, { headers: bcHeaders(getBcToken()), signal })` - and `isBounded` matched only
+`signal:` with a colon. So the guard reported three unbounded calls in the file that is, in fact,
+the best Failure-First implementation in the repo: `bcSend` wraps every request in
+`AbortSignal.timeout(bcTimeoutMs())` with retries, capped backoff, a typed `BcTimeoutError` and
+an emitted failure event.
+
+**A guard that flags exemplary code is worse than no guard**, because the work it generates is
+negative: someone "fixes" something correct and risks breaking it. Fixed, with two tests - one
+pinning the shorthand form, one proving `{ body: signalPayload }` is still counted UNBOUNDED, so
+widening the pattern did not trade one wrong answer for another.
+
+**The ratchet's own burn-down branch is what caught it.** It failed with "basecampClient now has
+NONE - delete its baseline entry". That branch exists only because the `bannedWordOutboundCopy`
+idiom has it; it earned its place on the first real use, which is the argument for copying a
+proven pattern rather than writing a fresh one.
+
+### The two that were real
+
+**`services/ops/bcSyncService.ts`** was genuinely unbounded, and sits INSIDE a retry loop - so a
+single stalled connection stopped the whole sync cycle rather than failing one page and retrying.
+It is a **near-duplicate of `basecampClient`**: same pacing, retries, backoff and token refresh,
+no timeout. It now uses the shared `bcTimeoutMs()` from `bcRetry`, which it already imported from,
+so both Basecamp clients honour one `BC_TIMEOUT_MS` instead of drifting apart. **The duplication
+itself is the real finding and is not fixed here** - two clients for one API is how one of them
+ends up missing a timeout for months.
+
+**`slackSubscriber.ts`** now bounds at **10s, deliberately shorter than the repo's usual 15s**:
+this is the incident NOTIFICATION path, so every second waiting on a stalled webhook is a second
+the alert is undelivered, and a small JSON POST that has not answered in ten seconds will not.
+The existing `catch` already turns the TimeoutError into `{ status: 'failed' }`, so the failure
+path needed no change.
+
+### Baseline 43 -> 38, across 14 files
+
+And the three movements are recorded separately in the baseline docblock, because only two of
+them were fixes. Conflating "I corrected my measurement" with "I fixed the code" would make the
+burn-down look faster than it is.
+
+### Verification
+
+Guard: 17 tests green at the lowered baseline. The three Basecamp suites (`bcReconcile`,
+`bcSyncIncremental`, `basecampClient`): **36 tests green**, so adding the signal broke no
+existing assertion. Backend `tsc --noEmit` clean. Test-file typecheck clean under the exact CI
+flags.
+
+### What is left
+
+38 calls across 14 files. The concentration is `openclawEngagementFetcher` (9), `githubService`
+(9) and `architectProxyService` (7) - 25 of the 38. `paysimpleService` is PAYMENTS and should be
+retimed with the most care; `repoProjectImport` and the large GitHub reads need a number that
+reflects how slow they legitimately are.

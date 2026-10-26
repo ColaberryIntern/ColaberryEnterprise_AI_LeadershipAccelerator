@@ -37,22 +37,31 @@ import path from 'path';
 
 const SRC = path.join(__dirname, '..', '..');
 
-/** Per-file unbounded `fetch` count, frozen 2026-10-24. Lower these; never raise them. */
+/**
+ * Per-file unbounded `fetch` count. Lower these; never raise them.
+ *
+ * Frozen at 43 across 17 files on 2026-10-24. Now **38 across 14**, and the three changes are
+ * worth distinguishing because only two of them were bugs:
+ *
+ *   - `services/ops/basecampClient.ts` (3) was NEVER unbounded. It passes the signal as an ES6
+ *     shorthand property, which the original `isBounded` could not see. A measurement error in
+ *     this guard, not a fix in that file.
+ *   - `services/ops/bcSyncService.ts` (1) was genuinely unbounded and now uses the shared
+ *     `bcTimeoutMs()` its sibling client already used.
+ *   - `.../subscribers/slackSubscriber.ts` (1) was genuinely unbounded and now bounds at 10s.
+ */
 const BASELINE: Record<string, [number, string]> = {
   'services/agents/openclaw/openclawEngagementFetcher.ts': [9, 'Reddit/HN/Quora engagement polling'],
   'services/githubService.ts': [9, 'GitHub REST; some calls are large repo reads'],
   'services/architectProxyService.ts': [7, 'architect proxy; upstream latency unknown'],
-  'services/ops/basecampClient.ts': [3, 'Basecamp API'],
   'services/commitDrivenMatcher.ts': [2, 'GitHub commit scan'],
   'services/githubIntegrationService.ts': [2, 'GitHub app integration'],
   'controllers/generatorController.ts': [1, 'generator passthrough'],
-  'intelligence/systemStateEngine/incidents/subscribers/slackSubscriber.ts': [1, 'Slack webhook'],
   'scripts/sbpLiveEndToEnd.ts': [1, 'one-off script, not a request path'],
   'services/agentGitHubService.ts': [1, 'GitHub for agent repos'],
   'services/apolloService.ts': [1, 'Apollo enrichment'],
   'services/architectIntegrationService.ts': [1, 'architect integration'],
   'services/delivery/repoProjectImport.ts': [1, 'repo import; legitimately slow'],
-  'services/ops/bcSyncService.ts': [1, 'Basecamp sync'],
   'services/paysimpleService.ts': [1, 'PAYMENTS — retime with care'],
   'services/visualScanService.ts': [1, 'visual scan'],
   'services/zoomService.ts': [1, 'Zoom API'],
@@ -136,9 +145,23 @@ export function callArguments(src: string, open: number): string | null {
   return null;
 }
 
-/** A call is bounded when its own argument list carries a `signal:`. */
+/**
+ * A call is bounded when its own argument list passes a `signal`.
+ *
+ * BOTH FORMS, because the first version of this only matched `signal:` and therefore reported
+ * `services/ops/basecampClient.ts` as three unbounded calls. It is not: it passes the signal as
+ * an ES6 SHORTHAND PROPERTY — `fetch(u, { headers: bcHeaders(...), signal })` — supplied by
+ * `bcSend`, which wraps every request in `AbortSignal.timeout(bcTimeoutMs())` with retries,
+ * backoff, a typed `BcTimeoutError` and a failure event. That is a better implementation of
+ * CLAUDE.md's Failure-First Design than anything a sweep would have added, and a guard that
+ * flags it would send someone to "fix" exemplary code.
+ *
+ * The shorthand pattern requires a `{` or `,` before and a `,` or `}` after, so an identifier
+ * that merely starts with the word — `{ body: signalPayload }` — is not mistaken for one. The
+ * test below controls that case explicitly.
+ */
 export function isBounded(args: string): boolean {
-  return /\bsignal\s*:/.test(args);
+  return /\bsignal\s*:/.test(args) || /[{,]\s*signal\s*[,}]/.test(args);
 }
 
 function tsFiles(dir: string, acc: string[] = []): string[] {
@@ -268,6 +291,23 @@ describe('the scanner reads code and not prose', () => {
 
   it('calls a call with no signal unbounded', () => {
     const src = 'await fetch(url, { headers });';
+    const [site] = fetchCallSites(src);
+    expect(isBounded(callArguments(src, site.open) as string)).toBe(false);
+  });
+
+  it('accepts the SHORTHAND signal property, which basecampClient uses', () => {
+    // Verbatim shape from services/ops/basecampClient.ts. The first version of isBounded
+    // required a colon and reported this file as three unbounded calls; `bcSend` supplies
+    // AbortSignal.timeout(bcTimeoutMs()) with retries and a typed BcTimeoutError.
+    const src = 'fetch(u, { headers: bcHeaders(getBcToken()), signal })';
+    const [site] = fetchCallSites(src);
+    expect(isBounded(callArguments(src, site.open) as string)).toBe(true);
+  });
+
+  it('does NOT mistake an identifier that merely starts with "signal"', () => {
+    // Without the delimiters, widening the pattern to accept the shorthand would start
+    // calling these bounded — trading one wrong answer for another.
+    const src = 'fetch(url, { body: signalPayload })';
     const [site] = fetchCallSites(src);
     expect(isBounded(callArguments(src, site.open) as string)).toBe(false);
   });
