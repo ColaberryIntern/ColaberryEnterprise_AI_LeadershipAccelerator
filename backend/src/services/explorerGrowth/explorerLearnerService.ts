@@ -1,6 +1,7 @@
 import { QueryTypes } from 'sequelize';
 import { sequelize } from '../../config/database';
 import type { ExplorerOverlay, ExplorerPrimaryState } from '../../types/explorerGrowth';
+import { withGhlUrls } from './explorerPersonLinks';
 
 /**
  * The learner drawer: one learner, in detail.
@@ -35,6 +36,8 @@ export interface LearnerProfile {
   last_decision_at: string | null;
   last_contacted_at: string | null;
   scores_computed_at: string | null;
+  /** 2026-10-26: the GHL record, one click (explorerPersonLinks); the 360 link is built from enrollment_id on the client. */
+  ghl_url: string | null;
 }
 
 export interface ScorePoint {
@@ -101,16 +104,19 @@ const TIMELINE_ABSENT =
 
 /** The full profile, or null when no such learner exists. */
 export async function getLearnerProfile(enrollmentId: string): Promise<LearnerProfile | null> {
-  const [row] = await sequelize.query<LearnerProfile>(
-    `SELECT enrollment_id, lead_id, email_normalized, primary_state, overlays,
-            e_score, i_score, f_score, contactability, affinities, signal_summary,
-            days_since_last_activity, state_entered_at, last_decision_at,
-            last_contacted_at, scores_computed_at
-       FROM explorer_journey_profiles
-      WHERE enrollment_id = :id`,
+  const [row] = await sequelize.query<Omit<LearnerProfile, 'ghl_url'> & { ghl_contact_id: string | null; lead_source: string | null }>(
+    `SELECT p.enrollment_id, p.lead_id, p.email_normalized, p.primary_state, p.overlays,
+            p.e_score, p.i_score, p.f_score, p.contactability, p.affinities, p.signal_summary,
+            p.days_since_last_activity, p.state_entered_at, p.last_decision_at,
+            p.last_contacted_at, p.scores_computed_at, l.ghl_contact_id, l.source AS lead_source
+       FROM explorer_journey_profiles p
+       LEFT JOIN leads l ON l.id = p.lead_id
+      WHERE p.enrollment_id = :id`,
     { replacements: { id: enrollmentId }, type: QueryTypes.SELECT },
   );
-  return row ?? null;
+  if (!row) return null;
+  const [linked] = await withGhlUrls([row]);
+  return linked;
 }
 
 /** True when the learner has a profile. The 404 test for every drawer route. */

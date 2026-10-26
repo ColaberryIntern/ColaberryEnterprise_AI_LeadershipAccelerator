@@ -2,6 +2,7 @@ import { QueryTypes } from 'sequelize';
 import { sequelize } from '../../config/database';
 import { ensureCampusActivitySchema } from '../../db/ensureCampusActivitySchema';
 import { rankOutreach, type OutreachRow, type OutreachSignals, type OutreachView } from './explorerOutreachRanking';
+import { withPersonLinks, type PersonLinks } from './explorerPersonLinks';
 
 /**
  * Explorer Growth tied to the campus (Ali, 2026-10-26): Open House sign-ups, assignments completed, admissions meetings booked,
@@ -82,9 +83,16 @@ const SIGNALS_SQL = `
                    FROM campus_admissions_bookings GROUP BY 1),
        tours AS (SELECT enrollment_id, MAX(furthest_stop) AS furthest, MAX(total_stops) AS total,
                         BOOL_OR(finished_at IS NOT NULL) AS finished FROM campus_tour_progress GROUP BY 1),
-       community AS (SELECT enrollment_id, MAX(last_active_at) AS last FROM community_members GROUP BY 1)
+       community AS (SELECT enrollment_id, MAX(last_active_at) AS last FROM community_members GROUP BY 1),
+       -- A HUMAN contacted them, per portal records (the Growth Journey rule, conversationOwnershipService): a staff-authored call,
+       -- meeting or note, or Ali's personal outreach. explorer_journey_profiles.last_contacted_at has no writer; GHL's own call /
+       -- text / email history needs the GHL v2 Conversations API, which this integration does not have yet (see the PR).
+       human AS (SELECT lead_id, MAX(created_at) AS last FROM activities
+                  WHERE admin_user_id IS NOT NULL AND type IN ('call', 'meeting', 'note') GROUP BY 1),
+       personal AS (SELECT lead_id, MAX(created_at) AS last FROM communication_logs
+                     WHERE direction = 'outbound' AND metadata->>'trigger' = 'ali_personal_outreach' GROUP BY 1)
   SELECT p.enrollment_id, p.email_normalized AS email, e.full_name AS name, p.primary_state, p.overlays,
-         p.e_score, p.i_score, p.last_contacted_at,
+         p.e_score, p.i_score, GREATEST(p.last_contacted_at, h.last, o.last) AS last_contacted_at,
          COALESCE(r.n, 0) AS rsvps, COALESCE(c.n, 0) AS cards, COALESCE(k.n, 0) AS calls, k.next_call,
          t.furthest AS tour_furthest, t.total AS tour_total, COALESCE(t.finished, false) AS tour_finished,
          GREATEST(cp.updated_at, cm.last, c.last, r.last) AS last_seen
@@ -95,7 +103,9 @@ const SIGNALS_SQL = `
     LEFT JOIN calls k ON k.enrollment_id = p.enrollment_id
     LEFT JOIN tours t ON t.enrollment_id = p.enrollment_id
     LEFT JOIN campus_presence cp ON cp.enrollment_id = p.enrollment_id
-    LEFT JOIN community cm ON cm.enrollment_id = p.enrollment_id`;
+    LEFT JOIN community cm ON cm.enrollment_id = p.enrollment_id
+    LEFT JOIN human h ON h.lead_id = p.lead_id
+    LEFT JOIN personal o ON o.lead_id = p.lead_id`;
 
 type RawSignals = Omit<OutreachSignals, 'e_score' | 'i_score' | 'cards' | 'rsvps' | 'calls' | 'tour_furthest' | 'tour_total' | 'next_call' | 'last_seen' | 'last_contacted_at'> & {
   e_score: unknown; i_score: unknown; cards: unknown; rsvps: unknown; calls: unknown; tour_furthest: unknown; tour_total: unknown;
@@ -113,8 +123,10 @@ export function toSignals(r: RawSignals): OutreachSignals {
   };
 }
 
-export async function getOutreach(view: OutreachView, limit: number, now = Date.now()): Promise<{ view: OutreachView; rows: OutreachRow[]; tracked_since: string }> {
+export async function getOutreach(view: OutreachView, limit: number, now = Date.now()): Promise<{ view: OutreachView; rows: (OutreachRow & PersonLinks)[]; tracked_since: string }> {
   await ensureCampusActivitySchema();
   const raw = await sequelize.query<RawSignals>(SIGNALS_SQL, { type: QueryTypes.SELECT });
-  return { view, rows: rankOutreach(raw.map(toSignals), view, limit, now), tracked_since: CAMPUS_TRACKED_SINCE };
+  // The 360 and GHL links for the ranked page only (the GHL lookup is per person)
+  const rows = await withPersonLinks(rankOutreach(raw.map(toSignals), view, limit, now));
+  return { view, rows, tracked_since: CAMPUS_TRACKED_SINCE };
 }

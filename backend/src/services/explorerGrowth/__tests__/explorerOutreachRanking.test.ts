@@ -57,10 +57,10 @@ describe('ranking', () => {
 describe('reasons, in plain words and only from recorded facts', () => {
   it('lists the call, intent, RSVPs, tour, assignments, last active and contact', () => {
     expect(reasonsFor(base({ next_call: '2026-10-28T15:00:00Z', overlays: ['HIGH_INTENT'], rsvps: 2, tour_furthest: 5, tour_total: 8, cards: 1, last_seen: day(3), last_contacted_at: day(10) }), NOW))
-      .toEqual(['Admissions call booked for Oct 28', 'High intent', "RSVP'd to 2 Open Houses", 'Campus tour: stop 5 of 8', 'Completed 1 assignment', 'Last active 3 days ago', 'Last contacted 10 days ago']);
+      .toEqual(['Admissions call booked for Oct 28', 'High intent', "RSVP'd to 2 Open Houses", 'Campus tour: stop 5 of 8', 'Completed 1 assignment', 'Last active 3 days ago', 'Last contacted 10 days ago (portal records)']);
   });
   it('a finished tour and a fresh account', () => {
-    expect(reasonsFor(base({ tour_finished: true, tour_furthest: 8, tour_total: 8 }), NOW)).toEqual(['Finished the campus tour', 'Active today', 'Not contacted yet']);
+    expect(reasonsFor(base({ tour_finished: true, tour_furthest: 8, tour_total: 8 }), NOW)).toEqual(['Finished the campus tour', 'Active today', 'No contact in portal records']);
   });
   it('never claims a tour or call that was not recorded', () => {
     const r = reasonsFor(base(), NOW).join(' ');

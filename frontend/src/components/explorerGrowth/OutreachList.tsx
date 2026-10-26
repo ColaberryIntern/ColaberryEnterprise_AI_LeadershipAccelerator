@@ -1,5 +1,6 @@
 import React from 'react';
 import type { OutreachRow, OutreachView } from '../../services/explorerCampusApi';
+import LearnerName from './LearnerName';
 
 /**
  * The staff outreach list (2026-10-26: "an easy way for the human staff to know who they should be reaching out to and who are the
@@ -43,7 +44,8 @@ export default function OutreachList({ rows, view }: { rows: OutreachRow[]; view
             <tr key={r.enrollment_id} data-testid="eg-outreach-row">
               <td className="text-muted">{i + 1}</td>
               <td>
-                <div className="fw-semibold">{r.name || r.email}</div>
+                {/* 2026-10-26: the name opens the 360; the orange icon opens GHL; the email starts a message */}
+                <div className="fw-semibold"><LearnerName enrollmentId={r.enrollment_id} email={r.email} name={r.name} leadId={r.lead_id} ghlUrl={r.ghl_url} /></div>
                 <a className="small" href={`mailto:${r.email}`}>{r.email}</a>
               </td>
               <td className="small text-nowrap">{stateLabel(r.primary_state)}</td>

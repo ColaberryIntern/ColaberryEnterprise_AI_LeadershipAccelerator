@@ -110,6 +110,8 @@ export interface ExplorerDistribution {
 export interface ExplorerLearnerRow {
   enrollment_id: string;
   lead_id: number | null;
+  /** 2026-10-26: the GHL contact in the right sub-account, or null (not in the CRM). */
+  ghl_url: string | null;
   email_normalized: string;
   primary_state: ExplorerPrimaryState | null;
   overlays: ExplorerOverlay[];
@@ -148,6 +150,9 @@ export interface LearnersQuery {
 export interface ExplorerDecisionRow {
   id: string;
   enrollment_id: string;
+  /** 2026-10-26: the 360 and GHL links (lead id and the GHL contact URL, or null). */
+  lead_id: number | null;
+  ghl_url: string | null;
   decision_date: string;
   mode: string;
   selected_action: ExplorerActionType | null;
@@ -294,6 +299,8 @@ export interface ExplorerContentHealth {
 export interface LearnerProfile {
   enrollment_id: string;
   lead_id: number | null;
+  /** 2026-10-26: the GHL contact in the right sub-account, or null. */
+  ghl_url: string | null;
   email_normalized: string;
   primary_state: ExplorerPrimaryState | null;
   overlays: ExplorerOverlay[];

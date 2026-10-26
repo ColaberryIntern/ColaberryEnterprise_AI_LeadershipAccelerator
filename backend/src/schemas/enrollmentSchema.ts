@@ -177,6 +177,21 @@ export const portalFreeSignupSchema = z.object({
   // `Lead.visitor_id` is `DataTypes.UUID`, so this is a UUID — not an arbitrary
   // bounded string, which is what the draft allowed.
   visitor_id: z.string().trim().uuid().optional(),
+
+  // Marketing consent, as an affirmative act.
+  //
+  // A STRICT BOOLEAN, deliberately narrower than `captureSignupConsent` accepts.
+  // That function takes `boolean | string | undefined | null` because a value
+  // arriving from another service could be anything, and it has one narrow gate
+  // (`isAffirmative`) that decides what COUNTS. This is a first-party form posting
+  // JSON, so there is no reason to accept "on" or "true" here, and accepting them
+  // would mean two places deciding what consent is.
+  //
+  // OPTIONAL, and absent means NO consent recorded rather than a revocation. It
+  // must also stay optional for a second reason: this object is `.strict()`, so the
+  // field cannot be sent until this schema is deployed, and it cannot be required
+  // until every caller sends it. The frontend and this change ship together.
+  marketing_opt_in: z.boolean().optional(),
 }).strict();
 
 export type PortalFreeSignupInput = z.infer<typeof portalFreeSignupSchema>;

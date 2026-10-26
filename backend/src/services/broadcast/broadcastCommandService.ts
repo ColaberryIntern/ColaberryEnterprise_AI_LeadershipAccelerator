@@ -35,6 +35,7 @@ import {
   type OccurrenceState,
   type EndReason,
 } from './broadcastStateMachine';
+import { rollUpOccurrence } from './broadcastPopulationService';
 
 export interface CommandRequest {
   occurrenceId: string;
@@ -104,6 +105,7 @@ export async function runProducerCommand(req: CommandRequest): Promise<CommandRe
 
   const patch = decision.patch;
   const wentLive = patch.editorial_state === 'live';
+  const ended = patch.editorial_state === 'ended';
 
   const updated = await sequelize.transaction(async (tx) => {
     // The guard that actually matters: another writer between our read and this write
@@ -137,6 +139,33 @@ export async function runProducerCommand(req: CommandRequest): Promise<CommandRe
         preview_seconds: updated.preview_seconds,
       },
     });
+  }
+
+  if (ended) {
+    /**
+     * C8.10 - freeze the audience numbers for this airing now that it is over.
+     *
+     * Post-commit and best-effort, for the rule the telemetry service states: telemetry
+     * must never break the thing it measures, and a producer's "end" must not fail
+     * because a derived count could not be written. The rollup is idempotent and
+     * recomputes from the viewer rows, so the next run corrects anything a failure here
+     * left behind - which is also why a late beat landing after this does not corrupt the
+     * figure permanently.
+     */
+    try {
+      await rollUpOccurrence(updated.id, Date.now());
+    } catch (err) {
+      console.error(JSON.stringify({
+        timestamp: new Date().toISOString(),
+        level: 'error',
+        service: 'broadcast-population',
+        event: 'occurrence_rollup_failed',
+        outcome: 'failure',
+        error_class: (err as Error)?.name ?? 'UnexpectedError',
+        occurrence_id: updated.id,
+        message: (err as Error)?.message,
+      }));
+    }
   }
 
   return { ok: true, occurrence: updated };
