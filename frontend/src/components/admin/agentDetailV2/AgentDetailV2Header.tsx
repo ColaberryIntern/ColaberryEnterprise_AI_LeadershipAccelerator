@@ -32,13 +32,20 @@ import { AutonomyLevel } from '../../../services/workforceOrgChartApi';
 // silently lost). Remaining 5 keys reordered and relabeled to match the
 // mockup's own real sidebar exactly: Overview, Talk to Reese, Work &
 // commitments, Decisions & evidence, Performance & settings.
-export type TabKey = 'overview' | 'talk' | 'work' | 'decisions' | 'performance_settings';
+export type TabKey = 'overview' | 'talk' | 'work' | 'decisions' | 'email' | 'performance_settings';
 
 export const TABS: Array<{ key: TabKey; label: string }> = [
   { key: 'overview', label: 'Overview' },
   { key: 'talk', label: 'Talk to Reese' },
   { key: 'work', label: 'Work & commitments' },
   { key: 'decisions', label: 'Decisions & evidence' },
+  // 2026-10-26, Ali: "Maya's inbox should go in her Agent dashboard that also has her decision
+  // making and tickets." Placed immediately after Decisions for that reason.
+  //
+  // Called "Email" and not "Inbox" deliberately: `decisions` already owns an inbox (pending
+  // proposals and the Decision Journal, via `getManagerInboxItems`), and two tabs both called
+  // some flavour of Inbox would be a coin flip for the reader.
+  { key: 'email', label: 'Email' },
   { key: 'performance_settings', label: 'Performance & settings' },
 ];
 

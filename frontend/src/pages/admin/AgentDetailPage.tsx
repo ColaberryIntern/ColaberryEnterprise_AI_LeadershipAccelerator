@@ -9,6 +9,7 @@ import { TabKey } from '../../components/admin/agentDetailV2/AgentDetailV2Header
 import AgentDetailLayout from '../../components/admin/agentDetailV2/AgentDetailLayout';
 import AgentOverviewV2 from '../../components/admin/agentDetailV2/AgentOverviewV2';
 import AgentWorkDecisionsTab from '../../components/admin/AgentWorkDecisionsTab';
+import AgentEmailTab from '../../components/admin/agentDetailV2/AgentEmailTab';
 import AgentWorkV2 from '../../components/admin/agentDetailV2/AgentWorkV2';
 import AgentTalkTab from '../../components/admin/AgentTalkTab';
 import AgentPerformanceSettingsTab from '../../components/admin/AgentPerformanceSettingsTab';
@@ -373,6 +374,12 @@ export default function AgentDetailPage() {
       )}
       {activeTab === 'decisions' && (
         <AgentWorkDecisionsTab agentId={id} inboxItems={inboxItems} inboxLoading={inboxLoading} inboxError={inboxError} onInboxChanged={fetchInbox} />
+      )}
+      {/* The agent's correspondence. Deliberately NOT given `inboxItems`: that state is the
+          DECISION inbox (pending proposals), and this tab fetches its own mail from
+          `/api/admin/agents/:id/email`. Sharing the state would conflate two different inboxes. */}
+      {activeTab === 'email' && (
+        <AgentEmailTab agentId={id} />
       )}
       {activeTab === 'talk' && (
         <AgentTalkTab

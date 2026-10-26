@@ -3110,6 +3110,73 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
       'publish_failed. Checks launchSafety.isKillSwitchActive() before claiming and again ' +
       'before every external action. No LLM.',
   },
+
+  // --- Maya: the admissions agent, finally registered (2026-10-26) ---
+  //
+  // Ali: "I was expecting to have one of these created for Maya - Maya should be flowing through
+  // our agent system." She was not in this registry at all: `SELECT COUNT(*) FROM ai_agents WHERE
+  // agent_name ILIKE '%maya%'` returned 0 in production. So she had no agent dashboard, no
+  // autonomy level, no tool grants, and no decisions or tickets surface - while existing
+  // everywhere else: a persona (`admissionsMayaService`), nine real LLM tools
+  // (`mayaActionService`/`mayaToolsService`), two seeded campaigns, a campus desk at the Main
+  // Gate, and an outbound voice script in `HotLeadEscalation`. Reese and Dara are registered;
+  // Maya, the one agent the public actually talks to, was not.
+  //
+  // `enabled: false`, per the governance rule the Dara entry above records and
+  // build-platform-agent/SKILL.md states: "new agents seed with AiAgent.enabled: false by
+  // default". A human enables this row after validation, not the seed. NOTE that her chat is
+  // already live and gated by ENABLE_CHAT, which this flag does not touch - registering her does
+  // not switch anything on or off, it gives the existing agent a record.
+  //
+  // `tools_granted` is her REAL nine, taken from `MAYA_TOOLS` in `mayaActionService.ts`, not an
+  // aspiration. Run through `classifyAgentAutonomyLevel`, `send_document`, `send_sms_summary`,
+  // `initiate_voice_call` and `schedule_strategy_call` each match the `communicate` tier
+  // (`send_`, `_sms`, `_call`), so the classifier derives `communicate` - which is honest, since
+  // she already sends documents, texts and places calls from a live chat turn.
+  //
+  // `send_email` is DELIBERATELY ABSENT. It is the one tool she does not have, so
+  // `agentEmailTool` drafts for her rather than sending, which is exactly Ali's "she can draft
+  // for now - but eventually she will send on her own". Granting it later is a row update, and
+  // the two dials stay independent: `autonomy_level` gates the CATEGORY, `tools_granted` gates
+  // the specific tool.
+  //
+  // No `system_prompt` here on purpose. Hers is composed per conversation by
+  // `buildMayaSystemPrompt()` from live context; a static copy in this row would be a second
+  // source of truth that silently drifts from the prompt she actually runs.
+  {
+    agent_name: 'Maya',
+    agent_type: 'ai_employee',
+    module: 'admissions',
+    source_file: 'backend/src/services/admissionsMayaService.ts',
+    // Reactive: she answers an inbound website chat turn. Nothing schedules her.
+    trigger_type: 'event_driven',
+    schedule: '',
+    category: 'admissions',
+    description:
+      'Maya - Director of Admissions, and the agent the public actually talks to. Answers the '
+      + 'website chat (gated by ENABLE_CHAT), captures and updates leads, sends admissions '
+      + 'documents and SMS summaries, books strategy calls against real availability, enrols '
+      + 'people in the Maya campaigns, and can initiate a Synthflow voice call. Her desk is at '
+      + 'the campus Main Gate, where it opens that same website chat rather than an in-campus DM '
+      + '(Ali\'s C6 decision, reaffirmed 2026-10-22). Registered 2026-10-26 so she has a '
+      + 'dashboard, an autonomy level and a tool-grant record like every other agent; '
+      + 'registration changed none of her existing behaviour.',
+    config: {},
+    enabled: false,
+    tools_granted: [
+      'capture_lead_details',
+      'update_lead_record',
+      'send_document',
+      'send_sms_summary',
+      'initiate_voice_call',
+      'get_available_slots',
+      'schedule_strategy_call',
+      'enroll_in_campaign',
+      'retrieve_knowledge',
+      'schedule_callback',
+    ],
+    persona_version: '2026-10-26',
+  },
 ];
 
 /**
