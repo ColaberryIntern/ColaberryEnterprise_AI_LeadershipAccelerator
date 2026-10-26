@@ -34,6 +34,7 @@ import { identifyVisitor } from '../../../utils/tracker';
 import { useParticipantAuth } from '../../../contexts/ParticipantAuthContext';
 import { useNavigate } from 'react-router-dom';
 import PortalFreeSignupPage from '../PortalFreeSignupPage';
+import { SIGNUP_CONSENT_TEXT } from '../../../config/consentText';
 
 const mockFreeSignup = freeSignup as jest.Mock;
 const mockIdentify = identifyVisitor as jest.Mock;
@@ -160,5 +161,81 @@ describe('the copy carries no banned wording', () => {
     // Ali, 2026-10-05: "don't use free" - TWC 807.172(d).
     expect(text()).not.toMatch(/\bfree\b/i);
     expect(text()).toContain('Create my account');
+  });
+});
+
+/**
+ * Marketing consent.
+ *
+ * WHY IT IS HERE AT ALL: this form never asked, so `leads.consent_contact` took its
+ * column default and every signup recorded a refusal nobody made - 110 of 110
+ * measured on production against an all-time baseline of 21,847 true to 3,068
+ * false. Downstream, the send gate reads that as "do not contact".
+ *
+ * WHY IT MUST NOT BLOCK: this is the front door of a live paid-ad funnel. A required
+ * checkbox trades signups for permissions, and that is a business decision rather
+ * than something a bug fix settles on its own. The two assertions that matter most
+ * below are that an untouched box still produces an account, and that an untouched
+ * box sends `false` rather than nothing.
+ */
+const consentBox = () => container.querySelector('#cbfs-consent') as HTMLInputElement;
+
+describe('marketing consent', () => {
+  it('shows the wording that will be recorded as the consent of record', async () => {
+    await mount();
+    expect(text()).toContain(SIGNUP_CONSENT_TEXT);
+  });
+
+  it('is UNCHECKED by default, because a pre-ticked box is not an affirmative act', async () => {
+    await mount();
+    expect(consentBox()).toBeTruthy();
+    expect(consentBox().checked).toBe(false);
+  });
+
+  it('is a real checkbox wired to its label, so it can be clicked and read out', async () => {
+    await mount();
+    expect(consentBox().type).toBe('checkbox');
+    const label = container.querySelector('label[for="cbfs-consent"]');
+    expect(label).toBeTruthy();
+    expect(label!.textContent).toContain(SIGNUP_CONSENT_TEXT);
+  });
+
+  it('DOES NOT BLOCK SUBMISSION when left alone', async () => {
+    await mount();
+    await fillAndSubmit();
+
+    expect(mockFreeSignup).toHaveBeenCalledTimes(1);
+    expect(mockLogin).toHaveBeenCalledWith('a.b.c');
+  });
+
+  it('sends false when left alone, which is a measurement rather than a silence', async () => {
+    await mount();
+    await fillAndSubmit();
+
+    expect(mockFreeSignup.mock.calls[0][0]).toMatchObject({ marketing_opt_in: false });
+  });
+
+  it('sends true once ticked', async () => {
+    await mount();
+    await act(async () => { consentBox().click(); });
+    expect(consentBox().checked).toBe(true);
+
+    await fillAndSubmit();
+
+    expect(mockFreeSignup.mock.calls[0][0]).toMatchObject({
+      full_name: 'Dana Okoro',
+      email: 'dana@example.com',
+      marketing_opt_in: true,
+    });
+  });
+
+  it('does not disturb the name and email fields it sits beside', async () => {
+    // `fillAndSubmit` destructures `[nameEl, emailEl] = inputs()`, so a checkbox
+    // inserted ABOVE them would silently retarget every other test in this file.
+    await mount();
+    const [first, second, third] = inputs();
+    expect(first.type).toBe('text');
+    expect(second.type).toBe('email');
+    expect(third.type).toBe('checkbox');
   });
 });

@@ -110,8 +110,21 @@ export interface FreeSignupResult {
   created: boolean;
 }
 
-/** Public: create (or reuse) a free guest account and get a participant session JWT. */
-export async function freeSignup(body: { full_name: string; email: string }): Promise<FreeSignupResult> {
+/**
+ * Public: create (or reuse) a free guest account and get a participant session JWT.
+ *
+ * `marketing_opt_in` is OPTIONAL and must stay optional. The server schema is
+ * `.strict()`, so it rejects unknown keys with a 400 - which means this field
+ * cannot be sent until the server that accepts it is deployed. Both halves ship in
+ * one change for that reason, and this endpoint must never be released
+ * frontend-only.
+ *
+ * Absent or false records NO consent. It is not a revocation, and it is not a
+ * default to be flipped on: an affirmative act is the only thing that counts.
+ */
+export async function freeSignup(
+  body: { full_name: string; email: string; marketing_opt_in?: boolean },
+): Promise<FreeSignupResult> {
   const { data } = await portalApi.post<FreeSignupResult>('/api/portal/free-signup', body);
   return data;
 }
