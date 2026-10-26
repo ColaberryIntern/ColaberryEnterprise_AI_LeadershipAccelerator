@@ -30,6 +30,8 @@ import SkillDetailDrawer from './SkillDetailDrawer';
 import CardDetailDrawer from '../../../components/timeline/CardDetailDrawer';
 import CommunityPulse from './CommunityPulse';
 import TodayStreakCard from './TodayStreakCard';
+import TodayDayCard from './TodayDayCard';
+import { ExplorerKicker, ExplorerRailCards, useExplorerHomeBase } from './ExplorerHomeBase';
 import TodayJourneyNudges from './TodayJourneyNudges';
 import NextLiveClassCard from './NextLiveClassCard';
 import InternshipOpportunityCard from './InternshipOpportunityCard';
@@ -192,6 +194,8 @@ const TodayShell: React.FC = () => {
   // Redesign flag (default ON while loading). firstName from the real profile —
   // never the raw email prefix.
   const redesign = flags?.today_redesign ?? true;
+  // C54 (v13 T6): an Explorer on the campus gets the home-base kicker and the pass + tour cards in the rail
+  const explorerHome = useExplorerHomeBase();
   const firstName = profile?.profile?.full_name?.trim().split(/\s+/)[0] || '';
 
   // The real registration lives on Eventbrite; RSVP here records it + awards
@@ -341,7 +345,7 @@ const TodayShell: React.FC = () => {
         /* command band — greeting + primary next step + the three meters in one row */
         <div className="te-band">
           <div>
-            <div className="crumb">◆ {schedule?.is_explorer ? 'Free AI Preview' : 'Command Center'}</div>
+            {explorerHome ? <ExplorerKicker /> : <div className="crumb">◆ {schedule?.is_explorer ? 'Free AI Preview' : 'Command Center'}</div>}
             <h2>
               {hydrated
                 ? (firstName ? `Welcome back, ${firstName} 👋` : 'Welcome back 👋')
@@ -415,7 +419,7 @@ const TodayShell: React.FC = () => {
         </div>
       ) : (
         <div className="te-page-h">
-          <div className="crumb">{schedule?.is_explorer ? 'Free AI Preview' : 'Command Center'}</div>
+          {explorerHome ? <ExplorerKicker /> : <div className="crumb">{schedule?.is_explorer ? 'Free AI Preview' : 'Command Center'}</div>}
           <h1>Welcome{me.email ? `, ${me.email.split('@')[0]}` : ''}</h1>
           <div className="sub">{schedule?.is_explorer
             ? "Explore AI for free — watch, listen, learn, and try. Enroll when you're ready to build for real."
@@ -565,22 +569,8 @@ const TodayShell: React.FC = () => {
           {/* Live community pulse — surfaces rooms people are in + live/next sessions */}
           <CommunityPulse />
           {/* Your day — meters fold into the command band when the redesign flag is on */}
-          {!redesign && (
-          <div className="te-card te-scard accent-leaf">
-            <h3><svg viewBox="0 0 24 24" fill="none"><path d="M12 2l2.6 7.4H22l-6.2 4.6 2.4 7.4L12 16.9 5.8 21.4l2.4-7.4L2 9.4h7.4z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /></svg> Your day</h3>
-            <div className="te-stat"><span className="lab">{lvl.name}</span><span className="num">{total.toLocaleString()} pts</span></div>
-            <div className="te-ribbon"><i style={{ width: `${lvl.pct}%`, background: 'var(--leaf)' }} /></div>
-            <div className="te-muted" style={{ margin: '-4px 0 12px' }}>{lvl.next ? `${lvl.next.min - total} pts to ${lvl.next.name}` : 'Max level reached'}</div>
-            <div className="te-stat"><span className="lab">Setup progress</span><span className="num">{setupDone}/{steps.length}</span></div>
-            <div className="te-ribbon"><i style={{ width: `${setupPct}%`, background: 'var(--berry)' }} /></div>
-            <div className="te-stat"><span className="lab">Skill proficiency</span><span className="num">{readiness}/100</span></div>
-            <div className="te-ribbon" style={{ marginBottom: 4 }}><i style={{ width: `${Math.max(2, readiness)}%`, background: 'var(--cherry)' }} /></div>
-            <div className="te-muted" style={{ fontSize: 12 }}>Grows as you build once the program starts.</div>
-            <Link className="te-btn ghost sm" style={{ width: '100%', justifyContent: 'center', marginTop: 12 }} to="/portal/points">Break down my points</Link>
-            <Link className="te-btn ghost sm" style={{ width: '100%', justifyContent: 'center', marginTop: 8 }} to="/portal/path">See your path</Link>
-            <div className="te-chip guest" style={{ marginTop: 12 }}>Free preview account</div>
-          </div>
-          )}
+          {!redesign && <TodayDayCard lvl={lvl} total={total} setupDone={setupDone} setupTotal={steps.length} setupPct={setupPct} readiness={readiness} />}
+          {explorerHome && <ExplorerRailCards />}
 
           {/* Daily streak */}
           <TodayStreakCard streak={streak} streakCount={streakCount} streakWeek={streakWeek} claimedToday={claimedToday} busy={busy} doClaimStreak={doClaimStreak} />

@@ -703,3 +703,7 @@
   .te-trybar__b{margin-left:0;width:100%}
 }
 @media (prefers-reduced-motion:reduce){.te-trybar{transition:none}}
+/* C54 (v13 T6): Today as the Explorer's home base (ExplorerHomeBase.tsx) */
+.te-explorer-kicker{color:var(--cherry);font-weight:800;letter-spacing:.12em}
+.te-explorer-pass .te-muted{margin:0 0 10px;line-height:1.5}
+.te-pass-maya,.te-pass-tour{width:100%;justify-content:center;margin-top:8px}
