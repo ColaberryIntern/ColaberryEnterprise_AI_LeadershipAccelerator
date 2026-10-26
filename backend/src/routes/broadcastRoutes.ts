@@ -87,6 +87,18 @@ router.get(
   c.getActiveBroadcasts,
 );
 
+/**
+ * Replay list (L8.3). The SAME guard chain as `/active`, deliberately: a past class is still
+ * a broadcast, a private one must still be invisible to anyone outside its room, and a paid
+ * one must still refuse a viewer who has not paid. Any guard dropped here would be a way in
+ * through the back door the day after the front one was locked.
+ */
+router.get(
+  `${P}/replays`,
+  flagGate, playbackLimiter, requireParticipant, attachCommunityStaffContext,
+  c.getReplayBroadcasts,
+);
+
 router.post(
   `${P}/:id/playback`,
   flagGate, playbackLimiter, requireParticipant, attachCommunityStaffContext,

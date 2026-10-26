@@ -16,6 +16,7 @@ import { resolveRoomEligibility } from '../services/broadcast/broadcastRoomEligi
 import { loadViewerAccessFacts, broadcastAccessDeps } from '../services/broadcast/broadcastAccessDeps';
 import { projectDiscovery, DiscoveryEntry } from '../services/broadcast/broadcastDiscovery';
 import { ACTIVE_DISCOVERY_STATES, findActiveOccurrences } from '../services/broadcast/broadcastActiveQuery';
+import { REPLAY_DISCOVERY_STATES, findReplayOccurrences } from '../services/broadcast/broadcastReplayQuery';
 import { resolvePollAfterMs } from '../services/broadcast/broadcastPollPolicy';
 import { signPlayback, computeGrantExpiry } from '../services/broadcast/broadcastPlaybackGrant';
 import { resolvePlaybackTarget } from '../services/broadcast/broadcastRecordingBinding';
@@ -470,5 +471,80 @@ export async function getActiveBroadcasts(req: Request, res: Response): Promise<
       context: { error_name: (err as Error)?.name ?? 'unknown' },
     }));
     res.status(503).json({ error: 'DiscoveryUnavailable' });
+  }
+}
+
+/**
+ * What a viewer can watch BACK (L8.3).
+ *
+ * A sibling of `getActiveBroadcasts`, and deliberately built from the same four pieces: the
+ * same access facts, the same room eligibility, the same `decideBroadcastAccess`, and the same
+ * `projectDiscovery`. Replay is not a second entitlement model, and inventing one here would
+ * mean two answers to 'may this person watch this' that can drift apart - with the paid path
+ * being the one that drifts silently.
+ *
+ * `projectDiscovery` is also what keeps a private class off this list for anyone not eligible
+ * for its room: it OMITS the entry rather than returning a shell with the title stripped, so a
+ * replay list cannot be used to enumerate what a cohort was taught.
+ *
+ * NOT POLLED. The live list tells a client when to come back because the answer changes while
+ * you watch it; a list of finished classes does not, and a poll_after_ms here would invite
+ * every open tab to re-read a page of history on a timer for nothing.
+ */
+export async function getReplayBroadcasts(req: Request, res: Response): Promise<void> {
+  const enrollmentId = req.participant!.sub;
+  try {
+    const occurrences = await findReplayOccurrences();
+    const facts = await loadViewerAccessFacts(enrollmentId);
+    const ctx = {
+      enrollmentId,
+      cohortId: req.participant!.cohort_id ?? null,
+      isAdmin: isStaff(req),
+    };
+    const nowMs = Date.now();
+
+    const entries: DiscoveryEntry[] = [];
+    for (const occurrence of occurrences) {
+      // Sequential, like the active query, and bounded by REPLAY_DISCOVERY_LIMIT. Room
+      // membership reads are cheap and a burst of parallel ones buys only contention.
+      // eslint-disable-next-line no-await-in-loop
+      const roomEligible = await resolveRoomEligibility(occurrence.room_id, ctx);
+      entries.push({
+        occurrence,
+        roomEligible,
+        decision: decideBroadcastAccess(
+          {
+            access_mode: occurrence.access_mode,
+            editorial_state: occurrence.editorial_state,
+            preview_seconds: occurrence.preview_seconds,
+            content_started_at: occurrence.content_started_at,
+          },
+          { enrollmentId, isAdmin: ctx.isAdmin, roomEligible },
+          facts.enrollment, facts.cohort, facts.roleInfo,
+          nowMs,
+        ),
+      });
+    }
+
+    res.json({
+      states: REPLAY_DISCOVERY_STATES,
+      replays: projectDiscovery(entries).map((item, i) => ({
+        ...item,
+        // The only field a past class needs that a live one does not. Epoch ms, matching the
+        // other two instants in the item, so no surface does timezone arithmetic of its own.
+        ended_at: occurrences[i].ended_at?.getTime() ?? null,
+      })),
+    });
+  } catch (err) {
+    // 503, not an empty list - the same rule as live discovery. 'Nothing to watch back' and
+    // 'we could not work out what you can watch back' are different facts, and reporting the
+    // second as the first tells a student their class was never recorded.
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(), level: 'error', service: 'broadcast',
+      event: 'broadcast_replay_discovery_failed', outcome: 'failure',
+      error_class: (err as Error)?.name ?? 'UnexpectedError',
+      context: { error_name: (err as Error)?.name ?? 'unknown' },
+    }));
+    res.status(503).json({ error: 'ReplayDiscoveryUnavailable' });
   }
 }
