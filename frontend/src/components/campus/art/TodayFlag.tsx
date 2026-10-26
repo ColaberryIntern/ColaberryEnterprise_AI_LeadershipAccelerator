@@ -26,7 +26,7 @@ export default function TodayFlag({ tower }: { tower: Pick<CampusBuilding, 'pos'
   const h = tower.pos.h;
   return (
     <g className="cm-today-flag" transform={`translate(${tower.pos.x} ${tower.pos.y})`} role="button" tabIndex={0}
-      aria-label="Today lives in the Schedule tower: open Today" data-testid="cm-today-flag" {...useOpenToday()}>
+      aria-label="Today lives here: open your Today page" data-testid="cm-today-flag" {...useOpenToday()}>
       <rect className="pill" x={-34} y={-h - 82} width={68} height={22} rx={11} />
       <path className="pointer" d={`M-5 ${-h - 61}L0 ${-h - 54}L5 ${-h - 61}Z`} />
       <text className="t" textAnchor="middle" y={-h - 67}>TODAY</text>

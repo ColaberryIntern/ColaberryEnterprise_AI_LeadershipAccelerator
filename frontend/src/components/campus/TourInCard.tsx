@@ -10,9 +10,11 @@ import type { Tour } from './tourSteps';
  */
 const TAG_CLASS: Record<string, string> = { open: 'is-open', preview: 'is-preview', demo: 'is-demo', locked: 'is-lock' };
 
-export function TourStopCard({ tour, index }: { tour: Tour; index: number }): React.ReactElement | null {
+export function TourStopCard({ tour, index, onToday }: { tour: Tour; index: number; onToday?: () => void }): React.ReactElement | null {
   const stop = tour.stops[index];
   if (!stop) return null;
+  // C53 (v13 T5): the Explorer tour's first stop is Today, so its block opens it
+  const todayStop = tour.audience === 'explorer' && index === 0 && stop.buildingId === 'tower' && !!onToday;
   const explorer = tour.audience === 'explorer';
   return (
     <div className={`cm-tc${explorer ? ' is-explorer' : ''}`} data-testid="cm-tour" data-stop={index + 1}>
@@ -31,6 +33,7 @@ export function TourStopCard({ tour, index }: { tour: Tour; index: number }): Re
         </>
       )}
       {stop.tip && <div className="cm-tc-tip" data-testid="cm-tour-tip"><span aria-hidden="true">💡 </span>{stop.tip}</div>}
+      {todayStop && <button type="button" className="cm-btn-red cm-tc-today" onClick={onToday} data-testid="cm-tour-today">Open Today &rarr;</button>}
     </div>
   );
 }

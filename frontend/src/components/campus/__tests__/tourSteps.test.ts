@@ -1,8 +1,8 @@
 /**
- * C7 tours: member 9, Explorer 7, business 6, staff none; every stop is a building on that audience's own campus; Explorer
+ * C7 tours: member 9, Explorer 8 (C53: from Today), business 6, staff none; every stop is a building on that audience's own campus; Explorer
  * states come from the pages' own signals; the copy invents nothing and never says "free".
  */
-import { tourFor, STATE_NOTE } from '../tourSteps';
+import { tourFor, STATE_NOTE, explorerFinishLine } from '../tourSteps';
 import { campusViewFor } from '../useCampusView';
 import type { CampusAudience } from '../campusMap';
 
@@ -13,7 +13,7 @@ const tour = (audience: CampusAudience, workplaceNames = false, s?: Parameters<t
 };
 
 describe('stop counts per audience', () => {
-  it.each([['member', 9], ['explorer', 7], ['business', 6]] as const)('%s has %i stops', (aud, n) => {
+  it.each([['member', 9], ['explorer', 8], ['business', 6]] as const)('%s has %i stops', (aud, n) => {
     expect(tour(aud)?.stops).toHaveLength(n);
   });
   it('staff has no tour', () => {
@@ -24,6 +24,25 @@ describe('stop counts per audience', () => {
     const stops = tour(aud)!.stops.map((s) => s.buildingId);
     expect(stops.every((id) => ids.includes(id))).toBe(true);
     expect(new Set(stops).size).toBe(stops.length);
+  });
+});
+
+describe('C53 (v13 T5): the Explorer tour starts at Today', () => {
+  it('stop 1 is the Schedule tower with the Today copy; the order follows the spec; it is called the Explorer tour', () => {
+    const t = tour('explorer')!;
+    expect(t.name).toBe('Explorer tour');
+    expect(t.stops.map((s) => s.buildingId)).toEqual(['tower', 'commons', 'library', 'amphi', 'lecture', 'studio', 'testing', 'gallery']);
+    expect(t.stops[0]).toMatchObject({ title: 'Start here: Today', state: 'open',
+      what: 'Today is your home base. Your next step, today’s plan, events coming up and Maya are all on one page.',
+      tip: 'The red 📅 Today button at the top brings you back here from anywhere on campus.' });
+  });
+  it('the member tour is unchanged', () => {
+    expect(tour('member')!.stops.map((s) => s.buildingId)).toEqual(['lecture', 'library', 'studio', 'testing', 'observatory', 'commons', 'gallery', 'career', 'arcade']);
+    expect(tour('member')!.name).toBe('What’s in your seat');
+  });
+  it('the finishing toast names the Explorer when the name is known, and reads without it', () => {
+    expect(explorerFinishLine('Ali')).toBe('That’s the campus, Ali. Today is always one tap away: the red 📅 Today button at the top.');
+    expect(explorerFinishLine('')).toBe('That’s the campus. Today is always one tap away: the red 📅 Today button at the top.');
   });
 });
 

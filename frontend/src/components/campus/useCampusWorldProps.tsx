@@ -3,7 +3,8 @@ import type { CampusWorldProps } from './CampusWorld';
 import { useCampus } from './CampusContext';
 import { useCampusView } from './useCampusView';
 import { useCampusOnAir } from './campusOnAir';
-import { tourFor } from './tourSteps';
+import { tourFor, explorerFinishLine } from './tourSteps';
+import { useHomeFacts } from './home/useHomeFacts';
 import type { Tour } from './tourSteps';
 import { explorerPath } from './campusPath';
 import MyLook from './MyLook';
@@ -38,6 +39,7 @@ export function useCampusWorldProps(onExit: () => void, onNavigate: () => void, 
     completePlanStop, tourIndex, setTourIndex, endTour, finishTour, look, lookError, saveLook, lockerOpen, closeLocker, openMap } = useCampus();
   const { audience, hasFullAccess, buildings, accessOf, isExplorer } = useCampusView();
   const { buildings: onAir } = useCampusOnAir();
+  const { firstName } = useHomeFacts(false);
   // C7: the guided tour for THIS viewer's campus (null for staff).
   const tour = tourFor(audience, buildings, accessOf, settings.workplaceNames);
   const touring = tour && tourIndex !== null ? Math.min(tourIndex, tour.stops.length - 1) : null;
@@ -46,8 +48,8 @@ export function useCampusWorldProps(onExit: () => void, onNavigate: () => void, 
     finishTour();
     if (audience !== 'explorer') return;
     setUnlock(true);
-    cheer({ big: '👋', title: 'Maya · welcome desk', detail: 'You made it round the whole campus. Ask me anything about enrolling.', ms: 5200 });
-  }, [finishTour, audience]);
+    cheer({ big: '📅', title: explorerFinishLine(firstName), detail: 'Maya at the welcome desk answers anything about enrolling.', ms: 5200 }); // C53 (v13 T5)
+  }, [finishTour, audience, firstName]);
   // Mark done (the prototype's completePlan): the points cheer, then "Next: <step> · <building> [Go]" (Go walks there), or all done.
   const onComplete = useCallback(async (s: PlanStop) => {
     const r = await completePlanStop(s);
