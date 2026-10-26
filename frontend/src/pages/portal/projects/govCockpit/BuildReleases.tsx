@@ -19,12 +19,14 @@ export default function BuildReleases({ summary }: { summary: GovBuildSummary | 
   if (!summary) {
     return <div className="gck-empty" style={{ padding: 16 }}>No software build is linked to this project yet. Once the build is materialized, its releases and stories appear here.</div>;
   }
-  const { releases, rollup, studentProjectId } = summary;
+  const { releases, rollup } = summary;
   return (
     <section>
       <div className="gck-filters" style={{ justifyContent: 'space-between' }}>
         <span className="gck-eyebrow">{rollup.verified} of {rollup.total} stor{rollup.total === 1 ? 'y' : 'ies'} verified &middot; {rollup.pct}%</span>
-        <a className="gck-btn primary" href={`/portal/projects/${encodeURIComponent(studentProjectId)}`}>
+        {/* The build has no bare /portal/projects/:id route; the student opens it from their projects list, which is
+            where the per-story workspace + repo + prompts live. Link there rather than to a route that does not exist. */}
+        <a className="gck-btn primary" href="/portal/projects">
           Open the build workspace <i className="ri-arrow-right-line" aria-hidden="true" />
         </a>
       </div>

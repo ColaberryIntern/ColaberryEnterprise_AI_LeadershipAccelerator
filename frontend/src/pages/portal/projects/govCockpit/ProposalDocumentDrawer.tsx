@@ -19,18 +19,31 @@ const STATUS: Record<string, { cls: string; label: string }> = {
   accepted: { cls: 'ok', label: 'Accepted' },
 };
 
-/** Open the document in a print window the browser saves as PDF (the chosen "produce PDF" path — no server render). */
+/**
+ * Print the document to PDF via the browser (the chosen "produce PDF" path — no server render). Uses a hidden
+ * IFRAME rather than window.open: a popup is blocked by default and `window.open(..., 'noopener')` returns null, so
+ * the old approach silently did nothing. The iframe prints in-page, no popup, and is removed after.
+ */
 function printDocument(title: string, html: string): void {
-  const w = window.open('', '_blank', 'noopener,width=900,height=1000');
-  if (!w) return;
-  w.document.write(`<!doctype html><html><head><meta charset="utf8"><title>${title.replace(/[<>&]/g, '')}</title>` +
-    `<style>@page{margin:1in}body{font:12pt Georgia,serif;color:#111;line-height:1.5;max-width:7in;margin:0 auto}` +
-    `h1{font-size:18pt}h2{font-size:15pt;margin-top:1.2em}h3{font-size:13pt}table{border-collapse:collapse;width:100%}` +
+  const safeTitle = title.replace(/[<>&]/g, '');
+  const iframe = document.createElement('iframe');
+  iframe.setAttribute('aria-hidden', 'true');
+  iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;';
+  document.body.appendChild(iframe);
+  const idoc = iframe.contentWindow?.document;
+  if (!idoc) { try { document.body.removeChild(iframe); } catch { /* already gone */ } return; }
+  idoc.open();
+  idoc.write(`<!doctype html><html><head><meta charset="utf8"><title>${safeTitle}</title>` +
+    `<style>@page{margin:1in}body{font:12pt Georgia,serif;color:#111;line-height:1.5}` +
+    `h1{font-size:18pt}h2{font-size:15pt;margin-top:1.2em}h3,h4{font-size:13pt}table{border-collapse:collapse;width:100%}` +
     `th,td{border:1px solid #999;padding:4px 8px;text-align:left}</style></head><body>` +
-    `<h1>${title.replace(/[<>&]/g, '')}</h1>${html}</body></html>`);
-  w.document.close();
-  w.focus();
-  setTimeout(() => { try { w.print(); } catch { /* user can print manually */ } }, 300);
+    `<h1>${safeTitle}</h1>${html}</body></html>`);
+  idoc.close();
+  const done = () => { try { document.body.removeChild(iframe); } catch { /* already gone */ } };
+  setTimeout(() => {
+    try { iframe.contentWindow?.focus(); iframe.contentWindow?.print(); } catch { /* user can use the browser print menu */ }
+    setTimeout(done, 1500);
+  }, 300);
 }
 
 export default function ProposalDocumentDrawer(

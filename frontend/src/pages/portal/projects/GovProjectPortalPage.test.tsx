@@ -43,7 +43,7 @@ describe('GovProjectPortalPage v2 — Build + Proposal cockpit', () => {
     expect(text).toContain('STORY-001');
     expect(text).toContain('Case dashboard');
     const link = Array.from(container.querySelectorAll('a')).find((a) => a.textContent?.includes('build workspace')) as HTMLAnchorElement;
-    expect(link.getAttribute('href')).toBe('/portal/projects/sp-1');
+    expect(link.getAttribute('href')).toBe('/portal/projects');
   });
 
   it('Proposal tab: a document card opens the drawer, and Draft with AI calls the API', async () => {
