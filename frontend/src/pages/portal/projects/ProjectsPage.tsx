@@ -422,8 +422,7 @@ const ProjectsPage: React.FC = () => {
     const next = new URLSearchParams(searchParams);
     next.delete('project');
     setSearchParams(next, { replace: true });
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs when the return target or the list arrives, not on every openInterior identity
-  }, [returnProject, projects.length]);
+  }, [returnProject, projects.length]); // when the return target or the list arrives, not on every openInterior identity
   /**
    * Open a task in the project WORKSPACE — the full page with the mentor on the
    * right, the build-side twin of the classroom runtime. This used to open a
