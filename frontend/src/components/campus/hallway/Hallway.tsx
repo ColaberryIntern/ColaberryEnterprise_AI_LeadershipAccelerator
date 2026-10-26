@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { fetchHallway, HALLWAY_CHANGED_EVENT, openMeetSheet, type Hallway } from './hallwayApi';
-import { doorSign, hallwayDoors, initialsOf, liveRooms, rowLine, type AnyDoor, type Door } from './hallwayModel';
+import { doorSign, hallwayDoors, initialsOf, isEmptyDoor, liveRooms, rowLine, type Door, type WallDoor } from './hallwayModel';
 import './hallway.css';
 
 /**
@@ -35,12 +35,22 @@ function Avatars({ d, max = 4 }: { d: Door; max?: number }): React.ReactElement 
 const LEFTS = [6, 38, 70];
 
 /** One side wall's doors: the left wall carries doors 1-3, the right 4-6. */
-export function HallwayWall({ doors, side, onOpen }: { doors: AnyDoor[]; side: 'left' | 'right'; onOpen: (route: string) => void }): React.ReactElement {
+export function HallwayWall({ doors, side, onOpen }: { doors: WallDoor[]; side: 'left' | 'right'; onOpen: (route: string) => void }): React.ReactElement {
   const mine = doors.filter((d) => (side === 'left' ? d.n <= 3 : d.n > 3));
   return (
     <>
       {mine.map((d) => {
         const left = `${LEFTS[(d.n - 1) % 3]}%`;
+        if (isEmptyDoor(d)) {
+          return (
+            <button key={d.key} type="button" className="cm-mdoor is-empty" style={{ left }} onClick={stop(() => openMeetSheet({ mode: 'new' }))} data-testid={`cm-door-${d.n}`}
+              aria-label={`Meeting room ${d.n}: empty, open a new room`}>
+              <span className="num">{d.n}</span>
+              <span className="plate"><b>Room {d.n}</b><small className="st-empty">Empty &middot; open it</small></span>
+              <span className="knob" aria-hidden="true" />
+            </button>
+          );
+        }
         if (d.more) {
           return (
             <button key="more" type="button" className="cm-mdoor is-more" style={{ left }} onClick={stop(() => onOpen('/portal/rooms'))} data-testid="cm-door-more">

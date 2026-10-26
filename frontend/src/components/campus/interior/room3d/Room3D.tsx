@@ -16,7 +16,7 @@ import { useCampusEvents } from '../../events/EventSignup';
 import { upcoming } from '../../events/eventsModel';
 import { openBookCall } from '../../admissions/admissionsCallApi';
 import { HallwayBoard, HallwayWall, useHallway } from '../../hallway/Hallway';
-import { hallwayDoors } from '../../hallway/hallwayModel';
+import { wallDoors } from '../../hallway/hallwayModel';
 import { LiveScreen } from '../../events/LiveScreen';
 import { AgendaBoard, useAgenda } from '../../events/Agenda';
 import { ArcadeBoard, ArcadeCabinets, ChampionsWall } from '../../games/ArcadeRoom';
@@ -105,7 +105,7 @@ export default function Room3D(p: Room3DProps): React.ReactElement | null {
   // C29 (v7 R2): Meeting Rooms is a hallway: doors on both side walls, the open rooms on the board
   const hall = id === 'commons';
   const { hallway } = useHallway(hall);
-  const doors = hall && hallway ? hallwayDoors(hallway) : [];
+  const doors = hall && hallway ? wallDoors(hallway) : []; // C44: always six doors on the walls
   // C31 (v7 R4): while Colaberry Live is on air, the Events Hall's screen is the broadcast
   const live = useLiveNow();
   // C33 (v7 R6): the Schedule's board is one list: classes, events and booked sessions
