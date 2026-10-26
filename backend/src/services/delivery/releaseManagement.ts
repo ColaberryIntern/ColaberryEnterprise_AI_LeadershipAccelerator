@@ -1,6 +1,7 @@
 import { evaluateReleaseGate, type ReleaseGateResult } from './releaseGate';
 import { resolveProfile } from './profileResolution';
 import { isReleaseCheck, type ReleaseCheckResult } from '../../modules/delivery/releaseChecks';
+import { claimEvidenceForRelease } from './releaseEvidence';
 
 /**
  * releaseManagement — the first code path that consults Gate 13 and Gate 14.
@@ -95,6 +96,25 @@ export async function createReleaseCandidate(input: {
     check_results: [],
     waived_categories: [],
     created_by_identity_id: input.actorIdentityId ?? null,
+  });
+
+  /**
+   * C8.11. The release claims the project's unclaimed evidence at the moment it is cut.
+   *
+   * Evidence is recorded against a story while the work happens, before anyone knows
+   * which release will ship it, so the release is the side that can make the connection.
+   * `delivery_evidence.release_id` and its index have existed since this schema shipped
+   * and nothing ever wrote them, which left every handover carrying the gate's verdicts
+   * without the trail behind them.
+   *
+   * AFTER the release row exists, and best-effort: the release is the primary record and
+   * failing to stamp a derived join must not lose it. The claim is idempotent, so the
+   * next cut repairs anything missed here.
+   */
+  await claimEvidenceForRelease({
+    releaseId: row.id,
+    projectId: input.projectId,
+    models,
   });
 
   return { ok: true, releaseId: row.id, profileKey: row.profile_key };
