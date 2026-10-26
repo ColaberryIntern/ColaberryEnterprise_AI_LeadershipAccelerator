@@ -187,7 +187,7 @@ export default function OverviewTab() {
             <SectionCard
               title="Trend"
               icon="line-chart-line"
-              subtitle="From the append-only nightly snapshots — the only source that can say what last week looked like."
+              subtitle="Newest day first. From the append-only nightly snapshots — the only source that can say what last week looked like."
             >
               <Trend trend={d.trend} />
             </SectionCard>

@@ -10,8 +10,10 @@ import {
   learnerParamsSchema,
   learnerSeriesQuerySchema,
   learnersQuerySchema,
+  outreachQuerySchema,
   shadowQuerySchema,
 } from '../schemas/explorerGrowthSchema';
+import { getCampusActivity, getOutreach } from '../services/explorerGrowth/explorerCampusService';
 import {
   getDistribution,
   getLearners,
@@ -133,6 +135,12 @@ export const getSummaryHandler = handler(null, null, () => getSummary());
 export const getDistributionHandler = handler(null, distributionQuerySchema, (_p, q) =>
   getDistribution(q.days),
 );
+
+// ─── Campus + outreach (2026-10-26) ─────────────────────────────────────────
+
+export const getCampusActivityHandler = handler(null, null, () => getCampusActivity());
+
+export const getOutreachHandler = handler(null, outreachQuerySchema, (_p, q) => getOutreach(q.view, q.limit));
 
 // ─── Journey ────────────────────────────────────────────────────────────────
 

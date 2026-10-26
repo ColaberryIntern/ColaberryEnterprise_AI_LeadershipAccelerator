@@ -13,6 +13,8 @@ import {
   getShadowHandler,
   getSummaryHandler,
   getWhyHandler,
+  getCampusActivityHandler,
+  getOutreachHandler,
 } from '../../controllers/explorerGrowthController';
 
 /**
@@ -61,6 +63,10 @@ router.use(BASE, requireAdmin);
 // Overview
 router.get(`${BASE}/summary`, getSummaryHandler);
 router.get(`${BASE}/distribution`, getDistributionHandler);
+
+// Campus activity + the staff outreach list (2026-10-26)
+router.get(`${BASE}/campus`, getCampusActivityHandler);
+router.get(`${BASE}/outreach`, getOutreachHandler);
 
 // Journey + the learner drawer
 router.get(`${BASE}/learners`, getLearnersHandler);

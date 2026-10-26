@@ -8,6 +8,7 @@ import {
 } from '../services/campus/campusAdmissionsCall';
 import { admissionsCalendarPort } from '../services/campus/campusAdmissionsCalendarPort';
 import { sendValidated, logFailure } from './campusRoutes';
+import { recordAdmissionsBooking, recordAdmissionsCancel } from '../services/campus/campusActivityService';
 
 /**
  * Campus "Book a call with admissions" (Basecamp C20). Participant-authed per route and behind the campus pilot, like every campus
@@ -65,6 +66,9 @@ export async function postBookRoute(req: Request, res: Response): Promise<void> 
     if (!e) { res.status(404).json({ error: 'Enrollment not found', error_class: 'NotFound' }); return; }
     const who = { enrollmentId: e.id, name: e.full_name || 'Colaberry learner', email: e.email };
     const { booking, created } = await bookAdmissionsCall(admissionsCalendarPort(), who, parsed.data);
+    // The staff count (Explorer Growth): best effort, the meeting is already on the calendar, which stays the record
+    await recordAdmissionsBooking({ eventId: booking.eventId, enrollmentId: e.id, startsAt: booking.startTime, topic: booking.topic })
+      .catch((err) => logFailure('campus_admissions_booking_log_failed', err));
     res.status(created ? 201 : 200);
     sendValidated(res, BookingResponse, { booking }, 'campus_admissions_book');
   } catch (err) {
@@ -80,7 +84,11 @@ export async function deleteBookingRoute(req: Request, res: Response): Promise<v
   if (!gate(req, res)) return;
   const id = EventIdParam.safeParse(req.params.eventId);
   if (!id.success) { res.status(400).json({ error: 'Invalid event id', error_class: 'ValidationFailed' }); return; }
-  try { await cancelAdmissionsCall(admissionsCalendarPort(), req.participant!.sub, id.data); res.status(204).end(); }
+  try {
+    await cancelAdmissionsCall(admissionsCalendarPort(), req.participant!.sub, id.data);
+    await recordAdmissionsCancel(id.data).catch((err) => logFailure('campus_admissions_cancel_log_failed', err)); // best effort, as booking
+    res.status(204).end();
+  }
   catch (err) { failUpstream(res, 'campus_admissions_cancel_failed', err); }
 }
 
