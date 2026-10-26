@@ -142,6 +142,14 @@
      posts white, announcements teal) */
   --cm-art-cork:#c99a63; --cm-art-cork-frame:#7a5230; --cm-art-cork-roof:#5b3d24;
   --cm-art-note-q:#fff3a8; --cm-art-note-post:#ffffff; --cm-art-note-ann:#c9f0e8;
+  /* v14 (C67): Community Board 2.0, lane colours (prototype LANES) and the cork's papers, browns, ritual strip and NEW ribbon */
+  --cm-art-lane-all:#2b1d12; --cm-art-lane-mine:#d4a017; --cm-art-lane-ann:#0f766e; --cm-art-lane-q:#c99700; --cm-art-lane-intro:#2f6f73;
+  --cm-art-lane-wins:#1f7a5a; --cm-art-lane-tips:#b4533a; --cm-art-lane-ideas:#465a8c; --cm-art-lane-general:#7a6a5a;
+  --cm-art-cb-dark:#2b1d12; --cm-art-cb-brown:#4a3424; --cm-art-cb-brown2:#6b5240; --cm-art-cb-paper:#fffdf6; --cm-art-cb-tile:#e9e0d3;
+  --cm-art-cb-paper-a:rgba(255,253,246,.55); --cm-art-cb-paper-b:rgba(255,253,246,.85); --cm-art-cb-paper-c:rgba(255,253,246,.94);
+  --cm-art-cb-gold:#ffd36e; --cm-art-cb-ritual-tx:#fff6e6; --cm-art-cb-ritual-sub:#e9cfa8; --cm-art-cb-q:#fff6c9; --cm-art-cb-pinned:#e6f3f1;
+  --cm-art-cb-new-d:#8a1116; --cm-art-cb-row-line:#f1eadf; --cm-art-cb-dash:#eadfcd; --cm-art-cb-excerpt:#5b5047; --cm-art-cb-age:#7a6a5a;
+  --cm-art-cb-shadow:rgba(0,0,0,.24); --cm-art-cb-shadow-s:rgba(0,0,0,.15); --cm-art-cb-glow:rgba(255,211,110,.85);
   /* C34 (v8 G2): the arcade cabinet (dark body, neon edge and title, the screen, the game-over sheet) */
   --cm-art-cab-bg:#1b1430; --cm-art-cab-edge:#6b2fa0; --cm-art-cab-neon:#5ef2c8; --cm-art-cab-screen:#0d0a18; --cm-art-cab-sheet:rgba(13,10,24,.9);
   /* C37 (v9 W2-W3): the sky: tints over the map, the window's skies by time of day and weather, sun, moon, clouds, hills, the frame */
