@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useCampus } from '../CampusContext';
 import { CAMPUS_HOME } from '../CampusLayers';
@@ -18,6 +18,11 @@ import './workstation.css';
  *
  * Stand up returns you to the room: the same "stand inside it" request every map entry uses (openMap(building, 'inside')), so
  * the home opens the room the workstation belongs to.
+ *
+ * C40 (Ali, 2026-10-25: "I'm more concerned with getting the content on the screen comfortably"): the frame gets out of the way.
+ * A slim pinned strip, thin bezels with no stands, the desk props only from 1200 px, a one-line status bar, Cory in a 300 px column,
+ * and below 1200 px Cory becomes a drawer (the Cory button in the top bar; Esc closes it) so the card takes the full width. Learners
+ * on a Claude Code task run the terminal on one half of the screen and this on the other (950-1100 px).
  */
 export interface WorkstationShellProps {
   theme: 'light' | 'dark';
@@ -54,6 +59,13 @@ export default function WorkstationShell(p: WorkstationShellProps): React.ReactE
   const facts = useHomeFacts(false);
   const standUp = () => { openMap(p.place.buildingId, 'inside'); navigate(CAMPUS_HOME); };
   const goSection = () => navigate(p.place.sectionRoute);
+  const [coryOpen, setCoryOpen] = useState(false);
+  useEffect(() => {
+    if (!coryOpen) return undefined;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setCoryOpen(false); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [coryOpen]);
 
   return (
     <div className="rt cm-ws" data-theme={p.theme} data-testid="cm-ws">
@@ -69,6 +81,9 @@ export default function WorkstationShell(p: WorkstationShellProps): React.ReactE
         <button type="button" className="cm-ws-btn" onClick={goSection} data-testid="cm-ws-section">
           <span aria-hidden="true">📺</span> All of {p.place.section}
         </button>
+        <button type="button" className="cm-ws-btn cm-ws-cory-toggle" onClick={() => setCoryOpen((o) => !o)} aria-expanded={coryOpen} aria-controls="cm-ws-cory" data-testid="cm-ws-cory-toggle">
+          <span aria-hidden="true">💬</span> Cory
+        </button>
         <button type="button" className="cm-ws-btn" onClick={standUp} data-testid="cm-ws-standup">
           <span aria-hidden="true">←</span> Stand up
         </button>
@@ -78,13 +93,12 @@ export default function WorkstationShell(p: WorkstationShellProps): React.ReactE
           <div className="bl"><small>PINNED ABOVE</small><b>your desk</b></div>
           <div className="cm-ws-tickets">
           {p.bench.length === 0 && <div className="cm-ws-ticket is-active"><span className="st">ON YOUR DESK</span><b>{p.cardTitle}</b></div>}
-          {p.bench.map((t, i) => {
+          {p.bench.map((t) => {
             const body = <><span className="st">{t.tag}</span><b>{t.title}</b><small>{t.note}</small></>;
             const cls = `cm-ws-ticket is-${t.state}`;
-            const rot = { ['--rot' as string]: `${((i % 3) - 1) * 1.2}deg` } as React.CSSProperties;
             return t.route
-              ? <button key={t.key} type="button" className={cls} style={rot} onClick={() => navigate(t.route as string, { state: { from: p.place.sectionRoute } })} data-testid="cm-ws-ticket">{body}</button>
-              : <div key={t.key} className={cls} style={rot} aria-current="step" data-testid="cm-ws-ticket">{body}</div>;
+              ? <button key={t.key} type="button" className={cls} onClick={() => navigate(t.route as string, { state: { from: p.place.sectionRoute } })} data-testid="cm-ws-ticket">{body}</button>
+              : <div key={t.key} className={cls} aria-current="step" data-testid="cm-ws-ticket">{body}</div>;
           })}
           </div>
           <DeskTools here={presence?.[p.place.buildingId] ?? null} />
@@ -93,19 +107,17 @@ export default function WorkstationShell(p: WorkstationShellProps): React.ReactE
           <div className="cm-ws-monitors">
             <div className="cm-ws-mon side">
               <div className="cm-ws-bezel">{p.left}</div>
-              <div className="neck" /><div className="base" />
             </div>
             <div className="cm-ws-mon main">
               <div className="cm-ws-bezel"><main className={`rt-mid cm-ws-screen${p.mainClass ? ` ${p.mainClass}` : ''}`}>
                 {p.heading && <div className="cm-ws-head" data-testid="cm-ws-head"><div className="k">{p.heading.kicker}</div><h2>{p.heading.title}</h2></div>}
                 {p.children}
               </main></div>
-              <div className="neck" /><div className="base" />
             </div>
           </div>
           <WorkstationDesk nameCard={nameCardOf(facts.fullName, facts.firstName)} />
         </div>
-        <div className="cm-ws-cory">{p.mentor}</div>
+        <div className={`cm-ws-cory${coryOpen ? ' is-open' : ''}`} id="cm-ws-cory" data-testid="cm-ws-cory">{p.mentor}</div>
       </div>
       <footer className="rt-bar cm-ws-status" data-testid="cm-ws-status">{p.status}</footer>
     </div>

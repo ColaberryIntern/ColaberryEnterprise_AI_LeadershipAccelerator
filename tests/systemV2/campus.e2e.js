@@ -360,64 +360,31 @@ async function runAudience(browser, audience, jwt) {
       console.log(`      [${audience}] next task in the bar on ${shown.length}/${pages.length}: ${shown.join(' ')}`);
     });
 
-    await step(audience, 'click-to-walk: three grass points, each ends within 4 units, no card, the whole campus (C17)', async () => {
-      const settle = () => page.waitForFunction(() => !document.querySelector('[data-testid="cm-travel-text"]'), null, { timeout: 20_000 });
-      const vb = () => page.evaluate(() => document.querySelector('.cm-home svg.cm-map').getAttribute('viewBox').split(' ').map(Number));
-      // This run keeps reduce motion on (walks are instant); click-to-walk is about the walk itself, so motion goes on for this
-      // step (the stored choice 'off' = never reduce) and back to 'on' at the end.
-      const motion = (m) => page.evaluate((v) => {
-        const k = 'colaberry.campus.settings.v1';
-        localStorage.setItem(k, JSON.stringify({ ...JSON.parse(localStorage.getItem(k) || '{}'), motion: v }));
-      }, m);
-      await motion('off');
-      try {
+    await step(audience, 'grass clicks never walk: no drop pin, no toast, you stay put (Ali, 2026-10-25: never show navigating to a non place)', async () => {
       await page.goto(`${urls.base}/portal/campus`, { waitUntil: 'domcontentloaded' });
       await page.waitForSelector('[data-testid="cm-home"] [data-testid="cm-concierge"]', { timeout: 30_000 });
-      await settle();
-      await page.waitForTimeout(1500); // the camera eases back to the whole campus after the card closed
-      // The whole-campus view, read once it has stopped moving (the ease can still be finishing after the wait above).
-      let base = await vb();
-      for (let i = 0; i < 10; i++) {
-        await page.waitForTimeout(400);
-        const again = await vb();
-        if (JSON.stringify(again) === JSON.stringify(base)) break;
-        base = again;
-      }
-      // Grass the viewer can actually click: world points in view whose top element is the map's ground (not a building, a desk,
-      // you, or a panel over the map), spread over the campus.
+      const at = () => page.evaluate(() => document.querySelector('[data-testid="cm-avatar"]').getAttribute('transform'));
+      const before = await at();
+      // grass the viewer can click: points in view whose top element is the map's ground (not a building, a desk, you or a panel)
       const spots = await page.evaluate(() => {
-        const svg = document.querySelector('.cm-home svg.cm-map');
-        const m = svg.getScreenCTM();
-        const out = [];
+        const svg = document.querySelector('.cm-home svg.cm-map'); const m = svg.getScreenCTM(); const out = [];
         for (const [x, y] of [[720, 520], [180, 470], [860, 250], [640, 300], [120, 640], [880, 660], [360, 520], [700, 160]]) {
-          const p = svg.createSVGPoint(); p.x = x; p.y = y; const s = p.matrixTransform(m);
-          const el = document.elementFromPoint(s.x, s.y);
-          if (el && svg.contains(el) && !el.closest('.cm-bld, .cm-hit-area, .cm-staff-tok, .cm-avatar')) out.push({ x, y, sx: s.x, sy: s.y });
+          const p = svg.createSVGPoint(); p.x = x; p.y = y; const s2 = p.matrixTransform(m);
+          const el = document.elementFromPoint(s2.x, s2.y);
+          if (el && svg.contains(el) && !el.closest('.cm-bld, .cm-hit-area, .cm-staff-tok, .cm-avatar, .cm-cboard-sign')) out.push({ sx: s2.x, sy: s2.y });
           if (out.length === 3) break;
         }
         return out;
       });
       must(spots.length === 3, `only ${spots.length} clickable grass points in view`);
-      for (const s of spots) {
-        await page.mouse.click(s.sx, s.sy);
-        await page.waitForSelector('[data-testid="cm-drop-pin"]', { timeout: 5_000 });
-        await settle();
-        await page.waitForTimeout(1500); // the camera's ease back to the whole campus
-        const at = await page.evaluate(() => document.querySelector('[data-testid="cm-avatar"]').getAttribute('transform').match(/translate\(([-\d.]+) ([-\d.]+)\)/).slice(1).map(Number));
-        must(Math.hypot(at[0] - s.x, at[1] - s.y) <= 4, `ended at ${at} for a click at ${s.x},${s.y}`);
-        must(await page.locator('[data-testid="cm-card"]').count() === 0, 'a card opened');
-        // The camera eases home: wait for the view to SETTLE on the whole campus (it must get there, not merely head there).
-        const home = await page.waitForFunction((b) => {
-          const v = document.querySelector('.cm-home svg.cm-map').getAttribute('viewBox').split(' ').map(Number);
-          // within 4 units: since C21 the base fit is around y 390 and the eased-home view lands 2-3 units off on a 1460-wide box
-          return v.every((x, i) => Math.abs(x - b[i]) <= 4);
-        }, base, { timeout: 8_000 }).then(() => true, () => false);
-        must(home, `view ${await vb()} never settled on the whole campus ${base}`);
+      for (const s2 of spots) {
+        await page.mouse.click(s2.sx, s2.sy);
+        await page.waitForTimeout(400);
+        must(await page.locator('[data-testid="cm-drop-pin"]').count() === 0, 'a drop pin appeared on the grass');
+        must(await page.locator('[data-testid="cm-travel-text"]').count() === 0, 'a walking toast appeared for the grass');
+        must(await page.locator('[data-testid="cm-card"]').count() === 0, 'a card opened from the grass');
       }
-      } finally {
-        await motion('on');
-        await page.goto(`${urls.base}/portal/campus`, { waitUntil: 'domcontentloaded' });
-      }
+      must((await at()) === before, 'the avatar moved on a grass click');
     });
 
     if (audience !== 'staff') {

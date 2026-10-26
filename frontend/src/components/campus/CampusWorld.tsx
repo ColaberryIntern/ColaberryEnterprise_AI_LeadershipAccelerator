@@ -170,13 +170,14 @@ export default function CampusWorld(p: CampusWorldProps): React.ReactElement {
   // WP-1 R10 with WP-5's popover: a person card closing is a return to the campus too (when no other card is open)
   const hadPerson = useRef(false);
   useEffect(() => { if (hadPerson.current && !personCard && !anyCard) camApi.current?.recenter(); hadPerson.current = !!personCard; }, [personCard, anyCard, camApi]);
-  // C17 (round 3 §2.5): a click on open ground first closes whatever is open, in Esc's order (a popover, the locker, the room; the
-  // return recenters), else walks you there. Never during a tour: its stops are its route.
-  const onGroundClick = useCallback((spot: Pt) => {
+  // A click on open ground closes whatever is open, in Esc's order (a popover, the locker, the room; the return recenters). C49b
+  // (Ali, 2026-10-25: "If I click on something that is not a building or Community Board, don't try to navigate there. You should
+  // not be able to show navigating to a non place."): it never walks you to a patch of grass. Only places are walked to.
+  const onGroundClick = useCallback(() => {
     if (tour) return;
     if (pp.peekOpen) pp.closePeek(); else if (staff.open) staff.close(); else if (personCard) onClosePerson?.();
-    else if (panel) panel.onClose(); else if (openRef.current) setOpen(null); else walkSpot(spot);
-  }, [tour, pp, staff, personCard, onClosePerson, panel, walkSpot]);
+    else if (panel) panel.onClose(); else if (openRef.current) setOpen(null);
+  }, [tour, pp, staff, personCard, onClosePerson, panel]);
   const onCardRef = useRef(p.onCard); onCardRef.current = p.onCard;
   useEffect(() => { onCardRef.current?.({ open: anyCard, building: cardBuilding }); }, [anyCard, cardBuilding]);
   // The tour's STOP badges on the map (an Explorer's say what each stop is: "3 · OPEN"), the current stop green.
