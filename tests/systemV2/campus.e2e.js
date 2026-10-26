@@ -304,6 +304,31 @@ async function runAudience(browser, audience, jwt) {
         await page.keyboard.press('Escape');
       });
 
+      await step(audience, 'C41/C42: with the real reveal animation, the back-wall screen sits inside the back wall at 1440x900, 1900x1000 and 390x844, and nothing on it overflows', async () => {
+        for (const viewport of [{ width: 1440, height: 900 }, { width: 1900, height: 1000 }, { width: 390, height: 844 }]) {
+          const { page: p2, context: c2 } = await newPage(browser, jwt, viewport);
+          try {
+            await p2.goto(urls.base + '/portal/campus', { waitUntil: 'domcontentloaded' });
+            // motion on for this check (the stored choice off = never reduce), so the room really plays its 1.5x reveal
+            await p2.evaluate(() => { const k = 'colaberry.campus.settings.v1'; localStorage.setItem(k, JSON.stringify({ ...JSON.parse(localStorage.getItem(k) || '{}'), motion: 'off' })); });
+            await p2.reload({ waitUntil: 'domcontentloaded' });
+            await p2.waitForSelector('[data-testid="cm-concierge"], [data-testid="cm-cc-peek"]', { timeout: 30_000 });
+            await p2.evaluate(() => document.querySelector('[data-testid="cm-bld-commons"]').dispatchEvent(new MouseEvent('click', { bubbles: true })));
+            await p2.waitForSelector('[data-testid="cm-room3d"][data-room="commons"] [data-testid="cm-board"]', { timeout: 20_000 });
+            await p2.waitForTimeout(1000);
+            const r = await p2.evaluate(() => {
+              const box = (el) => { const b = el.getBoundingClientRect(); return { l: b.left, t: b.top, r: b.right, b: b.bottom }; };
+              const scr = document.querySelector('[data-testid="cm-room3d"] [data-testid="cm-board"]');
+              const over = Array.from(scr.querySelectorAll('*')).filter((el) => el.scrollWidth > el.clientWidth + 1 && getComputedStyle(el).overflow !== 'visible').map((el) => el.className || el.tagName);
+              return { s: box(scr), f: box(document.querySelector('[data-testid="cm-room3d"] .face.back')), over };
+            });
+            const inside = r.s.l >= r.f.l - 2 && r.s.t >= r.f.t - 2 && r.s.r <= r.f.r + 2 && r.s.b <= r.f.b + 2;
+            must(inside, viewport.width + 'x' + viewport.height + ': the screen ' + JSON.stringify(r.s) + ' runs outside the back wall ' + JSON.stringify(r.f));
+            must(r.over.length === 0, viewport.width + 'x' + viewport.height + ': overflowing on the screen: ' + r.over.slice(0, 3).join(', '));
+          } finally { await c2.close(); }
+        }
+      });
+
       await step(audience, 'C29: Meeting Rooms: doors match the card rows; "+ New room" opens a real room (local DB) and it gets a door', async () => {
         const toHall = async () => {
           await page.goto(`${urls.base}/portal/campus`, { waitUntil: 'domcontentloaded' });
@@ -318,8 +343,11 @@ async function runAudience(browser, audience, jwt) {
         await toHall();
         const before = await doors();
         const rows = await page.locator('[data-testid^="cm-hall-row-"]').count();
-        must(before.filter((t) => !t.includes('More rooms')).length === rows, `doors ${before.length} != card rows ${rows}`);
-        must(before.length <= 6, `${before.length} doors (max 6)`);
+        // C44: always six doors on the walls; the real ones (not More rooms, not the empty fillers) match the card rows
+        const real = (ds) => ds.filter((t) => !t.includes('More rooms') && !t.includes('Empty'));
+        must(real(before).length === rows, `real doors ${real(before).length} != card rows ${rows}`);
+        must(before.length === 6, `${before.length} doors (want 6)`);
+        must(await page.locator('[data-testid="cm-room3d"] .face.right .cm-mdoor').count() === 3, 'the right wall does not carry doors 4-6');
         const name = `E2E hallway ${Date.now().toString(36)}`;
         await page.click('[data-testid="cm-board-new-room"]');
         await page.waitForSelector('[data-testid="cm-meet-new"]', { timeout: 10_000 });
@@ -330,7 +358,7 @@ async function runAudience(browser, audience, jwt) {
         // the room just created is yours, so there is at least one door: wait for the hallway to draw it (its read can be slow under load)
         await page.waitForSelector('[data-testid="cm-room3d"] .cm-mdoor', { timeout: 15_000 });
         const after = await doors();
-        must(after.some((t) => t.includes(name)) || (before.length === 6 && after.some((t) => t.includes('More rooms'))), `no door for the new room: ${after.join(' | ')}`);
+        must(after.some((t) => t.includes(name)) || (real(before).length >= 6 && after.some((t) => t.includes('More rooms'))), `no door for the new room: ${after.join(' | ')}`);
       });
 
     }

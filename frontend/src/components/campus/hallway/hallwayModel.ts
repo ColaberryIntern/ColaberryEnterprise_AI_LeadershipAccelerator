@@ -15,6 +15,10 @@ export interface Door {
 }
 export interface MoreDoor { more: true; n: number; key: 'more'; hidden: number }
 export type AnyDoor = Door | MoreDoor;
+/** C44: a filler door on the wall, "Room <n> - Empty - open it": it opens the New room sheet and invents no room, people or booking. */
+export interface EmptyDoor { empty: true; n: number; key: string }
+export type WallDoor = AnyDoor | EmptyDoor;
+export const isEmptyDoor = (d: WallDoor): d is EmptyDoor => 'empty' in d;
 
 const door = (r: HallwayRoom, state: DoorState, booking: HallwayBooking | null): Omit<Door, 'n'> => ({
   more: false, key: booking ? `b-${booking.booking_id}` : `r-${r.room_id}`, roomId: r.room_id, name: booking && state === 'booked' ? booking.title : r.name,
@@ -45,6 +49,14 @@ export function hallwayDoors(h: Hallway, max = MAX_DOORS): AnyDoor[] {
   const shown: AnyDoor[] = all.slice(0, max - 1).map((d, i) => ({ ...d, n: i + 1 }));
   shown.push({ more: true, n: max, key: 'more', hidden: all.length - (max - 1) });
   return shown;
+}
+
+/** C44 (room fix F4): the walls always show six doors (1-3 left, 4-6 right): the real doors in hallway order (with More rooms when
+ *  there are more than six), then empty filler doors up to six. The arrival card's rows and the sheet keep using hallwayDoors. */
+export function wallDoors(h: Hallway, max = MAX_DOORS): WallDoor[] {
+  const real: WallDoor[] = hallwayDoors(h, max);
+  for (let n = real.length + 1; n <= max; n += 1) real.push({ empty: true, n, key: `empty-${n}` });
+  return real;
 }
 
 /** Live rooms, for the board's "n OPEN NOW" and its rows. */

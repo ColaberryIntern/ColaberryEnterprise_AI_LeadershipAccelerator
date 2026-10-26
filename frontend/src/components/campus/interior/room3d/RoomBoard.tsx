@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useLayoutEffect, useRef, useState } from 'react';
 import type { PageSummary, SideTop } from '../pageSummary';
 import type { PlanStop } from '../../campusPlan';
 
@@ -24,9 +24,39 @@ export interface BoardProps {
 
 const stop = (fn: () => void) => (e: React.MouseEvent) => { e.stopPropagation(); fn(); };
 
+/**
+ * C42 (room fix F2): the fit pass. The screen's text is sized from the room (--fw x --fit); when a long card still overflows the
+ * screen, --fit steps down 5% at a time to 80%, so nothing is clipped. Set on the element directly (no re-render), on every render
+ * and when the screen resizes.
+ */
+export function fitScreen(el: HTMLElement): number {
+  const inner = el.querySelector<HTMLElement>('.inner');
+  if (!inner) return 1;
+  let fit = 1;
+  el.style.setProperty('--fit', '1');
+  while (inner.scrollHeight > inner.clientHeight + 1 && fit > 0.8 + 1e-9) {
+    fit = Math.round((fit - 0.05) * 100) / 100;
+    el.style.setProperty('--fit', String(fit));
+  }
+  return fit;
+}
+function useFitScreen(): React.RefObject<HTMLDivElement> {
+  const ref = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => { if (ref.current) fitScreen(ref.current); });
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === 'undefined') return undefined;
+    const ro = new ResizeObserver(() => fitScreen(el));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  return ref;
+}
+
 export function RoomScreen({ summary, name, planStep, onSection, onCard, onPlan, custom }: BoardProps): React.ReactElement {
   const next = summary?.next ?? null;
   const [copied, setCopied] = useState(false);
+  const screenRef = useFitScreen();
   const copy = (text: string) => { void navigator.clipboard?.writeText(text).then(() => setCopied(true), () => setCopied(false)); };
   let body: React.ReactNode;
   if (custom) {
@@ -66,9 +96,8 @@ export function RoomScreen({ summary, name, planStep, onSection, onCard, onPlan,
   return (
     // The screen body is a mouse shortcut to the section. It is not announced as a button (a button inside a button is invalid);
     // its own buttons are the controls, and "See all of ‹section›" / "Open ‹section›" is always one of them for the keyboard.
-    <div className="cm-r3-screen" onClick={onSection} data-testid="cm-board" role="group" aria-label="The board">
+    <div className="cm-r3-screen" ref={screenRef} onClick={onSection} data-testid="cm-board" role="group" aria-label="The board">
       <div className="inner">{body}</div>
-      <span className="stand" aria-hidden="true" />
     </div>
   );
 }

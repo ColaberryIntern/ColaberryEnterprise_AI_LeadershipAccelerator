@@ -20,7 +20,7 @@ jest.mock('../campusApi', () => ({
 jest.mock('../../../utils/portalApi', () => ({ __esModule: true, default: { get: jest.fn() } }));
 
 // eslint-disable-next-line import/first
-import { hallwayDoors, orderedDoors, doorSign, centralSlotIso, bookDays, type Door } from '../hallway/hallwayModel';
+import { hallwayDoors, orderedDoors, doorSign, centralSlotIso, bookDays, wallDoors, isEmptyDoor, type Door } from '../hallway/hallwayModel';
 // eslint-disable-next-line import/first
 import { HallwayWall, HallwayRows, HallwayBoard } from '../hallway/Hallway';
 // eslint-disable-next-line import/first
@@ -180,5 +180,32 @@ describe('the sheets', () => {
     await flush();
     expect(q('[role="alert"]')!.textContent).toContain('Could not open the room');
     expect(where).toBe('/portal/campus');
+  });
+});
+
+describe('C44: the walls always show six doors', () => {
+  const mine = (n: number) => Array.from({ length: n }, (_, i) => room(`m${i}`, { mine: true }));
+  it('0, 3, 6 and 9 rooms each give six doors: the real ones first, then empty fillers, or More rooms as the sixth', () => {
+    const shape = (n: number) => wallDoors(H(mine(n))).map((d) => (isEmptyDoor(d) ? 'empty' : d.more ? 'more' : 'room'));
+    expect(shape(0)).toEqual(['empty', 'empty', 'empty', 'empty', 'empty', 'empty']);
+    expect(shape(3)).toEqual(['room', 'room', 'room', 'empty', 'empty', 'empty']);
+    expect(shape(6)).toEqual(['room', 'room', 'room', 'room', 'room', 'room']);
+    expect(shape(9)).toEqual(['room', 'room', 'room', 'room', 'room', 'more']);
+    expect(wallDoors(H(mine(3))).map((d) => d.n)).toEqual([1, 2, 3, 4, 5, 6]);
+    expect(hallwayDoors(H(mine(3)))).toHaveLength(3); // the card rows still list only real rooms
+  });
+  it('an empty door reads Room <n> - Empty - open it and opens the New room sheet; it never says free', () => {
+    const seen: unknown[] = [];
+    const on = (e: Event) => seen.push((e as CustomEvent).detail);
+    window.addEventListener(MEET_SHEET_EVENT, on);
+    const h = H(mine(3));
+    render(<><HallwayWall doors={wallDoors(h)} side="left" onOpen={() => undefined} /><HallwayWall doors={wallDoors(h)} side="right" onOpen={() => undefined} /></>);
+    const d5 = container.querySelector('[data-testid="cm-door-5"]') as HTMLButtonElement;
+    expect(d5.textContent).toContain('Room 5');
+    expect(d5.textContent).toContain('Empty');
+    expect(container.textContent).not.toMatch(/free/i);
+    act(() => { d5.click(); });
+    window.removeEventListener(MEET_SHEET_EVENT, on);
+    expect(seen).toEqual([{ mode: 'new' }]);
   });
 });

@@ -187,12 +187,13 @@ const VIEWS = [
   // in the same order and state; the board counts the open rooms; + New room and Book a session are on the board and the card.
   { name: '26-meeting-rooms', route: '/portal/campus', accounts: ['member'], steps: () => [tap('commons'), WALKED, { wait: 2000 }],
     required: () => ['cm-room3d', 'cm-board-new-room', 'cm-board-book-room', 'cm-hall-rows', 'cm-hall-new', 'cm-hall-book'],
-    assert: () => `(() => { const doors = Array.from(document.querySelectorAll('[data-testid="cm-room3d"] .cm-mdoor')); if (doors.length > 6) return 'doors: ' + doors.length;
-      for (const d of doors) { if (d.classList.contains('is-more')) continue; const n = d.getAttribute('data-testid').replace('cm-door-', '');
+    assert: () => `(() => { const doors = Array.from(document.querySelectorAll('[data-testid="cm-room3d"] .cm-mdoor')); if (doors.length !== 6) return 'doors: ' + doors.length + ' (want 6)';
+      if (document.querySelectorAll('[data-testid="cm-room3d"] .face.right .cm-mdoor').length !== 3) return 'right wall doors != 3';
+      for (const d of doors) { if (d.classList.contains('is-more') || d.classList.contains('is-empty')) continue; const n = d.getAttribute('data-testid').replace('cm-door-', '');
         const row = document.querySelector('[data-testid="cm-hall-row-' + n + '"]'); if (!row) return 'no card row for door ' + n;
         const name = d.querySelector('.plate b').textContent; if (!row.textContent.includes(name)) return 'door ' + n + ' (' + name + ') is not row ' + n;
         if (d.classList.contains('is-live') !== !!row.querySelector('.dot')) return 'door ' + n + ' live state differs from its row'; }
-      const rows = document.querySelectorAll('[data-testid^="cm-hall-row-"]').length; const real = doors.filter((d) => !d.classList.contains('is-more')).length;
+      const rows = document.querySelectorAll('[data-testid^="cm-hall-row-"]').length; const real = doors.filter((d) => !d.classList.contains('is-more') && !d.classList.contains('is-empty')).length;
       return rows === real ? '' : 'rows ' + rows + ' vs doors ' + real; })()` },
   // C30 (v7 R3): the Community Board on the Quad: the noticeboard is on the map; clicking it walks there and opens the cork board with
   // its four tabs and the real notes from the community feed.
