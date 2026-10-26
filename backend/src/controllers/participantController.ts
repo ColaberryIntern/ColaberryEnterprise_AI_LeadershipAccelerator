@@ -263,14 +263,38 @@ export async function handleFreeSignup(req: Request, res: Response, next: NextFu
       // Zod v4: `.issues`, not `.errors`.
       return res.status(400).json({ error: parsed.error.issues[0]?.message ?? 'Invalid signup' });
     }
-    const { full_name, email, ...acquisition } = parsed.data;
+    // `marketing_opt_in` is pulled OUT of the rest rather than riding along in
+    // `acquisition`. Everything in `acquisition` is written to `Lead` columns, and
+    // consent is not a Lead column - it is its own record with its own evidence. If
+    // it were left in the spread, Sequelize would silently drop it and the consent
+    // would be lost with nothing reporting it, which is the failure mode this whole
+    // change exists to end.
+    const { full_name, email, marketing_opt_in, ...acquisition } = parsed.data;
 
     // 'learner': this is the public free-AI signup, so the account joins the
     // Explorer programme and is visible to Explorer Growth from the moment it
     // exists. Before this argument existed, accounts created here carried
     // `tier: 'guest'` and no `enrollment_type`, which made them free AI learners
     // the growth engine could not see.
-    const result = await createFreeAccount({ full_name, email, programme: 'learner', acquisition });
+    //
+    // `sourceSlug: 'training'` is the DOOR's claim about itself, and it belongs
+    // here rather than inside the shared service. `createFreeAccount` has five
+    // callers and only this one is the AI-learning funnel; defaulting the slug in
+    // the service would stamp org invites and invited teammates as training leads,
+    // which is the same conscription the required `programme` argument exists to
+    // prevent. A caller-supplied `source_id` still wins over this.
+    const result = await createFreeAccount({
+      full_name,
+      email,
+      programme: 'learner',
+      acquisition,
+      marketingOptIn: marketing_opt_in,
+      sourceSlug: 'training',
+      requestMeta: {
+        ipAddress: req.ip ?? null,
+        userAgent: typeof req.get === 'function' ? req.get('user-agent') ?? null : null,
+      },
+    });
     res.status(result.created ? 201 : 200).json(result);
   } catch (err) { next(err); }
 }

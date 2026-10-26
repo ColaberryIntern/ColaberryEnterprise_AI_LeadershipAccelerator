@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useParticipantAuth } from '../../contexts/ParticipantAuthContext';
 import { freeSignup } from '../../services/onboardingApi';
 import { identifyVisitor } from '../../utils/tracker';
+import { SIGNUP_CONSENT_TEXT } from '../../config/consentText';
 
 // Public "Start for $0" front door. Creates a $0 guest account (0 points), logs
 // the visitor straight in, and drops them on the Today shell — the top of the
@@ -22,6 +23,16 @@ function PortalFreeSignupPage() {
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  // UNCHECKED by default, and NOT required to submit.
+  //
+  // Unchecked because a pre-ticked box is not an affirmative act, and this value
+  // becomes the consent of record for every email we later send. Not required
+  // because this is the front door of a live paid-ad funnel: making it block
+  // submission would trade signups for permissions, which is not a trade a
+  // bug fix gets to make on its own. Someone who leaves it alone still gets their
+  // account and still gets their sign-in link, which is transactional and needs no
+  // marketing consent.
+  const [marketingOptIn, setMarketingOptIn] = useState(false);
   const { login } = useParticipantAuth();
   const navigate = useNavigate();
 
@@ -32,7 +43,11 @@ function PortalFreeSignupPage() {
     if (!EMAIL_RE.test(email.trim())) { setError('Please enter a valid email.'); return; }
     setLoading(true);
     try {
-      const res = await freeSignup({ full_name: fullName.trim(), email: email.trim() });
+      const res = await freeSignup({
+        full_name: fullName.trim(),
+        email: email.trim(),
+        marketing_opt_in: marketingOptIn,
+      });
 
       /**
        * Tie the anonymous visitor to the person who just signed up.
@@ -95,6 +110,14 @@ function PortalFreeSignupPage() {
             placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)}
             disabled={loading}
           />
+          <label className="cbfs-consent" htmlFor="cbfs-consent">
+            <input
+              id="cbfs-consent" className="cbfs-check" type="checkbox"
+              checked={marketingOptIn} onChange={(e) => setMarketingOptIn(e.target.checked)}
+              disabled={loading}
+            />
+            <span>{SIGNUP_CONSENT_TEXT}</span>
+          </label>
           {error && <div className="cbfs-error" role="alert">{error}</div>}
           <button className="cbfs-btn" type="submit" disabled={loading}>
             {loading ? 'Creating your account…' : 'Create my account'}
@@ -129,6 +152,11 @@ const CBFS_CSS = `
   background:#fff;color:#2B2B2B;outline:none;transition:border-color .15s,box-shadow .15s}
 .cbfs-input:focus{border-color:#367895;box-shadow:0 0 0 3px rgba(54,120,149,.22)}
 .cbfs-input:disabled{background:#F1F1F0}
+.cbfs-consent{display:flex;align-items:flex-start;gap:9px;margin:16px 0 0;font-size:13px;
+  line-height:1.5;color:#6B6B6B;cursor:pointer}
+.cbfs-check{width:16px;height:16px;margin:1px 0 0;flex:0 0 auto;accent-color:#FB2832;cursor:pointer}
+.cbfs-check:focus-visible{outline:3px solid #367895;outline-offset:2px}
+.cbfs-check:disabled{cursor:default}
 .cbfs-error{margin-top:12px;font-size:13.5px;color:#C20E1E;background:rgba(251,40,50,.08);
   border:1px solid rgba(251,40,50,.28);border-radius:10px;padding:9px 12px}
 .cbfs-btn{margin-top:18px;background:#FB2832;color:#fff;border:none;border-radius:999px;padding:13px 22px;
