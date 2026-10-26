@@ -5,7 +5,8 @@ import type { levelFor } from '../../../services/onboardingApi';
 /**
  * "Your day" in the Today rail: points and level, setup progress and skill proficiency as ribbons. Shown only when the command-band
  * redesign flag is off (the band carries the same meters as rings). Extracted from TodayShell unchanged (C54: the shell was over the
- * 500-line ceiling, so it gives up a block before it takes the Explorer additions).
+ * 500-line ceiling, so it gives up a block before it takes the Explorer additions). Its chip says "Preview account": the move would have
+ * carried "Free" into a new file, which the copy lint (40 TAC 807.172(d)) rightly refuses.
  */
 export interface TodayDayCardProps {
   lvl: ReturnType<typeof levelFor>;
@@ -30,7 +31,7 @@ export default function TodayDayCard({ lvl, total, setupDone, setupTotal, setupP
       <div className="te-muted" style={{ fontSize: 12 }}>Grows as you build once the program starts.</div>
       <Link className="te-btn ghost sm" style={{ width: '100%', justifyContent: 'center', marginTop: 12 }} to="/portal/points">Break down my points</Link>
       <Link className="te-btn ghost sm" style={{ width: '100%', justifyContent: 'center', marginTop: 8 }} to="/portal/path">See your path</Link>
-      <div className="te-chip guest" style={{ marginTop: 12 }}>Free preview account</div>
+      <div className="te-chip guest" style={{ marginTop: 12 }}>Preview account</div>
     </div>
   );
 }
