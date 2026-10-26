@@ -16,7 +16,9 @@ import { certPrepNextAction } from '../../../pages/portal/certprep/certPrepNextA
 /** secondary: a copy button (Projects "Copy prompt"): its label and the text it copies. */
 export interface PageNext { kicker: string; points: number; title: string; sub: string | null; cta: string; secondary?: { label: string; copy: string } | null }
 export interface SideRow { label: string; value: string; pct?: number }
-export interface SideTop { title: string; rows: SideRow[] }
+/** C43: `empty` is the line a board shows when it has no rows; `open` names its action ("Open <section>"); `route` sends that action
+ *  somewhere other than the section (the interns' standup room). */
+export interface SideTop { title: string; rows: SideRow[]; empty?: string; open?: string; route?: string }
 export interface PageSummary { next: PageNext | null; sideTop: SideTop | null; card: string | null; doorName: string }
 
 /** Classroom: the week's next card (the same default week the page opens on), "Your status", and that card's runtime. */

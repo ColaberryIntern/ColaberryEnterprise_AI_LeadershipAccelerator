@@ -119,7 +119,7 @@ export default function ArrivalPanel(p: ArrivalPanelProps): React.ReactElement {
   const wall = useRoomWall(b.id, audience, data, plan ? plan.stops : null);
   // v6 D1: the board (this building page's Next step and side card) and your spot, for a room you can use.
   const inRoom = access === 'open' && !!ROOMS[b.id];
-  const summary = usePageSummary(b.id, inRoom, buildingName(b, wp));
+  const summary = usePageSummary(b.id, inRoom, buildingName(b, wp), audience);
   const spot = inRoom ? spotOf(b.id) : null;
   // C28 (v7 R1): a class broadcast airs in the Events Hall; the Classroom says so, with Walk in (its live page)
   const { broadcasts } = useCampusOnAir();

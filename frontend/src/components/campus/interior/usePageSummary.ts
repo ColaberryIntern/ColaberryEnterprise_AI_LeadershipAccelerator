@@ -2,7 +2,14 @@ import { useEffect, useState } from 'react';
 import portalApi from '../../../utils/portalApi';
 import { getCertDomains, getCertPrepSummary } from '../../../services/certPrepApi';
 import { useProjectsList } from '../../../pages/portal/projects/projectsStore';
-import type { BuildingId } from '../campusMap';
+import type { BuildingId, CampusAudience } from '../campusMap';
+import { fetchLibrary } from '../../../services/roomsApi';
+import { fetchPublicEvents } from '../../../services/onboardingApi';
+import { fetchCareerProfile } from '../../../services/careerApi';
+import { fetchInternshipDashboard } from '../../../services/internshipApi';
+import { useCampus } from '../CampusContext';
+import type { SideTop } from './pageSummary';
+import { careerBoard, eventsBoard, libraryBoard, portfolioBoard, progressBoard, scheduleBoard } from './wallBoards';
 import { certPrepSummary, classroomSummary, plainSummary, projectsSummary } from './pageSummary';
 import type { ClassroomFeed, PageSummary } from './pageSummary';
 import { accountRows, useAccountFacts } from '../admissions/accountFacts';
@@ -33,7 +40,27 @@ export const clearSummaryCache = (): void => cache.clear();
  * `name` is the building as this viewer sees it (Workplace names respected): it names the section on the board and the tiles,
  * except the Classroom's "Week N", which is the week, not a building name.
  */
-export function usePageSummary(id: BuildingId, open: boolean, name: string): PageSummary | null {
+/** C43: the rooms whose left-wall board comes from wallBoards.ts (each from the data its page reads). */
+const WALL_FETCH: Partial<Record<BuildingId, (section: string) => Promise<SideTop>>> = {
+  library: (s) => cached('library', fetchLibrary).then((v) => libraryBoard(v, s), () => libraryBoard(null, s)),
+  amphi: (s) => cached('events-30', () => fetchPublicEvents(30)).then((e) => eventsBoard(e, new Date(), s), () => eventsBoard(null, new Date(), s)),
+  observatory: (s) => cached('classroom', () => portalApi.get('/api/portal/classroom').then((r) => r.data as ClassroomFeed)).then((f) => progressBoard(f, s), () => progressBoard(null, s)),
+  gallery: (s) => cached('career-profile', fetchCareerProfile).then((p) => portfolioBoard(p, s), () => portfolioBoard(null, s)),
+  // a non-intern gets a 404 from the dashboard: the empty state, not an error
+  career: (s) => cached('intern-dash', fetchInternshipDashboard).then((d) => careerBoard(d, s), () => careerBoard(null, s)),
+};
+
+export function usePageSummary(id: BuildingId, open: boolean, name: string, audience?: CampusAudience): PageSummary | null {
+  const { planStops } = useCampus();
+  const [wall, setWall] = useState<{ id: BuildingId; side: SideTop } | null>(null);
+  // the Career Center is the Partner Office / Staff Office for those accounts: no intern board there
+  const wallFetch = id === 'career' && (audience === 'business' || audience === 'staff') ? undefined : WALL_FETCH[id];
+  useEffect(() => {
+    if (!open || !wallFetch) return undefined;
+    let alive = true;
+    wallFetch(name).then((side) => { if (alive) setWall({ id, side }); });
+    return () => { alive = false; };
+  }, [id, open, name, wallFetch]);
   const projects = useProjectsList(); // a local store read (cheap); the page uses the same list
   const account = useAccountFacts(open && id === 'admissions'); // C21: the Admissions room's "Your account" wall board
   const [fetched, setFetched] = useState<{ id: BuildingId; s: PageSummary } | null>(null);
@@ -57,5 +84,7 @@ export function usePageSummary(id: BuildingId, open: boolean, name: string): Pag
   if (id === 'lecture') return fetched?.id === id ? fetched.s : null;
   // C21: Admissions draws its own board (plans & pricing); the summary carries only the left wall's "Your account"
   if (id === 'admissions') return { ...plainSummary(name), sideTop: account ? accountRows(account) : null };
+  if (id === 'tower') return { ...plainSummary(name), sideTop: scheduleBoard(planStops, name) };
+  if (wallFetch) return { ...plainSummary(name), sideTop: wall?.id === id ? wall.side : null };
   return plainSummary(name);
 }
