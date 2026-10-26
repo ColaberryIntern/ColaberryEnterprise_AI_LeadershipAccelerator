@@ -102,7 +102,8 @@ export function RoomScreen({ summary, name, planStep, onSection, onCard, onPlan,
   );
 }
 
-export function WallBoard({ side, onSection }: { side: SideTop; onSection: () => void }): React.ReactElement {
+export function WallBoard({ side, onSection, onRoute }: { side: SideTop; onSection: () => void; onRoute?: (route: string) => void }): React.ReactElement {
+  const go = () => (side.route && onRoute ? onRoute(side.route) : onSection());
   const [flat, setFlat] = useState(false);
   return (
     <>
@@ -115,6 +116,8 @@ export function WallBoard({ side, onSection }: { side: SideTop; onSection: () =>
             {r.pct != null && <span className="bar"><i style={{ width: `${Math.max(3, r.pct)}%` }} /></span>}
           </React.Fragment>
         ))}
+        {!side.rows.length && side.empty && <span className="empty" data-testid="cm-wall-board-empty">{side.empty}</span>}
+        {side.open && <span className="go">{side.open} &rarr;</span>}
       </button>
       {flat && (
         <div className="cm-r3-flat" role="dialog" aria-modal="true" aria-label={side.title} data-testid="cm-wall-board-flat"
@@ -122,8 +125,9 @@ export function WallBoard({ side, onSection }: { side: SideTop; onSection: () =>
           <div className="card">
             <h3>{side.title}</h3>
             {side.rows.map((r) => <div key={r.label} className="kv"><span>{r.label}</span><b>{r.value}</b></div>)}
+            {!side.rows.length && side.empty && <p>{side.empty}</p>}
             <div className="row">
-              <button type="button" className="cm-btn" onClick={onSection} data-testid="cm-wall-board-page">See it on the page &rarr;</button>
+              <button type="button" className="cm-btn" onClick={go} data-testid="cm-wall-board-page">{side.open ?? 'See it on the page'} &rarr;</button>
               <button type="button" className="cm-btn is-secondary" onClick={() => setFlat(false)} autoFocus>Close</button>
             </div>
           </div>

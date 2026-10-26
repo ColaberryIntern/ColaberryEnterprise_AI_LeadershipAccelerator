@@ -164,7 +164,7 @@ export default function Room3D(p: Room3DProps): React.ReactElement | null {
             {hall ? <HallwayWall doors={doors} side="left" onOpen={p.onOpen} />
               : arcade ? <div className="cm-r3-wallslot"><ChampionsWall d={games} onOpen={p.onOpen} /></div>
               : id === 'chow' ? <div className="cm-r3-wallslot"><Chalkboard now={wx.now} condition={wx.w.condition} /></div>
-              : summary?.sideTop && <div className="cm-r3-wallslot"><WallBoard side={summary.sideTop} onSection={section} /></div>}
+              : summary?.sideTop && <div className="cm-r3-wallslot"><WallBoard side={summary.sideTop} onSection={section} onRoute={p.onOpen} /></div>}
           </div>
           <div className="face right"><div className="wainscot" aria-hidden="true" />
             <RoomWindow wx={wx} small={hall} view={view} />

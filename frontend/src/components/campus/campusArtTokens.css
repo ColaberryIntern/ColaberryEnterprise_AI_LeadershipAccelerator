@@ -113,6 +113,11 @@
   --cm-art-pulse-down:#d9962b; --cm-art-ghost-w:rgba(255,255,255,.18); --cm-art-flash:#fff1c9; --cm-art-flash-edge:#d9962b;
   /* WP-5: gear on room figures (accSVG), the business rooms' lanyard badge, a partner's teammate tag, a cabinet under the pointer, the
      AI staff (per-desk colors from the prototype's STAFF), the person card popover, the staff card's quoted prompts, a partner's KPIs */
+  /* C45: the window's mini buildings and landmarks (v12 miniBldg / miniLandmark) */
+  --cm-art-mini-wall:#fbf6ee; --cm-art-mini-glass:#dfe9f0; --cm-art-mini-arcade:#2b1a3d; --cm-art-mini-win:#bcd3dc; --cm-art-mini-edge:rgba(0,0,0,.15);
+  --cm-art-mini-arcade-roof:#14091f; --cm-art-mini-neon:#ff4fa3; --cm-art-mini-pond:#8fc4cc; --cm-art-mini-pond-hi:#b8e0e6; --cm-art-mini-stone:#e2d2b6;
+  --cm-art-mini-water:#9fcbd2; --cm-art-mini-spray:#c8e6ea; --cm-art-mini-post:#6e4a32; --cm-art-mini-cork:#c69c6d; --cm-art-mini-cork-edge:#8a5e40;
+  --cm-art-mini-gate:#3a2f26; --cm-art-mini-gate-arch:#2a221b;
   --cm-art-jacket:#1f3b5c; --cm-art-jacket-zip:#c9d3dc; --cm-art-architect:#d4a017; --cm-art-architect-ink:#3a2a00;
   --cm-art-hoodie:#b3242a; --cm-art-chain:#f5c542; --cm-art-shades:#111111; --cm-art-badge-edge:#9aa6b0; --cm-art-team-tag:#0f766e;
   --cm-art-cab-hover:rgba(255,255,255,.08); --cm-art-staff-maya:#b0306a; --cm-art-staff-reese:#b07a00; --cm-art-staff-dara:#c46a1b;

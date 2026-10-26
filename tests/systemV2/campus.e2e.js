@@ -388,6 +388,36 @@ async function runAudience(browser, audience, jwt) {
       console.log(`      [${audience}] next task in the bar on ${shown.length}/${pages.length}: ${shown.join(' ')}`);
     });
 
+    if (audience === 'explorer') {
+      await step(audience, 'v13 (C49-C53): each of the six ways to Today reaches /portal/today and stays there (no bounce back to the map)', async () => {
+        const home = async () => {
+          await page.goto(`${urls.base}/portal/campus`, { waitUntil: 'domcontentloaded' });
+          await page.waitForSelector('[data-testid="cm-home"] [data-testid="cm-concierge"]', { timeout: 30_000 });
+        };
+        const tower = async () => { await page.click('[data-testid="cm-bld-tower"]'); await page.waitForSelector('[data-testid="cm-card"]', { timeout: 15_000 }); };
+        const PATHS = [
+          ['the top-bar button', async () => page.click('[data-testid="cm-topbar-today"]')],
+          ['the panel card', async () => page.click('[data-testid="cm-today-card"]')],
+          ['the tower flag', async () => page.click('[data-testid="cm-today-flag"]')],
+          ['the gate sign', async () => page.click('[data-testid="cm-gate-today"]')],
+          ['the tower card\'s primary', async () => { await tower(); await page.click('[data-testid="cm-card"] :is([data-testid="cm-arrive-cta"], [data-testid="cm-way-board"])'); }],
+          ['tour stop 1\'s button', async () => { await page.click('[data-testid="cm-concierge"] [data-testid="cm-cc-tour-start"]'); await page.waitForSelector('[data-testid="cm-tour-today"]', { timeout: 15_000 }); await page.click('[data-testid="cm-tour-today"]'); }],
+        ];
+        for (const [name, go] of PATHS) {
+          await home();
+          await go();
+          await page.waitForURL((u) => u.pathname === '/portal/today', { timeout: 15_000 }).catch(() => undefined);
+          await page.waitForTimeout(2500); // the first-visit landing would have bounced by now
+          const at = new URL(page.url()).pathname;
+          must(at === '/portal/today', `${name}: ended on ${at}`);
+        }
+        // path 6 left the tour paused at stop 1: dismiss it (the panel's ×) so the next step starts the tour fresh
+        await home();
+        if (await page.locator('[data-testid="cm-cc-tour-dismiss"]').count()) await page.click('[data-testid="cm-cc-tour-dismiss"]');
+        await page.waitForSelector('[data-testid="cm-concierge"] [data-testid="cm-cc-tour-start"]', { timeout: 15_000 });
+      });
+    }
+
     await step(audience, 'grass clicks never walk: no drop pin, no toast, you stay put (Ali, 2026-10-25: never show navigating to a non place)', async () => {
       await page.goto(`${urls.base}/portal/campus`, { waitUntil: 'domcontentloaded' });
       await page.waitForSelector('[data-testid="cm-home"] [data-testid="cm-concierge"]', { timeout: 30_000 });
@@ -399,7 +429,7 @@ async function runAudience(browser, audience, jwt) {
         for (const [x, y] of [[720, 520], [180, 470], [860, 250], [640, 300], [120, 640], [880, 660], [360, 520], [700, 160]]) {
           const p = svg.createSVGPoint(); p.x = x; p.y = y; const s2 = p.matrixTransform(m);
           const el = document.elementFromPoint(s2.x, s2.y);
-          if (el && svg.contains(el) && !el.closest('.cm-bld, .cm-hit-area, .cm-staff-tok, .cm-avatar, .cm-cboard-sign')) out.push({ sx: s2.x, sy: s2.y });
+          if (el && svg.contains(el) && !el.closest('.cm-bld, .cm-hit-area, .cm-staff-tok, .cm-avatar, .cm-cboard-sign, .cm-today-flag, .cm-gate-today')) out.push({ sx: s2.x, sy: s2.y });
           if (out.length === 3) break;
         }
         return out;

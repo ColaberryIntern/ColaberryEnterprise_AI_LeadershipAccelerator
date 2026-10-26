@@ -8,6 +8,7 @@
 import React from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { act } from 'react-dom/test-utils';
+import { MemoryRouter } from 'react-router-dom';
 import CampusConcierge from '../home/CampusConcierge';
 import type { ConciergeProps } from '../home/CampusConcierge';
 import { TourOffer, UpNext, RoomsHere, tourMinutes } from '../home/NextSteps';
@@ -21,7 +22,8 @@ let container: HTMLDivElement;
 let root: Root;
 beforeEach(() => { container = document.createElement('div'); document.body.appendChild(container); root = createRoot(container); });
 afterEach(() => { act(() => root.unmount()); container.remove(); });
-const render = (el: React.ReactElement) => act(() => { root.render(el); });
+// C50: the concierge carries the Today card (a router link)
+const render = (el: React.ReactElement) => act(() => { root.render(<MemoryRouter>{el}</MemoryRouter>); });
 const q = (id: string) => container.querySelector(`[data-testid="${id}"]`) as HTMLElement | null;
 const buildings = [...CAMPUS_BUILDINGS];
 const stop = (o: Partial<PlanStop> & Pick<PlanStop, 'key' | 'title' | 'route' | 'buildingId' | 'done'>): PlanStop =>
@@ -148,7 +150,7 @@ describe('the tour card, three states', () => {
 
   it('per account: Explorer and partner wording; staff (no tour) get no card', () => {
     render(offer({ audience: 'explorer', stops: TOUR.slice(0, 7) }));
-    expect(q('cm-cc-tour')!.textContent).toContain('7 stops');
+    expect(q('cm-cc-tour')!.textContent).toContain('A 3-minute walk through 7 places. It starts at Today, your home base.'); // C53
     render(offer({ audience: 'business', stops: TOUR.slice(0, 6) }));
     expect(q('cm-cc-tour')!.textContent).toContain('Start the partner tour');
     render(offer({ audience: 'staff', stops: null }));

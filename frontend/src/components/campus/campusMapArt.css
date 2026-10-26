@@ -146,3 +146,12 @@
 .cm-marquee.is-reconnecting{animation:cm-flicker 1.4s steps(2) infinite}
 @keyframes cm-flicker{50%{opacity:.45}}
 .cm-map.is-reduced .cm-marquee{animation:none}
+/* C51 / C52 (v13 T3, T4): the Explorer signposts to Today: the TODAY flag over the Schedule tower, START HERE under the gate */
+.cm-today-flag,.cm-gate-today{cursor:pointer}
+.cm-today-flag .pill,.cm-today-flag .pointer,.cm-gate-today .pill{fill:var(--cm-art-red)}
+.cm-today-flag .pill{stroke:var(--cm-art-white);stroke-width:2.5}
+.cm-today-flag .t,.cm-gate-today .t{fill:var(--cm-art-white);font-weight:800;font-family:'DM Sans',system-ui,sans-serif;pointer-events:none}
+.cm-today-flag .t{font-size:10.5px}
+.cm-gate-today .t{font-size:9px;letter-spacing:.6px}
+.cm-today-flag:hover .pill,.cm-today-flag:hover .pointer,.cm-gate-today:hover .pill{fill:var(--cm-art-red-d)}
+.cm-today-flag:focus-visible .pill,.cm-gate-today:focus-visible .pill{stroke:var(--cm-art-ink);stroke-width:2.5}

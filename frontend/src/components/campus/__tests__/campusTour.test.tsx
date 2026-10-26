@@ -184,12 +184,12 @@ describe('moving through it', () => {
     expect(tourPosts).toBe(0);
   });
 
-  it('Explorer: seven stops; "Finish · see what you\'d unlock" opens the unlock sheet with the opt-in (Q10)', async () => {
+  it('Explorer: eight stops (C53: from Today); "Finish · see what you\'d unlock" opens the unlock sheet with the opt-in (Q10)', async () => {
     mockAudience = 'explorer';
     await mount();
     await click('cm-cc-tour-start');
-    expect(q('cm-tour-count')?.getAttribute('aria-label')).toBe('Stop 1 of 7');
-    for (let i = 0; i < 6; i++) await click('cm-tour-next');
+    expect(q('cm-tour-count')?.getAttribute('aria-label')).toBe('Stop 1 of 8');
+    for (let i = 0; i < 7; i++) await click('cm-tour-next');
     expect(q('cm-tour-next')?.textContent).toBe('Finish · see what you’d unlock →');
     await click('cm-tour-next');
     expect(q('cm-unlock')).not.toBeNull();

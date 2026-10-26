@@ -45,6 +45,7 @@ const CAREER_FACE: Partial<Record<CampusAudience, string>> = {
 };
 export function subOf(b: Pick<CampusBuilding, 'id'>, audience: CampusAudience, workplace = false): string | null {
   if (b.id === 'career' && CAREER_FACE[audience]) return CAREER_FACE[audience]!;
+  if (b.id === 'tower' && audience === 'explorer') return 'Today, your home base · plus your schedule'; // C51 (v13 T3)
   const s = SUB[b.id];
   return s ? (workplace && s[1]) || s[0] : null;
 }

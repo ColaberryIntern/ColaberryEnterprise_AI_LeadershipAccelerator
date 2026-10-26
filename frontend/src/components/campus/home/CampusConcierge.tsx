@@ -30,6 +30,7 @@ import type { HomeAgenda } from './useMapMoments';
 import PhotoPrompt from './PhotoPrompt';
 import { ComingUpCall } from '../admissions/BookCallHost';
 import { OpenHouseCard } from '../events/OpenHouseCard';
+import { TodayCard } from './TodayCard';
 import type { OpenHouseView } from '../../../services/onboardingApi';
 import type { AdmissionsBooking } from '../admissions/admissionsCallApi';
 import { ComingUpAgenda } from '../events/Agenda';
@@ -170,6 +171,8 @@ export default function CampusConcierge(p: ConciergeProps): React.ReactElement {
       <h1 data-testid="cm-cc-greeting">{greetLine(audience, p.firstName, p.now.getHours(), quiet)}</h1>
       <p className="cm-lead" data-testid="cm-cc-lead">{lead}</p>
       {p.weatherLine && <p className="cm-lead cm-lead-wx" data-testid="cm-cc-weather">{p.weatherLine}</p>}
+      {/* C50 (v13 T2): Today, the Explorer's home base, first in the panel (a slim row for everyone else) */}
+      {audience !== 'business' && <TodayCard audience={audience} stops={p.stops} desks={p.desks} now={p.now} />}
       <Pulse p={p} />
       {/* C20 (v3 2.6 #2): Coming up, a booked admissions call, above Up next */}
       <OpenHouseCard audience={audience} ev={p.openHouse?.ev ?? null} registered={!!p.openHouse?.registered} now={p.now} onRegistered={p.openHouse?.markRegistered} />

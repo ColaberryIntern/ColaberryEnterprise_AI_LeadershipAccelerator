@@ -25,7 +25,8 @@ function roomRoutes(): string[] {
   for (const a of AUDIENCES) for (const b of campusBuildingsFor(a)) {
     // C6: admin links (Staff Office) are not campus pages; they open the Management Portal in a new tab.
     // C39: Chow Hall's door opens the order sheet; it has no page (checked below)
-    if (!b.primary.admin && b.primary.route !== CHOW_ROUTE && !b.rooms.find((r) => r.route === b.primary.route)?.planned) all.add(b.primary.route);
+    // C51: a route may carry a query (the Explorer tower opens /portal/today?stay=1); the router matches the path only
+    if (!b.primary.admin && b.primary.route !== CHOW_ROUTE && !b.rooms.find((r) => r.route === b.primary.route)?.planned) all.add(b.primary.route.split('?')[0]);
     for (const r of b.rooms) if (!r.planned && !r.admin) all.add(r.route);
   }
   return Array.from(all).sort();

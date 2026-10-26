@@ -124,6 +124,17 @@ describe('the tour inside the arrival panel', () => {
     expect(q('cm-tour-tag')!.textContent).toBe('Members');
     expect(q('cm-tour')!.textContent).toContain('While you’re here');
   });
+  it('C53: only the Explorer tour’s first stop (Today) has Open Today, and it opens Today', () => {
+    let opened = 0;
+    render(<TourStopCard tour={explorer} index={0} onToday={() => { opened += 1; }} />);
+    expect(q('cm-tour-title')!.textContent).toBe('Start here: Today');
+    act(() => { q('cm-tour-today')!.click(); });
+    expect(opened).toBe(1);
+    render(<TourStopCard tour={explorer} index={1} onToday={() => undefined} />);
+    expect(q('cm-tour-today')).toBeNull();
+    render(<TourStopCard tour={member} index={0} onToday={() => undefined} />);
+    expect(q('cm-tour-today')).toBeNull();
+  });
   it('the nav: Next names the next building; the last stop finishes per account; off the route, back to the tour', () => {
     const calls: string[] = [];
     const nav = (tour = member, index = 0, nextName: string | null = 'Library', hereStop = true) => render(<TourNav tour={tour} index={index} hereStop={hereStop} nextName={nextName}

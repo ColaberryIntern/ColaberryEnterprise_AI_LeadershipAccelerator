@@ -31,6 +31,8 @@ const MEMBER: CopyTable = {
 };
 
 const EXPLORER: CopyTable = {
+  // C53 (v13 T5): the Explorer tour starts at Today, their home base (the Schedule tower)
+  tower: { title: 'Start here: Today', what: 'Today is your home base. Your next step, today’s plan, events coming up and Maya are all on one page.', can: [], tip: 'The red 📅 Today button at the top brings you back here from anywhere on campus.' },
   commons: { title: 'Start here: meet anyone', what: 'A hallway of live rooms: study groups, pair work, one-on-ones.', can: ['Join a live room', 'Open a room or book one for later'], tip: 'Maya at the {gate} answers questions about enrolling.' },
   library: { title: 'Reference on demand', what: 'Documents shared with everyone in the program.', can: ['Read the guides and reference material'], tip: 'A good place to see the kind of material the program uses.' },
   amphi: { title: 'Open events', what: 'Open houses, demos and talks.', can: ['See upcoming events', 'RSVP to the ones you want'], tip: 'An open house is the quickest way to ask everything at once.' },
@@ -51,9 +53,14 @@ const BUSINESS: CopyTable = {
 
 const ORDER: Record<Exclude<CampusAudience, 'staff'>, { name: string; table: CopyTable; stops: BuildingId[] }> = {
   member: { name: 'What’s in your seat', table: MEMBER, stops: ['lecture', 'library', 'studio', 'testing', 'observatory', 'commons', 'gallery', 'career', 'arcade'] },
-  explorer: { name: 'Explorer campus tour', table: EXPLORER, stops: ['commons', 'library', 'amphi', 'lecture', 'studio', 'testing', 'gallery'] },
+  explorer: { name: 'Explorer tour', table: EXPLORER, stops: ['tower', 'commons', 'library', 'amphi', 'lecture', 'studio', 'testing', 'gallery'] },
   business: { name: 'Partner tour', table: BUSINESS, stops: ['lecture', 'studio', 'testing', 'commons', 'gallery', 'career'] },
 };
+
+/** C53 (v13 T5): the Explorer's finishing toast (no name: it reads without one). */
+export function explorerFinishLine(firstName: string): string {
+  return `That’s the campus${firstName ? `, ${firstName}` : ''}. Today is always one tap away: the red 📅 Today button at the top.`;
+}
 
 /** What a non-open state means for the Explorer, in the same words as the building card (C6 NOTICE). */
 export const STATE_NOTE: Record<Exclude<ExplorerAccess, 'open'>, string> = {

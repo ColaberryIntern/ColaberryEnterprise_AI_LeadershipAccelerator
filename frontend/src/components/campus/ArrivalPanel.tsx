@@ -41,6 +41,7 @@ import { AgendaRows, useAgenda } from './events/Agenda';
 import { ArcadeCard } from './games/ArcadeRoom';
 import { useGameRoomData } from './games/GameRoomSections';
 import { useCampus } from './CampusContext';
+import { TowerTodayTile, TODAY_HREF } from './home/TodayCard';
 
 /**
  * Arriving at a building (C11b; WP-2): the room behind, and the arrival panel in front, as the prototype's arrive() builds it:
@@ -119,7 +120,7 @@ export default function ArrivalPanel(p: ArrivalPanelProps): React.ReactElement {
   const wall = useRoomWall(b.id, audience, data, plan ? plan.stops : null);
   // v6 D1: the board (this building page's Next step and side card) and your spot, for a room you can use.
   const inRoom = access === 'open' && !!ROOMS[b.id];
-  const summary = usePageSummary(b.id, inRoom, buildingName(b, wp));
+  const summary = usePageSummary(b.id, inRoom, buildingName(b, wp), audience);
   const spot = inRoom ? spotOf(b.id) : null;
   // C28 (v7 R1): a class broadcast airs in the Events Hall; the Classroom says so, with Walk in (its live page)
   const { broadcasts } = useCampusOnAir();
@@ -156,7 +157,7 @@ export default function ArrivalPanel(p: ArrivalPanelProps): React.ReactElement {
         happening={happeningAt(b.id, { onAir: p.onAir, count: p.count, presenceError: p.presenceError, facts: factsAt(b.id, data, p.look, now),
           live: live ? { state: live.state, title: live.b.title, sub: liveSub(live.b, live.now) } : null })}
         onEnterRoom={p.onEnterRoom} desks={desks}
-        tourTop={isStop ? <TourStopCard tour={tour!.model} index={tourIdx} /> : undefined}
+        tourTop={isStop ? <TourStopCard tour={tour!.model} index={tourIdx} onToday={() => open(TODAY_HREF)} /> : b.id === 'tower' && audience === 'explorer' ? <TowerTodayTile onOpen={open} /> : undefined}
         ways={b.id === 'amphi' && live && live.state !== 'replay' ? <LiveTile live={live} onJoin={open} /> : b.id === 'arcade' ? undefined : inRoom ? <ArrivalWays spot={spot} summary={summary} name={buildingName(b, wp)} primaryLabel={b.primary.label} onSection={() => open(b.primary.route)} onSpot={sitAtSpot} /> : undefined}
         planBox={showPlanBox ? <PlanBox stop={plan!.stops[stepIdx]} index={stepIdx} total={plan!.stops.length} onOpen={open} onDone={plan!.onComplete} /> : undefined}
         tourNav={tour ? <TourNav tour={tour.model} index={tourIdx} hereStop={isStop} nextName={nextB ? buildingName(nextB, wp) : null}

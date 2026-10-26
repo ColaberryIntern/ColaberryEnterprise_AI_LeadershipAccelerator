@@ -63,7 +63,18 @@ const roomOk = (id, spots) => `(() => {
 /** v6 D1 fidelity view 21-room: the five rooms the ticket names, as a member (the click-throughs are in campus.e2e.js). */
 const ROOM_VIEWS = [['lecture', 1], ['studio', 1], ['testing', 1], ['library', 1], ['amphi', 0]].map(([id, spots]) => ({
   name: `21-room-${id}`, route: '/portal/campus', accounts: ['member'], steps: () => [tap(id), WALKED],
-  required: () => ['cm-inside', 'cm-room3d', 'cm-board', 'cm-ways', ...(spots ? ['.cm-r3-spot'] : [])], assert: () => roomOk(id, spots) }));
+  required: () => ['cm-inside', 'cm-room3d', 'cm-board', 'cm-ways', ...(spots ? ['.cm-r3-spot'] : []), ...(id === 'library' || id === 'amphi' ? ['cm-wall-board'] : [])], assert: () => roomOk(id, spots) }));
+/** C43 (room fix F3): every room has its left-wall board (from real data, or its empty line); these four had a blank wall. */
+/** C45 (room fix F5): the window is big and shows the neighbours as themselves (Classroom, Library; Meeting Rooms' high strip). */
+const WINDOW_VIEWS = [['lecture', 0.6], ['library', 0.6], ['commons', 0.2]].map(([id, minH]) => ({
+  name: `31-room-windows-${id}`, route: '/portal/campus', accounts: ['member'], steps: () => [tap(id), WALKED, { wait: 800 }],
+  required: () => ['cm-room3d', 'cm-room-window', ...(id === 'commons' ? [] : ['[data-mini]'])],
+  assert: () => `(() => { const w = document.querySelector('[data-testid=\"cm-room-window\"]'); const f = w.closest('.face'); if (!f) return 'window not on a wall';
+    const r = w.offsetHeight / f.offsetHeight; return r >= ${minH} ? '' : 'window is ' + Math.round(r * 100) + '% of the wall height'; })()` }));
+const WALL_VIEWS = ['tower', 'observatory', 'gallery', 'career'].map((id) => ({
+  name: `21-room-wall-${id}`, route: '/portal/campus', accounts: ['member'], steps: () => [tap(id), WALKED],
+  required: () => ['cm-room3d', 'cm-wall-board'],
+  assert: () => "(() => document.querySelector('[data-testid=\"cm-room3d\"] .face.left [data-testid=\"cm-wall-board\"]') ? '' : 'no board on the left wall')()" }));
 
 /** The map's viewBox right now, and the drag / zoom that move it well away from the whole campus. */
 const VB = "document.querySelector('svg.cm-map.has-camera').getAttribute('viewBox')";
@@ -155,7 +166,7 @@ const VIEWS = [
   // WP-5: a room whose back wall carries real facts (the Schedule board: TODAY · <weekday>, the next session, event and plan)
   { name: '19-room-wall', route: '/portal/campus', steps: () => [tap('tower'), WALKED],
     required: () => ['cm-inside', 'cm-room3d', 'cm-board', 'cm-r3-you'], assert: () => roomOk('tower', 0) }, // v6 D1: Schedule has a board, no spot
-  ...ROOM_VIEWS,
+  ...ROOM_VIEWS, ...WALL_VIEWS, ...WINDOW_VIEWS,
   // C19 (round 3 §2.3 + v6 D1): the workstation, reached the real way (into the Studio, sit at your desk). A story as a member:
   // the throwaway seed has a project but no Classroom week, so the lesson workstation is covered by its unit test instead.
   // C40: the frame gets out of the way. Under 1600 px the angled side monitor folds away; under 1200 px Cory is a drawer (closed) and
@@ -226,6 +237,26 @@ const VIEWS = [
       return over.length ? 'text overflows: ' + over.slice(0, 3).join(' | ') : ''; })()` },
   // C37/C38 (v9, v10): the sky layer and the weather chip on the map (the clock alone while CAMPUS_WEATHER_ENABLED is off), and in the
   // Classroom the window on the right wall with the real view east ("Looking out at ...").
+  // v13 (C49-C53): Today is the Explorer's home base. On the map: the red Today button, the Today card first in the panel, the TODAY
+  // flag over the tower and START HERE at the gate; at the tower, Open Today as its primary and the "Today lives here" tile; the tour's
+  // stop 1 is the tower with Open Today. The member twin: a neutral button, the slim row, no flag and no sign.
+  { name: '32-today-explorer', route: '/portal/campus', accounts: ['explorer'], steps: () => [{ wait: 1200 }],
+    required: (a, size) => ['cm-topbar-today', 'cm-today-flag', 'cm-gate-today', ...(size === 'phone' ? [] : ['cm-today-card'])],
+    assert: () => `(() => { if (!document.querySelector('[data-testid="cm-topbar-today"]').classList.contains('is-primary')) return 'Today button is not red';
+      const c = document.querySelector('[data-testid="cm-today-card"]'); if (c && c.offsetParent !== null) { const lead = document.querySelector('[data-testid="cm-cc-lead"]');
+        if (lead && lead.nextElementSibling !== c && !(lead.nextElementSibling && lead.nextElementSibling.contains(c))) return 'the Today card is not first under the lead'; }
+      return document.querySelector('[data-testid="cm-gate-today"]').textContent.includes('START HERE') ? '' : 'gate sign text'; })()` },
+  { name: '32-today-explorer-tower', route: '/portal/campus', accounts: ['explorer'], steps: () => [tap('tower'), WALKED, { wait: 800 }],
+    required: () => ['cm-card', 'cm-tower-today'],
+    assert: () => `(() => document.querySelector('.cm-arrive').textContent.includes('Open Today') ? '' : 'the tower card has no Open Today')()` },
+  { name: '32-today-explorer-tour', route: '/portal/campus', accounts: ['explorer'], steps: () => [{ click: '[data-testid="cm-cc-tour-start"]' }, WALKED, { wait: 800 }],
+    required: () => ['cm-card', '.cm-arrive [data-testid="cm-tour"]', 'cm-tour-today'],
+    assert: () => `(() => { const t = document.querySelector('[data-testid="cm-tour-title"]').textContent; return t === 'Start here: Today' ? '' : 'stop 1 title: ' + t; })()` },
+  { name: '32-today-member', route: '/portal/campus', accounts: ['member'], steps: () => [{ wait: 1200 }],
+    required: (a, size) => ['cm-topbar-today', ...(size === 'phone' ? [] : ['cm-today-row'])],
+    assert: () => `(() => { if (document.querySelector('[data-testid="cm-topbar-today"]').classList.contains('is-primary')) return 'member Today button is red';
+      if (document.querySelector('[data-testid="cm-today-flag"]')) return 'member sees the TODAY flag';
+      return document.querySelector('[data-testid="cm-gate-today"]') ? 'member sees the gate sign' : ''; })()` },
   { name: '31-weather', route: '/portal/campus', accounts: ['member'], steps: () => [tap('lecture'), WALKED, { wait: 2000 }],
     required: (a, size) => ['cm-wx', 'cm-room-window', 'cm-win-looking', ...(size === 'phone' ? [] : ['cm-wx-chip'])],
     assert: () => `(() => { const l = document.querySelector('[data-testid="cm-win-looking"]').textContent; if (!/^Looking out at /.test(l)) return 'window sign: ' + l;
@@ -261,7 +292,7 @@ function panelFor(view, a, size) {
   if (view.name === '01-gate' || view.name === '23-workstation') return []; // the workstation is full screen, as the prototype's #ws
   const tour = a === 'staff' ? [] : ['cm-cc-tour'];
   if (view.route !== '/portal/campus' && view.name !== '14-step-outside') return size === 'phone' ? ['cm-steps-open'] : ['cm-page-rail', ...tour.map((t) => `[data-testid="cm-page-rail"] [data-testid="${t}"]`)];
-  if (size === 'phone' && (CARD_VIEWS.includes(view.name) || view.name.startsWith('21-room-') || view.name === '24-admissions' || view.name === '25-schedule' || view.name === '26-meeting-rooms' || view.name === '28-live' || view.name === '30-game-room-interior' || view.name === '30-chow-hall' || view.name === '31-weather')) return ['cm-cc-peek'];
+  if (size === 'phone' && (CARD_VIEWS.includes(view.name) || view.name.startsWith('21-room-') || view.name.startsWith('31-room-windows-') || view.name.startsWith('32-today-explorer-t') || view.name === '24-admissions' || view.name === '25-schedule' || view.name === '26-meeting-rooms' || view.name === '28-live' || view.name === '30-game-room-interior' || view.name === '30-chow-hall' || view.name === '31-weather')) return ['cm-cc-peek'];
   return ['cm-concierge', ...tour];
 }
 const withPanel = (view) => ({ ...view, required: (a, size) => [...view.required(a, size), ...panelFor(view, a, size)] });
