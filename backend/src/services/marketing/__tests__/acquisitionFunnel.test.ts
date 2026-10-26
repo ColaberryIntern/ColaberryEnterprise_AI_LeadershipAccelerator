@@ -154,3 +154,40 @@ describe('the window', () => {
     expect(query.mock.calls[0][1].replacements.days).toBe('7');
   });
 });
+
+/**
+ * The SQL form, because mocking `sequelize.query` means no test above can see the SQL at all.
+ *
+ * This shipped to production broken. `l.source = ANY(:sources)` looks right and is right in
+ * hand-written SQL, but Sequelize expands a replacement ARRAY into a comma-separated list, so
+ * Postgres receives `ANY('a','b','c')` and answers "syntax error at or near ,". The endpoint
+ * 500'd. Proved against the live database afterwards, both directions: ANY errors, IN returns
+ * 271 rows.
+ *
+ * A mocked query cannot catch a syntax error, so this asserts the one property that distinguishes
+ * the working form from the broken one. It is a guard against regression, NOT a substitute for
+ * running the query - which is the actual lesson here.
+ */
+describe('the array is interpolated in a form Postgres accepts', () => {
+  it('uses IN (:sources), never = ANY(:sources)', async () => {
+    landingPageTraffic.mockResolvedValue([page()]);
+    mockQueries({ signups: '1', accounts: '1', in_crm: '1', returned: '0' });
+
+    await acquisitionFunnel(30);
+
+    const statements = query.mock.calls.map((c) => String(c[0]));
+    expect(statements.length).toBeGreaterThanOrEqual(2);
+    statements.forEach((sql) => {
+      expect(sql).not.toMatch(/=\s*ANY\s*\(\s*:sources\s*\)/);
+      expect(sql).toMatch(/IN\s*\(\s*:sources\s*\)/);
+    });
+  });
+
+  it('passes the sources as an array, which is why the form matters', async () => {
+    landingPageTraffic.mockResolvedValue([page()]);
+    mockQueries({ signups: '1', accounts: '1', in_crm: '1', returned: '0' });
+
+    await acquisitionFunnel(30);
+    expect(Array.isArray(query.mock.calls[0][1].replacements.sources)).toBe(true);
+  });
+});
