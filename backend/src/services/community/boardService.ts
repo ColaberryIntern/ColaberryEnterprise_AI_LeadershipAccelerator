@@ -1,10 +1,12 @@
 import { QueryTypes } from 'sequelize';
 import { sequelize } from '../../config/database';
-import { CommunityLike, CommunityMember, CommunityPost } from '../../models';
+import { Cohort, CommunityLike, CommunityMember, CommunityPost } from '../../models';
+import { publicRitual, ritualForWeek } from '../runtime/communityRituals';
 import { getOrCreateMember, resolveCohortId } from '../communityService';
-import { assembleBoard, laneOf, type BoardRow, type Lane, type PostLane } from './boardModel';
+import { assembleBoard, cohortWeek, laneOf, WEEK_MS, type BoardRow, type Lane, type PostLane } from './boardModel';
 import { ritualOf, type PostRitual } from './boardRitual';
 import { seenMarks } from './boardSeen';
+import { noteText } from './boardText';
 
 /**
  * GET /api/portal/community/board (Campus v14 B1, Basecamp C65): the Community Board in sections for the viewer's cohort, scoped
@@ -34,6 +36,9 @@ export interface BoardPost {
   mine: boolean;
   /** Your own posts only: replies newer than your last look. */
   new_replies: number;
+  /** The note's title and excerpt (boardText.noteText): never the ritual heading; a locked post says what unlocks it. */
+  title: string;
+  excerpt: string;
 }
 
 export interface BoardResponse {
@@ -47,6 +52,9 @@ export interface BoardResponse {
   this_week: BoardPost[];
   last_week: BoardPost[];
   older: { posts: BoardPost[]; next_cursor: string | null };
+  /** This week's ritual bar (v14 B2): the viewer's cohort week, its ritual (prompt, guided fields, reaction) and how many posted it
+   *  this week. Null with no cohort week (staff, business) and on counts_only. */
+  week_ritual: { week: number; ritual: ReturnType<typeof publicRitual>; posted: number; category: string } | null;
 }
 
 export interface BoardQuery { lane: Lane; q?: string; olderCursor: string | null; countsOnly: boolean }
@@ -64,6 +72,16 @@ function myNewReplies(rows: { post_id: string; created_at: Date | string }[], ma
     if (since && new Date(r.created_at).getTime() > new Date(since).getTime()) out.set(r.post_id, (out.get(r.post_id) ?? 0) + 1);
   }
   return out;
+}
+
+async function weekRitualFor(cohortId: string, rows: BoardRow[], now: number): Promise<BoardResponse['week_ritual']> {
+  const cohort = (await Cohort.findByPk(cohortId, { attributes: ['start_date'], raw: true })) as unknown as { start_date: string } | null;
+  const week = cohortWeek(cohort?.start_date, now);
+  if (week === null) return null;
+  const ritual = ritualForWeek(week);
+  const since = now - WEEK_MS;
+  const posted = rows.filter((r) => r.ritual_key === ritual.key && new Date(r.created_at).getTime() >= since).length;
+  return { week, ritual: publicRitual(ritual), posted, category: ritual.category };
 }
 
 export async function getBoard(enrollmentId: string, query: BoardQuery, now = Date.now()): Promise<BoardResponse> {
@@ -108,7 +126,7 @@ export async function getBoard(enrollmentId: string, query: BoardQuery, now = Da
     my_new_replies: Array.from(newReplies.values()).reduce((a, b) => a + b, 0),
   };
   if (query.countsOnly) {
-    return { ...head, pinned: [], unanswered: [], fresh: [], this_week: [], last_week: [], older: { posts: [], next_cursor: null } };
+    return { ...head, pinned: [], unanswered: [], fresh: [], this_week: [], last_week: [], older: { posts: [], next_cursor: null }, week_ritual: null };
   }
 
   const wanted = [...shape.ids.pinned, ...shape.ids.unanswered, ...shape.ids.fresh, ...shape.ids.this_week, ...shape.ids.last_week, ...shape.ids.older.ids];
@@ -128,6 +146,7 @@ export async function getBoard(enrollmentId: string, query: BoardQuery, now = Da
       member: { id: p.member_id, display_name: m?.display_name ?? 'Member', avatar_url: m?.avatar_url ?? null, level: m?.level ?? 1 },
       ritual, ritual_values: !locked && ritual && p.ritual_meta?.values ? p.ritual_meta.values : null,
       lane: laneOf({ pinned: !!p.pinned, category: p.category, ritual_key: ritual?.key ?? null }), mine, new_replies: mine ? newReplies.get(id) ?? 0 : 0,
+      ...noteText({ body: locked ? null : p.body, locked, min_level: p.min_level, ritual_key: ritual?.key ?? null, ritual_values: p.ritual_meta?.values ?? null }),
     };
   };
   const res: BoardResponse = {
@@ -135,6 +154,7 @@ export async function getBoard(enrollmentId: string, query: BoardQuery, now = Da
     pinned: shape.ids.pinned.map(card), unanswered: shape.ids.unanswered.map(card), fresh: shape.ids.fresh.map(card),
     this_week: shape.ids.this_week.map(card), last_week: shape.ids.last_week.map(card),
     older: { posts: shape.ids.older.ids.map(card), next_cursor: shape.ids.older.next_cursor },
+    week_ritual: await weekRitualFor(cohortId, rows, now),
   };
   console.log(JSON.stringify({ level: 'info', service: 'community-board', event: 'board_read', outcome: 'success', duration_ms: Date.now() - started, posts: raw.length, lane: query.lane, searched: !!term }));
   return res;

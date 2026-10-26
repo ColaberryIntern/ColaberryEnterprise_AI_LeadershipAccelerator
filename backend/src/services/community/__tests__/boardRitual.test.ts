@@ -10,7 +10,7 @@ it('there are twelve rituals', () => {
 
 it.each(ALL.map((r) => [r.name, r] as const))('reads %s from a composed heading', (_n, r) => {
   const body = `${r.icon} ${r.name} · Week ${r.week}\n\nWhat I built: something real`;
-  expect(ritualFromBody(body)).toEqual({ key: r.key, name: r.name, icon: r.icon, week: r.week });
+  expect(ritualFromBody(body)).toEqual({ key: r.key, name: r.name, icon: r.icon, week: r.week, reaction: r.reaction });
 });
 
 it('a free-text post is no ritual', () => {
@@ -29,7 +29,7 @@ it('an unknown name in a heading-shaped line is no ritual', () => {
 });
 
 it('ritual_meta wins over the body; the post week wins over the ritual week', () => {
-  expect(ritualOf({ ritual: 'cohort_wins' }, 'no heading at all', 9)).toEqual({ key: 'cohort_wins', name: 'Cohort Wins', icon: '🏆', week: 9 });
+  expect(ritualOf({ ritual: 'cohort_wins' }, 'no heading at all', 9)).toEqual(expect.objectContaining({ key: 'cohort_wins', name: 'Cohort Wins', icon: '🏆', week: 9 }));
   expect(ritualOf({ ritual: 'cohort_wins' }, 'no heading', null)?.week).toBe(5);
   expect(ritualOf({ ritual: 'not_a_ritual' }, '👋 Roll Call · Week 1\n\nhi', null)?.key).toBe('roll_call');
   expect(ritualOf(null, 'plain post', null)).toBeNull();

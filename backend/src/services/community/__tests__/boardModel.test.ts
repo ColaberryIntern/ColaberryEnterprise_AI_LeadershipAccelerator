@@ -1,4 +1,4 @@
-import { assembleBoard, bucketOf, cursorOf, laneOf, FRESH_MS, WEEK_MS, TWO_WEEKS_MS, type BoardRow } from '../boardModel';
+import { assembleBoard, bucketOf, cohortWeek, cursorOf, laneOf, FRESH_MS, WEEK_MS, TWO_WEEKS_MS, type BoardRow } from '../boardModel';
 
 /** Campus v14 B1: lanes, the 48 h / 7 d / 14 d buckets on instants, no repeats on "all", "mine" scoping, new-since and paging. */
 const NOW = Date.parse('2026-10-26T17:00:00Z');
@@ -36,6 +36,18 @@ describe('bucketOf at the boundaries (instants)', () => {
     [TWO_WEEKS_MS - 1, 'last_week'], [TWO_WEEKS_MS, 'older'],
   ])('%i ms old is %s', (age, b) => {
     expect(bucketOf(ago(age), NOW)).toBe(b);
+  });
+});
+
+describe('cohortWeek (the ritual bar)', () => {
+  it.each([
+    ['no cohort', null, null],
+    ['before the cohort starts', '2026-11-02', null],
+    ['day one', '2026-10-26', 1],
+    ['the second week', '2026-10-19', 2],
+    ['long after (capped at 12)', '2026-01-05', 12],
+  ])('%s', (_n, start, week) => {
+    expect(cohortWeek(start, NOW)).toBe(week);
   });
 });
 

@@ -7,6 +7,7 @@ jest.mock('../../../models', () => ({
   CommunityPost: { findAll: (...a: unknown[]) => mockPosts(...a) },
   CommunityMember: { findAll: (...a: unknown[]) => mockMembers(...a) },
   CommunityLike: { findAll: (...a: unknown[]) => mockLikes(...a) },
+  Cohort: { findByPk: () => Promise.resolve({ start_date: '2026-10-19' }) },
 }));
 jest.mock('../../../config/database', () => ({ sequelize: { query: (...a: unknown[]) => mockQuery(...a) } }));
 jest.mock('../../communityService', () => ({
@@ -52,6 +53,13 @@ it('builds cards: ritual, lane, mine, likes, and a locked teaser without its tex
   const c = all.find((p) => p.id === 'c')!;
   expect([c.locked, c.body]).toEqual([true, null]);
   expect(b.unanswered.map((p) => p.id)).toEqual(['b']);
+});
+
+it('carries the ritual for the cohort week, with how many posted it this week', async () => {
+  const b = await getBoard('enr-1', { lane: 'all', olderCursor: null, countsOnly: false }, NOW);
+  expect(b.week_ritual).toEqual(expect.objectContaining({ week: 2, posted: 0 }));
+  expect(b.week_ritual!.ritual.key).toBe('skill_drop');
+  expect((await getBoard('enr-1', { lane: 'all', olderCursor: null, countsOnly: true }, NOW)).week_ritual).toBeNull();
 });
 
 it('counts replies on my posts newer than my last look', async () => {

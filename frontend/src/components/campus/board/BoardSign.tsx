@@ -1,26 +1,24 @@
 import React, { useEffect, useState } from 'react';
-import { fetchPosts } from '../../../services/communityApi';
-import { BOARD_AT, newSince, readSeen } from './boardModel';
+import { BOARD_AT } from './boardModel';
 import { BOARD_EVENT, openBoard } from './boardApi';
+import { useBoardBadge } from './useBoardBadge';
 import './communityBoard.css';
 
 /**
  * The Community Board on the map (C30, v7 R3): a cork noticeboard on two posts with a little roof and pinned notes, just south-east of
- * the fountain, a "Community Board" pill and a red badge counting posts since your last look. Focusable; Enter or a click walks you
- * there and opens the board. It is not a building: no room, no presence.
+ * the fountain, a "Community Board" pill, and (v14 B5, C70) a red badge with the notes new since your last look plus new replies on
+ * your posts, capped at "9+", from the server's counts. Focusable; Enter or a click walks you there and opens the board. Not a building.
  */
 function useBadge(): number {
-  const [n, setN] = useState(0);
+  const count = useBoardBadge();
+  const [cleared, setCleared] = useState(false);
   useEffect(() => {
-    let alive = true;
-    const load = () => fetchPosts({ limit: 30 }).then((p) => { if (alive) setN(newSince(p.posts, readSeen())); }).catch(() => { /* no badge when the feed is down */ });
-    load();
-    // opening the board marks it read
-    const clear = () => setN(0);
+    const clear = () => setCleared(true); // opening the board marks it seen; the next poll brings the real number back
     window.addEventListener(BOARD_EVENT, clear);
-    return () => { alive = false; window.removeEventListener(BOARD_EVENT, clear); };
+    return () => window.removeEventListener(BOARD_EVENT, clear);
   }, []);
-  return n;
+  useEffect(() => { setCleared(false); }, [count]);
+  return cleared ? 0 : count;
 }
 
 export default function BoardSign(): React.ReactElement {

@@ -282,26 +282,29 @@ async function runAudience(browser, audience, jwt) {
         must(await page.locator('.sch-root .tg-dayhead').count() === 7, 'the week view is not seven days');
       });
 
-      await step(audience, 'C30: the Community Board: Tab to it on the map, Enter opens four tabs; a post pins to the top after a reload (local DB)', async () => {
+      await step(audience, 'C30 + v14 (C67-C71): the Community Board: Tab to it on the map, Enter opens the sections; a note posts through the composer, shows in Fresh after a reload, and the Community page is one click away (local DB)', async () => {
         await page.goto(`${urls.base}/portal/campus`, { waitUntil: 'domcontentloaded' });
         await page.waitForSelector('[data-testid="cm-cboard-sign"]', { timeout: 30_000 });
         await page.focus('[data-testid="cm-cboard-sign"]');
         await page.keyboard.press('Enter');
-        await page.waitForSelector('[data-testid="cm-cboard"]', { timeout: 10_000 });
-        must(await page.locator('[data-testid="cm-cboard"] [role="tab"]').count() === 4, 'the board does not have four tabs');
+        await page.waitForSelector('[data-testid="cm-cboard"] [data-testid="cb-status"]', { timeout: 15_000 });
+        must(await page.locator('[data-testid="cb-lanes"] [data-testid^="cb-lane-"]').count() === 9, 'the board does not have nine sections');
         // the feed's own rule: a post needs at least 15 words
-        const body = `E2E board post ${Date.now().toString(36)}: a short note pinned by the campus check to prove posting from the board reaches the feed.`;
-        await page.click('[data-testid="cm-cb-post"]');
-        await page.fill('[data-testid="cm-cb-compose"] textarea', body);
-        await page.click('[data-testid="cm-cb-pin"]');
-        await page.waitForSelector('[data-testid="cm-cb-compose"]', { state: 'detached', timeout: 15_000 });
+        const token = `E2E-${Date.now().toString(36)}`;
+        const body = `${token} board note: a short note posted by the campus check to prove posting from the board reaches the feed and comes back.`;
+        await page.click('[data-testid="cb-add"]');
+        await page.click('[data-testid="cb-type-post"]');
+        await page.fill('[data-testid="cb-compose-body"]', body);
+        await page.click('[data-testid="cb-compose-post"]');
+        await page.waitForSelector('[data-testid="cb-toast"]', { timeout: 15_000 });
         await page.reload({ waitUntil: 'domcontentloaded' });
         await page.waitForSelector('[data-testid="cm-cboard-sign"]', { timeout: 30_000 });
         await page.click('[data-testid="cm-cboard-sign"]');
-        await page.waitForSelector('[data-testid="cm-cboard"] .cm-cb-note', { timeout: 15_000 });
-        const first = await page.textContent('[data-testid="cm-cboard"] .cm-cb-note');
-        must((first || '').includes(body), `the new post is not first: "${first}"`);
-        await page.keyboard.press('Escape');
+        await page.waitForSelector('[data-testid="cb-fresh"]', { timeout: 15_000 });
+        const fresh = await page.textContent('[data-testid="cb-fresh"]');
+        must((fresh || '').includes(token), `the new note is not in Fresh: "${(fresh || '').slice(0, 200)}"`);
+        await page.click('[data-testid="cm-cb-feed"]');
+        await page.waitForURL((u) => u.pathname === '/portal/community', { timeout: 15_000 });
       });
 
       await step(audience, 'C41/C42: with the real reveal animation, the back-wall screen sits inside the back wall at 1440x900, 1900x1000 and 390x844, and nothing on it overflows', async () => {

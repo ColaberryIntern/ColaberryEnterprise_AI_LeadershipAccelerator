@@ -16,6 +16,7 @@ import { rightNowRows, teamRows } from './rightNow';
 import type { Urgent } from './rightNow';
 import type { HomeAgenda } from './useMapMoments';
 
+import { BoardChipBadge } from '../board/BoardChipBadge';
 /**
  * The campus concierge (C11b), the prototype's left panel (.cc): where you are, a greeting by name, one honest line about now,
  * the campus pulse, the help desk, the account's own card (the Explorer pass, the tour offer), today's plan, the live card, and
@@ -201,7 +202,7 @@ export default function CampusConcierge(p: ConciergeProps): React.ReactElement {
 
       <div className="cm-sec">{audience === 'business' ? 'See where your team…' : 'I want to…'}</div>
       <div className="cm-chips" data-testid="cm-cc-chips">
-        {chipsFor(audience, wp, buildings).map(([label, id]) => <button key={id} type="button" onClick={() => chip(id)}>{label}</button>)}
+        {chipsFor(audience, wp, buildings).map(([label, id]) => <button key={id} type="button" onClick={() => chip(id)}>{label}{id === BOARD && <BoardChipBadge />}</button>)}
       </div>
       <Directory buildings={buildings} audience={audience} workplace={wp} onWalk={p.onWalk} />
       {p.photo !== undefined && <PhotoPrompt audience={audience} photo={p.photo} />}

@@ -44,6 +44,17 @@ export function bucketOf(createdAt: string | Date, now: number): Bucket {
   return 'older';
 }
 
+/**
+ * The viewer's cohort week (1-based) from the cohort's start date, for this week's ritual bar: null before the cohort starts or with no
+ * cohort (staff and business accounts get no bar), and capped at 12 (there are twelve weekly rituals).
+ */
+export function cohortWeek(startDate: string | null | undefined, now: number): number | null {
+  if (!startDate) return null;
+  const start = new Date(`${String(startDate).slice(0, 10)}T00:00:00-05:00`).getTime(); // the cohort's first day, Central
+  if (Number.isNaN(start) || now < start) return null;
+  return Math.min(12, Math.floor((now - start) / WEEK_MS) + 1);
+}
+
 export interface BoardRow extends LaneInput { id: string; member_id: string; created_at: string; comment_count: number }
 
 export interface BoardIds {
