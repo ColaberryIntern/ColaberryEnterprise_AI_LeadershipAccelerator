@@ -16,6 +16,7 @@ import { deriveGovBuildPlan, buildGovStoryPrompt, reconcileGovBuildPlan, type Go
 import type { EvidenceView } from './govBuildEvidence';
 import type { SharedProposalView, ProposalShareLevel } from './govProposalShare';
 import { deriveBuildStoryStage, deriveProposalStage, toCommitFeed, readGovProvenanceFacts, type BuildStage, type ProposalStage, type CommitFeedItem } from './govCockpit';
+import type { GovBuildSummary } from './govBuildSummary';
 
 export interface StudentGovTrackView { trackType: string; status: string; hasBuild: boolean; }
 export interface StudentGovRequirementView {
@@ -81,6 +82,9 @@ export interface StudentGovProjectView {
   keyDates: Array<{ date: string | null; text: string | null }>;
   /** The build-repo commit feed: every matched push for this project, newest first (public commit facts, no identity). */
   commitFeed: CommitFeedItem[];
+  /** v2 Build view: the SBP build summary (releases -> stories + progress) and the linked project id for the
+   *  deep-link to the build workspace. Null when no build is linked yet. */
+  buildSummary: GovBuildSummary | null;
 }
 
 /**
@@ -166,6 +170,7 @@ export function toStudentGovProjectView(project: any, tracks: any[], requirement
     agency: null,
     keyDates: [],
     commitFeed: [],
+    buildSummary: null, // filled by the async loader from the materialized SBP build
   };
 }
 
@@ -238,6 +243,13 @@ export async function getStudentGovProjectView(deliveryProjectId: string, viewer
       view.keyDates = facts.keyDates;
     }
   } catch { /* additive; agency/keyDates stay at their safe defaults */ }
+
+  // v2 Build view: the SBP build summary (releases -> stories + progress) for the linked build project. Best-effort;
+  // it also lazily publishes the plan so the commit->story loop runs. Null when no build is linked yet.
+  try {
+    const { getGovBuildSummary } = await import('./govBuildSummary');
+    view.buildSummary = await getGovBuildSummary(deliveryProjectId);
+  } catch { /* additive; buildSummary stays null */ }
 
   // P6: the shared proposal (projected to THIS viewer's grant level) + the price-free submission checklist. Built
   // from the SAME response slots the admin workspace uses (deriveResponseSlots + the persisted responses), then run
