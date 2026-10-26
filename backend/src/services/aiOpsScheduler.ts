@@ -418,6 +418,27 @@ const DYNAMIC_SCHEDULE_REGISTRY: DynamicScheduleEntry[] = [
     label: 'Executive weekly briefing',
   },
   {
+    // C8.8 commercialization weekly report. 8:15 Monday, deliberately clear of the
+    // 6:45 daily and 7:45 weekly briefings above - that pair collided once and Ali
+    // received both in the same minute.
+    //
+    // SHIPS DARK, like GovOpportunityDailySync below: the runner no-ops unless
+    // COMMERCIAL_WEEKLY_REPORT_ENABLED=true, so registering it changes nothing until
+    // it is switched on. That is not timidity - C8.8 puts the recipient list with
+    // Ali, and a job that mailed anyone on merge would have decided it for him.
+    //
+    // Whoever enables it: this estate runs THREE scheduler instances. Set the flag on
+    // ONE, or the report arrives three times.
+    agentName: 'CommercializationWeeklyReport',
+    hardcodedSchedule: '15 8 * * 1',
+    dynamicImport: async () => {
+      const { runWeeklyCommercialReport } = await import(
+        './commercialization/weeklyCommercialReportJob');
+      await runWeeklyCommercialReport();
+    },
+    label: 'Commercialization weekly report (dark until enabled)',
+  },
+  {
     // Gov pursuit daily tracking — re-check the v1 discovery feed for pursued opportunities and flag deadline
     // changes / drops from the feed. Ships DARK: the runner no-ops unless ENABLE_GOV_DAILY_SYNC=true (a distinct
     // flag from govIngestion, which is already on), so registering this changes nothing until it is switched on.
