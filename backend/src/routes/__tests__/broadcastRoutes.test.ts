@@ -39,6 +39,10 @@ jest.mock('../../controllers/broadcastController', () => ({
     res.json({ reached: 'heartbeat', isStaff: req.participant?.isStaff ?? null }),
   getLiveAudience: (req: { participant?: { isStaff?: boolean } }, res: { json: (b: unknown) => void }) =>
     res.json({ reached: 'audience', isStaff: req.participant?.isStaff ?? null }),
+  // L8.3's replay list. Third time the trap above has caught a change to this router, and
+  // it caught this one too: every test in this file failed at module load until it was added.
+  getReplayBroadcasts: (req: { participant?: { isStaff?: boolean } }, res: { json: (b: unknown) => void }) =>
+    res.json({ reached: 'replays', isStaff: req.participant?.isStaff ?? null }),
 }));
 
 // participantAuth calls logAuthFailure on every rejected token, which reaches
