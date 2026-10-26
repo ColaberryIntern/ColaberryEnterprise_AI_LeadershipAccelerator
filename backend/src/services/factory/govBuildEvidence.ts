@@ -26,6 +26,10 @@ export interface EvidenceView {
   artifactRef: string | null;
   status: 'submitted' | 'verified' | 'rejected';
   submittedAt: string | null;
+  /** 'student' for a manual hand-in, 'github_push' for an auto-matched build-repo commit. Student-safe. */
+  source: 'student' | 'github_push';
+  /** The matched commit's SHA (github_push only); null for a manual hand-in. Student-safe (not an identity). */
+  commitSha: string | null;
 }
 
 function toView(row: GovBuildStoryEvidenceAttributes): EvidenceView {
@@ -37,6 +41,8 @@ function toView(row: GovBuildStoryEvidenceAttributes): EvidenceView {
     artifactRef: row.artifact_ref ?? null,
     status: row.status,
     submittedAt: row.submitted_at ? new Date(row.submitted_at).toISOString() : null,
+    source: row.source === 'github_push' ? 'github_push' : 'student',
+    commitSha: row.commit_sha ?? null,
   };
 }
 
@@ -60,6 +66,46 @@ export async function submitBuildStoryEvidence(input: SubmitEvidenceInput): Prom
     reviewed_at: null,
   });
   return toView(row.get({ plain: true }) as GovBuildStoryEvidenceAttributes);
+}
+
+export interface GithubPushEvidenceInput {
+  deliveryProjectId: string;
+  storyId: string;
+  canonicalReqId: string;
+  description: string;
+  artifactRef: string | null;
+  submittedByIdentityId: string;
+  commitSha: string;
+}
+
+/**
+ * File a build-repo commit that cited a story's requirement key as evidence (`source: 'github_push'`). IDEMPOTENT on
+ * (story_id, commit_sha): GitHub retries webhook deliveries, so a redelivered push must never double-file — the
+ * partial unique index backs this, and findOrCreate re-finds on the unique-constraint race. Status is ALWAYS
+ * 'submitted': a matched commit PROPOSES completion; only a reviewer (evidence.verify) verifies it. Returns true when
+ * a new row was created, false when this commit was already filed for this story.
+ */
+export async function fileGithubPushEvidence(input: GithubPushEvidenceInput): Promise<boolean> {
+  const commitSha = String(input.commitSha ?? '').trim();
+  if (!input.deliveryProjectId || !input.storyId || !input.canonicalReqId || !commitSha) throw new EvidenceInputError('Missing identifiers for a commit evidence row.');
+  if (!input.submittedByIdentityId) throw new EvidenceInputError('A submitting identity is required.');
+  const [, created] = await GovBuildStoryEvidence.findOrCreate({
+    where: { story_id: input.storyId, commit_sha: commitSha },
+    defaults: {
+      delivery_project_id: input.deliveryProjectId,
+      story_id: input.storyId,
+      canonical_req_id: input.canonicalReqId,
+      description: String(input.description ?? '').trim() || `Commit ${commitSha.slice(0, 7)}`,
+      artifact_ref: input.artifactRef ? String(input.artifactRef).trim() : null,
+      status: 'submitted', // a matched commit is a CLAIM; verification is a separate, reviewer-only act
+      source: 'github_push',
+      commit_sha: commitSha,
+      submitted_by_identity_id: input.submittedByIdentityId,
+      reviewed_by_identity_id: null,
+      reviewed_at: null,
+    },
+  });
+  return created;
 }
 
 /** All evidence hand-ins for a delivery project, newest first — to surface per story in the workspace/projection. */

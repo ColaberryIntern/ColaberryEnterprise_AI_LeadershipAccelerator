@@ -4,12 +4,14 @@ import { sequelize } from '../config/database';
 // same pattern as ensureGovSourceBundleSchema.ts. Each statement is CREATE ... IF NOT EXISTS in its own try/catch,
 // so a partial DB self-heals and re-running boot is a no-op.
 //
-// Additive only: creates 1 new table, never alters or drops anything existing. Columns must match
-// backend/src/models/GovBuildStoryEvidence.ts EXACTLY.
+// Additive only: creates/extends 1 table, never drops anything existing. Columns must match
+// backend/src/models/GovBuildStoryEvidence.ts EXACTLY. The `ADD COLUMN IF NOT EXISTS` statements are the
+// gov-build-cockpit extension (a commit in the build repo that cites a story's requirement key files a `github_push`
+// evidence row); they self-heal an older table on boot, same as the column-add in ensureGovProposalResponseSchema.ts.
 //
-// `status` defaults to 'submitted': a hand-in is the student's CLAIM, never a self-verification. Only a reviewer
-// holding evidence.verify (which an associate_builder does not) moves it to verified/rejected — enforced at the
-// route layer, with the default here as the backstop.
+// `status` defaults to 'submitted': a hand-in (or a matched commit) is a CLAIM, never a self-verification. Only a
+// reviewer holding evidence.verify (which an associate_builder does not) moves it to verified/rejected — enforced at
+// the route layer, with the default here as the backstop.
 export async function ensureGovBuildStoryEvidenceSchema(): Promise<void> {
   const statements: string[] = [
     `CREATE TABLE IF NOT EXISTS gov_build_story_evidence (
@@ -26,6 +28,12 @@ export async function ensureGovBuildStoryEvidenceSchema(): Promise<void> {
        reviewed_at TIMESTAMPTZ
      )`,
     `CREATE INDEX IF NOT EXISTS idx_gov_build_evidence_project_story ON gov_build_story_evidence (delivery_project_id, story_id)`,
+    // Gov build cockpit: where a hand-in came from, and the commit it matched (null for a manual student hand-in).
+    `ALTER TABLE gov_build_story_evidence ADD COLUMN IF NOT EXISTS source VARCHAR(20) NOT NULL DEFAULT 'student'`,
+    `ALTER TABLE gov_build_story_evidence ADD COLUMN IF NOT EXISTS commit_sha VARCHAR(64)`,
+    // One evidence row per (story, commit): a redelivered push (GitHub retries) must never double-file. Partial so
+    // the many NULL commit_sha of manual hand-ins never collide (mirrors github_connections_unique_project).
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_gov_build_evidence_story_commit ON gov_build_story_evidence (story_id, commit_sha) WHERE commit_sha IS NOT NULL`,
   ];
 
   for (const sql of statements) {
