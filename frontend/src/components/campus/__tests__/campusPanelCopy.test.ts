@@ -107,7 +107,7 @@ const T0 = new Date('2026-10-22T10:00:00').getTime();
 const session = (date: string, time: string, status: 'scheduled' | 'live' = 'scheduled') => ({ id: 's', session_number: 1, title: 'Build Day', session_date: date,
   start_time: time, end_time: '23:00', status, meeting_link: null, meeting_provider: null, timezone: 'America/Chicago', room_id: null });
 const agenda = (s: ReturnType<typeof session> | null, eventDays: number | null): HomeAgenda => ({
-  lecture: { session: s }, amphi: { event: eventDays === null ? null : ({ id: 'e', title: 'Open House', starts_at: new Date(T0 + eventDays * 86400000).toISOString() } as never) }, now: T0,
+  lecture: { session: s }, events: { event: eventDays === null ? null : ({ id: 'e', title: 'Open House', starts_at: new Date(T0 + eventDays * 86400000).toISOString() } as never) }, now: T0,
 });
 
 describe('Right now and the urgent card', () => {

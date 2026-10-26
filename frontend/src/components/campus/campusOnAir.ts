@@ -12,12 +12,13 @@ import { ROOM_BUILDING } from './campusRoomKind';
  *
  *  - What is on air: whatever discovery lists (the server returns only live and reconnecting broadcasts). Disabled or
  *    unavailable discovery shows nothing, never a stale "on air".
- *  - Where (C28, v7 R1, completing round-1 Q2): EVERY broadcast airs in the EVENTS HALL (an event room, campusRoomKind). One tied
+ *  - Where (C28, v7 R1, completing round-1 Q2; C62): EVERY broadcast airs in the EVENTS HALL (a live room, campusRoomKind; events
+ *    themselves moved to the Meeting Rooms in C62, Colaberry Live stayed). One tied
  *    to a class session (session_id) still airs there, and the Classroom shows "Your class is live in the Events Hall · Walk in".
  *    LIVE_ROOM_BUILDING ('commons') is retired: a broadcast never lights the commons. Its join route is unchanged (the class
  *    session's live page, else its room).
  */
-export const LIVE_BUILDING: BuildingId = ROOM_BUILDING.event;
+export const LIVE_BUILDING: BuildingId = ROOM_BUILDING.live;
 
 /** Where a broadcast airs on the campus: always the Events Hall (C28). */
 export function liveBuildingOf(_b: Pick<DiscoveryBroadcast, 'room_id' | 'session_id'>): BuildingId {

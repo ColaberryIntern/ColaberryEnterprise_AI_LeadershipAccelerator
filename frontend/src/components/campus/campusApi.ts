@@ -145,3 +145,23 @@ export async function putLook(equipped: Record<string, string | null>): Promise<
     throw new Error(typeof msg === 'string' && msg ? msg : 'We could not save your look. Try again.');
   }
 }
+
+/** C63: one weekly session (the internship cohort's required meetings), as GET /api/portal/campus/weekday-sessions returns it. */
+export interface WeekdaySessionView {
+  day: string; time: string; title: string; audience: 'interns_only' | 'public';
+  room_id: string | null; room_name: string | null; join_url: string | null; registration_url: string | null;
+}
+export interface WeekdaySessionsData { intern: boolean; sessions: WeekdaySessionView[] }
+
+/**
+ * C63: the weekly sessions for this account (the public ones for every member; the Monday interns-only call for an active intern,
+ * decided by the server). previewIntern asks for the staff preview of the intern view (the server honors it only for an account allowed
+ * to preview). Throws on failure; the caller shows no sessions.
+ */
+export async function fetchWeekdaySessions(previewIntern = false): Promise<WeekdaySessionsData> {
+  const { data } = await axios.get<WeekdaySessionsData>(`${process.env.REACT_APP_API_URL || ''}/api/portal/campus/weekday-sessions`, {
+    headers: authHeaders(), timeout: CAMPUS_FLAGS_TIMEOUT_MS, params: previewIntern ? { as: 'intern' } : undefined,
+  });
+  if (!data || typeof data !== 'object' || !Array.isArray(data.sessions)) throw new Error('weekday sessions: unexpected body');
+  return { intern: data.intern === true, sessions: data.sessions };
+}

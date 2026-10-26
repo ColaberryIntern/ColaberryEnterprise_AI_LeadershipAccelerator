@@ -6,6 +6,7 @@ import { sessionStartMs, urgentAt } from '../campusFacts';
 import type { HomeAgenda } from './useMapMoments';
 import { shortIn } from './useMapMoments';
 import { pulseOf, wd } from './conciergeCopy';
+import { EVENTS_BUILDING } from '../campusRoomKind';
 
 /**
  * The panel's "Right now" list and urgent card (WP-4; the prototype's #sugg and #urgent, D:1867-1878), from real data only: your
@@ -63,9 +64,9 @@ export function rightNowRows(o: {
   if (p.busiest && p.busiestCount > 0) {
     rows.push({ key: 'people', buildingId: p.busiest.id, title: `Drop into the ${buildingName(p.busiest, o.workplace)}`, detail: `${p.busiestCount} ${p.busiestCount === 1 ? 'person' : 'people'} here now` });
   }
-  const e = o.agenda?.amphi.event;
+  const e = o.agenda?.events.event;
   const when = e && o.agenda ? eventIn(e.starts_at, o.agenda.now) : null;
-  if (e && when && has('amphi')) rows.push({ key: 'event', buildingId: 'amphi', title: e.title, detail: when });
+  if (e && when && has(EVENTS_BUILDING)) rows.push({ key: 'event', buildingId: EVENTS_BUILDING, title: e.title, detail: when }); // C62
   return rows.slice(0, MAX_ROWS);
 }
 

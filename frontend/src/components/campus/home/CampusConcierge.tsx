@@ -107,8 +107,8 @@ export const BOARD = 'board';
 export const FOOD = 'food';
 type ChipTo = BuildingId | typeof LATE | typeof BOARD | typeof FOOD;
 export const CHIPS: Record<'member' | 'explorer' | 'business' | 'work', [string, ChipTo][]> = {
-  member: [['Learn', 'lecture'], ['Build', 'studio'], ['Prep for cert', 'testing'], ['Meet people', 'commons'], ['📌 Ask the community', BOARD], ['See my progress', 'observatory'], ['Show my work', 'gallery'], ['Find events', 'amphi'], ['🍔 Grab food', FOOD], ['I’m running late', LATE]],
-  explorer: [['Try the course', 'library'], ['Meet people', 'commons'], ['📌 Ask the community', BOARD], ['Upcoming events', 'amphi'], ['See how projects work', 'studio'], ['🍔 Grab food', FOOD]],
+  member: [['Learn', 'lecture'], ['Build', 'studio'], ['Prep for cert', 'testing'], ['Meet people', 'commons'], ['📌 Ask the community', BOARD], ['See my progress', 'observatory'], ['Show my work', 'gallery'], ['Find events', 'commons'], ['🍔 Grab food', FOOD], ['I’m running late', LATE]],
+  explorer: [['Try the course', 'library'], ['Meet people', 'commons'], ['📌 Ask the community', BOARD], ['Upcoming events', 'commons'], ['See how projects work', 'studio'], ['🍔 Grab food', FOOD]],
   business: [['…learns', 'lecture'], ['…builds', 'studio'], ['…gets certified', 'testing'], ['…connects', 'commons'], ['…shows their work', 'gallery'], ['Seats & reporting', 'career'], ['🍔 Grab food', FOOD]],
   work: [['Upskill', 'lecture'], ['Ship work', 'studio'], ['Get certified', 'testing'], ['Meet the team', 'commons'], ['My performance', 'observatory'], ['Show clients', 'gallery'], ['Town halls', 'amphi'], ['🍔 Grab food', FOOD], ['I’m running late', LATE]],
 };

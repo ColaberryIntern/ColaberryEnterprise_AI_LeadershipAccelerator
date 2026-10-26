@@ -9,6 +9,7 @@ import type { Happening } from './BuildingCard';
 import { levelOfRung } from '../../services/bandLadder';
 import { minutesLeft, stopDetail } from './campusPlan';
 import type { PlanStop } from './campusPlan';
+import { EVENTS_BUILDING } from './campusRoomKind';
 
 /**
  * What is really true about a building right now (WP-2, the prototype's "Happening here" rows and the urgent CTA), from the
@@ -36,7 +37,7 @@ export interface LookFacts {
 }
 
 const SOURCES: Partial<Record<BuildingId, (keyof ArrivalData)[]>> = {
-  lecture: ['session'], tower: ['session', 'event'], amphi: ['event'], testing: ['certVerified'], arcade: ['gameTime'],
+  lecture: ['session'], tower: ['session', 'event'], commons: ['event'], testing: ['certVerified'], arcade: ['gameTime'], // C62: events in the Meeting Rooms
 };
 /** Cert evidence only for a member who can open Cert Prep (otherwise the paywall answers 402 and there is nothing to say). */
 export const sourcesFor = (id: BuildingId, audience: CampusAudience, open = true): (keyof ArrivalData)[] =>
@@ -93,7 +94,7 @@ export function factsAt(id: BuildingId, d: ArrivalData, look: LookFacts, now: nu
   const ev = e ? { title: e.title, detail: inLabel(new Date(e.starts_at).getTime(), now), tone: '' as const } : null;
   if (id === 'lecture') { if (step) out.push(step); if (cls) out.push(cls); }
   if (id === 'tower') { if (plan) out.push({ ...plan, title: 'Today' }); if (cls) out.push(cls); if (ev) out.push({ ...ev, title: 'Next event', detail: `${e!.title} · ${ev.detail}` }); }
-  if (id === 'amphi' && ev) out.push(ev);
+  if (id === EVENTS_BUILDING && ev) out.push(ev);
   if (id === 'testing' && d.certVerified && d.certVerified.total > 0) {
     out.push({ title: 'Skill proficiency', detail: `${d.certVerified.verified} / ${d.certVerified.total} objectives verified`, tone: '' });
   }

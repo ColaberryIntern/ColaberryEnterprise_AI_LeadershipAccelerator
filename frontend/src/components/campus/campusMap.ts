@@ -86,10 +86,12 @@ export const CAMPUS_BUILDINGS: readonly CampusBuilding[] = [
     rooms: [{ label: 'Projects', route: '/portal/projects' }, { label: 'Assignments', route: '/portal/assignments' }],
     prefixes: ['/portal/projects', '/portal/assignments'],
     explorer: 'demo', gate: 'projects', audiences: EVERYONE, pos: { x: 755, y: 215, w: 128, h: 116 }, kind: 'office', zone: 'up' },
+  // C62: Colaberry Live airs here (on air, the main action is "Join the live room"); events moved to the Meeting Rooms, so the events
+  // page belongs to them. Off air there is no page of upcoming broadcasts, so the main action is the events list, said plainly.
   { id: 'amphi', name: 'Events Hall', workplaceName: 'Town Hall',
-    primary: { label: 'See events and RSVP', route: '/portal/events' },
-    rooms: [{ label: 'Events', route: '/portal/events' }],
-    prefixes: ['/portal/events'], explorer: 'open', audiences: EVERYONE, pos: { x: 700, y: 350, w: 132, h: 62 }, kind: 'amphi', zone: 'up' },
+    primary: { label: 'See what is coming up', route: '/portal/events' },
+    rooms: [],
+    prefixes: [], explorer: 'open', audiences: EVERYONE, pos: { x: 700, y: 350, w: 132, h: 62 }, kind: 'amphi', zone: 'up' },
   { id: 'testing', name: 'Cert Prep Center', workplaceName: 'Certification Center',
     primary: { label: 'Take the diagnostic or practice', route: '/portal/cert-prep' },
     rooms: [{ label: 'Cert prep', workplaceLabel: 'Certification prep', route: '/portal/cert-prep' }],
@@ -102,8 +104,8 @@ export const CAMPUS_BUILDINGS: readonly CampusBuilding[] = [
   // Board (C30, v7 R3) gives /portal/community its own place on the Quad.
   { id: 'commons', name: 'Meeting Rooms', workplaceName: 'Meeting Rooms',
     primary: { label: 'Open live rooms', route: '/portal/rooms' },
-    rooms: [{ label: 'Meeting rooms', route: '/portal/rooms' }, { label: 'Community', route: '/portal/community' }, { label: 'People', route: '/portal/community/people' }],
-    prefixes: ['/portal/rooms', '/portal/community'], explorer: 'open', audiences: EVERYONE, pos: { x: 310, y: 546, w: 124, h: 62 }, kind: 'gable', zone: 'ave' },
+    rooms: [{ label: 'Meeting rooms', route: '/portal/rooms' }, { label: 'Events', route: '/portal/events' }, { label: 'Community', route: '/portal/community' }, { label: 'People', route: '/portal/community/people' }],
+    prefixes: ['/portal/rooms', '/portal/events', '/portal/community'], explorer: 'open', audiences: EVERYONE, pos: { x: 310, y: 546, w: 124, h: 62 }, kind: 'gable', zone: 'ave' },
   { id: 'gallery', name: 'Showcase Gallery', workplaceName: 'Portfolio Gallery',
     primary: { label: 'Open my portfolio', route: '/portal/portfolio' },
     rooms: [{ label: 'Portfolio', route: '/portal/portfolio' }, { label: 'Preview', route: '/portal/portfolio/preview' }, { label: 'Showcase', route: '/portal/showcase' }],

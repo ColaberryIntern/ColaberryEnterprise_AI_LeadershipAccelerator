@@ -6,6 +6,7 @@ import { useMySessions } from '../classroom/ClassSessions';
 import { useHallway } from '../hallway/Hallway';
 import { KIND_ICON, agenda, agendaWhen, type AgendaItem } from './agendaModel';
 import { weekStrip } from './eventsModel';
+import { occurrences, useWeekdaySessions } from './weekdaySessions';
 import './campusEvents.css';
 
 /**
@@ -17,10 +18,13 @@ export function useAgenda(enabled: boolean): AgendaItem[] | null {
   const sessions = useMySessions(enabled);
   const events = useCampusEvents(enabled);
   const { hallway } = useHallway(enabled);
+  const weekly = useWeekdaySessions(enabled);
   return useMemo(() => {
     if (!enabled || sessions === null || events === null) return null;
-    return agenda({ sessions: sessions === 'error' ? [] : sessions, events: events ?? [], bookings: hallway?.bookings ?? [], now: new Date() });
-  }, [enabled, sessions, events, hallway]);
+    const now = new Date();
+    return agenda({ sessions: sessions === 'error' ? [] : sessions, events: events ?? [], bookings: hallway?.bookings ?? [], now,
+      weekly: weekly ? { intern: weekly.intern, occurrences: occurrences(weekly.sessions, now.getTime()) } : undefined });
+  }, [enabled, sessions, events, hallway, weekly]);
 }
 
 const stop = (fn: () => void) => (e: React.MouseEvent) => { e.stopPropagation(); fn(); };
@@ -29,6 +33,7 @@ export function AgendaAction({ item, onWalk }: { item: AgendaItem; onWalk: (id: 
   if (item.kind === 'event' && item.event) return <EventSignup event={item.event} compact />;
   if (item.kind === 'class') return <button type="button" className="cm-ag-act" onClick={stop(() => onWalk(item.building))}>🎓 Class</button>;
   if (item.kind === 'session') return <button type="button" className="cm-ag-act" onClick={stop(() => onWalk(item.building))}>🚪 Booked</button>;
+  if (item.kind === 'weekly') return <button type="button" className="cm-ag-act" onClick={stop(() => onWalk(item.building))}>{item.internsOnly ? '🗓 Interns only' : item.required ? '🗓 Your session' : '🗓 Open to members'}</button>;
   return null;
 }
 

@@ -26,10 +26,10 @@ const SUB: Partial<Record<BuildingId, [string, string | null]>> = {
   library: ['Curriculum, lessons & reference', 'Playbooks, curriculum & docs'],
   tower: ['Your schedule & today’s agenda', 'Your schedule & agenda'],
   studio: ['Sprint board, tickets & builds', null],
-  amphi: ['Events, open houses & demos', 'Town halls, events & demos'],
+  amphi: ['Colaberry Live broadcasts', 'Town halls & live broadcasts'], // C62: events moved to the Meeting Rooms
   testing: ['Cert prep & knowledge checks', 'Skill verification & knowledge checks'],
   observatory: ['Your path, progress & points', 'Growth path, progress & points'],
-  commons: ['Live rooms, study groups & 1:1s', null], // C29 (v7 R2): Meeting Rooms
+  commons: ['Events, live rooms, study groups & 1:1s', 'Events, meetings & 1:1s'], // C29 (v7 R2): Meeting Rooms; C62: events happen here
 
   gallery: ['Portfolio & client demos', null],
   career: ['Engagements, internship & company work', null],

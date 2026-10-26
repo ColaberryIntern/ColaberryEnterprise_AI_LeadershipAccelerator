@@ -8,6 +8,7 @@ import { GAME_IDS } from '../games/engine/gameRules';
 import type { WallFacts } from './RoomWalls';
 import { classroomLine, eventBanner, scheduleRows, sprintOf, weekdayOf } from './roomWallFacts';
 import type { ProjectTreeLite } from './roomWallFacts';
+import { EVENTS_BUILDING } from '../campusRoomKind';
 
 /**
  * The open building's back-wall facts (WP-5). The Classroom, Schedule and Events Hall reuse the arrival facts already read for the
@@ -42,7 +43,7 @@ export function useRoomWall(id: BuildingId, audience: CampusAudience, data: Arri
     day: weekdayOf(now),
     schedule: id === 'tower' ? scheduleRows({ session: data.session, event: data.event, stops, now }) : undefined,
     classroom: id === 'lecture' ? classroomLine(data.session) : null,
-    eventBanner: id === 'amphi' ? eventBanner(data.event, now) : null,
+    eventBanner: id === EVENTS_BUILDING ? eventBanner(data.event, now) : null, // C62
     ...extra,
   };
 }

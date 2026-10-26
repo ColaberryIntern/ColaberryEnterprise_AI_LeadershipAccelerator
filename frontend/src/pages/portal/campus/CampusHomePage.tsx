@@ -33,6 +33,7 @@ import { buildingName } from '../../../components/campus/campusMap';
 import CampusListView from '../../../components/campus/CampusListView';
 import CampusDoorTransition from '../../../components/campus/CampusDoorTransition';
 import CampusDmToast from '../../../components/campus/CampusDmToast';
+import CampusAlerts from '../../../components/campus/events/CampusAlerts';
 import CampusTabBar from '../../../components/campus/CampusTabBar';
 import CampusLive from '../../../components/campus/CampusLive';
 import CampusCheer from '../../../components/campus/CampusCheer';
@@ -161,6 +162,8 @@ function CampusHome(): React.ReactElement {
       <CampusListView />
       <CampusDoorTransition />
       <CampusDmToast />
+      {/* C64: the 5-minute alerts; they show in this page's own cheer toast */}
+      <CampusAlerts />
       <BookCallHost />
       <MeetingSheetHost />
       <CommunityBoardHost reduceMotion={reduce} />

@@ -42,6 +42,7 @@ import { ArcadeCard } from './games/ArcadeRoom';
 import { useGameRoomData } from './games/GameRoomSections';
 import { useCampus } from './CampusContext';
 import { TowerTodayTile, TODAY_HREF } from './home/TodayCard';
+import { EVENTS_BUILDING } from './campusRoomKind';
 
 /**
  * Arriving at a building (C11b; WP-2): the room behind, and the arrival panel in front, as the prototype's arrive() builds it:
@@ -112,8 +113,8 @@ export default function ArrivalPanel(p: ArrivalPanelProps): React.ReactElement {
   const stepIdx = plan && !tour ? plan.stops.findIndex((s) => !s.done && s.buildingId === b.id) : -1;
   // v6 D6: the box only when this building's step is NOT the panel's Up next (else it would say the same thing twice).
   const upNextIdx = plan ? plan.stops.findIndex((s) => !s.done) : -1;
-  // C26 (v6 D4): in the Events Hall the upcoming events (one tap to sign up) take the plan box's place
-  const showPlanBox = stepIdx >= 0 && stepIdx !== upNextIdx && b.id !== 'amphi';
+  // C26 (v6 D4): where events happen (the Meeting Rooms since C62) the upcoming events (one tap to sign up) take the plan box's place
+  const showPlanBox = stepIdx >= 0 && stepIdx !== upNextIdx && b.id !== EVENTS_BUILDING;
   const open = (r: string) => p.onEnterRoom?.(r);
   const desks = p.staffDesks ? desksForBuilding(p.staffDesks, b.id, audience) : undefined;
   const desk = desks?.find((d) => d.on_duty) ?? null;
@@ -127,7 +128,7 @@ export default function ArrivalPanel(p: ArrivalPanelProps): React.ReactElement {
   const classLive = b.id === 'lecture' ? liveClassOf(broadcasts) : null;
   const classLiveRoute = classLive ? roomRoute(classLive) : null;
   // C27 (v6 D5): the Schedule and the Events Hall list the upcoming events with one-tap sign up (Eventbrite is the record)
-  const evs = useCampusEvents(b.id === 'amphi');
+  const evs = useCampusEvents(b.id === EVENTS_BUILDING);
   const agendaItems = useAgenda(b.id === 'tower');
   const { openMap } = useCampus();
   // C29 (v7 R2): Meeting Rooms lists the hallway's doors with Join / Details / Open
@@ -165,13 +166,14 @@ export default function ArrivalPanel(p: ArrivalPanelProps): React.ReactElement {
         children={b.id === 'gate' && p.isExplorer ? <ExplorerPath onNavigate={p.onNavigate}
           model={explorerPath(p.buildings, p.accessOf, wp, !!p.staffDesks?.some((d) => d.id === 'maya' && d.on_duty))} />
           : b.id === 'admissions' ? <AdmissionsServices audience={audience} onNavigate={open} />
-          : b.id === 'commons' && access === 'open' ? <HallwayRows hallway={hall.hallway} error={hall.error} onOpen={open} />
+          // C62: events happen in the Meeting Rooms (one tap to sign up), above the hallway's doors
+          : b.id === 'commons' && access === 'open' ? <><UpcomingEvents events={evs ? upcoming(evs, new Date(), 20) : null} heading="Events happen here · one tap to sign up" /><HallwayRows hallway={hall.hallway} error={hall.error} onOpen={open} /></>
+          : b.id === EVENTS_BUILDING ? <UpcomingEvents events={evs ? upcoming(evs, new Date(), 20) : null} heading="Events happen here · one tap to sign up" />
           : b.id === 'lecture' && access === 'open' ? <ClassSessions sessions={classes} onOpen={open} broadcastRoute={classLiveRoute} />
           : b.id === 'arcade' && access === 'open' ? <ArcadeCard d={games} onOpen={open} place={buildingName(b, wp)} />
           // C33 (v7 R6): the Schedule lists classes, events and booked sessions together
           : b.id === 'tower' ? <AgendaRows items={agendaItems} place={(id) => { const x = p.buildings.find((y) => y.id === id); return x ? buildingName(x, wp) : id; }} onWalk={(id) => openMap(id)} />
-          // C31 (v7 R4): every event happens in the Events Hall (all of them, one tap to sign up)
-          : b.id === 'amphi' ? <UpcomingEvents events={evs ? upcoming(evs, new Date(), 20) : null} heading="Every event happens here · one tap to sign up" /> : undefined}
+          : undefined}
         whoIsHere={p.presence === undefined && !p.presenceError ? undefined
           : { presence: p.presence?.[b.id], error: p.presenceError, loading: p.presence === null && !p.presenceError, onPick: p.onPickPerson, onMore: p.onMore }} />
     </>

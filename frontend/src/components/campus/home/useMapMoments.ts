@@ -3,6 +3,7 @@ import type { CampusAudience } from '../campusMap';
 import type { MapMoments } from '../CampusWorldMap';
 import { loadArrival, sessionStartMs, urgentAt } from '../campusFacts';
 import type { ArrivalData } from '../campusFacts';
+import { EVENTS_BUILDING } from '../campusRoomKind';
 
 /**
  * What a member's map says is next (WP-3; the prototype's moment badges and urgent ring), from real data only:
@@ -23,7 +24,7 @@ export function shortIn(ms: number, now: number): string | null {
   return h < 24 ? `${h}h ${m % 60}m` : `${Math.floor(h / 24)}d ${h % 24}h`;
 }
 
-export function momentsFrom(lecture: ArrivalData, amphi: ArrivalData, now: number): MapMoments {
+export function momentsFrom(lecture: ArrivalData, events: ArrivalData, now: number): MapMoments {
   const out: MapMoments = { urgent: null, badges: {} };
   const s = lecture.session;
   if (s) {
@@ -33,25 +34,26 @@ export function momentsFrom(lecture: ArrivalData, amphi: ArrivalData, now: numbe
     else if (left) out.badges.lecture = { text: `Class in ${left}`, tone: start! - now <= 15 * 60000 ? 'hot' : '' };
     if (urgentAt('lecture', lecture, now)) out.urgent = 'lecture';
   }
-  const e = amphi.event;
+  const e = events.event;
   if (e) {
     const m = Math.round((new Date(e.starts_at).getTime() - now) / 60000);
-    if (m >= 0) out.badges.amphi = { text: m >= 1440 ? `In ${Math.floor(m / 1440)}d` : m >= 60 ? `In ${Math.floor(m / 60)}h` : 'Today', tone: '' };
+    if (m >= 0) out.badges[EVENTS_BUILDING] = { text: m >= 1440 ? `In ${Math.floor(m / 1440)}d` : m >= 60 ? `In ${Math.floor(m / 60)}h` : 'Today', tone: '' };
   }
   return out;
 }
 
 /** WP-4: what is coming up, for the map's badges and the panel's Right now and urgent card: a member's next live class and, for
  *  everyone, the next event. Re-read on the tick (the facts are cached a minute, campusFacts). */
-export interface HomeAgenda { lecture: ArrivalData; amphi: ArrivalData; now: number }
+/** C62: `events` is the next event, read where events happen (the Meeting Rooms). */
+export interface HomeAgenda { lecture: ArrivalData; events: ArrivalData; now: number }
 export function useHomeAgenda(audience: CampusAudience, active: boolean): HomeAgenda | null {
-  const [data, setData] = useState<{ lecture: ArrivalData; amphi: ArrivalData } | null>(null);
+  const [data, setData] = useState<{ lecture: ArrivalData; events: ArrivalData } | null>(null);
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     if (!active) return undefined;
     let alive = true;
-    const load = () => Promise.all([audience === 'member' ? loadArrival('lecture', audience) : Promise.resolve<ArrivalData>({}), loadArrival('amphi', audience)])
-      .then(([lecture, amphi]) => { if (alive) setData({ lecture, amphi }); });
+    const load = () => Promise.all([audience === 'member' ? loadArrival('lecture', audience) : Promise.resolve<ArrivalData>({}), loadArrival(EVENTS_BUILDING, audience)])
+      .then(([lecture, events]) => { if (alive) setData({ lecture, events }); });
     load();
     const t = window.setInterval(() => { setNow(Date.now()); load(); }, TICK_MS);
     return () => { alive = false; window.clearInterval(t); };
@@ -61,5 +63,5 @@ export function useHomeAgenda(audience: CampusAudience, active: boolean): HomeAg
 
 /** The map's moments: members only, as in the prototype (Explorers keep their access badges). */
 export function mapMoments(audience: CampusAudience, agenda: HomeAgenda | null): MapMoments | undefined {
-  return audience === 'member' && agenda ? momentsFrom(agenda.lecture, agenda.amphi, agenda.now) : undefined;
+  return audience === 'member' && agenda ? momentsFrom(agenda.lecture, agenda.events, agenda.now) : undefined;
 }
