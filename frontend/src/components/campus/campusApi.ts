@@ -120,7 +120,7 @@ export async function postTourComplete(): Promise<TourCompleteAnswer> {
 
 // ---- C9: My look (same rules: own request, token attached, no redirect interceptor) ----
 
-export interface LookItem { id: string; name: string; slot: 'head' | 'face' | 'body' | 'neck' | 'ride'; threshold: number; unlocked: boolean }
+export interface LookItem { id: string; name: string; slot: 'head' | 'face' | 'body' | 'neck'; threshold: number; unlocked: boolean }
 export interface CampusLook { points: number; rung_name: string; catalog: LookItem[]; equipped: Record<string, string> }
 
 function asLook(data: unknown): CampusLook {

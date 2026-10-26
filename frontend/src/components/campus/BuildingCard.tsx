@@ -109,6 +109,8 @@ export default function BuildingCard({ building: b, access, workplaceNames, onCl
       </div>
       <div className="cm-arrive-body">
         {tourTop}
+        {/* C48 (Ali, 2026-10-25): the tour's Next / Back sit at the TOP with the stop, never at the bottom of a long card */}
+        {tourNav}
         {ways}
         {stage}
         {planBox}
@@ -160,7 +162,6 @@ export default function BuildingCard({ building: b, access, workplaceNames, onCl
 
         {children}
 
-        {tourNav}
         <div className="cm-arrive-foot">
           <button type="button" className="cm-btn-line" onClick={onClose} data-testid="cm-arrive-back">&larr; Back to the Quad</button>
           {onElsewhere && <button type="button" className="cm-btn-line" onClick={onElsewhere} data-testid="cm-arrive-elsewhere">Go somewhere else</button>}

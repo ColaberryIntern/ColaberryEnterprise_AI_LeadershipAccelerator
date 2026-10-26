@@ -11,6 +11,7 @@ import CabinetHost from '../../../components/campus/games/CabinetModal';
 import OrderSheetHost from '../../../components/campus/chow/OrderSheet';
 import { useAgenda } from '../../../components/campus/events/Agenda';
 import { comingUpOf } from '../../../components/campus/events/agendaModel';
+import { useNextOpenHouse } from '../../../components/campus/events/OpenHouseCard';
 import { useCampusWeather } from '../../../components/campus/weather/useCampusWeather';
 import { WeatherSky, WeatherChip } from '../../../components/campus/weather/WeatherViews';
 import { weatherLead } from '../../../components/campus/weather/weatherModel';
@@ -120,6 +121,8 @@ function CampusHome(): React.ReactElement {
   // C33 (v7 R6): Coming up = your next classes, the events you signed up for and the meeting rooms you booked
   const schedule = useAgenda(true);
   const coming = useMemo(() => comingUpOf(schedule ?? [], new Date()), [schedule]);
+  // C47: the next Open House (Explorers sign up, members share, staff are reminded)
+  const openHouse = useNextOpenHouse(audience === 'explorer' || audience === 'member' || audience === 'staff');
   // C37 (v9 W1-W4): the local weather and time of day; the clock alone while CAMPUS_WEATHER_ENABLED is off
   const wx = useCampusWeather(true);
   const wxLine = urgent || live ? null : weatherLead(wx.w, wx.tod, wx.celsius);
@@ -150,7 +153,7 @@ function CampusHome(): React.ReactElement {
         stops={campus.planStops} planMinutes={campus.planMinutes} live={live} now={new Date()} agenda={agenda} urgent={urgent}
         tourStops={tour ? tour.stops : null} touring={touring} tourProgress={campus.tourProgress} justToured={campus.justToured}
         onWalk={map.goTo} onRun={(id) => map.goTo(id, { run: true })} onHover={setHover} onTour={campus.resumeTour} onEndTour={campus.endTour} onDismissTour={campus.dismissTour} onDone={onComplete}
-        onOpen={(r) => campus.enterThroughDoor(r, null)} photo={photo} call={call} coming={coming} weatherLine={wxLine} />
+        onOpen={(r) => campus.enterThroughDoor(r, null)} photo={photo} call={call} coming={coming} openHouse={openHouse} weatherLine={wxLine} />
       <div className="cm-home-livebar"><CampusLive onWalk={(id, run) => map.goTo(id, { run })} hereId={campus.here ?? null} /></div>
       <CampusTabBar active="/portal/campus" />
       <CampusListView />

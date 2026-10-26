@@ -5,8 +5,8 @@ import LockerGrid from './LockerGrid';
 
 /**
  * The "My look" locker card (Colaberry Campus C9), shown on the full map. WP-7: the items are the prototype's locker tiles
- * (LockerGrid, shared with the Me panel). Every item is EARNED with points, never bought; a ride shows only on your own avatar,
- * and only while you travel.
+ * (LockerGrid, shared with the Me panel). Every item is EARNED with points, never bought (C46: gear
+ * only, no rides).
  */
 export interface MyLookProps {
   look: CampusLook | null;
@@ -26,7 +26,7 @@ export default function MyLook({ look, lookError, onSave, onClose }: MyLookProps
       {!look && !lookError && <p className="cm-who-note">Loading...</p>}
       {look && (
         <>
-          <p className="cm-who-note" data-testid="cm-look-points">{look.rung_name ? `${look.rung_name} · ` : ''}{look.points} points. Gear is earned with points, never bought. A ride shows only on your avatar, while you travel.</p>
+          <p className="cm-who-note" data-testid="cm-look-points">{look.rung_name ? `${look.rung_name} · ` : ''}{look.points} points. Gear is earned with points, never bought.</p>
           <LockerGrid look={look} onSave={onSave} />
         </>
       )}
