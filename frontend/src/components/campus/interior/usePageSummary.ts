@@ -44,7 +44,7 @@ export const clearSummaryCache = (): void => cache.clear();
 /** C43: the rooms whose left-wall board comes from wallBoards.ts (each from the data its page reads). */
 const WALL_FETCH: Partial<Record<BuildingId, (section: string, audience?: CampusAudience) => Promise<SideTop>>> = {
   library: (s) => cached('library', fetchLibrary).then((v) => libraryBoard(v, s), () => libraryBoard(null, s)),
-  amphi: (s, a) => cached('events-30', () => fetchPublicEvents(30)).then((e) => eventsBoard(eventsFor(a, e), new Date(), s), () => eventsBoard(null, new Date(), s)),
+  commons: (s, a) => cached('events-30', () => fetchPublicEvents(30)).then((e) => eventsBoard(eventsFor(a, e), new Date(), s), () => eventsBoard(null, new Date(), s)), // C62 where, C60 who
   observatory: (s) => cached('classroom', () => portalApi.get('/api/portal/classroom').then((r) => r.data as ClassroomFeed)).then((f) => progressBoard(f, s), () => progressBoard(null, s)),
   gallery: (s) => cached('career-profile', fetchCareerProfile).then((p) => portfolioBoard(p, s), () => portfolioBoard(null, s)),
   // a non-intern gets a 404 from the dashboard: the empty state, not an error

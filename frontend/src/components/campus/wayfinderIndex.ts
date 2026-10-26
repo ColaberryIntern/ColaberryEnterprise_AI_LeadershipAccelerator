@@ -32,14 +32,14 @@ export interface WfItem {
 
 /** The prototype's `keys` per building, verbatim (with the business district's extra words). */
 export const WF_KEYS: Partial<Record<BuildingId, string>> = {
-  lecture: 'class classroom lesson lessons week lecture session sessions live check in checkin attendance learn study today plan broadcast on air watch stream colaberry replay',
+  lecture: 'class classroom lesson lessons week lecture session sessions live check in checkin attendance learn study today plan watch replay', // C62: broadcast words are the Events Hall's
   library: 'library curriculum lessons reading reference resources guides docs study',
   tower: 'schedule calendar agenda today time when late what next tower clock plan',
   studio: 'project projects build builds ship code workspace assignment assignments blueprint homework studio sprint board ticket tickets jira kanban work office hq client deliverable',
-  amphi: 'event events open house rsvp demo talk meetup amphitheater',
+  amphi: 'colaberry live broadcast on air auditorium amphitheater town hall stream', // C62: events moved to the Meeting Rooms
   testing: 'cert certification prep exam test quiz knowledge check claude code verify skills proficiency',
   observatory: 'path progress points streak tier level rank skills radar me my growth observatory',
-  commons: 'community people classmates chat rooms room meeting meetings hallway door doors study group pair 1:1 one-on-one book session hang lounge social commons friends',
+  commons: 'event events open house rsvp demo talk meetup community people classmates chat rooms room meeting meetings hallway door doors study group pair 1:1 one-on-one book session hang lounge social commons friends',
   gallery: 'portfolio showcase gallery work share resume demo show showroom demos client clients present',
   career: 'internship intern standup stand-up meeting company job career team orientation handoff client clients engagement engagements management portal employee company office tower',
   arcade: 'game games arcade play break relax fun chase maze slingshot launch breakout bricks score scores leaderboard rest',

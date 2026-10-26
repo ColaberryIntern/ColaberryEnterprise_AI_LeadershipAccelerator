@@ -9,15 +9,16 @@ import type { DiscoveryBroadcast } from '../../../hooks/useBroadcastDiscovery';
 
 const bc = (o: Partial<DiscoveryBroadcast>): DiscoveryBroadcast => ({ id: 'b', title: 'Live', room_id: null, session_id: null, ...o } as DiscoveryBroadcast);
 
-it('all four kinds map to their building', () => {
-  expect(roomKind({ broadcast: true })).toBe('event');
+it('all five kinds map to their building (C62: a broadcast is live, the Events Hall; an event room is the Meeting Rooms)', () => {
+  expect(roomKind({ broadcast: true })).toBe('live');
   expect(roomKind({ metadata: { kind: 'event' } })).toBe('event');
   expect(roomKind({ metadata: { event_id: 'eb-1' } })).toBe('event');
   expect(roomKind({ room_type: 'scheduled', linked_live_session_id: 'ls-1' })).toBe('class');
   expect(roomKind({ room_type: 'scheduled', linked_live_session_id: null })).toBe('open');
   expect(roomKind({ room_type: 'persistent', has_booking: true })).toBe('session');
   expect(roomKind({ room_type: 'persistent' })).toBe('open');
-  expect(ROOM_BUILDING).toEqual({ event: 'amphi', class: 'lecture', session: 'commons', open: 'commons' });
+  expect(ROOM_BUILDING).toEqual({ live: 'amphi', event: 'commons', class: 'lecture', session: 'commons', open: 'commons' });
+  expect(roomBuilding({ metadata: { kind: 'event' } })).toBe('commons');
   expect(roomBuilding({ broadcast: true, room_type: 'scheduled', linked_live_session_id: 'ls-1' })).toBe('amphi'); // a broadcast wins
 });
 

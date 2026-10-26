@@ -12,6 +12,7 @@ import campusHallwayRoutes from './campusHallwayRoutes';
 import campusWeatherRoutes from './campusWeatherRoutes';
 import campusTourProgressRoutes from './campusTourProgressRoutes';
 import communityBoardRoutes from './communityBoardRoutes';
+import campusWeekdaySessionsRoutes from './campusWeekdaySessionsRoutes';
 
 /**
  * The learner-portal mounts, out of `server.ts` (Phase 5 T514).
@@ -57,4 +58,6 @@ export function mountLearnerPortalRoutes(app: Express): void {
   app.use(campusTourProgressRoutes);
   // Colaberry Campus v14: the Community Board in sections + server-side seen (C65 / C66; participant-authed, behind the pilot).
   app.use(communityBoardRoutes);
+  // Colaberry Campus: the weekly sessions (C63; the Monday call for interns only, decided server-side; participant-authed, pilot).
+  app.use(campusWeekdaySessionsRoutes);
 }

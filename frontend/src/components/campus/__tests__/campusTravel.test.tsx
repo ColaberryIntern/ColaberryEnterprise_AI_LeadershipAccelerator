@@ -138,7 +138,7 @@ describe('what is next on the map (members), and the quiet look', () => {
   it('"Class in 1d 3h", "In 15d"; within 15 minutes the badge turns red and the ring pulses; live says Live now', () => {
     expect(shortIn(now + 27 * 3600000, now)).toBe('1d 3h');
     const far = momentsFrom({ session: session('2026-10-23', '13:00') }, { event: { id: 'e', title: 'Open House', starts_at: new Date(now + 15 * 86400000).toISOString() } as never }, now);
-    expect(far).toEqual({ urgent: null, badges: { lecture: { text: 'Class in 1d 3h', tone: '' }, amphi: { text: 'In 15d', tone: '' } } });
+    expect(far).toEqual({ urgent: null, badges: { lecture: { text: 'Class in 1d 3h', tone: '' }, commons: { text: 'In 15d', tone: '' } } }); // C62: the event badge is on the Meeting Rooms
     const soon = momentsFrom({ session: session('2026-10-22', '10:12') }, {}, now);
     expect(soon).toEqual({ urgent: 'lecture', badges: { lecture: { text: 'Class in 12 min', tone: 'hot' } } });
     expect(momentsFrom({ session: session('2026-10-22', '09:00', 'live') }, {}, now).badges.lecture).toEqual({ text: 'Live now', tone: 'hot' });

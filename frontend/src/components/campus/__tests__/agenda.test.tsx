@@ -25,7 +25,7 @@ const place = (id: string) => PLACE[id] ?? id;
 describe('the model', () => {
   it('a class, an event and a session, in date order, each in its building', () => {
     const items = agenda({ sessions: [cls()], events: [ev()], bookings: [bk()], now: NOW });
-    expect(items.map((i) => [i.kind, i.building])).toEqual([['session', 'commons'], ['class', 'lecture'], ['event', 'amphi']]);
+    expect(items.map((i) => [i.kind, i.building])).toEqual([['session', 'commons'], ['class', 'lecture'], ['event', 'commons']]); // C62: events happen in the Meeting Rooms
     expect(items[1].title).toBe('Week 3 · Build Day');
   });
   it('a class starts at its Central wall time (DST-correct); a past class, a completed one and a cancelled one are not ahead', () => {

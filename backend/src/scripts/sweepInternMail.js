@@ -39,6 +39,7 @@
  *   node dist/scripts/sweepInternMail.js --since 48h --apply
  */
 const { Sequelize, QueryTypes } = require('sequelize');
+const { fetchAllPages } = require('./lib/basecampPaging');
 const R = require('./lib/agentRoster');
 
 const ACCOUNT = '3945211';
@@ -90,6 +91,11 @@ async function bc(method, p, body) {
   if (!r.ok) throw new Error(`${method} ${p} -> ${r.status} ${(await r.text()).slice(0, 160)}`);
   return r.status === 204 ? {} : r.json();
 }
+
+/** Every comment on a ticket. Paginated, because `comments.json` returns the OLDEST 15. */
+const allComments = (recordingId) => fetchAllPages(
+  (page) => bc('GET', `/buckets/${BUCKET}/recordings/${recordingId}/comments.json?page=${page}`),
+);
 
 const esc = (s) => String(s == null ? '' : s)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -271,8 +277,8 @@ function troubleWords(subject, body) {
       continue;
     }
 
-    const existing = await bc('GET', `/buckets/${BUCKET}/recordings/${ticket.id}/comments.json`);
-    const already = (existing || []).some((c) => String(c.content || '').includes(m.pmid));
+    const existing = await allComments(ticket.id);
+    const already = existing.some((c) => String(c.content || '').includes(m.pmid));
     if (already) {
       skipped++;
       console.log(`  ALREADY    ${label}  -> ${ticket.agent}`);
