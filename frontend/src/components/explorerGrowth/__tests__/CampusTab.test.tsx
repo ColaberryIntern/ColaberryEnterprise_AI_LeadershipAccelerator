@@ -5,6 +5,7 @@
 import React from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { act } from 'react-dom/test-utils';
+import { MemoryRouter } from 'react-router-dom';
 
 const mockActivity = jest.fn();
 const mockOutreach = jest.fn();
@@ -44,7 +45,7 @@ const q = (id: string) => container.querySelector(`[data-testid="${id}"]`) as HT
 const flush = async () => { await act(async () => { await Promise.resolve(); await Promise.resolve(); }); };
 
 it('shows the campus numbers and how far explorers got in the tour', async () => {
-  act(() => { root.render(<CampusTab />); });
+  act(() => { root.render(<MemoryRouter><CampusTab /></MemoryRouter>); });
   await flush();
   expect(q('eg-kpi-openhouse')!.textContent).toContain('42');
   expect(q('eg-kpi-openhouse')!.textContent).toContain('45 seats saved');
@@ -58,19 +59,21 @@ it('shows the campus numbers and how far explorers got in the tour', async () =>
 
 it('says so when no tour has been taken yet', async () => {
   mockActivity.mockResolvedValue({ ...ACTIVITY, tours: { started: 0, finished: 0, by_stop: [] } });
-  act(() => { root.render(<CampusTab />); });
+  act(() => { root.render(<MemoryRouter><CampusTab /></MemoryRouter>); });
   await flush();
   expect(q('eg-tour-none')).not.toBeNull();
 });
 
 it('lists who to reach out to with the reasons, and switches to Most engaged', async () => {
-  act(() => { root.render(<CampusTab />); });
+  act(() => { root.render(<MemoryRouter><CampusTab /></MemoryRouter>); });
   await flush();
   expect(mockOutreach).toHaveBeenCalledWith('reach_out', 25);
   const row = q('eg-outreach-row')!;
   expect(row.textContent).toContain('Pat Lee');
   expect(row.textContent).toContain('Campus tour: stop 5 of 8');
-  expect(row.querySelector('a')!.getAttribute('href')).toBe('mailto:pat@example.com');
+  // 2026-10-26: the name opens the 360; the email still starts a message
+  expect(row.querySelector('a')!.getAttribute('href')).toBe('/admin/people/pat%40example.com?tab=explorer');
+  expect(row.querySelector('a[href^="mailto:"]')!.getAttribute('href')).toBe('mailto:pat@example.com');
   act(() => { q('eg-view-engaged')!.click(); });
   await flush();
   expect(mockOutreach).toHaveBeenLastCalledWith('engaged', 25);
