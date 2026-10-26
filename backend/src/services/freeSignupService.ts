@@ -63,6 +63,37 @@ export interface FreeSignupInput {
     page_url?: string;
     visitor_id?: string;
   };
+
+  /**
+   * What the person actually ticked. Absent or false records NOTHING: it is not a
+   * revocation, and it is never inferred from anything else.
+   *
+   * Kept OUT of `acquisition` on purpose. Everything in there is written to a
+   * `Lead` column; consent is its own record with its own evidence, and if it rode
+   * along in that object Sequelize would silently drop it.
+   */
+  marketingOptIn?: boolean;
+
+  /**
+   * Which `lead_sources` row this DOOR is, as a slug.
+   *
+   * The door names itself and the server resolves the slug to a tenant and brand
+   * through `modules/tenancy/tenantResolver`. No slug-to-brand map is added here:
+   * `growthJourney/journeyDefaults.ts` makes a third such map an explicit hard
+   * stop, and names that resolver as the thing to call instead.
+   *
+   * No default. `createFreeAccount` has five callers and only one is the AI-learning
+   * funnel, so a default would stamp org invites and invited teammates with a brand
+   * nobody chose for them - the same conscription the required `programme` argument
+   * exists to prevent.
+   */
+  sourceSlug?: string;
+
+  /** Evidence of the request that produced the consent. Optional; absent stays null. */
+  requestMeta?: {
+    ipAddress?: string | null;
+    userAgent?: string | null;
+  };
 }
 
 export interface FreeSignupResult {
@@ -124,6 +155,8 @@ export function guestEnrollmentDefaults(clean: FreeAccountIdentity) {
 async function captureGuestAsLead(
   clean: FreeAccountIdentity,
   acquisition: FreeSignupInput['acquisition'],
+  resolvedSourceId: string | null,
+  consentContact: boolean,
 ): Promise<number | null> {
   try {
     const [lead] = await Lead.findOrCreate({
@@ -131,6 +164,18 @@ async function captureGuestAsLead(
       defaults: {
         name: clean.full_name,
         email: clean.email,
+        // The consent the person actually gave, instead of the column default.
+        //
+        // `leads.consent_contact` is `NOT NULL DEFAULT false`, and nothing on this
+        // path ever wrote it, so every free-signup lead recorded a refusal nobody
+        // made: 110 of 110 measured on production against an all-time baseline of
+        // 21,847 true to 3,068 false.
+        //
+        // In `defaults` ONLY, deliberately. A returning email writes nothing here -
+        // `freeSignupAcquisition.test.ts` pins that as intended behaviour - so a
+        // returning person's new consent is recorded on the brand relationship
+        // instead, which is the row the send gate actually reads.
+        consent_contact: consentContact,
         // The caller's own source wins when supplied, so a signup that arrived
         // through a named entry point keeps that provenance. `free_signup` stays
         // the fallback, and is still what makes these rows identifiable and
@@ -141,7 +186,11 @@ async function captureGuestAsLead(
         // Acquisition evidence. `?? null` rather than `|| null` so that a
         // deliberate 0 or empty string is preserved instead of being swallowed,
         // and so "absent" lands as NULL rather than as an invented default.
-        source_id: acquisition?.source_id ?? null,
+        // A caller-supplied `source_id` still wins; the slug-resolved one is the
+        // fallback. Before this, nothing resolved anything and no caller sent a
+        // UUID, so all 197 production rows carried NULL - which is why the origin
+        // brand was underivable and no brand relationship could exist.
+        source_id: acquisition?.source_id ?? resolvedSourceId,
         entry_point_id: acquisition?.entry_point_id ?? null,
         utm_source: acquisition?.utm_source ?? null,
         utm_campaign: acquisition?.utm_campaign ?? null,
@@ -235,7 +284,36 @@ export async function createFreeAccount(input: FreeSignupInput): Promise<FreeSig
     } catch { /* never allowed to affect signup */ }
   })();
 
-  const leadId = await captureGuestAsLead(clean, input.acquisition);
+  // Resolve the door's slug to a tenant and brand through the one resolver that
+  // owns that question. `resolveContextBySourceSlug` reads `lead_sources`, refuses
+  // a non-active brand or tenant, caches for five minutes, and returns null rather
+  // than throwing.
+  //
+  // NULL IS HONOURED, NOT PAPERED OVER. `journeyDefaults.ts` states the doctrine
+  // plainly - the default when nothing resolves is no programme, "not 'the first
+  // brand', not 'Colaberry Training'" - so an unresolved slug means no `source_id`
+  // and no brand relationship. Inventing a brand here would attribute a person to a
+  // business they never touched, and the relationship row is what later permits mail
+  // to be sent to them. An honest absence is recoverable; a fabricated consent
+  // relationship is not.
+  const context = input.sourceSlug
+    ? await (async () => {
+      try {
+        const { resolveContextBySourceSlug } = await import('../modules/tenancy/tenantResolver');
+        return await resolveContextBySourceSlug(input.sourceSlug);
+      } catch {
+        return null;
+      }
+    })()
+    : null;
+
+  const consented = input.marketingOptIn === true;
+  const leadId = await captureGuestAsLead(
+    clean,
+    input.acquisition,
+    context?.sourceId ?? null,
+    consented,
+  );
 
   // T205: the Explorer journey profile, AT REGISTRATION rather than overnight.
   //
@@ -250,6 +328,73 @@ export async function createFreeAccount(input: FreeSignupInput): Promise<FreeSig
   // on the input, so a reused non-learner row is also correctly skipped.
   if (enrollment.enrollment_type === 'explorer') {
     await bridgeExplorerProfileAtRegistration(enrollment.id, 'portal_free_signup');
+  }
+
+  // Consent, as a record and as a relationship. Two writes, because they answer two
+  // different questions and one cannot stand in for the other.
+  //
+  //   consent_records       - WHAT they agreed to, in the words they were shown.
+  //                           The audit trail. Written only on an affirmative act.
+  //   lead_tenant_contexts  - WHICH BRAND may contact them. What `brandPreferenceGate`
+  //                           actually reads before a send, and the reason a
+  //                           Colaberry Training campaign can reach this person at
+  //                           all. Without the row the gate returns `no_relationship`
+  //                           and blocks, which is how 43,000 sends were cancelled.
+  //
+  // Both are best-effort and neither may fail a signup. Both are idempotent:
+  // `captureSignupConsent` writes nothing unless the box was ticked, and
+  // `ensureLeadTenantContext` is keyed on a unique `(lead_id, tenant_id, brand_id)`
+  // and only ever GRANTS consent on an existing row, never revokes it.
+  //
+  // `ensureLeadTenantContext` is called rather than writing the table directly
+  // because `leadContextService` declares itself the only writer of it, and a second
+  // writer is how first-touch attribution starts disagreeing with itself.
+  if (leadId !== null) {
+    try {
+      const { captureSignupConsent, SIGNUP_CONSENT_TEXT } = await import('./consent/captureSignupConsent');
+      await captureSignupConsent({
+        email: clean.email,
+        marketingOptIn: input.marketingOptIn,
+        source: 'free_signup',
+        consentText: SIGNUP_CONSENT_TEXT,
+        ipAddress: input.requestMeta?.ipAddress ?? null,
+        userAgent: input.requestMeta?.userAgent ?? null,
+      });
+    } catch (error) {
+      console.error('[freeSignup] consent capture failed', {
+        error_class: error instanceof Error ? error.constructor.name : 'Unknown',
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+
+    // Only with a resolved brand. See the resolver call above for why a null is
+    // honoured instead of defaulted.
+    if (context) {
+      try {
+        const { ensureLeadTenantContext } = await import('../modules/tenancy/leadContextService');
+        await ensureLeadTenantContext({
+          leadId,
+          tenantId: context.tenantId,
+          brandId: context.brandId,
+          // 'learner' is what this door creates; `programme: 'learner'` is passed by
+          // its only caller. The column is free text with no enum, and the model's
+          // own examples name `learner` first.
+          relationshipType: 'learner',
+          consentContact: consented,
+          consentSource: 'free_signup',
+          attribution: {
+            sourceId: context.sourceId ?? null,
+            entryPointId: input.acquisition?.entry_point_id ?? null,
+            visitorId: input.acquisition?.visitor_id ?? null,
+          },
+        });
+      } catch (error) {
+        console.error('[freeSignup] brand relationship write failed', {
+          error_class: error instanceof Error ? error.constructor.name : 'Unknown',
+          message: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
   }
 
   // The sign-in link. THIS IS THE BUG THIS CHANGE FIXES.

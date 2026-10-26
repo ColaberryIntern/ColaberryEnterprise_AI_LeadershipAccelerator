@@ -20,7 +20,7 @@ import OpsBcTodo from '../../models/OpsBcTodo';
 import OpsBcProject from '../../models/OpsBcProject';
 import { sequelize } from '../../config/database';
 import { getBcToken, refreshBcToken, isAuthError } from './basecampToken';
-import { BC_RETRYABLE_STATUS, bcBackoffMs, bcPace, sleep } from './bcRetry';
+import { BC_RETRYABLE_STATUS, bcBackoffMs, bcPace, bcTimeoutMs, sleep } from './bcRetry';
 import { reconcileAction, is404 } from './bcReconcile';
 
 // Projects with no BC activity (no todo updated, no project metadata
@@ -87,7 +87,17 @@ async function bcGet<T>(url: string): Promise<T> {
   let refreshed = false;
   for (let attempt = 0; ; attempt++) {
     await bcPace(); // stay under BC's rate limit so 429s rarely happen at all
-    const r = await fetch(u, { headers: bcHeaders(getBcToken()) });
+    // TIMEOUT FROM THE SHARED bcRetry HELPER, the same one `basecampClient.bcSend` uses, so
+    // both Basecamp clients honour one `BC_TIMEOUT_MS` rather than drifting apart.
+    //
+    // Without it this request could hang indefinitely, and it sits INSIDE the retry loop — so a
+    // single stalled connection stops the whole sync cycle rather than failing that page and
+    // retrying. `basecampClient` has had this since it was written; this near-duplicate client
+    // did not, which is the cost of there being two of them.
+    const r = await fetch(u, {
+      headers: bcHeaders(getBcToken()),
+      signal: AbortSignal.timeout(bcTimeoutMs()),
+    });
     if (isAuthError(r.status) && !refreshed) {
       await refreshBcToken();
       refreshed = true;

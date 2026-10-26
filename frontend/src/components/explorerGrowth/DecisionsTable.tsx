@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import StatusBadge from '../admin/shell/StatusBadge';
 import AsyncPanel from './AsyncPanel';
 import DecisionWhyModal from './DecisionWhyModal';
+import LearnerName from './LearnerName';
 import { useExplorerData } from './useExplorerData';
 import type { ExplorerDecisionPage } from '../../services/explorerGrowthApi';
 
@@ -68,7 +69,8 @@ export default function DecisionsTable({
                   {p.rows.map((r) => (
                     <tr key={r.id}>
                       <td>
-                        <div className="fw-semibold">{r.email_normalized ?? '—'}</div>
+                        {/* 2026-10-26: the 360 profile and the GHL record, one click each */}
+                        <div className="fw-semibold"><LearnerName enrollmentId={r.enrollment_id} email={r.email_normalized} leadId={r.lead_id} ghlUrl={r.ghl_url} /></div>
                         <div className="text-muted small font-monospace">
                           {r.enrollment_id.slice(0, 8)}…
                         </div>

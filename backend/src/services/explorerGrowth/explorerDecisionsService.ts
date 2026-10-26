@@ -5,6 +5,7 @@ import { namedGaps } from './explorerGapParsing';
 import { pgArray } from './content/resolveContentAssets';
 import type { ExplorerActionType, ExplorerAssetPurpose } from '../../types/explorerGrowth';
 import type { ContentQuery, DecisionsQuery, ShadowQuery } from '../../schemas/explorerGrowthSchema';
+import { withGhlUrls } from './explorerPersonLinks';
 
 /**
  * The per-decision tabs: Decisions, Shadow, and Content.
@@ -45,6 +46,9 @@ export interface ExplorerDecisionRow {
   e_score: number | null;
   i_score: number | null;
   f_score: number | null;
+  /** 2026-10-26: the 360 page and the GHL record, one click each (explorerPersonLinks). */
+  lead_id: number | null;
+  ghl_url: string | null;
 }
 
 export interface ExplorerDecisionPage {
@@ -113,7 +117,8 @@ const DECISION_COLUMNS = `d.id, d.enrollment_id, d.decision_date, d.mode, d.sele
        d.channel, d.executed, d.reason,
        jsonb_array_length(d.suppressed_actions) AS suppressed_count,
        jsonb_array_length(d.selected_content_assets) AS asset_count,
-       p.email_normalized, p.primary_state, p.e_score, p.i_score, p.f_score`;
+       p.email_normalized, p.primary_state, p.e_score, p.i_score, p.f_score,
+       p.lead_id, l.ghl_contact_id, l.source AS lead_source`;
 
 async function listDecisions(
   where: string,
@@ -127,15 +132,17 @@ async function listDecisions(
     { replacements: bind, type: QueryTypes.SELECT },
   );
 
-  const rows = await sequelize.query<ExplorerDecisionRow>(
+  const raw = await sequelize.query<Omit<ExplorerDecisionRow, 'ghl_url'> & { ghl_contact_id: string | null; lead_source: string | null }>(
     `SELECT ${DECISION_COLUMNS}
        FROM explorer_journey_decisions d
        LEFT JOIN explorer_journey_profiles p ON p.enrollment_id = d.enrollment_id
+       LEFT JOIN leads l ON l.id = p.lead_id
        ${where}
       ORDER BY d.created_at DESC, d.id
       LIMIT :limit OFFSET :offset`,
     { replacements: { ...bind, limit, offset }, type: QueryTypes.SELECT },
   );
+  const rows: ExplorerDecisionRow[] = await withGhlUrls(raw);
 
   return {
     rows,

@@ -3,6 +3,7 @@ import SectionCard from '../admin/shell/SectionCard';
 import StatusBadge from '../admin/shell/StatusBadge';
 import AsyncPanel from './AsyncPanel';
 import LearnerDrawer from './LearnerDrawer';
+import LearnerName from './LearnerName';
 import { useExplorerData } from './useExplorerData';
 import {
   getLearners,
@@ -185,7 +186,8 @@ export default function JourneyTab() {
                         onClick={() => setOpen(r)}
                       >
                         <td>
-                          <div className="fw-semibold">{r.email_normalized}</div>
+                          {/* 2026-10-26: the 360 profile and the GHL record, one click each (they do not open the drawer) */}
+                          <div className="fw-semibold"><LearnerName enrollmentId={r.enrollment_id} email={r.email_normalized} leadId={r.lead_id} ghlUrl={r.ghl_url} /></div>
                           <div className="text-muted small font-monospace">
                             {r.enrollment_id.slice(0, 8)}…
                           </div>

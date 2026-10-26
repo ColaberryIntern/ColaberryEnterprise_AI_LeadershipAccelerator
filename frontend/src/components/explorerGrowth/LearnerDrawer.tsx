@@ -4,6 +4,7 @@ import AsyncPanel from './AsyncPanel';
 import SignalTimeline from './SignalTimeline';
 import DecisionWhyModal from './DecisionWhyModal';
 import { useExplorerData } from './useExplorerData';
+import LearnerName from './LearnerName';
 import {
   getEligibility,
   getLearner,
@@ -52,7 +53,8 @@ export default function LearnerDrawer({ enrollmentId, email, onClose }: Props) {
           <div className="modal-content">
             <div className="modal-header">
               <div>
-                <h5 className="modal-title">{email}</h5>
+                {/* 2026-10-26: the 360 profile and the GHL record, one click each (the GHL link comes with the profile) */}
+                <h5 className="modal-title"><LearnerName enrollmentId={enrollmentId} email={email} leadId={profile.data?.lead_id} ghlUrl={profile.data?.ghl_url} /></h5>
                 <div className="text-muted small font-monospace">{enrollmentId}</div>
               </div>
               <button type="button" className="btn-close" onClick={onClose} aria-label="Close" />

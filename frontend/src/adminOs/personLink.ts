@@ -43,7 +43,9 @@ export interface PersonRef {
 export type PersonTab =
   | 'timeline' | 'journey' | 'acquisition' | 'notes' | 'strategy'
   | 'communications' | 'class' | 'work' | 'account' | 'growth'
-  | 'engagement' | 'learning' | 'billing' | 'activity' | 'trust';
+  | 'engagement' | 'learning' | 'billing' | 'activity' | 'trust'
+  // the Explorer score tab (PersonProfilePage), linked from Explorer Growth (2026-10-26)
+  | 'explorer';
 
 /**
  * The 360 URL for whatever this row knows, or null when it knows nothing usable.

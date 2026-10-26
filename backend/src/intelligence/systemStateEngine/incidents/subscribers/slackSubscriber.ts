@@ -38,6 +38,12 @@ export function createSlackSubscriber(config: SlackSubscriberConfig): IncidentSu
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body),
+          // 10s, DELIBERATELY SHORTER than the repo's usual 15s. This is the incident
+          // NOTIFICATION path, so every second spent waiting on a stalled webhook is a second
+          // the alert is not delivered — and a Slack webhook that has not answered a small JSON
+          // POST in ten seconds is not going to. The `catch` below already turns the resulting
+          // TimeoutError into `{ status: 'failed' }`, so the failure path needed no change.
+          signal: AbortSignal.timeout(10_000),
         });
         if (!res.ok) return { status: 'failed', message: `HTTP ${res.status}` };
         return { status: 'succeeded' };

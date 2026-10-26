@@ -2,6 +2,7 @@ import { QueryTypes } from 'sequelize';
 import { sequelize } from '../../config/database';
 import type { ExplorerOverlay, ExplorerPrimaryState } from '../../types/explorerGrowth';
 import type { LearnersQuery } from '../../schemas/explorerGrowthSchema';
+import { withGhlUrls } from './explorerPersonLinks';
 
 /**
  * The aggregate tabs: Overview, Journey, and the mode Settings displays.
@@ -75,6 +76,8 @@ export interface ExplorerLearnerRow {
   state_entered_at: string | null;
   last_decision_at: string | null;
   scores_computed_at: string | null;
+  /** 2026-10-26: the GHL record, one click (explorerPersonLinks); the 360 link is built from the row on the client. */
+  ghl_url: string | null;
 }
 
 export interface ExplorerLearnerPage {
@@ -237,16 +240,19 @@ export async function getLearners(q: LearnersQuery): Promise<ExplorerLearnerPage
     { replacements: bind, type: QueryTypes.SELECT },
   );
 
-  const rows = await sequelize.query<ExplorerLearnerRow>(
+  const raw = await sequelize.query<Omit<ExplorerLearnerRow, 'ghl_url'> & { ghl_contact_id: string | null; lead_source: string | null }>(
     `SELECT p.enrollment_id, p.lead_id, p.email_normalized, p.primary_state, p.overlays,
             p.e_score, p.i_score, p.f_score, p.days_since_last_activity,
-            p.state_entered_at, p.last_decision_at, p.scores_computed_at
+            p.state_entered_at, p.last_decision_at, p.scores_computed_at,
+            l.ghl_contact_id, l.source AS lead_source
        FROM explorer_journey_profiles p
+       LEFT JOIN leads l ON l.id = p.lead_id
        ${where}
       ORDER BY p.i_score DESC NULLS LAST, p.e_score DESC NULLS LAST, p.enrollment_id
       LIMIT :limit OFFSET :offset`,
     { replacements: { ...bind, limit: q.limit, offset: q.offset }, type: QueryTypes.SELECT },
   );
 
+  const rows: ExplorerLearnerRow[] = await withGhlUrls(raw);
   return { rows, total: Number(count?.count ?? 0), limit: q.limit, offset: q.offset };
 }
