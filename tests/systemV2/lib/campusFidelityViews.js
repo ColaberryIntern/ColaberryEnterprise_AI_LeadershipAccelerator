@@ -237,6 +237,26 @@ const VIEWS = [
       return over.length ? 'text overflows: ' + over.slice(0, 3).join(' | ') : ''; })()` },
   // C37/C38 (v9, v10): the sky layer and the weather chip on the map (the clock alone while CAMPUS_WEATHER_ENABLED is off), and in the
   // Classroom the window on the right wall with the real view east ("Looking out at ...").
+  // v13 (C49-C53): Today is the Explorer's home base. On the map: the red Today button, the Today card first in the panel, the TODAY
+  // flag over the tower and START HERE at the gate; at the tower, Open Today as its primary and the "Today lives here" tile; the tour's
+  // stop 1 is the tower with Open Today. The member twin: a neutral button, the slim row, no flag and no sign.
+  { name: '32-today-explorer', route: '/portal/campus', accounts: ['explorer'], steps: () => [{ wait: 1200 }],
+    required: (a, size) => ['cm-topbar-today', 'cm-today-flag', 'cm-gate-today', ...(size === 'phone' ? [] : ['cm-today-card'])],
+    assert: () => `(() => { if (!document.querySelector('[data-testid="cm-topbar-today"]').classList.contains('is-primary')) return 'Today button is not red';
+      const c = document.querySelector('[data-testid="cm-today-card"]'); if (c && c.offsetParent !== null) { const lead = document.querySelector('[data-testid="cm-cc-lead"]');
+        if (lead && lead.nextElementSibling !== c && !(lead.nextElementSibling && lead.nextElementSibling.contains(c))) return 'the Today card is not first under the lead'; }
+      return document.querySelector('[data-testid="cm-gate-today"]').textContent.includes('START HERE') ? '' : 'gate sign text'; })()` },
+  { name: '32-today-explorer-tower', route: '/portal/campus', accounts: ['explorer'], steps: () => [tap('tower'), WALKED, { wait: 800 }],
+    required: () => ['cm-card', 'cm-tower-today'],
+    assert: () => `(() => document.querySelector('.cm-arrive').textContent.includes('Open Today') ? '' : 'the tower card has no Open Today')()` },
+  { name: '32-today-explorer-tour', route: '/portal/campus', accounts: ['explorer'], steps: () => [{ click: '[data-testid="cm-cc-tour-start"]' }, WALKED, { wait: 800 }],
+    required: () => ['cm-card', '.cm-arrive [data-testid="cm-tour"]', 'cm-tour-today'],
+    assert: () => `(() => { const t = document.querySelector('[data-testid="cm-tour-title"]').textContent; return t === 'Start here: Today' ? '' : 'stop 1 title: ' + t; })()` },
+  { name: '32-today-member', route: '/portal/campus', accounts: ['member'], steps: () => [{ wait: 1200 }],
+    required: (a, size) => ['cm-topbar-today', ...(size === 'phone' ? [] : ['cm-today-row'])],
+    assert: () => `(() => { if (document.querySelector('[data-testid="cm-topbar-today"]').classList.contains('is-primary')) return 'member Today button is red';
+      if (document.querySelector('[data-testid="cm-today-flag"]')) return 'member sees the TODAY flag';
+      return document.querySelector('[data-testid="cm-gate-today"]') ? 'member sees the gate sign' : ''; })()` },
   { name: '31-weather', route: '/portal/campus', accounts: ['member'], steps: () => [tap('lecture'), WALKED, { wait: 2000 }],
     required: (a, size) => ['cm-wx', 'cm-room-window', 'cm-win-looking', ...(size === 'phone' ? [] : ['cm-wx-chip'])],
     assert: () => `(() => { const l = document.querySelector('[data-testid="cm-win-looking"]').textContent; if (!/^Looking out at /.test(l)) return 'window sign: ' + l;
@@ -272,7 +292,7 @@ function panelFor(view, a, size) {
   if (view.name === '01-gate' || view.name === '23-workstation') return []; // the workstation is full screen, as the prototype's #ws
   const tour = a === 'staff' ? [] : ['cm-cc-tour'];
   if (view.route !== '/portal/campus' && view.name !== '14-step-outside') return size === 'phone' ? ['cm-steps-open'] : ['cm-page-rail', ...tour.map((t) => `[data-testid="cm-page-rail"] [data-testid="${t}"]`)];
-  if (size === 'phone' && (CARD_VIEWS.includes(view.name) || view.name.startsWith('21-room-') || view.name.startsWith('31-room-windows-') || view.name === '24-admissions' || view.name === '25-schedule' || view.name === '26-meeting-rooms' || view.name === '28-live' || view.name === '30-game-room-interior' || view.name === '30-chow-hall' || view.name === '31-weather')) return ['cm-cc-peek'];
+  if (size === 'phone' && (CARD_VIEWS.includes(view.name) || view.name.startsWith('21-room-') || view.name.startsWith('31-room-windows-') || view.name.startsWith('32-today-explorer-t') || view.name === '24-admissions' || view.name === '25-schedule' || view.name === '26-meeting-rooms' || view.name === '28-live' || view.name === '30-game-room-interior' || view.name === '30-chow-hall' || view.name === '31-weather')) return ['cm-cc-peek'];
   return ['cm-concierge', ...tour];
 }
 const withPanel = (view) => ({ ...view, required: (a, size) => [...view.required(a, size), ...panelFor(view, a, size)] });
