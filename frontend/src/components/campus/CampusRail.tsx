@@ -6,7 +6,8 @@ import { buildingForPath, buildingName } from './campusMap';
 import type { CampusBuilding } from './campusMap';
 import type { CampusPerson } from './campusApi';
 import { initialsOf } from './WhoIsHere';
-import { desksForBuilding } from './campusPeople';
+import { desksForBuilding, mayaAllowedFor } from './campusPeople';
+import { openBookCall } from './admissions/admissionsCallApi';
 import { rungTone } from '../../services/bandLadder';
 import { tourFor } from './tourSteps';
 import { UpNext, TourOffer } from './home/NextSteps';
@@ -34,7 +35,8 @@ export default function CampusRail(): React.ReactElement | null {
   const b = here ? buildings.find((x) => x.id === here.id) as CampusBuilding | undefined : undefined;
   const named = (b && presence && !presenceError ? presence[b.id]?.people ?? [] : []).filter((p): p is CampusPerson => 'enrollment_id' in p);
   const deskHere = b ? desksForBuilding(staffDesks, b.id, audience).filter((d) => d.on_duty) : [];
-  const allDesks = staffDesks.filter((d) => d.on_duty && (d.id !== 'maya' || audience === 'explorer' || audience === 'staff'));
+  const allDesks = staffDesks.filter((d) => d.on_duty && (d.id !== 'maya' || mayaAllowedFor(audience)));
+  const talk = audience === 'member' || audience === 'explorer'; // C20/C21: "📅 Talk to a person" on the rail's help desk
   const tour = tourFor(audience, buildings, accessOf, settings.workplaceNames);
   return (
     <div className="cm-rail" data-testid="cm-page-rail">
@@ -68,7 +70,7 @@ export default function CampusRail(): React.ReactElement | null {
           </ul>
         </section>
       )}
-      {allDesks.length > 0 && (
+      {(allDesks.length > 0 || talk) && (
         <section aria-label="Help desk">
           <h3 className="cm-rail-h">Help desk &middot; 24/7</h3>
           <div className="cm-rail-desks">
@@ -77,6 +79,11 @@ export default function CampusRail(): React.ReactElement | null {
                 <span className="cm-sav" aria-hidden="true">{initialsOf(d.name)}</span>{d.name}
               </button>
             ))}
+            {talk && (
+              <button type="button" className="cm-sbtn" onClick={() => openBookCall()} data-testid="cm-rail-talk" aria-haspopup="dialog">
+                <span className="cm-sav" aria-hidden="true">📅</span>Talk to a person
+              </button>
+            )}
           </div>
         </section>
       )}

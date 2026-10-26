@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { useCampus } from './CampusContext';
+import { useCampusView } from './useCampusView';
 
 /**
  * Phone bottom bar while the campus is active (Campus C2), in place of nav.te-tabbar; shown by
@@ -26,21 +27,25 @@ const TAB_ICON: Record<string, React.ReactElement> = {
 
 export default function CampusTabBar({ active }: { active: string }): React.ReactElement {
   const { openMap, layer, settings } = useCampus();
+  const { audience } = useCampusView();
+  const todayFirst = audience === 'explorer'; // C49 (v13 T1): Today, the Explorer's home base, leads the tab bar
   const on = (m: string[]) => m.some((p) => active === p || active.startsWith(p + '/'));
+  const tab = (t: typeof TABS[number]) => (
+    <Link key={t.label} to={t.to} className={`cm-tab${on(t.match) ? ' active' : ''}`} aria-current={on(t.match) ? 'page' : undefined}>
+      <span className="cm-tab-ic" aria-hidden="true">{TAB_ICON[t.label]}</span>
+      <span className="lb">{settings.workplaceNames && t.workplaceLabel ? t.workplaceLabel : t.label}</span>
+    </Link>
+  );
   return (
     <nav className="cm-tabbar" aria-label="Campus">
+      {todayFirst && tab(TABS[0])}
       <button type="button" className={`cm-tab${layer === 'map' || active === '/portal/campus' ? ' active' : ''}`} aria-current={active === '/portal/campus' ? 'page' : undefined} onClick={() => openMap()}>
         <span className="cm-tab-ic" aria-hidden="true">
           <svg viewBox="0 0 24 24" fill="none"><path d="M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2V6z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /><path d="M9 4v14M15 6v14" stroke="currentColor" strokeWidth="2" /></svg>
         </span>
         <span className="lb">Map</span>
       </button>
-      {TABS.map((t) => (
-        <Link key={t.label} to={t.to} className={`cm-tab${on(t.match) ? ' active' : ''}`} aria-current={on(t.match) ? 'page' : undefined}>
-          <span className="cm-tab-ic" aria-hidden="true">{TAB_ICON[t.label]}</span>
-          <span className="lb">{settings.workplaceNames && t.workplaceLabel ? t.workplaceLabel : t.label}</span>
-        </Link>
-      ))}
+      {(todayFirst ? TABS.slice(1) : TABS).map(tab)}
     </nav>
   );
 }

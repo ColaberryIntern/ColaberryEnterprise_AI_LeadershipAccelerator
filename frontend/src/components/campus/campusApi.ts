@@ -80,8 +80,10 @@ export function isReadOnlySession(): boolean {
  * "I am in this building now." Throws on failure; the caller decides it is non-fatal. WP-7 (Q14): with `share` false the server
  * forgets your building instead of recording it ("Show which building I'm in" off).
  */
-export async function postCampusHere(area: string, share = true): Promise<void> {
-  await axios.post(`${process.env.REACT_APP_API_URL || ''}/api/portal/campus/here`, share ? { area } : { area, share: false }, {
+export async function postCampusHere(area: string, share = true, roomId: string | null = null): Promise<void> {
+  // C28: with a room id the server counts you in that room's building (sent only when sharing; forgetting needs no room)
+  const body = share ? { area, ...(roomId ? { room_id: roomId } : {}) } : { area, share: false };
+  await axios.post(`${process.env.REACT_APP_API_URL || ''}/api/portal/campus/here`, body, {
     headers: authHeaders(), timeout: CAMPUS_FLAGS_TIMEOUT_MS,
   });
 }
@@ -118,7 +120,7 @@ export async function postTourComplete(): Promise<TourCompleteAnswer> {
 
 // ---- C9: My look (same rules: own request, token attached, no redirect interceptor) ----
 
-export interface LookItem { id: string; name: string; slot: 'head' | 'face' | 'body' | 'neck' | 'ride'; threshold: number; unlocked: boolean }
+export interface LookItem { id: string; name: string; slot: 'head' | 'face' | 'body' | 'neck'; threshold: number; unlocked: boolean }
 export interface CampusLook { points: number; rung_name: string; catalog: LookItem[]; equipped: Record<string, string> }
 
 function asLook(data: unknown): CampusLook {

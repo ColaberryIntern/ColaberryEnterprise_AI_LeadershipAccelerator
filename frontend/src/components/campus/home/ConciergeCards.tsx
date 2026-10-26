@@ -11,6 +11,7 @@ import { useIsMgmt } from '../campusMgmt';
 import { roomLabel } from '../campusMap';
 import { deskRole } from './conciergeCopy';
 import { openStaffCard } from '../staffCard';
+import { openBookCall } from '../admissions/admissionsCallApi';
 
 /**
  * The concierge's cards (C11b), each the prototype's (.helpdesk, .plan-card, .pass) fed by real campus data (WP-6: the live card is LiveCard.tsx). A card
@@ -21,9 +22,9 @@ const initialsOf = (name: string) => name.split(/\s+/).filter(Boolean).map((w) =
 
 /** HELP DESK: the AI staff on duty for this viewer, each with the prototype's role (Mentor / Curriculum / Admissions); a press
  *  opens their card where you pressed (decision Q7, WP-5), with "Visit the desk" to walk there. */
-export function HelpDesk({ desks, workplace = false }: { desks: StaffDesk[]; workplace?: boolean }): React.ReactElement | null {
+export function HelpDesk({ desks, workplace = false, talk = false }: { desks: StaffDesk[]; workplace?: boolean; talk?: boolean }): React.ReactElement | null {
   const on = desks.filter((d) => d.on_duty);
-  if (!on.length) return null;
+  if (!on.length && !talk) return null;
   return (
     <div className="cm-helpdesk" data-testid="cm-cc-helpdesk">
       <span>Help desk</span>
@@ -33,6 +34,12 @@ export function HelpDesk({ desks, workplace = false }: { desks: StaffDesk[]; wor
           <span className="cm-sav" aria-hidden="true">{initialsOf(d.name)}</span>{d.name} <small>{deskRole(d, workplace)}</small>
         </button>
       ))}
+      {/* C20 (v3 2.7): a real person, not an AI; opens "Book a call with admissions" */}
+      {talk && (
+        <button type="button" className="cm-sbtn" onClick={() => openBookCall()} data-testid="cm-cc-talk" aria-haspopup="dialog">
+          <span className="cm-sav" aria-hidden="true">📅</span>Talk to a person <small>Admissions</small>
+        </button>
+      )}
     </div>
   );
 }

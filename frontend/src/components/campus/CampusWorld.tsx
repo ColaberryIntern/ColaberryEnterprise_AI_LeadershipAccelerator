@@ -28,7 +28,8 @@ import { useMapPeople } from './useMapPeople';
 import TravelToast from './TravelToast';
 import type { Travel } from './useWalk';
 import type { Me } from './art/AvatarPin';
-import type { MapMoments } from './CampusWorldMap';
+import type { MapMoments, WalkRequest } from './CampusWorldMap';
+import type { Pt } from './walkPath';
 import type { Framed } from './useWorldStage';
 import { openWayfinder } from './wayfinderHost';
 import type { CampusLiveNow } from './campusOnAir';
@@ -99,6 +100,8 @@ export interface CampusWorldProps {
   me?: Me | null;
   moments?: MapMoments;
   quiet?: boolean;
+  /** C17: you walked to a spot on the grass (the caller clears "here"). */
+  onGround?: () => void;
 }
 
 const NO_LOOK: LookFacts = { points: null, rung: null, planMinutes: null };
@@ -125,8 +128,9 @@ export default function CampusWorld(p: CampusWorldProps): React.ReactElement {
   openRef.current = open;
   const closeCard = useCallback(() => { const id = openRef.current; setOpen(null); if (id) els.current.get(id)?.focus(); }, []);
 
-  const [walkRequest, setWalkRequest] = useState<{ id: BuildingId; seq: number; instant?: boolean; run?: boolean } | null>(null);
+  const [walkRequest, setWalkRequest] = useState<WalkRequest | null>(null);
   const walk = useCallback((id: BuildingId, instant?: boolean, run?: boolean) => setWalkRequest((w) => ({ id, seq: (w?.seq ?? 0) + 1, instant, run })), []);
+  const walkSpot = useCallback((spot: Pt, instant?: boolean) => setWalkRequest((w) => ({ id: null, spot, seq: (w?.seq ?? 0) + 1, instant })), []);
   const [travel, setTravel] = useState<Travel | null>(null);
   const t = useWorldTour(tour, closeCard, walk, revealBuilding);
   const onArrive = useCallback((id: BuildingId) => { revealBuilding(id); setOpen(id); }, [revealBuilding]);
@@ -166,6 +170,14 @@ export default function CampusWorld(p: CampusWorldProps): React.ReactElement {
   // WP-1 R10 with WP-5's popover: a person card closing is a return to the campus too (when no other card is open)
   const hadPerson = useRef(false);
   useEffect(() => { if (hadPerson.current && !personCard && !anyCard) camApi.current?.recenter(); hadPerson.current = !!personCard; }, [personCard, anyCard, camApi]);
+  // A click on open ground closes whatever is open, in Esc's order (a popover, the locker, the room; the return recenters). C49b
+  // (Ali, 2026-10-25: "If I click on something that is not a building or Community Board, don't try to navigate there. You should
+  // not be able to show navigating to a non place."): it never walks you to a patch of grass. Only places are walked to.
+  const onGroundClick = useCallback(() => {
+    if (tour) return;
+    if (pp.peekOpen) pp.closePeek(); else if (staff.open) staff.close(); else if (personCard) onClosePerson?.();
+    else if (panel) panel.onClose(); else if (openRef.current) setOpen(null);
+  }, [tour, pp, staff, personCard, onClosePerson, panel]);
   const onCardRef = useRef(p.onCard); onCardRef.current = p.onCard;
   useEffect(() => { onCardRef.current?.({ open: anyCard, building: cardBuilding }); }, [anyCard, cardBuilding]);
   // The tour's STOP badges on the map (an Explorer's say what each stop is: "3 · OPEN"), the current stop green.
@@ -174,13 +186,13 @@ export default function CampusWorld(p: CampusWorldProps): React.ReactElement {
     <div className={`cm-world${anyCard ? ' has-card' : ''}`} onKeyDown={onKeyDown}>
       <CampusWorldMap buildings={buildings} accessOf={accessOf} workplaceNames={workplaceNames} reduceMotion={reduceMotion}
         initialTarget={p.initialTarget} onArrive={onArrive} buildingRef={registerEl} counts={presenceError ? undefined : counts}
-        people={pp.people} yours={pp.yours} onPeek={pp.openPeek} presenceDown={presenceError && presence !== undefined} walkRequest={walkRequest} onTravel={setTravel}
-        onAir={p.onAir} plan={p.plan?.stops} ownGear={p.ownGear} showOpen={audience === 'explorer'} camera={camera} desks={mapDesks}
+        people={pp.people} yours={pp.yours} onPeek={pp.openPeek} presenceDown={presenceError && presence !== undefined} walkRequest={walkRequest} onTravel={setTravel} onGroundClick={onGroundClick} onGround={p.onGround}
+        onAir={p.onAir} plan={p.plan?.stops} ownGear={p.ownGear} showOpen={audience === 'explorer'} todayFlag={audience === 'explorer'} camera={camera} desks={mapDesks}
         me={p.me ?? (meInitials ? { initials: meInitials } : null)} hover={p.hover} startAt={p.startAt}
         liveMark={p.liveNow ? { state: p.liveNow.state, text: marqueeText(p.liveNow.b, p.liveNow.now) } : null} tourBadges={tourBadges} dimExcept={cardBuilding} moments={p.moments} quiet={p.quiet} />
       <CampusZoomControls apiRef={camApi} />
-      <TravelToast text={travel ? `${travel.verb} to ${buildingName(buildings.find((x) => x.id === travel.id) ?? buildings[0], workplaceNames)}…` : null}
-        onSkip={() => { if (travel) walk(travel.id, true); }} />
+      <TravelToast text={travel ? `${travel.verb} to ${travelPlace(travel, buildings, workplaceNames)}…` : null}
+        onSkip={() => { if (travel?.spot) walkSpot(travel.spot, true); else if (travel?.id) walk(travel.id, true); }} />
       {pp.peek}
       {panel && panel.card}
       {staff.node}
@@ -198,8 +210,14 @@ export default function CampusWorld(p: CampusWorldProps): React.ReactElement {
   );
 }
 
-/** The prototype's goThroughDoor zooms from the room's own back door, not the building on the map. */
-const doorRect = (): DOMRect | null => document.querySelector('[data-testid="cm-inside-door"] rect')?.getBoundingClientRect() ?? null;
+/** Where the toast says you are going: the building's name, or (C17) "this spot" on the grass. */
+function travelPlace(t: Travel, buildings: CampusBuilding[], workplace: boolean): string {
+  const b = t.id ? buildings.find((x) => x.id === t.id) : undefined;
+  return b ? buildingName(b, workplace) : 'this spot';
+}
+
+/** v6 D1: the page or workstation grows out of what you went through: your spot when you sat down, otherwise the board. */
+const doorRect = (): DOMRect | null => (document.querySelector('.cm-r3-spot.is-sit') ?? document.querySelector('[data-testid="cm-board"]'))?.getBoundingClientRect() ?? null;
 
 function PersonPopFor({ t, buildings, workplace, audience, here, reese, onClose, onWalkOver, onMessaged }: {
   t: PersonCardTarget; buildings: CampusBuilding[]; workplace: boolean; audience: CampusAudience; here: boolean; reese: boolean;

@@ -31,6 +31,10 @@ export interface TopBarProps {
   onFind: () => void;
   /** Opens the Me panel (look and campus settings). */
   onMe: () => void;
+  /** C49 (v13 T1): today's plan for the Today button's count ("<done> of <total>"); null or empty: no count. */
+  today?: { done: number; total: number } | null;
+  /** C37 (v9 W4): the weather chip ("‹emoji› ‹temp›°", the clock alone while weather is off). */
+  weather?: React.ReactNode;
 }
 
 export default function CampusTopBar(p: TopBarProps): React.ReactElement {
@@ -47,6 +51,13 @@ export default function CampusTopBar(p: TopBarProps): React.ReactElement {
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><circle cx="12" cy="10" r="3" /><path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z" /></svg>
         <span>Where are you headed?</span><kbd aria-hidden="true">/</kbd>
       </button>
+      {/* C49 (v13 T1): Today, the Explorer's home base, one obvious click away: red for Explorers, neutral for everyone else (Ali's
+          default); ?stay=1 so the first-visit landing never bounces it back to the map */}
+      <Link to="/portal/today?stay=1" className={`cm-pill cm-topbar-today${audience === 'explorer' ? ' is-primary' : ''}`} data-testid="cm-topbar-today"
+        aria-label="Open Today: your next step, plan and events">
+        <span aria-hidden="true">📅</span> Today
+        {p.today && p.today.total > 0 && <small className="cm-today-count hide-m" data-testid="cm-topbar-today-count">{p.today.done} of {p.today.total}</small>}
+      </Link>
       <button type="button" className="cm-pill cm-topbar-list" onClick={p.onList} data-testid="cm-topbar-list" aria-label="List view of every building and room">
         <span aria-hidden="true">{'☰'}</span><span className="hide-m"> List</span>
       </button>
@@ -65,6 +76,7 @@ export default function CampusTopBar(p: TopBarProps): React.ReactElement {
           <><span className="sep hide-m" aria-hidden="true" />
             <span data-testid="cm-stats-streak" title="Day streak"><span aria-hidden="true">{'🔥 '}</span>{streak}<span className="cm-sr"> day streak</span></span></>
         )}
+        {p.weather && <><span className="sep hide-m" aria-hidden="true" />{p.weather}</>}
         <span className="cm-stats-bell" data-testid="cm-stats-bell"><NotificationBell /></span>
         <button type="button" className="cm-me" onClick={p.onMe} aria-label="You: your look and campus settings" data-testid="cm-stats-me">
           {p.photo ? <img src={p.photo} alt="" data-testid="cm-stats-photo" /> : initials}

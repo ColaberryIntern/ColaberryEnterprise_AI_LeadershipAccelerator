@@ -11,7 +11,7 @@ import type { CampusLook } from '../campusApi';
 
 const catalog = [
   { id: 'cap', name: 'Cohort cap', slot: 'head', threshold: 150, unlocked: true },
-  { id: 'board', name: 'Skateboard', slot: 'ride', threshold: 150, unlocked: true },
+  { id: 'jacket', name: 'Campus jacket', slot: 'body', threshold: 150, unlocked: true },
   { id: 'hoodie', name: 'Colaberry hoodie', slot: 'body', threshold: 400, unlocked: false },
 ] as CampusLook['catalog'];
 let mockLook: CampusLook = { points: 200, rung_name: 'AI Aware II', catalog, equipped: {} };

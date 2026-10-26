@@ -263,7 +263,12 @@ neither column:**
 
 **The send on the `/enroll` path, which is why T216 creates nothing in production — row 16:**
 
-- `backend/src/services/enrollmentService.ts:424` → "const result = await sendTrainingWelcome({"
+- `backend/src/services/enrollmentService.ts:432` → "const welcome = await sendPortalWelcome({"
+
+  Re-cited on 2026-10-25. This path used to call `sendTrainingWelcome` directly through its own
+  private copy of the token-mint-send-log block. That copy had no idempotency guard and was
+  measurably double-sending, so it was migrated onto the shared `sendPortalWelcome`. The send
+  still happens here; it is now guarded.
 
 ## What this enumeration does NOT claim
 

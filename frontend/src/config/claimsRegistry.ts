@@ -414,16 +414,17 @@ export const CLAIMS: readonly Claim[] = [
     evidenceSource: 'Live probe, 2026-08-07.',
     owner: 'Ali',
     lastVerifiedAt: '2026-08-07',
-    approvedRoutes: ['/pricing', '/'],
+    // C21: the campus Admissions board and /portal/plans (authenticated learner pages) show the same verified price.
+    approvedRoutes: ['/pricing', '/', '/portal/plans', '/portal/campus'],
     requiresSampleLabel: false,
   },
   {
     /*
-     * RETIRED 2026-08-19. There is no month-to-month plan -- Ali confirmed the
-     * only individual price is $149/month billed annually. The entry stays as
-     * NEEDS_VERIFICATION rather than being deleted so the key cannot be quietly
-     * reused for a different number, and so anything still referencing it
-     * renders nothing instead of a price we do not offer.
+     * NOT ADVERTISED. Retired from the public pages 2026-08-19. Ali, 2026-10-24:
+     * month-to-month ($199) is not retired as a plan, but the annual membership is
+     * pitched first and month-to-month is offered only when someone pushes back
+     * (Maya's knowledge base carries that rule). So no page approves this claim:
+     * anything still referencing it renders nothing.
      */
     key: 'pricing.individual.monthly',
     publicWording: '$199/month, month-to-month',
@@ -443,7 +444,7 @@ export const CLAIMS: readonly Claim[] = [
     evidenceSource: 'Live probe, 2026-08-07.',
     owner: 'Ali',
     lastVerifiedAt: '2026-08-07',
-    approvedRoutes: ['/pricing'],
+    approvedRoutes: ['/pricing', '/portal/plans', '/portal/campus'], // C21: the Admissions board and /portal/plans
     requiresSampleLabel: false,
   },
   {
@@ -454,7 +455,7 @@ export const CLAIMS: readonly Claim[] = [
     evidenceSource: 'Live probe, 2026-08-07.',
     owner: 'Ali',
     lastVerifiedAt: '2026-08-07',
-    approvedRoutes: ['/pricing'],
+    approvedRoutes: ['/pricing', '/portal/plans', '/portal/campus'], // C21: the Admissions board and /portal/plans
     requiresSampleLabel: false,
   },
   {

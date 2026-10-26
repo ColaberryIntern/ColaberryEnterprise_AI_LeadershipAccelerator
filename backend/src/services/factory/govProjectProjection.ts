@@ -15,13 +15,26 @@
 import { deriveGovBuildPlan, buildGovStoryPrompt, reconcileGovBuildPlan, type GovBuildStory, type GovBuildRelease } from './proposal/govBuildPlan';
 import type { EvidenceView } from './govBuildEvidence';
 import type { SharedProposalView, ProposalShareLevel } from './govProposalShare';
+import { deriveBuildStoryStage, deriveProposalStage, toCommitFeed, readGovProvenanceFacts, type BuildStage, type ProposalStage, type CommitFeedItem } from './govCockpit';
 
 export interface StudentGovTrackView { trackType: string; status: string; hasBuild: boolean; }
 export interface StudentGovRequirementView {
   canonicalReqId: string; statement: string; priority: string; tracks: string[]; evidenceState: string;
 }
 /** A student-facing build story — the derived story, its Claude Code prompt, and the student's submitted evidence. */
-export interface StudentGovBuildStory extends GovBuildStory { prompt: string; evidence: EvidenceView[]; }
+export interface StudentGovBuildStory extends GovBuildStory {
+  prompt: string;
+  evidence: EvidenceView[];
+  /** The 4-stage board column (todo/build/matched/done), derived from assignment + evidence. A commit reaches
+   *  `matched` at most; only a reviewer-verified row makes it `done`. */
+  stage: BuildStage;
+  /** Build stories are AI-worked (handed to Claude Code in the build repo); the proposal checklist is human-owned. */
+  owner: 'ai';
+  /** True when THIS viewer is the story's assignee — the student-safe form of "assigned to me" (never the id). */
+  mine: boolean;
+  /** The latest matched build-repo commit for this story (sha + first message line), or null. Student-safe. */
+  commit: { sha: string; message: string } | null;
+}
 export interface StudentGovBuildPlan {
   releases: GovBuildRelease[];
   stories: StudentGovBuildStory[];
@@ -32,6 +45,12 @@ export interface StudentGovBuildPlan {
 /** One row of the intern-facing, PRICE-FREE submission checklist: a response slot and whether it is ship-ready. */
 export interface StudentSubmissionChecklistItem {
   requirementId: string; statement: string; status: string; approved: boolean; openGapCount: number;
+  /** The 3-stage board column (todo/build/done) — a proposal task closes by approval, never a commit. */
+  stage: ProposalStage;
+  /** Proposal tasks are human-owned (reviews, answers, demo), as against AI-worked build stories. */
+  owner: 'human';
+  /** True when THIS viewer can edit the proposal (it is theirs to work). */
+  mine: boolean;
 }
 export interface StudentSubmissionChecklist {
   items: StudentSubmissionChecklistItem[];
@@ -56,6 +75,12 @@ export interface StudentGovProjectView {
   /** Whether THIS viewer may verify evidence (holds evidence.verify) — lights up reviewer controls. Never a
    *  student (they lack evidence.verify); it is the viewer's own capability, not a leak of anyone else's. */
   viewerCanVerify: boolean;
+  /** The soliciting agency (public) for the cockpit's project bar. Null when not captured. */
+  agency: string | null;
+  /** Detected key-date lines (public) — the frontend's govDeadline helper turns these into the close countdown. */
+  keyDates: Array<{ date: string | null; text: string | null }>;
+  /** The build-repo commit feed: every matched push for this project, newest first (public commit facts, no identity). */
+  commitFeed: CommitFeedItem[];
 }
 
 /**
@@ -64,7 +89,7 @@ export interface StudentGovProjectView {
  * the established set's `kind`, the same rail the proposal + requirement projections use, so an intern's checklist
  * can never carry a price. Total; garbage in yields an empty checklist.
  */
-export function toStudentSubmissionChecklist(slots: any[], established: any[]): StudentSubmissionChecklist {
+export function toStudentSubmissionChecklist(slots: any[], established: any[], canEdit = false): StudentSubmissionChecklist {
   const pricingIds = new Set(
     (Array.isArray(established) ? established : [])
       .filter((r) => r && String(r.kind ?? '').trim().toLowerCase() === 'pricing')
@@ -76,7 +101,11 @@ export function toStudentSubmissionChecklist(slots: any[], established: any[]): 
       const gaps = Array.isArray(s.gaps) ? s.gaps : [];
       const openGapCount = gaps.filter((g: any) => g && (g.resolution === 'open' || g.resolution === 'filler')).length;
       const status = String(s.status ?? 'unanswered');
-      return { requirementId: String(s.requirementId ?? ''), statement: String(s.statement ?? ''), status, approved: status === 'approved' && openGapCount === 0, openGapCount };
+      const approved = status === 'approved' && openGapCount === 0;
+      return {
+        requirementId: String(s.requirementId ?? ''), statement: String(s.statement ?? ''), status, approved, openGapCount,
+        stage: deriveProposalStage({ status, approved }), owner: 'human' as const, mine: canEdit,
+      };
     });
   const approved = items.filter((i) => i.approved).length;
   return { items, counts: { total: items.length, approved, remaining: items.length - approved }, ready: items.length > 0 && approved === items.length };
@@ -110,7 +139,9 @@ export function toStudentGovProjectView(project: any, tracks: any[], requirement
   const planBase = deriveGovBuildPlan(reqRows);
   const build: StudentGovBuildPlan = {
     releases: planBase.releases,
-    stories: planBase.stories.map((s) => ({ ...s, prompt: buildGovStoryPrompt(s), evidence: [] as EvidenceView[] })),
+    // Pure defaults: with no assignment/evidence loaded here, every story is `todo` and unclaimed; the async
+    // overlay in getStudentGovProjectView recomputes stage/mine/commit from the persisted state.
+    stories: planBase.stories.map((s) => ({ ...s, prompt: buildGovStoryPrompt(s), evidence: [] as EvidenceView[], stage: 'todo' as const, owner: 'ai' as const, mine: false, commit: null })),
     buildStoryCount: planBase.buildStoryCount,
     orphanedStories: [],
   };
@@ -130,6 +161,11 @@ export function toStudentGovProjectView(project: any, tracks: any[], requirement
     proposal: { level: 'none', canComment: false, canEdit: false, responses: [] },
     submissionChecklist: { items: [], counts: { total: 0, approved: 0, remaining: 0 }, ready: false },
     viewerCanVerify,
+    // Cockpit project-bar + feed defaults; the async loader fills agency/keyDates (from the qualification) and the
+    // commit feed (from the project's github_push evidence).
+    agency: null,
+    keyDates: [],
+    commitFeed: [],
   };
 }
 
@@ -166,16 +202,42 @@ export async function getStudentGovProjectView(deliveryProjectId: string, viewer
       release: s.release, acceptance: s.acceptance, status: s.status,
     }));
     const recon = reconcileGovBuildPlan(derived, assignments, evidence);
-    const toStudent = (s: GovBuildStory): StudentGovBuildStory => ({
-      ...s,
-      assigneeIdentityId: null, // never leak who else is assigned; the status alone is student-safe
-      assignedAt: null,
-      prompt: buildGovStoryPrompt(s),
-      evidence: byStory.get(s.id) ?? [],
-    });
+    const toStudent = (s: GovBuildStory): StudentGovBuildStory => {
+      const evList = byStory.get(s.id) ?? [];
+      // The latest matched build-repo commit for this story (evidence is newest-first), if any.
+      const pushEv = evList.find((e) => e.source === 'github_push' && e.commitSha);
+      // "mine" is computed from the assignee id BEFORE it is stripped — only the boolean leaves this boundary.
+      const mine = !!viewerIdentityId && s.assigneeIdentityId === viewerIdentityId;
+      return {
+        ...s,
+        assigneeIdentityId: null, // never leak who else is assigned; the status alone is student-safe
+        assignedAt: null,
+        prompt: buildGovStoryPrompt(s),
+        evidence: evList,
+        stage: deriveBuildStoryStage({ assigned: s.status === 'assigned', evidence: evList }),
+        owner: 'ai' as const,
+        mine,
+        commit: pushEv ? { sha: String(pushEv.commitSha), message: pushEv.description } : null,
+      };
+    };
     view.build.stories = recon.stories.map(toStudent);
     view.build.orphanedStories = recon.orphanedStories.map(toStudent);
+    // The project's build-repo commit feed (matched pushes, newest first) — public commit facts, no identity.
+    view.commitFeed = toCommitFeed(evidence);
   } catch { /* overlay is additive; a failure here never blocks the student view */ }
+
+  // Cockpit project bar: the soliciting agency + detected key dates, from THIS project's qualification
+  // (requirements_json.provenance + .dossier). Best-effort + student-safe (readGovProvenanceFacts carries only the
+  // public agency + key-date lines, never the dossier's contacts or any evaluation/compliance internals).
+  try {
+    const { default: GovQualification } = await import('../../models/GovQualification');
+    const qual: any = await GovQualification.findOne({ where: { delivery_project_id: deliveryProjectId }, order: [['version', 'DESC']] });
+    if (qual) {
+      const facts = readGovProvenanceFacts(qual.requirements_json);
+      view.agency = facts.agency;
+      view.keyDates = facts.keyDates;
+    }
+  } catch { /* additive; agency/keyDates stay at their safe defaults */ }
 
   // P6: the shared proposal (projected to THIS viewer's grant level) + the price-free submission checklist. Built
   // from the SAME response slots the admin workspace uses (deriveResponseSlots + the persisted responses), then run
@@ -191,7 +253,7 @@ export async function getStudentGovProjectView(deliveryProjectId: string, viewer
     slots = applyResponsesToSlots(slots, responses as any);
     const level: ProposalShareLevel = viewerIdentityId ? await getProposalShareLevel(deliveryProjectId, viewerIdentityId) : 'none';
     view.proposal = toSharedProposalView(slots, requirements, level);
-    view.submissionChecklist = toStudentSubmissionChecklist(slots, requirements);
+    view.submissionChecklist = toStudentSubmissionChecklist(slots, requirements, view.proposal.canEdit);
   } catch { /* additive; the safe defaults set in the pure view remain */ }
   return view;
 }

@@ -28,6 +28,32 @@ import { getTypeXp } from '../../progression/pointsConfigService';
 export const DEMO_XP_KEY = 'demo';
 export const PRESENTATION_XP_KEY = 'presentation';
 
+/**
+ * WHAT HANDING IN THE TEXT PAYS — zero by default, since 2026-10-24.
+ *
+ * Ali, looking at the "Submit · +40 pts" button on PREP-1: "The points should
+ * be moved from here. This is not a good place to collect points. Set up a
+ * points system where they get points for the 1st video in each section."
+ *
+ * The prep week paid 40 for pasting text into a box. The work that box stands
+ * for is the video, and the video is now paid directly — 30 for recording a
+ * type the first time, 15 more for sharing it. Paying both would pay twice for
+ * one piece of work and leave the incentive pointed at the box.
+ *
+ * A SEPARATE KEY RATHER THAN ZEROING `demo`. That row also prices the `demo`
+ * CARD type elsewhere in the curriculum; zeroing it to settle a prep question
+ * would silently unprice something nobody was talking about.
+ *
+ * A ROW AT ZERO, NOT A DELETED AWARD. `prepPointsMap` leaves a zero-priced task
+ * out of the map, and every consumer already reads absence as "no badge" — so
+ * the button stops advertising points with no UI change at all. Turning it back
+ * on is one admin edit rather than a deploy.
+ *
+ * Demo Day is untouched. It is a live presentation a staff member marks, not a
+ * video in the portfolio, so it keeps pricing from `presentation`.
+ */
+export const PREP_HANDIN_XP_KEY = 'prep_handin';
+
 export const PREP_STORY_IDS = ['PREP-1', 'PREP-2', 'PREP-3', 'PREP-4', 'PREP-5', 'PREP-6'] as const;
 export type PrepStoryId = typeof PREP_STORY_IDS[number];
 
@@ -40,7 +66,7 @@ export function isPrepStory(storyId: string | null | undefined): storyId is Prep
 
 /** Which points_config row pays a given prep task. */
 export function prepXpKey(storyId: PrepStoryId): string {
-  return storyId === DEMO_DAY_STORY_ID ? PRESENTATION_XP_KEY : DEMO_XP_KEY;
+  return storyId === DEMO_DAY_STORY_ID ? PRESENTATION_XP_KEY : PREP_HANDIN_XP_KEY;
 }
 
 /**
@@ -64,10 +90,12 @@ export function prepCtaVerb(storyId: string | null | undefined): 'Submit' | 'Dem
  * "no badge".
  */
 export async function prepPointsMap(): Promise<Map<string, number>> {
-  const [demo, presentation] = await Promise.all([getTypeXp(DEMO_XP_KEY), getTypeXp(PRESENTATION_XP_KEY)]);
+  const [handIn, presentation] = await Promise.all([
+    getTypeXp(PREP_HANDIN_XP_KEY), getTypeXp(PRESENTATION_XP_KEY),
+  ]);
   const m = new Map<string, number>();
   for (const id of PREP_STORY_IDS) {
-    const rate = id === DEMO_DAY_STORY_ID ? presentation.builder : demo.builder;
+    const rate = id === DEMO_DAY_STORY_ID ? presentation.builder : handIn.builder;
     if (rate > 0) m.set(id, rate);
   }
   return m;

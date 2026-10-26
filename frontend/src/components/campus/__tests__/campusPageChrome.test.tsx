@@ -48,7 +48,7 @@ let root: Root;
 const flush = async () => { for (let i = 0; i < 8; i += 1) await act(async () => { await Promise.resolve(); }); };
 const q = (s: string) => container.querySelector(s);
 
-async function mount(path: string): Promise<void> {
+async function mount(path: string, next: React.ReactNode = null): Promise<void> {
   window.localStorage.setItem(CAMPUS_SETTINGS_KEY, JSON.stringify({ nav: 'campus', workplaceNames: false, motion: 'on' }));
   window.localStorage.setItem(PARTICIPANT_TOKEN_KEY, 'h.eyJlbWFpbCI6ImxlYXJuZXJAZXhhbXBsZS5jb20ifQ.s'); // gitleaks:allow (fake, unsigned)
   container = document.createElement('div');
@@ -56,7 +56,7 @@ async function mount(path: string): Promise<void> {
   await act(async () => {
     root = createRoot(container);
     root.render(<MemoryRouter initialEntries={[path]}><ParticipantAuthProvider><CampusProvider>
-      <CampusLocationBar /><CampusBanner /><CampusNav active={path} /><CampusRail />
+      <CampusLocationBar next={next} /><CampusBanner /><CampusNav active={path} /><CampusRail />
     </CampusProvider></ParticipantAuthProvider></MemoryRouter>);
   });
   await flush();
@@ -78,6 +78,28 @@ describe('the location bar and its coach mark (C16, round 3 2.4)', () => {
     expect(q('[data-testid="cm-page-hint"]')).toBeNull(); // replaced by the coach mark
   });
 
+  it('Ali 2026-10-24: the page\'s sticky next task rides IN the bar, in the middle column, in place of the trail; the actions stay', async () => {
+    const next = <div className="te-condensed" data-testid="page-next"><span className="te-cmini-tx"><span className="lab">Your next step</span><span className="val">Watch the agents lesson</span></span><button type="button">Open</button></div>;
+    await mount('/portal/classroom', next);
+    const bar = q('[data-testid="cm-locbar"]')!;
+    const slot = bar.querySelector('[data-testid="cm-lb-next"]')!;
+    expect(slot).not.toBeNull();
+    expect(slot.getAttribute('aria-label')).toBe('Your next step');
+    expect(slot.querySelector('[data-testid="page-next"]')!.textContent).toContain('Watch the agents lesson');
+    expect(bar.querySelector('[data-testid="cm-trail"]')).toBeNull(); // the trail steps aside while you are scrolled down
+    // the map pill (left, over the left nav) and Step outside / Where to / you (right) never move
+    expect(bar.firstElementChild!.getAttribute('data-testid')).toBe('cm-locbar-map');
+    expect(bar.children[1]).toBe(slot);
+    expect(bar.querySelector('[data-testid="cm-step-out"]')).not.toBeNull();
+    expect(bar.querySelector('[data-testid="cm-whereto"]')).not.toBeNull();
+  });
+
+  it('with no next task (top of the page, or a page without one) the trail is back', async () => {
+    await mount('/portal/classroom');
+    expect(q('[data-testid="cm-lb-next"]')).toBeNull();
+    expect(q('[data-testid="cm-trail"]')).not.toBeNull();
+  });
+
   it('the coach mark shows once per session, 800 ms after the first page, and not again', async () => {
     window.sessionStorage.removeItem(COACH_KEY);
     await mount('/portal/rooms');
@@ -97,7 +119,7 @@ describe('the left column', () => {
   it('lists the rooms of the building you are in, the current one marked', async () => {
     await mount('/portal/rooms');
     const side = q('[data-testid="cm-page-side"]')!;
-    expect(side.textContent).toContain('In Community Lounge');
+    expect(side.textContent).toContain('In Meeting Rooms');
     expect(side.querySelector('[aria-current="page"]')!.getAttribute('href')).toBe('/portal/rooms');
   });
   it('on a page outside any building, no rooms section', async () => {

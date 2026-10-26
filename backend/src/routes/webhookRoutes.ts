@@ -157,6 +157,37 @@ router.post('/api/webhook/github', express.raw({ type: 'application/json' }), as
         context: { message: err?.message, owner, repo },
       }));
     });
+
+    // 5. GOV BUILD COCKPIT — the gov delivery project's completion loop.
+    //
+    // Also OUTSIDE the enrollment branch, and resolving the repo to a gov
+    // DELIVERY project on its own (repo -> student project -> solution_build
+    // track), for the same FR-037 reason as step 4: the enrollment path above
+    // predates project-scoped repos, and a gov build repo is bound to a student
+    // project that no enrollment lookup reaches. A commit whose message cites a
+    // build story's requirement id files that commit as `submitted` evidence for
+    // the story — idempotent on (story, sha), never self-verifying, and only for
+    // an ASSIGNED story (there is no system identity to credit an unassigned
+    // one to; an unassigned match is logged and skipped). Fire-and-forget like
+    // its siblings; the matcher never throws and classifies its own failures.
+    (async () => {
+      const { resolveGovDeliveryProjectForRepo, matchCommitsToGovStories } = await import('../services/factory/govBuildCommitSync');
+      const deliveryProjectId = await resolveGovDeliveryProjectForRepo(owner, repo);
+      if (!deliveryProjectId) return;
+      const commits = (Array.isArray(payload.commits) ? payload.commits : []).map((c: any) => ({
+        sha: String(c?.id ?? ''),
+        message: String(c?.message ?? ''),
+        authorLogin: c?.author?.username ?? null,
+      }));
+      await matchCommitsToGovStories(deliveryProjectId, commits, { owner, name: repo });
+    })().catch((err: Error) => {
+      console.error(JSON.stringify({
+        timestamp: new Date().toISOString(), level: 'error', service: 'backend',
+        event: 'github_webhook_gov_commit_match_failed', outcome: 'failure',
+        error_class: err?.constructor?.name ?? 'Error',
+        context: { message: err?.message, owner, repo },
+      }));
+    });
   }
 
   // 200 regardless of what the work above concludes. GitHub retries non-2xx,

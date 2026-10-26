@@ -29,11 +29,14 @@ const SUB: Partial<Record<BuildingId, [string, string | null]>> = {
   amphi: ['Events, open houses & demos', 'Town halls, events & demos'],
   testing: ['Cert prep & knowledge checks', 'Skill verification & knowledge checks'],
   observatory: ['Your path, progress & points', 'Growth path, progress & points'],
-  commons: ['Community, people & live rooms', 'Colleagues, coffee & live rooms'],
+  commons: ['Live rooms, study groups & 1:1s', null], // C29 (v7 R2): Meeting Rooms
+
   gallery: ['Portfolio & client demos', null],
   career: ['Engagements, internship & company work', null],
-  arcade: ['Three quick games · 15 min a day', null],
-  gate: ['The way in, and the welcome desk', null],
+  arcade: ['Five quick games · 15 min a day', null], // C36 (v8 G5)
+  gate: ['The way in to the campus', null],
+  admissions: ['Plans, enrollment & talking to a person', 'Plans, seats & billing'], // C21: Maya's building
+  chow: ['Food, coffee & treats · order from your favorite app', null], // C39 (v11)
 };
 /** The career building changes face per account (campusMap.careerBuildingFor); its line follows the face. */
 const CAREER_FACE: Partial<Record<CampusAudience, string>> = {
@@ -42,6 +45,7 @@ const CAREER_FACE: Partial<Record<CampusAudience, string>> = {
 };
 export function subOf(b: Pick<CampusBuilding, 'id'>, audience: CampusAudience, workplace = false): string | null {
   if (b.id === 'career' && CAREER_FACE[audience]) return CAREER_FACE[audience]!;
+  if (b.id === 'tower' && audience === 'explorer') return 'Today, your home base · plus your schedule'; // C51 (v13 T3)
   const s = SUB[b.id];
   return s ? (workplace && s[1]) || s[0] : null;
 }

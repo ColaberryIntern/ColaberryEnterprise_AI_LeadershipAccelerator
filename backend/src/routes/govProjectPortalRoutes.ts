@@ -81,6 +81,35 @@ router.get(
 );
 
 /**
+ * POST /api/portal/gov-projects/:projectId/copilot — the Build Cockpit's project copilot. Guarded by project.read
+ * (a member of THIS project), it loads the SAME student-safe projection the page renders and answers
+ * DETERMINISTICALLY from it (govCopilot) — so the copilot can only ever repeat what the caller already sees; there
+ * is no path by which it exposes an admin/internal field or another member's identity. Body: { question }.
+ */
+router.post(
+  '/api/portal/gov-projects/:projectId/copilot',
+  requireParticipant,
+  requireGovProjectAccess('project.read'),
+  async (req: GovProjectRequest, res: Response) => {
+    const projectId = req.params.projectId;
+    if (typeof projectId !== 'string' || !projectId) { res.status(400).json({ error: 'Project id is required' }); return; }
+    const question = String((req.body ?? {}).question ?? '').trim();
+    if (!question) { res.status(400).json({ error: 'A question is required' }); return; }
+    try {
+      const { hasDeliveryPermission } = await import('../modules/delivery/deliveryAuthorization');
+      const viewerCanVerify = !!(req.deliveryContext && hasDeliveryPermission(req.deliveryContext, 'evidence.verify'));
+      const viewerIdentityId = req.deliveryContext?.platformIdentityId ?? null;
+      const view = await getStudentGovProjectView(projectId, viewerCanVerify, viewerIdentityId);
+      if (!view) { res.status(404).json({ error: 'Not found' }); return; }
+      const { answerCopilot } = await import('../services/factory/govCopilot');
+      res.json(answerCopilot(view, question));
+    } catch {
+      res.status(500).json({ error: 'Could not answer right now.' });
+    }
+  },
+);
+
+/**
  * POST /api/portal/gov-projects/:projectId/build-stories/:storyId/evidence — the student's completion HAND-IN for
  * a Build story. Guarded by requireGovProjectAccess('story.execute'): an assigned associate_builder holds
  * story.execute, so they may submit; they do NOT hold evidence.verify, so they can never self-verify — the
@@ -153,6 +182,96 @@ router.post(
         return;
       }
       res.status(500).json({ error: 'Could not verify the evidence.' });
+    }
+  },
+);
+
+// ── P4/P6: intern proposal AUTHORING — an EDIT-shared member drafts/edits a response from the portal ──────────
+// Mirrors the admin author routes (govQualificationRoutes), reusing the SAME services (keyed on delivery_project_id,
+// which the portal route already holds), but gated for a student: membership (project.read) AND an EDIT-level
+// proposal share on THIS project. The intern can DRAFT/EDIT only — every save lands `draft`; review/approve stay
+// admin-only (requireSection('program')), so separation of duties holds. The write is confined to the requirements
+// the student-safe projection exposes, which DROPS pricing — so an intern can never touch a pricing slot. Identity
+// is always the guard-resolved one (req.deliveryContext), never a client-supplied value.
+const RESPONSE_ERR_STATUS: Record<string, number> = {
+  bad_input: 400, bad_resolution: 400, empty_answer: 422, not_found: 404, gap_not_found: 404,
+};
+
+/**
+ * Gate an intern proposal WRITE: require an EDIT-level share on THIS project, and that `requirementId` is one the
+ * caller's own student-safe projection exposes (pricing is dropped there). On success returns the guard-resolved
+ * identity; otherwise writes 401/403/404 and returns null. A non-member never reaches here (requireGovProjectAccess
+ * 404s first); a member without an edit share is 403; an edit member writing a hidden/pricing requirement is 404.
+ */
+async function requireProposalEdit(req: GovProjectRequest, res: Response, projectId: string, requirementId: string): Promise<string | null> {
+  const me = req.deliveryContext?.platformIdentityId ?? null;
+  if (!me) { res.status(401).json({ error: 'No resolvable identity' }); return null; }
+  const view = await getStudentGovProjectView(projectId, false, me);
+  if (!view) { res.status(404).json({ error: 'Not found' }); return null; }
+  const prop = view.proposal;
+  if (!prop || !prop.canEdit) { res.status(403).json({ error: 'Forbidden' }); return null; }
+  if (!prop.responses.some((r: { requirementId: string }) => r.requirementId === requirementId)) {
+    res.status(404).json({ error: 'Not found' });
+    return null;
+  }
+  return me;
+}
+
+/**
+ * POST /api/portal/gov-projects/:projectId/proposal/:requirementId — an EDIT-shared intern drafts/edits the
+ * response for one requirement. Any save lands `draft` (a changed answer is not reviewed/approved); the intern
+ * cannot review or approve. Body: { content }.
+ */
+router.post(
+  '/api/portal/gov-projects/:projectId/proposal/:requirementId',
+  requireParticipant,
+  requireGovProjectAccess('project.read'),
+  async (req: GovProjectRequest, res: Response) => {
+    const projectId = req.params.projectId;
+    const requirementId = req.params.requirementId;
+    if (typeof projectId !== 'string' || !projectId || typeof requirementId !== 'string' || !requirementId) {
+      res.status(400).json({ error: 'Project and requirement ids are required' });
+      return;
+    }
+    const me = await requireProposalEdit(req, res, projectId, requirementId);
+    if (!me) return;
+    const { saveProposalResponse, ResponseError } = await import('../services/factory/govProposalResponse');
+    try {
+      const view = await saveProposalResponse({ deliveryProjectId: projectId, requirementId, content: String((req.body ?? {}).content ?? ''), authoredByIdentityId: me });
+      res.json(view);
+    } catch (err: any) {
+      if (err instanceof ResponseError) { res.status(RESPONSE_ERR_STATUS[err.reason] ?? 400).json({ error: err.message, reason: err.reason }); return; }
+      res.status(500).json({ error: 'Could not save the response.' });
+    }
+  },
+);
+
+/**
+ * POST /api/portal/gov-projects/:projectId/proposal/:requirementId/gaps/:gapId — an EDIT-shared intern resolves a
+ * draft gap (answered | filler | open). Recomputes status and clears any prior sign-off. Body: { resolution, answer? }.
+ */
+router.post(
+  '/api/portal/gov-projects/:projectId/proposal/:requirementId/gaps/:gapId',
+  requireParticipant,
+  requireGovProjectAccess('project.read'),
+  async (req: GovProjectRequest, res: Response) => {
+    const projectId = req.params.projectId;
+    const requirementId = req.params.requirementId;
+    const gapId = req.params.gapId;
+    if (typeof projectId !== 'string' || !projectId || typeof requirementId !== 'string' || !requirementId || typeof gapId !== 'string' || !gapId) {
+      res.status(400).json({ error: 'Project, requirement and gap ids are required' });
+      return;
+    }
+    const me = await requireProposalEdit(req, res, projectId, requirementId);
+    if (!me) return;
+    const body: any = req.body ?? {};
+    const { resolveProposalGap, ResponseError } = await import('../services/factory/govProposalResponse');
+    try {
+      const view = await resolveProposalGap({ deliveryProjectId: projectId, requirementId, gapId, resolution: body.resolution, answer: body.answer ?? null });
+      res.json(view);
+    } catch (err: any) {
+      if (err instanceof ResponseError) { res.status(RESPONSE_ERR_STATUS[err.reason] ?? 400).json({ error: err.message, reason: err.reason }); return; }
+      res.status(500).json({ error: 'Could not update the gap.' });
     }
   },
 );

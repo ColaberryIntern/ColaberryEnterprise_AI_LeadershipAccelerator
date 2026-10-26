@@ -17,11 +17,16 @@ import { taskPointsForProject } from '../storyPoints';
 
 beforeEach(() => {
   jest.clearAllMocks();
-  mockGetTypeXp.mockImplementation(async (key: string) => ({ learning: 0, community: 0, builder: key === 'presentation' ? 60 : key === 'demo' ? 40 : 0 }));
+  // `prep_handin` ships seeded at ZERO — see below. A non-zero value is used in
+  // most tests here so the wiring is observable; the shipped default has its own
+  // test, because "it pays nothing" is the actual product behaviour now.
+  mockGetTypeXp.mockImplementation(async (key: string) => ({
+    learning: 0, community: 0, builder: key === 'presentation' ? 60 : key === 'prep_handin' ? 40 : 0,
+  }));
 });
 
 describe('prepPointsMap', () => {
-  it('prices PREP-1…5 from `demo` and PREP-6 from `presentation` — the rows that already exist', async () => {
+  it('prices PREP-1…5 from `prep_handin` and PREP-6 from `presentation`', async () => {
     const m = await prepPointsMap();
     expect([...m.entries()]).toEqual([
       ['PREP-1', 40], ['PREP-2', 40], ['PREP-3', 40], ['PREP-4', 40], ['PREP-5', 40], ['PREP-6', 60],
@@ -36,8 +41,28 @@ describe('prepPointsMap', () => {
     expect([...m.keys()]).toEqual(['PREP-6']);
   });
 
+  it('AS SHIPPED, the text hand-in prices nothing and only Demo Day pays', async () => {
+    // Ali, 2026-10-24: "The points should be moved from here." `prep_handin` is
+    // seeded at 0, so every hand-in task drops out of the map and the
+    // "Submit · +40 pts" button stops claiming points — with no UI change,
+    // because absence already means "no badge". The videos pay instead.
+    mockGetTypeXp.mockImplementation(async (key: string) => ({
+      learning: 0, community: 0, builder: key === 'presentation' ? 60 : 0,
+    }));
+    const m = await prepPointsMap();
+    expect(m.get('PREP-1')).toBeUndefined();
+    expect(m.get('PREP-5')).toBeUndefined();
+    expect(m.get('PREP-6')).toBe(60);
+  });
+
+  it('does NOT price the hand-in from `demo`, which still prices the demo CARD type', () => {
+    // Zeroing `demo` to settle a prep question would have unpriced a curriculum
+    // card nobody was talking about. The separate key is the whole point.
+    expect(prepXpKey('PREP-1')).not.toBe('demo');
+  });
+
   it('names the row each task is paid from, and knows which tasks are prep', () => {
-    expect(prepXpKey('PREP-1')).toBe('demo');
+    expect(prepXpKey('PREP-1')).toBe('prep_handin');
     expect(prepXpKey(DEMO_DAY_STORY_ID)).toBe('presentation');
     expect(isPrepStory('PREP-3')).toBe(true);
     expect(isPrepStory('STORY-003')).toBe(false);

@@ -27,6 +27,8 @@ const SIGNATURE = {
 const SIZES = [{ name: 'desktop', width: 1440, height: 900 }, { name: 'phone', width: 390, height: 844 }];
 // C16: 1920 wide, only for the fidelity views that name it in `sizes` (22-page-nav checks the bar at 1440 and 1920)
 const WIDE = { name: 'wide', width: 1920, height: 1080 };
+// C40: half a laptop screen (a Claude Code terminal on the other half), only for the views that name it in `sizes`
+const HALF = { name: 'half', width: 1100, height: 1000 };
 
 /**
  * --fidelity (C11b): drive the build into the 12 fidelity views for every account and size, assert each view's required
@@ -54,7 +56,7 @@ async function runFidelity(browser) {
   // --only=<view name> re-runs one view (all accounts and sizes)
   const ONLY = (process.argv.find((a) => a.startsWith('--only=')) || '').slice('--only='.length) || null;
   const results = [];
-  for (const size of [...SIZES, WIDE]) {
+  for (const size of [...SIZES, WIDE, HALF]) {
     for (const account of ACCOUNTS) {
       for (const view of VIEWS) {
         if (ONLY && view.name !== ONLY) continue;

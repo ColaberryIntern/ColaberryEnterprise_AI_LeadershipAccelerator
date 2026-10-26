@@ -39,7 +39,9 @@ describe('trailFor', () => {
   });
 
   it('honors Workplace names', () => {
-    expect(trailFor('/portal/rooms', campusBuildingsFor('member'), true).map((c) => c.label)).toEqual(['Campus', 'Collab Cafe', 'Rooms']);
+    expect(trailFor('/portal/classroom', campusBuildingsFor('member'), true).map((c) => c.label)).toEqual(['Campus', 'Training Room', 'Training']);
+    // C29 (v7 R2): Meeting Rooms has the same name in both looks
+    expect(trailFor('/portal/rooms', campusBuildingsFor('member'), true).map((c) => c.label)).toEqual(['Campus', 'Meeting Rooms', 'Meeting rooms']);
   });
 
   it('buildingIdForPath follows the same rules', () => {

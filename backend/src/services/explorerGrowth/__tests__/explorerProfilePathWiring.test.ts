@@ -28,7 +28,12 @@ jest.mock('../../../models', () => ({
   // The deposit path's DRY-RUN branch checks credit existence via the model instead of
   // writing, so a preview needs this even though it writes nothing.
   AccountCredit: { findOne: async () => null },
-  CommunicationLog: { create: async () => ({}) },
+  // `findAll` added 2026-10-25, when the welcome moved onto the shared
+  // `sendPortalWelcome`. That module checks whether this address was already
+  // welcomed and FAILS CLOSED when it cannot tell, so a missing `findAll` made the
+  // guard refuse and this suite's "pre-existing sends intact" assertion saw zero
+  // sends. Empty list = nobody welcomed yet, which is what this test assumes.
+  CommunicationLog: { create: async () => ({}), findAll: async () => [] },
 }));
 
 /**

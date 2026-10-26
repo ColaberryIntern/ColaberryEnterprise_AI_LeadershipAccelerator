@@ -24,6 +24,9 @@ jest.mock('../../services/campus/campusWave', () => ({ waveAt: (...a: unknown[])
 jest.mock('../../services/campus/campusAudience', () => ({ campusAudienceFor: jest.fn() }));
 jest.mock('../../services/campus/campusLookService', () => ({ getLook: jest.fn(), setLook: jest.fn(), looksFor: jest.fn(async () => new Map()) }));
 jest.mock('../../services/campus/campusTourHandoff', () => ({ requestTourHandoff: jest.fn() }));
+// C28: where a room lives (it reads the room models); mocked so the router stays cheap to load
+let mockRoomArea: string | null = null;
+jest.mock('../../services/campus/campusRoomBuilding', () => ({ roomBuildingFor: async () => mockRoomArea }));
 
 import express from 'express';
 import request from 'supertest';
@@ -169,6 +172,19 @@ describe('POST /api/portal/campus/here (C4)', () => {
     expect(mockClear).not.toHaveBeenCalled();
     expect((await request(buildApp()).post(HERE).set('Authorization', `Bearer ${token()}`).send({ area: 'library', share: false })).status).toBe(204);
     expect(mockClear).toHaveBeenCalledWith('enr-1');
+  });
+
+  it('C28: a room page counts in the building its room lives in; an unknown room keeps the area sent; room_id must be a uuid', async () => {
+    const app = buildApp({ CAMPUS_ENABLED: 'all' });
+    const room = '0b9f3c2e-1a2b-4c3d-8e9f-001122334455';
+    mockRoomArea = 'amphi';
+    expect((await request(app).post(HERE).set('Authorization', `Bearer ${token()}`).send({ area: 'commons', room_id: room })).status).toBe(204);
+    expect(mockTouch).toHaveBeenLastCalledWith('enr-1', 'amphi');
+    mockRoomArea = null;
+    await request(app).post(HERE).set('Authorization', `Bearer ${token()}`).send({ area: 'commons', room_id: room });
+    expect(mockTouch).toHaveBeenLastCalledWith('enr-1', 'commons');
+    expect((await request(app).post(HERE).set('Authorization', `Bearer ${token()}`).send({ area: 'commons', room_id: 'not-a-uuid' })).status).toBe(400);
+    expect(mockTouch).toHaveBeenCalledTimes(2);
   });
 
   it('a storage failure answers 500 CampusPresenceUnavailable', async () => {

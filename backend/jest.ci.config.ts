@@ -126,23 +126,37 @@ const ciConfig: Config = {
     ...(base.testPathIgnorePatterns ?? ['/node_modules/']),
 
     // ── GROUP 1: DIES AT IMPORT — a model is mocked while the REAL association
-    // wiring runs. `models/index.ts:548` does `Cohort.hasMany(Enrollment, ...)`,
-    // and a suite that replaced `Enrollment` with a plain object gets
-    // "called with something that's not a subclass of Sequelize.Model", or
-    // "<Model>.default.hasMany is not a function" when the mocked one is the
-    // subject rather than the target.
+    // wiring runs, so `models/index.ts` refuses it. FIVE OF THE SEVEN ARE NOW
+    // FIXED and off this list (66 tests, every one of which previously never
+    // ran); what follows is why the last two are different in kind, not just
+    // unfinished.
     //
-    // NOT fixable by a better config mock — the suites in group 1 and the six
-    // that came off the list differ in kind. The fix is per-suite: stop
-    // `jest.mock`-ing models and `jest.spyOn` the real ones, which is now
-    // possible because `configMocks` gives a real (unconnected) Sequelize that
-    // `Model.init` accepts. That is genuine test refactoring, not a mock tweak.
+    // THE FIX FOR THE FIVE was mocking the SERVICE BOUNDARY, not the model
+    // layer. `subscriptionService:2` is `import { Enrollment, Cohort,
+    // Subscription } from '../models'`, so importing it executes
+    // `models/index.ts`, and line 548 runs `Cohort.hasMany(Enrollment, ...)`
+    // against the plain object the suite mocked. Mocking a model harder cannot
+    // help — the index associates whatever it is handed — but mocking
+    // `subscriptionService` stops the index being imported at all, and it is
+    // the right boundary anyway: those suites test community behaviour, and
+    // comp status is subscription behaviour with its own tests.
+    //
+    // (An earlier version of this comment prescribed "stop `jest.mock`-ing
+    // models and `jest.spyOn` the real ones". That was wrong, and much larger
+    // than what the problem actually needed.)
+    //
+    // WHY THESE TWO CANNOT GO THE SAME WAY. There is no single service to mock:
+    // `adminRoutes.test.ts:70` reaches the index through
+    // `adminRoutes.ts:6 -> authRoutes.ts:18`, and `typeLaunchGate.test.ts:7`
+    // through `contentEntitlement.ts:1`, both landing on
+    // `models/index.ts:1835`. Nor can the mocks be shimmed: a no-op `hasMany`
+    // satisfies the call when the MOCK is the source, but line 1837 is
+    // `Enrollment.hasMany(TimelineCardProgress)` where the source is REAL and
+    // the target is mocked — and Sequelize validates that a target is a `Model`
+    // subclass, which no plain object can satisfy. These two need their models
+    // real (or the index itself mocked), which is the larger refactor the five
+    // turned out not to require.
     'src/__tests__/routes/adminRoutes\\.test\\.ts',
-    'src/__tests__/services/cohortPresenceService\\.test\\.ts',
-    'src/__tests__/services/communityCalendarService\\.test\\.ts',
-    'src/__tests__/services/communityModeration\\.test\\.ts',
-    'src/__tests__/services/communityNotificationService\\.test\\.ts',
-    'src/__tests__/services/communityService\\.test\\.ts',
     'src/services/timeline/__tests__/typeLaunchGate\\.test\\.ts',
 
     // ── GROUP 2: THE SUITE RUNS — these are genuine assertion failures, not

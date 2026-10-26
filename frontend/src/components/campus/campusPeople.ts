@@ -16,13 +16,15 @@ export function tokensFor(area: CampusAreaPresence | undefined, max: number = TO
   return { shown: named.slice(0, max), more: Math.max(0, named.length - max) };
 }
 
-/** Maya's desk is for Explorers and staff only. The server decides first; this is the second, independent check. */
+/** C21 (v6 D3): Maya is always in her Admissions building and on the help desks, for every audience (it replaced C6's
+ *  Explorer-and-staff rule). The server decides first; this is the second, independent check. */
 export function mayaAllowedFor(audience: CampusAudience): boolean {
-  return audience === 'explorer' || audience === 'staff';
+  return audience === 'explorer' || audience === 'staff' || audience === 'member' || audience === 'business';
 }
 
-/** The desks that belong in this building's card for this viewer. */
+/** The desks that belong in this building's card for this viewer (an older server's Maya at the gate counts as Admissions). */
 export function desksForBuilding(desks: StaffDesk[], buildingId: string, audience: CampusAudience): StaffDesk[] {
-  return desks.filter((d) => d.building === buildingId && (d.id !== 'maya' || mayaAllowedFor(audience)));
+  const at = (d: StaffDesk) => (d.id === 'maya' && d.building === 'gate' ? 'admissions' : d.building);
+  return desks.filter((d) => at(d) === buildingId && (d.id !== 'maya' || mayaAllowedFor(audience)));
 }
 

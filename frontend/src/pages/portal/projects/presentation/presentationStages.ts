@@ -102,26 +102,34 @@ export function openingStageFor(storyId: string | undefined | null): Presentatio
 /**
  * Student-facing titles for the six prep tasks.
  *
- * A DISPLAY OVERRIDE, NOT A RENAME. The stored titles in `student_tasks` are untouched,
- * and so are the story ids, the evidence, the points, the due dates and the verified
- * state. Two reasons it is done here rather than in `buildSchedule.ts`:
+ * THESE NOW MATCH THE STORED TITLES RATHER THAN REPLACING THEM, since
+ * 2026-10-24. The override began as a display-only rename, on the reasoning
+ * that changing `buildSchedule` would only affect newly materialised tasks and
+ * split a mid-programme cohort between old names and new.
  *
- * 1. Changing the schedule would only affect NEWLY materialised tasks, so a cohort
- *    mid-programme would end up with some students on old titles and some on new —
- *    worse than either option alone.
- * 2. It is reversible with the feature flag. Flag off, the student sees exactly the
- *    title they see today, because this module is never loaded.
+ * What that reasoning missed is that exactly ONE component calls
+ * `studentTitleFor` — the Studio sidebar. So PREP-1 was "Tell Your Project's
+ * Story" in the sidebar and "Write the Demo Narrative: the Problem, the One
+ * Moment, the Guardrail" everywhere else: two names for one task, which is
+ * worse than either name. Ali saw both and said the step names do not match
+ * the video names.
+ *
+ * The real fix was to rename the tasks for real — `buildSchedule` for new
+ * builds, a backfill for the 294 existing rows — so every surface says the
+ * same thing. This map is kept, aligned to those names, so the sidebar keeps
+ * working if a stored title is ever missing, and so there is one obvious place
+ * to look when the names are questioned again.
  *
  * The PREP id stays visible alongside the title, so a student mentioning "PREP-3" to a
  * mentor and a mentor searching for it still meet in the middle.
  */
 const STUDENT_TITLES: Record<string, string> = {
-  'PREP-1': "Tell Your Project's Story",
-  'PREP-2': 'Your First Recorded Walkthrough',
-  'PREP-3': 'Build Your AI Presentation',
-  'PREP-4': 'Rehearse With an Audience',
-  'PREP-5': 'Create Your Portfolio Demo',
-  'PREP-6': 'Present Your Project Live',
+  'PREP-1': 'Record Your Project Introduction',
+  'PREP-2': 'Record Your Working-System Demo',
+  'PREP-3': 'Record Your AI Visual Presentation',
+  'PREP-4': 'Record Your Stakeholder Update',
+  'PREP-5': 'Record Your Final Showcase',
+  'PREP-6': 'Present at Demo Day',
 };
 
 /**

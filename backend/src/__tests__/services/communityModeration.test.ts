@@ -32,6 +32,24 @@ jest.mock('../../services/pointsService', () => ({
   getTotalsForEnrollments: jest.fn(async () => new Map()),
   levelForPoints: jest.fn(() => ({ level: 1, name: 'Apprentice' })),
 }));
+// MOCKED AT THE SERVICE BOUNDARY, not the model layer, and that distinction is why this suite
+// could not run.
+//
+// `communityService:18` imports `subscriptionService`, whose line 2 is
+// `import { Enrollment, Cohort, Subscription } from '../models'` — so importing it executes
+// `models/index.ts`, and line 548 there runs `Cohort.hasMany(Enrollment, ...)`. The `Enrollment`
+// the index hands to `hasMany` is the one THIS FILE mocks above as a plain object, so Sequelize
+// refuses it: "called with something that's not a subclass of Sequelize.Model". The suite died
+// at import, before a single test, which is why it sat on `jest.ci.config.ts`'s ignore list with
+// no test names ever attached to the failure.
+//
+// Mocking a model harder cannot fix that — the index would still associate whatever it is given.
+// Mocking the SERVICE stops the index from ever being imported, and it is the right boundary on
+// its own merits: this file tests moderation, and whether an enrollment is comped is
+// subscription behaviour with its own tests.
+jest.mock('../../services/subscriptionService', () => ({
+  activeCompEnrollmentIds: jest.fn(async () => new Set<string>()),
+}));
 
 import { reportPost } from '../../services/communityService';
 import { listReportedPosts, removePost } from '../../services/communityModerationService';

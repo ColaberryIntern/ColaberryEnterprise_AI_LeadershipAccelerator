@@ -146,6 +146,8 @@ export interface CreateBookingInput {
   privacy?: RoomPrivacy;
   capacity?: number;
   room_id?: string;
+  /** The backend dedupes on it (a double submit books once); the campus Book a session sheet sends one per sheet. */
+  idempotency_key?: string;
 }
 
 export interface CreateRoomInput {

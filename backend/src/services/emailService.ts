@@ -13,7 +13,7 @@ import { SessionReminderData, buildSessionReminderHtml } from './email/sessionRe
 import { isDev } from '../config/featureFlags';
 import { decideDevEmailRouting } from './devEmailGuard';
 import { buildLeadAlert, decideNotify, type AlertLead } from './leadAlertMessage';
-import { membershipPriceLine } from './admissionsPricing';
+import { membershipPitchLine } from './admissionsPricing';
 
 // Prefer Mandrill SMTP relay when API key is set, fall back to generic SMTP
 const transporter = env.mandrillApiKey
@@ -296,6 +296,25 @@ export interface TrainingWelcomeData {
   to: string;
   fullName: string;
   portalLink: string;
+  /**
+   * Both optional and both ADDITIVE: absent means the standard welcome, rendered
+   * exactly as it was before these existed. They exist for the 2026-10-23 recovery
+   * send, where the message has to acknowledge that the person signed up days
+   * earlier and never heard from us. A separate template would have meant a second
+   * copy of a 60-line branded layout to keep in step with this one.
+   */
+  subjectOverride?: string;
+  /** Replaces the opening paragraph. Plain text; escaped before rendering. */
+  intro?: string;
+  /**
+   * Suppress the "Inside, you'll find everything you need" lead-in and its three
+   * bullets. The recovery send needs this: that block is written to greet a brand
+   * new registrant, and it reads badly above an apology to someone who signed up
+   * three days ago and heard nothing.
+   */
+  hideHighlights?: boolean;
+  /** An extra paragraph after the sign-in link. Plain text; escaped. */
+  closing?: string;
 }
 
 function escapeHtml(s: string): string {
@@ -393,6 +412,26 @@ export function buildTrainingWelcomeHtml(data: TrainingWelcomeData): string {
   const firstName = (data.fullName || '').trim().split(/\s+/)[0] || 'there';
   const name = escapeHtml(firstName);
   const link = data.portalLink;
+  // Escaped, because `intro` is caller-supplied prose that lands inside markup.
+  // The recovery script passes a dated sentence built from a database value.
+  const openingPara = data.intro
+    ? escapeHtml(data.intro)
+    : 'You just took the first real step toward building with AI, not just reading about it. Your seat is reserved and your learning portal is ready right now.';
+  // Hoisted out of the literal so the standard send renders the SAME markup it
+  // always did, character for character, rather than a reflowed near-copy.
+  const highlights = data.hideHighlights ? '' : `<p style="margin:0 0 20px; color:#2d3748; font-size:16px; line-height:1.6;">
+            Inside, you'll find everything you need to hit the ground running:
+          </p>
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
+            <tr><td style="padding:8px 0; color:#2d3748; font-size:15px; line-height:1.5;"><span style="color:#38a169; font-weight:700;">&#10003;</span>&nbsp; Your program roadmap and what to expect week one</td></tr>
+            <tr><td style="padding:8px 0; color:#2d3748; font-size:15px; line-height:1.5;"><span style="color:#38a169; font-weight:700;">&#10003;</span>&nbsp; Hands-on projects you'll build and keep for your portfolio</td></tr>
+            <tr><td style="padding:8px 0; color:#2d3748; font-size:15px; line-height:1.5;"><span style="color:#38a169; font-weight:700;">&#10003;</span>&nbsp; A clear path from where you are to a real AI-ready role</td></tr>
+          </table>`;
+  const closingPara = data.closing
+    ? `<p style="margin:0 0 20px; color:#2d3748; font-size:15px; line-height:1.6;">
+            ${escapeHtml(data.closing)}
+          </p>`
+    : '';
   return `
 <!DOCTYPE html>
 <html>
@@ -415,16 +454,9 @@ export function buildTrainingWelcomeHtml(data: TrainingWelcomeData): string {
         <tr><td style="padding:32px;">
           <h1 style="margin:0 0 16px; color:#1a365d; font-size:24px; font-weight:700; line-height:1.25;">You're in, ${name}. Welcome to Colaberry.</h1>
           <p style="margin:0 0 16px; color:#2d3748; font-size:16px; line-height:1.6;">
-            You just took the first real step toward building with AI, not just reading about it. Your seat is reserved and your learning portal is ready right now.
+            ${openingPara}
           </p>
-          <p style="margin:0 0 20px; color:#2d3748; font-size:16px; line-height:1.6;">
-            Inside, you'll find everything you need to hit the ground running:
-          </p>
-          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
-            <tr><td style="padding:8px 0; color:#2d3748; font-size:15px; line-height:1.5;"><span style="color:#38a169; font-weight:700;">&#10003;</span>&nbsp; Your program roadmap and what to expect week one</td></tr>
-            <tr><td style="padding:8px 0; color:#2d3748; font-size:15px; line-height:1.5;"><span style="color:#38a169; font-weight:700;">&#10003;</span>&nbsp; Hands-on projects you'll build and keep for your portfolio</td></tr>
-            <tr><td style="padding:8px 0; color:#2d3748; font-size:15px; line-height:1.5;"><span style="color:#38a169; font-weight:700;">&#10003;</span>&nbsp; A clear path from where you are to a real AI-ready role</td></tr>
-          </table>
+          ${highlights}
           <!-- CTA -->
           <table role="presentation" cellpadding="0" cellspacing="0" style="margin:8px 0 24px;">
             <tr><td style="border-radius:6px; background:#e53e3e;">
@@ -437,6 +469,7 @@ export function buildTrainingWelcomeHtml(data: TrainingWelcomeData): string {
           <p style="margin:0 0 20px; font-size:13px; line-height:1.5; word-break:break-all;">
             <a href="${link}" style="color:#2b6cb0;">${escapeHtml(link)}</a>
           </p>
+          ${closingPara}
           <p style="margin:0; color:#718096; font-size:13px; line-height:1.5;">
             This sign-in link is unique to you and stays active for the next 30 days. We can't wait to see what you build.
           </p>
@@ -462,7 +495,7 @@ export async function sendTrainingWelcome(data: TrainingWelcomeData): Promise<{ 
     console.warn('[Email] SMTP not configured. Skipping training welcome to:', redactForLogs(data.to));
     return { sent: false };
   }
-  const subject = 'Welcome to Colaberry: your AI journey starts now';
+  const subject = data.subjectOverride || 'Welcome to Colaberry: your AI journey starts now';
   // NEVER REDIRECTED: `portalLink` is built as /portal/verify?token=... by
   // enrollmentService, so this welcome email is also a login.
   const r = await resolveEmailRecipient(data.to, subject, { neverRedirect: true });
@@ -1123,7 +1156,7 @@ function buildExecutiveOverviewHtml(data: ExecutiveOverviewEmailData): string {
   <div class="highlight">
     <strong>Format:</strong> 5-Day Executive AI Build Accelerator<br>
     <strong>Designed For:</strong> Directors, VPs, CTOs, and Technical Leaders<br>
-    <strong>Investment:</strong> ${membershipPriceLine()}<br>
+    <strong>Investment:</strong> ${membershipPitchLine()}<br>
     <strong>Outcome:</strong> Working AI POC + Executive Deck + 90-Day Roadmap
   </div>
 
@@ -1252,7 +1285,7 @@ function buildInterestHtml(data: InterestEmailData): string {
   <div class="highlight">
     <strong>Duration:</strong> 3 weeks (6 core sessions + optional labs)<br>
     <strong>Format:</strong> Live, instructor-led with hands-on projects<br>
-    <strong>Investment:</strong> ${membershipPriceLine()}<br>
+    <strong>Investment:</strong> ${membershipPitchLine()}<br>
     <strong>Outcome:</strong> Working AI Proof of Capability + Executive Presentation + 90-Day Roadmap
   </div>
 

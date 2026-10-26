@@ -34,6 +34,15 @@ jest.mock('../../models', () => ({
   Enrollment: { findAll: jest.fn().mockResolvedValue([]), findOne: jest.fn(), create: jest.fn() },
   Lead: { findOrCreate: jest.fn() },
   Campaign: {},
+  // Added 2026-10-25 when this path moved onto the shared `sendPortalWelcome`.
+  //
+  // That module asks "has this address already been welcomed?" before sending, and
+  // it FAILS CLOSED: if the question cannot be answered it refuses to send, because
+  // a missed welcome can be re-run and a duplicate cannot be withdrawn. Without
+  // `findAll` here the lookup threw, the guard correctly refused, and these four
+  // tests saw zero sends. The empty list is this suite's "nobody has been welcomed
+  // yet", which is the state its assertions were always written against.
+  CommunicationLog: { findAll: jest.fn().mockResolvedValue([]), create: jest.fn() },
 }));
 
 const mockGetOrCreateExplorerCohort = jest.fn();

@@ -49,6 +49,21 @@ function log(event: string, ctx: Record<string, unknown>, outcome: 'success' | '
 /** The `points_config` row this reads. Absent row => rate 0 => nothing paid. */
 export const PRESENTATION_RECORDING_XP_KEY = 'presentation_recording';
 
+/**
+ * The sharing bonus. Ali, 2026-10-24: "Let's give extra points to encourage
+ * sharing."
+ *
+ * A SECOND AWARD, NOT A BIGGER FIRST ONE, because they are different acts with
+ * different risk. Recording is private work a learner controls completely;
+ * putting their face in front of the cohort is a decision they can decline, and
+ * the product should never make declining feel like a penalty. Separating the
+ * two means the recording is paid whatever they choose afterwards.
+ *
+ * Keyed on the type as well, so the ceiling is the same seven. Sharing, taking
+ * down and re-sharing the same video pays once.
+ */
+export const PRESENTATION_SHARE_XP_KEY = 'presentation_shared';
+
 export interface RecordingAward {
   awarded: boolean;
   builder: number;
@@ -121,6 +136,62 @@ export async function payForRecordedType(
   }
 }
 
+/**
+ * Pay the sharing bonus for `typeId`, at most once ever.
+ *
+ * Called when a showcase actually goes LIVE to the cohort — staff approval,
+ * not the learner's request. Paying on request would pay for asking, and a
+ * request that is later declined would have bought points for nothing.
+ */
+export async function payForSharedType(
+  enrollmentId: string | null | undefined,
+  typeId: string | null | undefined,
+  context: { showcaseId?: string; recordingId?: string } = {},
+): Promise<RecordingAward> {
+  if (!enrollmentId || !typeId) return NOTHING;
+  if (!env.portalPointsAwardEnabled) return NOTHING;
+
+  let rate: { builder: number; community: number };
+  try {
+    const xp = await getTypeXp(PRESENTATION_SHARE_XP_KEY);
+    rate = { builder: xp.builder, community: xp.community };
+  } catch (err) {
+    log('presentation_share_points_rate_failed', { typeId, error_class: classifyError(err) }, 'failure');
+    return NOTHING;
+  }
+
+  if (rate.builder <= 0 && rate.community <= 0) return NOTHING;
+
+  try {
+    const r = await award(enrollmentId, {
+      eventType: PRESENTATION_SHARE_XP_KEY,
+      // Same ceiling as the recording award: seven types, seven bonuses. Taking
+      // a video down and re-sharing it pays nothing further.
+      eventKey: `presentation_shared:${typeId}`,
+      points: rate.builder,
+      metadata: {
+        presentation_type: typeId,
+        showcase_id: context.showcaseId ?? null,
+        recording_id: context.recordingId ?? null,
+      },
+    });
+    if (!r.awarded) return NOTHING;
+
+    log('presentation_share_points_awarded', { typeId, showcaseId: context.showcaseId ?? null, points: r.points });
+    return { awarded: true, builder: r.points, community: rate.community };
+  } catch (err) {
+    // The demo is published and the cohort can see it. A missing points row is
+    // a reporting gap, never a reason to unpublish.
+    log('presentation_share_points_failed', {
+      typeId,
+      showcaseId: context.showcaseId ?? null,
+      error_class: classifyError(err),
+      note: 'showcase is published; the HUD points row is missing',
+    }, 'failure');
+    return NOTHING;
+  }
+}
+
 /** What one recorded type is worth right now, for the UI to advertise. */
 export async function recordedTypeRate(): Promise<{ builder: number; community: number }> {
   if (!env.portalPointsAwardEnabled) return { builder: 0, community: 0 };
@@ -130,6 +201,17 @@ export async function recordedTypeRate(): Promise<{ builder: number; community: 
   } catch {
     // An unpriced slot shows no badge rather than "0 pts" — same rule prepPoints
     // states: fail closed and advertise nothing.
+    return { builder: 0, community: 0 };
+  }
+}
+
+/** What sharing one type is worth on top, for the UI to advertise. */
+export async function sharedTypeRate(): Promise<{ builder: number; community: number }> {
+  if (!env.portalPointsAwardEnabled) return { builder: 0, community: 0 };
+  try {
+    const xp = await getTypeXp(PRESENTATION_SHARE_XP_KEY);
+    return { builder: xp.builder, community: xp.community };
+  } catch {
     return { builder: 0, community: 0 };
   }
 }

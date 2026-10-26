@@ -16,6 +16,8 @@ import { useCampusDmToasts, DmToast, ToastHold } from './useCampusDmToasts';
 import type { StaffDesk } from './campusPeopleApi';
 import { useParticipantAuth } from '../../contexts/ParticipantAuthContext';
 import type { BuildingId } from './campusMap';
+import { CHOW_ROUTE } from './campusMap';
+import { openOrderSheet } from './chow/OrderSheet';
 import { CampusSettings, CampusSettingsView, readCampusSettings, writeCampusSettings } from './campusSettings';
 import { useEffectiveReduceMotion } from './useEffectiveReduceMotion';
 import './campusTokens.css'; // C11: contrast tokens on :root; the provider wraps every portal route, so every campus surface has them
@@ -207,6 +209,8 @@ export function CampusProvider({ children }: { children?: React.ReactNode }): Re
   const [door, setDoor] = useState<DoorState | null>(null);
   const doorSeq = React.useRef(0);
   const enterThroughDoor = useCallback((route: string, from: DoorRect | null) => {
+    // C39 (v11): Chow Hall has no page; its door opens the order sheet and the URL does not change
+    if (route === CHOW_ROUTE) { openOrderSheet(); return; }
     doorSeq.current += 1; setDoor({ phase: 'in', route, from, id: doorSeq.current });
   }, []);
   const stepOutside = useCallback((buildingId: BuildingId | null) => {

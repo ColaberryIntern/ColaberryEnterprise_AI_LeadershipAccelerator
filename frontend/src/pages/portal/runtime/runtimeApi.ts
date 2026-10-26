@@ -19,6 +19,8 @@ export interface RtCard {
   week_title?: string | null;   // the week's SECTION title from the Blueprint — the Overview card's display title
 }
 export interface RtOpen { card: RtCard; progress: { status: string; completed_at: string | null } }
+/** A notebook row (runtime_notes via notebookService). */
+export interface RtNote { id: string; card_id: string | null; kind: string; title: string | null; body: string | null; created_at: string }
 
 // In-Workspace blog reader payload (blogReaderService). ok:false ⇒ show the external link.
 export interface BlogReaderContent {
@@ -219,7 +221,9 @@ export const runtimeApi = {
   cardDwell: (cardId: string, beat: { delta_s: number }) =>
     portalApi.post(`/api/portal/runtime/cards/${cardId}/dwell`, beat).then((r) => r.data as { dwell_s: number; required_s: number; met: boolean }),
   readiness: () => portalApi.get('/api/portal/runtime/readiness').then((r) => r.data as Readiness),
-  saveNote: (cardId: string, body: string, kind = 'note') => portalApi.post('/api/portal/runtime/notebook', { card_id: cardId, kind, body }).then((r) => r.data),
+  saveNote: (cardId: string, body: string, kind = 'note') => portalApi.post('/api/portal/runtime/notebook', { card_id: cardId, kind, body }).then((r) => r.data as RtNote),
+  // The student's notes, newest first (the server caps at 200); the workstation notebook keeps this card's.
+  notes: () => portalApi.get('/api/portal/runtime/notebook', { params: { kind: 'note' } }).then((r) => (r.data?.notes ?? []) as RtNote[]),
   comments: (cardId: string) => portalApi.get(`/api/portal/classroom/cards/${cardId}/comments`).then((r) => r.data as { comments: CardComment[] }),
   comment: (cardId: string, body: string) => portalApi.post(`/api/portal/classroom/cards/${cardId}/comments`, { body }).then((r) => r.data as { comment: CardComment }),
   survey: (cardId: string) => portalApi.get(`/api/portal/runtime/cards/${cardId}/survey`).then((r) => r.data as SurveyView),

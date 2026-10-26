@@ -63,13 +63,13 @@ describe('pure helpers', () => {
     expect(tokensFor(undefined)).toEqual({ shown: [], more: 0 });
   });
 
-  it('desksForBuilding keeps a building\'s desks and drops Maya for members and business viewers', () => {
-    const desks = [{ id: 'reese', building: 'commons' }, { id: 'maya', building: 'gate' }] as StaffDesk[];
+  it('desksForBuilding keeps a building\'s desks; C21: Maya sits in Admissions for every audience (an older server\'s gate desk counts there)', () => {
+    const desks = [{ id: 'reese', building: 'commons' }, { id: 'maya', building: 'admissions' }] as StaffDesk[];
     expect(desksForBuilding(desks, 'commons', 'member').map((d) => d.id)).toEqual(['reese']);
-    expect(desksForBuilding(desks, 'gate', 'member')).toEqual([]);
-    expect(desksForBuilding(desks, 'gate', 'business')).toEqual([]);
-    expect(desksForBuilding(desks, 'gate', 'explorer').map((d) => d.id)).toEqual(['maya']);
-    expect(desksForBuilding(desks, 'gate', 'staff').map((d) => d.id)).toEqual(['maya']);
+    for (const a of ['member', 'business', 'explorer', 'staff'] as const) expect(desksForBuilding(desks, 'admissions', a).map((d) => d.id)).toEqual(['maya']);
+    const old = [{ id: 'maya', building: 'gate' }] as StaffDesk[];
+    expect(desksForBuilding(old, 'admissions', 'member').map((d) => d.id)).toEqual(['maya']);
+    expect(desksForBuilding(old, 'gate', 'member')).toEqual([]);
   });
 });
 

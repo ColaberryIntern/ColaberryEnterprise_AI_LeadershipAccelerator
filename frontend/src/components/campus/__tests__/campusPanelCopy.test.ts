@@ -40,6 +40,12 @@ describe('the kicker (D:1851-1854)', () => {
     expect(k({ here: bld('studio') })).toBe('At Project Studio');
     expect(k({ here: bld('library'), live: true })).toMatch(/^Colaberry Live · Thursday/);
   });
+  it('C17: out on the grass a member is "On campus" (never "At the main gate"); a building, or Live, still wins', () => {
+    expect(k({ onLawn: true })).toBe('On campus');
+    expect(k({ onLawn: true, workplace: true })).toBe('On campus');
+    expect(k({ onLawn: true, here: bld('library') })).toBe('At the Library');
+    expect(k({ onLawn: true, live: true })).toMatch(/^Colaberry Live/);
+  });
 });
 
 describe('the greeting (D:1844-1848)', () => {
@@ -81,7 +87,7 @@ describe('the lead (MOMENTS, finishTour)', () => {
 describe('the pulse (renderPresence)', () => {
   const pl = (o: Partial<Parameters<typeof pulseLine>[0]>) => pulseLine({ audience: 'member', workplace: false, presence: PRESENCE, presenceError: false, buildings: B, staffOnDuty: true, ...o });
   it('member, Explorer, partner (their named people of all), quiet, down, unknown', () => {
-    expect(pl({})).toEqual({ tone: 'live', bold: '4 classmates on campus', rest: 'busiest: Community Lounge (3)', walk: true });
+    expect(pl({})).toEqual({ tone: 'live', bold: '4 classmates on campus', rest: 'busiest: Meeting Rooms (3)', walk: true });
     expect(pl({ audience: 'explorer' })!.bold).toBe('4 people on campus');
     expect(pl({ audience: 'business' })).toEqual({ tone: 'team', bold: '1 of your people on campus', rest: '4 learners in all', walk: true });
     expect(pl({ presence: EMPTY })).toEqual({ tone: 'quiet', bold: 'Quiet hours', rest: 'nobody else on campus · staff on duty 24/7', walk: false });
@@ -109,7 +115,7 @@ describe('Right now and the urgent card', () => {
     agenda: agenda(session('2026-10-23', '13:00'), 15), presence: PRESENCE, presenceError: false, live: false, urgent: null, ...o });
   it('a member: the plan, the next class, where people are (three at most, the event drops off)', () => {
     expect(rows({}).map((r) => [r.key, r.title, r.detail])).toEqual([
-      ['plan', 'Continue today’s plan', '20 min · Week 5 lessons'], ['class', 'Next live class', 'Build Day · in 1d 3h'], ['people', 'Drop into the Community Lounge', '3 people here now'],
+      ['plan', 'Continue today’s plan', '20 min · Week 5 lessons'], ['class', 'Next live class', 'Build Day · in 1d 3h'], ['people', 'Drop into the Meeting Rooms', '3 people here now'],
     ]);
     expect(rows({ stops: [], presence: EMPTY }).map((r) => r.key)).toEqual(['class', 'event']);
     expect(rows({ stops: [], presence: EMPTY }).find((r) => r.key === 'event')!.detail).toBe('In 15d');
@@ -129,7 +135,7 @@ describe('Right now and the urgent card', () => {
     expect(eventIn(new Date(T0 - 60000).toISOString(), T0)).toBeNull();
   });
   it('a partner\'s team: every named (teammate) entry, with where they are', () => {
-    expect(teamRows(PRESENCE, false, B, false).map((r) => [r.name, r.detail])).toEqual([['Mia Lopez', 'In Community Lounge']]);
+    expect(teamRows(PRESENCE, false, B, false).map((r) => [r.name, r.detail])).toEqual([['Mia Lopez', 'In Meeting Rooms']]);
     expect(teamRows(PRESENCE, true, B, false)).toEqual([]);
   });
 });
@@ -161,11 +167,11 @@ describe('the Wayfinder search (buildDest + matcher)', () => {
     expect(wayfinderSearch('cert', ctx({ audience: 'explorer', accessOf: (b) => (b.id === 'testing' ? 'locked' : 'open') })).find((r) => r.kind === 'building')!.action).toBe('🔒 Peek');
     expect(wayfinderSearch('a', ctx()).length).toBeLessThanOrEqual(WF_LIMIT + 5);
   });
-  it('"late" puts what is starting first; the empty Wayfinder groups Happening now, Suggested, Staff, All buildings', () => {
+  it('"late" puts what is starting first; the empty Wayfinder groups Happening now, Suggested, Staff, Help (C20), All buildings', () => {
     const urgent = { buildingId: 'lecture' as const, title: 'Live class starts in 4 min', detail: 'Build Day · Classroom' };
     expect(wayfinderSearch('late', ctx({ urgent }))[0]).toMatchObject({ kind: 'urgent', action: 'Run →', run: true });
     const groups = Array.from(new Set(wayfinderEmpty(ctx({ urgent, suggested: [{ key: 'plan', buildingId: 'lecture', title: 'Continue today’s plan', detail: '~96 min' }] })).map((r) => r.group)));
-    expect(groups).toEqual(['Happening now', 'Suggested for you', 'Staff · always on', 'All buildings']);
+    expect(groups).toEqual(['Happening now', 'Suggested for you', 'Staff · always on', 'Help', 'All buildings']);
     expect(wayfinderEmpty(ctx()).filter((r) => r.group === 'All buildings')).toHaveLength(B.length);
   });
 });

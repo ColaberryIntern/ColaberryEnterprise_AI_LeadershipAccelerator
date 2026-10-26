@@ -9,8 +9,23 @@ import type { GameId } from './engine/gameRules';
  */
 export const GAME_API_TIMEOUT_MS = 10_000;
 export interface GameTime { used_s: number; cap_s: number; left_s: number; resets_at: string }
-export interface BoardRow { rank: number; name: string; score: number; you: boolean }
-export interface Board { week_start: string; rows: BoardRow[] }
+/** C35: rows also carry who the person is (only for people you may see by name; others read "Colaberry learner"). */
+export interface BoardRow {
+  rank: number; name: string; score: number; you: boolean;
+  display_name?: string; avatar_url?: string | null; rung_name?: string | null; cohort_name?: string | null;
+}
+/** At most ten rows; `me` is your best and rank even outside them (null: no score yet). */
+export interface Board { week_start: string; rows: BoardRow[]; me?: { best: number; rank: number } | null }
+export type BoardScope = 'cohort' | 'all';
+export type BoardPeriod = 'week' | 'all';
+export interface RecentHigh { kind: 'best' | 'top'; name: string; enrollment_id: string; game: GameId; score: number; at: string }
+export interface GameSummary {
+  week_start: string;
+  your_week: { played: number; best_game: GameId | null; best_score: number | null; best_rank: number | null };
+  champions: Array<{ game: GameId; name: string | null; avatar_url: string | null; score: number | null }>;
+  recent: RecentHigh[];
+}
+export interface PlayingNow { count: number; people: Array<{ name: string; game: GameId }> }
 
 export class GameApiError extends Error {
   constructor(message: string, readonly status: number, readonly error_class: string) { super(message); this.name = 'GameApiError'; }
@@ -36,4 +51,9 @@ export const fetchGameTime = () => call<GameTime>('get', '/time');
 export const startGameRun = (game: GameId) => call<{ run_id: string; left_s: number }>('post', '/start', { game });
 export const beatGameRun = (runId: string) => call<{ left_s: number }>('post', '/beat', { run_id: runId });
 export const submitGameScore = (runId: string, score: number) => call<{ score: number; seconds_used: number; replayed: boolean }>('post', '/scores', { run_id: runId, score });
-export const fetchGameBoard = (game: GameId) => call<Board>('get', `/scores?game=${encodeURIComponent(game)}`);
+export const fetchGameBoard = (game: GameId, scope: BoardScope = 'cohort', period: BoardPeriod = 'week') =>
+  call<Board>('get', `/scores?game=${encodeURIComponent(game)}&scope=${scope}&period=${period}`);
+// C35 (v8 G4)
+export const fetchGameSummary = () => call<GameSummary>('get', '/summary');
+export const fetchPlayingNow = () => call<PlayingNow>('get', '/playing');
+export const challengeFriend = (to: string, game: GameId, score: number) => call<{ sent: boolean; reason: 'sent' | 'already_challenged' }>('post', '/challenge', { to, game, score });

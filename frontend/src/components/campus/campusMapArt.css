@@ -99,6 +99,12 @@
 .cm-steps .cm-step{fill:var(--cm-art-step-dot);animation:cm-step-fade 1.6s forwards;pointer-events:none}
 @keyframes cm-step-fade{to{opacity:0}}
 .cm-route-line{pointer-events:none}
+/* C17 (round 3 §2.5): the drop pin where a ground click is taking you (prototype #dropPin) */
+.cm-drop-pin{pointer-events:none}
+.cm-drop-pin .dot{fill:var(--cm-art-red)}
+.cm-drop-pin .ring{fill:none;stroke:var(--cm-art-red);stroke-width:2;transform-box:fill-box;transform-origin:center;animation:cm-drop-ring 1.2s ease-out infinite}
+@keyframes cm-drop-ring{from{opacity:.9;transform:scale(.4)}to{opacity:0;transform:scale(1.6)}}
+.cm-map.is-reduced .cm-drop-pin .ring{animation:none}
 .cm-bld.is-hl .body-g{transform:translateY(-4px)}
 .cm-bld.is-hl .lbl rect{fill:var(--cm-art-pic-ink);stroke:var(--cm-art-pic-ink)}
 .cm-bld.is-hl .lbl text{fill:var(--cm-art-white)}
@@ -140,3 +146,12 @@
 .cm-marquee.is-reconnecting{animation:cm-flicker 1.4s steps(2) infinite}
 @keyframes cm-flicker{50%{opacity:.45}}
 .cm-map.is-reduced .cm-marquee{animation:none}
+/* C51 / C52 (v13 T3, T4): the Explorer signposts to Today: the TODAY flag over the Schedule tower, START HERE under the gate */
+.cm-today-flag,.cm-gate-today{cursor:pointer}
+.cm-today-flag .pill,.cm-today-flag .pointer,.cm-gate-today .pill{fill:var(--cm-art-red)}
+.cm-today-flag .pill{stroke:var(--cm-art-white);stroke-width:2.5}
+.cm-today-flag .t,.cm-gate-today .t{fill:var(--cm-art-white);font-weight:800;font-family:'DM Sans',system-ui,sans-serif;pointer-events:none}
+.cm-today-flag .t{font-size:10.5px}
+.cm-gate-today .t{font-size:9px;letter-spacing:.6px}
+.cm-today-flag:hover .pill,.cm-today-flag:hover .pointer,.cm-gate-today:hover .pill{fill:var(--cm-art-red-d)}
+.cm-today-flag:focus-visible .pill,.cm-gate-today:focus-visible .pill{stroke:var(--cm-art-ink);stroke-width:2.5}

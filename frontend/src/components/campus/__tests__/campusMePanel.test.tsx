@@ -62,7 +62,7 @@ const LOOK = (points: number, equipped: Record<string, string> = {}): CampusLook
   points, rung_name: 'AI Enabled II', equipped,
   catalog: [
     { id: 'cap', name: 'Red cap', slot: 'head', threshold: 150, unlocked: points >= 150 },
-    { id: 'board', name: 'Skateboard', slot: 'ride', threshold: 150, unlocked: points >= 150 },
+    { id: 'jacket', name: 'Campus jacket', slot: 'body', threshold: 150, unlocked: points >= 150 },
     { id: 'hoodie', name: 'Hoodie', slot: 'body', threshold: 400, unlocked: points >= 400 },
     { id: 'chain', name: 'Gold chain', slot: 'neck', threshold: 900, unlocked: points >= 900 },
   ],
@@ -139,11 +139,12 @@ describe('the bar from the last unlock to the next (E M2)', () => {
 });
 
 describe('the locker tiles (E M6)', () => {
-  it('says ✓ Wearing / Wear it / Ride it / 🔒 n pts', () => {
+  it('says ✓ Wearing / Wear it / 🔒 n pts (C46: never Ride it)', () => {
     const l = LOOK(500, { head: 'cap' });
     expect(tileState(l.catalog[0], true)).toBe('✓ Wearing');
     expect(tileState(l.catalog[2], false)).toBe('Wear it');
-    expect(tileState(l.catalog[1], false)).toBe('Ride it');
+    expect(tileState(l.catalog[1], false)).toBe('Wear it');
+    expect(l.catalog.map((i) => tileState(i, false))).not.toContain('Ride it');
     expect(tileState(l.catalog[3], false)).toBe('🔒 900 pts');
   });
   it('wears an item, takes it off, and a locked one cannot be pressed', async () => {
@@ -255,14 +256,14 @@ describe('the account-type switch (Ali, 2026-10-23)', () => {
 });
 
 describe('the live Classroom (Q2) and auto check-in', () => {
-  it('a class session airs in the Classroom and joins on its live page; a room alone stays in the commons', () => {
-    expect(liveBuildingOf(bc({ session_id: 'ses-1', room_id: 'r1' }))).toBe('lecture');
-    expect(liveBuildingOf(bc({ room_id: 'r1' }))).toBe('commons');
-    expect(liveBuildingOf(bc())).toBeNull();
+  it('C28 (v7 R1): every broadcast airs in the Events Hall, never the commons; a class session still joins on its live page', () => {
+    expect(liveBuildingOf(bc({ session_id: 'ses-1', room_id: 'r1' }))).toBe('amphi');
+    expect(liveBuildingOf(bc({ room_id: 'r1' }))).toBe('amphi');
+    expect(liveBuildingOf(bc())).toBe('amphi');
     expect(roomRoute(bc({ session_id: 'ses-1' }))).toBe('/portal/live/ses-1');
     expect(roomRoute(bc({ room_id: 'r1' }))).toBe('/portal/rooms/r1');
     expect(headlineBroadcast([bc({ id: 'a' }), bc({ id: 'b', session_id: 's' })])!.id).toBe('b');
-    expect([...onAirBuildings([bc({ session_id: 's' }), bc({ room_id: 'r' })])].sort()).toEqual(['commons', 'lecture']);
+    expect([...onAirBuildings([bc({ session_id: 's' }), bc({ room_id: 'r' })])].sort()).toEqual(['amphi']);
   });
   const live = (o: Partial<CampusLiveNow> = {}): CampusLiveNow => ({ b: bc({ session_id: 'ses-1' }), state: 'live', now: 0, polledAt: 0, building: 'lecture', ...o });
   it('checks in only a member, only in the live building, only while on air', () => {
@@ -270,7 +271,7 @@ describe('the live Classroom (Q2) and auto check-in', () => {
     expect(shouldCheckIn('explorer', live(), 'lecture')).toBeNull();
     expect(shouldCheckIn('member', live(), 'library')).toBeNull();
     expect(shouldCheckIn('member', live({ state: 'reconnecting' }), 'lecture')).toBeNull();
-    expect(shouldCheckIn('member', live({ b: bc({ room_id: 'r' }), building: 'commons' }), 'commons')).toBeNull();
+    expect(shouldCheckIn('member', live({ b: bc({ room_id: 'r' }), building: 'amphi' }), 'amphi')).toBeNull();
   });
   it('joins once per session (idempotent on our side too), remembers a 404, retries other failures on the next arrival', async () => {
     mockJoin.mockResolvedValue({ ok: true, status: 'present', awarded: true, points: 25 });

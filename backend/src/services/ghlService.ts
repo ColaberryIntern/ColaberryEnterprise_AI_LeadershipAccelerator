@@ -1,6 +1,7 @@
 import { getSetting, getTestOverrides } from './settingsService';
 import { resolveGhlAccountForSource } from './leads/ghlAccountRouting';
 import { provenanceTagsFor } from './leads/ghlProvenanceTags';
+import { isSyntheticContactEmail } from './leads/syntheticContacts';
 import { logActivity } from './activityService';
 import Lead from '../models/Lead';
 import { redactForLogs } from '../utils/piiRedaction';
@@ -273,6 +274,35 @@ export async function syncLeadToGhl(
   // Which sub-account this lead belongs in. A source routed to an account that
   // has no key on file yet is withheld rather than falling back to the default,
   // because the default is Agent Cory AI and writing there would put the lead in
+  /**
+   * A test fixture is not a person, and must never reach a customer-facing CRM.
+   *
+   * The e2e suite creates real `free_signup` leads in PRODUCTION. On 2026-10-23 the backfill put
+   * one into the live school account before anybody noticed, and it had to be deleted by hand.
+   * The live path had the same hole: from the moment the sync fires on arrival, every e2e run
+   * would create a contact the admissions team might try to call.
+   *
+   * Checked BEFORE routing, because this is true regardless of which account the lead would have
+   * gone to, and withheld in the same shape as every other refusal so it shows up in the same
+   * activity log an operator already reads.
+   */
+  if (isSyntheticContactEmail(lead.email)) {
+    const reason = 'synthetic test address, not a real person';
+    console.warn(`[GHL] Lead ${lead.id} not synced: ${reason}`);
+    await logActivity({
+      lead_id: lead.id,
+      type: 'system',
+      subject: 'GHL Sync Withheld',
+      metadata: {
+        action: 'ghl_sync',
+        status: 'withheld',
+        reason: 'synthetic_email',
+        source: lead.source || null,
+      },
+    }).catch(() => {});
+    return { contactId: null, isTestMode: false, error: reason };
+  }
+
   // the wrong CRM in front of an outbound dialer. See leads/ghlAccountRouting.ts.
   const route = await resolveGhlAccountForSource(lead.source);
   if (route.status !== 'ready') {

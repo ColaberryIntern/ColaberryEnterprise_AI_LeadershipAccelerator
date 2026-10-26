@@ -20,6 +20,11 @@ import './campusLocbar.css';
  * Every control is 36 px, 13.5 px, and never wraps (labels sit in an ellipsis span). No "Next" button: Up next is in the rail.
  * It sticks to the top once the header scrolls away (a soft shadow when scrolled). Esc steps outside (campusEsc guards it).
  * A coach mark, once per browser session, 800 ms after the first page, explains Step outside and Campus map; it hides after 4.2 s.
+ *
+ * `next` (Ali, 2026-10-24): the page's own sticky "next task" (the condensedSlot a page hands PortalShell, shown once you scroll
+ * past its hero) used to ride in the portal header; the campus hid it when the bar arrived. It now rides IN the bar, in the middle
+ * column to the right of the left navigation, in place of the trail while you are scrolled down; back at the top, the trail returns.
+ * Campus map, Step outside and Where to? never move.
  */
 export const COACH_KEY = 'colaberry.campus.coach';
 export const COACH_DELAY_MS = 800;
@@ -49,7 +54,7 @@ function useScrolled(): boolean {
   return scrolled;
 }
 
-export default function CampusLocationBar(): React.ReactElement | null {
+export default function CampusLocationBar({ next = null }: { next?: React.ReactNode } = {}): React.ReactElement | null {
   const { active, settings, layer, openMap, stepOutside, openMe } = useCampus();
   const { buildings } = useCampusView();
   const { pathname } = useLocation();
@@ -76,6 +81,7 @@ export default function CampusLocationBar(): React.ReactElement | null {
         </span>
         <span className="cm-lb-t">Campus map</span>
       </button>
+      {next ? <div className="cm-lb-next" role="region" aria-label="Your next step" data-testid="cm-lb-next">{next}</div> : (
       <ol className="cm-lb-crumbs" data-testid="cm-trail">
         <li className="cm-crumb-home"><button type="button" onClick={() => openMap()} data-testid="cm-crumb-campus"><span className="cm-lb-t">Campus</span></button></li>
         {building && (
@@ -86,7 +92,7 @@ export default function CampusLocationBar(): React.ReactElement | null {
           </li>
         )}
         {room && <li><span className="cur" aria-current="page"><span className="cm-lb-t">{room.label}</span></span></li>}
-      </ol>
+      </ol>)}
       <div className="cm-lb-acts">
         <button type="button" className="cm-lb-btn" onClick={() => stepOutside(here)} data-testid="cm-step-out"><span aria-hidden="true" className="cm-lb-ic">←</span><span className="cm-lb-t">Step outside</span></button>
         <div className="cm-lb-where"><WhereTo placeholder="Where to?" /></div>

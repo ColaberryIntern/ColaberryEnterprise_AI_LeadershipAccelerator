@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from 'react';
 import { readParticipant } from '../../pages/portal/today/shellUtils';
+import { VIEW_AS_TOKEN_KEY } from '../../utils/participantToken';
 
 /**
  * The guided tour's state (WP-1, moved out of CampusContext in WP-2 so the provider stays readable): the stop on screen, and the
@@ -14,9 +15,17 @@ import { readParticipant } from '../../pages/portal/today/shellUtils';
 export interface TourProgress { paused: number | null; toured: boolean; pausedAt?: number }
 export const PAUSE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 export const tourKey = (): string => `colaberry.campus.tour.${readParticipant().email || 'anon'}`;
+/**
+ * Where the progress lives. Staff "Viewing as" a learner (a read-only, tab-scoped session) keep it in sessionStorage: the tour they
+ * click through in someone else's view must neither show up as that learner's progress in this browser later, nor show this browser's
+ * earlier tours as the learner's (Ali, 2026-10-26: "Tour in progress, stop 5 of 8" while viewing a learner who had never had the campus).
+ */
+function tourStore(): Storage {
+  return window.sessionStorage.getItem(VIEW_AS_TOKEN_KEY) ? window.sessionStorage : window.localStorage;
+}
 export function readTour(now: number = Date.now()): TourProgress {
   try {
-    const v = JSON.parse(window.localStorage.getItem(tourKey()) || 'null');
+    const v = JSON.parse(tourStore().getItem(tourKey()) || 'null');
     if (v && typeof v === 'object') {
       const pausedAt = typeof v.pausedAt === 'number' ? v.pausedAt : undefined;
       // A pause with no time (stored before C13) or older than a week has expired.
@@ -26,7 +35,7 @@ export function readTour(now: number = Date.now()): TourProgress {
   } catch { /* nothing stored */ }
   return { paused: null, toured: false };
 }
-function writeTour(p: TourProgress): void { try { window.localStorage.setItem(tourKey(), JSON.stringify(p)); } catch { /* no storage */ } }
+function writeTour(p: TourProgress): void { try { tourStore().setItem(tourKey(), JSON.stringify(p)); } catch { /* no storage */ } }
 
 export interface CampusTourState {
   tourIndex: number | null;

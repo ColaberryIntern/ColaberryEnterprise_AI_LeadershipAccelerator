@@ -11,10 +11,18 @@ export interface StudentGovTrackView { trackType: string; status: string; hasBui
 export interface StudentGovRequirementView {
   canonicalReqId: string; statement: string; priority: string; tracks: string[]; evidenceState: string;
 }
+/** The 4-stage cockpit board column a build story moves through (a commit reaches `matched` at most). */
+export type GovBuildStage = 'todo' | 'build' | 'matched' | 'done';
+/** A proposal task closes by approval, so it never enters `matched`. */
+export type GovProposalStage = 'todo' | 'build' | 'done';
 /** A student's submitted completion evidence for a build story — `submitted` until a reviewer verifies it. */
 export interface GovBuildEvidenceView {
   id: string; storyId: string; canonicalReqId: string; description: string;
   artifactRef: string | null; status: 'submitted' | 'verified' | 'rejected'; submittedAt: string | null;
+  /** 'student' for a manual hand-in, 'github_push' for an auto-matched build-repo commit. Optional (older backends). */
+  source?: 'student' | 'github_push';
+  /** The matched commit's SHA (github_push only). Optional (older backends). */
+  commitSha?: string | null;
 }
 /** A build story the student works — cites its requirement, carries the Claude Code prompt + submitted evidence. */
 export interface StudentGovBuildStory {
@@ -25,6 +33,18 @@ export interface StudentGovBuildStory {
   /** True when the requirement left the established set but the student's work is preserved (revision). */
   orphaned?: boolean;
   evidence: GovBuildEvidenceView[];
+  /** Cockpit board column, derived from assignment + evidence. Optional (absent on older backends ⇒ derive). */
+  stage?: GovBuildStage;
+  /** Build stories are AI-worked. Optional (older backends). */
+  owner?: 'ai';
+  /** True when THIS viewer is the assignee (the student-safe "assigned to me"; never the id). Optional. */
+  mine?: boolean;
+  /** The latest matched build-repo commit (sha + first message line), or null. Optional (older backends). */
+  commit?: { sha: string; message: string } | null;
+}
+/** One row of the project's build-repo commit feed (matched pushes, newest first) — public commit facts, no identity. */
+export interface GovCommitFeedItem {
+  sha: string; message: string; storyKey: string; at: string | null; verified: boolean;
 }
 export interface StudentGovBuildRelease { key: string; name: string; storyIds: string[] }
 export interface StudentGovBuildPlan {
@@ -48,6 +68,12 @@ export interface SharedProposalView {
 /** P6: one row of the PRICE-FREE submission checklist. */
 export interface StudentSubmissionChecklistItem {
   requirementId: string; statement: string; status: string; approved: boolean; openGapCount: number;
+  /** Cockpit board column (proposal closes by approval — never `matched`). Optional (older backends). */
+  stage?: GovProposalStage;
+  /** Proposal tasks are human-owned. Optional (older backends). */
+  owner?: 'human';
+  /** True when THIS viewer can edit the proposal. Optional (older backends). */
+  mine?: boolean;
 }
 export interface StudentSubmissionChecklist {
   items: StudentSubmissionChecklistItem[];
@@ -68,7 +94,16 @@ export interface StudentGovProjectView {
   submissionChecklist?: StudentSubmissionChecklist;
   /** Whether the current viewer may verify evidence (a reviewer, not a student) — lights up verify/reject controls. */
   viewerCanVerify: boolean;
+  /** Cockpit: the soliciting agency (public), for the project bar. Optional (older backends). */
+  agency?: string | null;
+  /** Cockpit: detected key-date lines (public) — fed to the govDeadline countdown helper. Optional (older backends). */
+  keyDates?: Array<{ date: string | null; text: string | null }>;
+  /** Cockpit: the build-repo commit feed (matched pushes, newest first). Optional (older backends). */
+  commitFeed?: GovCommitFeedItem[];
 }
+
+/** The project copilot's grounded answer to a question (deterministic, from the student-safe projection). */
+export interface GovCopilotAnswer { intent: 'next' | 'review' | 'risk' | 'proposal' | 'other'; answer: string; }
 
 /** P6: a card for a gov project the intern is assigned to — minimal fields for the "on your profile" surface. */
 export interface MyGovProjectCard { projectId: string; name: string; status: string; }
@@ -97,6 +132,28 @@ export async function submitBuildStoryEvidence(
   return data.evidence;
 }
 
+/**
+ * P6: an EDIT-shared intern drafts/edits the proposal response for one requirement. Any save lands `draft` (a
+ * changed answer is not reviewed/approved); the intern cannot review or approve (admin-only, 403 server-side). The
+ * caller reloads the project after to show the new status. A non-edit viewer is refused server-side.
+ */
+export async function saveGovProposalResponse(projectId: string, requirementId: string, content: string): Promise<void> {
+  await portalApi.post(
+    `/api/portal/gov-projects/${encodeURIComponent(projectId)}/proposal/${encodeURIComponent(requirementId)}`,
+    { content },
+  );
+}
+
+/** P6: an EDIT-shared intern resolves a draft gap on a proposal response (answered | filler | open). */
+export async function resolveGovProposalGap(
+  projectId: string, requirementId: string, gapId: string, resolution: 'open' | 'answered' | 'filler', answer?: string,
+): Promise<void> {
+  await portalApi.post(
+    `/api/portal/gov-projects/${encodeURIComponent(projectId)}/proposal/${encodeURIComponent(requirementId)}/gaps/${encodeURIComponent(gapId)}`,
+    { resolution, answer: answer ?? null },
+  );
+}
+
 /** A reviewer (evidence.verify) decides a submitted hand-in. Students get 403 server-side; the UI hides it from them. */
 export async function verifyBuildStoryEvidence(
   projectId: string, evidenceId: string, decision: 'verified' | 'rejected',
@@ -106,4 +163,13 @@ export async function verifyBuildStoryEvidence(
     { decision },
   );
   return data.evidence;
+}
+
+/** Ask the project copilot. Answers DETERMINISTICALLY from the same student-safe projection the page renders. */
+export async function askGovCopilot(projectId: string, question: string): Promise<GovCopilotAnswer> {
+  const { data } = await portalApi.post<GovCopilotAnswer>(
+    `/api/portal/gov-projects/${encodeURIComponent(projectId)}/copilot`,
+    { question },
+  );
+  return data;
 }

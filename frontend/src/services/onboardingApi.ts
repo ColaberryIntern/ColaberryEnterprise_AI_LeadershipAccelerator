@@ -239,6 +239,9 @@ export interface MySession {
   end_time: string;
   status: 'scheduled' | 'live' | 'completed' | 'cancelled';
   room_id: string | null;
+  /** C32: the same endpoint also carries these (PortalSessionsPage reads them); absent from an older server. */
+  recording_url?: string | null;
+  attendance_status?: string | null;
 }
 export async function fetchMySessions(): Promise<MySession[]> {
   const { data } = await portalApi.get<{ sessions: MySession[] }>('/api/portal/sessions');

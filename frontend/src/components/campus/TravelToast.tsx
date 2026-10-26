@@ -2,8 +2,7 @@ import React from 'react';
 import './campusPeek.css';
 
 /**
- * "Walking to Library…" while you walk (WP-3; the prototype's #tt, D:1316, D:1779), "Skating to" / "Driving to" on a ride and
- * "Running to" when late, with Skip, which stands you at the door at once. Polite live region; never shown with reduce motion (no
+ * "Walking to Library…" while you walk (WP-3; the prototype's #tt, D:1316, D:1779) and "Running to" when late (C46: no rides), with Skip, which stands you at the door at once. Polite live region; never shown with reduce motion (no
  * walk happens then).
  */
 export default function TravelToast({ text, onSkip }: { text: string | null; onSkip: () => void }): React.ReactElement {

@@ -5,10 +5,14 @@ import { initialsOf } from '../WhoIsHere';
 import { art } from '../art/artColor';
 import { publicOnly } from '../campusGear';
 import { levelOfRung } from '../../../services/bandLadder';
-import BuildingInterior from './BuildingInterior';
+import Room3D from './room3d/Room3D';
+import type { PageSummary } from './pageSummary';
+import type { SpotDef } from './roomSpots';
+import type { PlanStop } from '../campusPlan';
+import { useHomeFacts } from '../home/useHomeFacts';
 import type { FigurePerson } from './RoomFurniture';
 import type { WallFacts } from './RoomWalls';
-import { doorLabel, ROOMS } from './roomModel';
+import { ROOMS } from './roomModel';
 import { readParticipant } from '../../../pages/portal/today/shellUtils';
 import { useCampus } from '../CampusContext';
 import { useMyPhoto } from '../home/useMyPhoto';
@@ -49,6 +53,13 @@ export interface CampusInsideProps {
   workplace?: boolean;
   wall?: WallFacts;
   onGame?: (game: string) => void;
+  /** v6 D1: the page's Next step and side card (the board), its plan step when the page has none, your spot, and where things lead. */
+  summary?: PageSummary | null;
+  planStep?: PlanStop | null;
+  spot?: SpotDef | null;
+  sectionRoute?: string;
+  onOpen?: (route: string) => void;
+  onBook?: () => void;
 }
 
 function tagFor(audience: CampusAudience, access: ExplorerAccess): { text: string; tone: string } | null {
@@ -59,13 +70,14 @@ function tagFor(audience: CampusAudience, access: ExplorerAccess): { text: strin
 }
 
 export default function CampusInside(p: CampusInsideProps): React.ReactElement | null {
-  const { building: b, buildingName, audience, access, presence, onAir, reduceMotion, onStepOutside, onPickPerson, desk, going = null } = p;
+  const { building: b, buildingName, audience, access, presence, reduceMotion, onStepOutside, onPickPerson, desk, going = null } = p;
   const area = presence?.[b.id];
   const named = useMemo(() => (area?.people ?? []).filter((x): x is CampusPerson => 'enrollment_id' in x && !!(x as CampusPerson).display_name), [area]);
   const people: FigurePerson[] = named.map((x) => ({ key: x.enrollment_id, name: x.display_name, initials: initialsOf(x.display_name), photo: x.avatar_url,
     level: x.rung_name ?? null, levelN: levelOfRung(x.rung_name), gear: publicOnly(x.gear), team: audience === 'business', tone: toneFor(x.enrollment_id) }));
   // WP-7: you, as others see you: your photo, your public gear and, for learners, your level coin (it was initials only).
   const { look } = useCampus();
+  const facts = useHomeFacts(false); // the first name on your spot's name card
   const myPhoto = useMyPhoto(true, false);
   const earns = audience === 'member' || audience === 'explorer';
   const you: FigurePerson = { key: 'you', name: 'You', initials: readParticipant().initials, photo: myPhoto, you: true,
@@ -77,15 +89,15 @@ export default function CampusInside(p: CampusInsideProps): React.ReactElement |
   return (
     <div className={`cm-inside${reduceMotion ? ' is-reduced' : ''}${locked ? ' is-locked' : ''}${going ? ' is-going' : ''}`} data-testid="cm-inside">
       <div className="cm-in-frame">
-        <BuildingInterior id={b.id} people={people} you={you} doorSign={doorLabel(audience, access)} name={buildingName} onAir={onAir}
+        <Room3D id={b.id} name={buildingName} people={people} you={you} summary={p.summary ?? null} planStep={p.planStep} spot={p.spot ?? null}
+          firstName={(facts.firstName || 'You').toUpperCase()} reduceMotion={reduceMotion} lanyard={!!p.workplace || BIZ_ROOMS.has(b.id)}
           desk={desk ? { name: desk.name, title: desk.title, initials: initialsOf(desk.name) } : null} onDesk={p.onDesk}
-          lanyard={!!p.workplace || BIZ_ROOMS.has(b.id)} going={!!going} fromDoor={p.fromDoor} reduceMotion={reduceMotion} wall={p.wall} onGame={p.onGame}
+          sectionRoute={p.sectionRoute ?? b.primary.route} onOpen={(r) => p.onOpen?.(r)} onBook={p.onBook}
           onPick={onPickPerson ? (key, at) => { const x = named.find((n) => n.enrollment_id === key); if (x) onPickPerson(x, at); } : undefined} />
         {locked && <div className="cm-in-lock"><div><b>🔒 Members only</b><small>You&rsquo;re looking in through the glass</small></div></div>}
         {tag && <span className={`cm-in-tag ${tag.tone}`} data-testid="cm-inside-tag">{tag.text}</span>}
         {going && <div className="cm-in-go" role="status" data-testid="cm-inside-going"><div><b>Opening&hellip;</b><small>{going}</small><div className="bar"><i /></div></div></div>}
         <div className="cm-in-hud">
-          {area && <span className="cm-in-count" data-testid="cm-inside-count"><i aria-hidden="true" />{area.count} here &middot; {buildingName}</span>}
           <button type="button" className="cm-btn-line" onClick={onStepOutside} data-testid="cm-inside-out">&larr; Step outside</button>
         </div>
       </div>

@@ -1,6 +1,6 @@
 /**
  * WP-3, travel feel and map dressing, on the real map:
- *  - the prototype's walk: 330 units/s (560 running) times the ride, ease-in-out, never under 600 ms; while walking the red route
+ *  - the prototype's walk: 330 units/s (560 running; C46: no rides), ease-in-out, never under 600 ms; while walking the red route
  *    line, footsteps, the destination highlighted and the "Walking to X… Skip" toast (Skip stands you at the door);
  *  - the people chip opens the peek (named people open their card, private ones are "Learner"), "—" chips while presence is down,
  *    a partner's "N · M yours" with teal dots;
@@ -56,12 +56,10 @@ function Harness({ initial }: { initial: Partial<CampusWorldProps> }) {
 const mount = (initial: Partial<CampusWorldProps> = {}) => act(() => { root.render(<Harness initial={initial} />); });
 
 describe('the walk (prototype travelTo)', () => {
-  it('speed, ride and easing', () => {
-    expect(travelSpeed(undefined)).toBe(330);
-    expect(travelSpeed(undefined, true)).toBe(560);
-    expect(travelSpeed('board')).toBeCloseTo(445.5);
-    expect(travelSpeed('cruiser')).toBeCloseTo(627);
-    expect([travelVerb(undefined), travelVerb(undefined, true), travelVerb('board'), travelVerb('cruiser')]).toEqual(['Walking', 'Running', 'Skating', 'Driving']);
+  it('speed and easing (C46: everyone walks; running is a faster walk)', () => {
+    expect(travelSpeed()).toBe(330);
+    expect(travelSpeed(true)).toBe(560);
+    expect([travelVerb(), travelVerb(true)]).toEqual(['Walking', 'Running']);
     expect(walkMs(33)).toBe(MIN_WALK_MS); // a short hop still takes 600 ms
     expect(walkMs(660)).toBe(2000);
     expect([easeInOut(0), easeInOut(0.25), easeInOut(0.5), easeInOut(1)]).toEqual([0, 0.125, 0.5, 1]);
@@ -82,13 +80,13 @@ describe('the walk (prototype travelTo)', () => {
     expect(q('[data-testid="cm-travel-text"]')).toBeNull();
   });
 
-  it('on a skateboard the toast says Skating; the walk eases (slow start)', () => {
-    mount({ ownGear: { ride: 'board' } });
+  it('an old saved ride still walks: the toast says Walking; the walk eases (slow start)', () => {
+    mount({ ownGear: { ride: 'board' } as never });
     click('[data-testid="cm-bld-observatory"]');
     frame(16);
     const before = q('[data-testid="cm-avatar"]')!.getAttribute('transform');
     frame(50);
-    expect(q('[data-testid="cm-travel-text"]')!.textContent).toBe('Skating to My Progress…');
+    expect(q('[data-testid="cm-travel-text"]')!.textContent).toBe('Walking to My Progress…');
     const [, x0, y0] = /translate\(([\d.]+) ([\d.]+)\)/.exec(before!)!.map(Number);
     const [, x1, y1] = /translate\(([\d.]+) ([\d.]+)\)/.exec(q('[data-testid="cm-avatar"]')!.getAttribute('transform')!)!.map(Number);
     expect(Math.hypot(x1 - x0, y1 - y0)).toBeLessThan(5); // ease-in: barely moved after 50 ms
@@ -104,7 +102,7 @@ describe('people on the map', () => {
     const opened: string[] = [];
     mount({ presence: PRESENCE, onOpenPerson: (tg) => opened.push(tg.person.display_name) });
     click('[data-testid="cm-count-commons"]', { clientX: 300, clientY: 200 });
-    expect(q('[data-testid="cm-peek"]')!.textContent).toContain('In Community Lounge');
+    expect(q('[data-testid="cm-peek"]')!.textContent).toContain('In Meeting Rooms');
     expect(q('[data-testid="cm-peek"]')!.textContent).toContain('3 classmates right now');
     expect(q('[data-testid="cm-peek-anon"]')!.textContent).toContain('Name private to their account');
     expect(q('[data-testid="cm-card"]')).toBeNull(); // the chip press does not walk to the building

@@ -41,11 +41,14 @@ const learner = {
   getEligibility: jest.fn(),
 };
 const why = { getExplorerWhyByDecision: jest.fn() };
+// 2026-10-26: campus activity and the staff outreach list
+const campus = { getCampusActivity: jest.fn(), getOutreach: jest.fn() };
 
 jest.mock('../../../services/explorerGrowth/explorerOverviewService', () => overview);
 jest.mock('../../../services/explorerGrowth/explorerDecisionsService', () => decisions);
 jest.mock('../../../services/explorerGrowth/explorerLearnerService', () => learner);
 jest.mock('../../../services/explorerGrowth/explorerWhyService', () => why);
+jest.mock('../../../services/explorerGrowth/explorerCampusService', () => campus);
 
 import explorerGrowthRoutes from '../explorerGrowthRoutes';
 
@@ -102,6 +105,8 @@ const ROUTES: {
   { name: 'shadow', path: `${BASE}/shadow`, badInput: `${BASE}/shadow?date=2026-02-30`, notFound: null },
   { name: 'content', path: `${BASE}/content`, badInput: `${BASE}/content?limit=0`, notFound: null },
   { name: 'eligibility', path: `${BASE}/eligibility/${ID}`, badInput: `${BASE}/eligibility/${BAD}`, notFound: 'learner' },
+  { name: 'campus', path: `${BASE}/campus`, badInput: null, notFound: null },
+  { name: 'outreach', path: `${BASE}/outreach?view=engaged`, badInput: `${BASE}/outreach?view=everyone`, notFound: null },
 ];
 
 /** Every service returns something, so a 200 means the route reached its service. */
@@ -118,6 +123,8 @@ function serveAll() {
   learner.getLearnerDecisions.mockResolvedValue({ rows: [], total: 0, limit: 50, offset: 0 });
   learner.getEligibility.mockResolvedValue({ enrollment_id: ID });
   why.getExplorerWhyByDecision.mockResolvedValue({ found: true, enrollment_id: ID });
+  campus.getCampusActivity.mockResolvedValue({ explorers: 340 });
+  campus.getOutreach.mockResolvedValue({ view: 'engaged', rows: [], tracked_since: '2026-10-26' });
 }
 
 beforeEach(() => {
@@ -125,15 +132,15 @@ beforeEach(() => {
   serveAll();
 });
 
-describe('the route table is the twelve in scope', () => {
-  it('has exactly twelve entries', () => {
+describe('the route table is the fourteen in scope (twelve + campus and outreach, 2026-10-26)', () => {
+  it('has exactly fourteen entries', () => {
     // Pinned to a number so adding a route without a test fails a count
     // assertion rather than passing silently. §27 lists 14; two are EPIC 12's.
-    expect(ROUTES).toHaveLength(12);
+    expect(ROUTES).toHaveLength(14);
   });
 });
 
-describe('401 unauthenticated — all twelve, no representative sample', () => {
+describe('401 unauthenticated — all fourteen, no representative sample', () => {
   it.each(ROUTES)('$name refuses an unauthenticated request', async ({ path }) => {
     const res = await request(app()).get(path);
     expect(res.status).toBe(401);
@@ -166,9 +173,9 @@ describe('200 authorised', () => {
 describe('400 on malformed input', () => {
   const withInput = ROUTES.filter((r) => r.badInput !== null);
 
-  it('covers eleven of the twelve — /summary takes no input', () => {
-    expect(withInput).toHaveLength(11);
-    expect(ROUTES.find((r) => r.badInput === null)!.name).toBe('summary');
+  it('covers twelve of the fourteen — /summary and /campus take no input', () => {
+    expect(withInput).toHaveLength(12);
+    expect(ROUTES.filter((r) => r.badInput === null).map((r) => r.name)).toEqual(['summary', 'campus']);
   });
 
   it.each(withInput)('$name rejects malformed input', async ({ badInput }) => {
@@ -195,11 +202,11 @@ describe('404 — qualified by which identifier the route takes', () => {
   const decisionRoutes = ROUTES.filter((r) => r.notFound === 'decision');
   const noIdRoutes = ROUTES.filter((r) => r.notFound === null);
 
-  it('splits five learner-id, one decision-id, six with no id', () => {
+  it('splits five learner-id, one decision-id, eight with no id', () => {
     expect(learnerRoutes).toHaveLength(5);
     expect(decisionRoutes).toHaveLength(1);
-    expect(noIdRoutes).toHaveLength(6);
-    expect(learnerRoutes.length + decisionRoutes.length + noIdRoutes.length).toBe(12);
+    expect(noIdRoutes).toHaveLength(8);
+    expect(learnerRoutes.length + decisionRoutes.length + noIdRoutes.length).toBe(14);
   });
 
   it.each(learnerRoutes)('$name 404s on an unknown learner', async ({ path }) => {
@@ -246,9 +253,9 @@ describe('READ-ONLY — the router registers no mutating verb', () => {
     expect(found).toHaveLength(0);
   });
 
-  it('registers exactly twelve GETs', () => {
+  it('registers exactly fourteen GETs', () => {
     const gets = stack.filter((l) => l.route?.methods?.get);
-    expect(gets).toHaveLength(12);
+    expect(gets).toHaveLength(14);
   });
 
   it('rejects a POST to a real path', async () => {
@@ -272,10 +279,12 @@ describe('a rejected service answers 500 — it does not hang, and it does not k
     shadow: decisions.getShadow,
     content: decisions.getContentHealth,
     eligibility: learner.getEligibility,
+    campus: campus.getCampusActivity,
+    outreach: campus.getOutreach,
   };
 
-  it('covers all twelve routes', () => {
-    expect(Object.keys(REJECTORS)).toHaveLength(12);
+  it('covers all fourteen routes', () => {
+    expect(Object.keys(REJECTORS)).toHaveLength(14);
   });
 
   it.each(ROUTES)('$name answers 500 when its service rejects', async ({ name, path }) => {

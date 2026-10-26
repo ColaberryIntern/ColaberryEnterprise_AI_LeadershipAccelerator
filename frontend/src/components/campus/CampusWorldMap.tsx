@@ -19,11 +19,17 @@ import { GroundPatterns, Ground, QuadAndPaths, District, Trees, GATE } from './a
 import type { PathDoor } from './art/grounds';
 import { doorOf, routeTo, START } from './walkPath';
 import type { Here, Pt } from './walkPath';
+import { campusGraph, clampGround, routeFrom } from './walkGraph';
+import type { Graph } from './walkGraph';
 import { useCampusCamera } from './useCampusCamera';
 import type { CameraApi, InsetsOf } from './useCampusCamera';
 import type { Cam } from './campusCamera';
 import { useWalk } from './useWalk';
 import type { Travel } from './useWalk';
+import BoardSign from './board/BoardSign';
+import TodayFlag, { GateTodaySign } from './art/TodayFlag';
+import { onBoard } from './board/boardApi';
+import { BOARD_SPOT } from './board/boardModel';
 import './campusMapArt.css';
 
 /**
@@ -44,6 +50,8 @@ export { doorOf } from './walkPath';
 export const WORLD = { w: 1000, h: 700 };
 
 export interface MapMoments { urgent: BuildingId | null; badges: Partial<Record<BuildingId, BadgeStatus>> }
+/** A walk asked for from outside the map: to a building (`id`) or, C17, to a spot on the grass (`spot`, id null). */
+export interface WalkRequest { id: BuildingId | null; spot?: Pt; seq: number; instant?: boolean; run?: boolean }
 export interface CampusMapProps {
   buildings: CampusBuilding[];
   accessOf: (b: CampusBuilding) => ExplorerAccess;
@@ -67,14 +75,19 @@ export interface CampusMapProps {
   presenceDown?: boolean;
   /** C5: walk to this building now. A new seq means a new walk. `instant` stands you at its door with no walk (Skip, Step outside);
    *  `run` uses the prototype's running speed. */
-  walkRequest?: { id: BuildingId; seq: number; instant?: boolean; run?: boolean } | null;
+  walkRequest?: WalkRequest | null;
   /** WP-3: told when a walk starts (what the toast should say) and ends (null). */
   onTravel?: (t: Travel | null) => void;
+  /** C17: a click on open ground (not a building, a person, a chip or you), in world units, clamped into the campus. The caller
+   *  decides: walk there (a walkRequest with `spot`), or close what is open. Absent = ground clicks do nothing. */
+  onGroundClick?: (spot: Pt) => void;
+  /** C17: arrived at a spot on the grass (nothing opens; the caller clears "here"). */
+  onGround?: () => void;
   /** WP-1: where the avatar stands when the map mounts (the building you were last at), instead of the gate. */
   startAt?: BuildingId | null;
   /** C8: buildings whose room is on air now (from broadcast discovery). */
   onAir?: Set<string>;
-  /** C9: the learner's OWN equipped set, drawn on their pin (public slots) and, only while it travels, the ride. */
+  /** C9: the learner's OWN equipped set, drawn on their pin. */
   ownGear?: Equipped;
   /** WP-2: today's plan (route and pins); absent during a tour and while live. */
   plan?: PlanStop[];
@@ -92,6 +105,8 @@ export interface CampusMapProps {
   hover?: BuildingId | null;
   /** C11b: the Explorer view's OPEN badges. */
   showOpen?: boolean;
+  /** C51 / C52 (v13 T3, T4): the Explorer's TODAY flag over the Schedule tower and START HERE sign at the gate (open Today, no walk). */
+  todayFlag?: boolean;
   /** C11b: the AI staff desks on duty for this viewer, drawn at their buildings (full map only). */
   desks?: MapDesk[];
   /** C11b / WP-3: you: initials (from your name), photo, level and account colour. */
@@ -168,12 +183,12 @@ const Scenery = memo(function Scenery({ doors, gateIsBuilding }: { doors: PathDo
  * Today's plan as ONE route (the prototype's renderPlanMap): from where you stand, along the campus paths, through each unfinished
  * stop in order (each leg starts at the previous stop's door).
  */
-export function planPathD(from: Here, stops: Pick<CampusBuilding, 'pos' | 'zone'>[]): string | null {
+export function planPathD(from: Here, stops: Pick<CampusBuilding, 'pos' | 'zone'>[], g?: Graph): string | null {
   if (!stops.length) return null;
   let d = `M${from.x} ${from.y}`;
   let prev = from;
   for (const b of stops) {
-    for (const q of routeTo(prev, b)) d += `L${q.x} ${q.y}`;
+    for (const q of (g ? routeFrom(g, prev, b) : routeTo(prev, b))) d += `L${q.x} ${q.y}`;
     prev = { ...doorOf(b), zone: b.zone };
   }
   return d;
@@ -181,8 +196,8 @@ export function planPathD(from: Here, stops: Pick<CampusBuilding, 'pos' | 'zone'
 
 /** WP-2: the plan route (hidden while walking: it is redrawn from where you arrive), its pins, and the tour's badges by building. */
 function useMapOverlays(o: { plan?: PlanStop[]; tourBadges?: { id: BuildingId; text: string; live: boolean }[]; buildings: CampusBuilding[];
-  compact: boolean; moving: boolean; from: Here }): { pins: ReturnType<typeof pinsOf>; badges: Partial<Record<BuildingId, { text: string; live: boolean }>>; planD: string | null } {
-  const { plan, tourBadges, buildings, compact, moving, from } = o;
+  compact: boolean; moving: boolean; from: Here; graph: Graph }): { pins: ReturnType<typeof pinsOf>; badges: Partial<Record<BuildingId, { text: string; live: boolean }>>; planD: string | null } {
+  const { plan, tourBadges, buildings, compact, moving, from, graph } = o;
   const pins = useMemo(() => pinsOf(plan), [plan]);
   const badges = useMemo(() => Object.fromEntries((tourBadges ?? []).map((t) => [t.id, t])) as Partial<Record<BuildingId, { text: string; live: boolean }>>, [tourBadges]);
   const { x, y, zone } = from;
@@ -190,8 +205,8 @@ function useMapOverlays(o: { plan?: PlanStop[]; tourBadges?: { id: BuildingId; t
     if (compact || moving || !plan) return null;
     const ids: BuildingId[] = [];
     for (const s of plan) if (!s.done && s.buildingId && !ids.includes(s.buildingId)) ids.push(s.buildingId);
-    return planPathD({ x, y, zone }, ids.map((id) => buildings.find((b) => b.id === id)).filter((b): b is CampusBuilding => !!b));
-  }, [compact, moving, plan, buildings, x, y, zone]);
+    return planPathD({ x, y, zone }, ids.map((id) => buildings.find((b) => b.id === id)).filter((b): b is CampusBuilding => !!b), graph);
+  }, [compact, moving, plan, buildings, x, y, zone, graph]);
   return { pins, badges, planD };
 }
 
@@ -201,6 +216,18 @@ function pinsOf(plan: PlanStop[] | undefined): Partial<Record<BuildingId, { n: n
   const next = plan?.find((s) => !s.done && s.buildingId);
   plan?.forEach((s, i) => { if (s.buildingId && !out[s.buildingId]) out[s.buildingId] = { n: i + 1, done: s.done, next: s === next }; });
   return out;
+}
+
+/** C17: what a click must NOT be on to count as ground: a building (or its click area), a staff desk, or you. */
+const NOT_GROUND = '.cm-bld, .cm-hit-area, .cm-staff-tok, .cm-avatar, .cm-cboard-sign, .cm-today-flag, .cm-gate-today';
+/** A screen point in world units, through the map's current viewBox (null where the browser cannot say, e.g. jsdom). */
+function toWorld(svg: SVGSVGElement | null, x: number, y: number): Pt | null {
+  const m = svg?.getScreenCTM?.();
+  if (!svg || !m || typeof svg.createSVGPoint !== 'function') return null;
+  const pt = svg.createSVGPoint();
+  pt.x = x; pt.y = y;
+  const w = pt.matrixTransform(m.inverse());
+  return { x: w.x, y: w.y };
 }
 
 export default function CampusWorldMap(p: CampusMapProps): React.ReactElement {
@@ -214,32 +241,53 @@ export default function CampusWorldMap(p: CampusMapProps): React.ReactElement {
   const locate = useCallback((id: string) => { const b = buildings.find((x) => x.id === id); return b ? (b.kind === 'gate' ? GATE : { x: b.pos.x, y: b.pos.y }) : null; }, [buildings]);
   const cam = useCampusCamera(svgRef, { enabled: !compact && !!camera, insets: camera?.insets, focusInsets: camera?.focusInsets, avatarRef: hereRef, locate, reduceMotion,
     apiRef: camera?.apiRef, framed: camera?.framed, startCam: camera?.startCam });
-  const { walkTo, moving, running, atId, targetId, routeD } = useWalk({ buildings, compact, reduceMotion, ride: p.ownGear?.ride, hereRef, setPos, cam, stepsRef, onArrive, onTravel: p.onTravel });
+  const { walkTo, walkToSpot, moving, running, atId, targetId, routeD, spot } = useWalk({ buildings, compact, reduceMotion, hereRef, setPos, cam, stepsRef,
+    onArrive, onTravel: p.onTravel, onGround: p.onGround });
+  const graph = useMemo(() => campusGraph(buildings), [buildings]);
 
   const pick = useCallback((id: BuildingId) => walkTo(id), [walkTo]);
+  // C17: a click on open ground (a drag's closing click never gets here: useCampusCamera swallows it in the capture phase).
+  const { onGroundClick } = p;
+  const groundClick = useCallback((e: React.MouseEvent<SVGSVGElement>) => {
+    if (!onGroundClick || (e.target as Element).closest?.(NOT_GROUND)) return;
+    const w = toWorld(svgRef.current, e.clientX, e.clientY);
+    if (w) onGroundClick(clampGround(w));
+  }, [onGroundClick]);
   const gateIsBuilding = buildings.some((b) => b.kind === 'gate');
+  const tower = buildings.find((b) => b.id === 'tower');
   // C11b Colaberry Live: evening over the full map while a building is really on air, and the path from you to it.
   const live = useMemo(() => (compact || !onAir ? [] : buildings.filter((b) => b.kind !== 'gate' && onAir.has(b.id))), [buildings, onAir, compact]);
-  const livePath = live.length && atId !== live[0].id ? [{ x: pos.x, y: pos.y }, ...routeTo(hereRef.current, live[0])] : null;
+  const livePath = live.length && atId !== live[0].id ? [{ x: pos.x, y: pos.y }, ...routeFrom(graph, hereRef.current, live[0])] : null;
   const doors = useMemo<PathDoor[]>(() => buildings.filter((b) => b.kind !== 'gate').map((b) => ({ id: b.id, x: b.pos.x, y: b.pos.y, zone: b.zone })), [buildings]);
 
-  const { pins, badges, planD } = useMapOverlays({ plan: p.plan, tourBadges: p.tourBadges, buildings, compact, moving, from: { x: pos.x, y: pos.y, zone: hereRef.current.zone } });
+  const { pins, badges, planD } = useMapOverlays({ plan: p.plan, tourBadges: p.tourBadges, buildings, compact, moving, from: { x: pos.x, y: pos.y, zone: hereRef.current.zone }, graph });
   const started = useRef(false);
   const { initialTarget } = p;
   useEffect(() => { if (initialTarget && !started.current) { started.current = true; walkTo(initialTarget); } }, [initialTarget, walkTo]);
   const lastWalk = useRef(0);
   useEffect(() => {
-    if (walkRequest && walkRequest.seq !== lastWalk.current) { lastWalk.current = walkRequest.seq; walkTo(walkRequest.id, { instant: !!walkRequest.instant, run: !!walkRequest.run }); }
-  }, [walkRequest, walkTo]);
+    if (!walkRequest || walkRequest.seq === lastWalk.current) return;
+    lastWalk.current = walkRequest.seq;
+    const how = { instant: !!walkRequest.instant, run: !!walkRequest.run };
+    if (walkRequest.spot) walkToSpot(walkRequest.spot, how); else if (walkRequest.id) walkTo(walkRequest.id, how);
+  }, [walkRequest, walkTo, walkToSpot]);
+
+  // C30 (v7 R3): opening the Community Board with a walk (the board, the chip, Where to?) walks you to it first
+  useEffect(() => (compact ? undefined : onBoard((o) => { if (o.walk) walkToSpot({ ...BOARD_SPOT }, { instant: false, run: false }); })), [compact, walkToSpot]);
 
   const quiet = !compact && !!p.quiet && !live.length;
   const urgent = live.length ? null : p.moments?.urgent ?? null; // the prototype drops the urgent ring while live
   const cls = ['cm-map', compact && 'is-compact', reduceMotion && 'is-reduced', camera && !compact && 'has-camera', live.length && 'is-evening', live.length && `ls-${p.liveMark?.state ?? 'live'}`, quiet && 'is-quiet'].filter(Boolean).join(' ');
   return (
     <svg ref={svgRef} className={cls} viewBox={`0 0 ${WORLD.w} ${WORLD.h}`} data-testid={compact ? undefined : 'cm-world'}
-      {...(compact ? { 'aria-hidden': true, focusable: 'false' } : { role: 'group', 'aria-label': 'Campus map' })}>
+      {...(compact ? { 'aria-hidden': true, focusable: 'false' } : { role: 'group', 'aria-label': 'Campus map', onClick: groundClick })}>
       <Scenery doors={doors} gateIsBuilding={gateIsBuilding} />
       {!compact && <path className="cm-route-line" d={routeD ?? ''} aria-hidden="true" data-testid="cm-route-line" />}
+      {!compact && spot && (
+        <g className="cm-drop-pin" transform={`translate(${spot.x} ${spot.y})`} aria-hidden="true" data-testid="cm-drop-pin">
+          <circle className="ring" r={10} /><circle className="dot" r={3.5} />
+        </g>
+      )}
       {!compact && <g className="cm-steps" ref={stepsRef} aria-hidden="true" />}
       {live.length > 0 && <LiveBack buildings={live} path={livePath} />}
       {planD && <path className="cm-plan-path" d={planD} aria-hidden="true" data-testid="cm-plan-path" />}
@@ -252,6 +300,9 @@ export default function CampusWorldMap(p: CampusMapProps): React.ReactElement {
           onPeek={compact ? undefined : p.onPeek} onPick={pick} setRef={p.buildingRef} />
       ))}
       {live.length > 0 && <LiveFront buildings={live} mark={compact ? null : p.liveMark} />}
+      {!compact && <BoardSign />}
+      {!compact && p.todayFlag && tower && <TodayFlag tower={tower} />}
+      {!compact && p.todayFlag && gateIsBuilding && <GateTodaySign />}
       {!compact && p.desks && p.desks.length > 0 && <StaffTokens desks={p.desks} buildings={buildings} onPick={pick} />}
       {!compact && <AvatarPin pos={pos} moving={moving} running={running} reduceMotion={reduceMotion} ownGear={p.ownGear} me={p.me} />}
     </svg>

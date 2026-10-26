@@ -7,7 +7,7 @@
  * score <= absoluteCap. The +30 s and the burst absorb a game's lumpy scoring (a level clear, a big shot) at the start of a run; the
  * ceiling stops a submit that claims far more than the run's real time could earn.
  */
-export const GAMES = ['byte-chase', 'launch-lab', 'bug-breaker'] as const;
+export const GAMES = ['byte-chase', 'launch-lab', 'bug-breaker', 'stack-drop', 'token-trail'] as const;
 export type GameId = typeof GAMES[number];
 
 export interface GameRule { ceilingPerSecond: number; burst: number; absoluteCap: number }
@@ -19,9 +19,19 @@ export const GAME_RULES: Record<GameId, GameRule> = {
   'launch-lab': { ceilingPerSecond: 2000, burst: 4000, absoluteCap: 200000 },
   // bricks 25 x level, level clear 250
   'bug-breaker': { ceilingPerSecond: 250, burst: 1000, absoluteCap: 200000 },
+  // C35: clears 100/300/500/800 x level (scoring level capped at 10) + 2 a row hard-dropped; a perfect run at 2.5 pieces a second
+  // (all four-row clears) earns about 2,090 a second at the cap
+  'stack-drop': { ceilingPerSecond: 2200, burst: 4000, absoluteCap: 2000000 },
+  // C35: tokens 10 x level (scoring level capped at 15) at up to 18 moves a second; even a token every four moves is 675 a second
+  'token-trail': { ceilingPerSecond: 800, burst: 1000, absoluteCap: 2000000 },
 };
 
-export const isGame = (g: unknown): g is GameId => typeof g === 'string' && (GAMES as readonly string[]).includes(g);
+/** C35: the games' names as people read them (challenges, recent highs). */
+export const GAME_NAMES: Record<GameId, string> = {
+  'byte-chase': 'Byte Chase', 'launch-lab': 'Launch Lab', 'bug-breaker': 'Bug Breaker', 'stack-drop': 'Stack Drop', 'token-trail': 'Token Trail',
+};
+
+export const isGame =(g: unknown): g is GameId => typeof g === 'string' && (GAMES as readonly string[]).includes(g);
 
 export function maxScoreFor(game: GameId, secondsUsed: number): number {
   const r = GAME_RULES[game];

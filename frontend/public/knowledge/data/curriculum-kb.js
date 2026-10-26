@@ -101,6 +101,6 @@ window.CURRICULUM_DATA = {
       a:"The free Open House is Thursday, July 16, 2026, and the first Founding Cohort class is Thursday, July 23, 2026. The Open House comes one week before the cohort it feeds, so you can see the program before you commit." },
     { category:"logistics", tags:["cost","included","membership","price","tool costs"],
       q:"What is included and what does it cost to join?",
-      a:"All four intensives, certification prep, the full-time internship, and the guided portfolio are included in the Colaberry AI Membership. The founding rate is $149 a month billed annually, or $199 a month month to month. You also cover your own third-party tool costs, an Anthropic subscription for Claude Code (about $20 a month) and light LLM API usage (most projects under $10 a month), paid directly to those providers." }
+      a:"All four intensives, certification prep, the full-time internship, and the guided portfolio are included in the Colaberry AI Membership. The founding rate is $149 a month billed annually, locked for as long as your membership stays active. You also cover your own third-party tool costs, an Anthropic subscription for Claude Code (about $20 a month) and light LLM API usage (most projects under $10 a month), paid directly to those providers." }
   ]
 };

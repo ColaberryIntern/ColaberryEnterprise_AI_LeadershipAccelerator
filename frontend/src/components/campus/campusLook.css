@@ -6,9 +6,8 @@
 .cm-gear-hoodie{fill:none;stroke:var(--berry);stroke-width:3;stroke-linecap:round}
 .cm-gear-chain{fill:none;stroke:var(--amber);stroke-width:2;stroke-linecap:round}
 
-/* Your own ride, only while you travel */
-.cm-ride-deck,.cm-ride-body{fill:var(--cherry)}
-.cm-ride-wheel{fill:var(--strong)}
+/* C46: the two jackets that replaced the rides (their colour is the SVG stroke, from the art tokens) */
+.cm-gear-jacket,.cm-gear-architect{fill:none;stroke-width:3;stroke-linecap:round}
 
 /* Level ring on a token: the stroke color comes from the portal's rung tone (set inline from --rung-solid) */
 

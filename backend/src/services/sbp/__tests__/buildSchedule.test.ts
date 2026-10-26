@@ -118,11 +118,27 @@ describe('demo prep is scheduled work', () => {
     });
   });
 
-  it('covers rehearsal and re-recording, not just "record a demo"', () => {
-    const titles = s.prep.map((p) => p.title.toLowerCase()).join(' | ');
-    expect(titles).toMatch(/watch it back/);
-    expect(titles).toMatch(/rehearse/);
-    expect(titles).toMatch(/slides/);
+  it('asks for a DIFFERENT kind of presentation on each task', () => {
+    // This used to assert the titles covered rehearsal, slides and watching a
+    // run-through back — stages of ONE demo. Since 2026-10-24 each prep task is
+    // one specific KIND of presentation, so the property worth holding is that
+    // they are distinct and each names its own video. Ali, on the task list:
+    // "The step names don't match the video names."
+    const titles = s.prep.map((p) => p.title.toLowerCase());
+    expect(new Set(titles).size).toBe(titles.length);
+    expect(titles).toEqual(expect.arrayContaining([
+      'record your project introduction',
+      'record your working-system demo',
+      'record your ai visual presentation',
+      'record your stakeholder update',
+      'record your final showcase',
+    ]));
+  });
+
+  it('ends with the live one, which is not a recording', () => {
+    const last = s.prep[s.prep.length - 1].title;
+    expect(last).toMatch(/Demo Day/i);
+    expect(last).not.toMatch(/^Record /);
   });
 
   it('ends on demo day itself', () => {

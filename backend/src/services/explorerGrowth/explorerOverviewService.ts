@@ -161,7 +161,7 @@ export async function getDistribution(days: number): Promise<ExplorerDistributio
     `SELECT as_of_date, primary_state, COUNT(*) AS count
        FROM explorer_score_snapshots
       WHERE as_of_date > CURRENT_DATE - CAST(:days AS integer)
-      GROUP BY 1, 2 ORDER BY 1 ASC, 3 DESC`,
+      GROUP BY 1, 2 ORDER BY 1 DESC, 3 DESC`, // newest day first (Ali, 2026-10-26: the table read oldest first)
     { replacements: { days }, type: QueryTypes.SELECT },
   );
 

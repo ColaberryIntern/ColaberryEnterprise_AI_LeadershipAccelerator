@@ -1,7 +1,5 @@
-import crypto from 'crypto';
 import { Cohort, Enrollment, Lead, Campaign } from '../models';
 import { AppError } from '../utils/AppError';
-import { env } from '../config/env';
 import { CreateInvoiceInput, CreateInvoiceRequestInput } from '../schemas/enrollmentSchema';
 import { pickBestEnrollment } from './participantService';
 import { bridgeExplorerProfileAtRegistration } from './explorerGrowth/explorerProfileAtRegistration';
@@ -408,51 +406,39 @@ export async function createExplorerEnrollment(input: {
   // CommunicationLog and any failure is surfaced — never silently swallowed. Only
   // fires on first creation, so re-running onboarding never double-sends.
   {
-    const subject = 'Welcome to Colaberry — your AI journey starts now';
-    let sent = false;
-    let messageId: string | null = null;
-    let errorMessage: string | null = null;
-    try {
-      const { sendTrainingWelcome } = await import('./emailService');
-      const ttlDays = Math.max(1, env.trainingWelcomeTokenTtlDays || 30);
-      const token = crypto.randomUUID();
-      await enrollment.update({
-        portal_token: token,
-        portal_token_expires_at: new Date(Date.now() + ttlDays * 24 * 60 * 60 * 1000),
-      });
-      const base = (env.frontendUrl || 'https://enterprise.colaberry.ai').replace(/\/$/, '');
-      const result = await sendTrainingWelcome({
-        to: email,
-        fullName: enrollment.full_name,
-        portalLink: `${base}/portal/verify?token=${token}`,
-      });
-      sent = result.sent;
-      messageId = result.messageId || null;
-      if (!sent) errorMessage = 'welcome email not sent (kill switch active or SMTP unconfigured)';
-    } catch (err: any) {
-      errorMessage = err?.message || 'unknown error';
-    }
-    if (!sent) {
-      console.error(`[OpenHouse] Welcome email NOT sent for enrollment ${enrollment.id} (${redactForLogs(email)}): ${errorMessage}`);
-    }
-    try {
-      const { logCommunication } = await import('./communicationLogService');
-      await logCommunication({
-        lead_id: leadId,
-        channel: 'email',
-        direction: 'outbound',
-        delivery_mode: 'live',
-        status: sent ? 'sent' : 'failed',
-        to_address: email,
-        from_address: env.trainingWelcomeFromEmail,
-        subject,
-        provider: 'mandrill',
-        provider_message_id: messageId,
-        error_message: errorMessage,
-        metadata: { event: 'open_house_welcome', enrollment_id: enrollment.id },
-      });
-    } catch (e: any) {
-      console.error('[OpenHouse] welcome comm-log failed (non-fatal):', e?.message);
+    // MIGRATED onto the shared `sendPortalWelcome` on 2026-10-24.
+    //
+    // This used to be its own ~45-line copy of token-minting, sending and logging,
+    // and the copy had NO IDEMPOTENCY GUARD. The comment above claimed "Only fires
+    // on first creation, so re-running onboarding never double-sends" - true of
+    // this call site, and not true of the ADDRESS, which is what the recipient
+    // experiences. Measured on production: four addresses carry two
+    // `open_house_welcome` rows each, two of them as recently as 2026-10-16 and
+    // 2026-10-22. A person with two enrollments is welcomed twice.
+    //
+    // The shared module keys on a `sent` CommunicationLog row for the address under
+    // ANY welcome event name, so this door and the portal door can no longer
+    // welcome the same person once each either.
+    //
+    // The EVENT NAME is deliberately unchanged, so this door's log history stays
+    // one coherent series across the migration.
+    //
+    // Two incidental fixes come with it. The old block logged the subject
+    // "Welcome to Colaberry — your AI journey starts now" while `sendTrainingWelcome`
+    // actually sends one with a colon, so every row this door wrote recorded a
+    // subject that was never sent. And the token is still minted on THIS enrollment
+    // rather than by an email-keyed lookup, which the module preserves and documents.
+    const { sendPortalWelcome } = await import('./welcome/sendPortalWelcome');
+    const welcome = await sendPortalWelcome({
+      enrollment: enrollment as unknown as import('./welcome/sendPortalWelcome').WelcomeEnrollment,
+      leadId,
+      event: 'open_house_welcome',
+    });
+    // Preserved verbatim from the old block: a genuine failure still names the
+    // enrollment and the redacted address. A SKIP is not a failure - it means the
+    // person already has their link - so it is deliberately not logged as one.
+    if (!welcome.sent && !welcome.skipped) {
+      console.error(`[OpenHouse] Welcome email NOT sent for enrollment ${enrollment.id} (${redactForLogs(email)}): ${welcome.reason}`);
     }
   }
 

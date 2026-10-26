@@ -133,7 +133,7 @@ describe('the concierge\'s new sections', () => {
   it('Right now: a row walks, hovering it lifts the building; the directory lists every building; late with nothing urgent walks to the Schedule', () => {
     render(<CampusConcierge {...base} {...cb} />);
     const row = q('[data-testid="cm-cc-now"] .cm-sg')!;
-    expect(row.textContent).toContain('Drop into the Community Lounge');
+    expect(row.textContent).toContain('Drop into the Meeting Rooms');
     act(() => { row.dispatchEvent(new MouseEvent('mouseover', { bubbles: true })); });
     act(() => { row.click(); });
     act(() => { row.dispatchEvent(new MouseEvent('mouseout', { bubbles: true })); });
