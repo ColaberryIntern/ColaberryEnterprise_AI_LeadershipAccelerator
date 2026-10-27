@@ -129,6 +129,51 @@ export class GovContainerUnavailableError extends Error {
 }
 
 /**
+ * Grant the admin who APPROVED a bid pursuit a REVIEWER role on the resulting delivery project, so they can open
+ * the cockpit and accept/return proposal documents. `qa_reviewer` carries `evidence.verify` (and `release.approve`)
+ * and nothing owner-level, so it is the least-privilege role that can review. The approver identity arrives as an
+ * EMAIL (the gov actor convention) or a uuid; it is resolved to a platform identity before the membership is
+ * written. NON-DESTRUCTIVE and idempotent: an existing membership of ANY role is left untouched (mirrors
+ * ensureAssigneeCanBuild — a builder is never silently promoted, a revoked member never silently reinstated).
+ * BEST-EFFORT: this runs AFTER the project transaction commits and never throws, so a membership hiccup can never
+ * roll back or fail the approval itself.
+ */
+export async function grantApproverReviewer(deliveryProjectId: string, approverIdentity: string | null | undefined): Promise<void> {
+  try {
+    if (!deliveryProjectId || !approverIdentity || typeof approverIdentity !== 'string') return;
+    let approverPlatformId: string | null;
+    if (approverIdentity.includes('@')) {
+      const { normalizeEmail } = await import('../../modules/identity/platformIdentityService');
+      const { default: PlatformIdentity } = await import('../../models/PlatformIdentity');
+      const normalized = normalizeEmail(approverIdentity);
+      const identity: any = normalized ? await PlatformIdentity.findOne({ where: { primary_email: normalized } }) : null;
+      approverPlatformId = identity && identity.id ? String(identity.id) : null;
+    } else {
+      approverPlatformId = asIdentityId(approverIdentity);
+    }
+    if (!approverPlatformId) return;
+    const { default: DeliveryProjectMember } = await import('../../models/DeliveryProjectMember');
+    const { DELIVERY_ROLES } = await import('../../modules/delivery/deliveryRoles');
+    const existing: any = await DeliveryProjectMember.findOne({
+      where: { delivery_project_id: deliveryProjectId, platform_identity_id: approverPlatformId },
+    });
+    if (existing) return; // never alter an existing membership — the engine gate decides
+    await DeliveryProjectMember.create({
+      delivery_project_id: deliveryProjectId,
+      platform_identity_id: approverPlatformId,
+      delivery_role: DELIVERY_ROLES.QA_REVIEWER,
+      granted_by_identity_id: approverPlatformId,
+    });
+  } catch (err: any) {
+    console.warn(JSON.stringify({
+      timestamp: new Date().toISOString(), level: 'warn', service: 'backend',
+      event: 'gov_approver_reviewer_grant_skipped', outcome: 'partial',
+      context: { deliveryProjectId, message: err?.message },
+    }));
+  }
+}
+
+/**
  * Create-or-reuse the gov delivery project + its two tracks, and map the established requirements onto it.
  * Idempotent and atomic. Throws GovContainerUnavailableError if the fixed gov container is not configured
  * (fail-closed, same posture as the routes). Never confers build authorization.
@@ -146,7 +191,7 @@ export async function ensureGovTwoTrackProject(input: EnsureGovTwoTrackProjectIn
   const name = String(input.provenance?.title || `Government pursuit ${input.canonicalOpportunityId}`).slice(0, 255);
   const established = Array.isArray(input.established) ? input.established : [];
 
-  return sequelize.transaction(async (transaction) => {
+  const result = await sequelize.transaction(async (transaction) => {
     // Idempotency: one project per opportunity, scoped to the fixed gov container + the government class.
     let project: any = await DeliveryProject.findOne({
       where: { slug, tenant_id: container.tenant.id, organization_id: container.org.id, project_class: 'government_public_sector' },
@@ -216,6 +261,13 @@ export async function ensureGovTwoTrackProject(input: EnsureGovTwoTrackProjectIn
 
     return { deliveryProjectId, created, tracks: trackTypes.length, requirements };
   });
+
+  // PR 3a: whoever APPROVED the pursuit becomes a reviewer on the project they just created, so they can open the
+  // cockpit and accept/return proposal documents. Runs AFTER the transaction commits and never throws, so a
+  // membership hiccup can never roll back the approval. Every approval + self-heal path flows through here.
+  await grantApproverReviewer(result.deliveryProjectId, input.approverIdentityId);
+
+  return result;
 }
 
 export interface LinkGovBuildResult { ok: true; linkId: string; created: boolean; }
