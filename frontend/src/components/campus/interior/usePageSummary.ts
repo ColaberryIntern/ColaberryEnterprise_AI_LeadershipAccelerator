@@ -9,11 +9,12 @@ import { fetchPublicEvents } from '../../../services/onboardingApi';
 import { fetchCareerProfile } from '../../../services/careerApi';
 import { fetchInternshipDashboard } from '../../../services/internshipApi';
 import { useCampus } from '../CampusContext';
-import type { SideTop } from './pageSummary';
+import type { SideRow, SideTop } from './pageSummary';
 import { careerBoard, eventsBoard, libraryBoard, portfolioBoard, progressBoard, scheduleBoard, towerCard } from './wallBoards';
 import { certPrepSummary, classroomSummary, plainSummary, projectsSummary } from './pageSummary';
 import type { ClassroomFeed, PageSummary } from './pageSummary';
 import { accountRows, useAccountFacts } from '../admissions/accountFacts';
+import { aheadBoard, pathAhead, todayFinished } from '../pathAhead';
 
 /**
  * The room's board for the building you are in (v6 D1): its page's Next step, the card to its right, and what your spot opens,
@@ -36,6 +37,24 @@ function cached<T>(key: string, load: () => Promise<T>): Promise<T> {
 }
 /** Tests: start from an empty cache. */
 export const clearSummaryCache = (): void => cache.clear();
+/** The classroom feed and the next 30 days of events, through the shared cache (the rooms and C78's path ahead read the same). */
+export const loadClassroom = (): Promise<ClassroomFeed> => cached('classroom', () => portalApi.get('/api/portal/classroom').then((r) => r.data as ClassroomFeed));
+export const loadEvents30 = (): ReturnType<typeof fetchPublicEvents> => cached('events-30', () => fetchPublicEvents(30));
+/** C78: the path ahead (pathAhead), loaded only while `enabled`; null while loading, off, or when both sources fail. */
+export function usePathAhead(enabled: boolean, audience?: CampusAudience): SideRow[] | null {
+  const [rows, setRows] = useState<SideRow[] | null>(null);
+  useEffect(() => {
+    if (!enabled) { setRows(null); return undefined; }
+    let alive = true;
+    Promise.allSettled([loadClassroom(), loadEvents30()]).then(([f, e]) => {
+      if (!alive) return;
+      if (f.status === 'rejected' && e.status === 'rejected') { setRows(null); return; }
+      setRows(pathAhead(f.status === 'fulfilled' ? f.value : null, e.status === 'fulfilled' ? eventsFor(audience, e.value) : null, new Date()));
+    });
+    return () => { alive = false; };
+  }, [enabled, audience]);
+  return rows;
+}
 
 /**
  * `name` is the building as this viewer sees it (Workplace names respected): it names the section on the board and the tiles,
@@ -44,8 +63,8 @@ export const clearSummaryCache = (): void => cache.clear();
 /** C43: the rooms whose left-wall board comes from wallBoards.ts (each from the data its page reads). */
 const WALL_FETCH: Partial<Record<BuildingId, (section: string, audience?: CampusAudience) => Promise<SideTop>>> = {
   library: (s) => cached('library', fetchLibrary).then((v) => libraryBoard(v, s), () => libraryBoard(null, s)),
-  commons: (s, a) => cached('events-30', () => fetchPublicEvents(30)).then((e) => eventsBoard(eventsFor(a, e), new Date(), s), () => eventsBoard(null, new Date(), s)), // C62 where, C60 who
-  observatory: (s) => cached('classroom', () => portalApi.get('/api/portal/classroom').then((r) => r.data as ClassroomFeed)).then((f) => progressBoard(f, s), () => progressBoard(null, s)),
+  commons: (s, a) => loadEvents30().then((e) => eventsBoard(eventsFor(a, e), new Date(), s), () => eventsBoard(null, new Date(), s)), // C62 where, C60 who
+  observatory: (s) => loadClassroom().then((f) => progressBoard(f, s), () => progressBoard(null, s)),
   gallery: (s) => cached('career-profile', fetchCareerProfile).then((p) => portfolioBoard(p, s), () => portfolioBoard(null, s)),
   // a non-intern gets a 404 from the dashboard: the empty state, not an error
   career: (s) => cached('intern-dash', fetchInternshipDashboard).then((d) => careerBoard(d, s), () => careerBoard(null, s)),
@@ -53,6 +72,8 @@ const WALL_FETCH: Partial<Record<BuildingId, (section: string, audience?: Campus
 
 export function usePageSummary(id: BuildingId, open: boolean, name: string, audience?: CampusAudience): PageSummary | null {
   const { planStops } = useCampus();
+  const finished = id === 'tower' && open && todayFinished(planStops);
+  const ahead = usePathAhead(finished, audience); // C78: today is done, so the Schedule shows what comes next
   const [wall, setWall] = useState<{ id: BuildingId; side: SideTop } | null>(null);
   // the Career Center is the Partner Office / Staff Office for those accounts: no intern board there
   const wallFetch = id === 'career' && (audience === 'business' || audience === 'staff') ? undefined : WALL_FETCH[id];
@@ -69,7 +90,7 @@ export function usePageSummary(id: BuildingId, open: boolean, name: string, audi
     if (!open || (id !== 'lecture' && id !== 'testing')) return undefined;
     let alive = true;
     const load = id === 'lecture'
-      ? cached('classroom', () => portalApi.get('/api/portal/classroom').then((r) => r.data as ClassroomFeed)).then(classroomSummary)
+      ? loadClassroom().then(classroomSummary)
       : cached('cert-prep', async () => {
         const sum = await getCertPrepSummary();
         if (!sum.data.availability.available) return null; // locked before its week: no board
@@ -85,8 +106,12 @@ export function usePageSummary(id: BuildingId, open: boolean, name: string, audi
   if (id === 'lecture') return fetched?.id === id ? fetched.s : null;
   // C21: Admissions draws its own board (plans & pricing); the summary carries only the left wall's "Your account"
   if (id === 'admissions') return { ...plainSummary(name), sideTop: account ? accountRows(account) : null };
-  // C75: the left board is Today's included learning; C76: the planning desk's chair opens the next unfinished item (all done: Today)
-  if (id === 'tower') return { ...plainSummary(name), sideTop: scheduleBoard(planStops, name), card: towerCard(planStops) };
+  // C75: the left board is Today's included learning; C76: the planning desk's chair opens the next unfinished item. C78: today is
+  // done, so the board is the path ahead and the chair opens your next lesson (none: Today)
+  if (id === 'tower') {
+    if (finished && ahead) return { ...plainSummary(name), sideTop: aheadBoard(ahead), card: ahead.find((r) => r.route)?.route ?? towerCard(planStops) };
+    return { ...plainSummary(name), sideTop: scheduleBoard(planStops, name), card: towerCard(planStops) };
+  }
   if (wallFetch) return { ...plainSummary(name), sideTop: wall?.id === id ? wall.side : null };
   return plainSummary(name);
 }

@@ -4,6 +4,7 @@ import type { BuildingId, CampusBuilding, ExplorerAccess } from '../campusMap';
 import { buildingName } from '../campusMap';
 import type { PlanStop } from '../campusPlan';
 import { stopDetail } from '../campusPlan';
+import type { SideRow } from '../interior/pageSummary';
 import type { StaffDesk } from '../campusPeopleApi';
 import type { ExplorerPathModel } from '../campusPath';
 import AdminLink from '../AdminLink';
@@ -44,8 +45,12 @@ export function HelpDesk({ desks, workplace = false, talk = false }: { desks: St
   );
 }
 
-/** TODAY'S PLAN: the steps, done ones struck through, the next one filled; the button walks to the next stop's building. */
-export function PlanCard({ stops, buildings, workplaceNames, onWalk }: { stops: PlanStop[]; buildings: CampusBuilding[]; workplaceNames: boolean; onWalk: Walk }): React.ReactElement | null {
+/** TODAY'S PLAN: the steps, done ones struck through, the next one filled; the button walks to the next stop's building. C78: all
+ *  done, it shows the path ahead (pathAhead: your next lessons, the next locked one and why, the next event) so finishing today never
+ *  reads as finishing; a row with a page opens it. */
+export function PlanCard({ stops, buildings, workplaceNames, onWalk, ahead, onOpen }: {
+  stops: PlanStop[]; buildings: CampusBuilding[]; workplaceNames: boolean; onWalk: Walk; ahead?: SideRow[] | null; onOpen?: (route: string) => void;
+}): React.ReactElement | null {
   if (!stops.length) return null;
   const done = stops.filter((s) => s.done).length;
   const next = stops.find((s) => !s.done && s.buildingId) ?? null;
@@ -69,6 +74,20 @@ export function PlanCard({ stops, buildings, workplaceNames, onWalk }: { stops: 
       {next
         ? <button type="button" className="cm-plan-go" onClick={() => onWalk(next.buildingId!)} data-testid="cm-cc-plan-go">{done ? 'Continue' : 'Walk the route'} &rarr; {nameOf(next.buildingId)}</button>
         : <div className="cm-lead" style={{ margin: '8px 0 0' }}>All done for today <span aria-hidden="true">🎉</span> Nice work.</div>}
+      {!next && !upNext && ahead && ahead.length > 0 && (
+        <div className="cm-ahead" data-testid="cm-plan-ahead">
+          <b>You are not finished. What comes next:</b>
+          <ul>
+            {ahead.map((r) => (
+              <li key={`${r.label}-${r.value}`}>
+                {r.route && onOpen
+                  ? <button type="button" onClick={() => onOpen(r.route!)} data-testid="cm-plan-ahead-go"><span>{r.label}</span><small>{r.value} &rarr;</small></button>
+                  : <span className="cm-ahead-row"><span>{r.label}</span><small>{r.value}</small></span>}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }
