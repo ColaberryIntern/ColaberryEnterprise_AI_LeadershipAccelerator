@@ -124,7 +124,12 @@ describe('reports_to: exactly one, resolving to a real human on the first hop', 
     // failure, caught here instead.
     await seedMayaIdentity();
     const cfg = configPassed();
-    expect(cfg.reportsToOrgMemberId).toBe(ORG_MEMBER.ALI);
+    // TAIWO, assigned by Ali on 2026-10-27, and the same owner `AdmissionsConversionArchitect`
+    // already reports to in production. Pinned to the named constant rather than the UUID so a
+    // change of owner is a one-line edit here and nowhere else; pinned at all because this is
+    // an assignment decision, which no test can derive and a refactor must not quietly move.
+    expect(cfg.reportsToOrgMemberId).toBe(ORG_MEMBER.TAIWO);
+    expect(cfg.reportsToOrgMemberId).not.toBe(ORG_MEMBER.ALI);
     expect(cfg.reportsToAgentName).toBeUndefined();
     expect(Boolean(cfg.reportsToOrgMemberId) !== Boolean(cfg.reportsToAgentName)).toBe(true);
   });

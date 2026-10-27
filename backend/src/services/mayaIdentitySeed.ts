@@ -46,7 +46,7 @@ import AiAgent from '../models/AiAgent';
  *
  * ── TWO DELIBERATE DEPARTURES FROM BOTH ─────────────────────────────────────
  *
- * 1. It IMPORTS `ORG_MEMBER.ALI` rather than redeclaring the UUID. Dara's file hardcodes
+ * 1. It IMPORTS `ORG_MEMBER.TAIWO` rather than redeclaring the UUID. Dara's file hardcodes
  *    Swati's id locally with provenance, which was right when hers was the only one; the
  *    shared `ORG_MEMBER` map in `ticketCreatorIdentitySeed.ts` now carries all six real
  *    org_members ids, verified live. A second copy of a UUID is a second thing to get wrong.
@@ -128,14 +128,20 @@ export async function seedMayaIdentity(): Promise<MayaIdentityIds> {
     // campaign enrollment (`enroll_in_campaign`) routes through mayaCampaignRouter, which has
     // its own rules and predates this file.
     pilotCohortGate: false,
-    // Maya reports DIRECTLY to a human, the same shape Dara uses, and to the same human Reese
-    // does. Ali is Exec on the Colaberry org and the DRI for this system, which makes the
-    // chain resolve on the first hop with no disabled agent in the middle — Reese's own
-    // known gap (he routes through a disabled `workforce_intelligence_engine`) is not a
-    // pattern to copy. This is a judgement call about accountability, not a derived fact: if
-    // admissions should answer to someone else, it is a one-row UPDATE, because
-    // `seedAgentIdentity()` self-heals reports_to ONLY when it is null and never overwrites.
-    reportsToOrgMemberId: ORG_MEMBER.ALI,
+    // Maya reports DIRECTLY to a human, the same shape Dara uses. TAIWO, not Ali: Ali assigned
+    // her to Taiwo on 2026-10-27, and Taiwo is also the owner the rest of the registry already
+    // uses for this domain — `AdmissionsConversionArchitect` reports to ORG_MEMBER.TAIWO in
+    // production today, alongside the Finance, Operations and StudentSuccess architects. The
+    // first draft of this file reasoned its way to Ali from the DRI role, which was the wrong
+    // hop: the DRI for the SYSTEM is not the manager of the AGENT. Direct-to-human keeps the
+    // chain resolving on the first hop with no disabled agent in the middle — Reese's own known
+    // gap (he routes through a disabled `workforce_intelligence_engine`) is not one to copy.
+    //
+    // This is what a FIRST seed writes. `seedAgentIdentity()` self-heals reports_to only when
+    // it is null and never overwrites — and Maya's production row has both reports_to columns
+    // null today (measured 2026-10-27), so the deploy sets Taiwo by itself. That is why no
+    // follow-up UPDATE is needed here, which was NOT true while this said Ali.
+    reportsToOrgMemberId: ORG_MEMBER.TAIWO,
   });
 
   // Two post-seed classifications, both self-heal-only-when-null, matching the posture every
