@@ -252,16 +252,22 @@ describe('states that are not data', () => {
   });
 });
 
-describe('the three views', () => {
-  it('offers all three, with none of them marked unbuilt any more', async () => {
-    // Ali confirmed "all 3", and all three now exist — Command Center in Phase 3, Triage Board in
-    // Phase 4, Activity Timeline in Phase 5. A view that is not built says "soon" rather than
-    // rendering an empty panel that would read as "no data"; there is nothing left to mark.
+describe('the views', () => {
+  it('offers every view, with none of them marked unbuilt any more', async () => {
+    // Ali confirmed "all 3" of the original views, and all three exist — Command Center in Phase 3,
+    // Triage Board in Phase 4, Activity Timeline in Phase 5. Agent nudges came later and is scoped
+    // to the agent-domain builders rather than the whole roster, which is why it takes no `rows`.
+    // A view that is not built says "soon" rather than rendering an empty panel that would read as
+    // "no data"; there is nothing left to mark.
+    //
+    // This list is asserted exactly rather than by length, and that is deliberate: adding a view
+    // without updating it here is how a tab ends up shipped with a wrong label or in the wrong
+    // order. It caught the nudge view being added, which is the check working.
     await render({ interns: [intern()], counts: counts() });
 
     const tabs = Array.from(container.querySelectorAll('[role="tab"]'));
     expect(tabs.map((t) => t.textContent)).toEqual([
-      'Command Center', 'Triage Board', 'Activity Timeline',
+      'Command Center', 'Triage Board', 'Activity Timeline', 'Agent nudges',
     ]);
     expect(tabs[0].getAttribute('aria-selected')).toBe('true');
     expect(container.textContent).not.toContain('soon');
