@@ -4,6 +4,8 @@ import { seedReeseIdentity } from './reese/reeseIdentitySeed';
 import { seedTicketCreatorIdentities } from './agentBlueprint/ticketCreatorIdentitySeed';
 import { REESE_PERSONA_BLOCK } from './reese/reeseSystemPrompt';
 import { seedDaraIdentity } from './curriculum/daraIdentitySeed';
+import { seedMayaIdentity } from './mayaIdentitySeed';
+import { MAYA_PERSONA_BLOCK } from './mayaPersona';
 import { seedDomainAgentIdentities } from './agentDomain/domainAgentIdentitySeed';
 import { DARA_PERSONA_BLOCK } from './curriculum/daraPersona';
 import { repointCurriculumLegacyBehaviors } from './curriculum/repointLegacyBehaviors';
@@ -3160,11 +3162,19 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
   // the two dials stay independent: `autonomy_level` gates the CATEGORY, `tools_granted` gates
   // the specific tool.
   //
-  // No `system_prompt` here on purpose. Hers is composed per conversation by
-  // `buildMayaSystemPrompt()` from live context; a static copy in this row would be a second
-  // source of truth that silently drifts from the prompt she actually runs.
+  // `system_prompt` carries her MANAGER-facing block only (2026-10-27). This entry originally
+  // omitted it, reasoning that hers is composed per conversation by `buildMayaSystemPrompt()`
+  // and a static copy would be a second source of truth that drifts. The concern was right and
+  // the conclusion was wrong: this column has exactly one consumer,
+  // `agentManagerConversationPrompt.ts`'s Talk tab, which is her MANAGER's conversation, not a
+  // visitor's. Leaving it null did not avoid a drifting copy, it just handed her manager the
+  // "No system prompt has been configured for you yet" fallback. Dara already carries this
+  // split — `DARA_PERSONA_BLOCK` (manager) on her row, `DARA_STUDENT_PERSONA_BLOCK` in her
+  // builder, "never mixed". Nothing is duplicated here, because the visitor prompt stays where
+  // it was: composed live and stored per-conversation on `ChatConversation.ai_system_prompt`.
   {
     agent_name: 'Maya',
+    system_prompt: MAYA_PERSONA_BLOCK,
     agent_type: 'ai_employee',
     module: 'admissions',
     source_file: 'backend/src/services/admissionsMayaService.ts',
@@ -3327,6 +3337,16 @@ export async function seedAgentRegistry(): Promise<void> {
     await seedDaraIdentity();
   } catch (err: any) {
     console.warn('[AI Ops] Dara identity seed failed:', err?.message);
+  }
+
+  // Maya (admissions), 2026-10-27 — same fail-open posture as the two above. Registered in
+  // PR #3399 with no identity at all, which left her dashboard rendering empty while even a
+  // ticket-creator identity had an AdminUser. Must run AFTER the AGENT_REGISTRY loop:
+  // seedAgentIdentity() throws by design if the 'Maya' row does not exist yet.
+  try {
+    await seedMayaIdentity();
+  } catch (err: any) {
+    console.warn('[AI Ops] Maya identity seed failed:', err?.message);
   }
 
   // Same fail-open posture — re-pointing the 4 absorbed legacy rows onto

@@ -97,6 +97,37 @@ const AGENT_PERMISSIONS: Record<string, AgentPermission> = {
   WorkforceTechnologyDirector: { tier: 'write_with_audit', allowedTables: ['workforce_tasks'], allowedOperations: ['flag_agent_health_issue'], requiresEvaluateSend: false },
   WorkforceResearchDirector: { tier: 'write_with_audit', allowedTables: ['workforce_messages'], allowedOperations: ['surface_insight'], requiresEvaluateSend: false },
   WorkforceMarketingDirector: { tier: 'suggest_only', allowedTables: ['proposed_agent_actions'], allowedOperations: ['propose_content_idea'], requiresEvaluateSend: false },
+
+  // Tier 4 — COMMUNICATION: Maya (admissions), classified 2026-10-27.
+  //
+  // DECIDED, NOT DEFAULTED. build-platform-agent/SKILL.md calls silently accepting
+  // DEFAULT_PERMISSION "exactly the 'random agent doing things' pattern" — and the default
+  // ('suggest_only', requiresEvaluateSend: false) is wrong for her in BOTH directions: it
+  // understates what she does (she writes leads and places calls, she does not propose) and it
+  // leaves requiresEvaluateSend false on the one agent here that actually reaches strangers.
+  //
+  // WHAT THIS CHANGES TODAY: nothing. Verified before adding — no Maya path imports this
+  // service (`mayaActionService`, `mayaToolsService`, `admissionsMayaService`, `chatService`
+  // all consult it zero times), so this is an accurate record of existing behaviour that takes
+  // effect if and when a caller is wired, not a new grant. Stating that plainly because an
+  // entry in this table reads like an enforced gate, and for her it is not one yet.
+  //
+  // allowedTables are the tables her tools genuinely write, read out of the real handlers in
+  // mayaToolsService.ts/mayaActionService.ts rather than copied from a sibling: a narrower list
+  // would deny her existing lead capture the moment anything does wire the gate.
+  Maya: {
+    tier: 'communication',
+    allowedTables: [
+      'leads', 'visitors', 'admissions_memory', 'admissions_action_logs',
+      'document_delivery_logs', 'call_contact_logs', 'strategy_calls',
+    ],
+    allowedOperations: [
+      'capture_lead_details', 'update_lead_record', 'send_document', 'send_sms_summary',
+      'initiate_voice_call', 'get_available_slots', 'schedule_strategy_call',
+      'enroll_in_campaign', 'retrieve_knowledge', 'schedule_callback',
+    ],
+    requiresEvaluateSend: true,
+  },
 };
 
 // Default permission for unclassified agents — restrict to suggest_only
