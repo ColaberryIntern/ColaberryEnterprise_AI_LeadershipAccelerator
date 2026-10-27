@@ -29,10 +29,53 @@ jest.mock('../../../models/Project', () => ({ __esModule: true, default: {} }));
 jest.mock('../../../models/DeliveryProjectSourceLink', () => ({ __esModule: true, default: {} }));
 const linkStudentProject = jest.fn();
 jest.mock('../../delivery/projectSourceLink', () => ({ linkStudentProject: (...a: any[]) => linkStudentProject(...a) }));
+// PR 3a: grantApproverReviewer resolves the approver + writes a reviewer membership via these (dynamic imports).
+const dpmFindOne = jest.fn();
+const dpmCreate = jest.fn();
+jest.mock('../../../models/DeliveryProjectMember', () => ({ __esModule: true, default: { findOne: (...a: any[]) => dpmFindOne(...a), create: (...a: any[]) => dpmCreate(...a) } }));
+const piFindOne = jest.fn();
+jest.mock('../../../models/PlatformIdentity', () => ({ __esModule: true, default: { findOne: (...a: any[]) => piFindOne(...a) } }));
+jest.mock('../../../modules/identity/platformIdentityService', () => ({ normalizeEmail: (e: string) => (e || '').trim().toLowerCase() }));
 
-import { ensureGovTwoTrackProject, govProjectSlug, toContractRequirementRow, classifyRequirementTracks, selectsSolutionBuild, linkGovBuildToStudentProject, GovContainerUnavailableError } from '../govDeliveryProject';
+import { ensureGovTwoTrackProject, grantApproverReviewer, govProjectSlug, toContractRequirementRow, classifyRequirementTracks, selectsSolutionBuild, linkGovBuildToStudentProject, GovContainerUnavailableError } from '../govDeliveryProject';
 
 const GWS = 'gws:04ac1711-c3f6-418a-9d9b-c5e6211295ec';
+
+describe('grantApproverReviewer (best-effort, non-destructive)', () => {
+  const UUID = '22222222-2222-4222-8222-222222222222';
+  beforeEach(() => {
+    jest.clearAllMocks();
+    dpmFindOne.mockResolvedValue(null);
+    dpmCreate.mockResolvedValue({});
+    piFindOne.mockResolvedValue({ id: 'pid-1' });
+  });
+  it('resolves the approver from their email and grants qa_reviewer', async () => {
+    await grantApproverReviewer('dp-1', 'Ali@Colaberry.com');
+    expect(piFindOne).toHaveBeenCalledWith({ where: { primary_email: 'ali@colaberry.com' } });
+    expect(dpmCreate).toHaveBeenCalledTimes(1);
+    expect(dpmCreate.mock.calls[0][0]).toMatchObject({ delivery_project_id: 'dp-1', platform_identity_id: 'pid-1', delivery_role: 'qa_reviewer' });
+  });
+  it('accepts a uuid approver directly, with no identity lookup', async () => {
+    await grantApproverReviewer('dp-1', UUID);
+    expect(piFindOne).not.toHaveBeenCalled();
+    expect(dpmCreate.mock.calls[0][0]).toMatchObject({ platform_identity_id: UUID, delivery_role: 'qa_reviewer' });
+  });
+  it('never alters an existing membership (no silent promote or demote)', async () => {
+    dpmFindOne.mockResolvedValue({ id: 'm-1', delivery_role: 'associate_builder' });
+    await grantApproverReviewer('dp-1', UUID);
+    expect(dpmCreate).not.toHaveBeenCalled();
+  });
+  it('is a no-op when there is no approver, and when the email does not resolve', async () => {
+    await grantApproverReviewer('dp-1', null);
+    piFindOne.mockResolvedValue(null);
+    await grantApproverReviewer('dp-1', 'ghost@nowhere.com');
+    expect(dpmCreate).not.toHaveBeenCalled();
+  });
+  it('never throws when the membership write fails (best-effort)', async () => {
+    dpmCreate.mockRejectedValue(new Error('db down'));
+    await expect(grantApproverReviewer('dp-1', UUID)).resolves.toBeUndefined();
+  });
+});
 
 describe('govProjectSlug (pure, deterministic)', () => {
   it('maps a gws key to gov-<uuid> (lowercased)', () => {
