@@ -1,10 +1,16 @@
 import React, { useEffect, useState } from 'react';
-import {
-  fetchAcquisitionFunnel, type AcquisitionFunnel, type FunnelStage,
-} from './acquisitionFunnelApi';
+import { fetchAcquisitionFunnel, type AcquisitionFunnel } from './acquisitionFunnelApi';
+import PerformanceHeader from './performance/PerformanceHeader';
+import KpiRow from './performance/KpiRow';
+import FunnelChart from './performance/FunnelChart';
+import SourceDonut from './performance/SourceDonut';
+import CampaignTable from './performance/CampaignTable';
+import LandingPagesTable from './performance/LandingPagesTable';
+import { takeawaySentence } from './performance/performanceMetrics';
+import './performance/marketingPerformance.css';
 
 /**
- * What happened to the people who clicked.
+ * What happened to the people who clicked - the Marketing Performance report.
  *
  * WHY IT IS HERE. This tab opened on "No marketing funnel data available yet. Data will appear
  * once campaigns have enrolled leads." That is the CAMPAIGN graph, driven by an engine paused
@@ -22,49 +28,15 @@ import {
  *
  * A LATER STAGE CAN EXCEED AN EARLIER ONE, and that is a finding rather than a bug. Each stage is
  * measured independently; an untracked page produces zero visitors and real signups. Clamping
- * them into a tidy descending shape would hide exactly that gap, so the percentages are drawn
- * against the widest stage and an increase is labelled rather than smoothed.
+ * them into a tidy descending shape would hide exactly that gap, so the bars are drawn against
+ * the widest stage and an increase is labelled rather than smoothed.
+ *
+ * ── THIS COMPONENT ONLY COMPOSES ──
+ *
+ * One request feeds the whole report. The arithmetic lives in `performance/performanceMetrics.ts`
+ * where it is tested, the presentation in the sibling components, and nothing here changes a
+ * backend calculation: the redesign is a presentation change, start to finish.
  */
-
-const PCT = (value: number, of: number): string => (of > 0 ? `${Math.round((value / of) * 100)}%` : '-');
-
-function StageRow({ stage, widest, previous }: { stage: FunnelStage; widest: number; previous: FunnelStage | null }) {
-  const width = widest > 0 ? Math.max(2, Math.round((stage.count / widest) * 100)) : 2;
-  // Step-over-step, against the previous stage. Can exceed 100%, and says so rather than hiding it.
-  const step = previous && previous.count > 0 ? Math.round((stage.count / previous.count) * 100) : null;
-  const grew = step !== null && step > 100;
-
-  return (
-    <div className="mb-3" data-testid={`funnel-stage-${stage.key}`}>
-      <div className="d-flex align-items-baseline justify-content-between">
-        <span className="fw-semibold">{stage.label}</span>
-        <span className="d-flex align-items-baseline gap-2">
-          <span className="fs-5 fw-bold" style={{ fontVariantNumeric: 'tabular-nums' }}>
-            {stage.count.toLocaleString()}
-          </span>
-          <span className="text-muted small">{stage.unit}</span>
-          {step !== null && (
-            <span className={`badge ${grew ? 'bg-warning text-dark' : 'bg-light text-dark'}`} title="Compared with the stage above">
-              {step}%
-            </span>
-          )}
-        </span>
-      </div>
-      <div className="progress" style={{ height: 8 }} role="img" aria-label={`${stage.count} ${stage.unit}`}>
-        <div className="progress-bar" style={{ width: `${width}%`, backgroundColor: '#1a365d' }} />
-      </div>
-      <div className="form-text small mb-0">{stage.note}</div>
-      {grew && (
-        <div className="form-text small text-warning mb-0">
-          More than the stage above. These two are measured independently, so one does not bound
-          the other: a visitor can reach this stage without registering the one before it, and an
-          untracked page can contribute here and not there.
-        </div>
-      )}
-    </div>
-  );
-}
-
 export default function AcquisitionFunnelPanel({ days = 30 }: { days?: number }) {
   const [data, setData] = useState<AcquisitionFunnel | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -79,118 +51,87 @@ export default function AcquisitionFunnelPanel({ days = 30 }: { days?: number })
     return () => { live = false; };
   }, [days]);
 
-  if (error) return <div className="alert alert-danger py-2 small" data-testid="funnel-error">{error}</div>;
-  if (!data) return <p className="text-muted small mb-0">Loading the funnel...</p>;
-
-  const widest = Math.max(...data.stages.map((s) => s.count), 1);
+  const loading = !data && !error;
+  const failed = error !== null;
+  const stages = data?.stages ?? [];
+  const campaigns = data?.campaigns ?? [];
+  const pages = data?.pages ?? [];
 
   return (
-    <div data-testid="acquisition-funnel">
-      <div className="card border-0 shadow-sm mb-3">
-        <div className="card-header bg-white fw-semibold d-flex justify-content-between align-items-center">
-          <span>From ad click to coming back</span>
-          <span className="text-muted small">last {data.windowDays} days</span>
-        </div>
-        <div className="card-body">
-          {data.empty ? (
-            <p className="text-muted mb-0" data-testid="funnel-empty">
-              Nothing recorded in this window. This counts landing-page traffic and signups, so it
-              stays empty until a page is published and someone visits it.
-            </p>
-          ) : (
-            data.stages.map((stage, i) => (
-              <StageRow
-                key={stage.key}
-                stage={stage}
-                widest={widest}
-                previous={i === 0 ? null : data.stages[i - 1]}
-              />
-            ))
+    <div className="mp" data-testid="acquisition-funnel">
+      <PerformanceHeader windowDays={data?.windowDays ?? (loading ? null : days)} />
+
+      {/*
+        The error banner keeps its old testid and its old words, and sits ABOVE the report rather
+        than replacing it. Returning a single line on failure, as this did before, collapses the
+        page and then jumps it back to full height when a retry succeeds.
+      */}
+      {failed && (
+        <div className="alert alert-danger py-2 small mb-0" data-testid="funnel-error">{error}</div>
+      )}
+
+      {data?.empty ? (
+        <p className="text-muted mb-0" data-testid="funnel-empty">
+          Nothing recorded in this window. This counts landing-page traffic and signups, so it
+          stays empty until a page is published and someone visits it.
+        </p>
+      ) : (
+        <>
+          <p className="mp-take">
+            {loading
+              ? <span className="mp-skeleton">Ads drove 0,000 sessions and 000 signups.</span>
+              : takeawaySentence(stages)}
+          </p>
+
+          <KpiRow stages={stages} loading={loading} />
+
+          <div className="mp-row">
+            <section className="mp-card" aria-labelledby="mp-funnel-title">
+              <h3 className="mp-card__title" id="mp-funnel-title">Conversion funnel</h3>
+              <p className="mp-card__note">
+                Each stage measured independently, drawn against the widest.
+              </p>
+              <FunnelChart stages={stages} loading={loading} error={failed} />
+            </section>
+
+            <section className="mp-card" aria-labelledby="mp-source-title">
+              <h3 className="mp-card__title" id="mp-source-title">Signups by source</h3>
+              <p className="mp-card__note">Where the people who signed up came from.</p>
+              <SourceDonut campaigns={campaigns} loading={loading} error={failed} />
+            </section>
+          </div>
+
+          {data && data.untrackedPages.length > 0 && (
+            /* Named rather than shown as zeros: a page with no tracker cannot be measured, and
+               averaging it into a conversion rate would understate every other page. */
+            <div className="alert alert-warning py-2 small mb-0" data-testid="funnel-untracked">
+              <strong>
+                {data.untrackedPages.length} page{data.untrackedPages.length === 1 ? '' : 's'}
+                {' '}cannot be measured
+              </strong>
+              {' '}- no tracker is served on {data.untrackedPages.join(', ')}. Visits there are
+              missing from every number above.
+            </div>
           )}
-        </div>
-      </div>
 
-      {data.untrackedPages.length > 0 && (
-        /* Named rather than shown as zeros: a page with no tracker cannot be measured, and
-           averaging it into a conversion rate would understate every other page. */
-        <div className="alert alert-warning py-2 small" data-testid="funnel-untracked">
-          <strong>{data.untrackedPages.length} page{data.untrackedPages.length === 1 ? '' : 's'} cannot be measured</strong>
-          {' '}- no tracker is served on {data.untrackedPages.join(', ')}. Visits there are missing
-          from every number above.
-        </div>
-      )}
+          <section className="mp-card" aria-labelledby="mp-campaigns-title">
+            <h3 className="mp-card__title" id="mp-campaigns-title">What each campaign produced</h3>
+            <p className="mp-card__note">
+              A campaign that signs people up without reaching the CRM has produced nothing
+              admissions can act on.
+            </p>
+            <CampaignTable campaigns={campaigns} loading={loading} error={failed} />
+          </section>
 
-      {data.campaigns.length > 0 && (
-        <div className="card border-0 shadow-sm mb-3">
-          <div className="card-header bg-white fw-semibold">What each campaign produced</div>
-          <div className="table-responsive">
-            <table className="table table-hover mb-0 align-middle">
-              <thead className="table-light">
-                <tr>
-                  <th>Source</th><th>Campaign</th>
-                  <th className="text-end">Signed up</th>
-                  <th className="text-end">Account</th>
-                  <th className="text-end">In the CRM</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.campaigns.map((c) => (
-                  <tr key={`${c.utm_source ?? '-'}|${c.utm_campaign ?? '-'}`} data-testid="funnel-campaign-row">
-                    <td>{c.utm_source ?? <span className="text-muted">untagged</span>}</td>
-                    <td className="small"><code>{c.utm_campaign ?? '-'}</code></td>
-                    <td className="text-end fw-semibold" style={{ fontVariantNumeric: 'tabular-nums' }}>{c.signups}</td>
-                    <td className="text-end" style={{ fontVariantNumeric: 'tabular-nums' }}>{c.accounts}</td>
-                    <td className="text-end" style={{ fontVariantNumeric: 'tabular-nums' }}>
-                      {c.in_crm}
-                      {c.signups > 0 && <span className="text-muted small ms-1">{PCT(c.in_crm, c.signups)}</span>}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {data.pages.length > 0 && (
-        <div className="card border-0 shadow-sm">
-          <div className="card-header bg-white fw-semibold">Each landing page</div>
-          <div className="table-responsive">
-            <table className="table table-hover mb-0 align-middle">
-              <thead className="table-light">
-                <tr>
-                  <th>Page</th>
-                  <th className="text-end">Visitors</th>
-                  <th className="text-end">Read it</th>
-                  <th className="text-end">Clicked</th>
-                  <th className="text-end">Known</th>
-                  <th className="text-end">From ads</th>
-                  {/* Loads last, and labelled, because it is the biggest number and the least useful. */}
-                  <th className="text-end text-muted">Loads</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.pages.map((p) => (
-                  <tr key={`${p.brand_slug ?? '-'}/${p.slug}`} data-testid="funnel-page-row">
-                    <td>
-                      <div>{p.slug}</div>
-                      <div className="text-muted" style={{ fontSize: '.72rem' }}>
-                        {p.brand_slug ?? 'no brand'}
-                        {!p.site_slug && <span className="text-warning"> · not measurable</span>}
-                      </div>
-                    </td>
-                    <td className="text-end fw-semibold" style={{ fontVariantNumeric: 'tabular-nums' }}>{p.visitors}</td>
-                    <td className="text-end" style={{ fontVariantNumeric: 'tabular-nums' }}>{p.engaged_visitors}</td>
-                    <td className="text-end" style={{ fontVariantNumeric: 'tabular-nums' }}>{p.cta_clickers}</td>
-                    <td className="text-end" style={{ fontVariantNumeric: 'tabular-nums' }}>{p.identified_leads}</td>
-                    <td className="text-end" style={{ fontVariantNumeric: 'tabular-nums' }}>{p.ad_clicks}</td>
-                    <td className="text-end text-muted" style={{ fontVariantNumeric: 'tabular-nums' }}>{p.views}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+          <section className="mp-card" aria-labelledby="mp-pages-title">
+            <h3 className="mp-card__title" id="mp-pages-title">Each landing page</h3>
+            <p className="mp-card__note">
+              Busiest first. Page loads last, and labelled, because it is the biggest number and
+              the least useful.
+            </p>
+            <LandingPagesTable pages={pages} loading={loading} error={failed} />
+          </section>
+        </>
       )}
     </div>
   );
