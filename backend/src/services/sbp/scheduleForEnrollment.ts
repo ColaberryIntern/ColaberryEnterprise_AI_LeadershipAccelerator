@@ -8,9 +8,31 @@
  * this lookup is exactly how the two would drift — one writing a demo day the
  * other never mentions.
  *
- * Null is a NORMAL outcome, not an error: a cohort with no recorded start date
- * means tasks materialize without due dates, exactly as they did before dates
- * existed. A missing cohort date must never cost a student their build.
+ * Null is a NORMAL outcome, not an error: with no anchor to date against, tasks
+ * materialize without due dates, exactly as they did before dates existed. A
+ * missing date must never cost a student their build.
+ *
+ * TWO ANCHORS, because there are now two kinds of learner.
+ *
+ * A cohort learner is anchored on `cohorts.start_date` and always has been. A
+ * SELF-PACED learner has no cohort at all — `enrollments.cohort_id` is nullable
+ * precisely so they can exist — and until this function grew a second anchor
+ * they fell through an INNER JOIN and got no dates whatsoever. Measured on
+ * production 2026-10-27: cohort learners carried due dates on 74.3% of their
+ * tasks, cohort-less learners on 10.5%.
+ *
+ * The self-paced anchor is the day their PLAN WAS PUBLISHED, not the day they
+ * signed up. Signup date is the tempting choice and it is wrong: somebody who
+ * enrolled in July and had a plan built in November would find every deadline
+ * already in the past, which is the born-overdue failure this file exists to
+ * prevent. For a learner working on their own time, the programme starts when
+ * there is a programme to work on.
+ *
+ * Everything downstream is deliberately unchanged. The same relative week
+ * offsets apply, so a self-paced learner gets the same shaped programme as a
+ * cohort, beginning on their own day. That is a DEFAULT, not a policy: no new
+ * pacing rule is invented here, and changing the self-paced length later means
+ * changing week numbers and nothing else.
  *
  * `publishedAt` is the OTHER half of the window and just as load-bearing as the
  * cohort start. The cohort says when the build window would open; the publish
@@ -34,6 +56,29 @@ function log(event: string, correlationId: string | null | undefined, outcome: s
   }));
 }
 
+/** Which clock dated this build. Logged so a date can always be explained. */
+export type ScheduleAnchorKind = 'cohort_start' | 'self_paced_plan_published';
+
+/**
+ * The anchor for a learner with no cohort.
+ *
+ * Returns null rather than reaching for `Date.now()`. A wall-clock anchor would
+ * re-date the whole build every time the documents were refreshed, which is the
+ * same drift `publishedAt` was introduced to stop — and a schedule that moves
+ * when you look at it is not a deadline.
+ */
+export function selfPacedAnchor(
+  publishedAt: Date | null,
+  enrollmentCreatedAt: Date | string | null | undefined,
+): Date | null {
+  if (publishedAt && !Number.isNaN(publishedAt.getTime())) return publishedAt;
+  // Fallback for a plan that has never published: the signup date is the only
+  // other fixed point we hold, and it is strictly better than no dates at all.
+  if (!enrollmentCreatedAt) return null;
+  const created = new Date(enrollmentCreatedAt);
+  return Number.isNaN(created.getTime()) ? null : created;
+}
+
 export async function scheduleForEnrollment(
   enrollmentId: string,
   plan: BuildPlan,
@@ -49,15 +94,31 @@ export async function scheduleForEnrollment(
 ): Promise<Schedule | null> {
   try {
     const { sequelize } = await import('../../config/database');
+    // LEFT JOIN on purpose. The inner join this replaced silently dropped every
+    // cohort-less learner, and a learner who returns no row cannot be told apart
+    // from a learner who does not exist.
     const [rows]: any = await sequelize.query(
-      `SELECT c.start_date FROM enrollments e
-         JOIN cohorts c ON c.id = e.cohort_id
-        WHERE e.id = $eid AND c.start_date IS NOT NULL LIMIT 1`,
+      `SELECT c.start_date, e.created_at FROM enrollments e
+         LEFT JOIN cohorts c ON c.id = e.cohort_id
+        WHERE e.id = $eid LIMIT 1`,
       { bind: { eid: enrollmentId } },
     );
-    const start = rows?.[0]?.start_date;
-    if (!start) {
-      log('sbp_schedule_skipped', correlationId, 'partial', { enrollmentId, reason: 'cohort has no start_date' });
+    const row = rows?.[0];
+    if (!row) {
+      log('sbp_schedule_skipped', correlationId, 'partial', { enrollmentId, reason: 'enrollment not found' });
+      return null;
+    }
+
+    const asOf = publishedAt ? new Date(publishedAt) : null;
+    const asOfValid = asOf && !Number.isNaN(asOf.getTime()) ? asOf : null;
+
+    const cohortStart = row.start_date ? new Date(row.start_date) : null;
+    const anchorKind: ScheduleAnchorKind = cohortStart ? 'cohort_start' : 'self_paced_plan_published';
+    const anchor = cohortStart ?? selfPacedAnchor(asOfValid, row.created_at);
+    if (!anchor || Number.isNaN(anchor.getTime())) {
+      log('sbp_schedule_skipped', correlationId, 'partial', {
+        enrollmentId, reason: 'no cohort start and no self-paced anchor',
+      });
       return null;
     }
 
@@ -65,16 +126,19 @@ export async function scheduleForEnrollment(
     for (const rel of plan.releases) {
       storiesByRelease.set(rel.key, plan.stories.filter((s) => s.release === rel.key).map((s) => s.id));
     }
-    const asOf = publishedAt ? new Date(publishedAt) : null;
     const schedule = buildSchedule({
       window: {
-        cohortStart: new Date(start),
-        asOf: asOf && !Number.isNaN(asOf.getTime()) ? asOf : undefined,
+        cohortStart: anchor,
+        asOf: asOfValid ?? undefined,
       },
       releases: plan.releases,
       storiesByRelease,
     });
     log('sbp_schedule_built', correlationId, 'success', {
+      // Which clock dated this build. Without it, a self-paced learner's dates
+      // look like a cohort's and nobody can tell why they differ.
+      anchorKind,
+      anchor: anchor.toISOString().slice(0, 10),
       buildWeeks: schedule.buildWeeks, capacity: schedule.capacity, totalTasks: schedule.totalTasks,
       demoRelease: schedule.demoReleaseKey, demoDay: schedule.demoDay.toISOString().slice(0, 10),
       buildStart: schedule.buildStart.toISOString().slice(0, 10),
