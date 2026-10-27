@@ -9,8 +9,11 @@
 
 const mockUpdate = jest.fn(async (..._a: unknown[]): Promise<any> => [1]);
 
-jest.mock('../../../models', () => ({
-  AiAgent: { update: (...a: unknown[]) => mockUpdate(...a) },
+// Mocks the model file directly, matching how the gate imports it. Mocking the `models` barrel
+// instead would not intercept it, and importing the barrel is what broke agentRunTracker's suite.
+jest.mock('../../../models/AiAgent', () => ({
+  __esModule: true,
+  default: { update: (...a: unknown[]) => mockUpdate(...a) },
 }));
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires

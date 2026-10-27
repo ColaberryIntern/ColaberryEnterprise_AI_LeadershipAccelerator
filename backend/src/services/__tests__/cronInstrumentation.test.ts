@@ -6,9 +6,22 @@
  * tests (only exercised indirectly through whichever cron job happened to
  * fire in other tests) — first dedicated coverage for this function.
  */
+// Two mocks, one function behind them. `cronInstrumentation` reads the models barrel, while
+// `agents/agentControlGate` (which owns the conditional closing write) imports
+// `models/AiAgent` directly so it does not drag the barrel's associations into every suite
+// that mocks model files individually. Mocking only one of the two leaves the other reaching
+// the real Sequelize model.
+// The `mock` prefix is required: a jest.mock factory may not reference an out-of-scope
+// variable unless its name starts with `mock`.
+const mockStaticUpdate = jest.fn();
+
 jest.mock('../../models', () => ({
-  AiAgent: { findOne: jest.fn(), update: jest.fn() },
+  AiAgent: { findOne: jest.fn(), update: (...a: unknown[]) => mockStaticUpdate(...a) },
   AiAgentActivityLog: { create: jest.fn() },
+}));
+jest.mock('../../models/AiAgent', () => ({
+  __esModule: true,
+  default: { update: (...a: unknown[]) => mockStaticUpdate(...a) },
 }));
 jest.mock('../../utils/requestContext', () => ({
   runWithRequestContext: (_ctx: any, fn: () => Promise<void>) => fn(),
@@ -23,7 +36,7 @@ const createActivityLog = AiAgentActivityLog.create as jest.Mock;
 // conditional on status = 'running' so a pause set mid-run is not erased by the run ending,
 // and an instance update cannot carry a WHERE. The opening status: 'running' write is still
 // the instance. The assertions below follow that split; WHAT they assert is unchanged.
-const staticUpdate = AiAgent.update as unknown as jest.Mock;
+const staticUpdate = mockStaticUpdate;
 
 function mockAgent(overrides: Partial<{ enabled: boolean; status: string; run_count: number; avg_duration_ms: number | null; error_count: number }> = {}) {
   const agent: Record<string, any> = { enabled: true, status: 'idle', run_count: 0, avg_duration_ms: null, error_count: 0, id: 'agent-1', ...overrides };

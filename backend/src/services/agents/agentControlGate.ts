@@ -1,4 +1,8 @@
-import { AiAgent } from '../../models';
+// The model directly, NOT the `models` barrel. The barrel runs every association at import
+// time, and this module is pulled in by low-level wrappers that suites mock file-by-file, so
+// importing the barrel here broke `agentRunTracker.test.ts` at load with
+// `AiAgent.hasMany is not a function`. `agentRunTracker` imports it this way for the same reason.
+import AiAgent from '../../models/AiAgent';
 
 /**
  * The one place that decides whether an operator's controls contain an agent.
