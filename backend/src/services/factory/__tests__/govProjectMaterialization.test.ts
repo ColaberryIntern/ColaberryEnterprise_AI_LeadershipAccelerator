@@ -10,6 +10,7 @@ jest.mock('../../sbp/materializeTasks', () => ({ materializePlanAsTasks: jest.fn
 jest.mock('../govDeliveryProject', () => ({ linkGovBuildToStudentProject: jest.fn() }));
 jest.mock('../govBuildPlanAI', () => ({ decomposeGovBuildPlanRaw: jest.fn() }));
 jest.mock('../../sbp/planGate', () => ({ gatePlan: jest.fn(() => ({ ok: true, violations: [] })), blockingViolations: jest.fn(() => []) }));
+jest.mock('../govBuildAssignment', () => ({ ensureAssigneeCanBuild: jest.fn() }));
 
 import { getIdentityLinks } from '../../../modules/identity/platformIdentityService';
 import ContractTrack from '../../../models/ContractTrack';
@@ -18,6 +19,7 @@ import { materializePlanAsTasks } from '../../sbp/materializeTasks';
 import { linkGovBuildToStudentProject } from '../govDeliveryProject';
 import { decomposeGovBuildPlanRaw } from '../govBuildPlanAI';
 import { gatePlan, blockingViolations } from '../../sbp/planGate';
+import { ensureAssigneeCanBuild } from '../govBuildAssignment';
 
 const PLAN: BuildPlan = {
   project_name: 'TxDOT Claims DB', descriptor: 'claims search',
@@ -81,6 +83,26 @@ describe('govProjectMaterialization (core-table write — idempotent, typed erro
     expect(mock(createNewProjectForEnrollment)).not.toHaveBeenCalled();  // the anti-duplicate guard
     expect(mock(linkGovBuildToStudentProject)).not.toHaveBeenCalled();
     expect(mock(materializePlanAsTasks)).toHaveBeenCalledWith('proj-existing', 'enr-1', PLAN, expect.objectContaining({ schedule: expect.anything() }));
+  });
+
+  it('grants the assignee the builder role on the delivery project, so their cockpit is not a 404', async () => {
+    const project: any = { id: 'proj-1', project_variables: {}, save: jest.fn().mockResolvedValue(undefined) };
+    mock(createNewProjectForEnrollment).mockResolvedValue(project);
+    await materializeGovBuildProject(baseInput);
+    // null actor: baseInput carries no actorIdentityId, so the grant records none.
+    expect(mock(ensureAssigneeCanBuild)).toHaveBeenCalledWith('dp-1', 'id-1', null);
+  });
+
+  it('backfills membership even when the project is REUSED (re-running materialize grants cockpit access)', async () => {
+    mock(ContractTrack.findByPk).mockResolvedValue({ solution_student_project_id: 'proj-existing' });
+    await materializeGovBuildProject(baseInput);
+    expect(mock(ensureAssigneeCanBuild)).toHaveBeenCalledWith('dp-1', 'id-1', null);
+  });
+
+  it('does NOT grant membership when materialize fails before the project is ensured', async () => {
+    mock(blockingViolations).mockReturnValue([{ rule: 'release_unbalanced', message: 'too much in r0' }]);
+    await expect(materializeGovBuildProject(baseInput)).rejects.toMatchObject({ reason: 'plan_blocked' });
+    expect(mock(ensureAssigneeCanBuild)).not.toHaveBeenCalled();
   });
 
   it('no enrollment (identity has no link and no email match) → GovMaterializeError no_enrollment, writes nothing', async () => {

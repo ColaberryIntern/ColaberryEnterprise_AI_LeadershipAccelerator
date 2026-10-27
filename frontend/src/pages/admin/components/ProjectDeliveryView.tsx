@@ -448,12 +448,23 @@ export default function ProjectDeliveryView({ cohortId, internsOnly, audienceFil
                 />
                 <LinkChip href={r.repo_url} icon="ri-github-fill" label="Repository" />
                 {r.project_kind === 'gov' && r.gov_delivery_project_id && (
-                  <LinkChip
-                    href={`/portal/gov-projects/${r.gov_delivery_project_id}`}
-                    icon="ri-folder-open-line"
-                    label="Project workspace"
-                    accent
-                  />
+                  // The cockpit is a PARTICIPANT-guarded route, so a raw link here bounced the admin to
+                  // /portal/login (no participant session). The workspace must be opened AS the member, so this
+                  // goes through the same read-only view-as flow as the eye button, landing on their gov cockpit.
+                  <button
+                    type="button"
+                    title={`Open the project workspace as ${r.student_name || 'this member'} (read-only)`}
+                    aria-label="Open the project workspace"
+                    onClick={(e) => { e.stopPropagation(); void openViewAs(r); }}
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                      width: 20, height: 20, marginLeft: 6, borderRadius: 5, verticalAlign: 'text-bottom',
+                      border: '0.5px solid var(--border-subtle)', background: 'var(--status-info-bg, #eff6ff)',
+                      color: 'var(--status-info, #2f6fc8)', fontSize: 12, lineHeight: 1, cursor: 'pointer', padding: 0,
+                    }}
+                  >
+                    <i className="ri-folder-open-line" aria-hidden="true" />
+                  </button>
                 )}
                 {r.enrollment_id && (
                   <button
