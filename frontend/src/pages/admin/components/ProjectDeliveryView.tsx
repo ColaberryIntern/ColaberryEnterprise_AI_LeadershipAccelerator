@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import api from '../../../utils/api';
+import { getViewAsUrl } from '../../../services/adminOrgApi';
 import { SectionCard, StatCard, StatusBadge } from '../../../components/admin/shell';
 import CaseStudyKpi from './projectDelivery/CaseStudyKpi';
 import CaseStudyReadinessModal from './projectDelivery/CaseStudyReadinessModal';
@@ -61,6 +62,8 @@ interface Readiness { score: number; ready: boolean; components: ReadinessCompon
 interface ProjectRow {
   project_id: string;
   name: string | null;
+  /** The owner's enrollment id — the key the admin "view as user" endpoint is keyed by. */
+  enrollment_id: string;
   student_name: string | null;
   student_email: string | null;
   cohort_id: string | null;
@@ -76,6 +79,10 @@ interface ProjectRow {
   /** The student's Command Center — a GitHub Pages site at the root of their own repo.
    *  Null until they publish Pages, which is why the icon renders conditionally. */
   command_center_url: string | null;
+  /** 'gov' for a materialized gov build; absent for ordinary / AI-agent builds. Drives the gov row links. */
+  project_kind?: string | null;
+  /** The linked gov DeliveryProject id — the id the cockpit opens on (/portal/gov-projects/:id). Null for non-gov. */
+  gov_delivery_project_id?: string | null;
   has_exec_summary: boolean;
   artifacts: number;
   tasks_total: number;
@@ -94,6 +101,30 @@ interface ProjectRow {
   /** Task-state split for the segmented bar, summed server-side from the releases
    *  so the bar and the release strip cannot disagree. */
   buckets: TaskBuckets;
+}
+
+/** The portal path a "View as" session should land on for this row, or null to land on the member's Today page.
+ *  A gov build opens straight on its cockpit; everything else has no single per-project page to deep-link to. */
+export function viewAsNextPath(r: Pick<ProjectRow, 'project_kind' | 'gov_delivery_project_id'>): string | null {
+  return r.project_kind === 'gov' && r.gov_delivery_project_id
+    ? `/portal/gov-projects/${r.gov_delivery_project_id}`
+    : null;
+}
+
+/**
+ * Open the admin "View as" read-only portal for a row's owner, landing on their gov cockpit when the build is a
+ * gov project (and their Today page otherwise). Mints a short-lived read-only participant token server-side and
+ * opens it in a new tab; writes are blocked server-side, so this is a safe way to see exactly what they see.
+ */
+async function openViewAs(r: ProjectRow): Promise<void> {
+  if (!r.enrollment_id) return;
+  try {
+    const url = await getViewAsUrl(r.enrollment_id);
+    if (!url) return;
+    const next = viewAsNextPath(r);
+    const dest = next ? `${url}&next=${encodeURIComponent(next)}` : url;
+    window.open(dest, '_blank');
+  } catch { /* the view-as endpoint failed — nothing opens; the operator can retry */ }
 }
 
 interface GanttTask {
@@ -416,6 +447,30 @@ export default function ProjectDeliveryView({ cohortId, internsOnly, audienceFil
                   accent
                 />
                 <LinkChip href={r.repo_url} icon="ri-github-fill" label="Repository" />
+                {r.project_kind === 'gov' && r.gov_delivery_project_id && (
+                  <LinkChip
+                    href={`/portal/gov-projects/${r.gov_delivery_project_id}`}
+                    icon="ri-folder-open-line"
+                    label="Project workspace"
+                    accent
+                  />
+                )}
+                {r.enrollment_id && (
+                  <button
+                    type="button"
+                    title={`View as ${r.student_name || 'this member'} (read-only)`}
+                    aria-label={`View the project as ${r.student_name || 'this member'}`}
+                    onClick={(e) => { e.stopPropagation(); void openViewAs(r); }}
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                      width: 20, height: 20, marginLeft: 6, borderRadius: 5, verticalAlign: 'text-bottom',
+                      border: '0.5px solid var(--border-subtle)', background: 'var(--surface-sunken)',
+                      color: 'var(--text-muted)', fontSize: 12, lineHeight: 1, cursor: 'pointer', padding: 0,
+                    }}
+                  >
+                    <i className="ri-eye-line" aria-hidden="true" />
+                  </button>
+                )}
               </div>
 
               <div>

@@ -115,6 +115,12 @@ export interface ProjectRow {
    *  Stored inside `projects.project_variables`, NOT as a column, which is why a schema
    *  search for `command_center_url` finds nothing. Null until they publish Pages. */
   command_center_url: string | null;
+  /** The project kind tag from project_variables ('gov' for a materialized gov build;
+   *  null for ordinary student / AI-agent builds). Drives the gov-only row links. */
+  project_kind: string | null;
+  /** The linked gov DeliveryProject id (project_variables.gov_delivery_project_id), set at
+   *  gov materialization — the id the cockpit opens on (/portal/gov-projects/:id). Null for non-gov. */
+  gov_delivery_project_id: string | null;
   has_exec_summary: boolean;
   artifacts: number;
   tasks_total: number;
@@ -290,6 +296,8 @@ export async function getProjectDelivery(
               ELSE 'none'
             END                 AS repo_source,
             p.project_variables->>'command_center_url' AS command_center_url,
+            p.project_variables->>'kind' AS project_kind,
+            p.project_variables->>'gov_delivery_project_id' AS gov_delivery_project_id,
             p.archived_at,
             (p.executive_summary IS NOT NULL AND p.executive_summary <> '') AS has_exec_summary,
             -- Whether this project's owner holds an internship, as a COLUMN rather than
@@ -407,6 +415,8 @@ export async function getProjectDelivery(
       repo_url: has_repo ? r.repo_url : null,
       repo_source: has_repo ? (r.repo_source as 'connection' | 'project_column') : 'none',
       command_center_url: r.command_center_url || null,
+      project_kind: r.project_kind || null,
+      gov_delivery_project_id: r.gov_delivery_project_id || null,
       has_exec_summary: !!r.has_exec_summary,
       artifacts,
       tasks_total: total,

@@ -859,13 +859,27 @@ router.post('/api/admin/factory/qualification/:canonicalOpportunityId/materializ
   if (!body.success) { res.status(400).json({ error: 'A delivery project, an assigned builder, and requirements are required.' }); return; }
   const scope = await scopeOrFail(res, 'gov_materialize_build_scope', { canonicalOpportunityId });
   if (!scope) return;
+  // Name the project from the pursuit itself (the solicitation title the reviewer saw) rather than the raw
+  // gws/canonical key, so the internship-projects row and the student's workspace show a human name. Best-effort
+  // for a decoupled (gws) pursuit; an explicit body title/projectName always wins, and the service keeps its own
+  // key-based fallback if nothing resolves.
+  let friendlyTitle: string | null = body.data.title ?? body.data.projectName ?? null;
+  if (!friendlyTitle && isGwsKey(canonicalOpportunityId)) {
+    try {
+      const beParsed = biddingEntityField.safeParse(req.body?.biddingEntity);
+      const beVal = beParsed.success ? beParsed.data : undefined;
+      const ws: any = await getDecoupledWorkspace(scope.tenantId, canonicalOpportunityId, beVal);
+      const t = ws?.provenance?.title;
+      friendlyTitle = t ? String(t).slice(0, 200) : null;
+    } catch { friendlyTitle = null; }
+  }
   try {
     const result = await materializeGovBuildProject({
       deliveryProjectId: body.data.deliveryProjectId,
       canonicalOpportunityId,
       assigneeIdentityId: body.data.assigneeIdentityId,
       requirements: body.data.requirements,
-      title: body.data.title ?? null,
+      title: friendlyTitle,
       buyer: body.data.buyer ?? null,
       buildSpec: body.data.buildSpec ?? null,
       deadline: body.data.deadline ?? null,
