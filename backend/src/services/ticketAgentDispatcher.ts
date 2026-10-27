@@ -300,8 +300,13 @@ export async function dispatchTicketToAgent(
     // Log agent output
     await addAgentOutput(ticketId, mapping.agent_name, result);
 
-    // Move to in_review if agent succeeded
-    if (result.errors.length === 0) {
+    // Move to in_review if the agent succeeded AND actually did something.
+    //
+    // An empty error list means the agent finished, not that it changed anything. For an agent
+    // that only ever advises, finishing cleanly is its normal outcome, so this promoted tickets
+    // nothing had been done to and told the reviewer, by moving them, that there was something
+    // to review. See `advisory_only` on AgentExecutionResult.
+    if (result.errors.length === 0 && !result.advisory_only) {
       await updateTicketStatus(ticketId, 'in_review', 'agent', mapping.agent_name);
     }
 
