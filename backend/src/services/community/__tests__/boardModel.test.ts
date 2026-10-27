@@ -114,4 +114,19 @@ describe('assembleBoard', () => {
     expect(p2.ids).toEqual(older.slice(20).map((r) => r.id));
     expect(p2.next_cursor).toBeNull();
   });
+
+  it('a section carries its first older page without asking (all its notes older than two weeks: it never opens empty)', () => {
+    const intros = Array.from({ length: 17 }, (_, i) => row({ ritual_key: 'roll_call', created_at: ago(TWO_WEEKS_MS + (i + 1) * 24 * H) }));
+    const lane = assembleBoard(intros, intros, opts({ lane: 'intro' }));
+    expect(lane.counts.intro).toBe(17);
+    expect(lane.ids.older.ids).toHaveLength(17);
+    expect(lane.ids.older.next_cursor).toBeNull();
+    const many = Array.from({ length: 25 }, (_, i) => row({ ritual_key: 'roll_call', created_at: ago(TWO_WEEKS_MS + (i + 1) * H) }));
+    const p1 = assembleBoard(many, many, opts({ lane: 'intro' })).ids.older;
+    expect(p1.ids).toHaveLength(20);
+    expect(assembleBoard(many, many, opts({ lane: 'intro', olderCursor: p1.next_cursor })).ids.older.ids).toEqual(many.slice(20).map((r) => r.id));
+    expect(assembleBoard(many, many, opts({ lane: 'mine', viewerMemberId: 'nobody' })).ids.older.ids).toHaveLength(0);
+    // Everything keeps its "Show older" button
+    expect(assembleBoard(many, many, opts()).ids.older.ids).toHaveLength(0);
+  });
 });

@@ -85,7 +85,7 @@ export function CommunityBoard({ compose = null, onClose }: { compose?: 'q' | 'p
   const loadOlder = async () => {
     setLoadingOlder(true);
     try {
-      const d = await getBoard({ lane, q, olderCursor: older.started ? older.next : '' });
+      const d = await getBoard({ lane, q, olderCursor: older.started ? older.next : (data?.older.posts.length ? data.older.next_cursor : '') });
       setOlder((o) => ({ posts: [...o.posts, ...d.older.posts], next: d.older.next_cursor, started: true }));
     } catch { setToast('Could not load older notes right now.'); }
     finally { setLoadingOlder(false); }
@@ -106,7 +106,7 @@ export function CommunityBoard({ compose = null, onClose }: { compose?: 'q' | 'p
 
   const ritual = data?.week_ritual ?? null;
   const viewProps = data ? {
-    lane, data, now, seenAt, glowId, older: older.posts, olderCursor: older.started ? older.next : 'start', loadingOlder,
+    lane, data, now, seenAt, glowId, older: older.posts, olderCursor: older.started ? older.next : (data.older.posts.length ? data.older.next_cursor : 'start'), loadingOlder,
     onOpen: openPost, onLane: setLane, onOlder: loadOlder,
   } : null;
   return (
