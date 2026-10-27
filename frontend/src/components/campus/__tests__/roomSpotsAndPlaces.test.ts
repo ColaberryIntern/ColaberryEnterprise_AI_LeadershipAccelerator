@@ -56,10 +56,10 @@ describe('the room\'s floor (prototype placeFigures)', () => {
     expect(furnitureOf('standing', false)).toEqual([]);
   });
 
-  it('you walk in from the front; the room is 0.6 x its width deep, at most 820', () => {
+  it('you walk in from the front; the room is 0.4 x its width deep, at most 560 (shallower since 2026-10-26: the back wall reads larger)', () => {
     expect(YOU_FROM[1]).toBeLessThan(0);
     expect(YOU_AT).toEqual([0.46, 0.12]);
-    expect(roomDepth(1000)).toBe(600);
-    expect(roomDepth(2000)).toBe(820);
+    expect(roomDepth(1000)).toBe(400);
+    expect(roomDepth(2000)).toBe(560);
   });
 });

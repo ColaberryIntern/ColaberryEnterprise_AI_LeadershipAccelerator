@@ -46,14 +46,14 @@ const mount = () => act(() => {
 });
 const vars = () => { const s = (container.querySelector('[data-testid="cm-room3d"]') as HTMLElement).style; return [s.getPropertyValue('--fw'), s.getPropertyValue('--d'), s.getPropertyValue('--persp')]; };
 
-it('sizes the room from its layout width (985), not the painted 1478 of the reveal: --fw 985px, --d 591px, --persp 936px', () => {
+it('sizes the room from its layout width (985), not the painted 1478 of the reveal: --fw 985px, --d 394px (0.4 x, 2026-10-26), --persp 936px', () => {
   mount();
-  expect(vars()).toEqual(['985px', '591px', '936px']);
+  expect(vars()).toEqual(['985px', '394px', '936px']);
 });
 
 it('re-measures when the reveal animation ends', () => {
   mount();
   layout = { w: 1200, h: 640 };
   act(() => { container.dispatchEvent(new Event('animationend')); });
-  expect(vars()).toEqual(['1200px', '720px', '1140px']);
+  expect(vars()).toEqual(['1200px', '480px', '1140px']);
 });

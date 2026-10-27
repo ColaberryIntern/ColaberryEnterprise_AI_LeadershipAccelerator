@@ -143,7 +143,7 @@ export default function Room3D(p: Room3DProps): React.ReactElement | null {
   const c = (k: string) => art(`in-${id}-${k}`);
   return (
     <div className={`cm-r3${room.dark ? ' is-dark' : ''}${zoom ? ' is-zoom' : ''}`} ref={wrap} data-testid="cm-room3d" data-room={id}
-      style={{ ['--fw' as string]: `${fw}px`, ['--fh' as string]: `${fh}px`, ['--d' as string]: `${d}px`, ['--persp' as string]: `${Math.round(fw * 0.95)}px`,
+      style={{ ['--fw' as string]: `${fw}px`, ['--fwr' as string]: `${fw}px`, ['--fh' as string]: `${fh}px`, ['--d' as string]: `${d}px`, ['--persp' as string]: `${Math.round(fw * 0.95)}px`,
         ['--wall' as string]: c('wall'), ['--wall-s' as string]: c('wall-d16'), ['--ceil' as string]: c('wall-d28'), ['--floor' as string]: c('floor'),
         ['--bc' as string]: art(id), ...(zoom ? { ['--zo' as string]: zoom } : {}) }}>
       <div className="cm-r3-stage">

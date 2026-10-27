@@ -56,5 +56,9 @@ export const YOU_AT: Place = [0.46, 0.12];
 /** The staff desk and its staffer (prototype: desk at [.2, .2], staffer just behind it). */
 export const DESK_AT: Place = [0.2, 0.2];
 export const STAFF_AT: Place = [0.2, 0.24];
-/** The room's depth from its width (prototype layoutRoom): 0.6 x width, at most 820 px; C26: the auditorium is deeper, 0.95 x width, at most 1100. */
-export const roomDepth = (fw: number, deep = false): number => Math.round(deep ? Math.min(fw * 0.95, 1100) : Math.min(fw * 0.6, 820));
+/**
+ * The room's depth from its width. Was the prototype's 0.6 x width (the back wall drew at about 61% of its size and its screen was hard
+ * to read); Ali 2026-10-26 ("I can barely see the information on the screen... utilize most of the screen"): a shallower room, 0.4 x
+ * width (at most 560 px), so the back wall and its screen draw at about 70%; the auditorium (C26) stays deeper, 0.7 x width, at most 820.
+ */
+export const roomDepth = (fw: number, deep = false): number => Math.round(deep ? Math.min(fw * 0.7, 820) : Math.min(fw * 0.4, 560));

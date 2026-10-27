@@ -37,9 +37,10 @@ it('the model: tiers, 42 seats front row first, a deeper and darker room', () =>
   expect(peoplePlaces('tiers', false)).toBe(TIER_SEATS);
   expect(TIER_SEATS).toHaveLength(42);
   expect(TIER_SEATS[0][1]).toBeLessThan(TIER_SEATS[41][1]); // front first
-  expect(roomDepth(1000, true)).toBe(950);
-  expect(roomDepth(2000, true)).toBe(1100);
-  expect(roomDepth(1000)).toBe(600); // other rooms unchanged
+  expect(roomDepth(1000, true)).toBe(700); // 2026-10-26: shallower rooms, the back wall reads larger
+  expect(roomDepth(2000, true)).toBe(820);
+  expect(roomDepth(1000)).toBe(400);
+  expect(roomDepth(2000)).toBe(560);
 });
 
 it('0 people present: six rows of empty seats, the stage, no heads, no spot', async () => {
