@@ -164,7 +164,9 @@ export async function acquisitionFunnel(days = 30): Promise<AcquisitionFunnel> {
       label: 'Read it',
       count: sum((p) => n(p.engaged_visitors)),
       unit: 'people',
-      note: 'Scrolled, or stayed long enough to register time on the page.',
+      note: 'Scrolled, or stayed long enough to register time on the page. Somebody who presses '
+        + 'the hero button straight away registers neither, so this can legitimately sit below '
+        + 'the stage beneath it.',
     },
     {
       key: 'cta',

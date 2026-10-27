@@ -48,6 +48,9 @@
   var buffer = [];
   var visibleStart = Date.now();
   var totalVisibleMs = 0;
+  // Whether time-on-page has already been reported for the CURRENT hidden state. Cleared when
+  // the page becomes visible again, so a reader who returns is reported again rather than once.
+  var timeReported = false;
   var firedThresholds = {};
   var lastScrollTime = 0;
 
@@ -343,17 +346,51 @@
   }
 
   // ---- Visibility + heartbeat ------------------------------------------
+
+  /**
+   * Report how long this page was actually looked at.
+   *
+   * THE BUG THIS FIXES is the same one `flushIfLeaving` above fixed for clicks, one event type
+   * later. `time_on_page` was pushed ONLY from `visibilitychange`, and on a landing page almost
+   * nobody leaves by hiding the tab - they press the button and navigate away, which on mobile
+   * Safari fires neither `visibilitychange` nor `beforeunload`. Measured on production over
+   * thirty days: 607 visitors reached /lp/ pages and 7 of them produced a `time_on_page` row.
+   * 1.2%. The acquisition funnel's "Read it" stage counts scroll OR time-on-page, so it was
+   * reporting scroll alone while its own note claimed to measure both.
+   *
+   * `pagehide` is the signal that survives a navigation.
+   * `packages/tracking-sdk/track-v2.js` already learned this; the flag and the reasoning there
+   * are the pattern this mirrors rather than reinvents.
+   */
+  function reportTimeOnPage() {
+    totalVisibleMs += Date.now() - visibleStart;
+    push('time_on_page', {
+      // `seconds` is the key behavioralSignalService reads for its >= 180 test. Renaming it here
+      // would fail exactly as silently as `depth` vs `depth_percent` once did.
+      seconds: Math.round(totalVisibleMs / 1000),
+      url: location.href,
+    });
+    timeReported = true;
+    flush(true);
+  }
+
   function onVisibilityChange() {
     if (document.visibilityState === 'hidden') {
-      totalVisibleMs += Date.now() - visibleStart;
-      push('time_on_page', {
-        seconds: Math.round(totalVisibleMs / 1000),
-        url: location.href,
-      });
-      flush(true);
+      reportTimeOnPage();
     } else {
       visibleStart = Date.now();
+      // A reader who comes back keeps accumulating, so a later report supersedes the earlier one
+      // rather than being suppressed by it.
+      timeReported = false;
     }
+  }
+
+  /**
+   * The same report, for the visitor who leaves by navigating rather than by hiding. The flag is
+   * what stops a hide-then-unload sequence reporting the same page twice.
+   */
+  function onPageHide() {
+    if (!timeReported) reportTimeOnPage();
   }
   function heartbeat() {
     if (document.visibilityState === 'visible') push('heartbeat', { url: location.href });
@@ -380,6 +417,10 @@
     window.addEventListener('scroll', onScroll, { passive: true });
     document.addEventListener('click', onClick, true);
     document.addEventListener('visibilitychange', onVisibilityChange);
+    // Not interchangeable with `beforeunload` below: that one only FLUSHES an already-buffered
+    // event, while this one is what CREATES the time-on-page event for a visitor who leaves by
+    // navigating. A flush of an empty buffer sends nothing.
+    window.addEventListener('pagehide', onPageHide);
     window.addEventListener('beforeunload', function () { flush(true); });
 
     setInterval(function () { flush(false); }, 5000);
