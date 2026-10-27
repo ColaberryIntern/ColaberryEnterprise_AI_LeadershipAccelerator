@@ -37,10 +37,20 @@ export interface ReplayBroadcast extends DiscoveryBroadcast {
 export interface ReplayResponse {
   states: string[];
   replays: ReplayBroadcast[];
+  /**
+   * How many days a class stays listed. Optional: an older backend does not send it, and the
+   * surface says nothing about retention rather than inventing a number when it is absent.
+   */
+  retention_days?: number;
 }
 
 export interface ReplayState {
   replays: ReplayBroadcast[];
+  /**
+   * The server's retention window in days, or null when it did not say. Null means "say nothing
+   * about retention" — a page that guesses here tells students a window nobody enforces.
+   */
+  retentionDays: number | null;
   /** The feature is off, or nobody is signed in. Render nothing at all. */
   disabled: boolean;
   /** Reachable but unresolved. Distinct from an empty list on purpose. */
@@ -79,6 +89,7 @@ export function useReplayDiscovery(enabled: boolean, deps: ReplayDeps = {}): Rep
   const [disabled, setDisabled] = useState(!enabled);
   const [unavailable, setUnavailable] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [retentionDays, setRetentionDays] = useState<number | null>(null);
   // A late answer from a fetch started before unmount must not set state. Checked rather than
   // assumed because this hook is mounted by a lazy route, where a fast back-navigation is
   // ordinary rather than exotic.
@@ -92,6 +103,10 @@ export function useReplayDiscovery(enabled: boolean, deps: ReplayDeps = {}): Rep
       const body = await fetchReplays();
       if (!live.current) return;
       setReplays(Array.isArray(body?.replays) ? body.replays : []);
+      // A positive finite number or nothing. A zero, a negative or a string would otherwise
+      // render as a retention promise the server never made.
+      const days = body?.retention_days;
+      setRetentionDays(typeof days === 'number' && Number.isFinite(days) && days > 0 ? days : null);
       setDisabled(false);
       setUnavailable(false);
     } catch (err) {
@@ -106,7 +121,7 @@ export function useReplayDiscovery(enabled: boolean, deps: ReplayDeps = {}): Rep
 
   useEffect(() => { void load(); }, [load]);
 
-  return { replays, disabled, unavailable, loading, refresh: () => { void load(); } };
+  return { replays, retentionDays, disabled, unavailable, loading, refresh: () => { void load(); } };
 }
 
 export default useReplayDiscovery;

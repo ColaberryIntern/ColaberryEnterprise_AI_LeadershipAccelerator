@@ -40,6 +40,9 @@ jest.mock('../../services/broadcast/broadcastActiveQuery', () => ({
 jest.mock('../../services/broadcast/broadcastReplayQuery', () => ({
   REPLAY_DISCOVERY_STATES: ['replay_ready'],
   REPLAY_DISCOVERY_LIMIT: 25,
+  // A DIFFERENT number from the real 25 on purpose: the route must forward what the service
+  // says, and a mock echoing the real value cannot tell forwarding from a hardcoded constant.
+  REPLAY_RETENTION_DAYS: 11,
   findReplayOccurrences: jest.fn(),
 }));
 
@@ -603,6 +606,25 @@ describe('getReplayBroadcasts', () => {
     const res = mockRes();
     await getReplayBroadcasts(req(), res);
     expect(res.json.mock.calls[0][0].states).toEqual(['replay_ready']);
+  });
+
+  it('tells the client the retention window, so no surface hardcodes it', async () => {
+    // The mock says 11, the real policy says 25. Forwarding means the client is told 11 here;
+    // a hardcoded 25 in the route would fail, which is the whole point of the mismatch.
+    const res = mockRes();
+    await getReplayBroadcasts(req(), res);
+    expect(res.json.mock.calls[0][0].retention_days).toBe(11);
+  });
+
+  it('sends the window even when there is nothing to list', async () => {
+    // An empty shelf is exactly where a student needs to know how long classes stay.
+    replayOccurrences.mockResolvedValue([]);
+    const res = mockRes();
+    await getReplayBroadcasts(req(), res);
+
+    const body = res.json.mock.calls[0][0];
+    expect(body.replays).toEqual([]);
+    expect(body.retention_days).toBe(11);
   });
 });
 

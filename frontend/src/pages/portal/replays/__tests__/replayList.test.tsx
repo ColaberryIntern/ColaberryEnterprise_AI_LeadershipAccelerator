@@ -57,7 +57,10 @@ const replay = (over: Partial<ReplayBroadcast> = {}): ReplayBroadcast => ({
   ...over,
 });
 
-const STATE = { replays: [] as ReplayBroadcast[], disabled: false, unavailable: false, loading: false };
+const STATE = {
+  replays: [] as ReplayBroadcast[], disabled: false, unavailable: false, loading: false,
+  retentionDays: 25 as number | null,
+};
 
 function mount(over: Partial<typeof STATE> = {}): void {
   container = document.createElement('div');
@@ -71,6 +74,47 @@ afterEach(() => {
   container?.remove();
   mockOpen.mockReset();
   mockPlayingId = null;
+});
+
+describe('the retention window, said out loud', () => {
+  it('tells a student how long a class stays, using the SERVER value', () => {
+    // Sourced, not written here: a hardcoded copy goes stale the first time the policy moves
+    // and leaves the page promising a window nobody enforces.
+    mount({ retentionDays: 25, replays: [replay()] });
+    expect(container.querySelector('[data-testid="replays-retention"]')!.textContent)
+      .toBe('Classes stay here for 25 days after they air.');
+  });
+
+  it('renders whatever the server says, not the number it was built with', () => {
+    mount({ retentionDays: 7 });
+    expect(container.querySelector('[data-testid="replays-retention"]')!.textContent)
+      .toContain('7 days');
+  });
+
+  it('says NOTHING when the server did not say — never a guess', () => {
+    // An older backend sends no window. Inventing one is the failure this arrangement avoids.
+    mount({ retentionDays: null });
+    expect(container.querySelector('[data-testid="replays-retention"]')).toBeNull();
+  });
+
+  it('shows it on an empty shelf too, which is where it matters most', () => {
+    // "Nothing here yet" and "this is how long things stay" answer different questions, and a
+    // student hunting an expired class needs the second.
+    mount({ retentionDays: 25, replays: [] });
+    expect(container.querySelector('[data-testid="replays-empty"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="replays-retention"]')).not.toBeNull();
+  });
+
+  it('stays silent when the feature is off, which promises nothing at all', () => {
+    mount({ retentionDays: 25, disabled: true });
+    expect(container.querySelector('[data-testid="replays-retention"]')).toBeNull();
+  });
+
+  it('says "1 day", not "1 days"', () => {
+    mount({ retentionDays: 1 });
+    expect(container.querySelector('[data-testid="replays-retention"]')!.textContent)
+      .toBe('Classes stay here for 1 day after they air.');
+  });
 });
 
 describe('the three ways to have nothing to show', () => {

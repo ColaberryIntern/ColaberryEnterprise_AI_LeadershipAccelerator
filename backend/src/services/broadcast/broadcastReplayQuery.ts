@@ -34,12 +34,45 @@ const COLUMNS = [
 /**
  * A page, not a feed.
  *
- * Unlike the active list this has no natural ceiling, so the limit is the ceiling. Twenty-five
- * is roughly a term of weekly classes, which is as far back as "I missed last week" ever
- * reaches; anything older is a search problem, not a list problem, and pretending otherwise
- * would ship an unbounded query to every student.
+ * Unlike the active list this has no natural ceiling, so the limit is a ceiling. It bounds the
+ * QUERY; the retention window below bounds the POLICY, and the two are not the same thing — a
+ * busy room can air more than twenty-five classes inside the window, and a quiet one fewer than
+ * twenty-five in a year.
  */
 export const REPLAY_DISCOVERY_LIMIT = 25;
+
+/**
+ * How long a class stays watchable back. **Ali's decision, 27 Oct 2026: 25 days.**
+ *
+ * The ticket asked "what appears in the list and for how long" and the code had no answer to
+ * the second half: the row cap bounded size, not age, so a class from a year ago stayed listed
+ * until twenty-five newer ones displaced it. This is the policy.
+ *
+ * A CONSTANT, NOT AN ENV KNOB. The discovery poll cadence is env-tunable because an operator
+ * needs to slow every client mid-incident without a deploy. Retention is not an incident lever;
+ * it is a commitment to students that interacts with billing, and it belongs somewhere a reader
+ * can see it and a diff can record changing it.
+ *
+ * WHAT IT COSTS, recorded because it is a real consequence rather than a detail: 25 days is
+ * shorter than a cohort's term, so a student revisiting Week 2 during Week 8 will not find it.
+ * The ticket's stated objective is learning continuity, and this window serves "I missed last
+ * week" rather than "let me rewatch the course". Changing it is this one number.
+ */
+export const REPLAY_RETENTION_DAYS = 25;
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * The oldest `ended_at` still listed.
+ *
+ * Takes `nowMs` rather than reading the clock, and is exported, because a retention boundary
+ * that cannot be tested at a chosen instant cannot be tested at all. The repo's date rule also
+ * forbids a `Date.now()` at module scope — a cutoff frozen at import would drift further from
+ * correct for every hour the process stayed up.
+ */
+export function replayRetentionCutoff(nowMs: number): Date {
+  return new Date(nowMs - REPLAY_RETENTION_DAYS * DAY_MS);
+}
 
 export type ReplayOccurrence = DiscoverableOccurrence & {
   preview_seconds: number;
@@ -49,6 +82,7 @@ export type ReplayOccurrence = DiscoverableOccurrence & {
 
 export async function findReplayOccurrences(
   limit: number = REPLAY_DISCOVERY_LIMIT,
+  nowMs: number = Date.now(),
 ): Promise<ReplayOccurrence[]> {
   const rows = await BroadcastOccurrence.findAll({
     where: {
@@ -56,6 +90,14 @@ export async function findReplayOccurrences(
       // The L8.4 join. Without a bound recording there is nothing to sign, so the row is not a
       // replay yet however finished the class is.
       provider_instance_uuid: { [Op.ne]: null },
+      // The retention window, enforced in the QUERY for the same reason the recording binding
+      // is: a row filtered out after the fact is a row that was still read, still sorted and
+      // still counted against the limit, so an expired class could push a live one off the
+      // page. A NULL ended_at cannot be aged and so cannot be shown to be inside the window —
+      // `Op.gte` excludes it, which is the fail-closed answer and the right one for a policy
+      // that touches billing. `ended_at` has been written since L7.4, so this only concerns
+      // rows that predate it.
+      ended_at: { [Op.gte]: replayRetentionCutoff(nowMs) },
     },
     attributes: COLUMNS as unknown as string[],
     // Most recent first: somebody looking for a replay is looking for the class they just
