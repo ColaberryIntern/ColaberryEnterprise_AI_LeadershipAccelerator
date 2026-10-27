@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import express, { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import { handleTrackEvent, handleTrackBatch, handleHeartbeat, handleIdentify } from '../controllers/trackingController';
 import { handlePortalSession } from '../controllers/portalTrackingController';
@@ -44,10 +44,34 @@ const heartbeatLimiter = rateLimit({
 
 const router = Router();
 
-router.post('/api/t/event', eventLimiter, handleTrackEvent);
-router.post('/api/t/batch', batchLimiter, handleTrackBatch);
-router.post('/api/t/heartbeat', heartbeatLimiter, handleHeartbeat);
-router.post('/api/t/identify', eventLimiter, handleIdentify);
+/**
+ * Parse a JSON body that arrives labelled `text/plain`.
+ *
+ * WHY THIS EXISTS. `navigator.sendBeacon` is the only way to report anything as a page unloads,
+ * and these pages beacon CROSS-ORIGIN (www.refactored.ai -> enterprise.colaberry.ai). A beacon
+ * sent as `application/json` is not a CORS-simple request, so it needs a preflight OPTIONS; during
+ * unload that preflight cannot complete and the browser DROPS the beacon. Measured: of 28
+ * visitors who fired `cta_click` and therefore demonstrably left the page, zero produced the
+ * `time_on_page` row the unload path was supposed to send. `text/plain` is CORS-safelisted, so the
+ * tracker now sends that - and this parser is what makes the body readable at this end.
+ *
+ * SCOPED TO THESE ROUTES ON PURPOSE. The global `express.json()` in server.ts is left alone:
+ * teaching every endpoint in the app to accept `text/plain` as JSON would widen the attack
+ * surface of the whole API to fix one tracker. These four routes are public, rate-limited, and
+ * already validate their own payloads.
+ *
+ * The limit is deliberately small. A beacon carries a handful of events; the global parser allows
+ * 5mb, which is three orders of magnitude more than anything legitimate here.
+ */
+const beaconBody = express.json({
+  type: ['application/json', 'text/plain'],
+  limit: '64kb',
+});
+
+router.post('/api/t/event', eventLimiter, beaconBody, handleTrackEvent);
+router.post('/api/t/batch', batchLimiter, beaconBody, handleTrackBatch);
+router.post('/api/t/heartbeat', heartbeatLimiter, beaconBody, handleHeartbeat);
+router.post('/api/t/identify', eventLimiter, beaconBody, handleIdentify);
 
 // Signed-in portal sessions. requireParticipant is not optional here: the whole design
 // is that eligibility and identity are decided from the token rather than asserted by
