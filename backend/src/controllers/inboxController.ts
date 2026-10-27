@@ -222,8 +222,13 @@ export async function handleApproveDraft(req: Request, res: Response) {
     const draftId = req.params.draftId as string;
     const { edited_body } = req.body;
 
+    // The authenticated admin, by email, because the actor identity in this codebase is an
+    // email and not a uuid. This used to be the literal string 'ali' inside the service, so the
+    // audit row named him whoever actually approved the draft.
+    const approvedBy = req.admin?.email || 'unknown';
+
     const { approveDraft } = await import('../services/inbox/replyDraftService');
-    const draft = await approveDraft(draftId, edited_body || undefined);
+    const draft = await approveDraft(draftId, edited_body || undefined, approvedBy);
     res.json({ success: true, draft });
   } catch (err: any) {
     console.error('[InboxCOS] ApproveDraft error:', err.message);

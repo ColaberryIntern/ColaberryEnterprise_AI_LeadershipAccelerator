@@ -239,6 +239,42 @@ describe('landing tracker: time_on_page survives a navigation', () => {
     expect(timed[0].seconds).toBe(7);
   });
 
+  it('beacons as text/plain, because application/json is DROPPED during unload', async () => {
+    /**
+     * THE DEFECT THIS PINS IS NOT IN THE HANDLER - IT IS IN THE CONTENT TYPE.
+     *
+     * The pagehide fix shipped and was live for ten hours. In that window, of 28 visitors who
+     * fired `cta_click` - demonstrably running this script, demonstrably leaving the page - ZERO
+     * produced a `time_on_page` row. The one visitor who did report came through
+     * `visibilitychange`, where the page is hidden but still alive.
+     *
+     * These pages beacon cross-origin (www.refactored.ai -> enterprise.colaberry.ai).
+     * `application/json` is not CORS-safelisted, so the POST needs a preflight OPTIONS; while the
+     * page lives that completes, and during unload it cannot, so the beacon is discarded. The
+     * handler was fine the whole time. `text/plain` is safelisted and needs no preflight.
+     *
+     * A test asserting "pagehide produces an event" passes either way - the event is created and
+     * handed to sendBeacon regardless. Only the Blob's TYPE separates data that arrives from data
+     * that is thrown away, so that is what this asserts.
+     */
+    loadTracker();
+    jest.advanceTimersByTime(5000);
+    window.dispatchEvent(new Event('pagehide'));
+
+    const calls = beaconCalls();
+    expect(calls.length).toBeGreaterThan(0);
+    for (const [, blob] of calls) {
+      // The Blob constructor lowercases the type, so this compares lowercased - which is also how
+      // the CORS safelist is matched. Asserting the exact cased string would fail on a detail no
+      // browser preserves.
+      expect(blob.type.toLowerCase()).toBe('text/plain;charset=utf-8');
+      expect(blob.type.toLowerCase()).not.toContain('application/json');
+    }
+    // And the body is still JSON - only its label changed, so the server can still parse it.
+    const parsed = JSON.parse(await readBlob(calls[0][1]));
+    expect(Array.isArray(parsed.events)).toBe(true);
+  });
+
   it('adds to the visit rather than re-counting it when the reader returns', async () => {
     // Pins the cumulative contract by VALUE, not just by row count: 3s read, away, 3s more read is
     // 3 then 6. A re-count would read 3 then 9 and still pass a length-only assertion, which is

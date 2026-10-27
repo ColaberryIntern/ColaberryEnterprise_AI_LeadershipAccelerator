@@ -161,34 +161,120 @@ Subject rules:
 // ─── Draft Approval ────────────────────────────────────────────────────────
 
 /**
- * Approves a draft (optionally with edits) and sends the reply via the email provider.
+ * Approves a draft (optionally with edits) and sends the reply as Ali.
+ *
+ * ## What changed on 2026-10-27, and why
+ *
+ * This function used to load the draft, write its status, and hand the body to a provider send
+ * assembled in this file. That send had no BCC to Ali, no signature, no style lint, no kill
+ * switch and no idempotency, and this function had no guard on the draft's current status: a
+ * second click re-sent the email, because writing `status` is not the same as checking it.
+ *
+ * Both halves are fixed here. The status transition is now a conditional UPDATE that only one
+ * caller can win, and the send goes through `sendReplyAsAli`, which is the single composition of
+ * the guards that already existed in this repository.
+ *
+ * `approvedBy` is a parameter because it used to be the literal string 'ali', which made the
+ * audit trail name him whoever actually clicked.
  */
-export async function approveDraft(draftId: string, editedBody?: string): Promise<any> {
+export async function approveDraft(
+  draftId: string,
+  editedBody?: string,
+  approvedBy: string = 'unknown',
+): Promise<any> {
   const draft = await InboxReplyDraft.findByPk(draftId);
   if (!draft) {
     throw new Error(`Draft not found: ${draftId}`);
   }
 
-  // Update status based on whether the body was edited
-  if (editedBody) {
-    draft.edited_body = editedBody;
-    draft.status = 'edited';
-  } else {
-    draft.status = 'approved';
-  }
-  draft.approved_by = 'ali';
-  await draft.save();
-
-  // Send the reply via the appropriate provider
   const email = await InboxEmail.findByPk(draft.email_id);
   if (!email) {
     throw new Error(`Original email not found for draft: ${draftId}`);
   }
 
+  // The Message-ID of what we are answering. Required: a reply that cannot thread leaves the
+  // original conversation reading as unanswered to the next sweep, so it is refused rather than
+  // sent unthreaded. Resolved before the claim so a draft that cannot thread never changes state.
+  const headers = email.headers || {};
+  const originalMessageId = String(
+    Object.entries(headers).find(([k]) => k.toLowerCase() === 'message-id')?.[1]
+    || email.provider_message_id
+    || '',
+  ).trim();
+  if (!originalMessageId) {
+    throw new Error(
+      `Refusing to send draft ${draftId}: no Message-ID on the email being answered, so the `
+      + 'reply would start a new conversation and leave the original reading as unanswered.',
+    );
+  }
+
+  // Mandrill sends as ali@colaberry.com and nothing else: `campaignTransport` pins the From and
+  // the envelope, which is the whole reason its BCC assertion can be trusted. So a draft
+  // answering a message that arrived at a different mailbox is refused rather than sent from the
+  // wrong identity. Replying to a personal Hotmail thread as ali@colaberry.com would change who
+  // the conversation is with, which is worse than not sending.
+  if (email.provider !== 'gmail_colaberry') {
+    throw new Error(
+      `Refusing to send draft ${draftId}: it answers a message received at ${email.provider}, `
+      + 'and this path sends only as ali@colaberry.com. Replying from a different address than '
+      + 'the one addressed would change who the thread is with. Needs its own sender before '
+      + 'non-Colaberry mailboxes can be answered from here.',
+    );
+  }
+
+  // Claim the draft. Only a row still awaiting approval can be moved, and only one caller can
+  // move it, so a double click loses the race here rather than at the provider. `sendReplyAsAli`
+  // is idempotent too, through the send ledger; this is the first of the two gates, not the only.
+  const nextStatus = editedBody ? 'edited' : 'approved';
+  const [claimed] = await InboxReplyDraft.update(
+    {
+      status: nextStatus,
+      approved_by: approvedBy,
+      ...(editedBody ? { edited_body: editedBody } : {}),
+    } as any,
+    { where: { id: draftId, status: 'pending_approval' } as any },
+  );
+  if (claimed === 0) {
+    const current = await InboxReplyDraft.findByPk(draftId);
+    throw new Error(
+      `Draft ${draftId} is not awaiting approval (status: ${current?.status ?? 'missing'}). `
+      + 'Refusing to send it a second time.',
+    );
+  }
+  await draft.reload();
+
   const replyBody = editedBody || draft.draft_body;
 
   try {
-    await sendReplyViaProvider(email, draft, replyBody);
+    // Imported here, not at the top of the file, and that is not a style choice. A static import
+    // pulls the whole send stack - campaign transport, the send ledger, the database config - in
+    // at module load, and this module is loaded by code that has nothing to do with sending. It
+    // made an unrelated auto-archive suite time out at import time. The rest of this file loads
+    // its providers the same way for the same reason.
+    const { sendReplyAsAli } = await import('../email/sendReplyAsAli');
+
+    const sent = await sendReplyAsAli({
+      recipient: draft.reply_to_address,
+      subject: draft.draft_subject || `Re: ${email.subject}`,
+      body: replyBody,
+      // One business event per draft, so a retry of this draft is the same send and a genuinely
+      // different draft to the same person about the same subject is not.
+      businessEventId: `inbox-draft-${draftId}`,
+      inReplyTo: originalMessageId,
+      tag: 'inbox-draft-reply',
+    });
+
+    if (sent.outcome === 'failed') {
+      throw new Error(`${sent.errorClass}: ${sent.error}`);
+    }
+    if (sent.outcome === 'skipped') {
+      // Not an error, and deliberately not marked sent: the kill switch, a dev process, missing
+      // Mandrill credentials, or the ledger already holding this send. Left at approved so it can
+      // be retried once the reason is gone, rather than silently reported as delivered.
+      console.log(`${LOG_PREFIX} Draft ${draftId} not sent: ${sent.reason}`);
+      return draft;
+    }
+
     draft.sent_at = new Date();
     draft.status = 'sent';
     await draft.save();
@@ -205,7 +291,8 @@ export async function approveDraft(draftId: string, editedBody?: string): Promis
     action: 'draft_sent',
     old_state: editedBody ? 'edited' : 'approved',
     new_state: 'sent',
-    actor: 'ali',
+    // Who actually clicked, not the literal 'ali' this used to record regardless.
+    actor: approvedBy,
     metadata: {
       draft_id: draftId,
       was_edited: !!editedBody,
@@ -270,131 +357,12 @@ function extractCategory(classification: InboxClassification | null): string {
   return 'unknown';
 }
 
-/**
- * Sends a reply via the appropriate email provider (Gmail API or MS Graph).
- * Routes based on the original email's provider field.
- */
-async function sendReplyViaProvider(
-  email: InboxEmail,
-  draft: InboxReplyDraft,
-  replyBody: string
-): Promise<void> {
-  const provider = email.provider;
-
-  if (provider === 'hotmail') {
-    await sendReplyViaMsGraph(email, draft, replyBody);
-  } else if (provider === 'gmail_colaberry' || provider === 'gmail_personal') {
-    await sendReplyViaGmail(email, draft, replyBody);
-  } else {
-    throw new Error(`Unsupported provider for reply: ${provider}`);
-  }
-}
-
-/**
- * Sends a reply via Microsoft Graph API.
- * Uses the provider_message_id to reply to the correct message in the thread.
- */
-async function sendReplyViaMsGraph(
-  email: InboxEmail,
-  draft: InboxReplyDraft,
-  replyBody: string
-): Promise<void> {
-  const messageId = email.provider_message_id;
-
-  // Two Graph clients exist and production is provisioned for only one of them.
-  // msGraphService is the confidential client (needs CLIENT_SECRET + TENANT_ID,
-  // neither of which prod has), so hard-wiring to it made every Hotmail reply
-  // fail with a flat "MS Graph not configured" — the same wiring mismatch that
-  // silently disabled Hotmail auto-archive. Prefer whichever is configured.
-  const confidential = await import('./msGraphService');
-  if (confidential.isConfigured()) {
-    console.log(`${LOG_PREFIX} Sending reply via MS Graph (confidential client) for message ${messageId}`);
-    await confidential.getGraphClient().api(`/me/messages/${messageId}/reply`).post({ comment: replyBody });
-    return;
-  }
-
-  const publicClient = await import('./graphMailService');
-  if (publicClient.isConfigured()) {
-    console.log(`${LOG_PREFIX} Sending reply via MS Graph (public client) for message ${messageId}`);
-    await publicClient.replyToMessage(messageId, replyBody);
-    return;
-  }
-
-  const present = ['MS_GRAPH_CLIENT_ID', 'MS_GRAPH_CLIENT_SECRET', 'MS_GRAPH_TENANT_ID', 'MS_GRAPH_REFRESH_TOKEN']
-    .map((v) => `${v}=${process.env[v] ? 'set' : 'MISSING'}`)
-    .join(' ');
-  throw new Error(`No configured MS Graph client — cannot send Hotmail reply. ${present}`);
-}
-
-/**
- * Sends a reply via Gmail API.
- * Constructs a raw RFC 2822 message with proper In-Reply-To and References headers.
- */
-async function sendReplyViaGmail(
-  email: InboxEmail,
-  draft: InboxReplyDraft,
-  replyBody: string
-): Promise<void> {
-  const { google } = await import('googleapis');
-
-  const credentialsKey =
-    email.provider === 'gmail_colaberry'
-      ? 'GMAIL_COLABERRY'
-      : 'GMAIL_PERSONAL';
-
-  const accessToken = process.env[`${credentialsKey}_ACCESS_TOKEN`];
-  const refreshToken = process.env[`${credentialsKey}_REFRESH_TOKEN`];
-  const clientId = process.env.GMAIL_CLIENT_ID;
-  const clientSecret = process.env.GMAIL_CLIENT_SECRET;
-
-  if (!refreshToken || !clientId || !clientSecret) {
-    throw new Error(`Gmail credentials not configured for ${email.provider}`);
-  }
-
-  const oauth2Client = new google.auth.OAuth2(clientId, clientSecret);
-  oauth2Client.setCredentials({
-    access_token: accessToken,
-    refresh_token: refreshToken,
-  });
-
-  const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
-
-  // Determine the "from" address based on the provider
-  const fromAddress =
-    email.provider === 'gmail_colaberry'
-      ? process.env.GMAIL_COLABERRY_ADDRESS || 'ali@colaberry.com'
-      : process.env.GMAIL_PERSONAL_ADDRESS || 'ali@gmail.com';
-
-  // Build the raw RFC 2822 message
-  const messageId = email.provider_message_id;
-  const headers = email.headers || {};
-  const originalMessageId =
-    Object.entries(headers).find(([k]) => k.toLowerCase() === 'message-id')?.[1] || messageId;
-
-  const rawLines = [
-    `From: ${fromAddress}`,
-    `To: ${draft.reply_to_address}`,
-    `Subject: ${draft.draft_subject || `Re: ${email.subject}`}`,
-    `In-Reply-To: ${originalMessageId}`,
-    `References: ${originalMessageId}`,
-    'Content-Type: text/plain; charset="UTF-8"',
-    '',
-    replyBody,
-  ];
-
-  const rawMessage = Buffer.from(rawLines.join('\r\n'))
-    .toString('base64')
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/, '');
-
-  console.log(`${LOG_PREFIX} Sending reply via Gmail (${email.provider}) for message ${messageId}`);
-
-  await gmail.users.messages.send({
-    userId: 'me',
-    requestBody: {
-      raw: rawMessage,
-      threadId: email.provider_thread_id || undefined,
-    },
-  });
-}
+// The three provider senders that used to live here are gone: sendReplyViaProvider,
+// sendReplyViaMsGraph and sendReplyViaGmail. They assembled an RFC 2822 message by hand and
+// posted it to the Gmail or Graph API with no BCC to Ali, no signature, no style lint, no kill
+// switch and no idempotency, and approveDraft above was their only caller.
+//
+// Deleted rather than left unused on purpose. An unguarded send path sitting in the same file
+// as a guarded one is how the guarded one gets bypassed again: the next person needing to send
+// from here finds a working function and calls it. Replies now go through
+// services/email/sendReplyAsAli, which is the single composition of the guards.
