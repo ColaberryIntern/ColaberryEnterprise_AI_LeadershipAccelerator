@@ -156,4 +156,20 @@
 .gck-doc-preview table{border-collapse:collapse;width:100%;margin:.6em 0;font-size:12.5px}
 .gck-doc-preview th,.gck-doc-preview td{border:1px solid var(--line);padding:4px 8px;text-align:left}
 
+/* v3: read-only project overview (solicitation facts + established requirements + submission readiness) */
+.gck-overview{display:flex;flex-direction:column;gap:18px}
+.gck-kv{display:flex;flex-wrap:wrap;gap:10px 28px}
+.gck-kv>div{display:flex;flex-direction:column;gap:2px}
+.gck-kv .k{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.gck-kv .v{font-size:14px;font-weight:600;color:var(--fg)}
+.gck-dates{list-style:none;margin:12px 0 0;padding:0;display:flex;flex-direction:column;gap:6px}
+.gck-dates li{display:flex;gap:10px;align-items:baseline;font-size:13px;color:var(--fg);border-top:1px dashed var(--line);padding-top:6px}
+.gck-dates li b{flex:none;color:var(--accent-2)}
+.gck-reqs{display:flex;flex-direction:column;gap:6px}
+.gck-reqrow{display:flex;gap:10px;align-items:flex-start;background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:8px 12px;min-width:0}
+.gck-reqrow .gck-key{flex:none;padding-top:2px}
+.gck-reqrow .gck-reqtext{flex:1;min-width:0;font-size:13.5px;line-height:1.45;overflow-wrap:anywhere}
+.gck-reqrow .gck-tags{flex:none;justify-content:flex-end}
+@media (max-width:560px){.gck-reqrow{flex-wrap:wrap}.gck-reqrow .gck-tags{justify-content:flex-start}}
+
 @media (prefers-reduced-motion:reduce){.gck *{animation:none!important;transition:none!important}}
