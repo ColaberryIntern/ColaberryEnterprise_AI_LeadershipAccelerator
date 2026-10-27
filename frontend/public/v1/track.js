@@ -208,8 +208,29 @@
       try {
         navigator.sendBeacon(
           ENDPOINT + '/api/t/batch',
+          // `text/plain`, NOT `application/json`, AND THIS IS THE WHOLE POINT OF THIS BRANCH.
+          //
+          // These pages are served from www.refactored.ai; ENDPOINT is enterprise.colaberry.ai.
+          // That makes every beacon CROSS-ORIGIN, and `application/json` is not one of the three
+          // CORS-safelisted Content-Type values, so the browser must send a preflight OPTIONS
+          // before the POST. While the page is alive that preflight completes and the data
+          // arrives. During `pagehide` the document is being torn down, the preflight cannot
+          // complete, and THE BROWSER DROPS THE BEACON. `text/plain` is safelisted, so the POST
+          // is a simple request that needs no preflight and survives unload.
+          //
+          // MEASURED, after the pagehide fix was already live for ten hours: of 28 visitors who
+          // fired `cta_click` - who therefore demonstrably had this script running AND
+          // demonstrably left the page - exactly ZERO produced a `time_on_page` row. Meanwhile
+          // the one visitor who reported did so from `visibilitychange`, where the page is merely
+          // hidden and still alive. Same function, same payload; the only difference is whether
+          // the document was unloading. That asymmetry is the preflight.
+          //
+          // The server side of this is `express.json({ type: [...] })` on the tracking routes -
+          // see backend/src/routes/trackingRoutes.ts. Changing this type without that parser
+          // would send every beacon to a handler that sees an empty body, which fails exactly as
+          // silently as the dropped beacon did.
           new Blob([JSON.stringify(Object.assign({}, common, { events: events }))], {
-            type: 'application/json',
+            type: 'text/plain;charset=UTF-8',
           }),
         );
       } catch (e) {}
