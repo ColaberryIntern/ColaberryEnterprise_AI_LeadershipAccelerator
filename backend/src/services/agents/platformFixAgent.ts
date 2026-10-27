@@ -88,7 +88,14 @@ Return JSON:
         `**Fix:** ${diagnostic.fix_description}\n` +
         `**Affected components:** ${diagnostic.affected_components.join(', ') || 'N/A'}\n` +
         `**Risk level:** ${diagnostic.risk_level}\n\n` +
-        `✅ Auto-fix has been applied. Moving to review.`,
+        // This said "Auto-fix has been applied. Moving to review." Nothing was applied: this
+        // agent reads a title and a description, asks a model for a diagnosis, and writes a
+        // comment. There is no file write, no patch and no deploy anywhere in it, and the action
+        // recorded two lines above is named `auto_fix_proposed`. So the code already knew it had
+        // only proposed, and the single untrue sentence in the path was the one a person reads.
+        // A reviewer who believed it could close a real defect as fixed.
+        `**No change has been made.** This is a proposed diagnosis only, at high enough ` +
+        `confidence to be worth acting on. Apply it yourself, then close the ticket.`,
         'agent',
         AGENT_NAME,
       );
@@ -129,5 +136,9 @@ Return JSON:
     actions_taken: actions,
     errors,
     duration_ms: Date.now() - startTime,
+    // This agent proposes and never applies, on both branches. Saying so stops the dispatcher
+    // promoting the ticket to in_review on a clean finish, which was the second half of the
+    // same falsehood: the comment claimed a fix, and the status move corroborated it.
+    advisory_only: true,
   };
 }
