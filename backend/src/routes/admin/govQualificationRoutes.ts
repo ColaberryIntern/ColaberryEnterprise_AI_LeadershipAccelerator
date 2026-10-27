@@ -132,6 +132,22 @@ router.get('/api/admin/factory/qualification/pending-approvals', requireSection(
   }
 });
 
+/** GET …/qualification-pipeline — every in-flight pursuit in the gov container, projected into the vet→build→assign
+ *  funnel stages (qualifying | ready_to_assign | in_build | passed) with the signals the pipeline board needs. The
+ *  Round-1 "vet" lane is the discovery feed (GET /opportunities); this covers Rounds 2–3 + in-build + passed-on.
+ *  Distinct literal path (not under /qualification/:id), so declaration order is free. Tenant-scoped; read-only. */
+router.get('/api/admin/factory/qualification-pipeline', requireSection('program'), async (req: Request, res: Response) => {
+  const scope = await scopeOrFail(res, 'gov_pipeline_scope', {});
+  if (!scope) return;
+  try {
+    const { listGovPipeline } = await import('../../services/factory/govPipeline');
+    const pipeline = await listGovPipeline(scope.tenantId);
+    res.json({ pipeline });
+  } catch (err: any) {
+    logFail('gov_pipeline_failed', err, {}); res.status(500).json({ error: 'Could not list the gov pipeline.' });
+  }
+});
+
 /**
  * GET /api/admin/factory/qualification/:canonicalOpportunityId?biddingEntity=…
  * The workspace read view backing data: the server-fetched source facts (requirements grouped by due stage,
