@@ -29,9 +29,10 @@ import { AutonomyLevel } from '../../../services/workforceOrgChartApi';
 // 'glance'/'command' retired from the nav (the 2 real pieces of content
 // they alone carried — Operational state + reason, the evidenced Attention
 // Required list — folded into Overview, see AgentOverviewV2.tsx; nothing
-// silently lost). Remaining 5 keys reordered and relabeled to match the
+// silently lost). Remaining keys reordered and relabeled to match the
 // mockup's own real sidebar exactly: Overview, Talk to Reese, Work &
-// commitments, Decisions & evidence, Performance & settings.
+// commitments, Decisions & evidence, Performance & settings — joined on
+// 2026-10-26 by Email (see the note on that entry below).
 export type TabKey = 'overview' | 'talk' | 'work' | 'decisions' | 'email' | 'performance_settings';
 
 export const TABS: Array<{ key: TabKey; label: string }> = [

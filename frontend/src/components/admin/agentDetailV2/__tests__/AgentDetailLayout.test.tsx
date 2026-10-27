@@ -109,15 +109,27 @@ afterEach(() => {
 });
 
 describe('AgentDetailLayout — sidebar nav', () => {
-  it('renders exactly the 5 real tabs, in the mockup\'s order, and clicking one calls onTabChange with the real tab key', async () => {
+  it('renders exactly the 6 real tabs, in the mockup\'s order, and clicking one calls onTabChange with the real tab key', async () => {
     const props = baseProps();
     await render(props);
 
-    const labels = ['Overview', 'Talk to Reese', 'Work & commitments', 'Decisions & evidence', 'Performance & settings'];
+    const labels = [
+      'Overview', 'Talk to Reese', 'Work & commitments', 'Decisions & evidence',
+      // 2026-10-26: Email joined the nav, after Decisions because Ali asked for the agent's
+      // inbox to sit beside her decision making rather than on a page of its own.
+      'Email',
+      'Performance & settings',
+    ];
     labels.forEach((label) => expect(findButton(container, label)).toBeTruthy());
 
-    // 'At a Glance'/'Live Status' are retired — never reachable via the nav.
-    expect(container.querySelectorAll('.adv2-sidebar-navbtn')).toHaveLength(5);
+    // The loop above passes in ANY order, so until 2026-10-26 the "in the mockup's order" in
+    // this test's own name was never actually checked — the count was doing all the work.
+    // Asserting the rendered sequence covers order AND count in one claim, and still
+    // guarantees what the count alone did: 'At a Glance'/'Live Status' are retired and
+    // never reachable via the nav.
+    const rendered = Array.from(container.querySelectorAll('.adv2-sidebar-navbtn'))
+      .map((b) => b.textContent);
+    expect(rendered).toEqual(labels);
 
     await act(async () => { findButton(container, 'Work & commitments').dispatchEvent(new MouseEvent('click', { bubbles: true })); });
     expect(props.onTabChange).toHaveBeenCalledWith('work');
