@@ -363,7 +363,18 @@
    * are the pattern this mirrors rather than reinvents.
    */
   function reportTimeOnPage() {
-    totalVisibleMs += Date.now() - visibleStart;
+    var now = Date.now();
+    totalVisibleMs += now - visibleStart;
+    // Advancing this keeps the accumulator correct however often this function is called: without
+    // it, the span since `visibleStart` is added AGAIN on each later report, re-counting the whole
+    // visit instead of adding the sliver since the last one.
+    //
+    // HONESTLY: with the guard now in `onVisibilityChange` below, no path reaches this function
+    // twice without an intervening `visible` - which resets `visibleStart` anyway - so this line
+    // changes no observable behavior today and no test can redden by removing it. It is kept so
+    // the function is right on its own terms, because the next caller added to it will not be
+    // reading the guard two screens down.
+    visibleStart = now;
     push('time_on_page', {
       // `seconds` is the key behavioralSignalService reads for its >= 180 test. Renaming it here
       // would fail exactly as silently as `depth` vs `depth_percent` once did.
@@ -376,7 +387,10 @@
 
   function onVisibilityChange() {
     if (document.visibilityState === 'hidden') {
-      reportTimeOnPage();
+      // The guard is consulted HERE as well, not only in `onPageHide`. A browser delivers `hidden`
+      // more than once across a single departure, and reporting on each delivery wrote two rows
+      // for one visit. One report per hidden state is the contract; becoming visible re-arms it.
+      if (!timeReported) reportTimeOnPage();
     } else {
       visibleStart = Date.now();
       // A reader who comes back keeps accumulating, so a later report supersedes the earlier one

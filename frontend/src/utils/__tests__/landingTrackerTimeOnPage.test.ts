@@ -218,4 +218,40 @@ describe('landing tracker: time_on_page survives a navigation', () => {
     const timed = (await sentEvents()).filter((e) => e.event_type === 'time_on_page');
     expect(timed).toHaveLength(2);
   });
+
+  it('does NOT write a second row when the browser delivers hidden twice for one departure', async () => {
+    // THE PRODUCTION REPRODUCTION. Hours after the pagehide fix shipped, the first real visitor to
+    // report produced two rows 154 ms apart carrying `seconds` 7 and then 14. `onPageHide` checked
+    // the guard; `onVisibilityChange` did not, so a second `hidden` delivery reported again - and
+    // because the accumulator had not advanced, it re-counted the entire visit instead of the
+    // 154 ms sliver. Two defects, one row pair: a duplicate row AND a doubled number.
+    //
+    // The doubling is the half that bites. behavioralSignalService tests `seconds >= 180`, so an
+    // inflated figure manufactures `extended_time_on_page` for someone who was never there.
+    loadTracker();
+    jest.advanceTimersByTime(7000);
+
+    setVisibility('hidden');
+    setVisibility('hidden');
+
+    const timed = (await sentEvents()).filter((e) => e.event_type === 'time_on_page');
+    expect(timed).toHaveLength(1);
+    expect(timed[0].seconds).toBe(7);
+  });
+
+  it('adds to the visit rather than re-counting it when the reader returns', async () => {
+    // Pins the cumulative contract by VALUE, not just by row count: 3s read, away, 3s more read is
+    // 3 then 6. A re-count would read 3 then 9 and still pass a length-only assertion, which is
+    // how the doubling above survived a suite that already checked "reports twice".
+    loadTracker();
+    jest.advanceTimersByTime(3000);
+
+    setVisibility('hidden');
+    setVisibility('visible');
+    jest.advanceTimersByTime(3000);
+    window.dispatchEvent(new Event('pagehide'));
+
+    const timed = (await sentEvents()).filter((e) => e.event_type === 'time_on_page');
+    expect(timed.map((e) => e.seconds)).toEqual([3, 6]);
+  });
 });
