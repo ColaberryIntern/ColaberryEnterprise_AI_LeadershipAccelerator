@@ -56,8 +56,9 @@ function StageRow({ stage, widest, previous }: { stage: FunnelStage; widest: num
       <div className="form-text small mb-0">{stage.note}</div>
       {grew && (
         <div className="form-text small text-warning mb-0">
-          More than the stage above. Measured independently, so this usually means a page that is
-          not carrying the tracker.
+          More than the stage above. These two are measured independently, so one does not bound
+          the other: a visitor can reach this stage without registering the one before it, and an
+          untracked page can contribute here and not there.
         </div>
       )}
     </div>
