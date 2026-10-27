@@ -12,6 +12,11 @@ import {
   buildLivePopulationReport,
   currentReportMonth,
 } from '../services/broadcast/livePopulationReport';
+import {
+  assertGapsAreStatedNotHidden,
+  buildDayNinetyReport,
+} from '../services/impact/dayNinetyReport';
+import type { PopulationSelector } from '../services/impact/dayNinetyReportService';
 
 export async function handleGetCommercializationBoard(
   _req: Request,
@@ -115,6 +120,67 @@ export async function handleGetLivePopulation(req: Request, res: Response): Prom
     res.status(500).json({
       success: false,
       error: 'Could not build the Colaberry Live population report.',
+    });
+  }
+}
+
+/**
+ * Exactly one selector, enforced rather than defaulted.
+ *
+ * There is deliberately no "all learners" branch. This report is sponsor-facing, and a
+ * selector that could be omitted would make the widest possible disclosure the easiest
+ * thing to request by accident.
+ */
+const DayNinetyQuerySchema = z.object({
+  sponsorId: z.string().uuid().optional(),
+  cohortId: z.string().uuid().optional(),
+}).strict().refine(
+  (q) => [q.sponsorId, q.cohortId].filter(Boolean).length === 1,
+  { message: 'Supply exactly one of sponsorId or cohortId.' },
+);
+
+/**
+ * C8.12 - the day-90 impact report, built from evidence records that already exist.
+ *
+ * The guard runs on the built report before it is sent, for the same reason the C8.10
+ * endpoint above does it: this report's value is entirely in what it declines to claim,
+ * so the decline is enforced on the response rather than only in tests. A 500 is better
+ * than a confident document, because this one gets forwarded to a paying customer.
+ */
+export async function handleGetDayNinetyReport(req: Request, res: Response): Promise<void> {
+  const parsed = DayNinetyQuerySchema.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({
+      success: false,
+      error: 'Validation failed',
+      error_class: 'ValidationError',
+      details: parsed.error.flatten(),
+    });
+    return;
+  }
+
+  const selector: PopulationSelector = parsed.data.sponsorId
+    ? { kind: 'sponsor', sponsorId: parsed.data.sponsorId }
+    : { kind: 'cohort', cohortId: parsed.data.cohortId as string };
+
+  try {
+    const report = await buildDayNinetyReport(selector);
+    assertGapsAreStatedNotHidden(report);
+    res.json({ success: true, data: report });
+  } catch (error) {
+    const err = error as Error;
+    console.error(JSON.stringify({
+      level: 'error',
+      service: 'day-ninety-impact',
+      event: 'day_ninety_report_failed',
+      error_class: err.name || 'UnknownError',
+      outcome: 'failure',
+      context: { selector: selector.kind },
+      message: err.message,
+    }));
+    res.status(500).json({
+      success: false,
+      error: 'Could not build the day-90 impact report.',
     });
   }
 }

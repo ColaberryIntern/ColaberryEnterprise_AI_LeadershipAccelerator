@@ -11,6 +11,7 @@ import { Router } from 'express';
 import { requireAdmin } from '../../middlewares/authMiddleware';
 import {
   handleGetCommercializationBoard,
+  handleGetDayNinetyReport,
   handleGetHypothesisHealth,
   handleGetLivePopulation,
 } from '../../controllers/commercializationController';
@@ -25,5 +26,10 @@ router.get('/api/admin/commercialization/hypotheses', requireAdmin, handleGetHyp
 // to make the C2.3 license break-even falsifiable, which is commercialization work, and
 // the prefix is already classified in the deny-by-default section gate.
 router.get('/api/admin/commercialization/live-population', requireAdmin, handleGetLivePopulation);
+// C8.12 - the day-90 impact report for one sponsor or one cohort. Admin-gated rather than
+// mounted on the sponsor portal: the report is assembled and reviewed internally before
+// anyone sends it, and this prefix is already classified in the deny-by-default section
+// gate. Exposing it directly to a sponsor token is a separate decision, not a wiring step.
+router.get('/api/admin/commercialization/day-90-report', requireAdmin, handleGetDayNinetyReport);
 
 export default router;
