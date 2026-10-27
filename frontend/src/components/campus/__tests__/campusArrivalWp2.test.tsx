@@ -113,9 +113,9 @@ describe('the tour inside the arrival panel', () => {
   it('the stop card: number, tour name, title, "You can", the tip', () => {
     render(<TourStopCard tour={member} index={0} />);
     expect(q('cm-tour')!.textContent).toContain('What’s in your seat');
-    expect(q('cm-tour-title')!.textContent).toBe('Your classroom');
+    expect(q('cm-tour-title')!.textContent).toBe('Start here: your Schedule');
     expect(q('cm-tour')!.textContent).toContain('You can');
-    expect(q('cm-tour-tip')!.textContent).toContain('replays');
+    expect(q('cm-tour-tip')!.textContent).toContain('Today');
     expect(q('cm-tour-tag')).toBeNull();
   });
   it('an Explorer at a locked stop: the Members tag and "While you’re here"', () => {
@@ -124,15 +124,17 @@ describe('the tour inside the arrival panel', () => {
     expect(q('cm-tour-tag')!.textContent).toBe('Members');
     expect(q('cm-tour')!.textContent).toContain('While you’re here');
   });
-  it('C53: only the Explorer tour’s first stop (Today) has Open Today, and it opens Today', () => {
+  it('C53 + C77: a tour’s first stop (the Schedule) has Open Today, for Explorers and members; later stops do not', () => {
     let opened = 0;
     render(<TourStopCard tour={explorer} index={0} onToday={() => { opened += 1; }} />);
-    expect(q('cm-tour-title')!.textContent).toBe('Start here: Today');
+    expect(q('cm-tour-title')!.textContent).toBe('Start here: the Schedule');
     act(() => { q('cm-tour-today')!.click(); });
     expect(opened).toBe(1);
     render(<TourStopCard tour={explorer} index={1} onToday={() => undefined} />);
     expect(q('cm-tour-today')).toBeNull();
     render(<TourStopCard tour={member} index={0} onToday={() => undefined} />);
+    expect(q('cm-tour-today')).not.toBeNull();
+    render(<TourStopCard tour={member} index={1} onToday={() => undefined} />);
     expect(q('cm-tour-today')).toBeNull();
   });
   it('the nav: Next names the next building; the last stop finishes per account; off the route, back to the tour', () => {
@@ -141,9 +143,9 @@ describe('the tour inside the arrival panel', () => {
       onNext={() => calls.push('next')} onBack={() => calls.push('back')} onEnd={() => calls.push('end')} />);
     nav();
     expect(q('cm-tour-next')!.textContent).toBe('Next: Library →');
-    expect(q('cm-tour-count')!.getAttribute('aria-label')).toBe('Stop 1 of 9');
+    expect(q('cm-tour-count')!.getAttribute('aria-label')).toBe('Stop 1 of 10');
     act(() => { q('cm-tour-next')!.click(); q('cm-tour-stop')!.click(); });
-    nav(member, 8, null);
+    nav(member, 9, null);
     expect(q('cm-tour-next')!.textContent).toBe('Finish tour ✓');
     nav(explorer, explorer.stops.length - 1, null);
     expect(q('cm-tour-next')!.textContent).toBe('Finish · see what you’d unlock →');

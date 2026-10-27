@@ -105,7 +105,7 @@ export interface CampusMapProps {
   hover?: BuildingId | null;
   /** C11b: the Explorer view's OPEN badges. */
   showOpen?: boolean;
-  /** C51 / C52 (v13 T3, T4): the Explorer's TODAY flag over the Schedule tower and START HERE sign at the gate (open Today, no walk). */
+  /** C51 / C52 (v13 T3, T4): the Explorer START HERE flag over the Schedule tower and sign at the gate (C77: both walk into the Schedule). */
   todayFlag?: boolean;
   /** C11b: the AI staff desks on duty for this viewer, drawn at their buildings (full map only). */
   desks?: MapDesk[];
@@ -301,8 +301,8 @@ export default function CampusWorldMap(p: CampusMapProps): React.ReactElement {
       ))}
       {live.length > 0 && <LiveFront buildings={live} mark={compact ? null : p.liveMark} />}
       {!compact && <BoardSign />}
-      {!compact && p.todayFlag && tower && <TodayFlag tower={tower} />}
-      {!compact && p.todayFlag && gateIsBuilding && <GateTodaySign />}
+      {!compact && p.todayFlag && tower && <TodayFlag tower={tower} onWalk={pick} />}
+      {!compact && p.todayFlag && gateIsBuilding && <GateTodaySign onWalk={pick} />}
       {!compact && p.desks && p.desks.length > 0 && <StaffTokens desks={p.desks} buildings={buildings} onPick={pick} />}
       {!compact && <AvatarPin pos={pos} moving={moving} running={running} reduceMotion={reduceMotion} ownGear={p.ownGear} me={p.me} />}
     </svg>

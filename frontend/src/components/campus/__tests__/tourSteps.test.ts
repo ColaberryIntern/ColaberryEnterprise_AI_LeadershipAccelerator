@@ -1,5 +1,5 @@
 /**
- * C7 tours: member 9, Explorer 8 (C53: from Today), business 6, staff none; every stop is a building on that audience's own campus; Explorer
+ * C7 tours: member 10 (C77: from the Schedule), Explorer 8 (C53, C77: from the Schedule), business 6, staff none; every stop is a building on that audience's own campus; Explorer
  * states come from the pages' own signals; the copy invents nothing and never says "free".
  */
 import { tourFor, STATE_NOTE, explorerFinishLine } from '../tourSteps';
@@ -13,7 +13,7 @@ const tour = (audience: CampusAudience, workplaceNames = false, s?: Parameters<t
 };
 
 describe('stop counts per audience', () => {
-  it.each([['member', 9], ['explorer', 8], ['business', 6]] as const)('%s has %i stops', (aud, n) => {
+  it.each([['member', 10], ['explorer', 8], ['business', 6]] as const)('%s has %i stops', (aud, n) => {
     expect(tour(aud)?.stops).toHaveLength(n);
   });
   it('staff has no tour', () => {
@@ -27,17 +27,19 @@ describe('stop counts per audience', () => {
   });
 });
 
-describe('C53 (v13 T5): the Explorer tour starts at Today', () => {
-  it('stop 1 is the Schedule tower with the Today copy; the order follows the spec; it is called the Explorer tour', () => {
+describe('C53 (v13 T5) + C77: every tour starts at the Schedule', () => {
+  it('Explorer stop 1 is the Schedule: what is coming up first, then Today (included, no card needed); never "free"', () => {
     const t = tour('explorer')!;
     expect(t.name).toBe('Explorer tour');
     expect(t.stops.map((s) => s.buildingId)).toEqual(['tower', 'commons', 'library', 'amphi', 'lecture', 'studio', 'testing', 'gallery']);
-    expect(t.stops[0]).toMatchObject({ title: 'Start here: Today', state: 'open',
-      what: 'Today is your home base. Your next step, today’s plan, events coming up and Maya are all on one page.',
-      tip: 'The red 📅 Today button at the top brings you back here from anywhere on campus.' });
+    expect(t.stops[0]).toMatchObject({ title: 'Start here: the Schedule', state: 'open' });
+    expect(t.stops[0].what).toContain('what is coming up');
+    expect(t.stops[0].what).toContain('no card needed');
+    expect(JSON.stringify(t.stops[0])).not.toMatch(/\bfree\b/i);
   });
-  it('the member tour is unchanged', () => {
-    expect(tour('member')!.stops.map((s) => s.buildingId)).toEqual(['lecture', 'library', 'studio', 'testing', 'observatory', 'commons', 'gallery', 'career', 'arcade']);
+  it('C77: the member tour starts at the Schedule too, then follows the old order', () => {
+    expect(tour('member')!.stops.map((s) => s.buildingId)).toEqual(['tower', 'lecture', 'library', 'studio', 'testing', 'observatory', 'commons', 'gallery', 'career', 'arcade']);
+    expect(tour('member')!.stops[0].title).toBe('Start here: your Schedule');
     expect(tour('member')!.name).toBe('What’s in your seat');
   });
   it('the finishing toast names the Explorer when the name is known, and reads without it', () => {
@@ -70,7 +72,7 @@ describe('Explorer states come from the pages, not the copy', () => {
 
 describe('names and copy', () => {
   it('headings use the viewer\'s campus names: Workplace names and the Partner Office', () => {
-    expect(tour('member', true)!.stops[0].name).toBe('Training Room');
+    expect(tour('member', true)!.stops.find((s) => s.buildingId === 'lecture')!.name).toBe('Training Room');
     expect(tour('business')!.stops.find((s) => s.buildingId === 'career')!.name).toBe('Partner Office');
   });
   it.each(['member', 'explorer', 'business'] as const)('%s copy: what and tip on every stop, never "free", no figures', (aud) => {
