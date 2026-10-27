@@ -65,6 +65,10 @@ export const AGENT_IDENTITY_EMAILS: readonly string[] = [
   'bposorchestrator@colaberry.com',
   'agentbehaviormonitor@colaberry.com',
   'growth-journey@colaberry.com',
+  // Maya (admissions), 2026-10-27. `staff_email` already excludes her today — a plus-alias-free
+  // @colaberry.com address — but that is precisely the coverage this list exists so as not to
+  // depend on.
+  'maya@colaberry.com',
 ];
 
 /** Lead sources that mint a prospect account — mirrors `PROSPECT_ACCOUNT_SOURCES`. */

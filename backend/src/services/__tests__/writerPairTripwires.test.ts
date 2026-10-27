@@ -125,6 +125,12 @@ const PAID_FILES: Record<string, string> = {
     + 'AGENT_IDENTITY_EMAILS list cannot name them; the staff_email and staff_role exclusion '
     + 'terms are what keep them out of the T207 backfill.',
   'services/reese/reeseIdentitySeed.ts': 'AGENT IDENTITY, not a person. The row reeseWelcomeService refuses to greet.',
+  'services/mayaIdentitySeed.ts':
+    'AGENT IDENTITY, not a person (2026-10-27). Same posture and the identical '
+    + 'enrollmentDefaults block as Dara and Reese above: paid + invoice + standard are honest '
+    + 'placeholders on the required Enrollment columns, and portal_enabled is false, so this is '
+    + 'not a learner row. This tripwire is what forced the classification - the file was a '
+    + 'newcomer to the matched set and failed the build until it was named here.',
 };
 
 /**
@@ -176,6 +182,11 @@ const OFF_EXPLORER_FILES: Record<string, string> = {
   'services/agentBlueprint/ticketCreatorIdentitySeed.ts': 'AGENT IDENTITY, not a person.',
   'services/curriculum/daraIdentitySeed.ts': 'AGENT IDENTITY, not a person.',
   'services/reese/reeseIdentitySeed.ts': 'AGENT IDENTITY, not a person.',
+  'services/mayaIdentitySeed.ts':
+    'AGENT IDENTITY, not a person (2026-10-27). Writes enrollment_type standard at CREATE, '
+    + 'which is a resting state and not a transition - the row does not exist before this file '
+    + 'makes it, so there is no explorer for anyone to be moved off. Same reasoning the ten '
+    + 'domain agents below carry.',
   'services/agentDomain/domainAgentIdentitySeed.ts':
     'TEN AGENT IDENTITIES, not people (AF3.1). Writes enrollment_type standard at CREATE, '
     + 'which is a resting state and not a transition: these rows do not exist before this '

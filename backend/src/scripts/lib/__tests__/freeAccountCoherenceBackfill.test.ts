@@ -371,11 +371,20 @@ describe('T207 AC6/AC8 — the inverse, and why it is ledger-driven', () => {
 });
 
 describe('T207 — the agent-identity list cannot go stale without failing this build', () => {
+  // NOTE (2026-10-27): this list is HARDCODED, so a brand-new seed file is invisible to the
+  // drift guard until somebody adds it here — which is the opposite of what
+  // `AGENT_IDENTITY_EMAILS`'s docblock promises ("re-derives these literals from the seed files
+  // ... so the protection does not depend on anybody remembering"). `mayaIdentitySeed.ts` was the
+  // first file to expose that: it introduced a new agent address and this guard stayed silent.
+  // Adding it here closes the case; deriving this list by globbing `*IdentitySeed.ts` would close
+  // the CLASS, and is left as its own change because it alters how every future agent is
+  // validated.
   const SEEDS = [
     'services/reese/reeseIdentitySeed.ts',
     'services/curriculum/daraIdentitySeed.ts',
     'services/agentBlueprint/ticketCreatorIdentitySeed.ts',
     'services/agentBlueprint/agentIdentitySeed.ts',
+    'services/mayaIdentitySeed.ts',
   ];
 
   /**
