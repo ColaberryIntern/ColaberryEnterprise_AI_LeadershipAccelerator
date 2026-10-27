@@ -300,7 +300,13 @@ async function runAgent(
   } catch (err: any) {
     const durationMs = Date.now() - startTime;
 
-    await agent.update({
+    // Conditional for the same reason the success path above is, and this is the half that was
+    // missed: a pause set mid-run was still erased whenever the run then THREW. 'error' is not
+    // 'paused', so the next tick's gate let the agent run again and the operator's pause was
+    // gone without ever having held. The failure path is in fact the likelier one to lose it,
+    // because a misbehaving agent is what makes somebody reach for pause in the first place.
+    // The error bookkeeping lands either way; only the status defers to whoever moved the row.
+    await completeRunPreservingControls(agent.id, {
       status: 'error',
       error_count: agent.error_count + 1,
       last_error: err.message,
