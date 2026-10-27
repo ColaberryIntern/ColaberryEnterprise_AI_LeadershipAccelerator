@@ -15,10 +15,11 @@ import { certPrepNextAction } from '../../../pages/portal/certprep/certPrepNextA
  */
 /** secondary: a copy button (Projects "Copy prompt"): its label and the text it copies. */
 export interface PageNext { kicker: string; points: number; title: string; sub: string | null; cta: string; secondary?: { label: string; copy: string } | null }
-export interface SideRow { label: string; value: string; pct?: number }
+/** C75: a row with a `route` is a button straight to that place (the Schedule's Today items open their assignment). */
+export interface SideRow { label: string; value: string; pct?: number; route?: string }
 /** C43: `empty` is the line a board shows when it has no rows; `open` names its action ("Open <section>"); `route` sends that action
- *  somewhere other than the section (the interns' standup room). */
-export interface SideTop { title: string; rows: SideRow[]; empty?: string; open?: string; route?: string }
+ *  somewhere other than the section (the interns' standup room). C75: `note` is one line under the title saying what the board is. */
+export interface SideTop { title: string; rows: SideRow[]; empty?: string; open?: string; route?: string; note?: string }
 export interface PageSummary { next: PageNext | null; sideTop: SideTop | null; card: string | null; doorName: string }
 
 /** Classroom: the week's next card (the same default week the page opens on), "Your status", and that card's runtime. */

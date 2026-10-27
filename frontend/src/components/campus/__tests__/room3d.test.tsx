@@ -103,6 +103,24 @@ describe('the left wall: one board', () => {
     expect(onOpen).toHaveBeenCalledTimes(2);
   });
 
+  it('C75: the Schedule\'s Today board: an item opens its assignment, Open Today opens the Today page, anywhere else enlarges it', () => {
+    const today = { title: '📅 Today · start learning here', note: 'Included for everyone, no card needed. Pick one to start it.', open: 'Open Today', route: '/portal/today',
+      rows: [{ label: 'Deep Dive · Understanding AI', value: '6 min', route: '/portal/runtime/s1' }, { label: 'The Architect Time Machine', value: '30 min', route: '/portal/runtime/s2' }] };
+    const onOpen = mount({ id: 'tower', spot: null, sectionRoute: '/portal/schedule', summary: { next: null, sideTop: today, card: null, doorName: 'Schedule' } });
+    expect(q('[data-testid="cm-wall-board-note"]')!.textContent).toContain('no card needed');
+    expect(container.querySelectorAll('[data-testid="cm-wall-board"] [data-testid="cm-wall-board-row"]')).toHaveLength(2);
+    click('[data-testid="cm-wall-board"] [data-testid="cm-wall-board-row"]');
+    expect(onOpen).toHaveBeenLastCalledWith('/portal/runtime/s1');
+    click('[data-testid="cm-wall-board-page"]');
+    expect(onOpen).toHaveBeenLastCalledWith('/portal/today');
+    expect(q('[data-testid="cm-wall-zoom"]')).toBeNull(); // neither enlarged it
+    click('[data-testid="cm-wall-board-note"]');
+    expect(q('[data-testid="cm-wall-zoom"]')).not.toBeNull();
+    click('[data-testid="cm-wall-zoom"] [data-testid="cm-wall-board-row"]'); // the enlarged board's items work too
+    expect(onOpen).toHaveBeenLastCalledWith('/portal/runtime/s1');
+    expect(onOpen).toHaveBeenCalledTimes(3);
+  });
+
   it('C74: the Chow Hall chalkboard enlarges too; the Meeting Rooms hallway doors do not', () => {
     mount({ id: 'chow', spot: spotOf('chow'), sectionRoute: '/portal/chow', summary: null });
     click('[data-testid="cm-wall-slot"]');
@@ -141,6 +159,14 @@ describe('your spot', () => {
     expect(container.querySelectorAll('[data-testid^="cm-cabinet-"][role="button"]')).toHaveLength(5);
     mount({ id: 'amphi', spot: null });
     expect(q('.cm-r3-spot')).toBeNull();
+  });
+
+  it('C76: the Schedule\'s planning desk, with your name card, opens the next unfinished Today item', () => {
+    const onOpen = mount({ id: 'tower', spot: spotOf('tower'), sectionRoute: '/portal/schedule', reduceMotion: true,
+      summary: { next: null, sideTop: null, card: '/portal/runtime/s2', doorName: 'Schedule' } });
+    expect(q('[data-testid="cm-spot-planner"] [data-testid="cm-spot-name"]')!.textContent).toBe('ALI');
+    click('[data-testid="cm-spot-planner"]');
+    expect(onOpen).toHaveBeenLastCalledWith('/portal/runtime/s2');
   });
 
   it('a workstation with nothing on it yet: the spot opens the section instead', () => {

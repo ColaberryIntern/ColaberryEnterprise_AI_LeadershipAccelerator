@@ -3,7 +3,7 @@
  * board's empty line + "Open <section>" when there is none (never a blank wall, never an invented row). Career: the interns' real
  * standup with Team "Not assigned yet"; anyone else the empty state.
  */
-import { careerBoard, eventsBoard, libraryBoard, portfolioBoard, progressBoard, scheduleBoard } from '../interior/wallBoards';
+import { careerBoard, eventsBoard, libraryBoard, portfolioBoard, progressBoard, scheduleBoard, towerCard } from '../interior/wallBoards';
 
 const NOW = new Date('2026-10-26T15:00:00Z');
 
@@ -17,11 +17,24 @@ it('Library: items, pinned and the newest; empty library: the empty line', () =>
   expect(libraryBoard(null, 'Library')).toEqual({ title: '📚 In the library', rows: [], empty: 'Nothing here yet', open: 'Open Library' });
 });
 
-it('Schedule: today\'s plan steps with done ticks (at most four); no plan: Nothing else on today', () => {
-  const stops = [{ title: 'Watch the intro', done: true, minutes: 12 }, { title: 'Build the agent', done: false, minutes: 30 }, { title: 'Reflect', done: false, minutes: null }] as never;
-  expect(scheduleBoard(stops, 'Schedule').rows).toEqual([
-    { label: 'Watch the intro', value: '✓ done' }, { label: 'Build the agent', value: '30 min' }, { label: 'Reflect', value: 'to do' }]);
-  expect(scheduleBoard(null, 'Schedule')).toMatchObject({ rows: [], empty: 'Nothing else on today', open: 'Open Schedule' });
+it('C75 Schedule: Today\'s included learning, each step opening its own assignment (at most four); the board opens the Today page', () => {
+  const stops = [{ title: 'Watch the intro', done: true, minutes: 12, route: '/portal/runtime/a' }, { title: 'Build the agent', done: false, minutes: 30, route: '/portal/runtime/b' },
+    { title: 'Reflect', done: false, minutes: null, route: '/portal/runtime/c' }] as never;
+  const b = scheduleBoard(stops, 'Schedule');
+  expect(b.rows).toEqual([
+    { label: 'Watch the intro', value: '✓ done', route: '/portal/runtime/a' }, { label: 'Build the agent', value: '30 min', route: '/portal/runtime/b' },
+    { label: 'Reflect', value: 'to do', route: '/portal/runtime/c' }]);
+  expect(b).toMatchObject({ title: '📅 Today · start learning here', open: 'Open Today', route: '/portal/today' });
+  expect(b.note).toContain('no card needed');
+  expect(JSON.stringify(b)).not.toMatch(/\bfree\b/i);
+  expect(scheduleBoard(null, 'Schedule')).toMatchObject({ rows: [], empty: 'Nothing else on today', open: 'Open Today', route: '/portal/today' });
+});
+
+it('C76 the planning desk opens the first unfinished Today item; all done or no plan: the Today page', () => {
+  const s = (route: string, done: boolean) => ({ route, done }) as never;
+  expect(towerCard([s('/a', true), s('/b', false), s('/c', false)])).toBe('/b');
+  expect(towerCard([s('/a', true)])).toBe('/portal/today');
+  expect(towerCard(null)).toBe('/portal/today');
 });
 
 it('Events Hall: the next three events in Central time, your sign-up ticked; none: No events scheduled', () => {

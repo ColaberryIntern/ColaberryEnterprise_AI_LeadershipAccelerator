@@ -53,6 +53,12 @@
 .cm-r3-enlarge:hover,.cm-r3-enlarge:focus-visible{opacity:1;outline:3px solid var(--cm-art-red);outline-offset:2px}
 .cm-r3-wallboard .go{background:none;border:0;padding:0;text-align:left;cursor:pointer}
 .cm-r3-wallboard .go:hover{text-decoration:underline}
+/* C75: the Schedule's Today board: its note, and rows that open their assignment */
+.cm-r3-wallboard .note{font-size:calc(var(--d, 600px) * .042);color:var(--cm-art-live);font-weight:700;margin:-4px 0 8px}
+.cm-r3-wallboard .r.is-link{width:100%;background:none;border:0;border-bottom:2px solid var(--cm-art-line);font:inherit;font-size:calc(var(--d, 600px) * .052);
+  color:inherit;text-align:left;cursor:pointer;border-radius:6px}
+.cm-r3-wallboard .r.is-link:hover,.cm-r3-wallboard .r.is-link:focus-visible{background:var(--cm-art-live-tint);outline:none}
+.cm-r3-wallboard .r.is-link b{color:var(--cm-art-red)}
 
 /* the left-wall board (prototype .board, sized for the side wall) */
 /* C43 (Ali 2026-10-25 "the left side should be bigger"): the board nearly fills the wall above the wainscot */

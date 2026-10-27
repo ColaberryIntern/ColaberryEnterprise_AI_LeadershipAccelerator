@@ -10,7 +10,7 @@ import { fetchCareerProfile } from '../../../services/careerApi';
 import { fetchInternshipDashboard } from '../../../services/internshipApi';
 import { useCampus } from '../CampusContext';
 import type { SideTop } from './pageSummary';
-import { careerBoard, eventsBoard, libraryBoard, portfolioBoard, progressBoard, scheduleBoard } from './wallBoards';
+import { careerBoard, eventsBoard, libraryBoard, portfolioBoard, progressBoard, scheduleBoard, towerCard } from './wallBoards';
 import { certPrepSummary, classroomSummary, plainSummary, projectsSummary } from './pageSummary';
 import type { ClassroomFeed, PageSummary } from './pageSummary';
 import { accountRows, useAccountFacts } from '../admissions/accountFacts';
@@ -85,7 +85,8 @@ export function usePageSummary(id: BuildingId, open: boolean, name: string, audi
   if (id === 'lecture') return fetched?.id === id ? fetched.s : null;
   // C21: Admissions draws its own board (plans & pricing); the summary carries only the left wall's "Your account"
   if (id === 'admissions') return { ...plainSummary(name), sideTop: account ? accountRows(account) : null };
-  if (id === 'tower') return { ...plainSummary(name), sideTop: scheduleBoard(planStops, name) };
+  // C75: the left board is Today's included learning; C76: the planning desk's chair opens the next unfinished item (all done: Today)
+  if (id === 'tower') return { ...plainSummary(name), sideTop: scheduleBoard(planStops, name), card: towerCard(planStops) };
   if (wallFetch) return { ...plainSummary(name), sideTop: wall?.id === id ? wall.side : null };
   return plainSummary(name);
 }

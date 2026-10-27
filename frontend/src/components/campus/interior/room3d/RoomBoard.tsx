@@ -139,9 +139,13 @@ export function WallBoard({ side, onSection, onRoute, onZoom, big }: WallBoardPr
       data-testid={big ? 'cm-wall-board-big' : 'cm-wall-board'}>
       <span className="pin" aria-hidden="true" />
       <h4>{side.title}</h4>
+      {side.note && <span className="note" data-testid="cm-wall-board-note">{side.note}</span>}
       {side.rows.map((r) => (
         <React.Fragment key={r.label}>
-          <span className="r"><span>{r.label}</span><b>{r.value}</b></span>
+          {/* C75: a row with a route goes straight there (the Schedule's Today items open their assignment) */}
+          {r.route && onRoute
+            ? <button type="button" className="r is-link" onClick={stop(() => onRoute(r.route!))} data-testid="cm-wall-board-row"><span>{r.label}</span><b>{r.value} &rarr;</b></button>
+            : <span className="r"><span>{r.label}</span><b>{r.value}</b></span>}
           {r.pct != null && <span className="bar"><i style={{ width: `${Math.max(3, r.pct)}%` }} /></span>}
         </React.Fragment>
       ))}

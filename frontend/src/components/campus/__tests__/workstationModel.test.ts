@@ -23,8 +23,12 @@ describe('where a workstation stands', () => {
   });
   it('falls back to the kind\'s own building for no origin, a building without a workstation, or an unknown path', () => {
     expect(workstationBuilding(null, 'studio')).toBe('studio');
-    expect(workstationBuilding('/portal/schedule', 'lecture')).toBe('lecture');
+    expect(workstationBuilding('/portal/game-room', 'lecture')).toBe('lecture'); // the Game Room's cabinets open the page, not a workstation
     expect(workstationBuilding('/somewhere/else', 'lecture')).toBe('lecture');
+  });
+  it('C76: an item started from the Schedule stands at your planning desk there, so Stand up returns to the Schedule', () => {
+    expect(workstationBuilding('/portal/schedule', 'lecture')).toBe('tower');
+    expect(workstationPlace('tower', false).spot).toBe('Your planning desk');
   });
   it('reads the spot words and the section name, honoring Workplace names', () => {
     const studio = workstationPlace('studio', false);
