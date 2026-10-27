@@ -16,7 +16,9 @@ import { resolveRoomEligibility } from '../services/broadcast/broadcastRoomEligi
 import { loadViewerAccessFacts, broadcastAccessDeps } from '../services/broadcast/broadcastAccessDeps';
 import { projectDiscovery, DiscoveryEntry } from '../services/broadcast/broadcastDiscovery';
 import { ACTIVE_DISCOVERY_STATES, findActiveOccurrences } from '../services/broadcast/broadcastActiveQuery';
-import { REPLAY_DISCOVERY_STATES, findReplayOccurrences } from '../services/broadcast/broadcastReplayQuery';
+import {
+  REPLAY_DISCOVERY_STATES, REPLAY_RETENTION_DAYS, findReplayOccurrences,
+} from '../services/broadcast/broadcastReplayQuery';
 import { resolvePollAfterMs } from '../services/broadcast/broadcastPollPolicy';
 import { signPlayback, computeGrantExpiry } from '../services/broadcast/broadcastPlaybackGrant';
 import { resolvePlaybackTarget } from '../services/broadcast/broadcastRecordingBinding';
@@ -535,6 +537,12 @@ export async function getReplayBroadcasts(req: Request, res: Response): Promise<
 
     res.json({
       states: REPLAY_DISCOVERY_STATES,
+      // Sent, not hardcoded in the page, for the reason `poll_after_ms` is sent on the live
+      // route: the number is a policy, and a copy of it in the frontend is a second source that
+      // drifts the first time the policy changes — leaving the page stating a window the server
+      // no longer enforces. Changing the constant must change what students are told, in the
+      // same deploy, without anyone remembering to.
+      retention_days: REPLAY_RETENTION_DAYS,
       replays: projectDiscovery(entries).map((item) => ({
         ...item,
         // The only field a past class needs that a live one does not. Epoch ms, matching the

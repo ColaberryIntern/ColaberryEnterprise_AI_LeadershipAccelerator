@@ -20,6 +20,15 @@ import { sequelize } from '../config/database';
  *
  * Ordered by `ended_at DESC` to match the list's own ordering: somebody looking for a replay
  * wants the class they just missed.
+ *
+ * THE RETENTION WINDOW NEEDS NO INDEX CHANGE, and it is worth saying why rather than leaving the
+ * next reader to wonder. `ended_at >= cutoff` is a range predicate on this index's leading — and
+ * only — key, so it is served as a range scan that stops at the cutoff instead of walking every
+ * watchable row. Had the window been expressed any other way, say a computed age column or a
+ * `NOW() - interval` on the row, it would not have been indexable at all. The window is also
+ * deliberately NOT baked into the index's WHERE clause: a partial index whose predicate contains
+ * a moving `NOW()` is not immutable and Postgres will refuse it, and even if it accepted one the
+ * index would silently stop matching the query as the clock moved.
  */
 export const REPLAY_INDEX_STATEMENTS: string[] = [
   `CREATE INDEX IF NOT EXISTS idx_broadcast_occ_replay

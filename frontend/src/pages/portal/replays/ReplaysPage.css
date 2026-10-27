@@ -16,6 +16,12 @@
   margin: 0 0 4px;
 }
 
+.rp-retention {
+  font-size: 0.85rem;
+  color: var(--ink-soft, #5a6b80);
+  margin: 2px 0 0;
+}
+
 .rp-note {
   color: var(--ink-soft, #5a6b80);
   font-size: 0.95rem;
