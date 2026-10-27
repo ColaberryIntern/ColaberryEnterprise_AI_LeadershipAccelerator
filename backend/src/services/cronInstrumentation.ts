@@ -11,6 +11,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { AiAgent, AiAgentActivityLog } from '../models';
 import { runWithRequestContext } from '../utils/requestContext';
+import { agentControlDecision, logControlSkip, completeRunPreservingControls } from './agents/agentControlGate';
 
 /**
  * Checks the agent registry for enabled/paused status, generates a trace_id,
@@ -43,11 +44,9 @@ export async function instrumentCronJob(agentName: string, fn: () => Promise<voi
   // agents, so a disabled/mis-seeded row would otherwise produce zero signal
   // anywhere. Logging here is the minimum bar; it's what makes an accidental
   // disable (vs. a deliberate one) discoverable from logs.
-  if (!agent.enabled || agent.status === 'paused') {
-    console.warn(JSON.stringify({
-      level: 'warn', service: 'backend', event: 'cron_job_skipped_disabled',
-      outcome: 'partial', context: { agent_name: agentName, enabled: agent.enabled, status: agent.status },
-    }));
+  const decision = agentControlDecision(agent);
+  if (!decision.run) {
+    logControlSkip(agentName, agent, decision);
     return;
   }
 
@@ -84,7 +83,9 @@ export async function instrumentCronJob(agentName: string, fn: () => Promise<voi
   }
 
   try {
-    await agent.update(updateFields);
+    // Conditional on the row still being `running`, so a pause set while this job was running
+    // is not erased by its own completion. The counts and timings land either way.
+    await completeRunPreservingControls(agent.id, updateFields);
     await AiAgentActivityLog.create({
       id: uuidv4(),
       agent_id: agent.id,

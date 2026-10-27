@@ -92,6 +92,9 @@ import { executeSystemResilienceSuperAgent } from './agents/departments/superAge
 import { executeAdmissionsSuperAgent } from './agents/departments/superAgents/admissionsSuperAgent';
 import { executePartnershipSuperAgent } from './agents/departments/superAgents/partnershipSuperAgent';
 import { executeFinanceSuperAgent } from './agents/departments/superAgents/financeSuperAgent';
+import {
+  agentControlDecision, logControlSkip, completeRunPreservingControls,
+} from './agents/agentControlGate';
 
 // Re-export seedAgentRegistry for callers
 export { seedAgentRegistry as seedAgents };
@@ -106,8 +109,11 @@ export async function runHealthScans(): Promise<void> {
 
   try {
     if (agent) {
-      if (!agent.enabled) {
-        console.log('[AI Ops] CampaignHealthScanner is disabled, skipping');
+      // This was a hand-copied gate that checked `enabled` only, so pausing
+      // CampaignHealthScanner did nothing. Shared predicate now.
+      const decision = agentControlDecision(agent);
+      if (!decision.run) {
+        logControlSkip('CampaignHealthScanner', agent, decision);
         return;
       }
       await agent.update({ status: 'running', updated_at: new Date() });
@@ -121,7 +127,8 @@ export async function runHealthScans(): Promise<void> {
         ? Math.round((agent.avg_duration_ms * agent.run_count + durationMs) / (agent.run_count + 1))
         : durationMs;
 
-      await agent.update({
+      // Conditional, so a pause set during the scan survives the scan ending.
+      await completeRunPreservingControls(agent.id, {
         status: 'idle',
         last_run_at: new Date(),
         run_count: agent.run_count + 1,
@@ -150,7 +157,7 @@ export async function runHealthScans(): Promise<void> {
   } catch (err: any) {
     console.error('[AI Ops] Health scan failed:', err.message);
     if (agent) {
-      await agent.update({
+      await completeRunPreservingControls(agent.id, {
         status: 'error',
         error_count: agent.error_count + 1,
         last_error: err.message,
@@ -180,13 +187,11 @@ async function runAgent(
     return null;
   }
 
-  if (!agent.enabled) {
-    console.log(`[AI Ops] Agent ${agentName} is disabled, skipping`);
-    return null;
-  }
-
-  if (agent.status === 'paused') {
-    console.log(`[AI Ops] Agent ${agentName} is paused, skipping`);
+  // This gate was already correct. It uses the shared predicate anyway, so all four wrappers
+  // read the same thing and a future change cannot fix one and miss the others.
+  const gate = agentControlDecision(agent);
+  if (!gate.run) {
+    logControlSkip(agentName, agent, gate);
     return null;
   }
 
@@ -230,7 +235,9 @@ async function runAgent(
      */
     const failed = result.errors.length > 0;
 
-    await agent.update({
+    // Conditional on the row still being `running`, so a pause set during this run is not
+    // erased by the run's own completion. The bookkeeping lands either way.
+    await completeRunPreservingControls(agent.id, {
       status: failed ? 'error' : 'idle',
       last_run_at: new Date(),
       run_count: agent.run_count + 1,
