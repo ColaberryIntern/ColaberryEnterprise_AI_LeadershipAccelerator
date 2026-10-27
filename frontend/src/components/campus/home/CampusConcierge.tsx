@@ -38,6 +38,8 @@ import { ComingUpAgenda } from '../events/Agenda';
 import { openBoard } from '../board/boardApi';
 import { openOrderSheet } from '../chow/OrderSheet';
 import type { AgendaItem } from '../events/agendaModel';
+import { usePathAhead } from '../interior/usePageSummary';
+import { todayFinished } from '../pathAhead';
 
 /** C20: who gets "📅 Talk to a person" on the help desk (learners and Explorers; partners and staff have their own channels). */
 export const talksToAdmissions = (a: CampusAudience): boolean => a === 'member' || a === 'explorer';
@@ -147,6 +149,8 @@ export default function CampusConcierge(p: ConciergeProps): React.ReactElement {
   const nextAny = p.stops?.find((s) => !s.done) ?? null;
   const hover = p.onHover ?? (() => undefined);
   const run = (id: BuildingId) => (p.onRun ?? p.onWalk)(id);
+  // C78: today's plan is finished, so the plan card shows the path ahead (loaded only then)
+  const ahead = usePathAhead(!!p.stops?.length && todayFinished(p.stops), audience);
   const rows = rightNowRows({ audience, workplace: wp, buildings, stops: p.stops, planMinutes: p.planMinutes ?? null, agenda: p.agenda ?? null,
     presence: p.presence, presenceError: p.presenceError, live: !!p.live, urgent: p.urgent ?? null, skipPlan: true });
   const chip = (id: ChipTo) => {
@@ -193,7 +197,7 @@ export default function CampusConcierge(p: ConciergeProps): React.ReactElement {
         path={explorerPath(buildings, p.accessOf, wp, desks.some((d) => d.id === 'maya' && d.on_duty))} />}
       {audience === 'staff' && <StaffTools buildings={buildings} workplaceNames={wp} />}
 
-      {p.stops && <div style={{ marginTop: 14 }}><PlanCard stops={p.stops} buildings={buildings} workplaceNames={wp} onWalk={p.onWalk} /></div>}
+      {p.stops && <div style={{ marginTop: 14 }}><PlanCard stops={p.stops} buildings={buildings} workplaceNames={wp} onWalk={p.onWalk} ahead={ahead} onOpen={p.onOpen} /></div>}
 
       {audience === 'business'
         ? <TeamNow rows={teamRows(p.presence, p.presenceError, buildings, wp)} buildings={buildings} workplace={wp} onWalk={p.onWalk} onHover={hover} />

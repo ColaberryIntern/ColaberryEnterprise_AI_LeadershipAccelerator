@@ -48,13 +48,31 @@ describe('the board (back wall)', () => {
     expect(q('[data-testid="cm-board-copy"]')!.textContent).toBe('Copy prompt');
   });
 
-  it('the screen body opens the section page; the primary button opens the workstation (with reduce motion, at once)', () => {
+  it('C73: the screen body enlarges the board over the room; clicking it again restores it; Escape restores it too', () => {
     const onOpen = mount({ reduceMotion: true });
     click('[data-testid="cm-board"]');
-    expect(onOpen).toHaveBeenLastCalledWith('/portal/projects');
+    expect(q('[data-testid="cm-board-zoom"]')).not.toBeNull();
+    expect(q('[data-testid="cm-board-big"]')!.textContent).toContain('STORY-001 · Opportunity Score');
+    click('[data-testid="cm-board-big"]');
+    expect(q('[data-testid="cm-board-zoom"]')).toBeNull();
+    click('[data-testid="cm-board-enlarge"]'); // the keyboard's toggle
+    expect(q('[data-testid="cm-board-zoom"]')).not.toBeNull();
+    act(() => { q('[data-testid="cm-board-zoom"]')!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); });
+    expect(q('[data-testid="cm-board-zoom"]')).toBeNull();
+    expect(onOpen).not.toHaveBeenCalled(); // enlarging never leaves the room
+  });
+
+  it('the board\'s buttons keep their job in both sizes and never toggle the size; See all opens the section', () => {
+    const onOpen = mount({ reduceMotion: true });
     click('[data-testid="cm-board-primary"]');
     expect(onOpen).toHaveBeenLastCalledWith('/portal/projects/workspace/p1/STORY-001');
-    expect(onOpen).toHaveBeenCalledTimes(2); // the button did not also open the section
+    expect(q('[data-testid="cm-board-zoom"]')).toBeNull();
+    click('[data-testid="cm-board-section"]');
+    expect(onOpen).toHaveBeenLastCalledWith('/portal/projects');
+    click('[data-testid="cm-board"]');
+    click('[data-testid="cm-board-zoom"] [data-testid="cm-board-primary"]');
+    expect(onOpen).toHaveBeenCalledTimes(3);
+    expect(onOpen).toHaveBeenLastCalledWith('/portal/projects/workspace/p1/STORY-001');
   });
 
   it('no Next step: the building\'s plan step; neither: a plain sign with the section name (never placeholder bars)', () => {
@@ -69,14 +87,46 @@ describe('the board (back wall)', () => {
 });
 
 describe('the left wall: one board', () => {
-  it('the card right of the Next step, opening flat with "See it on the page"', () => {
+  it('C74: the card right of the Next step enlarges on click and restores on the next; its page link works in both sizes', () => {
     const onOpen = mount();
     expect(container.querySelectorAll('[data-testid="cm-wall-board"]')).toHaveLength(1);
     expect(q('[data-testid="cm-wall-board"]')!.textContent).toContain('Your builds');
     click('[data-testid="cm-wall-board"]');
-    expect(q('[data-testid="cm-wall-board-flat"]')!.textContent).toContain('130/2380');
+    expect(q('[data-testid="cm-wall-zoom"] [data-testid="cm-wall-board-big"]')!.textContent).toContain('130/2380');
+    click('[data-testid="cm-wall-board-big"]');
+    expect(q('[data-testid="cm-wall-zoom"]')).toBeNull();
     click('[data-testid="cm-wall-board-page"]');
     expect(onOpen).toHaveBeenLastCalledWith('/portal/projects');
+    expect(q('[data-testid="cm-wall-zoom"]')).toBeNull(); // the link did not also enlarge it
+    click('[data-testid="cm-wall-board-enlarge"]');
+    click('[data-testid="cm-wall-board-page-big"]');
+    expect(onOpen).toHaveBeenCalledTimes(2);
+  });
+
+  it('C75: the Schedule\'s Today board: an item opens its assignment, Open Today opens the Today page, anywhere else enlarges it', () => {
+    const today = { title: '📅 Today · start learning here', note: 'Included for everyone, no card needed. Pick one to start it.', open: 'Open Today', route: '/portal/today',
+      rows: [{ label: 'Deep Dive · Understanding AI', value: '6 min', route: '/portal/runtime/s1' }, { label: 'The Architect Time Machine', value: '30 min', route: '/portal/runtime/s2' }] };
+    const onOpen = mount({ id: 'tower', spot: null, sectionRoute: '/portal/schedule', summary: { next: null, sideTop: today, card: null, doorName: 'Schedule' } });
+    expect(q('[data-testid="cm-wall-board-note"]')!.textContent).toContain('no card needed');
+    expect(container.querySelectorAll('[data-testid="cm-wall-board"] [data-testid="cm-wall-board-row"]')).toHaveLength(2);
+    click('[data-testid="cm-wall-board"] [data-testid="cm-wall-board-row"]');
+    expect(onOpen).toHaveBeenLastCalledWith('/portal/runtime/s1');
+    click('[data-testid="cm-wall-board-page"]');
+    expect(onOpen).toHaveBeenLastCalledWith('/portal/today');
+    expect(q('[data-testid="cm-wall-zoom"]')).toBeNull(); // neither enlarged it
+    click('[data-testid="cm-wall-board-note"]');
+    expect(q('[data-testid="cm-wall-zoom"]')).not.toBeNull();
+    click('[data-testid="cm-wall-zoom"] [data-testid="cm-wall-board-row"]'); // the enlarged board's items work too
+    expect(onOpen).toHaveBeenLastCalledWith('/portal/runtime/s1');
+    expect(onOpen).toHaveBeenCalledTimes(3);
+  });
+
+  it('C74: the Chow Hall chalkboard enlarges too; the Meeting Rooms hallway doors do not', () => {
+    mount({ id: 'chow', spot: spotOf('chow'), sectionRoute: '/portal/chow', summary: null });
+    click('[data-testid="cm-wall-slot"]');
+    expect(q('[data-testid="cm-wall-zoom"] [data-testid="cm-wall-slot-big"]')).not.toBeNull();
+    click('[data-testid="cm-wall-slot-big"]');
+    expect(q('[data-testid="cm-wall-zoom"]')).toBeNull();
   });
 });
 
@@ -109,6 +159,14 @@ describe('your spot', () => {
     expect(container.querySelectorAll('[data-testid^="cm-cabinet-"][role="button"]')).toHaveLength(5);
     mount({ id: 'amphi', spot: null });
     expect(q('.cm-r3-spot')).toBeNull();
+  });
+
+  it('C76: the Schedule\'s planning desk, with your name card, opens the next unfinished Today item', () => {
+    const onOpen = mount({ id: 'tower', spot: spotOf('tower'), sectionRoute: '/portal/schedule', reduceMotion: true,
+      summary: { next: null, sideTop: null, card: '/portal/runtime/s2', doorName: 'Schedule' } });
+    expect(q('[data-testid="cm-spot-planner"] [data-testid="cm-spot-name"]')!.textContent).toBe('ALI');
+    click('[data-testid="cm-spot-planner"]');
+    expect(onOpen).toHaveBeenLastCalledWith('/portal/runtime/s2');
   });
 
   it('a workstation with nothing on it yet: the spot opens the section instead', () => {

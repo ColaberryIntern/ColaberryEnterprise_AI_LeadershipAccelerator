@@ -13,8 +13,12 @@ describe('your spot per building (the prototype SPOTS table)', () => {
     expect(spotOf('admissions')).toMatchObject({ kind: 'meet', opens: 'book', tile: '📅 Meet a person' });
   });
 
-  it('nobody works in the Events Hall, My Progress or the Schedule: no spot; the Lounge has doors, not a couch (v7 R2 wins)', () => {
-    for (const id of ['amphi', 'observatory', 'tower', 'commons', 'gallery', 'gate']) expect(spotOf(id)).toBeNull();
+  it('nobody works in the Events Hall or My Progress: no spot; the Lounge has doors, not a couch (v7 R2 wins)', () => {
+    for (const id of ['amphi', 'observatory', 'commons', 'gallery', 'gate']) expect(spotOf(id)).toBeNull();
+  });
+
+  it('C76: the Schedule has a planning desk that opens the workstation (the next Today item)', () => {
+    expect(spotOf('tower')).toMatchObject({ kind: 'planner', opens: 'ws', tile: '🪑 Your planning desk' });
   });
 
   it('positions match the prototype (front right, its size)', () => {

@@ -94,22 +94,22 @@ const saved = () => JSON.parse(window.localStorage.getItem(tourKey()) || 'null')
 jest.setTimeout(15000);
 
 describe('starting the tour', () => {
-  it('the rail\'s tour card lands on the campus home on stop 1 of 9: the tour inside the arrival panel, the room behind it (WP-2; C16)', async () => {
+  it('the rail\'s tour card lands on the campus home on stop 1 of 10 (C77: the Schedule first): the tour inside the arrival panel, the room behind it (WP-2; C16)', async () => {
     await mount();
     await click('cm-cc-tour-start');
     expect(where.path).toBe('/portal/campus');
     expect(q('cm-home')).not.toBeNull();
-    expect(q('cm-card')?.getAttribute('data-building')).toBe('lecture');
+    expect(q('cm-card')?.getAttribute('data-building')).toBe('tower');
     expect(container.querySelector('[data-testid="cm-card"] [data-testid="cm-tour"]')).not.toBeNull();
-    expect(q('cm-arrive-kicker')?.textContent).toBe('What’s in your seat · stop 1 of 9');
-    expect(q('cm-tour-title')?.textContent).toBe('Your classroom');
-    expect(q('cm-tour-tip')?.textContent).toContain('replays');
-    expect(q('cm-tour-count')?.getAttribute('aria-label')).toBe('Stop 1 of 9');
-    expect(document.activeElement?.id).toBe('cm-card-lecture'); // the panel's heading takes focus at each stop
+    expect(q('cm-arrive-kicker')?.textContent).toBe('What’s in your seat · stop 1 of 10');
+    expect(q('cm-tour-title')?.textContent).toBe('Start here: your week');
+    expect(q('cm-tour-tip')?.textContent).toContain('Today');
+    expect(q('cm-tour-count')?.getAttribute('aria-label')).toBe('Stop 1 of 10');
+    expect(document.activeElement?.id).toBe('cm-card-tower'); // the panel's heading takes focus at each stop
     expect(q('cm-inside')).not.toBeNull(); // the room shows during the tour, as the prototype's flyIn
-    expect(avatarAt()).toContain(doorFor('lecture'));
-    expect(q('cm-tour-stop-lecture')?.getAttribute('class')).toContain('is-live'); // STOP badges on the map, the current one green
-    expect(q('cm-tour-stop-arcade')?.textContent).toBe('STOP 9');
+    expect(avatarAt()).toContain(doorFor('tower'));
+    expect(q('cm-tour-stop-tower')?.getAttribute('class')).toContain('is-live'); // STOP badges on the map, the current one green
+    expect(q('cm-tour-stop-arcade')?.textContent).toBe('STOP 10');
   });
 
   it('the home side panel offers it too, and shows it running (no Start) while touring', async () => {
@@ -119,7 +119,7 @@ describe('starting the tour', () => {
     expect(where.path).toBe('/portal/campus');
     expect(q('cm-cc-tour')?.getAttribute('data-state')).toBe('idle');
     await click('cm-cc-tour-start');
-    expect(q('cm-tour-count')?.getAttribute('aria-label')).toBe('Stop 1 of 9');
+    expect(q('cm-tour-count')?.getAttribute('aria-label')).toBe('Stop 1 of 10');
     expect(q('cm-cc-tour')?.getAttribute('data-state')).toBe('running');
     expect(q('cm-cc-tour-start')).toBeNull();
   });
@@ -143,20 +143,20 @@ describe('moving through it', () => {
     await mount();
     await click('cm-cc-tour-start');
     expect(q('cm-tour-back')).toBeNull();
-    expect(q('cm-tour-next')?.textContent).toBe('Next: Library →');
+    expect(q('cm-tour-next')?.textContent).toBe('Next: Classroom →');
     await click('cm-tour-next');
-    expect(q('cm-tour-count')?.getAttribute('aria-label')).toBe('Stop 2 of 9');
-    expect(q('cm-card')?.getAttribute('data-building')).toBe('library');
-    expect(q('cm-arrive-kicker')?.textContent).toBe('What’s in your seat · stop 2 of 9');
-    expect(avatarAt()).toContain(doorFor('library'));
-    expect(document.activeElement?.id).toBe('cm-card-library');
+    expect(q('cm-tour-count')?.getAttribute('aria-label')).toBe('Stop 2 of 10');
+    expect(q('cm-card')?.getAttribute('data-building')).toBe('lecture');
+    expect(q('cm-arrive-kicker')?.textContent).toBe('What’s in your seat · stop 2 of 10');
+    expect(avatarAt()).toContain(doorFor('lecture'));
+    expect(document.activeElement?.id).toBe('cm-card-lecture');
   });
 
   it('member: the last stop says "Finish tour ✓"; finishing closes the panel, marks it taken, and the lead says so (no server call)', async () => {
     await mount();
     await click('cm-cc-tour-start');
-    for (let i = 0; i < 8; i++) await click('cm-tour-next');
-    expect(q('cm-tour-count')?.getAttribute('aria-label')).toBe('Stop 9 of 9');
+    for (let i = 0; i < 9; i++) await click('cm-tour-next');
+    expect(q('cm-tour-count')?.getAttribute('aria-label')).toBe('Stop 10 of 10');
     expect(q('cm-tour-next')?.textContent).toBe('Finish tour ✓');
     await click('cm-tour-next');
     expect(q('cm-card')).toBeNull();
@@ -213,7 +213,7 @@ describe('ending it', () => {
     expect(saved()).toMatchObject({ paused: 1, toured: false }); // C13: plus pausedAt (a pause expires after 7 days)
     expect(q('cm-cc-tour')?.getAttribute('data-state')).toBe('paused');
     await click('cm-cc-tour-resume');
-    expect(q('cm-tour-count')?.getAttribute('aria-label')).toBe('Stop 2 of 9');
+    expect(q('cm-tour-count')?.getAttribute('aria-label')).toBe('Stop 2 of 10');
   });
 
   it('the side panel End tour pauses it too', async () => {

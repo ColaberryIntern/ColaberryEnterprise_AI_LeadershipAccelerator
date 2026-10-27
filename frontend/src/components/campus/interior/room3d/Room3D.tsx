@@ -9,7 +9,7 @@ import RoomCrowd from './RoomCrowd';
 import { Billboard, person } from './billboard';
 import type { PageSummary } from '../pageSummary';
 import type { PlanStop } from '../../campusPlan';
-import { RoomScreen, WallBoard } from './RoomBoard';
+import { BoardZoom, EnlargeButton, RoomScreen, WallBoard } from './RoomBoard';
 import PlansBoard from '../../admissions/PlansBoard';
 import { NextEventBoard } from '../../events/EventRows';
 import { useCampusEvents } from '../../events/EventSignup';
@@ -66,6 +66,14 @@ export interface Room3DProps {
 }
 
 const FALLBACK = { fw: 900, fh: 560 };
+/** C74: a click on a left-wall piece that is not one of its own controls enlarges / restores it. */
+const unlessControl = (fn: () => void) => (e: React.MouseEvent) => {
+  const hit = (e.target as HTMLElement).closest('button, a, [role="button"]');
+  if (hit && hit !== e.currentTarget) return;
+  fn();
+};
+/** C74: the left-wall slot is drawn at its wall size (d x 0.88 by fh x 0.76) and scaled to fill most of the room, flat. */
+export const leftZoomScale = (fw: number, fh: number, d: number): number => Math.min((fw * 0.92) / (d * 0.88), (fh * 0.92) / (fh * 0.76));
 export const WALK_MS = 750;
 export const ZOOM_MS = 520;
 
@@ -99,6 +107,7 @@ export default function Room3D(p: Room3DProps): React.ReactElement | null {
   const [youAt, setYouAt] = useState<Place>(reduceMotion ? YOU_AT : YOU_FROM);
   const [walkMs, setWalkMs] = useState(1100);
   const [zoom, setZoom] = useState<string | null>(null);
+  const [big, setBig] = useState<'back' | 'left' | null>(null); // C73/C74: the board enlarged over the room
   const timers = useRef<number[]>([]);
   // C27 (v6 D5): the Schedule board's week and upcoming events; C26: the Events Hall board's next event (C62: off air only; events
   // themselves are on the Meeting Rooms' wall board and banner)
@@ -141,6 +150,34 @@ export default function Room3D(p: Room3DProps): React.ReactElement | null {
     }, WALK_MS));
   };
   const c = (k: string) => art(`in-${id}-${k}`);
+  const toggle = (w: 'back' | 'left') => () => setBig((b) => (b === w ? null : w));
+  const screen = (isBig: boolean) => (
+    <RoomScreen summary={summary} name={p.name} planStep={p.planStep} onSection={section} onCard={cardRoute && spot?.opens !== 'book' && spot?.opens !== 'order' ? sitDown : null}
+      onPlan={(r) => p.onOpen(r)} onZoom={toggle('back')} big={isBig} custom={id === 'admissions' ? <PlansBoard onSection={section} />
+        : id === 'chow' ? <CravingScreen now={wx.now} condition={wx.w.condition} />
+        : id === 'tower' && agendaItems ? <AgendaBoard items={agendaItems} now={new Date()} place={placeName} onWalk={(b) => openMap(b)} onSection={section} />
+        : id === 'amphi' && live ? <LiveScreen live={live} hereCount={people.length} onJoin={p.onOpen} />
+        : id === 'amphi' && events ? <NextEventBoard event={upcoming(events, new Date(), 1)[0] ?? null} onSection={section} />
+        : hall ? <HallwayBoard hallway={hallway} onOpen={p.onOpen} />
+        : arcade ? <ArcadeBoard d={games} onOpen={p.onOpen} /> : undefined} />
+  );
+  // The left wall's one piece (the hallway's doors are doors, not a board, and do not enlarge)
+  const leftPiece = (isBig: boolean): React.ReactNode => {
+    const zoomLeft = toggle('left');
+    const slot = (node: React.ReactNode) => (
+      <div className={isBig ? 'cm-r3-wallslot is-big' : 'cm-r3-wallslot'} onClick={unlessControl(zoomLeft)} data-testid={isBig ? 'cm-wall-slot-big' : 'cm-wall-slot'}>
+        {node}<EnlargeButton big={isBig} onZoom={zoomLeft} testId={isBig ? 'cm-wall-board-restore' : 'cm-wall-board-enlarge'} />
+      </div>
+    );
+    if (arcade) return slot(<ChampionsWall d={games} onOpen={p.onOpen} />);
+    if (id === 'chow') return slot(<Chalkboard now={wx.now} condition={wx.w.condition} />);
+    if (!summary?.sideTop) return null;
+    return (
+      <div className={isBig ? 'cm-r3-wallslot is-big' : 'cm-r3-wallslot'}>
+        <WallBoard side={summary.sideTop} onSection={section} onRoute={p.onOpen} onZoom={zoomLeft} big={isBig} />
+      </div>
+    );
+  };
   return (
     <div className={`cm-r3${room.dark ? ' is-dark' : ''}${zoom ? ' is-zoom' : ''}`} ref={wrap} data-testid="cm-room3d" data-room={id}
       style={{ ['--fw' as string]: `${fw}px`, ['--fwr' as string]: `${fw}px`, ['--fh' as string]: `${fh}px`, ['--d' as string]: `${d}px`, ['--persp' as string]: `${Math.round(fw * 0.95)}px`,
@@ -151,21 +188,11 @@ export default function Room3D(p: Room3DProps): React.ReactElement | null {
           <div className="face ceil" aria-hidden="true">{[0.2, 0.5, 0.8].map((x) => <i key={x} style={{ left: `calc(${x * 100}% - 75px)` }} />)}</div>
           <div className="face floor" aria-hidden="true" />
           <div className="face back"><div className="wainscot" aria-hidden="true" />
-            <RoomScreen summary={summary} name={p.name} planStep={p.planStep} onSection={section} onCard={cardRoute && spot?.opens !== 'book' && spot?.opens !== 'order' ? sitDown : null}
-              onPlan={(r) => p.onOpen(r)} custom={id === 'admissions' ? <PlansBoard onSection={section} />
-                : id === 'chow' ? <CravingScreen now={wx.now} condition={wx.w.condition} />
-                : id === 'tower' && agendaItems ? <AgendaBoard items={agendaItems} now={new Date()} place={placeName} onWalk={(b) => openMap(b)} onSection={section} />
-                : id === 'amphi' && live ? <LiveScreen live={live} hereCount={people.length} onJoin={p.onOpen} />
-                : id === 'amphi' && events ? <NextEventBoard event={upcoming(events, new Date(), 1)[0] ?? null} onSection={section} />
-                : hall ? <HallwayBoard hallway={hallway} onOpen={p.onOpen} />
-                : arcade ? <ArcadeBoard d={games} onOpen={p.onOpen} /> : undefined} />
+            {screen(false)}
             {tiers && <div className="cm-r3-platform" aria-hidden="true" data-testid="cm-r3-stage" />}
           </div>
           <div className="face left"><div className="wainscot" aria-hidden="true" />
-            {hall ? <HallwayWall doors={doors} side="left" onOpen={p.onOpen} />
-              : arcade ? <div className="cm-r3-wallslot"><ChampionsWall d={games} onOpen={p.onOpen} /></div>
-              : id === 'chow' ? <div className="cm-r3-wallslot"><Chalkboard now={wx.now} condition={wx.w.condition} /></div>
-              : summary?.sideTop && <div className="cm-r3-wallslot"><WallBoard side={summary.sideTop} onSection={section} onRoute={p.onOpen} /></div>}
+            {hall ? <HallwayWall doors={doors} side="left" onOpen={p.onOpen} /> : leftPiece(false)}
           </div>
           <div className="face right"><div className="wainscot" aria-hidden="true" />
             <RoomWindow wx={wx} small={hall} view={view} />
@@ -189,6 +216,12 @@ export default function Room3D(p: Room3DProps): React.ReactElement | null {
           </div>
         </div>
       </div>
+      {big === 'back' && <BoardZoom onClose={() => setBig(null)} testId="cm-board-zoom">{screen(true)}</BoardZoom>}
+      {big === 'left' && !hall && (
+        <BoardZoom onClose={() => setBig(null)} testId="cm-wall-zoom">
+          <div className="cm-r3-leftbig" style={{ width: d * 0.88, height: fh * 0.76, ['--k' as string]: leftZoomScale(fw, fh, d) }}>{leftPiece(true)}</div>
+        </BoardZoom>
+      )}
     </div>
   );
 }

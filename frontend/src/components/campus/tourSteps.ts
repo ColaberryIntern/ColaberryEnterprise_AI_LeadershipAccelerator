@@ -19,6 +19,8 @@ export interface Tour { audience: CampusAudience; name: string; stops: TourStop[
 type CopyTable = Partial<Record<BuildingId, TourCopy>>;
 
 const MEMBER: CopyTable = {
+  // C77 (Ali 2026-10-27: "everyone needs to start with the schedule"): the member tour starts at the Schedule too
+  tower: { title: 'Start here: your week', what: 'See your week first: classes, events and the sessions you booked are on the big board. Today’s plan is on the left board.', can: ['Sign up for what is coming up', 'Sit at your planning desk to start today’s next item'], tip: 'The red 📅 Today button at the top brings you back to today’s plan from anywhere on campus.' },
   lecture: { title: 'Your classroom', what: 'Every week of the Accelerator lives here, plus the live classes.', can: ['Pick up your lessons right where you left off', 'Check in to live classes for attendance credit', 'Rewatch a class from its replay'], tip: 'Most people miss the replays. They’re under Live sessions.' },
   library: { title: 'Knowledge on demand', what: 'Documents shared with everyone in the program: guides, templates and reference.', can: ['Find guides and reference material', 'Ask Dara at the curriculum desk to explain anything, around the clock'], tip: 'Dara can turn anything you are reading into a plain-words summary.' },
   studio: { title: 'Where you build', what: 'Your real AI projects, worked task by task in the project workspace, like a real team.', can: ['Work your next project task', 'See what is due in your assignments'], tip: 'Every shipped build becomes evidence in your portfolio.' },
@@ -31,9 +33,10 @@ const MEMBER: CopyTable = {
 };
 
 const EXPLORER: CopyTable = {
-  // C53 (v13 T5): the Explorer tour starts at Today, their home base (the Schedule tower)
-  tower: { title: 'Start here: Today', what: 'Today is your home base. Your next step, today’s plan, events coming up and Maya are all on one page.', can: [], tip: 'The red 📅 Today button at the top brings you back here from anywhere on campus.' },
-  commons: { title: 'Start here: meet anyone', what: 'A hallway of live rooms: events, study groups, pair work, one-on-ones.', can: ['Join a live room', 'See upcoming events and RSVP', 'Open a room or book one for later'], tip: 'Maya at the {gate} answers questions about enrolling.' },
+  // C53 (v13 T5): the Explorer tour starts at the Schedule tower. C77 (Ali 2026-10-27: "before you can start learning you have to get a
+  // schedule ... then today is where all the [included] content is"): it says so, Schedule first, then Today. Never the word "free".
+  tower: { title: 'Start here: what is coming up', what: 'Everyone starts here. The big board shows what is coming up: classes, events and sessions you can sign up for. The left board is Today, the learning included for everyone, no card needed.', can: ['Sign up for an upcoming event', 'Pick a Today item, or sit at your planning desk to start'], tip: 'The red 📅 Today button at the top brings you back to Today from anywhere on campus.' },
+  commons: { title: 'Meet anyone', what: 'A hallway of live rooms: events, study groups, pair work, one-on-ones.', can: ['Join a live room', 'See upcoming events and RSVP', 'Open a room or book one for later'], tip: 'Maya at the {gate} answers questions about enrolling.' },
   library: { title: 'Reference on demand', what: 'Documents shared with everyone in the program.', can: ['Read the guides and reference material'], tip: 'A good place to see the kind of material the program uses.' },
   amphi: { title: 'Colaberry Live', what: 'When Colaberry goes live, everyone gathers here.', can: ['Walk in when a broadcast is on air', 'Join the live room for audio and Q&A'], tip: 'Open houses and other events happen in the Meeting Rooms.' },
   lecture: { title: 'Live classes', what: 'Members get the weekly lessons and live sessions of the program.', can: ['See how a week of the program is laid out'], tip: 'Enrolled members can join every live session and check in for attendance.' },
@@ -52,7 +55,7 @@ const BUSINESS: CopyTable = {
 };
 
 const ORDER: Record<Exclude<CampusAudience, 'staff'>, { name: string; table: CopyTable; stops: BuildingId[] }> = {
-  member: { name: 'What’s in your seat', table: MEMBER, stops: ['lecture', 'library', 'studio', 'testing', 'observatory', 'commons', 'gallery', 'career', 'arcade'] },
+  member: { name: 'What’s in your seat', table: MEMBER, stops: ['tower', 'lecture', 'library', 'studio', 'testing', 'observatory', 'commons', 'gallery', 'career', 'arcade'] },
   explorer: { name: 'Explorer tour', table: EXPLORER, stops: ['tower', 'commons', 'library', 'amphi', 'lecture', 'studio', 'testing', 'gallery'] },
   business: { name: 'Partner tour', table: BUSINESS, stops: ['lecture', 'studio', 'testing', 'commons', 'gallery', 'career'] },
 };

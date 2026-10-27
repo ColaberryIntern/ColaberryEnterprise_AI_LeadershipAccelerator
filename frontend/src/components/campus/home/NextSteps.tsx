@@ -141,7 +141,7 @@ export function TourOffer(p: TourOfferProps): React.ReactElement | null {
   const min = tourMinutes(n);
   const head = partner ? '▶ Start the partner tour' : p.audience === 'explorer' ? '🧭 Take the explorer tour' : '🧭 What’s in your seat?';
   const body = partner ? `${n} stops, about ${min} min. See where your people learn and build.`
-    : p.audience === 'explorer' ? `A ${min}-minute walk through ${n} places. It starts at Today, your home base.` // C53 (v13 T5)
+    : p.audience === 'explorer' ? `A ${min}-minute walk through ${n} places. It starts with what is coming up, then Today.` // C53 (v13 T5); C77: the Schedule first
       : `A ${min}-minute walk through the ${n} places your enrollment unlocks, including a few most people miss.`;
   return (
     <div className={cls} data-testid="cm-cc-tour" data-state="idle">

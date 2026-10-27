@@ -23,7 +23,7 @@ it('the tower opens Today for Explorers and the schedule for everyone else; name
   for (const a of ['member', 'business', 'staff'] as CampusAudience[]) expect(tower(a).primary).toEqual({ label: 'Open my schedule', route: '/portal/schedule' });
   expect(tower('explorer').name).toBe('Schedule');
   expect(tower('explorer').rooms).toEqual(tower('member').rooms);
-  expect(subOf({ id: 'tower' }, 'explorer')).toBe('Today, your home base · plus your schedule');
+  expect(subOf({ id: 'tower' }, 'explorer')).toBe('What is coming up, then Today, your home base');
   expect(subOf({ id: 'tower' }, 'member')).toBe('Your schedule & today’s agenda');
 });
 
@@ -32,7 +32,7 @@ let root: Root;
 let path = '';
 function Where(): null { path = useLocation().pathname + useLocation().search; return null; }
 afterEach(() => { if (root) act(() => root.unmount()); container?.remove(); root = undefined as unknown as Root; });
-async function mount(audience: CampusAudience): Promise<void> {
+async function mount(audience: CampusAudience, workplaceNames = false): Promise<void> {
   container = document.createElement('div');
   document.body.appendChild(container);
   await act(async () => {
@@ -41,7 +41,7 @@ async function mount(audience: CampusAudience): Promise<void> {
       <MemoryRouter initialEntries={['/portal/campus']}>
         <Where />
         <Routes><Route path="*" element={<CampusWorld buildings={campusBuildingsFor(audience)} audience={audience} hasFullAccess={audience !== 'explorer'}
-          workplaceNames={false} reduceMotion onExit={() => {}} onNavigate={() => {}} />} /></Routes>
+          workplaceNames={workplaceNames} reduceMotion onExit={() => {}} onNavigate={() => {}} />} /></Routes>
       </MemoryRouter>,
     );
   });
@@ -56,22 +56,28 @@ it('only Explorers see the TODAY flag', async () => {
   expect(q('[data-testid="cm-today-flag"]')).not.toBeNull();
 });
 
-it('a flag click opens Today and starts no walk (no card, no route line)', async () => {
+// C77 (Ali 2026-10-27: "everyone needs to start with the schedule"): the flag says START HERE and walks into the Schedule, exactly
+// as a click on the tower does; it no longer jumps to the Today page
+const walked = async (el: HTMLElement, ev: Event): Promise<void> => {
+  await act(async () => { el.dispatchEvent(ev); await Promise.resolve(); });
+};
+it('C77: a flag click walks you to the Schedule (the same as clicking the tower) and stays on the campus', async () => {
   await mount('explorer');
-  act(() => { q('[data-testid="cm-today-flag"]')!.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
-  expect(path).toBe('/portal/today?stay=1');
-  expect(q('[data-testid="cm-card"]')).toBeNull();
-  expect(q('[data-testid="cm-route-line"]')!.getAttribute('d')).toBe('');
+  expect(q('[data-testid="cm-today-flag"]')!.textContent).toBe('START HERE');
+  await walked(q('[data-testid="cm-today-flag"]')!, new MouseEvent('click', { bubbles: true }));
+  expect(path).toBe('/portal/campus');
+  expect(q('[data-testid="cm-card"]')!.textContent).toContain('Schedule');
 });
 
-it('Enter on the flag opens Today too', async () => {
+it('C77: Enter on the flag walks to the Schedule too', async () => {
   await mount('explorer');
-  act(() => { q('[data-testid="cm-today-flag"]')!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); });
-  expect(path).toBe('/portal/today?stay=1');
+  await walked(q('[data-testid="cm-today-flag"]')!, new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+  expect(path).toBe('/portal/campus');
+  expect(q('[data-testid="cm-card"]')!.textContent).toContain('Schedule');
 });
 
-// C52 (v13 T4): the Main Gate says START HERE -> TODAY, for Explorers only (staff see the gate but not the sign)
-it('only Explorers see the START HERE sign at the gate, and it opens Today without a walk', async () => {
+// C52 (v13 T4) + C77: the Main Gate says START HERE -> SCHEDULE, for Explorers only (staff see the gate but not the sign)
+it('only Explorers see the START HERE sign at the gate, and it walks to the Schedule', async () => {
   for (const a of ['member', 'staff'] as CampusAudience[]) {
     await mount(a);
     expect([a, q('[data-testid="cm-gate-today"]')]).toEqual([a, null]);
@@ -80,11 +86,19 @@ it('only Explorers see the START HERE sign at the gate, and it opens Today witho
   await mount('explorer');
   const sign = q('[data-testid="cm-gate-today"]')!;
   expect(sign.getAttribute('role')).toBe('button');
-  expect(sign.getAttribute('aria-label')).toBe('Start here: open Today');
-  expect(sign.textContent).toBe('START HERE → TODAY');
-  act(() => { sign.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
-  expect(path).toBe('/portal/today?stay=1');
-  expect(q('[data-testid="cm-card"]')).toBeNull();
+  expect(sign.getAttribute('aria-label')).toBe('Start here: walk to the Schedule');
+  expect(sign.textContent).toBe('START HERE → SCHEDULE');
+  await walked(sign, new MouseEvent('click', { bubbles: true }));
+  expect(path).toBe('/portal/campus');
+  expect(q('[data-testid="cm-card"]')!.textContent).toContain('Schedule');
+});
+
+// Workplace names on: the signs use the viewer's name for the building (Calendar), never a hard-coded "Schedule"
+it('with Workplace names the signs name the Calendar', async () => {
+  await mount('explorer', true);
+  expect(q('[data-testid="cm-gate-today"]')!.textContent).toBe('START HERE → CALENDAR');
+  expect(q('[data-testid="cm-gate-today"]')!.getAttribute('aria-label')).toBe('Start here: walk to the Calendar');
+  expect(q('[data-testid="cm-today-flag"]')!.getAttribute('aria-label')).toBe('Start here: walk into the Calendar');
 });
 
 it('the tile offers Open Today and Full schedule', () => {

@@ -8,13 +8,14 @@ import type { BuildingId } from '../campusMap';
  *  - 'page': the building's page (the Game Room cabinet);
  *  - 'book': the "Book a call with admissions" sheet (the Admissions meeting table, v6 D3);
  *  - 'order': the order sheet (the Chow Hall counter, v11 C2).
- * Buildings where nobody works (Events Hall, My Progress, Schedule) have no spot; their board's button does the action.
+ * Buildings where nobody works (Events Hall, My Progress) have no spot; their board's button does the action. C76 (Ali 2026-10-27):
+ * the Schedule gets a planning desk; its chair opens your next unfinished Today item (usePageSummary sets the tower's card).
  * v7 R2 wins over v6 for the Community Lounge (now Meeting Rooms): no couch, it gets a hallway of doors instead.
  *
  * x and z place the spot on the floor (share of the room's width from the left, share of its depth from the front), w and h are
  * its size in px, as the prototype's billboards.
  */
-export type SpotKind = 'desk' | 'seat' | 'carrel' | 'booth' | 'cabinet' | 'meet' | 'counter';
+export type SpotKind = 'desk' | 'seat' | 'carrel' | 'booth' | 'cabinet' | 'meet' | 'counter' | 'planner';
 export type SpotOpens = 'ws' | 'page' | 'book' | 'order';
 export interface SpotDef {
   kind: SpotKind;
@@ -36,6 +37,8 @@ export const SPOTS: Partial<Record<BuildingId | 'admissions', SpotDef>> = {
   admissions: { kind: 'meet', x: 0.7, z: 0.2, w: 330, h: 220, opens: 'book', tile: '📅 Meet a person', sub: 'Book time with the admissions team' },
   // C39 (v11 C2): the Chow Hall service counter opens the order sheet
   chow: { kind: 'counter', x: 0.72, z: 0.2, w: 330, h: 230, opens: 'order', tile: '🛎 The counter', sub: 'Pick a craving, then your delivery app' },
+  // C76: the Schedule's planning desk: sit down and your next Today item opens
+  tower: { kind: 'planner', x: 0.66, z: 0.18, w: 340, h: 250, opens: 'ws', tile: '🪑 Your planning desk', sub: 'Sit down and start your next item for today' },
 };
 
 export const spotOf = (id: string): SpotDef | null => (SPOTS as Record<string, SpotDef | undefined>)[id] ?? null;

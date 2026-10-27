@@ -32,10 +32,21 @@ export function libraryBoard(v: LibraryView | null, section: string): SideTop {
   return board('📚 In the library', rows, 'Nothing here yet', `Open ${section}`);
 }
 
-export function scheduleBoard(stops: PlanStop[] | null, section: string): SideTop {
-  const rows = (stops ?? []).slice(0, MAX_ROWS).map((s) => ({ label: s.title, value: s.done ? '✓ done' : s.minutes ? `${s.minutes} min` : 'to do' }));
-  return board('📅 Today', rows, 'Nothing else on today', `Open ${section}`);
+/**
+ * C75 (Ali 2026-10-27: "make sure they know that this side represents the free learning and they should be able to click on it and
+ * go straight to the assignment or go to the Today page"): the Schedule's left board is Today, the learning everyone gets. Each row
+ * opens its own assignment (the plan's route); the board's button opens the Today page. The copy never says "free" (TWC 807.172(d)):
+ * it says included, no card needed. `_section` keeps the signature the other boards share.
+ */
+export const TODAY_ROUTE = '/portal/today';
+export function scheduleBoard(stops: PlanStop[] | null, _section: string): SideTop {
+  const rows = (stops ?? []).slice(0, MAX_ROWS).map((s) => ({ label: s.title, value: s.done ? '✓ done' : s.minutes ? `${s.minutes} min` : 'to do', route: s.route }));
+  return { title: '📅 Today · start learning here', note: 'Included for everyone, no card needed. Pick one to start it.',
+    rows, ...(rows.length ? {} : { empty: 'Nothing else on today' }), open: 'Open Today', route: TODAY_ROUTE };
 }
+
+/** C76: what the Schedule's planning desk opens: the first unfinished Today item; all done (or no plan): the Today page. */
+export const towerCard = (stops: PlanStop[] | null): string => (stops ?? []).find((s) => !s.done)?.route ?? TODAY_ROUTE;
 
 export function eventsBoard(events: OpenHouseView[] | null, now: Date, section: string): SideTop {
   const rows = upcoming(events ?? [], now, 3).map((e) => { const w = eventWhen(e.starts_at); return { label: e.title, value: `${w.day} · ${w.time}${e.is_registered ? ' ✓' : ''}` }; });

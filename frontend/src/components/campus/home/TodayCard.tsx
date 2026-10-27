@@ -54,7 +54,7 @@ export function TodayCard({ audience, stops, desks, now }: { audience: CampusAud
   const facts = todayFacts(stops, events, desks, now);
   return (
     <Link to={TODAY_HREF} className="cm-today-card" data-testid="cm-today-card" aria-label="Your Today page: open Today">
-      <small>START HERE &middot; YOUR HOME BASE</small>
+      <small>YOUR HOME BASE &middot; AFTER WHAT IS COMING UP</small>
       <b><span aria-hidden="true">📅</span> Your Today page</b>
       <span className="cm-today-lead">Everything for today in one place. Come back to it any time with the red Today button at the top.</span>
       {facts.length > 0 && <dl>{facts.map((f) => <div key={f.label}><dt>{f.label}</dt><dd>{f.value}</dd></div>)}</dl>}

@@ -40,6 +40,26 @@
 .cm-r3-screen .stand{display:none} /* C42: wall-mounted, no stand */
 .cm-r3-screen:hover{filter:brightness(1.03);box-shadow:0 22px 48px var(--cm-art-sp-shadow)}
 
+/* C73/C74 (Ali 2026-10-27, "click on the board ... blow up the board to full screen ... click on it again it should go back"): the
+   enlarged board, flat over the whole room (out of the 3D stage), zoom-out cursor; its own buttons keep working */
+.cm-r3-zoom{position:absolute;inset:0;z-index:20;display:grid;place-items:center;padding:2.5%;background:var(--cm-art-in-screen-dim);cursor:zoom-out;animation:cm-r3-zoomin .18s ease-out}
+.cm-r3-zoom .cm-r3-screen.is-big{position:relative;left:auto;right:auto;top:auto;width:100%;height:100%;cursor:zoom-out}
+.cm-r3-zoom .cm-r3-leftbig{position:relative;flex:none;transform:scale(var(--k,1))}
+.cm-r3-zoom .cm-r3-wallslot.is-big{inset:0;left:0;right:0;top:0;height:100%;cursor:zoom-out}
+.cm-r3-zoom .cm-r3-wallboard.is-big{cursor:zoom-out}
+@keyframes cm-r3-zoomin{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:none}}
+.cm-r3-enlarge{position:absolute;top:8px;right:8px;z-index:2;width:34px;height:34px;border-radius:50%;border:1px solid var(--cm-art-line);background:var(--cm-art-white);
+  color:var(--cm-art-sp-ink);font-size:17px;line-height:1;display:grid;place-items:center;cursor:pointer;opacity:.85}
+.cm-r3-enlarge:hover,.cm-r3-enlarge:focus-visible{opacity:1;outline:3px solid var(--cm-art-red);outline-offset:2px}
+.cm-r3-wallboard .go{background:none;border:0;padding:0;text-align:left;cursor:pointer}
+.cm-r3-wallboard .go:hover{text-decoration:underline}
+/* C75: the Schedule's Today board: its note, and rows that open their assignment */
+.cm-r3-wallboard .note{font-size:calc(var(--d, 600px) * .042);color:var(--cm-art-live);font-weight:700;margin:-4px 0 8px}
+.cm-r3-wallboard .r.is-link{width:100%;background:none;border:0;border-bottom:2px solid var(--cm-art-line);font:inherit;font-size:calc(var(--d, 600px) * .052);
+  color:inherit;text-align:left;cursor:pointer;border-radius:6px}
+.cm-r3-wallboard .r.is-link:hover,.cm-r3-wallboard .r.is-link:focus-visible{background:var(--cm-art-live-tint);outline:none}
+.cm-r3-wallboard .r.is-link b{color:var(--cm-art-red)}
+
 /* the left-wall board (prototype .board, sized for the side wall) */
 /* C43 (Ali 2026-10-25 "the left side should be bigger"): the board nearly fills the wall above the wainscot */
 .cm-r3-wallslot{position:absolute;left:6%;right:6%;top:6%;height:76%}
@@ -47,7 +67,7 @@
   border:6px solid var(--cm-art-in-frame);cursor:zoom-in;display:flex;flex-direction:column;overflow:hidden;font:inherit}
 .cm-r3-wallboard:hover{filter:brightness(1.04)}
 .cm-r3-wallboard .pin{position:absolute;top:-14px;left:50%;width:20px;height:20px;border-radius:50%;background:var(--cm-art-red);transform:translateX(-50%)}
-.cm-r3-wallboard h4{margin:0 0 10px;font-size:calc(var(--d, 600px) * .07)}
+.cm-r3-wallboard h4{margin:0 0 10px;padding-right:1.4em;font-size:calc(var(--d, 600px) * .07)}
 .cm-r3-wallboard .r{display:flex;justify-content:space-between;gap:12px;font-size:calc(var(--d, 600px) * .052);padding:5px 0;border-bottom:2px solid var(--cm-art-line)}
 .cm-r3-wallboard .r b{font-family:ui-monospace,Menlo,monospace}
 .cm-r3-wallboard .bar{display:block;height:12px;border-radius:6px;background:var(--cm-art-line);margin:6px 0 10px;overflow:hidden}
@@ -83,7 +103,7 @@
 @keyframes cm-r3-scr{50%{opacity:.75}}
 .cm-r3-fig.is-you{pointer-events:none}
 .cm-r3-fig.is-you.is-gone{opacity:0;transition:opacity .2s}
-@media (prefers-reduced-motion:reduce){.cm-r3-stage{transition:none}.cm-r3-spot .steam path,.cm-r3-spot .scrglow{animation:none}}
+@media (prefers-reduced-motion:reduce){.cm-r3-zoom{animation:none}.cm-r3-stage{transition:none}.cm-r3-spot .steam path,.cm-r3-spot .scrglow{animation:none}}
 
 /* C26 (v6 D4): the Events Hall auditorium: six tiered rows of red seats (each row a little taller, so they read as tiers), the
    raised stage under the screen, and a head per person really here (no invented crowd) */

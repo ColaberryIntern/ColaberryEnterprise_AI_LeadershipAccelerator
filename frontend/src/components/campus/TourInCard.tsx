@@ -14,7 +14,8 @@ export function TourStopCard({ tour, index, onToday }: { tour: Tour; index: numb
   const stop = tour.stops[index];
   if (!stop) return null;
   // C53 (v13 T5): the Explorer tour's first stop is Today, so its block opens it
-  const todayStop = tour.audience === 'explorer' && index === 0 && stop.buildingId === 'tower' && !!onToday;
+  // C77: every tour's first stop is the Schedule; from there, Today is the next step (Explorers and members alike)
+  const todayStop = index === 0 && stop.buildingId === 'tower' && !!onToday;
   const explorer = tour.audience === 'explorer';
   return (
     <div className={`cm-tc${explorer ? ' is-explorer' : ''}`} data-testid="cm-tour" data-stop={index + 1}>
