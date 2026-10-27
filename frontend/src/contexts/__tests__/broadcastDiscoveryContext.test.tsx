@@ -76,13 +76,14 @@ function deps() {
 
 /** A consumer that writes what it sees into the DOM, so each one is independently checkable. */
 function StateProbe({ label }: { label: string }) {
-  const { broadcasts, disabled, unavailable } = useDiscoveryState();
+  const { broadcasts, disabled, unavailable, answered } = useDiscoveryState();
   return (
     <div
       data-testid={`probe-${label}`}
       data-count={String(broadcasts.length)}
       data-disabled={String(disabled)}
       data-unavailable={String(unavailable)}
+      data-answered={String(answered)}
     />
   );
 }
@@ -219,11 +220,88 @@ describe('a consumer outside the provider is OFF, not merely empty', () => {
     expect(DISCOVERY_FALLBACK.disabled).toBe(true);
     expect(DISCOVERY_FALLBACK.broadcasts).toEqual([]);
     expect(DISCOVERY_FALLBACK.unavailable).toBe(false);
+    // Nothing was asked, so nothing was answered.
+    expect(DISCOVERY_FALLBACK.answered).toBe(false);
   });
 
   it('useRoomBroadcast finds nothing outside the provider', async () => {
     await mount(<RoomProbe label="lonely" roomId="room-1" />);
     expect(find('room-lonely')?.getAttribute('data-occ')).toBe('none');
+  });
+});
+
+/**
+ * `answered` — the positive signal, kept apart from the absence of the negative one.
+ *
+ * `disabled` starts false, because on mount nothing yet says the feature is off, and that is
+ * right for a placement that renders nothing until it has something to show. It is wrong for
+ * anything reading `!disabled` as "broadcasting exists": for the first moment of every page
+ * load that is a guess, and with the flag dark it is a wrong one. L8.3's "Replays" nav tab was
+ * gated that way first, which put the tab in every sidebar on load and took it away when the
+ * 404 landed.
+ */
+describe('answered — asked, and got a reply', () => {
+  async function mountOne(): Promise<void> {
+    signedIn();
+    await mount(
+      <ParticipantAuthProvider>
+        <BroadcastDiscoveryProvider deps={deps()}>
+          <StateProbe label="gate" />
+        </BroadcastDiscoveryProvider>
+      </ParticipantAuthProvider>,
+    );
+  }
+
+  it('is FALSE while the first request is still in flight, though disabled is false too', async () => {
+    // The whole point: in this state `!disabled` is true and means nothing. A gate built on it
+    // alone shows a tab for a feature that may well be switched off.
+    fetchDiscovery.mockImplementation(() => new Promise<DiscoveryResponse>(() => undefined));
+    await mountOne();
+
+    expect(find('probe-gate')?.getAttribute('data-answered')).toBe('false');
+    expect(find('probe-gate')?.getAttribute('data-disabled')).toBe('false');
+  });
+
+  it('is true once discovery answers with a list', async () => {
+    fetchDiscovery.mockImplementation(() => Promise.resolve(response()));
+    await mountOne();
+
+    expect(find('probe-gate')?.getAttribute('data-answered')).toBe('true');
+    expect(find('probe-gate')?.getAttribute('data-disabled')).toBe('false');
+  });
+
+  it('is true after a 404 as well — a 404 IS an answer, and the one a gate most needs', async () => {
+    fetchDiscovery.mockImplementation(() => Promise.reject(
+      Object.assign(new Error('not found'), { response: { status: 404 } }),
+    ));
+    await mountOne();
+
+    expect(find('probe-gate')?.getAttribute('data-answered')).toBe('true');
+    expect(find('probe-gate')?.getAttribute('data-disabled')).toBe('true');
+  });
+
+  it('is true after an outage, which is neither off nor unknown', async () => {
+    fetchDiscovery.mockImplementation(() => Promise.reject(
+      Object.assign(new Error('bad gateway'), { response: { status: 503 } }),
+    ));
+    await mountOne();
+
+    expect(find('probe-gate')?.getAttribute('data-answered')).toBe('true');
+    expect(find('probe-gate')?.getAttribute('data-unavailable')).toBe('true');
+  });
+
+  it('stays false for a signed-out viewer, who is never asked at all', async () => {
+    // No token: the provider never enables the hook, so there is no answer to have.
+    await mount(
+      <ParticipantAuthProvider>
+        <BroadcastDiscoveryProvider deps={deps()}>
+          <StateProbe label="gate" />
+        </BroadcastDiscoveryProvider>
+      </ParticipantAuthProvider>,
+    );
+
+    expect(find('probe-gate')?.getAttribute('data-answered')).toBe('false');
+    expect(fetchDiscovery).not.toHaveBeenCalled();
   });
 });
 
