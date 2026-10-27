@@ -97,7 +97,7 @@ export function RoomScreen({ summary, name, planStep, onSection, onCard, onPlan,
     // The screen body is a mouse shortcut to the section. It is not announced as a button (a button inside a button is invalid);
     // its own buttons are the controls, and "See all of ‹section›" / "Open ‹section›" is always one of them for the keyboard.
     <div className="cm-r3-screen" ref={screenRef} onClick={onSection} data-testid="cm-board" role="group" aria-label="The board">
-      <div className="inner">{body}</div>
+      <div className={custom ? 'inner is-custom' : 'inner'}>{body}</div>
     </div>
   );
 }

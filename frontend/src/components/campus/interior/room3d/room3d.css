@@ -21,6 +21,10 @@
 /* C42 (v12 + Ali 2026-10-25 "the main picture should be bigger"): wall-mounted, most of the back wall, text about 1.35x; --fit steps it
    down (RoomScreen) when a long card would overflow */
 .cm-r3-screen{position:absolute;left:5%;right:5%;top:5%;height:74%;--fit:1;cursor:zoom-in;background:var(--cm-art-in-screen);border-radius:18px;padding:12px;box-shadow:0 18px 40px var(--cm-art-sp-shadow)}
+/* Ali 2026-10-26 ("I can barely see the information on the screen"): a room's own screen (Chow Hall's cravings, the Schedule, the hallway,
+   the plans, events, live, the arcade) sizes its type from --fw at 0.9-3%; inside the screen --fw is the room width x 1.7, so every custom
+   screen reads about 1.7x larger at once, keeping its own proportions. --fwr is the room's real width (Room3D). */
+.cm-r3-screen .inner.is-custom{--fw:calc(var(--fwr) * 1.7)}
 .cm-r3-screen:focus-visible{outline:4px solid var(--cm-art-red);outline-offset:4px}
 .cm-r3-screen .inner{width:100%;height:100%;border-radius:10px;background:var(--cm-art-white);color:var(--cm-art-sp-ink);display:flex;flex-direction:column;justify-content:center;padding:4% 5%;position:relative;overflow:hidden}
 .cm-r3-screen .inner::before{content:"";position:absolute;left:0;top:0;right:0;height:7px;background:var(--bc)}
