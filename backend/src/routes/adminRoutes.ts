@@ -58,6 +58,7 @@ import departmentIntelligenceRoutes from './admin/departmentIntelligenceRoutes';
 import websiteIntelligenceRoutes from './admin/websiteIntelligenceRoutes';
 import admissionsRoutes from './admin/admissionsRoutes';
 import agentDomainRoutes from './admin/agentDomainRoutes';
+import agentNudgeRoutes from './admin/agentNudgeRoutes';
 import ticketRoutes from './admin/ticketRoutes';
 import previewRoutes from './admin/previewRoutes';
 import alertRoutes from './admin/alertRoutes';
@@ -262,6 +263,10 @@ router.use(admissionsRoutes);
 // The ten AI employee domain projects. Read-only; every route carries its own
 // requireSection guard, because the repo's route-auth lint is per FILE not per route.
 router.use(agentDomainRoutes);
+// Nudges to the agent builders. Separate from the line above because these SEND, while
+// agentDomainRoutes is read-only by charter, and because the recipient's name and address make
+// this an `internship` grant rather than a `program` one.
+router.use(agentNudgeRoutes);
 router.use(ticketRoutes);
 router.use(previewRoutes);
 router.use(alertRoutes);
