@@ -23,7 +23,7 @@ it('the tower opens Today for Explorers and the schedule for everyone else; name
   for (const a of ['member', 'business', 'staff'] as CampusAudience[]) expect(tower(a).primary).toEqual({ label: 'Open my schedule', route: '/portal/schedule' });
   expect(tower('explorer').name).toBe('Schedule');
   expect(tower('explorer').rooms).toEqual(tower('member').rooms);
-  expect(subOf({ id: 'tower' }, 'explorer')).toBe('Today, your home base · plus your schedule');
+  expect(subOf({ id: 'tower' }, 'explorer')).toBe('What is coming up, then Today, your home base');
   expect(subOf({ id: 'tower' }, 'member')).toBe('Your schedule & today’s agenda');
 });
 

@@ -66,11 +66,14 @@ describe('pathAhead (pure)', () => {
     expect(todayFinished(null)).toBe(false);
   });
   it('the Schedule board once today is done: what comes next, Open Today, an empty line, never "free"', () => {
-    const b = aheadBoard(pathAhead(feed(CARDS), EVENTS, NOW));
+    const b = aheadBoard(pathAhead(feed(CARDS), EVENTS, NOW), true);
     expect(b).toMatchObject({ title: '✅ Today is done · what comes next', open: 'Open Today', route: '/portal/today' });
     expect(b.note).toContain('You are not finished');
-    expect(aheadBoard([]).empty).toBe('Nothing new on your path yet');
-    expect(JSON.stringify([b, aheadBoard([])])).not.toMatch(/\bfree\b/i);
+    expect(aheadBoard([], true).empty).toBe('Nothing new on your path yet');
+    expect(JSON.stringify([b, aheadBoard([], false)])).not.toMatch(/\bfree\b/i);
+  });
+  it('no items left today is not claimed as "done" (finished items drop off the plan, or there was none)', () => {
+    expect(aheadBoard([], false).title).toBe('📅 Nothing left on today · what comes next');
   });
 });
 

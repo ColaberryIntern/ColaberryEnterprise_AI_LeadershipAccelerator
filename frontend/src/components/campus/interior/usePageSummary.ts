@@ -109,7 +109,7 @@ export function usePageSummary(id: BuildingId, open: boolean, name: string, audi
   // C75: the left board is Today's included learning; C76: the planning desk's chair opens the next unfinished item. C78: today is
   // done, so the board is the path ahead and the chair opens your next lesson (none: Today)
   if (id === 'tower') {
-    if (finished && ahead) return { ...plainSummary(name), sideTop: aheadBoard(ahead), card: ahead.find((r) => r.route)?.route ?? towerCard(planStops) };
+    if (finished && ahead) return { ...plainSummary(name), sideTop: aheadBoard(ahead, !!planStops?.length), card: ahead.find((r) => r.route)?.route ?? towerCard(planStops) };
     return { ...plainSummary(name), sideTop: scheduleBoard(planStops, name), card: towerCard(planStops) };
   }
   if (wallFetch) return { ...plainSummary(name), sideTop: wall?.id === id ? wall.side : null };

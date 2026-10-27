@@ -1,5 +1,5 @@
 /**
- * C50 (v13 T2): "Your Today page" in the side panel. Explorers: a whole-card link, START HERE - YOUR HOME BASE, up to four facts from
+ * C50 (v13 T2): "Your Today page" in the side panel. Explorers: a whole-card link, YOUR HOME BASE (C77: START HERE moved to the Schedule), up to four facts from
  * real data (each left out when there is nothing real: next step, today's plan, the next event, Maya only while on duty), and Open
  * Today. Members and staff: a slim row. Both open /portal/today?stay=1. The concierge puts it first under the greeting.
  */
@@ -43,7 +43,8 @@ it('Explorers: the whole card opens Today, with the facts and Open Today', () =>
   act(() => { root.render(<MemoryRouter><TodayCard audience="explorer" stops={STOPS} desks={DESKS} now={NOW} /></MemoryRouter>); });
   const card = q('[data-testid="cm-today-card"]')!;
   expect(card.getAttribute('href')).toBe(TODAY_HREF);
-  expect(card.textContent).toContain('START HERE');
+  expect(card.textContent).toContain('YOUR HOME BASE · AFTER WHAT IS COMING UP'); // C77: START HERE is the Schedule now
+  expect(card.textContent).not.toContain('START HERE');
   expect(card.textContent).toContain('Your Today page');
   expect(card.querySelectorAll('dl > div')).toHaveLength(4);
   expect(card.textContent).toContain('Open Today');

@@ -33,10 +33,12 @@ export function pathAhead(feed: ClassroomFeed | null, events: OpenHouseView[] | 
 /** Today is finished (every item done) or there is no plan left today: the moment to show the path ahead. */
 export const todayFinished = (stops: { done: boolean }[] | null): boolean => !!stops && stops.every((s) => s.done);
 
-/** The Schedule's left board once today is finished: what comes next, and Today one tap away. */
-export function aheadBoard(rows: SideRow[]): SideTop {
+/** The Schedule's left board once today is finished: what comes next, and Today one tap away. `hadItems`: today's items are all
+ *  checked off ("Today is done"); no items is ambiguous (done ones drop off the plan on the next read, or there was none), so it
+ *  says only what is true either way. */
+export function aheadBoard(rows: SideRow[], hadItems: boolean): SideTop {
   return {
-    title: '✅ Today is done · what comes next',
+    title: hadItems ? '✅ Today is done · what comes next' : '📅 Nothing left on today · what comes next',
     note: 'You are not finished. Pick up your next lesson or sign up for what is coming up.',
     rows, ...(rows.length ? {} : { empty: 'Nothing new on your path yet' }), open: 'Open Today', route: '/portal/today',
   };

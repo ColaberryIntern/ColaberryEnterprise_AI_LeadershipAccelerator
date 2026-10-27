@@ -150,7 +150,7 @@ describe('the tour card, three states', () => {
 
   it('per account: Explorer and partner wording; staff (no tour) get no card', () => {
     render(offer({ audience: 'explorer', stops: TOUR.slice(0, 7) }));
-    expect(q('cm-cc-tour')!.textContent).toContain('A 3-minute walk through 7 places. It starts at Today, your home base.'); // C53
+    expect(q('cm-cc-tour')!.textContent).toContain('A 3-minute walk through 7 places. It starts with what is coming up, then Today.'); // C53, C77
     render(offer({ audience: 'business', stops: TOUR.slice(0, 6) }));
     expect(q('cm-cc-tour')!.textContent).toContain('Start the partner tour');
     render(offer({ audience: 'staff', stops: null }));

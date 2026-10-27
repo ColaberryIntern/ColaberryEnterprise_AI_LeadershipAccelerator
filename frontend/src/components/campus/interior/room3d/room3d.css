@@ -67,7 +67,7 @@
   border:6px solid var(--cm-art-in-frame);cursor:zoom-in;display:flex;flex-direction:column;overflow:hidden;font:inherit}
 .cm-r3-wallboard:hover{filter:brightness(1.04)}
 .cm-r3-wallboard .pin{position:absolute;top:-14px;left:50%;width:20px;height:20px;border-radius:50%;background:var(--cm-art-red);transform:translateX(-50%)}
-.cm-r3-wallboard h4{margin:0 0 10px;font-size:calc(var(--d, 600px) * .07)}
+.cm-r3-wallboard h4{margin:0 0 10px;padding-right:1.4em;font-size:calc(var(--d, 600px) * .07)}
 .cm-r3-wallboard .r{display:flex;justify-content:space-between;gap:12px;font-size:calc(var(--d, 600px) * .052);padding:5px 0;border-bottom:2px solid var(--cm-art-line)}
 .cm-r3-wallboard .r b{font-family:ui-monospace,Menlo,monospace}
 .cm-r3-wallboard .bar{display:block;height:12px;border-radius:6px;background:var(--cm-art-line);margin:6px 0 10px;overflow:hidden}
