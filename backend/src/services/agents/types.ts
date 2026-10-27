@@ -21,4 +21,16 @@ export interface AgentExecutionResult {
   duration_ms: number;
   /** Number of entities scanned/processed (for non-campaign agents) */
   entities_processed?: number;
+  /**
+   * True when the agent only looked and advised, and changed nothing.
+   *
+   * The dispatcher moves a ticket to `in_review` whenever an agent returns with no errors, which
+   * reads a clean finish as work done. For an agent that only ever proposes, finishing cleanly
+   * is its normal outcome, so that rule promoted tickets nothing had been done to. A reviewer
+   * then opens a ticket the system has already moved, and the move is itself a claim.
+   *
+   * Set this and the dispatcher leaves the ticket where it is. Absent, nothing changes, so an
+   * agent that really does change something keeps the old behavior without opting in.
+   */
+  advisory_only?: boolean;
 }

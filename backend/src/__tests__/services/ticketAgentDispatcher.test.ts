@@ -440,3 +440,57 @@ describe('dispatchTicketToAgent — Milestone 4 idempotency + malformed-input sw
     expect(mockEmit.mock.calls[1][0].authorizationDecisionId).toBe('approval-attempt-2');
   });
 });
+
+describe('an advisory agent does not move the ticket (finding 49)', () => {
+  // An empty error list means the agent finished, not that it changed anything. PlatformFixAgent
+  // only ever proposes, so finishing cleanly is its normal outcome, and promoting on that told
+  // the reviewer - by moving the ticket - that there was something to review. The agent now says
+  // `advisory_only` and the dispatcher leaves the ticket alone.
+
+  it('leaves the status alone when the agent reports advisory_only', async () => {
+    ticketFindByPk.mockResolvedValue({ id: 'tk20', type: 'bug', status: 'todo', metadata: {}, title: 'T', description: 'D' });
+    agentRunCreate.mockResolvedValue(makeAgentRun('run20'));
+    const mockExecute = jest.fn().mockResolvedValue({
+      agent_name: 'PlatformFixAgent', campaigns_processed: 0, actions_taken: [], errors: [],
+      duration_ms: 5, advisory_only: true,
+    });
+    mockSelectAgent.mockResolvedValue(makeSelection('PlatformFixAgent', mockExecute));
+
+    await dispatchTicketToAgent('tk20');
+
+    // `in_progress` at the start is correct and still happens; it is the PROMOTION that must
+    // not. Asserting "never called at all" would have failed for the right reason by accident.
+    expect(updateTicketStatus).toHaveBeenCalledWith('tk20', 'in_progress', 'agent', 'PlatformFixAgent');
+    expect(updateTicketStatus).not.toHaveBeenCalledWith('tk20', 'in_review', 'agent', 'PlatformFixAgent');
+  });
+
+  it('still promotes an agent that did change something', async () => {
+    // The guard is opt-in, so an agent that does real work keeps the old behavior without
+    // having to declare anything.
+    ticketFindByPk.mockResolvedValue({ id: 'tk21', type: 'bug', status: 'todo', metadata: {}, title: 'T', description: 'D' });
+    agentRunCreate.mockResolvedValue(makeAgentRun('run21'));
+    const mockExecute = jest.fn().mockResolvedValue({
+      agent_name: 'CurriculumQAAgent', campaigns_processed: 0, actions_taken: [], errors: [], duration_ms: 5,
+    });
+    mockSelectAgent.mockResolvedValue(makeSelection('CurriculumQAAgent', mockExecute));
+
+    await dispatchTicketToAgent('tk21');
+
+    expect(updateTicketStatus).toHaveBeenCalledWith('tk21', 'in_review', 'agent', 'CurriculumQAAgent');
+  });
+
+  it('still records the run as a success, because proposing IS the job', async () => {
+    ticketFindByPk.mockResolvedValue({ id: 'tk22', type: 'bug', status: 'todo', metadata: {}, title: 'T', description: 'D' });
+    const run = makeAgentRun('run22');
+    agentRunCreate.mockResolvedValue(run);
+    const mockExecute = jest.fn().mockResolvedValue({
+      agent_name: 'PlatformFixAgent', campaigns_processed: 0, actions_taken: [], errors: [],
+      duration_ms: 5, advisory_only: true,
+    });
+    mockSelectAgent.mockResolvedValue(makeSelection('PlatformFixAgent', mockExecute));
+
+    await dispatchTicketToAgent('tk22');
+
+    expect(run.update).toHaveBeenCalledWith(expect.objectContaining({ status: 'success', result: 'success' }));
+  });
+});

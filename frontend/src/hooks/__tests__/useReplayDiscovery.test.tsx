@@ -94,6 +94,34 @@ describe('the four states, kept apart', () => {
   });
 });
 
+describe('the retention window it is told', () => {
+  it('passes a sane window through', async () => {
+    await mount(true, () => Promise.resolve({ ...body([row()]), retention_days: 25 }));
+    expect(seen.retentionDays).toBe(25);
+  });
+
+  it('is null when the server does not say, so the page stays silent', async () => {
+    // An older backend sends no window. Null means "say nothing", never "assume something".
+    await mount(true, () => Promise.resolve(body([row()])));
+    expect(seen.retentionDays).toBeNull();
+  });
+
+  it('refuses a value that is not a positive finite number', async () => {
+    /**
+     * Each of these would render as a retention promise the server never made: "0 days",
+     * "-5 days", "NaN days", "25 days" from a string that later fails arithmetic. The guard
+     * is cheap; the failure is a page lying to a student about how long their class lasts.
+     */
+    for (const bad of [0, -5, Number.NaN, Infinity, '25', null, {}, []]) {
+      // eslint-disable-next-line no-await-in-loop
+      await mount(true, () => Promise.resolve({ ...body([row()]), retention_days: bad } as never));
+      expect(seen.retentionDays).toBeNull();
+      act(() => { root?.unmount(); });
+      container?.remove();
+    }
+  });
+});
+
 describe('what it returns', () => {
   it('passes the rows through untouched', async () => {
     await mount(true, () => Promise.resolve(body([row(), row({ id: 'occ-2' })])));

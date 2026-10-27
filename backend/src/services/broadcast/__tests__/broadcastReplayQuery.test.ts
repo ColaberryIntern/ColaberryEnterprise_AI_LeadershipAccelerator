@@ -15,6 +15,7 @@ jest.mock('../broadcastActiveQuery', () => ({
 import { Op } from 'sequelize';
 import {
   findReplayOccurrences, REPLAY_DISCOVERY_STATES, REPLAY_DISCOVERY_LIMIT,
+  REPLAY_RETENTION_DAYS, replayRetentionCutoff,
 } from '../broadcastReplayQuery';
 import { ACTIVE_DISCOVERY_STATES } from '../broadcastActiveQuery';
 
@@ -75,6 +76,104 @@ describe('only what can actually play', () => {
 
   it('CONTROL: it does ask for something, so the assertions above are not vacuous', () => {
     expect([...REPLAY_DISCOVERY_STATES]).toEqual(['replay_ready']);
+  });
+});
+
+/**
+ * The retention window — Ali's decision of 27 Oct 2026, which the ticket asked for and the code
+ * previously had no answer to ("what appears in the list and for how long").
+ *
+ * A duration is the easiest thing in this file to get wrong by an invisible margin: off by a
+ * factor of 1000, off by one day, measured from the wrong column, or applied after the query so
+ * that an expired class still consumes a slot on the page. Each of those is a separate test,
+ * and the boundary is asserted from BOTH sides because a cutoff with only one side tested is a
+ * cutoff that could be anywhere.
+ */
+describe('the retention window', () => {
+  // A fixed instant. A boundary test against a live clock is a boundary test that passes at
+  // 11:59 and fails at midnight.
+  const NOW = Date.UTC(2026, 9, 27, 12, 0, 0);
+  const daysAgo = (n: number) => new Date(NOW - n * 24 * 60 * 60 * 1000);
+
+  it('is 25 days, and says so in one place', () => {
+    expect(REPLAY_RETENTION_DAYS).toBe(25);
+  });
+
+  it('computes the cutoff as exactly that many days back', () => {
+    // Guards the units. A seconds-vs-milliseconds slip here would make the window 25 seconds
+    // or 68 years, and either would pass a test that only checked "a cutoff exists".
+    expect(replayRetentionCutoff(NOW).getTime()).toBe(NOW - 25 * 86_400_000);
+  });
+
+  it('asks the DATABASE for the window, not the caller afterwards', async () => {
+    // In the query, so an expired class is never read, never sorted, and never counted against
+    // the limit. Filtered later, twenty-five expired classes would push every live one off.
+    await findReplayOccurrences(REPLAY_DISCOVERY_LIMIT, NOW);
+
+    const where = mockFindAll.mock.calls[0][0].where;
+    expect(where).toHaveProperty('ended_at');
+    // The OPERATOR, read through the symbol: `>=`, not merely "a key called ended_at".
+    expect(where.ended_at[Op.gte]).toEqual(replayRetentionCutoff(NOW));
+  });
+
+  it('measures from ended_at, which is when the class finished', async () => {
+    // Not scheduled_start_at: a class moved twice would expire from a date it never aired on.
+    await findReplayOccurrences(REPLAY_DISCOVERY_LIMIT, NOW);
+
+    const where = mockFindAll.mock.calls[0][0].where;
+    expect(where.scheduled_start_at).toBeUndefined();
+    expect(where.content_started_at).toBeUndefined();
+  });
+
+  it('CONTROL: the cutoff moves with the clock', async () => {
+    // Without this, every assertion above would hold against a frozen constant computed at
+    // import — which is exactly the module-scope `Date.now()` the repo's date rule forbids,
+    // and which would drift further from correct for every hour the process stayed up.
+    await findReplayOccurrences(REPLAY_DISCOVERY_LIMIT, NOW);
+    const first = mockFindAll.mock.calls[0][0].where.ended_at[Op.gte].getTime();
+
+    const LATER = NOW + 7 * 86_400_000;
+    await findReplayOccurrences(REPLAY_DISCOVERY_LIMIT, LATER);
+    const second = mockFindAll.mock.calls[1][0].where.ended_at[Op.gte].getTime();
+
+    expect(second - first).toBe(7 * 86_400_000);
+  });
+
+  it('defaults to the real clock when no instant is given', async () => {
+    // The production call site passes no instant, so the default has to be live rather than
+    // the epoch — a cutoff of 1970 would retain everything and silently void the policy.
+    const before = Date.now();
+    await findReplayOccurrences();
+    const cutoff = mockFindAll.mock.calls[0][0].where.ended_at[Op.gte].getTime();
+
+    expect(cutoff).toBeGreaterThanOrEqual(before - 25 * 86_400_000 - 5_000);
+    expect(cutoff).toBeLessThanOrEqual(Date.now() - 25 * 86_400_000 + 5_000);
+  });
+
+  it('the boundary, from both sides', async () => {
+    await findReplayOccurrences(REPLAY_DISCOVERY_LIMIT, NOW);
+    const cutoff = mockFindAll.mock.calls[0][0].where.ended_at[Op.gte].getTime();
+
+    // Inside: last week's class, the case the whole feature exists for.
+    expect(daysAgo(7).getTime()).toBeGreaterThan(cutoff);
+    expect(daysAgo(24).getTime()).toBeGreaterThan(cutoff);
+    // Outside: a class from the start of term.
+    expect(daysAgo(26).getTime()).toBeLessThan(cutoff);
+    expect(daysAgo(90).getTime()).toBeLessThan(cutoff);
+  });
+
+  it('excludes a row whose end time was never written, rather than guessing', async () => {
+    /**
+     * `Op.gte` against NULL is NULL, which is not true, so an undated row is omitted. That is
+     * the fail-closed answer: a row that cannot be aged cannot be shown to be inside a window
+     * that touches billing. `ended_at` has been written since L7.4, so this concerns only rows
+     * predating it — and the surface keeps its "Date not recorded" branch as belt and braces.
+     */
+    await findReplayOccurrences(REPLAY_DISCOVERY_LIMIT, NOW);
+    const where = mockFindAll.mock.calls[0][0].where;
+    // Nothing opts NULL back in.
+    expect(where.ended_at[Op.or]).toBeUndefined();
+    expect(where.ended_at[Op.is]).toBeUndefined();
   });
 });
 

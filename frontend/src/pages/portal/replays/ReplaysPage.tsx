@@ -45,6 +45,7 @@ export default function ReplaysPage(): React.ReactElement {
         disabled={state.disabled}
         unavailable={state.unavailable}
         loading={state.loading}
+        retentionDays={state.retentionDays}
       />
     </PortalShell>
   );
