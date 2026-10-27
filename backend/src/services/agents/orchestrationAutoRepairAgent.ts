@@ -17,7 +17,18 @@ export async function runOrchestrationAutoRepairAgent(
   const startTime = Date.now();
   const actions: AgentAction[] = [];
   const errors: string[] = [];
-  const maxRepairs = config.max_repairs_per_run || 10;
+  /**
+   * A configured limit of 0 means NO repairs, and used to mean ten.
+   *
+   * `config.max_repairs_per_run || 10` treats 0 as absent, so the one setting an operator would
+   * reach for to stop this agent writing — without disabling it outright and losing its scanning
+   * — quietly gave it the default budget instead. Reported by Quincy on 2026-10-26. Only null,
+   * undefined and a non-number fall back to the default now.
+   */
+  const configured = config.max_repairs_per_run;
+  const maxRepairs = typeof configured === 'number' && Number.isFinite(configured) && configured >= 0
+    ? Math.floor(configured)
+    : 10;
   let repairCount = 0;
 
   try {
@@ -91,8 +102,16 @@ export async function runOrchestrationAutoRepairAgent(
         ];
         if (!allowedFKFields.includes(fkField)) continue;
 
+        // Repair only what the monitor actually flagged.
+        //
+        // promptMonitorAgent looks for broken prompt links on ACTIVE mini-sections only
+        // (`is_active: true`), but this repair cleared the link on every mini-section carrying it,
+        // inactive ones included — so one flagged active lesson licensed a write across any number
+        // of unflagged inactive ones. Quincy found this on 2026-10-26. The filter here now matches
+        // the monitor's, which is the rule the whole monitor-then-repair pair depends on: a repair
+        // may not reach further than the finding that authorized it.
         const affected = await MiniSection.findAll({
-          where: { [fkField]: brokenPromptId },
+          where: { is_active: true, [fkField]: brokenPromptId },
           attributes: ['id', 'title', fkField],
         });
 

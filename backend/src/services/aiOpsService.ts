@@ -30,10 +30,20 @@ export async function getOverview() {
   const actionsToday = await AiAgentActivityLog.count({
     where: { created_at: { [Op.gte]: todayStart } },
   });
+  // "Repairs Today" used to be `action ILIKE '%repair%'` alone, which missed every repair
+  // OrchestrationAutoRepairAgent has ever made: it logs `reactivate_prompt`, `null_broken_fk`
+  // and `null_broken_artifact_fk`, none of which contain the word. Quincy found this on
+  // 2026-10-26. The named actions live in agents/repairActions.ts so the agent, the permission
+  // layer and this counter all read one list; the ILIKE stays so any other agent naming its
+  // action `*repair*` keeps counting.
+  const { ORCHESTRATION_REPAIR_ACTIONS } = await import('./agents/repairActions');
   const repairsToday = await AiAgentActivityLog.count({
     where: {
       created_at: { [Op.gte]: todayStart },
-      action: { [Op.iLike]: '%repair%' },
+      [Op.or]: [
+        { action: { [Op.iLike]: '%repair%' } },
+        ...ORCHESTRATION_REPAIR_ACTIONS.map((name) => ({ action: { [Op.iLike]: `%${name}%` } })),
+      ],
       result: 'success',
     },
   });

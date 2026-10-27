@@ -212,11 +212,38 @@ async function runAgent(
       ? Math.round((agent.avg_duration_ms * agent.run_count + durationMs) / (agent.run_count + 1))
       : durationMs;
 
+    /**
+     * An agent that RETURNS its errors failed just as much as one that threw.
+     *
+     * Reported by Quincy on 2026-10-26: OrchestrationHealthAgent catches its own errors and
+     * returns them in `result.errors` instead of throwing. This branch logged the run as
+     * `result: 'failed'` while describing it as `scan_completed_no_issues`, set the status back
+     * to `idle`, and left `error_count` untouched — that field only moved in the catch below. So
+     * the activity row said both "failed" and "no issues" at once, and the agent's own row looked
+     * healthy. 104 agents come through here, so any of them that reports rather than throws was
+     * treated the same way, and anything scoring agents by `error_count` or `status` undercounted
+     * those failures.
+     *
+     * Treating a reported error as a failure is a deliberate behavior change: agents that
+     * routinely return soft errors will now show `status: 'error'` and raise the overview's
+     * errored count. That visibility is the point of the fix, not a side effect of it.
+     */
+    const failed = result.errors.length > 0;
+
     await agent.update({
-      status: 'idle',
+      status: failed ? 'error' : 'idle',
       last_run_at: new Date(),
       run_count: agent.run_count + 1,
       avg_duration_ms: newAvg,
+      // Spread only on failure, so a successful run never overwrites the previous error with a
+      // null and loses the only record of what went wrong last time.
+      ...(failed
+        ? {
+          error_count: agent.error_count + 1,
+          last_error: String(result.errors[0] ?? 'agent reported an error').slice(0, 500),
+          last_error_at: new Date(),
+        }
+        : {}),
       last_result: {
         campaigns_processed: result.campaigns_processed,
         actions_taken: result.actions_taken.length,
@@ -227,15 +254,18 @@ async function runAgent(
       updated_at: new Date(),
     });
 
-    // Log the execution summary with trace — include full action details
+    // Log the execution summary with trace — include full action details.
+    // A run with no actions AND no errors is the only one that gets to say "no issues".
     const actionSummary = result.actions_taken.length > 0
       ? `${result.actions_taken.length} action(s): ${[...new Set(result.actions_taken.map(a => a.action))].join(', ')}`
-      : 'scan_completed_no_issues';
+      : failed
+        ? `scan_failed_with_errors: ${result.errors.length} error(s)`
+        : 'scan_completed_no_issues';
 
     await logAgentActivity({
       agent_id: agent.id,
       action: actionSummary,
-      result: result.errors.length > 0 ? 'failed' : 'success',
+      result: failed ? 'failed' : 'success',
       trace_id: traceId,
       duration_ms: durationMs,
       execution_context: {
