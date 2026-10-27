@@ -34,8 +34,10 @@ export const bareTitle = (storyId: string | undefined, title: string): string =>
 /** How many tickets the bench holds: the prototype's cork shows about five before it scrolls. */
 export const BENCH_MAX = 6;
 
-/** The building a workstation stands in: the page it was opened from, else the kind's own building. */
-export function workstationBuilding(from: string | null | undefined, fallback: BuildingId): BuildingId {
+/** The building a workstation stands in: the room it was opened in on the campus (`at`, C79), else the page it was opened from,
+ *  else the kind's own building. Only a room with a workstation spot counts. */
+export function workstationBuilding(from: string | null | undefined, fallback: BuildingId, at?: BuildingId | null): BuildingId {
+  if (at && spotOf(at)?.opens === 'ws') return at;
   const b = from ? buildingForPath(from) : null;
   return b && spotOf(b.id)?.opens === 'ws' ? (b.id as BuildingId) : fallback;
 }

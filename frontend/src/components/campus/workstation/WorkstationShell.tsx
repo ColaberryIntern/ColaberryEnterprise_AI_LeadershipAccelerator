@@ -7,6 +7,7 @@ import { runtimeCss } from '../../../pages/portal/runtime/runtimeKit';
 import WorkstationDesk from './WorkstationDesk';
 import DeskTools from './DeskTools';
 import type { BenchTicket, WorkstationPlace } from './workstationModel';
+import type { BuildingId } from '../campusMap';
 import './workstation.css';
 
 /**
@@ -57,7 +58,7 @@ export function benchState(returnTo: string | null | undefined, sectionRoute: st
 }
 
 /** `location.state` as the workstation pages read it. */
-export interface WorkstationOrigin { from?: string; fromCampus?: boolean }
+export interface WorkstationOrigin { from?: string; fromCampus?: boolean; at?: BuildingId }
 
 /** The page to return to, or null when the learner came from the campus map (or a deep link). */
 export function returnToOf(state: unknown): string | null {

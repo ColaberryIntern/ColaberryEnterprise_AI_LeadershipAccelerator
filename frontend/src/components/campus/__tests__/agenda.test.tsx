@@ -54,8 +54,8 @@ describe('rendered', () => {
   it('the board: icons 🚪 🎓 🎪 in order with their buildings, 🎓 Class walks to the Classroom, 🚪 Booked to Meeting Rooms, the event signs up', () => {
     const walks: string[] = [];
     const items = agenda({ sessions: [cls()], events: [ev({ is_registered: false })], bookings: [bk()], now: NOW });
-    act(() => { root.render(<div className="cm-r3-screen"><AgendaBoard items={items} now={NOW} place={place} onWalk={(id) => walks.push(id)} onSection={() => undefined} /></div>); });
-    expect(q('.k')!.textContent).toBe('Your week · classes, events & sessions');
+    act(() => { root.render(<div className="cm-r3-screen"><AgendaBoard items={items} now={NOW} place={place} onWalk={(id) => walks.push(id)} onOpen={() => undefined} /></div>); });
+    expect(q('.k')!.textContent).toBe('Your week'); // C80: one line, never clipped
     const rows = Array.from(container.querySelectorAll('.cm-ag-row'));
     expect(rows.map((r) => r.querySelector('.ic')!.textContent)).toEqual(['🚪', '🎓', '🎪']);
     expect(rows[0].textContent).toContain('Meeting Rooms');
@@ -65,6 +65,14 @@ describe('rendered', () => {
     act(() => { (rows[0].querySelector('button') as HTMLButtonElement).click(); });
     expect(walks).toEqual(['lecture', 'commons']);
     expect(container.querySelectorAll('[data-testid="cm-board-strip"] .d[data-has-event]').length).toBe(3);
+  });
+  it('C80: the board has three small buttons, Calendar, Events and Today, each to its own page (no single "Open my schedule")', () => {
+    const opened: string[] = [];
+    act(() => { root.render(<div className="cm-r3-screen"><AgendaBoard items={[]} now={NOW} place={place} onWalk={() => undefined} onOpen={(r) => opened.push(r)} /></div>); });
+    expect(q('[data-testid="cm-board-primary"]')).toBeNull();
+    expect(container.textContent).not.toContain('Open my schedule');
+    for (const k of ['calendar', 'events', 'today']) act(() => { (q(`[data-testid="cm-board-${k}"]`) as HTMLButtonElement).click(); });
+    expect(opened).toEqual(['/portal/schedule', '/portal/events', '/portal/today?stay=1']);
   });
   it('Coming up shows "‹day› · time · ‹building›" with Walk there; nothing when empty', () => {
     const walks: string[] = [];

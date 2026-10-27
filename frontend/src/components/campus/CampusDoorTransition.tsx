@@ -2,6 +2,7 @@ import './campusBanner.css'; // the door panel's styles travel with the componen
 import React, { useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useCampus } from './CampusContext';
+import type { BuildingId } from './campusMap';
 
 /**
  * Plays the campus door transitions (Colaberry Campus C3).
@@ -30,14 +31,24 @@ const insetOf = (r: Rect): string => {
 const FULL = 'inset(0px 0px 0px 0px round 0px)';
 const centerRect = (): Rect => ({ left: window.innerWidth / 2 - 40, top: window.innerHeight / 2 - 30, width: 80, height: 60 });
 
+/** What a door hands the page it opens: where it was opened from (Ali, 2026-10-26: backing out returns there) and, from the campus
+ *  home, the building you are standing in (C79: a workstation opened in the Schedule stands in the Schedule). */
+export function doorState(pathname: string, search: string, here: BuildingId | null): { from: string; at?: BuildingId } {
+  const from = `${pathname}${search}`;
+  return pathname === '/portal/campus' && here ? { from, at: here } : { from };
+}
+
 export default function CampusDoorTransition(): React.ReactElement | null {
-  const { door, clearDoor, settings, openMap, closeLayer } = useCampus();
+  const { door, clearDoor, settings, openMap, closeLayer, here } = useCampus();
   const navigate = useNavigate();
   const loc = useLocation();
   const onHome = loc.pathname === '/portal/campus';
   // Where the door was opened from travels with it (Ali, 2026-10-26: backing out returns where you came from). From the campus home,
   // the workstation's Stand up still stands you in the room (returnToOf treats the home as no page).
   const fromHere = `${loc.pathname}${loc.search}`;
+  // C79: read through a ref, so the building changing mid-animation (Step outside sets it) never restarts the door
+  const hereRef = useRef(here);
+  hereRef.current = here;
   const panel = useRef<HTMLDivElement | null>(null);
   const reduce = settings.reduceMotion;
 
@@ -48,7 +59,7 @@ export default function CampusDoorTransition(): React.ReactElement | null {
     const once = (fn: () => void) => () => { if (done) return; done = true; if (timer !== undefined) window.clearTimeout(timer); fn(); clearDoor(); };
 
     if (door.phase === 'in') {
-      const finish = once(() => { closeLayer(); navigate(door.route, { state: { from: fromHere } }); });
+      const finish = once(() => { closeLayer(); navigate(door.route, { state: doorState(loc.pathname, loc.search, hereRef.current) }); });
       const el = panel.current;
       if (reduce || !el || typeof el.animate !== 'function') { finish(); return undefined; }
       timer = window.setTimeout(finish, DOOR_FALLBACK_MS);

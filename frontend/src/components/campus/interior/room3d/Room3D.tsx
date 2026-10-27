@@ -155,7 +155,7 @@ export default function Room3D(p: Room3DProps): React.ReactElement | null {
     <RoomScreen summary={summary} name={p.name} planStep={p.planStep} onSection={section} onCard={cardRoute && spot?.opens !== 'book' && spot?.opens !== 'order' ? sitDown : null}
       onPlan={(r) => p.onOpen(r)} onZoom={toggle('back')} big={isBig} custom={id === 'admissions' ? <PlansBoard onSection={section} />
         : id === 'chow' ? <CravingScreen now={wx.now} condition={wx.w.condition} />
-        : id === 'tower' && agendaItems ? <AgendaBoard items={agendaItems} now={new Date()} place={placeName} onWalk={(b) => openMap(b)} onSection={section} />
+        : id === 'tower' && agendaItems ? <AgendaBoard items={agendaItems} now={new Date()} place={placeName} onWalk={(b) => openMap(b)} onOpen={p.onOpen} />
         : id === 'amphi' && live ? <LiveScreen live={live} hereCount={people.length} onJoin={p.onOpen} />
         : id === 'amphi' && events ? <NextEventBoard event={upcoming(events, new Date(), 1)[0] ?? null} onSection={section} />
         : hall ? <HallwayBoard hallway={hallway} onOpen={p.onOpen} />
