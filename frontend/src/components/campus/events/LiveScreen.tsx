@@ -11,13 +11,47 @@ import '../campusLiveStates.css';
  *    broadcast's own room / live page) and 👏 React (local only, round-1 Q15: nothing is sent);
  *  - LiveTile: the arrival card's single tile in place of the board tile.
  * Not shown (no data in discovery, logged for Ali): the host's name, a watcher count and "captions on".
+ *
+ * C28b — THE STAGE ACTUALLY PLAYS NOW. Until this, the only action on the Events Hall's screen
+ * was "Join the audience →", which navigates OUT of the room: walking into the hall and walking
+ * away from the class were the same click. "Watch on the big screen" opens the broadcast in the
+ * portal's one player, which `Room3D` then docks over this very screen.
+ *
+ * WHEN DOCKED, THIS BOARD GETS OUT OF THE WAY. The player covers the screen, so everything here
+ * except the chip would be drawn behind a video — present to a screen reader, invisible to
+ * everyone else, and impossible to click. `docked` therefore collapses the board to its state
+ * line, and the player's own controls take over.
  */
 const stop = (fn: () => void) => (e: React.MouseEvent) => { e.stopPropagation(); fn(); };
 
-export function LiveScreen({ live, hereCount, onJoin }: { live: CampusLiveNow; hereCount: number | null; onJoin: (route: string) => void }): React.ReactElement {
+export interface LiveScreenProps {
+  live: CampusLiveNow;
+  hereCount: number | null;
+  onJoin: (route: string) => void;
+  /** Open the broadcast in the portal's player. Absent on a surface that cannot dock it. */
+  onWatchHere?: () => void;
+  /** True while the player covers this screen, so the board stands down. */
+  docked?: boolean;
+}
+
+export function LiveScreen({ live, hereCount, onJoin, onWatchHere, docked = false }: LiveScreenProps): React.ReactElement {
   const [claps, setClaps] = useState(0);
   const route = roomRoute(live.b);
   const st = LIVE_STATES[live.state];
+
+  if (docked) {
+    /**
+     * The player is on this wall. Only the state line survives, and it sits ABOVE the video
+     * rather than behind it — the room keeps telling you what you are watching and for how
+     * long, which the player's own title bar does not say.
+     */
+    return (
+      <span className={`cm-ls-chip is-${live.state} is-docked`} data-testid="cm-board-onair">
+        {st.chip} &middot; {liveSub(live.b, live.now)}
+      </span>
+    );
+  }
+
   return (
     <>
       <span className={`cm-ls-chip is-${live.state}`} data-testid="cm-board-onair">{st.chip} · {liveSub(live.b, live.now)}</span>
@@ -25,7 +59,9 @@ export function LiveScreen({ live, hereCount, onJoin }: { live: CampusLiveNow; h
       <h3 data-testid="cm-board-title">{live.b.title}</h3>
       {hereCount !== null && hereCount > 0 && <p className="cm-ls-meta">{hereCount === 1 ? '1 person in the hall' : `${hereCount} people in the hall`}</p>}
       <div className="row">
-        {route && <button type="button" className="b red" onClick={stop(() => onJoin(route))} data-testid="cm-board-join-audience">Join the audience &rarr;</button>}
+        {/* The primary action is now to WATCH, not to leave. */}
+        {onWatchHere && <button type="button" className="b red" onClick={stop(onWatchHere)} data-testid="cm-board-watch-here">&#9654; Watch on the big screen</button>}
+        {route && <button type="button" className={onWatchHere ? 'b' : 'b red'} onClick={stop(() => onJoin(route))} data-testid="cm-board-join-audience">Join the audience &rarr;</button>}
         <button type="button" className="b" onClick={stop(() => setClaps((n) => n + 1))} aria-label="React with applause" data-testid="cm-board-react">👏{claps > 0 ? ` ${claps}` : ''}</button>
       </div>
     </>
