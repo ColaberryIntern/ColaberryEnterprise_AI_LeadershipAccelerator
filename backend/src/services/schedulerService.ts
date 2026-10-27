@@ -23,6 +23,7 @@ import { getSetting } from './settingsService';
 import { redactForLogs } from '../utils/piiRedaction';
 import { partitionNotifiable, isNotificationSuppressed } from './notifications/enrollmentNotificationSuppression';
 import { staleCutoff, resolveMaxAgeDays } from './scheduledActionPolicy';
+import { renewClaim, recoverStaleActions as recoverStaleActionsLeased } from './scheduling/claimLease';
 import { evaluateSend } from './communicationSafetyService';
 import type { SendChannel } from './communicationSafetyService';
 import { sendSmsViaGhl, addContactNote, syncLeadToGhl } from './ghlService';
@@ -528,6 +529,18 @@ async function processScheduledActions(): Promise<void> {
     const channel = (action.channel || 'email') as CampaignChannel;
     const campaignId = action.campaign_id || '_none_';
 
+    // Re-assert ownership before doing anything with this row, and push the lease out.
+    //
+    // We claimed up to 40 rows in one go and have been pacing between sends ever since, so by
+    // now this batch may have been running longer than the staleness threshold. If so, recovery
+    // handed this row back and another scheduler process may already have sent it. `action` is
+    // the copy we loaded at claim time and knows none of that; sending from it is how the same
+    // lead gets the same message twice. A failed renewal means the row is no longer ours.
+    if (!(await renewClaim(action.id, processorId))) {
+      console.log(`[Scheduler] Action ${action.id} no longer owned by ${processorId}, skipping`);
+      continue;
+    }
+
     // Load campaign settings (cached)
     let campaignSettings: Record<string, any> = {};
     if (action.campaign_id && !campaignCache[campaignId]) {
@@ -827,21 +840,22 @@ async function processScheduledActions(): Promise<void> {
 
 /**
  * Recover stale actions stuck in 'processing' for more than 10 minutes.
- * Resets them to 'pending' so they can be re-claimed.
+ *
+ * Delegates to `scheduling/claimLease`, which consumes an attempt per recovery. Resetting to
+ * 'pending' without consuming one let a row that hung every time recycle forever, because
+ * `attempts_made` moves only when a run finishes.
  */
 async function recoverStaleActions(): Promise<number> {
-  const staleThreshold = new Date(Date.now() - 10 * 60 * 1000); // 10 min
-  const [count] = await ScheduledEmail.update(
-    { status: 'pending', processing_started_at: null, processor_id: null } as any,
-    {
-      where: {
-        status: 'processing',
-        processing_started_at: { [Op.lt]: staleThreshold },
-      },
-    },
-  );
-  if (count > 0) console.log(`[Scheduler] Recovered ${count} stale actions`);
-  return count;
+  const outcome = await recoverStaleActionsLeased();
+  if (outcome.requeued > 0 || outcome.exhausted > 0) {
+    // Log the ids, not just a count: without them there is no way to tell afterwards which rows
+    // were recycled, which is the first question asked when a lead reports a duplicate.
+    console.log(
+      `[Scheduler] Recovered ${outcome.requeued} stale actions, failed ${outcome.exhausted} with no attempts left`,
+      JSON.stringify({ ids: outcome.ids }),
+    );
+  }
+  return outcome.requeued + outcome.exhausted;
 }
 
 /**

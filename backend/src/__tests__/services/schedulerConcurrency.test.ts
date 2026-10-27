@@ -55,9 +55,6 @@ jest.mock('../../services/communicationSafetyService', () => ({
   }),
 }));
 
-// Import after mocks
-import { ScheduledEmail } from '../../models';
-
 describe('schedulerConcurrency', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -110,46 +107,16 @@ describe('schedulerConcurrency', () => {
 
   // ─── Stale Recovery ─────────────────────────────────────────────────────
 
-  describe('recoverStaleActions', () => {
-    test('should reset actions stuck in processing for > 10 minutes', async () => {
-      const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
-
-      // Simulate the stale recovery query criteria
-      const staleWhere = {
-        status: 'processing',
-        processing_started_at: { lt: tenMinutesAgo },
-      };
-
-      expect(staleWhere.status).toBe('processing');
-      expect(staleWhere.processing_started_at.lt).toBeInstanceOf(Date);
-      expect(staleWhere.processing_started_at.lt.getTime()).toBeLessThanOrEqual(
-        Date.now() - 10 * 60 * 1000,
-      );
-    });
-
-    test('should update stale records to pending status', async () => {
-      mockScheduledEmailUpdate.mockResolvedValueOnce([3]);
-
-      await ScheduledEmail.update(
-        {
-          status: 'pending',
-          processing_started_at: null,
-          processor_id: null,
-        } as any,
-        {
-          where: {
-            status: 'processing',
-            processing_started_at: { [Symbol.for('lt')]: new Date(Date.now() - 600000) },
-          },
-        } as any,
-      );
-
-      expect(mockScheduledEmailUpdate).toHaveBeenCalledWith(
-        expect.objectContaining({ status: 'pending', processing_started_at: null }),
-        expect.any(Object),
-      );
-    });
-  });
+  // Stale recovery is tested in `services/scheduling/__tests__/claimLease.test.ts`, against the
+  // real `recoverStaleActions`.
+  //
+  // Two tests lived here and were deleted rather than moved, because neither could fail. One
+  // built the recovery `where` clause inside the test and asserted on its own object; the other
+  // called the `ScheduledEmail.update` mock directly with hand-written arguments and asserted
+  // the mock had received them. Production code was never involved, so both stayed green when
+  // recovery changed on 2026-10-27 to consume an attempt per recycle, while describing the old
+  // behavior as though it were still covered. A test that cannot fail is worse than no test:
+  // it reports coverage that does not exist. Found by Quincy Ninying while building Ellis.
 
   // ─── Atomic Claim Query ──────────────────────────────────────────────────
 
