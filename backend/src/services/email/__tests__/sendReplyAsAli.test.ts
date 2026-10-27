@@ -8,7 +8,12 @@
 
 const mockKillSwitch = jest.fn(async () => false);
 const mockSendOnce = jest.fn();
-const mockSendCampaignMessage = jest.fn(async () => ({ ok: true, messageId: 'mandrill-1' }));
+// Rest parameters are required on any mock whose `.mock.calls` is indexed below. A
+// `jest.fn(impl)` whose impl takes no arguments infers a ZERO-LENGTH tuple, so `calls[0][2]`
+// is a type error under tsconfig.test.json even though ts-jest transpiles and runs it happily.
+const mockSendCampaignMessage = jest.fn(
+  async (..._a: unknown[]): Promise<any> => ({ ok: true, messageId: 'mandrill-1' }),
+);
 const mockBuildCampaignMessage = jest.fn((input: any) => ({ built: true, ...input }));
 let mockIsDev = false;
 

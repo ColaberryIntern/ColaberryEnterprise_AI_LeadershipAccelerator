@@ -9,13 +9,19 @@
  * Every test here pins one of those holes shut. The double-click test is the important one.
  */
 
-const mockSendReplyAsAli = jest.fn(async () => ({
-  outcome: 'sent' as const, idempotencyKey: 'K', messageId: 'm1',
-}));
-const mockDraftUpdate = jest.fn(async () => [1]);
+// Rest parameters are required on any mock whose `.mock.calls` is indexed below. A
+// `jest.fn(impl)` whose impl takes no arguments infers a ZERO-LENGTH tuple, so `calls[0][0]` is
+// a type error under tsconfig.test.json even though ts-jest transpiles and runs it happily. The
+// `Promise<any>` return keeps a per-test mockResolvedValue of a different outcome assignable.
+const mockSendReplyAsAli = jest.fn(
+  async (..._a: unknown[]): Promise<any> => ({
+    outcome: 'sent', idempotencyKey: 'K', messageId: 'm1',
+  }),
+);
+const mockDraftUpdate = jest.fn(async (..._a: unknown[]): Promise<any> => [1]);
 const mockDraftFindByPk = jest.fn();
 const mockEmailFindByPk = jest.fn();
-const mockLogAuditEvent = jest.fn(async () => undefined);
+const mockLogAuditEvent = jest.fn(async (..._a: unknown[]): Promise<any> => undefined);
 
 jest.mock('../../email/sendReplyAsAli', () => ({
   sendReplyAsAli: (...a: unknown[]) => mockSendReplyAsAli(...(a as [])),
