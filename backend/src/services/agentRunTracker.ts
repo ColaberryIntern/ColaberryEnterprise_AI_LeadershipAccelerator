@@ -10,6 +10,7 @@
  * none of them ever touch the AiAgent row the Trust Command Center reads from.
  */
 import AiAgent from '../models/AiAgent';
+import { agentControlDecision, logControlSkip } from './agents/agentControlGate';
 
 /**
  * Runs `fn`, then records the attempt on the named AiAgent row — on success AND on
@@ -30,8 +31,13 @@ export async function trackAgentRun<T>(agentName: string, fn: () => Promise<T>):
     console.warn(`[AgentRunTracker] No AiAgent row for "${agentName}" — running anyway (bookkeeping only is skipped). Register this agent so its activity shows on the Trust dashboard.`);
     return fn();
   }
-  if (!agent.enabled) {
-    console.log(`[AgentRunTracker] Agent ${agentName} is disabled, skipping`);
+  // Pause used to be invisible here. This checked `enabled` only, and Pause writes `status`
+  // while leaving `enabled` true, so pausing AutonomousEngine, AICOOStrategicCycle,
+  // MetaAgentLoop or CoryEvolutionCycle did nothing at all. Shared predicate now, so the four
+  // wrappers cannot drift apart again.
+  const decision = agentControlDecision(agent);
+  if (!decision.run) {
+    logControlSkip(agentName, agent, decision);
     return null;
   }
 
