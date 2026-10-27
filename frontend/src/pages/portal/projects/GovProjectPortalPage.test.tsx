@@ -39,9 +39,11 @@ describe('GovProjectPortalPage v2 — Build + Proposal cockpit', () => {
     expect(text).toContain('TxDOT Claims Search');
     expect(text).toContain('TxDOT OGC');
     expect(text).toContain('Overall completion');
-    // Build tab is default: the story shows, plus the deep-link to the build workspace
-    expect(text).toContain('STORY-001');
-    expect(text).toContain('Case dashboard');
+    // Overview is the default tab now; open Build to see releases -> stories + the deep-link
+    await click(tab('Build'));
+    const buildText = container.textContent ?? '';
+    expect(buildText).toContain('STORY-001');
+    expect(buildText).toContain('Case dashboard');
     const link = Array.from(container.querySelectorAll('a')).find((a) => a.textContent?.includes('build workspace')) as HTMLAnchorElement;
     expect(link.getAttribute('href')).toBe('/portal/projects');
   });
@@ -91,5 +93,51 @@ describe('GovProjectPortalPage v2 — Build + Proposal cockpit', () => {
     (api.getStudentGovProject as jest.Mock).mockRejectedValue({ response: { status: 500 } });
     await render();
     expect(container.querySelector('[data-testid="gov-project-error"]')).toBeTruthy();
+  });
+});
+
+describe('GovProjectPortalPage: Overview tab (read-only project brief)', () => {
+  const withOverview = (over: any = {}): any => baseView({
+    requirements: [
+      { canonicalReqId: 'R1', statement: 'Vendor shall provide a claims search portal.', priority: 'high', tracks: ['proposal', 'build'], evidenceState: 'open' },
+      { canonicalReqId: 'R2', statement: 'System shall support single sign-on.', priority: 'medium', tracks: ['build'], evidenceState: 'satisfied' },
+    ],
+    requirementCounts: { total: 2, proposal: 1, build: 2 },
+    submissionChecklist: {
+      items: [
+        { requirementId: 'R1', statement: 'Technical approach narrative', status: 'drafting', approved: false, openGapCount: 2 },
+        { requirementId: 'R2', statement: 'SSO design note', status: 'approved', approved: true, openGapCount: 0 },
+      ],
+      counts: { total: 2, approved: 1, remaining: 1 }, ready: false,
+    },
+    ...over,
+  });
+
+  it('is the default tab and renders the solicitation, the established requirements and the price-free readiness', async () => {
+    (api.getStudentGovProject as jest.Mock).mockResolvedValue(withOverview());
+    await render();
+    expect(tab('Overview').getAttribute('aria-selected')).toBe('true');
+    const overview = container.querySelector('.gck-overview');
+    expect(overview).toBeTruthy();
+    const text = overview!.textContent ?? '';
+    // solicitation facts + the detected key-date line (the bar shows the date; the text line is unique to Overview)
+    expect(text).toContain('TxDOT OGC');
+    expect(text).toContain('Proposals due');
+    // established requirements (the compliance matrix) + the counts split
+    expect(text).toContain('Vendor shall provide a claims search portal.');
+    expect(text).toContain('System shall support single sign-on.');
+    expect(text).toContain('2 total');
+    expect(text).toContain('1 proposal');
+    // price-free submission readiness
+    expect(text).toContain('Technical approach narrative');
+    expect(text).toContain('1/2 approved');
+  });
+
+  it('is strictly read-only: the Overview surface has no inputs, editors or buttons', async () => {
+    (api.getStudentGovProject as jest.Mock).mockResolvedValue(withOverview());
+    await render();
+    const overview = container.querySelector('.gck-overview')!;
+    expect(overview.querySelectorAll('input, textarea, select, [contenteditable="true"]').length).toBe(0);
+    expect(overview.querySelectorAll('button').length).toBe(0);
   });
 });

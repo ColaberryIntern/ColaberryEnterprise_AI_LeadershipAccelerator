@@ -6,6 +6,7 @@ import ProposalDocuments from './ProposalDocuments';
 import ProposalDocumentDrawer from './ProposalDocumentDrawer';
 import CommitFeed from './CommitFeed';
 import HowItWorks from './HowItWorks';
+import ProjectOverview from './ProjectOverview';
 import CopilotRail from './CopilotRail';
 import './govCockpit.css';
 
@@ -16,12 +17,12 @@ import './govCockpit.css';
  * (verified build stories + accepted documents), the agency and the close countdown. The copilot rail is grounded in
  * the same student-safe projection. All data comes from one projection; this only arranges it + holds view state.
  */
-type Tab = 'build' | 'proposal' | 'commits' | 'how';
+type Tab = 'overview' | 'build' | 'proposal' | 'commits' | 'how';
 
 export default function CockpitView(
   { view, projectId, onReload }: { view: StudentGovProjectView; projectId: string; onReload: () => void },
 ): React.ReactElement {
-  const [tab, setTab] = useState<Tab>('build');
+  const [tab, setTab] = useState<Tab>('overview');
   const [openDocKey, setOpenDocKey] = useState<string | null>(null);
 
   const docs = useMemo(() => view.proposalDocuments ?? [], [view.proposalDocuments]);
@@ -73,6 +74,7 @@ export default function CockpitView(
       </section>
 
       <nav className="gck-tabs" role="tablist">
+        <button className="gck-tab" role="tab" aria-selected={tab === 'overview'} onClick={() => setTab('overview')}>Overview</button>
         <button className="gck-tab" role="tab" aria-selected={tab === 'build'} onClick={() => setTab('build')}>Build</button>
         <button className="gck-tab" role="tab" aria-selected={tab === 'proposal'} onClick={() => setTab('proposal')}>Proposal<span className="n">{docs.length}</span></button>
         <button className="gck-tab" role="tab" aria-selected={tab === 'commits'} onClick={() => setTab('commits')}>Commit sync<span className="n">{feed.length}</span></button>
@@ -81,6 +83,7 @@ export default function CockpitView(
 
       <div className="gck-main">
         <div style={{ minWidth: 0 }}>
+          {tab === 'overview' && <ProjectOverview view={view} />}
           {tab === 'build' && <BuildReleases summary={view.buildSummary} />}
           {tab === 'proposal' && <ProposalDocuments docs={docs} onOpen={(d) => setOpenDocKey(d.key)} />}
           {tab === 'commits' && <CommitFeed feed={feed} />}
