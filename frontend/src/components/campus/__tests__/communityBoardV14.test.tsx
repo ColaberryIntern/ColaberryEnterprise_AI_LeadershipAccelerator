@@ -12,6 +12,7 @@ import type { BoardPost, BoardResponse } from '../board/boardData';
 const mockGetBoard = jest.fn();
 const mockSeen = jest.fn();
 const mockCreatePost = jest.fn();
+const mockCreateComment = jest.fn();
 jest.mock('../board/boardData', () => {
   const actual = jest.requireActual('../board/boardData');
   return { ...actual, getBoard: (...a: unknown[]) => mockGetBoard(...a), markBoardSeen: (...a: unknown[]) => mockSeen(...a) };
@@ -19,7 +20,7 @@ jest.mock('../board/boardData', () => {
 jest.mock('../../../services/communityApi', () => ({
   createPost: (...a: unknown[]) => mockCreatePost(...a),
   fetchComments: () => Promise.resolve([{ id: 'c1', body: 'Try a backoff cap', created_at: new Date().toISOString(), member: { id: 'm2', display_name: 'Sam Roe', avatar_url: null, level: 3 }, parent_comment_id: null, like_count: 0, viewer_has_liked: false, replies: [] }]),
-  createComment: jest.fn(),
+  createComment: (...a: unknown[]) => mockCreateComment(...a),
   togglePostLike: jest.fn(),
 }));
 // eslint-disable-next-line import/first
@@ -126,6 +127,41 @@ it('a note opens the thread drawer with its replies; Esc closes the drawer first
   expect(onClose).not.toHaveBeenCalled();
   act(() => { window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); });
   expect(onClose).toHaveBeenCalled();
+});
+
+it('a reply follows the feed rule live: one word cannot be sent and says why; five words send', async () => {
+  mockCreateComment.mockReset();
+  mockCreateComment.mockResolvedValue({ id: 'c2', body: 'x', created_at: new Date().toISOString(), member: { id: 'm', display_name: 'Ali M', avatar_url: null, level: 4 }, parent_comment_id: null, like_count: 0, viewer_has_liked: false, replies: [] });
+  await mount();
+  act(() => { q('cb-note-f1')!.click(); });
+  await flush();
+  const type = (v: string) => act(() => {
+    const input = q('cb-reply-input') as HTMLInputElement;
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, v);
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  type('Testing');
+  expect((q('cb-reply-send') as HTMLButtonElement).disabled).toBe(true);
+  expect(q('cb-reply-words')!.textContent).toContain('1 word · replies need at least 5');
+  type('I tried a retry with backoff');
+  expect(q('cb-reply-words')).toBeNull();
+  await act(async () => { q('cb-reply-send')!.click(); await Promise.resolve(); });
+  expect(mockCreateComment).toHaveBeenCalledWith('f1', 'I tried a retry with backoff');
+});
+
+it('a section whose notes are all older than two weeks shows them, and Show older continues from the server cursor', async () => {
+  await mount();
+  const old = (id: string) => post({ id, title: `Intro ${id}`, lane: 'intro', created_at: iso(30 * 86_400_000) });
+  mockGetBoard.mockResolvedValueOnce({ ...BOARD, pinned: [], unanswered: [], fresh: [], this_week: [], last_week: [], older: { posts: [old('o1'), old('o2')], next_cursor: 'cur-2' } });
+  act(() => { q('cb-lane-intro')!.click(); });
+  await flush();
+  expect(q('cb-empty')).toBeNull();
+  expect(container.textContent).toContain('Intro o1');
+  mockGetBoard.mockResolvedValueOnce({ ...BOARD, older: { posts: [old('o3')], next_cursor: null } });
+  await act(async () => { q('cb-show-older')!.click(); await Promise.resolve(); });
+  await flush();
+  expect(mockGetBoard).toHaveBeenLastCalledWith(expect.objectContaining({ lane: 'intro', olderCursor: 'cur-2' }));
+  expect(container.textContent).toContain('Intro o3');
 });
 
 it('search is debounced and asks the server', async () => {

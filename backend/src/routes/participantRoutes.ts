@@ -1175,7 +1175,9 @@ router.post('/api/portal/community/posts/:postId/comments', communityCommentRate
   const paramsParsed = PostIdParamSchema.safeParse(req.params);
   const bodyParsed = CreateCommentSchema.safeParse(req.body);
   if (!paramsParsed.success || !bodyParsed.success) {
-    res.status(400).json({ error: 'Invalid comment' });
+    // the schema's own words (e.g. "Replies need at least 5 words...") so the reply box can say why; never the input back
+    const reason = !bodyParsed.success ? bodyParsed.error.issues[0]?.message : undefined;
+    res.status(400).json({ error: reason || 'Invalid comment' });
     return;
   }
   try {

@@ -106,6 +106,7 @@ import agentRoleCharterRoutes from './admin/agentRoleCharterRoutes';
 import reeseBehaviourSwitchRoutes from './admin/reeseBehaviourSwitchRoutes';
 import managerDirectiveRoutes from './admin/managerDirectiveRoutes';
 import managerInboxRoutes from './admin/managerInboxRoutes';
+import agentEmailInboxRoutes from './admin/agentEmailInboxRoutes';
 import approvalRequestRoutes from './admin/approvalRequestRoutes';
 import agentManagerConversationRoutes from './admin/agentManagerConversationRoutes';
 import agentGoalRoutes from './admin/agentGoalRoutes';
@@ -320,6 +321,9 @@ router.use(agentRoleCharterRoutes);
 router.use(reeseBehaviourSwitchRoutes);
 router.use(managerDirectiveRoutes);
 router.use(managerInboxRoutes);
+// The agent's correspondence, beside her decision inbox above. Distinct paths (`/email` vs
+// `/inbox`) so neither surface reads as the other.
+router.use(agentEmailInboxRoutes);
 router.use(approvalRequestRoutes);
 router.use(agentManagerConversationRoutes);
 router.use(agentGoalRoutes);
