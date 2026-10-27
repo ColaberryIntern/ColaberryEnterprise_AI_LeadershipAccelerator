@@ -109,6 +109,11 @@ const BASELINE = {
   'services/agents/openclaw/openclawPlatformStrategy.ts': [2, 'POLICY LIST: forbids "Feel free to reach out" on two platform strategies'],
   'services/agents/skool/skoolPlatformStrategy.ts': [4, 'POLICY LIST: forbids "feel free to reach out" in four Skool rule blocks'],
   'services/agents/skool/skoolQualityGateAgent.ts': [1, "POLICY LIST: 'free trial' is a DETECTED banned phrase here"],
+  // Added 2026-10-27. Maya's manager-facing guardrail has to NAME the forbidden word, or the
+  // model reading it cannot tell which word is banned and may reach for it. Rewording to dodge
+  // this scanner would disable the very rule the line exists to enforce — the same reasoning
+  // the four POLICY LIST entries above already carry.
+  'services/mayaPersona.ts': [1, "POLICY LIST: Maya's own guardrail forbids the word and names 807.172(d)"],
   'services/content/bannedCopyScanner.ts': [3, 'RULE TEXT: the scanner declares the word and quotes 807.172(d)'],
   'services/content/brandGovernanceSeed.ts': [3, 'RULE TEXT: the brand rule quotes 807.172(d) and names the approved phrasings'],
 

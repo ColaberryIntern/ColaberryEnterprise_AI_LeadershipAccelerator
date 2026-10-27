@@ -16,6 +16,9 @@ jest.mock('../reese/reeseSystemPrompt', () => ({ REESE_PERSONA_BLOCK: 'MOCKED_PE
 
 import AiAgent from '../../models/AiAgent';
 import { seedAgentRegistry } from '../agentRegistrySeed';
+// Safe to import for real: mayaPersona.ts is a single exported string constant with no imports
+// of its own, so it pulls in neither the models barrel nor any service.
+import { MAYA_PERSONA_BLOCK } from '../mayaPersona';
 
 /**
  * Maya is a registered agent, and her grants are her REAL tools.
@@ -145,9 +148,60 @@ describe('what the grants mean', () => {
     expect(maya.tools_granted).not.toContain('send_email');
   });
 
-  it('carries no static system_prompt, because hers is composed per conversation', () => {
-    // `buildMayaSystemPrompt()` builds it from live context. A copy on this row would be a second
-    // source of truth that drifts from the prompt she actually runs.
-    expect(maya.system_prompt).toBeUndefined();
+  // ── REVISED 2026-10-27 ────────────────────────────────────────────────────
+  //
+  // This block used to assert `expect(maya.system_prompt).toBeUndefined()`, on the reasoning
+  // that hers is composed per conversation and a static copy would drift. The concern was
+  // right; the conclusion was wrong. That column has exactly ONE consumer —
+  // `agentManagerConversationPrompt.ts`, the admin Talk tab — which is her MANAGER's
+  // conversation, not a visitor's. Leaving it null did not prevent a drifting copy, it just
+  // gave her manager the "No system prompt has been configured for you yet" fallback.
+  //
+  // So the assertion now pins the DISTINCTION rather than the absence, which is the thing
+  // actually worth protecting: the row carries the manager block, and the visitor prompt stays
+  // composed live. Dara proves the pattern — manager block on the row, student block in her
+  // builder, "never mixed" (curriculum/daraPersona.ts).
+  describe('her system_prompt is the MANAGER block, and only that', () => {
+    it('carries one, so the Talk tab is not a blank frame', () => {
+      expect(typeof maya.system_prompt).toBe('string');
+      expect((maya.system_prompt as string).length).toBeGreaterThan(200);
+    });
+
+    it('is exactly MAYA_PERSONA_BLOCK — not a hand-copied paraphrase of it', () => {
+      expect(maya.system_prompt).toBe(MAYA_PERSONA_BLOCK);
+    });
+
+    it('declares on its face that this conversation is with the manager, not a prospect', () => {
+      // The load-bearing line. Without it an LLM handed this block in the Talk tab could
+      // reasonably start selling to its own manager.
+      expect(maya.system_prompt).toContain('speaking to your MANAGER');
+      expect(maya.system_prompt).toContain('Report on the pipeline; do not pitch it');
+    });
+
+    it('carries the two sections the locked persona pattern requires', () => {
+      expect(maya.system_prompt).toContain('VOICE PRINCIPLES (locked):');
+      expect(maya.system_prompt).toContain('GUARDRAILS (never do these):');
+    });
+
+    it('carries the two guardrails that are non-negotiable for EVERY agent built this way', () => {
+      // build-platform-agent/SKILL.md, Derivation rule 2: "always including 'never pretend to
+      // be human or hide that you are an AI' and a neutral-pronoun ('they/them') line - these
+      // two are non-negotiable across every agent built this way".
+      expect(maya.system_prompt).toContain('Never pretend to be human');
+      expect(maya.system_prompt).toContain('they/them');
+    });
+
+    it('carries her two domain guardrails: no price from memory, and the TWC wording rule', () => {
+      // Both are standing constraints an admissions agent can violate in one sentence, so they
+      // are pinned rather than trusted to survive a future reword.
+      expect(maya.system_prompt).toContain('Never state a price');
+      expect(maya.system_prompt).toContain('807.172(d)');
+      expect(maya.system_prompt).toContain('no card needed');
+    });
+
+    it('does NOT claim the outcomes she cannot see', () => {
+      expect(maya.system_prompt).toContain('Never report a send as a delivery');
+      expect(maya.system_prompt).toContain('Never claim an enrollment');
+    });
   });
 });

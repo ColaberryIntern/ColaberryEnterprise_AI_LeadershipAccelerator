@@ -57,7 +57,7 @@ Two refinements the first scan needed, both recorded because they changed the an
    consumer into the reporting bucket, where it would never have been given a behaviour test. A
    rule was added for that form and the file is now row 29. Branching: 31 → 28 → **29**.
 
-## BRANCHING — 36 files
+## BRANCHING — 37 files
 
 **Row 17 is retired, and why is worth recording.** It was `services/freeSignupService.ts`, which
 used to decide `tier: 'guest'` itself. T202b made it delegate to the canonical service, so it no
@@ -107,6 +107,7 @@ any row does not.
 | 34 | `scripts/lib/freeAccountCoherenceBackfill.ts` | pure predicate; `enrollment_type` only in prose | — | — | **Added by T207, and it is in this table by judgement rather than by the scan.** The write-site scanner does NOT match it: its only `enrollment_type: 'standard'` occurrence is inside a docblock, and the scanner strips comments before matching -- correctly, and my own `grep` disagreed with it until I checked which of us was reading code. It is listed anyway because it is where the backfill's decision actually lives: the pure predicate that classifies every row, excludes six populations and requires POSITIVE free-signup provenance before moving anything onto the learner programme. A reader looking for "what decides" would otherwise find only the CLI. Writes nothing; returns a ledger the CLI applies. |
 | 35 | `scripts/srsDistributionReport.ts` | `enrollment_type = 'explorer'` inside a `SELECT` | unchanged | unchanged | **Added by M25, and it is the weakest match in this table: a READER that writes nothing at all.** The literal appears only in the `SELECT` that chooses which population to report on. It reads each person through the normal Person 360 reader, computes the Sales Readiness Score in memory, prints a distribution and persists nothing — there is no `INSERT`, `UPDATE` or `DELETE` anywhere in it, and it assigns `enrollment_type` nowhere, so neither population moves and **both population cells read `unchanged`**, not `writer` and not a dash, so the tally can account for it. It scores through the real reader rather than a faster bespoke query so that what is measured is what the product would score, absences included, which is also why it runs sequentially under a `LIMIT` and is a report rather than a batch job. **Ran read-only against production 2026-10-17 over 250 rows: nothing written, no score persisted, nothing sent.** The same two writer tripwires carry it with the same determination. |
 | 36 | `services/agentDomain/domainAgentIdentitySeed.ts` | writes `'standard'` | unchanged | unchanged | **Added by AF3.1.** Seeds the ten Agent Factory domain agents, one `Enrollment` each, as `'standard'` with `portal_enabled: false` so none of them appears as a learner. Same reasoning as rows 25 to 27: an agent identity is not a free account, neither population moves, and the T207 backfill skips it. One difference is worth recording rather than inheriting. These addresses are **derived** from the domain key at runtime, not written as string literals, so `AGENT_IDENTITY_EMAILS` cannot pin them and the drift guard that re-derives that list from the seed files finds nothing here to pin. What actually excludes them is the `staff_email` and `staff_role` terms, which is the open-ended case `freeAccountCoherenceBackfill.test.ts` already covers by name. |
+| 37 | `services/mayaIdentitySeed.ts` | writes `'standard'` | unchanged | unchanged | **Added 2026-10-27, when Maya was given a real staff identity.** Seeds her `Enrollment` as `'standard'` with `portal_enabled: false`, so she is not a learner. Same reasoning as rows 25 to 27 and 36: an agent identity is not a free account and neither population moves. Unlike row 36's ten domain agents, whose addresses are derived from the domain key at runtime, hers is a string literal in the seed file, so it is pinned by name in `AGENT_IDENTITY_EMAILS` rather than relying on the `staff_email` term alone. (The address itself is deliberately not written here: `verifyGrowthOsResetCitations.js` forbids email addresses in these docs, and it was right to reject the first version of this row.) Finding that out exposed a real gap: the drift guard that is supposed to re-derive that list scans a **hardcoded** list of seed paths, so a brand-new seed file is invisible to it. `mayaIdentitySeed.ts` was added to that list; globbing it would close the class and is left as its own change. |
 
 **Tallies, counted from the table's own cells rather than by hand** — the first draft said "12 for
 A" and "9 unchanged", both off by one in **compensating** directions, so the two wrong numbers
@@ -118,8 +119,8 @@ asserts them from the parsed cells so they cannot drift again:
 | Changes for population A | **14** | `grep -cE '^\| [0-9]+ \| ` + "`[^`]+`" + ` \| [^\|]*\| \*\*CHANGES\*\* \|'` |
 | Changes for population B | **3** (rows 1, 13 and 32) | `grep -cE '\| — \| \*\*CHANGES\*\* \|'` |
 | Writers | **6** | `grep -c "\| writer \| writer \|"` |
-| Unchanged, with a stated reason | **13** | `grep -c "\| unchanged \| unchanged \|"` |
-| **Total** | **36** | matches the generator's `BRANCHING` count |
+| Unchanged, with a stated reason | **14** | `grep -c "\| unchanged \| unchanged \|"` |
+| **Total** | **37** | matches the generator's `BRANCHING` count |
 
 ## REPORTING — 19 files
 

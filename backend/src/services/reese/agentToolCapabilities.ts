@@ -278,6 +278,58 @@ export const TOOL_CAPABILITIES: Record<string, ToolCapability> = {
     reads: [],
     produces: ['Ticket status -> done (capability verified) or cancelled (capability row deleted)'],
   },
+
+  // --- Maya (admissions), added 2026-10-27. All 10 of her granted tools were
+  // `undocumentedTools` on her transparency page from the moment she was registered
+  // (PR #3399) — she is the agent the PUBLIC actually talks to, so an undocumented
+  // chest was the worst place for that gap to sit. Each entry below is grounded in the
+  // real dispatch in `mayaActionService.ts` and the handlers in `mayaToolsService.ts`,
+  // read before writing, not copied from a sibling entry. Three of these REACH A REAL
+  // STRANGER (send_document, send_sms_summary, initiate_voice_call) — that is why her
+  // permission tier is `communication` and why `requiresEvaluateSend` is true for her.
+  capture_lead_details: {
+    reads: ['The visitor chat conversation', 'Any existing Lead and AdmissionsMemory row for this visitor'],
+    produces: ['A Lead row (created, or updated when one already resolves for the visitor)', 'An AdmissionsMemory update linking visitor -> lead', 'A GoHighLevel contact sync (syncNewLeadToGhl)', 'An AdmissionsActionLog row'],
+  },
+  update_lead_record: {
+    reads: ['The Lead resolved for this visitor'],
+    produces: ['One field updated on that Lead (company, title, phone, email or interest_area)', 'A GoHighLevel sync of the change', 'An AdmissionsActionLog row'],
+  },
+  send_document: {
+    reads: ['AdmissionsMemory and the linked Lead for a confirmed email address', 'The canDeliverDocument gate in admissionsWorkflowService'],
+    produces: ['A real program document email to the visitor (sendAdmissionsDocument)', 'A DocumentDeliveryLog row', 'An AdmissionsActionLog row, including a `denied` row when the gate refuses'],
+  },
+  send_sms_summary: {
+    reads: ['The visitor conversation history and their confirmed phone number'],
+    produces: ['A real SMS to the visitor via GoHighLevel (sendSmsViaGhl)', 'An AdmissionsActionLog row'],
+  },
+  initiate_voice_call: {
+    reads: ['The visitor phone number and their call history for the last 24h (max 1 call per visitor per 24h)'],
+    produces: ['A real outbound AI voice call via Synthflow (triggerVoiceCall)', 'A CallContactLog row', 'A CommunicationLog row the Synthflow webhook matches the call back to'],
+  },
+  get_available_slots: {
+    reads: ['Strategy-call calendar availability for the requested day and time-of-day preference'],
+    produces: [],
+  },
+  schedule_strategy_call: {
+    reads: ['The slot chosen from get_available_slots and the visitor name/email'],
+    produces: ['An Appointment (createAppointment) and a StrategyCall row', 'A Lead row when none exists yet for the booker', 'A confirmation email and SMS to the visitor'],
+  },
+  enroll_in_campaign: {
+    reads: ['The resolved Lead and whether it is already in a Maya campaign'],
+    produces: ['Campaign enrollment via routeLeadToCampaign (only the two real Maya campaigns: voice_call, general)', 'A Maya interaction tag on the lead'],
+  },
+  retrieve_knowledge: {
+    reads: ['AdmissionsKnowledgeEntry rows, via findRelevantKnowledge, optionally narrowed by category'],
+    produces: [],
+  },
+  schedule_callback: {
+    reads: ['The visitor phone number and their stated preferred callback time'],
+    // Deliberately NOT a ticket. Maya creates no tickets anywhere, which is why the
+    // Agent Ticket Standard (directives/register-ticket-creating-agent.md) does not
+    // govern her — verified by reading the handler, not assumed from the tool's name.
+    produces: ['An AdmissionsActionLog row with status `pending` for the human admissions team'],
+  },
 };
 
 /** One tool's own reads/produces, plus whether it has a dictionary entry at
