@@ -25,3 +25,18 @@ a reviewer role automatically.
   - Notes: no schema change. Backfills an existing project the next time it is re-approved
     or its workspace self-heals (both flow through ensureGovTwoTrackProject). Makes the
     "Project workspace" link from the mgmt-portal PR open for the approving admin.
+
+- [x] Re-pin the LC-01 creation-site ratchet after the gov create call moved
+  - Date: 2026-10-27
+  - Session: CC-20261027-p4k9
+  - What changed: the grantApproverReviewer function (45 lines) landed above
+    ensureGovTwoTrackProject, moving `DeliveryProject.create(` in govDeliveryProject.ts from
+    line 157 to 202. lifecycleRegistrationCoverage.test.ts pins each creation site as
+    `file:line mechanism` and failed by name, exactly as designed. Re-pinned 157 -> 202 and
+    extended the move-history comment. No new creation site was added:
+    `DeliveryProjectMember.create(` does not match the CREATION regex (needs `Project.`, not
+    `ProjectMember.`), and the bulkCreate/upsert/raw-INSERT/hooks:false tripwires still pass.
+  - Verification: jest lifecycleRegistrationCoverage.test.ts 18/18 pass locally (jest 5.9.x,
+    worktree node). The gate was re-pinned, not weakened.
+  - Notes: this was PR 3a (#3429) CI's only red test ("Backend unit tests"). Branch had no
+    divergence from origin/main on the touched files, so the fix pushes and merges cleanly.
