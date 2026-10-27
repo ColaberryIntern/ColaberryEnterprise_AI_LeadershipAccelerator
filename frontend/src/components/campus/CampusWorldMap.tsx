@@ -301,8 +301,8 @@ export default function CampusWorldMap(p: CampusMapProps): React.ReactElement {
       ))}
       {live.length > 0 && <LiveFront buildings={live} mark={compact ? null : p.liveMark} />}
       {!compact && <BoardSign />}
-      {!compact && p.todayFlag && tower && <TodayFlag tower={tower} onWalk={pick} />}
-      {!compact && p.todayFlag && gateIsBuilding && <GateTodaySign onWalk={pick} />}
+      {!compact && p.todayFlag && tower && <TodayFlag tower={tower} place={buildingName(tower, workplaceNames)} onWalk={pick} />}
+      {!compact && p.todayFlag && gateIsBuilding && tower && <GateTodaySign place={buildingName(tower, workplaceNames)} onWalk={pick} />}
       {!compact && p.desks && p.desks.length > 0 && <StaffTokens desks={p.desks} buildings={buildings} onPick={pick} />}
       {!compact && <AvatarPin pos={pos} moving={moving} running={running} reduceMotion={reduceMotion} ownGear={p.ownGear} me={p.me} />}
     </svg>

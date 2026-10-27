@@ -113,7 +113,7 @@ describe('the tour inside the arrival panel', () => {
   it('the stop card: number, tour name, title, "You can", the tip', () => {
     render(<TourStopCard tour={member} index={0} />);
     expect(q('cm-tour')!.textContent).toContain('What’s in your seat');
-    expect(q('cm-tour-title')!.textContent).toBe('Start here: your Schedule');
+    expect(q('cm-tour-title')!.textContent).toBe('Start here: your week');
     expect(q('cm-tour')!.textContent).toContain('You can');
     expect(q('cm-tour-tip')!.textContent).toContain('Today');
     expect(q('cm-tour-tag')).toBeNull();
@@ -127,7 +127,7 @@ describe('the tour inside the arrival panel', () => {
   it('C53 + C77: a tour’s first stop (the Schedule) has Open Today, for Explorers and members; later stops do not', () => {
     let opened = 0;
     render(<TourStopCard tour={explorer} index={0} onToday={() => { opened += 1; }} />);
-    expect(q('cm-tour-title')!.textContent).toBe('Start here: the Schedule');
+    expect(q('cm-tour-title')!.textContent).toBe('Start here: what is coming up');
     act(() => { q('cm-tour-today')!.click(); });
     expect(opened).toBe(1);
     render(<TourStopCard tour={explorer} index={1} onToday={() => undefined} />);

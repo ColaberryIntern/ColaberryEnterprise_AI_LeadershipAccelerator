@@ -102,7 +102,7 @@ describe('starting the tour', () => {
     expect(q('cm-card')?.getAttribute('data-building')).toBe('tower');
     expect(container.querySelector('[data-testid="cm-card"] [data-testid="cm-tour"]')).not.toBeNull();
     expect(q('cm-arrive-kicker')?.textContent).toBe('What’s in your seat · stop 1 of 10');
-    expect(q('cm-tour-title')?.textContent).toBe('Start here: your Schedule');
+    expect(q('cm-tour-title')?.textContent).toBe('Start here: your week');
     expect(q('cm-tour-tip')?.textContent).toContain('Today');
     expect(q('cm-tour-count')?.getAttribute('aria-label')).toBe('Stop 1 of 10');
     expect(document.activeElement?.id).toBe('cm-card-tower'); // the panel's heading takes focus at each stop

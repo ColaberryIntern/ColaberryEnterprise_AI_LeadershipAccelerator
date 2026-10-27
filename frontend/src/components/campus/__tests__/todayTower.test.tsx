@@ -32,7 +32,7 @@ let root: Root;
 let path = '';
 function Where(): null { path = useLocation().pathname + useLocation().search; return null; }
 afterEach(() => { if (root) act(() => root.unmount()); container?.remove(); root = undefined as unknown as Root; });
-async function mount(audience: CampusAudience): Promise<void> {
+async function mount(audience: CampusAudience, workplaceNames = false): Promise<void> {
   container = document.createElement('div');
   document.body.appendChild(container);
   await act(async () => {
@@ -41,7 +41,7 @@ async function mount(audience: CampusAudience): Promise<void> {
       <MemoryRouter initialEntries={['/portal/campus']}>
         <Where />
         <Routes><Route path="*" element={<CampusWorld buildings={campusBuildingsFor(audience)} audience={audience} hasFullAccess={audience !== 'explorer'}
-          workplaceNames={false} reduceMotion onExit={() => {}} onNavigate={() => {}} />} /></Routes>
+          workplaceNames={workplaceNames} reduceMotion onExit={() => {}} onNavigate={() => {}} />} /></Routes>
       </MemoryRouter>,
     );
   });
@@ -91,6 +91,14 @@ it('only Explorers see the START HERE sign at the gate, and it walks to the Sche
   await walked(sign, new MouseEvent('click', { bubbles: true }));
   expect(path).toBe('/portal/campus');
   expect(q('[data-testid="cm-card"]')!.textContent).toContain('Schedule');
+});
+
+// Workplace names on: the signs use the viewer's name for the building (Calendar), never a hard-coded "Schedule"
+it('with Workplace names the signs name the Calendar', async () => {
+  await mount('explorer', true);
+  expect(q('[data-testid="cm-gate-today"]')!.textContent).toBe('START HERE → CALENDAR');
+  expect(q('[data-testid="cm-gate-today"]')!.getAttribute('aria-label')).toBe('Start here: walk to the Calendar');
+  expect(q('[data-testid="cm-today-flag"]')!.getAttribute('aria-label')).toBe('Start here: walk into the Calendar');
 });
 
 it('the tile offers Open Today and Full schedule', () => {

@@ -32,14 +32,14 @@ describe('C53 (v13 T5) + C77: every tour starts at the Schedule', () => {
     const t = tour('explorer')!;
     expect(t.name).toBe('Explorer tour');
     expect(t.stops.map((s) => s.buildingId)).toEqual(['tower', 'commons', 'library', 'amphi', 'lecture', 'studio', 'testing', 'gallery']);
-    expect(t.stops[0]).toMatchObject({ title: 'Start here: the Schedule', state: 'open' });
+    expect(t.stops[0]).toMatchObject({ title: 'Start here: what is coming up', state: 'open' });
     expect(t.stops[0].what).toContain('what is coming up');
     expect(t.stops[0].what).toContain('no card needed');
     expect(JSON.stringify(t.stops[0])).not.toMatch(/\bfree\b/i);
   });
   it('C77: the member tour starts at the Schedule too, then follows the old order', () => {
     expect(tour('member')!.stops.map((s) => s.buildingId)).toEqual(['tower', 'lecture', 'library', 'studio', 'testing', 'observatory', 'commons', 'gallery', 'career', 'arcade']);
-    expect(tour('member')!.stops[0].title).toBe('Start here: your Schedule');
+    expect(tour('member')!.stops[0].title).toBe('Start here: your week');
     expect(tour('member')!.name).toBe('What’s in your seat');
   });
   it('the finishing toast names the Explorer when the name is known, and reads without it', () => {
