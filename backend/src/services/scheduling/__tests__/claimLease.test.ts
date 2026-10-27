@@ -11,8 +11,11 @@ import { QueryTypes } from 'sequelize';
  * SQL they actually hand to the database.
  */
 
-const query = jest.fn();
-const transaction = jest.fn(async (cb: any) => cb('TX'));
+// Both mocks declare an explicit rest parameter. Without one, `query(...args)` below is a spread
+// into a signature TypeScript cannot match (TS2556) and `tsconfig.test.json` rejects the file,
+// even though ts-jest transpiles and runs it happily.
+const query = jest.fn((..._args: unknown[]): any => undefined);
+const transaction = jest.fn(async (...args: unknown[]): Promise<any> => (args[0] as any)('TX'));
 
 jest.mock('../../../config/database', () => ({
   sequelize: {
