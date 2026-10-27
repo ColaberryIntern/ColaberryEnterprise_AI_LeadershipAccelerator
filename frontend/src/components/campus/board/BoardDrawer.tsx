@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createComment, fetchComments, togglePostLike, type CommunityComment } from '../../../services/communityApi';
+import { checkReply, countWords, MIN_REPLY_WORDS } from '../../timeline/contributionQuality';
 import { markBoardSeen, type BoardPost } from './boardData';
 import { Age, Avatar, Chip } from './BoardNotes';
 import { firstName } from './boardTime';
@@ -45,8 +46,11 @@ export default function BoardDrawer({ p, now, onClose, onChanged, onFeed }: Draw
       onChanged({ ...p, viewer_has_liked: r.liked, like_count: r.like_count });
     } catch { setMessage('Could not save that right now.'); }
   };
+  // the feed's own reply rule (contributionQuality: at least five words), shown live, so the server never has to refuse it
+  const replyOk = checkReply(text).ok;
+  const words = countWords(text);
   const send = async () => {
-    if (busy || !text.trim()) return;
+    if (busy || !replyOk) return;
     setBusy(true); setMessage('');
     try {
       const c = await createComment(p.id, text.trim());
@@ -87,10 +91,11 @@ export default function BoardDrawer({ p, now, onClose, onChanged, onFeed }: Draw
         ))}
       </div>
       {message && <p className="cb-msg" role="alert">{message}</p>}
+      {text.trim() && !replyOk && <p className="cb-words" data-testid="cb-reply-words">{words} {words === 1 ? 'word' : 'words'} · replies need at least {MIN_REPLY_WORDS}, say what you tried, asked or noticed</p>}
       <div className="rbox">
         <input value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void send(); } }}
           placeholder={isQ ? 'Write an answer…' : 'Write a reply…'} aria-label={isQ ? 'Your answer' : 'Your reply'} maxLength={2000} data-testid="cb-reply-input" />
-        <button type="button" className="cb-btn pri" onClick={send} disabled={busy || !text.trim()} data-testid="cb-reply-send">{busy ? 'Sending…' : 'Reply'}</button>
+        <button type="button" className="cb-btn pri" onClick={send} disabled={busy || !replyOk} data-testid="cb-reply-send">{busy ? 'Sending…' : 'Reply'}</button>
       </div>
     </div>
   );

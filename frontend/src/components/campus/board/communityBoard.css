@@ -161,3 +161,6 @@
 @media (max-width:900px){.cb-body{grid-template-columns:1fr;grid-template-rows:auto minmax(0,1fr)}.cb-lanes{flex-direction:row;overflow-x:auto;overflow-y:hidden;flex:none}.cb2 .cb-lanes button{width:auto;white-space:nowrap}.cb-lanes .lbl{display:none}.cb-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.cb-search{width:100%}}
 @media (max-width:560px){.cb-grid,.cb-qs{grid-template-columns:1fr}.cm-cb.cb2{padding:16px 14px;height:92vh}.cb-ritual .tx .posted{display:none}}
 @media (prefers-reduced-motion:reduce){.cb2 .cb-note{transform:none;transition:none}.cb-note.glow,.cb-mine.glow{animation:none}}
+
+/* 2026-10-26: the reply box says the feed rule live (five words) */
+.cb-drawer .cb-words{margin:0 16px 6px;font-size:12.5px;color:var(--cm-art-muted)}

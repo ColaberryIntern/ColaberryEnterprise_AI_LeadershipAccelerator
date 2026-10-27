@@ -133,10 +133,13 @@ export function assembleBoard(all: BoardRow[], listed: BoardRow[], o: AssembleOp
   ids.this_week = rest.filter((r) => bucketOf(r.created_at, o.now) === 'this_week').map((r) => r.id);
   ids.last_week = rest.filter((r) => bucketOf(r.created_at, o.now) === 'last_week').map((r) => r.id);
 
-  if (o.olderCursor !== null) {
+  // A section (any lane but Everything) carries its first older page without asking: a lane whose notes are all older than two weeks
+  // otherwise opened empty while its count said 17 (Ali, 2026-10-26). Everything keeps its "Show older" button.
+  const cursor = o.olderCursor ?? (o.lane !== 'all' ? 'start' : null);
+  if (cursor !== null) {
     const older = rest.filter((r) => bucketOf(r.created_at, o.now) === 'older');
-    const start = o.olderCursor === '' || o.olderCursor === 'start' ? 0 : older.findIndex((r) => cursorOf(r) === o.olderCursor) + 1;
-    const page = start > 0 || o.olderCursor === '' || o.olderCursor === 'start' ? older.slice(start, start + OLDER_PAGE) : [];
+    const start = cursor === '' || cursor === 'start' ? 0 : older.findIndex((r) => cursorOf(r) === cursor) + 1;
+    const page = start > 0 || cursor === '' || cursor === 'start' ? older.slice(start, start + OLDER_PAGE) : [];
     ids.older = { ids: page.map((r) => r.id), next_cursor: start + OLDER_PAGE < older.length && page.length ? cursorOf(page[page.length - 1]) : null };
   }
 
