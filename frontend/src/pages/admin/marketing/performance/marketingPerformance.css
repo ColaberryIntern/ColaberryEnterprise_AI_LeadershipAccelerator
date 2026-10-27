@@ -1,0 +1,390 @@
+/*
+ * Marketing Performance report - the BI-report styling for /admin/marketing/performance.
+ *
+ * TOKENS, NOT HEXES. The design spec that drove this redesign states its palette as literal hex
+ * values. None of them are repeated here: each is mapped onto the token this repo already
+ * publishes in `frontend/src/colaberry/tokens/colors.css`, so the report follows the admin theme
+ * instead of pinning a second copy of it that drifts. The mapping, once, for the next reader:
+ *
+ *   spec fg        -> --text-body / --text-strong    spec ok       -> --status-success
+ *   spec fg-muted  -> --text-muted                   spec warn     -> --status-warning
+ *   spec bg        -> --surface-page                 spec bad      -> --status-danger
+ *   spec panel     -> --surface-card                 spec critical -> --status-danger
+ *   spec border    -> --border-subtle                spec series   -> --chart-1 .. --chart-8
+ *
+ * The one place the spec cannot be honoured is its typeface: it asks for Source Serif 4 for the
+ * title and big numbers, offering "or the app's existing sans/serif pair" as the fallback. This
+ * repo has no serif face - `--font-display` and `--font-body` are both Roboto - so the serif role
+ * is carried by weight and size rather than by a second family. Adding a webfont for one page
+ * would cost every admin page a download.
+ *
+ * DARK MODE IS DELIBERATELY ABSENT. `frontend/src/utils/portalTheme.ts` sets `data-theme` only
+ * under /portal, with a header saying the admin app has no dark styles and must not be woken up
+ * dark. Everything below is token-driven, so if that ever changes this page follows for free.
+ */
+
+.mp {
+  --mp-track: var(--neutral-100, #f1f3f6);
+  --mp-accent: var(--chart-1);
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  color: var(--text-body);
+  max-width: 1400px;
+}
+
+/* ---- Header ---------------------------------------------------------- */
+
+.mp-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 12px;
+  border-bottom: 3px solid var(--mp-accent);
+}
+
+.mp-head__title {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 1.625rem;
+  line-height: 1.15;
+  margin: 0;
+  color: var(--text-strong);
+  text-wrap: balance;
+}
+
+.mp-head__sub {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin: 4px 0 0;
+}
+
+.mp-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+
+.mp-chip {
+  font-size: 0.75rem;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--surface-card);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.mp-chip b { color: var(--text-strong); font-weight: 600; }
+
+.mp-take {
+  font-size: 0.875rem;
+  line-height: 1.5;
+  margin: 0;
+  max-width: 70ch;
+}
+
+.mp-take b { font-weight: 600; color: var(--text-strong); }
+
+/* ---- KPI row --------------------------------------------------------- */
+
+.mp-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr));
+  gap: 16px;
+}
+
+.mp-kpi {
+  background: var(--surface-card);
+  border: 1px solid var(--border-subtle);
+  border-top: 4px solid var(--mp-kpi-accent, var(--border-default));
+  border-radius: 10px;
+  padding: 14px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 7.5rem;
+}
+
+.mp-kpi__label {
+  font-size: 0.6875rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 600;
+}
+
+.mp-kpi__value {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 2.1875rem;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-strong);
+}
+
+/* The "Came back later" card: the number itself carries the warning, not just its top rule. */
+.mp-kpi--critical .mp-kpi__value { color: var(--status-danger); }
+
+.mp-kpi__note {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-top: auto;
+}
+
+/* ---- Card + two-column row ------------------------------------------ */
+
+.mp-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.7fr) minmax(min(100%, 18rem), 1fr);
+  gap: 16px;
+}
+
+@media (max-width: 860px) {
+  .mp-row { grid-template-columns: 1fr; }
+}
+
+.mp-card {
+  background: var(--surface-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  padding: 20px;
+  position: relative;
+  min-width: 0;
+}
+
+.mp-card__title {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0;
+  color: var(--text-strong);
+}
+
+.mp-card__note {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin: 4px 0 14px;
+}
+
+/* ---- Funnel ---------------------------------------------------------- */
+
+.mp-fn { display: flex; flex-direction: column; gap: 10px; }
+
+.mp-fn__head,
+.mp-fn__row {
+  display: grid;
+  grid-template-columns: minmax(7.5rem, 11rem) 1fr 4.5rem 4.2rem;
+  gap: 10px;
+  align-items: center;
+}
+
+.mp-fn__head {
+  font-size: 0.6875rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.mp-fn__head span:nth-child(n + 3) { text-align: right; }
+
+.mp-fn__label { font-size: 0.75rem; line-height: 1.25; }
+
+.mp-fn__unit { color: var(--text-muted); }
+
+.mp-fn__track {
+  height: 26px;
+  background: var(--mp-track);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.mp-fn__bar {
+  height: 100%;
+  border-radius: 4px;
+  background: var(--mp-accent);
+  transform-origin: left center;
+}
+
+.mp-fn__bar--worst,
+.mp-fn__bar--critical { background: var(--status-danger); }
+.mp-fn__bar--grew { background: var(--status-warning); }
+
+.mp-fn__row:hover .mp-fn__bar { filter: brightness(1.12); }
+
+.mp-fn__count {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: var(--text-strong);
+}
+
+.mp-fn__delta {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.mp-fn__delta--down { color: var(--status-danger); }
+.mp-fn__delta--grew { color: var(--status-warning); }
+
+.mp-fn__flag {
+  font-size: 0.75rem;
+  color: var(--status-warning);
+  margin: 12px 0 0;
+  line-height: 1.45;
+}
+
+@media (max-width: 520px) {
+  .mp-fn__head,
+  .mp-fn__row { grid-template-columns: 6.5rem 1fr 3.4rem 3.4rem; }
+}
+
+/* Bars grow once, on first paint. Honoured only where motion is welcome. */
+@media (prefers-reduced-motion: no-preference) {
+  .mp-fn--anim .mp-fn__bar { animation: mpGrow 600ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+  @keyframes mpGrow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+}
+
+/* ---- Donut ----------------------------------------------------------- */
+
+.mp-dn {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 20px;
+  justify-content: center;
+}
+
+.mp-dn__chart { position: relative; width: 100%; max-width: 220px; aspect-ratio: 1; }
+
+.mp-dn__center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.mp-dn__total {
+  font-family: var(--font-display);
+  font-size: 1.625rem;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-strong);
+}
+
+.mp-dn__totalLabel { font-size: 0.75rem; color: var(--text-muted); }
+
+.mp-dn__legend {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 0.75rem;
+}
+
+.mp-dn__legend li { display: flex; align-items: center; gap: 8px; }
+
+.mp-dn__swatch { width: 10px; height: 10px; border-radius: 2px; flex: 0 0 auto; }
+
+/* ---- Tables ---------------------------------------------------------- */
+
+.mp-tableWrap { overflow-x: auto; }
+
+.mp-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.mp-table th {
+  text-align: right;
+  font-weight: 600;
+  color: var(--text-muted);
+  padding: 8px 10px;
+  border-bottom: 2px solid var(--border-subtle);
+  white-space: nowrap;
+  background: var(--surface-card);
+}
+
+.mp-table td {
+  text-align: right;
+  padding: 9px 10px;
+  border-bottom: 1px solid var(--border-subtle);
+  white-space: nowrap;
+}
+
+.mp-table th:first-child,
+.mp-table td:first-child { text-align: left; }
+
+.mp-table tbody tr:hover td { background: var(--mp-track); }
+
+.mp-table tr.mp-table__zero td { color: var(--text-muted); }
+
+.mp-cellbar {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: flex-end;
+  width: 100%;
+}
+
+.mp-cellbar__bar { height: 8px; border-radius: 4px; flex: 0 0 auto; }
+
+.mp-tag {
+  display: inline-block;
+  font-size: 0.6875rem;
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--border-subtle);
+  color: var(--text-muted);
+  margin-left: 6px;
+}
+
+.mp-sub { display: block; font-size: 0.6875rem; color: var(--text-muted); }
+
+.mp-ok { color: var(--status-success); font-weight: 600; }
+.mp-warn { color: var(--status-warning); font-weight: 600; }
+
+/* ---- States ---------------------------------------------------------- */
+
+/*
+ * Skeletons hold the SAME box the real content will occupy, so nothing jumps when data lands.
+ * A spinner would say "wait" without saying what for, and would reflow the page on arrival.
+ */
+.mp-skeleton {
+  background: var(--mp-track);
+  border-radius: 4px;
+  color: transparent;
+  display: inline-block;
+  min-width: 3ch;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .mp-skeleton { animation: mpPulse 1.4s ease-in-out infinite; }
+  @keyframes mpPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
+}
+
+.mp-fail {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  min-height: 8rem;
+}
+
+.mp-fail::before {
+  content: '';
+  width: 0.375rem;
+  height: 0.375rem;
+  border-radius: 50%;
+  background: var(--status-danger);
+  flex: 0 0 auto;
+}
