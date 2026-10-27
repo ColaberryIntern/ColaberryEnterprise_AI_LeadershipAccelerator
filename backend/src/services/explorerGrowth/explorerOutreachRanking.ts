@@ -11,7 +11,10 @@
  *   e/i scores  the Explorer Growth engagement and intent scores; HIGH_INTENT / DORMANT overlays
  *   last_seen   the latest of campus presence, community activity, a completed card or an RSVP
  *
- * MOST ENGAGED: everyone, by an engagement score (cards x3, RSVPs x8, calls x12, a finished tour 10 or 1 per stop reached, E/5, and
+ * rsvps has no writer today: Open House sign-ups are recorded on Eventbrite, so it reads 0 until a portal RSVP exists.
+ *
+ * MOST ENGAGED: everyone not yet converted (Ali 2026-10-27: an outreach list ranks people still deciding; enrolled members led it on
+ * production), by an engagement score (cards x3, RSVPs x8, calls x12, a finished tour 10 or 1 per stop reached, E/5, and
  * 10 if seen in the last day or 5 in the last week).
  * REACH OUT NOW: not converted, no call already coming up, not contacted in the last 7 days, and seen in the last 14 days (someone
  * gone longer is a re-engagement campaign, not a call list); by intent (I, RSVPs x10, a finished tour 8, cards x2, HIGH_INTENT 20,
@@ -84,7 +87,7 @@ export function reasonsFor(s: OutreachSignals, now: number): string[] {
 }
 
 export function rankOutreach(rows: OutreachSignals[], view: OutreachView, limit: number, now: number): OutreachRow[] {
-  const pool = view === 'reach_out' ? rows.filter((r) => reachOutCandidate(r, now)) : rows;
+  const pool = view === 'reach_out' ? rows.filter((r) => reachOutCandidate(r, now)) : rows.filter((r) => r.primary_state !== 'CONVERTED');
   const score = view === 'reach_out' ? intentScore : engagementScore;
   return pool
     .map((r) => ({ ...r, score: score(r, now), reasons: reasonsFor(r, now) }))

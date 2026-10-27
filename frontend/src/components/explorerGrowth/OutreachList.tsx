@@ -5,11 +5,11 @@ import LearnerName from './LearnerName';
 /**
  * The staff outreach list (2026-10-26: "an easy way for the human staff to know who they should be reaching out to and who are the
  * most engaged customers"). Two views: Reach out now (not converted, no call coming up, not contacted in 7 days, active in the last
- * 14) and Most engaged. Each person carries the plain reasons the backend derived from recorded facts; the email opens a message.
+ * 14) and Most engaged (not converted). Each person carries the plain reasons the backend derived from recorded facts; the email opens a message.
  */
 export const VIEWS: { key: OutreachView; label: string; hint: string }[] = [
   { key: 'reach_out', label: 'Reach out now', hint: 'Active in the last 14 days, not converted, no call booked, not contacted in the last 7 days. Highest intent first.' },
-  { key: 'engaged', label: 'Most engaged', hint: 'Everyone, ranked by what they have done: assignments, Open House sign-ups, calls booked, the tour and recent activity.' },
+  { key: 'engaged', label: 'Most engaged', hint: 'Everyone not yet enrolled, ranked by what they have done: assignments, calls booked, the tour and recent activity.' },
 ];
 
 const stateLabel = (s: string): string => s.replace(/_/g, ' ').toLowerCase().replace(/^\w/, (c) => c.toUpperCase());

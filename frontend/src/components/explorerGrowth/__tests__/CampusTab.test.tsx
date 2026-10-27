@@ -47,8 +47,9 @@ const flush = async () => { await act(async () => { await Promise.resolve(); awa
 it('shows the campus numbers and how far explorers got in the tour', async () => {
   act(() => { root.render(<MemoryRouter><CampusTab /></MemoryRouter>); });
   await flush();
-  expect(q('eg-kpi-openhouse')!.textContent).toContain('42');
-  expect(q('eg-kpi-openhouse')!.textContent).toContain('45 seats saved');
+  // Open House sign-ups live on Eventbrite: the tile points there and never shows the portal count
+  expect(q('eg-kpi-openhouse')!.textContent).toContain('Recorded on Eventbrite');
+  expect(q('eg-kpi-openhouse')!.textContent).not.toContain('42');
   expect(q('eg-kpi-assignments')!.textContent).toContain('612');
   expect(q('eg-kpi-calls')!.textContent).toContain('2 upcoming');
   expect(q('eg-kpi-tours')!.textContent).toContain('4 finished');
