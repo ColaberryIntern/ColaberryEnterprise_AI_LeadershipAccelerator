@@ -42,6 +42,9 @@ export const DISCOVERY_FALLBACK: DiscoveryState = {
   disabled: true,
   unavailable: false,
   loading: false,
+  // Nothing was asked, so nothing was answered. A consumer gating on `answered` outside the
+  // provider gets "no" rather than an optimistic "not yet known to be off".
+  answered: false,
   refresh: NOOP,
 };
 

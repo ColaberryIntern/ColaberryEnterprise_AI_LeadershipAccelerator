@@ -103,6 +103,20 @@ export interface DiscoveryState {
    */
   unavailable: boolean;
   loading: boolean;
+  /**
+   * Discovery has come back at least once, whatever it said.
+   *
+   * `disabled` starts false, because on mount nothing yet says the feature is off. That is the
+   * right default for an affordance that should stay hidden until there is something to show —
+   * the badge renders nothing with an empty list either way. It is the WRONG default for
+   * anything that treats `!disabled` as "broadcasting exists", because for the first moment of
+   * every page load that is a guess, and with the flag dark it is a wrong one. A nav tab gated
+   * that way appears on load and vanishes when the 404 lands.
+   *
+   * So the positive signal is separate from the absence of the negative one. Gate on
+   * `answered && !disabled` to mean "we asked, and broadcasting is on".
+   */
+  answered: boolean;
   refresh: () => void;
 }
 
@@ -169,6 +183,7 @@ export function useBroadcastDiscovery(enabled: boolean, deps: DiscoveryDeps = {}
   const [unavailable, setUnavailable] = useState(false);
   const [disabled, setDisabled] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [answered, setAnswered] = useState(false);
 
   const timer = useRef<unknown>(null);
   const failures = useRef(0);
@@ -196,8 +211,11 @@ export function useBroadcastDiscovery(enabled: boolean, deps: DiscoveryDeps = {}
       setBroadcasts(Array.isArray(data?.broadcasts) ? data.broadcasts : []);
       setUnavailable(false);
       setDisabled(false);
+      setAnswered(true);
     } catch (err) {
       if (stopped.current || mine !== generation.current) return;
+      // Answered either way: a 404 is an answer, and it is the one a nav gate most needs.
+      setAnswered(true);
 
       if (isTerminalDiscoveryError(err)) {
         // Off, or not signed in. Show nothing, and stop: there is no state that retrying can
@@ -252,5 +270,5 @@ export function useBroadcastDiscovery(enabled: boolean, deps: DiscoveryDeps = {}
     };
   }, [enabled, tick, subscribeVisibility, isVisible, clear]);
 
-  return { broadcasts, unavailable, disabled, loading, refresh };
+  return { broadcasts, unavailable, disabled, loading, answered, refresh };
 }

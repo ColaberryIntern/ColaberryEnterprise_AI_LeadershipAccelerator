@@ -526,13 +526,20 @@ export async function getReplayBroadcasts(req: Request, res: Response): Promise<
       });
     }
 
+    // Keyed by id, NOT by position. `projectDiscovery` OMITS an occurrence the viewer may not
+    // know about, so the projected array is shorter than the one it came from and its indices
+    // no longer line up — which made every date after an omitted private class the date of
+    // some earlier class. Omission is this ticket's headline requirement, so the case that
+    // corrupted the dates was the case the feature exists to handle.
+    const endedAtById = new Map(occurrences.map((o) => [o.id, o.ended_at?.getTime() ?? null]));
+
     res.json({
       states: REPLAY_DISCOVERY_STATES,
-      replays: projectDiscovery(entries).map((item, i) => ({
+      replays: projectDiscovery(entries).map((item) => ({
         ...item,
         // The only field a past class needs that a live one does not. Epoch ms, matching the
         // other two instants in the item, so no surface does timezone arithmetic of its own.
-        ended_at: occurrences[i].ended_at?.getTime() ?? null,
+        ended_at: endedAtById.get(item.id) ?? null,
       })),
     });
   } catch (err) {

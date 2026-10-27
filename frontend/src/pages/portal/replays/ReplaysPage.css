@@ -1,0 +1,91 @@
+/*
+ * Replays (L8.3). Tokens only — no literal colors — so this inherits the portal's light and
+ * dark treatments the way every other student surface does.
+ */
+
+.rp-wrap {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 18px 16px 48px;
+}
+
+.rp-heading {
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--ink, #10233a);
+  margin: 0 0 4px;
+}
+
+.rp-note {
+  color: var(--ink-soft, #5a6b80);
+  font-size: 0.95rem;
+  line-height: 1.5;
+  margin: 14px 0 0;
+}
+
+.rp-warn {
+  border: 1px solid var(--amber, #c9922a);
+  border-radius: 8px;
+  padding: 12px 14px;
+  background: var(--amber-wash, rgba(201, 146, 42, 0.08));
+}
+
+.rp-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.rp-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px 16px;
+}
+
+.rp-card-body { min-width: 0; }
+
+.rp-title {
+  font-size: 1rem;
+  font-weight: 650;
+  color: var(--ink, #10233a);
+  margin: 0;
+  /* A class title is authored copy and can be long; it wraps rather than being clipped,
+     because a truncated title is how a student fails to recognise the week they missed. */
+  overflow-wrap: anywhere;
+}
+
+.rp-when {
+  font-size: 0.85rem;
+  color: var(--ink-soft, #5a6b80);
+  margin: 3px 0 0;
+}
+
+.rp-locked {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--ink-soft, #5a6b80);
+  white-space: nowrap;
+}
+
+/* The action must stay reachable with one thumb on a phone, which is where a missed class is
+   most often watched back. 44px is the WCAG 2.1 AA target floor. */
+.rp-card .te-btn {
+  min-height: 44px;
+  flex: 0 0 auto;
+}
+
+@media (max-width: 560px) {
+  .rp-card {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .rp-card .te-btn,
+  .rp-locked {
+    width: 100%;
+    text-align: center;
+  }
+}

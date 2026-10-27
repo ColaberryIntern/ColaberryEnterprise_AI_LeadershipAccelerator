@@ -43,6 +43,7 @@ const CertPrepPage = lazy(() => import('../pages/portal/certprep/CertPrepPage'))
 const CommunityPage = lazy(() => import('../pages/portal/community/CommunityPage'));
 const PeopleDirectoryPage = lazy(() => import('../pages/portal/community/PeopleDirectoryPage'));
 const RoomsPage = lazy(() => import('../pages/portal/rooms/RoomsPage'));
+const ReplaysPage = lazy(() => import('../pages/portal/replays/ReplaysPage'));
 const GlobalLibraryPage = lazy(() => import('../pages/portal/library/GlobalLibraryPage'));
 const PlansPage = lazy(() => import('../pages/portal/plans/PlansPage')); // C21: the Admissions building's page
 const CompanyPage = lazy(() => import('../pages/portal/company/CompanyPage'));
@@ -173,6 +174,11 @@ const portalRoutes = (
       <Route path="/portal/cert-prep" element={<PageGate feature="cert-prep"><CertPrepPage /></PageGate>} />
       <Route path="/portal/community" element={<CommunityPage />} />
       <Route path="/portal/community/people" element={<PeopleDirectoryPage />} />
+      {/* L8.3 — watch a past class back. AUTHENTICATED, unlike the live link: a replay list
+          is per-viewer by definition, and its endpoint answers 401 to a stranger. No
+          PageGate: the page's own entries carry the entitlement answer per class, so gating
+          the whole surface would hide a free replay behind a paid wall. */}
+      <Route path="/portal/replays" element={<ReplaysPage />} />
       <Route path="/portal/rooms" element={<RoomsPage />} />
       <Route path="/portal/rooms/:roomId" element={<RoomsPage />} />
       <Route path="/portal/library" element={<GlobalLibraryPage />} />

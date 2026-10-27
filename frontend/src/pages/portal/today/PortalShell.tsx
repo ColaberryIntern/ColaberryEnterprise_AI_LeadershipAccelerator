@@ -21,6 +21,8 @@ import { useInternshipNav } from '../useInternshipNav';
 import ConfettiCelebration from '../../../components/ConfettiCelebration';
 import { ClassicNav, ClassicTabBar } from './ShellNav';
 import { useCampus } from '../../../components/campus/CampusContext';
+import { useDiscoveryState } from '../../../contexts/BroadcastDiscoveryContext';
+import { showReplaysTab } from '../../../components/portal/replaysNavGate';
 import CampusNav from '../../../components/campus/CampusNav';
 import CampusTabBar from '../../../components/campus/CampusTabBar';
 import CampusLayers from '../../../components/campus/CampusLayers';
@@ -144,6 +146,18 @@ const INTERNSHIP_NAV_ITEM: NavItem = {
   ),
 };
 
+// "Replays" (L8.3) — appended to "Build and learn", and ONLY when broadcasting is switched on.
+// It takes that fact from the shared discovery provider, whose `disabled` already means "the
+// feature is off or nobody is signed in": with BROADCAST_ENABLED dark the replay route answers
+// a clean 404, so an unconditional nav item would be a permanent link to an empty page on
+// every student's sidebar. Ungated (no lock badge): the page's entries carry their own
+// entitlement answer per class, and a free replay must not sit behind a paid-looking lock.
+const REPLAYS_NAV_ITEM: NavItem = {
+  label: 'Replays', to: '/portal/replays', icon: (
+    <svg viewBox="0 0 24 24" fill="none"><rect x="2" y="5" width="20" height="14" rx="2.5" stroke="currentColor" strokeWidth="2" /><path d="M10 9.5l4.5 2.5L10 14.5v-5Z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /></svg>
+  ),
+};
+
 type PortalShellProps = {
   /** Plain node for pages that don't condense; a function form for pages that
    *  need the live condensed boolean to sync their body hero's animation with
@@ -174,15 +188,23 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge, condens
   const companyNavLabel = companyLabel(org);
   const mgmt = useMgmtStatus();           // employee with a mgmt role = "Management Portal" link
   const { isIntern } = useInternshipNav(); // in the internship process / active intern = "Internship" tab
+  // Broadcasting on = a "Replays" tab. Read from the SHARED provider, so this adds no request.
+  // The rule itself lives in `replaysNavGate`, with the reason the `answered` term is not
+  // redundant and a test for each of its four states.
+  const broadcastOn = showReplaysTab(useDiscoveryState());
   // Effective nav: employees get "Management Portal", managers get "Your company",
   // both prepended above "Your day"; interns get an "Internship" tab inside
   // "Build and learn". Non-interns see the group exactly as before.
   const groups = useMemo<NavGroup[]>(
     () => {
-      const base = isIntern
+      const extra: NavItem[] = [
+        ...(isIntern ? [INTERNSHIP_NAV_ITEM] : []),
+        ...(broadcastOn ? [REPLAYS_NAV_ITEM] : []),
+      ];
+      const base = extra.length
         ? NAV_GROUPS.map((g) =>
             g.grp === 'Build and learn'
-              ? { ...g, items: [...g.items, INTERNSHIP_NAV_ITEM] }
+              ? { ...g, items: [...g.items, ...extra] }
               : g,
           )
         : NAV_GROUPS;
@@ -192,7 +214,7 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge, condens
         ...base,
       ];
     },
-    [isOrgManager, companyNavLabel, mgmt.is_mgmt, isIntern],
+    [isOrgManager, companyNavLabel, mgmt.is_mgmt, isIntern, broadcastOn],
   );
   // Mobile bottom tab bar mirrors the effective, navigable destinations.
   const tabItems = useMemo(

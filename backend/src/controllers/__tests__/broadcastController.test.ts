@@ -35,13 +35,23 @@ jest.mock('../../services/broadcast/broadcastActiveQuery', () => ({
   ACTIVE_DISCOVERY_STATES: ['live', 'reconnecting'],
   findActiveOccurrences: jest.fn(),
 }));
+// L8.3's read. The query itself is pinned in broadcastReplayQuery.test.ts; what is left to
+// the controller is who may know about each row, which is the half this ticket is judged on.
+jest.mock('../../services/broadcast/broadcastReplayQuery', () => ({
+  REPLAY_DISCOVERY_STATES: ['replay_ready'],
+  REPLAY_DISCOVERY_LIMIT: 25,
+  findReplayOccurrences: jest.fn(),
+}));
 
-import { postProducerCommand, postPlaybackGrant, getActiveBroadcasts } from '../broadcastController';
+import {
+  postProducerCommand, postPlaybackGrant, getActiveBroadcasts, getReplayBroadcasts,
+} from '../broadcastController';
 import BroadcastOccurrence from '../../models/BroadcastOccurrence';
 import { runProducerCommand } from '../../services/broadcast/broadcastCommandService';
 import { resolveRoomEligibility } from '../../services/broadcast/broadcastRoomEligibility';
 import { loadViewerAccessFacts, broadcastAccessDeps } from '../../services/broadcast/broadcastAccessDeps';
 import { findActiveOccurrences } from '../../services/broadcast/broadcastActiveQuery';
+import { findReplayOccurrences } from '../../services/broadcast/broadcastReplayQuery';
 import { postPlaybackHeartbeat, getLiveAudience } from '../broadcastController';
 import { recordPlaybackBeat, readLiveAudience } from '../../services/broadcast/broadcastTelemetryService';
 
@@ -53,6 +63,7 @@ const loadEnrollment = broadcastAccessDeps.loadEnrollment as jest.Mock;
 const loadCohort = broadcastAccessDeps.loadCohort as jest.Mock;
 const loadRoleInfo = broadcastAccessDeps.loadRoleInfo as jest.Mock;
 const activeOccurrences = findActiveOccurrences as jest.Mock;
+const replayOccurrences = findReplayOccurrences as jest.Mock;
 const recordBeat = recordPlaybackBeat as jest.Mock;
 const readAudience = readLiveAudience as jest.Mock;
 
@@ -82,6 +93,7 @@ beforeEach(() => {
   loadCohort.mockResolvedValue(null);
   loadRoleInfo.mockResolvedValue({ isStaff: false, hasActiveComp: false });
   activeOccurrences.mockResolvedValue([]);
+  replayOccurrences.mockResolvedValue([]);
 });
 
 describe('postProducerCommand', () => {
@@ -462,6 +474,135 @@ describe('getActiveBroadcasts', () => {
       if (previous === undefined) delete process.env.BROADCAST_DISCOVERY_POLL_MS;
       else process.env.BROADCAST_DISCOVERY_POLL_MS = previous;
     }
+  });
+});
+
+/**
+ * getReplayBroadcasts (L8.3) — what a viewer may know about a class that has already aired.
+ *
+ * The ticket is judged on one sentence: a private occurrence the viewer is not eligible for
+ * must be OMITTED ENTIRELY rather than returned as a locked shell. That is `mayKnowAbout`,
+ * reused rather than re-copied, and these pin that the replay route actually goes through it.
+ *
+ * It also pins the field replay adds on top of the live projection. Dating a past class is
+ * the whole point of listing it, and the first version of this handler read `ended_at` by
+ * POSITION out of the pre-filter array — so the moment an entitlement omission shortened the
+ * list, every later class was dated from an earlier one. The requirement and the defect were
+ * the same case, which is why it survived a green query suite.
+ */
+describe('getReplayBroadcasts', () => {
+  const PRIVATE_TITLE = 'Cohort 12 private retro';
+
+  const past = (over: any = {}) => ({
+    id: OCC, title: PRIVATE_TITLE, room_id: 'room-1', access_mode: 'private',
+    editorial_state: 'replay_ready', scheduled_start_at: new Date('2026-10-07T18:00:00Z'),
+    content_started_at: new Date('2026-10-07T18:02:00Z'),
+    ended_at: new Date('2026-10-07T19:10:00Z'), preview_seconds: 900, session_id: null, ...over,
+  });
+
+  it('NEVER sends a private replay title to an ineligible viewer', async () => {
+    replayOccurrences.mockResolvedValue([past()]);
+    roomEligible.mockResolvedValue(false);
+    const res = mockRes();
+
+    await getReplayBroadcasts(req(), res);
+
+    const body = res.json.mock.calls[0][0];
+    expect(body.replays).toEqual([]);
+    // Asserted on the wire. A locked shell that still carries the title is the failure mode.
+    expect(JSON.stringify(body)).not.toContain(PRIVATE_TITLE);
+  });
+
+  it('CONTROL: sends that same replay to an eligible room member', async () => {
+    // Without this the assertion above would pass against a handler that returns nothing ever.
+    replayOccurrences.mockResolvedValue([past()]);
+    roomEligible.mockResolvedValue(true);
+    const res = mockRes();
+
+    await getReplayBroadcasts(req(), res);
+
+    const body = res.json.mock.calls[0][0];
+    expect(body.replays).toHaveLength(1);
+    expect(body.replays[0]).toMatchObject({ title: PRIVATE_TITLE, can_watch: true });
+  });
+
+  it('dates every replay from its OWN class, even when entitlement omitted an earlier one', async () => {
+    // The omission is what breaks a positional read: three rows in, one filtered out, two
+    // listed — and the two that remain are at indices 0 and 1 of a different array.
+    replayOccurrences.mockResolvedValue([
+      past({ id: 'occ-private', ended_at: new Date('2026-10-01T19:00:00Z') }),
+      past({
+        id: 'occ-week-9', title: 'Week 9 Build Day', access_mode: 'free', room_id: 'room-2',
+        ended_at: new Date('2026-10-13T19:40:00Z'),
+      }),
+      past({
+        id: 'occ-week-10', title: 'Week 10 Build Day', access_mode: 'free', room_id: 'room-3',
+        ended_at: new Date('2026-10-20T19:40:00Z'),
+      }),
+    ]);
+    roomEligible.mockResolvedValue(false);
+    const res = mockRes();
+
+    await getReplayBroadcasts(req(), res);
+
+    const { replays } = res.json.mock.calls[0][0];
+    expect(replays.map((r: any) => r.id)).toEqual(['occ-week-9', 'occ-week-10']);
+    // Positional: Week 9 would be dated 1 Oct (the private class it cannot even see) and
+    // Week 10 dated 13 Oct. A student reading the list is told the wrong week, twice.
+    expect(replays[0].ended_at).toBe(new Date('2026-10-13T19:40:00Z').getTime());
+    expect(replays[1].ended_at).toBe(new Date('2026-10-20T19:40:00Z').getTime());
+  });
+
+  it('carries a null ended_at as null rather than inventing an epoch', async () => {
+    replayOccurrences.mockResolvedValue([past({ access_mode: 'free', ended_at: null })]);
+    const res = mockRes();
+    await getReplayBroadcasts(req(), res);
+    expect(res.json.mock.calls[0][0].replays[0].ended_at).toBeNull();
+  });
+
+  it('loads the viewer facts ONCE however long the replay list is', async () => {
+    replayOccurrences.mockResolvedValue([
+      past({ id: 'a', access_mode: 'free' }),
+      past({ id: 'b', access_mode: 'free', room_id: 'room-2' }),
+      past({ id: 'c', access_mode: 'free', room_id: 'room-3' }),
+    ]);
+    const res = mockRes();
+
+    await getReplayBroadcasts(req(), res);
+
+    expect(viewerFacts).toHaveBeenCalledTimes(1);
+    expect(roomEligible).toHaveBeenCalledTimes(3);
+  });
+
+  it('hands staff context to the eligibility resolver rather than deciding staff itself', async () => {
+    // Staff are eligible everywhere, but that is resolveRoomEligibility's rule to apply. What
+    // this route owes it is the fact — a second staff check here would be the copy the ticket
+    // forbids.
+    replayOccurrences.mockResolvedValue([past()]);
+    const res = mockRes();
+
+    await getReplayBroadcasts(req({ participant: { sub: 'enr-1', isStaff: true } }), res);
+
+    expect(roomEligible).toHaveBeenCalledWith('room-1', expect.objectContaining({ isAdmin: true }));
+  });
+
+  it('answers 503 when it cannot work out what can be watched back — NOT an empty list', async () => {
+    replayOccurrences.mockRejectedValue(new Error('connect ECONNREFUSED postgres://u:pw@db/x'));
+    const res = mockRes();
+
+    await getReplayBroadcasts(req(), res);
+
+    // "your class was never recorded" and "we could not tell" are different facts, and
+    // reporting the second as the first is the one that loses trust.
+    expect(res.status).toHaveBeenCalledWith(503);
+    expect(res.json.mock.calls[0][0]).toEqual({ error: 'ReplayDiscoveryUnavailable' });
+    expect(JSON.stringify(res.json.mock.calls[0][0])).not.toContain('postgres://');
+  });
+
+  it('reports which states it considered, so the client is not guessing', async () => {
+    const res = mockRes();
+    await getReplayBroadcasts(req(), res);
+    expect(res.json.mock.calls[0][0].states).toEqual(['replay_ready']);
   });
 });
 
