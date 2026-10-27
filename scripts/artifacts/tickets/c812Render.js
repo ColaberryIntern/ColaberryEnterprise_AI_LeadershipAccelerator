@@ -250,7 +250,7 @@ function buildDocument() {
       ${evidence}</table>
 
     <h2>3. The baseline: ${esc(D.BASELINE.verdict)}</h2>
-    <p>This is the centre of the ticket, and it is the trap the ticket predicted, sprung
+    <p>This is the center of the ticket, and it is the trap the ticket predicted, sprung
       in the worse of the two available ways. The columns are not empty. They are
       <em>full of zeros</em>, which means the arithmetic completes.</p>
     <table><tr><th>Column</th><th style="text-align:right">Zeros</th>

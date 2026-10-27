@@ -62,7 +62,7 @@ const EVIDENCE = [
 ];
 
 /**
- * The baseline finding. This is the centre of the ticket.
+ * The baseline finding. This is the center of the ticket.
  */
 const BASELINE = {
   verdict: 'NO BASELINE EXISTS, FOR ANYBODY',
