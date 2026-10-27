@@ -36,13 +36,14 @@ describe('ranking', () => {
     ];
     expect(rankOutreach(rows, 'reach_out', 10, NOW).map((r) => r.email)).toEqual(['hot@example.com', 'rsvp@example.com', 'low@example.com']);
   });
-  it('most engaged counts everyone, by recorded activity', () => {
+  it('most engaged ranks everyone still deciding by recorded activity; converted members are left out', () => {
     const rows = [
       base({ email: 'idle@example.com', last_seen: day(30) }),
       base({ email: 'busy@example.com', cards: 5, calls: 1 }),
-      base({ email: 'converted@example.com', primary_state: 'CONVERTED', cards: 2 }),
+      base({ email: 'converted@example.com', primary_state: 'CONVERTED', cards: 40 }),
     ];
-    expect(rankOutreach(rows, 'engaged', 10, NOW).map((r) => r.email)).toEqual(['busy@example.com', 'converted@example.com', 'idle@example.com']);
+    expect(rankOutreach(rows, 'engaged', 10, NOW).map((r) => r.email)).toEqual(['busy@example.com', 'idle@example.com']);
+    expect(rankOutreach([rows[2]], 'engaged', 10, NOW)).toEqual([]);
     expect(engagementScore(base({ cards: 5, calls: 1 }), NOW)).toBe(15 + 12 + 10);
   });
   it('ties break on the email (stable order) and the limit applies', () => {

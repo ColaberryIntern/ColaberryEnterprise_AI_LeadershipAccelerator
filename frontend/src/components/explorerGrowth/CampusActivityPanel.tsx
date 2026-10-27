@@ -4,7 +4,7 @@ import type { CampusActivity } from '../../services/explorerCampusApi';
 
 /**
  * Explorer Growth: what explorers are doing on the campus (2026-10-26). Every number is a recorded fact (explorerCampusService):
- * Open House "Save my seat", completed assignment cards, admissions calls booked from the campus, the explorer tour (furthest stop of
+ * completed assignment cards (Open House sign-ups live on Eventbrite, so that tile points there instead of showing a portal 0), admissions calls booked from the campus, the explorer tour (furthest stop of
  * how many, finished) and who was on the campus. Tours and bookings are recorded only from `tracked_since`, and the panel says so.
  */
 function Kpi({ label, value, sub, testId }: { label: string; value: number; sub: string; testId: string }) {
@@ -43,8 +43,12 @@ export default function CampusActivityPanel({ a }: { a: CampusActivity }) {
   return (
     <>
       <div className="row g-3 mb-3">
-        <Kpi testId="eg-kpi-openhouse" label="Open House sign-ups" value={a.open_house.people}
-          sub={`${a.open_house.rsvps.toLocaleString()} seats saved · ${a.open_house.last_7_days.toLocaleString()} this week`} />
+        <div className="col-6 col-md-4 col-xl" data-testid="eg-kpi-openhouse">
+          <div className="border rounded-3 p-3 h-100 bg-light">
+            <div className="text-muted small text-uppercase fw-semibold" style={{ letterSpacing: '.04em' }}>Open House sign-ups</div>
+            <div className="small mt-1">Recorded on Eventbrite, not in the portal. See the event page there for who signed up.</div>
+          </div>
+        </div>
         <Kpi testId="eg-kpi-assignments" label="Assignments completed" value={a.assignments.completed}
           sub={`by ${a.assignments.people.toLocaleString()} explorers · ${a.assignments.last_7_days.toLocaleString()} this week`} />
         <Kpi testId="eg-kpi-calls" label="Admissions calls booked" value={a.admissions_calls.booked}
@@ -58,7 +62,7 @@ export default function CampusActivityPanel({ a }: { a: CampusActivity }) {
         <TourSteps byStop={a.tours.by_stop} started={a.tours.started} />
       </SectionCard>
       <p className="text-muted small mt-2 mb-0" data-testid="eg-tracked-since">
-        Of {a.explorers.toLocaleString()} explorers. Tours and admissions calls booked from the campus are counted since {since}; Open House sign-ups and assignments include everything before.
+        Of {a.explorers.toLocaleString()} explorers. Tours and admissions calls booked from the campus are counted since {since}; assignments include everything before.
       </p>
     </>
   );
