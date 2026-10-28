@@ -265,6 +265,25 @@ export function getAgentDomain(key: string): AgentDomain | undefined {
   return AGENT_DOMAINS.find((d) => d.domain_key === key);
 }
 
+/**
+ * The human name a domain's `projects.name` carries. AF2.7 item 3.
+ *
+ * The provisioner used to write `name: plan.domain_key`, so all ten landed in production reading
+ * `admissions`, `product_experience`, `learner_success` — snake_case machine keys on a surface
+ * where every other student project carries a real name (CoreOps, HosPulse, Ambit, Ledgerly).
+ * Interns see this on their own project page and on the admin Delivery board.
+ *
+ * It lives HERE, beside the titles, because two callers must agree exactly: the provisioner that
+ * names a NEW row, and the repair that renames the ten rows already in production. Two copies of
+ * this rule is how the repair silently writes a different name than the next provision does.
+ *
+ * Falls back to the key for an unknown domain rather than throwing: a name is cosmetic, and a
+ * provisioner that refuses to create a project over a display string would be the worse failure.
+ */
+export function domainProjectName(key: string): string {
+  return getAgentDomain(key)?.title ?? key;
+}
+
 /** Domains whose manager genuinely cannot reach the surface. Measured, not averaged. */
 export function blockedDomains(): readonly AgentDomain[] {
   return AGENT_DOMAINS.filter((d) => !d.can_reach_surface);
