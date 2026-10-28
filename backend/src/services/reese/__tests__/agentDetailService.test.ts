@@ -1062,14 +1062,62 @@ describe('getAgentDetail', () => {
     });
 
     describe('employee_facts (Reese Product Phase 1, R7 — truthful employee facts)', () => {
-      it('honesty boundary: null for every agent that is not Reese — no fabricated availability/work-state for an agent this phase never reviewed', async () => {
+      // 2026-10-27 — THIS TEST USED TO ASSERT THE OPPOSITE, and it was right to, until it
+      // wasn't. It read `expect(result!.employee_facts).toBeNull()` under the name "honesty
+      // boundary: null for every agent that is not Reese - no fabricated availability/
+      // work-state for an agent this phase never reviewed". The intent was sound: do not
+      // invent facts. The effect was not: null does not render an empty state, it deletes the
+      // Hero sentence and makes the whole Employee facts card return null, which is why Maya's
+      // Overview was blank when Ali looked at it. The honesty boundary is kept by MEASURING
+      // the seven agent-agnostic fields and leaving `behaviours` genuinely empty, not by
+      // withholding all seven.
+      it('populates for an agent that is not Reese, with a genuinely empty behaviours array', async () => {
+        mockGetRoleCharter.mockResolvedValue({ agentId: 'agent-1', charter: null });
+        mockRoomMessageFindOne.mockResolvedValue(null);
+        mockLastActivity.mockResolvedValue(null);
+        mockCountOpenTickets.mockResolvedValue(0);
         mockAgentFindByPk.mockResolvedValue({ ...reeseAgent, agent_name: 'CoryBrain' });
 
         const result = await getAgentDetail('agent-1');
+        const facts = result!.employee_facts!;
 
-        expect(result!.employee_facts).toBeNull();
-        expect(mockRoomMessageFindOne).not.toHaveBeenCalled();
-        expect(mockGetRoleCharter).not.toHaveBeenCalled();
+        expect(result!.employee_facts).not.toBeNull();
+        expect(facts.behaviours).toEqual([]);
+        // The seven agent-agnostic fields are all present and all measured.
+        expect(facts.work_state).toBe('idle');
+        expect(facts.work_state_detail).toBeNull();
+        expect(facts.last_meaningful_action).toBeNull();
+        expect(facts.charter_version).toBeNull();
+        expect(typeof facts.manager_chain_note).toBe('string');
+        // Nothing is fabricated: the charter and room-message lookups really ran for this
+        // agent, rather than being skipped and reported as absent.
+        expect(mockGetRoleCharter).toHaveBeenCalled();
+      });
+
+      // THE EDGE CASE THAT WAS A REAL BUG, not a refactor artefact. Availability was
+      // `agent.enabled && behaviours.some((b) => b.enabled)`, and `[].some()` is ALWAYS false,
+      // so the moment this stopped being Reese-only, every behaviour-less agent would have
+      // reported "unavailable" no matter what its own row said. These two tests fail if that
+      // form ever comes back.
+      it('availability for a behaviour-less agent follows its OWN enabled flag, not an empty .some()', async () => {
+        mockGetRoleCharter.mockResolvedValue({ agentId: 'agent-1', charter: null });
+        mockRoomMessageFindOne.mockResolvedValue(null);
+        mockAgentFindByPk.mockResolvedValue({ ...reeseAgent, agent_name: 'CoryBrain', enabled: true });
+
+        const result = await getAgentDetail('agent-1');
+
+        expect(result!.employee_facts!.behaviours).toEqual([]);
+        expect(result!.employee_facts!.availability).toBe('available');
+      });
+
+      it('and reports unavailable when that row is switched off', async () => {
+        mockGetRoleCharter.mockResolvedValue({ agentId: 'agent-1', charter: null });
+        mockRoomMessageFindOne.mockResolvedValue(null);
+        mockAgentFindByPk.mockResolvedValue({ ...reeseAgent, agent_name: 'CoryBrain', enabled: false });
+
+        const result = await getAgentDetail('agent-1');
+
+        expect(result!.employee_facts!.availability).toBe('unavailable');
       });
 
       it('happy path: real charter version/effective date, real last meaningful action, real manager chain, real behaviour switches', async () => {

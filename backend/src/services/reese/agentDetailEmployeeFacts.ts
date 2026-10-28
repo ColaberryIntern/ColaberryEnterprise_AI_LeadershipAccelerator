@@ -2,9 +2,8 @@ import type { PersonaVersionHistoryRow } from '../agentPersonaVersionHistoryServ
 import type { AgentAuthorizationSummary } from '../agentAuthorizationService';
 import type { AgentGoalsDimension } from '../agentGoalsDimensionsService';
 import type { CommunityPresenceStatus } from '../../models/CommunityMember';
-import RoomMessage from '../../models/RoomMessage';
-import { getRoleCharter } from '../agentRoleCharterService';
 import { REESE_BEHAVIOURS } from '../../scripts/lib/reeseBehaviourInventory';
+import { buildAgentEmployeeFactsCore } from './agentEmployeeFactsCore';
 import type { LastTicketRef } from './reeseBehaviourLastTicket';
 import type { AgentDetailTicket, AgentDetailTicketBreakdown } from './agentDetailTicketTypes';
 import {
@@ -456,61 +455,17 @@ export async function getReeseEmployeeFacts(
     };
   });
 
-  // Availability is truthful, not the presence heartbeat: unavailable when
-  // her own row is off OR every real behaviour is switched off.
-  const availability: EmployeeFacts['availability'] =
-    agent.enabled && behaviours.some((b) => b.enabled) ? 'available' : 'unavailable';
+  // The seven agent-agnostic fields now live in agentEmployeeFactsCore.ts --
+  // see its header for why, and for the availability bug that extraction
+  // surfaced. Reese is the one caller that passes a real behaviour catalogue.
+  const core = await buildAgentEmployeeFactsCore(agent, {
+    lastTicketActivityAt: ctx.lastTicketActivityAt,
+    openTicketCount: ctx.openTicketCount,
+    reportsTo: ctx.reportsTo,
+    enrollmentId: ctx.reeseEnrollmentId,
+    hasBehaviourCatalogue: true,
+    anyBehaviourEnabled: behaviours.some((b) => b.enabled),
+  });
 
-  // Last meaningful action — her latest real room_messages row (never the
-  // heartbeat), compared against the latest ticket activity, whichever is
-  // more recent. Fails safe to null, never throws (a lookup failure here
-  // must not break the whole Agent Detail response).
-  let lastMessage: { at: Date; description: string } | null = null;
-  try {
-    if (ctx.reeseEnrollmentId) {
-      const latest = await RoomMessage.findOne({
-        where: { enrollment_id: ctx.reeseEnrollmentId, deleted_at: null },
-        order: [['created_at', 'DESC']],
-      });
-      if (latest) lastMessage = { at: latest.created_at, description: `Sent a DM: "${String(latest.content).slice(0, 140)}"` };
-    }
-  } catch {
-    lastMessage = null;
-  }
-
-  const lastTicket = ctx.lastTicketActivityAt
-    ? { at: ctx.lastTicketActivityAt, description: 'Ticket activity (see linked tickets)' }
-    : null;
-
-  const lastMeaningfulAction =
-    lastMessage && lastTicket
-      ? (lastMessage.at > lastTicket.at ? lastMessage : lastTicket)
-      : lastMessage || lastTicket;
-
-  const workState: EmployeeFacts['work_state'] = ctx.openTicketCount > 0 ? 'working_on_ticket' : 'idle';
-  const workStateDetail = ctx.openTicketCount > 0 ? `${ctx.openTicketCount} open ticket(s)` : null;
-
-  const charterView = await getRoleCharter(agent.id);
-  const charterVersion = charterView?.charter?.version ?? null;
-  const charterEffectiveAt = charterView?.charter?.effectiveAt ?? null;
-
-  let managerChainNote: string;
-  if (ctx.reportsTo?.resolved_human) {
-    managerChainNote = `Reports to: ${ctx.reportsTo.resolved_human.name}`;
-  } else if (ctx.reportsTo?.immediate_agent) {
-    managerChainNote = `Reports to: ${ctx.reportsTo.immediate_agent.name} (does not resolve to a human)`;
-  } else {
-    managerChainNote = 'No manager chain configured';
-  }
-
-  return {
-    availability,
-    work_state: workState,
-    work_state_detail: workStateDetail,
-    last_meaningful_action: lastMeaningfulAction,
-    charter_version: charterVersion,
-    charter_effective_at: charterEffectiveAt,
-    manager_chain_note: managerChainNote,
-    behaviours,
-  };
+  return { ...core, behaviours };
 }

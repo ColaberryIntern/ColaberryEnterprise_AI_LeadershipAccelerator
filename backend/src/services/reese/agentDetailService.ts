@@ -17,6 +17,7 @@ import { getAgentAuthorizationSummary, getAbacMode, resolveEffectiveMode } from 
 import { computeAgentGoalsDimensions } from '../agentGoalsDimensionsService';
 import { classifyAgentAutonomyLevel } from '../agentCapabilityClassifier';
 import { getReeseEmployeeFacts, type AgentDetailResult } from './agentDetailEmployeeFacts';
+import { getAgentEmployeeFacts } from './agentEmployeeFactsCore';
 import { computeLastTicketPerBehaviour } from './reeseBehaviourLastTicket';
 import { BEHAVIOUR_KEY_BY_CRON_AGENT_NAME } from './reeseBehaviourMetadata';
 import { computeNeedsReply, computeStatusBucket } from './ticketStatusBucket';
@@ -281,10 +282,21 @@ export async function getAgentDetail(agentId: string): Promise<AgentDetailResult
   const lastTicketByBehaviour =
     agent.agent_name === 'Reese' ? computeLastTicketPerBehaviour(allTicketTypeRows as any[]) : {};
 
-  // Reese Product Phase 1, R7 — truthful employee facts, Reese-only. Gated
-  // strictly on agent_name so no other agent's response shape or content
-  // changes by a single byte (proven by this file's own existing tests,
-  // which cover non-Reese agents and pass unmodified).
+  // Truthful employee facts for EVERY agent (2026-10-27). Reese keeps the
+  // behaviour-catalogue path; everyone else gets the same seven agent-agnostic
+  // facts with an honestly empty behaviours array.
+  //
+  // WHAT THIS REPLACED, AND WHY IT WAS WRONG. This read
+  // `agent.agent_name === 'Reese' ? ... : null`, with a comment arguing the
+  // name gate meant "no other agent's response shape or content changes by a
+  // single byte". True, and that was the problem: null does not render an empty
+  // state, it removes the Hero sentence and makes the entire Employee facts
+  // card `return null`. Ali, looking at Maya's Overview on 2026-10-27, asked
+  // why her page was blank. It was blank because of this line.
+  //
+  // `behaviours` is still Reese-only on purpose. See getAgentEmployeeFacts()'s
+  // docblock: an event-driven agent runs no named scheduled behaviours, so the
+  // empty array is a measurement, not a placeholder.
   const employeeFacts =
     agent.agent_name === 'Reese'
       ? await getReeseEmployeeFacts(agent, {
@@ -300,7 +312,12 @@ export async function getAgentDetail(agentId: string): Promise<AgentDetailResult
           })),
           lastTicketByBehaviour,
         })
-      : null;
+      : await getAgentEmployeeFacts(agent, {
+          lastTicketActivityAt: lastActivityAt,
+          openTicketCount,
+          reportsTo,
+          enrollmentId,
+        });
 
   return {
     agent: {
