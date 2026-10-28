@@ -47,7 +47,9 @@ const KNOWN_UNRAISED: Array<{ route: string; multerCap: string; note: string }> 
   { route: '/api/portal/certifications', multerCap: '15MB', note: 'certificateUpload' },
   { route: '/api/portal/internship/documents/:documentType/signed', multerCap: '25MB', note: 'signedDocumentUpload' },
   { route: '/api/portal/community/upload', multerCap: '8MB', note: 'communityMediaUpload' },
-  { route: '/api/portal/agent-attachments', multerCap: '10MB', note: 'agentAttachmentUpload' },
+  // /api/portal/agent-attachments was here until 2026-10-28. Removed because it is now
+  // raised to 10m in nginx.conf — reported from the Gov Contracts build as refusing
+  // anything over ~1 MB while documented as 10 MB, which is this trap exactly.
   // Public and staff-facing.
   { route: '/api/strategy-prep/:token/upload', multerCap: '50MB', note: 'strategyPrepUpload; public token flow' },
   { route: '/api/admin/accelerator/submissions/:id/upload', multerCap: '50MB', note: 'strategyPrepUpload; staff' },
