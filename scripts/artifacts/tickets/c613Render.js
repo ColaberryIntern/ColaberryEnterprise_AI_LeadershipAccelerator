@@ -7,12 +7,16 @@
  *
  * ## Why the scorecard is a matrix and not a table of ticks
  *
- * The ten do not sort into pass and fail. Each carries three independent checks that
+ * The ten do not sort into pass and fail. Each carries four independent checks that
  * disagree with each other: a company can have the strongest CEO quote on the list and
- * still fail the L&D disqualifier (CNO), or clear every disqualifier and have no
- * requisition at all (Lindsay). A matrix shows the disagreement, which IS the finding.
- * A single pass/fail column would have to pick one check to privilege and would hide
- * the rest.
+ * still fail the disqualifier (CNO), or clear every disqualifier and have no requisition
+ * at all (Lindsay). A matrix shows the disagreement, which IS the finding. A single
+ * pass/fail column would have to pick one check to privilege and would hide the rest.
+ *
+ * The last two columns are deliberately both present. Column four is the disqualifier as
+ * Ali settled it on 2026-10-28; column five is the L&D finding underneath it, which the
+ * refinement did not change. Two companies read "clear" in one and "present" in the
+ * other, and that disagreement is the most important thing on the page.
  *
  * Status colors only - green/amber/red/gray carry state, never series identity, and
  * every cell is labeled as well as colored so the grid survives a mono print and a
@@ -54,15 +58,50 @@ function sev(v) {
 
 /* ------------------------------------------------------------------ scorecard */
 
+/** Small word map so the headline can be computed without reading "9 Clean Targets". */
+const WORDS = ['Zero', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight',
+  'Nine', 'Ten'];
+const word = (n) => WORDS[n] || String(n);
+
 /**
- * Ten rows, four columns of state. Cells are labeled as well as colored.
+ * What each column shows for one company. Returns a severity key and a cell label, so
+ * the fill and the text can never drift apart.
+ *
+ * The `ld` column is the only one whose worst state is amber rather than red. It reports
+ * a finding, not a failure: since the refinement an L&D organization is a reason to
+ * watch a company, not a reason to cut it.
+ */
+function cellFor(k, co) {
+  if (k === 'commitment') {
+    return { v: 'YES', txt: co.commitment.who === co.ceo.name ? 'CEO' : 'company' };
+  }
+  if (k === 'req') {
+    return { v: co.req.verdict, txt: co.req.verdict === 'YES' ? 'open' : 'none' };
+  }
+  if (k === 'ai') {
+    const v = co.disq.aiLeader.verdict;
+    return { v, txt: v === 'CLEAR' ? 'clear' : 'watch' };
+  }
+  if (k === 'capability') {
+    const v = co.disq.capability.verdict;
+    return { v, txt: v === 'PASSES' ? 'clear' : (v === 'DISQUALIFIED' ? 'FAILS' : 'unknown') };
+  }
+  const v = co.disq.ld.verdict;
+  if (v === 'DISQUALIFIED') return { v: 'WATCH', txt: 'present' };
+  if (v === 'UNRESOLVED') return { v: 'UNRESOLVED', txt: 'unclear' };
+  return { v: 'PASSES', txt: 'none' };
+}
+
+/**
+ * Ten rows, five columns of state. Cells are labeled as well as colored.
  */
 function matrix(w = 980) {
   const cols = [
     { k: 'commitment', label: 'Public AI commitment' },
     { k: 'req', label: 'Open AI / data req' },
     { k: 'ai', label: 'No AI leader in post' },
-    { k: 'ld', label: 'No full talent + L&D' },
+    { k: 'capability', label: 'No enterprise capability org' },
+    { k: 'ld', label: 'In-house L&D org' },
   ];
   const labelW = 196;
   const cellW = (w - labelW) / cols.length;
@@ -85,11 +124,7 @@ function matrix(w = 980) {
   const rows = D.COMPANIES.map((co, r) => {
     const y = headH + r * rowH;
     const cells = cols.map((c, i) => {
-      let v; let txt;
-      if (c.k === 'commitment') { v = 'YES'; txt = co.commitment.who === co.ceo.name ? 'CEO' : 'company'; }
-      else if (c.k === 'req') { v = co.req.verdict; txt = co.req.verdict === 'YES' ? 'open' : 'none'; }
-      else if (c.k === 'ai') { v = co.disq.aiLeader.verdict; txt = v === 'CLEAR' ? 'clear' : 'watch'; }
-      else { v = co.disq.ld.verdict; txt = v === 'PASSES' ? 'clear' : (v === 'DISQUALIFIED' ? 'FAILS' : 'unknown'); }
+      const { v, txt } = cellFor(c.k, co);
       const col = sev(v);
       const x = labelW + i * cellW;
       return `<rect x="${x + 2}" y="${y + 3}" width="${cellW - 4}" height="${rowH - 6}"
@@ -98,7 +133,7 @@ function matrix(w = 980) {
           font-weight="700" text-anchor="middle"
           fill="${v === 'DISQUALIFIED' ? '#fff' : col}">${esc(txt)}</text>`;
     }).join('');
-    const failed = co.disq.ld.verdict === 'DISQUALIFIED';
+    const failed = co.disq.capability.verdict === 'DISQUALIFIED';
     return `<text x="0" y="${y + rowH / 2 + 3}" font-size="8.8"
         font-weight="${failed ? 700 : 600}"
         fill="${failed ? SEV.bad : '#334155'}">${esc(co.name)}</text>${cells}`;
@@ -112,7 +147,8 @@ function tiles() {
   const t = [
     { n: D.CAMPAIGN.enrolled, k: 'enrolled, verified' },
     { n: C.CLEAN.length, k: 'clear every check' },
-    { n: C.DISQUALIFIED.length, k: 'fail the L&D test' },
+    { n: C.DISQUALIFIED.length, k: 'disqualified' },
+    { n: C.OVERTURNED.length, k: 'returned, on watch' },
     { n: C.WITH_REQ.length, k: 'have an open req' },
     { n: D.CAMPAIGN.touchpoints, k: 'messages sent' },
   ];
@@ -121,38 +157,41 @@ function tiles() {
 }
 
 function buildVisual() {
-  const names = C.DISQUALIFIED.map((c) => c.name).join(', ');
+  const cut = C.DISQUALIFIED.map((c) => c.name).join(', ');
+  const back = C.OVERTURNED.map((c) => c.name).join(' and ');
   const body = `
-  <h1>Ten CEOs, Six Clean Targets</h1>
-  <div class="meta">C6.13 &middot; boards read ${esc(D.OBSERVED)} &middot; campaign
-    ${esc(D.CAMPAIGN.id)} &middot; nothing sent</div>
+  <h1>Ten CEOs, ${esc(word(C.CLEAN.length))} Clean Targets</h1>
+  <div class="meta">C6.13 &middot; boards read ${esc(D.OBSERVED)} &middot; disqualifier
+    settled ${esc(D.DISQ_LD.decidedOn)} &middot; campaign ${esc(D.CAMPAIGN.id)}
+    &middot; nothing sent</div>
   <div class="rule"></div>
 
   <div class="takeaway">
     <div class="label">Takeaway</div>
     <div class="headline">All ten are enrolled with Apollo-verified addresses and nothing
-      has been sent. The L&amp;D disqualifier, never previously run, fails
-      ${C.DISQUALIFIED.length} of them &mdash; ${esc(names)} &mdash; and one is the
-      best-fitting target on the list.</div>
+      has been sent. The L&amp;D disqualifier now tests whether a company already builds
+      capability at enterprise scale, not whether it trains anyone: ${esc(cut)} is cut,
+      ${esc(back)} return on watch, and ${esc(word(C.CLEAN.length).toLowerCase())} clear
+      every check.</div>
   </div>
 
   ${tiles()}
 
   <figure>${matrix()}</figure>
 
-  <div class="warn" style="font-size:8.4pt"><b>The criterion cuts hardest where the fit
-    is best.</b> Tennant has a CEO on record on AI, an &ldquo;Enterprise AI and Analytics
-    Leader&rdquo; req it has not filled, and no AI leader in post. It fails only because
-    it runs a Talent Development team &mdash; built for leadership and technical
-    training, carrying no AI content. CNO&rsquo;s failure is different and sound:
-    fifteen consecutive years of Training magazine awards is a company that builds its
-    own.</div>
+  <div class="warn" style="font-size:8.4pt"><b>The two returned companies keep their
+    finding.</b> Tennant runs a staffed Talent Development team and Avista runs the Jack
+    Stewart Training Center with eleven apprenticeships. Both are real, both are
+    unchanged, and both carry no AI content &mdash; leadership, trades and product
+    training. The refined test reads that as a buying habit with a budget line already
+    in place. If either declines with &ldquo;we will do this internally&rdquo;, the
+    literal reading was right.</div>
 
-  <div class="note" style="font-size:8.4pt"><b>Your decision.</b> Whether the
-    disqualifier tests for any training function, or only for an existing AI-capability
-    program. Six under the first reading, eight under the second, with CNO falling
-    either way. All four activation blockers remain closed, so nothing moves until you
-    settle it.</div>
+  <div class="note" style="font-size:8.4pt"><b>Still yours.</b> The order of approach
+    &mdash; the other half of what this ticket reserves to you. No AI curriculum was
+    found at any of the ten, so the disqualifier tests capacity to build rather than
+    the word &ldquo;AI&rdquo;; it still cuts one. All four activation blockers remain
+    closed, so nothing sends.</div>
   `;
   return htmlDoc({ title: 'C6.13 Target List', css: baseCss() + SHARED, body });
 }
@@ -162,6 +201,7 @@ function buildVisual() {
 function companyBlock(co) {
   const m = co.commitment;
   const ld = co.disq.ld;
+  const cap = co.disq.capability;
   const ai = co.disq.aiLeader;
   const emp = co.employees;
   const attributed = m.who === co.ceo.name;
@@ -174,10 +214,13 @@ function companyBlock(co) {
       <br><span class="src">Negative validated with a live control: ${esc(co.req.control)}
       &mdash; ${esc(co.req.controlUrl)}</span>`;
 
+  const badge = cap.verdict === 'DISQUALIFIED' ? 'DISQUALIFIED'
+    : (cap.verdict === 'UNRESOLVED' ? 'UNRESOLVED'
+      : (cap.overturnedBy ? 'CLEARS - ON WATCH' : 'CLEARS BOTH'));
+
   return `<div class="co">
     <h3>${co.rank}. ${esc(co.name)}
-      ${chip(ld.verdict === 'DISQUALIFIED' ? 'DISQUALIFIED' : (ld.verdict === 'UNRESOLVED'
-        ? 'L&D UNRESOLVED' : 'CLEARS BOTH'), sev(ld.verdict))}</h3>
+      ${chip(badge, cap.overturnedBy ? SEV.watch : sev(cap.verdict))}</h3>
     <div class="sub">${esc(co.sector)} &middot; ${esc(co.ceo.name)}, ${esc(co.ceo.title)}
       &middot; ${esc(co.ceo.email)} (Apollo ${esc(co.ceo.emailStatus)})
       &middot; lead ${co.leadId}</div>
@@ -200,13 +243,23 @@ function companyBlock(co) {
     <p style="font-size:8.6pt;margin:5px 0"><b>AI leader (${esc(ai.verdict)}):</b>
       ${esc(ai.detail)}</p>
 
-    <div class="${ld.verdict === 'DISQUALIFIED' ? 'warn' : (ld.verdict === 'UNRESOLVED' ? 'note' : 'ok')}">
-      <b>Talent + L&amp;D (${esc(ld.verdict)}):</b> ${esc(ld.detail)}
+    <div class="${cap.verdict === 'DISQUALIFIED' ? 'warn' : (cap.overturnedBy ? 'note' : 'ok')}">
+      <b>Disqualifier &mdash; enterprise capability (${esc(cap.verdict)}):</b>
+      ${esc(cap.detail)}
+      ${cap.overturnedBy ? '<br><br><b>Overturned by:</b> ' + esc(cap.overturnedBy) : ''}
+      ${cap.watch ? '<br><br><b>Standing watch:</b> ' + esc(cap.watch) : ''}
+      ${cap.evidenceLimit ? '<br><br><b>Limit of the evidence:</b> '
+        + esc(cap.evidenceLimit) : ''}
+      ${cap.residualRisk ? '<br><br><b>Residual risk:</b> ' + esc(cap.residualRisk) : ''}</div>
+
+    <p style="font-size:8.6pt;margin:5px 0"><b>Underlying L&amp;D finding
+      (${esc(ld.verdict)} under the ticket&rsquo;s literal wording):</b> ${esc(ld.detail)}
       ${ld.settled ? '<br><br><b>Settled:</b> ' + esc(ld.settled) : ''}
       ${ld.overturns ? '<br><br><b>Overturns an earlier pass:</b> ' + esc(ld.overturns) : ''}
+      ${ld.nuance ? '<br><br><b>Nuance:</b> ' + esc(ld.nuance) : ''}
       ${ld.residualRisk ? '<br><br><b>Residual risk:</b> ' + esc(ld.residualRisk) : ''}
       ${ld.whatWouldSettleIt ? '<br><br><b>What would settle it:</b> '
-        + esc(ld.whatWouldSettleIt) : ''}</div>
+        + esc(ld.whatWouldSettleIt) : ''}</p>
 
     ${co.note ? `<p style="font-size:8.6pt;margin:5px 0 0"><b>Note:</b> ${esc(co.note)}</p>` : ''}
   </div>`;
@@ -233,9 +286,12 @@ function buildDocument() {
   <div class="takeaway">
     <div class="label">Takeaway</div>
     <div class="headline">Ten CEOs are named and enrolled, every address Apollo-verified
-      and none guessed. Three fail the ticket&rsquo;s own L&amp;D disqualifier, which had
-      never properly been run, and one more cannot be resolved. Six clear every check.
-      The composition of the final ten is yours to settle.</div>
+      and none guessed. The L&amp;D disqualifier, which had never properly been run,
+      failed three under the ticket&rsquo;s literal wording; it was refined on
+      ${esc(D.DISQ_LD.decidedOn)} to test enterprise capability building rather than any
+      training function. ${esc(C.DISQUALIFIED.map((c) => c.name).join(', '))} is cut,
+      ${esc(C.OVERTURNED.map((c) => c.name).join(' and '))} return carrying their
+      findings, and ${esc(word(C.CLEAN.length).toLowerCase())} clear every check.</div>
   </div>
 
   <h2>What landed in production</h2>
@@ -268,6 +324,25 @@ function buildDocument() {
     requisition does not disqualify &mdash; it just means the commitment carries the row
     alone.</p>
 
+  <h2>The disqualifier that had never been run</h2>
+  <p class="lede">The ticket names two disqualifiers and only the AI-leadership one had
+    been checked. Running the second &mdash; <i>&ldquo;${esc(D.DISQ_LD.replaced)}&rdquo;</i>
+    &mdash; failed CNO Financial, Tennant and Avista, and could not be resolved for
+    Smile Brands. The problem was not the finding but the test: Tennant is the
+    best-fitting company on the list by every other signal, and it failed for running a
+    Talent Development team that teaches leadership and product skills to a
+    cleaning-equipment field force.</p>
+  <p class="lede">On ${esc(D.DISQ_LD.decidedOn)} the wording was settled as:
+    <i>&ldquo;${esc(D.DISQ_LD.wording)}&rdquo;</i></p>
+  <p class="lede"><b>The wording is about scale deliberately, and here is why.</b>
+    ${esc(D.DISQ_LD.evidenceLimit)} A disqualifier that excludes nobody is decoration
+    presented as diligence, so the build now fails outright if the refined wording ever
+    clears all ten. It currently cuts ${C.DISQUALIFIED.length} of ${D.COMPANIES.length}.</p>
+  <p class="lede">The two returned companies keep their findings in full. Their L&amp;D
+    entries below are unchanged from the day they were disqualified, each carries the
+    record of the overturn, and each carries a standing watch &mdash; the build refuses
+    to render a returned company that has lost either one.</p>
+
   <h2>Acceptance criteria</h2>
   ${criteriaTable()}
 
@@ -285,9 +360,15 @@ function buildDocument() {
       four Horace Mann filings ever containing &ldquo;artificial intelligence&rdquo;, none
       quoting a person; every 8-K earnings release from Q3 2025 to Q2 2026 contains zero
       occurrences; so do both 2026 call transcripts.</li>
-    <li><b>No verdict on Smile Brands&rsquo; L&amp;D.</b> &ldquo;Smile University&rdquo;
-      exists by name but every sourceable detail points to dentist continuing education,
-      and LinkedIn was unreachable from the research environment.</li>
+    <li><b>No verdict on whether Smile Brands has an L&amp;D function.</b> &ldquo;Smile
+      University&rdquo; exists by name but every sourceable detail points to dentist
+      continuing education, and LinkedIn was unreachable from the research environment.
+      The refined disqualifier clears Smile Brands either way, so the question is no
+      longer decision-relevant &mdash; but it is open, not answered, and one LinkedIn
+      people-search should close it before the company is approached.</li>
+    <li><b>No claim that any company runs an AI-capability program today.</b> None was
+      found at any of the ten. CNO is disqualified on demonstrated capacity to build,
+      not on an AI curriculum already in place.</li>
     <li><b>No recommended order.</b> The ticket reserves it.</li>
   </ul>
   `;

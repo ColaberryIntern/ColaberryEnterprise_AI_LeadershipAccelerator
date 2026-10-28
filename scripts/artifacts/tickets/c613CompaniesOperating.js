@@ -72,6 +72,23 @@ const OPERATING = [
           + 'test - the disqualifier is a formal internal training organization, and the '
           + 'absence of a branded academy is not the absence of one.',
       },
+      capability: {
+        verdict: 'PASSES',
+        detail: 'Staffed but narrow. The Talent Development team owns competency '
+          + 'frameworks, succession planning, and technical and product training for a '
+          + 'cleaning-equipment field force. There is no learning platform, no '
+          + 'curriculum ownership beyond product and safety, and no capability building '
+          + 'for knowledge workers - which is why the Enterprise AI and Analytics '
+          + 'Leader seat is being hired rather than grown.',
+        overturnedBy: 'The refined disqualifier settled on 2026-10-28. Under the '
+          + 'ticket’s literal wording Tennant was disqualified; the L&D finding '
+          + 'above is unchanged and still true.',
+        watch: 'The closest call on the list. Tennant has the staff and the budget line '
+          + 'to build an AI program and no AI content in it today. The refined test '
+          + 'reads that as a buying habit; the literal test read it as a build '
+          + 'capability. If Tennant declines with "we will do this internally", that is '
+          + 'the evidence the literal reading was right.',
+      },
     },
     note: 'Tennant builds AI and robotics products, so it competes for the same engineers as '
       + 'big tech while paying Eden Prairie industrial rates. It is hiring for exactly the '
@@ -138,6 +155,19 @@ const OPERATING = [
           + 'learning / training / instructional-design titles. LinkedIn was unreachable '
           + 'from the research environment.',
       },
+      capability: {
+        verdict: 'PASSES',
+        detail: 'The refinement resolves what the literal test could not. The SMILE U '
+          + 'trademark scopes Smile University to continuing dental education and every '
+          + 'named program is dentist-facing; on the most expansive reading available it '
+          + 'is clinical CE plus leadership coaching. Neither is enterprise technical '
+          + 'capability building, so the verdict is the same whichever way the open '
+          + 'question lands.',
+        residualRisk: 'The underlying L&D-function question is still unresolved - it is '
+          + 'simply no longer decision-relevant. One LinkedIn people-search would close '
+          + 'it, and should be run before Smile Brands is approached rather than before '
+          + 'it is listed.',
+      },
     },
   },
   {
@@ -196,6 +226,13 @@ const OPERATING = [
           + 'Cantwell when he was COO, so it predates 2022. If that seat still exists '
           + 'below the executive tier, this flips. GRAND publishes no org chart below the '
           + 'senior leadership team.',
+      },
+      capability: {
+        verdict: 'PASSES',
+        detail: 'One $23/hr Learning Specialist running onboarding and event '
+          + 'coordination, with no executive owner above the seat. Nothing there could '
+          + 'stand up a technical capability program, and the refined test clears it '
+          + 'more cleanly than the literal one did.',
       },
     },
   },
@@ -257,6 +294,11 @@ const OPERATING = [
           + 'named anywhere is safety, as one of eight elements of the Lindsay Safety '
           + 'System. No corporate university, no leadership-development program, and no '
           + 'L&D, training or instructional-design role open anywhere on the careers site.',
+      },
+      capability: {
+        verdict: 'PASSES',
+        detail: 'Safety training inside the Lindsay Safety System and nothing else. No '
+          + 'platform, no curriculum, no staff, and no open seat that would start one.',
       },
     },
     note: '"Very early innings" is the best opening line on the list. The chief executive is '
@@ -331,6 +373,22 @@ const OPERATING = [
           + 'by Avista lineworkers at an Avista training center, under a dedicated program '
           + 'manager, and the 10-K files it alongside leadership and engineering '
           + 'development under one training umbrella.',
+      },
+      capability: {
+        verdict: 'PASSES',
+        detail: 'Trades, not knowledge work. The Jack Stewart Training Center is a '
+          + 'craft training center; the eleven apprenticeships are 2-4 year programs '
+          + 'teaching lineworkers to work safely on energized plant, and the '
+          + 'engineering and Aspiring Leaders tracks are discipline and supervisory '
+          + 'development. None of it is a curriculum an AI-capability program could be '
+          + 'built on top of.',
+        overturnedBy: 'The refined disqualifier settled on 2026-10-28. Under the '
+          + 'ticket’s literal wording Avista was disqualified; the L&D finding '
+          + 'above is unchanged and still true.',
+        watch: 'Avista has more learning infrastructure than any other passing company '
+          + '- a physical training center, a dedicated program manager and an '
+          + 'instructional designer on staff. If any company on this list turns out to '
+          + 'build its own, it is this one.',
       },
     },
     note: 'Chosen over ONE Gas on evidence. ONE Gas was not disqualified - its AI lead is a '

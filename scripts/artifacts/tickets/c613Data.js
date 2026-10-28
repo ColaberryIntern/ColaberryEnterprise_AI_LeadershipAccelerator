@@ -19,11 +19,11 @@
  * ## The order
  *
  * `rank` is the order the companies were assembled in, not a recommended sequence of
- * approach. The ticket reserves the order to Ali, and three of the ten now carry a
- * failed disqualifier, so proposing a sequence here would pre-empt a decision that is
- * his.
+ * approach. The ticket reserves the order to Ali in as many words, so proposing a
+ * sequence here would pre-empt it. He settled the disqualifier on 2026-10-28; the order
+ * is the half of that sentence still outstanding.
  */
-const { OBSERVED, CAMPAIGN_ID, PENDING } = require('./c613Constants');
+const { OBSERVED, CAMPAIGN_ID, PENDING, DISQ_LD } = require('./c613Constants');
 const { FINANCIAL } = require('./c613CompaniesFinancial');
 const { OPERATING } = require('./c613CompaniesOperating');
 
@@ -58,4 +58,4 @@ const MUST_HAVE = [
 
 const COMPANIES = [...FINANCIAL, ...OPERATING];
 
-module.exports = { OBSERVED, CAMPAIGN, MUST_HAVE, COMPANIES, PENDING };
+module.exports = { OBSERVED, CAMPAIGN, MUST_HAVE, COMPANIES, PENDING, DISQ_LD };
