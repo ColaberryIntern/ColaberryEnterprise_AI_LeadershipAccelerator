@@ -484,6 +484,40 @@ async function listCommits(
 }
 
 /**
+ * Recent default-branch commits (FULL sha + full message) for the gov commit matcher's
+ * manual-sync fallback. Reuses this module's bounded reader (timeout, retries, full-sha list)
+ * so the shas MATCH what the push webhook files - dedup on (story, sha) stays correct across
+ * both triggers. The FULL message is kept (not just the subject) because a story citation can
+ * live below the subject line. Best-effort: a classified read problem (no token, repo gone,
+ * rate limit) returns [] after logging, because a manual sync must never fail on this read.
+ */
+export async function listRepoCommitsForMatch(
+  owner: string,
+  repo: string,
+  correlationId?: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<Array<{ sha: string; message: string; authorLogin: string | null }>> {
+  try {
+    const token = requireToken();
+    const { commits } = await listCommits(owner, repo, null, token, fetchImpl);
+    return commits
+      .map((c) => ({
+        sha: String(c?.sha ?? ''),
+        message: String(c?.commit?.message ?? ''),
+        authorLogin: c?.author?.login ? String(c.author.login) : null,
+      }))
+      .filter((c) => c.sha);
+  } catch (err: unknown) {
+    log('gov_sync_commit_read_failed', correlationId, 'failure', {
+      owner,
+      repo,
+      error_class: err instanceof RepoReadError ? err.error_class : ((err as { constructor?: { name?: string } })?.constructor?.name ?? 'Error'),
+    });
+    return [];
+  }
+}
+
+/**
  * Which non-default branches carry commits naming one of these stories.
  *
  * Deliberately shallow: one page of commits per branch, a bounded number of
