@@ -139,9 +139,21 @@ export default function AgentOverviewV2EmployeeFacts({ detail, agentId }: Props)
           </div>
         </div>
 
-        <p className="adv2-muted" style={{ margin: '4px 0 12px', fontSize: 12.5 }}>
-          {healthyCount} healthy, {unknownCount} unknown{unhealthyCount > 0 ? `, ${unhealthyCount} unhealthy` : ''} across {employee_facts.behaviours.length} behaviour{employee_facts.behaviours.length === 1 ? '' : 's'}.
-        </p>
+        {/* 2026-10-27: employee_facts now populates for EVERY agent, not only Reese, so this
+            card renders for agents that have no behaviour catalogue at all. "0 healthy, 0
+            unknown across 0 behaviours" reads as breakage; the real situation is that an
+            event-driven agent runs no NAMED SCHEDULED behaviours, which is a different thing
+            from having broken ones. Say that instead of counting nothing. */}
+        {employee_facts.behaviours.length === 0 ? (
+          <p className="adv2-muted" style={{ margin: '4px 0 12px', fontSize: 12.5 }}>
+            No scheduled behaviours. This agent is event-driven, so it has no named background
+            processes of its own to report on — the facts above are still measured.
+          </p>
+        ) : (
+          <p className="adv2-muted" style={{ margin: '4px 0 12px', fontSize: 12.5 }}>
+            {healthyCount} healthy, {unknownCount} unknown{unhealthyCount > 0 ? `, ${unhealthyCount} unhealthy` : ''} across {employee_facts.behaviours.length} behaviour{employee_facts.behaviours.length === 1 ? '' : 's'}.
+          </p>
+        )}
 
         {CATEGORY_ORDER.filter((cat) => grouped[cat].length > 0).map((cat) => (
           <div key={cat} style={{ marginBottom: 14 }}>

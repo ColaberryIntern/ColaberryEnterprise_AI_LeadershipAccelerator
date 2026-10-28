@@ -57,6 +57,7 @@ import {
   planProvision,
   type ProvisionPlan,
 } from './agentDomainProvisionPlan';
+import { domainProjectName } from './agentDomainRegistry';
 
 export interface ProvisionContext {
   readonly sequelize: Sequelize;
@@ -210,13 +211,20 @@ async function provisionOne(
   // `tenant_id` is passed explicitly even though `beforeCreate` would resolve it: this function
   // already resolved the tenant by slug and refuses when it is ambiguous, and the hook honours an
   // id that is already set (`if (instance.tenant_id) return`).
+  //
+  // AF2.7 item 3: `name` is the domain's TITLE, not its key. This read `plan.domain_key`, so the
+  // ten shipped reading `admissions` / `product_experience` on a page where every other project
+  // has a human name. Note `findOrCreate` honours `defaults` only when it actually creates, so
+  // fixing this does NOT repair the ten rows already in production — a re-run is a no-op by
+  // design. `backend/src/scripts/renameAgentDomainProjects.js` does that, using this same
+  // `domainProjectName` so the two can never disagree.
   const [, projectCreated] = await Project.findOrCreate({
     where: { id: plan.project_id },
     defaults: {
       id: plan.project_id,
       enrollment_id: enrollmentId,
       program_id: programId,
-      name: plan.domain_key,
+      name: domainProjectName(plan.domain_key),
       project_stage: PROVISION_STAGE,
       tenant_id: tenantId,
     } as never,

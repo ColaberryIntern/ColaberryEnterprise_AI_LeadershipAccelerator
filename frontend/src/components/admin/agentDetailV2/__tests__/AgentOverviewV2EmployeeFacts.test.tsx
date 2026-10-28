@@ -110,9 +110,35 @@ afterEach(() => {
 });
 
 describe('AgentOverviewV2EmployeeFacts', () => {
-  it('renders nothing when employee_facts is null (honest empty state for every non-Reese agent)', async () => {
+  // 2026-10-27: the name of this test used to end "(honest empty state for every non-Reese
+  // agent)". The assertion was and is correct -- null renders nothing -- but the parenthetical
+  // became false the moment employee_facts started populating for every agent. Null is now the
+  // genuine no-data case, not the every-other-agent case.
+  it('renders nothing when employee_facts is null, which is now the real no-data case only', async () => {
     await renderFacts(null);
     expect(container.textContent).toBe('');
+  });
+
+  // The behaviour-less agent. Before 2026-10-27 this combination could not occur, because a
+  // non-Reese agent got null and the card never rendered at all. Now Maya and every future
+  // event-driven agent land here, and "0 healthy, 0 unknown across 0 behaviours" would read as
+  // breakage rather than as the truth, which is that she runs no NAMED SCHEDULED processes.
+  it('an agent with no behaviour catalogue gets a sentence, not a count of nothing', async () => {
+    await renderFacts(employeeFacts({ behaviours: [] }));
+
+    expect(container.textContent).toContain('No scheduled behaviours');
+    expect(container.textContent).toContain('event-driven');
+    // The specific string the old code would have produced must NOT appear.
+    expect(container.textContent).not.toContain('across 0 behaviours');
+    expect(container.textContent).not.toContain('0 healthy');
+  });
+
+  it('and still shows the seven measured facts for that agent, because only behaviours are empty', async () => {
+    await renderFacts(employeeFacts({ behaviours: [], work_state: 'idle', work_state_detail: null }));
+
+    expect(container.textContent).toContain('idle');
+    expect(container.textContent).toContain('Reports to: Ali Muwwakkil');
+    expect(container.textContent).toContain('v3');
   });
 
   it('renders the 3-column mini-stat row with real data', async () => {

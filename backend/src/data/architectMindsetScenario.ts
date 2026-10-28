@@ -30,6 +30,12 @@ export interface AmScenario {
   week: number;
   /** Week 0 is a baseline demonstration, not scored as the first lesson. */
   baseline: boolean;
+  /**
+   * A short first taste (Week 0): the renderer runs 6 stages instead of 10 (no
+   * Part One interview, re-architecture, receipt, decision record, or project
+   * transfer), and the backend skips the gates those stages would satisfy.
+   */
+  lite?: boolean;
   title: string;
   series: string;
   experience: string;
@@ -75,180 +81,81 @@ import { AM_QUALIFICATION } from './architectMindsetQualification';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // WEEK 0 — "You Don't Become an Architect by Learning More Tools"
-// Series intro + Time Machine format demo. Baseline only (unscored).
+// Series intro: a SHORT first taste of the Time Machine (lite: 6 stages, one
+// click question, one sentence). Baseline only (unscored). Feedback 2026-10-27:
+// the full 10-stage run was too much this early, so Week 0 shows the format
+// without the depth; Week 1 is where the full machine starts.
 // ─────────────────────────────────────────────────────────────────────────────
 export const WEEK0_SCENARIO: AmScenario = {
-  version: 'wk0.v1',
+  version: 'wk0.v2',
   week: 0,
   baseline: true,
+  lite: true,
   title: 'You Don\'t Become an Architect by Learning More Tools',
   series: 'Architect Mindset',
   experience: 'The Architect Time Machine',
-  principle: 'An architect sees the entire system surrounding the requested feature.',
+  principle: 'Before you build what was asked for, look at everything around it.',
   tagline: 'Gain the lessons experience usually teaches too late.',
   request: {
-    from: 'the sponsor',
-    text: 'Build an AI assistant that answers employee questions using company documents. We need a demonstration in two weeks.',
+    from: 'your manager',
+    text: 'Build an AI assistant that answers employee questions using company documents. We need a demo in two weeks.',
   },
   initial_system: ['An employee', 'An AI assistant', 'Company documents'],
   first_decision: {
-    prompt: 'What would you do first? There is no penalty here. We capture your instinct before teaching anything, so you can compare it later.',
+    prompt: 'Go with your gut. There is no wrong answer, and nothing here is graded.',
     options: [
-      { id: 'model', label: 'Choose the AI model' },
-      { id: 'interface', label: 'Build the chat interface' },
-      { id: 'upload', label: 'Upload the company documents' },
-      { id: 'ask', label: 'Ask more questions about the system' },
-      { id: 'plan', label: 'Create a project plan' },
-      { id: 'poc', label: 'Start a proof of concept' },
-      { id: 'custom', label: 'I would do something else', custom: true },
+      { id: 'model', label: 'Pick the AI tool' },
+      { id: 'interface', label: 'Start building the chat screen' },
+      { id: 'upload', label: 'Load in the company documents' },
+      { id: 'ask', label: 'Ask a few questions first' },
+      { id: 'custom', label: 'Something else', custom: true },
     ],
   },
   zoom_out: {
-    people: ['Full-time employees', 'Contractors', 'Managers', 'Executives', 'Human Resources', 'Legal', 'IT support', 'Administrators'],
-    information: ['Employee handbook', 'Benefits', 'Compensation policies', 'Performance information', 'Legal policies', 'Security procedures', 'Customer information', 'Internal strategy', 'Outdated versions', 'Draft and conflicting documents'],
-    decisions: ['Low-risk factual answer', 'Personal information retrieval', 'Policy interpretation', 'Legal or employee-relations escalation', 'Unauthorized request', 'Insufficient evidence and abstention'],
-    operations: ['Document ownership', 'Content updates', 'Access changes', 'Logging', 'Monitoring', 'Incident response', 'Cost', 'Model changes', 'Human escalation', 'Long-term maintenance'],
+    titles: { people: 'Who will use it', information: 'What it will read', decisions: 'What it should not answer alone', operations: 'Who keeps it running' },
+    people: ['Employees', 'Managers', 'HR', 'Legal'],
+    information: ['The handbook', 'Pay and benefits', 'Old, out-of-date versions'],
+    decisions: ['Someone\'s personal or pay details', 'Legal questions'],
+    operations: ['Keeping documents current', 'Fixing wrong answers'],
   },
   signature_reveals: [
-    'The request contained one user. The real system contained at least eight roles.',
-    'The request contained one source called "company documents." The real system contained multiple information classes, owners, permissions, and conflicting versions.',
-    'The assignment was described as question answering. It was actually an identity, access, policy, evidence, governance, and operational system.',
+    'The request mentioned one user and "company documents." The real system has different people, different kinds of information, and rules about who can see what.',
   ],
-  interview_part_1: [
-    {
-      id: 'q1', text: 'What did you focus on when you first received the request?', mode: 'single', dimension: 'system_scope',
-      options: [
-        { id: 'speed', label: 'How quickly I could build the requested feature.' },
-        { id: 'tools', label: 'Which model, framework, and tools I would use.' },
-        { id: 'system', label: 'Understanding the users, data, decisions, risks, and owners around the feature.' },
-        { id: 'outcome', label: 'Clarifying the business outcome and how success would be measured.' },
-        { id: 'custom', label: 'I see it differently, let me write my own answer.', custom: true },
-      ],
-    },
-    {
-      id: 'q2', text: 'Which newly revealed part of the system changed your thinking the most?', mode: 'single', dimension: 'stakeholder_awareness',
-      options: [
-        { id: 'roles', label: 'The eight different roles, each with different needs and permissions.' },
-        { id: 'classes', label: 'The many information classes, owners, and conflicting versions.' },
-        { id: 'decisions', label: 'The decisions the assistant might be asked to make, including ones it should refuse.' },
-        { id: 'ops', label: 'The ongoing operations: ownership, updates, monitoring, cost, escalation.' },
-        { id: 'custom', label: 'I see it differently, let me write my own answer.', custom: true },
-      ],
-    },
-    {
-      id: 'q3', text: 'What assumption in the original request created the greatest risk?', mode: 'single', dimension: 'assumption_discovery',
-      options: [
-        { id: 'one_user', label: 'That there was one kind of user with one kind of need.' },
-        { id: 'one_source', label: 'That "company documents" was a single, trusted, current source.' },
-        { id: 'just_qa', label: 'That the job was question answering rather than governed decision-making.' },
-        { id: 'two_weeks', label: 'That a responsible version of this could be demonstrated in two weeks.' },
-        { id: 'custom', label: 'I see it differently, let me write my own answer.', custom: true },
-      ],
-    },
-    {
-      id: 'q4', text: 'Which decision should the AI be prohibited from making alone?', mode: 'single', dimension: 'governance_ownership',
-      options: [
-        { id: 'legal', label: 'Interpreting legal or employee-relations policy.' },
-        { id: 'personal', label: 'Returning someone\'s personal or compensation information.' },
-        { id: 'authority', label: 'Acting on a request from someone without the authority to make it.' },
-        { id: 'low_evidence', label: 'Answering confidently when the evidence is weak or conflicting.' },
-        { id: 'custom', label: 'I see it differently, let me write my own answer.', custom: true },
-      ],
-    },
-    {
-      id: 'q5', text: 'What would you need to observe after launch?', mode: 'single', dimension: 'evidence_observability',
-      options: [
-        { id: 'source', label: 'Which document version each answer came from, and who owns it.' },
-        { id: 'wrong', label: 'How often it answered confidently and incorrectly.' },
-        { id: 'escalation', label: 'When it escalated to a human, and whether the handoff completed.' },
-        { id: 'cost', label: 'Cost, usage, and how behavior changed after a model update.' },
-        { id: 'custom', label: 'I see it differently, let me write my own answer.', custom: true },
-      ],
-    },
-    {
-      id: 'q6', text: 'Who should own the system after the demonstration?', mode: 'single', dimension: 'governance_ownership',
-      options: [
-        { id: 'named', label: 'A named owner for content, access, and escalation, not "the AI team, later".' },
-        { id: 'it', label: 'IT support, as another application to maintain.' },
-        { id: 'hr_legal', label: 'HR and Legal, since most of the risk lives in their domains.' },
-        { id: 'shared', label: 'A shared owner group with a clear decision-maker for each concern.' },
-        { id: 'custom', label: 'I see it differently, let me write my own answer.', custom: true },
-      ],
-    },
-    {
-      id: 'q7', text: 'What is the difference between building the assistant and architecting the assistant?', mode: 'single', dimension: 'tradeoff_quality',
-      options: [
-        { id: 'feature_vs_system', label: 'Building makes the feature work once; architecting decides how the whole system behaves over time.' },
-        { id: 'speed_vs_care', label: 'Building optimizes for the demo; architecting optimizes for what happens after it.' },
-        { id: 'code_vs_decisions', label: 'Building is code; architecting is the decisions, boundaries, and owners around the code.' },
-        { id: 'same', label: 'They are mostly the same with different words.' },
-        { id: 'custom', label: 'I see it differently, let me write my own answer.', custom: true },
-      ],
-    },
-    {
-      id: 'q8', text: 'What will you begin doing before you build?', mode: 'single', dimension: 'decision_communication',
-      options: [
-        { id: 'map', label: 'Map the whole system: users, data, decisions, risks, and owners.' },
-        { id: 'outcome', label: 'Name the business outcome and how success will be measured.' },
-        { id: 'failure', label: 'Design the failure path and the decisions the AI must not make alone.' },
-        { id: 'stakeholders', label: 'Talk to the stakeholders the request did not mention.' },
-        { id: 'custom', label: 'I see it differently, let me write my own answer.', custom: true },
-      ],
-    },
-  ],
+  // Lite: no Part One interview. The single takeaway question lives in Part Two.
+  interview_part_1: [],
   interview_part_2: [
     {
-      id: 'r1', text: 'When the system failed, what was the most important thing you originally missed?', mode: 'single', dimension: 'failure_anticipation',
+      id: 'r1', text: 'What is the big idea you will take with you?', mode: 'single', dimension: 'system_scope',
       options: [
-        { id: 'users', label: 'I treated all users as though they had the same needs and permissions.' },
-        { id: 'authority', label: 'I trusted the available information without verifying ownership or authority.' },
-        { id: 'failure_path', label: 'I planned for the successful path but did not design the failure path.' },
-        { id: 'business', label: 'I focused on technical delivery without defining business success.' },
-        { id: 'custom', label: 'I see it differently, let me write my own answer.', custom: true },
-      ],
-    },
-    {
-      id: 'r2', text: 'What changed most in your thinking between your first decision and now?', mode: 'single', dimension: 'system_scope',
-      options: [
-        { id: 'scope', label: 'I now see how far the system extends beyond the feature that was requested.' },
-        { id: 'owners', label: 'I now start from owners, risks, and evidence rather than tools.' },
-        { id: 'refuse', label: 'I now design what the system should refuse to do, not only what it can do.' },
-        { id: 'measure', label: 'I now define success as a measurable outcome, not a working demo.' },
-        { id: 'custom', label: 'I see it differently, let me write my own answer.', custom: true },
+        { id: 'tools', label: 'Pick the best AI tool, and the rest will follow.' },
+        { id: 'system', label: 'A simple request can hide a bigger system. Look around it before you build.' },
+        { id: 'speed', label: 'Build it fast, and fix the problems later.' },
+        { id: 'custom', label: 'I would put it differently.', custom: true },
       ],
     },
   ],
   consequence: {
     horizon: [
-      { point: 'First build', risk: 10, note: 'The demo works on the happy path.' },
-      { point: 'First user', risk: 14 },
-      { point: '1,000 users', risk: 30, note: 'Different roles ask for things the demo never considered.' },
-      { point: 'First failure', risk: 64, note: 'A confident, wrong answer on a sensitive question.' },
-      { point: 'First audit', risk: 86, note: 'No one can say which document version an answer came from, or who approved it.' },
-      { point: 'Ownership handoff', risk: 74 },
-      { point: 'Vendor swap', risk: 58 },
-      { point: 'Long-term operation', risk: 44 },
+      { point: 'Demo day', risk: 10, note: 'It works. Everyone is happy.' },
+      { point: 'Everyone uses it', risk: 35, note: 'People ask things the demo never planned for.' },
+      { point: 'A wrong answer', risk: 70, note: 'It confidently answers a sensitive question wrong.' },
+      { point: 'Who owns this?', risk: 85, note: 'Nobody can say where the answer came from.' },
     ],
-    reveal: 'At the first audit, no one could say which document version an answer came from, or who approved it. The demonstration had no owner.',
-    lesson: 'The system that looked finished at the demonstration became the organization\'s problem at the audit. That gap, between building the assistant and architecting it, is the whole subject of this series.',
+    reveal: 'The demo worked. A few months later, nobody could say where a wrong answer came from, or whose job it was to fix it.',
+    lesson: 'That is the difference between building something and architecting it. Each week, the Time Machine helps you spot problems like this before they happen.',
   },
   rearchitecture: {
-    prompt: 'You have seen where this decision led. Change at least one decision, or defend one you would keep, and explain the single most important thing you originally missed.',
+    prompt: 'Last step. One click, then one sentence in your own words.',
   },
   receipt: {
     counts: [
-      { label: 'feature request', value: '1' },
-      { label: 'user roles', value: '8' },
-      { label: 'information classes', value: '10' },
-      { label: 'decision categories', value: '6' },
-      { label: 'architectural concerns', value: '7' },
-      { label: 'implementation strategies', value: '4' },
-      { label: 'hidden assumptions', value: '12' },
-      { label: 'professional perspectives', value: '5' },
-      { label: 'project phases', value: '2' },
+      { label: 'request', value: '1' },
+      { label: 'kinds of users', value: '4' },
+      { label: 'kinds of information', value: '3' },
+      { label: 'things it should not answer alone', value: '2' },
     ],
     represented_hours: 450,
-    minutes: 13,
+    minutes: 5,
     qualification: AM_QUALIFICATION,
   },
   adr: {

@@ -394,8 +394,63 @@ export function canonicalProjectId(routeId: string): string {
  * Replace the whole project list and re-render subscribers. Used by projectSync
  * after reconciling with the backend (completions overlaid / a build hydrated on
  * a fresh device). This is the store's only backend-authoritative write entry.
+ *
+ * RETURNS WHETHER THE WRITE LANDED. `write()` has reported its own failures
+ * since the QuotaExceededError case described above it, but this function threw
+ * the answer away — so the one path that matters, "the server gave us a newer
+ * copy and this device could not store it", still ended with every caller
+ * believing it had. That is a silent stale copy: the next read serves the OLD
+ * value and nothing anywhere says so. Callers now get the boolean and can tell
+ * the student (see projectFreshness).
  */
-export function hydrateProjects(list: StudentProject[]): void { write(list); notify(); }
+export function hydrateProjects(list: StudentProject[]): boolean {
+  const ok = write(list);
+  notify();
+  return ok;
+}
+
+// ── freshness stamp ─────────────────────────────────────────────────────────
+// WHEN THIS DEVICE'S COPY WAS LAST CONFIRMED AGAINST THE SERVER. Parked beside
+// the cache, in the SAME slot, because it describes that exact cache: a view-as
+// preview must not stamp the admin's own slot, and a signed-in student must not
+// inherit a timestamp earned by a different account in this browser.
+//
+// Deliberately NOT written inside `hydrateProjects`. Reconcile only writes when
+// something CHANGED, so a perfectly healthy page that pulled and found no news
+// would never refresh its stamp and would go on to claim its copy was days old.
+// "Confirmed" has to mean "we reached the server and it answered", which is a
+// fact only the sync layer can report.
+const CONFIRMED_SUFFIX = '__confirmed_at';
+
+/** Record that the server was reached and this copy reflects its answer. */
+export function markProjectsConfirmed(at: number = Date.now()): void {
+  try {
+    const slot = storageSlot();
+    slot.area.setItem(slot.key + CONFIRMED_SUFFIX, String(at));
+  } catch (err) {
+    // A stamp is diagnostics, not data. Losing it must never cost the write
+    // that matters, so this reports and carries on.
+    logStoreFailure('projects_confirmed_stamp_write_failed', err);
+  }
+}
+
+/**
+ * Epoch ms when this device's copy was last confirmed against the server, or
+ * null if it never has been in this slot. Null is NOT zero: "we have never
+ * confirmed this copy" and "we confirmed it at the epoch" are different facts,
+ * and only the first one is true of a fresh device.
+ */
+export function projectsConfirmedAt(): number | null {
+  try {
+    const slot = storageSlot();
+    const raw = slot.area.getItem(slot.key + CONFIRMED_SUFFIX);
+    if (raw === null) return null;
+    const at = Number(raw);
+    return Number.isFinite(at) && at > 0 ? at : null;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Record that a local placeholder is standing in for a specific backend project.

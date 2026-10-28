@@ -44,7 +44,10 @@
 .cm-ev-countdown {
   font-size: calc(var(--fw, 16px) * 0.9 * var(--fit, 1));
   font-weight: 700;
-  color: var(--amber, #c9922a);
+  color: var(--amber);
   letter-spacing: .02em;
   margin: 2px 0 4px;
 }
+/* C80: the Schedule board's three small buttons (Calendar, Events, Today), one row, each a third of the old single button */
+.cm-r3-screen .cm-ag-btns{flex-wrap:nowrap;gap:calc(var(--fw) * .012)}
+.cm-r3-screen .cm-ag-btns .b{flex:1 1 0;min-width:0;height:calc(var(--fw) * .05 * var(--fit));font-size:calc(var(--fw) * .022 * var(--fit));padding:0 calc(var(--fw) * .012 * var(--fit))}

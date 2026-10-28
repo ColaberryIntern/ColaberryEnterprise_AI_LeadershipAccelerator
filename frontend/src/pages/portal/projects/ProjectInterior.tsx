@@ -24,6 +24,28 @@ import '../../../components/timeline/timeline.css';
 
 const DUE_LABEL: Record<string, string> = { overdue: 'Overdue', today: 'Due today', up: 'Upcoming', done: 'Completed' };
 
+/**
+ * AF2.7 item 2 — the per-project preview address, shown ONLY when one is configured.
+ *
+ * This page used to render `https://<slug>.preview.colaberry.ai` unconditionally on every
+ * student project. Measured 2026-10-20 and re-measured 2026-10-28: `preview.colaberry.ai` has
+ * NO DNS AT ALL — not the apex, not any subdomain (probed against `enterprise.colaberry.ai` as a
+ * positive control, which resolves, so the resolver was working). The link has therefore never
+ * worked for any student on any project; the ten interns are just the newest people shown it.
+ *
+ * Config rather than deletion: preview hosting is a real intended feature and building it is
+ * explicitly out of AF2.7's scope. Unset — which is every environment today — renders nothing.
+ * Whoever finishes the feature sets REACT_APP_PROJECT_PREVIEW_HOST and the address returns,
+ * with no code change and no second place for the hostname to be written down.
+ *
+ * Read per render, not at module scope. CRA replaces `process.env.REACT_APP_*` with a string
+ * literal at build time, so in the shipped bundle this is a literal and costs nothing; under
+ * jest it stays a real lookup, which is what lets a test set the host without reloading the
+ * module. Module scope forced `jest.isolateModules`, and that loaded a SECOND copy of React into
+ * the isolated registry — every render then died with "Invalid hook call".
+ */
+const previewHost = (): string => (process.env.REACT_APP_PROJECT_PREVIEW_HOST || '').trim();
+
 // ── one task as the SAME card the Classroom renders ──
 // Ali, 2026-09-11: "Projects should look more like the Classroom section, and
 // the projects should have points instead of the open button." So a story is
@@ -254,9 +276,11 @@ const ProjectInterior: React.FC<{
                   <span className="chip sm warn" title="A general starter template built in your browser — no schedule, no Command Center, generic prompts.">Starter template</span>
                 )}
               </div>
-              <a className="prev" href={`https://${project.slug}.preview.colaberry.ai`} target="_blank" rel="noreferrer">
-                {project.slug}.preview.colaberry.ai
-              </a>
+              {previewHost() && (
+                <a className="prev" href={`https://${project.slug}.${previewHost()}`} target="_blank" rel="noreferrer">
+                  {project.slug}.{previewHost()}
+                </a>
+              )}
             </div>
             <div className="pj-outline">
               <button className={`pj-olrow${sel === 'all' ? ' active' : ''}`} onClick={() => setSel('all')}>

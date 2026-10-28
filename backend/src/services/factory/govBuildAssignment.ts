@@ -70,7 +70,7 @@ function toView(row: GovBuildStoryAssignmentAttributes): AssignmentView {
  * a story. In those cases the engine gate below still decides and still fails closed. Idempotent: if the member
  * already exists it is a no-op, and a concurrent-create race is swallowed (the gate reads whichever row won).
  */
-async function ensureAssigneeCanBuild(
+export async function ensureAssigneeCanBuild(
   deliveryProjectId: string,
   assigneeIdentityId: string,
   grantedByIdentityId: string | null,

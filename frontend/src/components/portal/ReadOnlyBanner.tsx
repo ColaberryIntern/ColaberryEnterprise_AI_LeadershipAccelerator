@@ -8,6 +8,11 @@ import { decodeParticipantClaims } from '../../utils/participantToken';
  * The server already blocks every write; this is the visible signal so the
  * admin always knows they're observing, not acting. Reactive via the auth
  * context token, so it appears the moment the read-only session is established.
+ *
+ * AF2.7: it also carries the one-line reason the Management Portal entry is missing. That entry
+ * is withheld for the whole session (mgmtBridgeGate.ts), and a nav item that simply vanishes is
+ * its own small untruth — so the explanation lives on the one element guaranteed to be on screen
+ * for exactly as long as the thing it explains is absent.
  */
 export default function ReadOnlyBanner() {
   const { token } = useParticipantAuth();
@@ -27,6 +32,7 @@ export default function ReadOnlyBanner() {
     >
       <i className="bi bi-eye-fill" aria-hidden="true" style={{ marginRight: 6 }}></i>
       Viewing as {claims.email || 'this member'} — READ ONLY. Nothing you do here changes their account.
+      {' '}Employee-only tools, including the Management Portal, are hidden while you view as someone else.
     </div>
   );
 }

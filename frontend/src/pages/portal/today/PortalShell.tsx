@@ -17,6 +17,7 @@ import MessagesButton from './MessagesButton';
 import { useEntitlement } from '../useEntitlement';
 import { useOrgManager, companyLabel } from '../useIsOrgManager';
 import { useMgmtStatus } from '../useMgmtStatus';
+import { mgmtBridgeBlockedReason, mgmtNavGroupsFor } from '../mgmtBridgeGate';
 import { useInternshipNav } from '../useInternshipNav';
 import ConfettiCelebration from '../../../components/ConfettiCelebration';
 import { ClassicNav, ClassicTabBar } from './ShellNav';
@@ -211,7 +212,11 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge, condens
           )
         : NAV_GROUPS;
       return [
-        ...(mgmt.is_mgmt ? [MGMT_NAV_GROUP] : []),
+        // AF2.7: withheld during a read-only "View as member" session. The link opens in a NEW
+        // TAB, which carries none of this tab's sessionStorage view-as token, so it would land
+        // the viewer on their OWN management portal with no signal — see mgmtBridgeGate.ts.
+        // ReadOnlyBanner carries the one-line reason, since it is on screen for the whole session.
+        ...mgmtNavGroupsFor(mgmt.is_mgmt, mgmtBridgeBlockedReason(), MGMT_NAV_GROUP),
         ...(isOrgManager ? [buildCompanyNavGroup(companyNavLabel)] : []),
         ...base,
       ];

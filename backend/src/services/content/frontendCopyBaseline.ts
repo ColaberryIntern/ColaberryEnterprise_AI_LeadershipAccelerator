@@ -55,7 +55,6 @@ export const FRONTEND_COPY_BASELINE: Readonly<Record<string, number>> = {
   'frontend/src/components/publicV2/OpenPlatform.tsx': 2,
   'frontend/src/components/publicV2/PublicFooterV2.tsx': 1,
   'frontend/src/components/publicV2/PublicHeaderV2.tsx': 1,
-  'frontend/src/components/timeline/ArchitectTimeMachine.tsx': 2,
   'frontend/src/components/timeline/claudeStudioParse.ts': 1,
   'frontend/src/pages/AIArchitectLandingPage.tsx': 11,
   'frontend/src/pages/AIPilotVerticalPage.tsx': 1,
@@ -113,9 +112,10 @@ export const FRONTEND_COPY_BASELINE: Readonly<Record<string, number>> = {
  * The sum the baseline asserts, kept beside it so a careless edit to the table is visible.
  *
  * 287 when first measured on 2026-10-06; **278** since 2026-10-13, when EnrollPage.tsx went to
- * zero. This number may only ever go DOWN.
+ * zero; **272** since 2026-10-28, when ArchitectTimeMachine.tsx went to zero (its `.am-free` CSS class
+ * was renamed `.am-input`). This number may only ever go DOWN.
  */
-export const FRONTEND_COPY_BASELINE_TOTAL = 274;
+export const FRONTEND_COPY_BASELINE_TOTAL = 272;
 
 /**
  * The scope the baseline was measured over. Anything outside it is NOT covered, and the

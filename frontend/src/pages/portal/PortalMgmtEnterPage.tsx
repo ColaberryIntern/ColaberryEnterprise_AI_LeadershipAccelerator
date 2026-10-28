@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import portalApi from '../../utils/portalApi';
 import { allowedMgmtNext } from './mgmtNext';
+import { mgmtBridgeBlockedReason } from './mgmtBridgeGate';
 
 /**
  * "Management Portal" entry — an employee opens the admin portal from inside
@@ -12,11 +13,19 @@ import { allowedMgmtNext } from './mgmtNext';
  *
  * C6: an optional ?next= sends them straight to one of three allowlisted admin pages (mgmtNext.ts). Anything else is
  * ignored and the landing is unchanged, so `next` cannot be used as an open redirect.
+ *
+ * AF2.7: refuses outright inside a read-only "View as member" tab. The nav no longer offers the
+ * link there, so this is the belt for a same-tab navigation (a typed URL, a ?next= deep link, the
+ * back button). It must come BEFORE the POST: `requireParticipant` would reject the request
+ * anyway, but only with the generic read-only 403, which reads as a broken page rather than as
+ * the deliberate refusal it is.
  */
 export default function PortalMgmtEnterPage() {
   const [error, setError] = useState('');
 
   useEffect(() => {
+    const blocked = mgmtBridgeBlockedReason();
+    if (blocked) { setError(blocked); return; }
     portalApi.post<{ admin_token?: string; role?: string }>('/api/portal/mgmt/enter')
       .then((res) => {
         const token = res.data?.admin_token;

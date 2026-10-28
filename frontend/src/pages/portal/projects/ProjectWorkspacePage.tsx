@@ -13,6 +13,7 @@ import { foldConnect } from './foldConnect';
 import { repoConnectionState } from './WorkspaceRepoPanel';
 import HowToBuild from './HowToBuild';
 import { refreshProjectsFromBackend } from './projectSync';
+import StaleCopyBanner from './StaleCopyBanner';
 import { useStoryVerification } from './useStoryVerification';
 import AcceptanceChecklist from './AcceptanceChecklist';
 import StoryCompletionPanel, { isSelfDirectedStory } from './StoryCompletionPanel';
@@ -24,7 +25,7 @@ import { useAgentAttachments } from '../../../components/portal/AgentAttachments
 import MentorRail, { type MentorMsg, type MentorMode } from '../../../components/portal/workspace/MentorRail';
 import WorkspaceStuckHelp from './WorkspaceStuckHelp';
 import { useCampus } from '../../../components/campus/CampusContext';
-import WorkstationShell, { returnToOf } from '../../../components/campus/workstation/WorkstationShell';
+import WorkstationShell, { returnToOf, type WorkstationOrigin } from '../../../components/campus/workstation/WorkstationShell';
 import RepoTerminal from '../../../components/campus/workstation/RepoTerminal';
 import { storyBench, storyTitle, workstationBuilding, workstationPlace } from '../../../components/campus/workstation/workstationModel';
 
@@ -168,9 +169,13 @@ const ProjectWorkspacePage: React.FC = () => {
   const storyKey = task?.storyId || taskId;
   const verif = useStoryVerification(projectId, storyKey);
 
-  // Greet once the task is known, so the opening line can name it.
+  // Greet once the task is known, so the opening line can name it. C57: one conversation per story, as the rail's header is per story.
+  // Moving to another story on the pinned strip keeps this page mounted (only the URL changes), so the conversation is keyed on the
+  // story: a new story starts a fresh greeting that names it (it used to keep the previous story's greeting and turns).
+  const convoFor = useRef<string | null>(null);
   useEffect(() => {
-    if (!task || msgs.length) return;
+    if (!task || convoFor.current === task.id) return;
+    convoFor.current = task.id;
     setMsgs([{
       role: 'assistant',
       // The screenshot line is here rather than in a tooltip because a
@@ -178,7 +183,7 @@ const ProjectWorkspacePage: React.FC = () => {
       // in the opening turn is the one place every student actually reads.
       content: `I'm Cory, your mentor for "${task.title}". Ask me anything, or hit a shortcut below — I'll coach, not hand you answers. Stuck on an error? Paste or drag a screenshot straight in and I'll read it.`,
     }]);
-  }, [task, msgs.length]);
+  }, [task]);
 
   useEffect(() => { mentorEnd.current?.scrollIntoView({ behavior: 'smooth' }); }, [msgs]);
 
@@ -195,6 +200,7 @@ const ProjectWorkspacePage: React.FC = () => {
 
   const ask = useCallback(async (mode: Mode, message: string) => {
     if (!task) return;
+    const asked = task.id; // C57: an answer that lands after you moved to another story is not shown on that story
     const history = msgs.slice(-12).map((m) => ({ role: m.role, content: m.content }));
     // Snapshot the tray BEFORE clearing it, so the sent message keeps its
     // thumbnails and the composer is empty again immediately.
@@ -209,11 +215,11 @@ const ProjectWorkspacePage: React.FC = () => {
         `/api/portal/projects/${projectId}/tasks/${encodeURIComponent(task.storyId || task.id)}/mentor`,
         { mode, message, history, attachments },
       );
-      setMsgs((m) => [...m, { role: 'assistant', content: data?.reply || data?.message || 'I could not answer that one.' }]);
+      if (convoFor.current === asked) setMsgs((m) => [...m, { role: 'assistant', content: data?.reply || data?.message || 'I could not answer that one.' }]);
     } catch {
       // Say so rather than dropping the turn silently — a mentor that goes
       // quiet reads as a mentor that ignored you.
-      setMsgs((m) => [...m, { role: 'assistant', content: 'I could not reach the mentor just then. Try again in a moment — your work is saved.' }]);
+      if (convoFor.current === asked) setMsgs((m) => [...m, { role: 'assistant', content: 'I could not reach the mentor just then. Try again in a moment — your work is saved.' }]);
     } finally {
       setBusy('');
     }
@@ -297,6 +303,12 @@ const ProjectWorkspacePage: React.FC = () => {
 
   // CENTER — read in one order: what this story is, what done means, then how to build it.
   const centre = (<>
+          {/* FIRST, above the story itself: whether what follows is the server's
+              answer or a copy saved on this device. It belongs here rather than
+              in the header because both render paths below (campus workstation
+              and the plain shell) compose `centre`, so neither can ship the
+              story text without the caveat that applies to it. */}
+          <StaleCopyBanner projectId={projectId} onRecovered={() => setTick((t) => t + 1)} />
           {blocked.blocked && (
             <div className="rt-card" style={{ marginBottom: 14 }}>
               <div className="rt-lab">Not yet</div>
@@ -423,7 +435,7 @@ const ProjectWorkspacePage: React.FC = () => {
     return (
       <WorkstationShell
         theme={theme}
-        place={workstationPlace(workstationBuilding(backTo, 'studio'), campus.settings.workplaceNames)}
+        place={workstationPlace(workstationBuilding(backTo, 'studio', (location.state as WorkstationOrigin | null)?.at), campus.settings.workplaceNames)}
         returnTo={returnToOf(location.state)}
         cardTitle={storyTitle(task.storyId, task.title)}
         heading={{ kicker: `${listName || project.name}${task.points ? ` · +${task.points} pts` : ''}`, title: storyTitle(task.storyId, task.title) }}

@@ -3,6 +3,8 @@ import {
   getAgentEmailInbox, approveAgentEmailDraft, discardAgentEmailDraft,
   type AgentEmailInbox, type AgentEmailDraft,
 } from '../../../services/agentEmailApi';
+import AgentEmailExplorerPreview from './AgentEmailExplorerPreview';
+import { showsExplorerPreview } from './explorerPreviewAgents';
 
 /**
  * The agent's own email, on her dashboard (Ali, 2026-10-26).
@@ -107,6 +109,16 @@ export default function AgentEmailTab({ agentId }: { agentId: string }) {
         <strong>Approving does not send.</strong> It records that a human said yes. Sending is a
         separate step and is not switched on yet.
       </div>
+
+      {/* The UPSTREAM of this queue, for the agents whose journey produces it. It sits above the
+          drafts deliberately: the draft queue is structurally empty today, and an empty queue with
+          no context reads as "nothing is happening" when the truth is "the journey decided a great
+          many things and executed none of them". Which agents see it is `explorerPreviewAgents`,
+          declared as data - not a name comparison written inline, which is the defect that left
+          Maya's Overview blank in the first place. */}
+      {showsExplorerPreview(inbox.agentName) && (
+        <AgentEmailExplorerPreview agentName={inbox.agentName} />
+      )}
 
       <DraftTable
         title={`Awaiting a decision (${awaiting.length})`}

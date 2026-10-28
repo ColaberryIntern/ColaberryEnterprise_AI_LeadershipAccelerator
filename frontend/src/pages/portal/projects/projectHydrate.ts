@@ -265,11 +265,133 @@ export function adoptServerTasks(p: StudentProject, tree: BackendProjectTree): S
 }
 
 /**
+ * The server-authored content of one task node, with absent/empty values left
+ * out so adoption is SET-FROM, never CLEARED-BY. `state`, `due` and `id` are
+ * deliberately absent: see adoptServerContent.
+ */
+function serverContentOf(t: BackendTaskNode): Partial<ProjectTask> {
+  const out: Partial<ProjectTask> = {};
+  if (t.title) out.title = t.title;
+  if (t.description) out.what = t.description;
+  if (t.build) out.prompt = t.build;
+  if (t.requirement_key) out.req = t.requirement_key;
+  if (t.owner_agent) out.owner = t.owner_agent;
+  if (t.release_key) out.release = t.release_key;
+  const acceptance = asAcceptance(t.acceptance);
+  if (acceptance && acceptance.length) out.acceptance = acceptance;
+  if (Array.isArray(t.blocked_by) && t.blocked_by.length) out.blockedBy = t.blocked_by;
+  // Only a real, positive price — preserving the rule the `points` overlay set.
+  if (typeof t.points === 'number' && t.points > 0) out.points = t.points;
+  if (t.verified_at) out.verifiedAt = t.verified_at;
+  return out;
+}
+
+/** Equal for adoption purposes. Arrays compare by content, everything else by identity. */
+function sameContentValue(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (Array.isArray(a) && Array.isArray(b)) return JSON.stringify(a) === JSON.stringify(b);
+  return false;
+}
+
+/** The subset of `fields` that would actually change `t`, or null if none would. */
+function contentDiff(t: ProjectTask, fields: Partial<ProjectTask>): Partial<ProjectTask> | null {
+  let out: Record<string, unknown> | null = null;
+  for (const [key, value] of Object.entries(fields)) {
+    if (sameContentValue((t as unknown as Record<string, unknown>)[key], value)) continue;
+    out = out || {};
+    out[key] = value;
+  }
+  return out as Partial<ProjectTask> | null;
+}
+
+/**
+ * Adopt the server's STORY CONTENT onto tasks this device ALREADY HOLDS.
+ *
+ * ── THE FOURTH, FIFTH AND SIXTH FORGOTTEN FIELD ─────────────────────────────
+ *
+ * `adoptServerTasks` is ADD-ONLY by design: it hands this device stories it
+ * lacks and never touches one it already has. So the only route by which
+ * server-authored text ever reached an existing card was for someone to
+ * remember to copy that one field in `overlayCompletions` — and the history of
+ * this file is three incidents of precisely that being forgotten:
+ *
+ *   verifiedAt  2026-09-15  `projectPoints.earned` read 0 on the very device
+ *                           that had earned 1,489 points; a fresh device, which
+ *                           takes the hydrate path, showed the right number.
+ *   points      -           a task stored before its story carried a price tag
+ *                           could never acquire one without a reinstall.
+ *   title       2026-10-25  the six demo-prep stories were renamed after the
+ *                           video each one asks for. 250 rows changed, verified
+ *                           in the database, and every device already holding
+ *                           the project went on showing the old name forever.
+ *
+ * `prompt`, `what` and `acceptance` were the fourth, fifth and sixth, and they
+ * cost two interns an evening. On 2026-10-21 Mihret read "This story is human
+ * work ... no prompt on purpose" on a story whose row held a correct
+ * ~4,100-character prompt. She was told to hard refresh, which CANNOT help —
+ * the stale copy is in localStorage, which outlives a refresh — and eventually
+ * diagnosed it herself by opening an incognito window, where an empty store
+ * forces the hydrate path and the server's real prompt appears. Quincy hit the
+ * same thing on a different story hours later. Every server-side check passed
+ * the whole time, because nothing was wrong on the server.
+ *
+ * So this inverts the default. Rather than naming the fields to copy, it copies
+ * everything the server authors, by one rule, which is what makes the NEXT
+ * field added to a plan arrive on existing devices without anyone remembering
+ * anything. The three Maps this replaces were each correct; needing them was
+ * the defect.
+ *
+ * WHAT IT WILL NOT DO:
+ *
+ *   - It never writes `state` or `due`. Completion is the student's, and
+ *     `overlayCompletions` keeps its monotonic guard (the server may mark a
+ *     story done, never undo one).
+ *   - It never writes `id`. That value keys the acceptance ticks parked in
+ *     localStorage under `te_ws_acc_*`, so re-pointing it would silently
+ *     disconnect a student from their own ticked boxes.
+ *   - It is SET-FROM, NEVER CLEARED-BY. A server returning no prompt says
+ *     nothing about the prompt this device already shows, and blanking a card
+ *     on that basis is worse than staleness. This was already the written rule
+ *     for `title` and `verifiedAt`; it is now the rule for all of them.
+ *
+ * Returns the SAME reference when nothing changed, so the write/re-render fast
+ * path every caller relies on survives.
+ */
+export function adoptServerContent(p: StudentProject, tree: BackendProjectTree): StudentProject {
+  const content = new Map<string, Partial<ProjectTask>>();
+  for (const l of tree.lists) {
+    for (const t of (Array.isArray(l.tasks) ? l.tasks : [])) {
+      content.set(serverTaskKey(t), serverContentOf(t));
+    }
+  }
+  if (content.size === 0) return p;
+
+  let changed = false;
+  const lists = p.lists.map((l) => {
+    let listChanged = false;
+    const tasks = l.tasks.map((t) => {
+      const fields = content.get(taskKey(t));
+      if (!fields) return t;
+      const diff = contentDiff(t, fields);
+      if (!diff) return t;
+      listChanged = true;
+      return { ...t, ...diff };
+    });
+    if (!listChanged) return l;
+    changed = true;
+    return { ...l, tasks };
+  });
+  return changed ? { ...p, lists } : p;
+}
+
+/**
  * Return a project reconciled with the backend tree: stories the server has and
- * this device lacks are added (see adoptServerTasks), any local task whose key
- * matches a backend task marked `complete` becomes `done`, and the server's name
- * is adopted (see adoptServerIdentity). Returns the SAME reference when nothing
- * changed, so callers can skip a write/re-render.
+ * this device lacks are added (see adoptServerTasks), everything the server
+ * authors on a story this device already holds is refreshed (see
+ * adoptServerContent), any local task whose key matches a backend task marked
+ * `complete` becomes `done`, and the server's name is adopted (see
+ * adoptServerIdentity). Returns the SAME reference when nothing changed, so
+ * callers can skip a write/re-render.
  */
 export function overlayCompletions(p: StudentProject, tree: BackendProjectTree): StudentProject {
   // Adoption runs FIRST so the rest of this function sees the full card. An
@@ -278,69 +400,29 @@ export function overlayCompletions(p: StudentProject, tree: BackendProjectTree):
   const withServerTasks = adoptServerTasks(p, tree);
   const adopted = withServerTasks !== p;
 
+  // Everything the server AUTHORS on a story this device already holds —
+  // prompt, description, acceptance, title, price, verification stamp and the
+  // rest — refreshed by one rule instead of three hand-maintained Maps. See
+  // adoptServerContent for the incidents that produced that decision.
+  const withContent = adoptServerContent(withServerTasks, tree);
+  const contentChanged = withContent !== withServerTasks;
+
   const done = new Set<string>();
-  // The server's verification stamp per story. This overlay is the path taken
-  // by the device that DID the work, and until 2026-09-15 it copied `done` and
-  // `points` across but never `verifiedAt`, so `projectPoints.earned` stayed 0
-  // on exactly that device while the ledger had paid 1,489 points. A fresh
-  // device, hydrating from scratch, showed the right number. Same shape of
-  // bug as `commandCenterUrl` below.
-  const verified = new Map<string, string>();
-  // The server's price tag per story. Tasks this device stored before stories
-  // carried points (or before the plan was published) have none; the overlay
-  // is how they get one without a reinstall. Same-reference when nothing moved.
-  const price = new Map<string, number>();
-  // The server's NAME per story. A task's title comes from the plan and the
-  // curriculum; this device never authors one, so the server owns it.
-  //
-  // THE THIRD FIELD THIS OVERLAY FORGOT — the comments above describe the first
-  // two. On 2026-10-25 the six demo-prep tasks were renamed after the video
-  // each one asks for. 250 rows changed, verified in the database, and every
-  // device that already held the project went on showing "Write the Demo
-  // Narrative…", because adoption only ADDS stories a device LACKS and this
-  // overlay copied status, points and verification but not the name.
-  //
-  // A reload does not fix that: the stale copy is in localStorage, which
-  // outlives a refresh. Without this line the rename is invisible to every
-  // existing student forever.
-  const name = new Map<string, string>();
   for (const l of tree.lists) for (const t of l.tasks) {
     if (t.status === 'complete' && t.story_id) done.add(t.story_id);
-    if (typeof t.points === 'number' && t.points > 0) price.set(t.story_id || t.id, t.points);
-    if (t.verified_at) verified.set(t.story_id || t.id, t.verified_at);
-    if (t.title) name.set(t.story_id || t.id, t.title);
   }
+
+  // COMPLETION ONLY, and deliberately monotonic: the server may mark a story
+  // done, never undo one. Everything the server authors is already on the card
+  // by this point, so this loop has one job left.
   let changed = false;
-  const lists = withServerTasks.lists.map((l) => {
+  const lists = withContent.lists.map((l) => {
     const tasks = l.tasks.map((t) => {
-      let next = t;
       if (t.state !== 'done' && done.has(taskKey(t))) {
         changed = true;
-        next = { ...next, state: 'done' as TaskState, due: 'done' as TaskDue };
+        return { ...t, state: 'done' as TaskState, due: 'done' as TaskDue };
       }
-      const pts = price.get(taskKey(t));
-      if (pts !== undefined && t.points !== pts) {
-        changed = true;
-        next = { ...next, points: pts };
-      }
-      // Set from the server, never cleared by it: a stamp this device saw on a
-      // live verify that the server has not yet echoed is not evidence of
-      // anything having been revoked.
-      const vAt = verified.get(taskKey(t));
-      if (vAt && t.verifiedAt !== vAt) {
-        changed = true;
-        next = { ...next, verifiedAt: vAt };
-      }
-      // Set from the server, never cleared by it — same rule as the stamp
-      // above. A server that returns no title for a story says nothing about
-      // the name this device already shows, and blanking the card on that
-      // basis would be worse than a stale name.
-      const serverName = name.get(taskKey(t));
-      if (serverName && t.title !== serverName) {
-        changed = true;
-        next = { ...next, title: serverName };
-      }
-      return next;
+      return t;
     });
     return changed ? { ...l, tasks } : l;
   });
@@ -382,12 +464,12 @@ export function overlayCompletions(p: StudentProject, tree: BackendProjectTree):
   // Requirement chips read from the stories that fulfil them. Recomputed on the
   // merged lists so a story the server just verified moves its requirement in
   // the same pull.
-  const mergedLists = changed ? lists : withServerTasks.lists;
-  const reqs = deriveReqStates(reconcileReqCatalog(withServerTasks.reqs, mergedLists), mergedLists);
-  const reqsChanged = reqs !== withServerTasks.reqs;
+  const mergedLists = changed ? lists : withContent.lists;
+  const reqs = deriveReqStates(reconcileReqCatalog(withContent.reqs, mergedLists), mergedLists);
+  const reqsChanged = reqs !== withContent.reqs;
 
-  const base: StudentProject = (!changed && !urlChanged && !adopted && !statusStale && !reqsChanged && !approvalChanged) ? p : {
-    ...withServerTasks,
+  const base: StudentProject = (!changed && !urlChanged && !adopted && !contentChanged && !statusStale && !reqsChanged && !approvalChanged) ? p : {
+    ...withContent,
     ...(changed ? { lists } : {}),
     ...(reqsChanged ? { reqs } : {}),
     ...(urlChanged ? { commandCenterUrl: nextUrl } : {}),

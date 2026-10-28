@@ -27,6 +27,7 @@ import { buildSchedule, type CohortWindow, type Schedule } from '../sbp/buildSch
 import { gatePlan, blockingViolations } from '../sbp/planGate';
 import type { BuildPlan } from '../sbp/planContract';
 import { linkGovBuildToStudentProject } from './govDeliveryProject';
+import { ensureAssigneeCanBuild } from './govBuildAssignment';
 import { factoryId } from './factoryIds';
 import { decomposeGovBuildPlanRaw } from './govBuildPlanAI';
 import { rescaleScheduleToDeadline } from './govScheduleWindow';
@@ -146,6 +147,14 @@ export async function materializeGovBuildProject(input: MaterializeGovProjectInp
       actorIdentityId: input.actorIdentityId ?? null,
     });
   }
+
+  // Cockpit access: the admin's assignment of this project to the intern IS their authorization to build it, so
+  // grant the intern the least-privilege builder role on the DELIVERY project when they have none yet. Without it
+  // the intern (and an admin viewing-as them) hits the membership-gated cockpit as a 404: materialize creates the
+  // monitored project but never a delivery membership. Idempotent and non-destructive, mirroring the per-story
+  // ensureAssigneeCanBuild, so re-running materialize backfills an already-assigned intern, and an existing
+  // membership of any role is left untouched.
+  await ensureAssigneeCanBuild(input.deliveryProjectId, input.assigneeIdentityId, input.actorIdentityId ?? null);
 
   // 4. Schedule + materialize (idempotent on (project_id, story_id); injects the STORY-000 Command Center).
   //    Back-scheduled to finish the day before the deadline when one is known (owner's "day before" rule).

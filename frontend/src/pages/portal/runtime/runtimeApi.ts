@@ -121,6 +121,8 @@ export interface AmOption { id: string; label: string; custom?: boolean }
 export interface AmInterviewQuestion { id: string; text: string; mode: 'single' | 'multiple'; options: AmOption[]; dimension?: string }
 export interface AmScenario {
   version: string; week: number; baseline: boolean; title: string; series: string; experience: string;
+  /** Week 0's short first taste: 6 stages, no Part One interview / re-architecture / receipt / record / transfer */
+  lite?: boolean;
   principle: string; tagline: string;
   request: { from: string; text: string };
   initial_system: string[];

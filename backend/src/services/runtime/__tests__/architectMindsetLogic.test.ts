@@ -61,20 +61,24 @@ describe('architectMindset state machine', () => {
   });
 });
 
+// Week 0 is lite (no Part One interview), so the generic validation runs on Week 1's.
+const Q1 = WEEK1_SCENARIO.interview_part_1;
 describe('interview validation', () => {
   it('accepts a chosen non-custom option', () => {
-    const q = S.interview_part_1[0];
+    const q = Q1[0];
     expect(isAnswerValid(q, { choice: q.options[0].id })).toBe(true);
   });
   it('rejects a custom option with no text, accepts it with text', () => {
-    const q = S.interview_part_1[0];
+    const q = Q1[0];
     const customId = q.options.find((o) => o.custom)!.id;
     expect(isAnswerValid(q, { choice: customId, custom: '  ' })).toBe(false);
     expect(isAnswerValid(q, { choice: customId, custom: 'I focused on the org first.' })).toBe(true);
   });
   it('flags every unanswered required question', () => {
-    expect(invalidAnswers(S.interview_part_1, {}).length).toBe(S.interview_part_1.length);
-    expect(invalidAnswers(S.interview_part_1, answeredAll()).length).toBe(0);
+    const all: Record<string, AmInterviewAnswer> = {};
+    for (const q of Q1) all[q.id] = { choice: q.options[0].id };
+    expect(invalidAnswers(Q1, {}).length).toBe(Q1.length);
+    expect(invalidAnswers(Q1, all).length).toBe(0);
   });
   it('isMeaningful rejects whitespace and one-char', () => {
     expect(isMeaningful('   ')).toBe(false);
@@ -93,7 +97,7 @@ describe('completion gates (14, backend-authoritative)', () => {
     expect(completionGaps(p, S).some((g) => g.code === 'consequence_viewed')).toBe(true);
   });
   it('blocks when a required interview question is unanswered', () => {
-    const p = fullProgress(); const iv = { ...p.interview }; delete (iv as any).q1;
+    const p = fullProgress(); const iv = { ...p.interview }; delete (iv as any).r1;
     expect(completionGaps(withDerived({ ...p, interview: iv }), S).some((g) => g.code === 'interview')).toBe(true);
   });
   it('blocks when the Architect Commitment is missing', () => {
@@ -102,11 +106,46 @@ describe('completion gates (14, backend-authoritative)', () => {
   it('blocks when the experience has not been evaluated', () => {
     expect(completionGaps(withDerived({ ...fullProgress(), evaluation: null }), S).some((g) => g.code === 'evaluation')).toBe(true);
   });
-  it('derives assumption/tradeoff/failure evidence from the interview so the MC flow completes', () => {
-    const ev = deriveEvidence(fullProgress(), S);
-    expect(ev.assumptions.length).toBeGreaterThanOrEqual(1);
-    expect(ev.tradeoffs.length).toBeGreaterThanOrEqual(1);
-    expect(ev.failure_modes.length).toBeGreaterThanOrEqual(1);
+});
+
+// ── Week 0 is LITE: a short first taste (feedback 2026-10-27: the full run was too much) ──
+const liteMin = (): AmProgress => ({
+  state: 'adr_generated',
+  first_decision: { choice: 'model' },
+  interview: { r1: { choice: 'tools' } },
+  commitment: 'ask who will use it before I pick a tool',
+  flags: { consequence_viewed: true },
+  evaluation: { baseline: true, signal: 0 },
+});
+describe('Week 0 lite (short first taste)', () => {
+  it('is lite: no Part One interview, one takeaway question, a short consequence horizon', () => {
+    expect(S.lite).toBe(true);
+    expect(S.interview_part_1).toEqual([]);
+    expect(S.interview_part_2.length).toBe(1);
+    expect(S.first_decision.options.length).toBeLessThanOrEqual(5);
+    expect(S.consequence.horizon.length).toBeLessThanOrEqual(4);
+    const tags = S.zoom_out.people.length + S.zoom_out.information.length + S.zoom_out.decisions.length + S.zoom_out.operations.length;
+    expect(tags).toBeLessThanOrEqual(12);
+  });
+  it('completes WITHOUT a revised decision, reflection, or derived evidence', () => {
+    expect(completionGaps(withDerived(liteMin()), S)).toEqual([]);
+  });
+  it('still requires the takeaway question, the commitment, and the fast-forward', () => {
+    expect(completionGaps({ ...liteMin(), interview: {} }, S).map((g) => g.code)).toContain('interview');
+    expect(completionGaps({ ...liteMin(), commitment: ' ' }, S).map((g) => g.code)).toContain('commitment');
+    expect(completionGaps({ ...liteMin(), flags: {} }, S).map((g) => g.code)).toContain('consequence_viewed');
+    expect(completionGaps({ ...liteMin(), state: 'zoom_out_complete' }, S).map((g) => g.code)).toContain('stages');
+  });
+  it('a full (non-lite) week still enforces the re-architecture gates', () => {
+    const codes = completionGaps({ ...liteMin(), interview: {} }, WEEK1_SCENARIO).map((g) => g.code);
+    expect(codes).toEqual(expect.arrayContaining(['revised_decision', 'reflection', 'tradeoff', 'assumption', 'failure']));
+  });
+  it('the lite baseline is capped: two clicks reach System Explorer at most', () => {
+    expect(assessBaseline(liteMin(), S).stage.label).toBe('Feature Thinker');
+    const best = assessBaseline({ ...liteMin(), first_decision: { choice: 'ask' }, interview: { r1: { choice: 'system' } } }, S);
+    expect(best.signal).toBe(40);
+    expect(best.stage.label).toBe('System Explorer');
+    expect(best.observation).toMatch(/architect move/);
   });
 });
 
@@ -223,10 +262,11 @@ describe('Weeks 0-12 full curriculum coverage (one reusable framework)', () => {
     for (let w = 1; w <= 12; w++) expect(scenarioForWeek(w)!.baseline).toBe(false);
   });
 
-  it('every week carries the interview tags the completion gates derive evidence from', () => {
+  it('every full (non-lite) week carries the interview tags the completion gates derive evidence from', () => {
     const missing: string[] = [];
     for (let w = 0; w <= 12; w++) {
       const sc = scenarioForWeek(w)!;
+      if (sc.lite) continue;   // lite skips the evidence gates (see the Week 0 lite suite)
       const tags = new Set([...sc.interview_part_1, ...sc.interview_part_2].map((q) => q.dimension));
       for (const t of REQUIRED_TAGS) if (!tags.has(t)) missing.push(`week ${w}:${t}`);
     }
@@ -246,9 +286,11 @@ describe('Weeks 0-12 full curriculum coverage (one reusable framework)', () => {
     for (let w = 0; w <= 12; w++) {
       const sc = scenarioForWeek(w)!;
       const ev = deriveEvidence(genericFull(sc), sc);
-      expect(ev.assumptions.length).toBeGreaterThanOrEqual(1);
-      expect(ev.tradeoffs.length).toBeGreaterThanOrEqual(1);
-      expect(ev.failure_modes.length).toBeGreaterThanOrEqual(1);
+      if (!sc.lite) {
+        expect(ev.assumptions.length).toBeGreaterThanOrEqual(1);
+        expect(ev.tradeoffs.length).toBeGreaterThanOrEqual(1);
+        expect(ev.failure_modes.length).toBeGreaterThanOrEqual(1);
+      }
       const p = { ...genericFull(sc), ...ev } as AmProgress;
       if (!isCompletionEligible(p, sc)) notEligible.push(`week ${w}: [${completionGaps(p, sc).map((g) => g.code).join(', ')}]`);
     }
