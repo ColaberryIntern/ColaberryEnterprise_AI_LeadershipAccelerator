@@ -59,6 +59,7 @@ describeIfDb('T14 — provisioning is idempotent and race-safe', () => {
   let sequelize: import('sequelize').Sequelize;
   let provisionDomain: typeof import('../agentDomainProvisioner').provisionDomain;
   let planProvision: typeof import('../agentDomainProvisionPlan').planProvision;
+  let domainProjectName: typeof import('../agentDomainRegistry').domainProjectName;
 
   const TENANT = '33333333-3333-3333-3333-333333333333';
   const ENROLLMENT = '44444444-4444-4444-4444-444444444444';
@@ -124,6 +125,7 @@ describeIfDb('T14 — provisioning is idempotent and race-safe', () => {
     ({ sequelize } = await import('../../../config/database'));
     ({ provisionDomain } = await import('../agentDomainProvisioner'));
     ({ planProvision } = await import('../agentDomainProvisionPlan'));
+    ({ domainProjectName } = await import('../agentDomainRegistry'));
 
     // Minimal stand-ins for the tables the real DDL references. Created FIRST so the ensure call
     // applies cleanly, and before any `sync()` — which would otherwise test a fake schema first.
@@ -277,17 +279,28 @@ describeIfDb('T14 — provisioning is idempotent and race-safe', () => {
       // hand-rolled stand-in and does not against the model's own table -- and a control that
       // takes a different path from the thing it controls for is weaker anyway.
       const { default: ProjectModel } = await import('../../../models/Project');
+      // AF2.7: the decoy carries the name the provisioner ACTUALLY writes -- the domain's title,
+      // not its raw key. This counted `WHERE name = DOMAIN` and silently fell to 1 the moment
+      // the provisioner started naming projects properly, so the count tracks `domainProjectName`
+      // rather than restating a literal that can drift away from the code under test.
+      const provisionedName = domainProjectName(DOMAIN);
       const random = await ProjectModel.create({
-        enrollment_id: ENROLLMENT, program_id: PROGRAM, name: DOMAIN,
+        enrollment_id: ENROLLMENT, program_id: PROGRAM, name: provisionedName,
       } as never, { lifecycleEntryPoint: 'test.non_derived_control' } as never);
       const randomId = String((random as unknown as { id: string }).id);
-      expect(randomId).not.toBe(p.project_id);
-      const total = await count(
-        `SELECT count(*)::text AS n FROM projects WHERE name = $1`, [DOMAIN]);
-      expect(total).toBe(2); // the derived one plus the random one
-      await sequelize.query(`DELETE FROM project_lifecycle_states WHERE student_project_id = $1`,
-      { bind: [randomId] });
-    await sequelize.query(`DELETE FROM projects WHERE id = $1`, { bind: [randomId] });
+      try {
+        expect(randomId).not.toBe(p.project_id);
+        const total = await count(
+          `SELECT count(*)::text AS n FROM projects WHERE name = $1`, [provisionedName]);
+        expect(total).toBe(2); // the derived one plus the random one
+      } finally {
+        // In a `finally` because this cleanup used to sit after the assertion: when the
+        // expectation failed, the decoy row survived into the NEXT test and failed that one too,
+        // so one real defect reported as two and the second pointed at innocent code.
+        await sequelize.query(`DELETE FROM project_lifecycle_states WHERE student_project_id = $1`,
+          { bind: [randomId] });
+        await sequelize.query(`DELETE FROM projects WHERE id = $1`, { bind: [randomId] });
+      }
     });
   });
 
