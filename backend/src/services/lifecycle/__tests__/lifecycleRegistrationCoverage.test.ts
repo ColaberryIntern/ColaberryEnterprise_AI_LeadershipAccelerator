@@ -251,7 +251,11 @@ describe('LC-01 — the set of project-creation sites is derived, not listed', (
       // above this one. Same call site, same mechanism, four lines lower. Re-pinned rather than
       // loosened: the line number is what makes a failure name the site, which is this file's
       // whole design.
-      'services/agentDomain/agentDomainProvisioner.ts:213 Project.findOrCreate(',
+      // Moved 213 -> 221 by AF2.7, which named the project from the domain's TITLE instead of its
+      // raw key (`name: domainProjectName(plan.domain_key)`) and documented above the call why
+      // `findOrCreate` cannot repair the ten rows already in production. Comment lines only; same
+      // call site, same mechanism, eight lines lower. Re-pinned, per the paragraph above.
+      'services/agentDomain/agentDomainProvisioner.ts:221 Project.findOrCreate(',
       'services/businessProcessSeedService.ts:135 Project.findOrCreate(',
       'services/delivery/leadConversion.ts:175 DeliveryProject.create(',
       // Moved 134 -> 147 -> 154 -> 202: helpers added above this call site (selectsSolutionBuild, then the
