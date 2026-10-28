@@ -41,3 +41,19 @@ export const VIEW_AS_TOKEN_KEY = 'view_as_participant_token';
 export function getParticipantToken(): string | null {
   return sessionStorage.getItem(VIEW_AS_TOKEN_KEY) || localStorage.getItem(PARTICIPANT_TOKEN_KEY);
 }
+
+/**
+ * Is THIS tab an admin's read-only "View as member" session? Driven by the token's `read_only`
+ * claim, not by which storage the token came from, so a non-impersonation token parked in
+ * sessionStorage does not read as one.
+ *
+ * Canonical here rather than in `components/campus/campusApi`, where this logic started.
+ * `campusApi` now delegates to it, because anything outside the campus that asks this question
+ * should not have to import the campus API module to do so: partial `jest.mock`s of that module
+ * are common, and one of them returned `undefined` for the function and crashed the portal
+ * shell in CI. Display/UI decisions only -- the server is the source of truth and enforces
+ * read-only centrally in `requireParticipant`.
+ */
+export function isReadOnlyParticipantSession(): boolean {
+  return decodeParticipantClaims(getParticipantToken())?.read_only === true;
+}

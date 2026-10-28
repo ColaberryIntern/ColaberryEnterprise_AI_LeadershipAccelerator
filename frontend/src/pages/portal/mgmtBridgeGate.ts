@@ -1,4 +1,7 @@
-import { isReadOnlySession } from '../../components/campus/campusApi';
+// From the canonical token module, NOT from components/campus/campusApi: campusApi is partially
+// jest.mock'd in several suites, and importing the function from there made `campusNoChange`
+// crash the whole portal shell with "isReadOnlySession is not a function" in CI.
+import { isReadOnlyParticipantSession } from '../../utils/participantToken';
 import type { NavGroup } from './today/ShellNav';
 
 /**
@@ -57,7 +60,7 @@ export const MGMT_BRIDGE_BLOCKED_REASON = 'Not available while you are viewing a
  * each one inventing its own wording for the same state.
  */
 export function mgmtBridgeBlockedReason(): string | null {
-  return isReadOnlySession() ? MGMT_BRIDGE_BLOCKED_REASON : null;
+  return isReadOnlyParticipantSession() ? MGMT_BRIDGE_BLOCKED_REASON : null;
 }
 
 /**

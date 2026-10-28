@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { getParticipantToken, decodeParticipantClaims } from '../../utils/participantToken';
+import { getParticipantToken, isReadOnlyParticipantSession } from '../../utils/participantToken';
 
 /**
  * Client for the Colaberry Campus endpoints. C1 has one: whether the campus is
@@ -71,9 +71,12 @@ export async function fetchCampusAudience(): Promise<'staff' | 'business' | 'exp
   }
 }
 
-/** True for an admin's read-only "view as" session: it may read presence but never record it. */
+/** True for an admin's read-only "view as" session: it may read presence but never record it.
+ *  Delegates to the canonical `isReadOnlyParticipantSession` in utils/participantToken so the
+ *  campus and the rest of the portal cannot drift to two answers; kept as an export because six
+ *  campus call sites and their mocks already reference it by this name. */
 export function isReadOnlySession(): boolean {
-  return decodeParticipantClaims(getParticipantToken())?.read_only === true;
+  return isReadOnlyParticipantSession();
 }
 
 /**
