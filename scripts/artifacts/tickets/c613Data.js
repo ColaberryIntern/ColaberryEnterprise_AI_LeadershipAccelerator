@@ -36,8 +36,11 @@ const CAMPAIGN = {
   status: 'draft',
   qaStatus: 'untested',
   approvalStatus: 'approved',
+  // The ceiling lives in campaigns.budget_cap. budget_total is null on this row, and an
+  // earlier revision of this file labeled the 500.00 as budget_total - right number,
+  // wrong column, in a document whose whole claim is that its figures are checkable.
   budgetSpent: '0.00',
-  budgetTotal: '500.00',
+  budgetCap: '500.00',
   activationGate: { claims_approved: false, dry_run_reviewed: false },
   enrolled: 10,
   touchpoints: 0,

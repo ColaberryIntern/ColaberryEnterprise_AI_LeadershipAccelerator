@@ -302,7 +302,8 @@ function buildDocument() {
     afterwards: status <code>${esc(D.CAMPAIGN.status)}</code>,
     qa_status <code>${esc(D.CAMPAIGN.qaStatus)}</code>,
     activation_gate <code>${esc(JSON.stringify(D.CAMPAIGN.activationGate))}</code>,
-    budget_spent ${esc(D.CAMPAIGN.budgetSpent)} of ${esc(D.CAMPAIGN.budgetTotal)},
+    budget_spent ${esc(D.CAMPAIGN.budgetSpent)} against a budget_cap of
+    ${esc(D.CAMPAIGN.budgetCap)},
     ${D.CAMPAIGN.touchpoints} touchpoints, ${D.CAMPAIGN.responses} responses.</p>
 
   <h2>The criterion that could not survive</h2>
