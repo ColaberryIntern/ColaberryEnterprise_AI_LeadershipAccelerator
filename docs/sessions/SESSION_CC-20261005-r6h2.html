@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Wednesday, October 28, 2026 at 12:45 PM</div>
-    <div><span class="sid">CC-20261005-r6h2</span><span class="count">73 changes</span></div>
+    <div class="meta">Generated Wednesday, October 28, 2026 at 2:27 PM</div>
+    <div><span class="sid">CC-20261005-r6h2</span><span class="count">74 changes</span></div>
   </header>
   <main>
     
@@ -1151,6 +1151,21 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">four checks, each with a control. (1) The regex, applied to the REAL lines rather than invented ones: old pattern matches **0 of 7**, new matches **6 of 6** inline-valued (the seventh is block-valued and named below), while a plain `- Verification:` line matches under BOTH (so the change did not simply become permissive) and a `- Notes:` line matches under NEITHER. (2) The generator on this session&#39;s log goes from **4 warnings to 0**, exit 0. (3) **Mutation test, because a clean run after loosening a regex proves nothing:** a throwaway log with one parenthetical entry and one entry carrying no Verification line at all - the gate stayed silent on the first and **still named the second**, so it can still fail. Throwaway log and its generated HTML both deleted, deletion verified, and `git status` confirmed to hold only the three intended files. (4) Independently of the gate, the five suites that back the four flagged entries were actually RUN on this branch at `edb83b63`: **5 suites / 109 tests passed**, exit 0, 576 seconds. That is the honest current figure for those five suites and is deliberately NOT the same as the counts the entries claim, which covered wider suite sets.</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">**THE HARNESS REPORTED exit code 0 WHILE JEST NEVER RAN AT ALL,** for the second time today. The run failed with `MODULE_NOT_FOUND` and only my own appended `JEST_EXIT=1` marker and a `JEST BIN MISSING` guard surfaced it. Cause: this worktree&#39;s `backend/node_modules` symlinks to a **2-entry** install, the same gutted-symlink trap that bit `frontend/node_modules` earlier in this session, while the ROOT symlink is healthy at 1,310 entries. No worktree on this box carries a full backend install. **The fix is to invoke the ROOT install&#39;s jest from the `backend` directory** - `node ../node_modules/jest/bin/jest.js` - because Node&#39;s resolution walks up past the gutted link to the healthy root, and ts-jest resolves from there too. It then passed, taking **576 seconds**, which is also why two foreground attempts timed out before a background run landed.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">74</span>
+          <h2>Phase 3 foundation: a quote-time copy guard that holds no rules, because neither canonical declaration is reachable</h2>
+          <span class="badge">2026-10-28</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `backend/src/services/explorerGrowth/explorerQuoteGuard.ts` (176 lines, **zero imports**, pure) and new `backend/src/services/explorerGrowth/__tests__/explorerQuoteGuard.test.ts` (16 tests). It scans named fields of text that would be QUOTED to a person and returns flags. It is the fourth enforcement point for the advertising rule: the two source ratchets and the system prompt cannot see a string that arrives from the DATABASE at runtime, which is exactly where this problem lives, since asset titles are synced from curriculum data by `syncTimelineCards` and were never written in this repo&#39;s source. No runtime caller yet, deliberately - see the fork below.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">four gates, all re-run after the last edit and read from the artifact. (1) The new suite: **16 tests passed, 1 suite, exit 0**, including zero-rules-means-unchecked, idempotency, non-mutation, regex-metacharacter escaping, and a source scan asserting the module imports nothing at all. (2) **Both copy ratchets, which were the two gates most likely to reject this: `bannedWordOutboundCopy.test.ts` + `frontendCopyLint.test.ts`, 2 suites / 31 tests passed, exit 0.** The new module contains **0** occurrences of the banned word (control: the same grep finds 19 in the canonical scanner), so it needs no baseline entry, and it does not import the scanner, so it does not drag a compiler into the production container. (3) Backend source typecheck with the stack&#39;s OWN declared compiler, `backend/node_modules/typescript` at **5.9.3**: zero diagnostics, `TSC_EXIT=0`, **and `--listFiles` proves the new file IS inside that program (count 1, against `explorerFactGuard.ts` as a known-compiled control at 1)** - because an empty tsc output and a skipped file look identical. (4) `checkTestTypecheck.js`: `400 error(s) across 141 file(s)`, **&quot;matched exactly, in both directions&quot;**, exit 0, so the new test file adds zero type errors.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**I DIAGNOSED THIS WORKTREE&#39;S `backend/node_modules` WRONG EARLIER TODAY AND THIS CORRECTS IT.** I called it the same gutted-symlink trap that bit `frontend/node_modules`. It is not: it is a deliberate **two-package** install - `eslint` and `typescript` **5.9.3** - with a working `.bin/tsc`. So jest genuinely is absent (which is why the earlier run died at `MODULE_NOT_FOUND` and had to go through the root install), but the stack&#39;s correctly-declared compiler was sitting there the whole time, and the backend typecheck above was run with it rather than with the root&#39;s 4.9.5.</span></div>
           
         </div>
       </article>
