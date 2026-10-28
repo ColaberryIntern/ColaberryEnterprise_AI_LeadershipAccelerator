@@ -14,13 +14,14 @@
  * source. The demo/sample build is never persisted (only real student builds).
  */
 import portalApi from '../../../utils/portalApi';
-import type { StudentProject, ProjectTask, TaskState } from './projectsStore';
+import type { StudentProject, ProjectTask, TaskState, TaskDue } from './projectsStore';
 import { loadProjects, hydrateProjects, claimBackendProject } from './projectsStore';
 import {
-  reconcileProjects, UNKNOWN_INVENTORY, backendIdOf,
+  reconcileProjects, UNKNOWN_INVENTORY, backendIdOf, backendTreeToProject, taskKey,
   type BackendProjectTree, type ServerInventory,
 } from './projectHydrate';
 import { isUuid } from './projectIdentity';
+import { markConfirmed, markStale, markStored } from './projectFreshness';
 
 function toBackendStatus(state: TaskState): string {
   if (state === 'done') return 'complete';
@@ -119,6 +120,22 @@ export function onProjectDrift(fn: DriftListener): () => void {
 export function onSyncFailure(fn: SyncFailureListener): () => void {
   failureListeners.add(fn);
   return () => { failureListeners.delete(fn); };
+}
+
+/**
+ * Store the reconciled list, and say so when this device could not.
+ *
+ * `hydrateProjects` returns whether the write landed. A failed write (quota —
+ * one live build carries a 30 KB prompt inside a 114 KB tree, so this is a real
+ * budget) leaves the OLD value in localStorage, which means the page is now
+ * showing a copy older than the answer we just fetched successfully. No sync
+ * failure fires on that path, because the sync did not fail: this is the one
+ * place that can notice.
+ */
+function storeReconciled(list: StudentProject[]): boolean {
+  const ok = hydrateProjects(list);
+  markStored(ok);
+  return ok;
 }
 
 /** Report a real (non-404) sync failure: structured console error + listeners. */
@@ -253,8 +270,7 @@ export async function hydrateProjectById(projectId: string): Promise<boolean> {
     const already = local.some((p) => p.id === tree.id || p.pipelineProjectId === tree.id);
     if (already) return false;
 
-    const { backendTreeToProject } = await import('./projectHydrate');
-    hydrateProjects([...local, backendTreeToProject(tree)]);
+    storeReconciled([...local, backendTreeToProject(tree)]);
     return true;
   } catch (err) {
     reportFailure('pull', err);
@@ -287,7 +303,7 @@ export async function refreshProjectById(projectId: string): Promise<boolean> {
     const tree = (res.data && Array.isArray(res.data.lists)) ? (res.data as BackendProjectTree) : null;
     if (!tree) return false;
     const { next, changed } = reconcileProjects(loadProjects(), tree, UNKNOWN_INVENTORY);
-    if (changed) hydrateProjects(next);
+    if (changed) storeReconciled(next);
     return changed;
   } catch (err) {
     reportFailure('pull', err);
@@ -403,7 +419,7 @@ async function reconcileFromBackend(): Promise<void> {
         },
       }));
     }
-    if (changed) hydrateProjects(next);
+    if (changed) storeReconciled(next);
 
     // Inside the try, but deliberately last: every projects-page load ends by
     // giving a card to any live server project this device still lacks.
@@ -413,8 +429,19 @@ async function reconcileFromBackend(): Promise<void> {
     // a published build (STORY-000 and all) that was not the active one at pull
     // time, so the active-project path above never handed it its tree.
     await refreshHeldLocalPlaceholders();
+
+    // THE SERVER WAS REACHED AND ITS ANSWER IS STORED. Stamped last, so it
+    // covers the whole pull rather than the first write in it, and it is
+    // `markConfirmed` rather than a bare timestamp because that function
+    // declines to stamp when a write along the way did not land.
+    markConfirmed();
   } catch (err) {
     reportFailure('pull', err);
+    // The page is about to keep rendering the copy it already had, which is the
+    // documented and correct fallback. What was missing is that the student was
+    // never told. A 404 is excluded for the same reason reportFailure excludes
+    // it: a flag-gated-off API is not a stale copy.
+    if (!isApiDisabled(err)) markStale('pull_failed', statusOf(err));
   }
 }
 
@@ -472,4 +499,80 @@ export async function syncProjectsWithBackend(): Promise<void> {
  */
 export async function refreshProjectsFromBackend(): Promise<void> {
   await reconcileFromBackend();
+}
+
+/**
+ * THE RECOVERY: replace ONE project's local card with the server's copy.
+ *
+ * This is what an incognito window did for Mihret on 2026-10-21, made into a
+ * button. An empty store forces the hydrate path, so the server's real story
+ * text appears; her normal window kept the device's copy and no amount of
+ * refreshing changed that. `adoptServerContent` now keeps content current on
+ * the ordinary pull, so this is the escape hatch rather than the fix — but it
+ * is the escape hatch a student can actually reach, which "open a private
+ * window" is not.
+ *
+ * FETCH FIRST, THEN REPLACE. The ticket asked for a button that "clears the
+ * local copy and refetches", and in that order it is a trap: if the refetch
+ * then fails, the student is left with nothing where they previously at least
+ * had stale work. Nothing local is touched until the server's tree is in hand.
+ *
+ * SCOPED TO ONE PROJECT. Rebuilding the whole list from the server would delete
+ * any build that exists only in this browser, which is a real state — a project
+ * created offline, or one whose mirror has been failing. The banner that calls
+ * this is on a single workspace, so this replaces a single card and leaves every
+ * other one alone.
+ *
+ * WHAT IT PRESERVES. Local completions the server has not echoed yet are
+ * carried across, keeping the monotonic rule the overlay uses: the server may
+ * mark a story done, never undo one.
+ *
+ * And the card's IDENTITY, which is the store's to decide and not this
+ * function's. `read()` heals a pseudo id to the server uuid and folds the old
+ * one into `legacyIds`, so a bookmarked `/workspace/p1786.../STORY-000` keeps
+ * resolving. Rebuilding from `backendTreeToProject` alone would drop those
+ * aliases and strand a student on the URL they are sitting on, mid-recovery,
+ * which is a worse outcome than the staleness they clicked the button to fix.
+ *
+ * Returns whether the fresh copy is now stored.
+ */
+export async function refetchProjectFromServer(projectId: string): Promise<boolean> {
+  try {
+    const res = await portalApi.get(`/api/portal/projects/${encodeURIComponent(projectId)}`);
+    const tree = (res.data && Array.isArray(res.data.lists)) ? (res.data as BackendProjectTree) : null;
+    if (!tree) return false;
+
+    const local = loadProjects();
+    const target = local.find((p) => p.id === tree.id || p.pipelineProjectId === tree.id);
+
+    const localDone = new Set<string>();
+    if (target) {
+      for (const l of target.lists) for (const t of l.tasks) {
+        if (t.state === 'done') localDone.add(taskKey(t));
+      }
+    }
+
+    const fresh = backendTreeToProject(tree);
+    const restored: StudentProject = {
+      ...fresh,
+      id: target?.id ?? fresh.id,
+      ...(target?.legacyIds ? { legacyIds: target.legacyIds } : {}),
+      ...((target && target.id !== tree.id) ? { pipelineProjectId: tree.id } : {}),
+      lists: fresh.lists.map((l) => ({
+        ...l,
+        tasks: l.tasks.map((t) => ((t.state !== 'done' && localDone.has(taskKey(t)))
+          ? { ...t, state: 'done' as TaskState, due: 'done' as TaskDue }
+          : t)),
+      })),
+    };
+
+    const next = target ? local.map((p) => (p === target ? restored : p)) : [...local, restored];
+    const ok = storeReconciled(next);
+    if (ok) markConfirmed();
+    return ok;
+  } catch (err) {
+    reportFailure('pull', err);
+    if (!isApiDisabled(err)) markStale('pull_failed', statusOf(err));
+    return false;
+  }
 }
