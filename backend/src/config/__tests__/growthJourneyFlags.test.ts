@@ -175,7 +175,7 @@ describe('the property names do not collide with Explorer’s sub-flags', () => 
     // Exactly the pattern explorerGrowthFlags.test.ts applies to every file:
     // `\.${prop}\b`. If this ever matches, the acceptance criterion "the
     // existing Explorer guard stays green with no new ALLOWED entry" is false.
-    expect(EXPLORER_SUB_FLAGS.length).toBe(9); // non-vacuity: the list is real
+    expect(EXPLORER_SUB_FLAGS.length).toBe(10); // non-vacuity: the list is real
     for (const prop of EXPLORER_SUB_FLAGS) {
       expect(MODULE_SRC).not.toMatch(new RegExp(`\\.${prop}\\b`));
       expect(ENV_SRC).not.toMatch(new RegExp(`\\.${prop}\\b`));
