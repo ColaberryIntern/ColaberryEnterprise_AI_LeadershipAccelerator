@@ -89,4 +89,38 @@ describe('we do not certify anyone', () => {
     expect(code).toContain('Preparation complete');
     expect(code).toContain('Preparation not yet complete');
   });
+
+  // THE GUARD ABOVE IS NOT ENOUGH, AND THIS IS WHY IT NEEDS A SECOND ONE.
+  //
+  // `/>\s*Certified\s*</` and `/Not yet certified/` describe the two strings that one
+  // fix removed from one table column. They do not describe the rule. Both passed in
+  // CI while three sentences of live copy still told a sponsor we had certified their
+  // named employees:
+  //
+  //   "...climbed high enough, and certified - they are the people to put on stage"
+  //   "As your team ships projects and certifies, standouts will surface here."
+  //   "{certifiedCount} of {participants.length} active builders certified so far."
+  //
+  // The third is the serious one: a computed number asserting a credential beside real
+  // names, rendered as "3 of 10 active builders certified so far". A guard that only
+  // knows the phrasing it was written against stops guarding the moment someone
+  // rephrases - which is what happened here, in the same file, in the same PR.
+  //
+  // So this asserts on the claim rather than on a phrasing. The word legitimately
+  // appears in the data contract (the API sends `cert_earned`; this page carries it as
+  // a `certified` flag and a table key), so those tokens are removed first and
+  // ANYTHING still containing "certif", in any casing, fails.
+  it('does not claim a credential in any phrasing, only in field names', () => {
+    const CONTRACT_TOKENS = [
+      /\.certified\b/g, // reads of the flag: p.certified, row.certified
+      /'certified'/g, // the table column key
+      /\bcertified\b(?=\s*[:?])/g, // type members and object literals: `certified: true`
+      /\bcert_earned\b/g, // the API field this maps from
+    ];
+    let prose = code;
+    for (const token of CONTRACT_TOKENS) prose = prose.replace(token, ' ');
+
+    const claims = [...prose.matchAll(/[^\n]*certif[^\n]*/gi)].map((m) => m[0].trim());
+    expect(claims).toEqual([]);
+  });
 });

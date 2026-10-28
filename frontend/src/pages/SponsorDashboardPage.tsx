@@ -472,7 +472,12 @@ function SponsorDashboardPage() {
     [view.participants]
   );
 
-  const certifiedCount = useMemo(
+  // Named for what the field records, not for what the old copy claimed. The underlying
+  // `certified` flag is the API's `cert_earned`, which tracks completion of OUR
+  // preparation track; it is not a credential we issue. This count is rendered in prose
+  // beside named employees, so the name it carries here is the name the next edit reaches
+  // for.
+  const prepCompleteCount = useMemo(
     () => view.participants.filter((p) => p.certified).length,
     [view.participants]
   );
@@ -681,8 +686,9 @@ function SponsorDashboardPage() {
           <Badge solid>Demo Day candidates</Badge>
           <h2 style={{ marginTop: 'var(--space-3)' }}>Your standouts, ready to present.</h2>
           <p>
-            These builders have shipped enough, climbed high enough, and certified — they are the people to put on
-            stage at Demo Day. This is talent discovery in action: proof of who can actually build with AI.
+            These builders have shipped enough, climbed high enough, and finished the preparation track — they are
+            the people to put on stage at Demo Day. This is talent discovery in action: proof of who can actually
+            build with AI.
           </p>
         </div>
 
@@ -714,7 +720,8 @@ function SponsorDashboardPage() {
           </div>
         ) : (
           <Card className="cbsd-dd-empty" elevation="sm">
-            No Demo Day candidates yet. As your team ships projects and certifies, standouts will surface here.
+            No Demo Day candidates yet. As your team ships projects and finishes the preparation track, standouts
+            will surface here.
           </Card>
         )}
       </section>
@@ -724,8 +731,8 @@ function SponsorDashboardPage() {
         <div className="cbsd-sec">
           <h2>Your sponsored team</h2>
           <p>
-            {certifiedCount} of {view.participants.length} active builders certified so far. Ranked by points
-            earned in {view.season}. Points come from shipping, not watching.
+            {prepCompleteCount} of {view.participants.length} active builders have completed the preparation
+            track so far. Ranked by points earned in {view.season}. Points come from shipping, not watching.
           </p>
         </div>
 
