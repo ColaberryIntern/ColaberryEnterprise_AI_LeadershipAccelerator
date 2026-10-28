@@ -9,36 +9,57 @@
  * criterion down with it and the next build says so. This is the same reason C8.12's
  * data module refuses to render a baseline that holds only zeros.
  *
- * ## The guard that matters most
+ * ## The two guards that matter most
  *
- * `assertDisqualifiedAreNotHidden`. Two of the ten fail the ticket's own L&D
- * disqualifier, and the tempting move - the one that makes the artifact look finished -
- * is to quietly drop them to nine, or to quietly keep them and not mention it. Both
- * would answer a question Ali reserved for himself: the ticket says in as many words
- * that what he needs to decide is "the final ten and the order". So the build fails if
- * a disqualified company is absent from the list AND absent from the exceptions, and it
- * fails if the headline count is presented as ten clean targets when it is not.
+ * `assertOverturnedFindingsStayVisible`. Ali refined the L&D disqualifier on 2026-10-28
+ * and the refinement returns two companies the literal wording had cut. The cheap way to
+ * apply that is to flip two verdicts and ship a clean list, which would delete the
+ * finding that prompted the decision. So `disq.ld` is frozen as found and `disq.capability`
+ * carries the disqualifier; the build fails if a company whose L&D finding was overturned
+ * does not say so and does not carry the standing reason to watch it.
+ *
+ * `assertTheDisqualifierStillFilters`. A criterion can be refined until it excludes
+ * nobody, and a disqualifier that disqualifies nobody is decoration presented as
+ * diligence. No AI curriculum was found at any of the ten, so a literal "already runs an
+ * AI program" test would have passed the whole list. The build fails if the refined
+ * wording ever clears all ten.
  */
 const D = require('./c613Data');
 
-/** Convenience views over the ten. */
-const DISQUALIFIED = D.COMPANIES.filter((c) => c.disq && c.disq.ld
-  && c.disq.ld.verdict === 'DISQUALIFIED');
-const UNRESOLVED = D.COMPANIES.filter((c) => c.disq && c.disq.ld
-  && c.disq.ld.verdict === 'UNRESOLVED');
-const CLEAN = D.COMPANIES.filter((c) => c.disq && c.disq.ld
-  && c.disq.ld.verdict === 'PASSES'
-  && c.disq.aiLeader && c.disq.aiLeader.verdict !== 'DISQUALIFIED');
+/**
+ * Companies at a given disqualifier verdict, recomputed on every call.
+ *
+ * The guards below call this rather than reading a view captured at module load. A
+ * snapshot taken at require time cannot see a verdict that changed afterwards, so a
+ * guard built on one silently stops guarding - which is exactly how the
+ * "still filters" check failed its own mutation test before this existed.
+ */
+const atCapability = (v) => D.COMPANIES.filter((c) => c.disq && c.disq.capability
+  && c.disq.capability.verdict === v);
+
+/**
+ * Convenience views for the renderer. These read `disq.capability` - the disqualifier as
+ * Ali settled it - not `disq.ld`, which is the underlying finding and is never used to
+ * pass or fail a row.
+ */
+const DISQUALIFIED = atCapability('DISQUALIFIED');
+const UNRESOLVED = atCapability('UNRESOLVED');
+const CLEAN = atCapability('PASSES').filter((c) => c.disq.aiLeader
+  && c.disq.aiLeader.verdict !== 'DISQUALIFIED');
 const WITH_REQ = D.COMPANIES.filter((c) => c.req && c.req.verdict === 'YES');
+
+/** Passing companies whose L&D finding was a disqualification under the literal wording. */
+const OVERTURNED = atCapability('PASSES').filter((c) => c.disq.ld
+  && c.disq.ld.verdict === 'DISQUALIFIED');
 
 /**
  * The ticket's acceptance criteria, verbatim, each scored from the data.
  *
- * Criterion 3 is deliberately not scorable as MET or UNMET. The ticket asks that each
- * company be CHECKED against the disqualifiers, and each has been; what the check
- * returned is that two fail. Reporting that as MET would hide the finding, and
- * reporting it as UNMET would imply the work was not done. It is reported as what it
- * is.
+ * Criterion 3 is now scorable, and it was not before. The ticket asks that each company
+ * be checked against the disqualifiers; all ten were, the check failed three under the
+ * ticket's literal wording, and that wording was the open question. Ali settled it on
+ * 2026-10-28, so the criterion is MET against a disqualifier that is now stated rather
+ * than inferred - and the three findings that forced the question are still reported.
  */
 function criteria() {
   const verified = D.COMPANIES.filter((c) => c.ceo.emailStatus === 'verified'
@@ -72,15 +93,23 @@ function criteria() {
       n: 3,
       text: 'Each checked against the disqualifiers: no VP of AI in post, no full talent '
         + 'plus L&D function',
-      verdict: 'CHECKED - ' + DISQUALIFIED.length + ' FAIL, ' + UNRESOLVED.length
-        + ' UNRESOLVED',
+      verdict: DISQUALIFIED.length + UNRESOLVED.length > 0 && CLEAN.length > 0
+        ? 'MET' : 'UNMET',
       evidence: 'All ten checked against both disqualifiers. The AI-leadership check is '
-        + 'clean across the list (one WATCH: Lindsay’s CIO has AI inside her remit). '
-        + 'The L&D check, which had never been run properly, disqualifies '
-        + DISQUALIFIED.map((c) => c.name).join(' and ') + ', and cannot be resolved for '
-        + UNRESOLVED.map((c) => c.name).join(', ') + '.',
-      decision: 'Whether those companies stay is Ali’s call, not the build’s. The '
-        + 'ticket reserves "the final ten and the order" to him explicitly.',
+        + 'clean across the list (one WATCH: Lindsay’s CIO has AI inside her remit). The '
+        + 'L&D check, which had never been run properly, disqualifies '
+        + DISQUALIFIED.map((c) => c.name).join(' and ') + '. ' + CLEAN.length
+        + ' of the ten clear both.',
+      note: 'The L&D wording was the open question and is now settled. The ticket read '
+        + '"no full talent plus L&D function"; run literally it failed three, including '
+        + 'the best-fitting company on the list. Ali chose the refined reading on '
+        + D.DISQ_LD.decidedOn + ': ' + D.DISQ_LD.wording,
+      decision: OVERTURNED.length
+        ? 'The refinement returns ' + OVERTURNED.map((c) => c.name).join(' and ')
+          + ', whose L&D findings are unchanged and reported in full below. '
+          + D.DISQ_LD.evidenceLimit + ' The order of approach remains Ali’s, and is the '
+          + 'half of "the final ten and the order" still outstanding.'
+        : 'The order of approach remains Ali’s.',
     },
     {
       n: 4,
@@ -104,8 +133,11 @@ function assertNoPendingFields() {
     for (const k of ['employees', 'commitment', 'disq']) {
       if (c[k] === D.PENDING) bad.push(c.name + '.' + k);
     }
-    if (c.disq && c.disq !== D.PENDING && c.disq.ld === D.PENDING) {
-      bad.push(c.name + '.disq.ld');
+    if (c.disq && c.disq !== D.PENDING) {
+      if (c.disq.ld === D.PENDING) bad.push(c.name + '.disq.ld');
+      if (!c.disq.capability || c.disq.capability === D.PENDING) {
+        bad.push(c.name + '.disq.capability');
+      }
     }
   }
   if (bad.length) {
@@ -160,10 +192,55 @@ function assertDisqualifiedAreNotHidden() {
     throw new Error('Expected ten companies, found ' + D.COMPANIES.length
       + '. A row was added or dropped without a decision being recorded.');
   }
-  for (const c of DISQUALIFIED) {
-    if (!c.disq.ld.detail) {
+  for (const c of atCapability('DISQUALIFIED')) {
+    if (!c.disq.capability.detail) {
       throw new Error(c.name + ' is marked disqualified with no reason given.');
     }
+  }
+}
+
+/**
+ * A refined criterion must not quietly delete the evidence that forced the refinement.
+ * Every company the refinement returns has to say that it was overturned and carry the
+ * standing reason to watch it, so the next person reading this list sees the same
+ * finding Ali saw when he decided.
+ */
+function assertOverturnedFindingsStayVisible() {
+  const overturned = atCapability('PASSES').filter((c) => c.disq.ld
+    && c.disq.ld.verdict === 'DISQUALIFIED');
+  for (const c of overturned) {
+    const cap = c.disq.capability;
+    if (!cap.overturnedBy || !cap.watch) {
+      throw new Error(c.name + ' passes a disqualifier it previously failed with no '
+        + 'record of the overturn and no standing watch. Refining a criterion is '
+        + 'allowed; losing the finding that prompted it is not.');
+    }
+  }
+
+  // The check above keys on the L&D finding, so softening that finding would quietly
+  // exempt a company from it - the one edit that erases an overturn without tripping
+  // anything. An overturn record is therefore binding in the other direction too: claim
+  // one and the finding it overturned has to still be on the page.
+  for (const c of D.COMPANIES) {
+    const cap = c.disq && c.disq.capability;
+    if (cap && cap.overturnedBy && c.disq.ld.verdict !== 'DISQUALIFIED') {
+      throw new Error(c.name + ' records an overturned disqualification but its L&D '
+        + 'finding no longer reads DISQUALIFIED. The finding and the overturn must '
+        + 'agree, or the refinement has been used to rewrite the evidence.');
+    }
+  }
+}
+
+/**
+ * A disqualifier that disqualifies nobody is decoration presented as diligence. If the
+ * refined wording ever clears all ten, it has stopped being a filter and the document
+ * must not claim the list was screened.
+ */
+function assertTheDisqualifierStillFilters() {
+  if (atCapability('DISQUALIFIED').length === 0) {
+    throw new Error('The refined L&D disqualifier excludes nobody. A criterion that '
+      + 'passes every candidate is not a screen - either the wording has been loosened '
+      + 'past usefulness or the evidence was not gathered.');
   }
 }
 
@@ -174,9 +251,11 @@ function assertAllGuards() {
   assertEveryNegativeHasAControl();
   assertNoGuessedEmail();
   assertDisqualifiedAreNotHidden();
+  assertOverturnedFindingsStayVisible();
+  assertTheDisqualifierStillFilters();
   return DISQUALIFIED.length + UNRESOLVED.length;
 }
 
 module.exports = {
-  criteria, assertAllGuards, DISQUALIFIED, UNRESOLVED, CLEAN, WITH_REQ,
+  criteria, assertAllGuards, DISQUALIFIED, UNRESOLVED, CLEAN, WITH_REQ, OVERTURNED,
 };

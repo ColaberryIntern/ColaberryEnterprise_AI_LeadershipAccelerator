@@ -10,8 +10,17 @@
  * Field contract, shared with c613CompaniesOperating:
  *   commitment { quote, who, whoTitle, date, sourceType, source, url, caveat? }
  *   req        { verdict: YES|NO, ... ; a NO MUST carry control + controlUrl }
- *   disq       { aiLeader: {verdict, detail}, ld: {verdict, detail, ...} }
+ *   disq       { aiLeader: {verdict, detail},
+ *                ld:         {verdict, detail, ...}   the L&D FINDING, recorded as found
+ *                capability: {verdict, detail, ...}   the DISQUALIFIER, as Ali settled it }
  * c613Criteria enforces all three.
+ *
+ * `ld` and `capability` are deliberately separate. Ali refined the disqualifier on
+ * 2026-10-28 (see c613Constants.DISQ_LD), and the easy way to apply that would have been
+ * to flip two verdicts from DISQUALIFIED to PASSES. That would have erased the evidence
+ * that prompted the refinement. The L&D finding stays exactly as it was found; the
+ * disqualifier is now a second, narrower verdict over it, and the build fails if a
+ * company whose L&D finding was overturned does not carry a stated reason.
  */
 const FINANCIAL = [
   {
@@ -72,6 +81,12 @@ const FINANCIAL = [
           + 'learning organization; discrete training-specialist roles exist, such as a '
           + 'Commercial Training Specialist in Kansas City, but there is no training org '
           + 'behind them.',
+      },
+      capability: {
+        verdict: 'PASSES',
+        detail: 'No enterprise learning organization. The discrete training-specialist '
+          + 'seats sit inside Total Rewards with no platform, no curriculum ownership '
+          + 'and nothing above them to scale a program from.',
       },
     },
   },
@@ -134,6 +149,12 @@ const FINANCIAL = [
           + 'criterion. The 10-K describes only tuition reimbursement for continued '
           + 'education and educational seminars run by outside parties. No internal '
           + 'learning organization, no academy, no CLO.',
+      },
+      capability: {
+        verdict: 'PASSES',
+        detail: 'Nothing to build with. Continued education is tuition reimbursement '
+          + 'and seminars run by outside parties - Cass buys capability rather than '
+          + 'building it, which is the behavior this offer is sold into.',
       },
     },
   },
@@ -203,6 +224,13 @@ const FINANCIAL = [
           + 'agent and field-sales channel, not corporate employees. No corporate '
           + 'university.',
       },
+      capability: {
+        verdict: 'PASSES',
+        detail: 'The field-learning machinery is real but channel-scoped: it exists to '
+          + 'make insurance agents sell, and it carries no technical or professional '
+          + 'curriculum for the roughly 1,800 corporate employees who would be the '
+          + 'subject of an AI program.',
+      },
     },
   },
   {
@@ -263,6 +291,12 @@ const FINANCIAL = [
           + 'named program anywhere is in the 2025 annual report: "We completed our '
           + 'Emerging Leaders Program". Set against the 400 staff they convened for AI '
           + 'enablement, that is appetite without the machinery to satisfy it.',
+      },
+      capability: {
+        verdict: 'PASSES',
+        detail: 'One completed leadership cohort against 400 staff convened for AI '
+          + 'enablement. The gap between what they have assembled an audience for and '
+          + 'what they can deliver to it is the clearest on the list.',
       },
     },
   },
@@ -332,6 +366,20 @@ const FINANCIAL = [
           + '3,300 corporate employees, so a corporate-employee gap may still exist. It '
           + 'does not change the verdict on the criterion as written: a company with '
           + 'fifteen consecutive years of training awards will build this itself.',
+      },
+      capability: {
+        verdict: 'DISQUALIFIED',
+        detail: 'The only company on the list that fails the refined test as well as '
+          + 'the literal one. CNO owns the full stack an enterprise learning '
+          + 'organization is made of: a Cornerstone LMS it runs itself, a Senior '
+          + 'Director of Field Learning Strategy owning curriculum, and fifteen '
+          + 'consecutive years of Training magazine recognition. Fifteen years of '
+          + 'standing up programs annually is demonstrated capacity to stand up '
+          + 'this one.',
+        evidenceLimit: 'No AI curriculum was found at CNO. It is disqualified on '
+          + 'demonstrated capacity to build, not on an AI program already running - '
+          + 'the distinction the refined wording turns on, and the reason that wording '
+          + 'is about scale rather than about the word "AI".',
       },
     },
   },

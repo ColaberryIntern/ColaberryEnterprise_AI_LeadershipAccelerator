@@ -19,11 +19,11 @@
  * ## The order
  *
  * `rank` is the order the companies were assembled in, not a recommended sequence of
- * approach. The ticket reserves the order to Ali, and three of the ten now carry a
- * failed disqualifier, so proposing a sequence here would pre-empt a decision that is
- * his.
+ * approach. The ticket reserves the order to Ali in as many words, so proposing a
+ * sequence here would pre-empt it. He settled the disqualifier on 2026-10-28; the order
+ * is the half of that sentence still outstanding.
  */
-const { OBSERVED, CAMPAIGN_ID, PENDING } = require('./c613Constants');
+const { OBSERVED, CAMPAIGN_ID, PENDING, DISQ_LD } = require('./c613Constants');
 const { FINANCIAL } = require('./c613CompaniesFinancial');
 const { OPERATING } = require('./c613CompaniesOperating');
 
@@ -36,8 +36,11 @@ const CAMPAIGN = {
   status: 'draft',
   qaStatus: 'untested',
   approvalStatus: 'approved',
+  // The ceiling lives in campaigns.budget_cap. budget_total is null on this row, and an
+  // earlier revision of this file labeled the 500.00 as budget_total - right number,
+  // wrong column, in a document whose whole claim is that its figures are checkable.
   budgetSpent: '0.00',
-  budgetTotal: '500.00',
+  budgetCap: '500.00',
   activationGate: { claims_approved: false, dry_run_reviewed: false },
   enrolled: 10,
   touchpoints: 0,
@@ -58,4 +61,4 @@ const MUST_HAVE = [
 
 const COMPANIES = [...FINANCIAL, ...OPERATING];
 
-module.exports = { OBSERVED, CAMPAIGN, MUST_HAVE, COMPANIES, PENDING };
+module.exports = { OBSERVED, CAMPAIGN, MUST_HAVE, COMPANIES, PENDING, DISQ_LD };
