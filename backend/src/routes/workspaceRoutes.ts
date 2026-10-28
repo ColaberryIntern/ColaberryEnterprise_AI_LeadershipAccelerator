@@ -348,6 +348,21 @@ router.post('/api/portal/workspace/repo/sync', requireParticipant, async (req, r
       documents = { outcome: 'write_failed', error_class: 'Unexpected', commit_sha: null, changed_paths: [] };
     }
 
+    // GOV BUILD COCKPIT fallback - the same commit-to-evidence matcher the push
+    // webhook runs (webhookRoutes step 5), for a gov repo whose hook was registered
+    // after its pushes, or never. Without it, "Sync from GitHub" did nothing for a
+    // gov student: verify / enrichment / doc-refresh above are the SBP path, and the
+    // gov matcher only ran on the webhook. Idempotent (dedup on story + full sha) and
+    // best-effort; it never fails the sync.
+    if (view?.repo_owner && view?.repo_name) {
+      try {
+        const { syncGovCommitsFromRepo } = await import('../services/factory/govBuildCommitSync');
+        await syncGovCommitsFromRepo(view.repo_owner, view.repo_name, correlationId);
+      } catch (govErr: any) {
+        logError('workspace_gov_commit_sync_failed', req, govErr);
+      }
+    }
+
     // Hosting check, detached. Sync is the other natural "something changed, go
     // and look again" moment, and covering it matters: a student who enables
     // Pages and never pushes again would otherwise never get their link. It runs

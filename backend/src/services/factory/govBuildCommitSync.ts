@@ -148,3 +148,27 @@ export async function matchCommitsToGovStories(
   }
   return result;
 }
+
+/**
+ * Manual-sync fallback for the gov completion loop. The push webhook (webhookRoutes step 5)
+ * catches each push live, but a repo whose hook was registered AFTER its pushes - or never -
+ * never fires it, and "Sync from GitHub" is the documented fallback trigger for the SBP path.
+ * It was NOT a trigger here, so a gov student whose hook missed their pushes got no commit
+ * evidence from the button. This resolves the repo to its gov delivery project, reads recent
+ * commits with FULL shas (so dedup matches the webhook), and runs the same idempotent,
+ * assigned-only, credit-bound matcher. Returns null when the repo is not a gov build repo (the
+ * common SBP case) so the caller can no-op quietly. Best-effort: the reader and matcher both
+ * classify their own failures and never throw into the sync.
+ */
+export async function syncGovCommitsFromRepo(
+  owner: string,
+  repo: string,
+  correlationId?: string,
+): Promise<GovCommitMatchResult | null> {
+  if (!owner || !repo) return null;
+  const deliveryProjectId = await resolveGovDeliveryProjectForRepo(owner, repo);
+  if (!deliveryProjectId) return null;
+  const { listRepoCommitsForMatch } = await import('../sbp/verification/repoProgressReader');
+  const commits = await listRepoCommitsForMatch(owner, repo, correlationId);
+  return matchCommitsToGovStories(deliveryProjectId, commits, { owner, name: repo });
+}
