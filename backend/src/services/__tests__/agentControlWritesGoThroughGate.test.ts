@@ -194,10 +194,20 @@ describe('agent run-completion writes go through the control gate', () => {
     // agentRunTracker records counts, timings and last_error but never a status, so it cannot
     // erase a pause and needs no gate. Pinned so that a later change adding a status write to
     // it has to come past the first assertion in this file.
-    const src = read('agentRunTracker.ts');
+    //
+    // Scoped to the update CALLS rather than the raw file text. The first version of this
+    // assertion did a substring match over the whole source and went red the moment a comment
+    // in that file EXPLAINED which status must not be written. A check that a comment can
+    // break is also a check a differently-quoted write can slip past, so the text match was
+    // the wrong instrument in both directions.
+    const calls = instanceUpdateCalls(read('agentRunTracker.ts'));
+    expect(calls.length).toBeGreaterThanOrEqual(2); // success and failure, or the scan missed one
 
-    COMPLETION_STATUSES.forEach((status) => {
-      expect(src).not.toContain(`status: '${status}'`);
+    calls.forEach((call) => {
+      COMPLETION_STATUSES.forEach((status) => {
+        expect(call).not.toContain(`status: '${status}'`);
+      });
+      expect(call).not.toContain('status:');
     });
   });
 
