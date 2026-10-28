@@ -38,3 +38,6 @@
 .cm-ag-walk{align-self:flex-start;background:none;border:0;padding:2px 0 0;color:var(--cm-art-red);font:700 12.5px 'DM Sans',system-ui,sans-serif;cursor:pointer}
 .cm-r3-screen .cm-ev-board-rows .cm-ag-row{font-size:calc(var(--fw) * .014);padding:calc(var(--fw) * .005) 0;color:var(--cm-art-sp-ink)}
 .cm-r3-screen .cm-ag-act{height:calc(var(--fw) * .03);font-size:calc(var(--fw) * .013);padding:0 calc(var(--fw) * .012)}
+/* C80: the Schedule board's three small buttons (Calendar, Events, Today), one row, each a third of the old single button */
+.cm-r3-screen .cm-ag-btns{flex-wrap:nowrap;gap:calc(var(--fw) * .012)}
+.cm-r3-screen .cm-ag-btns .b{flex:1 1 0;min-width:0;height:calc(var(--fw) * .05 * var(--fit));font-size:calc(var(--fw) * .022 * var(--fit));padding:0 calc(var(--fw) * .012 * var(--fit))}

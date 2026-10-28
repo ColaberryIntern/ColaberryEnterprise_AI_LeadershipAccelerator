@@ -29,7 +29,7 @@ import CampusLayers from '../CampusLayers';
 // eslint-disable-next-line import/first
 import { CAMPUS_SETTINGS_KEY } from '../campusSettings';
 // eslint-disable-next-line import/first
-import { DOOR_FALLBACK_MS } from '../CampusDoorTransition';
+import { DOOR_FALLBACK_MS, doorState } from '../CampusDoorTransition';
 // eslint-disable-next-line import/first
 import { ParticipantAuthProvider } from '../../../contexts/ParticipantAuthContext';
 // eslint-disable-next-line import/first
@@ -178,5 +178,16 @@ describe('step outside (WP-1: lands on the campus home)', () => {
     expect(container.querySelector('[data-testid="cm-door"]')).toBeNull();
     expect(campus().door).toBeNull();
     expect(animateCalls).toBe(0);
+  });
+});
+
+// C79 (Ali 2026-10-27): a lesson opened inside the Schedule said "Classroom"; from the campus home the door carries the building
+describe('what the door hands the page (doorState)', () => {
+  it('from the campus home, standing in a building: the home and that building', () => {
+    expect(doorState('/portal/campus', '', 'tower')).toEqual({ from: '/portal/campus', at: 'tower' });
+  });
+  it('from the home on the lawn, or from any page: only where it came from', () => {
+    expect(doorState('/portal/campus', '', null)).toEqual({ from: '/portal/campus' });
+    expect(doorState('/portal/today', '?stay=1', 'tower')).toEqual({ from: '/portal/today?stay=1' });
   });
 });

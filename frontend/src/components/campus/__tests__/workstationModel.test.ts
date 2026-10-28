@@ -26,6 +26,11 @@ describe('where a workstation stands', () => {
     expect(workstationBuilding('/portal/game-room', 'lecture')).toBe('lecture'); // the Game Room's cabinets open the page, not a workstation
     expect(workstationBuilding('/somewhere/else', 'lecture')).toBe('lecture');
   });
+  it('C79: opened inside a room on the campus (at), it stands in that room, whatever the page; a room without a workstation does not count', () => {
+    expect(workstationBuilding('/portal/campus', 'lecture', 'tower')).toBe('tower');
+    expect(workstationBuilding('/portal/campus', 'lecture', null)).toBe('lecture');
+    expect(workstationBuilding('/portal/campus', 'lecture', 'arcade')).toBe('lecture');
+  });
   it('C76: an item started from the Schedule stands at your planning desk there, so Stand up returns to the Schedule', () => {
     expect(workstationBuilding('/portal/schedule', 'lecture')).toBe('tower');
     expect(workstationPlace('tower', false).spot).toBe('Your planning desk');

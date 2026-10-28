@@ -59,12 +59,21 @@ export function AgendaRows({ items, place, onWalk, limit = 6 }: { items: AgendaI
   );
 }
 
+/** C80 (Ali 2026-10-27: "make that button smaller ... two buttons there each a 1/3 of the size now. One to go to Calendar. and then
+ *  another going to events. 3 buttons. buttons to get to today"): the board's one big "Open my schedule" (which opened the building's
+ *  main page, Today for Explorers) is three small buttons, each to its own page. */
+export const AGENDA_BUTTONS: { key: string; label: string; route: string }[] = [
+  { key: 'calendar', label: 'Calendar', route: '/portal/schedule' },
+  { key: 'events', label: 'Events', route: '/portal/events' },
+  { key: 'today', label: 'Today', route: '/portal/today?stay=1' },
+];
+
 /** The Schedule room's board. */
-export function AgendaBoard({ items, now, place, onWalk, onSection }: { items: AgendaItem[]; now: Date; place: (id: BuildingId) => string; onWalk: (id: BuildingId) => void; onSection: () => void }): React.ReactElement {
+export function AgendaBoard({ items, now, place, onWalk, onOpen }: { items: AgendaItem[]; now: Date; place: (id: BuildingId) => string; onWalk: (id: BuildingId) => void; onOpen: (route: string) => void }): React.ReactElement {
   const strip = weekStrip(items.map((i) => ({ starts_at: i.startIso }) as OpenHouseView), now);
   return (
     <>
-      <div className="k">Your week · classes, events &amp; sessions</div>
+      <div className="k">Your week</div>{/* C80: one line, so the board never clips its heading; the rows say which are classes, events and sessions */}
       <div className="cm-ev-strip" data-testid="cm-board-strip">
         {strip.map((d) => (
           <span key={d.ymd} className={`d${d.today ? ' is-today' : ''}`} data-has-event={d.hasEvent || undefined}>
@@ -76,7 +85,11 @@ export function AgendaBoard({ items, now, place, onWalk, onSection }: { items: A
       <ul className="cm-ev-board-rows" onClick={(e) => e.stopPropagation()}>
         {items.slice(0, 3).map((i) => <AgendaRow key={i.id} item={i} place={place} onWalk={onWalk} />)}
       </ul>
-      <div className="row"><button type="button" className="b red" onClick={stop(onSection)} data-testid="cm-board-primary">Open my schedule &rarr;</button></div>
+      <div className="row cm-ag-btns">
+        {AGENDA_BUTTONS.map((b) => (
+          <button key={b.key} type="button" className={`b${b.key === 'calendar' ? ' red' : ''}`} onClick={stop(() => onOpen(b.route))} data-testid={`cm-board-${b.key}`}>{b.label} &rarr;</button>
+        ))}
+      </div>
     </>
   );
 }

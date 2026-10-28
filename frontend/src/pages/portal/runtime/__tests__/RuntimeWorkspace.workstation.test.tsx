@@ -13,7 +13,7 @@ import { act } from 'react-dom/test-utils';
 let mockActive = true;
 const mockNav: string[] = [];
 const mockOpenMap: Array<[unknown, unknown]> = [];
-let mockLocState: { from?: string } | null = { from: '/portal/classroom' };
+let mockLocState: { from?: string; at?: string } | null = { from: '/portal/classroom' };
 const mockSaved: Array<[string, string]> = [];
 
 jest.mock('react-router-dom', () => ({
@@ -133,6 +133,16 @@ it('opened from the campus map, Stand up stands you inside the Classroom on the 
   act(() => { t('cm-ws-standup')!.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
   expect(mockOpenMap).toEqual([['lecture', 'inside']]);
   expect(mockNav[mockNav.length - 1]).toBe('/portal/campus');
+});
+
+// C79 (Ali 2026-10-27): a Today item opened inside the Schedule said "Classroom" and Stand up went to the Classroom
+it('opened inside the Schedule on the campus, it is your planning desk there: All of Schedule, and Stand up stands you in the Schedule', async () => {
+  mockLocState = { from: '/portal/campus', at: 'tower' };
+  await mount();
+  expect(t('cm-ws-section')!.textContent).toContain('All of Schedule');
+  expect(t('cm-ws-section')!.textContent).not.toContain('Classroom');
+  act(() => { t('cm-ws-standup')!.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+  expect(mockOpenMap).toEqual([['tower', 'inside']]);
 });
 
 it('with the campus off renders the classic workspace', async () => {
