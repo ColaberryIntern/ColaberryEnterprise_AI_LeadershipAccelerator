@@ -8,12 +8,15 @@ import { sequelize } from '../config/database';
 export interface CampusPresenceAttributes {
   enrollment_id: string;
   area: string;
+  /** Campus HQ: the admin sidebar page an employee has open (Management Portal heartbeat); null everywhere else. */
+  hq_path?: string | null;
   updated_at?: Date;
 }
 
 class CampusPresence extends Model<CampusPresenceAttributes> implements CampusPresenceAttributes {
   declare enrollment_id: string;
   declare area: string;
+  declare hq_path: string | null;
   declare updated_at: Date;
 }
 
@@ -21,6 +24,7 @@ CampusPresence.init(
   {
     enrollment_id: { type: DataTypes.UUID, primaryKey: true, allowNull: false },
     area: { type: DataTypes.STRING(32), allowNull: false },
+    hq_path: { type: DataTypes.STRING(128), allowNull: true },
     updated_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
   },
   {

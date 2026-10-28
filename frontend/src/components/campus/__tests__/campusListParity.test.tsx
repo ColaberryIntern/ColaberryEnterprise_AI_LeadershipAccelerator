@@ -40,7 +40,8 @@ jest.mock('../campusOnAir', () => {
   const actual = jest.requireActual('../campusOnAir');
   return { ...actual, useCampusOnAir: () => ({ broadcasts: [], buildings: new Set(['commons']) }) };
 });
-jest.mock('../campusMgmt', () => ({ useIsMgmt: () => mockMgmt, fetchIsMgmt: () => Promise.resolve(mockMgmt), __resetMgmtCacheForTests: () => undefined }));
+jest.mock('../campusMgmt', () => ({ useIsMgmt: () => mockMgmt, fetchIsMgmt: () => Promise.resolve(mockMgmt), __resetMgmtCacheForTests: () => undefined,
+  useCampusMgmt: () => ({ isMgmt: mockMgmt, label: null, sections: [], canSection: () => false }) }));
 
 // eslint-disable-next-line import/first
 import { CampusProvider, useCampus } from '../CampusContext';

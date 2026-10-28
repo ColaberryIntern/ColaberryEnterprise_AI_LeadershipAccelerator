@@ -1,0 +1,451 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Colaberry HQ Elevator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Playfair+Display:wght@600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/remixicon@4.2.0/fonts/remixicon.css" rel="stylesheet">
+<style>
+:root{
+  --ink:#16120e;--muted:#6b6258;--paper:#fbf7f0;--card:#fffdf9;--line:#e9e0d3;
+  --navy:#0e1a2c;--navy2:#13233a;--navy3:#1c3150;--brass:#c9a227;--brass2:#e6c96b;--brass3:#8c6d12;
+  --marble:#efe9df;--red:#e31b23;--red-d:#a8141a;--green:#1f8a4c;--teal:#0f766e;
+  --serif:'Playfair Display',Georgia,'Times New Roman',serif;--sans:'DM Sans',system-ui,-apple-system,Segoe UI,sans-serif;--mono:'JetBrains Mono',ui-monospace,Menlo,monospace;
+  --shadow:0 10px 30px rgba(10,16,28,.18);
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{font-family:var(--sans);color:var(--ink);background:#dfe7d6;overflow:hidden}
+button{font:inherit;cursor:pointer;border:0;background:none;color:inherit}
+:focus-visible{outline:3px solid var(--red);outline-offset:2px}
+/* ---------- top bar ---------- */
+.top{position:fixed;top:12px;left:12px;right:12px;height:52px;display:flex;align-items:center;gap:10px;z-index:30}
+.pill{height:52px;background:var(--card);border-radius:26px;box-shadow:var(--shadow);display:flex;align-items:center;gap:10px;padding:0 18px;font-weight:700;white-space:nowrap}
+.pill.back{font-weight:800}
+.pill.title{flex:1;min-width:0;gap:12px}
+.pill.title .k{font:800 11px var(--sans);letter-spacing:.16em;color:var(--brass3)}
+.pill.title b{font-family:var(--serif);font-size:20px;overflow:hidden;text-overflow:ellipsis}
+.pill.title .sync{margin-left:auto;font:600 12px var(--mono);color:var(--muted);display:flex;align-items:center;gap:6px}
+.pill.title .sync i{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 0 4px rgba(31,138,76,.15)}
+.as{display:flex;align-items:center;gap:8px}
+.as label{font:800 10.5px var(--sans);letter-spacing:.14em;color:var(--muted)}
+.as select{height:36px;border-radius:18px;border:1px solid var(--line);padding:0 12px;font:700 13px var(--sans);background:#fff}
+.srcbtn{height:36px;border-radius:18px;border:1px solid var(--line);padding:0 14px;font-weight:700;font-size:13px;background:#fff}
+.srcbtn.on{background:var(--navy);color:#fff;border-color:var(--navy)}
+/* ---------- layout ---------- */
+.wrap{position:fixed;top:76px;left:12px;right:12px;bottom:12px;display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:12px}
+.wrap.src-on{grid-template-columns:300px minmax(0,1fr) 360px}
+.stage{position:relative;border-radius:22px;overflow:hidden;box-shadow:var(--shadow);background:var(--navy)}
+.side{background:var(--card);border-radius:22px;box-shadow:var(--shadow);overflow:auto;padding:20px}
+.src{display:none;background:#111827;color:#e5e7eb;border-radius:22px;box-shadow:var(--shadow);overflow:auto;padding:16px 14px}
+.wrap.src-on .src{display:block}
+/* ---------- side panel ---------- */
+.kick{font:800 11px var(--sans);letter-spacing:.16em;color:var(--red);text-transform:uppercase}
+.side h2{font-family:var(--serif);font-size:26px;margin:4px 0 6px;line-height:1.15}
+.side p.lead{margin:0 0 14px;color:var(--muted);font-size:14px;line-height:1.5}
+.badge{position:relative;border-radius:18px;padding:16px;background:linear-gradient(135deg,var(--navy2),var(--navy));color:#fff;overflow:hidden;margin-bottom:16px}
+.badge:before{content:"";position:absolute;right:-30px;top:-30px;width:130px;height:130px;border-radius:50%;border:18px solid rgba(201,162,39,.18)}
+.badge .row{display:flex;gap:12px;align-items:center}
+.badge .ph{width:52px;height:52px;border-radius:12px;background:var(--brass);color:var(--navy);display:grid;place-items:center;font:800 18px var(--sans);flex:none}
+.badge .nm b{display:block;font-size:17px}
+.badge .nm small{color:#c9d3e3;font-size:12.5px}
+.badge .lv{margin-top:12px;font:800 10.5px var(--sans);letter-spacing:.14em;color:var(--brass2)}
+.badge .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.badge .chips span{font-size:12px;font-weight:700;border-radius:999px;padding:4px 10px;background:rgba(255,255,255,.12)}
+.badge .chips span.g{background:var(--brass);color:var(--navy)}
+.badge .strip{position:absolute;left:0;right:0;bottom:0;height:5px;background:linear-gradient(90deg,var(--red),var(--brass))}
+.sec{font:800 11px var(--sans);letter-spacing:.14em;color:var(--muted);text-transform:uppercase;margin:18px 0 8px;display:flex;align-items:center;gap:8px}
+.sec small{margin-left:auto;letter-spacing:0;text-transform:none;font-weight:600}
+.flist{display:flex;flex-direction:column;gap:6px}
+.frow{display:flex;align-items:center;gap:10px;width:100%;text-align:left;border:1px solid var(--line);border-radius:12px;padding:8px 10px;background:#fff}
+.frow:hover{border-color:var(--brass)}
+.frow .n{width:34px;height:28px;border-radius:7px;background:var(--navy);color:var(--brass2);display:grid;place-items:center;font:700 12px var(--mono);flex:none}
+.frow .t{flex:1;min-width:0}
+.frow .t b{display:block;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.frow .t small{color:var(--muted);font-size:12px}
+.frow .st{font-size:12px;font-weight:800;color:var(--green);white-space:nowrap}
+.frow.lock{background:#f4f1ec;border-color:#ece5da;cursor:not-allowed}
+.frow.lock .n{background:#d9d3ca;color:#8a8178}
+.frow.lock .t b{color:#8a8178}
+.frow.lock .st{color:var(--red)}
+.frow.here{box-shadow:0 0 0 2px var(--brass)}
+.rlist{display:flex;flex-direction:column;gap:6px}
+.rrow{display:flex;align-items:center;gap:10px;border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:#fff;width:100%;text-align:left}
+.rrow:hover{border-color:var(--red)}
+.rrow i.ic{font-size:18px;color:var(--navy3);width:22px;text-align:center}
+.rrow .t{flex:1;min-width:0}.rrow .t b{display:block;font-size:14px}.rrow .t code{font:500 11.5px var(--mono);color:var(--muted)}
+.rrow .go{font-weight:800;font-size:13px;color:var(--red);white-space:nowrap}
+.rrow.lock{background:#f4f1ec;cursor:not-allowed}.rrow.lock .t b{color:#8a8178}.rrow.lock .go{color:var(--red)}.rrow.lock i.ic{color:#b3aa9f}
+.note{font-size:12.5px;color:var(--muted);line-height:1.5;background:var(--paper);border-radius:12px;padding:10px 12px;margin-top:14px}
+.btn{height:40px;border-radius:20px;padding:0 16px;border:1px solid var(--line);background:#fff;font-weight:700;font-size:14px;display:inline-flex;align-items:center;gap:8px}
+.btn.red{background:var(--red);border-color:var(--red);color:#fff}
+.btn.brass{background:var(--brass);border-color:var(--brass);color:var(--navy)}
+.btn.navy{background:var(--navy);border-color:var(--navy);color:#fff}
+.btnrow{display:flex;gap:8px;flex-wrap:wrap}
+/* ---------- source (admin sidebar mirror) ---------- */
+.src h4{margin:0 0 2px;font-size:14px;color:#fff}
+.src .sub{font:500 11.5px var(--mono);color:#9ca3af;margin-bottom:12px}
+.src .g{margin-bottom:10px}
+.src .g .h{font:800 10.5px var(--sans);letter-spacing:.12em;color:#9ca3af;text-transform:uppercase;display:flex;gap:6px;align-items:center;padding:4px 6px}
+.src .g .h code{margin-left:auto;font:500 10px var(--mono);color:#6b7280;text-transform:none;letter-spacing:0}
+.src .l{display:flex;align-items:center;gap:8px;font-size:13px;padding:5px 8px;border-radius:8px;color:#e5e7eb}
+.src .l i{color:#9ca3af}
+.src .l.no{color:#6b7280}.src .l.no:after{content:"🔒";margin-left:auto;font-size:10px}
+.src .sim{border-top:1px solid #374151;margin-top:12px;padding-top:12px;display:flex;flex-direction:column;gap:6px}
+.src .sim button{text-align:left;font-size:12.5px;font-weight:700;color:#fde68a;background:#1f2937;border-radius:8px;padding:8px 10px}
+/* ---------- scenes ---------- */
+.scene{position:absolute;inset:0;display:none}
+.scene.on{display:block;animation:fade .35s ease}
+@keyframes fade{from{opacity:0}}
+/* exterior */
+.ext{background:linear-gradient(180deg,#a9c6dd 0%,#d7e4ea 55%,#dfe7d6 56%,#cfd9c4 100%)}
+.ext.night{background:linear-gradient(180deg,#0b1430 0%,#1d2a4e 55%,#2a3a2a 56%,#1e2a1e 100%)}
+.ext svg{position:absolute;left:50%;bottom:6%;transform:translateX(-50%);height:88%;max-width:96%}
+.ext .flr{cursor:pointer}
+.ext .flr:hover .bandhi{opacity:1}
+.ext .cta{position:absolute;left:24px;bottom:24px;display:flex;gap:10px;align-items:center}
+.ext .legend{position:absolute;right:20px;top:20px;background:rgba(255,253,249,.92);border-radius:14px;padding:10px 14px;font-size:12.5px;line-height:1.7;box-shadow:var(--shadow)}
+.ext .legend i{display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:-2px;margin-right:6px}
+.tip{position:absolute;pointer-events:none;background:var(--navy);color:#fff;border-radius:10px;padding:8px 12px;font-size:13px;box-shadow:var(--shadow);display:none;z-index:9;max-width:260px}
+.tip b{display:block}.tip small{color:#c9d3e3}
+/* lobby */
+.lobby{background:var(--navy)}
+.lobby .wall{position:absolute;left:0;right:0;top:0;height:68%;background:
+  repeating-linear-gradient(90deg,transparent 0 118px,rgba(201,162,39,.35) 118px 120px),linear-gradient(180deg,#13233a,#0e1a2c)}
+.lobby .cornice{position:absolute;left:0;right:0;top:0;height:16px;background:linear-gradient(180deg,var(--brass2),var(--brass3))}
+.lobby .floor{position:absolute;left:0;right:0;bottom:0;height:32%;background:
+  linear-gradient(180deg,rgba(14,26,44,.55),rgba(14,26,44,0) 40%),
+  repeating-linear-gradient(115deg,rgba(255,255,255,.0) 0 60px,rgba(140,120,90,.08) 60px 62px),
+  linear-gradient(180deg,#e9e2d6,#d8cfc0);border-top:6px solid var(--brass3)}
+.lobby .floor:after{content:"";position:absolute;left:50%;top:18%;width:46%;height:60%;transform:translateX(-50%);border-radius:50%;background:radial-gradient(ellipse,rgba(227,27,35,.18),transparent 70%)}
+.sign{position:absolute;left:50%;top:5%;transform:translateX(-50%);text-align:center;color:var(--brass2);text-shadow:0 2px 0 rgba(0,0,0,.4)}
+.sign .w{font-family:var(--serif);font-weight:800;font-size:clamp(26px,3.6vw,52px);letter-spacing:.22em}
+.sign .w .c{color:#ff4b52}
+.sign .s{font:700 clamp(10px,1vw,13px) var(--sans);letter-spacing:.5em;color:#d8c58a;margin-top:2px}
+.sign .face{display:inline-block;margin-top:8px;font:800 11px var(--sans);letter-spacing:.24em;color:var(--navy);background:var(--brass);border-radius:3px;padding:4px 10px}
+.bank{position:absolute;left:50%;bottom:30%;transform:translateX(-50%);display:flex;gap:26px;align-items:flex-end}
+.elev{position:relative;width:clamp(86px,9vw,132px);height:clamp(150px,22vh,230px);background:linear-gradient(90deg,#8c6d12,#e6c96b 50%,#8c6d12);padding:7px 7px 0;border-radius:4px 4px 0 0;cursor:pointer;box-shadow:0 10px 30px rgba(0,0,0,.4)}
+.elev .dr{position:absolute;inset:7px 7px 0;display:flex}
+.elev .dr i{flex:1;background:linear-gradient(90deg,#b7b1a7,#e7e2d8 45%,#bdb6aa);border-right:1px solid #8f887e;transition:transform .7s cubic-bezier(.6,0,.3,1)}
+.elev .dr i:last-child{border-right:0;border-left:1px solid #8f887e}
+.elev.open .dr i:first-child{transform:translateX(-100%)}.elev.open .dr i:last-child{transform:translateX(100%)}
+.elev .dr{overflow:hidden;background:#3a2a17}
+.elev .ind{position:absolute;left:50%;top:-34px;transform:translateX(-50%);min-width:54px;height:24px;border-radius:4px;background:#0a0a0a;color:#ffb648;font:700 13px var(--mono);display:grid;place-items:center;border:2px solid var(--brass3);padding:0 6px}
+.elev:hover{filter:brightness(1.08)}
+.callbtn{width:44px;height:74px;border-radius:8px;background:linear-gradient(180deg,#e6c96b,#8c6d12);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;align-self:center;margin-bottom:40px;box-shadow:0 6px 14px rgba(0,0,0,.4)}
+.callbtn i{width:22px;height:22px;border-radius:50%;background:#1a1408;border:2px solid #f4e3a8;display:grid;place-items:center;color:#ffb648;font-size:11px;font-style:normal}
+.callbtn.lit i{box-shadow:0 0 12px #ffb648;background:#3a2408}
+.desk{position:absolute;left:4%;bottom:23%;width:22%;min-width:170px}
+.desk .top2{height:16px;border-radius:8px 8px 0 0;background:linear-gradient(180deg,#f4efe6,#d9cfbf);box-shadow:0 -2px 0 var(--brass) inset}
+.desk .body{height:clamp(60px,9vh,96px);background:linear-gradient(180deg,#e8e0d2,#c8bba6);border-bottom:6px solid var(--brass3);display:grid;place-items:center;font:800 11px var(--sans);letter-spacing:.3em;color:var(--brass3)}
+.desk .host{position:absolute;left:50%;bottom:100%;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center}
+.desk .host .av{width:48px;height:48px;border-radius:50%;background:#b07a00;color:#fff;display:grid;place-items:center;font-weight:800;border:3px solid #fff}
+.desk .host .bd{width:56px;height:46px;border-radius:24px 24px 6px 6px;background:#1c3150;margin-top:-4px}
+.bubble{position:absolute;left:4%;bottom:calc(23% + 196px);max-width:290px;background:#fffdf9;border-radius:16px;padding:12px 14px;font-size:13.5px;line-height:1.45;box-shadow:var(--shadow)}
+.bubble:after{content:"";position:absolute;left:40px;bottom:-9px;border:10px solid transparent;border-top-color:#fffdf9;border-bottom:0}
+.bubble b{display:block;font-size:12px;letter-spacing:.1em;color:var(--brass3)}
+.dir{position:absolute;right:3%;top:20%;width:clamp(230px,24%,330px);background:#121212;border:6px solid var(--brass3);border-radius:6px;padding:12px 12px 10px;color:#f5f5f5;box-shadow:0 14px 30px rgba(0,0,0,.45);max-height:58%;overflow:auto}
+.dir h5{margin:0 0 8px;text-align:center;font:800 11px var(--sans);letter-spacing:.32em;color:var(--brass2)}
+.dir .r{display:flex;align-items:center;gap:8px;font:600 12.5px var(--mono);padding:4px 4px;border-bottom:1px dashed #333;cursor:pointer;width:100%;text-align:left;color:#f5f5f5}
+.dir .r span.n{width:30px;color:var(--brass2)}
+.dir .r span.l{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-transform:uppercase;letter-spacing:.04em}
+.dir .r span.s{font-size:11px}
+.dir .r.no{color:#8a8a8a;cursor:not-allowed}.dir .r.no span.n{color:#7a6a3a}.dir .r.no span.s{color:#ff5a60}
+.dir .r.yes span.s{color:#7ee2a8}
+.gdoors{position:absolute;left:21%;bottom:30%;display:flex;gap:14px}
+.gdoor{margin-right:22px;width:clamp(70px,7vw,96px);height:clamp(110px,16vh,160px);background:linear-gradient(180deg,rgba(210,230,240,.55),rgba(160,190,210,.35));border:5px solid var(--brass3);border-bottom:0;border-radius:4px 4px 0 0;position:relative;display:flex;align-items:flex-end;justify-content:center;padding-bottom:8px;cursor:pointer}
+.gdoor .pl{background:var(--brass);color:var(--navy);font:800 10px var(--sans);letter-spacing:.06em;border-radius:3px;padding:3px 6px;text-align:center;line-height:1.2}
+.gdoor:hover{filter:brightness(1.15)}
+.gate{position:absolute;left:50%;bottom:6%;transform:translateX(-50%);display:flex;gap:18px;align-items:center}
+.gate .tsl{width:70px;height:56px;border-radius:8px;background:linear-gradient(180deg,#30435f,#1a2a42);border-top:4px solid var(--brass)}
+.gate .reader{display:flex;align-items:center;gap:10px;background:#fffdf9;border-radius:30px;padding:8px 18px 8px 8px;box-shadow:var(--shadow);font-weight:800}
+.gate .reader .dot{width:40px;height:40px;border-radius:50%;background:var(--navy);color:var(--brass2);display:grid;place-items:center;font-size:18px}
+.gate .reader.ok .dot{background:var(--green);color:#fff}
+.gate .reader.no .dot{background:var(--red);color:#fff}
+/* cab */
+.cab{background:linear-gradient(180deg,#3b2a18,#2a1d10)}
+.cab .walls{position:absolute;inset:0;background:repeating-linear-gradient(90deg,rgba(255,255,255,.03) 0 3px,transparent 3px 120px),linear-gradient(180deg,#5a3f22,#3b2a18)}
+.cab .rail{position:absolute;left:0;right:0;bottom:30%;height:10px;background:linear-gradient(180deg,var(--brass2),var(--brass3))}
+.cab .ind2{position:absolute;left:50%;top:18px;transform:translateX(-50%);background:#0a0a0a;border:3px solid var(--brass3);border-radius:8px;padding:6px 18px;display:flex;align-items:center;gap:12px;color:#ffb648;font:700 22px var(--mono)}
+.cab .ind2 small{font:700 11px var(--sans);letter-spacing:.2em;color:#c9a227}
+.panel{position:absolute;right:6%;top:13%;bottom:8%;width:min(430px,46%);background:linear-gradient(180deg,#d9c37a,#a88a2b);border-radius:14px;padding:16px 16px;box-shadow:inset 0 0 0 3px #f1dc93,0 20px 40px rgba(0,0,0,.45);display:flex;flex-direction:column}
+.panel h5{margin:0 0 10px;text-align:center;font:800 11px var(--sans);letter-spacing:.3em;color:#3a2a08}
+.btns{flex:1;overflow:auto;display:grid;grid-template-columns:1fr 1fr;gap:8px;align-content:start;padding:2px}
+.fb{display:flex;align-items:center;gap:10px;text-align:left;border-radius:30px;padding:5px 10px 5px 5px;background:rgba(255,255,255,.18);min-width:0}
+.fb .c{width:42px;height:42px;border-radius:50%;flex:none;display:grid;place-items:center;font:800 13px var(--mono);color:#ffcf6e;background:radial-gradient(circle at 40% 35%,#3a2b10,#120d04);border:3px solid #f4e3a8;box-shadow:0 2px 0 #6d540e}
+.fb .lb{min-width:0}
+.fb .lb b{display:block;font-size:13px;color:#2a1d04;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fb .lb small{font-size:11px;color:#5a4410;font-weight:700}
+.fb:hover .c{box-shadow:0 0 14px #ffcf6e,0 2px 0 #6d540e}
+.fb.cur .c{background:radial-gradient(circle,#ffcf6e,#e09b20);color:#2a1d04}
+.fb.lock{opacity:.78;cursor:not-allowed}
+.fb.lock .c{background:#b9b2a5;color:#7b7368;border-color:#e31b23;box-shadow:none}
+.fb.lock .lb b{color:#6a5d45}
+.fb.lock .lb small{color:#b3141b}
+.fb.shake{animation:shake .4s}
+@keyframes shake{25%{transform:translateX(-5px)}75%{transform:translateX(5px)}}
+.cab .guide{position:absolute;left:5%;top:16%;width:min(380px,40%);background:rgba(255,253,249,.96);border-radius:16px;padding:16px;box-shadow:var(--shadow);max-height:72%;overflow:auto}
+.cab .guide h3{margin:2px 0 4px;font-family:var(--serif);font-size:22px}
+.cab .guide .kv{font-size:13px;color:var(--muted);margin-bottom:10px}
+.cab .guide ul{list-style:none;margin:0;padding:0}
+.cab .guide li{display:flex;gap:8px;align-items:center;font-size:13.5px;padding:6px 0;border-bottom:1px solid var(--line)}
+.cab .guide li i{color:var(--navy3)}
+.cab .guide li.no{color:#9a9086}.cab .guide li.no:after{content:"🔒";margin-left:auto;font-size:11px}
+.cabdoors{position:absolute;inset:0;display:flex;pointer-events:none;z-index:5}
+.cabdoors i{flex:1;background:linear-gradient(90deg,#b7b1a7,#ece7dd 45%,#bdb6aa);transition:transform .6s cubic-bezier(.6,0,.3,1)}
+.cabdoors i:first-child{transform:translateX(-100%)}.cabdoors i:last-child{transform:translateX(100%)}
+.cabdoors.shut i{transform:none}
+/* floor */
+.floorsc{background:#f3eee6}
+.corr{position:absolute;inset:0;background:linear-gradient(180deg,#f6f2ea 0 62%,#cbbfae 62%)}
+.corr:before{content:"";position:absolute;left:50%;bottom:0;width:30%;height:38%;transform:translateX(-50%);background:linear-gradient(180deg,#9a1c22,#c3262e);clip-path:polygon(35% 0,65% 0,100% 100%,0 100%)}
+.plate{position:absolute;left:50%;top:22px;transform:translateX(-50%);background:linear-gradient(180deg,var(--brass2),var(--brass3));border-radius:6px;padding:8px 22px;text-align:center;box-shadow:0 8px 18px rgba(0,0,0,.2);color:#20160a;white-space:nowrap}
+.plate .n{font:700 12px var(--mono);letter-spacing:.2em}
+.plate b{display:block;font-family:var(--serif);font-size:24px;letter-spacing:.06em}
+.offices{position:absolute;left:4%;right:4%;top:120px;bottom:12%;overflow:auto;display:flex;flex-wrap:wrap;justify-content:center;gap:18px;align-content:flex-start;padding:6px}
+.office{width:170px;flex:none}
+.office{position:relative;height:210px;border-radius:6px 6px 0 0;background:linear-gradient(180deg,#5b3d22,#3e2914);padding:9px 9px 0;box-shadow:0 12px 24px rgba(0,0,0,.18);display:flex;flex-direction:column;text-align:center;color:#fff}
+.office .gl{flex:1;border-radius:3px;background:linear-gradient(160deg,rgba(220,235,245,.95),rgba(170,200,220,.85));display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:var(--navy);padding:8px}
+.office .gl i{font-size:30px;color:var(--navy3)}
+.office .gl b{font-size:14.5px;line-height:1.2}
+.office .gl code{font:500 10.5px var(--mono);color:#4a5a70;word-break:break-all}
+.office .pl{margin:8px auto 10px;background:linear-gradient(180deg,var(--brass2),var(--brass3));color:#20160a;font:800 11px var(--sans);border-radius:3px;padding:4px 10px;letter-spacing:.04em}
+.office .kn{position:absolute;right:16px;top:52%;width:10px;height:10px;border-radius:50%;background:var(--brass2)}
+.office:hover{transform:translateY(-3px);transition:transform .15s}
+.office:hover .gl{background:linear-gradient(160deg,#fffbe8,#f5e6b0)}
+.office.lock{background:linear-gradient(180deg,#9c968c,#7e776d);cursor:not-allowed}
+.office.lock .gl{background:repeating-linear-gradient(135deg,#dcd6cc 0 8px,#d2cbc0 8px 16px);color:#8a8178}
+.office.lock .gl i{color:#a39a8e}
+.office.lock .pl{background:#c9c2b6;color:#b3141b}
+.office.lock:hover{transform:none}
+.office .ext{position:absolute;top:14px;right:16px;font-size:12px;color:var(--navy3)}
+.floorbar{position:absolute;left:20px;bottom:20px;display:flex;gap:8px;z-index:3}
+/* toast */
+#toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);z-index:90;display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none}
+#toast .t{background:var(--navy);color:#fff;border-radius:14px;padding:10px 16px;font-size:14px;box-shadow:var(--shadow);animation:fade .25s;max-width:560px}
+#toast .t code{font:600 12px var(--mono);color:var(--brass2)}
+@media (max-width:1100px){.wrap,.wrap.src-on{grid-template-columns:1fr;grid-template-rows:minmax(420px,62vh) auto;overflow:auto}.wrap.src-on .src{order:3}.side{overflow:visible}
+ body{overflow:auto}.wrap{position:static;margin:76px 12px 12px}.pill.title .sync{display:none}}
+@media (max-width:700px){.as label{display:none}.as select{max-width:170px}.srcbtn{display:none}.top{flex-wrap:wrap;height:auto}.pill{height:44px}.pill.title{order:3;flex-basis:100%}.wrap{margin-top:150px}
+ .dir{display:none}.panel{left:4%;right:4%;width:auto;top:70px}.cab .guide{display:none}.bubble{display:none}.desk{display:none}.gdoors{left:4%}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<header class="top">
+  <button class="pill back" data-act="campus" aria-label="Back to the campus map">← Campus</button>
+  <div class="pill title"><span class="k" id="faceK">STAFF OFFICE</span><b>Colaberry · Refactored.ai</b><span class="sync" title="Floors and rooms are generated from the admin sidebar (adminNav.ts)"><i></i><span id="syncTxt">In sync with admin navigation</span></span></div>
+  <div class="pill as"><label for="who">VIEWING AS</label><select id="who" aria-label="Prototype: view as">
+    <option value="ali">Ali · Owner</option><option value="sarbjit" selected>Sarbjit · Marketing + Internship</option><option value="dhee">Dhee · Admissions</option><option value="mentor">A mentor</option><option value="support">Support</option>
+    <option value="member">A member / intern</option><option value="partner">A partner (org manager)</option><option value="explorer">An explorer</option></select>
+    <button class="srcbtn" id="srcBtn" data-act="src" title="Show the admin sidebar the building is generated from">Admin sidebar</button></div>
+</header>
+<div class="wrap" id="wrap">
+  <aside class="src" id="src" aria-label="Admin navigation (source of truth)"></aside>
+  <main class="stage" id="stage">
+    <section class="scene ext" id="s-ext" aria-label="The building from outside"></section>
+    <section class="scene lobby" id="s-lobby" aria-label="The lobby"></section>
+    <section class="scene cab" id="s-cab" aria-label="Inside the elevator"></section>
+    <section class="scene floorsc" id="s-floor" aria-label="A floor"></section>
+    <div class="tip" id="tip"></div>
+  </main>
+  <aside class="side" id="side"></aside>
+</div>
+<div id="toast" aria-live="polite"></div>
+<script>
+/* =========================================================================================
+   THE SOURCE OF TRUTH: the admin sidebar (frontend/src/components/Layout/adminNav.ts), copied here as data.
+   PINNED_LINKS become the Executive Floor (the top); every NAV_GROUPS entry becomes a floor, in the same order,
+   top to bottom; every link becomes a room. Nothing about a floor is written by hand: add a group in adminNav.ts and
+   the building grows a floor. Access is the link's section (link.section ?? group.section), exactly as the sidebar filters.
+   ========================================================================================= */
+const NAV_SOURCE = {"pinned": [{"path": "/admin/dashboard", "label": "Dashboard", "icon": "dashboard-line", "section": "dashboard"}, {"path": "/admin/war-room", "label": "War Room", "icon": "radar-line", "section": "war_room"}, {"path": "/admin/trust", "label": "Trust Center", "icon": "shield-check-line", "section": "trust"}, {"path": "/admin/students", "label": "Student Story", "icon": "file-user-line", "section": "students"}, {"path": "/admin/career-review", "label": "Portfolio Review", "icon": "award-line", "section": "career_review"}, {"path": "https://advisor.colaberry.ai/my-day/", "label": "My Day", "icon": "calendar-check-line", "section": "students", "newTab": true}, {"path": "/admin/ai-training-enter", "label": "AI Training", "icon": "book-open-line", "section": "students", "newTab": true, "requiresMgmtBridge": true}], "groups": [{"label": "Revenue", "section": "revenue", "links": [{"path": "/admin/revenue", "label": "Revenue", "icon": "money-dollar-circle-line"}, {"path": "/admin/commercialization", "label": "Commercialization", "icon": "line-chart-line"}, {"path": "/admin/refunds", "label": "Refunds", "icon": "refund-2-line"}, {"path": "/admin/leads", "label": "Leads", "icon": "group-line", "section": "leads"}, {"path": "/admin/pipeline", "label": "Pipeline", "icon": "filter-3-line", "section": "leads"}, {"path": "/admin/business-accounts", "label": "Business Accounts", "icon": "building-line"}, {"path": "/admin/opportunities", "label": "Opportunities", "icon": "line-chart-line"}, {"path": "/admin/funnel", "label": "Funnel", "icon": "filter-2-line"}]}, {"label": "Marketing", "section": "campaigns", "links": [{"path": "/admin/marketing", "label": "Marketing", "icon": "broadcast-line"}]}, {"label": "Brands", "section": "brands", "links": [{"path": "/admin/marketing/brands", "label": "Brands", "icon": "global-line"}]}, {"label": "Campaigns", "section": "campaigns", "links": [{"path": "/admin/campaigns", "label": "Campaigns", "icon": "megaphone-line"}, {"path": "/admin/communications", "label": "Communications", "icon": "chat-3-line"}, {"path": "/admin/visitors", "label": "Visitors", "icon": "eye-line"}, {"path": "/admin/explorer-growth", "label": "Explorer Growth", "icon": "radar-line"}, {"path": "/admin/growth-journey", "label": "Growth Journey", "icon": "route-line"}]}, {"label": "Lead Ingestion", "section": "lead_ingestion", "links": [{"path": "/admin/sources", "label": "Sources", "icon": "upload-cloud-2-line"}, {"path": "/admin/ingest-logs", "label": "Ingest Logs", "icon": "file-list-3-line"}, {"path": "/admin/routing-rules", "label": "Routing Rules", "icon": "node-tree"}, {"path": "/admin/autonomous", "label": "Autonomous", "icon": "lightbulb-flash-line"}]}, {"label": "AI Internship", "section": "internship", "links": [{"path": "/admin/internship", "label": "Applications", "icon": "user-follow-line"}]}, {"label": "Inbox & Content", "section": "inbox_content", "links": [{"path": "/admin/inbox", "label": "Inbox COS", "icon": "inbox-2-line"}, {"path": "/admin/missed-opportunities", "label": "Missed Opportunities", "icon": "mail-close-line"}, {"path": "/admin/content-queue", "label": "Content Queue", "icon": "article-line"}]}, {"label": "Program", "section": "program", "links": [{"path": "/admin/accelerator", "label": "Accelerator", "icon": "graduation-cap-line"}, {"path": "/admin/orchestration", "label": "Curriculum", "icon": "flow-chart"}, {"path": "/admin/workforce", "label": "AI Organization", "icon": "team-line"}, {"path": "/admin/my-domain", "label": "My Domain", "icon": "robot-2-line", "section": "dashboard"}, {"path": "/admin/all-domains", "label": "All Domains", "icon": "stack-line"}, {"path": "/admin/tools", "label": "Tools", "icon": "tools-line"}, {"path": "/admin/factory", "label": "Project Factory", "icon": "node-tree"}, {"path": "/admin/gov-opportunities", "label": "Gov Opportunities", "icon": "government-line"}, {"path": "/admin/gov-qualification", "label": "Gov Qualification", "icon": "shield-check-line"}, {"path": "/admin/gov-services", "label": "Our Services", "icon": "service-line"}]}, {"label": "Intelligence", "section": "intelligence", "links": [{"path": "/admin/ceo", "label": "CEO Command", "icon": "vip-crown-line"}, {"path": "/admin/cb-system", "label": "CB System", "icon": "robot-2-line"}, {"path": "/admin/intelligence", "label": "Intelligence OS", "icon": "cpu-line"}, {"path": "/admin/brain", "label": "Enterprise Intelligence", "icon": "brain-line", "section": "program"}, {"path": "/admin/insights", "label": "Insights", "icon": "lightbulb-line"}, {"path": "/admin/governance", "label": "Governance", "icon": "shield-keyhole-line"}, {"path": "/admin/governance-policy", "label": "Governance Policies", "icon": "shield-star-line"}]}, {"label": "System", "section": "system", "links": [{"path": "/admin/tickets", "label": "Tickets", "icon": "ticket-2-line"}, {"path": "/admin/reports", "label": "Automated Reports", "icon": "mail-send-line"}, {"path": "/admin/settings", "label": "Settings", "icon": "settings-3-line"}]}]};
+let NAV = JSON.parse(JSON.stringify(NAV_SOURCE));
+const ALL_SECTIONS=['dashboard','trust','war_room','revenue','campaigns','lead_ingestion','inbox_content','program','intelligence','system','students','leads','career_review','internship','brands'];
+/* who is visiting: mgmt sections from /api/portal/mgmt/status (role -> MGMT_ROLE_DEFS sections) */
+const WHO={
+  ali:{name:'Ali Muwwakkil',ini:'AM',title:'Owner',aud:'staff',sections:ALL_SECTIONS},
+  sarbjit:{name:'Sarbjit Kaur',ini:'SK',title:'Marketing intern · AI Internship',aud:'staff',sections:['dashboard','campaigns','brands','internship']},
+  dhee:{name:'Dhee',ini:'DH',title:'Admissions',aud:'staff',sections:['dashboard','lead_ingestion','internship']},
+  mentor:{name:'Jordan (mentor)',ini:'JM',title:'Mentor',aud:'staff',sections:['dashboard','career_review']},
+  support:{name:'Sam (support)',ini:'SS',title:'Support',aud:'staff',sections:['students']},
+  member:{name:'Priya Natarajan',ini:'PN',title:'Member · AI intern',aud:'member',sections:[]},
+  partner:{name:'Dana Okoye',ini:'DO',title:'Partner · Meridian Freight',aud:'business',sections:[]},
+  explorer:{name:'Marcus Bell',ini:'MB',title:'Explorer',aud:'explorer',sections:[]},
+};
+let ME=WHO.sarbjit;
+const S={scene:'ext',floor:null,hover:null,cabAt:'G',moving:false,src:false,changed:0};
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const can=sec=>!!sec&&ME.sections.includes(sec);
+const isStaff=()=>ME.aud==='staff';
+const FACE={staff:['STAFF OFFICE','Staff Office'],member:['CAREER CENTER','Career Center'],business:['PARTNER OFFICE','Partner Office'],explorer:['CAREER CENTER','Career Center']};
+
+/* ---- the building, derived ---- */
+function floors(){
+  const groups=NAV.groups.map(g=>({key:'g-'+g.label,label:g.label,section:g.section,links:g.links.map(l=>({...l,section:l.section||g.section}))}));
+  const list=[{key:'exec',label:'Executive Floor',section:null,links:NAV.pinned.map(l=>({...l})),pinned:true},...groups];
+  const n=list.length;
+  list.forEach((f,i)=>{f.num=i===0?'PH':String(n-i+1);f.open=f.links.filter(l=>isStaff()&&can(l.section));f.access=f.open.length>0});
+  return list;
+}
+/* the ground floor: what every audience has (the existing career building faces) */
+function ground(){
+  const r=[];
+  if(ME.aud==='member'||ME.aud==='explorer'||ME.aud==='staff')r.push({label:'Career Center',sub:'Internship',icon:'briefcase-4-line',route:'/portal/internship',portal:true});
+  if(ME.aud==='business')r.push({label:'Partner suite',sub:'Your company',icon:'building-2-line',route:'/portal/company',portal:true});
+  if(isStaff())r.push({label:'Management Portal',sub:'Front desk',icon:'door-open-line',route:'/portal/mgmt-enter',portal:false});
+  return r;
+}
+const bridge=p=>/^https?:/.test(p)?p:'/portal/mgmt-enter?next='+encodeURIComponent(p);
+function floorByNum(n){return floors().find(f=>f.num===n)}
+
+/* ---- toast ---- */
+function toast(h,ms=3200){const t=document.createElement('div');t.className='t';t.innerHTML=h;$('toast').appendChild(t);setTimeout(()=>t.remove(),ms)}
+
+/* ---- the source panel (admin sidebar mirror) ---- */
+function renderSrc(){const F=floors();
+  $('src').innerHTML=`<h4>Admin navigation</h4><div class="sub">adminNav.ts · ${F.length} floors · ${F.reduce((a,f)=>a+f.links.length,0)} rooms</div>
+  <div class="g"><div class="h">Pinned <code>→ ${F[0].num}</code></div>${NAV.pinned.map(l=>`<div class="l${isStaff()&&can(l.section)?'':' no'}"><i class="ri-${l.icon}"></i>${esc(l.label)}</div>`).join('')}</div>
+  ${F.slice(1).map(f=>`<div class="g"><div class="h">${esc(f.label)} <code>→ floor ${f.num}</code></div>${f.links.map(l=>`<div class="l${isStaff()&&can(l.section)?'':' no'}"><i class="ri-${l.icon}"></i>${esc(l.label)}</div>`).join('')}</div>`).join('')}
+  <div class="sim"><div style="font:800 10.5px var(--sans);letter-spacing:.12em;color:#9ca3af">PROTOTYPE · CHANGE THE SIDEBAR</div>
+   <button data-act="sim-add">＋ Add a “Finance” group (2 links)</button><button data-act="sim-move">↔ Move “Leads” into Marketing</button><button data-act="sim-rename">✎ Rename “Program” to “Delivery”</button><button data-act="sim-reset">↺ Reset to adminNav.ts</button></div>`}
+function navChanged(msg){S.changed++;renderAll();$('syncTxt').textContent='Rebuilt from admin navigation · just now';toast(`🏢 ${msg} The building rebuilt itself: <b>${floors().length} floors</b>.`,4200)}
+
+/* ---- side panel ---- */
+function badgeHTML(){const F=floors(),open=F.filter(f=>f.access);
+  const lvl=isStaff()?(open.length===F.length?'ALL-ACCESS BADGE':`OPENS ${open.length} OF ${F.length} FLOORS`):'GROUND FLOOR ONLY';
+  return `<div class="badge"><div class="row"><span class="ph">${ME.ini}</span><span class="nm"><b>${esc(ME.name)}</b><small>${esc(ME.title)}</small></span></div>
+   <div class="lv">${lvl}</div><div class="chips"><span class="g">G · Lobby</span>${open.map(f=>`<span>${f.num} · ${esc(f.label)}</span>`).join('')}</div><span class="strip"></span></div>`}
+function floorRow(f){const here=S.floor===f.num&&S.scene==='floor';
+  const st=!isStaff()?'Staff only':f.access?(f.open.length===f.links.length?'✓ Your badge':`✓ ${f.open.length} of ${f.links.length} rooms`):'🔒 No access';
+  return `<button class="frow${f.access?'':' lock'}${here?' here':''}" data-act="${f.access?'ride':'locked'}" data-f="${f.num}" ${f.access?'':'aria-disabled="true"'}><span class="n">${f.num}</span><span class="t"><b>${esc(f.label)}</b><small>${f.links.length} ${f.links.length===1?'room':'rooms'}</small></span><span class="st">${st}</span></button>`}
+function renderSide(){const F=floors();let h='';
+  if(S.scene==='floor'&&S.floor&&S.floor!=='G'){const f=floorByNum(S.floor);
+    h=`<div class="kick">FLOOR ${f.num}</div><h2>${esc(f.label)}</h2><p class="lead">${f.open.length===f.links.length?'Every room on this floor is open to you.':`Your badge opens ${f.open.length} of the ${f.links.length} rooms here. The rest stay locked.`} Each room opens its admin page in a new tab.</p>
+     <div class="sec">Rooms on this floor <small>${f.open.length} open</small></div><div class="rlist">${f.links.map(l=>roomRow(l)).join('')}</div>
+     <div class="sec">Ride somewhere else</div><div class="btnrow"><button class="btn navy" data-act="to-cab">↕ Elevator</button><button class="btn" data-act="to-lobby">Lobby</button></div>`}
+  else if(S.scene==='floor'&&S.floor==='G'){h=`<div class="kick">GROUND FLOOR</div><h2>${FACE[ME.aud][1]}</h2><p class="lead">Open to everyone with a campus badge.</p><div class="rlist">${ground().map(groundRow).join('')}</div>`}
+  else{const lead=isStaff()?`Your badge decides which floors the elevator will take you to. Floors mirror the admin sidebar, and rooms are its pages.`:`Members and explorers use the ground floor: the ${ME.aud==='business'?'Partner suite':'Career Center'}. The floors above are Colaberry staff floors.`;
+    h=`<div class="kick">${S.scene==='cab'?'IN THE ELEVATOR':S.scene==='lobby'?'IN THE LOBBY':'OUTSIDE'}</div><h2>${S.scene==='ext'?'Colaberry Tower':'Where your badge works'}</h2><p class="lead">${lead}</p>${badgeHTML()}
+     <div class="sec">Floors <small>${isStaff()?F.filter(f=>f.access).length+' open':'staff only'}</small></div><div class="flist">${F.map(floorRow).join('')}
+     <button class="frow" data-act="ride" data-f="G"><span class="n">G</span><span class="t"><b>Lobby · ${FACE[ME.aud][1]}</b><small>${ground().map(g=>g.label).join(' · ')}</small></span><span class="st">✓ Everyone</span></button></div>
+     <div class="note">🔄 This building is generated from the admin sidebar. When a group or page is added, moved or renamed there, the floors and rooms here change with it. Access follows the same section rules as the sidebar.</div>`}
+  $('side').innerHTML=h}
+function roomRow(l){const ok=isStaff()&&can(l.section);const ext=/^https?:/.test(l.path);
+  return `<button class="rrow${ok?'':' lock'}" data-act="${ok?'open':'locked-room'}" data-p="${esc(l.path)}" data-l="${esc(l.label)}"><i class="ic ri-${l.icon}"></i><span class="t"><b>${esc(l.label)}</b><code>${esc(l.path.replace('https://',''))}</code></span><span class="go">${ok?(ext?'Open ↗':'Open in admin ↗'):'🔒'}</span></button>`}
+function groundRow(g){return `<button class="rrow" data-act="${g.portal?'portal':'open'}" data-p="${g.route}" data-l="${esc(g.label)}"><i class="ic ri-${g.icon}"></i><span class="t"><b>${esc(g.label)}</b><code>${g.sub}</code></span><span class="go">Go →</span></button>`}
+
+/* ---- scene: exterior (an Art Deco tower, a band per floor) ---- */
+function renderExt(){const F=floors(),n=F.length,bandH=34,W=360,baseH=120,top=170,H=top+n*bandH+baseH;
+  const night=new Date().getHours()>=19||new Date().getHours()<6;$('s-ext').classList.toggle('night',night);
+  let bands='';F.forEach((f,i)=>{const y=top+i*bandH;const lit=f.access;const w=W-(i===0?60:0),x=(W-w)/2+40;
+    let wins='';for(let j=0;j<10;j++)wins+=`<rect x="${x+14+j*((w-28)/10)}" y="${y+8}" width="${(w-28)/10-8}" height="${bandH-16}" rx="2" fill="${lit?'#ffd36e':night?'#26324a':'#9fb3c4'}" opacity="${lit&&(i+j)%4===0?.75:1}"/>`;
+    bands+=`<g class="flr" data-f="${f.num}" data-act="${lit?'ride':'locked'}"><rect x="${x}" y="${y}" width="${w}" height="${bandH}" fill="${night?'#1b2740':'#e9e3d6'}" stroke="#c9a227" stroke-width="1"/>${wins}
+     <rect class="bandhi" x="${x}" y="${y}" width="${w}" height="${bandH}" fill="${lit?'rgba(255,211,110,.25)':'rgba(227,27,35,.18)'}" opacity="0"/>
+     <text x="${x-10}" y="${y+bandH/2+4}" text-anchor="end" font-family="JetBrains Mono,monospace" font-size="12" font-weight="700" fill="${lit?'#8c6d12':'#9a9086'}">${f.num}</text>
+     ${!lit&&isStaff()?`<text x="${x+w+10}" y="${y+bandH/2+4}" font-size="11" fill="#e31b23">🔒</text>`:''}</g>`});
+  const by=top+n*bandH;
+  $('s-ext').innerHTML=`<svg viewBox="-20 0 ${W+120} ${H}" role="img" aria-label="Colaberry Tower, ${n} floors">
+   <polygon points="${W/2+40},10 ${W/2+60},${top-60} ${W/2+20},${top-60}" fill="#c9a227"/>
+   <rect x="${W/2-10}" y="${top-60}" width="100" height="60" fill="${night?'#1b2740':'#e9e3d6'}" stroke="#c9a227"/>
+   <circle cx="${W/2+40}" cy="${top-30}" r="18" fill="#e31b23"/><text x="${W/2+40}" y="${top-24}" text-anchor="middle" font-family="Playfair Display,Georgia,serif" font-size="18" font-weight="800" fill="#fff">C</text>
+   ${bands}
+   <rect x="20" y="${by}" width="${W+40}" height="${baseH}" fill="#0e1a2c"/>
+   <rect x="20" y="${by}" width="${W+40}" height="8" fill="#c9a227"/>
+   <text x="${W/2+40}" y="${by+34}" text-anchor="middle" font-family="Playfair Display,Georgia,serif" font-size="22" font-weight="800" letter-spacing="6" fill="#e6c96b">COLABERRY</text>
+   <text x="${W/2+40}" y="${by+52}" text-anchor="middle" font-family="DM Sans,sans-serif" font-size="9" font-weight="700" letter-spacing="5" fill="#d8c58a">REFACTORED.AI</text>
+   <g class="flr" data-act="enter"><rect x="${W/2+5}" y="${by+62}" width="70" height="${baseH-62}" fill="#e6c96b"/><rect x="${W/2+10}" y="${by+67}" width="60" height="${baseH-67}" fill="#a9c6dd" opacity=".85"/>
+   <line x1="${W/2+40}" y1="${by+67}" x2="${W/2+40}" y2="${by+baseH}" stroke="#8c6d12" stroke-width="2"/></g>
+   <rect x="${W/2-70}" y="${by+70}" width="64" height="18" rx="2" fill="#c9a227"/><text x="${W/2-38}" y="${by+82}" text-anchor="middle" font-family="DM Sans,sans-serif" font-size="7.5" font-weight="800" letter-spacing="1" fill="#0e1a2c">${FACE[ME.aud][0]}</text>
+   <text x="${W/2+40}" y="${by+baseH+0}" text-anchor="middle" font-size="0">G</text></svg>
+   <div class="legend"><div><i style="background:#ffd36e"></i>Floors your badge opens</div><div><i style="background:#9fb3c4;outline:2px solid #e31b23"></i>Floors you can’t reach</div><div style="color:var(--muted);font-size:11.5px">Hover a floor to see what’s on it</div></div>
+   <div class="cta"><button class="btn red" data-act="enter">Walk in →</button><span style="background:rgba(255,253,249,.92);border-radius:14px;padding:8px 12px;font-size:13px;font-weight:600">${isStaff()?`Your badge opens <b>${F.filter(f=>f.access).length}</b> of ${n} floors`:'You can use the ground floor'}</span></div>`}
+
+/* ---- scene: lobby ---- */
+function renderLobby(){const F=floors(),open=F.filter(f=>f.access);
+  const greet=isStaff()?`Good ${partOfDay()}, ${ME.name.split(' ')[0]}. Your badge opens ${open.length===F.length?'every floor':`${open.length} ${open.length===1?'floor':'floors'}`}: ${open.slice(0,3).map(f=>f.label).join(', ')}${open.length>3?'…':''}. The elevators are straight ahead.`:
+    `Welcome, ${ME.name.split(' ')[0]}. The ${ME.aud==='business'?'Partner suite':'Career Center'} is right here on the ground floor. The floors above are for Colaberry staff.`;
+  $('s-lobby').innerHTML=`<div class="wall"></div><div class="cornice"></div><div class="floor"></div>
+   <div class="sign"><div class="w"><span class="c">C</span>OLABERRY</div><div class="s">REFACTORED.AI</div><div class="face">${FACE[ME.aud][0]}</div></div>
+   <div class="bank">${ground().filter(g=>g.portal).map(g=>`<button class="gdoor" data-act="portal" data-p="${g.route}" data-l="${esc(g.label)}" aria-label="${esc(g.label)}, ground floor"><span class="pl">${esc(g.label).toUpperCase()}<br>${esc(g.sub)}</span></button>`).join('')}${['A','B'].map((x,i)=>`<button class="elev" id="el${x}" data-act="call" aria-label="Elevator ${x}"><span class="ind">${i===0?S.cabAt:'PH'}</span><span class="dr"><i></i><i></i></span></button>${i===0?'<button class="callbtn" data-act="call" aria-label="Call the elevator"><i>▲</i><i>▼</i></button>':''}`).join('')}</div>
+   <div class="bubble"><b>CONCIERGE · REESE</b>${esc(greet)}</div>
+   <div class="desk"><div class="host"><span class="av">RE</span><span class="bd"></span></div><div class="top2"></div><div class="body">CONCIERGE</div></div>
+   <div class="dir" aria-label="Building directory"><h5>DIRECTORY</h5>${F.map(f=>`<button class="r ${isStaff()&&f.access?'yes':'no'}" data-act="${f.access?'ride':'locked'}" data-f="${f.num}"><span class="n">${f.num}</span><span class="l">${esc(f.label)}</span><span class="s">${!isStaff()?'STAFF':f.access?'✓':'🔒'}</span></button>`).join('')}
+    <button class="r yes" data-act="ride" data-f="G"><span class="n">G</span><span class="l">LOBBY · ${FACE[ME.aud][1].toUpperCase()}</span><span class="s">✓</span></button></div>
+   <div class="gate"><span class="tsl"></span><button class="reader ${isStaff()?'ok':'no'}" data-act="call"><span class="dot">${isStaff()?'✓':'G'}</span>${isStaff()?`Tap your badge · ${open.length} ${open.length===1?'floor':'floors'}`:`${ME.aud==='explorer'?'Visitor':ME.aud==='business'?'Partner':'Member'} badge · ground floor`}</button><span class="tsl"></span></div>`}
+function partOfDay(){const h=new Date().getHours();return h<12?'morning':h<17?'afternoon':'evening'}
+
+/* ---- scene: elevator cab ---- */
+function renderCab(){const F=floors();const hv=S.hover?floorByNum(S.hover):null;
+  $('s-cab').innerHTML=`<div class="walls"></div><div class="rail"></div>
+   <div class="ind2"><small>FLOOR</small><span id="indNum">${S.cabAt}</span><small id="indDir"></small></div>
+   <div class="guide" id="guide">${guideHTML(hv)}</div>
+   <div class="panel" aria-label="Floor buttons"><h5>SELECT A FLOOR</h5><div class="btns">${F.map(f=>fbtn(f)).join('')}${fbtn({num:'G',label:'Lobby',links:ground(),access:true,open:ground(),ground:true})}</div></div>
+   <div class="cabdoors" id="cabDoors"><i></i><i></i></div>`}
+function fbtn(f){const cur=S.cabAt===f.num;const lock=!f.access;
+  const sub=f.ground?'Everyone':lock?(isStaff()?'No access':'Staff only'):(f.open.length===f.links.length?`${f.links.length} ${f.links.length===1?'room':'rooms'}`:`${f.open.length} of ${f.links.length} rooms`);
+  return `<button class="fb${cur?' cur':''}${lock?' lock':''}" data-act="${lock?'locked':'ride'}" data-f="${f.num}" data-hover="${f.num}" ${lock?'aria-disabled="true"':''} aria-label="Floor ${f.num}, ${esc(f.label)}${lock?', no access':''}"><span class="c">${lock?'🔒':f.num}</span><span class="lb"><b>${esc(f.label)}</b><small>${sub}</small></span></button>`}
+function guideHTML(f){if(!f)return `<div class="kick">YOUR RIDE</div><h3>Pick a floor</h3><div class="kv">Lit buttons are the floors your badge opens. Grey buttons with a red ring are locked for you.</div>${badgeHTML()}`;
+  if(f.num==='G')return `<div class="kick">GROUND FLOOR</div><h3>Lobby · ${FACE[ME.aud][1]}</h3><ul>${ground().map(g=>`<li><i class="ri-${g.icon}"></i>${esc(g.label)}</li>`).join('')}</ul>`;
+  return `<div class="kick">FLOOR ${f.num}</div><h3>${esc(f.label)}</h3><div class="kv">${f.access?(f.open.length===f.links.length?'Every room is open to you.':`${f.open.length} of ${f.links.length} rooms open to you.`):isStaff()?'Your badge doesn’t open this floor.':'Colaberry staff only.'}</div>
+   <ul>${f.links.map(l=>`<li class="${isStaff()&&can(l.section)?'':'no'}"><i class="ri-${l.icon}"></i>${f.access||isStaff()?esc(l.label):'Staff room'}</li>`).join('')}</ul>`}
+
+/* ---- scene: floor ---- */
+function renderFloor(){const f=S.floor==='G'?null:floorByNum(S.floor);
+  if(!f){$('s-floor').innerHTML=`<div class="corr"></div><div class="plate"><div class="n">GROUND FLOOR</div><b>${FACE[ME.aud][1].toUpperCase()}</b></div>
+    <div class="offices">${ground().map(g=>`<button class="office" data-act="${g.portal?'portal':'open'}" data-p="${g.route}" data-l="${esc(g.label)}"><span class="gl"><i class="ri-${g.icon}"></i><b>${esc(g.label)}</b><code>${esc(g.sub)}</code></span><span class="pl">${g.portal?'WALK IN':'OPEN ↗'}</span><span class="kn"></span></button>`).join('')}</div>
+    <div class="floorbar"><button class="btn navy" data-act="to-cab">↕ Elevator</button><button class="btn" data-act="to-lobby">Lobby</button></div>`;return}
+  $('s-floor').innerHTML=`<div class="corr"></div><div class="plate"><div class="n">FLOOR ${f.num}</div><b>${esc(f.label.toUpperCase())}</b></div>
+   <div class="offices">${f.links.map(l=>{const ok=isStaff()&&can(l.section),ext=/^https?:/.test(l.path);
+     return `<button class="office${ok?'':' lock'}" data-act="${ok?'open':'locked-room'}" data-p="${esc(l.path)}" data-l="${esc(l.label)}" ${ok?'':'aria-disabled="true"'} aria-label="${esc(l.label)}${ok?', opens in a new tab':', no access'}">${ext&&ok?'<span class="ext">↗</span>':''}<span class="gl"><i class="ri-${l.icon}"></i><b>${esc(l.label)}</b><code>${esc(l.path.replace('https://',''))}</code></span><span class="pl">${ok?'OPEN ↗':'🔒 NO ACCESS'}</span><span class="kn"></span></button>`}).join('')}</div>
+   <div class="floorbar"><button class="btn navy" data-act="to-cab">↕ Elevator</button><button class="btn" data-act="to-lobby">Lobby</button></div>`}
+
+/* ---- navigation ---- */
+function go(scene){S.scene=scene;document.querySelectorAll('.scene').forEach(x=>x.classList.toggle('on',x.id==='s-'+scene));renderScene();renderSide()}
+function renderScene(){({ext:renderExt,lobby:renderLobby,cab:renderCab,floor:renderFloor})[S.scene]()}
+function renderAll(){renderSrc();renderScene();renderSide();$('faceK').textContent=FACE[ME.aud][0]}
+function callElevator(){const a=$('elA');if(a){a.classList.add('open')}document.querySelector('.callbtn')?.classList.add('lit');setTimeout(()=>{go('cab')},a?750:0)}
+function ride(num){if(S.moving)return;if(S.scene!=='cab'){go('cab')}
+  const order=['G',...floors().map(f=>f.num).reverse()];const from=order.indexOf(S.cabAt),to=order.indexOf(num);
+  const doors=$('cabDoors');S.moving=true;doors.classList.add('shut');
+  const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const step=()=>{const cur=order.indexOf(S.cabAt);if(cur===to){$('indDir').textContent='';setTimeout(()=>{S.moving=false;S.floor=num;go('floor')},reduce?0:350);return}
+    S.cabAt=order[cur+(to>cur?1:-1)];$('indNum').textContent=S.cabAt;$('indDir').textContent=to>cur?'▲':'▼';setTimeout(step,reduce?0:Math.max(70,420/Math.max(1,Math.abs(to-from))))};
+  setTimeout(step,reduce?0:650)}
+function openRoom(path,label){const url=bridge(path);
+  const w=window.open('','_blank');
+  if(w){w.document.write(`<!doctype html><title>${esc(label)} · Admin</title><body style="font-family:system-ui;padding:40px;background:#f8fafc"><div style="font:600 12px monospace;color:#64748b">PROTOTYPE · NEW ADMIN TAB</div><h1 style="margin:6px 0">${esc(label)}</h1><p>In the real build this tab opens <code>${esc(url)}</code>, which signs you in to the Management Portal and lands on <code>${esc(path)}</code>.</p></body>`);w.document.close()}
+  toast(`↗ Opening <b>${esc(label)}</b> in a new admin tab · <code>${esc(path.replace('https://',''))}</code>`)}
+
+/* ---- events ---- */
+document.addEventListener('click',e=>{const a=e.target.closest('[data-act]');if(!a)return;const act=a.dataset.act;
+  if(act==='enter')go('lobby');
+  else if(act==='call')callElevator();
+  else if(act==='ride'){const n=a.dataset.f;if(S.scene==='cab'||S.scene==='floor'||S.scene==='lobby'){if(S.scene!=='cab'){go('cab');setTimeout(()=>ride(n),300)}else ride(n)}else{go('cab');setTimeout(()=>ride(n),300)}}
+  else if(act==='locked'){const f=floorByNum(a.dataset.f);a.classList.add('shake');setTimeout(()=>a.classList.remove('shake'),400);
+    toast(isStaff()?`🔒 Your badge doesn’t open <b>${esc(f.label)}</b>. Ask an admin to add it to your role.`:`🔒 The floors above the lobby are for Colaberry staff.`)}
+  else if(act==='locked-room')toast(`🔒 <b>${esc(a.dataset.l)}</b> is on this floor, but your badge doesn’t open it.`);
+  else if(act==='open')openRoom(a.dataset.p,a.dataset.l);
+  else if(act==='portal')toast(`🚪 Walking into <b>${esc(a.dataset.l)}</b> · <code>${esc(a.dataset.p)}</code> (same tab, campus chrome)`);
+  else if(act==='to-cab')go('cab');
+  else if(act==='to-lobby'){S.cabAt='G';go('lobby')}
+  else if(act==='campus')toast('← Back to the campus map');
+  else if(act==='src'){S.src=!S.src;$('wrap').classList.toggle('src-on',S.src);$('srcBtn').classList.toggle('on',S.src)}
+  else if(act==='sim-add'){NAV.groups.splice(1,0,{label:'Finance',section:'revenue',links:[{path:'/admin/finance/invoices',label:'Invoices',icon:'bill-line'},{path:'/admin/finance/payouts',label:'Payouts',icon:'bank-card-line'}]});navChanged('A “Finance” group was added to the sidebar.')}
+  else if(act==='sim-move'){const rev=NAV.groups.find(g=>g.label==='Revenue'),mk=NAV.groups.find(g=>g.label==='Marketing');const i=rev?rev.links.findIndex(l=>l.label==='Leads'):-1;if(i<0||!mk)return toast('Leads already moved');mk.links.push(rev.links.splice(i,1)[0]);navChanged('“Leads” moved from Revenue to Marketing (it keeps its own access rule).')}
+  else if(act==='sim-rename'){const g=NAV.groups.find(g=>g.label==='Program');if(!g)return toast('Already renamed');g.label='Delivery';navChanged('“Program” was renamed “Delivery”.')}
+  else if(act==='sim-reset'){NAV=JSON.parse(JSON.stringify(NAV_SOURCE));navChanged('Back to adminNav.ts as it is today.')}
+});
+document.addEventListener('mouseover',e=>{const b=e.target.closest('[data-hover]');if(b&&S.scene==='cab'&&b.dataset.hover!==S.hover){S.hover=b.dataset.hover;const g=$('guide');if(g)g.innerHTML=guideHTML(S.hover==='G'?{num:'G'}:floorByNum(S.hover))}
+  const fl=e.target.closest('#s-ext .flr[data-f]');const tip=$('tip');
+  if(fl){const f=floorByNum(fl.dataset.f);const r=$('stage').getBoundingClientRect();tip.style.display='block';tip.style.left=Math.min(e.clientX-r.left+14,r.width-270)+'px';tip.style.top=(e.clientY-r.top+14)+'px';
+    tip.innerHTML=`<b>${f.num} · ${esc(f.label)}</b><small>${!isStaff()?'Colaberry staff only':f.access?`${f.open.length} of ${f.links.length} rooms open to you`:'🔒 Your badge doesn’t open this floor'}</small>`}else tip.style.display='none'});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){if(S.scene==='floor')go('cab');else if(S.scene==='cab')go('lobby');else if(S.scene==='lobby')go('ext')}});
+$('who').addEventListener('change',e=>{ME=WHO[e.target.value];S.cabAt='G';S.floor=null;S.hover=null;go(S.scene==='floor'||S.scene==='cab'?'lobby':S.scene);renderSrc();$('faceK').textContent=FACE[ME.aud][0]});
+renderSrc();$('faceK').textContent=FACE[ME.aud][0];go('ext');
+</script>
+</body>
+</html>

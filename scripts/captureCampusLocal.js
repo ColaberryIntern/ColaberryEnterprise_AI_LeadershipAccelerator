@@ -56,12 +56,15 @@ async function runFidelity(browser) {
   // --only=<view name> re-runs one view (all accounts and sizes)
   const ONLY = (process.argv.find((a) => a.startsWith('--only=')) || '').slice('--only='.length) || null;
   const results = [];
+  // Campus HQ: a view may name extra seeded accounts (staff-mentor, staff-marketing, ...); views without `accounts` run for the four.
+  const ALL_ACCOUNTS = Array.from(new Set([...ACCOUNTS, ...VIEWS.flatMap((v) => v.accounts ?? [])]));
   for (const size of [...SIZES, WIDE, HALF]) {
-    for (const account of ACCOUNTS) {
+    for (const account of ALL_ACCOUNTS) {
       for (const view of VIEWS) {
         if (ONLY && view.name !== ONLY) continue;
         if (!(view.sizes ?? ['desktop', 'phone']).includes(size.name)) continue;
-        if (view.accounts && !view.accounts.includes(account)) continue;
+        if (view.accounts ? !view.accounts.includes(account) : !ACCOUNTS.includes(account)) continue;
+        if (!TOKENS.users[account]) { console.log(`MISS ${account} ${size.name} ${view.name} ERROR no token for ${account} (re-run seedCampusE2E.ts)`); results.push({ account, size: size.name, view: view.name, missing: [], known: [], error: 'no token' }); continue; }
         if (view.desktopOnly && size.name !== 'desktop') continue;
         const ctx = await createSafeContext(browser, { token: TOKENS.users[account].jwt, viewport: { width: size.width, height: size.height, deviceScaleFactor: 1 } });
         // motion is the REDUCE-motion choice: 'on' = arrivals are instant (stable shots); a view with reduceMotion: false walks

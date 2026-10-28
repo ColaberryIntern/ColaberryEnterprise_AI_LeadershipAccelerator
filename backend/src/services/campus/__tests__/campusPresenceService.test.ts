@@ -60,6 +60,11 @@ describe('touchCampusArea', () => {
     expect(upsert).toHaveBeenCalledTimes(1);
     expect(upsert.mock.calls[0][0]).toMatchObject({ enrollment_id: 'enr-1', area: 'library' });
   });
+
+  it('Campus HQ: a campus beat clears the Management Portal page, so a stale floor never outlives the admin tab', async () => {
+    await touchCampusArea('enr-1', 'career');
+    expect(upsert.mock.calls[0][0]).toMatchObject({ area: 'career', hq_path: null });
+  });
 });
 
 describe('clearCampusArea (WP-7, Q14: "Show which building I am in" off)', () => {
@@ -328,5 +333,57 @@ describe('C9: level and gear on named people only', () => {
     expect(mate.display_name).toBe('Mia');
     expect(mate.rung_name).toBeUndefined();
     expect(mate.gear).toBeUndefined();
+  });
+});
+
+describe('Campus HQ: where staff are inside the HQ, for staff viewers only', () => {
+  const hqRows = [
+    { enrollment_id: 'kes', area: 'career', hq_path: '/admin/internship', updated_at: at(5_000) },
+    { enrollment_id: 'sam', area: 'career', hq_path: null, updated_at: at(6_000) },
+    { enrollment_id: 'anon', area: 'career', hq_path: '/admin/leads', updated_at: at(7_000) },
+    { enrollment_id: 'lib', area: 'library', hq_path: '/admin/leads', updated_at: at(8_000) },
+  ];
+  const staffPanel = () => panel.mockResolvedValue({ viewer_role: 'staff', online: [person('kes', 'Kes'), person('sam', 'Sam'), person('lib', 'Lia')], classes: [], businesses: [] });
+
+  it('a staff viewer sees the sidebar page of each named employee in the HQ (and the lobby as no page)', async () => {
+    mockAudience = 'staff';
+    findAll.mockResolvedValue(hqRows);
+    staffPanel();
+    const { areas } = await getCampusPresence('me', null, NOW);
+    const career = areas.career!.people as Array<CampusPersonOut | { anonymous: true }>;
+    expect(career[0]).toMatchObject({ enrollment_id: 'kes', hq_path: '/admin/internship' });
+    expect(career[1]).not.toHaveProperty('hq_path');
+    expect(career[2]).toEqual({ anonymous: true }); // an unnamed person never carries a page
+    expect(areas.library!.people[0]).not.toHaveProperty('hq_path'); // only the HQ building carries one
+  });
+
+  it('a member never sees what staff are working on', async () => {
+    mockAudience = 'member';
+    findAll.mockResolvedValue(hqRows);
+    staffPanel();
+    const { areas } = await getCampusPresence('me', null, NOW);
+    expect(JSON.stringify(areas)).not.toContain('hq_path');
+    expect(areas.career!.count).toBe(3); // still counted in the building
+  });
+
+  it('a failed audience lookup reads as not staff (fail closed)', async () => {
+    const { campusAudienceFor } = jest.requireMock('../campusAudience') as { campusAudienceFor: jest.Mock };
+    // the first call is the business-team check (visible set); the second is the HQ staff check, which fails here
+    campusAudienceFor.mockResolvedValueOnce('staff').mockRejectedValueOnce(new Error('db down'));
+    const spy = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    findAll.mockResolvedValue(hqRows);
+    staffPanel();
+    const { areas } = await getCampusPresence('me', null, NOW);
+    expect(JSON.stringify(areas)).not.toContain('hq_path');
+    spy.mockRestore();
+  });
+
+  it('no audience lookup at all when nobody is on an admin page', async () => {
+    const { campusAudienceFor } = jest.requireMock('../campusAudience') as { campusAudienceFor: jest.Mock };
+    findAll.mockResolvedValue([{ enrollment_id: 'lib', area: 'library', hq_path: null, updated_at: at(8_000) }]);
+    panel.mockResolvedValue({ viewer_role: 'student', my_class: [], active_now: [] });
+    campusAudienceFor.mockClear();
+    await getCampusPresence('me', null, NOW);
+    expect(campusAudienceFor).not.toHaveBeenCalled();
   });
 });

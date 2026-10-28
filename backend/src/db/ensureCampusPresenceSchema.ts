@@ -27,6 +27,9 @@ export const CAMPUS_PRESENCE_STATEMENTS: string[] = [
   `ALTER TABLE campus_presence ADD COLUMN IF NOT EXISTS area VARCHAR(32)`,
   `ALTER TABLE campus_presence ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()`,
   `CREATE INDEX IF NOT EXISTS idx_campus_presence_updated ON campus_presence (updated_at)`,
+  // Campus HQ: the sidebar page (a nav path, never an id) an employee has open in the Management Portal, so staff see which
+  // floor and room of the HQ building they are on. Additive and nullable: null = in the building's lobby, or not in HQ at all.
+  `ALTER TABLE campus_presence ADD COLUMN IF NOT EXISTS hq_path VARCHAR(128)`,
 ];
 
 type Runner = (sql: string) => Promise<unknown>;

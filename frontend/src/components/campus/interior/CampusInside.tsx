@@ -16,6 +16,8 @@ import { ROOMS } from './roomModel';
 import { readParticipant } from '../../../pages/portal/today/shellUtils';
 import { useCampus } from '../CampusContext';
 import { useMyPhoto } from '../home/useMyPhoto';
+import HqBuilding from '../hq/HqBuilding';
+import type { HqState } from '../hq/useHq';
 import '../campusInside.css';
 
 /**
@@ -60,6 +62,8 @@ export interface CampusInsideProps {
   sectionRoute?: string;
   onOpen?: (route: string) => void;
   onBook?: () => void;
+  /** Campus HQ: the career building's elevator scenes, in place of the 3D room (state shared with the arrival panel). */
+  hq?: HqState | null;
 }
 
 function tagFor(audience: CampusAudience, access: ExplorerAccess): { text: string; tone: string } | null {
@@ -87,13 +91,16 @@ export default function CampusInside(p: CampusInsideProps): React.ReactElement |
   const locked = audience === 'explorer' && access === 'locked';
   const tag = tagFor(audience, access);
   return (
-    <div className={`cm-inside${reduceMotion ? ' is-reduced' : ''}${locked ? ' is-locked' : ''}${going ? ' is-going' : ''}`} data-testid="cm-inside">
+    <div className={`cm-inside${reduceMotion ? ' is-reduced' : ''}${locked ? ' is-locked' : ''}${going ? ' is-going' : ''}${p.hq ? ' is-hq' : ''}`} data-testid="cm-inside">
       <div className="cm-in-frame">
-        <Room3D id={b.id} name={buildingName} people={people} you={you} summary={p.summary ?? null} planStep={p.planStep} spot={p.spot ?? null}
+        {p.hq ? (
+          <HqBuilding s={p.hq} audience={audience} face={buildingName} firstName={facts.firstName} reduceMotion={reduceMotion}
+            desk={desk ? { name: desk.name, initials: initialsOf(desk.name) } : null} named={named} onGround={(r) => p.onOpen?.(r)} />
+        ) : <Room3D id={b.id} name={buildingName} people={people} you={you} summary={p.summary ?? null} planStep={p.planStep} spot={p.spot ?? null}
           firstName={(facts.firstName || 'You').toUpperCase()} reduceMotion={reduceMotion} lanyard={!!p.workplace || BIZ_ROOMS.has(b.id)}
           desk={desk ? { name: desk.name, title: desk.title, initials: initialsOf(desk.name) } : null} onDesk={p.onDesk}
           sectionRoute={p.sectionRoute ?? b.primary.route} onOpen={(r) => p.onOpen?.(r)} onBook={p.onBook}
-          onPick={onPickPerson ? (key, at) => { const x = named.find((n) => n.enrollment_id === key); if (x) onPickPerson(x, at); } : undefined} />
+          onPick={onPickPerson ? (key, at) => { const x = named.find((n) => n.enrollment_id === key); if (x) onPickPerson(x, at); } : undefined} />}
         {locked && <div className="cm-in-lock"><div><b>🔒 Members only</b><small>You&rsquo;re looking in through the glass</small></div></div>}
         {tag && <span className={`cm-in-tag ${tag.tone}`} data-testid="cm-inside-tag">{tag.text}</span>}
         {going && <div className="cm-in-go" role="status" data-testid="cm-inside-going"><div><b>Opening&hellip;</b><small>{going}</small><div className="bar"><i /></div></div></div>}

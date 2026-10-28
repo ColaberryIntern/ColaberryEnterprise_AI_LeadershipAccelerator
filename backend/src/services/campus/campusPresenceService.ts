@@ -53,6 +53,9 @@ export interface CampusPersonOut extends CampusPerson {
   can_message: boolean;
   rung_name?: string;
   gear?: Partial<Record<'head' | 'face' | 'body' | 'neck', string>>;
+  /** Campus HQ: the sidebar page this person has open in the Management Portal. Sent ONLY to a staff viewer, only for a
+   *  named person in the HQ (career) building: members and explorers never see what staff are working on (H6). */
+  hq_path?: string;
 }
 export type CampusPresenceEntry = CampusPersonOut | { anonymous: true };
 /** C13: 'quad' = online (by the People panel) with no fresh building: the open middle of the map, not a building one can enter. */
@@ -68,7 +71,8 @@ export class CampusAreaError extends Error {
 export async function touchCampusArea(enrollmentId: string, area: unknown): Promise<void> {
   if (!isCampusArea(area)) throw new CampusAreaError(area);
   await ensureCampusPresenceSchema();
-  await CampusPresence.upsert({ enrollment_id: enrollmentId, area, updated_at: new Date() });
+  // Campus HQ: a campus heartbeat clears the Management Portal page, so a stale floor never outlives the admin tab.
+  await CampusPresence.upsert({ enrollment_id: enrollmentId, area, hq_path: null, updated_at: new Date() });
 }
 
 /**
@@ -137,12 +141,13 @@ export async function getCampusPresence(viewer: string, cohort: string | null, n
   const since = new Date(now.getTime() - FRESH_MS);
   const rows = (await CampusPresence.findAll({
     where: { updated_at: { [Op.gte]: since } },
-    attributes: ['enrollment_id', 'area', 'updated_at'],
+    attributes: ['enrollment_id', 'area', 'hq_path', 'updated_at'],
     order: [['updated_at', 'DESC']],
     limit: ROW_LIMIT,
     raw: true,
-  })) as unknown as Array<{ enrollment_id: string; area: string; updated_at: Date | string }>;
+  })) as unknown as Array<{ enrollment_id: string; area: string; hq_path?: string | null; updated_at: Date | string }>;
   const visible = await visibleSetFor(viewer, cohort, now);
+  const staffViewer = rows.some((r) => r.hq_path) && await isStaffViewer(viewer);
   const areas: CampusPresenceAreas['areas'] = {};
   for (const r of rows) {
     if (new Date(r.updated_at).getTime() < since.getTime()) continue; // defensive: the query already bounds it
@@ -151,7 +156,8 @@ export async function getCampusPresence(viewer: string, cohort: string | null, n
     const slot = areas[r.area] ?? (areas[r.area] = { count: 0, people: [] });
     slot.count += 1;
     const named = visible.get(r.enrollment_id);
-    slot.people.push(named ? { ...named, can_message: false } : { anonymous: true });
+    const hq = staffViewer && r.area === 'career' && r.hq_path ? { hq_path: r.hq_path } : {};
+    slot.people.push(named ? { ...named, can_message: false, ...hq } : { anonymous: true });
   }
   // C13: everyone the People panel shows this viewer as online who is in no building right now counts at the Quad, so the campus
   // total equals the panel's count minus you. Only people the viewer may see by name are added (the panel's own set).
@@ -161,6 +167,18 @@ export async function getCampusPresence(viewer: string, cohort: string | null, n
   await markCanMessage(viewer, cohort, areas);
   await markLook(areas);
   return { areas };
+}
+
+/** Campus HQ: only staff see where staff are inside the HQ. A failed audience lookup reads as not staff (fail closed). */
+async function isStaffViewer(viewer: string): Promise<boolean> {
+  try {
+    return (await campusAudienceFor(viewer)) === 'staff';
+  } catch (err: unknown) {
+    const e = err as { name?: string; message?: string };
+    console.error(JSON.stringify({ level: 'error', service: 'backend', event: 'campus_hq_audience_failed', outcome: 'failure',
+      error_class: e?.name || 'Error', context: { message: String(e?.message || err).slice(0, 200) } }));
+    return false;
+  }
 }
 
 /**

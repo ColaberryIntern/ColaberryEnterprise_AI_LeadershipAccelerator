@@ -46,6 +46,17 @@ export const AUDIENCES: readonly AudienceSeed[] = [
 ];
 export const EXPLORER = { email: 'campus-e2e-explorer@colaberry.test', full_name: 'Ellis Explorer' };
 
+/** Campus HQ (H8): one staff account per role the elevator e2e checks, each a staff community member with that mgmt_role.
+ *  Tokens are written under `staff-<role>`; the original `staff` (mgmt_role 'admin') is unchanged. */
+export const HQ_STAFF: ReadonlyArray<{ role: string; id: string; full_name: string }> = [
+  { role: 'owner', id: '0e2e0000-0000-4000-8000-000000000111', full_name: 'Olive Owner' },
+  { role: 'marketing', id: '0e2e0000-0000-4000-8000-000000000112', full_name: 'Mara Marketing' },
+  { role: 'admissions', id: '0e2e0000-0000-4000-8000-000000000113', full_name: 'Ada Admissions' },
+  { role: 'mentor', id: '0e2e0000-0000-4000-8000-000000000114', full_name: 'Milo Mentor' },
+  { role: 'support', id: '0e2e0000-0000-4000-8000-000000000115', full_name: 'Sage Support' },
+];
+export const hqStaffEmail = (role: string): string => `campus-e2e-staff-${role}@colaberry.test`;
+
 async function seed(): Promise<Record<string, { enrollment_id: string; jwt: string }>> {
   // Imported only after the guard passed: these open the database connection.
   const { Enrollment, Cohort, CommunityMember, Organization, AiAgent } = await import('../models');
@@ -80,6 +91,19 @@ async function seed(): Promise<Record<string, { enrollment_id: string; jwt: stri
     defaults: { enrollment_id: staff.id, display_name: staff.full_name },
   });
   await member.update({ display_name: staff.full_name, role: 'staff', mgmt_role: 'admin' });
+
+  // Campus HQ: a staff account per role (same column defaults as the audiences above; only the community role differs).
+  for (const h of HQ_STAFF) {
+    const fields = {
+      full_name: h.full_name, email: hqStaffEmail(h.role), company: 'Campus E2E', cohort_id: COHORT_ID,
+      payment_status: 'pending' as const, payment_method: 'invoice' as const, status: 'active' as const, portal_enabled: true,
+    };
+    const [row] = await Enrollment.findOrCreate({ where: { id: h.id }, defaults: { id: h.id, ...fields } });
+    await row.update(fields);
+    const [cm] = await CommunityMember.findOrCreate({ where: { enrollment_id: h.id }, defaults: { enrollment_id: h.id, display_name: h.full_name } });
+    await cm.update({ display_name: h.full_name, role: 'staff', mgmt_role: h.role });
+    out[`staff-${h.role}`] = { enrollment_id: h.id, jwt: signParticipantJwt({ id: row.id, email: row.email, cohort_id: row.cohort_id ?? null }) };
+  }
 
   const business = AUDIENCES.find((a) => a.key === 'business')!;
   const [org] = await Organization.findOrCreate({
