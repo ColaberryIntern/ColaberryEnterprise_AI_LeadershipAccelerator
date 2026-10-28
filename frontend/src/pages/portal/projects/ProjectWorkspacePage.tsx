@@ -13,6 +13,7 @@ import { foldConnect } from './foldConnect';
 import { repoConnectionState } from './WorkspaceRepoPanel';
 import HowToBuild from './HowToBuild';
 import { refreshProjectsFromBackend } from './projectSync';
+import StaleCopyBanner from './StaleCopyBanner';
 import { useStoryVerification } from './useStoryVerification';
 import AcceptanceChecklist from './AcceptanceChecklist';
 import StoryCompletionPanel, { isSelfDirectedStory } from './StoryCompletionPanel';
@@ -302,6 +303,12 @@ const ProjectWorkspacePage: React.FC = () => {
 
   // CENTER — read in one order: what this story is, what done means, then how to build it.
   const centre = (<>
+          {/* FIRST, above the story itself: whether what follows is the server's
+              answer or a copy saved on this device. It belongs here rather than
+              in the header because both render paths below (campus workstation
+              and the plain shell) compose `centre`, so neither can ship the
+              story text without the caveat that applies to it. */}
+          <StaleCopyBanner projectId={projectId} onRecovered={() => setTick((t) => t + 1)} />
           {blocked.blocked && (
             <div className="rt-card" style={{ marginBottom: 14 }}>
               <div className="rt-lab">Not yet</div>
