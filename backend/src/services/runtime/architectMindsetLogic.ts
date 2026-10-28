@@ -125,13 +125,16 @@ export function completionGaps(p: AmProgress, s: AmScenario): Gap[] {
   const bad = invalidAnswers([...q1, ...q2], ans);
   if (bad.length) push('interview', `Answer every required interview question (${bad.length} remaining).`);
 
-  const rd = p.revised_decision;
-  if (!(rd && (isMeaningful(rd.choice) || isMeaningful(rd.custom)))) push('revised_decision', 'Submit your revised architectural decision.');
-
-  if (cleanList(p.tradeoffs).length < 1) push('tradeoff', 'Explain at least one tradeoff.');
-  if (cleanList(p.assumptions).length < 1) push('assumption', 'Identify at least one assumption.');
-  if (cleanList(p.failure_modes).length < 1) push('failure', 'Identify at least one consequence or failure risk.');
-  if (!isMeaningful(p.reflection)) push('reflection', 'Submit your final reflection.');
+  // A lite scenario (Week 0's short first taste) has no re-architecture stage, so it
+  // never collects a revised decision, reflection, or tradeoff/assumption/failure evidence.
+  if (!s.lite) {
+    const rd = p.revised_decision;
+    if (!(rd && (isMeaningful(rd.choice) || isMeaningful(rd.custom)))) push('revised_decision', 'Submit your revised architectural decision.');
+    if (cleanList(p.tradeoffs).length < 1) push('tradeoff', 'Explain at least one tradeoff.');
+    if (cleanList(p.assumptions).length < 1) push('assumption', 'Identify at least one assumption.');
+    if (cleanList(p.failure_modes).length < 1) push('failure', 'Identify at least one consequence or failure risk.');
+    if (!isMeaningful(p.reflection)) push('reflection', 'Submit your final reflection.');
+  }
   if (!isMeaningful(p.commitment)) push('commitment', 'Complete your Architect Commitment.');
   if (!p.evaluation) push('evaluation', 'The experience must be evaluated.');
   return gaps;
@@ -191,6 +194,17 @@ export function stageForScore(score: number): AmStage {
 export function assessBaseline(p: AmProgress, s: AmScenario): { signal: number; stage: AmStage; observation: string } {
   const ans = p.interview || {};
   const systemsChoice = (qid: string, ids: string[]): number => (ids.includes(String(ans[qid]?.choice)) || isMeaningful(ans[qid]?.custom) ? 1 : 0);
+  if (s.lite) {
+    // Lite has two signals only: the gut call (asking first) and the takeaway (look around it).
+    // Capped at 40 (System Explorer): two clicks cannot evidence the higher stages.
+    const asked = p.first_decision?.choice === 'ask' || isMeaningful(p.first_decision?.custom) ? 1 : 0;
+    const hits = asked + systemsChoice('r1', ['system']);
+    const signal = hits * 20;
+    const observation = hits >= 1
+      ? 'You are already looking past the feature to the people and information around it. That is the architect move.'
+      : 'Your first instinct went to the build. That is normal, and it is exactly what the Time Machine will stretch week by week.';
+    return { signal, stage: stageForScore(signal), observation };
+  }
   let hits = 0; let total = 0;
   const rubric: Array<[string, string[]]> = [
     ['q1', ['system', 'outcome']], ['q3', ['one_source', 'just_qa', 'one_user']], ['q4', ['legal', 'personal', 'authority', 'low_evidence']],
