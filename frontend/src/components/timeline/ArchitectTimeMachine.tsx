@@ -342,7 +342,7 @@ const OptionList: React.FC<{ name: string; options: { id: string; label: string;
         </button>
       ))}
       {value === (options.find((o) => o.custom)?.id) && (
-        <textarea className="am-free" autoFocus placeholder="In your own words…" value={custom} onChange={(e) => onCustom(e.target.value)} aria-label="Your own answer (required)" />
+        <textarea className="am-input" autoFocus placeholder="In your own words…" value={custom} onChange={(e) => onCustom(e.target.value)} aria-label="Your own answer (required)" />
       )}
     </div>
   );
@@ -387,7 +387,7 @@ const StageBody: React.FC<any> = (p) => {
       return (<><p className="am-kicker">{lite ? 'Your Call' : 'First Decision · before the lesson'}</p><h2 className="am-h">What would you do first?</h2><p className="am-lead">{s.first_decision.prompt}</p>{banner}
         <OptionList name="First decision" options={s.first_decision.options} value={p.firstChoice} custom={p.firstCustom} invalid={!!p.reqError} onChoose={p.setFirstChoice} onCustom={p.setFirstCustom} />
         {!lite && (<><label className="am-flab" htmlFor="am-reason">Why? (one line captures your reasoning)</label>
-        <textarea id="am-reason" className="am-free" placeholder="I would start by…" value={p.firstReason} onChange={(e) => p.setFirstReason(e.target.value)} /></>)}</>);
+        <textarea id="am-reason" className="am-input" placeholder="I would start by…" value={p.firstReason} onChange={(e) => p.setFirstReason(e.target.value)} /></>)}</>);
     case 'zoom_out':
       return (<><p className="am-kicker">{lite ? 'The Bigger Picture' : 'System Zoom-Out'}</p><h2 className="am-h">{lite ? `It was never just ${s.initial_system.length} things.` : `The system was never ${s.initial_system.length} boxes.`}</h2>
         <div className="am-layers">
@@ -413,27 +413,27 @@ const StageBody: React.FC<any> = (p) => {
         <div className="am-interviewer"><span className="am-orb" /><div className="am-bubble"><span className="am-who">Architect Interviewer</span>{s.rearchitecture.prompt}</div></div>{banner}
         <Interview questions={s.interview_part_2} answers={p.iv2} set={p.setIv2} invalidIds={p.reqError ? requiredUnanswered(s.interview_part_2, p.iv2) : []} />
         <label className="am-flab" htmlFor="am-reflect">In your own words, the most important thing you originally missed</label>
-        <textarea id="am-reflect" className="am-free" placeholder="I planned for the successful path but did not design the…" value={p.reflection} onChange={(e) => p.setReflection(e.target.value)} /></>);
+        <textarea id="am-reflect" className="am-input" placeholder="I planned for the successful path but did not design the…" value={p.reflection} onChange={(e) => p.setReflection(e.target.value)} /></>);
     case 'receipt':
       return (<><p className="am-kicker">Experience Receipt</p><h2 className="am-h">What this session represented.</h2>{p.receipt && <Receipt receipt={p.receipt} />}</>);
     case 'record':
       return (<><p className="am-kicker">Architect Decision Record</p><h2 className="am-h">Your record, in your words.</h2>
         <p className="am-lead">A structured, portfolio-ready record you own, generated from what you decided. Finish it with your commitment.</p>
         <label className="am-flab" htmlFor="am-commit">{s.commitment_prompt} …</label>
-        <textarea id="am-commit" className="am-free" placeholder="… map the whole system, its owners, and its failure paths, before choosing a tool." value={p.commitment} onChange={(e) => p.setCommitment(e.target.value)} />{banner}</>);
+        <textarea id="am-commit" className="am-input" placeholder="… map the whole system, its owners, and its failure paths, before choosing a tool." value={p.commitment} onChange={(e) => p.setCommitment(e.target.value)} />{banner}</>);
     case 'transfer':
       return (<><p className="am-kicker">Project Transfer</p><h2 className="am-h">Apply it to your own project.</h2>
         <div className="am-interviewer"><span className="am-orb" /><div className="am-bubble"><span className="am-who">Architect Interviewer</span>{s.project_transfer.questions[0]}</div></div>
         <label className="am-flab" htmlFor="am-assumed">{s.project_transfer.questions[0]}</label>
-        <textarea id="am-assumed" className="am-free" placeholder="I assumed I would build…" value={p.assumed} onChange={(e) => p.setAssumed(e.target.value)} />
+        <textarea id="am-assumed" className="am-input" placeholder="I assumed I would build…" value={p.assumed} onChange={(e) => p.setAssumed(e.target.value)} />
         <label className="am-flab" htmlFor="am-outcome">{s.project_transfer.questions[1]}</label>
-        <textarea id="am-outcome" className="am-free" placeholder="Success would look like…" value={p.outcome} onChange={(e) => p.setOutcome(e.target.value)} />{banner}</>);
+        <textarea id="am-outcome" className="am-input" placeholder="Success would look like…" value={p.outcome} onChange={(e) => p.setOutcome(e.target.value)} />{banner}</>);
     case 'takeaway':
       return (<><p className="am-kicker">Your Takeaway</p><h2 className="am-h">What will you take with you?</h2>
         <p className="am-lead">{s.rearchitecture.prompt}</p>{banner}
         <Interview questions={s.interview_part_2} answers={p.iv2} set={p.setIv2} invalidIds={p.reqError ? requiredUnanswered(s.interview_part_2, p.iv2) : []} />
         <label className="am-flab" htmlFor="am-commit">Finish the sentence: {s.commitment_prompt} …</label>
-        <textarea id="am-commit" className="am-free" placeholder="… ask who will use it and what it touches before I pick a tool." value={p.commitment} onChange={(e) => p.setCommitment(e.target.value)} /></>);
+        <textarea id="am-commit" className="am-input" placeholder="… ask who will use it and what it touches before I pick a tool." value={p.commitment} onChange={(e) => p.setCommitment(e.target.value)} /></>);
     default: return null;
   }
 };

@@ -70,8 +70,8 @@ export const AM_CSS = `
 .am-box>i{width:9px;height:9px;border-radius:50%;background:#8fc7db;transform:scale(0);transition:transform .13s var(--am-ease)}
 .am-opt.on .am-box>i{transform:scale(1)}
 @media(prefers-reduced-motion:reduce){.am-box>i{transition:none}}
-.am-free{width:100%;max-width:62ch;background:#0b1519;border:1px solid #ffffff2e;border-radius:10px;color:#eef6f9;font:14px var(--am-sans);padding:11px 13px;min-height:70px;resize:vertical;margin-top:6px}
-.am-free:focus-visible{outline:3px solid #8fc7db;outline-offset:1px}
+.am-input{width:100%;max-width:62ch;background:#0b1519;border:1px solid #ffffff2e;border-radius:10px;color:#eef6f9;font:14px var(--am-sans);padding:11px 13px;min-height:70px;resize:vertical;margin-top:6px}
+.am-input:focus-visible{outline:3px solid #8fc7db;outline-offset:1px}
 .am-flab{display:block;font:600 12px var(--am-mono);letter-spacing:.03em;color:#9fbcc7;margin:14px 0 4px;text-transform:uppercase}
 .am-reqbanner{display:flex;align-items:center;gap:10px;background:#3a1416;border:1px solid #7a2a2e;color:#ffb9bd;border-radius:10px;padding:10px 13px;font-size:13px;margin:12px 0;max-width:62ch}.am-i{font-weight:800}
 .am-layers{display:grid;grid-template-columns:1fr 1fr;gap:12px;max-width:70ch;margin:14px 0}
