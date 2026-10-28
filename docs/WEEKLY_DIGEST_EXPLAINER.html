@@ -1,0 +1,724 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Weekly Digest Decision Logic</title>
+<style>
+  :root {
+    --cherry: #FB2832;
+    --cherry-deep: #C20E1E;
+    --cherry-bg: #FFF0F1;
+    --leaf: #77BB4A;
+    --ink: #2d3748;
+    --ink-soft: #718096;
+    --page: #f7fafc;
+    --card: #ffffff;
+    --line: #e2e8f0;
+    --ok: #38a169;
+    --warn: #B26A00;
+    --warn-bg: #FFF8E6;
+    --bad: #e53e3e;
+    --mono: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace;
+    --sans: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--page);
+    color: var(--ink);
+    font-family: var(--sans);
+    line-height: 1.6;
+    font-size: 16px;
+  }
+
+  .wrap { max-width: 1060px; margin: 0 auto; padding: 0 20px 80px; }
+
+  /* ---- Masthead ---- */
+  header.mast {
+    background: var(--card);
+    border-bottom: 4px solid var(--cherry);
+    padding: 44px 0 30px;
+    margin-bottom: 30px;
+  }
+  header.mast .wrap { padding-bottom: 0; }
+  .eyebrow {
+    font-size: 0.7rem; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--cherry); font-weight: 700; margin: 0 0 10px;
+  }
+  h1 { font-size: 2.1rem; line-height: 1.15; margin: 0 0 12px; color: var(--ink); font-weight: 700; text-wrap: balance; }
+  .standfirst { font-size: 1.08rem; color: var(--ink-soft); margin: 0; max-width: 68ch; }
+
+  /* ---- The headline warning ---- */
+  .alarm {
+    background: var(--warn-bg);
+    border: 1px solid #F0D28A;
+    border-left: 5px solid var(--warn);
+    border-radius: 8px;
+    padding: 18px 22px;
+    margin: 0 0 34px;
+  }
+  .alarm h2 { margin: 0 0 8px; font-size: 1.12rem; color: #8A5200; }
+  .alarm p { margin: 0 0 10px; }
+  .alarm p:last-child { margin-bottom: 0; }
+
+  /* ---- Sections ---- */
+  section { margin: 0 0 42px; }
+  h2.sec {
+    font-size: 1.45rem; margin: 0 0 6px; color: var(--ink); font-weight: 700;
+    padding-bottom: 8px; border-bottom: 2px solid var(--line);
+  }
+  h2.sec .num {
+    display: inline-block; min-width: 1.6em; color: var(--cherry); font-variant-numeric: tabular-nums;
+  }
+  .sec-note { color: var(--ink-soft); font-size: 0.93rem; margin: 10px 0 20px; max-width: 72ch; }
+  h3 { font-size: 1.05rem; margin: 26px 0 8px; color: var(--ink); font-weight: 600; }
+
+  .card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 10px; padding: 20px 22px; margin: 0 0 18px;
+  }
+
+  /* ---- Tables ---- */
+  .tbl-wrap { overflow-x: auto; margin: 0 0 18px; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.88rem; background: var(--card); }
+  th {
+    text-align: left; font-weight: 600; color: var(--ink-soft);
+    border-bottom: 2px solid var(--line); padding: 9px 11px; white-space: nowrap;
+    font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  td { padding: 10px 11px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  tbody tr:hover td { background: #fafbfc; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  tr.spotlight td { background: var(--cherry-bg); font-weight: 600; }
+  tr.spotlight:hover td { background: #ffe4e6; }
+  tr.dim td { color: var(--ink-soft); }
+
+  code, .k {
+    font-family: var(--mono); font-size: 0.86em;
+    background: #f1f3f6; padding: 1px 5px; border-radius: 4px;
+    color: #313a47; word-break: break-word;
+  }
+  pre {
+    font-family: var(--mono); font-size: 0.8rem; line-height: 1.55;
+    background: #1f2430; color: #e6e9ef; padding: 16px 18px;
+    border-radius: 8px; overflow-x: auto; margin: 0 0 16px;
+  }
+  pre .c { color: #8b97a8; }
+  pre .s { color: #9ad67a; }
+  pre .kw { color: #ff8e8e; }
+
+  .path {
+    font-family: var(--mono); font-size: 0.74rem; color: var(--ink-soft);
+    display: block; margin-top: 3px; word-break: break-all;
+  }
+
+  /* ---- Pills ---- */
+  .pill {
+    display: inline-block; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.04em;
+    padding: 2px 9px; border-radius: 999px; text-transform: uppercase; white-space: nowrap;
+  }
+  .pill-shadow { background: #e9ecf2; color: #4a5568; }
+  .pill-gap { background: var(--warn-bg); color: #8A5200; border: 1px solid #F0D28A; }
+  .pill-ok { background: #E8F6EE; color: #1A7F4B; }
+  .pill-dead { background: #FDECEC; color: #A3252E; }
+
+  /* ---- The chain diagram ---- */
+  .chain { display: flex; flex-wrap: wrap; gap: 10px; align-items: stretch; margin: 6px 0 20px; }
+  .chain-step {
+    flex: 1 1 160px; min-width: 150px; background: var(--card);
+    border: 1px solid var(--line); border-top: 3px solid var(--cherry);
+    border-radius: 8px; padding: 12px 14px;
+  }
+  .chain-step .lab {
+    font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--ink-soft); font-weight: 700; display: block; margin-bottom: 4px;
+  }
+  .chain-step .val { font-family: var(--mono); font-size: 0.84rem; color: var(--ink); font-weight: 600; }
+  .chain-step .why { font-size: 0.78rem; color: var(--ink-soft); margin-top: 6px; line-height: 1.4; }
+  .chain-step.audience { border-top-color: #367895; }
+
+  /* ---- Cross tab ---- */
+  table.xtab td, table.xtab th { text-align: center; }
+  table.xtab td:first-child, table.xtab th:first-child { text-align: left; font-weight: 600; }
+  td.zero { background: var(--warn-bg); color: #8A5200; font-weight: 700; }
+  td.has { font-variant-numeric: tabular-nums; }
+
+  .callout {
+    border-left: 4px solid var(--cherry); background: var(--cherry-bg);
+    padding: 14px 18px; border-radius: 0 8px 8px 0; margin: 0 0 18px;
+  }
+  .callout p { margin: 0; }
+  .callout.neutral { border-left-color: #367895; background: #EEF5F8; }
+
+  blockquote {
+    margin: 0 0 16px; padding: 12px 18px; border-left: 3px solid var(--line);
+    color: #3d4654; font-style: italic; background: var(--card); border-radius: 0 6px 6px 0;
+  }
+  blockquote cite { display: block; font-style: normal; font-size: 0.76rem; color: var(--ink-soft); margin-top: 7px; font-family: var(--mono); }
+
+  ul.tight { margin: 0 0 16px; padding-left: 22px; }
+  ul.tight li { margin-bottom: 7px; }
+
+  footer.foot {
+    border-top: 2px solid var(--line); margin-top: 20px; padding-top: 18px;
+    font-size: 0.82rem; color: var(--ink-soft);
+  }
+
+  @media (max-width: 640px) {
+    h1 { font-size: 1.6rem; }
+    h2.sec { font-size: 1.2rem; }
+    body { font-size: 15px; }
+  }
+</style>
+</head>
+<body>
+
+<header class="mast">
+  <div class="wrap">
+    <p class="eyebrow">Explorer Growth &middot; Decision Logic</p>
+    <h1>What the weekly digest actually chooses from</h1>
+    <p class="standfirst">
+      How the Governor picks one action per learner per night, what evidence it reads to do it,
+      how &ldquo;stage&rdquo; and &ldquo;audience&rdquo; cross to decide what a person is allowed to
+      receive, and why it sometimes declares that it has nothing to send.
+    </p>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <div class="alarm">
+    <h2>Read this first: it is not weekly, and nothing sends it</h2>
+    <p>
+      <code>explorer_weekly_digest</code> is a real campaign with a real sequence and a real decision
+      written for it most nights. But three separate facts in the code mean
+      <strong>no Explorer learner has ever received it</strong>:
+    </p>
+    <ul class="tight">
+      <li>Its sequence ships <code>is_active: false</code>, re-asserted on every boot. The seed file calls
+        this &ldquo;the one thing that actually stops a send.&rdquo;
+        <span class="path">backend/src/seeds/explorerGrowth/seedExplorerGrowthCampaigns.ts:33, 73</span></li>
+      <li>Every decision row is written <code>mode: 'shadow'</code> and <code>executed: false</code>.
+        <span class="path">backend/src/services/explorerGrowth/governor/runGovernor.ts:261, 293</span></li>
+      <li>Its sequence has <strong>one step at <code>delay_days: 0</code></strong>, not a recurring
+        seven-day step. Nothing re-enrolls anyone weekly.
+        <span class="path">backend/src/seeds/explorerGrowth/explorerSequenceDefinitions.ts:137-147</span></li>
+    </ul>
+    <p>
+      So everything below describes a system that <strong>decides and records</strong>, and is
+      deliberately not yet permitted to act. That is the point of shadow mode: you can audit the
+      judgment before it reaches anybody.
+    </p>
+  </div>
+
+  <!-- ================= 1 ================= -->
+  <section>
+    <h2 class="sec"><span class="num">1</span>The nine things it can choose, and why the digest nearly always loses</h2>
+    <p class="sec-note">
+      The agent does not compose a digest out of parts. Each night it runs eight independent
+      generators over one learner, each of which either proposes a single action or returns nothing.
+      A referee then picks exactly one winner. The weekly digest is one of the nine possible
+      outcomes, and deliberately the <em>last</em> one.
+    </p>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th class="num">Tier</th>
+            <th>What it proposes</th>
+            <th>Fires when</th>
+            <th class="num">Score</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="dim"><td class="num">0</td><td><strong>Nothing &mdash; it stops the decision</strong><br />converted, unsubscribed, DNC, consent revoked, kill switch, campaign inactive</td><td>Any one of six hard stops is true, checked in that order</td><td class="num">&mdash;</td></tr>
+          <tr class="dim"><td class="num">1</td><td colspan="2"><em>No generator exists</em></td><td class="num">&mdash;</td></tr>
+          <tr><td class="num">2</td><td>Recover friction</td><td>Friction score at or above 25</td><td class="num">50&nbsp;+&nbsp;f, capped 90<br />(95 if the address bounced)</td></tr>
+          <tr><td class="num">3</td><td>Create a human task</td><td>Learner is mid-conversation &mdash; &ldquo;a reply is a person waiting&rdquo;</td><td class="num">80</td></tr>
+          <tr><td class="num">4</td><td colspan="2"><em>No generator &mdash; event logistics deferred, and a test asserts its absence</em></td><td class="num">&mdash;</td></tr>
+          <tr><td class="num">5</td><td>Commercial offer</td><td>Intent at or above 60, and friction below 25</td><td class="num">min(100, i)</td></tr>
+          <tr><td class="num">6</td><td>Activation rescue</td><td>Never started, or dormant 14+ days</td><td class="num">75 never-engaged<br />40&nbsp;+&nbsp;days, capped 70</td></tr>
+          <tr><td class="num">7</td><td>Recommend one lesson</td><td>Has affinity tags above 0.35 confidence</td><td class="num">40&nbsp;+&nbsp;10&nbsp;per&nbsp;tag, capped 80</td></tr>
+          <tr><td class="num">8</td><td>Community digest</td><td>Email eligible</td><td class="num">50</td></tr>
+          <tr class="spotlight"><td class="num">9</td><td>WEEKLY DIGEST &mdash; up to 3 lessons</td><td>Email eligible. That is the entire condition.</td><td class="num">30</td></tr>
+          <tr><td class="num">10</td><td>Referral ask</td><td>Email eligible</td><td class="num">40</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>
+      Lower tier wins. The digest sits at tier 9, second-lowest of the ten, and its only test is
+      &ldquo;can we legally email this person.&rdquo; It is the fallback: it fires for anyone reachable who
+      produced nothing better.
+    </p>
+
+    <pre><span class="c">// governor/candidates/nurture.ts:80-97 &mdash; the entire digest generator</span>
+<span class="kw">export function</span> generalNurture(ctx) {
+  <span class="kw">if</span> (ctx.contactability?.email?.eligible !== <span class="kw">true</span>) <span class="kw">return null</span>;
+  <span class="kw">return</span> {
+    action_type:      <span class="s">'SEND_EMAIL'</span>,
+    campaign_key:     <span class="s">'explorer_weekly_digest'</span>,
+    priority_tier:    <span class="s">9</span>,
+    intra_tier_score: <span class="s">30</span>,
+    required_assets:  [{ asset_type: <span class="s">'weekly_digest'</span>, state: ctx.primary_state, ... }],
+    rationale:        [<span class="s">'general nurture &mdash; no higher-priority candidate applies'</span>],
+  };
+}</pre>
+
+    <h3>How the referee ranks them</h3>
+    <p>Four sort keys, in order:</p>
+    <ul class="tight">
+      <li><code>priority_tier</code> ascending &mdash; lower tier wins outright</li>
+      <li><code>intra_tier_score</code> descending &mdash; breaks ties inside one tier</li>
+      <li>then <code>action_type</code> and <code>campaign_key</code> alphabetically</li>
+    </ul>
+    <p>
+      Those last two exist only to make the ordering <em>total</em>. The documented third and fourth
+      keys (days in state, enrollment id) are constant for a single learner, so they cannot separate
+      two of that learner's candidates. Without a final deterministic key the output would stop being
+      reproducible, which would quietly destroy the idempotency the whole system rests on.
+    </p>
+
+    <div class="callout">
+      <p>
+        <strong>Every loser is recorded with the reason it lost.</strong> This is why the digest is
+        usually the thing <em>being</em> suppressed rather than the thing suppressing: a real
+        production row reads
+        <code>explorer_weekly_digest &rarr; "lower priority than tier 6 (SEND_EMAIL)"</code>.
+      </p>
+    </div>
+  </section>
+
+  <!-- ================= 2 ================= -->
+  <section>
+    <h2 class="sec"><span class="num">2</span>What information it looks at</h2>
+    <p class="sec-note">
+      Three cron jobs run in a deliberate order each night: content sync at 02:50, profile recompute
+      at 03:20, then the decision at 03:50. By the time the agent chooses, this is everything on its desk.
+    </p>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Input</th><th>Where it comes from</th><th>What it changes</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>Primary state</strong></td>
+            <td>Learner profile, one of eight values</td>
+            <td>Gates tiers 6, 7, 8 &mdash; and supplies the <strong>stage</strong> for the content lookup</td>
+          </tr>
+          <tr>
+            <td><strong>Overlays</strong></td>
+            <td>Profile, 12 possible, recomputed fresh every run</td>
+            <td>Gate friction, in-conversation, high-intent and referral tiers</td>
+          </tr>
+          <tr>
+            <td><strong>Scores</strong> (engagement, intent, friction)</td>
+            <td>Recomputed <em>live</em> from signals, not read from the stored profile</td>
+            <td>Intent at 60 opens tier 5; friction at 25 opens tier 2 and blocks tier 5</td>
+          </tr>
+          <tr>
+            <td><strong>Affinity tags</strong></td>
+            <td>Profile</td>
+            <td>Ranks content by topic. <span class="pill pill-dead">inert today</span> every profile carries an empty list, so this currently changes nothing</td>
+          </tr>
+          <tr>
+            <td><strong>Behavioral readout</strong></td>
+            <td>Navigation events, card progress, page events, interaction outcomes, community posts</td>
+            <td>Last engagement separates never-started from lapsed; recent intent gates the offer</td>
+          </tr>
+          <tr>
+            <td><strong>Contactability</strong></td>
+            <td><strong>Re-resolved fresh every run</strong>, never the stored copy</td>
+            <td>The digest's only predicate. &ldquo;A stored eligibility goes stale the moment someone unsubscribes.&rdquo;</td>
+          </tr>
+          <tr>
+            <td><strong>Contact history</strong></td>
+            <td>Count and latest of executed decisions in the last 7 days</td>
+            <td>Feeds the frequency cap and the cooldown</td>
+          </tr>
+          <tr>
+            <td><strong>Entitlement tier</strong></td>
+            <td>The same free-preview check the learner portal gates on</td>
+            <td>Decides which content the person is allowed to be shown &mdash; see &sect;3</td>
+          </tr>
+          <tr>
+            <td><strong>Profile freshness</strong></td>
+            <td>Profile timestamps</td>
+            <td>Refuses the whole decision if never scored, stale beyond 26 hours, or clock-skewed</td>
+          </tr>
+          <tr>
+            <td><strong>Campaign registry</strong></td>
+            <td>Campaign rows, keyed on <code>settings.campaign_key</code></td>
+            <td>Resolves the campaign id, or names a gap &mdash; see &sect;4</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Two name collisions worth knowing</h3>
+    <ul class="tight">
+      <li>
+        There is a per-learner portal preference also called <strong>weekly digest</strong>
+        (&ldquo;A Monday summary of your progress, points, and what&rsquo;s next&rdquo;).
+        <strong>The Governor does not read it.</strong> Different feature, same name.
+      </li>
+      <li>
+        The forecast service uses the word <strong>gap</strong> to mean a shortfall against a
+        paid-learner target. Unrelated to content gaps in &sect;4.
+      </li>
+    </ul>
+
+    <h3>What is deliberately NOT on the desk</h3>
+    <p>
+      The generators are pure functions. The context handed to them has, in the code's own words,
+      &ldquo;no mailer, no queue, no campaign engine, no model client.&rdquo; A test enforces an import
+      whitelist and derives the forbidden <code>send*</code> function names from the mail service's own
+      source, so the decision layer is <em>structurally</em> incapable of sending. A generator can
+      propose; it cannot act.
+    </p>
+  </section>
+
+  <!-- ================= 3 ================= -->
+  <section>
+    <h2 class="sec"><span class="num">3</span>Stage &times; audience: the two questions that must both pass</h2>
+    <p class="sec-note">
+      This is the part most often misread as one idea. &ldquo;Stage&rdquo; and &ldquo;audience&rdquo; are
+      two independent axes, written by different functions for different reasons, and a piece of
+      content has to clear both before a learner can be sent it.
+    </p>
+
+    <div class="card">
+      <h3 style="margin-top:0">Three vocabularies that share zero members</h3>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Vocabulary</th><th>Answers</th><th>Values</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><strong>Primary state</strong><br /><span class="path">8 values, SHOUTING</span></td>
+              <td>Where the <em>person</em> is</td>
+              <td><code>NEW_EXPLORER</code> <code>ACTIVATING</code> <code>ACTIVE_LEARNER</code>
+                  <code>ENGAGED_LEARNER</code> <code>CONNECTED_TO_COMMUNITY</code>
+                  <code>CONSIDERING_NEXT_STEP</code> <code>ENROLLMENT_READY</code> <code>CONVERTED</code></td>
+            </tr>
+            <tr>
+              <td><strong>Stage tag</strong><br /><span class="path">3 values, lowercase</span></td>
+              <td>Where the <em>content</em> sits</td>
+              <td><code>activation</code> <code>learning</code> <code>evergreen</code></td>
+            </tr>
+            <tr>
+              <td><strong>Audience tag</strong><br /><span class="path">2 values</span></td>
+              <td>Who may <em>open</em> it</td>
+              <td><code>free_preview</code> <code>full_access</code></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <blockquote>
+        A learner has a state (<code>ACTIVATING</code>). A card carries a stage tag
+        (<code>activation</code>). These sets share zero members. The first draft of the resolver
+        compared them directly, and because every generator sets state on every asset query, it would
+        have matched nothing for all 153 learners &mdash; and been reported as a content gap rather
+        than a bug.
+        <cite>content/assetPurposeMap.ts:143-155</cite>
+      </blockquote>
+      <p style="margin-bottom:0">
+        One function is the only sanctioned bridge between the first two. Nothing else may compare them.
+      </p>
+    </div>
+
+    <h3>Axis one: person &rarr; state &rarr; stage</h3>
+    <div class="chain">
+      <div class="chain-step">
+        <span class="lab">Evidence</span>
+        <span class="val">1 card completed</span>
+        <p class="why">Scored live from behavior, in a fixed order of tests</p>
+      </div>
+      <div class="chain-step">
+        <span class="lab">becomes state</span>
+        <span class="val">ACTIVE_LEARNER</span>
+        <p class="why">Learning states never regress &mdash; index position is the rule. Commercial states may decay.</p>
+      </div>
+      <div class="chain-step">
+        <span class="lab">maps to stage</span>
+        <span class="val">learning</span>
+        <p class="why">Via the one sanctioned bridge</p>
+      </div>
+      <div class="chain-step">
+        <span class="lab">matched against</span>
+        <span class="val">card stage tag</span>
+        <p class="why">Which came from the card&rsquo;s week number</p>
+      </div>
+    </div>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Learner state</th><th>Content stage it asks for</th><th>Why</th></tr></thead>
+        <tbody>
+          <tr><td><code>NEW_EXPLORER</code>, <code>ACTIVATING</code></td><td><code>activation</code></td><td>Not started, or barely. The beginning is what is useful.</td></tr>
+          <tr><td><code>ACTIVE_LEARNER</code>, <code>ENGAGED_LEARNER</code>, <code>CONNECTED_TO_COMMUNITY</code></td><td><code>learning</code></td><td>Underway. Week-2-and-beyond material moves them.</td></tr>
+          <tr><td><code>CONSIDERING_NEXT_STEP</code>, <code>ENROLLMENT_READY</code>, <code>CONVERTED</code></td><td><code>evergreen</code></td><td>Past the learning arc. Undated material travels best; a stale &ldquo;start here&rdquo; card would read as the system not knowing who they are.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Axis two: content &rarr; week &rarr; stage <em>and</em> audience</h3>
+    <p>Both tags are written by the 02:50 projection, from one field: the card&rsquo;s week number.</p>
+    <pre><span class="c">// Where the content sits in the journey</span>
+week is null  &rarr; <span class="s">'evergreen'</span>
+week &lt;= 1     &rarr; <span class="s">'activation'</span>
+otherwise     &rarr; <span class="s">'learning'</span>
+
+<span class="c">// Who is allowed to open it &mdash; mirrors the portal's own gate exactly</span>
+week === 0    &rarr; [<span class="s">'free_preview'</span>, <span class="s">'full_access'</span>]
+otherwise     &rarr; [<span class="s">'full_access'</span>]</pre>
+
+    <div class="callout">
+      <p>
+        <strong>The trap.</strong> An undated card is <code>evergreen</code>, which sounds portable, but
+        <code>full_access</code> only &mdash; because the portal&rsquo;s rule is <code>week === 0</code>
+        and <code>null</code> is not <code>0</code>. The two tags answer different questions, and the
+        thresholds genuinely differ: <strong>week &le; 1</strong> for stage,
+        <strong>week === 0</strong> for audience.
+      </p>
+    </div>
+
+    <h3>Where they cross</h3>
+    <p>
+      At lookup time both become predicates in the same query. For a digest to an
+      <code>ACTIVATING</code> free-preview learner:
+    </p>
+    <pre><span class="kw">AND</span> :tier = <span class="kw">ANY</span>(audience_tags)                                <span class="c">-- 'free_preview'</span>
+<span class="kw">AND</span> (:stage_tags <span class="kw">IS NULL OR</span> journey_stage_tags &amp;&amp; :stage_tags)  <span class="c">-- '{activation}'</span>
+<span class="kw">AND</span> asset_type = <span class="kw">ANY</span>(:kinds)                                 <span class="c">-- '{LESSON}'</span>
+<span class="kw">LIMIT</span> :max_rows                                              <span class="c">-- 3, only for the digest</span></pre>
+    <p>
+      A stage of <code>null</code> means <em>do not filter by stage</em>, which is not the same as
+      &ldquo;match nothing.&rdquo; The digest pins no stage of its own, so it follows the learner.
+      Activation purposes do the opposite: they pin <code>activation</code> regardless of where the
+      learner has drifted to, because the point is the <em>first</em> step.
+    </p>
+
+    <h3>What the crossing produces in practice</h3>
+    <p>
+      The admin Content tab renders this as a cross-tab. Figures below are the ones recorded in the
+      code at the time of writing, not a live query:
+    </p>
+    <div class="tbl-wrap">
+      <table class="xtab">
+        <thead><tr><th>Stage</th><th>free_preview</th><th>full_access</th></tr></thead>
+        <tbody>
+          <tr><td>activation</td><td class="has">23</td><td class="has">23</td></tr>
+          <tr><td>learning</td><td class="zero">0</td><td class="has">206</td></tr>
+          <tr><td>evergreen</td><td class="zero">0</td><td class="has">&mdash;</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="alarm" style="margin-bottom:18px">
+      <h2>The consequence, in one line</h2>
+      <p style="margin-bottom:0">
+        Of 585 synced cards only <strong>23 are week 0</strong>, while <strong>152 of 153 learners are
+        free tier</strong>. Every one of the 206 learning-stage assets is <code>full_access</code>. So a
+        free-tier learner past week 0 has an <strong>empty candidate set by construction</strong> &mdash;
+        not because content is missing, but because none of it is theirs to see. Recommending anything
+        else would send 96% of the audience to a paywall.
+      </p>
+    </div>
+    <p>
+      Zero cells are highlighted in the real UI with the tooltip
+      <em>&ldquo;No asset a learner in this stage and tier could receive.&rdquo;</em>
+      Do not sum the cells: 23 assets carry both audience tags, so the grid totals more than the
+      catalog holds.
+    </p>
+  </section>
+
+  <!-- ================= 4 ================= -->
+  <section>
+    <h2 class="sec"><span class="num">4</span>Why something is declared a gap</h2>
+    <p class="sec-note">
+      A gap is a first-class outcome, not an error. The governing contract is that a missing asset is
+      <strong>reported, never invented and never quietly substituted</strong>. There are three distinct
+      kinds and they should not be merged.
+    </p>
+
+    <div class="card">
+      <h3 style="margin-top:0"><span class="pill pill-gap">Kind A</span> &nbsp;Declared gap &mdash; a purpose nothing can ever answer</h3>
+      <p>
+        Hand-written in source with a reason. The entire test is one field:
+        <code>supported: false</code>. It is refused <strong>before any database query runs</strong>.
+      </p>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Purpose</th><th>Declared reason</th></tr></thead>
+          <tbody>
+            <tr><td><code>community_digest</code></td><td>Community posts are 100% cohort-scoped private discussion; no cohort-safe projection is defined. <strong>A privacy boundary, not a shortage</strong> &mdash; every post carries a cohort id, and a registry row is cohort-blind by construction.</td></tr>
+            <tr><td><code>friction_recovery</code></td><td>No friction-recovery content exists; zero learners currently request it</td></tr>
+            <tr><td><code>enrollment_offer</code></td><td>No offer asset is projected yet; zero learners currently reach <code>ENROLLMENT_READY</code></td></tr>
+            <tr><td><code>referral_invite</code></td><td>No referral asset exists; zero learners currently reach <code>REFERRAL_READY</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <blockquote>
+        Reported rather than filled. An invented &ldquo;we noticed you got stuck&rdquo; email nobody
+        wrote is worse than an empty registry, because it looks ready.
+        <cite>content/assetPurposeMap.ts:121-128</cite>
+      </blockquote>
+      <p style="margin-bottom:0">
+        <span class="pill pill-ok">note</span> &nbsp;The weekly digest is <strong>not</strong> a declared
+        gap. It is <code>supported: true</code>, kinds <code>['LESSON']</code>, limit <code>3</code>
+        &mdash; the only purpose allowed more than one asset, &ldquo;because a digest of a single item
+        is not a digest.&rdquo;
+      </p>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-top:0"><span class="pill pill-gap">Kind B</span> &nbsp;Named gap &mdash; this learner, this night, nothing to carry</h3>
+      <p>An action was selected and no content could fill it. Two conditions produce one:</p>
+      <ul class="tight">
+        <li>the purpose is a declared gap, so the reason above travels verbatim; or</li>
+        <li>the query ran and <strong>returned zero rows</strong>.</li>
+      </ul>
+      <p>The second produces a token naming the purpose and the stage it looked in:</p>
+      <pre>no_asset_for_purpose:lesson_recommendation:learning</pre>
+      <p>
+        There is no gap table and no gap type. A gap is a string segment inside the decision row&rsquo;s
+        reason column, alongside the rationale and the consent note:
+      </p>
+      <pre>state=CONNECTED_TO_COMMUNITY | no affinity evidence yet
+  | campaign=explorer_next_lesson | consent: can_spam_opt_out
+  | asset gaps: no_asset_for_purpose:lesson_recommendation:learning</pre>
+      <p style="margin-bottom:0">
+        Two properties matter. <strong>A gap never drops the decision</strong> &mdash; the row is still
+        written, so the review can say &ldquo;these N have no asset behind them&rdquo; instead of quietly
+        showing fewer rows. And <strong>partial success stays partial</strong>: one gap does not discard
+        the assets that did resolve, and one success does not hide the gap.
+      </p>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-top:0"><span class="pill pill-gap">Kind C</span> &nbsp;Campaign gap &mdash; the message has nowhere to be sent from</h3>
+      <p>
+        The action named a campaign key that no campaign row answers, so the id stays null and the gap
+        is named: <code>no campaign for key: explorer_weekly_digest</code>.
+      </p>
+      <blockquote style="margin-bottom:0">
+        It never falls back to another campaign: the eight keys mean eight different messages, and
+        substituting one for another would send a dormant learner an enrollment offer while every
+        count still looked healthy.
+        <cite>governor/runGovernor.ts:235-241</cite>
+      </blockquote>
+    </div>
+
+    <h3>What a human is supposed to do about one</h3>
+    <p>
+      The admin Content tab carries the instruction itself, under the heading
+      <em>&ldquo;What the Governor could not find&rdquo;</em>:
+    </p>
+    <blockquote>
+      Before treating this as missing content, read the matrix below. A gap can mean the content exists
+      but the learner&rsquo;s tier cannot see it.
+      <cite>components/explorerGrowth/ContentTab.tsx:118-141</cite>
+    </blockquote>
+    <p>So the loop is: read the token to learn <em>which purpose and which stage</em>, then use the
+       stage &times; audience grid to decide which of three causes it is.</p>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Cause</th><th>What it means</th><th>Action</th></tr></thead>
+        <tbody>
+          <tr><td>Content genuinely absent</td><td>Nothing exists for that purpose and stage</td><td>Author or publish it; the 02:50 sync projects it the next night</td></tr>
+          <tr><td>Content exists, tier cannot see it</td><td>The entitlement filter excluded it</td><td><strong>A scope decision about the free tier, not a bug</strong></td></tr>
+          <tr><td>Declared gap</td><td>A deliberate, reasoned refusal</td><td>Changing it means designing audience-scoped resolution &mdash; not filing a ticket</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <blockquote>
+      That is why 12 decisions reported a gap on 2026-09-02 and zero did on 08-31: the entitlement
+      filter shipped on 09-01 and is working exactly as designed. It is a decision about what the free
+      tier should include, not a bug &mdash; and the cross-tab is what makes that legible instead of
+      alarming.
+      <cite>components/explorerGrowth/ContentTab.tsx:20-23</cite>
+    </blockquote>
+  </section>
+
+  <!-- ================= 5 ================= -->
+  <section>
+    <h2 class="sec"><span class="num">5</span>Everything that can stop the digest</h2>
+    <p class="sec-note">
+      The pipeline order is: freshness gate, hard stop, generate, arbitrate, contact policy, record.
+      Note that <strong>contact policy runs after the winner is chosen, not before</strong> &mdash; so a
+      blocked message is recorded as &ldquo;chosen, then blocked, and here is why,&rdquo; which is far
+      more useful to a reviewer than never appearing.
+    </p>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Stop</th><th>Condition</th><th>Result</th></tr></thead>
+        <tbody>
+          <tr><td>Profile never scored</td><td>Scores timestamp not later than creation</td><td>Whole decision refused</td></tr>
+          <tr><td>Profile stale</td><td>Older than 26 hours</td><td>Whole decision refused</td></tr>
+          <tr><td>Clock skew</td><td>Scored in the future</td><td>Refused &mdash; calling this &ldquo;fresh&rdquo; would be a fail-open in the gate built to close one</td></tr>
+          <tr><td>Six hard stops</td><td>Converted, unsubscribed, DNC, consent revoked, kill switch, campaign inactive</td><td>Nothing is even generated</td></tr>
+          <tr><td>Missing hard-stop data</td><td>The block is absent</td><td>Treated as a stop. &ldquo;Absent evidence is not evidence of eligibility.&rdquo;</td></tr>
+          <tr><td>Email not eligible</td><td>Contactability says no</td><td>The digest candidate is never created</td></tr>
+          <tr><td>Frequency cap</td><td>3 or more contacts in 7 days</td><td>Winner blocked, reason recorded</td></tr>
+          <tr><td>Cooldown</td><td>Under 48 hours since the last contact</td><td>Winner blocked, reason recorded</td></tr>
+          <tr><td>Unreadable contact history</td><td>The history query throws</td><td><strong>Fails closed</strong> &mdash; treated as an infinite contact count. &ldquo;An unknown contact history is not permission.&rdquo;</td></tr>
+          <tr><td>Consent lookup fails</td><td>Throws, or returns anything unexpected</td><td><strong>Fails closed</strong>, precisely because the underlying helpers fail open</td></tr>
+          <tr><td>Locked-lesson gate</td><td>Free-preview learner, non-week-0 asset</td><td>Asset excluded. This caught 12 free-preview learners about to be sent a week-9 lesson.</td></tr>
+          <tr><td>One decision per day</td><td>A unique index on learner and UTC date</td><td>Re-running the night updates rather than duplicating &mdash; &ldquo;the idempotency guarantee&rdquo;</td></tr>
+          <tr><td>Feature flags</td><td>All default off; sub-flags subordinate to a master</td><td>Run skipped entirely</td></tr>
+          <tr><td>Sequence inactive</td><td><code>is_active: false</code>, re-asserted on boot</td><td>Throws before any scheduled-email row exists</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="callout neutral">
+      <p>
+        One outcome that should never be mistaken for consent: when <em>no</em> consent record exists at
+        all, the verdict is allowed with basis <code>no_evidence</code>, and that phrase is written onto
+        the decision row. It is recorded precisely so nobody later reads silence as permission.
+      </p>
+    </div>
+  </section>
+
+  <!-- ================= 6 ================= -->
+  <section>
+    <h2 class="sec"><span class="num">6</span>Where the design document and the code disagree</h2>
+    <p class="sec-note">
+      Worth knowing before planning work against the plan rather than the code.
+    </p>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>The plan specifies</th><th>What exists</th></tr></thead>
+        <tbody>
+          <tr><td>One recurring step, 7-day delay, re-enrolled weekly</td><td>One step, <code>delay_days: 0</code>, no re-enrollment <span class="pill pill-dead">absent</span></td></tr>
+          <tr><td>Three assembled slots: one thing to learn, one opportunity, one next action</td><td>No slot concept anywhere in the subsystem. The digest asks for up to 3 LESSON assets and nothing else. <span class="pill pill-dead">absent</span></td></tr>
+          <tr><td>Guardrail: if fewer than 2 of 3 slots resolve, do not send &mdash; &ldquo;a one-item digest is a newsletter&rdquo;</td><td>No such guardrail <span class="pill pill-dead">absent</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>
+      The campaign-definitions file says so itself: it is keyed from the shipped governor rather than
+      the plan document, because only 2 of the 8 campaign keys matched. The eight purposes were
+      <em>measured</em> &mdash; read back out of real decision rows &mdash; not designed up front.
+    </p>
+  </section>
+
+  <footer class="foot">
+    <p>
+      Every claim here was read from the code in <code>backend/src/services/explorerGrowth/</code> and
+      verified against source. Production counts (153 learners, 585 cards, 23 week-0, 206 learning
+      assets, 12 gapped decisions) are figures recorded in code comments at the time they were written,
+      not live queries &mdash; treat them as orders of magnitude, not today&rsquo;s numbers.
+    </p>
+    <p style="margin-bottom:0">
+      The one thing to carry away: this system currently <strong>decides and records, and is not
+      permitted to send</strong>. Shadow mode exists so the judgment can be audited before it reaches
+      a learner.
+    </p>
+  </footer>
+
+</div>
+</body>
+</html>

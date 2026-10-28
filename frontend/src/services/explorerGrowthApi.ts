@@ -213,6 +213,36 @@ export interface ExplorerSuppressed {
   reason: string;
 }
 
+/**
+ * A rendered draft of the message a decision would have sent.
+ *
+ * The verdict travels with the copy on purpose. A reader cannot tell a
+ * shippable draft from one the quality gate threw out by reading the prose, so
+ * showing the body without the verdict would be worse than showing nothing —
+ * it would look approved.
+ */
+export interface ExplorerWhyMessage {
+  scheduled_email_id: string;
+  subject: string;
+  body: string;
+  /** `explorer_draft` or `explorer_draft_rejected`. Never a sendable status. */
+  status: string;
+  passed_quality_gate: boolean;
+  /** Why the gate refused, verbatim. Empty when it passed. */
+  issues: string[];
+  /** What the validator silently corrected. */
+  auto_fixed: string[];
+  /**
+   * False means the Explorer fact guard was NOT in force, so dates and prices
+   * in this copy went unchecked. Distinct from "in force and found nothing
+   * quotable", which is the strictest state rather than the weakest.
+   */
+  fact_set_present: boolean;
+  step_index: number | null;
+  model: string | null;
+  created_at: string | null;
+}
+
 export interface ExplorerWhy {
   found: true;
   enrollment_id: string;
@@ -248,6 +278,18 @@ export interface ExplorerWhy {
     named_gaps: string[];
     gap: string | null;
   };
+  /**
+   * The message this decision would have sent, once it has been rendered.
+   *
+   * Null means no draft exists — the normal state for a WAIT, for a learner
+   * with no lead row, and for every decision made before the draft stage
+   * shipped. It does NOT mean the message was empty.
+   *
+   * `content.assets` above says which lesson could be CITED. This says what the
+   * learner would actually READ. Answering only the first is what made the
+   * Content tab unreadable.
+   */
+  message: ExplorerWhyMessage | null;
   contactability: Record<string, unknown> | null;
   affinities: { tag: string; confidence: number; sources?: string[] }[];
   /** From the profile — current, not as at the decision. */

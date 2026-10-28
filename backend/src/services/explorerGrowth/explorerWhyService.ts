@@ -1,6 +1,8 @@
 import { ExplorerJourneyDecision, ExplorerJourneyProfile } from '../../models';
 import type { ExplorerActionType } from '../../types/explorerGrowth';
 import { namedGaps } from './explorerGapParsing';
+import type { DraftMessage } from './drafts/draftContracts';
+import { loadDraftForDecision } from './drafts/draftRepository';
 import type {
   ExplorerWhy,
   ExplorerWhyAbsent,
@@ -171,12 +173,25 @@ function buildAbsence(
   };
 }
 
+/**
+ * The rendered draft, when one exists.
+ *
+ * Loaded only when the decision actually points at one, so the common cases —
+ * a WAIT, and every decision made before the draft stage shipped — cost no
+ * query at all.
+ */
+async function draftFor(decision: DecisionRow): Promise<DraftMessage | null> {
+  if (!decision.scheduled_email_id) return null;
+  return loadDraftForDecision(decision.scheduled_email_id);
+}
+
 /** The present-decision payload. Pure assembly — every value is already loaded. */
 function buildFound(
   enrollmentId: string,
   decision: DecisionRow,
   profile: ProfileRow | null,
   now: number,
+  message: DraftMessage | null = null,
 ): ExplorerWhyFound {
   const scoresAtDecision = projectScores(decision);
   const scoresNow = profile ? projectScores(profile) : null;
@@ -199,6 +214,7 @@ function buildFound(
     triggering_signals: (decision.triggering_signals ?? []) as Record<string, unknown>[],
     deferred_actions: (decision.deferred_actions ?? []) as Record<string, unknown>[],
     content: buildContent(decision),
+    message,
     contactability: profile?.contactability ?? null,
     affinities: profile?.affinities ?? [],
     scores_now: scoresNow,
@@ -226,10 +242,11 @@ export async function getExplorerWhyByDecision(
   const decision = await ExplorerJourneyDecision.findOne({ where: { id: decisionId } });
   if (!decision) return null;
 
-  const profile = await ExplorerJourneyProfile.findOne({
-    where: { enrollment_id: decision.enrollment_id },
-  });
-  return buildFound(decision.enrollment_id, decision, profile, now);
+  const [profile, message] = await Promise.all([
+    ExplorerJourneyProfile.findOne({ where: { enrollment_id: decision.enrollment_id } }),
+    draftFor(decision),
+  ]);
+  return buildFound(decision.enrollment_id, decision, profile, now, message);
 }
 
 /**
@@ -256,7 +273,9 @@ export async function getExplorerWhy(
     ExplorerJourneyProfile.findOne({ where: { enrollment_id: enrollmentId } }),
   ]);
 
-  if (decision) return buildFound(enrollmentId, decision, profile, now);
+  if (decision) {
+    return buildFound(enrollmentId, decision, profile, now, await draftFor(decision));
+  }
 
   // Only reached when there is nothing to show. The extra lookup exists solely
   // to tell the reader WHICH kind of nothing they are looking at.

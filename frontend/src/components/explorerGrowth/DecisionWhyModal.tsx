@@ -29,6 +29,114 @@ import { getWhy, type ExplorerWhy, type ExplorerWhyScores } from '../../services
  * disagree most of the time.
  */
 
+/**
+ * The generated body as readable text.
+ *
+ * NOT `dangerouslySetInnerHTML`. The body is model-written HTML, and this repo
+ * forbids injecting un-sanitised markup without a stated reason — "it came
+ * from our own generator" is not one, because the generator's input includes
+ * lead fields and lesson titles that originate outside it.
+ *
+ * A reviewer is here to judge the WORDS, so tags are dropped rather than shown
+ * raw: block boundaries become newlines, entities are decoded, and nothing is
+ * executed. `<br>` and the closing of a block tag both become line breaks so
+ * paragraphs survive the trip.
+ */
+export function draftBodyToText(html: string): string {
+  return html
+    .replace(/<\s*br\s*\/?\s*>/gi, '\n')
+    .replace(/<\s*\/\s*(p|div|h[1-6]|li|tr|blockquote)\s*>/gi, '\n')
+    .replace(/<[^>]*>/g, '')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+/** The message a decision would have sent, with the quality verdict attached. */
+function MessagePanel({ w }: { w: ExplorerWhy }) {
+  const m = w.message;
+
+  if (!m) {
+    // A STATED ABSENCE, never a blank panel. The two reasons lead to opposite
+    // actions — "go run the render" versus "there was never going to be one" —
+    // and "nothing here" reads as a bug.
+    //
+    // KEYED ON THE PAYLOAD'S OWN FIELDS, not on a list of action names. An
+    // email decision is one with a campaign behind it on the email channel,
+    // which is exactly what the backend's own eligibility check tests. A
+    // duplicated copy of DRAFTABLE_ACTIONS over here would drift the first
+    // time a generator gained a fourth emailing action — and it would drift
+    // silently, into a sentence claiming no email was ever going to be sent.
+    const expectsOne = w.outcome.channel === 'email' && Boolean(w.outcome.selected_campaign_id);
+    return (
+      <div className="text-muted small">
+        {expectsOne
+          ? 'No message has been rendered for this decision yet. Run the draft render for this date to generate it.'
+          : `A ${w.outcome.selected_action ?? 'decision'} on channel ${w.outcome.channel ?? 'none'} sends no email, so there is no message to show.`}
+      </div>
+    );
+  }
+
+  const refused = !m.passed_quality_gate;
+
+  return (
+    <>
+      <div className="d-flex gap-2 align-items-center mb-2 flex-wrap">
+        <span className={`badge ${refused ? 'bg-danger' : 'bg-secondary'}`}>
+          {refused ? 'Refused by the quality gate' : 'Draft'}
+        </span>
+        {/* Said plainly on every draft, because the safety of this whole stage
+            rests on it and a reader should not have to infer it. */}
+        <span className="badge bg-light text-dark border">Not sendable</span>
+        {m.step_index !== null && (
+          <span className="text-muted small">Sequence step {m.step_index + 1}</span>
+        )}
+        {m.model && <span className="text-muted small font-monospace">{m.model}</span>}
+      </div>
+
+      {refused && m.issues.length > 0 && (
+        <div className="alert alert-danger py-2 px-3 small mb-2">
+          <div className="fw-semibold mb-1">
+            This copy would not have been allowed to send:
+          </div>
+          <ul className="mb-0 ps-3">
+            {m.issues.map((issue, i) => (
+              <li key={i}>{issue}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {!m.fact_set_present && (
+        <div className="alert alert-warning py-2 px-3 small mb-2 mb-0">
+          The Explorer fact guard was not in force for this generation, so any
+          date, price or seat count in this copy went unchecked.
+        </div>
+      )}
+
+      {m.auto_fixed.length > 0 && (
+        <div className="text-muted small mb-2">
+          Auto-corrected before saving: {m.auto_fixed.join('; ')}
+        </div>
+      )}
+
+      <div className="card border-0 bg-light">
+        <div className="card-body p-3">
+          <div className="fw-semibold mb-2">{m.subject}</div>
+          <div className="small" style={{ whiteSpace: 'pre-wrap' }}>
+            {draftBodyToText(m.body)}
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
 function ScoreRow({ label, s, muted }: { label: string; s: ExplorerWhyScores | null; muted?: boolean }) {
   if (!s) {
     return (
@@ -191,9 +299,21 @@ export function WhyBody({ w }: { w: ExplorerWhy }) {
         )}
       </div>
 
-      {/* ── Content, or the named gap ────────────────────────────────────── */}
+      {/* ── The message itself ───────────────────────────────────────────── */}
+      {/* FIRST, above the asset list, deliberately. A reader opening this modal
+          wants to know what the learner would read; which lesson could be cited
+          is supporting detail. Putting the citation list first is what made the
+          old layout answer a question nobody was asking. */}
       <div className="mb-4">
-        <h6 className="text-uppercase text-muted small mb-2">Content</h6>
+        <h6 className="text-uppercase text-muted small mb-2">Message</h6>
+        <MessagePanel w={w} />
+      </div>
+
+      {/* ── Content cited, or the named gap ──────────────────────────────── */}
+      <div className="mb-4">
+        <h6 className="text-uppercase text-muted small mb-2">
+          Content available to cite
+        </h6>
         {w.content.gap ? (
           <div className="alert alert-warning py-2 px-3 small mb-0">
             <div className="fw-semibold mb-1">{w.content.gap}</div>

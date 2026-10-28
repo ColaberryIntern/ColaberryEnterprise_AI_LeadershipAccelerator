@@ -15,6 +15,7 @@ const ALL_FEATURES: ExplorerGrowthFeature[] = [
   'signalIngest',
   'journeyIntelligence',
   'journeyGovernor',
+  'draftRender',
   'commercial',
   'aliOutreach',
   'sms',
@@ -38,16 +39,17 @@ describe('resolveExplorerGrowthFlags — default OFF', () => {
     }
   });
 
-  it('covers all ten documented flags', () => {
-    // 9 through EPIC 2; journeyIntelligenceEnabled added by EPIC 3 T000.
-    expect(FLAG_KEYS).toHaveLength(10);
-    expect(Object.keys(resolveExplorerGrowthFlags({}))).toHaveLength(10);
+  it('covers all eleven documented flags', () => {
+    // 9 through EPIC 2; journeyIntelligenceEnabled added by EPIC 3 T000;
+    // draftRenderEnabled added by the shadow-decision draft renderer.
+    expect(FLAG_KEYS).toHaveLength(11);
+    expect(Object.keys(resolveExplorerGrowthFlags({}))).toHaveLength(11);
   });
 
   // Boundary: the repo convention is a strict `=== 'true'` opt-in. Anything else
   // — including a differently-cased 'TRUE' or a truthy-looking '1' — must stay OFF.
   // A flag that turned on for '1' or 'TRUE' would be an accidental live launch.
-  // Asserted across ALL TEN flags, not just the master: each is read through the
+  // Asserted across ALL ELEVEN flags, not just the master: each is read through the
   // shared isOn() helper today, but that is an implementation detail this test
   // must not depend on — a future per-flag special case has to fail here.
   it.each(['false', 'FALSE', '', '0', '1', 'TRUE', 'True', 'yes', 'on', ' true'])(
@@ -73,6 +75,7 @@ describe('resolveExplorerGrowthFlags — default OFF', () => {
       signalIngestEnabled: 'EXPLORER_SIGNAL_INGEST_ENABLED',
       journeyIntelligenceEnabled: 'EXPLORER_JOURNEY_INTELLIGENCE_ENABLED',
       journeyGovernorEnabled: 'EXPLORER_JOURNEY_GOVERNOR_ENABLED',
+      draftRenderEnabled: 'EXPLORER_DRAFT_RENDER_ENABLED',
       commercialEnabled: 'EXPLORER_COMMERCIAL_ENABLED',
       aliOutreachEnabled: 'EXPLORER_ALI_OUTREACH_ENABLED',
       smsEnabled: 'EXPLORER_SMS_ENABLED',
@@ -191,6 +194,15 @@ describe('dark-launch guard — no direct sub-flag reads outside the flags modul
   const ALLOWED = [
     path.join('config', 'explorerGrowthFlags.ts'),
     path.join('config', '__tests__', 'explorerGrowthFlags.test.ts'),
+    // Asserts the ABSENCE of the very bypass this guard prevents:
+    //   expect(runner).not.toMatch(/env\.explorerGrowth\.draftRenderEnabled/)
+    // The regex literal contains the property path, so a scan that matches on
+    // the NAME rather than on a usage fires on the assertion itself. Allowing a
+    // test here is the existing convention in this list, and a test file cannot
+    // activate a feature in production, which is the only thing this guard is
+    // defending. `frontendCopyLint.test.ts` records the same lesson about its
+    // own scan: a name in a comment or an assertion is not the thing it forbids.
+    path.join('services', 'explorerGrowth', 'drafts', '__tests__', 'draftsCannotSend.test.ts'),
   ];
 
   function walk(dir: string, out: string[] = []): string[] {
@@ -207,7 +219,18 @@ describe('dark-launch guard — no direct sub-flag reads outside the flags modul
 
   it('finds no unsanctioned direct sub-flag read', () => {
     const offenders: string[] = [];
-    for (const file of walk(SRC)) {
+    const scanned = walk(SRC);
+
+    // Non-vacuity, which this guard was missing. `expect(offenders).toEqual([])`
+    // passes identically whether the walk found nothing to report or found
+    // nothing at all - a broken path or an empty directory would read as clean.
+    // The sibling guard in `frontendCopyLint.test.ts` asserts the same floor for
+    // the same reason. It matters more now that this list carries an allowed
+    // entry: an exemption is only safe while the scan around it is provably live.
+    expect(scanned.length).toBeGreaterThan(500);
+    expect(SUB_FLAG_PROPS.length).toBeGreaterThan(0);
+
+    for (const file of scanned) {
       if (ALLOWED.some((a) => file.endsWith(a))) continue;
       const text = fs.readFileSync(file, 'utf8');
       for (const prop of SUB_FLAG_PROPS) {

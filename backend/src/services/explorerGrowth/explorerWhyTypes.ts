@@ -88,6 +88,18 @@ export interface ExplorerWhyFound {
   triggering_signals: Record<string, unknown>[];
   deferred_actions: Record<string, unknown>[];
   content: ExplorerWhyContent;
+  /**
+   * The message this decision would have sent, once Phase 1 has rendered it.
+   *
+   * Null means no draft exists for this decision — which is the normal state
+   * for a WAIT, for a learner with no lead row, and for every decision made
+   * before the draft stage shipped. It does NOT mean the message was empty.
+   *
+   * `content.assets` above says which lesson could be CITED; this says what
+   * the learner would actually READ. Those are different questions, and the
+   * drilldown answering only the first is what made the Content tab confusing.
+   */
+  message: import('./drafts/draftContracts').DraftMessage | null;
   /** From the profile — current, not as at the decision. Labelled accordingly. */
   contactability: ExplorerContactability | null;
   affinities: ExplorerAffinity[];

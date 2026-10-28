@@ -1,0 +1,580 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Explorer Messaging Plan</title>
+<style>
+  :root{
+    --cherry:#FB2832; --cherry-deep:#C20E1E; --cherry-bg:#FFF0F1; --leaf:#77BB4A;
+    --ink:#1d2430; --body:#2d3748; --muted:#667085; --faint:#8a93a3;
+    --page:#f6f7f9; --card:#ffffff; --line:#e2e8f0; --line-soft:#eef1f5;
+    --amber:#B45309; --amber-bg:#FFF7E6; --amber-line:#F3D9A4;
+    --good-bg:#F1F8EC; --good-line:#CFE5BC;
+    --cool:#1F6FB2; --cool-bg:#EDF5FB; --cool-line:#CBE0F0;
+    --mono:'Cascadia Mono',Consolas,'SF Mono',Menlo,monospace;
+    --sans:'Segoe UI',system-ui,-apple-system,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    margin:0; background:var(--page); color:var(--body);
+    font-family:var(--sans); line-height:1.62; font-size:16px;
+  }
+  .wrap{max-width:1080px; margin:0 auto; padding-block:0 72px; padding-left:16px; padding-right:16px}
+
+  /* ── masthead ─────────────────────────────── */
+  .masthead{
+    background:linear-gradient(135deg,#1d2430 0%,#2b3444 58%,#3a2a2e 100%);
+    color:#fff; padding:40px 0 34px; margin-bottom:28px;
+    border-bottom:4px solid var(--cherry);
+  }
+  .masthead .wrap{padding-bottom:0}
+  .eyebrow{
+    font-size:11.5px; letter-spacing:.14em; text-transform:uppercase;
+    color:#ffb9bd; font-weight:600; margin:0 0 10px;
+  }
+  .masthead h1{
+    margin:0 0 14px; font-size:34px; line-height:1.18; font-weight:700;
+    letter-spacing:-.015em; text-wrap:balance; color:#fff;
+  }
+  .masthead p{margin:0; color:#d3d8e2; max-width:66ch; font-size:16.5px}
+  .masthead strong{color:#fff}
+  .stamp{
+    margin-top:20px; display:flex; flex-wrap:wrap; gap:8px;
+  }
+  .stamp span{
+    font-family:var(--mono); font-size:11.5px; letter-spacing:.02em;
+    background:rgba(255,255,255,.09); border:1px solid rgba(255,255,255,.17);
+    color:#e6e9ef; padding:4px 9px; border-radius:3px;
+  }
+
+  /* ── verdict ─────────────────────────────── */
+  .verdict{
+    background:var(--card); border:1px solid var(--line);
+    border-left:5px solid var(--cherry); border-radius:6px;
+    padding:24px 26px; margin-bottom:30px;
+    box-shadow:0 1px 3px rgba(16,24,40,.05);
+  }
+  .verdict h2{
+    margin:0 0 12px; font-size:20px; color:var(--cherry-deep);
+    font-weight:700; letter-spacing:-.01em;
+  }
+  .verdict p{margin:0 0 11px; font-size:17px}
+  .verdict p:last-child{margin-bottom:0}
+
+  /* ── sections ─────────────────────────────── */
+  section{margin-bottom:34px}
+  h2.sec{
+    font-size:13px; letter-spacing:.13em; text-transform:uppercase;
+    color:var(--cherry-deep); font-weight:700; margin:0 0 4px;
+    padding-bottom:9px; border-bottom:2px solid var(--cherry-bg);
+  }
+  h2.sec + .lede{margin:14px 0 20px; color:var(--muted); max-width:72ch; font-size:15.5px}
+
+  .card{
+    background:var(--card); border:1px solid var(--line); border-radius:6px;
+    padding:20px 22px; margin-bottom:14px;
+    box-shadow:0 1px 2px rgba(16,24,40,.04);
+  }
+  .card > h3{
+    margin:0 0 10px; font-size:17px; color:var(--ink); font-weight:650;
+    letter-spacing:-.005em; text-wrap:balance;
+  }
+  .card p{margin:0 0 11px}
+  .card p:last-child{margin-bottom:0}
+
+  .finding{display:flex; gap:16px; align-items:flex-start}
+  .fnum{
+    flex:0 0 34px; height:34px; border-radius:50%;
+    background:var(--cherry-bg); color:var(--cherry-deep);
+    display:flex; align-items:center; justify-content:center;
+    font-weight:700; font-size:14px; font-family:var(--mono); margin-top:1px;
+  }
+  .fbody{flex:1 1 auto; min-width:0}
+
+  code{
+    font-family:var(--mono); font-size:.885em;
+    background:#f1f3f7; color:#334; padding:1.5px 5px; border-radius:3px;
+    border:1px solid #e4e8ef; word-break:break-word;
+  }
+  .src{
+    font-family:var(--mono); font-size:12px; color:var(--faint);
+    margin-top:10px; padding-top:9px; border-top:1px dashed var(--line);
+    word-break:break-word;
+  }
+
+  blockquote{
+    margin:13px 0; padding:13px 16px; background:#fbfcfd;
+    border-left:3px solid var(--line); border-radius:0 4px 4px 0;
+    font-size:14.5px; color:#3c4454;
+  }
+  blockquote p{margin:0 0 8px}
+  blockquote p:last-child{margin:0}
+  blockquote cite{
+    display:block; margin-top:9px; font-style:normal;
+    font-family:var(--mono); font-size:11.5px; color:var(--faint);
+  }
+
+  /* ── callouts ─────────────────────────────── */
+  .note{padding:14px 17px; border-radius:5px; margin:14px 0; font-size:15px; border:1px solid}
+  .note:last-child{margin-bottom:0}
+  .note--warn{background:var(--amber-bg); border-color:var(--amber-line); color:#6b4411}
+  .note--good{background:var(--good-bg); border-color:var(--good-line); color:#33521f}
+  .note--cool{background:var(--cool-bg); border-color:var(--cool-line); color:#174d7c}
+  .note b{font-weight:650}
+  .note p{margin:0 0 8px}
+  .note p:last-child{margin:0}
+
+  /* ── tables ─────────────────────────────── */
+  .tbl-wrap{overflow-x:auto; margin:14px 0; border:1px solid var(--line); border-radius:6px; background:var(--card)}
+  table{border-collapse:collapse; width:100%; font-size:14.5px; min-width:560px}
+  th,td{padding:10px 13px; text-align:left; border-bottom:1px solid var(--line-soft); vertical-align:top}
+  thead th{
+    background:#f8f9fb; font-size:11.5px; letter-spacing:.07em; text-transform:uppercase;
+    color:var(--muted); font-weight:700; border-bottom:2px solid var(--line);
+    white-space:nowrap;
+  }
+  tbody tr:last-child td{border-bottom:none}
+  td.num{font-family:var(--mono); text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap}
+  .pill{
+    display:inline-block; font-size:11px; font-weight:650; padding:2.5px 8px;
+    border-radius:11px; white-space:nowrap; letter-spacing:.015em;
+  }
+  .pill--have{background:var(--good-bg); color:#3d6626; border:1px solid var(--good-line)}
+  .pill--gap{background:var(--amber-bg); color:var(--amber); border:1px solid var(--amber-line)}
+  .pill--new{background:var(--cool-bg); color:var(--cool); border:1px solid var(--cool-line)}
+  .pill--dead{background:#f3f4f6; color:#6b7280; border:1px solid #e5e7eb}
+
+  /* ── phases ─────────────────────────────── */
+  .phase{
+    background:var(--card); border:1px solid var(--line); border-radius:6px;
+    margin-bottom:16px; overflow:hidden; box-shadow:0 1px 2px rgba(16,24,40,.04);
+  }
+  .phase > header{
+    display:flex; gap:14px; align-items:baseline; flex-wrap:wrap;
+    padding:15px 22px; background:#fafbfc; border-bottom:1px solid var(--line);
+  }
+  .phase .pid{
+    font-family:var(--mono); font-size:12px; font-weight:700; letter-spacing:.06em;
+    color:#fff; background:var(--cherry-deep); padding:3px 9px; border-radius:3px;
+    text-transform:uppercase; white-space:nowrap;
+  }
+  .phase .ptitle{font-size:17px; font-weight:650; color:var(--ink); flex:1 1 220px; letter-spacing:-.005em}
+  .phase .psize{font-family:var(--mono); font-size:11.5px; color:var(--muted); white-space:nowrap}
+  .phase > .pbody{padding:18px 22px}
+  .phase dl{margin:0; display:grid; grid-template-columns:132px 1fr; gap:9px 16px; font-size:14.8px}
+  .phase dt{
+    font-size:11px; letter-spacing:.09em; text-transform:uppercase;
+    color:var(--muted); font-weight:700; padding-top:3px;
+  }
+  .phase dd{margin:0}
+  .phase dd ul{margin:0; padding-left:18px}
+  .phase dd li{margin-bottom:5px}
+  .phase dd li:last-child{margin-bottom:0}
+
+  /* ── decision ─────────────────────────────── */
+  .decision{
+    background:var(--card); border:2px solid var(--cherry);
+    border-radius:6px; padding:24px 26px;
+    box-shadow:0 2px 8px rgba(251,40,50,.1);
+  }
+  .decision h3{margin:0 0 6px; font-size:19px; color:var(--cherry-deep); font-weight:700}
+  .opt{
+    border:1px solid var(--line); border-radius:5px; padding:14px 16px;
+    margin-top:12px; background:#fbfcfd;
+  }
+  .opt .lbl{font-weight:650; color:var(--ink); display:block; margin-bottom:4px; font-size:15.5px}
+  .opt p{margin:0; font-size:14.5px; color:var(--muted)}
+  .rec{
+    margin-top:14px; padding:13px 16px; background:var(--cherry-bg);
+    border:1px solid #f7c6c9; border-radius:5px; font-size:15px; color:#7d1016;
+  }
+
+  ul.tight{margin:11px 0; padding-left:20px}
+  ul.tight li{margin-bottom:7px}
+  ul.tight li:last-child{margin-bottom:0}
+
+  footer.prov{
+    margin-top:44px; padding-top:20px; border-top:1px solid var(--line);
+    font-size:13px; color:var(--faint);
+  }
+  footer.prov p{margin:0 0 7px; max-width:80ch}
+  footer.prov code{font-size:.9em; background:#eef0f4}
+
+  @media (max-width:620px){
+    .masthead h1{font-size:26px}
+    .phase dl{grid-template-columns:1fr; gap:4px 0}
+    .phase dt{padding-top:9px}
+    .finding{gap:11px}
+    .wrap{padding-left:16px; padding-right:16px}
+  }
+</style>
+</head>
+<body>
+
+<div class="masthead">
+  <div class="wrap">
+    <p class="eyebrow">Explorer Growth OS &middot; Content &amp; messaging</p>
+    <h1>Why there is no weekly digest, and the plan to produce one</h1>
+    <p>The Content tab is confusing because it answers a question nobody asked. It reports <strong>which lesson cards could be pointed at</strong>. You were looking for <strong>what the message says</strong>. That message has never existed &mdash; not because anything is broken, but because composing it was deliberately deferred to send time, and send time has never arrived.</p>
+    <div class="stamp">
+      <span>27 Oct 2026</span>
+      <span>525 email decisions &middot; 0 sent</span>
+      <span>Diagnosis verified from source</span>
+      <span>Plan: 5 phases</span>
+    </div>
+  </div>
+</div>
+
+<div class="wrap">
+
+<div class="verdict">
+  <h2>The short answer</h2>
+  <p>Every Explorer sequence step already carries a real subject line and a real written brief. The weekly digest's subject is <code>"This week in AI, for practitioners"</code>. Its brief says: <em>lead with the content supplied in the context &mdash; usually two or three lessons &mdash; and say what each is FOR in one line.</em></p>
+  <p>What it does <strong>not</strong> carry is a body. <code>body_template</code> is an empty string on all 24 steps, <em>by design</em>, with a comment saying so: the engine generates the message at send time from the brief plus the learner's context. Nothing has ever sent, so nothing has ever been generated.</p>
+  <p><strong>So the digest is not missing. It is a prompt that has never been run.</strong> Everything you need to run it &mdash; the generator, the validator, the fact guard, the draft store, the approval screen &mdash; already exists in this repo and is already tested. None of it has been introduced to the Governor.</p>
+</div>
+
+<!-- ══════════ DIAGNOSIS ══════════ -->
+<section>
+  <h2 class="sec">Diagnosis &mdash; five findings</h2>
+  <p class="lede">Each of these is read from source, with the file named. Where something does not exist, it is stated as not existing rather than described.</p>
+
+  <div class="card finding">
+    <div class="fnum">1</div>
+    <div class="fbody">
+      <h3>The body was deferred on purpose, and the deferral was never closed</h3>
+      <p>The sequence definitions are explicit about it. This is the comment at the top of the file that defines all 24 steps:</p>
+      <blockquote>
+        <p>THESE ARE PROMPTS, NOT COPY. <code>body_template</code> is empty on every step by design: the engine generates the message at send time from <code>ai_instructions</code> plus lead context. Only 12 of ~180 steps across the whole production system carry a body template. Writing copy here would duplicate the campaign engine, which the original brief forbade.</p>
+        <cite>backend/src/seeds/explorerGrowth/explorerSequenceDefinitions.ts:8&ndash;12</cite>
+      </blockquote>
+      <p>That was a reasonable call. The cost of it is that <strong>there is no way to read the message before it sends</strong>, which is exactly what you are asking for. The same file is candid that the safety clause appended to every brief is an instruction, not a control: <em>"this is an instruction to a generator, not a filter on its output &hellip; the real control on generated copy is the send-time quality gate, which belongs to the epic that wires execution."</em> That epic has not shipped.</p>
+      <div class="src">explorerSequenceDefinitions.ts:8&ndash;12, 32&ndash;43, 46&ndash;58, 137&ndash;147</div>
+    </div>
+  </div>
+
+  <div class="card finding">
+    <div class="fnum">2</div>
+    <div class="fbody">
+      <h3>The Governor and the message generator have never been introduced</h3>
+      <p><code>generateMessage()</code> is a mature service that returns <code>{subject, body}</code> for email, grounded in a campaign system prompt, the lead profile, verified engagement context and live cohort facts. <strong>Fifteen places in this repo call it. None of them is Explorer Growth.</strong></p>
+      <p>The validator built to check its output, <code>validateGeneratedMessage()</code>, already imports the Explorer fact guard. The rails were built for this traffic and left unconnected.</p>
+      <p>The deeper disconnect: the Governor writes <code>selected_campaign_id</code>, but <strong>never traverses campaign &rarr; sequence &rarr; step</strong>. <code>selected_sequence_step</code> is never written by any code in the repository. The 24 subject lines sit in <code>follow_up_sequences.steps</code> and are, today, unreachable from a decision.</p>
+      <div class="src">aiMessageService.ts:306 (generateMessage), :537 (generatePreview) &middot; messageValidatorService.ts:7, :47 &middot; runGovernor.ts:242&ndash;248, 260&ndash;294</div>
+    </div>
+  </div>
+
+  <div class="card finding">
+    <div class="fnum">3</div>
+    <div class="fbody">
+      <h3>A decision row has nowhere to put a message &mdash; except one unused column</h3>
+      <p><code>explorer_journey_decisions</code> has <code>selected_content_assets</code> (pointers to lessons), <code>channel</code> and <code>reason</code>. There is <strong>no subject column, no body column, no html column</strong>. The content registry has none either &mdash; its own sync file says <em>"<code>explorer_content_assets</code> &hellip; has no body column at all."</em></p>
+      <div class="note note--good">
+        <p><b>But there is a <code>scheduled_email_id</code> column, and nothing has ever written to it.</b> It exists precisely for this link. That single fact reshapes the fix &mdash; see Phase 1.</p>
+      </div>
+      <div class="src">ensureExplorerGrowthSchema.ts:60&ndash;91, 143&ndash;175 &middot; syncTimelineCards.ts:9&ndash;16 &middot; ExplorerContentAsset.ts:124&ndash;126</div>
+    </div>
+  </div>
+
+  <div class="card finding">
+    <div class="fnum">4</div>
+    <div class="fbody">
+      <h3>&ldquo;Content asset&rdquo; means &ldquo;lesson card&rdquo;, and the tab never says so</h3>
+      <p>The registry holds exactly one kind of thing. Every row is written with <code>asset_type = 'LESSON'</code>, projected from published timeline cards. The model's own header lists seven other kinds it was meant to hold &mdash; videos, blog posts, podcasts, cohorts, live sessions, open-house events, community rooms &mdash; and <strong>none of them has a sync or a seeder</strong>. That list documents intent, not inventory.</p>
+      <p>So when the tab says 468 assets support the weekly digest, it means <em>468 lesson cards could be cited in a digest</em>. It does not mean a digest exists. Of the 525 email decisions in production, 392 &ldquo;resolved content&rdquo; &mdash; all 392 resolved a pointer to a lesson, not a sentence.</p>
+      <p>Compounding it: <strong>your two screenshotted tables are built from different SQL.</strong> The cross-tab filters on active + email-capable only. The coverage table additionally filters on the validity window and the asset type. They are not reconcilable by eye, and nothing on screen warns you.</p>
+      <div class="src">syncTimelineCards.ts:149&ndash;166, 185&ndash;199, 220&ndash;241 &middot; ExplorerContentAsset.ts:12&ndash;26 &middot; explorerDecisionsService.ts:199&ndash;231 vs :252&ndash;260</div>
+    </div>
+  </div>
+
+  <div class="card finding">
+    <div class="fnum">5</div>
+    <div class="fbody">
+      <h3>The message in your screenshot is a stale row, not a live failure</h3>
+      <p>&ldquo;No content asset was resolved &hellip; and the Governor named no gap&rdquo; fires only when an action that expects content has zero assets <em>and</em> no named gap. With the eight generators as shipped, <strong>a newly written row cannot reach that state</strong> &mdash; the only three candidates that request nothing are a <code>WAIT</code> and two human-task actions, none of which expects content.</p>
+      <p>Those rows predate the asset wiring. The Governor's own comment records it: <em>"Until EPIC 5 NOTHING anywhere assigned this column, and all 153 rows read <code>[]</code>."</em> The upsert is keyed on <code>(enrollment_id, decision_date)</code>, so it never backfills an earlier date. The Decisions list hides them (it defaults to the latest run); the Journey drill-down does not. Your own screenshot corroborates this &mdash; the learner's scores moved from E&nbsp;0&nbsp;/&nbsp;I&nbsp;1 at the decision to E&nbsp;5&nbsp;/&nbsp;I&nbsp;24 now, which is a lot of drift for a current decision.</p>
+      <div class="note note--warn">
+        <p><b>There is still a real hole underneath.</b> <code>resolveAllForCandidate</code> returns <code>{assets: [], gaps: []}</code> when handed an empty request list &mdash; the loop that produces a gap simply never runs. Any future generator that asks for nothing while selecting an action that expects content reproduces this silence exactly. It needs a guard regardless of the stale rows.</p>
+      </div>
+      <div class="src">resolveContentAssets.ts:206&ndash;222 &middot; runGovernor.ts:274&ndash;275, :286 &middot; explorerWhyService.ts:55&ndash;61, 118&ndash;121 &middot; decideForLearner.ts:95, nurture.ts:24, frictionRecovery.ts:55</div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ CONSTRAINT ══════════ -->
+<section>
+  <h2 class="sec">The constraint that shapes the fix</h2>
+  <p class="lede">The obvious repair &mdash; have the Governor compose the email &mdash; is the wrong one, and a test will stop it.</p>
+
+  <div class="card">
+    <h3>The Governor is architecturally forbidden from composing or sending</h3>
+    <p>A structural test sweeps every file under <code>governor/</code> and <code>content/</code> and enforces an <strong>import whitelist</strong>, not merely a denylist. <code>emailService</code>, <code>schedulerService</code> and <strong><code>sequenceService</code></strong> are named forbidden outright. The generator is simply not on the allowed list, so importing it fails the build.</p>
+    <blockquote>
+      <p>WHY THIS IS A WHITELIST. The plan inherited a denylist of six strings. The plan auditor found that <code>emailService.ts</code> exports twenty-six <code>send*</code> functions, and only one of them is in that list &hellip; A new dependency is a deliberate decision that fails this test until someone adds it and says why.</p>
+      <cite>backend/src/services/explorerGrowth/governor/__tests__/noSendPaths.test.ts:6&ndash;23</cite>
+    </blockquote>
+    <p>This is a good guard and it should stay. It is also why <code>sequenceService</code> being forbidden matters: the Governor <em>cannot</em> be the thing that reads a sequence step. So the plan does not put generation there. It puts it in a new sibling stage that runs after the Governor, with its own narrower whitelist that still forbids every mailer and queue writer.</p>
+    <div class="src">noSendPaths.test.ts:25&ndash;27 (swept dirs), :116&ndash;129 (whitelist), :131&ndash;140 (forbidden modules), :219&ndash;251 (derived send-fn sweep)</div>
+  </div>
+</section>
+
+<!-- ══════════ WHAT EXISTS ══════════ -->
+<section>
+  <h2 class="sec">What we already have, and where the words come from</h2>
+  <p class="lede">You asked to make it evident what is used to send information and where that information comes from. This is that inventory. Most of the machine is built; the pieces are not connected to each other.</p>
+
+  <div class="tbl-wrap">
+    <table>
+      <thead>
+        <tr><th>Piece</th><th>Where it lives</th><th>State</th><th>What it contributes to a message</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><b>Subject line &amp; brief</b></td>
+          <td><code>follow_up_sequences.steps</code> (24 steps, 8 sequences)</td>
+          <td><span class="pill pill--have">exists</span></td>
+          <td>The subject verbatim, plus a prose brief, a goal, and a tone. Unreachable from a decision today.</td>
+        </tr>
+        <tr>
+          <td><b>Message generator</b></td>
+          <td><code>aiMessageService.generateMessage()</code></td>
+          <td><span class="pill pill--have">exists</span></td>
+          <td>Turns the brief + context into <code>{subject, body}</code>. Used in 15 places; never by Explorer.</td>
+        </tr>
+        <tr>
+          <td><b>Which lessons to cite</b></td>
+          <td><code>explorer_content_assets</code> &larr; published timeline cards</td>
+          <td><span class="pill pill--have">exists</span></td>
+          <td>The two or three lessons the digest is told to lead with. 585 cards projected.</td>
+        </tr>
+        <tr>
+          <td><b>Fact grounding</b></td>
+          <td><code>explorerFactResolver</code> + <code>explorerFactGuard</code></td>
+          <td><span class="pill pill--have">exists</span></td>
+          <td>Decides which dates/prices/seat counts may be stated, then rejects any the model invents. Fails closed.</td>
+        </tr>
+        <tr>
+          <td><b>Output validator</b></td>
+          <td><code>messageValidatorService</code></td>
+          <td><span class="pill pill--have">exists</span></td>
+          <td>Banned links, banned sign-offs, opt-out rules &mdash; and already imports the Explorer fact guard.</td>
+        </tr>
+        <tr>
+          <td><b>Draft store</b></td>
+          <td><code>scheduled_emails</code>, <code>status='agent_draft'</code></td>
+          <td><span class="pill pill--have">exists</span></td>
+          <td>A safe place to hold an unsent message. The scheduler only claims <code>status='pending'</code>, so drafts cannot leak.</td>
+        </tr>
+        <tr>
+          <td><b>Approve / discard screen</b></td>
+          <td><code>agentEmailInboxService</code></td>
+          <td><span class="pill pill--have">exists</span></td>
+          <td>A review queue where <em>approval explicitly never sends</em> &mdash; it only flips status.</td>
+        </tr>
+        <tr>
+          <td><b>Brand identity &amp; senders</b></td>
+          <td><code>brands</code>, <code>sender_profiles</code>, <code>brand_domains</code></td>
+          <td><span class="pill pill--have">exists</span></td>
+          <td>AI Flotation is already a seeded tenant + brand with its own domain and sender. Profiles ship <code>draft</code>.</td>
+        </tr>
+        <tr>
+          <td><b>Brand voice rules</b></td>
+          <td><code>brand_governance_rules</code></td>
+          <td><span class="pill pill--gap">not wired</span></td>
+          <td>Tone, approved offers, prohibited claims, protected terms, allowed link domains. <b>No generator reads it.</b></td>
+        </tr>
+        <tr>
+          <td><b>Link decision &rarr; message</b></td>
+          <td><code>decisions.scheduled_email_id</code></td>
+          <td><span class="pill pill--gap">never written</span></td>
+          <td>The column exists for exactly this and has never held a value.</td>
+        </tr>
+        <tr>
+          <td><b>Knowledge base</b></td>
+          <td><code>admissions_knowledge_entries</code> (Maya's)</td>
+          <td><span class="pill pill--gap">not brand-scoped</span></td>
+          <td>Keyword-scored facts injected into a prompt. Works, and is the pattern to copy. No brand column, no file upload.</td>
+        </tr>
+        <tr>
+          <td><b>Template renderer</b></td>
+          <td><code>explorerTemplateRenderer</code></td>
+          <td><span class="pill pill--dead">dead code</span></td>
+          <td>Substitutes <code>{{tokens}}</code> in a string. <b>Zero production callers.</b> Not part of the fix.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="note note--warn">
+    <p><b>One landmine to name now, because it will bite at the end, not the beginning.</b> Every existing campaign was backfilled to the Colaberry Enterprise brand, but leads have no matching <code>lead_tenant_contexts</code> row. The brand gate resolves that to <code>no_relationship</code> and blocks the send. It does not block drafting and it will not affect any phase below &mdash; but the day you decide to actually send, this is what stops you, and it is a separate piece of work.</p>
+  </div>
+</section>
+
+<!-- ══════════ PLAN ══════════ -->
+<section>
+  <h2 class="sec">The plan</h2>
+  <p class="lede">Five phases. Phase 1 alone answers your immediate ask and is the smallest of them, because it mostly connects things that already work. Each phase ships behind its own flag and nothing in any phase sends mail.</p>
+
+  <div class="phase">
+    <header>
+      <span class="pid">Phase 1</span>
+      <span class="ptitle">Generate the message every shadow decision would have sent</span>
+      <span class="psize">~2 days &middot; 1 PR</span>
+    </header>
+    <div class="pbody">
+      <dl>
+        <dt>What ships</dt>
+        <dd>A new stage, <code>explorerGrowth/drafts/</code>, that runs after the nightly Governor. For each shadow decision it follows campaign &rarr; sequence &rarr; step, calls <code>generateMessage()</code> with that step's brief plus the lessons the Governor resolved, runs the validator and the fact guard, and writes the result as a <code>scheduled_emails</code> row with <code>status='agent_draft'</code>. Then it sets <code>decisions.scheduled_email_id</code> &mdash; the column that has been waiting. Also writes <code>selected_sequence_step</code>, finally.</dd>
+        <dt>Why this shape</dt>
+        <dd>It reuses the draft mechanism that is already safe by construction rather than inventing one: the scheduler claims only <code>status='pending'</code>, so an <code>agent_draft</code> row is structurally unsendable. No new columns on the decision table. The Governor is not touched, so its purity guard stays green on its existing whitelist.</dd>
+        <dt>You will see</dt>
+        <dd>For every Explorer, the actual subject and body that would have gone out last night &mdash; including the weekly digest, written from real lessons.</dd>
+        <dt>Verification</dt>
+        <dd>
+          <ul>
+            <li>The purity test still passes unchanged for <code>governor/</code> and <code>content/</code>.</li>
+            <li>A new sibling guard proves the drafts stage cannot import a mailer or write a <code>pending</code> row.</li>
+            <li>A test asserts a generated body naming an unresolved date is rejected and recorded, not stored as clean.</li>
+            <li>Idempotency: re-running the stage twice for one learner-day produces one draft, not two.</li>
+          </ul>
+        </dd>
+        <dt>Cost &amp; risk</dt>
+        <dd>Roughly 150 generations per night at current volume, so a hard per-run cap and a dry-run mode ship with it. Risk is spend, not sends. New flag <code>EXPLORER_DRAFT_RENDER_ENABLED</code>, default off.</dd>
+      </dl>
+    </div>
+  </div>
+
+  <div class="phase">
+    <header>
+      <span class="pid">Phase 2</span>
+      <span class="ptitle">Rebuild the dashboard around the message</span>
+      <span class="psize">~3 days &middot; 1 PR</span>
+    </header>
+    <div class="pbody">
+      <dl>
+        <dt>What ships</dt>
+        <dd>
+          <ul>
+            <li><b>Shadow becomes the main tab.</b> Each row shows the subject; opening it shows the full body, the lessons it cited, and any validator findings.</li>
+            <li><b>Why? gains the message.</b> The <em>Content</em> section stops being a list of lesson titles and shows the draft, with the pointers beneath it.</li>
+            <li><b>Content tab is renamed <em>Content supply</em></b> and its subtitle says plainly that these are lesson cards projected from the curriculum. The two tables are reconciled to one query so the numbers agree, and the date filter the endpoint already accepts gets a control.</li>
+            <li><b>Four fields that are fetched and never displayed</b> &mdash; <code>ai_involved</code>, <code>ai_rationale</code>, <code>selected_sequence_step</code>, <code>scheduled_email_id</code> &mdash; get surfaced.</li>
+            <li><b>The first write route.</b> <code>POST /content/refresh</code>, which was specified and never built, becomes a &ldquo;re-run now&rdquo; button so the tab stops being a dead end.</li>
+          </ul>
+        </dd>
+        <dt>Constraint</dt>
+        <dd>The page is currently tested to be read-only &mdash; &ldquo;registers exactly fourteen GETs&rdquo;, &ldquo;exports no function whose name suggests a write&rdquo;. Adding the first write is a deliberate amendment to those tests, called out in the PR rather than slipped past them.</dd>
+        <dt>Verification</dt>
+        <dd>Pinned copy and test-ids survive or change on purpose: <code>suppressed-row</code>, <code>suppressed-count</code>, <code>suppressed-table</code>, &ldquo;Do not add the cells up&rdquo;, &ldquo;No content was needed for this action&rdquo;. Note CI does not run frontend jest, so <code>tsc --noEmit</code> plus a production screenshot pass is the real gate.</dd>
+      </dl>
+    </div>
+  </div>
+
+  <div class="phase">
+    <header>
+      <span class="pid">Phase 3</span>
+      <span class="ptitle">Ground the copy in a knowledge base, and add the AI button</span>
+      <span class="psize">~1 week &middot; 2 PRs</span>
+    </header>
+    <div class="pbody">
+      <dl>
+        <dt>Where we start from</dt>
+        <dd>Three unrelated things in this repo are called a knowledge base. The one worth building on is Maya's: <code>admissions_knowledge_entries</code>, retrieved by keyword scoring and injected into the prompt under a <em>&ldquo;use these facts to answer accurately&rdquo;</em> header. It works. It has no brand column, no file upload, no chunker and no embeddings.</dd>
+        <dt>What ships</dt>
+        <dd>
+          <ul>
+            <li><b>Ingestion</b> &mdash; the genuinely new part. Attach a document or a URL, chunk it, store it with its source so every fact in a draft can be traced back to the file it came from.</li>
+            <li><b>Retrieval into the draft stage</b>, reusing Maya's scoring rather than a second mechanism.</li>
+            <li><b>Brand voice finally wired in.</b> <code>brand_governance_rules</code> already holds tone, prohibited claims, protected terms and allowed link domains, and no generator reads it. Phase 3 makes it a prompt input and a post-check.</li>
+            <li><b>The AI button</b> on the admin page: regenerate this draft, with an editable brief, a diff against the previous version, and the retrieved sources listed.</li>
+          </ul>
+        </dd>
+        <dt>Borrow, don't invent</dt>
+        <dd><code>composerDraftService</code> already solves the hard part of grounded generation: it forbids invented specifics, requires <code>[placeholder]</code> instead, and runs a second reader that digit-checks every price, date and percentage against the brief. That is the pattern to copy, not re-derive.</dd>
+      </dl>
+    </div>
+  </div>
+
+  <div class="phase">
+    <header>
+      <span class="pid">Phase 4</span>
+      <span class="ptitle">Per brand &mdash; someone arriving on AI Flotation</span>
+      <span class="psize">~1 week &middot; 2 PRs</span>
+    </header>
+    <div class="pbody">
+      <dl>
+        <dt>Better news than expected</dt>
+        <dd>AI Flotation already exists as a seeded tenant and brand, with <code>aiflotation.com</code>, a tracking domain, a <code>build@aiflotation.com</code> sender on its own Mandrill subaccount, a lead-source slug, its own offer policy (Enterprise minus business training, plus six explicit denies) and its own journey program. Content resolution <em>already</em> takes a brand scope &mdash; <code>{brand_id, allow_unscoped}</code> is a required argument, not an afterthought.</dd>
+        <dt>What is actually missing</dt>
+        <dd>
+          <ul>
+            <li><code>generateMessage()</code> hard-codes &ldquo;Colaberry Enterprise AI Division&rdquo; into its persona and takes no brand. That is the main change.</li>
+            <li>Knowledge-base rows have no brand column, so Phase 3's schema must carry one from day one rather than bolt it on.</li>
+            <li>Sender profiles ship <code>draft</code> and must be activated per brand, with the preflight that refuses to send CPN mail over an AI Flotation envelope.</li>
+            <li>Explorer assets are projected only from the Colaberry curriculum, so a brand with no curriculum has no content to cite &mdash; that is a content problem, not a code one.</li>
+          </ul>
+        </dd>
+        <dt>You will see</dt>
+        <dd>A brand selector on the page, and for a given learner: which brand they arrived on, which knowledge base answered, which sender would carry it, and the draft in that brand's voice.</dd>
+      </dl>
+    </div>
+  </div>
+
+  <div class="phase">
+    <header>
+      <span class="pid">Phase 5</span>
+      <span class="ptitle">Stage &times; audience &mdash; fix the data, not the taxonomy</span>
+      <span class="psize">~2 days &middot; 1 PR + a decision</span>
+    </header>
+    <div class="pbody">
+      <dl>
+        <dt>Verdict</dt>
+        <dd><b>The taxonomy does not need redesigning. The tagging rule does.</b> Stage and audience are two independent axes, both derived from a card's week number but at different thresholds: <code>week &lt;= 1</code> sets the stage, <code>week === 0</code> sets the audience. That second threshold is the whole problem.</dd>
+        <dt>The arithmetic</dt>
+        <dd>Of 585 published cards, <b>only 23 are week 0</b>, so only those carry the free-preview tag &mdash; while 152 of 153 learners are free tier. That is why your cross-tab shows <code>0</code> for learning and evergreen in the free column. <b>A free-tier learner past activation has an empty candidate set by construction.</b> Nothing is broken; the rule simply excludes almost everyone from almost everything.</dd>
+        <dt>What ships</dt>
+        <dd>A change to one function, <code>audienceTagsForWeek</code>, plus the guard from Finding 5 so an empty request list can never again produce a silent non-answer. Also worth fixing in the same pass: a tier lookup that swallows its error and returns <em>full access</em>, so a database hiccup currently widens the pool rather than narrowing it.</dd>
+        <dt>Blocked on you</dt>
+        <dd>Which lessons a non-paying Explorer may be shown in an email is a commercial decision, not an engineering one. See below.</dd>
+      </dl>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ DECISION ══════════ -->
+<section>
+  <h2 class="sec">The one decision I need</h2>
+  <div class="decision">
+    <h3>What may a free-tier Explorer be shown in an email?</h3>
+    <p style="margin:0 0 4px; color:var(--muted); font-size:15px">Everything else in this plan I can decide and build. This one sets the paywall, so it is yours. It currently answers itself by accident: week&nbsp;0 only, which means 23 cards out of 585.</p>
+
+    <div class="opt">
+      <span class="lbl">A &mdash; Title and one-line summary for any lesson; the link paywalls</span>
+      <p>The digest can cite any of the 585 lessons and say what each is for. Clicking through still hits the upgrade wall. Maximum useful content, zero given away.</p>
+    </div>
+    <div class="opt">
+      <span class="lbl">B &mdash; Open the first lesson of each module</span>
+      <p>A deliberate free tier that is more than a single week but less than the catalogue. Needs someone to mark which cards qualify &mdash; a content task, not a code one.</p>
+    </div>
+    <div class="opt">
+      <span class="lbl">C &mdash; Leave it at week 0 and accept the consequence</span>
+      <p>The digest stays effectively undeliverable to 152 of 153 learners. Defensible only if the digest is not the point.</p>
+    </div>
+
+    <div class="rec">
+      <b>Recommendation: A.</b> It makes the digest work immediately without giving away a single lesson, it needs no content tagging pass, and it matches what the digest's own brief already asks for &mdash; <em>&ldquo;say what each is FOR in one line &hellip; this should read as useful on its own even if they never click.&rdquo;</em> That sentence was written for a paywalled link.
+    </div>
+  </div>
+</section>
+
+<footer class="prov">
+  <p><b>How this was established.</b> Three parallel read-only passes over the Explorer Growth subsystem, the admin page, and the knowledge-base and brand layers, with every load-bearing claim then re-checked against source directly. Production counts (525 email decisions, 392 with a resolved asset, 133 without, 0 executed) come from a live query against <code>explorer_journey_decisions</code> on 27 Oct 2026. Asset counts (585 cards, 23 at week 0, 152 of 153 learners free tier) are figures recorded in source comments, not re-measured here.</p>
+  <p><b>Stated as unverified:</b> that the rows showing &ldquo;the Governor named no gap&rdquo; are specifically pre-asset-wiring rows is a strong inference from the generator set, the upsert key and the score drift visible in the screenshot &mdash; it is not a measurement. Confirming it is one query, and it is the first task of Phase 1.</p>
+  <p>No code was changed to produce this document.</p>
+</footer>
+
+</div>
+</body>
+</html>
