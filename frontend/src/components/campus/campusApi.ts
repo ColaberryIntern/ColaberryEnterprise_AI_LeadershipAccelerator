@@ -45,6 +45,7 @@ export interface CampusPerson {
   enrollment_id: string; display_name: string; avatar_url: string | null;
   /** C5: may I message them (the DM rule). Absent from an older server = no. */ can_message?: boolean;
   /** C9: their level (band rung) and the gear others may see. Absent when unknown. */ rung_name?: string; gear?: Record<string, string>;
+  /** Campus HQ: the admin sidebar page they have open (staff viewers only, HQ building only). Absent = the lobby. */ hq_path?: string;
 }
 export type CampusPresenceEntry = CampusPerson | { anonymous: true };
 export interface CampusAreaPresence { count: number; people: CampusPresenceEntry[] }

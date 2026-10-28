@@ -4,6 +4,7 @@ import { requireAdmin, requireSection } from '../middlewares/authMiddleware';
 import { mgmtSectionGate } from '../middlewares/mgmtSectionGate';
 import { caseStudySurfaceLabGate } from '../middlewares/caseStudySurfaceLabGate';
 import authRoutes from './admin/authRoutes';
+import hqPresenceRoutes from './admin/hqPresenceRoutes';
 import cohortRoutes from './admin/cohortRoutes';
 import peopleRoutes from './admin/peopleRoutes';
 import personProfileRoutes from './admin/personProfileRoutes';
@@ -148,6 +149,7 @@ router.use(auditMiddleware);
 // Legacy admins and owner pass untouched; runs before every admin sub-router.
 router.use(mgmtSectionGate);
 router.use(authRoutes);
+router.use(hqPresenceRoutes); // Campus HQ heartbeat: section-agnostic in mgmtSectionGate (the caller's own presence)
 router.use(cohortRoutes);
 router.use(personProfileRoutes);
 router.use(peopleRoutes);

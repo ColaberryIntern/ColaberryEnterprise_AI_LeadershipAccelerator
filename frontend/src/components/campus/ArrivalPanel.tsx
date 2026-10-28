@@ -6,7 +6,7 @@ import PlanBox from './PlanBox';
 import { TourStopCard, TourNav } from './TourInCard';
 import type { Tour } from './tourSteps';
 import type { BuildingId, CampusAudience, CampusBuilding, ExplorerAccess } from './campusMap';
-import { buildingName } from './campusMap';
+import { buildingName, CAMPUS_BUILDINGS } from './campusMap';
 import type { CampusPerson, CampusPresence } from './campusApi';
 import type { StaffDesk } from './campusPeopleApi';
 import { desksForBuilding } from './campusPeople';
@@ -43,6 +43,11 @@ import { useGameRoomData } from './games/GameRoomSections';
 import { useCampus } from './CampusContext';
 import { TowerTodayTile, TODAY_HREF } from './home/TodayCard';
 import { EVENTS_BUILDING } from './campusRoomKind';
+import { useHq } from './hq/useHq';
+import { HqArrivalSide } from './hq/HqBuilding';
+
+/** Campus HQ: the career building (Staff Office / Career Center / Partner Office) is the elevator tower. */
+const HQ_BUILDING = 'career';
 
 /**
  * Arriving at a building (C11b; WP-2): the room behind, and the arrival panel in front, as the prototype's arrive() builds it:
@@ -144,13 +149,19 @@ export default function ArrivalPanel(p: ArrivalPanelProps): React.ReactElement {
   const live = p.live ?? null;
   const liveRoute = live ? roomRoute(live.b) : null;
   const liveCta = live && liveRoute && live.state !== 'replay' ? { label: live.state === 'live' ? 'Join the live room · audio & Q&A' : 'Join the live room', route: liveRoute } : null;
+  // Campus HQ: one state for the elevator scenes in the frame and the badge and floors in this card
+  const isHq = b.id === HQ_BUILDING && access === 'open';
+  // the internship building's own name for this viewer (Career Center, or Engagements in the Workplace look)
+  const careerBase = CAMPUS_BUILDINGS.find((x) => x.id === HQ_BUILDING);
+  const hq = useHq(audience, p.reduceMotion, isHq, careerBase ? buildingName(careerBase, wp) : undefined);
+  const hqNamed = isHq ? (p.presence?.[b.id]?.people ?? []).filter((x): x is CampusPerson => 'enrollment_id' in x && !!(x as CampusPerson).display_name) : [];
   return (
     <>
       <CampusInside building={b} buildingName={buildingName(b, wp)} audience={audience} access={access}
         presence={p.presenceError ? undefined : p.presence} onAir={p.onAir} reduceMotion={p.reduceMotion} onStepOutside={p.onClose} going={p.going}
         onPickPerson={p.onPickPerson} desk={desk} onDesk={desk ? (at) => openStaffCard(desk.id, at) : undefined} wall={wall} workplace={wp} fromDoor={p.fromDoor}
         onGame={p.onEnterRoom ? (g) => open(`/portal/game-room?game=${g}`) : undefined}
-        summary={summary} planStep={stepIdx >= 0 ? plan!.stops[stepIdx] : null} spot={spot} sectionRoute={b.primary.route} onOpen={open} />
+        summary={summary} planStep={stepIdx >= 0 ? plan!.stops[stepIdx] : null} spot={spot} sectionRoute={b.primary.route} onOpen={open} hq={isHq ? hq : null} />
       <BuildingCard key={b.id} building={b} access={access} workplaceNames={wp} onClose={p.onClose} onNavigate={p.onNavigate} audience={audience}
         kicker={live && !isStop ? `${LIVE_STATES[live.state].chip} · Colaberry Live` : kickerOf({ zone: zoneLabelOf(b, wp), access, audience, tour: isStop ? { name: tour!.model.name, n: tourIdx + 1, of: tour!.model.stops.length } : null })}
         line={b.id === 'chow' ? foodLead(wx.now, wx.w.condition) : subOf(b, audience, wp)} onElsewhere={p.onElsewhere} urgent={liveCta ?? (classLiveRoute ? { label: 'Your class is live in the Events Hall · Walk in', route: classLiveRoute } : urgentAt(b.id, data, now))} flashRoute={p.flashRoute}
@@ -158,8 +169,11 @@ export default function ArrivalPanel(p: ArrivalPanelProps): React.ReactElement {
         happening={happeningAt(b.id, { onAir: p.onAir, count: p.count, presenceError: p.presenceError, facts: factsAt(b.id, data, p.look, now),
           live: live ? { state: live.state, title: live.b.title, sub: liveSub(live.b, live.now) } : null })}
         onEnterRoom={p.onEnterRoom} desks={desks}
-        tourTop={isStop ? <TourStopCard tour={tour!.model} index={tourIdx} onToday={() => open(TODAY_HREF)} /> : b.id === 'tower' && audience === 'explorer' ? <TowerTodayTile onOpen={open} /> : undefined}
-        ways={b.id === 'amphi' && live && live.state !== 'replay' ? <LiveTile live={live} onJoin={open} /> : b.id === 'arcade' ? undefined : inRoom ? <ArrivalWays spot={spot} summary={summary} name={buildingName(b, wp)} primaryLabel={b.primary.label} onSection={() => open(b.primary.route)} onSpot={sitAtSpot} /> : undefined}
+        tourTop={isStop ? <TourStopCard tour={tour!.model} index={tourIdx} onToday={() => open(TODAY_HREF)} />
+          // Campus HQ: your badge and the floors come first, under the hero (the prototype's side panel)
+          : isHq ? <HqArrivalSide s={hq} audience={audience} face={buildingName(b, wp)} named={hqNamed} />
+          : b.id === 'tower' && audience === 'explorer' ? <TowerTodayTile onOpen={open} /> : undefined}
+        ways={b.id === 'amphi' && live && live.state !== 'replay' ? <LiveTile live={live} onJoin={open} /> : b.id === 'arcade' || isHq ? undefined : inRoom ? <ArrivalWays spot={spot} summary={summary} name={buildingName(b, wp)} primaryLabel={b.primary.label} onSection={() => open(b.primary.route)} onSpot={sitAtSpot} /> : undefined}
         planBox={showPlanBox ? <PlanBox stop={plan!.stops[stepIdx]} index={stepIdx} total={plan!.stops.length} onOpen={open} onDone={plan!.onComplete} /> : undefined}
         tourNav={tour ? <TourNav tour={tour.model} index={tourIdx} hereStop={isStop} nextName={nextB ? buildingName(nextB, wp) : null}
           onNext={tour.onNext} onBack={tour.onBack} onEnd={tour.onEnd} /> : undefined}

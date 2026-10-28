@@ -10,7 +10,8 @@ import { MemoryRouter } from 'react-router-dom';
 let mockPost: () => Promise<unknown> = async () => ({ data: { admin_token: 'admin.jwt', role: 'ops' } });
 jest.mock('../../../utils/portalApi', () => ({ __esModule: true, default: { post: () => mockPost() } }));
 let mockIsMgmt = true;
-jest.mock('../campusMgmt', () => ({ useIsMgmt: () => mockIsMgmt, fetchIsMgmt: () => Promise.resolve(mockIsMgmt) }));
+jest.mock('../campusMgmt', () => ({ useIsMgmt: () => mockIsMgmt, fetchIsMgmt: () => Promise.resolve(mockIsMgmt),
+  useCampusMgmt: () => ({ isMgmt: mockIsMgmt, label: null, sections: [], canSection: () => false }) }));
 
 // eslint-disable-next-line import/first
 import PortalMgmtEnterPage from '../../../pages/portal/PortalMgmtEnterPage';
@@ -39,7 +40,8 @@ describe('allowedMgmtNext (the bridge allowlist)', () => {
     expect(allowedMgmtNext(mgmtBridgeTo(p).split('?')[1] ? '?' + mgmtBridgeTo(p).split('?')[1] : '')).toBe(p);
   });
   it.each([
-    ['nothing', ''], ['another admin page', '?next=%2Fadmin%2Fsettings'], ['a protocol-relative URL', '?next=%2F%2Fexample.com'],
+    // HQ H3: every sidebar page is allowed now, so the "not listed" case is an admin route with no sidebar entry.
+    ['an admin page the sidebar does not list', '?next=%2Fadmin%2Fapollo'], ['nothing', ''], ['a protocol-relative URL', '?next=%2F%2Fexample.com'],
     ['an absolute URL', '?next=https%3A%2F%2Fevil.example'], ['a lookalike', '?next=%2Fadmin%2Fpeople%2F..%2Fsettings'],
   ])('ignores %s', (_n, search) => {
     expect(allowedMgmtNext(search)).toBeNull();
@@ -61,7 +63,7 @@ describe('PortalMgmtEnterPage with next', () => {
     expect(replaced).toEqual(['/admin/people']);
     expect(window.localStorage.getItem('admin_token')).toBe('admin.jwt');
   });
-  it.each([['no next', ''], ['//example.com', '?next=%2F%2Fexample.com'], ['an unlisted admin page', '?next=%2Fadmin%2Fsettings']])('%s lands on the dashboard, as before', async (_n, search) => {
+  it.each([['no next', ''], ['//example.com', '?next=%2F%2Fexample.com'], ['an admin page the sidebar does not list', '?next=%2Fadmin%2Fapollo']])('%s lands on the dashboard, as before', async (_n, search) => {
     await visit(search);
     expect(replaced).toEqual(['/admin/dashboard']);
   });

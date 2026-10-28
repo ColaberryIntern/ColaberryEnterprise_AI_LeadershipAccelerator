@@ -5,6 +5,9 @@ import { searchCampus, SearchResult } from './campusSearch';
 import type { BuildingId } from './campusMap';
 import { openBookCall } from './admissions/admissionsCallApi';
 import { openBoard } from './board/boardApi';
+import { useCampusMgmt } from './campusMgmt';
+import { buildHq } from './hq/hqModel';
+import { setHqIntent } from './hq/hqIntent';
 
 /**
  * "Where to?" (Colaberry Campus C3): a WAI-ARIA combobox over buildings, rooms and the people the
@@ -23,7 +26,12 @@ export default function WhereTo({ placeholder = 'Where to?' }: { placeholder?: s
   const [active, setActive] = useState(0);
   const listId = useId();
   const talk = audience === 'member' || audience === 'explorer'; // C20: "Book a call with admissions" for learners and Explorers
-  const results = useMemo(() => searchCampus(q, buildings, presence, settings.workplaceNames, talk), [q, buildings, presence, settings.workplaceNames, talk]);
+  // Campus HQ: staff also find HQ floors and the rooms their badge opens (built from the same sections as the building)
+  const mgmt = useCampusMgmt();
+  const sectionsKey = mgmt.sections.join(',');
+  // rebuilt when the sections change (keyed on their joined list)
+  const hq = useMemo(() => (audience === 'staff' ? buildHq((s) => mgmt.sections.includes(s), true, 'staff') : null), [audience, sectionsKey]);
+  const results = useMemo(() => searchCampus(q, buildings, presence, settings.workplaceNames, talk, hq), [q, buildings, presence, settings.workplaceNames, talk, hq]);
   const expanded = open && results.length > 0;
   const optionId = (i: number) => `${listId}-opt-${i}`;
 
@@ -32,6 +40,7 @@ export default function WhereTo({ placeholder = 'Where to?' }: { placeholder?: s
     if (r.kind === 'book') openBookCall();
     else if (r.kind === 'board') openBoard({ walk: true }); // C30: the Community Board (on a page it opens in place)
     else if (r.kind === 'room' && r.navigable) enterThroughDoor(r.route, null);
+    else if (r.kind === 'hq') { setHqIntent(r.floor); openMap(r.buildingId as BuildingId); } // the HQ rides there as it opens
     else openMap(r.buildingId as BuildingId);
   };
 

@@ -1,4 +1,6 @@
 /**
+ * The campus HQ building is generated from this file (components/campus/hq/hqModel.ts). Nothing else needs editing when you add, move or rename a link.
+ *
  * adminNav.ts — admin sidebar information architecture.
  * Pinned links always show; labeled groups are collapsible (see AdminLayout).
  * `icon` is a RemixIcon name without the `ri-` prefix (the brand icon set,

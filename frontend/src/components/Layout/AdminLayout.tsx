@@ -4,6 +4,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import ErrorBoundary from '../ui/ErrorBoundary';
 import SafeModeBanner from '../admin/SafeModeBanner';
 import { PINNED_LINKS, NAV_GROUPS, ALL_LINKS, NavLink as NavLinkT } from './adminNav';
+import { useAdminCampusPresence } from './useAdminCampusPresence';
 
 const COLLAPSE_KEY = 'admin.nav.collapsed.v1';
 
@@ -40,6 +41,7 @@ function AdminLayout() {
   const { logout, canSection, hasPortalAccount } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  useAdminCampusPresence(location.pathname, hasPortalAccount); // Campus HQ: online + on this page's floor
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [query, setQuery] = useState('');
 

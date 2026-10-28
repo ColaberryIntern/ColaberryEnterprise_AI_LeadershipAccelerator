@@ -12,6 +12,7 @@ import { getLook, setLook } from '../services/campus/campusLookService';
 import { GEAR_SLOTS } from '../services/campus/campusUnlocks';
 import { mayPreviewAudiences } from '../services/campus/campusAudienceSwitch';
 import { roomBuildingFor } from '../services/campus/campusRoomBuilding';
+import { HQ_PATH } from '../services/campus/hqPath';
 
 /**
  * Colaberry Campus learner endpoints (Basecamp C1 onward). Mounted with the
@@ -66,6 +67,8 @@ const PublicGearSchema = z.object({ head: z.string(), face: z.string(), body: z.
 const PersonSchema = z.object({
   enrollment_id: z.string(), display_name: z.string(), avatar_url: z.string().nullable(), can_message: z.boolean(),
   rung_name: z.string().optional(), gear: PublicGearSchema.optional(),
+  // Campus HQ: the sidebar page a named employee has open (staff viewers only; see campusPresenceService).
+  hq_path: z.string().regex(HQ_PATH).optional(),
 }).strict();
 const EntrySchema = z.union([PersonSchema, z.object({ anonymous: z.literal(true) }).strict()]);
 export const CampusPresenceResponse = z.object({

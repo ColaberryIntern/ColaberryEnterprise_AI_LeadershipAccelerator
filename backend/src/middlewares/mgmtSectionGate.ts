@@ -219,6 +219,9 @@ const AGNOSTIC = [
   // The coarse check moves to the route because the route can express what this
   // table cannot.
   '/api/admin/people',
+  // Campus HQ: the Management Portal's presence heartbeat. About the CALLER only (the enrollment comes from the token),
+  // writes their own online time and HQ floor, returns no data. Every admin identity needs it, like /api/admin/me.
+  '/api/admin/campus/here',
 ];
 
 function matchesPrefix(path: string, prefix: string): boolean {

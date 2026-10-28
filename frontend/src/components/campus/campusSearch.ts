@@ -2,6 +2,9 @@ import type { CampusBuilding } from './campusMap';
 import { buildingName, roomLabel } from './campusMap';
 import type { CampusPresence, CampusPerson } from './campusApi';
 import { means as meansBoard } from './board/boardModel';
+import { hqSearch, type Hq } from './hq/hqModel';
+
+const HQ_BUILDING_ID = 'career';
 
 /**
  * "Where to?" search across the campus (Colaberry Campus C3). Pure.
@@ -15,7 +18,9 @@ export type SearchResult =
   | { kind: 'room'; id: string; label: string; buildingId: string; route: string; navigable: boolean; detail: string }
   | { kind: 'person'; id: string; label: string; buildingId: string; detail: string }
   | { kind: 'book'; id: string; label: string; buildingId: string; detail: string }
-  | { kind: 'board'; id: string; label: string; buildingId: string; detail: string };
+  | { kind: 'board'; id: string; label: string; buildingId: string; detail: string }
+  /** Campus HQ (staff): a floor, or a room your badge opens; picking it rides the HQ elevator there. */
+  | { kind: 'hq'; id: string; label: string; buildingId: string; detail: string; floor: string };
 
 export const SEARCH_LIMIT = 8;
 /** C20 (round 3 §2.7): searches that mean "talk to a person" find "Book a call with admissions". */
@@ -31,15 +36,23 @@ export const BOARD_RESULT: SearchResult = { kind: 'board', id: 'board', label: '
 
 const isNamed = (e: unknown): e is CampusPerson => !!e && typeof e === 'object' && !('anonymous' in (e as object));
 
-export function searchCampus(query: string, buildings: CampusBuilding[], presence: CampusPresence | null, workplaceNames: boolean, admissions = false): SearchResult[] {
+export function searchCampus(query: string, buildings: CampusBuilding[], presence: CampusPresence | null, workplaceNames: boolean, admissions = false, hq: Hq | null = null): SearchResult[] {
   const q = query.trim().toLowerCase();
   if (!q) return [];
-  if (admissions && meansBooking(q)) return [BOOK_RESULT, ...searchCampus(query, buildings, presence, workplaceNames)].slice(0, SEARCH_LIMIT);
-  if (meansBoard(q)) return [BOARD_RESULT, ...plainSearch(q, buildings, presence, workplaceNames)].slice(0, SEARCH_LIMIT);
-  return plainSearch(q, buildings, presence, workplaceNames);
+  if (admissions && meansBooking(q)) return [BOOK_RESULT, ...searchCampus(query, buildings, presence, workplaceNames, false, hq)].slice(0, SEARCH_LIMIT);
+  if (meansBoard(q)) return [BOARD_RESULT, ...plainSearch(q, buildings, presence, workplaceNames, hq)].slice(0, SEARCH_LIMIT);
+  return plainSearch(q, buildings, presence, workplaceNames, hq);
 }
 
-function plainSearch(q: string, buildings: CampusBuilding[], presence: CampusPresence | null, workplaceNames: boolean): SearchResult[] {
+/** Campus HQ: floors by label and the rooms this viewer can open (hqSearch never returns a locked room or a learner's hit). */
+function hqResults(q: string, hq: Hq | null): SearchResult[] {
+  return hq ? hqSearch(hq, q).map((h) => ({
+    kind: 'hq' as const, id: `hq:${h.kind}:${h.floor}:${h.room?.path ?? ''}`, label: h.label, buildingId: HQ_BUILDING_ID, floor: h.floor,
+    detail: h.kind === 'floor' ? `HQ · floor ${h.floor}` : `HQ · floor ${h.floor} · ride there`,
+  })) : [];
+}
+
+function plainSearch(q: string, buildings: CampusBuilding[], presence: CampusPresence | null, workplaceNames: boolean, hq: Hq | null = null): SearchResult[] {
   const hit = (s: string) => s.toLowerCase().includes(q);
   const out: SearchResult[] = [];
   for (const b of buildings) {
@@ -60,6 +73,7 @@ function plainSearch(q: string, buildings: CampusBuilding[], presence: CampusPre
       }
     }
   }
+  out.push(...hqResults(q, hq));
   // Exact-prefix matches first, then the rest, stable within each group.
   const starts = (r: SearchResult) => (r.label.toLowerCase().startsWith(q) ? 0 : 1);
   return out.map((r, i) => ({ r, i })).sort((a, b) => starts(a.r) - starts(b.r) || a.i - b.i).map((x) => x.r).slice(0, SEARCH_LIMIT);

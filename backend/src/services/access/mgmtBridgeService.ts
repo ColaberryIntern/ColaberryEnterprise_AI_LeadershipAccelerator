@@ -16,6 +16,10 @@ export interface MgmtStatus {
   is_mgmt: boolean;
   role: string | null;
   label: string | null;
+  /** The sections this person's admin session would be scoped to (the same `sectionsForRole` the minted admin
+   *  token carries). The campus HQ building reads it to decide which floors your badge opens; it is presentation
+   *  only, and `mgmtSectionGate` stays the one enforcement point. Empty for anyone who is not a mgmt user. */
+  sections: SectionKey[];
 }
 
 async function loadMgmtRole(enrollmentId: string): Promise<string | null> {
@@ -61,7 +65,12 @@ export async function loadStaffPortalLinkByEmail(email: string): Promise<StaffPo
  *  Portal" link visibility in the student portal. */
 export async function getMgmtStatus(enrollmentId: string): Promise<MgmtStatus> {
   const role = await loadMgmtRole(enrollmentId);
-  return { is_mgmt: !!role, role, label: role && isMgmtRole(role) ? MGMT_ROLE_DEFS[role].label : null };
+  return {
+    is_mgmt: !!role,
+    role,
+    label: role && isMgmtRole(role) ? MGMT_ROLE_DEFS[role].label : null,
+    sections: [...sectionsForRole(role)],
+  };
 }
 
 export interface MintedMgmtToken {

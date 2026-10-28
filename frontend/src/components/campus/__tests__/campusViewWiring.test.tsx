@@ -13,7 +13,8 @@ jest.mock('../../../pages/portal/useEntitlement', () => ({ useEntitlement: () =>
 jest.mock('../../../pages/portal/useIsOrgManager', () => ({ useOrgManager: () => ({ isManager: mock.manager, org: null, loaded: true }) }));
 jest.mock('../../../pages/portal/useIsExplorer', () => ({ useIsExplorer: () => mock.explorer }));
 jest.mock('../../../pages/portal/useInternshipNav', () => ({ useInternshipNav: () => ({ isIntern: false }) }));
-jest.mock('../campusMgmt', () => ({ useIsMgmt: () => mock.mgmt, fetchIsMgmt: () => Promise.resolve(mock.mgmt) }));
+jest.mock('../campusMgmt', () => ({ useIsMgmt: () => mock.mgmt, fetchIsMgmt: () => Promise.resolve(mock.mgmt),
+  useCampusMgmt: () => ({ isMgmt: mock.mgmt, label: null, sections: [], canSection: () => false }) }));
 let mockOpened: Array<string | undefined> = [];
 jest.mock('../CampusContext', () => ({
   useCampus: () => ({ settings: { nav: 'campus', workplaceNames: false, reduceMotion: true }, presence: null, presenceError: false, layer: 'none',

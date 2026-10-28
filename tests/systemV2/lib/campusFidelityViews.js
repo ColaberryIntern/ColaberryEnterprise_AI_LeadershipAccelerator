@@ -38,6 +38,36 @@ const tap = (id) => ({ evaluate: `(async () => { for (let i = 0; i < 50; i++) { 
 /** WP-3: the prototype walk (330 units/s, eased, at least 600 ms): the longest walk on the campus settles inside this. */
 const WALKED = { wait: 2600 };
 
+/** Campus HQ: the accounts whose signature building is the elevator tower (career). */
+const isHqAccount = (a) => SIGNATURE[a] === 'career';
+/** Campus HQ: ride by floor LABEL (numbers follow the sidebar, so a test that names a number breaks when a group is added). */
+const hqButton = (label) => ({ evaluate: `(() => { const b = [...document.querySelectorAll('.cm-hq-cab .fb')].find((x) => x.querySelector('b')?.textContent === ${JSON.stringify(label)}); if (!b) throw new Error('no floor button ${label}'); b.click(); })()`, settle: 1800 });
+const hqHover = (label) => ({ evaluate: `(() => { const b = [...document.querySelectorAll('.cm-hq-cab .fb')].find((x) => x.querySelector('b')?.textContent === ${JSON.stringify(label)}); b.focus(); b.dispatchEvent(new MouseEvent('mouseover', { bubbles: true })); })()`, settle: 500 });
+/** H8: no text in the HQ overflows its box (an ellipsis is a deliberate cut, not an overflow). */
+const HQ_NO_OVERFLOW = `(() => {
+  for (const el of document.querySelectorAll('.cm-hq b, .cm-hq small, .cm-hq .pl, .cm-hq code, .cm-hq-side b, .cm-hq-side small, .cm-hq-side .st, .cm-hq-side .go')) {
+    if (el.offsetParent === null) continue;
+    const cs = getComputedStyle(el); if (cs.textOverflow === 'ellipsis') continue;
+    if (el.scrollWidth > el.clientWidth + 1 && cs.display !== 'inline') return 'text overflows: ' + el.textContent.slice(0, 40);
+  }
+  return '';
+})()`;
+const HQ_IN = [tap('career'), WALKED];
+const HQ_LOBBY = [...HQ_IN, { click: '[data-testid="cm-hq-walk-in"]' }];
+const HQ_CAB = [...HQ_LOBBY, { click: '[data-testid="cm-hq-call"]' }];
+const HQ_VIEWS = [
+  { name: '34-hq-outside', route: '/portal/campus', accounts: ['staff-marketing', 'member'], steps: () => HQ_IN,
+    required: () => ['cm-hq', 'cm-hq-ext', 'cm-hq-walk-in', 'cm-hq-badge', 'cm-hq-panel'], assert: () => HQ_NO_OVERFLOW },
+  { name: '34-hq-lobby', route: '/portal/campus', accounts: ['staff', 'member'], steps: () => HQ_LOBBY,
+    required: (a, size) => ['cm-hq-lobby', 'cm-hq-reader', ...(size === 'phone' ? [] : ['cm-hq-concierge', 'cm-hq-directory'])], assert: () => HQ_NO_OVERFLOW },
+  { name: '34-hq-elevator', route: '/portal/campus', accounts: ['staff'], steps: () => [...HQ_CAB, hqHover('Marketing')],
+    required: (a, size) => ['cm-hq-cab', '.cm-hq-cab .fb.lock', '.cm-hq-cab .fb:not(.lock)', ...(size === 'phone' ? [] : ['cm-hq-guide-rooms'])], assert: () => HQ_NO_OVERFLOW },
+  { name: '34-hq-floor', route: '/portal/campus', accounts: ['staff'], steps: () => [...HQ_CAB, hqButton('Campaigns')],
+    required: () => ['cm-hq-floor', 'cm-hq-office', 'cm-hq-to-cab', 'cm-hq-panel-floor'], assert: () => HQ_NO_OVERFLOW },
+  { name: '34-hq-partial', route: '/portal/campus', accounts: ['staff-mentor'], steps: () => [...HQ_CAB, hqButton('Executive Floor')],
+    required: () => ['cm-hq-floor', 'cm-hq-office', 'cm-hq-office-locked', 'cm-hq-panel-floor'], assert: () => HQ_NO_OVERFLOW },
+];
+
 const HOME_KNOWN = (a, size) => [
   ...(size === 'phone' ? ['phone: the stats pill is hidden as in the prototype phone layout; the campus tab bar has no Alerts tab yet'] : []),
   'top bar messages icon: comes with the chat on the home (decision Q6, WP-10)',
@@ -109,9 +139,12 @@ const VIEWS = [
     required: (a, size) => [...MAP_ART, ...buildingIds(), ...TOPBAR, ...(size === 'phone' ? [] : ['cm-stats', ...STATS[a]]), ...CONCIERGE, ...HELPDESK(a), ...CONCIERGE_BY[a], ...(size === 'phone' ? ['.cm-tabbar'] : [])],
     known: HOME_KNOWN },
   { name: '03-arrive', route: '/portal/campus', steps: (a) => [tap(SIGNATURE[a]), WALKED],
-    required: (a) => ['cm-card', 'cm-arrive-hero', 'cm-arrive-now', ...(a === 'explorer' ? [] : ['cm-ways', 'cm-way-board']), 'cm-arrive-back', 'cm-arrive-elsewhere', '.cm-arrive .cm-rooms'] }, // v6 D1: the two ways in replace the single action (an explorer's lecture preview is locked: no ways, the enroll action stays)
+    // v6 D1: the two ways in replace the single action (an explorer's lecture preview is locked: no ways, the enroll action stays).
+    // Campus HQ: the career building (business and staff) is the elevator tower: its badge and floors take the ways' place.
+    required: (a) => ['cm-card', 'cm-arrive-hero', 'cm-arrive-now', ...(a === 'explorer' ? [] : isHqAccount(a) ? ['cm-hq-badge', 'cm-hq-panel'] : ['cm-ways', 'cm-way-board']), 'cm-arrive-back', 'cm-arrive-elsewhere', '.cm-arrive .cm-rooms'] },
   { name: '04-inside', route: '/portal/campus', steps: (a) => [tap(SIGNATURE[a]), WALKED],
-    required: () => ['cm-inside', 'cm-room3d', 'cm-board', 'cm-inside-you', 'cm-inside-out'], // v6 D1: the CSS 3D room; the board replaced the door
+    // v6 D1: the CSS 3D room; the board replaced the door. Campus HQ: the career building shows the tower instead.
+    required: (a) => (isHqAccount(a) ? ['cm-inside', 'cm-hq', 'cm-hq-ext', 'cm-inside-out'] : ['cm-inside', 'cm-room3d', 'cm-board', 'cm-inside-you', 'cm-inside-out']),
     assert: () => NO_DOOR,
     known: () => ['the room opens on arrival, as the prototype flyIn does (no separate "look inside" step)', 'the prototype interiors invented events, dates, client names and tickets: neutral signs instead'] },
   { name: '05-page', route: '/portal/library',
@@ -166,7 +199,7 @@ const VIEWS = [
   // WP-5: a room whose back wall carries real facts (the Schedule board: TODAY · <weekday>, the next session, event and plan)
   { name: '19-room-wall', route: '/portal/campus', steps: () => [tap('tower'), WALKED],
     required: () => ['cm-inside', 'cm-room3d', 'cm-board', 'cm-r3-you'], assert: () => roomOk('tower', 0) }, // v6 D1: Schedule has a board, no spot
-  ...ROOM_VIEWS, ...WALL_VIEWS, ...WINDOW_VIEWS,
+  ...ROOM_VIEWS, ...WALL_VIEWS, ...WINDOW_VIEWS, ...HQ_VIEWS,
   // C19 (round 3 §2.3 + v6 D1): the workstation, reached the real way (into the Studio, sit at your desk). A story as a member:
   // the throwaway seed has a project but no Classroom week, so the lesson workstation is covered by its unit test instead.
   // C40: the frame gets out of the way. Under 1600 px the angled side monitor folds away; under 1200 px Cory is a drawer (closed) and
@@ -295,9 +328,9 @@ const VIEWS = [
 /** WP-1: the side panel (and the tour in it) is required on every view past the gate. */
 function panelFor(view, a, size) {
   if (view.name === '01-gate' || view.name === '23-workstation') return []; // the workstation is full screen, as the prototype's #ws
-  const tour = a === 'staff' ? [] : ['cm-cc-tour'];
+  const tour = a.startsWith('staff') ? [] : ['cm-cc-tour']; // staff, and the HQ's per-role staff accounts
   if (view.route !== '/portal/campus' && view.name !== '14-step-outside') return size === 'phone' ? ['cm-steps-open'] : ['cm-page-rail', ...tour.map((t) => `[data-testid="cm-page-rail"] [data-testid="${t}"]`)];
-  if (size === 'phone' && (CARD_VIEWS.includes(view.name) || view.name.startsWith('21-room-') || view.name.startsWith('31-room-windows-') || view.name.startsWith('32-today-explorer-t') || view.name === '24-admissions' || view.name === '25-schedule' || view.name === '26-meeting-rooms' || view.name === '28-live' || view.name === '30-game-room-interior' || view.name === '30-chow-hall' || view.name === '31-weather')) return ['cm-cc-peek'];
+  if (size === 'phone' && (CARD_VIEWS.includes(view.name) || view.name.startsWith('34-hq-') || view.name.startsWith('21-room-') || view.name.startsWith('31-room-windows-') || view.name.startsWith('32-today-explorer-t') || view.name === '24-admissions' || view.name === '25-schedule' || view.name === '26-meeting-rooms' || view.name === '28-live' || view.name === '30-game-room-interior' || view.name === '30-chow-hall' || view.name === '31-weather')) return ['cm-cc-peek'];
   return ['cm-concierge', ...tour];
 }
 const withPanel = (view) => ({ ...view, required: (a, size) => [...view.required(a, size), ...panelFor(view, a, size)] });

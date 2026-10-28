@@ -160,6 +160,26 @@
   --cm-art-sun:#ffd23d; --cm-art-sun-glow:rgba(255,210,61,.6); --cm-art-moon:#f3efd9; --cm-art-cloud:#ffffff; --cm-art-cloud-rain:#8d96a1; --cm-art-cloud-night:#3a4466;
   --cm-art-hills:#5f8f5a; --cm-art-hills-night:#22324a; --cm-art-win-frame:#f4ead7; --cm-art-win-frame-edge:#c9b896;
   --cm-art-gr-accent:#6b2fa0; --cm-art-gr-week:#1f8a4c; --cm-art-gr-champ:#1f4f7a; --cm-art-gr-you:#fdecec; --cm-art-gr-gold:#d4a017;
+  /* Campus HQ (the elevator tower): docs/design/campus/colaberry-hq-elevator.html :root and its scene CSS. A picture: the same in both themes. */
+  --cm-art-hq-navy:#0e1a2c; --cm-art-hq-navy2:#13233a; --cm-art-hq-navy3:#1c3150; --cm-art-hq-brass:#c9a227; --cm-art-hq-brass2:#e6c96b; --cm-art-hq-brass3:#8c6d12;
+  --cm-art-hq-pin:rgba(201,162,39,.35); --cm-art-hq-ring:rgba(201,162,39,.18); --cm-art-hq-chip:rgba(255,255,255,.12); --cm-art-hq-sub:#c9d3e3;
+  --cm-art-hq-sky:#a9c6dd; --cm-art-hq-sky2:#d7e4ea; --cm-art-hq-grass:#dfe7d6; --cm-art-hq-grass2:#cfd9c4;
+  --cm-art-hq-night:#0b1430; --cm-art-hq-night2:#1d2a4e; --cm-art-hq-night-g:#2a3a2a; --cm-art-hq-night-g2:#1e2a1e;
+  --cm-art-hq-band:#e9e3d6; --cm-art-hq-band-night:#1b2740; --cm-art-hq-win:#ffd36e; --cm-art-hq-win-off:#9fb3c4; --cm-art-hq-win-night:#26324a;
+  --cm-art-hq-num-off:#9a9086; --cm-art-hq-band-hi:rgba(255,211,110,.25); --cm-art-hq-band-lock:rgba(227,27,35,.18); --cm-art-hq-sign-sub:#d8c58a; --cm-art-hq-sign-c:#ff4b52;
+  --cm-art-hq-marble:#e9e2d6; --cm-art-hq-marble2:#d8cfc0; --cm-art-hq-vein:rgba(140,120,90,.08); --cm-art-hq-shade:rgba(14,26,44,.55); --cm-art-hq-shade0:rgba(14,26,44,0); --cm-art-hq-glow:rgba(227,27,35,.18);
+  --cm-art-hq-steel:#b7b1a7; --cm-art-hq-steel2:#e7e2d8; --cm-art-hq-steel-edge:#8f887e; --cm-art-hq-shaft:#3a2a17; --cm-art-hq-lamp:#ffb648; --cm-art-hq-lamp-bg:#0a0a0a; --cm-art-hq-call-ink:#1a1408; --cm-art-hq-call-ring:#f4e3a8;
+  --cm-art-hq-desk:#f4efe6; --cm-art-hq-desk2:#d9cfbf; --cm-art-hq-desk3:#e8e0d2; --cm-art-hq-desk4:#c8bba6; --cm-art-hq-host:#b07a00;
+  --cm-art-hq-dir:#121212; --cm-art-hq-dir-line:#333333; --cm-art-hq-dir-ink:#f5f5f5; --cm-art-hq-dir-off:#8a8a8a; --cm-art-hq-dir-off-n:#7a6a3a; --cm-art-hq-dir-yes:#7ee2a8; --cm-art-hq-dir-no:#ff5a60;
+  --cm-art-hq-door-glass:rgba(210,230,240,.55); --cm-art-hq-door-glass2:rgba(160,190,210,.35); --cm-art-hq-tsl:#30435f; --cm-art-hq-tsl2:#1a2a42;
+  --cm-art-hq-wood:#5a3f22; --cm-art-hq-wood2:#3b2a18; --cm-art-hq-wood3:#2a1d10; --cm-art-hq-grain:rgba(255,255,255,.03);
+  --cm-art-hq-panel:#d9c37a; --cm-art-hq-panel2:#a88a2b; --cm-art-hq-panel-edge:#f1dc93; --cm-art-hq-panel-ink:#3a2a08; --cm-art-hq-btn-bg:rgba(255,255,255,.18);
+  --cm-art-hq-btn:#3a2b10; --cm-art-hq-btn2:#120d04; --cm-art-hq-btn-lit:#ffcf6e; --cm-art-hq-btn-cur:#e09b20; --cm-art-hq-btn-ink:#2a1d04; --cm-art-hq-btn-sub:#5a4410; --cm-art-hq-btn-edge:#6d540e;
+  --cm-art-hq-btn-lock:#b9b2a5; --cm-art-hq-btn-lock-ink:#7b7368; --cm-art-hq-btn-lock-b:#6a5d45; --cm-art-hq-btn-lock-s:#b3141b;
+  --cm-art-hq-corr:#f6f2ea; --cm-art-hq-corr-floor:#cbbfae; --cm-art-hq-runner:#9a1c22; --cm-art-hq-runner2:#c3262e; --cm-art-hq-plate-ink:#20160a;
+  --cm-art-hq-office:#5b3d22; --cm-art-hq-office2:#3e2914; --cm-art-hq-glass:rgba(220,235,245,.95); --cm-art-hq-glass2:rgba(170,200,220,.85); --cm-art-hq-glass-hi:#fffbe8; --cm-art-hq-glass-hi2:#f5e6b0; --cm-art-hq-code:#4a5a70;
+  --cm-art-hq-office-lock:#9c968c; --cm-art-hq-office-lock2:#7e776d; --cm-art-hq-glass-lock:#dcd6cc; --cm-art-hq-glass-lock2:#d2cbc0; --cm-art-hq-lock-icon:#a39a8e; --cm-art-hq-plaque-lock:#c9c2b6;
+  --cm-art-hq-row-lock:#f4f1ec; --cm-art-hq-row-lock-edge:#ece5da; --cm-art-hq-n-lock:#d9d3ca; --cm-art-hq-ink-lock:#8a8178; --cm-art-hq-paper:#fbf7f0; --cm-art-hq-legend:rgba(255,253,249,.92); --cm-art-hq-guide:rgba(255,253,249,.96);
 }
 [data-theme="dark"]{
   --cm-art-paper:#1e1e1e; --cm-art-ink:#f4f4f4; --cm-art-muted:#b5ad9f; --cm-art-line:#3a352d;
