@@ -59,8 +59,15 @@ function parseEntries(md) {
   const entries = [];
   let cur = null;
 
+  // A label may carry a parenthetical qualifier before the colon, because the
+  // honest thing to write is often "Verification (after the second fix pass;
+  // earlier figures are in the notes below): ...". Demanding a bare
+  // "Verification:" made the hard gate below report SIX entries across FOUR
+  // session logs as carrying no verification evidence when every one of them
+  // carried it - the gate was reading punctuation, not substance, and a gate
+  // that cries wolf on a true entry teaches people to ignore it.
   const field = (line, label) => {
-    const m = line.match(new RegExp(`^\\s*-\\s*${label}:\\s*(.+)$`, 'i'));
+    const m = line.match(new RegExp(`^\\s*-\\s*${label}\\s*(?:\\([^)]*\\))?:\\s*(.+)$`, 'i'));
     return m ? m[1].trim() : null;
   };
 
