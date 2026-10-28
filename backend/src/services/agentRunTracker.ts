@@ -60,9 +60,36 @@ export async function trackAgentRun<T>(agentName: string, fn: () => Promise<T>):
     const newAvg = agent.avg_duration_ms
       ? Math.round((agent.avg_duration_ms * agent.run_count + durationMs) / (agent.run_count + 1))
       : durationMs;
+    /**
+     * `error_count` is the field every health computation in the product actually divides by,
+     * and this path used to leave it alone.
+     *
+     * Reported by Quincy on 2026-10-28, verified here: the failure branch wrote `last_run_at`
+     * and `run_count + 1` exactly as the success branch does, and `error_count` appeared
+     * nowhere in this file. aiOpsService.ts:472 scores an agent
+     * `100 - error_count / max(run_count, 1) * 200`, so with the numerator frozen at 0 a timer
+     * that failed every single run rendered a green 100 beside a fresh timestamp and a
+     * climbing run count. It read as healthy AND busy, which is worse than reading as broken,
+     * because nothing invites anyone to look. The four wrappers on this path are
+     * AutonomousEngine, AICOOStrategicCycle, MetaAgentLoop and CoryEvolutionCycle.
+     *
+     * Two things here are deliberately NOT changed.
+     *
+     * `last_run_at` still moves on failure. A failing job is still firing, and the cron health
+     * check detects a job that STOPPED by the gap between fires. Withholding the timestamp
+     * would trade a false "healthy" for a false "stopped".
+     *
+     * No `status` is written, on either path. `status: 'error'` would make this file a
+     * completion writer able to erase an operator's mid-run pause, and the gate that prevents
+     * that (`completeRunPreservingControls`) is only reached by callers that CLAIM the run by
+     * writing `status: 'running'`. This function never claims one, which is precisely why it
+     * needs no gate. The first assertion in agentControlWritesGoThroughGate.test.ts pins that
+     * invariant, so adding a status write here has to come past it.
+     */
     await agent.update({
       last_run_at: new Date(),
       run_count: agent.run_count + 1,
+      error_count: agent.error_count + 1,
       avg_duration_ms: newAvg,
       last_error: err?.message ? String(err.message).slice(0, 2000) : 'Unknown error',
       last_error_at: new Date(),
