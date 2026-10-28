@@ -49,6 +49,7 @@ import { instrumentCronJob } from './cronInstrumentation';
 import { runScheduledRecompute } from './explorerGrowth/explorerProfileService';
 import { recomputeAllMilestonePromotions } from './progression/milestoneSweep';
 import { runScheduledGovernor } from './explorerGrowth/governor/runGovernor';
+import { runScheduledDraftRender } from './explorerGrowth/drafts/runDraftRender';
 import { registerGrowthJourneyCrons } from './scheduling/growthJourneyCrons';
 import { runContentSync } from './explorerGrowth/content/runContentSync';
 import {
@@ -1838,6 +1839,34 @@ export function startScheduler(): void {
       await runScheduledGovernor();
     }).catch((err) => {
       console.error('[Scheduler] ExplorerGovernorDecide failed:', err);
+    });
+  });
+
+  // Explorer Growth OS - draft render (Phase 1, docs/EXPLORER_MESSAGING_PLAN.html).
+  //
+  // 04:10 UTC, TWENTY MINUTES AFTER the Governor. It reads the decisions that
+  // job writes, so running it beside the Governor would render yesterday's
+  // decisions and leave today's with no message against them.
+  //
+  // A SEPARATE CRON BLOCK, not an extra call inside the Governor's. That block
+  // promises "DECIDES AND RECORDS ONLY - it enqueues nothing and sends
+  // nothing", and generating copy inside it would make the promise read as
+  // narrower than it looks. Keeping them apart also means Admin > Agents can
+  // pause the rendering without pausing the deciding, which matters because
+  // only one of the two costs money per run.
+  //
+  // RENDERS ONLY. Drafts land in scheduled_emails with a status the sender
+  // never claims - its candidate SELECT and its claiming UPDATE both require
+  // status = 'pending' - so nothing written here can be picked up and sent.
+  //
+  // runScheduledDraftRender checks isExplorerFeatureEnabled('draftRender')
+  // itself and returns immediately when off, so this is dark until BOTH the
+  // master flag and EXPLORER_DRAFT_RENDER_ENABLED are on.
+  cron.schedule('10 4 * * *', () => {
+    instrumentCronJob('ExplorerDraftRender', async () => {
+      await runScheduledDraftRender();
+    }).catch((err) => {
+      console.error('[Scheduler] ExplorerDraftRender failed:', err);
     });
   });
 

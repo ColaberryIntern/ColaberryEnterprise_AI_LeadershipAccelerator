@@ -1,7 +1,7 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { WhyBody } from '../DecisionWhyModal';
-import type { ExplorerWhy } from '../../../services/explorerGrowthApi';
+import { WhyBody, draftBodyToText } from '../DecisionWhyModal';
+import type { ExplorerWhy, ExplorerWhyMessage } from '../../../services/explorerGrowthApi';
 
 /**
  * The Why modal — the component this epic exists for.
@@ -76,6 +76,9 @@ const BASE: ExplorerWhy = {
   triggering_signals: [],
   deferred_actions: [],
   content: { assets: [], named_gaps: [], gap: null },
+  // Null is the honest default: most decisions have no rendered draft, and the
+  // panel's job in that case is to say WHICH kind of nothing it is.
+  message: null,
   contactability: null,
   affinities: [],
   scores_now: null,
@@ -179,6 +182,158 @@ describe('drift between then and now is surfaced, not smoothed over', () => {
     // by a separate recompute. Must not render as "scores of zero".
     const markup = html(why({ scores_now: null }));
     expect(markup).toContain('No profile row');
+  });
+});
+
+describe('the message a decision would have sent', () => {
+  // A FULL base plus a Partial override, two spreads — the same shape the
+  // `why` helper above uses. Inline properties followed by `...Partial<T>`
+  // make TypeScript mark the result's properties optional, which then fails to
+  // satisfy the required fields; two spreads keep them required.
+  const BASE_MESSAGE: ExplorerWhyMessage = {
+    scheduled_email_id: 'se-1',
+    subject: 'This week in AI, for practitioners',
+    body: '<p>Two lessons worth your time.</p><p>Both are short.</p>',
+    status: 'explorer_draft',
+    passed_quality_gate: true,
+    issues: [],
+    auto_fixed: [],
+    fact_set_present: true,
+    step_index: 0,
+    model: 'gpt-x',
+    created_at: null,
+  };
+  const message = (over: Partial<ExplorerWhyMessage> = {}): ExplorerWhyMessage => ({
+    ...BASE_MESSAGE,
+    ...over,
+  });
+
+  it('shows the subject and the body a learner would read', () => {
+    const markup = html(why({ message: message() }));
+    expect(markup).toContain('This week in AI, for practitioners');
+    expect(markup).toContain('Two lessons worth your time.');
+  });
+
+  it('says NOT SENDABLE on every draft', () => {
+    // The safety of the whole stage rests on this, so a reader should never
+    // have to infer it from a status string.
+    expect(html(why({ message: message() }))).toContain('Not sendable');
+  });
+
+  it('marks refused copy as refused and lists why', () => {
+    // Showing the body WITHOUT the verdict would be worse than showing
+    // nothing: a reviewer would read it as approved.
+    const markup = html(
+      why({
+        message: message({
+          passed_quality_gate: false,
+          status: 'explorer_draft_rejected',
+          issues: ['Ungrounded date: November 12'],
+        }),
+      }),
+    );
+    expect(markup).toContain('Refused by the quality gate');
+    expect(markup).toContain('Ungrounded date: November 12');
+    expect(markup).toContain('would not have been allowed to send');
+  });
+
+  it('warns when the fact guard was not even in force', () => {
+    // Distinct from "in force and found nothing quotable", which is the
+    // STRICTEST state. Conflating them makes a disabled guard look passing.
+    const markup = html(why({ message: message({ fact_set_present: false }) }));
+    expect(markup).toContain('fact guard was not in force');
+  });
+
+  it('does not warn when the guard was in force', () => {
+    expect(html(why({ message: message() }))).not.toContain('fact guard was not in force');
+  });
+
+  it('states which KIND of absence it is, rather than rendering blank', () => {
+    // An email decision with no draft means "go run the render". A WAIT with
+    // no draft means "there was never going to be one". Opposite actions.
+    //
+    // The distinction is drawn from channel + campaign, NOT from the action
+    // name: RECOMMEND_LESSON and RECOVER_FRICTION are both emails despite
+    // being named after their subject matter, and BASE here is a
+    // RECOMMEND_LESSON. An action-name check would have called the largest
+    // group of learners in the system "sends no email".
+    const pending = html(
+      why({
+        message: null,
+        outcome: { ...BASE.outcome, channel: 'email', selected_campaign_id: 'c1' },
+      }),
+    );
+    expect(pending).toContain('Run the draft render');
+
+    const wait = html(
+      why({
+        message: null,
+        outcome: {
+          ...BASE.outcome,
+          selected_action: 'WAIT',
+          channel: 'none',
+          selected_campaign_id: null,
+        },
+      }),
+    );
+    expect(wait).toContain('sends no email');
+    expect(wait).not.toContain('Run the draft render');
+  });
+
+  it('does not promise a render for an email decision with no campaign', () => {
+    // The Governor leaves selected_campaign_id null AND names the gap when a
+    // campaign_key resolves to nothing. There is no sequence, so there is no
+    // brief, so running the render would not produce one — saying "go run it"
+    // would send a reader off to do something that cannot work.
+    const markup = html(
+      why({
+        message: null,
+        outcome: { ...BASE.outcome, channel: 'email', selected_campaign_id: null },
+      }),
+    );
+    expect(markup).not.toContain('Run the draft render');
+  });
+
+  it('puts the message above the asset list', () => {
+    // A reader wants to know what the learner would read; which lesson could
+    // be cited is supporting detail. The old order answered the second
+    // question only, which is what made the tab confusing.
+    const markup = html(why({ message: message() }));
+    expect(markup.indexOf('Message')).toBeLessThan(
+      markup.indexOf('Content available to cite'),
+    );
+  });
+});
+
+describe('draftBodyToText', () => {
+  it('never emits raw markup — the body is model-written and not trusted', () => {
+    // dangerouslySetInnerHTML is forbidden here for a reason: the generator's
+    // inputs include lead fields and lesson titles from outside it.
+    const out = draftBodyToText('<p>Hi <script>alert(1)</script>there</p>');
+    expect(out).not.toContain('<script>');
+    expect(out).not.toContain('<p>');
+    expect(out).toContain('there');
+  });
+
+  it('keeps paragraph breaks so the copy stays readable', () => {
+    expect(draftBodyToText('<p>One</p><p>Two</p>')).toBe('One\nTwo');
+    expect(draftBodyToText('One<br>Two')).toBe('One\nTwo');
+  });
+
+  it('decodes the entities an email body actually contains', () => {
+    expect(draftBodyToText('<p>Tips &amp; tricks&nbsp;here</p>')).toBe('Tips & tricks here');
+    expect(draftBodyToText('<p>&quot;quoted&quot; &#39;single&#39;</p>')).toBe(
+      '"quoted" \'single\'',
+    );
+  });
+
+  it('collapses the run of blank lines that block tags leave behind', () => {
+    expect(draftBodyToText('<div><p>A</p></div><div><p>B</p></div>')).toBe('A\n\nB');
+  });
+
+  it('is total on an empty body', () => {
+    expect(draftBodyToText('')).toBe('');
+    expect(draftBodyToText('<p></p>')).toBe('');
   });
 });
 

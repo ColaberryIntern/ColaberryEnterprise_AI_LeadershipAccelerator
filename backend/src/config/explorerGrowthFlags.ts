@@ -20,6 +20,7 @@ export type ExplorerGrowthFeature =
   | 'signalIngest'
   | 'journeyIntelligence'
   | 'journeyGovernor'
+  | 'draftRender'
   | 'commercial'
   | 'aliOutreach'
   | 'sms'
@@ -40,6 +41,16 @@ export interface ExplorerGrowthFlags {
   readonly journeyIntelligenceEnabled: boolean;
   /** Run the Journey Governor decision engine. */
   readonly journeyGovernorEnabled: boolean;
+  /**
+   * Render the message a shadow decision WOULD have sent, as an unsendable
+   * draft. Separate from journeyGovernor because it costs model calls and the
+   * Governor does not: someone may want decisions nightly without paying to
+   * render copy, and shutting the rendering off must not stop the deciding.
+   *
+   * This flag cannot cause a send. Drafts are written with a status the
+   * sender never claims; see `explorerGrowth/drafts/draftContracts.ts`.
+   */
+  readonly draftRenderEnabled: boolean;
   /** Accelerator / subscription / referral messaging. */
   readonly commercialEnabled: boolean;
   /** Personal outreach from Ali's campaign identity. */
@@ -60,6 +71,7 @@ export const EXPLORER_GROWTH_ENV_KEYS = {
   signalIngestEnabled: 'EXPLORER_SIGNAL_INGEST_ENABLED',
   journeyIntelligenceEnabled: 'EXPLORER_JOURNEY_INTELLIGENCE_ENABLED',
   journeyGovernorEnabled: 'EXPLORER_JOURNEY_GOVERNOR_ENABLED',
+  draftRenderEnabled: 'EXPLORER_DRAFT_RENDER_ENABLED',
   commercialEnabled: 'EXPLORER_COMMERCIAL_ENABLED',
   aliOutreachEnabled: 'EXPLORER_ALI_OUTREACH_ENABLED',
   smsEnabled: 'EXPLORER_SMS_ENABLED',
@@ -73,6 +85,7 @@ const FEATURE_FLAG: Record<ExplorerGrowthFeature, keyof ExplorerGrowthFlags> = {
   signalIngest: 'signalIngestEnabled',
   journeyIntelligence: 'journeyIntelligenceEnabled',
   journeyGovernor: 'journeyGovernorEnabled',
+  draftRender: 'draftRenderEnabled',
   commercial: 'commercialEnabled',
   aliOutreach: 'aliOutreachEnabled',
   sms: 'smsEnabled',
@@ -99,6 +112,7 @@ export function resolveExplorerGrowthFlags(
     signalIngestEnabled: isOn(source[EXPLORER_GROWTH_ENV_KEYS.signalIngestEnabled]),
     journeyIntelligenceEnabled: isOn(source[EXPLORER_GROWTH_ENV_KEYS.journeyIntelligenceEnabled]),
     journeyGovernorEnabled: isOn(source[EXPLORER_GROWTH_ENV_KEYS.journeyGovernorEnabled]),
+    draftRenderEnabled: isOn(source[EXPLORER_GROWTH_ENV_KEYS.draftRenderEnabled]),
     commercialEnabled: isOn(source[EXPLORER_GROWTH_ENV_KEYS.commercialEnabled]),
     aliOutreachEnabled: isOn(source[EXPLORER_GROWTH_ENV_KEYS.aliOutreachEnabled]),
     smsEnabled: isOn(source[EXPLORER_GROWTH_ENV_KEYS.smsEnabled]),
