@@ -339,6 +339,12 @@ describe('theming comes from the global token layer, not the portal shell', () =
       // premise is asserted in the next test rather than trusted here — an allowlist entry
       // whose reason is only a comment is how a guard like this stops guarding.
       '--action-fg',
+      // C28b: the Events Hall dock geometry. These four hold LENGTHS that useStageDock
+      // writes at runtime — the measured rectangle of the hall's screen — so there is no
+      // colour for a theme to redefine and nothing for the tokens file to declare. The
+      // premise, that they are geometry and never anything a theme has an opinion about,
+      // is asserted below rather than trusted to this comment.
+      '--lmp-stage-top', '--lmp-stage-left', '--lmp-stage-width', '--lmp-stage-height',
     ]);
 
     const unthemed = [...used].filter((name) => !invariant.has(name) && !darkBlock.includes(`${name}:`));
@@ -364,6 +370,22 @@ describe('theming comes from the global token layer, not the portal shell', () =
     expect(dark?.[1].trim()).toBe(light?.[1].trim());
     // and --action-fg genuinely has no dark override to find
     expect(darkSide).not.toContain('--action-fg:');
+  });
+
+  it('the stage dock tokens really are geometry, which is why they may skip the dark block', () => {
+    // The premise behind the four --lmp-stage-* entries on the allowlist above. Each one may
+    // only ever be the value of a geometry property. If a later change used one for a colour,
+    // a shadow or a border, the exemption would be wrong and this fails instead of quietly
+    // widening the allowlist.
+    const GEOMETRY = new Set(['top', 'left', 'right', 'bottom', 'width', 'height']);
+    const NAMES = ['--lmp-stage-top', '--lmp-stage-left', '--lmp-stage-width', '--lmp-stage-height'];
+    for (const name of NAMES) {
+      const props = Array.from(css.matchAll(new RegExp(`([a-z-]+)\\s*:\\s*var\\(${name}\\)`, 'g')))
+        .map((m) => m[1]);
+      // A guard that scanned nothing reports a clean pass over a stylesheet it never read.
+      expect(props.length).toBeGreaterThan(0);
+      expect(props.filter((p) => !GEOMETRY.has(p))).toEqual([]);
+    }
   });
 
   it('positions the mini player clear of the DM dock and the tab bar', () => {

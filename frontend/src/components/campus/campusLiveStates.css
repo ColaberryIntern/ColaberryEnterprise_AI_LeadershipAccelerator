@@ -75,3 +75,12 @@
 .cm-reduced .cm-stage *,.is-reduced .cm-stage *{animation:none !important}
 .cm-arrive-hero.is-live{background:linear-gradient(135deg,var(--cm-art-hero-live-from),var(--cm-art-ls-live)) !important}
 .cm-arrive-hero.is-live.is-reconnecting{background:linear-gradient(135deg,var(--cm-art-hero-live-from),var(--cm-art-ls-reconnecting)) !important}
+
+/* C28b: docked. The player covers the wall, so the chip is all that is left of the board and
+   it sits at the top rather than centred behind a video. */
+.cm-r3-screen .cm-ls-chip.is-docked {
+  position: absolute;
+  top: 6px;
+  left: 8px;
+  z-index: 2;
+}

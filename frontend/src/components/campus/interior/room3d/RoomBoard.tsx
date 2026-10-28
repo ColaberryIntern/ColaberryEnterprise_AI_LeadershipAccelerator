@@ -27,6 +27,15 @@ export interface BoardProps {
   onZoom?: () => void;
   /** C73: this is the enlarged copy over the room. */
   big?: boolean;
+  /**
+   * Hands the screen element to the caller (C28b: the Events Hall docks the broadcast player
+   * over it). A callback rather than a forwarded ref because this component already owns a ref
+   * on that node for the fit pass, and two refs on one node is how one of them ends up null.
+   *
+   * Since C73 there can be TWO of these mounted at once — the board on the wall and the
+   * enlarged copy over the room — so the caller passes this to exactly one of them.
+   */
+  screenEl?: (el: HTMLDivElement | null) => void;
 }
 
 const stop = (fn: () => void) => (e: React.MouseEvent) => { e.stopPropagation(); fn(); };
@@ -70,7 +79,7 @@ function useFitScreen(): React.RefObject<HTMLDivElement> {
   return ref;
 }
 
-export function RoomScreen({ summary, name, planStep, onSection, onCard, onPlan, custom, onZoom, big }: BoardProps): React.ReactElement {
+export function RoomScreen({ summary, name, planStep, onSection, onCard, onPlan, custom, onZoom, big, screenEl }: BoardProps): React.ReactElement {
   const next = summary?.next ?? null;
   const [copied, setCopied] = useState(false);
   const screenRef = useFitScreen();
@@ -114,7 +123,9 @@ export function RoomScreen({ summary, name, planStep, onSection, onCard, onPlan,
     // The screen body is a mouse shortcut: enlarge / restore (C73), or the section when there is no zoom. It is not announced as a
     // button (a button inside a button is invalid); its own buttons are the controls, "See all of ‹section›" / "Open ‹section›" is
     // always one of them, and the Enlarge button is the keyboard's toggle.
-    <div className={big ? 'cm-r3-screen is-big' : 'cm-r3-screen'} ref={screenRef} onClick={onZoom ?? onSection}
+    <div className={big ? 'cm-r3-screen is-big' : 'cm-r3-screen'}
+      ref={(el) => { (screenRef as React.MutableRefObject<HTMLDivElement | null>).current = el; screenEl?.(el); }}
+      onClick={onZoom ?? onSection}
       data-testid={big ? 'cm-board-big' : 'cm-board'} role="group" aria-label={big ? 'The board, enlarged' : 'The board'}>
       <div className={custom ? 'inner is-custom' : 'inner'}>{body}</div>
       {onZoom && <EnlargeButton big={big} onZoom={onZoom} testId={big ? 'cm-board-restore' : 'cm-board-enlarge'} />}

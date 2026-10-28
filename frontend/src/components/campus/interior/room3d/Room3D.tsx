@@ -31,6 +31,8 @@ import { CAMPUS_BUILDINGS } from '../../campusMap';
 
 const placeName = (b: BuildingId): string => CAMPUS_BUILDINGS.find((x) => x.id === b)?.name ?? b;
 import { useLiveNow } from '../../campusOnAir';
+import { useBroadcastPlayer } from '../../../../contexts/BroadcastPlayerContext';
+import { useStageDock, isDockTarget } from '../useStageDock';
 import { YOU_AT, YOU_FROM, roomDepth } from './roomPlaces';
 import type { Place } from './roomPlaces';
 import './room3d.css';
@@ -118,6 +120,24 @@ export default function Room3D(p: Room3DProps): React.ReactElement | null {
   const doors = hall && hallway ? wallDoors(hallway) : []; // C44: always six doors on the walls
   // C31 (v7 R4): while Colaberry Live is on air, the Events Hall's screen is the broadcast
   const live = useLiveNow();
+  /**
+   * C28b: the Events Hall IS the cinema. The portal's one player is docked over this room's
+   * screen while the viewer is standing in here and that same broadcast is open.
+   *
+   * Gated on the session matching the occurrence on air, not merely on something playing: a
+   * viewer who opened last week's replay and then walked in should not have it pasted onto the
+   * wall as though it were the live class.
+   */
+  const { session: playerSession, open: openPlayer } = useBroadcastPlayer();
+  const liveOccurrenceId = id === 'amphi' && live ? live.b.id : null;
+  const stageActive = liveOccurrenceId !== null && playerSession?.occurrenceId === liveOccurrenceId;
+  const stage = useStageDock(stageActive, 'amphi');
+  const watchHere = React.useCallback(() => {
+    if (!live) return;
+    // The same three fields every other campus surface passes, so "already watching" stays
+    // detectable by occurrence id across all of them.
+    openPlayer({ occurrenceId: live.b.id, asset: 'master.m3u8', title: live.b.title });
+  }, [live, openPlayer]);
   // C33 (v7 R6): the Schedule's board is one list: classes, events and booked sessions
   const agendaItems = useAgenda(id === 'tower');
   // C36 (v8 G5): the Game Room is an arcade aisle (five cabinets, the champions wall, the break board), refreshed after each game
@@ -152,11 +172,19 @@ export default function Room3D(p: Room3DProps): React.ReactElement | null {
   const c = (k: string) => art(`in-${id}-${k}`);
   const toggle = (w: 'back' | 'left') => () => setBig((b) => (b === w ? null : w));
   const screen = (isBig: boolean) => (
-    <RoomScreen summary={summary} name={p.name} planStep={p.planStep} onSection={section} onCard={cardRoute && spot?.opens !== 'book' && spot?.opens !== 'order' ? sitDown : null}
+    <RoomScreen
+      /**
+       * C28b x C73: exactly ONE of the two mounted boards gets the dock ref — the enlarged copy
+       * when it is open, the wall board otherwise. Handing it to both would leave the dock
+       * measuring whichever rendered last, which is a coin toss that changes with React's
+       * ordering rather than with what the viewer can see.
+       */
+      screenEl={id === 'amphi' && isDockTarget(isBig, big === 'back') ? stage.ref : undefined}
+      summary={summary} name={p.name} planStep={p.planStep} onSection={section} onCard={cardRoute && spot?.opens !== 'book' && spot?.opens !== 'order' ? sitDown : null}
       onPlan={(r) => p.onOpen(r)} onZoom={toggle('back')} big={isBig} custom={id === 'admissions' ? <PlansBoard onSection={section} />
         : id === 'chow' ? <CravingScreen now={wx.now} condition={wx.w.condition} />
         : id === 'tower' && agendaItems ? <AgendaBoard items={agendaItems} now={new Date()} place={placeName} onWalk={(b) => openMap(b)} onOpen={p.onOpen} />
-        : id === 'amphi' && live ? <LiveScreen live={live} hereCount={people.length} onJoin={p.onOpen} />
+        : id === 'amphi' && live ? <LiveScreen live={live} hereCount={people.length} onJoin={p.onOpen} onWatchHere={watchHere} docked={stage.docked} />
         : id === 'amphi' && events ? <NextEventBoard event={upcoming(events, new Date(), 1)[0] ?? null} onSection={section} />
         : hall ? <HallwayBoard hallway={hallway} onOpen={p.onOpen} />
         : arcade ? <ArcadeBoard d={games} onOpen={p.onOpen} /> : undefined} />

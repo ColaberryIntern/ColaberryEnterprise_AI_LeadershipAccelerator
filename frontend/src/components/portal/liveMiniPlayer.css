@@ -266,3 +266,67 @@ body[data-live-companion="playing"] .clv-root {
 /* With nothing playing there is nothing pinned, so the page keeps its ordinary centring.
    The page sets playing/idle itself; a `:has()` selector here would have left a
    screen-height hole on any browser that does not support it. */
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   STAGE DOCK — the player sitting on the Events Hall's back-wall screen (C28b).
+
+   Placement only. The room measures its screen and publishes the rect as the four
+   custom properties below, plus `body[data-live-stage]`; nothing about the player's
+   React tree changes, which is why none of this needed an edit to LiveMiniPlayer.tsx.
+   The precedent is `body[data-live-companion]` further up this file.
+
+   `:not(.is-fullscreen)` is load-bearing. Real fullscreen is sized by the user agent
+   and sets `inset: 0`; fixed offsets from a wall that is no longer on screen would
+   fight it, and the viewer would get a video letter-boxed into a corner of their own
+   full screen. Fullscreen always wins.
+   ───────────────────────────────────────────────────────────────────────────── */
+body[data-live-stage] .lmp:not(.is-fullscreen) {
+  top: var(--lmp-stage-top);
+  left: var(--lmp-stage-left);
+  width: var(--lmp-stage-width);
+  height: var(--lmp-stage-height);
+  right: auto;
+  bottom: auto;
+  transform: none;
+  max-width: none;
+  border-radius: 10px;
+  /* The wall already carries the frame and the room's shadow; a second panel border
+     around it reads as a window floating in front of the screen rather than as the
+     screen itself. */
+  border: none;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, .35), 0 24px 60px rgba(0, 0, 0, .45);
+  display: flex;
+  flex-direction: column;
+  background: var(--neutral-1000, #000);
+}
+
+/* The screen is a wall panel, not a 16:9 frame, so the video fills what is left after
+   the title bar and controls and letter-boxes itself inside it. Without this the fixed
+   aspect ratio would overflow the wall on a wide screen. */
+body[data-live-stage] .lmp:not(.is-fullscreen) .lmp-video {
+  flex: 1;
+  min-height: 0;
+  aspect-ratio: auto;
+  object-fit: contain;
+}
+
+/* Small screens: a phone's Events Hall wall is too small to be a cinema, so the dock is
+   abandoned and the player returns to its ordinary placement. Declared rather than left
+   to chance, because the alternative is a 90px-tall video nobody can use. */
+@media (max-width: 760px) {
+  body[data-live-stage] .lmp:not(.is-fullscreen) {
+    top: auto;
+    left: auto;
+    right: 12px;
+    bottom: 12px;
+    width: min(320px, calc(100vw - 24px));
+    height: auto;
+    border-radius: 14px;
+  }
+
+  body[data-live-stage] .lmp:not(.is-fullscreen) .lmp-video {
+    flex: none;
+    aspect-ratio: 16 / 9;
+    object-fit: fill;
+  }
+}
