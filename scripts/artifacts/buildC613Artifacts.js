@@ -3,14 +3,16 @@
  *
  *   node scripts/artifacts/buildC613Artifacts.js
  *
- * THE GUARD THAT MATTERS is assertDisqualifiedAreNotHidden. Three of the ten fail the
- * ticket's own L&D disqualifier, and the tempting move - the one that makes the
- * artifact look finished - is to quietly drop the list to seven, or to quietly keep all
- * ten and not mention it. Either would settle a question the ticket reserves to Ali in
- * as many words: "What does Ali need to personally review or decide? The final ten and
- * the order."
+ * THE GUARDS THAT MATTER are the two that police the refinement Ali made on 2026-10-28.
+ * The ticket's literal L&D disqualifier failed three of the ten, including the
+ * best-fitting company on the list; he chose the narrower wording. Applying that by
+ * flipping two verdicts to PASSES would have deleted the evidence that prompted the
+ * decision, so assertOverturnedFindingsStayVisible fails the build if a returned
+ * company has lost its finding or its standing watch, and
+ * assertTheDisqualifierStillFilters fails it if the refined wording ever clears all ten
+ * - a disqualifier that disqualifies nobody is decoration presented as diligence.
  *
- * assertEveryNegativeHasAControl is the second. Six of the ten have no open AI
+ * assertEveryNegativeHasAControl is the third. Six of the ten have no open AI
  * requisition, and "we looked and found nothing" is worth nothing unless the search is
  * shown to work. Every NO carries a live posting retrieved from the same board.
  */
@@ -43,26 +45,28 @@ async function main() {
   }
 
   const met = C.criteria().filter((c) => c.verdict === 'MET').length;
+  const names = (xs) => (xs.length ? xs.map((c) => c.name).join(', ') : '(none)');
   console.log('');
   console.log('  companies        : ' + D.COMPANIES.length
     + '  (enrolled ' + D.CAMPAIGN.enrolled + ', lead ids ' + D.CAMPAIGN.leadIdRange + ')');
-  console.log('  criteria met     : ' + met + ' of ' + C.criteria().length
-    + '  (criterion 3 is a CHECK, not a pass/fail)');
-  console.log('  clear all checks : ' + C.CLEAN.length
-    + '  -> ' + C.CLEAN.map((c) => c.name).join(', '));
-  console.log('  L&D disqualified : ' + C.DISQUALIFIED.length
-    + '  -> ' + C.DISQUALIFIED.map((c) => c.name).join(', '));
-  console.log('  L&D unresolved   : ' + C.UNRESOLVED.length
-    + '  -> ' + C.UNRESOLVED.map((c) => c.name).join(', '));
-  console.log('  open AI req      : ' + C.WITH_REQ.length
-    + '  -> ' + C.WITH_REQ.map((c) => c.name).join(', '));
-  console.log('  open questions   : ' + open);
+  console.log('  criteria met     : ' + met + ' of ' + C.criteria().length);
+  console.log('  disqualifier     : settled ' + D.DISQ_LD.decidedOn
+    + ', enterprise-capability wording');
+  console.log('  clear all checks : ' + C.CLEAN.length + '  -> ' + names(C.CLEAN));
+  console.log('  disqualified     : ' + C.DISQUALIFIED.length
+    + '  -> ' + names(C.DISQUALIFIED));
+  console.log('  returned on watch: ' + C.OVERTURNED.length
+    + '  -> ' + names(C.OVERTURNED));
+  console.log('  unresolved       : ' + C.UNRESOLVED.length
+    + '  -> ' + names(C.UNRESOLVED));
+  console.log('  open AI req      : ' + C.WITH_REQ.length + '  -> ' + names(C.WITH_REQ));
+  console.log('  rows with a flag : ' + open);
   console.log('');
   console.log('  campaign         : ' + D.CAMPAIGN.status + '/' + D.CAMPAIGN.qaStatus
     + ', gates ' + JSON.stringify(D.CAMPAIGN.activationGate)
     + ', ' + D.CAMPAIGN.touchpoints + ' touchpoints');
   console.log('');
-  console.log('  REVIEW STATE: BLOCKED - ALI DECISION REQUIRED');
+  console.log('  REVIEW STATE: READY - ORDER OF APPROACH IS STILL ALI’S CALL');
   console.log('\nwritten to ' + OUT);
 }
 
