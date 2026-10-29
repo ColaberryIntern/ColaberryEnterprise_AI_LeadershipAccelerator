@@ -40,7 +40,12 @@ const healthyFunnel = (): FunnelStage[] => [
 const campaign = (
   utm_source: string | null, utm_campaign: string | null,
   signups: number, accounts: number, in_crm: number,
-): FunnelCampaignRow => ({ utm_source, utm_campaign, signups, accounts, in_crm });
+  // Defaulted rather than added to every call site, because none of this file's existing
+  // assertions are about consent. Kept REQUIRED on the type itself: a campaign row with no
+  // opt-in figure is the thing worth noticing, so an optional field would let a door that
+  // earns no permission render as a blank rather than as a zero.
+  opted_in = 0,
+): FunnelCampaignRow => ({ utm_source, utm_campaign, signups, accounts, in_crm, opted_in });
 
 const page = (slug: string, visitors: number, over: Partial<FunnelPageRow> = {}): FunnelPageRow => ({
   slug, brand_slug: 'colaberry', status: 'published', site_slug: 'training',

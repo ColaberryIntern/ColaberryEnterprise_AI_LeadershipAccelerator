@@ -118,6 +118,25 @@ function PortalFreeSignupPage() {
             placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)}
             disabled={loading}
           />
+
+          {/*
+            DIRECTLY UNDER THE EMAIL FIELD, which is the change rather than the wording.
+            It previously sat last, below the optional phone block and immediately above the
+            submit button - so it was read, if at all, at the moment attention had already moved
+            to the button, and a person who typed a phone number met it as the SECOND of two
+            stacked checkboxes. It belongs beside the thing it is about. Measured before moving
+            it: 347 free_signup leads in thirty days, 59 ticked. Still unchecked, still optional;
+            neither of those is a layout decision.
+          */}
+          <label className="cbfs-consent" htmlFor="cbfs-consent">
+            <input
+              id="cbfs-consent" className="cbfs-check" type="checkbox"
+              checked={marketingOptIn} onChange={(e) => setMarketingOptIn(e.target.checked)}
+              disabled={loading}
+            />
+            <span>{SIGNUP_CONSENT_TEXT}</span>
+          </label>
+
           <label className="cbfs-label" htmlFor="cbfs-phone">Phone (optional)</label>
           <input
             id="cbfs-phone" className="cbfs-input" type="tel" autoComplete="tel"
@@ -142,14 +161,6 @@ function PortalFreeSignupPage() {
             </label>
           )}
 
-          <label className="cbfs-consent" htmlFor="cbfs-consent">
-            <input
-              id="cbfs-consent" className="cbfs-check" type="checkbox"
-              checked={marketingOptIn} onChange={(e) => setMarketingOptIn(e.target.checked)}
-              disabled={loading}
-            />
-            <span>{SIGNUP_CONSENT_TEXT}</span>
-          </label>
           {error && <div className="cbfs-error" role="alert">{error}</div>}
           <button className="cbfs-btn" type="submit" disabled={loading}>
             {loading ? 'Creating your account…' : 'Create my account'}

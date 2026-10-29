@@ -39,6 +39,12 @@ export interface FunnelCampaignRow {
   signups: number;
   accounts: number;
   in_crm: number;
+  /**
+   * Signups from this campaign who ticked the consent box. Mirrors the backend field of the
+   * same name. Zero here is the signal worth reading: it means a door that produces leads and
+   * earns no permission to contact any of them, which apollo, popup and catalog_request all did.
+   */
+  opted_in: number;
 }
 
 export interface AcquisitionFunnel {

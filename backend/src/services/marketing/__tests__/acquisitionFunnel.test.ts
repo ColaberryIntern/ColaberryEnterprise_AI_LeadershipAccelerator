@@ -78,6 +78,51 @@ describe('the stages', () => {
   });
 });
 
+/**
+ * The permission gate. Measured 2026-10-29: 957 ad sessions, 314 signups, 313 in the CRM,
+ * 6 returned - and only 73 of 423 leads in the window had ticked consent. The page showed the
+ * collapse from 313 to 6 and offered no reason for it, when most of the gap is people nobody
+ * has permission to contact. These tests hold that reason on the page.
+ */
+describe('the permission gate', () => {
+  it('reports who we are allowed to email', async () => {
+    landingPageTraffic.mockResolvedValue([page()]);
+    mockQueries({ signups: '314', accounts: '313', in_crm: '313', opted_in: '59', returned: '6' });
+    const funnel = await acquisitionFunnel(30);
+    const byKey = Object.fromEntries(funnel.stages.map((s) => [s.key, s.count]));
+    expect(byKey.opted_in).toBe(59);
+  });
+
+  it('sits where the narrowing happens, after the CRM and before the return', async () => {
+    landingPageTraffic.mockResolvedValue([page()]);
+    mockQueries({ signups: '314', accounts: '313', in_crm: '313', opted_in: '59', returned: '6' });
+    const funnel = await acquisitionFunnel(30);
+    const keys = funnel.stages.map((s) => s.key);
+    expect(keys.indexOf('opted_in')).toBeGreaterThan(keys.indexOf('in_crm'));
+    expect(keys.indexOf('opted_in')).toBeLessThan(keys.indexOf('returned'));
+  });
+
+  it('is not derived from the stage above it', async () => {
+    // Independently measured like every other stage, so a consent count ABOVE the CRM count
+    // survives rather than being clamped. Someone can tick the box and fail to sync.
+    landingPageTraffic.mockResolvedValue([page()]);
+    mockQueries({ signups: '10', accounts: '4', in_crm: '4', opted_in: '7', returned: '1' });
+    const funnel = await acquisitionFunnel(30);
+    const byKey = Object.fromEntries(funnel.stages.map((s) => [s.key, s.count]));
+    expect(byKey.opted_in).toBe(7);
+  });
+
+  it('reads an absent consent count as zero rather than dropping the stage', async () => {
+    // A server that answers without the field must still render the gate, because a missing
+    // stage reads as "no gate here" and that is the exact misreading this change removes.
+    landingPageTraffic.mockResolvedValue([page()]);
+    mockQueries({ signups: '10', accounts: '4', in_crm: '4', returned: '1' });
+    const funnel = await acquisitionFunnel(30);
+    const byKey = Object.fromEntries(funnel.stages.map((s) => [s.key, s.count]));
+    expect(byKey.opted_in).toBe(0);
+  });
+});
+
 describe('a later stage may exceed an earlier one', () => {
   it('does not clamp signups down to visitors', async () => {
     // The real case: a page with no tracker produces zero visitors and real signups. Clamping
