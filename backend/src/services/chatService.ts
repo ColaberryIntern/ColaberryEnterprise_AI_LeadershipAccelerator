@@ -16,6 +16,7 @@ import { getVisitorSignalSummary } from './behavioralSignalService';
 import { buildMayaSystemPrompt, generateMayaGreeting } from './admissionsMayaService';
 import { loadMemory, saveConversationToMemory, classifyVisitorType } from './admissionsMemoryService';
 import { buildKnowledgeContext } from './admissionsKnowledgeService';
+import { NO_KNOWLEDGE_DIRECTIVE } from './admissionsKnowledgeGate';
 import { executeMayaAction, MAYA_TOOLS, type MayaActionResult } from './mayaActionService';
 import { emitToolCall } from './aiEventService';
 import { addMayaInteractionTag } from './mayaCampaignRouter';
@@ -363,16 +364,22 @@ export async function sendMessage(
     limit: 20,
   });
 
-  // Inject RAG knowledge context for the current message
+  // Inject RAG knowledge context for the current message.
+  //
+  // APPENDED UNCONDITIONALLY, AND THE FAILURE PATH APPENDS TOO. `buildKnowledgeContext`
+  // never returns an empty string: when nothing matched, or every match was withheld for
+  // quoting a retired fact, it returns an explicit "you have no sourced answer" instruction.
+  // The previous `if (knowledgeCtx)` and silent `catch` meant both of those cases left the
+  // prompt with NO knowledge block, so the model answered from its own weights and the
+  // visitor saw a confident, unsourced answer with nothing marking it as such. A lookup
+  // failure is not "non-critical" on a public surface that quotes prices and dates.
   let systemPrompt = conversation.ai_system_prompt || '';
   try {
     const pageCategory = (conversation as any).page_category || '';
-    const knowledgeCtx = await buildKnowledgeContext(visitorMessage, pageCategory);
-    if (knowledgeCtx) {
-      systemPrompt += '\n\n' + knowledgeCtx;
-    }
-  } catch {
-    // Non-critical — continue without knowledge context
+    systemPrompt += '\n\n' + (await buildKnowledgeContext(visitorMessage, pageCategory));
+  } catch (knowErr) {
+    systemPrompt += '\n\n' + NO_KNOWLEDGE_DIRECTIVE;
+    console.warn('[Chat] Knowledge lookup failed, answering unsourced:', (knowErr as Error).message);
   }
 
   const messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [

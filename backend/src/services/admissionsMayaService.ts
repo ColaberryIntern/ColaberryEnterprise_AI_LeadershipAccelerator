@@ -1,5 +1,9 @@
 import { buildMemoryContext, loadMemory, isCEO } from './admissionsMemoryService';
 import { buildKnowledgeContext } from './admissionsKnowledgeService';
+// The annual-first price discipline was wired into Maya's VOICE prompt only. Chat is the
+// surface visitors actually reach, and it carried no price instruction at all, so the model
+// chose between $149 and $199 from whatever rows keyword scoring happened to return.
+import { pricingPitchRule } from './admissionsPricing';
 import { getVisitorWorkflowStage } from './admissionsWorkflowService';
 import { buildPersonalizedContext } from './mayaPersonalizationService';
 import { getCampaignContext, formatCampaignContextForPrompt } from './campaignContextService';
@@ -57,12 +61,12 @@ Your goals:
     parts.push(`\n${memoryContext}`);
   }
 
-  // Knowledge context (RAG)
+  // Knowledge context (RAG). Appended unconditionally once there is a message to match:
+  // `buildKnowledgeContext` returns an explicit "no sourced answer" instruction rather than
+  // an empty string, and dropping that on falsiness is what let an unsourced answer look
+  // identical to a sourced one. No message at all is different - there is no query to run.
   if (params.userMessage) {
-    const knowledgeContext = await buildKnowledgeContext(params.userMessage, params.pageCategory);
-    if (knowledgeContext) {
-      parts.push(`\n${knowledgeContext}`);
-    }
+    parts.push(`\n${await buildKnowledgeContext(params.userMessage, params.pageCategory)}`);
   }
 
   // CEO recognition
@@ -234,6 +238,7 @@ GENERAL STRATEGY:
 IMPORTANT RULES:
 - Keep responses concise (2-4 sentences typical, longer only when explaining something detailed)
 - Never fabricate specific numbers, dates, or facts about the program - use retrieve_knowledge or suggest they check the relevant page
+- ${pricingPitchRule()}
 - If the visitor shares ANY identifying info (name, email, phone, company, title), acknowledge it warmly and call capture_lead_details IMMEDIATELY in the same response - do not defer this to a later message
 - Reference previous conversations and interests when you recognize a returning visitor
 - Use plain text, not markdown formatting (no ** or ## etc.)

@@ -3,6 +3,7 @@ import CoraKbEntry from '../../models/CoraKbEntry';
 import CoraKbCourse from '../../models/CoraKbCourse';
 import { getActiveCohort, resolveMergeTags } from '../kbService';
 import { findRelevantKnowledge } from '../admissionsKnowledgeService';
+import { gateKnowledgeEntries } from '../admissionsKnowledgeGate';
 import { STOPWORDS } from './textNormalization';
 
 // Read/write bridge between the Inbox Intel Case Resolution Engine and the
@@ -88,15 +89,23 @@ export async function findRelevantCoraKbAnswers(query: string, limit = 5): Promi
 
 export async function findRelevantAdmissionsAnswers(query: string, limit = 5): Promise<KnowledgeMatch[]> {
   const entries = await findRelevantKnowledge({ query, limit });
-  return entries.map((e) => ({
+  // GATED. "Public-facing by definition, safe to treat as directly usable" was the reasoning
+  // here, and it is the one assumption that does not hold: a row quoting the retired $4,500
+  // offer or the past March 31 2026 cohort is public-facing AND must not be repeated. The
+  // nightly crawler writes rows without applying the retirement check, so the table cannot be
+  // trusted at read time. A withheld row is dropped from the matches entirely rather than
+  // returned with `can_auto_answer: false`, because this engine's job is to decide what can be
+  // answered WITHOUT asking Ali, and a retired fact is not an answer in either direction.
+  const { allowed } = gateKnowledgeEntries(entries);
+  return allowed.map((e) => ({
     source: 'admissions_kb' as const,
     entry_id: e.id,
     question: e.title,
     answer: e.content,
     automation_potential: null,
     escalation_logic: null,
-    // Marketing/admissions FAQ content is public-facing by definition — no
-    // escalation concept applies, safe to treat as directly usable.
+    // Still true of what SURVIVES the gate: admissions FAQ content carries no escalation
+    // concept, so anything quotable here is directly usable.
     can_auto_answer: true,
   }));
 }

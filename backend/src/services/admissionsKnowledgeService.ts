@@ -1,6 +1,7 @@
 import AdmissionsKnowledgeEntry from '../models/AdmissionsKnowledgeEntry';
 import { Op } from 'sequelize';
 import { emitRetrieval } from './aiEventService';
+import { gateKnowledgeEntries, renderKnowledgeContext } from './admissionsKnowledgeGate';
 
 /**
  * Find relevant knowledge entries by keyword matching against the query and category.
@@ -71,25 +72,35 @@ export async function findRelevantKnowledge(params: {
 
 /**
  * Build a knowledge context string for system prompt injection.
+ *
+ * Retrieval is only half of this. Rows are then GATED (`admissionsKnowledgeGate`) before any
+ * of them reaches the prompt, because keyword scoring ranks by relevance and knows nothing
+ * about whether a fact is still allowed to be quoted. Two behaviours depend on it:
+ *
+ *  - A row quoting a retired fact is withheld even when it scores highest. The nightly
+ *    website crawler writes rows without applying the retirement check, so a retired figure
+ *    can sit in an active row between a crawl and the next restart.
+ *  - NO MATCH NOW RETURNS AN INSTRUCTION, NOT AN EMPTY STRING. The empty string left the
+ *    prompt with no knowledge block at all, and the model answered from its own weights with
+ *    nothing marking the answer as unsourced. Callers must therefore append whatever this
+ *    returns UNCONDITIONALLY; treating a falsy result as "nothing to add" reintroduces the
+ *    exact failure, and the gate's test pins that the return is never empty.
  */
 export async function buildKnowledgeContext(query: string, pageCategory?: string): Promise<string> {
   const entries = await findRelevantKnowledge({ query, pageCategory, limit: 4 });
+  const gated = gateKnowledgeEntries(entries);
   // Persist retrieval provenance — source IDs/titles for observability + citations (TBI P1-6).
+  // Records what actually REACHED the prompt, not what was fetched: a withheld row did not
+  // source the answer, so logging it as a source would misattribute the reply.
   emitRetrieval({
     method: 'keyword',
-    count: entries.length,
-    sources: entries.map((e) => ({ id: e.id, title: e.title, category: e.category })),
+    count: gated.allowed.length,
+    sources: gated.allowed.map((e) => ({ id: e.id, title: e.title, category: e.category })),
     workflowId: 'maya_knowledge',
     agentId: 'Maya',
   }).catch(() => {});
-  if (entries.length === 0) return '';
 
-  const parts: string[] = ['KNOWLEDGE BASE (use these facts to answer accurately):'];
-  for (const entry of entries) {
-    parts.push(`[${entry.category.toUpperCase()}] ${entry.title}: ${entry.content}`);
-  }
-
-  return parts.join('\n');
+  return renderKnowledgeContext(gated);
 }
 
 /**
