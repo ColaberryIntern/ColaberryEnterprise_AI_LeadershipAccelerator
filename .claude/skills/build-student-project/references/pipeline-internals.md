@@ -118,6 +118,7 @@ written. It has now: **178 tasks carry `verified_at`.**
 | `studentDataContract.ts` | pure | `docs/DATA_CONTRACT.md`, the field-by-field spec shipped into the repo |
 | `buildProgressSnapshot.ts` | pure | The server's view of a build, shaped for mirroring |
 | `refreshRepoDocuments.ts` | I/O | Re-write the student's data files after a sync |
+| `govPlanForSync.ts` | I/O | Publishes a **gov** build's plan on the sync path, before `refreshRepoDocuments` reads it. A gov plan is otherwise published only when the gov cockpit view opens (`ensureGovBuildPlanPublished` from `getStudentGovProjectView`), so a gov student who connected a repo, granted push, and clicked "Sync from GitHub" got `no_plan` forever: `build_plans` stayed empty and nothing was ever written to the repo. Gated to `project_variables.kind === 'gov'` (regular SBP builds also carry STORY tasks, so an unconditional publish would fabricate a gov plan for a non-gov project), idempotent, best-effort (never throws). Found diagnosing a live gov intern whose repo stayed empty after Sync (2026-10-28) |
 | `docsBundle.ts` | pure | The same rendered document set, as a file the student downloads |
 | `zipArchive.ts` | pure | A minimal, dependency-free ZIP writer |
 | `skillInference.ts` | pure | The ten architecture skills, inferred from what was COMMITTED |
