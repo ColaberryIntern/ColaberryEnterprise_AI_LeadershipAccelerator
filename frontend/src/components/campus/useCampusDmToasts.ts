@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import type { DmConversation } from '../../services/dmApi';
 import { fetchConversationsQuiet } from './campusPeopleApi';
 import { myEnrollmentId } from '../../services/dmApi';
 
@@ -23,10 +24,18 @@ export interface DmToast { key: string; peerId: string; peerName: string; text: 
 
 /** Why the toast is being held open: the pointer is over it, or focus is inside it. Tracked separately (C11). */
 export type ToastHold = 'hover' | 'focus';
-export interface DmToastControls { toast: DmToast | null; dismiss: () => void; hold: (why: ToastHold) => void; release: (why: ToastHold) => void }
+export interface DmToastControls {
+  toast: DmToast | null; dismiss: () => void; hold: (why: ToastHold) => void; release: (why: ToastHold) => void;
+  /** C23 phase 3: the same poll's conversation list (newest first), for the inbox, its badge and the chat heads. null until read. */
+  conversations: DmConversation[] | null;
+  /** Read now (after marking a conversation read), instead of waiting for the next 45 s tick. */
+  refresh: () => void;
+}
 
 export function useCampusDmToasts(active: boolean): DmToastControls {
   const [toast, setToast] = useState<DmToast | null>(null);
+  const [conversations, setConversations] = useState<DmConversation[] | null>(null);
+  const tickRef = useRef<() => Promise<void>>(async () => undefined);
   const seen = useRef<Map<string, string> | null>(null); // roomId -> lastAt; null until the baseline
   const toasted = useRef(new Set<string>());
   const hideTimer = useRef<number | null>(null);
@@ -46,7 +55,7 @@ export function useCampusDmToasts(active: boolean): DmToastControls {
   const release = useCallback((why: ToastHold) => { held.current = { ...held.current, [why]: false }; scheduleHide(); }, []); // the timer helpers only touch refs and the stable setToast
 
   useEffect(() => {
-    if (!active) { seen.current = null; return undefined; }
+    if (!active) { seen.current = null; setConversations(null); return undefined; }
     let alive = true;
     let inflight = false;
     const me = myEnrollmentId();
@@ -57,6 +66,7 @@ export function useCampusDmToasts(active: boolean): DmToastControls {
       try {
         const convos = await fetchConversationsQuiet();
         if (!alive) return;
+        setConversations(convos);
         const prev = seen.current;
         const next = new Map(convos.map((c) => [c.roomId, c.lastAt]));
         seen.current = next;
@@ -78,11 +88,13 @@ export function useCampusDmToasts(active: boolean): DmToastControls {
       }
     };
 
+    tickRef.current = tick;
     void tick();
     const id = window.setInterval(() => { void tick(); }, DM_TOAST_POLL_MS);
     return () => { alive = false; window.clearInterval(id); };
   }, [active]);
 
   useEffect(() => () => { if (hideTimer.current !== null) window.clearTimeout(hideTimer.current); }, []);
-  return { toast, dismiss, hold, release };
+  const refresh = useCallback(() => { void tickRef.current(); }, []);
+  return { toast, dismiss, hold, release, conversations, refresh };
 }

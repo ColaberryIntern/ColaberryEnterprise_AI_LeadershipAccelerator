@@ -24,6 +24,8 @@ jest.mock('../../../services/communityApi', () => ({
 import NotificationBell from '../../../pages/portal/community/NotificationBell';
 // eslint-disable-next-line import/first
 import { notificationPlace, FEED_PLACE, PEOPLE_PLACE } from '../campusNotify';
+// eslint-disable-next-line import/first
+import { OPEN_BELL_EVENT } from '../art/BuildingBadges';
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -111,5 +113,29 @@ describe("C23 (rule R10): the bell closing without a pick", () => {
     for (let i = 0; i < 3; i++) await act(async () => { await Promise.resolve(); });
     await act(async () => { (container.querySelector(".cm-notif") as HTMLButtonElement).click(); });
     expect(dismissed).toEqual([1, 1]);
+  });
+});
+
+describe('C23 phase 3: a map notification pin opens the bell', () => {
+  const mountBell = async () => {
+    mockItems = [notif('mention', 'post')];
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    await act(async () => { root = createRoot(container); root.render(<NotificationBell />); });
+  };
+  it('while the campus is active, the pin event opens the panel with the list', async () => {
+    mockActive = true;
+    await mountBell();
+    expect(container.querySelector('.cm-notif')).toBeNull();
+    await act(async () => { window.dispatchEvent(new Event(OPEN_BELL_EVENT)); });
+    for (let i = 0; i < 3; i++) await act(async () => { await Promise.resolve(); });
+    expect(container.querySelector('.cm-notif')).not.toBeNull();
+  });
+  it('with the campus off, the classic bell ignores it', async () => {
+    mockActive = false;
+    await mountBell();
+    await act(async () => { window.dispatchEvent(new Event(OPEN_BELL_EVENT)); });
+    for (let i = 0; i < 3; i++) await act(async () => { await Promise.resolve(); });
+    expect(container.querySelector('.cm-notif')).toBeNull();
   });
 });
