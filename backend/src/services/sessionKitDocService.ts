@@ -18,6 +18,7 @@ import { renderKitHtml, modeForSlide } from './classKit/kitHtml';
 import { renderClassOutline } from './classKit/outlineHtml';
 import { mintKitToken } from './classKit/kitToken';
 import { getKitConfig } from './sessionKitConfigService';
+import { injectCustomDeckLive } from './classKit/customDeck';
 
 /**
  * Render the plain-language CLASS OUTLINE for a session — a one-page teaching plan
@@ -57,6 +58,8 @@ export async function renderSessionTeachingGuide(sessionId: string): Promise<str
   // what every request actually uses.
   const { renderTeachingGuide } = await import('./classKit/teachingGuideHtml');
   const config = await getKitConfig(sessionId);
+  // A custom deck ships its own guide, written against its own slides.
+  if (config.customDeck?.guideHtml) return config.customDeck.guideHtml;
   const spec = buildKitSpec({
     session: kit.session,
     cohortName: kit.cohort_name,
@@ -82,6 +85,23 @@ export async function renderSessionKitDoc(sessionId: string, mode: KitDocMode = 
   if (!kit) return null;
 
   const config = await getKitConfig(sessionId);
+  const base = (env.frontendUrl || 'https://enterprise.colaberry.ai').replace(/\/+$/, '');
+
+  // A hand-designed deck replaces the generated one wholesale; only the live
+  // connection is injected (customDeck.ts). Same token, same endpoints.
+  if (config.customDeck) {
+    const live = mode === 'live';
+    return injectCustomDeckLive(config.customDeck.html, {
+      enabled: live,
+      sessionId,
+      liveStateUrl: live ? `${base}/api/portal/sessions/${sessionId}/live-state` : undefined,
+      broadcastUrl: live ? `${base}/api/portal/sessions/${sessionId}/broadcast` : undefined,
+      token: live ? mintKitToken(sessionId) : undefined,
+      checkinUrl: kit.checkin_url,
+      qrSvg: kit.qr_svg,
+    });
+  }
+
   const spec = buildKitSpec({
     session: kit.session,
     cohortName: kit.cohort_name,
@@ -101,7 +121,6 @@ export async function renderSessionKitDoc(sessionId: string, mode: KitDocMode = 
   // token. The endpoint must be ABSOLUTE — a relative URL won't resolve from an
   // about:blank document — and it stays same-origin as the admin page (which
   // inherited that origin), so the fetch needs no CORS and no cookies.
-  const base = (env.frontendUrl || 'https://enterprise.colaberry.ai').replace(/\/+$/, '');
   return renderKitHtml(spec, {
     live: {
       enabled: true,
