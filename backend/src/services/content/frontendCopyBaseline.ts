@@ -100,7 +100,7 @@ export const FRONTEND_COPY_BASELINE: Readonly<Record<string, number>> = {
   'frontend/src/pages/portal/settings/SettingsPage.tsx': 1,
   'frontend/src/pages/portal/settings/SubscriptionSection.tsx': 4,
   'frontend/src/pages/portal/settings/TeamSection.tsx': 1,
-  'frontend/src/pages/portal/today/TodayShell.tsx': 6,
+  'frontend/src/pages/portal/today/TodayShell.tsx': 4,
   'frontend/src/pages/publicV2/HomeV2.tsx': 4,
   'frontend/src/pages/publicV2/PlatformV2.tsx': 2,
   'frontend/src/pages/publicV2/PricingV2.tsx': 5,
@@ -113,9 +113,10 @@ export const FRONTEND_COPY_BASELINE: Readonly<Record<string, number>> = {
  *
  * 287 when first measured on 2026-10-06; **278** since 2026-10-13, when EnrollPage.tsx went to
  * zero; **272** since 2026-10-28, when ArchitectTimeMachine.tsx went to zero (its `.am-free` CSS class
- * was renamed `.am-input`). This number may only ever go DOWN.
+ * was renamed `.am-input`); **270** since 2026-10-29 (C91), when the Explorer banner left TodayShell.tsx for
+ * ExplorerPreviewBanner.tsx and its "Free AI Preview" / "learning AI for free" became "no card needed". This number may only ever go DOWN.
  */
-export const FRONTEND_COPY_BASELINE_TOTAL = 272;
+export const FRONTEND_COPY_BASELINE_TOTAL = 270;
 
 /**
  * The scope the baseline was measured over. Anything outside it is NOT covered, and the

@@ -1,11 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import './TodayShell.css';
 import {
   fetchPoints, fetchOnboardingProfile, rsvpOpenHouse, ingestBackground, fetchStreak, claimDailyStreak,
   levelFor, PointsSummary, OnboardingSchedule, OnboardingProfileView, StreakView,
 } from '../../../services/onboardingApi';
-import { loadSchedule } from '../scheduleCache';
+import { loadSchedule, resetScheduleCache } from '../scheduleCache';
 import PortalShell from './PortalShell';
 import OpenOnPhone from './OpenOnPhone';
 import { usePortalFlags } from '../../../hooks/usePortalFlags';
@@ -58,6 +58,8 @@ import { fetchSkillProfile, LearnerSkillProfile } from '../../../services/capeAp
 import { useTodayNextStep } from './useTodayNextStep';
 import TodayNextStepBanner from './TodayNextStepBanner';
 import TodayNextStepCondensed from './TodayNextStepCondensed';
+import ExplorerPreviewBanner from './ExplorerPreviewBanner';
+import { needsFirstWin, findFirstLessonCard, FIRST_LESSON_PARAM } from './explorerFirstWin';
 
 const TodayShell: React.FC = () => {
   // False until the first loadAll() settles. Gates every derived number in the
@@ -201,6 +203,17 @@ const TodayShell: React.FC = () => {
   const redesign = flags?.today_redesign ?? true;
   // C54 (v13 T6): an Explorer on the campus gets the home-base kicker and the pass + tour cards in the rail
   const explorerHome = useExplorerHomeBase();
+  // C91: an Explorer with no first win yet gets one job, their first lesson; the enroll ask waits until after it
+  const firstWinPending = needsFirstWin(schedule);
+  const firstLesson = useMemo(() => (firstWinPending ? findFirstLessonCard(curriculum, curriculumBuckets) : null), [firstWinPending, curriculum, curriculumBuckets]);
+  // The campus gate's "Start your first lesson" lands here with ?first=1: open that lesson once, as soon as it is known
+  const firstOpened = React.useRef(false);
+  useEffect(() => {
+    if (firstOpened.current || !hydrated || !firstLesson) return;
+    if (new URLSearchParams(window.location.search).get(FIRST_LESSON_PARAM) !== '1') return;
+    firstOpened.current = true;
+    openCard(firstLesson);
+  }, [hydrated, firstLesson, openCard]);
   const firstName = profile?.profile?.full_name?.trim().split(/\s+/)[0] || '';
 
   // The real registration lives on Eventbrite; RSVP here records it + awards
@@ -307,6 +320,7 @@ const TodayShell: React.FC = () => {
     nextSetupStep,
     planFlagOn: !!flags?.cape_today_plan,
     refreshToken: points,
+    firstLesson,
   });
   const scrollToAnchor = (id: string) => () => {
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -331,6 +345,7 @@ const TodayShell: React.FC = () => {
 
   const handleCardComplete = useCallback(async (card: TimelineFeedCard) => {
     const res = await collectCard(card);
+    resetScheduleCache(); // C91: a completion can be the first win; re-read the schedule so the enroll ask returns without a reload
     await loadAll();
     emitPointsEarned(res?.points_awarded ?? 0); // HUD burst + chime
     emitCardCollected(card.id);                 // drop it off the feed
@@ -339,7 +354,7 @@ const TodayShell: React.FC = () => {
   return (
     <PortalShell
       todayBadge={hydrated ? setupRemaining : 0}
-      condensedSlot={<TodayNextStepCondensed nextStep={nextStep} onScrollTo={scrollToAnchor} />}
+      condensedSlot={<TodayNextStepCondensed nextStep={nextStep} onScrollTo={scrollToAnchor} onOpenCard={openCard} />}
     >
       {(condensed) => (
         <>
@@ -363,6 +378,7 @@ const TodayShell: React.FC = () => {
               <TodayNextStepBanner
                 nextStep={nextStep}
                 total={total}
+                onOpenCard={openCard}
                 onScrollTo={scrollToAnchor}
               />
             ) : (
@@ -434,24 +450,8 @@ const TodayShell: React.FC = () => {
       </div>
 
       {schedule?.is_explorer && (
-        <div className="te-card" style={{ background: 'linear-gradient(135deg,#2E6A86,#367895)', color: '#fff', padding: '20px 22px', marginBottom: 18, border: 'none' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11.5, fontWeight: 700, letterSpacing: '.05em', textTransform: 'uppercase', opacity: 0.9 }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M4 8h16v8H4zM4 8l2-3h12l2 3M9 12h6" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /></svg>
-            Free AI Preview
-          </div>
-          <h2 style={{ margin: '8px 0 6px', fontSize: 22, color: '#fff' }}>You're learning AI for free</h2>
-          <p style={{ margin: '0 0 14px', opacity: 0.92, maxWidth: '54ch' }}>Enroll in the AI Systems Architect Accelerator to unlock all 12 weeks, the live build classes, the community, and your certification.</p>
-          {(fcCd || ohCd) && (
-            <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', margin: '2px 0 16px' }}>
-              {fcCd && <div><div style={{ fontSize: 11, opacity: 0.82 }}>Next class starts in</div><div style={{ fontFamily: 'ui-monospace,Menlo,monospace', fontWeight: 700, fontSize: 15 }}>{fcCd.d}d {fcCd.h}h {fcCd.m}m {fcCd.s}s</div></div>}
-              {oh && ohCd && <div><div style={{ fontSize: 11, opacity: 0.82 }}>{oh.title} in</div><div style={{ fontFamily: 'ui-monospace,Menlo,monospace', fontWeight: 700, fontSize: 15 }}>{ohCd.d}d {ohCd.h}h {ohCd.m}m {ohCd.s}s</div></div>}
-            </div>
-          )}
-          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-            <Link className="te-btn cherry" to="/portal/settings?tab=subscription">Enroll to unlock →</Link>
-            {oh && <button className="te-btn" style={{ color: '#fff', border: '1px solid rgba(255,255,255,.6)', background: 'rgba(255,255,255,.14)' }} onClick={doRsvp} disabled={busy || rsvped}>{rsvped ? "RSVP'd for the event" : 'RSVP for the event'}</button>}
-          </div>
-        </div>
+        <ExplorerPreviewBanner firstWinPending={firstWinPending} firstLesson={firstLesson} onStartLesson={openCard}
+          fcCd={fcCd} ohCd={ohCd} ohTitle={oh?.title ?? null} showRsvp={!!oh} rsvped={rsvped} busy={busy} onRsvp={doRsvp} />
       )}
 
       <div className="te-grid">
@@ -634,6 +634,7 @@ const TodayShell: React.FC = () => {
           // A server rejection propagates so the drawer surfaces the reason.
           const res = await collectCard(card);
           setSelectedCard(null);
+          resetScheduleCache(); // C91: the first lesson finishes here; re-read first_win
           await loadAll();
           emitPointsEarned(res?.points_awarded ?? 0);   // HUD burst + chime
           emitCardCollected(card.id);                   // drop it off the feed

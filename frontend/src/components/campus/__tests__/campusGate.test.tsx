@@ -98,6 +98,37 @@ describe('the gate', () => {
     expect(entered).toEqual([true, false]);
   });
 
+  it('C91: an Explorer with no first lesson yet is led to it; the doors open first, the tour stays second, Esc still just enters', () => {
+    const entered: boolean[] = [];
+    let lessons = 0;
+    render({ audience: 'explorer', streak: null, onEnter: (t) => entered.push(t), onFirstLesson: () => { lessons += 1; } });
+    expect(q('[data-testid="cm-gate-enter"]')!.textContent).toBe('Start your first lesson →');
+    expect(q('[data-testid="cm-gate-sub"]')!.textContent).toContain('Start with your first lesson');
+    expect(q('[data-testid="cm-gate-tour"]')!.textContent).toBe('Or take the short tour →');
+    expect(container.textContent!.toLowerCase()).not.toMatch(/\bfree\b/);
+    act(() => { (q('[data-testid="cm-gate-enter"]') as HTMLButtonElement).click(); });
+    expect(lessons).toBe(0); // not until the doors have opened
+    act(() => { jest.advanceTimersByTime(2000); });
+    expect([lessons, entered]).toEqual([1, []]);
+  });
+
+  it('C91: the tour and Esc are unchanged for that Explorer, and reduce motion starts the lesson at once', () => {
+    const entered: boolean[] = [];
+    let lessons = 0;
+    render({ audience: 'explorer', streak: null, reduceMotion: true, onEnter: (t) => entered.push(t), onFirstLesson: () => { lessons += 1; } });
+    act(() => { (q('[data-testid="cm-gate-tour"]') as HTMLButtonElement).click(); });
+    act(() => { q('[data-testid="cm-gate"]')!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); });
+    act(() => { (q('[data-testid="cm-gate-enter"]') as HTMLButtonElement).click(); });
+    expect([entered, lessons]).toEqual([[true, false], 1]);
+  });
+
+  it('C91: only Explorers get the first-lesson door; a member with the prop (never passed in practice) enters as before', () => {
+    render({ onFirstLesson: () => undefined });
+    expect(q('[data-testid="cm-gate-enter"]')!.textContent).toBe('Tap your ID to enter campus →');
+    render({ audience: 'explorer', streak: null, onFirstLesson: null });
+    expect(q('[data-testid="cm-gate-enter"]')!.textContent).toContain('Pick up your pass');
+  });
+
   it('no tour for this viewer, no tour link', () => {
     render({ hasTour: false, audience: 'staff' });
     expect(q('[data-testid="cm-gate-tour"]')).toBeNull();

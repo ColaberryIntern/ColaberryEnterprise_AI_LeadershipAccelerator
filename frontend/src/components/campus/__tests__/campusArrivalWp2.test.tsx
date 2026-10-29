@@ -107,7 +107,8 @@ describe('Mark done through Today\'s collect path', () => {
 });
 
 describe('the tour inside the arrival panel', () => {
-  const access = (bb: { id: string }) => (bb.id === 'testing' || bb.id === 'gallery' ? 'locked' : bb.id === 'studio' ? 'demo' : 'open') as never;
+  // C91: the Explorer tour is now Schedule, Meet anyone, Live classes, so the locked stop under test is the classroom (page gate on)
+  const access = (bb: { id: string }) => (bb.id === 'testing' || bb.id === 'gallery' || bb.id === 'lecture' ? 'locked' : bb.id === 'studio' ? 'demo' : 'open') as never;
   const member = tourFor('member', [...CAMPUS_BUILDINGS], () => 'open' as never, false)!;
   const explorer = tourFor('explorer', [...CAMPUS_BUILDINGS], access, false)!;
   it('the stop card: number, tour name, title, "You can", the tip', () => {

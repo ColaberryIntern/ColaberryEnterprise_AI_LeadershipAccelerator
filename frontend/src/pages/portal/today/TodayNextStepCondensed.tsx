@@ -4,6 +4,7 @@ import CondensedHeaderCard from './CondensedHeaderCard';
 import OpenOnPhone from './OpenOnPhone';
 import { sumCardPoints } from '../classroomNextStep';
 import { SETUP_STEP_CTA_LABEL, type TodayNextStep } from './useTodayNextStep';
+import type { TimelineFeedCard } from '../../../components/timeline/TimelineCard';
 
 const SPARKLE = (
   <svg viewBox="0 0 24 24" fill="none"><path d="M12 2l2.8 6.6 7.2.6-5.5 4.7 1.7 7L12 17.8 5.8 21.5l1.7-7L2 9.8l7.2-.6z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /></svg>
@@ -12,6 +13,8 @@ const SPARKLE = (
 type Props = {
   nextStep: TodayNextStep;
   onScrollTo: (id: string) => () => void;
+  /** C91: opens a card right here on Today (the first lesson), not in Classroom. */
+  onOpenCard?: (card: TimelineFeedCard) => void;
 };
 
 /**
@@ -22,8 +25,25 @@ type Props = {
  * pure redundancy. "Open on your phone" stays, but icon-only (compact) so
  * it fits next to the next-step action without crowding the slot.
  */
-const TodayNextStepCondensed: React.FC<Props> = ({ nextStep, onScrollTo }) => {
+const TodayNextStepCondensed: React.FC<Props> = ({ nextStep, onScrollTo, onOpenCard }) => {
   const phone = <OpenOnPhone compact />;
+
+  if (nextStep.kind === 'first-lesson') {
+    return (
+      <CondensedHeaderCard
+        icon={SPARKLE}
+        tone="berry"
+        label="Your first lesson"
+        title={nextStep.card.title}
+        action={(
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <button type="button" className="te-btn cherry sm" onClick={() => onOpenCard?.(nextStep.card)} data-testid="te-first-lesson-condensed">Start →</button>
+            {phone}
+          </div>
+        )}
+      />
+    );
+  }
 
   if (nextStep.kind === 'classroom') {
     const pts = sumCardPoints(nextStep.card.points);

@@ -79,6 +79,7 @@ export interface OnboardingSchedule {
   is_explorer?: boolean;      // free Explorer tier — drives the Today conversion funnel
   is_staff?: boolean;         // community_members.role === 'staff' — never gated by <PageGate>
   has_full_access?: boolean;  // page-level paywall signal (separate flag from is_explorer) — see useEntitlement
+  first_win?: boolean | null; // C91: has finished a first lesson; null/absent = unknown (keep the pre-C91 page) — see explorerFirstWin
 }
 
 export interface ResumeProfileFields {

@@ -20,6 +20,7 @@ import { z } from 'zod';
 import type { SubscriptionPlan } from '../models/Subscription';
 import { getOnboardingSchedule, rsvpToOpenHouse } from '../services/openHouseService';
 import { isFreePreviewTier, resolveContentPageAccess } from '../services/access/contentEntitlement';
+import { hasFirstWin } from '../services/explorerFirstWin';
 import { getUpcomingPublicEvents, annotateRegistration } from '../services/publicEventsService';
 import { Enrollment } from '../models';
 import { ingestBackground, getOnboardingProfile } from '../services/resumeIngestService';
@@ -210,7 +211,7 @@ export async function handleClaimStreak(req: Request, res: Response, next: NextF
 export async function handleGetOnboardingSchedule(req: Request, res: Response, next: NextFunction) {
   try {
     const enrollmentId = req.participant!.sub;
-    const [schedule, isExplorer, pageAccess] = await Promise.all([
+    const [schedule, isExplorer, pageAccess, firstWin] = await Promise.all([
       getOnboardingSchedule(enrollmentId),
       // Free-preview status drives the enroll/pay conversion funnel on the portal
       // (Today). Single source of truth = contentEntitlement.isFreePreviewTier
@@ -220,8 +221,10 @@ export async function handleGetOnboardingSchedule(req: Request, res: Response, n
       // independently-flagged predicate from is_explorer above; see
       // contentEntitlement.resolveContentPageAccess.
       resolveContentPageAccess(enrollmentId),
+      // C91: has the learner finished a first lesson? Holds the enroll ask until they have. null = unknown (old behavior).
+      hasFirstWin(enrollmentId),
     ]);
-    res.json({ ...schedule, is_explorer: isExplorer, is_staff: pageAccess.isStaff, has_full_access: pageAccess.hasFullAccess });
+    res.json({ ...schedule, is_explorer: isExplorer, is_staff: pageAccess.isStaff, has_full_access: pageAccess.hasFullAccess, first_win: firstWin });
   } catch (err) { next(err); }
 }
 

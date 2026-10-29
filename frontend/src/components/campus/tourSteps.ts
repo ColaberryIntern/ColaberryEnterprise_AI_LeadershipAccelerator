@@ -2,7 +2,9 @@ import { buildingName } from './campusMap';
 import type { BuildingId, CampusAudience, CampusBuilding, ExplorerAccess } from './campusMap';
 
 /**
- * The guided tours (Colaberry Campus C7), as pure data: member 9 stops, Explorer 7, business 6; staff has no tour.
+ * The guided tours (Colaberry Campus C7), as pure data: member 9 stops, Explorer 3, business 6; staff has no tour.
+ * C91: the Explorer tour was 8 stops and 8 of the first 10 ad Explorers who opened it left at stop 1. It is now the three that matter
+ * on day one (the Schedule, Meet anyone, Live classes) and ends by pointing at Today, where their first lesson is.
  *
  * COPY RULES: each stop says what the building is, what you can do there and a tip, written from what the portal page behind it
  * really does today. No counts, dates, times, prices or progress figures (the prototype's "Week 5", ticket ids and KPI tiles were
@@ -39,7 +41,7 @@ const EXPLORER: CopyTable = {
   commons: { title: 'Meet anyone', what: 'A hallway of live rooms: events, study groups, pair work, one-on-ones.', can: ['Join a live room', 'See upcoming events and RSVP', 'Open a room or book one for later'], tip: 'Maya at the {gate} answers questions about enrolling.' },
   library: { title: 'Reference on demand', what: 'Documents shared with everyone in the program.', can: ['Read the guides and reference material'], tip: 'A good place to see the kind of material the program uses.' },
   amphi: { title: 'Colaberry Live', what: 'When Colaberry goes live, everyone gathers here.', can: ['Walk in when a broadcast is on air', 'Join the live room for audio and Q&A'], tip: 'Open houses and other events happen in the Meeting Rooms.' },
-  lecture: { title: 'Live classes', what: 'Members get the weekly lessons and live sessions of the program.', can: ['See how a week of the program is laid out'], tip: 'Enrolled members can join every live session and check in for attendance.' },
+  lecture: { title: 'Live classes', what: 'Members get the weekly lessons and live sessions of the program.', can: ['See how a week of the program is laid out'], tip: 'Last stop. The lessons open to you are on Today: the red 📅 Today button at the top.' },
   studio: { title: 'Real AI projects', what: 'Members build real projects task by task in the project workspace.', can: ['Walk through how a project is organized'], tip: 'Building for real starts the day you enroll.' },
   testing: { title: 'Certification', what: 'Knowledge checks and practice that prepare members for certification.', can: [], tip: 'The sign-up view shows exactly what enrolling opens here.' },
   gallery: { title: 'A portfolio of your work', what: 'Members\' work collected into a portfolio others can view.', can: ['Browse the showcase'], tip: 'Last stop. Next: what enrolling opens for you.' },
@@ -56,7 +58,7 @@ const BUSINESS: CopyTable = {
 
 const ORDER: Record<Exclude<CampusAudience, 'staff'>, { name: string; table: CopyTable; stops: BuildingId[] }> = {
   member: { name: 'What’s in your seat', table: MEMBER, stops: ['tower', 'lecture', 'library', 'studio', 'testing', 'observatory', 'commons', 'gallery', 'career', 'arcade'] },
-  explorer: { name: 'Explorer tour', table: EXPLORER, stops: ['tower', 'commons', 'library', 'amphi', 'lecture', 'studio', 'testing', 'gallery'] },
+  explorer: { name: 'Explorer tour', table: EXPLORER, stops: ['tower', 'commons', 'lecture'] },
   business: { name: 'Partner tour', table: BUSINESS, stops: ['lecture', 'studio', 'testing', 'commons', 'gallery', 'career'] },
 };
 
