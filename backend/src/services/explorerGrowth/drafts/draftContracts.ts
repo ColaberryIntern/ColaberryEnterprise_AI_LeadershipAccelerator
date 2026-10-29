@@ -1,4 +1,8 @@
 import type { ExplorerActionType } from '../../../types/explorerGrowth';
+// Type-only, so this file stays free of runtime imports. The citation shape is the quote
+// gate's, not a second copy of it: a reviewer comparing a draft against the hub needs the
+// same `reference` the gate approved, not a re-derived link.
+import type { KnowledgeCitation } from '../explorerKnowledgeQuote';
 
 /**
  * Explorer Growth OS — draft render contracts. Phase 1 of
@@ -234,6 +238,25 @@ export interface DraftMessage {
   step_index: number | null;
   model: string | null;
   created_at: string | null;
+  /**
+   * The knowledge entries this copy was allowed to draw on, in prompt order.
+   *
+   * Empty is AMBIGUOUS on its own, which is why `knowledge_available` sits beside it: the
+   * corpus may have failed to load, or it may have loaded and offered nothing quotable.
+   * Those have different fixes — a deployment problem versus a content problem — and a
+   * reviewer looking at a thin draft needs to know which.
+   */
+  cited: KnowledgeCitation[];
+  /** False when the knowledge base could not be read at all for this generation. */
+  knowledge_available: boolean;
+  /**
+   * The identity and published voice the copy was written under.
+   *
+   * `published: false` means rule-set version 0 — nobody has written a voice down for this
+   * brand — which is not the same as a brand whose voice says nothing. Null only for a
+   * draft rendered before brand voice was recorded.
+   */
+  brand_voice: { name: string; rules_version: number; published: boolean } | null;
 }
 
 /** What gets written to `scheduled_emails`. */

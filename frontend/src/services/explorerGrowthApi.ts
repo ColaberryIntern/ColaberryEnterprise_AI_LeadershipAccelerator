@@ -253,6 +253,27 @@ export interface ExplorerWhyMessage {
   step_index: number | null;
   model: string | null;
   created_at: string | null;
+  /** The knowledge entries this copy was allowed to draw on, in prompt order. */
+  cited: KnowledgeCitation[];
+  /**
+   * False when the knowledge base could not be read for this generation.
+   *
+   * Carried separately from `cited` because an empty citation list is ambiguous on its
+   * own: the corpus may have failed to load, or loaded and offered nothing quotable. Those
+   * are a deployment problem and a content problem, and the panel says which.
+   */
+  knowledge_available: boolean;
+  /** The identity and published voice the copy was written under. */
+  brand_voice: { name: string; rules_version: number; published: boolean } | null;
+}
+
+/** One knowledge entry a draft was allowed to quote, with its deep link into the hub. */
+export interface KnowledgeCitation {
+  domain: string;
+  question: string;
+  /** Path into `/knowledge`, e.g. `sales/index.html#cat-program-basics`. May be empty. */
+  reference: string;
+  referenceLabel: string;
 }
 
 export interface ExplorerWhy {
@@ -584,24 +605,20 @@ export async function regenerateDraft(
   return data;
 }
 
-/** One version in a decision's draft history, oldest first. */
-export interface ExplorerDraftVersion {
-  scheduled_email_id: string;
-  subject: string;
-  body: string;
-  status: string;
-  passed_quality_gate: boolean;
-  issues: string[];
-  auto_fixed: string[];
-  fact_set_present: boolean;
-  step_index: number | null;
-  model: string | null;
-  created_at: string | null;
+/**
+ * One version in a decision's draft history, oldest first.
+ *
+ * An INTERSECTION with the live draft shape rather than a re-listing of its fields, which
+ * is what the backend contract does too. A version IS a draft, and a reviewer comparing two
+ * of them needs the same fields on both — a narrowed "summary" shape is how a history view
+ * ends up unable to show the thing someone opened it to compare.
+ */
+export type ExplorerDraftVersion = ExplorerWhyMessage & {
   /** 1-based, oldest first. */
   version: number;
   superseded: boolean;
   current: boolean;
-}
+};
 
 /**
  * Every version ever rendered for one decision.

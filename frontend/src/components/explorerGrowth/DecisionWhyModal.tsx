@@ -2,6 +2,8 @@ import React from 'react';
 import StatusBadge from '../admin/shell/StatusBadge';
 import AsyncPanel from './AsyncPanel';
 import { useExplorerData } from './useExplorerData';
+import { draftBodyToText } from './draftBodyToText';
+import DraftRevisionPanel, { SourcesList, BrandVoiceBadge } from './DraftRevisionPanel';
 import { getWhy, type ExplorerWhy, type ExplorerWhyScores } from '../../services/explorerGrowthApi';
 
 /**
@@ -29,33 +31,10 @@ import { getWhy, type ExplorerWhy, type ExplorerWhyScores } from '../../services
  * disagree most of the time.
  */
 
-/**
- * The generated body as readable text.
- *
- * NOT `dangerouslySetInnerHTML`. The body is model-written HTML, and this repo
- * forbids injecting un-sanitised markup without a stated reason — "it came
- * from our own generator" is not one, because the generator's input includes
- * lead fields and lesson titles that originate outside it.
- *
- * A reviewer is here to judge the WORDS, so tags are dropped rather than shown
- * raw: block boundaries become newlines, entities are decoded, and nothing is
- * executed. `<br>` and the closing of a block tag both become line breaks so
- * paragraphs survive the trip.
- */
-export function draftBodyToText(html: string): string {
-  return html
-    .replace(/<\s*br\s*\/?\s*>/gi, '\n')
-    .replace(/<\s*\/\s*(p|div|h[1-6]|li|tr|blockquote)\s*>/gi, '\n')
-    .replace(/<[^>]*>/g, '')
-    .replace(/&nbsp;/gi, ' ')
-    .replace(/&amp;/gi, '&')
-    .replace(/&lt;/gi, '<')
-    .replace(/&gt;/gi, '>')
-    .replace(/&quot;/gi, '"')
-    .replace(/&#39;/gi, "'")
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
-}
+// Moved to its own module so the revision panel can use it without a cycle (this file
+// imports that panel). Re-exported so every existing importer, including this file's own
+// test, is unaffected. See `draftBodyToText.ts` for why it was moved rather than copied.
+export { draftBodyToText } from './draftBodyToText';
 
 /**
  * How the decision was reached: whether a model was involved, what it said, and
@@ -161,6 +140,7 @@ function MessagePanel({ w }: { w: ExplorerWhy }) {
           <span className="text-muted small">Sequence step {m.step_index + 1}</span>
         )}
         {m.model && <span className="text-muted small font-monospace">{m.model}</span>}
+        <BrandVoiceBadge m={m} />
       </div>
 
       {refused && m.issues.length > 0 && (
@@ -196,6 +176,15 @@ function MessagePanel({ w }: { w: ExplorerWhy }) {
             {draftBodyToText(m.body)}
           </div>
         </div>
+      </div>
+
+      {/* What the copy was ALLOWED to say, as opposed to what it had available to cite.
+          The section below this one lists the content assets the Governor resolved; this
+          lists the knowledge entries that survived the quote gate and reached the prompt.
+          They answer different questions and are deliberately not merged. */}
+      <div className="mt-2">
+        <div className="text-uppercase text-muted small fw-semibold mb-1">Facts it could use</div>
+        <SourcesList m={m} />
       </div>
     </>
   );
@@ -241,7 +230,22 @@ function ScoreRow({ label, s, muted }: { label: string; s: ExplorerWhyScores | n
  * map named. Testing it through the async shell would only ever reach the
  * loading state.
  */
-export function WhyBody({ w }: { w: ExplorerWhy }) {
+export function WhyBody({
+  w,
+  revision,
+}: {
+  w: ExplorerWhy;
+  /**
+   * The revision surface, rendered under the message.
+   *
+   * Taken as a NODE rather than built here, because it fetches and holds state while this
+   * component is deliberately pure — that purity is what makes the "every loser is
+   * rendered" guarantee testable with `renderToStaticMarkup`. The modal, which already
+   * holds the decision id and the payload's reload, passes it in; omitting it renders the
+   * body exactly as before, which is what every existing test does.
+   */
+  revision?: React.ReactNode;
+}) {
   return (
     <>
       {/* ── The winner ───────────────────────────────────────────────────── */}
@@ -374,6 +378,7 @@ export function WhyBody({ w }: { w: ExplorerWhy }) {
       <div className="mb-4">
         <h6 className="text-uppercase text-muted small mb-2">Message</h6>
         <MessagePanel w={w} />
+        {revision}
       </div>
 
       {/* ── Content cited, or the named gap ──────────────────────────────── */}
@@ -445,7 +450,18 @@ export default function DecisionWhyModal({ decisionId, onClose }: Props) {
           </div>
           <div className="modal-body">
             <AsyncPanel state={why} onRetry={why.reload}>
-              {(w) => <WhyBody w={w} />}
+              {(w) => (
+                <WhyBody
+                  w={w}
+                  // Only offered where there is a draft to revise. Offering it on a
+                  // decision that sends no email would be a button that can only 409.
+                  revision={
+                    w.found && w.message ? (
+                      <DraftRevisionPanel decisionId={decisionId} onDone={why.reload} />
+                    ) : undefined
+                  }
+                />
+              )}
             </AsyncPanel>
           </div>
         </div>

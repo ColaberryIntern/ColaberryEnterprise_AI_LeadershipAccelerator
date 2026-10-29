@@ -186,6 +186,39 @@ export async function loadDraftForDecision(
     step_index: row.step_index ?? null,
     model: typeof meta.model === 'string' ? meta.model : null,
     created_at: row.created_at ? new Date(row.created_at).toISOString() : null,
+    ...readKnowledgeAndVoice(meta),
+  };
+}
+
+/**
+ * The grounding and brand fields, read the same way for a live draft and a historical one.
+ *
+ * One function rather than two copies: these are the fields a reviewer compares ACROSS
+ * versions, so the two readers disagreeing about how to parse them is the one divergence
+ * that would be invisible on screen and wrong in exactly the place someone is looking.
+ *
+ * `knowledge_available` defaults to FALSE for a draft rendered before grounding existed.
+ * That is the honest reading - no knowledge was consulted - and it is why the field is
+ * carried separately from `cited` rather than inferred from it being empty.
+ */
+function readKnowledgeAndVoice(meta: Record<string, any>): Pick<
+  DraftMessage,
+  'cited' | 'knowledge_available' | 'brand_voice'
+> {
+  const knowledge = meta.knowledge ?? {};
+  const voice = meta.brand_voice;
+
+  return {
+    cited: Array.isArray(knowledge.cited) ? knowledge.cited : [],
+    knowledge_available: knowledge.available === true,
+    brand_voice:
+      voice && typeof voice.name === 'string'
+        ? {
+            name: voice.name,
+            rules_version: Number(voice.rules_version) || 0,
+            published: voice.published === true,
+          }
+        : null,
   };
 }
 
@@ -393,6 +426,7 @@ export async function loadDraftHistory(decisionId: string): Promise<DraftVersion
       step_index: row.step_index ?? null,
       model: typeof meta.model === 'string' ? meta.model : null,
       created_at: row.created_at ? new Date(row.created_at).toISOString() : null,
+      ...readKnowledgeAndVoice(meta),
       version: i + 1,
       superseded: row.status === EXPLORER_DRAFT_SUPERSEDED_STATUS,
       current: row.is_current === true,

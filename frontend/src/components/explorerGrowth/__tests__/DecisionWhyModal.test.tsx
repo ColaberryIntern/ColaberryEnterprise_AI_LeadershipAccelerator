@@ -206,6 +206,19 @@ describe('the message a decision would have sent', () => {
     step_index: 0,
     model: 'gpt-x',
     created_at: null,
+    // Phase 3. The default is a GROUNDED draft that cites one entry, because that is the
+    // state the panel is built for; the tests about an absent corpus or an ungoverned
+    // brand override these explicitly rather than relying on a bare default.
+    cited: [
+      {
+        domain: 'sales',
+        question: 'Do I need a coding background?',
+        reference: 'sales/index.html#cat-program-basics',
+        referenceLabel: 'Program basics',
+      },
+    ],
+    knowledge_available: true,
+    brand_voice: { name: 'Colaberry Enterprise AI Division', rules_version: 0, published: false },
   };
   const message = (over: Partial<ExplorerWhyMessage> = {}): ExplorerWhyMessage => ({
     ...BASE_MESSAGE,
