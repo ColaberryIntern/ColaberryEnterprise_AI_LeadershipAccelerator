@@ -52,6 +52,8 @@
 /* two-column main */
 .gck-main{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:16px;padding-top:16px;align-items:start}
 @media (max-width:980px){.gck-main{grid-template-columns:minmax(0,1fr)}}
+/* read-only (admin viewing an intern's contract): no copilot rail, so one column. */
+.gck-main--readonly{grid-template-columns:minmax(0,1fr)}
 
 /* filters */
 .gck-filters{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px}

@@ -20,8 +20,12 @@ import './govCockpit.css';
 type Tab = 'overview' | 'build' | 'proposal' | 'commits' | 'how';
 
 export default function CockpitView(
-  { view, projectId, onReload }: { view: StudentGovProjectView; projectId: string; onReload: () => void },
+  { view, projectId, onReload, readOnly = false }: { view: StudentGovProjectView; projectId: string; onReload: () => void; readOnly?: boolean },
 ): React.ReactElement {
+  // readOnly: an owner/admin viewing an intern's contract from the admin left-nav sees the SAME tabs,
+  // but the two interactive surfaces that post to participant-token endpoints are withheld — the
+  // copilot rail (hidden) and the proposal-document drawer (not opened). Interns pass readOnly=false
+  // (the default), so their cockpit is unchanged.
   const [tab, setTab] = useState<Tab>('overview');
   const [openDocKey, setOpenDocKey] = useState<string | null>(null);
 
@@ -81,18 +85,18 @@ export default function CockpitView(
         <button className="gck-tab" role="tab" aria-selected={tab === 'how'} onClick={() => setTab('how')}>How it works</button>
       </nav>
 
-      <div className="gck-main">
+      <div className={`gck-main${readOnly ? ' gck-main--readonly' : ''}`}>
         <div style={{ minWidth: 0 }}>
           {tab === 'overview' && <ProjectOverview view={view} />}
           {tab === 'build' && <BuildReleases summary={view.buildSummary} />}
-          {tab === 'proposal' && <ProposalDocuments docs={docs} onOpen={(d) => setOpenDocKey(d.key)} />}
+          {tab === 'proposal' && <ProposalDocuments docs={docs} onOpen={readOnly ? () => {} : (d) => setOpenDocKey(d.key)} />}
           {tab === 'commits' && <CommitFeed feed={feed} />}
           {tab === 'how' && <HowItWorks />}
         </div>
-        <CopilotRail projectId={projectId} greeting={greeting} />
+        {!readOnly && <CopilotRail projectId={projectId} greeting={greeting} />}
       </div>
 
-      {openDoc && <ProposalDocumentDrawer doc={openDoc} projectId={projectId} canVerify={view.viewerCanVerify} onReload={onReload} onClose={() => setOpenDocKey(null)} />}
+      {!readOnly && openDoc && <ProposalDocumentDrawer doc={openDoc} projectId={projectId} canVerify={view.viewerCanVerify} onReload={onReload} onClose={() => setOpenDocKey(null)} />}
     </div>
   );
 }

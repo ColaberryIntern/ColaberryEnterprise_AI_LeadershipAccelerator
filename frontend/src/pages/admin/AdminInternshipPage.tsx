@@ -8,7 +8,6 @@ import InternshipApplicationsMode from './internship/InternshipApplicationsMode'
 import { InternshipProjectsMode, InternshipManageMode } from './internship/InternshipTools';
 import InternConsoleMode from './internship/InternConsoleMode';
 import InternshipAgentsMode from './internship/InternshipAgentsMode';
-import InternshipGovContractsMode from './internship/InternshipGovContractsMode';
 
 /**
  * AdminInternshipPage — the AI Internship admin console.
@@ -36,18 +35,18 @@ import InternshipGovContractsMode from './internship/InternshipGovContractsMode'
  * never exposed.
  */
 
-type Mode = 'apps' | 'console' | 'projects' | 'manage' | 'agents' | 'gov';
-// The last two tabs are section-gated: each renders only for a viewer who holds the matching
-// management section (`agents` / `gov_contracts`). owner and admin hold both; Admissions, who
-// holds `internship` to run the application queue (resume / phone / transcript), holds neither
-// and so never sees them. A tab with no `section` is visible to everyone who can open this hub.
+type Mode = 'apps' | 'console' | 'projects' | 'manage' | 'agents';
+// The Agents tab is section-gated: it renders only for a viewer who holds the `agents` management
+// section. owner and admin hold it; Admissions, who holds `internship` to run the application queue
+// (resume / phone / transcript), does not and so never sees it. A tab with no `section` is visible to
+// everyone who can open this hub. (Gov Contracts was a tab here until the left-nav redesign; it now
+// lives as per-contract sub-items in the "Interns → Gov Contracts" sidebar node — see adminNav.ts.)
 const MODES: Array<{ key: Mode; label: string; section?: string }> = [
   { key: 'apps', label: 'Applications' },
   { key: 'console', label: 'Intern Console' },
   { key: 'projects', label: 'Projects' },
   { key: 'manage', label: 'Manage' },
   { key: 'agents', label: 'Agents', section: 'agents' },
-  { key: 'gov', label: 'Gov Contracts', section: 'gov_contracts' },
 ];
 
 const AdminInternshipPage: React.FC = () => {
@@ -97,7 +96,6 @@ const AdminInternshipPage: React.FC = () => {
         {mode === 'projects' && <InternshipProjectsMode onOpenApplicant={openApplicant} />}
         {mode === 'manage' && <InternshipManageMode />}
         {mode === 'agents' && <InternshipAgentsMode />}
-        {mode === 'gov' && <InternshipGovContractsMode />}
       </div>
     </ReviewProvider>
   );

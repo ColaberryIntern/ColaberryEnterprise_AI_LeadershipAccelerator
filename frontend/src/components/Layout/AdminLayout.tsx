@@ -5,6 +5,7 @@ import ErrorBoundary from '../ui/ErrorBoundary';
 import SafeModeBanner from '../admin/SafeModeBanner';
 import { PINNED_LINKS, NAV_GROUPS, ALL_LINKS, NavLink as NavLinkT } from './adminNav';
 import { useAdminCampusPresence } from './useAdminCampusPresence';
+import { useAdminGovContractsNav, adminGovContractNavEntries } from './useAdminGovContractsNav';
 
 const COLLAPSE_KEY = 'admin.nav.collapsed.v1';
 
@@ -96,6 +97,11 @@ function AdminLayout() {
     .map((g) => ({ ...g, links: g.links.filter((l) => canSection(l.section ?? g.section)) }))
     .filter((g) => g.links.length > 0);
 
+  // Per-contract sub-items for the nested "Interns → Gov Contracts" node. The fetch only fires for a
+  // viewer who holds `gov_contracts` (owner/Kes), and the list is already row-scoped server-side, so
+  // owner/Kes see every contract. Empty ⇒ the node is not rendered at all.
+  const govNavEntries = adminGovContractNavEntries(useAdminGovContractsNav(canSection('gov_contracts')));
+
   const q = query.trim().toLowerCase();
   const searchResults = q
     ? ALL_LINKS.filter(
@@ -177,6 +183,40 @@ function AdminLayout() {
                       {!isCollapsed && group.links.map((link) => (
                         <NavItem key={link.path} link={link} active={isActive(link.path)} onNavigate={closeMobile} />
                       ))}
+                      {/* Nested, expandable "Gov Contracts" node — one sub-item per contract, each
+                          opening its read-only cockpit. Shown only inside the Interns group and only
+                          when the gov-contracts fetch returned rows (so only for a gov_contracts
+                          holder). Expanded by default (its collapse key starts undefined). */}
+                      {!isCollapsed && label === 'Interns' && govNavEntries.length > 0 && (() => {
+                        const subKey = 'Interns::gov';
+                        const subOpen = !collapsed[subKey];
+                        const subActive = govNavEntries.some((e) => isActive(e.to));
+                        return (
+                          <div className="admin-nav-group" style={{ marginLeft: 12, marginTop: 2 }}>
+                            <button
+                              type="button"
+                              className={`admin-nav-group__header${subActive ? ' has-active' : ''}`}
+                              onClick={() => toggleGroup(subKey)}
+                              aria-expanded={subOpen}
+                            >
+                              <span>Gov Contracts</span>
+                              <i className={`ri-arrow-${subOpen ? 'down' : 'right'}-s-line`} aria-hidden="true" />
+                            </button>
+                            {subOpen && govNavEntries.map((e) => (
+                              <Link
+                                key={e.key}
+                                to={e.to}
+                                className={`admin-nav-link${isActive(e.to) ? ' active' : ''}`}
+                                onClick={closeMobile}
+                                aria-current={isActive(e.to) ? 'page' : undefined}
+                              >
+                                <i className="ri-government-line admin-nav-ricon" aria-hidden="true" />
+                                <span>{e.label}</span>
+                              </Link>
+                            ))}
+                          </div>
+                        );
+                      })()}
                     </div>
                   );
                 })}

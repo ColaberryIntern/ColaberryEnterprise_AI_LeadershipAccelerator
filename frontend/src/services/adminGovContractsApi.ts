@@ -1,4 +1,5 @@
 import api from '../utils/api';
+import type { StudentGovProjectView } from './govProjectPortalApi';
 
 /**
  * adminGovContractsApi — the admin Interns-hub "Gov Contracts" tab's one data call.
@@ -45,6 +46,16 @@ export interface GovContractsResponse {
 export async function fetchGovContracts(): Promise<GovContractsResponse> {
   const { data } = await api.get('/api/admin/gov-contracts');
   return data as GovContractsResponse;
+}
+
+/**
+ * The SAME student-safe projection the assigned intern sees in their cockpit, for an owner/admin to
+ * read read-only from the admin left-nav. `GET /api/admin/gov-contracts/:projectId/cockpit`, gated
+ * `gov_contracts`; projectId is the delivery project id (a card's `deliveryProjectId`).
+ */
+export async function fetchGovContractCockpit(projectId: string): Promise<StudentGovProjectView> {
+  const { data } = await api.get(`/api/admin/gov-contracts/${encodeURIComponent(projectId)}/cockpit`);
+  return (data as { project: StudentGovProjectView }).project;
 }
 
 export function errorMessage(e: unknown, fallback: string): string {

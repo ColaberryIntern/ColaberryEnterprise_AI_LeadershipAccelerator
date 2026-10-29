@@ -74,4 +74,39 @@ router.get('/api/admin/gov-contracts', requireSection('gov_contracts'), async (r
   }
 });
 
+/**
+ * GET /api/admin/gov-contracts/:projectId/cockpit — the SAME student-safe projection the assigned
+ * intern sees in their portal cockpit, so an owner/admin can read it in-place from the left-nav
+ * (the Interns-hub left-nav redesign). Gated `requireSection('gov_contracts')` — owner/admin hold it,
+ * no scoped role does — and it returns the read-only view for ANY non-archived government delivery
+ * project, NOT only ones the caller is a member of, so management sees every contract the list shows.
+ *
+ * View-only by construction: the admin page renders CockpitView read-only (no copilot, no proposal
+ * edits), and this asserts no verify identity — `viewerCanVerify=false` so the admin sees exactly the
+ * intern's own view, never reviewer controls. The projection itself is already student-safe (never an
+ * admin/internal field). 404 when the id is not a (non-archived) government project.
+ */
+router.get('/api/admin/gov-contracts/:projectId/cockpit', requireSection('gov_contracts'), async (req: Request, res: Response) => {
+  const projectId = req.params.projectId;
+  if (typeof projectId !== 'string' || !projectId) {
+    res.status(400).json({ error: 'Project id is required' });
+    return;
+  }
+  try {
+    const { getStudentGovProjectView } = await import('../../services/factory/govProjectProjection');
+    // Resolve the admin's identity only to feed the projection's proposal-share lookup; an owner/admin
+    // is not an edit-share member, so it resolves to a read-only view regardless.
+    const actor = await resolveGovProjectActor(req);
+    const view = await getStudentGovProjectView(projectId, false, actor?.platformIdentityId ?? null);
+    if (!view) {
+      res.status(404).json({ error: 'Not found' });
+      return;
+    }
+    res.json({ project: view });
+  } catch (err: unknown) {
+    logFail('gov_contract_cockpit_failed', err, { projectId });
+    res.status(500).json({ error: 'Could not load the government contract.' });
+  }
+});
+
 export default router;
