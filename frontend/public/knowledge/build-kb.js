@@ -40,14 +40,34 @@ for (const [domain, label, data] of SOURCES) {
       tags: x.tags || [],
       reference: reference,
       reference_label: x.refLabel || (x.doc ? x.doc.replace(/\.html$/, "").replace(/-/g, " ") : "") || (domain === "sales" ? (cat[x.category] || "Sales hub") : ""),
-      needs_verification: (x.confidence === "drafted-verify") || false
+      needs_verification: (x.confidence === "drafted-verify") || false,
+      // The TRI-STATE, preserved. `needs_verification` above is lossy: it maps
+      // "drafted-verify" to true and EVERYTHING ELSE to false, so an entry nobody
+      // ever reviewed is indistinguishable from one a human explicitly vouched for.
+      // Today that is not hypothetical - 137 of the 217 entries (63%) carry no
+      // `confidence` at all, because only the sales domain has ever been triaged
+      // (80 sales entries: 77 "grounded", 3 "drafted-verify"; the other five domains
+      // contribute 137 entries with no value). For those 137, `needs_verification:
+      // false` means "nobody said", not "verified".
+      //
+      // An AI consumer reading the boolean therefore treats most of the library as
+      // checked. That is the same fail-open shape as `resolveContentPageAccess`, which
+      // read absent state as approved and once marked all 153 Explorers CONVERTED.
+      // Emitting the raw value lets a consumer fail CLOSED on "unstated" instead.
+      //
+      // `needs_verification` is kept unchanged, so this is purely additive.
+      confidence: x.confidence || "unstated"
     });
   });
 }
 
 const out = {
   schema: "colaberry.kb/v1",
-  version: "1.0",
+  // 1.1 adds the per-entry `confidence` tri-state. Additive, so `schema` stays v1 and
+  // existing readers are unaffected - but a consumer that MUST distinguish "unstated"
+  // from "vouched" can require >= 1.1 and fail loudly against an older export rather
+  // than silently reading every entry as verified.
+  version: "1.1",
   name: "Colaberry Knowledge Base",
   description: "Company source of truth: Sales, Marketing, Design, Curriculum, Product, and Compliance. Machine-readable export for AI ingestion, built on the Colaberry design system. Refund and cancellation terms are drafted, not final. The AI Systems Architect Accelerator's own TWC status is not asserted here; only the Colaberry School of Data Analytics holds COA U5306. Do not invent facts beyond these entries.",
   generated_from: ["sales/kb-data.js", "marketing/hub-data.js", "data/design-kb.js", "data/curriculum-kb.js", "data/product-kb.js", "data/compliance-kb.js"],
