@@ -19,6 +19,7 @@ import { useOrgManager, companyLabel } from '../useIsOrgManager';
 import { useMgmtStatus } from '../useMgmtStatus';
 import { mgmtBridgeBlockedReason, mgmtNavGroupsFor } from '../mgmtBridgeGate';
 import { useInternshipNav } from '../useInternshipNav';
+import { useMyGovProjectsNav, govNavEntries } from '../useMyGovProjectsNav';
 import ConfettiCelebration from '../../../components/ConfettiCelebration';
 import { ClassicNav, ClassicTabBar } from './ShellNav';
 import { useCampus } from '../../../components/campus/CampusContext';
@@ -161,6 +162,16 @@ const REPLAYS_NAV_ITEM: NavItem = {
   ),
 };
 
+// "Gov Contracts" — a group of the intern's assigned government build(s), each
+// item deep-linking to their existing cockpit at /portal/gov-projects/:id. Shown
+// only when the participant is an active member of at least one government
+// delivery project (useMyGovProjectsNav, membership-scoped server-side), so a
+// non-gov student never sees it and an intern sees only their own contract(s).
+// Placed right after "Build and learn" — it is where their build work lives.
+const GOV_ICON = (
+  <svg viewBox="0 0 24 24" fill="none"><path d="M12 3l9 4H3l9-4Z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /><path d="M5 10v7M9.5 10v7M14.5 10v7M19 10v7M3 20h18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
+);
+
 type PortalShellProps = {
   /** Plain node for pages that don't condense; a function form for pages that
    *  need the live condensed boolean to sync their body hero's animation with
@@ -191,6 +202,7 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge, condens
   const companyNavLabel = companyLabel(org);
   const mgmt = useMgmtStatus();           // employee with a mgmt role = "Management Portal" link
   const { isIntern } = useInternshipNav(); // in the internship process / active intern = "Internship" tab
+  const govProjects = useMyGovProjectsNav(); // gov contract(s) assigned to this intern = "Gov Contracts" group
   // Broadcasting on = a "Replays" tab. Read from the SHARED provider, so this adds no request.
   // The rule itself lives in `replaysNavGate`, with the reason the `answered` term is not
   // redundant and a test for each of its four states.
@@ -211,6 +223,18 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge, condens
               : g,
           )
         : NAV_GROUPS;
+      // Gov Contracts: one group whose items are the intern's own assigned
+      // contract(s) (empty ⇒ no group), inserted right after "Build and learn".
+      const govEntries = govNavEntries(govProjects);
+      const govGroup: NavGroup | null = govEntries.length
+        ? { grp: 'Gov Contracts', items: govEntries.map((e) => ({ ...e, icon: GOV_ICON })) }
+        : null;
+      const withGov = ((): NavGroup[] => {
+        if (!govGroup) return base;
+        const idx = base.findIndex((g) => g.grp === 'Build and learn');
+        if (idx < 0) return [...base, govGroup];
+        return [...base.slice(0, idx + 1), govGroup, ...base.slice(idx + 1)];
+      })();
       return [
         // AF2.7: withheld during a read-only "View as member" session. The link opens in a NEW
         // TAB, which carries none of this tab's sessionStorage view-as token, so it would land
@@ -218,10 +242,10 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge, condens
         // ReadOnlyBanner carries the one-line reason, since it is on screen for the whole session.
         ...mgmtNavGroupsFor(mgmt.is_mgmt, mgmtBridgeBlockedReason(), MGMT_NAV_GROUP),
         ...(isOrgManager ? [buildCompanyNavGroup(companyNavLabel)] : []),
-        ...base,
+        ...withGov,
       ];
     },
-    [isOrgManager, companyNavLabel, mgmt.is_mgmt, isIntern, broadcastOn],
+    [isOrgManager, companyNavLabel, mgmt.is_mgmt, isIntern, broadcastOn, govProjects],
   );
   // Mobile bottom tab bar mirrors the effective, navigable destinations.
   const tabItems = useMemo(
