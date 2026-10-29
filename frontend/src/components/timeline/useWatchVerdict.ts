@@ -11,7 +11,7 @@
  * Fail-open on a fetch error: an unreachable status endpoint must not trap the
  * student. The server re-checks on completion regardless.
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 export interface WatchVerdict { watched_pct: number; required_pct: number | null; met: boolean; }
 
@@ -36,14 +36,16 @@ export function watchGateLabel(watch: WatchVerdict | null, verb = 'Keep watching
  */
 export function useWatchVerdict(key: string | null, load: () => Promise<WatchVerdict>) {
   const [watch, setWatch] = useState<WatchVerdict | null>(null);
+  // `load` is a fresh closure every render; hold the latest in a ref so the
+  // fetch re-runs only when the key changes, not on every render.
+  const loadRef = useRef(load);
+  loadRef.current = load;
   useEffect(() => {
     setWatch(null);
     if (!key) return;
     let alive = true;
-    load().then((v) => { if (alive) setWatch(v); }).catch(() => { if (alive) setWatch(WATCH_FAIL_OPEN); });
+    loadRef.current().then((v) => { if (alive) setWatch(v); }).catch(() => { if (alive) setWatch(WATCH_FAIL_OPEN); });
     return () => { alive = false; };
-    // `load` closes over the same key; re-running on its identity would refetch every render.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
   return [watch, setWatch] as const;
 }
