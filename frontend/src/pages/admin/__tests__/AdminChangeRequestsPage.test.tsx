@@ -87,6 +87,25 @@ beforeEach(() => {
 
 const text = () => container.textContent ?? '';
 
+/**
+ * Type into a CONTROLLED input.
+ *
+ * Setting `el.value` directly and firing `input` does not work: React keeps its own value tracker,
+ * sees no change, never calls `onChange`, and re-renders the field with the old state. The symptom
+ * is subtle and cost a CI round trip here — the error message under test rendered correctly (the
+ * mock rejects regardless of input) while the field read as empty, so the failure looked like the
+ * page discarding the text rather than the test never entering it.
+ *
+ * Going through the prototype's value setter is what the sibling suite does, for the same reason.
+ */
+async function type(el: HTMLInputElement | HTMLTextAreaElement, value: string) {
+  await act(async () => {
+    const proto = el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+    Object.getOwnPropertyDescriptor(proto, 'value')!.set!.call(el, value);
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+}
+
 describe('who sees the decision queue', () => {
   it('THE INTERN VIEW: no queue at all when the admin-only read is refused', async () => {
     await render();
@@ -192,10 +211,10 @@ describe('refusals are rendered in the server’s own words', () => {
     });
     await render();
     const input = container.querySelector('#cr-title') as HTMLInputElement;
-    await act(async () => {
-      input.value = '...';
-      input.dispatchEvent(new Event('input', { bubbles: true }));
-    });
+    await type(input, '...');
+    // The text really is in the field before we submit, or the assertion below would pass for the
+    // wrong reason - an empty field "retaining" nothing.
+    expect((container.querySelector('#cr-title') as HTMLInputElement).value).toBe('...');
     const form = container.querySelector('form')!;
     await act(async () => { form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })); });
     await act(async () => { await Promise.resolve(); });
