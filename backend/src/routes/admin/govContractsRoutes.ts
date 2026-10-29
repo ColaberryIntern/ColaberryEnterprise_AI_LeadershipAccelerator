@@ -1,0 +1,77 @@
+import { Router, Request, Response } from 'express';
+import { requireSection, adminAllowedSections } from '../../middlewares/authMiddleware';
+// READ-ONLY, fail-closed resolution of the fixed Government Contracts container (its tenant).
+import { lookupGovContractsContainer } from '../../scripts/lib/factoryDemoContainer';
+import { resolveGovProjectActor } from '../../middlewares/govProjectAccess';
+import { scopeGovCardsToMembership } from '../../services/factory/govContractsScope';
+
+/**
+ * Admin — Government Contracts tab (mgmt-portal M1).
+ *
+ * The admin Interns hub's "Gov Contracts" tab needs ONE list endpoint: the active government
+ * pursuits/projects this caller may see. It is its OWN route gated `requireSection('gov_contracts')`
+ * — NOT the existing `/api/admin/factory/*` surface, which is gated `program`. Reusing that would
+ * recreate the nav-renders-but-API-403s trap this repo keeps warning about: the tab is gated
+ * `gov_contracts`, so its data must be too, or a future `gov_contracts`-only role would see the tab
+ * and get a 403 on every call.
+ *
+ * TWO layers of access, in order:
+ *   1. SECTION gate (`requireSection('gov_contracts')`) — may you open the tab at all. owner/admin
+ *      hold it (derived from ALL_SECTIONS); no scoped role does yet.
+ *   2. ROW scope — a "broad" caller (one who also holds `program`: owner, admin, legacy full admin)
+ *      is a management/operator viewer and sees EVERY active pursuit, exactly as the existing gov
+ *      cockpit does; a scoped caller sees only the delivery projects they are an active
+ *      `DeliveryProjectMember` of (email-resolved identity), mirroring `/api/portal/gov-projects`.
+ *
+ * Read-only. The list itself is the existing `listGovPipeline` projection (thread-head pursuits in
+ * the gov container, newest first); the deep link into the per-pursuit cockpit lives on the client.
+ */
+const router = Router();
+
+function logFail(event: string, err: unknown, context: Record<string, unknown>): void {
+  console.error(JSON.stringify({
+    timestamp: new Date().toISOString(), level: 'error', service: 'backend', event,
+    outcome: 'failure',
+    error_class: (err as { constructor?: { name?: string } })?.constructor?.name ?? 'Error',
+    context: { ...context, message: (err as { message?: string })?.message },
+  }));
+}
+
+/**
+ * GET /api/admin/gov-contracts — the active gov pursuits this caller may see, for the Gov Contracts
+ * tab. `scope` echoes whether the list is the full tenant list ('all') or membership-scoped ('member').
+ * Fails closed (503) if the gov container is not configured; never discloses another tenant's data.
+ */
+router.get('/api/admin/gov-contracts', requireSection('gov_contracts'), async (req: Request, res: Response) => {
+  try {
+    // Inside the try so a DB-level rejection here fails as a clean 500, not an unhandled rejection;
+    // an unconfigured container is still the deliberate fail-closed 503.
+    const container = await lookupGovContractsContainer();
+    if (!container) {
+      logFail('gov_contracts_scope', new Error('gov container not resolvable'), {});
+      res.status(503).json({ error: 'The government contracts workspace is not configured.' });
+      return;
+    }
+    const { listGovPipeline } = await import('../../services/factory/govPipeline');
+    const cards = await listGovPipeline(container.tenant.id);
+    const broad = adminAllowedSections((req as any).admin ?? {}).includes('program');
+    let memberIds: string[] = [];
+    if (!broad) {
+      const actor = await resolveGovProjectActor(req);
+      if (actor) {
+        const { default: DeliveryProjectMember } = await import('../../models/DeliveryProjectMember');
+        const memberships: any[] = await DeliveryProjectMember.findAll({
+          where: { platform_identity_id: actor.platformIdentityId, status: 'active' },
+        });
+        memberIds = Array.from(new Set(memberships.map((m) => m.delivery_project_id).filter(Boolean))).map(String);
+      }
+    }
+    const projects = scopeGovCardsToMembership(cards, memberIds, broad);
+    res.json({ projects, scope: broad ? 'all' : 'member' });
+  } catch (err: unknown) {
+    logFail('gov_contracts_list_failed', err, {});
+    res.status(500).json({ error: 'Could not list government contracts.' });
+  }
+});
+
+export default router;

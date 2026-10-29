@@ -103,9 +103,13 @@ Both fields are required and the schema is `.strict()`. `expected_version` is op
 - A replay on the portal Replays page, expiring 25 days after `ended_at`.
 
 ## 5. Verification
-- **Flag on:** an unauthenticated request to a `/api/portal/broadcasts/*` path returns **401**, not
-  404. A 404 means the feature is still dark — the gate answers before auth, which is what makes
-  404-vs-401 the honest signal here.
+- **Flag on — and you must probe INSIDE the backend container.** With the flag dark a
+  `/api/portal/broadcasts/*` path answers **404**; with it on, **401**. The gate runs before auth,
+  which is what makes 404-vs-401 the honest signal. But that signal is **not readable from outside**:
+  measured 2026-10-29 against `enterprise.colaberry.ai`, the broadcast path, a deliberately unknown
+  path and `/api/health` all returned 401 alike, because the edge answers before the flag gate is
+  ever reached. A 401 from the public hostname therefore proves nothing. Read the flag directly:
+  `docker exec accelerator-backend sh -c 'echo $BROADCAST_ENABLED'`.
 - **Occurrence exists and is correctly addressed:** the §2 query returns one row for the session,
   with a non-null `room_id` and a non-null `provider_session_id`. A null `provider_session_id` means
   the occurrence is real, correctly gated, and **unplayable** (`no_live_input`).
@@ -138,10 +142,34 @@ Both fields are required and the schema is `.strict()`. `expected_version` is op
 - **Signed-out visitors can never watch.** `if (!viewer.enrollmentId) return denied: guest` runs
   before every access-mode branch, including `free`. Prospects without portal logins cannot be served
   in-portal by any configuration — they attend through the Open House deck service instead.
-- **`access_mode: 'free'` is currently unreachable.** The `free_event` branch is built and
-  unit-tested, but the only two writers of `access_mode` both write `'private'`. Opening access is
-  therefore done at the *room* layer (§3.2), not the access-mode layer. Do not hand-write
-  `access_mode` in the database to work around this.
+- **No code writes `access_mode` — yet production holds a value no code could have written.** The
+  `free_event` branch is built and unit-tested; occurrence creation hard-codes `'private'`
+  (`broadcastSessionOccurrence.ts:116`) and the column defaults to `'private'`. Yet the ended
+  occurrence `Colaberry Live - First Private Technical Airing` carries `access_mode = 'free'`, read
+  from production on 2026-10-29. Someone set it directly and that airing completed. So the honest
+  statement is not "`free` is unreachable" but "`free` is reachable only out of band".
+
+  Two ways to open access, and they are **not** equivalent:
+
+  | | Room flip (§3.2) | Direct `access_mode` write |
+  |---|---|---|
+  | Supported by code | yes — `updateRoom`, audited via `RoomAccessChanged` | no writer; a manual `UPDATE` |
+  | Requires the occurrence to have a room | **yes** | no |
+  | Side effects | widens the room's *other* content too | none beyond this occurrence |
+  | Reverting | `{"privacy":"cohort"}` | `UPDATE … SET access_mode = 'private'` |
+
+  Prefer the room flip: it leaves an audit trail and is a supported code path. Fall back to the
+  direct write only when the occurrence has no room — and record it in the session log when you do,
+  because nothing else will.
+
+- **The "configure it properly" path does not exist yet.** `broadcast_series.default_access_mode` is
+  declared in DDL, CHECK-constrained to the valid modes, and asserted by a schema test — and is
+  **never read by any service, controller or script**. Nothing ever writes `series_id` on an
+  occurrence either, so no occurrence has a series for a default to be inherited from. Wiring only
+  the read would therefore change nothing: it would add a fifth unreachable branch while appearing
+  to fix the fourth. Until both halves are built, the two rows above are the whole set of options.
+  Same defect class as `roomEligible: false` awaiting P2-07 and the command-less
+  `ended → processing` path — declared, tested, unreachable.
 - **Opening a room widens access to everything in it**, not just the broadcast — messages, resources,
   bookings. For a session room that is normally empty of other content this is fine; check before
   flipping a room that has history.

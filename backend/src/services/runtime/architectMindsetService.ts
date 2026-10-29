@@ -13,6 +13,7 @@ import TimelineCard from '../../models/TimelineCard';
 import TimelineCardProgress from '../../models/TimelineCardProgress';
 import PortfolioArtifact from '../../models/PortfolioArtifact';
 import { completeActivity } from './runtimeService';
+import { architectPointsView } from './architectPoints';
 import { chatJson } from './runtimeAi';
 import {
   AmScenario, AmInterviewQuestion, scenarioForWeek,
@@ -66,10 +67,11 @@ async function save(row: TimelineCardProgress, progress: AmProgress, status?: 'i
 
 // ── GET state (resume) ───────────────────────────────────────────────────────
 export async function getState(enrollmentId: string, cardId: string) {
-  const { scenario, row, progress } = await load(enrollmentId, cardId);
+  const { card, scenario, row, progress } = await load(enrollmentId, cardId);
   return {
     scenario, progress,
     status: row.status,
+    points: await architectPointsView(enrollmentId, card as any, progress.state === 'completed'),
     receipt: computeReceipt(scenario),
     gaps: progress.state === 'completed' ? [] : completionGaps({ ...progress, ...deriveEvidence(progress, scenario) }, scenario),
     ledger: await getLedger(enrollmentId),
@@ -169,9 +171,10 @@ export async function complete(enrollmentId: string, cardId: string) {
   const { card, scenario, row } = await load(enrollmentId, cardId);
   let progress = normalize(row.student_progress, scenario);
   if (progress.state === 'completed') {
-    // idempotent: already done -> return the stored artifact + ledger, no re-award
+    // idempotent: already done -> return the stored artifact + ledger. The points view
+    // retries the (idempotent) award, so a first award that failed is healed, never doubled.
     const existing = await PortfolioArtifact.findOne({ where: { enrollment_id: enrollmentId, card_id: cardId } });
-    return { already: true, artifact: existing ? existing.toJSON() : null, receipt: computeReceipt(scenario), evaluation: progress.evaluation, baseline: scenario.baseline, ledger: await getLedger(enrollmentId) };
+    return { already: true, points: await architectPointsView(enrollmentId, card as any, true), artifact: existing ? existing.toJSON() : null, receipt: computeReceipt(scenario), evaluation: progress.evaluation, baseline: scenario.baseline, ledger: await getLedger(enrollmentId) };
   }
   // backfill derived evidence, then ensure evaluation
   progress = { ...progress, ...deriveEvidence(progress, scenario) };
@@ -203,6 +206,7 @@ export async function complete(enrollmentId: string, cardId: string) {
 
   return {
     already: false,
+    points: { value: (await architectPointsView(enrollmentId, card as any, false)).value, awarded_now: result.outcome?.points_awarded || 0 },
     outcome: result.outcome,
     artifact: result.artifact,
     readiness: result.readiness,

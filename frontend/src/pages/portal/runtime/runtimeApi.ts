@@ -153,7 +153,9 @@ export interface AmProgress {
 export interface AmReceipt { counts: Array<{ label: string; value: string }>; represented_hours: number; minutes: number; ratio: number; qualification: string }
 export interface AmLedger { lessons_completed: number; decisions_recorded: number; assumptions_discovered: number; failure_modes_examined: number; perspectives_encountered: number; represented_hours: number }
 export interface AmGap { code: string; label: string }
-export interface AmStateView { scenario: AmScenario; progress: AmProgress; status: string; receipt: AmReceipt; gaps: AmGap[]; ledger: AmLedger }
+/** The card's engagement points: its worth, and how many were newly credited by this call. */
+export interface AmPoints { value: number; awarded_now: number }
+export interface AmStateView { scenario: AmScenario; progress: AmProgress; status: string; receipt: AmReceipt; gaps: AmGap[]; ledger: AmLedger; points?: AmPoints }
 
 // Week in Review (reflection) — the per-student data behind the weekly reflection panel.
 export interface WrActivity {
@@ -187,7 +189,7 @@ export const runtimeApi = {
   architectEvaluate: (cardId: string) =>
     portalApi.post(`/api/portal/runtime/cards/${cardId}/architect/evaluate`, {}).then((r) => r.data as { evaluation: AmProgress['evaluation']; gaps: AmGap[] }),
   architectComplete: (cardId: string) =>
-    portalApi.post(`/api/portal/runtime/cards/${cardId}/architect/complete`, {}).then((r) => r.data as { already: boolean; outcome?: any; artifact?: any; readiness?: Readiness; receipt: AmReceipt; evaluation: AmProgress['evaluation']; baseline: boolean; ledger: AmLedger }),
+    portalApi.post(`/api/portal/runtime/cards/${cardId}/architect/complete`, {}).then((r) => r.data as { already: boolean; points?: AmPoints; outcome?: any; artifact?: any; readiness?: Readiness; receipt: AmReceipt; evaluation: AmProgress['evaluation']; baseline: boolean; ledger: AmLedger }),
   architectLedger: (cardId: string) => portalApi.get(`/api/portal/runtime/cards/${cardId}/architect/ledger`).then((r) => r.data as { ledger: AmLedger }),
   nudge: (cardId: string) => portalApi.get(`/api/portal/runtime/cards/${cardId}/nudge`).then((r) => r.data as Nudge),
   // `attachments` = ids of files the student handed Cory on this turn
