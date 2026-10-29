@@ -114,7 +114,11 @@ const BASELINE = {
   // this scanner would disable the very rule the line exists to enforce — the same reasoning
   // the four POLICY LIST entries above already carry.
   'services/mayaPersona.ts': [1, "POLICY LIST: Maya's own guardrail forbids the word and names 807.172(d)"],
-  'services/content/bannedCopyScanner.ts': [3, 'RULE TEXT: the scanner declares the word and quotes 807.172(d)'],
+  // Moved out of `bannedCopyScanner.ts` when knowledge grounding needed the canonical rule
+  // from a pure runtime module: the scanner imports the TypeScript compiler and so cannot be
+  // imported outside tests. Same three occurrences, same authority, one fewer declaration of
+  // the rule in the repo — see bannedCopyRule.ts's header.
+  'services/content/bannedCopyRule.ts': [3, 'RULE TEXT: the canonical rule declares the word and quotes 807.172(d)'],
   'services/content/brandGovernanceSeed.ts': [3, 'RULE TEXT: the brand rule quotes 807.172(d) and names the approved phrasings'],
 
   // ── Curriculum: lesson prose about software economics. Reaches students, advertises nothing.

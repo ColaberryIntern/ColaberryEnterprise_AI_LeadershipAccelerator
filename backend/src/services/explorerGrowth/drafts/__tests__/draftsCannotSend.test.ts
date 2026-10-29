@@ -186,12 +186,37 @@ describe('the write is atomic, because a partial commit breaks the replay guard'
     // decision and get drafted a second time tomorrow.
     const repo = codeOf(files.find((f) => f.endsWith('draftRepository.ts'))!);
     expect(repo).toContain('sequelize.transaction');
-    expect(repo).toContain('INSERT INTO scheduled_emails');
-    expect(repo).toContain('UPDATE explorer_journey_decisions');
-    // Both statements must be inside the transaction callback.
-    const txStart = repo.indexOf('sequelize.transaction');
-    expect(repo.indexOf('INSERT INTO scheduled_emails')).toBeGreaterThan(txStart);
-    expect(repo.indexOf('UPDATE explorer_journey_decisions')).toBeGreaterThan(txStart);
+
+    // POSITION IS NOT THE PROPERTY, and this assertion used to test position: it compared
+    // the index of the INSERT against the index of `sequelize.transaction`. That broke the
+    // moment the insert was extracted into a helper declared ABOVE the transaction - while
+    // still being handed the transaction and still being atomic. It also had a hole in the
+    // other direction, which matters more: a query written lexically INSIDE the callback but
+    // missing `transaction: t` runs outside the transaction entirely, and the position test
+    // would have passed it. So assert the thing that actually makes the write atomic.
+    const WRITES = [
+      'INSERT INTO scheduled_emails',
+      'UPDATE explorer_journey_decisions',
+      'UPDATE scheduled_emails',
+    ];
+
+    for (const write of WRITES) {
+      let from = 0;
+      let seen = 0;
+      for (;;) {
+        const at = repo.indexOf(write, from);
+        if (at === -1) break;
+        seen += 1;
+        // The options object follows the SQL string; the transaction must be in it.
+        expect(repo.slice(at, at + 1200)).toContain('transaction: t');
+        from = at + write.length;
+      }
+      // A write that disappeared would otherwise pass this loop vacuously.
+      expect(seen).toBeGreaterThan(0);
+    }
+
+    // And the extracted insert is handed the transaction rather than opening its own.
+    expect(repo).toContain('insertDraftRow(input, t)');
   });
 
   it('the prior-draft count excludes the row being rendered', () => {

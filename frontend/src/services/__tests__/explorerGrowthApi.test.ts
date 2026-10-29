@@ -188,21 +188,25 @@ describe('unset filters are omitted, not sent as "undefined"', () => {
 });
 
 /**
- * THE CLIENT HAS EXACTLY ONE WRITE, AND THIS BLOCK WAS AMENDED TO SAY SO.
+ * THE CLIENT HAS EXACTLY TWO WRITES, AND THIS BLOCK HAS BEEN AMENDED TWICE TO SAY SO.
  *
- * It used to assert the client could not write at all. Phase 2 adds
- * `refreshContent`, so that had to change — and the change was made NARROWER
- * rather than weaker. The reads still must not touch a mutating verb; the write
- * name allow-list holds exactly one entry; and every other write-shaped name is
- * still forbidden, so `/mode`, `/pause`, `recalculate` and the rest cannot arrive
- * without amending this again, deliberately, with a reason.
+ * It began by asserting the client could not write at all. Phase 2 added
+ * `refreshContent` and Phase 3 adds `regenerateDraft`, and both times the change was
+ * made NARROWER rather than weaker. The reads still must not touch a mutating verb; the
+ * allow-list is an exact set checked both ways; and every other write-shaped name is still
+ * forbidden, so `/mode`, `/pause`, `recalculate` and the rest cannot arrive without
+ * amending this again, deliberately, with a reason.
  *
- * `refreshContent` was named to MATCH the forbidden pattern on purpose.
- * `postContentRefresh` would have slipped past the regex untouched and left the
- * guard intact-looking and useless.
+ * BOTH write names were chosen to MATCH the forbidden pattern on purpose, and the second one
+ * required extending the pattern to do it: the regex had `refresh` but not `regenerate`, so
+ * `regenerateDraft` would have passed untouched and left the guard looking intact while the
+ * write it exists to catch walked in. `regenerate` was therefore added to the regex in the
+ * same change. The alternative — a name the regex already missed, such as
+ * `postContentRefresh` or `requestRevision` — is indistinguishable from evasion.
  */
-describe('the client has exactly one write', () => {
+describe('the client has exactly two writes', () => {
   it('the READS never call a mutating verb', async () => {
+    mockGet.mockResolvedValue({ data: {} });
     await Promise.all([
       apiClient.getSummary(),
       apiClient.getDistribution(),
@@ -216,28 +220,59 @@ describe('the client has exactly one write', () => {
       apiClient.getShadow(),
       apiClient.getContentHealth(),
       apiClient.getEligibility(ID),
+      apiClient.getDraftHistory(ID),
     ]);
-    expect(mockGet).toHaveBeenCalledTimes(12);
+    expect(mockGet).toHaveBeenCalledTimes(13);
     for (const verb of [mockPost, mockPut, mockPatch, mockDel]) expect(verb).not.toHaveBeenCalled();
   });
 
-  /** The one write the page is allowed to have, by exact name. */
-  const ALLOWED_WRITES = ['refreshContent'];
+  /**
+   * The writes the page is allowed to have, by exact name.
+   *
+   * `regenerate` was ADDED to the regex below in the same change that added
+   * `regenerateDraft`. Without that, the new write would have slipped past a guard built to
+   * catch exactly this, and the guard would have looked intact while doing nothing about
+   * the write actually arriving. Extending the pattern and then allowing the one name is
+   * the opposite of evading it.
+   */
+  const ALLOWED_WRITES = ['refreshContent', 'regenerateDraft'];
 
-  it('exports exactly ONE function whose name suggests a write', () => {
+  it('exports exactly TWO functions whose names suggest a write', () => {
     const writeish = Object.keys(apiClient).filter((k) =>
-      /^(set|update|create|delete|pause|resume|recalculate|rerun|suppress|refresh)/i.test(k),
+      /^(set|update|create|delete|pause|resume|recalculate|rerun|regenerate|suppress|refresh)/i.test(k),
     );
-    expect(writeish).toEqual(ALLOWED_WRITES);
+    expect(writeish.sort()).toEqual([...ALLOWED_WRITES].sort());
   });
 
-  it('the one write POSTs, to the one path, and touches no other verb', async () => {
+  it('the first write POSTs, to the one path, and touches no other verb', async () => {
     mockPost.mockResolvedValue({ data: {} });
     await apiClient.refreshContent({});
 
     expect(mockPost).toHaveBeenCalledTimes(1);
     expect(mockPost.mock.calls[0][0]).toBe(`${BASE}/content/refresh`);
     for (const verb of [mockPut, mockPatch, mockDel]) expect(verb).not.toHaveBeenCalled();
+  });
+
+  it('the second write POSTs to the decision it names, and touches no other verb', async () => {
+    mockPost.mockResolvedValue({ data: {} });
+    await apiClient.regenerateDraft(ID, { brief: 'shorter' });
+
+    expect(mockPost).toHaveBeenCalledTimes(1);
+    expect(mockPost.mock.calls[0][0]).toBe(`${BASE}/decisions/${ID}/regenerate`);
+    // The brief is a BODY, not params: the endpoint validates `req.body` with a `.strict()`
+    // schema, so sent as params it would arrive nowhere and the schema would parse `{}` —
+    // a regeneration that silently ignored the reviewer's instruction.
+    expect(mockPost.mock.calls[0][1]).toEqual({ brief: 'shorter' });
+    for (const verb of [mockPut, mockPatch, mockDel]) expect(verb).not.toHaveBeenCalled();
+  });
+
+  it('the history read GETs, and is not a write despite sitting beside one', async () => {
+    mockGet.mockResolvedValue({ data: { versions: [] } });
+    await apiClient.getDraftHistory(ID);
+
+    expect(mockGet).toHaveBeenCalledTimes(1);
+    expect(mockGet.mock.calls[0][0]).toBe(`${BASE}/decisions/${ID}/history`);
+    for (const verb of [mockPost, mockPut, mockPatch, mockDel]) expect(verb).not.toHaveBeenCalled();
   });
 
   it('sends the body as a body, not as query params', async () => {

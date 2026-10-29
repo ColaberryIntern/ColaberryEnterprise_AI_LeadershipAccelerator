@@ -1,4 +1,5 @@
 import * as ts from 'typescript';
+import { FREE_WORD_RULE, BANNED_COPY_RULES, type BannedWordRule } from './bannedCopyRule';
 
 /**
  * bannedCopyScanner — find a banned WORD in user-facing copy inside TypeScript/TSX source,
@@ -37,22 +38,13 @@ import * as ts from 'typescript';
  * path, this is an attribute no human reads - and never about what a string means.
  */
 
-/** A banned word and the authority that bans it. */
-export interface BannedWordRule {
-  id: string;
-  /** Matched case-insensitively on word boundaries, so "freedom" and "freely" do not match. */
-  word: string;
-  reason: string;
-  /** What to write instead. */
-  approvedAlternatives: readonly string[];
-}
-
-export const FREE_WORD_RULE: BannedWordRule = {
-  id: 'tac-807-172-d-free',
-  word: 'free',
-  reason: '40 TAC 807.172(d) (Texas Workforce Commission): training must not be advertised as "free".',
-  approvedAlternatives: ['$0 to start', 'No card needed'],
-};
+// The rule itself now lives in `bannedCopyRule.ts`, a leaf with no imports, and is
+// re-exported here so every existing consumer of this module is unaffected. The move
+// exists because this file opens with `import * as ts from 'typescript'`, which makes it
+// unimportable from the runtime graph - so the canonical rule was unreachable by the pure
+// modules that need it most. See that file's header for the fork this closed.
+export { FREE_WORD_RULE, BANNED_COPY_RULES };
+export type { BannedWordRule };
 
 /**
  * Why an occurrence is NOT user-facing copy. A CLOSED set: `scanSource` records one of these

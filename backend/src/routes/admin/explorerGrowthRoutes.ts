@@ -15,7 +15,9 @@ import {
   getWhyHandler,
   getCampusActivityHandler,
   getOutreachHandler,
+  getDraftHistoryHandler,
   postContentRefreshHandler,
+  postRegenerateDraftHandler,
 } from '../../controllers/explorerGrowthController';
 
 /**
@@ -92,6 +94,9 @@ router.get(`${BASE}/learners/:enrollmentId/scores`, getLearnerScoresHandler);
 // Decisions + the Why drilldown
 router.get(`${BASE}/decisions`, getDecisionsHandler);
 router.get(`${BASE}/decisions/:id`, getWhyHandler);
+// Registered AFTER `/decisions/:id` and it does not shadow it: Express matches on the full
+// path, and `/decisions/:id` cannot match a two-segment tail.
+router.get(`${BASE}/decisions/:id/history`, getDraftHistoryHandler);
 
 // Shadow + Content
 router.get(`${BASE}/shadow`, getShadowHandler);
@@ -100,8 +105,13 @@ router.get(`${BASE}/content`, getContentHandler);
 // Eligibility
 router.get(`${BASE}/eligibility/:enrollmentId`, getEligibilityHandler);
 
-// The one write. Registered last so the read surface above stays readable as a
-// block, and so a reviewer scanning this file sees the reads end before it begins.
+// The writes. Registered last so the read surface above stays readable as a block, and so a
+// reviewer scanning this file sees the reads end before they begin. These two are the only
+// ones §27 sanctions for this page, and neither can send: the first writes drafts whose
+// status the sender's claim predicate excludes, and the second adds a version and moves the
+// one it replaced to a third status that is equally unclaimable. The other six writes §27
+// specifies stay absent, because each changes what the system does to real learners.
 router.post(`${BASE}/content/refresh`, postContentRefreshHandler);
+router.post(`${BASE}/decisions/:id/regenerate`, postRegenerateDraftHandler);
 
 export default router;
