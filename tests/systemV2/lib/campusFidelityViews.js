@@ -21,10 +21,11 @@ const MAP_ART = ['cm-world', 'cm-ground-grass', 'cm-quad-lawn', 'cm-quad-label',
 const ALL = ['lecture', 'library', 'tower', 'studio', 'amphi', 'testing', 'observatory', 'commons', 'gallery', 'career', 'arcade'];
 const buildingIds = () => ALL.flatMap((id) => [`cm-bld-${id}`, `cm-label-${id}`]);
 const STATS = {
-  member: ['cm-stats-level', 'cm-stats-points', 'cm-stats-online', 'cm-stats-bell', 'cm-stats-me'],
-  explorer: ['cm-stats-acct-explorer', 'cm-stats-online', 'cm-stats-bell', 'cm-stats-me'],
+  // C23 phase 3: the 💬 inbox for every account but business (the prototype's not-sponsor)
+  member: ['cm-stats-level', 'cm-stats-points', 'cm-stats-online', 'cm-stats-messages', 'cm-stats-bell', 'cm-stats-me'],
+  explorer: ['cm-stats-acct-explorer', 'cm-stats-online', 'cm-stats-messages', 'cm-stats-bell', 'cm-stats-me'],
   business: ['cm-stats-acct-business', 'cm-stats-online', 'cm-stats-bell', 'cm-stats-me'],
-  staff: ['cm-stats-acct-staff', 'cm-stats-online', 'cm-stats-bell', 'cm-stats-me'],
+  staff: ['cm-stats-acct-staff', 'cm-stats-online', 'cm-stats-messages', 'cm-stats-bell', 'cm-stats-me'],
 };
 const TOPBAR = ['cm-topbar', 'cm-topbar-brand', 'cm-topbar-search', 'cm-topbar-list'];
 const CONCIERGE = ['cm-concierge', 'cm-cc-where', 'cm-cc-greeting', 'cm-cc-lead'];
@@ -74,7 +75,6 @@ const HQ_VIEWS = [
 
 const HOME_KNOWN = (a, size) => [
   ...(size === 'phone' ? ['phone: the stats pill is hidden as in the prototype phone layout; the campus tab bar has no Alerts tab yet'] : []),
-  'top bar messages icon: comes with the chat on the home (decision Q6, WP-10)',
   'concierge "Right now": real rows only (plan, next class, busiest building, next event); a quiet local stack may have none',
   ...(a === 'explorer' ? ['pulse "K Explorers like you": needs an Explorer tag in presence (WP-9)'] : []),
   ...(a === 'business' ? ['partner company / seats / invite chips and "of your N people": no team size or company endpoint yet (WP-9)'] : []),
@@ -158,6 +158,11 @@ const VIEWS = [
     // WP-6: the marquee over the live building, the bar's state chip and clock, the card's chip and chime
     required: (a, size) => ['cm-world', 'cm-cc-live', 'cm-beams', 'svg.cm-map.is-evening.ls-live', 'cm-marquee', 'cm-live-chip', ...(size === 'phone' ? [] : ['cm-live-sub']), 'cm-cc-live-chime'],
     known: () => ['ambient walkers: decision Q1 (real present people walking) is still open; the prototype\'s random crowd is never drawn'] },
+  // C23 phase 3 (Q6): the 💬 inbox; the staff desks seed gives it its Staff section. Chat heads and pins need a seeded unread
+  // conversation / notification, so they are covered by campusDmDock and campusInbox instead.
+  { name: '35-inbox', route: '/portal/campus', accounts: ['member', 'explorer', 'staff'], steps: () => [{ click: '[data-testid="cm-stats-messages"]' }, { wait: 400 }],
+    required: () => ['cm-inbox'], desktopOnly: true,
+    known: () => ['chat heads and the map notification pins need a seeded unread conversation or notification; covered by campusDmDock and campusInbox'] },
   { name: '07-notifications', route: '/portal/campus', steps: () => [{ click: '[data-testid="cm-stats-bell"] button' }],
     required: () => ['.cm-bell-panel'], desktopOnly: true },
   { name: '08-person-card', route: '/portal/campus', accounts: ['member', 'explorer', 'staff'], steps: () => [{ click: '[data-testid="cm-cc-helpdesk"] button' }, { wait: 500 }],

@@ -6,7 +6,7 @@ import type { CampusPerson } from './campusApi';
 import type { Equipped } from './campusGear';
 import BuildingArt from './art/BuildingArt';
 import { MainGateArt } from './art/MainGate';
-import { PeopleChip, StatusBadge, TourBadge, PlanPin, UrgentPing, statusOf } from './art/BuildingBadges';
+import { PeopleChip, StatusBadge, TourBadge, PlanPin, NotifPin, UrgentPing, statusOf } from './art/BuildingBadges';
 import type { BadgeStatus } from './art/BuildingBadges';
 import AvatarPin from './art/AvatarPin';
 import type { Me } from './art/AvatarPin';
@@ -97,6 +97,8 @@ export interface CampusMapProps {
   dimExcept?: BuildingId | null;
   /** WP-3: a member's time badges ("Class in 1d 3h") and the building whose class starts within 15 minutes. */
   moments?: MapMoments;
+  /** C23 phase 3 (WP-10): unread notifications per building (real types only), drawn as red count pins on the full map. */
+  notifs?: Partial<Record<BuildingId, number>>;
   /** WP-3: nobody else is on campus right now (the prototype's quiet hours look). */
   quiet?: boolean;
   /** WP-6: Colaberry Live's state and the marquee's words over the live building (beams and waves only while live). */
@@ -119,7 +121,7 @@ export interface CampusMapProps {
 interface BuildingProps {
   b: CampusBuilding; access: ExplorerAccess; label: string; compact: boolean; count: number; shown?: CampusPerson[]; onAir?: boolean; here?: boolean;
   hl?: boolean; showOpen?: boolean; pin?: { n: number; done: boolean; next: boolean }; tourBadge?: { text: string; live: boolean }; dim?: boolean;
-  moment?: BadgeStatus; urgent?: boolean; yours?: number; down?: boolean; onPeek?: (id: BuildingId, x: number, y: number) => void;
+  moment?: BadgeStatus; notifs?: number; urgent?: boolean; yours?: number; down?: boolean; onPeek?: (id: BuildingId, x: number, y: number) => void;
   onPick: (id: BuildingId) => void; setRef?: (id: BuildingId, el: SVGGElement | null) => void;
 }
 
@@ -144,6 +146,7 @@ const Building = memo(function Building(p: BuildingProps): React.ReactElement {
       {status && !p.tourBadge && <StatusBadge b={b} status={status} compact={compact} />}
       {p.tourBadge && <TourBadge b={b} text={p.tourBadge.text} live={p.tourBadge.live} />}
       {p.pin && <PlanPin b={b} n={p.pin.n} done={p.pin.done} next={p.pin.next} />}
+      {!compact && !isGate && (p.notifs ?? 0) > 0 && <NotifPin b={b} n={p.notifs!} />}
     </g>
   );
 });
@@ -296,7 +299,7 @@ export default function CampusWorldMap(p: CampusMapProps): React.ReactElement {
         <Building key={b.id} b={b} access={accessOf(b)} label={buildingName(b, workplaceNames)} compact={compact} count={counts?.[b.id] ?? 0}
           shown={people?.[b.id]?.shown} onAir={!!onAir?.has(b.id)} here={!compact && atId === b.id} hl={!compact && (targetId === b.id || p.hover === b.id)} showOpen={p.showOpen}
           pin={compact ? undefined : pins[b.id]} tourBadge={compact ? undefined : badges[b.id]} dim={!compact && !!p.dimExcept && p.dimExcept !== b.id}
-          moment={compact ? undefined : p.moments?.badges[b.id]} urgent={!compact && urgent === b.id} yours={p.yours?.[b.id]} down={!compact && !!p.presenceDown}
+          moment={compact ? undefined : p.moments?.badges[b.id]} notifs={compact ? undefined : p.notifs?.[b.id]} urgent={!compact && urgent === b.id} yours={p.yours?.[b.id]} down={!compact && !!p.presenceDown}
           onPeek={compact ? undefined : p.onPeek} onPick={pick} setRef={p.buildingRef} />
       ))}
       {live.length > 0 && <LiveFront buildings={live} mark={compact ? null : p.liveMark} />}

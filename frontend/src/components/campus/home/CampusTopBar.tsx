@@ -4,6 +4,7 @@ import type { CampusAudience } from '../campusMap';
 import '../campusPanels.css';
 import { levelOfRung } from '../../../services/bandLadder';
 import NotificationBell from '../../../pages/portal/community/NotificationBell';
+import { badgeText } from './inboxModel';
 import AccountChip from './AccountChip';
 
 /**
@@ -31,6 +32,8 @@ export interface TopBarProps {
   onFind: () => void;
   /** C23 (rule R10): the bell closed without a pick; the home recenters its map. */
   onBellClosed?: () => void;
+  /** C23 phase 3 (Q6): the 💬 inbox button: conversations with unread, open state, and the toggle. Absent = no button. */
+  messages?: { unread: number; open: boolean; onToggle: () => void } | null;
   /** Opens the Me panel (look and campus settings). */
   onMe: () => void;
   /** C49 (v13 T1): today's plan for the Today button's count ("<done> of <total>"); null or empty: no count. */
@@ -79,6 +82,14 @@ export default function CampusTopBar(p: TopBarProps): React.ReactElement {
             <span data-testid="cm-stats-streak" title="Day streak"><span aria-hidden="true">{'🔥 '}</span>{streak}<span className="cm-sr"> day streak</span></span></>
         )}
         {p.weather && <><span className="sep hide-m" aria-hidden="true" />{p.weather}</>}
+        {/* C23 phase 3: the inbox, before the bell (v3:581); never for a business account (the prototype's not-sponsor, D:592) */}
+        {p.messages && audience !== 'business' && (
+          <button type="button" className={`cm-msgs-btn${p.messages.open ? ' is-open' : ''}`} onClick={p.messages.onToggle} data-testid="cm-stats-messages"
+            aria-haspopup="dialog" aria-expanded={p.messages.open} aria-label={`Messages${p.messages.unread ? `, ${p.messages.unread} with unread` : ''}`}>
+            <span aria-hidden="true">{'💬'}</span>
+            {badgeText(p.messages.unread) && <i className="cm-msgs-badge" data-testid="cm-stats-messages-badge">{badgeText(p.messages.unread)}</i>}
+          </button>
+        )}
         <span className="cm-stats-bell" data-testid="cm-stats-bell"><NotificationBell onDismissed={p.onBellClosed} /></span>
         <button type="button" className="cm-me" onClick={p.onMe} aria-label="You: your look and campus settings" data-testid="cm-stats-me">
           {p.photo ? <img src={p.photo} alt="" data-testid="cm-stats-photo" /> : initials}

@@ -155,3 +155,12 @@
 .cm-gate-today .t{font-size:9px;letter-spacing:.6px}
 .cm-today-flag:hover .pill,.cm-today-flag:hover .pointer,.cm-gate-today:hover .pill{fill:var(--cm-art-red-d)}
 .cm-today-flag:focus-visible .pill,.cm-gate-today:focus-visible .pill{stroke:var(--cm-art-ink);stroke-width:2.5}
+
+/* C23 phase 3 (WP-10): the notification count pin (D:873-875); the ring pulses unless motion is reduced. */
+.cm-notif-pin{cursor:pointer}
+.cm-notif-pin .dot{fill:var(--cm-art-red);stroke:var(--cm-art-white);stroke-width:2}
+.cm-notif-pin .ring{fill:none;stroke:var(--cm-art-red);stroke-width:2;transform-box:fill-box;transform-origin:center;animation:cm-notif-ring 1.8s ease-out infinite}
+.cm-notif-pin text{font:900 9.5px 'DM Sans',var(--sans),sans-serif;fill:var(--cm-art-white)}
+@keyframes cm-notif-ring{0%{opacity:.9;transform:scale(.8)}100%{opacity:0;transform:scale(1.9)}}
+.is-reduced .cm-notif-pin .ring{animation:none;opacity:0}
+@media (prefers-reduced-motion:reduce){.cm-notif-pin .ring{animation:none;opacity:0}}

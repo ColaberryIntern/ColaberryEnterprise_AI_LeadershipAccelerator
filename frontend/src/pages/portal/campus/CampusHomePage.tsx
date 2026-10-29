@@ -34,6 +34,9 @@ import CampusListView from '../../../components/campus/CampusListView';
 import CampusDoorTransition from '../../../components/campus/CampusDoorTransition';
 import CampusDmToast from '../../../components/campus/CampusDmToast';
 import CampusDmDock from '../../../components/campus/CampusDmDock';
+import CampusInbox from '../../../components/campus/home/CampusInbox';
+import { unreadConversations } from '../../../components/campus/home/inboxModel';
+import { useNotifPins } from '../../../components/campus/home/useNotifPins';
 import CampusAlerts from '../../../components/campus/events/CampusAlerts';
 import CampusTabBar from '../../../components/campus/CampusTabBar';
 import CampusLive from '../../../components/campus/CampusLive';
@@ -96,6 +99,9 @@ function CampusHome(): React.ReactElement {
   // The building whose card opened is where you now are.
   // C17: out on the grass after a click-to-walk (the kicker reads "On campus" until you next arrive somewhere).
   const [onLawn, setOnLawn] = useState(false);
+  // C23 phase 3 (Q6): the 💬 inbox under the top bar; closing it recenters the map (rule R10)
+  const [inboxOpen, setInboxOpen] = useState(false);
+  const closeInbox = useCallback(() => { setInboxOpen(false); map.camRef.current?.recenter(); }, [map.camRef]);
   const onCard = useCallback((s: { open: boolean; building: BuildingId | null }) => {
     setCardOpen(s.open); if (s.building) { setHere(s.building); setOnLawn(false); }
   }, [setHere]);
@@ -110,6 +116,7 @@ function CampusHome(): React.ReactElement {
   // WP-3: you on the map (photo, level for those who earn points), a member's time badges, the night look, the concierge's entrance.
   const photo = useMyPhoto(campus.active);
   const agenda = useHomeAgenda(audience, campus.active);
+  const notifPins = useNotifPins(campus.active); // C23 phase 3: red count pins over the buildings notifications belong to
   const reveal = useConciergeReveal(gateOpen, map.onGateOpening);
   const quiet = !!presence && !presenceError && Object.values(presence).every((a) => a.people.length === 0);
   const liveKey = liveNow ? `${liveNow.b.id}|${liveNow.b.title}|${liveNow.building}|${liveNow.state}` : '';
@@ -147,10 +154,12 @@ function CampusHome(): React.ReactElement {
         live={liveB ? { place: buildingName(liveB, wp), preview: liveNow?.b.access_mode === 'preview' } : null}
         hasTour={!!tour} reduceMotion={reduce} now={new Date()} onOpening={reveal.onOpening} onEnter={enter} photo={photo} />}
       <CampusWorld {...props} insets={homeInsets} walkTo={map.walk} onCard={onCard} cameraRef={map.camRef} startAt={campus.here}
-        startCam={map.startCam} recenter={map.recenter} me={{ initials, photo, level, tone: audience }} moments={mapMoments(audience, agenda)} quiet={quiet} hover={hover} liveNow={liveNow} onGround={onGround} />
+        startCam={map.startCam} recenter={map.recenter} me={{ initials, photo, level, tone: audience }} moments={mapMoments(audience, agenda)} notifs={notifPins} quiet={quiet} hover={hover} liveNow={liveNow} onGround={onGround} />
       <WeatherSky wx={wx} reduceMotion={reduce} paused={gateOpen} />
       <CampusTopBar today={todayCount} audience={audience} online={online} points={look?.points ?? null} rung={look?.rung_name || null} photo={photo} workplace={wp}
-        streak={facts.streak} initials={initials} onList={campus.openList} onFind={() => { openWayfinder(); }} onBellClosed={() => map.camRef.current?.recenter()} onMe={() => (campus.meOpen ? campus.closeMe() : campus.openMe())} weather={<WeatherChip wx={wx} />} />
+        streak={facts.streak} initials={initials} onList={campus.openList} onFind={() => { openWayfinder(); }} onBellClosed={() => map.camRef.current?.recenter()}
+        messages={{ unread: unreadConversations(campus.dmConversations), open: inboxOpen, onToggle: () => (inboxOpen ? closeInbox() : setInboxOpen(true)) }} onMe={() => (campus.meOpen ? campus.closeMe() : campus.openMe())} weather={<WeatherChip wx={wx} />} />
+      <CampusInbox open={inboxOpen} onClose={closeInbox} workplace={wp} />
       <CampusMeHost fullName={facts.fullName} initials={initials} onClosed={() => map.camRef.current?.recenter()} />
       <CampusConcierge waiting={!reveal.shown} cardOpen={cardOpen} audience={audience} firstName={facts.firstName} hereId={campus.here ?? null} onLawn={onLawn}
         buildings={buildings} accessOf={accessOf} workplaceNames={wp} presence={presence} presenceError={presenceError} desks={staffDesks}
