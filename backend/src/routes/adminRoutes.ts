@@ -137,6 +137,7 @@ import projectLifecycleReviewRoutes from './admin/projectLifecycleReviewRoutes';
 // already past the 500-line ceiling; the route prefixes still live under /api/admin/factory/.
 import caseStudyServiceLinkRoutes from './admin/caseStudyServiceLinkRoutes';
 import govQualificationRoutes from './admin/govQualificationRoutes';
+import govContractsRoutes from './admin/govContractsRoutes';
 import certPrepAdminRoutes from './admin/certPrepAdminRoutes';
 import certificationAdminRoutes from './admin/certificationAdminRoutes';
 import checklistRoutes from './admin/checklistRoutes';
@@ -361,6 +362,9 @@ router.use(caseStudyServiceLinkRoutes);
 // Gov qualification workspace (Phase 2). Paths are nested under /api/admin/factory/qualification, so
 // mgmtSectionGate's existing '/api/admin/factory' → 'program' PREFIX row already covers them.
 router.use(govQualificationRoutes);
+// Gov Contracts tab (M1): its own router gated 'gov_contracts' (NOT the factory→program prefix),
+// so the Interns-hub tab's data agrees with its section gate. mgmtSectionGate maps the prefix.
+router.use(govContractsRoutes);
 // Cert Prep instructor surface. Path prefix is registered in mgmtSectionGate's
 // PATH_SECTION under 'program' - without that row the gate is deny-by-default
 // and every scoped mgmt token 403s here while legacy admin passes.
