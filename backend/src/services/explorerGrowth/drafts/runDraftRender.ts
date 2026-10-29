@@ -12,6 +12,7 @@ import { tallyReasons } from './draftEligibility';
 import {
   commitDraft,
   countPriorDrafted,
+  loadDecisionById,
   loadDecisionsForDate,
   loadRecipientEmail,
   loadSequenceSteps,
@@ -248,4 +249,67 @@ export async function runScheduledDraftRender(
     return { skipped: true };
   }
   return runDraftRenderBatch(options);
+}
+
+/** Why a regeneration did not happen. Distinct causes, because the answers differ. */
+export type RegenerateRefusal =
+  /** The master switch or `draftRender` is off. */
+  | 'feature_disabled'
+  /** No such decision - deleted between the page loading and the click. */
+  | 'decision_not_found'
+  /** The decision has never been drafted, so there is nothing to replace. */
+  | 'never_drafted';
+
+export type RegenerateResult =
+  | { ok: true; outcome: DraftOutcome }
+  | { ok: false; refusal: RegenerateRefusal };
+
+/**
+ * Re-render ONE decision's draft, keeping the previous version.
+ *
+ * Flag-gated like the cron, and through the same sanctioned read, so this cannot activate
+ * while the master switch is off. ONE generation, not a batch: the cost of a mis-click is
+ * a single model call, which is why this needs no `maxGenerations` cap of its own.
+ *
+ * A decision that has NEVER been drafted is refused rather than quietly drafted for the
+ * first time. The nightly render is the right path for that, and writing a first draft
+ * through the code path whose whole job is to replace one would mean `recommitDraft`
+ * superseding nothing and reporting it - a success that looks like a failure.
+ */
+export async function regenerateDraftForDecision(
+  decisionId: string,
+  brief?: string,
+): Promise<RegenerateResult> {
+  const flags = env.explorerGrowth;
+  if (!flags || !isExplorerFeatureEnabled('draftRender', flags)) {
+    return { ok: false, refusal: 'feature_disabled' };
+  }
+
+  const decision = await loadDecisionById(decisionId);
+  if (!decision) return { ok: false, refusal: 'decision_not_found' };
+  if (!decision.scheduled_email_id) return { ok: false, refusal: 'never_drafted' };
+
+  const outcome = await renderDecisionDraft(decision, liveDeps(), {
+    regenerate: {
+      previousScheduledEmailId: decision.scheduled_email_id,
+      ...(brief ? { brief } : {}),
+    },
+  });
+
+  console.log(
+    JSON.stringify({
+      level: 'info',
+      service: 'explorer-draft-render',
+      event: 'draft_regenerated',
+      outcome: outcome.status === 'drafted' || outcome.status === 'rejected' ? 'success' : 'failure',
+      decision_id: decisionId,
+      draft_status: outcome.status,
+      // Whether a brief was given, never the brief itself: it is operator free text and
+      // this line goes to stdout.
+      had_brief: Boolean(brief),
+      superseded: Boolean(outcome.superseded_scheduled_email_id),
+    }),
+  );
+
+  return { ok: true, outcome };
 }

@@ -111,6 +111,36 @@ export async function loadDecisionsForDate(
 }
 
 /**
+ * One decision, for a regeneration aimed at it by id.
+ *
+ * The SAME column list as `loadDecisionsForDate`, because the same renderer consumes both:
+ * a narrower projection here would make a regenerated draft differ from a nightly one in
+ * ways nobody chose - most obviously by losing `selected_content_assets`, which is what the
+ * digest is built from.
+ *
+ * Returns null rather than throwing on a missing id, so the caller can answer 404 instead
+ * of 500 for a decision that was deleted between the page loading and the click.
+ */
+export async function loadDecisionById(decisionId: string): Promise<DraftableDecision | null> {
+  const rows = await sequelize.query<DraftableDecision>(
+    `SELECT id::text AS id,
+            enrollment_id::text AS enrollment_id,
+            lead_id,
+            decision_date::text AS decision_date,
+            selected_action,
+            selected_campaign_id::text AS selected_campaign_id,
+            channel,
+            scheduled_email_id::text AS scheduled_email_id,
+            COALESCE(selected_content_assets, '[]'::jsonb) AS selected_content_assets,
+            reason
+       FROM explorer_journey_decisions
+      WHERE id = CAST(:decisionId AS uuid)`,
+    { replacements: { decisionId }, type: QueryTypes.SELECT },
+  );
+  return rows[0] ?? null;
+}
+
+/**
  * Read one rendered draft back, for the Why drilldown.
  *
  * Returns null rather than throwing on a missing row: a decision can carry a

@@ -3,11 +3,16 @@ import { ZodError, type ZodType } from 'zod';
 import { classifyError } from '../utils/errorClassifier';
 import { env } from '../config/env';
 import { isExplorerFeatureEnabled } from '../config/explorerGrowthFlags';
-import { runDraftRenderBatch } from '../services/explorerGrowth/drafts/runDraftRender';
+import {
+  regenerateDraftForDecision,
+  runDraftRenderBatch,
+} from '../services/explorerGrowth/drafts/runDraftRender';
+import { loadDraftHistory } from '../services/explorerGrowth/drafts/draftRepository';
 import {
   contentQuerySchema,
   contentRefreshBodySchema,
   decisionParamsSchema,
+  regenerateDraftBodySchema,
   decisionsQuerySchema,
   distributionQuerySchema,
   eligibilityParamsSchema,
@@ -241,6 +246,117 @@ export async function postContentRefreshHandler(req: Request, res: Response): Pr
     res.status(500).json({ error: 'The re-run failed. Nothing was written.', error_class: errorClass });
   }
 }
+
+/**
+ * `POST /decisions/:id/regenerate` — write one more version of this decision's draft.
+ *
+ * THE SECOND WRITE, and the last one §27 sanctions for this page. Like the first it cannot
+ * send: the version it writes carries a status the sender's claim predicate excludes, and
+ * the version it replaces is moved to a third status that is equally unclaimable. Its blast
+ * radius is one model call.
+ *
+ * ── THE THREE REFUSALS ARE THREE STATUS CODES ───────────────────────────────
+ *
+ * They need opposite actions from whoever pressed the button, so collapsing them into one
+ * error would be the same failure as a re-run that reports "0 drafts" whether it was
+ * disabled or found nothing:
+ *
+ *   403  the feature is dark          → turn the flag on
+ *   404  no such decision             → the page is stale, reload it
+ *   409  never drafted                → use the batch re-run; there is no version to replace
+ *
+ * ── IT DOES NOT RETURN THE COPY ─────────────────────────────────────────────
+ *
+ * Only the ids and the verdict. The client re-reads the Why payload, which already carries
+ * the message and its citations, so there stays exactly ONE reader of draft content behind
+ * exactly one admin guard. A second shape carrying the body would be a second thing to keep
+ * in step with the first, and the first is the one the page already renders.
+ */
+export async function postRegenerateDraftHandler(req: Request, res: Response): Promise<void> {
+  let params: { id: string };
+  let body: { brief?: string };
+  try {
+    params = decisionParamsSchema.parse(req.params ?? {});
+    body = regenerateDraftBodySchema.parse(req.body ?? {});
+  } catch (err) {
+    if (err instanceof ZodError) return badRequest(res, err);
+    throw err;
+  }
+
+  try {
+    const result = await regenerateDraftForDecision(params.id, body.brief);
+
+    if (!result.ok) {
+      if (result.refusal === 'feature_disabled') {
+        console.warn(
+          JSON.stringify({
+            level: 'warn',
+            service: 'explorer-growth-command-center',
+            event: 'regenerate_refused_flag_off',
+            outcome: 'failure',
+            error_class: 'FeatureDisabled',
+          }),
+        );
+        res.status(403).json({
+          error: 'The draft render is switched off.',
+          error_class: 'FeatureDisabled',
+        });
+        return;
+      }
+
+      if (result.refusal === 'decision_not_found') {
+        res.status(404).json({ error: 'No such decision', error_class: 'NotFound' });
+        return;
+      }
+
+      res.status(409).json({
+        error:
+          'This decision has never been drafted, so there is no version to replace. Re-run the draft render instead.',
+        error_class: 'NeverDrafted',
+      });
+      return;
+    }
+
+    const { outcome } = result;
+    res.json({
+      status: outcome.status,
+      reason: outcome.reason,
+      scheduled_email_id: outcome.scheduled_email_id,
+      superseded_scheduled_email_id: outcome.superseded_scheduled_email_id ?? null,
+      step_index: outcome.step_index,
+      issues: outcome.issues,
+    });
+  } catch (err) {
+    const errorClass = classifyError(err);
+    console.error(
+      JSON.stringify({
+        level: 'error',
+        service: 'explorer-growth-command-center',
+        event: 'regenerate_failed',
+        error_class: errorClass,
+        outcome: 'failure',
+        message: (err as { message?: string })?.message?.slice(0, 200) ?? null,
+      }),
+    );
+    res.status(500).json({
+      error: 'The regeneration failed. The previous draft is unchanged.',
+      error_class: errorClass,
+    });
+  }
+}
+
+/**
+ * `GET /decisions/:id/history` — every version ever rendered for this decision.
+ *
+ * Returns `{ versions: [] }` rather than a 404 for a decision that has never been drafted:
+ * "no versions" is a true answer about a real decision, and 404 would read as "no such
+ * decision", which is a different problem with a different fix.
+ */
+export const getDraftHistoryHandler = handler(
+  decisionParamsSchema,
+  null,
+  async (p) => ({ versions: await loadDraftHistory(p.id) }),
+);
 
 // ─── Overview ───────────────────────────────────────────────────────────────
 

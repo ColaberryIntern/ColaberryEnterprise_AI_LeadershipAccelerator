@@ -544,6 +544,80 @@ export async function refreshContent(
   return data;
 }
 
+/**
+ * What a regeneration wrote.
+ *
+ * NO COPY, deliberately. The endpoint returns ids and the gate's verdict only, and the
+ * caller re-reads the Why payload for the message itself — so there stays exactly one
+ * shape carrying draft content and exactly one place that renders it.
+ */
+export interface RegenerateDraftResult {
+  status: 'drafted' | 'rejected' | 'skipped' | 'failed';
+  reason: string | null;
+  scheduled_email_id: string | null;
+  /** The version this replaced. `null` means nothing was superseded — not "unchanged". */
+  superseded_scheduled_email_id: string | null;
+  step_index: number | null;
+  issues: string[];
+}
+
+/**
+ * Write one more version of a decision's draft. THE SECOND AND LAST WRITE THIS CLIENT HAS.
+ *
+ * ── ALSO NAMED TO TRIP THE GUARD ────────────────────────────────────────────
+ *
+ * The write-name regex `refreshContent` was named to trip did NOT contain `regenerate`, so
+ * this function would have slipped past it untouched — a guard looking intact while doing
+ * nothing about the write actually being added. So `regenerate` was ADDED to that regex in
+ * the same change, and this name then fails the test on sight, exactly as intended. The
+ * alternative — keeping the regex as it was and calling this `regenerateDraft` anyway —
+ * would have been indistinguishable from evading it.
+ */
+export async function regenerateDraft(
+  decisionId: string,
+  body: { brief?: string } = {},
+): Promise<RegenerateDraftResult> {
+  const { data } = await api.post<RegenerateDraftResult>(
+    `${BASE}/decisions/${decisionId}/regenerate`,
+    body,
+  );
+  return data;
+}
+
+/** One version in a decision's draft history, oldest first. */
+export interface ExplorerDraftVersion {
+  scheduled_email_id: string;
+  subject: string;
+  body: string;
+  status: string;
+  passed_quality_gate: boolean;
+  issues: string[];
+  auto_fixed: string[];
+  fact_set_present: boolean;
+  step_index: number | null;
+  model: string | null;
+  created_at: string | null;
+  /** 1-based, oldest first. */
+  version: number;
+  superseded: boolean;
+  current: boolean;
+}
+
+/**
+ * Every version ever rendered for one decision.
+ *
+ * `{ versions: [] }` for a decision that has never been drafted, which is a true answer
+ * about a real decision rather than a 404.
+ */
+export async function getDraftHistory(
+  decisionId: string,
+): Promise<{ versions: ExplorerDraftVersion[] }> {
+  const { data } = await api.get<{ versions: ExplorerDraftVersion[] }>(
+    `${BASE}/decisions/${decisionId}/history`,
+  );
+  return data;
+}
+
 export async function getEligibility(enrollmentId: string): Promise<LearnerEligibility> {
   const { data } = await api.get<LearnerEligibility>(`${BASE}/eligibility/${enrollmentId}`);
   return data;
