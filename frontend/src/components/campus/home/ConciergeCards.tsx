@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import type { BuildingId, CampusBuilding, ExplorerAccess } from '../campusMap';
 import { buildingName } from '../campusMap';
@@ -8,8 +8,9 @@ import type { SideRow } from '../interior/pageSummary';
 import type { StaffDesk } from '../campusPeopleApi';
 import type { ExplorerPathModel } from '../campusPath';
 import AdminLink from '../AdminLink';
-import { useIsMgmt } from '../campusMgmt';
-import { roomLabel } from '../campusMap';
+import { useCampusMgmt } from '../campusMgmt';
+import { buildHq, roomHref } from '../hq/hqModel';
+import { hasHistory, readHqUsage, topRooms } from '../hq/hqUsage';
 import { deskRole } from './conciergeCopy';
 import { openStaffCard } from '../staffCard';
 import { openBookCall } from '../admissions/admissionsCallApi';
@@ -118,17 +119,37 @@ export function ExplorerPass({ buildings, accessOf, workplaceNames, path }: {
   );
 }
 
-/** STAFF TOOLS (the prototype's staff "Needs attention" tiles, made of what exists): the Staff Office's Management Portal links,
- *  opened in a new tab through the bridge, or disabled without Management Portal access (the AdminLink rule). */
-export function StaffTools({ buildings, workplaceNames }: { buildings: CampusBuilding[]; workplaceNames: boolean }): React.ReactElement | null {
-  const isMgmt = useIsMgmt();
+/** STAFF TOOLS: Open the Management Portal, then (C84, Ali 2026-10-28) the Management Portal rooms this badge opens, the same
+ *  rooms the HQ elevator shows, most used first and capped, with "See all" walking to the HQ for the rest. The Staff Office's
+ *  own rooms (Handoffs, People, View as a learner) are the "Rooms in" chips above, so they are not repeated here. Links open in
+ *  a new tab through the bridge, or are disabled without Management Portal access (the AdminLink rule). */
+export function StaffTools({ buildings, onAll }: { buildings: CampusBuilding[]; workplaceNames?: boolean; onAll?: () => void }): React.ReactElement | null {
+  const { isMgmt, canSection } = useCampusMgmt();
+  const usage = useMemo(readHqUsage, []);
   const office = buildings.find((b) => b.rooms.some((r) => r.admin));
   if (!office) return null;
-  const links = [{ label: office.primary.label, route: office.primary.route }, ...office.rooms.filter((r) => r.admin).map((r) => ({ label: roomLabel(r, workplaceNames), route: r.route }))];
+  const { rooms, total } = topRooms(buildHq(canSection, isMgmt, 'staff'), usage);
   return (
     <div className="cm-staff-tools" data-testid="cm-cc-staff-tools">
       <div className="cm-plan-h"><b>Staff tools</b><small>{isMgmt ? 'Opens the Management Portal' : 'Needs Management Portal access'}</small></div>
-      <div className="cm-staff-grid">{links.map((l, i) => <AdminLink key={l.route} label={l.label} route={l.route} className={`cm-staff-tile is-${i}`} isMgmt={isMgmt} />)}</div>
+      <div className="cm-staff-grid is-one">
+        <AdminLink label={office.primary.label} route={office.primary.route} className="cm-staff-tile is-0" isMgmt={isMgmt} />
+      </div>
+      {rooms.length > 0 && (
+        <>
+          <div className="cm-staff-sub" data-testid="cm-cc-staff-rooms-h">{hasHistory(rooms, usage) ? 'Your most used rooms' : 'Your rooms'}</div>
+          <div className="cm-staff-grid" data-testid="cm-cc-staff-rooms">
+            {rooms.map((r) => (
+              <AdminLink key={r.path} label={r.label} route={roomHref(r)} className="cm-staff-tile is-room" isMgmt={isMgmt}>
+                <i className={`ic ri-${r.icon}`} aria-hidden="true" />{r.label}
+              </AdminLink>
+            ))}
+          </div>
+          {total > rooms.length && onAll && (
+            <button type="button" className="cm-link cm-staff-all" onClick={onAll} data-testid="cm-cc-staff-all">See all {total} rooms in the Staff Office &rarr;</button>
+          )}
+        </>
+      )}
     </div>
   );
 }

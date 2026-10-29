@@ -355,20 +355,22 @@ export async function createFreeAccount(input: FreeSignupInput): Promise<FreeSig
    *
    * Swallow-safe and awaited, exactly like the email capture: a consent write must never cost
    * somebody their account, and an unticked box records nothing rather than a revocation.
+   *
+   * THE LOOP THAT USED TO BE HERE now lives in `consent/capturePhoneConsent`. Four more surfaces
+   * need the same pair of writes (the strategy-call modal behind fifteen landing pages, the
+   * contact form, the shared lead-capture form, /enroll), and five copies of the code that decides
+   * what somebody is taken to have agreed to is five chances for one copy to be subtly wrong in a
+   * way that still looks like a valid record. This call site kept its own guard on
+   * `phoneConsent === true` because the service's own input type is a strict boolean.
    */
   if (phone && input.phoneConsent === true) {
-    const { captureSignupConsent, PHONE_CONSENT_TEXT } = await import('./consent/captureSignupConsent');
-    for (const channel of ['voice', 'sms'] as const) {
-      // eslint-disable-next-line no-await-in-loop -- two writes, and order is irrelevant
-      await captureSignupConsent({
-        email: clean.email,
-        phone,
-        channel,
-        marketingOptIn: true,
-        source: 'free_signup',
-        consentText: PHONE_CONSENT_TEXT,
-      });
-    }
+    const { capturePhoneConsent } = await import('./consent/capturePhoneConsent');
+    await capturePhoneConsent({
+      email: clean.email,
+      phone,
+      phoneConsent: true,
+      source: 'free_signup',
+    });
   }
 
   // T205: the Explorer journey profile, AT REGISTRATION rather than overnight.

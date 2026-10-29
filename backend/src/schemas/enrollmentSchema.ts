@@ -34,6 +34,17 @@ export const createFreeAccountSchema = z.object({
    */
   marketing_opt_in: z.union([z.boolean(), z.literal('true'), z.literal('on')]).optional(),
 
+  /**
+   * Permission to call or text, asked for SEPARATELY from the email box above.
+   *
+   * The email wording reads "Email me about Colaberry courses, events and AI
+   * resources", and no reading of that authorises a telephone call — which is why
+   * this is its own field rather than a second use of `marketing_opt_in`. Optional,
+   * and absent records nothing rather than a revocation.
+   * See services/consent/capturePhoneConsent.ts.
+   */
+  phone_consent: z.union([z.boolean(), z.literal('true'), z.literal('on')]).optional(),
+
   full_name: z.string().min(1, 'Full name is required').max(255),
   email: z.string().email('Invalid email address').max(255),
   company: z.string().max(255).optional().default(''),

@@ -242,6 +242,54 @@ export const contentQuerySchema = z
   .strict()
   .transform(withPaginationDefaults);
 
+/**
+ * `POST /content/refresh` — re-run the draft render. The page's only write.
+ *
+ * ── A BODY SCHEMA, AND WHY IT IS THE TIGHTEST ONE HERE ──────────────────────
+ *
+ * Every other schema in this file validates a query string on a GET. This one
+ * guards the first and only mutating route on an admin page that has been
+ * read-only since it shipped, and the operation behind it SPENDS MONEY — each
+ * draft is a model call. So it is narrower than it strictly needs to be:
+ *
+ *   `.strict()`  an unknown key is a 400 rather than a silent ignore, which on a
+ *                write means a caller asking for something it will not get
+ *                cannot believe it got it.
+ *   `date`       optional. Absent means the latest run, which is what a reviewer
+ *                pressing the button on the page means by "re-run".
+ *   `limit`      capped at 500 HERE as well as in the service. The service's cap
+ *                protects a cron; this one protects against a hand-rolled request
+ *                asking for 100,000 generations, and a cap that exists in only
+ *                one of the two places is one refactor from being gone.
+ *
+ * NO `dryRun` KEY, deliberately. The operator script defaults to a dry run
+ * because a bare shell invocation would otherwise bill ~150 generations; a button
+ * labelled "re-run the draft render" that quietly did nothing would be the
+ * opposite failure, a control that looks like it worked.
+ */
+export const contentRefreshBodySchema = z
+  .object({
+    date: isoDaySchema.optional(),
+    /*
+     * A REAL NUMBER, not `numericParam`.
+     *
+     * Every other numeric field in this file is a query parameter, so it arrives
+     * as a string and `numericParam` starts with `z.string()` to parse it. This is
+     * a JSON body: `{ "limit": 5 }` delivers the number 5, which `z.string()`
+     * rejects — so reusing the query helper here made the field impossible to set,
+     * 400ing every caller that tried while the page's own button (which sends no
+     * limit) looked perfectly healthy. Caught by a test that asserted the value
+     * was forwarded rather than one that only asserted a 200.
+     */
+    limit: z
+      .number()
+      .int('limit must be a whole number')
+      .min(1, 'limit must be at least 1')
+      .max(500, 'limit must be at most 500')
+      .optional(),
+  })
+  .strict();
+
 /** `GET /distribution` — state distribution and its trend. */
 export const distributionQuerySchema = z
   .object({ days: numericParam('days', 1, 365).optional() })

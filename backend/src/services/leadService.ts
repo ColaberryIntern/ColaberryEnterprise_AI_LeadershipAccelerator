@@ -92,6 +92,19 @@ export const leadSchema = z.object({
   source: z.string().max(50).optional().default('website'),
   form_type: z.string().max(100).optional().default('contact'),
   consent_contact: z.boolean().optional().default(false),
+  /**
+   * Permission to call or text, which `consent_contact` above does NOT grant.
+   *
+   * `consent_contact` is the generic "I agree to be contacted by Colaberry" tick
+   * that every form here has shown for years. It is channel-blind: it is stored on
+   * `leads.consent_contact` and read without distinguishing email from telephone,
+   * so treating it as phone permission would let one sentence about being
+   * "contacted" authorise an autodialled call. This field is the explicit grant,
+   * recorded per channel and keyed on the number.
+   *
+   * Optional and absent-means-nothing, like every other consent input here.
+   */
+  phone_consent: z.boolean().optional().default(false),
   utm_source: z.string().max(255).optional().default(''),
   utm_campaign: z.string().max(255).optional().default(''),
   page_url: z.string().max(500).optional().default(''),
@@ -641,6 +654,10 @@ export async function createLeadAdmin(data: {
     source: data.source?.trim() || 'admin_manual',
     form_type: 'admin_manual',
     consent_contact: false,
+    // An admin typing somebody into the CRM is not that person granting anything.
+    // The only thing that can create a phone grant is an affirmative act by its
+    // owner, recorded with the words they were shown.
+    phone_consent: false,
     utm_source: '',
     utm_campaign: '',
     page_url: '',

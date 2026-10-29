@@ -1,6 +1,6 @@
 {
   "schema": "colaberry.kb/v1",
-  "version": "1.0",
+  "version": "1.1",
   "name": "Colaberry Knowledge Base",
   "description": "Company source of truth: Sales, Marketing, Design, Curriculum, Product, and Compliance. Machine-readable export for AI ingestion, built on the Colaberry design system. Refund and cancellation terms are drafted, not final. The AI Systems Architect Accelerator's own TWC status is not asserted here; only the Colaberry School of Data Analytics holds COA U5306. Do not invent facts beyond these entries.",
   "generated_from": [
@@ -270,7 +270,7 @@
       "status": "active"
     }
   ],
-  "generated_at": "2026-07-19T23:11:39.209Z",
+  "generated_at": "2026-10-29T00:36:51.842Z",
   "count": 217,
   "entries": [
     {
@@ -288,7 +288,8 @@
       ],
       "reference": "sales/index.html#cat-program-basics",
       "reference_label": "Program basics & format",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "grounded"
     },
     {
       "id": "sales-2",
@@ -305,7 +306,8 @@
       ],
       "reference": "sales/index.html#cat-program-basics",
       "reference_label": "Program basics & format",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "grounded"
     },
     {
       "id": "sales-3",
@@ -322,7 +324,8 @@
       ],
       "reference": "sales/index.html#cat-program-basics",
       "reference_label": "Program basics & format",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "grounded"
     },
     {
       "id": "sales-4",
@@ -339,7 +342,8 @@
       ],
       "reference": "sales/index.html#cat-program-basics",
       "reference_label": "Program basics & format",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "grounded"
     },
     {
       "id": "sales-5",
@@ -356,7 +360,8 @@
       ],
       "reference": "sales/index.html#cat-program-basics",
       "reference_label": "Program basics & format",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "grounded"
     },
     {
       "id": "sales-6",
@@ -373,7 +378,8 @@
       ],
       "reference": "sales/index.html#cat-program-basics",
       "reference_label": "Program basics & format",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "grounded"
     },
     {
       "id": "sales-7",
@@ -390,7 +396,8 @@
       ],
       "reference": "sales/index.html#cat-program-basics",
       "reference_label": "Program basics & format",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "grounded"
     },
     {
       "id": "sales-8",
@@ -407,7 +414,8 @@
       ],
       "reference": "sales/index.html#cat-program-basics",
       "reference_label": "Program basics & format",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "grounded"
     },
     {
       "id": "sales-9",
@@ -425,7 +433,8 @@
       ],
       "reference": "sales/index.html#cat-pricing-billing",
       "reference_label": "Pricing & billing",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "grounded"
     },
     {
       "id": "sales-10",
@@ -442,7 +451,8 @@
       ],
       "reference": "sales/index.html#cat-pricing-billing",
       "reference_label": "Pricing & billing",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "grounded"
     },
     {
       "id": "sales-11",
@@ -460,7 +470,8 @@
       ],
       "reference": "sales/index.html#cat-pricing-billing",
       "reference_label": "Pricing & billing",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "grounded"
     },
     {
       "id": "sales-12",
@@ -477,7 +488,8 @@
       ],
       "reference": "sales/index.html#cat-pricing-billing",
       "reference_label": "Pricing & billing",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "grounded"
     },
     {
       "id": "sales-13",
@@ -494,7 +506,8 @@
       ],
       "reference": "sales/index.html#cat-pricing-billing",
       "reference_label": "Pricing & billing",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "grounded"
     },
     {
       "id": "sales-14",
@@ -512,7 +525,8 @@
       ],
       "reference": "sales/index.html#cat-pricing-billing",
       "reference_label": "Pricing & billing",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "grounded"
     },
     {
       "id": "sales-15",
@@ -529,7 +543,8 @@
       ],
       "reference": "sales/index.html#cat-pricing-billing",
       "reference_label": "Pricing & billing",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "grounded"
     },
     {
       "id": "sales-16",
@@ -547,7 +562,8 @@
       ],
       "reference": "sales/index.html#cat-pricing-billing",
       "reference_label": "Pricing & billing",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "grounded"
     },
     {
       "id": "sales-17",
@@ -564,7 +580,8 @@
       ],
       "reference": "sales/index.html#cat-founding-urgency",
       "reference_label": "Founding Cohort & urgency",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "grounded"
     },
     {
       "id": "sales-18",
@@ -581,7 +598,8 @@
       ],
       "reference": "sales/index.html#cat-founding-urgency",
       "reference_label": "Founding Cohort & urgency",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "grounded"
     },
     {
       "id": "sales-19",
@@ -598,7 +616,8 @@
       ],
       "reference": "sales/index.html#cat-founding-urgency",
       "reference_label": "Founding Cohort & urgency",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "grounded"
     },
     {
       "id": "sales-20",
@@ -615,7 +634,8 @@
       ],
       "reference": "sales/index.html#cat-founding-urgency",
       "reference_label": "Founding Cohort & urgency",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "grounded"
     },
     {
       "id": "sales-21",
@@ -632,7 +652,8 @@
       ],
       "reference": "sales/index.html#cat-founding-urgency",
       "reference_label": "Founding Cohort & urgency",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "grounded"
     },
     {
       "id": "sales-22",
@@ -649,7 +670,8 @@
       ],
       "reference": "sales/index.html#cat-founding-urgency",
       "reference_label": "Founding Cohort & urgency",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "grounded"
     },
     {
       "id": "sales-23",
@@ -666,7 +688,8 @@
       ],
       "reference": "sales/index.html#cat-founding-urgency",
       "reference_label": "Founding Cohort & urgency",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "grounded"
     },
     {
       "id": "sales-24",
@@ -683,7 +706,8 @@
       ],
       "reference": "sales/index.html#cat-eligibility",
       "reference_label": "Eligibility & prerequisites",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "grounded"
     },
     {
       "id": "sales-25",
@@ -701,7 +725,8 @@
       ],
       "reference": "sales/index.html#cat-eligibility",
       "reference_label": "Eligibility & prerequisites",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "grounded"
     },
     {
       "id": "sales-26",
@@ -718,7 +743,8 @@
       ],
       "reference": "sales/index.html#cat-eligibility",
       "reference_label": "Eligibility & prerequisites",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "grounded"
     },
     {
       "id": "sales-27",
@@ -735,7 +761,8 @@
       ],
       "reference": "sales/index.html#cat-eligibility",
       "reference_label": "Eligibility & prerequisites",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "grounded"
     },
     {
       "id": "sales-28",
@@ -752,7 +779,8 @@
       ],
       "reference": "sales/index.html#cat-eligibility",
       "reference_label": "Eligibility & prerequisites",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "grounded"
     },
     {
       "id": "sales-29",
@@ -769,7 +797,8 @@
       ],
       "reference": "sales/index.html#cat-eligibility",
       "reference_label": "Eligibility & prerequisites",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "grounded"
     },
     {
       "id": "sales-30",
@@ -787,7 +816,8 @@
       ],
       "reference": "sales/index.html#cat-eligibility",
       "reference_label": "Eligibility & prerequisites",
-      "needs_verification": true
+      "needs_verification": true,
+      "confidence": "drafted-verify"
     },
     {
       "id": "sales-31",
@@ -804,7 +834,8 @@
       ],
       "reference": "sales/index.html#cat-time-schedule",
       "reference_label": "Time & schedule",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "grounded"
     },
     {
       "id": "sales-32",
@@ -821,7 +852,8 @@
       ],
       "reference": "sales/index.html#cat-time-schedule",
       "reference_label": "Time & schedule",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "grounded"
     },
     {
       "id": "sales-33",
@@ -838,7 +870,8 @@
       ],
       "reference": "sales/index.html#cat-time-schedule",
       "reference_label": "Time & schedule",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "grounded"
     },
     {
       "id": "sales-34",
@@ -855,7 +888,8 @@
       ],
       "reference": "sales/index.html#cat-time-schedule",
       "reference_label": "Time & schedule",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "grounded"
     },
     {
       "id": "sales-35",
@@ -872,7 +906,8 @@
       ],
       "reference": "sales/index.html#cat-time-schedule",
       "reference_label": "Time & schedule",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "grounded"
     },
     {
       "id": "sales-36",
@@ -889,7 +924,8 @@
       ],
       "reference": "sales/index.html#cat-time-schedule",
       "reference_label": "Time & schedule",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "grounded"
     },
     {
       "id": "sales-37",
@@ -906,7 +942,8 @@
       ],
       "reference": "sales/index.html#cat-curriculum-build",
       "reference_label": "Curriculum & what you build",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "grounded"
     },
     {
       "id": "sales-38",
@@ -923,7 +960,8 @@
       ],
       "reference": "sales/index.html#cat-curriculum-build",
       "reference_label": "Curriculum & what you build",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "grounded"
     },
     {
       "id": "sales-39",
@@ -940,7 +978,8 @@
       ],
       "reference": "sales/index.html#cat-curriculum-build",
       "reference_label": "Curriculum & what you build",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "grounded"
     },
     {
       "id": "sales-40",
@@ -957,7 +996,8 @@
       ],
       "reference": "sales/index.html#cat-curriculum-build",
       "reference_label": "Curriculum & what you build",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "grounded"
     },
     {
       "id": "sales-41",
@@ -974,7 +1014,8 @@
       ],
       "reference": "sales/index.html#cat-curriculum-build",
       "reference_label": "Curriculum & what you build",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "grounded"
     },
     {
       "id": "sales-42",
@@ -991,7 +1032,8 @@
       ],
       "reference": "sales/index.html#cat-curriculum-build",
       "reference_label": "Curriculum & what you build",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "grounded"
     },
     {
       "id": "sales-43",
@@ -1008,7 +1050,8 @@
       ],
       "reference": "sales/index.html#cat-curriculum-build",
       "reference_label": "Curriculum & what you build",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "grounded"
     },
     {
       "id": "sales-44",
@@ -1025,7 +1068,8 @@
       ],
       "reference": "sales/index.html#cat-curriculum-build",
       "reference_label": "Curriculum & what you build",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "grounded"
     },
     {
       "id": "sales-45",
@@ -1042,7 +1086,8 @@
       ],
       "reference": "sales/index.html#cat-certification",
       "reference_label": "Certification & credibility",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "grounded"
     },
     {
       "id": "sales-46",
@@ -1059,7 +1104,8 @@
       ],
       "reference": "sales/index.html#cat-certification",
       "reference_label": "Certification & credibility",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "grounded"
     },
     {
       "id": "sales-47",
@@ -1076,7 +1122,8 @@
       ],
       "reference": "sales/index.html#cat-certification",
       "reference_label": "Certification & credibility",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "grounded"
     },
     {
       "id": "sales-48",
@@ -1093,7 +1140,8 @@
       ],
       "reference": "sales/index.html#cat-certification",
       "reference_label": "Certification & credibility",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "grounded"
     },
     {
       "id": "sales-49",
@@ -1110,7 +1158,8 @@
       ],
       "reference": "sales/index.html#cat-certification",
       "reference_label": "Certification & credibility",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "grounded"
     },
     {
       "id": "sales-50",
@@ -1127,7 +1176,8 @@
       ],
       "reference": "sales/index.html#cat-certification",
       "reference_label": "Certification & credibility",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "grounded"
     },
     {
       "id": "sales-51",
@@ -1144,7 +1194,8 @@
       ],
       "reference": "sales/index.html#cat-refunds-guarantee",
       "reference_label": "Refunds & guarantees",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "grounded"
     },
     {
       "id": "sales-52",
@@ -1161,7 +1212,8 @@
       ],
       "reference": "sales/index.html#cat-refunds-guarantee",
       "reference_label": "Refunds & guarantees",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "grounded"
     },
     {
       "id": "sales-53",
@@ -1178,7 +1230,8 @@
       ],
       "reference": "sales/index.html#cat-refunds-guarantee",
       "reference_label": "Refunds & guarantees",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "grounded"
     },
     {
       "id": "sales-54",
@@ -1195,7 +1248,8 @@
       ],
       "reference": "sales/index.html#cat-refunds-guarantee",
       "reference_label": "Refunds & guarantees",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "grounded"
     },
     {
       "id": "sales-55",
@@ -1212,7 +1266,8 @@
       ],
       "reference": "sales/index.html#cat-refunds-guarantee",
       "reference_label": "Refunds & guarantees",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "grounded"
     },
     {
       "id": "sales-56",
@@ -1229,7 +1284,8 @@
       ],
       "reference": "sales/index.html#cat-refunds-guarantee",
       "reference_label": "Refunds & guarantees",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "grounded"
     },
     {
       "id": "sales-57",
@@ -1247,7 +1303,8 @@
       ],
       "reference": "sales/index.html#cat-refunds-guarantee",
       "reference_label": "Refunds & guarantees",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "grounded"
     },
     {
       "id": "sales-58",
@@ -1264,7 +1321,8 @@
       ],
       "reference": "sales/index.html#cat-career-outcomes",
       "reference_label": "Careers, portfolio & internship",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "grounded"
     },
     {
       "id": "sales-59",
@@ -1281,7 +1339,8 @@
       ],
       "reference": "sales/index.html#cat-career-outcomes",
       "reference_label": "Careers, portfolio & internship",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "grounded"
     },
     {
       "id": "sales-60",
@@ -1298,7 +1357,8 @@
       ],
       "reference": "sales/index.html#cat-career-outcomes",
       "reference_label": "Careers, portfolio & internship",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "grounded"
     },
     {
       "id": "sales-61",
@@ -1315,7 +1375,8 @@
       ],
       "reference": "sales/index.html#cat-career-outcomes",
       "reference_label": "Careers, portfolio & internship",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "grounded"
     },
     {
       "id": "sales-62",
@@ -1332,7 +1393,8 @@
       ],
       "reference": "sales/index.html#cat-career-outcomes",
       "reference_label": "Careers, portfolio & internship",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "grounded"
     },
     {
       "id": "sales-63",
@@ -1349,7 +1411,8 @@
       ],
       "reference": "sales/index.html#cat-career-outcomes",
       "reference_label": "Careers, portfolio & internship",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "grounded"
     },
     {
       "id": "sales-64",
@@ -1366,7 +1429,8 @@
       ],
       "reference": "sales/index.html#cat-career-outcomes",
       "reference_label": "Careers, portfolio & internship",
-      "needs_verification": true
+      "needs_verification": true,
+      "confidence": "drafted-verify"
     },
     {
       "id": "sales-65",
@@ -1383,7 +1447,8 @@
       ],
       "reference": "sales/index.html#cat-enrollment-logistics",
       "reference_label": "Enrollment & onboarding",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "grounded"
     },
     {
       "id": "sales-66",
@@ -1400,7 +1465,8 @@
       ],
       "reference": "sales/index.html#cat-enrollment-logistics",
       "reference_label": "Enrollment & onboarding",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "grounded"
     },
     {
       "id": "sales-67",
@@ -1417,7 +1483,8 @@
       ],
       "reference": "sales/index.html#cat-enrollment-logistics",
       "reference_label": "Enrollment & onboarding",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "grounded"
     },
     {
       "id": "sales-68",
@@ -1434,7 +1501,8 @@
       ],
       "reference": "sales/index.html#cat-enrollment-logistics",
       "reference_label": "Enrollment & onboarding",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "grounded"
     },
     {
       "id": "sales-69",
@@ -1451,7 +1519,8 @@
       ],
       "reference": "sales/index.html#cat-enrollment-logistics",
       "reference_label": "Enrollment & onboarding",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "grounded"
     },
     {
       "id": "sales-70",
@@ -1468,7 +1537,8 @@
       ],
       "reference": "sales/index.html#cat-enrollment-logistics",
       "reference_label": "Enrollment & onboarding",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "grounded"
     },
     {
       "id": "sales-71",
@@ -1485,7 +1555,8 @@
       ],
       "reference": "sales/index.html#cat-objections-comparisons",
       "reference_label": "Objections & comparisons",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "grounded"
     },
     {
       "id": "sales-72",
@@ -1502,7 +1573,8 @@
       ],
       "reference": "sales/index.html#cat-objections-comparisons",
       "reference_label": "Objections & comparisons",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "grounded"
     },
     {
       "id": "sales-73",
@@ -1519,7 +1591,8 @@
       ],
       "reference": "sales/index.html#cat-objections-comparisons",
       "reference_label": "Objections & comparisons",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "grounded"
     },
     {
       "id": "sales-74",
@@ -1536,7 +1609,8 @@
       ],
       "reference": "sales/index.html#cat-objections-comparisons",
       "reference_label": "Objections & comparisons",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "grounded"
     },
     {
       "id": "sales-75",
@@ -1553,7 +1627,8 @@
       ],
       "reference": "sales/index.html#cat-objections-comparisons",
       "reference_label": "Objections & comparisons",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "grounded"
     },
     {
       "id": "sales-76",
@@ -1570,7 +1645,8 @@
       ],
       "reference": "sales/index.html#cat-objections-comparisons",
       "reference_label": "Objections & comparisons",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "grounded"
     },
     {
       "id": "sales-77",
@@ -1589,7 +1665,8 @@
       ],
       "reference": "sales/index.html#cat-pricing-billing",
       "reference_label": "Pricing & billing",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "grounded"
     },
     {
       "id": "sales-78",
@@ -1608,7 +1685,8 @@
       ],
       "reference": "sales/index.html#cat-pricing-billing",
       "reference_label": "Pricing & billing",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "grounded"
     },
     {
       "id": "sales-79",
@@ -1627,7 +1705,8 @@
       ],
       "reference": "sales/index.html#cat-pricing-billing",
       "reference_label": "Pricing & billing",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "grounded"
     },
     {
       "id": "sales-80",
@@ -1647,7 +1726,8 @@
       ],
       "reference": "sales/index.html#cat-pricing-billing",
       "reference_label": "Pricing & billing",
-      "needs_verification": true
+      "needs_verification": true,
+      "confidence": "drafted-verify"
     },
     {
       "id": "marketing-1",
@@ -1664,7 +1744,8 @@
       ],
       "reference": "marketing/docs/campaign-brief.html",
       "reference_label": "campaign brief",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "marketing-2",
@@ -1681,7 +1762,8 @@
       ],
       "reference": "marketing/docs/campaign-brief.html",
       "reference_label": "campaign brief",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "marketing-3",
@@ -1698,7 +1780,8 @@
       ],
       "reference": "marketing/docs/open-house-playbook.html",
       "reference_label": "open house playbook",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "marketing-4",
@@ -1715,7 +1798,8 @@
       ],
       "reference": "marketing/docs/campaign-brief.html",
       "reference_label": "campaign brief",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "marketing-5",
@@ -1732,7 +1816,8 @@
       ],
       "reference": "marketing/docs/email-social-alignment.html",
       "reference_label": "email social alignment",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "marketing-6",
@@ -1749,7 +1834,8 @@
       ],
       "reference": "marketing/docs/audience-segments.html",
       "reference_label": "audience segments",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "marketing-7",
@@ -1765,7 +1851,8 @@
       ],
       "reference": "marketing/docs/audience-segments.html",
       "reference_label": "audience segments",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "marketing-8",
@@ -1782,7 +1869,8 @@
       ],
       "reference": "marketing/docs/audience-segments.html",
       "reference_label": "audience segments",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "marketing-9",
@@ -1799,7 +1887,8 @@
       ],
       "reference": "marketing/docs/audience-segments.html",
       "reference_label": "audience segments",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "marketing-10",
@@ -1815,7 +1904,8 @@
       ],
       "reference": "marketing/docs/messaging-positioning.html",
       "reference_label": "messaging positioning",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "marketing-11",
@@ -1832,7 +1922,8 @@
       ],
       "reference": "marketing/docs/messaging-positioning.html",
       "reference_label": "messaging positioning",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "marketing-12",
@@ -1849,7 +1940,8 @@
       ],
       "reference": "marketing/docs/messaging-positioning.html",
       "reference_label": "messaging positioning",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "marketing-13",
@@ -1866,7 +1958,8 @@
       ],
       "reference": "marketing/docs/messaging-positioning.html",
       "reference_label": "messaging positioning",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "marketing-14",
@@ -1883,7 +1976,8 @@
       ],
       "reference": "marketing/docs/messaging-positioning.html",
       "reference_label": "messaging positioning",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "marketing-15",
@@ -1902,7 +1996,8 @@
       ],
       "reference": "marketing/docs/social-strategy.html",
       "reference_label": "social strategy",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "marketing-16",
@@ -1919,7 +2014,8 @@
       ],
       "reference": "marketing/docs/content-calendar.html",
       "reference_label": "content calendar",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "marketing-17",
@@ -1937,7 +2033,8 @@
       ],
       "reference": "marketing/docs/distribution-repurposing.html",
       "reference_label": "distribution repurposing",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "marketing-18",
@@ -1954,7 +2051,8 @@
       ],
       "reference": "marketing/docs/social-strategy.html",
       "reference_label": "social strategy",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "marketing-19",
@@ -1971,7 +2069,8 @@
       ],
       "reference": "marketing/docs/content-sequences-prompts.html",
       "reference_label": "content sequences prompts",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "marketing-20",
@@ -1988,7 +2087,8 @@
       ],
       "reference": "marketing/docs/post-copy-bank.html",
       "reference_label": "post copy bank",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "marketing-21",
@@ -2005,7 +2105,8 @@
       ],
       "reference": "marketing/docs/post-copy-bank.html",
       "reference_label": "post copy bank",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "marketing-22",
@@ -2023,7 +2124,8 @@
       ],
       "reference": "marketing/docs/post-copy-bank.html",
       "reference_label": "post copy bank",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "marketing-23",
@@ -2041,7 +2143,8 @@
       ],
       "reference": "marketing/docs/post-copy-bank.html",
       "reference_label": "post copy bank",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "marketing-24",
@@ -2058,7 +2161,8 @@
       ],
       "reference": "marketing/docs/post-copy-bank.html",
       "reference_label": "post copy bank",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "marketing-25",
@@ -2076,7 +2180,8 @@
       ],
       "reference": "marketing/docs/content-sequences-prompts.html",
       "reference_label": "content sequences prompts",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "marketing-26",
@@ -2093,7 +2198,8 @@
       ],
       "reference": "marketing/docs/post-copy-bank.html",
       "reference_label": "post copy bank",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "marketing-27",
@@ -2109,7 +2215,8 @@
       ],
       "reference": "marketing/docs/post-copy-bank.html",
       "reference_label": "post copy bank",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "marketing-28",
@@ -2127,7 +2234,8 @@
       ],
       "reference": "marketing/docs/open-house-playbook.html",
       "reference_label": "open house playbook",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "marketing-29",
@@ -2144,7 +2252,8 @@
       ],
       "reference": "marketing/docs/post-copy-bank.html",
       "reference_label": "post copy bank",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "marketing-30",
@@ -2160,7 +2269,8 @@
       ],
       "reference": "marketing/docs/hashtag-strategy.html",
       "reference_label": "hashtag strategy",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "marketing-31",
@@ -2177,7 +2287,8 @@
       ],
       "reference": "marketing/docs/hashtag-strategy.html",
       "reference_label": "hashtag strategy",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "marketing-32",
@@ -2194,7 +2305,8 @@
       ],
       "reference": "marketing/docs/hashtag-strategy.html",
       "reference_label": "hashtag strategy",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "marketing-33",
@@ -2211,7 +2323,8 @@
       ],
       "reference": "marketing/docs/content-calendar.html",
       "reference_label": "content calendar",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "marketing-34",
@@ -2228,7 +2341,8 @@
       ],
       "reference": "marketing/docs/content-calendar.html",
       "reference_label": "content calendar",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "marketing-35",
@@ -2244,7 +2358,8 @@
       ],
       "reference": "marketing/docs/program-fact-sheet.html",
       "reference_label": "program fact sheet",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "marketing-36",
@@ -2261,7 +2376,8 @@
       ],
       "reference": "marketing/docs/creative-image-ideas.html",
       "reference_label": "creative image ideas",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "marketing-37",
@@ -2278,7 +2394,8 @@
       ],
       "reference": "marketing/docs/creative-image-ideas.html",
       "reference_label": "creative image ideas",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "marketing-38",
@@ -2294,7 +2411,8 @@
       ],
       "reference": "marketing/docs/creative-image-ideas.html",
       "reference_label": "creative image ideas",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "marketing-39",
@@ -2311,7 +2429,8 @@
       ],
       "reference": "marketing/docs/creative-image-ideas.html",
       "reference_label": "creative image ideas",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "marketing-40",
@@ -2328,7 +2447,8 @@
       ],
       "reference": "marketing/docs/program-fact-sheet.html",
       "reference_label": "program fact sheet",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "marketing-41",
@@ -2345,7 +2465,8 @@
       ],
       "reference": "marketing/docs/program-fact-sheet.html",
       "reference_label": "program fact sheet",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "marketing-42",
@@ -2362,7 +2483,8 @@
       ],
       "reference": "marketing/docs/program-fact-sheet.html",
       "reference_label": "program fact sheet",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "marketing-43",
@@ -2379,7 +2501,8 @@
       ],
       "reference": "marketing/docs/program-fact-sheet.html",
       "reference_label": "program fact sheet",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "marketing-44",
@@ -2396,7 +2519,8 @@
       ],
       "reference": "marketing/docs/faq-objections.html",
       "reference_label": "faq objections",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "marketing-45",
@@ -2414,7 +2538,8 @@
       ],
       "reference": "marketing/docs/faq-objections.html",
       "reference_label": "faq objections",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "marketing-46",
@@ -2432,7 +2557,8 @@
       ],
       "reference": "marketing/docs/program-fact-sheet.html",
       "reference_label": "program fact sheet",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "marketing-47",
@@ -2449,7 +2575,8 @@
       ],
       "reference": "marketing/docs/faq-objections.html",
       "reference_label": "faq objections",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "marketing-48",
@@ -2468,7 +2595,8 @@
       ],
       "reference": "marketing/docs/program-fact-sheet.html",
       "reference_label": "program fact sheet",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "marketing-49",
@@ -2486,7 +2614,8 @@
       ],
       "reference": "marketing/docs/program-fact-sheet.html",
       "reference_label": "program fact sheet",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "marketing-50",
@@ -2503,7 +2632,8 @@
       ],
       "reference": "marketing/docs/kpi-measurement.html",
       "reference_label": "kpi measurement",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "marketing-51",
@@ -2520,7 +2650,8 @@
       ],
       "reference": "marketing/docs/kpi-measurement.html",
       "reference_label": "kpi measurement",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "marketing-52",
@@ -2537,7 +2668,8 @@
       ],
       "reference": "marketing/docs/kpi-measurement.html",
       "reference_label": "kpi measurement",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "marketing-53",
@@ -2554,7 +2686,8 @@
       ],
       "reference": "marketing/docs/brand-visual-style.html",
       "reference_label": "brand visual style",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "marketing-54",
@@ -2571,7 +2704,8 @@
       ],
       "reference": "marketing/docs/messaging-positioning.html",
       "reference_label": "messaging positioning",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "marketing-55",
@@ -2588,7 +2722,8 @@
       ],
       "reference": "marketing/docs/brand-visual-style.html",
       "reference_label": "brand visual style",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "marketing-56",
@@ -2605,7 +2740,8 @@
       ],
       "reference": "marketing/docs/brand-visual-style.html",
       "reference_label": "brand visual style",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "marketing-57",
@@ -2623,7 +2759,8 @@
       ],
       "reference": "marketing/docs/launch-checklist.html",
       "reference_label": "launch checklist",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "marketing-58",
@@ -2640,7 +2777,8 @@
       ],
       "reference": "marketing/docs/launch-checklist.html",
       "reference_label": "launch checklist",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "marketing-59",
@@ -2657,7 +2795,8 @@
       ],
       "reference": "marketing/docs/launch-checklist.html",
       "reference_label": "launch checklist",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "marketing-60",
@@ -2675,7 +2814,8 @@
       ],
       "reference": "marketing/docs/faq-objections.html",
       "reference_label": "faq objections",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "marketing-61",
@@ -2693,7 +2833,8 @@
       ],
       "reference": "marketing/docs/program-fact-sheet.html",
       "reference_label": "program fact sheet",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "design-1",
@@ -2711,7 +2852,8 @@
       ],
       "reference": "design/readme.md",
       "reference_label": "Repo readme",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "design-2",
@@ -2730,7 +2872,8 @@
       ],
       "reference": "design/readme.md",
       "reference_label": "Repo readme",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "design-3",
@@ -2748,7 +2891,8 @@
       ],
       "reference": "design/design-system.html",
       "reference_label": "Design system guide",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "design-4",
@@ -2767,7 +2911,8 @@
       ],
       "reference": "design/readme.md",
       "reference_label": "Repo readme",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "design-5",
@@ -2784,7 +2929,8 @@
       ],
       "reference": "design/design-system.html",
       "reference_label": "Design system guide",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "design-6",
@@ -2801,7 +2947,8 @@
       ],
       "reference": "design/readme.md",
       "reference_label": "Repo readme",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "design-7",
@@ -2821,7 +2968,8 @@
       ],
       "reference": "design/design-system.html#colors",
       "reference_label": "Color tokens",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "design-8",
@@ -2838,7 +2986,8 @@
       ],
       "reference": "design/design-system.html#colors",
       "reference_label": "Color tokens",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "design-9",
@@ -2854,7 +3003,8 @@
       ],
       "reference": "design/design-system.html#colors",
       "reference_label": "Color tokens",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "design-10",
@@ -2872,7 +3022,8 @@
       ],
       "reference": "design/design-system.html#colors",
       "reference_label": "Color tokens",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "design-11",
@@ -2890,7 +3041,8 @@
       ],
       "reference": "design/BRAND.md",
       "reference_label": "Brand guide",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "design-12",
@@ -2908,7 +3060,8 @@
       ],
       "reference": "design/design-system.html",
       "reference_label": "Design system guide",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "design-13",
@@ -2926,7 +3079,8 @@
       ],
       "reference": "design/BRAND.md",
       "reference_label": "Brand guide",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "design-14",
@@ -2944,7 +3098,8 @@
       ],
       "reference": "design/design-system.html",
       "reference_label": "Design system guide",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "design-15",
@@ -2961,7 +3116,8 @@
       ],
       "reference": "design/BRAND.md",
       "reference_label": "Brand guide",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "design-16",
@@ -2977,7 +3133,8 @@
       ],
       "reference": "design/BRAND.md",
       "reference_label": "Brand guide",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "design-17",
@@ -2994,7 +3151,8 @@
       ],
       "reference": "design/BRAND.md",
       "reference_label": "Brand guide",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "design-18",
@@ -3013,7 +3171,8 @@
       ],
       "reference": "design/BRAND.md",
       "reference_label": "Brand guide",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "design-19",
@@ -3031,7 +3190,8 @@
       ],
       "reference": "design/BRAND.md",
       "reference_label": "Brand guide",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "design-20",
@@ -3049,7 +3209,8 @@
       ],
       "reference": "design/design-system.html#components",
       "reference_label": "Live components",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "design-21",
@@ -3067,7 +3228,8 @@
       ],
       "reference": "design/IMPLEMENTATION.md",
       "reference_label": "Implementation guide",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "design-22",
@@ -3085,7 +3247,8 @@
       ],
       "reference": "design/design-system.html#components",
       "reference_label": "Live components",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "design-23",
@@ -3104,7 +3267,8 @@
       ],
       "reference": "design/readme.md",
       "reference_label": "Repo readme",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "design-24",
@@ -3123,7 +3287,8 @@
       ],
       "reference": "design/ui_kits/marketing-website/index.html",
       "reference_label": "Marketing website kit",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "design-25",
@@ -3140,7 +3305,8 @@
       ],
       "reference": "design/BRAND.md",
       "reference_label": "Brand guide",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "design-26",
@@ -3157,7 +3323,8 @@
       ],
       "reference": "design/BRAND.md",
       "reference_label": "Brand guide",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "design-27",
@@ -3175,7 +3342,8 @@
       ],
       "reference": "design/design-system.html#a11y",
       "reference_label": "WCAG audit",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "design-28",
@@ -3193,7 +3361,8 @@
       ],
       "reference": "design/design-system.html#a11y",
       "reference_label": "WCAG audit",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "design-29",
@@ -3212,7 +3381,8 @@
       ],
       "reference": "design/BRAND.md",
       "reference_label": "Brand guide",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "design-30",
@@ -3230,7 +3400,8 @@
       ],
       "reference": "design/IMPLEMENTATION.md",
       "reference_label": "Implementation guide",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "design-31",
@@ -3248,7 +3419,8 @@
       ],
       "reference": "design/readme.md",
       "reference_label": "Repo readme",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "design-32",
@@ -3266,7 +3438,8 @@
       ],
       "reference": "design/BRAND.md",
       "reference_label": "Brand guide",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "design-33",
@@ -3284,7 +3457,8 @@
       ],
       "reference": "design/BRAND.md",
       "reference_label": "Brand guide",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "design-34",
@@ -3301,7 +3475,8 @@
       ],
       "reference": "design/BRAND.md",
       "reference_label": "Brand guide",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "design-35",
@@ -3320,7 +3495,8 @@
       ],
       "reference": "design/readme.md",
       "reference_label": "Repo readme",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "design-36",
@@ -3338,7 +3514,8 @@
       ],
       "reference": "design/readme.md",
       "reference_label": "Repo readme",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "curriculum-1",
@@ -3356,7 +3533,8 @@
       ],
       "reference": "",
       "reference_label": "",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "curriculum-2",
@@ -3373,7 +3551,8 @@
       ],
       "reference": "",
       "reference_label": "",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "curriculum-3",
@@ -3390,7 +3569,8 @@
       ],
       "reference": "",
       "reference_label": "",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "curriculum-4",
@@ -3409,7 +3589,8 @@
       ],
       "reference": "downloads/colaberry-architecture-philosophy.html",
       "reference_label": "The architecture philosophy (one-pager)",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "curriculum-5",
@@ -3428,7 +3609,8 @@
       ],
       "reference": "",
       "reference_label": "",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "curriculum-6",
@@ -3448,7 +3630,8 @@
       ],
       "reference": "",
       "reference_label": "",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "curriculum-7",
@@ -3466,7 +3649,8 @@
       ],
       "reference": "",
       "reference_label": "",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "curriculum-8",
@@ -3485,7 +3669,8 @@
       ],
       "reference": "",
       "reference_label": "",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "curriculum-9",
@@ -3504,7 +3689,8 @@
       ],
       "reference": "",
       "reference_label": "",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "curriculum-10",
@@ -3523,7 +3709,8 @@
       ],
       "reference": "",
       "reference_label": "",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "curriculum-11",
@@ -3543,7 +3730,8 @@
       ],
       "reference": "",
       "reference_label": "",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "curriculum-12",
@@ -3562,7 +3750,8 @@
       ],
       "reference": "",
       "reference_label": "",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "curriculum-13",
@@ -3580,7 +3769,8 @@
       ],
       "reference": "",
       "reference_label": "",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "curriculum-14",
@@ -3598,7 +3788,8 @@
       ],
       "reference": "",
       "reference_label": "",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "curriculum-15",
@@ -3617,7 +3808,8 @@
       ],
       "reference": "",
       "reference_label": "",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "curriculum-16",
@@ -3634,7 +3826,8 @@
       ],
       "reference": "",
       "reference_label": "",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "curriculum-17",
@@ -3652,7 +3845,8 @@
       ],
       "reference": "",
       "reference_label": "",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "curriculum-18",
@@ -3672,7 +3866,8 @@
       ],
       "reference": "",
       "reference_label": "",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "curriculum-19",
@@ -3690,7 +3885,8 @@
       ],
       "reference": "",
       "reference_label": "",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "curriculum-20",
@@ -3708,7 +3904,8 @@
       ],
       "reference": "",
       "reference_label": "",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "curriculum-21",
@@ -3727,7 +3924,8 @@
       ],
       "reference": "",
       "reference_label": "",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "curriculum-22",
@@ -3746,7 +3944,8 @@
       ],
       "reference": "",
       "reference_label": "",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "product-1",
@@ -3764,7 +3963,8 @@
       ],
       "reference": "",
       "reference_label": "",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "product-2",
@@ -3782,7 +3982,8 @@
       ],
       "reference": "",
       "reference_label": "",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "product-3",
@@ -3799,7 +4000,8 @@
       ],
       "reference": "",
       "reference_label": "",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "product-4",
@@ -3817,7 +4019,8 @@
       ],
       "reference": "",
       "reference_label": "",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "product-5",
@@ -3836,7 +4039,8 @@
       ],
       "reference": "",
       "reference_label": "",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "product-6",
@@ -3855,7 +4059,8 @@
       ],
       "reference": "",
       "reference_label": "",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "product-7",
@@ -3874,7 +4079,8 @@
       ],
       "reference": "",
       "reference_label": "",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "product-8",
@@ -3893,7 +4099,8 @@
       ],
       "reference": "",
       "reference_label": "",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "product-9",
@@ -3910,7 +4117,8 @@
       ],
       "reference": "",
       "reference_label": "",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "product-10",
@@ -3928,7 +4136,8 @@
       ],
       "reference": "",
       "reference_label": "",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "compliance-1",
@@ -3947,7 +4156,8 @@
       ],
       "reference": "",
       "reference_label": "",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "compliance-2",
@@ -3964,7 +4174,8 @@
       ],
       "reference": "",
       "reference_label": "",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "compliance-3",
@@ -3983,7 +4194,8 @@
       ],
       "reference": "",
       "reference_label": "",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "compliance-4",
@@ -4000,7 +4212,8 @@
       ],
       "reference": "",
       "reference_label": "",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "compliance-5",
@@ -4019,7 +4232,8 @@
       ],
       "reference": "",
       "reference_label": "",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "compliance-6",
@@ -4036,7 +4250,8 @@
       ],
       "reference": "",
       "reference_label": "",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "compliance-7",
@@ -4054,7 +4269,8 @@
       ],
       "reference": "",
       "reference_label": "",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     },
     {
       "id": "compliance-8",
@@ -4073,7 +4289,8 @@
       ],
       "reference": "",
       "reference_label": "",
-      "needs_verification": false
+      "needs_verification": false,
+      "confidence": "unstated"
     }
   ]
 }

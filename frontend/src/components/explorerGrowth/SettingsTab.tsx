@@ -120,8 +120,11 @@ export function Body({ summary }: { summary: ExplorerSummary }) {
             </li>
           </ul>
           <div className="alert alert-secondary py-2 px-3 small mb-0">
-            Phase A shipped twelve read endpoints and no write path. This page reads. Any control
-            that changes the system arrives with its own backend and its own decision.
+            Phase A shipped fourteen read endpoints and no write path. Phase 2 added exactly one
+            write — <strong>Re-run the draft render</strong>, on the Content supply tab — which
+            regenerates the copy a decision would have sent and cannot send it. The controls above
+            remain absent: each of them changes what the system does to real learners, and each
+            arrives with its own backend and its own decision.
           </div>
         </SectionCard>
       </div>

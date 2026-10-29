@@ -20,10 +20,18 @@ import {
  * ── IT CANNOT SEND, STRUCTURALLY RATHER THAN BY PROMISE ─────────────────────
  *
  * This component adds NO backend code. It calls two endpoints that already exist on the Explorer
- * Growth admin router, which registers fourteen GETs and zero mutating verbs - a property pinned
- * by `explorerGrowthRoutes.access.test.ts`, not by this file's good intentions. `getSummary` and
- * `getShadow` are SELECT-only in `explorerOverviewService.ts` and `explorerDecisionsService.ts`.
- * There is no new write path here to audit because there is no new path at all.
+ * Growth admin router. `getSummary` and `getShadow` are SELECT-only in `explorerOverviewService.ts`
+ * and `explorerDecisionsService.ts`. There is no new write path here to audit because there is no
+ * new path at all.
+ *
+ * CORRECTED 2026-10-28: this used to say the router "registers fourteen GETs and zero mutating
+ * verbs". It registers fourteen GETs and exactly ONE mutating verb as of Phase 2 — `POST
+ * /content/refresh`, which re-runs the draft render and whose output the sender's claim predicate
+ * excludes. The property that matters to THIS component is unchanged and is still pinned by
+ * `explorerGrowthRoutes.access.test.ts`: the two endpoints it calls are reads, and the single write
+ * is not one of them. The count was restated rather than the sentence deleted, because "zero
+ * mutating verbs" is exactly the kind of inherited claim that stays on a page long after it stopped
+ * being true.
  *
  * ── THE 403 IS A REAL CASE, NOT A THEORETICAL ONE ───────────────────────────
  *

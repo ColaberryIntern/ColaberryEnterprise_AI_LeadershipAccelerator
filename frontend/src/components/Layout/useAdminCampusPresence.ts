@@ -2,6 +2,7 @@ import axios from 'axios';
 import { useEffect } from 'react';
 import { ALL_LINKS } from './adminNav';
 import { readCampusSettings } from '../campus/campusSettings';
+import { recordHqVisit } from '../campus/hq/hqUsage';
 
 /**
  * Campus HQ presence from the Management Portal (Ali, 2026-10-28): an employee working here counts as online and stands on
@@ -42,6 +43,8 @@ export function sendAdminCampusBeat(pathname: string): Promise<void> {
 
 /** `enabled` = this admin session has a linked staff account (no campus identity otherwise; the server would 204). */
 export function useAdminCampusPresence(pathname: string, enabled: boolean): void {
+  // C84: count the page against its sidebar room, for the campus Staff tools card (this browser only; see hqUsage).
+  useEffect(() => { recordHqVisit(hqPathFor(pathname)); }, [pathname]);
   useEffect(() => {
     if (!enabled) return undefined;
     const beat = () => { if (document.visibilityState !== 'hidden') void sendAdminCampusBeat(pathname); };

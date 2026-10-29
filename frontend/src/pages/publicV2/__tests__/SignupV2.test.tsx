@@ -41,7 +41,24 @@ const ctx: ContextInput = {
   role: 'exec', teamSize: '50-199', timeline: 'this_quarter', goal: 'measure_readiness',
   phone: ' 555-0100 ', notes: ' We have no idea where we stand. ',
   evaluating90Days: true, sponsorshipInterest: true, consentContact: true,
+  phoneConsent: true,
 };
+
+describe('buildContextPayload — the phone grant is its own field', () => {
+  it('carries phone_consent separately from consent_contact', () => {
+    // "You may contact me about this" is channel-blind and cannot stand as
+    // agreement to be telephoned, so the two must be able to disagree.
+    const p = buildContextPayload(account, { ...ctx, phoneConsent: false }, {}, '/signup');
+    expect(p.consent_contact).toBe(true);
+    expect(p.phone_consent).toBe(false);
+  });
+
+  it('sends the grant when it was given', () => {
+    const p = buildContextPayload(account, ctx, {}, '/signup');
+    expect(p.phone_consent).toBe(true);
+    expect(p.phone).toBe('555-0100');
+  });
+});
 
 describe('buildAccountBody — sends only what the endpoint accepts', () => {
   it('sends exactly name, email and company', () => {
@@ -91,7 +108,7 @@ describe('buildContextPayload — everything collected lands somewhere real', ()
     const allowed = new Set([
       'name', 'email', 'company', 'role', 'phone', 'title', 'company_size',
       'evaluating_90_days', 'interest_area', 'message', 'source', 'form_type',
-      'consent_contact', 'utm_source', 'utm_campaign', 'page_url',
+      'consent_contact', 'phone_consent', 'utm_source', 'utm_campaign', 'page_url',
       'corporate_sponsorship_interest', 'timeline',
     ]);
     Object.keys(payload).forEach((k) => expect(allowed.has(k)).toBe(true));

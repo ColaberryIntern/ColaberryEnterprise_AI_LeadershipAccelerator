@@ -583,7 +583,10 @@ function SponsorshipPage() {
               ) : (
                 <LeadCaptureForm
                   formType="sponsor_inquiry"
-                  fields={['name', 'email', 'company', 'title', 'company_size']}
+                  // Phone added so a team rollout enquiry can actually be rung back,
+                  // and it carries its own optional permission tick — the form never
+                  // collects a number without asking what may be done with it.
+                  fields={['name', 'email', 'company', 'title', 'phone', 'company_size']}
                   submitLabel="Bring your team"
                   buttonClassName="cb-btn cb-btn--primary cb-btn--lg cb-btn--full"
                   successMessage="Your rollout request is in, we'll be in touch within one business day."

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import api from '../utils/api';
 import { getUTMPayloadFields } from '../services/utmService';
 import { identifyVisitor } from '../utils/tracker';
+import PhoneConsentCheckbox from './PhoneConsentCheckbox';
 
 interface FormErrors {
   [key: string]: string;
@@ -55,6 +56,10 @@ function LeadCaptureForm({
   });
   const [evaluating90Days, setEvaluating90Days] = useState(false);
   const [consentChecked, setConsentChecked] = useState(false);
+  // A SECOND, separate permission. `consentChecked` is the required "I agree to be
+  // contacted by Colaberry" tick, which is channel-blind and cannot stand as
+  // agreement to a telephone call. This one is optional and starts false.
+  const [phoneConsent, setPhoneConsent] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState<FormErrors>({});
@@ -107,6 +112,11 @@ function LeadCaptureForm({
       });
       if (showConsent) {
         payload.consent_contact = consentChecked;
+      }
+      // Only when this form actually collects a number. Sending it from a form
+      // with no phone field would claim an answer to a question nobody was asked.
+      if (fields.includes('phone')) {
+        payload.phone_consent = phoneConsent;
       }
       const utmFields = getUTMPayloadFields();
       Object.assign(payload, utmFields);
@@ -255,6 +265,17 @@ function LeadCaptureForm({
               value={formData.phone}
               onChange={handleChange}
               placeholder="+1 (555) 123-4567"
+            />
+          </div>
+        )}
+        {fields.includes('phone') && (
+          <div className="col-12">
+            <PhoneConsentCheckbox
+              id={`${formType}-phone-consent`}
+              phone={formData.phone}
+              checked={phoneConsent}
+              onChange={setPhoneConsent}
+              disabled={submitting}
             />
           </div>
         )}

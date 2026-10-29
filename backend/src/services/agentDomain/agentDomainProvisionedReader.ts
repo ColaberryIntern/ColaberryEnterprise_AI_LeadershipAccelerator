@@ -61,6 +61,11 @@ export interface ProvisionedDomainRow {
   readonly manager_blocker: string | null;
   readonly intended_builder_state: string | null;
   readonly agent_id: string | null;
+  /**
+   * AF10.6: the name the intern gave this agent, or null if they have not named it. Null is the
+   * normal state, not a finding -- the intern sets it and nothing backfills it.
+   */
+  readonly agent_display_name: string | null;
   readonly releases: number;
   readonly stories: number;
   readonly stories_verified: number;
@@ -85,6 +90,7 @@ const BASE_SQL = `
          adp.manager_blocker,
          adp.intended_builder_state,
          adp.agent_id::text                        AS agent_id,
+         aa.config->>'display_name'                AS agent_display_name,
          (SELECT count(*) FROM student_task_lists l
            WHERE l.project_id = adp.student_project_id)::int                         AS releases,
          (SELECT count(*) FROM student_tasks t
@@ -96,7 +102,8 @@ const BASE_SQL = `
            WHERE b.agent_domain_project_id = adp.id)::int                            AS build_authorizations
     FROM agent_domain_projects adp
     LEFT JOIN project_lifecycle_states pls ON pls.student_project_id = adp.student_project_id
-    LEFT JOIN org_members om ON om.id::text = adp.manager_identity_id`;
+    LEFT JOIN org_members om ON om.id::text = adp.manager_identity_id
+    LEFT JOIN ai_agents aa ON aa.id = adp.agent_id`;
 
 /**
  * The org_members ids this email owns, inside the ORG OF RECORD only.

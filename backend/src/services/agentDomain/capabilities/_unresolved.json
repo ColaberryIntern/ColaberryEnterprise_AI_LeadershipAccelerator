@@ -1,6 +1,6 @@
 {
   "bucket": "unresolved",
-  "_comment": "The legacy agent rows that belong to no domain. Tracked HERE rather than in the gitignored run directory, because 'no legacy functionality is silently lost' cannot rest on a file that is not in the repository. Each row carries disposition 'unresolved' and the measured reason it is undomained. Five of these are live production rows, which is why an owner decision is needed rather than a default.",
+  "_comment": "The legacy agent rows that belong to no domain. Tracked HERE rather than in the gitignored run directory, because 'no legacy functionality is silently lost' cannot rest on a file that is not in the repository. Each row carries disposition 'unresolved', the measured reason it is undomained, and a 'measured' block recording what production said on 2026-10-28. CORRECTION, measured 2026-10-28: this comment previously said 'Five of these are live production rows'. Five is the count of rows whose PROPOSED KIND is unresolved; the live population is THIRTEEN of the 21, and between them they have run 1,491,129 times. The eight proposed for retirement are all disabled with zero runs, which is the most useful fact here: retiring them risks nothing. An owner decision is still needed, which is why needs_owner_decision stays true.",
   "legacy_row_count": 21,
   "kind_breakdown": {
     "behavior": 8,
@@ -15,7 +15,13 @@
       "source": "registry",
       "disposition": "unresolved",
       "capability_id": null,
-      "reason": "cron */10 * * * * wired at backend/src/services/schedulerService.ts:2286 (backend/src/services/agentRegistrySeed.ts:102); domain: category=behavioral (visitor intent scoring serves both marketing and sales; not assigned)"
+      "reason": "cron */10 * * * * wired at backend/src/services/schedulerService.ts:2286 (backend/src/services/agentRegistrySeed.ts:102); domain: category=behavioral (visitor intent scoring serves both marketing and sales; not assigned)",
+      "measured": {
+        "on": "2026-10-28",
+        "enabled": true,
+        "run_count": 32623,
+        "has_run": true
+      }
     },
     {
       "agent_name": "BehavioralTriggerEvaluator",
@@ -23,7 +29,13 @@
       "source": "registry",
       "disposition": "unresolved",
       "capability_id": null,
-      "reason": "cron 5,15,25,35,45,55 * * * * wired at backend/src/services/schedulerService.ts:2312 (backend/src/services/agentRegistrySeed.ts:124); domain: category=behavioral (visitor intent scoring serves both marketing and sales; not assigned)"
+      "reason": "cron 5,15,25,35,45,55 * * * * wired at backend/src/services/schedulerService.ts:2312 (backend/src/services/agentRegistrySeed.ts:124); domain: category=behavioral (visitor intent scoring serves both marketing and sales; not assigned)",
+      "measured": {
+        "on": "2026-10-28",
+        "enabled": true,
+        "run_count": 32516,
+        "has_run": true
+      }
     },
     {
       "agent_name": "ICPInsightComputer",
@@ -31,7 +43,13 @@
       "source": "registry",
       "disposition": "unresolved",
       "capability_id": null,
-      "reason": "cron 0 2 * * * wired at backend/src/services/schedulerService.ts:2260 (backend/src/services/agentRegistrySeed.ts:91); domain: category=behavioral (visitor intent scoring serves both marketing and sales; not assigned)"
+      "reason": "cron 0 2 * * * wired at backend/src/services/schedulerService.ts:2260 (backend/src/services/agentRegistrySeed.ts:91); domain: category=behavioral (visitor intent scoring serves both marketing and sales; not assigned)",
+      "measured": {
+        "on": "2026-10-28",
+        "enabled": true,
+        "run_count": 228,
+        "has_run": true
+      }
     },
     {
       "agent_name": "IntentScoreRecomputer",
@@ -39,7 +57,13 @@
       "source": "registry",
       "disposition": "unresolved",
       "capability_id": null,
-      "reason": "cron 7,22,37,52 * * * * wired at backend/src/services/schedulerService.ts:2299 (backend/src/services/agentRegistrySeed.ts:113); domain: category=behavioral (visitor intent scoring serves both marketing and sales; not assigned)"
+      "reason": "cron 7,22,37,52 * * * * wired at backend/src/services/schedulerService.ts:2299 (backend/src/services/agentRegistrySeed.ts:113); domain: category=behavioral (visitor intent scoring serves both marketing and sales; not assigned)",
+      "measured": {
+        "on": "2026-10-28",
+        "enabled": true,
+        "run_count": 21399,
+        "has_run": true
+      }
     },
     {
       "agent_name": "OpportunityScoreRecomputer",
@@ -47,7 +71,13 @@
       "source": "registry",
       "disposition": "unresolved",
       "capability_id": null,
-      "reason": "cron 3,23,43 * * * * wired at backend/src/services/schedulerService.ts:2410 (backend/src/services/agentRegistrySeed.ts:201); domain: category=behavioral (visitor intent scoring serves both marketing and sales; not assigned)"
+      "reason": "cron 3,23,43 * * * * wired at backend/src/services/schedulerService.ts:2410 (backend/src/services/agentRegistrySeed.ts:201); domain: category=behavioral (visitor intent scoring serves both marketing and sales; not assigned)",
+      "measured": {
+        "on": "2026-10-28",
+        "enabled": true,
+        "run_count": 15837,
+        "has_run": true
+      }
     },
     {
       "agent_name": "PortfolioGitHubSyncAgent",
@@ -55,7 +85,13 @@
       "source": "registry",
       "disposition": "unresolved",
       "capability_id": null,
-      "reason": "cron 15 2 * * * wired at backend/src/services/schedulerService.ts:3430 (backend/src/services/agentRegistrySeed.ts:2184); domain: no rule matched category=accelerator"
+      "reason": "cron 15 2 * * * wired at backend/src/services/schedulerService.ts:3430 (backend/src/services/agentRegistrySeed.ts:2184); domain: no rule matched category=accelerator",
+      "measured": {
+        "on": "2026-10-28",
+        "enabled": true,
+        "run_count": 125,
+        "has_run": true
+      }
     },
     {
       "agent_name": "SessionLifecycle",
@@ -63,7 +99,13 @@
       "source": "registry",
       "disposition": "unresolved",
       "capability_id": null,
-      "reason": "cron */5 * * * * wired at backend/src/services/schedulerService.ts:2665 (backend/src/services/agentRegistrySeed.ts:293); domain: no rule matched category=accelerator"
+      "reason": "cron */5 * * * * wired at backend/src/services/schedulerService.ts:2665 (backend/src/services/agentRegistrySeed.ts:293); domain: no rule matched category=accelerator",
+      "measured": {
+        "on": "2026-10-28",
+        "enabled": true,
+        "run_count": 65323,
+        "has_run": true
+      }
     },
     {
       "agent_name": "SessionReminders",
@@ -71,7 +113,13 @@
       "source": "registry",
       "disposition": "unresolved",
       "capability_id": null,
-      "reason": "cron */30 * * * * wired at backend/src/services/schedulerService.ts:2588 (backend/src/services/agentRegistrySeed.ts:282); domain: no rule matched category=accelerator"
+      "reason": "cron */30 * * * * wired at backend/src/services/schedulerService.ts:2588 (backend/src/services/agentRegistrySeed.ts:282); domain: no rule matched category=accelerator",
+      "measured": {
+        "on": "2026-10-28",
+        "enabled": true,
+        "run_count": 10886,
+        "has_run": true
+      }
     },
     {
       "agent_name": "Alumni_Outreach_Agent",
@@ -79,7 +127,13 @@
       "source": "registry",
       "disposition": "unresolved",
       "capability_id": null,
-      "reason": "source_file backend/src/services/agents/alumni/alumniOutreachAgent.ts does not exist on disk and has no git history; backend/src/services/agentRegistryAuditClassification.ts:23 NO_SOURCE_FILE (confirmed_dead) (backend/src/services/agentRegistrySeed.ts:1205); domain: category=alumni has no matching target domain"
+      "reason": "source_file backend/src/services/agents/alumni/alumniOutreachAgent.ts does not exist on disk and has no git history; backend/src/services/agentRegistryAuditClassification.ts:23 NO_SOURCE_FILE (confirmed_dead) (backend/src/services/agentRegistrySeed.ts:1205); domain: category=alumni has no matching target domain",
+      "measured": {
+        "on": "2026-10-28",
+        "enabled": false,
+        "run_count": 0,
+        "has_run": false
+      }
     },
     {
       "agent_name": "Alumni_Reengagement_Agent",
@@ -87,7 +141,13 @@
       "source": "registry",
       "disposition": "unresolved",
       "capability_id": null,
-      "reason": "source_file backend/src/services/agents/alumni/alumniReengagementAgent.ts does not exist on disk and has no git history; backend/src/services/agentRegistryAuditClassification.ts:23 NO_SOURCE_FILE (confirmed_dead) (backend/src/services/agentRegistrySeed.ts:1215); domain: category=alumni has no matching target domain"
+      "reason": "source_file backend/src/services/agents/alumni/alumniReengagementAgent.ts does not exist on disk and has no git history; backend/src/services/agentRegistryAuditClassification.ts:23 NO_SOURCE_FILE (confirmed_dead) (backend/src/services/agentRegistrySeed.ts:1215); domain: category=alumni has no matching target domain",
+      "measured": {
+        "on": "2026-10-28",
+        "enabled": false,
+        "run_count": 0,
+        "has_run": false
+      }
     },
     {
       "agent_name": "Alumni_Referral_Agent",
@@ -95,7 +155,13 @@
       "source": "registry",
       "disposition": "unresolved",
       "capability_id": null,
-      "reason": "source_file backend/src/services/agents/alumni/alumniReferralAgent.ts does not exist on disk and has no git history; backend/src/services/agentRegistryAuditClassification.ts:23 NO_SOURCE_FILE (confirmed_dead) (backend/src/services/agentRegistrySeed.ts:1225); domain: category=alumni has no matching target domain"
+      "reason": "source_file backend/src/services/agents/alumni/alumniReferralAgent.ts does not exist on disk and has no git history; backend/src/services/agentRegistryAuditClassification.ts:23 NO_SOURCE_FILE (confirmed_dead) (backend/src/services/agentRegistrySeed.ts:1225); domain: category=alumni has no matching target domain",
+      "measured": {
+        "on": "2026-10-28",
+        "enabled": false,
+        "run_count": 0,
+        "has_run": false
+      }
     },
     {
       "agent_name": "Corporate_Training_Agent",
@@ -103,7 +169,13 @@
       "source": "registry",
       "disposition": "unresolved",
       "capability_id": null,
-      "reason": "source_file backend/src/services/agents/partnerships/corporateTrainingAgent.ts does not exist on disk and has no git history; backend/src/services/agentRegistryAuditClassification.ts:23 NO_SOURCE_FILE (confirmed_dead) (backend/src/services/agentRegistrySeed.ts:1247); domain: category=partnerships has no matching target domain"
+      "reason": "source_file backend/src/services/agents/partnerships/corporateTrainingAgent.ts does not exist on disk and has no git history; backend/src/services/agentRegistryAuditClassification.ts:23 NO_SOURCE_FILE (confirmed_dead) (backend/src/services/agentRegistrySeed.ts:1247); domain: category=partnerships has no matching target domain",
+      "measured": {
+        "on": "2026-10-28",
+        "enabled": false,
+        "run_count": 0,
+        "has_run": false
+      }
     },
     {
       "agent_name": "Employer_Relationship_Agent",
@@ -111,7 +183,13 @@
       "source": "registry",
       "disposition": "unresolved",
       "capability_id": null,
-      "reason": "source_file backend/src/services/agents/partnerships/employerRelationshipAgent.ts does not exist on disk and has no git history; backend/src/services/agentRegistryAuditClassification.ts:23 NO_SOURCE_FILE (confirmed_dead) (backend/src/services/agentRegistrySeed.ts:1257); domain: category=partnerships has no matching target domain"
+      "reason": "source_file backend/src/services/agents/partnerships/employerRelationshipAgent.ts does not exist on disk and has no git history; backend/src/services/agentRegistryAuditClassification.ts:23 NO_SOURCE_FILE (confirmed_dead) (backend/src/services/agentRegistrySeed.ts:1257); domain: category=partnerships has no matching target domain",
+      "measured": {
+        "on": "2026-10-28",
+        "enabled": false,
+        "run_count": 0,
+        "has_run": false
+      }
     },
     {
       "agent_name": "Enterprise_Partnership_Agent",
@@ -119,7 +197,13 @@
       "source": "registry",
       "disposition": "unresolved",
       "capability_id": null,
-      "reason": "source_file backend/src/services/agents/partnerships/enterprisePartnershipAgent.ts does not exist on disk and has no git history; backend/src/services/agentRegistryAuditClassification.ts:23 NO_SOURCE_FILE (confirmed_dead) (backend/src/services/agentRegistrySeed.ts:1237); domain: category=partnerships has no matching target domain"
+      "reason": "source_file backend/src/services/agents/partnerships/enterprisePartnershipAgent.ts does not exist on disk and has no git history; backend/src/services/agentRegistryAuditClassification.ts:23 NO_SOURCE_FILE (confirmed_dead) (backend/src/services/agentRegistrySeed.ts:1237); domain: category=partnerships has no matching target domain",
+      "measured": {
+        "on": "2026-10-28",
+        "enabled": false,
+        "run_count": 0,
+        "has_run": false
+      }
     },
     {
       "agent_name": "Opportunity_Detection_Agent",
@@ -127,7 +211,13 @@
       "source": "registry",
       "disposition": "unresolved",
       "capability_id": null,
-      "reason": "source_file backend/src/services/agents/intelligence/opportunityDetectionAgent.ts does not exist on disk and has no git history; backend/src/services/agentRegistryAuditClassification.ts:23 NO_SOURCE_FILE (confirmed_dead) (backend/src/services/agentRegistrySeed.ts:1331); domain: category=behavioral (visitor intent scoring serves both marketing and sales; not assigned)"
+      "reason": "source_file backend/src/services/agents/intelligence/opportunityDetectionAgent.ts does not exist on disk and has no git history; backend/src/services/agentRegistryAuditClassification.ts:23 NO_SOURCE_FILE (confirmed_dead) (backend/src/services/agentRegistrySeed.ts:1331); domain: category=behavioral (visitor intent scoring serves both marketing and sales; not assigned)",
+      "measured": {
+        "on": "2026-10-28",
+        "enabled": false,
+        "run_count": 0,
+        "has_run": false
+      }
     },
     {
       "agent_name": "Trend_Detection_Agent",
@@ -135,7 +225,13 @@
       "source": "registry",
       "disposition": "unresolved",
       "capability_id": null,
-      "reason": "source_file backend/src/services/agents/intelligence/trendDetectionAgent.ts does not exist on disk and has no git history; backend/src/services/agentRegistryAuditClassification.ts:23 NO_SOURCE_FILE (confirmed_dead) (backend/src/services/agentRegistrySeed.ts:1311); domain: category=behavioral (visitor intent scoring serves both marketing and sales; not assigned)"
+      "reason": "source_file backend/src/services/agents/intelligence/trendDetectionAgent.ts does not exist on disk and has no git history; backend/src/services/agentRegistryAuditClassification.ts:23 NO_SOURCE_FILE (confirmed_dead) (backend/src/services/agentRegistrySeed.ts:1311); domain: category=behavioral (visitor intent scoring serves both marketing and sales; not assigned)",
+      "measured": {
+        "on": "2026-10-28",
+        "enabled": false,
+        "run_count": 0,
+        "has_run": false
+      }
     },
     {
       "agent_name": "calendar_intent_booster",
@@ -143,7 +239,13 @@
       "source": "production_only",
       "disposition": "unresolved",
       "capability_id": null,
-      "reason": "production row (2026-03-11) from the March governance seed (governanceService.ts ensureGovernanceAgents, zero callers today); enabled; no registry entry; verify whether anything still runs it"
+      "reason": "production row (2026-03-11) from the March governance seed (governanceService.ts ensureGovernanceAgents, zero callers today); enabled; no registry entry; verify whether anything still runs it",
+      "measured": {
+        "on": "2026-10-28",
+        "enabled": true,
+        "run_count": 12,
+        "has_run": true
+      }
     },
     {
       "agent_name": "forecast_engine",
@@ -151,7 +253,13 @@
       "source": "production_only",
       "disposition": "unresolved",
       "capability_id": null,
-      "reason": "production row (2026-03-11) from the March governance seed; enabled; no registry entry; verify whether anything still runs it"
+      "reason": "production row (2026-03-11) from the March governance seed; enabled; no registry entry; verify whether anything still runs it",
+      "measured": {
+        "on": "2026-10-28",
+        "enabled": true,
+        "run_count": 9351,
+        "has_run": true
+      }
     },
     {
       "agent_name": "intent_scorer",
@@ -159,7 +267,13 @@
       "source": "production_only",
       "disposition": "unresolved",
       "capability_id": null,
-      "reason": "production row (2026-03-11) from the March governance seed; enabled; no registry entry; verify whether anything still runs it"
+      "reason": "production row (2026-03-11) from the March governance seed; enabled; no registry entry; verify whether anything still runs it",
+      "measured": {
+        "on": "2026-10-28",
+        "enabled": true,
+        "run_count": 1954,
+        "has_run": true
+      }
     },
     {
       "agent_name": "revenue_aggregator",
@@ -167,7 +281,13 @@
       "source": "production_only",
       "disposition": "unresolved",
       "capability_id": null,
-      "reason": "production row (2026-03-11) from the March governance seed; enabled; no registry entry; verify whether anything still runs it"
+      "reason": "production row (2026-03-11) from the March governance seed; enabled; no registry entry; verify whether anything still runs it",
+      "measured": {
+        "on": "2026-10-28",
+        "enabled": true,
+        "run_count": 150,
+        "has_run": true
+      }
     },
     {
       "agent_name": "visitor_tracker",
@@ -175,7 +295,16 @@
       "source": "production_only",
       "disposition": "unresolved",
       "capability_id": null,
-      "reason": "production row (2026-03-11) from the March governance seed; enabled; no registry entry; verify whether anything still runs it"
+      "reason": "production row (2026-03-11) from the March governance seed; enabled; no registry entry; verify whether anything still runs it",
+      "measured": {
+        "on": "2026-10-28",
+        "enabled": true,
+        "run_count": 1300725,
+        "has_run": true
+      }
     }
-  ]
+  ],
+  "measured_live_rows": 13,
+  "measured_live_runs": 1491129,
+  "measured_on": "2026-10-28"
 }

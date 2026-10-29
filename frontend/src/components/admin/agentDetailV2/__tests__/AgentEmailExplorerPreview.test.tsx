@@ -51,6 +51,14 @@ function row(over: Partial<ExplorerDecisionPage['rows'][0]> = {}): ExplorerDecis
     e_score: 40,
     i_score: 30,
     f_score: 10,
+    // The draft the decision produced (Phase 2). Null here on purpose: this
+    // preview renders a count and a verdict, not the copy, so a fixture carrying
+    // a subject would suggest it displays one. The REQUIRED-ness of these three
+    // fields is what brought this fixture to my attention at all, which is the
+    // contract layer doing its job rather than a chore.
+    scheduled_email_id: null,
+    draft_subject: null,
+    draft_status: null,
     ...over,
   };
 }

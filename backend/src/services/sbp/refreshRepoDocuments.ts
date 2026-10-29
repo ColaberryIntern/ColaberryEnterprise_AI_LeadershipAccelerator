@@ -39,6 +39,7 @@ import { renderDocs } from './renderDocs';
 import { writeDocsToRepo, readRepoManifest, RepoWriteError } from './repoWriter';
 import { loadBuildProgress } from './buildProgressSnapshot';
 import { scheduleForEnrollment } from './scheduleForEnrollment';
+import { ensureGovPlanPublishedForSync } from './govPlanForSync';
 
 export type RefreshOutcome =
   | 'written'          // files changed and were committed
@@ -89,6 +90,12 @@ export async function refreshRepoDocuments(
 ): Promise<RefreshResult> {
   const startedAt = Date.now();
   try {
+    // Gov builds publish their plan only when the gov cockpit view is opened, so a repo sync must
+    // publish it itself — otherwise a gov student who clicks "Sync from GitHub" gets no_plan forever
+    // and their repo is never written. Idempotent, gated to gov builds, best-effort: a non-gov
+    // project or a failure just falls through to the normal no_plan path below.
+    await ensureGovPlanPublishedForSync(projectId, opts.correlationId ?? null);
+
     const stored = await getPublishedPlan(projectId);
     if (!stored) return result('no_plan');
 

@@ -4,7 +4,7 @@ import AsyncPanel from './AsyncPanel';
 import DecisionWhyModal from './DecisionWhyModal';
 import LearnerName from './LearnerName';
 import { useExplorerData } from './useExplorerData';
-import type { ExplorerDecisionPage } from '../../services/explorerGrowthApi';
+import type { ExplorerDecisionPage, ExplorerDecisionRow } from '../../services/explorerGrowthApi';
 
 /**
  * The table behind both Decisions and Shadow.
@@ -15,6 +15,55 @@ import type { ExplorerDecisionPage } from '../../services/explorerGrowthApi';
  * programme, when two surfaces read one corrupt column differently and one said
  * "registered" while the other asked the same person to sign up.
  */
+
+/** The status the draft stage writes when the send-time quality gate refused the copy. */
+const REJECTED = 'explorer_draft_rejected';
+
+/**
+ * What this learner would have read, in one cell.
+ *
+ * Four distinct states, and collapsing any pair of them would mislead:
+ *
+ *   a subject            - the draft exists and passed the gate
+ *   a subject + REFUSED  - the draft exists and the gate refused it. This is the
+ *                          most interesting row on the page and the easiest to
+ *                          hide, because refused copy still HAS a subject and
+ *                          renders identically unless the status is read.
+ *   "not drafted yet"    - an actionable email decision with no draft. Honest
+ *                          absence: the draft stage runs 20 minutes after the
+ *                          Governor and is flag-gated, so before it has run every
+ *                          row looks like this.
+ *   an em dash           - nothing was ever going to be sent (a WAIT, or a
+ *                          non-email action). Not a gap, so not flagged as one.
+ */
+export function DraftSubject({ row }: { row: ExplorerDecisionRow }) {
+  if (row.draft_subject) {
+    const refused = row.draft_status === REJECTED;
+    return (
+      <>
+        <div className={refused ? 'text-muted' : ''} title={row.draft_subject}>
+          {row.draft_subject}
+        </div>
+        {refused && (
+          <div className="small mt-1">
+            <span className="badge bg-warning text-dark" data-testid="draft-refused">
+              refused by the quality gate
+            </span>
+          </div>
+        )}
+      </>
+    );
+  }
+
+  // Mirrors the Why modal's rule rather than re-deriving it from an action list:
+  // an email decision carrying a campaign is one that SHOULD have produced copy.
+  const expectsOne = row.channel === 'email' && row.selected_action !== 'WAIT';
+  return (
+    <span className="text-muted small">
+      {expectsOne ? 'not drafted yet' : '—'}
+    </span>
+  );
+}
 
 interface Props {
   fetcher: () => Promise<ExplorerDecisionPage>;
@@ -59,6 +108,11 @@ export default function DecisionsTable({
                   <tr>
                     {showRecipient && <th>Would go to</th>}
                     {!showRecipient && <th>Learner</th>}
+                    {/* The subject sits second, next to the person who would read
+                        it. Before Phase 2 the only way to see the copy was to open
+                        one modal per decision, so answering "did the right
+                        messaging go out" across 142 rows meant 142 clicks. */}
+                    <th>Message</th>
                     <th>Action</th>
                     <th>State</th>
                     <th className="text-end">Content</th>
@@ -74,6 +128,9 @@ export default function DecisionsTable({
                         <div className="text-muted small font-monospace">
                           {r.enrollment_id.slice(0, 8)}…
                         </div>
+                      </td>
+                      <td style={{ maxWidth: 320 }}>
+                        <DraftSubject row={r} />
                       </td>
                       <td>
                         <StatusBadge

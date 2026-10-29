@@ -49,6 +49,25 @@ export interface ExplorerDecisionRow {
   /** 2026-10-26: the 360 page and the GHL record, one click each (explorerPersonLinks). */
   lead_id: number | null;
   ghl_url: string | null;
+  /**
+   * The draft this decision produced, joined from `scheduled_emails`.
+   *
+   * WHY A LIST ROW CARRIES THE SUBJECT. Until Phase 2 the only way to see what a
+   * learner would read was to open the Why drilldown, one decision at a time. A
+   * reviewer checking "did the right messaging go out" had to open 142 modals to
+   * answer it, which is not a review, and it is why the shadow tab read as a list
+   * of verdicts with no content behind them.
+   *
+   * `null` is a real and common answer, not an error: a decision rendered before
+   * the draft stage existed has no draft, and a decision whose action is a WAIT
+   * never gets one. `draft_status` distinguishes copy that passed the quality gate
+   * (`explorer_draft`) from copy the gate refused (`explorer_draft_rejected`) —
+   * the refusal is the more interesting row of the two, and showing them
+   * identically would hide it.
+   */
+  scheduled_email_id: string | null;
+  draft_subject: string | null;
+  draft_status: string | null;
 }
 
 export interface ExplorerDecisionPage {
@@ -118,7 +137,9 @@ const DECISION_COLUMNS = `d.id, d.enrollment_id, d.decision_date, d.mode, d.sele
        jsonb_array_length(d.suppressed_actions) AS suppressed_count,
        jsonb_array_length(d.selected_content_assets) AS asset_count,
        p.email_normalized, p.primary_state, p.e_score, p.i_score, p.f_score,
-       p.lead_id, l.ghl_contact_id, l.source AS lead_source`;
+       p.lead_id, l.ghl_contact_id, l.source AS lead_source,
+       d.scheduled_email_id::text AS scheduled_email_id,
+       se.subject AS draft_subject, se.status AS draft_status`;
 
 async function listDecisions(
   where: string,
@@ -137,6 +158,12 @@ async function listDecisions(
        FROM explorer_journey_decisions d
        LEFT JOIN explorer_journey_profiles p ON p.enrollment_id = d.enrollment_id
        LEFT JOIN leads l ON l.id = p.lead_id
+       -- LEFT, never INNER. An INNER JOIN here would silently drop every decision
+       -- that has no draft yet — which today is most of them — and the page would
+       -- read as "the Governor decided almost nothing" rather than "the draft
+       -- stage has not run for these". The count query above does not join at all,
+       -- so an INNER here would also make the rows disagree with the total.
+       LEFT JOIN scheduled_emails se ON se.id = d.scheduled_email_id
        ${where}
       ORDER BY d.created_at DESC, d.id
       LIMIT :limit OFFSET :offset`,
@@ -249,12 +276,33 @@ export async function getContentHealth(q: ContentQuery): Promise<ExplorerContent
     { type: QueryTypes.SELECT },
   );
 
+  /*
+   * THE MATRIX AND THE COVERAGE TABLE NOW AGREE ON WHAT "AVAILABLE" MEANS.
+   *
+   * They did not. `coverageForPurpose` has always excluded an asset outside its
+   * `starts_at` / `expires_at` window; this query did not, so the matrix counted
+   * expired and not-yet-started assets as things "a learner in this stage and tier
+   * could receive". That is not a presentation difference between two panels, it
+   * is the matrix answering its own stated question wrongly: an expired asset
+   * cannot be received by anybody. A reviewer reading a healthy cell and a thin
+   * coverage row for the same stage had no way to tell which one was lying.
+   *
+   * WHAT STILL DIFFERS BETWEEN THE TWO, AND LEGITIMATELY SO. This query unnests
+   * BOTH tag arrays, so an asset with two stage tags and two audience tags appears
+   * in up to four cells — which is why the panel says "do not add the cells up".
+   * Coverage unnests only `audience_tags` and filters stages with `&&`, and it
+   * additionally narrows by `asset_type` because a purpose can only draw on
+   * certain kinds. Those two are intrinsic to the questions being asked and are
+   * explained on the page; the availability window was not, and was simply wrong.
+   */
   const matrix = await sequelize.query<{ stage: string; audience: string; count: string }>(
     `SELECT s.stage, u.audience, COUNT(DISTINCT a.id) AS count
        FROM explorer_content_assets a,
             LATERAL UNNEST(a.journey_stage_tags) s(stage),
             LATERAL UNNEST(a.audience_tags) u(audience)
       WHERE a.active AND 'email' = ANY(a.allowed_channels)
+        AND (a.starts_at IS NULL OR a.starts_at <= NOW())
+        AND (a.expires_at IS NULL OR a.expires_at > NOW())
       GROUP BY 1, 2 ORDER BY 3 DESC`,
     { type: QueryTypes.SELECT },
   );
