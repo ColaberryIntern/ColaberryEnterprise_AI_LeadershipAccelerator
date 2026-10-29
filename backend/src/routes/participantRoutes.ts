@@ -82,7 +82,7 @@ import {
 import {
   handleOpenCard, handleMentor, handleNudge, handleReflection, handleEnsureContent, handleUploadCertificate, handleGetCertificate, handlePromptLab,
   handleComplete, handleReadiness, handleListNotes, handleCreateNote, handleDeleteNote,
-  handleWatchBeat, handleBlogReadBeat, handleBlogCollect, handleBlogReader, handleDwellBeat, handleGetSurvey, handleSaveSurvey,
+  handleWatchBeat, handleWatchVerdict, handleBlogReadBeat, handleBlogCollect, handleBlogReader, handleDwellBeat, handleGetSurvey, handleSaveSurvey,
   handleMediaBeat, handleMediaVerdict, handleMediaCollect,
   handleGetWeekReview, handleSaveReflectionSignals,
   handleGetPeerWins, handleSubmitWin, handleCheerWin,
@@ -297,6 +297,7 @@ const watchBeatRateLimiter = rateLimit({
   message: { error: 'Too many watch beats — please slow down' },
 });
 router.post('/api/portal/runtime/cards/:cardId/watch', watchBeatRateLimiter, requireParticipant, handleWatchBeat);
+router.get('/api/portal/runtime/cards/:cardId/watch', requireParticipant, handleWatchVerdict);
 
 // ── AI Internship (participant surface) ─────────────────────────────────────
 // Every handler scopes to req.participant.sub; none accepts an application id
