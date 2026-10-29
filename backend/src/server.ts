@@ -175,6 +175,7 @@ import { ensureCapeTodayPlanSchema } from './db/ensureCapeTodayPlanSchema';
 import { ensureCapeGovernanceSchema } from './db/ensureCapeGovernanceSchema';
 import { ensureCapeAiPulseExposureSchema } from './db/ensureCapeAiPulseExposureSchema';
 import { ensureAgentDomainProjectSchemaGuarded } from './db/ensureAgentDomainProjectSchema';
+import { ensureAgentDomainChangeRequestSchemaGuarded } from './db/ensureAgentDomainChangeRequestSchema';
 
 // Import models to register associations before sync
 import './models';
@@ -3122,6 +3123,10 @@ async function start(): Promise<void> {
   // the call reject, or observed `app.listen`. A source-grep is not a behavioural assertion.
   // `ensureAgentDomainProjectSchemaGuarded` cannot reject, so this await is safe bare.
   await ensureAgentDomainProjectSchemaGuarded();
+  // AF4.2 change requests. Same contract as the call above: the guard lives in the module so its
+  // failure path is testable, and it cannot reject, so this await is safe bare. The table is
+  // additive and `IF NOT EXISTS`, so this is a no-op on every boot after the first.
+  await ensureAgentDomainChangeRequestSchemaGuarded();
   // Colaberry Commons — seed the 10 always-open fruit video rooms (idempotent).
   // Gated on the feature flag so it only populates envs where Rooms is enabled.
   if (env.communityRoomsEnabled) {

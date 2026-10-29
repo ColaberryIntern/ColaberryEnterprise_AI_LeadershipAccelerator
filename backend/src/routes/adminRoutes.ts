@@ -61,6 +61,7 @@ import admissionsRoutes from './admin/admissionsRoutes';
 import agentDomainRoutes from './admin/agentDomainRoutes';
 import agentNudgeRoutes from './admin/agentNudgeRoutes';
 import agentDisplayNameRoutes from './admin/agentDisplayNameRoutes';
+import agentChangeRequestRoutes from './admin/agentChangeRequestRoutes';
 import ticketRoutes from './admin/ticketRoutes';
 import previewRoutes from './admin/previewRoutes';
 import alertRoutes from './admin/alertRoutes';
@@ -274,6 +275,7 @@ router.use(agentNudgeRoutes);
 // as the line above -- that router is read-only by charter and this one writes -- but on the
 // narrower `dashboard` grant, because it carries no builder name or address.
 router.use(agentDisplayNameRoutes);
+router.use(agentChangeRequestRoutes);
 router.use(ticketRoutes);
 router.use(previewRoutes);
 router.use(alertRoutes);
