@@ -35,8 +35,20 @@ const mockDel = api.delete as unknown as jest.Mock;
  * different question than the one asked. So every call that takes filters is
  * checked for what it actually forwarded.
  *
- * NOTE ON THE GATE: CI does not run frontend jest tests — only
- * `frontend-typecheck` and `frontend-build`. This file is a local guard.
+ * NOTE ON THE GATE, corrected 2026-10-28. This file used to say "CI does not run
+ * frontend jest tests — only `frontend-typecheck` and `frontend-build`. This file
+ * is a local guard." That was wrong, and wrong in the direction that invites
+ * somebody to break it: `.github/workflows/ci.yml` has a `frontend-tests` job
+ * running `react-scripts test`, and the ONLY thing it excludes is the `/testEnv/`
+ * helper directory — so this file does run in CI and does go red.
+ *
+ * What is true, and is the part worth knowing: *Frontend unit tests* is not in the
+ * REQUIRED set, so a failure here is visible without blocking a merge. The five
+ * required checks are *Backend typecheck*, *Backend unit tests*, *Secret scan +
+ * route-auth lint*, *Frontend build* and *Frontend typecheck* — and *Frontend
+ * build* runs with `CI=true`, which promotes warnings to errors, so an unused
+ * import blocks a merge where a failing assertion in this file would not. Treat a
+ * red run here as a real finding, not as local noise.
  */
 
 const ID = '3f7c1e90-2b4a-4d55-9a1e-6c8b0d2f4a71';
@@ -175,10 +187,22 @@ describe('unset filters are omitted, not sent as "undefined"', () => {
   });
 });
 
-describe('the client cannot write', () => {
-  it('never calls a mutating verb', async () => {
-    // Phase A shipped no write route, and §27's seven are a governance decision
-    // rather than a build task. A client with no write method cannot leak one in.
+/**
+ * THE CLIENT HAS EXACTLY ONE WRITE, AND THIS BLOCK WAS AMENDED TO SAY SO.
+ *
+ * It used to assert the client could not write at all. Phase 2 adds
+ * `refreshContent`, so that had to change — and the change was made NARROWER
+ * rather than weaker. The reads still must not touch a mutating verb; the write
+ * name allow-list holds exactly one entry; and every other write-shaped name is
+ * still forbidden, so `/mode`, `/pause`, `recalculate` and the rest cannot arrive
+ * without amending this again, deliberately, with a reason.
+ *
+ * `refreshContent` was named to MATCH the forbidden pattern on purpose.
+ * `postContentRefresh` would have slipped past the regex untouched and left the
+ * guard intact-looking and useless.
+ */
+describe('the client has exactly one write', () => {
+  it('the READS never call a mutating verb', async () => {
     await Promise.all([
       apiClient.getSummary(),
       apiClient.getDistribution(),
@@ -197,10 +221,43 @@ describe('the client cannot write', () => {
     for (const verb of [mockPost, mockPut, mockPatch, mockDel]) expect(verb).not.toHaveBeenCalled();
   });
 
-  it('exports no function whose name suggests a write', () => {
+  /** The one write the page is allowed to have, by exact name. */
+  const ALLOWED_WRITES = ['refreshContent'];
+
+  it('exports exactly ONE function whose name suggests a write', () => {
     const writeish = Object.keys(apiClient).filter((k) =>
       /^(set|update|create|delete|pause|resume|recalculate|rerun|suppress|refresh)/i.test(k),
     );
-    expect(writeish).toEqual([]);
+    expect(writeish).toEqual(ALLOWED_WRITES);
+  });
+
+  it('the one write POSTs, to the one path, and touches no other verb', async () => {
+    mockPost.mockResolvedValue({ data: {} });
+    await apiClient.refreshContent({});
+
+    expect(mockPost).toHaveBeenCalledTimes(1);
+    expect(mockPost.mock.calls[0][0]).toBe(`${BASE}/content/refresh`);
+    for (const verb of [mockPut, mockPatch, mockDel]) expect(verb).not.toHaveBeenCalled();
+  });
+
+  it('sends the body as a body, not as query params', async () => {
+    // The endpoint validates `req.body` with a `.strict()` schema. Sent as params
+    // the keys would arrive nowhere, the schema would parse `{}`, and the run
+    // would quietly use its defaults while the caller believed it had asked for
+    // a date — a 200 answering a different question.
+    mockPost.mockResolvedValue({ data: {} });
+    await apiClient.refreshContent({ date: '2026-10-27', limit: 5 });
+
+    expect(mockPost.mock.calls[0][1]).toEqual({ date: '2026-10-27', limit: 5 });
+  });
+
+  it('sends limit as a NUMBER, which is what the body schema accepts', async () => {
+    // The backend's other numeric fields are query params and are parsed from
+    // strings; this one is JSON and is validated as a real number. A client
+    // stringifying it here would 400 every call that set it.
+    mockPost.mockResolvedValue({ data: {} });
+    await apiClient.refreshContent({ limit: 5 });
+
+    expect(typeof (mockPost.mock.calls[0][1] as { limit: unknown }).limit).toBe('number');
   });
 });
