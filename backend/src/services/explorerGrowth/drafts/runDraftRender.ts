@@ -1,7 +1,7 @@
 import { env } from '../../../config/env';
 import { isExplorerFeatureEnabled } from '../../../config/explorerGrowthFlags';
 import { redactForLogs } from '../../../utils/piiRedaction';
-import { generateMessage } from '../../aiMessageService';
+import { DEFAULT_BRAND_VOICE, generateMessage } from '../../aiMessageService';
 import { buildCompositeContext } from '../../contextGraphService';
 import { validateGeneratedMessage } from '../../messageValidatorService';
 import type { ExplorerFactSet } from '../explorerFactGuard';
@@ -98,6 +98,13 @@ function liveDeps(): DraftRenderDeps {
     generate: generateMessage,
     validate: validateGeneratedMessage,
     ground: groundForDraft,
+    // THE PHASE 4 SEAM. Explorer has no brand to resolve rules by today: `enrollments`
+    // carries no `brand_id` and content resolution runs `{ brand_id: null,
+    // allow_unscoped: true }` on purpose. So this returns the historical identity at
+    // rule-set version 0, which the characterization test proves produces a byte-identical
+    // prompt to passing nothing. When Phase 4 gives a learner a brand, only this line
+    // changes - to read the brand's published `voice` through `getCurrentRules`.
+    resolveBrandVoice: async () => DEFAULT_BRAND_VOICE,
     commitDraft,
   };
 }

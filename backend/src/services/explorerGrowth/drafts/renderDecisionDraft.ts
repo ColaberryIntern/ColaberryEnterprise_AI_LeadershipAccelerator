@@ -1,6 +1,10 @@
 import type { SequenceStep } from '../../../models/FollowUpSequence';
 import type { CompositeContext } from '../../contextGraphService';
-import type { GenerateMessageParams, GenerateMessageResult } from '../../aiMessageService';
+import type {
+  BrandVoice,
+  GenerateMessageParams,
+  GenerateMessageResult,
+} from '../../aiMessageService';
 import type { ValidationResult } from '../../messageValidatorService';
 import type { ExplorerFactSet } from '../explorerFactGuard';
 import type { GroundingResult } from '../explorerKnowledgeGrounding';
@@ -56,6 +60,17 @@ export interface DraftRenderDeps {
    * copy forever.
    */
   ground: (input: { query: string; facts?: ExplorerFactSet }) => Promise<DraftGrounding>;
+  /**
+   * The identity and published voice this message is written in.
+   *
+   * A DEPENDENCY rather than a constant so Phase 4 can point it at a real brand without
+   * touching this file. Today it resolves to the historical default at rule-set version 0,
+   * because there is no brand to look rules up by: `enrollments` carries no `brand_id`, and
+   * Explorer's own content resolution deliberately runs `{ brand_id: null,
+   * allow_unscoped: true }`. Version 0 means UNGOVERNED, not approved, and that is recorded
+   * on the draft rather than left absent - an absent field reads as "nobody checked".
+   */
+  resolveBrandVoice: () => Promise<BrandVoice>;
   /**
    * Write the draft AND stamp the decision's `scheduled_email_id` /
    * `selected_sequence_step`, ATOMICALLY. Returns the new draft's id.
@@ -203,11 +218,13 @@ export async function renderDecisionDraft(
   let generated: GenerateMessageResult;
   let context: CompositeContext;
   let grounding: DraftGrounding = { available: false, reason: 'not_attempted' };
+  let brandVoice: BrandVoice | undefined;
   // What the model was actually told. Persisted as-sent, so a reviewer reading the draft
   // beside its citations sees the same facts the generator saw.
   let groundedInstructions = instructions;
   try {
     context = await deps.buildContext(leadId, campaignId, stepIndex);
+    brandVoice = await deps.resolveBrandVoice();
 
     // Its own try/catch: a knowledge-base outage must degrade this message to ungrounded
     // copy, which the fact guard still judges, rather than being reported as
@@ -251,6 +268,7 @@ export async function renderDecisionDraft(
         total_steps: totalSteps,
       },
       tone: step.ai_tone,
+      brandVoice,
       compositeContext: context,
     });
   } catch (err: any) {
@@ -319,6 +337,17 @@ export async function renderDecisionDraft(
               copy_rules_applied: grounding.result.copyRulesApplied,
             }
           : { available: false, reason: grounding.reason },
+        // Which identity the copy was written as, and which published rule set backed its
+        // voice. `published: false` is a STATED NEGATIVE: version 0 is "nobody has written
+        // a voice down", and leaving the field out would be indistinguishable from a
+        // renderer that never looked.
+        brand_voice: brandVoice
+          ? {
+              name: brandVoice.name,
+              rules_version: brandVoice.rulesVersion,
+              published: brandVoice.rulesVersion > 0,
+            }
+          : null,
         model: generated.model,
         tokens_used: generated.tokens_used,
       },

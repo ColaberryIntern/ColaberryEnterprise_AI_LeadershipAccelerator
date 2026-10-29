@@ -112,6 +112,11 @@ function harness(over: Partial<DraftRenderDeps> = {}): Harness {
     // The default harness grounds nothing, so every pre-existing test keeps asserting the
     // ungrounded behaviour it was written for. Tests about grounding override it.
     ground: async () => ({ available: false, reason: 'not_configured' }),
+    resolveBrandVoice: async () => ({
+      name: 'Colaberry Enterprise AI Division',
+      teamName: 'Colaberry Enterprise AI',
+      rulesVersion: 0,
+    }),
     commitDraft: async (input, decisionId) => {
       committed.push({ input, decisionId });
       return 'se-new';
@@ -386,6 +391,46 @@ describe('planDecisionDraft is the dry run, and it spends nothing', () => {
       ok: false,
       reason: 'no_recipient_email',
     });
+  });
+});
+
+describe('brand voice', () => {
+  it('passes the resolved voice to the generator', async () => {
+    const h = harness({
+      resolveBrandVoice: async () => ({
+        name: 'AI Flotation',
+        tone: 'plain, technical',
+        rulesVersion: 4,
+      }),
+    });
+
+    await renderDecisionDraft(decision(), h.deps);
+
+    expect(h.generatedWith[0].brandVoice).toMatchObject({ name: 'AI Flotation', rulesVersion: 4 });
+  });
+
+  it('records a published voice on the draft', async () => {
+    const h = harness({
+      resolveBrandVoice: async () => ({ name: 'AI Flotation', tone: 'dry', rulesVersion: 4 }),
+    });
+
+    await renderDecisionDraft(decision(), h.deps);
+
+    const meta = h.committed[0].input.metadata as any;
+    expect(meta.brand_voice).toEqual({ name: 'AI Flotation', rules_version: 4, published: true });
+  });
+
+  it('records UNGOVERNED as a stated negative rather than an absent field', async () => {
+    // Version 0 is "nobody has written a voice down", not "approved". Omitting the field
+    // would be indistinguishable from a renderer that never looked.
+    const h = harness();
+
+    await renderDecisionDraft(decision(), h.deps);
+
+    const meta = h.committed[0].input.metadata as any;
+    expect(meta.brand_voice.published).toBe(false);
+    expect(meta.brand_voice.rules_version).toBe(0);
+    expect(meta.brand_voice.name).toBe('Colaberry Enterprise AI Division');
   });
 });
 
