@@ -126,6 +126,11 @@ const PATH_SECTION: Array<[string, SectionKey]> = [
   ['/api/admin/agent-domains-mine', 'dashboard'],
   ['/api/admin/agent-domains-provisioned', 'program'],
   ['/api/admin/agent-domains', 'program'],
+  // Agent Factory tab list (M2). Its OWN 'agents'-gated prefix so the Interns-hub Agents tab's data
+  // agrees with its nav gate; reusing '-provisioned' ('program') would 403 a future 'agents'-only
+  // builder who can see the tab. Distinct from the '-domains' prefixes (no '/'-boundary overlap), so
+  // declaration order is free. Per-domain scope (managed ∪ built) is a SECOND, in-service check.
+  ['/api/admin/agent-factory', 'agents'],
   ['/api/admin/cohorts', 'program'], ['/api/admin/curriculum', 'program'], ['/api/admin/components', 'program'],
   ['/api/admin/composer', 'program'], ['/api/admin/capabilities', 'program'], ['/api/admin/recipes', 'program'],
   ['/api/admin/feed-control', 'program'],
@@ -153,6 +158,11 @@ const PATH_SECTION: Array<[string, SectionKey]> = [
   // unmapped path is deny-by-default for every scoped mgmt token, and
   // 'admissions' (Dhee) is exactly such a token.
   ['/api/admin/internship', 'internship'],
+  // Gov Contracts tab list (M1). Its OWN prefix + section so the Interns-hub tab's data agrees
+  // with its 'gov_contracts' nav gate; distinct from '/api/admin/factory' (which stays 'program'),
+  // so there is no ordering shadow. Per-project row scope is a SECOND, in-service check (membership),
+  // not expressible in this role-level table.
+  ['/api/admin/gov-contracts', 'gov_contracts'],
   // CAPE — the Architecture Skills taxonomy (skill definitions, evidence-band
   // weights) and the Feed Control governance board built on it. Programme work:
   // it defines what students are measured on, so it belongs with curriculum.
