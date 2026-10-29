@@ -37,6 +37,10 @@
 .cm-list .cm-list-plan h2{font-size:17px;margin:0 0 6px}
 .cm-list .cm-list-plan ol{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:4px}
 .cm-list .cm-empty{grid-column:1/-1}
+/* C23 (WP-10): plan rows "1." / "✓" with their building (D:3521); what enrolling unlocks, the amber pill (D:999). */
+.cm-list .cm-list-plan-n{font-weight:700;margin-right:2px}
+.cm-list .cm-list-plan-at{color:var(--cm-art-muted);font-weight:400}
+.cm-list .cm-list-unlock{align-self:flex-start;color:var(--cm-art-ink);font-weight:700;font-size:13px}
 @media (max-width:760px){ .cm-list .cm-list-body{grid-template-columns:1fr} .cm-list .cm-layer-bar strong{font-size:24px} }
 
 /* ---- notifications from the bell in the campus top bar (prototype .notifs) ---- */
@@ -46,9 +50,21 @@
 .cm-topbar .cm-bell-btn{border:0;background:transparent;color:var(--cm-art-ink)}
 
 /* ---- the new-message toast (prototype .toast): Reply / Walk over ---- */
-.cm-dm-toast{border-radius:16px;border:0;background:var(--cm-art-pic-ink);color:var(--cm-art-on-dark);box-shadow:var(--cm-art-shadow);padding:12px 12px 12px 16px;gap:10px;font-family:'DM Sans',var(--sans),sans-serif}
+/* C23: `body` so this wins over campusPeople.css's light base rule, which can load after this file (it did on the home). */
+body .cm-dm-toast{border-radius:16px;border:0;background:var(--cm-art-pic-ink);color:var(--cm-art-on-dark);box-shadow:var(--cm-art-shadow);padding:12px 12px 12px 16px;gap:10px;font-family:'DM Sans',var(--sans),sans-serif}
 .cm-dm-toast .cm-link{color:var(--cm-art-on-dark);font-weight:700;background:var(--cm-art-in-name-bg);border:1px solid var(--cm-art-pic-muted);border-radius:999px;padding:6px 12px;text-decoration:none}
 .cm-dm-toast .cm-card-x{color:var(--cm-art-on-dark);background:transparent;border:0;font-size:18px}
+/* C23 (Q6): the prototype toast stacks face, name, place, the message and its actions; top right on a desktop (D:574-580). */
+body .cm-dm-toast{align-items:flex-start}
+@media(min-width:821px){body .cm-dm-toast{top:76px;right:16px;bottom:auto;left:auto;width:340px;max-width:calc(100% - 32px)}}
+.cm-dm-toast .cm-card-x{align-self:flex-start;padding:0 2px;line-height:1}
+.cm-dm-toast-av{color:var(--cm-art-on-dark);flex:0 0 38px;width:38px;height:38px;border-radius:50%;overflow:hidden;display:flex;align-items:center;justify-content:center;background:var(--cm-art-in-name-bg);font-weight:700;font-size:13px}
+.cm-dm-toast-av img{width:100%;height:100%;object-fit:cover}
+.cm-dm-toast-body{flex:1;min-width:0;display:flex;flex-direction:column}
+.cm-dm-toast-where{opacity:.7;font-size:12px}
+.cm-dm-toast-text{margin:4px 0 8px;font-size:13px;line-height:1.4;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.cm-dm-toast-acts{display:flex;gap:8px;flex-wrap:wrap}
+.cm-dm-toast .cm-link.is-reply{background:var(--cm-art-on-dark);color:var(--cm-art-pic-ink);border-color:var(--cm-art-on-dark)}
 
 /* ---- the Me panel (prototype .me-panel) ---- */
 .cm-me-panel{position:absolute;top:76px;right:16px;bottom:16px;width:min(400px,calc(100% - 32px));z-index:12;background:var(--cm-art-paper);border-radius:22px;box-shadow:var(--cm-art-shadow);

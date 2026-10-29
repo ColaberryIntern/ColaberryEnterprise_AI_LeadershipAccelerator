@@ -109,6 +109,22 @@ describe('the Wayfinder', () => {
     root = createRoot(container);
     expect(openWayfinder()).toBe(false);
   });
+
+  it("C23 (rule R10): Esc and the backdrop tell the home to recenter; a pick walks instead", () => {
+    const closed: number[] = [];
+    picked = [];
+    render(<Wayfinder ctx={ctx} onPick={(it) => picked.push(it)} onClosed={() => closed.push(1)} />);
+    key("/");
+    key("Escape", {}, q('[data-testid="cm-wf-input"]')!);
+    expect(closed).toEqual([1]);
+    key("/");
+    act(() => { q('[data-testid="cm-wayfinder"]')!.dispatchEvent(new MouseEvent("mousedown", { bubbles: true })); });
+    expect(closed).toEqual([1, 1]);
+    key("/");
+    key("Enter", {}, q('[data-testid="cm-wf-input"]')!);
+    expect(picked).toHaveLength(1);
+    expect(closed).toEqual([1, 1]);
+  });
 });
 
 describe('the concierge\'s new sections', () => {

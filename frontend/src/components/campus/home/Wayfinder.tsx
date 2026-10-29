@@ -17,7 +17,11 @@ import '../campusWayfinder.css';
  *  - a pick walks there (a room flashes in its building's card, the prototype's flashRoom), runs to what is starting, or opens a
  *    person's card. Nothing is logged: search insights are decision Q11's separate project.
  */
-export default function Wayfinder({ ctx, onPick }: { ctx: WfContext; onPick: (it: WfItem) => void }): React.ReactElement | null {
+export default function Wayfinder({ ctx, onPick, onClosed }: {
+  ctx: WfContext; onPick: (it: WfItem) => void;
+  /** C23 (rule R10): closed without a pick (Esc, the backdrop); the home recenters its map. A pick walks instead. */
+  onClosed?: () => void;
+}): React.ReactElement | null {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState('');
   const [sel, setSel] = useState(0);
@@ -30,7 +34,9 @@ export default function Wayfinder({ ctx, onPick }: { ctx: WfContext; onPick: (it
     back.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     setQ(''); setSel(0); setOpen(true);
   }, []);
-  const close = useCallback(() => { setOpen(false); window.setTimeout(() => back.current?.focus?.(), 0); }, []);
+  const closedRef = useRef(onClosed);
+  closedRef.current = onClosed;
+  const close = useCallback(() => { setOpen(false); closedRef.current?.(); window.setTimeout(() => back.current?.focus?.(), 0); }, []);
   useEffect(() => registerWayfinder(show), [show]);
   useEffect(() => { if (open) window.setTimeout(() => input.current?.focus(), 20); }, [open]);
   useEffect(() => {

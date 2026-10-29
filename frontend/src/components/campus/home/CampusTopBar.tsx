@@ -29,6 +29,8 @@ export interface TopBarProps {
   onList: () => void;
   /** Opens the Wayfinder. */
   onFind: () => void;
+  /** C23 (rule R10): the bell closed without a pick; the home recenters its map. */
+  onBellClosed?: () => void;
   /** Opens the Me panel (look and campus settings). */
   onMe: () => void;
   /** C49 (v13 T1): today's plan for the Today button's count ("<done> of <total>"); null or empty: no count. */
@@ -77,7 +79,7 @@ export default function CampusTopBar(p: TopBarProps): React.ReactElement {
             <span data-testid="cm-stats-streak" title="Day streak"><span aria-hidden="true">{'🔥 '}</span>{streak}<span className="cm-sr"> day streak</span></span></>
         )}
         {p.weather && <><span className="sep hide-m" aria-hidden="true" />{p.weather}</>}
-        <span className="cm-stats-bell" data-testid="cm-stats-bell"><NotificationBell /></span>
+        <span className="cm-stats-bell" data-testid="cm-stats-bell"><NotificationBell onDismissed={p.onBellClosed} /></span>
         <button type="button" className="cm-me" onClick={p.onMe} aria-label="You: your look and campus settings" data-testid="cm-stats-me">
           {p.photo ? <img src={p.photo} alt="" data-testid="cm-stats-photo" /> : initials}
         </button>

@@ -133,8 +133,8 @@ const CARD_VIEWS = ['03-arrive', '04-inside', '14-step-outside', '15-panel-with-
 /** A view: route to open, then steps (each a { click }, { evaluate } or { wait }) and the required ids for an account and size. */
 const VIEWS = [
   { name: '01-gate', fresh: true, route: '/portal/campus',
-    required: (a) => ['cm-gate', 'cm-gate-arch-text', 'cm-gate-logo', 'cm-gate-greeting', 'cm-gate-sub', 'cm-gate-id', 'cm-gate-enter', ...(a === 'staff' ? [] : ['cm-gate-tour'])],
-    known: () => ['WP-4 (Q9): Enter claims today\'s streak; the line shows the server\'s points and appears only for a member with an unclaimed or running streak'] },
+    // C23: no longer a "known": Q9 is built (cm-gate-streak, useGateStreak). The line needs a real streak, so it is not required.
+    required: (a) => ['cm-gate', 'cm-gate-arch-text', 'cm-gate-logo', 'cm-gate-greeting', 'cm-gate-sub', 'cm-gate-id', 'cm-gate-enter', ...(a === 'staff' ? [] : ['cm-gate-tour'])] },
   { name: '02-home', route: '/portal/campus',
     required: (a, size) => [...MAP_ART, ...buildingIds(), ...TOPBAR, ...(size === 'phone' ? [] : ['cm-stats', ...STATS[a]]), ...CONCIERGE, ...HELPDESK(a), ...CONCIERGE_BY[a], ...(size === 'phone' ? ['.cm-tabbar'] : [])],
     known: HOME_KNOWN },
@@ -146,14 +146,14 @@ const VIEWS = [
     // v6 D1: the CSS 3D room; the board replaced the door. Campus HQ: the career building shows the tower instead.
     required: (a) => (isHqAccount(a) ? ['cm-inside', 'cm-hq', 'cm-hq-ext', 'cm-inside-out'] : ['cm-inside', 'cm-room3d', 'cm-board', 'cm-inside-you', 'cm-inside-out']),
     assert: () => NO_DOOR,
-    known: () => ['the room opens on arrival, as the prototype flyIn does (no separate "look inside" step)', 'the prototype interiors invented events, dates, client names and tickets: neutral signs instead'] },
+    known: () => ['the room opens on arrival, as the prototype flyIn does (no separate "look inside" step)', 'rooms show real-data boards only (C27, C33, C43); the prototype interiors invented events, dates, client names and tickets, never drawn'] },
   { name: '05-page', route: '/portal/library',
     required: (a, size) => ['cm-locbar', 'cm-trail', 'cm-step-out', '.cm-locbar .cm-whereto', ...(size === 'phone' ? [] : ['cm-page-side', 'cm-page-rail'])], // C16: the bar
     known: () => ['the page countdown header (next class / next event) is the existing portal header, not rebuilt'] },
   { name: '06-live', route: '/portal/campus', needsLive: true,
     // WP-6: the marquee over the live building, the bar's state chip and clock, the card's chip and chime
     required: (a, size) => ['cm-world', 'cm-cc-live', 'cm-beams', 'svg.cm-map.is-evening.ls-live', 'cm-marquee', 'cm-live-chip', ...(size === 'phone' ? [] : ['cm-live-sub']), 'cm-cc-live-chime'],
-    known: () => ['the prototype crowd of walking dots was random: not drawn (the building head count is real)'] },
+    known: () => ['ambient walkers: decision Q1 (real present people walking) is still open; the prototype\'s random crowd is never drawn'] },
   { name: '07-notifications', route: '/portal/campus', steps: () => [{ click: '[data-testid="cm-stats-bell"] button' }],
     required: () => ['.cm-bell-panel'], desktopOnly: true },
   { name: '08-person-card', route: '/portal/campus', accounts: ['member', 'explorer', 'staff'], steps: () => [{ click: '[data-testid="cm-cc-helpdesk"] button' }, { wait: 500 }],
@@ -161,9 +161,10 @@ const VIEWS = [
     known: () => ['the learner person card (a popover at the press) needs someone else on campus; covered by campusPeopleRooms'] },
   { name: '09-chat', route: '/portal/campus', accounts: ['member', 'explorer', 'staff'], steps: () => [{ click: '[data-testid="cm-cc-helpdesk"] button' }, { wait: 500 }],
     required: () => ['cm-staff-card'],
-    known: () => ['chat with a desk opens through Today (the existing DM dock); not rebuilt on the home'] },
+    // C23: corrected. The chat now opens on the home itself (CampusDmDock); only the seed is missing.
+    known: () => ['a desk\'s Message opens the chat dock on the home (CampusDmDock), but only for a desk on duty with a real account, which the local seed has none of; covered by campusDmDock'] },
   { name: '10-toast', route: '/portal/campus', required: () => ['cm-world'],
-    known: () => ['the DM toast (Reply, Walk over) needs a real incoming message; covered by campusPanels and campusDmToast tests'] },
+    known: () => ['the DM toast shows on the next 45 s poll after a new message; its face, place, message, Reply and Walk over are covered by campusPanels and campusDmToast'] },
   { name: '11-list', route: '/portal/campus', steps: () => [{ click: '[data-testid="cm-topbar-list"]' }],
     required: () => ['cm-list', '.cm-list-intro'] },
   { name: '12-me', route: '/portal/campus', steps: () => [{ click: '[data-testid="cm-stats-me"]' }],

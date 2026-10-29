@@ -96,7 +96,7 @@ describe('the message toast stays clear of card actions', () => {
   it('carries is-over-layer while a campus layer is open, and not otherwise', async () => {
     container = document.createElement('div');
     document.body.appendChild(container);
-    const toast = { key: 'k', peerId: 'p', peerName: 'Sam' };
+    const toast = { key: 'k', peerId: 'p', peerName: 'Sam', text: 'hi', peerAvatar: null };
     await act(async () => { root = createRoot(container); root.render(<MemoryRouter><DmToastView toast={toast} onDismiss={() => undefined} overLayer /></MemoryRouter>); });
     expect(q('[data-testid="cm-dm-toast"]')!.classList.contains('is-over-layer')).toBe(true);
     await act(async () => { root.render(<MemoryRouter><DmToastView toast={toast} onDismiss={() => undefined} /></MemoryRouter>); });

@@ -69,8 +69,8 @@ function Controls(): null { campus = useCampus(); return null; }
 let container: HTMLDivElement;
 let root: Root;
 const flush = async () => { for (let i = 0; i < 10; i += 1) await act(async () => { await Promise.resolve(); }); };
-async function openList(): Promise<HTMLElement> {
-  window.localStorage.setItem(CAMPUS_SETTINGS_KEY, JSON.stringify({ nav: 'campus', workplaceNames: false, motion: 'on' }));
+async function openList(workplaceNames = false): Promise<HTMLElement> {
+  window.localStorage.setItem(CAMPUS_SETTINGS_KEY, JSON.stringify({ nav: 'campus', workplaceNames, motion: 'on' }));
   window.localStorage.setItem(PARTICIPANT_TOKEN_KEY, 'h.eyJlbWFpbCI6ImxlYXJuZXJAZXhhbXBsZS5jb20ifQ.s'); // gitleaks:allow (fake, unsigned)
   container = document.createElement('div');
   document.body.appendChild(container);
@@ -188,5 +188,50 @@ describe('the side nav follows the same admin rule (C11)', () => {
     const admin = nav.querySelector('[data-admin="true"]')!;
     expect(admin.tagName).toBe('SPAN');
     expect(admin.getAttribute('aria-disabled')).toBe('true');
+  });
+});
+
+describe("C23 (WP-10): the directory as the prototype draws it", () => {
+  const type = (list: HTMLElement, v: string) => act(() => {
+    const box = list.querySelector(".cm-filter") as HTMLInputElement;
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(box, v);
+    box.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  it("plan rows are numbered and name their building", async () => {
+    mockAudience = "member";
+    const list = await openList();
+    expect(Array.from(list.querySelectorAll(".cm-list-plan-n")).map((n) => n.textContent)).toEqual(["1.", "2."]);
+    expect(list.querySelectorAll(".cm-list-plan-at")).toHaveLength(2);
+    expect(list.querySelector("#cm-list-plan-h")!.textContent).toContain("Today’s plan");
+  });
+  it("the filter also matches the prototype's keywords (kanban is the Project Studio)", async () => {
+    mockAudience = "member";
+    const list = await openList();
+    type(list, "kanban");
+    expect(Array.from(list.querySelectorAll("section[data-building]")).map((x) => x.getAttribute("data-building"))).toEqual(["studio"]);
+  });
+  it("Workplace names call it the HQ directory; a press on the backdrop closes it", async () => {
+    mockAudience = "member";
+    const list = await openList(true);
+    expect(list.getAttribute("aria-label")).toBe("HQ directory");
+    expect(list.querySelector(".cm-layer-bar strong")!.textContent).toBe("HQ directory");
+    await act(async () => { list.dispatchEvent(new MouseEvent("mousedown", { bubbles: true })); });
+    expect(document.querySelector("[data-testid=\"cm-list\"]")).toBeNull();
+  });
+  it("a press inside the box does not close it", async () => {
+    mockAudience = "member";
+    const list = await openList();
+    await act(async () => { list.querySelector(".cm-list-intro")!.dispatchEvent(new MouseEvent("mousedown", { bubbles: true })); });
+    expect(document.querySelector("[data-testid=\"cm-list\"]")).not.toBeNull();
+  });
+  it("a members-only building tells an Explorer what enrolling unlocks; a member never sees it", async () => {
+    mockAudience = "explorer";
+    let list = await openList();
+    expect(list.querySelectorAll("[data-testid^=\"cm-list-unlock-\"]").length).toBeGreaterThan(0);
+    expect(list.querySelector("[data-testid^=\"cm-list-unlock-\"]")!.textContent).toBe("See what enrolling unlocks");
+    act(() => root.unmount()); container.remove();
+    mockAudience = "member";
+    list = await openList();
+    expect(list.querySelectorAll("[data-testid^=\"cm-list-unlock-\"]")).toHaveLength(0);
   });
 });

@@ -18,7 +18,8 @@ export const DM_TOAST_POLL_MS = 45_000;
 // C11: 12 s (was 8 s), and paused while the toast has focus or the pointer (WCAG 2.2.1).
 export const TOAST_MS = 12_000;
 
-export interface DmToast { key: string; peerId: string; peerName: string }
+// C23 (Q6): the message text and the sender's avatar come with the conversation already; the toast shows them.
+export interface DmToast { key: string; peerId: string; peerName: string; text: string; peerAvatar: string | null }
 
 /** Why the toast is being held open: the pointer is over it, or focus is inside it. Tracked separately (C11). */
 export type ToastHold = 'hover' | 'focus';
@@ -68,7 +69,7 @@ export function useCampusDmToasts(active: boolean): DmToastControls {
         if (!top) return;
         const key = top.roomId + '|' + top.lastAt;
         toasted.current.add(key);
-        setToast({ key, peerId: top.peerId, peerName: top.peerName });
+        setToast({ key, peerId: top.peerId, peerName: top.peerName, text: top.lastMessage ?? '', peerAvatar: top.peerAvatar ?? null });
         scheduleHide();
       } catch {
         // Silent by design: retried next tick; the inbox elsewhere still shows unread.
