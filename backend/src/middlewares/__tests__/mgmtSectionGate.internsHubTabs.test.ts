@@ -1,5 +1,5 @@
 import { pathToSection } from '../mgmtSectionGate';
-import { MGMT_ROLES, roleCanAccessSection } from '../../services/access/mgmtRoles';
+import { MGMT_ROLES, roleCanAccessSection, type SectionKey } from '../../services/access/mgmtRoles';
 
 /**
  * M3 harden — the Interns hub's two new tab routes are classified, mapped to their OWN sections,
@@ -32,8 +32,8 @@ describe('M3 Interns hub tab routes — classified and management-only', () => {
   });
 
   it('NO scoped role reaches the Agents or Gov Contracts routes (deny-by-default)', () => {
-    const govSection = pathToSection('/api/admin/gov-contracts') as string;
-    const agentsSection = pathToSection('/api/admin/agent-factory') as string;
+    const govSection = pathToSection('/api/admin/gov-contracts') as SectionKey;
+    const agentsSection = pathToSection('/api/admin/agent-factory') as SectionKey;
     const scoped = MGMT_ROLES.filter((r) => r !== 'owner' && r !== 'admin');
     for (const role of scoped) {
       expect(roleCanAccessSection(role, govSection)).toBe(false);
