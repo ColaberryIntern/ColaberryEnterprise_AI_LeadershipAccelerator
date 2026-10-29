@@ -16,6 +16,7 @@ import {
 import { createAppointment } from './appointmentService';
 import { sendStrategyCallConfirmation } from './emailService';
 import { findRelevantKnowledge } from './admissionsKnowledgeService';
+import { gateKnowledgeEntries } from './admissionsKnowledgeGate';
 import AdmissionsKnowledgeEntry from '../models/AdmissionsKnowledgeEntry';
 import { routeLeadToCampaign, addMayaInteractionTag } from './mayaCampaignRouter';
 import {
@@ -374,8 +375,12 @@ export async function initiateVoiceCall(
       order: [['priority', 'DESC']],
       limit: 15,
     });
-    if (topEntries.length > 0) {
-      knowledgeFacts = topEntries
+    // Gated as well: this path reads the table directly by priority and never went through
+    // `findRelevantKnowledge`, so it was the third way a retired fact could reach a person -
+    // and the only one that reaches them by telephone.
+    const gated = gateKnowledgeEntries(topEntries);
+    if (gated.allowed.length > 0) {
+      knowledgeFacts = gated.allowed
         .map((e: any) => `- ${e.title}: ${e.content}`)
         .join('\n');
     }
@@ -834,22 +839,34 @@ export async function retrieveKnowledgeContent(
   }
 
   try {
+    // GATED, because this tool is a way AROUND the gated prompt path. Maya calls
+    // `retrieve_knowledge` herself and the result goes straight back into the conversation,
+    // so leaving it ungated would mean the model could reach a retired fact simply by asking
+    // for it. Same gate, same reasons, applied at the same moment of quoting.
     const entries = await findRelevantKnowledge({ query, pageCategory: category || undefined });
-    if (!entries || entries.length === 0) {
+    const gated = gateKnowledgeEntries(entries || []);
+    if (gated.allowed.length === 0) {
       return {
         success: true,
-        summary: 'No matching knowledge base entries found for this query.',
+        // "Nothing matched" and "everything that matched is unquotable" are different
+        // situations and the model is told which, so it cannot read the second as the first.
+        summary:
+          gated.retrieved === 0
+            ? 'No matching knowledge base entries found for this query.'
+            : `No quotable entry matched. ${gated.retrieved} matched but quote retired facts and were withheld. `
+              + 'Do not reconstruct them. Say you want to give the exact answer and offer the admissions team.',
+        details: { entry_count: 0, withheld: gated.blocked.length },
       };
     }
 
-    const formatted = entries
+    const formatted = gated.allowed
       .map((e: any) => `[${e.category?.toUpperCase() || 'INFO'}] ${e.title}: ${e.content}`)
       .join('\n\n');
 
     return {
       success: true,
       summary: formatted,
-      details: { entry_count: entries.length },
+      details: { entry_count: gated.allowed.length, withheld: gated.blocked.length },
     };
   } catch (err: any) {
     return { success: false, summary: `Knowledge retrieval failed: ${err.message}` };
