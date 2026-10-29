@@ -115,6 +115,8 @@ export async function getCampusPresenceRoute(req: Request, res: Response): Promi
 // ---- C5: AI staff desks ----
 const DeskSchema = z.object({
   id: z.enum(['reese', 'dara', 'maya']), name: z.string(), title: z.string(), building: z.string(), ai: z.literal(true),
+  // C87: where the agent stays in the Staff Office (the floor's section and the office door); null off the tower
+  floor: z.string().max(40).nullable(), office: z.string().max(200).nullable(),
   on_duty: z.boolean(), enrollment_id: z.string().nullable(), opens: z.string().nullable(), prompts: z.array(z.string()).max(5),
 }).strict();
 export const StaffDesksResponse = z.object({ desks: z.array(DeskSchema).max(3) }).strict();

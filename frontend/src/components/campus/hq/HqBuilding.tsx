@@ -10,6 +10,8 @@ import type { HqPerson } from './HqPeople';
 import { HqPanel } from './HqPanel';
 import { useHomeFacts } from '../home/useHomeFacts';
 import { useCampusMgmt } from '../campusMgmt';
+import { useCampus } from '../CampusContext';
+import type { StaffDesk } from '../campusPeopleApi';
 import './hq.css';
 
 /**
@@ -21,8 +23,18 @@ export function toHqPeople(named: CampusPerson[]): HqPerson[] {
   return named.map((p) => ({ key: p.enrollment_id, name: p.display_name, initials: initialsOf(p.display_name), photo: p.avatar_url, hq_path: p.hq_path }));
 }
 
+/**
+ * C87: an AI agent whose place is a Staff Office floor stands at its office door (Dara at Curriculum on the Program floor).
+ * The server lists such a desk only for a badge that opens that floor, so nothing here needs its own gate.
+ */
+export function deskPeople(desks: StaffDesk[] | null | undefined): HqPerson[] {
+  return (desks ?? []).filter((d) => d.on_duty && d.office)
+    .map((d) => ({ key: `desk-${d.id}`, name: `${d.name} (AI, ${d.title})`, initials: initialsOf(d.name), photo: null, hq_path: d.office ?? undefined }));
+}
+
 export function useHqPlaced(s: HqState, named: CampusPerson[]): HqPlaced<HqPerson> {
-  return useMemo(() => placePeople(s.hq, toHqPeople(named)), [s.hq, named]);
+  const { staffDesks } = useCampus();
+  return useMemo(() => placePeople(s.hq, [...toHqPeople(named), ...deskPeople(staffDesks)]), [s.hq, named, staffDesks]);
 }
 
 const AUDIENCE_TITLE: Record<CampusAudience, string> = { member: 'Member', explorer: 'Explorer', business: 'Partner', staff: 'Colaberry staff' };

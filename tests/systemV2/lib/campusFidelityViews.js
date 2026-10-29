@@ -55,7 +55,11 @@ const HQ_NO_OVERFLOW = `(() => {
 const HQ_IN = [tap('career'), WALKED];
 const HQ_LOBBY = [...HQ_IN, { click: '[data-testid="cm-hq-walk-in"]' }];
 const HQ_CAB = [...HQ_LOBBY, { click: '[data-testid="cm-hq-call"]' }];
+/** C87: Dara stays on the Program floor, at the Curriculum office door (a badge without that floor is never sent her desk). */
+const DARA_AT_CURRICULUM = "(() => [...document.querySelectorAll('.cm-hq-floor [data-testid=\"cm-hq-people\"]')].some((p) => /^At Curriculum: .*Dara/.test(p.getAttribute('aria-label') || '')) ? '' : 'Dara is not at the Curriculum door')()";
 const HQ_VIEWS = [
+  { name: '34-hq-agent', route: '/portal/campus', accounts: ['staff'], steps: () => [...HQ_CAB, hqButton('Program')],
+    required: () => ['cm-hq-floor', '.cm-hq-floor [data-testid="cm-hq-people"]'], assert: () => DARA_AT_CURRICULUM },
   { name: '34-hq-outside', route: '/portal/campus', accounts: ['staff-marketing', 'member'], steps: () => HQ_IN,
     required: () => ['cm-hq', 'cm-hq-ext', 'cm-hq-walk-in', 'cm-hq-badge', 'cm-hq-panel'], assert: () => HQ_NO_OVERFLOW },
   { name: '34-hq-lobby', route: '/portal/campus', accounts: ['staff', 'member'], steps: () => HQ_LOBBY,

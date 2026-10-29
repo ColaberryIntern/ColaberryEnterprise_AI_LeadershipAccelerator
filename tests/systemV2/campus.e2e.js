@@ -15,6 +15,7 @@ const fs = require('fs');
 const path = require('path');
 const { assertLocalOnly } = require('./lib/localOnly');
 const { runRecenter } = require('./lib/campusRecenterE2E');
+const { runAgentPlaces } = require('./lib/campusAgentPlacesE2E');
 
 const urls = assertLocalOnly({ base: process.env.BASE_URL || 'http://localhost:3150', api: process.env.API_URL || 'http://127.0.0.1:3101' });
 const { chromium } = require(process.env.PW_PATH || 'playwright');
@@ -112,7 +113,8 @@ async function runAudience(browser, audience, jwt) {
 
     await step(audience, 'the staff desks this audience should see', async () => {
       // WP-5: the staff are chips at the head of Who's here; a press opens their card (a popover, Q7)
-      await page.click('.cm-home g[data-building="commons"]');
+      // C87: Reese stays in the Classroom
+      await page.click('.cm-home g[data-building="lecture"]');
       await page.click('[data-testid="cm-who-staff-reese"]', { timeout: 15_000 });
       await page.waitForSelector('[data-testid="cm-staff-card"] [data-testid="cm-desk-reese"]', { timeout: 15_000 });
       await page.keyboard.press('Escape'); // closes the staff card
@@ -574,6 +576,8 @@ async function runOff(browser, audience, jwt) {
     if (MODE === 'on' && AUDIENCES.includes('member') && process.env.CAMPUS_E2E_RECENTER !== '0') {
       await runRecenter({ browser, audience: 'member', jwt: seeded.users.member.jwt, urls, step, must, newPage });
     }
+    // C87: where each agent stays, and Dara only for a badge that opens the Program floor (API level, every case at once)
+    if (MODE === 'on' && (!process.env.CAMPUS_E2E_AUDIENCES || process.env.CAMPUS_E2E_PLACES === '1')) await runAgentPlaces({ urls, users: seeded.users, step, must });
   } finally {
     await browser.close();
   }
