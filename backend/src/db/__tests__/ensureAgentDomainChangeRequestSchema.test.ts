@@ -36,12 +36,23 @@ afterEach(() => warn.mockRestore());
 
 const TABLE = 'agent_domain_change_requests';
 
-/** Queue the three reads `assert` performs, in the order it performs them. */
+/**
+ * Queue the three reads `assert` performs, in the order it performs them.
+ *
+ * ROWS ARE RAW ARRAYS, because that is what this driver returns for a SINGLE-COLUMN select. The
+ * first version of this helper staged them as `{ table_name: '...' }` objects, and that is exactly
+ * why a broken assert shipped: `rows.map(r => r.table_name)` works beautifully against a mock that
+ * invents objects and yields `undefined` against the real thing. In production it reported
+ * `missing table agent_domain_change_requests` with the table present and correct.
+ *
+ * **A mock that returns a shape the real driver does not produce tests the mock.**
+ */
 function stageAssert(opts: { tables?: string[]; columns?: string[]; indexes?: string[] } = {}) {
+  const rowsOf = (names: string[]) => names.map((n) => [n]);
   mockQuery
-    .mockResolvedValueOnce((opts.tables ?? [TABLE]).map((table_name) => ({ table_name })))
-    .mockResolvedValueOnce((opts.columns ?? [...REQUIRED_COLUMNS]).map((ref) => ({ ref })))
-    .mockResolvedValueOnce((opts.indexes ?? [...REQUIRED_INDEXES]).map((indexname) => ({ indexname })));
+    .mockResolvedValueOnce(rowsOf(opts.tables ?? [TABLE]))
+    .mockResolvedValueOnce(rowsOf(opts.columns ?? [...REQUIRED_COLUMNS]))
+    .mockResolvedValueOnce(rowsOf(opts.indexes ?? [...REQUIRED_INDEXES]));
 }
 
 function lastWarning(): Record<string, unknown> | null {
@@ -76,6 +87,46 @@ describe('ensure', () => {
       .mockResolvedValue([]);
     await ensureAgentDomainChangeRequestSchema();
     expect(mockQuery.mock.calls.length).toBeGreaterThanOrEqual(4);
+  });
+});
+
+describe('THE PRODUCTION REGRESSION: the query shape has to match the real driver', () => {
+  // This whole block exists because the first version shipped, the DDL worked perfectly, and the
+  // assert still reported a missing table against one that was present in production with all 12
+  // columns and all 4 indexes. Two separate mistakes, either of which alone was enough.
+
+  it('reads rows as RAW ARRAYS, the shape a single-column select really returns', async () => {
+    stageAssert(); // raw arrays
+    await expect(assertAgentDomainChangeRequestSchema()).resolves.toBeUndefined();
+  });
+
+  it('also copes with object rows, so the normalizer is doing the work and not a lucky shape', async () => {
+    mockQuery
+      .mockResolvedValueOnce([{ table_name: TABLE }])
+      .mockResolvedValueOnce(REQUIRED_COLUMNS.map((ref) => ({ ref })))
+      .mockResolvedValueOnce(REQUIRED_INDEXES.map((indexname) => ({ indexname })));
+    await expect(assertAgentDomainChangeRequestSchema()).resolves.toBeUndefined();
+  });
+
+  it('binds by NAME, never positionally — $1 with a nested array matched nothing', async () => {
+    stageAssert();
+    await assertAgentDomainChangeRequestSchema();
+    for (const call of mockQuery.mock.calls) {
+      const [sql, opts] = call as [string, { bind?: unknown }];
+      expect(sql).toContain('ANY($names)');
+      expect(sql).not.toContain('ANY($1)');
+      // An object bind, not an array: `bind: [[...]]` is the exact shape that failed.
+      expect(Array.isArray(opts.bind)).toBe(false);
+      expect(opts.bind).toHaveProperty('names');
+    }
+  });
+
+  it('reuses the sibling normalizer rather than reimplementing it', async () => {
+    const source: string = jest.requireActual('fs')
+      .readFileSync(require.resolve('../ensureAgentDomainChangeRequestSchema'), 'utf8');
+    expect(source).toMatch(/import\s*\{\s*normalizeNameRows\s*\}\s*from\s*'\.\/ensureAgentDomainProjectSchema'/);
+    // A local copy would drift from the shape the driver actually returns, which is the whole bug.
+    expect(source).not.toMatch(/function normalizeNameRows/);
   });
 });
 
