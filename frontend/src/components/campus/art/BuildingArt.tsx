@@ -3,6 +3,10 @@ import { art, RoofKind } from './artColor';
 import { WallWithWindows, Door, PedimentRoof, GableRoof, TowerRoof, FlatRoof, DomeRoof } from './roofsClassic';
 import { OfficeTower, Pavilion } from './roofsModern';
 import { Amphitheater, Arcade } from './roofsSpecial';
+import { HqTowerArt } from './hqTower';
+
+/** The building whose interior is the Campus HQ (ArrivalPanel's HQ_BUILDING). */
+const HQ_BUILDING_ID = 'career';
 
 /**
  * One building, drawn as the prototype draws it (drawBuilding): a soft ground shadow, the body (lifted 4 px on hover, focus or
@@ -17,6 +21,7 @@ const CLASSIC: Partial<Record<RoofKind, React.ComponentType<{ id: string; w: num
 };
 
 function Body({ id, kind, w, h }: Omit<BuildingArtProps, 'label'>): React.ReactElement {
+  if (id === HQ_BUILDING_ID) return <HqTowerArt w={w} h={h} />; // C83: the map draws the tower the HQ scene opens into
   if (kind === 'office') return <OfficeTower id={id} w={w} h={h} />;
   if (kind === 'pavilion') return <Pavilion id={id} w={w} h={h} />;
   if (kind === 'amphi') return <Amphitheater id={id} w={w} h={h} />;
