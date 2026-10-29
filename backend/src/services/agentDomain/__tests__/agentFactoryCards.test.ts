@@ -16,6 +16,7 @@ function row(partial: Partial<ProvisionedDomainRow> & { domain_key: string; stud
     manager_blocker: null,
     intended_builder_state: 'verified_active',
     agent_id: null,
+    agent_display_name: null,
     releases: 0,
     stories: 0,
     stories_verified: 0,
