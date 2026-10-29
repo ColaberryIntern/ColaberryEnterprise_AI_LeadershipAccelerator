@@ -2,6 +2,8 @@ import type { SequenceStep } from '../../../models/FollowUpSequence';
 import type { CompositeContext } from '../../contextGraphService';
 import type { GenerateMessageParams, GenerateMessageResult } from '../../aiMessageService';
 import type { ValidationResult } from '../../messageValidatorService';
+import type { ExplorerFactSet } from '../explorerFactGuard';
+import type { GroundingResult } from '../explorerKnowledgeGrounding';
 import {
   EXPLORER_DRAFT_REJECTED_STATUS,
   EXPLORER_DRAFT_STATUS,
@@ -21,6 +23,19 @@ import { draftSkipReason, selectStepIndex } from './draftEligibility';
  * quality gate refuses, which are awkward to provoke through real I/O.
  */
 
+/**
+ * What the knowledge base offered for one message.
+ *
+ * A discriminated union rather than `GroundingResult | null`, so "the corpus could not be
+ * loaded" and "the corpus loaded and offered nothing quotable" stay distinguishable on the
+ * persisted row. Those have different fixes - one is a deployment problem, the other a
+ * content problem - and collapsing them is the same mistake `fact_set_present` exists to
+ * prevent for the fact guard.
+ */
+export type DraftGrounding =
+  | { available: true; result: GroundingResult }
+  | { available: false; reason: string };
+
 export interface DraftRenderDeps {
   /** The campaign's sequence steps, in order. Empty when it has no sequence. */
   loadSequenceSteps: (campaignId: string) => Promise<SequenceStep[]>;
@@ -30,6 +45,17 @@ export interface DraftRenderDeps {
   buildContext: (leadId: number, campaignId: string, stepIndex: number) => Promise<CompositeContext>;
   generate: (params: GenerateMessageParams) => Promise<GenerateMessageResult>;
   validate: (content: string, context: CompositeContext, channel: 'email') => ValidationResult;
+  /**
+   * Knowledge for this message: gate the corpus, rank what survives, render a prompt block.
+   *
+   * REQUIRED, not optional. An optional dependency defaults to doing nothing, and "written,
+   * tested, no caller" is precisely the state `explorerKnowledgeSource` and
+   * `explorerKnowledgeQuote` were found in - 217 curated entries and a complete quote gate
+   * that no production path had ever reached. Making it required means a composition root
+   * that forgets to supply it fails to compile instead of silently generating ungrounded
+   * copy forever.
+   */
+  ground: (input: { query: string; facts?: ExplorerFactSet }) => Promise<DraftGrounding>;
   /**
    * Write the draft AND stamp the decision's `scheduled_email_id` /
    * `selected_sequence_step`, ATOMICALLY. Returns the new draft's id.
@@ -176,11 +202,40 @@ export async function renderDecisionDraft(
 
   let generated: GenerateMessageResult;
   let context: CompositeContext;
+  let grounding: DraftGrounding = { available: false, reason: 'not_attempted' };
+  // What the model was actually told. Persisted as-sent, so a reviewer reading the draft
+  // beside its citations sees the same facts the generator saw.
+  let groundedInstructions = instructions;
   try {
     context = await deps.buildContext(leadId, campaignId, stepIndex);
+
+    // Its own try/catch: a knowledge-base outage must degrade this message to ungrounded
+    // copy, which the fact guard still judges, rather than being reported as
+    // `generation_failed` - a reason that would send someone to look at the model.
+    try {
+      grounding = await deps.ground({
+        // The step's goal plus the instructions, which already carry the asset digest.
+        // That is what the message is ABOUT, and so what the corpus should be searched on.
+        query: [step.step_goal ?? '', instructions].filter((s) => s !== '').join(' '),
+        facts: context.explorer,
+      });
+    } catch (err: any) {
+      grounding = {
+        available: false,
+        reason: [err?.name, err?.message].filter(Boolean).join(': ') || 'grounding_failed',
+      };
+    }
+
+    if (grounding.available && grounding.result.block !== '') {
+      // Appended to `ai_instructions` for the same reason `describeContentAssets` is:
+      // `buildUserPrompt` returns early when a composite context is present and never
+      // reads `context_notes`, so a field that looks like grounding would supply none.
+      groundedInstructions = `${instructions}\n\n${grounding.result.block}`;
+    }
+
     generated = await deps.generate({
       channel: 'email',
-      ai_instructions: instructions,
+      ai_instructions: groundedInstructions,
       lead: {
         name: context.lead.name,
         company: context.lead.company,
@@ -235,7 +290,7 @@ export async function renderDecisionDraft(
       subject: generated.subject || step.subject || 'Colaberry Enterprise AI',
       body: verdict.content,
       to_email: toEmail,
-      ai_instructions: instructions,
+      ai_instructions: groundedInstructions,
       status,
       metadata: {
         explorer_decision_id: decision.id,
@@ -251,6 +306,19 @@ export async function renderDecisionDraft(
           // quoted, which is the strictest state, not the most permissive.
           fact_set_present: context.explorer !== undefined,
         },
+        // Every fact the copy was allowed to use, and what the gate refused. `available:
+        // false` means the corpus never loaded; `available: true` with no citations means
+        // it loaded and offered nothing quotable, which is a content problem to fix at the
+        // source rather than a gate to loosen.
+        knowledge: grounding.available
+          ? {
+              available: true,
+              cited: grounding.result.citations,
+              quotable_count: grounding.result.quotableCount,
+              refusals: grounding.result.refusalCounts,
+              copy_rules_applied: grounding.result.copyRulesApplied,
+            }
+          : { available: false, reason: grounding.reason },
         model: generated.model,
         tokens_used: generated.tokens_used,
       },

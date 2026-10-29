@@ -132,10 +132,20 @@ ScheduledEmail.init(
       allowNull: true,
     },
     status: {
-      type: DataTypes.STRING(20),
+      // 32 rather than 20. `explorer_draft_rejected` is 23 characters, and against a
+      // VARCHAR(20) Postgres does not truncate - it raises 22001 and the INSERT fails,
+      // rolling back the transaction that also stamps the decision. The LIVE column is
+      // widened by db/ensureScheduledEmailStatusWidth.ts: editing this line alone changes
+      // no real column, because there is no migration runner here and
+      // sequelize.sync({ alter: true }) is off behind DB_BOOT_SYNC (see server.ts).
+      type: DataTypes.STRING(32),
       allowNull: false,
       defaultValue: 'pending',
-      comment: 'pending | processing | sent | failed | cancelled | paused',
+      // The full written vocabulary, not just the sendable ones. `agent_draft` is Maya's
+      // correspondence; the two `explorer_draft*` values are Explorer journey drafts.
+      // Only `pending` is ever claimed by the sender - see schedulerService's claim UPDATE.
+      comment:
+        'pending | processing | sent | failed | cancelled | paused | agent_draft | explorer_draft | explorer_draft_rejected',
     },
     processing_started_at: {
       type: DataTypes.DATE,

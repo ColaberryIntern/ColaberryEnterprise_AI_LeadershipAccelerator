@@ -109,6 +109,9 @@ function harness(over: Partial<DraftRenderDeps> = {}): Harness {
       return { subject: 'Generated subject', body: '<p>Generated body</p>', tokens_used: 400, model: 'gpt-x' };
     },
     validate: (content) => ({ valid: true, content, issues: [], autoFixed: [] }),
+    // The default harness grounds nothing, so every pre-existing test keeps asserting the
+    // ungrounded behaviour it was written for. Tests about grounding override it.
+    ground: async () => ({ available: false, reason: 'not_configured' }),
     commitDraft: async (input, decisionId) => {
       committed.push({ input, decisionId });
       return 'se-new';
@@ -116,6 +119,33 @@ function harness(over: Partial<DraftRenderDeps> = {}): Harness {
     ...over,
   };
   return { deps, committed, generatedWith };
+}
+
+/** A grounding dep that offers one block and one citation, and records its query. */
+function groundingStub(block = 'KNOWLEDGE BASE (use these facts to answer accurately):\n[1] sales - Q?\n    A.') {
+  const queries: string[] = [];
+  const ground: DraftRenderDeps['ground'] = async (input) => {
+    queries.push(input.query);
+    return {
+      available: true,
+      result: {
+        block,
+        citations: [
+          { domain: 'sales', question: 'Q?', reference: 'sales/index.html#x', referenceLabel: 'Sales' },
+        ],
+        quotableCount: 7,
+        refusalCounts: {
+          confidence_unstated: 3,
+          confidence_drafted_verify: 0,
+          banned_copy: 1,
+          ungrounded_fact: 0,
+          copy_rules_absent: 0,
+        },
+        copyRulesApplied: true,
+      },
+    };
+  };
+  return { ground, queries };
 }
 
 describe('the happy path', () => {
@@ -356,5 +386,150 @@ describe('planDecisionDraft is the dry run, and it spends nothing', () => {
       ok: false,
       reason: 'no_recipient_email',
     });
+  });
+});
+
+describe('knowledge grounding', () => {
+  it('puts the knowledge block in front of the generator', async () => {
+    const g = groundingStub();
+    const h = harness({ ground: g.ground });
+
+    await renderDecisionDraft(decision(), h.deps);
+
+    expect(h.generatedWith).toHaveLength(1);
+    // It must land on `ai_instructions`, not `context_notes`: `buildUserPrompt` returns
+    // early when a composite context is present and never reads context_notes, so a block
+    // placed there would look like grounding and supply none.
+    expect(h.generatedWith[0].ai_instructions).toContain('KNOWLEDGE BASE');
+    expect(h.generatedWith[0].context_notes).toBeUndefined();
+  });
+
+  it('searches the corpus on what the message is about - the step goal and the instructions', async () => {
+    const g = groundingStub();
+    const h = harness({ ground: g.ground });
+
+    await renderDecisionDraft(decision(), h.deps);
+
+    expect(g.queries).toHaveLength(1);
+    expect(g.queries[0]).toContain('Stay useful to someone not currently in a lesson');
+    expect(g.queries[0]).toContain('General nurture for a learner who is not mid-lesson.');
+  });
+
+  it('passes the learner’s resolved facts to the gate, so grounding is per-learner', async () => {
+    const seen: Array<{ facts?: unknown }> = [];
+    const h = harness({
+      buildContext: async () => context({ explorer: { dates: ['Nov 3'], prices: [], seats: [] } }),
+      ground: async (input) => {
+        seen.push(input);
+        return { available: false, reason: 'checked' };
+      },
+    });
+
+    await renderDecisionDraft(decision(), h.deps);
+
+    expect(seen[0].facts).toEqual({ dates: ['Nov 3'], prices: [], seats: [] });
+  });
+
+  it('persists the instructions AS SENT, so the citations and the prompt agree', async () => {
+    const g = groundingStub();
+    const h = harness({ ground: g.ground });
+
+    await renderDecisionDraft(decision(), h.deps);
+
+    const { input } = h.committed[0];
+    expect(input.ai_instructions).toContain('KNOWLEDGE BASE');
+  });
+
+  it('records the citations and the refusal counts on the draft', async () => {
+    const g = groundingStub();
+    const h = harness({ ground: g.ground });
+
+    await renderDecisionDraft(decision(), h.deps);
+
+    const meta = h.committed[0].input.metadata as any;
+    expect(meta.knowledge.available).toBe(true);
+    expect(meta.knowledge.cited).toHaveLength(1);
+    expect(meta.knowledge.cited[0].reference).toBe('sales/index.html#x');
+    expect(meta.knowledge.quotable_count).toBe(7);
+    expect(meta.knowledge.refusals.confidence_unstated).toBe(3);
+    expect(meta.knowledge.copy_rules_applied).toBe(true);
+  });
+
+  it('distinguishes "the corpus never loaded" from "it loaded and offered nothing"', async () => {
+    const unavailable = harness({ ground: async () => ({ available: false, reason: 'timeout: no response' }) });
+    await renderDecisionDraft(decision(), unavailable.deps);
+    const a = unavailable.committed[0].input.metadata as any;
+    expect(a.knowledge).toEqual({ available: false, reason: 'timeout: no response' });
+
+    const empty = harness({
+      ground: async () => ({
+        available: true,
+        result: {
+          block: '',
+          citations: [],
+          quotableCount: 0,
+          refusalCounts: {
+            confidence_unstated: 137,
+            confidence_drafted_verify: 0,
+            banned_copy: 0,
+            ungrounded_fact: 0,
+            copy_rules_absent: 0,
+          },
+          copyRulesApplied: true,
+        },
+      }),
+    });
+    await renderDecisionDraft(decision(), empty.deps);
+    const b = empty.committed[0].input.metadata as any;
+    // Same visible outcome - no citations - but a completely different fix. One is a
+    // deployment problem, the other is 137 entries nobody has triaged.
+    expect(b.knowledge.available).toBe(true);
+    expect(b.knowledge.refusals.confidence_unstated).toBe(137);
+  });
+
+  it('leaves the instructions untouched when nothing is quotable', async () => {
+    const h = harness({
+      ground: async () => ({
+        available: true,
+        result: {
+          block: '',
+          citations: [],
+          quotableCount: 0,
+          refusalCounts: {
+            confidence_unstated: 0,
+            confidence_drafted_verify: 0,
+            banned_copy: 0,
+            ungrounded_fact: 0,
+            copy_rules_absent: 0,
+          },
+          copyRulesApplied: true,
+        },
+      }),
+    });
+
+    await renderDecisionDraft(decision(), h.deps);
+
+    expect(h.generatedWith[0].ai_instructions).not.toContain('KNOWLEDGE BASE');
+    // No trailing blank lines bolted on for an empty block.
+    expect(h.generatedWith[0].ai_instructions.endsWith('mid-lesson.')).toBe(true);
+  });
+
+  it('still produces a draft when grounding THROWS, and does not call it a generation failure', async () => {
+    // A hub outage must cost this message its citations, not its draft. Reporting it as
+    // `generation_failed` would send someone to look at the model instead of the deploy.
+    const h = harness({
+      ground: async () => {
+        throw Object.assign(new Error('socket hang up'), { name: 'FetchError' });
+      },
+    });
+
+    const out = await renderDecisionDraft(decision(), h.deps);
+
+    expect(out.status).toBe('drafted');
+    expect(out.reason).toBeNull();
+    const meta = h.committed[0].input.metadata as any;
+    expect(meta.knowledge.available).toBe(false);
+    expect(meta.knowledge.reason).toContain('FetchError');
+    expect(meta.knowledge.reason).toContain('socket hang up');
   });
 });

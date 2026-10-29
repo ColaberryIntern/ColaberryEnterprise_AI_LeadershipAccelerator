@@ -4,6 +4,9 @@ import { redactForLogs } from '../../../utils/piiRedaction';
 import { generateMessage } from '../../aiMessageService';
 import { buildCompositeContext } from '../../contextGraphService';
 import { validateGeneratedMessage } from '../../messageValidatorService';
+import type { ExplorerFactSet } from '../explorerFactGuard';
+import { groundDraft } from '../explorerKnowledgeGrounding';
+import { loadExplorerKnowledge } from '../explorerKnowledgeLoader';
 import { type DraftOutcome, type DraftRenderResult } from './draftContracts';
 import { tallyReasons } from './draftEligibility';
 import {
@@ -13,7 +16,12 @@ import {
   loadRecipientEmail,
   loadSequenceSteps,
 } from './draftRepository';
-import { planDecisionDraft, renderDecisionDraft, type DraftRenderDeps } from './renderDecisionDraft';
+import {
+  planDecisionDraft,
+  renderDecisionDraft,
+  type DraftGrounding,
+  type DraftRenderDeps,
+} from './renderDecisionDraft';
 
 /**
  * Explorer Growth OS — draft render batch. Phase 1 of
@@ -53,6 +61,34 @@ function todayUtc(now: Date = new Date()): string {
   return now.toISOString().slice(0, 10);
 }
 
+/**
+ * The live grounding adapter - the ONE place the two knowledge modules meet.
+ *
+ * Composition happens here rather than inside either module so both stay pure and
+ * directly testable: `explorerKnowledgeLoader` does the I/O, `groundDraft` does the gating,
+ * ranking and rendering, and neither imports the other.
+ *
+ * There is no separate batch-level preload. The loader's own TTL cache already means a
+ * batch of 142 decisions performs ONE fetch, and a second caching layer here would be a
+ * second thing to keep in step with it.
+ *
+ * A failed load returns `available: false` carrying the reason, never throws: the caller
+ * degrades that message to ungrounded copy rather than losing the draft.
+ */
+async function groundForDraft(input: {
+  query: string;
+  facts?: ExplorerFactSet;
+}): Promise<DraftGrounding> {
+  const loaded = await loadExplorerKnowledge();
+  if (!loaded.loaded) {
+    return { available: false, reason: `${loaded.reason}: ${loaded.detail}` };
+  }
+  return {
+    available: true,
+    result: groundDraft({ base: loaded.base, query: input.query, facts: input.facts }),
+  };
+}
+
 function liveDeps(): DraftRenderDeps {
   return {
     loadSequenceSteps,
@@ -61,6 +97,7 @@ function liveDeps(): DraftRenderDeps {
     buildContext: buildCompositeContext,
     generate: generateMessage,
     validate: validateGeneratedMessage,
+    ground: groundForDraft,
     commitDraft,
   };
 }
