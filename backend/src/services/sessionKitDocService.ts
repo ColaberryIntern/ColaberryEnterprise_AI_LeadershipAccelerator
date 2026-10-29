@@ -91,14 +91,18 @@ export async function renderSessionKitDoc(sessionId: string, mode: KitDocMode = 
   // connection is injected (customDeck.ts). Same token, same endpoints.
   if (config.customDeck) {
     const live = mode === 'live';
+    // Open House sessions take guests (name + email, no login link), so the QR
+    // goes to the public join page instead of the login-gated check-in.
+    const guests = /open house/i.test(String(kit.session.title || ''));
+    const joinUrl = `${base}/api/portal/sessions/${sessionId}/join`;
     return injectCustomDeckLive(config.customDeck.html, {
       enabled: live,
       sessionId,
       liveStateUrl: live ? `${base}/api/portal/sessions/${sessionId}/live-state` : undefined,
       broadcastUrl: live ? `${base}/api/portal/sessions/${sessionId}/broadcast` : undefined,
       token: live ? mintKitToken(sessionId) : undefined,
-      checkinUrl: kit.checkin_url,
-      qrSvg: kit.qr_svg,
+      checkinUrl: guests ? joinUrl : kit.checkin_url,
+      qrSvg: guests ? await QRCode.toString(joinUrl, { type: 'svg', margin: 1, width: 280 }) : kit.qr_svg,
     });
   }
 
