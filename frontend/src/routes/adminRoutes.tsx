@@ -71,6 +71,7 @@ const AdminGovernancePolicyPage = lazy(() => import('../pages/admin/AdminGoverna
 const AdminProjectOverview = lazy(() => import('../pages/admin/AdminProjectOverview'));
 const AdminCaseStudiesPage = lazy(() => import('../pages/admin/AdminCaseStudiesPage'));
 const AdminInternshipPage = lazy(() => import('../pages/admin/AdminInternshipPage'));
+const AdminGovContractCockpitPage = lazy(() => import('../pages/admin/AdminGovContractCockpitPage'));
 const AdminFactoryCommandCenterPage = lazy(() => import('../pages/admin/AdminFactoryCommandCenterPage'));
 const AdminGovOpportunitiesPage = lazy(() => import('../pages/admin/AdminGovOpportunitiesPage'));
 const AdminGovQualificationPage = lazy(() => import('../pages/admin/AdminGovQualificationPage'));
@@ -286,6 +287,7 @@ const adminRoutes = (
             same way as the business-account pair above. */}
         <Route path="/admin/case-studies" element={<AdminCaseStudiesPage />} />
         <Route path="/admin/internship" element={<AdminInternshipPage />} />
+        <Route path="/admin/gov-contracts/:projectId" element={<AdminGovContractCockpitPage />} />
         <Route path="/admin/factory" element={<AdminFactoryCommandCenterPage />} />
         <Route path="/admin/gov-opportunities" element={<AdminGovOpportunitiesPage />} />
         <Route path="/admin/gov-qualification" element={<AdminGovQualificationPage />} />
