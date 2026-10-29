@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { env } from '../config/env';
-import { sectionsForRole, ALL_SECTIONS, isMgmtRole, type SectionKey } from '../services/access/mgmtRoles';
+import { effectiveSections, ALL_SECTIONS, isMgmtRole, type SectionKey } from '../services/access/mgmtRoles';
 import { logAuthFailure } from './authFailureLog';
 
 export interface AuthPayload {
@@ -12,6 +12,9 @@ export interface AuthPayload {
   // admin SECTIONS this login may reach (mgmtRoles.ts). Absent on legacy
   // admin_users logins, which keep full admin access.
   mgmt_role?: string;
+  // C82 (H4 option A): sections granted on top of mgmt_role, minted from community_members.mgmt_extra_sections. Only ever read
+  // together with a valid mgmt_role (effectiveSections), so it cannot widen a legacy admin or a token without a role.
+  mgmt_extra_sections?: string[];
   // Present on a legacy admin_users login whose email matches a staff
   // CommunityMember — the enrollment id to bridge into via "AI Training"
   // (POST /api/admin/portal/enter). Deliberately separate from `mgmt_role`:
@@ -37,8 +40,9 @@ export interface AuthPayload {
  * there unreachable. The API scope is unchanged by this — requireSalesOrAdmin
  * still decides what data they may touch; this only lets the shell render it.
  */
-export function adminAllowedSections(payload: Pick<AuthPayload, 'role' | 'mgmt_role'>): SectionKey[] {
-  if (payload.mgmt_role) return sectionsForRole(payload.mgmt_role);
+export function adminAllowedSections(payload: Pick<AuthPayload, 'role' | 'mgmt_role'> & Pick<Partial<AuthPayload>, 'mgmt_extra_sections'>): SectionKey[] {
+  // C82: the role's sections plus any extra grants (effectiveSections), never more than the real section keys
+  if (payload.mgmt_role) return effectiveSections(payload.mgmt_role, payload.mgmt_extra_sections);
   if (payload.role === 'super_admin' || payload.role === 'admin') return [...ALL_SECTIONS];
   if (payload.role === 'sales') return ['leads'];
   return [];

@@ -43,6 +43,9 @@ export interface AdminCommunityMember {
   free_access: boolean;
   // Management-portal role for staff (null when none / not staff).
   mgmt_role: string | null;
+  // C82: admin sections granted on top of mgmt_role, and the sections the role itself gives.
+  mgmt_extra_sections: string[];
+  mgmt_role_sections: string[];
   // The business account this person belongs to, or null for a regular
   // individual account. Lets the roster distinguish the two at a glance.
   org: { id: string; name: string; membership: 'manager' | 'member' } | null;
@@ -91,6 +94,16 @@ export async function setCommunityMemberMgmtRole(memberId: string, mgmtRole: Mgm
     { mgmt_role: mgmtRole },
   );
   return data.member.mgmt_role;
+}
+
+// C82: set the admin sections granted on top of a staff member's management role (the whole list). The backend keeps only real
+// sections the role does not already give, and refuses sections the caller does not hold. Returns what was stored.
+export async function setCommunityMemberExtraSections(memberId: string, sections: string[]): Promise<string[]> {
+  const { data } = await api.patch<{ member: { mgmt_extra_sections: string[] } }>(
+    `/api/admin/community/members/${memberId}/mgmt-extra-sections`,
+    { sections },
+  );
+  return data.member.mgmt_extra_sections;
 }
 
 // Mint a read-only "View as member" URL for an enrollment (server enforces
