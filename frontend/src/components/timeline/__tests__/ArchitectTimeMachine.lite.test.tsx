@@ -20,7 +20,10 @@ jest.mock('../../../services/pointsFx', () => ({ emitPointsEarned: jest.fn() }))
 import ArchitectTimeMachine from '../ArchitectTimeMachine';
 import { runtimeApi } from '../../../pages/portal/runtime/runtimeApi';
 
+import { emitPointsEarned } from '../../../services/pointsFx';
+
 const mockApi = runtimeApi as unknown as Record<string, jest.Mock>;
+const mockEmit = emitPointsEarned as unknown as jest.Mock;
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -88,7 +91,7 @@ describe('ArchitectTimeMachine lite (Week 0 first taste)', () => {
   });
 
   it('completes end to end with one click question and one sentence', async () => {
-    mockApi.architectComplete.mockResolvedValue({ receipt: null, ledger: null, evaluation: { baseline: true, observation: 'Nice.' }, readiness: null });
+    mockApi.architectComplete.mockResolvedValue({ receipt: null, ledger: null, evaluation: { baseline: true, observation: 'Nice.' }, readiness: null, points: { value: 160, awarded_now: 160 } });
     await mount(true);
     await next();                                   // arrival
     await next();                                   // request
@@ -107,5 +110,36 @@ describe('ArchitectTimeMachine lite (Week 0 first taste)', () => {
     expect(mockApi.architectComplete).toHaveBeenCalledWith('c1');
     expect(container.textContent).toContain('You are ready for Week 1');
     expect(container.textContent).not.toContain('fourteen completion gates');
+    // Points are awarded automatically on completion; the student must SEE that.
+    expect(container.textContent).toContain('+160 points');
+    expect(mockEmit).toHaveBeenCalledWith(160);
+  });
+});
+
+describe('ArchitectTimeMachine points (2026-10-29: "no way to get my points")', () => {
+  const completedState = (awarded_now: number) => ({
+    ...stateFor(true), status: 'completed',
+    progress: { state: 'completed', interview: {}, flags: {}, evaluation: { baseline: true } },
+    points: { value: 160, awarded_now },
+  });
+
+  it('reopening a completed card shows the points it earned', async () => {
+    mockApi.architectState.mockResolvedValue(completedState(0));
+    await act(async () => { root.render(<ArchitectTimeMachine cardId="c1" variant="workspace" />); });
+    expect(container.textContent).toContain('+160 points');
+    expect(container.textContent).toContain('nothing else to collect');
+    expect(mockEmit).toHaveBeenCalledWith(0);          // already on the ledger: emit is a silent no-op
+  });
+
+  it('a previously-missed award healed on open fires the points burst', async () => {
+    mockApi.architectState.mockResolvedValue(completedState(160));
+    await act(async () => { root.render(<ArchitectTimeMachine cardId="c1" variant="workspace" />); });
+    expect(mockEmit).toHaveBeenCalledWith(160);
+  });
+
+  it('a card worth 0 points shows no points banner', async () => {
+    mockApi.architectState.mockResolvedValue({ ...completedState(0), points: { value: 0, awarded_now: 0 } });
+    await act(async () => { root.render(<ArchitectTimeMachine cardId="c1" variant="workspace" />); });
+    expect(container.querySelector('.am-pts')).toBeNull();
   });
 });

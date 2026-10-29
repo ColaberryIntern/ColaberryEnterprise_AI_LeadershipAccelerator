@@ -96,6 +96,7 @@ export const AM_CSS = `
 .am-gates{columns:2;column-gap:24px;max-width:66ch;margin:12px 0}.am-gate{display:flex;gap:9px;align-items:flex-start;font-size:13px;color:#dce9ee;break-inside:avoid;margin-bottom:7px}
 .am-c{flex:none;width:18px;height:18px;border-radius:99px;background:var(--am-leaf);color:#fff;font-size:11px;display:grid;place-items:center}
 .am-baseline{background:#ffffff0d;border:1px solid #ffffff20;border-radius:12px;padding:13px 15px;margin:12px 0;max-width:64ch}.am-baseline b{color:#fff;font-size:13.5px}.am-baseline p{margin:5px 0 0;font-size:14px;color:#cfe0e6}
+.am-pts{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 12px;background:#5ba63c26;border:1px solid #8fd47366;border-radius:12px;padding:11px 15px;margin:14px 0 4px;max-width:64ch}.am-pts b{color:#c9f2b4;font-size:18px}.am-pts span{font-size:13.5px;color:#cfe0e6}
 .am-dash{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}.am-metric{background:#0e1a2099;border:1px solid #ffffff20;border-radius:10px;padding:11px 12px;text-align:center}
 .am-metric b{display:block;font:700 20px var(--am-mono);color:#8fc7db}.am-metric.down b{color:#ff8a90}.am-metric.up b{color:#8fd28a}.am-metric span{display:block;font-size:11px;color:#9fbcc7;margin-top:3px;line-height:1.3}
 @media (max-width:560px){.am-dash{grid-template-columns:1fr 1fr}}

@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { runtimeApi, WeekReview, WrActivity, WrSignalsInput } from '../../pages/portal/runtime/runtimeApi';
+import { emitPointsEarned } from '../../services/pointsFx';
 // timeline.css first, deliberately. These styles are scoped under
 // timeline.css's .tl-de ancestor, and with route-level code splitting the
 // two files can land in different chunks -- importing it here pins the
@@ -111,7 +112,9 @@ const ReflectionReview: React.FC<Props> = ({ cardId, variant = 'drawer', preview
         // The reflection completes on submit — mark it done once (best-effort; points).
         if (!completedOnce.current) {
           completedOnce.current = true;
-          runtimeApi.complete(cardId).catch(() => { /* best-effort */ });
+          runtimeApi.complete(cardId)
+            .then((r) => emitPointsEarned(Number(r?.outcome?.points_awarded) || 0))   // the award was silent before
+            .catch(() => { /* best-effort */ });
         }
       })
       .catch(() => setSaveState('idle'));

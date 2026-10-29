@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { runtimeApi, RtOpen, Readiness, PromptEval } from './runtimeApi';
+import { emitPointsEarned } from '../../../services/pointsFx';
 import { RuntimeHero, RuntimeVideo, PromptLabPanel, RuntimeReadinessStats } from './runtimeActivityPanels';
 import RuntimeBlogPanel from './RuntimeBlogPanel';
 import type { WatchBeatPayload } from '../../../components/timeline/VideoEmbed';
@@ -197,7 +198,11 @@ const RuntimeWorkspace: React.FC = () => {
       const work = isLab ? `${prompt}\n\n${evalResult ? 'Eval: ' + evalResult.score + '/100' : ''}` : reflectionText;
       const r = await runtimeApi.complete(card.id, work, reflectionText);
       setArtifact(r.artifact); setReadiness(r.readiness); setCompleted(true);
-      setMsgs((m) => [...m, { role: 'assistant', content: r.artifact ? `Nice — I turned your work into a portfolio artifact: "${r.artifact.title}". Your readiness just updated below.` : 'Completed — your progress and readiness updated below.', kind: 'complete' }]);
+      // Points land server-side on completion; say so, or the student never knows they were paid.
+      const pts = Number(r.outcome?.points_awarded) || 0;
+      emitPointsEarned(pts);
+      const ptsLine = pts > 0 ? ` +${pts} points added to your total.` : '';
+      setMsgs((m) => [...m, { role: 'assistant', content: (r.artifact ? `Nice — I turned your work into a portfolio artifact: "${r.artifact.title}". Your readiness just updated below.` : 'Completed — your progress and readiness updated below.') + ptsLine, kind: 'complete' }]);
       // Deep Dive: on completion, return the student to the Classroom right where they
       // left off (it restores their week + scroll) — now with this card marked complete.
       // Completing any assignment returns the student to the curriculum (Classroom),
