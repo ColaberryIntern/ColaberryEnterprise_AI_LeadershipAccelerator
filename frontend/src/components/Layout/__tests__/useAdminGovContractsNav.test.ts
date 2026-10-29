@@ -16,8 +16,8 @@ describe('adminGovContractNavEntries — admin per-contract nav sub-items', () =
       card({ key: 'op:gov:b', title: 'Fairfax County ERP', deliveryProjectId: 'dp2' }),
     ];
     expect(adminGovContractNavEntries(cards)).toEqual([
-      { key: 'dp1', label: 'Saratoga Springs Municipal', to: '/admin/gov-contracts/dp1' },
-      { key: 'dp2', label: 'Fairfax County ERP', to: '/admin/gov-contracts/dp2' },
+      { key: 'dp1', label: 'Saratoga Springs Municipal', to: '/admin/internship/gov-contract/dp1' },
+      { key: 'dp2', label: 'Fairfax County ERP', to: '/admin/internship/gov-contract/dp2' },
     ]);
   });
 
@@ -27,6 +27,6 @@ describe('adminGovContractNavEntries — admin per-contract nav sub-items', () =
 
   it('falls back to the pursuit key when a contract has no title', () => {
     expect(adminGovContractNavEntries([card({ key: 'op:gov:d', title: null, deliveryProjectId: 'dp9' })]))
-      .toEqual([{ key: 'dp9', label: 'op:gov:d', to: '/admin/gov-contracts/dp9' }]);
+      .toEqual([{ key: 'dp9', label: 'op:gov:d', to: '/admin/internship/gov-contract/dp9' }]);
   });
 });

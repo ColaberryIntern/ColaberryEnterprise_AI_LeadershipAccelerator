@@ -287,7 +287,7 @@ const adminRoutes = (
             same way as the business-account pair above. */}
         <Route path="/admin/case-studies" element={<AdminCaseStudiesPage />} />
         <Route path="/admin/internship" element={<AdminInternshipPage />} />
-        <Route path="/admin/gov-contracts/:projectId" element={<AdminGovContractCockpitPage />} />
+        <Route path="/admin/internship/gov-contract/:projectId" element={<AdminGovContractCockpitPage />} />
         <Route path="/admin/factory" element={<AdminFactoryCommandCenterPage />} />
         <Route path="/admin/gov-opportunities" element={<AdminGovOpportunitiesPage />} />
         <Route path="/admin/gov-qualification" element={<AdminGovQualificationPage />} />

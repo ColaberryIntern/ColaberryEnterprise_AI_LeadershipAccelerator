@@ -150,7 +150,7 @@ export const NAV_GROUPS: NavGroup[] = [
   // never sees it). Gov Contracts is NO LONGER a page tab: it is a nested, expandable sub-node
   // rendered dynamically under this group by AdminLayout (one per-contract sub-item, gated
   // `gov_contracts`, so Admissions never sees it), each opening the contract's read-only cockpit at
-  // /admin/gov-contracts/:deliveryProjectId — the same view the assigned intern sees.
+  // /admin/internship/gov-contract/:deliveryProjectId — the same view the assigned intern sees.
   { label: 'Interns', section: 'internship', links: [
     { path: '/admin/internship', label: 'Interns', icon: 'user-follow-line' },
   ]},
@@ -323,12 +323,6 @@ export const UNLISTED_PATH_SECTIONS: ReadonlyArray<readonly [string, string]> = 
   // would be duplication rather than belt and braces. Being a child of /admin/marketing does
   // not pull it back to 'campaigns' — the longer path wins.
   ['/admin/brands', 'brands'],
-  // Gov contract cockpit (read-only): an owner/admin reads ONE contract exactly as the assigned
-  // intern sees it, reached from the "Interns → Gov Contracts" left-nav sub-items. It has no nav
-  // entry of its own (the sub-items are built dynamically from the gov-contracts list in
-  // AdminLayout), so the section is restated here — otherwise sectionForPath() returns null and
-  // ProtectedRoute bounces it. Longest prefix: /admin/gov-contracts/:deliveryProjectId → gov_contracts.
-  ['/admin/gov-contracts', 'gov_contracts'],
   // Audit ledger. Classified from what it QUERIES (event_type, actor,
   // entity_type, entity_id, payload) rather than from its name — it is a
   // system audit trail, not a marketing events page.
