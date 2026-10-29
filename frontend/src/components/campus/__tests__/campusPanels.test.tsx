@@ -32,6 +32,7 @@ import CampusMePanel from '../home/CampusMePanel';
 import { ENTRANCE_KEY } from '../home/campusEntrance';
 // eslint-disable-next-line import/first
 import { DmToastView } from '../CampusDmToast';
+import { registerDmHost } from '../dmHost';
 // eslint-disable-next-line import/first
 import CampusListView from '../CampusListView';
 // eslint-disable-next-line import/first
@@ -83,7 +84,7 @@ describe('the Me panel', () => {
 
 describe('the message toast', () => {
   beforeEach(() => { container = document.createElement('div'); document.body.appendChild(container); root = createRoot(container); });
-  const toast = { key: 'k', peerId: 'e1', peerName: 'Avery Stone' };
+  const toast = { key: 'k', peerId: 'e1', peerName: 'Avery Stone', text: 'Are you coming to the Build Day?', peerAvatar: null };
   it('offers Walk over only when the sender is somewhere on campus', () => {
     const walked: number[] = [];
     act(() => { root.render(<MemoryRouter><DmToastView toast={toast} onDismiss={() => undefined} onWalkOver={() => walked.push(1)} /></MemoryRouter>); });
@@ -91,6 +92,24 @@ describe('the message toast', () => {
     expect(walked).toEqual([1]);
     act(() => { root.render(<MemoryRouter><DmToastView toast={toast} onDismiss={() => undefined} /></MemoryRouter>); });
     expect(q('[data-testid="cm-dm-toast-walk"]')).toBeNull();
+  });
+  it("C23 (Q6): shows the face, where the sender is, the message, and Reply", () => {
+    const unhost = registerDmHost();
+    act(() => { root.render(<MemoryRouter><DmToastView toast={toast} onDismiss={() => undefined} place="Library" /></MemoryRouter>); });
+    expect(q('.cm-dm-toast-av')!.textContent).toBe('AS');
+    expect(q('[data-testid="cm-dm-toast-where"]')!.textContent).toBe('In Library · just now');
+    expect(q('[data-testid="cm-dm-toast-text"]')!.textContent).toBe('Are you coming to the Build Day?');
+    expect(q('[data-testid="cm-dm-toast-open"]')!.textContent).toBe('Reply');
+    unhost();
+  });
+  it("C23: no place is guessed, an empty message draws no line, and only a safe picture is drawn", () => {
+    act(() => { root.render(<MemoryRouter><DmToastView toast={{ ...toast, text: '', peerAvatar: 'javascript:alert(1)' }} onDismiss={() => undefined} /></MemoryRouter>); });
+    expect(q('[data-testid="cm-dm-toast-where"]')!.textContent).toBe('just now');
+    expect(q('[data-testid="cm-dm-toast-text"]')).toBeNull();
+    expect(q('.cm-dm-toast-av img')).toBeNull();
+    expect(q('.cm-dm-toast')!.textContent).toContain('Reply on Today');
+    act(() => { root.render(<MemoryRouter><DmToastView toast={{ ...toast, peerAvatar: 'data:image/png;base64,AAAA' }} onDismiss={() => undefined} /></MemoryRouter>); });
+    expect(q('.cm-dm-toast-av img')!.getAttribute('src')).toBe('data:image/png;base64,AAAA');
   });
 });
 

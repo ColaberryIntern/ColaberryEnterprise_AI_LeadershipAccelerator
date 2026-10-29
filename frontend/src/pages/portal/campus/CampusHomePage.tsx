@@ -150,7 +150,7 @@ function CampusHome(): React.ReactElement {
         startCam={map.startCam} recenter={map.recenter} me={{ initials, photo, level, tone: audience }} moments={mapMoments(audience, agenda)} quiet={quiet} hover={hover} liveNow={liveNow} onGround={onGround} />
       <WeatherSky wx={wx} reduceMotion={reduce} paused={gateOpen} />
       <CampusTopBar today={todayCount} audience={audience} online={online} points={look?.points ?? null} rung={look?.rung_name || null} photo={photo} workplace={wp}
-        streak={facts.streak} initials={initials} onList={campus.openList} onFind={() => { openWayfinder(); }} onMe={() => (campus.meOpen ? campus.closeMe() : campus.openMe())} weather={<WeatherChip wx={wx} />} />
+        streak={facts.streak} initials={initials} onList={campus.openList} onFind={() => { openWayfinder(); }} onBellClosed={() => map.camRef.current?.recenter()} onMe={() => (campus.meOpen ? campus.closeMe() : campus.openMe())} weather={<WeatherChip wx={wx} />} />
       <CampusMeHost fullName={facts.fullName} initials={initials} onClosed={() => map.camRef.current?.recenter()} />
       <CampusConcierge waiting={!reveal.shown} cardOpen={cardOpen} audience={audience} firstName={facts.firstName} hereId={campus.here ?? null} onLawn={onLawn}
         buildings={buildings} accessOf={accessOf} workplaceNames={wp} presence={presence} presenceError={presenceError} desks={staffDesks}
@@ -173,7 +173,7 @@ function CampusHome(): React.ReactElement {
       <CabinetHost />
       <OrderSheetHost />
       <CampusCheer burst reduceMotion={reduce} />
-      <Wayfinder ctx={wf.ctx} onPick={wf.onPick} />
+      <Wayfinder ctx={wf.ctx} onPick={wf.onPick} onClosed={() => map.camRef.current?.recenter()} />
       {extra}
     </div>
   );

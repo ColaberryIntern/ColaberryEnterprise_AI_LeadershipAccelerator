@@ -14,6 +14,7 @@
 const fs = require('fs');
 const path = require('path');
 const { assertLocalOnly } = require('./lib/localOnly');
+const { runRecenter } = require('./lib/campusRecenterE2E');
 
 const urls = assertLocalOnly({ base: process.env.BASE_URL || 'http://localhost:3150', api: process.env.API_URL || 'http://127.0.0.1:3101' });
 const { chromium } = require(process.env.PW_PATH || 'playwright');
@@ -569,6 +570,10 @@ async function runOff(browser, audience, jwt) {
   const browser = await chromium.launch();
   try {
     for (const a of AUDIENCES) await (MODE === 'off' ? runOff : runAudience)(browser, a, seeded.users[a].jwt);
+    // C23: the recenter rules R2-R5 and R7-R11 (camera behavior, one member account); off with CAMPUS_E2E_RECENTER=0
+    if (MODE === 'on' && AUDIENCES.includes('member') && process.env.CAMPUS_E2E_RECENTER !== '0') {
+      await runRecenter({ browser, audience: 'member', jwt: seeded.users.member.jwt, urls, step, must, newPage });
+    }
   } finally {
     await browser.close();
   }

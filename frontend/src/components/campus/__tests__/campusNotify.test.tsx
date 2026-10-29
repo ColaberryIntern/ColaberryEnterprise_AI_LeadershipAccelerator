@@ -91,3 +91,25 @@ describe('the bell, campus on: through the door to the place', () => {
     expect(assigned).toEqual([]);
   });
 });
+
+describe("C23 (rule R10): the bell closing without a pick", () => {
+  it("tells the campus home to recenter, from the bell again or a press outside; a pick does not", async () => {
+    mockActive = true;
+    mockItems = [notif("mention", "post")];
+    const dismissed: number[] = [];
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    await act(async () => { root = createRoot(container); root.render(<NotificationBell onDismissed={() => dismissed.push(1)} />); });
+    const bell = () => container.querySelector(".cm-bell-btn") as HTMLButtonElement;
+    await act(async () => { bell().click(); });
+    await act(async () => { bell().click(); });
+    expect(dismissed).toEqual([1]);
+    await act(async () => { bell().click(); });
+    await act(async () => { document.body.dispatchEvent(new MouseEvent("mousedown", { bubbles: true })); });
+    expect(dismissed).toEqual([1, 1]);
+    await act(async () => { bell().click(); });
+    for (let i = 0; i < 3; i++) await act(async () => { await Promise.resolve(); });
+    await act(async () => { (container.querySelector(".cm-notif") as HTMLButtonElement).click(); });
+    expect(dismissed).toEqual([1, 1]);
+  });
+});

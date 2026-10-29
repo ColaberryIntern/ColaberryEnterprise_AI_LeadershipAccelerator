@@ -74,6 +74,7 @@ describe('CampusDmToast', () => {
     mockConvos = [convo('r1', 'Mia', '2026-10-18T10:05:00Z')];
     await tick();
     expect(toast()?.textContent).toContain('Mia sent you a message');
+    expect(toast()?.querySelector('[data-testid="cm-dm-toast-text"]')?.textContent).toBe('hi'); // C23: the message itself
     await act(async () => { (toast()!.querySelector('[aria-label="Dismiss"]') as HTMLButtonElement).click(); });
     await tick();
     expect(toast()).toBeNull();

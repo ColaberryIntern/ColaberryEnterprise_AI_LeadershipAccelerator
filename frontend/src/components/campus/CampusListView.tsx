@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { useCampus } from './CampusContext';
 import { useCampusView } from './useCampusView';
 import { useCampusOnAir } from './campusOnAir';
-import { accessLabel } from './campusAccess';
+import { accessLabel, enrollCta } from './campusAccess';
 import { buildingName, roomLabel } from './campusMap';
 import type { CampusBuilding } from './campusMap';
 import { routeBuildings } from './campusPlan';
@@ -19,7 +19,8 @@ import CampusSettingsPanel from './CampusSettingsPanel';
 import { trapTab } from './focusTrap';
 import { useReturnFocus } from './useReturnFocus';
 import { subOf } from './campusArrival';
-import { BUILDING_ICON } from './campusMap';
+import { BUILDING_ICON, CAMPUS_BUILDINGS } from './campusMap';
+import { WF_KEYS } from './wayfinderIndex';
 import type { BuildingId } from './campusMap';
 import './campusPanels.css';
 
@@ -29,6 +30,10 @@ import './campusPanels.css';
  * desks, and its rooms (admin rooms by the same rule as the card). The Main Gate is listed too, with the Explorer's path to
  * enrolling. The bar offers the tour, My look and Settings, as the map's bar does. A filter narrows buildings and rooms and
  * announces the count.
+ *
+ * C23 (WP-10, D:1310 and D:3519-3531): the plan rows read "1." or "✓" with their building; the filter also matches the
+ * building's line and the prototype's keywords; Workplace names call it the HQ directory; a press on the dim backdrop closes;
+ * a members-only building tells an Explorer what enrolling unlocks.
  */
 
 export default function CampusListView(): React.ReactElement | null {
@@ -47,11 +52,15 @@ export default function CampusListView(): React.ReactElement | null {
   const route = planStops ? routeBuildings(planStops) : [];
   const hasTour = !!tourFor(audience, buildings, accessOf, wp);
   const needle = q.trim().toLowerCase();
+  const title = wp ? 'HQ directory' : 'Campus directory';
   const shown = buildings.map((b) => {
     const name = buildingName(b, wp);
-    const rooms = b.rooms.filter((r) => !needle || name.toLowerCase().includes(needle) || roomLabel(r, wp).toLowerCase().includes(needle));
-    return { b, name, rooms };
-  }).filter((x) => !needle || x.name.toLowerCase().includes(needle) || x.rooms.length > 0);
+    // the building matches on its name, its line and the prototype's keywords (then every room shows); else room by room
+    const whole = !needle || `${name} ${subOf(b, audience, wp) ?? ''} ${WF_KEYS[b.id as BuildingId] ?? ''}`.toLowerCase().includes(needle);
+    const rooms = b.rooms.filter((r) => whole || roomLabel(r, wp).toLowerCase().includes(needle));
+    return { b, name, rooms, whole };
+  }).filter((x) => x.whole || x.rooms.length > 0);
+  const planPlace = (id: BuildingId | null) => { const pb = id ? CAMPUS_BUILDINGS.find((x) => x.id === id) : undefined; return pb ? buildingName(pb, wp) : null; };
 
   const facts = (b: CampusBuilding) => {
     const stop = route.indexOf(b.id);
@@ -64,15 +73,16 @@ export default function CampusListView(): React.ReactElement | null {
   };
 
   return (
-    <div className="cm-layer cm-list" role="dialog" aria-modal="true" aria-label="Campus directory" data-testid="cm-list" tabIndex={-1}
-      onKeyDown={(e) => { if (e.key === 'Escape') closeLayer(); else trapTab(e); }}>
+    <div className="cm-layer cm-list" role="dialog" aria-modal="true" aria-label={title} data-testid="cm-list" tabIndex={-1}
+      onKeyDown={(e) => { if (e.key === 'Escape') closeLayer(); else trapTab(e); }}
+      onMouseDown={(e) => { if (e.target === e.currentTarget) closeLayer(); }}>
       <div className="cm-layer-bar">
-        <strong>Campus directory</strong>
+        <strong>{title}</strong>
         <input ref={input} className="cm-filter" placeholder="Filter buildings and rooms" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Filter buildings and rooms" />
         {hasTour && <button type="button" className="cm-link" onClick={startTour} data-testid="cm-list-tour">Take the tour</button>}
         <button type="button" className="cm-link" onClick={() => { closeLayer(); openMe(); }} data-testid="cm-list-look">My look</button>
         <CampusSettingsPanel variant="bar" />
-        <button type="button" className="cm-btn is-secondary" onClick={closeLayer} aria-label="Close campus directory">Close</button>
+        <button type="button" className="cm-btn is-secondary" onClick={closeLayer} aria-label={`Close ${title.toLowerCase()}`}>Close</button>
       </div>
       <p className="cm-list-intro">Every building and room, as a list. Works with a keyboard and screen reader, and opens the same pages as the map.</p>
       {presenceError && <p className="cm-layer-warn cm-list-warn" role="status">We can't load who's online right now.</p>}
@@ -80,8 +90,15 @@ export default function CampusListView(): React.ReactElement | null {
         {/* C11b: today's plan first, as the prototype's directory */}
         {!needle && planStops && planStops.length > 0 && (
           <section className="cm-list-plan" aria-labelledby="cm-list-plan-h" data-testid="cm-list-plan">
-            <h2 id="cm-list-plan-h">Today&rsquo;s plan</h2>
-            <ol>{planStops.map((s) => <li key={s.key}><button type="button" className="cm-link" onClick={() => { closeLayer(); enterThroughDoor(s.route, null); }}>{s.title}</button></li>)}</ol>
+            <h2 id="cm-list-plan-h"><span aria-hidden="true">📋 </span>Today&rsquo;s plan</h2>
+            <ol>{planStops.map((s, i) => {
+              const at = planPlace(s.buildingId);
+              return (
+                <li key={s.key}><button type="button" className="cm-link" onClick={() => { closeLayer(); enterThroughDoor(s.route, null); }}>
+                  <span className="cm-list-plan-n">{s.done ? <><span aria-hidden="true">✓</span><span className="cm-sr-only">Done:</span></> : `${i + 1}.`}</span> {s.title}{at && <small className="cm-list-plan-at"> {at}</small>}
+                </button></li>
+              );
+            })}</ol>
           </section>
         )}
         {shown.map(({ b, name, rooms }) => {
@@ -89,7 +106,7 @@ export default function CampusListView(): React.ReactElement | null {
           const desks = desksForBuilding(staffDesks, b.id, audience);
           return (
             <section key={b.id} className={`cm-list-bld cm-b-${b.id}`} data-building={b.id} aria-labelledby={`cm-list-h-${b.id}`}>
-              <h2 id={`cm-list-h-${b.id}`}><span className="cm-list-ic" aria-hidden="true">{BUILDING_ICON[b.id] ?? ''}</span>{name}{chip && <small className="cm-nav-chip">{chip}</small>}</h2>
+              <h2 id={`cm-list-h-${b.id}`}><span className="cm-list-ic" aria-hidden="true">{BUILDING_ICON[b.id] ?? ''}</span>{name}{chip && <small className="cm-nav-chip">{accessOf(b) === 'locked' && <span aria-hidden="true">🔒 </span>}{chip}</small>}</h2>
               {subOf(b, audience, settings.workplaceNames) && <p className="cm-list-line">{subOf(b, audience, settings.workplaceNames)}</p>}
               {facts(b)}
               <WhoIsHere presence={presence?.[b.id]} error={presenceError} loading={presence === null && !presenceError} />
@@ -104,6 +121,7 @@ export default function CampusListView(): React.ReactElement | null {
                   ))}
                 </ul>
               )}
+              {isExplorer && accessOf(b) === 'locked' && <Link className="cm-list-unlock" to={enrollCta(b).to} onClick={closeLayer} data-testid={`cm-list-unlock-${b.id}`}>See what enrolling unlocks</Link>}
               {b.id !== 'gate' && <button type="button" className="cm-list-walk" onClick={() => openMap(b.id as BuildingId)} data-testid={`cm-list-walk-${b.id}`}>Walk there on the map</button>}
               {desks.length > 0 && <div className="cm-desks">{desks.map((d) => <StaffDesk key={d.id} desk={d} onMessaged={closeLayer} />)}</div>}
               {b.id === 'gate' && isExplorer && (

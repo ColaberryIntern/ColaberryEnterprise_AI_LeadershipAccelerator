@@ -27,8 +27,11 @@ function notifText(n: CommunityNotification): string {
  *
  * Campus (C8): while the campus is active, every item walks through the campus door to its place (campusNotify); with the
  * campus off, the classic behavior below is unchanged.
+ *
+ * C23 (rule R10): `onDismissed` fires when the panel closes without a pick (the bell again, or a press outside), so the
+ * campus home can recenter its map, as it does when the person card, the list or the Me panel closes.
  */
-const NotificationBell: React.FC = () => {
+const NotificationBell: React.FC<{ onDismissed?: () => void }> = ({ onDismissed }) => {
   const [count, setCount] = useState(0);
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<CommunityNotification[] | null>(null);
@@ -44,15 +47,16 @@ const NotificationBell: React.FC = () => {
 
   useEffect(() => {
     if (!open) return;
-    const onDoc = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    const onDoc = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) { setOpen(false); onDismissed?.(); } };
     document.addEventListener('mousedown', onDoc);
     return () => document.removeEventListener('mousedown', onDoc);
-  }, [open]);
+  }, [open, onDismissed]);
 
   const toggle = () => {
     const next = !open;
     setOpen(next);
     if (next) fetchNotifications().then(setItems).catch(() => setItems([]));
+    else onDismissed?.();
   };
 
   const onItem = (n: CommunityNotification) => {
