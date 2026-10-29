@@ -201,6 +201,9 @@ export const runtimeApi = {
   complete: (cardId: string, work?: string, reflection?: string) => portalApi.post(`/api/portal/runtime/cards/${cardId}/complete`, { work, reflection }).then((r) => r.data as { outcome: any; artifact: any; readiness: Readiness }),
   watch: (cardId: string, beat: { delta_s: number; position_s?: number | null; duration_s?: number | null; provider?: string | null }) =>
     portalApi.post(`/api/portal/runtime/cards/${cardId}/watch`, beat).then((r) => r.data as { watched_pct: number; required_pct: number | null; met: boolean }),
+  // Current watch verdict, no write: hydrates Mark complete on open so it starts dimmed until the bar is met.
+  watchVerdict: (cardId: string) =>
+    portalApi.get(`/api/portal/runtime/cards/${cardId}/watch`).then((r) => r.data as { watched_pct: number; required_pct: number | null; met: boolean }),
   // Blog 2-minute read gate (ambient blogs, keyed on blogId): heartbeat + collect.
   blogRead: (blogId: string, beat: { delta_s: number }) =>
     portalApi.post(`/api/portal/runtime/today/blog/${blogId}/read`, beat).then((r) => r.data as { read_s: number; required_s: number; met: boolean }),

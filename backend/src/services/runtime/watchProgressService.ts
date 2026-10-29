@@ -76,17 +76,20 @@ async function typeCompletionRules(slug: string): Promise<any> {
   }
 }
 
+export interface WatchVerdict { watched_pct: number; required_pct: number | null; met: boolean }
+
 /**
- * The completion gate — called by onCardCompleted BEFORE the status flip.
- * Throws { status: 422 } with a student-readable message when the requirement
- * is not met. Idempotent completions (already completed) never re-gate.
+ * The one verdict both the UI and the completion gate read, so the button can
+ * never say "go" while the server says "no". required_pct null = type isn't
+ * watch-gated; a completed card is always met (never re-gated).
  */
-export async function assertWatchRequirement(enrollmentId: string, card: TimelineCard): Promise<void> {
+export async function watchVerdictFor(enrollmentId: string, card: TimelineCard): Promise<WatchVerdict> {
   const required = requiredWatchPct(card, await typeCompletionRules(card.type));
-  if (required == null) return;
+  if (required == null) return { watched_pct: 0, required_pct: null, met: true };
+  const requiredPct = Math.round(required * 100);
 
   const progress = await TimelineCardProgress.findOne({ where: { card_id: card.id, enrollment_id: enrollmentId } });
-  if (progress?.status === 'completed') return;   // re-complete stays idempotent, never re-gated
+  if (progress?.status === 'completed') return { watched_pct: requiredPct, required_pct: requiredPct, met: true };
 
   const storedWatch = (progress?.analytics && typeof progress.analytics === 'object' ? progress.analytics.watch : null) as WatchState | null;
   // Recompute against ground truth at check time too — not just on the next beat —
@@ -96,11 +99,26 @@ export async function assertWatchRequirement(enrollmentId: string, card: Timelin
   const authoritativeDurationS = await resolveAuthoritativeDurationS(card, enrollmentId);
   const watch = withAuthoritativeDuration(storedWatch, authoritativeDurationS);
   const verdict = meetsWatchRequirement(watch, required);
-  if (verdict.met) return;
+  return { watched_pct: verdict.watched_pct, required_pct: requiredPct, met: verdict.met };
+}
 
-  const requiredPct = Math.round(required * 100);
+/** Current verdict for a card, no write — the UI hydrates its button from this on open. */
+export async function getWatchVerdict(enrollmentId: string, cardId: string): Promise<WatchVerdict> {
+  const card = await TimelineCard.findByPk(cardId);
+  if (!card || !isCardServable(card.visibility)) throw Object.assign(new Error('Card not available'), { status: 404 });
+  return watchVerdictFor(enrollmentId, card);
+}
+
+/**
+ * The completion gate — called by onCardCompleted BEFORE the status flip.
+ * Throws { status: 422 } with a student-readable message when the requirement
+ * is not met. Idempotent completions (already completed) never re-gate.
+ */
+export async function assertWatchRequirement(enrollmentId: string, card: TimelineCard): Promise<void> {
+  const verdict = await watchVerdictFor(enrollmentId, card);
+  if (verdict.met) return;
   throw Object.assign(
-    new Error(`Watch at least ${requiredPct}% to collect your points — you're at ${verdict.watched_pct}%.`),
-    { status: 422, code: 'watch_requirement', watched_pct: verdict.watched_pct, required_pct: requiredPct },
+    new Error(`Watch at least ${verdict.required_pct}% to collect your points — you're at ${verdict.watched_pct}%.`),
+    { status: 422, code: 'watch_requirement', watched_pct: verdict.watched_pct, required_pct: verdict.required_pct },
   );
 }
