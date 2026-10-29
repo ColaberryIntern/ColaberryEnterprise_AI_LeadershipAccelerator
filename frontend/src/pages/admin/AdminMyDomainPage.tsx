@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { PageHeader, SectionCard } from '../../components/admin/shell';
 import {
-  fetchMyDomains, errorMessage,
+  fetchMyDomains, errorMessage, setAgentDisplayName, AGENT_DISPLAY_NAME_MAX,
   type MyDomainsResponse, type AgentDomainRow,
 } from '../../services/agentDomainApi';
 
@@ -142,12 +142,103 @@ function DomainCard({ d }: { d: AgentDomainRow }) {
 
         <dt className="col-sm-4 text-muted fw-normal">Agent</dt>
         <dd className="col-sm-8">
-          {d.agent_id
-            ? <code>{d.agent_id}</code>
-            : <span className="text-muted">none built yet</span>}
+          <AgentName d={d} />
         </dd>
       </dl>
     </SectionCard>
+  );
+}
+
+/**
+ * AF10.6 — the agent's name, and the control that sets it.
+ *
+ * ## This slot used to render a bare UUID
+ *
+ * Which told the intern nothing about their own agent, and is the reason the ticket exists. The
+ * id is moved to the `title` attribute rather than deleted, because it is what anyone debugging
+ * actually needs and it is now one hover away instead of occupying the line.
+ *
+ * ## The server's refusal is rendered verbatim
+ *
+ * A 409 says which name collided and a 403 says the agent is not yours. Those sentences are the
+ * entire value of the uniqueness check: "Maya is already taken by another agent" tells the intern
+ * what to do next, and "Could not save" does not. So `errorMessage` surfaces the API's own words
+ * and the fallback is only reached when the request never got an answer.
+ *
+ * ## Naming is not approval-gated, on purpose
+ *
+ * The ticket is explicit that the intern sets this directly, because the name is internal and
+ * reversible and approval friction would buy nothing. So there is no pending state here and no
+ * manager step -- it saves, or it tells you why not.
+ */
+function AgentName({ d }: { d: AgentDomainRow }) {
+  const [draft, setDraft] = useState(d.agent_display_name ?? '');
+  const [saved, setSaved] = useState<string | null>(d.agent_display_name);
+  const [editing, setEditing] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState('');
+
+  // Every hook above runs unconditionally, so this early return cannot reorder them.
+  const agentId = d.agent_id;
+  if (!agentId) return <span className="text-muted">none built yet</span>;
+
+  const save = () => {
+    setBusy(true);
+    setProblem('');
+    setAgentDisplayName(agentId, draft)
+      .then((r) => { setSaved(r.display_name); setEditing(false); })
+      .catch((e) => setProblem(errorMessage(e, 'Could not save that name.')))
+      .finally(() => setBusy(false));
+  };
+
+  if (!editing) {
+    return (
+      <>
+        {saved
+          ? <span className="fw-semibold" title={agentId}>{saved}</span>
+          : <span className="text-muted" title={agentId}>not named yet</span>}
+        <button
+          type="button"
+          className="btn btn-link btn-sm p-0 ms-2"
+          onClick={() => { setDraft(saved ?? ''); setProblem(''); setEditing(true); }}
+        >
+          {saved ? 'rename' : 'name your agent'}
+        </button>
+        {problem && <div className="small mt-1" style={{ color: 'var(--color-secondary)' }}>{problem}</div>}
+      </>
+    );
+  }
+
+  return (
+    <>
+      <div className="d-flex align-items-center gap-2 flex-wrap">
+        <input
+          className="form-control form-control-sm"
+          style={{ maxWidth: 220 }}
+          value={draft}
+          maxLength={AGENT_DISPLAY_NAME_MAX}
+          aria-label="Agent name"
+          onChange={(e) => setDraft(e.target.value)}
+        />
+        <button
+          type="button"
+          className="btn btn-primary btn-sm"
+          disabled={busy || draft.trim() === ''}
+          onClick={save}
+        >
+          {busy ? 'Saving…' : 'Save'}
+        </button>
+        <button
+          type="button"
+          className="btn btn-outline-secondary btn-sm"
+          disabled={busy}
+          onClick={() => { setEditing(false); setProblem(''); }}
+        >
+          Cancel
+        </button>
+      </div>
+      {problem && <div className="small mt-1" style={{ color: 'var(--color-secondary)' }}>{problem}</div>}
+    </>
   );
 }
 

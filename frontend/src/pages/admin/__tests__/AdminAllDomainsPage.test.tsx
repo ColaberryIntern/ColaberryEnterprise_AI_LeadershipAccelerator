@@ -62,6 +62,8 @@ function row(over: Record<string, unknown> = {}) {
     manager_blocker: null,
     intended_builder_state: 'verified_active',
     agent_id: null,
+    // AF10.6: null is the normal state, and this page does not render it.
+    agent_display_name: null,
     releases: 3,
     stories: 70,
     stories_verified: 0,

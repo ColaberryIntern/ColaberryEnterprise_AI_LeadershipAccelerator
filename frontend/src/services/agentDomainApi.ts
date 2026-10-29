@@ -27,6 +27,11 @@ export interface AgentDomainRow {
   manager_blocker: string | null;
   intended_builder_state: string | null;
   agent_id: string | null;
+  /**
+   * AF10.6: the name the intern gave this agent. Null until they name it, which is the normal
+   * state — nothing backfills it, because the whole point is that the intern chooses.
+   */
+  agent_display_name: string | null;
   releases: number;
   stories: number;
   stories_verified: number;
@@ -70,4 +75,30 @@ export async function fetchProvisionedDomains(): Promise<{
 export function errorMessage(e: unknown, fallback: string): string {
   const r = e as { response?: { data?: { error?: string } } };
   return r?.response?.data?.error || fallback;
+}
+
+/**
+ * Mirrors `AGENT_DISPLAY_NAME_MAX` in `backend/src/schemas/agentDisplayNameSchema.ts`. Declared
+ * here rather than in the page so the input's `maxLength` and the server's `.max()` cannot drift
+ * into a control that accepts what the API will refuse.
+ */
+export const AGENT_DISPLAY_NAME_MAX = 60;
+
+/**
+ * AF10.6 — name your own agent.
+ *
+ * The backend answers 403 if the agent is not yours and 409 if the name is taken, and both carry
+ * a sentence worth showing verbatim. `errorMessage` already surfaces `response.data.error`, so a
+ * caller that uses it gets "Maya is already taken by another agent" rather than "request failed",
+ * which is the difference between a usable refusal and a dead end.
+ */
+export async function setAgentDisplayName(
+  agentId: string,
+  displayName: string,
+): Promise<{ agent_id: string; display_name: string; unchanged: boolean }> {
+  const { data } = await api.patch(
+    `/api/admin/agents/${agentId}/display-name`,
+    { display_name: displayName },
+  );
+  return data;
 }

@@ -27,6 +27,11 @@ jest.mock('../../../services/agentDomainApi', () => ({
   fetchMyDomains: jest.fn(),
   fetchProvisionedDomains: jest.fn(),
   errorMessage: (_e: unknown, fallback: string) => fallback,
+  // AF10.6. Both are real exports the page imports, so leaving them out of this factory would
+  // make the naming control fail on an undefined call rather than on anything this suite is
+  // about. Its own behaviour is covered in AdminMyDomainPage.agentName.test.tsx.
+  setAgentDisplayName: jest.fn(),
+  AGENT_DISPLAY_NAME_MAX: 60,
 }));
 
 jest.mock('../../../components/admin/shell', () => ({
@@ -53,6 +58,8 @@ function row(over: Record<string, unknown> = {}) {
     manager_identity_id: 'm1', manager_email: 'sohail@colaberry.com',
     manager_can_reach: true, manager_blocker: null,
     intended_builder_state: 'verified_active', agent_id: null,
+    // AF10.6: null is the normal state. The intern names their agent; nothing backfills it.
+    agent_display_name: null,
     releases: 3, stories: 70, stories_verified: 0, build_authorizations: 0,
     ...over,
   };
