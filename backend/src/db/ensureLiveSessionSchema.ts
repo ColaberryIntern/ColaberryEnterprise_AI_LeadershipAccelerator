@@ -168,6 +168,32 @@ export async function ensureLiveSessionSchema(): Promise<void> {
     `CREATE UNIQUE INDEX IF NOT EXISTS uq_session_poll_responses_key ON session_poll_responses (session_id, enrollment_id, poll_key)`,
     `CREATE INDEX IF NOT EXISTS idx_session_poll_responses_key ON session_poll_responses (session_id, poll_key)`,
 
+    // ---- session_guests + session_guest_poll_responses (Open House guests) ----
+    // Name + email only, no login (sessionGuestStore.ts). Separate from the
+    // enrollment-keyed tables on purpose: a guest is not an enrollment.
+    // enrollment_id is an email match recorded for follow-up, never a grant.
+    `CREATE TABLE IF NOT EXISTS session_guests (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       session_id UUID NOT NULL REFERENCES live_sessions(id),
+       name VARCHAR(100) NOT NULL,
+       email VARCHAR(254) NOT NULL,
+       email_lower VARCHAR(254) NOT NULL,
+       enrollment_id UUID REFERENCES enrollments(id),
+       created_at TIMESTAMPTZ DEFAULT NOW(),
+       updated_at TIMESTAMPTZ DEFAULT NOW()
+     )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS uq_session_guests_email ON session_guests (session_id, email_lower)`,
+    `CREATE TABLE IF NOT EXISTS session_guest_poll_responses (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       session_id UUID NOT NULL REFERENCES live_sessions(id),
+       guest_id UUID NOT NULL REFERENCES session_guests(id),
+       poll_key VARCHAR(200) NOT NULL,
+       choice INTEGER NOT NULL,
+       created_at TIMESTAMPTZ DEFAULT NOW()
+     )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS uq_session_guest_poll_responses_key ON session_guest_poll_responses (session_id, guest_id, poll_key)`,
+    `CREATE INDEX IF NOT EXISTS idx_session_guest_poll_responses_key ON session_guest_poll_responses (session_id, poll_key)`,
+
     // ---- session_presence_events (named join/leave feed for the instructor deck's ticker) ----
     // display_name is denormalized at write time (mirrors session_chat_messages.sender_name
     // above) — the ticker shows a point-in-time projection, not a live profile join.

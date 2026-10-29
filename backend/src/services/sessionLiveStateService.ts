@@ -11,6 +11,7 @@
 import { QueryTypes } from 'sequelize';
 import { sequelize } from '../config/database';
 import { getRecentPresenceEvents, PresenceEvent, formatDisplayName } from './sessionPresenceService';
+import { addTallies, countGuests, getGuestCorrectNames, getGuestTally } from './sessionGuestStore';
 import type { KitSlide } from './classKit/kitSpec';
 
 export type PulseState = 'here' | 'building' | 'stuck' | 'finished';
@@ -190,7 +191,8 @@ export async function getPollTally(sessionId: string, pollKey: string): Promise<
   );
   const tally: number[] = [];
   for (const r of rows) tally[r.choice] = Number(r.n) || 0;
-  return tally;
+  // Open House guests (name + email, no login) vote in their own table.
+  return addTallies(tally, await getGuestTally(sessionId, pollKey));
 }
 
 /**
@@ -209,7 +211,8 @@ export async function getPollCorrectResponders(sessionId: string, pollKey: strin
       ORDER BY e.full_name`,
     { replacements: { sid: sessionId, key: pollKey, choice: correctChoice }, type: QueryTypes.SELECT },
   );
-  return rows.map((r) => formatDisplayName(r.full_name));
+  const guests = await getGuestCorrectNames(sessionId, pollKey, correctChoice);
+  return [...rows.map((r) => formatDisplayName(r.full_name)), ...guests];
 }
 
 // ---- reads ----
@@ -279,7 +282,7 @@ export async function getLiveState(sessionId: string): Promise<LiveState> {
   const recentEvents = await getRecentPresenceEvents(sessionId);
 
   return {
-    present: Number(presentRow?.n) || 0,
+    present: (Number(presentRow?.n) || 0) + await countGuests(sessionId),
     participated: Number(participatedRow?.n) || 0,
     here: c.here, building: c.building, stuck: c.stuck, finished: c.finished,
     questions: msgs.map((m) => ({ name: m.sender_name, text: m.content, at: String(m.created_at) })),
