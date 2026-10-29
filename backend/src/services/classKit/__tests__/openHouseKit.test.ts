@@ -13,8 +13,8 @@ import { theaterHtml } from '../kitTheater';
 const SESSION: BuildKitSpecInput['session'] = {
   id: '00000000-0000-0000-0000-0000000000oh', session_number: 1,
   title: 'Open House — The Forward Deployed Engineer', session_date: '2026-10-29',
-  start_time: '18:30', end_time: '20:00', session_type: 'core', meeting_link: null,
-} as BuildKitSpecInput['session'];
+  start_time: '18:30', end_time: '20:00', status: 'scheduled',
+};
 
 function input(config: KitConfig): BuildKitSpecInput {
   return { session: SESSION, cohortName: 'Cohort - November 2026', checkinUrl: 'https://x/checkin', qrSvg: '<svg/>', meetLink: null, config };
