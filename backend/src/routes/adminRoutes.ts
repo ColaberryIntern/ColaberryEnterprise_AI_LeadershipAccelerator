@@ -138,6 +138,7 @@ import projectLifecycleReviewRoutes from './admin/projectLifecycleReviewRoutes';
 import caseStudyServiceLinkRoutes from './admin/caseStudyServiceLinkRoutes';
 import govQualificationRoutes from './admin/govQualificationRoutes';
 import govContractsRoutes from './admin/govContractsRoutes';
+import agentFactoryRoutes from './admin/agentFactoryRoutes';
 import certPrepAdminRoutes from './admin/certPrepAdminRoutes';
 import certificationAdminRoutes from './admin/certificationAdminRoutes';
 import checklistRoutes from './admin/checklistRoutes';
@@ -365,6 +366,9 @@ router.use(govQualificationRoutes);
 // Gov Contracts tab (M1): its own router gated 'gov_contracts' (NOT the factory→program prefix),
 // so the Interns-hub tab's data agrees with its section gate. mgmtSectionGate maps the prefix.
 router.use(govContractsRoutes);
+// Agent Factory tab (M2): its own 'agents'-gated router (NOT the '-provisioned' program prefix),
+// so the Interns-hub Agents tab's data agrees with its section gate. mgmtSectionGate maps the prefix.
+router.use(agentFactoryRoutes);
 // Cert Prep instructor surface. Path prefix is registered in mgmtSectionGate's
 // PATH_SECTION under 'program' - without that row the gate is deny-by-default
 // and every scoped mgmt token 403s here while legacy admin passes.

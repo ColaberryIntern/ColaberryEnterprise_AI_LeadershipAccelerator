@@ -126,6 +126,11 @@ const PATH_SECTION: Array<[string, SectionKey]> = [
   ['/api/admin/agent-domains-mine', 'dashboard'],
   ['/api/admin/agent-domains-provisioned', 'program'],
   ['/api/admin/agent-domains', 'program'],
+  // Agent Factory tab list (M2). Its OWN 'agents'-gated prefix so the Interns-hub Agents tab's data
+  // agrees with its nav gate; reusing '-provisioned' ('program') would 403 a future 'agents'-only
+  // builder who can see the tab. Distinct from the '-domains' prefixes (no '/'-boundary overlap), so
+  // declaration order is free. Per-domain scope (managed ∪ built) is a SECOND, in-service check.
+  ['/api/admin/agent-factory', 'agents'],
   ['/api/admin/cohorts', 'program'], ['/api/admin/curriculum', 'program'], ['/api/admin/components', 'program'],
   ['/api/admin/composer', 'program'], ['/api/admin/capabilities', 'program'], ['/api/admin/recipes', 'program'],
   ['/api/admin/feed-control', 'program'],
