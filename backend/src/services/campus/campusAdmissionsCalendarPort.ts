@@ -1,6 +1,6 @@
-import { env } from '../../config/env';
 import { getTestOverrides } from '../settingsService';
 import { getAvailableSlots, findEventsByPrivateProperty, insertCampusEvent, cancelCalendarEvent } from '../calendarService';
+import { admissionsCalendar } from '../calendarTarget';
 import type { AdmissionsCalendarPort } from './campusAdmissionsCall';
 import { memoryAdmissionsCalendar } from './campusAdmissionsMemoryCalendar';
 
@@ -17,12 +17,14 @@ export function stubAllowed(e: NodeJS.ProcessEnv = process.env): boolean {
 
 export function admissionsCalendarPort(): AdmissionsCalendarPort {
   if (stubAllowed()) return (memory ??= memoryAdmissionsCalendar());
+  // C90: the admissions calendar (Roselen in production), not the strategy-call calendar; unset = the same calendar as before
+  const target = admissionsCalendar();
   return {
-    getAvailableSlots,
-    findEventsByPrivateProperty,
-    insertCampusEvent,
-    cancelCalendarEvent,
-    ownerEmail: env.googleCalendarOwnerEmail || null,
+    getAvailableSlots: (days) => getAvailableSlots(days, target),
+    findEventsByPrivateProperty: (key, value, timeMin) => findEventsByPrivateProperty(key, value, timeMin, target),
+    insertCampusEvent: (input) => insertCampusEvent(input, target),
+    cancelCalendarEvent: (eventId) => cancelCalendarEvent(eventId, target),
+    ownerEmail: target.ownerEmail,
     async testRedirect() {
       const t = await getTestOverrides();
       return t.enabled && t.email ? t.email : null;
