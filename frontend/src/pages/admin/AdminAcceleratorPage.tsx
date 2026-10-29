@@ -187,6 +187,28 @@ function AdminAcceleratorPage() {
   const [kitSessionId, setKitSessionId] = useState<string | null>(null);
   // Session id whose Present dropdown menu is open, else null.
   const [presentMenu, setPresentMenu] = useState<string | null>(null);
+  // Viewport position of that menu. It renders position:fixed because the
+  // sessions table sits inside .table-responsive (overflow auto), which clipped
+  // an absolutely-positioned menu and forced a tiny inner scrollbar.
+  const [presentMenuPos, setPresentMenuPos] = useState<React.CSSProperties>({});
+  const togglePresentMenu = (id: string, e: React.MouseEvent<HTMLButtonElement>) => {
+    if (presentMenu === id) { setPresentMenu(null); return; }
+    const r = e.currentTarget.getBoundingClientRect();
+    const MENU_HEIGHT = 290; // 6 items + 2 dividers at btn-sm density
+    const right = Math.max(8, window.innerWidth - r.right);
+    setPresentMenuPos(r.bottom + MENU_HEIGHT > window.innerHeight
+      ? { bottom: window.innerHeight - r.top + 2, right }
+      : { top: r.bottom + 2, right });
+    setPresentMenu(id);
+  };
+  // A fixed menu would float away from its button on scroll — close it instead.
+  useEffect(() => {
+    if (!presentMenu) return undefined;
+    const close = () => setPresentMenu(null);
+    window.addEventListener('scroll', close, true);
+    window.addEventListener('resize', close);
+    return () => { window.removeEventListener('scroll', close, true); window.removeEventListener('resize', close); };
+  }, [presentMenu]);
   // Session {id, title} whose Customize (Class Kit config) modal is open, else null.
   const [customizeTarget, setCustomizeTarget] = useState<{ id: string; title: string } | null>(null);
   // Which category tab the Customize modal should open on — set only via the
@@ -1051,9 +1073,9 @@ function AdminAcceleratorPage() {
                         <div className="d-flex gap-1">
                           <div className="btn-group" style={{ position: 'relative' }}>
                             <button className="btn btn-primary btn-sm" onClick={() => handleOpenKitDeck(s.id)} title="Open the interactive Class Kit teaching deck in a new tab — share this on screen to run the class. The check-in QR is on the first slides.">▶ Present</button>
-                            <button className="btn btn-primary btn-sm dropdown-toggle dropdown-toggle-split" onClick={() => setPresentMenu(presentMenu === s.id ? null : s.id)} title="More: Rehearse · Download · Teaching guide · Readiness"><span className="visually-hidden">More</span></button>
+                            <button className="btn btn-primary btn-sm dropdown-toggle dropdown-toggle-split" onClick={(e) => togglePresentMenu(s.id, e)} title="More: Rehearse · Download · Teaching guide · Readiness"><span className="visually-hidden">More</span></button>
                             {presentMenu === s.id && (
-                              <div className="dropdown-menu show" style={{ position: 'absolute', top: '100%', right: 0, zIndex: 1050, display: 'block' }}>
+                              <div className="dropdown-menu show" style={{ position: 'fixed', ...presentMenuPos, zIndex: 1050, display: 'block' }}>
                                 <button className="dropdown-item" onClick={() => { setPresentMenu(null); handleOpenKitDeck(s.id, 'rehearse'); }}>🎓 Rehearse (live off)</button>
                                 <button className="dropdown-item" onClick={() => { setPresentMenu(null); handleDownloadKit(s.id, s.title); }}>⬇️ Download standalone HTML</button>
                                 <button className="dropdown-item" onClick={() => { setPresentMenu(null); handleDownloadTeachingGuide(s.id, s.title); }} title="Read before class — every slide in plain language, the terms behind it, and where the pacing gets tight">📖 Teaching guide (download)</button>

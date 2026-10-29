@@ -65,6 +65,7 @@ function resolveTeachSlides(base: TeachSlide[], config: KitConfig): TeachSlide[]
  * challenge, same question both times) — that's authored content, not a
  * special case the engine needs to know about. */
 export function defaultInteractionsFor(week: number | null, dayKind: DayKind): InteractionPlacement[] {
+  if (dayKind === 'openhouse') return [];
   if (dayKind === 'orientation') {
     return [
       { ...ORIENTATION_PLAN.designChoice, segment: 'welcome', eyebrow: 'Warm-up', title: 'Where are you starting from?', presenterTip: 'Read the spread out loud. Sets up the "from user to builder" arc.' },
@@ -105,7 +106,7 @@ export interface DefaultOpening {
  * the result-preview (Thursday). Exported so kitConfigDefaults.ts can
  * resolve the identical content without duplicating this logic. */
 export function defaultOpeningFor(week: number | null, dayKind: DayKind): DefaultOpening {
-  if (dayKind === 'orientation') return { coldOpen: null, hook: null, resultPreview: null };
+  if (dayKind === 'orientation' || dayKind === 'openhouse') return { coldOpen: null, hook: null, resultPreview: null };
   const wc = week != null ? WEEK_CLASS_CONTENT.find((w) => w.week === week) : undefined;
   if (!wc) return { coldOpen: null, hook: null, resultPreview: null };
   if (dayKind === 'architecture') {
@@ -495,6 +496,31 @@ function orientationSlides(meta: KitMeta, segs: KitSegment[], config: KitConfig)
   return out;
 }
 
+// -- Open House -----------------------------------------------------------------
+
+/** A prospect session: nothing is generated from week content, because an Open
+ * House has no week. Each segment is exactly its authored teach slides, then
+ * its story beats, then its questions — all from the session's KitConfig — so
+ * the deck is whatever the session's own deck script says it is. */
+function openHouseSlides(meta: KitMeta, segs: KitSegment[], config: KitConfig): KitSlide[] {
+  const out: KitSlide[] = [...openingSlides(meta, segs)];
+  const teach = resolveTeachSlides([], config);
+  const interactions = resolveInteractions([], config);
+  const hook = resolveSlot<HookCopy>(null, config.opening.hook);
+  if (hook) {
+    out.push(slide(segs[0], -1, 'hook', {
+      title: hook.headline, body: hook.caption,
+      presenterTip: 'One sentence. Let it land before you say anything else.',
+    }));
+  }
+  segs.forEach((seg) => {
+    out.push(...teachToSlides(teach, seg.id, seg));
+    pushStoryBeats(out, undefined, seg.id, seg, config);
+    pushInteractions(out, interactions, seg.id, seg);
+  });
+  return out;
+}
+
 function breakSlide(seg: KitSegment): KitSlide {
   return slide(seg, 0, 'break', {
     eyebrow: 'Reset', title: 'Short break', body: 'Stretch, questions, individual catch-up. Back in 5.',
@@ -511,14 +537,15 @@ export function buildKitSpec(input: BuildKitSpecInput): KitSpec {
   const { session } = input;
   const config = input.config || DEFAULT_KIT_CONFIG;
   const dayKind = detectDayKind(session.title, session.session_date);
-  const week = dayKind === 'orientation' ? null : parseWeek(session.title);
+  const week = dayKind === 'orientation' || dayKind === 'openhouse' ? null : parseWeek(session.title);
   const meta = buildMeta(input, dayKind, week);
 
   const templates = runOfShowFor(dayKind);
   const segments = toSegments(templates, meta.durationMin);
 
   let slides: KitSlide[];
-  if (dayKind === 'orientation') slides = orientationSlides(meta, segments, config);
+  if (dayKind === 'openhouse') slides = openHouseSlides(meta, segments, config);
+  else if (dayKind === 'orientation') slides = orientationSlides(meta, segments, config);
   else if (dayKind === 'build') slides = buildSlides(meta, segments, config);
   else slides = architectureSlides(meta, segments, config);
   slides = applyKitConfig(slides, config);
