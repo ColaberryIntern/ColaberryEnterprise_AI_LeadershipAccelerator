@@ -16,6 +16,7 @@ import {
   captureSignupConsent,
   SIGNUP_CONSENT_TEXT,
 } from '../services/consent/captureSignupConsent';
+import { capturePhoneConsent } from '../services/consent/capturePhoneConsent';
 
 export async function handleListOpenCohorts(
   _req: Request,
@@ -184,6 +185,25 @@ export async function handleCreateFreeAccount(
       // Calling it unguarded threw on a hand-rolled req in an existing test, and
       // the controller's catch turned that into a silent failure to respond -
       // consent capture must never be able to break a signup that way.
+      userAgent: typeof (req as any).get === 'function' ? req.get('user-agent') ?? null : null,
+    });
+
+    // Phone permission, a SEPARATE act from the email box above.
+    //
+    // /enroll has collected a phone number and shown only the email wording, so a
+    // person who ticked "Email me about Colaberry courses" has been recorded as
+    // consenting to email and nothing else — correctly. This records the telephone
+    // grant when, and only when, they tick the second box.
+    //
+    // Keyed on the number inside the helper, not on the email: a voice or SMS send
+    // looks consent up by phone, so an email-keyed row would be invisible to the
+    // gate while looking perfectly valid in the table.
+    await capturePhoneConsent({
+      phone: data.phone,
+      email: data.email,
+      phoneConsent: (data as any).phone_consent,
+      source: 'free_signup',
+      ipAddress: req.ip ?? null,
       userAgent: typeof (req as any).get === 'function' ? req.get('user-agent') ?? null : null,
     });
 

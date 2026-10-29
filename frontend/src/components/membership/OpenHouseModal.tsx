@@ -84,7 +84,10 @@ function OpenHouseModal({
         </p>
         <LeadCaptureForm
           formType={`open_house_${personaSlug}`}
-          fields={['name', 'email']}
+          // Phone is optional and brings its own permission tick with it. An RSVP
+          // is the one moment somebody will give a number for a reminder, and the
+          // tick is what makes that number usable rather than just stored.
+          fields={['name', 'email', 'phone']}
           submitLabel={submitLabel}
           successMessage={successMessage}
           buttonClassName="btn btn-primary btn-lg w-100"

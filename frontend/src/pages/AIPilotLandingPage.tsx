@@ -3,6 +3,7 @@ import { initTracker } from '../utils/tracker';
 import { captureUTMFromURL } from '../services/utmService';
 import { captureCampaignFromURL } from '../services/campaignAttributionService';
 import SEOHead from '../components/SEOHead';
+import PhoneConsentCheckbox from '../components/PhoneConsentCheckbox';
 
 // Standalone landing page for the SMB CEO "6-Week AI ROI Pilot" initiative.
 // Targets owner-operators of 5-50 person, operations-heavy companies. Low-barrier
@@ -45,9 +46,13 @@ function AIPilotLandingPage() {
     name: '',
     email: '',
     company: '',
+    phone: '',
     company_size: '',
     message: '',
     consent_contact: false,
+    // Separate from `consent_contact`, which is the required channel-blind tick
+    // and cannot stand as agreement to be telephoned. Optional; starts false.
+    phone_consent: false,
   });
   const [status, setStatus] = useState<'idle' | 'submitting' | 'success' | 'error'>('idle');
   const [errorMsg, setErrorMsg] = useState('');
@@ -78,9 +83,11 @@ function AIPilotLandingPage() {
           name: form.name,
           email: form.email,
           company: form.company,
+          phone: form.phone,
           company_size: form.company_size,
           message: form.message,
           consent_contact: form.consent_contact,
+          phone_consent: form.phone_consent,
           source: 'ai-pilot',
           form_type: 'ai_pilot',
           interest_area: 'ai_roi_pilot',
@@ -260,6 +267,23 @@ function AIPilotLandingPage() {
                     <label className="form-label small fw-bold" style={{ color: DARK.text }}>Company</label>
                     <input type="text" className="form-control" value={form.company} onChange={(e) => update('company', e.target.value)} />
                   </div>
+                  <div className="col-md-5">
+                    <label className="form-label small fw-bold" style={{ color: DARK.text }}>Phone</label>
+                    <input type="tel" className="form-control" value={form.phone} onChange={(e) => update('phone', e.target.value)} placeholder="(555) 123-4567" />
+                  </div>
+                </div>
+                {/* Only once a number is typed, never pre-ticked, never required. */}
+                <div className="mb-3">
+                  <PhoneConsentCheckbox
+                    id="ai-pilot-phone-consent"
+                    phone={form.phone}
+                    checked={form.phone_consent}
+                    onChange={(next) => update('phone_consent', next)}
+                    disabled={status === 'submitting'}
+                    labelClassName="form-check-label small"
+                  />
+                </div>
+                <div className="row g-3 mb-3">
                   <div className="col-md-5">
                     <label className="form-label small fw-bold" style={{ color: DARK.text }}>Team size</label>
                     <select className="form-select" value={form.company_size} onChange={(e) => update('company_size', e.target.value)}>

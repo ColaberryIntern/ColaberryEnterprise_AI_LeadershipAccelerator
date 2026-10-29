@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import Modal from './ui/Modal';
+import PhoneConsentCheckbox from './PhoneConsentCheckbox';
 import { useCalendarAvailability } from '../hooks/useCalendarAvailability';
 import { downloadICS } from '../utils/ics';
 import api from '../utils/api';
@@ -108,6 +109,10 @@ export default function StrategyCallModal({
   const [email, setEmail] = useState(initialEmail);
   const [company, setCompany] = useState(initialCompany);
   const [phone, setPhone] = useState(initialPhone ? formatPhone(initialPhone) : '');
+  // Starts FALSE even when `initialPhone` is prefilled. A number we already hold
+  // from an earlier form is not permission to ring it, and pre-ticking a box on
+  // somebody's behalf is the one thing consent cannot be.
+  const [phoneConsent, setPhoneConsent] = useState(false);
   const [formError, setFormError] = useState('');
   const [bookingResult, setBookingResult] = useState<BookingResult | null>(null);
   const [editingDetails, setEditingDetails] = useState(false);
@@ -130,6 +135,7 @@ export default function StrategyCallModal({
     setEmail(initialEmail);
     setCompany(initialCompany);
     setPhone(initialPhone ? formatPhone(initialPhone) : '');
+    setPhoneConsent(false);
     setFormError('');
     setBookingResult(null);
     setEditingDetails(false);
@@ -177,6 +183,12 @@ export default function StrategyCallModal({
         email: email.trim(),
         company: company.trim(),
         phone: phone.trim(),
+        // Sent even when false, so the backend can tell "declined" from "an older
+        // client that could not ask". `bookCallSchema` treats it as optional and a
+        // false records nothing, so neither reading changes behaviour today — but
+        // the distinction is the difference between a form that asked and one that
+        // did not, and that is worth being able to see in the request.
+        phone_consent: phoneConsent,
         slot_start: selectedSlot.start,
         timezone,
         page_origin: pageOrigin || window.location.pathname,
@@ -205,6 +217,7 @@ export default function StrategyCallModal({
         email: email.trim(),
         company: company.trim(),
         phone: phone.trim(),
+        phone_consent: phoneConsent,
         form_type: 'strategy_call',
         ...utmFields,
         visitor_fingerprint: visitorFp || undefined,
@@ -355,6 +368,23 @@ export default function StrategyCallModal({
                   </button>
                 </div>
               </div>
+
+              {/*
+                ASKED ON THIS BRANCH TOO, which is easy to miss. A visitor arriving
+                with a prefilled identity never sees the form below — they read the
+                summary and press Confirm — so a tick that lived only in the form
+                would leave every prefilled booking collecting a number with no
+                permission, the exact gap this change closes.
+              */}
+              <PhoneConsentCheckbox
+                id="sc-phone-consent-confirm"
+                phone={phone}
+                checked={phoneConsent}
+                onChange={setPhoneConsent}
+                disabled={step === 'submitting'}
+                wrapperClassName="form-check mb-3"
+              />
+
               <button
                 type="button"
                 className="btn btn-hero-primary btn-lg w-100"
@@ -428,6 +458,20 @@ export default function StrategyCallModal({
                     value={phone}
                     onChange={(e) => setPhone(formatPhone(e.target.value))}
                     placeholder="(555) 123-4567"
+                    disabled={step === 'submitting'}
+                  />
+                </div>
+                {/*
+                  Appears only once a number is typed, and never pre-ticked. The
+                  phone stays optional and so does this: leaving it alone still
+                  books the call, it just records no permission to telephone.
+                */}
+                <div className="col-12">
+                  <PhoneConsentCheckbox
+                    id="sc-phone-consent"
+                    phone={phone}
+                    checked={phoneConsent}
+                    onChange={setPhoneConsent}
                     disabled={step === 'submitting'}
                   />
                 </div>

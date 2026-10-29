@@ -20,6 +20,8 @@ import {
   buildContextPayload,
   isConsumerEmail,
 } from '../../config/v2Signup';
+import { shouldAskPhoneConsent } from '../../components/PhoneConsentCheckbox';
+import { PHONE_CONSENT_TEXT } from '../../config/consentText';
 import './signupV2.css';
 import '../../components/publicV2/heroV8.css';
 
@@ -55,6 +57,7 @@ function SignupV2(): React.ReactElement {
   const [ctx, setCtx] = useState<ContextInput>({
     role: '', teamSize: '', timeline: '', goal: '', phone: '', notes: '',
     evaluating90Days: false, sponsorshipInterest: false, consentContact: false,
+    phoneConsent: false,
   });
 
   const setField = <K extends keyof AccountInput>(k: K, v: AccountInput[K]) =>
@@ -300,6 +303,20 @@ function SignupV2(): React.ReactElement {
                   <input className="cbv2-field__input" type="tel" autoComplete="tel"
                     value={ctx.phone} onChange={(ev) => setCtxField('phone', ev.target.value)} />
                 </label>
+
+                {/*
+                  Directly under the number rather than with the three ticks below,
+                  because it is about this field and they are not. Shown only once
+                  something is typed; never pre-ticked; leaving it alone still
+                  finishes the signup.
+                */}
+                {shouldAskPhoneConsent(ctx.phone) && (
+                  <label className="cbv2-consent">
+                    <input type="checkbox" checked={ctx.phoneConsent}
+                      onChange={(ev) => setCtxField('phoneConsent', ev.target.checked)} />
+                    <span>{PHONE_CONSENT_TEXT}</span>
+                  </label>
+                )}
 
                 <label className="cbv2-field">
                   <span className="cbv2-field__label">Anything we should know</span>

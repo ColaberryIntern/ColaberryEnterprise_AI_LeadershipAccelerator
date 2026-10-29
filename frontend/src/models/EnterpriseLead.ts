@@ -34,6 +34,15 @@ export interface EnterpriseLead {
   // Optional
   message?: string;
   consentContact?: boolean;
+  /**
+   * Permission to call or text, which `consentContact` does NOT grant.
+   *
+   * `consentContact` is the required "I agree to be contacted by Colaberry" tick.
+   * It is channel-blind, so reading it as phone permission would let one sentence
+   * about being contacted authorise an autodialled call. Separate field, separate
+   * wording on screen, separate record per channel on the backend.
+   */
+  phoneConsent?: boolean;
 
   // Scoring (frontend-computed)
   intentScore?: number;
@@ -44,7 +53,7 @@ export interface EnterpriseLead {
  *
  * Backend accepts: name, email, company, role, phone, title, company_size,
  * evaluating_90_days, interest_area, message, source, form_type,
- * consent_contact, utm_source, utm_campaign, page_url
+ * consent_contact, phone_consent, utm_source, utm_campaign, page_url
  *
  * Extra fields are serialized into message and interest_area.
  */
@@ -76,6 +85,7 @@ export function toLeadPayload(lead: EnterpriseLead): Record<string, unknown> {
     message: (baseMessage + extraBlock).trim() || undefined,
     form_type: lead.formType,
     consent_contact: lead.consentContact ?? undefined,
+    phone_consent: lead.phoneConsent ?? undefined,
     utm_source: lead.utmMedium
       ? `${lead.utmSource || 'direct'}|${lead.utmMedium}`
       : lead.utmSource || undefined,

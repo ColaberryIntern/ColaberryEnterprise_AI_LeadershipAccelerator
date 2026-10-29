@@ -12,6 +12,7 @@ import { syncNewLeadToGhl } from '../services/ghlService';
 import { recordOutcome } from '../services/interactionService';
 import { logActivity } from '../services/activityService';
 import { redactForLogs } from '../utils/piiRedaction';
+import { capturePhoneConsent } from '../services/consent/capturePhoneConsent';
 
 export async function handleGetAvailability(
   req: Request,
@@ -78,6 +79,35 @@ export async function handleBookCall(
       visitor_fingerprint: data.visitor_fingerprint || null,
       utm_source: data.utm_source || null,
       utm_campaign: data.utm_campaign || null,
+    });
+
+    // Phone permission, recorded the moment the number is persisted.
+    //
+    // THIS IS THE GAP THIS CHANGE CLOSES. The booking form has offered a phone
+    // field on fifteen landing pages since it shipped, and nothing ever asked
+    // whether that number could be used — so every number in `strategy_calls.phone`
+    // has no `consent_records` row behind it and the consent gate reads
+    // `no_express_consent` for all of them.
+    //
+    // `PHONE_CONSENT_TEXT` is the right wording here rather than
+    // `CALLBACK_CONSENT_TEXT`: this is a tick granting standing permission to get
+    // in touch, not somebody pressing "call me now". The stronger, 30-day-bounded
+    // grant belongs to a surface where the affirmative act IS the request to be
+    // phoned.
+    //
+    // Placed after the row rather than before the booking, so a failed booking
+    // never leaves a grant for a call that does not exist. Swallow-safe: nobody
+    // loses a confirmed strategy call because a consent insert failed.
+    await capturePhoneConsent({
+      phone: data.phone,
+      email: data.email,
+      phoneConsent: data.phone_consent,
+      source: 'strategy_call',
+      ipAddress: req.ip ?? null,
+      // `req.get` is an Express helper, not part of the bare request shape — see
+      // the same guard on the enrolment path, where calling it unguarded on a
+      // hand-rolled req swallowed the whole response.
+      userAgent: typeof (req as any).get === 'function' ? req.get('user-agent') ?? null : null,
     });
 
     // Find or create Lead by email

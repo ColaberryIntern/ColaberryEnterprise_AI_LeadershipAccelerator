@@ -11,6 +11,8 @@ import { Card } from '../colaberry/components/core/Card';
 import { Button } from '../colaberry/components/core/Button';
 import { Badge } from '../colaberry/components/core/Badge';
 import { Input } from '../colaberry/components/core/Input';
+import { shouldAskPhoneConsent } from '../components/PhoneConsentCheckbox';
+import { PHONE_CONSENT_TEXT } from '../config/consentText';
 
 interface FormErrors {
   [key: string]: string;
@@ -51,6 +53,11 @@ function EnrollPage() {
     // Marketing consent. Defaults to UNTICKED: consent must be an affirmative
     // act, and a pre-ticked box is not consent in any regime that matters.
     marketing_opt_in: false,
+    // Permission to CALL OR TEXT, which `marketing_opt_in` does not grant: that
+    // box says "Email me about Colaberry courses" and no reading of it extends to
+    // a telephone call. Separate field, separate wording, separate record per
+    // channel on the backend. It rides along on the `...formData` spread below.
+    phone_consent: false,
   });
   const [errors, setErrors] = useState<FormErrors>({});
   const [serverError, setServerError] = useState('');
@@ -411,6 +418,32 @@ function EnrollPage() {
                     value={formData.phone}
                     onChange={handleChange}
                   />
+                  {/*
+                    Beside the number, not down with the email box, so there is no
+                    doubt which permission is which. Shown only once something is
+                    typed and never pre-ticked; leaving it alone still creates the
+                    account. `handleChange` already reads `checked` for a checkbox.
+                  */}
+                  {shouldAskPhoneConsent(formData.phone) && (
+                    <label
+                      htmlFor="phone_consent"
+                      style={{
+                        display: 'flex', gap: '0.6rem', alignItems: 'flex-start',
+                        cursor: 'pointer', fontSize: '0.825rem', lineHeight: 1.45,
+                        marginTop: 'var(--space-2)', color: 'var(--text-muted)',
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        id="phone_consent"
+                        name="phone_consent"
+                        checked={formData.phone_consent}
+                        onChange={handleChange}
+                        style={{ marginTop: '0.2rem', flexShrink: 0 }}
+                      />
+                      <span>{PHONE_CONSENT_TEXT}</span>
+                    </label>
+                  )}
                 </div>
 
                 {/* Company Size */}

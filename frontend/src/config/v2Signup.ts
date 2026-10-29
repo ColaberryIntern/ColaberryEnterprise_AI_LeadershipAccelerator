@@ -137,6 +137,17 @@ export interface ContextInput {
   readonly evaluating90Days: boolean;
   readonly sponsorshipInterest: boolean;
   readonly consentContact: boolean;
+  /**
+   * Permission to call or text the number above.
+   *
+   * SEPARATE from `consentContact`, deliberately. That box reads "You may contact
+   * me about this", which is channel-blind — and the phone field's own label ("if
+   * you would rather be called") states a preference, not a grant. Neither is the
+   * express written permission a voice or SMS send is looked up against, so this is
+   * its own field, shown with its own wording, and recorded per channel keyed on
+   * the number.
+   */
+  readonly phoneConsent: boolean;
 }
 
 export const SIGNUP_FORM_TYPE = 'business_account';
@@ -185,6 +196,7 @@ export function buildContextPayload(
     evaluating_90_days: ctx.evaluating90Days,
     corporate_sponsorship_interest: ctx.sponsorshipInterest,
     consent_contact: ctx.consentContact,
+    phone_consent: ctx.phoneConsent,
     form_type: SIGNUP_FORM_TYPE,
     source: 'website',
     page_url: pageUrl,
