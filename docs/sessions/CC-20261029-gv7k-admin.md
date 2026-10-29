@@ -34,6 +34,16 @@ branches, so one shared session file would collide on the second merge.
   - Verification: `useAdminGovContractsNav.test.ts` (pure `adminGovContractNavEntries`: per-build item, drops
     no-build pursuits, title fallback). Backend file typechecks clean under tsc 5.9.3 (whole graph, 0 errors).
     Frontend typecheck/build/unit-tests authoritative in CI (worktree has no FE react/tsc).
+  - CI fix (round 2): CI frontend unit tests flagged 3 suites coupled to admin-nav structure. (1) `hqModel.test.ts`
+    (the Campus HQ building is GENERATED from adminNav) pinned the old group label → renamed its assertions
+    'AI Internship' → 'Interns'. (2) `adminNavMarketing.test.ts` + (3) `adminOs/domains.test.ts` enforce invariants
+    on `UNLISTED_PATH_SECTIONS` (every unlisted section must be used by a nav LINK, and every unlisted path must be
+    absorbed by a domain holding its section). My `['/admin/gov-contracts','gov_contracts']` row broke both, because
+    `gov_contracts` is not a nav-LINK section (the gov items are dynamic sub-items) and no domain absorbs it. Fix:
+    DROPPED that UNLISTED row and made the cockpit route a CHILD of /admin/internship —
+    `/admin/internship/gov-contract/:projectId` — so `sectionForPath` resolves it to `internship` via the existing
+    nav link (no UNLISTED entry, no adminOs cascade). The backend endpoint stays the real `gov_contracts` gate, and
+    the nav sub-items still render only for gov_contracts holders. Updated the nav `to` + its test accordingly.
   - Notes: Scoping — the nav fetch is row-scoped server-side (owner/Kes broad→all; Admissions holds neither
     `gov_contracts` nor the node). The cockpit endpoint is gated `gov_contracts` (owner/admin only). Proposal doc
     CONTENT is not shown to admins in v1 (the drawer is editable, so it's withheld); a read-only doc viewer is a
