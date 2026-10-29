@@ -35,7 +35,7 @@ not available at showtime is someone with a terminal open.
 | Accounts | **Two.** A staff account, and a non-staff account whose cohort is NOT the rehearsal session's cohort. |
 | Flags | `BROADCAST_ENABLED=true` and `COMMUNITY_ROOMS_ENABLED=true`. With rooms off, occurrence creation refuses `no_room` and nothing exists at all. |
 | Session | A **throwaway** session with Broadcast ticked, scheduled for today, in a cohort you are happy to disturb. Not the real event's session. |
-| Stream | The live input actually streaming, exactly as it will be for the real thing. A rehearsal without a feed cannot prove step 3. |
+| Stream | A live input you can start **on cue**, exactly as it will be for the real thing. Do not start it in advance — step 3 has you enter backstage first, and a rehearsal without a feed cannot prove steps 3 to 5. |
 
 Creating the session auto-creates two rows: a community room (`privacy: 'cohort'`) and the
 occurrence (`access_mode: 'private'`).
@@ -117,15 +117,33 @@ would present as a correctly gated, correctly lit, completely silent broadcast.
 Starting has no UI. Each command is version-guarded, and **each response returns the new version**
 — use it for the next call rather than re-fetching.
 
+**The stream and these commands are two different systems, and the order is forced.** Starting Zoom
+alone changes nothing a viewer sees: the Events Hall, the popup and the player are all driven by
+`editorial_state`, and only a command moves it. No transition here is driven by the clock, so a
+scheduled start time publishes nothing either. And the command alone is refused — `go_live` fails
+unless `provider_health` is `ready`.
+
+**So `enter_backstage` comes before you start streaming.** The health loop observes `backstage`,
+`live` and `reconnecting` only; a `scheduled` occurrence is never polled, so until it is backstage
+nothing is watching for your feed and health cannot become `ready`.
+
 ```js
 let v = <version from step 2>;
 let r;
-r = await api('POST', '/api/portal/broadcasts/<ID>/command', { command: 'enter_backstage',       expected_version: v }); v = r.data.occurrence.version;
-r = await api('POST', '/api/portal/broadcasts/<ID>/command', { command: 'mark_content_started',  expected_version: v }); v = r.data.occurrence.version;
-r = await api('POST', '/api/portal/broadcasts/<ID>/command', { command: 'go_live',               expected_version: v }); v = r.data.occurrence.version;
+
+// 3a. Backstage FIRST — this is what starts the platform watching for your stream.
+r = await api('POST', '/api/portal/broadcasts/<ID>/command', { command: 'enter_backstage', expected_version: v }); v = r.data.occurrence.version;
+
+// 3b. NOW start the Zoom stream, and re-run step 2 until it returns 200 rather than 503.
+//     That 200 is the platform confirming provider_health is ready. go_live is refused until then.
+
+// 3c. Only once the grant returns 200:
+r = await api('POST', '/api/portal/broadcasts/<ID>/command', { command: 'mark_content_started', expected_version: v }); v = r.data.occurrence.version;
+r = await api('POST', '/api/portal/broadcasts/<ID>/command', { command: 'go_live',              expected_version: v }); v = r.data.occurrence.version;
 ```
 
-Run them **one at a time**, reading each result before sending the next.
+Run them **one at a time**, reading each result before sending the next. A refused `go_live` almost
+always means health is not ready yet — wait and re-check the grant rather than retrying in a loop.
 
 - `mark_content_started` stamps the clock **every access decision and the whole preview window is
   measured from**. Send it when content actually starts, not when the room opens.
@@ -174,6 +192,17 @@ tests the thing most likely to be wrong.
 
 End the rehearsal from the **End control in the mini player** — the one producer action that does
 have a UI. Confirm the Events Hall goes dark and the popup disappears for the non-staff viewer.
+
+**Closing Zoom is not ending the broadcast**, and this is worth rehearsing deliberately because it
+is the step most likely to be skipped under relief that the show went well. The occurrence stays
+`live` over dead air, still advertised, until the safety net ends it with
+`end_reason: 'auto_stream_gone'` after the stream has been **continuously** absent for
+`BROADCAST_AUTO_END_WINDOW_SECONDS` — default 300s, clamped 60–3600. That is what 2026-10-20's five
+minutes of dead air was.
+
+If you want to prove the safety net itself, stop the stream and *don't* press End: the occurrence
+should end on its own about five minutes later. Worth doing once, on a rehearsal, never on a real
+airing.
 
 Then revert the room if you opened it, and leave the real event's session untouched.
 

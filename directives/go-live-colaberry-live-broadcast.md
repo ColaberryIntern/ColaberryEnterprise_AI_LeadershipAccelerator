@@ -78,24 +78,51 @@ Both fields are required and the schema is `.strict()`. `expected_version` is op
 **409** means the occurrence moved under you, so re-read it before deciding again — never retry a
 409 blindly. The version increments on each accepted command.
 
+**THE ZOOM STREAM AND THESE COMMANDS ARE TWO DIFFERENT SYSTEMS, AND THE ORDER IS FORCED.**
+Starting the stream alone changes nothing a viewer can see — the Events Hall, the popup and the
+player are all driven by `editorial_state`, and only a command moves that. **No transition here is
+driven by the clock**, so a scheduled start time publishes nothing either. And the command alone is
+refused: `go_live` fails unless `provider_health` is `ready`. "The producer said go" and "the feed
+is actually usable" are deliberately two columns, so a stray webhook or a calendar entry can never
+put backstage content on air.
+
 4. `enter_backstage` — `scheduled → backstage`. Nothing is offered to viewers yet.
-5. `mark_content_started` — stamps `content_started_at`. **This is the clock every access decision
+
+   **Do this BEFORE starting the stream.** The health loop observes `backstage`, `live` and
+   `reconnecting` only — a `scheduled` occurrence is never polled, so until it is backstage nothing
+   is watching for your feed and `provider_health` cannot become `ready`. Entering backstage first
+   is what makes step 6 possible at all.
+
+5. Start the Zoom stream, and **wait for the platform to see it.** Re-run the §2 playback grant: a
+   200 means it is ready, a 503 `ProviderNotReady` means it is not yet.
+6. `mark_content_started` — stamps `content_started_at`. **This is the clock every access decision
    and the whole preview window is measured from.** Send it when the content actually starts, not
    when the room opens.
-6. `go_live` — `→ live`. Discovery now surfaces it, the campus Events Hall lights up, and the
-   mini-player popup appears for anyone eligible.
+7. `go_live` — `→ live`. Discovery now surfaces it, the campus Events Hall lights up, and the
+   mini-player popup appears for anyone eligible. A refusal here almost always means health is not
+   `ready` yet; wait rather than retrying in a loop.
 
 ### After
 
-7. **End it** with the End control in the mini player. Ending is **terminal** — there is no un-end
-   command. If nobody presses it, the L7.4 safety net ends the occurrence with
-   `end_reason: 'auto_stream_gone'` after the stream has been continuously absent past the
-   configured window.
-8. **Replays publish themselves.** The health loop calls `runReplayTick`, which issues
+8. **End it** with the End control in the mini player. Ending is **terminal** — there is no un-end
+   command.
+
+   **CLOSING ZOOM DOES NOT END THE BROADCAST.** The occurrence stays `live` over dead air, still
+   advertised, still lighting the Events Hall. That is exactly what happened on 2026-10-20 for five
+   minutes. If nobody presses End, the L7.4 safety net ends it with
+   `end_reason: 'auto_stream_gone'` once the stream has been **continuously** absent for
+   `BROADCAST_AUTO_END_WINDOW_SECONDS` — **default 300s**, clamped to 60–3600. That window is long
+   on purpose: it has to survive a presenter restarting OBS or riding out bad hotel wifi. Press End;
+   do not rely on it.
+
+   A brief drop is handled separately and needs no action: `live → reconnecting → live` keeps the
+   same occurrence **and the same `content_started_at`**, so a blip cannot silently refill
+   everyone's preview window.
+9. **Replays publish themselves.** The health loop calls `runReplayTick`, which issues
    `begin_processing` then `publish_replay` once the provider reports a ready recording. Nothing
    manual. The replay then appears on the portal Replays page for **25 days** after `ended_at`.
-9. **Revert the access change** if you opened the room for a one-off:
-   `PATCH /api/portal/community/rooms/<room_id>  {"privacy":"cohort"}`.
+10. **Revert the access change** if you opened the room for a one-off:
+    `PATCH /api/portal/community/rooms/<room_id>  {"privacy":"cohort"}`.
 
 ## 4. Outputs
 - An occurrence that reaches `live`, then `ended`, then `replay_ready`.
