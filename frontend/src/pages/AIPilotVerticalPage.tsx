@@ -3,6 +3,7 @@ import { initTracker } from '../utils/tracker';
 import { captureUTMFromURL } from '../services/utmService';
 import { captureCampaignFromURL } from '../services/campaignAttributionService';
 import SEOHead from '../components/SEOHead';
+import PhoneConsentCheckbox from '../components/PhoneConsentCheckbox';
 
 // Config-driven vertical variants of the AI ROI Pilot landing page. One component,
 // many verticals (DRY). Each variant has its own URL and lead attribution
@@ -99,7 +100,13 @@ const CONTINUATION = [
 
 function AIPilotVerticalPage({ variantKey }: { variantKey: keyof typeof VARIANTS }) {
   const v = VARIANTS[variantKey];
-  const [form, setForm] = useState({ name: '', email: '', company: '', company_size: '', message: '', consent_contact: false });
+  // `phone_consent` is separate from `consent_contact`: that one is the required
+  // channel-blind tick and cannot stand as agreement to be telephoned. Optional,
+  // starts false, and is only ever asked once a number is typed.
+  const [form, setForm] = useState({
+    name: '', email: '', company: '', phone: '', company_size: '', message: '',
+    consent_contact: false, phone_consent: false,
+  });
   const [status, setStatus] = useState<'idle' | 'submitting' | 'success' | 'error'>('idle');
   const [errorMsg, setErrorMsg] = useState('');
 
@@ -122,7 +129,8 @@ function AIPilotVerticalPage({ variantKey }: { variantKey: keyof typeof VARIANTS
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: form.name, email: form.email, company: form.company, company_size: form.company_size,
-          message: form.message, consent_contact: form.consent_contact,
+          phone: form.phone, message: form.message, consent_contact: form.consent_contact,
+          phone_consent: form.phone_consent,
           source: v.slug, form_type: v.slug, interest_area: 'ai_roi_pilot',
           page_url: typeof window !== 'undefined' ? window.location.href : '',
         }),
@@ -290,6 +298,22 @@ function AIPilotVerticalPage({ variantKey }: { variantKey: keyof typeof VARIANTS
                     <label className="form-label small fw-bold" style={{ color: DARK.text }}>Company</label>
                     <input type="text" className="form-control" value={form.company} onChange={(e) => update('company', e.target.value)} />
                   </div>
+                  <div className="col-md-5">
+                    <label className="form-label small fw-bold" style={{ color: DARK.text }}>Phone</label>
+                    <input type="tel" className="form-control" value={form.phone} onChange={(e) => update('phone', e.target.value)} placeholder="(555) 123-4567" />
+                  </div>
+                </div>
+                <div className="mb-3">
+                  <PhoneConsentCheckbox
+                    id="ai-pilot-vertical-phone-consent"
+                    phone={form.phone}
+                    checked={form.phone_consent}
+                    onChange={(next) => update('phone_consent', next)}
+                    disabled={status === 'submitting'}
+                    labelClassName="form-check-label small"
+                  />
+                </div>
+                <div className="row g-3 mb-3">
                   <div className="col-md-5">
                     <label className="form-label small fw-bold" style={{ color: DARK.text }}>Team size</label>
                     <select className="form-select" value={form.company_size} onChange={(e) => update('company_size', e.target.value)}>

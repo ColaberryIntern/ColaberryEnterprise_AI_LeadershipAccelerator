@@ -197,6 +197,15 @@ export interface LabContact {
   readonly companySize: string;
   readonly timeline: string;
   readonly consent: boolean;
+  /** Optional, and only asked once a number is typed. */
+  readonly phone: string;
+  /**
+   * Permission to call or text, which `consent` does not grant: that one is the
+   * required channel-blind agreement, and reading it as telephone permission is
+   * the conflation this field exists to avoid. Never required — the lab submits
+   * perfectly well with no number and no tick.
+   */
+  readonly phoneConsent: boolean;
 }
 
 /**
@@ -207,6 +216,11 @@ export interface LabContact {
  * `visitor_fingerprint`, no client-computed score, and no field the person did
  * not knowingly provide. Every key here maps to an existing `leads` column
  * validated by `leadSchema`.
+ *
+ * The phone and its permission are consistent with that stance rather than an
+ * exception to it: both are typed by the person, on screen, in the words the
+ * backend records as evidence. The thing this page refuses to send is a device id
+ * they never saw, and it still refuses to.
  */
 export function buildLeadPayload(
   contact: LabContact,
@@ -227,6 +241,8 @@ export function buildLeadPayload(
     form_type: LAB_FORM_TYPE,
     source: LAB_SOURCE,
     consent_contact: contact.consent,
+    phone: contact.phone.trim(),
+    phone_consent: contact.phoneConsent,
     page_url: pageUrl,
     ...utm,
   };

@@ -39,6 +39,8 @@ const contact: LabContact = {
   companySize: '251-1000',
   timeline: 'this_quarter',
   consent: true,
+  phone: ' (214) 555-0100 ',
+  phoneConsent: true,
 };
 
 const answers = {
@@ -68,10 +70,36 @@ describe('buildLeadPayload — what it omits', () => {
     const allowed = new Set([
       'name', 'email', 'company', 'role', 'phone', 'title', 'company_size',
       'evaluating_90_days', 'interest_area', 'message', 'source', 'form_type',
-      'consent_contact', 'utm_source', 'utm_campaign', 'page_url',
+      'consent_contact', 'phone_consent', 'utm_source', 'utm_campaign', 'page_url',
       'corporate_sponsorship_interest', 'timeline',
     ]);
     Object.keys(payload).forEach((k) => expect(allowed.has(k)).toBe(true));
+  });
+});
+
+describe('buildLeadPayload — the phone grant', () => {
+  it('sends the number trimmed and the permission as its own key', () => {
+    const payload = buildLeadPayload(contact, answers, '', {}, '/lab');
+    expect(payload.phone).toBe('(214) 555-0100');
+    expect(payload.phone_consent).toBe(true);
+  });
+
+  it('keeps the phone grant SEPARATE from consent_contact', () => {
+    // One tick must not be able to stand in for the other. A payload where the
+    // generic agreement silently supplied the telephone permission is the exact
+    // conflation the second field exists to prevent, so assert they can differ.
+    const payload = buildLeadPayload(
+      { ...contact, consent: true, phoneConsent: false }, answers, '', {}, '/lab',
+    );
+    expect(payload.consent_contact).toBe(true);
+    expect(payload.phone_consent).toBe(false);
+  });
+
+  it('does not require a phone or its permission to submit', () => {
+    // The lab is a diagnostic, not a lead-qualification gate. Leaving both alone
+    // must still validate — only `consent` is required.
+    const errors = validateContact({ ...contact, phone: '', phoneConsent: false });
+    expect(errors).toEqual({});
   });
 });
 

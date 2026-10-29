@@ -14,6 +14,8 @@ import {
   composeSummary,
   StepId,
 } from '../../config/v2Lab';
+import { shouldAskPhoneConsent } from '../../components/PhoneConsentCheckbox';
+import { PHONE_CONSENT_TEXT } from '../../config/consentText';
 import './opportunityLabV2.css';
 
 /**
@@ -50,6 +52,8 @@ function OpportunityLabV2(): React.ReactElement {
   const [companySize, setCompanySize] = useState('');
   const [timeline, setTimeline] = useState('');
   const [consent, setConsent] = useState(false);
+  const [phone, setPhone] = useState('');
+  const [phoneConsent, setPhoneConsent] = useState(false);
 
   const [errors, setErrors] = useState<FieldErrors>({});
   const [serverError, setServerError] = useState('');
@@ -82,7 +86,9 @@ function OpportunityLabV2(): React.ReactElement {
     if (isLast) {
       Object.assign(
         next,
-        validateContact({ name, email, company, title, companySize, timeline, consent }),
+        validateContact({
+          name, email, company, title, companySize, timeline, consent, phone, phoneConsent,
+        }),
       );
     }
     setErrors(next);
@@ -108,7 +114,7 @@ function OpportunityLabV2(): React.ReactElement {
     try {
       // visitor_fingerprint is deliberately NOT attached here. See file header.
       const payload = buildLeadPayload(
-        { name, email, company, title, companySize, timeline, consent },
+        { name, email, company, title, companySize, timeline, consent, phone, phoneConsent },
         answers,
         freeText,
         getUTMPayloadFields() as unknown as Record<string, string>,
@@ -361,6 +367,34 @@ function OpportunityLabV2(): React.ReactElement {
                     </select>
                   </label>
                 </div>
+
+                <label className="cbv2-field">
+                  <span className="cbv2-field__label">Phone (optional)</span>
+                  <input
+                    className="cbv2-field__input"
+                    type="tel"
+                    value={phone}
+                    onChange={(ev) => setPhone(ev.target.value)}
+                    autoComplete="tel"
+                  />
+                </label>
+
+                {/*
+                  Its own permission, shown only once a number is typed. Consistent
+                  with this page's data stance rather than an exception to it: the
+                  number and the agreement are both things the person typed, on
+                  screen, in the words the backend stores as evidence.
+                */}
+                {shouldAskPhoneConsent(phone) && (
+                  <label className="cbv2-consent">
+                    <input
+                      type="checkbox"
+                      checked={phoneConsent}
+                      onChange={(ev) => setPhoneConsent(ev.target.checked)}
+                    />
+                    <span>{PHONE_CONSENT_TEXT}</span>
+                  </label>
+                )}
 
                 <label className="cbv2-consent">
                   <input

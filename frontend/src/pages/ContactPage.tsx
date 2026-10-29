@@ -12,6 +12,8 @@ import { Card } from '../colaberry/components/core/Card';
 import { Input } from '../colaberry/components/core/Input';
 import { Textarea } from '../colaberry/components/core/Textarea';
 import { Checkbox } from '../colaberry/components/core/Checkbox';
+import { shouldAskPhoneConsent } from '../components/PhoneConsentCheckbox';
+import { PHONE_CONSENT_TEXT } from '../config/consentText';
 
 const TRY_PATH = '/try';
 
@@ -53,6 +55,8 @@ interface ContactForm {
   industry: string;
   message: string;
   consentContact: boolean;
+  /** Optional, and separate from `consentContact` — see EnterpriseLead. */
+  phoneConsent: boolean;
 }
 
 const EMPTY_FORM: ContactForm = {
@@ -65,6 +69,7 @@ const EMPTY_FORM: ContactForm = {
   industry: '',
   message: '',
   consentContact: false,
+  phoneConsent: false,
 };
 
 function ContactPage() {
@@ -112,6 +117,8 @@ function ContactPage() {
         industry: form.industry || undefined,
         message: form.message.trim() || undefined,
         consentContact: form.consentContact,
+        // Only meaningful alongside a number, and the tick is only shown with one.
+        phoneConsent: form.phoneConsent,
         formType: FORM_TYPE,
         ...getUTMParams(),
         pageOrigin: window.location.href,
@@ -328,6 +335,28 @@ function ContactPage() {
                         placeholder="+1 (555) 123-4567"
                         autoComplete="tel"
                       />
+                      {/*
+                        Beside the field it belongs to, not down with the required
+                        consent box, so it is unmistakably about this number.
+                        Rendered with this page's own Checkbox primitive rather than
+                        the shared Bootstrap one — the shared rule is
+                        `shouldAskPhoneConsent` and the shared wording is
+                        PHONE_CONSENT_TEXT; the markup belongs to the page.
+                      */}
+                      {shouldAskPhoneConsent(form.phone) && (
+                        <div style={{ marginTop: 'var(--space-2)' }}>
+                          <Checkbox
+                            name="phoneConsent"
+                            checked={form.phoneConsent}
+                            onChange={handleChange}
+                            label={
+                              <span style={{ fontSize: 'var(--fs-body-sm)', color: 'var(--text-muted)' }}>
+                                {PHONE_CONSENT_TEXT}
+                              </span>
+                            }
+                          />
+                        </div>
+                      )}
                     </div>
                     <div className="col-md-6">
                       <Input

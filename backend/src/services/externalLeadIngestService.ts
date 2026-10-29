@@ -95,6 +95,12 @@ export async function ingestExternalLead(payload: V1LeadInput, correlation_id?: 
     title: payload.title ?? '',
     company_size: payload.company_size ?? '',
     evaluating_90_days: false,
+    // Scoring input only — this object never reaches a consent writer. False
+    // regardless: when somebody asks to be called from the training site, the grant
+    // is written by `callbackRequestService` with its own wording and a 30-day
+    // lapse, and duplicating it here would be a second, looser record of the same
+    // act.
+    phone_consent: false,
     interest_area: '',
     message: payload.message ?? '',
     source: payload.source,

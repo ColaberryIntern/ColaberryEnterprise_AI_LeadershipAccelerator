@@ -86,6 +86,16 @@ export async function importLeadsFromCsv(buffer: Buffer): Promise<ImportResult> 
         source: row.source?.trim() || 'csv_import',
         form_type: row.form_type?.trim() || 'csv_import',
         consent_contact: row.consent_contact === 'true' || row.consent_contact === 'Yes',
+        // HARD-CODED FALSE, and deliberately not read from the CSV.
+        //
+        // A spreadsheet column cannot be evidence of express written permission to
+        // telephone somebody: nobody saw a sentence, nothing records what they were
+        // shown, and whoever typed "Yes" in a cell was not the person granting it.
+        // Accepting it from the file is how an import would manufacture consent for
+        // a whole list at once, which is the single worst failure available here.
+        // A real grant comes from a form, or from a documented act recorded with its
+        // own wording.
+        phone_consent: false,
         utm_source: row.utm_source?.trim() || '',
         utm_campaign: row.utm_campaign?.trim() || '',
         page_url: row.page_url?.trim() || '',

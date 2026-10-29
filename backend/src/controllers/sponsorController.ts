@@ -92,6 +92,10 @@ export async function handleSponsorInquiry(
       role: '',
       evaluating_90_days: false,
       consent_contact: false,
+      // This endpoint shows no phone-permission wording, so there is nothing to
+      // record. The sponsorship form on the React side asks separately and posts
+      // to /api/leads, which is where that grant is written.
+      phone_consent: false,
       timeline: '',
     });
 
