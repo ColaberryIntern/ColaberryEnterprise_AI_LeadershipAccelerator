@@ -194,6 +194,17 @@ export const NAV_GROUPS: NavGroup[] = [
     // live on 19 Oct when an intern's sidebar showed only Dashboard and Brands.
     // Same shape as Leads/Pipeline, which sit in the Revenue group on 'leads'.
     { path: '/admin/my-domain', label: 'My Domain', icon: 'robot-2-line', section: 'dashboard' },
+    // AF4.2 — an intern asks for a platform change; a named human decides it.
+    // CARRIES ITS OWN SECTION, for exactly the reason the My Domain line above records: the
+    // people this was built for hold 'dashboard', and inheriting the Program group's 'program'
+    // would 403 all seven of them on the surface meant for them. That failure has already
+    // happened once here, on 19 Oct.
+    //
+    // 'dashboard' is the one section every mgmt role carries, so this link is also visible to a
+    // mentor, a support rep and a community organizer. That is intended and safe: the DECIDE and
+    // queue-read routes behind it carry `requireAdmin`, and the page renders the decision queue
+    // only when the API returns it. Visibility here is not the access control.
+    { path: '/admin/change-requests', label: 'Change Requests', icon: 'git-pull-request-line', section: 'dashboard' },
     // The programme-wide view of the same ten. Sits beside My Domain because the pair is
     // the distinction worth seeing in the nav: one is what you own, one is everything.
     { path: '/admin/all-domains', label: 'All Domains', icon: 'stack-line' },

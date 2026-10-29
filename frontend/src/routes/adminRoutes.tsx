@@ -46,6 +46,8 @@ const WorkforceOSPage = lazy(() => import('../pages/admin/workforce/WorkforceOSP
 // AF2.1 - the landing a domain owner sees after bridging in from the portal.
 const AdminMyDomainPage = lazy(() => import('../pages/admin/AdminMyDomainPage'));
 const AdminAllDomainsPage = lazy(() => import('../pages/admin/AdminAllDomainsPage'));
+// AF4.2 - file a change request, and (for an admin) decide one.
+const AdminChangeRequestsPage = lazy(() => import('../pages/admin/AdminChangeRequestsPage'));
 const AdminToolsPage = lazy(() => import('../pages/admin/AdminToolsPage'));
 const ApprovalRequestsPage = lazy(() => import('../pages/admin/ApprovalRequestsPage'));
 const EnterpriseIntelligencePage = lazy(() => import('../pages/admin/intelligence/EnterpriseIntelligencePage'));
@@ -220,6 +222,10 @@ const adminRoutes = (
         <Route path="/admin/ops-center" element={<Navigate to="/admin/workforce" replace />} />
         <Route path="/admin/workforce" element={<WorkforceOSPage />} />
         <Route path="/admin/my-domain" element={<AdminMyDomainPage />} />
+        {/* AF4.2. Everyone who can open it may file and see their own; the decision queue
+            renders only when the admin-only API returns it, so the page cannot drift out of
+            agreement with `requireAdmin` the way a client-side role check would. */}
+        <Route path="/admin/change-requests" element={<AdminChangeRequestsPage />} />
         {/* The programme-wide counterpart to My Domain. Same data source as the
             agent-domain routes, gated on 'program'; My Domain stays scoped by
             ownership and must not be widened to cover this. */}
