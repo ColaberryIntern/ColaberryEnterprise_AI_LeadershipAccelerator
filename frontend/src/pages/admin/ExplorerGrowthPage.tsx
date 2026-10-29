@@ -37,23 +37,47 @@ import { getSummary } from '../../services/explorerGrowthApi';
 
 type TabKey = 'overview' | 'campus' | 'journey' | 'decisions' | 'shadow' | 'content' | 'settings';
 
-const TABS: { key: TabKey; label: string; icon: string }[] = [
+/**
+ * SHADOW LEADS, as of Phase 2.
+ *
+ * It was fifth, after Overview, Campus, Journey and Decisions. The question this
+ * page exists to answer is "would the right thing have gone out", and the only tab
+ * that answers it is Shadow — now that each of its rows carries the subject the
+ * learner would have read, rather than a verdict with the copy hidden one modal
+ * deep. Overview keeps its place in the list because the aggregate is still worth
+ * a glance; it just is not where a review starts.
+ *
+ * The DEFAULT landing tab moved with it (see `tab` below), because a reviewer who
+ * arrives at a stat row has to know to click before they can begin.
+ */
+/* Exported for the test, in the same spirit as `ContentTab`'s `Matrix`: the tab
+   contract is worth asserting as data, and this page has never had a test. */
+export const TABS: { key: TabKey; label: string; icon: string }[] = [
+  { key: 'shadow', label: 'Shadow review', icon: 'eye-line' },
   { key: 'overview', label: 'Overview', icon: 'dashboard-line' },
   // 2026-10-26: what explorers do on the campus, and who staff should reach out to
   { key: 'campus', label: 'Campus & outreach', icon: 'user-voice-line' },
   { key: 'journey', label: 'Journey', icon: 'route-line' },
   { key: 'decisions', label: 'Decisions', icon: 'git-branch-line' },
-  { key: 'shadow', label: 'Shadow', icon: 'eye-line' },
-  { key: 'content', label: 'Content', icon: 'book-open-line' },
+  { key: 'content', label: 'Content supply', icon: 'book-open-line' },
   { key: 'settings', label: 'Settings', icon: 'settings-3-line' },
 ];
+
+/**
+ * Where the page lands with no `?tab=`.
+ *
+ * Kept as its own constant rather than inlined, so the landing tab and the tab
+ * ORDER cannot drift apart silently — reordering the array above is exactly the
+ * change that would otherwise leave this pointing at whatever used to be first.
+ */
+export const DEFAULT_TAB: TabKey = 'shadow';
 
 const isTabKey = (v: string | null): v is TabKey => TABS.some((t) => t.key === v);
 
 export default function ExplorerGrowthPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const raw = searchParams.get('tab');
-  const tab: TabKey = isTabKey(raw) ? raw : 'overview';
+  const tab: TabKey = isTabKey(raw) ? raw : DEFAULT_TAB;
 
   // The summary drives the header, the stat row AND the trust badge, so it is
   // fetched once here rather than three times by three children.

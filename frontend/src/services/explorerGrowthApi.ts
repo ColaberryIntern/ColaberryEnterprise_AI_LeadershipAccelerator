@@ -167,6 +167,18 @@ export interface ExplorerDecisionRow {
   e_score: number | null;
   i_score: number | null;
   f_score: number | null;
+  /**
+   * The draft this decision produced, if the draft stage has rendered it.
+   *
+   * `null` is a real answer and the common one: a decision taken before the draft
+   * stage existed has no draft, and a WAIT never gets one. `draft_status` is
+   * `explorer_draft` when the copy passed the send-time quality gate and
+   * `explorer_draft_rejected` when the gate refused it — rendering those two
+   * identically would hide the more interesting of the pair.
+   */
+  scheduled_email_id: string | null;
+  draft_subject: string | null;
+  draft_status: string | null;
 }
 
 export interface ExplorerDecisionPage {
@@ -496,6 +508,39 @@ export async function getContentHealth(
   q: { date?: string; limit?: number; offset?: number } = {},
 ): Promise<ExplorerContentHealth> {
   const { data } = await api.get<ExplorerContentHealth>(`${BASE}/content`, { params: params(q) });
+  return data;
+}
+
+/** What a re-run did. `outcomes` is withheld by the endpoint; it carries recipients. */
+export interface ContentRefreshResult {
+  attempted: number;
+  drafted: number;
+  rejected: number;
+  skipped: number;
+  failed: number;
+  /** Counts keyed by skip reason, so a run reports WHICH wall it hit, by name. */
+  by_reason: Record<string, number>;
+}
+
+/**
+ * Re-run the draft render. THE ONLY WRITE THIS CLIENT HAS.
+ *
+ * ── NAMED TO TRIP THE GUARD, NOT TO SLIP PAST IT ────────────────────────────
+ *
+ * `explorerGrowthApi.test.ts` asserts this module "exports no function whose name
+ * suggests a write", matching `/^(set|update|create|delete|pause|resume|
+ * recalculate|rerun|suppress|refresh)/i`. `refreshContent` matches that regex and
+ * therefore FAILS that test on sight — which is the point. Names that would have
+ * passed silently were available (`postContentRefresh`, `requestContentRefresh`)
+ * and choosing one would have defeated a guard this page's authors put there
+ * deliberately. The test is amended in the same change to allow exactly this one
+ * name and to keep forbidding every other, so the next write still has to argue
+ * for itself.
+ */
+export async function refreshContent(
+  body: { date?: string; limit?: number } = {},
+): Promise<ContentRefreshResult> {
+  const { data } = await api.post<ContentRefreshResult>(`${BASE}/content/refresh`, body);
   return data;
 }
 

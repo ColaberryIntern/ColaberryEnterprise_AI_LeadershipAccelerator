@@ -3,7 +3,14 @@ import request from 'supertest';
 import jwt from 'jsonwebtoken';
 
 jest.mock('../../../config/env', () => ({
-  env: { jwtSecret: 'test-secret', nodeEnv: 'test' },
+  // `explorerGrowth` is present and OFF by default, which is production's own
+  // posture for a dark-launched feature. Tests that need it on turn it on
+  // explicitly, so the permissive state is never the one inherited by accident.
+  env: {
+    jwtSecret: 'test-secret',
+    nodeEnv: 'test',
+    explorerGrowth: { growthOsEnabled: false, draftRenderEnabled: false },
+  },
 }));
 
 /**
@@ -50,7 +57,13 @@ jest.mock('../../../services/explorerGrowth/explorerLearnerService', () => learn
 jest.mock('../../../services/explorerGrowth/explorerWhyService', () => why);
 jest.mock('../../../services/explorerGrowth/explorerCampusService', () => campus);
 
+// The draft render behind the one write route. Mocked so this file never calls a
+// paid model, and so the flag-off path can be proven to not call it AT ALL.
+const drafts = { runDraftRenderBatch: jest.fn() };
+jest.mock('../../../services/explorerGrowth/drafts/runDraftRender', () => drafts);
+
 import explorerGrowthRoutes from '../explorerGrowthRoutes';
+import { env } from '../../../config/env';
 
 /**
  * The Command Center's twelve read routes.
@@ -73,6 +86,14 @@ const token = (role = 'admin') =>
 
 function app() {
   const a = express();
+  // `express.json()` mirrors the real server (`server.ts:207`, mounted before the
+  // routers). It was not needed while every route was a GET, and leaving it out
+  // once a POST existed made the body arrive as `undefined` — so the schema parsed
+  // an empty object, every malformed-body test got a 200, and the endpoint looked
+  // like it was ignoring its input by design. Without this the four 400 cases
+  // below pass vacuously in the other direction: they cannot fail for the right
+  // reason because the body never reaches the schema.
+  a.use(express.json());
   a.use(explorerGrowthRoutes);
   return a;
 }
@@ -244,13 +265,45 @@ describe('EPIC 12 routes are absent, not stubbed', () => {
   });
 });
 
-describe('READ-ONLY — the router registers no mutating verb', () => {
-  const stack = (explorerGrowthRoutes as unknown as { stack: { route?: { methods: Record<string, boolean> } }[] })
-    .stack;
+/**
+ * FOURTEEN READS AND EXACTLY ONE WRITE.
+ *
+ * ── THIS BLOCK WAS AMENDED, AND THE AMENDMENT IS THE POINT ──────────────────
+ *
+ * It used to assert `registers no post route` — zero mutating verbs of any kind.
+ * Phase 2 adds `POST /content/refresh`, so that assertion had to change, and there
+ * were two ways to change it. The weak way is to delete it. The way taken here is
+ * to make it NARROWER THAN IT WAS BROAD: the router may register exactly one
+ * mutating route, it must be a POST, and it must be at exactly that path. PUT,
+ * PATCH and DELETE stay at zero, and a second POST — the `/mode` switch, the
+ * `/pause` kill switch, a `recalculate` — fails this as loudly as the first one
+ * would have.
+ *
+ * So the guard still does its job: it stops a write arriving unnoticed. It just
+ * records that one write arrived deliberately, with the reason in
+ * `explorerGrowthRoutes.ts`, rather than pretending none ever would.
+ */
+describe('the write surface is exactly one POST, and nothing else', () => {
+  const stack = (explorerGrowthRoutes as unknown as {
+    stack: { route?: { path?: string; methods: Record<string, boolean> } }[];
+  }).stack;
 
-  it.each(['post', 'put', 'patch', 'delete'])('registers no %s route', (verb) => {
+  it.each(['put', 'patch', 'delete'])('registers no %s route', (verb) => {
     const found = stack.filter((l) => l.route?.methods?.[verb]);
     expect(found).toHaveLength(0);
+  });
+
+  it('registers exactly ONE post route', () => {
+    const posts = stack.filter((l) => l.route?.methods?.post);
+    expect(posts).toHaveLength(1);
+  });
+
+  it('and that one post is the draft re-run, at the path Phase 2 declared', () => {
+    // Pinned to the PATH, not just the count. A count alone would let the single
+    // permitted write be moved to `/mode` — the governance boundary — without
+    // failing anything.
+    const posts = stack.filter((l) => l.route?.methods?.post);
+    expect(posts[0].route?.path).toBe(`${BASE}/content/refresh`);
   });
 
   it('registers exactly fourteen GETs', () => {
@@ -258,9 +311,116 @@ describe('READ-ONLY — the router registers no mutating verb', () => {
     expect(gets).toHaveLength(14);
   });
 
-  it('rejects a POST to a real path', async () => {
+  it('rejects a POST to a real GET path', async () => {
+    // The one write does not make the other fourteen writable.
     const res = await auth(request(app()).post(`${BASE}/summary`) as unknown as request.Test);
     expect(res.status).toBe(404);
+  });
+});
+
+/**
+ * `POST /content/refresh` — the one write, behaving like one.
+ *
+ * A write earns stricter tests than a read, because the failure modes are not
+ * symmetrical: a read that wrongly 500s costs a page view, and a write that
+ * wrongly RUNS costs model calls against real decisions. So the cases that matter
+ * most here are the refusals, and each asserts that the service was not merely
+ * refused but NEVER CALLED.
+ */
+describe('POST /content/refresh', () => {
+  const PATH = `${BASE}/content/refresh`;
+  const flags = env.explorerGrowth as { growthOsEnabled: boolean; draftRenderEnabled: boolean };
+
+  const RESULT = {
+    attempted: 3, drafted: 2, rejected: 1, skipped: 0, failed: 0,
+    by_reason: {},
+    // Present in the service's own result and deliberately NOT echoed by the
+    // endpoint: it carries per-learner detail including recipient addresses.
+    outcomes: [{ decision_id: 'd1', recipient: 'learner@example.com' }],
+  };
+
+  beforeEach(() => {
+    flags.growthOsEnabled = true;
+    flags.draftRenderEnabled = true;
+    drafts.runDraftRenderBatch.mockResolvedValue(RESULT);
+  });
+
+  it('refuses an unauthenticated request', async () => {
+    const res = await request(app()).post(PATH).send({});
+    expect(res.status).toBe(401);
+    expect(drafts.runDraftRenderBatch).not.toHaveBeenCalled();
+  });
+
+  it('refuses a token signed with the wrong secret', async () => {
+    const bad = jwt.sign({ id: 1, role: 'admin' }, 'wrong-secret');
+    const res = await request(app()).post(PATH).set('Authorization', `Bearer ${bad}`).send({});
+    expect(res.status).toBe(401);
+    expect(drafts.runDraftRenderBatch).not.toHaveBeenCalled();
+  });
+
+  it('runs for an admin and reports what the run did', async () => {
+    const res = await auth(request(app()).post(PATH).send({}) as unknown as request.Test);
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ attempted: 3, drafted: 2, rejected: 1 });
+    expect(drafts.runDraftRenderBatch).toHaveBeenCalledTimes(1);
+  });
+
+  it('does NOT echo per-learner outcomes, which carry recipient addresses', async () => {
+    const res = await auth(request(app()).post(PATH).send({}) as unknown as request.Test);
+    expect(res.body.outcomes).toBeUndefined();
+    expect(JSON.stringify(res.body)).not.toContain('learner@example.com');
+  });
+
+  it('403s and runs NOTHING when the sub-flag is off', async () => {
+    flags.draftRenderEnabled = false;
+    const res = await auth(request(app()).post(PATH).send({}) as unknown as request.Test);
+    expect(res.status).toBe(403);
+    expect(res.body.error_class).toBe('FeatureDisabled');
+    expect(drafts.runDraftRenderBatch).not.toHaveBeenCalled();
+  });
+
+  it('403s and runs NOTHING when the MASTER flag is off, even with the sub-flag on', async () => {
+    // The whole point of reading through `isExplorerFeatureEnabled`: a sub-flag
+    // must not be able to activate a feature past the master switch.
+    flags.growthOsEnabled = false;
+    flags.draftRenderEnabled = true;
+    const res = await auth(request(app()).post(PATH).send({}) as unknown as request.Test);
+    expect(res.status).toBe(403);
+    expect(drafts.runDraftRenderBatch).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['an unknown key', { nope: 1 }],
+    ['a malformed date', { date: '2026-02-30' }],
+    ['a limit of zero', { limit: 0 }],
+    ['a limit past the cap', { limit: 501 }],
+  ])('400s on %s, without running', async (_label, body) => {
+    const res = await auth(request(app()).post(PATH).send(body) as unknown as request.Test);
+    expect(res.status).toBe(400);
+    expect(drafts.runDraftRenderBatch).not.toHaveBeenCalled();
+  });
+
+  it('forwards the date and limit it was given', async () => {
+    await auth(
+      request(app()).post(PATH).send({ date: '2026-10-27', limit: 5 }) as unknown as request.Test,
+    );
+    expect(drafts.runDraftRenderBatch).toHaveBeenCalledWith({ decisionDate: '2026-10-27', limit: 5 });
+  });
+
+  it('passes NO date when none was given, so the service picks the latest run', async () => {
+    // Not `{ decisionDate: undefined }`: the service defaults on absence, and an
+    // explicit undefined would be indistinguishable from a caller asking for it.
+    await auth(request(app()).post(PATH).send({}) as unknown as request.Test);
+    expect(drafts.runDraftRenderBatch).toHaveBeenCalledWith({});
+  });
+
+  it('answers 500 with a classified error when the run rejects', async () => {
+    drafts.runDraftRenderBatch.mockRejectedValue(new Error('connection terminated'));
+    const res = await auth(request(app()).post(PATH).send({}) as unknown as request.Test);
+    expect(res.status).toBe(500);
+    expect(res.body.error_class).toBeDefined();
+    // The message must not leak into the response body.
+    expect(JSON.stringify(res.body)).not.toContain('connection terminated');
   });
 });
 

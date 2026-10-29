@@ -57,6 +57,70 @@ export function draftBodyToText(html: string): string {
     .trim();
 }
 
+/**
+ * How the decision was reached: whether a model was involved, what it said, and
+ * which sequence step was picked.
+ *
+ * ── WHY THIS PANEL EXISTS ───────────────────────────────────────────────────
+ *
+ * `ai_involved`, `ai_rationale` and `selected_sequence_step` have been selected by
+ * `explorerWhyService`, typed on `ExplorerWhy['outcome']` and sent over the wire on
+ * every single Why open since the drilldown shipped — and rendered nowhere. Three
+ * fields fetched and dropped on the floor.
+ *
+ * `ai_involved` is the one that matters most and reads as the most innocuous. On a
+ * page whose whole subject is governance, whether a model took part in a decision
+ * about a real learner is not a detail; it is the first thing an auditor asks, and
+ * until now the honest answer was that the API knew and the screen did not say.
+ *
+ * Rendered as a stated negative rather than hidden when false: "no model was
+ * involved" is a finding, and an absent badge is indistinguishable from a panel
+ * that forgot to check.
+ */
+function ProvenancePanel({ w }: { w: ExplorerWhy }) {
+  const o = w.outcome;
+  const step = o.selected_sequence_step;
+
+  return (
+    <div className="mb-4">
+      <h6 className="text-uppercase text-muted small mb-2">How this was decided</h6>
+      <div className="d-flex flex-wrap gap-2 align-items-center mb-2">
+        {o.ai_involved ? (
+          <span className="badge bg-info text-dark" data-testid="ai-involved">
+            <i className="ri-sparkling-line me-1" aria-hidden="true" />
+            A model took part in this decision
+          </span>
+        ) : (
+          <span className="badge bg-light text-dark border" data-testid="ai-not-involved">
+            Decided by rules only — no model involved
+          </span>
+        )}
+        {step !== null && (
+          <span className="badge bg-secondary" data-testid="sequence-step">
+            {/* +1 because the column is a zero-based index and a reviewer counts
+                steps from one. The same offset is applied to the draft's own
+                step_index in MessagePanel, so the two agree on screen. */}
+            Sequence step {step + 1}
+          </span>
+        )}
+      </div>
+      {o.ai_rationale ? (
+        <blockquote className="small text-muted mb-0 ps-3 border-start" data-testid="ai-rationale">
+          {/* Plain text, not markup. This string is model-written, so it is
+              rendered as content and never as HTML. */}
+          {o.ai_rationale}
+        </blockquote>
+      ) : (
+        o.ai_involved && (
+          <div className="small text-muted">
+            The model gave no rationale for this decision.
+          </div>
+        )
+      )}
+    </div>
+  );
+}
+
 /** The message a decision would have sent, with the quality verdict attached. */
 function MessagePanel({ w }: { w: ExplorerWhy }) {
   const m = w.message;
@@ -298,6 +362,9 @@ export function WhyBody({ w }: { w: ExplorerWhy }) {
           </div>
         )}
       </div>
+
+      {/* ── How the decision was reached ─────────────────────────────────── */}
+      <ProvenancePanel w={w} />
 
       {/* ── The message itself ───────────────────────────────────────────── */}
       {/* FIRST, above the asset list, deliberately. A reader opening this modal

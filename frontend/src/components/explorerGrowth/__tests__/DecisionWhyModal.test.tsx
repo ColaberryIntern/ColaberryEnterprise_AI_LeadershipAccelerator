@@ -27,7 +27,11 @@ import type { ExplorerWhy, ExplorerWhyMessage } from '../../../services/explorer
  * guarantee is tested on the thing that renders it rather than through an async
  * shell that would only ever reach the loading state.
  *
- * NOTE ON THE GATE: CI does not run frontend jest. This is a local guard.
+ * NOTE ON THE GATE, corrected 2026-10-28: CI DOES run frontend jest. The
+ * `frontend-tests` job in `ci.yml` runs `react-scripts test` and excludes only the
+ * `/testEnv/` helper directory, so this file executes there and goes red. It is
+ * not in the REQUIRED check set, so a failure is visible without blocking a merge
+ * — but it is a real signal, not local noise.
  */
 
 /** Shaped from real production decision 771952ba-…, 2026-09-02. */
@@ -362,5 +366,77 @@ describe('provenance is on the payload', () => {
     expect(markup).toContain('shadow');
     expect(markup).toContain('epic4-v1');
     expect(markup).toContain('771952ba-9801-481c-a263-56e2cde51c14');
+  });
+});
+
+/**
+ * Whether a model took part, and what it said (Phase 2).
+ *
+ * `ai_involved`, `ai_rationale` and `selected_sequence_step` were selected by the
+ * service, typed on the payload and sent on every Why open since the drilldown
+ * shipped — and rendered nowhere. Three fields fetched and dropped on the floor.
+ *
+ * `ai_involved` is the one that matters and the one that reads as harmless. On a
+ * page whose subject is governance, whether a model decided something about a real
+ * learner is the first question an auditor asks, and until now the honest answer
+ * was that the API knew and the screen did not say.
+ */
+const withOutcome = (over: Partial<ExplorerWhy['outcome']>): ExplorerWhy =>
+  why({ outcome: { ...BASE.outcome, ...over } });
+
+describe('how the decision was reached', () => {
+  it('STATES that no model was involved, rather than showing nothing', () => {
+    // A stated negative. An absent badge is indistinguishable from a panel that
+    // forgot to check, and "no model" is a finding worth reading.
+    const markup = html(withOutcome({ ai_involved: false }));
+    expect(markup).toContain('data-testid="ai-not-involved"');
+    expect(markup).toContain('no model involved');
+  });
+
+  it('says plainly when a model DID take part', () => {
+    const markup = html(withOutcome({ ai_involved: true }));
+    expect(markup).toContain('data-testid="ai-involved"');
+    expect(markup).toContain('A model took part in this decision');
+    expect(markup).not.toContain('data-testid="ai-not-involved"');
+  });
+
+  it('shows the rationale the model gave', () => {
+    const markup = html(
+      withOutcome({ ai_involved: true, ai_rationale: 'Chose lesson 4 over 7 on recency.' }),
+    );
+    expect(markup).toContain('data-testid="ai-rationale"');
+    expect(markup).toContain('Chose lesson 4 over 7 on recency.');
+  });
+
+  it('says a model gave NO rationale, which is different from no model', () => {
+    // The two absences lead to different questions: "why is this unexplained"
+    // versus "there was nothing to explain".
+    const markup = html(withOutcome({ ai_involved: true, ai_rationale: null }));
+    expect(markup).toContain('The model gave no rationale');
+  });
+
+  it('does not ask for a rationale when no model was involved', () => {
+    const markup = html(withOutcome({ ai_involved: false, ai_rationale: null }));
+    expect(markup).not.toContain('The model gave no rationale');
+  });
+
+  it('renders the rationale as TEXT, never as markup', () => {
+    const markup = html(withOutcome({ ai_involved: true, ai_rationale: '<b>bold</b>' }));
+    expect(markup).not.toContain('<b>bold</b>');
+    expect(markup).toContain('&lt;b&gt;');
+  });
+
+  it('shows the sequence step counting from one, not zero', () => {
+    const markup = html(withOutcome({ selected_sequence_step: 0 }));
+    expect(markup).toContain('data-testid="sequence-step"');
+    expect(markup).toContain('Sequence step 1');
+  });
+
+  it('omits the step badge when the decision carried no step', () => {
+    // `null` means no step was selected. Rendering "Sequence step 1" for it would
+    // invent a fact — and `0` is a REAL step, so a truthiness check here would
+    // have hidden the first step of every sequence.
+    const markup = html(withOutcome({ selected_sequence_step: null }));
+    expect(markup).not.toContain('data-testid="sequence-step"');
   });
 });

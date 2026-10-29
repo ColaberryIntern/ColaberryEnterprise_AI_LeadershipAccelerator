@@ -203,6 +203,21 @@ describe('dark-launch guard — no direct sub-flag reads outside the flags modul
     // defending. `frontendCopyLint.test.ts` records the same lesson about its
     // own scan: a name in a comment or an assertion is not the thing it forbids.
     path.join('services', 'explorerGrowth', 'drafts', '__tests__', 'draftsCannotSend.test.ts'),
+    // Phase 2, the `POST /content/refresh` route test. Its `env` mock has to BUILD
+    // a flags object to prove two things the route must do: 403 when the sub-flag
+    // is off, and 403 when the MASTER flag is off even with the sub-flag on. The
+    // second assertion is only reachable by setting the two independently, so the
+    // literal name is unavoidable here — and writing it indirectly to dodge this
+    // scan would be the "name it to slip past the guard" move deliberately
+    // rejected elsewhere in the same change (see `refreshContent`, named to TRIP
+    // its guard rather than evade it).
+    //
+    // Safe for the same reason as the entry above: a test file cannot activate a
+    // feature in production, and the production read this defends —
+    // `explorerGrowthController.postContentRefreshHandler` — goes through
+    // `isExplorerFeatureEnabled` and is NOT allowed here, so a real bypass added
+    // in the controller still fails this guard.
+    path.join('routes', 'admin', '__tests__', 'explorerGrowthRoutes.access.test.ts'),
   ];
 
   function walk(dir: string, out: string[] = []): string[] {

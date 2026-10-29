@@ -314,4 +314,107 @@ describe('getContentHealth', () => {
     expect(h.decision_gaps.named).toHaveLength(1);
     expect(h.decision_gaps.gap_count).toBe(12);
   });
+
+  /**
+   * THE MATRIX AND THE COVERAGE TABLE NOW AGREE ON WHAT "AVAILABLE" MEANS.
+   *
+   * They did not, and the disagreement was not cosmetic. `coverageForPurpose` has
+   * always excluded an asset outside its `starts_at`/`expires_at` window; the
+   * matrix did not, so it counted expired and not-yet-started assets as things "a
+   * learner in this stage and tier could receive". An expired asset cannot be
+   * received by anybody, so the matrix was answering its own stated question
+   * wrongly — and a reviewer comparing a healthy cell against a thin coverage row
+   * for the same stage had no way to tell which panel was lying.
+   *
+   * Asserted on the SQL because the fixtures are routed by substring: the rows
+   * come back the same either way, so a behavioural assertion here would pass
+   * whether or not the predicate exists. The SQL IS the behaviour being changed.
+   */
+  describe('the availability window', () => {
+    it('the matrix excludes assets outside their start/expiry window', async () => {
+      await getContentHealth(q);
+      const matrixSql = find('s.stage, u.audience');
+
+      expect(matrixSql).toContain('starts_at IS NULL OR a.starts_at <= NOW()');
+      expect(matrixSql).toContain('expires_at IS NULL OR a.expires_at > NOW()');
+    });
+
+    it('and uses the SAME window the coverage query has always used', async () => {
+      // Pinned as a pair. If one of the two is ever relaxed, the panels start
+      // disagreeing again and this fails rather than drifting quietly.
+      await getContentHealth(q);
+      const matrixSql = find('s.stage, u.audience');
+      const coverageSql = find('SELECT u.audience, COUNT(DISTINCT a.id)');
+
+      for (const predicate of [
+        'starts_at IS NULL OR a.starts_at <= NOW()',
+        'expires_at IS NULL OR a.expires_at > NOW()',
+      ]) {
+        expect(matrixSql).toContain(predicate);
+        expect(coverageSql).toContain(predicate);
+      }
+    });
+
+    it('still counts only active, emailable assets', async () => {
+      // The window was ADDED to the existing predicates, not swapped for them.
+      await getContentHealth(q);
+      const matrixSql = find('s.stage, u.audience');
+
+      expect(matrixSql).toContain('a.active');
+      expect(matrixSql).toContain("'email' = ANY(a.allowed_channels)");
+    });
+  });
+});
+
+/**
+ * The subject of the draft a decision produced, on the LIST rows.
+ *
+ * Before this, the only way to see what a learner would read was the Why
+ * drilldown, one decision at a time — so answering "did the right messaging go
+ * out" across 142 shadow rows meant opening 142 modals.
+ */
+describe('the list rows carry the draft', () => {
+  const q: ShadowQuery = { limit: 50, offset: 0 };
+
+  beforeEach(() =>
+    route([
+      { match: 'COUNT(*) AS count', rows: [{ count: '1', decision_date: '2026-10-27' }] },
+      {
+        match: 'd.scheduled_email_id',
+        rows: [
+          {
+            id: 'd1',
+            enrollment_id: 'e1',
+            scheduled_email_id: 's1',
+            draft_subject: 'This week in AI, for practitioners',
+            draft_status: 'explorer_draft',
+          },
+        ],
+      },
+    ]),
+  );
+
+  it('selects the subject and the status alongside the decision', async () => {
+    const page = await getShadow(q);
+    expect(page.rows[0].draft_subject).toBe('This week in AI, for practitioners');
+    expect(page.rows[0].draft_status).toBe('explorer_draft');
+    expect(page.rows[0].scheduled_email_id).toBe('s1');
+  });
+
+  it('joins the draft with a LEFT JOIN, never an INNER one', async () => {
+    // An INNER JOIN would silently drop every decision with no draft — today most
+    // of them — and the page would read as "the Governor decided almost nothing"
+    // rather than "the draft stage has not run for these". It would also make the
+    // rows disagree with the COUNT query, which does not join at all.
+    await getShadow(q);
+    const sql = find('d.scheduled_email_id');
+
+    expect(sql).toContain('LEFT JOIN scheduled_emails se ON se.id = d.scheduled_email_id');
+    expect(sql).not.toMatch(/\bINNER JOIN scheduled_emails\b/);
+  });
+
+  it('casts the id to text, so it survives JSON as a string', async () => {
+    await getShadow(q);
+    expect(find('d.scheduled_email_id')).toContain('d.scheduled_email_id::text');
+  });
 });

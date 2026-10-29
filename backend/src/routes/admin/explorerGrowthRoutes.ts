@@ -15,6 +15,7 @@ import {
   getWhyHandler,
   getCampusActivityHandler,
   getOutreachHandler,
+  postContentRefreshHandler,
 } from '../../controllers/explorerGrowthController';
 
 /**
@@ -35,14 +36,27 @@ import {
  * `scripts/lint-route-auth.js`, which fails CI on an admin route file with no
  * recognised guard.
  *
- * ── READ-ONLY ───────────────────────────────────────────────────────────────
+ * ── FOURTEEN READS AND EXACTLY ONE WRITE (Phase 2, 2026-10-28) ──────────────
  *
- * Twelve GETs, no POST/PUT/PATCH/DELETE. §27 specifies seven write routes
- * (`/mode`, `/pause`, `/resume`, `/content/refresh`, `recalculate`,
- * `rerun-decision`, `suppress` + its DELETE); all are Phase B, where a human
- * sees the consequence as they flip it. A test asserts the router registers no
- * mutating verb, and `auditMiddleware` (`adminRoutes.ts:110`) corroborates
- * independently by logging mutating requests that never arrive.
+ * This router was read-only by contract until Phase 2. It now registers ONE
+ * mutating route, `POST /content/refresh`, and the test that used to assert "no
+ * mutating verb at all" was deliberately amended in the same change to assert
+ * exactly one POST at exactly that path. That is a narrower claim than it looks:
+ * a second write appearing here still fails it.
+ *
+ * WHY THIS ONE AND NOT THE OTHER SIX. §27 specifies seven writes — `/mode`,
+ * `/pause`, `/resume`, `/content/refresh`, `recalculate`, `rerun-decision`,
+ * `suppress` + its DELETE. Six of them change what the system WILL DO to real
+ * learners; `/mode` in particular is the governance boundary whose upper values
+ * begin sending to 153 people, and a kill switch that looks clickable but does
+ * nothing is worse than none. This one only re-runs a rendering stage whose output
+ * cannot be sent: the drafts it writes carry a status the sender's claim predicate
+ * excludes, asserted against the sender's own source. Its blast radius is model
+ * spend, capped in both the body schema and the service.
+ *
+ * The other six remain absent, and the Settings tab still says so on the page.
+ * `auditMiddleware` (`adminRoutes.ts:110`) logs mutating requests, so this one is
+ * recorded when it is used rather than merely permitted.
  *
  * ── OUT OF SCOPE, DECLARED RATHER THAN OMITTED ──────────────────────────────
  *
@@ -85,5 +99,9 @@ router.get(`${BASE}/content`, getContentHandler);
 
 // Eligibility
 router.get(`${BASE}/eligibility/:enrollmentId`, getEligibilityHandler);
+
+// The one write. Registered last so the read surface above stays readable as a
+// block, and so a reviewer scanning this file sees the reads end before it begins.
+router.post(`${BASE}/content/refresh`, postContentRefreshHandler);
 
 export default router;

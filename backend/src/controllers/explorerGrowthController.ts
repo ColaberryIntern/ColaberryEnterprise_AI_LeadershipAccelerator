@@ -1,8 +1,12 @@
 import { Request, Response } from 'express';
 import { ZodError, type ZodType } from 'zod';
 import { classifyError } from '../utils/errorClassifier';
+import { env } from '../config/env';
+import { isExplorerFeatureEnabled } from '../config/explorerGrowthFlags';
+import { runDraftRenderBatch } from '../services/explorerGrowth/drafts/runDraftRender';
 import {
   contentQuerySchema,
+  contentRefreshBodySchema,
   decisionParamsSchema,
   decisionsQuerySchema,
   distributionQuerySchema,
@@ -126,6 +130,116 @@ function handler<P, Q>(
       res.status(500).json({ error: 'Command Center read failed', error_class: errorClass });
     }
   };
+}
+
+// ─── The one write (Phase 2) ────────────────────────────────────────────────
+
+/**
+ * `POST /content/refresh` — re-run the draft render for a date.
+ *
+ * ── WHY THIS IS NOT BUILT ON `handler()` ABOVE ──────────────────────────────
+ *
+ * That wrapper validates params and query and treats every failure the same way,
+ * which is right for fourteen reads. A write needs three things it does not do:
+ * a BODY schema, a 403 when the feature is dark, and a log line that says a write
+ * was attempted. Bending the read wrapper to cover all three would make every
+ * read carry a write's semantics — so this is its own function, and it is the only
+ * one of its kind in this file.
+ *
+ * ── THE FLAG CHECK IS A REFUSAL, NOT A NO-OP ────────────────────────────────
+ *
+ * Read through `isExplorerFeatureEnabled`, so BOTH the master switch and
+ * `draftRender` must be on — the same sanctioned read the cron uses, never the raw
+ * sub-flag. When it is off this answers 403 rather than running and reporting
+ * zero: a button that returns "0 drafts written" from a disabled feature is
+ * indistinguishable from one that found nothing to do, and those need opposite
+ * actions from whoever pressed it.
+ *
+ * ── IT CANNOT SEND ──────────────────────────────────────────────────────────
+ *
+ * The stage behind this writes drafts whose status the sender's claim predicate
+ * excludes, asserted against the sender's own source in `draftsCannotSend`. So the
+ * blast radius of a mis-click is model spend, which the schema and the service both
+ * cap, and which this reports back so the cost is visible rather than inferred.
+ */
+export async function postContentRefreshHandler(req: Request, res: Response): Promise<void> {
+  let body: { date?: string; limit?: number };
+  try {
+    body = contentRefreshBodySchema.parse(req.body ?? {});
+  } catch (err) {
+    if (err instanceof ZodError) return badRequest(res, err);
+    throw err;
+  }
+
+  // FAIL CLOSED on a missing flags object, rather than throwing.
+  //
+  // `isExplorerFeatureEnabled` reads `flags.growthOsEnabled`, so an `env` without
+  // an `explorerGrowth` block is a TypeError inside the gate — which Express turns
+  // into a 500 and which reads to the operator as "the re-run broke" rather than
+  // "the feature is off". For a dark-launched WRITE the safe reading of an absent
+  // config is OFF, never on, and never a crash.
+  const flags = env.explorerGrowth;
+  if (!flags || !isExplorerFeatureEnabled('draftRender', flags)) {
+    console.warn(
+      JSON.stringify({
+        level: 'warn',
+        service: 'explorer-growth-command-center',
+        event: 'content_refresh_refused_flag_off',
+        outcome: 'failure',
+        error_class: 'FeatureDisabled',
+      }),
+    );
+    res.status(403).json({
+      error: 'The draft render is switched off.',
+      error_class: 'FeatureDisabled',
+    });
+    return;
+  }
+
+  try {
+    const result = await runDraftRenderBatch({
+      ...(body.date ? { decisionDate: body.date } : {}),
+      ...(body.limit ? { limit: body.limit } : {}),
+    });
+
+    console.log(
+      JSON.stringify({
+        level: 'info',
+        service: 'explorer-growth-command-center',
+        event: 'content_refresh_ran',
+        outcome: 'success',
+        attempted: result.attempted,
+        drafted: result.drafted,
+        rejected: result.rejected,
+      }),
+    );
+
+    // `outcomes` is withheld on purpose: it carries per-learner detail including
+    // recipient addresses, and this endpoint answers "what did the run do", not
+    // "who did it do it to". The Why drilldown is where a single learner's draft
+    // is read, behind the same admin guard but one decision at a time.
+    res.json({
+      attempted: result.attempted,
+      drafted: result.drafted,
+      rejected: result.rejected,
+      skipped: result.skipped,
+      failed: result.failed,
+      by_reason: result.by_reason,
+    });
+  } catch (err) {
+    const errorClass = classifyError(err);
+    console.error(
+      JSON.stringify({
+        level: 'error',
+        service: 'explorer-growth-command-center',
+        event: 'content_refresh_failed',
+        error_class: errorClass,
+        outcome: 'failure',
+        message: (err as { message?: string })?.message?.slice(0, 200) ?? null,
+      }),
+    );
+    res.status(500).json({ error: 'The re-run failed. Nothing was written.', error_class: errorClass });
+  }
 }
 
 // ─── Overview ───────────────────────────────────────────────────────────────
