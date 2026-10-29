@@ -9,7 +9,10 @@
 
 /* the shell gains a row for the bar between the header and the columns; the header no longer sticks (the bar does) */
 .te-shell.has-locbar{grid-template-rows:auto auto 1fr;grid-template-areas:"top top top" "loc loc loc" "nav main contacts";--te-side-top:76px}
-.te-shell.has-locbar .te-top{position:relative}
+/* the header must out-rank the bar (z-index:21 below), or the bar paints over anything the header opens downward:
+   the bell and message panels hang off .te-top, and a positioned ancestor at z-index:auto loses to any positive one
+   however high the panel's own z-index is. 22 clears the bar and still sits under the full-screen campus layers (40+). */
+.te-shell.has-locbar .te-top{position:relative;z-index:22}
 .te-shell.has-locbar .cm-nav,.te-shell.has-locbar .te-contacts{top:56px;height:calc(100vh - 56px)}
 @media (max-width:820px){ .te-shell.has-locbar{grid-template-areas:"top" "loc" "main"} }
 
