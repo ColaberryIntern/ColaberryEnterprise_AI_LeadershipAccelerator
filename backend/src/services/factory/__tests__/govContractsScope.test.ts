@@ -25,6 +25,9 @@ function mk(deliveryProjectId: string | null, key = `op:gov:${deliveryProjectId 
     zipAttested: true,
     pursuitKind: 'software',
     build: null,
+    closeDate: null,
+    assignedInterns: [],
+    hasActiveIntern: false,
     updatedAt: null,
     createdAt: null,
   };

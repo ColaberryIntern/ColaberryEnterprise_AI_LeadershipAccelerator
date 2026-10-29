@@ -74,6 +74,7 @@ const AdminProjectOverview = lazy(() => import('../pages/admin/AdminProjectOverv
 const AdminCaseStudiesPage = lazy(() => import('../pages/admin/AdminCaseStudiesPage'));
 const AdminInternshipPage = lazy(() => import('../pages/admin/AdminInternshipPage'));
 const AdminGovContractCockpitPage = lazy(() => import('../pages/admin/AdminGovContractCockpitPage'));
+const AdminAgentDomainPage = lazy(() => import('../pages/admin/AdminAgentDomainPage'));
 const AdminFactoryCommandCenterPage = lazy(() => import('../pages/admin/AdminFactoryCommandCenterPage'));
 const AdminGovOpportunitiesPage = lazy(() => import('../pages/admin/AdminGovOpportunitiesPage'));
 const AdminGovQualificationPage = lazy(() => import('../pages/admin/AdminGovQualificationPage'));
@@ -294,6 +295,7 @@ const adminRoutes = (
         <Route path="/admin/case-studies" element={<AdminCaseStudiesPage />} />
         <Route path="/admin/internship" element={<AdminInternshipPage />} />
         <Route path="/admin/internship/gov-contract/:projectId" element={<AdminGovContractCockpitPage />} />
+        <Route path="/admin/internship/agent/:domainKey" element={<AdminAgentDomainPage />} />
         <Route path="/admin/factory" element={<AdminFactoryCommandCenterPage />} />
         <Route path="/admin/gov-opportunities" element={<AdminGovOpportunitiesPage />} />
         <Route path="/admin/gov-qualification" element={<AdminGovQualificationPage />} />

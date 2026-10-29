@@ -19,6 +19,13 @@ export interface GovContractBuildProgress {
   total: number;
 }
 
+/** An active intern assigned to build this contract (membership ∩ live intern roster). */
+export interface GovContractAssignedIntern {
+  identityId: string;
+  name: string;
+  email: string | null;
+}
+
 export interface GovContractCard {
   key: string;
   isDecoupled: boolean;
@@ -34,6 +41,11 @@ export interface GovContractCard {
   zipAttested: boolean;
   pursuitKind: 'software' | 'services';
   build: GovContractBuildProgress | null;
+  /** The submission/close date (ISO), or null when none is resolvable (treated as not-yet-expired, not hidden). */
+  closeDate: string | null;
+  /** Active interns assigned to this contract; drives the owner line and the "has an active intern" filter. */
+  assignedInterns: GovContractAssignedIntern[];
+  hasActiveIntern: boolean;
   updatedAt: string | null;
   createdAt: string | null;
 }

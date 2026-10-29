@@ -37,6 +37,13 @@ export interface GovPipelineBuildProgress {
   total: number;
 }
 
+/** An ACTIVE intern assigned to build this pursuit's delivery project (membership ∩ live intern roster). */
+export interface GovAssignedIntern {
+  identityId: string;
+  name: string;
+  email: string | null;
+}
+
 /** One pursuit card on the funnel board. Display fields are best-effort (null when the source never carried them). */
 export interface GovPipelineCard {
   /** canonical_opportunity_id — either an op:gov:<hex> canonical id OR a gws:<uuid> decoupled workspace key. */
@@ -59,6 +66,14 @@ export interface GovPipelineCard {
   pursuitKind: 'software' | 'services';
   /** Non-null once the build is materialized (drives the 'in_build' stage + the progress bar). */
   build: GovPipelineBuildProgress | null;
+  /** The pursuit's submission/close date (ISO), resolved from the OP snapshot or the dossier key-dates.
+   *  null when none is resolvable — the client treats "unknown" as not-yet-expired, never as hidden. */
+  closeDate: string | null;
+  /** ACTIVE interns assigned to the delivery project (empty when none / no project). The nav shows the owner
+   *  from this and hides a contract with no active intern. */
+  assignedInterns: GovAssignedIntern[];
+  /** Convenience: assignedInterns.length > 0. */
+  hasActiveIntern: boolean;
   updatedAt: string | null;
   createdAt: string | null;
 }
@@ -81,10 +96,50 @@ function toIso(value: unknown): string | null {
   return Number.isNaN(d.getTime()) ? null : d.toISOString();
 }
 
+/** PURE. Normalize a human or ISO date to "YYYY-MM-DD" (local calendar), or null. Mirrors govDeadline.toIsoDate
+ *  on the client — the backend cannot import frontend code, so this small, total logic is duplicated. */
+function toIsoDate(d: unknown): string | null {
+  if (typeof d !== 'string' || !d.trim()) return null;
+  const v = d.trim();
+  // Already an ISO date-only — return verbatim. Round-tripping it through Date.parse would read it as UTC
+  // midnight and then local calendar components would shift the day backward in a negative-offset timezone.
+  if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
+  const cleaned = v.replace(/(\d+)(?:st|nd|rd|th)\b/gi, '$1').replace(/\./g, '').trim();
+  const ms = Date.parse(cleaned);
+  if (Number.isNaN(ms)) return null;
+  const dt = new Date(ms);
+  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+}
+
+/** PURE. The pursuit's submission/close date: the OP snapshot's closeAt (verbatim, keeps the time) or closeDate,
+ *  else the submission line from the dossier's AI-extracted key dates (mirrors govDeadline.dossierDeadlineIso for a
+ *  ZIP/decoupled pursuit with no OP close). null when none resolves — the client treats that as not-yet-expired. */
+export function resolveGovCloseDate(rec: any): string | null {
+  const snap = (rec && rec.source_snapshot) || null;
+  const op = snap && snap.opportunity ? snap.opportunity : null;
+  const closeAt = (snap && snap.closeAt) || (op && op.closeAt);
+  if (closeAt) return String(closeAt);
+  const closeDate = (snap && snap.closeDate) || (op && op.closeDate);
+  if (closeDate) return toIsoDate(closeDate) ?? String(closeDate);
+  const rj = (rec && rec.requirements_json) || {};
+  const keyDates: any[] = (rj.dossier && Array.isArray(rj.dossier.keyDates)) ? rj.dossier.keyDates : [];
+  const rows = keyDates.filter((k) => k && k.date);
+  if (rows.length === 0) return null;
+  const isQ = (t: string) => /\b(?:question|inquir|clarif)/i.test(t);
+  const isSubmit = (t: string) => /\b(?:received|due|submit|proposal|closing|closes?|no\s+later|must\s+be)\b/i.test(t);
+  const nonQ = rows.filter((k) => !isQ(String(k.text ?? '')));
+  const chosen = nonQ.find((k) => isSubmit(String(k.text ?? ''))) ?? nonQ[0] ?? rows[0];
+  return chosen ? toIsoDate(chosen.date) : null;
+}
+
 /** PURE. Project a qualification thread-head row (plain object, e.g. `row.get()`) + its build progress into a
  *  funnel card. Field extraction mirrors getDecoupledWorkspace: title/agency prefer the decoupled provenance, then
  *  fall back to the canonical source snapshot. */
-export function projectGovPipelineCard(rec: any, build: GovPipelineBuildProgress | null): GovPipelineCard {
+export function projectGovPipelineCard(
+  rec: any,
+  build: GovPipelineBuildProgress | null,
+  assignedInterns: GovAssignedIntern[] = [],
+): GovPipelineCard {
   const rj = (rec && rec.requirements_json) || {};
   const established: any[] = Array.isArray(rj.established) ? rj.established : [];
   const provenance = rj.provenance || null;
@@ -119,6 +174,9 @@ export function projectGovPipelineCard(rec: any, build: GovPipelineBuildProgress
     zipAttested,
     pursuitKind,
     build,
+    closeDate: resolveGovCloseDate(rec),
+    assignedInterns,
+    hasActiveIntern: assignedInterns.length > 0,
     updatedAt: toIso(rec && rec.updated_at),
     createdAt: toIso(rec && rec.created_at),
   };
@@ -152,6 +210,17 @@ export async function listGovPipeline(tenantId: string): Promise<GovPipelineCard
     where: { tenant_id: tenantId, status: 'active', superseded_by_id: null },
     order: [['updated_at', 'DESC']],
   });
+  // Resolve the ACTIVE intern roster ONCE: membership alone can include someone no longer an active intern, so
+  // the live roster is the real gate. Map platform identity id -> {name,email}. Best-effort: a roster failure
+  // yields an empty map, so no contract shows an owner and the nav simply surfaces none (never throws).
+  const { listActiveInternsForAssignment, listAssignableBuilders } = await import('./govBuildAssignment');
+  const activeInternById = new Map<string, { name: string; email: string | null }>();
+  try {
+    for (const a of await listActiveInternsForAssignment()) {
+      activeInternById.set(a.identityId, { name: a.name, email: a.email });
+    }
+  } catch { /* best-effort: no roster -> no active-intern owners resolved */ }
+
   const cards: GovPipelineCard[] = [];
   for (const row of rows) {
     const rec = row && row.get ? row.get() : row;
@@ -162,7 +231,20 @@ export async function listGovPipeline(tenantId: string): Promise<GovPipelineCard
     if (approved && deliveryProjectId) {
       try { build = await getGovBuildProgressLite(deliveryProjectId); } catch { build = null; }
     }
-    cards.push(projectGovPipelineCard(rec, build));
+    // ACTIVE interns on this project = active builders (story.execute) that are ALSO in the live intern roster.
+    let assignedInterns: GovAssignedIntern[] = [];
+    if (deliveryProjectId && activeInternById.size > 0) {
+      try {
+        const builders = await listAssignableBuilders(deliveryProjectId);
+        assignedInterns = builders
+          .filter((b) => activeInternById.has(b.identityId))
+          .map((b) => {
+            const r = activeInternById.get(b.identityId)!;
+            return { identityId: b.identityId, name: r.name, email: r.email ?? b.email ?? null };
+          });
+      } catch { assignedInterns = []; }
+    }
+    cards.push(projectGovPipelineCard(rec, build, assignedInterns));
   }
   return cards;
 }
