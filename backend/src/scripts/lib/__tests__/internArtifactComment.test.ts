@@ -1,5 +1,15 @@
+// Aliased deliberately. These suites are GLOBAL SCRIPTS, not modules -- the house pattern in
+// scripts/lib is a top-level `require` -- so every top-level `const` shares one scope across every
+// test file in the project. `agentTicketDigest.test.ts:15` already declares `fingerprintOf` and
+// `FINGERPRINT_TAG` for the AF10.3 digest, so taking those names here collides with TS2451
+// "Cannot redeclare block-scoped variable" and the frozen test-typecheck baseline reads it as new
+// errors. jest runs both files happily either way, which is exactly why the types are the gate.
 const {
-  renderComment, fingerprintOf, lastFingerprints, FINGERPRINT_TAG, INLINE_MAX_CHARS,
+  renderComment,
+  fingerprintOf: docFingerprintOf,
+  lastFingerprints,
+  FINGERPRINT_TAG: DOC_TAG,
+  INLINE_MAX_CHARS,
 } = require('../internArtifactComment');
 
 /**
@@ -26,43 +36,43 @@ const present = (over: Record<string, unknown> = {}) => ({
   ...over,
 });
 
-describe('fingerprintOf', () => {
+describe('docFingerprintOf', () => {
   it('is stable for identical content', () => {
-    expect(fingerprintOf(present())).toBe(fingerprintOf(present()));
+    expect(docFingerprintOf(present())).toBe(docFingerprintOf(present()));
   });
 
   it('changes when the content changes', () => {
-    expect(fingerprintOf(present())).not.toBe(fingerprintOf(present({ content: 'different' })));
+    expect(docFingerprintOf(present())).not.toBe(docFingerprintOf(present({ content: 'different' })));
   });
 
   it('DOES NOT move on a re-read: byte count and truncation flags are not hashed', () => {
     // Only the content and the status are material. Anything else that varies between runs would
     // make this post forever.
-    expect(fingerprintOf(present())).toBe(fingerprintOf(present({ bytes: 999, truncated: true })));
+    expect(docFingerprintOf(present())).toBe(docFingerprintOf(present({ bytes: 999, truncated: true })));
   });
 
   it('THE DELETION CASE: present and absent hash differently for the same path', () => {
     const wasThere = present();
     const nowGone = { key: wasThere.key, path: wasThere.path, status: 'absent' };
-    expect(fingerprintOf(nowGone)).not.toBe(fingerprintOf(wasThere));
+    expect(docFingerprintOf(nowGone)).not.toBe(docFingerprintOf(wasThere));
   });
 
   it('distinguishes absent from unreadable, so "gone" and "we cannot see it" are not one event', () => {
     const path = 'docs/discovery/01-system-classes.md';
-    const absent = fingerprintOf({ path, status: 'absent' });
-    const unreadable = fingerprintOf({ path, status: 'unreadable', reason: 'nope', error_class: 'Unauthorized' });
+    const absent = docFingerprintOf({ path, status: 'absent' });
+    const unreadable = docFingerprintOf({ path, status: 'unreadable', reason: 'nope', error_class: 'Unauthorized' });
     expect(absent).not.toBe(unreadable);
   });
 
   it('is 16 hex characters, matching the sentinel pattern the reader greps for', () => {
-    expect(fingerprintOf(present())).toMatch(/^[0-9a-f]{16}$/);
+    expect(docFingerprintOf(present())).toMatch(/^[0-9a-f]{16}$/);
   });
 });
 
 describe('renderComment', () => {
   it('embeds a sentinel carrying the tag, the path and the fingerprint', () => {
     const { html, fingerprint } = renderComment({ agent: 'Ellis', doc: present() });
-    expect(html).toContain(`${FINGERPRINT_TAG}:docs/discovery/01-system-classes.md:${fingerprint}`);
+    expect(html).toContain(`${DOC_TAG}:docs/discovery/01-system-classes.md:${fingerprint}`);
   });
 
   it('shows a short document inline, in full', () => {
@@ -147,8 +157,8 @@ describe('renderComment', () => {
 describe('lastFingerprints', () => {
   it('finds one fingerprint per path', () => {
     const comments = [
-      { content: `a <em>${FINGERPRINT_TAG}:docs/discovery/01.md:1111111111111111</em>` },
-      { content: `b <em>${FINGERPRINT_TAG}:docs/migration/legacy.md:2222222222222222</em>` },
+      { content: `a <em>${DOC_TAG}:docs/discovery/01.md:1111111111111111</em>` },
+      { content: `b <em>${DOC_TAG}:docs/migration/legacy.md:2222222222222222</em>` },
     ];
     const seen = lastFingerprints(comments);
     expect(seen.get('docs/discovery/01.md')).toBe('1111111111111111');
@@ -157,8 +167,8 @@ describe('lastFingerprints', () => {
 
   it('LATER WINS: a second comment for the same path supersedes the first', () => {
     const comments = [
-      { content: `${FINGERPRINT_TAG}:docs/discovery/01.md:1111111111111111` },
-      { content: `${FINGERPRINT_TAG}:docs/discovery/01.md:3333333333333333` },
+      { content: `${DOC_TAG}:docs/discovery/01.md:1111111111111111` },
+      { content: `${DOC_TAG}:docs/discovery/01.md:3333333333333333` },
     ];
     expect(lastFingerprints(comments).get('docs/discovery/01.md')).toBe('3333333333333333');
   });
@@ -179,7 +189,7 @@ describe('lastFingerprints', () => {
 
   it('finds several paths inside a single comment body', () => {
     const seen = lastFingerprints([{
-      content: `${FINGERPRINT_TAG}:a.md:1111111111111111 and ${FINGERPRINT_TAG}:b.md:2222222222222222`,
+      content: `${DOC_TAG}:a.md:1111111111111111 and ${DOC_TAG}:b.md:2222222222222222`,
     }]);
     expect(seen.size).toBe(2);
   });
