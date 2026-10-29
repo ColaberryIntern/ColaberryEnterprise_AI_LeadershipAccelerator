@@ -40,6 +40,19 @@ export const SECTION_KEYS = [
   // condition it names. `owner` and `admin` pick the key up automatically because both are
   // derived from ALL_SECTIONS; `marketing` is granted it explicitly below. No role loses brands.
   'brands',
+  // The Interns hub's two further tabs (mgmt-portal M0). The hub lives at /admin/internship
+  // behind the 'internship' section, but these two surfaces carry their OWN keys rather than
+  // folding into it — deliberately, for the same reason 'internship' is not folded into
+  // 'program': the application queue holds an applicant's resume, phone and transcript, and the
+  // agent build surfaces and government delivery projects are a different grant that should not
+  // travel with it. `agents` is the per-agent dashboard + GitHub view; `gov_contracts` is the
+  // per-project management view, proposal workspace and AI helper. owner and admin derive from
+  // ALL_SECTIONS and pick both up automatically; NO scoped role is granted either here, so
+  // Admissions (who holds 'internship') never reaches these tabs. The per-domain and per-project
+  // grants, and the backend path->section rows for each tab's routes, land with those routes —
+  // this gate is deny-by-default, so a prefix is classified the day it is mounted, not before.
+  'agents',
+  'gov_contracts',
 ] as const;
 export type SectionKey = typeof SECTION_KEYS[number];
 

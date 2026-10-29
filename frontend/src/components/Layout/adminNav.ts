@@ -142,8 +142,15 @@ export const NAV_GROUPS: NavGroup[] = [
   // under, so nav visibility and API access agree by construction — a link that
   // renders for someone the API will then 403 is the failure this file keeps
   // warning about. Admissions (Dhee) holds this section, so she sees it here.
+  //
+  // The link opens the Interns hub. Besides the application queue it now carries two
+  // further tabs, Agents and Gov Contracts, each gated INSIDE the page by its own
+  // management section (`agents` / `gov_contracts`) so Admissions, who holds only
+  // `internship`, never sees them. Those are deliberately NOT separate nav sections:
+  // the hub stays one destination with 'internship' as its coarse gate, owner/admin
+  // reach it and see all three tabs, and the per-tab section decides the rest.
   { label: 'AI Internship', section: 'internship', links: [
-    { path: '/admin/internship', label: 'Applications', icon: 'user-follow-line' },
+    { path: '/admin/internship', label: 'Interns', icon: 'user-follow-line' },
   ]},
   { label: 'Inbox & Content', section: 'inbox_content', links: [
     { path: '/admin/inbox', label: 'Inbox COS', icon: 'inbox-2-line' },
