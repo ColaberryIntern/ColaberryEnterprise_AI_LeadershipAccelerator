@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Wednesday, October 28, 2026 at 6:24 PM</div>
-    <div><span class="sid">CC-20261005-r6h2</span><span class="count">75 changes</span></div>
+    <div class="meta">Generated Wednesday, October 28, 2026 at 9:12 PM</div>
+    <div><span class="sid">CC-20261005-r6h2</span><span class="count">76 changes</span></div>
   </header>
   <main>
     
@@ -1181,6 +1181,21 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">re-run after the last edit, then confirmed by CI&#39;s own run rather than by my local one. (1) The three affected suites - `explorerGrowthFlags`, `growthJourneyFlags`, `draftsCannotSend` - **3 suites / 106 tests passed, exit 0**, read from the artifact over my own appended `JEST_EXIT` marker. (2) Backend source typecheck with the stack&#39;s OWN declared compiler, `backend/node_modules/typescript` at **5.9.3**: zero diagnostic lines, exit 0. (3) **CI on `cb7d7b72`, monitored to settlement: `pass: 10 | skipping: 1`, nothing in any other state**, `head=cb7d7b72 draft=false mergeable=MERGEABLE`. Ali re-approved and merged it at `2026-10-28T20:58:05Z`.</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">**I PUSHED TO ANOTHER SESSION&#39;S BRANCH AND DESTROYED THE APPROVAL ALI HAD ALREADY GIVEN IT.** `dismiss_stale_reviews_on_push` and `require_last_push_approval` are both on, so there was no version of this fix that did not cost him a second click; I said so before pushing rather than after, and he re-approved. Two deliberate choices beyond the fix: **this entry is NOT on their branch** - a session log is this session&#39;s record, it would have conflicted with `main`, and mixing my records into someone else&#39;s PR makes their diff answer for my work - and **I did not rebase their branch**, which was six commits behind `main`, because rewriting another session&#39;s branch is not mine to do and `main`&#39;s required checks had nothing to say about the gap.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">76</span>
+          <h2>Phase 3: the knowledge quote gate, built on the tri-state the export was discarding for 137 of 217 entries</h2>
+          <span class="badge">2026-10-28</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`frontend/public/knowledge/build-kb.js` now emits the per-entry `confidence` verbatim (schema version 1.0 to 1.1) and `kb.json` is regenerated; new `backend/src/services/explorerGrowth/explorerKnowledgeSource.ts` (239 lines, Zod-validated parser) and `explorerKnowledgeQuote.ts` (311 lines, the gate); three new suites under `explorerGrowth/__tests__/`. Seven files, and the `kb.json` churn of **436 added / 219 deleted accounts for itself line-for-line**: 217 trailing-comma edits, 217 new `confidence` lines, plus `version` and `generated_at`. **`explorerQuoteGuard` finally has its first caller**, which is why it was built last week with no consumer.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">four gates, all re-run after the last edit and read from the artifact. (1) The three new suites: **3 suites / 38 tests passed, `JEST_EXIT=0`**, read from my own appended marker because the harness misreported jest&#39;s exit code three times today. (2) **Mutation test, because a green suite proves nothing alone:** disabling the unreviewed-entry refusal (`if (false &amp;&amp; ...)`) **fails 4 tests and exits 1**, the 37-count pin among them - so the gate&#39;s central refusal is load-bearing rather than decorative. Reverted by editing forward, never by checkout or stash, and the revert confirmed by grep before re-running. (3) Backend source typecheck with the stack&#39;s OWN declared compiler, `backend/node_modules/typescript` at **5.9.3**: zero diagnostics, `SRC_TSC_EXIT=0`, total output two lines, **and `--listFiles` proves both new modules are inside that program (2) against `explorerFactGuard.ts` as a known-compiled control (1)** - an empty tsc output and a skipped file look identical. (4) `checkTestTypecheck.js`, the real CI gate for test files: `CHECK_EXIT=0`, `400 error(s) across 141 file(s)`, **&quot;matched exactly, in both directions&quot;**.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**ONE DIVERGENCE LEFT UNADDRESSED AND NAMED.** The hub&#39;s sales page prefers a DB-backed endpoint at runtime - `USE_LIVE_KB = true` pointing at `GET /api/v1/knowledge/sales`, which is the one route in `v1Routes.ts` carrying no `requireServiceToken` while every POST beside it has one - and falls back to the bundled file after 4s. So for the sales slice, what a visitor sees can come from `cora_kb_entries` rather than from the export, and that projection drops the entry id entirely, making nothing quoted through it traceable to a row. This change reads the export, which is the surface the hub designates for AI ingestion. Reconciling the two is a separate decision and is not quietly assumed here.</span></div>
           
         </div>
       </article>
