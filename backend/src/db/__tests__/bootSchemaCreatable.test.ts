@@ -115,6 +115,13 @@ const NOT_CREATABLE_AT_BOOT: readonly string[] = [
   'page_events',
   'projects',  // 
   'routing_rules',
+  // No CREATE anywhere in the repo: it predates the ensure-module convention and exists
+  // only because sequelize.sync once created it. Newly ALTERed at boot by
+  // ensureScheduledEmailStatusWidth, which widens `status` to 32 so the 23-character
+  // `explorer_draft_rejected` can be written at all. That widen is deliberately a
+  // probe-then-ALTER with no CREATE: inventing a CREATE TABLE for a 40-column legacy
+  // table from its Sequelize model is how the two definitions start to disagree.
+  'scheduled_emails',
   'student_tasks',  // seeds/seedStudentTasks.ts
   'tickets',
   'today_feed_impressions',

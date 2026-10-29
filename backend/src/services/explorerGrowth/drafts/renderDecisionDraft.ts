@@ -1,7 +1,13 @@
 import type { SequenceStep } from '../../../models/FollowUpSequence';
 import type { CompositeContext } from '../../contextGraphService';
-import type { GenerateMessageParams, GenerateMessageResult } from '../../aiMessageService';
+import type {
+  BrandVoice,
+  GenerateMessageParams,
+  GenerateMessageResult,
+} from '../../aiMessageService';
 import type { ValidationResult } from '../../messageValidatorService';
+import type { ExplorerFactSet } from '../explorerFactGuard';
+import type { GroundingResult } from '../explorerKnowledgeGrounding';
 import {
   EXPLORER_DRAFT_REJECTED_STATUS,
   EXPLORER_DRAFT_STATUS,
@@ -21,6 +27,19 @@ import { draftSkipReason, selectStepIndex } from './draftEligibility';
  * quality gate refuses, which are awkward to provoke through real I/O.
  */
 
+/**
+ * What the knowledge base offered for one message.
+ *
+ * A discriminated union rather than `GroundingResult | null`, so "the corpus could not be
+ * loaded" and "the corpus loaded and offered nothing quotable" stay distinguishable on the
+ * persisted row. Those have different fixes - one is a deployment problem, the other a
+ * content problem - and collapsing them is the same mistake `fact_set_present` exists to
+ * prevent for the fact guard.
+ */
+export type DraftGrounding =
+  | { available: true; result: GroundingResult }
+  | { available: false; reason: string };
+
 export interface DraftRenderDeps {
   /** The campaign's sequence steps, in order. Empty when it has no sequence. */
   loadSequenceSteps: (campaignId: string) => Promise<SequenceStep[]>;
@@ -30,6 +49,28 @@ export interface DraftRenderDeps {
   buildContext: (leadId: number, campaignId: string, stepIndex: number) => Promise<CompositeContext>;
   generate: (params: GenerateMessageParams) => Promise<GenerateMessageResult>;
   validate: (content: string, context: CompositeContext, channel: 'email') => ValidationResult;
+  /**
+   * Knowledge for this message: gate the corpus, rank what survives, render a prompt block.
+   *
+   * REQUIRED, not optional. An optional dependency defaults to doing nothing, and "written,
+   * tested, no caller" is precisely the state `explorerKnowledgeSource` and
+   * `explorerKnowledgeQuote` were found in - 217 curated entries and a complete quote gate
+   * that no production path had ever reached. Making it required means a composition root
+   * that forgets to supply it fails to compile instead of silently generating ungrounded
+   * copy forever.
+   */
+  ground: (input: { query: string; facts?: ExplorerFactSet }) => Promise<DraftGrounding>;
+  /**
+   * The identity and published voice this message is written in.
+   *
+   * A DEPENDENCY rather than a constant so Phase 4 can point it at a real brand without
+   * touching this file. Today it resolves to the historical default at rule-set version 0,
+   * because there is no brand to look rules up by: `enrollments` carries no `brand_id`, and
+   * Explorer's own content resolution deliberately runs `{ brand_id: null,
+   * allow_unscoped: true }`. Version 0 means UNGOVERNED, not approved, and that is recorded
+   * on the draft rather than left absent - an absent field reads as "nobody checked".
+   */
+  resolveBrandVoice: () => Promise<BrandVoice>;
   /**
    * Write the draft AND stamp the decision's `scheduled_email_id` /
    * `selected_sequence_step`, ATOMICALLY. Returns the new draft's id.
@@ -42,6 +83,39 @@ export interface DraftRenderDeps {
    * itself forbids the partial commit rather than a comment asking for it.
    */
   commitDraft: (input: PersistDraftInput, decisionId: string) => Promise<string>;
+  /**
+   * Supersede the decision's current draft and write a new version, atomically.
+   *
+   * A separate dependency from `commitDraft` rather than a flag on it, because the two have
+   * different safety properties: this one also writes to an EXISTING row, and the status
+   * predicate that stops it touching the sender's queue lives in that UPDATE.
+   */
+  recommitDraft: (
+    input: PersistDraftInput,
+    decisionId: string,
+    previousScheduledEmailId: string,
+  ) => Promise<{ id: string; supersededId: string | null }>;
+}
+
+/** How this render differs from the nightly one. */
+export interface RenderOptions {
+  /**
+   * Regenerate over an existing draft rather than writing a first one.
+   *
+   * Carries the draft being replaced, so the write can supersede exactly that row rather
+   * than re-reading the decision and racing another regeneration.
+   */
+  regenerate?: {
+    previousScheduledEmailId: string;
+    /**
+     * What the operator asked for in this attempt, free text.
+     *
+     * Appended to the step's instructions rather than replacing them: a brief is a nudge
+     * ("shorter, lead with the cohort date"), not a new campaign. Replacing them would let
+     * one regeneration silently drop the asset digest and the knowledge block.
+     */
+     brief?: string;
+  };
 }
 
 /** A skip, phrased as an outcome so the batch never has to special-case it. */
@@ -165,22 +239,70 @@ export async function planDecisionDraft(
 export async function renderDecisionDraft(
   decision: DraftableDecision,
   deps: DraftRenderDeps,
+  options: RenderOptions = {},
 ): Promise<DraftOutcome> {
-  const plan = await planDecisionDraft(decision, deps);
+  const regenerate = options.regenerate;
+
+  // THE IDEMPOTENCY GUARD IS BYPASSED DELIBERATELY, AND NARROWLY. `draftSkipReason` returns
+  // `already_drafted` as soon as a decision carries a `scheduled_email_id`, which is exactly
+  // right for the nightly batch: without it, every run would re-draft every decision and
+  // spend model budget doing it. A regeneration is the opposite case - an operator asking
+  // for this one decision to be drafted again - so the planner is asked the question it was
+  // built for, "what would this decision draft if it had none", with the pointer that trips
+  // the guard removed. Nothing else about the decision is altered, so the step index still
+  // comes from `countPriorDrafted` and a regeneration cannot wander onto a different step.
+  const planFrom = regenerate ? { ...decision, scheduled_email_id: null } : decision;
+
+  const plan = await planDecisionDraft(planFrom, deps);
   if (!plan.ok) return skipped(decision, plan.reason);
   const { leadId, campaignId, stepIndex, step, toEmail, totalSteps } = plan;
 
+  const briefLine = regenerate?.brief?.trim()
+    ? `\n\nTHIS IS A REVISION. The reviewer asked for: ${regenerate.brief.trim()}`
+    : '';
+
   const instructions = `${step.ai_instructions ?? ''}${describeContentAssets(
     decision.selected_content_assets ?? [],
-  )}`;
+  )}${briefLine}`;
 
   let generated: GenerateMessageResult;
   let context: CompositeContext;
+  let grounding: DraftGrounding = { available: false, reason: 'not_attempted' };
+  let brandVoice: BrandVoice | undefined;
+  // What the model was actually told. Persisted as-sent, so a reviewer reading the draft
+  // beside its citations sees the same facts the generator saw.
+  let groundedInstructions = instructions;
   try {
     context = await deps.buildContext(leadId, campaignId, stepIndex);
+    brandVoice = await deps.resolveBrandVoice();
+
+    // Its own try/catch: a knowledge-base outage must degrade this message to ungrounded
+    // copy, which the fact guard still judges, rather than being reported as
+    // `generation_failed` - a reason that would send someone to look at the model.
+    try {
+      grounding = await deps.ground({
+        // The step's goal plus the instructions, which already carry the asset digest.
+        // That is what the message is ABOUT, and so what the corpus should be searched on.
+        query: [step.step_goal ?? '', instructions].filter((s) => s !== '').join(' '),
+        facts: context.explorer,
+      });
+    } catch (err: any) {
+      grounding = {
+        available: false,
+        reason: [err?.name, err?.message].filter(Boolean).join(': ') || 'grounding_failed',
+      };
+    }
+
+    if (grounding.available && grounding.result.block !== '') {
+      // Appended to `ai_instructions` for the same reason `describeContentAssets` is:
+      // `buildUserPrompt` returns early when a composite context is present and never
+      // reads `context_notes`, so a field that looks like grounding would supply none.
+      groundedInstructions = `${instructions}\n\n${grounding.result.block}`;
+    }
+
     generated = await deps.generate({
       channel: 'email',
-      ai_instructions: instructions,
+      ai_instructions: groundedInstructions,
       lead: {
         name: context.lead.name,
         company: context.lead.company,
@@ -196,6 +318,7 @@ export async function renderDecisionDraft(
         total_steps: totalSteps,
       },
       tone: step.ai_tone,
+      brandVoice,
       compositeContext: context,
     });
   } catch (err: any) {
@@ -224,7 +347,7 @@ export async function renderDecisionDraft(
   const verdict = deps.validate(generated.body, context, 'email');
 
   const status = verdict.valid ? EXPLORER_DRAFT_STATUS : EXPLORER_DRAFT_REJECTED_STATUS;
-  const scheduledEmailId = await deps.commitDraft(
+  const persistInput: PersistDraftInput = (
     {
       lead_id: leadId,
       campaign_id: campaignId,
@@ -235,7 +358,7 @@ export async function renderDecisionDraft(
       subject: generated.subject || step.subject || 'Colaberry Enterprise AI',
       body: verdict.content,
       to_email: toEmail,
-      ai_instructions: instructions,
+      ai_instructions: groundedInstructions,
       status,
       metadata: {
         explorer_decision_id: decision.id,
@@ -251,20 +374,57 @@ export async function renderDecisionDraft(
           // quoted, which is the strictest state, not the most permissive.
           fact_set_present: context.explorer !== undefined,
         },
+        // Every fact the copy was allowed to use, and what the gate refused. `available:
+        // false` means the corpus never loaded; `available: true` with no citations means
+        // it loaded and offered nothing quotable, which is a content problem to fix at the
+        // source rather than a gate to loosen.
+        knowledge: grounding.available
+          ? {
+              available: true,
+              cited: grounding.result.citations,
+              quotable_count: grounding.result.quotableCount,
+              refusals: grounding.result.refusalCounts,
+              copy_rules_applied: grounding.result.copyRulesApplied,
+            }
+          : { available: false, reason: grounding.reason },
+        // Which identity the copy was written as, and which published rule set backed its
+        // voice. `published: false` is a STATED NEGATIVE: version 0 is "nobody has written
+        // a voice down", and leaving the field out would be indistinguishable from a
+        // renderer that never looked.
+        brand_voice: brandVoice
+          ? {
+              name: brandVoice.name,
+              rules_version: brandVoice.rulesVersion,
+              published: brandVoice.rulesVersion > 0,
+            }
+          : null,
+        // Present only on a regeneration: which draft this replaced, and what the reviewer
+        // asked for. Stored so the history answers "why is version 3 different" without
+        // anyone having to remember, and so a brief that produced worse copy is auditable.
+        revision: regenerate
+          ? { of: regenerate.previousScheduledEmailId, brief: regenerate.brief?.trim() || null }
+          : null,
         model: generated.model,
         tokens_used: generated.tokens_used,
       },
-    },
-    decision.id,
+    }
   );
+
+  // Two writers, chosen by what this render IS rather than by a flag inside one of them:
+  // the first draft inserts, a regeneration also supersedes, and the status predicate that
+  // keeps the supersede away from the sender's queue lives in that second writer.
+  const written = regenerate
+    ? await deps.recommitDraft(persistInput, decision.id, regenerate.previousScheduledEmailId)
+    : { id: await deps.commitDraft(persistInput, decision.id), supersededId: null };
 
   return {
     decision_id: decision.id,
     enrollment_id: decision.enrollment_id,
     status: verdict.valid ? 'drafted' : 'rejected',
     reason: null,
-    scheduled_email_id: scheduledEmailId,
+    scheduled_email_id: written.id,
     step_index: stepIndex,
     issues: verdict.issues,
+    superseded_scheduled_email_id: written.supersededId,
   };
 }

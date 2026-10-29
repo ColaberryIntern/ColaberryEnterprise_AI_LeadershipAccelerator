@@ -253,6 +253,27 @@ export interface ExplorerWhyMessage {
   step_index: number | null;
   model: string | null;
   created_at: string | null;
+  /** The knowledge entries this copy was allowed to draw on, in prompt order. */
+  cited: KnowledgeCitation[];
+  /**
+   * False when the knowledge base could not be read for this generation.
+   *
+   * Carried separately from `cited` because an empty citation list is ambiguous on its
+   * own: the corpus may have failed to load, or loaded and offered nothing quotable. Those
+   * are a deployment problem and a content problem, and the panel says which.
+   */
+  knowledge_available: boolean;
+  /** The identity and published voice the copy was written under. */
+  brand_voice: { name: string; rules_version: number; published: boolean } | null;
+}
+
+/** One knowledge entry a draft was allowed to quote, with its deep link into the hub. */
+export interface KnowledgeCitation {
+  domain: string;
+  question: string;
+  /** Path into `/knowledge`, e.g. `sales/index.html#cat-program-basics`. May be empty. */
+  reference: string;
+  referenceLabel: string;
 }
 
 export interface ExplorerWhy {
@@ -541,6 +562,76 @@ export async function refreshContent(
   body: { date?: string; limit?: number } = {},
 ): Promise<ContentRefreshResult> {
   const { data } = await api.post<ContentRefreshResult>(`${BASE}/content/refresh`, body);
+  return data;
+}
+
+/**
+ * What a regeneration wrote.
+ *
+ * NO COPY, deliberately. The endpoint returns ids and the gate's verdict only, and the
+ * caller re-reads the Why payload for the message itself — so there stays exactly one
+ * shape carrying draft content and exactly one place that renders it.
+ */
+export interface RegenerateDraftResult {
+  status: 'drafted' | 'rejected' | 'skipped' | 'failed';
+  reason: string | null;
+  scheduled_email_id: string | null;
+  /** The version this replaced. `null` means nothing was superseded — not "unchanged". */
+  superseded_scheduled_email_id: string | null;
+  step_index: number | null;
+  issues: string[];
+}
+
+/**
+ * Write one more version of a decision's draft. THE SECOND AND LAST WRITE THIS CLIENT HAS.
+ *
+ * ── ALSO NAMED TO TRIP THE GUARD ────────────────────────────────────────────
+ *
+ * The write-name regex `refreshContent` was named to trip did NOT contain `regenerate`, so
+ * this function would have slipped past it untouched — a guard looking intact while doing
+ * nothing about the write actually being added. So `regenerate` was ADDED to that regex in
+ * the same change, and this name then fails the test on sight, exactly as intended. The
+ * alternative — keeping the regex as it was and calling this `regenerateDraft` anyway —
+ * would have been indistinguishable from evading it.
+ */
+export async function regenerateDraft(
+  decisionId: string,
+  body: { brief?: string } = {},
+): Promise<RegenerateDraftResult> {
+  const { data } = await api.post<RegenerateDraftResult>(
+    `${BASE}/decisions/${decisionId}/regenerate`,
+    body,
+  );
+  return data;
+}
+
+/**
+ * One version in a decision's draft history, oldest first.
+ *
+ * An INTERSECTION with the live draft shape rather than a re-listing of its fields, which
+ * is what the backend contract does too. A version IS a draft, and a reviewer comparing two
+ * of them needs the same fields on both — a narrowed "summary" shape is how a history view
+ * ends up unable to show the thing someone opened it to compare.
+ */
+export type ExplorerDraftVersion = ExplorerWhyMessage & {
+  /** 1-based, oldest first. */
+  version: number;
+  superseded: boolean;
+  current: boolean;
+};
+
+/**
+ * Every version ever rendered for one decision.
+ *
+ * `{ versions: [] }` for a decision that has never been drafted, which is a true answer
+ * about a real decision rather than a 404.
+ */
+export async function getDraftHistory(
+  decisionId: string,
+): Promise<{ versions: ExplorerDraftVersion[] }> {
+  const { data } = await api.get<{ versions: ExplorerDraftVersion[] }>(
+    `${BASE}/decisions/${decisionId}/history`,
+  );
   return data;
 }
 

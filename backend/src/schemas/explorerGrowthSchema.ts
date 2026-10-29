@@ -290,6 +290,29 @@ export const contentRefreshBodySchema = z
   })
   .strict();
 
+/**
+ * `POST /decisions/:id/regenerate` — the reviewer's brief for one more attempt.
+ *
+ *   `.strict()`  an unknown key is a 400, for the same reason the refresh body is strict:
+ *                on a write, a caller asking for something it will not get must not be able
+ *                to believe it got it. A caller that tried to pass a `status` or a `body`
+ *                here is told so rather than silently ignored.
+ *   `brief`      optional. Absent means "try again with the same instructions", which is a
+ *                legitimate request, because generation is not deterministic.
+ *   `max(500)`   a brief is a NUDGE, not a new campaign. The bound matters because this text
+ *                is appended to the prompt: unbounded, it is unbounded token spend per click
+ *                and an unbounded amount of operator text steering a generator whose other
+ *                instructions are reviewed in code.
+ *
+ * Trimmed before the bound, so a brief of only whitespace is the same as no brief — which is
+ * how the renderer treats it too, rather than appending an empty revision instruction.
+ */
+export const regenerateDraftBodySchema = z
+  .object({
+    brief: z.string().trim().max(500, 'brief must be at most 500 characters').optional(),
+  })
+  .strict();
+
 /** `GET /distribution` — state distribution and its trend. */
 export const distributionQuerySchema = z
   .object({ days: numericParam('days', 1, 365).optional() })

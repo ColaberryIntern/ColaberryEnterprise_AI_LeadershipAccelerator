@@ -1,10 +1,13 @@
-import { QueryTypes } from 'sequelize';
+import { QueryTypes, type Transaction } from 'sequelize';
 import { sequelize } from '../../../config/database';
 import type { SequenceStep } from '../../../models/FollowUpSequence';
 import {
+  EXPLORER_DRAFT_REJECTED_STATUS,
   EXPLORER_DRAFT_STATUS,
+  EXPLORER_DRAFT_SUPERSEDED_STATUS,
   SENDER_CLAIMED_STATUS,
   type DraftMessage,
+  type DraftVersion,
   type DraftableDecision,
   type PersistDraftInput,
 } from './draftContracts';
@@ -108,6 +111,36 @@ export async function loadDecisionsForDate(
 }
 
 /**
+ * One decision, for a regeneration aimed at it by id.
+ *
+ * The SAME column list as `loadDecisionsForDate`, because the same renderer consumes both:
+ * a narrower projection here would make a regenerated draft differ from a nightly one in
+ * ways nobody chose - most obviously by losing `selected_content_assets`, which is what the
+ * digest is built from.
+ *
+ * Returns null rather than throwing on a missing id, so the caller can answer 404 instead
+ * of 500 for a decision that was deleted between the page loading and the click.
+ */
+export async function loadDecisionById(decisionId: string): Promise<DraftableDecision | null> {
+  const rows = await sequelize.query<DraftableDecision>(
+    `SELECT id::text AS id,
+            enrollment_id::text AS enrollment_id,
+            lead_id,
+            decision_date::text AS decision_date,
+            selected_action,
+            selected_campaign_id::text AS selected_campaign_id,
+            channel,
+            scheduled_email_id::text AS scheduled_email_id,
+            COALESCE(selected_content_assets, '[]'::jsonb) AS selected_content_assets,
+            reason
+       FROM explorer_journey_decisions
+      WHERE id = CAST(:decisionId AS uuid)`,
+    { replacements: { decisionId }, type: QueryTypes.SELECT },
+  );
+  return rows[0] ?? null;
+}
+
+/**
  * Read one rendered draft back, for the Why drilldown.
  *
  * Returns null rather than throwing on a missing row: a decision can carry a
@@ -153,6 +186,39 @@ export async function loadDraftForDecision(
     step_index: row.step_index ?? null,
     model: typeof meta.model === 'string' ? meta.model : null,
     created_at: row.created_at ? new Date(row.created_at).toISOString() : null,
+    ...readKnowledgeAndVoice(meta),
+  };
+}
+
+/**
+ * The grounding and brand fields, read the same way for a live draft and a historical one.
+ *
+ * One function rather than two copies: these are the fields a reviewer compares ACROSS
+ * versions, so the two readers disagreeing about how to parse them is the one divergence
+ * that would be invisible on screen and wrong in exactly the place someone is looking.
+ *
+ * `knowledge_available` defaults to FALSE for a draft rendered before grounding existed.
+ * That is the honest reading - no knowledge was consulted - and it is why the field is
+ * carried separately from `cited` rather than inferred from it being empty.
+ */
+function readKnowledgeAndVoice(meta: Record<string, any>): Pick<
+  DraftMessage,
+  'cited' | 'knowledge_available' | 'brand_voice'
+> {
+  const knowledge = meta.knowledge ?? {};
+  const voice = meta.brand_voice;
+
+  return {
+    cited: Array.isArray(knowledge.cited) ? knowledge.cited : [],
+    knowledge_available: knowledge.available === true,
+    brand_voice:
+      voice && typeof voice.name === 'string'
+        ? {
+            name: voice.name,
+            rules_version: Number(voice.rules_version) || 0,
+            published: voice.published === true,
+          }
+        : null,
   };
 }
 
@@ -171,6 +237,46 @@ export async function loadDraftForDecision(
  * these rows are never pending. The stale-pending expiry job is likewise
  * scoped to `status = 'pending'` (`:414`), so it cannot touch a draft either.
  */
+/**
+ * The INSERT, shared by the first write and a regeneration.
+ *
+ * Extracted rather than copied so the two writes cannot drift in what they persist - a
+ * regeneration that quietly stopped recording `ai_instructions` or the citation block would
+ * leave a version history whose older entries were richer than its newer ones.
+ */
+async function insertDraftRow(input: PersistDraftInput, t: Transaction): Promise<string> {
+  const inserted = await sequelize.query<{ id: string }>(
+    `INSERT INTO scheduled_emails
+       (lead_id, campaign_id, step_index, channel, subject, body, to_email,
+        max_attempts, attempts_made, scheduled_for, status, ai_instructions,
+        ai_generated, metadata, created_at)
+     VALUES
+       (:lead_id, :campaign_id, :step_index, 'email', :subject, :body, :to_email,
+        1, 0, NOW(), :status, :ai_instructions,
+        true, CAST(:metadata AS jsonb), NOW())
+     RETURNING id::text AS id`,
+    {
+      replacements: {
+        lead_id: input.lead_id,
+        campaign_id: input.campaign_id,
+        step_index: input.step_index,
+        subject: input.subject.slice(0, 255),
+        body: input.body,
+        to_email: input.to_email,
+        status: input.status,
+        ai_instructions: input.ai_instructions,
+        metadata: JSON.stringify(input.metadata),
+      },
+      type: QueryTypes.SELECT,
+      transaction: t,
+    },
+  );
+
+  const id = inserted[0]?.id;
+  if (!id) throw new Error('draft insert returned no id');
+  return id;
+}
+
 export async function commitDraft(input: PersistDraftInput, decisionId: string): Promise<string> {
   // Belt-and-braces against the one mistake that would make a draft sendable.
   //
@@ -185,35 +291,7 @@ export async function commitDraft(input: PersistDraftInput, decisionId: string):
   }
 
   return sequelize.transaction(async (t) => {
-    const inserted = await sequelize.query<{ id: string }>(
-      `INSERT INTO scheduled_emails
-         (lead_id, campaign_id, step_index, channel, subject, body, to_email,
-          max_attempts, attempts_made, scheduled_for, status, ai_instructions,
-          ai_generated, metadata, created_at)
-       VALUES
-         (:lead_id, :campaign_id, :step_index, 'email', :subject, :body, :to_email,
-          1, 0, NOW(), :status, :ai_instructions,
-          true, CAST(:metadata AS jsonb), NOW())
-       RETURNING id::text AS id`,
-      {
-        replacements: {
-          lead_id: input.lead_id,
-          campaign_id: input.campaign_id,
-          step_index: input.step_index,
-          subject: input.subject.slice(0, 255),
-          body: input.body,
-          to_email: input.to_email,
-          status: input.status,
-          ai_instructions: input.ai_instructions,
-          metadata: JSON.stringify(input.metadata),
-        },
-        type: QueryTypes.SELECT,
-        transaction: t,
-      },
-    );
-
-    const id = inserted[0]?.id;
-    if (!id) throw new Error('draft insert returned no id');
+    const id = await insertDraftRow(input, t);
 
     await sequelize.query(
       `UPDATE explorer_journey_decisions
@@ -227,5 +305,131 @@ export async function commitDraft(input: PersistDraftInput, decisionId: string):
     );
 
     return id;
+  });
+}
+
+/**
+ * Replace a decision's draft, keeping the previous one as a version.
+ *
+ * ONE TRANSACTION, three statements, for the same reason `commitDraft` is atomic: a partial
+ * commit here would leave the decision pointing at a superseded row, or two rows both
+ * claiming to be current, and the Why drilldown would show whichever it found first.
+ *
+ * THE STATUS PREDICATE IS THE GUARD. The supersede only matches a row that is still one of
+ * the two draft states, so it cannot touch the sender's queue even if the wrong id were
+ * passed - a `pending` row is not in the list and is left exactly as it is. A row that a
+ * previous regeneration already superseded is likewise skipped, and reported as such rather
+ * than rewritten, so a double-submitted click does not rewrite history twice.
+ */
+export async function recommitDraft(
+  input: PersistDraftInput,
+  decisionId: string,
+  previousScheduledEmailId: string,
+): Promise<{ id: string; supersededId: string | null }> {
+  // Same belt-and-braces as `commitDraft`, for the same reason: the type already forbids
+  // it, and this is here for the day the union is widened.
+  if ((input.status as string) === SENDER_CLAIMED_STATUS) {
+    throw new Error(`refusing to write a draft with the sender-claimed status "${input.status}"`);
+  }
+
+  return sequelize.transaction(async (t) => {
+    const superseded = await sequelize.query<{ id: string }>(
+      `UPDATE scheduled_emails
+          SET status = :supersededStatus
+        WHERE id = CAST(:previousId AS uuid)
+          AND status IN (:draftStatus, :rejectedStatus)
+        RETURNING id::text AS id`,
+      {
+        replacements: {
+          supersededStatus: EXPLORER_DRAFT_SUPERSEDED_STATUS,
+          previousId: previousScheduledEmailId,
+          draftStatus: EXPLORER_DRAFT_STATUS,
+          rejectedStatus: EXPLORER_DRAFT_REJECTED_STATUS,
+        },
+        type: QueryTypes.SELECT,
+        transaction: t,
+      },
+    );
+
+    const id = await insertDraftRow(input, t);
+
+    await sequelize.query(
+      `UPDATE explorer_journey_decisions
+          SET scheduled_email_id = CAST(:id AS uuid),
+              selected_sequence_step = :stepIndex
+        WHERE id = CAST(:decisionId AS uuid)`,
+      {
+        replacements: { id, stepIndex: input.step_index, decisionId },
+        transaction: t,
+      },
+    );
+
+    return { id, supersededId: superseded[0]?.id ?? null };
+  });
+}
+
+/**
+ * Every draft ever rendered for one decision, oldest first.
+ *
+ * Keyed on `metadata->>'explorer_decision_id'` rather than on the decision's current
+ * `scheduled_email_id`, which by definition names only the newest. That metadata key has
+ * been written by every Explorer draft since the stage shipped, so the history is complete
+ * for rows that predate regeneration too.
+ *
+ * `current` is derived by comparing against the decision's own pointer rather than from the
+ * status, because the two answer different questions: a rejected draft can be the current
+ * one, and a row could in principle carry a draft status while no longer being pointed at.
+ */
+export async function loadDraftHistory(decisionId: string): Promise<DraftVersion[]> {
+  const rows = await sequelize.query<{
+    id: string;
+    subject: string;
+    body: string;
+    status: string;
+    step_index: number | null;
+    metadata: Record<string, any> | string | null;
+    created_at: Date | null;
+    is_current: boolean;
+  }>(
+    `SELECT se.id::text AS id, se.subject, se.body, se.status, se.step_index,
+            se.metadata, se.created_at,
+            (d.scheduled_email_id = se.id) AS is_current
+       FROM scheduled_emails se
+       LEFT JOIN explorer_journey_decisions d
+              ON d.id = CAST(:decisionId AS uuid)
+      WHERE se.metadata->>'explorer_decision_id' = :decisionId
+      ORDER BY se.created_at ASC, se.id ASC`,
+    { replacements: { decisionId }, type: QueryTypes.SELECT },
+  );
+
+  return rows.map((row, i) => {
+    const meta =
+      (typeof row.metadata === 'string' ? JSON.parse(row.metadata) : row.metadata) ?? {};
+    const gate = meta.quality_gate ?? {};
+
+    return {
+      scheduled_email_id: row.id,
+      subject: row.subject,
+      body: row.body,
+      status: row.status,
+      // SUPERSEDING ERASES THE STATUS SIGNAL, so for a historical row the stored verdict is
+      // the authority and for a live one the status still is. `loadDraftForDecision` reads
+      // the status alone and is right to: it only ever sees the current row, where the two
+      // agree. Here they cannot, because `explorer_draft_superseded` overwrote whichever of
+      // the two draft statuses the row used to carry.
+      passed_quality_gate: row.status === EXPLORER_DRAFT_SUPERSEDED_STATUS
+        ? gate.valid === true
+        : row.status === EXPLORER_DRAFT_STATUS,
+      issues: Array.isArray(gate.issues) ? gate.issues : [],
+      auto_fixed: Array.isArray(gate.auto_fixed) ? gate.auto_fixed : [],
+      fact_set_present: gate.fact_set_present === true,
+      step_index: row.step_index ?? null,
+      model: typeof meta.model === 'string' ? meta.model : null,
+      created_at: row.created_at ? new Date(row.created_at).toISOString() : null,
+      ...readKnowledgeAndVoice(meta),
+      version: i + 1,
+      superseded: row.status === EXPLORER_DRAFT_SUPERSEDED_STATUS,
+      current: row.is_current === true,
+    };
   });
 }

@@ -61,7 +61,58 @@ export interface GenerateMessageParams {
     meet_link: string;
   };
   compositeContext?: import('./contextGraphService').CompositeContext;
+  /**
+   * Who this message is sent AS.
+   *
+   * Omit it and the prompt uses {@link DEFAULT_BRAND_VOICE}, which reproduces the
+   * hard-coded Colaberry Enterprise AI identity this function carried before brands
+   * existed - byte for byte, pinned by a characterization test. Every one of the ten
+   * existing callers omits it, so none of their prompts change.
+   */
+  brandVoice?: BrandVoice;
 }
+
+/**
+ * The identity and the published voice a message is written in.
+ *
+ * `tone` and `guidance` come from `brand_governance_rules.voice`, which until now no
+ * generator read: the rules were a post-hoc validator's input only, so a brand could
+ * publish a tone and every generated message would ignore it.
+ */
+export interface BrandVoice {
+  /** Long form, used in the persona: "a professional outreach specialist for X". */
+  name: string;
+  /** Short form, used in the sign-off: "Sign off as the X team". Defaults to `name`. */
+  teamName?: string;
+  /** `voice.tone` from the published rule set. */
+  tone?: string;
+  /** `voice.guidance` from the published rule set. */
+  guidance?: string;
+  /**
+   * The published rule-set version backing `tone` and `guidance`.
+   *
+   * ZERO MEANS UNGOVERNED, NOT APPROVED. `getCurrentRules` returns an empty rule set at
+   * version 0 for a brand that has never published, and a caller that reads "no violations"
+   * from that as "approved" repeats the failure recorded against `resolveContentPageAccess`,
+   * which once marked all 153 Explorers CONVERTED by reading absent state as consent.
+   */
+  rulesVersion: number;
+}
+
+/**
+ * The identity this service used before it took a brand.
+ *
+ * Kept as data rather than inlined so the fallback is one thing a test can point at, and
+ * so "what does an unbranded message sound like" has an answer that is not spread across
+ * three template literals.
+ */
+export const DEFAULT_BRAND_VOICE: BrandVoice = {
+  name: 'Colaberry Enterprise AI Division',
+  // Deliberately the shorter form: the email prompt has always said "Sign off as the
+  // Colaberry Enterprise AI team", not "...Division team".
+  teamName: 'Colaberry Enterprise AI',
+  rulesVersion: 0,
+};
 
 export interface GenerateMessageResult {
   subject?: string;
@@ -81,15 +132,26 @@ function getClient(): OpenAI {
   return openaiClient;
 }
 
-function buildSystemPrompt(channel: AIChannel, params: GenerateMessageParams): string {
+/**
+ * Exported for the characterization test.
+ *
+ * The brand parameters below changed three template literals that every campaign email,
+ * SMS and voice prompt in the product is built from. A test that pins the unbranded output
+ * is the only thing that makes "this is inert for the existing ten callers" a measurement
+ * rather than a claim, and the function was private with no test at all.
+ */
+export function buildSystemPrompt(channel: AIChannel, params: GenerateMessageParams): string {
   const campaignPrompt = params.campaignContext?.system_prompt || '';
+  const brand = params.brandVoice ?? DEFAULT_BRAND_VOICE;
+  const brandName = brand.name;
+  const teamName = brand.teamName ?? brand.name;
 
   const channelInstructions: Record<AIChannel, string> = {
-    email: `You are writing a professional business email for Colaberry Enterprise AI Division.
+    email: `You are writing a professional business email for ${brandName}.
 OUTPUT FORMAT — respond with ONLY valid JSON, no markdown fences:
 {"subject": "...", "body": "..."}
 The "body" must be HTML suitable for email. Use <p>, <h2>, <strong>, <a> tags.
-Include a clear CTA. Keep it concise (150-250 words). Sign off as the Colaberry Enterprise AI team.
+Include a clear CTA. Keep it concise (150-250 words). Sign off as the ${teamName} team.
 Never include unsubscribe links or footer — those are added automatically.`,
 
     sms: `You are writing a short SMS text message.
@@ -102,7 +164,7 @@ CRITICAL RULES:
 - Keep it human, warm, and conversational — not automated or salesy.
 - No hashtags, no emojis unless natural.`,
 
-    voice: `You are writing AI agent instructions for a voice call by Maya, Director of Admissions at Colaberry Enterprise AI Division.
+    voice: `You are writing AI agent instructions for a voice call by Maya, Director of Admissions at ${brandName}.
 OUTPUT FORMAT — respond with ONLY the voice prompt instructions, no JSON, no quotes.
 Write in second person ("You are Maya, calling..."). Include:
 - The objective of the call
@@ -114,9 +176,27 @@ CRITICAL: The voice agent's name is Maya. NEVER use placeholder brackets like [Y
 CRITICAL: Always address the lead by their actual name from the LEAD PROFILE below. NEVER use placeholder brackets like [Lead Name] or [Name] for the lead either.`,
   };
 
-  const defaultPersona = `You are a professional outreach specialist for Colaberry Enterprise AI Division. You write personalized, consultative messages that feel like 1:1 conversations, not marketing templates. You reference the lead's specific context naturally. You never sound like a mass email.`;
+  const defaultPersona = `You are a professional outreach specialist for ${brandName}. You write personalized, consultative messages that feel like 1:1 conversations, not marketing templates. You reference the lead's specific context naturally. You never sound like a mass email.`;
 
-  return `${campaignPrompt || defaultPersona}
+  // The published brand voice, finally an INPUT to generation rather than only a
+  // validator's reference. `brand_governance_rules` has held tone and guidance all along
+  // and no generator read them, so a brand could publish a voice and every message would
+  // ignore it.
+  //
+  // Omitted ENTIRELY when nothing is published, rather than rendered as an empty heading:
+  // "BRAND VOICE:" with nothing under it reads as "this brand has no opinion", when the
+  // truth is that nobody has written one down. The version is stated so a reviewer can
+  // tell a published voice from the default, and v0 never reaches here because v0 carries
+  // no tone or guidance to render.
+  const voiceParts = [
+    brand.tone ? `Tone: ${brand.tone}` : '',
+    brand.guidance ?? '',
+  ].filter((s) => s !== '');
+  const voiceBlock = voiceParts.length > 0
+    ? `\n\nBRAND VOICE (published rule set v${brand.rulesVersion}; follow it over any general style preference):\n${voiceParts.join('\n')}`
+    : '';
+
+  return `${campaignPrompt || defaultPersona}${voiceBlock}
 
 ${channelInstructions[channel]}
 

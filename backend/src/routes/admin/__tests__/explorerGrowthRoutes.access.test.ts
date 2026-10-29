@@ -57,10 +57,14 @@ jest.mock('../../../services/explorerGrowth/explorerLearnerService', () => learn
 jest.mock('../../../services/explorerGrowth/explorerWhyService', () => why);
 jest.mock('../../../services/explorerGrowth/explorerCampusService', () => campus);
 
-// The draft render behind the one write route. Mocked so this file never calls a
+// The draft render behind the two write routes. Mocked so this file never calls a
 // paid model, and so the flag-off path can be proven to not call it AT ALL.
-const drafts = { runDraftRenderBatch: jest.fn() };
+const drafts = { runDraftRenderBatch: jest.fn(), regenerateDraftForDecision: jest.fn() };
 jest.mock('../../../services/explorerGrowth/drafts/runDraftRender', () => drafts);
+
+// The version-history read behind `GET /decisions/:id/history`.
+const draftRepo = { loadDraftHistory: jest.fn() };
+jest.mock('../../../services/explorerGrowth/drafts/draftRepository', () => draftRepo);
 
 import explorerGrowthRoutes from '../explorerGrowthRoutes';
 import { env } from '../../../config/env';
@@ -123,6 +127,9 @@ const ROUTES: {
   { name: 'scores', path: `${BASE}/learners/${ID}/scores`, badInput: `${BASE}/learners/${BAD}/scores`, notFound: 'learner' },
   { name: 'decisions', path: `${BASE}/decisions`, badInput: `${BASE}/decisions?executed=maybe`, notFound: null },
   { name: 'why', path: `${BASE}/decisions/${ID}`, badInput: `${BASE}/decisions/${BAD}`, notFound: 'decision' },
+  // `notFound: null` on purpose: an empty history is a true answer about a real decision.
+  // A 404 here would read as "no such decision", which is a different problem.
+  { name: 'draft history', path: `${BASE}/decisions/${ID}/history`, badInput: `${BASE}/decisions/${BAD}/history`, notFound: null },
   { name: 'shadow', path: `${BASE}/shadow`, badInput: `${BASE}/shadow?date=2026-02-30`, notFound: null },
   { name: 'content', path: `${BASE}/content`, badInput: `${BASE}/content?limit=0`, notFound: null },
   { name: 'eligibility', path: `${BASE}/eligibility/${ID}`, badInput: `${BASE}/eligibility/${BAD}`, notFound: 'learner' },
@@ -146,6 +153,7 @@ function serveAll() {
   why.getExplorerWhyByDecision.mockResolvedValue({ found: true, enrollment_id: ID });
   campus.getCampusActivity.mockResolvedValue({ explorers: 340 });
   campus.getOutreach.mockResolvedValue({ view: 'engaged', rows: [], tracked_since: '2026-10-26' });
+  draftRepo.loadDraftHistory.mockResolvedValue([]);
 }
 
 beforeEach(() => {
@@ -153,15 +161,17 @@ beforeEach(() => {
   serveAll();
 });
 
-describe('the route table is the fourteen in scope (twelve + campus and outreach, 2026-10-26)', () => {
-  it('has exactly fourteen entries', () => {
+describe('the route table is the fifteen in scope (twelve + campus and outreach + draft history)', () => {
+  it('has exactly fifteen entries', () => {
     // Pinned to a number so adding a route without a test fails a count
     // assertion rather than passing silently. §27 lists 14; two are EPIC 12's.
-    expect(ROUTES).toHaveLength(14);
+    // Phase 3 adds `/decisions/:id/history`, the version-history read behind the
+    // regenerate button.
+    expect(ROUTES).toHaveLength(15);
   });
 });
 
-describe('401 unauthenticated — all fourteen, no representative sample', () => {
+describe('401 unauthenticated — all fifteen, no representative sample', () => {
   it.each(ROUTES)('$name refuses an unauthenticated request', async ({ path }) => {
     const res = await request(app()).get(path);
     expect(res.status).toBe(401);
@@ -194,8 +204,8 @@ describe('200 authorised', () => {
 describe('400 on malformed input', () => {
   const withInput = ROUTES.filter((r) => r.badInput !== null);
 
-  it('covers twelve of the fourteen — /summary and /campus take no input', () => {
-    expect(withInput).toHaveLength(12);
+  it('covers thirteen of the fifteen — /summary and /campus take no input', () => {
+    expect(withInput).toHaveLength(13);
     expect(ROUTES.filter((r) => r.badInput === null).map((r) => r.name)).toEqual(['summary', 'campus']);
   });
 
@@ -223,11 +233,13 @@ describe('404 — qualified by which identifier the route takes', () => {
   const decisionRoutes = ROUTES.filter((r) => r.notFound === 'decision');
   const noIdRoutes = ROUTES.filter((r) => r.notFound === null);
 
-  it('splits five learner-id, one decision-id, eight with no id', () => {
+  it('splits five learner-id, one decision-id, nine with no id', () => {
     expect(learnerRoutes).toHaveLength(5);
+    // Still ONE decision-id 404: the history read takes a decision id but answers an empty
+    // list rather than a 404, because "no versions" is a true answer about a real decision.
     expect(decisionRoutes).toHaveLength(1);
-    expect(noIdRoutes).toHaveLength(8);
-    expect(learnerRoutes.length + decisionRoutes.length + noIdRoutes.length).toBe(14);
+    expect(noIdRoutes).toHaveLength(9);
+    expect(learnerRoutes.length + decisionRoutes.length + noIdRoutes.length).toBe(15);
   });
 
   it.each(learnerRoutes)('$name 404s on an unknown learner', async ({ path }) => {
@@ -266,24 +278,33 @@ describe('EPIC 12 routes are absent, not stubbed', () => {
 });
 
 /**
- * FOURTEEN READS AND EXACTLY ONE WRITE.
+ * FIFTEEN READS AND EXACTLY TWO WRITES.
  *
- * ── THIS BLOCK WAS AMENDED, AND THE AMENDMENT IS THE POINT ──────────────────
+ * ── THIS BLOCK HAS BEEN AMENDED TWICE, AND THE AMENDMENTS ARE THE POINT ─────
  *
- * It used to assert `registers no post route` — zero mutating verbs of any kind.
- * Phase 2 adds `POST /content/refresh`, so that assertion had to change, and there
- * were two ways to change it. The weak way is to delete it. The way taken here is
- * to make it NARROWER THAN IT WAS BROAD: the router may register exactly one
- * mutating route, it must be a POST, and it must be at exactly that path. PUT,
- * PATCH and DELETE stay at zero, and a second POST — the `/mode` switch, the
- * `/pause` kill switch, a `recalculate` — fails this as loudly as the first one
- * would have.
+ * It began as `registers no post route` — zero mutating verbs of any kind. Phase 2
+ * added `POST /content/refresh` and Phase 3 adds
+ * `POST /decisions/:id/regenerate`, so the assertion has had to change twice, and
+ * each time there were two ways to do it. The weak way is to delete it, or to relax
+ * it to "some posts exist". The way taken both times is to make it NARROWER THAN IT
+ * WAS BROAD:
  *
- * So the guard still does its job: it stops a write arriving unnoticed. It just
- * records that one write arrived deliberately, with the reason in
- * `explorerGrowthRoutes.ts`, rather than pretending none ever would.
+ *   - PUT, PATCH and DELETE stay at exactly zero.
+ *   - The POST count is pinned, so a third write fails as loudly as the first would
+ *     have.
+ *   - The POST paths are pinned AS A SET, so a permitted write cannot be moved to
+ *     `/mode` — the governance boundary — and a second one cannot drift while the
+ *     first still matches.
+ *
+ * Pinning the set rather than `posts[0]` matters now that there are two: an
+ * index-based assertion passes whenever the route it happens to land on is right,
+ * which depends on registration order rather than on the contract.
+ *
+ * The other six writes §27 specifies stay absent, because each changes what the
+ * system does to real learners. Both permitted writes are unsendable by
+ * construction — see `draftsCannotSend`.
  */
-describe('the write surface is exactly one POST, and nothing else', () => {
+describe('the write surface is exactly two POSTs, at exactly two paths, and nothing else', () => {
   const stack = (explorerGrowthRoutes as unknown as {
     stack: { route?: { path?: string; methods: Record<string, boolean> } }[];
   }).stack;
@@ -293,27 +314,42 @@ describe('the write surface is exactly one POST, and nothing else', () => {
     expect(found).toHaveLength(0);
   });
 
-  it('registers exactly ONE post route', () => {
+  it('registers exactly TWO post routes', () => {
     const posts = stack.filter((l) => l.route?.methods?.post);
-    expect(posts).toHaveLength(1);
+    expect(posts).toHaveLength(2);
   });
 
-  it('and that one post is the draft re-run, at the path Phase 2 declared', () => {
-    // Pinned to the PATH, not just the count. A count alone would let the single
-    // permitted write be moved to `/mode` — the governance boundary — without
-    // failing anything.
-    const posts = stack.filter((l) => l.route?.methods?.post);
-    expect(posts[0].route?.path).toBe(`${BASE}/content/refresh`);
+  it('and they are exactly the draft re-run and the regenerate, at the declared paths', () => {
+    // Pinned to the PATHS as a SET, not just the count. A count alone would let a
+    // permitted write be moved to `/mode` — the governance boundary — without failing
+    // anything, and pinning only the first would let the second drift.
+    const paths = stack
+      .filter((l) => l.route?.methods?.post)
+      .map((l) => l.route?.path)
+      .sort();
+
+    expect(paths).toEqual(
+      [`${BASE}/content/refresh`, `${BASE}/decisions/:id/regenerate`].sort(),
+    );
   });
 
-  it('registers exactly fourteen GETs', () => {
+  it('registers exactly fifteen GETs', () => {
     const gets = stack.filter((l) => l.route?.methods?.get);
-    expect(gets).toHaveLength(14);
+    expect(gets).toHaveLength(15);
   });
 
   it('rejects a POST to a real GET path', async () => {
-    // The one write does not make the other fourteen writable.
+    // The two writes do not make the fifteen reads writable.
     const res = await auth(request(app()).post(`${BASE}/summary`) as unknown as request.Test);
+    expect(res.status).toBe(404);
+  });
+
+  it('rejects a POST to the history read, which sits next to a write path', async () => {
+    // `/decisions/:id/history` and `/decisions/:id/regenerate` differ by one segment, so
+    // this is the pair most likely to be conflated by a later edit.
+    const res = await auth(
+      request(app()).post(`${BASE}/decisions/${ID}/history`) as unknown as request.Test,
+    );
     expect(res.status).toBe(404);
   });
 });
@@ -441,10 +477,14 @@ describe('a rejected service answers 500 — it does not hang, and it does not k
     eligibility: learner.getEligibility,
     campus: campus.getCampusActivity,
     outreach: campus.getOutreach,
+    'draft history': draftRepo.loadDraftHistory,
   };
 
-  it('covers all fourteen routes', () => {
-    expect(Object.keys(REJECTORS)).toHaveLength(14);
+  it('covers all fifteen routes', () => {
+    expect(Object.keys(REJECTORS)).toHaveLength(15);
+    // And every one of them is a route in the table, so a renamed route cannot leave a
+    // rejector pointing at nothing while the count still passes.
+    expect(Object.keys(REJECTORS).sort()).toEqual(ROUTES.map((r) => r.name).sort());
   });
 
   it.each(ROUTES)('$name answers 500 when its service rejects', async ({ name, path }) => {
@@ -496,5 +536,167 @@ describe('the guard is path-scoped, not applied to every later route', () => {
     a.get('/api/public/anything', (_req, res) => res.json({ ok: true }));
     const res = await request(a).get('/api/public/anything');
     expect(res.status).toBe(200);
+  });
+});
+
+/**
+ * `POST /decisions/:id/regenerate` — the second write, behaving like one.
+ *
+ * The three refusals get three status codes because they need opposite actions from whoever
+ * pressed the button, and each is asserted to ALSO not have called the service: a refusal
+ * that still spends a model call is not a refusal.
+ */
+describe('POST /decisions/:id/regenerate', () => {
+  const flags = env.explorerGrowth as { growthOsEnabled: boolean; draftRenderEnabled: boolean };
+  const PATH = `${BASE}/decisions/${ID}/regenerate`;
+
+  const ok = {
+    ok: true as const,
+    outcome: {
+      decision_id: ID,
+      enrollment_id: ID,
+      status: 'drafted' as const,
+      reason: null,
+      scheduled_email_id: 'se-v2',
+      step_index: 1,
+      issues: [],
+      superseded_scheduled_email_id: 'se-v1',
+    },
+  };
+
+  beforeEach(() => {
+    flags.growthOsEnabled = true;
+    flags.draftRenderEnabled = true;
+    drafts.regenerateDraftForDecision.mockResolvedValue(ok);
+  });
+
+  afterEach(() => {
+    flags.growthOsEnabled = false;
+    flags.draftRenderEnabled = false;
+  });
+
+  it('refuses an unauthenticated request', async () => {
+    const res = await request(app()).post(PATH).send({});
+    expect(res.status).toBe(401);
+    expect(drafts.regenerateDraftForDecision).not.toHaveBeenCalled();
+  });
+
+  it('refuses a non-admin role with 403, distinguishably from a dark feature', async () => {
+    // `requireAdmin` answers 403 for an authenticated non-admin and 401 for no token. The
+    // feature-disabled refusal is ALSO a 403, so the status alone cannot tell "you may not
+    // do this" from "this is switched off" — the guard's 403 carries no `error_class`,
+    // the feature's does, and conflating them would send an operator to the wrong fix.
+    const res = await request(app())
+      .post(PATH)
+      .set('Authorization', `Bearer ${token('student')}`)
+      .send({});
+
+    expect(res.status).toBe(403);
+    expect(res.body.error_class).not.toBe('FeatureDisabled');
+    expect(drafts.regenerateDraftForDecision).not.toHaveBeenCalled();
+  });
+
+  it('400s a malformed decision id before reaching the service', async () => {
+    const res = await auth(
+      request(app()).post(`${BASE}/decisions/${BAD}/regenerate`).send({}) as unknown as request.Test,
+    );
+    expect(res.status).toBe(400);
+    expect(drafts.regenerateDraftForDecision).not.toHaveBeenCalled();
+  });
+
+  it('400s an unknown body key rather than ignoring it', async () => {
+    // `.strict()`. A caller that tried to set the body or the status must be told it did not.
+    const res = await auth(
+      request(app()).post(PATH).send({ body: '<p>mine</p>' }) as unknown as request.Test,
+    );
+    expect(res.status).toBe(400);
+    expect(drafts.regenerateDraftForDecision).not.toHaveBeenCalled();
+  });
+
+  it('400s a brief past the bound', async () => {
+    const res = await auth(
+      request(app()).post(PATH).send({ brief: 'x'.repeat(501) }) as unknown as request.Test,
+    );
+    expect(res.status).toBe(400);
+    expect(drafts.regenerateDraftForDecision).not.toHaveBeenCalled();
+  });
+
+  it('403s when the draft render is dark, and does NOT spend a generation', async () => {
+    drafts.regenerateDraftForDecision.mockResolvedValue({ ok: false, refusal: 'feature_disabled' });
+    const res = await auth(request(app()).post(PATH).send({}) as unknown as request.Test);
+
+    expect(res.status).toBe(403);
+    expect(res.body.error_class).toBe('FeatureDisabled');
+  });
+
+  it('404s a decision that no longer exists', async () => {
+    drafts.regenerateDraftForDecision.mockResolvedValue({ ok: false, refusal: 'decision_not_found' });
+    const res = await auth(request(app()).post(PATH).send({}) as unknown as request.Test);
+
+    expect(res.status).toBe(404);
+    expect(res.body.error_class).toBe('NotFound');
+  });
+
+  it('409s a decision that has never been drafted, and says what to do instead', async () => {
+    drafts.regenerateDraftForDecision.mockResolvedValue({ ok: false, refusal: 'never_drafted' });
+    const res = await auth(request(app()).post(PATH).send({}) as unknown as request.Test);
+
+    expect(res.status).toBe(409);
+    expect(res.body.error_class).toBe('NeverDrafted');
+    expect(res.body.error).toMatch(/re-run the draft render/i);
+  });
+
+  it('forwards the decision id and the brief', async () => {
+    await auth(
+      request(app()).post(PATH).send({ brief: 'lead with the cohort date' }) as unknown as request.Test,
+    );
+
+    expect(drafts.regenerateDraftForDecision).toHaveBeenCalledWith(ID, 'lead with the cohort date');
+  });
+
+  it('forwards undefined when no brief is given, rather than an empty string', async () => {
+    await auth(request(app()).post(PATH).send({}) as unknown as request.Test);
+    expect(drafts.regenerateDraftForDecision).toHaveBeenCalledWith(ID, undefined);
+  });
+
+  it('returns the ids and the verdict, and NOT the copy', async () => {
+    const res = await auth(request(app()).post(PATH).send({}) as unknown as request.Test);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({
+      status: 'drafted',
+      reason: null,
+      scheduled_email_id: 'se-v2',
+      superseded_scheduled_email_id: 'se-v1',
+      step_index: 1,
+      issues: [],
+    });
+    // The client re-reads the Why payload for the copy, so there stays exactly one reader
+    // of draft content behind exactly one guard.
+    expect(res.body.body).toBeUndefined();
+    expect(res.body.subject).toBeUndefined();
+  });
+
+  it('reports a rejected draft as 200 with the verdict, not as an error', async () => {
+    // The quality gate refusing copy is the system working. It is not a failed request, and
+    // a 500 here would send someone to look at the endpoint instead of at the copy.
+    drafts.regenerateDraftForDecision.mockResolvedValue({
+      ok: true,
+      outcome: { ...ok.outcome, status: 'rejected', issues: ['ungrounded date'] },
+    });
+
+    const res = await auth(request(app()).post(PATH).send({}) as unknown as request.Test);
+
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe('rejected');
+    expect(res.body.issues).toEqual(['ungrounded date']);
+  });
+
+  it('500s when the service rejects, saying the previous draft is unchanged', async () => {
+    drafts.regenerateDraftForDecision.mockRejectedValue(new Error('DB down'));
+    const res = await auth(request(app()).post(PATH).send({}) as unknown as request.Test);
+
+    expect(res.status).toBe(500);
+    expect(res.body.error).toMatch(/previous draft is unchanged/i);
   });
 });
