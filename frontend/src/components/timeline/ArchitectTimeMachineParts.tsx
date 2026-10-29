@@ -71,7 +71,13 @@ export const ConsequenceHorizon: React.FC<{ horizon: { point: string; risk: numb
   );
 };
 
-export const Completed: React.FC<{ receipt: AmReceipt | null; ledger: AmLedger | null; progress: AmProgress | null; lite?: boolean }> = ({ receipt, ledger, progress, lite }) => {
+/** The points line on the finish screen. Points are awarded automatically on completion
+ *  (nothing to collect), so this is the student's only confirmation they landed. */
+const PointsEarned: React.FC<{ points: number }> = ({ points }) => (points > 0
+  ? <div className="am-pts" role="status"><b>+{points} points</b><span>Added to your total automatically. There is nothing else to collect.</span></div>
+  : null);
+
+export const Completed: React.FC<{ receipt: AmReceipt | null; ledger: AmLedger | null; progress: AmProgress | null; lite?: boolean; points?: number }> = ({ receipt, ledger, progress, lite, points = 0 }) => {
   const gates = ['Initial decision submitted', 'All stages traversed', 'Consequence reveal viewed', 'Every required interview question answered', 'Custom answers are meaningful', 'Revised decision submitted', 'At least one tradeoff explained', 'At least one assumption identified', 'At least one failure risk identified', 'Final reflection submitted', 'Architect Decision Record generated', 'Experience evaluated', 'All progress saved', 'Backend confirmed eligibility'];
   const ev = progress?.evaluation;
   const scored = !!ev && ev.baseline === false && Array.isArray(ev.dimensions) && ev.dimensions.length > 0;
@@ -81,6 +87,7 @@ export const Completed: React.FC<{ receipt: AmReceipt | null; ledger: AmLedger |
         <TimeDial phase={2} reveal />
         <p className="am-kicker">Orientation complete</p>
         <h2 className="am-h">That is the Time Machine. You are ready for Week 1.</h2>
+        <PointsEarned points={points} />
         <p className="am-lead">Each week works the same way: a request, your call, the bigger picture, and a look into the future. From Week 1 it goes a little deeper, one idea at a time.</p>
         {ev?.observation && <div className="am-baseline"><b>What we noticed</b><p>{ev.observation}</p></div>}
         {progress?.commitment && <div className="am-commit">&ldquo;{progress.commitment}&rdquo;<span>Your Architect Commitment</span></div>}
@@ -93,6 +100,7 @@ export const Completed: React.FC<{ receipt: AmReceipt | null; ledger: AmLedger |
         <TimeDial phase={2} reveal />
         <p className="am-kicker">Completion · verified on the backend</p>
         <h2 className="am-h">{scored ? 'Lesson complete. Here is your Architect Mindset Score.' : 'Baseline set. You are ready for Week 1.'}</h2>
+        <PointsEarned points={points} />
         <p className="am-lead">All fourteen completion gates passed server-side. Draft progress never counts as completion, and reopening this card will not re-award anything.</p>
         <div className="am-gates">{gates.map((g, i) => <div key={i} className="am-gate"><span className="am-c">✓</span>{g}</div>)}</div>
         {scored && ev

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { runtimeApi, AmScenario, AmProgress, AmReceipt, AmLedger, AmInterviewQuestion, AmInterviewAnswer } from '../../pages/portal/runtime/runtimeApi';
+import { runtimeApi, AmPoints, AmScenario, AmProgress, AmReceipt, AmLedger, AmInterviewQuestion, AmInterviewAnswer } from '../../pages/portal/runtime/runtimeApi';
 import { emitPointsEarned } from '../../services/pointsFx';
 import { Aperture, TimeDial, Receipt, OutcomeDashboard, ConsequenceHorizon, Completed } from './ArchitectTimeMachineParts';
 import { AM_CSS } from './architectTimeMachineStyles';
@@ -64,6 +64,7 @@ const ArchitectTimeMachine: React.FC<Props> = ({ cardId, variant, preview, compl
   const [loading, setLoading] = useState(!preview);
   const [error, setError] = useState('');
   const [completed, setCompleted] = useState(!!completedProp);
+  const [points, setPoints] = useState<AmPoints | null>(null);   // card worth, shown on the finish screen
   const [busy, setBusy] = useState(false);
 
   // stage flow (workspace)
@@ -89,6 +90,7 @@ const ArchitectTimeMachine: React.FC<Props> = ({ cardId, variant, preview, compl
       if (!alive) return;
       setScenario(v.scenario); setProgress(v.progress); setReceipt(v.receipt); setLedger(v.ledger);
       setCompleted(v.status === 'completed' || v.progress.state === 'completed');
+      if (v.points) { setPoints(v.points); emitPointsEarned(v.points.awarded_now); } // a healed, previously-missed award
       // hydrate captured inputs for resume
       const p = v.progress;
       if (p.first_decision) { setFirstChoice(p.first_decision.choice || (p.first_decision.custom ? 'custom' : '')); setFirstCustom(p.first_decision.custom || ''); setFirstReason(p.first_decision.reasoning || ''); }
@@ -180,7 +182,8 @@ const ArchitectTimeMachine: React.FC<Props> = ({ cardId, variant, preview, compl
       const res = await runtimeApi.architectComplete(cardId);
       setReceipt(res.receipt); setLedger(res.ledger); setCompleted(true);
       setProgress((p) => (p ? { ...p, state: 'completed', evaluation: res.evaluation } : p));
-      if (res.artifact) emitPointsEarned(0);
+      if (res.points) setPoints(res.points);
+      emitPointsEarned(res.points?.awarded_now ?? res.outcome?.points_awarded ?? 0);
       if (onCompleted) onCompleted(res.readiness);
     } catch (e: any) {
       setReqError(e?.response?.data?.error || 'A few steps remain before this can be completed.');
@@ -249,7 +252,7 @@ const ArchitectTimeMachine: React.FC<Props> = ({ cardId, variant, preview, compl
   }
 
   // ── WORKSPACE: the full experience ──────────────────────────────────────────
-  if (completed) return <div className="am am-ws"><Style /><Completed receipt={receipt} ledger={ledger} progress={progress} lite={lite} /></div>;
+  if (completed) return <div className="am am-ws"><Style /><Completed receipt={receipt} ledger={ledger} progress={progress} lite={lite} points={points?.value || 0} /></div>;
 
   const stage = STAGES[cur].key as StageKey;
   return (
