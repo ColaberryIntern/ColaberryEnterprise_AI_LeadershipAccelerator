@@ -10,6 +10,19 @@
 import { KitSlide } from './kitSpec';
 import { esc } from './kitRenderUtils';
 
+/** Giveaway draw controls: one button press per winner, winners stack as chips.
+ * Shown by the deck script only once the vote is revealed (entrants = everyone
+ * who picked the answer, which the server returns as correctResponders). */
+function raffleHtml(count: number): string {
+  return (
+    '<div class="kraffle" data-role="raffle" data-count="' + count + '" style="display:none">' +
+    '<button class="ktheater-btn primary" data-action="draw" type="button">🎲 Draw winner</button>' +
+    '<div class="kraffle-big" data-role="raffle-big"></div>' +
+    '<div class="kraffle-chips" data-role="raffle-chips"></div>' +
+    '</div>'
+  );
+}
+
 export function theaterHtml(slide: KitSlide): string {
   const it = slide.interaction;
   if (!it) return '';
@@ -35,6 +48,7 @@ export function theaterHtml(slide: KitSlide): string {
     '</div>' +
     (it.reveal ? `<div class="ktheater-explain" data-role="explain" style="display:none">${esc(it.reveal)}</div>` : '') +
     '<div class="ktheater-correct" data-role="correct-list" style="display:none"></div>' +
+    (it.raffle ? raffleHtml(it.raffle) : '') +
     '</div>'
   );
 }

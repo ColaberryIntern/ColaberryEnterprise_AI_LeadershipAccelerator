@@ -433,6 +433,8 @@ export function renderKitHtml(spec: KitSpec, opts: RenderKitOptions = {}): strin
           key: s.id, kind: s.interaction.kind, q: s.interaction.q, options: s.interaction.options,
           answer: typeof s.interaction.answer === 'number' ? s.interaction.answer : null, revealed: false,
           theater: s.interaction.theater ? true : undefined,
+          liveBars: s.interaction.liveBars ? true : undefined,
+          raffle: typeof s.interaction.raffle === 'number' && s.interaction.raffle > 0 ? s.interaction.raffle : undefined,
         }
       : null;
     const prompt = phase === 'prompt' && s.prompt

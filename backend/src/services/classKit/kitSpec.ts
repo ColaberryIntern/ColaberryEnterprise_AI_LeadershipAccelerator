@@ -226,6 +226,7 @@ export function buildCheckpointDiagram(cps: BuildCheckpoint[]): string {
 
 /** Detect the class day kind from title first, then weekday, then fall back. */
 export function detectDayKind(title: string, dateStr: string): DayKind {
+  if (/open house/i.test(title)) return 'openhouse';
   if (/orientation/i.test(title)) return 'orientation';
   if (/architecture day/i.test(title)) return 'architecture';
   if (/build day/i.test(title)) return 'build';
@@ -242,6 +243,7 @@ function parseWeek(title: string): number | null {
 
 function dayLabelFor(dayKind: DayKind): string {
   if (dayKind === 'orientation') return 'Orientation';
+  if (dayKind === 'openhouse') return 'Open House';
   if (dayKind === 'build') return 'Build Day';
   return 'Architecture Day';
 }

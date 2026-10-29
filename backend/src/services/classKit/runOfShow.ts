@@ -69,7 +69,27 @@ export const ORIENTATION_RUN_OF_SHOW: SegmentTemplate[] = [
   { id: 'setup', startMin: 90, endMin: 120, label: 'Environment setup (Swati)', mode: 'build', purpose: 'Claude Code + VS Code live setup — everyone leaves set up; then what to expect before Week 1', publicValue: 'Setup tutorial' },
 ];
 
+// Open House — a 90-minute prospect session, scaled to the session's real
+// duration like every other template. Every slide comes from KitConfig. The
+// segments are deliberately short: a segment renders its content, then its
+// questions, so short segments are what put a question every 2-3 slides.
+export const OPEN_HOUSE_RUN_OF_SHOW: SegmentTemplate[] = [
+  { id: 'welcome', startMin: 0, endMin: 6, label: 'Welcome + check-in', mode: 'open', purpose: 'Everyone logs in on their phone and votes', publicValue: 'Opening hook' },
+  { id: 'signal', startMin: 6, endMin: 14, label: 'The $100M signal', mode: 'present', purpose: 'What Anthropic just bet on, and why', publicValue: 'Thought-leadership clip' },
+  { id: 'news', startMin: 14, endMin: 22, label: 'This month in AI', mode: 'present', purpose: 'Current events, numbers and quotes', publicValue: 'News clip' },
+  { id: 'role', startMin: 22, endMin: 30, label: 'The role', mode: 'present', purpose: 'What a Forward Deployed Engineer actually does', publicValue: 'Career clip' },
+  { id: 'pay', startMin: 30, endMin: 37, label: 'Pay + trajectory', mode: 'present', purpose: 'What the role pays and where it leads', publicValue: 'Career clip' },
+  { id: 'architect', startMin: 37, endMin: 47, label: 'Think like an architect', mode: 'interact', purpose: 'How an architect reasons, tried live on a real decision', publicValue: 'Decision theater clip' },
+  { id: 'program', startMin: 47, endMin: 55, label: 'The 12 weeks', mode: 'present', purpose: 'Curriculum and how it runs', publicValue: 'Program walkthrough' },
+  { id: 'proof', startMin: 55, endMin: 63, label: 'Proof you can perform', mode: 'present', purpose: 'Internship, projects, GitHub, case studies, certification', publicValue: 'Program walkthrough' },
+  { id: 'investment', startMin: 63, endMin: 73, label: 'The investment', mode: 'present', purpose: 'The cost of a year, and what the year returns', publicValue: 'Conversion' },
+  { id: 'books', startMin: 73, endMin: 78, label: 'Giveaway: books', mode: 'interact', purpose: 'Raffle: 3 copies of the CEO’s book', publicValue: 'Celebration clip' },
+  { id: 'scholarships', startMin: 78, endMin: 84, label: 'Giveaway: scholarships', mode: 'interact', purpose: 'Raffle: 3 scholarships (50% off a year)', publicValue: 'Celebration clip' },
+  { id: 'close', startMin: 84, endMin: 90, label: 'Enroll tonight', mode: 'close', purpose: 'The decision, tonight', publicValue: 'Conversion' },
+];
+
 export function runOfShowFor(dayKind: DayKind): SegmentTemplate[] {
+  if (dayKind === 'openhouse') return OPEN_HOUSE_RUN_OF_SHOW;
   if (dayKind === 'orientation') return ORIENTATION_RUN_OF_SHOW;
   if (dayKind === 'build') return BUILD_RUN_OF_SHOW;
   return ARCHITECTURE_RUN_OF_SHOW;

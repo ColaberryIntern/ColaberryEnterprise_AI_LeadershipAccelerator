@@ -11,7 +11,7 @@ interface Props {
    * teaching content) — in that case these prompts exist but have no visible
    * effect, so we say so instead of leaving it a silent no-op. */
   appliesToThisSession: boolean;
-  dayKind: 'orientation' | 'architecture' | 'build';
+  dayKind: 'orientation' | 'architecture' | 'build' | 'openhouse';
   onRewrite: (currentItems: PromptOverride[], instruction: string) => Promise<PromptOverride[]>;
   onChange: (next: CountAndOverride<PromptOverride>) => void;
 }
