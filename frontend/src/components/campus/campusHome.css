@@ -193,6 +193,11 @@
 .cm-staff-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px}
 .cm-staff-tile{display:block;border:1px solid var(--cm-art-line);background:var(--cm-art-card);border-radius:12px;padding:10px;font-size:13px;font-weight:700;color:var(--cm-art-ink);text-decoration:none}
 .cm-staff-tile.is-disabled{color:var(--cm-art-muted)}
+.cm-staff-grid.is-one{grid-template-columns:1fr}
+.cm-staff-sub{margin:10px 0 0;font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--cm-art-muted)}
+.cm-staff-tile.is-room{display:flex;flex-direction:column;gap:4px;line-height:1.25}
+.cm-staff-tile .ic{font-size:18px;line-height:1;color:var(--cm-art-red)}
+.cm-staff-all{display:block;margin-top:8px;font-size:13px}
 
 /* Colaberry Live on the home: the prototype's dark pill at top center (.livebar); the portal live-now badge steps aside here */
 .cm-on-home .lnb{display:none}

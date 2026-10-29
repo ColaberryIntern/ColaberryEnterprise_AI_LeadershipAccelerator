@@ -195,7 +195,7 @@ export default function CampusConcierge(p: ConciergeProps): React.ReactElement {
 
       {audience === 'explorer' && <ExplorerPass buildings={buildings} accessOf={p.accessOf} workplaceNames={wp}
         path={explorerPath(buildings, p.accessOf, wp, desks.some((d) => d.id === 'maya' && d.on_duty))} />}
-      {audience === 'staff' && <StaffTools buildings={buildings} workplaceNames={wp} />}
+      {audience === 'staff' && <StaffTools buildings={buildings} workplaceNames={wp} onAll={() => p.onWalk('career')} />}
 
       {p.stops && <div style={{ marginTop: 14 }}><PlanCard stops={p.stops} buildings={buildings} workplaceNames={wp} onWalk={p.onWalk} ahead={ahead} onOpen={p.onOpen} /></div>}
 
