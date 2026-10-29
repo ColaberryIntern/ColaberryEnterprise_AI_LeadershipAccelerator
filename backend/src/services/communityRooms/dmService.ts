@@ -7,7 +7,7 @@ import { RoomAccessContext } from './roomEntitlementService';
 import { postMessage, listMessages } from './roomMessageService';
 import { getReeseEnrollmentId } from '../reese/reeseIdentitySeed';
 import { getDaraEnrollmentId } from '../curriculum/daraIdentitySeed';
-import { dmBlockReasonFor } from './dmEligibility';
+import { dmBlockReasonFor, agentFloorBlockFor } from './dmEligibility';
 
 // 1:1 direct messages, modelled as a 2-person private CommunityRoom
 // (room_type 'dm') so they reuse the persisted RoomMessage layer — messages
@@ -157,6 +157,10 @@ export async function sendDmMessage(
   attachments: Array<{ id: string; name?: string | null }> = [],
 ): Promise<RoomMessage> {
   await assertDmRoom(roomId);
+  // C87: an existing thread with Dara stays shut for a badge that does not open her floor (openDm refuses new ones).
+  const other = await RoomMembership.findOne({ where: { room_id: roomId, enrollment_id: { [Op.ne]: ctx.enrollmentId } } });
+  const floorBlock = await agentFloorBlockFor(ctx.enrollmentId, other?.enrollment_id);
+  if (floorBlock) throw new DmError(floorBlock);
   // `attachments` is added to the payload only when there is something to add,
   // so a plain text DM reaches postMessage with the exact input shape it always
   // had. CI caught the alternative: passing `attachments: []` unconditionally

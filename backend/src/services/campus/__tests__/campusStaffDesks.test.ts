@@ -11,7 +11,9 @@ jest.mock('../../access/contentEntitlement', () => ({
 }));
 jest.mock('../../portalSettingsService', () => ({ isOrgManager: jest.fn(async () => mockManager) }));
 let mockMgmt: boolean | 'throw' = false;
-jest.mock('../../access/mgmtBridgeService', () => ({ getMgmtStatus: jest.fn(async () => { if (mockMgmt === 'throw') throw new TypeError('db down'); return { is_mgmt: mockMgmt, role: mockMgmt ? 'ops' : null, label: null }; }) }));
+// C87: the badge's sections decide whether Dara (Program floor) is listed
+let mockSections: string[] = [];
+jest.mock('../../access/mgmtBridgeService', () => ({ getMgmtStatus: jest.fn(async () => { if (mockMgmt === 'throw') throw new TypeError('db down'); return { is_mgmt: mockMgmt, role: mockMgmt ? 'ops' : null, label: null, sections: mockSections }; }) }));
 jest.mock('../../reese/reeseIdentitySeed', () => ({ isReeseEnabled: jest.fn(), getReeseEnrollmentId: jest.fn() }));
 jest.mock('../../curriculum/daraIdentitySeed', () => ({ isDaraEnabled: jest.fn(), getDaraEnrollmentId: jest.fn() }));
 // The thing NOT to use: a broader staff test (staff role OR mgmt_role). Mocked to say "yes" so a regression to it shows.
@@ -31,6 +33,7 @@ const ids = async () => (await getStaffDesks('enr-1')).desks.map((d) => d.id);
 beforeEach(() => {
   jest.clearAllMocks();
   set({});
+  mockSections = [];
   (isReeseEnabled as jest.Mock).mockResolvedValue(true);
   (getReeseEnrollmentId as jest.Mock).mockResolvedValue('reese-1');
   (isDaraEnabled as jest.Mock).mockResolvedValue(true);
@@ -79,11 +82,11 @@ describe('audience: the frontend\'s sources, the frontend\'s precedence', () => 
 
 describe('Maya: every audience (C21, v6 D3; it replaced the C6 rule of staff and Explorers only)', () => {
   it.each([
-    [{}, ['reese', 'dara', 'maya']],
-    [{ manager: true }, ['reese', 'dara', 'maya']],
-    [{ manager: true, explorer: true }, ['reese', 'dara', 'maya']],
-    [{ explorer: true }, ['reese', 'dara', 'maya']],
-    [{ staff: true }, ['reese', 'dara', 'maya']],
+    [{}, ['reese', 'maya']],
+    [{ manager: true }, ['reese', 'maya']],
+    [{ manager: true, explorer: true }, ['reese', 'maya']],
+    [{ explorer: true }, ['reese', 'maya']],
+    [{ staff: true }, ['reese', 'maya']], // C87: no Program floor on the badge = no Dara
   ])('%j -> %j', async (o, want) => {
     set(o);
     expect(await ids()).toEqual(want);
@@ -108,10 +111,11 @@ describe('Maya: every audience (C21, v6 D3; it replaced the C6 rule of staff and
 });
 
 describe('on duty', () => {
-  it('Reese and Dara on duty: their buildings, enrollment ids and three questions each', async () => {
+  it('Reese and Dara on duty: their places (C87), enrollment ids and their questions (Reese 3; Dara 2, the staff-usable ones)', async () => {
+    mockSections = ['dashboard', 'program'];
     const { desks } = (await getStaffDesks('enr-1'));
     expect(desks.filter((d) => d.id !== 'maya').map((d) => [d.id, d.building, d.on_duty, d.enrollment_id, d.prompts.length])).toEqual([
-      ['reese', 'commons', true, 'reese-1', 3], ['dara', 'library', true, 'dara-1', 3],
+      ['reese', 'lecture', true, 'reese-1', 3], ['dara', 'career', true, 'dara-1', 2],
     ]);
     expect(desks.every((d) => d.ai === true)).toBe(true);
   });
@@ -123,6 +127,7 @@ describe('on duty', () => {
   });
 
   it('an unseeded Dara (no identity) is off duty even when enabled', async () => {
+    mockSections = ['program'];
     (getDaraEnrollmentId as jest.Mock).mockResolvedValue(null);
     const dara = (await getStaffDesks('enr-1')).desks.find((d) => d.id === 'dara')!;
     expect(dara).toMatchObject({ on_duty: false, enrollment_id: null });
@@ -131,5 +136,42 @@ describe('on duty', () => {
   it('a failing lookup rejects (the route answers 500; the UI hides desks)', async () => {
     (isDaraEnabled as jest.Mock).mockRejectedValue(new TypeError('db down'));
     await expect(getStaffDesks('enr-1')).rejects.toThrow('db down');
+  });
+});
+
+describe('C87: every agent has one place; Dara only for a badge that opens the Program floor', () => {
+  const dara = async () => (await getStaffDesks('enr-1')).desks.find((d) => d.id === 'dara');
+  it('Reese is in the Classroom, Maya in Admissions, for everyone', async () => {
+    const { desks } = await getStaffDesks('enr-1');
+    expect(desks.find((d) => d.id === 'reese')).toMatchObject({ building: 'lecture', floor: null, office: null });
+    expect(desks.find((d) => d.id === 'maya')).toMatchObject({ building: 'admissions', floor: null, office: null });
+  });
+  it('a badge with the Program floor (the curriculum role) sees Dara in the Staff Office at Curriculum', async () => {
+    set({ mgmt: true }); mockSections = ['dashboard', 'program'];
+    expect(await dara()).toMatchObject({ building: 'career', floor: 'program', office: '/admin/orchestration', enrollment_id: 'dara-1' });
+  });
+  it.each([['a member', {}, []], ['a marketing badge', { mgmt: true }, ['dashboard', 'campaigns']], ['staff without a badge', { staff: true }, []]])('%s never sees Dara', async (_n, o, sections) => {
+    set(o); mockSections = sections as string[];
+    expect(await dara()).toBeUndefined();
+  });
+  it('a failed badge lookup hides Dara (fail closed) and is logged', async () => {
+    set({ mgmt: 'throw' });
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+    expect(await dara()).toBeUndefined();
+    expect(warn.mock.calls.map((c) => JSON.parse(String(c[0])).event)).toContain('agent_floor_lookup_failed');
+    warn.mockRestore();
+  });
+});
+
+describe('C87: the places match the admin menu the tower is built from', () => {
+  it('the office of Dara is the Curriculum page, inside the Program group (section program) of adminNav.ts', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { AGENT_PLACES } = require('../agentPlaces');
+    const src = fs.readFileSync(path.join(__dirname, '..', '..', '..', '..', '..', 'frontend', 'src', 'components', 'Layout', 'adminNav.ts'), 'utf8');
+    const start = src.indexOf("{ label: 'Program', section: 'program'");
+    expect(start).toBeGreaterThan(-1);
+    const end = src.indexOf("{ label: '", start + 10);
+    expect(src.slice(start, end)).toContain(`path: '${AGENT_PLACES.dara.office}', label: 'Curriculum'`);
+    expect(AGENT_PLACES.dara.floor).toBe('program');
   });
 });

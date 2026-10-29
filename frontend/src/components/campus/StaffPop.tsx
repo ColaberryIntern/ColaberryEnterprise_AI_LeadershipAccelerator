@@ -7,6 +7,7 @@ import StaffDesk from './StaffDesk';
 import { onStaffCard } from './staffCard';
 import { popPosition, usePopover } from './usePopover';
 import type { At } from './usePopover';
+import { NAV_GROUPS } from '../Layout/adminNav';
 import './campusPop.css';
 
 /**
@@ -18,6 +19,12 @@ export function placeName(b: CampusBuilding | undefined, workplace: boolean): st
   if (!b) return workplace ? 'the Plaza' : 'the Quad';
   if (b.kind === 'gate') return workplace ? 'the Visitor entrance' : 'the Main Gate';
   return `the ${buildingName(b, workplace)}`;
+}
+
+/** C87: an agent on a Staff Office floor: "the Staff Office on the Program floor" (the admin-menu group that holds its office). */
+export function deskPlace(desk: Pick<Desk, 'office'>, b: CampusBuilding | undefined, workplace: boolean): string {
+  const group = desk.office ? NAV_GROUPS.find((g) => g.links.some((l) => l.path === desk.office)) : undefined;
+  return group?.label ? `${placeName(b, workplace)} on the ${group.label} floor` : placeName(b, workplace);
 }
 
 function Card({ desk, at, place, here, workplace, onClose, onVisit, onMessaged }: {
@@ -53,7 +60,7 @@ export function useStaffPop(o: { desks?: Desk[]; audience: CampusAudience; build
   const b = o.buildings.find((x) => x.id === desk.building);
   return {
     open: true, close,
-    node: <Card desk={desk} at={req.at} place={placeName(b, o.workplace)} here={o.hereId === desk.building} workplace={o.workplace}
+    node: <Card desk={desk} at={req.at} place={deskPlace(desk, b, o.workplace)} here={o.hereId === desk.building} workplace={o.workplace}
       onClose={close} onVisit={() => { setReq(null); o.walk(desk.building as BuildingId); }} onMessaged={o.onMessaged} />,
   };
 }
