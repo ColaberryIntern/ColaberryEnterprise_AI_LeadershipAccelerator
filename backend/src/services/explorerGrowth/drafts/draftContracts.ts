@@ -69,8 +69,44 @@ export const EXPLORER_DRAFT_STATUS = 'explorer_draft';
  */
 export const EXPLORER_DRAFT_REJECTED_STATUS = 'explorer_draft_rejected';
 
-/** Neither draft status may ever equal the one the sender claims. */
+/**
+ * A draft that a regeneration replaced. Kept, never deleted.
+ *
+ * THE VERSION HISTORY IS THESE ROWS. `commitDraft` already inserts a new row and re-points
+ * the decision at it, so a regeneration would leave the old row behind anyway - orphaned,
+ * still carrying `explorer_draft`, and therefore indistinguishable from the current one. All
+ * that was missing was a word for "this was the previous answer". With it, the history of a
+ * decision is `SELECT ... WHERE metadata->>'explorer_decision_id' = :id ORDER BY created_at`,
+ * at full fidelity: subject, body, gate verdict, citations, model and token count, exactly as
+ * they were. A separate history table would have duplicated all of those columns and then
+ * had to be kept in step with them.
+ *
+ * Only reachable because `scheduled_emails.status` is now 32 wide: at 25 characters this
+ * value could not have been written at all against the old `VARCHAR(20)`, which is the same
+ * defect `ensureScheduledEmailStatusWidth` exists to fix for the rejected status.
+ *
+ * Unsendable for the same structural reason as the other two: it is not `pending`.
+ */
+export const EXPLORER_DRAFT_SUPERSEDED_STATUS = 'explorer_draft_superseded';
+
+/** No draft status may ever equal the one the sender claims. */
 export const SENDER_CLAIMED_STATUS = 'pending';
+
+/**
+ * One entry in a decision's draft history, oldest first.
+ *
+ * An intersection rather than a new shape: a version IS a draft, and a reviewer comparing
+ * two of them needs the same fields on both. Duplicating a narrowed "summary" shape here is
+ * how a history view ends up unable to show the thing someone opened it to compare.
+ */
+export type DraftVersion = DraftMessage & {
+  /** 1-based, oldest first, assigned at read time from `created_at` order. */
+  version: number;
+  /** True when a later regeneration replaced this one. */
+  superseded: boolean;
+  /** True for the version the decision currently points at. */
+  current: boolean;
+};
 
 /**
  * Actions that mean "an email would have gone out".
@@ -131,6 +167,15 @@ export interface DraftOutcome {
   step_index: number | null;
   /** Quality-gate issues when `rejected`; the error class when `failed`. */
   issues: string[];
+  /**
+   * On a regeneration, the draft this one replaced.
+   *
+   * `null` on a first draft, and also `null` when the supersede matched nothing - which is
+   * the honest answer to a double-submitted regeneration, where a previous attempt already
+   * superseded that row. A caller must not read `null` here as "the old draft is still
+   * current".
+   */
+  superseded_scheduled_email_id?: string | null;
 }
 
 export interface DraftRenderResult {

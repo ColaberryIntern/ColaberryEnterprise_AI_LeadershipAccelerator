@@ -37,6 +37,7 @@ import {
 import {
   EXPLORER_DRAFT_STATUS,
   EXPLORER_DRAFT_REJECTED_STATUS,
+  EXPLORER_DRAFT_SUPERSEDED_STATUS,
   SENDER_CLAIMED_STATUS,
 } from '../../services/explorerGrowth/drafts/draftContracts';
 import { activeBootCall, serverSourceText } from './helpers/bootCalls';
@@ -141,7 +142,15 @@ describe('the width fits every status the codebase writes', () => {
   it('fits the Explorer draft statuses', () => {
     expect(EXPLORER_DRAFT_STATUS.length).toBeLessThanOrEqual(SCHEDULED_EMAIL_STATUS_WIDTH);
     expect(EXPLORER_DRAFT_REJECTED_STATUS.length).toBeLessThanOrEqual(SCHEDULED_EMAIL_STATUS_WIDTH);
+    expect(EXPLORER_DRAFT_SUPERSEDED_STATUS.length).toBeLessThanOrEqual(SCHEDULED_EMAIL_STATUS_WIDTH);
     expect(SENDER_CLAIMED_STATUS.length).toBeLessThanOrEqual(SCHEDULED_EMAIL_STATUS_WIDTH);
+  });
+
+  it('would NOT have fitted the old width of 20 - which is why the widen is load-bearing', () => {
+    // Both of the statuses this phase introduced exceed 20 characters. The version history
+    // regeneration keeps is only expressible because the column was widened first.
+    expect(EXPLORER_DRAFT_REJECTED_STATUS.length).toBeGreaterThan(20);
+    expect(EXPLORER_DRAFT_SUPERSEDED_STATUS.length).toBeGreaterThan(20);
   });
 
   it('records WHY this module exists: the rejected status does not fit the old width of 20', () => {
@@ -171,6 +180,7 @@ describe('the width fits every status the codebase writes', () => {
     const statusBlock = modelSource.slice(modelSource.indexOf('status: {'));
     expect(statusBlock).toContain(EXPLORER_DRAFT_STATUS);
     expect(statusBlock).toContain(EXPLORER_DRAFT_REJECTED_STATUS);
+    expect(statusBlock).toContain(EXPLORER_DRAFT_SUPERSEDED_STATUS);
   });
 });
 

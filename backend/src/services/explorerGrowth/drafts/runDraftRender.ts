@@ -15,6 +15,7 @@ import {
   loadDecisionsForDate,
   loadRecipientEmail,
   loadSequenceSteps,
+  recommitDraft,
 } from './draftRepository';
 import {
   planDecisionDraft,
@@ -106,6 +107,7 @@ function liveDeps(): DraftRenderDeps {
     // changes - to read the brand's published `voice` through `getCurrentRules`.
     resolveBrandVoice: async () => DEFAULT_BRAND_VOICE,
     commitDraft,
+    recommitDraft,
   };
 }
 

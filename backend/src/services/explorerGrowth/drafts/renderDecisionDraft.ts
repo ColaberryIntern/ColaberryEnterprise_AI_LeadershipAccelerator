@@ -83,6 +83,39 @@ export interface DraftRenderDeps {
    * itself forbids the partial commit rather than a comment asking for it.
    */
   commitDraft: (input: PersistDraftInput, decisionId: string) => Promise<string>;
+  /**
+   * Supersede the decision's current draft and write a new version, atomically.
+   *
+   * A separate dependency from `commitDraft` rather than a flag on it, because the two have
+   * different safety properties: this one also writes to an EXISTING row, and the status
+   * predicate that stops it touching the sender's queue lives in that UPDATE.
+   */
+  recommitDraft: (
+    input: PersistDraftInput,
+    decisionId: string,
+    previousScheduledEmailId: string,
+  ) => Promise<{ id: string; supersededId: string | null }>;
+}
+
+/** How this render differs from the nightly one. */
+export interface RenderOptions {
+  /**
+   * Regenerate over an existing draft rather than writing a first one.
+   *
+   * Carries the draft being replaced, so the write can supersede exactly that row rather
+   * than re-reading the decision and racing another regeneration.
+   */
+  regenerate?: {
+    previousScheduledEmailId: string;
+    /**
+     * What the operator asked for in this attempt, free text.
+     *
+     * Appended to the step's instructions rather than replacing them: a brief is a nudge
+     * ("shorter, lead with the cohort date"), not a new campaign. Replacing them would let
+     * one regeneration silently drop the asset digest and the knowledge block.
+     */
+     brief?: string;
+  };
 }
 
 /** A skip, phrased as an outcome so the batch never has to special-case it. */
@@ -206,14 +239,31 @@ export async function planDecisionDraft(
 export async function renderDecisionDraft(
   decision: DraftableDecision,
   deps: DraftRenderDeps,
+  options: RenderOptions = {},
 ): Promise<DraftOutcome> {
-  const plan = await planDecisionDraft(decision, deps);
+  const regenerate = options.regenerate;
+
+  // THE IDEMPOTENCY GUARD IS BYPASSED DELIBERATELY, AND NARROWLY. `draftSkipReason` returns
+  // `already_drafted` as soon as a decision carries a `scheduled_email_id`, which is exactly
+  // right for the nightly batch: without it, every run would re-draft every decision and
+  // spend model budget doing it. A regeneration is the opposite case - an operator asking
+  // for this one decision to be drafted again - so the planner is asked the question it was
+  // built for, "what would this decision draft if it had none", with the pointer that trips
+  // the guard removed. Nothing else about the decision is altered, so the step index still
+  // comes from `countPriorDrafted` and a regeneration cannot wander onto a different step.
+  const planFrom = regenerate ? { ...decision, scheduled_email_id: null } : decision;
+
+  const plan = await planDecisionDraft(planFrom, deps);
   if (!plan.ok) return skipped(decision, plan.reason);
   const { leadId, campaignId, stepIndex, step, toEmail, totalSteps } = plan;
 
+  const briefLine = regenerate?.brief?.trim()
+    ? `\n\nTHIS IS A REVISION. The reviewer asked for: ${regenerate.brief.trim()}`
+    : '';
+
   const instructions = `${step.ai_instructions ?? ''}${describeContentAssets(
     decision.selected_content_assets ?? [],
-  )}`;
+  )}${briefLine}`;
 
   let generated: GenerateMessageResult;
   let context: CompositeContext;
@@ -297,7 +347,7 @@ export async function renderDecisionDraft(
   const verdict = deps.validate(generated.body, context, 'email');
 
   const status = verdict.valid ? EXPLORER_DRAFT_STATUS : EXPLORER_DRAFT_REJECTED_STATUS;
-  const scheduledEmailId = await deps.commitDraft(
+  const persistInput: PersistDraftInput = (
     {
       lead_id: leadId,
       campaign_id: campaignId,
@@ -348,20 +398,33 @@ export async function renderDecisionDraft(
               published: brandVoice.rulesVersion > 0,
             }
           : null,
+        // Present only on a regeneration: which draft this replaced, and what the reviewer
+        // asked for. Stored so the history answers "why is version 3 different" without
+        // anyone having to remember, and so a brief that produced worse copy is auditable.
+        revision: regenerate
+          ? { of: regenerate.previousScheduledEmailId, brief: regenerate.brief?.trim() || null }
+          : null,
         model: generated.model,
         tokens_used: generated.tokens_used,
       },
-    },
-    decision.id,
+    }
   );
+
+  // Two writers, chosen by what this render IS rather than by a flag inside one of them:
+  // the first draft inserts, a regeneration also supersedes, and the status predicate that
+  // keeps the supersede away from the sender's queue lives in that second writer.
+  const written = regenerate
+    ? await deps.recommitDraft(persistInput, decision.id, regenerate.previousScheduledEmailId)
+    : { id: await deps.commitDraft(persistInput, decision.id), supersededId: null };
 
   return {
     decision_id: decision.id,
     enrollment_id: decision.enrollment_id,
     status: verdict.valid ? 'drafted' : 'rejected',
     reason: null,
-    scheduled_email_id: scheduledEmailId,
+    scheduled_email_id: written.id,
     step_index: stepIndex,
     issues: verdict.issues,
+    superseded_scheduled_email_id: written.supersededId,
   };
 }

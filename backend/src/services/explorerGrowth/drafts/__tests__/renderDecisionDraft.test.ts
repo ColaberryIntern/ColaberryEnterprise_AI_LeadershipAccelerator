@@ -93,11 +93,13 @@ function context(over: Record<string, any> = {}): any {
 interface Harness {
   deps: DraftRenderDeps;
   committed: Array<{ input: PersistDraftInput; decisionId: string }>;
+  recommitted: Array<{ input: PersistDraftInput; decisionId: string; previousId: string }>;
   generatedWith: any[];
 }
 
 function harness(over: Partial<DraftRenderDeps> = {}): Harness {
   const committed: Harness['committed'] = [];
+  const recommitted: Harness['recommitted'] = [];
   const generatedWith: any[] = [];
   const deps: DraftRenderDeps = {
     loadSequenceSteps: async () => [step(), step({ subject: 'Second' }), step({ subject: 'Third' })],
@@ -121,9 +123,13 @@ function harness(over: Partial<DraftRenderDeps> = {}): Harness {
       committed.push({ input, decisionId });
       return 'se-new';
     },
+    recommitDraft: async (input, decisionId, previousId) => {
+      recommitted.push({ input, decisionId, previousId });
+      return { id: 'se-v2', supersededId: previousId };
+    },
     ...over,
   };
-  return { deps, committed, generatedWith };
+  return { deps, committed, recommitted, generatedWith };
 }
 
 /** A grounding dep that offers one block and one citation, and records its query. */
@@ -391,6 +397,132 @@ describe('planDecisionDraft is the dry run, and it spends nothing', () => {
       ok: false,
       reason: 'no_recipient_email',
     });
+  });
+});
+
+describe('regeneration', () => {
+  /** A decision that already has a draft - the state that stops the nightly batch. */
+  const drafted = () => decision({ scheduled_email_id: 'se-v1' });
+
+  it('is skipped by the nightly path, which is what the guard is for', async () => {
+    const h = harness();
+    const out = await renderDecisionDraft(drafted(), h.deps);
+
+    expect(out.status).toBe('skipped');
+    expect(out.reason).toBe('already_drafted');
+    expect(h.generatedWith).toHaveLength(0);
+  });
+
+  it('bypasses that guard when asked, and generates', async () => {
+    const h = harness();
+    const out = await renderDecisionDraft(drafted(), h.deps, {
+      regenerate: { previousScheduledEmailId: 'se-v1' },
+    });
+
+    expect(out.status).toBe('drafted');
+    expect(h.generatedWith).toHaveLength(1);
+  });
+
+  it('supersedes exactly the draft it was given, and reports it', async () => {
+    const h = harness();
+    const out = await renderDecisionDraft(drafted(), h.deps, {
+      regenerate: { previousScheduledEmailId: 'se-v1' },
+    });
+
+    expect(h.recommitted).toHaveLength(1);
+    expect(h.recommitted[0].previousId).toBe('se-v1');
+    expect(h.committed).toHaveLength(0);
+    expect(out.scheduled_email_id).toBe('se-v2');
+    expect(out.superseded_scheduled_email_id).toBe('se-v1');
+  });
+
+  it('keeps the step index stable, so a revision cannot wander onto another step', async () => {
+    // The step comes from countPriorDrafted, which counts STRICTLY EARLIER decisions, so
+    // removing this decision's own pointer cannot change it.
+    const h = harness({ countPriorDrafted: async () => 1 });
+    const out = await renderDecisionDraft(drafted(), h.deps, {
+      regenerate: { previousScheduledEmailId: 'se-v1' },
+    });
+
+    expect(out.step_index).toBe(1);
+    expect(h.recommitted[0].input.step_index).toBe(1);
+  });
+
+  it('adds the reviewer brief WITHOUT dropping the step instructions or the assets', async () => {
+    const h = harness({ ground: groundingStub().ground });
+    await renderDecisionDraft(
+      decision({ scheduled_email_id: 'se-v1', selected_content_assets: [{ title: 'Week 3 lab' }] }),
+      h.deps,
+      { regenerate: { previousScheduledEmailId: 'se-v1', brief: 'shorter, lead with the date' } },
+    );
+
+    const sent = h.generatedWith[0].ai_instructions as string;
+    expect(sent).toContain('shorter, lead with the date');
+    // A brief is a nudge, not a new campaign. Replacing the instructions would silently
+    // drop the asset digest and the knowledge block.
+    expect(sent).toContain('General nurture for a learner who is not mid-lesson.');
+    expect(sent).toContain('Week 3 lab');
+    expect(sent).toContain('KNOWLEDGE BASE');
+  });
+
+  it('records the lineage and the brief on the new draft', async () => {
+    const h = harness();
+    await renderDecisionDraft(drafted(), h.deps, {
+      regenerate: { previousScheduledEmailId: 'se-v1', brief: '  tighten the opening  ' },
+    });
+
+    const meta = h.recommitted[0].input.metadata as any;
+    expect(meta.revision).toEqual({ of: 'se-v1', brief: 'tighten the opening' });
+  });
+
+  it('records a blank brief as null rather than an empty string', async () => {
+    const h = harness();
+    await renderDecisionDraft(drafted(), h.deps, {
+      regenerate: { previousScheduledEmailId: 'se-v1', brief: '   ' },
+    });
+
+    const meta = h.recommitted[0].input.metadata as any;
+    expect(meta.revision.brief).toBeNull();
+    // And an all-whitespace brief must not reach the prompt as a revision instruction.
+    expect(h.generatedWith[0].ai_instructions).not.toContain('THIS IS A REVISION');
+  });
+
+  it('leaves revision null on a first draft, and uses the inserting writer', async () => {
+    const h = harness();
+    await renderDecisionDraft(decision(), h.deps);
+
+    expect(h.committed).toHaveLength(1);
+    expect(h.recommitted).toHaveLength(0);
+    expect((h.committed[0].input.metadata as any).revision).toBeNull();
+    expect((await renderDecisionDraft(decision(), h.deps)).superseded_scheduled_email_id).toBeNull();
+  });
+
+  it('reports no supersede when the previous row no longer matched', async () => {
+    // A double-submitted regeneration: the first attempt already superseded that row, so
+    // the predicate matches nothing. `null` here must not be read as "the old draft is
+    // still current".
+    const h = harness({
+      recommitDraft: async () => ({ id: 'se-v3', supersededId: null }),
+    });
+
+    const out = await renderDecisionDraft(drafted(), h.deps, {
+      regenerate: { previousScheduledEmailId: 'se-v1' },
+    });
+
+    expect(out.scheduled_email_id).toBe('se-v3');
+    expect(out.superseded_scheduled_email_id).toBeNull();
+  });
+
+  it('still refuses to regenerate a decision that was never draftable', async () => {
+    // Bypassing `already_drafted` must not bypass the other walls.
+    const h = harness({ loadRecipientEmail: async () => null });
+    const out = await renderDecisionDraft(drafted(), h.deps, {
+      regenerate: { previousScheduledEmailId: 'se-v1' },
+    });
+
+    expect(out.status).toBe('skipped');
+    expect(out.reason).toBe('no_recipient_email');
+    expect(h.recommitted).toHaveLength(0);
   });
 });
 

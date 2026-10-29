@@ -145,7 +145,7 @@ ScheduledEmail.init(
       // correspondence; the two `explorer_draft*` values are Explorer journey drafts.
       // Only `pending` is ever claimed by the sender - see schedulerService's claim UPDATE.
       comment:
-        'pending | processing | sent | failed | cancelled | paused | agent_draft | explorer_draft | explorer_draft_rejected',
+        'pending | processing | sent | failed | cancelled | paused | agent_draft | explorer_draft | explorer_draft_rejected | explorer_draft_superseded',
     },
     processing_started_at: {
       type: DataTypes.DATE,
