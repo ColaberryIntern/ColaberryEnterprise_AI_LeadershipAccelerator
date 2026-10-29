@@ -134,11 +134,17 @@ describe('every role gets the badge its sections give it', () => {
     expect(badgeLevel(hq)).toBe('ALL-ACCESS BADGE');
   });
 
-  it('mentor: the Executive Floor partly (Dashboard and Portfolio Review), and My Domain on Program', () => {
+  it('mentor: the Executive Floor partly (Dashboard and Portfolio Review), and My Domain + Change Requests on Program', () => {
     const hq = hqFor('mentor');
     expect(hq.floors[0].access).toBe('some');
     expect(openLabels(hq.floors[0])).toEqual(['Dashboard', 'Portfolio Review']);
-    expect(openLabels(floorOf(hq.floors, 'Program'))).toEqual(['My Domain']);
+    // Both Program rooms a mentor can open carry `section: 'dashboard'` as an explicit override on
+    // the link rather than inheriting the group's 'program'. Those overrides exist because the
+    // people those two surfaces are FOR hold only 'dashboard' — AF8.3 found all six interns
+    // getting a 403 without it on 19 Oct. `dashboard` is the one section every mgmt role carries,
+    // so a mentor sees them too. Intended, and not the access control: Change Requests lets a
+    // mentor FILE one, while deciding is `requireAdmin` at the API (AF4.2).
+    expect(openLabels(floorOf(hq.floors, 'Program'))).toEqual(['My Domain', 'Change Requests']);
     expect(openFloors(hq).map((f) => f.label)).toEqual([EXECUTIVE_FLOOR_LABEL, 'Program']);
   });
 

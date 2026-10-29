@@ -126,6 +126,17 @@ const PATH_SECTION: Array<[string, SectionKey]> = [
   ['/api/admin/agent-domains-mine', 'dashboard'],
   ['/api/admin/agent-domains-provisioned', 'program'],
   ['/api/admin/agent-domains', 'program'],
+  // AF4.2 change requests, classified in the same change that mounts the router, for the reason
+  // the rows above give: this gate is deny-by-default, so an unmapped prefix reaches the final
+  // 403 with nothing explaining why. Same hyphen-sibling shape as the pair above.
+  //
+  // The `-mine` half is `dashboard` because it is self-scoped: the service resolves the caller
+  // from their verified token and 403s on a domain they do not own. The broader half is `program`
+  // for the audience that reads the ten domains — but note the DECIDE route additionally carries
+  // `requireAdmin`, because `dashboard` is the one section every mgmt role holds and approving a
+  // platform change is not something a mentor or a support rep should be able to do.
+  ['/api/admin/agent-domain-change-requests-mine', 'dashboard'],
+  ['/api/admin/agent-domain-change-requests', 'program'],
   // Agent Factory tab list (M2). Its OWN 'agents'-gated prefix so the Interns-hub Agents tab's data
   // agrees with its nav gate; reusing '-provisioned' ('program') would 403 a future 'agents'-only
   // builder who can see the tab. Distinct from the '-domains' prefixes (no '/'-boundary overlap), so

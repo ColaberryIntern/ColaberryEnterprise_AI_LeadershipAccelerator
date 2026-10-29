@@ -102,3 +102,79 @@ export async function setAgentDisplayName(
   );
   return data;
 }
+
+/**
+ * AF4.2 — change requests.
+ *
+ * Mirrors the limits in `backend/src/schemas/agentChangeRequestSchema.ts`, declared here rather
+ * than in the page so an input's `maxLength` and the server's `.max()` cannot drift into a control
+ * that accepts what the API will refuse.
+ */
+export const CHANGE_REQUEST_TITLE_MAX = 140;
+export const CHANGE_REQUEST_DESCRIPTION_MAX = 4000;
+export const DECLINED_REASON_MAX = 1000;
+
+/** Field-for-field the backend payload, snake_case, with no remapping layer. */
+export interface ChangeRequest {
+  id: string;
+  domain_key: string;
+  title: string;
+  description: string | null;
+  status: 'submitted' | 'approved' | 'declined' | 'withdrawn';
+  requested_by_identity: string;
+  requested_at: string | null;
+  approved_by_identity: string | null;
+  approved_at: string | null;
+  declined_reason: string | null;
+}
+
+/**
+ * File one against a domain you own. 403 if it is not yours, 400 if the body is unusable, and both
+ * carry a sentence worth showing verbatim through `errorMessage`.
+ */
+export async function fileChangeRequest(input: {
+  domain_key: string;
+  title: string;
+  description?: string;
+}): Promise<ChangeRequest> {
+  const { data } = await api.post('/api/admin/agent-domain-change-requests-mine', input);
+  return data;
+}
+
+/** Your own requests, across every domain you own. */
+export async function fetchMyChangeRequests(): Promise<ChangeRequest[]> {
+  const { data } = await api.get<{ change_requests: ChangeRequest[] }>(
+    '/api/admin/agent-domain-change-requests-mine',
+  );
+  return data.change_requests;
+}
+
+/** The whole queue. Admin-only at the API, so a non-admin caller gets a 403 here. */
+export async function fetchAllChangeRequests(
+  status?: ChangeRequest['status'],
+): Promise<ChangeRequest[]> {
+  const { data } = await api.get<{ change_requests: ChangeRequest[] }>(
+    '/api/admin/agent-domain-change-requests',
+    { params: status ? { status } : undefined },
+  );
+  return data.change_requests;
+}
+
+/**
+ * Approve or decline. The backend answers **409** when the decision itself is refused — the
+ * four-hour timer identity, self-approval, an already-decided request — and that is deliberately
+ * not a 403: the caller is authorized, this particular decision is not allowed to stand. The
+ * response carries the server's own sentence plus the rules, so `errorMessage` shows the person
+ * why rather than "request failed".
+ */
+export async function decideChangeRequest(
+  id: string,
+  decision: 'approved' | 'declined',
+  declinedReason?: string,
+): Promise<ChangeRequest> {
+  const { data } = await api.post(
+    `/api/admin/agent-domain-change-requests/${id}/decide`,
+    decision === 'declined' ? { decision, declined_reason: declinedReason } : { decision },
+  );
+  return data;
+}
