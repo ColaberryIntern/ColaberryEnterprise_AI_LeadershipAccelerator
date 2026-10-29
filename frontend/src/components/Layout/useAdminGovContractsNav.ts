@@ -30,7 +30,9 @@ export interface AdminGovNavEntry { key: string; label: string; to: string; }
  * Pure: map the admin gov-contract cards to nav sub-items. Only contracts with an actual build
  * (`deliveryProjectId`) get an item — an early-stage pursuit has no intern cockpit to open, so a
  * sub-item for it would 404. Each links to the admin read-only cockpit at
- * /admin/gov-contracts/:deliveryProjectId. Label falls back to the pursuit key when there is no title.
+ * /admin/internship/gov-contract/:deliveryProjectId (a child of /admin/internship, so it inherits the
+ * `internship` route gate; the backend endpoint is the real `gov_contracts` gate). Label falls back to
+ * the pursuit key when there is no title.
  */
 export function adminGovContractNavEntries(cards: GovContractCard[]): AdminGovNavEntry[] {
   return cards
@@ -38,6 +40,6 @@ export function adminGovContractNavEntries(cards: GovContractCard[]): AdminGovNa
     .map((c) => ({
       key: c.deliveryProjectId as string,
       label: c.title || c.key,
-      to: `/admin/gov-contracts/${c.deliveryProjectId}`,
+      to: `/admin/internship/gov-contract/${c.deliveryProjectId}`,
     }));
 }

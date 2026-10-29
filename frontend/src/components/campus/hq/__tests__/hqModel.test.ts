@@ -154,19 +154,19 @@ describe('every role gets the badge its sections give it', () => {
     expect(openFloors(hq)).toHaveLength(1);
   });
 
-  it('admissions: Lead Ingestion and AI Internship whole, plus Dashboard and My Domain', () => {
+  it('admissions: Lead Ingestion and Interns whole, plus Dashboard and My Domain', () => {
     const hq = hqFor('admissions');
     expect(floorOf(hq.floors, 'Lead Ingestion').access).toBe('all');
-    expect(floorOf(hq.floors, 'AI Internship').access).toBe('all');
+    expect(floorOf(hq.floors, 'Interns').access).toBe('all');
     expect(openLabels(hq.floors[0])).toEqual(['Dashboard']);
-    expect(openFloors(hq).map((f) => f.label)).toEqual([EXECUTIVE_FLOOR_LABEL, 'Lead Ingestion', 'AI Internship', 'Program']);
+    expect(openFloors(hq).map((f) => f.label)).toEqual([EXECUTIVE_FLOOR_LABEL, 'Lead Ingestion', 'Interns', 'Program']);
     expect(badgeLevel(hq)).toBe(`OPENS 4 OF ${hq.floors.length} FLOORS`);
   });
 
-  it('marketing (Sarbjit today, one role): Marketing, Brands, Campaigns; AI Internship stays locked until H4', () => {
+  it('marketing (Sarbjit today, one role): Marketing, Brands, Campaigns; Interns stays locked until H4', () => {
     const hq = hqFor('marketing');
     for (const l of ['Marketing', 'Brands', 'Campaigns']) expect(floorOf(hq.floors, l).access).toBe('all');
-    expect(floorOf(hq.floors, 'AI Internship').access).toBe('none');
+    expect(floorOf(hq.floors, 'Interns').access).toBe('none');
   });
 
   it('explorers and members: every staff floor is none, ground floor only, Staff only everywhere', () => {
@@ -238,7 +238,7 @@ describe('who is where in the building', () => {
 
   it('a sidebar page puts a person on its floor and at its door', () => {
     const placed = placePeople(hq, [kes, two]);
-    const num = floorOf(hq.floors, 'AI Internship').num;
+    const num = floorOf(hq.floors, 'Interns').num;
     expect(placed.byFloor.get(num)).toEqual([kes, two]);
     expect(placed.byRoom.get('/admin/internship')).toEqual([kes, two]);
     expect(placed.lobby).toEqual([]);
@@ -258,8 +258,8 @@ describe('who is where in the building', () => {
 
   it('places by the page even on a floor the viewer cannot open (where someone is is not access)', () => {
     const mentor = hqFor('mentor');
-    expect(floorOf(mentor.floors, 'AI Internship').access).toBe('none');
-    expect(placePeople(mentor, [kes]).byFloor.get(floorOf(mentor.floors, 'AI Internship').num)).toEqual([kes]);
+    expect(floorOf(mentor.floors, 'Interns').access).toBe('none');
+    expect(placePeople(mentor, [kes]).byFloor.get(floorOf(mentor.floors, 'Interns').num)).toEqual([kes]);
   });
 });
 
