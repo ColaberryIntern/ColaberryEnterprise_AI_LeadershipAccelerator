@@ -42,6 +42,7 @@
 
 import { QueryTypes } from 'sequelize';
 import { sequelize } from '../config/database';
+import { normalizeNameRows } from './ensureAgentDomainProjectSchema';
 
 export const REQUIRED_TABLES: ReadonlyArray<string> = ['agent_domain_change_requests'];
 
@@ -146,34 +147,57 @@ export async function ensureAgentDomainChangeRequestSchema(): Promise<void> {
  * broken in production for a day on exactly that. Mocked unit tests cannot see a column name;
  * `information_schema` can.
  */
+/**
+ * Read one column of names, using the shape that is PROVEN against this driver.
+ *
+ * Both halves of this matter, and the first version of this file got both wrong. It shipped, the
+ * DDL worked perfectly, and the assert still reported `missing table` against a table sitting
+ * right there in production:
+ *
+ *   1. **Named bind, not positional.** `ANY($names)` with `bind: { names }`. The original used
+ *      `ANY($1)` with `bind: [[...names]]` - a positional array whose single element is itself an
+ *      array - and it matched nothing.
+ *   2. **Rows come back as RAW ARRAYS for a single-column select**, so `rows.map(r => r.table_name)`
+ *      yields `undefined` even when the query is right. `normalizeNameRows` is imported rather than
+ *      reimplemented; its sibling learned this the same way and its comment says so.
+ *
+ * The unit tests did not catch it because they staged rows as `{ table_name: '...' }` objects,
+ * which this driver never returns here. **A mock that returns a shape the real driver does not
+ * produce tests the mock.** There is now a test that feeds the raw-array shape.
+ */
+async function readNames(sql: string, names: ReadonlyArray<string>): Promise<string[]> {
+  const rows = await sequelize.query(sql, {
+    bind: { names: names as string[] },
+    type: QueryTypes.SELECT,
+  });
+  return normalizeNameRows(rows);
+}
+
 export async function assertAgentDomainChangeRequestSchema(): Promise<void> {
   const problems: string[] = [];
 
-  const tables = await sequelize.query<{ table_name: string }>(
+  const tables = await readNames(
     `SELECT table_name FROM information_schema.tables
-      WHERE table_schema = 'public' AND table_name = ANY($1)`,
-    { type: QueryTypes.SELECT, bind: [[...REQUIRED_TABLES]] },
+      WHERE table_schema = 'public' AND table_name = ANY($names)`,
+    REQUIRED_TABLES,
   );
-  const haveTables = new Set(tables.map((r) => r.table_name));
-  for (const t of REQUIRED_TABLES) if (!haveTables.has(t)) problems.push(`missing table ${t}`);
+  for (const t of REQUIRED_TABLES) if (!tables.includes(t)) problems.push(`missing table ${t}`);
 
   // Only worth asking about columns if the table arrived; otherwise every column is "missing" and
   // the real finding drowns in ten lines of noise.
   if (problems.length === 0) {
-    const cols = await sequelize.query<{ ref: string }>(
-      `SELECT table_name || '.' || column_name AS ref FROM information_schema.columns
-        WHERE table_schema = 'public' AND table_name = ANY($1)`,
-      { type: QueryTypes.SELECT, bind: [[...REQUIRED_TABLES]] },
+    const cols = await readNames(
+      `SELECT table_name || '.' || column_name FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = ANY($names)`,
+      REQUIRED_TABLES,
     );
-    const haveCols = new Set(cols.map((r) => r.ref));
-    for (const c of REQUIRED_COLUMNS) if (!haveCols.has(c)) problems.push(`missing column ${c}`);
+    for (const c of REQUIRED_COLUMNS) if (!cols.includes(c)) problems.push(`missing column ${c}`);
 
-    const idx = await sequelize.query<{ indexname: string }>(
-      `SELECT indexname FROM pg_indexes WHERE schemaname = 'public' AND tablename = ANY($1)`,
-      { type: QueryTypes.SELECT, bind: [[...REQUIRED_TABLES]] },
+    const idx = await readNames(
+      `SELECT indexname FROM pg_indexes WHERE schemaname = 'public' AND tablename = ANY($names)`,
+      REQUIRED_TABLES,
     );
-    const haveIdx = new Set(idx.map((r) => r.indexname));
-    for (const i of REQUIRED_INDEXES) if (!haveIdx.has(i)) problems.push(`missing index ${i}`);
+    for (const i of REQUIRED_INDEXES) if (!idx.includes(i)) problems.push(`missing index ${i}`);
   }
 
   if (problems.length > 0) {
