@@ -122,9 +122,24 @@ describe('the boot registration is WRAPPED, because its assert throws', () => {
     // one. Asserting uniqueness was the fabrication; asserting membership plus a pinned roster is
     // what actually protects anything.
     expect(throwing).toContain('ensureAgentDomainProjectSchema.ts');
-    expect(throwing.sort()).toEqual(
-      ['ensureAgentDomainProjectSchema.ts', 'ensureBroadcastTelemetrySchema.ts'],
-    );
+    // AF4.2 added the third member, 2026-10-29. `ensureAgentDomainChangeRequestSchema.ts` asserts
+    // its post-condition against `information_schema` and raises SchemaInvariantViolation, for the
+    // reason this roster exists: its own `ensure` cannot fail, because `CREATE TABLE IF NOT EXISTS`
+    // is a no-op on an existing table and every statement error is warned rather than raised, so it
+    // resolves identically whether the DDL worked or did nothing at all.
+    //
+    // It is guarded the same way: `ensureAgentDomainChangeRequestSchemaGuarded` cannot reject, and
+    // `__tests__/ensureAgentDomainChangeRequestSchema.test.ts` drives that failure path over an
+    // Error, a string, null and undefined rather than grepping for a try/catch.
+    //
+    // THIS ROSTER IS THE POINT, so it is updated rather than loosened: a new throwing
+    // post-condition that nobody wrapped would otherwise reach `server.ts` and stop the port
+    // binding, and the pin is what forces a reviewer to look.
+    expect(throwing.sort()).toEqual([
+      'ensureAgentDomainChangeRequestSchema.ts',
+      'ensureAgentDomainProjectSchema.ts',
+      'ensureBroadcastTelemetrySchema.ts',
+    ]);
   });
 
   /**
