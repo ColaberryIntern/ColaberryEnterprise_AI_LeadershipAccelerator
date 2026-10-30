@@ -2,6 +2,7 @@ import { Lead } from '../../../models';
 import AdmissionsActionLog from '../../../models/AdmissionsActionLog';
 import AdmissionsMemory from '../../../models/AdmissionsMemory';
 import { getAvailableSlots, createBooking } from '../../calendarService';
+import { admissionsCalendar } from '../../calendarTarget';
 import { createAppointment } from '../../appointmentService';
 import { logAgentActivity } from '../../aiEventService';
 import type { AgentExecutionResult, AgentAction } from '../types';
@@ -43,7 +44,7 @@ export async function runAdmissionsAppointmentAgent(
 
     // If no slot specified, return available slots
     if (!slot_start) {
-      const availability = await getAvailableSlots(7);
+      const availability = await getAvailableSlots(7, admissionsCalendar()); // C90: the admissions calendar
       actions.push({
         campaign_id: '',
         action: 'slots_retrieved',
@@ -66,7 +67,7 @@ export async function runAdmissionsAppointmentAgent(
       phone: (lead as any).phone || '',
       slotStart: slot_start,
       timezone,
-    });
+    }, admissionsCalendar());
 
     // Create Appointment record
     await createAppointment({

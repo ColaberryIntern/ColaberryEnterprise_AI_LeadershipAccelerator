@@ -125,7 +125,13 @@ export function RoomScreen({ summary, name, planStep, onSection, onCard, onPlan,
     // always one of them, and the Enlarge button is the keyboard's toggle.
     <div className={big ? 'cm-r3-screen is-big' : 'cm-r3-screen'}
       ref={(el) => { (screenRef as React.MutableRefObject<HTMLDivElement | null>).current = el; screenEl?.(el); }}
-      onClick={onZoom ?? onSection}
+      onClick={(e) => {
+        // C86: a press on one of the board's own controls (a custom screen's "Order food", a row link) is that control's, never
+        // also "enlarge": Chow Hall's order button opened the sheet AND the enlarged board, which then covered the counter.
+        const hit = (e.target as HTMLElement).closest('button, a, [role="button"]');
+        if (hit && hit !== e.currentTarget) return;
+        (onZoom ?? onSection)();
+      }}
       data-testid={big ? 'cm-board-big' : 'cm-board'} role="group" aria-label={big ? 'The board, enlarged' : 'The board'}>
       <div className={custom ? 'inner is-custom' : 'inner'}>{body}</div>
       {onZoom && <EnlargeButton big={big} onZoom={onZoom} testId={big ? 'cm-board-restore' : 'cm-board-enlarge'} />}
