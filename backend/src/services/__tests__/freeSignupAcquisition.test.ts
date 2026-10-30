@@ -73,6 +73,8 @@ const acquisition = {
   entry_point_id: ENTRY_POINT_ID,
   utm_source: 'newsletter',
   utm_campaign: 'oct',
+  utm_content: '52708445138434',
+  utm_term: '52708443249434',
   page_url: 'https://cpn.example.com/ai',
   visitor_id: VISITOR_ID,
 };
@@ -175,7 +177,7 @@ describe('T204 — the schema agrees with the Lead model it writes', () => {
     return len;
   };
 
-  it.each(['source', 'form_type', 'utm_source', 'utm_campaign'])(
+  it.each(['source', 'form_type', 'utm_source', 'utm_campaign', 'utm_content', 'utm_term'])(
     '%s caps at exactly the width the column declares',
     (field) => {
       const width = stringWidth(field);
@@ -321,9 +323,15 @@ describe('T204 — acquisition evidence reaches the lead', () => {
     await createFreeAccount({ full_name: 'Maya', email: 'maya@example.com', programme: 'learner' });
 
     const d = leadDefaults();
-    for (const key of ['source_id', 'entry_point_id', 'utm_source', 'utm_campaign', 'page_url', 'visitor_id']) {
+    for (const key of ['source_id', 'entry_point_id', 'utm_source', 'utm_campaign', 'utm_content', 'utm_term', 'page_url', 'visitor_id']) {
       expect(d[key]).toBeNull();
     }
+  });
+
+  it('C94: which ad (utm_content) and which placement (utm_term) reach the lead row', async () => {
+    await createFreeAccount({ full_name: 'Maya', email: 'maya@example.com', programme: 'learner', acquisition });
+
+    expect(leadDefaults()).toMatchObject({ utm_content: '52708445138434', utm_term: '52708443249434' });
   });
 
   it('falls back to free_signup for source when none is supplied, keeping those rows excludable', async () => {

@@ -1,14 +1,18 @@
 /**
  * announcementWeek0 — the hand-authored, LOCKED Week 0 announcement content
- * ("Welcome to Your Free AI Preview"). Week 0 is the free lead-magnet tier; its
+ * ("Welcome to Your AI Preview"). Week 0 is the no-card-needed preview tier; its
  * copy is fixed marketing (approved by Ali 2026-07-19) and deliberately has NO
  * time budget, so it is stored here and LOCKED on the card (metadata.locked) so
  * it never auto-regenerates or drifts. Weeks 1+ instead generate live from
  * ANNOUNCEMENT_GENERATION_PROMPT. Applied by scripts/setupAnnouncementCards.ts.
+ *
+ * C95 (2026-10-30): the banned F-word is gone from every learner-visible line (TWC 807.172(d)); the house
+ * phrase is "no card needed". Apply to the live card with
+ * `node dist/scripts/setupAnnouncementCards.js --week0-only`.
  */
 export const ANNOUNCEMENT_WEEK0 = {
-  title: 'Welcome to Your Free AI Preview',
-  summary: "Your free week of AI is here. See everything you'll explore, meet your AI Mentor, and say hello to the community.",
+  title: 'Welcome to Your AI Preview',
+  summary: "Your AI preview week is here, no card needed. See everything you'll explore, meet your AI Mentor, and say hello to the community.",
   questions: [] as string[],
   reflection: '',
   body_html: `
@@ -40,9 +44,9 @@ export const ANNOUNCEMENT_WEEK0 = {
   .talk{background:#fff;border:1px dashed var(--teal);border-radius:14px;padding:16px;text-align:center}
   .talk h3{margin:0 0 6px;font-size:15px;color:var(--teal)} .talk p{margin:0;font-size:13px;color:var(--muted);line-height:1.55}
 </style>
-<div class="hero"><div class="wave">👋</div><h1>Welcome to Your Free AI Preview</h1><p>You just stepped into the world of AI, and this week is on us. Explore, get curious, and see what AI can really do for your work. 🎉</p></div>
-<div class="chips"><span class="chip">🆓 <span class="n">100% Free</span></span><span class="chip">♾️ <span class="n">Always fresh</span></span><span class="chip">🧭 <span class="n">Start here</span></span><span class="chip">🤖 <span class="n">AI Mentor included</span></span></div>
-<div class="band"><p class="eyebrow">🤝 Our promise</p><p>At Colaberry, we are <strong>dedicated to teaching and leading in AI</strong>. Every one of the basics, what AI is, how to talk to it, and where it helps, can be learned right here in this free preview.</p><p>No jargon. No pressure. Just a friendly, hands-on taste of the journey. 🌱</p></div>
+<div class="hero"><div class="wave">👋</div><h1>Welcome to Your AI Preview</h1><p>You just stepped into the world of AI, no card needed. Explore, get curious, and see what AI can really do for your work. 🎉</p></div>
+<div class="chips"><span class="chip">💳 <span class="n">No card needed</span></span><span class="chip">♾️ <span class="n">Always fresh</span></span><span class="chip">🧭 <span class="n">Start here</span></span><span class="chip">🤖 <span class="n">AI Mentor included</span></span></div>
+<div class="band"><p class="eyebrow">🤝 Our promise</p><p>At Colaberry, we are <strong>dedicated to teaching and leading in AI</strong>. Every one of the basics, what AI is, how to talk to it, and where it helps, can be learned right here in this preview.</p><p>No jargon. No pressure. Just a friendly, hands-on taste of the journey. 🌱</p></div>
 <p class="eyebrow">✨ What you'll explore</p>
 <div class="explore">
   <div class="item"><div class="ic">🎬</div><div><h3>Real stories</h3><p>Short testimonials from people who changed their careers with AI.</p></div></div>

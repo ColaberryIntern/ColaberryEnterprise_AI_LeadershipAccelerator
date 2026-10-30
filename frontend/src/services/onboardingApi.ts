@@ -1,6 +1,7 @@
 import portalApi from '../utils/portalApi';
 import { getParticipantToken } from '../utils/participantToken';
 import type { Band } from './bandLadder';
+import type { SignupAcquisitionFields } from './utmService';
 
 // Re-export the pure 5-band mirror so callers have one import surface for the
 // ladder. The pure module (bandLadder.ts) stays network-free for its unit test.
@@ -132,7 +133,7 @@ export async function freeSignup(
     phone?: string;
     /** Permission to call or text. Separate from `marketing_opt_in`, which is email only. */
     phone_consent?: boolean;
-  },
+  } & SignupAcquisitionFields,
 ): Promise<FreeSignupResult> {
   const { data } = await portalApi.post<FreeSignupResult>('/api/portal/free-signup', body);
   return data;
