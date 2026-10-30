@@ -1,5 +1,6 @@
 import { google } from 'googleapis';
 import { env } from '../config/env';
+import { admissionsCalendar, defaultCalendar, type CalendarTarget } from './calendarTarget';
 import { AppError } from '../utils/AppError';
 import { getTestOverrides } from './settingsService';
 import { redactForLogs } from '../utils/piiRedaction';
@@ -55,17 +56,18 @@ function getAuthClient() {
 }
 
 /**
- * Return a Calendar client using impersonated auth when googleCalendarOwnerEmail
- * is configured, otherwise plain service-account auth.
+ * Return a Calendar client using impersonated auth when the target has an owner
+ * (googleCalendarOwnerEmail for the default calendar), otherwise plain service-account auth.
  * This ensures getAvailableSlots and createBooking see the same calendar.
+ * C90: every call below takes a CalendarTarget (calendarTarget.ts); admissions passes its own.
  */
-function getCalendarClient() {
-  if (env.googleCalendarOwnerEmail) {
+function getCalendarClient(ownerEmail: string | null = defaultCalendar().ownerEmail) {
+  if (ownerEmail) {
     const impersonateAuth = new google.auth.JWT({
       email: env.googleServiceAccountEmail,
       key: env.googlePrivateKey,
       scopes: ['https://www.googleapis.com/auth/calendar'],
-      subject: env.googleCalendarOwnerEmail,
+      subject: ownerEmail,
     });
     return google.calendar({ version: 'v3', auth: impersonateAuth });
   }
@@ -118,8 +120,8 @@ function slotsOverlap(slot: TimeSlot, busyStart: string, busyEnd: string): boole
   return slotStartMs < bufferedBusyEndMs && slotEndMs > bufferedBusyStartMs;
 }
 
-export async function getAvailableSlots(days: number = 21): Promise<AvailabilityResponse> {
-  const calendar = getCalendarClient();
+export async function getAvailableSlots(days: number = 21, target: CalendarTarget = defaultCalendar()): Promise<AvailabilityResponse> {
+  const calendar = getCalendarClient(target.ownerEmail);
 
   const now = new Date();
   // Allow same-day bookings with 4-hour buffer
@@ -134,7 +136,7 @@ export async function getAvailableSlots(days: number = 21): Promise<Availability
   // from timed events. All-day events (start.date) should NOT block time slots.
   // If the calendar API fails, propagate the error so callers know availability
   // could not be verified (fail-closed).
-  const busyBlocks = await getTimedBusyBlocks(calendar, startDate, endDate);
+  const busyBlocks = await getTimedBusyBlocks(calendar, startDate, endDate, target.calendarId);
 
   // Generate available slots per day
   const dates: DateSlots[] = [];
@@ -176,6 +178,7 @@ async function getTimedBusyBlocks(
   calendar: ReturnType<typeof google.calendar>,
   timeMin: Date,
   timeMax: Date,
+  calendarId: string,
 ): Promise<{ start: string; end: string }[]> {
   const MAX_MEETING_MS = 24 * 60 * 60 * 1000; // 24 hours
   const blocks: { start: string; end: string }[] = [];
@@ -184,7 +187,7 @@ async function getTimedBusyBlocks(
   try {
     do {
       const res = await calendar.events.list({
-        calendarId: env.googleCalendarId,
+        calendarId,
         timeMin: timeMin.toISOString(),
         timeMax: timeMax.toISOString(),
         singleEvents: true,
@@ -222,16 +225,16 @@ async function getTimedBusyBlocks(
   return blocks;
 }
 
-export async function createBooking(data: BookingInput): Promise<BookingResult> {
-  const calendar = getCalendarClient();
+export async function createBooking(data: BookingInput, target: CalendarTarget = defaultCalendar()): Promise<BookingResult> {
+  const calendar = getCalendarClient(target.ownerEmail);
 
   const startTime = new Date(data.slotStart);
   const endTime = new Date(startTime.getTime() + SLOT_DURATION_MINUTES * 60 * 1000);
 
-  console.log(`[Calendar] createBooking: ${redactForLogs(data.name)} | ${startTime.toISOString()} - ${endTime.toISOString()} | calendarId: ${env.googleCalendarId} | impersonating: ${env.googleCalendarOwnerEmail || 'none'}`);
+  console.log(`[Calendar] createBooking: ${redactForLogs(data.name)} | ${startTime.toISOString()} - ${endTime.toISOString()} | ${target.kind} calendar: ${target.calendarId} | impersonating: ${target.ownerEmail || 'none'}`);
 
   // Pre-booking conflict check: verify the slot is still free (ignoring all-day events)
-  const conflicts = await getTimedBusyBlocks(calendar, startTime, endTime);
+  const conflicts = await getTimedBusyBlocks(calendar, startTime, endTime, target.calendarId);
   if (conflicts.length > 0) {
     console.warn(`[Calendar] Conflict detected for ${startTime.toISOString()} - ${endTime.toISOString()}:`, JSON.stringify(conflicts));
     throw new AppError('This time slot is no longer available. Please select a different time.', 409);
@@ -271,11 +274,14 @@ export async function createBooking(data: BookingInput): Promise<BookingResult> 
     },
     attendees: [
       { email: attendeeEmail, displayName: data.name },
-      ...(env.googleCalendarOwnerEmail ? [{ email: env.googleCalendarOwnerEmail }] : []),
-      { email: 'ali@colaberry.com' },
-      { email: 'ram@colaberry.com' },
-      // Only add David Lahme for utility page bookings
-      ...((data.pageOrigin || '').includes('utility') ? [{ email: 'dlahme@colaberry.com' }] : []),
+      ...(target.ownerEmail ? [{ email: target.ownerEmail }] : []),
+      // C90: the fixed staff invites belong to the strategy-call calendar only; an admissions call is the attendee and admissions
+      ...(target.kind === 'default' ? [
+        { email: 'ali@colaberry.com' },
+        { email: 'ram@colaberry.com' },
+        // Only add David Lahme for utility page bookings
+        ...((data.pageOrigin || '').includes('utility') ? [{ email: 'dlahme@colaberry.com' }] : []),
+      ] : []),
     ],
     reminders: {
       useDefault: false,
@@ -292,7 +298,7 @@ export async function createBooking(data: BookingInput): Promise<BookingResult> 
   let event;
   try {
     event = await calendar.events.insert({
-      calendarId: env.googleCalendarId,
+      calendarId: target.calendarId,
       conferenceDataVersion: 1,
       sendNotifications: true,
       requestBody: {
@@ -309,7 +315,7 @@ export async function createBooking(data: BookingInput): Promise<BookingResult> 
   } catch (meetErr: any) {
     console.warn('[Calendar] Meet link creation failed, creating event without conference:', meetErr.message);
     event = await calendar.events.insert({
-      calendarId: env.googleCalendarId,
+      calendarId: target.calendarId,
       sendNotifications: true,
       requestBody: baseRequest,
     });
@@ -363,10 +369,10 @@ function toCampusEvent(e: { id?: string | null; start?: { dateTime?: string | nu
 }
 
 /** Upcoming (not cancelled) events carrying a private property, oldest first. */
-export async function findEventsByPrivateProperty(key: string, value: string, timeMin: Date): Promise<CampusCalendarEvent[]> {
-  const calendar = getCalendarClient();
+export async function findEventsByPrivateProperty(key: string, value: string, timeMin: Date, target: CalendarTarget = defaultCalendar()): Promise<CampusCalendarEvent[]> {
+  const calendar = getCalendarClient(target.ownerEmail);
   const res = await calendar.events.list({
-    calendarId: env.googleCalendarId,
+    calendarId: target.calendarId,
     privateExtendedProperty: [`${key}=${value}`],
     timeMin: timeMin.toISOString(),
     singleEvents: true,
@@ -377,8 +383,8 @@ export async function findEventsByPrivateProperty(key: string, value: string, ti
 }
 
 /** True when no timed event overlaps [start, end) (all-day, free and cancelled events ignored, as createBooking). */
-export async function isSlotFree(start: Date, end: Date): Promise<boolean> {
-  return (await getTimedBusyBlocks(getCalendarClient(), start, end)).length === 0;
+export async function isSlotFree(start: Date, end: Date, target: CalendarTarget = defaultCalendar()): Promise<boolean> {
+  return (await getTimedBusyBlocks(getCalendarClient(target.ownerEmail), start, end, target.calendarId)).length === 0;
 }
 
 export interface CampusEventInput {
@@ -392,8 +398,8 @@ export interface CampusEventInput {
 }
 
 /** Insert a 30-minute event with a Meet link (plain event if Meet creation fails), invites sent. */
-export async function insertCampusEvent(input: CampusEventInput): Promise<CampusCalendarEvent> {
-  const calendar = getCalendarClient();
+export async function insertCampusEvent(input: CampusEventInput, target: CalendarTarget = defaultCalendar()): Promise<CampusCalendarEvent> {
+  const calendar = getCalendarClient(target.ownerEmail);
   const end = new Date(input.slotStart.getTime() + SLOT_DURATION_MINUTES * 60 * 1000);
   const base = {
     summary: input.summary,
@@ -406,22 +412,22 @@ export async function insertCampusEvent(input: CampusEventInput): Promise<Campus
   };
   try {
     const ev = await calendar.events.insert({
-      calendarId: env.googleCalendarId, conferenceDataVersion: 1, sendUpdates: 'all',
+      calendarId: target.calendarId, conferenceDataVersion: 1, sendUpdates: 'all',
       requestBody: { ...base, conferenceData: { createRequest: { requestId: input.requestId, conferenceSolutionKey: { type: 'hangoutsMeet' } } } },
     }, { timeout: CAMPUS_CALENDAR_TIMEOUT_MS });
     return toCampusEvent(ev.data);
   } catch (meetErr: any) {
     console.warn('[Calendar] campus event: Meet link creation failed, creating without conference:', meetErr?.message);
-    const ev = await calendar.events.insert({ calendarId: env.googleCalendarId, sendUpdates: 'all', requestBody: base }, { timeout: CAMPUS_CALENDAR_TIMEOUT_MS });
+    const ev = await calendar.events.insert({ calendarId: target.calendarId, sendUpdates: 'all', requestBody: base }, { timeout: CAMPUS_CALENDAR_TIMEOUT_MS });
     return toCampusEvent(ev.data);
   }
 }
 
 /** Cancel (delete) an event and notify its attendees. A 404/410 means it is already gone, which is the goal. */
-export async function cancelCalendarEvent(eventId: string): Promise<void> {
-  const calendar = getCalendarClient();
+export async function cancelCalendarEvent(eventId: string, target: CalendarTarget = defaultCalendar()): Promise<void> {
+  const calendar = getCalendarClient(target.ownerEmail);
   try {
-    await calendar.events.delete({ calendarId: env.googleCalendarId, eventId, sendUpdates: 'all' }, { timeout: CAMPUS_CALENDAR_TIMEOUT_MS });
+    await calendar.events.delete({ calendarId: target.calendarId, eventId, sendUpdates: 'all' }, { timeout: CAMPUS_CALENDAR_TIMEOUT_MS });
   } catch (err: any) {
     const code = err?.code ?? err?.status;
     if (code === 404 || code === 410) return;
@@ -429,17 +435,22 @@ export async function cancelCalendarEvent(eventId: string): Promise<void> {
   }
 }
 
-export async function updateCalendarEvent(eventId: string, description: string): Promise<void> {
+/**
+ * Write prep notes into a booked call's description. C90: calls are booked on the bookings calendar (Roselen), so it is tried
+ * first; a call booked before the switch lives on the default calendar, so a 404/410 there falls back to it (the previous
+ * behavior). Never throws: prep notes are best-effort and logged on failure.
+ */
+export async function updateCalendarEvent(eventId: string, description: string, target: CalendarTarget = admissionsCalendar()): Promise<void> {
+  const patch = (calendar: ReturnType<typeof google.calendar>, calendarId: string) =>
+    calendar.events.patch({ calendarId, eventId, requestBody: { description } });
   try {
-    const auth = getAuthClient();
-    const calendar = google.calendar({ version: 'v3', auth });
-
-    await calendar.events.patch({
-      calendarId: env.googleCalendarId,
-      eventId,
-      requestBody: { description },
-    });
-
+    try {
+      await patch(getCalendarClient(target.ownerEmail), target.calendarId);
+    } catch (err: any) {
+      const code = err?.code ?? err?.status;
+      if (target.kind === 'default' || (code !== 404 && code !== 410)) throw err;
+      await patch(google.calendar({ version: 'v3', auth: getAuthClient() }), env.googleCalendarId);
+    }
     console.log('[Calendar] Updated event description:', eventId);
   } catch (err: any) {
     console.error('[Calendar] Failed to update event:', eventId, err.message);
