@@ -63,6 +63,17 @@ function app() {
 
 const auth = (r: request.Test) => r.set('Authorization', `Bearer ${token()}`);
 
+/**
+ * A mutable alias onto the mocked flags.
+ *
+ * `ExplorerGrowthFlags` declares its fields `readonly` and `resolveExplorerGrowthFlags`
+ * freezes the object, so assigning to `env.explorerGrowth.growthOsEnabled` directly is a
+ * TS2540. ts-jest transpiles without type checking, so that error is invisible to a local
+ * run and only the test-file typecheck catches it. The sibling
+ * `explorerGrowthRoutes.access.test.ts` takes the same alias for the same reason.
+ */
+const flags = env.explorerGrowth as { growthOsEnabled: boolean; draftRenderEnabled: boolean };
+
 function storedResult(over: Record<string, unknown> = {}) {
   return {
     status: 'stored',
@@ -78,7 +89,7 @@ function storedResult(over: Record<string, unknown> = {}) {
 
 beforeEach(() => {
   ingest.ingestKnowledgeDocument.mockReset();
-  env.explorerGrowth.growthOsEnabled = false;
+  flags.growthOsEnabled = false;
 });
 
 describe('the router makes exactly one claim', () => {
@@ -135,7 +146,7 @@ describe('the guard', () => {
   });
 
   it('403s an authenticated NON-admin', async () => {
-    env.explorerGrowth.growthOsEnabled = true;
+    flags.growthOsEnabled = true;
 
     const res = await request(app())
       .post(UPLOAD)
@@ -187,7 +198,7 @@ describe('the feature gate', () => {
 
 describe('the upload', () => {
   beforeEach(() => {
-    env.explorerGrowth.growthOsEnabled = true;
+    flags.growthOsEnabled = true;
   });
 
   it('400s when no file was attached', async () => {
