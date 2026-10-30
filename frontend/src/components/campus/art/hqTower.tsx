@@ -1,12 +1,12 @@
 import React from 'react';
 import { art } from './artColor';
-import { isNight } from '../hq/HqOutside';
+import { TOWER_BAND } from '../hq/HqOutside';
 
 /**
  * C83: the career building on the map is the Colaberry Tower, the same building the HQ scene draws when you open it (Ali,
  * 2026-10-28: "It should not be two different buildings"). HqOutside's tower at map size: brass spire, the red C crown, the
- * PH band, banded floors with gold windows, the navy COLABERRY base and its brass door. Day and night follow the tower
- * scene's rule (isNight), so both pictures agree at the same hour. Same footprint as the office sprite it replaces, y = 0 is
+ * PH band, banded floors with gold windows, the navy COLABERRY base and its brass door. C89 (Ali, 2026-10-29: "bring the
+ * blue back"): the bands are navy at every hour, as in the tower scene, so the building never turns cream by day. Same footprint as the office sprite it replaces, y = 0 is
  * the ground line, so the label, badges and pins do not move.
  */
 const BANDS = 10;
@@ -15,9 +15,9 @@ const BASE_H = 26;
 const CROWN_H = 16;
 const PH_H = 8;
 
-export function HqTowerArt({ w, h, hour = new Date().getHours() }: { w: number; h: number; hour?: number }): React.ReactElement {
+export function HqTowerArt({ w, h }: { w: number; h: number }): React.ReactElement {
   const hw = w / 2;
-  const band = art(isNight(hour) ? 'hq-band-night' : 'hq-band');
+  const band = art(TOWER_BAND);
   const crownY = -h + 4;
   const phY = crownY + CROWN_H;
   const floorsY = phY + PH_H;

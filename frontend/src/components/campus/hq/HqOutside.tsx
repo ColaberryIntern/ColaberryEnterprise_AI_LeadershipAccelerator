@@ -15,6 +15,9 @@ const BASE_H = 120;
 const TOP = 170;
 
 export function isNight(hour: number): boolean { return hour >= 19 || hour < 6; }
+/** C89 (Ali, 2026-10-29: "bring the blue back"): the tower's bands are navy at every hour (they were cream by day). The map
+ *  tower (art/hqTower.tsx) uses the same token, so the two pictures always match. Night still dims the locked windows. */
+export const TOWER_BAND = 'hq-band-night';
 
 export function HqOutside({ s, face, hour, people }: { s: HqState; face: string; hour: number; people: Map<string, HqPerson[]> }): React.ReactElement {
   const { hq } = s;
@@ -27,7 +30,7 @@ export function HqOutside({ s, face, hour, people }: { s: HqState; face: string;
     <div className={`cm-hq-ext${night ? ' is-night' : ''}`} data-testid="cm-hq-ext">
       <svg viewBox={`-20 0 ${W + 120} ${by + BASE_H}`} role="img" aria-label={`Colaberry Tower, ${n} floors`} onMouseLeave={() => setTip(null)}>
         <polygon points={`${W / 2 + 40},10 ${W / 2 + 60},${TOP - 60} ${W / 2 + 20},${TOP - 60}`} fill={art('hq-brass')} />
-        <rect x={W / 2 - 10} y={TOP - 60} width={100} height={60} fill={art(night ? 'hq-band-night' : 'hq-band')} stroke={art('hq-brass')} />
+        <rect x={W / 2 - 10} y={TOP - 60} width={100} height={60} fill={art(TOWER_BAND)} stroke={art('hq-brass')} />
         <circle cx={W / 2 + 40} cy={TOP - 30} r={18} fill={art('red')} />
         <text x={W / 2 + 40} y={TOP - 24} textAnchor="middle" className="cm-hq-serif" fontSize={18} fontWeight={800} fill={art('cloud')}>C</text>
         {hq.floors.map((f, i) => {
@@ -40,7 +43,7 @@ export function HqOutside({ s, face, hour, people }: { s: HqState; face: string;
             <g key={f.key} className="cm-hq-band" data-testid={`cm-hq-band-${f.num}`} data-lit={on ? '1' : '0'}
               onMouseMove={(e) => { const r = (e.currentTarget.ownerSVGElement as SVGSVGElement).getBoundingClientRect(); setTip({ f, x: e.clientX - r.left, y: e.clientY - r.top }); }}
               onClick={() => (on ? s.ride(f.num) : s.locked(f))}>
-              <rect x={x} y={y} width={w} height={BAND_H} fill={art(night ? 'hq-band-night' : 'hq-band')} stroke={art('hq-brass')} strokeWidth={1} />
+              <rect x={x} y={y} width={w} height={BAND_H} fill={art(TOWER_BAND)} stroke={art('hq-brass')} strokeWidth={1} />
               {Array.from({ length: 10 }, (_v, j) => (
                 <rect key={j} x={x + 14 + j * ((w - 28) / 10)} y={y + 8} width={(w - 28) / 10 - 8} height={BAND_H - 16} rx={2}
                   fill={art(on ? 'hq-win' : night ? 'hq-win-night' : 'hq-win-off')} opacity={on && (i + j) % 4 === 0 ? 0.75 : 1} />
