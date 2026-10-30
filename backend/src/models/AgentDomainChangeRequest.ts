@@ -1,6 +1,7 @@
 import { DataTypes, Model } from 'sequelize';
 import { sequelize } from '../config/database';
 import type { AgentChangeRequestStatus } from '../services/agentDomain/agentChangeRequest';
+import type { ChangeRequestKind } from '../db/ensureAgentDomainChangeRequestSchema';
 
 /**
  * AgentDomainChangeRequest — AF4.2. An intern's request to change the platform, and who decided it.
@@ -35,6 +36,8 @@ import type { AgentChangeRequestStatus } from '../services/agentDomain/agentChan
  */
 export interface AgentDomainChangeRequestAttributes {
   id?: string;
+  /** What is being asked for: `change` (AF4.2) or `tool` (AF7.1). Defaults to `change`. */
+  kind?: ChangeRequestKind;
   domain_key: string;
   title: string;
   description?: string | null;
@@ -51,6 +54,7 @@ export interface AgentDomainChangeRequestAttributes {
 class AgentDomainChangeRequest extends Model<AgentDomainChangeRequestAttributes>
   implements AgentDomainChangeRequestAttributes {
   declare id: string;
+  declare kind: ChangeRequestKind;
   declare domain_key: string;
   declare title: string;
   declare description: string | null;
@@ -67,6 +71,7 @@ class AgentDomainChangeRequest extends Model<AgentDomainChangeRequestAttributes>
 AgentDomainChangeRequest.init(
   {
     id: { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true },
+    kind: { type: DataTypes.TEXT, allowNull: false, defaultValue: 'change' },
     domain_key: { type: DataTypes.TEXT, allowNull: false },
     title: { type: DataTypes.TEXT, allowNull: false },
     description: { type: DataTypes.TEXT, allowNull: true },
@@ -86,6 +91,7 @@ AgentDomainChangeRequest.init(
     indexes: [
       { fields: ['domain_key'] },
       { fields: ['status'] },
+      { fields: ['kind'] },
       { fields: ['requested_by_identity'] },
     ],
   },

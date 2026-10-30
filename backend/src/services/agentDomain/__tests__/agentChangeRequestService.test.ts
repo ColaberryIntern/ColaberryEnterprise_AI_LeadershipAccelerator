@@ -354,3 +354,72 @@ describe('listing', () => {
     expect(mockFindAll).not.toHaveBeenCalled();
   });
 });
+
+describe('AF7.1: tool requests ride the same governance spine', () => {
+  it('stores `change` when no kind is given, so every AF4.2 caller keeps its meaning', async () => {
+    recorded();
+    await fileChangeRequest({
+      sequelize: fakeSequelize(), email: INTERN, domainKey: 'platform-automation', title: 'Something',
+    });
+    expect(mockCreate).toHaveBeenCalledWith(expect.objectContaining({ kind: 'change' }));
+  });
+
+  it('stores `tool` when asked for one', async () => {
+    recorded();
+    const out = await fileChangeRequest({
+      sequelize: fakeSequelize(), email: INTERN, kind: 'tool',
+      domainKey: 'platform-automation', title: 'Read the cron registry',
+    });
+    expect(mockCreate).toHaveBeenCalledWith(expect.objectContaining({ kind: 'tool' }));
+    expect(out.kind).toBe('tool');
+  });
+
+  it('A TOOL REQUEST IS NOT A GRANT. Filing one changes no agent and grants nothing', async () => {
+    // The whole safety property of routing tools through this spine: the row is a request. The
+    // grant is a separate, later, human act. Nothing here touches an agent.
+    recorded();
+    await fileChangeRequest({
+      sequelize: fakeSequelize(), email: INTERN, kind: 'tool',
+      domainKey: 'platform-automation', title: 'Read the cron registry',
+    });
+    const written = JSON.stringify(mockCreate.mock.calls);
+    expect(written).not.toContain('tools_granted');
+    expect(written).not.toContain('autonomy');
+    expect(written).toContain('"status":"submitted"');
+  });
+
+  it('a tool request still refuses the four-hour timer as its decider', async () => {
+    recorded();
+    const row = fakeRow({ kind: 'tool' });
+    mockFindByPk.mockResolvedValue(row);
+    await expect(decideChangeRequest({
+      sequelize: fakeSequelize(), email: TIMER, id: 'cr-1', decision: 'approved',
+    })).rejects.toBeInstanceOf(ChangeRequestRefusedError);
+    expect(row.update).not.toHaveBeenCalled();
+  });
+
+  it("filters the intern's own list by kind when asked, and does not when not", async () => {
+    recorded();
+    mockFindAll.mockResolvedValue([]);
+    await listMyChangeRequests(fakeSequelize(), INTERN, 'tool');
+    expect((mockFindAll.mock.calls[0][0] as { where: Record<string, unknown> }).where)
+      .toEqual({ requested_by_identity: INTERN, kind: 'tool' });
+
+    mockFindAll.mockClear();
+    await listMyChangeRequests(fakeSequelize(), INTERN);
+    expect((mockFindAll.mock.calls[0][0] as { where: Record<string, unknown> }).where)
+      .toEqual({ requested_by_identity: INTERN });
+  });
+
+  it('projects kind back, defaulting a pre-AF7.1 row with no kind to change', async () => {
+    // Rows written before the column existed come back with it undefined, not with a wrong value.
+    recorded();
+    const row = fakeRow();
+    delete (row as Record<string, unknown>).kind;
+    mockFindByPk.mockResolvedValue(row);
+    const out = await decideChangeRequest({
+      sequelize: fakeSequelize(), email: ALI, id: 'cr-1', decision: 'approved',
+    });
+    expect(out.kind).toBe('change');
+  });
+});

@@ -47,6 +47,12 @@ const IdParamSchema = z.object({ id: z.string().uuid('Not a change request id.')
 
 const ListQuerySchema = z.object({
   status: z.enum(['submitted', 'approved', 'declined', 'withdrawn']).optional(),
+  kind: z.enum(['change', 'tool']).optional(),
+}).strict();
+
+/** The intern's own list takes the same filter, so one surface can show either. */
+const MineQuerySchema = z.object({
+  kind: z.enum(['change', 'tool']).optional(),
 }).strict();
 
 /** One structured line per attempt, success or failure. No bodies, no stacks. */
@@ -140,6 +146,7 @@ export async function handleFileChangeRequest(req: Request, res: Response): Prom
     const created = await fileChangeRequest({
       sequelize,
       email: actorEmail,
+      kind: body.kind,
       domainKey: body.domain_key,
       title: body.title,
       description: body.description ?? null,
@@ -147,7 +154,10 @@ export async function handleFileChangeRequest(req: Request, res: Response): Prom
     log({
       level: 'info', outcome: 'success', duration_ms: Date.now() - startedAt,
       actor_email: actorEmail,
-      context: { action: 'file', change_request_id: created.id, domain_key: created.domain_key },
+      context: {
+        action: 'file', change_request_id: created.id,
+        domain_key: created.domain_key, kind: created.kind,
+      },
     });
     res.status(201).json(created);
   } catch (err: unknown) {
@@ -184,7 +194,8 @@ export async function handleListMyChangeRequests(req: Request, res: Response): P
   const startedAt = Date.now();
   const actorEmail = actorOf(req);
   try {
-    const rows = await listMyChangeRequests(sequelize, actorEmail);
+    const { kind } = MineQuerySchema.parse(req.query);
+    const rows = await listMyChangeRequests(sequelize, actorEmail, kind);
     res.json({ change_requests: rows });
   } catch (err: unknown) {
     respondToError(err, res, { actorEmail, action: 'list_mine', duration: Date.now() - startedAt });
@@ -195,8 +206,10 @@ export async function handleListAllChangeRequests(req: Request, res: Response): 
   const startedAt = Date.now();
   const actorEmail = actorOf(req);
   try {
-    const { status } = ListQuerySchema.parse(req.query);
-    const rows = await listAllChangeRequests(sequelize, status as AgentChangeRequestStatus | undefined);
+    const { status, kind } = ListQuerySchema.parse(req.query);
+    const rows = await listAllChangeRequests(
+      sequelize, status as AgentChangeRequestStatus | undefined, kind,
+    );
     res.json({ change_requests: rows });
   } catch (err: unknown) {
     respondToError(err, res, { actorEmail, action: 'list_all', duration: Date.now() - startedAt });
