@@ -1,6 +1,6 @@
 import {
   PLANS, planChargeAmount, isSubscriptionRef, isNonPayingCohortName, getSubscription, startCheckout, activateByRef, cancelSubscription, confirmCheckout,
-  billingAnchorMs, periodEndMs,
+  billingAnchorMs, periodEndMs, anniversaryDayOfMonth,
   grantFreeAccess, revokeFreeAccess, activeCompEnrollmentIds,
 } from '../subscriptionService';
 import { Enrollment, Cohort, Subscription, AccountCredit } from '../../models';
@@ -173,18 +173,25 @@ describe('subscriptionService', () => {
   });
 
   describe('billing anchor', () => {
-    it('anchors an early payment on the class start date', () => {
-      // NOW is July 15 — class starts July 23, so the period starts July 23.
-      expect(billingAnchorMs(NOW, '2026-07-23')).toBe(Date.UTC(2026, 6, 23));
+    // The rule, in the owner's words on 2026-10-30: "If they started on the 3rd,
+    // then that lasts them to next month on the 3rd, or next year on the 3rd for
+    // yearly." Enrollment is rolling, so the anniversary is the signup date and
+    // nothing else moves it.
+    it('anchors on the signup date even when a class starts later', () => {
+      // NOW is July 15, class starts July 23. This USED to return July 23, which
+      // is the behavior rolling enrollment retired.
+      expect(billingAnchorMs(NOW, '2026-07-23')).toBe(NOW);
     });
-    it('anchors on payment time once class has started', () => {
+    it('anchors on the signup date once class has started', () => {
       expect(billingAnchorMs(NOW, '2026-07-01')).toBe(NOW);
-      expect(billingAnchorMs(NOW, '2026-07-15')).toBe(NOW); // class day, later that day
+      expect(billingAnchorMs(NOW, '2026-07-15')).toBe(NOW);
     });
-    it('falls back to payment time without a valid class date', () => {
-      expect(billingAnchorMs(NOW, null)).toBe(NOW);
-      expect(billingAnchorMs(NOW, undefined)).toBe(NOW);
-      expect(billingAnchorMs(NOW, 'not-a-date')).toBe(NOW);
+    it('ignores the class date entirely, so the answer cannot vary by cohort', () => {
+      // The defect this closes: two people paying the same afternoon used to get
+      // different renewal dates depending on which cohort their enrollment landed in.
+      for (const cohortStart of [null, undefined, 'not-a-date', '2026-01-01', '2027-12-31']) {
+        expect(billingAnchorMs(NOW, cohortStart as string | null)).toBe(NOW);
+      }
     });
     it('computes period end as +1 calendar month/year with end-of-month clamping', () => {
       expect(periodEndMs(Date.UTC(2026, 6, 23), 'month')).toBe(Date.UTC(2026, 7, 23));  // 7/23 → 8/23
@@ -192,6 +199,37 @@ describe('subscriptionService', () => {
       expect(periodEndMs(Date.UTC(2027, 0, 31), 'month')).toBe(Date.UTC(2027, 1, 28));  // Jan 31 → Feb 28
       expect(periodEndMs(Date.UTC(2026, 6, 23), 'year')).toBe(Date.UTC(2027, 6, 23));
       expect(periodEndMs(Date.UTC(2028, 1, 29), 'year')).toBe(Date.UTC(2029, 1, 28));   // leap day → Feb 28
+    });
+    it('signing up on the 3rd renews on the 3rd, monthly and annually (the stated rule)', () => {
+      const third = Date.UTC(2026, 10, 3);
+      expect(periodEndMs(third, 'month')).toBe(Date.UTC(2026, 11, 3));
+      expect(periodEndMs(third, 'year')).toBe(Date.UTC(2027, 10, 3));
+    });
+    it('an end-of-month signup RECOVERS instead of drifting backwards', () => {
+      // Sign up 1/31. February clamps to the 28th. Without carrying the signup
+      // day, March would be computed from 2/28 and the member would renew on the
+      // 28th for good — while PaySimple, which maps day 31 to LastofMonth, would
+      // bill 3/31. Our clock and the processor's must not disagree.
+      const signupDay = 31;
+      expect(periodEndMs(Date.UTC(2027, 0, 31), 'month', signupDay)).toBe(Date.UTC(2027, 1, 28));
+      expect(periodEndMs(Date.UTC(2027, 1, 28), 'month', signupDay)).toBe(Date.UTC(2027, 2, 31));
+      expect(periodEndMs(Date.UTC(2027, 2, 31), 'month', signupDay)).toBe(Date.UTC(2027, 3, 30));
+      expect(periodEndMs(Date.UTC(2027, 3, 30), 'month', signupDay)).toBe(Date.UTC(2027, 4, 31));
+    });
+    it('the 30th behaves the same way through February', () => {
+      const signupDay = 30;
+      expect(periodEndMs(Date.UTC(2027, 0, 30), 'month', signupDay)).toBe(Date.UTC(2027, 1, 28));
+      expect(periodEndMs(Date.UTC(2027, 1, 28), 'month', signupDay)).toBe(Date.UTC(2027, 2, 30));
+    });
+    it('ignores a nonsense anniversary day rather than throwing (boundary)', () => {
+      for (const bad of [0, 32, -1, 1.5, NaN, undefined]) {
+        expect(periodEndMs(Date.UTC(2026, 6, 23), 'month', bad as number))
+          .toBe(Date.UTC(2026, 7, 23)); // falls back to the anchor's own day
+      }
+    });
+    it('anniversaryDayOfMonth reads the signup day', () => {
+      expect(anniversaryDayOfMonth(Date.UTC(2026, 10, 3))).toBe(3);
+      expect(anniversaryDayOfMonth(Date.UTC(2027, 0, 31))).toBe(31);
     });
   });
 
@@ -641,7 +679,12 @@ describe('subscriptionService', () => {
       expect(Cohort.findAll).not.toHaveBeenCalled();
     });
 
-    it('anchors the period on the class start date when paying early (pay 7/20 → month runs 7/23 → 8/23)', async () => {
+    it('anchors the period on the SIGNUP date even when the class starts later (pay 7/20 → 8/20)', async () => {
+      // Rolling enrollment, 2026-10-30: the anniversary is the day they signed up.
+      // This used to return July 23, the class start, so that paying early cost no
+      // days. With registrations arriving all month there is no shared start date
+      // to wait for, and the old rule made the answer depend on which cohort the
+      // enrollment landed in.
       const payTime = Date.UTC(2026, 6, 20, 15); // July 20, class starts July 23
       const sub = { status: 'pending', plan: 'monthly', enrollment_id: 'e1', paysimple_payment_id: null, update: jest.fn() };
       const enrollment = { cohort_id: 'c-july', enrolled_at: null, update: jest.fn() };
@@ -651,8 +694,8 @@ describe('subscriptionService', () => {
       await activateByRef('SUB-e1-1', { amount: 199 }, payTime);
 
       const subUpdate = sub.update.mock.calls[0][0];
-      expect(subUpdate.started_at.getTime()).toBe(Date.UTC(2026, 6, 23));            // class day, not pay day
-      expect(subUpdate.current_period_end.getTime()).toBe(Date.UTC(2026, 7, 23));    // 8/23, not 8/20
+      expect(subUpdate.started_at.getTime()).toBe(payTime);                           // pay day, not class day
+      expect(subUpdate.current_period_end.getTime()).toBe(Date.UTC(2026, 7, 20, 15)); // 8/20, not 8/23
       // The enrollment still records the real payment date.
       expect(enrollment.update.mock.calls[0][0].enrolled_at.getTime()).toBe(payTime);
     });
@@ -691,7 +734,9 @@ describe('subscriptionService', () => {
       expect(subUpdate.current_period_end.getTime()).toBe(Date.UTC(2026, 7, 29, 14)); // due Aug 29, NOT Sep 12
     });
 
-    it('still honors the class-start anchor when a late repair recovers an early payment', async () => {
+    it('a late repair of an early payment still anchors on the PAYMENT date', async () => {
+      // Both rules that could move this anchor are now off: the class start no
+      // longer pulls it forward, and the repair clock must never pull it back.
       const paidAt = Date.UTC(2026, 6, 21, 9);    // paid July 21, before class
       const repairedAt = Date.UTC(2026, 7, 12, 20);
       const sub = { status: 'pending', plan: 'monthly', enrollment_id: 'e1', paysimple_payment_id: null, update: jest.fn() };
@@ -702,8 +747,8 @@ describe('subscriptionService', () => {
       await activateByRef('SUB-e1-1', { amount: 199, paidAt }, repairedAt);
 
       const subUpdate = sub.update.mock.calls[0][0];
-      expect(subUpdate.started_at.getTime()).toBe(Date.UTC(2026, 6, 23));         // class day
-      expect(subUpdate.current_period_end.getTime()).toBe(Date.UTC(2026, 7, 23)); // Aug 23
+      expect(subUpdate.started_at.getTime()).toBe(paidAt);                           // July 21
+      expect(subUpdate.current_period_end.getTime()).toBe(Date.UTC(2026, 7, 21, 9)); // Aug 21
     });
 
     it('falls back to the activation clock when paidAt is absent or unparseable', async () => {
@@ -730,8 +775,11 @@ describe('subscriptionService', () => {
       await activateByRef('SUB-e1-1', {}, NOW); // July 15
 
       expect(enrollment.update.mock.calls[0][0].cohort_id).toBe('c-july'); // not the Explorer bucket
-      // ...and the anchor uses the PAID cohort's start date, not the bucket's.
-      expect(sub.update.mock.calls[0][0].started_at.getTime()).toBe(Date.UTC(2026, 6, 23));
+      // The rerouting still matters for access. The billing anchor no longer
+      // follows it: under rolling enrollment it is the signup date, so moving a
+      // member between cohorts can no longer move their renewal date.
+      expect(sub.update.mock.calls[0][0].started_at.getTime()).toBe(NOW);
+      expect(sub.update.mock.calls[0][0].current_period_end.getTime()).toBe(Date.UTC(2026, 7, 15, 12));
     });
   });
 
