@@ -1,9 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { requireSection, adminAllowedSections } from '../../middlewares/authMiddleware';
-// READ-ONLY, fail-closed resolution of the fixed Government Contracts container (its tenant).
-import { lookupGovContractsContainer } from '../../scripts/lib/factoryDemoContainer';
 import { resolveGovProjectActor } from '../../middlewares/govProjectAccess';
-import { scopeGovCardsToMembership } from '../../services/factory/govContractsScope';
 
 /**
  * Admin — Government Contracts tab (mgmt-portal M1).
@@ -46,28 +43,16 @@ router.get('/api/admin/gov-contracts', requireSection('gov_contracts'), async (r
   try {
     // Inside the try so a DB-level rejection here fails as a clean 500, not an unhandled rejection;
     // an unconfigured container is still the deliberate fail-closed 503.
-    const container = await lookupGovContractsContainer();
-    if (!container) {
+    // C92: the list body lives in services/factory/govContractsList.ts, shared with the Campus HQ building
+    const { listGovContractsFor } = await import('../../services/factory/govContractsList');
+    const admin = (req as any).admin ?? {};
+    const list = await listGovContractsFor({ email: String(admin.email ?? ''), sections: adminAllowedSections(admin) });
+    if (!list) {
       logFail('gov_contracts_scope', new Error('gov container not resolvable'), {});
       res.status(503).json({ error: 'The government contracts workspace is not configured.' });
       return;
     }
-    const { listGovPipeline } = await import('../../services/factory/govPipeline');
-    const cards = await listGovPipeline(container.tenant.id);
-    const broad = adminAllowedSections((req as any).admin ?? {}).includes('program');
-    let memberIds: string[] = [];
-    if (!broad) {
-      const actor = await resolveGovProjectActor(req);
-      if (actor) {
-        const { default: DeliveryProjectMember } = await import('../../models/DeliveryProjectMember');
-        const memberships: any[] = await DeliveryProjectMember.findAll({
-          where: { platform_identity_id: actor.platformIdentityId, status: 'active' },
-        });
-        memberIds = Array.from(new Set(memberships.map((m) => m.delivery_project_id).filter(Boolean))).map(String);
-      }
-    }
-    const projects = scopeGovCardsToMembership(cards, memberIds, broad);
-    res.json({ projects, scope: broad ? 'all' : 'member' });
+    res.json(list);
   } catch (err: unknown) {
     logFail('gov_contracts_list_failed', err, {});
     res.status(500).json({ error: 'Could not list government contracts.' });

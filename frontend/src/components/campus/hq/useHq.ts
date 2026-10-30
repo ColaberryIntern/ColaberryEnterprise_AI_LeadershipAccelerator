@@ -3,6 +3,7 @@ import type { CampusAudience } from '../campusMap';
 import { useCampusMgmt } from '../campusMgmt';
 import { isTypingTarget } from '../campusEsc';
 import { buildHq, lockedFloorToast, rideOrder, type Hq, type HqFloor, type HqRoom } from './hqModel';
+import { useHqSubnav } from './useHqSubnav';
 import { takeHqIntent } from './hqIntent';
 
 /**
@@ -44,7 +45,9 @@ export function useHq(audience: CampusAudience, reduceMotion: boolean, active = 
   const isStaff = audience === 'staff';
   const sectionsKey = mgmt.sections.join(',');
   // rebuilt when the sections change (keyed on their joined list), not on every render
-  const hq = useMemo(() => buildHq((s) => mgmt.sections.includes(s), isStaff, audience, undefined, careerName), [sectionsKey, isStaff, audience, careerName]);
+  // C92: the sidebar's live sub-lists (Gov Contracts, Agents) for this person, so the floors match the sidebar
+  const subs = useHqSubnav(isStaff && active);
+  const hq = useMemo(() => buildHq((s) => mgmt.sections.includes(s), isStaff, audience, undefined, careerName, subs), [sectionsKey, isStaff, audience, careerName, subs]);
   const [scene, setScene] = useState<HqScene>('ext');
   const [floor, setFloor] = useState<string | null>(null);
   const [cabAt, setCabAt] = useState('G');

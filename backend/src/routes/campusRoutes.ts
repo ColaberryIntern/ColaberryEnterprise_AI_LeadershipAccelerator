@@ -250,7 +250,23 @@ const router = Router();
 router.get('/api/portal/campus/flags', requireParticipant, getCampusFlags);
 router.post('/api/portal/campus/here', requireParticipant, postCampusHere);
 router.get('/api/portal/campus/presence', requireParticipant, getCampusPresenceRoute);
+/** C92: GET /api/portal/campus/hq-subnav - the cards behind the admin sidebar's live sub-lists (Gov Contracts, Agents) for
+*  THIS person, so the Campus HQ building shows what their sidebar shows (services/campus/hqSubnav.ts). Empty lists for
+*  anyone without the sections. */
+const HqSubnavResponse = z.object({ gov: z.array(z.unknown()).max(500), agents: z.array(z.unknown()).max(500) }).strict();
+export async function getHqSubnavRoute(req: Request, res: Response): Promise<void> {
+  if (!campusOnFor(req)) { res.status(403).json({ error: 'The campus is not enabled for this account', error_class: 'CampusNotEnabled' }); return; }
+  try {
+    const { getHqSubnav } = await import('../services/campus/hqSubnav');
+    const body = await getHqSubnav(req.participant!.sub, String(req.participant!.email ?? ''));
+    sendValidated(res, HqSubnavResponse, body, 'campus_hq_subnav');
+  } catch (err) {
+    logFailure('campus_hq_subnav_failed', err);
+    res.status(500).json({ error: 'Could not load the building sub-lists', error_class: 'CampusHqSubnavUnavailable' });
+  }
+}
 router.get('/api/portal/campus/staff-desks', requireParticipant, getStaffDesksRoute);
+router.get('/api/portal/campus/hq-subnav', requireParticipant, getHqSubnavRoute);
 router.post('/api/portal/campus/wave', requireParticipant, postWaveRoute);
 router.post('/api/portal/campus/tour/complete', requireParticipant, postTourCompleteRoute);
 router.get('/api/portal/campus/look', requireParticipant, getLookRoute);
