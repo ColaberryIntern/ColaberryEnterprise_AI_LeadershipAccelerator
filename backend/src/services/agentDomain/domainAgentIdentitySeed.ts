@@ -51,7 +51,7 @@ async function managerOrgMemberIdByDomain(): Promise<Record<string, string | nul
 }
 
 /** `MarketingDomainAgent` -> `marketing`. The registry name is the only link back to the key. */
-function domainKeyOf(agentName: string): string {
+export function domainKeyOf(agentName: string): string {
   return agentName
     .replace(/DomainAgent$/, '')
     .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
@@ -116,6 +116,19 @@ export async function seedDomainAgentIdentities(): Promise<DomainIdentityResult[
         // No proactive capability exists for any of these, so there is no eligible population
         // to gate. Same posture as Dara's.
         pilotCohortGate: false,
+        // WITHOUT THIS, EVERY ONE OF THESE WAS REFUSED ON EVERY BOOT. `domainAgents.ts` ships all
+        // ten with `tools_granted: []` deliberately -- granting one is AF7.1 and needs a manager
+        // -- and Agent Ticket Standard Step 4 refuses an empty tool list. Measured in production
+        // 2026-10-30: nine refusals per restart, fail-open, so the only visible symptom was seven
+        // interns opening an agent console that rendered empty. The exemption is honoured only
+        // while the agent is disabled and at observe, re-read off the row by the gate itself, so
+        // this does not become a way to register a live actor without declared capabilities.
+        nonTicketCreating: {
+          reason:
+            'Release Zero floor: disabled, at observe, no tools granted, no schedule and no '
+            + 'trigger. It creates no tickets because it cannot act at all. It exists so the '
+            + 'domain has an inspectable agent to build on, and a capability grant is AF7.1.',
+        },
         // The domain's accountable manager, already set on the AiAgent row by AF3.1. Passing it
         // here keeps the identity consistent with the org chart rather than relying on the
         // self-heal, and `seedAgentIdentity` only writes it when the field is null anyway.

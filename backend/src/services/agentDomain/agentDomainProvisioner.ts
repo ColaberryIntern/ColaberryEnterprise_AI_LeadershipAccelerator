@@ -81,7 +81,15 @@ export interface ProvisionRunResult {
   readonly failed: ReadonlyArray<{ domain_key: string; error_class: string; message: string }>;
 }
 
-async function resolveTenantId(sequelize: Sequelize, tx: Transaction): Promise<string> {
+/**
+ * The tenant these projects belong to, resolved by slug.
+ *
+ * EXPORTED, because every writer into `agent_domain_projects` needs it and the one that did not
+ * have it clobbered another tenant's row. `uq_agent_domain_key` is on (tenant_id, domain_key), so
+ * a domain key is NOT unique on its own and an UPDATE without this predicate reaches every
+ * tenant that holds the same key.
+ */
+export async function resolveTenantId(sequelize: Sequelize, tx: Transaction): Promise<string> {
   const rows = await sequelize.query<{ id: string }>(
     `SELECT id FROM tenants WHERE slug = $1`,
     { bind: [TENANT_SLUG], type: QueryTypes.SELECT, transaction: tx },

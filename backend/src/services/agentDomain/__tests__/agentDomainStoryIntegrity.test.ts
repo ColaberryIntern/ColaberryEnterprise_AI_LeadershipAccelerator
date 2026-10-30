@@ -216,13 +216,18 @@ describe('no control character survives in this directory', () => {
 describe('the story set, counted correctly', () => {
   const all = planForAllDomains().flatMap((p) => p.stories);
 
-  it('is 503 stories, not 448: the composition is asserted so it cannot drift', () => {
+  it('is 513 stories, not 448: the composition is asserted so it cannot drift', () => {
     // 448 was 443 + 5: the five research stories counted ONCE rather than per domain, and the
     // ten legacy-migration plans dropped. A bare total hid both mistakes, so the parts are pinned.
+    //
+    // 503 -> 513 when STORY-000 landed: one Command Center per domain, so the ten are a NEW kind
+    // rather than a tenth of something that already existed. Pinning the parts is what makes that
+    // readable as "ten were added" instead of "a number changed".
     expect(all.filter((s) => s.kind === 'implementation')).toHaveLength(443);
     expect(all.filter((s) => s.kind === 'research')).toHaveLength(50);
     expect(all.filter((s) => s.kind === 'legacy_migration')).toHaveLength(10);
-    expect(all).toHaveLength(503);
+    expect(all.filter((s) => s.kind === 'command_center')).toHaveLength(10);
+    expect(all).toHaveLength(513);
     expect(planForAllDomains().reduce((n, p) => n + p.releases.length, 0)).toBe(30);
   });
 
@@ -230,6 +235,18 @@ describe('the story set, counted correctly', () => {
     for (const p of planForAllDomains()) {
       expect(p.stories.filter((s) => s.kind === 'research')).toHaveLength(5);
       expect(p.stories.filter((s) => s.kind === 'legacy_migration')).toHaveLength(1);
+      expect(p.stories.filter((s) => s.kind === 'command_center')).toHaveLength(1);
+    }
+  });
+
+  it('the Command Center is the FIRST story of the FIRST release, in every domain', () => {
+    // Not cosmetic. `planProvision` derives position from array order within a cluster, so being
+    // first in this array is the only thing that makes it position 0 on the board -- and position
+    // is what the portal sorts on. A Command Center sitting fourth is a Command Center nobody
+    // opens first.
+    for (const p of planForAllDomains()) {
+      expect(p.stories[0].kind).toBe('command_center');
+      expect(p.stories[0].release_key).toBe(p.releases[0].cluster);
     }
   });
 

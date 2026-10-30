@@ -289,7 +289,10 @@ describe('the plan covers all ten domains completely', () => {
     // no prompt, and could not tell whether she was meant to run anything; she asked instead of
     // guessing, which is the only reason it surfaced rather than quietly costing her a day.
     const research = plans.flatMap((p) => p.stories).filter((s) => s.kind !== 'implementation');
-    expect(research.length).toBe(60); // 5 research + 1 legacy migration, per domain
+    // 5 research + 1 legacy migration + 1 Command Center, per domain. The Command Center lands in
+    // this set on purpose: it is Claude Code work with a real prompt, so the same floor applies to
+    // it as to everything else here.
+    expect(research.length).toBe(70);
     for (const s of research) {
       expect(s.build).not.toBe(HUMAN_WORK_STATEMENT);
       expect(s.build.length).toBeGreaterThan(1500);
