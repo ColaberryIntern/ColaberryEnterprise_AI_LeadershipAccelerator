@@ -2,6 +2,9 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import BuildingArt from '../BuildingArt';
 import { HqTowerArt } from '../hqTower';
+import fs from 'fs';
+import path from 'path';
+import { TOWER_BAND } from '../../hq/HqOutside';
 
 // C83: the map's career building is the Colaberry Tower the HQ scene draws, not the glass office Project Studio keeps.
 const svg = (el: React.ReactElement): HTMLElement => {
@@ -19,18 +22,16 @@ test('the career building draws the Colaberry Tower; Project Studio keeps the gl
   expect(studio.querySelector('[data-testid="cm-hq-map-tower"]')).toBeNull();
 });
 
-test('the tower uses the HQ palette, and day/night follows the tower scene rule', () => {
-  const fills = (hour: number) => Array.from(svg(<HqTowerArt w={100} h={126} hour={hour} />).querySelectorAll('rect')).map((r) => r.getAttribute('fill'));
-  const day = fills(12);
-  expect(day).toContain('var(--cm-art-hq-band)');
-  expect(day).toContain('var(--cm-art-hq-win)');
-  expect(day).toContain('var(--cm-art-hq-navy)');
-  expect(fills(21)).toContain('var(--cm-art-hq-band-night)');
-  expect(fills(21)).not.toContain('var(--cm-art-hq-band)');
+test('C89: the tower is navy blue at every hour, with gold windows and the navy base (never the cream day band)', () => {
+  const fills = Array.from(svg(<HqTowerArt w={100} h={126} />).querySelectorAll('rect')).map((r) => r.getAttribute('fill'));
+  expect(fills).toContain('var(--cm-art-hq-band-night)');
+  expect(fills).toContain('var(--cm-art-hq-win)');
+  expect(fills).toContain('var(--cm-art-hq-navy)');
+  expect(fills).not.toContain('var(--cm-art-hq-band)');
 });
 
 test('the footprint stays inside the old sprite, so labels and badges do not move', () => {
-  const rects = Array.from(svg(<HqTowerArt w={100} h={126} hour={12} />).querySelectorAll('rect'));
+  const rects = Array.from(svg(<HqTowerArt w={100} h={126} />).querySelectorAll('rect'));
   for (const r of rects) {
     const x = Number(r.getAttribute('x')); const y = Number(r.getAttribute('y'));
     expect(x).toBeGreaterThanOrEqual(-54);
@@ -38,4 +39,11 @@ test('the footprint stays inside the old sprite, so labels and badges do not mov
     expect(y).toBeGreaterThanOrEqual(-126);
     expect(y + Number(r.getAttribute('height'))).toBeLessThanOrEqual(0.01);
   }
+});
+
+test('C89: the tower scene uses the same navy band at every hour (no day/night choice of band left in HqOutside)', () => {
+  expect(TOWER_BAND).toBe('hq-band-night');
+  const src = fs.readFileSync(path.join(__dirname, '..', '..', 'hq', 'HqOutside.tsx'), 'utf8');
+  expect(src).not.toContain("night ? 'hq-band-night' : 'hq-band'");
+  expect(src.split('art(TOWER_BAND)').length - 1).toBeGreaterThanOrEqual(2);
 });

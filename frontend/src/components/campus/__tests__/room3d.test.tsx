@@ -75,6 +75,15 @@ describe('the board (back wall)', () => {
     expect(onOpen).toHaveBeenLastCalledWith('/portal/projects/workspace/p1/STORY-001');
   });
 
+  it('C86: a custom screen\'s own button (Chow Hall\'s "Order food") does its job and never also enlarges the board', () => {
+    mount({ id: 'chow', name: 'Chow Hall', spot: spotOf('chow'), reduceMotion: true });
+    expect(q('[data-testid="cm-board"] [data-testid="cm-crave-order"]')).not.toBeNull();
+    click('[data-testid="cm-board"] [data-testid="cm-crave-order"]');
+    expect(q('[data-testid="cm-board-zoom"]')).toBeNull();
+    click('[data-testid="cm-board"]'); // the body still enlarges it
+    expect(q('[data-testid="cm-board-zoom"]')).not.toBeNull();
+  });
+
   it('no Next step: the building\'s plan step; neither: a plain sign with the section name (never placeholder bars)', () => {
     const step = { label: 'Deep Dive · Modern Software', minutes: 6, route: '/portal/runtime/s1' } as unknown as PlanStop;
     const onOpen = mount({ summary: { ...SUMMARY, next: null }, planStep: step, reduceMotion: true });

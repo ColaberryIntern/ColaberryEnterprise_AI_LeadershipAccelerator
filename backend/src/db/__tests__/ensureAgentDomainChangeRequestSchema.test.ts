@@ -17,6 +17,7 @@ jest.mock('../../config/database', () => ({
 }));
 
 import {
+  CHANGE_REQUEST_KINDS,
   REQUIRED_COLUMNS,
   REQUIRED_INDEXES,
   REQUIRED_TABLES,
@@ -49,10 +50,17 @@ const TABLE = 'agent_domain_change_requests';
  */
 function stageAssert(opts: { tables?: string[]; columns?: string[]; indexes?: string[] } = {}) {
   const rowsOf = (names: string[]) => names.map((n) => [n]);
-  mockQuery
-    .mockResolvedValueOnce(rowsOf(opts.tables ?? [TABLE]))
-    .mockResolvedValueOnce(rowsOf(opts.columns ?? [...REQUIRED_COLUMNS]))
-    .mockResolvedValueOnce(rowsOf(opts.indexes ?? [...REQUIRED_INDEXES]));
+  // DISPATCH ON THE SQL, not on call order. An earlier version queued three `mockResolvedValueOnce`
+  // in sequence, which silently broke the moment AF7.1 added a DDL statement: the extra statement
+  // ate the first queued answer and the assert read columns where it expected tables. Keying on
+  // what the query asks for cannot drift when a statement is added or reordered.
+  mockQuery.mockImplementation((sql: unknown) => {
+    const s = String(sql);
+    if (s.includes('information_schema.tables')) return Promise.resolve(rowsOf(opts.tables ?? [TABLE]));
+    if (s.includes('information_schema.columns')) return Promise.resolve(rowsOf(opts.columns ?? [...REQUIRED_COLUMNS]));
+    if (s.includes('pg_indexes')) return Promise.resolve(rowsOf(opts.indexes ?? [...REQUIRED_INDEXES]));
+    return Promise.resolve([]); // the DDL statements
+  });
 }
 
 function lastWarning(): Record<string, unknown> | null {
@@ -181,10 +189,8 @@ describe('the boot guard cannot reject, so server.ts can await it bare', () => {
 
   it('reports ok:true when the schema is sound', async () => {
     mockQuery.mockReset();
-    // Four statements, then the three assert reads.
-    mockQuery
-      .mockResolvedValueOnce([]).mockResolvedValueOnce([])
-      .mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+    // stageAssert dispatches on the SQL, so the DDL statements answer `[]` and the three reads
+    // answer correctly no matter how many statements run before them.
     stageAssert();
     await expect(ensureAgentDomainChangeRequestSchemaGuarded()).resolves.toEqual({ ok: true });
   });
@@ -201,15 +207,37 @@ describe('idempotency and blast radius, asserted on the SQL itself', () => {
     for (const c of creates) expect(c).toMatch(/IF NOT EXISTS/);
   });
 
-  it('CONTAINS NO ALTER, DROP OR UPDATE in the statements it runs at boot', async () => {
-    // This is the whole safety argument for calling it PROCEED-tier rather than escalating: it
-    // adds a table and touches nothing that already exists. ROLLBACK_STATEMENTS holds the only
-    // DROP, and nothing calls it at boot.
-    const statementBlock = source.slice(
-      source.indexOf('const STATEMENTS'),
-      source.indexOf('ROLLBACK_STATEMENTS'),
-    );
-    expect(statementBlock).not.toMatch(/\bALTER\b|\bDROP\b|\bUPDATE\b|\bDELETE\b/i);
+  /**
+   * NARROWED, DELIBERATELY, in AF7.1 — and the narrowing is the point.
+   *
+   * This started as "no ALTER at all", which was right while the file only ever created a table.
+   * AF7.1 adds a `kind` column to a table that already exists in production, so an ALTER is
+   * unavoidable. Deleting the assertion would have been the easy move and would have thrown away
+   * the guarantee; instead it now bans the ALTERs that can destroy or lock, and permits exactly
+   * one additive form.
+   *
+   * `ADD COLUMN IF NOT EXISTS ... NOT NULL DEFAULT` is safe here specifically because Postgres
+   * applies the default to existing rows without rewriting the table, so there is no migration
+   * window and no backfill. `DROP COLUMN`, `ALTER TYPE` and `SET NOT NULL` on an existing nullable
+   * column are all different propositions and all still refused.
+   */
+  it('runs NO destructive statement at boot, and only ONE additive ALTER form', async () => {
+    // COMMENTS STRIPPED FIRST. The block's own prose explains which ALTERs are banned, and names
+    // them to do so - so an un-stripped assertion matches the explanation rather than the SQL and
+    // fails on correct code. Exactly the trap `agentChangeRequestNoTrigger.test.ts` documents.
+    const statementBlock = source
+      .slice(source.indexOf('const STATEMENTS'), source.indexOf('ROLLBACK_STATEMENTS'))
+      .replace(/\/\*[\s\S]*?\*\//g, ' ')
+      .replace(/(^|[^:])\/\/[^\n]*/g, '$1');
+    // Never, under any circumstances, at boot.
+    expect(statementBlock).not.toMatch(/\bDROP\b|\bUPDATE\b|\bDELETE\b|\bTRUNCATE\b/i);
+    expect(statementBlock).not.toMatch(/ALTER\s+TABLE[\s\S]*?\bDROP\s+COLUMN\b/i);
+    expect(statementBlock).not.toMatch(/ALTER\s+TABLE[\s\S]*?\bALTER\s+COLUMN\b/i);
+    expect(statementBlock).not.toMatch(/\bSET\s+NOT\s+NULL\b/i);
+    // Every ALTER that IS present must be the one permitted additive shape.
+    const alters = statementBlock.match(/ALTER\s+TABLE[^`]*/gi) ?? [];
+    expect(alters.length).toBeGreaterThan(0); // positive control: there is one to check
+    for (const a of alters) expect(a).toMatch(/ADD COLUMN IF NOT EXISTS/i);
   });
 
   it('constrains the approver and the timestamp to move together', async () => {
@@ -221,6 +249,26 @@ describe('idempotency and blast radius, asserted on the SQL itself', () => {
 
   it('makes a proposer-less row impossible rather than merely refused', async () => {
     expect(source).toMatch(/requested_by_identity TEXT NOT NULL/);
+  });
+
+  it('AF7.1: `kind` defaults to change, so rows written before it keep their meaning', async () => {
+    // No backfill, no migration window. A row that predates the column reads as `change`, which
+    // is exactly what it was.
+    expect(source).toMatch(/ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT 'change'/);
+    expect(CHANGE_REQUEST_KINDS).toEqual(['change', 'tool']);
+  });
+
+  it('asserts the new column and its index, so a half-applied ALTER is caught', async () => {
+    // The ALTER cannot fail loudly (every statement error is warned), so the post-condition is
+    // the only thing that would notice it had not run.
+    expect(REQUIRED_COLUMNS).toContain('agent_domain_change_requests.kind');
+    expect(REQUIRED_INDEXES).toContain('idx_adcr_kind');
+  });
+
+  it('THROWS when kind is missing, the case this whole ALTER could fail silently on', async () => {
+    stageAssert({ columns: REQUIRED_COLUMNS.filter((c) => !c.endsWith('.kind')) });
+    await expect(assertAgentDomainChangeRequestSchema())
+      .rejects.toThrow(/missing column agent_domain_change_requests\.kind/);
   });
 
   it('offers a rollback that drops only its own table', async () => {

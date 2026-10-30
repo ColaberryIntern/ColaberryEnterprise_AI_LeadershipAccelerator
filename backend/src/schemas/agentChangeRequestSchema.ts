@@ -26,6 +26,18 @@ export const DECLINED_REASON_MAX = 1000;
 const HAS_A_LETTER = /\p{L}/u;
 
 export const FileChangeRequestSchema = z.object({
+  /**
+   * AF7.1. Optional, defaulting to `change`, so every caller written against AF4.2 keeps working
+   * unchanged and an intern filing an ordinary change request never has to think about it.
+   *
+   * A tool request is the same governance with a different payload: a named proposer, a named
+   * human approver, a timestamp, and no machine identity anywhere near it. Splitting it into a
+   * second table would mean two approval spines to keep honest, and the handoff design warns that
+   * is how one of them quietly stops being enforced.
+   */
+  kind: z.enum(['change', 'tool'], {
+    message: "A request is either a 'change' or a 'tool'.",
+  }).optional(),
   domain_key: z.string().trim().min(1, 'A change request has to name the domain it is about.'),
   title: z.string().trim()
     .min(1, 'A title is required.')

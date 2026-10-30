@@ -152,7 +152,7 @@ no retry.
 
 **Intended (§12):** the rep's availability and appointments inside the sales workflow, with
 GHL as the external source of truth when the rep is configured for it.
-**Owned by:** `backend/src/services/calendarService.ts:225` → "export async function createBooking(data: BookingInput): Promise<BookingResult> {"
+**Owned by:** `backend/src/services/calendarService.ts:228` → "export async function createBooking(data: BookingInput, target: CalendarTarget = defaultCalendar()): Promise<BookingResult> {"
 **Missing:** the owner is **Google Calendar, for the public strategy-call flow** — a
 different calendar, a different audience, and explicitly not to be migrated (§12). The
 rep-facing calendar is `ABSENT`. The internal appointment table has no provider-id column,

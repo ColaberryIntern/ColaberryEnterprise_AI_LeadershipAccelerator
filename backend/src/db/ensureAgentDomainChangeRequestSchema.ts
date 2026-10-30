@@ -57,12 +57,29 @@ export const REQUIRED_COLUMNS: ReadonlyArray<string> = [
   'agent_domain_change_requests.approved_by_identity',
   'agent_domain_change_requests.approved_at',
   'agent_domain_change_requests.declined_reason',
+  // AF7.1. Added after the table shipped, which is why it arrives by ALTER rather than in the
+  // CREATE: the ten domain projects already exist and will not be re-created.
+  'agent_domain_change_requests.kind',
 ];
+
+/**
+ * What a request is ASKING FOR. `change` is the original AF4.2 meaning; `tool` is AF7.1.
+ *
+ * One table rather than two, because the governance is identical and splitting it would mean two
+ * approval spines to keep honest. `docs/AGENT_TOOL_REQUEST_HANDOFF.md` warns against exactly that:
+ * a second spine beside the first is how one of them quietly stops being enforced.
+ *
+ * The default is `change`, so every row written before this column existed keeps its original
+ * meaning without a backfill.
+ */
+export const CHANGE_REQUEST_KINDS = ['change', 'tool'] as const;
+export type ChangeRequestKind = typeof CHANGE_REQUEST_KINDS[number];
 
 export const REQUIRED_INDEXES: ReadonlyArray<string> = [
   'idx_adcr_domain_key',
   'idx_adcr_status',
   'idx_adcr_requested_by',
+  'idx_adcr_kind',
 ];
 
 /**
@@ -110,6 +127,18 @@ const STATEMENTS: ReadonlyArray<string> = [
   `CREATE INDEX IF NOT EXISTS idx_adcr_status ON agent_domain_change_requests (status)`,
   `CREATE INDEX IF NOT EXISTS idx_adcr_requested_by
      ON agent_domain_change_requests (requested_by_identity)`,
+  // AF7.1 — `kind`, arriving by ALTER because the table already exists in production.
+  //
+  // THIS IS THE ONLY ALTER THIS FILE WILL EVER RUN, and it is additive in the narrowest sense:
+  // `ADD COLUMN IF NOT EXISTS` with a NOT NULL default, which Postgres applies to existing rows
+  // without rewriting the table. Every row written before AF7.1 therefore keeps its original
+  // meaning, `change`, with no backfill and no migration window.
+  //
+  // A destructive ALTER (DROP COLUMN, ALTER TYPE, SET NOT NULL on an existing nullable column)
+  // would be a different proposition entirely and is still refused by this file's test.
+  `ALTER TABLE agent_domain_change_requests
+     ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT 'change'`,
+  `CREATE INDEX IF NOT EXISTS idx_adcr_kind ON agent_domain_change_requests (kind)`,
 ];
 
 /** Net-new, and says so: `ROLLBACK_STATEMENTS` appears in no other file in this directory. */

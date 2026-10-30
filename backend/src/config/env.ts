@@ -157,6 +157,9 @@ export const env = {
   googleServiceAccountEmail: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || '',
   googlePrivateKey: (process.env.GOOGLE_PRIVATE_KEY || '').replace(/\\n/g, '\n'),
   googleCalendarOwnerEmail: process.env.GOOGLE_CALENDAR_OWNER_EMAIL || '',
+  // C90: admissions bookings (campus call, admissions agent, Maya) go on this calendar; unset = the calendar above.
+  admissionsCalendarId: process.env.ADMISSIONS_CALENDAR_ID || '',
+  admissionsCalendarOwnerEmail: process.env.ADMISSIONS_CALENDAR_OWNER_EMAIL || '',
   // Family Command Center V2: the "Family" calendar read for the daily briefing.
   // Discover its id with `node backend/src/scripts/discoverFamilyCalendar.js`.
   googleFamilyCalendarId: process.env.GOOGLE_FAMILY_CALENDAR_ID || '',

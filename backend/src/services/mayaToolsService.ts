@@ -13,6 +13,7 @@ import {
   getAvailableSlots as calendarGetSlots,
   createBooking,
 } from './calendarService';
+import { admissionsCalendar } from './calendarTarget';
 import { createAppointment } from './appointmentService';
 import { sendStrategyCallConfirmation } from './emailService';
 import { findRelevantKnowledge } from './admissionsKnowledgeService';
@@ -505,7 +506,7 @@ export async function getAvailableSlots(
   }
 
   try {
-    const availability = await calendarGetSlots(days);
+    const availability = await calendarGetSlots(days, admissionsCalendar()); // C90: Maya offers the admissions calendar's free times
 
     if (!availability.dates || availability.dates.length === 0) {
       return {
@@ -683,7 +684,7 @@ export async function scheduleStrategyCall(
       phone: phone || '',
       slotStart: slot_start,
       timezone: 'America/Chicago',
-    });
+    }, admissionsCalendar()); // C90: Maya books admissions calls on the admissions calendar
 
     // Resolve or auto-create lead so appointment, campaign, and SMS all work
     let lead = await resolveLeadForVisitor(visitorId);
