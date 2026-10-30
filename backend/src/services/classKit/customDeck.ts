@@ -14,6 +14,9 @@ export interface CustomDeckLive {
   sessionId: string;
   liveStateUrl?: string;
   broadcastUrl?: string;
+  /** Server-side giveaway draw + the recorded winners (sessionRaffleService). */
+  raffleDrawUrl?: string;
+  raffleWinnersUrl?: string;
   token?: string;
   checkinUrl: string;
   qrSvg: string;

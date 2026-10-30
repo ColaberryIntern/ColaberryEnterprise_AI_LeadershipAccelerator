@@ -324,7 +324,7 @@ const ClassroomPage: React.FC = () => {
           <div className="tl-crumb">{wkLabel(week)}</div>
           <h1 className="tl-h1">Classroom{week != null ? ` — ${wkLabel(week)}` : ''}</h1>
           <div className="tl-sub">{feed.is_explorer
-            ? 'Your free AI Preview — watch testimonials, listen to podcasts, read, and try short lessons and quizzes. Enroll to unlock the full Accelerator.'
+            ? 'Your AI Preview, no card needed — watch testimonials, listen to podcasts, read, and try short lessons and quizzes. Enroll to unlock the full Accelerator.'
             : 'Your week as a feed. Watch, build, test, reflect — every item scores on-site and feeds your points. Complete each card to advance.'}</div>
         </div>
       </div>
@@ -333,7 +333,7 @@ const ClassroomPage: React.FC = () => {
         <div className="tl-card tl-ac-berry" style={{ padding: '15px 18px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
           <svg width="26" height="26" viewBox="0 0 24 24" fill="none" style={{ flex: 'none' }}><path d="M4 8h16v8H4zM4 8l2-3h12l2 3M9 12h6" stroke="var(--cherry)" strokeWidth="2" strokeLinejoin="round" /></svg>
           <div style={{ minWidth: 0, flex: 1 }}>
-            <div style={{ fontWeight: 700 }}>You're on the free AI Preview</div>
+            <div style={{ fontWeight: 700 }}>You're on the AI Preview, no card needed</div>
             <div className="tl-small">Enroll in the AI Systems Architect Accelerator to unlock all 12 weeks, the live classes, the community, and your certification.</div>
           </div>
           <button type="button" className="tl-btn primary sm" onClick={() => navigate('/portal/settings?tab=subscription')}>Enroll to unlock →</button>

@@ -471,28 +471,38 @@ export function deckScript(): string {
       setTimeout((function(el){ return function(){ if (el.parentNode) el.parentNode.removeChild(el); }; })(bit), 4200);
     }
   }
-  // Winners per slide id, kept for the life of the tab so a re-render or an
-  // accidental double click can never draw the same person twice.
+  // Winners per slide id. The platform draws and records each one
+  // (POST raffle-draw, sessionRaffleService); a repeated draw number returns
+  // the stored winner, so a double click or a reload never draws twice.
   var raffleWinners = {};
+  var raffleBusy = false;
   function drawWinner(sm){
     var active = document.querySelector('.kslide.active');
     var box = active && active.querySelector('[data-role="raffle"]');
-    if (!box) return;
+    if (!box || raffleBusy) return;
     var max = parseInt(box.getAttribute('data-count'), 10) || 1;
     var won = raffleWinners[sm.id] || (raffleWinners[sm.id] = []);
     var big = box.querySelector('[data-role="raffle-big"]');
     if (won.length >= max){ if (big) big.textContent = 'All ' + max + ' winners drawn 🎉'; return; }
-    var pool = ((pulse.poll && pulse.poll.correctResponders) || []).filter(function(nm){ return won.indexOf(nm) < 0; });
-    if (!pool.length){ if (big) big.textContent = 'No entrants left to draw'; return; }
-    var spins = 0;
+    var lv = K.live || {};
+    if (!lv.enabled || !lv.broadcastEndpoint || !sm.question){ if (big) big.textContent = 'Draws run live only (Present, not Rehearse)'; return; }
+    var url = lv.broadcastEndpoint.replace(/\\/broadcast$/, '/raffle-draw') + '?t=' + encodeURIComponent(lv.token || '');
+    var names = (pulse.poll && pulse.poll.correctResponders) || [];
+    var spins = 0, result = null, failed = null;
+    raffleBusy = true;
+    fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ poll_key: sm.question.key, draw_number: won.length + 1, max_winners: max }) })
+      .then(function(r){ return r.json().then(function(d){ if (r.ok) result = d; else failed = (d && d.error) || 'Draw failed'; }); })
+      .catch(function(){ failed = 'No connection. Press Draw again.'; });
     var timer = setInterval(function(){
-      if (big) big.textContent = pool[Math.floor(Math.random() * pool.length)];
+      if (big && names.length) big.textContent = names[Math.floor(Math.random() * names.length)];
       spins += 1;
-      if (spins < 18) return;
+      if (spins < 18 || (!result && !failed && spins < 120)) return;
       clearInterval(timer);
-      var pick = pool[Math.floor(Math.random() * pool.length)];
-      won.push(pick);
-      if (big) big.textContent = '🏆 ' + pick;
+      raffleBusy = false;
+      if (!result){ if (big) big.textContent = failed || 'Draw timed out. Press Draw again.'; return; }
+      won[result.draw_number - 1] = result.display_name;
+      if (big) big.textContent = '🏆 ' + result.display_name;
       var chips = box.querySelector('[data-role="raffle-chips"]');
       if (chips) chips.innerHTML = won.map(function(nm, ix){ return '<span class="kraffle-chip">#' + (ix + 1) + ' ' + esc(nm) + '</span>'; }).join('');
       confetti();

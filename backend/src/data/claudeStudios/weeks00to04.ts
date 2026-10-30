@@ -15,7 +15,7 @@ export const STUDIOS_00_TO_04: ClaudeStudioWeek[] = [
     key: 'working-agreement',
     title: 'Claude Working Agreement Studio',
     career_asset: 'A personal Claude Project and a written AI Working Agreement',
-    week_theme: 'Free AI Preview',
+    week_theme: 'AI Preview',
     adaptation: null,
     intro:
       'Before you build anything, decide how you will work with Claude. This studio has you set up one reusable Project that carries your role, your standards, and your privacy boundaries into every future conversation, then write the agreement that says what you will and will not hand over to an AI. It is the shortest studio in the program and the one every later week leans on.',
@@ -182,7 +182,7 @@ After you build it, tell me what a confused first-time reader would still get wr
     portfolio_eligible: true,
     certification_active: false,
     instructor_notes:
-      'This is the free-preview week, so treat it as onboarding, not assessment. The Project created here is reused in every later studio — if a student skips it, weeks 1-12 get materially harder, so chase non-completion early. The single most valuable output is the "three decisions I will never delegate" list; read those before anything else.',
+      'This is the preview week, so treat it as onboarding, not assessment. The Project created here is reused in every later studio — if a student skips it, weeks 1-12 get materially harder, so chase non-completion early. The single most valuable output is the "three decisions I will never delegate" list; read those before anything else.',
     misconceptions: [
       'Thinking a Project is just a folder — students often skip custom instructions entirely, which is the only part that carries context forward.',
       'Assuming Artifacts and Claude Code are the same thing because both produce code.',

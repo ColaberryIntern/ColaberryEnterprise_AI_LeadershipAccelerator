@@ -5,6 +5,9 @@ interface StoredUTM {
   utmSource: string;
   utmCampaign: string;
   utmMedium: string;
+  /** C94: which ad / which placement. Optional because entries stored before C94 lack them. */
+  utmContent?: string;
+  utmTerm?: string;
   storedAt: string;
 }
 
@@ -12,6 +15,8 @@ export interface UTMParams {
   utmSource: string;
   utmCampaign: string;
   utmMedium: string;
+  utmContent?: string;
+  utmTerm?: string;
   lid?: string;
 }
 
@@ -26,14 +31,18 @@ export function captureUTMFromURL(): void {
     const source = params.get('utm_source');
     const campaign = params.get('utm_campaign');
     const medium = params.get('utm_medium');
+    const content = params.get('utm_content');
+    const term = params.get('utm_term');
 
     const lid = params.get('lid');
 
-    if (source || campaign || medium || lid) {
+    if (source || campaign || medium || content || term || lid) {
       const stored: StoredUTM = {
         utmSource: source || '',
         utmCampaign: campaign || '',
         utmMedium: medium || '',
+        utmContent: content || '',
+        utmTerm: term || '',
         storedAt: new Date().toISOString(),
       };
       localStorage.setItem(UTM_KEY, JSON.stringify(stored));
@@ -63,6 +72,8 @@ export function getUTMParams(): UTMParams {
       utmSource: stored.utmSource || '',
       utmCampaign: stored.utmCampaign || '',
       utmMedium: stored.utmMedium || '',
+      utmContent: stored.utmContent || '',
+      utmTerm: stored.utmTerm || '',
       lid: localStorage.getItem('cb_lid') || '',
     };
   } catch {
@@ -126,4 +137,45 @@ export function getUTMPayloadFields(): {
     utm_campaign: utmCampaign || undefined,
     page_url: window.location.href,
   };
+}
+
+export interface SignupAcquisitionFields {
+  utm_source?: string;
+  utm_campaign?: string;
+  utm_content?: string;
+  utm_term?: string;
+  page_url?: string;
+}
+
+/** The server caps (enrollmentSchema portalFreeSignupSchema): 255 per UTM field, 500 and http(s) for page_url. */
+const UTM_MAX = 255;
+const PAGE_URL_MAX = 500;
+
+/**
+ * C94: the acquisition keys for POST /api/portal/free-signup, which the signup page never sent, so every ad signup
+ * was recorded as a plain `free_signup` with no source. Same `source|medium` convention as getUTMPayloadFields, plus
+ * utm_content (which ad) and utm_term (which placement).
+ *
+ * The route is `.strict()` and validates each value, so this returns ONLY keys that hold a value the server will
+ * accept: an empty value is omitted (absent means "not known"), an over-long value is omitted rather than truncated
+ * (a cut-off id is a wrong id), and page_url is sent only when it is http(s) and within 500 characters. A signup must
+ * never fail because of a tracking value.
+ */
+export function getSignupAcquisitionFields(): SignupAcquisitionFields {
+  const { utmCampaign, utmContent, utmTerm } = getUTMParams();
+  const { utm_source: source } = getUTMPayloadFields();
+  const out: SignupAcquisitionFields = {};
+  const put = (key: Exclude<keyof SignupAcquisitionFields, 'page_url'>, v: string | undefined) => {
+    const s = (v || '').trim();
+    if (s && s.length <= UTM_MAX) out[key] = s;
+  };
+  put('utm_source', source);
+  put('utm_campaign', utmCampaign);
+  put('utm_content', utmContent);
+  put('utm_term', utmTerm);
+  try {
+    const href = window.location.href;
+    if (/^https?:\/\//i.test(href) && href.length <= PAGE_URL_MAX) out.page_url = href;
+  } catch { /* no location: leave page_url out */ }
+  return out;
 }

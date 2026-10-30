@@ -39,7 +39,8 @@ import { renderDocs } from './renderDocs';
 import { writeDocsToRepo, readRepoManifest, RepoWriteError } from './repoWriter';
 import { loadBuildProgress } from './buildProgressSnapshot';
 import { scheduleForEnrollment } from './scheduleForEnrollment';
-import { ensureGovPlanPublishedForSync } from './govPlanForSync';
+import { ensureGovPlanPublishedForSync, isGovBuildProjectVariables } from './govPlanForSync';
+import { scheduleFromBoard } from './scheduleFromBoard';
 
 export type RefreshOutcome =
   | 'written'          // files changed and were committed
@@ -113,13 +114,21 @@ export async function refreshRepoDocuments(
     }
 
     const plan = stored.plan as BuildPlan;
-    // `stored.published_at`, never `new Date()`. This path runs on every repo
-    // sync; a wall-clock floor would nudge the student's whole schedule further
-    // out each time they pushed, and plan.json would disagree with the tasks
-    // table it is supposed to mirror.
-    const schedule = enrollmentId
-      ? await scheduleForEnrollment(enrollmentId, plan, opts.correlationId ?? null, stored.published_at)
-      : null;
+    // A GOV build's tasks are dated by the deadline back-scheduler (govSyntheticSchedule), not the
+    // cohort scheduler, so its plan.json must take its dates FROM THE BOARD or every release reads the
+    // same wrong day — the symptom Omolola saw on Saratoga. `scheduleFromBoard` reads the real
+    // `student_tasks.due_on` back; a non-gov build keeps the cohort schedule; a null from either falls
+    // through to no dates, as before.
+    //
+    // `stored.published_at`, never `new Date()`: this path runs on every repo sync, and a wall-clock
+    // floor would nudge the student's whole schedule further out each time they pushed, making plan.json
+    // disagree with the tasks table it is supposed to mirror.
+    const isGov = isGovBuildProjectVariables((project as { project_variables?: unknown } | null)?.project_variables);
+    const schedule =
+      (isGov ? await scheduleFromBoard(projectId) : null)
+      ?? (enrollmentId
+        ? await scheduleForEnrollment(enrollmentId, plan, opts.correlationId ?? null, stored.published_at)
+        : null);
     const snapshot = await loadBuildProgress(projectId, enrollmentId || null);
 
     // Asked explicitly rather than inferred from `repoForProject` having

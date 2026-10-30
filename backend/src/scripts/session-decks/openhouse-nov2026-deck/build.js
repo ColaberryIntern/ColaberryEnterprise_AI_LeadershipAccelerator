@@ -103,7 +103,7 @@ main{max-width:980px;margin:0 auto;padding:24px 16px 80px}
 <li>Open <b>📱 My presenter link</b> on your phone: it follows the deck, slide by slide, with the note for each one.</li>
 <li>Have a second tab logged in to the platform for the live business (slide 6, back on slide 23).</li>
 <li>Pricing order: <b>$149/mo billed annually</b> first and alone. $199 month-to-month only if someone pushes back. Never the banned price word: say "$0 to start" or "no card needed" (TWC rule).</li>
-<li>Draws: entrants are everyone logged in who taps "I'm in". Lock → Reveal → Draw winner, once per winner. Winners are remembered in this browser even if you reload; write them down anyway for admissions.</li>
+<li>Draws: entrants are everyone logged in who taps "I'm in". Lock → Reveal → Draw winner, once per winner. The platform draws and saves each winner (full name + email), so a reload or another computer shows the same names, and the post-event packet reads them from the database.</li>
 </ul></div>
 ${rows}
 </main></body></html>`;

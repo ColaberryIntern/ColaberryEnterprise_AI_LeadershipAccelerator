@@ -47,7 +47,7 @@ export function recordHqVisit(path: string | null, now: number = Date.now()): vo
 
 /** The rooms this badge opens, most used first (count, then most recent), then sidebar order; capped. Locked rooms never appear. */
 export function topRooms(hq: Hq, usage: HqUsage, cap: number = STAFF_TOOLS_CAP): { rooms: HqRoom[]; total: number } {
-  const open = hq.floors.flatMap((f) => f.rooms).filter((r) => r.open && !r.external);
+  const open = hq.floors.flatMap((f) => f.rooms).filter((r) => r.open && !r.external && !r.own);
   const order = new Map(open.map((r, i) => [r.path, i]));
   const ranked = [...open].sort((a, b) => {
     const ua = usage[a.path]; const ub = usage[b.path];

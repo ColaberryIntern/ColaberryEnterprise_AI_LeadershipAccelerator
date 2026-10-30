@@ -86,9 +86,8 @@ const SRC = path.resolve(__dirname, '../..');
 const BASELINE = {
   // ── ADVERTISING, still open. Outside this component's ownership (see ADVERTISING_STILL_OPEN).
   'controllers/salesHubCoryController.ts': [1, 'ADVERTISING: "free Open House" in the fact sheet Cory writes sales replies from'],
-  'data/announcementWeek0.ts': [5, 'ADVERTISING: the Week 0 lead-magnet card, including the chip "100% Free"'],
-  'data/claudeStudios/weeks00to04.ts': [2, 'ADVERTISING: week_theme "Free AI Preview" and "the free-preview week"'],
-  'data/weekBlueprints.ts': [3, 'ADVERTISING: week title "Free AI Preview"; two internal tier notes'],
+  // C95 (2026-10-30): data/announcementWeek0.ts (5) and data/claudeStudios/weeks00to04.ts (2) went to zero.
+  'data/weekBlueprints.ts': [2, 'ADVERTISING-ADJACENT: two internal tier notes in Week 0 generation prompts (the week title was fixed in C95)'],
   'seeds/seedColdOutboundCampaign.ts': [1, 'ADVERTISING: "a free, no-commitment tool" in cold-outbound generation instructions'],
   'seeds/seedColdOutboundPhases.ts': [1, 'ADVERTISING: "is a free tool" in phase generation instructions'],
   'seeds/seedKbData.ts': [4, 'ADVERTISING: answer_template "completely free"; plus inbound match keywords and third-party tool pricing'],
@@ -231,6 +230,11 @@ const REMOVED_ADVERTISING = [
   // internal log line would net to the same 2.
   'Your free account is ready',
   'You already have a free account',
+  // Removed 2026-10-30 (C95) from the Week 0 welcome card, the first card every Explorer sees.
+  'Welcome to Your Free AI Preview',
+  '100% Free',
+  'Your free week of AI',
+  'Free AI Preview',
 ];
 
 /**
@@ -243,9 +247,8 @@ const ADVERTISING_STILL_OPEN = [
   // response messages were removed; the two occurrences left are INTERNAL, so the path
   // belongs in the baseline but no longer on this list.
   'controllers/salesHubCoryController.ts',
-  'data/announcementWeek0.ts',
-  'data/claudeStudios/weeks00to04.ts',
-  'data/weekBlueprints.ts',
+  // data/announcementWeek0.ts, data/claudeStudios/weeks00to04.ts and data/weekBlueprints.ts were here until
+  // 2026-10-30 (C95). The first two went to zero; the two left in weekBlueprints are internal prompt notes.
   'seeds/seedColdOutboundCampaign.ts',
   'seeds/seedColdOutboundPhases.ts',
   'seeds/seedKbData.ts',
