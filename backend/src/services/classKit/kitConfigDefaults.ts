@@ -67,11 +67,12 @@ function flattenStoryBeats(map: Record<string, StoryBeat[]> | undefined): StoryB
 
 export function getKitConfigDefaults(session: KitSessionInput): KitConfigDefaults {
   const dayKind = detectDayKind(session.title, session.session_date);
-  const week = dayKind === 'orientation' ? null : parseWeek(session.title);
+  const week = dayKind === 'orientation' || dayKind === 'openhouse' ? null : parseWeek(session.title);
   const wc = week != null ? WEEK_CLASS_CONTENT.find((w) => w.week === week) : undefined;
 
   const teach =
-    dayKind === 'orientation' ? ORIENTATION_TEACH
+    dayKind === 'openhouse' ? []
+    : dayKind === 'orientation' ? ORIENTATION_TEACH
       : dayKind === 'architecture' ? (packTeach(week, 'monday') ?? teachSlidesFor(week, 'monday'))
         : (packTeach(week, 'thursday') ?? teachSlidesFor(week, 'thursday'));
 

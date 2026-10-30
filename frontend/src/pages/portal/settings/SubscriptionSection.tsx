@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
   fetchSubscription, startSubscriptionCheckout, cancelSubscription, confirmSubscriptionCheckout,
   SubscriptionView, PlanId,
@@ -256,6 +257,10 @@ const SubscriptionSection: React.FC<{ onToast?: (m: string) => void }> = ({ onTo
         <>
           <p className="set-sub">You’re on the free plan. Upgrade to unlock the full program.</p>
           {renderPlans(true)}
+          {/* C91: for an Explorer this tab was a dead end (ad audit: 121 of 308 ad signups ended up here, none paid); always offer the way back to learning */}
+          <div className="set-actions" style={{ marginTop: 12 }} data-testid="set-sub-keep-learning">
+            <Link className="te-btn ghost sm" to="/portal/today?stay=1">Not ready yet? Back to your lessons →</Link>
+          </div>
         </>
       )}
 

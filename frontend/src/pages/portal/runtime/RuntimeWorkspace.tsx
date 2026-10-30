@@ -14,6 +14,9 @@ import SkillsJarPanel from '../../../components/timeline/SkillsJarPanel';
 import { toTitleCase } from '../../../utils/titleCase';
 import { useReaderProgress } from '../../../components/timeline/useReaderProgress';
 import { useBlogReadGate } from '../../../components/timeline/useBlogReadGate';
+import { useWatchVerdict } from '../../../components/timeline/useWatchVerdict';
+import { useDwellGate, isDwellGatedCard } from '../../../components/timeline/useDwellGate';
+import { RuntimeCompleteGate, RuntimeBlogCompleteGate } from './RuntimeCompleteGate';
 import { useDeepDiveHost } from '../../../components/timeline/useDeepDiveHost';
 import SetupLabRender from '../../../components/timeline/SetupLabRender';
 import PromptCatalogRender from '../../../components/timeline/PromptCatalogRender';
@@ -74,8 +77,7 @@ const RuntimeWorkspace: React.FC = () => {
   const [reflectionText, setReflectionText] = useState('');
   const [artifact, setArtifact] = useState<any>(null);
   const [completed, setCompleted] = useState(false);
-  // Server-truth watch state for the 75% gate (video/testimonial/podcast).
-  const [watch, setWatch] = useState<{ watched_pct: number; required_pct: number | null; met: boolean } | null>(null);
+  const [gateMsg, setGateMsg] = useState<string | null>(null);   // a server rejection, shown beside the button (never replaces the page)
 
   // mentor
   const [msgs, setMsgs] = useState<Msg[]>([]);
@@ -95,7 +97,7 @@ const RuntimeWorkspace: React.FC = () => {
     (async () => {
       try {
         const [open, rd] = await Promise.all([runtimeApi.open(cardId), runtimeApi.readiness().catch(() => null)]);
-        setData(open); setReadiness(rd); setCompleted(open.progress.status === 'completed'); setWatch(null); setNudge(null);
+        setData(open); setReadiness(rd); setCompleted(open.progress.status === 'completed'); setGateMsg(null); setNudge(null);
         // The screenshot line is in the opening turn rather than a tooltip: a
         // paperclip nobody notices is the same as no paperclip, and this is the
         // one place every student actually reads.
@@ -123,12 +125,15 @@ const RuntimeWorkspace: React.FC = () => {
   const externalTitle = isVideo || band === 'skills_jar' || ['testimonial', 'blog', 'podcast', 'announcement'].includes(card?.type || '');
   const rawTitle = card?.week_title || card?.content?.title || card?.title || '';
   const displayTitle = externalTitle ? rawTitle : toTitleCase(rawTitle);
-  // Watch gate: report play heartbeats while not yet completed; the "Mark complete"
-  // button stays disabled until the server confirms the 75% threshold is met.
+  // Watch gate: the verdict is fetched the moment the card opens (so "Mark complete"
+  // starts dimmed), then play heartbeats refresh it until the server says it's met.
+  const [watch, setWatch] = useWatchVerdict(card && isVideo && !completed ? card.id : null, () => runtimeApi.watchVerdict(cardId));
   const onWatchBeat: ((beat: WatchBeatPayload) => void) | undefined = card && !completed
     ? (beat) => { runtimeApi.watch(card.id, beat).then(setWatch).catch(() => { /* best-effort */ }); }
     : undefined;
-  const watchGated = isVideo && watch?.required_pct != null && !watch?.met;
+  // Dwell gate (passive-content bands): the same continuous-read timer the drawer runs.
+  const dwellGated = !!card && !completed && isDwellGatedCard(card);
+  const dwell = useDwellGate(dwellGated ? cardId : null, dwellGated);
   // Self Study reading: same per-section read-gate as the drawer — Mark complete only
   // unlocks once every section has been read (>=5s each), via the reader's postMessages.
   const isReader = band === 'warmup' && !!card?.content?.body_html;
@@ -139,7 +144,6 @@ const RuntimeWorkspace: React.FC = () => {
   const isBlog = card?.type === 'blog' && !!card?.blog?.url;
   const blogId = isBlog && cardId.startsWith('blog:') ? cardId.slice('blog:'.length) : null;
   const blogGate = useBlogReadGate(!completed ? blogId : null, true);
-  const blogReadPct = Math.min(100, Math.round(((blogGate.state?.read_s ?? 0) / (blogGate.state?.required_s || 120)) * 100));
   // Deep Dive Field Guide: renders its own self-contained HTML in an allow-scripts iframe
   // (same as the drawer's deepdive arm). The host bridge owns read/copy persistence
   // (restored across drawer↔workspace), the +100-point upload, and the gate — dd.complete
@@ -193,7 +197,7 @@ const RuntimeWorkspace: React.FC = () => {
     try { setReflectionQs((await runtimeApi.reflection(card.id)).questions); } catch { /* ignore */ } finally { setBusy(''); }
   };
   const complete = async () => {
-    if (!card) return; setBusy('complete');
+    if (!card) return; setBusy('complete'); setGateMsg(null);
     try {
       const work = isLab ? `${prompt}\n\n${evalResult ? 'Eval: ' + evalResult.score + '/100' : ''}` : reflectionText;
       const r = await runtimeApi.complete(card.id, work, reflectionText);
@@ -208,18 +212,24 @@ const RuntimeWorkspace: React.FC = () => {
       // Completing any assignment returns the student to the curriculum (Classroom),
       // right where they left off — the Deep Dive already did this; now it's universal.
       setTimeout(goBack, 1200);
-    } catch (e: any) { setError(e?.response?.data?.error || 'Completion failed.'); } finally { setBusy(''); }
+    } catch (e: any) {
+      // A gate the server still enforced: say why beside the button and re-dim it,
+      // rather than swapping the whole workspace for an error page.
+      const d = e?.response?.data || {};
+      if (d.code === 'watch_requirement' && d.required_pct != null) setWatch({ watched_pct: Number(d.watched_pct) || 0, required_pct: d.required_pct, met: false });
+      setGateMsg(d.error || 'Completion failed. Try again in a moment.');
+    } finally { setBusy(''); }
   };
   // Ambient blogs collect via the read gate (not the generic complete): the server
   // re-checks the 2-minute read before awarding, and it's idempotent per blog.
   const collectBlogPts = async () => {
-    if (!blogId) return; setBusy('complete');
+    if (!blogId) return; setBusy('complete'); setGateMsg(null);
     try {
       await runtimeApi.blogCollect(blogId);
       setCompleted(true);
       setMsgs((m) => [...m, { role: 'assistant', content: 'Nice — points collected. Taking you back to your timeline.', kind: 'complete' }]);
       setTimeout(goBack, 1200);
-    } catch (e: any) { setError(e?.response?.data?.error || 'Keep reading a little longer to collect your points.'); } finally { setBusy(''); }
+    } catch (e: any) { setGateMsg(e?.response?.data?.error || 'Keep reading a little longer to collect your points.'); } finally { setBusy(''); }
   };
 
   if (error) return <div className="rt" data-theme={theme}><style>{runtimeCss}</style><div className="rt-mid" style={{ padding: 40 }}>{error} <button className="rt-btn" onClick={goBack}>← {backTo.includes('/today') ? 'Timeline' : 'Classroom'}</button></div></div>;
@@ -227,27 +237,12 @@ const RuntimeWorkspace: React.FC = () => {
 
   // Complete gate + comments are shared so Self Study can host them in the reader foot /
   // right rail (single-scroll layout) while every other card keeps them in the center.
-  const completeLabel = busy === 'complete' ? 'Generating evidence…'
-    : watchGated ? `Keep watching · ${watch?.watched_pct ?? 0}/${watch?.required_pct}%`
-    : card.evidence_required ? 'Complete & generate evidence' : 'Mark complete';
-  const completeGate = completed
-    ? <span className="rt-pill done">✓ Completed — evidence generated</span>
-    : isReader && !readerProg.complete
-      ? <span className="rt-muted">{readerProg.total > 0 ? `${readerProg.done} of ${readerProg.total} sections read — read all to finish` : 'Read the material to finish'}</span>
-      : isDeepDive && !ddComplete
-        ? <span className="rt-muted">Finish the steps in the guide to complete{dd.total > 0 ? ` — ${dd.done} of ${dd.total} sections read` : ''}</span>
-        : <button className={fill ? 'ss-complete-btn' : 'rt-btn cta'} disabled={busy === 'complete' || watchGated} title={watchGated ? `Reach ${watch?.required_pct}% watched to collect your points` : undefined} onClick={complete}>{completeLabel}</button>;
-  // Blog: collect appears only after the 2-minute read gate is met (server re-enforces).
-  const blogCompleteGate = completed
-    ? <span className="rt-pill done">✓ Completed — points collected</span>
-    : !blogGate.state?.met
-      ? <span className="rt-muted" style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-          Read the post — {blogGate.state?.read_s ?? 0}s of {blogGate.state?.required_s ?? 120}s to collect your points
-          <span style={{ flexBasis: '100%', height: 6, borderRadius: 3, background: 'rgba(0,0,0,.12)', overflow: 'hidden' }}><i style={{ display: 'block', height: '100%', width: `${blogReadPct}%`, background: '#367895', transition: 'width .5s ease' }} /></span>
-        </span>
-      // No `?? 10` here: a card that carries no learning points must not advertise ten
-      // of them. When there are none to collect the action is a plain completion.
-      : <button className="rt-btn cta" disabled={busy === 'complete'} onClick={collectBlogPts}>{(card.points?.learning ?? 0) > 0 ? `Collect +${card.points?.learning} pts` : 'Mark complete'}</button>;
+  const completeGate = <RuntimeCompleteGate completed={completed} busy={busy === 'complete'} fill={fill} evidenceRequired={!!card.evidence_required}
+    reader={{ on: isReader, complete: readerProg.complete, done: readerProg.done, total: readerProg.total }}
+    deepDive={{ on: isDeepDive, complete: ddComplete, done: dd.done, total: dd.total }}
+    watchApplies={isVideo} watch={watch} dwellApplies={dwellGated} dwell={dwell} message={gateMsg} onComplete={complete}
+    lockedReason={isSetupLab && !labCopied ? 'Copy the prompt first' : isPromptCatalog && !allPromptsCopied ? 'Copy all the prompts first' : null} />;
+  const blogCompleteGate = <RuntimeBlogCompleteGate completed={completed} busy={busy === 'complete'} gate={blogGate.state} learningPoints={card.points?.learning ?? 0} message={gateMsg} onCollect={collectBlogPts} />;
   // Comments always render in the right rail now (every card type), so the center is a
   // single, clean scroll.
   const commentsBlock = <RuntimeComments cardId={cardId} postId={card.id} />;
@@ -415,13 +410,13 @@ const RuntimeWorkspace: React.FC = () => {
       endRef={mentorEnd}
       subtitle={campus.active ? `Your mentor for ${displayTitle}` : undefined}
       top={<>
-        {isSetupLab && (labCopied || completed) && (
+        {isSetupLab && (
           <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--line)' }}>
             {!completed && <div className="rt-lab" style={{ marginBottom: 8 }}>Finished in Claude Code?</div>}
             {completeGate}
           </div>
         )}
-        {isPromptCatalog && (allPromptsCopied || completed) && (
+        {isPromptCatalog && (
           <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--line)' }}>
             {!completed && <div className="rt-lab" style={{ marginBottom: 8 }}>Built one in Claude Code?</div>}
             {completeGate}

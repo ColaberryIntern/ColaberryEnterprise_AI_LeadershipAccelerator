@@ -50,6 +50,8 @@ export interface FunnelCampaignRow {
   signups: number;
   accounts: number;
   in_crm: number;
+  /** Signups from this campaign who ticked consent. Zero here means a door earning no permission. */
+  opted_in: number;
 }
 
 export interface AcquisitionFunnel {
@@ -71,6 +73,8 @@ interface DownstreamRow {
   signups: string;
   accounts: string;
   in_crm: string;
+  /** Signups who ticked the consent box. The ceiling on anything we can send. */
+  opted_in: string;
   returned: string;
 }
 
@@ -83,7 +87,7 @@ interface DownstreamRow {
 async function downstream(days: number): Promise<DownstreamRow> {
   const rows = await sequelize.query<DownstreamRow>(
     `WITH landing_leads AS (
-       SELECT l.id, lower(btrim(l.email)) AS email, l.ghl_contact_id
+       SELECT l.id, lower(btrim(l.email)) AS email, l.ghl_contact_id, l.consent_contact
        FROM leads l
        -- IN (:list), NOT = ANY(:list). Sequelize expands a replacement array into a
        -- comma-separated list, so ANY(...) receives ANY('a','b','c') and Postgres rejects it
@@ -102,13 +106,14 @@ async function downstream(days: number): Promise<DownstreamRow> {
        (SELECT count(DISTINCT e.email) FROM enrollments e
           WHERE lower(btrim(e.email)) IN (SELECT email FROM landing_leads))::text AS accounts,
        (SELECT count(*) FROM landing_leads WHERE ghl_contact_id IS NOT NULL)::text AS in_crm,
+       (SELECT count(*) FROM landing_leads WHERE consent_contact)::text AS opted_in,
        (SELECT count(DISTINCT vs.lead_id) FROM visitor_sessions vs
           JOIN leads l2 ON l2.id = vs.lead_id
           WHERE l2.id IN (SELECT id FROM landing_leads)
             AND vs.started_at::date > l2.created_at::date)::text AS returned`,
     { type: QueryTypes.SELECT, replacements: { days: String(days), sources: LANDING_SOURCES } },
   );
-  return rows[0] ?? { signups: '0', accounts: '0', in_crm: '0', returned: '0' };
+  return rows[0] ?? { signups: '0', accounts: '0', in_crm: '0', opted_in: '0', returned: '0' };
 }
 
 /** Signups, accounts and CRM coverage per campaign, so spend can be compared to outcome. */
@@ -117,7 +122,10 @@ async function byCampaign(days: number): Promise<FunnelCampaignRow[]> {
     `SELECT l.utm_source, l.utm_campaign,
             count(*)::int AS signups,
             count(DISTINCT e.email)::int AS accounts,
-            count(*) FILTER (WHERE l.ghl_contact_id IS NOT NULL)::int AS in_crm
+            count(*) FILTER (WHERE l.ghl_contact_id IS NOT NULL)::int AS in_crm,
+            -- Per campaign, because an opt-in rate averaged over every door hides the
+            -- door that earns none. apollo, popup and catalog_request were at zero.
+            count(*) FILTER (WHERE l.consent_contact)::int AS opted_in
      FROM leads l
      LEFT JOIN enrollments e ON lower(btrim(e.email)) = lower(btrim(l.email))
      -- See the note above: IN, not ANY, because of how replacements expand.
@@ -195,6 +203,20 @@ export async function acquisitionFunnel(days = 30): Promise<AcquisitionFunnel> {
       count: n(down.in_crm),
       unit: 'people',
       note: 'Synced to GoHighLevel, so admissions can contact them.',
+    },
+    {
+      // Measured independently like every other stage, and placed here because this is
+      // where the funnel actually narrows. "Reached the CRM" says admissions CAN see them;
+      // this says whether we are ALLOWED to email them. Without it the page shows 313
+      // collapsing to a handful and offers no reason, when most of the gap is simply
+      // people nobody has permission to contact. `brandPreferenceGate` reads the per-brand
+      // relationship rather than this column, so treat this as the ceiling rather than the
+      // verdict: nobody above this line is reachable, and not everybody below it is.
+      key: 'opted_in',
+      label: 'Allowed us to email them',
+      count: n(down.opted_in),
+      unit: 'people',
+      note: 'Ticked the consent box at signup. Everyone else can only be reached on the site itself.',
     },
     {
       key: 'returned',

@@ -236,13 +236,21 @@ describe('marketing consent', () => {
     // Received tel", which is the guard working rather than the change being wrong.
     //
     // The phone CONSENT checkbox is deliberately absent here - it renders only once a number
-    // has been typed, so at mount the marketing checkbox is still the last input.
+    // has been typed.
+    //
+    // ORDER CHANGED 2026-10-29, and this guard fired exactly as its author predicted, just with
+    // the operands swapped. The marketing checkbox was MOVED UP to sit directly under the email
+    // field: at the bottom of the form it was read, if at all, after attention had already moved
+    // to the submit button, and 59 of 347 free_signup leads in thirty days ticked it. What this
+    // guard actually protects is name and email staying at indexes 0 and 1, because
+    // `fillAndSubmit` destructures exactly those two. A checkbox arriving at index 2 leaves that
+    // intact, and the other 21 tests in this file passing unchanged is the evidence for it.
     await mount();
     const [first, second, third, fourth] = inputs();
     expect(first.type).toBe('text');
     expect(second.type).toBe('email');
-    expect(third.type).toBe('tel');
-    expect(fourth.type).toBe('checkbox');
+    expect(third.type).toBe('checkbox');
+    expect(fourth.type).toBe('tel');
   });
 });
 

@@ -2,11 +2,14 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { sumCardPoints } from '../classroomNextStep';
 import { SETUP_STEP_CTA_LABEL, type TodayNextStep } from './useTodayNextStep';
+import type { TimelineFeedCard } from '../../../components/timeline/TimelineCard';
 
 type Props = {
   nextStep: TodayNextStep;
   total: number;
   onScrollTo: (id: string) => () => void;
+  /** C91: opens a card right here on Today (the first lesson), not in Classroom. */
+  onOpenCard?: (card: TimelineFeedCard) => void;
 };
 
 /**
@@ -16,7 +19,23 @@ type Props = {
  * doesn't grow that file further. Pure presentation; all the "what state is
  * the student in" logic lives in useTodayNextStep.ts.
  */
-const TodayNextStepBanner: React.FC<Props> = ({ nextStep, total, onScrollTo }) => {
+const TodayNextStepBanner: React.FC<Props> = ({ nextStep, total, onScrollTo, onOpenCard }) => {
+  if (nextStep.kind === 'first-lesson') {
+    const pts = sumCardPoints(nextStep.card.points);
+    return (
+      <>
+        <p className="statline">Start here: one lesson first, then everything else is yours to explore.</p>
+        <div className="ctas">
+          <button className="te-btn cherry" type="button" onClick={() => onOpenCard?.(nextStep.card)} data-testid="te-first-lesson-cta">
+            {nextStep.card.title}
+            {pts > 0 && <> · +{pts} pts</>}
+            {' →'}
+          </button>
+        </div>
+      </>
+    );
+  }
+
   if (nextStep.kind === 'classroom') {
     const pts = sumCardPoints(nextStep.card.points);
     return (

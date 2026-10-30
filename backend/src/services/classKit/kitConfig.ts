@@ -61,6 +61,8 @@ export interface Slot<T> {
 export interface OpeningCopy { title: string; body: string }
 export interface HookCopy { headline: string; caption: string }
 
+export interface CustomDeck { html: string; guideHtml: string | null }
+
 export interface KitConfig {
   storyBeats: CountAndOverride<StoryBeatOverride>;
   /** Live Decision Theater — full-screen poll treatment. When false, theater-
@@ -134,6 +136,12 @@ export interface KitConfig {
    * changes visually until an instructor actually adds/edits/removes one). */
   interactions: CountAndOverride<InteractionPlacement>;
 
+  /** A hand-designed deck that replaces the generated one for this session
+   * (an Open House, a keynote). ▶ Present serves `html` with the session's
+   * live connection injected (see customDeck.ts), and the Teaching guide
+   * download serves `guideHtml`. Null = the normal generated deck. */
+  customDeck?: CustomDeck | null;
+
   /** The recurring "opening" moments that repeat in near-identical shape
    * across weeks — the cold-open framing ("By Thursday, this will exist"),
    * Story Mode's optional full-screen hook, and Build Day's result-preview.
@@ -162,6 +170,7 @@ export const DEFAULT_KIT_CONFIG: KitConfig = {
   teach: { enabled: true, max: null, overrides: null },
   prompts: { enabled: true, max: null, overrides: null },
   interactions: { enabled: true, max: null, overrides: null },
+  customDeck: null,
   opening: {
     coldOpen: { ...DEFAULT_SLOT },
     hook: { ...DEFAULT_SLOT },
@@ -184,6 +193,14 @@ function mergeSlot<T>(saved: unknown, fallback: Slot<T>): Slot<T> {
     enabled: typeof s.enabled === 'boolean' ? s.enabled : fallback.enabled,
     override: s.override && typeof s.override === 'object' ? (s.override as T) : fallback.override,
   };
+}
+
+/** A custom deck only counts when its html is a non-empty string; anything
+ * else falls back to the generated deck rather than presenting a blank page. */
+function mergeCustomDeck(saved: unknown): CustomDeck | null {
+  const s = (saved && typeof saved === 'object' ? saved : {}) as Partial<CustomDeck>;
+  if (typeof s.html !== 'string' || !s.html.trim()) return null;
+  return { html: s.html, guideHtml: typeof s.guideHtml === 'string' && s.guideHtml.trim() ? s.guideHtml : null };
 }
 
 /** Merge a possibly-partial/possibly-null saved config over the defaults —
@@ -213,6 +230,7 @@ export function mergeKitConfig(saved: unknown): KitConfig {
     // the old shape — exactly the discipline this function already existed
     // to guarantee for every other category.
     interactions: mergeCountAndOverride(s.interactions, DEFAULT_KIT_CONFIG.interactions),
+    customDeck: mergeCustomDeck(s.customDeck),
     opening: {
       coldOpen: mergeSlot(so.coldOpen, DEFAULT_KIT_CONFIG.opening.coldOpen),
       hook: mergeSlot(so.hook, DEFAULT_KIT_CONFIG.opening.hook),

@@ -53,7 +53,7 @@ const CATEGORIES: CategoryDef[] = [
 ];
 
 const DAY_LABEL: Record<KitConfigDefaults['dayKind'], string> = {
-  orientation: 'Orientation', architecture: 'Architecture Day (Monday)', build: 'Build Day (Thursday)',
+  orientation: 'Orientation', architecture: 'Architecture Day (Monday)', build: 'Build Day (Thursday)', openhouse: 'Open House',
 };
 
 const KitConfigModal: React.FC<Props> = ({ sessionId, sessionTitle, onClose, showToast, initialCategory }) => {

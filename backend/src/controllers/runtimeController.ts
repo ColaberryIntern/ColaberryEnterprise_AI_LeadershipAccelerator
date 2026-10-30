@@ -6,7 +6,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { openCard, completeActivity, readinessSummary, cardContext } from '../services/runtime/runtimeService';
-import { recordWatchBeat } from '../services/runtime/watchProgressService';
+import { recordWatchBeat, getWatchVerdict } from '../services/runtime/watchProgressService';
 import { recordReadBeat, collectBlog } from '../services/runtime/blogReadGateService';
 import { recordMediaBeat, getMediaVerdict, collectMedia } from '../services/runtime/ambientMediaGateService';
 import { getBlogReader } from '../services/blog/blogReaderService';
@@ -178,6 +178,12 @@ export async function handleWatchBeat(req: Request, res: Response, next: NextFun
     const beat = watchBeatSchema.parse(req.body);
     res.json(await recordWatchBeat(eid(req), String(req.params.cardId), beat));
   } catch (err) { fail(res, err, next); }
+}
+
+/** GET /api/portal/runtime/cards/:cardId/watch — current watch verdict, no write.
+ *  The UI reads it on open so Mark complete starts dimmed until the bar is met. */
+export async function handleWatchVerdict(req: Request, res: Response, next: NextFunction) {
+  try { res.json(await getWatchVerdict(eid(req), String(req.params.cardId))); } catch (err) { fail(res, err, next); }
 }
 
 const readBeatSchema = z.object({ delta_s: z.number().min(0).max(600) });

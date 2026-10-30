@@ -13,6 +13,7 @@ import type { CompleteResult } from './campusPlanApi';
 import type { CampusLook } from './campusApi';
 import type { PlanStop } from './campusPlan';
 import { useCampusDmToasts, DmToast, ToastHold } from './useCampusDmToasts';
+import type { DmConversation } from '../../services/dmApi';
 import type { StaffDesk } from './campusPeopleApi';
 import { useParticipantAuth } from '../../contexts/ParticipantAuthContext';
 import type { BuildingId } from './campusMap';
@@ -94,6 +95,9 @@ export interface CampusState {
   /** C11: pause / resume the toast's auto-hide while it has focus or the pointer. */
   holdDmToast: (why: ToastHold) => void;
   releaseDmToast: (why: ToastHold) => void;
+  /** C23 phase 3: my conversations from the same poll (null until read), and a read-now for after marking one read. */
+  dmConversations: DmConversation[] | null;
+  refreshDms: () => void;
   /** C8: today's plan as campus stops (null when the plan is off, failed, or the campus is off). */
   planStops: PlanStop[] | null;
   /** WP-2: the plan's own total minutes, and marking a step done (Today's collect path; the step stays, ticked). */
@@ -147,7 +151,7 @@ const OFF: CampusState = {
   tourProgress: { paused: null, toured: false }, resumeTour: noop, finishTour: noop, dismissTour: noop, openList: noop, closeLayer: noop,
   presence: null, presenceError: false, door: null, enterThroughDoor: noop, stepOutside: noop, clearDoor: noop,
   staffDesks: [], staffDesksError: false, personCard: null, openPersonCard: noop, closePersonCard: noop,
-  dmToast: null, dismissDmToast: noop, holdDmToast: noop, releaseDmToast: noop, planStops: null, planMinutes: null,
+  dmToast: null, dismissDmToast: noop, holdDmToast: noop, releaseDmToast: noop, dmConversations: null, refreshDms: noop, planStops: null, planMinutes: null,
   completePlanStop: () => Promise.resolve({ ok: false, reason: 'failed', message: 'The campus is off' }), justToured: false, tourIndex: null, startTour: noop, setTourIndex: noop, endTour: noop,
   look: null, lookError: false, saveLook: () => Promise.reject(new Error('The campus is off')), reloadLook: noop, lockerOpen: false, openLocker: noop, closeLocker: noop, meOpen: false, openMe: noop, closeMe: noop,
   audienceSwitch: false, viewAs: null, setViewAs: noop,
@@ -220,7 +224,7 @@ export function CampusProvider({ children }: { children?: React.ReactNode }): Re
 
   // C5: AI staff desks (read once while active) and the open person card.
   const { staffDesks, staffDesksError } = useStaffDesks(active);
-  const { toast: dmToast, dismiss: dismissDmToast, hold: holdDmToast, release: releaseDmToast } = useCampusDmToasts(active);
+  const { toast: dmToast, dismiss: dismissDmToast, hold: holdDmToast, release: releaseDmToast, conversations: dmConversations, refresh: refreshDms } = useCampusDmToasts(active);
   const { look, lookError, saveLook, reloadLook } = useCampusLook(active);
   const { stops: planStops, minutes: planMinutes, complete: completePlanStop } = useCampusPlan(active, layer === 'map', reloadLook);
   const openPersonCard = useCallback((t: PersonCardTarget) => setPersonCard(t), []);
@@ -228,9 +232,9 @@ export function CampusProvider({ children }: { children?: React.ReactNode }): Re
 
   const value = useMemo<CampusState>(
     () => ({ enabled, ready, settings, active, updateSettings, layer, mapFocus, mapHow, openMap, ackMap, here, setHere, tourProgress, resumeTour, finishTour, dismissTour, openList, closeLayer, presence, presenceError,
-      door, enterThroughDoor, stepOutside, clearDoor, staffDesks, staffDesksError, personCard, openPersonCard, closePersonCard, dmToast, dismissDmToast, holdDmToast, releaseDmToast, planStops, planMinutes, completePlanStop, justToured, tourIndex, startTour, setTourIndex, endTour, look, lookError, saveLook, reloadLook, lockerOpen, openLocker, closeLocker, meOpen, openMe, closeMe, audienceSwitch, viewAs, setViewAs }),
+      door, enterThroughDoor, stepOutside, clearDoor, staffDesks, staffDesksError, personCard, openPersonCard, closePersonCard, dmToast, dismissDmToast, holdDmToast, releaseDmToast, dmConversations, refreshDms, planStops, planMinutes, completePlanStop, justToured, tourIndex, startTour, setTourIndex, endTour, look, lookError, saveLook, reloadLook, lockerOpen, openLocker, closeLocker, meOpen, openMe, closeMe, audienceSwitch, viewAs, setViewAs }),
     [enabled, ready, settings, active, updateSettings, layer, mapFocus, mapHow, openMap, ackMap, here, setHere, tourProgress, resumeTour, finishTour, dismissTour, openList, closeLayer, presence, presenceError,
-      door, enterThroughDoor, stepOutside, clearDoor, staffDesks, staffDesksError, personCard, openPersonCard, closePersonCard, dmToast, dismissDmToast, holdDmToast, releaseDmToast, planStops, planMinutes, completePlanStop, justToured, tourIndex, startTour, setTourIndex, endTour, look, lookError, saveLook, reloadLook, lockerOpen, openLocker, closeLocker, meOpen, openMe, closeMe, audienceSwitch, viewAs, setViewAs],
+      door, enterThroughDoor, stepOutside, clearDoor, staffDesks, staffDesksError, personCard, openPersonCard, closePersonCard, dmToast, dismissDmToast, holdDmToast, releaseDmToast, dmConversations, refreshDms, planStops, planMinutes, completePlanStop, justToured, tourIndex, startTour, setTourIndex, endTour, look, lookError, saveLook, reloadLook, lockerOpen, openLocker, closeLocker, meOpen, openMe, closeMe, audienceSwitch, viewAs, setViewAs],
   );
   return <Ctx.Provider value={value}><AudienceSwitchContext.Provider value={switchValue}>{children}</AudienceSwitchContext.Provider></Ctx.Provider>;
 }

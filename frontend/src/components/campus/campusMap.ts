@@ -98,7 +98,7 @@ export const CAMPUS_BUILDINGS: readonly CampusBuilding[] = [
     prefixes: ['/portal/cert-prep'], explorer: 'open', gate: 'cert-prep', audiences: EVERYONE, pos: { x: 150, y: 330, w: 104, h: 62 }, kind: 'flat', zone: 'up' },
   { id: 'observatory', name: 'My Progress', workplaceName: 'My Performance',
     primary: { label: 'View my path', route: '/portal/path' },
-    rooms: [{ label: 'Path', route: '/portal/path' }, { label: 'Progress', route: '/portal/progress' }, { label: 'Points', route: '/portal/points' }],
+    rooms: [{ label: 'My path', route: '/portal/path' }, { label: 'Progress', route: '/portal/progress' }, { label: 'Points', route: '/portal/points' }],
     prefixes: ['/portal/path', '/portal/progress', '/portal/points'], explorer: 'open', audiences: EVERYONE, pos: { x: 130, y: 546, w: 96, h: 54 }, kind: 'dome', zone: 'ave' },
   // C29 (v7 R2): renamed from the Community Lounge; "Meeting Rooms" in both looks. Community stays a room here until the Community
   // Board (C30, v7 R3) gives /portal/community its own place on the Quad.

@@ -99,6 +99,8 @@ export interface CampusWorldProps {
    *  whether nobody else is on campus (the night look). */
   me?: Me | null;
   moments?: MapMoments;
+  /** C23 phase 3: unread notifications per building (the map's red count pins). */
+  notifs?: Partial<Record<BuildingId, number>>;
   quiet?: boolean;
   /** C17: you walked to a spot on the grass (the caller clears "here"). */
   onGround?: () => void;
@@ -189,7 +191,7 @@ export default function CampusWorld(p: CampusWorldProps): React.ReactElement {
         people={pp.people} yours={pp.yours} onPeek={pp.openPeek} presenceDown={presenceError && presence !== undefined} walkRequest={walkRequest} onTravel={setTravel} onGroundClick={onGroundClick} onGround={p.onGround}
         onAir={p.onAir} plan={p.plan?.stops} ownGear={p.ownGear} showOpen={audience === 'explorer'} todayFlag={audience === 'explorer'} camera={camera} desks={mapDesks}
         me={p.me ?? (meInitials ? { initials: meInitials } : null)} hover={p.hover} startAt={p.startAt}
-        liveMark={p.liveNow ? { state: p.liveNow.state, text: marqueeText(p.liveNow.b, p.liveNow.now) } : null} tourBadges={tourBadges} dimExcept={cardBuilding} moments={p.moments} quiet={p.quiet} />
+        liveMark={p.liveNow ? { state: p.liveNow.state, text: marqueeText(p.liveNow.b, p.liveNow.now) } : null} tourBadges={tourBadges} dimExcept={cardBuilding} moments={p.moments} notifs={p.notifs} quiet={p.quiet} />
       <CampusZoomControls apiRef={camApi} />
       <TravelToast text={travel ? `${travel.verb} to ${travelPlace(travel, buildings, workplaceNames)}…` : null}
         onSkip={() => { if (travel?.spot) walkSpot(travel.spot, true); else if (travel?.id) walk(travel.id, true); }} />

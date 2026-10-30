@@ -342,20 +342,30 @@ export function deckScript(): string {
     if (correctList){
       var names = (p && p.correctResponders) || null;
       if (st === 'revealed' && names && names.length){
-        correctList.textContent = '✅ Got it right: ' + names.join(', ');
+        correctList.textContent = (sm.question && sm.question.raffle)
+          ? '🎟️ ' + names.length + ' in the draw'
+          : '✅ Got it right: ' + names.join(', ');
         correctList.style.display = '';
       } else {
         correctList.textContent = '';
         correctList.style.display = 'none';
       }
     }
+    var raffleEl = root.querySelector('[data-role="raffle"]');
+    if (raffleEl) raffleEl.style.display = st === 'revealed' ? '' : 'none';
+    var liveBars = !!(sm.question && sm.question.liveBars);
     for (var k = 0; k < tiles.length; k++){
       var idx = parseInt(tiles[k].getAttribute('data-idx'), 10);
       var n = (p && p.tally && p.tally[idx]) || 0;
       var pct = total ? Math.round(n / total * 100) : 0;
       var fill = tiles[k].querySelector('.fill');
       var pctEl = tiles[k].querySelector('.pct');
-      if (st === 'revealed'){
+      if (liveBars && st !== 'revealed'){
+        // Opinion poll: the bars ARE the show, so they move as votes land.
+        if (fill) fill.style.width = pct + '%';
+        if (pctEl) pctEl.textContent = n + ' · ' + pct + '%';
+        tiles[k].classList.remove('correct');
+      } else if (st === 'revealed'){
         if (fill) fill.style.width = pct + '%';
         if (pctEl) pctEl.textContent = pct + '%';
         var isCorrect = sm.question && typeof sm.question.answer === 'number' && sm.question.answer === idx;
@@ -447,8 +457,57 @@ export function deckScript(): string {
     else { elLive.textContent = 'STANDBY'; elLive.className = 'krail-live off'; }
   }
 
+  // ---- celebration + giveaway draw ----
+  function confetti(){
+    var colors = ['#FB2832', '#77BB4A', '#F5C542', '#367895', '#ffffff'];
+    for (var c = 0; c < 90; c++){
+      var bit = document.createElement('i');
+      bit.className = 'kconfetti';
+      bit.style.left = Math.random() * 100 + 'vw';
+      bit.style.background = colors[c % colors.length];
+      bit.style.animationDelay = Math.random() * 0.6 + 's';
+      bit.style.animationDuration = 1.8 + Math.random() * 1.6 + 's';
+      document.body.appendChild(bit);
+      setTimeout((function(el){ return function(){ if (el.parentNode) el.parentNode.removeChild(el); }; })(bit), 4200);
+    }
+  }
+  // Winners per slide id, kept for the life of the tab so a re-render or an
+  // accidental double click can never draw the same person twice.
+  var raffleWinners = {};
+  function drawWinner(sm){
+    var active = document.querySelector('.kslide.active');
+    var box = active && active.querySelector('[data-role="raffle"]');
+    if (!box) return;
+    var max = parseInt(box.getAttribute('data-count'), 10) || 1;
+    var won = raffleWinners[sm.id] || (raffleWinners[sm.id] = []);
+    var big = box.querySelector('[data-role="raffle-big"]');
+    if (won.length >= max){ if (big) big.textContent = 'All ' + max + ' winners drawn 🎉'; return; }
+    var pool = ((pulse.poll && pulse.poll.correctResponders) || []).filter(function(nm){ return won.indexOf(nm) < 0; });
+    if (!pool.length){ if (big) big.textContent = 'No entrants left to draw'; return; }
+    var spins = 0;
+    var timer = setInterval(function(){
+      if (big) big.textContent = pool[Math.floor(Math.random() * pool.length)];
+      spins += 1;
+      if (spins < 18) return;
+      clearInterval(timer);
+      var pick = pool[Math.floor(Math.random() * pool.length)];
+      won.push(pick);
+      if (big) big.textContent = '🏆 ' + pick;
+      var chips = box.querySelector('[data-role="raffle-chips"]');
+      if (chips) chips.innerHTML = won.map(function(nm, ix){ return '<span class="kraffle-chip">#' + (ix + 1) + ' ' + esc(nm) + '</span>'; }).join('');
+      confetti();
+    }, 90);
+  }
+
   // ---- reveal + copy ----
   document.addEventListener('click', function(e){
+    var drawBtn = e.target.closest('[data-action="draw"]');
+    if (drawBtn){
+      e.stopPropagation();
+      var smd = (K.slides || [])[i];
+      if (smd) drawWinner(smd);
+      return;
+    }
     var theaterBtn = e.target.closest('[data-action="lock"], [data-action="reveal"], [data-action="reopen"]');
     if (theaterBtn){
       e.stopPropagation();
@@ -456,7 +515,7 @@ export function deckScript(): string {
       if (sm2){
         var action = theaterBtn.getAttribute('data-action');
         if (action === 'lock') theaterState[sm2.id] = 'locked';
-        else if (action === 'reveal'){ theaterState[sm2.id] = 'revealed'; revealed[sm2.id] = true; }
+        else if (action === 'reveal'){ theaterState[sm2.id] = 'revealed'; revealed[sm2.id] = true; confetti(); }
         else if (action === 'reopen') theaterState[sm2.id] = 'voting';
         broadcastCurrent();
         renderTheater();

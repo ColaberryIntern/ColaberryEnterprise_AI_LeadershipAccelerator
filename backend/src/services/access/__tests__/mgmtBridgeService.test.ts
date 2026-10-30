@@ -6,7 +6,8 @@ jest.mock('../../participantService', () => ({ signParticipantJwt: jest.fn(() =>
 
 import CommunityMember from '../../../models/CommunityMember';
 import Enrollment from '../../../models/Enrollment';
-import { loadStaffPortalLinkByEmail, getMgmtStatus } from '../mgmtBridgeService';
+import { loadStaffPortalLinkByEmail, getMgmtStatus, mintMgmtAdminToken } from '../mgmtBridgeService';
+import jwt from 'jsonwebtoken';
 import { MGMT_ROLES, MGMT_ROLE_DEFS, sectionsForRole } from '../mgmtRoles';
 
 const cmFindOne = CommunityMember.findOne as jest.Mock;
@@ -88,5 +89,30 @@ describe('getMgmtStatus', () => {
     const s = await getMgmtStatus('e1');
     s.sections.push('system');
     expect(sectionsForRole('mentor')).not.toContain('system');
+  });
+});
+
+describe('C82: extra sections on top of the role', () => {
+  beforeEach(() => jest.clearAllMocks());
+  it('the portal status serves role + extras (what the building and the Dara floor read)', async () => {
+    cmFindOne.mockResolvedValueOnce({ role: 'staff', mgmt_role: 'marketing', mgmt_extra_sections: ['internship', 'campaigns', 'bogus'] });
+    expect((await getMgmtStatus('e1')).sections).toEqual(['dashboard', 'campaigns', 'brands', 'internship']);
+  });
+  it('a revoke (empty extras) serves the role only', async () => {
+    cmFindOne.mockResolvedValueOnce({ role: 'staff', mgmt_role: 'marketing', mgmt_extra_sections: [] });
+    expect((await getMgmtStatus('e1')).sections).toEqual(sectionsForRole('marketing'));
+  });
+  it('the minted admin token carries the extras and its sections include them', async () => {
+    cmFindOne.mockResolvedValueOnce({ role: 'staff', mgmt_role: 'marketing', mgmt_extra_sections: ['internship'] });
+    (Enrollment.findByPk as jest.Mock).mockResolvedValueOnce({ email: 's@example.com' });
+    const minted = await mintMgmtAdminToken('e1');
+    expect(minted?.sections).toEqual(['dashboard', 'campaigns', 'brands', 'internship']);
+    expect((jwt.sign as jest.Mock).mock.calls[0][0]).toMatchObject({ mgmt_role: 'marketing', mgmt_extra_sections: ['internship'] });
+  });
+  it('no extras: no extra claim in the token', async () => {
+    cmFindOne.mockResolvedValueOnce({ role: 'staff', mgmt_role: 'marketing', mgmt_extra_sections: [] });
+    (Enrollment.findByPk as jest.Mock).mockResolvedValueOnce({ email: 's@example.com' });
+    await mintMgmtAdminToken('e1');
+    expect((jwt.sign as jest.Mock).mock.calls[0][0]).not.toHaveProperty('mgmt_extra_sections');
   });
 });

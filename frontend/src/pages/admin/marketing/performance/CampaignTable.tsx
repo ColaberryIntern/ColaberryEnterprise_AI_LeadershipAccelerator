@@ -48,6 +48,7 @@ export default function CampaignTable({
             <th scope="col">Signed up</th>
             <th scope="col">Account</th>
             <th scope="col">In the CRM</th>
+            <th scope="col">Opted in</th>
             <th scope="col">CRM sync</th>
           </tr>
         </thead>
@@ -88,6 +89,9 @@ export default function CampaignTable({
                 </td>
                 <td>{formatCount(row.accounts)}</td>
                 <td>{formatCount(row.in_crm)}</td>
+                {/* Per campaign rather than only in the headline, because an average hides
+                    the door earning nothing: apollo, popup and catalog_request were at zero. */}
+                <td>{formatCount(row.opted_in)}</td>
                 <td className={syncRate == null ? undefined : (isCrmSyncHealthy(syncRate) ? 'mp-ok' : 'mp-warn')}>
                   {formatPct(syncRate, 0)}
                 </td>

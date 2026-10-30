@@ -76,7 +76,7 @@ Array [
     "name": "My Progress",
     "primary": "View my path -> /portal/path",
     "rooms": Array [
-      "Path -> /portal/path",
+      "My path -> /portal/path",
       "Progress -> /portal/progress",
       "Points -> /portal/points",
     ],
@@ -230,7 +230,7 @@ Array [
     "name": "My Progress",
     "primary": "View my path -> /portal/path",
     "rooms": Array [
-      "Path -> /portal/path",
+      "My path -> /portal/path",
       "Progress -> /portal/progress",
       "Points -> /portal/points",
     ],
@@ -393,7 +393,7 @@ Array [
     "name": "My Progress",
     "primary": "View my path -> /portal/path",
     "rooms": Array [
-      "Path -> /portal/path",
+      "My path -> /portal/path",
       "Progress -> /portal/progress",
       "Points -> /portal/points",
     ],
@@ -547,7 +547,7 @@ Array [
     "name": "My Progress",
     "primary": "View my path -> /portal/path",
     "rooms": Array [
-      "Path -> /portal/path",
+      "My path -> /portal/path",
       "Progress -> /portal/progress",
       "Points -> /portal/points",
     ],

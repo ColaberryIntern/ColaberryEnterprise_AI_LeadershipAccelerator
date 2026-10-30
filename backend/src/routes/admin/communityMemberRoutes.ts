@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import { z } from 'zod';
 import { requireAdmin } from '../../middlewares/authMiddleware';
 
 const router = Router();
@@ -122,9 +123,10 @@ router.patch('/api/admin/community/members/:memberId/mgmt-role', requireAdmin, a
     const verdict = canGrantMgmtRole({
       // `requireAdmin` has already set req.admin, but an absent role resolves to no sections,
       // so the failure direction here is deny rather than grant.
-      callerSections: adminAllowedSections({ role: req.admin?.role ?? '', mgmt_role: req.admin?.mgmt_role }),
+      callerSections: adminAllowedSections({ role: req.admin?.role ?? '', mgmt_role: req.admin?.mgmt_role, mgmt_extra_sections: req.admin?.mgmt_extra_sections }),
       currentRole: member.mgmt_role ?? null,
       newRole: mgmt_role,
+      currentExtras: member.mgmt_extra_sections ?? [], // C82: their access is role + extras
     });
     if (!verdict.allowed) {
       console.warn(JSON.stringify({
@@ -139,10 +141,61 @@ router.patch('/api/admin/community/members/:memberId/mgmt-role', requireAdmin, a
       return;
     }
 
-    await member.update({ mgmt_role });
-    res.json({ member: { id: member.id, mgmt_role } });
+    // C82: clearing the role clears the extras too, so revoking management access removes all of it
+    await member.update(mgmt_role === null ? { mgmt_role, mgmt_extra_sections: [] } : { mgmt_role });
+    res.json({ member: { id: member.id, mgmt_role, mgmt_extra_sections: mgmt_role === null ? [] : member.mgmt_extra_sections ?? [] } });
   } catch (err: any) {
     console.error('[CommunityMemberRoutes] PATCH /community/members/:memberId/mgmt-role error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * PATCH /api/admin/community/members/:memberId/mgmt-extra-sections   body: { sections: SectionKey[] }
+ * C82 (Campus HQ H4, option A, Ali's pick): sections granted on top of a staff member's management role (Sarbjit: Marketing plus
+ * AI Internship). Their access becomes effectiveSections(role, extras) everywhere: mgmtSectionGate, the sidebar, the portal status
+ * and the campus building. The same no-escalation rule as the role (canGrantExtraSections). Every key must be a real section;
+ * keys the role already gives are dropped (normalizeExtraSections). Audited by auditMiddleware; a denial is logged. The person's
+ * campus building updates at once (the portal status reads the database); an open admin session picks it up at its next sign-in
+ * through the bridge (the token carries the extras), like a role change.
+ */
+const ExtraSectionsBody = z.object({ sections: z.array(z.string().max(40)).max(40) }).strict();
+router.patch('/api/admin/community/members/:memberId/mgmt-extra-sections', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const parsed = ExtraSectionsBody.safeParse(req.body);
+    if (!parsed.success) { res.status(400).json({ error: 'sections must be a list of section keys', error_class: 'ValidationError' }); return; }
+    const { SECTION_KEYS, isSectionKey, normalizeExtraSections } = await import('../../services/access/mgmtRoles');
+    const unknown = parsed.data.sections.filter((x) => !isSectionKey(x));
+    if (unknown.length) { res.status(400).json({ error: `unknown section(s): ${unknown.join(', ')}. Allowed: ${SECTION_KEYS.join(', ')}`, error_class: 'ValidationError' }); return; }
+    const { default: CommunityMember } = await import('../../models/CommunityMember');
+    const member = await CommunityMember.findByPk(req.params.memberId as string);
+    if (!member) { res.status(404).json({ error: 'Member not found' }); return; }
+    if (member.role !== 'staff' || !member.mgmt_role) {
+      res.status(400).json({ error: 'Extra sections go on top of a management role: give the member a role first', error_class: 'ValidationError' });
+      return;
+    }
+    const extras = normalizeExtraSections(member.mgmt_role, parsed.data.sections);
+    const { canGrantExtraSections } = await import('../../services/access/mgmtRoleGrant');
+    const { adminAllowedSections } = await import('../../middlewares/authMiddleware');
+    const verdict = canGrantExtraSections({
+      callerSections: adminAllowedSections({ role: req.admin?.role ?? '', mgmt_role: req.admin?.mgmt_role, mgmt_extra_sections: req.admin?.mgmt_extra_sections }),
+      role: member.mgmt_role,
+      currentExtras: member.mgmt_extra_sections ?? [],
+      newExtras: extras,
+    });
+    if (!verdict.allowed) {
+      console.warn(JSON.stringify({
+        level: 'warn', service: 'backend', event: 'mgmt_extra_sections_grant_denied',
+        outcome: 'failure', error_class: 'AuthorizationError',
+        context: { caller_role: req.admin?.role, caller_mgmt_role: req.admin?.mgmt_role ?? null, target_member_id: req.params.memberId, requested: extras, blocked_by: verdict.blockedBy },
+      }));
+      res.status(403).json({ error: verdict.reason });
+      return;
+    }
+    await member.update({ mgmt_extra_sections: extras });
+    res.json({ member: { id: member.id, mgmt_role: member.mgmt_role, mgmt_extra_sections: extras } });
+  } catch (err: any) {
+    console.error('[CommunityMemberRoutes] PATCH /community/members/:memberId/mgmt-extra-sections error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
