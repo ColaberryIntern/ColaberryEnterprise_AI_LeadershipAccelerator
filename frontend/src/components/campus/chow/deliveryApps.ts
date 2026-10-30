@@ -25,6 +25,11 @@ export const CRAVINGS: { id: string; label: string; emoji: string }[] = [
   { id: 'pizza', label: 'Pizza', emoji: '🍕' }, { id: 'burgers', label: 'Burgers', emoji: '🍔' }, { id: 'tacos', label: 'Tacos', emoji: '🌮' },
   { id: 'noodles', label: 'Noodles', emoji: '🍜' }, { id: 'sushi', label: 'Sushi', emoji: '🍣' }, { id: 'salad', label: 'Salad', emoji: '🥗' },
   { id: 'coffee', label: 'Coffee', emoji: '☕' }, { id: 'treats', label: 'Treats', emoji: '🍩' },
+  // C93 (Ali, 2026-10-30: "Add many more food types like indian food... about 20 total choices"): 12 more, 20 in all.
+  { id: 'indian', label: 'Indian', emoji: '🍛' }, { id: 'chinese', label: 'Chinese', emoji: '🥡' }, { id: 'thai', label: 'Thai', emoji: '🌶️' },
+  { id: 'greek', label: 'Greek', emoji: '🥙' }, { id: 'bbq', label: 'BBQ', emoji: '🍖' }, { id: 'chicken', label: 'Chicken', emoji: '🍗' },
+  { id: 'sandwiches', label: 'Sandwiches', emoji: '🥪' }, { id: 'breakfast', label: 'Breakfast', emoji: '🥞' }, { id: 'pasta', label: 'Pasta', emoji: '🍝' },
+  { id: 'seafood', label: 'Seafood', emoji: '🦐' }, { id: 'korean', label: 'Korean', emoji: '🍲' }, { id: 'smoothies', label: 'Smoothies', emoji: '🥤' },
 ];
 
 /** The region from the time zone: US zones, London, India; anything else ANY. */
