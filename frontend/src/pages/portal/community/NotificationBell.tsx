@@ -8,6 +8,7 @@ import {
 } from '../../../services/communityApi';
 import { useCampus } from '../../../components/campus/CampusContext';
 import { notificationPlace } from '../../../components/campus/campusNotify';
+import { OPEN_BELL_EVENT } from '../../../components/campus/art/BuildingBadges';
 
 function notifText(n: CommunityNotification): string {
   const who = n.actor?.display_name ?? 'Someone';
@@ -30,6 +31,8 @@ function notifText(n: CommunityNotification): string {
  *
  * C23 (rule R10): `onDismissed` fires when the panel closes without a pick (the bell again, or a press outside), so the
  * campus home can recenter its map, as it does when the person card, the list or the Me panel closes.
+ *
+ * C23 phase 3 (WP-10): while the campus is active, a press on a map notification pin (OPEN_BELL_EVENT) opens this panel.
  */
 const NotificationBell: React.FC<{ onDismissed?: () => void }> = ({ onDismissed }) => {
   const [count, setCount] = useState(0);
@@ -51,6 +54,13 @@ const NotificationBell: React.FC<{ onDismissed?: () => void }> = ({ onDismissed 
     document.addEventListener('mousedown', onDoc);
     return () => document.removeEventListener('mousedown', onDoc);
   }, [open, onDismissed]);
+
+  useEffect(() => {
+    if (!campusActive) return undefined;
+    const onPin = () => { setOpen(true); fetchNotifications().then(setItems).catch(() => setItems([])); };
+    window.addEventListener(OPEN_BELL_EVENT, onPin);
+    return () => window.removeEventListener(OPEN_BELL_EVENT, onPin);
+  }, [campusActive]);
 
   const toggle = () => {
     const next = !open;

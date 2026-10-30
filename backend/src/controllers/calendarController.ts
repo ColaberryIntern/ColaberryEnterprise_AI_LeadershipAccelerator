@@ -3,6 +3,7 @@ import { Op } from 'sequelize';
 import { ZodError } from 'zod';
 import { bookCallSchema } from '../schemas/calendarSchema';
 import { getAvailableSlots, createBooking } from '../services/calendarService';
+import { admissionsCalendar } from '../services/calendarTarget';
 import StrategyCall from '../models/StrategyCall';
 import Lead from '../models/Lead';
 import { sendStrategyCallConfirmation } from '../services/emailService';
@@ -21,7 +22,7 @@ export async function handleGetAvailability(
 ): Promise<void> {
   try {
     const days = parseInt(req.query.days as string, 10) || 21;
-    const availability = await getAvailableSlots(Math.min(days, 60));
+    const availability = await getAvailableSlots(Math.min(days, 60), admissionsCalendar());
     res.json(availability);
   } catch (error) {
     next(error);
@@ -62,7 +63,7 @@ export async function handleBookCall(
       slotStart: data.slot_start,
       timezone: data.timezone,
       pageOrigin: data.page_origin || '',
-    });
+    }, admissionsCalendar()); // C90 (Ali, 2026-10-29: "Roselen should get booked all these"): strategy calls too
 
     // Save to database
     const call = await StrategyCall.create({

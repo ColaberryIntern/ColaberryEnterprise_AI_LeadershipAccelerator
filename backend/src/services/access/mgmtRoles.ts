@@ -183,6 +183,33 @@ export function sectionsForRole(role: string | undefined | null): SectionKey[] {
   return isMgmtRole(role) ? MGMT_ROLE_DEFS[role].sections : [];
 }
 
+/** True for a real admin section key. */
+export function isSectionKey(s: unknown): s is SectionKey {
+  return typeof s === 'string' && (SECTION_KEYS as readonly string[]).includes(s);
+}
+
+/**
+ * C82 (Campus HQ H4, option A, Ali's pick): a person may hold EXTRA sections on top of their one management role (Sarbjit:
+ * Marketing plus AI Internship). Their EFFECTIVE sections are the role's sections plus the extras, deduplicated and limited to
+ * real section keys. This is the ONE function every reader uses (the admin token's sections, mgmtSectionGate, the sidebar via
+ * /api/admin/me, /api/portal/mgmt/status and the campus building). An invalid or missing role gets nothing, extras or not
+ * (deny by default), so extras can never turn a non-staff account into a management login.
+ */
+export function effectiveSections(role: string | undefined | null, extras: readonly unknown[] | null | undefined): SectionKey[] {
+  if (!isMgmtRole(role)) return [];
+  const out = [...MGMT_ROLE_DEFS[role].sections];
+  for (const x of extras ?? []) if (isSectionKey(x) && !out.includes(x)) out.push(x);
+  return out;
+}
+
+/** The extras worth storing: real section keys, deduplicated, without the ones the role already gives. */
+export function normalizeExtraSections(role: string | undefined | null, extras: readonly unknown[] | null | undefined): SectionKey[] {
+  const base = sectionsForRole(role);
+  const out: SectionKey[] = [];
+  for (const x of extras ?? []) if (isSectionKey(x) && !base.includes(x) && !out.includes(x)) out.push(x);
+  return out;
+}
+
 /** Authoritative access check — may this role reach this section? */
 export function roleCanAccessSection(role: string | undefined | null, section: SectionKey): boolean {
   return sectionsForRole(role).includes(section);

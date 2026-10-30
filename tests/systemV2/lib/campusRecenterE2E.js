@@ -87,6 +87,7 @@ async function runRecenter({ browser, audience, jwt, urls, step, must, newPage }
       ['the list', '[data-testid="cm-topbar-list"]', 'Escape'],
       ['the Me panel', '[data-testid="cm-stats-me"]', 'Escape'],
       ['the bell', '[data-testid="cm-stats-bell"] button', '[data-testid="cm-stats-bell"] button'],
+      ['the inbox', '[data-testid="cm-stats-messages"]', 'Escape'], // C23 phase 3
     ]) {
       await step(audience, `R10 recenter: closing ${name}`, async () => {
         await disturb(page, must, base);

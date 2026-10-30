@@ -12,6 +12,9 @@ import {
   handleGetPresenterPage,
 } from '../controllers/sessionLiveController';
 import {
+  handleGuestJoinPage, handleGuestJoin, handleGuestState, handleGuestVote,
+} from '../controllers/sessionGuestController';
+import {
   handleGetInternshipStatus, handleStartInternshipApplication, handleSaveInternshipIntake,
   handleSelectInternshipChannel, handleDismissInternshipCard,
   handleInternshipCardImpression, handleInternshipCardOpened,
@@ -82,7 +85,7 @@ import {
 import {
   handleOpenCard, handleMentor, handleNudge, handleReflection, handleEnsureContent, handleUploadCertificate, handleGetCertificate, handlePromptLab,
   handleComplete, handleReadiness, handleListNotes, handleCreateNote, handleDeleteNote,
-  handleWatchBeat, handleBlogReadBeat, handleBlogCollect, handleBlogReader, handleDwellBeat, handleGetSurvey, handleSaveSurvey,
+  handleWatchBeat, handleWatchVerdict, handleBlogReadBeat, handleBlogCollect, handleBlogReader, handleDwellBeat, handleGetSurvey, handleSaveSurvey,
   handleMediaBeat, handleMediaVerdict, handleMediaCollect,
   handleGetWeekReview, handleSaveReflectionSignals,
   handleGetPeerWins, handleSubmitWin, handleCheerWin,
@@ -297,6 +300,7 @@ const watchBeatRateLimiter = rateLimit({
   message: { error: 'Too many watch beats — please slow down' },
 });
 router.post('/api/portal/runtime/cards/:cardId/watch', watchBeatRateLimiter, requireParticipant, handleWatchBeat);
+router.get('/api/portal/runtime/cards/:cardId/watch', requireParticipant, handleWatchVerdict);
 
 // ── AI Internship (participant surface) ─────────────────────────────────────
 // Every handler scopes to req.participant.sub; none accepts an application id
@@ -425,6 +429,14 @@ router.post('/api/portal/sessions/:id/broadcast', kitTokenOrAdmin, handleSetBroa
 router.get('/api/portal/sessions/:id/presenter-notes', kitTokenOrAdmin, handleGetPresenterNotes);
 // Instructor's own phone page (HTML) — dark, large text, polls presenter-notes above.
 router.get('/api/portal/sessions/:id/presenter-page', kitTokenOrAdmin, handleGetPresenterPage);
+// Open House GUESTS — intentionally PUBLIC (Ali, 2026-10-29: name + email, no
+// login link). Only "Open House" sessions accept guests, and the pass is
+// session-scoped and grants voting only — never portal access
+// (sessionGuestService.ts).
+router.get('/api/portal/sessions/:id/join', handleGuestJoinPage);
+router.post('/api/portal/sessions/:id/guest-join', handleGuestJoin);
+router.get('/api/portal/sessions/:id/guest-state', handleGuestState);
+router.post('/api/portal/sessions/:id/guest-vote', handleGuestVote);
 router.get('/api/portal/submissions', requireParticipant, handleGetSubmissions);
 router.post('/api/portal/submissions', requireParticipant, handleCreateSubmission);
 router.post('/api/portal/submissions/:id/upload', requireParticipant, strategyPrepUpload.single('file'), handleUploadSubmission);

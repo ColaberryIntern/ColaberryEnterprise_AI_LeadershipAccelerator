@@ -1,4 +1,4 @@
-import { deriveGovPipelineStage, projectGovPipelineCard } from '../govPipeline';
+import { deriveGovPipelineStage, projectGovPipelineCard, resolveGovCloseDate } from '../govPipeline';
 
 describe('deriveGovPipelineStage', () => {
   it('no_bid → passed', () => expect(deriveGovPipelineStage('no_bid', false)).toBe('passed'));
@@ -95,5 +95,45 @@ describe('projectGovPipelineCard', () => {
       bidding_entity: 'colaberry', decision: 'no_bid', version: 2, requirements_json: {},
     };
     expect(projectGovPipelineCard(rec, null).stage).toBe('passed');
+  });
+
+  it('surfaces the passed assigned interns, hasActiveIntern, and the resolved close date', () => {
+    const rec = {
+      canonical_opportunity_id: 'gws:55555555-5555-5555-5555-555555555555',
+      bidding_entity: 'colaberry', decision: 'approved_bid_pursuit', version: 1,
+      delivery_project_id: 'dp-9', source_snapshot: { closeDate: '2026-12-01' },
+      requirements_json: { established: [] },
+    };
+    const card = projectGovPipelineCard(rec, { studentProjectId: 'sp', pct: 0, verified: 0, total: 3 },
+      [{ identityId: 'id-1', name: 'Omolola', email: 'om@x.com' }]);
+    expect(card.closeDate).toBe('2026-12-01');
+    expect(card.assignedInterns).toEqual([{ identityId: 'id-1', name: 'Omolola', email: 'om@x.com' }]);
+    expect(card.hasActiveIntern).toBe(true);
+  });
+
+  it('defaults to no assigned interns (hasActiveIntern false) when none are passed', () => {
+    const card = projectGovPipelineCard({ canonical_opportunity_id: 'gws:x', requirements_json: {} }, null);
+    expect(card.assignedInterns).toEqual([]);
+    expect(card.hasActiveIntern).toBe(false);
+  });
+});
+
+describe('resolveGovCloseDate', () => {
+  it('prefers the OP snapshot closeAt verbatim, keeping the time', () => {
+    expect(resolveGovCloseDate({ source_snapshot: { closeAt: '2026-11-06T17:00:00Z' } })).toBe('2026-11-06T17:00:00Z');
+  });
+  it('falls back to the snapshot closeDate (date-only)', () => {
+    expect(resolveGovCloseDate({ source_snapshot: { closeDate: '2026-11-06' } })).toBe('2026-11-06');
+  });
+  it('picks the submission line from the dossier key-dates for a ZIP pursuit, skipping questions', () => {
+    const rec = { requirements_json: { dossier: { keyDates: [
+      { date: 'Oct. 20th, 2026', text: 'Questions due' },
+      { date: 'Nov. 6th, 2026', text: 'Proposals must be received by' },
+    ] } } };
+    expect(resolveGovCloseDate(rec)).toBe('2026-11-06');
+  });
+  it('is null when nothing resolves — the client treats unknown as not-expired, not hidden', () => {
+    expect(resolveGovCloseDate({ requirements_json: {} })).toBeNull();
+    expect(resolveGovCloseDate({})).toBeNull();
   });
 });

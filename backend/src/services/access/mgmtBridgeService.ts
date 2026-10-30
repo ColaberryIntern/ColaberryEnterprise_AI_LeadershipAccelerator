@@ -3,7 +3,7 @@ import { env } from '../../config/env';
 import CommunityMember from '../../models/CommunityMember';
 import Enrollment from '../../models/Enrollment';
 import { signParticipantJwt } from '../participantService';
-import { isMgmtRole, sectionsForRole, MGMT_ROLE_DEFS, type SectionKey } from './mgmtRoles';
+import { isMgmtRole, effectiveSections, normalizeExtraSections, MGMT_ROLE_DEFS, type SectionKey } from './mgmtRoles';
 
 /**
  * The student→admin session bridge. A staff member with a management role opens
@@ -22,13 +22,18 @@ export interface MgmtStatus {
   sections: SectionKey[];
 }
 
-async function loadMgmtRole(enrollmentId: string): Promise<string | null> {
+/** C82: the management role and the extra sections granted on top of it (normalized: real keys the role does not already give). */
+async function loadMgmtGrant(enrollmentId: string): Promise<{ role: string; extras: SectionKey[] } | null> {
   const member = await CommunityMember.findOne({
     where: { enrollment_id: enrollmentId },
-    attributes: ['role', 'mgmt_role'],
+    attributes: ['role', 'mgmt_role', 'mgmt_extra_sections'],
   });
   if (!member || member.role !== 'staff' || !isMgmtRole(member.mgmt_role)) return null;
-  return member.mgmt_role;
+  return { role: member.mgmt_role, extras: normalizeExtraSections(member.mgmt_role, member.mgmt_extra_sections) };
+}
+
+async function loadMgmtRole(enrollmentId: string): Promise<string | null> {
+  return (await loadMgmtGrant(enrollmentId))?.role ?? null;
 }
 
 export interface StaffPortalLink {
@@ -64,12 +69,14 @@ export async function loadStaffPortalLinkByEmail(email: string): Promise<StaffPo
 /** Does this student's account carry a management role? Drives the "Management
  *  Portal" link visibility in the student portal. */
 export async function getMgmtStatus(enrollmentId: string): Promise<MgmtStatus> {
-  const role = await loadMgmtRole(enrollmentId);
+  const grant = await loadMgmtGrant(enrollmentId);
+  const role = grant?.role ?? null;
   return {
     is_mgmt: !!role,
     role,
     label: role && isMgmtRole(role) ? MGMT_ROLE_DEFS[role].label : null,
-    sections: [...sectionsForRole(role)],
+    // C82: the effective sections (role + extras), the same function the admin token's sections come from
+    sections: effectiveSections(role, grant?.extras),
   };
 }
 
@@ -88,19 +95,21 @@ export interface MintedMgmtToken {
  * sections that adminAllowedSections()/sectionsForRole() permit. Short-lived.
  */
 export async function mintMgmtAdminToken(enrollmentId: string): Promise<MintedMgmtToken | null> {
-  const mgmt = await loadMgmtRole(enrollmentId);
-  if (!mgmt || !isMgmtRole(mgmt)) return null;
+  const grant = await loadMgmtGrant(enrollmentId);
+  const mgmt = grant?.role ?? null;
+  if (!grant || !mgmt || !isMgmtRole(mgmt)) return null;
 
   const enrollment = await Enrollment.findByPk(enrollmentId, { attributes: ['email'] });
   const email = (enrollment as any)?.email || '';
   const jwtRole = mgmt === 'owner' ? 'super_admin' : 'admin';
 
   const admin_token = jwt.sign(
-    { sub: enrollmentId, email, role: jwtRole, mgmt_role: mgmt },
+    // C82: the extras ride in the token, so every admin check stays synchronous (a revoke lags like a role change: 12 h)
+    { sub: enrollmentId, email, role: jwtRole, mgmt_role: mgmt, ...(grant.extras.length ? { mgmt_extra_sections: grant.extras } : {}) },
     env.jwtSecret,
     { expiresIn: '12h' },
   );
-  return { admin_token, role: mgmt, sections: sectionsForRole(mgmt) };
+  return { admin_token, role: mgmt, sections: effectiveSections(mgmt, grant.extras) };
 }
 
 export interface MintedPortalToken {

@@ -1,8 +1,8 @@
 /**
- * C7 tours: member 10 (C77: from the Schedule), Explorer 8 (C53, C77: from the Schedule), business 6, staff none; every stop is a building on that audience's own campus; Explorer
+ * C7 tours: member 10 (C77: from the Schedule), Explorer 3 (C53, C77: from the Schedule; C91: cut from 8), business 6, staff none; every stop is a building on that audience's own campus; Explorer
  * states come from the pages' own signals; the copy invents nothing and never says "free".
  */
-import { tourFor, STATE_NOTE, explorerFinishLine } from '../tourSteps';
+import { tourFor, STATE_NOTE, explorerFinishLine, buildingLine } from '../tourSteps';
 import { campusViewFor } from '../useCampusView';
 import type { CampusAudience } from '../campusMap';
 
@@ -13,7 +13,7 @@ const tour = (audience: CampusAudience, workplaceNames = false, s?: Parameters<t
 };
 
 describe('stop counts per audience', () => {
-  it.each([['member', 10], ['explorer', 8], ['business', 6]] as const)('%s has %i stops', (aud, n) => {
+  it.each([['member', 10], ['explorer', 3], ['business', 6]] as const)('%s has %i stops', (aud, n) => {
     expect(tour(aud)?.stops).toHaveLength(n);
   });
   it('staff has no tour', () => {
@@ -31,11 +31,21 @@ describe('C53 (v13 T5) + C77: every tour starts at the Schedule', () => {
   it('Explorer stop 1 is the Schedule: what is coming up first, then Today (included, no card needed); never "free"', () => {
     const t = tour('explorer')!;
     expect(t.name).toBe('Explorer tour');
-    expect(t.stops.map((s) => s.buildingId)).toEqual(['tower', 'commons', 'library', 'amphi', 'lecture', 'studio', 'testing', 'gallery']);
+    expect(t.stops.map((s) => s.buildingId)).toEqual(['tower', 'commons', 'lecture']);
     expect(t.stops[0]).toMatchObject({ title: 'Start here: what is coming up', state: 'open' });
     expect(t.stops[0].what).toContain('what is coming up');
     expect(t.stops[0].what).toContain('no card needed');
     expect(JSON.stringify(t.stops[0])).not.toMatch(/\bfree\b/i);
+  });
+  it('C91: the Explorer tour is three stops and its last stop points at Today, where the first lesson is', () => {
+    const t = tour('explorer')!;
+    const last = t.stops[t.stops.length - 1];
+    expect(last.buildingId).toBe('lecture');
+    expect(last.tip).toMatch(/^Last stop\./);
+    expect(last.tip).toContain('Today');
+  });
+  it('C91: dropping stops from the tour keeps their building lines (the arrival panel still reads them)', () => {
+    for (const id of ['library', 'amphi', 'studio', 'testing', 'gallery'] as const) expect(buildingLine('explorer', id)).toBeTruthy();
   });
   it('C77: the member tour starts at the Schedule too, then follows the old order', () => {
     expect(tour('member')!.stops.map((s) => s.buildingId)).toEqual(['tower', 'lecture', 'library', 'studio', 'testing', 'observatory', 'commons', 'gallery', 'career', 'arcade']);
@@ -49,20 +59,18 @@ describe('C53 (v13 T5) + C77: every tour starts at the Schedule', () => {
 });
 
 describe('Explorer states come from the pages, not the copy', () => {
-  it('page gate off (production): Preview on the classroom, Demo on the studio, the rest open', () => {
+  it('page gate off (production): Preview on the classroom, the rest open (the studio left the tour in C91)', () => {
     const stops = tour('explorer', false, { isStaff: false, hasFullAccess: true, isExplorer: true })!.stops;
     const by = Object.fromEntries(stops.map((s) => [s.buildingId, s]));
     expect(by.lecture.state).toBe('preview');
     expect(by.lecture.note).toBe(STATE_NOTE.preview);
-    expect(by.studio.state).toBe('demo');
+    expect(by.tower.state).toBe('open');
     expect(by.commons.state).toBe('open');
     expect(by.commons.note).toBeNull();
   });
-  it('page gate on: paywalled buildings read Members, with the locked note', () => {
-    const by = Object.fromEntries(tour('explorer', false, { isStaff: false, hasFullAccess: false, isExplorer: true })!.stops.map((s) => [s.buildingId, s]));
-    expect(by.testing.state).toBe('locked');
-    expect(by.testing.note).toBe(STATE_NOTE.locked);
-    expect(by.gallery.state).toBe('locked');
+  it('page gate on: every stop carries the note for its own state (open has none)', () => {
+    const stops = tour('explorer', false, { isStaff: false, hasFullAccess: false, isExplorer: true })!.stops;
+    for (const s of stops) expect(s.note).toBe(s.state === 'open' || s.state === null ? null : STATE_NOTE[s.state]);
   });
   it('member and business stops carry no state', () => {
     expect(tour('member')!.stops.every((s) => s.state === null && s.note === null)).toBe(true);

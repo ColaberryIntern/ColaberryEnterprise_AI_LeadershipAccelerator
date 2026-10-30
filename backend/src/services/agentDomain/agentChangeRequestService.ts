@@ -2,6 +2,7 @@ import { QueryTypes, Transaction, type Sequelize } from 'sequelize';
 import AgentDomainChangeRequest from '../../models/AgentDomainChangeRequest';
 import { AGENT_DOMAIN_ORG_ID } from './agentDomainRegistry';
 import { loadMyDomains, resolveOwnerIdentityIds } from './agentDomainProvisionedReader';
+import type { ChangeRequestKind } from '../../db/ensureAgentDomainChangeRequestSchema';
 import {
   gateAgentChangeRequest,
   type AgentChangeRequestIssue,
@@ -60,6 +61,7 @@ export class ChangeRequestRefusedError extends Error {
 
 export interface ChangeRequestRow {
   id: string;
+  kind: ChangeRequestKind;
   domain_key: string;
   title: string;
   description: string | null;
@@ -109,6 +111,7 @@ function project(r: AgentDomainChangeRequest): ChangeRequestRow {
   const iso = (d: Date | null): string | null => (d ? new Date(d).toISOString() : null);
   return {
     id: r.id,
+    kind: (r.kind ?? 'change') as ChangeRequestKind,
     domain_key: r.domain_key,
     title: r.title,
     description: r.description ?? null,
@@ -124,6 +127,8 @@ function project(r: AgentDomainChangeRequest): ChangeRequestRow {
 export interface FileChangeRequestArgs {
   sequelize: Sequelize;
   email: string;
+  /** AF7.1. Omitted means `change`, so AF4.2 callers are unaffected. */
+  kind?: ChangeRequestKind;
   domainKey: string;
   title: string;
   description?: string | null;
@@ -155,6 +160,7 @@ export async function fileChangeRequest(args: FileChangeRequestArgs): Promise<Ch
   if (issues.length > 0) throw new ChangeRequestRefusedError(issues);
 
   const created = await AgentDomainChangeRequest.create({
+    kind: args.kind ?? 'change',
     domain_key: domainKey,
     title,
     description: args.description ?? null,
@@ -229,11 +235,12 @@ export async function decideChangeRequest(
 export async function listMyChangeRequests(
   sequelize: Sequelize,
   email: string,
+  kind?: ChangeRequestKind,
 ): Promise<ChangeRequestRow[]> {
   const recorded = await resolveRecordedHumans(sequelize, email);
   if (recorded.length === 0) throw new ActorNotResolvedError();
   const rows = await AgentDomainChangeRequest.findAll({
-    where: { requested_by_identity: recorded[0] },
+    where: { requested_by_identity: recorded[0], ...(kind ? { kind } : {}) },
     order: [['requested_at', 'DESC']],
     limit: 200,
   });
@@ -244,9 +251,11 @@ export async function listMyChangeRequests(
 export async function listAllChangeRequests(
   _sequelize: Sequelize,
   status?: AgentChangeRequestStatus,
+  kind?: ChangeRequestKind,
 ): Promise<ChangeRequestRow[]> {
+  const where = { ...(status ? { status } : {}), ...(kind ? { kind } : {}) };
   const rows = await AgentDomainChangeRequest.findAll({
-    ...(status ? { where: { status } } : {}),
+    ...(Object.keys(where).length ? { where } : {}),
     order: [['requested_at', 'DESC']],
     limit: 200,
   });

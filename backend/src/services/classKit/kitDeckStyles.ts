@@ -472,6 +472,12 @@ body.mode-story .ktoggles:hover{opacity:1}
 .ktheater-explain{margin-top:2.6vh;background:#101c2e;border:1.5px solid #233650;border-radius:14px;padding:1.8vh 1.8vw;
   font-size:clamp(14px,.5vw + .8vh,19px);color:#dbe6f0;max-width:760px;margin-left:auto;margin-right:auto}
 .ktheater-correct{margin-top:1.4vh;font-size:clamp(13px,.45vw + .7vh,16px);color:#bdeecb;text-align:center;font-weight:600}
+.kraffle{margin-top:2.4vh;text-align:center}
+.kraffle-big{margin-top:1.6vh;min-height:1.3em;font-size:clamp(28px,2vw + 2vh,64px);font-weight:900;color:#F5C542;letter-spacing:-.01em}
+.kraffle-chips{margin-top:1.2vh;display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+.kraffle-chip{background:#1e4a2a;border:1.5px solid var(--leaf);color:#fff;border-radius:999px;padding:.8vh 1.4vw;font-weight:800;font-size:clamp(13px,.5vw + .7vh,18px)}
+.kconfetti{position:fixed;top:-12px;width:10px;height:16px;border-radius:2px;z-index:200;pointer-events:none;animation:kconfetti-fall 2.4s linear forwards}
+@keyframes kconfetti-fall{to{transform:translateY(105vh) rotate(720deg);opacity:.9}}
 
 #kqr-overlay{position:fixed;inset:0;z-index:80;background:rgba(15,20,25,.92);display:none;flex-direction:column;align-items:center;justify-content:center;color:#fff;gap:20px}
 #kqr-overlay.show{display:flex}

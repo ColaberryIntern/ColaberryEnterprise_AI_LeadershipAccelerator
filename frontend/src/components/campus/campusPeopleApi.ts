@@ -21,6 +21,9 @@ export interface StaffDesk {
   name: string;
   title: string;
   building: string;
+  /** C87: the Staff Office floor (admin-menu section) and the office door the agent stands at; null or absent off the tower. */
+  floor?: string | null;
+  office?: string | null;
   ai: true;
   on_duty: boolean;
   enrollment_id: string | null;

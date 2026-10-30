@@ -193,6 +193,10 @@ export interface SubscriptionView {
   /** Unspent account credit (e.g. the $50 Open House deposit) applied to the
    *  next payment. 0 when none. */
   available_credit_cents: number;
+  /** Credit usable on each plan. Differs from the total when a credit is
+   *  annual-only (the Open House scholarship), so the monthly card never shows
+   *  it coming off. */
+  credit_cents_by_plan: Record<string, number>;
   subscription: null | {
     plan: SubscriptionPlan;
     status: string;
@@ -214,6 +218,10 @@ export async function getSubscription(enrollmentId: string, nowMs: number = Date
 
   // Unspent account credit (Open House $50 deposit) applied to the next payment.
   const available_credit_cents = await getAvailableCreditCents(enrollmentId);
+  const credit_cents_by_plan: Record<string, number> = {
+    annual: await getAvailableCreditCents(enrollmentId, 'annual'),
+    monthly: await getAvailableCreditCents(enrollmentId, 'monthly'),
+  };
 
   // The class this student's payment counts toward (their selection, else the
   // default target cohort) — lets the UI explain the early-pay billing anchor.
@@ -229,7 +237,7 @@ export async function getSubscription(enrollmentId: string, nowMs: number = Date
     : null;
 
   if (!sub || sub.status === 'pending') {
-    return { plans, needs_subscription: isExplorer, class_start, available_credit_cents, subscription: null };
+    return { plans, needs_subscription: isExplorer, class_start, available_credit_cents, credit_cents_by_plan, subscription: null };
   }
 
   const periodEnd = sub.current_period_end ? new Date(sub.current_period_end) : null;
@@ -244,6 +252,7 @@ export async function getSubscription(enrollmentId: string, nowMs: number = Date
     needs_subscription: isExplorer && !active,
     class_start,
     available_credit_cents,
+    credit_cents_by_plan,
     subscription: {
       plan: sub.plan,
       status: sub.status,
@@ -347,7 +356,7 @@ export async function startCheckout(enrollmentId: string, plan: SubscriptionPlan
   // pick whole credit rows up to the payable target so the amount PaySimple is
   // asked to charge is reduced. The credit is not consumed until the payment
   // settles (activateByRef) — a checkout the student abandons keeps the credit.
-  const creditRows = await availableCreditRows(enrollmentId);
+  const creditRows = await availableCreditRows(enrollmentId, plan);
   const { appliedCents } = selectCreditsUpTo(creditRows, creditApplyTarget(cfg.amount_cents));
   const chargeCents = cfg.amount_cents - appliedCents;
   const chargeAmount = round2(chargeCents / 100);
@@ -506,7 +515,7 @@ export async function activateByRef(
   const appliedCreditCents = (sub as any).applied_credit_cents || 0;
   if (appliedCreditCents > 0) {
     try {
-      await consumeCreditsForSubscription(sub.enrollment_id, sub.id, appliedCreditCents, nowMs);
+      await consumeCreditsForSubscription(sub.enrollment_id, sub.id, appliedCreditCents, nowMs, sub.plan);
     } catch (err: any) {
       // Never fail an activation over credit bookkeeping — the payment cleared.
       console.error('[Subscription] credit consume failed (non-fatal):', err?.message);

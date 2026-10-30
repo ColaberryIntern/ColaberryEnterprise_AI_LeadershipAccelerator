@@ -27,7 +27,9 @@
  * so getSessionCurriculum's /Week\s+(\d+)/ parse still resolves the blueprint.
  */
 
-export type DayKind = 'orientation' | 'architecture' | 'build';
+/** 'openhouse' = a prospect-facing session (title contains "Open House") whose
+ * every slide comes from its KitConfig overrides — no week content is generated. */
+export type DayKind = 'orientation' | 'architecture' | 'build' | 'openhouse';
 export type InteractionKind = 'prediction' | 'poll' | 'trivia';
 
 export interface Interaction {
@@ -42,6 +44,14 @@ export interface Interaction {
    * count, locked vote, animated reveal) instead of the compact inline treatment.
    * Use sparingly — a handful of times per class, for decisions worth stopping for. */
   theater?: boolean;
+  /** Theater only: fill the answer tiles live while votes arrive, instead of
+   * holding every bar at zero until the reveal. For opinion polls where the
+   * moving numbers ARE the moment. */
+  liveBars?: boolean;
+  /** Theater only: a giveaway draw of this many winners. Everyone who picks
+   * `answer` is an entrant; after the reveal a "Draw winner" button picks one
+   * distinct entrant at random per click. */
+  raffle?: number;
 }
 
 export interface BuildCheckpoint {

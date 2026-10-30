@@ -279,7 +279,8 @@ describe('GET /api/portal/campus/presence (C4)', () => {
 
 describe('GET /api/portal/campus/staff-desks (C5)', () => {
   const DESKS = '/api/portal/campus/staff-desks';
-  const reese = { id: 'reese', name: 'Reese', title: 'Mentor desk', building: 'commons', ai: true, on_duty: true, enrollment_id: 'r-1', opens: null, prompts: ['Q1', 'Q2', 'Q3'] };
+  const reese = { id: 'reese', name: 'Reese', title: 'Mentor desk', building: 'lecture', floor: null, office: null, ai: true, on_duty: true, enrollment_id: 'r-1', opens: null, prompts: ['Q1', 'Q2', 'Q3'] };
+  const dara = { id: 'dara', name: 'Dara', title: 'Curriculum desk', building: 'career', floor: 'program', office: '/admin/orchestration', ai: true, on_duty: true, enrollment_id: 'd-1', opens: null, prompts: ['Q1'] };
   beforeEach(() => { mockGetDesks.mockReset(); mockGetDesks.mockResolvedValue({ audience: 'member', desks: [reese] }); });
 
   it('401s without a token', async () => {
@@ -296,6 +297,12 @@ describe('GET /api/portal/campus/staff-desks (C5)', () => {
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ desks: [reese] });
     expect(mockGetDesks).toHaveBeenCalledWith('enr-1');
+  });
+  it('C87: a desk with a Staff Office place (floor and office) passes the response contract', async () => {
+    mockGetDesks.mockResolvedValue({ audience: 'staff', desks: [reese, dara] });
+    const res = await request(buildApp({ CAMPUS_ENABLED: 'all' })).get(DESKS).set('Authorization', `Bearer ${token()}`);
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ desks: [reese, dara] });
   });
   it('a service failure answers 500 CampusStaffDesksUnavailable', async () => {
     mockGetDesks.mockRejectedValue(new TypeError('db down'));

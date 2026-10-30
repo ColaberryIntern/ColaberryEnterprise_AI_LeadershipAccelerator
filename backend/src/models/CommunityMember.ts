@@ -16,6 +16,8 @@ export interface CommunityMemberAttributes {
   // Management-portal role for staff (owner|admin|curriculum|revenue|admissions|
   // support), or null for non-mgmt members. Gates admin sections via mgmtRoles.ts.
   mgmt_role?: string | null;
+  // C82 (H4 option A): admin sections granted on top of mgmt_role (effectiveSections in mgmtRoles.ts). Empty = the role only.
+  mgmt_extra_sections?: string[];
   presence_status?: CommunityPresenceStatus;
   last_active_at?: Date | null;
   created_at?: Date;
@@ -32,6 +34,7 @@ class CommunityMember extends Model<CommunityMemberAttributes> implements Commun
   declare points: number;
   declare role: CommunityMemberRole;
   declare mgmt_role: string | null;
+  declare mgmt_extra_sections: string[];
   declare presence_status: CommunityPresenceStatus;
   declare last_active_at: Date | null;
   declare created_at: Date;
@@ -86,6 +89,13 @@ CommunityMember.init(
       // or null. CHECK-constrained in ensureCommunityMemberRoleSchema().
       type: DataTypes.STRING(20),
       allowNull: true,
+    },
+    mgmt_extra_sections: {
+      // C82: section keys granted on top of mgmt_role; validated against SECTION_KEYS by the grant route. Added by
+      // ensureCommunityMemberRoleSchema() (awaited before app.listen, so the column exists before any query).
+      type: DataTypes.ARRAY(DataTypes.STRING(40)),
+      allowNull: false,
+      defaultValue: [],
     },
     presence_status: {
       // 'online'/'away' are P2 (websocket presence layer, spec §6.A/§8) — the

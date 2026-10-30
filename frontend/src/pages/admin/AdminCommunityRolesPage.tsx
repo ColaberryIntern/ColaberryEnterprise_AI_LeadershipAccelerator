@@ -3,10 +3,11 @@ import { Link } from 'react-router-dom';
 import { PageHeader, SectionCard } from '../../components/admin/shell';
 import {
   fetchCommunityMembers, setCommunityMemberRole, setCommunityMemberFreeAccess, fetchViewAsUrl,
-  setCommunityMemberMgmtRole,
+  setCommunityMemberMgmtRole, setCommunityMemberExtraSections,
   AdminCommunityMember, CommunityMemberRole, MgmtRole, MGMT_ROLES, MGMT_ROLE_LABEL,
 } from '../../services/communityAdminApi';
 import PersonLink from '../../components/admin/person/PersonLink';
+import ExtraSectionsEditor from './communityRoles/ExtraSectionsEditor';
 
 const ROLES: CommunityMemberRole[] = ['student', 'mentor', 'staff'];
 const ROLE_LABEL: Record<CommunityMemberRole, string> = { student: 'Member', mentor: 'Mentor', staff: 'Staff' };
@@ -120,6 +121,7 @@ export default function AdminCommunityRolesPage({ embedded = false }: Props = {}
     try {
       const updated = await setCommunityMemberMgmtRole(m.id, mgmtRole);
       setMembers((prev) => prev.map((x) => (x.id === m.id ? { ...x, mgmt_role: updated } : x)));
+      void load(search); // C82: the role's own sections (and cleared extras) come back with the roster
       setNotice(
         updated
           ? `${m.display_name} is now ${MGMT_ROLE_LABEL[updated as MgmtRole]} in the Management Portal.`
@@ -127,6 +129,22 @@ export default function AdminCommunityRolesPage({ embedded = false }: Props = {}
       );
     } catch (e: any) {
       setError(e?.response?.data?.error ?? 'Failed to update management role');
+    } finally {
+      setSavingId(null);
+    }
+  };
+
+  // C82: grant or revoke admin sections on top of a staff member's management role.
+  const onExtras = async (m: AdminCommunityMember, sections: string[]) => {
+    setSavingId(m.id);
+    setNotice(null);
+    setError(null);
+    try {
+      const stored = await setCommunityMemberExtraSections(m.id, sections);
+      setMembers((prev) => prev.map((x) => (x.id === m.id ? { ...x, mgmt_extra_sections: stored } : x)));
+      setNotice(stored.length ? `${m.display_name} now also has ${stored.length} extra section${stored.length === 1 ? '' : 's'}.` : `${m.display_name} has their role's sections only.`);
+    } catch (e: any) {
+      setError(e?.response?.data?.error ?? 'Failed to update sections');
     } finally {
       setSavingId(null);
     }
@@ -253,7 +271,7 @@ export default function AdminCommunityRolesPage({ embedded = false }: Props = {}
                       </select>
                     </td>
                     <td>
-                      {m.role === 'staff' ? (
+                      {m.role === 'staff' ? (<>
                         <select
                           className="form-select form-select-sm"
                           value={m.mgmt_role ?? ''}
@@ -264,7 +282,11 @@ export default function AdminCommunityRolesPage({ embedded = false }: Props = {}
                           <option value="">None</option>
                           {MGMT_ROLES.map((r) => <option key={r} value={r}>{MGMT_ROLE_LABEL[r]}</option>)}
                         </select>
-                      ) : (
+                        {m.mgmt_role && (
+                          <ExtraSectionsEditor key={`${m.id}:${m.mgmt_role}:${(m.mgmt_extra_sections ?? []).join(',')}`} name={m.display_name}
+                            roleSections={m.mgmt_role_sections ?? []} extras={m.mgmt_extra_sections ?? []} saving={savingId === m.id} onSave={(s) => onExtras(m, s)} />
+                        )}
+                      </>) : (
                         <span className="text-muted small" title="Only staff can hold a Management Portal role">—</span>
                       )}
                     </td>

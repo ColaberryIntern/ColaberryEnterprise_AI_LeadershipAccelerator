@@ -37,6 +37,10 @@ export interface SubscriptionView {
   /** Unspent account credit (e.g. the $50 Open House deposit) applied to the
    *  next payment. 0 when none. */
   available_credit_cents: number;
+  /** Credit usable on each plan id. Lower than the total for the monthly plan
+   *  when a credit is annual-only (the Open House scholarship). Older servers
+   *  omit it, in which case the total applies to every plan. */
+  credit_cents_by_plan?: Record<string, number>;
   subscription: SubscriptionState | null;
 }
 

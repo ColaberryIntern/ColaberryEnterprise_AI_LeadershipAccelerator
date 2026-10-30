@@ -1,0 +1,805 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Open House — The Forward Deployed Engineer</title>
+<style>
+  :root{
+    --cherry:#FB2832; --cherry-deep:#E5121D; --cherry-dark:#C20E1E;
+    --leaf:#5BA63C; --leaf-soft:#eaf6e3;
+    --berry:#367895; --amber:#E8920C; --amber-soft:#fdf0dd;
+    --ink:#1a202c; --ink-2:#2d3748; --muted:#64748b; --line:#e8e2de;
+    --bg:#ffffff; --bg-soft:#faf7f5; --shadow:0 18px 50px rgba(26,32,44,.14);
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{height:100%}
+  body{font-family:"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:var(--ink);background:#111;overflow:hidden}
+  .slide{position:absolute;inset:0;display:none;flex-direction:column;background:var(--bg);padding:4.5vh 5vw;overflow:hidden}
+  .slide.active{display:flex;animation:fadein .35s ease}
+  @keyframes fadein{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+  .slide.wm::after{content:"";position:absolute;right:-70px;bottom:-90px;width:420px;height:420px;
+    background:url("{{IMG:colaberry-mark.png}}") no-repeat center/contain;opacity:.055;pointer-events:none}
+  .slide.statement.wm::after{background-image:url("{{IMG:colaberry-mark-white.png}}");opacity:.10}
+  #progress{position:fixed;top:0;left:0;height:5px;background:var(--cherry);width:0;z-index:50;transition:width .3s ease}
+  #counter{position:fixed;bottom:16px;right:22px;z-index:50;font-size:13px;color:#94a3b8;font-weight:600;letter-spacing:1px}
+  #hint{position:fixed;bottom:16px;left:22px;z-index:50;font-size:12px;color:#b8b0aa}
+  #livepill{position:fixed;top:14px;right:18px;z-index:55;font-size:11px;font-weight:800;letter-spacing:1.5px;padding:5px 12px;border-radius:999px;background:#94a3b8;color:#fff}
+  #livepill.on{background:var(--leaf)}
+  .kicker{color:var(--cherry-deep);font-weight:800;letter-spacing:3px;text-transform:uppercase;font-size:clamp(12px,1.15vw,16px);margin-bottom:1.6vh}
+  h1{font-size:clamp(32px,4.4vw,64px);line-height:1.08;letter-spacing:-.5px}
+  h2{font-size:clamp(26px,3.4vw,50px);line-height:1.1;letter-spacing:-.5px}
+  .sub{color:var(--muted);font-size:clamp(15px,1.5vw,21px);line-height:1.5;margin-top:1.8vh;max-width:58ch}
+  .red{color:var(--cherry-deep)}
+  ul.points{margin-top:2.4vh;list-style:none}
+  ul.points li{position:relative;padding-left:30px;margin:1.3vh 0;font-size:clamp(14px,1.3vw,19px);line-height:1.45;color:var(--ink-2)}
+  ul.points li::before{content:"";position:absolute;left:0;top:.5em;width:14px;height:14px;border-radius:4px;background:var(--cherry);opacity:.9}
+  ul.points li b{color:var(--ink)}
+  .brandbar{display:flex;align-items:center;gap:14px;margin-bottom:3vh;z-index:2}
+  .wordmark{height:30px;width:150px;background:url("{{IMG:colaberry-horizontal.png}}") no-repeat left center/contain}
+  .wordmark.white{background-image:url("{{IMG:colaberry-horizontal-white.png}}");height:26px;width:130px}
+  .brandbar .bsec{font-weight:700;letter-spacing:2.5px;font-size:13px;color:#a89f99;text-transform:uppercase;border-left:2px solid var(--line);padding-left:14px}
+  .split{display:grid;grid-template-columns:minmax(0,46fr) minmax(0,54fr);gap:4vw;align-items:center;flex:1;min-height:0}
+  .split.rev{grid-template-columns:minmax(0,54fr) minmax(0,46fr)}
+  .center{flex:1;display:flex;flex-direction:column;justify-content:center;align-items:flex-start;min-height:0}
+  .center.mid{align-items:center;text-align:center}
+  .shot{position:relative;border-radius:18px;overflow:hidden;border:1px solid var(--line);box-shadow:var(--shadow);background:#fff;height:70vh}
+  .shot img{width:100%;height:100%;object-fit:cover;object-position:top center;display:block}
+  .shot .tag{position:absolute;top:12px;left:12px;background:var(--cherry);color:#fff;font-size:11px;font-weight:800;letter-spacing:1.5px;padding:5px 12px;border-radius:999px;z-index:2}
+  .shot .tag.pub{background:var(--berry)}
+  .shot .cap{position:absolute;left:0;right:0;bottom:0;background:linear-gradient(transparent,rgba(20,15,12,.84));color:#fff;font-size:13px;padding:26px 16px 12px;letter-spacing:.4px}
+  .photo{position:relative;border-radius:18px;overflow:hidden;border:1px solid var(--line);box-shadow:var(--shadow)}
+  .photo img{width:100%;height:100%;object-fit:cover;display:block}
+  .photostack{display:grid;grid-template-rows:3fr 2fr;gap:2vh;height:72vh}
+  .statement{background:radial-gradient(120% 140% at 20% 0%,#ff5a4e 0%,var(--cherry) 42%,var(--cherry-dark) 100%);color:#fff}
+  .statement .kicker{color:#ffd9d4}
+  .statement h1{color:#fff;font-size:clamp(36px,5vw,76px)}
+  .statement .sub{color:#ffe4e1}
+  .stats{display:flex;gap:2vw;margin-top:3.4vh;flex-wrap:wrap}
+  .stat{border:1.5px solid var(--line);border-left:6px solid var(--cherry);border-radius:14px;padding:1.8vh 1.6vw;background:var(--bg-soft);min-width:11vw}
+  .stat b{display:block;font-size:clamp(24px,2.7vw,40px);letter-spacing:-.5px}
+  .stat span{display:block;color:var(--muted);font-size:clamp(11px,.95vw,14px);text-transform:uppercase;letter-spacing:1.3px;margin-top:4px}
+  .stat.berry{border-left-color:var(--berry)} .stat.amber{border-left-color:var(--amber)} .stat.leaf{border-left-color:var(--leaf)}
+  .src{margin-top:2vh;font-size:clamp(10px,.85vw,12px);color:#a59c96;letter-spacing:.4px}
+  .quote{position:relative;border:1.5px solid var(--line);border-radius:18px;background:#fff;box-shadow:var(--shadow);padding:2.6vh 2.2vw 2vh 3.4vw;margin:1.2vh 0}
+  .quote::before{content:"\201C";position:absolute;left:.9vw;top:.2vh;font-size:clamp(50px,5vw,84px);font-weight:800;color:var(--cherry);opacity:.85;font-family:Georgia,serif;line-height:1}
+  .quote p{font-size:clamp(15px,1.55vw,23px);line-height:1.42;color:var(--ink);font-weight:600}
+  .quote .who{margin-top:1.2vh;font-size:clamp(11px,1vw,14px);color:var(--muted);font-weight:700;letter-spacing:.6px;text-transform:uppercase}
+  .quote .who b{color:var(--cherry-deep)}
+  .quote.berry::before{color:var(--berry)} .quote.amber::before{color:var(--amber)}
+  .phases{display:grid;grid-template-columns:repeat(4,1fr);gap:1.4vw;flex:1;margin-top:2.6vh;min-height:0}
+  .phase{position:relative;border:1.5px solid var(--line);border-radius:16px;background:var(--bg-soft);padding:2.2vh 1.2vw;display:flex;flex-direction:column;overflow:hidden}
+  .phase .ic{font-size:clamp(28px,2.6vw,40px);margin-bottom:1vh}
+  .phase h3{font-size:clamp(15px,1.4vw,20px);line-height:1.25;margin-bottom:.6vh}
+  .phase .wk{font-size:clamp(10px,.9vw,13px);color:var(--cherry-deep);font-weight:800;letter-spacing:2px;text-transform:uppercase;margin-bottom:1vh}
+  .phase p{font-size:clamp(12px,1.08vw,15.5px);color:var(--ink-2);line-height:1.45}
+  .phase .ghost{position:absolute;right:14px;bottom:0;font-size:clamp(100px,10vw,170px);font-weight:800;color:rgba(26,32,44,.055);line-height:.8}
+  .phase:nth-child(1){border-top:5px solid var(--cherry)} .phase:nth-child(2){border-top:5px solid var(--berry)}
+  .phase:nth-child(3){border-top:5px solid var(--amber)} .phase:nth-child(4){border-top:5px solid var(--leaf)}
+  .bookcover{width:min(19vw,250px);aspect-ratio:2/3;border-radius:10px;box-shadow:0 24px 60px rgba(26,32,44,.35);
+    background:linear-gradient(160deg,#0e1b26 0%,#16324a 55%,#0b1220 100%);color:#fff;display:flex;flex-direction:column;padding:2vh 1.3vw;border:1px solid rgba(255,255,255,.15)}
+  .bookcover .bc-top{font-size:10px;letter-spacing:2.5px;color:#7fd1c0;font-weight:800;text-transform:uppercase}
+  .bookcover h3{font-size:clamp(18px,1.9vw,28px);line-height:1.12;margin-top:1.2vh;font-weight:800}
+  .bookcover .bc-sub{font-size:clamp(10px,.85vw,13px);color:#bcd3e2;line-height:1.4;margin-top:1.2vh}
+  .bookcover .bc-author{margin-top:auto;font-size:clamp(11px,.95vw,14px);font-weight:700;border-top:1px solid rgba(255,255,255,.25);padding-top:1.2vh}
+  .bookcover .bc-author span{display:block;font-weight:500;color:#9fb8c9;font-size:.85em}
+  .ram{width:min(12vw,150px);aspect-ratio:1/1;border-radius:20px;overflow:hidden;border:4px solid #fff;box-shadow:var(--shadow)}
+  .ram img{width:100%;height:100%;object-fit:cover;display:block}
+  .prizes{display:grid;grid-template-columns:1fr 1fr;gap:2.4vw;flex:1;margin-top:2vh;min-height:0;align-items:stretch}
+  .prize{border:2px solid var(--line);border-radius:22px;padding:3vh 2vw;display:flex;gap:1.6vw;align-items:center;background:#fff;box-shadow:var(--shadow)}
+  .prize.gold{border-color:var(--amber);background:linear-gradient(160deg,#fffaf0,#fdf0dd)}
+  .prize .big{font-size:clamp(40px,4.6vw,70px);font-weight:900;letter-spacing:-1px;color:var(--cherry-deep);line-height:1}
+  .prize h3{font-size:clamp(18px,1.9vw,28px);margin:.8vh 0}
+  .prize p{font-size:clamp(13px,1.2vw,17px);color:var(--ink-2);line-height:1.45}
+  .raffle{margin-top:2.4vh;background:var(--amber-soft);border:2px solid var(--amber);border-radius:16px;padding:1.6vh 1.6vw;font-size:clamp(13px,1.25vw,17px);color:#5f3803;line-height:1.5}
+  .raffle b{color:#3f2600}
+  .doors{display:grid;grid-template-columns:1.15fr 1fr;gap:2.4vw;flex:1;margin-top:2vh;min-height:0}
+  .door{border:2px solid var(--line);border-radius:20px;padding:2.6vh 2vw;display:flex;flex-direction:column;background:#fff}
+  .door.primary{border-color:var(--cherry);box-shadow:var(--shadow)}
+  .door .dk{font-size:12px;font-weight:800;letter-spacing:2px;text-transform:uppercase;color:var(--muted)}
+  .door.primary .dk{color:var(--cherry-deep)}
+  .door h3{font-size:clamp(20px,2.1vw,30px);margin:.6vh 0}
+  .price{font-size:clamp(34px,4vw,58px);font-weight:800;letter-spacing:-1px}
+  .price small{font-size:.38em;color:var(--muted);font-weight:600}
+  .door ul{list-style:none;margin-top:1.4vh}
+  .door li{padding:.7vh 0 .7vh 26px;position:relative;font-size:clamp(13px,1.2vw,17px);color:var(--ink-2)}
+  .door li::before{content:"✓";position:absolute;left:0;color:var(--leaf);font-weight:800}
+  .sum{margin-top:auto;border-top:2px dashed var(--line);padding-top:1.4vh;display:flex;justify-content:space-between;font-size:clamp(14px,1.35vw,19px);font-weight:700}
+  .sum b{color:var(--cherry-deep);font-size:1.25em}
+  .agrow{display:flex;align-items:center;gap:1.4vw;padding:1.3vh 1.4vw;border:1.5px solid var(--line);border-radius:16px;background:#fff;margin:1vh 0;box-shadow:0 6px 18px rgba(26,32,44,.05)}
+  .agrow .n{width:42px;height:42px;flex:none;border-radius:50%;background:var(--cherry);color:#fff;font-weight:800;font-size:19px;display:flex;align-items:center;justify-content:center}
+  .agrow.hot{border-color:var(--cherry);box-shadow:var(--shadow)} .agrow.hot .n{background:var(--cherry-dark)}
+  .agrow .t{flex:1;font-size:clamp(15px,1.45vw,20px);font-weight:700}
+  .agrow .t span{display:block;font-weight:500;color:var(--muted);font-size:.72em;margin-top:2px}
+  .agrow .mins{font-family:Consolas,monospace;font-size:clamp(12px,1.05vw,15px);color:var(--berry);font-weight:700;white-space:nowrap}
+  .bigbtn{display:inline-flex;align-items:center;gap:14px;background:var(--cherry);color:#fff;text-decoration:none;font-weight:800;
+    font-size:clamp(17px,1.8vw,26px);padding:2.2vh 2.6vw;border-radius:999px;box-shadow:0 18px 44px rgba(251,40,50,.4)}
+  .ladder{display:flex;gap:1vw;align-items:stretch;margin-top:2.6vh}
+  .rung{flex:1;border-radius:16px;padding:2vh 1.2vw;color:#fff;display:flex;flex-direction:column;gap:.6vh}
+  .rung b{font-size:clamp(15px,1.4vw,20px)} .rung span{font-size:clamp(11px,1vw,14px);opacity:.9}
+  .arrow{align-self:center;font-size:28px;color:#c9c1bb}
+  .bars{display:flex;align-items:flex-end;gap:3vw;height:34vh;margin-top:3vh;padding:0 1vw;border-bottom:2px solid var(--line)}
+  .bar{flex:1;border-radius:12px 12px 0 0;position:relative;display:flex;align-items:flex-start;justify-content:center;color:#fff;font-weight:800;padding-top:1vh;font-size:clamp(16px,1.6vw,24px)}
+  .bar i{position:absolute;bottom:-4.4vh;left:0;right:0;text-align:center;color:var(--muted);font-style:normal;font-size:clamp(11px,1vw,14px);font-weight:700}
+  .bigqr{width:min(34vh,330px);height:min(34vh,330px);border:2px solid var(--line);border-radius:20px;padding:14px;background:#fff;box-shadow:var(--shadow)}
+  .bigqr svg{width:100%;height:100%}
+  .count{font-size:clamp(60px,9vw,140px);font-weight:900;color:var(--cherry-deep);line-height:1;letter-spacing:-2px;transition:transform .2s}
+  .count.bump{transform:scale(1.12)}
+  .url{font-size:clamp(14px,1.4vw,20px);font-weight:700;color:var(--berry);margin-top:1.4vh;word-break:break-all}
+
+  /* ---------- live poll slide (platform voting) ---------- */
+  .slide.poll{background:radial-gradient(120% 120% at 10% 0%,#1b2a44 0%,#0B1220 60%);padding:3vh 3vw;color:#fff}
+  .pollhead{display:flex;align-items:center;gap:1.6vw;margin-bottom:1.4vh}
+  .pollhead .plabel{font-weight:800;letter-spacing:2.5px;font-size:clamp(12px,1.1vw,15px);color:#ff6a71;text-transform:uppercase}
+  .pollhead .spacer{flex:1}
+  .qrmini{display:flex;align-items:center;gap:10px;background:#fff;border-radius:12px;padding:6px 12px 6px 6px;color:var(--ink)}
+  .qrmini .q{width:min(9vh,84px);height:min(9vh,84px)} .qrmini .q svg{width:100%;height:100%;display:block}
+  .qrmini span{font-size:clamp(10px,.95vw,13px);font-weight:700;line-height:1.25}
+  .pq{font-size:clamp(24px,2.9vw,44px);font-weight:800;line-height:1.15;max-width:1200px;margin:1vh 0 2.4vh}
+  .pvoted{display:flex;align-items:baseline;gap:12px;color:#9fb3c8;font-weight:700;letter-spacing:1px;font-size:clamp(13px,1.2vw,17px)}
+  .pvoted b{font-size:clamp(34px,3.6vw,58px);color:#fff;font-weight:900;letter-spacing:-1px;transition:transform .2s}
+  .pvoted b.bump{transform:scale(1.15)}
+  .popts{display:grid;gap:1.4vh;margin-top:2vh;max-width:1250px}
+  .popt{position:relative;border-radius:16px;background:#16233a;border:2px solid #27405f;overflow:hidden;padding:2vh 1.6vw;display:flex;justify-content:space-between;align-items:center;font-size:clamp(16px,1.6vw,24px);font-weight:700}
+  .popt .fill{position:absolute;inset:0;width:0;background:linear-gradient(90deg,#FB2832,#ff7a57);opacity:.55;transition:width .7s cubic-bezier(.2,.9,.3,1);z-index:0}
+  .popt:nth-child(2) .fill{background:linear-gradient(90deg,#367895,#4fb0d8)}
+  .popt:nth-child(3) .fill{background:linear-gradient(90deg,#E8920C,#ffc04d)}
+  .popt:nth-child(4) .fill{background:linear-gradient(90deg,#5BA63C,#8fd16b)}
+  .popt .lab,.popt .num{position:relative;z-index:1}
+  .popt .num{font-variant-numeric:tabular-nums;color:#fff}
+  .popt.correct{border-color:#8fd16b;box-shadow:0 0 0 4px rgba(143,209,107,.25)}
+  .popt.correct .lab::after{content:"  ✓";color:#8fd16b}
+  .pctrl{display:flex;gap:12px;margin-top:2.4vh;align-items:center;flex-wrap:wrap}
+  .pbtn{background:#27405f;color:#fff;border:none;border-radius:999px;padding:1.3vh 2vw;font-weight:800;cursor:pointer;font-size:clamp(13px,1.1vw,16px)}
+  .pbtn.primary{background:var(--cherry);box-shadow:0 12px 30px rgba(251,40,50,.4)}
+  .pstate{font-weight:800;letter-spacing:2px;font-size:12px;text-transform:uppercase;padding:6px 12px;border-radius:999px;background:#3b2a55;color:#e4d4ff}
+  .pstate.locked{background:#5a3b10;color:#ffd38a} .pstate.revealed{background:#1e4a2a;color:#bdeecb}
+  .preveal{margin-top:2vh;max-width:1200px;background:#101c2e;border:1.5px solid #233650;border-radius:14px;padding:1.8vh 1.6vw;color:#dbe6f0;font-size:clamp(14px,1.35vw,20px);display:none}
+  .pright{margin-top:1.2vh;color:#bdeecb;font-weight:700;font-size:clamp(13px,1.1vw,16px);display:none}
+  .pnolive{color:#ffd38a;font-weight:700;font-size:13px;margin-left:8px}
+  .rafflebox{margin-top:2vh;text-align:center;display:none}
+  .rafflebig{font-size:clamp(40px,5vw,84px);font-weight:900;color:#F5C542;min-height:1.2em;letter-spacing:-1px}
+  .rafflechips{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:1.4vh}
+  .rafflechips span{background:#1e4a2a;border:1.5px solid #8fd16b;border-radius:999px;padding:.9vh 1.4vw;font-weight:800}
+  .confetti{position:fixed;top:-14px;width:10px;height:16px;border-radius:2px;z-index:200;pointer-events:none;animation:fall 2.6s linear forwards}
+  @keyframes fall{to{transform:translateY(106vh) rotate(760deg)}}
+  #notes{position:fixed;left:0;right:0;bottom:0;background:rgba(20,15,12,.95);color:#ffe4e1;padding:16px 26px;font-size:15px;line-height:1.5;z-index:60;display:none;border-top:3px solid var(--cherry);max-height:40vh;overflow:auto}
+  #notes b{color:#fff}
+  @media print{body{overflow:visible;background:#fff}.slide{display:flex !important;position:relative;page-break-after:always;height:100vh}#progress,#counter,#hint,#notes,#livepill{display:none !important}@page{size:letter landscape;margin:0}}
+</style>
+</head>
+<body>
+<div id="progress"></div>
+<div id="counter"></div>
+<div id="hint">← → navigate · N notes · Q show QR</div>
+<div id="livepill">REHEARSAL · LIVE OFF</div>
+<div id="notes"></div>
+
+<!-- ======================= 1 · WELCOME ======================= -->
+<section class="slide wm" data-min="2" data-title="Welcome" data-note="High energy, big smile. 'Welcome! Tonight is not a webinar. Tonight we start building a business, live, from an idea somebody in this room gives us, and I am going to show you the job title Anthropic just put a hundred million dollars behind.' Then: 'Grab your phone, the next slide is how you get in the game, and how you win tonight.'">
+  <div class="brandbar"><div class="wordmark"></div><span class="bsec">AI Systems Architect Accelerator · Open House</span></div>
+  <div class="split">
+    <div>
+      <div class="kicker">Open House · Thursday, October 29, 2026</div>
+      <h1>Tonight we start<br>building a business.<br><span class="red">Yours.</span></h1>
+      <p class="sub">In the next 60 minutes: the job Anthropic just bet $100 million on, what it pays, how an architect thinks, and lesson one of how you build it, starting tonight.</p>
+      <div class="stats">
+        <div class="stat"><b>60 min</b><span>live, on your phone</span></div>
+        <div class="stat berry"><b>Nov 12</b><span>November cohort kicks off</span></div>
+        <div class="stat amber"><b>6 prizes</b><span>drawn live tonight</span></div>
+      </div>
+    </div>
+    <div class="photostack">
+      <div class="photo"><img src="{{IMG:u-1531482615713-2afd69097998.jpg}}" alt="Builders working together"></div>
+      <div class="photo"><img src="{{IMG:developer-code.jpg}}" alt="Building with Claude Code"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= 2 · LOBBY + RAFFLE ======================= -->
+<section class="slide wm" data-oh="lobby" data-min="3" data-title="Connect your phone" data-note="Give it 60 to 90 seconds. 'Scan this code and log in. That is how you vote tonight, and it is how you get into the giveaways: three signed copies of our CEO's book, and three scholarships worth fifty percent off a full year.' Read the live counter out loud as it climbs and celebrate it. No account yet? The same page signs you up in seconds, $0 to start, no card needed. Don't move on until most phones are in.">
+  <div class="brandbar"><div class="wordmark"></div><span class="bsec">Connect your phone</span></div>
+  <div class="split">
+    <div>
+      <div class="kicker">Before we start · 60 seconds</div>
+      <h2>Grab your phone.<br><span class="red">You're part of the show.</span></h2>
+      <ul class="points">
+        <li><b>Scan the code</b> and log in. New here? Sign up on the same page: $0 to start, no card needed.</li>
+        <li>Vote in tonight's <b>live polls and trivia</b>: the numbers move on this screen as you answer</li>
+        <li>Be logged in for the <b>live draws</b>: 3 signed books + 3 scholarships worth 50% off a year</li>
+      </ul>
+      <div class="url" data-checkin></div>
+    </div>
+    <div class="center mid">
+      <div class="bigqr" data-qr></div>
+      <div style="margin-top:3vh;color:var(--muted);font-weight:800;letter-spacing:2px;font-size:13px;text-transform:uppercase">In the room right now</div>
+      <div class="count" data-present>0</div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= 3 · AGENDA ======================= -->
+<section class="slide wm" data-min="1" data-title="Tonight's plan" data-note="30 seconds. Point at row 2: 'We are going to start building a real business right now, inside the platform, from YOUR idea.' Point at row 7: 'And stay to the end, because that is where six people win.'">
+  <div class="brandbar"><div class="wordmark"></div><span class="bsec">Tonight's plan</span></div>
+  <div class="center" style="max-width:1080px;width:100%;margin:0 auto">
+    <div class="kicker">The next 60 minutes</div>
+    <h2 style="margin-bottom:1.4vh">Here's the plan.</h2>
+    <div style="width:100%">
+      <div class="agrow"><span class="n">1</span><span class="t">Welcome + the giveaways</span><span class="mins">5 min</span></div>
+      <div class="agrow hot"><span class="n">2</span><span class="t">We start a business, live<span>You give us the idea. We set it up inside the platform, the same way you would on day one.</span></span><span class="mins">5 min</span></div>
+      <div class="agrow"><span class="n">3</span><span class="t">The $100 million signal<span>What Anthropic just bet on, this month in AI, and what the people building it are saying</span></span><span class="mins">10 min</span></div>
+      <div class="agrow"><span class="n">4</span><span class="t">The Forward Deployed Engineer<span>What the job is, what it pays, where it leads, and how an architect thinks</span></span><span class="mins">12 min</span></div>
+      <div class="agrow"><span class="n">5</span><span class="t">Your 12 weeks: building one business<span>Lesson one, the internship, the proof, the certification</span></span><span class="mins">12 min</span></div>
+      <div class="agrow"><span class="n">6</span><span class="t">The investment: a year with Colaberry + Claude</span><span class="mins">6 min</span></div>
+      <div class="agrow hot"><span class="n">7</span><span class="t">The live draws + Q&amp;A<span>3 signed books · 3 scholarships worth $894 each</span></span><span class="mins">10 min</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= 4 · THE GIVEAWAYS (EARLY) ======================= -->
+<section class="slide wm" data-min="2" data-title="Tonight's giveaways" data-note="Build excitement early, exactly like July. 'Here is what is on the line tonight. Our CEO, Ram Katamaraja, wrote the book on why AI agent projects fail and how to build ones that do not. Three signed copies go to three people tonight. And three of you win a scholarship worth fifty percent off a full year of membership: that is eight hundred and ninety-four dollars.' Then: 'The draws happen live at the end, and you have to be logged in on your phone to win. So stay with me.'">
+  <div class="brandbar"><div class="wordmark"></div><span class="bsec">Tonight's giveaways</span></div>
+  <div class="kicker">Drawn live at the end · be logged in to win</div>
+  <h2>Six people leave tonight with something.</h2>
+  <div class="prizes">
+    <div class="prize">
+      <div class="bookcover">
+        <div class="bc-top">Colaberry Press</div>
+        <h3>Trust Before Intelligence</h3>
+        <div class="bc-sub">Why 95% of AI Agent Projects Fail, and the 3 Frameworks, Right Infrastructure, and 90-Day Fix</div>
+        <div class="bc-author">Ram Katamaraja<span>CEO, Colaberry Inc.</span></div>
+      </div>
+      <div>
+        <div class="big">3×</div>
+        <h3>Signed copies of Ram's book</h3>
+        <p>The playbook for building AI agents a business can actually trust, by our CEO.</p>
+        <div class="ram" style="margin-top:2vh"><img src="{{IMG:ram-katamaraja.jpg}}" alt="Ram Katamaraja"></div>
+      </div>
+    </div>
+    <div class="prize gold">
+      <div>
+        <div class="big">3×</div>
+        <h3>Scholarships: 50% off a full year</h3>
+        <p>A year of membership at the founding rate is <b>$1,788</b>. The scholarship is worth <b>$894</b>, so your year costs <b>$894</b>.</p>
+        <div class="raffle"><b>With a year of Claude Pro ($200):</b> your whole year of building is <b>$1,094</b>.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= 5 · POLL: WHERE ARE YOU ======================= -->
+<section class="slide poll" data-poll="oh-where" data-kind="poll" data-min="1" data-title="Poll: where are you right now?"
+  data-q="Where are you right now?"
+  data-options='["Working, and I want to level up","Between jobs, and using this window","Running my own business","Student or changing careers"]'
+  data-note="First vote of the night. 'Phones out. Where are you right now?' Read the voted counter as it climbs, narrate the bars as they move. Lock, then Reveal. 'Look at this room. However you answered, there are people here exactly like you, and the cohort is who you build next to.' If the count is stuck at zero, press Q to put the QR back up.">
+</section>
+
+<!-- ======================= 6 · START A BUSINESS LIVE ======================= -->
+<section class="slide wm" data-min="5" data-title="We start a business, live" data-note="THE HOOK, inside the platform: no API key, nothing to install. 'Who owns a business, or has an idea for one?' Pick a volunteer. Click the button: it opens the platform's project builder (Start a new build) in a new tab. Fill it WITH the room: the business problem, who uses it, the industry, internal or external, revenue or operational. About 3 minutes. Then say: 'That is day one of the program. Your twelve weeks are spent building exactly this, for your own idea.' Come back to the deck. We return to it near the end.">
+  <div class="brandbar"><div class="wordmark"></div><span class="bsec">Live · inside the platform</span></div>
+  <div class="split rev">
+    <div class="shot"><span class="tag">THE PLATFORM · DAY ONE</span><img src="{{IMG:21-project-builder--hero.png}}" alt="Project DNA Wizard"><div class="cap">Project DNA Wizard: define the business problem, the users, the industry, then the AI components</div></div>
+    <div>
+      <div class="kicker">Agenda item 2 · right now</div>
+      <h2>Let's start a business.<br><span class="red">Live. From your idea.</span></h2>
+      <ul class="points">
+        <li>Someone in this room gives us a <b>real business idea</b></li>
+        <li>We describe it together in the platform's <b>project builder</b>, and it turns the idea into a build with the prompt to start</li>
+        <li>That is literally <b>what you do on day one</b> of the program, and you can start it tonight</li>
+        <li>No API keys, nothing to install: <b>it is all built in the platform</b></li>
+      </ul>
+      <div style="margin-top:3.4vh"><a class="bigbtn" href="https://enterprise.colaberry.ai/portal/projects?new=1" target="_blank" rel="noopener" onclick="event.stopPropagation()">▶ Open the project builder</a></div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= 7 · STATEMENT ======================= -->
+<section class="slide statement wm" data-min="1" data-title="The signal" data-note="Read it once, slowly. PAUSE. Let it land before you say anything else. Then: 'Let's see if you can guess how big this bet is.'">
+  <div class="center mid">
+    <div class="kicker">This month</div>
+    <h1>In October, Anthropic put<br><u>$100 million</u> behind a job title<br>most people have never heard of.</h1>
+    <p class="sub" style="margin-top:4vh">Tonight: what that job is, what it pays, and how you put yourself in position for it in the next twelve months.</p>
+  </div>
+</section>
+
+<!-- ======================= 8 · POLL: PREDICTION ======================= -->
+<section class="slide poll" data-poll="oh-predict" data-kind="prediction" data-min="1" data-title="Prediction: how many engineers?"
+  data-q="Anthropic committed $100 million to train a new kind of engineer. How many are they training?"
+  data-options='["1,000","5,000","10,000","50,000"]'
+  data-note="A prediction, no answer marked: the next slide is the reveal. 'Here is a real number from this month. Make your call.' Let the bars build, narrate the spread, Lock, Reveal the spread, then advance.">
+</section>
+
+<!-- ======================= 9 · FRONTIER ACADEMY ======================= -->
+<section class="slide wm" data-min="2" data-title="$100M to train 10,000 engineers" data-note="The reveal: ten thousand. 'Anthropic is paying to train ten thousand of these people, and they started with McKinsey, Deloitte and Morgan Stanley.' Point at the three steps: 'Look at the shape: learn it, then twelve weeks leading a real project, then get assessed on what you actually did. Hold on to that shape, you will see it again tonight.' Note: Anthropic says Frontier Deployed Engineer; everyone else says Forward Deployed Engineer, FDE. Same job. Say both once, then use FDE.">
+  <div class="brandbar"><div class="wordmark"></div><span class="bsec">October 2, 2026 · Anthropic</span></div>
+  <div class="split">
+    <div>
+      <div class="kicker">The Claude Frontier Academy</div>
+      <h2>$100 million to train<br><span class="red">10,000 Frontier Deployed Engineers.</span></h2>
+      <ul class="points">
+        <li><b>Step 1:</b> an intensive program → "Claude Resident Engineer" badge</li>
+        <li><b>Step 2:</b> a 12-week residency leading a real Claude project inside their company</li>
+        <li><b>Step 3:</b> a second assessment → "Claude Frontier Deployed Engineer" badge</li>
+        <li>First cohort: <b>Accenture, Bain, Capgemini, Commonwealth Bank, Deloitte, McKinsey, Morgan Stanley, Novo Nordisk</b></li>
+      </ul>
+      <div class="quote berry" style="margin-top:2.4vh"><p>The people with the skills to make it work inside a real business have become the hardest talent to find.</p><div class="who"><b>Anthropic</b> · Claude Frontier Academy announcement</div></div>
+      <div class="src">Source: anthropic.com/news/claude-frontier-academy · Oct 2, 2026 · target: 10,000 engineers by end of 2027</div>
+    </div>
+    <div class="photo" style="height:70vh"><img src="{{IMG:u-1552664730-d307ca884978.jpg}}" alt="A team at work"></div>
+  </div>
+</section>
+
+<!-- ======================= 10 · THE BOTTLENECK ======================= -->
+<section class="slide wm" data-min="2" data-title="The bottleneck is people" data-note="Say it slowly, in plain words. 'Here is what the hundred million dollars is really telling you. The AI itself is not the hard part anymore: Anthropic ships a new model every few weeks. The hard part is getting it to actually work inside a company.' Point at the bars: 'Out of every hundred companies, thirty-nine are still testing AI agents. Only twenty-three have one actually running. Everything in between is pilots that never made it to real work.' Then the punchline: 'Someone has to take those companies from testing to running. That person is the Forward Deployed Engineer, and there are not enough of them.' Source if asked: McKinsey's latest State of AI survey.">
+  <div class="brandbar"><div class="wordmark"></div><span class="bsec">Read the signal</span></div>
+  <div class="split">
+    <div>
+      <div class="kicker">Why this matters to you</div>
+      <h2>The AI isn't the hard part anymore.<br><span class="red">Making it work in a real company is.</span></h2>
+      <p class="sub">Anthropic released <b>three new Claude models in 17 days</b> this fall. The technology keeps getting better and easier to get. What companies can't find are people who can put it to work.</p>
+      <div class="raffle" style="margin-top:3vh;font-size:clamp(15px,1.45vw,21px)"><b>Someone has to take companies from "testing" to "running."</b><br>That person is the Forward Deployed Engineer.</div>
+    </div>
+    <div>
+      <div class="kicker" style="color:var(--ink-2)">Out of every 100 companies…</div>
+      <div style="margin-top:2.4vh">
+        <div style="font-size:clamp(15px,1.4vw,20px);font-weight:700;margin-bottom:1vh">Are <span class="red">testing</span> AI agents</div>
+        <div style="height:7vh;border-radius:12px;background:#f1ece8;overflow:hidden"><div style="height:100%;width:39%;background:linear-gradient(90deg,var(--amber),#ffc04d);display:flex;align-items:center;justify-content:flex-end;padding-right:1vw;color:#fff;font-weight:900;font-size:clamp(20px,2.2vw,34px)">39</div></div>
+        <div style="font-size:clamp(15px,1.4vw,20px);font-weight:700;margin:3vh 0 1vh">Have one <span style="color:var(--leaf)">actually running</span></div>
+        <div style="height:7vh;border-radius:12px;background:#f1ece8;overflow:hidden"><div style="height:100%;width:23%;background:linear-gradient(90deg,var(--leaf),#8fd16b);display:flex;align-items:center;justify-content:flex-end;padding-right:1vw;color:#fff;font-weight:900;font-size:clamp(20px,2.2vw,34px)">23</div></div>
+        <p class="sub" style="margin-top:3vh">The space between those two bars is pilots that never made it to real work. <b>That gap is the job.</b></p>
+      </div>
+      <div class="src">Sources: McKinsey, The State of AI (Nov 2025) · anthropic.com/news (Claude Opus, Sonnet and Haiku 5.5: Sep 22, Sep 28, Oct 7, 2026)</div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= 11 · QUOTES ======================= -->
+<section class="slide wm" data-min="3" data-title="What the people building AI are saying" data-note="The honest slide. Read the Amodei quote yourself, word for word. 'One hundred and twelve thousand US job cuts this year where the employer said AI was the reason. That is real.' Then turn it: 'Jensen Huang said it best, roughly: you will not lose your job to AI, you will lose it to the person next to you who knows how to use it. Tonight is about being that person.' The Huang line is a paraphrase: never present it as verbatim.">
+  <div class="brandbar"><div class="wordmark"></div><span class="bsec">This month in AI</span></div>
+  <div class="split">
+    <div>
+      <div class="kicker">What the people building it are saying</div>
+      <div class="quote"><p>We may indeed have a serious employment crisis on our hands as the pipeline for these early-stage white-collar work starts to contract and dry up.</p><div class="who"><b>Dario Amodei</b> · CEO, Anthropic · spring 2026</div></div>
+      <div class="quote amber"><p>You won't lose your job to AI. You'll lose it to someone who knows how to use AI. <span style="font-weight:500;color:var(--muted)">(paraphrase)</span></p><div class="who"><b>Jensen Huang</b> · CEO, NVIDIA · Fortune, Apr 2026</div></div>
+    </div>
+    <div class="center">
+      <div class="stat" style="width:100%"><b>112,713</b><span>US job cuts citing AI through July 2026, more than double all of 2025</span></div>
+      <div class="stat leaf" style="width:100%;margin-top:2vh"><b>AI engineer</b><span>the fastest-rising job in the US (LinkedIn 2026)</span></div>
+      <p class="sub">The work isn't disappearing. It's moving to the people who can direct these systems.</p>
+      <div class="src">Sources: Challenger, Gray &amp; Christmas, July 2026 report · LinkedIn Jobs on the Rise 2026</div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= 12 · TRIVIA: GARTNER ======================= -->
+<section class="slide poll" data-poll="oh-gartner" data-kind="trivia" data-answer="2" data-min="1" data-title="Trivia: agents in enterprise apps"
+  data-q="Gartner predicts what share of enterprise apps will feature task-specific AI agents by 2026?"
+  data-options='["Under 5%","About 15%","About 40%","About 75%"]'
+  data-reveal="About 40%, up from under 5% in 2025 (Gartner, Aug 2025). Eight times more agent-powered software in a year, and somebody has to deploy every one of them."
+  data-note="Trivia, game-show energy. 'Gartner put a number on this. What do you think?' Lock, Reveal, read a few names from the 'got it right' line and celebrate them. Then: 'Forty percent, up from under five. Somebody has to deploy every one of those.'">
+</section>
+
+<!-- ======================= 13 · THE ROLE ======================= -->
+<section class="slide wm" data-min="2" data-title="What a Forward Deployed Engineer does" data-note="Make the role concrete. 'Palantir made this role famous. OpenAI and Anthropic hire for it now. An FDE walks into a business, finds the process worth fixing, designs the system, builds it with tools like Claude Code, puts the guardrails around it, and stays until it works with real data and real people.' Then: 'Notice: that is building a business's AI, which is exactly what we just started doing live. The code got cheap. The judgment did not.' If asked 'do I need to be a programmer': no. They learn to direct Claude Code and think in systems.">
+  <div class="brandbar"><div class="wordmark"></div><span class="bsec">The role</span></div>
+  <div class="split rev">
+    <div class="photo" style="height:70vh"><img src="{{IMG:u-1600880292203-757bb62b4baf.jpg}}" alt="Working with a client"></div>
+    <div>
+      <div class="kicker">The Forward Deployed Engineer</div>
+      <h2>An architect who ships<br><span class="red">inside the customer's business.</span></h2>
+      <ul class="points">
+        <li><b>Sits with the business</b>, not behind a ticket queue</li>
+        <li>Turns a messy business problem into a <b>system design</b></li>
+        <li><b>Builds it fast</b> with AI tools like Claude Code</li>
+        <li>Makes it <b>safe and reliable</b>: guardrails, approvals, evals</li>
+        <li><b>Owns the outcome</b>: adoption, numbers, trust</li>
+      </ul>
+      <p class="sub">Half engineer, half consultant, all accountability.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= 14 · TRIVIA: PAY ======================= -->
+<section class="slide poll" data-poll="oh-pay" data-kind="trivia" data-answer="2" data-min="1" data-title="Trivia: what does it pay?"
+  data-q="What is the median total compensation for a Forward Deployed Engineer (Levels.fyi)?"
+  data-options='["About $95,000","About $140,000","About $205,000","About $350,000"]'
+  data-reveal="About $205,000 median total compensation. The middle half of the market earns $172K to $277K (Levels.fyi, Sep 2026)."
+  data-note="Most of the room guesses low. 'What do you think this role pays? Median, total comp.' Lock, Reveal, read the names who got it right. The next slide unpacks it.">
+</section>
+
+<!-- ======================= 15 · DEMAND + PAY + TRAJECTORY ======================= -->
+<section class="slide wm" data-min="2" data-title="Demand, pay and trajectory" data-note="Let the numbers be the drama. 'Six hundred and forty-three. That was April of last year. Five thousand three hundred and thirty. That was April of this year.' Pause. 'Median pay, two hundred and five thousand dollars, and that is the middle, not the top.' Then walk the ladder: 'Deploy one system, design many, own the strategy, or build your own firm. Every company that deploys AI needs someone who owns it.' Postings are Indeed data reported by Business Insider; the ladder is our read of the market, not a statistic. Do not quote the six- and seven-figure numbers on blogs: they are unverified.">
+  <div class="brandbar"><div class="wordmark"></div><span class="bsec">Demand · pay · trajectory</span></div>
+  <div class="split">
+    <div>
+      <div class="kicker">FDE job postings · Indeed data</div>
+      <div class="bars">
+        <div class="bar" style="height:17%;background:#c9c1bb">643<i>April 2025</i></div>
+        <div class="bar" style="height:100%;background:linear-gradient(180deg,#ff5a4e,var(--cherry-dark))">5,330<i>April 2026</i></div>
+      </div>
+      <p class="sub" style="margin-top:6vh"><b class="red">+729% in one year.</b> The number of people who can prove they've done this work did not grow eightfold.</p>
+    </div>
+    <div>
+      <div class="kicker">What it pays · Levels.fyi</div>
+      <div class="stats" style="margin-top:0">
+        <div class="stat"><b>$205K</b><span>median total comp</span></div>
+        <div class="stat berry"><b>$172K–$277K</b><span>middle 50% of the market</span></div>
+      </div>
+      <div class="kicker" style="margin-top:4vh">Where it leads</div>
+      <div class="ladder">
+        <div class="rung" style="background:var(--cherry)"><b>FDE</b><span>deploys one system</span></div><div class="arrow">→</div>
+        <div class="rung" style="background:var(--berry)"><b>AI Architect</b><span>designs many</span></div><div class="arrow">→</div>
+        <div class="rung" style="background:var(--amber)"><b>Head of AI</b><span>owns the strategy</span></div>
+      </div>
+      <div class="src">Sources: Indeed via Business Insider · levels.fyi Forward Deployed Engineer (updated Sep 2026)</div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= 16 · THINK LIKE AN ARCHITECT ======================= -->
+<section class="slide wm" data-min="2" data-title="Think like an architect" data-note="The heart of the night: slow down. 'Here is the difference between a coder and an architect.' Read the five questions as a ladder. Then the story on the right: 'A support agent was given a refund tool. It refunded two thousand four hundred dollars to an account created six minutes earlier. Every fact was in the system. Nothing was responsible for checking them. It was not a bug. It was a permission nobody thought to withhold.' Then: 'Let's see if you can think like one.'">
+  <div class="brandbar"><div class="wordmark"></div><span class="bsec">Think like an architect</span></div>
+  <div class="split">
+    <div>
+      <div class="kicker">A coder asks "how do I build it?"</div>
+      <h2>An architect asks<br><span class="red">"what is it allowed to do?"</span></h2>
+      <ul class="points">
+        <li>What problem is <b>actually worth solving</b>?</li>
+        <li>What is it allowed to do, and what is it <b>never</b> allowed to do?</li>
+        <li><b>Who approves</b> the risky actions?</li>
+        <li>What happens <b>when it fails</b>, and how do we know?</li>
+        <li>How do we <b>prove it worked</b>, in business numbers?</li>
+      </ul>
+    </div>
+    <div class="center">
+      <div class="prize gold" style="flex-direction:column;align-items:flex-start;gap:1vh">
+        <div style="font-size:54px">💸</div>
+        <h3>The agent that worked perfectly and lost $2,400</h3>
+        <p>A support agent with a refund tool refunded $2,400 to an account created six minutes earlier, with a changed shipping address, after four other refunds that day. Every fact was in the system. Nothing was responsible for checking them. Every line of code ran correctly.</p>
+        <p style="margin-top:1vh"><b>It wasn't a bug. It was a permission nobody thought to withhold.</b></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= 17 · DECISION THEATER ======================= -->
+<section class="slide poll" data-poll="oh-architect" data-kind="trivia" data-answer="1" data-min="2" data-title="Decision theater: you are the architect"
+  data-q="A bank wants an AI agent issuing customer refunds by Friday. As the architect, what's your FIRST move?"
+  data-options='["Start building the agent so you hit Friday","Define what it may refund, the limits, and who approves the rest","Pick the most powerful model available","Write a really detailed prompt"]'
+  data-reveal="The architect decides what the system is allowed to do before anything is built: limits, approvals, and what happens when it's wrong. The model and the prompt come after the authority is designed."
+  data-note="You are the client. 'I am the bank. I want this live by Friday. You are my architect. What do you do first?' Lock, Reveal, read the names who chose B and celebrate them by name. 'That is the whole job in one decision. Everyone can build. The architect decides what it is allowed to do, and that is who companies pay two hundred thousand dollars for.'">
+</section>
+
+<!-- ======================= 18 · 12 WEEKS = ONE BUSINESS ======================= -->
+<section class="slide wm" data-min="2" data-title="Your 12 weeks: one business, four stages" data-note="Remember Anthropic's shape: learn it, then twelve weeks building something real, then prove it. 'Here is ours. You don't build our sample project. You build YOUR business system, the one you define on day one, in four stages.' Name the arc, don't read every word: foundation, your AI team, connect it to the real world, make it scale and govern it. 'By week twelve you are designing the governance and reliability layer, the exact work that separates a demo from production.' Kickoff is Thursday, November 12.">
+  <div class="brandbar"><div class="wordmark"></div><span class="bsec">The program</span></div>
+  <div class="kicker">12 weeks · 4 intensives · one system you build from scratch</div>
+  <h2>You don't build our project.<br><span class="red">You build your business.</span></h2>
+  <div class="phases">
+    <div class="phase"><div class="ic">🧱</div><div class="wk">Weeks 1–3</div><h3>Build your AI foundation</h3><p>Claude Code, your workspace, and the first working version of your idea.</p><div class="ghost">1</div></div>
+    <div class="phase"><div class="ic">🤖</div><div class="wk">Weeks 4–6</div><h3>Create your AI team</h3><p>Agents that each own a job in your business, working together.</p><div class="ghost">2</div></div>
+    <div class="phase"><div class="ic">🔌</div><div class="wk">Weeks 7–9</div><h3>Connect it to the real world</h3><p>Real data, real tools, real users. It stops being a demo.</p><div class="ghost">3</div></div>
+    <div class="phase"><div class="ic">🏛️</div><div class="wk">Weeks 10–12</div><h3>Design AI that scales</h3><p>Governance, approvals, reliability: what makes a business trust it.</p><div class="ghost">4</div></div>
+  </div>
+</section>
+
+<!-- ======================= 19 · LESSON ONE ======================= -->
+<section class="slide wm" data-min="2" data-title="Lesson one: start tonight" data-note="Show them the beginning. 'Once your project is defined, the platform turns it into a build plan, and every day it tells you the next step: the context, the task, and the exact prompt you paste into Claude Code.' Point at the Blueprint screenshot. 'That is lesson one. And here's the thing: you don't have to wait for November 12. Start your account at zero dollars tonight, define your business, and you walk into week one already moving.' Mention: self-paced, with live sessions every week: join live or watch the recording.">
+  <div class="brandbar"><div class="wordmark"></div><span class="bsec">Lesson one</span></div>
+  <div class="split">
+    <div>
+      <div class="kicker">The beginning of what you'll learn</div>
+      <h2>Every day, the platform hands you<br><span class="red">the next step.</span></h2>
+      <ul class="points">
+        <li>Your idea becomes a <b>build plan</b>: releases, steps, tasks</li>
+        <li>Each step gives you the <b>context, the task, and the exact prompt</b> for Claude Code</li>
+        <li><b>Self-paced</b>, with <b>live sessions every week</b>: join live or watch it later</li>
+        <li><b>Start tonight</b> at $0, no card needed, and walk into November 12 already building</li>
+      </ul>
+    </div>
+    <div class="shot"><span class="tag">THE PLATFORM · BLUEPRINT</span><img src="{{IMG:23-blueprint--hero.png}}" alt="Blueprint: execute the next step"><div class="cap">Blueprint: context, task, and the prompt you paste into Claude Code</div></div>
+  </div>
+</section>
+
+<!-- ======================= 20 · POLL: WHAT WOULD YOU BUILD ======================= -->
+<section class="slide poll" data-poll="oh-build" data-kind="poll" data-min="1" data-title="Poll: what would you build first?"
+  data-q="If you started on November 12, what would you build first?"
+  data-options='["An AI system for my current job","A product for my own business","A portfolio project to get hired as an FDE","Something for my community or a nonprofit"]'
+  data-note="Get them picturing themselves in it. 'Imagine it is November 12. What would you build first?' Let the bars move, Lock, Reveal. 'Every one of those is a real capstone. You arrive with the idea and leave with it deployed.'">
+</section>
+
+<!-- ======================= 21 · PROOF ======================= -->
+<section class="slide wm" data-min="2" data-title="Proof you can perform" data-note="The product. 'Anthropic certifies knowledge. Colaberry certifies capability.' Walk the list: 'An internship on real AI projects, a GitHub profile where every system lives with its code and its decisions, case studies with business results, and certification prep.' Then: 'When an interviewer asks have you deployed AI, you send a link.' It is Anthropic Architect certification PREP: never say we issue it, never promise anyone passes.">
+  <div class="brandbar"><div class="wordmark"></div><span class="bsec">Proof, not promises</span></div>
+  <div class="split rev">
+    <div class="shot"><span class="tag pub">YOUR PUBLIC PORTFOLIO</span><img src="{{IMG:25-portfolio--hero.png}}" alt="Portfolio"><div class="cap">Every system you build, graded and recruiter-facing</div></div>
+    <div>
+      <div class="kicker">Anthropic certifies knowledge</div>
+      <h2>Colaberry certifies<br><span class="red">capability.</span></h2>
+      <ul class="points">
+        <li>An <b>internship experience</b> on real AI projects</li>
+        <li>A <b>GitHub profile</b> with every system, decision and result</li>
+        <li><b>Case studies</b> that tell the business story</li>
+        <li><b>Anthropic Architect certification prep</b> (CCA-F) included</li>
+        <li>When they ask "have you deployed AI?", <b>you send a link</b></li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= 22 · POLL: PROOF TODAY ======================= -->
+<section class="slide poll" data-poll="oh-proof" data-kind="poll" data-min="1" data-title="Poll: what could you show tomorrow?"
+  data-q="If an FDE hiring manager asked you for proof tomorrow, what could you show them?"
+  data-options='["A GitHub profile with deployed AI systems","An AI certification","A case study with business results","Honestly, nothing yet"]'
+  data-note="The honest gap; most will pick 'nothing yet', and that is the point. 'Be honest, nobody sees your name.' Lock, Reveal, read the 'nothing yet' bar. 'That bar is the reason this program exists. Twelve months from now every one of those can be yours.'">
+</section>
+
+<!-- ======================= 23 · BACK TO THE LIVE BUSINESS ======================= -->
+<section class="slide wm" data-min="2" data-title="Back to our business" data-note="Switch to the platform tab where you started the volunteer's project. Show the project as it stands. 'Twenty minutes ago this was an idea in somebody's head. Now it is a defined project in the platform, ready for a build plan. Our students spend twelve weeks turning exactly this into a working, governed AI system. This isn't the project, it is lesson one.' Thank the volunteer by name.">
+  <div class="brandbar"><div class="wordmark"></div><span class="bsec">Our live business</span></div>
+  <div class="split rev">
+    <div class="shot"><span class="tag">THE PLATFORM · YOUR DAY</span><img src="{{IMG:10-today--hero.png}}" alt="Today"></div>
+    <div>
+      <div class="kicker">Twenty minutes ago it was an idea</div>
+      <h2>Now it's a project.<br><span class="red">That's lesson one.</span></h2>
+      <p class="sub">Twelve weeks from now, a project like this one is a working, governed AI system, on your GitHub, with a case study and the proof that you can do this job.</p>
+      <div style="margin-top:3vh"><a class="bigbtn" href="https://enterprise.colaberry.ai/portal/projects" target="_blank" rel="noopener" onclick="event.stopPropagation()">▶ Back to the project</a></div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= 24 · THE INVESTMENT ======================= -->
+<section class="slide wm" data-min="4" data-title="The investment" data-note="Lead with the annual plan ALONE. 'Here is the whole year, including the tool, so there are no surprises. Colaberry at our founding rate: one hundred and forty-nine a month, billed annually, one thousand seven hundred and eighty-eight, and it stays locked while you are a member. Claude Pro for the year: two hundred. One thousand nine hundred and eighty-eight dollars for a year of building.' Then the why: 'Twelve weeks teaches you. Twelve months makes you hireable: the internship, the second and third project, the certification, the case studies.' Do NOT mention the $199 month-to-month option unless someone pushes back; if they do: 'There is a month-to-month option at $199. Most people choose the year because it is cheaper and the year is what it takes.' Only ever say '$0 to start' or 'no card needed' for the starter account (TWC rule).">
+  <div class="brandbar"><div class="wordmark"></div><span class="bsec">The investment</span></div>
+  <div class="kicker">Your year: Colaberry + Claude</div>
+  <h2>Twelve weeks teaches you.<br><span class="red">Twelve months makes you hireable.</span></h2>
+  <div class="doors">
+    <div class="door primary">
+      <div class="dk">The year · recommended</div>
+      <h3>Annual membership</h3>
+      <div class="price">$149<small> /mo, billed annually</small></div>
+      <ul>
+        <li>The 12-week program, then a full year of building</li>
+        <li>Internship · portfolio projects · certification prep</li>
+        <li>Live sessions every week · join live or watch later</li>
+        <li>Founding rate, locked while your membership is active</li>
+      </ul>
+      <div class="sum"><span>Colaberry $1,788 + Claude Pro $200</span><b>$1,988 / year</b></div>
+    </div>
+    <div class="door">
+      <div class="dk">Not ready to commit?</div>
+      <h3>Start tonight at $0</h3>
+      <div class="price">$0<small> · no card needed</small></div>
+      <ul>
+        <li>Create your account tonight</li>
+        <li>Define your business in the Project DNA Wizard</li>
+        <li>Look around the platform, then decide</li>
+      </ul>
+      <div class="raffle" style="margin-top:auto"><b>Months 1–3</b> learn + build · <b>4–6</b> internship + cert · <b>7–12</b> proof + interviews</div>
+    </div>
+  </div>
+  <div class="src">Pricing: Colaberry founding rate ($149/mo billed annually) · Claude Pro $17/mo billed annually ($200/yr), claude.com/pricing</div>
+</section>
+
+<!-- ======================= 25 · TRIVIA: THE MATH ======================= -->
+<section class="slide poll" data-poll="oh-math" data-kind="trivia" data-answer="3" data-min="1" data-title="Trivia: what does a year cost, really?"
+  data-q="A full year of Colaberry + Claude Pro is $1,988. At the FDE median ($205K), that's roughly how much work?"
+  data-options='["About 2 months of pay","About 1 month of pay","About 2 weeks of pay","About 2½ working days of pay"]'
+  data-reveal="$205,000 over about 260 working days is roughly $790 a day. $1,988 is about two and a half working days. That's the whole year of building."
+  data-note="Make the annual decision obvious. 'Let's do the math together.' Lock, Reveal, read the math slowly. 'Two and a half days. A whole year of building, for two and a half days of what this role pays at the median.' This is arithmetic on the Levels.fyi median, not an income promise: say 'this role pays', never 'you will earn'.">
+</section>
+
+<!-- ======================= 26 · DRAW: BOOKS ======================= -->
+<section class="slide poll" data-poll="oh-raffle-books" data-kind="trivia" data-answer="0" data-raffle="3" data-min="3" data-title="Live draw: 3 signed books"
+  data-q="📚 Enter the draw for 1 of 3 signed copies of Trust Before Intelligence"
+  data-options='["🎟️ I&#39;m in, enter me"]'
+  data-reveal="You're in. Three names, drawn live."
+  data-note="Party mode. 'Tap I'm in, right now, everybody.' Watch the count climb. When it stops: Lock, Reveal (it shows how many are in), then press Draw winner three times, one name per click, with a drumroll. Say each name and congratulate them. Write the winners down: admissions follows up tonight. If nobody shows after Reveal, ask them to tap again and Reopen.">
+</section>
+
+<!-- ======================= 27 · DRAW: SCHOLARSHIPS ======================= -->
+<section class="slide poll" data-poll="oh-raffle-scholar" data-kind="trivia" data-answer="0" data-raffle="3" data-min="3" data-title="Live draw: 3 scholarships"
+  data-q="🎓 Enter the draw for 1 of 3 scholarships: 50% off a full year ($894 value)"
+  data-options='["🎟️ I&#39;m in, enter me"]'
+  data-reveal="You're in. Three scholarships, drawn live."
+  data-note="The big one: maximum energy. 'Fifty percent off a full year: eight hundred and ninety-four dollars. Tap I'm in.' Lock, Reveal, Draw three times, make every click a moment. 'Winners, admissions emails you tonight with how to claim it.' The scholarship applies to the annual plan; confirm any other terms with Ali before promising them. Write the winners down.">
+</section>
+
+<!-- ======================= 28 · POLL: LEAVING TONIGHT ======================= -->
+<section class="slide poll" data-poll="oh-leaving" data-kind="poll" data-min="1" data-title="Poll: where are you leaving tonight?"
+  data-q="Where are you leaving tonight?"
+  data-options='["Enrolling in the annual membership tonight","Starting at $0 tonight, deciding this week","I need to talk it over with family or my manager","Still exploring"]'
+  data-note="The last vote doubles as a commitment. 'Last vote of the night. Where are you leaving tonight?' Lock, Reveal, celebrate the enrollers. To 'talk it over': 'Do it tonight, and show them the math slide.'">
+</section>
+
+<!-- ======================= 29 · CLOSE ======================= -->
+<section class="slide statement wm" data-min="5" data-title="Start tonight" data-note="LEAVE THIS UP through Q&A. 'Anthropic just told the whole world what the next job is. You now know more about it than ninety-nine percent of the people who will apply for it. Lock the year at the founding rate before November 12, or start at zero dollars tonight and define your business. Either way, start tonight.' Paste the enrollment link in the chat. Stay on for questions: the best conversations happen in the five minutes after the close.">
+  <div class="center mid">
+    <div class="kicker">One decision</div>
+    <h1>Start tonight.<br>A year from now,<br>you'll have the proof.</h1>
+    <div class="stats" style="justify-content:center">
+      <div class="stat"><b>$149/mo</b><span>billed annually · rate locked</span></div>
+      <div class="stat"><b>$0</b><span>to start · no card needed</span></div>
+      <div class="stat"><b>Nov 12</b><span>November cohort kicks off</span></div>
+    </div>
+    <p class="sub" style="margin-top:3.4vh">Questions? We're staying on. Ask away.</p>
+  </div>
+</section>
+
+<script>
+(function(){
+  var K = window.__KITLIVE__ || { enabled: false };
+  var LIVE = !!(K.enabled && K.liveStateUrl && K.broadcastUrl && K.token);
+  var slides = [].slice.call(document.querySelectorAll('.slide'));
+  var notes = document.getElementById('notes'), counter = document.getElementById('counter'), progress = document.getElementById('progress');
+  var pill = document.getElementById('livepill');
+  var i = 0, notesOn = false, seq = 0, live = null, lastPresent = -1;
+  var DECK_ID = 'oh-' + Math.random().toString(36).slice(2, 10);
+  var pstate = {};   // poll key -> voting | locked | revealed
+  var winners = {};  // poll key -> [names]
+  try { winners = JSON.parse(localStorage.getItem('oh-nov26-winners') || '{}') || {}; } catch (e) { winners = {}; }
+  function saveWinners(){ try { localStorage.setItem('oh-nov26-winners', JSON.stringify(winners)); } catch (e) {} }
+  function esc(s){ return String(s == null ? '' : s).replace(/[&<>"]/g, function(c){ return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[c]; }); }
+  if (LIVE) { pill.textContent = 'LIVE'; pill.className = 'on'; }
+
+  /* ---- QR + check-in URL from the platform ---- */
+  if (K.qrSvg) document.querySelectorAll('[data-qr]').forEach(function(el){ el.innerHTML = K.qrSvg; });
+  if (K.checkinUrl) document.querySelectorAll('[data-checkin]').forEach(function(el){ el.textContent = K.checkinUrl.replace(/^https?:\/\//, ''); });
+
+  /* ---- build every poll slide from its data-* attributes ---- */
+  slides.forEach(function(s){
+    if (!s.dataset.poll) return;
+    var opts = JSON.parse(s.dataset.options);
+    var kindLabel = s.dataset.raffle ? '● Live draw' : s.dataset.kind === 'trivia' ? '● Live trivia' : s.dataset.kind === 'prediction' ? '● Live prediction' : '● Live poll';
+    s.innerHTML =
+      '<div class="pollhead"><div class="wordmark white"></div><span class="plabel">' + kindLabel + '</span><span class="pstate">Voting open</span>' + (LIVE ? '' : '<span class="pnolive">rehearsal · live voting off</span>') +
+      '<span class="spacer"></span><div class="qrmini"><div class="q">' + (K.qrSvg || '') + '</div><span>scan + log in<br>to vote</span></div></div>' +
+      '<div class="pq">' + esc(s.dataset.q) + '</div>' +
+      '<div class="pvoted"><b data-voted>0</b> voted</div>' +
+      '<div class="popts">' + opts.map(function(o, k){ return '<div class="popt" data-idx="' + k + '"><div class="fill"></div><span class="lab">' + String.fromCharCode(65 + k) + '. ' + esc(o) + '</span><span class="num"></span></div>'; }).join('') + '</div>' +
+      '<div class="pctrl"><button class="pbtn" data-act="lock">🔒 Lock vote</button><button class="pbtn primary" data-act="reveal" style="display:none">🎉 Reveal</button><button class="pbtn" data-act="reopen" style="display:none">↩ Reopen</button></div>' +
+      (s.dataset.reveal ? '<div class="preveal">' + esc(s.dataset.reveal) + '</div>' : '') +
+      '<div class="pright"></div>' +
+      (s.dataset.raffle ? '<div class="rafflebox"><button class="pbtn primary" data-act="draw" style="font-size:clamp(16px,1.6vw,24px);padding:1.8vh 3vw">🎲 Draw winner</button><div class="rafflebig"></div><div class="rafflechips"></div></div>' : '');
+    renderWinners(s);
+  });
+
+  function question(s){
+    if (!s.dataset.poll) return null;
+    var st = pstate[s.dataset.poll] || 'voting';
+    return {
+      key: s.dataset.poll, kind: s.dataset.kind || 'poll', q: s.dataset.q, options: JSON.parse(s.dataset.options),
+      answer: s.dataset.answer != null ? Number(s.dataset.answer) : null, revealed: st === 'revealed', theater: { state: st },
+    };
+  }
+
+  /* ---- platform broadcast: what every phone + the presenter phone shows ---- */
+  function broadcast(){
+    if (!LIVE) return;
+    var s = slides[i], q = question(s);
+    var body = {
+      slide_index: i, slide_id: s.dataset.poll || ('oh-slide-' + i), title: s.dataset.title || '', segment_label: 'Open House',
+      phase: q ? 'question' : 'status', question: q, presenter_tip: s.dataset.note || '', presenter_preface: '',
+      next_title: i + 1 < slides.length ? (slides[i + 1].dataset.title || '') : 'End of the show',
+      seq: Date.now() * 10 + (seq++ % 10), deck_id: DECK_ID,
+    };
+    fetch(K.broadcastUrl + '?t=' + encodeURIComponent(K.token), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).catch(function(){});
+  }
+
+  /* ---- live-state polling: the moving numbers ---- */
+  function poll(){
+    if (!LIVE) return;
+    fetch(K.liveStateUrl + '?t=' + encodeURIComponent(K.token), { headers: { Accept: 'application/json' } })
+      .then(function(r){ return r.ok ? r.json() : null; })
+      .then(function(d){ if (d) { live = d; render(); } })
+      .catch(function(){});
+  }
+  function bump(el){ el.classList.remove('bump'); void el.offsetWidth; el.classList.add('bump'); setTimeout(function(){ el.classList.remove('bump'); }, 220); }
+
+  function render(){
+    var s = slides[i];
+    var present = (live && live.present) || 0;
+    document.querySelectorAll('[data-present]').forEach(function(el){ if (String(present) !== el.textContent) { el.textContent = present; if (present > lastPresent && lastPresent >= 0) bump(el); } });
+    lastPresent = present;
+    if (!s.dataset.poll) return;
+    var key = s.dataset.poll, st = pstate[key] || 'voting';
+    var p = live && live.poll && live.poll.key === key ? live.poll : null;
+    var tally = (p && p.tally) || [], total = (p && p.total) || 0;
+    var votedEl = s.querySelector('[data-voted]');
+    if (votedEl && votedEl.textContent !== String(total)) { votedEl.textContent = total; bump(votedEl); }
+    var badge = s.querySelector('.pstate');
+    badge.className = 'pstate ' + st; badge.textContent = st === 'locked' ? '🔒 Vote locked' : st === 'revealed' ? '✅ Results' : 'Voting open';
+    s.querySelector('[data-act="lock"]').style.display = st === 'voting' ? '' : 'none';
+    s.querySelector('[data-act="reveal"]').style.display = st === 'locked' ? '' : 'none';
+    s.querySelector('[data-act="reopen"]').style.display = st === 'locked' ? '' : 'none';
+    var ans = s.dataset.answer != null ? Number(s.dataset.answer) : -1;
+    s.querySelectorAll('.popt').forEach(function(row){
+      var k = Number(row.dataset.idx), n = tally[k] || 0, pct = total ? Math.round(n / total * 100) : 0;
+      row.querySelector('.fill').style.width = pct + '%';
+      row.querySelector('.num').textContent = n + ' · ' + pct + '%';
+      row.classList.toggle('correct', st === 'revealed' && k === ans && !s.dataset.raffle);
+    });
+    var rv = s.querySelector('.preveal'); if (rv) rv.style.display = st === 'revealed' ? 'block' : 'none';
+    var right = s.querySelector('.pright'), names = (p && p.correctResponders) || null;
+    if (right) {
+      if (st === 'revealed' && names && names.length) {
+        right.textContent = s.dataset.raffle ? '🎟️ ' + names.length + ' in the draw' : '✅ Got it right: ' + names.join(', ');
+        right.style.display = 'block';
+      } else right.style.display = 'none';
+    }
+    var rb = s.querySelector('.rafflebox'); if (rb) rb.style.display = st === 'revealed' ? 'block' : 'none';
+  }
+
+  function renderWinners(s){
+    var box = s.querySelector('.rafflechips'); if (!box) return;
+    var won = winners[s.dataset.poll] || [];
+    box.innerHTML = won.map(function(n, k){ return '<span>#' + (k + 1) + ' ' + esc(n) + '</span>'; }).join('');
+  }
+
+  function confetti(){
+    var colors = ['#FB2832', '#5BA63C', '#F5C542', '#367895', '#ffffff', '#E8920C'];
+    for (var c = 0; c < 110; c++) {
+      var b = document.createElement('i'); b.className = 'confetti';
+      b.style.left = Math.random() * 100 + 'vw'; b.style.background = colors[c % colors.length];
+      b.style.animationDelay = Math.random() * .7 + 's'; b.style.animationDuration = 1.9 + Math.random() * 1.7 + 's';
+      document.body.appendChild(b);
+      setTimeout((function(el){ return function(){ if (el.parentNode) el.parentNode.removeChild(el); }; })(b), 4600);
+    }
+  }
+
+  function draw(s){
+    var key = s.dataset.poll, max = Number(s.dataset.raffle) || 1;
+    var won = winners[key] || (winners[key] = []);
+    var big = s.querySelector('.rafflebig');
+    if (won.length >= max) { big.textContent = 'All ' + max + ' winners drawn 🎉'; return; }
+    var all = (live && live.poll && live.poll.key === key && live.poll.correctResponders) || [];
+    var pool = all.filter(function(n){ return won.indexOf(n) < 0; });
+    if (!pool.length) { big.textContent = 'No entrants left to draw'; return; }
+    var spins = 0;
+    var t = setInterval(function(){
+      big.textContent = pool[Math.floor(Math.random() * pool.length)];
+      if (++spins < 22) return;
+      clearInterval(t);
+      var pick = pool[Math.floor(Math.random() * pool.length)];
+      won.push(pick); saveWinners();
+      big.textContent = '🏆 ' + pick;
+      renderWinners(s); confetti();
+    }, 85);
+  }
+
+  document.addEventListener('click', function(e){
+    var b = e.target.closest('[data-act]');
+    if (b) {
+      e.stopPropagation();
+      var s = slides[i], key = s.dataset.poll, act = b.dataset.act;
+      if (act === 'draw') { draw(s); return; }
+      pstate[key] = act === 'lock' ? 'locked' : act === 'reveal' ? 'revealed' : 'voting';
+      if (act === 'reveal') confetti();
+      broadcast(); render(); setTimeout(poll, 400);
+      return;
+    }
+    if (e.target.closest('a')) return;
+    if (e.clientX > innerWidth * 0.5) show(i + 1); else show(i - 1);
+  });
+
+  function show(n){
+    i = Math.max(0, Math.min(slides.length - 1, n));
+    slides.forEach(function(s, k){ s.classList.toggle('active', k === i); });
+    counter.textContent = (i + 1) + ' / ' + slides.length;
+    progress.style.width = ((i + 1) / slides.length * 100) + '%';
+    notes.innerHTML = '<b>Slide ' + (i + 1) + ' · ' + esc(slides[i].dataset.title || '') + ' · ~' + (slides[i].dataset.min || '?') + ' min</b><br>' + esc(slides[i].dataset.note || '');
+    broadcast(); render(); poll();
+  }
+  addEventListener('keydown', function(e){
+    if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') show(i + 1);
+    else if (e.key === 'ArrowLeft' || e.key === 'PageUp') show(i - 1);
+    else if (e.key === 'n' || e.key === 'N') { notesOn = !notesOn; notes.style.display = notesOn ? 'block' : 'none'; }
+    else if (e.key === 'q' || e.key === 'Q') { var lob = slides.findIndex(function(s){ return s.dataset.oh === 'lobby'; }); if (lob >= 0) show(lob); }
+    else if (e.key === 'Home') show(0);
+  });
+  setInterval(poll, 2500);
+  show(0);
+})();
+</script>
+</body>
+</html>

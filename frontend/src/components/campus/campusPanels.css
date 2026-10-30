@@ -154,3 +154,21 @@ body .cm-dm-toast{align-items:flex-start}
 .cm-me-bar{height:6px;border-radius:6px;background:var(--cm-art-line);overflow:hidden;width:180px}
 .cm-me-bar i{display:block;height:100%;background:var(--cm-art-live)}
 .cm-me-next small{display:block;margin-top:4px;color:var(--cm-art-muted);font-size:12px}
+
+/* ---- C23 phase 3 (Q6): the 💬 inbox button and popover (D:499-501, D:538-546) ---- */
+.cm-topbar .cm-msgs-btn{position:relative;border:0;background:transparent;font-size:16px;line-height:1;padding:2px 4px;cursor:pointer;color:var(--cm-art-ink)}
+.cm-topbar .cm-msgs-badge{position:absolute;top:-6px;right:-8px;min-width:16px;height:16px;border-radius:8px;background:var(--cm-art-red);color:var(--cm-art-on-dark);font:700 10px/16px 'DM Sans',sans-serif;padding:0 4px;text-align:center;font-style:normal}
+.cm-inbox{position:fixed;top:70px;right:16px;width:340px;max-height:70vh;overflow:auto;background:var(--cm-art-paper);border-radius:18px;box-shadow:var(--cm-art-shadow);border:1px solid var(--cm-art-line);z-index:27;padding:10px;font-family:'DM Sans',sans-serif}
+.cm-inbox h4{margin:6px 6px 4px;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--cm-art-muted)}
+.cm-ib-row{display:flex;align-items:center;gap:10px;width:100%;padding:8px;border:0;background:transparent;border-radius:12px;text-align:left;cursor:pointer;color:var(--cm-art-ink)}
+.cm-ib-row:hover,.cm-ib-row:focus-visible{background:var(--cm-art-card)}
+.cm-ib-av{flex:0 0 30px;width:30px;height:30px;border-radius:50%;display:grid;place-items:center;background:var(--cm-art-in-name-bg);color:var(--cm-art-on-dark);font-weight:700;font-size:11px;overflow:hidden}
+.cm-ib-av.is-staff{box-shadow:0 0 0 2px var(--cm-art-hq-brass)}
+.cm-ib-av img{width:100%;height:100%;object-fit:cover}
+.cm-ib-txt{flex:1;min-width:0;display:flex;flex-direction:column}
+.cm-ib-txt small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--cm-art-muted);font-size:12px}
+.cm-ib-tag{margin-left:6px;padding:1px 6px;border-radius:999px;background:var(--cm-art-hq-brass);color:var(--cm-art-pic-ink);font-size:9px;letter-spacing:.06em;text-transform:uppercase;vertical-align:middle}
+.cm-ib-row.is-unread b{font-weight:800}
+.cm-ib-dot{flex:0 0 9px;width:9px;height:9px;border-radius:50%;background:var(--cm-art-red)}
+.cm-ib-empty{margin:8px;color:var(--cm-art-muted);font-size:13px}
+@media(max-width:760px){.cm-inbox{left:10px;right:10px;width:auto;top:110px}}

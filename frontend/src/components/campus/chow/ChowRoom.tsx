@@ -16,7 +16,7 @@ export function CravingScreen({ now, condition }: { now: Date; condition: Condit
       <div className="t">WHAT ARE YOU CRAVING?</div>
       <div className="cm-crave-grid">
         {CRAVINGS.map((c) => (
-          <button key={c.id} type="button" onClick={() => openOrderSheet(c.id)} data-testid={`cm-crave-tile-${c.id}`}>{c.emoji} {c.label}</button>
+          <button key={c.id} type="button" onClick={() => openOrderSheet(c.id)} title={c.label} data-testid={`cm-crave-tile-${c.id}`}>{c.emoji} {c.label}</button>
         ))}
       </div>
       <small>{foodLead(now, condition)}</small>

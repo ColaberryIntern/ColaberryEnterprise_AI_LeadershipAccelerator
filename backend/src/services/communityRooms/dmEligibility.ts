@@ -3,6 +3,7 @@ import Enrollment from '../../models/Enrollment';
 import { isStaffOrMgmt } from '../access/staffAccess';
 import { getReeseEnrollmentId } from '../reese/reeseIdentitySeed';
 import { getDaraEnrollmentId } from '../curriculum/daraIdentitySeed';
+import { canReachAgent, floorBlockedMessage } from '../campus/agentPlaces';
 
 /**
  * WHO MAY DM WHOM: the one implementation of the rule (moved verbatim from dmService.assertSameCohort so the campus
@@ -16,13 +17,18 @@ import { getDaraEnrollmentId } from '../curriculum/daraIdentitySeed';
  *
  * Failure posture (unchanged): an id lookup that fails or throws counts as "no bypass", so a broken lookup can only
  * ever deny a cross-cohort DM, never allow one.
+ *
+ * C87 (agent places): Dara stays on the Program floor of the Staff Office. A person whose badge does not open that floor
+ * may not DM her, whatever their cohort or role: that check runs FIRST. Dara writing to someone is not limited here. The
+ * floor lookup fails closed (canReachAgent), so a broken lookup can only ever deny.
  */
-export interface DmContext { meIsStaffOrMgmt: boolean; reeseId: string | null; daraId: string | null }
+export interface DmContext { meIsStaffOrMgmt: boolean; reeseId: string | null; daraId: string | null; daraFloorOpen: boolean }
 export interface DmTarget { id: string; cohort_id: string | null }
 
 export const DM_NOT_AVAILABLE = 'That person is no longer available';
 export const DM_COHORT_ONLY = 'You can only message people in your cohort';
 export const DM_NO_COHORT = 'You are not in a cohort yet';
+export const DM_DARA_FLOOR = floorBlockedMessage('Dara');
 
 async function lookupAgentId(fn: () => Promise<string | null>, event: string): Promise<string | null> {
   try {
@@ -41,12 +47,14 @@ export async function loadDmContext(meId: string): Promise<DmContext> {
   const meIsStaffOrMgmt = await isStaffOrMgmt(meId);
   const reeseId = await lookupAgentId(getReeseEnrollmentId, 'reese_enrollment_lookup_failed');
   const daraId = await lookupAgentId(getDaraEnrollmentId, 'dara_enrollment_lookup_failed');
-  return { meIsStaffOrMgmt, reeseId, daraId };
+  const daraFloorOpen = await canReachAgent(meId, 'dara');
+  return { meIsStaffOrMgmt, reeseId, daraId, daraFloorOpen };
 }
 
 /** Pure: null when the DM is allowed, else the exact message the sender sees. */
 export function dmBlockReason(meId: string, other: DmTarget | null, myCohortId: string | null | undefined, ctx: DmContext): string | null {
   if (!other) return DM_NOT_AVAILABLE;
+  if (ctx.daraId && other.id === ctx.daraId && meId !== ctx.daraId && !ctx.daraFloorOpen) return DM_DARA_FLOOR;
   if (myCohortId && other.cohort_id === myCohortId) return null;
   if (ctx.meIsStaffOrMgmt) return null;
   if (ctx.reeseId && (meId === ctx.reeseId || other.id === ctx.reeseId)) return null;
@@ -59,7 +67,7 @@ export async function dmBlockReasonFor(meId: string, otherId: string, myCohortId
   const row = await Enrollment.findByPk(otherId);
   if (!row) return DM_NOT_AVAILABLE;
   const other: DmTarget = { id: otherId, cohort_id: row.cohort_id ?? null };
-  if (myCohortId && other.cohort_id === myCohortId) return null;
+  // C87: no same-cohort shortcut before the context any more; the Dara floor check must run for everyone.
   return dmBlockReason(meId, other, myCohortId, await loadDmContext(meId));
 }
 
@@ -72,4 +80,15 @@ export async function canDmMany(meId: string, myCohortId: string | null | undefi
   const ctx = await loadDmContext(meId);
   for (const id of otherIds) out.set(id, dmBlockReason(meId, byId.get(id) ?? null, myCohortId, ctx) === null);
   return out;
+}
+
+/**
+ * C87: sending in a DM room that already exists (a thread from before Dara moved to the Program floor). openDm checks the
+ * whole rule; this checks only the floor, for the room's other member. Null when allowed, else the message to show.
+ */
+export async function agentFloorBlockFor(meId: string, otherId: string | null | undefined): Promise<string | null> {
+  if (!otherId) return null;
+  const daraId = await lookupAgentId(getDaraEnrollmentId, 'dara_enrollment_lookup_failed');
+  if (!daraId || otherId !== daraId || meId === daraId) return null;
+  return (await canReachAgent(meId, 'dara')) ? null : DM_DARA_FLOOR;
 }

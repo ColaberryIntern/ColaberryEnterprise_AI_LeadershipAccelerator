@@ -100,3 +100,19 @@ export function PlanPin({ b, n, done, next }: { b: CampusBuilding; n: number; do
     </g>
   );
 }
+
+/** C23 phase 3 (WP-10, D:1703 and D:3285-3287): unread notifications that belong to this building, a red count pin at its top-left
+ *  corner above the roof, with a pulsing ring. A press opens the notifications (the bell); it is a mouse shortcut inside the building's
+ *  own button, so it is hidden from assistive tech (the bell carries the same list and count). */
+export const OPEN_BELL_EVENT = 'cm-open-bell';
+export function NotifPin({ b, n }: { b: CampusBuilding; n: number }): React.ReactElement {
+  const y = b.id === 'amphi' ? -44 : -b.pos.h - 14;
+  return (
+    <g className="cm-notif-pin" aria-hidden="true" data-testid={`cm-notif-pin-${b.id}`} transform={`translate(${-b.pos.w / 2 + 2} ${y})`}
+      onClick={(e) => { e.stopPropagation(); window.dispatchEvent(new Event(OPEN_BELL_EVENT)); }}>
+      <circle className="ring" r={11} />
+      <circle className="dot" r={8.5} />
+      <text y={3.6} textAnchor="middle">{n > 9 ? '9+' : n}</text>
+    </g>
+  );
+}

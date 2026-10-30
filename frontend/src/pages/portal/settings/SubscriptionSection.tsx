@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
   fetchSubscription, startSubscriptionCheckout, cancelSubscription, confirmSubscriptionCheckout,
   SubscriptionView, PlanId,
@@ -138,6 +139,9 @@ const SubscriptionSection: React.FC<{ onToast?: (m: string) => void }> = ({ onTo
   const planCfg = sub ? plans.find((p) => p.id === sub.plan) : null;
 
   const creditCents = view.available_credit_cents || 0;
+  const creditFor = (planId: string) => view.credit_cents_by_plan?.[planId] ?? creditCents;
+  // Part of the credit only works on the annual plan (the Open House scholarship).
+  const annualOnlyCents = Math.max(0, creditFor('annual') - creditFor('monthly'));
 
   // Plan-selection grid. `withFree` prepends the current (Free) plan, selected.
   const renderPlans = (withFree: boolean) => (
@@ -145,7 +149,9 @@ const SubscriptionSection: React.FC<{ onToast?: (m: string) => void }> = ({ onTo
       {creditCents > 0 && (
         <div className="set-credit-banner" style={{ gridColumn: '1 / -1' }}>
           <span className="set-credit-chip">${money(creditCents / 100)} credit</span>
-          <span>Your ${money(creditCents / 100)} Open House deposit is on your account — it comes off your first payment automatically, whichever plan you choose.</span>
+          <span>{annualOnlyCents > 0
+            ? `Your $${money(creditCents / 100)} Open House credit is on your account. It comes off your first payment automatically when you choose the annual plan${creditFor('monthly') > 0 ? ` ($${money(creditFor('monthly') / 100)} of it also applies to monthly)` : ''}.`
+            : `Your $${money(creditCents / 100)} Open House deposit is on your account — it comes off your first payment automatically, whichever plan you choose.`}</span>
         </div>
       )}
       {withFree && (
@@ -159,7 +165,7 @@ const SubscriptionSection: React.FC<{ onToast?: (m: string) => void }> = ({ onTo
         </div>
       )}
       {plans.map((p) => {
-        const { appliedCents, chargeDollars } = firstCharge(p.price, creditCents);
+        const { appliedCents, chargeDollars } = firstCharge(p.price, creditFor(p.id));
         return (
         <div key={p.id} className={`set-plan${p.id === 'annual' ? ' featured' : ''}`}>
           {p.id === 'annual' && <span className="set-plan-badge">Best value</span>}
@@ -256,6 +262,10 @@ const SubscriptionSection: React.FC<{ onToast?: (m: string) => void }> = ({ onTo
         <>
           <p className="set-sub">You’re on the free plan. Upgrade to unlock the full program.</p>
           {renderPlans(true)}
+          {/* C91: for an Explorer this tab was a dead end (ad audit: 121 of 308 ad signups ended up here, none paid); always offer the way back to learning */}
+          <div className="set-actions" style={{ marginTop: 12 }} data-testid="set-sub-keep-learning">
+            <Link className="te-btn ghost sm" to="/portal/today?stay=1">Not ready yet? Back to your lessons →</Link>
+          </div>
         </>
       )}
 

@@ -25,6 +25,8 @@ jest.mock('../../services/curriculum/daraReplyService', () => ({ maybeTriggerDar
 // so this file only asserts dmService.ts calls it correctly (its own
 // internals are unit-tested in communityNotificationService.test.ts).
 jest.mock('../../services/communityNotificationService', () => ({ createNotification: jest.fn() }));
+// C87: Dara stays on the Program floor; these tests run as a badge that opens it unless a test says otherwise.
+jest.mock('../../services/access/mgmtBridgeService', () => ({ getMgmtStatus: jest.fn() }));
 
 import { openDm, sendDmMessage, listDmMessages, listConversations, markDmRead } from '../../services/communityRooms/dmService';
 import { createNotification } from '../../services/communityNotificationService';
@@ -38,6 +40,11 @@ import { getReeseEnrollmentId } from '../../services/reese/reeseIdentitySeed';
 import { maybeTriggerReeseReply } from '../../services/reese/reeseReplyService';
 import { getDaraEnrollmentId } from '../../services/curriculum/daraIdentitySeed';
 import { maybeTriggerDaraReply } from '../../services/curriculum/daraReplyService';
+import { getMgmtStatus } from '../../services/access/mgmtBridgeService';
+
+const PROGRAM_BADGE = { is_mgmt: true, role: 'curriculum', label: 'Curriculum', sections: ['dashboard', 'program'] };
+const NO_BADGE = { is_mgmt: false, role: null, label: null, sections: [] };
+beforeEach(() => { (getMgmtStatus as jest.Mock).mockResolvedValue(PROGRAM_BADGE); });
 
 const findOrCreateRoom = CommunityRoom.findOrCreate as jest.Mock;
 const findByPkRoom = CommunityRoom.findByPk as jest.Mock;
@@ -182,7 +189,15 @@ describe('Reese Phase 1 — assertSameCohort identity-keyed bypass (T008)', () =
 });
 
 describe('Dara v2 Phase 3 — assertSameCohort identity-keyed bypass', () => {
-  it('happy path: a non-staff student in one cohort can DM Dara, who has no cohort of their own', async () => {
+  it('C87: a student whose badge does not open the Program floor cannot DM Dara', async () => {
+    (getMgmtStatus as jest.Mock).mockResolvedValue(NO_BADGE);
+    findByPkEnroll.mockResolvedValue({ id: dara, cohort_id: null });
+    isStaffOrMgmtMock.mockResolvedValue(false);
+    await expect(openDm(me, dara, cohort)).rejects.toMatchObject({ name: 'DmError', message: "Dara works on a Staff Office floor your badge doesn't open" });
+    expect(findOrCreateRoom).not.toHaveBeenCalled();
+  });
+
+  it('happy path: someone whose badge opens the Program floor (C87) can DM Dara, who has no cohort of their own', async () => {
     findByPkEnroll.mockResolvedValue({ id: dara, cohort_id: null });
     isStaffOrMgmtMock.mockResolvedValue(false);
     const r = await openDm(me, dara, cohort);
@@ -248,6 +263,15 @@ describe('send / list guards', () => {
 
     const m = await sendDmMessage(ctx, 'room-1', 'hi');
     expect(m).toEqual({ id: 'm1', content: 'hi' });
+  });
+
+  it('C87: an existing thread with Dara is shut for a badge without the Program floor; nothing is posted', async () => {
+    (getMgmtStatus as jest.Mock).mockResolvedValue(NO_BADGE);
+    getDaraEnrollmentIdMock.mockResolvedValue(dara);
+    findByPkRoom.mockResolvedValue({ id: 'room-1', room_type: 'dm' });
+    findOneMember.mockResolvedValue({ enrollment_id: dara });
+    await expect(sendDmMessage(ctx, 'room-1', 'hi')).rejects.toMatchObject({ name: 'DmError' });
+    expect(postMock).not.toHaveBeenCalled();
   });
 
   it('refuses to send into a non-dm room (guards against posting to cohort rooms)', async () => {

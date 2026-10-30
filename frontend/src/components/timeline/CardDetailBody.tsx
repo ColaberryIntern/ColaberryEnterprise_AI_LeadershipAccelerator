@@ -15,6 +15,7 @@ import { useReaderProgress } from './useReaderProgress';
 import { useDeepDiveHost } from './useDeepDiveHost';
 import { useBlogReadGate } from './useBlogReadGate';
 import { useDwellGate, isDwellGatedCard } from './useDwellGate';
+import { useWatchVerdict, isWatchBlocked, watchGateLabel } from './useWatchVerdict';
 
 /** Tiny stable string hash — varies the dwell Collect button placement per card. */
 function hashStr(s: string): number {
@@ -285,13 +286,22 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
   const presenter = card.video?.presenter || null;
   const duration = card.estimated_time ? `${card.estimated_time} min` : null;
 
-  // Server-truth watch gate (video/testimonial/podcast): each heartbeat response
-  // updates the bar + Mark-complete enablement; the server enforces regardless.
-  const [watch, setWatch] = useState<{ watched_pct: number; required_pct: number | null; met: boolean } | null>(null);
   const [gateMsg, setGateMsg] = useState<string | null>(null);
   const [copyGateMet, setCopyGateMet] = useState(false);   // Claude Code labs (drawer): reveal completion once the prompt(s) are copied — phone users complete here
-  useEffect(() => { setWatch(null); setGateMsg(null); }, [card.id]);
+  useEffect(() => { setGateMsg(null); }, [card.id]);
   const live = !preview && !done;
+  // Ambient podcast/testimonial items (ref `podcast:<id>`) have no card row, so
+  // their beats go to the ambient media gate rather than the card watch gate —
+  // same verdict shape, same 75% bar, different key. See ambientMedia.ts.
+  const ambientMedia = ambientMediaOf(card);
+  // Server-truth watch gate (video/testimonial/podcast), fetched the moment the
+  // drawer opens so Collect starts DIMMED (null = still checking), then refreshed
+  // by each heartbeat. Ambient items may already have crossed 75% on the tile's
+  // inline player. The server enforces regardless.
+  const watchKey = live && (ambientMedia || (isVideo && source)) ? (ambientMedia ? `${ambientMedia.kind}:${ambientMedia.id}` : card.id) : null;
+  const [watch, setWatch] = useWatchVerdict(watchKey, () => (ambientMedia
+    ? runtimeApi.mediaVerdict(ambientMedia.kind, ambientMedia.id)
+    : runtimeApi.watchVerdict(card.id)));
   // Beat reporting deliberately does NOT stop at completion. `live` still gates
   // the gate UI (a completed card has nothing left to unlock), but tying the
   // heartbeat to it froze watched_pct the instant a student collected their
@@ -303,10 +313,6 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
   // unlock threshold rather than measured. Preview is still excluded: admin
   // previews must never write progress.
   const reportBeats = !preview;
-  // Ambient podcast/testimonial items (ref `podcast:<id>`) have no card row, so
-  // their beats go to the ambient media gate rather than the card watch gate —
-  // same verdict shape, same 75% bar, different key. See ambientMedia.ts.
-  const ambientMedia = ambientMediaOf(card);
   const handleWatchBeat = reportBeats
     ? (beat: WatchBeatPayload) => {
         const req = ambientMedia
@@ -315,15 +321,6 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
         req.then(setWatch).catch(() => { /* best-effort heartbeat */ });
       }
     : undefined;
-  // Hydrate the ambient verdict on open: the student may have crossed 75% on the
-  // tile's inline player, and the Collect button here must reflect that without
-  // waiting for another beat.
-  useEffect(() => {
-    if (!ambientMedia || !live) return;
-    let alive = true;
-    runtimeApi.mediaVerdict(ambientMedia.kind, ambientMedia.id).then((v) => { if (alive) setWatch(v); }).catch(() => { /* best-effort */ });
-    return () => { alive = false; };
-  }, [ambientMedia?.kind, ambientMedia?.id, live]);
   const completeSafely = onComplete
     ? async () => {
         setGateMsg(null);
@@ -332,6 +329,7 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
       }
     : undefined;
   const gateActive = watch?.required_pct != null;
+  const watchLabel = watchGateLabel(watch, 'Collect points');   // null = met → open to click
 
   // Self Study gating: the reader iframe reports per-section read-progress (>=5s dwell
   // each); the Mark Complete button appears only once every section is read. Enforced
@@ -603,6 +601,7 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
             ) : (
               <div className="tld-note" style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                 <span>Read through it — {dwell?.dwell_s ?? 0}s of {dwell?.required_s ?? 120}s before you can collect your points.</span>
+                {completeSafely && <button type="button" className="tl-btn primary" disabled title="Stay with this to collect your points" style={{ marginLeft: 'auto' }}>Collect +{pts} pts</button>}
                 <div style={{ flexBasis: '100%', height: 6, borderRadius: 3, background: 'rgba(0,0,0,.10)', overflow: 'hidden' }}>
                   <i style={{ display: 'block', height: '100%', width: `${dwellPct}%`, background: '#367895', transition: 'width .5s ease' }} />
                 </div>
@@ -653,10 +652,10 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
                     type="button"
                     className="tl-btn primary"
                     onClick={completeSafely}
-                    disabled={gateActive && !watch?.met}
-                    title={gateActive && !watch?.met ? `Reach ${watch?.required_pct}% watched to collect your points` : undefined}
+                    disabled={isWatchBlocked(watch)}
+                    title={watch == null ? 'Checking how much you have watched' : isWatchBlocked(watch) ? `Reach ${watch.required_pct}% watched to collect your points` : undefined}
                   >
-                    {gateActive && !watch?.met ? `Collect points · ${watch?.watched_pct ?? 0}/${watch?.required_pct}%` : 'Collect points'}
+                    {watchLabel ?? 'Collect points'}
                   </button>
                 )}
                 {/* Blog: collect after the 2-minute read gate is met (server enforces). */}
@@ -683,16 +682,17 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
                 {isPeerWins && !isCommunityPost && completeSafely && (
                   <button type="button" className="tl-btn primary" onClick={completeSafely}>Mark complete</button>
                 )}
-                {/* Self Study: the Mark Complete button only appears once every section
-                    has been read (>=5s each), matching the workstation's gate + style. */}
-                {isReader && readerProg.complete && completeSafely && (
-                  <button type="button" className="ss-complete-btn" onClick={completeSafely}>Mark complete</button>
+                {/* Gated completions show the button DIMMED until the requirement is met
+                    (never hidden, never clickable early): Self Study = every section read
+                    (>=5s each), Deep Dive = the guide's steps, labs = prompt(s) copied. */}
+                {isReader && completeSafely && (
+                  <button type="button" className="ss-complete-btn" disabled={!readerProg.complete} title={readerProg.complete ? undefined : 'Read every section to finish'} onClick={completeSafely}>Mark complete</button>
                 )}
-                {isDeepDive && dd.complete && completeSafely && (
-                  <button type="button" className="ss-complete-btn" onClick={completeSafely}>Mark complete</button>
+                {isDeepDive && completeSafely && (
+                  <button type="button" className="ss-complete-btn" disabled={!dd.complete} title={dd.complete ? undefined : 'Finish the steps in the guide to complete'} onClick={completeSafely}>Mark complete</button>
                 )}
-                {(isSetupLab || isPromptCatalog) && copyGateMet && completeSafely && (
-                  <button type="button" className="ss-complete-btn" onClick={completeSafely}>Complete &amp; generate evidence</button>
+                {(isSetupLab || isPromptCatalog) && completeSafely && (
+                  <button type="button" className="ss-complete-btn" disabled={!copyGateMet} title={copyGateMet ? undefined : 'Copy the prompt to complete this lab'} onClick={completeSafely}>Complete &amp; generate evidence</button>
                 )}
               </>
             )}

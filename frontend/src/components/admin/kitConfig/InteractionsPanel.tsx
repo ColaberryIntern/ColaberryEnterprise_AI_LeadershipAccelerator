@@ -6,7 +6,7 @@ interface Props {
   config: CountAndOverride<InteractionPlacement>;
   defaults: InteractionPlacement[];
   theaterEnabled: boolean;
-  dayKind: 'orientation' | 'architecture' | 'build';
+  dayKind: 'orientation' | 'architecture' | 'build' | 'openhouse';
   onToggleTheater: (v: boolean) => void;
   /** Calls the backend's AI-generate-a-question endpoint; the parent owns the
    * sessionId and the actual API call. Always resolves to a usable question
@@ -16,7 +16,7 @@ interface Props {
 }
 
 const GROUP_FOR_DAYKIND: Record<Props['dayKind'], string> = {
-  orientation: 'Orientation', architecture: 'Architecture Day (Monday)', build: 'Build Day (Thursday)',
+  orientation: 'Orientation', architecture: 'Architecture Day (Monday)', build: 'Build Day (Thursday)', openhouse: 'Open House',
 };
 
 const segmentLabel = (value: string) => {

@@ -423,6 +423,16 @@ const ProjectsPage: React.FC = () => {
     next.delete('project');
     setSearchParams(next, { replace: true });
   }, [returnProject, projects.length]); // when the return target or the list arrives, not on every openInterior identity
+  // ?new=1 deep-links straight into the "Start a new build" wizard (the Open House
+  // deck's "Open the project builder" button). Dropped after use, like ?project=.
+  const wantsNew = searchParams.get('new') === '1';
+  useEffect(() => {
+    if (!wantsNew) return;
+    setView({ kind: 'wizard' });
+    const next = new URLSearchParams(searchParams);
+    next.delete('new');
+    setSearchParams(next, { replace: true });
+  }, [wantsNew]); // once per arrival with the parameter
   /**
    * Open a task in the project WORKSPACE — the full page with the mentor on the
    * right, the build-side twin of the classroom runtime. This used to open a

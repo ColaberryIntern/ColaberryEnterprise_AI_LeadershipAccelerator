@@ -132,7 +132,7 @@ export interface KitConfig {
 /** Read-only authored-default content, so the UI can show what is actually
  * running today instead of a "using defaults" placeholder. */
 export interface KitConfigDefaults {
-  dayKind: 'orientation' | 'architecture' | 'build';
+  dayKind: 'orientation' | 'architecture' | 'build' | 'openhouse';
   week: number | null;
   teach: TeachSlideOverride[];
   prompts: PromptOverride[];
