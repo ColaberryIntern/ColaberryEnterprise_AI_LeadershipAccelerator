@@ -23,6 +23,7 @@ import caseStudyAdminRoutes from './admin/caseStudyAdminRoutes';
 import caseStudyStudioRoutes from './admin/caseStudyStudioRoutes';
 import caseStudyMetricRoutes from './admin/caseStudyMetricRoutes';
 import explorerGrowthRoutes from './admin/explorerGrowthRoutes';
+import explorerKnowledgeRoutes from './admin/explorerKnowledgeRoutes';
 import growthJourneyStatusRoutes from './admin/growthJourneyStatusRoutes';
 import growthJourneyReadRoutes from './admin/growthJourneyReadRoutes';
 import growthJourneyRoutes from './admin/growthJourneyRoutes';
@@ -218,6 +219,12 @@ router.use(caseStudyMetricRoutes);
 // deny-by-default for every scoped management role while legacy admin passed,
 // which is a surface that half-works and looks fine.
 router.use(explorerGrowthRoutes);
+// Knowledge ingestion is its OWN router so explorerGrowthRoutes keeps its pinned "exactly
+// which routes are mutating" contract at full strength - an upload route added there would
+// have to loosen that count, and a loosened pin protects less for every change after it.
+// No new PATH_SECTION row is needed: mgmtSectionGate matches on prefix, so
+// /api/admin/explorer-growth/knowledge inherits the explorer-growth row above.
+router.use(explorerKnowledgeRoutes);
 // MUST STAY ABOVE `growthJourneyRoutes` (Phase 6, T604). That router applies
 // `requireGrowthJourneyEnabled` over the whole /api/admin/growth-journey prefix, so the status
 // registry - the one surface an operator needs BEFORE the master flag is on - escapes the 404
