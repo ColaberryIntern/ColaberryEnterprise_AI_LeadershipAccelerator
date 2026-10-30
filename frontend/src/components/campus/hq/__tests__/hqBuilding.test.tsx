@@ -11,10 +11,14 @@ import type { CampusPerson } from '../../campusApi';
 
 const MARKETING = ['dashboard', 'campaigns', 'brands'];
 let mockSections: string[] = MARKETING;
+let mockGovProjects: { projectId: string; name: string; status: string }[] = [];
 jest.mock('../../campusMgmt', () => ({
   useCampusMgmt: () => ({ isMgmt: mockSections.length > 0, label: mockSections.length ? 'Marketing' : null, sections: mockSections, canSection: (s: string) => mockSections.includes(s) }),
 }));
 jest.mock('../../home/useHomeFacts', () => ({ useHomeFacts: () => ({ firstName: 'Sarbjit', fullName: 'Sarbjit Kaur', initials: 'SK' }) }));
+// A member's office floor is fed by their assigned gov projects (membership-scoped). Default none, so the member/explorer
+// cases below stay ground-floor-only; one test sets it to prove the office floor lights up.
+jest.mock('../../../../services/govProjectPortalApi', () => ({ listMyGovProjects: () => Promise.resolve(mockGovProjects) }));
 
 // eslint-disable-next-line import/first
 import { useHq } from '../useHq';
@@ -41,7 +45,7 @@ async function render(audience: CampusAudience, named: CampusPerson[] = []): Pro
   document.body.appendChild(container);
   await act(async () => { root = createRoot(container); root.render(<Harness audience={audience} named={named} />); });
 }
-afterEach(() => { if (root) act(() => root!.unmount()); root = undefined; container?.remove(); mockSections = MARKETING; });
+afterEach(() => { if (root) act(() => root!.unmount()); root = undefined; container?.remove(); mockSections = MARKETING; mockGovProjects = []; });
 
 const $ = (sel: string) => container.querySelector(sel) as HTMLElement;
 const $$ = (sel: string) => Array.from(container.querySelectorAll(sel)) as HTMLElement[];
@@ -148,6 +152,39 @@ describe('members and explorers: the ground floor only', () => {
     expect(guide).not.toContain('Leads');
     await click(revenue);
     expect($('[data-testid="cm-hq-toast"]').textContent).toBe('The floors above the lobby are for Colaberry staff.');
+  });
+});
+
+describe('a gov intern’s own office floor (H4)', () => {
+  const flush = async () => { await act(async () => { await new Promise((r) => setTimeout(r, 0)); }); };
+
+  it('a member on a gov project gets ONE open floor — their project — linking to the cockpit', async () => {
+    mockSections = [];
+    mockGovProjects = [{ projectId: 'proj-123', name: 'Saratoga Springs RFP', status: 'building' }];
+    await render('member');
+    await flush(); // let the membership fetch resolve and the office floor render in
+
+    expect($('[data-testid="cm-hq-badge-level"]').textContent).toMatch(/^OPENS 1 OF \d+ FLOORS$/);
+    await click($('[data-testid="cm-hq-walk-in"]'));
+    await click($('[data-testid="cm-hq-call"]'));
+    const office = $('[data-testid="cm-hq-fb-1"]');
+    expect(office.getAttribute('aria-disabled')).toBeNull(); // open, not a locked staff floor
+    expect(office.textContent).toContain('Gov Contracts');
+    await click(office);
+    expect(scene()).toBe('floor');
+    const rooms = $$('[data-testid="cm-hq-office"]') as HTMLAnchorElement[];
+    expect(rooms.map((a) => a.getAttribute('href'))).toEqual(['/portal/gov-projects/proj-123']); // the cockpit, not the admin bridge
+    expect(rooms[0].textContent).toContain('Saratoga Springs RFP');
+    expect(rooms.every((a) => a.target === '_blank' && a.rel === 'noopener noreferrer')).toBe(true);
+  });
+
+  it('a member with no assigned project is unchanged: ground floor only, no office', async () => {
+    mockSections = [];
+    mockGovProjects = [];
+    await render('member');
+    await flush();
+    expect($('[data-testid="cm-hq-badge-level"]').textContent).toBe('GROUND FLOOR ONLY');
+    expect($('[data-testid="cm-hq-fb-1"]')).toBeNull();
   });
 });
 
