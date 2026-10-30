@@ -157,3 +157,29 @@ describe('the limits are shared, not guessed', () => {
     expect(DECLINED_REASON_MAX).toBe(1000);
   });
 });
+
+describe('AF7.1: what the request is ASKING FOR', () => {
+  it('defaults to a change request when kind is omitted, so AF4.2 callers are untouched', () => {
+    const r = FileChangeRequestSchema.safeParse(file());
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data.kind).toBeUndefined();
+  });
+
+  it('accepts a tool request', () => {
+    const r = FileChangeRequestSchema.safeParse(file({ kind: 'tool' }));
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data.kind).toBe('tool');
+  });
+
+  it('REFUSES an invented kind rather than storing it', () => {
+    // A third kind nobody implemented would route to no queue and be read by nobody.
+    for (const kind of ['grant', 'TOOL', 'change-request', '']) {
+      expect(FileChangeRequestSchema.safeParse(file({ kind })).success).toBe(false);
+    }
+  });
+
+  it('says in plain words what the two kinds are', () => {
+    const r = FileChangeRequestSchema.safeParse(file({ kind: 'grant' }));
+    expect(issues(r).join(' ')).toContain("either a 'change' or a 'tool'");
+  });
+});
