@@ -7,8 +7,9 @@
 .cm-order-app b{font-size:15px}
 .cm-order-app span{color:var(--cm-art-red);font-weight:700;font-size:13px}
 .cm-order-app small{color:var(--cm-art-muted);font-size:12px}
+/* C93: 20 cravings, 4 across x 5 rows (the screen has the height); a label too long for its tile ends in an ellipsis (full name in the title) rather than widening it. */
 .cm-crave-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:calc(var(--fw, 900px) * .008);margin:calc(var(--fw, 900px) * .008) 0}
-.cm-crave-grid button{padding:calc(var(--fw, 900px) * .006);border-radius:8px;border:1px solid var(--cm-art-line);background:var(--cm-art-sp-card);font:700 calc(var(--fw, 900px) * .013) 'DM Sans',system-ui,sans-serif;color:var(--cm-art-sp-ink);cursor:pointer}
+.cm-crave-grid button{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:calc(var(--fw, 900px) * .006);border-radius:8px;border:1px solid var(--cm-art-line);background:var(--cm-art-sp-card);font:700 calc(var(--fw, 900px) * .013) 'DM Sans',system-ui,sans-serif;color:var(--cm-art-sp-ink);cursor:pointer}
 .cm-chalk{display:flex;flex-direction:column;gap:6px;width:100%;padding:12px;border:6px solid var(--cm-art-chow-frame);border-radius:6px;background:var(--cm-art-chalk);color:var(--cm-art-on-dark);
   font:700 calc(var(--fw, 900px) * .013) 'DM Sans',system-ui,sans-serif;text-align:left;cursor:pointer}
 .cm-chalk .t{letter-spacing:.12em}
