@@ -1,11 +1,31 @@
-# Directive — Test 3: Colaberry Live Dress Rehearsal
+# Directive — Rehearse the Colaberry Live Airing Procedure
 
 **Purpose.** Prove, before an audience is watching, that every step of putting a broadcast on air
-works — and that a non-staff viewer can actually see it. Tests 1 and 2 proved the stream. This one
-proves the **procedure**, because the procedure is the part nobody has run under time pressure.
+works — and that a non-staff viewer can actually see it. It proves the **procedure**, because the
+procedure is the part nobody has run under time pressure.
 
 Companion to `go-live-colaberry-live-broadcast.md`, which is the reference for what each step means.
 This is the rehearsal script.
+
+## Where this sits on the official test ladder — and what it is NOT
+
+The governing requirements document (`docs/requirements/COLABERRY_LIVE_BASECAMP_BOOTSTRAP_v2.md`,
+§15) defines a **six-stage** ladder, and this directive is deliberately narrower than any single
+stage of it. Read this table before claiming a stage is passed.
+
+| Stage | What §15 requires | This directive |
+|---|---|---|
+| **Test 1** — provider smoke test | RTMP accepted, HLS created, signed playback works, grant renews, end state correct | **Covers playback + end.** Does not test grant *renewal* over time. |
+| **Test 2** — private five-person airing | discovery, persistent player, navigation does not restart video, companion QR, poll, Prompt Drop, Builder pulse, reconnect, end, replay processing | **Covers discovery, player and end only.** Five of its ten items are untouched. |
+| **Test 3** — internal staff pilot | **Piyush, Sohail and Aleem present**, evaluating content, UX, audio, video, lighting, camera, graphics, Prompt Drop timing, participation, marketing CTA | **Not covered at all.** This is a human evaluation session, not a console script. |
+| **Test 4** — full dress rehearsal | the actual studio and actual live-class flow: cold open, Ali camera, slides, Claude/Claude Code, screen share, participant voice, prompt, poll, Builder Room, QR, CTA, end, replay | **Not covered at all.** |
+| **Test 5** — failure drills | thirteen deliberate failures; confirm no access fails open | **One of thirteen** (the §5 auto-end check), and it is optional. |
+| **Test 6** — production launch | proof of a real production airing | Not covered. |
+
+**This file was originally named "Test 3: Dress Rehearsal", which was wrong twice over** — Test 3 is
+the staff pilot and Test 4 is the dress rehearsal, and this script is neither. Passing it proves the
+operator procedure and the access decision. It does not substitute for any ladder stage, and in
+particular it cannot be cited as evidence that the system is ready for an audience.
 
 ---
 
