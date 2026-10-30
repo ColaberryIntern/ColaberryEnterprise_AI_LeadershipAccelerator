@@ -333,6 +333,129 @@ describe('seedAgentIdentity', () => {
     });
   });
 
+  /**
+   * The `nonTicketCreating` exemption, added 2026-10-30.
+   *
+   * It exists because this gate and `agentRegistry/domainAgents.ts` deadlocked: the registry ships
+   * the ten Agent Factory domain agents with `tools_granted: []` on purpose, and this gate refused
+   * all nine of them on every boot, fail-open, for twelve days. The visible symptom was an empty
+   * agent console for seven interns, not an error.
+   *
+   * These tests exist to keep the exemption NARROW. The thing that must stay true is that it buys
+   * visibility and nothing else: the moment an exempt agent can act, the standard applies again.
+   */
+  describe('nonTicketCreating exemption from the tools_granted gate', () => {
+    const EXEMPT: AgentIdentityConfig = {
+      ...CONFIG,
+      nonTicketCreating: { reason: 'Release Zero floor: disabled, at observe, no tools, no trigger.' },
+    };
+
+    /** The floor as a real row carries it: disabled, classified observe, no tools. */
+    function atFloor() {
+      const a = makeFakeAgent();
+      (a as any).tools_granted = [];
+      (a as any).enabled = false;
+      (a as any).autonomy_level = 'observe';
+      return a;
+    }
+
+    it('seeds an identity for a floor agent with NO tools granted', async () => {
+      fakeAgent = atFloor();
+      mockAiAgentFindOne.mockResolvedValue(fakeAgent);
+
+      await expect(seedAgentIdentity(EXEMPT)).resolves.toBeDefined();
+      // The point of the whole change: the three identity rows get written, which is what makes
+      // the agent visible in the transparency console at all.
+      expect(mockEnrollmentFindOrCreate).toHaveBeenCalled();
+      expect(mockCommunityMemberFindOrCreate).toHaveBeenCalled();
+      expect(mockAdminUserFindOrCreate).toHaveBeenCalled();
+    });
+
+    it('grants NOTHING: it never writes tools_granted, enabled or autonomy_level', async () => {
+      fakeAgent = atFloor();
+      mockAiAgentFindOne.mockResolvedValue(fakeAgent);
+
+      await seedAgentIdentity(EXEMPT);
+
+      // An identity lets an agent be SEEN and addressed. It must not let it act, and the only way
+      // to prove that here is to read every write this function made to the agent row.
+      for (const call of (fakeAgent.update as jest.Mock).mock.calls) {
+        expect(Object.keys(call[0] ?? {})).not.toContain('tools_granted');
+        expect(Object.keys(call[0] ?? {})).not.toContain('enabled');
+        expect(Object.keys(call[0] ?? {})).not.toContain('autonomy_level');
+      }
+    });
+
+    it('a null autonomy_level counts as the floor, because null means never classified', async () => {
+      fakeAgent = atFloor();
+      (fakeAgent as any).autonomy_level = null;
+      mockAiAgentFindOne.mockResolvedValue(fakeAgent);
+
+      await expect(seedAgentIdentity(EXEMPT)).resolves.toBeDefined();
+    });
+
+    it('REFUSES an exempt agent that has been enabled', async () => {
+      fakeAgent = atFloor();
+      (fakeAgent as any).enabled = true;
+      mockAiAgentFindOne.mockResolvedValue(fakeAgent);
+
+      await expect(seedAgentIdentity(EXEMPT)).rejects.toThrow(/exemption holds only while/);
+      expect(mockEnrollmentFindOrCreate).not.toHaveBeenCalled();
+    });
+
+    it('REFUSES an exempt agent promoted above observe', async () => {
+      fakeAgent = atFloor();
+      (fakeAgent as any).autonomy_level = 'act_audited';
+      mockAiAgentFindOne.mockResolvedValue(fakeAgent);
+
+      await expect(seedAgentIdentity(EXEMPT)).rejects.toThrow(/exemption holds only while/);
+    });
+
+    it('REFUSES an exempt agent whose enabled flag could not be read', async () => {
+      // Strict `=== false`, not falsy. A row that came back without the column is a row we cannot
+      // prove is at the floor, and "cannot prove" must not read as "is".
+      fakeAgent = atFloor();
+      (fakeAgent as any).enabled = undefined;
+      mockAiAgentFindOne.mockResolvedValue(fakeAgent);
+
+      await expect(seedAgentIdentity(EXEMPT)).rejects.toThrow(/exemption holds only while/);
+    });
+
+    it('the refusal names the declared reason, so a misused exemption is traceable', async () => {
+      fakeAgent = atFloor();
+      (fakeAgent as any).enabled = true;
+      mockAiAgentFindOne.mockResolvedValue(fakeAgent);
+
+      await expect(seedAgentIdentity(EXEMPT)).rejects.toThrow(/Release Zero floor/);
+    });
+
+    it('exempts ONLY the tools gate: the reports-to pair is still required', async () => {
+      fakeAgent = atFloor();
+      mockAiAgentFindOne.mockResolvedValue(fakeAgent);
+
+      await expect(
+        seedAgentIdentity({ ...CONFIG_WITHOUT_REPORTS_TO, nonTicketCreating: EXEMPT.nonTicketCreating } as AgentIdentityConfig),
+      ).rejects.toThrow(/exactly one of reportsToOrgMemberId or reportsToAgentName/);
+    });
+
+    it('exempts ONLY the tools gate: a generic display identity is still refused', async () => {
+      fakeAgent = atFloor();
+      mockAiAgentFindOne.mockResolvedValue(fakeAgent);
+
+      await expect(
+        seedAgentIdentity({ ...EXEMPT, displayName: 'Agent' }),
+      ).rejects.toThrow(/generic\/collapsed fallback label/);
+    });
+
+    it('POSITIVE CONTROL: the same floor row with NO exemption is still refused', async () => {
+      // Without this, every test above would pass on a gate that had simply been deleted.
+      fakeAgent = atFloor();
+      mockAiAgentFindOne.mockResolvedValue(fakeAgent);
+
+      await expect(seedAgentIdentity(CONFIG)).rejects.toThrow(/tools_granted is missing or empty/);
+    });
+  });
+
   it('reports_to_type/reports_to_id (AI Leadership): populates the human target directly on a row where both are currently null, no extra AiAgent lookup', async () => {
     fakeAgent = makeFakeAgent();
     (fakeAgent as any).reports_to_type = null;

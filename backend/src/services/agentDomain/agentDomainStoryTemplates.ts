@@ -42,8 +42,16 @@ import {
   type DomainCapabilityMatrix,
 } from './capabilityRecord';
 import { researchPromptFor } from './agentDomainResearchPrompts';
+import {
+  COMMAND_CENTER_SHARED_FOUNDATION_REASON,
+  COMMAND_CENTER_TITLE,
+  COMMAND_CENTER_VALIDATION_DEPENDENCY,
+  commandCenterBrief,
+  commandCenterPromptForDomain,
+  domainCommandCenterStoryId,
+} from './agentDomainCommandCenterStory';
 
-export type StoryKind = 'research' | 'legacy_migration' | 'implementation';
+export type StoryKind = 'command_center' | 'research' | 'legacy_migration' | 'implementation';
 export type StoryStatus = 'draft' | 'ready';
 
 export interface GeneratedStory {
@@ -204,6 +212,36 @@ function researchStories(d: AgentDomain, m: DomainCapabilityMatrix): GeneratedSt
 }
 
 /** One legacy-migration story per domain, generated from its real dispositions. */
+/**
+ * STORY-000, the Command Center -- the FIRST story of the FIRST release, before any of this
+ * domain's own work.
+ *
+ * Owner instruction, 30 October 2026: everyone builds one, so they can see the whole of what they
+ * are being asked to build before they start building it. Its content lives in
+ * `agentDomainCommandCenterStory.ts`; this function only places it.
+ *
+ * Position is not set here. `planProvision` counts stories within their cluster in array order, so
+ * being first in the array IS being position 0 -- and the existing ten projects, whose rows are
+ * already positioned 0..n, are shifted by the backfill rather than by this generator. See
+ * `backfillAgentDomainCommandCenter.ts`.
+ */
+function commandCenterStory(d: AgentDomain, m: DomainCapabilityMatrix): GeneratedStory {
+  return {
+    story_id: domainCommandCenterStoryId(d.domain_key),
+    release_key: 'r0',
+    kind: 'command_center',
+    title: COMMAND_CENTER_TITLE,
+    // Draft like every other story: nothing on any of these projects has been accepted yet, and
+    // the one story that rendered as further along than the rest would be the one nobody trusts.
+    status: 'draft',
+    body: commandCenterBrief(d, m),
+    capability_id: null,
+    shared_foundation_reason: COMMAND_CENTER_SHARED_FOUNDATION_REASON,
+    validation_dependency: COMMAND_CENTER_VALIDATION_DEPENDENCY,
+    claude_code_prompt: commandCenterPromptForDomain(d, m),
+  };
+}
+
 function legacyMigrationStory(d: AgentDomain, m: DomainCapabilityMatrix): GeneratedStory {
   const by = new Map<string, number>();
   for (const row of m.legacy_dispositions) by.set(row.disposition, (by.get(row.disposition) ?? 0) + 1);
@@ -375,6 +413,7 @@ export function planForDomain(domainKey: string): DomainPlan {
     domain_key: domainKey,
     releases: RELEASES,
     stories: [
+      commandCenterStory(d, m),
       ...researchStories(d, m),
       legacyMigrationStory(d, m),
       ...implementationStories(d, m),
