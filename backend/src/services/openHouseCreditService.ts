@@ -30,7 +30,17 @@ export interface OpenHousePayer {
   name?: string;
   sourceEventId: string;       // the PaySimple deposit external_id (OH716-...) — idempotency key
   amountCents?: number;        // defaults to $50
+  /** Credit reason; defaults to the $50 deposit. Use OPEN_HOUSE_SCHOLARSHIP_REASON
+   *  for the annual-only scholarship (accountCreditService.ANNUAL_ONLY_CREDIT_REASONS). */
+  reason?: string;
+  /** Ledger note + the note on a newly created enrollment. */
+  note?: string;
 }
+
+/** Open House scholarship: 50% off the annual membership ($1,788 → $894). Usable
+ *  ONLY on the annual plan — enforced at checkout by the credit's reason. */
+export const OPEN_HOUSE_SCHOLARSHIP_REASON = 'open_house_scholarship_annual';
+export const OPEN_HOUSE_SCHOLARSHIP_CENTS = 89400;
 
 export interface GrantOutcome {
   email: string;
@@ -135,7 +145,7 @@ export async function reconcileOpenHousePayer(
         status: 'active',
         portal_enabled: true,
         enrolled_at: new Date(opts.nowMs ?? Date.now()),
-        notes: `Open House $50 seat deposit (${payer.sourceEventId})`,
+        notes: `${payer.note || 'Open House $50 seat deposit'} (${payer.sourceEventId})`,
       } as any);
       out.cohortSet = !!opts.cohort;
     } else {
@@ -165,10 +175,10 @@ export async function reconcileOpenHousePayer(
     const { granted } = await grantCredit({
       enrollmentId: enrollment.id,
       amountCents,
-      reason: OPEN_HOUSE_CREDIT_REASON,
+      reason: payer.reason || OPEN_HOUSE_CREDIT_REASON,
       sourceEventId: payer.sourceEventId,
       grantedBy: opts.grantedBy,
-      note: `$50 Open House seat deposit${payer.name ? ` — ${payer.name}` : ''}`,
+      note: `${payer.note || '$50 Open House seat deposit'}${payer.name ? ` — ${payer.name}` : ''}`,
     });
     out.creditGranted = granted;
     out.creditAlreadyPresent = !granted;

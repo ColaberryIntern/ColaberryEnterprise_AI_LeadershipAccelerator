@@ -139,6 +139,9 @@ const SubscriptionSection: React.FC<{ onToast?: (m: string) => void }> = ({ onTo
   const planCfg = sub ? plans.find((p) => p.id === sub.plan) : null;
 
   const creditCents = view.available_credit_cents || 0;
+  const creditFor = (planId: string) => view.credit_cents_by_plan?.[planId] ?? creditCents;
+  // Part of the credit only works on the annual plan (the Open House scholarship).
+  const annualOnlyCents = Math.max(0, creditFor('annual') - creditFor('monthly'));
 
   // Plan-selection grid. `withFree` prepends the current (Free) plan, selected.
   const renderPlans = (withFree: boolean) => (
@@ -146,7 +149,9 @@ const SubscriptionSection: React.FC<{ onToast?: (m: string) => void }> = ({ onTo
       {creditCents > 0 && (
         <div className="set-credit-banner" style={{ gridColumn: '1 / -1' }}>
           <span className="set-credit-chip">${money(creditCents / 100)} credit</span>
-          <span>Your ${money(creditCents / 100)} Open House deposit is on your account — it comes off your first payment automatically, whichever plan you choose.</span>
+          <span>{annualOnlyCents > 0
+            ? `Your $${money(creditCents / 100)} Open House credit is on your account. It comes off your first payment automatically when you choose the annual plan${creditFor('monthly') > 0 ? ` ($${money(creditFor('monthly') / 100)} of it also applies to monthly)` : ''}.`
+            : `Your $${money(creditCents / 100)} Open House deposit is on your account — it comes off your first payment automatically, whichever plan you choose.`}</span>
         </div>
       )}
       {withFree && (
@@ -160,7 +165,7 @@ const SubscriptionSection: React.FC<{ onToast?: (m: string) => void }> = ({ onTo
         </div>
       )}
       {plans.map((p) => {
-        const { appliedCents, chargeDollars } = firstCharge(p.price, creditCents);
+        const { appliedCents, chargeDollars } = firstCharge(p.price, creditFor(p.id));
         return (
         <div key={p.id} className={`set-plan${p.id === 'annual' ? ' featured' : ''}`}>
           {p.id === 'annual' && <span className="set-plan-badge">Best value</span>}

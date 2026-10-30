@@ -21,6 +21,18 @@ import type { AccountCreditAttributes } from '../models/AccountCredit';
 // this floor; any credit that would overshoot is simply left available.
 export const MIN_CHARGE_CENTS = 100;
 
+/** Credit reasons that may ONLY reduce an annual-plan charge. The Open House
+ * scholarship (50% off a year) is worth $894; letting it fall on a $199 monthly
+ * charge would turn a year's discount into four free months. */
+export const ANNUAL_ONLY_CREDIT_REASONS: readonly string[] = ['open_house_scholarship_annual'];
+
+/** Whether a credit with `reason` may be applied to a charge for `plan`. No plan
+ * given = no restriction (the ledger total). Pure. */
+export function creditUsableOnPlan(reason: string | null | undefined, plan?: string): boolean {
+  if (!plan) return true;
+  return plan === 'annual' || !ANNUAL_ONLY_CREDIT_REASONS.includes(String(reason || ''));
+}
+
 export interface CreditRow { id: string; amount_cents: number }
 
 /**
@@ -46,24 +58,27 @@ export function creditApplyTarget(chargeCents: number): number {
   return Math.max(0, chargeCents - MIN_CHARGE_CENTS);
 }
 
-/** Available (unspent) credit rows for an enrollment, oldest first. */
-export async function availableCreditRows(enrollmentId: string): Promise<AccountCredit[]> {
-  return AccountCredit.findAll({
+/** Available (unspent) credit rows for an enrollment, oldest first. With `plan`,
+ *  only the rows that may be applied to that plan (annual-only credits drop out
+ *  of a monthly charge). */
+export async function availableCreditRows(enrollmentId: string, plan?: string): Promise<AccountCredit[]> {
+  const rows = await AccountCredit.findAll({
     where: { enrollment_id: enrollmentId, status: 'available' },
     order: [['created_at', 'ASC']],
   });
+  return plan ? rows.filter((r) => creditUsableOnPlan(r.reason, plan)) : rows;
 }
 
-/** Total available (unspent) credit for an enrollment, in cents. */
-export async function getAvailableCreditCents(enrollmentId: string): Promise<number> {
-  const rows = await availableCreditRows(enrollmentId);
+/** Total available (unspent) credit for an enrollment, in cents (optionally: usable on `plan`). */
+export async function getAvailableCreditCents(enrollmentId: string, plan?: string): Promise<number> {
+  const rows = await availableCreditRows(enrollmentId, plan);
   return rows.reduce((sum, r) => sum + (r.amount_cents || 0), 0);
 }
 
 /** How much credit a plan charge would apply + the resulting charge, for an
  *  enrollment. Used by checkout and the Subscription view's "you pay today". */
-export async function planCreditPreview(enrollmentId: string, chargeCents: number): Promise<{ available_cents: number; applied_cents: number; charge_after_cents: number }> {
-  const rows = await availableCreditRows(enrollmentId);
+export async function planCreditPreview(enrollmentId: string, chargeCents: number, plan?: string): Promise<{ available_cents: number; applied_cents: number; charge_after_cents: number }> {
+  const rows = await availableCreditRows(enrollmentId, plan);
   const available = rows.reduce((s, r) => s + (r.amount_cents || 0), 0);
   const { appliedCents } = selectCreditsUpTo(rows, creditApplyTarget(chargeCents));
   return { available_cents: available, applied_cents: appliedCents, charge_after_cents: chargeCents - appliedCents };
@@ -116,6 +131,7 @@ export async function consumeCreditsForSubscription(
   subscriptionId: string,
   targetCents: number,
   nowMs: number = Date.now(),
+  plan?: string,
 ): Promise<number> {
   if (!targetCents || targetCents <= 0) return 0;
 
@@ -125,7 +141,9 @@ export async function consumeCreditsForSubscription(
     return alreadyApplied.reduce((s, r) => s + (r.amount_cents || 0), 0);
   }
 
-  const rows = await availableCreditRows(enrollmentId);
+  // Same plan filter as checkout, so the rows consumed are the rows that
+  // discounted the charge — never an annual-only credit on a monthly plan.
+  const rows = await availableCreditRows(enrollmentId, plan);
   const { creditIds, appliedCents } = selectCreditsUpTo(rows, targetCents);
   if (!creditIds.length) return 0;
 
