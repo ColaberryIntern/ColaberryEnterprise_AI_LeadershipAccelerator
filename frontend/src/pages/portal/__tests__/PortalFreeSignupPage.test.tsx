@@ -338,3 +338,69 @@ describe('phone and permission to call', () => {
     expect(mockFreeSignup).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('C94: the signup records the ad that brought them', () => {
+  afterEach(() => window.localStorage.clear());
+
+  it('sends source|medium, campaign, ad and placement captured from the ad link', async () => {
+    window.localStorage.setItem('cb_utm_params', JSON.stringify({
+      utmSource: 'fb', utmMedium: 'paid', utmCampaign: '52708443249234', utmContent: '52708445138434',
+      utmTerm: '52708443249434', storedAt: new Date().toISOString(),
+    }));
+    await mount();
+    await fillAndSubmit();
+
+    expect(mockFreeSignup.mock.calls[0][0]).toMatchObject({
+      utm_source: 'fb|paid', utm_campaign: '52708443249234', utm_content: '52708445138434', utm_term: '52708443249434',
+    });
+  });
+
+  it('a 400 with tracking keys (an older strict server) retries once WITHOUT them, and the signup succeeds', async () => {
+    window.localStorage.setItem('cb_utm_params', JSON.stringify({
+      utmSource: 'fb', utmMedium: 'paid', utmCampaign: 'c', utmContent: 'ad', utmTerm: 'set', storedAt: new Date().toISOString(),
+    }));
+    mockFreeSignup
+      .mockRejectedValueOnce({ response: { status: 400, data: { error: 'Unrecognized key: "utm_content"' } } })
+      .mockResolvedValueOnce({ jwt: 'a.b.c' });
+    await mount();
+    await fillAndSubmit();
+
+    expect(mockFreeSignup).toHaveBeenCalledTimes(2);
+    expect(mockFreeSignup.mock.calls[0][0]).toHaveProperty('utm_content', 'ad');
+    const retry = mockFreeSignup.mock.calls[1][0];
+    for (const k of ['utm_source', 'utm_campaign', 'utm_content', 'utm_term', 'page_url']) expect(retry).not.toHaveProperty(k);
+    expect(retry).toMatchObject({ full_name: 'Dana Okoro', email: 'dana@example.com' });
+    expect(mockLogin).toHaveBeenCalledWith('a.b.c');
+  });
+
+  it('a 400 about the person still fails after the retry and shows the server message; no third call', async () => {
+    window.localStorage.setItem('cb_utm_params', JSON.stringify({ utmSource: 'fb', utmMedium: '', utmCampaign: 'c', storedAt: new Date().toISOString() }));
+    const bad = { response: { status: 400, data: { error: 'Please enter a valid email.' } } };
+    mockFreeSignup.mockRejectedValueOnce(bad).mockRejectedValueOnce(bad);
+    await mount();
+    await fillAndSubmit();
+
+    expect(mockFreeSignup).toHaveBeenCalledTimes(2);
+    expect(text()).toContain('Please enter a valid email.');
+    expect(mockLogin).not.toHaveBeenCalled();
+  });
+
+  it('a non-400 failure (server down) is not retried', async () => {
+    window.localStorage.setItem('cb_utm_params', JSON.stringify({ utmSource: 'fb', utmMedium: '', utmCampaign: 'c', storedAt: new Date().toISOString() }));
+    mockFreeSignup.mockRejectedValueOnce({ response: { status: 503, data: {} } });
+    await mount();
+    await fillAndSubmit();
+
+    expect(mockFreeSignup).toHaveBeenCalledTimes(1);
+    expect(mockLogin).not.toHaveBeenCalled();
+  });
+
+  it('with no ad data, sends no UTM keys at all (absent means not known) and still signs up', async () => {
+    await mount();
+    await fillAndSubmit();
+
+    const body = mockFreeSignup.mock.calls[0][0];
+    for (const k of ['utm_source', 'utm_campaign', 'utm_content', 'utm_term']) expect(body).not.toHaveProperty(k);
+    expect(mockLogin).toHaveBeenCalledWith('a.b.c');
+  });
+});

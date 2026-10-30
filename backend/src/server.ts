@@ -65,6 +65,7 @@ import { ensurePresentationOpsSchema } from './db/ensurePresentationOpsSchema';
 import { ensureInboxCaseSchema } from './db/ensureInboxCaseSchema';
 import { ensureInboxCommitmentSchema } from './db/ensureInboxCommitmentSchema';
 import { ensureLeadViewPreferenceSchema } from './db/ensureLeadViewPreferenceSchema';
+import { ensureLeadAttributionColumns } from './db/ensureLeadAttributionColumns';
 import { ensureScholarshipInterviewSchema } from './db/ensureScholarshipInterviewSchema';
 import { ensureWorkLedgerSchema } from './db/ensureWorkLedgerSchema';
 import { ensureExplorerGrowthSchema } from './db/ensureExplorerGrowthSchema';
@@ -2550,6 +2551,8 @@ async function start(): Promise<void> {
   // /inbox-zero commitment ledger (what Ali owes). Depends on inbox_cases above.
   await ensureInboxCommitmentSchema();
   await ensureLeadViewPreferenceSchema();
+  // C94: leads.utm_content / utm_term (which ad, which placement), additive nullable columns.
+  await ensureLeadAttributionColumns();
   await ensureScholarshipInterviewSchema();
   // ProofDesk Work Ledger — Milestone 1 (Foundation): 4 ledger tables + 12 additive
   // nullable ticket columns (idempotent DDL, shadow mode).

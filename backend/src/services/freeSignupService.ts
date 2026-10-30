@@ -60,6 +60,8 @@ export interface FreeSignupInput {
     entry_point_id?: string;
     utm_source?: string;
     utm_campaign?: string;
+    utm_content?: string;
+    utm_term?: string;
     page_url?: string;
     visitor_id?: string;
   };
@@ -213,6 +215,9 @@ async function captureGuestAsLead(
         entry_point_id: acquisition?.entry_point_id ?? null,
         utm_source: acquisition?.utm_source ?? null,
         utm_campaign: acquisition?.utm_campaign ?? null,
+        // C94: which ad and which placement, so an ad signup's source is recorded here, not rebuilt later.
+        utm_content: acquisition?.utm_content ?? null,
+        utm_term: acquisition?.utm_term ?? null,
         page_url: acquisition?.page_url ?? null,
         // No `referrer`: `Lead` has no such column, so writing it was a key
         // Sequelize silently dropped. Preserving a referrer needs a column and
