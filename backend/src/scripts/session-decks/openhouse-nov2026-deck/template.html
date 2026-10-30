@@ -594,7 +594,7 @@
   data-q="📚 Enter the draw for 1 of 3 signed copies of Trust Before Intelligence"
   data-options='["🎟️ I&#39;m in, enter me"]'
   data-reveal="You're in. Three names, drawn live."
-  data-note="Party mode. 'Tap I'm in, right now, everybody.' Watch the count climb. When it stops: Lock, Reveal (it shows how many are in), then press Draw winner three times, one name per click, with a drumroll. Say each name and congratulate them. Write the winners down: admissions follows up tonight. If nobody shows after Reveal, ask them to tap again and Reopen.">
+  data-note="Party mode. 'Tap I'm in, right now, everybody.' Watch the count climb. When it stops: Lock, Reveal (it shows how many are in), then press Draw winner three times, one name per click, with a drumroll. Say each name and congratulate them. Winners are saved by the platform automatically; admissions follows up tonight. If nobody shows after Reveal, ask them to tap again and Reopen.">
 </section>
 
 <!-- ======================= 27 · DRAW: SCHOLARSHIPS ======================= -->
@@ -602,7 +602,7 @@
   data-q="🎓 Enter the draw for 1 of 3 scholarships: 50% off a full year ($894 value)"
   data-options='["🎟️ I&#39;m in, enter me"]'
   data-reveal="You're in. Three scholarships, drawn live."
-  data-note="The big one: maximum energy. 'Fifty percent off a full year: eight hundred and ninety-four dollars. Tap I'm in.' Lock, Reveal, Draw three times, make every click a moment. 'Winners, admissions emails you tonight with how to claim it.' The scholarship applies to the annual plan; confirm any other terms with Ali before promising them. Write the winners down.">
+  data-note="The big one: maximum energy. 'Fifty percent off a full year: eight hundred and ninety-four dollars. Tap I'm in.' Lock, Reveal, Draw three times, make every click a moment. 'Winners, admissions emails you tonight with how to claim it.' The scholarship applies to the annual plan; confirm any other terms with Ali before promising them. Winners are saved by the platform automatically.">
 </section>
 
 <!-- ======================= 28 · POLL: LEAVING TONIGHT ======================= -->
@@ -636,9 +636,20 @@
   var i = 0, notesOn = false, seq = 0, live = null, lastPresent = -1;
   var DECK_ID = 'oh-' + Math.random().toString(36).slice(2, 10);
   var pstate = {};   // poll key -> voting | locked | revealed
-  var winners = {};  // poll key -> [names]
-  try { winners = JSON.parse(localStorage.getItem('oh-nov26-winners') || '{}') || {}; } catch (e) { winners = {}; }
-  function saveWinners(){ try { localStorage.setItem('oh-nov26-winners', JSON.stringify(winners)); } catch (e) {} }
+  // Winners are drawn AND recorded by the platform (raffle-draw), so a reload,
+  // a second computer, or the post-event packet all see the same names.
+  var winners = {};  // poll key -> [display names], loaded from the server
+  function loadWinners(){
+    if (!LIVE || !K.raffleWinnersUrl) return;
+    fetch(K.raffleWinnersUrl + '?t=' + encodeURIComponent(K.token), { headers: { Accept: 'application/json' } })
+      .then(function(r){ return r.ok ? r.json() : null; })
+      .then(function(d){
+        if (!d || !d.winners) return;
+        winners = {};
+        d.winners.forEach(function(w){ (winners[w.poll_key] = winners[w.poll_key] || [])[w.draw_number - 1] = w.display_name; });
+        slides.forEach(function(s){ if (s.dataset.raffle) renderWinners(s); });
+      }).catch(function(){});
+  }
   function esc(s){ return String(s == null ? '' : s).replace(/[&<>"]/g, function(c){ return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[c]; }); }
   if (LIVE) { pill.textContent = 'LIVE'; pill.className = 'on'; }
 
@@ -747,22 +758,29 @@
     }
   }
 
+  var drawing = false;
   function draw(s){
     var key = s.dataset.poll, max = Number(s.dataset.raffle) || 1;
-    var won = winners[key] || (winners[key] = []);
+    var won = (winners[key] || []).filter(Boolean);
     var big = s.querySelector('.rafflebig');
     if (won.length >= max) { big.textContent = 'All ' + max + ' winners drawn 🎉'; return; }
-    var all = (live && live.poll && live.poll.key === key && live.poll.correctResponders) || [];
-    var pool = all.filter(function(n){ return won.indexOf(n) < 0; });
-    if (!pool.length) { big.textContent = 'No entrants left to draw'; return; }
-    var spins = 0;
+    if (!LIVE || !K.raffleDrawUrl) { big.textContent = 'Draws run live only (Present, not Rehearse)'; return; }
+    if (drawing) return;
+    drawing = true;
+    // Spin through the entrants on screen while the platform draws and records.
+    var names = (live && live.poll && live.poll.key === key && live.poll.correctResponders) || [];
+    var spins = 0, result = null, failed = null;
+    fetch(K.raffleDrawUrl + '?t=' + encodeURIComponent(K.token), { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ poll_key: key, draw_number: won.length + 1, max_winners: max }) })
+      .then(function(r){ return r.json().then(function(d){ if (r.ok) result = d; else failed = (d && d.error) || 'Draw failed'; }); })
+      .catch(function(){ failed = 'No connection. Press Draw again.'; });
     var t = setInterval(function(){
-      big.textContent = pool[Math.floor(Math.random() * pool.length)];
-      if (++spins < 22) return;
-      clearInterval(t);
-      var pick = pool[Math.floor(Math.random() * pool.length)];
-      won.push(pick); saveWinners();
-      big.textContent = '🏆 ' + pick;
+      if (names.length) big.textContent = names[Math.floor(Math.random() * names.length)];
+      if (++spins < 22 || (!result && !failed && spins < 120)) return;
+      clearInterval(t); drawing = false;
+      if (!result) { big.textContent = failed || 'Draw timed out. Press Draw again.'; return; }
+      (winners[key] = winners[key] || [])[result.draw_number - 1] = result.display_name;
+      big.textContent = '🏆 ' + result.display_name;
       renderWinners(s); confetti();
     }, 85);
   }
@@ -799,6 +817,7 @@
   });
   setInterval(poll, 2500);
   show(0);
+  loadWinners();
 })();
 </script>
 </body>

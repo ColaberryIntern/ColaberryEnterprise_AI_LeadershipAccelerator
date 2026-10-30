@@ -100,6 +100,8 @@ export async function renderSessionKitDoc(sessionId: string, mode: KitDocMode = 
       sessionId,
       liveStateUrl: live ? `${base}/api/portal/sessions/${sessionId}/live-state` : undefined,
       broadcastUrl: live ? `${base}/api/portal/sessions/${sessionId}/broadcast` : undefined,
+      raffleDrawUrl: live ? `${base}/api/portal/sessions/${sessionId}/raffle-draw` : undefined,
+      raffleWinnersUrl: live ? `${base}/api/portal/sessions/${sessionId}/raffle-winners` : undefined,
       token: live ? mintKitToken(sessionId) : undefined,
       checkinUrl: guests ? joinUrl : kit.checkin_url,
       qrSvg: guests ? await QRCode.toString(joinUrl, { type: 'svg', margin: 1, width: 280 }) : kit.qr_svg,
