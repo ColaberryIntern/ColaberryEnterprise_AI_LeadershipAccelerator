@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
+import { useFirstWinPending, FIRST_LESSON_HREF } from '../today/explorerFirstWin';
 import CampusWorld from '../../../components/campus/CampusWorld';
 import CampusTopBar from '../../../components/campus/home/CampusTopBar';
 import CampusConcierge from '../../../components/campus/home/CampusConcierge';
@@ -85,6 +86,7 @@ export default function CampusHomePage(): React.ReactElement {
 function CampusHome(): React.ReactElement {
   const campus = useCampus();
   const { audience, buildings, accessOf } = useCampusView();
+  const navigate = useNavigate();
   const liveNow = useLiveNow(); // WP-6: Colaberry Live's broadcast, state and one-second clock
   useLiveCheckIn(audience, liveNow, campus.here ?? null); // WP-7 (Q2): walking into the live Classroom checks a member in
   const facts = useHomeFacts(audience === 'member');
@@ -145,6 +147,9 @@ function CampusHome(): React.ReactElement {
   const todayCount = campus.planStops && campus.planStops.length ? { done: campus.planStops.filter((s) => s.done).length, total: campus.planStops.length } : null;
   const initials = facts.initials || readParticipant().initials;
   const enter = (t: boolean) => { setGateOpen(false); reveal.show(); if (reduce) map.camRef.current?.base(); if (t) campus.startTour(); void claimStreak(); };
+  // C91: an Explorer with no first lesson yet: the gate's main button opens that lesson on Today (ad audit: 170 of 193 stalled at the start)
+  const firstWinPending = useFirstWinPending(audience === 'explorer');
+  const startFirstLesson = () => { void claimStreak(); navigate(FIRST_LESSON_HREF); };
   const level = audience === 'member' || audience === 'explorer' ? levelOfRung(look?.rung_name) : null;
   return (
     <div className={`cm-home cm-scope${reduce ? ' is-reduced' : ''}`} data-testid="cm-home">
@@ -152,7 +157,8 @@ function CampusHome(): React.ReactElement {
         rung={look?.rung_name || null} points={look?.points ?? null} streak={facts.streak} online={online} workplace={wp}
         streakPoints={facts.claimedToday === false && !inViewAs() ? facts.nextPoints : null}
         live={liveB ? { place: buildingName(liveB, wp), preview: liveNow?.b.access_mode === 'preview' } : null}
-        hasTour={!!tour} reduceMotion={reduce} now={new Date()} onOpening={reveal.onOpening} onEnter={enter} photo={photo} />}
+        hasTour={!!tour} reduceMotion={reduce} now={new Date()} onOpening={reveal.onOpening} onEnter={enter} photo={photo}
+        onFirstLesson={firstWinPending ? startFirstLesson : null} />}
       <CampusWorld {...props} insets={homeInsets} walkTo={map.walk} onCard={onCard} cameraRef={map.camRef} startAt={campus.here}
         startCam={map.startCam} recenter={map.recenter} me={{ initials, photo, level, tone: audience }} moments={mapMoments(audience, agenda)} notifs={notifPins} quiet={quiet} hover={hover} liveNow={liveNow} onGround={onGround} />
       <WeatherSky wx={wx} reduceMotion={reduce} paused={gateOpen} />

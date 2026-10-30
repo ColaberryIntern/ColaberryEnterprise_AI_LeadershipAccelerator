@@ -17,7 +17,7 @@ import OrgMember from '../models/OrgMember';
 import { env } from '../config/env';
 import { activeCompEnrollmentIds } from './subscriptionService';
 import { isStaffOrMgmt } from './access/staffAccess';
-import { isCommunityModeratorRole } from './access/mgmtRoles';
+import { isCommunityModeratorRole, sectionsForRole } from './access/mgmtRoles';
 import { CreatePostInput, TogglePinInput, CreateCommentInput, UpdateProfileInput } from '../schemas/communitySchemas';
 
 // Lite poll-presence (P0 per the approved design mockup — real-time websocket
@@ -1228,6 +1228,9 @@ export interface AdminMemberRow {
   // Management-portal role (owner/admin/curriculum/revenue/admissions/support)
   // for staff members, or null. Drives the Mgmt Role control on the roster.
   mgmt_role: string | null;
+  /** C82: sections granted on top of mgmt_role (H4 option A), and the sections the role itself gives (for the editor). */
+  mgmt_extra_sections: string[];
+  mgmt_role_sections: string[];
   // The business account this person belongs to, or null for a regular
   // individual account. Lets staff tell the two apart on the roster, which was
   // previously impossible — nothing in this payload referenced an organization.
@@ -1318,6 +1321,8 @@ export async function listMembersForAdmin(search?: string): Promise<AdminMemberR
     signed_up_at: m.enrollment?.created_at ? new Date(m.enrollment.created_at).toISOString() : null,
     free_access: m.enrollment_id ? compSet.has(m.enrollment_id) : false,
     mgmt_role: m.mgmt_role ?? null,
+    mgmt_extra_sections: m.mgmt_extra_sections ?? [],
+    mgmt_role_sections: sectionsForRole(m.mgmt_role),
     org: m.enrollment_id ? orgMap.get(m.enrollment_id) ?? null : null,
   }));
 

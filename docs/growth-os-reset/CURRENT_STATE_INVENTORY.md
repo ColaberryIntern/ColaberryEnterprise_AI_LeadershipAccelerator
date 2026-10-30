@@ -55,7 +55,7 @@ The evidence, one citation per line:
 - Claim 2 — `backend/src/services/leads/ghlAccountRouting.ts:132` → "const accountKey = routes[group] || DEFAULT_ACCOUNT;"
 - Claim 3 — `backend/src/services/ghlService.ts:54` → "const GHL_BASE = 'https://rest.gohighlevel.com/v1';"
 - Claim 4 — `backend/src/routes/calendarRoutes.ts:6` → "router.get('/api/calendar/availability', handleGetAvailability);"
-- Claim 4 — `backend/src/services/calendarService.ts:225` → "export async function createBooking(data: BookingInput): Promise<BookingResult> {"
+- Claim 4 — `backend/src/services/calendarService.ts:228` → "export async function createBooking(data: BookingInput, target: CalendarTarget = defaultCalendar()): Promise<BookingResult> {"
 - Claim 5 — `backend/src/models/GrowthJourneyHandoff.ts:67` → "export const OWNER_QUEUES"
 - Claim 6 — `backend/src/services/growthJourney/capacityService.ts:83` → "      where: { brand_id: args.brandId, policy_type: 'queue_capacity', owner_queue: args.ownerQueue },"
 - Claim 7 — `frontend/src/components/growthJourney/HandoffsTab.tsx:115` → '            <button type="button" className="btn btn-outline-secondary btn-sm" onClick={state.reload}>'

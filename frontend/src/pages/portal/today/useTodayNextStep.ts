@@ -6,6 +6,7 @@ import { fetchTodayPlan } from '../../../services/capeApi';
 export type TodayNextStep =
   | { kind: 'classroom'; card: TimelineFeedCard }
   | { kind: 'classroom-done' }
+  | { kind: 'first-lesson'; card: TimelineFeedCard }
   | { kind: 'setup'; key: string; title: string; action: (() => void) | null }
   | { kind: 'plan' }
   | { kind: 'timeline' };
@@ -29,6 +30,9 @@ export const SETUP_STEP_CTA_LABEL: Record<string, string> = {
  * - Explorer/free students: a 3-stage sequence — finish setup, then work
  *   through Today's Plan, then explore the Timeline — surfacing whichever
  *   stage they're actually on instead of a generic greeting.
+ *   C91: before any of that, an Explorer with no first win yet is pointed at
+ *   one lesson (`firstLesson`); the setup asks (resume, referral) wait until
+ *   after it, because asking for a resume first lost almost every ad signup.
  */
 export function useTodayNextStep(params: {
   isExplorer: boolean;
@@ -40,8 +44,10 @@ export function useTodayNextStep(params: {
   /** Bump/replace this (e.g. the points object) to re-check plan completion
    *  after a card is completed elsewhere on the page. */
   refreshToken: unknown;
+  /** C91: the lesson an Explorer with no first win yet should start (null once they have one, or with nothing open). */
+  firstLesson?: TimelineFeedCard | null;
 }): TodayNextStep {
-  const { isExplorer, curriculum, buckets, setupRemaining, nextSetupStep, planFlagOn, refreshToken } = params;
+  const { isExplorer, curriculum, buckets, setupRemaining, nextSetupStep, planFlagOn, refreshToken, firstLesson } = params;
   // null = unknown yet, or no plan to speak of (flag off / empty / errored) —
   // both fall through to the Timeline stage rather than blocking on a loading state.
   const [planIncomplete, setPlanIncomplete] = useState<boolean | null>(null);
@@ -64,6 +70,7 @@ export function useTodayNextStep(params: {
     const card = findActiveNextCard(curriculum, buckets);
     return card ? { kind: 'classroom', card } : { kind: 'classroom-done' };
   }
+  if (firstLesson) return { kind: 'first-lesson', card: firstLesson };
   if (setupRemaining > 0) {
     return nextSetupStep
       ? { kind: 'setup', key: nextSetupStep.key, title: nextSetupStep.title, action: nextSetupStep.action }

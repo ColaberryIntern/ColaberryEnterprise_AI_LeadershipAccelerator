@@ -11,8 +11,10 @@ jest.mock('../govDeliveryProject', () => ({ linkGovBuildToStudentProject: jest.f
 jest.mock('../govBuildPlanAI', () => ({ decomposeGovBuildPlanRaw: jest.fn() }));
 jest.mock('../../sbp/planGate', () => ({ gatePlan: jest.fn(() => ({ ok: true, violations: [] })), blockingViolations: jest.fn(() => []) }));
 jest.mock('../govBuildAssignment', () => ({ ensureAssigneeCanBuild: jest.fn() }));
+jest.mock('../../sbp/planStore', () => ({ getPublishedPlan: jest.fn(), savePlanDraft: jest.fn(), publishPlan: jest.fn() }));
 
 import { getIdentityLinks } from '../../../modules/identity/platformIdentityService';
+import { getPublishedPlan, savePlanDraft, publishPlan } from '../../sbp/planStore';
 import ContractTrack from '../../../models/ContractTrack';
 import { createNewProjectForEnrollment } from '../../projectService';
 import { materializePlanAsTasks } from '../../sbp/materializeTasks';
@@ -52,6 +54,9 @@ describe('govProjectMaterialization (core-table write — idempotent, typed erro
     mock(materializePlanAsTasks).mockResolvedValue({ lists: 2, tasks: 3, preservedComplete: 0 });
     mock(linkGovBuildToStudentProject).mockResolvedValue({ ok: true, linkId: 'l1', created: true });
     mock(ContractTrack.findByPk).mockResolvedValue(null);
+    mock(getPublishedPlan).mockResolvedValue(null);
+    mock(savePlanDraft).mockResolvedValue({ version: 1, plan_sha256: 'sha' });
+    mock(publishPlan).mockResolvedValue(undefined);
   });
 
   it('happy path: creates a named project, marks its gov origin, links it, and materializes the plan', async () => {
@@ -136,5 +141,37 @@ describe('govProjectMaterialization (core-table write — idempotent, typed erro
   it('bad input (no requirements) → bad_input, resolves no enrollment', async () => {
     await expect(materializeGovBuildProject({ ...baseInput, requirements: [] })).rejects.toMatchObject({ reason: 'bad_input' });
     expect(mock(getIdentityLinks)).not.toHaveBeenCalled();
+  });
+
+  it('publishes the REAL plan to build_plans so the repo sync renders it, not the empty reconstruction', async () => {
+    const project: any = { id: 'proj-1', project_variables: {}, save: jest.fn().mockResolvedValue(undefined) };
+    mock(createNewProjectForEnrollment).mockResolvedValue(project);
+    await materializeGovBuildProject(baseInput);
+    expect(mock(savePlanDraft)).toHaveBeenCalledWith('proj-1', PLAN, expect.objectContaining({ gate: expect.anything() }));
+    expect(mock(publishPlan)).toHaveBeenCalledWith('proj-1', 1, 'sha');
+  });
+
+  it('self-heals: re-publishes the real plan over an existing empty-requirements reconstruction', async () => {
+    mock(ContractTrack.findByPk).mockResolvedValue({ solution_student_project_id: 'proj-x' });
+    mock(getPublishedPlan).mockResolvedValue({ plan: { requirements: [] } });
+    await materializeGovBuildProject(baseInput);
+    expect(mock(savePlanDraft)).toHaveBeenCalledWith('proj-x', PLAN, expect.anything());
+    expect(mock(publishPlan)).toHaveBeenCalled();
+  });
+
+  it('leaves a GOOD existing plan alone — no re-publish churn', async () => {
+    mock(ContractTrack.findByPk).mockResolvedValue({ solution_student_project_id: 'proj-x' });
+    mock(getPublishedPlan).mockResolvedValue({ plan: { requirements: [{ id: 'REQ-001' }] } });
+    await materializeGovBuildProject(baseInput);
+    expect(mock(savePlanDraft)).not.toHaveBeenCalled();
+    expect(mock(publishPlan)).not.toHaveBeenCalled();
+  });
+
+  it('a plan-persist failure is swallowed — materialize still succeeds', async () => {
+    mock(ContractTrack.findByPk).mockResolvedValue({ solution_student_project_id: 'proj-x' });
+    mock(getPublishedPlan).mockRejectedValue(new Error('db down'));
+    const r = await materializeGovBuildProject(baseInput);
+    expect(r.projectId).toBe('proj-x');
+    expect(r.tasks).toBe(3);
   });
 });

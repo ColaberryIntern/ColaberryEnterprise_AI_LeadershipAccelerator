@@ -5,6 +5,13 @@ import { sequelize } from '../../config/database';
 // distinguishing substring of the SQL text — the same shape as every other
 // sequelize.query-based service test in this repo (see orgService.test.ts).
 jest.mock('../../config/database', () => ({ sequelize: { query: jest.fn() } }));
+// No Open House guests in these tests — the guest store has its own suite.
+jest.mock('../sessionGuestStore', () => ({
+  addTallies: (a: number[], b: number[]) => a.map((n, i) => (n || 0) + (b[i] || 0)),
+  countGuests: async () => 0,
+  getGuestCorrectNames: async () => [],
+  getGuestTally: async () => [],
+}));
 
 // Keep the REAL `formatDisplayName` (needed to prove the "Ali Muwwakkil" ->
 // "Ali M." redaction actually happens, not just that an import exists) while

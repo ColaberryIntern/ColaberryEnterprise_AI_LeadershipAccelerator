@@ -25,6 +25,7 @@ import Project from '../../models/Project';
 import { materializePlanAsTasks } from '../sbp/materializeTasks';
 import { buildSchedule, type CohortWindow, type Schedule } from '../sbp/buildSchedule';
 import { gatePlan, blockingViolations } from '../sbp/planGate';
+import { savePlanDraft, publishPlan, getPublishedPlan } from '../sbp/planStore';
 import type { BuildPlan } from '../sbp/planContract';
 import { linkGovBuildToStudentProject } from './govDeliveryProject';
 import { ensureAssigneeCanBuild } from './govBuildAssignment';
@@ -161,6 +162,23 @@ export async function materializeGovBuildProject(input: MaterializeGovProjectInp
   const deadlineDate = input.deadline ? new Date(input.deadline) : null;
   const schedule = govSyntheticSchedule(plan, now, deadlineDate && !Number.isNaN(deadlineDate.getTime()) ? deadlineDate : null);
   const mat = await materializePlanAsTasks(projectId, enrollmentId, plan, { schedule, now });
+
+  // 5. Persist the REAL plan to build_plans so the repo-sync document path renders IT — the real
+  //    requirements (REQ-001..), project name, dates and r0..rN releases — instead of the lossy,
+  //    verifier-only reconstructPlanFromTasks fallback (which hardcodes requirements:[] and name:'').
+  //    This closes the gap govBuildPublish.ts was a workaround for: the plan here IS the one the board
+  //    was materialized from, so plan and board stay identical. Publish when no plan exists yet, OR when
+  //    the existing published plan is that empty-requirements reconstruction, so a project materialized
+  //    before this fix self-heals on a re-materialize; a good plan is left untouched (no churn).
+  //    Best-effort: a persist failure never fails the materialize (the sync path falls back as before).
+  try {
+    const existing = await getPublishedPlan(projectId);
+    const existingReqs = existing?.plan?.requirements;
+    if (!existing || !Array.isArray(existingReqs) || existingReqs.length === 0) {
+      const draft = await savePlanDraft(projectId, plan, { gate });
+      await publishPlan(projectId, draft.version, draft.plan_sha256);
+    }
+  } catch { /* materialize still succeeds; the sync path falls back to the reconstruction as before */ }
 
   return {
     projectId, created, enrollmentId,

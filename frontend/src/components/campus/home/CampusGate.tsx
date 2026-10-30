@@ -44,6 +44,8 @@ export interface GateProps {
   live?: { place: string; preview: boolean } | null;
   /** WP-7: your uploaded photo on the ID card (the prototype's renderGate after a photo); initials without one. */
   photo?: string | null;
+  /** C91: an Explorer with no first lesson yet: the main button starts that lesson (called after the doors open), the tour stays second. */
+  onFirstLesson?: (() => void) | null;
 }
 
 export default function CampusGate(p: GateProps): React.ReactElement {
@@ -57,13 +59,15 @@ export default function CampusGate(p: GateProps): React.ReactElement {
     return () => { if (timer.current !== null) window.clearTimeout(timer.current); if (fade.current !== null) window.clearTimeout(fade.current); };
   }, []);
   const explorer = p.audience === 'explorer';
-  const go = (tour: boolean) => {
+  const firstLesson = explorer && p.onFirstLesson ? p.onFirstLesson : null;
+  const go = (tour: boolean, lesson = false) => {
     markGateSeen(p.now);
-    if (p.reduceMotion) { p.onEnter(tour); return; }
+    const after = () => (lesson && firstLesson ? firstLesson() : p.onEnter(tour));
+    if (p.reduceMotion) { after(); return; }
     setOpening(true);
     p.onOpening?.();
     fade.current = window.setTimeout(() => setDone(true), FADE_AT_MS);
-    timer.current = window.setTimeout(() => p.onEnter(tour), OPEN_MS);
+    timer.current = window.setTimeout(after, OPEN_MS);
   };
   const greeting = greetLine(p.audience, p.firstName, p.now.getHours(), false);
   const who = (n: number) => (p.audience === 'member' ? (n === 1 ? 'classmate' : 'classmates') : (n === 1 ? 'person' : 'people'));
@@ -75,7 +79,8 @@ export default function CampusGate(p: GateProps): React.ReactElement {
       : wd(`Colaberry Live is on air. Your cohort is heading to the ${p.live.place}.`, p.workplace))
     : null;
   const sub = liveLine ?? (explorer
-    ? 'Your Explorer pass is ready. Wander anywhere: a few buildings are members-only, and you can still peek inside.'
+    ? (firstLesson ? 'Your Explorer pass is ready. Start with your first lesson, then wander anywhere on campus.'
+      : 'Your Explorer pass is ready. Wander anywhere: a few buildings are members-only, and you can still peek inside.')
     : staff ? (here ? `${here} ${here === 1 ? 'learner is' : 'learners are'} on campus right now.` : 'The campus is open.')
     : partner ? `See where your team learns and builds.${here ? ` ${here} ${here === 1 ? 'person is' : 'people are'} on campus right now.` : ''}`
     : here ? `The campus is open. ${here} ${who(here)} ${here === 1 ? 'is' : 'are'} already inside.` : 'The campus is open.');
@@ -114,8 +119,9 @@ export default function CampusGate(p: GateProps): React.ReactElement {
             </div>
           </div>
           {/* The partner entrance leads with the partner tour (the prototype's "Start the partner tour"); everyone else enters, with the tour as the alternative. */}
-          <button type="button" className="cm-tap" ref={enterBtn} onClick={() => go(partner && p.hasTour)} data-testid="cm-gate-enter">
-            {explorer ? 'Pick up your pass and explore →' : staff ? 'Badge in →' : partner && p.hasTour ? 'Start the partner tour →' : p.workplace ? 'Tap your badge to enter HQ →' : 'Tap your ID to enter campus →'}
+          {/* C91: an Explorer with no first lesson yet is led to that lesson; "explore" is the reward after it, not the first job */}
+          <button type="button" className="cm-tap" ref={enterBtn} onClick={() => go(partner && p.hasTour, !!firstLesson)} data-testid="cm-gate-enter">
+            {firstLesson ? 'Start your first lesson →' : explorer ? 'Pick up your pass and explore →' : staff ? 'Badge in →' : partner && p.hasTour ? 'Start the partner tour →' : p.workplace ? 'Tap your badge to enter HQ →' : 'Tap your ID to enter campus →'}
           </button>
           {p.hasTour && !staff && <button type="button" className="cm-tap-alt" onClick={() => go(!partner)} data-testid="cm-gate-tour">{partner ? 'Or just look around on your own' : explorer ? 'Or take the short tour →' : 'New here? Enter with a guided tour →'}</button>}
         </div>

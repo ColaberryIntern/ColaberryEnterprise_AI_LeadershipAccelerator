@@ -155,7 +155,7 @@ function SegmentTrack<T>({
 }
 
 interface Props {
-  dayKind: 'orientation' | 'architecture' | 'build';
+  dayKind: 'orientation' | 'architecture' | 'build' | 'openhouse';
   segments: TimelineSegment[];
   checkpoints: CheckpointLandmark[];
   breakSegment: BreakLandmark | null;

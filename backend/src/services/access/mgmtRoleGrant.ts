@@ -40,6 +40,8 @@ export interface GrantRequest {
   currentRole: string | null;
   /** The role being assigned, or null to clear it. */
   newRole: string | null;
+  /** C82: the extra sections the target holds right now (their access is role + extras, so a removal counts them too). */
+  currentExtras?: readonly string[];
 }
 
 export interface GrantVerdict {
@@ -81,7 +83,7 @@ export function canGrantMgmtRole(req: GrantRequest): GrantVerdict {
     };
   }
 
-  if (!withinAuthority(req.callerSections, req.currentRole)) {
+  if (!withinAuthority(req.callerSections, req.currentRole) || !allHeld(req.callerSections, req.currentExtras ?? [])) {
     return {
       allowed: false,
       blockedBy: req.currentRole ?? undefined,
@@ -89,5 +91,32 @@ export function canGrantMgmtRole(req: GrantRequest): GrantVerdict {
     };
   }
 
+  return { allowed: true };
+}
+
+function allHeld(callerSections: SectionKey[], sections: readonly string[]): boolean {
+  const held = new Set<string>(callerSections);
+  return sections.every((section) => held.has(section));
+}
+
+export interface ExtrasRequest {
+  callerSections: SectionKey[];
+  /** The target's management role (extras only ever apply on top of one). */
+  role: string | null;
+  currentExtras: readonly string[];
+  newExtras: readonly string[];
+}
+
+/**
+ * C82 (H4 option A): may this caller set the target's extra sections? The same no-escalation rule as roles, in both directions:
+ * every extra granted must be a section the caller holds, and the target's CURRENT access (role + current extras) must be within
+ * the caller's, so nobody below can grant themselves or others more, or strip someone who holds more. Pure, as canGrantMgmtRole.
+ */
+export function canGrantExtraSections(req: ExtrasRequest): GrantVerdict {
+  const over = req.newExtras.find((x) => !req.callerSections.includes(x as SectionKey));
+  if (over) return { allowed: false, blockedBy: over, reason: 'You cannot grant a section you do not hold yourself.' };
+  if (!withinAuthority(req.callerSections, req.role) || !allHeld(req.callerSections, req.currentExtras)) {
+    return { allowed: false, blockedBy: req.role ?? undefined, reason: 'You cannot change the sections of someone who holds more access than you.' };
+  }
   return { allowed: true };
 }
