@@ -1,0 +1,119 @@
+<div class="d-flex align-items-center gap-3 mb-4 flex-wrap">
+  <a href="/evaluations" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left"></i></a>
+  <div class="flex-grow-1">
+    <h2 class="mb-0">{{eval.typeLabel}}</h2>
+    <p class="text-muted mb-0 small">
+      {{eval.evaluatee_name}} · {{eval.period}} ·
+      {{#if (eq eval.eval_type "self")}}submitted by {{eval.evaluatee_name}}{{else}}submitted by {{eval.evaluator_name}}{{/if}}
+    </p>
+  </div>
+  <span class="badge {{#if (eq eval.status 'submitted')}}bg-success{{else}}bg-secondary{{/if}} fs-6">
+    {{#if (eq eval.status 'submitted')}}Submitted{{else}}Draft{{/if}}
+  </span>
+</div>
+
+{{#if submitted}}
+<div class="alert alert-success d-flex gap-2 align-items-center mb-3">
+  <i class="bi bi-check-circle-fill flex-shrink-0"></i>
+  Evaluation submitted successfully.
+  {{#if canManage}}<a href="{{compareUrl}}" class="ms-1">View comparison →</a>{{/if}}
+</div>
+{{/if}}
+
+<div class="row g-4">
+  <div class="col-lg-7">
+
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-header bg-light fw-semibold py-2 small">
+        <i class="bi bi-bar-chart-line me-2 text-muted"></i>Performance Ratings
+        {{#if eval.avg}}<span class="badge bg-{{eval.avgBadge}} ms-2">Avg {{eval.avg}} / 5</span>{{/if}}
+      </div>
+      <div class="card-body">
+        {{#each eval.dimRows}}
+        <div class="mb-3">
+          <div class="d-flex justify-content-between align-items-center mb-1">
+            <span class="small fw-semibold">{{label}}</span>
+            {{#if value}}
+            <span class="badge bg-{{badge}} {{textClass}} small">{{value}} — {{ratingLabel}}</span>
+            {{else}}
+            <span class="text-muted small">—</span>
+            {{/if}}
+          </div>
+          <div class="progress" style="height: 8px;">
+            <div class="progress-bar bg-{{badge}}" style="width: {{pct}}%"></div>
+          </div>
+        </div>
+        {{/each}}
+      </div>
+    </div>
+
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-light fw-semibold py-2 small">
+        <i class="bi bi-chat-left-text me-2 text-muted"></i>Written Responses
+      </div>
+      <div class="card-body small">
+        {{#if eval.strengths}}
+        <div class="mb-2">
+          <div class="text-muted fw-semibold mb-1">Strengths</div>
+          <p class="mb-0">{{eval.strengths}}</p>
+        </div>
+        {{/if}}
+        {{#if eval.growth_areas}}
+        <div class="mb-2">
+          <div class="text-muted fw-semibold mb-1">Areas for Growth</div>
+          <p class="mb-0">{{eval.growth_areas}}</p>
+        </div>
+        {{/if}}
+        {{#if eval.goals_next_semester}}
+        <div class="mb-2">
+          <div class="text-muted fw-semibold mb-1">Goals for Next Semester</div>
+          <p class="mb-0">{{eval.goals_next_semester}}</p>
+        </div>
+        {{/if}}
+        {{#if canManage}}
+        {{#if eval.supervisor_notes}}
+        <div class="mt-3 pt-3 border-top">
+          <div class="text-muted fw-semibold mb-1"><i class="bi bi-lock me-1"></i>Supervisor Notes (private)</div>
+          <p class="mb-0 fst-italic">{{eval.supervisor_notes}}</p>
+        </div>
+        {{/if}}
+        {{/if}}
+      </div>
+    </div>
+
+  </div>
+
+  <div class="col-lg-5">
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-header bg-light fw-semibold py-2 small">
+        <i class="bi bi-arrow-left-right me-2 text-muted"></i>Side-by-Side Comparison
+      </div>
+      <div class="card-body small text-muted">
+        <p class="mb-2">Both self and supervisor evaluations must be submitted to unlock the comparison view.</p>
+        <a href="{{compareUrl}}" class="btn btn-outline-primary btn-sm w-100">
+          <i class="bi bi-arrow-left-right me-1"></i>View Comparison
+        </a>
+      </div>
+    </div>
+
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-light fw-semibold py-2 small">
+        <i class="bi bi-person-check me-2 text-muted"></i>Evaluation Info
+      </div>
+      <div class="card-body small">
+        <dl class="row mb-0">
+          <dt class="col-sm-5 text-muted fw-normal">Staff Member</dt>
+          <dd class="col-sm-7">{{eval.evaluatee_name}}</dd>
+          <dt class="col-sm-5 text-muted fw-normal">Building</dt>
+          <dd class="col-sm-7">{{eval.evaluatee_building}}</dd>
+          <dt class="col-sm-5 text-muted fw-normal">Period</dt>
+          <dd class="col-sm-7">{{eval.period}}</dd>
+          <dt class="col-sm-5 text-muted fw-normal">Type</dt>
+          <dd class="col-sm-7">{{eval.typeLabel}}</dd>
+          <dt class="col-sm-5 text-muted fw-normal">Submitted by</dt>
+          <dd class="col-sm-7">{{eval.evaluator_name}}</dd>
+        </dl>
+      </div>
+    </div>
+  </div>
+</div>
