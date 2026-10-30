@@ -10,6 +10,7 @@ jest.mock('../../../config/database', () => ({
 import { sequelize } from '../../../config/database';
 import {
   findBySha,
+  findChunksByKeywords,
   persist,
   explorerKnowledgeDocumentStore,
   KEYWORD_SEPARATOR,
@@ -242,6 +243,85 @@ describe('the comma separator is safe only because of the keyword charset', () =
     for (const word of words) {
       expect(word).not.toContain(KEYWORD_SEPARATOR);
     }
+  });
+});
+
+describe('findChunksByKeywords — retrieval reads NULL brand differently from dedupe', () => {
+  it('treats an unscoped document as applying to EVERY brand', async () => {
+    query.mockResolvedValueOnce([]);
+
+    await findChunksByKeywords(['cohort'], { brandId: 'brand-a' });
+
+    // The dedupe key puts a NULL brand in its OWN bucket; retrieval treats it as global.
+    // Copying either predicate into the other's place is wrong in a way that looks right.
+    expect(sqlAt(0)).toContain('d.brand_id IS NULL OR d.brand_id = CAST(:brandId AS uuid)');
+    expect(sqlAt(0)).not.toContain('COALESCE(d.brand_id');
+  });
+
+  it('does NOT filter on confidence, so the gate can report what it refused', async () => {
+    query.mockResolvedValueOnce([]);
+
+    await findChunksByKeywords(['cohort']);
+
+    // Filtering here would turn "four passages matched and none are approved" into silence,
+    // which reads identically to "nothing matched".
+    //
+    // Scoped to the WHERE clause on purpose: `confidence` DOES appear in the ORDER BY, and
+    // a whole-statement match would be satisfied by that and prove nothing.
+    const sql = sqlAt(0);
+    const whereClause = sql.slice(sql.indexOf('WHERE'), sql.indexOf('ORDER BY'));
+    expect(whereClause.length).toBeGreaterThan(0);
+    expect(whereClause).not.toContain('confidence');
+  });
+
+  it('orders approved documents first, so they cannot be starved out of the limit', async () => {
+    query.mockResolvedValueOnce([]);
+
+    await findChunksByKeywords(['cohort']);
+
+    expect(sqlAt(0)).toContain("ORDER BY (d.confidence = 'grounded') DESC");
+  });
+
+  it('hides retired documents', async () => {
+    query.mockResolvedValueOnce([]);
+
+    await findChunksByKeywords(['cohort']);
+
+    expect(sqlAt(0)).toContain('d.retired_at IS NULL');
+  });
+
+  it('matches on keyword overlap through the GIN index', async () => {
+    query.mockResolvedValueOnce([]);
+
+    await findChunksByKeywords(['cohort', 'seats']);
+
+    expect(sqlAt(0)).toContain('c.keywords && CAST(:tokens AS text[])');
+    expect(optsAt(0).replacements.tokens).toEqual(['cohort', 'seats']);
+  });
+
+  it('bounds the candidate set', async () => {
+    query.mockResolvedValueOnce([]);
+
+    await findChunksByKeywords(['cohort'], { limit: 5 });
+
+    expect(optsAt(0).replacements.limit).toBe(5);
+    expect(sqlAt(0)).toContain('LIMIT :limit');
+  });
+
+  it('never issues a query for an empty token list', async () => {
+    // `keywords && '{}'` matches nothing, so the round trip is pure cost — and an empty
+    // query is the normal case for a message with no searchable goal.
+    await expect(findChunksByKeywords([])).resolves.toEqual([]);
+
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  it('refuses a limit of zero rather than silently returning nothing', async () => {
+    query.mockResolvedValueOnce([]);
+
+    await findChunksByKeywords(['cohort'], { limit: 0 });
+
+    expect(optsAt(0).replacements.limit).toBe(1);
   });
 });
 

@@ -77,6 +77,71 @@ export async function findBySha(
   return row ? { id: row.id, chunkCount: Number(row.chunk_count) } : null;
 }
 
+/**
+ * How many chunks a single grounding call will consider.
+ *
+ * Bounded because the candidate set is loaded into JavaScript for the gate to judge. The
+ * consequence is stated rather than hidden: document refusal counts reflect the CANDIDATE
+ * set, not the whole corpus. The hub's counts stay complete, because the hub is read whole.
+ */
+export const MAX_CHUNK_CANDIDATES = 24;
+
+interface ChunkRow {
+  document_id: string;
+  title: string;
+  confidence: string;
+  chunk_index: number;
+  text: string;
+  keywords: string[] | null;
+}
+
+/**
+ * Candidate chunks for a query, by keyword overlap.
+ *
+ * ## NULL means something DIFFERENT here than it does in the dedupe key
+ *
+ * In the unique index, a NULL brand is its own bucket: an unscoped document does not collide
+ * with a branded one. In retrieval, a NULL brand means "applies to every brand" — a global
+ * policy should answer a question asked under any brand. Copying either predicate into the
+ * other's place would be wrong in a way that looks right: dedupe would start merging
+ * different brands' documents, or retrieval would hide every global document the moment a
+ * brand was selected.
+ *
+ * ## Confidence is NOT filtered here
+ *
+ * The gate refuses unapproved chunks, and its refusal counts are what tells a reviewer
+ * "four passages matched and none of them are approved". Filtering in SQL would turn that
+ * into silence, which reads identically to "nothing matched". Approved documents are ordered
+ * FIRST so they cannot be starved out of the candidate limit by a large unapproved corpus —
+ * that changes which candidates are considered, never any verdict.
+ */
+export async function findChunksByKeywords(
+  tokens: readonly string[],
+  options: { brandId?: string | null; limit?: number } = {},
+): Promise<ChunkRow[]> {
+  if (tokens.length === 0) return [];
+
+  return sequelize.query<ChunkRow>(
+    `SELECT d.id::text AS document_id, d.title, d.confidence,
+            c.chunk_index, c.text, c.keywords
+       FROM explorer_knowledge_chunks c
+       JOIN explorer_knowledge_documents d ON d.id = c.document_id
+      WHERE d.retired_at IS NULL
+        AND (d.brand_id IS NULL OR d.brand_id = CAST(:brandId AS uuid))
+        AND c.keywords && CAST(:tokens AS text[])
+      ORDER BY (d.confidence = 'grounded') DESC, d.created_at DESC, c.chunk_index
+      LIMIT :limit`,
+    {
+      replacements: {
+        tokens: [...tokens],
+        brandId: options.brandId ?? null,
+        limit: Math.max(1, options.limit ?? MAX_CHUNK_CANDIDATES),
+      },
+      type: QueryTypes.SELECT,
+    },
+  );
+}
+
 /** Insert the document, or find the row that won the race. Returns the id either way. */
 async function insertDocument(
   document: IngestDocumentRow,
