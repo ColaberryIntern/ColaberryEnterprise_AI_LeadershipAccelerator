@@ -5,8 +5,26 @@ import { needsFirstWin, findFirstLessonCard, FIRST_LESSON_HREF } from '../explor
 import type { TimelineFeedCard } from '../../../../components/timeline/TimelineCard';
 
 const card = (id: string, over: Partial<TimelineFeedCard>): TimelineFeedCard =>
-  ({ id, title: id, status: 'available', week: 0, order: 1, bucket: 'learn', ...over } as unknown as TimelineFeedCard);
+  ({ id, title: id, status: 'available', week: 0, order: 1, bucket: 'learn', points: { learning: 10, builder: 0, community: 0 }, ...over } as unknown as TimelineFeedCard);
 const BUCKETS = ['pre_class', 'learn', 'apply', 'reflect'];
+const NO_POINTS = { learning: 0, builder: 0, community: 0 };
+
+describe('C91 fix: only a lesson that banks points can be the first lesson', () => {
+  it('production, Oct 30: the 0-point welcome announcement is skipped for the knowledge check after it', () => {
+    const cards = [
+      card('welcome', { bucket: 'pre_class', order: 0, points: NO_POINTS }),
+      card('quick-check', { bucket: 'pre_class', order: 1, points: { learning: 10, builder: 5, community: 0 } }),
+      card('self-study', { bucket: 'pre_class', order: 2 }),
+    ];
+    expect(findFirstLessonCard(cards, BUCKETS)!.id).toBe('quick-check');
+  });
+  it('a 0-point card in progress is not resumed as the first lesson either', () => {
+    expect(findFirstLessonCard([card('welcome', { status: 'in_progress', points: NO_POINTS }), card('ok', { week: 1 })], BUCKETS)!.id).toBe('ok');
+  });
+  it('a card with no points at all (null) never qualifies; only 0-point cards open means no first lesson', () => {
+    expect(findFirstLessonCard([card('a', { points: null as never }), card('b', { points: NO_POINTS })], BUCKETS)).toBeNull();
+  });
+});
 
 describe('needsFirstWin', () => {
   it('is true only for an Explorer the server says has no first win yet', () => {
