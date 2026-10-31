@@ -180,7 +180,12 @@ const BASELINE = {
   'seeds/seedComponentAuthoring.ts': [5, 'INTERNAL: the free-response field, in authoring instructions for the generator'],
   'seeds/seedDepartments.ts': [2, 'SENSE: VERB - "free analyst bandwidth", "would free 60 hours/month" in demo seed data'],
   'seeds/seedLeadSources.ts': [3, 'INTERNAL: the "Free Training Interest" lead source; form_name is a GHL join key'],
-  'seeds/explorerGrowth/explorerSequenceDefinitions.ts': [1, 'INTERNAL: "created a free account" describes account state to an agent'],
+  // 2026-10-31: seeds/explorerGrowth/explorerSequenceDefinitions.ts went to zero. It was
+  // classified INTERNAL ("describes account state to an agent"), but that was wrong about
+  // where the string ends up: it is seeded `ai_instructions`, so it reaches the model on the
+  // same STEP INSTRUCTIONS line as the asset digest and primed the vocabulary of outbound
+  // copy. The first real Explorer render, on the same day, put the word in 12 of 12 bodies.
+  // Reworded to "an account with no card needed", so the entry is deleted rather than lowered.
   'seeds/growthJourney/journeyProgramDefinitions.ts': [2, 'INTERNAL: policy text on which pathways a program may activate'],
   'seeds/growthJourney/offerPolicyDefinitions.ts': [1, 'INTERNAL: offer-policy note on permitted pathways'],
   'services/agentRegistrySeed.ts': [2, 'SENSE: VERB - "to free resources"; plus third-party RSS feeds'],

@@ -20,6 +20,14 @@ import {
  * generator throwing, and a campaign whose sequence is empty.
  */
 
+/**
+ * The base the renderer resolves links against.
+ *
+ * Matches `env.publicAppUrl`'s default rather than `env.frontendUrl`'s, which is
+ * `http://localhost:3000` and is not in `messageValidatorService`'s ALLOWED_DOMAINS.
+ */
+const BASE = 'https://enterprise.colaberry.ai';
+
 function step(over: Partial<SequenceStep> = {}): SequenceStep {
   return {
     delay_days: 0,
@@ -237,13 +245,58 @@ describe('the content the digest was told to lead with', () => {
   });
 
   it('adds nothing when no asset resolved', () => {
-    expect(describeContentAssets([])).toBe('');
+    expect(describeContentAssets([], BASE)).toBe('');
     // A row with no usable title contributes no line rather than "- undefined".
-    expect(describeContentAssets([{ summary: 'orphan' }])).toBe('');
+    expect(describeContentAssets([{ summary: 'orphan' }], BASE)).toBe('');
   });
 
   it('tells the model not to invent a lesson that was not supplied', () => {
-    expect(describeContentAssets([{ title: 'A lesson' }])).toContain('do not invent');
+    expect(describeContentAssets([{ title: 'A lesson' }], BASE)).toContain('do not invent');
+  });
+
+  it('absolutises the relative portal path the registry stores', () => {
+    // `syncTimelineCards.ts:192` writes `/portal/runtime/<id>`, and the model reproduced it
+    // verbatim into 5 of 12 bodies on 2026-10-31.
+    const digest = describeContentAssets(
+      [{ title: 'A lesson', url: '/portal/runtime/abc' }],
+      BASE,
+    );
+    expect(digest).toContain(`(${BASE}/portal/runtime/abc)`);
+    expect(digest).not.toContain('(/portal/runtime/abc)');
+  });
+
+  it('leaves an already-absolute asset URL alone', () => {
+    expect(
+      describeContentAssets([{ title: 'A lesson', url: 'https://enterprise.colaberry.ai/x' }], BASE),
+    ).toContain('(https://enterprise.colaberry.ai/x)');
+  });
+
+  it('drops an unresolvable URL rather than guessing, keeping the title', () => {
+    const digest = describeContentAssets([{ title: 'A lesson', url: 'portal/x' }], BASE);
+    expect(digest).toContain('A lesson');
+    expect(digest).not.toContain('portal/x');
+  });
+
+  it('EXCLUDES an asset whose title advertises the banned word', () => {
+    // The real production title, which reached 10 of 12 bodies.
+    const digest = describeContentAssets(
+      [{ title: 'Welcome to Your Free AI Preview', url: '/portal/runtime/abc' }],
+      BASE,
+    );
+    // No line survives, so the whole digest collapses rather than naming the asset.
+    expect(digest).toBe('');
+  });
+
+  it('keeps the compliant assets when only one of several is excluded', () => {
+    const digest = describeContentAssets(
+      [
+        { title: 'Welcome to Your Free AI Preview' },
+        { title: 'Intro to Large Language Models' },
+      ],
+      BASE,
+    );
+    expect(digest).toContain('Intro to Large Language Models');
+    expect(digest).not.toContain('Free');
   });
 });
 
@@ -708,5 +761,106 @@ describe('knowledge grounding', () => {
     expect(meta.knowledge.available).toBe(false);
     expect(meta.knowledge.reason).toContain('FetchError');
     expect(meta.knowledge.reason).toContain('socket hang up');
+  });
+});
+
+/**
+ * The post-generation copy guards.
+ *
+ * Every body below is the shape of something production actually produced on 2026-10-31,
+ * the first day this pipeline could write a row at all. `validateGeneratedMessage` passed
+ * all 12 of those drafts: it has no banned-word concept, and its URL check is
+ * `https?://`-anchored so a root-relative href is invisible to it.
+ */
+describe('the copy guards on the generated body', () => {
+  /** A `generate` dep that returns exactly this body. */
+  function generating(body: string): Partial<DraftRenderDeps> {
+    return { generate: async () => ({ subject: 'S', body, tokens_used: 1, model: 'm' }) };
+  }
+
+  it('REFUSES a body advertising the banned word, which 12 of 12 real drafts did', async () => {
+    const h = harness(generating('<p>Welcome to Your Free AI Preview.</p>'));
+
+    const out = await renderDecisionDraft(decision(), h.deps);
+
+    expect(out.status).toBe('rejected');
+    expect(out.issues.join(' ')).toContain('tac-807-172-d-free');
+    expect(h.committed[0].input.status).toBe(EXPLORER_DRAFT_REJECTED_STATUS);
+    const meta = h.committed[0].input.metadata as any;
+    expect(meta.quality_gate.valid).toBe(false);
+    expect(meta.quality_gate.copy_issues).toHaveLength(1);
+  });
+
+  it('REPAIRS a relative link rather than refusing it, and records the repair', async () => {
+    // One correct absolute form exists and no judgement is involved, so this is fixed.
+    const h = harness(generating('<p><a href="/portal/runtime/abc">Lesson</a></p>'));
+
+    const out = await renderDecisionDraft(decision(), h.deps);
+
+    expect(out.status).toBe('drafted');
+    expect(h.committed[0].input.body).toContain(`href="${BASE}/portal/runtime/abc"`);
+    expect(h.committed[0].input.body).not.toContain('href="/portal/runtime/abc"');
+    const meta = h.committed[0].input.metadata as any;
+    // The count is the control: asserting only the body passes identically if the
+    // rewriter matched nothing and the body merely happened to look right.
+    expect(meta.quality_gate.links_absolutised).toBe(1);
+    expect(meta.quality_gate.auto_fixed.join(' ')).toContain('absolutised 1');
+    expect(meta.quality_gate.copy_issues).toEqual([]);
+  });
+
+  it('fixes the link AND refuses the word when a body carries both, as draft 1 did', async () => {
+    const h = harness(
+      generating('<p><a href="/portal/runtime/abc">Welcome to Your Free AI Preview</a></p>'),
+    );
+
+    const out = await renderDecisionDraft(decision(), h.deps);
+
+    expect(out.status).toBe('rejected');
+    // The repair still lands, so whoever rewrites the wording is not also left holding a
+    // broken link.
+    expect(h.committed[0].input.body).toContain(`href="${BASE}/portal/runtime/abc"`);
+  });
+
+  it('refuses a link it cannot make absolute instead of shipping it', async () => {
+    const h = harness(generating('<p><a href="portal/runtime/abc">Lesson</a></p>'));
+
+    const out = await renderDecisionDraft(decision(), h.deps);
+
+    expect(out.status).toBe('rejected');
+    expect(out.issues.join(' ')).toContain('absolute');
+  });
+
+  it('leaves compliant copy untouched and records a clean gate', async () => {
+    const clean = '<p>Your AI preview is ready. No card needed.</p>';
+    const h = harness(generating(clean));
+
+    const out = await renderDecisionDraft(decision(), h.deps);
+
+    expect(out.status).toBe('drafted');
+    expect(h.committed[0].input.body).toBe(clean);
+    const meta = h.committed[0].input.metadata as any;
+    expect(meta.quality_gate.valid).toBe(true);
+    expect(meta.quality_gate.copy_issues).toEqual([]);
+    expect(meta.quality_gate.links_absolutised).toBe(0);
+  });
+
+  it('keeps the existing validator issues alongside the new copy issues', async () => {
+    // Composition, not replacement: an ungrounded date and a banned word are different
+    // failures with different owners, and both must survive to the row.
+    const h = harness({
+      ...generating('<p>Free</p>'),
+      validate: (content) => ({
+        valid: false,
+        content,
+        issues: ['Ungrounded date: November 12'],
+        autoFixed: [],
+      }),
+    });
+
+    const out = await renderDecisionDraft(decision(), h.deps);
+
+    expect(out.issues).toHaveLength(2);
+    expect(out.issues.join(' ')).toContain('November 12');
+    expect(out.issues.join(' ')).toContain('tac-807-172-d-free');
   });
 });

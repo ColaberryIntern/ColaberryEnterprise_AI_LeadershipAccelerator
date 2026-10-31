@@ -100,6 +100,10 @@ describe('the extractor works, so the assertions below mean something', () => {
     const names = files.map((f) => path.basename(f)).sort();
     expect(names).toEqual([
       'draftContracts.ts',
+      // Added 2026-10-31. Pure copy guards: the banned-word rule and the relative-link
+      // repair. It imports only `content/bannedCopyRule`, a dependency-free leaf, so the
+      // import ban below covers it unchanged.
+      'draftCopyGuards.ts',
       'draftEligibility.ts',
       'draftRepository.ts',
       'renderDecisionDraft.ts',
