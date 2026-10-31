@@ -98,6 +98,45 @@ interface TaskRow {
 }
 
 /**
+ * The INSERT, exported so a test can execute THE STATEMENT THIS SCRIPT RUNS rather than a copy
+ * of it. A copy drifts, and a pinned copy that drifts is worse than no test: it goes green while
+ * the real statement is broken.
+ *
+ * It is exported because of what happened on the first production run. The statement then shared
+ * `$4` between `title` and `description`, and Postgres refused all ten domains with
+ * `inconsistent types deduced for parameter $4` - it deduces a parameter's type from each use
+ * site, `title` is `varchar(500)` and `description` is `text`, and one parameter cannot be both.
+ * Nothing in the unit tier could see it: those mock `sequelize.query`, and a mock never deduces a
+ * type. The dry run could not see it either, because a dry run computes the plan and never
+ * executes the write. Only real Postgres answers this question, which is why the companion test
+ * is an `*.integration.test.ts` and why the statement had to come out of the function to be
+ * reachable from one.
+ *
+ * `description` duplicating `title` is intentional and matches `agentDomainProvisioner.ts`, which
+ * binds `s.title, s.title` into `$4, $5` for this same reason.
+ */
+export const COMMAND_CENTER_INSERT_SQL = `INSERT INTO student_tasks
+             (id, task_list_id, project_id, title, description, narrative, build, acceptance,
+              status, position, story_id, release_key, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, 'not_started', $9, $10, $11, now(), now())
+           ON CONFLICT (id) DO NOTHING`;
+
+/**
+ * The content refresh, exported for the same reason and carrying the same original defect.
+ *
+ * This is the statement a SECOND run takes, so the broken version made the idempotency claim
+ * unprovable in practice: run one would create, run two would refuse all ten. Both statements are
+ * therefore executed by the companion integration test, and both have a negative control.
+ *
+ * Status is never in the SET list. A refresh updates what the generator produced and must not
+ * reset a builder's progress.
+ */
+export const COMMAND_CENTER_REFRESH_SQL = `UPDATE student_tasks
+              SET title = $3, description = $4, narrative = $5, build = $6,
+                  acceptance = $7::jsonb, updated_at = now()
+            WHERE task_list_id = $1 AND project_id = $2 AND story_id = $8`;
+
+/**
  * The intended `0..n` ordering for one release.
  *
  * PURE, and exported, because this is the whole decision the script makes and a decision that
@@ -171,12 +210,14 @@ async function backfillOne(domainKey: string): Promise<DomainResult> {
         // builds, and reported `unchanged` on every later pass. Both columns move together here,
         // from one generator call, so they cannot desync.
         await sequelize.query(
-          `UPDATE student_tasks
-              SET title = $3, description = $3, narrative = $4, build = $5,
-                  acceptance = $6::jsonb, updated_at = now()
-            WHERE task_list_id = $1 AND project_id = $2 AND story_id = $7`,
+          COMMAND_CENTER_REFRESH_SQL,
           {
-            bind: [listId, projectId, planned.title, planned.body, planned.claude_code_prompt,
+            // Same reason as the INSERT: `$3` is title, `$4` is description, and the value is
+            // deliberately bound twice. This statement carried the identical defect, and it is
+            // the one a SECOND run takes - so the half of the script that proves idempotency was
+            // the half with no chance of running.
+            bind: [listId, projectId, planned.title, planned.title, planned.body,
+              planned.claude_code_prompt,
               JSON.stringify([...COMMAND_CENTER_ACCEPTANCE]), storyId],
             type: QueryTypes.UPDATE,
             transaction: tx,
@@ -188,13 +229,13 @@ async function backfillOne(domainKey: string): Promise<DomainResult> {
         // single place that decides position, and a second place deciding it is a second place to
         // get it wrong.
         await sequelize.query(
-          `INSERT INTO student_tasks
-             (id, task_list_id, project_id, title, description, narrative, build, acceptance,
-              status, position, story_id, release_key, created_at, updated_at)
-           VALUES ($1, $2, $3, $4, $4, $5, $6, $7::jsonb, 'not_started', $8, $9, $10, now(), now())
-           ON CONFLICT (id) DO NOTHING`,
+          COMMAND_CENTER_INSERT_SQL,
           {
-            bind: [rowId, listId, projectId, planned.title, planned.body, planned.claude_code_prompt,
+            // `planned.title` appears TWICE: `$4` is title and `$5` is description. Duplicating
+            // the value is intended; sharing one placeholder between them is the defect that
+            // failed all ten domains in production. See COMMAND_CENTER_INSERT_SQL above.
+            bind: [rowId, listId, projectId, planned.title, planned.title, planned.body,
+              planned.claude_code_prompt,
               JSON.stringify([...COMMAND_CENTER_ACCEPTANCE]), existing.length, storyId,
               FIRST_CLUSTER],
             type: QueryTypes.INSERT,
