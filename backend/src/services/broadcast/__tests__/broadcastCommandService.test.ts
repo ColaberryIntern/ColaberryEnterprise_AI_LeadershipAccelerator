@@ -81,6 +81,44 @@ describe('runProducerCommand', () => {
     expect(emit).not.toHaveBeenCalled(); // nothing committed, so nothing announced
   });
 
+  /**
+   * A conflict is the one refusal a client can resolve by itself, by acting on the version
+   * that is actually current. The End control has been reading a `version` off this response
+   * since it shipped and nothing ever put one there, so every conflict told the producer
+   * "someone moved this" and nothing more.
+   */
+  it('returns the row a refusal was judged against, so a conflict can report the real version', async () => {
+    findByPk.mockResolvedValue(row({ version: 9 }));
+    const r = await runProducerCommand({ occurrenceId: 'occ-1', command: 'go_live', expectedVersion: 4, isProducer: true, nowMs: NOW });
+    expect(r).toMatchObject({ ok: false, error_class: 'VersionConflict', status: 409 });
+    expect(r.occurrence!.version).toBe(9);
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('RE-READS after losing the write race, rather than echoing the version that just failed', async () => {
+    // Echoing our own read would send the client back with the exact number the database
+    // rejected, which is a retry loop dressed up as a conflict report.
+    findByPk.mockResolvedValueOnce(row({ version: 4 })).mockResolvedValueOnce(row({ version: 5, editorial_state: 'live' }));
+    update.mockResolvedValue([0]);
+
+    const r = await runProducerCommand({ occurrenceId: 'occ-1', command: 'go_live', expectedVersion: 4, isProducer: true, nowMs: NOW });
+
+    expect(r).toMatchObject({ ok: false, error_class: 'VersionConflict' });
+    expect(r.occurrence!.version).toBe(5);
+  });
+
+  it('omits the row when the occurrence vanished mid-flight', async () => {
+    // Deleted between read and write. Still a conflict, but there is no version to report and
+    // guessing one would be worse than silence — the client would send it.
+    findByPk.mockResolvedValueOnce(row({ version: 4 })).mockResolvedValueOnce(null);
+    update.mockResolvedValue([0]);
+
+    const r = await runProducerCommand({ occurrenceId: 'occ-1', command: 'go_live', expectedVersion: 4, isProducer: true, nowMs: NOW });
+
+    expect(r).toMatchObject({ ok: false, error_class: 'VersionConflict' });
+    expect(r.occurrence).toBeUndefined();
+  });
+
   it('emits SessionWentLive once, AFTER the committed transition', async () => {
     findByPk.mockResolvedValueOnce(row()).mockResolvedValueOnce(row({ editorial_state: 'live', version: 5 }));
     update.mockResolvedValue([1]);

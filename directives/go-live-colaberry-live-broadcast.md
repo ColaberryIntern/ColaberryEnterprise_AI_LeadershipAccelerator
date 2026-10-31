@@ -97,8 +97,17 @@ Decide which before the event, not during it.
 
 ### T-15 min — put it on air
 
-Starting a broadcast has **no UI** (only *ending* does — the End control in the mini player). Each
-step is a `POST /api/portal/broadcasts/<occurrence_id>/command` as a staff participant, body:
+**There is now a control for this, and it is the supported path.** Open
+`/portal/live/<session_id>` signed in as staff on a laptop: the **producer strip** shows the
+occurrence's state, the feed health, the version, and a button for each command that is legal right
+now. It polls every 5s, so the pre-air wait for the platform to see your feed is visible instead of
+invisible, and End asks before it fires. A command it does not offer is one the server would refuse;
+when Go Live is withheld, the strip prints the server's own reason.
+
+The raw API below remains correct and is the fallback — use it when the portal is unreachable, when
+you need a command the strip does not offer (`begin_processing` and `publish_replay` are deliberately
+not sendable), or to understand what the strip is doing. Each step is a
+`POST /api/portal/broadcasts/<occurrence_id>/command` as a staff participant, body:
 
 ```json
 { "command": "<name>", "expected_version": <current version> }
@@ -118,11 +127,20 @@ put backstage content on air.
 
 4. `enter_backstage` — `scheduled → backstage`. Nothing is offered to viewers yet.
 
-   **This is the one command whose `version` you cannot look up.** The playback grant is the only
-   endpoint that returns `version`, and on a `scheduled` occurrence with no live input it answers
-   503 `ProviderNotReady` with a body of `{ error, reason }` only. So read the version from the
-   database (the §2 query) or from a prior command's response. This is also why there is no Go Live
-   button yet — see `docs/COLABERRY_LIVE_PROGRAM_SPEC.md` §9.
+   **This used to be the one command whose `version` you could not look up**, which is why there
+   was no Go Live button for so long. The playback grant was the only endpoint returning `version`,
+   and on a `scheduled` occurrence with no live input it answers 503 `ProviderNotReady` with a body
+   of `{ error, reason }` only — so the first command in the sequence was the one whose version was
+   unobtainable. There is now a producer read that answers it:
+
+   ```
+   GET /api/portal/broadcasts/session/<session_id>/producer
+   ```
+
+   Staff-only, keyed on the **session** rather than the occurrence, and it returns the occurrence's
+   state, feed health, version, and which commands are available with the reason for each that is
+   not. The strip above is its caller. Reading the version out of the database (the §2 query) still
+   works and is the fallback.
 
    **Do this BEFORE starting the stream.** The health loop observes `backstage`, `live` and
    `reconnecting` only — a `scheduled` occurrence is never polled, so until it is backstage nothing
@@ -140,7 +158,8 @@ put backstage content on air.
 
 ### After
 
-8. **End it** with the End control in the mini player. Ending is **terminal** — there is no un-end
+8. **End it** with the End control — in the producer strip on `/portal/live/<session_id>`, or the
+   one in the mini player. Both ask before firing. Ending is **terminal** — there is no un-end
    command.
 
    **CLOSING ZOOM DOES NOT END THE BROADCAST.** The occurrence stays `live` over dead air, still

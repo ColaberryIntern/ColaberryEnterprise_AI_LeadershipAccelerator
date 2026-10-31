@@ -1,5 +1,5 @@
 /**
- * The producer's half of the broadcast: ending it.
+ * The producer's half of the broadcast: putting it on air and ending it.
  *
  * Exists because Ali asked the obvious question during Test 2 — "can we just end it once the
  * stream is done? I won't have you there every time." Until now the only way to end a
@@ -34,12 +34,51 @@ export interface EndResult {
  * That is reported rather than swallowed.
  */
 export async function endBroadcast(occurrenceId: string, expectedVersion: number): Promise<EndResult> {
+  const r = await sendProducerCommand(occurrenceId, 'end', expectedVersion);
+  // `ended` rather than `sent`, kept for the mini player's existing contract: that control
+  // only ever issues this one command, and reading "ended" at its call site is clearer than
+  // a generic success.
+  return r.outcome === 'sent'
+    ? { outcome: 'ended' }
+    : { outcome: r.outcome, currentVersion: r.currentVersion };
+}
+
+/**
+ * The commands a client may send. Mirrors `SENDABLE_PRODUCER_COMMANDS` on the backend, which
+ * is also what the route's schema is built from — `begin_processing` and `publish_replay` are
+ * absent on purpose, because a replay publishes itself and a hand-sent one would race the
+ * health loop.
+ */
+export type ProducerCommand =
+  | 'enter_backstage' | 'return_to_scheduled' | 'mark_content_started'
+  | 'go_live' | 'end' | 'cancel';
+
+export type CommandOutcome = 'sent' | 'conflict' | 'forbidden' | 'failed';
+
+export interface CommandResult {
+  outcome: CommandOutcome;
+  /** Present on conflict: the version the server says is current. */
+  currentVersion?: number;
+}
+
+/**
+ * Send one producer command, guarded on the version the caller last saw.
+ *
+ * A 409 is NOT an error to retry blindly: it means the occurrence moved under us, so the
+ * producer is looking at a stale picture. The server now returns the version that is actually
+ * current with that refusal, so the caller can re-read and decide again rather than reload.
+ */
+export async function sendProducerCommand(
+  occurrenceId: string,
+  command: ProducerCommand,
+  expectedVersion: number,
+): Promise<CommandResult> {
   try {
     await portalApi.post(`/api/portal/broadcasts/${occurrenceId}/command`, {
-      command: 'end',
+      command,
       expected_version: expectedVersion,
     });
-    return { outcome: 'ended' };
+    return { outcome: 'sent' };
   } catch (err: unknown) {
     const res = (err as { response?: { status?: number; data?: Record<string, unknown> } })?.response;
     const status = res?.status;
@@ -48,9 +87,75 @@ export async function endBroadcast(occurrenceId: string, expectedVersion: number
       return { outcome: 'conflict', currentVersion: typeof v === 'number' ? v : undefined };
     }
     // 403 is a real answer, not a failure: this viewer is not a producer. It should be
-    // unreachable from the UI, because the control is only rendered when the server said
-    // is_producer — but the server deciding again is the reason that is safe.
+    // unreachable from the UI, because the control is only rendered when the server said so
+    // — but the server deciding again is the reason that is safe.
     if (status === 403 || status === 401) return { outcome: 'forbidden' };
+    return { outcome: 'failed' };
+  }
+}
+
+/** One command, and why it cannot be sent right now. Mirrors the backend's description. */
+export interface CommandAvailability {
+  command: ProducerCommand;
+  available: boolean;
+  /** The server's own refusal text, or `no_change` when the command would do nothing. */
+  reason?: string;
+  /** Absent when the command is merely a no-op, which is how "already done" reads. */
+  error_class?: string;
+}
+
+export interface ProducerOccurrence {
+  id: string;
+  title: string;
+  editorial_state: string;
+  provider_health: string;
+  version: number;
+  content_started_at: string | null;
+  ended_at: string | null;
+  end_reason: string | null;
+  scheduled_start_at: string | null;
+}
+
+export type ProducerReadOutcome = 'ok' | 'forbidden' | 'failed';
+
+export interface ProducerStateResult {
+  outcome: ProducerReadOutcome;
+  /** False when live was never enabled for this session. Only meaningful when `ok`. */
+  found?: boolean;
+  occurrence?: ProducerOccurrence | null;
+  commands?: CommandAvailability[];
+}
+
+/**
+ * Read the producer's view of this class: state, provider health, the version to act on, and
+ * which commands are available right now.
+ *
+ * THIS IS THE READ THAT MAKES A GO LIVE CONTROL POSSIBLE. The playback grant was the only
+ * endpoint that returned a version, and it answers 503 on a scheduled occurrence — so before
+ * this route, the first command in the sequence was the one whose version could not be read.
+ *
+ * `forbidden` is reported rather than swallowed, because it is the signal the control uses to
+ * render nothing at all: this page is loaded by ordinary viewers, and a producer strip must
+ * never appear for one.
+ */
+export async function readProducerState(sessionId: string): Promise<ProducerStateResult> {
+  try {
+    const res = await portalApi.get<{
+      found: boolean;
+      occurrence: ProducerOccurrence | null;
+      commands: CommandAvailability[];
+    }>(`/api/portal/broadcasts/session/${sessionId}/producer`);
+    return {
+      outcome: 'ok',
+      found: res.data.found,
+      occurrence: res.data.occurrence,
+      commands: res.data.commands ?? [],
+    };
+  } catch (err: unknown) {
+    const status = (err as { response?: { status?: number } })?.response?.status;
+    // 404 means the broadcast feature is dark (the flag gate answers before auth), which from
+    // a producer's point of view is the same instruction as "not for you": render nothing.
+    if (status === 403 || status === 401 || status === 404) return { outcome: 'forbidden' };
     return { outcome: 'failed' };
   }
 }

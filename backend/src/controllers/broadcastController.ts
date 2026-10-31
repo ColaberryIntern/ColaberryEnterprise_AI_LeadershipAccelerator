@@ -1,7 +1,8 @@
 import { Request, Response } from 'express';
 import { ZodError } from 'zod';
 import {
-  producerCommandSchema, occurrenceIdParamSchema, playbackGrantSchema, playbackHeartbeatSchema,
+  producerCommandSchema, occurrenceIdParamSchema, sessionIdParamSchema,
+  playbackGrantSchema, playbackHeartbeatSchema, SENDABLE_PRODUCER_COMMANDS,
 } from '../schemas/broadcastSchema';
 import {
   rejectUntrustedFields, resolveTelemetryConfig, type MeasuredAccessMode,
@@ -11,6 +12,7 @@ import {
 import { ACCESS_MODES } from '../db/ensureBroadcastSchema';
 import { recordPlaybackBeat, readLiveAudience } from '../services/broadcast/broadcastTelemetryService';
 import { runProducerCommand } from '../services/broadcast/broadcastCommandService';
+import { readProducerStateBySession } from '../services/broadcast/broadcastProducerState';
 import { decideBroadcastAccess, resolveBroadcastAccess } from '../services/broadcast/broadcastEntitlement';
 import { resolveRoomEligibility } from '../services/broadcast/broadcastRoomEligibility';
 import { loadViewerAccessFacts, broadcastAccessDeps } from '../services/broadcast/broadcastAccessDeps';
@@ -87,7 +89,16 @@ export async function postProducerCommand(req: Request, res: Response): Promise<
     });
 
     if (!result.ok) {
-      res.status(result.status || 409).json({ error: result.error_class, reason: result.reason });
+      // The version is included WHEN KNOWN, because a conflict is the one refusal a client
+      // can resolve on its own — it acts on the version that is actually current rather than
+      // reloading the page. Omitted, never guessed, when the service could not read a row:
+      // a fabricated version is worse than none, since the client would send it.
+      const version = result.occurrence?.version;
+      res.status(result.status || 409).json({
+        error: result.error_class,
+        reason: result.reason,
+        ...(typeof version === 'number' ? { version } : {}),
+      });
       return;
     }
     res.json({
@@ -354,6 +365,41 @@ export async function postPlaybackHeartbeat(req: Request, res: Response): Promis
     res.status(204).end();
   } catch (err) {
     respondError(res, err, 'broadcast_heartbeat_failed');
+  }
+}
+
+/**
+ * GET /api/portal/broadcasts/session/:sessionId/producer — the producer's view of a class.
+ *
+ * This is the read that makes a Go Live control possible at all. Before it, the version every
+ * command requires was unobtainable before the stream existed: the playback grant was the only
+ * endpoint returning one, and it answers 503 on a `scheduled` occurrence. See
+ * broadcastProducerState.ts for the full reason.
+ *
+ * DELIBERATELY NOT FOLDED INTO THE AUDIENCE READ, which is the other producer-facing endpoint.
+ * That route answers 503 with no count field when telemetry collection fails, by design — and
+ * a producer needs the version MOST when things are going wrong. Coupling the lifecycle read
+ * to telemetry health would take the control away at exactly the wrong moment.
+ *
+ * `found: false` is a 200, not a 404. Live is opt-in per session, so a session with no
+ * occurrence is the ordinary case and reads as "live was never enabled here" — distinct from
+ * a session id that does not exist, which this route does not claim to tell apart.
+ */
+export async function getProducerState(req: Request, res: Response): Promise<void> {
+  try {
+    const { sessionId } = sessionIdParamSchema.parse(req.params);
+
+    // Same signal the producer commands are decided on. A non-producer learns nothing about
+    // whether the session exists, which is why the refusal precedes the read.
+    if (!isStaff(req)) {
+      res.status(403).json({ error: 'Forbidden', reason: 'not_a_producer' });
+      return;
+    }
+
+    const state = await readProducerStateBySession(sessionId, Date.now(), SENDABLE_PRODUCER_COMMANDS);
+    res.json(state);
+  } catch (err) {
+    respondError(res, err, 'broadcast_producer_state_failed');
   }
 }
 
