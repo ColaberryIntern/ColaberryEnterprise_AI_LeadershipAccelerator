@@ -71,9 +71,9 @@
     },
     {
       "id": "awards",
-      "copy": "MIT Solve Work of the Future; MIT Solve Community Favorite Award; Patrick J. McGovern Foundation AI for the Betterment of Humanity Prize; General Motors Prize for Advanced Technologies; JFFLabs $1 Billion Wage Gain Challenge finalist.",
+      "copy": "MIT Solve Work of the Future; Patrick J. McGovern Foundation AI for the Betterment of Humanity Prize; General Motors Prize for Advanced Technologies; JFFLabs $1 Billion Wage Gain Challenge finalist.",
       "status": "qualified",
-      "evidence": "All five were displayed on the previous refactored.ai site, with logo assets for each on its CDN. Names carried over verbatim. Rendered as TEXT, not logos, so the site carries no dependency on a CDN nobody has confirmed owning. Independent confirmation of each award has not been done in this session.",
+      "evidence": "Was five; MIT Solve Community Favorite Award was removed from this row and from both pages on 2026-10-31 because claim registry row CLM-019 blocks it as unevidenced and the site shipped it regardless. Displayed on the previous refactored.ai site, with logo assets for each on its CDN. Names carried over verbatim. Rendered as TEXT, not logos, so the site carries no dependency on a CDN nobody has confirmed owning. Independent confirmation of each award has NOT been done, and none of the four carries a primary source: the registry rows hold an organization name where the URL belongs. A funder checks recognition first, and the JFFLabs row is the most exposed of the four, since Jobs for the Future co-sponsored the XPRIZE Rapid Reskilling competition we cite elsewhere and that competition concluded in January 2023 with no grand prize awarded.",
       "surfaces": ["/", "/about/"]
     },
     {
