@@ -84,7 +84,10 @@ export function composeSignupEvents(rows: SignupRow[], config: SnackbarConfig, n
       kind: 'signup',
       initials,
       title,
-      action: 'just created a free account',
+      // NOT "a free account": 40 TAC 807.172(d) forbids advertising training as free, and this
+      // string renders on a public landing page. The kit shipped the banned phrasing; the
+      // backend copy ratchet caught it. House phrasings are "$0 to start" and "No card needed".
+      action: 'just created an account',
       ago_minutes: roundedAgo(row.created_at, now),
     });
     if (events.length >= MAX_EVENTS) break;

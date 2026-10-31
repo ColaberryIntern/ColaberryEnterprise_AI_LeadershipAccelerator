@@ -79,6 +79,42 @@ describe('composeSignupEvents', () => {
   });
 });
 
+/**
+ * 40 TAC 807.172(d): training may not be advertised as "free". The kit shipped
+ * `action: 'just created a free account'`, which renders on a public landing page — caught by
+ * the backend copy ratchet, not by a human reading the patch.
+ *
+ * The ratchet already blocks the word repo-wide, so this is not a second copy of that rule. It
+ * pins the thing the ratchet cannot: the ratchet counts occurrences per FILE, so moving the
+ * phrase into a config default, a renderer, or a later kit drop satisfies the count while the
+ * public page says it again. This asserts over the composed OUTPUT, every string the bar can
+ * actually show, so wherever the phrasing comes from it fails here.
+ */
+describe('every string the bar renders is advertising-compliant', () => {
+  const everyFormat = ['city_only', 'first_initial', 'opted_in_only'] as const;
+
+  it('never says "free" in any name format, opted in or not', () => {
+    for (const name_format of everyFormat) {
+      const cfg = { ...DEFAULT_SNACKBAR_CONFIG, name_format };
+      const rows = [row(), row({ name: 'Ana Diaz', opted_in: false })];
+      for (const e of composeSignupEvents(rows, cfg, NOW)) {
+        expect(`${e.title} ${e.action}`).not.toMatch(/\bfree\b/i);
+      }
+    }
+  });
+
+  it('never says "free" in the daily-count card either', () => {
+    const cfg = { ...DEFAULT_SNACKBAR_CONFIG, events: ['daily_count'] as Array<'signup' | 'daily_count'>, daily_min: 1 };
+    const e = composeDailyCount(42, cfg)!;
+    expect(`${e.title} ${e.action}`).not.toMatch(/\bfree\b/i);
+  });
+
+  it('still says something useful — the guard cannot be satisfied by rendering nothing', () => {
+    const [e] = composeSignupEvents([row()], DEFAULT_SNACKBAR_CONFIG, NOW);
+    expect(e.action).toBe('just created an account');
+  });
+});
+
 describe('composeDailyCount', () => {
   const cfg = { ...DEFAULT_SNACKBAR_CONFIG, events: ['signup', 'daily_count'] as Array<'signup' | 'daily_count'>, daily_min: 10 };
   it('is hidden below the minimum', () => expect(composeDailyCount(9, cfg)).toBeNull());
