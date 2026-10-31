@@ -287,7 +287,11 @@ X, when they reach the slide X was authored onto."
 | Surface | Requirement | Verdict |
 |---|---|---|
 | Desktop | persistent video, never interrupted | **BUILT** — the `<video>` is a sibling of `<Outlet/>` in the layout route, so it is literally the same DOM node across navigations |
-| Desktop | Prompt · Poll · Chat/Builder Room · Build progress · Claude Code controls | **NOT BUILT — all five.** The interactive rail is rendered only in the `companion` branch (`LiveSessionPage.tsx:224-244`). |
+| Desktop | Prompt | **BUILT 2026-10-31 (fuller than the phone's).** `LivePromptCard` with `full` is the only surface anywhere that renders `pasteWhere`, `ccMode` and `rescue` — three fields the instructor deck has been sending since it shipped. |
+| Desktop | Poll | **BUILT 2026-10-31** — the companion deck, reused rather than reimplemented, so there is one poll loop on the page instead of two. |
+| Desktop | Chat/Builder Room | **BUILT 2026-10-31** — `SessionChatPanel`, the first reader this thread has ever had. See finding 2. |
+| Desktop | Claude Code controls | **PARTIAL.** The prompt card now tells the viewer which tool and which mode. Nothing launches anything: `pasteWhere`/`ccMode` are free text written per week ("Claude Code", "Plan Mode"), and guessing a destination from prose sends somebody to a chat window for a terminal exercise. A real launch control needs the session builder's tool-mode declaration (requirements §9). |
+| Desktop | Build progress | **NOT BUILT.** Nothing in `CompanionState` carries a viewer's position in the lab, so there is no progress to render. This one needs a server-side notion of build steps before it is a UI task at all. |
 | Phone | sticky live video | **BUILT** |
 | Phone | one-thumb interaction | **BUILT** — every control ≥56px, pulse is optimistic |
 | Phone | Prompt | **BUILT (subset)** — see DOC 03 row 9 |
@@ -310,6 +314,13 @@ X, when they reach the slide X was authored onto."
    on report. Desktop viewers can still watch via the persistent mini player, so this is a dead
    affordance rather than a blocked path — but it is a shipped self-link on the primary watch button.
 
+   **Fixed 2026-10-31, inside §9 item 4 rather than as a separate patch**, because the right fix
+   depended on what the desktop page became. The page no longer reads `watch_url` at all; the
+   workspace's watch control is `BroadcastWatchButton`, which opens the in-app player and renders
+   nothing when there is nothing to offer. The server keeps sending the field and is right to: the
+   URL is genuinely where a viewer watches, and the defect was a page linking to itself, not a
+   wrong URL. A test now fails if any anchor on the page points back at its own route.
+
 2. **Three features are complete server-side with no reader.** Clip markers (admin API, no UI), the
    producer audience read `GET /api/portal/broadcasts/:id/audience` (no caller anywhere in
    `frontend/src`), and the session chat thread (students write, students never read). This is the
@@ -317,12 +328,20 @@ X, when they reach the slide X was authored onto."
    `broadcast_series.default_access_mode`; `broadcastClipListController.ts:10-14` names it as
    recurring in this subsystem.
 
-   **Still all three, and the audience one is now cheap to fix.** The producer strip added for
+   **Two now, not three. The chat thread got its reader on 2026-10-31** (§9 item 4), and giving it
+   one surfaced two defects that could not have been observed while nothing read it: the response
+   handed every classmate the author's `enrollment_id`, and `limit` with `ORDER BY ASC` returned the
+   OLDEST hundred messages, so a class past a hundred lines would have shown a thread frozen on its
+   first hour with no new message ever arriving. Both are fixed and pinned by tests. That is the
+   argument for closing this defect class rather than tolerating it: an unread feature is not
+   half-working, it is unmeasured.
+
+   **The audience one is cheap to fix and still deliberately open.** The producer strip added for
    P4-02 (§9 item 3) is a producer-facing surface on the page where a producer already stands, so
-   the audience read finally has somewhere obvious to be rendered. It was deliberately left out of
-   that change: a viewer count is a different question from a lifecycle control, and the two must
-   not share a request — the audience route answers 503 with no count when collection fails, by
-   design, and the control must survive that.
+   the audience read finally has somewhere obvious to be rendered. It was left out of that change:
+   a viewer count is a different question from a lifecycle control, and the two must not share a
+   request — the audience route answers 503 with no count when collection fails, by design, and the
+   control must survive that.
 
 3. **Participation is keyed on `session_id`, not `occurrence_id`** (`ensureLiveSessionSchema.ts:134-169`),
    while clip markers are occurrence-keyed. DOC 03 permits a session to have more than one
@@ -422,11 +441,34 @@ production polish. Applying it:
 
    **Still open in P4-02:** preview-vs-program, a live clock, and the segment rundown. The task is
    not closed — the part that stopped an airing is.
-4. **The desktop viewer — R4's largest hole.** Five of DOC 04's six desktop requirements are not
-   built: Prompt, Poll, Chat/Builder Room, build progress and Claude Code controls all exist only in
-   the phone branch. Fold the self-link in §8 finding 1 into this work rather than patching it
-   separately, since both live in the same component and the right fix for the button depends on
-   whether the desktop page becomes the interactive surface or stays a status card.
+4. **The desktop viewer — R4's largest hole. Built 2026-10-31.** Five of DOC 04's six desktop
+   requirements were missing: Prompt, Poll, Chat/Builder Room, build progress and Claude Code
+   controls all existed only in the phone branch.
+
+   **The question this item posed answered itself: the desktop page is now the interactive
+   surface**, not a status card. DOC 04 asks the laptop for the rail, and once it has one there is
+   nowhere for a "Watch now" link to go — so the self-link in §8 finding 1 died here rather than in
+   a patch of its own, exactly as this item proposed.
+
+   - `LiveWorkspace` (`frontend/src/components/portal/LiveWorkspace.tsx`) is the two-column laptop
+     rail: prompt and poll on the left, chat on the right, collapsing to one column under 900px.
+     It renders no video of its own, and a test fails if it ever does — the persistent player is a
+     sibling of `<Outlet/>` in the layout route, which is how "no forced video interruption" is
+     implemented as a DOM fact rather than a promise.
+   - `LivePromptCard` was extracted from the companion deck so both surfaces share one
+     implementation and differ only in how much of a prompt fits. The laptop's `full` variant is
+     the first thing anywhere to render `pasteWhere`, `ccMode` and `rescue`.
+   - `SessionChatPanel` is DOC 04's Chat/Builder Room and the first reader of
+     `GET /api/portal/sessions/:id/chat`. Two latent defects fell out of reading it; see §8
+     finding 2.
+   - The composer states who can see a message, because the same thread has been written into
+     through "Ask a question" with only an instructor on the other end.
+
+   **Still open in item 4, and named rather than quietly dropped:** build progress (needs a
+   server-side notion of a viewer's position in the lab — nothing in `CompanionState` carries one),
+   a launch control for Claude/Claude Code (needs requirements §9's tool-mode declaration), and
+   chat on the *phone* companion, which is a different design problem: a scrolling thread under a
+   thumb competes with the one-tap controls the surface exists for.
 
 5. **R5 studio, in Piyush's stated order** — equipment, then HeyGen, then sample, then production.
    This is unblocked today, is not Claude Code work, and gates Tests 3 and 4. It should run in

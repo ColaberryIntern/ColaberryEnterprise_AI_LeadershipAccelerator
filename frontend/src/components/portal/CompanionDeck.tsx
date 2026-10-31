@@ -3,6 +3,7 @@ import {
   getCompanionState, setSessionPulse, submitPollResponse,
   type CompanionState, type PulseState,
 } from '../../services/onboardingApi';
+import LivePromptCard from './LivePromptCard';
 
 /**
  * The phone deck for a live class (L4.7) — what a viewer can do with one thumb.
@@ -32,6 +33,13 @@ import {
 
 export interface CompanionDeckProps {
   sessionId: string;
+  /**
+   * Desktop workspace. The deck itself is unchanged — the prompt card renders the three
+   * fields a one-thumb surface drops (`pasteWhere`, `ccMode`, `rescue`). Passed through
+   * rather than branched on here, because what differs between the surfaces is how much of
+   * a prompt fits, not what the deck does.
+   */
+  full?: boolean;
   /** Injected in tests. Production uses the real companion endpoints. */
   loadState?: (sessionId: string) => Promise<CompanionState>;
   sendPulse?: (sessionId: string, state: PulseState) => Promise<void>;
@@ -61,12 +69,11 @@ const KIND_LABEL: Record<'prediction' | 'poll' | 'trivia', string> = {
 };
 
 export default function CompanionDeck({
-  sessionId, loadState, sendPulse, sendPoll,
+  sessionId, full = false, loadState, sendPulse, sendPoll,
 }: CompanionDeckProps): React.ReactElement {
   const [state, setState] = useState<CompanionState | null>(null);
   const [pulse, setPulse] = useState<PulseState | null>(null);
   const [choice, setChoice] = useState<number | null>(null);
-  const [copied, setCopied] = useState(false);
   /** Set once the viewer has touched something, so a poll refresh cannot undo their tap. */
   const touched = useRef(false);
 
@@ -118,13 +125,6 @@ export default function CompanionDeck({
     pushPoll(sessionId, question.key, index).catch(() => undefined);
   }, [question, votingOpen, choice, sessionId, pushPoll]);
 
-  const copyPrompt = useCallback((text: string) => {
-    const done = () => { setCopied(true); window.setTimeout(() => setCopied(false), 1600); };
-    // Clipboard is unavailable on an insecure origin and in some in-app browsers, which is
-    // most of a phone audience. Failing silently would leave the button looking broken.
-    if (navigator.clipboard?.writeText) navigator.clipboard.writeText(text).then(done, () => undefined);
-  }, []);
-
   const prompt = state ? state.prompt : null;
 
   return (
@@ -164,21 +164,7 @@ export default function CompanionDeck({
         </div>
       )}
 
-      {prompt && (
-        <div className="cdeck-card" data-testid="companion-prompt">
-          <p className="cdeck-label">⌨️ {prompt.label}</p>
-          <pre className="cdeck-prompt">{prompt.prompt}</pre>
-          <button type="button" className="cdeck-copy" onClick={() => copyPrompt(prompt.prompt)}>
-            {copied ? 'Copied' : 'Copy prompt'}
-          </button>
-          {prompt.expectedResult && (
-            <p className="cdeck-note"><b>👀 You should see:</b> {prompt.expectedResult}</p>
-          )}
-          {prompt.stopCondition && (
-            <p className="cdeck-note"><b>🛑 Stop when:</b> {prompt.stopCondition}</p>
-          )}
-        </div>
-      )}
+      {prompt && <LivePromptCard prompt={prompt} full={full} />}
 
       <div className="cdeck-card">
         <p className="cdeck-label">Tap your status any time</p>
@@ -243,21 +229,6 @@ const CDECK_CSS = `
 }
 .cdeck-opt-text{ flex:1; }
 .cdeck-tick{ flex:none; font-weight:700; }
-
-.cdeck-prompt{
-  font-family:Consolas, "SF Mono", monospace; font-size:12.5px; line-height:1.5;
-  white-space:pre-wrap; word-break:break-word; margin:0;
-  padding:10px; color:var(--text-body);
-  background:var(--surface-subtle); border:1px solid var(--border-subtle);
-  border-radius:var(--radius-md);
-}
-.cdeck-copy{
-  width:100%; min-height:48px; margin-top:10px;
-  font-family:var(--font-body); font-size:15px; font-weight:600;
-  color:var(--action-fg); background:var(--action-bg);
-  border:none; border-radius:var(--radius-pill); cursor:pointer;
-}
-.cdeck-copy:focus-visible{ outline:none; box-shadow:var(--focus-ring); }
 
 /* Two across on a phone: four full-width rows would push the video off the screen, and the
    whole point of the deck is that it sits under a sticky player. */

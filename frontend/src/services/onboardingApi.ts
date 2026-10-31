@@ -310,6 +310,51 @@ export async function askSessionQuestion(sessionId: string, text: string): Promi
   await portalApi.post(`/api/portal/sessions/${sessionId}/chat`, { content: text });
 }
 
+/** One line of a live class's chat thread. The author's enrollment id is not on the wire. */
+export interface SessionChatLine {
+  id: string;
+  sender_name: string;
+  content: string;
+  /** ISO-8601. The client owns the viewer's timezone, so formatting happens here. */
+  created_at: string;
+}
+
+/** Longest message the server accepts, mirrored so the composer can say so before sending. */
+export const MAX_CHAT_LENGTH = 500;
+
+export type SessionChatResult =
+  | { outcome: 'ok'; messages: SessionChatLine[]; active_count: number }
+  /** Not this viewer's cohort, or not signed in. Render nothing and stop asking. */
+  | { outcome: 'forbidden' }
+  /** Transient. The caller keeps whatever it last had on screen. */
+  | { outcome: 'failed' };
+
+/**
+ * Read the class chat thread.
+ *
+ * THE THREE OUTCOMES ARE DISTINCT BECAUSE THE RESPONSES DIFFER. A 404 means the session is
+ * not in this viewer's cohort — the server deliberately does not say whether it exists — and
+ * that is a permanent answer, so a chat panel should disappear rather than retry. A 500 or a
+ * dropped connection is temporary and must not blank a thread mid-class. Collapsing the two
+ * is how a transient blip reads as "the class ended". Same shape as `readProducerState`.
+ */
+export async function getSessionChat(sessionId: string): Promise<SessionChatResult> {
+  try {
+    const { data } = await portalApi.get<{
+      messages: SessionChatLine[]; active_count: number;
+    }>(`/api/portal/sessions/${sessionId}/chat`);
+    return {
+      outcome: 'ok',
+      messages: data.messages ?? [],
+      active_count: data.active_count ?? 0,
+    };
+  } catch (err: unknown) {
+    const status = (err as { response?: { status?: number } })?.response?.status;
+    if (status === 401 || status === 403 || status === 404) return { outcome: 'forbidden' };
+    return { outcome: 'failed' };
+  }
+}
+
 /** A coding prompt broadcast to student phones during Build Mode. */
 export interface BroadcastPrompt {
   label: string;

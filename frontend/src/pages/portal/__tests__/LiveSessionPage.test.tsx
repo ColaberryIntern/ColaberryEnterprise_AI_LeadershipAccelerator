@@ -45,6 +45,22 @@ jest.mock('../../../components/portal/ProducerStrip', () => ({
   __esModule: true,
   default: ({ sessionId }: { sessionId: string }) => <div data-testid="producer-stub">{sessionId}</div>,
 }));
+// The desktop rail. Same deal: it polls the companion state and the chat, and its own suite
+// covers what it contains. This file asks when the page mounts it and with what.
+jest.mock('../../../components/portal/LiveWorkspace', () => ({
+  __esModule: true,
+  default: ({ sessionId, roomId, isAuthenticated }: {
+    sessionId: string; roomId: string | null; isAuthenticated: boolean;
+  }) => (
+    <div
+      data-testid="workspace-stub"
+      data-room={String(roomId)}
+      data-authed={String(isAuthenticated)}
+    >
+      {sessionId}
+    </div>
+  ),
+}));
 
 import portalApi from '../../../utils/portalApi';
 import { useParticipantAuth } from '../../../contexts/ParticipantAuthContext';
@@ -100,6 +116,8 @@ afterEach(async () => {
 
 const text = () => container.textContent || '';
 const titleOf = () => container.querySelector('[data-testid="live-session-title"]')?.textContent || '';
+const workspace = () => container.querySelector('[data-testid="workspace-stub"]') as HTMLElement | null;
+const card = () => container.querySelector('[data-testid="live-session-page"]') as HTMLElement;
 
 describe('what someone who clicks the link actually sees', () => {
   it('tells an early arrival the class has not started, and does not look like an error', async () => {
@@ -110,17 +128,27 @@ describe('what someone who clicks the link actually sees', () => {
     // The reassurance matters as much as the state: this link is clicked days early by design.
     expect(text()).toContain('It will update on its own');
     expect(text()).toContain('the link stays the same for this class');
-    expect(container.querySelector('[data-testid="live-session-watch"]')).toBeNull();
+    expect(workspace()).toBeNull();
   });
 
-  it('offers somewhere to go only when there is something to watch', async () => {
+  it('becomes the workspace once the class is on air', async () => {
     wire('live', 'https://enterprise.colaberry.ai/portal/live/sess-1');
     await render();
 
-    const watch = container.querySelector('[data-testid="live-session-watch"]') as HTMLAnchorElement | null;
-    expect(watch).not.toBeNull();
-    expect(watch!.getAttribute('href')).toBe('https://enterprise.colaberry.ai/portal/live/sess-1');
     expect(titleOf()).toContain('is live now');
+    expect(workspace()).not.toBeNull();
+  });
+
+  it('NEVER renders a link to the page it is already on', async () => {
+    // `watch_url` for this session resolves to this exact route, so the primary watch button
+    // was a self-link from the day it shipped (spec §8 finding 1). The page no longer reads
+    // the field at all; the workspace's own watch control opens the in-app player instead.
+    wire('live', 'https://enterprise.colaberry.ai/portal/live/sess-1');
+    await render();
+
+    const selfLinks = Array.from(container.querySelectorAll('a'))
+      .filter((a) => (a.getAttribute('href') || '').includes('/portal/live/sess-1'));
+    expect(selfLinks).toHaveLength(0);
   });
 
   it('says ended without offering a dead button', async () => {
@@ -128,7 +156,7 @@ describe('what someone who clicks the link actually sees', () => {
     await render();
 
     expect(titleOf()).toContain('has ended');
-    expect(container.querySelector('[data-testid="live-session-watch"]')).toBeNull();
+    expect(workspace()).toBeNull();
   });
 
   it('does not tell someone their link is broken when the check simply failed', async () => {
@@ -157,7 +185,10 @@ describe('what someone who clicks the link actually sees', () => {
     await render();
 
     expect(titleOf()).toContain('is live now');
-    expect(container.querySelector('[data-testid="live-session-watch"]')).not.toBeNull();
+    expect(workspace()).not.toBeNull();
+    // The room id rides on the same failed request, and the workspace is built to be handed
+    // a null rather than withheld — the watch control decides for itself.
+    expect(workspace()!.getAttribute('data-room')).toBe('null');
     expect(text()).not.toContain('Week 12');
   });
 });
@@ -211,21 +242,19 @@ describe('it looks like Colaberry', () => {
 });
 
 describe('the phone companion (L4.7)', () => {
-  it('does not offer a link away from the only screen the viewer has', async () => {
-    // The laptop surface sends you to the workspace. On a phone the companion IS the place to
-    // watch, so "Watch now" would navigate the viewer off their own video.
+  it('gets the one-thumb deck, not the two-column workspace', async () => {
     wire('live', 'https://enterprise.colaberry.ai/portal/live/sess-1');
     await render(true);
 
-    expect(container.querySelector('[data-testid="live-session-watch"]')).toBeNull();
     expect(container.querySelector('[data-testid="companion-surface"]')).not.toBeNull();
+    expect(workspace()).toBeNull();
   });
 
-  it('CONTROL: the laptop surface still offers it', async () => {
+  it('CONTROL: the laptop surface gets the workspace and not the companion deck', async () => {
     wire('live', 'https://enterprise.colaberry.ai/portal/live/sess-1');
     await render(false);
 
-    expect(container.querySelector('[data-testid="live-session-watch"]')).not.toBeNull();
+    expect(workspace()).not.toBeNull();
     expect(container.querySelector('[data-testid="companion-surface"]')).toBeNull();
   });
 
@@ -257,6 +286,52 @@ describe('the phone companion (L4.7)', () => {
     await render(true);
 
     expect(container.querySelector('[data-testid="companion-surface"]')).toBeNull();
+  });
+});
+
+describe('the desktop workspace (DOC 04)', () => {
+  it('is handed the session, the room and whether the viewer is signed in', async () => {
+    wire('live', null, { ...INFO, room_id: 'room-9' });
+    await render();
+
+    expect(workspace()!.textContent).toBe('sess-1');
+    expect(workspace()!.getAttribute('data-room')).toBe('room-9');
+    expect(workspace()!.getAttribute('data-authed')).toBe('true');
+  });
+
+  it('mounts for a signed-out visitor too, and tells IT who the viewer is', async () => {
+    // The rail is gated inside the workspace rather than here, because a public marketed URL
+    // should still explain itself to someone who has not signed in.
+    mockAuth.mockReturnValue({ isAuthenticated: false });
+    wire('live');
+    await render();
+
+    expect(workspace()).not.toBeNull();
+    expect(workspace()!.getAttribute('data-authed')).toBe('false');
+  });
+
+  it('widens the card for it', async () => {
+    // 440px is right for a one-line status card and far too narrow for two columns.
+    wire('live');
+    await render();
+
+    expect(card().className).toContain('is-wide');
+  });
+
+  it('CONTROL: leaves the card narrow when there is no workspace in it', async () => {
+    wire('not_started');
+    await render();
+
+    expect(card().className).not.toContain('is-wide');
+  });
+
+  it('is not mounted before the class is on air', async () => {
+    // Unlike the producer strip, which is needed precisely while nothing is airing, there is
+    // nothing for a VIEWER to do on a class that has not started.
+    wire('not_started');
+    await render();
+
+    expect(workspace()).toBeNull();
   });
 });
 
