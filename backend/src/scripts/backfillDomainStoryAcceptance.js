@@ -33,8 +33,28 @@ if (!process.env.DATABASE_URL) {
 const sql = new Sequelize(process.env.DATABASE_URL, { logging: false });
 const q = (t, b) => sql.query(t, { bind: b || [], type: QueryTypes.SELECT });
 
-/** The releases whose criteria exist in prose. r0/r1 are research stories and have none. */
-const MIGRATABLE_RELEASE = 'r2';
+/**
+ * The stories whose criteria exist in prose: the capability stories, one per capability.
+ *
+ * This used to be `release_key = 'r2'`, which was the same set only for as long as a release meant
+ * a PHASE OF WORK. Phase 2 of `AUTONOMY_RELEASE_MIGRATION.md` made a release a RUNG OF AUTONOMY,
+ * so every one of these rows now carries `release_key = 'autonomy:R0'` and the old predicate
+ * matches nothing. It would not have raised; it would have reported "0 stories with an empty
+ * acceptance field" and exited successfully, which is the shape of a repair script that has
+ * quietly stopped repairing anything.
+ *
+ * `story_kind` is the column that actually means what this script means. It is NULL on every row
+ * provisioned before the ladder, so the predicate accepts both: the kind when it is set, and the
+ * old release key when it is not. That keeps this script correct against a database whether or not
+ * the migration has run, which matters because the two ship together but roll out separately.
+ */
+const IS_CAPABILITY_STORY =
+  `(story_kind = 'implementation' OR (story_kind IS NULL AND release_key = 'r2'))`;
+
+/** Shared-foundation stories: the Command Center, the five research stories, the legacy plan. */
+const IS_SHARED_STORY =
+  `(story_kind IN ('command_center','research','legacy_migration')`
+  + ` OR (story_kind IS NULL AND release_key IN ('r0','r1')))`;
 
 const IS_EMPTY = `(acceptance IS NULL OR acceptance::text IN ('null','[]','{}','""'))`;
 const IS_DOMAIN = `project_id IN (SELECT student_project_id FROM agent_domain_projects)`;
@@ -46,10 +66,10 @@ async function main() {
     SELECT id::text AS id, story_id,
            coalesce(narrative,'') AS narrative, coalesce(build,'') AS build
       FROM student_tasks
-     WHERE ${IS_DOMAIN} AND release_key = $1 AND ${IS_EMPTY}
-     ORDER BY story_id`, [MIGRATABLE_RELEASE]);
+     WHERE ${IS_DOMAIN} AND ${IS_CAPABILITY_STORY} AND ${IS_EMPTY}
+     ORDER BY story_id`);
 
-  console.log(`${MIGRATABLE_RELEASE} stories with an empty acceptance field: ${rows.length}`);
+  console.log(`capability stories with an empty acceptance field: ${rows.length}`);
 
   const planned = [];
   const unparsed = [];
@@ -93,13 +113,13 @@ async function main() {
     SELECT count(*)::int AS n,
            count(*) FILTER (WHERE NOT ${IS_EMPTY})::int AS acc
       FROM student_tasks
-     WHERE ${IS_DOMAIN} AND release_key = $1`, [MIGRATABLE_RELEASE]);
-  console.log(`  ${MIGRATABLE_RELEASE}: ${after.acc} of ${after.n} now carry acceptance criteria`);
+     WHERE ${IS_DOMAIN} AND ${IS_CAPABILITY_STORY}`);
+  console.log(`  capability stories: ${after.acc} of ${after.n} now carry acceptance criteria`);
 
   const [research] = await q(`
     SELECT count(*)::int AS n FROM student_tasks
-     WHERE ${IS_DOMAIN} AND release_key IN ('r0','r1') AND NOT ${IS_EMPTY}`);
-  console.log(`  r0/r1 left alone on purpose, non-empty count: ${research.n} (want 0)`);
+     WHERE ${IS_DOMAIN} AND ${IS_SHARED_STORY} AND NOT ${IS_EMPTY}`);
+  console.log(`  shared-foundation stories left alone on purpose, non-empty: ${research.n}`);
 }
 
 main()

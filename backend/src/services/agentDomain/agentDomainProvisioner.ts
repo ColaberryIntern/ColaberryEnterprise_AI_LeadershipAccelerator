@@ -299,14 +299,26 @@ async function provisionOne(
       throw new Error(`OrphanStoryError: story '${s.story_id}' names release '${s.release_cluster}', which has none`);
     }
     stories += await insertedCount(sequelize, tx,
+      // `title` and `description` carry the same VALUE through two separate PLACEHOLDERS ($4, $5).
+      // Sharing one placeholder across them is a parse error, not a style choice: Postgres deduces
+      // a parameter's type from each use site, `title` is varchar(500) and `description` is text,
+      // and one parameter cannot be both. The Command Center backfill shipped with them sharing
+      // `$4` and refused all ten domains in production with "inconsistent types deduced for
+      // parameter $4". The same applies to `acceptance`, which is why it is cast once, explicitly.
       `INSERT INTO student_tasks
          (id, task_list_id, project_id, title, description, narrative, build, status, position,
-          story_id, release_key, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, 'not_started', $8, $9, $10, now(), now())
+          story_id, release_key, capability_id, autonomy_stage, story_kind, acceptance,
+          created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, 'not_started', $8, $9, $10, $11, $12, $13, $14::jsonb,
+               now(), now())
        ON CONFLICT (id) DO NOTHING
        RETURNING id`,
       [s.id, listId, plan.project_id, s.title, s.title, s.narrative, s.build, s.position,
-        s.story_id, s.release_key],
+        s.story_id, s.release_key, s.capability_id, s.autonomy_stage, s.kind,
+        // NULL rather than `[]` when the generator has no criteria to give. An empty array would
+        // read as "acceptance was authored and is empty", and AF10.2 owns that column for every
+        // kind except `release_behaviour`, whose criteria come straight from the capability record.
+        s.acceptance.length > 0 ? JSON.stringify([...s.acceptance]) : null],
     );
   }
   inserted.student_tasks = stories;

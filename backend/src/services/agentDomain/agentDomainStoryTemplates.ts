@@ -8,11 +8,27 @@
  *
  * ## What each project gets
  *
- *   r0  Discovery and validation -- the owner's five research/manager-discovery stories, plus the
- *       manager-interview and workflow-validation stories the amendment asks for.
- *   r1  Legacy migration plan -- spec §40. Generated from that domain's real dispositions, so it
- *       says which rows migrate, which are retired or superseded and why, and which are `unknown`.
- *   r2  Capability development -- one story per capability, each traced to its `capability_id`.
+ * **A release is a RUNG OF AUTONOMY, not a phase of work.** Phase 2 of
+ * `docs/architecture/ai-workforce-management/AUTONOMY_RELEASE_MIGRATION.md`, decided by Ali on
+ * 30 October 2026. Each project gets thirteen releases: the ten rungs `autonomy:R0` to
+ * `autonomy:R9`, in the owner's own wording, plus the three original workstream releases kept
+ * empty below them as the rollback path.
+ *
+ * Stories land on rungs like this:
+ *
+ *   autonomy:R0  the Command Center, the owner's five research/manager-discovery stories, the
+ *                legacy migration plan, and every capability story -- because R0 is literally
+ *                "Define the workflow, requirements, risks and human decisions", and all 443
+ *                capabilities record `starting_autonomy: autonomy:R0`.
+ *   autonomy:R1  .. R9   one story per `release_behaviour[]` entry, placed on that entry's own
+ *                rung. 964 entries across the 443 records, each already carrying its behaviour
+ *                and its acceptance criteria. This is the additive half of Phase 2.
+ *   r0, r1, r2   kept, empty. One UPDATE per story restores the previous shape.
+ *
+ * Nothing here enables an agent, grants a tool or changes an autonomy level, and **finishing a
+ * release promotes nobody** -- it makes a rung eligible for a named human to promote on evidence.
+ * Story completion is recorded as a non-promoting signal precisely so that a ladder cannot decay
+ * into a progress bar.
  *
  * ## Prompts are built from evidence, not from a template
  *
@@ -40,7 +56,21 @@ import {
   loadDomainMatrix,
   type CapabilityRecord,
   type DomainCapabilityMatrix,
+  type ReleaseBehaviour,
 } from './capabilityRecord';
+import { AUTONOMY_MEANINGS, type AutonomyStage } from './autonomyLadder';
+import {
+  AUTONOMY_RELEASES,
+  FOUNDATION_STAGE,
+  LEGACY_RELEASES,
+  RELEASES,
+  RUNG_PLATFORM_GAP,
+  bareLevel,
+  releaseName,
+  rungOf,
+  type GeneratedRelease,
+} from './agentDomainReleaseLadder';
+import { bullets, promptFor } from './agentDomainCapabilityPrompt';
 import { researchPromptFor } from './agentDomainResearchPrompts';
 import {
   COMMAND_CENTER_SHARED_FOUNDATION_REASON,
@@ -51,7 +81,8 @@ import {
   domainCommandCenterStoryId,
 } from './agentDomainCommandCenterStory';
 
-export type StoryKind = 'command_center' | 'research' | 'legacy_migration' | 'implementation';
+export type StoryKind =
+  | 'command_center' | 'research' | 'legacy_migration' | 'implementation' | 'release_behaviour';
 export type StoryStatus = 'draft' | 'ready';
 
 export interface GeneratedStory {
@@ -69,12 +100,24 @@ export interface GeneratedStory {
   readonly validation_dependency: string;
   /** The full, domain-specific Claude Code prompt. Empty only for research stories. */
   readonly claude_code_prompt: string;
-}
-
-export interface GeneratedRelease {
-  readonly cluster: string;
-  readonly name: string;
-  readonly position: number;
+  /**
+   * The rung of the autonomy ladder this story sits on, namespaced `autonomy:R0`..`autonomy:R9`.
+   *
+   * Equal to `release_key` by construction, because Phase 2 made a release BE a rung. They are
+   * kept as two fields rather than one because they answer different questions and a later phase
+   * may legitimately separate them: `release_key` is where the row hangs, `autonomy_stage` is the
+   * authority level the work belongs to. A test asserts they agree for every generated story, so
+   * if they ever diverge it is because somebody meant it.
+   */
+  readonly autonomy_stage: AutonomyStage;
+  /**
+   * Acceptance criteria to write with the row, when the source data already carries them.
+   *
+   * Empty for every kind except `release_behaviour`, whose criteria are written per rung in the
+   * capability records. The other kinds were backfilled separately by AF10.2 on 2026-10-21 and
+   * re-deriving them here would fight a script that already owns that column.
+   */
+  readonly acceptance: ReadonlyArray<string>;
 }
 
 export interface DomainPlan {
@@ -82,16 +125,6 @@ export interface DomainPlan {
   readonly releases: ReadonlyArray<GeneratedRelease>;
   readonly stories: ReadonlyArray<GeneratedStory>;
 }
-
-const RELEASES: ReadonlyArray<GeneratedRelease> = [
-  { cluster: 'r0', name: 'Discovery and validation', position: 0 },
-  { cluster: 'r1', name: 'Legacy migration plan', position: 1 },
-  { cluster: 'r2', name: 'Capability development', position: 2 },
-];
-
-/** The release's display name for a cluster key, for the prompt header. */
-const releaseName = (cluster: string): string =>
-  RELEASES.find((r) => r.cluster === cluster)?.name ?? cluster;
 
 /** The owner's five, verbatim in intent. Prefixes are stable; titles may be reworded. */
 const RESEARCH_PREFIXES = [
@@ -102,10 +135,6 @@ const RESEARCH_PREFIXES = [
   'RESEARCH-5-THREE-PROPOSED-TASKS',
 ] as const;
 
-function bullets(items: ReadonlyArray<string>, empty = '_none recorded_'): string {
-  if (items.length === 0) return empty;
-  return items.map((i) => `- ${i}`).join('\n');
-}
 
 /** The five research stories, written against THIS domain rather than in the abstract. */
 function researchStories(d: AgentDomain, m: DomainCapabilityMatrix): GeneratedStory[] {
@@ -118,7 +147,11 @@ function researchStories(d: AgentDomain, m: DomainCapabilityMatrix): GeneratedSt
     const storyId = `${d.domain_key}.${prefix}`;
     return {
       story_id: storyId,
-      release_key: 'r0',
+      // R0 is literally "Define the workflow, requirements, risks and human decisions." That is
+      // what these five stories are, which is why the migration design maps them here.
+      release_key: FOUNDATION_STAGE,
+      autonomy_stage: FOUNDATION_STAGE,
+      acceptance: [],
       kind: 'research',
       title,
       status: 'draft',
@@ -137,7 +170,7 @@ function researchStories(d: AgentDomain, m: DomainCapabilityMatrix): GeneratedSt
         domainTitle: d.title,
         manager: m.accountable_human,
         storyId,
-        release: releaseName('r0'),
+        release: releaseName(FOUNDATION_STAGE),
       }) ?? '',
     };
   };
@@ -228,7 +261,12 @@ function researchStories(d: AgentDomain, m: DomainCapabilityMatrix): GeneratedSt
 function commandCenterStory(d: AgentDomain, m: DomainCapabilityMatrix): GeneratedStory {
   return {
     story_id: domainCommandCenterStoryId(d.domain_key),
-    release_key: 'r0',
+    // Stays first on the board, and R0 is where "understand what you are about to build" belongs.
+    // Being first in this array IS being position 0 within the rung; see the note above.
+    release_key: FOUNDATION_STAGE,
+    autonomy_stage: FOUNDATION_STAGE,
+    // Already carries six criteria in production, written by Phase 1's backfill, which owns them.
+    acceptance: [],
     kind: 'command_center',
     title: COMMAND_CENTER_TITLE,
     // Draft like every other story: nothing on any of these projects has been accepted yet, and
@@ -259,7 +297,11 @@ function legacyMigrationStory(d: AgentDomain, m: DomainCapabilityMatrix): Genera
 
   return {
     story_id: `${d.domain_key}.LEGACY-MIGRATION-PLAN`,
-    release_key: 'r1',
+    // Same kind of work as the research five: deciding what the agent inherits before it does
+    // anything. The migration design maps it to R0 for that reason.
+    release_key: FOUNDATION_STAGE,
+    autonomy_stage: FOUNDATION_STAGE,
+    acceptance: [],
     kind: 'legacy_migration',
     title: 'Legacy migration plan',
     status: 'draft',
@@ -301,91 +343,32 @@ function legacyMigrationStory(d: AgentDomain, m: DomainCapabilityMatrix): Genera
       domainTitle: d.title,
       manager: m.accountable_human,
       storyId: `${d.domain_key}.LEGACY-MIGRATION-PLAN`,
-      release: releaseName('r1'),
+      release: releaseName(FOUNDATION_STAGE),
     }) ?? '',
   };
 }
 
-/** A real, capability-specific Claude Code prompt, assembled from that capability's own record. */
-function promptFor(d: AgentDomain, m: DomainCapabilityMatrix, c: CapabilityRecord): string {
-  const first = c.release_behaviour[0];
-  return [
-    `# ${c.name}`,
-    ``,
-    `**Domain:** ${d.title} · **Capability:** \`${c.capability_id}\``,
-    `**Accountable human:** ${m.accountable_human} · **Validation state:** ${c.requirement_validation_state}`,
-    `**Built today:** ${c.implementation_state} · **Source:** ${c.classification}`,
-    ``,
-    `## The business outcome`,
-    c.business_outcome,
-    ``,
-    `Intended users: ${c.intended_users.length ? c.intended_users.join(', ') : 'unknown'}.`,
-    ``,
-    `## The human-operable process, as it works now`,
-    `This must be operable by a person before an agent touches it. If a human cannot do it by hand`,
-    `against the surfaces below, the agent version has nothing to stand on.`,
-    ``,
-    `**Workflow**`,
-    bullets(c.workflow, '_unknown -- establishing this IS the first task_'),
-    ``,
-    `**Inputs**`,
-    bullets(c.inputs),
-    ``,
-    `**Outputs**`,
-    bullets(c.outputs),
-    ``,
-    `**Exceptions that must be handled**`,
-    bullets(c.exceptions, '_none recorded -- treat that as a gap, not as "none exist"_'),
-    ``,
-    `## The tool interface`,
-    `**Tools this capability requires** (none is one of the eight default-denied capabilities;`,
-    `anything that would need one is listed under blockers instead)`,
-    bullets(c.required_tools),
-    ``,
-    `**Application surfaces**`,
-    bullets([...c.application_pages, ...c.apis], '_none -- a surface may need building first_'),
-    ``,
-    `**Source modules**`,
-    bullets(c.source_modules),
-    ``,
-    `**Dependencies**`,
-    bullets(c.dependencies),
-    ``,
-    `## The agent behaviour that uses it`,
-    `Starting autonomy **${c.starting_autonomy}**; ceiling **${c.max_permitted_autonomy}**.`,
-    c.max_autonomy_rationale ? `Why that ceiling: ${c.max_autonomy_rationale}` : '',
-    c.human_decision
-      ? `\n**THIS IS A HUMAN DECISION.** It stays human-required at every autonomy level, forever. An`
-        + `\nagent may prepare, summarise and propose; it may never decide. No amount of evidence`
-        + `\npromotes this into automation.`
-      : `\nNot a human-reserved decision, but promotion is still evidence-based and one step at a time.`,
-    ``,
-    first
-      ? `**First release behaviour (${first.autonomy})**\n${first.behaviour}\n\n`
-        + `Acceptance: ${first.acceptance_criteria}`
-      : `No release behaviour is recorded yet. Defining it is the first piece of work.`,
-    ``,
-    `## Before you start`,
-    bullets(
-      c.blocked_by.length > 0 ? [...c.blocked_by] : [],
-      '_no recorded blockers -- re-check rather than trusting this_',
-    ),
-    ``,
-    `## Evidence this is done`,
-    `Cite the real thing: a named passing test, a measured figure with its query, or a file:line.`,
-    `**None of these count:** this story being marked complete, elapsed time, a conversation that`,
-    `went well, or a mocked test passing. ${m.accountable_human} evaluates the evidence, and`,
-    `${c.requirement_validation_state === 'draft' ? 'nothing here is validated yet' : 'validation is recorded'}.`,
-    ``,
-    `## Evidence this capability rests on`,
-    bullets(c.supporting_evidence, '_none -- which is why this is classified proposed_new_'),
-  ].filter((l) => l !== '').join('\n');
-}
+
+/** `internship.application_intake` -> `application_intake`. The id without its domain prefix. */
+const shortCapabilityId = (capabilityId: string): string =>
+  capabilityId.split('.').slice(1).join('.');
+
+/** The id of the capability story a per-rung story hangs off. Kept in one place so they agree. */
+const capabilityStoryId = (domainKey: string, capabilityId: string): string =>
+  `${domainKey}.CAP.${shortCapabilityId(capabilityId)}`;
 
 function implementationStories(d: AgentDomain, m: DomainCapabilityMatrix): GeneratedStory[] {
   return m.capabilities.map((c) => ({
-    story_id: `${d.domain_key}.CAP.${c.capability_id.split('.').slice(1).join('.')}`,
-    release_key: 'r2',
+    story_id: capabilityStoryId(d.domain_key, c.capability_id),
+    // The capability's OWN recorded starting rung, refused rather than defaulted if it is not a
+    // real one. Measured 2026-10-31: all 443 records start at `autonomy:R0`, so every capability
+    // story lands on R0 today -- which is accurate, since none of this work has been validated by
+    // a manager yet, and it is what `AUTONOMY_RELEASE_MIGRATION.md` predicted ("most are R0").
+    release_key: rungOf(c.capability_id, 'starting_autonomy', c.starting_autonomy),
+    autonomy_stage: rungOf(c.capability_id, 'starting_autonomy', c.starting_autonomy),
+    // Backfilled by AF10.2 on 2026-10-21 for every existing row; that script owns the column for
+    // these kinds. The per-rung stories below are different: their criteria are in the data.
+    acceptance: [],
     kind: 'implementation' as StoryKind,
     title: c.name,
     // Nothing is validated, so nothing is ready.
@@ -405,6 +388,66 @@ function implementationStories(d: AgentDomain, m: DomainCapabilityMatrix): Gener
   }));
 }
 
+/**
+ * One story per `release_behaviour[]` entry -- **the additive half of Phase 2, and the half that
+ * makes the ladder real.**
+ *
+ * Nothing here is invented. Every capability record already carries an array of
+ * `{autonomy, behaviour, acceptance_criteria}`, written during the research pass: 964 entries
+ * across the 443 records, spread over all ten rungs. Until now the generator read
+ * `release_behaviour[0]`, interpolated three of its fields into one prompt string, and never
+ * looked at the rest -- so roughly 520 entries with their own acceptance criteria were invisible
+ * to the provisioner. This projects them into rows.
+ *
+ * The story id EXTENDS the capability story's id with the rung, so the relationship is visible in
+ * the id itself and greppable from a board. That is also why `story_id` had to be widened: these
+ * reach 81 characters, and at the old 60-char limit 221 pairs of them collided after truncation.
+ *
+ * A capability's starting rung is deliberately NOT skipped when it also appears in
+ * `release_behaviour` (111 entries do). The capability story says "build this capability"; the
+ * rung story says "reach this behaviour at this authority level, and here is how it is judged".
+ * Those are different pieces of work with different acceptance, and their ids differ, so both
+ * stand.
+ */
+function releaseBehaviourStories(d: AgentDomain, m: DomainCapabilityMatrix): GeneratedStory[] {
+  const stories: GeneratedStory[] = [];
+  for (const c of m.capabilities) {
+    for (const rb of c.release_behaviour) {
+      const stage = rungOf(c.capability_id, 'release_behaviour.autonomy', rb.autonomy);
+      const level = bareLevel(stage);
+      stories.push({
+        story_id: `${capabilityStoryId(d.domain_key, c.capability_id)}.${stage}`,
+        release_key: stage,
+        autonomy_stage: stage,
+        kind: 'release_behaviour',
+        title: `${c.name} · ${level}`,
+        status: 'draft',
+        body:
+          `**${level} · ${AUTONOMY_MEANINGS[level]}**\n\n${rb.behaviour}\n\n`
+          + (RUNG_PLATFORM_GAP[level] ? `${RUNG_PLATFORM_GAP[level]}\n\n` : '')
+          + `**How this is judged:** ${rb.acceptance_criteria}\n\n`
+          + `Capability: \`${c.capability_id}\`. Its ceiling is **${c.max_permitted_autonomy}**`
+          + `${c.max_autonomy_rationale ? ` -- ${c.max_autonomy_rationale}` : ''}.\n\n`
+          + (c.human_decision
+            ? `**This capability is a human decision.** It stays human-required at every rung, `
+              + `forever. Reaching this rung lets the agent prepare, summarise and propose. It `
+              + `never lets it decide.\n\n`
+            : '')
+          + `Reaching a rung makes it eligible for promotion by a named human, on evidence. `
+          + `Finishing this story promotes nothing by itself.`,
+        capability_id: c.capability_id,
+        shared_foundation_reason: null,
+        // The criteria are real, written per rung, and go on the row rather than being left for a
+        // later backfill the way the first 503 stories were.
+        acceptance: [rb.acceptance_criteria],
+        validation_dependency: c.validation_dependency,
+        claude_code_prompt: promptFor(d, m, c, rb),
+      });
+    }
+  }
+  return stories;
+}
+
 export function planForDomain(domainKey: string): DomainPlan {
   const d = AGENT_DOMAINS.find((x) => x.domain_key === domainKey);
   if (!d) throw new Error(`Unknown domain '${domainKey}'`);
@@ -417,6 +460,7 @@ export function planForDomain(domainKey: string): DomainPlan {
       ...researchStories(d, m),
       legacyMigrationStory(d, m),
       ...implementationStories(d, m),
+      ...releaseBehaviourStories(d, m),
     ],
   };
 }
@@ -425,4 +469,9 @@ export function planForAllDomains(): DomainPlan[] {
   return AGENT_DOMAINS.map((d) => planForDomain(d.domain_key));
 }
 
-export { RESEARCH_PREFIXES, RELEASES };
+export {
+  RESEARCH_PREFIXES, RELEASES, AUTONOMY_RELEASES, LEGACY_RELEASES, FOUNDATION_STAGE,
+  capabilityStoryId,
+};
+// Re-exported so the split out of this module is invisible to everything that imported from it.
+export { NotAnAutonomyRungError, type GeneratedRelease } from './agentDomainReleaseLadder';

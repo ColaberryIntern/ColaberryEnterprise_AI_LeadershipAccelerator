@@ -182,6 +182,23 @@ export interface PlannedStory {
   readonly position: number;
   readonly capability_id: string | null;
   readonly release_key: string;
+  /**
+   * The rung this story sits on, namespaced `autonomy:R0`..`autonomy:R9`.
+   *
+   * Phase 2 of `AUTONOMY_RELEASE_MIGRATION.md`, item 7. Until this existed the provisioner
+   * computed a story's rung, rendered it into the prompt PROSE, and dropped it -- so no surface
+   * could answer "which rung is this agent on" without re-parsing a 6,000-character string.
+   */
+  readonly autonomy_stage: string;
+  /**
+   * Acceptance criteria written WITH the row, where the source data carries them.
+   *
+   * Non-empty only for `release_behaviour` stories, whose criteria are recorded per rung in the
+   * capability records. The other kinds were backfilled by AF10.2 and are left to it: the first
+   * 503 stories shipped with this column null and needed two repair scripts, which is the thing
+   * this field exists to stop happening to the next 964.
+   */
+  readonly acceptance: ReadonlyArray<string>;
 }
 
 /**
@@ -224,11 +241,26 @@ function titleFor(r: GeneratedRelease): string {
   return r.name.slice(0, 255);
 }
 
+/**
+ * The width of `student_tasks.story_id`, which this module truncates to.
+ *
+ * Declared here rather than imported from `db/ensureAgentDomainStoryLadderSchema`, because that
+ * module imports `sequelize` and this one's whole contract is that it is pure -- no database, no
+ * clock, no randomness. The two numbers are instead pinned together by a unit test that compares
+ * them, the same way the registry and its `CHECK` constraint are set-compared both ways rather
+ * than one importing the other. A test that fails is better than a purity violation that does not.
+ */
+export const STORY_ID_MAX = 120;
+
 function plannedStory(domainKey: string, s: GeneratedStory, position: number): PlannedStory {
   return {
     id: derivedStoryId(domainKey, s.story_id),
     release_cluster: s.release_key,
-    story_id: s.story_id.slice(0, 60),
+    // 120, matching the widened column. The slice stays because a slice that never cuts is a
+    // guard, and the one that used to cut at 60 was silently producing truncated ids while the
+    // row id above was derived from the FULL string -- so two stories could land as two rows
+    // carrying one `story_id`. See `db/ensureAgentDomainStoryLadderSchema.ts`.
+    story_id: s.story_id.slice(0, STORY_ID_MAX),
     kind: s.kind,
     title: s.title.slice(0, 500),
     narrative: s.body,
@@ -236,6 +268,8 @@ function plannedStory(domainKey: string, s: GeneratedStory, position: number): P
     position,
     capability_id: s.capability_id,
     release_key: s.release_key.slice(0, 60),
+    autonomy_stage: s.autonomy_stage,
+    acceptance: s.acceptance,
   };
 }
 

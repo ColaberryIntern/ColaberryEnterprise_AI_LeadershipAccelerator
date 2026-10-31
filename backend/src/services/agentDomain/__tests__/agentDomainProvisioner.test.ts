@@ -30,7 +30,9 @@ import {
   planAllProvisions,
   allPlannedIds,
   HUMAN_WORK_STATEMENT,
+  STORY_ID_MAX,
 } from '../agentDomainProvisionPlan';
+import { STORY_ID_MIN_WIDTH } from '../../../db/ensureAgentDomainStoryLadderSchema';
 import { AGENT_DOMAIN_KEYS, AGENT_DOMAIN_ENTRY_POINT } from '../agentDomainRegistry';
 import { POST_APPROVAL_STAGES } from '../../lifecycle/lifecycleStages';
 
@@ -288,7 +290,13 @@ describe('the plan covers all ten domains completely', () => {
     // It is not a style preference. Mihret opened one of these, read that it was human work with
     // no prompt, and could not tell whether she was meant to run anything; she asked instead of
     // guessing, which is the only reason it surfaced rather than quietly costing her a day.
-    const research = plans.flatMap((p) => p.stories).filter((s) => s.kind !== 'implementation');
+    //
+    // The filter names the three shared-foundation kinds rather than saying
+    // `kind !== 'implementation'`. That shorthand meant the same set only while `implementation`
+    // was the one traced kind; Phase 2 added `release_behaviour`, and the shorthand would have
+    // quietly pulled 964 per-rung stories into a set the next line expects to hold 70.
+    const SHARED_KINDS = ['research', 'legacy_migration', 'command_center'];
+    const research = plans.flatMap((p) => p.stories).filter((s) => SHARED_KINDS.includes(s.kind));
     // 5 research + 1 legacy migration + 1 Command Center, per domain. The Command Center lands in
     // this set on purpose: it is Claude Code work with a real prompt, so the same floor applies to
     // it as to everything else here.
@@ -333,10 +341,47 @@ describe('the plan covers all ten domains completely', () => {
       }
       for (const s of p.stories) {
         expect(s.title.length).toBeLessThanOrEqual(500);
-        expect(s.story_id.length).toBeLessThanOrEqual(60);
+        expect(s.story_id.length).toBeLessThanOrEqual(STORY_ID_MAX);
         expect(s.release_key.length).toBeLessThanOrEqual(60);
       }
     }
+  });
+
+  it('the truncation width and the COLUMN width are the same number', () => {
+    // `agentDomainProvisionPlan` declares `STORY_ID_MAX` locally instead of importing it from the
+    // schema module, because that module imports `sequelize` and the plan's whole contract is that
+    // it is pure. So the two numbers are pinned to each other HERE, the same way the registry and
+    // its CHECK constraint are set-compared both ways rather than one importing the other.
+    //
+    // If they ever disagree, the plan truncates to a width the column does not have -- which is
+    // the failure this guard exists for, in whichever direction it happens.
+    expect(STORY_ID_MAX).toBe(STORY_ID_MIN_WIDTH);
+  });
+
+  it('no two stories collide after truncation, in any domain', () => {
+    // The reason `story_id` was widened. The row `id` is derived from the UNtruncated string while
+    // `story_id` is truncated to fit, so a collision here does not raise a unique violation -- it
+    // writes two distinct rows carrying one `story_id`, and every later query that joins on it
+    // reads one of them arbitrarily.
+    //
+    // Measured 2026-10-31: 24 ids were ALREADY truncated at the old 60-char limit in production,
+    // and had not collided purely by luck of the naming. Appending a rung to them would have
+    // produced 221 colliding pairs. This asserts the luck is no longer load-bearing.
+    for (const p of plans) {
+      const stored = p.stories.map((s) => s.story_id);
+      expect(new Set(stored).size).toBe(stored.length);
+    }
+  });
+
+  it('POSITIVE CONTROL: truncating to the OLD width would have collided', () => {
+    // Proves the test above is measuring something real rather than passing because every id is
+    // short. If this control ever goes quiet, the ids changed and the guard above stopped
+    // guarding anything.
+    const collisions = plans.flatMap((p) => {
+      const at60 = p.stories.map((s) => s.story_id.slice(0, 60));
+      return at60.length - new Set(at60).size;
+    }).reduce((a, b) => a + b, 0);
+    expect(collisions).toBeGreaterThan(0);
   });
 
   it('every planned builder state is one the CHECK constraint admits', () => {

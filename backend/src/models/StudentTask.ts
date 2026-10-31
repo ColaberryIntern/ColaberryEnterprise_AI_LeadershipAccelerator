@@ -79,6 +79,16 @@ export interface StudentTaskAttributes {
   factory_confidence?: number | null;
   source_evidence?: any;
   decomposition_method?: string | null;
+  // ── Agent Factory autonomy ladder (nullable, additive;
+  // db/ensureAgentDomainStoryLadderSchema.ts) ──
+  // The capability this story traces to, and the rung it sits on. `capability_id` is a dotted
+  // human-readable string rather than a UUID because the capability records live in JSON under
+  // services/agentDomain/capabilities, so there is no table to reference. Both are null on every
+  // story that predates the ladder migration, and on the 70 shared-foundation stories that
+  // legitimately trace to no single capability.
+  capability_id?: string | null;
+  autonomy_stage?: string | null;
+  story_kind?: string | null;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -121,6 +131,9 @@ class StudentTask extends Model<StudentTaskAttributes> implements StudentTaskAtt
   declare factory_confidence: number | null;
   declare source_evidence: any;
   declare decomposition_method: string | null;
+  declare capability_id: string | null;
+  declare autonomy_stage: string | null;
+  declare story_kind: string | null;
   declare created_at: Date;
   declare updated_at: Date;
 }
@@ -142,7 +155,12 @@ StudentTask.init(
     },
     position: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
     // ── Unified story-driven fields (nullable) ──
-    story_id: { type: DataTypes.STRING(60), allowNull: true },
+    // 120, not 60. A per-rung agent-domain story id appends the autonomy rung to the capability's
+    // id and reaches 81 characters; at 60 the provisioner truncated silently while deriving the row
+    // id from the untruncated string, so two distinct stories could land as two rows sharing one
+    // `story_id`. Twenty-four ids were already cut off mid-word in production before the widening.
+    // See `db/ensureAgentDomainStoryLadderSchema.ts`.
+    story_id: { type: DataTypes.STRING(120), allowNull: true },
     narrative: { type: DataTypes.TEXT, allowNull: true },
     owner_agent: { type: DataTypes.STRING(120), allowNull: true },
     acceptance: { type: DataTypes.JSONB, allowNull: true },
@@ -185,6 +203,15 @@ StudentTask.init(
     factory_confidence: { type: DataTypes.DOUBLE, allowNull: true },
     source_evidence: { type: DataTypes.JSONB, allowNull: true },
     decomposition_method: { type: DataTypes.TEXT, allowNull: true },
+    // ── Agent Factory autonomy ladder (nullable, additive). Declared here for the same reason as
+    // every field above: an attribute absent from init is stripped from INSERT/UPDATE by Sequelize
+    // without a word, so the migration would appear to write the rung and read back null. ──
+    capability_id: { type: DataTypes.TEXT, allowNull: true },
+    // Namespaced `autonomy:R0`..`autonomy:R9`, never a bare `R3` -- see
+    // `services/agentDomain/autonomyLadder.ts` for the two risk-tier readers that fail OPEN on an
+    // unrecognised bare value.
+    autonomy_stage: { type: DataTypes.TEXT, allowNull: true },
+    story_kind: { type: DataTypes.TEXT, allowNull: true },
   },
   {
     sequelize,
