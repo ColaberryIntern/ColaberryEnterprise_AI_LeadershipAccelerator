@@ -168,14 +168,25 @@ export async function readAgentGate(agentName: string): Promise<AgentGate> {
  * `SET status = 'processing' ... AND status = 'pending'`. A draft can never be claimed, so it can
  * never be sent by accident. That was verified against `schedulerService` before choosing this
  * table rather than assumed.
+ *
+ * `id` IS SUPPLIED EXPLICITLY. `scheduled_emails.id` is `uuid NOT NULL` with NO database
+ * default — the default is `defaultValue: DataTypes.UUIDV4` on the Sequelize model, which
+ * generates it client-side — so a raw insert that omits it fails every row with
+ * `null value in column "id" ... violates not-null constraint`. This writer omitted it,
+ * which is why production held ZERO `agent_draft` rows on 2026-10-31: no agent draft has
+ * ever been persisted. The `catch` below returns null on failure, so the only visible
+ * symptom was a draft that silently never appeared.
+ *
+ * Guarded by `explorerGrowth/drafts/__tests__/scheduledEmailRawInsertsSupplyId.test.ts`,
+ * which scans every raw insert into this table instead of mocking one.
  */
 async function writeDraft(req: AgentEmailRequest, reason: string): Promise<string | null> {
   try {
     const rows = await sequelize.query<{ id: string }>(
       `INSERT INTO scheduled_emails
-         (lead_id, to_email, subject, body, status, scheduled_for, step_index, campaign_id, metadata, created_at)
+         (id, lead_id, to_email, subject, body, status, scheduled_for, step_index, campaign_id, metadata, created_at)
        VALUES
-         ($leadId, $toEmail, $subject, $body, $status, now(), 0, $campaignId, $metadata::jsonb, now())
+         (gen_random_uuid(), $leadId, $toEmail, $subject, $body, $status, now(), 0, $campaignId, $metadata::jsonb, now())
        RETURNING id`,
       {
         bind: {
