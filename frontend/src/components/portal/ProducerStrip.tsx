@@ -97,6 +97,23 @@ export default function ProducerStrip(
    */
   const [commandNotice, setCommandNotice] = useState<string | null>(null);
   const [readFailed, setReadFailed] = useState(false);
+  /**
+   * WHETHER THIS VIEWER HAS EVER BEEN ANSWERED AS A PRODUCER.
+   *
+   * The control hides itself on every poll tick, which is right the first time and wrong
+   * every time after. A later poll can answer `forbidden` for reasons that have nothing to do
+   * with who is watching — the participant token expires mid-class, the broadcast flag is
+   * turned off, staff context fails to resolve — and the strip would then vanish between one
+   * tick and the next, in the middle of an airing, with no explanation and End being the
+   * thing most needed. A control that disappears silently is indistinguishable from one that
+   * was never there.
+   *
+   * So the hide is only silent BEFORE the server has ever called this viewer a producer.
+   * After that it says what happened. The security property is unchanged: a viewer who is
+   * not a producer never gets a successful read, so this never becomes true for them and
+   * they never see a trace of the control.
+   */
+  const [everAuthorized, setEverAuthorized] = useState(false);
 
   const refresh = useCallback(async (): Promise<void> => {
     const next = await read(sessionId);
@@ -105,6 +122,7 @@ export default function ProducerStrip(
     // exception — there is nothing to keep.
     setState((prev) => (next.outcome === 'failed' && prev ? prev : next));
     setReadFailed(next.outcome === 'failed');
+    if (next.outcome === 'ok' && next.found && next.occurrence) setEverAuthorized(true);
   }, [read, sessionId]);
 
   useEffect(() => {
@@ -144,13 +162,43 @@ export default function ProducerStrip(
     }
   }, [refresh, send, state]);
 
-  // Not a producer, feature dark, or no broadcast for this session: render nothing at all.
-  if (!state || state.outcome === 'forbidden') return null;
-  if (state.outcome === 'ok' && state.found === false) return null;
-  const occurrence = state.occurrence;
-  if (!occurrence) return null;
+  /**
+   * The one shape this component can render: an occurrence plus its command list. Resolved as
+   * a single value so the two guards below need no non-null assertions — anything else is
+   * "nothing to show", and the only question left is whether to say why.
+   */
+  const live = state && state.outcome === 'ok' && state.found !== false && state.occurrence
+    ? { occurrence: state.occurrence, commands: state.commands ?? [] }
+    : null;
 
-  const commands = state.commands ?? [];
+  // Not a producer, feature dark, or no broadcast for this session: render nothing at all —
+  // but only while the server has never answered otherwise. See `everAuthorized`.
+  if (!live && !everAuthorized) return null;
+
+  if (!live) {
+    /**
+     * It was here a moment ago. Say so, and say what to do — a producer mid-airing needs to
+     * know whether to re-authenticate or reach for the API fallback, and the one thing that
+     * helps nobody is an empty space where the End button was.
+     *
+     * No command buttons: the server has stopped authorizing this caller, so every one of
+     * them would fail. Offering them would be the dead affordance this subsystem keeps
+     * finding.
+     */
+    return (
+      <section className="cps" data-testid="producer-strip" aria-label="Producer controls">
+        <style>{CPS_CSS}</style>
+        <p className="cps-notice" role="status" data-testid="producer-revoked">
+          <b>Producer controls are no longer available for this class.</b> The server stopped
+          authorizing this session — most often an expired sign-in, or the broadcast feature
+          being switched off. Sign in again to get them back. If a class is on air and needs
+          ending now, use the API fallback in the go-live directive.
+        </p>
+      </section>
+    );
+  }
+
+  const { occurrence, commands } = live;
   const available = commands.filter((c) => c.available);
   const blocked = commands.filter(
     (c) => !c.available && c.error_class && EXPLAIN_WHEN_BLOCKED.includes(c.command),

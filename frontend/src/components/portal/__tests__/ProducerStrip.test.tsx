@@ -102,6 +102,49 @@ describe('who sees it', () => {
     expect(find('producer-strip')).toBeNull();
   });
 
+  it('DOES NOT VANISH when a later poll says forbidden, having once said otherwise', async () => {
+    // The control re-decides whether to exist on every poll tick. A token that expires
+    // mid-class, or the flag being switched off, answers forbidden for reasons that have
+    // nothing to do with who is watching — and the strip would disappear between one tick
+    // and the next, mid-airing, with End being the thing most needed.
+    await render();
+    expect(find('producer-strip')).not.toBeNull();
+
+    loadState.mockResolvedValue({ outcome: 'forbidden' } as ProducerStateResult);
+    await tap('producer-cmd-enter_backstage');
+
+    expect(find('producer-strip')).not.toBeNull();
+    expect(find('producer-revoked')!.textContent).toContain('no longer available');
+  });
+
+  it('offers no commands once authorization is gone, because every one would fail', async () => {
+    await render();
+    loadState.mockResolvedValue({ outcome: 'forbidden' } as ProducerStateResult);
+    await tap('producer-cmd-enter_backstage');
+
+    expect(find('producer-cmd-enter_backstage')).toBeNull();
+    expect(find('producer-state')).toBeNull();
+  });
+
+  it('says so too if the broadcast stops being attached to the session', async () => {
+    await render();
+    loadState.mockResolvedValue({ outcome: 'ok', found: false, occurrence: null, commands: [] });
+    await tap('producer-cmd-enter_backstage');
+
+    expect(find('producer-revoked')).not.toBeNull();
+  });
+
+  it('CONTROL: the silent hide stays silent for someone who was never a producer', async () => {
+    // The security property this must not trade away. A viewer never gets a successful read,
+    // so `everAuthorized` never becomes true for them and they never reach the explanation
+    // above — no strip, no message, no trace that a control exists.
+    await render({ outcome: 'forbidden' });
+
+    expect(find('producer-strip')).toBeNull();
+    expect(find('producer-revoked')).toBeNull();
+    expect(container.textContent).toBe('');
+  });
+
   it('renders for a producer, with the state, the feed health and the version', async () => {
     await render();
     expect(find('producer-strip')).not.toBeNull();
