@@ -99,6 +99,8 @@ describe('staff (Marketing): the badge, the ride, the rooms', () => {
     expect(offices.map((a) => a.getAttribute('href'))).toEqual(['/admin/campaigns', '/admin/communications', '/admin/visitors', '/admin/explorer-growth', '/admin/growth-journey']
       .map((p) => `/portal/mgmt-enter?next=${encodeURIComponent(p)}`));
     expect(offices.every((a) => a.target === '_blank' && a.rel === 'noopener noreferrer')).toBe(true);
+    // C103: the door carries the room's name, never its /admin address
+    expect(offices.every((a) => a.querySelector('code') === null && !(a.textContent ?? '').includes('/admin'))).toBe(true);
     expect($('[data-testid="cm-hq-panel-floor"]').textContent).toContain(`FLOOR ${numOf('Campaigns')}`);
   });
 
