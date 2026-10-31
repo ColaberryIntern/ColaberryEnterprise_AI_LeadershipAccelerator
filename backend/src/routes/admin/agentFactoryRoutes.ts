@@ -1,13 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { requireSection, adminAllowedSections } from '../../middlewares/authMiddleware';
-import { sequelize } from '../../config/database';
-import {
-  loadProvisionedDomains, loadMyDomains, resolveOwnerIdentityIds,
-  type ProvisionedDomainRow,
-} from '../../services/agentDomain/agentDomainProvisionedReader';
-import { AGENT_DOMAINS } from '../../services/agentDomain/agentDomainRegistry';
-import { resolveProjectRepos } from '../../services/projectRepoResolver';
-import { assembleAgentCards, type RegistryEntry } from '../../services/agentDomain/agentFactoryCards';
+import { listAgentFactoryFor } from '../../services/agentDomain/agentFactoryList';
 
 /**
  * Admin — Agent Factory tab (mgmt-portal M2).
@@ -26,10 +19,6 @@ import { assembleAgentCards, type RegistryEntry } from '../../services/agentDoma
  */
 const router = Router();
 
-/** domain_key → display title + intended builder, the two facts the provisioned row does not carry. */
-const REGISTRY_BY_KEY: ReadonlyMap<string, RegistryEntry> = new Map(
-  AGENT_DOMAINS.map((d) => [d.domain_key, { title: d.title, intended_builder: d.intended_builder }]),
-);
 
 function logFail(event: string, err: unknown, context: Record<string, unknown>): void {
   console.error(JSON.stringify({
@@ -46,18 +35,9 @@ function logFail(event: string, err: unknown, context: Record<string, unknown>):
  */
 router.get('/api/admin/agent-factory', requireSection('agents'), async (req: Request, res: Response) => {
   try {
-    const broad = adminAllowedSections((req as any).admin ?? {}).includes('program');
-    const email = String((req as any).admin?.email ?? '');
-    let rows: ProvisionedDomainRow[];
-    if (broad) {
-      rows = await loadProvisionedDomains(sequelize);
-    } else {
-      const identityIds = await resolveOwnerIdentityIds(sequelize, email);
-      rows = await loadMyDomains(sequelize, email, identityIds);
-    }
-    const repos = await resolveProjectRepos(rows.map((r) => ({ id: r.student_project_id })));
-    const agents = assembleAgentCards(rows, REGISTRY_BY_KEY, repos);
-    res.json({ agents, scope: broad ? 'all' : 'mine' });
+    // C92: the list body lives in services/agentDomain/agentFactoryList.ts, shared with the Campus HQ building
+    const admin = (req as any).admin ?? {};
+    res.json(await listAgentFactoryFor({ email: String(admin.email ?? ''), sections: adminAllowedSections(admin) }));
   } catch (err: unknown) {
     logFail('agent_factory_list_failed', err, {});
     res.status(500).json({ error: 'Could not list the agent factory.' });

@@ -5,8 +5,9 @@ import ErrorBoundary from '../ui/ErrorBoundary';
 import SafeModeBanner from '../admin/SafeModeBanner';
 import { PINNED_LINKS, NAV_GROUPS, ALL_LINKS, NavLink as NavLinkT } from './adminNav';
 import { useAdminCampusPresence } from './useAdminCampusPresence';
-import { useAdminGovContractsNav, adminGovContractNavEntries } from './useAdminGovContractsNav';
-import { useAdminAgentsNav, adminAgentNavEntries } from './useAdminAgentsNav';
+import { useAdminGovContractsNav } from './useAdminGovContractsNav';
+import { useAdminAgentsNav } from './useAdminAgentsNav';
+import { subNavEntries, type NavSubCards } from './adminSubNav';
 
 const COLLAPSE_KEY = 'admin.nav.collapsed.v1';
 
@@ -127,11 +128,13 @@ function AdminLayout() {
   // Per-contract sub-items for the nested "Interns → Gov Contracts" node. The fetch only fires for a
   // viewer who holds `gov_contracts` (owner/Kes), and the list is already row-scoped server-side, so
   // owner/Kes see every contract. Empty ⇒ the node is not rendered at all.
-  const govNavEntries = adminGovContractNavEntries(useAdminGovContractsNav(canSection('gov_contracts')));
+  const subCards: NavSubCards = {
+    gov: useAdminGovContractsNav(canSection('gov_contracts')),
+    agents: useAdminAgentsNav(canSection('agents')),
+  };
 
   // Per-agent sub-items for the nested "Interns → Agents" node — ALL agent domains (the fetch only fires
   // for an `agents` holder). Empty ⇒ the node is not rendered.
-  const agentNavEntries = adminAgentNavEntries(useAdminAgentsNav(canSection('agents')));
 
   const q = query.trim().toLowerCase();
   const searchResults = q
@@ -214,57 +217,34 @@ function AdminLayout() {
                       {!isCollapsed && group.links.map((link) => (
                         <NavItem key={link.path} link={link} active={isActive(link.path)} onNavigate={closeMobile} />
                       ))}
-                      {/* Nested, expandable "Gov Contracts" node — one sub-item per contract, each
-                          opening its read-only cockpit. Shown only inside the Interns group and only
-                          when the gov-contracts fetch returned rows (so only for a gov_contracts
-                          holder). Expanded by default (its collapse key starts undefined). */}
-                      {!isCollapsed && label === 'Interns' && govNavEntries.length > 0 && (() => {
-                        const subKey = 'Interns::gov';
+                      {/* C92: a group's LIVE sub-lists, declared in adminNav.ts (`subLists`), one expandable node each (e.g. Interns ->
+                          Gov Contracts, Agents). Shown only for a holder of the sub-list's section and only when its feed returned rows.
+                          The Campus HQ building renders the same declaration through the same mapping (adminSubNav.ts), so the two stay in
+                          sync: add a sub-list in adminNav.ts and both show it. Collapse keys are `<group>::<source>` (expanded by default). */}
+                      {!isCollapsed && (group.subLists ?? []).map((sl) => {
+                        const entries = canSection(sl.section) ? subNavEntries(sl.source, subCards) : [];
+                        if (entries.length === 0) return null;
+                        const subKey = `${label}::${sl.source}`;
                         const subOpen = !collapsed[subKey];
-                        const subActive = govNavEntries.some((e) => isActive(e.to));
+                        const subActive = entries.some((e) => isActive(e.to));
                         return (
-                          <div className="admin-nav-group" style={{ marginLeft: 12, marginTop: 2 }}>
+                          <div className="admin-nav-group" style={{ marginLeft: 12, marginTop: 2 }} key={subKey}>
                             <button
                               type="button"
                               className={`admin-nav-group__header${subActive ? ' has-active' : ''}`}
                               onClick={() => toggleGroup(subKey)}
                               aria-expanded={subOpen}
                             >
-                              <span>Gov Contracts</span>
+                              <span>{sl.label}</span>
                               <i className={`ri-arrow-${subOpen ? 'down' : 'right'}-s-line`} aria-hidden="true" />
                             </button>
-                            {subOpen && govNavEntries.map((e) => (
+                            {subOpen && entries.map((e) => (
                               <NavSubLink key={e.key} to={e.to} label={e.label} owner={e.owner}
-                                icon="ri-government-line" active={isActive(e.to)} onNavigate={closeMobile} />
+                                icon={`ri-${sl.icon}`} active={isActive(e.to)} onNavigate={closeMobile} />
                             ))}
                           </div>
                         );
-                      })()}
-                      {/* Nested, expandable "Agents" node — a SISTER to Gov Contracts. One sub-item per agent
-                          domain (ALL of them). A built agent links to its live dashboard; an unbuilt one to its
-                          per-agent page. Shown only when the agent-factory fetch returned rows (an `agents` holder). */}
-                      {!isCollapsed && label === 'Interns' && agentNavEntries.length > 0 && (() => {
-                        const subKey = 'Interns::agents';
-                        const subOpen = !collapsed[subKey];
-                        const subActive = agentNavEntries.some((e) => isActive(e.to));
-                        return (
-                          <div className="admin-nav-group" style={{ marginLeft: 12, marginTop: 2 }}>
-                            <button
-                              type="button"
-                              className={`admin-nav-group__header${subActive ? ' has-active' : ''}`}
-                              onClick={() => toggleGroup(subKey)}
-                              aria-expanded={subOpen}
-                            >
-                              <span>Agents</span>
-                              <i className={`ri-arrow-${subOpen ? 'down' : 'right'}-s-line`} aria-hidden="true" />
-                            </button>
-                            {subOpen && agentNavEntries.map((e) => (
-                              <NavSubLink key={e.key} to={e.to} label={e.label} owner={e.owner}
-                                icon="ri-robot-2-line" active={isActive(e.to)} onNavigate={closeMobile} />
-                            ))}
-                          </div>
-                        );
-                      })()}
+                      })}
                     </div>
                   );
                 })}

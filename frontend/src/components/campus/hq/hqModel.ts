@@ -1,5 +1,6 @@
 import { NAV_GROUPS, PINNED_LINKS, type NavGroup, type NavLink } from '../../Layout/adminNav';
 import { mgmtBridgeTo } from '../../../pages/portal/mgmtNext';
+import { subNavEntries, type NavSubCards } from '../../Layout/adminSubNav';
 import type { CampusAudience } from '../campusMap';
 
 /**
@@ -11,6 +12,10 @@ import type { CampusAudience } from '../campusMap';
  * PRESENTATION ONLY. A room is open when the viewer is staff and holds the room's section (`link.section ?? group.section`,
  * the same rule as ALL_LINKS). Section keys stay the only access truth and mgmtSectionGate stays the one enforcement point,
  * so this building can never show open what the admin sidebar would hide (the principle at the top of adminOs/domains.ts).
+ *
+ * C92: a group's LIVE sub-lists (adminNav.ts `subLists`, e.g. Interns -> Gov Contracts, Agents) are rooms on that floor too,
+ * built from the same cards and the same mapping as the sidebar (adminSubNav.ts), and only for a holder of the sub-list's
+ * section, exactly as the sidebar shows them. So a new sidebar sub-list or sub-item reaches the building with no edit here.
  */
 
 /** The one label the building owns: the sidebar's pinned set has no group label. */
@@ -77,12 +82,16 @@ function officeFloor(office: HqOffice): HqFloor {
  * The building for one viewer. `canSection` is their admin sections (GET /api/portal/mgmt/status); `isStaff` is the staff
  * audience. `nav` is injectable so a test can prove a changed sidebar changes the building with no other edit. `office` is
  * a non-staff member's own assigned project(s): when present, their badge opens that one floor and nothing else staff.
+ * `subs` (C92) is the sidebar's live sub-list cards, so a staff floor carries the same sub-rooms the sidebar shows.
  */
-export function buildHq(canSection: (s: string) => boolean, isStaff: boolean, audience: CampusAudience = isStaff ? 'staff' : 'member', nav: HqNav = SIDEBAR, careerName?: string, office?: HqOffice): Hq {
+export function buildHq(canSection: (s: string) => boolean, isStaff: boolean, audience: CampusAudience = isStaff ? 'staff' : 'member', nav: HqNav = SIDEBAR, careerName?: string, office?: HqOffice, subs: NavSubCards = {}): Hq {
   const top = nav.groups.length + 1;
+  const subRooms = (g: NavGroup): HqRoom[] => (g.subLists ?? []).flatMap((sl) => (isStaff && canSection(sl.section)
+    ? subNavEntries(sl.source, subs).map((e) => ({ path: e.to, label: e.label, icon: sl.icon, section: sl.section, newTab: true, external: false, open: true }))
+    : []));
   const floors = [
     floor('pinned', 'PH', EXECUTIVE_FLOOR_LABEL, nav.pinned.map((l) => room(l, '', canSection, isStaff))),
-    ...nav.groups.map((g, i) => floor(`group-${i}`, String(top - i), g.label ?? g.section, g.links.map((l) => room(l, g.section, canSection, isStaff)))),
+    ...nav.groups.map((g, i) => floor(`group-${i}`, String(top - i), g.label ?? g.section, [...g.links.map((l) => room(l, g.section, canSection, isStaff)), ...subRooms(g)])),
   ];
   // Additive and gated: with no office, or for staff (who have real floors), the building is exactly as before.
   if (!isStaff && office && office.projects.length > 0) floors.push(officeFloor(office));

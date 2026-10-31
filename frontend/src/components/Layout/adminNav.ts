@@ -19,7 +19,18 @@
 // A legacy admin with no staff link at all has no enrollment to send to, so the
 // link would always 403 for them.
 export interface NavLink { path: string; label: string; icon: string; section?: string; newTab?: boolean; requiresMgmtBridge?: boolean; }
-export interface NavGroup { label: string | null; section: string; links: NavLink[]; }
+/**
+ * C92: a LIVE sub-list under a group (its entries come from the server, row-scoped for the viewer), e.g. Interns -> Gov Contracts.
+ * Declared here, not in the sidebar component, so the admin sidebar AND the Campus HQ building both render it from this one
+ * place: add a sub-list here and both show it. `source` names the feed (adminSubNav.ts maps each feed to entries).
+ */
+export type NavSubListSource = 'gov' | 'agents';
+export interface NavSubList {
+  source: NavSubListSource; label: string; section: string; icon: string;
+  /** The admin pages its entries open, as strict one-segment patterns: the Management Portal bridge accepts these (mgmtNext.ts). */
+  paths: RegExp[];
+}
+export interface NavGroup { label: string | null; section: string; links: NavLink[]; subLists?: NavSubList[]; }
 
 /** Always-visible quick set above the collapsible groups. */
 export const PINNED_LINKS: NavLink[] = [
@@ -153,6 +164,12 @@ export const NAV_GROUPS: NavGroup[] = [
   // /admin/internship/gov-contract/:deliveryProjectId — the same view the assigned intern sees.
   { label: 'Interns', section: 'internship', links: [
     { path: '/admin/internship', label: 'Interns', icon: 'user-follow-line' },
+  ], subLists: [
+    // C92: each pursuit with a build and an active intern; each agent domain (the sidebar and the building read these)
+    { source: 'gov', label: 'Gov Contracts', section: 'gov_contracts', icon: 'government-line',
+      paths: [/^\/admin\/internship\/gov-contract\/[A-Za-z0-9-]{1,64}$/] },
+    { source: 'agents', label: 'Agents', section: 'agents', icon: 'robot-2-line',
+      paths: [/^\/admin\/agents\/[A-Za-z0-9_-]{1,64}$/, /^\/admin\/internship\/agent\/[A-Za-z0-9_-]{1,64}$/] },
   ]},
   { label: 'Inbox & Content', section: 'inbox_content', links: [
     { path: '/admin/inbox', label: 'Inbox COS', icon: 'inbox-2-line' },

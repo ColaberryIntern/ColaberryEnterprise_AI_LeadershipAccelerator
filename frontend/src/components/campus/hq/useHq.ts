@@ -3,6 +3,7 @@ import type { CampusAudience } from '../campusMap';
 import { useCampusMgmt } from '../campusMgmt';
 import { isTypingTarget } from '../campusEsc';
 import { buildHq, lockedFloorToast, rideOrder, type Hq, type HqFloor, type HqRoom, type HqOffice } from './hqModel';
+import { useHqSubnav } from './useHqSubnav';
 import { takeHqIntent } from './hqIntent';
 import { listMyGovProjects } from '../../../services/govProjectPortalApi';
 
@@ -44,6 +45,8 @@ export function useHq(audience: CampusAudience, reduceMotion: boolean, active = 
   const mgmt = useCampusMgmt();
   const isStaff = audience === 'staff';
   const sectionsKey = mgmt.sections.join(',');
+  // C92: the sidebar's live sub-lists (Gov Contracts, Agents) for this person, so the floors match the sidebar
+  const subs = useHqSubnav(isStaff && active);
   // A member's own office: the gov project(s) they are an ACTIVE member of (membership-scoped server-side). Fail-soft —
   // any error (not assigned, flag off, offline, 403) leaves it undefined, so the building is unchanged. Only members fetch.
   const [office, setOffice] = useState<HqOffice | undefined>(undefined);
@@ -56,8 +59,8 @@ export function useHq(audience: CampusAudience, reduceMotion: boolean, active = 
     return () => { live = false; };
   }, [audience]);
   const officeKey = office ? office.projects.map((p) => p.projectId).join(',') : '';
-  // rebuilt when the sections or the member's office change (keyed on their joined lists), not on every render
-  const hq = useMemo(() => buildHq((s) => mgmt.sections.includes(s), isStaff, audience, undefined, careerName, office), [sectionsKey, isStaff, audience, careerName, officeKey]);
+  // rebuilt when the sections, the member's office or the sub-lists change (keyed on their joined lists), not on every render
+  const hq = useMemo(() => buildHq((s) => mgmt.sections.includes(s), isStaff, audience, undefined, careerName, office, subs), [sectionsKey, isStaff, audience, careerName, officeKey, subs]);
   const [scene, setScene] = useState<HqScene>('ext');
   const [floor, setFloor] = useState<string | null>(null);
   const [cabAt, setCabAt] = useState('G');
