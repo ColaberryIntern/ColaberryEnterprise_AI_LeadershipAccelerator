@@ -223,7 +223,9 @@ export default function AdminGovOpportunitiesPage(): React.ReactElement {
   const [catFilter, setCatFilter] = useState<CatFilter>('all');
   const [sort, setSort] = useState<SortKey>('priority');
   const [decentOnly, setDecentOnly] = useState(false);
-  const [vettedOnly, setVettedOnly] = useState(true);  // Ali: this page should show only vetted opportunities by default
+  // The "Vetted only" view Ali wants. Default OFF in PR 1 — almost nothing is vetted yet, so defaulting on would
+  // show an empty page; the default flips on with PR 2, whose daily sweep populates the vetted set. Toggle anytime.
+  const [vettedOnly, setVettedOnly] = useState(false);
   const [detailsOf, setDetailsOf] = useState<GovOpportunity | null>(null);
   const [dismissingKey, setDismissingKey] = useState<string | null>(null);
   const [recentlyDismissed, setRecentlyDismissed] = useState<GovOpportunity[]>([]);
