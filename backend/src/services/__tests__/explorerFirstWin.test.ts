@@ -32,7 +32,7 @@ describe('explorerFirstWin (C91)', () => {
   });
 
   it('counts every learning type and none of the non-learning ones', () => {
-    expect(FIRST_WIN_EVENT_TYPES).toEqual(expect.arrayContaining(['card_complete', 'knowledge_check', 'survey_complete', 'evaluation_passed', 'ambient_learning']));
+    expect(FIRST_WIN_EVENT_TYPES).toEqual(expect.arrayContaining(['card_complete', 'knowledge_check', 'survey_complete', 'evaluation_passed', 'ambient_learning', 'deep_dive_field_guide']));
     for (const notLearning of ['daily_streak', 'open_house_rsvp', 'profile_completed', 'referral_submitted', 'portal_session', 'community_post']) {
       expect(FIRST_WIN_EVENT_TYPES).not.toContain(notLearning);
     }

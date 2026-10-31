@@ -36,8 +36,10 @@ describe('the report covers every domain, with figures read from the data', () =
     expect(r.totals.legacy_rows_total).toBe(246);
   });
 
-  it('reports 503 stories and 30 releases, which is the corrected composition', () => {
-    expect(r.totals.stories).toBe(503);
+  it('reports 513 stories and 30 releases, which is the corrected composition', () => {
+    // 503 + the ten Command Centers, one per domain. The implementation total is pinned alongside
+    // it so a story count that moves for the wrong reason cannot hide behind the right one.
+    expect(r.totals.stories).toBe(513);
     expect(r.totals.releases).toBe(30);
     expect(r.rows.reduce((n, x) => n + x.implementation_stories, 0)).toBe(443);
   });

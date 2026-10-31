@@ -19,24 +19,24 @@ const interns = (hq: ReturnType<typeof buildHq>) => hq.floors.find((f) => f.labe
 
 describe('the building shows the sidebar sub-lists, for the same person', () => {
   it('the Interns floor has the Interns room, then each Gov Contract and each Agent, opening their admin pages', () => {
-    const rooms = interns(buildHq(ALL, true, 'staff', undefined, undefined, CARDS)).rooms;
+    const rooms = interns(buildHq(ALL, true, 'staff', undefined, undefined, undefined, CARDS)).rooms;
     expect(rooms.map((r) => r.label)).toEqual(['Interns', 'Statewide Victim-Centered', 'Curriculum, Learning & Content']);
     expect(rooms[1]).toMatchObject({ path: '/admin/internship/gov-contract/11111111-2222-4333-8444-555555555555', section: 'gov_contracts', open: true, newTab: true });
     expect(rooms[2]).toMatchObject({ path: '/admin/internship/agent/curriculum', section: 'agents', open: true });
   });
   it('a sub-list whose section the person does not hold is not shown (the sidebar does not show it either)', () => {
-    const rooms = interns(buildHq((s) => s === 'internship', true, 'staff', undefined, undefined, CARDS)).rooms;
+    const rooms = interns(buildHq((s) => s === 'internship', true, 'staff', undefined, undefined, undefined, CARDS)).rooms;
     expect(rooms.map((r) => r.label)).toEqual(['Interns']);
   });
   it('no cards (not loaded, or failed) = the static rooms only, never a guessed list; learners never get sub-items', () => {
     expect(interns(buildHq(ALL, true, 'staff')).rooms.map((r) => r.label)).toEqual(['Interns']);
-    expect(interns(buildHq(ALL, false, 'member', undefined, undefined, CARDS)).rooms.map((r) => r.label)).toEqual(['Interns']);
+    expect(interns(buildHq(ALL, false, 'member', undefined, undefined, undefined, CARDS)).rooms.map((r) => r.label)).toEqual(['Interns']);
   });
 });
 
 describe('drift guard: every sidebar sub-list reaches the building with no other edit', () => {
   it('for every group declaring sub-lists, the floor = its links + the same entries the sidebar maps', () => {
-    const hq = buildHq(ALL, true, 'staff', undefined, undefined, CARDS);
+    const hq = buildHq(ALL, true, 'staff', undefined, undefined, undefined, CARDS);
     const top = NAV_GROUPS.length + 1;
     NAV_GROUPS.forEach((g: NavGroup, i) => {
       const fl = hq.floors.find((f) => f.num === String(top - i))!;
@@ -47,7 +47,7 @@ describe('drift guard: every sidebar sub-list reaches the building with no other
   });
   it('a NEW sub-list declared on any group appears on that floor (injected nav)', () => {
     const nav = { pinned: [], groups: [{ label: 'Lab', section: 'program', links: [], subLists: [{ source: 'agents' as const, label: 'Agents', section: 'agents', icon: 'robot-2-line', paths: [] }] }] };
-    expect(buildHq(ALL, true, 'staff', nav, undefined, CARDS).floors[1].rooms.map((r) => r.label)).toEqual(['Curriculum, Learning & Content']);
+    expect(buildHq(ALL, true, 'staff', nav, undefined, undefined, CARDS).floors[1].rooms.map((r) => r.label)).toEqual(['Curriculum, Learning & Content']);
   });
   it('the admin sidebar renders sub-lists from the declaration, not from a hard-coded group', () => {
     const src = fs.readFileSync(path.join(__dirname, '..', '..', '..', 'Layout', 'AdminLayout.tsx'), 'utf8');

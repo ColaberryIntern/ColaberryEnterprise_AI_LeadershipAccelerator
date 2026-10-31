@@ -22,6 +22,8 @@ interface LeadAttributes {
   last_contacted_at?: Date;
   utm_source?: string;
   utm_campaign?: string;
+  utm_content?: string | null;
+  utm_term?: string | null;
   page_url?: string;
   interest_area?: string;
   message?: string;
@@ -87,6 +89,8 @@ class Lead extends Model<LeadAttributes> implements LeadAttributes {
   declare last_contacted_at: Date;
   declare utm_source: string;
   declare utm_campaign: string;
+  declare utm_content: string | null;
+  declare utm_term: string | null;
   declare page_url: string;
   declare interest_area: string;
   declare message: string;
@@ -197,6 +201,15 @@ Lead.init(
       allowNull: true,
     },
     utm_campaign: {
+      type: DataTypes.STRING(255),
+      allowNull: true,
+    },
+    // C94: which ad (utm_content) and which placement (utm_term). Added in prod by ensureLeadAttributionColumns.
+    utm_content: {
+      type: DataTypes.STRING(255),
+      allowNull: true,
+    },
+    utm_term: {
       type: DataTypes.STRING(255),
       allowNull: true,
     },

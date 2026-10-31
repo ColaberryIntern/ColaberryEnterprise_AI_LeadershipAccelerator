@@ -59,6 +59,24 @@ export interface AgentIdentityConfig {
   /** Off by default — opt in only if this agent will gate a proactive capability on an eligible population. */
   pilotCohortGate?: boolean;
   /**
+   * Declare that this agent creates no tickets, which exempts it from the Agent Ticket Standard
+   * Step 4 `tools_granted` requirement — AND ONLY THAT ONE. Every other registration check still
+   * applies: the reports-to pair, the display identity, and the existence of the `AiAgent` row.
+   *
+   * REQUIRED SHAPE IS AN OBJECT WITH A REASON, not a boolean, on purpose. A bare
+   * `nonTicketCreating: true` is a flag somebody can copy into a new caller without thinking; a
+   * reason has to be written, and it lands in the error message if the exemption is later used
+   * outside the floor.
+   *
+   * The exemption is NOT a promise about the agent's future. `seedAgentIdentity` re-reads
+   * `enabled` and `autonomy_level` off the row and refuses an exempt agent that has been switched
+   * on or promoted — see the gate itself for why that re-read matters more than this field does.
+   *
+   * Set by the ten Agent Factory domain agents (`agentDomain/domainAgentIdentitySeed.ts`), which
+   * exist at the Release Zero floor so a domain has an inspectable agent to build on.
+   */
+  nonTicketCreating?: { readonly reason: string };
+  /**
    * Raw `created_by_id`/`assigned_to_id` strings this process used to stamp on
    * tickets BEFORE it had a real AdminUser identity (e.g. 'cory-engine'). Omitted or
    * empty for a net-new agent with no such history (e.g. Reese). Self-heals into
@@ -215,13 +233,52 @@ export async function seedAgentIdentity(config: AgentIdentityConfig): Promise<Ag
   // body). A ticket-creating agent with no declared tools_granted is exactly
   // the "boilerplate/aspirational capability list" gap Step 4 exists to
   // catch — refuse registration rather than let it ship silently.
+  //
+  // ── THE EXEMPTION, AND WHY IT HAD TO EXIST ────────────────────────────────
+  //
+  // This gate and `agentRegistry/domainAgents.ts` were both right and deadlocked each other for
+  // twelve days. The registry ships the ten Agent Factory domain agents at the Release Zero floor
+  // with `tools_granted: []` DELIBERATELY — its own header says "no capability. Granting one is
+  // AF7.1 and requires a manager" — and this gate then refused all nine of them on every single
+  // boot. Measured in production 2026-10-30: nine `[AI Ops] domain agent identity seed failed
+  // for <X>DomainAgent: AiAgent.tools_granted is missing or empty` lines, every restart, fail-open
+  // so nobody noticed. The consequence was not an error page. `liveAgentsService` selects
+  // `AdminUser` where `is_ai_operated = true AND agent_id IS NOT NULL`, so an agent with no
+  // identity renders as an EMPTY console rather than a broken one: seven interns opened their
+  // agent and saw nothing, with no indication that anything had refused anything.
+  //
+  // THE FIX IS NOT TO GRANT A TOOL. Granting one to satisfy a seeder would also lift the
+  // `no_tool_grants` cap in `effectiveAuthority()`, which forces any capability above
+  // `autonomy:R2` back down while grants are empty — so a cosmetic fix here would have quietly
+  // raised nine agents' authority ceiling. Tool grants are the owner's lever, by design and by
+  // his explicit instruction; a boot-time seeder must never pull it.
+  //
+  // So the gate keeps its scope and gains the words its own error message already used. It
+  // protects TICKET-CREATING agents. An agent that declares it creates none is exempt, and the
+  // exemption is honoured ONLY at the floor — re-read off the row, never trusted from the config.
+  // An exempt agent that is `enabled`, or has been moved above `observe`, is refused exactly as
+  // before: the moment it can act, it owes the standard a real capability list.
   const declaredTools = aiAgent.tools_granted;
   if (!Array.isArray(declaredTools) || declaredTools.length === 0) {
-    throw new Error(
-      `[${config.agentName}] AiAgent.tools_granted is missing or empty — every ticket-creating agent must ` +
-        'declare its real capabilities in AGENT_REGISTRY before seedAgentIdentity() will register it ' +
-        '(Agent Ticket Standard Step 4).',
-    );
+    if (!config.nonTicketCreating) {
+      throw new Error(
+        `[${config.agentName}] AiAgent.tools_granted is missing or empty — every ticket-creating agent must ` +
+          'declare its real capabilities in AGENT_REGISTRY before seedAgentIdentity() will register it ' +
+          '(Agent Ticket Standard Step 4).',
+      );
+    }
+    // The floor, re-asserted from the persisted row. `autonomy_level` is nullable and a null means
+    // "never classified", which is at or below observe; anything else is a level somebody chose.
+    const atFloor = aiAgent.enabled === false
+      && (aiAgent.autonomy_level === 'observe' || aiAgent.autonomy_level === null);
+    if (!atFloor) {
+      throw new Error(
+        `[${config.agentName}] claims nonTicketCreating ("${config.nonTicketCreating.reason}") but is ` +
+          `enabled=${String(aiAgent.enabled)} autonomy_level=${String(aiAgent.autonomy_level)} — the ` +
+          'tools_granted exemption holds only while an agent is disabled and at observe. An agent that ' +
+          'can act must declare its real capabilities (Agent Ticket Standard Step 4).',
+      );
+    }
   }
 
   const [enrollment] = await Enrollment.findOrCreate({

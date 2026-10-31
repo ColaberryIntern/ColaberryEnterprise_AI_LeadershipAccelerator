@@ -70,7 +70,7 @@ export function HqOutside({ s, face, hour, people }: { s: HqState; face: string;
       {tip && (
         <div className="cm-hq-tip" style={{ left: tip.x + 14, top: tip.y + 14 }} role="status">
           <b>{tip.f.num} · {tip.f.label}</b>
-          <small>{!hq.isStaff ? 'Colaberry staff only' : tip.f.access !== 'none' ? `${tip.f.openCount} of ${tip.f.rooms.length} rooms open to you` : '🔒 Your badge doesn’t open this floor'}</small>
+          <small>{tip.f.own ? `Your office · ${tip.f.rooms.length} ${tip.f.rooms.length === 1 ? 'room' : 'rooms'}` : !hq.isStaff ? 'Colaberry staff only' : tip.f.access !== 'none' ? `${tip.f.openCount} of ${tip.f.rooms.length} rooms open to you` : '🔒 Your badge doesn’t open this floor'}</small>
         </div>
       )}
       <div className="cm-hq-legend">
@@ -80,7 +80,7 @@ export function HqOutside({ s, face, hour, people }: { s: HqState; face: string;
       </div>
       <div className="cm-hq-cta">
         <button type="button" className="cm-hq-btn is-red" onClick={s.walkIn} data-testid="cm-hq-walk-in">Walk in →</button>
-        <span className="cm-hq-chip">{hq.isStaff ? <>Your badge opens <b>{lit}</b> of {n} floors</> : 'You can use the ground floor'}</span>
+        <span className="cm-hq-chip">{hq.isStaff ? <>Your badge opens <b>{lit}</b> of {n} floors</> : lit > 0 ? <>Your badge opens your office + the lobby</> : 'You can use the ground floor'}</span>
       </div>
     </div>
   );
@@ -120,11 +120,11 @@ export function HqLobby({ s, face, audience, firstName, hour, desk, lobby, peopl
           const on = f.access !== 'none';
           const here = hq.isStaff ? people.get(f.num)?.length ?? 0 : 0;
           return (
-            <button key={f.key} type="button" className={`r ${hq.isStaff && on ? 'yes' : 'no'}`} aria-disabled={on ? undefined : true}
+            <button key={f.key} type="button" className={`r ${(hq.isStaff && on) || f.own ? 'yes' : 'no'}`} aria-disabled={on ? undefined : true}
               onClick={() => (on ? s.ride(f.num) : s.locked(f))} title={floorStatus(f, hq.isStaff)}>
               <span className="n">{f.num}</span><span className="l">{f.label}</span>
               {here > 0 && <span className="p">👤{here}</span>}
-              <span className="s">{!hq.isStaff ? 'STAFF' : on ? '✓' : '🔒'}</span>
+              <span className="s">{f.own ? '✓' : !hq.isStaff ? 'STAFF' : on ? '✓' : '🔒'}</span>
             </button>
           );
         })}

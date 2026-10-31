@@ -3,6 +3,7 @@ import SectionCard from '../admin/shell/SectionCard';
 import StatCard from '../admin/shell/StatCard';
 import StatusBadge from '../admin/shell/StatusBadge';
 import AsyncPanel from './AsyncPanel';
+import KnowledgeUploadPanel from './KnowledgeUploadPanel';
 import { useExplorerData } from './useExplorerData';
 import {
   getContentHealth,
@@ -191,12 +192,24 @@ export default function ContentTab() {
   );
 
   return (
-    <AsyncPanel
-      state={health}
-      isEmpty={(h) => h.total === 0}
-      emptyMessage="The content registry is empty."
-      emptyHint="The nightly sync projects published curriculum into it. If it has never run, nothing here is wrong — there is simply nothing yet."
-      onRetry={health.reload}
+    <>
+      {/*
+        OUTSIDE the AsyncPanel, deliberately.
+
+        AsyncPanel replaces its children with an empty state when the content registry has
+        no rows. Uploading a knowledge source has nothing to do with that registry — and an
+        empty registry is precisely when someone is most likely to be looking for something
+        to feed the composer. Nested inside, the upload would vanish exactly when it is
+        wanted, and the page would look like it had no answer to its own empty state.
+      */}
+      <KnowledgeUploadPanel />
+
+      <AsyncPanel
+        state={health}
+        isEmpty={(h) => h.total === 0}
+        emptyMessage="The content registry is empty."
+        emptyHint="The nightly sync projects published curriculum into it. If it has never run, nothing here is wrong — there is simply nothing yet."
+        onRetry={health.reload}
     >
       {(h) => (
         <div className="row g-3">
@@ -382,7 +395,8 @@ export default function ContentTab() {
             </SectionCard>
           </div>
         </div>
-      )}
-    </AsyncPanel>
+        )}
+      </AsyncPanel>
+    </>
   );
 }

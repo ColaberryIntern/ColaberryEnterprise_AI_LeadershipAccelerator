@@ -81,6 +81,9 @@ the opposite of a demotion.
 
 ### Phase 1 — Make the agents real and give everyone a Command Center
 
+**BUILT, 30 October 2026.** What follows is what was planned; the subsection after it records what
+building it actually found, because one of the three items was not the problem it looked like.
+
 Nothing on a ladder means anything while the agent is invisible and nobody can see their own plan.
 
 1. **Backfill STORY-000** into all ten domain projects, and add the injection to the domain
@@ -93,6 +96,77 @@ Nothing on a ladder means anything while the agent is invisible and nobody can s
 
 Still `enabled: false`, still `observe`, still no tools. **Visible is not the same as able**, and
 this phase deliberately only buys visibility.
+
+#### What Phase 1 found: the identity seeder was not missing, it was refusing
+
+Item 2 was written as "seed each agent's identity", on the assumption the seeder had never run.
+It runs on **every boot**, and it had been **refusing all nine agents on every boot for twelve
+days**. Measured in the production container, 30 October:
+
+```
+[AI Ops] domain agent identity seed failed for MarketingDomainAgent:
+  AiAgent.tools_granted is missing or empty — every ticket-creating agent must declare its
+  real capabilities in AGENT_REGISTRY before seedAgentIdentity() will register it
+  (Agent Ticket Standard Step 4).
+```
+
+Nine lines like that, every restart. **Two correct designs deadlocked each other.**
+`agentRegistry/domainAgents.ts` ships all ten agents at the Release Zero floor with
+`tools_granted: []` *deliberately* — its own header says "no capability. Granting one is AF7.1 and
+requires a manager" — and `seedAgentIdentity()` refuses any agent whose tool list is empty.
+
+The seeder is fail-open, so nothing broke loudly. `liveAgentsService` selects `AdminUser` where
+`is_ai_operated = true AND agent_id IS NOT NULL`, so an agent with no identity renders an **empty**
+console rather than a broken one. Seven interns opened their agent and saw nothing, with no
+indication that anything had refused anything.
+
+**The fix was not to grant a tool.** Granting one would also lift the `no_tool_grants` cap in
+`effectiveAuthority()`, which forces any capability above `autonomy:R2` back down while grants are
+empty — so a cosmetic fix would have quietly raised nine agents' authority ceiling. Tool grants are
+the owner's lever by design and by explicit instruction; a boot-time seeder must never pull it.
+
+Instead the gate keeps its scope and gains the words its own error message already used: it
+protects **ticket-creating** agents. An agent that declares `nonTicketCreating` is exempt from that
+one check, and the exemption is honoured **only at the floor** — `enabled` and `autonomy_level` are
+re-read off the row rather than trusted from the config, so an exempt agent that has been switched
+on or promoted is refused exactly as before. Ten tests hold that line, including a positive control
+proving the gate still refuses the same row without the exemption.
+
+#### The one existing column Phase 1 writes
+
+This document promises that the only column changing on an existing row is `task_list_id`. That is
+true of Phase 2 and **not** of Phase 1, so it is corrected here rather than quietly contradicted:
+backfilling STORY-000 also rewrites `position` on the stories already in each `r0` release, because
+the portal sorts the board on it and a Command Center that renders fourth is a Command Center
+nobody opens first.
+
+It renormalizes rather than shifting. A shift has to know whether it already ran — run it twice and
+`r0` starts at 2; crash between the shift and the insert and it starts at 1 with a hole, and both
+states are silent. The backfill instead computes the intended order (Command Center first, then
+every existing row in its current order) and writes `0..n`, which is idempotent **by value**: a
+second run computes the same numbers and the `IS DISTINCT FROM` guard writes nothing. It also
+repairs a tie or a gap, which a shift would preserve forever. Relative order among the builder's own
+stories is never changed.
+
+No story, status, `verified_at`, narrative or prompt is touched.
+
+#### Item 3 resolves the agent ids, it does not pin them
+
+`AGENT_DOMAINS[].agent_id` is populated for exactly two domains, `learner_success` (Reese) and
+`curriculum` (Dara), because both agents predate the Agent Factory. The nine `*DomainAgent` rows
+were created later, in one batch, and their ids were never written back.
+
+Those ids are **not** derived — `seedAgentRegistry` creates the rows with `findOrCreate` keyed on
+`agent_name`, so each id is a UUID minted at insert time and differs per environment. Pinning nine
+production UUIDs into the registry would have produced a file that is correct in production and
+silently wrong in dev. `agent_name` is the only stable link, so that is what the reconcile resolves
+on. It fills a `NULL` only, is tenant-scoped (the sibling reconcile shipped without that predicate
+and a verifier reproduced it clobbering another tenant's row), and writes nothing to `enabled`,
+`autonomy_level` or `tools_granted`.
+
+It reports all **ten** domains, not the nine in the agent registry. `curriculum` has no
+`*DomainAgent` entry because its employee is Dara, and a report covering only the registry's nine
+would read as ten clean domains.
 
 ### Phase 2 — Project the ladder
 

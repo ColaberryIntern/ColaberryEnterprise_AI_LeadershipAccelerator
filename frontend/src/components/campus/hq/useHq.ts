@@ -2,9 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CampusAudience } from '../campusMap';
 import { useCampusMgmt } from '../campusMgmt';
 import { isTypingTarget } from '../campusEsc';
-import { buildHq, lockedFloorToast, rideOrder, type Hq, type HqFloor, type HqRoom } from './hqModel';
+import { buildHq, lockedFloorToast, rideOrder, type Hq, type HqFloor, type HqRoom, type HqOffice } from './hqModel';
 import { useHqSubnav } from './useHqSubnav';
 import { takeHqIntent } from './hqIntent';
+import { listMyGovProjects } from '../../../services/govProjectPortalApi';
 
 /**
  * Campus HQ state (H5): which scene you are in (outside, lobby, elevator, a floor), where the cab is, the hovered button, and
@@ -44,10 +45,22 @@ export function useHq(audience: CampusAudience, reduceMotion: boolean, active = 
   const mgmt = useCampusMgmt();
   const isStaff = audience === 'staff';
   const sectionsKey = mgmt.sections.join(',');
-  // rebuilt when the sections change (keyed on their joined list), not on every render
   // C92: the sidebar's live sub-lists (Gov Contracts, Agents) for this person, so the floors match the sidebar
   const subs = useHqSubnav(isStaff && active);
-  const hq = useMemo(() => buildHq((s) => mgmt.sections.includes(s), isStaff, audience, undefined, careerName, subs), [sectionsKey, isStaff, audience, careerName, subs]);
+  // A member's own office: the gov project(s) they are an ACTIVE member of (membership-scoped server-side). Fail-soft —
+  // any error (not assigned, flag off, offline, 403) leaves it undefined, so the building is unchanged. Only members fetch.
+  const [office, setOffice] = useState<HqOffice | undefined>(undefined);
+  useEffect(() => {
+    if (audience !== 'member') { setOffice(undefined); return undefined; }
+    let live = true;
+    listMyGovProjects()
+      .then((cards) => { if (live && cards.length) setOffice({ label: 'Gov Contracts', projects: cards.map((c) => ({ projectId: c.projectId, name: c.name })) }); })
+      .catch(() => { /* not assigned / flag off / offline — no office floor, ground floor only as before */ });
+    return () => { live = false; };
+  }, [audience]);
+  const officeKey = office ? office.projects.map((p) => p.projectId).join(',') : '';
+  // rebuilt when the sections, the member's office or the sub-lists change (keyed on their joined lists), not on every render
+  const hq = useMemo(() => buildHq((s) => mgmt.sections.includes(s), isStaff, audience, undefined, careerName, office, subs), [sectionsKey, isStaff, audience, careerName, officeKey, subs]);
   const [scene, setScene] = useState<HqScene>('ext');
   const [floor, setFloor] = useState<string | null>(null);
   const [cabAt, setCabAt] = useState('G');

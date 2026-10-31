@@ -3382,6 +3382,26 @@ export async function seedAgentRegistry(): Promise<void> {
     console.warn('[AI Ops] domain agent identity seed failed:', err?.message);
   }
 
+  // Phase 1 item 3 -- point each domain's anchor row at its employee. Runs AFTER the identity
+  // seed so a newly registered agent is linked on the same boot it becomes visible.
+  //
+  // Same fail-open posture as every seed above. Safe to run on every boot: it only ever fills a
+  // NULL `agent_id`, is tenant-scoped, and writes nothing to `enabled`, `autonomy_level` or
+  // `tools_granted` -- a link makes an agent findable from its project, not able to act.
+  //
+  // WIRED HERE ON PURPOSE. `promotionCriteria.ts` in this same subtree has 22 refusal codes and
+  // zero callers, which is a gate that guards nothing; a reconcile with no caller is the same
+  // mistake wearing different clothes.
+  try {
+    const { linkDomainAgents } = await import('./agentDomain/agentDomainAgentLink');
+    const { sequelize } = await import('../config/database');
+    const linked = await linkDomainAgents(sequelize);
+    const n = linked.filter((r) => r.outcome === 'linked').length;
+    if (n > 0) console.log(`[AI Ops] linked ${n} domain project(s) to their agent`);
+  } catch (err: any) {
+    console.warn('[AI Ops] domain agent link failed:', err?.message);
+  }
+
   // Agent Registration Stage 1 — identity-only registrations for the 5
   // ticket-creator processes registered above. Same fail-open posture: one
   // agent's identity-seed failure must never block another's or boot.

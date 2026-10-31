@@ -21,11 +21,16 @@ import type { CampusAudience } from '../campusMap';
 /** The one label the building owns: the sidebar's pinned set has no group label. */
 export const EXECUTIVE_FLOOR_LABEL = 'Executive Floor';
 
-export interface HqRoom { path: string; label: string; icon: string; section: string; newTab: boolean; external: boolean; open: boolean }
-export interface HqFloor { key: string; num: string; label: string; rooms: HqRoom[]; openCount: number; access: 'all' | 'some' | 'none' }
+export interface HqRoom { path: string; label: string; icon: string; section: string; newTab: boolean; external: boolean; open: boolean; own?: boolean }
+export interface HqFloor { key: string; num: string; label: string; rooms: HqRoom[]; openCount: number; access: 'all' | 'some' | 'none'; own?: boolean }
 export interface GroundRoom { key: 'career' | 'partner' | 'mgmt'; label: string; sub: string; icon: string; route: string; portal: boolean }
 export interface HqNav { pinned: NavLink[]; groups: NavGroup[] }
 export interface Hq { floors: HqFloor[]; ground: GroundRoom[]; isStaff: boolean }
+
+/** A member's own office in the tower: the floor their badge opens, one room per assigned project. Supplied only for a
+ *  non-staff member (from their active delivery memberships); absent ⇒ the building is staff-only, exactly as before. */
+export interface HqOfficeProject { projectId: string; name: string }
+export interface HqOffice { label: string; projects: HqOfficeProject[] }
 
 const SIDEBAR: HqNav = { pinned: PINNED_LINKS, groups: NAV_GROUPS };
 const isExternal = (path: string) => /^https?:/.test(path);
@@ -54,10 +59,32 @@ export function groundFor(audience: CampusAudience, careerName = 'Career Center'
 }
 
 /**
- * The building for one viewer. `canSection` is their admin sections (GET /api/portal/mgmt/status); `isStaff` is the staff
- * audience. `nav` is injectable so a test can prove a changed sidebar changes the building with no other edit.
+ * A member's own office floor (H4): one room per assigned project, each a real link to the participant cockpit
+ * (/portal/gov-projects/:id, membership-enforced server-side). `own` marks it the viewer's own, so the badge, the
+ * floor list and the room name read as theirs — never "Staff only" — without opening any staff section.
  */
-export function buildHq(canSection: (s: string) => boolean, isStaff: boolean, audience: CampusAudience = isStaff ? 'staff' : 'member', nav: HqNav = SIDEBAR, careerName?: string, subs: NavSubCards = {}): Hq {
+const OFFICE_FLOOR_NUM = '1'; // always free: sidebar floors number from groups+1 down to 2, and G is the lobby
+function officeFloor(office: HqOffice): HqFloor {
+  const rooms: HqRoom[] = office.projects.map((p) => ({
+    path: `/portal/gov-projects/${p.projectId}`,
+    label: p.name || p.projectId,
+    icon: 'briefcase-4-line',
+    section: 'own',
+    newTab: false,
+    external: false,
+    open: true,
+    own: true,
+  }));
+  return { key: 'office', num: OFFICE_FLOOR_NUM, label: office.label, rooms, openCount: rooms.length, access: 'all', own: true };
+}
+
+/**
+ * The building for one viewer. `canSection` is their admin sections (GET /api/portal/mgmt/status); `isStaff` is the staff
+ * audience. `nav` is injectable so a test can prove a changed sidebar changes the building with no other edit. `office` is
+ * a non-staff member's own assigned project(s): when present, their badge opens that one floor and nothing else staff.
+ * `subs` (C92) is the sidebar's live sub-list cards, so a staff floor carries the same sub-rooms the sidebar shows.
+ */
+export function buildHq(canSection: (s: string) => boolean, isStaff: boolean, audience: CampusAudience = isStaff ? 'staff' : 'member', nav: HqNav = SIDEBAR, careerName?: string, office?: HqOffice, subs: NavSubCards = {}): Hq {
   const top = nav.groups.length + 1;
   const subRooms = (g: NavGroup): HqRoom[] => (g.subLists ?? []).flatMap((sl) => (isStaff && canSection(sl.section)
     ? subNavEntries(sl.source, subs).map((e) => ({ path: e.to, label: e.label, icon: sl.icon, section: sl.section, newTab: true, external: false, open: true }))
@@ -66,12 +93,15 @@ export function buildHq(canSection: (s: string) => boolean, isStaff: boolean, au
     floor('pinned', 'PH', EXECUTIVE_FLOOR_LABEL, nav.pinned.map((l) => room(l, '', canSection, isStaff))),
     ...nav.groups.map((g, i) => floor(`group-${i}`, String(top - i), g.label ?? g.section, [...g.links.map((l) => room(l, g.section, canSection, isStaff)), ...subRooms(g)])),
   ];
+  // Additive and gated: with no office, or for staff (who have real floors), the building is exactly as before.
+  if (!isStaff && office && office.projects.length > 0) floors.push(officeFloor(office));
   return { floors, ground: groundFor(audience, careerName), isStaff };
 }
 
 /** Where a room opens, in a new tab: an external link its own URL; every internal page through the Management Portal
  *  bridge (the allowlist holds every sidebar path, H3), including AI Training's own landing page. */
 export function roomHref(r: HqRoom): string {
+  if (r.own) return r.path; // a member's own cockpit is a portal route, reached directly, not through the admin bridge
   return r.external ? r.path : mgmtBridgeTo(r.path);
 }
 
@@ -80,8 +110,9 @@ export const openFloors = (hq: Hq): HqFloor[] => hq.floors.filter((f) => f.acces
 
 /** The badge's level line: ALL-ACCESS BADGE, OPENS n OF N FLOORS, or GROUND FLOOR ONLY. */
 export function badgeLevel(hq: Hq): string {
-  if (!hq.isStaff) return 'GROUND FLOOR ONLY';
   const n = openFloors(hq).length;
+  // A member with an office floor opens it (never all); a member with none is still ground-floor-only.
+  if (!hq.isStaff) return n > 0 ? `OPENS ${n} OF ${hq.floors.length} FLOORS` : 'GROUND FLOOR ONLY';
   return n === hq.floors.length ? 'ALL-ACCESS BADGE' : `OPENS ${n} OF ${hq.floors.length} FLOORS`;
 }
 
@@ -89,6 +120,7 @@ export const roomsText = (n: number): string => `${n} ${n === 1 ? 'room' : 'room
 
 /** A floor's status in the Floors list: ✓ Your badge, ✓ k of n rooms, 🔒 No access, or Staff only. */
 export function floorStatus(f: HqFloor, isStaff: boolean): string {
+  if (f.own) return '✓ Your badge';
   if (!isStaff) return 'Staff only';
   if (f.access === 'all') return '✓ Your badge';
   if (f.access === 'some') return `✓ ${f.openCount} of ${f.rooms.length} rooms`;
@@ -97,12 +129,14 @@ export function floorStatus(f: HqFloor, isStaff: boolean): string {
 
 /** A floor button's small line in the elevator. */
 export function buttonSub(f: HqFloor, isStaff: boolean): string {
+  if (f.own) return roomsText(f.rooms.length);
   if (f.access === 'none') return isStaff ? 'No access' : 'Staff only';
   return f.access === 'all' ? roomsText(f.rooms.length) : `${f.openCount} of ${f.rooms.length} rooms`;
 }
 
-/** What a viewer may read about a room: members and explorers never see room names on staff floors (H6). */
-export const roomName = (r: HqRoom, isStaff: boolean): string => (isStaff ? r.label : 'Staff room');
+/** What a viewer may read about a room: members and explorers never see room names on staff floors (H6), but they do see
+ *  their own office rooms by name. */
+export const roomName = (r: HqRoom, isStaff: boolean): string => (r.own || isStaff ? r.label : 'Staff room');
 
 export const lockedFloorToast = (f: HqFloor, isStaff: boolean): string => (isStaff
   ? `Your badge doesn’t open ${f.label}. Ask an admin to add it to your role.`
@@ -112,7 +146,14 @@ export const lockedFloorToast = (f: HqFloor, isStaff: boolean): string => (isSta
 export function conciergeLine(hq: Hq, firstName: string, audience: CampusAudience, hour: number): string {
   const part = hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening';
   const to = firstName ? `, ${firstName}` : ''; // no name read yet: the greeting goes without one, never "there"
-  if (!hq.isStaff) return `Welcome${to}. The ground floor is yours: ${hq.ground.map((g) => g.label).join(', ')}. The floors above are for Colaberry staff.`;
+  if (!hq.isStaff) {
+    const mine = hq.floors.filter((f) => f.own);
+    if (mine.length) {
+      const names = mine.flatMap((f) => f.rooms.map((r) => r.label));
+      return `Welcome${to}. Your badge opens the ground floor and your office: ${names.slice(0, 3).join(', ')}${names.length > 3 ? '…' : ''}. The other floors are for Colaberry staff.`;
+    }
+    return `Welcome${to}. The ground floor is yours: ${hq.ground.map((g) => g.label).join(', ')}. The floors above are for Colaberry staff.`;
+  }
   const open = openFloors(hq);
   if (open.length === 0) return `Good ${part}${to}. Your badge opens the ground floor. Ask an admin to add a floor to your role.`;
   const which = open.length === hq.floors.length ? 'every floor' : `${open.length} ${open.length === 1 ? 'floor' : 'floors'}`;
@@ -121,7 +162,11 @@ export function conciergeLine(hq: Hq, firstName: string, audience: CampusAudienc
 
 /** The badge reader's line at the turnstiles. */
 export function readerLine(hq: Hq, audience: CampusAudience): string {
-  if (!hq.isStaff) return `${audience === 'explorer' ? 'Visitor' : audience === 'business' ? 'Partner' : 'Member'} badge · ground floor`;
+  if (!hq.isStaff) {
+    const mine = openFloors(hq).length;
+    if (mine) return `Member badge · ${mine} ${mine === 1 ? 'floor' : 'floors'}`;
+    return `${audience === 'explorer' ? 'Visitor' : audience === 'business' ? 'Partner' : 'Member'} badge · ground floor`;
+  }
   const n = openFloors(hq).length;
   return `Tap your badge · ${n} ${n === 1 ? 'floor' : 'floors'}`;
 }

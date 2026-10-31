@@ -6,7 +6,7 @@
 import React from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { act } from 'react-dom/test-utils';
-import { foodRegion, foodLead, urlFor, DELIVERY_APPS, mealAt, appsFor } from '../chow/deliveryApps';
+import { CRAVINGS, foodRegion, foodLead, urlFor, DELIVERY_APPS, mealAt, appsFor } from '../chow/deliveryApps';
 import { OrderSheet, ORDER_EVENT } from '../chow/OrderSheet';
 import { CravingScreen, Chalkboard } from '../chow/ChowRoom';
 import { CAMPUS_BUILDINGS } from '../campusMap';
@@ -38,6 +38,16 @@ it('the URL builder encodes the craving; apps without search open their home pag
   expect(urlFor(DELIVERY_APPS.find((a) => a.name === 'Grubhub')!, 'pizza')).toBe('https://www.grubhub.com/');
 });
 
+it('C93: twenty distinct cravings including Indian, each searchable by the apps that search', () => {
+  expect(CRAVINGS).toHaveLength(20);
+  expect(new Set(CRAVINGS.map((c) => c.id)).size).toBe(20);
+  expect(new Set(CRAVINGS.map((c) => c.label)).size).toBe(20);
+  expect(CRAVINGS.map((c) => c.label)).toEqual(expect.arrayContaining(['Indian', 'Chinese', 'Thai', 'Greek']));
+  const dd = DELIVERY_APPS.find((a) => a.name === 'DoorDash')!;
+  expect(urlFor(dd, 'Indian')).toBe('https://www.doordash.com/search/store/indian/');
+  expect(urlFor(DELIVERY_APPS.find((a) => a.name === 'Uber Eats')!, 'Greek')).toBe('https://www.ubereats.com/search?q=greek');
+});
+
 let container: HTMLDivElement;
 let root: Root;
 beforeEach(() => { container = document.createElement('div'); document.body.appendChild(container); root = createRoot(container); });
@@ -65,12 +75,12 @@ it('London shows Deliveroo, Just Eat and Uber Eats; the default craving follows 
   expect(q('[data-testid="cm-crave-coffee"]')!.getAttribute('aria-pressed')).toBe('true');
 });
 
-it('the room: the screen grid has eight cravings and each tile opens the sheet on it; the chalkboard and Order food open it too', () => {
+it('the room: the screen grid has twenty cravings (C93) and each tile opens the sheet on it; the chalkboard and Order food open it too', () => {
   const opened: unknown[] = [];
   const on = (e: Event) => opened.push((e as CustomEvent).detail);
   window.addEventListener(ORDER_EVENT, on);
   act(() => { root.render(<><CravingScreen now={at(12)} condition="rain" /><Chalkboard now={at(19)} condition={null} /></>); });
-  expect(container.querySelectorAll('[data-testid^="cm-crave-tile-"]')).toHaveLength(8);
+  expect(container.querySelectorAll('[data-testid^="cm-crave-tile-"]')).toHaveLength(20);
   act(() => { (q('[data-testid="cm-crave-tile-tacos"]') as HTMLButtonElement).click(); });
   act(() => { (q('[data-testid="cm-crave-order"]') as HTMLButtonElement).click(); });
   act(() => { (q('[data-testid="cm-chalkboard"]') as HTMLButtonElement).click(); });

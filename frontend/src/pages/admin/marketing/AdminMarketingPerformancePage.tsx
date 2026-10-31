@@ -7,7 +7,7 @@ import { tabFromSearch, type PerformanceTab } from './performanceTabs';
 import api from '../../../utils/api';
 import { PageHeader, StatCard, StatusBadge, SectionCard } from '../../../components/admin/shell';
 import { TrustSignal } from '../../../components/admin/shell/trust';
-import { deriveMarketingTrust, MarketingDataState } from './marketingTrust';
+import { deriveTabTrust, MarketingDataState } from './marketingTrust';
 import { formatMoneyOrUnavailable, formatRatioOrUnavailable, formatSpend } from './marketingFormat';
 import CampaignTableControls from './CampaignTableControls';
 import { defaultScope, scopeToQuery, type MarketingScope, type ScopeComparison } from './marketingScope';
@@ -694,10 +694,32 @@ function CampaignDetailModal({ campaign: c, onClose, onEdit, onRefresh }: {
 
 // ─── Campaign Link Registry Tab ─────────────────────────────────────────────
 
-function CampaignLinkRegistryTab() {
+function CampaignLinkRegistryTab({
+  onDataState,
+}: {
+  onDataState?: (state: MarketingDataState) => void;
+} = {}) {
   const [campaigns, setCampaigns] = useState<RegisteredCampaign[]>([]);
   const [channelROI, setChannelROI] = useState<ChannelROI[]>([]);
   const [loading, setLoading] = useState(true);
+  /**
+   * Whether the campaign fetch FAILED, as opposed to returning nothing.
+   *
+   * The catch used to do `setCampaigns([])` alone, so a 500 rendered the same empty state as a
+   * registry with no campaigns in it — "No campaigns found. Create a campaign to get started."
+   * over an outage. Adding the trust badge forced this to become a real state, because there
+   * was no honest value to report without it.
+   */
+  const [failed, setFailed] = useState(false);
+  /**
+   * Whether the channel-ROI call failed. Separate from `failed`, because it is caught on
+   * purpose so a dead channel-roi does not take the campaign table down with it — but the
+   * metric-status list comes from THAT response, and an uncaught-but-unrecorded failure would
+   * look exactly like "every metric is computable".
+   */
+  const [roiFailed, setRoiFailed] = useState(false);
+  /** When the fetch resolved. See the note in AcquisitionFunnelPanel: never a render time. */
+  const [fetchedAt, setFetchedAt] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [editingCampaign, setEditingCampaign] = useState<RegisteredCampaign | null>(null);
   const [detailCampaign, setDetailCampaign] = useState<RegisteredCampaign | null>(null);
@@ -708,10 +730,19 @@ function CampaignLinkRegistryTab() {
 
   const fetchCampaigns = useCallback(async () => {
     setLoading(true);
+    setFailed(false);
+    setRoiFailed(false);
     try {
       const [campRes, roiRes] = await Promise.all([
         api.get('/api/admin/campaigns'),
-        api.get('/api/admin/marketing/channel-roi').catch(() => ({ data: { channels: [] } })),
+        // The swallow stays — a dead channel-roi should not take the campaign table down with
+        // it — but it is RECORDED now. `unavailable` comes from this response, so without the
+        // flag a failed call looks identical to "every metric is computable" and the badge
+        // would certify completeness it never heard anything about.
+        api.get('/api/admin/marketing/channel-roi').catch(() => {
+          setRoiFailed(true);
+          return { data: { channels: [] } };
+        }),
       ]);
       const all = campRes.data?.campaigns || campRes.data || [];
       // Only show marketing campaigns (approval_status = 'live') — not internal automation campaigns
@@ -728,14 +759,41 @@ function CampaignLinkRegistryTab() {
         } catch { kpis[c.id] = { visitors: 0, leads: 0, engaged: 0, enrollments: 0 }; }
       }));
       setCampaignKPIs(kpis);
+      setFetchedAt(new Date().toISOString());
     } catch {
       setCampaigns([]);
+      // An outage is not an empty registry. Without this the tab says "No campaigns found.
+      // Create a campaign to get started" to someone whose campaigns are all still there.
+      setFailed(true);
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => { fetchCampaigns(); }, [fetchCampaigns]);
+
+  /**
+   * Report to the page's trust badge.
+   *
+   * `unavailable` comes from the server's own registry via `channel-roi`, never from a list
+   * written here — the frontend must not be able to drift into a rosier view than the backend's.
+   * While the fetch is in flight it is `undefined`, which is "no answer yet" rather than "none".
+   */
+  useEffect(() => {
+    if (!onDataState) return;
+
+    onDataState({
+      loading,
+      error: failed,
+      fetchedAt,
+      // `undefined` is "no answer yet", NOT "none" — which is the right reading while the
+      // fetch is in flight, when the campaign call failed, and when the channel-ROI call that
+      // carries the metric status failed. Reporting `[]` in that last case would claim
+      // completeness on the strength of a response that never arrived.
+      unavailable:
+        loading || failed || roiFailed ? undefined : channelROI[0]?.unavailable ?? [],
+    });
+  }, [onDataState, loading, failed, roiFailed, fetchedAt, channelROI]);
 
   const openDrillDown = async (c: RegisteredCampaign) => {
     setDrillLoading(true);
@@ -831,6 +889,15 @@ function CampaignLinkRegistryTab() {
                 <span className="visually-hidden">Loading...</span>
               </div>
               Loading campaigns...
+            </div>
+          ) : failed ? (
+            /* An outage and an empty registry used to render identically, and the calm reading
+               is the one that sticks: someone whose campaigns were all still there would be
+               told to go and create one. Checked BEFORE the empty case, because a failed fetch
+               also leaves the list empty. */
+            <div className="p-4 text-center text-danger" data-testid="registry-error">
+              The campaign registry could not be loaded. This is not an empty registry — your
+              campaigns are still there. Try again, or check the API.
             </div>
           ) : campaigns.length === 0 ? (
             <div className="p-4 text-center text-muted">
@@ -958,7 +1025,12 @@ function CampaignLinkRegistryTab() {
   );
 }
 
-// ─── Revenue Intelligence Tab (Original Content) ────────────────────────────
+// ─── Campaign performance tab (keyed `revenue`; renamed 2026-10-30) ─────────
+//
+// The component is still `RevenueIntelligenceTab` and the key is still `revenue`, because
+// the backend's attention queue links to `?tab=revenue`. Only what a person READS changed.
+// The panel has never shown a revenue figure and structurally cannot: see the note on
+// PERFORMANCE_TAB_LABELS.revenue.
 
 function RevenueIntelligenceTab(
   { onDataState, onComparison, scope }: { onDataState?: (s: MarketingDataState) => void; onComparison?: (c: ScopeComparison | null) => void; scope: MarketingScope },
@@ -1133,7 +1205,9 @@ function RevenueIntelligenceTab(
   return (
     <div>
       <div className="d-flex justify-content-between align-items-center mb-4">
-        <h2 className="h4 fw-bold mb-0">Revenue Intelligence</h2>
+        {/* Reads the label rather than repeating it, so the heading and the tab strip cannot
+            end up calling the same panel two different things. */}
+        <h2 className="h4 fw-bold mb-0">{PERFORMANCE_TAB_LABELS.revenue}</h2>
         <button className="btn btn-sm btn-outline-primary" onClick={fetchData} disabled={loading}>
           <i className="ri-refresh-line" aria-hidden="true" /> {loading ? 'Loading...' : 'Refresh'}
         </button>
@@ -1311,12 +1385,25 @@ function AdminMarketingPerformancePage() {
   // component stays mounted, so the initial-state read above would not see it.
   useEffect(() => { setActiveTab(tabFromSearch(search)); }, [search]);
 
-  /* ---------- per-page trust signal ----------
+  /* ---------- per-TAB trust signal ----------
    * Derived from the data the page actually received. This was previously a literal
    * `level: 'live'` with `updatedAt: new Date()` inside an empty-dependency useMemo, which
    * reported the component's MOUNT TIME as the data's freshness and read "live" even when the
-   * fetch had failed. See marketingTrust.ts for the full account. */
-  const [dataState, setDataState] = useState<MarketingDataState>({});
+   * fetch had failed. See marketingTrust.ts for the full account.
+   *
+   * ── AND THEN IT WAS STILL WRONG, IN A QUIETER WAY (fixed 2026-10-30) ──
+   *
+   * One badge served four panels and exactly ONE of them fed it. `dataState` started as `{}`,
+   * which derives to `unverified`, and only the campaign-performance tab ever replaced it. So
+   * the badge read "Unverified" above the marketing funnel — which had loaded perfectly — and
+   * kept reading it there for as long as nobody opened the other tab. Open that tab once and
+   * the badge flipped to "Stale" and then reported THAT tab's state while the operator was
+   * looking at a different one.
+   *
+   * Keyed by tab now, and the badge shows the ACTIVE tab's entry. A badge that describes a
+   * panel you are not looking at is worse than no badge: it certifies the wrong thing, which
+   * is the same failure `marketingTrust.ts` was written to end. */
+  const [tabState, setTabState] = useState<Partial<Record<PerformanceTab, MarketingDataState>>>({});
 
   /**
    * Scope owned here, at the page, because it governs every tab. `defaultScope` is seeded from
@@ -1340,17 +1427,44 @@ function AdminMarketingPerformancePage() {
       .finally(() => { if (!cancelled) setBrandsLoading(false); });
     return () => { cancelled = true; };
   }, []);
-  const handleDataState = useCallback((next: MarketingDataState) => setDataState(next), []);
+  /**
+   * One stable reporter per tab.
+   *
+   * NOT a `reportFor(tab)` factory. Each panel holds its reporter in a `useEffect` dependency
+   * list, so a factory returning a fresh function every render would re-fire those effects
+   * forever. These are created once and never change identity.
+   */
+  const reportFunnel = useCallback(
+    (next: MarketingDataState) => setTabState((prev) => ({ ...prev, funnel: next })), []);
+  const reportRevenue = useCallback(
+    (next: MarketingDataState) => setTabState((prev) => ({ ...prev, revenue: next })), []);
+  const reportRegistry = useCallback(
+    (next: MarketingDataState) => setTabState((prev) => ({ ...prev, registry: next })), []);
+
   const [comparison, setComparison] = useState<ScopeComparison | null>(null);
   const handleComparison = useCallback((next: ScopeComparison | null) => setComparison(next), []);
-  const trust: TrustSignal = useMemo(() => deriveMarketingTrust(dataState), [dataState]);
+
+  /**
+   * The badge describes the tab in front of you.
+   *
+   * A tab that does not report gets `unreported`, which reads as "this tab does not report a
+   * trust signal" rather than "nothing has loaded yet". Both are `unverified` — nothing has
+   * been checked either way — but one resolves on its own and the other never will, and
+   * telling someone to wait for an answer that is not coming is its own small failure.
+   */
+  const trust: TrustSignal = useMemo(
+    () => deriveTabTrust(activeTab, tabState),
+    [tabState, activeTab],
+  );
 
   return (
     <>
+      {/* The subtitle says what the tabs measure. It used to say "revenue", which this page
+          does not have and structurally cannot compute — see PERFORMANCE_TAB_LABELS.revenue. */}
       <PageHeader
         title="Performance"
         icon="line-chart-line"
-        subtitle="Marketing funnel, revenue, campaign links, and AI outreach."
+        subtitle="Marketing funnel, campaign performance, campaign links, and AI outreach."
         breadcrumb={[
           { label: 'Admin', to: '/admin/dashboard' },
           { label: 'Marketing', to: '/admin/marketing' },
@@ -1376,13 +1490,18 @@ function AdminMarketingPerformancePage() {
       </PageHeader>
 
       {/* Decides for itself whether the filter belongs above this tab - see
-          PerformanceScopeBar, which exists so that rule can be tested. */}
+          PerformanceScopeBar, which exists so that rule can be tested.
+
+          `fetchedAt` is the campaign-performance tab's OWN fetch time, not the active tab's.
+          This strip only ever renders above that tab — it is the only one the brand/date
+          filter filters — so stamping it with another tab's timestamp would date a control
+          that tab is not even being shown beside. */}
       <PerformanceScopeBar
         activeTab={activeTab}
         scope={scope}
         brands={scopeBrands}
         brandsLoading={brandsLoading}
-        fetchedAt={dataState.fetchedAt ?? null}
+        fetchedAt={tabState.revenue?.fetchedAt ?? null}
         now={Date.now()}
         comparison={comparison}
         onScopeChange={setScope}
@@ -1406,15 +1525,17 @@ function AdminMarketingPerformancePage() {
               reads the tracking data and answers what the tab is actually opened to find out:
               who clicked, who signed up, and whether any of them came back.
             */}
-            <AcquisitionFunnelPanel days={30} />
+            {/* The acquisition funnel is what feeds this tab's trust badge. The campaign graph
+                below it reports nothing, which is why the badge names the funnel. */}
+            <AcquisitionFunnelPanel days={30} onDataState={reportFunnel} />
 
             <h3 className="h6 text-muted mt-4 mb-2">Campaign graph</h3>
             <MarketingFunnelGraph />
           </Suspense>
         </div>
       )}
-      {activeTab === 'revenue' && <RevenueIntelligenceTab onDataState={handleDataState} onComparison={handleComparison} scope={scope} />}
-      {activeTab === 'registry' && <CampaignLinkRegistryTab />}
+      {activeTab === 'revenue' && <RevenueIntelligenceTab onDataState={reportRevenue} onComparison={handleComparison} scope={scope} />}
+      {activeTab === 'registry' && <CampaignLinkRegistryTab onDataState={reportRegistry} />}
       {activeTab === 'outreach' && (
         <Suspense fallback={
           <div className="text-center py-5">

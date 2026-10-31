@@ -17,6 +17,7 @@
  *
  * Run inside the backend container:
  *   node dist/scripts/setupAnnouncementCards.js
+ *   node dist/scripts/setupAnnouncementCards.js --week0-only   # C95: re-lock the Week 0 copy, touch nothing else
  *   (dev/preview via ts-node: npx ts-node src/scripts/setupAnnouncementCards.ts)
  */
 import TimelineCard from '../models/TimelineCard';
@@ -93,6 +94,8 @@ async function main(): Promise<void> {
   const programId = targetProgram();
   console.log(`[setupAnnouncement] program ${programId}`);
   await lockWeek0(programId);
+  // C95: a copy change to Week 0 must not also archive or clear Weeks 1-12, so --week0-only stops here
+  if (process.argv.includes('--week0-only')) { console.log('[setupAnnouncement] --week0-only: weeks 1+ untouched'); process.exit(0); }
   for (let wk = 1; wk <= CANONICAL_WEEKS; wk++) await refreshWeek(programId, wk);
   console.log('[setupAnnouncement] done');
   process.exit(0);
