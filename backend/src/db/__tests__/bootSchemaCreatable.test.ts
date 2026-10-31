@@ -109,6 +109,12 @@ const NOT_CREATABLE_AT_BOOT: readonly string[] = [
   'follow_up_sequences',
   'github_connections',
   'lead_sources',
+  // Same case as scheduled_emails below: no CREATE anywhere in src (only a one-column stub in
+  // claimLease.integration.test.ts); it exists because sequelize.sync once created it. Newly ALTERed
+  // at boot by ensureLeadAttributionColumns (C94, 2026-10-30), two nullable ADD COLUMN IF NOT EXISTS
+  // that warn and continue when the table is absent. A CREATE TABLE for this ~70-column legacy table
+  // written from its model is how two definitions start to disagree, so none is invented here.
+  'leads',
   'onboarding_profiles',
   'org_members',
   'organizations',  // scripts/rehearseRefactoredDeliverySchema.ts

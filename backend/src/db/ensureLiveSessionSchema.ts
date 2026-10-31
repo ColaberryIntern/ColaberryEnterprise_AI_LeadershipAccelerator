@@ -194,6 +194,27 @@ export async function ensureLiveSessionSchema(): Promise<void> {
     `CREATE UNIQUE INDEX IF NOT EXISTS uq_session_guest_poll_responses_key ON session_guest_poll_responses (session_id, guest_id, poll_key)`,
     `CREATE INDEX IF NOT EXISTS idx_session_guest_poll_responses_key ON session_guest_poll_responses (session_id, poll_key)`,
 
+    // ---- session_raffle_winners (live giveaway draws, sessionRaffleService.ts) ----
+    // One row per (session, draw, draw_number): a re-click or a reloaded deck
+    // returns the stored winner instead of drawing again. The two partial
+    // unique indexes stop the same person winning one draw twice. email is
+    // denormalized so the post-event packet never needs a recording.
+    `CREATE TABLE IF NOT EXISTS session_raffle_winners (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       session_id UUID NOT NULL REFERENCES live_sessions(id),
+       poll_key VARCHAR(200) NOT NULL,
+       draw_number INTEGER NOT NULL,
+       guest_id UUID REFERENCES session_guests(id),
+       enrollment_id UUID REFERENCES enrollments(id),
+       display_name VARCHAR(100) NOT NULL,
+       full_name VARCHAR(255) NOT NULL,
+       email VARCHAR(254),
+       created_at TIMESTAMPTZ DEFAULT NOW()
+     )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS uq_session_raffle_winners_draw ON session_raffle_winners (session_id, poll_key, draw_number)`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS uq_session_raffle_winners_guest ON session_raffle_winners (session_id, poll_key, guest_id) WHERE guest_id IS NOT NULL`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS uq_session_raffle_winners_enrollment ON session_raffle_winners (session_id, poll_key, enrollment_id) WHERE enrollment_id IS NOT NULL`,
+
     // ---- session_presence_events (named join/leave feed for the instructor deck's ticker) ----
     // display_name is denormalized at write time (mirrors session_chat_messages.sender_name
     // above) — the ticker shows a point-in-time projection, not a live profile join.

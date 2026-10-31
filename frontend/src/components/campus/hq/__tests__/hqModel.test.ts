@@ -228,6 +228,53 @@ describe('the words on the badge, the floors and the lobby', () => {
   });
 });
 
+describe('a member’s own office floor (H4): the one floor an intern’s badge opens', () => {
+  const office = { label: 'Gov Contracts', projects: [{ projectId: 'p1', name: 'Saratoga Springs RFP' }, { projectId: 'p2', name: 'Herriman' }] };
+  const mhq = buildHq(() => false, false, 'member', undefined, undefined, office);
+  const off = mhq.floors[mhq.floors.length - 1];
+
+  it('appends ONE office floor for a member, numbered 1, with a room per assigned project', () => {
+    expect(mhq.floors).toHaveLength(NAV_GROUPS.length + 2); // the staff floors + PH, plus the office
+    expect(off).toMatchObject({ key: 'office', num: '1', label: 'Gov Contracts', access: 'all', own: true });
+    expect(off.rooms.map((r) => r.path)).toEqual(['/portal/gov-projects/p1', '/portal/gov-projects/p2']);
+    expect(off.rooms.map((r) => r.label)).toEqual(['Saratoga Springs RFP', 'Herriman']);
+    expect(off.rooms.every((r) => r.open && r.own && !r.external)).toBe(true);
+    expect(off.num < mhq.floors[mhq.floors.length - 2].num).toBe(true); // '1' sits below every staff floor ('2'+)
+  });
+
+  it('leaves every staff floor shut — the member has the building, but only this one office', () => {
+    expect(mhq.floors.slice(0, -1).every((f) => f.access === 'none' && !f.own)).toBe(true);
+    expect(openFloors(mhq).map((f) => f.key)).toEqual(['office']);
+  });
+
+  it('reads the badge, floor and room as THEIRS, never "Staff only"', () => {
+    expect(badgeLevel(mhq)).toBe(`OPENS 1 OF ${mhq.floors.length} FLOORS`);
+    expect(floorStatus(off, false)).toBe('✓ Your badge');
+    expect(buttonSub(off, false)).toBe('2 rooms');
+    expect(roomName(off.rooms[0], false)).toBe('Saratoga Springs RFP'); // own rooms are named even for a non-staff viewer
+    expect(roomHref(off.rooms[0])).toBe('/portal/gov-projects/p1'); // a portal route, reached directly, not the admin bridge
+  });
+
+  it('the concierge and the badge reader name the office', () => {
+    expect(conciergeLine(mhq, 'Priya', 'member', 9)).toBe('Welcome, Priya. Your badge opens the ground floor and your office: Saratoga Springs RFP, Herriman. The other floors are for Colaberry staff.');
+    expect(readerLine(mhq, 'member')).toBe('Member badge · 1 floor');
+  });
+
+  it('is gated: staff ignore the office (they have real floors), and an empty office adds nothing', () => {
+    const staff = buildHq(() => true, true, 'staff', undefined, undefined, office);
+    expect(staff.floors).toHaveLength(NAV_GROUPS.length + 1);
+    expect(staff.floors.some((f) => f.own)).toBe(false);
+
+    const empty = buildHq(() => false, false, 'member', undefined, undefined, { label: 'Gov Contracts', projects: [] });
+    expect(empty.floors.some((f) => f.own)).toBe(false);
+    expect(badgeLevel(empty)).toBe('GROUND FLOOR ONLY');
+
+    const none = buildHq(() => false, false, 'member'); // no office arg at all — the old behavior, unchanged
+    expect(none.floors.some((f) => f.own)).toBe(false);
+    expect(badgeLevel(none)).toBe('GROUND FLOOR ONLY');
+  });
+});
+
 describe('who is where in the building', () => {
   const hq = hqFor('owner');
   type P = { name: string; hq_path?: string };

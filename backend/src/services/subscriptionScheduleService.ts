@@ -15,6 +15,11 @@
 import { QueryTypes } from 'sequelize';
 import { sequelize } from '../config/database';
 import { getPayment } from './paysimpleService';
+// From the PURE module, not from `subscriptionService`: that module pulls in the
+// Sequelize models, and importing it here broke a suite that mocks the database
+// differently (`Cohort.init` on an undefined sequelize). The date math has no such
+// dependencies, which is why it was extracted.
+import { periodEndMs, anniversaryDayOfMonth } from './billing/billingPeriod';
 import {
   createRecurringSchedule, suspendRecurringSchedule, assertStartDateNotPast,
 } from './paysimpleRecurring';
@@ -202,12 +207,15 @@ export async function advancePeriodForScheduledPayment(params: {
   nowMs?: number;
 }): Promise<{ advanced: boolean; reason?: string; subscriptionId?: string }> {
   const rows = (await sequelize.query(
-    `SELECT id, plan, current_period_end, paysimple_payment_id
+    `SELECT id, plan, current_period_end, started_at, paysimple_payment_id
        FROM subscriptions
       WHERE paysimple_schedule_id = :sid AND status IN ('active','past_due')
       LIMIT 1`,
     { replacements: { sid: params.scheduleId }, type: QueryTypes.SELECT },
-  )) as Array<{ id: string; plan: string; current_period_end: string; paysimple_payment_id: string | null }>;
+  )) as Array<{
+    id: string; plan: string; current_period_end: string;
+    started_at: string | null; paysimple_payment_id: string | null;
+  }>;
 
   if (!rows.length) return { advanced: false, reason: 'no_subscription_for_schedule' };
   const sub = rows[0];
@@ -217,15 +225,18 @@ export async function advancePeriodForScheduledPayment(params: {
     return { advanced: false, reason: 'already_applied', subscriptionId: sub.id };
   }
 
+  // The renewal day comes from the SIGNUP, not from the period we are advancing
+  // past. Taking it from `current_period_end` lets an end-of-month membership walk
+  // backwards and stay there: sign up 1/31, February clamps to 2/28, and every
+  // month after that is computed from the 28th. PaySimple does not agree — it bills
+  // day 31 as `LastofMonth`, so 3/31 — and our record would stop matching the
+  // charges from the third month on. Falls back to the period end when `started_at`
+  // is missing, which is the old behavior and never blocks a renewal.
   const from = new Date(sub.current_period_end);
-  const next = new Date(from.getTime());
-  if (sub.plan === 'annual') next.setUTCFullYear(next.getUTCFullYear() + 1);
-  else {
-    const day = from.getUTCDate();
-    next.setUTCMonth(next.getUTCMonth() + 1, 1);
-    const lastDay = new Date(Date.UTC(next.getUTCFullYear(), next.getUTCMonth() + 1, 0)).getUTCDate();
-    next.setUTCDate(Math.min(day, lastDay));
-  }
+  const startedMs = sub.started_at ? Date.parse(sub.started_at) : NaN;
+  const anniversary = Number.isFinite(startedMs)
+    ? anniversaryDayOfMonth(startedMs) : from.getUTCDate();
+  const next = new Date(periodEndMs(from.getTime(), sub.plan === 'annual' ? 'year' : 'month', anniversary));
 
   await sequelize.query(
     `UPDATE subscriptions

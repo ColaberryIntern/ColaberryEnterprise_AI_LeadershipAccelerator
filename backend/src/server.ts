@@ -65,10 +65,12 @@ import { ensurePresentationOpsSchema } from './db/ensurePresentationOpsSchema';
 import { ensureInboxCaseSchema } from './db/ensureInboxCaseSchema';
 import { ensureInboxCommitmentSchema } from './db/ensureInboxCommitmentSchema';
 import { ensureLeadViewPreferenceSchema } from './db/ensureLeadViewPreferenceSchema';
+import { ensureLeadAttributionColumns } from './db/ensureLeadAttributionColumns';
 import { ensureScholarshipInterviewSchema } from './db/ensureScholarshipInterviewSchema';
 import { ensureWorkLedgerSchema } from './db/ensureWorkLedgerSchema';
 import { ensureExplorerGrowthSchema } from './db/ensureExplorerGrowthSchema';
 import { ensureScheduledEmailStatusWidth } from './db/ensureScheduledEmailStatusWidth';
+import { ensureExplorerKnowledgeDocumentSchema } from './db/ensureExplorerKnowledgeDocumentSchema';
 import { ensurePageEventLeadId } from './db/ensurePageEventLeadId';
 // Student Build Pipeline. These two were dropped from server.ts when the
 // sponsor magic-link fix (c21cd66e) resolved a conflict in this file by
@@ -2549,6 +2551,8 @@ async function start(): Promise<void> {
   // /inbox-zero commitment ledger (what Ali owes). Depends on inbox_cases above.
   await ensureInboxCommitmentSchema();
   await ensureLeadViewPreferenceSchema();
+  // C94: leads.utm_content / utm_term (which ad, which placement), additive nullable columns.
+  await ensureLeadAttributionColumns();
   await ensureScholarshipInterviewSchema();
   // ProofDesk Work Ledger — Milestone 1 (Foundation): 4 ledger tables + 12 additive
   // nullable ticket columns (idempotent DDL, shadow mode).
@@ -2564,6 +2568,12 @@ async function start(): Promise<void> {
   // a render that never ran. Only ever widens; a column already wide enough, or already
   // `text`, is left alone. Must run before the first draft render, which is a 4:10am cron.
   await ensureScheduledEmailStatusWidth();
+  // Explorer knowledge ingestion: the documents + chunks store behind uploaded knowledge
+  // sources. Placed in the Explorer block and NOT after ensureMultiTenantSchema because it
+  // deliberately carries no FK on brand_id — see that module's header. Safe here because
+  // an ingested document lands at confidence 'unstated', which the quote gate already
+  // refuses, so nothing it stores is quotable until a human marks it grounded.
+  await ensureExplorerKnowledgeDocumentSchema();
   // D1 fix: page_events.lead_id. contextGraphService has always queried this
   // column and it has never existed, so buildCompositeContext() throws and every
   // campaign email silently falls back to the legacy prompt. Additive + nullable.

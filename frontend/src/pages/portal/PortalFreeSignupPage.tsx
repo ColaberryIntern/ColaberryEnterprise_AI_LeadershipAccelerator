@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useParticipantAuth } from '../../contexts/ParticipantAuthContext';
 import { freeSignup } from '../../services/onboardingApi';
 import { identifyVisitor } from '../../utils/tracker';
+import { getSignupAcquisitionFields } from '../../services/utmService';
 import { SIGNUP_CONSENT_TEXT, PHONE_CONSENT_TEXT } from '../../config/consentText';
 
 // Public "Start for $0" front door. Creates a $0 guest account (0 points), logs
@@ -47,7 +48,7 @@ function PortalFreeSignupPage() {
     if (!EMAIL_RE.test(email.trim())) { setError('Please enter a valid email.'); return; }
     setLoading(true);
     try {
-      const res = await freeSignup({
+      const person = {
         full_name: fullName.trim(),
         email: email.trim(),
         marketing_opt_in: marketingOptIn,
@@ -55,7 +56,19 @@ function PortalFreeSignupPage() {
         // fields existed would reject the whole signup rather than ignore the extra keys.
         ...(phone.trim() ? { phone: phone.trim() } : {}),
         ...(phone.trim() && phoneConsent ? { phone_consent: true } : {}),
-      });
+      };
+      // C94: the ad that brought them (source|medium, campaign, ad, placement, page). Only keys with a value the
+      // strict route accepts are present. If the server still answers 400 (a backend older than this page, or a
+      // value it rejects), sign them up once more WITHOUT the tracking keys: attribution must never cost a signup.
+      // A 400 that was about the person (a bad email) fails the retry the same way and shows the same message.
+      const acquisition = getSignupAcquisitionFields();
+      let res;
+      try {
+        res = await freeSignup({ ...person, ...acquisition });
+      } catch (first: any) {
+        if (first?.response?.status !== 400 || Object.keys(acquisition).length === 0) throw first;
+        res = await freeSignup(person);
+      }
 
       /**
        * Tie the anonymous visitor to the person who just signed up.

@@ -88,7 +88,7 @@ export const WEEK_BLUEPRINTS: WeekBlueprintContent[] = [
   /* ----------------------------------------------------------------- Week 0 */
   {
     week: 0,
-    title: 'Free AI Preview',
+    title: 'AI Preview',
     difficulty: 'intro',
     estimated_hours: 2.5,
     purpose:

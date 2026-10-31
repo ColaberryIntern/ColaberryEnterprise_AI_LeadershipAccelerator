@@ -299,7 +299,7 @@ const TodayShell: React.FC = () => {
   };
 
   const steps = [
-    { key: 'account', title: 'Create your free account', done: true, meta: 'Welcome to Colaberry', pts: 0, action: null as null | (() => void) },
+    { key: 'account', title: 'Create your account', done: true, meta: 'Welcome to Colaberry', pts: 0, action: null as null | (() => void) },
     { key: 'resume', title: 'Upload your resume or LinkedIn PDF', done: hasBackground, meta: 'Personalizes your experience in the background', pts: 25, action: !hasBackground ? () => setShowUpload((v) => !v) : null },
     { key: 'referral', title: 'Recommend a friend', done: hasReferral, meta: 'Know someone who’d love this?', pts: 25, action: !hasReferral ? () => setShowReferral((v) => !v) : null },
   ];
@@ -365,7 +365,7 @@ const TodayShell: React.FC = () => {
         /* command band — greeting + primary next step + the three meters in one row */
         <div className="te-band">
           <div>
-            {explorerHome ? <ExplorerKicker /> : <div className="crumb">◆ {schedule?.is_explorer ? 'Free AI Preview' : 'Command Center'}</div>}
+            {explorerHome ? <ExplorerKicker /> : <div className="crumb">◆ {schedule?.is_explorer ? 'AI Preview' : 'Command Center'}</div>}
             <h2>
               {hydrated
                 ? (firstName ? `Welcome back, ${firstName} 👋` : 'Welcome back 👋')
@@ -440,10 +440,10 @@ const TodayShell: React.FC = () => {
         </div>
       ) : (
         <div className="te-page-h">
-          {explorerHome ? <ExplorerKicker /> : <div className="crumb">{schedule?.is_explorer ? 'Free AI Preview' : 'Command Center'}</div>}
+          {explorerHome ? <ExplorerKicker /> : <div className="crumb">{schedule?.is_explorer ? 'AI Preview' : 'Command Center'}</div>}
           <h1>Welcome{me.email ? `, ${me.email.split('@')[0]}` : ''}</h1>
           <div className="sub">{schedule?.is_explorer
-            ? "Explore AI for free — watch, listen, learn, and try. Enroll when you're ready to build for real."
+            ? "Explore AI, no card needed — watch, listen, learn, and try. Enroll when you're ready to build for real."
             : "Let's get you set up. A few quick steps unlock your first points and your seat."}</div>
         </div>
       )}

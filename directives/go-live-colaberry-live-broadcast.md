@@ -12,6 +12,10 @@
 Take a scheduled Accelerator session from "created" to "on air in the portal", with the right
 people able to watch it, and prove it with an account that is not staff.
 
+This is the operator procedure only. For what the program as a whole is meant to be, the release
+order, and what is built versus specified, see `docs/COLABERRY_LIVE_PROGRAM_SPEC.md` and the
+governing requirements it maps — `docs/requirements/COLABERRY_LIVE_BASECAMP_BOOTSTRAP_v2.md`.
+
 ## 2. Inputs
 - **An Accelerator session** created in the admin UI with **Broadcast ticked**. Creating it is the
   only supported way to mint an occurrence (`broadcastSessionOccurrence.ensureOccurrenceForSession`).
@@ -23,6 +27,32 @@ people able to watch it, and prove it with an account that is not staff.
 - **A portal session token for a staff account** (producer commands authenticate a *participant*
   and derive producer rights from the staff context on that token — there is no admin-app path).
 - **A non-staff test account** outside the session's cohort. See §7.
+- **The host signed into the Zoom DESKTOP CLIENT.** This is not a preference, it is the whole
+  ingest path, and it is what stopped the 2026-10-29 airing. See immediately below.
+
+### The Zoom precondition that has no error message
+
+**The stream is started from the Zoom DESKTOP client**, via
+*More → Live on Custom Live Streaming Service*. On 2026-10-29 the host was signed in from something
+other than the desktop client and had no way to start the stream; the account was fine, the
+occurrence was fine, and the airing did not happen. Every vendor procedure for custom RTMP describes
+the desktop app as where you start it, so **use the desktop client** and do not plan an airing around
+any other client without first proving the control is there.
+
+Confirm all four of these **before** the day, not at showtime:
+
+| | |
+|---|---|
+| Account capability | In the Zoom **web portal**: Account Settings → *In Meeting (Advanced)* → *Allow livestreaming of meetings*, with **Custom Live Streaming Service** ticked. Livestreaming can be on while the custom option is not — that is the common trap. |
+| Host license and tier | A **licensed** host on Pro / Business / Education / Enterprise. Sub-accounts can lack the ability entirely. |
+| Host identity and client | The host is on the **desktop client**, at or above Zoom's minimum version for custom streaming, signed in as **the account actually running the class** — the setting is scoped per user, so verifying it on an admin account proves nothing about Ali's. |
+| Visible control | The host can see *More → Live on Custom Live Streaming Service* in a throwaway meeting. **Seeing the menu item is the only proof that holds** — the four rows above are the things that remove it. |
+
+**Fallback if custom RTMP is unavailable to the host:** there is no in-portal substitute — the player
+is fed by the Cloudflare live input and nothing else writes to it. The options are to have a host who
+*does* have the capability start the meeting and stream, or to run the event without the in-portal
+broadcast and treat Colaberry Live as the degraded bonus this directive's header already says it is.
+Decide which before the event, not during it.
 
 ## 3. Steps
 
@@ -88,6 +118,12 @@ put backstage content on air.
 
 4. `enter_backstage` — `scheduled → backstage`. Nothing is offered to viewers yet.
 
+   **This is the one command whose `version` you cannot look up.** The playback grant is the only
+   endpoint that returns `version`, and on a `scheduled` occurrence with no live input it answers
+   503 `ProviderNotReady` with a body of `{ error, reason }` only. So read the version from the
+   database (the §2 query) or from a prior command's response. This is also why there is no Go Live
+   button yet — see `docs/COLABERRY_LIVE_PROGRAM_SPEC.md` §9.
+
    **Do this BEFORE starting the stream.** The health loop observes `backstage`, `live` and
    `reconnecting` only — a `scheduled` occurrence is never polled, so until it is backstage nothing
    is watching for your feed and `provider_health` cannot become `ready`. Entering backstage first
@@ -148,6 +184,11 @@ put backstage content on air.
   Replays page lists it.
 
 ## 6. Edge cases / failure modes
+- **The host cannot find "Live on Custom Live Streaming Service":** they are on the browser client,
+  or custom streaming is not enabled for *their* user. See §2. Nothing in the portal can work around
+  this, and no error surfaces anywhere — the occurrence simply sits in `backstage` with
+  `provider_health` never reaching `ready`, which looks identical to a stream that has not started
+  yet. **This cost the 2026-10-29 airing.**
 - **Every path 404s from outside:** `app.colaberry.com` does not proxy the API. Probe from inside
   the backend container.
 - **409 on a producer command:** the occurrence moved. Re-read its `version` and decide again.

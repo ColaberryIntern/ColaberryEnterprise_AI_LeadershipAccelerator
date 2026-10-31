@@ -19,8 +19,12 @@ jest.mock('../../sbp/planStore', () => ({
   savePlanDraft: (...a: any[]) => savePlanDraft(...a),
   publishPlan: (...a: any[]) => publishPlan(...a),
 }));
+const projectFindByPk = jest.fn();
+const govQualFindOne = jest.fn();
+jest.mock('../../../models/Project', () => ({ __esModule: true, default: { findByPk: (...a: any[]) => projectFindByPk(...a) } }));
+jest.mock('../../../models/GovQualification', () => ({ __esModule: true, default: { findOne: (...a: any[]) => govQualFindOne(...a) } }));
 
-import { reconstructPlanFromTasks, ensureGovBuildPlanPublished } from '../govBuildPublish';
+import { reconstructPlanFromTasks, ensureGovBuildPlanPublished, mapEstablishedToRequirements } from '../govBuildPublish';
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -28,6 +32,7 @@ beforeEach(() => {
   getPublishedPlan.mockResolvedValue(null); getPlan.mockResolvedValue(null);
   savePlanDraft.mockResolvedValue({ version: 1, plan_sha256: 'sha1' });
   publishPlan.mockResolvedValue({});
+  projectFindByPk.mockResolvedValue(null); govQualFindOne.mockResolvedValue(null);
 });
 
 describe('reconstructPlanFromTasks', () => {
@@ -60,6 +65,64 @@ describe('reconstructPlanFromTasks', () => {
 
     stFindAll.mockResolvedValue([{ story_id: 'not-a-story', title: 'x', position: 0 }]);
     expect(await reconstructPlanFromTasks('proj-1')).toBeNull();      // no STORY-* tasks ⇒ nothing to publish
+  });
+});
+
+describe('reconstructPlanFromTasks — enrichment from the project + qualification', () => {
+  beforeEach(() => {
+    stFindAll.mockResolvedValue([
+      { story_id: 'STORY-001', release_key: 'r0', title: 'x', acceptance: ['a'], fulfills: ['REQ-001'], position: 0 },
+    ]);
+  });
+
+  it('fills project_name and the reviewer-established requirements (the real reviewed set)', async () => {
+    projectFindByPk.mockResolvedValue({ name: 'Saratoga Springs RFP', project_variables: { kind: 'gov', gov_canonical_id: 'gws:abc' } });
+    govQualFindOne.mockResolvedValue({ requirements_json: { established: [
+      { id: 'REQ-001', text: 'The system must do X.' },
+      { id: 'REQ-002', text: 'The system must do Y.', category: 'Permitting' },
+    ] } });
+    const plan = await reconstructPlanFromTasks('proj-1');
+    expect(plan!.project_name).toBe('Saratoga Springs RFP');
+    expect(plan!.requirements.map((r) => r.id)).toEqual(['REQ-001', 'REQ-002']);
+    expect(plan!.requirements[0]).toMatchObject({ statement: 'The system must do X.', kind: 'FUNC', priority: 'must', cluster: 'Requirements' });
+    expect(plan!.requirements[1].cluster).toBe('Permitting');
+    expect(govQualFindOne).toHaveBeenCalledTimes(1);
+  });
+
+  it('falls back to a bare — but still board-faithful — reconstruction when the lookup throws', async () => {
+    projectFindByPk.mockRejectedValue(new Error('db down'));
+    const plan = await reconstructPlanFromTasks('proj-1');
+    expect(plan!.project_name).toBe('');
+    expect(plan!.requirements).toEqual([]);
+    expect(plan!.stories).toHaveLength(1); // the board is still reconstructed — the publish is never blocked
+  });
+
+  it('names the project but leaves requirements empty when it is not a gov project (no canonical)', async () => {
+    projectFindByPk.mockResolvedValue({ name: 'A build', project_variables: {} });
+    const plan = await reconstructPlanFromTasks('proj-1');
+    expect(plan!.project_name).toBe('A build');
+    expect(plan!.requirements).toEqual([]);
+    expect(govQualFindOne).not.toHaveBeenCalled();
+  });
+});
+
+describe('mapEstablishedToRequirements', () => {
+  it('maps text→statement, defaults kind/priority, dedups ids, drops empties', () => {
+    const reqs = mapEstablishedToRequirements([
+      { id: 'REQ-001', text: 'A.' },
+      { id: 'REQ-001', text: 'duplicate id ignored' },
+      { id: 'REQ-002', text: '   ' },                        // empty statement dropped
+      { id: 'REQ-003', statement: 'C.', category: 'Billing' },
+    ]);
+    expect(reqs.map((r) => r.id)).toEqual(['REQ-001', 'REQ-003']);
+    expect(reqs[0]).toMatchObject({ statement: 'A.', kind: 'FUNC', priority: 'must', cluster: 'Requirements' });
+    expect(reqs[1]).toMatchObject({ statement: 'C.', cluster: 'Billing' });
+  });
+
+  it('is empty for a non-array', () => {
+    expect(mapEstablishedToRequirements(undefined)).toEqual([]);
+    expect(mapEstablishedToRequirements(null)).toEqual([]);
+    expect(mapEstablishedToRequirements({})).toEqual([]);
   });
 });
 

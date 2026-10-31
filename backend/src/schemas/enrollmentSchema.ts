@@ -163,6 +163,8 @@ export const portalFreeSignupSchema = z.object({
   entry_point_id: z.string().trim().uuid().optional(),     // Lead.entry_point_id UUID
   utm_source: z.string().trim().max(255).optional(),       // Lead.utm_source  STRING(255)
   utm_campaign: z.string().trim().max(255).optional(),     // Lead.utm_campaign STRING(255)
+  utm_content: z.string().trim().max(255).optional(),      // Lead.utm_content STRING(255), C94: which ad
+  utm_term: z.string().trim().max(255).optional(),         // Lead.utm_term    STRING(255), C94: which placement
   // URLs validated as URLs **and restricted to http/https**.
   //
   // `.url()` alone is not enough, and a test written for this task found it the

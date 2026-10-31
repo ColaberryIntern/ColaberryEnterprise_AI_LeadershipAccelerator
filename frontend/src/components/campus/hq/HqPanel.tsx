@@ -44,13 +44,13 @@ export function HqPanel({ s, who, face, placed }: { s: HqState; who: HqBadgeWho;
       <div className="cm-hq-side" data-testid="cm-hq-panel-floor">
         <div className="kick">FLOOR {f.num}</div>
         <h2>{f.label}</h2>
-        <p className="lead">{f.access === 'all' ? 'Every room on this floor is open to you.' : `Your badge opens ${f.openCount} of the ${f.rooms.length} rooms here. The rest stay locked.`} Each room opens its admin page in a new tab.</p>
+        <p className="lead">{f.access === 'all' ? 'Every room on this floor is open to you.' : `Your badge opens ${f.openCount} of the ${f.rooms.length} rooms here. The rest stay locked.`}{f.own ? ' Open it to pick up your build.' : ' Each room opens its admin page in a new tab.'}</p>
         <div className="sec">Rooms on this floor <small>{f.openCount} open</small></div>
         <div className="cm-hq-rlist">
           {f.rooms.map((r) => {
             const body = (<><i className={`ic ri-${r.icon}`} /><span className="t"><b>{roomName(r, hq.isStaff)}</b><code>{r.path.replace('https://', '')}</code></span>
               <HqPeople people={placed.byRoom.get(r.path) ?? []} label={`At ${r.label}`} size="sm" />
-              <span className="go">{r.open ? (r.external ? 'Open ↗' : 'Open in admin ↗') : '🔒'}</span></>);
+              <span className="go">{r.open ? (r.external || r.own ? 'Open ↗' : 'Open in admin ↗') : '🔒'}</span></>);
             return r.open
               ? <a key={r.path} className="cm-hq-rrow" href={roomHref(r)} target="_blank" rel="noopener noreferrer" data-testid="cm-hq-rrow">{body}</a>
               : <button key={r.path} type="button" className="cm-hq-rrow lock" aria-disabled="true" onClick={() => s.lockedRoom(r)}>{body}</button>;
@@ -72,9 +72,11 @@ export function HqPanel({ s, who, face, placed }: { s: HqState; who: HqBadgeWho;
       <h2>{s.scene === 'ext' ? 'Colaberry Tower' : 'Where your badge works'}</h2>
       <p className="lead">{hq.isStaff
         ? 'Your badge decides which floors the elevator will take you to. Floors mirror the admin sidebar, and rooms are its pages.'
-        : `Members and explorers use the ground floor: the ${hq.ground[0]?.label ?? face}. The floors above are Colaberry staff floors.`}</p>
+        : openFloors(hq).length
+          ? 'Your badge opens the ground floor and your office floor. The other floors are Colaberry staff floors.'
+          : `Members and explorers use the ground floor: the ${hq.ground[0]?.label ?? face}. The floors above are Colaberry staff floors.`}</p>
       <HqBadge s={s} who={who} />
-      <div className="sec">Floors <small>{hq.isStaff ? `${openFloors(hq).length} open` : 'staff only'}</small></div>
+      <div className="sec">Floors <small>{hq.isStaff || openFloors(hq).length ? `${openFloors(hq).length} open` : 'staff only'}</small></div>
       <div className="cm-hq-flist">
         {hq.floors.map((x) => <FloorRow key={x.key} s={s} f={x} here={people?.byFloor.get(x.num) ?? []} />)}
         <button type="button" className="cm-hq-frow" onClick={() => s.ride('G')} data-testid="cm-hq-frow-G">

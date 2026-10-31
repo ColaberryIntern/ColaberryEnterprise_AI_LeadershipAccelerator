@@ -85,38 +85,14 @@ export const isSubscriptionRef = (externalId: string | undefined | null): boolea
   !!externalId && externalId.startsWith(SUB_PREFIX);
 
 /**
- * Billing anchor: paying early never costs time. If the payment lands BEFORE
- * the class start date, the billing period starts on the class start date —
- * pay on 7/20 for a class starting 7/23 and the month runs 7/23 → 8/23, not
- * 7/20 → 8/20. If payment lands on/after class start, it anchors on payment
- * time as before. `cohortStartDate` is the cohorts.start_date DATEONLY
- * ('YYYY-MM-DD'), parsed as UTC midnight; missing/invalid dates fall back to
- * payment time (never blocks an activation).
+ * Billing period math lives in `billing/billingPeriod`, which imports no models
+ * and no database so the renewal path can share one implementation. Re-exported
+ * here because callers and tests have imported these from this module since
+ * before the split.
  */
-export function billingAnchorMs(paymentMs: number, cohortStartDate?: string | null): number {
-  if (!cohortStartDate) return paymentMs;
-  const startMs = Date.parse(`${String(cohortStartDate).slice(0, 10)}T00:00:00Z`);
-  if (!Number.isFinite(startMs)) return paymentMs;
-  return Math.max(paymentMs, startMs);
-}
+import { billingAnchorMs, anniversaryDayOfMonth, periodEndMs } from './billing/billingPeriod';
 
-/**
- * End of a billing period: +1 calendar month (monthly) or +1 calendar year
- * (annual) from the anchor — "a month" means the same day next month (7/23 →
- * 8/23), clamped to the last day when the target month is shorter (1/31 →
- * 2/28). Calendar math replaces the old fixed 30/365-day window so the period
- * end matches what a subscriber expects.
- */
-export function periodEndMs(anchorMs: number, cadence: 'year' | 'month'): number {
-  const d = new Date(anchorMs);
-  const targetYear = cadence === 'year' ? d.getUTCFullYear() + 1 : d.getUTCFullYear();
-  const targetMonth = cadence === 'year' ? d.getUTCMonth() : d.getUTCMonth() + 1;
-  const lastDayOfTarget = new Date(Date.UTC(targetYear, targetMonth + 1, 0)).getUTCDate();
-  return Date.UTC(
-    targetYear, targetMonth, Math.min(d.getUTCDate(), lastDayOfTarget),
-    d.getUTCHours(), d.getUTCMinutes(), d.getUTCSeconds(), d.getUTCMilliseconds(),
-  );
-}
+export { billingAnchorMs, anniversaryDayOfMonth, periodEndMs };
 
 /** A cohort a PAYING subscriber must never be dropped into: demo/test fixtures,
  *  or the free Explorer / prospect holding cohorts. */

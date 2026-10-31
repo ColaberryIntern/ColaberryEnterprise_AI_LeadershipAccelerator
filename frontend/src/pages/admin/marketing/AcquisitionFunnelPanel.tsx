@@ -7,6 +7,7 @@ import SourceDonut from './performance/SourceDonut';
 import CampaignTable from './performance/CampaignTable';
 import LandingPagesTable from './performance/LandingPagesTable';
 import { takeawaySentence } from './performance/performanceMetrics';
+import type { MarketingDataState } from './marketingTrust';
 import './performance/marketingPerformance.css';
 
 /**
@@ -37,22 +38,74 @@ import './performance/marketingPerformance.css';
  * where it is tested, the presentation in the sibling components, and nothing here changes a
  * backend calculation: the redesign is a presentation change, start to finish.
  */
-export default function AcquisitionFunnelPanel({ days = 30 }: { days?: number }) {
+export default function AcquisitionFunnelPanel({
+  days = 30,
+  onDataState,
+}: {
+  days?: number;
+  /**
+   * Report what this panel knows to the page's trust badge.
+   *
+   * Before 2026-10-30 this panel reported nothing, so the badge above it read "Unverified"
+   * over a report that had loaded perfectly — and once the sibling tab had been opened, it
+   * showed THAT tab's state instead. Optional, so every existing mount is unaffected.
+   */
+  onDataState?: (state: MarketingDataState) => void;
+}) {
   const [data, setData] = useState<AcquisitionFunnel | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /**
+   * When the fetch RESOLVED, not when this component mounted.
+   *
+   * Recorded here because the endpoint sends no timestamp. This is NOT the defect
+   * `marketingTrust` was written to replace — that was `new Date()` inside a mount-time
+   * `useMemo`, which reported the render and never moved on a refetch. This is set exactly
+   * once per successful fetch and cleared when a new one starts.
+   */
+  const [fetchedAt, setFetchedAt] = useState<string | null>(null);
 
   useEffect(() => {
     let live = true;
     setData(null);
     setError(null);
+    setFetchedAt(null);
     fetchAcquisitionFunnel(days)
-      .then((d) => { if (live) setData(d); })
+      .then((d) => { if (live) { setData(d); setFetchedAt(new Date().toISOString()); } })
       .catch(() => { if (live) setError('The funnel could not be loaded.'); });
     return () => { live = false; };
   }, [days]);
 
   const loading = !data && !error;
   const failed = error !== null;
+
+  /**
+   * UNTRACKED PAGES ARE THIS TAB'S COMPLETENESS GAP.
+   *
+   * The panel already shows them — "{n} page(s) cannot be measured" — and they are exactly
+   * what `unavailable` means: something the report cannot compute, with a reason. Reporting
+   * `[]` while that warning is on screen would let the badge read "live" over a report that
+   * is openly admitting it is missing traffic.
+   */
+  useEffect(() => {
+    if (!onDataState) return;
+
+    onDataState({
+      // No `surface` here on purpose: the page owns the tab's name because the page owns the
+      // labels, and two sources for one name drift the first time either is renamed.
+      loading,
+      error: failed,
+      fetchedAt,
+      unavailable: data
+        ? data.untrackedPages.map((page) => ({
+            key: `marketing.landing_page_traffic:${page}`,
+            name: `Traffic on ${page}`,
+            reason:
+              'No tracker is served on this page, so visits to it are missing from every ' +
+              'number on this tab.',
+          }))
+        : undefined,
+    });
+  }, [onDataState, loading, failed, fetchedAt, data]);
   const stages = data?.stages ?? [];
   const campaigns = data?.campaigns ?? [];
   const pages = data?.pages ?? [];
