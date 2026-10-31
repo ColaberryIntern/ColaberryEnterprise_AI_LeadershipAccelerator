@@ -228,7 +228,7 @@ the brief that carries the rest.
 | Stage | Requires | Status |
 |---|---|---|
 | **Test 1** — provider smoke test | RTMP accepted, HLS created, signed playback in Colaberry, grant renews, end state correct | **Mostly passed.** Two airings exist in the Cloudflare account (a 13 Oct test and the first private technical airing). Grant *renewal over time* is not separately evidenced. |
-| **Test 2** — private five-person airing | discovery, persistent player, navigation does not restart video, companion QR, poll, Prompt Drop, Builder pulse, reconnect, end, replay processing | **Never run — and mostly not blocked.** Eight of the ten are built (see §8); Builder-pulse-to-viewers and reconnect are partial. The gap here is an unexecuted test, not missing code. |
+| **Test 2** — private five-person airing | discovery, persistent player, navigation does not restart video, companion QR, poll, Prompt Drop, Builder pulse, reconnect, end, replay processing | **Never run — and mostly not blocked.** Eight of the ten are built (see §8); Builder-pulse-to-viewers and reconnect are partial. The gap here is an unexecuted test, not missing code. **Run sheet: `directives/run-test-2-private-five-person-airing.md`** — hard gates, the five roles, all ten checks with expected state. |
 | **Test 3** — internal staff pilot | **Piyush, Sohail, Aleem present**; evaluate content, UX, audio, video, lighting, camera, graphics, Prompt Drop timing, participation, marketing CTA | **Not run.** Needs R5 studio equipment and a completed Test 2 to be worth three people's time — and two of its ten evaluation criteria (graphics, marketing CTA) have nothing built to evaluate (§8, DOC 03 rows 10 and 12). |
 | **Test 4** — full dress rehearsal | actual studio, actual live-class flow, cold open through replay | **Not run.** |
 | **Test 5** — failure drills | thirteen deliberate failures; confirm state is honest and **no access fails open** | **Not run** (one of the thirteen, the auto-end window, is written up as an optional check). |
@@ -276,7 +276,7 @@ X, when they reach the slide X was authored onto."
 | 6 | phone companion state | **BUILT** — phone polls every 2.5s |
 | 7 | polls | **BUILT** — server-side vote lock, tallies, theater reveal |
 | 8 | Builder pulse | **PARTIAL** — the aggregate exists and is **instructor-only**; never exposed to viewers |
-| 9 | Claude / Claude Code instructions | **PARTIAL** — authored with `pasteWhere`/`ccMode`/`rescue`, but the phone renders none of those three |
+| 9 | Claude / Claude Code instructions | **PARTIAL**, and the two phone surfaces differ. Authored with `pasteWhere`/`ccMode`/`rescue`. `CompanionDeck` renders none of the three (`CompanionDeck.tsx:174-178`); the check-in page renders `pasteWhere` in its copy-button label and neither of the other two (`ClassCheckinPage.tsx:326`). Both render `expectedResult` and `stopCondition`. `ccMode` and `rescue` reach no viewer on either surface. |
 | 10 | broadcast graphics / lower thirds | **NOT BUILT** — no graphics layer of any kind exists |
 | 11 | "mark this moment" clip candidates | **BUILT server-side, but automatic.** Every slide advance writes a marker. In-points only. The admin read route has no UI caller, and the deck's own `M` key still writes to an in-memory array lost on tab close. |
 | 12 | CTA | **PARTIAL** — a projected slide only; `CompanionState` has no CTA field |
@@ -328,10 +328,27 @@ X, when they reach the slide X was authored onto."
    while clip markers are occurrence-keyed. DOC 03 permits a session to have more than one
    occurrence, so re-airing a session would merge its participation across both airings.
 
-4. **The highest-traffic live surface has no tests.** `ClassCheckinPage.tsx` is where the room QR
-   actually lands, and it has zero test coverage while duplicating ~130 lines of companion logic with
-   *different status labels* — so DOC 04's exact four-label contract holds on `CompanionDeck` and not
-   on the surface most students reach.
+4. **The highest-traffic live surface has no tests, and the QR never reaches the companion.**
+   `ClassCheckinPage.tsx` is where the room QR actually lands — `sessionPersistentUrl` resolves to
+   `/portal/class-checkin/<sessionId>` (`broadcastSessionLinks.ts:47-49`,
+   `sessionReminderEmail.ts:42-44`), routed at `portalRoutes.tsx:126`. It does **not** hand off to
+   the companion deck: it polls companion state and renders polls and prompts itself, and its onward
+   button goes to the session's room or `/portal/today` (`ClassCheckinPage.tsx:179`). So
+   `/portal/live/<sessionId>/companion` is reached only by typing or linking it directly.
+
+   It has zero test coverage while duplicating ~130 lines of companion logic, and the status labels
+   are not the same set:
+
+   | Surface | States offered |
+   |---|---|
+   | `CompanionDeck` (`/companion`) | **Following** · **Building** · **Stuck** · **Finished** — exact DOC 04 match (`CompanionDeck.tsx:51-54`) |
+   | Check-in page (the QR target) | **Building** · **"I'm stuck"** · **Finished** (`ClassCheckinPage.tsx:336-338`) |
+
+   **The QR surface has no "Following"** — the one state a viewer who is only watching can press, and
+   the one `CompanionDeck.tsx:24` singles out for exactly that reason. A student who scans the QR and
+   follows along has no way to register it, so the Builder-pulse aggregate under-reports by however
+   many passive viewers arrived that way. Expect Test 2's pulse data to be wrong in that direction,
+   and do not read it as a stream fault.
 
 ---
 
@@ -353,6 +370,13 @@ production polish. Applying it:
    partial rather than absent. **It has simply never been run with five people.** That makes it the
    cheapest high-information action available: it needs no code, it exercises the whole spine, and
    every one of the four §8 findings would show up in it.
+
+   **The run sheet is `directives/run-test-2-private-five-person-airing.md`**: the four hard gates
+   that must be true before five people's time is spent, the five roles and the device each holds,
+   all ten §15 checks with what proves a pass and which two are expected to come back partial, the
+   evidence to capture, and what a passed Test 2 does *not* establish. It puts one phone on each of
+   the two surfaces in §8 finding 4 deliberately, because the difference between them is the most
+   valuable thing the run can produce.
 
    Running it also unblocks Test 3 honestly. The staff pilot asks Piyush, Sohail and Aleem to
    *evaluate* the experience, which is a poor use of three people's time if the first five-person

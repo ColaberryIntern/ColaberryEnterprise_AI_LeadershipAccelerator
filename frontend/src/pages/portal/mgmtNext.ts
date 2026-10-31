@@ -1,4 +1,4 @@
-import { ALL_LINKS } from '../../components/Layout/adminNav';
+import { ALL_LINKS, NAV_GROUPS } from '../../components/Layout/adminNav';
 
 /**
  * Where the Management Portal bridge (/portal/mgmt-enter) may send someone after it opens their admin session
@@ -19,14 +19,19 @@ export function mgmtNextAllowlist(links: ReadonlyArray<{ path: string }> = ALL_L
 }
 export const MGMT_NEXT_ALLOWLIST: readonly string[] = mgmtNextAllowlist();
 
+/** C92: the pages a sidebar sub-list's entries open (adminNav.ts `subLists[].paths`): strict one-segment patterns, so a
+ *  per-contract or per-agent page can open through the bridge without making `next` an open redirect. */
+export const MGMT_NEXT_PATTERNS: readonly RegExp[] = NAV_GROUPS.flatMap((g) => (g.subLists ?? []).flatMap((sl) => sl.paths));
+const allowed = (next: string, allowlist: readonly string[]) => allowlist.includes(next) || MGMT_NEXT_PATTERNS.some((re) => re.test(next));
+
 /** The allowlisted destination named by a search string ("?next=..."), or null. */
 export function allowedMgmtNext(search: string, allowlist: readonly string[] = MGMT_NEXT_ALLOWLIST): string | null {
   const next = new URLSearchParams(search).get('next');
-  return next !== null && allowlist.includes(next) ? next : null;
+  return next !== null && allowed(next, allowlist) ? next : null;
 }
 
 /** A bridge link that lands on `next` once the admin session is open. A destination that is not allowlisted gets the
  *  plain bridge (the default landing), so a caller can never build a link that silently points somewhere else. */
 export function mgmtBridgeTo(next: string): string {
-  return MGMT_NEXT_ALLOWLIST.includes(next) ? `/portal/mgmt-enter?next=${encodeURIComponent(next)}` : '/portal/mgmt-enter';
+  return allowed(next, MGMT_NEXT_ALLOWLIST) ? `/portal/mgmt-enter?next=${encodeURIComponent(next)}` : '/portal/mgmt-enter';
 }
