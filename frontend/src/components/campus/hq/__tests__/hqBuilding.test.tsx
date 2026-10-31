@@ -175,7 +175,9 @@ describe('a gov intern’s own office floor (H4)', () => {
     const rooms = $$('[data-testid="cm-hq-office"]') as HTMLAnchorElement[];
     expect(rooms.map((a) => a.getAttribute('href'))).toEqual(['/portal/gov-projects/proj-123']); // the cockpit, not the admin bridge
     expect(rooms[0].textContent).toContain('Saratoga Springs RFP');
-    expect(rooms.every((a) => a.target === '_blank' && a.rel === 'noopener noreferrer')).toBe(true);
+    // own office rooms open SAME-TAB: a new tab would drop the "view as" session token (sessionStorage is
+    // per-tab) and the cockpit would 404. Staff admin rooms keep target=_blank (asserted elsewhere).
+    expect(rooms.every((a) => a.getAttribute('target') === null && a.getAttribute('rel') === null)).toBe(true);
   });
 
   it('a member with no assigned project is unchanged: ground floor only, no office', async () => {
