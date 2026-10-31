@@ -8,6 +8,7 @@ import type LandingPage from '../../models/LandingPage';
 import { landingPageTraffic } from '../../services/marketing/landingPageTraffic';
 import { siteSlugForBrand } from '../../services/marketing/landingPageSiteTag';
 import { landingPageAudience } from '../../services/marketing/landingPageVisitors';
+import { parseSnackbarConfig, snackbarConfigSchema } from '../../services/marketing/landingPageSnackbar';
 
 /**
  * Landing page authoring API — brief in, reviewable page out.
@@ -72,6 +73,9 @@ const PatchSchema = z.object({
   slug: slugSchema.optional(),
   site_slug: z.string().trim().regex(/^[a-z0-9-]{1,64}$/).nullable().optional(),
   content: landingPageContentSchema.optional(),
+  /** Snack bar: true / false, or null to follow the brand default. */
+  snackbar_enabled: z.boolean().nullable().optional(),
+  snackbar_config: snackbarConfigSchema.optional(),
 }).strict();
 
 const PublishSchema = z.object({
@@ -138,6 +142,8 @@ function summarise(page: LandingPage) {
     published_at: page.published_at,
     repo_path: page.repo_path,
     repo_commit: page.repo_commit,
+    snackbar_enabled: page.snackbar_enabled,
+    snackbar_config: parseSnackbarConfig(page.snackbar_config).config,
     updated_at: page.updated_at,
   };
 }

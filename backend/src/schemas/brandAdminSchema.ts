@@ -76,6 +76,9 @@ export const BrandPatchSchema = z
       .regex(/^[0-9]{8,20}$/, 'meta_pixel_id must be 8-20 digits, as issued by Meta')
       .nullable()
       .optional(),
+    // Snack bar on by default for every hosted page this brand builds. A page can still
+    // override it either way from its own settings.
+    snackbar_default_enabled: z.boolean().optional(),
     // IANA Area/Location or UTC. Abbreviations like "CST" are refused: ICU would accept them,
     // and "CST" is Central Standard in one place and China Standard in another.
     timezone: z
