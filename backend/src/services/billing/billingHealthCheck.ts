@@ -244,6 +244,43 @@ async function checkSchedulesMatchBook(scheduleIdsAtGateway: string[]): Promise<
   };
 }
 
+/**
+ * An automatic charge failed and the member has not paid since.
+ *
+ * On 2026-10-31 six schedule members had declined (insufficient funds, closed
+ * account, card reported lost), four of them two months running, and nothing said
+ * so. PaySimple does not retry a declined card: the next attempt is a month later.
+ *
+ * The action is a person, not a link. The schedule is still live and charges again
+ * next cycle, so a payment link would bill the same month twice.
+ */
+export const PAST_DUE_SCHEDULED_SQL = `SELECT DISTINCT ON (s.enrollment_id)
+            e.full_name, e.email, s.paysimple_schedule_id AS schedule_id,
+            s.current_period_end::date::text AS period_end, s.cancel_reason AS reason
+       FROM subscriptions s JOIN enrollments e ON e.id = s.enrollment_id
+      WHERE s.status = 'past_due'
+      ORDER BY s.enrollment_id, s.current_period_end DESC`;
+
+async function checkPastDueScheduled(): Promise<Finding | null> {
+  const rows = await sequelize.query<{ full_name: string; email: string; schedule_id: string | null; period_end: string; reason: string | null }>(
+    PAST_DUE_SCHEDULED_SQL,
+    { type: QueryTypes.SELECT },
+  );
+  if (!rows.length) return null;
+  return {
+    severity: 'act_now',
+    code: 'scheduled_charge_failed',
+    headline: `${rows.length} member(s) had an automatic payment decline`,
+    detail:
+      'PaySimple does not retry a declined card; the schedule tries again next cycle. '
+      + 'Until then the member is unpaid for this period.',
+    action:
+      'Contact each member to put a current card on file in PaySimple. Do NOT send a payment link: '
+      + 'the schedule is still live and would charge them again.',
+    rows: rows.map((r) => `${r.full_name} <${r.email}> schedule ${r.schedule_id ?? '?'}, period ended ${r.period_end}: ${r.reason ?? 'no reason recorded'}`),
+  };
+}
+
 /* ------------------------------------------------------------------ */
 /*  Milestones                                                         */
 /* ------------------------------------------------------------------ */
@@ -305,6 +342,7 @@ export async function runBillingHealthCheck(
   // Each check is isolated: one failing query must not blind the rest.
   for (const [name, fn] of Object.entries({
     duplicateActive: () => checkDuplicateActive(),
+    pastDueScheduled: () => checkPastDueScheduled(),
     lapsedNoFollowup: () => checkLapsedWithoutFollowup(),
     reminderAlive: () => checkReminderJobAlive(),
     expiringCards: () => checkExpiringCards(gateway.cardExpiryByEmail ?? new Map()),
