@@ -4,6 +4,7 @@ import {
   type CompanionState, type PulseState,
 } from '../../services/onboardingApi';
 import LivePromptCard from './LivePromptCard';
+import { LIVE_PULSES } from './livePulse';
 
 /**
  * The phone deck for a live class (L4.7) — what a viewer can do with one thumb.
@@ -50,17 +51,11 @@ export interface CompanionDeckProps {
 const POLL_MS = 2500;
 
 /**
- * The four states, in the order a class moves through them.
- *
- * `here` is the wire value for "Following". The label differs because "here" answers a
- * register and "Following" answers what the instructor actually wants to know.
+ * The four states now come from `livePulse.ts`, which is the single place DOC 04's set is
+ * named. This deck matched it; the class check-in page — the surface the room QR actually
+ * lands on — did not, and the drift is what moved the list out of here.
  */
-const PULSES: ReadonlyArray<{ state: PulseState; label: string; emoji: string }> = [
-  { state: 'here', label: 'Following', emoji: '👀' },
-  { state: 'building', label: 'Building', emoji: '🛠️' },
-  { state: 'stuck', label: 'Stuck', emoji: '✋' },
-  { state: 'finished', label: 'Finished', emoji: '✅' },
-];
+const PULSES = LIVE_PULSES;
 
 const KIND_LABEL: Record<'prediction' | 'poll' | 'trivia', string> = {
   prediction: '🔮 Make your prediction',
