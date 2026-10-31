@@ -31,6 +31,7 @@ import trackedLinkRedirectRoutes from './routes/trackedLinkRedirectRoutes';
 import openclawShortLinkRoutes from './routes/openclawShortLinkRoutes';
 import mediaFetchRoutes from './routes/mediaFetchRoutes';
 import publicLandingPageRoutes from './routes/publicLandingPageRoutes';
+import publicSnackbarFeedRoutes from './routes/publicSnackbarFeedRoutes';
 import publicTrackingConfigRoutes from './routes/publicTrackingConfigRoutes';
 import linkedInCallbackRoutes from './routes/linkedInCallbackRoutes';
 import marketingOAuthCallbackRoutes from './routes/marketingOAuthCallbackRoutes';
@@ -168,6 +169,7 @@ import { ensureBrandGovernanceSchema } from './db/ensureBrandGovernanceSchema';
 import { ensureChannelAccountSchema } from './db/ensureChannelAccountSchema';
 import { ensureLandingPageSchema } from './db/ensureLandingPageSchema';
 import { ensureBrandPixelSchema } from './db/ensureBrandPixelSchema';
+import { ensureLandingPageSnackbarSchema } from './db/ensureLandingPageSnackbarSchema';
 import { ensureContentItemDestinationSchema } from './db/ensureContentItemDestinationSchema';
 import { ensureCapeSchema } from './db/ensureCapeSchema';
 import { ensureCapstoneSchema } from './db/ensureCapstoneSchema';
@@ -274,6 +276,8 @@ app.use(mediaFetchRoutes);
 // session, so mounted below adminRoutes this would 401 every click on every campaign. Pinned by
 // publicLandingPageRoutes.test.ts, which builds both orders and asserts 200 above / 404 below.
 app.use(publicLandingPageRoutes);
+// The landing-page snack bar feed. Public for the same reason, so above adminRoutes too.
+app.use(publicSnackbarFeedRoutes);
 // Same reason, same position: the portal asks this before a visitor has signed in, so it has
 // to answer above adminRoutes or a logged-out page gets a 401 for public information.
 app.use(publicTrackingConfigRoutes);
@@ -2728,6 +2732,8 @@ async function start(): Promise<void> {
   // column carrying the brand's Meta Pixel ID, so tracking is configured per brand rather
   // than pasted per page.
   await ensureBrandPixelSchema();
+  // Snack bar columns on brands, landing_pages and leads. Additive, idempotent, post-checked.
+  await ensureLandingPageSnackbarSchema();
   // After brand governance: the FK it adds to content_variants needs the accounts table, and
   // the accounts table references brands.
   await ensureChannelAccountSchema();

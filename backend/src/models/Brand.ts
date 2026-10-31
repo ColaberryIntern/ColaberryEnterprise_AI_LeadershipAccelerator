@@ -29,6 +29,8 @@ export interface BrandAttributes {
   default_theme_key?: string | null;
   /** Meta Pixel ID. Digits only; the column has a CHECK and the renderer re-validates. */
   meta_pixel_id?: string | null;
+  /** Snack bar on by default for every hosted page this brand builds. */
+  snackbar_default_enabled?: boolean;
   support_email?: string | null;
   /** IANA zone, e.g. America/Chicago. Null means the code default applies. */
   timezone?: string | null;
@@ -57,6 +59,7 @@ class Brand extends Model<BrandAttributes> implements BrandAttributes {
   declare default_public_url: string | null;
   declare default_theme_key: string | null;
   declare meta_pixel_id: string | null;
+  declare snackbar_default_enabled: boolean;
   declare support_email: string | null;
   declare timezone: string | null;
   declare default_journey_program_id: string | null;
@@ -106,6 +109,11 @@ Brand.init(
     meta_pixel_id: {
       type: DataTypes.STRING(32),
       allowNull: true,
+    },
+    snackbar_default_enabled: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
     },
     support_email: {
       type: DataTypes.STRING(255),

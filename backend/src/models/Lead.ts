@@ -35,6 +35,8 @@ interface LeadAttributes {
   assigned_admin?: string;
   pipeline_stage?: string;
   consent_contact?: boolean;
+  /** Opted in at signup to be shown by first name in landing-page snack bars. */
+  social_proof_opt_in?: boolean;
   lead_source_type?: string;
   industry?: string;
   annual_revenue?: string;
@@ -102,6 +104,7 @@ class Lead extends Model<LeadAttributes> implements LeadAttributes {
   declare assigned_admin: string;
   declare pipeline_stage: string;
   declare consent_contact: boolean;
+  declare social_proof_opt_in: boolean;
   declare lead_source_type: string;
   declare industry: string;
   declare annual_revenue: string;
@@ -256,6 +259,11 @@ Lead.init(
       type: DataTypes.STRING(50),
       allowNull: false,
       defaultValue: 'new_lead',
+    },
+    social_proof_opt_in: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
     },
     consent_contact: {
       type: DataTypes.BOOLEAN,

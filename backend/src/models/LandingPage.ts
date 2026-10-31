@@ -41,6 +41,10 @@ interface LandingPageAttributes {
   /** Where the master copy lives in the brand's repo, and the commit this row was built from. */
   repo_path?: string | null;
   repo_commit?: string | null;
+  /** Snack bar override: true / false / null = follow the brand default. */
+  snackbar_enabled?: boolean | null;
+  /** Zod-validated in services/marketing/landingPageSnackbar.ts on read and write. */
+  snackbar_config?: Record<string, unknown>;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -62,6 +66,8 @@ class LandingPage extends Model<LandingPageAttributes> implements LandingPageAtt
   declare created_by: string | null;
   declare repo_path: string | null;
   declare repo_commit: string | null;
+  declare snackbar_enabled: boolean | null;
+  declare snackbar_config: Record<string, unknown>;
   declare created_at: Date;
   declare updated_at: Date;
 }
@@ -104,6 +110,8 @@ LandingPage.init(
     created_by: { type: DataTypes.UUID, allowNull: true },
     repo_path: { type: DataTypes.STRING(500), allowNull: true },
     repo_commit: { type: DataTypes.STRING(64), allowNull: true },
+    snackbar_enabled: { type: DataTypes.BOOLEAN, allowNull: true },
+    snackbar_config: { type: DataTypes.JSONB, allowNull: false, defaultValue: {} },
     created_at: {
       type: DataTypes.DATE,
       allowNull: false,

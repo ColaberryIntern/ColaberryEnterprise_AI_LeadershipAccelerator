@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { renderLandingPage } from '../services/marketing/landingPageRenderer';
 import { parseLandingPageContent } from '../schemas/landingPageContentSchema';
 import { metaPixelCspAdditions } from '../services/marketing/landingPagePixel';
+import { isSnackbarEnabled, parseSnackbarConfig } from '../services/marketing/landingPageSnackbar';
 import { randomBytes } from 'crypto';
 
 /**
@@ -123,6 +124,12 @@ router.get('/lp/:brand/:slug', landingPageRateLimiter, async (req: Request, res:
     // same as no nonce, since an injected script could simply carry it.
     const cspNonce = randomBytes(16).toString('base64');
 
+    // Snack bar: brand default, overridden per page. Resolved here so the renderer stays a pure
+    // function of its input. Config that will not parse renders with defaults (logged by the feed).
+    const snackbar = isSnackbarEnabled(brand.snackbar_default_enabled, page.snackbar_enabled)
+      ? { brandSlug, pageSlug: slug, config: parseSnackbarConfig(page.snackbar_config).config }
+      : null;
+
     const { html, branded } = renderLandingPage({
       content: content.content,
       brand: {
@@ -133,6 +140,7 @@ router.get('/lp/:brand/:slug', landingPageRateLimiter, async (req: Request, res:
       siteSlug: page.site_slug,
       pageUrl: absoluteUrl(req),
       cspNonce,
+      snackbar,
     });
 
     if (!page.site_slug) {

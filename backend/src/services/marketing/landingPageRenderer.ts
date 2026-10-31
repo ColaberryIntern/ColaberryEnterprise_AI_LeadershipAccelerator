@@ -8,6 +8,7 @@ import { normalizeHeadingCase } from './landingPageHeadingCase';
 import type { LandingPageContentShape, LandingPageSection } from '../../schemas/landingPageContentSchema';
 import { STYLES } from './landingPageStyles';
 import { renderCta, renderSectionBody, type Cta } from './landingPageSections';
+import { SNACKBAR_STYLES, snackbarScriptTag, type SnackbarRenderInput } from './landingPageSnackbar';
 
 /**
  * A hosted landing page, as the HTML a stranger's browser receives.
@@ -92,6 +93,11 @@ export interface RenderLandingPageInput {
    * be the same string, and the only way to guarantee that is for one caller to own both.
    */
   cspNonce?: string;
+  /**
+   * The "just signed up" snack bar, when it is on for this page (brand default or page override,
+   * resolved by the caller). Optional so every existing caller renders exactly as before.
+   */
+  snackbar?: SnackbarRenderInput | null;
 }
 
 /** A link target that is safe to put in an href: absolute http(s), or a site-relative path. */
@@ -141,7 +147,7 @@ export interface RenderedLandingPage {
 }
 
 export function renderLandingPage(input: RenderLandingPageInput): RenderedLandingPage {
-  const { brand, siteSlug, pageUrl, cspNonce } = input;
+  const { brand, siteSlug, pageUrl, cspNonce, snackbar } = input;
   // Sentence case at the boundary, so no page can be SERVED in Title Case whenever it was
   // written. The generator normalises too, but pages built before that existed are already in
   // the database and already live, and this fixes those without a migration. The function is
@@ -209,6 +215,7 @@ ${themeCssVars(theme)}
   color-scheme: light;
 }
 ${STYLES}
+${snackbar ? SNACKBAR_STYLES : ''}
 </style>
 ${cspNonce ? metaPixelHead(brand.meta_pixel_id, cspNonce) : ''}
 </head>
@@ -233,6 +240,7 @@ ${darkLogo
 </div>
 </footer>
 ${tracker}
+${snackbar ? snackbarScriptTag(snackbar) : ''}
 </body>
 </html>`;
 
