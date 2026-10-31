@@ -1,6 +1,7 @@
 import { QueryTypes } from 'sequelize';
 import { sequelize } from '../config/database';
 import { IS_STAFF_SQL } from './staffDetection';
+import { syntheticEmailSql } from './leads/syntheticContacts';
 import { pickBestDuplicate } from './emailIdentity';
 import type { TenureRosterRow } from './subscriptionAnalyticsService';
 
@@ -41,6 +42,7 @@ export async function getDepositHolderRoster(): Promise<TenureRosterRow[]> {
        LEFT JOIN community_members cm ON cm.enrollment_id = e.id
        JOIN account_credits ac ON ac.enrollment_id = e.id
       WHERE e.enrollment_type = 'explorer' AND e.status = 'active' AND NOT ${IS_STAFF_SQL}
+        AND NOT ${syntheticEmailSql('e.email')}
         AND ac.reason = 'open_house_deposit' AND ac.status = 'available'`,
     { type: QueryTypes.SELECT }
   )) as Array<{ enrollment_id: string; full_name: string | null; email: string | null; created_at: string | null; amount_cents: number }>;

@@ -251,6 +251,76 @@ export function applyProducerCommand(
   return { ok: true, patch };
 }
 
+/**
+ * The operational order a producer works in, which is NOT the order the rules happen to be
+ * written in. `COMMAND_TARGET` is still the one source of truth for which commands exist —
+ * this map only says where each sits in a sequence a person reads top to bottom, and a test
+ * asserts the two agree so a new command cannot be added without being placed.
+ */
+const COMMAND_ORDER: Record<ProducerCommand, number> = {
+  enter_backstage: 10,
+  mark_content_started: 20,
+  go_live: 30,
+  end: 40,
+  begin_processing: 50,
+  publish_replay: 60,
+  return_to_scheduled: 70,
+  cancel: 80,
+};
+
+/** Every command that exists, in the order a producer would work through them. */
+export const PRODUCER_COMMANDS: ProducerCommand[] =
+  (Object.keys(COMMAND_TARGET) as ProducerCommand[]).sort((a, b) => COMMAND_ORDER[a] - COMMAND_ORDER[b]);
+
+export interface CommandAvailability {
+  command: ProducerCommand;
+  /** True when sending this command now would actually change something. */
+  available: boolean;
+  /**
+   * Why not, when it is unavailable. Carries the machine's own refusal text, so a producer
+   * reads the same sentence the command route would have answered with.
+   */
+  reason?: string;
+  /** The refusal class, absent when the command is merely a no-op. */
+  error_class?: CommandOutcome['error_class'];
+}
+
+/**
+ * What a producer could do to this occurrence right now, and why not for the rest.
+ *
+ * DERIVED, NEVER RESTATED. Every answer here comes from running `applyProducerCommand`
+ * itself, so this cannot drift out of agreement with the rules the command route enforces —
+ * which is the whole reason it lives in this module rather than in a controller. A second
+ * table of "when is Go Live allowed" is a second place to forget that going live takes two
+ * keys.
+ *
+ * A NO-OP IS NOT OFFERED. Re-asserting the current state is legal and harmless, but a button
+ * that does nothing is a button that teaches a producer the control is broken. So a command
+ * that would be a no-op is reported unavailable with no `error_class`, which is how a caller
+ * tells "already done" apart from "refused".
+ *
+ * Evaluated as a producer at the current version on purpose: this describes the occurrence,
+ * not the caller. Whether *this* caller may produce is decided by the route, and a version
+ * conflict is a property of a stale client rather than of the occurrence.
+ */
+export function describeProducerCommands(current: OccurrenceState, nowMs: number): CommandAvailability[] {
+  return PRODUCER_COMMANDS.map((command) => {
+    const outcome = applyProducerCommand(current, command, {
+      expectedVersion: current.version,
+      nowMs,
+      isProducer: true,
+    });
+    if (outcome.ok && !outcome.noop) return { command, available: true };
+    if (outcome.ok) return { command, available: false, reason: 'no_change' };
+    return {
+      command,
+      available: false,
+      reason: outcome.reason,
+      error_class: outcome.error_class,
+    };
+  });
+}
+
 export interface ProviderEvent {
   health: ProviderHealth;
   /** Provider-side event time. Used only to reject stale deliveries. */

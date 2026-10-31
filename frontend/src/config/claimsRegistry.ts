@@ -138,6 +138,52 @@ export const CLAIMS: readonly Claim[] = [
     requiresSampleLabel: false,
     note: 'Safe replacement for `anthropic.partner`.',
   },
+  /* ── security posture: the same blocked/safe pairing as the partner claim ── */
+  {
+    /*
+     * ADDED 2026-10-31 (C7.9). The utility landing pages carried "SOC 2 aligned audit
+     * trails", "Built for SOC 2 Type II" and "Auditor-ready from day one", while the
+     * procurement FAQ built for the same buyers states we do not hold SOC 2. A buyer who
+     * read both found us contradicting ourselves on a security claim, which is the worst
+     * category to be inconsistent about.
+     *
+     * The measurement behind the FAQ also corrected something a reasonable person would
+     * have got wrong from memory: Anthropic is NOT a subprocessor of customer data, because
+     * the key is absent from production and the provider setting is unset. `anthropic.capability`
+     * above is a statement about how we build, not about who processes anyone's data.
+     */
+    key: 'security.soc2certified',
+    publicWording: 'SOC 2 certified / SOC 2 Type II / auditor-ready',
+    verification: 'DO_NOT_PUBLISH',
+    capability: 'unbuilt',
+    evidenceSource:
+      'No SOC 2 report exists. A direct search for Vanta, Drata, Secureframe and Thoropass ' +
+      'returns no vendor correspondence, and no audit firm appears anywhere in the record, ' +
+      'although the "decide to start" to-do is ticked and named exactly those things.',
+    owner: 'Ali',
+    lastVerifiedAt: '2026-10-31',
+    approvedRoutes: [],
+    requiresSampleLabel: false,
+    note: 'Hard block. Use `security.soc2alignment` instead. A certification we do not hold is the one overclaim a procurement review is guaranteed to test.',
+  },
+  {
+    key: 'security.soc2alignment',
+    publicWording: 'Audit trails aligned to SOC 2 controls, not SOC 2 certified',
+    verification: 'VERIFIED',
+    capability: 'live',
+    evidenceSource:
+      'A statement about how the audit trail is designed, paired with an explicit denial of ' +
+      'certification. Ali approved this wording 2026-10-31 over removing every SOC 2 mention, ' +
+      'so the security story survives a procurement review instead of disappearing from it.',
+    owner: 'Ali',
+    lastVerifiedAt: '2026-10-31',
+    approvedRoutes: ['/utility-ai', '/utility-iou', '/iou-demo'],
+    requiresSampleLabel: false,
+    note:
+      'Naming a standard in order to DENY holding it is not an overstatement, and any guard ' +
+      'over this copy has to allow that case or the honest sentence becomes unwritable. ' +
+      'Live on /utility-ai and /utility-iou; NERC CIP and SOX ride the same wording there.',
+  },
   {
     key: 'credential.cca',
     publicWording: 'Certified Anthropic AI Systems Architect',

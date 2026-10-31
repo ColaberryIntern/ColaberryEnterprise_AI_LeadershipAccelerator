@@ -37,6 +37,23 @@ const isFlaggedForReview = (o: GovOpportunity): boolean => {
   return s === 'no_bid' || s === 'needs_review' || o.pursuitStatus === 'declined';
 };
 
+/** The vetting-ladder ("approval level") badge for a row. Null for a not-yet-qualified row, so the caller falls
+ *  back to the existing Unassessed / Approval-pending badges. Tones go through the shared `subtle()` token helper. */
+function VettingBadge({ v }: { v?: { stage: string } | null }): React.ReactElement | null {
+  if (!v || v.stage === 'not_vetted') return null;
+  const map: Record<string, { label: string; tone: 'success' | 'warning' | 'danger' | 'secondary' }> = {
+    vetted: { label: 'Vetted', tone: 'success' },
+    rfi: { label: 'RFI response', tone: 'secondary' },
+    awaiting_approval: { label: 'Awaiting approval', tone: 'secondary' },
+    needs_requirements: { label: 'Needs requirements', tone: 'warning' },
+    in_review: { label: 'In review', tone: 'secondary' },
+    no_bid: { label: 'No-bid', tone: 'danger' },
+  };
+  const m = map[v.stage];
+  if (!m) return null;
+  return <span className={`badge ${subtle(m.tone)}`} title={`Qualification stage: ${v.stage}`}>{m.label}</span>;
+}
+
 type CatFilter = 'all' | 'it' | 'consulting';
 type SortKey = 'priority' | 'fit' | 'closing' | 'value';
 
@@ -206,6 +223,9 @@ export default function AdminGovOpportunitiesPage(): React.ReactElement {
   const [catFilter, setCatFilter] = useState<CatFilter>('all');
   const [sort, setSort] = useState<SortKey>('priority');
   const [decentOnly, setDecentOnly] = useState(false);
+  // The "Vetted only" view Ali wants. Default OFF in PR 1 — almost nothing is vetted yet, so defaulting on would
+  // show an empty page; the default flips on with PR 2, whose daily sweep populates the vetted set. Toggle anytime.
+  const [vettedOnly, setVettedOnly] = useState(false);
   const [detailsOf, setDetailsOf] = useState<GovOpportunity | null>(null);
   const [dismissingKey, setDismissingKey] = useState<string | null>(null);
   const [recentlyDismissed, setRecentlyDismissed] = useState<GovOpportunity[]>([]);
@@ -259,10 +279,15 @@ export default function AdminGovOpportunitiesPage(): React.ReactElement {
     () => categoryFiltered.filter((o) => typeof o.fitScore === 'number' && o.fitScore >= DECENT_FIT).length,
     [categoryFiltered],
   );
+  const vettedInView = useMemo(
+    () => categoryFiltered.filter((o) => o.vetting?.stage === 'vetted').length,
+    [categoryFiltered],
+  );
   const shown = useMemo(() => {
-    const list = decentOnly
+    const base = decentOnly
       ? categoryFiltered.filter((o) => typeof o.fitScore === 'number' && o.fitScore >= DECENT_FIT)
       : categoryFiltered;
+    const list = vettedOnly ? base.filter((o) => o.vetting?.stage === 'vetted') : base;
     const by: Record<SortKey, (a: GovOpportunity, b: GovOpportunity) => number> = {
       priority: (a, b) => (b.priorityScore ?? -1) - (a.priorityScore ?? -1),
       fit: (a, b) => (b.fitScore ?? -1) - (a.fitScore ?? -1),
@@ -270,7 +295,7 @@ export default function AdminGovOpportunitiesPage(): React.ReactElement {
       value: (a, b) => (b.estimatedValue ?? -1) - (a.estimatedValue ?? -1),
     };
     return [...list].sort(by[sort]);
-  }, [categoryFiltered, decentOnly, sort]);
+  }, [categoryFiltered, decentOnly, vettedOnly, sort]);
 
   // Summary KPIs + the mix bars are computed over the CURRENTLY-FILTERED view (`shown`) so they move with the
   // filters. Estimates stay UNVERIFIED and are never called revenue. (The Flagged card is a separate bucket and
@@ -428,6 +453,10 @@ export default function AdminGovOpportunitiesPage(): React.ReactElement {
                 <button type="button" className={`btn ${catFilter === 'it' ? 'btn-dark' : 'btn-outline-secondary'}`} onClick={() => setCatFilter('it')}>IT {itCount}</button>
                 <button type="button" className={`btn ${catFilter === 'consulting' ? 'btn-dark' : 'btn-outline-secondary'}`} onClick={() => setCatFilter('consulting')}>Consulting {consultingCount}</button>
               </div>
+              <button type="button" className={`btn btn-sm ${vettedOnly ? 'btn-success' : 'btn-outline-success'}`} aria-pressed={vettedOnly}
+                onClick={() => setVettedOnly((v) => !v)} title="Show only vetted opportunities (passed pursuit approval)">
+                <i className="ri-shield-check-line me-1" aria-hidden="true" />Vetted only {vettedInView}
+              </button>
               <button type="button" className={`btn btn-sm ${decentOnly ? 'btn-success' : 'btn-outline-success'}`} aria-pressed={decentOnly}
                 onClick={() => setDecentOnly((v) => !v)} title={`Show only decent options (fit ≥ ${DECENT_FIT})`}>
                 <i className="ri-filter-3-line me-1" aria-hidden="true" />Decent options {decentInView}
@@ -470,7 +499,11 @@ export default function AdminGovOpportunitiesPage(): React.ReactElement {
           )}
 
           {shown.length === 0 ? (
-            <p className="text-secondary mb-0">No candidates in this filter.</p>
+            <p className="text-secondary mb-0">
+              {vettedOnly
+                ? 'No vetted opportunities yet. Toggle "Vetted only" off to see the full curated set, then Qualify an opportunity to start its approval.'
+                : 'No candidates in this filter.'}
+            </p>
           ) : (
             <div className="table-responsive">
               <table className="table table-hover align-middle mb-0">
@@ -498,8 +531,14 @@ export default function AdminGovOpportunitiesPage(): React.ReactElement {
                           <div className="small text-secondary d-flex flex-wrap align-items-center gap-2">
                             <span>{o.agency}</span>
                             {o.category && <span className="badge bg-secondary-subtle text-secondary-emphasis">{o.category}</span>}
-                            {unassessed && <span className="badge bg-secondary-subtle text-secondary-emphasis" title="No review verdict (absent or null) — unassessed, never approved">Unassessed</span>}
-                            {pendingKeys.has(o.uuid) && <span className="badge bg-info-subtle text-info-emphasis" title="A pursuit approval is awaiting a second admin">Approval pending</span>}
+                            {o.vetting && o.vetting.stage !== 'not_vetted' ? (
+                              <VettingBadge v={o.vetting} />
+                            ) : (
+                              <>
+                                {unassessed && <span className="badge bg-secondary-subtle text-secondary-emphasis" title="No review verdict (absent or null) — unassessed, never approved">Unassessed</span>}
+                                {pendingKeys.has(o.uuid) && <span className="badge bg-info-subtle text-info-emphasis" title="A pursuit approval is awaiting a second admin">Approval pending</span>}
+                              </>
+                            )}
                           </div>
                         </td>
                         <td><ScoreChip score={o.priorityScore} /></td>

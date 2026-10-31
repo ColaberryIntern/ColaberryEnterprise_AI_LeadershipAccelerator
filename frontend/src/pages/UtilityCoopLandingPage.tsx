@@ -39,7 +39,7 @@ const ROLE_HEROES: Record<string, { badge: string; headline: string; subhead: st
     bullets: [
       'Connects to NISC, Azure, Oracle, and your existing data stack',
       'No data migration required. AI agents read from your systems.',
-      'SOC 2 aligned audit trails and full explainability',
+      'Audit trails aligned to SOC 2 controls, not SOC 2 certified, with full explainability',
     ],
   },
   cfo: {
@@ -129,7 +129,7 @@ function UtilityCoopLandingPage() {
     ],
     cio: [
       { icon: 'bi-database', title: 'NISC Controls the Data', problem: 'Your data lives in NISC (iVue, Oracle, EDC) with 15-minute latency. Getting data out for AI is the first challenge.', solution: 'We connect to NISC, Azure, Oracle, and your existing systems. No data migration. AI agents read from your infrastructure.' },
-      { icon: 'bi-shield-lock', title: 'Security and Compliance', problem: 'NERC CIP, data governance, and member privacy are non-negotiable. Any AI solution must meet these standards.', solution: 'SOC 2 aligned audit trails. Every AI decision is explainable, replayable, and traceable. Full compliance monitoring.' },
+      { icon: 'bi-shield-lock', title: 'Security and Compliance', problem: 'NERC CIP, data governance, and member privacy are non-negotiable. Any AI solution must meet these standards.', solution: 'Audit trails aligned to SOC 2 controls. We are not SOC 2 certified and do not claim to be. Every AI decision is explainable, replayable, and traceable. Full compliance monitoring.' },
       { icon: 'bi-puzzle', title: 'Integration Complexity', problem: 'You have ABS, CIS, OMS, NAM, TMS, MDM, IVCM, Power BI dashboards. Adding another system is the last thing you need.', solution: 'This is an overlay, not a replacement. It sits on top of your existing stack and makes it smarter.' },
       { icon: 'bi-code-square', title: 'No AI Team', problem: 'You have IT staff who manage NISC and networks. You do not have a team of data scientists or ML engineers.', solution: 'You do not need one. The AI agents are pre-built for co-op operations. Your IT team manages the system, not the models.' },
     ],
@@ -441,7 +441,7 @@ function UtilityCoopLandingPage() {
             {[
               { icon: 'bi-building', title: 'Proven Utility Experience', desc: 'We have a history of working with the largest utilities in the United States. Our team understands grid operations, regulatory requirements, and co-op governance.' },
               { icon: 'bi-puzzle', title: 'Works With What You Have', desc: 'Our solution works in tandem with your existing AI efforts, NISC systems, Azure pipelines, and internal tools. We reduce discovery time and help you get to ROI faster, not start from scratch.' },
-              { icon: 'bi-shield-lock', title: 'Cybersecurity and Compliance', desc: 'SOC 2 aligned audit trails. NERC CIP awareness. Every AI decision is explainable, replayable, and traceable. Your member data stays protected.' },
+              { icon: 'bi-shield-lock', title: 'Cybersecurity and Compliance', desc: 'Audit trails aligned to SOC 2 controls, not SOC 2 certified. NERC CIP awareness. Every AI decision is explainable, replayable, and traceable. Your member data stays protected.' },
               { icon: 'bi-cash-stack', title: 'Cost Control and Transparent ROI', desc: 'No hidden fees. No surprise overruns. Our ROI methodology is fully deterministic and transparent. You see the math before you commit, and you can validate it with your own numbers.' },
               { icon: 'bi-award', title: 'USDA Grant Eligible', desc: 'USDA Rural Utilities Service (RUS) provides loans and grants for technology improvements. Our solutions can be positioned for grid resilience funding, so you spend grant money you already have, not discretionary O&M budget.' },
               { icon: 'bi-arrow-left-right', title: 'Flexible Engagement', desc: 'No secure login required at the initial interest stage. Start with a free demo and assessment. NDA and formal agreements come when you are ready for active implementation.' },

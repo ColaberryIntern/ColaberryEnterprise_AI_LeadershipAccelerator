@@ -117,9 +117,26 @@ export const ORIENTATION_TEACH: TeachSlide[] = [
   },
   {
     segment: 'big-picture', eyebrow: '🏆 The proof', title: 'Fourteen years of turning careers around',
-    body: 'Colaberry has been launching careers since 2012 — over 5,000 careers, 10,000+ professionals trained, $100M+ in wage impact. We’re an Anthropic / Claude Code partner, so you build on the real, current AI stack, not a sandbox. You are never building alone: live instructors and mentors through all 12 weeks.',
-    bullets: ['Since 2012 · 5,000+ careers · $100M+ wage impact', 'Anthropic / Claude Code partner', 'Live instructors + mentors the whole way'],
-    script: 'This earns you the right to teach the rest of the night. Say it with quiet confidence, then move.',
+    body: 'Colaberry has been teaching this since 2012 — 8k+ data students enrolled, 2,500+ certified, 1,000+ hires. We build on Claude and Claude Code, so you build on the real, current AI stack, not a sandbox. You are never building alone: live instructors and mentors through all 12 weeks.',
+    bullets: ['Since 2012 · 8k+ students · 2,500+ certified · 1,000+ hires', 'We build on Claude and Claude Code', 'Live instructors + mentors the whole way'],
+    // Every figure here is the approved public wording from the claim registry
+    // (frontend/src/config/claimsRegistry.ts), which is why this slide now carries an
+    // evidence array like the one above it. The wording it replaced did not: "5,000+
+    // careers", "10,000+ professionals trained" and "$100M+ in wage impact" have no
+    // source, and the registry blocks all three -- `trackrecord.careers` is superseded
+    // because "careers launched" and "students enrolled" differ by an order of
+    // magnitude, and `trackrecord.wageimpact` carries an empty approvedRoutes because
+    // no methodology was ever located. "Anthropic / Claude Code partner" is blocked
+    // too (`anthropic.partner`: application submitted, admission not evidenced); the
+    // approved replacement states what we build with rather than who we are affiliated
+    // with. Quote nothing on this slide that is not in that registry.
+    evidence: [
+      { claim: '8k+ data students enrolled', publisher: 'Colaberry', sourceTitle: 'claim registry trackrecord.students', publicationDate: '2026', sourceType: 'internal-verified', note: 'CCPP read-only query 2026-08-13: 8,588 distinct students; printed figure is rounded down' },
+      { claim: '2,500+ certified', publisher: 'Colaberry', sourceTitle: 'claim registry trackrecord.certified', publicationDate: '2026', sourceType: 'internal-verified', note: 'CCPP read-only query 2026-08-13: 2,844 with CertifiedDate; printed figure is rounded down' },
+      { claim: '1,000+ hires', publisher: 'Colaberry', sourceTitle: 'claim registry trackrecord.hired', publicationDate: '2026', sourceType: 'internal-verified', note: 'owner-attested, not query-verified: 691 traceable in CCPP plus ~300 Ali knows of directly' },
+      { claim: 'Teaching this since 2012', publisher: 'Colaberry', sourceTitle: 'claim registry trackrecord.since2012', publicationDate: '2026', sourceType: 'internal-verified', note: 'earliest StartDate 2012-04-07, enrolments in every year since' },
+    ],
+    script: 'This earns you the right to teach the rest of the night. Say it with quiet confidence, then move. If anyone asks about wage or salary outcomes, say we do not publish them — we have no employment data, and the hires figure is partly owner-attested rather than measured.',
   },
   {
     segment: 'big-picture', eyebrow: '🗺️ How it works', title: 'Learn it Monday. Build it Thursday. Prove it by Friday.',

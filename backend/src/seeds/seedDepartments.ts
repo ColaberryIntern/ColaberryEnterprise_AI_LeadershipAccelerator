@@ -130,10 +130,17 @@ const DEPARTMENTS = [
       { title: 'AI-adaptive curriculum for every student', progress: 48 },
       { title: '90% student satisfaction score', progress: 82 },
     ],
+    // "Job Placement 72%" was removed here on 2026-10-31. No placement rate exists to
+    // seed: there is no employment, wage or placement data anywhere in production, so the
+    // numerator was invented and the denominator is unknown. The nearest real figure is
+    // the claim registry's `trackrecord.hired`, which is 691 traceable hires against
+    // 8,588 enrolments and is itself partly owner-attested -- nothing close to 72%.
+    // The other two values here are illustrative seed data for an internal dashboard, but
+    // a placement rate is the one figure a funder or an auditor tests first, and a seeded
+    // number on a screen reads as a measurement. Do not reintroduce it without a source.
     kpis: [
       { name: 'Completion Rate', value: 78, unit: '%', trend: 'up', delta: 4.0, prev_value: 75 },
       { name: 'Student Satisfaction', value: 87, unit: '%', trend: 'up', delta: 3.6, prev_value: 84 },
-      { name: 'Job Placement', value: 72, unit: '%', trend: 'stable', delta: 0.8, prev_value: 71.4 },
     ],
   },
   {

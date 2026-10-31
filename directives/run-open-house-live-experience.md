@@ -1,6 +1,8 @@
 # Directive — Run the Open House Live Experience
 
-**Status:** active · **Owner:** Ali · **System:** AI Systems Architect Accelerator Open House · **Established:** 2026-07-17 (first run 2026-07-16)
+> **Superseded 2026-10-31** by [`run-open-house-on-platform.md`](run-open-house-on-platform.md): Open Houses now run inside the platform (guest join, live polls, server-recorded draws), with no separate service or admin key. Kept as the record of the July 2026 setup.
+
+**Status:** superseded · **Owner:** Ali · **System:** AI Systems Architect Accelerator Open House · **Established:** 2026-07-17 (first run 2026-07-16)
 
 ## 1. Purpose
 Run a fully interactive Open House: one presentation the host drives from a single URL that, as the host advances slides, automatically launches live audience polls/trivia on attendees' phones, shows animated results on the shared screen, draws the raffle, and flips phones to a $50 founding-seat claim — plus a live "build a business from an audience idea" demo. Delivers a high-conversion, high-energy event with zero mid-show tab-juggling by the host.

@@ -5,15 +5,18 @@ import { launchPractice, LaunchNotReadyError, type LaunchBrief } from './present
  * The screen between "I have a room" and "I am in a recorded call".
  *
  * WHY THERE IS A STEP HERE AT ALL. A student should never discover after the fact
- * that the session was recording, or that the room was visible to their cohort. Both
+ * that the session was recording, or that the room was visible to their cohort, or
+ * that the take they just spent is unusable because nothing was on screen. All three
  * facts are shown before they commit, and the Join control stays disabled until they
  * have said they read them.
  *
- * THE FACTS COME FROM THE SESSION, NOT FROM A CONSTANT. An earlier draft of this
- * panel hardcoded "only you" and "records automatically". That is true of a solo
- * rehearsal and false of demo day, and a screen whose entire job is informed consent
- * cannot be the thing that misinforms. Both lines are derived from the attempt's real
- * mode and the room's real recording policy.
+ * THE TWO CONSENT FACTS COME FROM THE SESSION, NOT FROM A CONSTANT. An earlier draft
+ * of this panel hardcoded "only you" and "records automatically". That is true of a
+ * solo rehearsal and false of demo day, and a screen whose entire job is informed
+ * consent cannot be the thing that misinforms. Both lines are derived from the
+ * attempt's real mode and the room's real recording policy. The screen-sharing line is
+ * deliberately NOT derived from anything: it is true of every room and every
+ * presentation type, and see `SCREEN_LINE` for why it has to be said here.
  *
  * POPUP BLOCKERS ARE THE NORMAL CASE, NOT AN EDGE CASE. `window.open` from an async
  * callback is blocked by default in Safari and by many extensions, and it signals
@@ -67,6 +70,29 @@ function recordingLine(policy: string | null): string {
   // 'always' and the unset default behave identically today: Zoom records on start.
   return 'This room records automatically from the moment you join, so you can watch yourself back.';
 }
+
+/**
+ * The instruction that four out of four student demos have needed so far.
+ *
+ * WHY THIS IS A FACT ON THE CONSENT SCREEN AND NOT A TIP SOMEWHERE ELSE. Zoom picks
+ * the composition of the file it saves from what actually happened in the room: share a
+ * screen and it writes `shared_screen_with_speaker_view`, share nothing and it writes
+ * `active_speaker`. Every student working-system demo recorded to date came back
+ * `active_speaker` — the learner talking, with the system they built nowhere in frame —
+ * while the only recordings carrying a screen were staff ones. That is not four people
+ * being careless, it is the product never having said so at the moment it mattered.
+ *
+ * It is told as a consequence rather than an instruction because "share your screen"
+ * alone reads as optional. Knowing the recording comes back unusable is what makes
+ * someone do it before they start rather than three minutes in.
+ *
+ * This is the last screen before the room opens, so it is the only place the sentence
+ * can still change the outcome. `RecordingEvidencePicker` already flags a take that
+ * arrived without a screen, but by then the take is spent.
+ */
+const SCREEN_LINE = 'Share your screen before you start speaking, and keep it shared. '
+  + 'Zoom saves only what it saw: with no screen shared, the recording comes back as '
+  + 'you talking with nothing to look at.';
 
 export default function GetReadyPanel(props: GetReadyPanelProps) {
   const { projectId, storyId, attemptId, mode, recordingPolicy, demo } = props;
@@ -126,6 +152,8 @@ export default function GetReadyPanel(props: GetReadyPanelProps) {
       <h3>Before you go in</h3>
 
       <dl className="ps-facts" data-testid="ps-getready-facts">
+        <dt>Share your screen</dt>
+        <dd data-testid="ps-getready-screen">{SCREEN_LINE}</dd>
         <dt>Who can see this</dt>
         <dd data-testid="ps-getready-who">{whoCanSee(mode)}</dd>
         <dt>Recording</dt>
@@ -141,7 +169,7 @@ export default function GetReadyPanel(props: GetReadyPanelProps) {
               onChange={(e) => setAcknowledged(e.target.checked)}
               data-testid="ps-getready-ack"
             />
-            <span>I have read the two points above.</span>
+            <span>I have read the three points above, and I will share my screen.</span>
           </label>
         </li>
       </ul>

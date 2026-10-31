@@ -12,10 +12,12 @@ import {
   applyProviderEvent,
   canTransition,
   assertTransition,
+  describeProducerCommands,
   isOnAir,
   isTerminalState,
   nextStates,
   EDITORIAL_STATES,
+  PRODUCER_COMMANDS,
   type OccurrenceState,
   type CommandContext,
 } from '../broadcastStateMachine';
@@ -321,5 +323,96 @@ describe('the end reason', () => {
   it('CANCELLING records no reason, because it never ended', () => {
     const r = applyProducerCommand(base({ editorial_state: 'scheduled' }), 'cancel', ctx());
     expect(r.patch).not.toHaveProperty('end_reason');
+  });
+});
+
+/**
+ * describeProducerCommands — what a producer could do right now.
+ *
+ * The property that matters is that it is DERIVED. Every assertion below is really asking
+ * the same question: does this agree with `applyProducerCommand` without restating it? A
+ * second table of "when is Go Live allowed" is the failure this is guarding against, because
+ * it would be a second place to forget that going live takes two keys.
+ */
+describe('describeProducerCommands', () => {
+  const find = (list: ReturnType<typeof describeProducerCommands>, command: string) =>
+    list.find((c) => c.command === command)!;
+
+  it('covers every command the machine has, in operational order', () => {
+    // Restated deliberately: a new command that nobody placed in the order would drop out of
+    // this list silently, and a producer control would never offer it.
+    expect(PRODUCER_COMMANDS).toEqual([
+      'enter_backstage', 'mark_content_started', 'go_live', 'end',
+      'begin_processing', 'publish_replay', 'return_to_scheduled', 'cancel',
+    ]);
+    expect(describeProducerCommands(base(), NOW)).toHaveLength(PRODUCER_COMMANDS.length);
+  });
+
+  it('offers backstage on a scheduled occurrence, and refuses go_live for want of a feed', () => {
+    const list = describeProducerCommands(base({ editorial_state: 'scheduled' }), NOW);
+    expect(find(list, 'enter_backstage').available).toBe(true);
+    // Guarantee 1 surfaced to a human: health, not intent, is what is missing.
+    expect(find(list, 'go_live')).toMatchObject({
+      available: false, error_class: 'ProviderNotReady',
+    });
+    expect(find(list, 'go_live').reason).toContain('unknown');
+  });
+
+  it('refuses mark_content_started before backstage, with the machine’s own words', () => {
+    const list = describeProducerCommands(base({ editorial_state: 'scheduled' }), NOW);
+    expect(find(list, 'mark_content_started')).toMatchObject({
+      available: false,
+      error_class: 'InvalidStateTransition',
+      reason: 'content_start_requires_backstage_or_live',
+    });
+  });
+
+  it('holds go_live until the content anchor is set, THEN offers it', () => {
+    // This is the forced order in the operator directive, read back off the rules rather
+    // than written down a second time.
+    const ready = { editorial_state: 'backstage' as const, provider_health: 'ready' as const };
+    const before = describeProducerCommands(base(ready), NOW);
+    expect(find(before, 'mark_content_started').available).toBe(true);
+    expect(find(before, 'go_live')).toMatchObject({
+      available: false, error_class: 'ContentNotStarted', reason: 'mark_content_started_first',
+    });
+
+    const after = describeProducerCommands(base({ ...ready, content_started_at: new Date(NOW) }), NOW);
+    expect(find(after, 'go_live').available).toBe(true);
+    // Already anchored, so re-marking would change nothing.
+    expect(find(after, 'mark_content_started').available).toBe(false);
+  });
+
+  it('distinguishes "already done" from "refused", which is why a no-op carries no class', () => {
+    const list = describeProducerCommands(base({ editorial_state: 'backstage' }), NOW);
+    const noop = find(list, 'enter_backstage');
+    // Re-asserting the current state is legal — but a button that does nothing teaches a
+    // producer the control is broken, so it is not offered.
+    expect(noop.available).toBe(false);
+    expect(noop.reason).toBe('no_change');
+    expect(noop.error_class).toBeUndefined();
+  });
+
+  it('offers nothing at all in a terminal state', () => {
+    for (const state of ['replay_ready', 'cancelled'] as const) {
+      const list = describeProducerCommands(base({ editorial_state: state }), NOW);
+      expect(list.filter((c) => c.available)).toEqual([]);
+    }
+  });
+
+  it('never reports a version conflict, because it describes the occurrence, not a client', () => {
+    // A stale client is a property of that client. Describing the occurrence as "conflicted"
+    // would make the control unusable for everyone the moment anyone else held an old copy.
+    const list = describeProducerCommands(base({ editorial_state: 'live', version: 97 }), NOW);
+    expect(list.some((c) => c.error_class === 'VersionConflict')).toBe(false);
+    expect(find(list, 'end').available).toBe(true);
+  });
+
+  it('tracks provider health rather than remembering it', () => {
+    const anchored = { editorial_state: 'backstage' as const, content_started_at: new Date(NOW) };
+    const down = describeProducerCommands(base({ ...anchored, provider_health: 'down' }), NOW);
+    const up = describeProducerCommands(base({ ...anchored, provider_health: 'ready' }), NOW);
+    expect(find(down, 'go_live').available).toBe(false);
+    expect(find(up, 'go_live').available).toBe(true);
   });
 });

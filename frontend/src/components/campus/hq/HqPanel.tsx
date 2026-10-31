@@ -50,9 +50,9 @@ export function HqPanel({ s, who, face, placed }: { s: HqState; who: HqBadgeWho;
           {f.rooms.map((r) => {
             const body = (<><i className={`ic ri-${r.icon}`} /><span className="t"><b>{roomName(r, hq.isStaff)}</b><code>{r.path.replace('https://', '')}</code></span>
               <HqPeople people={placed.byRoom.get(r.path) ?? []} label={`At ${r.label}`} size="sm" />
-              <span className="go">{r.open ? (r.external || r.own ? 'Open ↗' : 'Open in admin ↗') : '🔒'}</span></>);
+              <span className="go">{r.open ? (r.external ? 'Open ↗' : r.own ? 'Open →' : 'Open in admin ↗') : '🔒'}</span></>);
             return r.open
-              ? <a key={r.path} className="cm-hq-rrow" href={roomHref(r)} target="_blank" rel="noopener noreferrer" data-testid="cm-hq-rrow">{body}</a>
+              ? <a key={r.path} className="cm-hq-rrow" href={roomHref(r)} target={r.own ? undefined : '_blank'} rel={r.own ? undefined : 'noopener noreferrer'} data-testid="cm-hq-rrow">{body}</a>
               : <button key={r.path} type="button" className="cm-hq-rrow lock" aria-disabled="true" onClick={() => s.lockedRoom(r)}>{body}</button>;
           })}
         </div>

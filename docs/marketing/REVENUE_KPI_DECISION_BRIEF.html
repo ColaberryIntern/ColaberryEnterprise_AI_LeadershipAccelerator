@@ -1,0 +1,407 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Revenue Reporting Decision Brief</title>
+<style>
+  :root {
+    --cherry: #FB2832;
+    --cherry-deep: #C20E1E;
+    --cherry-bg: #FFF0F1;
+    --leaf: #77BB4A;
+    --ink: #2d3748;
+    --ink-light: #718096;
+    --border: #e2e8f0;
+    --bg: #ffffff;
+    --bg-alt: #f7fafc;
+    --amber: #b7791f;
+    --amber-bg: #fffaf0;
+    --slate: #4a5568;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg-alt);
+    color: var(--ink);
+    font: 400 16px/1.6 'Segoe UI', system-ui, -apple-system, sans-serif;
+  }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 0 16px 64px; }
+  header {
+    background: linear-gradient(135deg, #1a202c 0%, #2d3748 100%);
+    color: #fff; padding: 40px 0 32px; margin-bottom: 32px;
+  }
+  header .wrap { padding-bottom: 0; }
+  header .eyebrow {
+    text-transform: uppercase; letter-spacing: .12em; font-size: 12px;
+    font-weight: 600; color: #fbb6bc; margin-bottom: 10px;
+  }
+  header h1 { margin: 0 0 10px; font-size: 30px; line-height: 1.2; font-weight: 700; }
+  header p { margin: 0; color: #cbd5e0; max-width: 62ch; }
+  h2 {
+    font-size: 21px; font-weight: 700; color: var(--cherry);
+    margin: 40px 0 14px; padding-bottom: 8px; border-bottom: 2px solid var(--border);
+  }
+  h3 { font-size: 16px; font-weight: 600; margin: 24px 0 8px; color: var(--slate); }
+  p, li { max-width: 72ch; }
+  code {
+    background: var(--bg-alt); border: 1px solid var(--border); border-radius: 3px;
+    padding: 1px 5px; font-size: 13px; font-family: Consolas, 'Courier New', monospace;
+  }
+  .card {
+    background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+    padding: 20px 24px; margin: 18px 0; box-shadow: 0 1px 3px rgba(0,0,0,.05);
+  }
+  .verdict {
+    border-left: 4px solid var(--cherry); background: var(--cherry-bg);
+  }
+  .alert {
+    border-left: 4px solid var(--amber); background: var(--amber-bg);
+  }
+  .verdict h3, .alert h3 { margin-top: 0; }
+  table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 14px; }
+  th {
+    text-align: left; background: var(--bg-alt); font-weight: 600; font-size: 12px;
+    text-transform: uppercase; letter-spacing: .05em; color: var(--ink-light);
+    padding: 10px 12px; border-bottom: 2px solid var(--border);
+  }
+  td { padding: 9px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  tbody tr:hover { background: var(--bg-alt); }
+  .num { font-variant-numeric: tabular-nums; }
+  .pill {
+    display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 9px;
+    border-radius: 11px; text-transform: uppercase; letter-spacing: .04em; white-space: nowrap;
+  }
+  .t-trusted { background: #e6ffed; color: #22633b; }
+  .t-partial { background: #fffaf0; color: #975a16; }
+  .t-unavailable { background: #edf2f7; color: #4a5568; }
+  .t-invalid { background: #fff5f5; color: #c53030; }
+  .bar { display: flex; height: 34px; border-radius: 6px; overflow: hidden; margin: 8px 0 6px; }
+  .bar span { display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 700; color: #fff; }
+  .b-trusted { background: #38a169; }
+  .b-partial { background: #d69e2e; }
+  .b-unavailable { background: #718096; }
+  .b-invalid { background: var(--cherry-deep); }
+  .legend { font-size: 13px; color: var(--ink-light); display: flex; gap: 18px; flex-wrap: wrap; }
+  .legend i { display: inline-block; width: 11px; height: 11px; border-radius: 2px; margin-right: 5px; }
+  .meta { font-size: 13px; color: var(--ink-light); margin-top: 6px; }
+  ul { padding-left: 22px; }
+  li { margin-bottom: 6px; }
+  .footnote { font-size: 13px; color: var(--ink-light); border-top: 1px solid var(--border);
+    margin-top: 40px; padding-top: 16px; }
+  @media (max-width: 600px) {
+    header h1 { font-size: 24px; }
+    .bar span { font-size: 10px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <div class="eyebrow">Marketing &rsaquo; Performance</div>
+    <h1>Revenue reporting: what we have, and whether to build the tab</h1>
+    <p>Answers three questions: what revenue figures exist today, what KPIs are registered,
+       and whether to mask them here or build a separate Revenue report.</p>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <div class="card verdict">
+    <h3>The short answer</h3>
+    <p style="margin-bottom:10px"><strong>We have recurring-revenue numbers, and they are real.</strong>
+       <code>/admin/revenue</code> reports MRR $6,765, ARR $81,180, 35 active subscribers and
+       ARPU $193.29, computed from paid enrolments. The Revenue report <em>already exists</em> &mdash;
+       it is simply not the Marketing &rsaquo; Performance tab.</p>
+    <p style="margin-bottom:10px"><strong>What is missing is the cash view, not the revenue view.</strong>
+       MRR is what members are contracted to pay. <em>Net revenue</em> &mdash; what actually landed,
+       net of refunds &mdash; still has no source wired, which is why the marketing surface
+       correctly reads &ldquo;Unavailable&rdquo;. Both statements are true at once.</p>
+    <p style="margin-bottom:0"><strong>But MRR is overstated by roughly 26%.</strong> Lapsed
+       members are never removed from it &mdash; see section 2. Fix that before anyone quotes
+       $81,180 externally.</p>
+  </div>
+
+  <div class="card alert">
+    <h3>Correction &mdash; 2026-10-31</h3>
+    <p style="margin-bottom:0">An earlier version of this brief said &ldquo;there are no revenue
+       numbers, not low ones &mdash; none.&rdquo; That was wrong. It described the metric registry
+       and the marketing surface, and missed the <code>/admin/revenue</code> subscription
+       subsystem entirely. The sections below are rewritten against what the product
+       actually computes.</p>
+  </div>
+
+  <h2>1. What <code>/admin/revenue</code> actually reports</h2>
+
+  <p>A full subscription view, computed by <code>subscriptionAnalyticsService</code> &mdash; the
+     recurring-revenue lens, deliberately distinct from <code>revenuePaymentsService</code>&rsquo;s
+     cash ledger. &ldquo;Is this a paying member&rdquo; is answered by the <strong>enrolment</strong>
+     (<code>payment_status='paid'</code>), not by <code>subscriptions.status</code>, which is
+     unreliable in production because the post-payment activation webhook frequently never fires.</p>
+
+  <table>
+    <thead><tr><th style="width:34%">Figure</th><th style="width:20%">Reported</th><th>Reconciles as</th></tr></thead>
+    <tbody>
+      <tr><td>MRR</td><td class="num"><strong>$6,765</strong></td><td>$596 annual + $6,169 monthly. Checks out.</td></tr>
+      <tr><td>ARR</td><td class="num">$81,180</td><td>MRR &times; 12.</td></tr>
+      <tr><td>Active subscribers</td><td class="num">35</td><td>4 annual + 31 monthly. Excludes 10 comped, 67 staff, 2 other.</td></tr>
+      <tr><td>ARPU</td><td class="num">$193.29</td><td>6,765 &divide; 35.</td></tr>
+      <tr><td>Monthly plan rate</td><td class="num">$199/mo</td><td>6,169 &divide; 31. Matches the published month-to-month price.</td></tr>
+      <tr><td>Annual plan rate</td><td class="num">$149/mo</td><td>596 &divide; 4. Matches the committed price.</td></tr>
+    </tbody>
+  </table>
+
+  <p>Every tile is internally consistent and the plan rates match the real offer. Staff (67) are
+     excluded from revenue entirely, which is right. The lapsed-subscription list is a genuinely
+     useful collections queue.</p>
+
+  <h2>2. Two defects in that page</h2>
+
+  <div class="card alert">
+    <h3>MRR counts members who stopped paying &mdash; roughly 26% overstated</h3>
+    <p>In <code>subscriptionAnalyticsService.ts</code>, MRR is accumulated for every
+       annual/monthly member (<code>kpis.mrr += monthlyAmount</code>, line&nbsp;332) with
+       <strong>no exclusion for lapsed</strong>. Lapse is detected further down the same loop
+       (line&nbsp;~352) and only ever pushed into the <code>attention</code> array &mdash; it
+       never decrements MRR or the subscriber count.</p>
+    <p>The page itself lists <strong>9 lapsed monthly members</strong>, overdue between 2 and 61
+       days. At $199 each that is <strong>~$1,791/mo still inside the $6,765</strong> &mdash;
+       about 26% of MRR, and roughly <strong>$21,500 of the $81,180 ARR</strong>.</p>
+    <p style="margin-bottom:0">The service header says so plainly: lapse is
+       <em>&ldquo;COMPUTED, not stored &mdash; nothing in this codebase flags them today&hellip; it
+       does not revoke access.&rdquo;</em> So this is a known shape, not a hidden bug &mdash; but
+       the KPI tile does not carry the caveat, and $81,180 is the number that would get quoted.</p>
+  </div>
+
+  <div class="card alert">
+    <h3>Subscriber tenure shows 114% and 213% &ldquo;carry over&rdquo;</h3>
+    <p>The panel is subtitled <em>&ldquo;how many carry over from the bucket above&rdquo;</em>,
+       which describes retention &mdash; and retention above 100% is impossible. The service is
+       honest about what the number really is: <em>&ldquo;a snapshot ratio (this bucket&rsquo;s
+       headcount vs. the bucket above it, right now) &mdash; not per-person cohort tracking across
+       time.&rdquo;</em></p>
+    <p style="margin-bottom:0">Comparing today&rsquo;s Month&nbsp;3 bucket to today&rsquo;s
+       Month&nbsp;2 bucket compares <em>different cohorts</em>, so the ratio is not carry-over at
+       all. The first step compounds it: Month&nbsp;1&rsquo;s 1% is measured against 740 Explorers,
+       a different population from every bucket after it. The fix is a label change, not a
+       calculation change &mdash; the code is right and the caption is wrong.</p>
+  </div>
+
+  <h2>3. What is still genuinely missing</h2>
+
+  <p>Two independent gaps, both structural rather than a data-quality problem:</p>
+
+  <table>
+    <thead>
+      <tr><th style="width:26%">Gap</th><th>What the registry records</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>No payments data</strong><br><code>revenue.net_revenue</code>
+            <span class="pill t-unavailable">unavailable</span></td>
+        <td>Source <em>identified</em> but not wired (confirmed 2026-09-05): transactions from
+            PaySimple, plan and enrolment context from CCPP SQL Server. There is still no local
+            payments table, and <code>refunds</code> holds 3 rows with the latest dated
+            2026-08-06. Knowing where the data lives is not the same as having read it.</td>
+      </tr>
+      <tr>
+        <td><strong>No ad-platform integration</strong><br><code>marketing.ad_spend</code>
+            <span class="pill t-unavailable">unavailable</span></td>
+        <td>No Meta, Google, LinkedIn or TikTok client, and no spend import of any kind.
+            <code>campaigns.budget_total</code> and <code>budget_cap</code> are hand-entered
+            <em>plans</em>, and nothing in the codebase ever writes <code>budget_spent</code>.
+            Reading those as spend would report a budget as an expenditure.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p>Because spend is uncomputable, so is everything derived from it: cost per click, cost per
+     lead, ROAS. Those are not missing data points waiting on a backfill &mdash; there is no
+     pipe.</p>
+
+  <p class="meta">Verified in source: <code>backend/src/services/adminOs/metricRegistry.ts</code>,
+     <code>backend/src/services/adminOs/metrics/marketingMetrics.ts</code>.
+     <code>campaignLinkService</code> writes <code>total_revenue: null, roi: null</code> as
+     literals.</p>
+
+  <h2>4. The KPI inventory &mdash; 35 registered metrics</h2>
+
+  <p class="meta">Note the scope limit: this registry governs the Admin&nbsp;OS / marketing
+     surfaces. The <code>/admin/revenue</code> figures in section 1 are computed by
+     <code>subscriptionAnalyticsService</code> and are <strong>not registered here</strong> &mdash;
+     which is itself worth fixing, since it means MRR and ARR carry no trust status and are
+     invisible to <code>mayComputeWith()</code>.</p>
+
+  <div class="bar">
+    <span class="b-trusted"  style="width:48.6%">17 trusted</span>
+    <span class="b-partial"  style="width:22.9%">8 partial</span>
+    <span class="b-unavailable" style="width:22.9%">8 unavailable</span>
+    <span class="b-invalid"  style="width:5.6%">2</span>
+  </div>
+  <div class="legend">
+    <span><i class="b-trusted"></i>Trusted &mdash; may be computed with</span>
+    <span><i class="b-partial"></i>Partial &mdash; may be shown with its caveat</span>
+    <span><i class="b-unavailable"></i>Unavailable &mdash; no source wired</span>
+    <span><i class="b-invalid"></i>Invalid &mdash; the number is wrong</span>
+  </div>
+  <p class="meta">Only <em>trusted</em> metrics may feed a health score, an executive narrative or
+     an AI recommendation &mdash; enforced by <code>mayComputeWith()</code>, not by convention.</p>
+
+  <h3>Marketing &amp; Revenue surfaces (18 keys)</h3>
+  <table>
+    <thead>
+      <tr><th style="width:34%">Metric</th><th style="width:14%">Status</th><th>Note</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Campaign leads</td><td><span class="pill t-trusted">trusted</span></td><td>Count of rows this system owns and writes.</td></tr>
+      <tr><td>Campaign engagement</td><td><span class="pill t-trusted">trusted</span></td><td>Same.</td></tr>
+      <tr><td>Campaign leads by status</td><td><span class="pill t-trusted">trusted</span></td><td>Same.</td></tr>
+      <tr><td>Content awaiting approval</td><td><span class="pill t-trusted">trusted</span></td><td>Feeds the Needs-Attention queue.</td></tr>
+      <tr><td>Failed / overdue publishing jobs</td><td><span class="pill t-trusted">trusted</span></td><td>Feeds the queue.</td></tr>
+      <tr><td>Broken tracking links</td><td><span class="pill t-trusted">trusted</span></td><td>Feeds the queue.</td></tr>
+      <tr><td>Tracked link clicks</td><td><span class="pill t-partial">partial</span></td><td>Bot filtering is heuristic.</td></tr>
+      <tr><td>Bot share of clicks</td><td><span class="pill t-partial">partial</span></td><td>A count of a heuristic classification.</td></tr>
+      <tr><td>Performance by creative</td><td><span class="pill t-partial">partial</span></td><td>&nbsp;</td></tr>
+      <tr><td>Click-to-session match rate</td><td><span class="pill t-unavailable">unavailable</span></td><td>&nbsp;</td></tr>
+      <tr><td>Ad spend</td><td><span class="pill t-unavailable">unavailable</span></td><td>No ad-platform integration exists.</td></tr>
+      <tr><td>Impressions</td><td><span class="pill t-unavailable">unavailable</span></td><td>Same cause.</td></tr>
+      <tr><td>Cost per click</td><td><span class="pill t-unavailable">unavailable</span></td><td>Derived from spend.</td></tr>
+      <tr><td>Cost per lead</td><td><span class="pill t-unavailable">unavailable</span></td><td>Derived from spend.</td></tr>
+      <tr><td>Return on ad spend</td><td><span class="pill t-unavailable">unavailable</span></td><td>Derived from spend.</td></tr>
+      <tr><td>Publish success rate</td><td><span class="pill t-unavailable">unavailable</span></td><td>&nbsp;</td></tr>
+      <tr><td>Net revenue</td><td><span class="pill t-unavailable">unavailable</span></td><td>PaySimple + CCPP identified, not wired.</td></tr>
+      <tr><td><strong>Campaign visitors</strong></td><td><span class="pill t-invalid">invalid</span></td><td><strong>See section 3.</strong> Not a count of any real group.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Growth, people &amp; learning (7 keys)</h3>
+  <table>
+    <thead><tr><th style="width:34%">Metric</th><th style="width:14%">Status</th><th>Note</th></tr></thead>
+    <tbody>
+      <tr><td>Unique visitors</td><td><span class="pill t-trusted">trusted</span></td><td>Crawlers excluded.</td></tr>
+      <tr><td>Engaged visitors</td><td><span class="pill t-trusted">trusted</span></td><td>Deliberate action, not a pageview.</td></tr>
+      <tr><td>Visitor &rarr; lead conversion</td><td><span class="pill t-partial">partial</span></td><td>Identity resolution only wired 2026-09-04; history understated.</td></tr>
+      <tr><td>Traffic source</td><td><span class="pill t-partial">partial</span></td><td>Pre-2026-09-04 sessions excluded, not bucketed as Direct.</td></tr>
+      <tr><td>Identity coverage</td><td><span class="pill t-partial">partial</span></td><td>83.4% lifetime <strong>hides a trend</strong>: 98% July &rarr; 66% Aug &rarr; 56% Sept.</td></tr>
+      <tr><td>Active learners</td><td><span class="pill t-invalid">invalid</span></td><td><code>attendance_records</code> unreliable. Must not be substituted with zero.</td></tr>
+      <tr><td>Net revenue</td><td><span class="pill t-unavailable">unavailable</span></td><td>Listed above.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Growth Journey OS (11 keys)</h3>
+  <p>9 trusted, 2 partial &mdash; but most are produced by agents that <strong>ship
+     disabled</strong>. Trusted describes the definition, not that anything is currently
+     writing to it.</p>
+
+  <h2>5. Mask, or build a separate report?</h2>
+
+  <p>Neither, in that order of priority:</p>
+
+  <h3>First &mdash; fix the invalid metric, not the layout</h3>
+  <p><strong>Four figures on the tab render as ordinary trustworthy numbers off a metric the
+     registry marks <code>invalid</code>.</strong> <code>marketing.campaign_visitors</code> takes
+     <code>GREATEST(site_visitors, email_unique_clickers)</code> &mdash; the larger of two
+     different populations &mdash; and reports it as one visitor count. The two sets overlap by
+     an unknown amount, so the true number lies between the max and the sum, and the query
+     returns one endpoint.</p>
+  <p>It then feeds <strong>High Intent&nbsp;%</strong>, <strong>Visitor&rarr;Lead&nbsp;%</strong>,
+     <strong>Conversion Rate</strong> and <strong>Total Visitors</strong>, and it is deliberately
+     excluded from the tab&rsquo;s &ldquo;cannot be computed&rdquo; notice. So it is the one
+     number on the page that is wrong <em>and</em> looks right &mdash; strictly worse than the
+     &ldquo;Unavailable&rdquo; cards, which are honest.</p>
+  <p>Correcting the denominator moves numbers people have read for months. That is a decision to
+     make deliberately, which is why it is still open as
+     <code>docs/marketing/ESCALATION-002-fabricated-metrics.md</code>.</p>
+
+  <h3>Second &mdash; group the dead cards, do not hide them</h3>
+  <p>Masking makes the gap invisible, and an invisible gap gets rediscovered in three months as a
+     fresh surprise. The registry&rsquo;s own rule is that <em>unavailable and invalid are not
+     zero</em> and should render as themselves. The presentation fix is to collect the money
+     cards into one labelled &ldquo;Not yet measurable&rdquo; block instead of interleaving them
+     with live figures, so four dead tiles stop diluting the trustworthy ones. Cheap, needs no
+     new data.</p>
+
+  <h3>Third &mdash; the separate report already exists; link to it rather than rebuild it</h3>
+  <p><code>/admin/revenue</code> is the Revenue report. The marketing tab should not grow a second
+     one, and the separation is right for a real reason rather than tidiness: subscription revenue
+     is <em>member</em>-grain, marketing is visitor- and campaign-grain. Putting both under one
+     heading called &ldquo;Revenue&rdquo; is exactly what invited engagement counts to be read as
+     money in the first place &mdash; which is why that tab is now
+     <strong>&ldquo;Campaign performance&rdquo;</strong>.</p>
+  <p>The cheap, high-value change is a pointer: where the campaign tab says revenue cannot be
+     computed, say <em>where revenue does live</em>. Right now someone who wants the number has no
+     way to learn from that page that the number exists one nav item away.</p>
+
+  <h2>6. KPIs still to add to the Revenue report</h2>
+
+  <p>Grounded in what the registry already declares and what the identified sources can actually
+     answer. Ordered by what lands first.</p>
+
+  <table>
+    <thead>
+      <tr><th style="width:30%">KPI</th><th style="width:18%">Needs</th><th>Note</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><strong>Net revenue</strong><br>gross &minus; refunds &minus; adjustments</td><td>PaySimple</td><td>Already a registered key with its dimensions declared: plan, cohort, source, period.</td></tr>
+      <tr><td><strong>Collected vs billed</strong></td><td>PaySimple</td><td>The AR gap. Invoiced is not banked, and conflating them overstates every figure below.</td></tr>
+      <tr><td><strong>Refund rate &amp; value</strong></td><td>PaySimple + refunds</td><td><code>refunds</code> currently holds 3 rows, latest 2026-08-06 &mdash; so this starts near-empty and must not read as &ldquo;no refunds&rdquo;.</td></tr>
+      <tr><td><strong>Plan mix</strong><br>month-to-month vs committed</td><td>CCPP</td><td>Directly actionable: the committed plan is the cheaper per-month rate, so the mix is the margin story.</td></tr>
+      <tr><td><strong>MRR &amp; net new MRR</strong></td><td>PaySimple + CCPP</td><td>The real recurring figure, replacing one-off enrolment arithmetic.</td></tr>
+      <tr><td><strong>Revenue per enrolment (ARPU)</strong></td><td>PaySimple + enrollments</td><td>Replaces the hardcoded <code>PRICE_PER_ENROLLMENT = 4500</code> &mdash; see section 5.</td></tr>
+      <tr><td><strong>Involuntary churn</strong><br>failed / lapsed payments</td><td>PaySimple</td><td>Usually the largest recoverable leak, and invisible without payment data.</td></tr>
+      <tr><td><strong>Revenue by acquisition source</strong></td><td>+ identity coverage</td><td>Will be <span class="pill t-partial">partial</span> at best: coverage is 83% lifetime and fell to 56% by September, so source-attributed revenue inherits that gap.</td></tr>
+      <tr><td><strong>LTV by source</strong></td><td>+ 2&ndash;3 cohorts of history</td><td>Needs retention history before it means anything. Not a launch KPI.</td></tr>
+      <tr><td><strong>CAC and payback period</strong></td><td><strong>Ad-platform integration</strong></td><td>Blocked on a second, separate project. Do not promise it with the payments work.</td></tr>
+    </tbody>
+  </table>
+
+  <p><strong>One constraint binds all of these:</strong> revenue counts
+     <em>app-originated checkouts only</em>. The PaySimple hosted page mints its own customer
+     record, so reconciliation has to run against app checkouts rather than against every
+     PaySimple transaction, or the same money gets counted twice.</p>
+
+  <h2>7. Found while verifying the above</h2>
+
+  <div class="card alert">
+    <h3>A $4,500 default sits on a live payment path</h3>
+    <p><code>paysimpleService.ts:399</code> &mdash;
+       <code>const amount = params.amount || 4500;</code> in
+       <code>createEnrollmentInvoice()</code>. Its only production caller,
+       <code>enrollmentController.ts:62</code>, <strong>does not pass an
+       <code>amount</code></strong>, so the default is what applies. The router is mounted
+       (<code>server.ts:228</code>) and the mode follows <code>env.paysimpleEnv</code>, so under
+       a live key this mints a real $4,500 hosted payment link.</p>
+    <p>Two other services already carry comments recording that 4500 is <em>not</em> the price
+       and that the offer is a monthly subscription &mdash;
+       <code>campaignLinkService.ts</code> and <code>marketingAnalyticsService.ts</code> were
+       both corrected. This caller was not.</p>
+    <p><strong>Downgraded after checking &mdash; it has never fired.</strong>
+       <code>revenueDashboardService</code>&rsquo;s header records the measurement that settles it:
+       <code>SELECT COUNT(*) FROM enrollments WHERE amount_paid = 4500</code> returns
+       <strong>0</strong>. Nobody has ever been charged it. So this is a dormant landmine on a path
+       nothing currently uses, not a live incident.</p>
+    <p style="margin-bottom:0">Still worth removing &mdash; a money default that is wrong by
+       <em>billing model</em> rather than by amount (a single $4,500 charge standing in for a
+       monthly subscription) is the kind of thing that fires the day someone reuses the helper.
+       But it is a backlog item, not a page.</p>
+  </div>
+
+  <p>The same <code>4500</code> fiction also still drives two reporting surfaces:
+     <code>opportunityScoringService.ts:18</code> and
+     <code>strategic-intelligence/scenarioSimulationEngine.ts:25</code>, where it produces
+     projected-revenue and scenario figures from a price that is not the price.
+     <code>governanceService.ts:212</code> defaults to it too, though that one is at least
+     configurable.</p>
+
+  <div class="footnote">
+    Prepared 2026-10-31 &middot; every figure verified against source, not recalled.
+    Registry: <code>backend/src/services/adminOs/metricRegistry.ts</code> and
+    <code>metrics/</code>. Related:
+    <code>docs/marketing/ESCALATION-002-fabricated-metrics.md</code> (open).
+  </div>
+
+</div>
+</body>
+</html>

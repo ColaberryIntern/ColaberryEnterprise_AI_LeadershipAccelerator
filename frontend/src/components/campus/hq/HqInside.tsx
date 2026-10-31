@@ -78,11 +78,11 @@ export function HqFloorScene({ s, f, people }: { s: HqState; f: HqFloor; people:
           const inner = (<>
             {r.external && r.open && <span className="ext">↗</span>}
             <span className="gl"><i className={`ri-${r.icon}`} /><b>{roomName(r, hq.isStaff)}</b>{hq.isStaff && <code>{ext(r.path)}</code>}</span>
-            <span className="pl">{r.open ? 'OPEN ↗' : '🔒 NO ACCESS'}</span><span className="kn" />
+            <span className="pl">{r.open ? (r.own ? 'OPEN →' : 'OPEN ↗') : '🔒 NO ACCESS'}</span><span className="kn" />
             {here.length > 0 && <span className="who"><HqPeople people={here} label={`At ${r.label}`} size="sm" /></span>}
           </>);
           return r.open ? (
-            <a key={r.path} className="office" href={roomHref(r)} target="_blank" rel="noopener noreferrer" aria-label={`${r.label}, opens in a new tab`} data-testid="cm-hq-office">{inner}</a>
+            <a key={r.path} className="office" href={roomHref(r)} target={r.own ? undefined : '_blank'} rel={r.own ? undefined : 'noopener noreferrer'} aria-label={r.own ? r.label : `${r.label}, opens in a new tab`} data-testid="cm-hq-office">{inner}</a>
           ) : (
             <button key={r.path} type="button" className="office lock" aria-disabled="true" aria-label={`${roomName(r, hq.isStaff)}, no access`} onClick={() => s.lockedRoom(r)} data-testid="cm-hq-office-locked">{inner}</button>
           );

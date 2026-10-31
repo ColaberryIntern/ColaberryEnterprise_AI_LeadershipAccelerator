@@ -5,6 +5,7 @@ import { useParticipantAuth } from '../../contexts/ParticipantAuthContext';
 import { useBroadcastPlayer } from '../../contexts/BroadcastPlayerContext';
 import BroadcastWatchButton from '../../components/portal/BroadcastWatchButton';
 import CompanionDeck from '../../components/portal/CompanionDeck';
+import ProducerStrip from '../../components/portal/ProducerStrip';
 
 /**
  * The landing page behind a session's persistent live link (L7.2).
@@ -242,6 +243,17 @@ export default function LiveSessionPage({ companion = false }: LiveSessionPagePr
                 )}
               </div>
             )}
+
+            {/* The producer's control (P4-02), on the laptop surface only — a phone companion
+                is a viewer's screen, and a destructive one-way End button does not belong
+                under someone's thumb while they are following a class.
+
+                Rendered regardless of `moment`, because a producer needs it BEFORE anything
+                is airing: `not_started` is exactly when Go Backstage has to be pressed. It
+                self-hides for anyone the server does not call a producer, so this condition
+                is about which screen it suits, not about who may use it. Gated on
+                authentication only to avoid a guaranteed 401 poll on a public page. */}
+            {!companion && isAuthenticated && <ProducerStrip sessionId={sessionId} />}
 
             {moment === 'unknown' && (
               <button type="button" className="clv-btn clv-btn-ghost" onClick={() => { void read(); }}>

@@ -97,6 +97,41 @@ describe('informed consent before a recorded call', () => {
     expect(q('ps-getready-recording')?.textContent).toMatch(/does not record/i);
   });
 
+  it('tells the student to share their screen before they speak', async () => {
+    // Every student working-system demo recorded before this line existed came back
+    // as `active_speaker` — the learner talking, the system nowhere in frame.
+    mount();
+    expect(q('ps-getready-screen')?.textContent).toMatch(/share your screen/i);
+    expect(q('ps-getready-screen')?.textContent).toMatch(/before you start speaking/i);
+  });
+
+  it('says what happens if they do not, not just that they should', async () => {
+    // "Share your screen" on its own reads as optional. The consequence is the part
+    // that makes someone do it at the right moment, so it is pinned separately.
+    mount();
+    expect(q('ps-getready-screen')?.textContent).toMatch(/nothing to look at/i);
+  });
+
+  it('shows the screen instruction whatever the room is', async () => {
+    // It is not derived from mode or policy, unlike the two consent facts. A cohort
+    // session and a room that never records both still need a screen shared.
+    for (const over of [{ mode: 'cohort_live' }, { mode: 'practice_peer' }, { recordingPolicy: 'never' }]) {
+      mount(over);
+      expect(q('ps-getready-screen')?.textContent).toMatch(/share your screen/i);
+      act(() => root?.unmount());
+      root = null;
+    }
+  });
+
+  it('makes the acknowledgement cover the screen, so ticking it is a commitment', async () => {
+    mount();
+    const label = container.querySelector('.ps-check label')?.textContent || '';
+    expect(label).toMatch(/three points/i);
+    expect(label).toMatch(/share my screen/i);
+    // The gate still works: reading three facts instead of two must not unlock Join early.
+    expect((q('ps-getready-join') as HTMLButtonElement).disabled).toBe(true);
+  });
+
   it('asks the server for the link only when the student actually goes in', async () => {
     mount();
     expect(portalApi.post).not.toHaveBeenCalled();

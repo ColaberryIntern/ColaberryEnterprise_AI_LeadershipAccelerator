@@ -38,6 +38,13 @@ jest.mock('../../../components/portal/BroadcastWatchButton', () => ({
   __esModule: true,
   default: ({ roomId }: { roomId: string | null }) => <div data-testid="watch-stub">{String(roomId)}</div>,
 }));
+// Stubbed for the same reason, and for one more: the real strip polls its own endpoint, which
+// `wire()` below deliberately rejects as an unexpected URL. Whether a producer may see it is
+// the strip's own suite; what this file asks is WHERE the page puts it.
+jest.mock('../../../components/portal/ProducerStrip', () => ({
+  __esModule: true,
+  default: ({ sessionId }: { sessionId: string }) => <div data-testid="producer-stub">{sessionId}</div>,
+}));
 
 import portalApi from '../../../utils/portalApi';
 import { useParticipantAuth } from '../../../contexts/ParticipantAuthContext';
@@ -250,6 +257,48 @@ describe('the phone companion (L4.7)', () => {
     await render(true);
 
     expect(container.querySelector('[data-testid="companion-surface"]')).toBeNull();
+  });
+});
+
+describe('the producer strip (P4-02)', () => {
+  const strip = () => container.querySelector('[data-testid="producer-stub"]');
+
+  it('is placed on the laptop surface BEFORE anything is airing, which is when it is needed', async () => {
+    // `not_started` is exactly when Go Backstage has to be pressed. A control that appeared
+    // only once the class was live would be useless for starting one.
+    wire('not_started');
+    await render();
+
+    expect(strip()).not.toBeNull();
+  });
+
+  it('is still there once the class is on air, for End', async () => {
+    wire('live', 'https://enterprise.colaberry.ai/portal/live/sess-1');
+    await render();
+
+    expect(strip()).not.toBeNull();
+  });
+
+  it('is NOT on the phone companion — a one-way End button does not belong under a thumb', async () => {
+    wire('live');
+    await render(true);
+
+    expect(strip()).toBeNull();
+  });
+
+  it('is not mounted for a signed-out viewer, so a public page makes no producer call', async () => {
+    mockAuth.mockReturnValue({ isAuthenticated: false });
+    wire('not_started');
+    await render();
+
+    expect(strip()).toBeNull();
+  });
+
+  it('is handed the session id, which is the key the producer read is on', async () => {
+    wire('not_started');
+    await render();
+
+    expect(strip()!.textContent).toBe('sess-1');
   });
 });
 
