@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Session CC-20261029-oh7n — Change Report</title>
+<style>
+  :root{
+    --navy:#0f2942; --navy-2:#1a365d; --blue:#2b6cb0; --blue-l:#3b82f6;
+    --ink:#1e293b; --muted:#64748b; --line:#e2e8f0; --bg:#f1f5f9; --card:#ffffff;
+    --green:#059669; --green-bg:#ecfdf5;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  header{background:linear-gradient(135deg,var(--navy),var(--blue));color:#fff;padding:38px 40px 30px;}
+  header .eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;opacity:.8;font-weight:600}
+  header h1{margin:8px 0 6px;font-size:26px;font-weight:700;letter-spacing:-.01em}
+  header .meta{font-size:13px;opacity:.85}
+  header .sid{display:inline-block;margin-top:14px;background:rgba(255,255,255,.14);
+    border:1px solid rgba(255,255,255,.25);border-radius:8px;padding:6px 12px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;font-weight:600}
+  header .count{margin-left:10px;opacity:.8;font-size:13px}
+  main{max-width:980px;margin:0 auto;padding:28px 24px 60px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;
+    box-shadow:0 1px 3px rgba(15,41,66,.06);margin-bottom:18px;overflow:hidden}
+  .card-head{display:flex;align-items:center;gap:14px;padding:18px 22px;border-bottom:1px solid var(--line);
+    background:linear-gradient(to bottom,#fafcff,#fff)}
+  .card-head .num{font-family:ui-monospace,monospace;font-size:13px;font-weight:700;color:#fff;
+    background:var(--blue-l);border-radius:7px;padding:5px 9px;flex:none}
+  .card-head h2{flex:1;margin:0;font-size:16px;font-weight:650;color:var(--navy-2);letter-spacing:-.01em}
+  .badge{flex:none;font-size:12px;color:var(--muted);background:#f8fafc;border:1px solid var(--line);
+    border-radius:999px;padding:3px 11px;font-weight:600}
+  .card-body{padding:18px 22px 20px}
+  .row{display:flex;gap:16px;padding:7px 0;border-bottom:1px dashed #eef2f7}
+  .row:last-child{border-bottom:none}
+  .k{flex:none;width:120px;font-size:12px;font-weight:700;color:var(--muted);
+    text-transform:uppercase;letter-spacing:.04em;padding-top:2px}
+  .v{flex:1;color:var(--ink)}
+  .v.ver{color:var(--green);font-weight:550}
+  .files{margin-top:14px;background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .files-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;
+    letter-spacing:.06em;margin-bottom:8px}
+  .files table{width:100%;border-collapse:collapse;font-size:13px}
+  .files td{padding:6px 8px;vertical-align:top;border-top:1px solid #eef2f7}
+  .files tr:first-child td{border-top:none}
+  .files td.path{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;
+    color:var(--navy-2);white-space:nowrap;font-weight:600}
+  .empty{background:#fff;border:1px dashed var(--line);border-radius:14px;padding:40px;
+    text-align:center;color:var(--muted)}
+  footer{max-width:980px;margin:0 auto;padding:0 24px 40px;color:var(--muted);font-size:12px}
+  code{font-family:ui-monospace,monospace;background:#eef2f7;padding:1px 6px;border-radius:5px;font-size:.92em}
+</style>
+</head>
+<body>
+  <header>
+    <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
+    <h1>What changed this session</h1>
+    <div class="meta">Generated Saturday, October 31, 2026 at 6:21 AM</div>
+    <div><span class="sid">CC-20261029-oh7n</span><span class="count">10 changes</span></div>
+  </header>
+  <main>
+    
+      <article class="card">
+        <div class="card-head">
+          <span class="num">01</span>
+          <h2>Class Kit: `openhouse` day kind, raffle draw, live-filling poll bars</h2>
+          <span class="badge">2026-10-29</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">a session titled &quot;Open House…&quot; renders only its KitConfig content (11-segment, 90-min run of show, no week content); theater polls gain `liveBars` (tiles fill as votes land) and `raffle: N` (after reveal, a Draw winner button picks N distinct entrants with confetti); confetti on every theater reveal.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`openHouseKit.test.ts` (5 tests) + full classKit suite 583/583 passing; backend `tsc --noEmit` (5.9.3) clean apart from 2 pre-existing local `@anthropic-ai/sdk` resolution errors; deck rendered locally with Playwright, 35 slides, 0 page errors.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">files touched — `data/classSessionPlan.ts`, `classKit/{kitSpec,kitSpecDaySlides,runOfShow,kitConfigDefaults,kitHtml,kitTheater,kitDeckScript,kitDeckStyles}.ts`, frontend `kitConfig/{types.ts,TimelineBuilderPanel.tsx}` (DayKind union widened). Failure modes: raffle with no entrants shows &quot;No entrants left to draw&quot;; winners kept per tab so a re-render never draws someone twice; reloading the tab resets the drawn list (write winners down — in the presenter notes).</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">02</span>
+          <h2>Admin Accelerator: Present dropdown no longer clipped</h2>
+          <span class="badge">2026-10-29</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">the Present split-button menu renders `position:fixed` at the caret&#39;s viewport rect (opens upward near the bottom), so `.table-responsive` no longer clips it into a tiny inner scrollbar; closes on scroll/resize.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">frontend `tsc --noEmit`.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">`AdminAcceleratorPage.tsx` is over the 500-line ceiling (grandfathered); a minimal in-place fix was chosen because the Open House is tonight. Split it on the next non-urgent touch.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">03</span>
+          <h2>Open House deck script for the November 2026 cohort</h2>
+          <span class="badge">2026-10-29</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`scripts/session-decks/openhouse-nov2026.js` — 18 teach slides, 1 story beat, 13 live questions (a question every 2-3 slides, lint-enforced), 2 raffles (3 books, 3 × 50%-of-a-year scholarships), tagged presenter notes for the teaching guide/presenter phone. Idempotently creates &quot;Open House — The Forward Deployed Engineer&quot; (2026-10-29, 18:30-20:00 CT) in Cohort - November 2026 and saves its KitConfig.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`node openhouse-nov2026.js --check` LINT OK; every figure traced to a dated source listed in the file header (Anthropic Oct 2 2026 Frontier Academy, Levels.fyi, Indeed/BI, Gartner, McKinsey, Challenger, LinkedIn, claude.com/pricing, /knowledge KB).</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">TWC rule enforced by lint (no &quot;free&quot;/&quot;guarantee&quot;); $199 month-to-month only in presenter notes (Ali 2026-10-24 pitch order).</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">04</span>
+          <h2>Deploy of PR #3493 (backend + nginx)</h2>
+          <span class="badge">2026-10-29</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`deploy-prod.sh` registry mode, backend then nginx, image for 006f732b.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">marker `kraffle` present in the running backend; prod-container render of session bc01abe2… = openhouse, 35 slides, 13 interactions; public main.js references chunk 1152.b1b5ad2e containing the DayKind change.</span></div>
+          
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">05</span>
+          <h2>Class Kit: custom (hand-designed) decks served through ▶ Present</h2>
+          <span class="badge">2026-10-29</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`KitConfig.customDeck {html, guideHtml}`; Present serves the html with `window.__KITLIVE__` (kit token, live-state + broadcast URLs, check-in URL + QR) injected after `&lt;head&gt;` (`classKit/customDeck.ts`); Rehearse/download inject `enabled:false`; the Teaching guide download serves `guideHtml`. Ali asked for the July Open House look on the platform&#39;s own login/voting, with no admin key.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`customDeck.test.ts` (7 tests, incl. `&lt;/script&gt;` breakout); classKit + controllers suites 955/955.</span></div>
+          
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">06</span>
+          <h2>Open House guests: name + email, no login link</h2>
+          <span class="badge">2026-10-29</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">public `GET /api/portal/sessions/:id/join` (phone page) + `guest-join` / `guest-state` / `guest-vote`, Open House sessions only; session-scoped voting-only guest pass (never portal access); new tables `session_guests`, `session_guest_poll_responses`; guests counted in `present`, tallies and draw names; email matched to the cohort&#39;s enrollment for follow-up. The custom deck&#39;s QR now points at the join page. Ali: &quot;we will just take their word for it and try to match the emails with the enrollments.&quot;</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`sessionGuest.test.ts` (11 tests: pass scoping, non-Open-House refused, lock → 409, off-screen question, cross-session pass); live-state, classKit, controllers and routes suites green (two route suites flaky only under parallel load, pass alone; `mountLearnerPortalRoutes` extraction test fails identically on clean main locally).</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">security posture change requested explicitly by Ali; mitigated by session scoping, Open-House-only gate, zod validation, and no account access from a guest pass.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">07</span>
+          <h2>Projects: `?new=1` deep link into &quot;Start a new build&quot;; Open House deck v2</h2>
+          <span class="badge">2026-10-29</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`ProjectsPage` opens the build wizard on `?new=1`; the July-format deck sources (`session-decks/openhouse-nov2026-deck/` template, build, save) with the builder buttons on `?new=1` and a plain-language slide 10.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">frontend tsc; deck rebuilt (29 slides, 11 questions, 60 min), saved to prod session bc01abe2… (verify=OK).</span></div>
+          
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">08</span>
+          <h2>Open House scholarship credits: $894, annual plan only</h2>
+          <span class="badge">2026-10-30</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">credit reason `open_house_scholarship_annual` is annual-only (`accountCreditService.ANNUAL_ONLY_CREDIT_REASONS` / `creditUsableOnPlan`); checkout (`startCheckout`) and settlement (`consumeCreditsForSubscription`) filter credits by plan; the Subscription view returns `credit_cents_by_plan` and the plan cards + banner use it (monthly never shows the scholarship). `openHouseCreditService` payers take an optional reason/note; `scripts/grantOpenHouseScholarships.js` grants winners (dry run default, idempotent on `&lt;event&gt;-SCHOLAR-&lt;email&gt;`, places them in the November 2026 cohort). Ali: &quot;they can only use it if they sign up for the yearly subscription.&quot;</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`annualOnlyCredit.test.ts` (5 tests incl. monthly settlement never consumes it); accountCredit / openHouseCredit / subscriptionService suites 93/93.</span></div>
+          
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">09</span>
+          <h2>Giveaway winners drawn and saved by the platform</h2>
+          <span class="badge">2026-10-30</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `session_raffle_winners` table (unique per draw number; partial unique per guest / per enrollment); `sessionRaffleService.drawRaffleWinner` draws uniformly (crypto.randomInt) from guests + students who entered and have not won, records full name + email, and returns the stored winner for a repeated draw number; `POST raffle-draw` + `GET raffle-winners` (kit token or admin; `?full=1` admin-only adds name + email). Both decks (July-format Open House template + generated Class Kit) draw through it; the Open House deck reloads winners from the server. Ali: &quot;I like the idea of saving the winners to the database. We will start doing these open houses every 2 weeks.&quot;</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`sessionRaffle.test.ts` (6 tests: idempotent re-draw, records name/email, prize cap, not-on-screen, empty pool); classKit/guest/live-state suites 617/617; Playwright: double click sends one draw, winners survive a deck reload.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">the Oct 29 winners were recovered from the Zoom cloud recording (support@colaberry.com, &quot;Career Switch Open House Session&quot;) — transcript + screen frames + guest list all agree.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">10</span>
+          <h2>Directive: run an Open House on the platform (biweekly cadence)</h2>
+          <span class="badge">2026-10-31</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `directives/run-open-house-on-platform.md`, covering T-1 setup (create the session, build, dry-run and save the deck), live presenting (guest join, polls, server draws) and T+1 close-out (winners endpoint, annual-only scholarship grant, packet to Taiwo). `run-open-house-live-experience.md` (the July standalone service) is marked superseded.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">every command, table, endpoint and output line in the directive was checked against the code on main (`save.js`, `build.js`, `grantOpenHouseScholarships.js`, `ensureLiveSessionSchema.ts`, `AccountCredit` model) and against the prod runs below.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">two follow-ups are recorded in the directive and not built: `save.js` takes a session id as an argument (today it is hard-coded to the Oct 29 session), and the participant packet and Taiwo email are generated from the database.</span></div>
+          
+        </div>
+      </article>
+  </main>
+  <footer>
+    Sourced from <code>docs/sessions/CC-20261029-oh7n.md</code>.
+    Regenerated after each change per <code>CLAUDE.md</code> → Per-session change report.
+  </footer>
+</body>
+</html>
