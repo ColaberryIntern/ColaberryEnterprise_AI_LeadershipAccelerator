@@ -39,9 +39,45 @@ export function isSyntheticContactEmail(email: string | null | undefined): boole
   const address = email.trim().toLowerCase();
   if (address === '') return false;
 
-  const testDomain = String(env.campaignTestEmailDomain || '@colaberry-test.local').toLowerCase();
-  if (testDomain && address.endsWith(testDomain)) return true;
+  const domain = testDomain();
+  if (domain && address.endsWith(domain)) return true;
 
   const localPart = address.split('@')[0] ?? '';
   return FIXTURE_PREFIXES.some((prefix) => localPart.startsWith(prefix));
+}
+
+function testDomain(): string {
+  return String(env.campaignTestEmailDomain || '@colaberry-test.local').toLowerCase();
+}
+
+/** A LIKE pattern literal: `%` and `_` in the value are escaped, quotes doubled, then `suffix` / `prefix` wildcards added. */
+function likeLiteral(value: string, wildcard: 'leading' | 'trailing'): string {
+  const escaped = value.replace(/[\\%_]/g, (m) => `\\${m}`).replace(/'/g, "''");
+  return wildcard === 'leading' ? `'%${escaped}'` : `'${escaped}%'`;
+}
+
+/**
+ * The same test as `isSyntheticContactEmail`, as a SQL boolean over `column`. C96 (2026-10-31).
+ *
+ * WHY. The daily points smoke test signs up a real Explorer in production (`e2e-points-…@colaberry-test.local`),
+ * and SQL rosters that count Explorers straight off `enrollments` counted every one of them. Callers write
+ * `AND NOT ${syntheticEmailSql('e.email')}`, so the rule lives here once instead of as a hand-copied LIKE per query.
+ *
+ * NULL-SAFE ON PURPOSE. `NOT (NULL LIKE …)` is NULL, which a WHERE treats as false, so a bare predicate would
+ * silently drop every row with no email. `coalesce` makes a missing email "not synthetic", the same answer the
+ * TS function gives.
+ *
+ * `column` is code, never input: it is checked against an identifier shape and refused otherwise.
+ */
+export function syntheticEmailSql(column: string): string {
+  if (!/^[a-z_][a-z0-9_]*(\.[a-z_][a-z0-9_]*)?$/i.test(column)) {
+    throw new Error(`syntheticEmailSql: not a column reference: ${column}`);
+  }
+  const address = `lower(trim(coalesce(${column}, '')))`;
+  const localPart = `split_part(${address}, '@', 1)`;
+  const clauses = [
+    ...(testDomain() ? [`${address} LIKE ${likeLiteral(testDomain(), 'leading')}`] : []),
+    ...FIXTURE_PREFIXES.map((p) => `${localPart} LIKE ${likeLiteral(p, 'trailing')}`),
+  ];
+  return `(${clauses.join(' OR ')})`;
 }
