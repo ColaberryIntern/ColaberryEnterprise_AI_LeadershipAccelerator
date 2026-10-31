@@ -243,15 +243,30 @@ function readKnowledgeAndVoice(meta: Record<string, any>): Pick<
  * Extracted rather than copied so the two writes cannot drift in what they persist - a
  * regeneration that quietly stopped recording `ai_instructions` or the citation block would
  * leave a version history whose older entries were richer than its newer ones.
+ *
+ * `id` IS SUPPLIED EXPLICITLY, and leaving it out is why this writer had never once
+ * succeeded. `scheduled_emails.id` is `uuid NOT NULL` with NO database default: the
+ * column default lives on the Sequelize model (`defaultValue: DataTypes.UUIDV4`), which
+ * generates it client-side, so every writer going through the model is fine and every
+ * raw-SQL writer must generate its own. Omitting it fails 100% of rows with
+ * `null value in column "id" ... violates not-null constraint` — measured against
+ * production on 2026-10-31, where a live render of 142 decisions drafted zero.
+ *
+ * The identical omission in `agents/tools/agentEmailTool.ts` is fixed in the same change,
+ * and `explorerSignalWriter.ts` already carried a comment warning about exactly this trap
+ * for a different table. The warning existed; it just was never applied here. The
+ * protective test is `__tests__/scheduledEmailRawInsertsSupplyId.test.ts`, which scans for
+ * raw inserts rather than mocking one — the existing unit tests mock `sequelize.query`,
+ * which is precisely why a defect that fails every real row looked green.
  */
 async function insertDraftRow(input: PersistDraftInput, t: Transaction): Promise<string> {
   const inserted = await sequelize.query<{ id: string }>(
     `INSERT INTO scheduled_emails
-       (lead_id, campaign_id, step_index, channel, subject, body, to_email,
+       (id, lead_id, campaign_id, step_index, channel, subject, body, to_email,
         max_attempts, attempts_made, scheduled_for, status, ai_instructions,
         ai_generated, metadata, created_at)
      VALUES
-       (:lead_id, :campaign_id, :step_index, 'email', :subject, :body, :to_email,
+       (gen_random_uuid(), :lead_id, :campaign_id, :step_index, 'email', :subject, :body, :to_email,
         1, 0, NOW(), :status, :ai_instructions,
         true, CAST(:metadata AS jsonb), NOW())
      RETURNING id::text AS id`,
