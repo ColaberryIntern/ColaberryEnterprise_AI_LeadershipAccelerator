@@ -141,4 +141,36 @@ router.get(
   c.getLiveAudience,
 );
 
+/**
+ * The producer's lifecycle read — the one that makes a Go Live control possible, because the
+ * version a command is guarded on was previously unobtainable before the stream existed.
+ *
+ * KEYED ON THE SESSION, so the literal `session` segment sits where `:id` does on every other
+ * route here. That is not a conflict — `/:id/audience` is two segments and this is three — but
+ * it is the reason this route is registered after them rather than first: a reader scanning
+ * the file should meet the occurrence-keyed routes as a group.
+ *
+ * Staff-only, and the same guard chain for the same reasons. It gets its OWN limiter rather
+ * than the command one: a producer control polls this while waiting for provider health to
+ * come up after starting the stream, and the command limiter's 30/min would put a polling
+ * control within a few requests of throttling itself out of the very window it is waiting
+ * through — with the actual commands competing for the same budget. This is a read with a
+ * poll's shape, so it is sized like one.
+ */
+const producerStateLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (_req, res) => {
+    res.status(429).json({ error: 'RateLimited', reason: 'too_many_producer_reads' });
+  },
+});
+
+router.get(
+  `${P}/session/:sessionId/producer`,
+  flagGate, producerStateLimiter, requireParticipant, attachCommunityStaffContext,
+  c.getProducerState,
+);
+
 export default router;

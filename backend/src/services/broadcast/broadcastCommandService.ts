@@ -95,7 +95,23 @@ export async function runProducerCommand(req: CommandRequest): Promise<CommandRe
   });
 
   if (!decision.ok) {
-    return { ok: false, error_class: decision.error_class, status: decision.status, reason: decision.reason };
+    /**
+     * THE REFUSAL CARRIES THE ROW IT WAS JUDGED AGAINST.
+     *
+     * A version conflict is the one refusal a client can act on by itself: it means the
+     * occurrence moved, so the right next step is to act on the version that is actually
+     * current. The frontend has been reading a `version` off this response since the End
+     * control shipped (broadcastProducer.ts), and nothing ever put one there — so every
+     * conflict reported `currentVersion: undefined` and a producer had no way forward but
+     * to reload. Returning the row lets the controller answer with the truth.
+     */
+    return {
+      ok: false,
+      occurrence,
+      error_class: decision.error_class,
+      status: decision.status,
+      reason: decision.reason,
+    };
   }
   if (decision.noop || !decision.patch) {
     // A duplicate click. Deliberately does NOT bump the version, so a concurrent caller
@@ -119,7 +135,17 @@ export async function runProducerCommand(req: CommandRequest): Promise<CommandRe
   });
 
   if (!updated) {
-    return tagged('VersionConflict', 409, 'row changed between read and write');
+    /**
+     * Lost the write race. The row we read is already stale by definition, so it is re-read
+     * rather than echoed: reporting the version we started from would send the client back
+     * with exactly the number that just failed. A null here means the occurrence was deleted
+     * mid-flight, which is a conflict too.
+     */
+    const current = await BroadcastOccurrence.findByPk(req.occurrenceId);
+    return {
+      ...tagged('VersionConflict', 409, 'row changed between read and write'),
+      occurrence: current ?? undefined,
+    };
   }
 
   if (wentLive) {

@@ -14,9 +14,25 @@ import { z } from 'zod';
  * omits it is exactly the caller racing someone else.
  */
 
+/**
+ * The producer commands a CLIENT may send over HTTP — a deliberate subset of the state
+ * machine's `ProducerCommand`.
+ *
+ * `begin_processing` and `publish_replay` are producer commands in the machine but are issued
+ * only by `runReplayTick` once the provider reports a ready recording, so they are absent
+ * here on purpose: a replay publishes itself, and a hand-sent one would race the loop.
+ *
+ * Exported as an array rather than written inline, because the producer-state read describes
+ * which commands are available right now and must not offer one this schema would answer 400
+ * to. One list, read by both directions.
+ */
+export const SENDABLE_PRODUCER_COMMANDS = [
+  'enter_backstage', 'return_to_scheduled', 'mark_content_started', 'go_live', 'end', 'cancel',
+] as const;
+
 export const producerCommandSchema = z
   .object({
-    command: z.enum(['enter_backstage', 'return_to_scheduled', 'mark_content_started', 'go_live', 'end', 'cancel']),
+    command: z.enum(SENDABLE_PRODUCER_COMMANDS),
     /** The version the caller believes it is acting on. Required — see above. */
     expected_version: z.number().int().nonnegative(),
   })
@@ -25,6 +41,14 @@ export type ProducerCommandInput = z.infer<typeof producerCommandSchema>;
 
 export const occurrenceIdParamSchema = z
   .object({ id: z.string().uuid('Invalid occurrence id') })
+  .strict();
+
+/**
+ * The producer-state read is keyed on the SESSION, not the occurrence — a producer opens the
+ * class they are about to teach, and the occurrence key changes when a show is re-timed.
+ */
+export const sessionIdParamSchema = z
+  .object({ sessionId: z.string().uuid('Invalid session id') })
   .strict();
 
 export const playbackGrantSchema = z

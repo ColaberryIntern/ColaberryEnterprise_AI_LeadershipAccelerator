@@ -160,8 +160,14 @@ End**, P4-03 chat and structured Q&A, P4-04 polls and pinned resources and react
 stage requests, P4-06 producer metrics and stream health, P4-07 reconnect and producer recovery,
 P4-08 two-role rehearsal.
 
-P4-02 is the task that contains the gap found on 2026-10-29: **there is no UI to start a broadcast.**
-Ending has one; starting is three hand-sent API commands.
+P4-02 contained the gap found on 2026-10-29: **there was no UI to start a broadcast.** Ending had
+one; starting was three hand-sent API commands, each needing a version read out of the database.
+
+**Built 2026-10-31.** A producer strip on `/portal/live/<session_id>`, fed by a new staff-only
+producer read, now shows the state, the feed health, the version and a button for each legal
+command — see §9 item 3 for what had to be solved first. The remaining P4-02 scope (preview-vs-program,
+a live clock, a segment rundown) is untouched, so the task is not closed; the part that stopped an
+airing is.
 
 ---
 
@@ -311,6 +317,13 @@ X, when they reach the slide X was authored onto."
    `broadcast_series.default_access_mode`; `broadcastClipListController.ts:10-14` names it as
    recurring in this subsystem.
 
+   **Still all three, and the audience one is now cheap to fix.** The producer strip added for
+   P4-02 (§9 item 3) is a producer-facing surface on the page where a producer already stands, so
+   the audience read finally has somewhere obvious to be rendered. It was deliberately left out of
+   that change: a viewer count is a different question from a lifecycle control, and the two must
+   not share a request — the audience route answers 503 with no count when collection fails, by
+   design, and the control must survive that.
+
 3. **Participation is keyed on `session_id`, not `occurrence_id`** (`ensureLiveSessionSchema.ts:134-169`),
    while clip markers are occurrence-keyed. DOC 03 permits a session to have more than one
    occurrence, so re-airing a session would merge its participation across both airings.
@@ -369,19 +382,46 @@ production polish. Applying it:
    *evaluate* the experience, which is a poor use of three people's time if the first five-person
    airing has not happened yet.
 
-3. **P4-02 — a Go Live / End control.** The procedure currently depends on three hand-sent API calls
-   with a version token, at showtime, by whoever has a console open. This is the single largest
-   source of operational risk left in the spine, and it is squarely in Phase 4's scope.
+3. **P4-02 — a Go Live / End control. BUILT 2026-10-31.** The procedure depended on three
+   hand-sent API calls with a version token, at showtime, by whoever had a console open. That was
+   the single largest source of operational risk left in the spine.
 
-   It needs one small backend change first, and the reason is worth recording because it is not
-   obvious. The only endpoint that returns the occurrence `version` is the playback grant
-   (`broadcastController.ts:235`, and again on the replay branch at :287). But on a `scheduled`
+   The prerequisite is worth recording, because it is why this took a backend change rather than a
+   button. The only endpoint that returned the occurrence `version` was the playback grant
+   (`broadcastController.ts:235`, and again on the replay branch at :287). On a `scheduled`
    occurrence there is no live input yet, so `resolvePlaybackTarget` is `'none'` and the route
    answers **503 `ProviderNotReady` with a body of `{ error, reason }` and no version**
-   (`broadcastController.ts:205-212`). Since `enter_backstage` is what makes the platform start
-   watching for the stream, it must be sent *before* a stream exists — so **the first command in the
-   sequence is the one command whose version cannot be obtained.** Either staff discovery must
-   expose `version`, or the 503 must carry it. Until then a Go Live button cannot be built.
+   (`broadcastController.ts:205-212`). Discovery could not fill the gap either:
+   `ACTIVE_DISCOVERY_STATES` is `['live','reconnecting']`, so a scheduled occurrence is not in it,
+   and its columns never included `version`. Since `enter_backstage` is what makes the platform
+   start watching for the stream, it must be sent *before* a stream exists — so **the first command
+   in the sequence was the one command whose version could not be obtained.**
+
+   **What was built, and why not either option this section first proposed.** Neither "staff
+   discovery exposes `version`" nor "the 503 carries it" was taken. Both would have bolted a
+   lifecycle fact onto a route that exists for something else — and the second is worse than it
+   looks, because it puts the number a producer needs most into an error body they get only when
+   the feed is *not* working. Instead:
+
+   - `GET /api/portal/broadcasts/session/:sessionId/producer`, staff-only, keyed on the session
+     because that is what a producer holds. It returns state, feed health, version, and **which
+     commands are available with the server's reason for each that is not.**
+   - That availability is **derived** by running the real state machine
+     (`describeProducerCommands`), never restated. A second table of "Go Live needs provider health"
+     would have been a second place to forget that going live takes two keys.
+   - It is deliberately **not** folded into the audience read, the other producer-facing endpoint,
+     which answers 503 with no count field when telemetry collection fails. Coupling the lifecycle
+     read to telemetry health would take the control away at exactly the wrong moment.
+   - A `ProducerStrip` on `/portal/live/<session_id>` is its caller, laptop-only, polling every 5s
+     so the pre-air wait is visible. It renders **nothing** unless the server calls the viewer a
+     producer — this page is public and students load it.
+   - A latent defect fixed on the way: the End control has read a `version` off a 409 since it
+     shipped, and the command route never sent one, so every conflict reported "someone moved this"
+     and no way forward. The refusal now carries the version that is actually current, re-read after
+     a lost write race rather than echoing the one that just failed.
+
+   **Still open in P4-02:** preview-vs-program, a live clock, and the segment rundown. The task is
+   not closed — the part that stopped an airing is.
 4. **The desktop viewer — R4's largest hole.** Five of DOC 04's six desktop requirements are not
    built: Prompt, Poll, Chat/Builder Room, build progress and Claude Code controls all exist only in
    the phone branch. Fold the self-link in §8 finding 1 into this work rather than patching it
