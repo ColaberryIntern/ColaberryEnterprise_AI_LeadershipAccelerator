@@ -24,6 +24,7 @@ import caseStudyStudioRoutes from './admin/caseStudyStudioRoutes';
 import caseStudyMetricRoutes from './admin/caseStudyMetricRoutes';
 import explorerGrowthRoutes from './admin/explorerGrowthRoutes';
 import explorerKnowledgeRoutes from './admin/explorerKnowledgeRoutes';
+import explorerKnowledgeReviewRoutes from './admin/explorerKnowledgeReviewRoutes';
 import growthJourneyStatusRoutes from './admin/growthJourneyStatusRoutes';
 import growthJourneyReadRoutes from './admin/growthJourneyReadRoutes';
 import growthJourneyRoutes from './admin/growthJourneyRoutes';
@@ -225,6 +226,12 @@ router.use(explorerGrowthRoutes);
 // No new PATH_SECTION row is needed: mgmtSectionGate matches on prefix, so
 // /api/admin/explorer-growth/knowledge inherits the explorer-growth row above.
 router.use(explorerKnowledgeRoutes);
+// Review is a THIRD router for the same reason ingestion was a second one: that file pins
+// itself to exactly one route, and the review writes are the ones that CAN make a document
+// quotable. Keeping them apart is what lets each router's safety claim stay testable -
+// "nothing this writes can reach a learner" for ingestion, and "these are the only writes
+// that can" for review. Same prefix, so it inherits the same mgmtSectionGate row.
+router.use(explorerKnowledgeReviewRoutes);
 // MUST STAY ABOVE `growthJourneyRoutes` (Phase 6, T604). That router applies
 // `requireGrowthJourneyEnabled` over the whole /api/admin/growth-journey prefix, so the status
 // registry - the one surface an operator needs BEFORE the master flag is on - escapes the 404
