@@ -13,6 +13,7 @@ import { requestChanges, ReviewValidationError } from '../../services/factory/fa
 // Gov-entry (Phase 5 slice 1): the best-fit opportunity feed (degrade-dark) + create-on-pick. The backfill
 // + gov container lazy-load their models inside their functions, so these imports don't init the ORM here.
 import { fetchBestFitOpportunities } from '../../services/factory/opportunities/oppPulseClient';
+import type { GovOpportunity } from '../../services/factory/opportunities/govOpportunity';
 // NOTE (Phase 1 gov-qualification guard): backfillUnassessedContract (auto-create of an unassessed shell) stays
 // disabled until the Phase 2 qualification flow lands. The navigation-only start route uses the READ-ONLY,
 // tenant-scoped, fail-closed lookupGovContractsContainer (NOT the provisioning resolveGovContractsContainer,
@@ -21,6 +22,7 @@ import { lookupGovContractsContainer } from '../../scripts/lib/factoryDemoContai
 // Team-scoped dismissals: hide a discovered v1 candidate from the whole team's feed (reversible). The service
 // lazy-loads its model inside each function, so this import never inits the ORM here.
 import { dismissOpportunity, restoreOpportunity, listActiveDismissedKeys } from '../../services/factory/opportunities/govOpportunityDismissals';
+import { loadVettingByCanonical, canonicalForUuid, type OpportunityVetting } from '../../services/factory/govOpportunityVetting';
 // Colaberry's service catalog (CRUD). Lazy-loads its model inside each function, so this import never inits the ORM.
 import {
   createServiceOffering, updateServiceOffering, retireServiceOffering, markGrowthServiceOffering, listServiceOfferings,
@@ -229,7 +231,7 @@ router.get('/api/admin/factory/opportunities', requireSection('program'), async 
     // stay up even when the gov container isn't configured, so a missing/erroring container returns the feed
     // UNFILTERED (unlike the dismiss/restore WRITE routes, which fail closed). dismissedCount reports how many
     // rows this page hid so the UI can say "showing N of M · K dismissed".
-    let opportunities = feed.opportunities;
+    let opportunities: Array<GovOpportunity & { vetting?: OpportunityVetting | null }> = feed.opportunities;
     let dismissedCount = 0;
     try {
       const container = await lookupGovContractsContainer();
@@ -239,6 +241,13 @@ router.get('/api/admin/factory/opportunities', requireSection('program'), async 
           const before = opportunities.length;
           opportunities = opportunities.filter((o) => !dismissed.has(o.uuid)); // new array; never mutate the feed
           dismissedCount = before - opportunities.length;
+        }
+        // Annotate each row with its qualification-derived vetting stage (the approval ladder), joined by
+        // canonical 'gws:'+uuid. Best-effort: on any failure rows stay un-annotated (the page reads that as
+        // not-vetted), so discovery never breaks because this join failed.
+        const vetting = await loadVettingByCanonical(container.tenant.id, opportunities.map((o) => canonicalForUuid(o.uuid)));
+        if (vetting.size > 0) {
+          opportunities = opportunities.map((o) => ({ ...o, vetting: vetting.get(canonicalForUuid(o.uuid)) ?? null }));
         }
       }
     } catch (filterErr: any) {

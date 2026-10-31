@@ -168,7 +168,12 @@ export interface GovOpportunity {
    * labeled "preliminary, unverified — not confirmed requirements"; NEVER a requirement. null when none supplied.
    */
   preliminarySummary?: string | null;
+  /** Where this opportunity sits on the qualification/approval ladder, joined server-side by canonical 'gws:'+uuid.
+   *  Absent/null => not yet qualified (read as not_vetted). */
+  vetting?: OpportunityVetting | null;
 }
+export type VettingStage = 'not_vetted' | 'in_review' | 'needs_requirements' | 'awaiting_approval' | 'rfi' | 'vetted' | 'no_bid';
+export interface OpportunityVetting { stage: VettingStage; decision: string | null; approvalStatus: string | null; }
 export type SnapshotReason = 'not_configured' | 'source_failed';
 export interface GovOpportunityFeed {
   opportunities: GovOpportunity[];
