@@ -2,7 +2,7 @@ import React from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { act } from 'react-dom/test-utils';
 import PerformanceScopeBar from '../PerformanceScopeBar';
-import { PERFORMANCE_TABS, type PerformanceTab } from '../performanceTabs';
+import { PERFORMANCE_TABS, PERFORMANCE_TAB_LABELS, type PerformanceTab } from '../performanceTabs';
 import { defaultScope } from '../marketingScope';
 
 /**
@@ -70,7 +70,10 @@ describe('the other three tabs are not filtered, so the filter is not offered', 
 
   it('names the tab the filter DOES apply to, so the note is actionable', async () => {
     await mount('funnel');
-    expect(note()!.textContent).toContain('Revenue');
+    // Asserted against the LABEL, not a literal. The tab was renamed from "Revenue" to
+    // "Campaign performance" on 2026-10-30, and a hardcoded string here would have to be
+    // chased on every rename — which is the drift the key/label split exists to prevent.
+    expect(note()!.textContent).toContain(PERFORMANCE_TAB_LABELS.revenue);
   });
 
   it('does not claim the figures are filtered', async () => {
