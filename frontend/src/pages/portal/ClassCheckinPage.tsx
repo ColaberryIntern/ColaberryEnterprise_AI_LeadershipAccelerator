@@ -8,6 +8,8 @@ import {
 } from '../../services/onboardingApi';
 import { emitPointsEarned } from '../../services/pointsFx';
 import { LinkState, linkStateAfterFailure } from './classroomLinkState';
+import { LIVE_PULSES } from '../../components/portal/livePulse';
+import { CBCK_CSS } from './classCheckinStyles';
 
 // Public live-class check-in landing (`/portal/class-checkin/:sessionId`).
 //
@@ -21,7 +23,19 @@ import { LinkState, linkStateAfterFailure } from './classroomLinkState';
 //
 // Mobile-first: one centered card, large tap targets. Styling uses the Design
 // System semantic tokens (mirrors PortalLoginPage) so light/dark and brand stay
-// consistent — no hardcoded hex.
+// consistent.
+//
+// The sheet lives in `classCheckinStyles.ts` — it was about 250 of this file's
+// lines and splitting it is what brought the component back under CLAUDE.md's
+// 500-line ceiling.
+//
+// This comment used to claim "no hardcoded hex". It is not true and was not
+// when it was written: there are fifteen hex literals, thirteen of them
+// `var(--token, #fallback)` fallbacks or `#fff` on a filled button, plus the
+// Prompt Drop box's terminal-dark `#0f1720`/`#26313f`/`#e7eef6`, which do NOT
+// adapt to light mode. Left as-is deliberately — restyling a student-facing
+// code block is a design decision — but recorded honestly, because a comment
+// asserting a property the file does not have is worse than no comment.
 
 interface CheckinInfo {
   title: string;
@@ -47,6 +61,40 @@ function kindLabel(kind: 'prediction' | 'poll' | 'trivia'): string {
   if (kind === 'trivia') return '🧠 Trivia';
   if (kind === 'prediction') return '🔮 Make your prediction';
   return '📊 Live poll';
+}
+
+interface PulseGridProps {
+  pulse: PulseState | null;
+  onTap: (s: PulseState) => void;
+  style?: React.CSSProperties;
+}
+
+/**
+ * The status grid, rendered identically wherever this page shows it.
+ *
+ * ONE component for both controllers, because they had drifted: Build Mode used to offer
+ * three states and drop `here`, so during the one segment where an instructor most needs to
+ * know who is merely following along, there was no button for it. `livePulse.ts` carries the
+ * rest of the reasoning and owns the set itself.
+ */
+function PulseGrid({ pulse, onTap, style }: PulseGridProps): React.ReactElement {
+  return (
+    <div className="cbck-status-grid" style={style} data-testid="pulse-grid">
+      {LIVE_PULSES.map(({ state: s, label, emoji }) => (
+        <button
+          key={s}
+          type="button"
+          className={`cbck-status cbck-status-${s}${pulse === s ? ' is-active' : ''}`}
+          onClick={() => onTap(s)}
+          aria-pressed={pulse === s}
+          data-testid={`pulse-${s}`}
+        >
+          <span className="cbck-status-emoji" aria-hidden="true">{emoji}</span>
+          {label}
+        </button>
+      ))}
+    </div>
+  );
 }
 
 /** Accepts "13:00", "13:00:00" (→ "1:00 PM") or an already-formatted "1:00 PM". */
@@ -80,13 +128,28 @@ const ClassCheckinPage: React.FC = () => {
     setSessionPulse(sessionId, state).catch(() => { /* best-effort; UI already reflects it */ });
   }, [sessionId]);
 
+  /**
+   * The send gate, and a REF rather than `qState` on purpose. The button's `disabled` is not
+   * the gate — Enter is also bound to this, and React batches, so two quick presses both read
+   * `qState === 'idle'` out of the same closure and both post. Nothing downstream deduplicates
+   * a question, so the instructor's deck would show it twice.
+   */
+  const askInFlight = useRef(false);
+
   const sendQuestion = useCallback(() => {
     const text = question.trim();
-    if (!text) return;
+    if (!text || askInFlight.current) return;
+    askInFlight.current = true;
     setQState('sending');
     askSessionQuestion(sessionId, text)
-      .then(() => { setQuestion(''); setQState('sent'); setTimeout(() => setQState('idle'), 1800); })
-      .catch(() => setQState('idle'));
+      .then(() => {
+        askInFlight.current = false;
+        setQuestion('');
+        setQState('sent');
+        setTimeout(() => setQState('idle'), 1800);
+      })
+      // The text stays in the box on failure, so a question is never silently eaten.
+      .catch(() => { askInFlight.current = false; setQState('idle'); });
   }, [sessionId, question]);
 
   // Mirror the instructor deck: once checked in, poll the companion state so the
@@ -213,7 +276,7 @@ const ClassCheckinPage: React.FC = () => {
             </div>
             <h1 className="cbck-title">Couldn&rsquo;t load this class</h1>
             <p className="cbck-text">The check-in link may be incomplete. Scan the code again, or ask your instructor for a fresh link.</p>
-            <button type="button" className="cbck-btn" onClick={loadInfo}>Try again</button>
+            <button type="button" className="cbck-btn" onClick={loadInfo} data-testid="checkin-retry-load">Try again</button>
           </div>
         )}
 
@@ -226,7 +289,7 @@ const ClassCheckinPage: React.FC = () => {
                 <h1 className="cbck-title">{info.title}</h1>
                 <p className="cbck-meta">{formatDate(info.session_date)}{info.start_time ? ` · ${formatTime(info.start_time)}` : ''}</p>
                 <p className="cbck-text cbck-text-lead">Log in to check in for this class.</p>
-                <a className="cbck-btn" href={loginHref}>Log in to check in</a>
+                <a className="cbck-btn" href={loginHref} data-testid="checkin-login">Log in to check in</a>
                 <p className="cbck-text cbck-text-sub">You&rsquo;ll sign in with your enrolled email, then come straight back here — your check-in finishes automatically.</p>
               </div>
             )}
@@ -252,7 +315,7 @@ const ClassCheckinPage: React.FC = () => {
 
                 {/* ── CONNECTION — only ever shown when something is actually wrong ── */}
                 {link !== 'live' && (
-                  <div className={`cbck-link-warn${link === 'signed_out' ? ' is-hard' : ''}`} role="status" aria-live="polite">
+                  <div className={`cbck-link-warn${link === 'signed_out' ? ' is-hard' : ''}`} role="status" aria-live="polite" data-testid="checkin-link-warn">
                     {link === 'signed_out' ? (
                       <>
                         <p className="cbck-link-title">You have been signed out</p>
@@ -297,6 +360,7 @@ const ClassCheckinPage: React.FC = () => {
                             key={idx}
                             type="button"
                             className={`cbck-q-opt${mine ? ' is-mine' : ''}${correct ? ' is-correct' : ''}`}
+                            data-testid={`checkin-opt-${idx}`}
                             onClick={() => answerPoll(q.key, idx)}
                             disabled={q.revealed || locked}
                           >
@@ -331,24 +395,7 @@ const ClassCheckinPage: React.FC = () => {
                     {companion.prompt.stopCondition && (
                       <p className="cbck-prompt-meta"><b>🛑 Stop when:</b> {companion.prompt.stopCondition}</p>
                     )}
-                    <div className="cbck-status-grid" style={{ marginTop: 16 }}>
-                      {([
-                        { s: 'building', label: 'Building', emoji: '🛠️' },
-                        { s: 'stuck', label: "I'm stuck", emoji: '✋' },
-                        { s: 'finished', label: 'Finished', emoji: '✅' },
-                      ] as { s: PulseState; label: string; emoji: string }[]).map(({ s, label, emoji }) => (
-                        <button
-                          key={s}
-                          type="button"
-                          className={`cbck-status cbck-status-${s}${pulse === s ? ' is-active' : ''}`}
-                          onClick={() => tapPulse(s)}
-                          aria-pressed={pulse === s}
-                        >
-                          <span className="cbck-status-emoji" aria-hidden="true">{emoji}</span>
-                          {label}
-                        </button>
-                      ))}
-                    </div>
+                    <PulseGrid pulse={pulse} onTap={tapPulse} style={{ marginTop: 16 }} />
                   </div>
                 ) : companion?.phase === 'broadcast' ? (
                   /* ── BUILDER BROADCAST — appears when the instructor reaches that segment ── */
@@ -363,25 +410,7 @@ const ClassCheckinPage: React.FC = () => {
                   /* ── DEFAULT — status controller + ask a question ── */
                   <div className="cbck-controller">
                     <p className="cbck-ctl-label">Tap your status any time</p>
-                    <div className="cbck-status-grid">
-                      {([
-                        { s: 'here', label: "I'm here", emoji: '👋' },
-                        { s: 'building', label: 'Building', emoji: '🛠️' },
-                        { s: 'stuck', label: "I'm stuck", emoji: '✋' },
-                        { s: 'finished', label: 'Finished', emoji: '✅' },
-                      ] as { s: PulseState; label: string; emoji: string }[]).map(({ s, label, emoji }) => (
-                        <button
-                          key={s}
-                          type="button"
-                          className={`cbck-status cbck-status-${s}${pulse === s ? ' is-active' : ''}`}
-                          onClick={() => tapPulse(s)}
-                          aria-pressed={pulse === s}
-                        >
-                          <span className="cbck-status-emoji" aria-hidden="true">{emoji}</span>
-                          {label}
-                        </button>
-                      ))}
-                    </div>
+                    <PulseGrid pulse={pulse} onTap={tapPulse} />
                     <div className="cbck-ask">
                       <input
                         type="text"
@@ -392,8 +421,9 @@ const ClassCheckinPage: React.FC = () => {
                         onKeyDown={(e) => { if (e.key === 'Enter') sendQuestion(); }}
                         maxLength={280}
                         aria-label="Ask a question"
+                        data-testid="checkin-ask-input"
                       />
-                      <button type="button" className="cbck-ask-send" onClick={sendQuestion} disabled={!question.trim() || qState === 'sending'}>
+                      <button type="button" className="cbck-ask-send" onClick={sendQuestion} disabled={!question.trim() || qState === 'sending'} data-testid="checkin-ask-send">
                         {qState === 'sent' ? 'Sent ✓' : qState === 'sending' ? '…' : 'Send'}
                       </button>
                     </div>
@@ -401,7 +431,7 @@ const ClassCheckinPage: React.FC = () => {
                   </div>
                 )}
 
-                <button type="button" className="cbck-btn cbck-btn-ghost" onClick={enterClass}>Open the live room</button>
+                <button type="button" className="cbck-btn cbck-btn-ghost" onClick={enterClass} data-testid="checkin-enter">Open the live room</button>
               </div>
             )}
 
@@ -415,8 +445,8 @@ const ClassCheckinPage: React.FC = () => {
                 </div>
                 <h1 className="cbck-title">We couldn&rsquo;t check you in</h1>
                 <p className="cbck-text">Something went wrong recording your attendance. Try again, or head straight into the class and your instructor can mark you present.</p>
-                <button type="button" className="cbck-btn" onClick={doJoin}>Try again</button>
-                <button type="button" className="cbck-btn cbck-btn-ghost" onClick={enterClass}>Enter the class anyway</button>
+                <button type="button" className="cbck-btn" onClick={doJoin} data-testid="checkin-retry-join">Try again</button>
+                <button type="button" className="cbck-btn cbck-btn-ghost" onClick={enterClass} data-testid="checkin-enter-anyway">Enter the class anyway</button>
               </div>
             )}
           </>
@@ -428,188 +458,6 @@ const ClassCheckinPage: React.FC = () => {
   );
 };
 
-const CBCK_CSS = `
-.cbck-root{
-  min-height:100vh; min-height:100dvh;
-  display:flex; align-items:center; justify-content:center;
-  padding:20px;
-  font-family:var(--font-body); color:var(--text-body);
-  background:
-    radial-gradient(1100px 460px at 50% -10%, color-mix(in srgb, var(--red-500) 9%, transparent), transparent 70%),
-    radial-gradient(900px 420px at 100% 110%, color-mix(in srgb, var(--blue-500) 8%, transparent), transparent 72%),
-    var(--surface-subtle);
-}
-.cbck-card{
-  width:100%; max-width:440px;
-  background:var(--surface-card);
-  border:1px solid var(--border-subtle);
-  border-radius:var(--radius-xl);
-  box-shadow:var(--shadow-xl);
-  padding:34px 30px 24px;
-  text-align:center;
-}
-@media (max-width:520px){ .cbck-card{ padding:28px 20px 22px; } }
 
-.cbck-brand{ display:flex; align-items:center; justify-content:center; gap:9px; margin-bottom:22px; }
-.cbck-wordmark{ font-family:var(--font-logo); font-weight:700; font-size:23px; letter-spacing:-.01em; color:var(--text-strong); line-height:1; }
-.cbck-wordmark-c{ color:var(--brand-accent); }
-
-.cbck-state{ display:flex; flex-direction:column; align-items:center; }
-
-.cbck-eyebrow{
-  font-size:12.5px; font-weight:700; letter-spacing:.05em; text-transform:uppercase;
-  color:var(--brand-accent); margin:0 0 8px;
-}
-.cbck-title{
-  font-family:var(--font-display); font-weight:700; font-size:24px; line-height:1.2;
-  letter-spacing:-.01em; color:var(--text-strong); margin:0 0 8px;
-}
-.cbck-meta{ font-size:14.5px; font-weight:600; color:var(--text-body); margin:0 0 18px; }
-.cbck-text{ font-size:14.5px; line-height:1.55; color:var(--text-muted); margin:0; }
-.cbck-text-lead{ margin:2px 0 20px; font-size:15.5px; color:var(--text-body); font-weight:500; }
-.cbck-text-sub{ margin-top:14px; font-size:13px; color:var(--text-subtle); }
-
-.cbck-icon{
-  width:66px; height:66px; margin:2px auto 16px;
-  display:flex; align-items:center; justify-content:center;
-  border-radius:var(--radius-circle);
-}
-.cbck-icon-ok{ background:var(--status-success-bg); color:var(--status-success); }
-.cbck-icon-warn{ background:var(--status-danger-bg); color:var(--status-danger); }
-
-/* Big tap targets — students act one-handed on a phone. */
-.cbck-btn{
-  width:100%; min-height:54px; margin-top:18px; padding:0 18px;
-  display:inline-flex; align-items:center; justify-content:center; gap:9px;
-  font-family:var(--font-body); font-size:16px; font-weight:600; text-decoration:none;
-  color:var(--action-fg); background:var(--action-bg);
-  border:none; border-radius:var(--radius-pill); cursor:pointer;
-  box-shadow:var(--shadow-brand);
-  transition:background var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
-}
-.cbck-btn:hover{ background:var(--action-bg-hover); transform:translateY(-1px); }
-.cbck-btn:active{ background:var(--action-bg-press); transform:translateY(0); }
-.cbck-btn:focus-visible{ outline:none; box-shadow:var(--focus-ring); }
-.cbck-btn-ghost{
-  color:var(--text-link); background:transparent; box-shadow:none;
-  border:1px solid var(--border-default); margin-top:14px;
-}
-.cbck-btn-ghost:hover{ background:var(--surface-subtle); }
-
-/* Live class controller */
-.cbck-controller{ width:100%; margin-top:22px; padding-top:20px; border-top:1px solid var(--border-subtle); }
-.cbck-ctl-label{ font-size:12px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--text-muted); margin:0 0 12px; }
-.cbck-status-grid{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
-.cbck-status{
-  display:flex; flex-direction:column; align-items:center; gap:6px;
-  min-height:76px; padding:12px 8px; cursor:pointer;
-  font-size:15px; font-weight:600; color:var(--text-body);
-  background:var(--surface-card); border:2px solid var(--border-default); border-radius:var(--radius-lg);
-  transition:border-color var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
-}
-.cbck-status:active{ transform:scale(.97); }
-.cbck-status-emoji{ font-size:24px; line-height:1; }
-.cbck-status.is-active{ color:#fff; border-color:transparent; }
-.cbck-status-here.is-active{ background:var(--blue-500, #367895); }
-.cbck-status-building.is-active{ background:var(--amber-500, #E8920C); }
-.cbck-status-stuck.is-active{ background:var(--red-500, #FB2832); }
-.cbck-status-finished.is-active{ background:var(--green-600, #3C7A26); }
-
-.cbck-ask{ display:flex; gap:8px; margin-top:14px; }
-.cbck-ask-input{
-  flex:1; min-width:0; height:48px; padding:0 14px;
-  font-size:15px; color:var(--text-body);
-  background:var(--surface-card); border:1.5px solid var(--border-default); border-radius:var(--radius-pill);
-}
-.cbck-ask-input:focus-visible{ outline:none; border-color:var(--brand-accent); box-shadow:var(--focus-ring); }
-.cbck-ask-send{
-  flex:none; height:48px; padding:0 18px; cursor:pointer;
-  font-size:15px; font-weight:700; color:var(--action-fg); background:var(--action-bg);
-  border:none; border-radius:var(--radius-pill);
-}
-.cbck-ask-send:disabled{ opacity:.5; cursor:default; }
-
-/* Live question (mirrors the instructor's screen) */
-.cbck-q-text{ font-size:19px; font-weight:700; line-height:1.35; color:var(--text-strong); margin:2px 0 16px; }
-.cbck-q-opts{ display:flex; flex-direction:column; gap:10px; }
-.cbck-q-opt{
-  display:flex; align-items:center; gap:12px; width:100%; min-height:56px; padding:10px 14px; cursor:pointer; text-align:left;
-  font-size:16px; font-weight:600; color:var(--text-body);
-  background:var(--surface-card); border:2px solid var(--border-default); border-radius:var(--radius-lg);
-  transition:border-color var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out);
-}
-.cbck-q-opt:active{ transform:scale(.99); }
-.cbck-q-opt:disabled{ cursor:default; }
-.cbck-q-letter{
-  flex:none; width:30px; height:30px; border-radius:8px; display:flex; align-items:center; justify-content:center;
-  font-weight:800; font-size:14px; color:var(--text-muted); background:var(--surface-subtle); border:1.5px solid var(--border-default);
-}
-.cbck-q-opt-text{ flex:1; min-width:0; }
-.cbck-q-opt.is-mine{ border-color:var(--brand-accent); background:color-mix(in srgb, var(--brand-accent) 8%, transparent); }
-.cbck-q-opt.is-mine .cbck-q-letter{ background:var(--brand-accent); color:#fff; border-color:var(--brand-accent); }
-.cbck-q-opt.is-correct{ border-color:var(--green-600, #3C7A26); background:color-mix(in srgb, var(--green-600, #3C7A26) 12%, transparent); }
-.cbck-q-opt.is-correct .cbck-q-letter{ background:var(--green-600, #3C7A26); color:#fff; border-color:var(--green-600, #3C7A26); }
-.cbck-q-check{ margin-left:auto; color:var(--green-600, #3C7A26); font-weight:800; }
-.cbck-broadcast-list{ list-style:none; margin:6px 0 0; padding:0; display:flex; flex-direction:column; gap:8px; text-align:left; }
-.cbck-broadcast-list li{
-  padding:11px 14px; font-size:15px; font-weight:600; color:var(--text-body);
-  background:var(--surface-subtle); border:1.5px solid var(--border-default); border-left:5px solid var(--amber-500, #E8920C); border-radius:var(--radius-lg);
-}
-
-/* Connection warning — only rendered when the companion poll is actually failing.
-   Amber for a blip it will recover from on its own, red for a signed-out session
-   the student has to act on. */
-.cbck-link-warn{
-  margin:0 0 16px; padding:12px 16px; border-radius:var(--radius-lg); text-align:left;
-  background:var(--status-warning-bg, color-mix(in srgb, var(--amber-500, #E8920C) 12%, transparent));
-  border-left:5px solid var(--amber-500, #E8920C);
-}
-.cbck-link-warn.is-hard{
-  background:var(--status-danger-bg); border-left-color:var(--status-danger);
-}
-.cbck-link-title{ margin:0 0 4px; font-size:14px; font-weight:700; color:var(--text-default); }
-.cbck-link-body{ margin:0; font-size:13px; line-height:1.5; color:var(--text-muted); }
-.cbck-link-btn{
-  margin-top:10px; padding:8px 16px; border:none; border-radius:999px;
-  background:var(--brand-accent); color:#fff; font-size:13px; font-weight:700; cursor:pointer;
-}
-
-/* Live Decision Theater badge on the phone */
-.cbck-theater-badge{
-  display:inline-block; margin:0 0 12px; padding:6px 14px; border-radius:999px;
-  font-size:12.5px; font-weight:700; letter-spacing:.02em;
-  background:color-mix(in srgb, var(--brand-accent) 12%, transparent); color:var(--brand-accent);
-}
-.cbck-theater-badge.is-locked{ background:var(--status-danger-bg); color:var(--status-danger); }
-
-/* Build Mode prompt (copy-ready) */
-.cbck-prompt-box{
-  margin-top:2px; background:#0f1720; border:1px solid #26313f; border-radius:var(--radius-lg);
-  padding:14px; text-align:left; overflow-x:auto;
-}
-.cbck-prompt-box pre{ margin:0; font-family:ui-monospace,"Cascadia Mono",Consolas,monospace; font-size:13.5px; line-height:1.5; color:#e7eef6; white-space:pre-wrap; word-break:break-word; }
-.cbck-copy-btn{ margin-top:12px; }
-.cbck-prompt-meta{ margin:10px 0 0; text-align:left; font-size:13.5px; line-height:1.5; color:var(--text-body); }
-.cbck-prompt-meta b{ color:var(--text-strong); }
-
-.cbck-spin{
-  width:34px; height:34px; margin:8px auto 16px; border-radius:50%;
-  border:3px solid var(--border-subtle); border-top-color:var(--brand-accent);
-  animation:cbck-spin .7s linear infinite;
-}
-@keyframes cbck-spin{ to{ transform:rotate(360deg); } }
-
-.cbck-foot{
-  margin:24px 0 0; padding-top:16px;
-  border-top:1px solid var(--border-subtle);
-  text-align:center; font-size:11.5px; letter-spacing:.01em; color:var(--text-subtle);
-}
-
-@media (prefers-reduced-motion: reduce){
-  .cbck-btn{ transition:none; }
-  .cbck-btn:hover{ transform:none; }
-  .cbck-spin{ animation-duration:1.5s; }
-}
-`;
 
 export default ClassCheckinPage;

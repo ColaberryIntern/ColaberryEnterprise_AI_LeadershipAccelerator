@@ -356,18 +356,41 @@ X, when they reach the slide X was authored onto."
    `/portal/live/<sessionId>/companion` is reached only by typing or linking it directly.
 
    It has zero test coverage while duplicating ~130 lines of companion logic, and the status labels
-   are not the same set:
+   were not the same set.
 
-   | Surface | States offered |
+   **CORRECTION, 2026-10-31 — the first version of this finding was wider than the code.** It
+   presented three states as what the check-in page *offers*, full stop. Re-read against the file:
+   the line reference was right but the scope was not. The page has **two** controllers, and only
+   one of them had dropped a state:
+
+   | Controller | States offered, before the fix |
    |---|---|
-   | `CompanionDeck` (`/companion`) | **Following** · **Building** · **Stuck** · **Finished** — exact DOC 04 match (`CompanionDeck.tsx:51-54`) |
-   | Check-in page (the QR target) | **Building** · **"I'm stuck"** · **Finished** (`ClassCheckinPage.tsx:336-338`) |
+   | `CompanionDeck` (`/companion`) | Following · Building · Stuck · Finished — exact DOC 04 match |
+   | Check-in page, default screen | "I'm here" · Building · "I'm stuck" · Finished — all four, two labels adrift |
+   | Check-in page, **Build Mode** | Building · "I'm stuck" · Finished — **`here` missing** |
 
-   **The QR surface has no "Following"** — the one state a viewer who is only watching can press, and
-   the one `CompanionDeck.tsx:24` singles out for exactly that reason. A student who scans the QR and
-   follows along has no way to register it, so the Builder-pulse aggregate under-reports by however
-   many passive viewers arrived that way. Expect Test 2's pulse data to be wrong in that direction,
-   and do not read it as a stream fault.
+   So a viewer who is only following along *could* say so on the status screen. What they could not
+   do was say so **during Build Mode** — the one segment where an instructor most needs to know who
+   is following rather than building — and a student who had already tapped it watched their own
+   status disappear from the grid when the instructor moved to a prompt. The under-reporting is real
+   but confined to that segment, not to the whole airing. **Test 2's pulse data should be read with
+   that narrower caveat, not the broad one this document first gave.**
+
+   **Fixed 2026-10-31.** DOC 04's set now lives in one module (`frontend/src/components/portal/
+   livePulse.ts`) that both surfaces import, so the two cannot drift again; both check-in
+   controllers render all four through one `PulseGrid`; and the labels match the companion exactly.
+   Wire values are untouched, so nothing already recorded is affected.
+
+   **Also fixed: the page now has tests** — 25 of them, the first coverage it has ever had, covering
+   attendance recorded exactly once, the sign-in round trip carrying the student back to this URL,
+   both pulse controllers, the poll, a question that could be double-posted by pressing Enter twice,
+   and the 2026-08-20 lost-connection incident in both directions. `CompanionDeck.tsx:15-21` declined
+   to extract from this file *because* it had no coverage; that reason is now gone.
+
+   **Still open here:** the QR still never reaches `/portal/live/<sessionId>/companion`, which
+   remains reachable only by typing it. Whether the two surfaces should converge is a product
+   decision, not a cleanup — they are now consistent in what they ask, which was the part that
+   corrupted a measurement.
 
 ---
 
