@@ -302,6 +302,11 @@ export interface PaySimplePayment {
   ActualSettledDate?: string | null;    // set once the payment settles; null while in flight
   EstimatedSettleDate?: string | null;  // when it is expected to settle
   CanVoidUntil?: string | null;   // void allowed only while now < CanVoidUntil
+  RecurringScheduleId?: number | null;  // set when a standing schedule produced the charge
+  /** Card declines carry their reason here. Null on the list endpoint; read a single payment. */
+  FailureData?: { Code?: string | null; Description?: string | null } | null;
+  /** On a returned bank draft this holds the return text, not an auth code. */
+  ProviderAuthCode?: string | null;
 }
 
 /** Fetch a single payment. Used to read the amount/status/void-window before a refund. */

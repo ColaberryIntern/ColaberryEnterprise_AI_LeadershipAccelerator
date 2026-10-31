@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { audioFromFileList, timingFromFileList } from '../services/presentation/recordingFacts';
-import { verifyWebhookSignature, getPayment } from '../services/paysimpleService';
+import { verifyWebhookSignature } from '../services/paysimpleService';
 import { markEnrollmentPaid, markEnrollmentFailed } from '../services/enrollmentService';
 import { enrollInClassReadinessCampaign } from '../services/readinessCampaignService';
 import { Cohort, EnrollmentLead } from '../models';
@@ -81,23 +81,14 @@ export async function handlePaySimpleWebhook(req: Request, res: Response): Promi
       //
       // The payment record carries RecurringScheduleId, so a recurrence is matched
       // deterministically rather than by amount or customer id, which is not unique
-      // across our subscriptions.
+      // across our subscriptions. A declined card is ALSO a payment with a
+      // RecurringScheduleId, so the status decides advance vs past_due there.
       if (!externalId && paymentId) {
         try {
-          const payment: any = await getPayment(paymentId as any);
-          const scheduleId = payment?.RecurringScheduleId;
-          if (scheduleId) {
-            const { advancePeriodForScheduledPayment } = await import('../services/subscriptionScheduleService');
-            const result = await advancePeriodForScheduledPayment({
-              scheduleId: String(scheduleId),
-              paymentId: String(paymentId),
-            });
-            console.log('[Webhook] Scheduled charge', JSON.stringify({ scheduleId, paymentId, ...result }));
-            // Real money that matches no subscription must be loud, never a quiet 200.
-            if (!result.advanced && result.reason === 'no_subscription_for_schedule') {
-              console.error('[Webhook] ALERT: scheduled payment matched no subscription',
-                JSON.stringify({ scheduleId, paymentId, amount }));
-            }
+          const { handleScheduledChargeEvent } = await import('../services/billing/scheduledChargeWebhook');
+          const result = await handleScheduledChargeEvent('payment_created', paymentId as any);
+          if (result.handled) {
+            console.log('[Webhook] Scheduled charge', JSON.stringify({ paymentId, amount, ...result }));
             res.json({ received: true, recurring: true, ...result });
             return;
           }
@@ -173,14 +164,20 @@ export async function handlePaySimpleWebhook(req: Request, res: Response): Promi
       } else {
         console.warn(`[Webhook] No enrollment found for external ID: ${externalId}`);
       }
-    } else if (eventType === 'payment_failed') {
+    } else if (eventType === 'payment_failed' || eventType === 'payment_returned') {
       const externalId = event.data?.order_external_id;
       const failureReason = event.data?.failure_reason || 'Unknown';
 
-      console.log(`[Webhook] Payment failed for ${externalId}: ${failureReason}`);
+      console.log(`[Webhook] ${eventType} for ${externalId}: ${failureReason}`);
 
       if (externalId) {
-        await markEnrollmentFailed(externalId);
+        if (eventType === 'payment_failed') await markEnrollmentFailed(externalId);
+      } else {
+        // A scheduled charge has no external id. Before 2026-10-31 this branch
+        // dropped every failed recurrence, so a declined member looked paid up.
+        const { handleScheduledChargeEvent } = await import('../services/billing/scheduledChargeWebhook');
+        const result = await handleScheduledChargeEvent(eventType, event.data?.payment_id, failureReason);
+        if (result.handled) console.log('[Webhook] Scheduled charge failed', JSON.stringify(result));
       }
     } else {
       console.log(`[Webhook] Unhandled event type: ${eventType}`);

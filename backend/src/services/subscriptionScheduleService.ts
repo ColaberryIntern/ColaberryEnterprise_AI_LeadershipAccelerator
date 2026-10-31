@@ -238,9 +238,12 @@ export async function advancePeriodForScheduledPayment(params: {
     ? anniversaryDayOfMonth(startedMs) : from.getUTCDate();
   const next = new Date(periodEndMs(from.getTime(), sub.plan === 'annual' ? 'year' : 'month', anniversary));
 
+  // A successful charge cures a past_due row, so the failure note it carried goes
+  // with it. Left in place it would read as a live problem on a paid-up member.
   await sequelize.query(
     `UPDATE subscriptions
         SET current_period_end = :next, status = 'active',
+            cancel_reason = CASE WHEN status = 'past_due' THEN NULL ELSE cancel_reason END,
             paysimple_payment_id = :pid, updated_at = now()
       WHERE id = :id`,
     { replacements: { next: next.toISOString(), pid: String(params.paymentId), id: sub.id } },
@@ -264,5 +267,56 @@ export async function markPastDueForSchedule(scheduleId: string, reason: string)
     { replacements: { sid: scheduleId, r: (reason || 'scheduled payment failed').slice(0, 2000) } },
   );
   return Boolean(affected);
+}
+
+/** The money did not arrive, or came back. Lower-cased PaySimple payment statuses. */
+const FAILED_CHARGE_STATUSES = new Set(['failed', 'returned', 'reversensf', 'chargeback', 'reversed']);
+/** A live charge: a card authorizes then posts, a bank draft is pending then settles. */
+const SUCCESS_CHARGE_STATUSES = new Set(['authorized', 'pending', 'posted', 'settled']);
+
+export type ScheduledChargeOutcome = 'success' | 'failed' | 'ignore';
+
+/**
+ * What a scheduled charge's PaySimple status means for the member's period.
+ *
+ * Found live 2026-10-31: a declined card is still a payment object carrying a
+ * `RecurringScheduleId`, and the period advanced on any such payment without
+ * reading its status. Six members declined on 28-30 Oct (insufficient funds,
+ * closed account, card reported lost) with nothing on our side noticing.
+ *
+ * Anything unrecognized, including a missing status, is 'ignore': neither
+ * advanced nor flagged, and logged by the caller so a human sees it.
+ */
+export function scheduledChargeOutcome(status: string | null | undefined): ScheduledChargeOutcome {
+  const s = String(status ?? '').trim().toLowerCase();
+  if (FAILED_CHARGE_STATUSES.has(s)) return 'failed';
+  if (SUCCESS_CHARGE_STATUSES.has(s)) return 'success';
+  return 'ignore';
+}
+
+/**
+ * Apply one scheduled charge to the book: advance the period on a live charge,
+ * mark the subscription past_due on a failed one, touch nothing otherwise.
+ *
+ * Both writes are idempotent (advance keys on the payment id, past_due only
+ * moves an 'active' row), so PaySimple re-delivering an event is harmless.
+ */
+export async function applyScheduledCharge(params: {
+  scheduleId: string;
+  paymentId: string;
+  status: string | null | undefined;
+  failureReason?: string | null;
+}): Promise<{ outcome: ScheduledChargeOutcome; advanced: boolean; markedPastDue: boolean; reason?: string; subscriptionId?: string }> {
+  const outcome = scheduledChargeOutcome(params.status);
+  if (outcome === 'success') {
+    const r = await advancePeriodForScheduledPayment({ scheduleId: params.scheduleId, paymentId: params.paymentId });
+    return { outcome, markedPastDue: false, ...r };
+  }
+  if (outcome === 'failed') {
+    const reason = `scheduled payment ${params.paymentId} ${params.status}: ${params.failureReason || 'no reason given'}`;
+    const markedPastDue = await markPastDueForSchedule(params.scheduleId, reason);
+    return { outcome, advanced: false, markedPastDue, reason: markedPastDue ? 'marked_past_due' : 'not_active_or_unmatched' };
+  }
+  return { outcome, advanced: false, markedPastDue: false, reason: `unrecognized_status:${params.status ?? 'missing'}` };
 }
 
