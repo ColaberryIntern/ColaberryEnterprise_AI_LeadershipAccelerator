@@ -67,7 +67,9 @@ describe('the in-use line is stated in both directions', () => {
     // Never left implied. "Not approved yet" and "approved but switched off" look the same
     // to a reader who is only told what the document is NOT.
     expect(markup).toContain('Not in use');
-    expect(markup).toContain('cannot be quoted yet');
+    // The whole clause, not a fragment: "can be quoted yet" on its own would also match a
+    // sentence saying the opposite, and the negation is the entire point of this line.
+    expect(markup).toContain('nothing in this document can be quoted yet');
   });
 
   it('renders a different message for each state rather than one hedged line', () => {
