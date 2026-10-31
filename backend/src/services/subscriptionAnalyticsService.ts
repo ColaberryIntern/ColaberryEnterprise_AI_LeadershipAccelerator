@@ -2,6 +2,7 @@ import { QueryTypes } from 'sequelize';
 import { sequelize } from '../config/database';
 import { inferPlanFromAmountPaid } from './planInference';
 import { IS_STAFF_SQL } from './staffDetection';
+import { syntheticEmailSql } from './leads/syntheticContacts';
 import { pickBestDuplicate } from './emailIdentity';
 import { getStaffRoster, getDepositHolderRoster } from './subscriptionRosterService';
 
@@ -193,7 +194,8 @@ async function fetchExplorerCounts(): Promise<{ freeTrial: number; depositHolder
           WHERE enrollment_id = e.id AND reason = 'open_house_deposit' AND status = 'available'
           LIMIT 1
        ) ac ON true
-      WHERE e.enrollment_type = 'explorer' AND e.status = 'active'`,
+      WHERE e.enrollment_type = 'explorer' AND e.status = 'active'
+        AND NOT ${syntheticEmailSql('e.email')}`,
     { type: QueryTypes.SELECT }
   )) as Array<{ enrollment_id: string; email: string | null; created_at: string | null; is_staff: boolean; deposit_enrollment_id: string | null; deposit_cents: number | null }>;
 

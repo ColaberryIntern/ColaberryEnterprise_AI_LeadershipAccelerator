@@ -1,6 +1,7 @@
 import { Lead } from '../../models';
 import { evaluateConsent } from '../consentService';
 import { redactForLogs } from '../../utils/piiRedaction';
+import { isSyntheticContactEmail } from '../leads/syntheticContacts';
 import type { ExplorerContactability } from '../../types/explorerGrowth';
 
 /**
@@ -94,7 +95,10 @@ export async function resolveContactability(input: {
   // Suppression first: it overrides consent in the restrictive direction, and
   // checking it once avoids three consent lookups for a suppressed learner.
   let suppressedReason: string | null = null;
-  if (input.leadId !== null) {
+  // C96: a test fixture (the daily smoke-test Explorer) is never a person to contact. Checked before any read,
+  // so it holds even when the lead link is missing or the lead read fails open in some later change.
+  if (isSyntheticContactEmail(input.email)) suppressedReason = 'synthetic_test_account';
+  if (!suppressedReason && input.leadId !== null) {
     try {
       const lead = await Lead.findByPk(input.leadId, { attributes: ['status'] });
       const status = (lead as any)?.status as string | undefined;

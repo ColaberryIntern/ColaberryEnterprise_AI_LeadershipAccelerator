@@ -2,6 +2,7 @@ import { QueryTypes } from 'sequelize';
 import { sequelize } from '../config/database';
 import { getTotalsForEnrollments, levelForPoints } from './pointsService';
 import { IS_STAFF_SQL } from './staffDetection';
+import { syntheticEmailSql } from './leads/syntheticContacts';
 import { pickBestDuplicate } from './emailIdentity';
 
 /* ------------------------------------------------------------------ */
@@ -45,7 +46,8 @@ export async function getExplorerRoster(): Promise<ExplorerRosterRow[]> {
           WHERE enrollment_id = e.id AND reason = 'open_house_deposit' AND status = 'available'
           LIMIT 1
        ) ac ON true
-      WHERE e.enrollment_type = 'explorer' AND e.status = 'active' AND ac.enrollment_id IS NULL AND NOT ${IS_STAFF_SQL}`,
+      WHERE e.enrollment_type = 'explorer' AND e.status = 'active' AND ac.enrollment_id IS NULL AND NOT ${IS_STAFF_SQL}
+        AND NOT ${syntheticEmailSql('e.email')}`,
     { type: QueryTypes.SELECT }
   )) as ExplorerRow[];
 

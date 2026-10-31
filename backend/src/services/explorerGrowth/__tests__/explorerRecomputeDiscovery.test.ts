@@ -73,6 +73,7 @@ beforeEach(() => {
     resolved: 212,
     unresolved: 0,
     duplicatesSkipped: 0,
+    syntheticSkipped: 0,
     unresolvedEnrollmentIds: [],
     dryRun: false,
   });

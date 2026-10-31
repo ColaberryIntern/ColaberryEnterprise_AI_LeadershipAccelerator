@@ -7,6 +7,7 @@ import {
 } from '../../models';
 import { pickBestEnrollment } from '../participantService';
 import { redactForLogs } from '../../utils/piiRedaction';
+import { isSyntheticContactEmail } from '../leads/syntheticContacts';
 
 /**
  * Explorer ↔ Lead identity bridge.
@@ -44,6 +45,8 @@ export interface BridgeResolution {
   lead_id: number | null;
   email_normalized: string;
   resolved: boolean;
+  /** C96: a test fixture address. No profile is written for it, whatever `dryRun` says. */
+  synthetic?: true;
 }
 
 export interface BridgeRepairReport {
@@ -51,6 +54,8 @@ export interface BridgeRepairReport {
   resolved: number;
   unresolved: number;
   duplicatesSkipped: number;
+  /** C96: test-fixture Explorers (the daily smoke test) deliberately given no profile. Not "unresolved". */
+  syntheticSkipped: number;
   /** Enrollment IDs only — never email addresses. */
   unresolvedEnrollmentIds: string[];
   dryRun: boolean;
@@ -92,6 +97,14 @@ export async function resolveExplorerLead(
   }
 
   const emailNormalized = normalizeEmail(enrollment.email);
+
+  // C96 (2026-10-31): the daily points smoke test signs up a real Explorer in production. This is the only place
+  // a profile is created (registration and the nightly repair both come through here), so refusing a fixture
+  // here keeps it out of scoring, the Governor, drafts, the outreach list and every Explorer Growth count.
+  if (isSyntheticContactEmail(emailNormalized)) {
+    return { enrollment_id: enrollmentId, lead_id: null, email_normalized: emailNormalized, resolved: false, synthetic: true };
+  }
+
   const leadId = await findLeadByEmail(emailNormalized);
 
   if (!options.dryRun) {
@@ -147,6 +160,7 @@ export async function repairAllExplorerBridges(
 
   let resolved = 0;
   let duplicatesSkipped = 0;
+  let syntheticSkipped = 0;
   const unresolvedEnrollmentIds: string[] = [];
 
   for (const [, candidates] of byEmail) {
@@ -155,7 +169,8 @@ export async function repairAllExplorerBridges(
     if (!canonical) continue;
 
     const result = await resolveExplorerLead(canonical.id, { dryRun });
-    if (result.resolved) resolved++;
+    if (result.synthetic) syntheticSkipped++;
+    else if (result.resolved) resolved++;
     else unresolvedEnrollmentIds.push(canonical.id);
   }
 
@@ -164,6 +179,7 @@ export async function repairAllExplorerBridges(
     resolved,
     unresolved: unresolvedEnrollmentIds.length,
     duplicatesSkipped,
+    syntheticSkipped,
     unresolvedEnrollmentIds,
     dryRun,
   };
