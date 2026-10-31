@@ -247,6 +247,39 @@ export interface ProjectSummaryDto {
    * waiting on the student and route it to the review screen. NULL = not gated.
    */
   approval_state: ProjectApprovalState | null;
+  /**
+   * C85 (Project Studio Departures board): the newest commit the platform last
+   * read from the repo (GitHubConnection.commit_summary_json[0]). Null when the
+   * caller did not resolve connection state, there is no repo, or no commit has
+   * been read yet. Never fetched live here: it is what the last sync recorded.
+   */
+  last_commit: ProjectLastCommit | null;
+  /**
+   * C85: the most recent of the last commit and the project's own last update,
+   * so the Departures board can list projects "last worked first". Null when
+   * neither is known.
+   */
+  last_worked_at: string | null;
+}
+
+export interface ProjectLastCommit { sha: string; message: string; at: string }
+
+/**
+ * PURE. The newest commit from a recorded commit summary, or null when the
+ * summary is missing, empty, or its first entry has no usable sha and date.
+ */
+export function lastCommitFrom(summary: unknown): ProjectLastCommit | null {
+  const first = Array.isArray(summary) ? summary[0] : null;
+  if (!first || typeof first !== 'object') return null;
+  const { sha, message, date } = first as { sha?: unknown; message?: unknown; date?: unknown };
+  if (typeof sha !== 'string' || !sha || typeof date !== 'string' || Number.isNaN(Date.parse(date))) return null;
+  return { sha: sha.slice(0, 7), message: typeof message === 'string' ? message : '', at: new Date(date).toISOString() };
+}
+
+/** PURE. The later of the given instants (ISO strings or Dates), or null when none is valid. */
+export function latestOf(...values: Array<string | Date | null | undefined>): string | null {
+  const times = values.map((v) => (v == null ? NaN : new Date(v).getTime())).filter((t) => !Number.isNaN(t));
+  return times.length ? new Date(Math.max(...times)).toISOString() : null;
 }
 
 /**
@@ -529,8 +562,9 @@ export function toProjectSummaryDto(
   activeProjectId: string | null,
   // Optional so every existing caller keeps compiling and simply reports null,
   // which the badge treats as "not resolved" and renders nothing for.
-  connection?: { repo_url?: string | null; status_json?: any } | null,
+  connection?: { repo_url?: string | null; status_json?: any; commit_summary_json?: unknown } | null,
 ): ProjectSummaryDto {
+  const lastCommit = lastCommitFrom(connection?.commit_summary_json);
   return {
     id: String(p.id),
     name: p.name ?? null,
@@ -543,5 +577,7 @@ export function toProjectSummaryDto(
     repo_url: connection?.repo_url ?? null,
     is_protected: isProtectedProject(p.id),
     approval_state: (p.approval_state ?? null) as ProjectApprovalState | null,
+    last_commit: lastCommit,
+    last_worked_at: latestOf(lastCommit?.at, p.updated_at),
   };
 }

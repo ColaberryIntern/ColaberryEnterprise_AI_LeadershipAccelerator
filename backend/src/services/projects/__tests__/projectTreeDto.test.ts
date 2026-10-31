@@ -6,7 +6,52 @@ import {
   toListDto,
   toProjectTreeDto,
   toProjectSummaryDto,
+  lastCommitFrom,
+  latestOf,
 } from '../projectTreeDto';
+
+/** C85: the Departures board's "last commit" and "last worked first". */
+describe('C85 last commit and last worked', () => {
+  const commit = { sha: 'abcdef1234567', message: 'Add login page', author: 'Sam', date: '2026-10-30T15:00:00Z', files_changed: 3 };
+
+  it('takes the newest recorded commit, shortened to 7 characters', () => {
+    expect(lastCommitFrom([commit, { ...commit, sha: 'older00', date: '2026-10-01T00:00:00Z' }]))
+      .toEqual({ sha: 'abcdef1', message: 'Add login page', at: '2026-10-30T15:00:00.000Z' });
+  });
+
+  it('is null for a missing, empty, or unusable summary', () => {
+    expect(lastCommitFrom(undefined)).toBeNull();
+    expect(lastCommitFrom(null)).toBeNull();
+    expect(lastCommitFrom([])).toBeNull();
+    expect(lastCommitFrom({ sha: 'x' })).toBeNull();
+    expect(lastCommitFrom([{ sha: '', date: commit.date }])).toBeNull();
+    expect(lastCommitFrom([{ sha: 'abc1234', date: 'not a date' }])).toBeNull();
+    expect(lastCommitFrom([{ sha: 'abc1234' }])).toBeNull();
+  });
+
+  it('latestOf picks the later instant and ignores invalid ones', () => {
+    expect(latestOf('2026-10-01T00:00:00Z', new Date('2026-10-02T00:00:00Z'))).toBe('2026-10-02T00:00:00.000Z');
+    expect(latestOf(null, undefined, 'garbage')).toBeNull();
+    expect(latestOf()).toBeNull();
+  });
+
+  it('the summary carries the commit and the later of commit and project update', () => {
+    const dto = toProjectSummaryDto({ id: 'p1', name: 'A', updated_at: new Date('2026-10-29T00:00:00Z') }, null,
+      { repo_url: 'https://github.com/a/b', commit_summary_json: [commit] });
+    expect(dto.last_commit?.sha).toBe('abcdef1');
+    expect(dto.last_worked_at).toBe('2026-10-30T15:00:00.000Z');
+    const newer = toProjectSummaryDto({ id: 'p1', name: 'A', updated_at: new Date('2026-10-31T00:00:00Z') }, null,
+      { repo_url: 'https://github.com/a/b', commit_summary_json: [commit] });
+    expect(newer.last_worked_at).toBe('2026-10-31T00:00:00.000Z');
+  });
+
+  it('no connection resolved: no commit, last worked from the project alone', () => {
+    const dto = toProjectSummaryDto({ id: 'p1', name: 'A', updated_at: '2026-10-29T00:00:00Z' }, null);
+    expect(dto.last_commit).toBeNull();
+    expect(dto.last_worked_at).toBe('2026-10-29T00:00:00.000Z');
+    expect(toProjectSummaryDto({ id: 'p1', name: 'A' }, null).last_worked_at).toBeNull();
+  });
+});
 
 describe('toTaskDto', () => {
   it('maps story + requirement fields and passes acceptance/fulfills through', () => {
