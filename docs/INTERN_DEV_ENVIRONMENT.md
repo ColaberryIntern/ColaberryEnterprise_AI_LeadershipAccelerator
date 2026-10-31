@@ -71,6 +71,34 @@ The seven interns' agent-build repositories, as the platform has them connected:
 
 ---
 
+## Audit result, 2026-10-31
+
+All 11 repositories were scanned over **every commit on every ref** with the pinned
+gitleaks and this repository's own `.gitleaks.toml`. The detector was verified against
+planted secrets first.
+
+**8 clean · 3 with findings · 0 unscanned · 0 confirmed disclosures.**
+
+Every finding was triaged by reading the surrounding code, not the value:
+
+| Repository | Finding | Verdict |
+|---|---|---|
+| `qninying/ai-operations-center` | 4, all in `mcp-server/src/evidenceRedaction.test.ts` | **Deliberate fixtures.** Each one sits inside an `it("redacts …")` case asserting that a redaction function strips it. This is the correct way to test redaction. |
+| `qninying/ambit` | 1, `src/totpLoginWiring.test.ts` | **Deliberate fixture.** A throwaway `PASSWORD` next to a TOTP secret generated at runtime. |
+| `qninying/HosPulse` | 1, `command-center/systems.html` | **A publishable key, documented.** The surrounding comment correctly notes it already ships in the deployed frontend bundle and that `service_role` and `DATABASE_URL` are never referenced. See the caveat in Known gaps. |
+
+Nobody has leaked a credential. The three repositories with findings all belong to the
+same intern and all three are a consequence of writing security tests, which is the
+opposite of the problem this audit looks for.
+
+Two things this result does **not** say:
+
+- It does not say the repositories are clean *today* in any lasting sense. It is a
+  measurement of 2026-10-31, and nothing currently stops a secret landing tomorrow.
+- It does not cover the other 43 connected repositories.
+
+---
+
 ## What you may never hold
 
 **This is the important half of the contract.** Your repository is public. Anything that
@@ -151,14 +179,29 @@ an approving review and you have no write access, so there is nothing for you to
 **Nothing of yours is pushed here by you.** The importer holds the write access, not an
 intern credential, and it is code in this repository that you can read.
 
-**The importer refuses some changes outright**, regardless of who approves them:
+The importer is `scripts/importInternChange.js`. It is dry-run by default, it keeps you
+as the commit's author via `git am`, it applies the patch in a throwaway worktree so it
+can never touch somebody's working branch, and it is idempotent on the source commit — a
+re-run after a timeout finds the existing branch and pull request instead of opening a
+second one.
+
+**It refuses some changes outright**, regardless of who would approve them. The rules are
+in `scripts/lib/internChangePolicy.js`, they are named, and they are unit tested:
 
 | Refused | Why |
 |---|---|
-| Any change under `.github/workflows/` | A workflow runs with this repository's secrets. A change there is a credential-exfiltration path, not a code change. |
-| `docker-compose*.yml`, `nginx/` | Production infrastructure. Escalation-tier in `CLAUDE.md`. |
-| `.gitleaks.toml`, `.gitleaksignore`, `scripts/secret-scan.js` | Weakening the secret gate is how the next secret gets through. |
-| A patch the secret scan flags | Checked before the branch is pushed, not after. |
+| Anything under `.github/` | A workflow runs with this repository's secrets, so a change there is arbitrary code execution with credentials, not a code change. The whole directory is refused rather than particular keys inside a YAML file, because that is the only version of the rule that cannot be worked around. |
+| `docker-compose*.yml`, `Dockerfile*`, `nginx/`, `preview-db-init/` | Production infrastructure. Escalation-tier in `CLAUDE.md`. |
+| `.gitleaks.toml`, `.gitleaksignore`, `.husky/`, `scripts/secret-scan.js`, `scripts/ensure-gitleaks.js` | Weakening the secret gate is how the next secret gets through, so the gate is not reachable from the path it guards. |
+| `scripts/ci/`, `CODEOWNERS`, `scripts/deploy-prod.sh` | These decide who may approve what. A change here edits the review itself. |
+| `CLAUDE.md`, `directives/` | The rules the review is conducted under. |
+| `.env` (but **not** `.env.example`), `*.pem`, `*.key`, `*.p12`, `id_rsa` | A credential-bearing file must never travel in a patch. |
+| An absolute path, or any `..` segment | It writes outside the repository when the patch is applied. |
+| More than 40 files | Not reviewable. That is a merge, not a change request. |
+| A patch the secret scan flags | Checked **before** the branch is pushed, because pushing is what publishes it. |
+
+A refusal names every rule that fired and every offending path at once, so a rejected
+change costs one round trip rather than one per problem.
 
 ---
 
@@ -186,9 +229,17 @@ Stated rather than smoothed over.
 2. **The secret gate has a pre-commit hook here, and nothing in an intern repo yet.**
    Until the hook is installed in their repositories, the scan is a periodic audit rather
    than a gate, and a secret can sit published between runs.
-3. **The import path is specified above but not yet built.** Criterion 3 of AF4.5 asks
-   for one real change demonstrated end to end, and that has not happened. Until it does,
-   this document describes the intended path, not an exercised one.
+3. **The importer is built, and no change has actually travelled it yet.** Both outcomes
+   are verified against real intern commits: it refused `qninying/platform-reliability-agent@3ffe3ceb`
+   by name because the commit touches `.github/workflows/ci.yml`, and it cleared
+   `tashdiah-Data/ai-project@832955b3`. What has **not** happened is a change pushed,
+   reviewed and merged through it end to end, which is what AF4.5 criterion 3 actually
+   asks for. Until that run exists this is a verified mechanism, not an exercised path.
 4. **The contract covers the 7 interns; 54 repositories are connected.** The other
    repositories belong to staff and students, are equally public, and are not governed by
    anything written here.
+5. **The one publishable key found is safe only if row-level security is on.** A Supabase
+   anon/publishable key is designed to be public, but it is only harmless when RLS is
+   enabled on every table it can reach; without RLS it grants read and write. This audit
+   read the repository, not the Supabase project, so that was **not verified**. It is one
+   check on one dashboard and it is worth doing.
