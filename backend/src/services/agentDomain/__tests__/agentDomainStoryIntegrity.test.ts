@@ -25,12 +25,17 @@
  * **503** — 443 implementation, 50 research (five per domain, counted once instead of ten times)
  * and 10 legacy-migration plans (dropped entirely). The corrected composition is asserted below
  * so the number cannot drift again without a test naming it.
+ *
+ * It has since moved twice, each time by addition and each time pinned per kind rather than as a
+ * total: **513** when Phase 1 gave every domain a Command Center, and **1,477** when Phase 2
+ * projected the 964 `release_behaviour[]` entries into per-rung stories.
  */
 
 import * as fs from 'fs';
 import * as path from 'path';
 import { planForAllDomains, type GeneratedStory } from '../agentDomainStoryTemplates';
 import { loadAllMatrices, type CapabilityRecord } from '../capabilityRecord';
+import { AUTONOMY_STAGES } from '../autonomyLadder';
 
 const DIR = path.join(__dirname, '..');
 const TS_FILES = fs.readdirSync(DIR).filter((f) => f.endsWith('.ts'));
@@ -216,19 +221,58 @@ describe('no control character survives in this directory', () => {
 describe('the story set, counted correctly', () => {
   const all = planForAllDomains().flatMap((p) => p.stories);
 
-  it('is 513 stories, not 448: the composition is asserted so it cannot drift', () => {
+  it('is 1,477 stories, not 448: the composition is asserted so it cannot drift', () => {
     // 448 was 443 + 5: the five research stories counted ONCE rather than per domain, and the
     // ten legacy-migration plans dropped. A bare total hid both mistakes, so the parts are pinned.
     //
     // 503 -> 513 when STORY-000 landed: one Command Center per domain, so the ten are a NEW kind
     // rather than a tenth of something that already existed. Pinning the parts is what makes that
     // readable as "ten were added" instead of "a number changed".
+    //
+    // 513 -> 1,477 at Phase 2, and the 964 are the whole point: one story per
+    // `release_behaviour[]` entry across the 443 capability records. Those entries were always in
+    // the data, each with its own behaviour and acceptance criteria, and the generator read only
+    // `release_behaviour[0]` -- so about 520 of them had never been looked at by anything. The
+    // count is pinned per KIND for the same reason as above: if this number moves, the test says
+    // which kind moved.
     expect(all.filter((s) => s.kind === 'implementation')).toHaveLength(443);
+    expect(all.filter((s) => s.kind === 'release_behaviour')).toHaveLength(964);
     expect(all.filter((s) => s.kind === 'research')).toHaveLength(50);
     expect(all.filter((s) => s.kind === 'legacy_migration')).toHaveLength(10);
     expect(all.filter((s) => s.kind === 'command_center')).toHaveLength(10);
-    expect(all).toHaveLength(513);
-    expect(planForAllDomains().reduce((n, p) => n + p.releases.length, 0)).toBe(30);
+    expect(all).toHaveLength(1477);
+    // 13 releases per domain: ten rungs plus the three originals, kept empty as the rollback path.
+    expect(planForAllDomains().reduce((n, p) => n + p.releases.length, 0)).toBe(130);
+  });
+
+  it('every story sits on a real rung, and `release_key` agrees with `autonomy_stage`', () => {
+    // The invariant the whole migration rests on. A release IS a rung now, so a story whose
+    // `release_key` and `autonomy_stage` disagree is a story claiming one authority level while
+    // hanging under another -- and `coverageMatrix` reads `release_key` while a dashboard would
+    // read `autonomy_stage`, so the two would report different ladders without anything failing.
+    for (const s of all) {
+      expect(AUTONOMY_STAGES).toContain(s.autonomy_stage);
+      expect(s.release_key).toBe(s.autonomy_stage);
+    }
+  });
+
+  it('POSITIVE CONTROL: a bare `R4` would NOT satisfy the rung check', () => {
+    // Proves the check above is testing the namespace and not merely "is a non-empty string".
+    // A bare `R4` is the dangerous value: it is lexically valid in the platform's DELIVERY RISK
+    // vocabulary, where two readers fail OPEN on an unrecognised tier.
+    expect(AUTONOMY_STAGES).not.toContain('R4' as never);
+  });
+
+  it('every rung of the ladder is a release on every board, even the empty ones', () => {
+    // Deliberate. `AUTONOMY_RELEASE_MIGRATION.md` wants "R2 through R9 visible above him for the
+    // first time", and measured against the capability data only one domain names all ten rungs.
+    // An empty rung above you is the point of a ladder; creating only the rungs with work in them
+    // would have rebuilt the flat backlog with extra steps.
+    for (const p of planForAllDomains()) {
+      for (const stage of AUTONOMY_STAGES) {
+        expect(p.releases.map((r) => r.cluster)).toContain(stage);
+      }
+    }
   });
 
   it('five research stories PER DOMAIN, which is where 50 comes from', () => {

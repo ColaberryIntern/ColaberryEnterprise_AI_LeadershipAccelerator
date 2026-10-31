@@ -36,11 +36,16 @@ describe('the report covers every domain, with figures read from the data', () =
     expect(r.totals.legacy_rows_total).toBe(246);
   });
 
-  it('reports 513 stories and 30 releases, which is the corrected composition', () => {
-    // 503 + the ten Command Centers, one per domain. The implementation total is pinned alongside
-    // it so a story count that moves for the wrong reason cannot hide behind the right one.
-    expect(r.totals.stories).toBe(513);
-    expect(r.totals.releases).toBe(30);
+  it('reports 1,477 stories and 130 releases, which is the corrected composition', () => {
+    // 503 + the ten Command Centers, one per domain = 513. Then Phase 2 projected the 964
+    // `release_behaviour[]` entries into per-rung stories = 1,477, and gave each project the ten
+    // rungs on top of its three kept originals = 130 releases.
+    //
+    // The implementation total is pinned alongside both so a story count that moves for the wrong
+    // reason cannot hide behind the right one: 443 is the number of CAPABILITIES, and it must not
+    // move when per-rung stories are added, because a rung story is not a new capability.
+    expect(r.totals.stories).toBe(1477);
+    expect(r.totals.releases).toBe(130);
     expect(r.rows.reduce((n, x) => n + x.implementation_stories, 0)).toBe(443);
   });
 

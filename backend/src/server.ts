@@ -104,6 +104,7 @@ import { ensureBroadcastEndReasonSchema } from './db/ensureBroadcastEndReasonSch
 import { ensureBroadcastClipMarkerSchema } from './db/ensureBroadcastClipMarkerSchema';
 import { ensureBroadcastReplayIndexSchema } from './db/ensureBroadcastReplayIndexSchema';
 import { ensureFactoryTaskSchema } from './db/ensureFactoryTaskSchema';
+import { ensureAgentDomainStoryLadderSchema } from './db/ensureAgentDomainStoryLadderSchema';
 import { ensureEmailSendLedgerSchema } from './db/ensureEmailSendLedgerSchema';
 import { ensureInternshipSchema } from './db/ensureInternshipSchema';
 import { ensureMilestoneLadderSchema } from './db/ensureMilestoneLadderSchema';
@@ -2902,6 +2903,11 @@ async function start(): Promise<void> {
   // attributes, added to student_tasks as new nullable columns (the archived_at/approval_state
   // pattern). Existing rows are untouched and unset until the factory populates them.
   await ensureFactoryTaskSchema();
+  // Agent Factory Phase 2: the capability link and the autonomy rung a story sits on, plus the
+  // widening of `story_id` that a per-rung id needs. Twenty-four domain story ids were already
+  // truncated at the old 60-char limit; appending a rung to them would have collided. Same
+  // additive, nullable, never-throwing contract as the helper above.
+  await ensureAgentDomainStoryLadderSchema();
   // Transactional email dedup ledger. CLAUDE.md mandates application-level
   // dedup on (recipient, subject, business_event_id) for Mandrill sends and
   // production had no such table, so every batch send was one retry away from

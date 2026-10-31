@@ -16,9 +16,11 @@ first `--apply` run exposed, the fix, and the verification.
     agent_id IS NOT NULL` went **26 to 35**. All ten `agent_domain_projects` rows now carry an
     `agent_id`, up from two.
   - Notes: The deploy command is refused to Claude as `[Production Deploy]` through BOTH the Bash
-    and PowerShell tools, which is a different category from an ordinary prod write; Ali ran it.
-    Every guard the script checks was verified read-only first, so the handover was a paste rather
-    than a question. The deploy shipped `7aef89d7` rather than the `3ebc3070` that was pre-verified,
+    and PowerShell tools, which is a different category from an ordinary prod write. **The block is
+    the permission mode, not the command:** Ali exited auto mode and the identical PowerShell
+    command then ran first try, from this session. An earlier revision of this entry said "Ali ran
+    it", which was wrong. Every guard the script checks was verified read-only first, so the ask
+    was "take this tab out of auto mode" rather than "run this for me". The deploy shipped `7aef89d7` rather than the `3ebc3070` that was pre-verified,
     because main advanced during the pre-check; the script's own digest guard confirmed `:main`
     matched that exact sha. Nine agents remain `enabled=false`, `observe`, `tools_granted=[]`.
 

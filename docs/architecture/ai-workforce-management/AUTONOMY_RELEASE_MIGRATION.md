@@ -21,13 +21,19 @@ different axis, which is most of why this drifted.
 
 ## The constraint that shapes everything: nothing is deleted
 
-**503 stories exist and 51 are complete with a `verified_at` stamp on each.** That is real work by
+**513 stories exist and 51 are complete with a `verified_at` stamp on each.** That is real work by
 seven people. The migration below does not delete a story, a status, a verification, a narrative or
 a prompt. The strongest statement available is this one:
 
 > After the migration, every story row that exists today still exists, with the same `id`, the same
-> `title`, the same `status`, the same `verified_at` and the same `build` prompt. The only column
-> that changes on an existing row is `task_list_id` — which release it hangs under.
+> `title`, the same `status`, the same `verified_at` and the same `build` prompt. The columns that
+> change on an existing row are `task_list_id` — which release it hangs under — and `release_key`,
+> which moves with it because a release now *is* a rung.
+
+*(This paragraph said "503" and "the only column that changes is `task_list_id`" when it was
+written on 30 October. 503 became 513 when Phase 1 gave every domain a Command Center, and the
+one-column promise did not survive implementation: see "Two columns change on an existing row" under
+Phase 2 for what actually happens and why.)*
 
 And even that is reversible, because the three original release rows are **kept, not dropped**. They
 end up empty, and they are the rollback path: one `UPDATE` puts every story back.
@@ -38,7 +44,8 @@ end up empty, and they are the rollback path: one `UPDATE` puts every story back
 |---|---|---|
 | The 5 research stories per domain | `autonomy:R0` | R0 is literally *"Define the workflow, requirements, risks and human decisions."* That is what those five stories are. |
 | The legacy migration story | `autonomy:R0` | Same kind of work: deciding what the agent inherits before it does anything. |
-| Each capability story (443 of them) | the capability's own `starting_autonomy` | Already recorded per capability. Most are `autonomy:R0`. |
+| The Command Center (STORY-000) | `autonomy:R0` | Understanding what you are about to build is R0 work, and it stays first on the board. |
+| Each capability story (443 of them) | the capability's own `starting_autonomy` | Already recorded per capability. Measured: **all 443** are `autonomy:R0`, not merely most, so the re-parent consolidates rather than spreads — which is what the next section is about. |
 | *(new)* one story per `release_behaviour[]` entry | that entry's `autonomy` | **This is the part that is purely additive.** |
 
 ### The additive half is the important half
@@ -170,11 +177,93 @@ would read as ten clean domains.
 
 ### Phase 2 — Project the ladder
 
+**BUILT, 31 October 2026.** What follows is what was planned; the subsections after it record what
+building it found, because two of the four items were not quite what this document promised.
+
 4. **Create the ten autonomy releases** per project, keeping the three existing ones.
 5. **Re-parent** existing stories per the mapping table. One column changes.
 6. **Generate the new stories** from `release_behaviour[]`.
 7. **Persist the link** the provisioner currently computes and throws away: `capability_id` and the
    autonomy stage belong on the story row. Without them no dashboard can ever say where anyone is.
+
+Measured: **13 releases per project** (ten rungs at positions 0-9, the three originals kept empty
+at 10-12), **513 stories re-parented**, **964 projected** from `release_behaviour[]`, for 1,477
+stories in all. Still `enabled: false`, still `observe`, still no tools granted, and finishing a
+release still promotes nobody.
+
+#### Two columns change on an existing row, not one
+
+This document promised that "the only column that changes on an existing row is `task_list_id`".
+That is not achievable, so it is corrected here rather than quietly broken.
+
+**`release_key` moves with `task_list_id`.** Every one of the 513 rows in production satisfies
+`release_key = its list's cluster` today, and leaving `release_key` behind would break that
+invariant and leave `coverageMatrix` — which reads `release_key` — reporting the superseded axis
+forever. **`position` is also rewritten**, for the reason Phase 1 recorded: three lists merging
+into one rung produces dozens of duplicate positions, and the portal sorts the board on it. It
+renormalizes rather than shifts, so it is idempotent by value.
+
+Three previously-NULL columns are populated: `capability_id`, `autonomy_stage` and `story_kind`.
+All three were null on all 513 rows before this ran, so filling them takes nothing away.
+
+There is also one repair. **17 rows hold a `story_id` truncated by the old `varchar(60)` column**,
+and re-parenting writes the full value now that the column can hold it. That is found and explained
+in the next section; it is listed here because it is a fourth column changing on an existing row.
+
+Never touched on an existing row: `id`, `title`, `status`, `narrative`, `build`, `due_on`,
+`verified_at`, `verified_by`, `verified_ref`, `verification_json`. **56 rows carry a verification
+stamp and all 56 keep it** (this document said 51 when it was written on 30 October; five more were
+verified in the week after). A test asserts the exact field set a re-parent writes, so this cannot
+drift into a wider update without the test naming it, and the planner was run against a snapshot of
+the real production rows to confirm every one of those 56 is re-parented rather than left behind.
+
+#### `story_id` had to be widened, and 24 ids were already truncated
+
+`student_tasks.story_id` was `varchar(60)`, and the provisioner truncates to fit while deriving the
+row `id` from the **untruncated** string. That combination is a duplicate key by another name: two
+logically distinct stories can be written as two rows carrying the same `story_id`, with no error.
+
+Measured in production before this shipped: the longest domain `story_id` is exactly 60 characters
+and **24 of them sit at the limit**, cut off mid-word — for instance
+`product_experience.CAP.stylesheet_architecture_consolidation`, whose real id ends
+`..._consolidation_proposal`. Nothing had collided, purely by luck of the naming.
+
+A per-rung story id appends the rung to the capability's, which reaches 81 characters. Keeping the
+60-char limit would have produced **221 pairs of distinct stories sharing one truncated id**. Of
+the alternative naming schemes measured, the only one that avoided every collision did so by luck
+too, and still stored a truncated identifier. So the column is widened to 120, which in Postgres is
+a catalog-only change that alters no existing value.
+
+#### The truncation also hid 17 stories from the migration itself
+
+This is the finding that justified checking the plan against real rows rather than a fixture.
+
+The migration matches an existing row to a generated story by `story_id`. Run against the test
+fixtures it was clean, because those fixtures generate their ids at today's width and therefore
+match by construction. Run against a read-only snapshot of the **actual production rows**, it
+reported **17 stories as unrecognised** — it would have left them under a superseded release and
+inserted a fresh duplicate of each beside them. Seventeen interns' stories, orphaned silently,
+with the new rows looking perfectly correct.
+
+They are not unrecognised. The database holds
+`curriculum.CAP.certification_item_rubric_review_and_improvem` where the generator now produces
+`..._improvement`. So the migration matches the wide id first and the 60-character form second, and
+repairs the stored value as it re-parents.
+
+The first attempt at that refused, correctly: four generated ids share the prefix
+`curriculum.CAP.module_and_artifact_drafting_for_human_approv` — the capability story and its R0,
+R1 and R4 rung stories. The ambiguity is only apparent, because the per-rung stories did not exist
+while the column was 60 wide, so the candidates are narrowed to the kinds that did. The refusal
+stays in place for a genuine collision between two pre-ladder stories.
+
+#### The ladder's own guard had to be extended to R8
+
+The "no story claims a capability this platform does not have" test caught the new generator on its
+first run, on `learner_success.CAP.daily_at_risk_student_flagging.autonomy:R8`. It was right to:
+R8 is agent-to-agent handoff, this document says that capability does not exist here, and the
+generated story described the behaviour without saying so. Every R8 story now carries that
+disclosure. Suppressing the story would have hidden a real gap and relaxing the guard would have
+been worse than either.
 
 ### Phase 3 — Make promotion a decision
 
