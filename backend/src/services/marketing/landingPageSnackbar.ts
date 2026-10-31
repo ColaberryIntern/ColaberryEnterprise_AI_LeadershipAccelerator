@@ -74,7 +74,7 @@ const SLUG = /^[a-z0-9][a-z0-9-]{0,159}$/;
  */
 export function snackbarScriptTag(input: SnackbarRenderInput): string {
   if (!SLUG.test(input.brandSlug) || !SLUG.test(input.pageSlug)) return '';
-  const feed = `/v1/lp-activity/${input.brandSlug}/${input.pageSlug}`;
+  const feed = `/api/v1/lp-activity/${input.brandSlug}/${input.pageSlug}`;
   return `<script src="/v1/snackbar.js" data-feed="${esc(feed)}" data-interval="${input.config.interval_s}" data-delay="${input.config.first_delay_s}" defer></script>`;
 }
 

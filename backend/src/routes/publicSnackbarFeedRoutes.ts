@@ -5,10 +5,26 @@ import { isSnackbarEnabled, parseSnackbarConfig } from '../services/marketing/la
 import { buildSnackbarFeed } from '../services/marketing/snackbarFeedService';
 
 /**
- * GET /v1/lp-activity/:brand/:slug - the snack bar feed for one published hosted page.
+ * GET /api/v1/lp-activity/:brand/:slug - the snack bar feed for one published hosted page.
  *
  * MOUNT ABOVE `adminRoutes`, next to publicLandingPageRoutes, for the same reason that file
  * documents: anything mounted after adminRoutes 401s.
+ *
+ * WHY `/api/v1/` AND NOT `/v1/`. The kit shipped this as a new top-level `/v1/` prefix, and
+ * `nginxFilenameRouteLocations.test.ts` refused it. That test is right, and the failure mode is
+ * invisible locally: nothing in `nginx.conf` matches `/v1/lp-activity/...`, so on production the
+ * request never reaches this router at all - it falls through to the static root and the SPA
+ * fallback, and the bar silently shows nothing on every page. Express answers it correctly when
+ * hit directly, which is exactly how `/m/` 404'd every signed image on 2026-09-15.
+ *
+ * `/api/v1/` is the existing public namespace (see v1Routes: open-house event, public events
+ * list, sales KB - all unauthenticated GETs behind a rate limiter, the same shape as this one),
+ * and `location /api/` already proxies to the backend. So this needs no nginx change, which also
+ * keeps it clear of a governance boundary.
+ *
+ * `/v1/snackbar.js` stays where it is. It is a genuine static asset under `frontend/public/v1/`,
+ * served from the static root, and that is the collision the kit's path created: one `/v1/`
+ * prefix cannot be both proxied to Express and served from disk.
  *
  * Same visibility rule as the page: only kind='hosted' AND status='published' AND the bar is on.
  * Everything else, including a malformed slug, returns `{ events: [] }` with 200, so the feed
@@ -46,7 +62,7 @@ function sendEmpty(res: Response): void {
 
 const router = Router();
 
-router.get('/v1/lp-activity/:brand/:slug', feedRateLimiter, async (req: Request, res: Response) => {
+router.get('/api/v1/lp-activity/:brand/:slug', feedRateLimiter, async (req: Request, res: Response) => {
   const parsed = paramsSchema.safeParse(req.params);
   if (!parsed.success) { sendEmpty(res); return; }
   const { brand: brandSlug, slug } = parsed.data;

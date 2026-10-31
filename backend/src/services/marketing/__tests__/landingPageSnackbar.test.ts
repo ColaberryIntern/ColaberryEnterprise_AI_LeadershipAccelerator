@@ -40,7 +40,7 @@ describe('snackbarScriptTag', () => {
   it('points at the same-origin script and the page feed', () => {
     const tag = snackbarScriptTag({ brandSlug: 'colaberry-training', pageSlug: 'ai-learning-platform', config: DEFAULT_SNACKBAR_CONFIG });
     expect(tag).toContain('src="/v1/snackbar.js"');
-    expect(tag).toContain('data-feed="/v1/lp-activity/colaberry-training/ai-learning-platform"');
+    expect(tag).toContain('data-feed="/api/v1/lp-activity/colaberry-training/ai-learning-platform"');
   });
   it('emits nothing for a slug that could break out of the attribute', () => {
     expect(snackbarScriptTag({ brandSlug: 'x"><script>', pageSlug: 'a', config: DEFAULT_SNACKBAR_CONFIG })).toBe('');

@@ -2,7 +2,7 @@
  * Colaberry landing-page snack bar ("someone just signed up").
  *
  * Loaded by every hosted landing page whose snack bar is on, as:
- *   <script src="/v1/snackbar.js" data-feed="/v1/lp-activity/<brand>/<slug>"
+ *   <script src="/v1/snackbar.js" data-feed="/api/v1/lp-activity/<brand>/<slug>"
  *           data-interval="8" data-delay="3" defer></script>
  *
  * WHY A FILE AND NOT INLINE. The landing-page CSP is `script-src 'self'` with no
