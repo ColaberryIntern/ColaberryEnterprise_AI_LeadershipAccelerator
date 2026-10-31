@@ -5,6 +5,7 @@ import { useParticipantAuth } from '../../contexts/ParticipantAuthContext';
 import { useBroadcastPlayer } from '../../contexts/BroadcastPlayerContext';
 import BroadcastWatchButton from '../../components/portal/BroadcastWatchButton';
 import CompanionDeck from '../../components/portal/CompanionDeck';
+import LiveWorkspace from '../../components/portal/LiveWorkspace';
 import ProducerStrip from '../../components/portal/ProducerStrip';
 
 /**
@@ -34,12 +35,23 @@ import ProducerStrip from '../../components/portal/ProducerStrip';
  * THE COMPANION IS THE SAME PAGE (L4.7). `companion` moves the persistent player to the top of
  * the screen and puts the one-thumb deck underneath it, rather than introducing a second page
  * that would have to repeat the moment resolution and get it subtly different.
+ *
+ * SO IS THE DESKTOP WORKSPACE. While a class is airing this page is not a status card — it is
+ * the laptop surface DOC 04 asks for, and `LiveWorkspace` is what makes it one. Before that,
+ * the only thing a desktop viewer was offered at `live` was an anchor to `watch_url`, which
+ * resolves to this exact route: the primary watch button linked to the page it was on. The
+ * page no longer reads that field. See LiveWorkspace's header for why the server is right to
+ * keep sending it.
  */
 
 type Moment = 'not_started' | 'live' | 'ended' | 'unknown';
 
 interface MomentResponse {
   moment: Moment;
+  /**
+   * Where a viewer watches. Deliberately unread here: for this page it resolves to this
+   * page. `LiveWorkspace` carries the full reasoning.
+   */
   watch_url: string | null;
 }
 
@@ -64,7 +76,9 @@ const COPY: Record<Moment, { eyebrow: string; title: string; body: string }> = {
   live: {
     eyebrow: 'On air',
     title: 'This class is live now',
-    body: 'Open the class to watch.',
+    // One line for both surfaces. It used to say "Open the class to watch", which was written
+    // when the only affordance was a link somewhere else — and that somewhere else was here.
+    body: 'Everything for this class is on this page.',
   },
   ended: {
     eyebrow: 'Finished',
@@ -109,7 +123,6 @@ export interface LiveSessionPageProps {
 export default function LiveSessionPage({ companion = false }: LiveSessionPageProps = {}): React.ReactElement {
   const { sessionId = '' } = useParams<{ sessionId: string }>();
   const [moment, setMoment] = useState<Moment | null>(null);
-  const [watchUrl, setWatchUrl] = useState<string | null>(null);
   const [info, setInfo] = useState<SessionInfo | null>(null);
   const { isAuthenticated } = useParticipantAuth();
   const { session: playing } = useBroadcastPlayer();
@@ -119,11 +132,9 @@ export default function LiveSessionPage({ companion = false }: LiveSessionPagePr
     try {
       const res = await portalApi.get<MomentResponse>(`/api/portal/sessions/${sessionId}/live-moment`);
       setMoment(res.data.moment);
-      setWatchUrl(res.data.watch_url);
     } catch {
       // A failed check is not a broken link, and saying so would train people to distrust it.
       setMoment('unknown');
-      setWatchUrl(null);
     }
   }, [sessionId]);
 
@@ -175,12 +186,20 @@ export default function LiveSessionPage({ companion = false }: LiveSessionPagePr
   const when = info
     ? [formatDate(info.session_date), formatTime(info.start_time)].filter(Boolean).join(' · ')
     : '';
+  /**
+   * The laptop surface, while something is airing. The card grows for it: 440px is right for
+   * a one-line status and far too narrow for a two-column workspace.
+   */
+  const showWorkspace = !companion && moment === 'live';
 
   return (
     <div className="clv-root">
       <style>{CLV_CSS}</style>
 
-      <main className="clv-card" data-testid="live-session-page">
+      <main
+        className={`clv-card${showWorkspace ? ' is-wide' : ''}`}
+        data-testid="live-session-page"
+      >
         <div className="clv-brand">
           <img src="/colaberry-icon.png" alt="" width={34} height={34} />
           <span className="clv-wordmark" aria-hidden="true">
@@ -215,11 +234,14 @@ export default function LiveSessionPage({ companion = false }: LiveSessionPagePr
 
             <p className="clv-text" data-testid="live-session-body">{copy.body}</p>
 
-            {/* The laptop surface sends the viewer to the workspace. The phone does NOT: it is
-                already the place to watch, and a link away from it would be a link away from
-                the only screen the viewer has. */}
-            {!companion && moment === 'live' && watchUrl && (
-              <a className="clv-btn" href={watchUrl} data-testid="live-session-watch">Watch now</a>
+            {/* The laptop surface IS the workspace, so it gets the interactive rail rather
+                than a link to itself. See LiveWorkspace. */}
+            {showWorkspace && (
+              <LiveWorkspace
+                sessionId={sessionId}
+                roomId={info ? info.room_id : null}
+                isAuthenticated={isAuthenticated}
+              />
             )}
 
             {companion && moment === 'live' && (
@@ -293,6 +315,8 @@ const CLV_CSS = `
   padding:34px 30px 26px;
   text-align:center;
 }
+/* The workspace card. Same chrome, room for two columns. */
+.clv-card.is-wide{ max-width:980px; }
 @media (max-width:520px){ .clv-card{ padding:28px 20px 22px; } }
 
 .clv-brand{ display:flex; align-items:center; justify-content:center; gap:9px; margin-bottom:22px; }
