@@ -14,6 +14,12 @@ export interface SubscriptionKpis {
   otherPaidCount: number;
   staffCount: number;
   arpu: number;
+  /** Dollars/month already inside `mrr` from members whose paid period has ended. */
+  lapsedMrr: number;
+  /** How many of `activeSubscribers` those are. */
+  lapsedSubscribers: number;
+  /** `mrr - lapsedMrr` — the part still actually being collected. */
+  collectibleMrr: number;
 }
 
 export interface PlanBreakdownRow {
@@ -37,7 +43,11 @@ export interface TenureBucket {
   label: string;
   count: number;
   byPlan: Record<SubscriptionPlanKey, number>;
-  retentionPct: number | null;
+  /**
+   * This bucket vs. the one above it, right now — NOT cohort retention, which is why it
+   * can exceed 100%. Renamed from `retentionPct` on 2026-10-31 along with the backend.
+   */
+  snapshotRatioPct: number | null;
 }
 
 export interface AttentionRow {

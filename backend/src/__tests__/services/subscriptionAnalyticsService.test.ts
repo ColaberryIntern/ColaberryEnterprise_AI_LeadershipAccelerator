@@ -150,7 +150,7 @@ describe('getSubscriptionAnalytics', () => {
     expect(byPlan.deposit_holder.amount).toBe(100); // $50 x 2
 
     expect(result.tenureFunnel[0]).toEqual(
-      expect.objectContaining({ label: 'Explorer', count: 3, retentionPct: null })
+      expect.objectContaining({ label: 'Explorer', count: 3, snapshotRatioPct: null })
     );
   });
 
@@ -158,7 +158,13 @@ describe('getSubscriptionAnalytics', () => {
     mockRows([]);
     const result = await getSubscriptionAnalytics(NOW);
 
-    expect(result.kpis).toEqual({ mrr: 0, arr: 0, activeSubscribers: 0, compedSeats: 0, otherPaidCount: 0, staffCount: 0, arpu: 0 });
+    // Exact, not objectContaining: this is the pin that fails when a KPI is added without
+    // deciding what its empty value means. All three lapsed fields are 0 rather than null,
+    // because "no lapsed revenue" is a real measurement here, not an absent one.
+    expect(result.kpis).toEqual({
+      mrr: 0, arr: 0, activeSubscribers: 0, compedSeats: 0, otherPaidCount: 0, staffCount: 0, arpu: 0,
+      lapsedMrr: 0, lapsedSubscribers: 0, collectibleMrr: 0,
+    });
     expect(result.upcomingPayments).toEqual([]);
     expect(result.attention).toEqual([]);
     expect(result.tenureFunnel[0].count).toBe(0);
@@ -240,6 +246,82 @@ describe('getSubscriptionAnalytics', () => {
     expect(result.upcomingPayments).toEqual([]);
     expect(result.attention).toHaveLength(1);
     expect(result.attention[0]).toEqual(expect.objectContaining({ enrollment_id: 'enr-lapsed', kind: 'lapsed', days_overdue: 5 }));
+  });
+
+  /* ---- The lapsed split -------------------------------------------------
+   *
+   * These pin a DELIBERATE choice rather than a convenience: a lapsed member
+   * stays inside `mrr`, and the overstatement is reported alongside it. If
+   * someone later decides MRR should exclude them, the first test here is what
+   * fails, which is the point — that is a pricing decision and it should have to
+   * be made on purpose, not arrive as a passing refactor.
+   */
+
+  it('keeps a lapsed member inside MRR and reports the overstatement beside it', async () => {
+    mockRows([
+      row({ enrollment_id: 'enr-lapsed', plan: 'monthly', amount_cents: 19900, current_period_end: new Date(NOW - 61 * DAY_MS).toISOString() }),
+    ]);
+    const result = await getSubscriptionAnalytics(NOW);
+
+    // Unchanged behaviour, asserted so a silent redefinition cannot pass.
+    expect(result.kpis.mrr).toBeCloseTo(199, 2);
+    expect(result.kpis.activeSubscribers).toBe(1);
+
+    // The part that was missing entirely before.
+    expect(result.kpis.lapsedMrr).toBeCloseTo(199, 2);
+    expect(result.kpis.lapsedSubscribers).toBe(1);
+    expect(result.kpis.collectibleMrr).toBeCloseTo(0, 2);
+  });
+
+  it('splits MRR into collectible and lapsed across a mix, and the two always sum to MRR', async () => {
+    mockRows([
+      row({ enrollment_id: 'enr-ok', plan: 'monthly', amount_cents: 19900 }), // period end in the future
+      row({ enrollment_id: 'enr-annual-ok', plan: 'annual', amount_cents: 178800 }), // $149/mo
+      row({ enrollment_id: 'enr-late', plan: 'monthly', amount_cents: 19900, current_period_end: new Date(NOW - 31 * DAY_MS).toISOString() }),
+    ]);
+    const result = await getSubscriptionAnalytics(NOW);
+
+    expect(result.kpis.mrr).toBeCloseTo(199 + 149 + 199, 2);
+    expect(result.kpis.lapsedMrr).toBeCloseTo(199, 2);
+    expect(result.kpis.lapsedSubscribers).toBe(1);
+    expect(result.kpis.collectibleMrr).toBeCloseTo(199 + 149, 2);
+
+    // The invariant, stated as an invariant: these three can never disagree.
+    expect(result.kpis.collectibleMrr + result.kpis.lapsedMrr).toBeCloseTo(result.kpis.mrr, 2);
+  });
+
+  it('does not count a FAILED checkout as lapsed revenue — a failed attempt is not an expired period', async () => {
+    mockRows([
+      row({ enrollment_id: 'enr-failed', amount_paid: '199.00', plan: 'monthly', sub_status: 'failed', current_period_end: null, started_at: null }),
+    ]);
+    const result = await getSubscriptionAnalytics(NOW);
+
+    // They are still counted as paying (via amount_paid) and still raised for attention,
+    // but lapsed MRR means "a period that ended", and this member has no period at all.
+    expect(result.kpis.mrr).toBeCloseTo(199, 2);
+    expect(result.attention[0]).toEqual(expect.objectContaining({ kind: 'failed' }));
+    expect(result.kpis.lapsedMrr).toBe(0);
+    expect(result.kpis.lapsedSubscribers).toBe(0);
+    expect(result.kpis.collectibleMrr).toBeCloseTo(199, 2);
+  });
+
+  it('never counts a comped seat or a staff account as lapsed revenue, however expired it looks', async () => {
+    const expired = new Date(NOW - 90 * DAY_MS).toISOString();
+    mockRows(
+      [
+        row({ enrollment_id: 'enr-comp-expired', plan: 'comp', amount_cents: 0, current_period_end: expired }),
+        row({ enrollment_id: 'enr-staff-expired', is_staff: true, plan: 'monthly', amount_cents: 19900, current_period_end: expired }),
+      ],
+      [],
+      [],
+    );
+    const result = await getSubscriptionAnalytics(NOW);
+
+    // Neither contributed to MRR in the first place, so neither can overstate it.
+    expect(result.kpis.lapsedMrr).toBe(0);
+    expect(result.kpis.lapsedSubscribers).toBe(0);
+    expect(result.kpis.mrr).toBe(0);
+    expect(result.attention).toEqual([]);
   });
 
   it('flags a failed checkout attempt, still counting the member as paying via their enrollment amount_paid (their only subscription row is failed, so it cannot supply the plan)', async () => {

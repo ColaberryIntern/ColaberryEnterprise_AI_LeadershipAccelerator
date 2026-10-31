@@ -21,14 +21,27 @@ const monthSubtitle = (month: number): string =>
   `Subscribers currently in their ${month === 5 ? '5th month or later' : `${ORDINAL[month]} month`}, sorted by next payment date.`;
 
 /** Tenure funnel — a snapshot heatmap of how many current subscribers are how
- *  many months into their subscription, split by plan, with a retention %
- *  against the bucket above. Explorer (free trial, no subscription yet) sits
- *  at the top; higher tenure buckets get thinner as people churn out. This is
- *  a headcount-ratio snapshot, not per-person cohort tracking across time —
- *  the subscription model is too new for a full acquisition-month matrix to
- *  carry enough data yet. Clicking a bucket's label/track drills into
- *  everyone in that month; clicking one of its colored plan segments narrows
- *  further to just that plan within that month. */
+ *  many months into their subscription, split by plan, with a ratio against the
+ *  bucket above. Explorer (free trial, no subscription yet) sits at the top.
+ *  Clicking a bucket's label/track drills into everyone in that month; clicking
+ *  one of its colored plan segments narrows further to just that plan.
+ *
+ *  ── THE RATIO IS NOT RETENTION ─────────────────────────────────────────────
+ *
+ *  The caption used to read "how many carry over from the bucket above", which
+ *  describes retention — and the page was rendering 114% and 213% under it.
+ *  Retention above 100% is impossible, so the copy was making a promise the
+ *  number could not keep.
+ *
+ *  The number itself is fine. It compares two buckets AS THEY STAND TODAY, and
+ *  those buckets hold different cohorts, so a later month holding more members
+ *  than an earlier one is ordinary rather than anomalous. Nothing here tracks a
+ *  person across time; the subscription model is too new for an acquisition-month
+ *  matrix to carry enough data yet.
+ *
+ *  So the fix is copy plus the field name behind it (`retentionPct` ->
+ *  `snapshotRatioPct`), not arithmetic. The old name is what the caption was
+ *  written against, and leaving it would invite the same sentence back. */
 export default function TenureRetentionFunnel({ buckets }: Props) {
   const [showExplorers, setShowExplorers] = useState(false);
   const [monthDrill, setMonthDrill] = useState<{ month: number; label: string } | null>(null);
@@ -38,7 +51,7 @@ export default function TenureRetentionFunnel({ buckets }: Props) {
   return (
     <SectionCard
       title="Subscriber tenure"
-      subtitle="Who's how many months in, and how many carry over from the bucket above."
+      subtitle="How many months in each subscriber is. The % compares a bucket with the one above it today — a snapshot across different cohorts, not retention, so it can exceed 100%."
       icon="stack-line"
     >
       <div className="d-flex align-items-center gap-3 mb-3 small text-muted">
@@ -101,7 +114,18 @@ export default function TenureRetentionFunnel({ buckets }: Props) {
             </span>
             <span className="text-nowrap text-end" style={{ width: 108, fontVariantNumeric: 'tabular-nums' }}>
               <span className="fw-semibold">{b.count}</span>
-              {b.retentionPct !== null && <span className="text-muted"> ({b.retentionPct}%)</span>}
+              {b.snapshotRatioPct !== null && (
+                <span
+                  className="text-muted"
+                  // Names the bucket being compared against, so the number reads as the
+                  // comparison it is. Without this the figure floats free and the nearest
+                  // available meaning is "retention".
+                  title={`${b.snapshotRatioPct}% of ${buckets[i - 1]?.label ?? 'the bucket above'}'s headcount, measured today. A comparison between two different groups of people — not retention, which is why it can exceed 100%.`}
+                >
+                  {' '}
+                  ({b.snapshotRatioPct}%)
+                </span>
+              )}
             </span>
           </div>
         );

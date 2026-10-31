@@ -34,6 +34,34 @@ export interface SubscriptionKpis {
   otherPaidCount: number; // paid members whose plan/amount can't be classified (e.g. sponsor-invoiced)
   staffCount: number; // real Colaberry team members — never a revenue/funnel signal, see IS_STAFF_SQL
   arpu: number; // mrr / activeSubscribers
+
+  /* ---- The lapsed split -------------------------------------------------
+   *
+   * `mrr` counts every annual/monthly member, INCLUDING those whose paid period
+   * ended and who have not renewed. That is not an oversight to patch silently:
+   * renewal here is a MANUAL checkout, not an auto-charge, so a member two days
+   * past their period end is ordinary friction rather than churn, and dropping
+   * them from MRR on day one would make the headline swing on nothing.
+   *
+   * At 61 days overdue it is not friction either, and until now the tile carried
+   * no caveat at all — so ARR could be quoted with roughly a quarter of it coming
+   * from people who have stopped paying.
+   *
+   * So `mrr` keeps its existing definition (no number moves under anyone who has
+   * been reading this page) and the overstatement is made VISIBLE beside it.
+   * Whether to redefine MRR to exclude lapsed members past some grace period is a
+   * pricing decision, not an implementation one; this split is what lets whoever
+   * owns the number see the cost of either choice before making it. Same
+   * reasoning as ESCALATION-002: correcting a figure people have read for months
+   * is a deliberate act, not a side effect.
+   */
+
+  /** Dollars/month already inside `mrr` from members whose paid period has ended. */
+  lapsedMrr: number;
+  /** How many of `activeSubscribers` those are. */
+  lapsedSubscribers: number;
+  /** `mrr - lapsedMrr` — the part still actually being collected. */
+  collectibleMrr: number;
 }
 
 export interface PlanBreakdownRow {
@@ -57,7 +85,18 @@ export interface TenureBucket {
   label: string; // 'Explorer' | 'Month 1' | 'Month 2' | ... | 'Month 5+'
   count: number;
   byPlan: Record<SubscriptionPlanKey, number>;
-  retentionPct: number | null; // vs. previous bucket; null for the first bucket
+  /**
+   * This bucket's headcount as a percentage of the bucket above it, right now.
+   *
+   * NOT cohort retention, and deliberately no longer named as though it were. The
+   * buckets hold DIFFERENT cohorts, so the ratio legitimately exceeds 100% whenever a
+   * later month holds more members than an earlier one — which is exactly what put
+   * "213%" on the page under a caption promising carry-over. The old name was
+   * `retentionPct`, and the name is what made the wrong reading the natural one.
+   *
+   * null for the first bucket, which has nothing above it.
+   */
+  snapshotRatioPct: number | null;
 }
 
 export interface AttentionRow {
@@ -305,7 +344,10 @@ function monthLabel(oneBased: number): string {
 export async function getSubscriptionAnalytics(nowMs: number = Date.now()): Promise<SubscriptionAnalytics> {
   const members = await classifyAllMembers(nowMs);
 
-  const kpis: SubscriptionKpis = { mrr: 0, arr: 0, activeSubscribers: 0, compedSeats: 0, otherPaidCount: 0, staffCount: 0, arpu: 0 };
+  const kpis: SubscriptionKpis = {
+    mrr: 0, arr: 0, activeSubscribers: 0, compedSeats: 0, otherPaidCount: 0, staffCount: 0, arpu: 0,
+    lapsedMrr: 0, lapsedSubscribers: 0, collectibleMrr: 0,
+  };
   const planCounts: Record<SubscriptionPlanKey, { count: number; amount: number }> = {
     annual: { count: 0, amount: 0 },
     monthly: { count: 0, amount: 0 },
@@ -354,6 +396,15 @@ export async function getSubscriptionAnalytics(nowMs: number = Date.now()): Prom
           enrollment_id: enrollmentId, payer_name: payerName, payer_email: payerEmail, kind: 'lapsed', plan,
           reference_date: new Date(dueMs).toISOString(), days_overdue: Math.floor((nowMs - dueMs) / DAY_MS),
         });
+
+        // This member is ALREADY counted in `mrr` above — the plan test is the same one
+        // that admitted them. Recording the overlap here, in the branch that proves they
+        // lapsed, is what keeps the two figures from drifting: there is no second pass
+        // over the members that could disagree about who is lapsed.
+        if (plan === 'annual' || plan === 'monthly') {
+          kpis.lapsedMrr += monthlyAmount;
+          kpis.lapsedSubscribers += 1;
+        }
       }
     }
 
@@ -377,6 +428,8 @@ export async function getSubscriptionAnalytics(nowMs: number = Date.now()): Prom
 
   kpis.arr = kpis.mrr * 12;
   kpis.arpu = kpis.activeSubscribers > 0 ? kpis.mrr / kpis.activeSubscribers : 0;
+  // Derived rather than accumulated, so it cannot disagree with its own two inputs.
+  kpis.collectibleMrr = kpis.mrr - kpis.lapsedMrr;
 
   const { freeTrial: freeTrialCount, depositHolders, depositTotal } = await fetchExplorerCounts();
   planCounts.deposit_holder = { count: depositHolders, amount: depositTotal };
@@ -407,16 +460,18 @@ export async function getSubscriptionAnalytics(nowMs: number = Date.now()): Prom
 
   // Tenure funnel: bucket every anchorable member by months since their tenure
   // anchor. Explorer = free-trial signups with no deposit and no subscription.
-  // retentionPct is a snapshot ratio (this bucket's headcount vs. the bucket
-  // above it, right now) — not per-person cohort tracking across time, since
+  // snapshotRatioPct is exactly that — this bucket's headcount vs. the bucket
+  // above it, right now — and NOT per-person cohort tracking across time, since
   // the subscription model only launched recently and there isn't enough
-  // history yet for a true cohort-retention curve.
+  // history yet for a true cohort-retention curve. It was called retentionPct
+  // until 2026-10-31; the rename is the fix, because the name is what the UI
+  // copy was written against when it promised "carry over from the bucket above".
   const buckets: TenureBucket[] = [];
-  buckets.push({ label: 'Explorer', count: freeTrialCount, byPlan: emptyPlanCounts(), retentionPct: null });
+  buckets.push({ label: 'Explorer', count: freeTrialCount, byPlan: emptyPlanCounts(), snapshotRatioPct: null });
   bucketCounts.forEach((b, i) => {
     const prev = buckets[buckets.length - 1];
-    const retentionPct = prev.count > 0 ? Math.round((b.count / prev.count) * 100) : null;
-    buckets.push({ label: monthLabel(i + 1), count: b.count, byPlan: b.byPlan, retentionPct });
+    const snapshotRatioPct = prev.count > 0 ? Math.round((b.count / prev.count) * 100) : null;
+    buckets.push({ label: monthLabel(i + 1), count: b.count, byPlan: b.byPlan, snapshotRatioPct });
   });
 
   return { kpis, planBreakdown, upcomingPayments, tenureFunnel: buckets, attention };
