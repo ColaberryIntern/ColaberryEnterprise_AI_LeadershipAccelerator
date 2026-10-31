@@ -168,6 +168,12 @@ function ManagementPreviewPage() {
     setRegBusy(true); setRegErr(null);
     try {
       const res = await registerOrg({ name, company: regCompany.trim() || undefined, email: workEmail });
+      // C103: an email that already has an account gets a sign-in link, not a session.
+      if (!res.jwt) {
+        setRegErr(res.message || 'You already have an account. Check your email for a sign-in link.');
+        setRegBusy(false);
+        return;
+      }
       persistParticipantSession(res.jwt);
       window.location.assign('/portal/company'); // full reload → auth context picks up the token
     } catch {

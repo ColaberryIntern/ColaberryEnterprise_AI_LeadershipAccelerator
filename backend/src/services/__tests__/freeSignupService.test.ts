@@ -67,6 +67,21 @@ describe('freeSignupService', () => {
       // programme must not move them onto it and gate them to Week 0.
       expect(existing.update).not.toHaveBeenCalled();
       expect(res.disposition).toBe('reused');
+      // C103: typing someone's email must not sign you in as them.
+      expect(res.jwt).toBeNull();
+    });
+
+    it('C103: an account that only gained the learner programme gets no session either', async () => {
+      const existing = {
+        id: 'enr-org', full_name: 'Owner', email: 'owner@example.com', tier: 'guest',
+        payment_status: null, enrollment_type: 'standard', update: jest.fn(),
+      };
+      (Enrollment.findAll as jest.Mock).mockResolvedValue([existing]);
+
+      const res = await createFreeAccount({ full_name: 'Anyone', email: 'owner@example.com', programme: 'learner' });
+
+      expect(res.created).toBe(false);
+      expect(res.jwt).toBeNull();
     });
 
     it('rejects missing email or name', async () => {
