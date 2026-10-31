@@ -36,6 +36,24 @@ const q = (t, b) => sql.query(t, { bind: b || [], type: QueryTypes.SELECT });
 const IS_EMPTY = `(acceptance IS NULL OR acceptance::text IN ('null','[]','{}','""'))`;
 const IS_DOMAIN = `project_id IN (SELECT student_project_id FROM agent_domain_projects)`;
 
+/**
+ * The shared-foundation stories: the Command Center, the five research stories and the legacy
+ * migration plan, seven per domain.
+ *
+ * This used to be `release_key IN ('r0','r1')`, which identified the same set only while a release
+ * meant a PHASE OF WORK. Phase 2 of `AUTONOMY_RELEASE_MIGRATION.md` made a release a RUNG OF
+ * AUTONOMY and moved all seven to `autonomy:R0`, so the old predicate matches nothing -- silently.
+ * It would have printed "0 stories with an empty acceptance field" and exited 0, which is how a
+ * repair script stops repairing without anybody noticing.
+ *
+ * `story_kind` is the column that means what this script means. It is NULL on every row
+ * provisioned before the ladder, so this accepts the kind where it is set and the old release key
+ * where it is not, and stays correct whether or not the migration has run.
+ */
+const IS_SHARED_STORY =
+  `(story_kind IN ('command_center','research','legacy_migration')`
+  + ` OR (story_kind IS NULL AND release_key IN ('r0','r1')))`;
+
 async function main() {
   console.log(APPLY ? '*** APPLYING ***\n' : '*** DRY RUN - nothing is written ***\n');
   console.log(`families in the table: ${RESEARCH_FAMILIES.length}`);
@@ -43,9 +61,9 @@ async function main() {
   const rows = await q(`
     SELECT id::text AS id, story_id, release_key
       FROM student_tasks
-     WHERE ${IS_DOMAIN} AND release_key IN ('r0','r1') AND ${IS_EMPTY}
+     WHERE ${IS_DOMAIN} AND ${IS_SHARED_STORY} AND ${IS_EMPTY}
      ORDER BY story_id`);
-  console.log(`r0/r1 stories with an empty acceptance field: ${rows.length}\n`);
+  console.log(`shared-foundation stories with an empty acceptance field: ${rows.length}\n`);
 
   const planned = [];
   const unknown = [];
@@ -88,7 +106,7 @@ async function main() {
     SELECT release_key, count(*)::int AS n,
            count(*) FILTER (WHERE NOT ${IS_EMPTY})::int AS acc
       FROM student_tasks
-     WHERE ${IS_DOMAIN} AND release_key IN ('r0','r1')
+     WHERE ${IS_DOMAIN} AND ${IS_SHARED_STORY}
      GROUP BY release_key ORDER BY release_key`);
   for (const b of back) console.log(`  ${b.release_key}: ${b.acc} of ${b.n} carry acceptance criteria`);
 

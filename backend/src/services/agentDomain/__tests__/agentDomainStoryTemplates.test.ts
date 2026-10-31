@@ -27,9 +27,43 @@ describe('the generator produced real content, so a clean sweep means something'
     expect(everyStory.length).toBeGreaterThan(400);
   });
 
-  it('every domain has all three releases', () => {
+  it('every domain has the ten rungs, then the three originals kept empty', () => {
+    // Exact equality, and in this order, because the order IS the board: positions 0-9 are the
+    // ladder and 10-12 are the superseded workstreams sitting below it. An intern opening the
+    // board must land on the rung they are on, not on three empty lists.
+    const expected = [
+      'autonomy:R0', 'autonomy:R1', 'autonomy:R2', 'autonomy:R3', 'autonomy:R4',
+      'autonomy:R5', 'autonomy:R6', 'autonomy:R7', 'autonomy:R8', 'autonomy:R9',
+      'r0', 'r1', 'r2',
+    ];
     for (const p of plans) {
-      expect(p.releases.map((r) => r.cluster)).toEqual(['r0', 'r1', 'r2']);
+      expect(p.releases.map((r) => r.cluster)).toEqual(expected);
+      expect(p.releases.map((r) => r.position)).toEqual([...Array(13).keys()]);
+    }
+  });
+
+  it('the three original releases are KEPT, which is what makes this reversible', () => {
+    // `AUTONOMY_RELEASE_MIGRATION.md` relies on them: "They end up empty, and they are the
+    // rollback path: one UPDATE puts every story back." Dropping them would make the migration
+    // one-way, so their survival is asserted rather than assumed.
+    for (const p of plans) {
+      for (const cluster of ['r0', 'r1', 'r2']) {
+        expect(p.releases.map((r) => r.cluster)).toContain(cluster);
+      }
+      // And nothing is generated into them any more.
+      expect(p.stories.filter((s) => ['r0', 'r1', 'r2'].includes(s.release_key))).toHaveLength(0);
+    }
+  });
+
+  it('a kept release and its rung are NOT spelled the same', () => {
+    // The migration design names this as "most of why this drifted": lowercase `r0/r1/r2` looks
+    // exactly like the ladder and is a different axis. `r0` and `autonomy:R0` now coexist in one
+    // project, and the only reason that is safe is that they are distinct strings. There is also
+    // a `(project_id, cluster)` unique index that a collision would hit.
+    for (const p of plans) {
+      const clusters = p.releases.map((r) => r.cluster);
+      expect(new Set(clusters).size).toBe(clusters.length);
+      expect(clusters).not.toContain('R0');
     }
   });
 });
@@ -203,15 +237,25 @@ describe('nothing is validated, and nothing claims to be', () => {
 });
 
 describe('every implementation story traces to a capability, or justifies not doing so', () => {
-  it('no untraced implementation story exists', () => {
+  // The two kinds that trace to one capability. `release_behaviour` joined them at Phase 2: a
+  // per-rung story is one capability's behaviour at one authority level, so it is traced exactly
+  // like the capability story it hangs off. This used to read `kind !== 'implementation'`, which
+  // meant "the shared-foundation stories" only for as long as there were no other traced kinds --
+  // it is spelled out now so adding a kind cannot quietly change what the test asserts.
+  const TRACED_KINDS = ['implementation', 'release_behaviour'];
+
+  it('no untraced story of a traced kind exists', () => {
     const untraced = everyStory.filter(
-      (s) => s.kind === 'implementation' && !s.capability_id,
+      (s) => TRACED_KINDS.includes(s.kind) && !s.capability_id,
     );
     expect(untraced).toEqual([]);
   });
 
-  it('every non-implementation story gives a shared-foundation reason instead', () => {
-    for (const s of everyStory.filter((x) => x.kind !== 'implementation')) {
+  it('every shared-foundation story gives a reason instead', () => {
+    const shared = everyStory.filter((x) => !TRACED_KINDS.includes(x.kind));
+    // 7 per domain: the Command Center, the five research stories and the legacy migration plan.
+    expect(shared).toHaveLength(70);
+    for (const s of shared) {
       expect(s.capability_id).toBeNull();
       expect(s.shared_foundation_reason).toBeTruthy();
     }
