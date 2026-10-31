@@ -14,6 +14,7 @@ import { careerBoard, eventsBoard, libraryBoard, portfolioBoard, progressBoard, 
 import { certPrepSummary, classroomSummary, plainSummary, projectsSummary } from './pageSummary';
 import type { ClassroomFeed, PageSummary } from './pageSummary';
 import { accountRows, useAccountFacts } from '../admissions/accountFacts';
+import { departuresBoard, fetchStudioFacts, type StudioProjectFacts } from './departures';
 import { aheadBoard, pathAhead, todayFinished } from '../pathAhead';
 
 /**
@@ -84,6 +85,14 @@ export function usePageSummary(id: BuildingId, open: boolean, name: string, audi
     return () => { alive = false; };
   }, [id, open, name, wallFetch, audience]);
   const projects = useProjectsList(); // a local store read (cheap); the page uses the same list
+  // C85: the Project Studio's Departures board orders the list by the server's "last worked"; a failed read keeps list order
+  const [studioFacts, setStudioFacts] = useState<Map<string, StudioProjectFacts> | null>(null);
+  useEffect(() => {
+    if (!open || id !== 'studio') return undefined;
+    let alive = true;
+    cached('studio-facts', fetchStudioFacts).then((f) => { if (alive) setStudioFacts(f); }, () => { if (alive) setStudioFacts(null); });
+    return () => { alive = false; };
+  }, [id, open]);
   const account = useAccountFacts(open && id === 'admissions'); // C21: the Admissions room's "Your account" wall board
   const [fetched, setFetched] = useState<{ id: BuildingId; s: PageSummary } | null>(null);
   useEffect(() => {
@@ -101,7 +110,7 @@ export function usePageSummary(id: BuildingId, open: boolean, name: string, audi
     return () => { alive = false; };
   }, [id, open]);
   if (!open) return null;
-  if (id === 'studio') return { ...projectsSummary(projects), doorName: name };
+  if (id === 'studio') return { ...projectsSummary(projects), sideTop: departuresBoard(projects, studioFacts, Date.now()), doorName: name };
   if (id === 'testing') return fetched?.id === id ? { ...fetched.s, doorName: name } : null;
   if (id === 'lecture') return fetched?.id === id ? fetched.s : null;
   // C21: Admissions draws its own board (plans & pricing); the summary carries only the left wall's "Your account"
