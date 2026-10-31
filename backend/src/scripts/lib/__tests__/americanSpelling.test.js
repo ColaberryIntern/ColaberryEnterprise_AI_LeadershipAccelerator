@@ -57,6 +57,35 @@ describe('the British-spelling detector', () => {
   });
 });
 
+/**
+ * The word list is a plain object literal, so a bare `MAP[word]` also finds everything on
+ * `Object.prototype`. Prose containing the word "constructor" was reported as a British spelling
+ * whose American form is `function Object() { [native code] }`. This gate runs over prose ABOUT
+ * code, where these words are ordinary, and it exits 1 - so an inherited key is a false failure
+ * on a gate rather than a curiosity. It was found by a real artifact describing an
+ * `err.constructor.name` defect.
+ */
+describe('inherited Object keys are not British spellings', () => {
+  it.each(['constructor', 'toString', 'valueOf', 'hasOwnProperty', 'isPrototypeOf', '__proto__'])(
+    'leaves the inherited key %s alone',
+    (word) => {
+      expect(findBritishSpelling(word)).toBeNull();
+    },
+  );
+
+  it('and the same words inside ordinary prose do not trip the scan', () => {
+    expect(findBritishSpelling('The constructor name is inherited from the prototype')).toBeNull();
+  });
+
+  // The control: the fix must not have turned the detector off. A word genuinely in the list
+  // still has to be found, including through an inflection, which is a separate lookup path.
+  it('CONTROL: a real British spelling is still detected, inflections included', () => {
+    expect(findBritishSpelling('behaviour')).toBe('behaviour');
+    expect(findBritishSpelling('organising')).toBe('organising');
+    expect(findBritishSpelling('enquiries')).toBe('enquiries');
+  });
+});
+
 describe('the suggested American form keeps the inflection', () => {
   // The bug this block exists for: "colours" -> "color" dropped the plural, and the sweep
   // acting on that suggestion rewrote a "## Colours" heading to "## Color".
