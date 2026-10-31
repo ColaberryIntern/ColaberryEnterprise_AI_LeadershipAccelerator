@@ -28,6 +28,10 @@ export const FLAGS = {
   // (default off) behind its OWN flag — distinct from govIngestion (already on) so deploying does not auto-run it.
   // Narrow by design: v1 feed carries the close DATE only, never amendments/meetings (no programmatic Bonfire).
   govDailySync: process.env.ENABLE_GOV_DAILY_SYNC === 'true',
+  // Gov pursuit daily SWEEP (PR 2 of the vetting pipeline) — hides low-fit discovery rows SILENTLY and emails the
+  // DRI two prompts (upload requirements -> vet + assign). Ships DARK (default off) behind its OWN flag, distinct
+  // from govDailySync (tracking only), so registering/deploying it changes nothing until ENABLE_GOV_OPP_SWEEP=true.
+  govOpportunitySweep: process.env.ENABLE_GOV_OPP_SWEEP === 'true',
   // Gov solicitation extractor AI comprehension pass. Ships DARK (default off). The regex extractor is unchanged;
   // with the flag on, the read-only /extract-requirements route ALSO runs a quote-verified AI pass and merges it
   // AFTER the deterministic rows (never renumbering or removing one). Flag off = byte-identical deterministic output.

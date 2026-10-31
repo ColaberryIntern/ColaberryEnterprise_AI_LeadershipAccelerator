@@ -158,6 +158,7 @@ export const KNOWN_SCHEDULED_NAMES_WITH_NO_SEED_ROW: ReadonlyArray<string> = [
   'CommunityDigest', // schedulerService.ts:3565, 0 8 * * *; daily community digest mail
   'FeedReleaseTick', // schedulerService.ts:2065, */15 * * * *; publishes cards whose release_date arrived
   'GithubWriteAccessReconcile', // schedulerService.ts:1924, 23 6 * * *; accepts student repo invitations
+  'GovOpportunityDailySweep', // DYNAMIC_SCHEDULE_REGISTRY, daily 07:30; dark behind ENABLE_GOV_OPP_SWEEP, no seed row (PR 2)
   'GovOpportunityDailySync', // DYNAMIC_SCHEDULE_REGISTRY, daily 07:00; no seed row ever written
   'HotLeadEscalation', // schedulerService.ts:2970, 3,18,33,48 14-22 * * 1-5; escalates hot leads to a call
   'InboxCaseAutoSync', // schedulerService.ts:2561, 0 * * * *; turns classified inbox mail into Cases
