@@ -4,6 +4,7 @@ import StatCard from '../admin/shell/StatCard';
 import StatusBadge from '../admin/shell/StatusBadge';
 import AsyncPanel from './AsyncPanel';
 import KnowledgeUploadPanel from './KnowledgeUploadPanel';
+import KnowledgeReviewPanel from './KnowledgeReviewPanel';
 import { useExplorerData } from './useExplorerData';
 import {
   getContentHealth,
@@ -185,6 +186,15 @@ function ContentRefreshButton({ onDone }: { onDone: () => void }) {
 
 export default function ContentTab() {
   const [date, setDate] = useState('');
+  /**
+   * Bumped when an upload stores something, so the review queue below re-reads.
+   *
+   * A counter rather than a callback the panel exposes: the upload and the queue are
+   * siblings that know nothing about each other, and the alternative — leaving the queue
+   * stale until the next navigation — shows a reviewer "nothing is waiting on you"
+   * seconds after they uploaded the thing that is.
+   */
+  const [uploadedCount, setUploadedCount] = useState(0);
   const query = useMemo(() => (date ? { date } : {}), [date]);
   const health = useExplorerData(
     () => getContentHealth(query),
@@ -202,7 +212,15 @@ export default function ContentTab() {
         to feed the composer. Nested inside, the upload would vanish exactly when it is
         wanted, and the page would look like it had no answer to its own empty state.
       */}
-      <KnowledgeUploadPanel />
+      <KnowledgeUploadPanel onUploaded={() => setUploadedCount((n) => n + 1)} />
+
+      {/*
+        Directly under the upload, and outside the AsyncPanel for the same reason it is:
+        the queue is where an upload GOES, and the two reading as one flow is the point.
+        A reviewer who uploads a policy and then cannot find where to approve it is the
+        failure this placement avoids.
+      */}
+      <KnowledgeReviewPanel reloadKey={uploadedCount} />
 
       <AsyncPanel
         state={health}
