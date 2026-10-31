@@ -3,6 +3,7 @@ import { z } from 'zod';
 import {
   registerManager, inviteMembers, getOverview, getRoster, getMemberDetail, getFeed,
 } from '../services/orgService';
+import { emailSignInLinkInstead } from '../services/signup/existingAccountSignIn';
 
 // ── Validation schemas (Zod v4 — read .issues, not .errors) ──────────────────
 
@@ -37,6 +38,12 @@ export async function handleOrgRegister(req: Request, res: Response, next: NextF
   }
   try {
     const result = await registerManager(parsed.data);
+    // C103: the email already had an account, so no session and no org details for
+    // whoever typed it; the owner gets a sign-in link.
+    if (result.existing_account) {
+      res.status(200).json(await emailSignInLinkInstead(parsed.data.email));
+      return;
+    }
     res.status(201).json(result);
   } catch (err) { next(err); }
 }

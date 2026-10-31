@@ -7,6 +7,7 @@ import {
 } from '../services/participantService';
 import { joinLiveSession, leaveMeetingSession } from '../services/liveSessionAttendanceService';
 import { createFreeAccount } from '../services/freeSignupService';
+import { emailSignInLinkInstead } from '../services/signup/existingAccountSignIn';
 import { portalFreeSignupSchema } from '../schemas/enrollmentSchema';
 import { getPointsSummary } from '../services/pointsService';
 import { getBandForEnrollment } from '../services/progression/progressionService';
@@ -306,6 +307,8 @@ export async function handleFreeSignup(req: Request, res: Response, next: NextFu
         userAgent: typeof req.get === 'function' ? req.get('user-agent') ?? null : null,
       },
     });
+    // C103: an existing account gets a sign-in link, never a session.
+    if (!result.jwt) return res.status(200).json(await emailSignInLinkInstead(email));
     res.status(result.created ? 201 : 200).json(result);
   } catch (err) { next(err); }
 }

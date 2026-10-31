@@ -93,6 +93,11 @@ export interface RegisterManagerResult {
    * this change exists to end.
    */
   jwt: string | null;
+  /**
+   * C103: the manager's email already had a training account, so `jwt` is null and
+   * the public route must email a sign-in link instead of answering with this result.
+   */
+  existing_account: boolean;
   organization: { id: string; name: string; owner_enrollment_id: string | null; organization_type: string };
   /** Null for consulting accounts, which are deliberately not enrolled. */
   enrollment: { id: string; full_name: string; email: string; tier: string } | null;
@@ -370,6 +375,7 @@ export async function registerManager(input: RegisterManagerInput): Promise<Regi
     // minting one anyway would hand a portal token to an account with no portal
     // presence.
     jwt: free?.jwt ?? null,
+    existing_account: Boolean(free && !free.created),
     organization: {
       id: organization.id,
       name: organization.name,

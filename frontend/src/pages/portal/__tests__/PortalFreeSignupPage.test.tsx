@@ -124,6 +124,30 @@ describe('a successful signup identifies the visitor', () => {
   });
 });
 
+describe('C103: an email that already has an account', () => {
+  const MESSAGE = 'You already have an account with this email. We sent you a sign-in link; it expires in 24 hours.';
+  beforeEach(() => { mockFreeSignup.mockResolvedValue({ check_email: true, message: MESSAGE }); });
+
+  it('is not signed in and stays on the page', async () => {
+    await mount();
+    await fillAndSubmit();
+
+    expect(mockLogin).not.toHaveBeenCalled();
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
+  it('is told to check their email, as a status rather than an error', async () => {
+    await mount();
+    await fillAndSubmit();
+
+    const note = container.querySelector('[data-testid="cbfs-check-email"]');
+    expect(note?.textContent).toBe(MESSAGE);
+    expect(note?.getAttribute('role')).toBe('status');
+    expect(container.querySelector('[role="alert"]')).toBeNull();
+    expect(submitButton().hasAttribute('disabled')).toBe(false);
+  });
+});
+
 describe('attribution never gets in the way of signing up', () => {
   it('a thrown identifyVisitor does not cost the person their account', async () => {
     mockIdentify.mockImplementation(() => { throw new Error('tracker blocked'); });

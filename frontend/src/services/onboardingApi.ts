@@ -106,11 +106,14 @@ export async function submitReferrals(friends: Array<{ name: string; email: stri
   return data;
 }
 
-export interface FreeSignupResult {
-  jwt: string;
-  enrollment: { id: string; full_name: string; email: string; tier: string };
-  created: boolean;
-}
+/**
+ * C103: two shapes. A NEW account comes back signed in (`jwt`). An email that
+ * already has an account gets `check_email` instead: the server emailed its owner
+ * a sign-in link and returns no session, because typing an email is not owning it.
+ */
+export type FreeSignupResult =
+  | { jwt: string; enrollment: { id: string; full_name: string; email: string; tier: string }; created: boolean }
+  | { jwt?: undefined; check_email: true; message: string };
 
 /**
  * Public: create (or reuse) a free guest account and get a participant session JWT.

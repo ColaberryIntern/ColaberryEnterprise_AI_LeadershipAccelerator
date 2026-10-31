@@ -77,7 +77,12 @@ function SignupV2(): React.ReactElement {
     setCreating(true);
     try {
       const res = await registerOrg(buildAccountBody(account));
-      persistParticipantSession(res.jwt);
+      // C103: an email that already has an account gets a sign-in link, not a session.
+      if (res.check_email) {
+        setServerError(res.message || 'You already have an account. Check your email for a sign-in link.');
+        return;
+      }
+      if (res.jwt) persistParticipantSession(res.jwt);
       setCreated(true);
     } catch (err) {
       /*
