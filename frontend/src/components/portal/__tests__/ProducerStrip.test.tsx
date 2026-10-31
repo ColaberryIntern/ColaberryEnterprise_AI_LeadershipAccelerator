@@ -212,6 +212,30 @@ describe('sending a command', () => {
     await tap('producer-cmd-enter_backstage');
     expect(find('producer-notice')!.textContent).toContain('Nothing changed');
   });
+
+  it('KEEPS the outcome on screen through the re-read that follows it', async () => {
+    // The bug this pins: every command is followed immediately by a successful re-read, and
+    // when both shared one notice the re-read wiped the message the command had just set.
+    // "This airing moved under you" appeared and vanished within the same tick, which is
+    // worse than never showing it — the producer sees a flicker and learns nothing.
+    await render(ok(), { outcome: 'conflict', currentVersion: 9 });
+    await tap('producer-cmd-enter_backstage');
+
+    expect(loadState.mock.calls.length).toBeGreaterThan(1); // the re-read did happen
+    expect(find('producer-notice')!.textContent).toContain('version 9');
+  });
+
+  it('drops the previous outcome when a new command is issued', async () => {
+    // A new command means a new outcome; leaving the old one up would describe something that
+    // is no longer what happened.
+    await render(ok(), { outcome: 'failed' });
+    await tap('producer-cmd-enter_backstage');
+    expect(find('producer-notice')).not.toBeNull();
+
+    sendCommand.mockResolvedValue({ outcome: 'sent' });
+    await tap('producer-cmd-enter_backstage');
+    expect(find('producer-notice')).toBeNull();
+  });
 });
 
 describe('when the read fails', () => {
@@ -225,7 +249,18 @@ describe('when the read fails', () => {
     await tap('producer-cmd-enter_backstage');
 
     expect(find('producer-strip')).not.toBeNull();
-    expect(find('producer-notice')!.textContent).toContain('still trying');
+    expect(find('producer-read-notice')!.textContent).toContain('still trying');
+  });
+
+  it('clears the read notice once a read succeeds again', async () => {
+    await render();
+    loadState.mockResolvedValue({ outcome: 'failed' } as ProducerStateResult);
+    await tap('producer-cmd-enter_backstage');
+    expect(find('producer-read-notice')).not.toBeNull();
+
+    loadState.mockResolvedValue(ok());
+    await tap('producer-cmd-enter_backstage');
+    expect(find('producer-read-notice')).toBeNull();
   });
 
   it('renders nothing when the very first read fails, having nothing to show', async () => {

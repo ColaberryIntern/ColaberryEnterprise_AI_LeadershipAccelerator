@@ -43,6 +43,12 @@ jest.mock('../../controllers/broadcastController', () => ({
   // it caught this one too: every test in this file failed at module load until it was added.
   getReplayBroadcasts: (req: { participant?: { isStaff?: boolean } }, res: { json: (b: unknown) => void }) =>
     res.json({ reached: 'replays', isStaff: req.participant?.isStaff ?? null }),
+  // P4-02's producer read. FOURTH time the trap above has caught a change to this router —
+  // the note has been here since the discovery route and it still caught this one, because
+  // the failure names a line in broadcastRoutes.ts rather than this mock. Every test in this
+  // file failed at module load until it was added.
+  getProducerState: (req: { participant?: { isStaff?: boolean } }, res: { json: (b: unknown) => void }) =>
+    res.json({ reached: 'producer', isStaff: req.participant?.isStaff ?? null }),
 }));
 
 // participantAuth calls logAuthFailure on every rejected token, which reaches
@@ -85,6 +91,12 @@ const OCC = '11111111-2222-4333-8444-555555555555';
 const COMMAND = `/api/portal/broadcasts/${OCC}/command`;
 const PLAYBACK = `/api/portal/broadcasts/${OCC}/playback`;
 const DISCOVERY = '/api/portal/broadcasts/active';
+/**
+ * P4-02's producer read. The only route here keyed on a SESSION rather than an occurrence, so
+ * it is also the only one whose path has three segments after the base — which is why it does
+ * not collide with `/:id/audience` despite both ending in a literal.
+ */
+const PRODUCER = `/api/portal/broadcasts/session/${OCC}/producer`;
 
 function token(extra: Record<string, unknown> = {}): string {
   return jwt.sign(
@@ -159,6 +171,10 @@ describe('the flag gate runs before auth', () => {
     // Added with the discovery route. A new route that forgets the gate is exactly the
     // omission this test exists to catch, so it has to enumerate all of them.
     expect((await request(app).get(DISCOVERY)).status).toBe(404);
+    // Added with P4-02's producer read, which is the one route here on a different path
+    // SHAPE — three segments rather than two — so "the gate is on every route" is a claim
+    // about that shape too, not only about the occurrence-keyed group.
+    expect((await request(app).get(PRODUCER)).status).toBe(404);
   });
 });
 
@@ -270,6 +286,36 @@ describe('rate limits', () => {
     const over = await request(app).post(COMMAND).set('Authorization', auth()).send({ command: 'end', expected_version: 1 });
     expect(over.status).toBe(429);
     expect(over.body).toEqual({ error: 'RateLimited', reason: 'too_many_commands' });
+  });
+
+  /**
+   * All three claims about the producer read's limiter in ONE test, on one app, deliberately.
+   *
+   * This suite is already the slowest in the router group and its own notes record a test
+   * timing out under a parallel 82-suite run. Proving the ceiling needs 61 requests; proving
+   * the budget is separate needs a command afterwards. Split across two tests that is 121
+   * requests and two apps for no extra coverage, and the suite is where it can least afford
+   * it.
+   */
+  it('gives the producer read its own budget AND its own ceiling', async () => {
+    // Why this limiter exists at all: a control polling the producer read while waiting for
+    // provider health would otherwise spend 24 of the command limiter's 30 per minute before
+    // issuing a single command, and throttle itself out of the window it is waiting through.
+    const app = buildApp({ flag: 'true' });
+
+    const burst = await Promise.all(
+      Array.from({ length: 60 }, () => request(app).get(PRODUCER).set('Authorization', auth())),
+    );
+    expect(burst.filter((r) => r.status === 429)).toHaveLength(0);
+
+    const over = await request(app).get(PRODUCER).set('Authorization', auth());
+    expect(over.status).toBe(429);
+    expect(over.body).toEqual({ error: 'RateLimited', reason: 'too_many_producer_reads' });
+
+    // 61 producer reads in, and the command budget is untouched.
+    const command = await request(app).post(COMMAND).set('Authorization', auth()).send({ command: 'end', expected_version: 1 });
+    expect(command.status).toBe(200);
+    expect(command.body.reached).toBe('command');
   });
 
   it('keeps the two limiters SEPARATE — a scraped playback endpoint must not lock out the producer', async () => {

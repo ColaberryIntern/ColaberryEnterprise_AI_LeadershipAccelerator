@@ -85,7 +85,18 @@ export default function ProducerStrip(
   const [state, setState] = useState<ProducerStateResult | null>(null);
   const [busy, setBusy] = useState<ProducerCommand | null>(null);
   const [confirming, setConfirming] = useState<ProducerCommand | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+  /**
+   * TWO NOTICES, NOT ONE, and the separation is load-bearing.
+   *
+   * Every command is followed immediately by a re-read. A single notice meant that re-read
+   * cleared the message the command had just set — so "this airing moved under you, now at
+   * version 9" appeared and vanished within the same tick, which is worse than never showing
+   * it: the producer sees a flicker and learns nothing. A command's outcome is owned by the
+   * command and survives until the producer issues the next one; a read failure is owned by
+   * the poll and clears as soon as a read succeeds.
+   */
+  const [commandNotice, setCommandNotice] = useState<string | null>(null);
+  const [readFailed, setReadFailed] = useState(false);
 
   const refresh = useCallback(async (): Promise<void> => {
     const next = await read(sessionId);
@@ -93,8 +104,7 @@ export default function ProducerStrip(
     // good picture plus a notice is more use than an empty strip. The first read is the
     // exception — there is nothing to keep.
     setState((prev) => (next.outcome === 'failed' && prev ? prev : next));
-    if (next.outcome === 'failed') setNotice('Could not reach the broadcast just now — still trying.');
-    else if (next.outcome === 'ok') setNotice(null);
+    setReadFailed(next.outcome === 'failed');
   }, [read, sessionId]);
 
   useEffect(() => {
@@ -110,21 +120,23 @@ export default function ProducerStrip(
     const occurrence = state?.occurrence;
     if (!occurrence) return;
     setConfirming(null);
+    // A new command means a new outcome; the previous one is no longer what happened.
+    setCommandNotice(null);
     setBusy(command);
     try {
       const result = await send(occurrence.id, command, occurrence.version);
       if (result.outcome === 'conflict') {
         // Someone else moved it. Say so plainly and re-read rather than retrying on a version
         // the server has already refused.
-        setNotice(
+        setCommandNotice(
           result.currentVersion != null
             ? `This airing moved under you (now at version ${result.currentVersion}). Reading it again.`
             : 'This airing moved under you. Reading it again.',
         );
       } else if (result.outcome === 'forbidden') {
-        setNotice('The server says you are not a producer for this airing.');
+        setCommandNotice('The server says you are not a producer for this airing.');
       } else if (result.outcome === 'failed') {
-        setNotice(`Could not send ${LABELS[command]}. Nothing changed.`);
+        setCommandNotice(`Could not send ${LABELS[command]}. Nothing changed.`);
       }
       await refresh();
     } finally {
@@ -215,8 +227,15 @@ export default function ProducerStrip(
         </p>
       ))}
 
-      {notice && (
-        <p className="cps-notice" role="status" data-testid="producer-notice">{notice}</p>
+      {commandNotice && (
+        <p className="cps-notice" role="status" data-testid="producer-notice">{commandNotice}</p>
+      )}
+
+      {readFailed && (
+        <p className="cps-notice" role="status" data-testid="producer-read-notice">
+          Could not reach the broadcast just now — still trying. What you see below is the last
+          answer that arrived.
+        </p>
       )}
     </section>
   );
