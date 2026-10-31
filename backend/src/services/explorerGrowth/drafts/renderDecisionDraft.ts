@@ -1,3 +1,4 @@
+import { env } from '../../../config/env';
 import type { SequenceStep } from '../../../models/FollowUpSequence';
 import type { CompositeContext } from '../../contextGraphService';
 import type {
@@ -15,6 +16,13 @@ import {
   type DraftableDecision,
   type PersistDraftInput,
 } from './draftContracts';
+import {
+  absolutizeHref,
+  absolutizeHrefs,
+  bannedCopyIssues,
+  emailLinkIssues,
+  isSafeToAdvertise,
+} from './draftCopyGuards';
 import { draftSkipReason, selectStepIndex } from './draftEligibility';
 
 /**
@@ -150,14 +158,36 @@ function skipped(
  * Titles and summaries only — the registry holds POINTERS, never copy, and a
  * card carries no body to quote.
  */
-export function describeContentAssets(assets: ReadonlyArray<Record<string, any>>): string {
+export function describeContentAssets(
+  assets: ReadonlyArray<Record<string, any>>,
+  baseUrl: string,
+): string {
   if (!assets?.length) return '';
   const lines = assets
     .map((a) => {
       const title = a?.title ?? a?.name;
       if (!title) return null;
       const summary = a?.summary ?? a?.description ?? '';
-      const url = a?.url ?? a?.portal_url ?? '';
+      // SCREENED HERE, BECAUSE THIS IS THE DOOR THE BANNED WORD CAME THROUGH.
+      //
+      // The 2026-10-31 live render put "Welcome to Your Free AI Preview" into 10 of 12
+      // bodies. The quote gate in `explorerKnowledgeGrounding` already screens corpus
+      // entries against the same rules, but it does not watch this line, so an asset title
+      // reached the model unchecked. 5 of 468 active assets are excluded by this, about 1%.
+      //
+      // EXCLUDED RATHER THAN REWRITTEN: most affected titles are real titles of real
+      // third-party content, and editing them would falsify a citation to pass a lint.
+      if (!isSafeToAdvertise({ title: String(title), summary: String(summary) })) return null;
+      // Absolutised because an email has no page to be relative to. The registry stores
+      // `/portal/runtime/<id>` (`syncTimelineCards.ts:192`) and the model reproduced that
+      // path verbatim into 5 of 12 bodies. `messageValidatorService`'s URL check is
+      // `https?://`-anchored, so it could not see them.
+      //
+      // An unresolvable URL is DROPPED rather than guessed at. The model still has the
+      // ALLOWED URLs block for a legitimate link, and the post-generation link guard below
+      // refuses anything it invents.
+      const rawUrl = a?.url ?? a?.portal_url ?? '';
+      const url = rawUrl ? absolutizeHref(String(rawUrl), baseUrl) ?? '' : '';
       return `- ${title}${summary ? `: ${summary}` : ''}${url ? ` (${url})` : ''}`;
     })
     .filter(Boolean);
@@ -261,8 +291,16 @@ export async function renderDecisionDraft(
     ? `\n\nTHIS IS A REVISION. The reviewer asked for: ${regenerate.brief.trim()}`
     : '';
 
+  // `publicAppUrl`, NOT `frontendUrl`. `frontendUrl` defaults to `http://localhost:3000`,
+  // and `messageValidatorService`'s ALLOWED_DOMAINS is
+  // ['enterprise.colaberry.ai', 'advisor.colaberry.ai'] — so an unset FRONTEND_URL would
+  // turn every absolutised link into an `Unknown URL found` issue and fail the draft.
+  // `publicAppUrl` already defaults to the production host.
+  const baseUrl = env.publicAppUrl;
+
   const instructions = `${step.ai_instructions ?? ''}${describeContentAssets(
     decision.selected_content_assets ?? [],
+    baseUrl,
   )}${briefLine}`;
 
   let generated: GenerateMessageResult;
@@ -346,7 +384,38 @@ export async function renderDecisionDraft(
   // three of already.
   const verdict = deps.validate(generated.body, context, 'email');
 
-  const status = verdict.valid ? EXPLORER_DRAFT_STATUS : EXPLORER_DRAFT_REJECTED_STATUS;
+  // THE BACKSTOP THE FIRST REAL RENDER PROVED WAS MISSING.
+  //
+  // `validateGeneratedMessage` checks ungrounded dates, prices and seat counts, hallucinated
+  // booking links and absolute URLs against ALLOWED_DOMAINS. It has no banned-word concept at
+  // all, and its URL pattern is `https?://`-anchored, so a root-relative href is invisible to
+  // it. On 2026-10-31 that combination let 12 of 12 drafts advertise a banned word and 5 of
+  // 12 carry a link no email client can follow, with `rejected: 0` reported for the batch.
+  //
+  // Screening the assets above stops the known source. This reads the FINAL text, so a word
+  // introduced by any other input — a seeded instruction, a corpus entry, the model itself —
+  // still cannot reach a person. Two layers, because the asset filter is a door and this is
+  // the wall.
+  const linkFixed = absolutizeHrefs(verdict.content, baseUrl);
+  const copyIssues = [
+    ...bannedCopyIssues(linkFixed.html),
+    ...emailLinkIssues(linkFixed.html, baseUrl),
+  ];
+  const body = linkFixed.html;
+  const issues = [...verdict.issues, ...copyIssues];
+  // A relative link is REPAIRED, not refused: there is exactly one correct absolute form and
+  // guessing is not involved. A banned word is refused, because the compliant rewrite is a
+  // judgement about meaning that no function should make silently.
+  const autoFixed =
+    linkFixed.rewritten > 0
+      ? [
+          ...verdict.autoFixed,
+          `absolutised ${linkFixed.rewritten} relative link(s) against ${baseUrl}`,
+        ]
+      : verdict.autoFixed;
+  const valid = verdict.valid && copyIssues.length === 0;
+
+  const status = valid ? EXPLORER_DRAFT_STATUS : EXPLORER_DRAFT_REJECTED_STATUS;
   const persistInput: PersistDraftInput = (
     {
       lead_id: leadId,
@@ -356,7 +425,7 @@ export async function renderDecisionDraft(
       // returns none — `explorerSequenceDefinitions.ts` writes a genuine
       // subject on all 24 steps even though every body_template is empty.
       subject: generated.subject || step.subject || 'Colaberry Enterprise AI',
-      body: verdict.content,
+      body,
       to_email: toEmail,
       ai_instructions: groundedInstructions,
       status,
@@ -366,9 +435,14 @@ export async function renderDecisionDraft(
         explorer_decision_date: decision.decision_date,
         explorer_step_index: stepIndex,
         quality_gate: {
-          valid: verdict.valid,
-          issues: verdict.issues,
-          auto_fixed: verdict.autoFixed,
+          valid,
+          issues,
+          auto_fixed: autoFixed,
+          // Recorded separately from `issues` so a reviewer can tell WHICH gate refused.
+          // Collapsing them would make a legal-copy refusal indistinguishable from an
+          // ungrounded date, and those have different owners and different fixes.
+          copy_issues: copyIssues,
+          links_absolutised: linkFixed.rewritten,
           // Absent means this was not treated as an Explorer send and the
           // fact guard did not apply. Empty means it WAS and nothing may be
           // quoted, which is the strictest state, not the most permissive.
@@ -420,11 +494,11 @@ export async function renderDecisionDraft(
   return {
     decision_id: decision.id,
     enrollment_id: decision.enrollment_id,
-    status: verdict.valid ? 'drafted' : 'rejected',
+    status: valid ? 'drafted' : 'rejected',
     reason: null,
     scheduled_email_id: written.id,
     step_index: stepIndex,
-    issues: verdict.issues,
+    issues,
     superseded_scheduled_email_id: written.supersededId,
   };
 }

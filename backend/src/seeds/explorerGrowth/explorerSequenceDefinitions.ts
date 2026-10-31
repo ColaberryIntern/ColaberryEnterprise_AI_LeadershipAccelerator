@@ -80,7 +80,11 @@ export const EXPLORER_SEQUENCES: ExplorerSequenceDefinition[] = [
         0,
         'Your first step is ready',
         'Get the learner to open one piece of content',
-        'This person created a free account and has not opened anything yet. Point them at the ONE specific first-step lesson supplied in the context and nothing else. Do not list options; a menu is why people stall. Two or three sentences. Do not imply they have done something wrong or that time is running out.',
+        // "a free account" was the one banned word seeded into a prompt (40 TAC 807.172(d)).
+        // It reached the model on the same STEP INSTRUCTIONS line as the asset digest, so it
+        // primed the vocabulary independently of any asset title. Reworded rather than
+        // deleted: whether the account cost anything is the fact the step turns on.
+        'This person created an account with no card needed and has not opened anything yet. Point them at the ONE specific first-step lesson supplied in the context and nothing else. Do not list options; a menu is why people stall. Two or three sentences. Do not imply they have done something wrong or that time is running out.',
       ),
       step(
         4,
