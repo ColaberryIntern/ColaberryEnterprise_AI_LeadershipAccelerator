@@ -251,4 +251,27 @@ describe('AdminGovOpportunitiesPage — dashboard redesign (honesty rails preser
     await clickEl(restoreBtn!);
     expect(factoryApi.restoreGovOpportunity).toHaveBeenCalledWith('g1');
   });
+
+  // ── Vetting ladder: approval-level badge + the "Vetted only" filter ──
+  it('shows the approval-level badge (Vetted) for a qualified opportunity in place of Unassessed', async () => {
+    const vetted: GovOpportunity = { ...candidate, uuid: 'v1', title: 'Vetted Platform', vetting: { stage: 'vetted', decision: 'approved_bid_pursuit', approvalStatus: 'approved' } };
+    (factoryApi.listGovOpportunities as jest.Mock).mockResolvedValue({ opportunities: [vetted], source: 'live', snapshotDate: null, snapshotReason: null });
+    await renderPage();
+    const badges = Array.from(container.querySelectorAll('.badge'));
+    expect(badges.some((b) => b.textContent === 'Vetted')).toBe(true);     // the stage badge
+    expect(badges.some((b) => b.textContent === 'Unassessed')).toBe(false); // it replaces the raw verdict badge
+  });
+
+  it('the "Vetted only" toggle (off by default) hides a not-yet-vetted row', async () => {
+    const vetted: GovOpportunity = { ...candidate, uuid: 'v2', title: 'Vetted Platform', vetting: { stage: 'vetted', decision: 'approved_bid_pursuit', approvalStatus: null } };
+    const fresh: GovOpportunity = { ...candidate, uuid: 'nv2', title: 'Fresh Candidate' };
+    (factoryApi.listGovOpportunities as jest.Mock).mockResolvedValue({ opportunities: [vetted, fresh], source: 'live', snapshotDate: null, snapshotReason: null, totalAvailable: 50 });
+    await renderPage();
+    expect(container.textContent ?? '').toContain('Fresh Candidate'); // both shown by default (toggle off)
+    const toggle = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('Vetted only'));
+    await clickEl(toggle!);
+    const text = container.textContent ?? '';
+    expect(text).toContain('Vetted Platform');     // the vetted row stays
+    expect(text).not.toContain('Fresh Candidate');  // the not-yet-vetted row is hidden
+  });
 });
