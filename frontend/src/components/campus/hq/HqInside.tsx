@@ -9,7 +9,6 @@ import type { HqPlaced } from './hqModel';
  * floor (one office door per room). Locked buttons and doors are visible, grey with a red lock, aria-disabled, and say why
  * on click. An open room is a real link that opens its admin page in a NEW TAB through the Management Portal bridge.
  */
-const ext = (p: string) => p.replace('https://', '');
 
 function Guide({ s, f, face, people }: { s: HqState; f: HqFloor | null; face: string; people: HqPlaced<HqPerson> }): React.ReactElement {
   const { hq } = s;
@@ -77,7 +76,8 @@ export function HqFloorScene({ s, f, people }: { s: HqState; f: HqFloor; people:
           const here = hq.isStaff ? people.byRoom.get(r.path) ?? [] : [];
           const inner = (<>
             {r.external && r.open && <span className="ext">↗</span>}
-            <span className="gl"><i className={`ri-${r.icon}`} /><b>{roomName(r, hq.isStaff)}</b>{hq.isStaff && <code>{ext(r.path)}</code>}</span>
+            {/* C103 (Ali, 2026-10-31): no /admin address on the door; it pushed the OPEN plates out of line */}
+            <span className="gl"><i className={`ri-${r.icon}`} /><b title={roomName(r, hq.isStaff)}>{roomName(r, hq.isStaff)}</b></span>
             <span className="pl">{r.open ? (r.own ? 'OPEN →' : 'OPEN ↗') : '🔒 NO ACCESS'}</span><span className="kn" />
             {here.length > 0 && <span className="who"><HqPeople people={here} label={`At ${r.label}`} size="sm" /></span>}
           </>);
