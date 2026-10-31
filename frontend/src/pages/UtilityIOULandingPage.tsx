@@ -64,7 +64,7 @@ const ROLE_HEROES: Record<string, { badge: string; headline: string; subhead: st
     bullets: [
       'Connects to Oracle CIS, SAP, Maximo, OMS, AMI head-ends, and your data lake',
       'No data migration required. AI agents read from the systems you already operate.',
-      'NERC CIP, SOC 2, and SOX-aligned audit trails. Full explainability of every AI decision.',
+      'Audit trails aligned to NERC CIP, SOC 2 and SOX controls. We hold none of those certifications and do not claim to. Full explainability of every AI decision.',
     ],
   },
   cfo: {
@@ -162,7 +162,7 @@ function UtilityIOULandingPage({ forcePresenter, defaultRole }: UtilityIOULandin
     ],
     cio: [
       { icon: 'bi-database', title: 'IT/OT Convergence Reality', problem: 'Your data lives across Oracle CIS, SAP, Maximo, OSI Monarch OMS, GE Smallworld GIS, AMI head-ends, and a Snowflake data lake. Getting it harmonized for AI is months of work.', solution: 'We connect to your existing systems via standard interfaces. AI agents read from your infrastructure. No new data warehouse, no migration project.' },
-      { icon: 'bi-shield-lock', title: 'NERC CIP and SOX Compliance', problem: 'Anything touching the BES is NERC CIP scoped. Anything touching financial reporting is SOX scoped. Both require documented controls and audit trails.', solution: 'Every AI decision is logged, explainable, and replayable. Built for SOC 2 Type II, NERC CIP, and SOX evidence. Auditor-ready from day one.' },
+      { icon: 'bi-shield-lock', title: 'NERC CIP and SOX Compliance', problem: 'Anything touching the BES is NERC CIP scoped. Anything touching financial reporting is SOX scoped. Both require documented controls and audit trails.', solution: 'Every AI decision is logged, explainable, and replayable. The audit trail is designed against SOC 2 Type II, NERC CIP and SOX control expectations, so your own auditors have evidence to work from. We are not certified under any of the three and make no such claim.' },
       { icon: 'bi-puzzle', title: 'Yet Another System', problem: 'You have spent years rationalizing your IT footprint. The last thing you need is another platform requiring its own integration, support contract, and admin team.', solution: 'AI orchestration is an overlay, not a replacement. It sits on top of your existing stack and makes it smarter. Sunset path documented if it fails to deliver.' },
       { icon: 'bi-code-square', title: 'No In-House AI Team', problem: 'You have IT generalists and platform engineers. You do not have a team of ML engineers, MLOps specialists, or LLM tuners — and hiring them is brutal.', solution: 'Pre-built AI agents tuned for utility operations. Your IT team manages the orchestration platform; we maintain the underlying models with quarterly tuning.' },
     ],
@@ -477,7 +477,7 @@ function UtilityIOULandingPage({ forcePresenter, defaultRole }: UtilityIOULandin
             {[
               { icon: 'bi-building', title: 'Production Utility Experience', desc: 'We have a track record working with the largest utilities in the United States. Our team understands grid operations, FERC and PUC requirements, and rate-case dynamics.' },
               { icon: 'bi-puzzle', title: 'Works With Your Existing Stack', desc: 'Our solution integrates with Oracle CIS, SAP, Maximo, OMS (OSI Monarch, GE), GIS (Smallworld, ESRI), AMI head-ends, and your data lake. We compress time-to-ROI; we do not replace what you already operate.' },
-              { icon: 'bi-shield-lock', title: 'NERC CIP, SOX, and SOC 2 Aligned', desc: 'Every AI decision is logged, explainable, and replayable. Audit trails built for SOC 2 Type II, NERC CIP, and SOX evidence. Your compliance team gets a clean story.' },
+              { icon: 'bi-shield-lock', title: 'Aligned to NERC CIP, SOX and SOC 2 Controls', desc: 'Every AI decision is logged, explainable, and replayable. Audit trails are designed against SOC 2 Type II, NERC CIP and SOX control expectations, not certified under them. Your compliance team gets evidence it can work with.' },
               { icon: 'bi-cash-stack', title: 'Rate-Case-Defendable ROI', desc: 'Fully transparent ROI methodology with documented benchmarks per FERC accounts. Every input traceable. Built to be defended in PUC testimony, not just in a board deck.' },
               { icon: 'bi-award', title: 'IRA / DOE / GRIP Funding Aligned', desc: 'AI investments positioned for grid resilience tax credits, IRA Section 45 grid program funding, and DOE GRIP/GRP grants. Spend grant capital before discretionary O&M.' },
               { icon: 'bi-arrow-left-right', title: 'Flexible Engagement', desc: 'Start with a free demo and assessment. NDA, MSA, and formal procurement come when you are ready. We meet your enterprise procurement process, not the other way around.' },
