@@ -272,22 +272,38 @@ function inflect(american, suffix) {
   return stem + suffix;
 }
 
+/**
+ * The dictionary entry for a word, or null.
+ *
+ * `BRITISH_TO_AMERICAN` is a plain object literal, so a bare `MAP[word]` also finds everything on
+ * `Object.prototype`. Prose containing the word "constructor" was reported as a British spelling
+ * whose American form is `function Object() { [native code] }`, and "toString", "valueOf" and
+ * "hasOwnProperty" behave the same way. The check runs over prose ABOUT code, where those words
+ * are ordinary, and it exits 1 -- so an inherited key is a false failure on a gate, not a
+ * curiosity. Every lookup goes through here so the guard cannot be forgotten at one call site.
+ */
+function entry(key) {
+  return Object.prototype.hasOwnProperty.call(BRITISH_TO_AMERICAN, key)
+    ? BRITISH_TO_AMERICAN[key]
+    : null;
+}
+
 /** The dictionary entry for a token, trying the token itself then common inflections. */
 function lookup(token) {
   const w = token.toLowerCase();
-  if (BRITISH_TO_AMERICAN[w]) return BRITISH_TO_AMERICAN[w];
+  if (entry(w)) return entry(w);
   for (const suffix of INFLECTIONS) {
     if (w.length > suffix.length + 2 && w.endsWith(suffix)) {
       const base = w.slice(0, -suffix.length);
-      if (BRITISH_TO_AMERICAN[base]) return inflect(BRITISH_TO_AMERICAN[base], suffix);
+      if (entry(base)) return inflect(entry(base), suffix);
       // "enquiries" -> entry "enquiry" -> "inquiry" -> "inquiries".
-      if (suffix === 'ies' && BRITISH_TO_AMERICAN[`${base}y`]) {
-        return inflect(BRITISH_TO_AMERICAN[`${base}y`], 'ies');
+      if (suffix === 'ies' && entry(`${base}y`)) {
+        return inflect(entry(`${base}y`), 'ies');
       }
-      if (E_RESTORING.has(suffix) && BRITISH_TO_AMERICAN[`${base}e`]) {
+      if (E_RESTORING.has(suffix) && entry(`${base}e`)) {
         // The British base ends in -e and the token dropped it before the suffix
         // ("organise" -> "organising"), so the American form drops its -e the same way.
-        return BRITISH_TO_AMERICAN[`${base}e`].replace(/e$/, '') + suffix;
+        return entry(`${base}e`).replace(/e$/, '') + suffix;
       }
     }
   }
