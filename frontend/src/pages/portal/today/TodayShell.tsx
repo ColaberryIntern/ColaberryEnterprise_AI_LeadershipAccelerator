@@ -451,6 +451,7 @@ const TodayShell: React.FC = () => {
 
       {schedule?.is_explorer && (
         <ExplorerPreviewBanner firstWinPending={firstWinPending} firstLesson={firstLesson} onStartLesson={openCard}
+          onSeeTimeline={scrollToAnchor('te-timeline-anchor')}
           fcCd={fcCd} ohCd={ohCd} ohTitle={oh?.title ?? null} showRsvp={!!oh} rsvped={rsvped} busy={busy} onRsvp={doRsvp} />
       )}
 

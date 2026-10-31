@@ -13,7 +13,7 @@ import type { TimelineFeedCard } from '../../../../components/timeline/TimelineC
 const lesson = { id: 'c1', title: 'What an AI system is', status: 'available' } as unknown as TimelineFeedCard;
 type Props = React.ComponentProps<typeof ExplorerPreviewBanner>;
 const base: Props = {
-  firstWinPending: true, firstLesson: lesson, onStartLesson: () => undefined, fcCd: null, ohCd: null, ohTitle: null,
+  firstWinPending: true, firstLesson: lesson, onStartLesson: () => undefined, onSeeTimeline: () => undefined, fcCd: null, ohCd: null, ohTitle: null,
   showRsvp: true, rsvped: false, busy: false, onRsvp: () => undefined,
 };
 
@@ -59,6 +59,24 @@ it.each([true, false])('never says "free" (TWC), first win pending = %s', (pendi
   render({ firstWinPending: pending });
   expect(container.textContent!.toLowerCase()).not.toMatch(/\bfree\b/);
   expect(container.textContent).toContain('no card needed');
+});
+
+// C102: the timeline is below the fold, so the opening message says so in both versions and offers a way down.
+it.each([true, false])('says the timeline is below and to scroll, first win pending = %s', (pending) => {
+  render({ firstWinPending: pending });
+  const hint = q('[data-testid="te-banner-scroll-hint"]')!.textContent!;
+  expect(hint).toContain('Your timeline is right below this box.');
+  expect(hint).toContain('Scroll down to watch, read and start your assignments.');
+  expect(hint.toLowerCase()).not.toContain('unlimited');
+  expect(q('[data-testid="te-banner-see-timeline"]')!.textContent).toBe('See your timeline ↓');
+});
+
+it('"See your timeline" scrolls, and does not replace the main ask', () => {
+  let scrolled = 0;
+  render({ firstWinPending: false, onSeeTimeline: () => { scrolled += 1; } });
+  act(() => { (q('[data-testid="te-banner-see-timeline"]') as HTMLButtonElement).click(); });
+  expect(scrolled).toBe(1);
+  expect(q('[data-testid="te-banner-enroll"]')).not.toBeNull();
 });
 
 it('no Open House: no RSVP button; RSVP\'d: the button says so and is disabled', () => {
