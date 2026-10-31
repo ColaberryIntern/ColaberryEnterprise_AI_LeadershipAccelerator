@@ -187,7 +187,7 @@ export async function listEnrollmentProjectsSummary(enrollmentId: string): Promi
   // Fail-soft: if the lookup throws, every card reports `repo_sync: null` and
   // simply shows no badge. A Projects page that 500s because a decoration could
   // not be computed would be a straight downgrade on the page it decorates.
-  let byProject = new Map<string, { repo_url?: string | null; status_json?: any }>();
+  let byProject = new Map<string, { repo_url?: string | null; status_json?: any; commit_summary_json?: unknown }>();
   try {
     const { default: GitHubConnection } = await import('../../models/GitHubConnection');
     const rows: any[] = await GitHubConnection.findAll({
