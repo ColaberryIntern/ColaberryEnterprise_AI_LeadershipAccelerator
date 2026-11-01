@@ -353,10 +353,38 @@ X, when they reach the slide X was authored onto."
    the real fix is the route's own limiter, and it is recorded here so the next caller does not
    rediscover it.
 
-   **Only clip markers remain** (admin API, no UI). Three became two became one, and in both closed
-   cases the act of reading a feature is what exposed what was wrong with it. That is the argument
-   for closing this class rather than tolerating it: an unread feature is not half-working, it is
-   unmeasured.
+   **None now. Clip markers got their reader on 2026-11-01** — `SessionClipList`, on the Class
+   Kit, plus the CSV that is R7's first brick (§9 item 6). Three became two became one became
+   zero, and in **all three** closed cases the act of reading a feature is what exposed what was
+   wrong with it. Four things here, none of which a passing test suite could have shown:
+
+   - **A marker is a start point and an editor needs a range.** One row per advance, no end. The
+     out point is the next marker's in point — derivable from rows already held — and for the last
+     marker it is the end of the recording, which is only knowable from `ended_at`. Real rows have
+     a null `ended_at`, so the last clip legitimately has no end and is reported as unknown rather
+     than measured against `now`, which would grow a duration every time the file was downloaded.
+   - **Every advance writes a marker, so most rows are not clip candidates.** A 38-minute class
+     produces dozens and a handful are worth cutting. Handing an editor forty undifferentiated
+     rows leaves him scrubbing the video, which is the precise cost this feature exists to remove.
+     The authored note is recoverable because the policy's label precedence is
+     `publicValue || segmentLabel || slideTitle` — a label equal to neither fallback is the
+     authored sentence. The proper fix is for the write path to store what it chose, which needs a
+     column on a shipped table and would only help future markers; deriving it works on the rows
+     that already exist.
+   - **A plain `<a href>` download would 401, and that is a trap for every future admin export.**
+     The admin JWT lives in `localStorage` and is attached by the `api` interceptor as a Bearer
+     header, so an anchor straight to the CSV route carries no `Authorization` at all. The file is
+     fetched through `api` and saved client-side instead.
+   - **The same habit exists on the frontend, which this document had only ever charged against
+     the backend.** `ClassDetailsModal.tsx` is 211 lines, self-fetching, and its own header
+     comment says it is "opened by clicking a session's Title in the admin Accelerator sessions
+     table" — and it is imported by nothing. It is a complete feature with no mount point.
+     Recorded here rather than fixed: wiring it up means editing `AdminAcceleratorPage.tsx`, which
+     is 1555 lines, and CLAUDE.md's ceiling rule makes splitting that page the price of the next
+     change to it.
+
+   An unread feature is not half-working, it is unmeasured. That is the argument for closing this
+   class rather than tolerating it, and it held on every one of the four.
 
 3. **Participation is keyed on `session_id`, not `occurrence_id`** (`ensureLiveSessionSchema.ts:134-169`),
    while clip markers are occurrence-keyed. The keying mismatch is real. The consequence this
@@ -628,6 +656,25 @@ production polish. Applying it:
    clip candidates out of the system in a form an editor can open, plus the production brief §9 of
    the requirements already expects session setup to generate. The other ten outputs belong to
    Piyush, Sohail and Aleem, and they need the files before anything else matters.
+
+   **One of the three is out, 2026-11-01: clip candidates.**
+   `GET /api/admin/accelerator/sessions/:id/clip-list.csv` serves the airing's markers as in/out
+   ranges with the authored clip notes flagged, and the Class Kit has a Download CSV button so it
+   does not need a URL anyone has to remember. A download rather than a script on purpose: the
+   data lives only in production, and nobody with the editing job has a shell there — a button on
+   a screen an admin is already signed into produces the same file.
+
+   **The other two are not, and neither is blocked on engineering judgment.** The recording is the
+   access-model question in §10 decision 3 — every route in the system today requires a portal
+   participant JWT, so "the editor gets the video" is a decision about credentials and not a file
+   format. The transcript does not exist yet in any form. Both should be read as waiting on Ali,
+   not as half-built.
+
+   Worth saying plainly about the clip file: **it has never run against a real airing.** Markers
+   have only been written since 2026-10-24, the one production airing was 2026-10-20, and Test 2
+   has not been run — so the first real clip list will be produced by Test 2 itself. The pairing,
+   the escaping and the empty cases are unit-tested; the claim that the file is *useful* is not
+   yet evidence, and the person to settle it is the editor opening it once.
 
 7. **R8 and R10** are reporting layers over the above and should trail them.
 

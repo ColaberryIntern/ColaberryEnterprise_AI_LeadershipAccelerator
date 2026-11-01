@@ -1,6 +1,9 @@
 import { Router, Request, Response } from 'express';
 import { requireAdmin } from '../../middlewares/authMiddleware';
-import { handleGetSessionClipList } from '../../controllers/broadcastClipListController';
+import {
+  handleGetSessionClipList,
+  handleGetSessionClipListCsv,
+} from '../../controllers/broadcastClipListController';
 import {
   handleListSessions, handleGetSession, handleCreateSession, handleUpdateSession, handleDeleteSession,
   handleSkipSession, handleUnskipDate, handleGetSessionCurriculum,
@@ -134,6 +137,9 @@ router.get('/api/admin/accelerator/sessions/:id/kit-doc', requireAdmin, handleGe
 // its position in the recording. Admin only; it is editorial material about a private
 // broadcast, not something a viewer should be able to enumerate.
 router.get('/api/admin/accelerator/sessions/:id/clip-list', requireAdmin, handleGetSessionClipList);
+// R7's first brick (§9 item 6): the same list as a file an editor can open. Same auth as the
+// JSON, because it is the same editorial material — the format is the only difference.
+router.get('/api/admin/accelerator/sessions/:id/clip-list.csv', requireAdmin, handleGetSessionClipListCsv);
 // Plain-language class outline (teaching plan) — review / prepare / print.
 router.get('/api/admin/accelerator/sessions/:id/outline', requireAdmin, handleGetSessionOutline);
 // Instructor readiness report (prep + source/evidence ledger).
