@@ -23,10 +23,17 @@ export interface OrgRegisterBody {
   email: string;
 }
 
+/**
+ * C103: `check_email` means the email already had an account; the server emailed
+ * its owner a sign-in link and returned no session. `jwt` is also null for a
+ * consulting account, which has no portal enrollment.
+ */
 export interface OrgRegisterResult {
-  jwt: string;
-  organization: { id: string; name: string; owner_enrollment_id: string };
-  enrollment: { id: string; full_name: string; email: string; tier: string };
+  jwt?: string | null;
+  check_email?: true;
+  message?: string;
+  organization?: { id: string; name: string; owner_enrollment_id: string };
+  enrollment?: { id: string; full_name: string; email: string; tier: string };
 }
 
 // ── Company rollup (overview) ────────────────────────────────────────────────

@@ -113,7 +113,13 @@ export interface FreeSignupInput {
 }
 
 export interface FreeSignupResult {
-  jwt: string;
+  /**
+   * C103: a session ONLY for an account this call created. Null for 'reused' and
+   * 'upgraded', because the email already belonged to someone and typing an email
+   * proves nothing about owning it. Public callers send a sign-in link instead
+   * (see `signup/existingAccountSignIn`).
+   */
+  jwt: string | null;
   enrollment: { id: string; full_name: string; email: string; tier: string };
   /**
    * True only when a NEW row was written. `participantController` turns this into
@@ -492,7 +498,9 @@ export async function createFreeAccount(input: FreeSignupInput): Promise<FreeSig
   }
 
   return {
-    jwt: signParticipantJwt(enrollment),
+    // C103: before this, a reused account got a session too, so anyone who knew a
+    // member's email could sign in as them through the public signup form.
+    jwt: disposition === 'created' ? signParticipantJwt(enrollment) : null,
     enrollment: {
       id: enrollment.id,
       full_name: enrollment.full_name,
