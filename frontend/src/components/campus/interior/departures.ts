@@ -16,8 +16,6 @@ import type { SideRow, SideTop } from './pageSummary';
 export interface StudioProjectFacts { id: string; last_commit: { sha: string; message: string; at: string } | null; last_worked_at: string | null }
 
 const TIMEOUT_MS = 10_000;
-/** Four rows, like the other wall boards: measured at the real wall sizes, a fifth row pushes "See all my projects" off the board. */
-export const DEPARTURES_MAX = 4;
 
 /** The server's per-project facts, keyed by id. Rejects on any failure (the board then shows list order with no times). */
 export async function fetchStudioFacts(): Promise<Map<string, StudioProjectFacts>> {
@@ -48,7 +46,8 @@ export function departuresBoard(projects: StudentProject[], facts: Map<string, S
     return a.i - b.i;
   });
   const seen = new Map<string, number>();
-  const rows: SideRow[] = timed.slice(0, DEPARTURES_MAX).map(({ p, f }) => {
+  // every project (Ali 2026-11-01, "why only 4?"): the board's row list scrolls, so "See all my projects" stays on the board
+  const rows: SideRow[] = timed.map(({ p, f }) => {
     // the value stays short so the project name keeps the row (a commit sha or a story title squeezed the names to "My Te…")
     const value = f?.last_worked_at ? ageLabel(f.last_worked_at, now) : 'Open';
     // the board keys rows by label: two builds with one name still get two rows

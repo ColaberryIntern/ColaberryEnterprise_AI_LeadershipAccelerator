@@ -76,6 +76,10 @@
 /* C43: a board with no rows still stands: its line, and what it opens */
 .cm-r3-wallboard .empty{font-size:calc(var(--d, 600px) * .05);color:var(--cm-art-muted);margin:6px 0}
 .cm-r3-wallboard .go{margin-top:auto;font-size:calc(var(--d, 600px) * .045);font-weight:800;color:var(--cm-art-red)}
+/* the row list takes the space between the title and the page link, and scrolls when it is longer (Ali 2026-11-01, all projects) */
+.cm-r3-wallboard .rows{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;display:flex;flex-direction:column;margin-bottom:8px}
+.cm-r3-wallboard .rows>*{flex:none}
+.cm-r3-wallboard .r b{flex:none;white-space:nowrap}
 .cm-r3-wallboard .r span:first-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cm-r3-flat{position:absolute;inset:0;z-index:6;background:var(--cm-art-in-screen-dim);display:grid;place-items:center}
 .cm-r3-flat .card{background:var(--cm-art-card);color:var(--cm-art-sp-ink);border-radius:22px;width:min(420px,90%);padding:22px}

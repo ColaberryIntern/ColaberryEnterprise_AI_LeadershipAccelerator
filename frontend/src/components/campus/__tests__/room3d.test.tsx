@@ -130,6 +130,17 @@ describe('the left wall: one board', () => {
     expect(onOpen).toHaveBeenCalledTimes(3);
   });
 
+  it('a long board (Departures, every project) keeps its rows in the scrolling list and its page link outside it', () => {
+    const rows = Array.from({ length: 7 }, (_, i) => ({ label: `Build ${i}`, value: 'Open', route: `/portal/projects/workspace/p${i}/STORY-001` }));
+    const onOpen = mount({ id: 'studio', spot: null, sectionRoute: '/portal/projects',
+      summary: { next: null, sideTop: { title: '🛫 Departures', rows, empty: 'x', open: 'See all my projects' }, card: null, doorName: 'Project Studio' } });
+    const list = q('[data-testid="cm-wall-board"] [data-testid="cm-wall-board-rows"]')!;
+    expect(list.querySelectorAll('[data-testid="cm-wall-board-row"]')).toHaveLength(7);
+    expect(list.querySelector('[data-testid="cm-wall-board-page"]')).toBeNull();
+    click('[data-testid="cm-wall-board-page"]');
+    expect(onOpen).toHaveBeenLastCalledWith('/portal/projects');
+  });
+
   it('C74: the Chow Hall chalkboard enlarges too; the Meeting Rooms hallway doors do not', () => {
     mount({ id: 'chow', spot: spotOf('chow'), sectionRoute: '/portal/chow', summary: null });
     click('[data-testid="cm-wall-slot"]');
