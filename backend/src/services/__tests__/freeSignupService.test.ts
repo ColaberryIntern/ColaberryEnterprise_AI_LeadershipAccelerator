@@ -44,7 +44,9 @@ describe('freeSignupService', () => {
       expect(Enrollment.create).toHaveBeenCalledTimes(1);
       expect(res.created).toBe(true);
       expect(res.enrollment).toEqual({ id: 'enr-1', full_name: 'Maya', email: 'maya@example.com', tier: 'guest' });
-      const decoded: any = jwt.verify(res.jwt, env.jwtSecret);
+      // C103: `jwt` is null for an existing account, so a created one must carry it.
+      expect(res.jwt).not.toBeNull();
+      const decoded: any = jwt.verify(res.jwt as string, env.jwtSecret);
       expect(decoded.sub).toBe('enr-1');
       expect(decoded.role).toBe('participant');
     });
