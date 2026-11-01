@@ -21,6 +21,15 @@
  * returning a plausible Date, and this refuses on that signal. An occurrence scheduled at a
  * guessed instant is worse than no occurrence: the preview window and the whole access decision
  * are measured from it.
+ *
+ * CANCELLING IS A ONE-WAY DOOR, AND THIS IS WHERE THAT BECOMES VISIBLE. `cancelled` has no
+ * outbound transition at all (`broadcastStateMachine.ts`: `cancelled: []`), and the UNIQUE
+ * constraint above means the session cannot be handed a second occurrence — so once an airing is
+ * cancelled, that class can never go on air again, and re-scheduling it does not bring it back.
+ * Whether that is the behavior Colaberry wants is a product decision rather than an
+ * implementation one, so it is recorded in the program spec for Ali rather than changed here.
+ * What IS corrected here is the reporting: this used to refuse with `already_aired`, which is the
+ * one thing that is not true about a show cancelled before it ever aired.
  */
 import { sequelize } from '../../config/database';
 import BroadcastOccurrence from '../../models/BroadcastOccurrence';
@@ -35,7 +44,15 @@ export type EnsureOutcome = 'created' | 'retimed' | 'unchanged' | 'refused';
 export type EnsureRefusal =
   | 'no_room'
   | 'undeterminable_start'
+  /** The occurrence has aired, or is airing: moving it would rewrite history. */
   | 'already_aired'
+  /**
+   * The occurrence was cancelled and is therefore unreachable forever. Its own reason, because
+   * `already_aired` asserts an airing that never happened — and because the two need different
+   * actions from whoever reads the log: an aired show is simply not re-timeable, while a
+   * cancelled one means the class has no route back onto Live at all.
+   */
+  | 'cancelled'
   /** No live input could be resolved, so the occurrence would be unplayable. L5.4. */
   | 'no_live_input';
 
@@ -44,7 +61,12 @@ export interface EnsureOccurrenceResult {
   occurrenceId: string | null;
   /** Present only when outcome is 'refused'. Machine-readable, for the caller's log. */
   reason?: EnsureRefusal;
-  /** Present when the start instant could not be derived, straight from broadcastIdentity. */
+  /**
+   * Whatever the refusal has to add: broadcastIdentity's own reason when the start instant could
+   * not be derived, and the occurrence's editorial state for the two refusals that depend on it.
+   * The comment used to name only the first, which stopped being the whole truth once a refusal
+   * started carrying a state — a reader has to know `detail` is not one fixed thing.
+   */
   detail?: string;
 }
 
@@ -220,14 +242,22 @@ export async function ensureOccurrenceForSession(
   // The key embeds the start instant, so a rescheduled session produces a different key. Moving
   // a show that has already gone live or finished would rewrite history, so it is refused rather
   // than silently applied — and refused loudly, because the admin just changed the date.
+  //
+  // TWO REASONS, NOT ONE. Everything outside RETIMEABLE is refused, but a cancelled occurrence
+  // is refused for the opposite reason to an aired one: not "this already happened, leave it
+  // alone" but "this never happened and now never can". They are the same branch and they are
+  // not the same event, so they do not share a reason string.
   if (!RETIMEABLE.has(existing.editorial_state)) {
+    const reason: EnsureRefusal = existing.editorial_state === 'cancelled'
+      ? 'cancelled'
+      : 'already_aired';
     log('broadcast_occurrence_refused', 'failure', {
       sessionId: session.id, occurrenceId: existing.id,
-      reason: 'already_aired', editorial_state: existing.editorial_state,
+      reason, editorial_state: existing.editorial_state,
     });
     return {
       outcome: 'refused', occurrenceId: existing.id,
-      reason: 'already_aired', detail: existing.editorial_state,
+      reason, detail: existing.editorial_state,
     };
   }
 

@@ -199,6 +199,28 @@ describe('what it offers', () => {
     }));
     expect(find('producer-blocked-enter_backstage')).toBeNull();
     expect(find('producer-no-actions')).not.toBeNull();
+    // Idle, not terminal: the plain sentence is the right one here.
+    expect(find('producer-no-actions')!.textContent).toContain('Nothing to do from here');
+  });
+
+  /**
+   * A CANCELLED AIRING HAS NO COMMANDS AND THAT IS NOT THE SAME AS AN IDLE ONE.
+   *
+   * The state machine leaves `cancelled` with no outbound transition, so the server correctly
+   * reports every command unavailable — and the strip used to answer that with "Nothing to do
+   * from here", which is exactly what it says for a class sitting quietly in backstage. The
+   * producer's actual question is whether this is recoverable, and for this one state the
+   * answer is no.
+   */
+  it('says WHY a cancelled airing has nothing to do, rather than shrugging', async () => {
+    await render(ok({
+      occurrence: occurrence({ editorial_state: 'cancelled' }),
+      commands: cmds({ command: 'go_live', available: false, reason: 'no_change' }),
+    }));
+
+    const note = find('producer-no-actions')!.textContent || '';
+    expect(note).toMatch(/not put it back on air/i);
+    expect(note).not.toMatch(/Nothing to do from here/i);
   });
 
   it('marks an on-air occurrence as ON AIR rather than its wire state', async () => {
@@ -239,11 +261,17 @@ describe('sending a command', () => {
     expect(sendCommand).toHaveBeenCalledWith('occ-1', 'end', 4);
   });
 
-  it('asks first before cancelling too', async () => {
+  it('asks first before cancelling, and says what cancelling costs the CLASS', async () => {
     await render(ok({ commands: cmds({ command: 'cancel', available: true }) }));
     await tap('producer-cmd-cancel');
     expect(sendCommand).not.toHaveBeenCalled();
-    expect(find('producer-confirm-cancel')).not.toBeNull();
+
+    // Not merely that a prompt appeared. A producer who reads "this cannot be undone" will
+    // reasonably go and re-schedule the class, which is accepted, changes nothing, and reports
+    // nothing — so the prompt has to say that here, where it can still be acted on.
+    const q = find('producer-confirm-cancel')!.textContent || '';
+    expect(q).toMatch(/cannot be put back on air/i);
+    expect(q).toMatch(/re-scheduling/i);
   });
 
   it('reports a conflict with the version that is actually current, and does not retry', async () => {
