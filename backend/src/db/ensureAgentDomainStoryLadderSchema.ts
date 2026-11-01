@@ -106,13 +106,35 @@ export async function ensureAgentDomainStoryLadderSchema(): Promise<void> {
  * column nobody created. It checks the WIDTH as well as the presence of the three new columns,
  * because a swallowed widening is the failure that would otherwise show up much later as two
  * stories sharing one truncated id.
+ *
+ * ## The query MUST name the schema, and this is not a style preference
+ *
+ * Measured in production on 2026-11-01, the first boot after this file shipped. All four statements
+ * above succeeded - `public.student_tasks.story_id` really was `varchar(120)` - and this assert
+ * reported the opposite at `level: 'error'`, because it filtered on `table_name` alone. That
+ * database holds THREE tables named `student_tasks`: `public`, plus the frozen backups
+ * `snap_quincy_20260819` and `snap_quincy_20260819_after`. The statements above are unqualified, so
+ * they correctly touch only the search_path schema; the query saw all three.
+ *
+ * The defect is not that it read the wrong row. With no `ORDER BY`, row order is unspecified and
+ * the `Map` keeps whichever arrived last, so the verdict was ARBITRARY - it happened to resolve to
+ * a backup still at 60 and declare a violation that was not real.
+ *
+ * Being loud was the lucky direction. The same omission reversed is silent: a `public` column that
+ * genuinely was never widened, masked by a snapshot that happens to be wide enough - a post-
+ * condition reporting success over the exact failure it exists to catch. `'public'` rather than
+ * `current_schema()` so the assert checks the schema the application actually reads, even if some
+ * future caller arrives with a different search_path. The repo had already settled this: the
+ * sibling `ensureAgentDomainProjectSchema` filters the same way, for a reason recorded in its own
+ * comment.
  */
 export async function assertAgentDomainStoryLadderSchema(): Promise<boolean> {
   const problems: string[] = [];
   try {
     const [cols] = await sequelize.query(
       `SELECT column_name, character_maximum_length FROM information_schema.columns
-        WHERE table_name = 'student_tasks'
+        WHERE table_schema = 'public'
+          AND table_name = 'student_tasks'
           AND column_name = ANY($names)`,
       { bind: { names: [...REQUIRED_COLUMNS, 'story_id'] } },
     );
@@ -120,18 +142,19 @@ export async function assertAgentDomainStoryLadderSchema(): Promise<boolean> {
     const have = new Map(rows.map((r) => [r.column_name, r.character_maximum_length]));
 
     for (const c of REQUIRED_COLUMNS) {
-      if (!have.has(c)) problems.push(`student_tasks.${c} missing`);
+      if (!have.has(c)) problems.push(`public.student_tasks.${c} missing`);
     }
 
     if (!have.has('story_id')) {
-      problems.push('student_tasks.story_id missing');
+      problems.push('public.student_tasks.story_id missing');
     } else {
       const width = have.get('story_id');
       // A null length means an unbounded type (TEXT), which is wider than any limit we need.
       if (width !== null && width !== undefined && width < STORY_ID_MIN_WIDTH) {
         problems.push(
-          `student_tasks.story_id is varchar(${width}), narrower than the ${STORY_ID_MIN_WIDTH} a `
-          + 'per-rung story id needs; ids would be truncated and two stories could collide',
+          `public.student_tasks.story_id is varchar(${width}), narrower than the `
+          + `${STORY_ID_MIN_WIDTH} a per-rung story id needs; ids would be truncated and two `
+          + 'stories could collide',
         );
       }
     }
