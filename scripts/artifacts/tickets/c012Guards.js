@@ -196,11 +196,30 @@ function assertNoCriterionIsMetWithoutMeasurement() {
   }
 }
 
+/**
+ * American spelling in the rendered document AND in the modules that produce it.
+ *
+ * The source half is not belt-and-braces. This guard originally read only the rendered
+ * HTML, and CI failed on a FUNCTION NAME in this very file - the British spelling of
+ * "labeled" in `assertUnenforcedFieldsAreLabeled`, which never reaches the page.
+ * `americanSpelling.test.js` scans the whole artifact source tree, so the repo caught it
+ * and the build did not, which is a round trip through CI for something a local guard can
+ * see in a second.
+ */
 function assertAmericanSpelling() {
-  const text = `${R.buildVisual()} ${R.buildDocument()}`.replace(/<[^>]+>/g, ' ');
-  const hits = findAllBritishSpellings(text);
-  if (hits.length > 0) {
-    throw new Error(`guard: British spelling in the document: ${hits.slice(0, 6).join(', ')}`);
+  const rendered = `${R.buildVisual()} ${R.buildDocument()}`.replace(/<[^>]+>/g, ' ');
+  const sources = ['c012Data.js', 'c012Guards.js', 'c012Render.js']
+    .map((f) => fs.readFileSync(path.join(__dirname, f), 'utf8'))
+    .concat(fs.readFileSync(path.join(__dirname, '..', 'buildC012Artifacts.js'), 'utf8'))
+    .concat(declarationSource());
+  for (const [what, text] of [['document', rendered], ['source', sources.join('\n')]]) {
+    const hits = findAllBritishSpellings(text);
+    if (hits.length > 0) {
+      // findAllBritishSpellings returns {word, american} objects, so name both - a bare
+      // join prints [object Object] and tells you nothing about what to change.
+      const named = hits.slice(0, 6).map((h) => `${h.word} -> ${h.american}`).join(', ');
+      throw new Error(`guard: British spelling in the ${what}: ${named}`);
+    }
   }
 }
 
