@@ -19,6 +19,7 @@ import {
 import {
   absolutizeHref,
   absolutizeHrefs,
+  bannedCopyInstruction,
   bannedCopyIssues,
   emailLinkIssues,
   isSafeToAdvertise,
@@ -337,6 +338,20 @@ export async function renderDecisionDraft(
       // reads `context_notes`, so a field that looks like grounding would supply none.
       groundedInstructions = `${instructions}\n\n${grounding.result.block}`;
     }
+
+    // LAST, AND DELIBERATELY NOT PART OF `instructions`.
+    //
+    // `instructions` is what the grounding query above is built from — the step goal plus
+    // the asset digest, which is what the message is ABOUT. A compliance rule is not a
+    // topic, and folding it into that string would have the corpus searched for the banned
+    // word and its approved alternatives, skewing which facts come back. So it is appended
+    // after grounding has already run.
+    //
+    // Appended to `groundedInstructions` rather than kept separate because that field is
+    // persisted as `ai_instructions` and documented above as "what the model was actually
+    // told". A rule the model was given but the record omits would break that invariant and
+    // leave a reviewer unable to tell an instructed draft from an uninstructed one.
+    groundedInstructions = `${groundedInstructions}\n\n${bannedCopyInstruction()}`;
 
     generated = await deps.generate({
       channel: 'email',

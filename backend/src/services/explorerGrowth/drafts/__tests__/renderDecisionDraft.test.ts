@@ -1,4 +1,6 @@
 import type { SequenceStep } from '../../../../models/FollowUpSequence';
+import { FREE_WORD_RULE } from '../../../content/bannedCopyRule';
+import { bannedCopyInstruction } from '../draftCopyGuards';
 import {
   EXPLORER_DRAFT_REJECTED_STATUS,
   EXPLORER_DRAFT_STATUS,
@@ -741,7 +743,15 @@ describe('knowledge grounding', () => {
 
     expect(h.generatedWith[0].ai_instructions).not.toContain('KNOWLEDGE BASE');
     // No trailing blank lines bolted on for an empty block.
-    expect(h.generatedWith[0].ai_instructions.endsWith('mid-lesson.')).toBe(true);
+    //
+    // This used to assert the whole string ended at 'mid-lesson.'. The copy rule is now
+    // appended after grounding, so the guarantee is stated against what precedes it: strip
+    // the rule and the step's own instructions must end exactly where they did, with no
+    // separator left behind by the empty grounding block.
+    const sent: string = h.generatedWith[0].ai_instructions;
+    const rule = bannedCopyInstruction();
+    expect(sent.endsWith(rule)).toBe(true);
+    expect(sent.slice(0, -rule.length)).toBe('General nurture for a learner who is not mid-lesson.\n\n');
   });
 
   it('still produces a draft when grounding THROWS, and does not call it a generation failure', async () => {
@@ -862,5 +872,60 @@ describe('the copy guards on the generated body', () => {
     expect(out.issues).toHaveLength(2);
     expect(out.issues.join(' ')).toContain('November 12');
     expect(out.issues.join(' ')).toContain('tac-807-172-d-free');
+  });
+});
+
+describe('the copy rule the model is told', () => {
+  it('reaches the generator, so the refusal is a backstop rather than the normal path', async () => {
+    const h = harness();
+    await renderDecisionDraft(decision(), h.deps);
+
+    expect(h.generatedWith).toHaveLength(1);
+    expect(h.generatedWith[0].ai_instructions).toContain(bannedCopyInstruction());
+  });
+
+  it('is persisted as part of ai_instructions, so a reviewer sees what the model was told', async () => {
+    const h = harness();
+    await renderDecisionDraft(decision(), h.deps);
+
+    expect(h.committed[0].input.ai_instructions).toContain(bannedCopyInstruction());
+  });
+
+  it('does NOT reach the grounding query, so the corpus is not searched for the rule', async () => {
+    // The subtle one. `instructions` feeds the retrieval query because it describes what
+    // the message is ABOUT; a compliance rule is not a topic. Folding it in would have the
+    // knowledge base searched for the banned word and its approved alternatives, changing
+    // which facts come back for reasons that have nothing to do with the learner.
+    const g = groundingStub();
+    const h = harness({ ground: g.ground });
+
+    await renderDecisionDraft(decision(), h.deps);
+
+    expect(g.queries).toHaveLength(1);
+    expect(g.queries[0]).not.toContain('COPY COMPLIANCE');
+    for (const alternative of FREE_WORD_RULE.approvedAlternatives) {
+      expect(g.queries[0]).not.toContain(alternative);
+    }
+    // CONTROL: the query is not simply empty — it still carries the step's own goal, so
+    // the assertions above are about placement rather than about a blank string.
+    expect(g.queries[0].length).toBeGreaterThan(0);
+  });
+
+  it('comes AFTER the grounding block, leaving the retrieved facts intact', async () => {
+    const g = groundingStub();
+    const h = harness({ ground: g.ground });
+
+    await renderDecisionDraft(decision(), h.deps);
+
+    const sent: string = h.generatedWith[0].ai_instructions;
+    expect(sent).toContain('KNOWLEDGE BASE');
+    expect(sent.indexOf('KNOWLEDGE BASE')).toBeLessThan(sent.indexOf('COPY COMPLIANCE'));
+  });
+
+  it('is still given when grounding is unavailable, so an outage cannot drop the rule', async () => {
+    const h = harness({ ground: async () => ({ available: false, reason: 'not_configured' }) });
+    await renderDecisionDraft(decision(), h.deps);
+
+    expect(h.generatedWith[0].ai_instructions).toContain(bannedCopyInstruction());
   });
 });

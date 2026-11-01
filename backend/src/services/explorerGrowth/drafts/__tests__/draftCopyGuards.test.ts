@@ -3,6 +3,7 @@ import {
   CopyRulesAbsentError,
   absolutizeHref,
   absolutizeHrefs,
+  bannedCopyInstruction,
   bannedCopyIssues,
   emailLinkIssues,
   findBannedCopy,
@@ -211,5 +212,53 @@ describe('the rule set this module is wired to', () => {
   it('is non-empty, or every guard above throws in production', () => {
     expect(BANNED_COPY_RULES.length).toBeGreaterThan(0);
     expect(BANNED_COPY_RULES).toContain(FREE_WORD_RULE);
+  });
+});
+
+describe('bannedCopyInstruction', () => {
+  it('states the banned word and every approved alternative, so the model is told the rule', () => {
+    const out = bannedCopyInstruction();
+
+    expect(out).toContain(FREE_WORD_RULE.word);
+    expect(out).toContain(FREE_WORD_RULE.reason);
+    for (const alternative of FREE_WORD_RULE.approvedAlternatives) {
+      expect(out).toContain(alternative);
+    }
+  });
+
+  it('refuses an empty rule set rather than instructing the model in nothing', () => {
+    expect(() => bannedCopyInstruction([])).toThrow(CopyRulesAbsentError);
+  });
+
+  it('is GENERATED from the rules, so a new rule cannot be silently left unstated', () => {
+    // The drift test. A hand-written instruction would still pass the assertions above
+    // while ignoring any rule added later, which is the whole failure mode this shape
+    // exists to make impossible - the instruction and the guard read one constant.
+    const extra = {
+      id: 'test-only-rule',
+      word: 'guaranteed',
+      reason: 'Test-only rule, never shipped.',
+      approvedAlternatives: ['typical'],
+    };
+    const out = bannedCopyInstruction([...BANNED_COPY_RULES, extra]);
+
+    expect(out).toContain('guaranteed');
+    expect(out).toContain('typical');
+    // and it did not drop the real one on the way
+    expect(out).toContain(FREE_WORD_RULE.word);
+    expect(out.split('\n').filter((l) => l.startsWith('- '))).toHaveLength(
+      BANNED_COPY_RULES.length + 1,
+    );
+  });
+
+  it('says the consequence, because a rule without one reads as a preference', () => {
+    expect(bannedCopyInstruction()).toMatch(/discarded|legal requirement/i);
+  });
+
+  it('CONTROL: its own text trips the output guard, proving the two agree on the word', () => {
+    // If this ever stopped matching, the instruction would be naming a word the guard does
+    // not actually enforce - the exact drift this module was built to close.
+    const hits = findBannedCopy(bannedCopyInstruction());
+    expect(hits.map((h) => h.rule_id)).toContain(FREE_WORD_RULE.id);
   });
 });
