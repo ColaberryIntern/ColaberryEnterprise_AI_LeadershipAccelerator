@@ -86,8 +86,11 @@ describe('the undomained bucket carries measured production evidence', () => {
     expect(derived).not.toBe(5);
   });
 
-  it('leaves the decision open, because the decision is not mine', () => {
+  it('leaves the decision open, because thirteen of the rulings did not resolve a row', () => {
+    // Was `every row is unresolved` until Ali ruled on 2026-11-01. Eight are now terminally
+    // retired; the other thirteen carry a ruling that could not finish the job.
     expect(bucket.needs_owner_decision).toBe(true);
-    expect(bucket.rows.every((r: any) => r.disposition === 'unresolved')).toBe(true);
+    const open = bucket.rows.filter((r: any) => r.disposition === 'unresolved');
+    expect(open).toHaveLength(13);
   });
 });
