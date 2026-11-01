@@ -232,3 +232,50 @@ export function emailLinkIssues(html: string, baseUrl: string): string[] {
       + 'An email has no page to be relative to, so every href must be absolute.',
   );
 }
+
+/**
+ * The rule, written for the MODEL rather than for the reviewer.
+ *
+ * ## Why this exists, measured rather than assumed
+ *
+ * The two guards above are both defensive: `isSafeToAdvertise` keeps a non-compliant asset
+ * out of the digest on the way in, and `bannedCopyIssues` refuses a non-compliant body on
+ * the way out. Neither one ever TELLS the generator the rule, and on 2026-11-01 a live
+ * render of 12 decisions measured what that costs: 8 of 12 drafts were refused, every one
+ * of them for the same banned word, in prose the model wrote unprompted. The three Explorer
+ * sequences it reads were checked and carry no banned word, so nothing was feeding it the
+ * term - it is simply the ordinary English for a no-cost offer.
+ *
+ * A guard that refuses two thirds of what it is handed is working as specified and still
+ * leaves the feature unusable. This is the missing third layer: state the rule up front, so
+ * the refusal becomes the backstop it was meant to be instead of the normal path.
+ *
+ * ## The word is never written here
+ *
+ * Every part of the sentence is read off the rule object - `word`, `reason`,
+ * `approvedAlternatives` - and none of it is spelled out in this file. That is deliberate
+ * twice over. It means this instruction cannot drift from the guard that enforces it, since
+ * both read the same constant; and it keeps a banned-word literal out of a source file that
+ * `bannedWordOutboundCopy.test.ts` scans with a per-file ratchet, where a new occurrence is
+ * a failure rather than a nit.
+ *
+ * Fails closed on an empty rule set for the same reason the guards do: zero rules means
+ * UNCHECKED, and silently instructing the model in nothing would read as compliance.
+ */
+export function bannedCopyInstruction(
+  rules: readonly BannedWordRule[] = BANNED_COPY_RULES,
+): string {
+  assertRules(rules, 'bannedCopyInstruction');
+  const lines = rules.map((rule) => {
+    const alternatives = rule.approvedAlternatives.map((a) => `"${a}"`).join(' or ');
+    return (
+      `- Never use the word "${rule.word}" anywhere in the subject or the body. ${rule.reason} `
+      + `Write ${alternatives} instead.`
+    );
+  });
+  return (
+    'COPY COMPLIANCE. These are legal requirements, not style preferences, and a draft '
+    + 'that breaks one is discarded rather than edited:\n'
+    + lines.join('\n')
+  );
+}
