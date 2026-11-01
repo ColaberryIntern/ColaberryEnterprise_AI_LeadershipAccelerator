@@ -7,6 +7,7 @@ import { sequelize } from '../config/database';
 import { QueryTypes, Op } from 'sequelize';
 import { emitExecutiveEvent } from './executiveAwarenessService';
 import { getMetric, mayComputeWith } from './adminOs/metricRegistry';
+import { validateGovernanceConfig, GovernanceConfigShape } from './campaignGovernancePolicy';
 
 const DEFAULT_BASE_URL = 'https://enterprise.colaberry.ai';
 /**
@@ -139,11 +140,18 @@ export async function validateCampaignForPublish(
     errors.push(`Budget cap exceeded: spent $${campaign.budget_spent} of $${campaign.budget_cap}`);
   }
 
-  // Check governance config exists
+  // Check the governance config says something, not merely that a row exists (C0.12).
+  //
+  // Every column in campaign_governance_configs carries a database default, so an empty
+  // PUT to the admin route creates a complete row. An existence check reads that as
+  // governance, which is how a gate ends up green over a record that governs nothing.
   const CampaignGovernanceConfig = (await import('../models/CampaignGovernanceConfig')).default;
   const govConfig = await CampaignGovernanceConfig.findOne({ where: { campaign_id: campaignId } });
-  if (!govConfig) {
-    errors.push('Campaign governance config must be created before going live');
+  const govVerdict = validateGovernanceConfig(govConfig as GovernanceConfigShape | null);
+  if (!govVerdict.valid) {
+    for (const e of govVerdict.errors) {
+      errors.push(govConfig ? `Campaign governance config: ${e}` : e);
+    }
   }
 
   return { valid: errors.length === 0, errors };

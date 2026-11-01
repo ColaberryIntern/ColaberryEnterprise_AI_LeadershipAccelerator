@@ -10,6 +10,11 @@
 
 import { GovernanceConfig, CronScheduleConfig, CampaignGovernanceConfig, RiskScoringConfig } from '../models';
 import { AutonomyMode } from '../models/GovernanceConfig';
+import {
+  CampaignRampProfile,
+  normalizeRampProfile,
+  readThreshold,
+} from './campaignGovernancePolicy';
 
 // ─── Hardcoded Defaults (fail-safe floor) ─────────────────────────────────────
 
@@ -77,7 +82,8 @@ export interface ResolvedCampaignGovernance {
   max_sms_failure_rate: number;
   min_open_rate: number;
   min_reply_rate: number;
-  ramp_profile: any | null;
+  /** Null when no config exists, or when the stored profile does not parse (C0.12). */
+  ramp_profile: CampaignRampProfile | null;
   source: 'database' | 'hardcoded';
 }
 
@@ -225,13 +231,19 @@ export async function resolveCampaignGovernance(campaignId: string): Promise<Res
   try {
     const row = await CampaignGovernanceConfig.findOne({ where: { campaign_id: campaignId } });
     if (row) {
+      // `readThreshold` rather than `Number(x) || default` (C0.12). The `||` form treats a
+      // stored zero as absent and quietly substitutes the looser platform default, so the
+      // tightest value anybody could type was the one value the resolver threw away. Zero
+      // is still wrong for these columns - `>=` comparisons make it pause a campaign with
+      // no unsubscribes at all - but it is now rejected at the point of writing by
+      // validateGovernanceConfig instead of masked here.
       return {
-        max_unsubscribe_rate: Number(row.max_unsubscribe_rate) || HARDCODED_CAMPAIGN_DEFAULTS.max_unsubscribe_rate,
-        max_bounce_rate: Number(row.max_bounce_rate) || HARDCODED_CAMPAIGN_DEFAULTS.max_bounce_rate,
-        max_sms_failure_rate: Number(row.max_sms_failure_rate) || HARDCODED_CAMPAIGN_DEFAULTS.max_sms_failure_rate,
-        min_open_rate: Number(row.min_open_rate) || HARDCODED_CAMPAIGN_DEFAULTS.min_open_rate,
-        min_reply_rate: Number(row.min_reply_rate) || HARDCODED_CAMPAIGN_DEFAULTS.min_reply_rate,
-        ramp_profile: row.ramp_profile,
+        max_unsubscribe_rate: readThreshold(row.max_unsubscribe_rate, HARDCODED_CAMPAIGN_DEFAULTS.max_unsubscribe_rate),
+        max_bounce_rate: readThreshold(row.max_bounce_rate, HARDCODED_CAMPAIGN_DEFAULTS.max_bounce_rate),
+        max_sms_failure_rate: readThreshold(row.max_sms_failure_rate, HARDCODED_CAMPAIGN_DEFAULTS.max_sms_failure_rate),
+        min_open_rate: readThreshold(row.min_open_rate, HARDCODED_CAMPAIGN_DEFAULTS.min_open_rate),
+        min_reply_rate: readThreshold(row.min_reply_rate, HARDCODED_CAMPAIGN_DEFAULTS.min_reply_rate),
+        ramp_profile: normalizeRampProfile(row.ramp_profile),
         source: 'database',
       };
     }
