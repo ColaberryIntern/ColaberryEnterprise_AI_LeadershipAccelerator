@@ -6,7 +6,7 @@ import { act } from 'react-dom/test-utils';
 
 import ProducerStrip from '../ProducerStrip';
 import type {
-  CommandAvailability, ProducerOccurrence, ProducerStateResult,
+  CommandAvailability, LiveAudienceResult, ProducerOccurrence, ProducerStateResult,
 } from '../../../services/broadcastProducer';
 
 /**
@@ -55,19 +55,29 @@ let container: HTMLDivElement;
 let root: Root;
 let loadState: jest.Mock;
 let sendCommand: jest.Mock;
+let loadAudience: jest.Mock;
 
 async function render(
   state: ProducerStateResult = ok(),
   result: { outcome: string; currentVersion?: number } = { outcome: 'sent' },
+  audience: LiveAudienceResult = { outcome: 'ok', watchingNow: 0 },
 ) {
   loadState = jest.fn().mockResolvedValue(state);
   sendCommand = jest.fn().mockResolvedValue(result);
+  loadAudience = jest.fn().mockResolvedValue(audience);
 
   container = document.createElement('div');
   document.body.appendChild(container);
   await act(async () => {
     root = createRoot(container);
-    root.render(<ProducerStrip sessionId="s1" loadState={loadState} sendCommand={sendCommand} />);
+    root.render(
+      <ProducerStrip
+        sessionId="s1"
+        loadState={loadState}
+        sendCommand={sendCommand}
+        loadAudience={loadAudience}
+      />,
+    );
   });
 }
 
@@ -309,5 +319,188 @@ describe('when the read fails', () => {
   it('renders nothing when the very first read fails, having nothing to show', async () => {
     await render({ outcome: 'failed' });
     expect(find('producer-strip')).toBeNull();
+  });
+});
+
+/**
+ * The clock and the viewer count — the two things a producer asks out loud, both of which were
+ * already on the wire and neither of which was rendered.
+ *
+ * `producerClock.test.ts` owns the arithmetic. These tests own the three things only the
+ * component can be wrong about: that the clock advances between polls rather than in
+ * five-second jumps, that the viewer count is a SECOND request on its own slower cadence and
+ * not folded into the state read, and that zero watchers and a broken counter stay different
+ * sentences on screen.
+ */
+const T0 = Date.parse('2026-11-01T18:00:00.000Z');
+const at = (offsetMs: number) => new Date(T0 + offsetMs).toISOString();
+
+/** Frozen clock AND frozen polls, so a rendered time is a fact rather than a race. */
+function freeze() {
+  jest.useFakeTimers();
+  jest.setSystemTime(T0);
+}
+
+const onAir = (over: Partial<ProducerOccurrence> = {}): ProducerStateResult => ok({
+  occurrence: occurrence({
+    editorial_state: 'live', provider_health: 'ready', content_started_at: at(-252_000), ...over,
+  }),
+  commands: cmds({ command: 'end', available: true }),
+});
+
+describe('the clock', () => {
+  it('says how long the class has been on air', async () => {
+    freeze();
+    await render(onAir());
+    expect(find('producer-clock')!.textContent).toBe('on air 4:12');
+    expect(find('producer-clock')!.getAttribute('data-kind')).toBe('on_air');
+  });
+
+  it('COUNTS UP PAST A MISSED START, which is the reading that changes a decision', async () => {
+    // Backstage with Go Live blocked on provider health is where a producer waits, and the
+    // strip could show the reason for the wait but never its cost.
+    freeze();
+    await render(ok({
+      occurrence: occurrence({ editorial_state: 'backstage', scheduled_start_at: at(-252_000) }),
+    }));
+    expect(find('producer-clock')!.getAttribute('data-kind')).toBe('overdue');
+    expect(find('producer-clock')!.textContent).toBe('4:12 past start');
+  });
+
+  it('TICKS WITHOUT RE-READING, so the time does not advance in five-second jumps', async () => {
+    freeze();
+    await render(onAir({ content_started_at: at(-61_000) }));
+    expect(find('producer-clock')!.textContent).toBe('on air 1:01');
+    const reads = loadState.mock.calls.length;
+
+    await act(async () => { jest.advanceTimersByTime(2_000); });
+
+    expect(find('producer-clock')!.textContent).toBe('on air 1:03');
+    // Two seconds is less than one poll: the clock moved on its own.
+    expect(loadState.mock.calls.length).toBe(reads);
+  });
+
+  it('renders no clock at all when there is no instant to measure from', async () => {
+    await render(ok({
+      occurrence: occurrence({ editorial_state: 'scheduled', scheduled_start_at: null }),
+    }));
+    expect(find('producer-clock')).toBeNull();
+  });
+});
+
+describe('the viewer count', () => {
+  it('shows how many people are watching', async () => {
+    freeze();
+    await render(onAir(), undefined, { outcome: 'ok', watchingNow: 12 });
+    expect(find('producer-audience')!.textContent).toBe('12 watching');
+    expect(loadAudience).toHaveBeenCalledWith('occ-1');
+  });
+
+  it('renders ZERO AS A NUMBER, because "nobody is watching" is a real answer', async () => {
+    freeze();
+    await render(onAir(), undefined, { outcome: 'ok', watchingNow: 0 });
+    const chip = find('producer-audience')!;
+    expect(chip.textContent).toBe('0 watching');
+    expect(chip.getAttribute('data-state')).toBe('ok');
+  });
+
+  it('NEVER SHOWS A ZERO when collection is down — it says so instead', async () => {
+    // The whole reason the route answers 503 with no count field. "Nobody watched" is a verdict
+    // on the broadcast; "collection is down" is a verdict on us, and a producer who reads the
+    // second as the first stops a class that people are watching.
+    freeze();
+    await render(onAir(), undefined, { outcome: 'unknown' });
+    const chip = find('producer-audience')!;
+    expect(chip.textContent).toBe('not measuring');
+    expect(chip.textContent).not.toMatch(/\d/);
+    expect(chip.getAttribute('data-state')).toBe('unknown');
+  });
+
+  it('distinguishes a failed request from the server saying it is not measuring', async () => {
+    freeze();
+    await render(onAir(), undefined, { outcome: 'failed' });
+    const chip = find('producer-audience')!;
+    expect(chip.textContent).toBe('no answer');
+    expect(chip.getAttribute('data-state')).toBe('failed');
+  });
+
+  it('keeps the last count when a later read fails, and says it is not moving', async () => {
+    freeze();
+    await render(onAir(), undefined, { outcome: 'ok', watchingNow: 7 });
+    expect(find('producer-audience')!.textContent).toBe('7 watching');
+
+    loadAudience.mockResolvedValue({ outcome: 'failed' } as LiveAudienceResult);
+    await act(async () => { jest.advanceTimersByTime(15_000); });
+
+    // A failed request carries no count, so overwriting the good one would throw away the only
+    // number there is.
+    expect(find('producer-audience')!.textContent).toBe('7 watching · not updating');
+    expect(find('producer-audience')!.getAttribute('data-state')).toBe('stale');
+  });
+
+  it('DOES NOT ASK BEFORE AIR, where the count is of nobody and the budget is needed', async () => {
+    // The audience route carries the COMMAND limiter, 30/min, shared with the producer's own
+    // commands. Polling a viewer count through the go-live sequence would spend that budget at
+    // the one moment it must not be spent.
+    await render();
+    expect(loadAudience).not.toHaveBeenCalled();
+    expect(find('producer-audience')).toBeNull();
+  });
+
+  it('POLLS SLOWER THAN THE STATE READ, and does not restart on every state poll', async () => {
+    // Two requests on two cadences: 5s for state, 15s for the count. If the audience effect
+    // depended on the occurrence OBJECT rather than its id, each 5s poll would hand it a new
+    // object, tear the interval down and re-fire — four reads in this window instead of two.
+    freeze();
+    await render(onAir());
+    expect(loadAudience).toHaveBeenCalledTimes(1);
+    expect(loadState).toHaveBeenCalledTimes(1);
+
+    await act(async () => { jest.advanceTimersByTime(15_000); });
+
+    expect(loadAudience).toHaveBeenCalledTimes(2);
+    expect(loadState).toHaveBeenCalledTimes(4);
+  });
+
+  it('stops counting once the airing is over, rather than leaving a stale number up', async () => {
+    freeze();
+    await render(onAir(), undefined, { outcome: 'ok', watchingNow: 12 });
+    expect(find('producer-audience')!.textContent).toBe('12 watching');
+
+    loadState.mockResolvedValue(ok({
+      occurrence: occurrence({ editorial_state: 'ended', ended_at: at(0) }),
+      commands: [],
+    }));
+    await act(async () => { jest.advanceTimersByTime(5_000); });
+
+    expect(find('producer-audience')).toBeNull();
+  });
+
+  it('DROPS THE OLD COUNT when the session re-airs as a new occurrence', async () => {
+    // DOC 03 permits a session to have more than one occurrence. Without the clear, the new
+    // airing would show the previous one's number for as long as the first request took —
+    // a short window, and a wrong number all the same.
+    freeze();
+    await render(onAir(), undefined, { outcome: 'ok', watchingNow: 12 });
+    expect(find('producer-audience')!.textContent).toBe('12 watching');
+
+    loadState.mockResolvedValue(ok({
+      occurrence: occurrence({ id: 'occ-2', editorial_state: 'live', content_started_at: at(0) }),
+      commands: cmds({ command: 'end', available: true }),
+    }));
+    // Held open deliberately, so the assertion lands inside the window the clear exists for.
+    loadAudience.mockImplementation(() => new Promise(() => {}));
+    await act(async () => { jest.advanceTimersByTime(5_000); });
+
+    expect(find('producer-audience')).toBeNull();
+    expect(loadAudience).toHaveBeenLastCalledWith('occ-2');
+  });
+
+  it('shows no count when the server says this viewer may not have one', async () => {
+    freeze();
+    await render(onAir(), undefined, { outcome: 'forbidden' });
+    expect(find('producer-audience')).toBeNull();
+    // ...and the strip itself is untouched: the state read is what authorizes it.
+    expect(find('producer-strip')).not.toBeNull();
   });
 });
