@@ -21,7 +21,7 @@ const AUTO_HIDE_REASON = 'auto_fit_below_threshold';
 const RUN_LOG_KEY = 'gov_opp_sweep_run_log';
 const APP_BASE = process.env.APP_PUBLIC_BASE || 'https://enterprise.colaberry.ai';
 
-export interface SweepOpportunity { uuid: string; title: string; agency: string; fitScore: number | null; }
+export interface SweepOpportunity { uuid: string; title: string; agency: string; fitScore: number | null; sourceUrl?: string | null; }
 
 const stageOf = (m: Map<string, VettingStage>, uuid: string): VettingStage => m.get(uuid) ?? 'not_vetted';
 
@@ -61,10 +61,18 @@ export function needsVetting(
 
 const esc = (s: string): string => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c] as string));
 
+/** The external Bonfire solicitation link for a row, when the feed supplied one (http(s) only, so a stray
+ *  scheme can never become a link). Rendered as a secondary link beside the in-app Qualify CTA so the recipient
+ *  can open the source solicitation on Bonfire directly. */
+const bonfireLink = (o: SweepOpportunity): string =>
+  typeof o.sourceUrl === 'string' && /^https?:\/\//i.test(o.sourceUrl)
+    ? ` &nbsp;·&nbsp; <a href="${esc(o.sourceUrl)}" style="color:#5b6472">View on Bonfire &rarr;</a>`
+    : '';
+
 function renderList(rows: SweepOpportunity[], cta: (o: SweepOpportunity) => string): string {
   const items = rows.map((o) => `<li style="margin:0 0 10px"><strong>${esc(o.title)}</strong>`
     + `<br><span style="color:#5b6472;font-size:13px">${esc(o.agency)}${typeof o.fitScore === 'number' ? ` · fit ${o.fitScore}` : ''}</span>`
-    + `<br>${cta(o)}</li>`).join('');
+    + `<br>${cta(o)}${bonfireLink(o)}</li>`).join('');
   return `<ul style="list-style:none;padding:0;margin:0">${items}</ul>`;
 }
 
@@ -127,7 +135,8 @@ export async function runGovOpportunitySweep(): Promise<SweepResult> {
 
   const opps: SweepOpportunity[] = feed
     .filter((o) => o && o.uuid)
-    .map((o) => ({ uuid: String(o.uuid), title: String(o.title ?? ''), agency: String(o.agency ?? ''), fitScore: typeof o.fitScore === 'number' ? o.fitScore : null }));
+    .map((o) => ({ uuid: String(o.uuid), title: String(o.title ?? ''), agency: String(o.agency ?? ''), fitScore: typeof o.fitScore === 'number' ? o.fitScore : null,
+      sourceUrl: typeof o.sourceUrl === 'string' && o.sourceUrl.trim() ? o.sourceUrl : null }));
 
   const dismissed = await listActiveDismissedKeys(tenantId);
   const vetting = await loadVettingByCanonical(tenantId, opps.map((o) => canonicalForUuid(o.uuid)));

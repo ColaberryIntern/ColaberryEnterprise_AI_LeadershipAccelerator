@@ -65,4 +65,17 @@ describe('email renderers', () => {
     expect(html).toContain('Herriman');
     expect(html).toContain(qualifyUrl('v1'));
   });
+  it('adds a View-on-Bonfire link, beside the Qualify CTA, when the row has an http(s) source URL (escaped)', () => {
+    const row: SweepOpportunity = { uuid: 'u2', title: 'T', agency: 'A', fitScore: 80, sourceUrl: 'https://op.colaberry.ai/b?a=1&b=2' };
+    const html = renderUploadEmail([row]);
+    expect(html).toContain('View on Bonfire');
+    expect(html).toContain('href="https://op.colaberry.ai/b?a=1&amp;b=2"');
+    expect(html).toContain(qualifyUrl('u2')); // still present, in addition to the Bonfire link
+  });
+  it('omits the Bonfire link when the source URL is missing or not http(s)', () => {
+    expect(renderUploadEmail([{ uuid: 'u3', title: 'T', agency: 'A', fitScore: 80, sourceUrl: null }])).not.toContain('View on Bonfire');
+    const bad = renderVetEmail([{ uuid: 'v2', title: 'T', agency: 'A', fitScore: 80, sourceUrl: 'javascript:alert(1)' }]);
+    expect(bad).not.toContain('View on Bonfire');
+    expect(bad).not.toContain('javascript:');
+  });
 });
