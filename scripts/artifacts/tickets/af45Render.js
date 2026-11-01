@@ -14,8 +14,8 @@ const D = require('./af45Data');
 const { TOKENS, SEV, esc, baseCss } = require('../artifactTheme');
 
 const FOOT = `${D.TICKET} &middot; Agent Factory &middot; merged ${D.MERGED_ON} in PRs `
-  + `#${D.PHASE1_PR} and #${D.PHASE2_PR} &middot; own repo, no fork, no write access, `
-  + 'and a refusal a reviewer cannot approve past';
+  + `#${D.PHASE1_PR} and #${D.PHASE2_PR}, revised ${D.REVISED_ON} &middot; own repo, no fork, `
+  + 'no write access, and a refusal a reviewer cannot approve past';
 
 function shell({ title, body, extraCss = '' }) {
   return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(title)}</title>
@@ -24,6 +24,25 @@ function shell({ title, body, extraCss = '' }) {
 }
 
 const metCount = D.CRITERIA.filter((c) => c.met).length;
+
+/*
+ * Three proof verdicts, not two, so neither renderer may color by "is it REFUSED".
+ *
+ * REFUSED is the policy declining a path. NO APPLY is the policy allowing it and the
+ * rehearsal declining it afterwards -- a different control firing, and worth its own
+ * color. The previous `v === 'REFUSED' ? bad : ok` would have painted NO APPLY green,
+ * which is the one reading of that row that is not true.
+ */
+function verdictColor(v) {
+  if (v === 'REFUSED') return SEV.bad;
+  if (v === 'ALLOWED') return SEV.ok;
+  return SEV.watch;
+}
+function verdictClass(v) {
+  if (v === 'REFUSED') return 'no';
+  if (v === 'ALLOWED') return 'yes';
+  return 'watch';
+}
 
 /* ------------------------------------------------------------------ visual */
 
@@ -34,14 +53,14 @@ function buildVisual() {
   h2 { font-size: 9.5pt; margin: 3px 0 2px; border-bottom-width: 1px; padding-bottom: 2px; }
   .cols { display: flex; gap: 10px; align-items: stretch; }
   .col { flex: 1; }
-  .cards { margin: 5px 0 6px; gap: 8px; }
+  .cards { margin: 3px 0 4px; gap: 8px; }
   .card { padding: 6px 9px; text-align: center; }
   .card .n { font-size: 16pt; }
   .card .k { font-size: 7.1pt; }
   .card.good .n { color: ${SEV.ok}; }
   .card.bad .n { color: ${SEV.bad}; }
   .rule { margin: 6px 0 8px; }
-  .takeaway { padding: 7px 11px; margin-bottom: 8px; }
+  .takeaway { padding: 7px 11px; margin-bottom: 5px; }
   .takeaway .headline { font-size: 11pt; }
   .mermaid { font-size: 7pt; }
   .tiny { font-size: 7.4pt; color: ${TOKENS.MUTED}; }
@@ -62,10 +81,19 @@ function buildVisual() {
   .pr .v { flex: 0 0 52px; font-weight: 700; }
   .pr .v.no { color: ${SEV.bad}; }
   .pr .v.yes { color: ${SEV.ok}; }
+  .pr .v.watch { color: ${SEV.watch}; }
   .pr .s { flex: 1.15; font-family: Consolas, monospace; font-size: 7.2pt; }
   .pr .r { flex: 1.4; color: ${TOKENS.MUTED}; }
+  /*
+   * Stays at 2 columns. Three was tried and made the block TALLER (77px -> 85px),
+   * because narrower columns wrap each gloss onto more lines than the extra column saves.
+   *
+   * The eleventh refusal class added a sixth row and 16px. Line-height is the lever that
+   * pays it back: these are single-line reference entries, so tightening leading costs
+   * nothing a reader notices, where shrinking the font would.
+   */
   .cls {
-    columns: 2; column-gap: 12px; font-size: 7.4pt; line-height: 1.32; margin-top: 2px;
+    columns: 2; column-gap: 12px; font-size: 7.4pt; line-height: 1.15; margin-top: 2px;
   }
   .cls div { break-inside: avoid; padding: 0.5px 0; }
   .cls code { font-size: 7.1pt; padding: 0 2px; }
@@ -87,7 +115,7 @@ function buildVisual() {
   <div class="mermaid">
   graph LR
     A["intern builds in<br/>their OWN public repo"] --> B["submits a commit:<br/>no shared history, no PR"]
-    B --> C{"refusal policy:<br/>10 named classes"}
+    B --> C{"refusal policy:<br/>${D.REFUSALS.length} named classes"}
     C -->|"workflow, infra,<br/>secret gate, governance"| X["REFUSED<br/>before a human sees it"]
     C -->|"clean"| D["patch scanned, applied in a<br/>throwaway worktree, pushed"]
     D --> E["PR opened by CODE,<br/>never by the intern"]
@@ -96,7 +124,7 @@ function buildVisual() {
 
   const proof = D.PROOF.map(([v, src, why]) => `
     <div class="pr">
-      <span class="v ${v === 'REFUSED' ? 'no' : 'yes'}">${esc(v)}</span>
+      <span class="v ${verdictClass(v)}">${esc(v)}</span>
       <span class="s">${esc(src)}</span>
       <span class="r">${esc(why)}</span>
     </div>`).join('');
@@ -116,8 +144,7 @@ function buildVisual() {
     <div>A GitHub pull request requires shared commit history, the same fork network. Every intern
     repository is a standalone project with unrelated history. <strong>That is not a limitation to
     work around, it is the safer shape</strong>: the thing holding write access is version-controlled
-    code that refuses what a tired reviewer would wave through, not a person's credential, and it
-    cannot be persuaded.</div>
+    code that cannot be persuaded, not a person's credential.</div>
   </div>
 
   ${kpi}
@@ -142,8 +169,8 @@ function buildVisual() {
       run reported <strong>"9 clean" where the truth was 8</strong>.</div>
       <div class="bd"><strong>2.</strong> The OpenAI rule was never exercised: it needs the literal
       marker <code>T3BlbkFJ</code>, so the fixture was not an OpenAI key.</div>
-      <div class="bd"><strong>3.</strong> A fixture edited to look more realistic broke detection
-      and read as a broken scanner for two rounds. The control is itself load-bearing.</div>
+      <div class="bd"><strong>3.</strong> A fixture edited to "look more realistic" broke detection
+      and read as a broken scanner. The control is itself load-bearing.</div>
     </div>
     <div class="col panel">
       <div class="hd">Why <code>.github/</code> is refused in full, not per key</div>
@@ -156,16 +183,14 @@ function buildVisual() {
     </div>
   </div>
 
-  <h2>Both outcomes proven against real intern commits, not fixtures</h2>
+  <h2>Three outcomes, proven against real intern commits, not fixtures</h2>
   ${proof}
-  <div class="tiny" style="margin-top:2px">The allow case is the control: a policy that refused
-  everything would pass the refusal test on its own.</div>
 
-  <h2>The ten refusal classes</h2>
+  <h2>The ${D.REFUSALS.length} refusal classes</h2>
   <div class="cls">${classes}</div>
-  <div class="tiny" style="margin-top:3px"><strong>Criterion 3 is NOT met:</strong> verified in both
-  directions, but no change has traveled it end to end, and that run opens a real pull request here
-  attributed to an intern. The five known gaps are in the spec document beside this page.</div>`;
+  <div class="tiny" style="margin-top:3px"><strong>Criterion 3 is NOT met and cannot be met as
+  written:</strong> no intern commit is importable, because not one of them is a change to this
+  codebase. The gaps and the survey behind that are in the spec document beside this page.</div>`;
 
   return shell({ title: `${D.TICKET} one-page visual`, body, extraCss: css });
 }
@@ -203,7 +228,7 @@ function buildDocument() {
 
   const proofRows = D.PROOF.map(([v, src, why]) => `
     <tr>
-      <td><span class="chip" style="background:${v === 'REFUSED' ? SEV.bad : SEV.ok}">${esc(v)}</span></td>
+      <td><span class="chip" style="background:${verdictColor(v)}">${esc(v)}</span></td>
       <td class="p">${esc(src)}</td><td>${esc(why)}</td>
     </tr>`).join('');
 
@@ -288,7 +313,7 @@ function buildDocument() {
   <p>${esc(D.PARSER.fix)}</p>
   <p><strong>${esc(D.PARSER.why)}</strong></p>
 
-  <h2>The ten refusal classes</h2>
+  <h2>The ${D.REFUSALS.length} refusal classes</h2>
   <table>
     <thead><tr><th>Rule</th><th>What it refuses</th></tr></thead>
     <tbody>${refusalRows}</tbody>
@@ -302,8 +327,12 @@ function buildDocument() {
     <thead><tr><th></th><th>Source commit</th><th>Why</th></tr></thead>
     <tbody>${proofRows}</tbody>
   </table>
-  <p>The allow case is the control. A policy that refused everything would pass the refusal test on
-  its own while making the whole path unusable.</p>
+  <p>Two different controls fire in that table. <strong>REFUSED</strong> is the policy declining a
+  path before anything is fetched. <strong>NO APPLY</strong> is the policy allowing the paths and
+  the rehearsal declining the patch afterwards, which is the check that did not exist until
+  2026-11-01. The allow case that proves the policy is not simply refusing everything lives in the
+  test suite, where every refusal test is paired with an ALLOW case on a neighboring path, and the
+  newest rule is mutation-tested in both directions.</p>
 
   <h2>The importer's safety properties</h2>
   <table>
@@ -323,6 +352,7 @@ function buildDocument() {
   <h2>Verification</h2>
   <p><strong>${D.VERIFICATION.tests} jest tests green</strong> across three suites:
   ${esc(D.VERIFICATION.suites)}. ${esc(D.VERIFICATION.pairing)}</p>
+  <p>${esc(D.VERIFICATION.mutation)}</p>
   <p>${esc(D.VERIFICATION.secretScan)}. ${esc(D.VERIFICATION.spelling)}.
   ${esc(D.VERIFICATION.individual)}.</p>
   <p><strong>Not run and not claimed:</strong> ${esc(D.VERIFICATION.notClaimed)}</p>`;

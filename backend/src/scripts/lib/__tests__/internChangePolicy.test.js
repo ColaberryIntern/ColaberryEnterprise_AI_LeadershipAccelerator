@@ -159,6 +159,81 @@ describe('evaluateChange', () => {
     });
   });
 
+  /**
+   * The rule that came out of a real failure: on 2026-11-01 a commit editing
+   * `.colaberry/progress.json` passed every refusal above, because every one of them asks
+   * whether a path is DANGEROUS and none asked whether it is OURS. `git am` then exited
+   * 128 -- there is no file to place the hunk in, and no base blob for `-3` to merge.
+   */
+  describe('a patch with no footprint in this repository', () => {
+    const OURS = [
+      'backend/src/services/agents/ellis/ellisPlatformAgent.ts',
+      'scripts/importInternChange.js',
+      'README.md',
+      'docs/AGENTS.md',
+    ];
+
+    it('refuses a patch that touches only the intern\'s own project files', () => {
+      const r = evaluateChange({
+        paths: ['.colaberry/progress.json', 'command-center/index.html'],
+        repoPaths: OURS,
+      });
+      expect(r.allowed).toBe(false);
+      expect(names(r)).toContain('no_path_in_this_repository');
+    });
+
+    it('allows a patch that touches even ONE path this repository has', () => {
+      const r = evaluateChange({
+        paths: ['.colaberry/progress.json', 'docs/AGENTS.md'],
+        repoPaths: OURS,
+      });
+      expect(r.allowed).toBe(true);
+    });
+
+    it('accepts a Set as readily as an array, since the caller builds one', () => {
+      const r = evaluateChange({ paths: ['nope/at/all.json'], repoPaths: new Set(OURS) });
+      expect(names(r)).toContain('no_path_in_this_repository');
+    });
+
+    it('normalizes Windows paths before deciding they are foreign', () => {
+      const r = evaluateChange({ paths: ['docs\\AGENTS.md'], repoPaths: OURS });
+      expect(r.allowed).toBe(true);
+    });
+
+    it('names every path, so the reader sees what the patch was actually about', () => {
+      const r = evaluateChange({
+        paths: ['.colaberry/progress.json', 'command-center/app.js'],
+        repoPaths: OURS,
+      });
+      const hit = r.refusals.find((x) => x.name === 'no_path_in_this_repository');
+      expect(hit.paths).toEqual(['.colaberry/progress.json', 'command-center/app.js']);
+    });
+
+    /*
+     * The check is opt-in. The policy is a pure decision model and the caller supplies
+     * the repository's paths; a caller that does not must not have the rule fire blind.
+     */
+    it('does NOT fire when the caller supplies no repoPaths', () => {
+      expect(evaluateChange({ paths: ['.colaberry/progress.json'] }).allowed).toBe(true);
+    });
+
+    it('does NOT fire on an empty repoPaths, which means "unknown", not "nothing matches"', () => {
+      expect(evaluateChange({ paths: ['.colaberry/progress.json'], repoPaths: [] }).allowed)
+        .toBe(true);
+    });
+
+    /*
+     * A filename match is not a content match, and this rule cannot tell the difference.
+     * Both repositories have a README.md; they are different documents sharing a name.
+     * That is why a name hit only clears THIS rule and the apply is then rehearsed for
+     * real -- the rule is deliberately scoped to zero overlap, the unambiguous case.
+     */
+    it('a bare filename collision clears this rule and nothing more', () => {
+      const r = evaluateChange({ paths: ['README.md'], repoPaths: OURS });
+      expect(r.allowed).toBe(true);
+    });
+  });
+
   describe('reporting', () => {
     it('reports EVERY matching rule, not just the first', () => {
       const r = ok(['.github/workflows/ci.yml', '.env', 'nginx/default.conf']);
