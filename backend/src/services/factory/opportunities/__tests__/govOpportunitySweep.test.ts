@@ -1,5 +1,5 @@
 import {
-  toAutoHide, needsRequirements, needsVetting, qualifyUrl, renderUploadEmail, renderVetEmail,
+  toAutoHide, needsRequirements, qualifyUrl, renderUploadEmail, renderVetSummaryEmail,
   type SweepOpportunity,
 } from '../govOpportunitySweep';
 import type { VettingStage } from '../../govOpportunityVetting';
@@ -40,17 +40,6 @@ describe('needsRequirements', () => {
   });
 });
 
-describe('needsVetting', () => {
-  it('is any row with a qualification in progress, regardless of fit', () => {
-    const r = needsVetting([opp('a', 80), opp('b', 30), opp('c', 90), opp('d', 70)], new Set(),
-      stages({ a: 'needs_requirements', b: 'in_review', c: 'vetted', d: 'awaiting_approval' }));
-    expect(r.map((o) => o.uuid).sort()).toEqual(['a', 'b', 'd']); // c is vetted (done), excluded
-  });
-  it('excludes dismissed rows', () => {
-    expect(needsVetting([opp('a', 80)], new Set(['a']), stages({ a: 'in_review' }))).toEqual([]);
-  });
-});
-
 describe('email renderers', () => {
   it('upload email lists each row with its Qualify link and escapes the title', () => {
     const html = renderUploadEmail([opp('u1', 80, 'A & B <RFP>')]);
@@ -58,12 +47,6 @@ describe('email renderers', () => {
     expect(html).toContain(qualifyUrl('u1'));
     expect(html).toContain('A &amp; B &lt;RFP&gt;');
     expect(html).not.toContain('<RFP>');
-  });
-  it('vet email lists each row with its link', () => {
-    const html = renderVetEmail([opp('v1', 80, 'Herriman')]);
-    expect(html).toContain('vet + assign');
-    expect(html).toContain('Herriman');
-    expect(html).toContain(qualifyUrl('v1'));
   });
   it('adds a View-on-Bonfire link, beside the Qualify CTA, when the row has an http(s) source URL (escaped)', () => {
     const row: SweepOpportunity = { uuid: 'u2', title: 'T', agency: 'A', fitScore: 80, sourceUrl: 'https://op.colaberry.ai/b?a=1&b=2' };
@@ -74,8 +57,20 @@ describe('email renderers', () => {
   });
   it('omits the Bonfire link when the source URL is missing or not http(s)', () => {
     expect(renderUploadEmail([{ uuid: 'u3', title: 'T', agency: 'A', fitScore: 80, sourceUrl: null }])).not.toContain('View on Bonfire');
-    const bad = renderVetEmail([{ uuid: 'v2', title: 'T', agency: 'A', fitScore: 80, sourceUrl: 'javascript:alert(1)' }]);
+    const bad = renderUploadEmail([{ uuid: 'u4', title: 'T', agency: 'A', fitScore: 80, sourceUrl: 'javascript:alert(1)' }]);
     expect(bad).not.toContain('View on Bonfire');
     expect(bad).not.toContain('javascript:');
+  });
+  it('vet summary email shows per-stage counts and links to the board, omitting zero rows', () => {
+    const html = renderVetSummaryEmail({ inReview: 22, needsRequirements: 17, awaitingApproval: 0, total: 39 });
+    expect(html).toContain('39 opportunities are ready to vet + assign');
+    expect(html).toContain('22 in review');
+    expect(html).toContain('17 with requirements being established');
+    expect(html).not.toContain('awaiting a second-admin approval'); // 0 -> row omitted
+    expect(html).toContain('/admin/gov-opportunities');
+  });
+  it('vet summary email uses the singular for a single opportunity', () => {
+    expect(renderVetSummaryEmail({ inReview: 1, needsRequirements: 0, awaitingApproval: 0, total: 1 }))
+      .toContain('1 opportunity is ready to vet + assign');
   });
 });
