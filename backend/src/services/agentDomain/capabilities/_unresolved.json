@@ -21,6 +21,12 @@
         "enabled": true,
         "run_count": 32623,
         "has_run": true
+      },
+      "owner_decision": {
+        "ruling": "absorb",
+        "decided_by": "Ali Muwwakkil",
+        "decided_on": "2026-11-01",
+        "blocked_on": "No domain owner. These serve two domains at once -- visitor intent scoring is both marketing and sales -- which is why they were undomained in the first place. The ruling is to absorb; the domain that absorbs each one is still unnamed, so this row cannot reach a terminal disposition yet."
       }
     },
     {
@@ -35,6 +41,12 @@
         "enabled": true,
         "run_count": 32516,
         "has_run": true
+      },
+      "owner_decision": {
+        "ruling": "absorb",
+        "decided_by": "Ali Muwwakkil",
+        "decided_on": "2026-11-01",
+        "blocked_on": "No domain owner. These serve two domains at once -- visitor intent scoring is both marketing and sales -- which is why they were undomained in the first place. The ruling is to absorb; the domain that absorbs each one is still unnamed, so this row cannot reach a terminal disposition yet."
       }
     },
     {
@@ -49,6 +61,12 @@
         "enabled": true,
         "run_count": 228,
         "has_run": true
+      },
+      "owner_decision": {
+        "ruling": "absorb",
+        "decided_by": "Ali Muwwakkil",
+        "decided_on": "2026-11-01",
+        "blocked_on": "No domain owner. These serve two domains at once -- visitor intent scoring is both marketing and sales -- which is why they were undomained in the first place. The ruling is to absorb; the domain that absorbs each one is still unnamed, so this row cannot reach a terminal disposition yet."
       }
     },
     {
@@ -63,6 +81,12 @@
         "enabled": true,
         "run_count": 21399,
         "has_run": true
+      },
+      "owner_decision": {
+        "ruling": "absorb",
+        "decided_by": "Ali Muwwakkil",
+        "decided_on": "2026-11-01",
+        "blocked_on": "No domain owner. These serve two domains at once -- visitor intent scoring is both marketing and sales -- which is why they were undomained in the first place. The ruling is to absorb; the domain that absorbs each one is still unnamed, so this row cannot reach a terminal disposition yet."
       }
     },
     {
@@ -77,6 +101,12 @@
         "enabled": true,
         "run_count": 15837,
         "has_run": true
+      },
+      "owner_decision": {
+        "ruling": "absorb",
+        "decided_by": "Ali Muwwakkil",
+        "decided_on": "2026-11-01",
+        "blocked_on": "No domain owner. These serve two domains at once -- visitor intent scoring is both marketing and sales -- which is why they were undomained in the first place. The ruling is to absorb; the domain that absorbs each one is still unnamed, so this row cannot reach a terminal disposition yet."
       }
     },
     {
@@ -91,6 +121,12 @@
         "enabled": true,
         "run_count": 125,
         "has_run": true
+      },
+      "owner_decision": {
+        "ruling": "absorb",
+        "decided_by": "Ali Muwwakkil",
+        "decided_on": "2026-11-01",
+        "blocked_on": "No domain owner. These serve two domains at once -- visitor intent scoring is both marketing and sales -- which is why they were undomained in the first place. The ruling is to absorb; the domain that absorbs each one is still unnamed, so this row cannot reach a terminal disposition yet."
       }
     },
     {
@@ -105,6 +141,12 @@
         "enabled": true,
         "run_count": 65323,
         "has_run": true
+      },
+      "owner_decision": {
+        "ruling": "absorb",
+        "decided_by": "Ali Muwwakkil",
+        "decided_on": "2026-11-01",
+        "blocked_on": "No domain owner. These serve two domains at once -- visitor intent scoring is both marketing and sales -- which is why they were undomained in the first place. The ruling is to absorb; the domain that absorbs each one is still unnamed, so this row cannot reach a terminal disposition yet."
       }
     },
     {
@@ -119,13 +161,19 @@
         "enabled": true,
         "run_count": 10886,
         "has_run": true
+      },
+      "owner_decision": {
+        "ruling": "absorb",
+        "decided_by": "Ali Muwwakkil",
+        "decided_on": "2026-11-01",
+        "blocked_on": "No domain owner. These serve two domains at once -- visitor intent scoring is both marketing and sales -- which is why they were undomained in the first place. The ruling is to absorb; the domain that absorbs each one is still unnamed, so this row cannot reach a terminal disposition yet."
       }
     },
     {
       "agent_name": "Alumni_Outreach_Agent",
       "proposed_kind": "retire",
       "source": "registry",
-      "disposition": "unresolved",
+      "disposition": "retired",
       "capability_id": null,
       "reason": "source_file backend/src/services/agents/alumni/alumniOutreachAgent.ts does not exist on disk and has no git history; backend/src/services/agentRegistryAuditClassification.ts:23 NO_SOURCE_FILE (confirmed_dead) (backend/src/services/agentRegistrySeed.ts:1205); domain: category=alumni has no matching target domain",
       "measured": {
@@ -133,13 +181,18 @@
         "enabled": false,
         "run_count": 0,
         "has_run": false
+      },
+      "owner_decision": {
+        "ruling": "retire",
+        "decided_by": "Ali Muwwakkil",
+        "decided_on": "2026-11-01"
       }
     },
     {
       "agent_name": "Alumni_Reengagement_Agent",
       "proposed_kind": "retire",
       "source": "registry",
-      "disposition": "unresolved",
+      "disposition": "retired",
       "capability_id": null,
       "reason": "source_file backend/src/services/agents/alumni/alumniReengagementAgent.ts does not exist on disk and has no git history; backend/src/services/agentRegistryAuditClassification.ts:23 NO_SOURCE_FILE (confirmed_dead) (backend/src/services/agentRegistrySeed.ts:1215); domain: category=alumni has no matching target domain",
       "measured": {
@@ -147,13 +200,18 @@
         "enabled": false,
         "run_count": 0,
         "has_run": false
+      },
+      "owner_decision": {
+        "ruling": "retire",
+        "decided_by": "Ali Muwwakkil",
+        "decided_on": "2026-11-01"
       }
     },
     {
       "agent_name": "Alumni_Referral_Agent",
       "proposed_kind": "retire",
       "source": "registry",
-      "disposition": "unresolved",
+      "disposition": "retired",
       "capability_id": null,
       "reason": "source_file backend/src/services/agents/alumni/alumniReferralAgent.ts does not exist on disk and has no git history; backend/src/services/agentRegistryAuditClassification.ts:23 NO_SOURCE_FILE (confirmed_dead) (backend/src/services/agentRegistrySeed.ts:1225); domain: category=alumni has no matching target domain",
       "measured": {
@@ -161,13 +219,18 @@
         "enabled": false,
         "run_count": 0,
         "has_run": false
+      },
+      "owner_decision": {
+        "ruling": "retire",
+        "decided_by": "Ali Muwwakkil",
+        "decided_on": "2026-11-01"
       }
     },
     {
       "agent_name": "Corporate_Training_Agent",
       "proposed_kind": "retire",
       "source": "registry",
-      "disposition": "unresolved",
+      "disposition": "retired",
       "capability_id": null,
       "reason": "source_file backend/src/services/agents/partnerships/corporateTrainingAgent.ts does not exist on disk and has no git history; backend/src/services/agentRegistryAuditClassification.ts:23 NO_SOURCE_FILE (confirmed_dead) (backend/src/services/agentRegistrySeed.ts:1247); domain: category=partnerships has no matching target domain",
       "measured": {
@@ -175,13 +238,18 @@
         "enabled": false,
         "run_count": 0,
         "has_run": false
+      },
+      "owner_decision": {
+        "ruling": "retire",
+        "decided_by": "Ali Muwwakkil",
+        "decided_on": "2026-11-01"
       }
     },
     {
       "agent_name": "Employer_Relationship_Agent",
       "proposed_kind": "retire",
       "source": "registry",
-      "disposition": "unresolved",
+      "disposition": "retired",
       "capability_id": null,
       "reason": "source_file backend/src/services/agents/partnerships/employerRelationshipAgent.ts does not exist on disk and has no git history; backend/src/services/agentRegistryAuditClassification.ts:23 NO_SOURCE_FILE (confirmed_dead) (backend/src/services/agentRegistrySeed.ts:1257); domain: category=partnerships has no matching target domain",
       "measured": {
@@ -189,13 +257,18 @@
         "enabled": false,
         "run_count": 0,
         "has_run": false
+      },
+      "owner_decision": {
+        "ruling": "retire",
+        "decided_by": "Ali Muwwakkil",
+        "decided_on": "2026-11-01"
       }
     },
     {
       "agent_name": "Enterprise_Partnership_Agent",
       "proposed_kind": "retire",
       "source": "registry",
-      "disposition": "unresolved",
+      "disposition": "retired",
       "capability_id": null,
       "reason": "source_file backend/src/services/agents/partnerships/enterprisePartnershipAgent.ts does not exist on disk and has no git history; backend/src/services/agentRegistryAuditClassification.ts:23 NO_SOURCE_FILE (confirmed_dead) (backend/src/services/agentRegistrySeed.ts:1237); domain: category=partnerships has no matching target domain",
       "measured": {
@@ -203,13 +276,18 @@
         "enabled": false,
         "run_count": 0,
         "has_run": false
+      },
+      "owner_decision": {
+        "ruling": "retire",
+        "decided_by": "Ali Muwwakkil",
+        "decided_on": "2026-11-01"
       }
     },
     {
       "agent_name": "Opportunity_Detection_Agent",
       "proposed_kind": "retire",
       "source": "registry",
-      "disposition": "unresolved",
+      "disposition": "retired",
       "capability_id": null,
       "reason": "source_file backend/src/services/agents/intelligence/opportunityDetectionAgent.ts does not exist on disk and has no git history; backend/src/services/agentRegistryAuditClassification.ts:23 NO_SOURCE_FILE (confirmed_dead) (backend/src/services/agentRegistrySeed.ts:1331); domain: category=behavioral (visitor intent scoring serves both marketing and sales; not assigned)",
       "measured": {
@@ -217,13 +295,18 @@
         "enabled": false,
         "run_count": 0,
         "has_run": false
+      },
+      "owner_decision": {
+        "ruling": "retire",
+        "decided_by": "Ali Muwwakkil",
+        "decided_on": "2026-11-01"
       }
     },
     {
       "agent_name": "Trend_Detection_Agent",
       "proposed_kind": "retire",
       "source": "registry",
-      "disposition": "unresolved",
+      "disposition": "retired",
       "capability_id": null,
       "reason": "source_file backend/src/services/agents/intelligence/trendDetectionAgent.ts does not exist on disk and has no git history; backend/src/services/agentRegistryAuditClassification.ts:23 NO_SOURCE_FILE (confirmed_dead) (backend/src/services/agentRegistrySeed.ts:1311); domain: category=behavioral (visitor intent scoring serves both marketing and sales; not assigned)",
       "measured": {
@@ -231,6 +314,11 @@
         "enabled": false,
         "run_count": 0,
         "has_run": false
+      },
+      "owner_decision": {
+        "ruling": "retire",
+        "decided_by": "Ali Muwwakkil",
+        "decided_on": "2026-11-01"
       }
     },
     {
@@ -245,6 +333,12 @@
         "enabled": true,
         "run_count": 12,
         "has_run": true
+      },
+      "owner_decision": {
+        "ruling": "parked",
+        "decided_by": "Ali Muwwakkil",
+        "decided_on": "2026-11-01",
+        "blocked_on": "Explicitly deferred on 2026-11-01. Live, production-only, no owner recorded and no autonomy source. Parking is a recorded answer, not a decision, and it must not be counted as one."
       }
     },
     {
@@ -259,6 +353,12 @@
         "enabled": true,
         "run_count": 9351,
         "has_run": true
+      },
+      "owner_decision": {
+        "ruling": "parked",
+        "decided_by": "Ali Muwwakkil",
+        "decided_on": "2026-11-01",
+        "blocked_on": "Explicitly deferred on 2026-11-01. Live, production-only, no owner recorded and no autonomy source. Parking is a recorded answer, not a decision, and it must not be counted as one."
       }
     },
     {
@@ -273,6 +373,12 @@
         "enabled": true,
         "run_count": 1954,
         "has_run": true
+      },
+      "owner_decision": {
+        "ruling": "parked",
+        "decided_by": "Ali Muwwakkil",
+        "decided_on": "2026-11-01",
+        "blocked_on": "Explicitly deferred on 2026-11-01. Live, production-only, no owner recorded and no autonomy source. Parking is a recorded answer, not a decision, and it must not be counted as one."
       }
     },
     {
@@ -287,6 +393,12 @@
         "enabled": true,
         "run_count": 150,
         "has_run": true
+      },
+      "owner_decision": {
+        "ruling": "parked",
+        "decided_by": "Ali Muwwakkil",
+        "decided_on": "2026-11-01",
+        "blocked_on": "Explicitly deferred on 2026-11-01. Live, production-only, no owner recorded and no autonomy source. Parking is a recorded answer, not a decision, and it must not be counted as one."
       }
     },
     {
@@ -301,10 +413,27 @@
         "enabled": true,
         "run_count": 1300725,
         "has_run": true
+      },
+      "owner_decision": {
+        "ruling": "parked",
+        "decided_by": "Ali Muwwakkil",
+        "decided_on": "2026-11-01",
+        "blocked_on": "Explicitly deferred on 2026-11-01. Live, production-only, no owner recorded and no autonomy source. Parking is a recorded answer, not a decision, and it must not be counted as one."
       }
     }
   ],
   "measured_live_rows": 13,
   "measured_live_runs": 1491129,
-  "measured_on": "2026-10-28"
+  "measured_on": "2026-10-28",
+  "owner_ruling": {
+    "ticket": "AF6.1",
+    "answer": "Q2: B",
+    "decided_by": "Ali Muwwakkil",
+    "decided_on": "2026-11-01",
+    "text": "Retire the eight that have never run, absorb the eight that run constantly, park the five live production-only rows.",
+    "retired": 8,
+    "absorb_pending_domain": 8,
+    "parked": 5,
+    "note": "Sixteen rulings, EIGHT terminal dispositions. Absorb cannot resolve a row without naming the domain that absorbs it, and parked is a deferral. Counting rulings as resolutions would report sixteen of twenty-one done where the truth is eight."
+  }
 }

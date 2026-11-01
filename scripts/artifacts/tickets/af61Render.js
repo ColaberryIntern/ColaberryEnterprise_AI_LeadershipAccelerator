@@ -48,11 +48,11 @@ function buildVisual() {
     font-size: 7.4pt; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
     color: ${TOKENS.CHERRY_DEEP}; margin-bottom: 4px;
   }
-  .panel .bd { font-size: 7.6pt; line-height: 1.34; margin-bottom: 3px; }
+  .panel .bd { font-size: 7.6pt; line-height: 1.24; margin-bottom: 2px; }
   .names { font-family: Consolas, monospace; font-size: 6.9pt; line-height: 1.3;
            color: ${TOKENS.MUTED}; }
   table.g { width: 100%; border-collapse: collapse; font-size: 7.3pt; margin-top: 2px; }
-  table.g td, table.g th { padding: 2px 5px; border-bottom: 1px solid ${TOKENS.BORDER};
+  table.g td, table.g th { padding: 1px 5px; border-bottom: 1px solid ${TOKENS.BORDER};
                            text-align: left; }
   table.g th { font-size: 6.9pt; text-transform: uppercase; letter-spacing: .04em;
                color: ${TOKENS.MUTED}; font-weight: 700; }
@@ -71,7 +71,7 @@ function buildVisual() {
     </tr>`).join('');
 
   const body = `
-  <h1>Sixteen of twenty-one decided. The five left include the busiest agent we run.</h1>
+  <h1>Sixteen ruled on. Eight actually resolved. The rest include the busiest agent we run.</h1>
   <div class="meta">${FOOT}</div>
   <div class="rule"></div>
 
@@ -88,8 +88,8 @@ function buildVisual() {
       <div class="k">Absorb &mdash; all active within the hour</div></div>
     <div class="card"><div class="n" style="color:${SEV.watch}">${D.GROUP_C.n}</div>
       <div class="k">Parked &mdash; live, and no owner recorded</div></div>
-    <div class="card"><div class="n">${decided} / ${D.TOTAL}</div>
-      <div class="k">Carry a terminal disposition</div></div>
+    <div class="card"><div class="n">${D.GROUP_A.n} / ${D.TOTAL}</div>
+      <div class="k">Actually resolved &mdash; ${decided} were ruled on</div></div>
   </div>
 
   <h2>The five parked rows, measured ${esc(D.MEASURED_ON)}</h2>
@@ -99,9 +99,10 @@ function buildVisual() {
       <th>Why it is not a tidy-up</th></tr></thead>
     <tbody>${parked}</tbody>
   </table>
-  <div class="tiny" style="margin-top:2px">All five are enabled at autonomy observe with NO
-  owner and no recorded autonomy source, created 2026-03-11 by the March governance seed. The
-  missing owner is why they were unresolved, and parking does not supply one.</div>
+  <div class="tiny" style="margin-top:2px"><strong>Five production-only rows, not "the five live
+  rows": thirteen of the 21 are live.</strong> All five enabled at observe, no owner, no autonomy
+  source, created 2026-03-11 by the March governance seed &mdash; the missing owner is why they
+  were unresolved, and parking does not supply one.</div>
 
   <div class="cols">
     <div class="col panel bad">
@@ -190,6 +191,7 @@ function buildDocument() {
   </table>
 
   <h2>Group C &mdash; PARKED (${D.GROUP_C.n})</h2>
+  <div class="note warn"><strong>${esc(D.GROUP_C.correction)}</strong></div>
   <p>${esc(D.GROUP_C.shared)}</p>
   <table>
     <thead><tr><th>Agent</th><th style="text-align:right">Activity rows</th>

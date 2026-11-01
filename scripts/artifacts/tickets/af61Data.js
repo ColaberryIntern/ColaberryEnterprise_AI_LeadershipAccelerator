@@ -23,8 +23,10 @@ const TOTAL = 21;
 const RULING = {
   answer: 'Q2: B',
   text: 'Approve retire and absorb, park the third group.',
-  consequence: 'Sixteen of the twenty-one now carry a terminal disposition with a named decider '
-    + 'and a date. Five do not, and are recorded as PARKED rather than quietly counted as done.',
+  consequence: 'All twenty-one now carry a ruling with a named decider and a date. Only EIGHT '
+    + 'reach a terminal disposition. Absorb cannot resolve a row without naming the domain that '
+    + 'absorbs it, and parked is a deferral, so thirteen rows still have no home. Counting '
+    + 'rulings as resolutions would report sixteen done where the truth is eight.',
 };
 
 /**
@@ -33,7 +35,7 @@ const RULING = {
  */
 const HEADLINE = {
   ruling: 'Retire the eight that have never run. Absorb the eight that run constantly. Park the '
-    + 'five live production rows.',
+    + 'five production-only rows, which are live and have no owner.',
   why: 'The retire group is genuinely dead and the behavior group is extremely alive, so these '
     + 'were never one decision. Group A has zero runs and zero activity rows between all eight of '
     + 'them. Group B ran 65,735 times in the last thirty days and every one of them was active '
@@ -82,7 +84,12 @@ const GROUP_B = {
 };
 
 /**
- * GROUP C: parked. Five live production rows.
+ * GROUP C: parked. The five PRODUCTION-ONLY rows.
+ *
+ * Not "the five live rows". AF3.3 corrected that on 2026-10-31 and pinned it with a test:
+ * THIRTEEN of the 21 are live, because the eight in Group B are enabled and busy too. Five is
+ * the count of rows whose source is production rather than the registry, and reading it as the
+ * count of live ones understated the decision by a factor of two and a half.
  *
  * Parked is a recorded disposition, not a decision. The ticket asks for one of assign-to-domain,
  * retire or keep-with-owner for each of the 21, so these five leave AF6.1 short of its own
@@ -138,6 +145,10 @@ const GROUP_C = {
         + 'parked instead, so it stays enabled and dormant.',
     },
   ],
+  correction: 'These are the five PRODUCTION-ONLY rows, not "the five live rows". THIRTEEN of '
+    + 'the 21 are live: the eight in Group B are enabled and busy too. AF3.3 caught that on '
+    + '2026-10-31 and pinned it with a test, after five was read as the count of live rows and '
+    + 'understated the decision by a factor of two and a half.',
   shared: 'All five: enabled, autonomy observe, autonomy_level_source EMPTY, status idle, '
     + 'created 2026-03-11 by the March governance seed, and NO owner recorded. The missing owner '
     + 'is why they were unresolved in the first place, and parking does not supply one.',
@@ -147,12 +158,13 @@ const GROUP_C = {
 const PARKED_COST = [
   'AF6.1 does not meet its own first acceptance criterion. It asks for a recorded decision for '
   + 'each of the 21; sixteen have one. The ticket stays open.',
-  'The consolidation claim stays imprecise. "217 agents down to 10" is defensible for sixteen of '
-  + 'these and silent about five, and the five include the busiest agent in the fleet.',
+  'The consolidation claim stays imprecise. "217 down to 10" should stop being quoted at all: '
+  + 'AF3.2 found 217 not reproducible and put it at 152. Whatever figure replaces it is still '
+  + 'silent about five rows, and they include the busiest agent in the fleet.',
   'calendar_intent_booster stays enabled while being dead for six months, because parking it is '
   + 'not the same as retiring it and this record will not blur the two.',
-  'forecast_engine has already stopped on its own, with no decision and no alert. Parking leaves '
-  + 'that unexplained rather than resolved.',
+  'forecast_engine stopped on its own, with no decision and no alert. Parking leaves that '
+  + 'unexplained rather than resolved.',
 ];
 
 /** What AF6.1 unblocks, and what it does not. */

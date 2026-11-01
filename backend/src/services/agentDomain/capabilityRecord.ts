@@ -195,13 +195,44 @@ export function assertRecordContract(key: string, m: DomainCapabilityMatrix): vo
   }
 }
 
+/**
+ * What the owner ruled about one undomained legacy agent, and when.
+ *
+ * AF6.1, Ali Muwwakkil, 2026-11-01: retire the eight that have never run, absorb the eight that
+ * run constantly, park the five live production-only rows.
+ *
+ * `ruling` is the DECISION. `disposition` is what that decision has so far been able to achieve,
+ * and the two are deliberately separate, because they came apart on this very bucket:
+ *
+ *  - `retire` reaches a terminal `disposition: 'retired'` immediately. Nothing more is needed.
+ *  - `absorb` CANNOT, because absorbing an agent means naming the domain that absorbs it, and
+ *    these eight are undomained precisely because they serve two domains at once. The ruling is
+ *    recorded; the row stays `unresolved` until a domain owner exists.
+ *  - `parked` is an explicit deferral. It is a recorded answer, not a decision, and it must never
+ *    be counted as one.
+ *
+ * Collapsing these into one field would let "Ali decided" stand in for "the agent has a home",
+ * and sixteen rulings would read as sixteen resolved rows when only eight are.
+ */
+export type OwnerRuling = 'retire' | 'absorb' | 'parked';
+
+export interface OwnerDecision {
+  readonly ruling: OwnerRuling;
+  readonly decided_by: string;
+  readonly decided_on: string;
+  /** What still stands between this ruling and a terminal disposition, where anything does. */
+  readonly blocked_on?: string;
+}
+
 export interface UnresolvedLegacyRow {
   readonly agent_name: string;
   readonly proposed_kind: string | null;
   readonly source: string | null;
-  readonly disposition: 'unresolved';
+  /** `retired` is terminal. `unresolved` means this row still has no home. */
+  readonly disposition: 'unresolved' | 'retired';
   readonly capability_id: null;
   readonly reason: string;
+  readonly owner_decision?: OwnerDecision;
 }
 
 export interface UnresolvedBucket {
@@ -232,9 +263,47 @@ export function loadUnresolvedBucket(): UnresolvedBucket {
     problems.push(`legacy_row_count ${parsed.legacy_row_count} but ${parsed.rows.length} rows`);
   }
   for (const r of parsed.rows) {
-    if (r.disposition !== 'unresolved') problems.push(`${r.agent_name}: disposition '${r.disposition}'`);
+    if (r.disposition !== 'unresolved' && r.disposition !== 'retired') {
+      problems.push(`${r.agent_name}: disposition '${r.disposition}'`);
+    }
     if (!r.reason || r.reason.trim().length === 0) problems.push(`${r.agent_name}: no reason`);
+
+    /* A row may only leave `unresolved` on a recorded ruling. Without this, widening the
+       disposition union is just a licence to mark rows retired with nobody's name on it. */
+    if (r.disposition === 'retired' && !r.owner_decision) {
+      problems.push(`${r.agent_name}: disposition 'retired' with no owner_decision`);
+    }
+    const d = r.owner_decision;
+    if (d) {
+      if (!d.decided_by || !d.decided_on) {
+        problems.push(`${r.agent_name}: owner_decision without a decider and a date`);
+      }
+      if (!['retire', 'absorb', 'parked'].includes(d.ruling)) {
+        problems.push(`${r.agent_name}: ruling '${d.ruling}'`);
+      }
+      /* The two directions that would let a ruling be misread as more than it is. */
+      if (d.ruling === 'retire' && r.disposition !== 'retired') {
+        problems.push(`${r.agent_name}: ruled retire but disposition is '${r.disposition}'`);
+      }
+      if (d.ruling !== 'retire' && r.disposition !== 'unresolved') {
+        problems.push(`${r.agent_name}: ruled '${d.ruling}' but disposition is '${r.disposition}'`);
+      }
+      /* `absorb` and `parked` both leave work behind. Saying what is a required field, because
+         "decided" with nothing named is how a ruling quietly becomes a resolution. */
+      if (d.ruling !== 'retire' && !d.blocked_on) {
+        problems.push(`${r.agent_name}: ruled '${d.ruling}' without naming what it is blocked on`);
+      }
+    }
   }
+
+  /* The flag must follow the rows. A bucket that still holds unresolved rows while claiming no
+     owner decision is needed is the exact shape of a green board over unfinished work. */
+  const stillOpen = parsed.rows.some((r) => r.disposition === 'unresolved');
+  if (parsed.needs_owner_decision !== stillOpen) {
+    problems.push(`needs_owner_decision is ${parsed.needs_owner_decision} but `
+      + `${stillOpen ? 'rows remain unresolved' : 'every row is resolved'}`);
+  }
+
   if (problems.length > 0) throw new Error(`UnresolvedBucketViolation: ${problems.join('; ')}`);
   return parsed;
 }

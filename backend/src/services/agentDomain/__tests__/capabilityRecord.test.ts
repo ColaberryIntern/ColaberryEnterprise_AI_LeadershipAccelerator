@@ -111,9 +111,11 @@ describe('every legacy agent row is accounted for, by name', () => {
 
   it('every bucket row carries a disposition AND a reason, which the run file never did', () => {
     const b = loadUnresolvedBucket();
+    // Still true after the AF6.1 ruling of 2026-11-01: thirteen rows remain unresolved, because
+    // eight were ruled `absorb` without a domain being named and five were parked.
     expect(b.needs_owner_decision).toBe(true);
     for (const r of b.rows) {
-      expect(r.disposition).toBe('unresolved');
+      expect(['unresolved', 'retired']).toContain(r.disposition);
       expect(r.reason.trim().length).toBeGreaterThan(10);
       expect(r.capability_id).toBeNull();
     }
