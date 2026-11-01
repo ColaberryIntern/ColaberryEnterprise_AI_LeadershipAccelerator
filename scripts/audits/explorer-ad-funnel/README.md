@@ -12,6 +12,7 @@ On the production host, from `/opt/colaberry-accelerator`:
 bash scripts/audits/explorer-ad-funnel/run.sh funnel                    # who signed up, from where, how far
 bash scripts/audits/explorer-ad-funnel/run.sh behavior                  # what ad Explorers did after signup
 bash scripts/audits/explorer-ad-funnel/run.sh cutover                   # before vs after C91 (2026-10-29 23:30 UTC)
+bash scripts/audits/explorer-ad-funnel/run.sh returnpath                # C97: who comes back, and what stops them
 bash scripts/audits/explorer-ad-funnel/run.sh funnel since=2026-11-01   # a different window
 bash scripts/audits/explorer-ad-funnel/run.sh cutover "cutover='2026-11-15 00:00:00+00'"
 ```
@@ -38,3 +39,7 @@ Read-only: one transaction, always rolled back, 60 s statement timeout, stops at
 - **Tour and admissions-call tables start on 2026-10-26.** Earlier signups show no tour activity by construction.
 - **Return visits** count visitor sessions started after signup; a returning visitor who blocks tracking is missed.
 - `cutover.sql` compares windows of different lengths. Compare the rates.
+- **Sign-in link use cannot be measured from `page_events`.** `/portal/verify` redirects to Today as soon as the token
+  checks out, before the tracker records the page: zero `/portal/verify` events exist for any visitor (`returnpath`
+  R5 is the control; `/portal/login` IS recorded). The only record of a link being used is the backend's request
+  log, which does not survive a container recreate.
