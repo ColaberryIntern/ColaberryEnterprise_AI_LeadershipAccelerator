@@ -260,6 +260,22 @@ async function getAdminRecipients(): Promise<string> {
   return env.emailFrom;
 }
 
+/**
+ * Gov pursuit daily-sweep notification to the DRI (the `admin_notification_emails` setting). The sweep composes
+ * the HTML; this is the one send path, routed through resolveEmailRecipient (test-mode safe) and guardedSendMail
+ * (the single transport chokepoint). Used only by the dark govOpportunitySweep job.
+ */
+export async function sendGovOpportunitySweepEmail(data: { subject: string; html: string }): Promise<void> {
+  const admin = await getAdminRecipients();
+  const r = await resolveEmailRecipient(admin, data.subject);
+  await guardedSendMail({
+    from: `"Colaberry Gov Pursuit" <${env.emailFrom}>`,
+    to: r.to,
+    subject: r.subject,
+    html: data.html,
+  });
+}
+
 export function htmlToPlainText(html: string): string {
   return html
     .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')

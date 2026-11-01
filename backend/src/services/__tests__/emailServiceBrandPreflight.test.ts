@@ -183,6 +183,9 @@ const SENDERS: Array<{ name: string; run: () => Promise<unknown> }> = [
     to: 'member@example.com', recipientName: 'Jordan Ellis', actorName: 'Marcus Reed',
     preview: 'That matches what we saw in the lab run.', postId: 'p-1', onOwnPost: true, eventId: 'c-1',
   }) },
+  { name: 'sendGovOpportunitySweepEmail', run: () => emailService.sendGovOpportunitySweepEmail({
+    subject: 'Gov pursuit: sweep', html: '<p>test</p>',
+  }) },
   { name: 'sendTrainingWelcome', run: () => emailService.sendTrainingWelcome({
     to: 'new@example.com', fullName: 'Jordan Ellis', portalLink: 'https://enterprise.colaberry.ai/portal?token=x',
   }) },
