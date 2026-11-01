@@ -1,4 +1,4 @@
-import { departuresBoard, projectRoute, DEPARTURES_MAX, type StudioProjectFacts } from '../interior/departures';
+import { departuresBoard, projectRoute, type StudioProjectFacts } from '../interior/departures';
 import type { StudentProject } from '../../../pages/portal/projects/projectsStore';
 
 /**
@@ -48,12 +48,12 @@ describe('Departures board (C85)', () => {
     expect(b.rows[0].label).toBe('Local build');
   });
 
-  it('six or more projects: the newest four, two builds with one name keep two rows', () => {
+  it('every project gets a row (Ali has seven; the board scrolls), and two builds with one name keep two rows', () => {
     const many = Array.from({ length: 7 }, (_, i) => proj(`p${i}`, i < 2 ? 'Same name' : `Build ${i}`));
     const b = departuresBoard(many, null, NOW);
-    expect(b.rows).toHaveLength(DEPARTURES_MAX);
+    expect(b.rows).toHaveLength(7);
     expect(b.rows.slice(0, 2).map((r) => r.label)).toEqual(['Same name', 'Same name (2)']);
-    expect(new Set(b.rows.map((r) => r.label)).size).toBe(DEPARTURES_MAX);
+    expect(new Set(b.rows.map((r) => r.label)).size).toBe(7);
   });
 
   it('a project with no next task opens the Projects page', () => {

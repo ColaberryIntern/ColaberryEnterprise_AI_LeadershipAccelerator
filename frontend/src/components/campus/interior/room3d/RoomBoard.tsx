@@ -157,15 +157,18 @@ export function WallBoard({ side, onSection, onRoute, onZoom, big }: WallBoardPr
       <span className="pin" aria-hidden="true" />
       <h4>{side.title}</h4>
       {side.note && <span className="note" data-testid="cm-wall-board-note">{side.note}</span>}
-      {side.rows.map((r) => (
-        <React.Fragment key={r.label}>
-          {/* C75: a row with a route goes straight there (the Schedule's Today items open their assignment) */}
-          {r.route && onRoute
-            ? <button type="button" className="r is-link" onClick={stop(() => onRoute(r.route!))} data-testid="cm-wall-board-row"><span>{r.label}</span><b>{r.value} &rarr;</b></button>
-            : <span className="r"><span>{r.label}</span><b>{r.value}</b></span>}
-          {r.pct != null && <span className="bar"><i style={{ width: `${Math.max(3, r.pct)}%` }} /></span>}
-        </React.Fragment>
-      ))}
+      {/* the rows scroll inside the board, so a long list (Departures, every project) never pushes the page link off it */}
+      {side.rows.length > 0 && <div className="rows" data-testid="cm-wall-board-rows">
+        {side.rows.map((r) => (
+          <React.Fragment key={r.label}>
+            {/* C75: a row with a route goes straight there (the Schedule's Today items open their assignment) */}
+            {r.route && onRoute
+              ? <button type="button" className="r is-link" onClick={stop(() => onRoute(r.route!))} data-testid="cm-wall-board-row"><span>{r.label}</span><b>{r.value} &rarr;</b></button>
+              : <span className="r"><span>{r.label}</span><b>{r.value}</b></span>}
+            {r.pct != null && <span className="bar"><i style={{ width: `${Math.max(3, r.pct)}%` }} /></span>}
+          </React.Fragment>
+        ))}
+      </div>}
       {!side.rows.length && side.empty && <span className="empty" data-testid="cm-wall-board-empty">{side.empty}</span>}
       <button type="button" className="go" onClick={stop(go)} data-testid={big ? 'cm-wall-board-page-big' : 'cm-wall-board-page'}>{side.open ?? 'See it on the page'} &rarr;</button>
       {onZoom && <EnlargeButton big={big} onZoom={onZoom} testId={big ? 'cm-wall-board-restore' : 'cm-wall-board-enlarge'} />}
