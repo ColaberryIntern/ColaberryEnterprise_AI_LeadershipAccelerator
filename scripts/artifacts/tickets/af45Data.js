@@ -14,6 +14,8 @@ const PHASE1_PR = 3535;
 const PHASE2_PR = 3538;
 const MERGED_ON = '2026-10-31';
 const AUDIT_ON = '2026-10-31';
+/* The day the authorized end-to-end run failed and the importer was hardened. */
+const REVISED_ON = '2026-11-01';
 const GITLEAKS_VERSION = '8.30.1';
 
 /**
@@ -169,7 +171,13 @@ const PARSER = {
     + 'repository nobody scanned, inside a report that says how many repositories were clean.',
 };
 
-/** The ten refusal classes. Named, in the style of promotionCriteria.ts, and unit tested. */
+/**
+ * The refusal classes. Named, in the style of promotionCriteria.ts, and unit tested.
+ *
+ * Every count of these in the rendered pages is derived from this array's length. The
+ * list said "ten" in three hardcoded places on 2026-11-01 while the code enforced
+ * eleven, which is the drift a hand-maintained number always eventually has.
+ */
 const REFUSALS = [
   ['workflow_or_actions_change', 'anything under .github/'],
   ['infrastructure_change', 'docker-compose*.yml, Dockerfile*, nginx/, preview-db-init/'],
@@ -181,6 +189,7 @@ const REFUSALS = [
   ['too_many_files_to_review', 'more than 40 files: that is a merge, not a change request'],
   ['secret_detected_in_patch', 'checked BEFORE the push, because pushing is what publishes it'],
   ['no_files_changed', 'an unreadable commit, which must not import as a no-op PR'],
+  ['no_path_in_this_repository', 'the intern\'s own project state: nothing here to apply it to'],
 ];
 
 /**
@@ -198,13 +207,19 @@ const GITHUB_RULE = 'A workflow runs with this repository\'s secrets, so a chang
 const PROOF = [
   ['REFUSED', 'qninying/platform-reliability-agent@3ffe3ceb',
     'workflow_or_actions_change, naming .github/workflows/ci.yml'],
-  ['ALLOWED', 'tashdiah-Data/ai-project@832955b3',
-    'no refusal fired, and the patch scans clean'],
+  ['REFUSED', 'tashdiah-Data/ai-project@832955b3',
+    'no_path_in_this_repository, naming .colaberry/progress.json. This row read '
+    + 'ALLOWED on 31 Oct and was wrong'],
+  ['NO APPLY', 'qninying/platform-reliability-agent@6a1c0afb',
+    'clears every refusal, then fails the rehearsal: no base blob here for git am -3'],
 ];
 
 /** The importer's safety properties, each one a deliberate choice with a reason. */
 const SAFETY = [
   ['Dry run by default', '--apply is required before anything is pushed'],
+  ['The dry run applies for real', 'it rehearses the patch onto origin/main in a throwaway '
+    + 'worktree and discards, because a rehearsal that never applies cannot tell importable '
+    + 'from unapplicable, and said so for a commit that then failed'],
   ['Idempotent', 'the branch name derives from the source commit, an existing branch is reused, '
     + 'and an existing pull request is reported rather than opened twice'],
   ['Never touches a working branch', 'the patch is applied in a throwaway git worktree built from '
@@ -240,10 +255,14 @@ const CRITERIA = [
     text: 'One real change travels intern repo to enterprise repo through a review the intern did '
       + 'not perform, demonstrated end to end.',
     met: false,
-    evidence: 'NOT MET, and the contract says so on its face. The mechanism is verified in both '
-      + 'directions against real intern commits, but no change has been pushed, reviewed and '
-      + 'merged through it. That final run opens a real pull request here attributed to an '
-      + 'intern, which is outward-facing, so it waits for Ali rather than happening quietly.',
+    evidence: 'NOT MET, and on 2026-11-01 the reason changed. Ali authorized the end-to-end run; '
+      + 'it failed, and the failure is the finding. No intern commit is importable. All 7 '
+      + 'repositories were surveyed over their recent commits and NOT ONE patch has a base blob '
+      + 'this repository contains, so git am -3 has nothing to merge against. The interns are '
+      + 'building their own standalone projects, so their commits touch their own files; the only '
+      + 'overlap is generic filenames (README.md, package.json, .gitignore) that are different '
+      + 'documents sharing a name. This criterion cannot be met by picking a better commit. It '
+      + 'needs an intern to make a genuine change to THIS codebase, which is a scope decision.',
   },
   {
     n: 4,
@@ -272,8 +291,14 @@ const GAPS = [
   'The secret gate is a pre-commit hook HERE and nothing in an intern repository yet. Until the '
   + 'hook is installed there, the scan is a periodic audit rather than a gate, and a secret can '
   + 'sit published between runs.',
-  'Criterion 3 is unmet: the importer is built and verified, and no change has traveled it end '
-  + 'to end.',
+  'Criterion 3 is unmet and cannot be met as written. The authorized end-to-end run on 2026-11-01 '
+  + 'failed, and surveying all 7 intern repositories showed why: no commit any intern has made is '
+  + 'importable, because none of them is a change to this codebase. Meeting it requires an intern '
+  + 'to contribute here for real, which is a scope decision rather than another run.',
+  'The dry run was lying until 2026-11-01. It checked policy and the secret scan and then printed '
+  + '"Would push and open a pull request" without ever attempting the apply, so it could not tell '
+  + 'an importable patch from one that explodes on contact. It now rehearses the apply on '
+  + 'origin/main and discards. Both halves of that failure are the kind a passing check hides.',
   'The contract governs the 7 interns; 54 repositories are connected. The other 43 belong to '
   + 'staff and students, are equally public, and are governed by nothing written here.',
   'The one publishable key found is harmless only if row-level security is enabled on every table '
@@ -283,8 +308,11 @@ const GAPS = [
 
 /** What ran. A count of tests is evidence only when the gate it stands for is named. */
 const VERIFICATION = {
-  tests: 92,
-  suites: '52 on the refusal policy, 18 on the target parser, 22 on the test-typecheck ratchet',
+  tests: 100,
+  suites: '60 on the refusal policy, 18 on the target parser, 22 on the test-typecheck ratchet',
+  mutation: 'The new no_path_in_this_repository rule was mutation-tested in BOTH directions: '
+    + 'forced never to fire, 3 tests fail; forced always to fire, 3 different tests fail. A rule '
+    + 'pinned in only one direction passes its own tests while being unusable.',
   pairing: 'Every refusal test is paired with an ALLOW case on a neighboring path, plus a CONTROL '
     + 'assertion, because a policy that refused everything would pass every refusal test on its '
     + 'own while making the path unusable.',
@@ -298,7 +326,7 @@ const VERIFICATION = {
 };
 
 module.exports = {
-  TICKET, PHASE1_PR, PHASE2_PR, MERGED_ON, AUDIT_ON, GITLEAKS_VERSION,
+  TICKET, PHASE1_PR, PHASE2_PR, MERGED_ON, AUDIT_ON, REVISED_ON, GITLEAKS_VERSION,
   HEADLINE, ACCESS, REPOS, AUDIT, TRIAGE, CONTROL, CORRECTION, PARSER,
   REFUSALS, GITHUB_RULE, PROOF, SAFETY, CRITERIA, GAPS, VERIFICATION,
 };

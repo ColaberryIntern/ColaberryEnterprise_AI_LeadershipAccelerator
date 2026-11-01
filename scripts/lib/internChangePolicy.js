@@ -95,9 +95,14 @@ const MAX_FILES = 40;
  * @param {string[]} change.paths       repo-relative paths the patch touches
  * @param {boolean} [change.secretFound] true when the secret scan flagged the patch
  * @param {number}  [change.maxFiles]
+ * @param {string[]|Set<string>} [change.repoPaths] this repository's tracked paths. When
+ *   supplied, a patch with no footprint here at all is refused -- see the rule below.
+ *   Omitted, the check does not run, so this stays a pure decision model the caller feeds.
  * @returns {{allowed: boolean, refusals: Array<{name: string, why: string, paths?: string[]}>}}
  */
-function evaluateChange({ paths, secretFound = false, maxFiles = MAX_FILES }) {
+function evaluateChange({
+  paths, secretFound = false, maxFiles = MAX_FILES, repoPaths = null,
+}) {
   const list = Array.isArray(paths) ? paths.filter((p) => typeof p === 'string' && p.trim()) : [];
   const refusals = [];
 
@@ -121,6 +126,34 @@ function evaluateChange({ paths, secretFound = false, maxFiles = MAX_FILES }) {
       name: 'too_many_files_to_review',
       why: `${list.length} files exceeds the reviewable limit of ${maxFiles}. Split it, `
         + 'or it is not a change request but a merge.',
+    });
+  }
+
+  /*
+   * A patch that touches nothing this repository has is the intern's own project state,
+   * not a contribution to this codebase.
+   *
+   * This rule is here because of a real failure on 2026-11-01. The dry run passed a
+   * commit that edited `.colaberry/progress.json` -- a file only the intern's repo has --
+   * and `git am` then died with exit 128, because there is no file to place the hunk in
+   * and no base blob for `-3` to merge against. Every refusal above asks "is this path
+   * DANGEROUS"; none asked "is this path even OURS", so the answer was yes by default.
+   *
+   * Deliberately scoped to the unambiguous case of ZERO overlap. A partial overlap may
+   * still conflict, and that is caught by actually attempting the apply rather than
+   * guessed at here, because a filename match is not a content match: both repositories
+   * have a `README.md`, and they are different documents that share a name.
+   */
+  const known = repoPaths instanceof Set ? repoPaths
+    : (Array.isArray(repoPaths) ? new Set(repoPaths) : null);
+  if (known && known.size && list.length
+      && !list.some((p) => known.has(normalize(p)))) {
+    refusals.push({
+      name: 'no_path_in_this_repository',
+      why: 'None of these paths exists in this repository, so the patch is the intern\'s '
+        + 'own project state rather than a change to this codebase. There is nothing here '
+        + 'for the hunks to apply to.',
+      paths: list.map((p) => normalize(p)),
     });
   }
 
