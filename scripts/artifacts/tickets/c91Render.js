@@ -53,12 +53,18 @@ function buildVisual() {
   const total = D.assertEveryVerdictIsBinary();
   const failed = D.assertRecommendationFollowsFromVerdicts();
   const r = D.RECOMMENDATION;
+  // Spelled out from the data rather than typed into the sentence. This paragraph read
+  // "Three of the five failures" while listing four of them, because the count was prose
+  // and the list was generated - the two drifted the moment a criterion moved path.
+  const word = (n) => ['none', 'one', 'two', 'three', 'four', 'five', 'six',
+    'seven', 'eight', 'nine'][n] || String(n);
+  const Word = (n) => word(n).charAt(0).toUpperCase() + word(n).slice(1);
 
   const body = `
     <h1 style="margin:0">Launch readiness: ${esc(r.verdict)}</h1>
     <p style="font-size:11.5px;color:#64748b;margin:3px 0 0">C9.1 &middot;
     ${total - failed} of ${total} criteria pass &middot; pass or fail, no partial credit
-    &middot; evidence gathered ${esc(D.AS_OF)}</p>
+    &middot; evidence gathered ${esc(D.AS_OF)}, figures re-read ${esc(D.RE_READ.at)}</p>
 
     <div class="bad" style="margin-top:9px"><strong>${esc(r.verdict)}.</strong>
     ${esc(r.because)}</div>
@@ -66,9 +72,14 @@ function buildVisual() {
     ${scorecard()}
 
     <div class="flag"><strong>The critical path runs through decisions, not through
-    building.</strong> Three of the five failures are waiting on Ali
-    (${D.CRITICAL_PATH.blockedOnAli.map((x) => esc(x)).join('; ')}), one on a
-    configuration row that nobody has created, and one on instrumentation.
+    building.</strong> ${Word(D.CRITICAL_PATH.blockedOnAli.length)} of the ${word(failed)}
+    failures are waiting on Ali
+    (${D.CRITICAL_PATH.blockedOnAli.map((x) => esc(x)).join('; ')})${
+      D.CRITICAL_PATH.blockedOnConfiguration.length
+        ? ', ' + word(D.CRITICAL_PATH.blockedOnConfiguration.length)
+          + ' on a configuration row that nobody has created'
+        : ''}, and
+    ${word(D.CRITICAL_PATH.blockedOnBuild.length)} on instrumentation.
     ${esc(r.smallestPathToGo)}</div>
 
     <p style="font-size:11px;color:#64748b;margin-top:4px"><strong>Why the asymmetry
@@ -119,7 +130,10 @@ function buildDocument() {
         <tr><td><strong>A decision only Ali can make</strong></td>
           <td>${D.CRITICAL_PATH.blockedOnAli.map((x) => esc(x)).join('<br>')}</td></tr>
         <tr><td><strong>A configuration nobody has created</strong></td>
-          <td>${D.CRITICAL_PATH.blockedOnConfiguration.map((x) => esc(x)).join('<br>')}</td></tr>
+          <td>${D.CRITICAL_PATH.blockedOnConfiguration.length
+            ? D.CRITICAL_PATH.blockedOnConfiguration.map((x) => esc(x)).join('<br>')
+            : '<em>None. The governance config this review called for was created by '
+              + 'C0.12 on ' + esc(D.RE_READ.at) + '.</em>'}</td></tr>
         <tr><td><strong>Engineering</strong></td>
           <td>${D.CRITICAL_PATH.blockedOnBuild.map((x) => esc(x)).join('<br>')}</td></tr>
       </tbody>

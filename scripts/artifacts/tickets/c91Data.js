@@ -14,6 +14,28 @@
 
 const AS_OF = '24 October 2026';
 
+/**
+ * When the database-backed figures were last re-read, and what moved.
+ *
+ * The review's own doctrine is that a verdict rests on evidence gathered today rather than
+ * on a ticket being closed. That cuts both ways: evidence gathered on 24 October is not
+ * evidence today either. C0.12 deliberately changed one of the figures below on
+ * 1 November, so everything measurable was re-read rather than only the one that was
+ * touched.
+ *
+ * NOT re-verified on 1 November: criteria 3 and 4, which rest on rendering pages in a
+ * browser rather than on a query. They are carried at their 24 October verdicts and this
+ * note is here so that is visible rather than implied.
+ */
+const RE_READ = {
+  at: '1 November 2026',
+  moved: ['campaignGovernanceConfigs: 0 -> 1'],
+  unchanged: ['strategicAccounts 0', 'activeCampaigns 6', 'revenueOpportunities 0',
+    'deliveryContracts 0', 'leadsLinkedToAnAccount 0'],
+  notReVerified: ['Website live', 'Demo ready'],
+  verdictsChanged: 0,
+};
+
 /** PASS or FAIL. There is no third value, on purpose. */
 const CRITERIA = [
   {
@@ -76,12 +98,17 @@ const CRITERIA = [
     name: 'Campaign gate passed',
     verdict: 'FAIL',
     evidence: 'C6.10 built the activation gate and is closed, so the gate EXISTS. No '
-      + 'campaign has passed it: campaign_governance_configs holds ZERO rows, and a '
-      + 'governance config is one of the gate’s own required checks. Nothing can '
-      + 'clear it in its current state.',
-    nuance: 'Separately worth knowing: six campaigns sit in status "active" while no '
-      + 'governance config exists. The gate having been built is not the same as the '
-      + 'gate having been passed, and this criterion asks for the second.',
+      + 'campaign has passed it. Re-measured 1 November: of 47 campaigns, exactly ONE '
+      + 'holds a governance config, and the gate reports it two blockers short - '
+      + 'claims_approved and dry_run_reviewed, both attestations only Ali can set. Zero '
+      + 'campaigns pass outright.',
+    nuance: 'THIS IS THE ONE VERDICT WHOSE REASON CHANGED. On 24 October '
+      + 'campaign_governance_configs held zero rows, so nothing could clear the gate in '
+      + 'its current state - a systemic block. C0.12 created the first config on '
+      + '1 November, so the block is no longer systemic: it is two human attestations on '
+      + 'one campaign. The verdict is still FAIL, because this criterion asks whether a '
+      + 'campaign has PASSED the gate and none has. Six campaigns still sit in status '
+      + '"active" without having passed it.',
   },
   {
     n: 7,
@@ -128,7 +155,7 @@ const CRITERIA = [
 const MEASURED = {
   asOf: AS_OF,
   strategicAccounts: 0,
-  campaignGovernanceConfigs: 0,
+  campaignGovernanceConfigs: 1,   // was 0 on 24 October; C0.12 created the first on 1 November
   activeCampaigns: 6,
   revenueOpportunities: 0,
   deliveryContracts: 0,
@@ -143,8 +170,12 @@ const MEASURED = {
  * engineering at all.
  */
 const CRITICAL_PATH = {
-  blockedOnAli: ['Proposal and SOW ready', 'Security one-pager ready', 'Target list verified'],
-  blockedOnConfiguration: ['Campaign gate passed'],
+  // 'Campaign gate passed' moved here from blockedOnConfiguration on 1 November. The
+  // configuration it was waiting for now exists, so what remains are two attestations
+  // only Ali can set - which makes FOUR of the five failures his, and one engineering.
+  blockedOnAli: ['Proposal and SOW ready', 'Security one-pager ready', 'Target list verified',
+    'Campaign gate passed'],
+  blockedOnConfiguration: [],
   blockedOnBuild: ['Funnel instrumented'],
 };
 
@@ -158,9 +189,12 @@ const RECOMMENDATION = {
   cost: 'C9.1 states the cost of getting this wrong: going outbound unprepared burns the '
     + 'target list, and a burned list cannot be re-approached for months. The asymmetry '
     + 'is severe - waiting costs weeks, burning the list costs the quarter.',
-  smallestPathToGo: 'Three decisions and one configuration. Settle the three reserved '
-    + 'SOW clauses, unblock the security one-pager, name the first ten targets, and '
-    + 'create a campaign governance config. None of those is a build.',
+  smallestPathToGo: 'FOUR decisions and one build, as of 1 November. Settle the three '
+    + 'reserved SOW clauses, unblock the security one-pager, name the first ten targets, '
+    + 'and set the two activation attestations on the CEO-direct campaign. The '
+    + 'configuration this review called for - a campaign governance config - was created '
+    + 'by C0.12 on 1 November, which is why the fourth item is now a decision rather than '
+    + 'a configuration step. Only the funnel is engineering.',
 };
 
 /* ------------------------------------------------------------------ *
@@ -230,8 +264,51 @@ function assertEveryFailureIsOnThePath() {
   return failed.length;
 }
 
+/**
+ * The prose must agree with the figures it sits next to.
+ *
+ * THIS GUARD EXISTS BECAUSE THE DOCUMENT WENT STALE AND NOTHING NOTICED. Criterion 6 read
+ * "campaign_governance_configs holds ZERO rows" for a week after C0.12 made that false,
+ * and every existing guard passed: they check that verdicts are binary, that evidence is
+ * present, that the recommendation follows, and that each failure sits on one path. None
+ * of them checks whether the evidence is still TRUE.
+ *
+ * A full truth check needs production. This is the offline half, and it is the half that
+ * would have fired: a claim of zero contradicted by a measurement that is not zero.
+ */
+function assertEvidenceAgreesWithMeasurements() {
+  const claimsZero = /\b(?:holds|held)\s+ZERO\s+rows/i;
+  const six = CRITERIA.find((c) => c.n === 6);
+  if (claimsZero.test(six.evidence) && MEASURED.campaignGovernanceConfigs !== 0) {
+    throw new Error('C9.1: criterion 6 says the governance table holds ZERO rows, but '
+      + `MEASURED.campaignGovernanceConfigs is ${MEASURED.campaignGovernanceConfigs}`);
+  }
+  // The path-to-GO is the sentence Ali acts on, so it may not call for something that has
+  // already been done.
+  if (/create a campaign governance config/i.test(RECOMMENDATION.smallestPathToGo)
+      && MEASURED.campaignGovernanceConfigs > 0) {
+    throw new Error('C9.1: the shortest path to GO still asks for a governance config '
+      + 'that already exists');
+  }
+  // A figure that moved must be declared as moved. Without this, MEASURED could be
+  // quietly corrected while RE_READ still reported a week of no change.
+  if (MEASURED.campaignGovernanceConfigs !== 0
+      && !RE_READ.moved.some((m) => /campaignGovernanceConfigs/.test(m))) {
+    throw new Error('C9.1: the governance config count is no longer the reviewed zero, '
+      + 'but RE_READ.moved does not say so');
+  }
+  // Every name in RE_READ has to be a real criterion, or the caveat protects nothing.
+  for (const n of RE_READ.notReVerified) {
+    if (!CRITERIA.some((c) => c.name === n)) {
+      throw new Error(`C9.1: RE_READ.notReVerified names "${n}", which is not a criterion`);
+    }
+  }
+  return MEASURED.campaignGovernanceConfigs;
+}
+
 module.exports = {
-  AS_OF, CRITERIA, MEASURED, CRITICAL_PATH, RECOMMENDATION,
+  AS_OF, RE_READ, CRITERIA, MEASURED, CRITICAL_PATH, RECOMMENDATION,
   assertEveryVerdictIsBinary, assertEveryVerdictCitesEvidence,
   assertRecommendationFollowsFromVerdicts, assertEveryFailureIsOnThePath,
+  assertEvidenceAgreesWithMeasurements,
 };

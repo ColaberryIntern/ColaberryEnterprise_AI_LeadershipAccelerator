@@ -21,6 +21,7 @@ async function main() {
   const evidenced = D.assertEveryVerdictCitesEvidence();
   const failed = D.assertRecommendationFollowsFromVerdicts();
   const onPath = D.assertEveryFailureIsOnThePath();
+  const configs = D.assertEvidenceAgreesWithMeasurements();
 
   const jobs = [
     { file: 'C91_1_ONE_PAGE.pdf', html: R.buildVisual(), landscape: true, maxPages: 1,
@@ -47,6 +48,11 @@ async function main() {
   console.log('  on a critical path  : ' + onPath);
   console.log('  blocked on Ali      : ' + D.CRITICAL_PATH.blockedOnAli.length
     + ' of ' + failed + '  -- the finding worth leading on');
+  console.log('  gov configs         : ' + configs + ' (was 0 at review time)');
+  console.log('  re-read             : ' + D.RE_READ.at
+    + '  moved ' + D.RE_READ.moved.length
+    + '  verdicts changed ' + D.RE_READ.verdictsChanged
+    + '  not re-verified ' + D.RE_READ.notReVerified.length);
   console.log('');
   console.log('  RECOMMENDATION      : ' + D.RECOMMENDATION.verdict);
   console.log('');
