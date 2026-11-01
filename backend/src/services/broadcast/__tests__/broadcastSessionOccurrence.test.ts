@@ -23,7 +23,14 @@ jest.mock('../../../models/BroadcastOccurrence', () => ({
 
 jest.spyOn(console, 'warn').mockImplementation(() => undefined);
 
-import { ensureOccurrenceForSession, isLiveEnabledForSession } from '../broadcastSessionOccurrence';
+import {
+  ensureOccurrenceForSession,
+  isLiveEnabledForSession,
+  EnsureOutcome,
+  EnsureRefusal,
+} from '../broadcastSessionOccurrence';
+import { EDITORIAL_STATES, EditorialState } from '../broadcastStateMachine';
+import { deriveStartInstant, occurrenceKeyFor } from '../broadcastIdentity';
 
 const SESSION = {
   id: '11111111-2222-3333-4444-555555555555',
@@ -214,6 +221,105 @@ describe('an occurrence that already exists', () => {
 
     expect(r.reason).toBe('already_aired');
   });
+
+  /**
+   * A CANCELLED SHOW NEVER AIRED, SO IT MUST NOT BE REFUSED AS IF IT HAD.
+   *
+   * Both land in the same non-retimeable branch and they are not the same event. An aired show
+   * is refused to protect history. A cancelled one is refused because it is unreachable
+   * forever — `cancelled` has no outbound transition, and the UNIQUE (source_type, source_id)
+   * index means no second occurrence can be minted for the session — so re-scheduling the class
+   * cannot put it back on air. Telling the operator that show "already aired" sends them looking
+   * for a recording of something that never happened.
+   */
+  it('names cancellation as its own refusal, not as an airing', async () => {
+    wireDb([{
+      id: 'occ-1',
+      occurrence_key: 'live_session:x:2026-10-19T14:00',
+      editorial_state: 'cancelled',
+    }]);
+
+    const r = await ensureOccurrenceForSession(SESSION, 'room-1');
+
+    expect(r.outcome).toBe('refused');
+    expect(r.reason).toBe('cancelled');
+    // The state still travels in `detail`, so a log reader keeps the exact state either way.
+    expect(r.detail).toBe('cancelled');
+    expect(mockQuery.mock.calls.some(([s]) => /UPDATE broadcast_occurrences/.test(s))).toBe(false);
+  });
+
+  /**
+   * NOTHING WAS ASKED FOR, SO NOTHING IS REFUSED — including for a cancelled occurrence.
+   *
+   * The key check runs before the state check, so an edit that does not move the start instant
+   * resolves to `unchanged` whatever state the occurrence is in. That order is deliberate and the
+   * alternative is worse: `updateSession` re-runs this on EVERY edit while live is enabled, and
+   * `recording_url` is written after every class, so refusing on state alone would log a refusal
+   * for every completed class every time its recording lands — a refusal of a request nobody
+   * made. The cancelled refusal fires on the case that actually matters, which is an admin
+   * trying to move the date.
+   */
+  it('reports a cancelled occurrence as unchanged when the instant did not move', async () => {
+    // Derived rather than written out: the point of the test is the precedence of the two
+    // checks, and hard-coding a key means hard-coding the timezone conversion as well — which
+    // would turn a rule about ordering into a test about Central time.
+    const instant = deriveStartInstant({
+      sourceType: 'live_session',
+      sourceId: SESSION.id,
+      sessionDate: SESSION.session_date,
+      rawStartTime: SESSION.start_time,
+      // `as any` mirrors the production call site exactly (broadcastSessionOccurrence.ts):
+      // `SourceDescriptor` is a discriminated union over six source types, and narrowing it from
+      // a literal here would assert a shape this test has no opinion about. Deliberately the
+      // same cast, so the test cannot derive a key by a different route than the code does.
+    } as any);
+    wireDb([{
+      id: 'occ-1',
+      occurrence_key: occurrenceKeyFor('live_session', SESSION.id, instant.startsAt!),
+      editorial_state: 'cancelled',
+    }]);
+
+    const r = await ensureOccurrenceForSession(SESSION, 'room-1');
+
+    expect(r.outcome).toBe('unchanged');
+    expect(r.reason).toBeUndefined();
+  });
+
+  /**
+   * EVERY STATE IS PLACED, AND THE COMPILER IS WHAT ENFORCES IT.
+   *
+   * `Record<EditorialState, …>` cannot be satisfied with a state missing, so adding a ninth
+   * editorial state fails the test typecheck until someone decides whether re-timing an
+   * occurrence in it is honest. That is the gate this table exists for: the two-reason split
+   * above is only correct as long as nobody drops a new state into the wrong bucket by default.
+   */
+  const EXPECTED: Record<EditorialState, { outcome: EnsureOutcome; reason?: EnsureRefusal }> = {
+    scheduled: { outcome: 'retimed' },
+    backstage: { outcome: 'retimed' },
+    live: { outcome: 'refused', reason: 'already_aired' },
+    reconnecting: { outcome: 'refused', reason: 'already_aired' },
+    ended: { outcome: 'refused', reason: 'already_aired' },
+    processing: { outcome: 'refused', reason: 'already_aired' },
+    replay_ready: { outcome: 'refused', reason: 'already_aired' },
+    cancelled: { outcome: 'refused', reason: 'cancelled' },
+  };
+
+  it.each(EDITORIAL_STATES.map((s) => [s, EXPECTED[s]] as const))(
+    're-timing from %s resolves to %o',
+    async (state, expected) => {
+      wireDb([{
+        id: 'occ-1',
+        occurrence_key: 'live_session:x:2026-10-19T14:00',
+        editorial_state: state,
+      }]);
+
+      const r = await ensureOccurrenceForSession(SESSION, 'room-1');
+
+      expect(r.outcome).toBe(expected.outcome);
+      expect(r.reason).toBe(expected.reason);
+      expect(mockCreate).not.toHaveBeenCalled();
+    },
+  );
 });
 
 describe('isLiveEnabledForSession', () => {

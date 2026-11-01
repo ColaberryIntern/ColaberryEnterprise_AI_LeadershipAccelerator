@@ -359,8 +359,32 @@ X, when they reach the slide X was authored onto."
    unmeasured.
 
 3. **Participation is keyed on `session_id`, not `occurrence_id`** (`ensureLiveSessionSchema.ts:134-169`),
-   while clip markers are occurrence-keyed. DOC 03 permits a session to have more than one
-   occurrence, so re-airing a session would merge its participation across both airings.
+   while clip markers are occurrence-keyed. The keying mismatch is real. The consequence this
+   document drew from it was not.
+
+   **CORRECTION, 2026-11-01 — the consequence was backwards.** This said re-airing a session
+   "would merge its participation across both airings," which reads as a defect sitting in the
+   data today. It is not, because **a session cannot be re-aired at all.**
+   `uq_broadcast_source_ref` is UNIQUE on `(source_type, source_id)`
+   (`ensureBroadcastSchema.ts:168-169`), so a live session holds **at most one** occurrence — by
+   constraint rather than by convention, which is what `broadcastSessionOccurrence.ts` means when
+   it says idempotency is the database's job. Every session→occurrence lookup in the backend goes
+   through that ref (producer state, session links, clip markers, the active query, the clip
+   list); there is no second creation path outside the backfill runner; and the only
+   `DELETE FROM broadcast_occurrences` in the repo is that runner's own batch reversal, which
+   touches only rows carrying a `batch_id` and so can never remove one created by normal
+   operation. Participation and clip markers are therefore 1:1 for every airing that exists.
+   Nothing is merged, and nothing in the data needs repairing.
+
+   **What this finding actually is: a precondition, recorded in the wrong order.** The day a
+   session is allowed to hold two occurrences — to re-run a class for a second cohort, or to give
+   a cancelled one another chance — participation merges across both airings silently, because
+   eight tables key on the session and none of them key on the airing: `attendance_records`,
+   `session_pulse`, `session_chat_messages`, `session_poll_responses`, `session_broadcast`,
+   `session_guests`, `session_guest_poll_responses`, `session_raffle_winners`. So occurrence-keying
+   participation is work that has to land **before** re-airing is supported, not after someone
+   notices two classes sharing one attendance roll. That ordering is the useful content of this
+   finding, and it connects directly to finding 5.
 
 4. **The highest-traffic live surface has no tests, and the QR never reaches the companion.**
    `ClassCheckinPage.tsx` is where the room QR actually lands — `sessionPersistentUrl` resolves to
@@ -406,6 +430,46 @@ X, when they reach the slide X was authored onto."
    remains reachable only by typing it. Whether the two surfaces should converge is a product
    decision, not a cleanup — they are now consistent in what they ask, which was the part that
    corrupted a measurement.
+
+5. **"Cancel this airing" is a one-way door, and nothing in the product said so.** Found
+   2026-11-01 while checking finding 3, and it is the finding that matters more of the two.
+
+   Three facts that are each individually reasonable:
+
+   | Fact | Where |
+   |---|---|
+   | `cancelled` has no outbound transition — it is terminal, with an empty list | `broadcastStateMachine.ts` (`cancelled: []`) |
+   | A session holds at most one occurrence, by UNIQUE index | `ensureBroadcastSchema.ts:168-169` |
+   | Re-timing an occurrence is refused outside `scheduled` and `backstage` | `broadcastSessionOccurrence.ts` (`RETIMEABLE`) |
+
+   Together they mean one confirmed click permanently retires a class from Colaberry Live. The
+   producer strip offers **Cancel this airing** with a confirmation on any scheduled occurrence,
+   which is exactly the right button to have — a class called off for weather or an absent
+   instructor is an ordinary Thursday. What follows is not ordinary: the occurrence can never
+   leave `cancelled`, the session can never be given a second occurrence, and re-scheduling the
+   class in the admin modal is **accepted, writes nothing, and reports nothing** to the person who
+   did it. `enableLiveForSession` logs the refusal to the server and returns void by design
+   (a broadcast problem must not fail session creation), the admin page has no error surface at
+   all, and the next signal anybody gets is an empty room at the top of the hour.
+
+   **The refusal also named the wrong reason.** Both the aired states and `cancelled` came back as
+   `already_aired` — the single thing that is not true about a show cancelled before it ever
+   aired, and a reason that sends whoever reads the log looking for a recording of something that
+   never happened. **Fixed 2026-11-01**: `cancelled` is its own refusal reason, and a table test
+   keyed on `Record<EditorialState, …>` now places all eight states, so a ninth cannot be dropped
+   into the wrong bucket by default.
+
+   **Also fixed: the producer is told before the click, and after it.** The confirmation now says
+   the class cannot be put back on air and that re-scheduling will not bring the broadcast back;
+   a cancelled occurrence explains that instead of answering with "Nothing to do from here", which
+   is what it said for a class sitting quietly in backstage. The copy moved into
+   `producerStripCopy.ts` and is unit-tested, because a sentence carrying that much consequence
+   should not be an assertion buried in a render.
+
+   **Not fixed, because it is not Claude Code's call** (§10 decision 5): whether a cancelled class
+   should be able to go back on air at all. Both candidate designs cross a governance boundary —
+   one changes the terminal-state set the health loop and discovery both read, the other changes
+   occurrence identity — and either one makes finding 3 live on the day it ships.
 
 ---
 
@@ -516,6 +580,16 @@ production polish. Applying it:
    monitoring anything. Note also that `PreviewBound` in `broadcastPlaybackGrant.ts` is **not** this:
    it is the paywall's free-preview window for an Explorer, which shares only the word.
 
+   **The cancel button now says what it costs, 2026-11-01.** Adding a control for every command
+   the state machine offers meant shipping **Cancel this airing**, and checking what it actually
+   does turned up §8 finding 5: cancelling permanently retires a class from Live, and the
+   confirmation said only "This cannot be undone" — true of the airing, silent about the class.
+   The confirmation now reaches past the airing, a cancelled occurrence explains itself instead of
+   answering "Nothing to do from here", and the backend stops reporting a never-aired show as
+   `already_aired`. The copy lives in `producerStripCopy.ts` and is unit-tested: it is the only
+   warning anyone gets before an irreversible action, which is a poor thing to leave as a string
+   inside a render. Whether the door should open again is §10 decision 5.
+
    **Still open in P4-02:** the segment rundown, and only that.
 4. **The desktop viewer — R4's largest hole. Built 2026-10-31.** Five of DOC 04's six desktop
    requirements were missing: Prompt, Poll, Chat/Builder Room, build progress and Claude Code
@@ -584,6 +658,27 @@ plainly because they cut against the instinct to build:
    participant JWT. There is no export, no download, no share link and no external credential. How
    Piyush receives a file is an access-model decision, not an implementation detail.
 4. **The raw-live retention call per airing** (§12's four-way policy) needs a named decider.
+5. **Can a cancelled class go back on air?** Raised 2026-11-01 by §8 finding 5. Today the answer
+   is no, permanently, and that is now said out loud in the producer's own confirmation rather
+   than discovered at showtime. Whether it should stay no is a product question — "this airing is
+   off" and "this class is retired from Live" are different promises, and the button says the
+   first while the system does the second.
+
+   Both ways of changing it cross a governance boundary, which is why neither was taken:
+
+   | Option | What it costs |
+   |---|---|
+   | **A. Make `cancelled` non-terminal** for an occurrence that never started content, reusing the existing `return_to_scheduled` command with a `content_started_at IS NULL` guard | Changes `TERMINAL_STATES`, which the health loop and discovery both read. The guard is necessary rather than optional: `cancel` is reachable from `live`, so some cancelled occurrences did air, and reviving one of those is how an airing silently inherits the previous audience's participation (finding 3). |
+   | **B. Re-point the source ref** to a fresh occurrence, leaving the cancelled one in history unlinked | No schema change and every reader follows the ref, so it is the smaller diff — but `occurrence_key` is UNIQUE and embeds the start instant, so re-enabling a class at the *same* date and time collides. Avoiding that means changing what an occurrence's identity is, which is the one thing the backfill's convergence depends on. |
+
+   **A third answer is legitimate and may be the right one:** leave it permanent, and put the
+   warning in front of the button — which is what shipped. Cancelling a broadcast is rare, and a
+   control that is honest about being irreversible is better than a revival path with a guard
+   nobody maintains. What is **not** acceptable is the state before this change, where the button
+   under-described what it did and the re-schedule that followed failed in silence.
+
+   Either A or B makes finding 3's participation keying load-bearing on the day it ships, so that
+   work is a precondition and not a follow-up.
 
 ---
 

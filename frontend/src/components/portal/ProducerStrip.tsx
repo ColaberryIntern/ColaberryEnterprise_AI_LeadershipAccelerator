@@ -6,10 +6,10 @@ import {
   type CommandAvailability,
   type LiveAudienceResult,
   type ProducerCommand,
-  type ProducerOccurrence,
   type ProducerStateResult,
 } from '../../services/broadcastProducer';
 import { clockTicks, producerClock } from './producerClock';
+import { CONFIRM_Q, LABELS, needsConfirm, noActionsNote, stateLabel } from './producerStripCopy';
 import { CPS_CSS } from './producerStripStyles';
 
 /**
@@ -82,30 +82,8 @@ const POLL_MS = 5000;
  */
 const AUDIENCE_POLL_MS = 15_000;
 
-/** Human labels. The wire values are the contract; these are for a person under time pressure. */
-const LABELS: Record<ProducerCommand, string> = {
-  enter_backstage: 'Go backstage',
-  mark_content_started: 'Mark content started',
-  go_live: 'Go live',
-  end: 'End broadcast',
-  return_to_scheduled: 'Back to scheduled',
-  cancel: 'Cancel this airing',
-};
-
-/**
- * The irreversible ones. `end` is terminal — there is no un-end command and the state machine
- * treats `ended` as one-way — and `cancel` is terminal too. Both ask first.
- */
-const NEEDS_CONFIRM: ProducerCommand[] = ['end', 'cancel'];
-
 /** The commands worth showing a refusal for, rather than simply omitting. */
 const EXPLAIN_WHEN_BLOCKED: ProducerCommand[] = ['go_live', 'mark_content_started'];
-
-function stateLabel(o: ProducerOccurrence): string {
-  if (o.editorial_state === 'live') return 'ON AIR';
-  if (o.editorial_state === 'reconnecting') return 'RECONNECTING';
-  return o.editorial_state.replace(/_/g, ' ').toUpperCase();
-}
 
 /**
  * A one-second tick, and only while something is actually counting.
@@ -354,7 +332,7 @@ export default function ProducerStrip(
           data-testid="producer-state"
         >
           {onAir && <span className="cps-dot" aria-hidden="true" />}
-          {stateLabel(occurrence)}
+          {stateLabel(occurrence.editorial_state)}
         </span>
         {/*
           * NEITHER THE CLOCK NOR THE COUNT IS A LIVE REGION, deliberately. Both change on their
@@ -391,11 +369,7 @@ export default function ProducerStrip(
           <React.Fragment key={c.command}>
             {confirming === c.command ? (
               <span className="cps-confirm" data-testid={`producer-confirm-${c.command}`}>
-                <span className="cps-confirm-q">
-                  {c.command === 'end'
-                    ? 'End it? This cannot be undone.'
-                    : 'Cancel this airing? This cannot be undone.'}
-                </span>
+                <span className="cps-confirm-q">{CONFIRM_Q[c.command]}</span>
                 <button
                   type="button"
                   className="cps-btn cps-btn-danger"
@@ -411,11 +385,11 @@ export default function ProducerStrip(
             ) : (
               <button
                 type="button"
-                className={`cps-btn${NEEDS_CONFIRM.includes(c.command) ? ' cps-btn-danger' : ''}`}
+                className={`cps-btn${needsConfirm(c.command) ? ' cps-btn-danger' : ''}`}
                 disabled={busy !== null}
                 data-testid={`producer-cmd-${c.command}`}
                 onClick={() => {
-                  if (NEEDS_CONFIRM.includes(c.command)) setConfirming(c.command);
+                  if (needsConfirm(c.command)) setConfirming(c.command);
                   else void run(c.command);
                 }}
               >
@@ -427,7 +401,7 @@ export default function ProducerStrip(
 
         {available.length === 0 && (
           <span className="cps-note" data-testid="producer-no-actions">
-            Nothing to do from here.
+            {noActionsNote(occurrence.editorial_state)}
           </span>
         )}
       </div>
