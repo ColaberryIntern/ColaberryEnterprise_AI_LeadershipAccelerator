@@ -32,6 +32,28 @@
  * `--reconcile` is what finally makes the claim true, and the dedupe is why that mode is safe:
  * see its comment below.
  *
+ * ── THE PREDICATE, AND THE THIRD WAY THIS JOB MISSED MAIL (AF10.8) ──────────
+ *
+ * Selection used to be `lower(from_address) = ANY($builders)`: FROM only, the seven builders
+ * only. The rule it exists to serve is "if he is sending and they are copied and vice versa
+ * then you should be pulling them in", and only half of that was implemented. Builder-to-anyone
+ * was caught. Kes-to-Ali-with-a-builder-copied was not a candidate in ANY window, over ANY
+ * range, forever.
+ *
+ * This is NOT the `--reconcile` hole again. That one was the rolling window never going back to
+ * look. This was the PREDICATE, which matters more, because a reconcile over 90 days reported a
+ * confident zero for traffic it was never going to select -- the exact failure `--reconcile`
+ * was built to remove.
+ *
+ * Measured 2026-11-01 over 90 days: 87 selectable, and 114 with a builder only in TO or CC.
+ * Eight of those are Kes's Ellis thread, carrying the agent's BRD and handover roadmap.
+ *
+ * Widening to "builder in from OR to OR cc" alone would have filed PaySimple receipts and Cora
+ * call recaps onto agent tickets, so the sender side is an ALLOWLIST. The decision lives in
+ * `agentRoster.selectMessage`, which is pure and unit tested in both directions, because a
+ * predicate change that no test can tell apart from the old one is not a change anybody can
+ * trust.
+ *
  * ── A ZERO MUST BE EVIDENCE, NOT SILENCE ────────────────────────────────────
  *
  * A sweep whose query is subtly wrong looks exactly like a quiet inbox. Every run prints the
@@ -304,25 +326,66 @@ function troubleWords(subject, body) {
   for (const p of problems) console.log(`  PROBLEM ${p.kind}: ${JSON.stringify(p)}`);
 
   // ── the mail ───────────────────────────────────────────────────────────
+  /*
+   * AF10.8. This WHERE used to be `lower(from_address) = ANY($1)` -- FROM only, builders only --
+   * so "Kes writes to Ali with a builder copied" was not a candidate in any window, over any
+   * range, ever. Eight of Kes's messages about Ellis, including its BRD and handover roadmap,
+   * had never been filed and never could be.
+   *
+   * The SQL only NARROWS to candidates; `R.selectMessage` makes the actual call, so the rule
+   * that decides what lands on somebody's ticket is a pure function with tests rather than a
+   * string in a query.
+   *
+   * Schema traps, both of which cost time once:
+   *   - `to_addresses`/`cc_addresses` are JSONB, not TEXT[]. `unnest` fails with
+   *     "function unnest(jsonb) does not exist"; `jsonb_array_elements_text` is the one.
+   *   - Some rows store `Display Name <a@b.com>`, so the coarse match here is containment.
+   *     `selectMessage` then parses the address and compares it whole, which is what stops
+   *     `notqninying@` passing for `qninying@`.
+   */
+  const likeBuilders = emails.map((e) => `%${e}%`);
   const mail = await q(
     `SELECT id::text, lower(from_address) AS from_address, from_name, subject,
             received_at::text AS received, provider_message_id AS pmid,
-            coalesce(body_text, '') AS body
+            coalesce(body_text, '') AS body,
+            coalesce(to_addresses, '[]'::jsonb) AS to_addresses,
+            coalesce(cc_addresses, '[]'::jsonb) AS cc_addresses
        FROM inbox_emails
-      WHERE lower(from_address) = ANY($1)
-        AND received_at > now() - ($2 || ' ' || $3)::interval
-      ORDER BY received_at ASC`, [emails, String(AMOUNT), UNIT]);
+      WHERE received_at > now() - ($2 || ' ' || $3)::interval
+        AND (
+          lower(from_address) = ANY($1)
+          OR (
+            lower(from_address) = ANY($4)
+            AND EXISTS (
+              SELECT 1
+                FROM jsonb_array_elements_text(
+                       coalesce(to_addresses, '[]'::jsonb)
+                       || coalesce(cc_addresses, '[]'::jsonb)) AS r(addr)
+               WHERE lower(r.addr) LIKE ANY($5)
+            )
+          )
+        )
+      ORDER BY received_at ASC`,
+    [emails, String(AMOUNT), UNIT, R.PROGRAMME_SENDERS, likeBuilders]);
 
   console.log(`\nmail matched in window: ${mail.length}`
     + `${RECONCILE ? '  (RECONCILE: every message in range, already-filed ones included)' : ''}`);
   if (!mail.length) {
-    console.log(`  NONE. Searched ${emails.length} addresses over the last ${AMOUNT} ${UNIT}.`);
+    console.log(`  NONE. Searched ${emails.length} builder addresses in FROM, TO and CC, plus `
+      + `${R.PROGRAMME_SENDERS.length} programme senders, over the last ${AMOUNT} ${UNIT}.`);
+    // Saying WHAT was searched is the point. Before AF10.8 this printed the same confident zero
+    // over a predicate that could never have selected Kes's mail at all, which is a measured
+    // zero that is really a miss.
     console.log('  This is a measured zero, not a skipped run.');
     await sql.close();
     process.exit(0);
   }
 
   let posted = 0; let skipped = 0; let unmatched = 0;
+  /* Counted apart from `skipped`. "Already on the ticket" and "this sender is not programme
+     traffic" are different facts, and reporting them as one number was how the first AF10.8
+     dry run printed "already filed=98" over 36 messages that had never been filed at all. */
+  let outOfScope = 0;
   /** What was filed THIS run. Drives the notification; an empty list sends nothing. */
   const filed = [];
 
@@ -345,10 +408,34 @@ function troubleWords(subject, body) {
   };
 
   for (const m of mail) {
+    /*
+     * AF10.8: the owner is not always the sender. On a widened match the sender is Kes and the
+     * ticket is Quincy's, so routing by sender would file it to a Kes ticket that does not
+     * exist. `selectMessage` returns the BUILDER, from the sender when they are one and from
+     * the recipients otherwise.
+     */
+    const pick = R.selectMessage({
+      from: m.from_address,
+      to: Array.isArray(m.to_addresses) ? m.to_addresses : [],
+      cc: Array.isArray(m.cc_addresses) ? m.cc_addresses : [],
+    }, { builderEmails: emails });
+
+    if (!pick.selected) {
+      // The SQL narrows; this decides. A candidate the predicate refuses is not silently
+      // dropped, because "it was in the window and did not file" is the question this job keeps
+      // being asked.
+      outOfScope++;
+      console.log(`  NOT IN SCOPE  ${m.received}  ${m.from_address}  (${pick.reason})`);
+      continue;
+    }
+    if (pick.via === 'recipient-ambiguous') {
+      console.log(`  AMBIGUOUS  ${pick.reason}; also copied: ${pick.otherBuilders.join(', ')}`);
+    }
+
     // `byEmail` holds an ARRAY per address, because one person can be on several domains. Taking
     // the first is a deliberate choice for a case that does not exist in the assigned set today;
     // it is logged above when it ever does, rather than being resolved silently.
-    const owned = byEmail.get(m.from_address);
+    const owned = byEmail.get(pick.owner);
     const domain = owned && owned.length ? owned[0].domain : null;
     const ticket = domain ? ticketForDomain.get(domain) : null;
     const flags = troubleWords(m.subject, m.body);
@@ -403,7 +490,8 @@ ${flagLine}<div>${esc(excerpt) || '<em>no text body</em>'}</div>
   }
 
   console.log(`\n=== result ===`);
-  console.log(`  matched=${mail.length}  ${APPLY ? 'posted' : 'would post'}=${posted}  already filed=${skipped}  no ticket=${unmatched}`);
+  console.log(`  matched=${mail.length}  ${APPLY ? 'posted' : 'would post'}=${posted}`
+    + `  already filed=${skipped}  not programme traffic=${outOfScope}  no ticket=${unmatched}`);
   if (RECONCILE) {
     console.log(`  mode=RECONCILE over the last ${AMOUNT} ${UNIT}.`);
     console.log(posted

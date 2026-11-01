@@ -256,6 +256,129 @@ function builderDrift(roster) {
     }));
 }
 
+/* ───────────────────────────── AF10.8: who counts as programme traffic ───── */
+
+/**
+ * Senders whose mail belongs on an agent ticket when a builder is only copied.
+ *
+ * The builders themselves are always in scope and are added by `selectMessage`; this list is
+ * everyone ELSE whose mail about a builder is programme traffic.
+ *
+ * Measured over 90 days on 2026-11-01: 114 messages have a builder in TO or CC and were
+ * structurally unselectable. Sorted by sender, the decision writes itself -- 68 are Ali's own
+ * sent mail, 26 are Dhee (Pip's main user), 8 are Kes, 3 are PaySimple receipts, and the tail is
+ * ones and twos. So the fix is NOT "anyone who copied a builder", which would file payment
+ * receipts and call recaps onto agent tickets. It is an allowlist.
+ *
+ * DELIBERATELY EXCLUDED, each for its own reason:
+ *   ali@colaberry.com   his own sent mail; it is the other side of a conversation already filed
+ *   paysimple@          payment receipts, not programme traffic
+ *   jackie@, cora@      one message each, neither about an agent
+ */
+const PROGRAMME_SENDERS = Object.freeze([
+  'kes@colaberry.com',
+  'dhee@colaberry.com',
+  'aleem@colaberry.com',
+]);
+
+/**
+ * Pull the bare address out of a recipient entry.
+ *
+ * THE SHAPE IS AN OBJECT, NOT A STRING. Measured in production 2026-11-01: `to_addresses` and
+ * `cc_addresses` hold `[{ "name": "Ali Muwwakkil", "address": "ali@colaberry.com" }]`. The
+ * AF10.8 ticket named two schema traps and this is a third, which the first dry run found the
+ * hard way -- the SQL matched Kes's messages as candidates, because
+ * `jsonb_array_elements_text` stringifies the whole object and the address is inside that text,
+ * and then this function read every one of them as `[object Object]` and reported "no builder
+ * in from, to or cc" for the exact eight the ticket exists to catch. A candidate that the
+ * predicate then silently refuses is worse than one it never selected.
+ *
+ * Also handles the plain `a@b.com` and `Display Name <a@b.com>` forms, because a column that
+ * holds objects today is not a promise about every row. Containment alone would be too loose --
+ * `kes@colaberry.com` is contained in `fakekes@colaberry.com` -- so the address is extracted and
+ * then compared whole.
+ */
+function bareAddress(entry) {
+  if (entry && typeof entry === 'object' && !Array.isArray(entry)) {
+    return String(entry.address || entry.email || '').trim().toLowerCase();
+  }
+  const s = String(entry == null ? '' : entry).trim().toLowerCase();
+  const angled = /<([^>]+)>/.exec(s);
+  return (angled ? angled[1] : s).trim();
+}
+
+/**
+ * Does this message belong on an agent ticket, and whose?
+ *
+ * PURE. No database, no Basecamp, no clock -- so the rule that decides what gets filed onto
+ * somebody's ticket can be tested exhaustively, which is the point: a predicate change that no
+ * test can tell apart from the old one is not a change anybody can trust.
+ *
+ * ## The defect this replaces
+ *
+ * The sweep selected `lower(from_address) = ANY($builders)`: FROM only, builders only. So
+ * "builder sends to anyone" was caught and "Kes writes to Ali with a builder copied" was not a
+ * candidate in any window, over any range, ever. Eight of Kes's messages about Ellis -- the
+ * agent's BRD and handover roadmap, the most important documents anyone has produced about it --
+ * had never been filed and never could be.
+ *
+ * ## Why the owner is not the sender
+ *
+ * On a widened match the sender is Kes and the ticket is Quincy's. Routing by sender would file
+ * Kes's mail to a Kes ticket that does not exist. The owner is the BUILDER found among the
+ * recipients, so the first builder in TO then CC wins, and `ambiguous` is reported rather than
+ * guessed when more than one builder is copied.
+ *
+ * @param {{from: string, to?: string[], cc?: string[]}} msg
+ * @param {{builderEmails: string[], programmeSenders?: string[]}} scope
+ * @returns {{selected: boolean, owner: string|null, via: string, reason: string,
+ *            otherBuilders: string[]}}
+ */
+function selectMessage(msg, scope) {
+  const builders = new Set((scope.builderEmails || []).map((e) => String(e).toLowerCase()));
+  const senders = new Set([
+    ...builders,
+    ...((scope.programmeSenders || PROGRAMME_SENDERS).map((e) => String(e).toLowerCase())),
+  ]);
+  const from = bareAddress(msg.from);
+  const recipients = [...(msg.to || []), ...(msg.cc || [])].map(bareAddress).filter(Boolean);
+  const copiedBuilders = [...new Set(recipients.filter((a) => builders.has(a)))];
+
+  /* A builder's own mail. The original predicate, unchanged, so widening cannot regress it. */
+  if (builders.has(from)) {
+    return {
+      selected: true, owner: from, via: 'sender', otherBuilders: copiedBuilders,
+      reason: 'sent by a builder',
+    };
+  }
+
+  if (!copiedBuilders.length) {
+    return {
+      selected: false, owner: null, via: 'none', otherBuilders: [],
+      reason: 'no builder in from, to or cc',
+    };
+  }
+
+  /* A builder IS copied, so the only question left is whether this sender's mail belongs on an
+     agent ticket at all. Absence from the allowlist is a decision, not an oversight. */
+  if (!senders.has(from)) {
+    return {
+      selected: false, owner: null, via: 'none', otherBuilders: copiedBuilders,
+      reason: `builder copied but ${from || '(no sender)'} is not a programme sender`,
+    };
+  }
+
+  return {
+    selected: true,
+    owner: copiedBuilders[0],
+    via: copiedBuilders.length > 1 ? 'recipient-ambiguous' : 'recipient',
+    otherBuilders: copiedBuilders.slice(1),
+    reason: copiedBuilders.length > 1
+      ? `${from} copied ${copiedBuilders.length} builders; filed to the first`
+      : `${from} is a programme sender and copied a builder`,
+  };
+}
+
 module.exports = {
   ROSTER_SQL,
   loadRoster,
@@ -270,4 +393,7 @@ module.exports = {
   builderFromTitle,
   matchTickets,
   builderDrift,
+  PROGRAMME_SENDERS,
+  bareAddress,
+  selectMessage,
 };
