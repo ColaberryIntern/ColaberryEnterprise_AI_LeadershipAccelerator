@@ -50,15 +50,6 @@ export function needsRequirements(
     && !alreadyDismissed.has(o.uuid) && stageOf(stageByUuid, o.uuid) === 'not_vetted');
 }
 
-const PENDING_VET: readonly VettingStage[] = ['needs_requirements', 'in_review', 'awaiting_approval'];
-
-/** PURE. A qualification exists but is not yet approved/assigned → ready to vet + assign. */
-export function needsVetting(
-  opps: SweepOpportunity[], alreadyDismissed: Set<string>, stageByUuid: Map<string, VettingStage>,
-): SweepOpportunity[] {
-  return opps.filter((o) => !alreadyDismissed.has(o.uuid) && PENDING_VET.includes(stageOf(stageByUuid, o.uuid)));
-}
-
 const esc = (s: string): string => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c] as string));
 
 /** The external Bonfire solicitation link for a row, when the feed supplied one (http(s) only, so a stray
@@ -85,13 +76,47 @@ export function renderUploadEmail(rows: SweepOpportunity[]): string {
     + `</div>`;
 }
 
-/** Email #2: opportunities whose qualification has started but is not yet approved — vet + assign. */
-export function renderVetEmail(rows: SweepOpportunity[]): string {
+/** The per-stage tally of opportunities with a qualification in progress (sourced from the qualification records,
+ *  NOT the best-fit feed window — so an opportunity keeps being nudged after it rotates out of the top-fit feed). */
+export interface VetCounts { inReview: number; needsRequirements: number; awaitingApproval: number; total: number }
+
+/** Email #2: a summary of the opportunities ready to vet + assign. A decoupled qualification stores only the
+ *  opportunity uuid (no server-side title), so the email reports the per-stage counts and links to the discovery
+ *  board, where each one's title + stage badge render. */
+export function renderVetSummaryEmail(c: VetCounts): string {
+  const row = (n: number, label: string): string => (n > 0 ? `<li style="margin:0 0 6px">${n} ${label}</li>` : '');
   return `<div style="font-family:Arial,Helvetica,sans-serif;color:#1a2230;max-width:640px">`
-    + `<h2 style="font-size:18px">Gov pursuit: ${rows.length} opportunit${rows.length === 1 ? 'y is' : 'ies are'} ready to vet + assign</h2>`
+    + `<h2 style="font-size:18px">Gov pursuit: ${c.total} opportunit${c.total === 1 ? 'y is' : 'ies are'} ready to vet + assign</h2>`
     + `<p style="color:#5b6472">These have a qualification in progress. Review the requirements and, if approved, assign a builder.</p>`
-    + renderList(rows, (o) => `<a href="${qualifyUrl(o.uuid)}" style="color:#1557b0">Vet &amp; assign &rarr;</a>`)
+    + `<ul style="padding-left:18px;margin:0 0 14px">`
+    + row(c.inReview, 'in review')
+    + row(c.needsRequirements, 'with requirements being established')
+    + row(c.awaitingApproval, 'awaiting a second-admin approval')
+    + `</ul>`
+    + `<a href="${APP_BASE}/admin/gov-opportunities" style="color:#1557b0">Review &amp; assign on the board &rarr;</a>`
     + `</div>`;
+}
+
+/** Count the opportunities whose qualification is in progress (most-advanced stage in the vet-pending set),
+ *  deduped per opportunity. Reuses loadVettingByCanonical so the stage logic stays single-sourced. Best-effort:
+ *  returns zeros on any error so the sweep never throws past its boundary. */
+async function countPendingVet(tenantId: string): Promise<VetCounts> {
+  const zero: VetCounts = { inReview: 0, needsRequirements: 0, awaitingApproval: 0, total: 0 };
+  try {
+    const { default: GovQualification } = await import('../../../models/GovQualification');
+    const rows: any[] = await GovQualification.findAll({ where: { tenant_id: tenantId, status: 'active' }, attributes: ['canonical_opportunity_id'] });
+    const canonicals = Array.from(new Set(rows.map((r) => String(r.canonical_opportunity_id))));
+    const vetting = await loadVettingByCanonical(tenantId, canonicals);
+    let inReview = 0, needsRequirements = 0, awaitingApproval = 0;
+    for (const v of vetting.values()) {
+      if (v.stage === 'in_review') inReview += 1;
+      else if (v.stage === 'needs_requirements') needsRequirements += 1;
+      else if (v.stage === 'awaiting_approval') awaitingApproval += 1;
+    }
+    return { inReview, needsRequirements, awaitingApproval, total: inReview + needsRequirements + awaitingApproval };
+  } catch {
+    return zero;
+  }
 }
 
 export interface SweepResult { skipped?: string; hidden: number; emailedUpload: number; emailedVet: number; }
@@ -162,14 +187,16 @@ export async function runGovOpportunitySweep(): Promise<SweepResult> {
     });
   }
 
-  // 3) Email #2 — vet + assign.
-  const vet = needsVetting(opps, dismissed, stageByUuid);
-  if (vet.length > 0) {
+  // 3) Email #2 — vet + assign. Sourced from the in-progress qualifications (NOT the best-fit feed window), so an
+  // opportunity keeps being nudged to vet + assign even after it rotates out of the top-fit feed. The decoupled
+  // qualification carries no server-side title, so this email reports per-stage counts and links to the board.
+  const vetCounts = await countPendingVet(tenantId);
+  if (vetCounts.total > 0) {
     await sendGovOpportunitySweepEmail({
-      subject: `Gov pursuit: ${vet.length} opportunit${vet.length === 1 ? 'y is' : 'ies are'} ready to vet + assign`,
-      html: renderVetEmail(vet),
+      subject: `Gov pursuit: ${vetCounts.total} opportunit${vetCounts.total === 1 ? 'y is' : 'ies are'} ready to vet + assign`,
+      html: renderVetSummaryEmail(vetCounts),
     });
   }
 
-  return { hidden: hide.length, emailedUpload: upload.length, emailedVet: vet.length };
+  return { hidden: hide.length, emailedUpload: upload.length, emailedVet: vetCounts.total };
 }
