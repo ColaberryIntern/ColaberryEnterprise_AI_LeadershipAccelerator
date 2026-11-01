@@ -159,3 +159,63 @@ export async function readProducerState(sessionId: string): Promise<ProducerStat
     return { outcome: 'failed' };
   }
 }
+
+/**
+ * Four answers, and the second one is the reason this is not a plain `number | null`.
+ *
+ *  - `ok`      a measurement arrived. The count may be 0, which is a real verdict.
+ *  - `unknown` collection is down. NOT zero. The server answers 503 for this and deliberately
+ *              omits the count field entirely; this mirrors that refusal into the type, so a
+ *              caller cannot render a number it was never given.
+ *  - `forbidden` not a producer, or the feature is dark. Render nothing.
+ *  - `failed`  the request did not land. The last good count is still the best thing to show,
+ *              labelled as not updating.
+ */
+export type AudienceOutcome = 'ok' | 'unknown' | 'forbidden' | 'failed';
+
+export interface LiveAudienceResult {
+  outcome: AudienceOutcome;
+  /** Only ever present when `ok`. Absent is "we do not know"; 0 is "nobody is watching". */
+  watchingNow?: number;
+}
+
+/**
+ * How many people are watching right now, for the producer.
+ *
+ * ZERO AND "WE DO NOT KNOW" MUST NOT COLLAPSE INTO EACH OTHER, and the client is where that
+ * would happen. The server goes to real trouble to keep them apart — a collection failure
+ * answers 503 with no count field at all, precisely so a client cannot print a fabricated
+ * zero — and the usual `?? 0` on the way in would undo all of it in one character. "Nobody
+ * watched" is a verdict on the broadcast; "collection is down" is a verdict on us, and a
+ * producer who reads the second as the first stops a class people are watching.
+ *
+ * So the count is carried only when the server both said `available` and sent a number. An
+ * `available: true` body with no usable count is a contract violation on the server's side
+ * and is reported as `unknown` rather than guessed at.
+ *
+ * ONLY `watching_now` IS LIFTED. The route also returns `deliberate`, `auto` and `by_mode`.
+ * They are genuinely useful after the fact and useless mid-air: a producer cannot act on the
+ * autoplay split while teaching, and putting four numbers where one belongs costs the one
+ * number its glanceability. They stay on the wire for the metrics surface that wants them.
+ */
+export async function readLiveAudience(occurrenceId: string): Promise<LiveAudienceResult> {
+  try {
+    const res = await portalApi.get<{ available?: boolean; watching_now?: number }>(
+      `/api/portal/broadcasts/${occurrenceId}/audience`,
+    );
+    const n = res.data?.watching_now;
+    if (res.data?.available === true && typeof n === 'number' && Number.isFinite(n)) {
+      return { outcome: 'ok', watchingNow: n };
+    }
+    return { outcome: 'unknown' };
+  } catch (err: unknown) {
+    const status = (err as { response?: { status?: number } })?.response?.status;
+    if (status === 403 || status === 401 || status === 404) return { outcome: 'forbidden' };
+    // 503 is the server's own "we are not measuring" — a successful answer to the question,
+    // not a failed request, and the one case where the strip must say so out loud.
+    if (status === 503) return { outcome: 'unknown' };
+    // Everything else, 429 included. A throttled producer is dropping measurements, which is
+    // the same thing to show as a dropped request: the last count, marked stale.
+    return { outcome: 'failed' };
+  }
+}

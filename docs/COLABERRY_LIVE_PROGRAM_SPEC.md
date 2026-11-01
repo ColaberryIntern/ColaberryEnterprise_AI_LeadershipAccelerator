@@ -165,9 +165,12 @@ one; starting was three hand-sent API commands, each needing a version read out 
 
 **Built 2026-10-31.** A producer strip on `/portal/live/<session_id>`, fed by a new staff-only
 producer read, now shows the state, the feed health, the version and a button for each legal
-command — see §9 item 3 for what had to be solved first. The remaining P4-02 scope (preview-vs-program,
-a live clock, a segment rundown) is untouched, so the task is not closed; the part that stopped an
-airing is.
+command — see §9 item 3 for what had to be solved first.
+
+**Live clock and viewer count added 2026-11-01.** Both were already on the wire and neither was
+rendered. Of the remaining P4-02 scope, **preview-vs-program is not a software task in this repo**
+and the **segment rundown** is the only item still open — see §9 item 3 for both. The task is not
+closed; the part that stopped an airing is.
 
 ---
 
@@ -336,12 +339,24 @@ X, when they reach the slide X was authored onto."
    argument for closing this defect class rather than tolerating it: an unread feature is not
    half-working, it is unmeasured.
 
-   **The audience one is cheap to fix and still deliberately open.** The producer strip added for
-   P4-02 (§9 item 3) is a producer-facing surface on the page where a producer already stands, so
-   the audience read finally has somewhere obvious to be rendered. It was left out of that change:
-   a viewer count is a different question from a lifecycle control, and the two must not share a
-   request — the audience route answers 503 with no count when collection fails, by design, and the
-   control must survive that.
+   **One now. The audience read got its caller on 2026-11-01** (§9 item 3) — the producer strip,
+   which is the surface on the page where a producer already stands. It is still a **separate
+   request** from the lifecycle control and must stay one: the audience route answers 503 with no
+   count when collection fails, by design, and the control has to survive that.
+
+   Giving it a reader surfaced the same thing the chat thread did — a defect that could only be
+   observed once something consumed it. Here it is a **rate limit**, not a response shape: the
+   route carries the *command* limiter, 30/min, shared with the producer's own commands, because
+   when it was written "a producer looking at a dashboard, not a player polling" was true and no
+   caller existed to contradict it. A naive 5s poll would have put a viewer counter in competition
+   with Go Live for the same budget. Handled in the client for now (15s, and only while on air);
+   the real fix is the route's own limiter, and it is recorded here so the next caller does not
+   rediscover it.
+
+   **Only clip markers remain** (admin API, no UI). Three became two became one, and in both closed
+   cases the act of reading a feature is what exposed what was wrong with it. That is the argument
+   for closing this class rather than tolerating it: an unread feature is not half-working, it is
+   unmeasured.
 
 3. **Participation is keyed on `session_id`, not `occurrence_id`** (`ensureLiveSessionSchema.ts:134-169`),
    while clip markers are occurrence-keyed. DOC 03 permits a session to have more than one
@@ -462,8 +477,46 @@ production polish. Applying it:
      and no way forward. The refusal now carries the version that is actually current, re-read after
      a lost write race rather than echoing the one that just failed.
 
-   **Still open in P4-02:** preview-vs-program, a live clock, and the segment rundown. The task is
-   not closed — the part that stopped an airing is.
+   **The live clock and the viewer count. Built 2026-11-01.** Both of these were already on the
+   wire and neither was rendered, which is the same defect class as §8 finding 2 and worth counting
+   as one: `content_started_at` and `scheduled_start_at` came back on every producer read and went
+   unread, and `GET /api/portal/broadcasts/:id/audience` had **no caller at all** from the day it
+   was written.
+
+   - **The clock counts up past a missed start** rather than resting a countdown at 0:00. That is
+     the reading that changes a decision: four minutes past the hour with Go Live still blocked is
+     a different situation from thirty seconds early, and the strip could already show the *reason*
+     for the pre-air wait but never its cost. It also reports how long a finished airing ran, from
+     `content_started_at` and `ended_at` — and shows nothing when `ended_at` is null, which real
+     production rows are, because nothing wrote that column until recently.
+   - **The clock is the producer's laptop against the server's timestamps**, and that is stated in
+     `producerClock.ts` rather than hidden. A start instant slightly ahead clamps to 0:00; one more
+     than a minute ahead shows **no clock at all**, because a wrong duration rendered confidently
+     is worse than a blank. A clock skewed into the past is *not* handled and cannot be from the
+     client alone — the fix, if it ever matters, is a server `now` on the producer read.
+   - **Zero watchers and a broken counter stay different sentences.** The route goes to real trouble
+     to keep them apart — a collection failure answers 503 with **no count field at all**, so no
+     client can print a fabricated zero — and the usual `?? 0` on the way in would have undone all
+     of it in one character. The chip reads `0 watching`, `not measuring`, or `no answer`, and a
+     kept number marked `not updating`; three different faults, three different sentences.
+   - **The count is a second request on a slower cadence, and that is a rate limit rather than
+     taste.** The audience route carries the **command** limiter, 30/min, shared with the producer's
+     own commands — it was written before any client called it, when "a producer looking at a
+     dashboard, not a player polling" was true. At the state read's 5s this control would spend 12
+     of those 30 a minute, and a go-live sequence that hit a version conflict could find its
+     commands throttled by a viewer counter nobody acts on. It polls at **15s**, and **only while
+     on air**. If a later surface needs it fresher, the route needs its own limiter — the argument
+     `producerStateLimiter` already makes on the backend — not a smaller number in the client.
+
+   **Preview-vs-program is not a software task in this repo, and should stop being listed as one.**
+   There is exactly one provider input (`cloudflareStreamProvider.ts`). Cutting between a preview
+   bus and a program bus is a vision-mixer function: it belongs to the studio in **P4-01/R5**, which
+   is Piyush's, and a software imitation of it — a second player labelled "preview" fed from the same
+   single input — would be worse than its absence, because it would read as a monitor that is not
+   monitoring anything. Note also that `PreviewBound` in `broadcastPlaybackGrant.ts` is **not** this:
+   it is the paywall's free-preview window for an Explorer, which shares only the word.
+
+   **Still open in P4-02:** the segment rundown, and only that.
 4. **The desktop viewer — R4's largest hole. Built 2026-10-31.** Five of DOC 04's six desktop
    requirements were missing: Prompt, Poll, Chat/Builder Room, build progress and Claude Code
    controls all existed only in the phone branch.
