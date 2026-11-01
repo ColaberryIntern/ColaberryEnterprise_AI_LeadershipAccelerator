@@ -148,12 +148,12 @@ function assertGateBeforeMatchesMeasurement() {
  * Describing them as governed would be precisely the failure the ticket names, and it is
  * the easiest one to commit by accident while writing a document about closing the gap.
  */
-function assertUnenforcedFieldsAreLabelled() {
+function assertUnenforcedFieldsAreLabeled() {
   for (const key of ['min_open_rate', 'min_reply_rate']) {
     const row = D.COLUMN_REACH.find((r) => r.column === key);
     if (!row) throw new Error(`guard: ${key} is missing from the column reach table`);
     if (!/STILL NOTHING/.test(row.after)) {
-      throw new Error(`guard: ${key} is not labelled as unenforced in the column reach table`);
+      throw new Error(`guard: ${key} is not labeled as unenforced in the column reach table`);
     }
   }
   const doc = R.buildDocument().replace(/<[^>]+>/g, ' ');
@@ -211,7 +211,7 @@ function assertAllGuards() {
   assertEveryFieldHasABasis();
   assertNoAttestationClaimed();
   assertGateBeforeMatchesMeasurement();
-  assertUnenforcedFieldsAreLabelled();
+  assertUnenforcedFieldsAreLabeled();
   assertEveryFlagIsRendered();
   assertNoCriterionIsMetWithoutMeasurement();
   assertAmericanSpelling();
@@ -230,5 +230,5 @@ module.exports = {
   assertNoAttestationClaimed,
   assertNoConfigIsAllDefaults,
   assertNoCriterionIsMetWithoutMeasurement,
-  assertUnenforcedFieldsAreLabelled,
+  assertUnenforcedFieldsAreLabeled,
 };
