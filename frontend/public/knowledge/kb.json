@@ -11,7 +11,7 @@
     "data/product-kb.js",
     "data/compliance-kb.js"
   ],
-  "core_facts": "Program public name: AI Systems Architect Accelerator, powered by Anthropic + Claude Code. Tagline: Learn With Claude. Build Through Colaberry. Deploy In The Real World. It is a 12-week program that moves working professionals, career changers, builders, and technical professionals from AI consumer to AI builder. Journey: Weeks 1-3 Build Your AI Foundation, Weeks 4-6 Create Your AI Team, Weeks 7-9 Connect AI To The Real World, Weeks 10-12 Design AI That Scales. Certification: Anthropic Architect certification. Brand proof point: 5,000+ careers since 2012. Open House (free): Thursday, July 16, 2026. Cohort 1 kickoff: Thursday, July 23, 2026. The Open House precedes the cohort it feeds by one week. Founding Cohort: 40 seats (cap). Pricing (Ali-confirmed 2026-06-25): $149/mo founding annual rate, $199/mo monthly. Pricing is revealed at the Open House, so it stays out of awareness posts. Student-paid third-party tool costs, disclosed before enrollment and paid directly to providers: an Anthropic subscription for Claude Code (about $20/mo) and LLM API usage (most projects under $10/mo). Campaign goal: generate free Open House registrations, then convert attendees into Founding Cohort enrollment. Audiences: alumni, dropouts, prospects. Channels: LinkedIn (primary), X, Instagram, plus the parallel 5-email sequence. Open items: the Open House registration URL [reg link] and exact start time [time + TZ] are not set yet; refund and cancellation terms are drafted and pending Ali. Do not invent these. If a detail is not in this knowledge base, say so plainly and point to the relevant document or the Open House. Never invent facts, metrics, testimonials, names, or claims.",
+  "core_facts": "Program public name: AI Systems Architect Accelerator, powered by Anthropic + Claude Code. Tagline: Learn With Claude. Build Through Colaberry. Deploy In The Real World. It is a 12-week program that moves working professionals, career changers, builders, and technical professionals from AI consumer to AI builder. Journey: Weeks 1-3 Build Your AI Foundation, Weeks 4-6 Create Your AI Team, Weeks 7-9 Connect AI To The Real World, Weeks 10-12 Design AI That Scales. Certification: Anthropic Architect certification. Brand proof point: 1,000+ hires since 2012. Open House (free): Thursday, July 16, 2026. Cohort 1 kickoff: Thursday, July 23, 2026. The Open House precedes the cohort it feeds by one week. Founding Cohort: 40 seats (cap). Pricing (Ali-confirmed 2026-06-25): $149/mo founding annual rate, $199/mo monthly. Pricing is revealed at the Open House, so it stays out of awareness posts. Student-paid third-party tool costs, disclosed before enrollment and paid directly to providers: an Anthropic subscription for Claude Code (about $20/mo) and LLM API usage (most projects under $10/mo). Campaign goal: generate free Open House registrations, then convert attendees into Founding Cohort enrollment. Audiences: alumni, dropouts, prospects. Channels: LinkedIn (primary), X, Instagram, plus the parallel 5-email sequence. Open items: the Open House registration URL [reg link] and exact start time [time + TZ] are not set yet; refund and cancellation terms are drafted and pending Ali. Do not invent these. If a detail is not in this knowledge base, say so plainly and point to the relevant document or the Open House. Never invent facts, metrics, testimonials, names, or claims.",
   "categories_by_domain": {
     "sales": [
       {
@@ -270,7 +270,7 @@
       "status": "active"
     }
   ],
-  "generated_at": "2026-10-29T00:36:51.842Z",
+  "generated_at": "2026-11-01T18:23:44.533Z",
   "count": 217,
   "entries": [
     {
@@ -1949,7 +1949,7 @@
       "category": "Messaging & positioning",
       "category_key": "messaging",
       "question": "What proof points can we use?",
-      "answer": "The approved brand proof point is 5,000+ careers since 2012. You may also reference the Anthropic Architect certification and the powered by Anthropic + Claude Code co-brand. Do not invent testimonials, placement rates, or salary figures.",
+      "answer": "The approved brand proof points come from the claim registry: 8k+ data students, 2,500+ certified, 1,000+ hires, and Teaching this since 2012. Do not use 'careers launched' in any form - it is superseded, because careers launched and students enrolled differ by an order of magnitude. You may also reference the Anthropic Architect certification and the powered by Anthropic + Claude Code co-brand. Do not invent testimonials, placement rates, or salary figures.",
       "detail": "",
       "tags": [
         "proof",
@@ -3370,7 +3370,7 @@
       "category": "Voice",
       "category_key": "voice",
       "question": "What is the brand voice?",
-      "answer": "Warm and credible. Sentence case. Speak to you. Lead with proof, such as 5,000+ careers since 2012. Use friendly action CTAs like Apply now and Enroll today. No emoji in product or web. Reinforce inclusivity: no degree or tests required, scholarships, and veterans support.",
+      "answer": "Warm and credible. Sentence case. Speak to you. Lead with proof from the claim registry, such as 1,000+ hires or Teaching this since 2012. Use friendly action CTAs like Apply now and Enroll today. No emoji in product or web. Reinforce inclusivity: no degree or tests required, scholarships, and veterans support.",
       "detail": "",
       "tags": [
         "voice",
@@ -4183,12 +4183,12 @@
       "category": "Track record",
       "category_key": "track-record",
       "question": "What is Colaberry's track record?",
-      "answer": "Colaberry has helped launch more than 5,000 careers since 2012. That track record, built over more than a decade, is the foundation the AI Systems Architect Accelerator stands on, not a single new course.",
+      "answer": "Colaberry has recorded 1,000+ hires since 2012. That track record, built over more than a decade, is the foundation the AI Systems Architect Accelerator stands on, not a single new course.",
       "detail": "",
       "tags": [
         "track record",
-        "5000",
-        "careers",
+        "1000",
+        "hires",
         "2012",
         "proof"
       ],
