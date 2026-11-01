@@ -28,6 +28,8 @@ function PortalFreeSignupPage() {
   const [phoneConsent, setPhoneConsent] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  // C103: set when the email already has an account and the server sent a sign-in link instead.
+  const [notice, setNotice] = useState('');
   // UNCHECKED by default, and NOT required to submit.
   //
   // Unchecked because a pre-ticked box is not an affirmative act, and this value
@@ -44,6 +46,7 @@ function PortalFreeSignupPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setNotice('');
     if (!fullName.trim()) { setError('Please enter your name.'); return; }
     if (!EMAIL_RE.test(email.trim())) { setError('Please enter a valid email.'); return; }
     setLoading(true);
@@ -92,6 +95,12 @@ function PortalFreeSignupPage() {
         });
       } catch { /* instrumentation must never break the signup */ }
 
+      // C103: an existing account is not signed in from this form; its owner gets a link by email.
+      if ('check_email' in res) {
+        setNotice(res.message);
+        setLoading(false);
+        return;
+      }
       login(res.jwt);
       navigate('/portal/today', { replace: true });
     } catch (err: any) {
@@ -175,6 +184,7 @@ function PortalFreeSignupPage() {
           )}
 
           {error && <div className="cbfs-error" role="alert">{error}</div>}
+          {notice && <div className="cbfs-notice" role="status" data-testid="cbfs-check-email">{notice}</div>}
           <button className="cbfs-btn" type="submit" disabled={loading}>
             {loading ? 'Creating your account…' : 'Create my account'}
           </button>
@@ -215,6 +225,8 @@ const CBFS_CSS = `
 .cbfs-check:disabled{cursor:default}
 .cbfs-error{margin-top:12px;font-size:13.5px;color:#C20E1E;background:rgba(251,40,50,.08);
   border:1px solid rgba(251,40,50,.28);border-radius:10px;padding:9px 12px}
+.cbfs-notice{margin-top:12px;font-size:13.5px;color:#1F4E63;background:rgba(54,120,149,.08);
+  border:1px solid rgba(54,120,149,.3);border-radius:10px;padding:9px 12px}
 .cbfs-btn{margin-top:18px;background:#FB2832;color:#fff;border:none;border-radius:999px;padding:13px 22px;
   font-size:15px;font-weight:700;font-family:inherit;cursor:pointer;transition:filter .15s}
 .cbfs-btn:hover:not(:disabled){filter:brightness(.95)}

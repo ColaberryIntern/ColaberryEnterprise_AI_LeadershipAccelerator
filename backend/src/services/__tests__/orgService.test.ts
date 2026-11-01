@@ -28,11 +28,18 @@ describe('orgService', () => {
     orgs = new Map();
     members = new Map();
 
-    (createFreeAccount as jest.Mock).mockImplementation(async ({ full_name, email }: any) => ({
-      jwt: 'jwt-' + email,
-      created: true,
-      enrollment: { id: 'enr-' + email, full_name, email: String(email).toLowerCase(), tier: 'guest' },
-    }));
+    // Mirrors the real service since C103: a session only for the call that created the account.
+    const seen = new Set<string>();
+    (createFreeAccount as jest.Mock).mockImplementation(async ({ full_name, email }: any) => {
+      const key = String(email).toLowerCase();
+      const created = !seen.has(key);
+      seen.add(key);
+      return {
+        jwt: created ? 'jwt-' + key : null,
+        created,
+        enrollment: { id: 'enr-' + key, full_name, email: key, tier: 'guest' },
+      };
+    });
 
     (Organization.findOrCreate as jest.Mock).mockImplementation(async ({ where, defaults }: any) => {
       const key = where.owner_enrollment_id;
@@ -86,8 +93,12 @@ describe('orgService', () => {
       const managerRow = Array.from(members.values())[0];
       expect(managerRow.role).toBe('manager');
       expect(managerRow.invite_status).toBe('active');
-      // A fresh JWT is always returned (login on every register).
-      expect(r2.jwt).toBe('jwt-ali@acme.com');
+      // C103: only the registration that created the account signs anyone in. The
+      // repeat is flagged so the route emails a link instead of returning a session.
+      expect(r1.jwt).toBe('jwt-ali@acme.com');
+      expect(r1.existing_account).toBe(false);
+      expect(r2.jwt).toBeNull();
+      expect(r2.existing_account).toBe(true);
     });
 
     it('rejects missing name or email', async () => {
