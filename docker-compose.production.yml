@@ -83,6 +83,13 @@ services:
       # (same reasoning as ENABLE_GOV_INGESTION). Surfaces changes only; NEVER advances a decision. Flip to
       # "false" to deactivate; the scheduler entry no-ops when unset.
       ENABLE_GOV_DAILY_SYNC: "true"
+      # Gov pursuit DAILY SWEEP — a 7:30am Central job (govOpportunitySweep) that auto-hides low-fit
+      # opportunities (fit < 60, via the reversible dismissals table) and emails upload-requirements /
+      # vet-and-assign prompts to the admin recipients. Literal "true" (same reasoning as ENABLE_GOV_DAILY_SYNC
+      # above): the compose edit guarantees the backend recreates so the flag is actually read. The run is
+      # idempotent (claimDailyRun — once per day via system_settings) so it cannot double-fire. Flip to "false"
+      # to deactivate; the scheduler entry no-ops when unset.
+      ENABLE_GOV_OPP_SWEEP: "true"
       # Service-to-service token training.colaberry.com uses for /api/v1/* calls.
       ENTERPRISE_CRM_TOKEN: ${ENTERPRISE_CRM_TOKEN:-}
       # AI News Flash intelligence pipeline — the daily generator behind the
