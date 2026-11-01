@@ -66,6 +66,36 @@ function getRampProfile(campaignType: string): RampProfile {
   return RAMP_PROFILES[campaignType] || RAMP_PROFILES.default;
 }
 
+/**
+ * The ramp shape for a campaign, preferring its governance config over its type (C0.12).
+ *
+ * `campaign_governance_configs.ramp_profile` was written by the admin route and read by
+ * the governance resolver, and then nothing used it: the ramp came from the hardcoded
+ * `RAMP_PROFILES` map keyed on campaign type, so a per-campaign profile was stored and
+ * ignored. A config column that cannot change behavior is decoration, and C0.12 exists
+ * precisely because a governance record that governs nothing reads green on the gate.
+ *
+ * The type map stays as the fallback, so a campaign with no config ramps exactly as before.
+ */
+async function resolveRampProfileFor(campaignId: string, campaignType: string): Promise<RampProfile> {
+  const fallback = getRampProfile(campaignType);
+  try {
+    const resolved = await resolveCampaignGovernance(campaignId);
+    const p = resolved.ramp_profile;
+    if (!p) return fallback;
+    return {
+      phase_sizes: [...p.phase_sizes],
+      advance_threshold: p.advance_threshold,
+      hold_threshold: p.hold_threshold,
+      evaluation_window_hours: p.evaluation_window_hours,
+    };
+  } catch {
+    // Fail to the type map rather than refusing to ramp. A governance read that errors
+    // must not become an outage; the publish gate is what refuses an unconfigured send.
+    return fallback;
+  }
+}
+
 const DEFAULT_EVOLUTION_CONFIG: EvolutionConfig = {
   enabled: true,
   evolution_frequency_sends: 100,
@@ -86,7 +116,7 @@ export async function initializeRamp(campaignId: string): Promise<RampState> {
   const campaign = await Campaign.findByPk(campaignId) as any;
   if (!campaign) throw new Error('Campaign not found');
 
-  const profile = getRampProfile(campaign.type);
+  const profile = await resolveRampProfileFor(campaignId, campaign.type);
   const leadsPerPhase: Record<string, number> = {};
   for (let i = 1; i <= profile.phase_sizes.length; i++) {
     leadsPerPhase[String(i)] = 0;
@@ -140,7 +170,7 @@ export async function evaluateRampPhase(campaignId: string): Promise<{
     return { decision: 'pause_for_review', health_score: rampState.phase_health_score };
   }
 
-  const profile = getRampProfile(campaign.type);
+  const profile = await resolveRampProfileFor(campaignId, campaign.type);
 
   // Check if current phase has enough data (evaluation window)
   const phaseStarted = rampState.phase_started_at ? new Date(rampState.phase_started_at) : null;
@@ -162,9 +192,20 @@ export async function evaluateRampPhase(campaignId: string): Promise<{
     return { decision: 'no_data', health_score: null };
   }
 
-  // Safety thresholds — pause if exceeded (from governance DB, fallback to hardcoded)
+  // Safety thresholds — pause if exceeded (from governance DB, fallback to hardcoded).
+  //
+  // These apply to every campaign type (C0.12). They used to be gated on `isAlumni`, which
+  // meant the unsubscribe, bounce and SMS-failure ceilings governed 1 of the 6 campaigns
+  // that were active in production on 2026-11-01, and none of the executive-outreach ones.
+  // A per-campaign governance config whose ceilings are only consulted for two campaign
+  // types is the governs-nothing case C0.12 was written to close.
+  //
+  // Widening it pauses nothing that is running today: all six active campaigns measured
+  // unsubscribe_rate, bounce_rate and sms_failure_rate at 0 on 2026-11-01. It is still a
+  // real behavior change for any campaign that later breaches a ceiling, which is the
+  // intended effect.
   const isAlumni = ['alumni', 'alumni_re_engagement'].includes(campaign.type);
-  if (isAlumni && health?.metrics) {
+  if (health?.metrics) {
     const m = health.metrics;
     let safetyLimits = HARDCODED_CAMPAIGN_DEFAULTS;
     try {
@@ -187,7 +228,10 @@ export async function evaluateRampPhase(campaignId: string): Promise<{
       });
       await campaignFull.update({ ramp_state: rampState, updated_at: new Date() });
 
-      // Supervisor logging for alumni
+      // Supervisor logging. Unconditional, because this is the only audit entry a safety
+      // pause writes and the pause now fires for every campaign type (C0.12). The source
+      // follows the campaign so a cold-outbound pause is not filed under the alumni
+      // supervisor, which is where somebody would go looking for it and not find it.
       const { logSupervisorDecision } = require('./alumniCampaignSupervisor');
       await logSupervisorDecision({
         campaign_id: campaignId,
@@ -199,7 +243,7 @@ export async function evaluateRampPhase(campaignId: string): Promise<{
         reasoning: `Safety threshold exceeded: ${safetyViolations.join(', ')}`,
         safety_flags: safetyViolations,
         metrics: m,
-      });
+      }, isAlumni ? 'alumni_campaign_supervisor' : 'campaign_ramp_supervisor');
 
       console.log(`[Ramp] Campaign ${campaignId}: SAFETY PAUSE — ${safetyViolations.join(', ')}`);
       return { decision: 'pause_for_review', health_score: healthScore };

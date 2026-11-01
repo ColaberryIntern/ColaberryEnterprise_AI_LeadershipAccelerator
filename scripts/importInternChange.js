@@ -6,8 +6,15 @@
  *   node scripts/importInternChange.js --repo qninying/ambit --commit 25d68f53
  *   node scripts/importInternChange.js --repo qninying/ambit --commit 25d68f53 --apply
  *
- * DRY RUN BY DEFAULT. Without `--apply` it fetches, scans, evaluates and prints exactly
- * what it would do, and writes nothing anywhere.
+ * DRY RUN BY DEFAULT. Without `--apply` it fetches, scans, evaluates, REHEARSES THE APPLY
+ * in a throwaway worktree, and writes nothing anywhere.
+ *
+ * The rehearsal is not decoration. Until 2026-11-01 the dry run checked policy and the
+ * secret scan and then printed "Would push ... and open a pull request" without ever
+ * trying to apply the patch. It said that about a commit editing
+ * `.colaberry/progress.json` -- a file only the intern's own repository has -- and the
+ * real run then died at `git am` with exit 128. A rehearsal that never applies cannot
+ * tell "importable" from "explodes on contact", so now it applies for real and discards.
  *
  * ## Why this exists at all
  *
@@ -128,13 +135,52 @@ function existingPr(branch) {
   return list.length ? list[0] : null;
 }
 
+/** This repository's tracked paths at origin/main, for the no-footprint refusal. */
+function repoPathsAtMain() {
+  run('git', ['fetch', 'origin', 'main', '--quiet'], { cwd: ROOT });
+  return new Set(run('git', ['ls-tree', '-r', '--name-only', 'origin/main'], { cwd: ROOT })
+    .split('\n').map((s) => s.trim()).filter(Boolean));
+}
+
+/** A patch that will not apply. Carried as a class so the top level can report specifics. */
+class PatchConflict extends Error {
+  constructor(detail) {
+    super('the patch does not apply to origin/main');
+    this.name = 'PatchConflict';
+    this.detail = detail;
+  }
+}
+
 /**
- * Apply and push from a THROWAWAY worktree built on origin/main.
+ * What `git am` actually objected to.
+ *
+ * `run()` keeps only the last few lines of stderr, and git prints its advice hints last,
+ * so a real failure arrived as `hint: If you prefer to skip this patch...` with the
+ * `error: could not apply` line already scrolled past. This reads the specifics instead,
+ * because "it conflicted" without the filename sends the reader back to the terminal.
+ */
+function conflictDetail(wt, am) {
+  const reasons = `${am.stdout || ''}\n${am.stderr || ''}`.split('\n')
+    .map((l) => l.trim())
+    .filter((l) => /^(error:|fatal:|CONFLICT|Applying:|Patch failed)/.test(l));
+  const unmerged = (spawnSync('git', ['diff', '--name-only', '--diff-filter=U'],
+    { cwd: wt, encoding: 'utf8' }).stdout || '')
+    .split('\n').map((s) => s.trim()).filter(Boolean);
+  return { exit: am.status, reasons, unmerged };
+}
+
+/**
+ * Apply the patch in a THROWAWAY worktree built on origin/main, and push only when asked.
  *
  * Never the caller's working branch: this applies somebody else's patch, and doing that
  * in a shared tree is how an unrelated session's uncommitted work gets caught up in it.
+ *
+ * `push: false` is the rehearsal the dry run performs. It stays DETACHED so it leaves no
+ * branch behind, applies the patch for real, and throws `PatchConflict` if it will not
+ * go on. Without that, a dry run can only report on policy and the secret scan, and will
+ * cheerfully promise a pull request for a patch that cannot be applied at all.
  */
-function applyAndPush({ branch, patchText, meta, repo }) {
+function applyInWorktree({ branch, patchText, meta, push }) {
   run('git', ['fetch', 'origin', 'main', '--quiet'], { cwd: ROOT });
   const wt = fs.mkdtempSync(path.join(os.tmpdir(), 'icwt-'));
   const patchFile = path.join(wt, '..', `${meta.short}.patch`);
@@ -142,13 +188,20 @@ function applyAndPush({ branch, patchText, meta, repo }) {
 
   try {
     run('git', ['worktree', 'add', '--quiet', '--detach', wt, 'origin/main'], { cwd: ROOT });
-    run('git', ['checkout', '-q', '-b', branch], { cwd: wt });
+    if (push) run('git', ['checkout', '-q', '-b', branch], { cwd: wt });
     /* `am` keeps the intern as author; -3 lets it fall back to a merge resolution. */
-    run('git', ['-c', 'user.name=Colaberry Importer',
+    const am = spawnSync('git', ['-c', 'user.name=Colaberry Importer',
       '-c', 'user.email=ali@colaberry.com',
-      'am', '-3', '--quiet', patchFile], { cwd: wt });
-    run('git', ['push', '--quiet', '-u', 'origin', `${branch}:${branch}`], { cwd: wt });
-    return run('git', ['rev-parse', 'HEAD'], { cwd: wt }).trim().slice(0, 8);
+      'am', '-3', patchFile], { cwd: wt, encoding: 'utf8', maxBuffer: 1 << 26 });
+    if (am.status !== 0) {
+      const detail = conflictDetail(wt, am);
+      /* Leave no half-applied state behind for the worktree removal to trip over. */
+      try { run('git', ['am', '--abort'], { cwd: wt }); } catch { /* best effort */ }
+      throw new PatchConflict(detail);
+    }
+    const head = run('git', ['rev-parse', 'HEAD'], { cwd: wt }).trim().slice(0, 8);
+    if (push) run('git', ['push', '--quiet', '-u', 'origin', `${branch}:${branch}`], { cwd: wt });
+    return head;
   } finally {
     try { run('git', ['worktree', 'remove', '--force', wt], { cwd: ROOT }); } catch { /* best effort */ }
     try { fs.rmSync(patchFile, { force: true }); } catch { /* best effort */ }
@@ -174,8 +227,11 @@ function prBody({ repo, meta, branch }) {
     '',
     '- The refusal policy in `scripts/lib/internChangePolicy.js` (workflows, infrastructure,',
     '  the secret gate, CI, code ownership, governance files, credential-bearing files,',
-    '  path traversal, and patch size) — no rule fired.',
+    '  path traversal, patch size, and whether the patch touches this repository at all)',
+    '  — no rule fired.',
     '- The pinned gitleaks over the patch text with this repository\'s `.gitleaks.toml` — clean.',
+    '- The patch was applied onto `origin/main` in a throwaway worktree before this branch',
+    '  existed, so it is known to apply rather than assumed to.',
     '',
     'See `docs/INTERN_DEV_ENVIRONMENT.md` for the contract this path implements.',
     '',
@@ -208,7 +264,9 @@ async function main() {
   console.log(`mode:    ${apply ? 'APPLY' : 'dry run (pass --apply to actually push)'}\n`);
 
   const secretFound = await patchHasSecret(patchText);
-  const verdict = evaluateChange({ paths: meta.paths, secretFound });
+  const verdict = evaluateChange({
+    paths: meta.paths, secretFound, repoPaths: repoPathsAtMain(),
+  });
 
   if (!verdict.allowed) {
     console.error(`REFUSED -- ${verdict.refusals.length} rule(s) fired. Nothing was pushed.\n`);
@@ -229,12 +287,17 @@ async function main() {
     return;
   }
 
+  /* Rehearse the apply for real, so the dry run cannot promise a pull request for a
+     patch that will not go on. This is the check whose absence let a commit through on
+     2026-11-01 that then failed at `git am` with exit 128. */
   if (!apply) {
+    const rehearsed = applyInWorktree({ branch, patchText, meta, push: false });
+    console.log(`apply:   rehearsed on origin/main and it applies clean (would be ${rehearsed})`);
     console.log(`\nWould push ${branch} and open a pull request. Re-run with --apply.`);
     return;
   }
 
-  const head = applyAndPush({ branch, patchText, meta, repo });
+  const head = applyInWorktree({ branch, patchText, meta, push: true });
   console.log(`pushed ${branch} at ${head}`);
   const url = run('gh', ['pr', 'create', '--base', 'main', '--head', branch,
     '--title', `Intern change: ${meta.subject}`.slice(0, 120),
@@ -244,6 +307,18 @@ async function main() {
 }
 
 main().catch((e) => {
+  if (e instanceof PatchConflict) {
+    console.error('\nDOES NOT APPLY -- nothing was pushed.\n');
+    console.error(`  git am exited ${e.detail.exit} applying this patch onto origin/main.`);
+    for (const r of e.detail.reasons) console.error(`  ${r}`);
+    if (e.detail.unmerged.length) {
+      console.error('\n  conflicted paths:');
+      for (const p of e.detail.unmerged) console.error(`      - ${p}`);
+    }
+    console.error('\nA patch is applied, never merged by hand here. Rebase it in the source');
+    console.error('repository against what this one actually contains, then import the new commit.');
+    process.exit(1);
+  }
   console.error(`IMPORT FAILED: ${e.message}`);
   process.exit(1);
 });

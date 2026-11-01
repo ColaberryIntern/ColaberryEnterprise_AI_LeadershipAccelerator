@@ -17,10 +17,20 @@ interface SupervisorDecision {
 /**
  * Log a structured supervisor decision for alumni campaigns.
  * Persisted to ai_agent_activity_logs via logAiEvent for full audit trail.
+ *
+ * `source` exists because C0.12 widened the ramp's safety-threshold pause from alumni
+ * campaigns to every campaign type, and this is the only audit entry a safety pause
+ * writes. Filing a cold-outbound pause under `alumni_campaign_supervisor` would make the
+ * audit trail wrong in the one place somebody would go looking for it, and dropping the
+ * entry instead would make a non-alumni pause invisible. Callers pass their own source;
+ * the default keeps every existing caller byte-identical.
  */
-export async function logSupervisorDecision(decision: SupervisorDecision): Promise<void> {
+export async function logSupervisorDecision(
+  decision: SupervisorDecision,
+  source = 'alumni_campaign_supervisor',
+): Promise<void> {
   try {
-    await logAiEvent('alumni_campaign_supervisor', decision.action, undefined, undefined, {
+    await logAiEvent(source, decision.action, undefined, undefined, {
       campaign_id: decision.campaign_id,
       campaign_name: decision.campaign_name,
       campaign_type: decision.campaign_type,
@@ -33,11 +43,11 @@ export async function logSupervisorDecision(decision: SupervisorDecision): Promi
       timestamp: new Date().toISOString(),
     });
   } catch (err: any) {
-    console.error(`[AlumniSupervisor] Failed to log decision:`, err.message);
+    console.error(`[${source}] Failed to log decision:`, err.message);
   }
 
   console.log(
-    `[AlumniSupervisor] ${decision.campaign_name} | Phase ${decision.ramp_phase} | ` +
+    `[${source}] ${decision.campaign_name} | Phase ${decision.ramp_phase} | ` +
     `Score: ${decision.health_score} | Action: ${decision.action} | ${decision.reasoning}`,
   );
 }
