@@ -261,13 +261,29 @@ async function getAdminRecipients(): Promise<string> {
 }
 
 /**
- * Gov pursuit daily-sweep notification to the DRI (the `admin_notification_emails` setting). The sweep composes
- * the HTML; this is the one send path, routed through resolveEmailRecipient (test-mode safe) and guardedSendMail
- * (the single transport chokepoint). Used only by the dark govOpportunitySweep job.
+ * Gov-pursuit sweep recipient. Prefers the dedicated `gov_pursuit_notification_email` setting (the DRI alone),
+ * and falls back to the shared `admin_notification_emails` list when that setting is unset or empty — so clearing
+ * the setting safely restores the previous behaviour.
+ */
+async function getGovPursuitRecipient(): Promise<string> {
+  try {
+    const dedicated = await getSetting('gov_pursuit_notification_email');
+    if (typeof dedicated === 'string' && dedicated.trim()) return dedicated.trim();
+  } catch {
+    // fall through to the shared admin list
+  }
+  return getAdminRecipients();
+}
+
+/**
+ * Gov pursuit daily-sweep notification. Goes to the gov-pursuit recipient (the dedicated
+ * `gov_pursuit_notification_email` setting, else the shared `admin_notification_emails`). The sweep composes the
+ * HTML; this is the one send path, routed through resolveEmailRecipient (test-mode safe) and guardedSendMail (the
+ * single transport chokepoint). Used only by the dark govOpportunitySweep job.
  */
 export async function sendGovOpportunitySweepEmail(data: { subject: string; html: string }): Promise<void> {
-  const admin = await getAdminRecipients();
-  const r = await resolveEmailRecipient(admin, data.subject);
+  const to = await getGovPursuitRecipient();
+  const r = await resolveEmailRecipient(to, data.subject);
   await guardedSendMail({
     from: `"Colaberry Gov Pursuit" <${env.emailFrom}>`,
     to: r.to,
