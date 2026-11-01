@@ -18,7 +18,12 @@ import {
   resolveRiskConfig,
   invalidateGovernanceCache,
   HARDCODED_DEFAULTS,
+  HARDCODED_CAMPAIGN_DEFAULTS,
 } from '../../services/governanceResolutionService';
+import {
+  GovernanceConfigShape,
+  validateGovernanceConfig,
+} from '../../services/campaignGovernancePolicy';
 
 const router = Router();
 const BASE = '/api/admin/governance-center';
@@ -229,6 +234,41 @@ router.put(`${BASE}/campaigns/:campaignId`, requireAdmin, async (req: Request, r
     const data: Record<string, any> = { campaign_id: campaignId, updated_by: adminId, updated_at: new Date() };
     for (const key of allowedFields) {
       if (req.body[key] !== undefined) data[key] = req.body[key];
+    }
+
+    // Judge the END STATE, not the request body (C0.12).
+    //
+    // Every column in this table carries a database default, so this route would accept an
+    // empty body and create a complete row - which the publish gate then read as
+    // governance. Validating the merged result means a partial update is still judged on
+    // what the config will say once written, and a config that says nothing is refused
+    // here rather than discovered by the gate reading green over it.
+    const existing = await CampaignGovernanceConfig.findOne({ where: { campaign_id: campaignId } });
+    const candidate: Record<string, unknown> = existing
+      ? {
+        max_unsubscribe_rate: existing.max_unsubscribe_rate,
+        max_bounce_rate: existing.max_bounce_rate,
+        max_sms_failure_rate: existing.max_sms_failure_rate,
+        min_open_rate: existing.min_open_rate,
+        min_reply_rate: existing.min_reply_rate,
+        ramp_profile: existing.ramp_profile,
+      }
+      // No row yet, so an unspecified field will take its database default. The candidate
+      // has to say so, or an empty body would validate against nothing and then create a
+      // complete row of defaults - the exact hollow config this check exists to refuse.
+      : { ...HARDCODED_CAMPAIGN_DEFAULTS, ramp_profile: null };
+    for (const key of allowedFields) {
+      if (req.body[key] !== undefined) candidate[key] = req.body[key];
+    }
+
+    const verdict = validateGovernanceConfig(candidate as GovernanceConfigShape);
+    if (!verdict.valid) {
+      res.status(400).json({
+        error: 'Campaign governance config is incomplete',
+        errors: verdict.errors,
+        would_be: candidate,
+      });
+      return;
     }
 
     const [row, created] = await CampaignGovernanceConfig.findOrCreate({
