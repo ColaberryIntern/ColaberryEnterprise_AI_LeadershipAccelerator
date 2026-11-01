@@ -185,6 +185,19 @@ jobs:
         run: node scripts/verifyGrowthOsResetCitations.js --self-test
       - name: Growth OS reset citation check
         run: node scripts/verifyGrowthOsResetCitations.js
+      # Knowledge hub claim check (C4.14). /knowledge is a PUBLIC static hub, so a
+      # blocked outcome claim written there is readable without asking us for
+      # anything. It is also where the design system's own BRAND.md lives, which is
+      # what made the last one self-propagating: the guidance told makers to lead
+      # with a figure the claim registry blocks, so anyone following the design
+      # system faithfully put it back. Same two-step shape as the lints above, and
+      # the same reason - the patterns are the thing being trusted, and the claim
+      # appeared in five phrasings plus bare stat tokens, two of which escaped the
+      # first search of the hub.
+      - name: Knowledge hub claim check self-test
+        run: node scripts/checkKnowledgeHubClaims.js --self-test
+      - name: Knowledge hub claim check
+        run: node scripts/checkKnowledgeHubClaims.js
 
   security-scan:
     name: Static security scan

@@ -35,9 +35,9 @@ window.COMPLIANCE_DATA = {
       a:"The Texas Workforce Commission, through its Career Schools and Colleges program, oversees licensed career schools in Texas, including reporting and student-protection requirements. Colaberry's data analytics school is approved under that framework." },
 
     // track-record
-    { category:"track-record", tags:["track record","5000","careers","2012","proof"],
+    { category:"track-record", tags:["track record","1000","hires","2012","proof"],
       q:"What is Colaberry's track record?",
-      a:"Colaberry has helped launch more than 5,000 careers since 2012. That track record, built over more than a decade, is the foundation the AI Systems Architect Accelerator stands on, not a single new course." },
+      a:"Colaberry has recorded 1,000+ hires since 2012. That track record, built over more than a decade, is the foundation the AI Systems Architect Accelerator stands on, not a single new course." },
     { category:"track-record", tags:["how long","since 2012","established"],
       q:"How long has Colaberry been operating?",
       a:"Since 2012. Over more than a decade Colaberry has built and run career programs and the regulated data analytics school behind them." },

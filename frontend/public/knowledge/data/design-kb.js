@@ -130,7 +130,7 @@ window.DESIGN_DATA = {
     // voice
     { category:"voice", tags:["voice","tone","sentence case","no emoji","proof"], ref:"design/BRAND.md", refLabel:"Brand guide",
       q:"What is the brand voice?",
-      a:"Warm and credible. Sentence case. Speak to you. Lead with proof, such as 5,000+ careers since 2012. Use friendly action CTAs like Apply now and Enroll today. No emoji in product or web. Reinforce inclusivity: no degree or tests required, scholarships, and veterans support." },
+      a:"Warm and credible. Sentence case. Speak to you. Lead with proof from the claim registry, such as 1,000+ hires or Teaching this since 2012. Use friendly action CTAs like Apply now and Enroll today. No emoji in product or web. Reinforce inclusivity: no degree or tests required, scholarships, and veterans support." },
 
     // usage
     { category:"usage", tags:["install","link","styles.css","bundle"], ref:"design/IMPLEMENTATION.md", refLabel:"Implementation guide",
