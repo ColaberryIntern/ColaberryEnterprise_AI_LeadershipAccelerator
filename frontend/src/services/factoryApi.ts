@@ -1066,10 +1066,26 @@ export interface ExtractedFileOutcome {
  *  when it did — `aiKept` quote-verified rows were added, `aiDropped` were dropped for not citing the source. */
 export interface GovExtractionMeta { mode: 'deterministic' | 'deterministic+ai'; model: string | null; aiKept: number; aiDropped: number; aiError: string | null }
 export async function extractGovQualificationRequirements(canonicalOpportunityId: string, file: File): Promise<{ candidates: ExtractedRequirementCandidate[]; items?: RequirementItem[]; fileCount: number; files?: ExtractedFileOutcome[]; extraction?: GovExtractionMeta }> {
+  // The server now extracts in a BACKGROUND job — a large multi-PDF bundle exceeded the ~100s edge timeout when it
+  // ran in-request. This uploads the ZIP (fast, returns a job id), then polls the job to completion and resolves
+  // with the SAME payload as before, so the caller is unchanged. Each poll is a tiny GET, so a long extraction no
+  // longer risks a dropped request. Throws on a failed or timed-out job.
   const form = new FormData();
   form.append('document', file);
-  const { data } = await api.post(qUrl(canonicalOpportunityId, '/extract-requirements'), form, { headers: { 'Content-Type': 'multipart/form-data' } });
-  return data;
+  const { data: started } = await api.post(qUrl(canonicalOpportunityId, '/extract-requirements'), form, { headers: { 'Content-Type': 'multipart/form-data' } });
+  const jobId: string | undefined = started?.jobId;
+  if (!jobId) throw new Error('Requirements extraction did not start.');
+  const intervalMs = 2500;
+  const deadline = Date.now() + 5 * 60 * 1000;
+  for (;;) {
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+    const { data } = await api.get(qUrl(canonicalOpportunityId, `/extract-requirements/${encodeURIComponent(jobId)}`));
+    if (data?.status === 'completed') {
+      return { candidates: data.candidates ?? [], items: data.items, fileCount: data.fileCount, files: data.files, extraction: data.extraction };
+    }
+    if (data?.status === 'failed') throw new Error(data?.error ?? 'Requirements extraction failed.');
+    if (Date.now() > deadline) throw new Error('Requirements extraction timed out. Please try again.');
+  }
 }
 
 export interface GovCandidate { canonicalOpportunityId: string; title: string | null; agency: string | null; noticeType: string | null; }
