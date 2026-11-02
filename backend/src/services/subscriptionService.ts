@@ -95,6 +95,7 @@ export const isSubscriptionRef = (externalId: string | undefined | null): boolea
  * before the split.
  */
 import { billingAnchorMs, anniversaryDayOfMonth, periodEndMs } from './billing/billingPeriod';
+import { checkoutBlock, checkoutBlockMessage } from './billing/checkoutGuard';
 
 export { billingAnchorMs, anniversaryDayOfMonth, periodEndMs };
 
@@ -249,7 +250,8 @@ export async function getSubscription(enrollmentId: string, nowMs: number = Date
 
 export type CheckoutResult =
   | { ok: true; payment_link: string; plan: SubscriptionPlan; amount: number; full_amount: number; applied_credit: number }
-  | { ok: false; reason: 'unknown_plan' | 'enrollment_not_found' | 'billing_unconfigured' | 'checkout_failed'; message?: string };
+  | { ok: false; reason: 'unknown_plan' | 'enrollment_not_found' | 'billing_unconfigured' | 'checkout_failed'; message?: string }
+  | { ok: false; reason: 'already_subscribed'; message: string; renews_on: string | null };
 
 /**
  * The PaySimple customer to bill this checkout against, reusing one we already
@@ -331,6 +333,14 @@ export async function startCheckout(enrollmentId: string, plan: SubscriptionPlan
 
   const enrollment = await Enrollment.findByPk(enrollmentId);
   if (!enrollment) return { ok: false, reason: 'enrollment_not_found' };
+
+  // Never sell a second month to someone who already has one; see billing/checkoutGuard.
+  const activeRows = (await Subscription.findAll({ where: { enrollment_id: enrollmentId, status: 'active' } })) || [];
+  const block = checkoutBlock(activeRows as any[], nowMs);
+  if (block) {
+    console.warn(`[Subscription] checkout refused for enrollment ${enrollmentId}: already subscribed (renews ${block.renews_on}, auto_billed=${block.auto_billed})`);
+    return { ok: false, reason: 'already_subscribed', message: checkoutBlockMessage(block), renews_on: block.renews_on };
+  }
 
   // Apply any account credit (e.g. the $50 Open House deposit) to THIS charge:
   // pick whole credit rows up to the payable target so the amount PaySimple is
@@ -414,10 +424,9 @@ export async function activateByRef(
   const cfg = PLANS[sub.plan] || PLANS.monthly;
   const now = new Date(nowMs);
 
-  // Anchor the billing period to the class start date: the student's paid
-  // cohort is resolved FIRST so an early payment starts its period on class
-  // day (pay 7/20, class 7/23 → period 7/23 → 8/23). Paying early only locks
-  // the seat sooner — it never shortens the first month.
+  // The paid cohort is resolved for the enrollment move below. It no longer moves
+  // the billing anchor: since 2026-10-30 a membership renews on the day it was
+  // bought, whatever the class start (see billing/billingPeriod).
   const enrollment = await Enrollment.findByPk(sub.enrollment_id);
   const cohort = enrollment ? await resolvePaidCohortFor(enrollment) : null;
   const cohortStart = cohort && (cohort as any).start_date ? String((cohort as any).start_date) : null;
