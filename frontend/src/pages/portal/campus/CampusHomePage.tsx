@@ -17,6 +17,7 @@ import { useCampusWeather } from '../../../components/campus/weather/useCampusWe
 import { WeatherSky, WeatherChip } from '../../../components/campus/weather/WeatherViews';
 import { weatherLead } from '../../../components/campus/weather/weatherModel';
 import { useHomeFacts } from '../../../components/campus/home/useHomeFacts';
+import { useCampusTeam } from '../../../components/campus/home/useCampusTeam';
 import CampusGate, { gateSeen } from '../../../components/campus/home/CampusGate';
 import CampusMeHost from '../../../components/campus/home/CampusMeHost';
 import Wayfinder from '../../../components/campus/home/Wayfinder';
@@ -90,6 +91,7 @@ function CampusHome(): React.ReactElement {
   const liveNow = useLiveNow(); // WP-6: Colaberry Live's broadcast, state and one-second clock
   useLiveCheckIn(audience, liveNow, campus.here ?? null); // WP-7 (Q2): walking into the live Classroom checks a member in
   const facts = useHomeFacts(audience === 'member');
+  const team = useCampusTeam(audience === 'business'); // C23 WP-9: the partner's company and team size
   const [cardOpen, setCardOpen] = useState(false);
   const [hover, setHover] = useState<BuildingId | null>(null);
   // D7: the entry gate, once per Central day (decided once, on the first render of the page).
@@ -158,7 +160,7 @@ function CampusHome(): React.ReactElement {
         streakPoints={facts.claimedToday === false && !inViewAs() ? facts.nextPoints : null}
         live={liveB ? { place: buildingName(liveB, wp), preview: liveNow?.b.access_mode === 'preview' } : null}
         hasTour={!!tour} reduceMotion={reduce} now={new Date()} onOpening={reveal.onOpening} onEnter={enter} photo={photo}
-        onFirstLesson={firstWinPending ? startFirstLesson : null} />}
+        onFirstLesson={firstWinPending ? startFirstLesson : null} team={team} />}
       <CampusWorld {...props} insets={homeInsets} walkTo={map.walk} onCard={onCard} cameraRef={map.camRef} startAt={campus.here}
         startCam={map.startCam} recenter={map.recenter} me={{ initials, photo, level, tone: audience }} moments={mapMoments(audience, agenda)} notifs={notifPins} quiet={quiet} hover={hover} liveNow={liveNow} onGround={onGround} />
       <WeatherSky wx={wx} reduceMotion={reduce} paused={gateOpen} />
@@ -172,7 +174,7 @@ function CampusHome(): React.ReactElement {
         stops={campus.planStops} planMinutes={campus.planMinutes} live={live} now={new Date()} agenda={agenda} urgent={urgent}
         tourStops={tour ? tour.stops : null} touring={touring} tourProgress={campus.tourProgress} justToured={campus.justToured}
         onWalk={map.goTo} onRun={(id) => map.goTo(id, { run: true })} onHover={setHover} onTour={campus.resumeTour} onEndTour={campus.endTour} onDismissTour={campus.dismissTour} onDone={onComplete}
-        onOpen={(r) => campus.enterThroughDoor(r, null)} photo={photo} call={call} coming={coming} openHouse={openHouse} weatherLine={wxLine} />
+        onOpen={(r) => campus.enterThroughDoor(r, null)} photo={photo} call={call} coming={coming} openHouse={openHouse} weatherLine={wxLine} team={team} />
       <div className="cm-home-livebar"><CampusLive onWalk={(id, run) => map.goTo(id, { run })} hereId={campus.here ?? null} /></div>
       <CampusTabBar active="/portal/campus" />
       <CampusListView />

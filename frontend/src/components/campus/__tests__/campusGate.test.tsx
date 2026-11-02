@@ -162,4 +162,16 @@ describe('role entrances (C11b fix round)', () => {
     expect(entered).toEqual([true, false]);
     expect(container.textContent).not.toMatch(/seats/);
   });
+
+  it('C23 WP-9: once the server says, a partner sees their company on the ID card and "your N people"; never seats', () => {
+    act(() => { root.render(<CampusGate {...base} audience="business" hasTour online={0} team={{ company: 'Acme Logistics', team_size: 9 }} />); });
+    expect(q('[data-testid="cm-gate-id"]')!.textContent).toContain('Acme Logistics');
+    expect(q('[data-testid="cm-gate-sub"]')!.textContent).toBe('See where your 9 people learn and build.');
+    act(() => { root.render(<CampusGate {...base} audience="business" hasTour online={0} team={{ company: null, team_size: 1 }} />); });
+    expect(q('[data-testid="cm-gate-id"]')!.textContent).toContain('Partner account');
+    expect(q('[data-testid="cm-gate-sub"]')!.textContent).toBe('See where your 1 person learns and builds.');
+    act(() => { root.render(<CampusGate {...base} audience="business" hasTour online={0} team={null} />); });
+    expect(q('[data-testid="cm-gate-sub"]')!.textContent).toBe('See where your team learns and builds.');
+    expect(container.textContent).not.toMatch(/seats/);
+  });
 });

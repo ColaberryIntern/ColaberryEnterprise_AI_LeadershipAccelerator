@@ -145,14 +145,17 @@ export function pulseOf(presence: CampusPresence | null, buildings: CampusBuildi
 
 /** The pulse line's words (D:2184-2200): bold part, the rest, its dot, and whether a press walks to the busiest building. */
 export type PulseLine = { tone: 'live' | 'team' | 'quiet' | 'down'; bold: string; rest: string; walk: boolean };
-export function pulseLine(o: { audience: CampusAudience; workplace: boolean; presence: CampusPresence | null; presenceError: boolean; buildings: CampusBuilding[]; staffOnDuty: boolean }): PulseLine | null {
+export function pulseLine(o: { audience: CampusAudience; workplace: boolean; presence: CampusPresence | null; presenceError: boolean; buildings: CampusBuilding[]; staffOnDuty: boolean;
+  teamSize?: number | null }): PulseLine | null {
   if (o.presenceError) return { tone: 'down', bold: 'Live presence is unavailable', rest: 'headcounts are hidden, not zero', walk: false };
   if (!o.presence) return null;
   const p = pulseOf(o.presence, o.buildings);
   const w = (s: string) => wd(s, o.workplace);
   if (p.total === 0) return { tone: 'quiet', bold: 'Quiet hours', rest: w(`nobody else on campus${o.staffOnDuty ? ' · staff on duty 24/7' : ''}`), walk: false };
   const busiest = p.busiest ? ` · busiest: ${buildingName(p.busiest, o.workplace)} (${p.busiestCount})` : '';
-  if (o.audience === 'business') return { tone: 'team', bold: `${p.named} of your people on campus`, rest: `${p.total} ${p.total === 1 ? 'learner' : 'learners'} in all`, walk: true };
+  // C23 WP-9: "2 of your 9 people" once the team size is known; a size below the count (never expected) keeps the plain line
+  const ofN = o.teamSize && o.teamSize >= p.named ? ` ${o.teamSize}` : '';
+  if (o.audience === 'business') return { tone: 'team', bold: `${p.named} of your${ofN} people on campus`, rest: `${p.total} ${p.total === 1 ? 'learner' : 'learners'} in all`, walk: true };
   const who = o.audience === 'member' ? (p.total === 1 ? 'classmate' : 'classmates') : (p.total === 1 ? 'person' : 'people');
   return { tone: 'live', bold: w(`${p.total} ${who} on campus`), rest: busiest.replace(/^ · /, ''), walk: true };
 }

@@ -247,6 +247,13 @@ export async function managedOrgIdFor(enrollmentId: string): Promise<string | nu
   return (await resolveManagedOrg(enrollmentId))?.id ?? null;
 }
 
+/** The organization this enrollment manages with its has_real_name verdict, exactly as Settings computes it (the viewer's
+ *  full name is the fallback test). Exported for the campus partner's company line (C23 WP-9); no logic of its own. */
+export async function managedOrgFor(enrollmentId: string): Promise<{ id: string; name: string; has_real_name: boolean } | null> {
+  const e: any = await Enrollment.findByPk(enrollmentId, { attributes: ['full_name'] });
+  return resolveManagedOrg(enrollmentId, e?.full_name ?? null);
+}
+
 export async function getSettings(enrollmentId: string): Promise<SettingsView | null> {
   const e: any = await Enrollment.findByPk(enrollmentId, {
     include: [
