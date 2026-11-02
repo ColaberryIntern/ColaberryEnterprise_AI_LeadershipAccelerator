@@ -16,6 +16,7 @@ import {
   canUploadResource,
 } from './roomEntitlementService';
 import { getMeetingProvider } from './meetingProvider';
+import { reserveRoomHost } from '../zoom/roomHostAllocator';
 import { log, slugify, shortToken, truncated, notFoundError, forbiddenError, validationError, conflictError } from './roomShared';
 
 // Rooms CRUD + discovery + the official-session linkage. Entitlement decisions
@@ -262,6 +263,11 @@ export async function joinVideoRoom(
   const provider = getMeetingProvider();
   const now = new Date();
   const end = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000);
+  // Which Zoom identity this room's year-long meeting belongs to. A Zoom user hosts
+  // one meeting at a time, so rooms sharing a host cannot be live at the same time —
+  // reserved here, before the call, and null while the pool is empty (unchanged
+  // behavior: the provider then falls back to the single configured host).
+  const hostEmail = await reserveRoomHost(room.id);
   const result = await provider.createMeeting({
     title: `Colaberry Rooms — ${room.name}`,
     description: room.description || 'Always-open community video room',
@@ -269,6 +275,7 @@ export async function joinVideoRoom(
     endAt: end,
     timezone: 'America/Chicago',
     requestId: `room-${room.id}`,
+    ...(hostEmail ? { hostEmail } : {}),
   });
   if (result.joinUrl) await room.update({ meeting_link: result.joinUrl });
   log('info', 'video_room_join', { room_id: roomId, has_link: !!result.joinUrl });
