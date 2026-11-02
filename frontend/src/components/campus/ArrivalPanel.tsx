@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import BuildingCard from './BuildingCard';
 import CampusInside from './interior/CampusInside';
 import ExplorerPath from './ExplorerPath';
@@ -163,15 +163,19 @@ export default function ArrivalPanel(p: ArrivalPanelProps): React.ReactElement {
   // rooms on screen. These carry room_name; the server already filters by audience, so
   // a non-intern never receives the Monday call.
   const weeklyData = useWeekdaySessions(b.id === EVENTS_BUILDING && access === 'open');
-  const weeklyFacts = useMemo(
-    () => (weeklyData ? occurrences(weeklyData.sessions, now).map((o) => ({
+  // Computed per render rather than memoised on `weeklyData`: `occurrences` drops
+  // sessions that have already passed, measured against `now`, so a memo keyed on the
+  // sessions alone would keep showing a session the panel had already sat through.
+  // Four sessions over seven days is not worth a stale answer. (A memo would also want
+  // a suppression for the exhaustive-deps hook rule, and naming that rule in a lint
+  // directive is ITSELF a build error here: this repo's CRA config does not load the
+  // react-hooks plugin, so the directive resolves to an unknown rule and fails the
+  // build. Same trap documented in useCardFocus.ts and PersonActivityChart.tsx.)
+  const weeklyFacts = weeklyData
+    ? occurrences(weeklyData.sessions, now).map((o) => ({
       title: o.session.title, startIso: o.startIso, roomName: o.session.room_name,
-    })) : []),
-    // `now` is a render-time clock; depending on it would recompute every render for no
-    // gain, since occurrences only changes when the sessions do.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [weeklyData],
-  );
+    }))
+    : [];
   return (
     <>
       <CampusInside building={b} buildingName={buildingName(b, wp)} audience={audience} access={access}
