@@ -138,6 +138,15 @@ export async function refreshRepoDocuments(
     // the doc for exactly the students it was wrong for. See repoWriteAccess.ts.
     const writeAccess = await repoWriteAccessForProject(projectId, opts.correlationId ?? null);
 
+    // AF3.9. An agent-domain project's Command Center is `<domain>.STORY-000` with six acceptance
+    // criteria; `renderDocs` looked for the bare `STORY-000`, missed, and supplied the SBP's
+    // generic five instead. Null for every ordinary build, which keeps their behaviour unchanged.
+    // Never throws: a failure here costs the correct Command Center, not the sync.
+    const { domainCommandCenterOverrideForProject } =
+      await import('../agentDomain/agentDomainCommandCenterForSync');
+    const commandCenterOverride =
+      await domainCommandCenterOverrideForProject(projectId, opts.correlationId ?? null);
+
     const files = renderDocs(plan, {
       repoUrl: repo.url,
       generatedAt: new Date().toISOString(),
@@ -150,6 +159,7 @@ export async function refreshRepoDocuments(
       progress: snapshot.progress,
       baselineByStory: snapshot.baselineByStory,
       repoWriteAccess: writeAccess,
+      commandCenterOverride,
     });
 
     const existingManifest = await readRepoManifest(

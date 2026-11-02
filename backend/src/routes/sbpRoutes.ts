@@ -367,7 +367,23 @@ router.get('/api/portal/sbp/builds/:projectId/stories/:storyId/prompt', requireP
   try {
     if (!gate(res)) return;
     const projectId = z.string().uuid().parse(req.params.projectId);
-    const storyId = z.string().regex(/^STORY-\d+$/i, 'storyId must look like STORY-001').parse(req.params.storyId);
+    // ── WHY THIS IS NOT `^STORY-\d+$` ANY MORE (AF3.9) ──────────────────────
+    //
+    // That pattern rejected EVERY story id on all ten agent-domain boards before the handler ran:
+    // `platform.STORY-000`, every `<domain>.CAP.<key>`, every `<domain>.RESEARCH-n-SLUG`. So the
+    // per-story prompt endpoint worked for no story on any of them, and a builder asking for the
+    // prompt to their own Command Center got a 400 telling them their id was malformed.
+    //
+    // Widened to the characters a story id is actually built from rather than to one scheme, so the
+    // next namespacing convention does not need a fourth regex. Still a validator and not a
+    // free-for-all: it must start alphanumeric, it is length-bounded, consecutive dots are refused,
+    // and `/`, `\` and whitespace are all outside the class. The value is used for a string
+    // comparison against plan story ids and in a JSON error body — never as a path — so this is the
+    // right amount of strictness for the surface.
+    const storyId = z.string()
+      .regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,99}$/, 'storyId must look like STORY-001 or platform.STORY-000')
+      .refine((s) => !s.includes('..'), 'storyId must not contain consecutive dots')
+      .parse(req.params.storyId);
     await requireOwnedProject(req, projectId);
 
     const { getPlan } = await import('../services/sbp/planStore');
@@ -421,7 +437,49 @@ router.get('/api/portal/sbp/builds/:projectId/stories/:storyId/prompt', requireP
       });
     }
 
-    if (!story) return res.status(404).json({ error: `Story ${storyId} is not in this plan` });
+    // ── THE SAME OMISSION, FOR THE TEN DOMAIN BOARDS (AF3.9) ────────────────
+    //
+    // Widening the validator above only moved the failure: `platform.STORY-000` reached the
+    // handler and 404'd as "not in this plan", which is true and no more use to the builder than
+    // the 400 was. A domain project's Command Center is not in its plan for exactly the reason the
+    // SBP's is not in its own — the Command Center is the window onto the system, not part of it —
+    // so it is supplied the same way, from the same generator `materializeTasks` stored on the
+    // task row. `domainKeyForProject` reads `agent_domain_projects`, and the project was already
+    // ownership-checked above, so a builder can only ever reach their own domain's prompt.
+    if (!story) {
+      // A DOT IS THE CHEAP PRE-FILTER, and it is deliberately not the rule itself.
+      //
+      // Every domain story id is namespaced `<domain>.something`; no SBP id contains a dot. So an
+      // ordinary `STORY-404` miss short-circuits here and never loads the agent-domain subsystem
+      // (which pulls the ten capability files and the 443-capability contract check) or touches the
+      // database. `isDomainCommandCenterStoryId` below is still the one place the actual rule
+      // lives — this only decides whether it is worth asking.
+      if (storyId.includes('.')) {
+        const { domainCommandCenterStoryId, isDomainCommandCenterStoryId, commandCenterPromptForDomain } =
+          await import('../services/agentDomain/agentDomainCommandCenterStory');
+        // Uppercased because the bare-STORY-000 branch above compares case-insensitively, and a
+        // builder who types their own id in lower case should not get a different answer here.
+        if (isDomainCommandCenterStoryId(storyId.toUpperCase())) {
+          const { domainKeyForProject } =
+            await import('../services/agentDomain/agentDomainCommandCenterForSync');
+          const domainKey = await domainKeyForProject(projectId);
+          if (domainKey && domainCommandCenterStoryId(domainKey).toUpperCase() === storyId.toUpperCase()) {
+            const { AGENT_DOMAINS } = await import('../services/agentDomain/agentDomainRegistry');
+            const { loadDomainMatrix } = await import('../services/agentDomain/capabilityRecord');
+            const domain = AGENT_DOMAINS.find((d) => d.domain_key === domainKey);
+            if (domain) {
+              return res.json({
+                story_id: domainCommandCenterStoryId(domainKey),
+                prompt: commandCenterPromptForDomain(domain, loadDomainMatrix(domainKey)),
+                has_repo: Boolean(repo),
+                paths_verified: manifest.length > 0,
+              });
+            }
+          }
+        }
+      }
+      return res.status(404).json({ error: `Story ${storyId} is not in this plan` });
+    }
 
     const { buildStoryPrompt } = await import('../services/sbp/buildStoryPrompt');
     const prompt = buildStoryPrompt(stored.plan, story, {

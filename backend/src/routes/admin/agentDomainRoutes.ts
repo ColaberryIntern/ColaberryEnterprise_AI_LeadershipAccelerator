@@ -73,6 +73,7 @@ import {
   resolveOwnerIdentityIds,
   summariseProvisioned,
 } from '../../services/agentDomain/agentDomainProvisionedReader';
+import { AUTONOMY_SET_BY_NOT_RECORDED } from '../../services/agentDomain/agentDomainSnapshot';
 import { sequelize } from '../../config/database';
 
 const router = Router();
@@ -309,6 +310,12 @@ router.get(
       as_builder: rows.length - managed.length,
       summary: summariseProvisioned(rows),
       domains: rows,
+      // AF3.9. Each row now carries the agent's `enabled`, `autonomy_level`,
+      // `autonomy_level_set_at`, `autonomy_level_source` and `tools_granted`, which the Command
+      // Center story's third and fourth acceptance criteria need and this route did not return.
+      // This names the one field that is genuinely absent from the schema, so a page labels the gap
+      // instead of drawing a blank that reads as a bug in the page.
+      not_recorded: [AUTONOMY_SET_BY_NOT_RECORDED],
       note: rows.length === 0
         ? 'This email matches no domain as either accountable manager or intended builder, so '
           + 'there is nothing to show. That is why the list is empty; it is not a failure to load.'

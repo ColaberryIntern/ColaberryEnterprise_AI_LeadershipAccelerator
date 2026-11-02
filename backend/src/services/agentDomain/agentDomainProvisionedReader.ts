@@ -66,6 +66,30 @@ export interface ProvisionedDomainRow {
    * normal state, not a finding -- the intern sets it and nothing backfills it.
    */
   readonly agent_display_name: string | null;
+  /**
+   * AF3.9: the agent's own live state, which this row did not carry and the Command Center story
+   * requires. Quincy reported it from the outside: "agent-domains-mine also doesn't return enabled,
+   * autonomy level, tools granted or who set autonomy, so those stay blank and are labelled." He
+   * was right, and he was being graded against two acceptance criteria that the only endpoint his
+   * page is allowed to call could not answer.
+   *
+   * All five are NULL when no `ai_agents` row is linked, because the join is LEFT. Null therefore
+   * means "no employee yet", which is a real state and not a failed read -- criterion 2 asks the
+   * page to say so in words and to look different from a panel that is still loading.
+   */
+  readonly agent_enabled: boolean | null;
+  readonly agent_autonomy_level: string | null;
+  readonly agent_autonomy_level_set_at: string | null;
+  /**
+   * `auto` or `manual`. This is as close as the schema gets to WHO set the autonomy level:
+   * `ai_agents` has `autonomy_level_set_at` and `autonomy_level_source` but NO `set_by` column, so
+   * the platform knows when it was set and whether a person chose it, and does not know which
+   * person. Adding that column is a schema change and therefore a separate decision; until then a
+   * page must label the gap rather than render a name. See `agentDomainSnapshot.notRecordedFor`.
+   */
+  readonly agent_autonomy_level_source: string | null;
+  readonly agent_tools_granted: string[] | null;
+  readonly agent_tools_granted_count: number | null;
   readonly releases: number;
   readonly stories: number;
   readonly stories_verified: number;
@@ -91,6 +115,26 @@ const BASE_SQL = `
          adp.intended_builder_state,
          adp.agent_id::text                        AS agent_id,
          aa.config->>'display_name'                AS agent_display_name,
+         aa.enabled                                AS agent_enabled,
+         aa.autonomy_level                         AS agent_autonomy_level,
+         aa.autonomy_level_set_at                  AS agent_autonomy_level_set_at,
+         aa.autonomy_level_source                  AS agent_autonomy_level_source,
+         -- tools_granted is JSONB, NOT text[]. unnest does not exist for jsonb, and
+         -- jsonb_array_length is the counterpart to array_length -- getting this wrong fails at
+         -- the database, which is the good failure mode but still a failure.
+         aa.tools_granted                          AS agent_tools_granted,
+         -- NULL means "no employee", 0 means "an employee with nothing granted". Collapsing those
+         -- two into 0 is the single confusion this story's second acceptance criterion forbids,
+         -- and a bare coalesce to an empty array does exactly that for a domain whose ai_agents
+         -- row does not exist. The jsonb_typeof arm is because jsonb_array_length RAISES on a
+         -- non-array, so one malformed value would take down the whole My Domain page rather than
+         -- showing a single unknown count.
+         CASE
+           WHEN aa.id IS NULL THEN NULL
+           WHEN aa.tools_granted IS NULL THEN 0
+           WHEN jsonb_typeof(aa.tools_granted) = 'array' THEN jsonb_array_length(aa.tools_granted)
+           ELSE NULL
+         END::int                                  AS agent_tools_granted_count,
          (SELECT count(*) FROM student_task_lists l
            WHERE l.project_id = adp.student_project_id)::int                         AS releases,
          (SELECT count(*) FROM student_tasks t
