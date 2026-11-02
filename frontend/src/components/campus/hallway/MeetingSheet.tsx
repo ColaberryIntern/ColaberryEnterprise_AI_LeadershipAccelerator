@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom';
 import { fetchCampusPresence, type CampusPerson } from '../campusApi';
 import { WHO_CAN_JOIN, bookSession, hallwayChanged, onMeetSheet, openNewRoom, type Hallway, type MeetSheetOpen } from './hallwayApi';
-import { SESSION_MINUTES, SLOTS, bookDays, centralSlotIso, centralWhen, doorSign, firstNameOf, hallwayDoors, initialsOf, type Door } from './hallwayModel';
+import { SESSION_MINUTES, SLOTS, bookDays, canJoin, centralSlotIso, centralWhen, doorSign, firstNameOf, hallwayDoors, initialsOf, type Door } from './hallwayModel';
 import { roomPath, useHallway } from './Hallway';
 import '../admissions/campusBook.css';
 import './hallway.css';
@@ -57,7 +57,7 @@ function Peek({ door, onClose, onGo }: { door: Door; onClose: () => void; onGo: 
         </>) : <p className="cm-book-muted">Nobody inside yet.</p>}
         <div className="cm-book-foot">
           <span className="cm-book-hint">{door.state === 'booked' && door.booking ? `${door.booking.hosting ? 'Booked by you' : 'You are going'} · ${centralWhen(door.booking.start_at)}` : 'Audio, video, screen share and chat'}</span>
-          {door.state === 'live' && <button type="button" className="cm-book-btn pri" onClick={() => onGo(roomPath(door.roomId))} data-testid="cm-meet-join">Join the room &rarr;</button>}
+          {canJoin(door) && <button type="button" className="cm-book-btn pri" onClick={() => onGo(roomPath(door.roomId))} data-testid="cm-meet-join">Join the room &rarr;</button>}
           {door.state === 'booked' && door.booking && <button type="button" className="cm-book-btn" onClick={() => onGo(roomPath(door.roomId))}>Opens {doorSign(door).replace('Booked · ', '')}</button>}
           {door.state === 'idle' && <button type="button" className="cm-book-btn pri" onClick={() => onGo(roomPath(door.roomId))}>Open this room &rarr;</button>}
         </div>

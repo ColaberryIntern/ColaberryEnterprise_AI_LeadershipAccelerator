@@ -31,7 +31,9 @@ import { MEET_SHEET_EVENT, HALLWAY_CHANGED_EVENT, type Hallway, type HallwayRoom
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const person = (id: string, friend = false) => ({ enrollment_id: id, display_name: `Person ${id}`, avatar_url: null, friend });
-const room = (id: string, o: Partial<HallwayRoom> = {}): HallwayRoom => ({ room_id: id, name: `Room ${id}`, sub: '', emoji: null, privacy: 'cohort', mine: false, inside_count: 0, inside: [], ...o });
+// live_since defaults to null: people present with NO meeting running, which is what
+// inside_count has always actually meant.
+const room = (id: string, o: Partial<HallwayRoom> = {}): HallwayRoom => ({ room_id: id, name: `Room ${id}`, sub: '', emoji: null, privacy: 'cohort', mine: false, inside_count: 0, inside: [], live_since: null, ...o });
 const H = (rooms: HallwayRoom[], bookings: Hallway['bookings'] = []): Hallway => ({ rooms, bookings, reese_id: 'reese-1' });
 const booking = (id: string, roomId: string, start: string) => ({ booking_id: id, room_id: roomId, title: `Session ${id}`, start_at: start, end_at: null, state: 'scheduled', hosting: true });
 
@@ -41,10 +43,25 @@ describe('the door rules', () => {
     room('friendly', { inside_count: 2, inside: [person('b', true)] }), room('idle-not-mine'),
   ], [booking('b2', 'bk', '2026-10-28T15:00:00.000Z')]);
 
-  it('orders live rooms with a friend, other live rooms, your bookings, then your idle rooms; idle rooms that are not yours have no door', () => {
-    expect(orderedDoors(h).map((d) => `${d.roomId}:${d.state}`)).toEqual(['friendly:live', 'live1:live', 'bk:booked', 'mine:idle']);
+  it('orders rooms with a friend first, other occupied rooms, your bookings, then your idle rooms; idle rooms that are not yours have no door', () => {
+    // These rooms have people but no meeting, so they are `occupied`, not `live`.
+    expect(orderedDoors(h).map((d) => `${d.roomId}:${d.state}`)).toEqual(['friendly:occupied', 'live1:occupied', 'bk:booked', 'mine:idle']);
     expect(orderedDoors(h)[0].friends).toBe(true);
     expect(orderedDoors(h)[2].name).toBe('Session b2'); // a booked door shows the session's title
+  });
+
+  it('a room with a meeting running outranks a busier room with no call', () => {
+    // THE DEFECT: ordering was by open browser tabs alone, so a real call lost its
+    // place on the wall to a room where more people happened to have a page open.
+    const mixed = H([room('busy', { inside_count: 9 }), room('calling', { inside_count: 1, live_since: '2026-11-02T15:00:00.000Z' })]);
+    expect(orderedDoors(mixed).map((d) => `${d.roomId}:${d.state}`)).toEqual(['calling:live', 'busy:occupied']);
+  });
+
+  it('shows a live room that nobody has the page open for', () => {
+    // The normal shape of a real call: everyone is in Zoom, nobody is on the website.
+    // Such a room used to have no door at all.
+    const empty = H([room('calling', { inside_count: 0, live_since: '2026-11-02T15:00:00.000Z' })]);
+    expect(orderedDoors(empty).map((d) => `${d.roomId}:${d.state}`)).toEqual(['calling:live']);
   });
 
   it('caps at six doors; with more, the sixth is "More rooms" with the hidden count; doors are numbered 1-6', () => {
@@ -57,12 +74,23 @@ describe('the door rules', () => {
     expect(hallwayDoors(H([]))).toEqual([]); // an empty campus has no invented doors
   });
 
-  it('signs: "● n inside", "Booked · Wed 10:00 AM" (Central), "Available"', () => {
+  it('signs: "n here" for presence, "Booked · Wed 10:00 AM" (Central), "Available"', () => {
+    // "inside" overclaimed. These people have a browser tab open; no call is running,
+    // so the sign must not imply one.
     const [f, l, b, fr] = hallwayDoors(h) as Door[];
-    expect(doorSign(f)).toBe('● 2 inside');
-    expect(doorSign(l)).toBe('● 5 inside');
+    expect(doorSign(f)).toBe('2 here');
+    expect(doorSign(l)).toBe('5 here');
     expect(doorSign(b)).toBe('Booked · Wed 10:00 AM');
     expect(doorSign(fr)).toBe('Available');
+  });
+
+  it('only a running meeting gets the live dot', () => {
+    const [live, alone] = hallwayDoors(H([
+      room('a', { inside_count: 4, live_since: '2026-11-02T15:00:00.000Z' }),
+      room('b', { inside_count: 0, live_since: '2026-11-02T15:00:00.000Z' }),
+    ])) as Door[];
+    expect(doorSign(live)).toBe('● Live · 4 here');
+    expect(doorSign(alone)).toBe('● Live now');
   });
 
   it('a Central slot is the right instant either side of the DST change; days skip the weekend and start tomorrow', () => {
@@ -100,18 +128,25 @@ describe('the walls, the board and the card', () => {
     render(<><HallwayWall doors={hallwayDoors(h)} side="left" onOpen={() => undefined} /><HallwayWall doors={hallwayDoors(h)} side="right" onOpen={() => undefined} /></>);
     expect(q('[data-testid="cm-door-1"]')!.className).toContain('is-friends');
     expect(q('[data-testid="cm-door-2"]')!.className).not.toContain('is-friends');
-    expect(q('[data-testid="cm-door-1"]')!.textContent).toContain('● 2 inside');
+    expect(q('[data-testid="cm-door-1"]')!.textContent).toContain('2 here');
     act(() => { (q('[data-testid="cm-door-1"]') as HTMLButtonElement).click(); });
     expect(seen).toEqual([{ mode: 'peek', roomId: 'f' }]);
     window.removeEventListener(MEET_SHEET_EVENT, on);
   });
 
-  it('the board counts the open rooms and Join goes to the room page', () => {
+  it('the board reports PEOPLE when no meeting is running, and Join goes to the room page', () => {
+    // THE HEADLINE DEFECT: this said "2 open now" for two rooms in which nothing was
+    // happening, because two people had a page open. It must not claim a call.
     const opened: string[] = [];
     render(<HallwayBoard hallway={h} onOpen={(r) => opened.push(r)} />);
-    expect(q('[data-testid="cm-board-title"]')!.textContent).toBe('Meeting rooms · 2 open now');
+    expect(q('[data-testid="cm-board-title"]')!.textContent).toBe('Meeting rooms · 3 people here');
     act(() => { (q('[data-testid="cm-board-room-f"] button') as HTMLButtonElement).click(); });
     expect(opened).toEqual(['/portal/rooms/f']);
+  });
+
+  it('the board says "live now" only once a meeting has actually started', () => {
+    render(<HallwayBoard hallway={H([room('f', { inside_count: 3, live_since: '2026-11-02T15:00:00.000Z' })])} onOpen={() => undefined} />);
+    expect(q('[data-testid="cm-board-title"]')!.textContent).toBe('Meeting rooms · 1 room live now');
   });
 
   it('the card says so when the rooms cannot load or none are open, and still offers + New room and Book a session', () => {

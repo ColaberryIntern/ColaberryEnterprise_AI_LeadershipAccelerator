@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { fetchHallway, HALLWAY_CHANGED_EVENT, openMeetSheet, type Hallway } from './hallwayApi';
-import { doorSign, hallwayDoors, initialsOf, isEmptyDoor, liveRooms, rowLine, type Door, type WallDoor } from './hallwayModel';
+import { boardRooms, boardSummary, canJoin, doorSign, hallwayDoors, initialsOf, isEmptyDoor, rowLine, type Door, type WallDoor } from './hallwayModel';
 import './hallway.css';
 
 /**
@@ -75,13 +75,16 @@ export function HallwayWall({ doors, side, onOpen }: { doors: WallDoor[]; side: 
 
 /** The back-wall board. */
 export function HallwayBoard({ hallway, onOpen }: { hallway: Hallway | null; onOpen: (route: string) => void }): React.ReactElement {
-  const live = hallway ? liveRooms(hallway) : [];
+  // Rows cover rooms with a meeting running AND rooms that merely have people in
+  // them; the heading distinguishes the two rather than calling both "open now".
+  const shown = hallway ? boardRooms(hallway) : [];
+  const summary = hallway ? boardSummary(hallway) : null;
   return (
     <>
-      <div className="k" data-testid="cm-board-title">Meeting rooms · {hallway ? live.length : '…'} open now</div>
-      {hallway && !live.length && <h3 className="plain">Nobody is in a room right now. Open one, or book one for later.</h3>}
+      <div className="k" data-testid="cm-board-title">Meeting rooms · {summary ? `${summary.count} ${summary.label}` : '…'}</div>
+      {hallway && !shown.length && <h3 className="plain">Nobody is in a room right now. Open one, or book one for later.</h3>}
       <ul className="cm-hall-board-rows" onClick={(e) => e.stopPropagation()}>
-        {live.slice(0, 4).map((d) => (
+        {shown.slice(0, 4).map((d) => (
           <li key={d.key} data-testid={`cm-board-room-${d.roomId}`}>
             <span className="tx"><b>{d.name}</b>{d.sub && <small>{d.sub}</small>}</span>
             <span className="av"><Avatars d={d as Door} max={3} /></span>
@@ -116,7 +119,7 @@ export function HallwayRows({ hallway, error, onOpen }: { hallway: Hallway | nul
               <span className="n">{d.n}</span>
               {d.state === 'live' && <span className="dot" aria-label="live" />}
               <span className="tx"><b>{d.name}</b><small>{rowLine(d)}</small></span>
-              {d.state === 'live' && <button type="button" className="cm-btn-line pri" onClick={() => onOpen(roomPath(d.roomId))}>Join</button>}
+              {canJoin(d) && <button type="button" className="cm-btn-line pri" onClick={() => onOpen(roomPath(d.roomId))}>Join</button>}
               {d.state === 'booked' && <button type="button" className="cm-btn-line" onClick={() => openMeetSheet({ mode: 'peek', roomId: d.roomId })}>Details</button>}
               {d.state === 'idle' && <button type="button" className="cm-btn-line" onClick={() => onOpen(roomPath(d.roomId))}>Open</button>}
             </li>

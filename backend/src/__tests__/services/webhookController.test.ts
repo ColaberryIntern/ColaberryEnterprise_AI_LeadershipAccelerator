@@ -63,6 +63,8 @@ jest.mock('../../services/sessionRecordingService', () => ({
   findAlwaysOpenRoomForZoomMeeting: jest.fn(),
 }));
 
+jest.mock('../../services/communityRooms/roomLiveState', () => ({ applyZoomLiveEvent: jest.fn() }));
+
 import { handlePaySimpleWebhook, handleZoomWebhook } from '../../controllers/webhookController';
 import { verifyWebhookSignature } from '../../services/paysimpleService';
 import { markEnrollmentPaid, markEnrollmentFailed } from '../../services/enrollmentService';
@@ -78,6 +80,7 @@ import {
   ingestRecordingForRoom,
   findAlwaysOpenRoomForZoomMeeting,
 } from '../../services/sessionRecordingService';
+import { applyZoomLiveEvent } from '../../services/communityRooms/roomLiveState';
 
 function mockRequest(body: any, headers: Record<string, string> = {}): Partial<Request> {
   return { body, headers };
@@ -500,10 +503,14 @@ describe('handleZoomWebhook', () => {
     expect(res.status).toHaveBeenCalledWith(200);
   });
 
-  it('benign-acks a non recording.completed event without touching the DB', async () => {
+  it('benign-acks an event it does not handle without touching the DB', async () => {
     (verifyZoomWebhookSignature as jest.Mock).mockReturnValue(true);
 
-    const event = { event: 'meeting.started', payload: { object: { id: 123 } } };
+    // Was `meeting.started`, which this endpoint now HANDLES (room liveness). The
+    // rule being tested is unchanged — an event with no handler is acked, not
+    // errored — so it needs an event that genuinely has no handler. This
+    // subscription is account-wide, so plenty arrive.
+    const event = { event: 'meeting.participant_joined', payload: { object: { id: 123 } } };
     const req = mockRequest(Buffer.from(JSON.stringify(event), 'utf8'), { 'x-zm-signature': 'v0=x', 'x-zm-request-timestamp': freshZoomTimestamp() });
     const res = mockResponse();
 
@@ -512,6 +519,88 @@ describe('handleZoomWebhook', () => {
     expect(res.status).toHaveBeenCalledWith(200);
     expect(res.json).toHaveBeenCalledWith({ received: true });
     expect(LiveSession.findOne).not.toHaveBeenCalled();
+  });
+
+  /**
+   * Room liveness. Before this, nothing in the platform ever learned that a meeting
+   * started — `recording.completed` was the only event handled, and it lands long
+   * after everyone has left — so the campus inferred "open now" from browser-tab
+   * heartbeats and said two rooms were open when nothing was happening.
+   */
+  describe('room liveness', () => {
+    const zoomEvent = (name: string, over: Record<string, unknown> = {}) => ({
+      event: name,
+      payload: { object: { id: 123, uuid: 'occ-abc', ...over } },
+    });
+
+    const deliver = async (name: string, over: Record<string, unknown> = {}) => {
+      (verifyZoomWebhookSignature as jest.Mock).mockReturnValue(true);
+      const req = mockRequest(Buffer.from(JSON.stringify(zoomEvent(name, over)), 'utf8'),
+        { 'x-zm-signature': 'v0=x', 'x-zm-request-timestamp': freshZoomTimestamp() });
+      const res = mockResponse();
+      await handleZoomWebhook(req as Request, res as Response);
+      return res;
+    };
+
+    it('marks the room live when its meeting starts', async () => {
+      (findAlwaysOpenRoomForZoomMeeting as jest.Mock).mockResolvedValue({ id: 'room-1', name: 'AI Internship' });
+      (applyZoomLiveEvent as jest.Mock).mockResolvedValue({ occurrence_uuid: 'occ-abc' });
+
+      const res = await deliver('meeting.started');
+
+      expect(applyZoomLiveEvent).toHaveBeenCalledWith('room-1', expect.objectContaining({
+        kind: 'started', occurrenceUuid: 'occ-abc', meetingId: '123',
+      }));
+      expect(res.status).toHaveBeenCalledWith(200);
+    });
+
+    it('clears it when the meeting ends', async () => {
+      (findAlwaysOpenRoomForZoomMeeting as jest.Mock).mockResolvedValue({ id: 'room-1', name: 'AI Internship' });
+      (applyZoomLiveEvent as jest.Mock).mockResolvedValue(null);
+
+      await deliver('meeting.ended');
+
+      expect(applyZoomLiveEvent).toHaveBeenCalledWith('room-1', expect.objectContaining({ kind: 'ended' }));
+    });
+
+    it('carries the OCCURRENCE uuid, which is what stops a late end closing a live call', async () => {
+      (findAlwaysOpenRoomForZoomMeeting as jest.Mock).mockResolvedValue({ id: 'room-1' });
+      (applyZoomLiveEvent as jest.Mock).mockResolvedValue(null);
+
+      await deliver('meeting.ended', { uuid: 'occ-older' });
+
+      expect((applyZoomLiveEvent as jest.Mock).mock.calls[0][1].occurrenceUuid).toBe('occ-older');
+    });
+
+    it('acks a meeting that belongs to no room without writing anything', async () => {
+      // The subscription is account-wide: every 1:1 and personal meeting lands here.
+      (findAlwaysOpenRoomForZoomMeeting as jest.Mock).mockResolvedValue(null);
+
+      const res = await deliver('meeting.started');
+
+      expect(applyZoomLiveEvent).not.toHaveBeenCalled();
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(res.json).toHaveBeenCalledWith({ received: true, matched: false });
+    });
+
+    it('still acks 200 when the write fails (failure path)', async () => {
+      // A non-2xx makes Zoom retry a delivery that will fail the same way, and a stale
+      // badge is already bounded by read-time expiry. Never 5xx at Zoom over this.
+      (findAlwaysOpenRoomForZoomMeeting as jest.Mock).mockResolvedValue({ id: 'room-1' });
+      (applyZoomLiveEvent as jest.Mock).mockRejectedValue(new Error('connection lost'));
+      jest.spyOn(console, 'error').mockImplementation(() => {});
+
+      const res = await deliver('meeting.started');
+
+      expect(res.status).toHaveBeenCalledWith(200);
+    });
+
+    it('does not reach the recording path', async () => {
+      (findAlwaysOpenRoomForZoomMeeting as jest.Mock).mockResolvedValue(null);
+      await deliver('meeting.started');
+      expect(LiveSession.findOne).not.toHaveBeenCalled();
+      expect(ingestRecordingForRoom).not.toHaveBeenCalled();
+    });
   });
 
   it('benign-acks recording.completed for a meeting that matches neither a LiveSession, a RoomBooking, nor an always-open Room (account-wide subscription, non-class/booking/room meeting)', async () => {

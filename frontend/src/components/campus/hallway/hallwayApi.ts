@@ -10,7 +10,10 @@ import { createBooking, createRoom, inviteToRoom, type RoomPrivacy } from '../..
 export interface HallwayPerson { enrollment_id: string; display_name: string; avatar_url: string | null; friend: boolean }
 export interface HallwayRoom {
   room_id: string; name: string; sub: string; emoji: string | null; privacy: string; mine: boolean;
+  /** People with this room's PAGE open in the last 70s. NOT people in the call. */
   inside_count: number; inside: HallwayPerson[];
+  /** When Zoom reported a meeting started here, or null if no call is running. */
+  live_since: string | null;
 }
 export interface HallwayBooking { booking_id: string; room_id: string; title: string; start_at: string; end_at: string | null; state: string; hosting: boolean }
 export interface Hallway { rooms: HallwayRoom[]; bookings: HallwayBooking[]; reese_id: string | null }

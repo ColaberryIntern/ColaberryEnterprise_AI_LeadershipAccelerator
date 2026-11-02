@@ -30,6 +30,36 @@ beforeEach(() => {
   mock.listed = []; mock.extraRooms = []; mock.presence = []; mock.bookings = []; mock.going = []; mock.cohorts = []; mock.visible = new Map();
 });
 
+describe('a meeting running is not the same thing as a page being open', () => {
+  const liveMeta = (sinceIso: string) => ({ live: { occurrence_uuid: 'occ-1', meeting_id: '123', since: sinceIso } });
+
+  it('keeps a room whose meeting is running even though NOBODY has its page open', async () => {
+    // The normal shape of a real call: everyone is in Zoom, nobody on the website.
+    // Such a room has no presence rows, so the hallway used to drop it entirely.
+    mock.listed = [{ visibility: 'full', room: room('calling', { metadata: liveMeta('2026-10-26T11:45:00.000Z') }) }];
+    const h = await getHallway(CTX, new Date('2026-10-26T12:00:00Z'));
+    expect(h.rooms.map((r) => r.room_id)).toEqual(['calling']);
+    expect(h.rooms[0].live_since).toBe('2026-10-26T11:45:00.000Z');
+    expect(h.rooms[0].inside_count).toBe(0);
+  });
+
+  it('reports live_since null for a room that merely has people in it', async () => {
+    // inside_count counts open browser tabs and never meant a meeting was happening.
+    mock.listed = [{ visibility: 'full', room: room('busy') }];
+    mock.presence = [{ room_id: 'busy', enrollment_id: 'a' }];
+    const h = await getHallway(CTX, new Date('2026-10-26T12:00:00Z'));
+    expect(h.rooms[0]).toMatchObject({ room_id: 'busy', inside_count: 1, live_since: null });
+  });
+
+  it('drops a stale liveness whose meeting never ended', async () => {
+    // A dropped `meeting.ended` must not pin a room open forever — that would be the
+    // original lie in a new place.
+    mock.listed = [{ visibility: 'full', room: room('stale', { metadata: liveMeta('2026-10-20T00:00:00.000Z') }) }];
+    const h = await getHallway(CTX, new Date('2026-10-26T12:00:00Z'));
+    expect(h.rooms).toEqual([]);
+  });
+});
+
 it('keeps rooms someone is in, rooms you own and rooms you booked; drops idle rooms, locked shells and event rooms', async () => {
   mock.listed = [
     { visibility: 'full', room: room('live') }, { visibility: 'full', room: room('idle') }, { visibility: 'full', room: room('own', { owner_enrollment_id: 'me' }) },

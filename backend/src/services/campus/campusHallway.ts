@@ -7,6 +7,7 @@ import Enrollment from '../../models/Enrollment';
 import type { RoomAccessContext } from '../communityRooms/roomEntitlementService';
 import { listRoomsForViewer } from '../communityRooms/roomService';
 import { visibleSetFor } from './campusPresenceService';
+import { liveSince } from '../communityRooms/roomLiveState';
 import { getReeseEnrollmentId } from '../reese/reeseIdentitySeed';
 
 /**
@@ -28,7 +29,21 @@ export const BOOKINGS_MAX = 20;
 export interface HallwayPerson { enrollment_id: string; display_name: string; avatar_url: string | null; friend: boolean }
 export interface HallwayRoom {
   room_id: string; name: string; sub: string; emoji: string | null; privacy: string; mine: boolean;
+  /**
+   * People with the room's PAGE open in the last 70 seconds. NOT people in the call —
+   * nothing reconciles against Zoom's participant list, and `room_presence.in_video`
+   * is written `false` by its only caller. Treating this as "a meeting is happening"
+   * is the defect `live_since` exists to fix; it is kept, under a name that says what
+   * it counts.
+   */
   inside_count: number; inside: HallwayPerson[];
+  /**
+   * When Zoom reported a meeting STARTED in this room, or null if none is running.
+   * The only trustworthy "live" on this payload. Null while the `meeting.started`
+   * subscription is unconfigured, which is why presence is still reported separately
+   * rather than replaced.
+   */
+  live_since: string | null;
 }
 export interface HallwayBooking { booking_id: string; room_id: string; title: string; start_at: string; end_at: string | null; state: string; hosting: boolean }
 export interface Hallway { rooms: HallwayRoom[]; bookings: HallwayBooking[]; reese_id: string | null }
@@ -93,7 +108,11 @@ export async function getHallway(ctx: RoomAccessContext, now: Date = new Date())
   const all = [...full, ...extra];
   const inside = await insideOf(all.map((r) => r.id), now);
   const booked = new Set(bookings.map((b) => b.room_id));
-  const keep = all.filter((r) => (inside.get(r.id)?.length ?? 0) > 0 || r.owner_enrollment_id === ctx.enrollmentId || booked.has(r.id)).slice(0, ROOMS_MAX);
+  // A room with a meeting running is shown even when nobody has its page open — the
+  // common case for a real call, where everyone is in Zoom and not on the website.
+  // Before liveness existed such a room was filtered out entirely.
+  const live = new Map(all.map((r) => [r.id, liveSince(r.metadata, now)]));
+  const keep = all.filter((r) => (inside.get(r.id)?.length ?? 0) > 0 || live.get(r.id) !== null || r.owner_enrollment_id === ctx.enrollmentId || booked.has(r.id)).slice(0, ROOMS_MAX);
   const visible = await visibleSetFor(ctx.enrollmentId, ctx.cohortId ?? null, now);
   const namedIds = Array.from(new Set(keep.flatMap((r) => (inside.get(r.id) ?? []).filter((id) => visible.has(id)))));
   const cohorts = await cohortsOf(namedIds);
@@ -104,7 +123,7 @@ export async function getHallway(ctx: RoomAccessContext, now: Date = new Date())
       return { enrollment_id: id, display_name: p.display_name, avatar_url: p.avatar_url, friend: !!ctx.cohortId && cohorts.get(id) === ctx.cohortId };
     });
     const emoji = typeof r.metadata?.emoji === 'string' ? (r.metadata.emoji as string) : null;
-    return { room_id: r.id, name: (r.name || 'Meeting room').slice(0, 80), sub: roomSub(r), emoji, privacy: r.privacy, mine: r.owner_enrollment_id === ctx.enrollmentId, inside_count: ids.length, inside: named };
+    return { room_id: r.id, name: (r.name || 'Meeting room').slice(0, 80), sub: roomSub(r), emoji, privacy: r.privacy, mine: r.owner_enrollment_id === ctx.enrollmentId, inside_count: ids.length, inside: named, live_since: live.get(r.id) ?? null };
   });
   return { rooms, bookings, reese_id: reese };
 }

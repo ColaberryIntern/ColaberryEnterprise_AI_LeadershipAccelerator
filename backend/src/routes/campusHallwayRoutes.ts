@@ -17,6 +17,10 @@ const Person = z.object({ enrollment_id: z.string(), display_name: z.string(), a
 const Room = z.object({
   room_id: z.string(), name: z.string(), sub: z.string(), emoji: z.string().nullable(), privacy: z.string(), mine: z.boolean(),
   inside_count: z.number().int().nonnegative(), inside: z.array(Person).max(4),
+  // When Zoom reported a meeting started here. `inside_count` counts open browser
+  // tabs and never meant this; the two are reported separately so the UI can stop
+  // calling the first one "open now".
+  live_since: z.string().nullable(),
 }).strict();
 const Booking = z.object({
   booking_id: z.string(), room_id: z.string(), title: z.string(), start_at: z.string(), end_at: z.string().nullable(), state: z.string(), hosting: z.boolean(),
