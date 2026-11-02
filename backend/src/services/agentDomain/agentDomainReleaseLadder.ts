@@ -33,9 +33,30 @@ export interface GeneratedRelease {
  * in a TITLE, which nothing parses; the CLUSTER key keeps the `autonomy:` namespace, because that
  * is the value that gets stored and read back.
  */
+/**
+ * The rung every capability's first story lands on, and the one whose title has to explain itself.
+ *
+ * On the 2 November call most builders reported "a bunch of stories in release 0", and they were
+ * right: 624 of the 1,477 tasks on the ten boards sit here, 42% of the programme, between 35 and 96
+ * per board. That is not a placement bug. A capability story hangs on the rung its
+ * `starting_autonomy` names, and all 443 capability records name `autonomy:R0` -- so R0 necessarily
+ * holds the starting point of every capability plus the shared foundation stories, and no code
+ * change can spread them without moving work to an authority level nobody approved.
+ *
+ * Owner decision, 2 Nov 2026: leave the placement, fix the labels. So the rung keeps its own
+ * wording and gains the one clause that answers the question a full list provokes. A builder
+ * opening a 96-item R0 should be able to tell "this is where everything begins" from "something is
+ * broken", and before this the title gave them no way to.
+ */
+const FOUNDATION_LEVEL: AutonomyLevel = 'R0';
+
+/** Appended to R0's title only. Kept short: it rides in a list header, not a paragraph. */
+const FOUNDATION_NOTE = 'every capability starts here';
+
 export const AUTONOMY_RELEASES: ReadonlyArray<GeneratedRelease> = AUTONOMY_LEVELS.map((level, i) => ({
   cluster: `${AUTONOMY_NAMESPACE}${level}`,
-  name: `${level} · ${AUTONOMY_MEANINGS[level].replace(/\.$/, '')}`,
+  name: `${level} · ${AUTONOMY_MEANINGS[level].replace(/\.$/, '')}`
+    + (level === FOUNDATION_LEVEL ? ` (${FOUNDATION_NOTE})` : ''),
   position: i,
 }));
 

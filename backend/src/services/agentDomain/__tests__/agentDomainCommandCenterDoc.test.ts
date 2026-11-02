@@ -192,12 +192,42 @@ describe('the snapshot renders the authority effectiveAuthority() returns', () =
     // asserted the opposite and failed, which is how the fact was found.
     //
     // This is therefore the honest assertion: the rule is reported, its scope is zero, and the
-    // page is told to say so. Criterion 4 of the Command Center story describes a state no builder
-    // can currently produce; that is a finding on AF3.9, not something to paper over here.
+    // page is told to say so.
+    //
+    // This comment used to end "Criterion 4 of the Command Center story describes a state no
+    // builder can currently produce; that is a finding on AF3.9, not something to paper over
+    // here." That finding was acted on on 2 Nov 2026: criterion 4 now asks for the count this
+    // rule constrains and for the zero case to be stated in words, which is exactly what the
+    // three fields below provide. See `criterion 4 asks only for fields the snapshot produces`.
     const rule = built.authority_rule as { approved_above_r2: number; binds_nothing: boolean };
     expect(rule.approved_above_r2).toBe(0);
     expect(rule.binds_nothing).toBe(true);
     expect(authority.every((a) => !a.reasons.includes('no_tool_grants'))).toBe(true);
+  });
+
+  it('criterion 4 asks only for fields the snapshot produces', () => {
+    // THE DRIFT GUARD. Criterion 4 and `authority_rule` are a contract written in two places: the
+    // criterion says what a builder must render, the snapshot says what they are given to render
+    // it from. The old criterion drifted from the implementation and nobody noticed until it
+    // blocked ten people, so the agreement is asserted rather than assumed.
+    const rule = built.authority_rule as Record<string, unknown>;
+    const criterion4 = COMMAND_CENTER_ACCEPTANCE.find((c) => c.includes('no_tool_grants')) as string;
+
+    // The criterion asks for three things, and each has a field behind it.
+    expect(rule).toHaveProperty('rule');                // "names the `no_tool_grants` rule"
+    expect(rule).toHaveProperty('approved_above_r2');   // "the number of capabilities it constrains"
+    expect(rule).toHaveProperty('binds_nothing');       // "saying so in words when that number is zero"
+    expect(typeof rule.approved_above_r2).toBe('number');
+    expect(typeof rule.binds_nothing).toBe('boolean');
+
+    // And the rule text the snapshot hands over must itself name the reason the criterion names,
+    // or a builder reading only the snapshot could not write the sentence the criterion wants.
+    expect(String(rule.rule)).toContain('no_tool_grants');
+    expect(criterion4).toContain('no_tool_grants');
+
+    // The zero case the criterion demands be stated in words is the case that holds today.
+    expect(rule.approved_above_r2).toBe(0);
+    expect(rule.binds_nothing).toBe(true);
   });
 
   it('still caps correctly the moment something IS approved above R2', () => {

@@ -46,7 +46,10 @@ const SIX = [
   'all six panels render and each one names the endpoint it read',
   'it says so in words and is visibly distinct from a panel that is still loading',
   'all ten rungs are present with the owner\'s wording',
-  'the reason `no_tool_grants`, not the authority the capability record asks for',
+  // Reworded with the real criterion on 2 Nov 2026: the old one asked for a capability above
+  // `autonomy:R2`, which no capability record produces. This fixture is override data rather than
+  // an assertion against the constant, but it claims to mirror the six, so it is kept honest.
+  'names the `no_tool_grants` rule with the number of capabilities it currently constrains',
   'nothing on the page states or implies that filing it granted anything',
   'no panel shows a number, a grant, a rung or a result this domain has not actually produced',
 ];
