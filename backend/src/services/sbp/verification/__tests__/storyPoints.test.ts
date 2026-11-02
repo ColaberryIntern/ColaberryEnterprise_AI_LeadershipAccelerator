@@ -12,6 +12,14 @@ jest.mock('../../planStore', () => ({
 jest.mock('../../../progression/pointsConfigService', () => ({
   getBudgetPerUnitXp: (...a: any[]) => mockGetBudgetPerUnitXp(...a),
 }));
+// Pinned so these cases stay about PRICING. The domain lookup is a real query,
+// and left unmocked it would reach for a database and fall back, which would
+// pass for the wrong reason. Its own behaviour is tested in
+// storyPoints.domainCommandCenter.test.ts.
+const mockDomainKeyForProject = jest.fn();
+jest.mock('../../../agentDomain/agentDomainCommandCenterForSync', () => ({
+  domainKeyForProject: (...a: any[]) => mockDomainKeyForProject(...a),
+}));
 
 import { planStorySpecs, storyPointsForProject, pointsByStoryId, STORY_XP_KEY } from '../storyPoints';
 import { COMMAND_CENTER_STORY_ID, COMMAND_CENTER_ACCEPTANCE } from '../../commandCenterStory';
@@ -22,6 +30,8 @@ const plan = (stories: Array<{ id: string; acceptance?: unknown }>) => ({ storie
 beforeEach(() => {
   jest.clearAllMocks();
   mockGetBudgetPerUnitXp.mockResolvedValue({ per_unit: 57, budget: 800, reason: null });
+  // Not an agent-domain project: the bare Command Center id, as before.
+  mockDomainKeyForProject.mockResolvedValue(null);
 });
 
 describe('planStorySpecs — the stories that are judged and paid', () => {

@@ -13,9 +13,15 @@ jest.mock('../../../models/Project', () => ({ __esModule: true, default: { findA
 jest.mock('../../../models/StudentTask', () => ({ __esModule: true, default: { count: jest.fn() } }));
 jest.mock('../../sbp/planStore', () => ({ getPublishedPlan: jest.fn() }));
 jest.mock('../../sbp/verification/storyPoints', () => ({
-  planStorySpecs: (plan: { stories?: Array<{ id: string }> }) => [
+  // AF3.10: the Command Center story is RESOLVED per project (namespaced on an
+  // agent-domain board) and passed in, so the mock mirrors that signature.
+  commandCenterSpecForProject: jest.fn(async () => ({ id: 'STORY-000', acceptance: [] })),
+  planStorySpecs: (
+    plan: { stories?: Array<{ id: string }> },
+    commandCenter: { id: string; acceptance: string[] } = { id: 'STORY-000', acceptance: [] },
+  ) => [
     ...(plan.stories ?? []).map((s) => ({ id: s.id, acceptance: [] })),
-    { id: 'STORY-000', acceptance: [] },
+    { id: commandCenter.id, acceptance: [...commandCenter.acceptance] },
   ],
 }));
 jest.mock('../../timeline/curriculumScope', () => ({ CANONICAL_PROGRAM_ID: 'prog-canonical' }));

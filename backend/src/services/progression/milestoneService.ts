@@ -28,7 +28,7 @@ import StudentMilestone from '../../models/StudentMilestone';
 import Project from '../../models/Project';
 import StudentTask from '../../models/StudentTask';
 import { getPublishedPlan } from '../sbp/planStore';
-import { planStorySpecs } from '../sbp/verification/storyPoints';
+import { planStorySpecs, commandCenterSpecForProject } from '../sbp/verification/storyPoints';
 import { CANONICAL_PROGRAM_ID } from '../timeline/curriculumScope';
 import { isCurriculumRequired } from '../timeline/typeRegistry';
 import { CURRICULUM_WEEKS, MilestoneState, PROJECT_MILESTONE_TARGET } from './milestoneLadder';
@@ -127,7 +127,7 @@ export async function getProjectCompletions(enrollmentId: string): Promise<Proje
   for (const project of projects) {
     const stored = await getPublishedPlan(project.id);
     if (!stored) continue;
-    const specs = planStorySpecs(stored.plan);
+    const specs = planStorySpecs(stored.plan, await commandCenterSpecForProject(project.id));
     const ids = specs.map((s) => s.id);
     if (ids.length === 0) continue;
     const verified = await StudentTask.count({

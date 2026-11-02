@@ -40,7 +40,7 @@ import { recomputeForEnrollment } from '../../progression/competencyEngine';
 import { evaluateForEnrollment } from '../../progression/promotionService';
 import { classifyError } from '../../../utils/errorClassifier';
 import { getBudgetPerUnitXp } from '../../progression/pointsConfigService';
-import { planStorySpecs, STORY_XP_KEY } from './storyPoints';
+import { planStorySpecs, STORY_XP_KEY, commandCenterSpecForProject } from './storyPoints';
 import { award as awardPoints } from '../../pointsService';
 import { env } from '../../../config/env';
 import { parseProgressFile, ProgressParseErrorClass } from './progressContract';
@@ -245,8 +245,16 @@ export async function verifyBuildFromRepo(
    * never be verified or finished). Built by storyPoints.planStorySpecs — the
    * ONE definition the Projects page and the Today tile also price from — so
    * what a student is shown is exactly what is judged and paid.
+   *
+   * The id is RESOLVED from the project, never assumed: an agent-domain board
+   * carries `<domain>.STORY-000` and no bare row at all, so judging the bare id
+   * there found no task and logged `sbp_verification_task_missing` on every run.
+   * See `commandCenterSpecForProject`.
    */
-  const specs: PlanStorySpec[] = planStorySpecs(stored.plan);
+  const specs: PlanStorySpec[] = planStorySpecs(
+    stored.plan,
+    await commandCenterSpecForProject(projectId),
+  );
 
   let inputs;
   try {

@@ -10,6 +10,12 @@ jest.mock('../../../progression/pointsConfigService', () => ({
   getBudgetPerUnitXp: (...a: any[]) => mockGetBudgetPerUnitXp(...a),
 }));
 jest.mock('../../planStore', () => ({ getPublishedPlan: (...a: any[]) => mockGetPublishedPlan(...a) }));
+// AF3.10: story pricing now resolves the Command Center per project. Pinned to
+// "not an agent-domain project" so these cases stay about PREP prices; left
+// unmocked it would reach for a database and pass by falling back.
+jest.mock('../../../agentDomain/agentDomainCommandCenterForSync', () => ({
+  domainKeyForProject: jest.fn(async () => null),
+}));
 
 import {
   prepCtaVerb, prepPointsMap, prepXpKey, isPrepStory, PREP_STORY_IDS, DEMO_DAY_STORY_ID } from '../prepPoints';
