@@ -18,6 +18,7 @@ import { loadVettingByCanonical, canonicalForUuid, type VettingStage } from '../
 /** Ali: hide opportunities with fit strictly below this, silently. */
 export const AUTO_HIDE_FIT_BELOW = 60;
 const AUTO_HIDE_REASON = 'auto_fit_below_threshold';
+const OFF_TARGET_REASON = 'auto_off_target';
 const RUN_LOG_KEY = 'gov_opp_sweep_run_log';
 const APP_BASE = process.env.APP_PUBLIC_BASE || 'https://enterprise.colaberry.ai';
 
@@ -30,23 +31,55 @@ export const qualifyUrl = (uuid: string): string =>
   `${APP_BASE}/admin/gov-qualification?gws=${encodeURIComponent('gws:' + uuid)}`;
 
 /**
- * PURE. Rows to auto-hide: fit strictly below the threshold, not already dismissed, and NOT already being
- * qualified (a started qualification must not be hidden out from under whoever is working it).
+ * Sweep-side relevance guard. The external fit model over-scores physical construction/trades, pure-labor
+ * staffing and human-services solicitations (e.g. a "...Construction" row lands at a usable fit). Match on the
+ * title and hide these REGARDLESS of fit. A title that also carries a software / data / AI signal is rescued,
+ * so a genuine IT solicitation that merely mentions one of these words is never hidden.
+ */
+const OFF_TARGET_TITLE = [
+  'construction', 'demolition', 'abatement', 'roofing', 'roof replacement', 'renovation',
+  'general contractor', 'contractor services', 'buildout', 'build-out', 'sewer', 'irrigation',
+  'paving', 'asphalt', 'concrete', 'janitorial', 'custodial', 'landscaping', 'debris',
+  'blight remediation', 'property maintenance', 'traffic control', 'security guard', 'guard services',
+  'temporary staffing', 'staffing agenc', 'foster care', 'hospice', 'short-term shelter',
+  'emergency placement', 'group home', 'youth development', 'unit conversion',
+];
+const RESCUE_TITLE = [
+  'software', 'system', 'platform', 'application', 'data', 'analytics', 'digital', 'website',
+  'hosting', 'intranet', 'portal', 'erp', 'records', 'proctoring', 'technology', 'cyber',
+  'cloud', 'dashboard', 'tracking', 'detection', 'information', 'electronic', 'online',
+];
+/** PURE. True when the title clearly describes off-target physical / pure-labor / human-services work with no
+ *  software, data or AI signal. Drives the relevance hide (regardless of fit) and keeps the row out of Email #1. */
+export function isOffTarget(title: string): boolean {
+  const t = String(title).toLowerCase();
+  if (/\bai\b/.test(t)) return false;
+  if (RESCUE_TITLE.some((k) => t.includes(k))) return false;
+  return OFF_TARGET_TITLE.some((k) => t.includes(k));
+}
+
+/**
+ * PURE. Rows to auto-hide: off-target by title (any fit) OR fit strictly below the threshold; in both cases not
+ * already dismissed, and NOT already being qualified (a started qualification must not be hidden out from under
+ * whoever is working it).
  */
 export function toAutoHide(
   opps: SweepOpportunity[], alreadyDismissed: Set<string>, stageByUuid: Map<string, VettingStage>,
   threshold: number = AUTO_HIDE_FIT_BELOW,
 ): SweepOpportunity[] {
-  return opps.filter((o) => typeof o.fitScore === 'number' && o.fitScore < threshold
-    && !alreadyDismissed.has(o.uuid) && stageOf(stageByUuid, o.uuid) === 'not_vetted');
+  return opps.filter((o) =>
+    !alreadyDismissed.has(o.uuid) && stageOf(stageByUuid, o.uuid) === 'not_vetted'
+    && (isOffTarget(o.title) || (typeof o.fitScore === 'number' && o.fitScore < threshold)));
 }
 
-/** PURE. Survived the hide (fit >= threshold, not dismissed) and has no qualification yet → needs requirements. */
+/** PURE. Survived the hide (on-target, fit >= threshold, not dismissed) and has no qualification yet → needs
+ *  requirements. Off-target titles are excluded even at high fit, so they never reach Email #1. */
 export function needsRequirements(
   opps: SweepOpportunity[], alreadyDismissed: Set<string>, stageByUuid: Map<string, VettingStage>,
   threshold: number = AUTO_HIDE_FIT_BELOW,
 ): SweepOpportunity[] {
   return opps.filter((o) => typeof o.fitScore === 'number' && o.fitScore >= threshold
+    && !isOffTarget(o.title)
     && !alreadyDismissed.has(o.uuid) && stageOf(stageByUuid, o.uuid) === 'not_vetted');
 }
 
@@ -167,13 +200,14 @@ export async function runGovOpportunitySweep(): Promise<SweepResult> {
   const vetting = await loadVettingByCanonical(tenantId, opps.map((o) => canonicalForUuid(o.uuid)));
   const stageByUuid = new Map<string, VettingStage>(opps.map((o) => [o.uuid, vetting.get(canonicalForUuid(o.uuid))?.stage ?? 'not_vetted']));
 
-  // 1) Auto-hide low-fit (silent), reversible via the dismissals table.
+  // 1) Auto-hide the off-target and the low-fit (silent), reversible via the dismissals table.
   const hide = toAutoHide(opps, dismissed, stageByUuid);
   for (const o of hide) {
     try {
       await dismissOpportunity({
         tenantId, organizationId: container.org.id, opportunityKey: o.uuid,
-        title: o.title, agency: o.agency, reason: AUTO_HIDE_REASON, dismissedBy: 'gov-opp-sweep',
+        title: o.title, agency: o.agency,
+        reason: isOffTarget(o.title) ? OFF_TARGET_REASON : AUTO_HIDE_REASON, dismissedBy: 'gov-opp-sweep',
       });
     } catch { /* best-effort per row; a hide failure must not abort the sweep */ }
   }
