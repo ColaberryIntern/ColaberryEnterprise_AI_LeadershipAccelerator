@@ -92,7 +92,9 @@ const SubscriptionSection: React.FC<{ onToast?: (m: string) => void }> = ({ onTo
       const code = err?.response?.data?.error;
       flash(code === 'billing_unconfigured'
         ? 'Payments aren’t enabled in this environment yet.'
-        : 'Could not start checkout right now. Please try again.');
+        : code === 'already_subscribed'
+          ? (err?.response?.data?.message || 'You already have an active membership.')
+          : 'Could not start checkout right now. Please try again.');
     } finally { setBusy(false); }
   };
 
