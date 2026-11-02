@@ -2,8 +2,9 @@ import {
   ZOOM_HOST_STATEMENTS,
   ZOOM_HOST_TABLES,
   ZOOM_HOST_REQUIRED_COLUMNS,
-  ZOOM_HOST_PURPOSES,
 } from '../ensureZoomHostSchema';
+import { HOST_PURPOSES, PRACTICE_HOST_PURPOSE } from '../../services/zoom/zoomHostRegistry';
+import { ROOM_HOST_PURPOSE } from '../../services/zoom/roomHostAllocator';
 
 /**
  * Static contract test — reads the DDL as source text, touches no database.
@@ -74,7 +75,17 @@ describe('zoom_hosts DDL', () => {
   });
 
   it('offers a purpose vocabulary that includes the general case', () => {
-    expect(ZOOM_HOST_PURPOSES).toContain('any');
+    expect(HOST_PURPOSES).toContain('any');
     expect(ZOOM_HOST_REQUIRED_COLUMNS).toContain('zoom_hosts.verified_at');
+  });
+
+  it('EVERY purpose an allocator asks for is a purpose a host can be registered as', () => {
+    // The drift this replaced a second vocabulary to prevent. A purpose is a join key:
+    // an allocator querying `room` while the only registerable value is `rooms` yields
+    // an empty pool, which reads as "no capacity" rather than "nobody can match this".
+    // Asserting the constants against each other makes that a failing test, not a
+    // quiet zero.
+    expect(HOST_PURPOSES).toContain(ROOM_HOST_PURPOSE);
+    expect(HOST_PURPOSES).toContain(PRACTICE_HOST_PURPOSE);
   });
 });

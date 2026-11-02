@@ -31,6 +31,51 @@ export interface ZoomHostRow {
   last_error: string | null;
 }
 
+/**
+ * The purposes a host may serve, and why the distinction is load-bearing.
+ *
+ * TWO ALLOCATORS DRAW FROM THIS POOL AND NEITHER SEES THE OTHER'S CLAIM.
+ * `roomHostAllocator` takes a host and keeps it, because a room's join link is
+ * permanent; it counts rows in `community_rooms`. `presentationCapacityService` takes
+ * a host for one rehearsal window; it counts rows in `presentation_slot_reservations`.
+ * Neither query can see the other's table.
+ *
+ * A host registered `any` matches BOTH. And both allocators walk the pool in priority
+ * order and take the first host that fits, so they do not merely collide now and
+ * then — they systematically prefer the SAME host. Splitting a populated pool by
+ * purpose is what stops a student's rehearsal being handed the host that is already
+ * carrying a live room: the original "two meetings tied together" fault wearing a
+ * different hat.
+ *
+ * `any` stays the default because it is the honest answer for a single-host install.
+ * With one host everything shares it regardless, and defaulting to a narrower purpose
+ * would make an empty pool look like a partitioned one.
+ *
+ * THIS LIST IS THE ONLY VOCABULARY. There used to be a second one in
+ * `ensureZoomHostSchema.ts` reading `['any', 'classes', 'practice', 'rooms']`, and the
+ * disagreement was not cosmetic: the allocator queries `room`, singular, so a host
+ * registered as `rooms` matched neither allocator and was simply dead capacity that
+ * `list` showed as verified. A purpose name is a join key between a registry row and
+ * an allocator's query, so it gets one definition.
+ */
+export const HOST_PURPOSES = ['any', 'room', 'practice'] as const;
+
+export type HostPurpose = (typeof HOST_PURPOSES)[number];
+
+/**
+ * The purpose the rehearsal allocator asks for.
+ *
+ * Named here rather than written as a literal at each call site for the reason above:
+ * the string is a join key, and `presentationCapacityService` asking for one spelling
+ * while a row holds another produces an empty pool and a queue of one, which is the
+ * behaviour this feature was built to remove. Its room-side counterpart is
+ * `ROOM_HOST_PURPOSE` in `roomHostAllocator`, and a test pins both into this list.
+ */
+export const PRACTICE_HOST_PURPOSE: HostPurpose = 'practice';
+
+export const isHostPurpose = (value: unknown): value is HostPurpose =>
+  (HOST_PURPOSES as readonly string[]).includes(String(value));
+
 export interface RegisterHostInput {
   hostEmail: string;
   label?: string | null;
@@ -41,32 +86,74 @@ export interface RegisterHostInput {
 }
 
 /**
- * Adds or updates a host. Registering does NOT make it usable — `verified_at` is
- * deliberately left alone here, so a re-registered host must be proved again.
+ * Adds or updates a host.
+ *
+ * A NEW row takes the documented defaults (`any`, priority 100, enabled). An EXISTING
+ * row keeps every field the caller did not mention.
+ *
+ * WHY OMISSION PRESERVES RATHER THAN RESETS. This used to assign every column from the
+ * incoming row, so the natural way to change one thing — `register a@b.com
+ * --purpose=room` — silently cleared that host's label, priority and credential_ref.
+ * Re-running the registration of a host that is already registered is the single most
+ * likely thing an operator does with this tool, and it has to be safe: same input,
+ * same end state, nothing else moved.
+ *
+ * `verified_at` is not in either list, so verification SURVIVES a re-registration. A
+ * new row has none and must be proved; changing a label or a purpose does not make the
+ * Zoom user stop existing, and forcing a re-verify there would just train people to
+ * run `verify` without reading it.
  */
 export async function registerHost(input: RegisterHostInput): Promise<void> {
   const email = String(input.hostEmail || '').trim().toLowerCase();
   if (!email) throw Object.assign(new Error('hostEmail is required'), { error_class: 'ValidationError' });
   await (await db()).query(
+    // Each value is read from the named parameter rather than EXCLUDED, because
+    // EXCLUDED carries the INSERT's defaults — EXCLUDED.purpose is already 'any' when
+    // the caller omitted it, which would defeat the preservation below.
     `INSERT INTO zoom_hosts (host_email, label, purpose, priority, credential_ref, enabled)
-       VALUES (:email, :label, :purpose, :priority, :cred, :enabled)
+       VALUES (:email,
+               :label::varchar,
+               COALESCE(:purpose::varchar, 'any'),
+               COALESCE(:priority::integer, 100),
+               :cred::varchar,
+               COALESCE(:enabled::boolean, TRUE))
      ON CONFLICT (LOWER(host_email)) DO UPDATE
-       SET label = EXCLUDED.label,
-           purpose = EXCLUDED.purpose,
-           priority = EXCLUDED.priority,
-           credential_ref = EXCLUDED.credential_ref,
-           enabled = EXCLUDED.enabled,
+       SET label = COALESCE(:label::varchar, zoom_hosts.label),
+           purpose = COALESCE(:purpose::varchar, zoom_hosts.purpose),
+           priority = COALESCE(:priority::integer, zoom_hosts.priority),
+           credential_ref = COALESCE(:cred::varchar, zoom_hosts.credential_ref),
+           enabled = COALESCE(:enabled::boolean, zoom_hosts.enabled),
            updated_at = NOW()`,
     {
       replacements: {
         email,
         label: input.label ?? null,
-        purpose: input.purpose ?? 'any',
-        priority: input.priority ?? 100,
+        purpose: input.purpose ?? null,
+        priority: input.priority ?? null,
         cred: input.credentialRef ?? null,
-        enabled: input.enabled !== false,
+        enabled: input.enabled ?? null,
       },
     },
+  );
+}
+
+/**
+ * Turns a host off or on, touching nothing else.
+ *
+ * NOT `registerHost({ enabled: false })`, which is what this used to be. That path
+ * goes through `ON CONFLICT DO UPDATE` and assigns every column from the incoming
+ * row, so disabling a host reset its label, priority, credential_ref and — now that
+ * the value decides which allocator may take it — its PURPOSE, back to `any`. A host
+ * parked for an afternoon came back shared between rooms and rehearsals, which is the
+ * exact collision the purpose split exists to prevent, arriving silently.
+ */
+export async function setHostEnabled(hostEmail: string, enabled: boolean): Promise<void> {
+  const email = String(hostEmail || '').trim();
+  if (!email) throw Object.assign(new Error('hostEmail is required'), { error_class: 'ValidationError' });
+  await (await db()).query(
+    `UPDATE zoom_hosts SET enabled = :enabled, updated_at = NOW()
+      WHERE LOWER(host_email) = LOWER(:email)`,
+    { replacements: { email, enabled } },
   );
 }
 
@@ -98,6 +185,42 @@ export async function allocatableHostEmails(purpose = 'any'): Promise<string[]> 
     { replacements: { purpose } },
   ) as [Array<{ host_email: string }>, unknown];
   return (rows || []).map((r) => r.host_email);
+}
+
+export interface CrossPurposeHost {
+  host_email: string;
+  room_count: number;
+}
+
+/**
+ * Hosts a rehearsal can take out from under a live room.
+ *
+ * The hazard is narrow and entirely decidable from the registry plus a room count: a
+ * host is exposed when it is allocatable, its purpose is `any` (so BOTH allocators
+ * match it — see `HOST_PURPOSES`), and it already carries at least one room's
+ * permanent link. The room keeps the link forever, so the rehearsal is the party that
+ * discovers the collision, mid-call.
+ *
+ * PURE ON PURPOSE. The two inputs come from different tables and the judgement between
+ * them is the part worth testing; folding it into a join would make it unreachable
+ * without a database and untestable at the boundary that matters.
+ *
+ * An unverified or disabled host is NOT exposed, because no allocator can pick it.
+ * Reporting it would train an operator to ignore this list.
+ */
+export function crossPurposeHosts(
+  hosts: ReadonlyArray<Pick<ZoomHostRow, 'host_email' | 'purpose' | 'enabled' | 'verified_at'>>,
+  roomCounts: ReadonlyMap<string, number>,
+): CrossPurposeHost[] {
+  const out: CrossPurposeHost[] = [];
+  for (const host of hosts) {
+    if (!host.enabled || !host.verified_at) continue;
+    if (host.purpose !== 'any') continue;
+    const email = String(host.host_email ?? '').trim();
+    const count = roomCounts.get(email.toLowerCase()) ?? 0;
+    if (count > 0) out.push({ host_email: email, room_count: count });
+  }
+  return out.sort((a, b) => b.room_count - a.room_count || a.host_email.localeCompare(b.host_email));
 }
 
 async function setVerified(email: string, ok: boolean, error?: string): Promise<void> {
