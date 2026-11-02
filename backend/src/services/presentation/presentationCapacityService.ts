@@ -36,10 +36,17 @@ export type SlotResult =
   | { ok: true; reservationId: string; startAt: Date; endAt: Date; hostEmail: string | null }
   | { ok: false; reason: 'taken' | 'class_window' | 'in_the_past'; nextAvailable: Date | null; message: string };
 
-/** Lazy, for the same reason as db() — the registry touches the ORM too. */
+/**
+ * Lazy, for the same reason as db() — the registry touches the ORM too.
+ *
+ * The purpose comes from the registry's own constant rather than a literal here: it is
+ * a join key against the `purpose` column, and a spelling that matches no row returns
+ * an empty pool, which this file reads as capacity one. A silent demotion to the old
+ * single-host behaviour is the hardest kind of regression to notice.
+ */
 async function allocatableHosts(): Promise<string[]> {
-  const { allocatableHostEmails } = await import('../zoom/zoomHostRegistry');
-  return allocatableHostEmails('practice');
+  const { allocatableHostEmails, PRACTICE_HOST_PURPOSE } = await import('../zoom/zoomHostRegistry');
+  return allocatableHostEmails(PRACTICE_HOST_PURPOSE);
 }
 
 /** Lazy so importing this module never constructs the ORM. */

@@ -18,11 +18,24 @@
  *   npx ts-node src/scripts/zoomHosts.ts list
  *   npx ts-node src/scripts/zoomHosts.ts verify
  *   npx ts-node src/scripts/zoomHosts.ts rooms
- *   npx ts-node src/scripts/zoomHosts.ts register <email> [label] [priority]
+ *   npx ts-node src/scripts/zoomHosts.ts register <email> [label] [priority] [--purpose=any|room|practice]
  *   npx ts-node src/scripts/zoomHosts.ts disable <email>
  *
  * `list`, `verify` and `rooms` are safe against production; `verify` writes only the
  * verified_at / last_error columns of the registry, and `rooms` writes nothing.
+ *
+ * ── SPLIT THE POOL BY PURPOSE ONCE IT HOLDS MORE THAN ONE HOST ───────────────────
+ *
+ * Two allocators draw from this pool and neither can see the other's claim: a room
+ * keeps its host permanently, a rehearsal borrows one for a window. A host registered
+ * `any` matches both, and both pick the first viable host in priority order — so they
+ * prefer the SAME host rather than colliding occasionally. Give the always-open rooms
+ * their own hosts and leave the rest for rehearsals:
+ *
+ *   register room-a@example.com    --purpose=room
+ *   register rehearsal-a@example.com --purpose=practice
+ *
+ * `rooms` reports any host still exposed to both, and exits non-zero while one is.
  *
  * Exit 0 when the command succeeded. `verify` exits 1 if NO host ended up
  * allocatable, because a pool nothing can use is a failure worth noticing in a cron.
@@ -33,9 +46,13 @@ import {
   listHosts,
   verifyAllHosts,
   allocatableHostEmails,
+  crossPurposeHosts,
+  setHostEnabled,
+  PRACTICE_HOST_PURPOSE,
   type ZoomHostRow,
 } from '../services/zoom/zoomHostRegistry';
-import { roomsSharingAHost } from '../services/zoom/roomHostAllocator';
+import { roomsSharingAHost, roomHostUsage, ROOM_HOST_PURPOSE } from '../services/zoom/roomHostAllocator';
+import { parseRegisterArgs, REGISTER_USAGE } from './lib/zoomHostArgs';
 
 function pad(s: unknown, n: number): string {
   const v = String(s ?? '');
@@ -47,11 +64,14 @@ function renderTable(rows: ZoomHostRow[]): void {
     console.log('  (no hosts registered — capacity is the single configured ZOOM_HOST_EMAIL)');
     return;
   }
-  console.log('  ' + pad('HOST', 34) + pad('PRIO', 6) + pad('ENABLED', 9) + pad('VERIFIED', 10) + 'NOTE');
+  // PURPOSE IS A COLUMN AN OPERATOR MUST BE ABLE TO SEE. It decides which allocator
+  // may take a host, so a table that hides it cannot answer the one question this
+  // tool exists to answer.
+  console.log('  ' + pad('HOST', 34) + pad('PURPOSE', 10) + pad('PRIO', 6) + pad('ENABLED', 9) + pad('VERIFIED', 10) + 'NOTE');
   for (const r of rows) {
     const verified = r.verified_at ? 'yes' : 'NO';
     const note = r.verified_at ? (r.credential_ref ? `cred=${r.credential_ref}` : '') : (r.last_error || 'never verified');
-    console.log('  ' + pad(r.host_email, 34) + pad(r.priority, 6) + pad(r.enabled ? 'yes' : 'no', 9)
+    console.log('  ' + pad(r.host_email, 34) + pad(r.purpose, 10) + pad(r.priority, 6) + pad(r.enabled ? 'yes' : 'no', 9)
       + pad(verified, 10) + String(note).slice(0, 80));
   }
 }
@@ -60,11 +80,22 @@ async function cmdList(): Promise<number> {
   const rows = await listHosts();
   console.log('Registered Zoom hosts');
   renderTable(rows);
-  const usable = await allocatableHostEmails('practice');
+
+  // BOTH CAPACITIES, because they are different numbers drawn from one pool and
+  // reporting only one made the other invisible.
+  const forPractice = await allocatableHostEmails(PRACTICE_HOST_PURPOSE);
+  const forRooms = await allocatableHostEmails(ROOM_HOST_PURPOSE);
   console.log('');
-  console.log(`Concurrent practice sessions possible right now: ${Math.max(1, usable.length)}`);
-  if (!usable.length) {
-    console.log('  (nothing allocatable — every booking falls back to the configured default host)');
+  console.log(`Concurrent practice sessions possible right now: ${Math.max(1, forPractice.length)}`);
+  console.log(`Rooms that can be live at once right now:        ${Math.max(1, forRooms.length)}`);
+  if (!forPractice.length && !forRooms.length) {
+    console.log('  (nothing allocatable — everything falls back to the configured default host)');
+  }
+
+  const exposed = crossPurposeHosts(rows, await roomHostUsage());
+  if (exposed.length) {
+    console.log('');
+    console.log(`${exposed.length} host(s) can be taken from a room by a rehearsal. See: zoomHosts.ts rooms`);
   }
   return 0;
 }
@@ -105,20 +136,24 @@ async function cmdVerify(): Promise<number> {
 }
 
 async function cmdRegister(argv: string[]): Promise<number> {
-  const [email, label, priority] = argv;
-  if (!email) {
-    console.error('usage: zoomHosts.ts register <email> [label] [priority]');
+  const parsed = parseRegisterArgs(argv);
+  if (!parsed.ok) {
+    console.error(parsed.error);
     return 2;
   }
-  await registerHost({
-    hostEmail: email,
-    label: label || null,
-    purpose: 'any',
-    priority: priority ? Number(priority) : 100,
-  });
+  const { email, label, priority, purpose } = parsed.args;
+  await registerHost({ hostEmail: email, label, purpose, priority });
   // Registering deliberately does NOT make a host usable. It must still be proved.
-  console.log(`Registered ${email}. It is NOT allocatable until it verifies — run:`);
+  console.log(`Registered ${email} for purpose "${purpose}". It is NOT allocatable until it verifies — run:`);
   console.log('  npx ts-node src/scripts/zoomHosts.ts verify');
+  if (purpose === 'any') {
+    // Said at the moment the choice is made, because by the time it shows up in
+    // `rooms` a room already holds the link and re-minting changes its join URL.
+    console.log('');
+    console.log('"any" means BOTH a room and a rehearsal can take this host, and they');
+    console.log('prefer the same one. With more than one host, use --purpose=room or');
+    console.log('--purpose=practice instead.');
+  }
   return 0;
 }
 
@@ -128,38 +163,65 @@ async function cmdDisable(argv: string[]): Promise<number> {
     console.error('usage: zoomHosts.ts disable <email>');
     return 2;
   }
-  await registerHost({ hostEmail: email, enabled: false });
+  await setHostEnabled(email, false);
   console.log(`Disabled ${email}. In-flight reservations already held on it are untouched.`);
+  console.log('Its purpose, label and priority are kept, so re-enabling restores it as it was.');
   return 0;
 }
 
 /**
- * Which rooms would collide: any host carrying more than one room's permanent link.
+ * Everything that can stop a room going live, in one place.
  *
- * A Zoom user hosts one meeting at a time, so two rooms on one host can never both be
- * live — the condition that made the Monday standup and the public AI session mutually
- * exclusive. Exits 1 when any host is shared, so a cron notices before a person does.
+ * TWO WAYS A ROOM LOSES ITS HOST, and they need different answers:
  *
- * A non-zero exit here is a CAPACITY fact, not a code fault: it means there are more
- * rooms than usable hosts, and the answer is another host, not another deploy.
+ *   1. ANOTHER ROOM has the same host. A Zoom user hosts one meeting at a time, so
+ *      two rooms on one host can never both be live — the condition that made the
+ *      Monday standup and the public AI session mutually exclusive. The answer is
+ *      another host.
+ *   2. A REHEARSAL can take the host, because the host's purpose is `any` and the
+ *      practice allocator matches it too. The answer is a purpose, not a host — and
+ *      it is free, which is why it is reported separately rather than folded in.
+ *
+ * Exits 1 while either holds, so a cron notices before a person does. A non-zero exit
+ * is an OPERATIONAL fact, not a code fault.
  */
 async function cmdRooms(): Promise<number> {
   const shared = await roomsSharingAHost();
-  if (!shared.length) {
-    console.log('No host carries more than one room. Every room can be live at once.');
+  const exposed = crossPurposeHosts(await listHosts(), await roomHostUsage());
+
+  if (!shared.length && !exposed.length) {
+    console.log('No host carries more than one room, and no room can be taken by a rehearsal.');
+    console.log('Every room can be live at once.');
     return 0;
   }
-  console.log('Rooms sharing a Zoom host — only ONE of each group can be live at a time:');
-  for (const row of shared) {
+
+  if (shared.length) {
+    console.log('Rooms sharing a Zoom host — only ONE of each group can be live at a time:');
+    for (const row of shared) {
+      console.log('');
+      console.log('  ' + row.host_email + '  (' + row.room_count + ' rooms)');
+      for (const name of row.rooms) console.log('    - ' + name);
+    }
     console.log('');
-    console.log('  ' + row.host_email + '  (' + row.room_count + ' rooms)');
-    for (const name of row.rooms) console.log('    - ' + name);
+    console.log('Add and verify another host, then re-mint the extra rooms:');
+    console.log('  npx ts-node src/scripts/zoomHosts.ts register <email> --purpose=room');
+    console.log('  npx ts-node src/scripts/zoomHosts.ts verify');
+    console.log('Re-minting changes a room\'s join URL, so announce it before you do.');
   }
-  console.log('');
-  console.log('Add and verify another host, then re-mint the extra rooms:');
-  console.log('  npx ts-node src/scripts/zoomHosts.ts register <email>');
-  console.log('  npx ts-node src/scripts/zoomHosts.ts verify');
-  console.log('Re-minting changes a room\'s join URL, so announce it before you do.');
+
+  if (exposed.length) {
+    if (shared.length) console.log('');
+    console.log('Hosts a rehearsal can take out from under a live room (purpose is "any"):');
+    for (const row of exposed) {
+      console.log('  ' + row.host_email + '  (carries ' + row.room_count
+        + (row.room_count === 1 ? ' room)' : ' rooms)'));
+    }
+    console.log('');
+    console.log('Pin each one to a single allocator. This changes no join URL:');
+    for (const row of exposed) {
+      console.log('  npx ts-node src/scripts/zoomHosts.ts register ' + row.host_email + ' --purpose=room');
+    }
+  }
   return 1;
 }
 
