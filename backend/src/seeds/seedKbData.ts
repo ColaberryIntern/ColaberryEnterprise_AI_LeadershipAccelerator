@@ -4,6 +4,7 @@
  * Idempotent: skips rows that already exist (matched by slug / email / question_pattern+course_id)
  */
 import { sequelize } from '../config/database';
+import { MEMBERSHIP_PRICE } from '../services/membershipPrice';
 import CoraKbCourse from '../models/CoraKbCourse';
 import CoraKbCohort from '../models/CoraKbCohort';
 import ResponsiblePerson from '../models/ResponsiblePerson';
@@ -37,8 +38,12 @@ async function seed() {
       start_date: 'Thursday, July 23, 2026',
       end_date: 'October 15, 2026',
       expo_date: 'October 2026',
-      price_annual: 149,
-      price_monthly: 199,
+      // From the price of record, not typed here: these two columns resolve the
+      // {{cohort.price_annual}} / {{cohort.price_monthly}} merge tags that the KB answers
+      // below are written against, so a typed copy would let the KB quote a price the
+      // checkout does not charge.
+      price_annual: MEMBERSHIP_PRICE.annualPerMonth,
+      price_monthly: MEMBERSHIP_PRICE.monthly,
       seats_total: 40,
       seats_remaining: 32,
       enrollment_url: 'enterprise.colaberry.ai',

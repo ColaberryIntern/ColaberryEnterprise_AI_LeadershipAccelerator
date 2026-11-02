@@ -9,6 +9,7 @@ jest.mock('../../models/AdmissionsKnowledgeEntry', () => ({
 jest.mock('../aiEventService', () => ({ emitRetrieval: () => Promise.resolve() }));
 
 import { MEMBERSHIP, membershipPitchSentence, membershipPitchLine, monthToMonthSentence, pricingPitchRule, quotesRetiredFact } from '../admissionsPricing';
+import { MEMBERSHIP_PRICE, ANNUAL_CHARGE, ANNUAL_TERM_MONTHS } from '../membershipPrice';
 import { SEED_ENTRIES, seedAdmissionsKnowledge, retireStaleFacts } from '../admissionsKnowledgeSeed';
 import { findRelevantKnowledge } from '../admissionsKnowledgeService';
 
@@ -18,13 +19,27 @@ import { findRelevantKnowledge } from '../admissionsKnowledgeService';
  * Ali, 2026-10-24: lead with the annual membership ALONE; the month-to-month plan only when the person pushes back.
  */
 describe('the price Maya quotes', () => {
-  it('CONTRACT: equals what checkout charges (subscriptionService PLANS)', () => {
-    // Read from the source, not imported: billing pulls in the enrollment and email services, which this test must not boot.
+  it('CONTRACT: checkout and Maya both read the price of record, and neither types a price', () => {
+    // Still read as TEXT rather than imported: billing pulls in the enrollment and email
+    // services, which this test must not boot.
+    //
+    // What is asserted is now stronger than "the two numbers match" (C10.2). Two equal
+    // literals satisfy a number check and drift apart on the next edit; what cannot drift is
+    // a plan table that contains no price to edit. So this checks that checkout REFERENCES
+    // membershipPrice and that no literal rate survives in it.
     const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'subscriptionService.ts'), 'utf8') as string;
-    const per = (plan: string) => Number((new RegExp(`${plan}: makePlan\\('${plan}', '[^']+', (\\d+)`).exec(src) ?? [])[1]);
-    expect(per('annual')).toBe(MEMBERSHIP.annualPerMonth);
-    expect(per('monthly')).toBe(MEMBERSHIP.monthly);
-    expect(MEMBERSHIP.annualPerYear).toBe(MEMBERSHIP.annualPerMonth * 12);
+    const reads = (plan: string, field: string) =>
+      new RegExp(`${plan}: makePlan\\('${plan}', '[^']+', MEMBERSHIP_PRICE\\.${field}\\b`).test(src);
+    expect(reads('annual', 'annualPerMonth')).toBe(true);
+    expect(reads('monthly', 'monthly')).toBe(true);
+    expect(src).toMatch(/from '\.\/membershipPrice'/);
+    expect(src).not.toMatch(/makePlan\('(?:annual|monthly)', '[^']+', \d/);
+
+    // Maya's figures are that same module's, and the annual charge is derived, not typed.
+    expect(MEMBERSHIP.annualPerMonth).toBe(MEMBERSHIP_PRICE.annualPerMonth);
+    expect(MEMBERSHIP.monthly).toBe(MEMBERSHIP_PRICE.monthly);
+    expect(MEMBERSHIP.annualPerYear).toBe(ANNUAL_CHARGE);
+    expect(MEMBERSHIP.annualPerYear).toBe(MEMBERSHIP.annualPerMonth * ANNUAL_TERM_MONTHS);
   });
 
   it('the pitch is the annual membership ALONE: $149 billed annually and start for $0, never $199', () => {
