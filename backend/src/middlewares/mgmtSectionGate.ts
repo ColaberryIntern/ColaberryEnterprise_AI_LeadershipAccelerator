@@ -142,6 +142,45 @@ const PATH_SECTION: Array<[string, SectionKey]> = [
   // builder who can see the tab. Distinct from the '-domains' prefixes (no '/'-boundary overlap), so
   // declaration order is free. Per-domain scope (managed ∪ built) is a SECOND, in-service check.
   ['/api/admin/agent-factory', 'agents'],
+  // ── FIVE AGENT PREFIXES THAT WERE MOUNTED WITHOUT BEING CLASSIFIED ────────────────────────
+  //
+  // Seven routes across the five prefixes below, found 2 Nov 2026, when four agent builders
+  // reported the same 403 on the same day. This gate
+  // runs BEFORE a route's own guard, and for a SCOPED role the final test is
+  // `if (section && allowed.includes(section)) return next();` — so an unclassified path fails on
+  // `section === null` and falls through to the 403 even when the route it guards says
+  // `requireSection('dashboard')` and the caller already holds `dashboard`.
+  //
+  // A `mgmt_role === 'admin'` caller takes the `isBroad` branch above, which denies only paths
+  // that ARE mapped. So an unmapped path passes for admin and is refused for every scoped role.
+  // That asymmetry is why none of this was visible from an owner or admin login, and it is the
+  // reason the rows above keep insisting a prefix is classified in the change that mounts it.
+  //
+  //   /api/admin/agents  'dashboard' — the agent naming save,
+  //       `PATCH /api/admin/agents/:agentId/display-name`, which already guards itself with
+  //       `requireSection('dashboard')`. A static prefix cannot express ':agentId/display-name',
+  //       so this classifies the whole subtree, and that is narrow in effect rather than broad:
+  //       every other '/api/admin/agents' route carries its own `requireAdmin` or
+  //       `requireAgentManagerOrAdmin()`, and the naming service re-checks ownership itself
+  //       (`AgentNotYoursError` -> 403). Coarse gate, fine route — the split this file's header
+  //       describes.
+  //   /api/admin/agent-domains-summary  'program' — a hyphen sibling of '-domains', so, exactly
+  //       as the '-mine' note above says, the 'program' row for '/api/admin/agent-domains'
+  //       cannot cover it. Declaration order is free for the same reason.
+  //   /api/admin/agent-nudges  'internship' — matches the nudge routes' own `requireSection`.
+  //   /api/admin/agent-domains-builders  'internship' — it serves intern NAMES, which are
+  //       applicant data, and `agentDomainRoutes.ts` says so where it sets that guard.
+  //   /api/admin/agent-domains-authorization  'program' — the ten-domain read, like '-domains'.
+  //
+  // The last two were missed by a hand-rolled sweep and caught by
+  // `mgmtSectionGate.guardedPathsAreClassified.test.ts`, which walks back from each
+  // `requireSection` to its router call and so reads multi-line route calls that a single regex
+  // over the call text had silently skipped. That test is the standing guard for this whole class.
+  ['/api/admin/agents', 'dashboard'],
+  ['/api/admin/agent-domains-summary', 'program'],
+  ['/api/admin/agent-nudges', 'internship'],
+  ['/api/admin/agent-domains-builders', 'internship'],
+  ['/api/admin/agent-domains-authorization', 'program'],
   ['/api/admin/cohorts', 'program'], ['/api/admin/curriculum', 'program'], ['/api/admin/components', 'program'],
   ['/api/admin/composer', 'program'], ['/api/admin/capabilities', 'program'], ['/api/admin/recipes', 'program'],
   ['/api/admin/feed-control', 'program'],

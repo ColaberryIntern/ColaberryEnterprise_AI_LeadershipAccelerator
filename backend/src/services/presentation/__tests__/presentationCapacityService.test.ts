@@ -2,7 +2,15 @@ jest.mock('../../../config/database', () => ({ sequelize: { query: jest.fn() } }
 // The allocator asks the registry which hosts exist. Mocked here so that lookup
 // never consumes the sequelize.query queue these tests carefully sequence — an
 // empty list is the single-host world they were written to describe.
-jest.mock('../../zoom/zoomHostRegistry', () => ({ allocatableHostEmails: jest.fn() }));
+// PRACTICE_HOST_PURPOSE is part of the mock because the service now reads it from
+// here. Omitting it does not fail — the service would simply ask for `undefined` and
+// these tests, which assert on the returned pool rather than the argument, would stay
+// green while the real pool came back empty and capacity silently fell to one. The
+// mock has to carry the constant for the same reason it carries the function.
+jest.mock('../../zoom/zoomHostRegistry', () => ({
+  allocatableHostEmails: jest.fn(),
+  PRACTICE_HOST_PURPOSE: 'practice',
+}));
 jest.mock('../../../models/LiveSession', () => ({ __esModule: true, default: { findAll: jest.fn() } }));
 
 import { sequelize } from '../../../config/database';
@@ -50,6 +58,27 @@ beforeEach(() => {
   // No registered Zoom hosts: the single-host world these tests describe.
   hostPool.mockResolvedValue([]);
   sessions.mockResolvedValue([]);          // no classes unless a test adds one
+});
+
+describe('which pool it draws from', () => {
+  it('asks the registry for PRACTICE hosts, not for every host', async () => {
+    // Nothing pinned this before. The purpose is a join key against the `purpose`
+    // column: ask for a spelling no row carries and the pool is empty, which this
+    // service reads as capacity one — the single-host behaviour the host pool was
+    // built to remove, restored silently and with every test still green.
+    q.mockResolvedValueOnce([[{ id: 'res-1' }], {}]);
+    await reserveSlot(req());
+    expect(hostPool).toHaveBeenCalledWith('practice');
+  });
+
+  it('never asks for the room purpose, which belongs to the other allocator', async () => {
+    q.mockResolvedValueOnce([[{ id: 'res-1' }], {}]);
+    await reserveSlot(req());
+    for (const call of hostPool.mock.calls) {
+      expect(call[0]).not.toBe('room');
+      expect(call[0]).not.toBeUndefined();
+    }
+  });
 });
 
 describe('capacity — the happy path', () => {
