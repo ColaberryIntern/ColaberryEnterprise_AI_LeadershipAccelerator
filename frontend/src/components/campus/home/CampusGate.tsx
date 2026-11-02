@@ -46,6 +46,8 @@ export interface GateProps {
   photo?: string | null;
   /** C91: an Explorer with no first lesson yet: the main button starts that lesson (called after the doors open), the tour stays second. */
   onFirstLesson?: (() => void) | null;
+  /** C23 WP-9: a partner's company and team size (null: not loaded or failed; the plain partner lines stay). */
+  team?: { company: string | null; team_size: number } | null;
 }
 
 export default function CampusGate(p: GateProps): React.ReactElement {
@@ -73,7 +75,9 @@ export default function CampusGate(p: GateProps): React.ReactElement {
   const who = (n: number) => (p.audience === 'member' ? (n === 1 ? 'classmate' : 'classmates') : (n === 1 ? 'person' : 'people'));
   const staff = p.audience === 'staff', partner = p.audience === 'business';
   const here = p.online && p.online > 0 ? p.online : 0;
-  // Each entrance's line, as the prototype's renderGate, with only the facts we have (no company, seats or "could use a hand").
+  // C23 WP-9: the partner's team size and company, only once the server has said (never a guessed number)
+  const teamN = partner && p.team ? p.team.team_size : 0;
+  // Each entrance's line, as the prototype's renderGate, with only the facts we have (a partner's company and team size from the server; never seats or "could use a hand").
   const liveLine = p.live && (p.audience === 'member' || explorer)
     ? (explorer ? (p.live.preview ? 'Colaberry Live is on: you can watch a preview. Come on in.' : 'Colaberry Live is on air. Come on in.')
       : wd(`Colaberry Live is on air. Your cohort is heading to the ${p.live.place}.`, p.workplace))
@@ -82,7 +86,7 @@ export default function CampusGate(p: GateProps): React.ReactElement {
     ? (firstLesson ? 'Your Explorer pass is ready. Start with your first lesson, then wander anywhere on campus.'
       : 'Your Explorer pass is ready. Wander anywhere: a few buildings are members-only, and you can still peek inside.')
     : staff ? (here ? `${here} ${here === 1 ? 'learner is' : 'learners are'} on campus right now.` : 'The campus is open.')
-    : partner ? `See where your team learns and builds.${here ? ` ${here} ${here === 1 ? 'person is' : 'people are'} on campus right now.` : ''}`
+    : partner ? `${teamN ? `See where your ${teamN} ${teamN === 1 ? 'person learns and builds' : 'people learn and build'}.` : 'See where your team learns and builds.'}${here ? ` ${here} ${here === 1 ? 'person is' : 'people are'} on campus right now.` : ''}`
     : here ? `The campus is open. ${here} ${who(here)} ${here === 1 ? 'is' : 'are'} already inside.` : 'The campus is open.');
   // The prototype's arch per entrance (renderGate): learners, visitors, staff and partners each have their own; Workplace names say Colaberry Works.
   const house = p.workplace ? 'Colaberry Works' : 'Colaberry';
@@ -110,7 +114,7 @@ export default function CampusGate(p: GateProps): React.ReactElement {
             <div className="ph" aria-hidden="true">{p.photo ? <img src={p.photo} alt="" data-testid="cm-gate-photo" /> : (p.initials || '·')}</div>
             <div>
               <b>{p.fullName || (explorer ? 'Explorer' : 'Welcome')}</b>
-              <small>{explorer ? 'Explorer · visitor pass' : partner ? 'Partner account' : staff ? 'Program staff · Colaberry' : 'AI Systems Architect Accelerator'}</small>
+              <small>{explorer ? 'Explorer · visitor pass' : partner ? (p.team?.company ?? 'Partner account') : staff ? 'Program staff · Colaberry' : 'AI Systems Architect Accelerator'}</small>
               {explorer && <small>No card needed</small>}
               {staff && <span className="tier">STAFF</span>}
               {partner && <span className="tier">Business partner</span>}

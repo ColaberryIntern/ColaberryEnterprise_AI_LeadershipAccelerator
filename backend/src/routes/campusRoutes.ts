@@ -246,8 +246,23 @@ export async function getAudienceSwitchRoute(req: Request, res: Response): Promi
   sendValidated(res, AudienceSwitchResponse, { allowed: await mayPreviewAudiences(req.participant!.sub) }, 'campus_audience_switch');
 }
 
+/** C23 WP-9: GET /api/portal/campus/team - the partner's company (real names only) and team size without the viewer, for the
+ *  gate, the kicker and "2 of your 9 people". Someone who manages nothing gets { company: null, team_size: 0 }. Pilot only. */
+const TeamResponse = z.object({ company: z.string().max(120).nullable(), team_size: z.number().int().min(0) }).strict();
+export async function getTeamRoute(req: Request, res: Response): Promise<void> {
+  if (!campusOnFor(req)) { notEnabled(res); return; }
+  try {
+    const { teamSummaryFor } = await import('../services/campus/campusTeam');
+    sendValidated(res, TeamResponse, await teamSummaryFor(req.participant!.sub), 'campus_team');
+  } catch (err) {
+    logFailure('campus_team_failed', err);
+    res.status(500).json({ error: 'Could not load your team', error_class: 'CampusTeamUnavailable' });
+  }
+}
+
 const router = Router();
 router.get('/api/portal/campus/flags', requireParticipant, getCampusFlags);
+router.get('/api/portal/campus/team', requireParticipant, getTeamRoute);
 router.post('/api/portal/campus/here', requireParticipant, postCampusHere);
 router.get('/api/portal/campus/presence', requireParticipant, getCampusPresenceRoute);
 /** C92: GET /api/portal/campus/hq-subnav - the cards behind the admin sidebar's live sub-lists (Gov Contracts, Agents) for

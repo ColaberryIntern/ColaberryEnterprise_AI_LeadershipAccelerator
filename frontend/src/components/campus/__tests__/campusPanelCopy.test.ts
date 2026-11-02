@@ -96,6 +96,18 @@ describe('the pulse (renderPresence)', () => {
     expect(pl({ presence: null })).toBeNull();
     expect(pl({ workplace: true })!.bold).toBe('4 colleagues at HQ');
   });
+  it('C23 WP-9: a partner with a known team size reads "1 of your 9 people"; unknown, zero or a size below the count keeps the plain line', () => {
+    expect(pl({ audience: 'business', teamSize: 9 })!.bold).toBe('1 of your 9 people on campus');
+    expect(pl({ audience: 'business', teamSize: null })!.bold).toBe('1 of your people on campus');
+    expect(pl({ audience: 'business', teamSize: 0 })!.bold).toBe('1 of your people on campus');
+    expect(pl({ audience: 'member', teamSize: 9 })!.bold).toBe('4 classmates on campus');
+  });
+  it('C23 WP-9: the partner kicker names the company only when there is one', () => {
+    const now = new Date('2026-10-22T10:00:00');
+    const k = (company: string | null) => kickerFor({ audience: 'business', here: null, workplace: false, live: false, now, company });
+    expect(k('Acme Logistics')).toBe('Partner visit · Acme Logistics');
+    expect(k(null)).toBe('Partner visit');
+  });
   it('the help desk roles; wd leaves member words alone', () => {
     expect([deskRole(desk('reese', 'commons'), false), deskRole(desk('dara', 'library'), false), deskRole(desk('dara', 'library'), true), deskRole(desk('maya', 'gate'), false)])
       .toEqual(['Mentor', 'Curriculum', 'Learning', 'Admissions']);

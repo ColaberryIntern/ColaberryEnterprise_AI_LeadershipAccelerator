@@ -15,6 +15,7 @@ import { greetLine, kickerFor, leadFor, momentOf, pulseLine, pulseOf } from './c
 import { rightNowRows, teamRows } from './rightNow';
 import type { Urgent } from './rightNow';
 import type { HomeAgenda } from './useMapMoments';
+import type { CampusTeam } from './useCampusTeam';
 
 import { BoardChipBadge } from '../board/BoardChipBadge';
 /**
@@ -98,6 +99,8 @@ export interface ConciergeProps {
   openHouse?: { ev: OpenHouseView | null; registered: boolean; markRegistered?: () => void };
   /** C37 (v9 W4): the weather line under the lead (null while weather is off, or something urgent or live is on). */
   weatherLine?: string | null;
+  /** C23 WP-9: a partner's company and team size (null: not a partner, not loaded, or failed: the plain lines stay). */
+  team?: CampusTeam | null;
 }
 
 /** The prototype's "I want to..." chips per account (CHIPS, CHIPS_EXP, CHIPS_SP, CHIPS_WORK), each a walk to a real building. "I'm
@@ -122,7 +125,8 @@ export function chipsFor(audience: CampusAudience, workplaceNames: boolean, buil
 export { pulseOf, liveKicker } from './conciergeCopy';
 
 function Pulse({ p }: { p: ConciergeProps }): React.ReactElement | null {
-  const line = pulseLine({ audience: p.audience, workplace: p.workplaceNames, presence: p.presence, presenceError: p.presenceError, buildings: p.buildings, staffOnDuty: p.desks.some((d) => d.on_duty) });
+  const line = pulseLine({ audience: p.audience, workplace: p.workplaceNames, presence: p.presence, presenceError: p.presenceError, buildings: p.buildings, staffOnDuty: p.desks.some((d) => d.on_duty),
+    teamSize: p.team?.team_size ?? null });
   if (!line) return null;
   const busiest = pulseOf(p.presence, p.buildings).busiest;
   const reese = p.desks.find((d) => d.id === 'reese' && d.on_duty) ?? p.desks.find((d) => d.on_duty);
@@ -172,7 +176,7 @@ export default function CampusConcierge(p: ConciergeProps): React.ReactElement {
       {p.live && <LiveCard title={p.live.title} buildingId={p.live.buildingId} place={liveB ? buildingName(liveB, wp) : null} audience={audience}
         teamHere={liveB && p.presence && !p.presenceError ? (p.presence[liveB.id]?.people ?? []).filter((e) => 'enrollment_id' in e).length : null}
         onWalk={(id, r) => (r ? run(id) : p.onWalk(id))} />}
-      <div className="cm-kicker" data-testid="cm-cc-where">{kickerFor({ audience, here: hereB, workplace: wp, live: !!p.live, now: p.now, onLawn: p.onLawn })}</div>
+      <div className="cm-kicker" data-testid="cm-cc-where">{kickerFor({ audience, here: hereB, workplace: wp, live: !!p.live, now: p.now, onLawn: p.onLawn, company: p.team?.company ?? null })}</div>
       <h1 data-testid="cm-cc-greeting">{greetLine(audience, p.firstName, p.now.getHours(), quiet)}</h1>
       <p className="cm-lead" data-testid="cm-cc-lead">{lead}</p>
       {p.weatherLine && <p className="cm-lead cm-lead-wx" data-testid="cm-cc-weather">{p.weatherLine}</p>}

@@ -1,0 +1,28 @@
+/* C23 WP-9: the Partner Office team panel (roster, readiness, on campus now, privacy note, invite, CSV) */
+.cm-pt{margin-top:4px}
+.cm-pt-what{font-size:13px;color:var(--cm-art-muted);margin:0 0 10px;line-height:1.45}
+.cm-pt-none{font-size:13px;color:var(--cm-art-muted);margin:6px 0 10px}
+.cm-pt .cm-linkbtn{background:none;border:0;padding:0;color:var(--cm-art-red);font:inherit;font-weight:700;cursor:pointer;text-decoration:underline}
+.cm-pt-rows{list-style:none;margin:0 0 8px;padding:0}
+.cm-pt-rows li{display:grid;grid-template-columns:minmax(0,1fr) 84px 76px;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--cm-art-line)}
+.cm-pt-rows .n{min-width:0;display:flex;flex-direction:column}
+.cm-pt-rows .n b,.cm-pt-rows .n small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cm-pt-rows .n b{font-size:14px}
+.cm-pt-rows .n small{font-size:12px;color:var(--cm-art-muted)}
+.cm-pt-rows .pct{position:relative;display:block;height:18px;border-radius:9px;background:var(--cm-art-line);overflow:hidden}
+.cm-pt-rows .pct i{position:absolute;inset:0 auto 0 0;background:var(--cm-art-live-tint)}
+.cm-pt-rows .pct em{position:relative;display:block;text-align:center;font-style:normal;font-size:11.5px;font-weight:800;line-height:18px;color:var(--cm-art-sp-ink)}
+.cm-pt-rows .pill{justify-self:end;font-size:11px;font-weight:800;padding:3px 8px;border-radius:999px;background:var(--cm-art-line);color:var(--cm-art-muted);white-space:nowrap}
+.cm-pt-rows .pill.is-on{background:var(--cm-art-live-tint);color:var(--cm-art-live)}
+.cm-pt-more{font-size:12px;color:var(--cm-art-muted);margin:0 0 8px}
+.cm-pt-privacy{font-size:12px;color:var(--cm-art-muted);margin:8px 0 10px}
+.cm-pt-privacy::before{content:'\1F512\00A0'}
+.cm-pt-acts{display:flex;flex-wrap:wrap;gap:8px}
+.cm-pt-invite{margin-top:10px;display:flex;flex-direction:column;gap:6px}
+.cm-pt-invite label{font-size:12px;font-weight:800;color:var(--cm-art-sp-ink)}
+.cm-pt-invite textarea,.cm-pt-invite input{font:inherit;font-size:14px;padding:8px 10px;border:1px solid var(--cm-art-line);border-radius:10px;background:var(--cm-art-white);color:var(--cm-art-sp-ink);min-width:0}
+.cm-pt-invite textarea:focus-visible,.cm-pt-invite input:focus-visible{outline:3px solid var(--cm-art-red);outline-offset:1px}
+.cm-pt-invite .row{display:flex;gap:8px}
+.cm-pt-invite .row input{flex:1}
+.cm-pt-invite .ok{font-size:13px;color:var(--cm-art-live);margin:0}
+.cm-pt-invite .err{font-size:13px;color:var(--cm-art-red);margin:0}

@@ -38,6 +38,7 @@ import { HallwayRows, useHallway } from './hallway/Hallway';
 import ClassSessions, { useMySessions } from './classroom/ClassSessions';
 import { LiveTile } from './events/LiveScreen';
 import { AgendaRows, useAgenda } from './events/Agenda';
+import PartnerTeam from './partner/PartnerTeam';
 import { ArcadeCard } from './games/ArcadeRoom';
 import { useGameRoomData } from './games/GameRoomSections';
 import { useCampus } from './CampusContext';
@@ -186,6 +187,8 @@ export default function ArrivalPanel(p: ArrivalPanelProps): React.ReactElement {
           : b.id === 'lecture' && access === 'open' ? <ClassSessions sessions={classes} onOpen={open} broadcastRoute={classLiveRoute} />
           : b.id === 'arcade' && access === 'open' ? <ArcadeCard d={games} onOpen={open} place={buildingName(b, wp)} />
           // C33 (v7 R6): the Schedule lists classes, events and booked sessions together
+          // C23 WP-9: the Partner Office is the partner's team panel (roster, on campus now, invite, CSV)
+          : b.id === 'career' && audience === 'business' ? <PartnerTeam presence={p.presenceError ? null : p.presence} onOpen={open} workplace={wp} />
           : b.id === 'tower' ? <AgendaRows items={agendaItems} place={(id) => { const x = p.buildings.find((y) => y.id === id); return x ? buildingName(x, wp) : id; }} onWalk={(id) => openMap(id)} />
           : undefined}
         whoIsHere={p.presence === undefined && !p.presenceError ? undefined
