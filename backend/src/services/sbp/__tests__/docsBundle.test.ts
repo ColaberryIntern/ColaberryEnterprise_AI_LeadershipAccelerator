@@ -25,6 +25,16 @@ jest.mock('../repoWriteAccess', () => ({
   repoWriteAccessForProject: (...a: unknown[]) => mockWriteAccess(...(a as [])),
 }));
 
+// AF3.9: the bundle now asks whether this project is an agent-domain project, so a domain builder
+// receives THEIR Command Center rather than the Student Build Pipeline's. Mocked for exactly the
+// reason above — the real lookup reaches Sequelize — and to `null`, which is the answer for every
+// ordinary build and keeps this suite the pure-renderer parity check it is. The domain branch has
+// its own coverage in `renderDocs.domainCommandCenter.test.ts`.
+const mockDomainOverride = jest.fn(async () => null);
+jest.mock('../../agentDomain/agentDomainCommandCenterForSync', () => ({
+  domainCommandCenterOverrideForProject: (...a: unknown[]) => mockDomainOverride(...(a as [])),
+}));
+
 import { buildDocsBundle, renderBundleNotice, BUNDLE_NOTICE_PATH } from '../docsBundle';
 import { renderDocs } from '../renderDocs';
 import { isSafeToOverwrite, seedPathFor } from '../fileOwnership';

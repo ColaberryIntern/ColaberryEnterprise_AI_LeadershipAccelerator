@@ -39,6 +39,33 @@ export interface RenderedFile {
   content: string;
 }
 
+/**
+ * A Command Center that is not the Student Build Pipeline's one (AF3.9).
+ *
+ * Supplied fully RENDERED so this module stays pure: the caller does the lookups and the markdown,
+ * and `renderDocs` only places the strings. Agent-domain projects namespace their Command Center as
+ * `<domain>.STORY-000` and carry SIX acceptance criteria rather than the SBP's five, so without
+ * this the lookup below missed on the bare id and every domain builder's repo received a confident,
+ * well-formed story about the wrong assignment. `agentDomainCommandCenterForSync` builds it.
+ */
+export interface CommandCenterOverride {
+  /** The namespaced story id, e.g. `platform.STORY-000`. Decides the doc path and the seed key. */
+  storyId: string;
+  /** The rung the seed hangs on, e.g. `autonomy:R0`. */
+  release: string | null;
+  /** The criteria that reach `.colaberry/progress.json`, unticked. */
+  acceptance: string[];
+  /** Rendered markdown for `docs/stories/<storyId>.md`. */
+  doc: string;
+  /**
+   * Anything else this Command Center needs in the repo — the committed data snapshot a public
+   * page reads, and the tombstone that supersedes the wrong bare `STORY-000.md`. Every path is
+   * re-checked against the allowlist like any other rendered file, and they are emitted in sorted
+   * order so array order cannot reach the bytes.
+   */
+  files?: Array<{ path: string; content: string }>;
+}
+
 export interface RenderContext {
   /** Clone URL, when a repo is provisioned. Omitted ⇒ prompts must not cite paths. */
   repoUrl?: string | null;
@@ -89,6 +116,11 @@ export interface RenderContext {
    * answer pass it; callers that do not, do not have to.
    */
   repoWriteAccess?: RepoWriteAccess | null;
+  /**
+   * Replace the SBP Command Center with a domain-native one. Omitted ⇒ unchanged behaviour, which
+   * is what every ordinary student build takes.
+   */
+  commandCenterOverride?: CommandCenterOverride | null;
 }
 
 /**
@@ -181,10 +213,18 @@ export function renderDocs(plan: BuildPlan, ctx: RenderContext = {}): RenderedFi
   // when it appends STORY-000's spec, with the same defensive dedup: if a plan
   // ever carries its own STORY-000, the PLAN wins, because the plan is the
   // authority on every story it actually contains.
-  const planHasCommandCenter = plan.stories.some((s) => s.id === COMMAND_CENTER_STORY_ID);
+  //
+  // AF3.9: WHICH Command Center is a question, not a constant. An agent-domain project's is
+  // `<domain>.STORY-000` with six criteria. Testing the bare id against those plans always missed,
+  // so the branch below fired and seeded the SBP's five — a correct file about the wrong story.
+  // The override carries the id, so the lookup, the doc path and the seed key move together and
+  // cannot disagree.
+  const override = ctx.commandCenterOverride ?? null;
+  const commandCenterStoryId = override?.storyId ?? COMMAND_CENTER_STORY_ID;
+  const planHasCommandCenter = plan.stories.some((s) => s.id === commandCenterStoryId);
   if (!planHasCommandCenter) {
     files.push({
-      path: `docs/stories/${COMMAND_CENTER_STORY_ID}.md`,
+      path: `docs/stories/${commandCenterStoryId}.md`,
       // Ordered plan, so array order cannot reach the bytes. No schedule:
       // renderDocs is pure and has no access to one, and the due dates it would
       // add live on the portal task row anyway. The build brief is the same.
@@ -193,7 +233,9 @@ export function renderDocs(plan: BuildPlan, ctx: RenderContext = {}): RenderedFi
       // criteria are seeded. Threaded rather than assumed: this same renderer
       // produces the repo write AND the downloadable bundle, and the bundle goes
       // to students whose repos the platform cannot touch.
-      content: commandCenterStoryDoc(orderedPlan, null, { writeAccess: ctx.repoWriteAccess ?? null }),
+      content: override
+        ? override.doc
+        : commandCenterStoryDoc(orderedPlan, null, { writeAccess: ctx.repoWriteAccess ?? null }),
     });
   }
 
@@ -238,9 +280,18 @@ export function renderDocs(plan: BuildPlan, ctx: RenderContext = {}): RenderedFi
   // stays byte-identical across renders — repoWriter's content-hash idempotency
   // depends on that. repoWriter then MERGES this over the file already in the
   // repo, so adding the skeleton cannot reset a flag the student has set.
+  //
+  // The override's criteria are the SIX the portal grades, so seeding them here is what finally
+  // makes the two sides agree. `mergeProgressFile` maps over the RENDERED stories, so the stale
+  // bare `STORY-000` entry already sitting in a domain builder's repo is dropped on the next sync
+  // rather than left beside the real one — the file self-heals, which the markdown cannot.
   const progressSeeds: PlanStorySeed[] = [
     ...byKey(plan.stories, (s) => s.id),
-    ...(planHasCommandCenter ? [] : [commandCenterStorySeed()]),
+    ...(planHasCommandCenter
+      ? []
+      : [override
+        ? { id: override.storyId, release: override.release, acceptance: [...override.acceptance] }
+        : commandCenterStorySeed()]),
   ];
   files.push({
     path: PROGRESS_FILE_PATH,
@@ -262,6 +313,13 @@ export function renderDocs(plan: BuildPlan, ctx: RenderContext = {}): RenderedFi
       commandCenterUrl: ctx.commandCenterUrl ?? null,
     })),
   });
+  // The override's own files — the committed data snapshot a public Command Center reads, and the
+  // tombstone that supersedes the wrong bare `STORY-000.md`. BEFORE the manifest, because the
+  // manifest is built from `files` and a path missing from it is a path prompt assembly refuses to
+  // cite. Sorted, so array order cannot reach the bytes and churn a commit that changes nothing.
+  for (const extra of [...(override?.files ?? [])].sort((a, b) => a.path.localeCompare(b.path))) {
+    files.push({ path: extra.path, content: extra.content });
+  }
   files.push({
     path: '.colaberry/manifest.json',
     content: `${JSON.stringify({

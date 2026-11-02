@@ -17,6 +17,15 @@ function row(partial: Partial<ProvisionedDomainRow> & { domain_key: string; stud
     intended_builder_state: 'verified_active',
     agent_id: null,
     agent_display_name: null,
+    // AF3.9 widened the row with the agent's own live state. All null here because `agent_id` is
+    // null in this default: null means "no employee linked", which is a different answer from 0
+    // ("an employee holding nothing"), and the reader keeps them distinct on purpose.
+    agent_enabled: null,
+    agent_autonomy_level: null,
+    agent_autonomy_level_set_at: null,
+    agent_autonomy_level_source: null,
+    agent_tools_granted: null,
+    agent_tools_granted_count: null,
     releases: 0,
     stories: 0,
     stories_verified: 0,

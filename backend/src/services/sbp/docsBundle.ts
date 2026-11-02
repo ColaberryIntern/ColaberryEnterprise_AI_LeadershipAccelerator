@@ -176,6 +176,15 @@ export async function buildDocsBundle(projectId: string, opts: { generatedAt?: D
   // that reaches the people it is false for.
   const repoWriteAccess = await repoWriteAccessForProject(projectId, stored.correlation_id ?? null);
 
+  // AF3.9, and it matters MORE here than on the repo path. This zip is how a builder whose repo the
+  // platform cannot write receives their documents at all, so rendering it without the override
+  // would hand precisely those people the wrong Command Center down the one channel that reaches
+  // them. Null for every ordinary build.
+  const { domainCommandCenterOverrideForProject } =
+    await import('../agentDomain/agentDomainCommandCenterForSync');
+  const commandCenterOverride =
+    await domainCommandCenterOverrideForProject(projectId, stored.correlation_id ?? null);
+
   // Same renderer, same context shape as a repo write. `repoUrl` is null on
   // purpose: with no repo, prompts must not cite a clone URL that does not
   // exist (FR-031).
@@ -188,6 +197,7 @@ export async function buildDocsBundle(projectId: string, opts: { generatedAt?: D
     projectId,
     truthRevision: stored.truth_revision ?? null,
     repoWriteAccess,
+    commandCenterOverride,
   });
 
   const notice = { path: BUNDLE_NOTICE_PATH, content: renderBundleNotice(plan.project_name, projectId) };
