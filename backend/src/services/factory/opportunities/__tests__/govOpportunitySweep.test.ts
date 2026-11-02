@@ -1,5 +1,5 @@
 import {
-  toAutoHide, needsRequirements, qualifyUrl, renderUploadEmail, renderVetSummaryEmail,
+  toAutoHide, needsRequirements, qualifyUrl, renderUploadEmail, renderVetSummaryEmail, isOffTarget,
   type SweepOpportunity,
 } from '../govOpportunitySweep';
 import type { VettingStage } from '../../govOpportunityVetting';
@@ -28,6 +28,12 @@ describe('toAutoHide', () => {
   it('ignores a missing fit score', () => {
     expect(toAutoHide([opp('a', null)], new Set(), new Map())).toEqual([]);
   });
+  it('hides an off-target title regardless of a high fit', () => {
+    expect(toAutoHide([opp('a', 90, 'New Construction of the Community Center')], new Set(), new Map()).map((o) => o.uuid)).toEqual(['a']);
+  });
+  it('never hides an off-target row whose qualification has started', () => {
+    expect(toAutoHide([opp('a', 90, 'Roof Replacement at Lincoln Elementary')], new Set(), stages({ a: 'in_review' }))).toEqual([]);
+  });
 });
 
 describe('needsRequirements', () => {
@@ -37,6 +43,26 @@ describe('needsRequirements', () => {
   });
   it('excludes dismissed rows', () => {
     expect(needsRequirements([opp('a', 80)], new Set(['a']), new Map())).toEqual([]);
+  });
+  it('excludes a high-fit off-target title', () => {
+    const r = needsRequirements([opp('a', 80, 'Temporary Staffing Agencies'), opp('b', 80, 'Permitting Software Solution')], new Set(), new Map());
+    expect(r.map((o) => o.uuid)).toEqual(['b']);
+  });
+});
+
+describe('isOffTarget', () => {
+  it('flags physical / construction / trades / pure-labor / human-services titles', () => {
+    ['New South Elementary Construction', 'Abatement and Demolition at Multiple Locations',
+      'On-Call Contractor Services - Roofing', 'Temporary Staffing Agencies',
+      'DHHS Emergency Placement Short-Term Shelter', 'Residential Small Group Home (DCFS)',
+      'Security Guard Services', 'Timpanogos Sanitary Sewer District- General Contractor',
+    ].forEach((t) => expect(isOffTarget(t)).toBe(true));
+  });
+  it('keeps software / data / AI titles (a rescue word wins over an off-target word)', () => {
+    ['RFP - Enterprise Work Order Management System', 'Micromobility Tracking Software',
+      'AI Field Assistants And Real-Time Emergency Platforms', 'Website Redesign, Hosting and Maintenance',
+      'Electronic Health Record System with Medicaid Billing', 'Sewer GIS Information System',
+    ].forEach((t) => expect(isOffTarget(t)).toBe(false));
   });
 });
 

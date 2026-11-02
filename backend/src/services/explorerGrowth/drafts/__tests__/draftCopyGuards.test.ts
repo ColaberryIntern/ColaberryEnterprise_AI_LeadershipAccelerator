@@ -81,6 +81,104 @@ describe('findBannedCopy', () => {
     expect(findBannedCopy(REAL_BODY_WITH_BOTH_DEFECTS)).toHaveLength(1);
     expect(findBannedCopy(REAL_BODY_ABSOLUTE_LINKS_ONLY)).toHaveLength(1);
   });
+
+  it('reports the ADVERTISING occurrence of the first real body, not its idiom', () => {
+    // This fixture carries both at once: an asset title that advertises the word, and a
+    // closing courtesy that does not. Asserting only the COUNT would pass whichever one the
+    // guard happened to pick, because `seen` collapses them to a single key. The capital
+    // letter is the discriminator - the title's occurrence is capitalised, the idiom's is
+    // not - so this is what distinguishes "caught the violation" from "caught the sign-off".
+    expect(findBannedCopy(REAL_BODY_WITH_BOTH_DEFECTS))
+      .toEqual([{ rule_id: FREE_WORD_RULE.id, text: FREE_WORD_RULE.word.replace(/^./, (c) => c.toUpperCase()) }]);
+  });
+});
+
+/**
+ * The idiom exemption.
+ *
+ * Measured 2026-11-01: 18 of 18 Explorer draft rejections, across both renders, were a
+ * closing courtesy rather than an advertisement. Zero were real violations.
+ *
+ * The word is never written literally in this block. It is read off the rule, the same way
+ * `bannedCopyInstruction` does it, because this file carries a shrink-only per-file ratchet
+ * baseline and a NEW occurrence fails it too.
+ */
+describe('findBannedCopy, idiom exemption', () => {
+  const W = FREE_WORD_RULE.word;
+  const IDIOM = `feel ${W}`;
+
+  it('does not flag the closing courtesy that caused 18 of 18 rejections', () => {
+    expect(findBannedCopy(`If you have any questions, ${IDIOM} to reach out.`)).toEqual([]);
+  });
+
+  it('exempts it however it is capitalised', () => {
+    expect(findBannedCopy(`${IDIOM.toUpperCase()} TO DIVE IN`)).toEqual([]);
+    expect(findBannedCopy(IDIOM.replace(/^./, (c) => c.toUpperCase()))).toEqual([]);
+  });
+
+  it('exempts it across any run of whitespace, including a newline', () => {
+    expect(findBannedCopy(`feel  ${W} to ask`)).toEqual([]);
+    expect(findBannedCopy(`feel\n${W} to ask`)).toEqual([]);
+    expect(findBannedCopy(`feel\t${W} to ask`)).toEqual([]);
+  });
+
+  it('exempts it at the very start of the content', () => {
+    // The lookback window starts at index 0 here, so there is no preceding character to
+    // serve as the word boundary. If that case were not handled the idiom would be flagged
+    // whenever it opened the text.
+    expect(findBannedCopy(`${IDIOM} to reach out`)).toEqual([]);
+  });
+
+  it('CONTROL: still flags the advertising use, so the exemption is not blanket', () => {
+    expect(findBannedCopy(`Welcome to Your ${W} AI Preview`)).toHaveLength(1);
+  });
+
+  it('flags a real violation that appears AFTER an exempt idiom in the same body', () => {
+    // The dangerous ordering. `seen` keys on the lowercased text, so if the exempt
+    // occurrence were allowed to claim the key first, the genuine violation behind it would
+    // be silently dropped and the body would report clean.
+    const body = `${IDIOM} to ask. Join our ${W} class today.`;
+    expect(findBannedCopy(body)).toHaveLength(1);
+  });
+
+  it('flags a real violation that appears BEFORE an exempt idiom in the same body', () => {
+    const body = `Join our ${W} class today. ${IDIOM} to ask.`;
+    expect(findBannedCopy(body)).toHaveLength(1);
+  });
+
+  it('does not exempt a different word that merely starts with the preceding one', () => {
+    // "feels" is not "feel". Were the match looser, any word beginning with the preceding
+    // word would open the exemption.
+    expect(findBannedCopy(`It feels ${W} to learn`)).toHaveLength(1);
+  });
+
+  it('does not exempt when the preceding word is the tail of a longer word', () => {
+    // The guard against a lookback window truncated mid-word. `wheelfeel` is not a word, but
+    // an `^`-anchored match on a truncated window would treat its tail as one.
+    expect(findBannedCopy(`a wheelfeel ${W} offer`)).toHaveLength(1);
+  });
+
+  it('is scoped to the rule it names, so it cannot cover a rule added later', () => {
+    // Same word, different authority. A future rule banning the same spelling for another
+    // reason must NOT inherit this exemption just because the spelling matches.
+    const otherAuthority = { ...FREE_WORD_RULE, id: 'some-other-authority' };
+    expect(findBannedCopy(`${IDIOM} to reach out`, [otherAuthority])).toHaveLength(1);
+  });
+
+  it('still throws on an empty rule set, which the exemption must not soften', () => {
+    expect(() => findBannedCopy(`${IDIOM} to reach out`, [])).toThrow(CopyRulesAbsentError);
+  });
+
+  it('carries the exemption through isSafeToAdvertise and bannedCopyIssues', () => {
+    // Both route through findBannedCopy, so the fix reaches every surface rather than only
+    // the one that was measured.
+    expect(isSafeToAdvertise({ title: `${IDIOM} to explore`, summary: null })).toBe(true);
+    expect(bannedCopyIssues(`${IDIOM} to reach out`)).toEqual([]);
+    // CONTROL on the same two surfaces, so the assertions above are about the idiom rather
+    // than about these functions having stopped checking anything.
+    expect(isSafeToAdvertise({ title: `Your ${W} AI Preview`, summary: null })).toBe(false);
+    expect(bannedCopyIssues(`Your ${W} AI Preview`)).toHaveLength(1);
+  });
 });
 
 describe('bannedCopyIssues', () => {

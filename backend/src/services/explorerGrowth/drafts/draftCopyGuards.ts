@@ -1,4 +1,4 @@
-import { BANNED_COPY_RULES, type BannedWordRule } from '../../content/bannedCopyRule';
+import { BANNED_COPY_RULES, FREE_WORD_RULE, type BannedWordRule } from '../../content/bannedCopyRule';
 
 /**
  * Explorer draft copy guards — the two defects found in the first real draft copy that has
@@ -95,6 +95,80 @@ function wordRegex(word: string): RegExp {
   return new RegExp(`\\b${word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi');
 }
 
+/**
+ * An occurrence that is an idiom rather than an advertisement.
+ *
+ * ## The measurement that caused this
+ *
+ * Taken 2026-11-01, after the instruction added by #3554 was deployed and a second batch
+ * rendered. Of the 24 Explorer drafts that have ever been generated, 18 were rejected, and
+ * ALL 18 were rejected for the same thing: a closing courtesy offering help. Not one was a
+ * real violation, and the word has never appeared in a single draft subject line.
+ *
+ * 40 TAC 807.172(d) forbids ADVERTISING training as no-cost. A sign-off offering to answer
+ * questions advertises nothing, so rejecting it is a false positive — compliant email was
+ * being discarded and the Governor held shut by a guard reporting a defect that was not
+ * there. `bannedCopyRule.ts` already says as much: "The word is prohibited, not the offer."
+ *
+ * ## Why an idiom exemption rather than a context classifier
+ *
+ * Matching only advertising contexts is more correct in principle, and was weighed and
+ * rejected on 2026-11-01: "advertising context" has no crisp definition, and a weak version
+ * silently passes a real violation, which is the single failure mode that matters here.
+ * Naming one idiom keeps the word banned everywhere else, so the exemption cannot widen by
+ * accident — adding to it is a visible edit to this list, not an emergent property.
+ *
+ * ## Why `precededBy` rather than the phrase
+ *
+ * The phrase is never spelled out here. `precededBy` carries only the harmless half and the
+ * banned half is read off the rule at match time. That keeps a banned-word literal out of
+ * this file, which `bannedWordOutboundCopy.test.ts` scans with a shrink-only per-file ratchet
+ * where a NEW occurrence fails too. It is the same constraint that shaped
+ * `bannedCopyInstruction`, and writing the phrase by hand would pass every behavioural
+ * assertion here and fail that ratchet.
+ */
+interface IdiomExemption {
+  /** The rule this applies to, named so it cannot silently cover a rule added later. */
+  ruleId: string;
+  /** The word that must immediately precede the occurrence. Never the banned word itself. */
+  precededBy: string;
+  why: string;
+}
+
+const IDIOM_EXEMPTIONS: readonly IdiomExemption[] = [
+  {
+    ruleId: FREE_WORD_RULE.id,
+    precededBy: 'feel',
+    why:
+      'A closing courtesy offering help, not a claim about price. 18 of 18 Explorer '
+      + 'rejections measured on 2026-11-01 were this and nothing else.',
+  },
+];
+
+/**
+ * How far back to look for the preceding word. Generous enough that the word sought is never
+ * truncated, bounded so a long body stays linear instead of re-slicing from the start of the
+ * content on every match.
+ */
+const LOOKBACK_CHARS = 48;
+
+/**
+ * Whether the occurrence at `at` is an exempt idiom for this rule.
+ *
+ * A newline is prepended when the window starts at the beginning of the content, so that
+ * start-of-content counts as a word boundary. Doing it this way rather than with an `^`
+ * branch is deliberate: `^` would also match a window truncated mid-word, which would exempt
+ * an occurrence sitting inside a longer word that merely ends in `precededBy`.
+ */
+function isExemptIdiom(ruleId: string, content: string, at: number): boolean {
+  const from = Math.max(0, at - LOOKBACK_CHARS);
+  const before = (from === 0 ? '\n' : '') + content.slice(from, at);
+  return IDIOM_EXEMPTIONS.some(
+    (ex) => ex.ruleId === ruleId
+      && new RegExp(`[^A-Za-z0-9_]${ex.precededBy}\\s+$`, 'i').test(before),
+  );
+}
+
 /** One banned-word hit in copy. */
 export interface BannedCopyHit {
   /** The rule's id, e.g. `tac-807-172-d-free`. */
@@ -122,7 +196,11 @@ export function findBannedCopy(
     let m: RegExpExecArray | null = re.exec(content);
     while (m !== null) {
       const key = m[0].toLowerCase();
-      if (!seen.has(key)) {
+      // The exemption is checked BEFORE `seen`, and the order is load-bearing. `seen` keys on
+      // the lowercased text, so an exempt occurrence that claimed the key would mask a REAL
+      // violation of the same spelling later in the same body. `REAL_BODY_WITH_BOTH_DEFECTS`
+      // is a production draft carrying both at once, and is the fixture that pins this.
+      if (!isExemptIdiom(rule.id, content, m.index) && !seen.has(key)) {
         seen.add(key);
         out.push({ rule_id: rule.id, text: m[0] });
       }

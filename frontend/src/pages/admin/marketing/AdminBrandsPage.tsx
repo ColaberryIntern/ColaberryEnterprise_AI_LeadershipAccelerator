@@ -30,6 +30,7 @@ import { BRAND_TABS, domainNotice, isBrandTab, setupSummary, type BrandSetupFact
 import BrandSetupTabs from './BrandSetupTabs';
 import { listItems, type ContentItem } from '../../../services/contentComposerApi';
 import { BrandPixelField } from './BrandPixelField';
+import { BrandSnackbarField } from './BrandSnackbarField';
 import api from '../../../utils/api';
 import { forBrand, missingSlug, toMarketingCampaigns, type MarketingCampaign } from './marketingCampaigns';
 
@@ -470,13 +471,19 @@ function AdminBrandsPage() {
                     <dt className="col-sm-3 text-muted">Support email</dt>
                     <dd className="col-sm-9">{brand.support_email ?? <span className="text-muted">not set</span>}</dd>
                   </dl>
-                  {/* The pixel IS editable; the fields above are not, and saying which is which
-                      beats one sentence that used to claim nothing here could be edited. */}
+                  {/* The pixel and the snack bar ARE editable; the fields above are not, and
+                      saying which is which beats one sentence that used to claim nothing here
+                      could be edited. */}
                   <p className="small text-muted mb-0">
                     The fields above are read-only here. Posting times are set per post in the
                     composer, not as recurring slots.
                   </p>
                   <BrandPixelField
+                    brand={brand}
+                    onSaved={(updated) => setBrands((prev) =>
+                      prev.map((b) => (b.id === updated.id ? { ...b, ...updated } : b)))}
+                  />
+                  <BrandSnackbarField
                     brand={brand}
                     onSaved={(updated) => setBrands((prev) =>
                       prev.map((b) => (b.id === updated.id ? { ...b, ...updated } : b)))}
