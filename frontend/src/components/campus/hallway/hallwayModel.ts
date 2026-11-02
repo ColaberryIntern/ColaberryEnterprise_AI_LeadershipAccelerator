@@ -1,4 +1,4 @@
-import type { Hallway, HallwayBooking, HallwayPerson, HallwayRoom } from './hallwayApi';
+import type { Hallway, HallwayBooking, HallwayPerson, HallwayRoom, HallwayRoomSession } from './hallwayApi';
 
 /**
  * The hallway's rules (C29, v7 R2), pure so each is tested. The prototype's MROOMS are illustrative; every door here is a real room:
@@ -16,11 +16,21 @@ import type { Hallway, HallwayBooking, HallwayPerson, HallwayRoom } from './hall
  */
 export const MAX_DOORS = 6;
 export const TZ = 'America/Chicago';
-/** `live` = a meeting is running. `occupied` = people are here, no call. */
-export type DoorState = 'live' | 'occupied' | 'booked' | 'idle';
+/**
+ * `live` = a meeting is running. `in_session` = the timetable says one is due here.
+ * `occupied` = people are here, no call and nothing scheduled.
+ *
+ * THREE SOURCES, THREE STATES, in that order of authority. A started call outranks a
+ * timetable entry, because it is the thing actually happening; a timetable entry
+ * outranks a count of open browser tabs, because it says WHAT is happening and names
+ * it. Before `in_session` existed the schedule could not reach the door at all.
+ */
+export type DoorState = 'live' | 'in_session' | 'occupied' | 'booked' | 'idle';
 export interface Door {
   more: false; n: number; key: string; roomId: string; name: string; sub: string; emoji: string | null;
   state: DoorState; insideCount: number; inside: HallwayPerson[]; friends: boolean; booking: HallwayBooking | null;
+  /** The scheduled session, carried so the sign can name it rather than say "in session". */
+  session: HallwayRoomSession | null;
 }
 export interface MoreDoor { more: true; n: number; key: 'more'; hidden: number }
 export type AnyDoor = Door | MoreDoor;
@@ -32,6 +42,7 @@ export const isEmptyDoor = (d: WallDoor): d is EmptyDoor => 'empty' in d;
 const door = (r: HallwayRoom, state: DoorState, booking: HallwayBooking | null): Omit<Door, 'n'> => ({
   more: false, key: booking ? `b-${booking.booking_id}` : `r-${r.room_id}`, roomId: r.room_id, name: booking && state === 'booked' ? booking.title : r.name,
   sub: r.sub, emoji: r.emoji, state, insideCount: r.inside_count, inside: r.inside, friends: r.inside.some((p) => p.friend), booking,
+  session: r.session ?? null,
 });
 
 /** Every door in hallway order, uncapped. */
@@ -41,8 +52,14 @@ export function orderedDoors(h: Hallway): Omit<Door, 'n'>[] {
   // website at all, which is the normal shape of a real call.
   const live = h.rooms.filter((r) => !!r.live_since).sort((a, b) => b.inside_count - a.inside_count);
   const liveIds = new Set(live.map((r) => r.room_id));
-  const occupied = h.rooms.filter((r) => !liveIds.has(r.room_id) && r.inside_count > 0).sort((a, b) => b.inside_count - a.inside_count);
-  const shownIds = new Set([...liveIds, ...occupied.map((r) => r.room_id)]);
+  // Then the timetable. A scheduled session outranks a count of open tabs because it
+  // names what is happening; it loses to a started call because that is happening.
+  // Sorted by start, so the session beginning soonest reads first.
+  const inSession = h.rooms.filter((r) => !liveIds.has(r.room_id) && !!r.session)
+    .sort((a, b) => (a.session!.start_at).localeCompare(b.session!.start_at));
+  const sessionIds = new Set(inSession.map((r) => r.room_id));
+  const occupied = h.rooms.filter((r) => !liveIds.has(r.room_id) && !sessionIds.has(r.room_id) && r.inside_count > 0).sort((a, b) => b.inside_count - a.inside_count);
+  const shownIds = new Set([...liveIds, ...sessionIds, ...occupied.map((r) => r.room_id)]);
   const firstBooking = new Map<string, HallwayBooking>();
   for (const b of [...h.bookings].sort((a, c) => a.start_at.localeCompare(c.start_at))) if (!firstBooking.has(b.room_id)) firstBooking.set(b.room_id, b);
   const booked = Array.from(firstBooking.values()).filter((b) => !shownIds.has(b.room_id) && byId.has(b.room_id));
@@ -52,9 +69,11 @@ export function orderedDoors(h: Hallway): Omit<Door, 'n'>[] {
   // Friends-first applies WITHIN each tier, not just to live rooms. Splitting rooms
   // into live and occupied would otherwise silently drop the rule for every room that
   // has people but no call, which before this change was all of them.
+  const sessionDoors = inSession.map((r) => door(r, 'in_session', firstBooking.get(r.room_id) ?? null));
   const occupiedDoors = occupied.map((r) => door(r, 'occupied', firstBooking.get(r.room_id) ?? null));
   return [
     ...liveDoors.filter((d) => d.friends), ...liveDoors.filter((d) => !d.friends),
+    ...sessionDoors.filter((d) => d.friends), ...sessionDoors.filter((d) => !d.friends),
     ...occupiedDoors.filter((d) => d.friends), ...occupiedDoors.filter((d) => !d.friends),
     ...booked.map((b) => door(byId.get(b.room_id)!, 'booked', b)), ...idle.map((r) => door(r, 'idle', null)),
   ];
@@ -80,9 +99,13 @@ export function wallDoors(h: Hallway, max = MAX_DOORS): WallDoor[] {
 /** Rooms with a meeting actually running. */
 export const liveRooms = (h: Hallway): Omit<Door, 'n'>[] => orderedDoors(h).filter((d) => d.state === 'live');
 
-/** Rooms worth a row on the board: a meeting is running, or people are present. */
+/** Rooms worth a row on the board: a meeting is running, one is scheduled, or people are present. */
 export const boardRooms = (h: Hallway): Omit<Door, 'n'>[] =>
-  orderedDoors(h).filter((d) => d.state === 'live' || d.state === 'occupied');
+  orderedDoors(h).filter((d) => d.state === 'live' || d.state === 'in_session' || d.state === 'occupied');
+
+/** Rooms the timetable has claimed, soonest first. */
+export const sessionRooms = (h: Hallway): Omit<Door, 'n'>[] =>
+  orderedDoors(h).filter((d) => d.state === 'in_session');
 
 /**
  * Is there anyone to walk in on?
@@ -91,8 +114,14 @@ export const boardRooms = (h: Hallway): Omit<Door, 'n'>[] =>
  * every room that has people in it but no call running — which, until the Zoom
  * subscription is configured, is every room. "A meeting is on" gates the live DOT;
  * "somebody is there" gates the door.
+ *
+ * `in_session` joins that list for the same reason, and it is the case that matters
+ * most: a scheduled session with nobody there yet is precisely when a person needs
+ * the button. Adding a state without adding it here is how the button silently
+ * disappears from the room everyone was told to be in.
  */
-export const canJoin = (d: Pick<Door, 'state'>): boolean => d.state === 'live' || d.state === 'occupied';
+export const canJoin = (d: Pick<Door, 'state'>): boolean =>
+  d.state === 'live' || d.state === 'in_session' || d.state === 'occupied';
 
 /**
  * The board's heading.
@@ -105,6 +134,11 @@ export const canJoin = (d: Pick<Door, 'state'>): boolean => d.state === 'live' |
 export function boardSummary(h: Hallway): { count: number; label: string } {
   const liveCount = liveRooms(h).length;
   if (liveCount > 0) return { count: liveCount, label: liveCount === 1 ? 'room live now' : 'rooms live now' };
+  // Then the timetable, which is a real answer and not a claim about a call: it says a
+  // session is due, which is what someone arriving at 8:50 came to find out. Reporting
+  // the tab count instead was how the board said "2 open now" with nothing happening.
+  const sessions = sessionRooms(h).length;
+  if (sessions > 0) return { count: sessions, label: sessions === 1 ? 'session scheduled now' : 'sessions scheduled now' };
   const here = orderedDoors(h).filter((d) => d.state === 'occupied').reduce((n, d) => n + d.insideCount, 0);
   if (here > 0) return { count: here, label: here === 1 ? 'person here' : 'people here' };
   return { count: 0, label: 'rooms live now' };
@@ -116,19 +150,44 @@ export function centralWhen(iso: string): string {
   return `${d.toLocaleDateString('en-US', { timeZone: TZ, weekday: 'short' })} ${d.toLocaleTimeString('en-US', { timeZone: TZ, hour: 'numeric', minute: '2-digit' })}`;
 }
 
-/** The door sign's state line: "● Live · 3 here", "3 here", "Booked · Tue 10:30 AM" or "Available". */
+/** "9:00 AM" in Central. Time only, because a session's door is read on its own day. */
+export function centralTime(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleTimeString('en-US', { timeZone: TZ, hour: 'numeric', minute: '2-digit' });
+}
+
+/** The door sign's state line: "● Live · 3 here", "◆ In session", "3 here", "Booked · Tue 10:30 AM" or "Available". */
 export function doorSign(d: Door): string {
   // "inside" was the old word and it overclaimed: it described an open browser tab as
   // being in the room. A live meeting gets the dot; presence gets a plain count.
   if (d.state === 'live') return d.insideCount > 0 ? `● Live · ${d.insideCount} here` : '● Live now';
+  if (d.state === 'in_session' && d.session) {
+    // A DIFFERENT marker from live, deliberately. The diamond says the clock claims this
+    // room; the filled dot says a call is running. One glyph for both would re-create
+    // exactly the ambiguity this work set out to remove.
+    if (!d.session.in_progress) {
+      const when = centralTime(d.session.start_at);
+      return when ? `Starts ${when}` : 'Starting soon';
+    }
+    return d.insideCount > 0 ? `◆ In session · ${d.insideCount} here` : '◆ In session';
+  }
   if (d.state === 'occupied') return `${d.insideCount} here`;
   if (d.state === 'booked' && d.booking) return `Booked · ${centralWhen(d.booking.start_at)}`;
   return 'Available';
 }
 
-/** The arrival card row's line: "Live now · sub", "3 here · sub", "Booked · Tue 10:30 AM" or "Available". */
+/** The arrival card row's line: "Live now · sub", "Intern standup · 9:00 AM", "3 here · sub", "Booked · Tue 10:30 AM" or "Available". */
 export function rowLine(d: Door): string {
   if (d.state === 'live') return ['Live now', d.sub].filter(Boolean).join(' · ');
+  if (d.state === 'in_session' && d.session) {
+    // The session's own TITLE, not the room's tagline. The original complaint was that
+    // the panel named a meeting that was not in the room being looked at; naming the
+    // session on the room it actually runs in is the whole correction.
+    const what = d.session.title;
+    const when = d.session.in_progress ? 'In session' : `Starts ${centralTime(d.session.start_at)}`.trim();
+    return [what, when].filter(Boolean).join(' · ');
+  }
   if (d.state === 'occupied') return [`${d.insideCount} here`, d.sub].filter(Boolean).join(' · ');
   return doorSign(d);
 }

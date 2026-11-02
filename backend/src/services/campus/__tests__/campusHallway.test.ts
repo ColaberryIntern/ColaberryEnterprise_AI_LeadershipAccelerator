@@ -9,7 +9,19 @@ const mock = {
   cohorts: [] as Array<{ id: string; cohort_id: string | null }>,
   visible: new Map<string, { enrollment_id: string; display_name: string; avatar_url: string | null }>(),
   bookingWhere: null as unknown,
+  sessions: [] as Array<{ day: string; time: string; title: string; room_id: string | null }>,
+  sessionsThrow: false,
 };
+// The weekly timetable. Stubbed like every other read here, and stubbed EXPLICITLY
+// rather than left to fail: before this mock existed the hallway's new schedule lookup
+// reached an unmocked Cohort.findOne, threw, and was swallowed by its own degradation
+// path — so the suite passed while never once exercising a scheduled session.
+jest.mock('../campusWeekdaySessions', () => ({
+  getWeekdaySessions: async () => {
+    if (mock.sessionsThrow) throw Object.assign(new Error('timetable unavailable'), { name: 'TimeoutError' });
+    return { intern: true, sessions: mock.sessions };
+  },
+}));
 jest.mock('../../communityRooms/roomService', () => ({ listRoomsForViewer: async () => mock.listed }));
 jest.mock('../campusPresenceService', () => ({ visibleSetFor: async () => mock.visible }));
 jest.mock('../../reese/reeseIdentitySeed', () => ({ getReeseEnrollmentId: async () => 'reese-1' }));
@@ -28,6 +40,81 @@ const person = (id: string) => ({ enrollment_id: id, display_name: `Person ${id}
 
 beforeEach(() => {
   mock.listed = []; mock.extraRooms = []; mock.presence = []; mock.bookings = []; mock.going = []; mock.cohorts = []; mock.visible = new Map();
+  mock.sessions = []; mock.sessionsThrow = false;
+});
+
+describe('the timetable claims a room, which is a third fact from presence and liveness', () => {
+  // Monday 2026-11-02, CST: the 9:00 AM standup is the real instant 15:00Z.
+  const STANDUP = { day: 'monday', time: '9:00 AM', title: 'Intern standup', room_id: 'standup-room' };
+
+  it('keeps a room whose session is due even with NOBODY inside and NO call running', async () => {
+    // The moment this exists for: someone opens the campus at 8:50 looking for the
+    // standup. Before this clause the room was filtered out until a person was already
+    // in it, so the schedule drove nothing.
+    mock.sessions = [STANDUP];
+    mock.listed = [{ visibility: 'full', room: room('standup-room') }];
+    const h = await getHallway(CTX, new Date('2026-11-02T14:50:00Z'));
+    expect(h.rooms.map((r) => r.room_id)).toEqual(['standup-room']);
+    expect(h.rooms[0].inside_count).toBe(0);
+    expect(h.rooms[0].live_since).toBeNull();
+    expect(h.rooms[0].session).toEqual({
+      title: 'Intern standup',
+      start_at: '2026-11-02T15:00:00.000Z',
+      end_at: '2026-11-02T16:00:00.000Z',
+      in_progress: false,
+    });
+  });
+
+  it('marks the session in progress once it has started', async () => {
+    mock.sessions = [STANDUP];
+    mock.listed = [{ visibility: 'full', room: room('standup-room') }];
+    const h = await getHallway(CTX, new Date('2026-11-02T15:30:00Z'));
+    expect(h.rooms[0].session?.in_progress).toBe(true);
+  });
+
+  it('drops the room again once the session window has passed', async () => {
+    mock.sessions = [STANDUP];
+    mock.listed = [{ visibility: 'full', room: room('standup-room') }];
+    const h = await getHallway(CTX, new Date('2026-11-02T16:30:00Z'));
+    expect(h.rooms).toEqual([]);
+  });
+
+  it('reports session null for a room nothing is scheduled in', async () => {
+    mock.sessions = [STANDUP];
+    mock.presence = [{ room_id: 'adhoc', enrollment_id: 'p1' }];
+    mock.listed = [{ visibility: 'full', room: room('adhoc') }];
+    const h = await getHallway(CTX, new Date('2026-11-02T15:30:00Z'));
+    expect(h.rooms.map((r) => r.room_id)).toEqual(['adhoc']);
+    expect(h.rooms[0].session).toBeNull();
+  });
+
+  it('reports a session and a running call independently on the same room', async () => {
+    // Both true at once is the normal case for a session someone actually started, and
+    // the payload must not collapse them: `live_since` is Zoom, `session` is the clock.
+    mock.sessions = [STANDUP];
+    mock.listed = [{ visibility: 'full', room: room('standup-room', { metadata: { live: { occurrence_uuid: 'o', meeting_id: '1', since: '2026-11-02T15:02:00.000Z' } } }) }];
+    const h = await getHallway(CTX, new Date('2026-11-02T15:30:00Z'));
+    expect(h.rooms[0].live_since).toBe('2026-11-02T15:02:00.000Z');
+    expect(h.rooms[0].session?.in_progress).toBe(true);
+  });
+
+  it('STILL RENDERS THE HALLWAY when the timetable lookup fails', async () => {
+    // A label must never take down the page people use to reach a call in progress.
+    mock.sessionsThrow = true;
+    mock.presence = [{ room_id: 'adhoc', enrollment_id: 'p1' }];
+    mock.listed = [{ visibility: 'full', room: room('adhoc') }];
+    const err = jest.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const h = await getHallway(CTX, new Date('2026-11-02T15:30:00Z'));
+      expect(h.rooms.map((r) => r.room_id)).toEqual(['adhoc']);
+      expect(h.rooms[0].session).toBeNull();
+      // Degraded, not silent.
+      expect(err).toHaveBeenCalled();
+      expect(String(err.mock.calls[0][0])).toContain('campus_hallway_sessions_failed');
+    } finally {
+      err.mockRestore();
+    }
+  });
 });
 
 describe('a meeting running is not the same thing as a page being open', () => {
