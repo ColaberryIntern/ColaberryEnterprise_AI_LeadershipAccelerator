@@ -7,8 +7,10 @@ import {
   type LiveAudienceResult,
   type ProducerCommand,
   type ProducerStateResult,
+  type RundownResult,
 } from '../../services/broadcastProducer';
 import { clockTicks, producerClock } from './producerClock';
+import ProducerRundown from './ProducerRundown';
 import { CONFIRM_Q, LABELS, needsConfirm, noActionsNote, stateLabel } from './producerStripCopy';
 import { CPS_CSS } from './producerStripStyles';
 
@@ -55,6 +57,15 @@ export interface ProducerStripProps {
   ) => Promise<{ outcome: string; currentVersion?: number }>;
   /** Injected in tests. A SEPARATE request from the state read — see `AUDIENCE_POLL_MS`. */
   loadAudience?: (occurrenceId: string) => Promise<LiveAudienceResult>;
+  /**
+   * Injected in tests, and passed straight through to the rundown.
+   *
+   * It exists as a prop on THIS component rather than only on the child because a child that
+   * fetches for itself turns every unit test of this strip into one that makes a real request.
+   * There is no global axios mock in this app, so that would be unmocked I/O inside a component
+   * test — the thing `broadcastRoutes.test.ts` had to go back and fix on the backend.
+   */
+  loadRundown?: (sessionId: string) => Promise<RundownResult>;
 }
 
 /**
@@ -140,7 +151,7 @@ function audienceChip(
 }
 
 export default function ProducerStrip(
-  { sessionId, loadState, sendCommand, loadAudience }: ProducerStripProps,
+  { sessionId, loadState, sendCommand, loadAudience, loadRundown }: ProducerStripProps,
 ): React.ReactElement | null {
   const read = loadState ?? readProducerState;
   const send = sendCommand ?? sendProducerCommandRequest;
@@ -422,6 +433,15 @@ export default function ProducerStrip(
           answer that arrived.
         </p>
       )}
+
+      {/*
+        * P4-02's segment rundown: which part of the show is on air and whether it is keeping to
+        * the plan. Its own component on its own request, so a kit-spec problem cannot take the
+        * controls above it away, and its own file so this one stays under the line ceiling. The
+        * tick is passed down rather than started again — the pace verdict and the clock in the
+        * header have to be measured from the same instant to be comparable at all.
+        */}
+      <ProducerRundown sessionId={sessionId} occurrence={occurrence} now={now} load={loadRundown} />
     </section>
   );
 }

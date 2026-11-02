@@ -4,6 +4,9 @@ import { env } from '../config/env';
 import { requireParticipant } from '../middlewares/participantAuth';
 import { attachCommunityStaffContext } from '../middlewares/communityRoomsStaffContext';
 import * as c from '../controllers/broadcastController';
+// Its own module, because `broadcastController` is past the hard line-ceiling — see the
+// rundown route's note at the bottom of this file.
+import * as rundown from '../controllers/broadcastRundownController';
 
 /**
  * Colaberry Live — broadcast routes.
@@ -171,6 +174,25 @@ router.get(
   `${P}/session/:sessionId/producer`,
   flagGate, producerStateLimiter, requireParticipant, attachCommunityStaffContext,
   c.getProducerState,
+);
+
+/**
+ * P4-02's segment rundown — the plan, and where the show is in it.
+ *
+ * SAME LIMITER AS THE PRODUCER READ, NOT THE COMMAND ONE, and for the same reason: this is a
+ * read with a poll's shape. It is deliberately slower than the state read in the client, but it
+ * is read by the same control in the same minute, so sizing it like a command would let a
+ * rundown throttle a Go Live. The audience route is the standing lesson on that.
+ *
+ * A SEPARATE HANDLER IN A SEPARATE FILE. `broadcastController.ts` is past the 500-line hard
+ * ceiling in CLAUDE.md's Modular Composition Rule, so the next change to it owes a split before
+ * it may add code. This handler is new code, so it goes in its own controller rather than
+ * borrowing the exemption.
+ */
+router.get(
+  `${P}/session/:sessionId/rundown`,
+  flagGate, producerStateLimiter, requireParticipant, attachCommunityStaffContext,
+  rundown.getSessionRundown,
 );
 
 export default router;
