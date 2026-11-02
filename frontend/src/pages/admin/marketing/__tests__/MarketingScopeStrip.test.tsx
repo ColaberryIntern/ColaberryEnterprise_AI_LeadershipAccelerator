@@ -21,8 +21,8 @@ let root: Root;
 let emitted: MarketingScope[];
 
 const BRANDS: Brand[] = [
-  { id: 'b1', tenant_id: 't1', slug: 'enterprise', name: 'Colaberry Enterprise', status: 'active', default_public_url: null, support_email: null, meta_pixel_id: null },
-  { id: 'b2', tenant_id: 't1', slug: 'training', name: 'Colaberry Training', status: 'active', default_public_url: null, support_email: null, meta_pixel_id: null },
+  { id: 'b1', tenant_id: 't1', slug: 'enterprise', name: 'Colaberry Enterprise', status: 'active', default_public_url: null, support_email: null, meta_pixel_id: null, snackbar_default_enabled: false },
+  { id: 'b2', tenant_id: 't1', slug: 'training', name: 'Colaberry Training', status: 'active', default_public_url: null, support_email: null, meta_pixel_id: null, snackbar_default_enabled: false },
 ];
 
 const SCOPE: MarketingScope = {

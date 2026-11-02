@@ -25,6 +25,11 @@ export interface Brand {
   support_email: string | null;
   /** Meta Pixel ID, or null when this brand is not being advertised. Digits only. */
   meta_pixel_id: string | null;
+  /**
+   * Whether this brand's hosted landing pages show a snack bar by default. Not nullable: a page
+   * may still override it either way, but the brand always holds a definite answer.
+   */
+  snackbar_default_enabled: boolean;
 }
 
 export interface BrandDomain {
@@ -100,5 +105,20 @@ export async function setBrandMetaPixelId(
   metaPixelId: string | null,
 ): Promise<Brand> {
   const res = await api.patch(`/api/admin/brands/${brandId}`, { meta_pixel_id: metaPixelId });
+  return res.data.brand as Brand;
+}
+
+/**
+ * Turn the landing-page snack bar on or off for every hosted page this brand builds.
+ *
+ * The brand is the right home for this for the same reason as the pixel: the alternative is a
+ * decision an operator has to remember on every page, and the snack bar spent its first weeks
+ * deployed, working, and dark on every page precisely because nothing ever set this flag.
+ */
+export async function setBrandSnackbarDefault(
+  brandId: string,
+  enabled: boolean,
+): Promise<Brand> {
+  const res = await api.patch(`/api/admin/brands/${brandId}`, { snackbar_default_enabled: enabled });
   return res.data.brand as Brand;
 }
