@@ -66,7 +66,8 @@ export default function CampusRail(): React.ReactElement | null {
                 </button>
               </li>
             ))}
-            {!named.length && !deskHere.length && <li className="cm-rail-quiet">Nobody else here right now.</li>}
+            {presenceError ? <li className="cm-rail-quiet" role="status" data-testid="cm-rail-down">Can’t load who’s here right now.</li>
+              : !named.length && !deskHere.length && <li className="cm-rail-quiet">Just you in here.</li>}
           </ul>
         </section>
       )}

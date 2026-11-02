@@ -48,11 +48,11 @@ function InviteSheet({ onSent }: { onSent: (n: number) => void }): React.ReactEl
   };
   return (
     <form className="cm-pt-invite" onSubmit={send} data-testid="cm-pt-invite" onClick={(e) => e.stopPropagation()}>
-      <label htmlFor="cm-pt-emails">Invite people</label>
-      <textarea id="cm-pt-emails" rows={2} value={text} onChange={(e) => setText(e.target.value)} placeholder="name@company.com, another@company.com" data-testid="cm-pt-emails" />
+      <label htmlFor="cm-pt-emails">Work emails (one per line)</label>
+      <textarea id="cm-pt-emails" rows={3} value={text} onChange={(e) => setText(e.target.value)} placeholder={'name@company.com\nanother@company.com'} data-testid="cm-pt-emails" />
       <div className="row">
         <input aria-label="Team (optional)" value={team} onChange={(e) => setTeam(e.target.value)} placeholder="Team (optional)" maxLength={120} data-testid="cm-pt-team" />
-        <button type="submit" className="cm-btn-red" disabled={sending} data-testid="cm-pt-send">{sending ? 'Sending…' : 'Send invite'}</button>
+        <button type="submit" className="cm-btn-red" disabled={sending} data-testid="cm-pt-send">{sending ? 'Sending…' : 'Send invites →'}</button>
       </div>
       {msg && <p className={msg.ok ? 'ok' : 'err'} role={msg.ok ? 'status' : 'alert'} data-testid="cm-pt-msg">{msg.text}</p>}
     </form>
@@ -96,7 +96,7 @@ export default function PartnerTeam({ presence, onOpen, workplace = false }: { p
       <p className="cm-pt-privacy" data-testid="cm-pt-privacy">Private: only your company's managers can see this list and its download.</p>
       <div className="cm-pt-acts">
         <button type="button" className="cm-btn-line" onClick={(e) => { e.stopPropagation(); setInviting((v) => !v); }} aria-expanded={inviting} data-testid="cm-pt-invite-toggle">{inviting ? 'Close invite' : 'Invite people'}</button>
-        <button type="button" className="cm-btn-line" disabled={!roster.length} onClick={(e) => { e.stopPropagation(); download(csvFileName(company, new Date()), rosterCsv(roster, here)); }} data-testid="cm-pt-csv">Download CSV</button>
+        <button type="button" className="cm-btn-line" disabled={!roster.length} onClick={(e) => { e.stopPropagation(); download(csvFileName(company, new Date()), rosterCsv(roster, here)); }} data-testid="cm-pt-csv"><span aria-hidden="true">⬇ </span>Export CSV</button>
         <button type="button" className="cm-btn-line" onClick={(e) => { e.stopPropagation(); onOpen('/portal/company'); }} data-testid="cm-pt-company">Company page</button>
       </div>
       {inviting && <InviteSheet onSent={() => fetchRoster()} />}

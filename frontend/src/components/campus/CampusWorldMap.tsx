@@ -31,7 +31,11 @@ import BoardSign from './board/BoardSign';
 import TodayFlag, { GateTodaySign } from './art/TodayFlag';
 import { onBoard } from './board/boardApi';
 import { BOARD_SPOT } from './board/boardModel';
+import { wd } from './home/conciergeCopy';
 import './campusMapArt.css';
+
+/** WP-11: a member's map badge in Workplace words ("Class in 2h" reads "Session in 2h"), as the design's badges pass its word swaps. */
+const wdBadge = (s: BadgeStatus | undefined, workplace: boolean): BadgeStatus | undefined => (s && workplace ? { ...s, text: wd(s.text, true) } : s);
 
 /**
  * The campus world, drawn as the prototype draws it (C11b; docs/design/campus/colaberry-campus.html): grass, the paved business
@@ -171,12 +175,12 @@ const HitAreas = memo(function HitAreas({ buildings, onPick }: { buildings: Camp
 });
 
 // The grounds never change during a walk: one memoized group, so a walk frame or a presence poll does not re-render ~200 nodes.
-const Scenery = memo(function Scenery({ doors, gateIsBuilding }: { doors: PathDoor[]; gateIsBuilding: boolean }): React.ReactElement {
+const Scenery = memo(function Scenery({ doors, gateIsBuilding, workplace }: { doors: PathDoor[]; gateIsBuilding: boolean; workplace: boolean }): React.ReactElement {
   return (
     <>
       <GroundPatterns />
       <Ground />
-      <QuadAndPaths doors={doors} />
+      <QuadAndPaths doors={doors} workplace={workplace} />
       <District />
       <Trees />
       {/* The gate is scenery for everyone (the prototype always draws it); only Explorers and staff get it as a building. */}
@@ -286,8 +290,8 @@ export default function CampusWorldMap(p: CampusMapProps): React.ReactElement {
   const cls = ['cm-map', compact && 'is-compact', reduceMotion && 'is-reduced', camera && !compact && 'has-camera', live.length && 'is-evening', live.length && `ls-${p.liveMark?.state ?? 'live'}`, quiet && 'is-quiet'].filter(Boolean).join(' ');
   return (
     <svg ref={svgRef} className={cls} viewBox={`0 0 ${WORLD.w} ${WORLD.h}`} data-testid={compact ? undefined : 'cm-world'}
-      {...(compact ? { 'aria-hidden': true, focusable: 'false' } : { role: 'group', 'aria-label': 'Campus map', onClick: groundClick })}>
-      <Scenery doors={doors} gateIsBuilding={gateIsBuilding} />
+      {...(compact ? { 'aria-hidden': true, focusable: 'false' } : { role: 'group', 'aria-label': 'Colaberry campus map', onClick: groundClick })}>
+      <Scenery doors={doors} gateIsBuilding={gateIsBuilding} workplace={workplaceNames} />
       {!compact && <path className="cm-route-line" d={routeD ?? ''} aria-hidden="true" data-testid="cm-route-line" />}
       {!compact && spot && (
         <g className="cm-drop-pin" transform={`translate(${spot.x} ${spot.y})`} aria-hidden="true" data-testid="cm-drop-pin">
@@ -302,7 +306,7 @@ export default function CampusWorldMap(p: CampusMapProps): React.ReactElement {
         <Building key={b.id} b={b} access={accessOf(b)} label={buildingName(b, workplaceNames)} compact={compact} count={counts?.[b.id] ?? 0}
           shown={people?.[b.id]?.shown} onAir={!!onAir?.has(b.id)} here={!compact && atId === b.id} hl={!compact && (targetId === b.id || p.hover === b.id)} showOpen={p.showOpen}
           pin={compact ? undefined : pins[b.id]} tourBadge={compact ? undefined : badges[b.id]} dim={!compact && !!p.dimExcept && p.dimExcept !== b.id}
-          moment={compact ? undefined : p.moments?.badges[b.id]} notifs={compact ? undefined : p.notifs?.[b.id]} urgent={!compact && urgent === b.id} yours={p.yours?.[b.id]} down={!compact && !!p.presenceDown}
+          moment={compact ? undefined : wdBadge(p.moments?.badges[b.id], workplaceNames)} notifs={compact ? undefined : p.notifs?.[b.id]} urgent={!compact && urgent === b.id} yours={p.yours?.[b.id]} down={!compact && !!p.presenceDown}
           onPeek={compact ? undefined : p.onPeek} onPick={pick} setRef={p.buildingRef} />
       ))}
       {live.length > 0 && <LiveFront buildings={live} mark={compact ? null : p.liveMark} />}

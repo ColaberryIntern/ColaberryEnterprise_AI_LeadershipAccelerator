@@ -120,8 +120,8 @@ export const CAMPUS_BUILDINGS: readonly CampusBuilding[] = [
     // C6: open. Neither /portal/internship nor /portal/company is paywalled; C2's 'locked' here was a rule the campus invented.
     explorer: 'open', audiences: EVERYONE, pos: { x: 870, y: 546, w: 100, h: 126 }, kind: 'office', zone: 'ave' },
   { id: 'arcade', name: 'Game Room', workplaceName: 'Break Room',
-    primary: { label: 'Games and leaderboards', route: '/portal/game-room' },
-    rooms: [{ label: 'Game Room', workplaceLabel: 'Games', route: '/portal/game-room' }],
+    primary: { label: 'See games & leaderboards', route: '/portal/game-room' },
+    rooms: [{ label: 'Games & leaderboards', workplaceLabel: 'Games', route: '/portal/game-room' }],
     prefixes: ['/portal/game-room'], explorer: 'open', audiences: EVERYONE, pos: { x: 210, y: 448, w: 108, h: 50 }, kind: 'arcade', zone: 'up' },
   { id: 'gate', name: 'Main Gate', workplaceName: 'Visitor Entrance',
     primary: { label: 'Start on Today', route: '/portal/today' }, // C6: Maya's desk is in this card now; the button goes to Today, so it says so

@@ -55,7 +55,7 @@ function Seg({ d, w }: { d: string; w: number }): React.ReactElement {
 }
 
 /** Two-tone paths: upper buildings to the hub, the avenue, lower buildings down to it, the spine to the gate; the fountain. */
-export function QuadAndPaths({ doors }: { doors: PathDoor[] }): React.ReactElement {
+export function QuadAndPaths({ doors, workplace = false }: { doors: PathDoor[]; workplace?: boolean }): React.ReactElement {
   return (
     <g className="dimmable" aria-hidden="true" data-testid="cm-paths">
       {doors.filter((b) => b.zone === 'up').map((b) => <Seg key={`u-${b.id}`} d={`M${HUB.x} ${HUB.y}L${b.x} ${b.y + 6}`} w={12} />)}
@@ -70,7 +70,7 @@ export function QuadAndPaths({ doors }: { doors: PathDoor[] }): React.ReactEleme
         <circle className="water" cx={500} cy={400} r={20} fill={art('water-hi')} />
         <circle cx={500} cy={400} r={6} fill={art('white')} opacity={0.9} />
       </g>
-      <text x={500} y={448} textAnchor="middle" fontSize={9} fontWeight={700} letterSpacing={2} fill={art('quad-text')} data-testid="cm-quad-label">THE QUAD</text>
+      <text x={500} y={448} textAnchor="middle" fontSize={9} fontWeight={700} letterSpacing={2} fill={art('quad-text')} data-testid="cm-quad-label">{workplace ? 'THE PLAZA' : 'THE QUAD'}</text>
     </g>
   );
 }

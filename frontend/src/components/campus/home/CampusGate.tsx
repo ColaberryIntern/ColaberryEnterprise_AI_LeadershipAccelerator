@@ -87,6 +87,7 @@ export default function CampusGate(p: GateProps): React.ReactElement {
       : 'Your Explorer pass is ready. Wander anywhere: a few buildings are members-only, and you can still peek inside.')
     : staff ? (here ? `${here} ${here === 1 ? 'learner is' : 'learners are'} on campus right now.` : 'The campus is open.')
     : partner ? `${teamN ? `See where your ${teamN} ${teamN === 1 ? 'person learns and builds' : 'people learn and build'}.` : 'See where your team learns and builds.'}${here ? ` ${here} ${here === 1 ? 'person is' : 'people are'} on campus right now.` : ''}`
+    : p.workplace ? (here ? `HQ is open. ${here} ${here === 1 ? 'colleague is' : 'colleagues are'} in right now.` : 'HQ is open.')
     : here ? `The campus is open. ${here} ${who(here)} ${here === 1 ? 'is' : 'are'} already inside.` : 'The campus is open.');
   // The prototype's arch per entrance (renderGate): learners, visitors, staff and partners each have their own; Workplace names say Colaberry Works.
   const house = p.workplace ? 'Colaberry Works' : 'Colaberry';
@@ -106,7 +107,7 @@ export default function CampusGate(p: GateProps): React.ReactElement {
           <h1 id="cm-gate-greeting" data-testid="cm-gate-greeting">{greeting}</h1>
           <p data-testid="cm-gate-sub">{sub}</p>
           {p.audience === 'member' && p.streak !== null && (p.streakPoints ? (
-            <div className="cm-gate-streak" data-testid="cm-gate-streak"><span aria-hidden="true">{'\u{1F525}'}</span>{p.streak > 0 ? <><b>{p.streak}-day streak</b> — tap in to keep it going</> : 'Tap in to start a streak'} (+{p.streakPoints} pts)</div>
+            <div className="cm-gate-streak" data-testid="cm-gate-streak"><span aria-hidden="true">{'\u{1F525}'}</span>{p.streak > 0 ? <><b>Day {p.streak + 1}</b> — tap in to keep your streak going</> : 'Tap in to start a streak'} (+{p.streakPoints} pts)</div>
           ) : p.streak > 0 && (
             <div className="cm-gate-streak" data-testid="cm-gate-streak"><span aria-hidden="true">{'\u{1F525}'}</span><b>{p.streak}-day streak</b></div>
           ))}

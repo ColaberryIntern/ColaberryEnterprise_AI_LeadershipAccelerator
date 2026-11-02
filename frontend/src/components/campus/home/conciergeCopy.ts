@@ -17,7 +17,7 @@ const WRULES: [RegExp, string][] = [
   [/My Progress/g, 'My Performance'], [/Game Room/g, 'Break Room'], [/\bSchedule\b/g, 'Calendar'], [/\bLibrary\b/g, 'Knowledge Base'],
   [/classmates/g, 'colleagues'], [/Classmates/g, 'Colleagues'], [/anywhere on campus/g, 'anywhere at HQ'], [/on campus/g, 'at HQ'], [/Campus/g, 'HQ'],
   [/campus/g, 'HQ'], [/Your cohort/g, 'Your team'], [/your cohort/g, 'your team'], [/Live class/g, 'Live session'], [/live class/g, 'live session'],
-  [/Next class/g, 'Next session'], [/next class/g, 'next session'],
+  [/Next class/g, 'Next session'], [/next class/g, 'next session'], [/\bClass in\b/g, 'Session in'],
 ];
 export const wd = (s: string, workplace: boolean): string => (workplace ? WRULES.reduce((a, [r, t]) => a.replace(r, t), s) : s);
 
@@ -89,6 +89,8 @@ export interface LeadInput {
   onCampus: number | null;
   /** WP-6: Colaberry Live's state (the prototype's per-state lead). */
   liveState?: string;
+  /** C23 WP-9: a partner's real company name (null: not known), as the design's "your Lakeshore Logistics team". */
+  company?: string | null;
 }
 
 /** After the tour (the prototype's finishTour lead): what the tour covered, and your real next step if you have one. */
@@ -109,7 +111,7 @@ export function leadFor(i: LeadInput): string {
   }
   if (i.audience === 'business') {
     const n = i.tourStops;
-    return `Here is where your team learns and builds. ${n ? `Take the ${NUMBER_WORDS[n] ?? n}-stop tour, or explore on your own.` : 'Explore on your own.'}`;
+    return `Here is where your${i.company ? ` ${i.company}` : ''} team learns and builds. ${n ? `Take the ${NUMBER_WORDS[n] ?? n}-stop tour, or explore on your own.` : 'Explore on your own.'}`;
   }
   if (i.audience === 'staff' && i.moment !== 'live') {
     return i.onCampus === null ? 'Here is where everyone is right now.' : `${i.onCampus} ${i.onCampus === 1 ? 'learner' : 'learners'} on campus.`;

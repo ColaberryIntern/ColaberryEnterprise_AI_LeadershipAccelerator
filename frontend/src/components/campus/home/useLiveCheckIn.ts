@@ -37,7 +37,7 @@ export function useLiveCheckIn(audience: CampusAudience, live: CampusLiveNow | n
     let alive = true;
     remember(sid); // claimed before the request, so two quick arrivals send one join
     joinSession(sid, 'classroom')
-      .then((r) => { if (alive) cheer({ big: '✅', title: `Checked in · ${title}`, detail: r.awarded && r.points ? `+${r.points} pts for attending` : 'Your attendance is recorded', ms: 3600 }); })
+      .then((r) => { if (alive) cheer({ big: '✅', title: `Checked in · ${title}`, detail: r.awarded && r.points ? `+${r.points} pts for attending` : 'Attendance recorded when you walked in. Nothing to click.', ms: 3600 }); })
       .catch((e: { response?: { status?: number }; name?: string }) => {
         if (e?.response?.status !== 404) {
           try { const list = readChecked().filter((x) => x !== sid); window.sessionStorage.setItem(CHECKED_KEY, JSON.stringify(list)); } catch { /* no storage */ }

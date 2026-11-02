@@ -34,8 +34,8 @@ describe('trailFor', () => {
     expect(trailFor('/portal/settings', campusBuildingsFor('member'), false)).toEqual([{ label: 'Campus' }]);
   });
 
-  it('the Game Room (C10) reads Campus > Game Room > Game Room', () => {
-    expect(trailFor('/portal/game-room', campusBuildingsFor('member'), false).map((c) => c.label)).toEqual(['Campus', 'Game Room', 'Game Room']);
+  it('the Game Room (C10) reads Campus > Game Room > Games & leaderboards (WP-11: the design\'s room name)', () => {
+    expect(trailFor('/portal/game-room', campusBuildingsFor('member'), false).map((c) => c.label)).toEqual(['Campus', 'Game Room', 'Games & leaderboards']);
   });
 
   it('honors Workplace names', () => {
