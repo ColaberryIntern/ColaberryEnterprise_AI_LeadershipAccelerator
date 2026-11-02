@@ -49,7 +49,7 @@ const EXPLORER: CopyTable = {
 
 const BUSINESS: CopyTable = {
   lecture: { title: 'Where they learn', what: 'The weekly lessons and live sessions your people attend. Their check-ins record attendance.', can: ['See how the program is laid out'], tip: 'Attendance comes from check-ins during live sessions.' },
-  studio: { title: 'Where they build', what: 'Your people work real projects task by task, the way an engineering team works.', can: ['See how project work is organized'], tip: 'Shipped work becomes evidence in their portfolios.' },
+  studio: { title: 'Where they build', what: 'Your people work real projects task by task, the way an engineering team works.', can: ['See how project work is organized'], tip: 'Every shipped build becomes evidence in their portfolio.' },
   testing: { title: 'Where they get certification-ready', what: 'Knowledge checks and practice that prepare them for certification.', can: ['See the knowledge checks they take'], tip: 'Short checks show where each person should focus.' },
   commons: { title: 'Where they connect', what: 'A hallway of live rooms for study groups, pair work and one-on-ones, and AI staff desks for help.', can: ['Join a live room'], tip: 'Reese, the AI mentor, helps your people when they are stuck.' },
   gallery: { title: 'Where they show their work', what: 'Each person\'s work collected into a portfolio others can view.', can: ['Browse the showcase'], tip: 'Portfolios fill in as they ship project work.' },

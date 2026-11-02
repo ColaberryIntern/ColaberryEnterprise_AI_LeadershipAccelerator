@@ -97,7 +97,7 @@ const NotificationBell: React.FC<{ onDismissed?: () => void }> = ({ onDismissed 
             {count > 0 && <button type="button" onClick={onReadAll}>Mark all read</button>}
           </div>
           {items === null && <div className="cm-empty">Loading…</div>}
-          {items !== null && items.length === 0 && <div className="cm-empty">No notifications yet.</div>}
+          {items !== null && items.length === 0 && <div className="cm-empty">You’re all caught up.</div>}
           {items?.map((n) => (
             <button type="button" key={n.id} className={`cm-notif${n.read ? '' : ' unread'}`} onClick={() => onItem(n)}>
               <Avatar name={n.actor?.display_name ?? '?'} src={n.actor?.avatar_url ?? null} size="sm" />

@@ -463,7 +463,7 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge, condens
         todayBadge={todayBadge} isStaff={isStaff} hasFullAccess={hasFullAccess} cohortName={cohortName}
         footer={campus.enabled ? (
           <button type="button" className="cm-link cm-switch-back" data-testid="cm-use-campus" onClick={() => campus.updateSettings({ nav: 'campus' })}>
-            Switch to campus map
+            <span aria-hidden="true">🗺 </span>Switch to the campus view
           </button>
         ) : undefined}
       />

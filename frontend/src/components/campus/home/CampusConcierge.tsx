@@ -148,7 +148,7 @@ export default function CampusConcierge(p: ConciergeProps): React.ReactElement {
   const liveB = p.live?.buildingId ? buildings.find((b) => b.id === p.live!.buildingId) : undefined;
   const moment = momentOf({ live: !!p.live, justToured: !!p.justToured, presenceError: p.presenceError, classSoon: !!p.urgent, quiet });
   const lead = leadFor({ audience, moment, firstName: p.firstName, workplace: wp, buildings, liveAt: liveB ? buildingName(liveB, wp) : null, next,
-    dutyNames: desks.filter((d) => d.on_duty).map((d) => d.name), tourStops: p.tourStops?.length ?? null, liveState: p.live?.state,
+    dutyNames: desks.filter((d) => d.on_duty).map((d) => d.name), tourStops: p.tourStops?.length ?? null, liveState: p.live?.state, company: p.team?.company ?? null,
     onCampus: p.presence && !p.presenceError ? pulseOf(p.presence, buildings).total : null });
   const nextAny = p.stops?.find((s) => !s.done) ?? null;
   const hover = p.onHover ?? (() => undefined);

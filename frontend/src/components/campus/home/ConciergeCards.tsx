@@ -112,7 +112,7 @@ export function ExplorerPass({ buildings, accessOf, workplaceNames, path }: {
       <div className="cm-pass-h"><span className="cm-pass-tag">EXPLORER PASS</span><span>No card needed</span></div>
       <div className="cm-pass-grid">
         <div><b>Open to you now</b>{list(usable.map((b) => `${buildingName(b, workplaceNames)}${accessOf(b) !== 'open' ? ` (${accessOf(b)})` : ''}`))}</div>
-        <div><b>Enrolling opens</b>{list(path.opens, 'is-locked')}</div>
+        <div><b>With enrollment</b>{list(path.opens, 'is-locked')}</div>
       </div>
       <Link to={path.cta.to} className="cm-btn-red" style={{ marginTop: 12 }} data-testid="cm-cc-enroll">{path.cta.label}</Link>
     </div>

@@ -86,7 +86,7 @@ export function CabinetModal({ game, onClose }: { game: GameId; onClose: () => v
           <span className="pill">{hud.score.toLocaleString('en-US')}</span>
           <span className="pill">Lv {hud.level}{hud.lives > 0 ? ` · ${'♥'.repeat(Math.min(hud.lives, 5))}` : ''}</span>
           <span className={`pill time${cap.leftS < 60 ? ' is-low' : ''}`} data-testid="gr-cab-time">⏱ {mmss(cap.leftS)}</span>
-          <button type="button" className="gr-cab-x" onClick={() => { if (cap.status === 'playing') void end(last.current, 'over'); onClose(); }} aria-label="Close the cabinet">✕</button>
+          <button type="button" className="gr-cab-x" onClick={() => { if (cap.status === 'playing') void end(last.current, 'over'); onClose(); }} aria-label="Close game">✕</button>
         </header>
         <div className="gr-cab-screen">
           {cap.status === 'playing' && !over && <GameCanvas key={round} engine={info.engine} running onOver={onOver} onScore={onScore} onHud={setHud} hideHud label={info.name} />}

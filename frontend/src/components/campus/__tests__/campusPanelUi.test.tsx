@@ -177,8 +177,9 @@ describe('the gate\'s streak line (Q9)', () => {
   const gate = (streak: number, streakPoints: number | null) => render(<CampusGate audience="member" firstName="Ali" fullName="Ali M" initials="AM" rung={null} points={null}
     streak={streak} streakPoints={streakPoints} online={null} workplace={false} hasTour reduceMotion now={new Date()} onEnter={() => undefined} />);
   it('unclaimed: what walking in claims, the server\'s points; a first day says so; claimed: the streak only', () => {
+    // WP-11 (gap A1.12, D:2717): before the claim it names the day walking in makes (the run so far + 1)
     gate(2, 5);
-    expect(q('[data-testid="cm-gate-streak"]')!.textContent).toBe('🔥2-day streak — tap in to keep it going (+5 pts)');
+    expect(q('[data-testid="cm-gate-streak"]')!.textContent).toBe('🔥Day 3 — tap in to keep your streak going (+5 pts)');
     gate(0, 5);
     expect(q('[data-testid="cm-gate-streak"]')!.textContent).toBe('🔥Tap in to start a streak (+5 pts)');
     gate(0, null);

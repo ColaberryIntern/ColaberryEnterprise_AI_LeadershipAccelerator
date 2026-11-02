@@ -163,7 +163,7 @@ export default function BuildingCard({ building: b, access, workplaceNames, onCl
         {children}
 
         <div className="cm-arrive-foot">
-          <button type="button" className="cm-btn-line" onClick={onClose} data-testid="cm-arrive-back">&larr; Back to the Quad</button>
+          <button type="button" className="cm-btn-line" onClick={onClose} data-testid="cm-arrive-back">&larr; {workplaceNames ? 'Back to the Plaza' : 'Back to the Quad'}</button>
           {onElsewhere && <button type="button" className="cm-btn-line" onClick={onElsewhere} data-testid="cm-arrive-elsewhere">Go somewhere else</button>}
         </div>
       </div>
