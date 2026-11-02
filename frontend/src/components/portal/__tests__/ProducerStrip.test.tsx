@@ -7,6 +7,7 @@ import { act } from 'react-dom/test-utils';
 import ProducerStrip from '../ProducerStrip';
 import type {
   CommandAvailability, LiveAudienceResult, ProducerOccurrence, ProducerStateResult,
+  RundownResult,
 } from '../../../services/broadcastProducer';
 
 /**
@@ -56,15 +57,25 @@ let root: Root;
 let loadState: jest.Mock;
 let sendCommand: jest.Mock;
 let loadAudience: jest.Mock;
+let loadRundown: jest.Mock;
 
 async function render(
   state: ProducerStateResult = ok(),
   result: { outcome: string; currentVersion?: number } = { outcome: 'sent' },
   audience: LiveAudienceResult = { outcome: 'ok', watchingNow: 0 },
+  /**
+   * The rundown defaults to `none`, so the tests below describe the strip alone.
+   *
+   * It is stubbed rather than left to fetch for itself: the rundown is a child of this
+   * component, there is no global axios mock in this app, and a child making a real request
+   * inside a parent's unit test is unmocked I/O in every one of the tests in this file.
+   */
+  rundown: RundownResult = { outcome: 'none' },
 ) {
   loadState = jest.fn().mockResolvedValue(state);
   sendCommand = jest.fn().mockResolvedValue(result);
   loadAudience = jest.fn().mockResolvedValue(audience);
+  loadRundown = jest.fn().mockResolvedValue(rundown);
 
   container = document.createElement('div');
   document.body.appendChild(container);
@@ -76,6 +87,7 @@ async function render(
         loadState={loadState}
         sendCommand={sendCommand}
         loadAudience={loadAudience}
+        loadRundown={loadRundown}
       />,
     );
   });
@@ -530,5 +542,58 @@ describe('the viewer count', () => {
     expect(find('producer-audience')).toBeNull();
     // ...and the strip itself is untouched: the state read is what authorizes it.
     expect(find('producer-strip')).not.toBeNull();
+  });
+});
+
+describe('the rundown under it', () => {
+  const plan = (over: Partial<RundownResult> = {}): RundownResult => ({
+    outcome: 'ok',
+    totalMinutes: 75,
+    slideCount: 9,
+    positionState: 'on_segment',
+    currentSegmentId: 'build-map',
+    currentSlideIndex: 3,
+    currentSlideTitle: 'Safety rules',
+    deckClaimedTitle: null,
+    segments: [
+      {
+        id: 'result-preview', label: 'Result preview', planned_start_min: 0, planned_end_min: 5,
+        first_slide: 0, last_slide: 1, slide_count: 2, standing: 'done',
+      },
+      {
+        id: 'build-map', label: 'Build map', planned_start_min: 5, planned_end_min: 25,
+        first_slide: 2, last_slide: 4, slide_count: 3, standing: 'current',
+      },
+    ],
+    ...over,
+  });
+
+  it('mounts under the controls and is keyed on the session', async () => {
+    freeze();
+    await render(onAir(), undefined, undefined, plan());
+    expect(find('producer-rundown')).not.toBeNull();
+    expect(loadRundown).toHaveBeenCalledWith('s1');
+  });
+
+  it('NEVER REACHES A VIEWER, because the strip it lives in does not render at all', async () => {
+    // The rundown names the segments and their planned windows, which is presenter material.
+    // It is inside the strip rather than beside it precisely so there is one authorization
+    // decision for both — and the strip's is the server's answer to the state read.
+    await render({ outcome: 'forbidden' }, undefined, undefined, plan());
+    expect(find('producer-rundown')).toBeNull();
+    expect(loadRundown).not.toHaveBeenCalled();
+  });
+
+  it('SHARES THE STRIP\'S CLOCK rather than starting a second one', async () => {
+    /**
+     * The pace verdict and the clock in the header are two readings of the same instant, and a
+     * producer compares them. `onAir()` starts content 4:12 ago, which is inside the Build map
+     * segment's 5–25 minute window — so a verdict measured from the same anchor reads on time,
+     * while one measured from the scheduled hour would not.
+     */
+    freeze();
+    await render(onAir(), undefined, undefined, plan());
+    expect(find('producer-clock')!.textContent).toBe('on air 4:12');
+    expect(find('rundown-pace')!.textContent).toBe('on time');
   });
 });

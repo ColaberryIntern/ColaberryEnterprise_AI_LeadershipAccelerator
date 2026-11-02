@@ -61,6 +61,28 @@ export interface ClipMarker {
   slideTitle: string;
 }
 
+/**
+ * Whether the deck is looking at a different slide list than the server.
+ *
+ * An open deck tab is a frozen snapshot: the slide list was baked into the page when Present
+ * was pressed. Edit the timeline mid-class and the server's spec no longer matches what the
+ * instructor is looking at, so index 12 is a different slide on each side. `getPresenterNotes`
+ * already refuses in that case rather than show notes for the wrong slide, and a marker has the
+ * same obligation — a silently mislabeled clip is harder to notice than a blank note.
+ *
+ * EXPORTED BECAUSE A SECOND READER NOW DEPENDS ON THE SAME ANSWER. The producer rundown
+ * (`broadcastRundown.ts`) resolves the current segment from the same index, so a second copy of
+ * this comparison could let it report a confident position while every marker for that same
+ * advance is being discarded here. One predicate means the two cannot disagree.
+ *
+ * A deck that sends no title cannot be checked and is taken at its word — that is the older
+ * deck's behavior, preserved on purpose rather than tightened into a refusal that would reject
+ * every advance from a tab that predates the field.
+ */
+export function deckHasDrifted(deckTitle: string | null, serverTitle: string): boolean {
+  return Boolean(deckTitle) && deckTitle !== serverTitle;
+}
+
 export type MarkerDecision =
   | { record: true; marker: ClipMarker }
   | {
@@ -100,16 +122,10 @@ export function decideClipMarker(input: MarkerInput): MarkerDecision {
   }
   if (!slide) return { record: false, reason: 'slide_not_resolvable' };
 
-  /**
-   * DRIFT GUARD, copied from `getPresenterNotes` because it is the same hazard.
-   *
-   * An open deck tab is a frozen snapshot: the slide list was baked into the page when Present
-   * was pressed. Edit the timeline mid-class and the server's spec no longer matches what the
-   * instructor is looking at, so index 12 is a different slide on each side. Presenter notes
-   * already refuse in that case rather than show notes for the wrong slide; a marker has the
-   * same obligation, and a silently mislabelled clip is harder to notice than a blank note.
-   */
-  if (deckTitle && slide.title !== deckTitle) {
+  // DRIFT GUARD, originally copied from `getPresenterNotes` because it is the same hazard. The
+  // comparison itself now lives in `deckHasDrifted` above, because the producer rundown reads
+  // the same index and must not be able to reach a different verdict about it.
+  if (deckHasDrifted(deckTitle, slide.title)) {
     return { record: false, reason: 'deck_drifted' };
   }
 

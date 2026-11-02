@@ -83,6 +83,30 @@ export function hms(ms: number): string {
 }
 
 /**
+ * How long the class has been running, or null when nothing honest can be said.
+ *
+ * EXPORTED SO THE SKEW RULE STAYS IN ONE PLACE. The segment rundown needs the same elapsed
+ * time to judge the show against its plan, and a second copy of "clamp small drift, refuse
+ * large" would let the clock show `on air 4:12` beside a pace verdict computed from a start the
+ * clock had already rejected. The two readings sit next to each other in the strip, so they
+ * must be measured from the same instant or neither can be trusted.
+ *
+ * Only `content_started_at` — never `scheduled_start_at`. The plan's minute offsets are
+ * measured from when content actually began, which is the anchor `broadcastClipMarkerPolicy`
+ * calls the only trustworthy class clock, and the one a clip's timecode is already counted
+ * from. Measuring the plan from the scheduled hour instead would report a class that started
+ * ten minutes late as ten minutes behind for its whole duration.
+ */
+export function elapsedSinceContentStart(
+  o: Pick<Timed, 'content_started_at'>, now: number,
+): number | null {
+  const started = instantOf(o.content_started_at);
+  if (started === null) return null;
+  if (started - now > SKEW_GRACE_MS) return null;
+  return Math.max(0, now - started);
+}
+
+/**
  * Whether this reading changes on its own and so needs a one-second tick.
  *
  * Separate from `producerClock` on purpose: the tick has to be decided BEFORE `now` is known,

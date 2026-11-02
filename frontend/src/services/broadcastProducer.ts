@@ -160,6 +160,90 @@ export async function readProducerState(sessionId: string): Promise<ProducerStat
   }
 }
 
+/** Where a segment stands relative to the one on air. The server decides this, never the client. */
+export type SegmentStanding = 'done' | 'current' | 'upcoming';
+
+/** One row of the rundown: an authored segment and its planned window. */
+export interface RundownSegment {
+  id: string;
+  label: string;
+  /** Minutes from content start, as authored and scaled to this session's real duration. */
+  planned_start_min: number;
+  planned_end_min: number;
+  first_slide: number;
+  last_slide: number;
+  slide_count: number;
+  standing: SegmentStanding;
+}
+
+/**
+ * Whether the show's position can be believed. Mirrors the server's own union.
+ *
+ * `deck_drifted` is the one worth reading twice: the instructor's Present tab is on a different
+ * slide list than the server, so the index means different things on each side — and every clip
+ * marker for that advance is being discarded for the same reason, with nothing but a server log
+ * to say so.
+ */
+export type RundownPositionState = 'on_segment' | 'deck_drifted' | 'unresolvable' | 'no_position';
+
+export type RundownOutcome = 'ok' | 'none' | 'forbidden' | 'failed';
+
+export interface RundownResult {
+  outcome: RundownOutcome;
+  totalMinutes?: number;
+  slideCount?: number;
+  positionState?: RundownPositionState;
+  currentSegmentId?: string | null;
+  currentSlideIndex?: number | null;
+  currentSlideTitle?: string | null;
+  deckClaimedTitle?: string | null;
+  segments?: RundownSegment[];
+}
+
+/**
+ * The show's rundown: the authored segments, their planned windows, and which one is on air.
+ *
+ * A SECOND REQUEST, NOT FOUR MORE FIELDS ON THE PRODUCER READ. The producer read is what puts a
+ * class on air, and the rundown is built over the week blueprint, the session, the cohort and
+ * the saved kit config — so folding it in would put a content problem in front of the Go Live
+ * button. The audience read is the standing precedent for keeping those apart.
+ *
+ * `none` is a real answer rather than a failure: a session with no week blueprint has no plan to
+ * show, and most sessions are taught without ever being broadcast at all.
+ */
+export async function readSessionRundown(sessionId: string): Promise<RundownResult> {
+  try {
+    const res = await portalApi.get<{
+      planned?: boolean;
+      total_minutes?: number;
+      slide_count?: number;
+      position_state?: RundownPositionState;
+      current_segment_id?: string | null;
+      current_slide_index?: number | null;
+      current_slide_title?: string | null;
+      deck_claimed_title?: string | null;
+      segments?: RundownSegment[];
+    }>(`/api/portal/broadcasts/session/${sessionId}/rundown`);
+
+    if (res.data?.planned !== true) return { outcome: 'none' };
+    return {
+      outcome: 'ok',
+      totalMinutes: res.data.total_minutes ?? 0,
+      slideCount: res.data.slide_count ?? 0,
+      positionState: res.data.position_state ?? 'no_position',
+      currentSegmentId: res.data.current_segment_id ?? null,
+      currentSlideIndex: res.data.current_slide_index ?? null,
+      currentSlideTitle: res.data.current_slide_title ?? null,
+      deckClaimedTitle: res.data.deck_claimed_title ?? null,
+      segments: res.data.segments ?? [],
+    };
+  } catch (err: unknown) {
+    const status = (err as { response?: { status?: number } })?.response?.status;
+    if (status === 403 || status === 401 || status === 404) return { outcome: 'forbidden' };
+    return { outcome: 'failed' };
+  }
+}
+
 /**
  * Four answers, and the second one is the reason this is not a plain `number | null`.
  *

@@ -51,6 +51,19 @@ jest.mock('../../controllers/broadcastController', () => ({
     res.json({ reached: 'producer', isStaff: req.participant?.isStaff ?? null }),
 }));
 
+/**
+ * P4-02's segment rundown. FIFTH time the trap above has caught a change to this router, and
+ * the first time it has been a SECOND controller module rather than one more handler on the
+ * existing one — so the mock above could not cover it however complete it was. The rundown has
+ * its own file because `broadcastController.ts` is past CLAUDE.md's 500-line hard ceiling, and
+ * the rule there is that the next change to such a file splits it before adding code.
+ */
+jest.mock('../../controllers/broadcastRundownController', () => ({
+  getSessionRundown: (
+    req: { participant?: { isStaff?: boolean } }, res: { json: (b: unknown) => void },
+  ) => res.json({ reached: 'rundown', isStaff: req.participant?.isStaff ?? null }),
+}));
+
 // participantAuth calls logAuthFailure on every rejected token, which reaches
 // emitAiEvent -> AiEvent.create() -> a real database. With no DATABASE_URL that attempt
 // just logs and resolves, but it is unmocked I/O inside a route test: it made
@@ -97,6 +110,8 @@ const DISCOVERY = '/api/portal/broadcasts/active';
  * not collide with `/:id/audience` despite both ending in a literal.
  */
 const PRODUCER = `/api/portal/broadcasts/session/${OCC}/producer`;
+/** P4-02's segment rundown — the same session-keyed shape, and the same guard chain. */
+const RUNDOWN = `/api/portal/broadcasts/session/${OCC}/rundown`;
 
 function token(extra: Record<string, unknown> = {}): string {
   return jwt.sign(
@@ -175,6 +190,9 @@ describe('the flag gate runs before auth', () => {
     // SHAPE — three segments rather than two — so "the gate is on every route" is a claim
     // about that shape too, not only about the occurrence-keyed group.
     expect((await request(app).get(PRODUCER)).status).toBe(404);
+    // And the rundown, whose handler lives in a second controller module — a route wired from
+    // a different file is exactly the kind that gets a guard chain copied with one link missing.
+    expect((await request(app).get(RUNDOWN)).status).toBe(404);
   });
 });
 
@@ -184,6 +202,26 @@ describe('mount order', () => {
       .post(COMMAND).set('Authorization', `Bearer ${token()}`).send({ command: 'go_live', expected_version: 1 });
     expect(res.status).toBe(200);
     expect(res.body.reached).toBe('command');
+  });
+
+  it('reaches the rundown with the staff context attached', async () => {
+    /**
+     * The one thing a route test can prove about the rundown: that it runs the SAME guard chain
+     * as the producer read. The handler decides staff-only from `req.participant.isStaff`, so a
+     * route that forgot `attachCommunityStaffContext` would answer 403 to Ali himself — and a
+     * route wired from a second controller file is exactly where a chain gets copied one link
+     * short.
+     */
+    const res = await request(buildApp({ flag: 'true' }))
+      .get(RUNDOWN).set('Authorization', `Bearer ${token()}`);
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ reached: 'rundown', isStaff: true });
+  });
+
+  it('401s an unauthenticated rundown read before any handler sees it', async () => {
+    const res = await request(buildApp({ flag: 'true' })).get(RUNDOWN);
+    expect(res.status).toBe(401);
+    expect(res.body.reached).toBeUndefined();
   });
 
   it('401s every request when mounted BELOW adminRoutes — the bug /r/, /i/ and /m/ each hit live', async () => {
@@ -313,6 +351,30 @@ describe('rate limits', () => {
     expect(over.body).toEqual({ error: 'RateLimited', reason: 'too_many_producer_reads' });
 
     // 61 producer reads in, and the command budget is untouched.
+    const command = await request(app).post(COMMAND).set('Authorization', auth()).send({ command: 'end', expected_version: 1 });
+    expect(command.status).toBe(200);
+    expect(command.body.reached).toBe('command');
+  });
+
+  it('puts the rundown on the producer READ budget, not the command one', async () => {
+    /**
+     * The rundown shares `producerStateLimiter` with the producer read, on purpose: both are
+     * polls by the same control in the same minute, and 60/min is sized for the pair (12/min
+     * for the state read at 5s, 6/min for the rundown at 10s). What must never happen is the
+     * rundown spending the COMMAND budget — a reference panel throttling Go Live is the exact
+     * failure the audience route's note already records.
+     */
+    const app = buildApp({ flag: 'true' });
+
+    await Promise.all(
+      Array.from({ length: 61 }, () => request(app).get(RUNDOWN).set('Authorization', auth())),
+    );
+    // Shared budget: the producer read is throttled too, which is the intended grouping.
+    const read = await request(app).get(PRODUCER).set('Authorization', auth());
+    expect(read.status).toBe(429);
+    expect(read.body).toEqual({ error: 'RateLimited', reason: 'too_many_producer_reads' });
+
+    // ...and the commands are untouched.
     const command = await request(app).post(COMMAND).set('Authorization', auth()).send({ command: 'end', expected_version: 1 });
     expect(command.status).toBe(200);
     expect(command.body.reached).toBe('command');

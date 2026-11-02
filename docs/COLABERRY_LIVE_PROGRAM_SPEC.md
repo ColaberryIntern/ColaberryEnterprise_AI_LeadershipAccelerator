@@ -169,8 +169,14 @@ command — see §9 item 3 for what had to be solved first.
 
 **Live clock and viewer count added 2026-11-01.** Both were already on the wire and neither was
 rendered. Of the remaining P4-02 scope, **preview-vs-program is not a software task in this repo**
-and the **segment rundown** is the only item still open — see §9 item 3 for both. The task is not
-closed; the part that stopped an airing is.
+and the **segment rundown** was the only item still open — see §9 item 3 for both.
+
+**Segment rundown added 2026-11-02, which closes every software item in P4-02.** The segments,
+their planned windows and the show's position have all existed for weeks; the only surface that
+joined them was the instructor's own Present tab, which is also the screen-recording source and
+so is the one window a producer does not have. What remains in P4-02 is preview-vs-program, and
+that belongs to the studio in P4-01/R5 rather than to this repo. The reading it produced is in
+§9 item 3; the finding it produced is §8 finding 6.
 
 ---
 
@@ -281,7 +287,7 @@ X, when they reach the slide X was authored onto."
 | 8 | Builder pulse | **PARTIAL** — the aggregate exists and is **instructor-only**; never exposed to viewers |
 | 9 | Claude / Claude Code instructions | **PARTIAL**, and the two phone surfaces differ. Authored with `pasteWhere`/`ccMode`/`rescue`. `CompanionDeck` renders none of the three (`CompanionDeck.tsx:174-178`); the check-in page renders `pasteWhere` in its copy-button label and neither of the other two (`ClassCheckinPage.tsx:326`). Both render `expectedResult` and `stopCondition`. `ccMode` and `rescue` reach no viewer on either surface. |
 | 10 | broadcast graphics / lower thirds | **NOT BUILT** — no graphics layer of any kind exists |
-| 11 | "mark this moment" clip candidates | **BUILT server-side, but automatic.** Every slide advance writes a marker. In-points only. The admin read route has no UI caller, and the deck's own `M` key still writes to an in-memory array lost on tab close. |
+| 11 | "mark this moment" clip candidates | **BUILT, and automatic rather than marked.** Every slide advance writes a marker; nobody presses anything. Stored as in-points only — the Class Kit panel and the CSV pair them into ranges on read (2026-11-01), so the last clip of an airing legitimately has no end. Two things still open: the deck's own `M` key writes to an in-memory array lost on tab close, and a `deck_drifted` advance records nothing at all (§9 item 3). *Row corrected 2026-11-02: it said the admin read route had no UI caller, which stopped being true on 2026-11-01.* |
 | 12 | CTA | **PARTIAL** — a projected slide only; `CompanionState` has no CTA field |
 | 13 | replay metadata | **PARTIAL** — lifecycle works; no chapters, no description, and nothing joins the clip markers to the replay |
 
@@ -307,7 +313,7 @@ X, when they reach the slide X was authored onto."
 | Second screen | persistent QR resolves to the current session context, server decides | **BUILT** — though "current" means the deck's current slide |
 | Second screen | context QR deep-links to a poll/prompt | **NOT BUILT — deliberately rejected**, same decision as DOC 03 row 5 |
 
-### Four findings worth acting on independently of the ladder
+### Findings worth acting on independently of the ladder
 
 1. **The laptop "Watch now" button links to the page it is on.** `resolveSessionMoment` returns
    `watchUrl = sessionWorkspaceUrl(sessionId)` (`broadcastSessionLinks.ts:111`), which is
@@ -499,6 +505,37 @@ X, when they reach the slide X was authored onto."
    one changes the terminal-state set the health loop and discovery both read, the other changes
    occurrence identity — and either one makes finding 3 live on the day it ships.
 
+6. **The show has two class clocks and they have never met.** Found 2026-11-02 while building the
+   segment rundown, which could not be built without choosing one of them.
+
+   | Clock | Where minute zero comes from | What it governs |
+   |---|---|---|
+   | The instructor's | `localStorage.kit_start_<sessionId>`, set by a **Start class** button in the Present tab (`classKit/kitDeckScript.ts`) | The deck's pace bar: ON TIME / BEHIND n MIN, and the instructor-facing advice that reads off it |
+   | The broadcast's | `content_started_at`, a column written by the `mark_content_started` producer command | The free-preview window, every clip marker's timecode, the producer strip's clock, and now the rundown |
+
+   Neither reads the other. The consequences are asymmetric, and that asymmetry is the finding:
+
+   - The broadcast's anchor is **enforced** — `go_live` refuses with `ContentNotStarted` unless it
+     is set, because going live without it would leave every viewer's preview window unbounded.
+     It cannot be forgotten without the class failing to start.
+   - The instructor's anchor is a **button somebody has to remember**. Forget it and the pace bar
+     reads "Not started" for a class that is on air. Press it twice, or open Present on a second
+     machine, and it reads a different elapsed time — it is per-browser, resettable, and
+     auto-stopped after three hours or when the room empties.
+   - So the two can disagree by any amount, and from 2026-11-02 they disagree **visibly**: the
+     instructor's pace bar and the producer's rundown now show the same reading computed from
+     different starts. `broadcastClipMarkerPolicy.ts` had already picked `content_started_at` and
+     said why — "the only trustworthy class clock" — so the rundown uses the same one, and the
+     clip list and the rundown can never disagree about which second was minute 0.
+
+   **Not fixed here, because the fix is a change to the instructor's surface rather than a
+   cleanup** (§10 decision 6). Seeding the deck's clock from `content_started_at` when the class
+   is airing is a contained change to a 653-line browser script, but it changes what **Start
+   class** means in front of a live room mid-program, and the Present tab doubles as the
+   screen-recording source. That is a product call about the teaching surface, not an
+   implementation detail, and it is the kind of change that should not land in the same week as
+   an airing.
+
 ---
 
 ## 9. Recommended order from here
@@ -618,7 +655,54 @@ production polish. Applying it:
    warning anyone gets before an irreversible action, which is a poor thing to leave as a string
    inside a render. Whether the door should open again is §10 decision 5.
 
-   **Still open in P4-02:** the segment rundown, and only that.
+   **The segment rundown, 2026-11-02 — and P4-02's software scope is now closed.** This is the
+   fourth thing in this item that was fully built, fully authored, and visible to nobody who
+   needed it. The run of show is authored per day kind and scaled to each session's real
+   duration; every slide the kit builder produces carries its segment's planned window; the
+   show's position is `slide_index` in `session_broadcast.state`; and the class clock is
+   `content_started_at`. The one surface that has ever joined them is the deck's own pace bar,
+   inside the Present tab — which is also the screen-recording source, so it is the single window
+   a producer does not have open.
+
+   - `GET /api/portal/broadcasts/session/:sessionId/rundown`, staff-only, on the **producer-read
+     limiter** rather than the command one. A second request rather than four more fields on the
+     producer read, for the reason that read already refuses to carry the audience count: the
+     rundown is built over the week blueprint, the session, the cohort and the saved kit config,
+     and folding it in would put a content problem in front of the Go Live button.
+   - **The segments are derived from the slides, not from a second list.** `KitSpec` carries
+     `segments` too, but the slides each carry the same planned window, and reading one of them
+     means the rundown's windows are by construction the windows the slides claim. A segment
+     holding no slides therefore does not appear — correct for a producer, because the show
+     cannot stop somewhere it has no slide.
+   - **The route deliberately does not return the class clock.** `content_started_at` is already
+     on the producer read, the same page already polls it, and the strip's clock is already
+     computed from it. A second copy could disagree across a slow poll, and the one thing a pace
+     verdict must not do is measure against a different start than the clock beside it. The
+     elapsed time goes through the same `elapsedSinceContentStart` — same anchor, same skew rule.
+   - **The pace rule is the deck's rule, against a better anchor.** BEHIND past the current
+     segment's planned end, AHEAD short of its planned start, with anything under a minute read
+     as on time — because `behind 0 min` is a verdict with no quantity in it, and a producer's
+     smallest available move is to cut or extend a beat. Producers and instructors compare notes
+     mid-class and must not be working from two definitions of "behind".
+
+   **What reading it exposed, and it is the same shape as every other first reader in this
+   subsystem: a guard that works, refuses correctly, logs, and is watched by nobody.**
+   `decideClipMarker` refuses with `deck_drifted` when the deck's asserted slide title disagrees
+   with the server's slide at the same index — an open Present tab is a frozen snapshot, so a
+   timeline edited mid-class makes index 12 a different slide on each side. The refusal is right.
+   Its only output is a server log line. While it lasts, **every clip marker for that class is
+   being discarded and the clip list comes out short**, and the only person who could fix it (by
+   re-opening Present) has no way to know. The rundown now refuses to report a position in that
+   state, names both titles, and says what it is costing. The comparison itself moved into one
+   exported predicate so the two surfaces cannot reach different verdicts about the same index —
+   a rundown confidently highlighting a segment while markers are being dropped for that very
+   advance is the failure worth preventing.
+
+   Worth saying plainly: **drift has never been observed.** Markers have only existed since
+   2026-10-24, the one production airing was 2026-10-20, and no airing has been run since. The
+   guard is a hazard with a test, not an incident with a fix.
+
+   **Still open in P4-02:** preview-vs-program only, and it is not software — see above.
 4. **The desktop viewer — R4's largest hole. Built 2026-10-31.** Five of DOC 04's six desktop
    requirements were missing: Prompt, Poll, Chat/Builder Room, build progress and Claude Code
    controls all existed only in the phone branch.
@@ -726,6 +810,21 @@ plainly because they cut against the instinct to build:
 
    Either A or B makes finding 3's participation keying load-bearing on the day it ships, so that
    work is a precondition and not a follow-up.
+6. **Should the instructor's pace bar read the broadcast's clock?** Raised 2026-11-02 by §8
+   finding 6. The deck's pace bar measures from a **Start class** button in `localStorage`; every
+   other clock in the system measures from `content_started_at`, which `go_live` will not proceed
+   without. Since 2026-11-02 the producer's rundown shows the second one, so an instructor and a
+   producer comparing notes can now see two different answers to "how far behind are we".
+
+   | Option | What it costs |
+   |---|---|
+   | **A. Seed the deck's clock from `content_started_at`** when the class is airing, leaving the button as a manual override for a class taught off air | One change to a 653-line browser script, no schema. But it changes what **Start class** does in front of a live room, and the Present tab is also the screen-recording source — so it should not land in the same week as an airing. |
+   | **B. Leave them separate and label them** — "class clock" on the deck, "on air" in the strip | Costs nothing and ships today. The two numbers still differ, and somebody will eventually act on the wrong one. |
+
+   My recommendation is **A, after Test 2 rather than before it** — Test 2 is the first run that
+   will produce real evidence of how far apart the two actually drift, and that evidence is worth
+   more than the change is urgent. Either way it is a decision about the instructor's surface,
+   which is why it is here rather than done.
 
 ---
 

@@ -26,6 +26,8 @@ import { signPlayback, computeGrantExpiry } from '../services/broadcast/broadcas
 import { resolvePlaybackTarget } from '../services/broadcast/broadcastRecordingBinding';
 import { signLivePlayback, CloudflareStreamError } from '../services/broadcast/providers/cloudflareStreamProvider';
 import BroadcastOccurrence from '../models/BroadcastOccurrence';
+// The producer test, moved out when a second controller needed it — see participantStaff.ts.
+import { isStaff } from '../middlewares/participantStaff';
 
 /**
  * Broadcast HTTP surface.
@@ -63,10 +65,6 @@ function respondError(res: Response, err: any, event: string): void {
   }
   // Never echo err.message on a 5xx: it can carry query fragments or provider detail.
   res.status(status).json({ error: status >= 500 ? 'Internal error' : (err?.reason || err?.message || error_class) });
-}
-
-function isStaff(req: Request): boolean {
-  return Boolean((req.participant as any)?.isStaff);
 }
 
 /**
