@@ -70,7 +70,7 @@
         { href:"sales/index.html", icon:"ri-external-link-line", t:"Plans & enrollment", d:"Open the Sales hub for pricing and to enroll." }
       ] },
     { key:"compliance", label:"Compliance & Trust", icon:"ri-shield-check-line", color:"var(--amber-500)", status:"active", dataGlobal:"COMPLIANCE_DATA",
-      blurb:"Colaberry's credentials and track record: the regulated career school, more than 5,000 careers since 2012, student protections, and how we communicate.",
+      blurb:"Colaberry's credentials and track record: the regulated career school, 1,000+ hires since 2012, student protections, and how we communicate.",
       resources:null }
   ];
   function domain(k){ for(var i=0;i<DOMAINS.length;i++){ if(DOMAINS[i].key===k) return DOMAINS[i]; } return null; }
@@ -146,7 +146,7 @@
       'click PL call kbChart("product","pricing")', 'click TR call kbChart("product","track")'
     ]),
     compliance: mm("LR", [
-      'REG["Regulated school<br/>COA U5306"] --> TR["Track record<br/>5,000+ since 2012"] --> SP["Student protections"] --> TP["Transparency"]',
+      'REG["Regulated school<br/>COA U5306"] --> TR["Track record<br/>1,000+ hires since 2012"] --> SP["Student protections"] --> TP["Transparency"]',
       sty(["REG","TR","SP","TP"],"k"),
       'click REG call kbChart("compliance","regulated")', 'click TR call kbChart("compliance","track record")',
       'click SP call kbChart("compliance","protect")', 'click TP call kbChart("compliance","transparen")'

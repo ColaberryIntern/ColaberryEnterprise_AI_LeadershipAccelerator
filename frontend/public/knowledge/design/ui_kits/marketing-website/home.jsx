@@ -43,7 +43,7 @@ function HomeView({ go }) {
             <div className="cb-avatar-group">
               <HAvatar name="Mika Rivera" size="sm" /><HAvatar name="Owen Brooks" size="sm" /><HAvatar name="Ada Lovelace" size="sm" /><HAvatar name="Sam Okafor" size="sm" />
             </div>
-            <span><strong>5,000+</strong> careers changed since 2012</span>
+            <span><strong>1,000+</strong> hires since 2012</span>
           </div>
         </div>
         <div className="cbsite-hero__media">
@@ -56,7 +56,7 @@ function HomeView({ go }) {
 
       {/* STATS */}
       <section className="cbsite-stats">
-        {[['5,000+','Graduates placed'],['2012','Founded for veterans'],['1:1','Mentor support'],['12 wks','To job-ready']].map((s,i)=>(
+        {[['1,000+','Hires'],['2012','Founded for veterans'],['1:1','Mentor support'],['12 wks','To job-ready']].map((s,i)=>(
           <div key={i} className="cbsite-stat"><div className="cbsite-stat__n">{s[0]}</div><div className="cbsite-stat__l">{s[1]}</div></div>
         ))}
       </section>

@@ -59,7 +59,7 @@ a social post, an event flyer, an email header, a one-pager, a slide, an ad. You
 **Tips that make the result great**
 - Ask for **options**: "give me 3 versions" — then tell Claude which one to refine.
 - Name the **brand color** you want to lead with: cherry red (energy), leaf green (growth), berry blue (trust).
-- Keep the **voice**: warm, encouraging, speak to "you", **no emoji**, lead with proof (5,000+ careers, since 2012).
+- Keep the **voice**: warm, encouraging, speak to "you", **no emoji**, lead with proof from the claim registry (1,000+ hires, teaching this since 2012).
 - Want to tweak it? Just say so in plain words: "make the headline bigger", "use the green instead",
   "swap in this photo" (drag a photo in).
 - To download what Claude made, use the **download / export** option on the file it gives you.
@@ -220,9 +220,44 @@ Never `linear` or hard bounces.
 No infinite/looping animation on real content. See the live **Motion** section of `design-system.html`.
 
 ## Voice
-Warm + credible. Sentence case. Speak to **"you."** Lead with proof (5,000+ careers, since 2012).
+Warm + credible. Sentence case. Speak to **"you."** Lead with proof from the claim registry (1,000+ hires, teaching this since 2012).
 Friendly action CTAs ("Apply now", "Enroll today"). **No emoji** in product/web. Reinforce inclusivity
 (no degree/tests required, scholarships, veterans support).
+
+### Proof points: use these, and only these
+
+Every outcome figure that leaves the building has to trace to a row in
+`frontend/src/config/claimsRegistry.ts`. These are the approved ones, with the registry key
+to cite if anyone asks where a number came from:
+
+| Registry key | Use exactly this wording | Status |
+|---|---|---|
+| `trackrecord.students` | 8k+ data students | VERIFIED (8,588, rounded down) |
+| `trackrecord.certified` | 2,500+ certified | VERIFIED (2,844, rounded down) |
+| `trackrecord.hired` | 1,000+ hires | OWNER_ATTESTED (691 recorded + Ali's attestation) |
+| `trackrecord.since2012` | Teaching this since 2012 | VERIFIED |
+
+**Blocked, and why — do not reintroduce these:**
+
+<!-- claim-check:allow-blocked-list — the list below NAMES the blocked claims in order
+     to forbid them, so scripts/checkKnowledgeHubClaims.js skips this region. Keep it
+     small, and close it. -->
+
+- `trackrecord.careers` — "5,000+ careers launched", in any phrasing: *careers built*,
+  *careers changed*, *graduates placed*, *more than 5,000 people into new careers*.
+  Superseded, not fixed. "Careers launched" most naturally means hires, which is 691 — so
+  the figure overstated the outcome by roughly an order of magnitude. If you want an
+  outcome number, use `trackrecord.hired`. If you want a scale number, use
+  `trackrecord.students`; do not swap one for the other to keep the number large.
+- `trackrecord.wageimpact` — "$100M+ in wage impact generated". No methodology was ever
+  located, and its approved routes list is empty.
+
+<!-- claim-check:end -->
+
+This guidance previously told makers to lead with the superseded figure, which
+put the design system and the claim registry in direct contradiction: anyone following this
+file faithfully reintroduced a blocked claim. `scripts/checkKnowledgeHubClaims.js` now fails
+the build if one reappears anywhere under `frontend/public/knowledge/`.
 
 ## Accessibility (WCAG 2.2)
 - Body text on white: `--neutral-800` (13.6:1) or `--text-muted` (5.3:1).
