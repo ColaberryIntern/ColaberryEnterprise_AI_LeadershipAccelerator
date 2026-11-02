@@ -89,6 +89,7 @@ import { ensureProjectLifecycleSchema } from './db/ensureProjectLifecycleSchema'
 import { ensureGovQualificationSchema } from './db/ensureGovQualificationSchema';
 import { ensureGovOpportunityDismissalSchema } from './db/ensureGovOpportunityDismissalSchema';
 import { ensureGovSourceBundleSchema } from './db/ensureGovSourceBundleSchema';
+import { ensureGovExtractionJobSchema } from './db/ensureGovExtractionJobSchema';
 import { ensureGovBuildStoryEvidenceSchema } from './db/ensureGovBuildStoryEvidenceSchema';
 import { ensureGovBuildStoryAssignmentSchema } from './db/ensureGovBuildStoryAssignmentSchema';
 import { ensureGovProposalResponseSchema } from './db/ensureGovProposalResponseSchema';
@@ -2864,6 +2865,10 @@ async function start(): Promise<void> {
   // qualification workspace. A single additive NEW table (no existing table altered); keyed by tenant_id +
   // qualification key + sha256, with the bytes on the uploads volume. See ensureGovSourceBundleSchema.
   await ensureGovSourceBundleSchema();
+  // Gov extraction jobs (gov_extraction_jobs): the background queue for large-ZIP requirements extraction, so the
+  // upload returns a job id immediately instead of extracting in-request (which exceeded the ~100s edge timeout).
+  // A single additive NEW table (no existing table altered). See ensureGovExtractionJobSchema.
+  await ensureGovExtractionJobSchema();
   // Gov build-story evidence (gov_build_story_evidence): the student's completion hand-in for a Build story,
   // recorded `submitted` (never self-verified). A single additive NEW table; see ensureGovBuildStoryEvidenceSchema.
   await ensureGovBuildStoryEvidenceSchema();

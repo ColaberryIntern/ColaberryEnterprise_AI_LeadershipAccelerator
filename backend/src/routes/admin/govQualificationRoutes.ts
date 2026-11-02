@@ -1463,39 +1463,61 @@ router.post('/api/admin/factory/qualification/:canonicalOpportunityId/attest-zip
 });
 
 /**
- * POST /api/admin/factory/qualification/:canonicalOpportunityId/extract-requirements — READ-ONLY. Run the existing
- * deterministic, in-memory extractor on the uploaded solicitation ZIP and return CANDIDATE requirements for the
- * reviewer to confirm in the workspace. It PERSISTS NOTHING: extraction is a convenience, not establishment — an
- * extracted candidate becomes an established (gate-bearing) requirement only when the reviewer confirms it through
- * the /decision establish path. Program-gated; multer in-memory ZIP (bytes hashed/parsed in memory, never stored).
+ * POST /api/admin/factory/qualification/:canonicalOpportunityId/extract-requirements — ASYNC. The uploaded
+ * solicitation ZIP is stored (gov_source_bundles) and a background extraction job is enqueued; the handler returns
+ * 202 { jobId } immediately, well under the ~100s edge timeout that a large multi-PDF bundle used to blow. The
+ * worker runs the same deterministic (+ flag-gated AI) extractor and the caller polls the GET sibling below for
+ * the result. Still PERSISTS NO established requirements: extraction is a convenience; a candidate becomes
+ * gate-bearing only when the reviewer confirms it through the /decision establish path. Program-gated + tenant-scoped.
  */
 router.post('/api/admin/factory/qualification/:canonicalOpportunityId/extract-requirements', requireSection('program'), uploadDocumentZip, async (req: Request, res: Response) => {
   const p = qualKeyParam.safeParse(req.params);
   if (!p.success) { res.status(400).json({ error: 'Invalid opportunity key.' }); return; }
   const file: any = (req as any).file;
   if (!file || !file.buffer) { res.status(400).json({ error: 'No document file uploaded (field "document").' }); return; }
+  const { canonicalOpportunityId } = p.data;
+  const scope = await scopeOrFail(res, 'gov_qualification_extract_requirements_scope', { canonicalOpportunityId });
+  if (!scope) return;
   try {
-    const { extractProposal } = await import('../../services/factory/proposal/proposalExtractor');
-    const { buildRequirementItems } = await import('../../services/factory/proposal/govRequirementItems');
-    const { applyAiComprehension } = await import('../../services/factory/proposal/govRequirementExtractAI');
-    const result = await extractProposal(file.buffer);
-    // Flag-gated (ENABLE_GOV_AI_EXTRACTION), fail-soft AI comprehension: appends quote-VERIFIED requirements AFTER
-    // the deterministic rows. With the flag OFF (default) this returns the deterministic requirements unchanged.
-    const { requirements, aiMeta } = await applyAiComprehension(result);
-    const candidates = (requirements || []).map((r: any) => ({
-      id: r.canonicalReqId, text: r.statement, extractedText: r.extractedText,
-      sourceDocument: r.sourceDocument, section: r.section, kind: r.kind, priority: r.priority,
-    }));
-    // P2: the same candidates grouped into defined items across 4 categories (submit/rule/scope/after_award),
-    // each citing its source fragment(s). Deterministic, advisory (gates nothing), persists nothing — the reviewer
-    // confirms items into established requirements through the /decision path. `candidates` stays the Raw view.
-    const items = buildRequirementItems(requirements, result.dossier);
-    // Surface the per-file extraction outcomes so the reviewer sees EVERY file and what happened to it (nothing
-    // silently skipped) — unsupported / unreadable / scanned-PDF / truncated are flagged for manual review.
-    res.json({ candidates, items, fileCount: result.fileCount, files: result.files, extraction: aiMeta });
+    const { storeGovSourceBundle } = await import('../../services/factory/proposal/govSourceBundleStore');
+    const { startGovExtraction } = await import('../../services/factory/proposal/govExtractionJobService');
+    // Persist the bytes so the background worker can re-open them after the request returns (idempotent/deduped by
+    // sha256 within this tenant+qualification), then enqueue — in-flight dedup means a double-click reuses the job.
+    const stored = await storeGovSourceBundle(scope.tenantId, canonicalOpportunityId, file);
+    const { jobId } = await startGovExtraction({
+      tenantId: scope.tenantId, qualificationKey: canonicalOpportunityId, sourceBundleId: stored.id, sha256: stored.sha256,
+    });
+    res.status(202).json({ jobId });
   } catch (err: any) {
-    logFail('gov_qualification_extract_requirements_failed', err, { canonicalOpportunityId: p.data.canonicalOpportunityId });
-    res.status(500).json({ error: 'Could not extract requirements from the document.' });
+    logFail('gov_qualification_extract_requirements_failed', err, { canonicalOpportunityId });
+    res.status(500).json({ error: 'Could not start requirements extraction.' });
+  }
+});
+
+/**
+ * GET /api/admin/factory/qualification/:canonicalOpportunityId/extract-requirements/:jobId — poll the background
+ * job started above. Scoped to tenant AND this qualification (404 otherwise, so a job id reveals nothing about
+ * another tenant's/qualification's extraction). On 'completed' it returns the SAME
+ * { candidates, items, fileCount, files, extraction } payload the old synchronous handler returned.
+ */
+router.get('/api/admin/factory/qualification/:canonicalOpportunityId/extract-requirements/:jobId', requireSection('program'), async (req: Request, res: Response) => {
+  const p = qualKeyParam.safeParse(req.params);
+  if (!p.success) { res.status(400).json({ error: 'Invalid opportunity key.' }); return; }
+  const jobId = String((req.params as any).jobId || '');
+  if (!/^[0-9a-fA-F-]{36}$/.test(jobId)) { res.status(400).json({ error: 'Invalid job id.' }); return; }
+  const { canonicalOpportunityId } = p.data;
+  const scope = await scopeOrFail(res, 'gov_qualification_extract_status_scope', { canonicalOpportunityId });
+  if (!scope) return;
+  try {
+    const { getGovExtractionStatus } = await import('../../services/factory/proposal/govExtractionJobService');
+    const status = await getGovExtractionStatus(jobId, scope.tenantId, canonicalOpportunityId);
+    if (!status) { res.status(404).json({ error: 'No such extraction job.' }); return; }
+    if (status.status === 'completed') { res.json({ status: 'completed', ...status.result }); return; }
+    if (status.status === 'failed') { res.json({ status: 'failed', error: status.error }); return; }
+    res.json({ status: status.status });
+  } catch (err: any) {
+    logFail('gov_qualification_extract_status_failed', err, { canonicalOpportunityId });
+    res.status(500).json({ error: 'Could not read the extraction job status.' });
   }
 });
 
