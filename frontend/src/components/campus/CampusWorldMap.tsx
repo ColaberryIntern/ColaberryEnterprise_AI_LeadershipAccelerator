@@ -14,6 +14,7 @@ import type { PlanStop } from './campusPlan';
 import { LiveBack, LiveFront } from './art/LiveDressing';
 import type { LiveMark } from './art/LiveDressing';
 import StaffTokens from './art/StaffTokens';
+import MapWalkers from './art/MapWalkers';
 import type { MapDesk } from './art/StaffTokens';
 import { GroundPatterns, Ground, QuadAndPaths, District, Trees, GATE } from './art/grounds';
 import type { PathDoor } from './art/grounds';
@@ -69,6 +70,8 @@ export interface CampusMapProps {
   people?: Partial<Record<string, { shown: CampusPerson[]; more: number }>>;
   /** WP-3: a press on a building's people chip opens the peek at the press. */
   onPeek?: (id: BuildingId, x: number, y: number) => void;
+  /** C23 Q1: a press on a walking classmate (MapWalkers) opens their person card. */
+  onWalker?: (person: CampusPerson, buildingId: BuildingId) => void;
   /** WP-3: a partner's teammates present per building ("N · M yours"). */
   yours?: Partial<Record<string, number>>;
   /** WP-3: presence failed: every chip reads "—" (unknown, not zero). */
@@ -222,7 +225,7 @@ function pinsOf(plan: PlanStop[] | undefined): Partial<Record<BuildingId, { n: n
 }
 
 /** C17: what a click must NOT be on to count as ground: a building (or its click area), a staff desk, or you. */
-const NOT_GROUND = '.cm-bld, .cm-hit-area, .cm-staff-tok, .cm-avatar, .cm-cboard-sign, .cm-today-flag, .cm-gate-today';
+const NOT_GROUND = '.cm-bld, .cm-hit-area, .cm-staff-tok, .cm-avatar, .cm-walker,.cm-cboard-sign, .cm-today-flag, .cm-gate-today';
 /** A screen point in world units, through the map's current viewBox (null where the browser cannot say, e.g. jsdom). */
 function toWorld(svg: SVGSVGElement | null, x: number, y: number): Pt | null {
   const m = svg?.getScreenCTM?.();
@@ -307,6 +310,7 @@ export default function CampusWorldMap(p: CampusMapProps): React.ReactElement {
       {!compact && p.todayFlag && tower && <TodayFlag tower={tower} place={buildingName(tower, workplaceNames)} onWalk={pick} />}
       {!compact && p.todayFlag && gateIsBuilding && tower && <GateTodaySign place={buildingName(tower, workplaceNames)} onWalk={pick} />}
       {!compact && p.desks && p.desks.length > 0 && <StaffTokens desks={p.desks} buildings={buildings} onPick={pick} />}
+      {!compact && !p.presenceDown && <MapWalkers people={people} buildings={buildings} reduceMotion={reduceMotion} team={!!p.yours} onPick={p.onWalker} />}
       {!compact && <AvatarPin pos={pos} moving={moving} running={running} reduceMotion={reduceMotion} ownGear={p.ownGear} me={p.me} />}
     </svg>
   );
