@@ -48,6 +48,15 @@
  * bootstrap and deletes every row in it between tests.
  */
 
+// MAKES THIS FILE A MODULE. Without a top-level import or export, TypeScript treats a
+// file as a global script, and `tsconfig.test.json` compiles every test file as one
+// program — so `HAS_DB` and `describeIfDb` here collide with the identically named
+// consts in the other integration suites (TS2451). Nothing is imported eagerly on
+// purpose: every real import is deferred into `beforeAll` so no ORM is constructed
+// before `jest.mock` has run. Jest is unaffected either way, and a per-file typecheck
+// does not see it — only the whole-program run does, which is the gate CI uses.
+export {};
+
 jest.setTimeout(120_000);
 
 const HAS_DB = Boolean(process.env.DATABASE_URL);
