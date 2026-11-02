@@ -1,8 +1,12 @@
 /**
- * What Maya (chat, voice, the briefing email) says the program costs: ONE sentence, from the figures below. They MUST equal the
- * billing plans (subscriptionService PLANS); a contract test fails the build if they differ, so an admissions answer can never
- * drift from what checkout charges. (Kept as a leaf module rather than importing PLANS: billing reaches the email service through
- * the enrollment service, and the email service reads this file.)
+ * What Maya (chat, voice, the briefing email) says the program costs: ONE sentence, from the figures below.
+ *
+ * The figures are no longer typed here. They come from membershipPrice.ts, the price of record, which checkout
+ * reads too - so an admissions answer cannot drift from what the card is charged. This file still does not import
+ * subscriptionService, and must not: billing reaches the email service through the enrollment service, and the
+ * email service reads this file, so importing PLANS here would close a cycle. membershipPrice.ts is importable
+ * precisely because it is a dependency-free leaf. A build guard (scripts/checkPriceAgreement.js) fails if this
+ * file, checkout, the knowledge base or the forecast stop agreeing with it.
  *
  * Ali, 2026-10-23 (Campus round 3, ticket C22): quote $149/month billed annually, $199/month month-to-month, and that you can start
  * for $0 with no card. The retired $4,500 per-participant offer and the March 31, 2026 cohort date must not be quoted anywhere
@@ -16,7 +20,14 @@
  *
  * Copy rule: never the word "free" (TWC 807.172(d)); "no card needed" instead.
  */
-export const MEMBERSHIP = { annualPerMonth: 149, annualPerYear: 1788, monthly: 199 } as const;
+import { MEMBERSHIP_PRICE, ANNUAL_CHARGE, ANNUAL_SAVING_VS_MONTHLY } from './membershipPrice';
+
+/** The rates Maya quotes, taken from the price of record. Nothing here is a typed price. */
+export const MEMBERSHIP = {
+  annualPerMonth: MEMBERSHIP_PRICE.annualPerMonth,
+  annualPerYear: ANNUAL_CHARGE,
+  monthly: MEMBERSHIP_PRICE.monthly,
+} as const;
 
 const usd = (n: number): string => `$${n.toLocaleString('en-US', { maximumFractionDigits: 2 })}`;
 
@@ -29,7 +40,7 @@ export function membershipPitchSentence(): string {
 /** Only on pushback (the price, the commitment, "is there a monthly option?"): the month-to-month plan. */
 export function monthToMonthSentence(): string {
   return `If a year is more commitment than you want right now, there is also a month-to-month plan at ${usd(MEMBERSHIP.monthly)} per month, `
-    + `cancel anytime. Same full membership; the annual plan saves ${usd((MEMBERSHIP.monthly - MEMBERSHIP.annualPerMonth) * 12)} a year.`;
+    + `cancel anytime. Same full membership; the annual plan saves ${usd(ANNUAL_SAVING_VS_MONTHLY)} a year.`;
 }
 
 /** Short form for a one-line fact (email highlight box): the annual membership only. */

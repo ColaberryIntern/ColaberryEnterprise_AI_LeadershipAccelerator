@@ -8,6 +8,7 @@ import {
   consumeCreditsForSubscription,
 } from './accountCreditService';
 import { retireRedundantExplorerAccounts } from './enrollmentService';
+import { MEMBERSHIP_PRICE, ANNUAL_TERM_MONTHS } from './membershipPrice';
 import type { SubscriptionPlan } from '../models/Subscription';
 
 /**
@@ -52,11 +53,11 @@ export interface PlanConfig {
 
 const round2 = (n: number): number => Math.round(n * 100) / 100;
 
-/** The amount actually charged for a plan: per-month × 12 for annual, per-month
- *  for monthly. Single source of truth so real prices ($149 / $199) drop in by
- *  editing per_month only. */
+/** The amount actually charged for a plan: per-month × the annual term for annual,
+ *  per-month for monthly. The rates themselves live in membershipPrice.ts, which is
+ *  the price of record for every surface that quotes one. */
 export function planChargeAmount(cfg: Pick<PlanConfig, 'per_month' | 'cadence'>): number {
-  return round2(cfg.cadence === 'year' ? cfg.per_month * 12 : cfg.per_month);
+  return round2(cfg.cadence === 'year' ? cfg.per_month * ANNUAL_TERM_MONTHS : cfg.per_month);
 }
 
 /** Build a plan from its per-month rate; price + amount_cents are derived. */
@@ -69,10 +70,13 @@ function makePlan(id: SubscriptionPlan, label: string, per_month: number, cadenc
 // its own (revoked explicitly via revokeFreeAccess).
 const COMP_PERIOD_DAYS = 3650;
 
-// Real prices: annual $149/mo → $1,788/yr (per_month × 12), monthly $199/mo.
+// The rates come from membershipPrice.ts — the price of record — so this file no longer
+// types a price. Annual is $149/mo billed annually, which derives $1,788/yr; monthly is
+// $199/mo. A build guard (scripts/checkPriceAgreement.js) fails if any surface that quotes
+// a price stops agreeing with that module.
 export const PLANS: Record<SubscriptionPlan, PlanConfig> = {
-  annual: makePlan('annual', 'Annual', 149, 'year', 365, 'Best value — pay once a year for full access to the program.'),
-  monthly: makePlan('monthly', 'Monthly', 199, 'month', 30, 'Month-to-month. Cancel anytime.'),
+  annual: makePlan('annual', 'Annual', MEMBERSHIP_PRICE.annualPerMonth, 'year', 365, 'Best value — pay once a year for full access to the program.'),
+  monthly: makePlan('monthly', 'Monthly', MEMBERSHIP_PRICE.monthly, 'month', 30, 'Month-to-month. Cancel anytime.'),
   // Admin-only comped seat (Free Access). $0, ~10-year period so it never lapses
   // on its own. Never listed for self-serve checkout (see getSubscription /
   // startCheckout) — granted only via grantFreeAccess().

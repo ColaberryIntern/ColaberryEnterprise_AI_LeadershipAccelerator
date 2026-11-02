@@ -198,6 +198,20 @@ jobs:
         run: node scripts/checkKnowledgeHubClaims.js --self-test
       - name: Knowledge hub claim check
         run: node scripts/checkKnowledgeHubClaims.js
+      # Membership price agreement (C10.2). A revenue plan used $1,700 while every one
+      # of the 44 annual subscription rows in production held $1,788, and the price was
+      # typed independently in five places. The rates now live in
+      # backend/src/services/membershipPrice.ts and this fails the build when the
+      # checkout, what Maya quotes, the knowledge base or the forecast stop agreeing
+      # with it. Same two-step shape as the lints above and the same reason, with one
+      # extra: the hub legitimately prices OTHER products ($1,999 Data Analytics,
+      # $4,500 Data Science, a $17,880 ten-seat proposal), so the content rule is
+      # context-scoped and the self-test is what proves it still rejects a real
+      # contradiction instead of quietly accepting everything.
+      - name: Membership price agreement self-test
+        run: node scripts/checkPriceAgreement.js --self-test
+      - name: Membership price agreement
+        run: node scripts/checkPriceAgreement.js
 
   security-scan:
     name: Static security scan
