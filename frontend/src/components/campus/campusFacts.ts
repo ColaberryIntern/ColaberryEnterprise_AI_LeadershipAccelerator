@@ -78,7 +78,31 @@ export function urgentAt(id: BuildingId, d: ArrivalData, now: number): { label: 
 
 const fmt = (n: number) => n.toLocaleString('en-US');
 
-export function factsAt(id: BuildingId, d: ArrivalData, look: LookFacts, now: number): Happening[] {
+/**
+ * One weekly session, flattened to what a "Happening here" row needs.
+ *
+ * Deliberately NOT `WeeklyOccurrence`: that type lives next to a React hook, and this
+ * module is pure. The caller flattens.
+ */
+export interface WeeklySessionFact {
+  title: string;
+  /** ISO instant of this occurrence. */
+  startIso: string;
+  /** The room it happens in. This is the whole point: the Eventbrite record has none. */
+  roomName: string | null;
+}
+
+/** Starting within a quarter hour, or started within the last hour. */
+const imminent = (startMs: number, now: number): boolean =>
+  startMs - now <= 15 * 60_000 && startMs - now > -60 * 60_000;
+
+export function factsAt(
+  id: BuildingId,
+  d: ArrivalData,
+  look: LookFacts,
+  now: number,
+  weekly: WeeklySessionFact[] = [],
+): Happening[] {
   const out: Happening[] = [];
   // C13: Schedule shows what is LEFT of the day (undone steps' minutes); any other building shows its own next step.
   const left = minutesLeft(look.stops ?? null);
@@ -95,7 +119,32 @@ export function factsAt(id: BuildingId, d: ArrivalData, look: LookFacts, now: nu
   const ev = e ? { title: e.title, detail: inLabel(new Date(e.starts_at).getTime(), now), tone: '' as const } : null;
   if (id === 'lecture') { if (step) out.push(step); if (cls) out.push(cls); }
   if (id === 'tower') { if (plan) out.push({ ...plan, title: 'Today' }); if (cls) out.push(cls); if (ev) out.push({ ...ev, title: 'Next event', detail: `${e!.title} · ${ev.detail}` }); }
-  if (id === EVENTS_BUILDING && ev) out.push(ev);
+  if (id === EVENTS_BUILDING) {
+    // THE REAL SCHEDULE FOR THIS BUILDING, and it goes first.
+    //
+    // "Happening here" used to show only `ev`: the globally-next public event from the
+    // Eventbrite mirror, attached to this building by the hardcoded SOURCES table above
+    // and carrying NO room, area or building field of its own. So the Meeting Rooms
+    // advertised one scheduled meeting that was not in any of the rooms you could see,
+    // while the sessions that genuinely run here — the Monday intern standup, the
+    // public AI sessions — were never mentioned, because they live in the cohort's
+    // weekly settings and nothing joined them to a building.
+    //
+    // The weekly sessions carry `room_name`, so a row can finally say WHERE.
+    const next = weekly[0];
+    if (next) {
+      const startMs = Date.parse(next.startIso);
+      const when = Number.isFinite(startMs) ? inLabel(startMs, now) : null;
+      out.push({
+        title: next.title,
+        detail: [next.roomName, when].filter(Boolean).join(' · '),
+        tone: (Number.isFinite(startMs) && imminent(startMs, now) ? 'live' : '') as Happening['tone'],
+      });
+    }
+    // Kept, because it is a real event people register for — but named as one, so it
+    // is no longer read as a session running in a room in this building.
+    if (ev) out.push({ ...ev, detail: `Public event · ${ev.detail}` });
+  }
   if (id === 'testing' && d.certVerified && d.certVerified.total > 0) {
     out.push({ title: 'Skill proficiency', detail: `${d.certVerified.verified} / ${d.certVerified.total} objectives verified`, tone: '' });
   }

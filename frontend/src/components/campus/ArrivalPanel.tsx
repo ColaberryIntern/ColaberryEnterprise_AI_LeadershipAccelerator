@@ -16,6 +16,7 @@ import { useCampusWeather } from './weather/useCampusWeather';
 import { foodLead } from './chow/deliveryApps';
 import { factsAt, loadArrival, urgentAt } from './campusFacts';
 import type { ArrivalData, LookFacts } from './campusFacts';
+import { occurrences, useWeekdaySessions } from './events/weekdaySessions';
 import type { PlanStop } from './campusPlan';
 import type { CompleteResult } from './campusPlanApi';
 import type { At } from './usePopover';
@@ -156,6 +157,25 @@ export default function ArrivalPanel(p: ArrivalPanelProps): React.ReactElement {
   const careerBase = CAMPUS_BUILDINGS.find((x) => x.id === HQ_BUILDING);
   const hq = useHq(audience, p.reduceMotion, isHq, careerBase ? buildingName(careerBase, wp) : undefined);
   const hqNamed = isHq ? (p.presence?.[b.id]?.people ?? []).filter((x): x is CampusPerson => 'enrollment_id' in x && !!(x as CampusPerson).display_name) : [];
+  // C63: the weekly sessions that genuinely run in this building's rooms. "Happening
+  // here" previously showed only the next Eventbrite event, which carries no room and
+  // no building, so the Meeting Rooms advertised a meeting that was in none of the
+  // rooms on screen. These carry room_name; the server already filters by audience, so
+  // a non-intern never receives the Monday call.
+  const weeklyData = useWeekdaySessions(b.id === EVENTS_BUILDING && access === 'open');
+  // Computed per render rather than memoised on `weeklyData`: `occurrences` drops
+  // sessions that have already passed, measured against `now`, so a memo keyed on the
+  // sessions alone would keep showing a session the panel had already sat through.
+  // Four sessions over seven days is not worth a stale answer. (A memo would also want
+  // a suppression for the exhaustive-deps hook rule, and naming that rule in a lint
+  // directive is ITSELF a build error here: this repo's CRA config does not load the
+  // react-hooks plugin, so the directive resolves to an unknown rule and fails the
+  // build. Same trap documented in useCardFocus.ts and PersonActivityChart.tsx.)
+  const weeklyFacts = weeklyData
+    ? occurrences(weeklyData.sessions, now).map((o) => ({
+      title: o.session.title, startIso: o.startIso, roomName: o.session.room_name,
+    }))
+    : [];
   return (
     <>
       <CampusInside building={b} buildingName={buildingName(b, wp)} audience={audience} access={access}
@@ -167,7 +187,7 @@ export default function ArrivalPanel(p: ArrivalPanelProps): React.ReactElement {
         kicker={live && !isStop ? `${LIVE_STATES[live.state].chip} · Colaberry Live` : kickerOf({ zone: zoneLabelOf(b, wp), access, audience, tour: isStop ? { name: tour!.model.name, n: tourIdx + 1, of: tour!.model.stops.length } : null })}
         line={b.id === 'chow' ? foodLead(wx.now, wx.w.condition) : subOf(b, audience, wp)} onElsewhere={p.onElsewhere} urgent={liveCta ?? (classLiveRoute ? { label: 'Your class is live in the Events Hall · Walk in', route: classLiveRoute } : urgentAt(b.id, data, now))} flashRoute={p.flashRoute}
         heroClass={live ? `is-live is-${live.state}` : undefined} stage={live ? <LiveStage live={live} audience={audience} enrollTo={enrollCta(b).to} /> : undefined}
-        happening={happeningAt(b.id, { onAir: p.onAir, count: p.count, presenceError: p.presenceError, facts: factsAt(b.id, data, p.look, now),
+        happening={happeningAt(b.id, { onAir: p.onAir, count: p.count, presenceError: p.presenceError, facts: factsAt(b.id, data, p.look, now, weeklyFacts),
           live: live ? { state: live.state, title: live.b.title, sub: liveSub(live.b, live.now) } : null })}
         onEnterRoom={p.onEnterRoom} desks={desks}
         tourTop={isStop ? <TourStopCard tour={tour!.model} index={tourIdx} onToday={() => open(TODAY_HREF)} />
