@@ -80,6 +80,14 @@ jest.mock('../../../services/factory/proposal/govSourceBundleStore', () => ({
   storeGovSourceBundle: (...a: any[]) => storeGovSourceBundle(...a),
   loadGovSourceBundleScoped: (...a: any[]) => loadGovSourceBundleScoped(...a),
 }));
+// 1A async extraction — the job service is mocked (its pure payload mapper has its own unit test); the route only
+// stores the ZIP and enqueues, then a GET polls the status. Keeps these route tests off the DB and the worker.
+const startGovExtraction = jest.fn();
+const getGovExtractionStatus = jest.fn();
+jest.mock('../../../services/factory/proposal/govExtractionJobService', () => ({
+  startGovExtraction: (...a: any[]) => startGovExtraction(...a),
+  getGovExtractionStatus: (...a: any[]) => getGovExtractionStatus(...a),
+}));
 // Step 6 — the two-track project creator, mocked so the flag-on tests don't touch the DB.
 const ensureGovTwoTrackProject = jest.fn();
 jest.mock('../../../services/factory/govDeliveryProject', () => ({ ensureGovTwoTrackProject: (...a: any[]) => ensureGovTwoTrackProject(...a) }));
@@ -115,13 +123,14 @@ beforeEach(() => {
   jest.clearAllMocks();
   lookupGovContractsContainer.mockResolvedValue(CONTAINER);
   storeGovSourceBundle.mockResolvedValue({ id: 'bundle-default', filename: 'solicitation.zip', mime: 'application/zip', byte_size: 9, sha256: 'a'.repeat(64), deduped: false });
+  startGovExtraction.mockResolvedValue({ jobId: 'job-default' });
 });
 
 describe('the section gate + tenant scoping', () => {
   it('mounts every route behind requireSection("program") (source-level, route-auth lint)', () => {
     const src = fs.readFileSync(path.join(__dirname, '..', 'govQualificationRoutes.ts'), 'utf8');
     const routeLines = src.split('\n').filter((l) => /router\.(get|post|put|patch|delete)\(/.test(l));
-    expect(routeLines.length).toBe(43); // +1 gov-redesign assign-roster (active-interns); +2 P3 assign; +5 P4 responses/amendments; +6 P5 submission export/package(GET)/receipt/acknowledge/reopen + outcome; +2 AI advisory (risk-narrative, proposal-summary); +1 P1 build-spec; +1 P2 build-plan-ai; +1 P2.3 materialize-build-project; +2 gov-redesign P3 (capability-fit advisory + capability-decisions persist); +3 gov-redesign P4 Decide (request-approval + send-back + pending-approvals); +2 gov-redesign P5 Build (draft-with-gaps + resolve-gap); +2 gov-redesign P5 Team & access (proposal-share GET + POST); +1 gov-redesign P5 Draft-with-AI (draft-ai); +1 gov-redesign P5 Ask-the-buyer (clarification-questions); +1 T2 pursuit-kind (software vs services); +1 gov-pipeline qualification-pipeline (vet->build->assign funnel feed)
+    expect(routeLines.length).toBe(44); // +1 1A GET extract-requirements/:jobId status poll; +1 gov-redesign assign-roster (active-interns); +2 P3 assign; +5 P4 responses/amendments; +6 P5 submission export/package(GET)/receipt/acknowledge/reopen + outcome; +2 AI advisory (risk-narrative, proposal-summary); +1 P1 build-spec; +1 P2 build-plan-ai; +1 P2.3 materialize-build-project; +2 gov-redesign P3 (capability-fit advisory + capability-decisions persist); +3 gov-redesign P4 Decide (request-approval + send-back + pending-approvals); +2 gov-redesign P5 Build (draft-with-gaps + resolve-gap); +2 gov-redesign P5 Team & access (proposal-share GET + POST); +1 gov-redesign P5 Draft-with-AI (draft-ai); +1 gov-redesign P5 Ask-the-buyer (clarification-questions); +1 T2 pursuit-kind (software vs services); +1 gov-pipeline qualification-pipeline (vet->build->assign funnel feed)
     // Each route DEFINITION line must carry the section guard (not just somewhere in the file).
     const unguarded = routeLines.filter((l) => !l.includes("requireSection('program')"));
     expect(unguarded).toEqual([]);
@@ -345,45 +354,53 @@ describe('POST review-documents (manual Bonfire-ZIP attestation)', () => {
 describe('POST extract-requirements (read-only: extract candidates from the solicitation ZIP)', () => {
   const url = `/api/admin/factory/qualification/${CLEAN_CANONICAL}/extract-requirements`;
 
-  it('200: runs extractProposal on the uploaded ZIP, returns mapped candidates + fileCount, and persists NOTHING', async () => {
-    extractProposal.mockResolvedValue({
-      blocks: [],
-      fileCount: 3,
-      files: [
-        { name: 'rfp.pdf', status: 'extracted', chars: 1200, truncated: false, warning: null },
-        { name: 'scan.pdf', status: 'image_only_pdf', chars: 0, truncated: false, warning: 'No extractable text (likely a scanned / image-only PDF) — review it manually or run OCR.' },
-      ],
-      requirements: [
-        { canonicalReqId: 'RQ1', statement: 'Offeror shall be registered in SAM.', extractedText: '...SAM registration...', sourceDocument: 'rfp.pdf', section: 'L.3', kind: 'eligibility', priority: 'must' },
-        { canonicalReqId: 'RQ2', statement: 'Submit three past-performance references.', extractedText: '...past performance...', sourceDocument: 'rfp.pdf', section: 'M.2', kind: 'submission', priority: 'should' },
-      ],
-    });
+  it('202: stores the uploaded ZIP and enqueues a background extraction job, returning a jobId', async () => {
     const res = await request(app).post(url)
       .field('biddingEntity', 'colaberry')
       .attach('document', Buffer.from('pretend-zip-bytes'), 'solicitation.zip');
-    expect(res.status).toBe(200);
-    expect(res.body.fileCount).toBe(3);
-    // The per-file outcomes are surfaced so the reviewer sees the scanned-PDF (nothing silently dropped).
-    expect(res.body.files).toHaveLength(2);
-    expect(res.body.files.find((f: any) => f.name === 'scan.pdf').status).toBe('image_only_pdf');
-    expect(res.body.candidates).toHaveLength(2);
-    expect(res.body.candidates[0]).toEqual({ id: 'RQ1', text: 'Offeror shall be registered in SAM.', extractedText: '...SAM registration...', sourceDocument: 'rfp.pdf', section: 'L.3', kind: 'eligibility', priority: 'must' });
-    // read-only: the extractor got the uploaded bytes; no qualification record was read or written
-    expect(extractProposal).toHaveBeenCalledTimes(1);
-    expect(Buffer.isBuffer(extractProposal.mock.calls[0][0])).toBe(true);
+    expect(res.status).toBe(202);
+    expect(res.body.jobId).toBe('job-default');
+    // the ZIP bytes were persisted for the worker (this tenant + qualification), and a job was enqueued
+    expect(storeGovSourceBundle).toHaveBeenCalledTimes(1);
+    expect(storeGovSourceBundle.mock.calls[0][0]).toBe('ten-1');
+    expect(storeGovSourceBundle.mock.calls[0][1]).toBe(CLEAN_CANONICAL);
+    expect(Buffer.isBuffer(storeGovSourceBundle.mock.calls[0][2].buffer)).toBe(true);
+    expect(startGovExtraction).toHaveBeenCalledWith({ tenantId: 'ten-1', qualificationKey: CLEAN_CANONICAL, sourceBundleId: 'bundle-default', sha256: 'a'.repeat(64) });
+    // the route does NOT extract synchronously (the worker does) and touches no qualification record
+    expect(extractProposal).not.toHaveBeenCalled();
     expect(govQualFindOne).not.toHaveBeenCalled();
     expect(recordDecision).not.toHaveBeenCalled();
     expect(createQualification).not.toHaveBeenCalled();
   });
 
-  it('200: an empty extraction returns no candidates (honest empty-state, not an error)', async () => {
-    extractProposal.mockResolvedValue({ blocks: [], fileCount: 1, requirements: [] });
-    const res = await request(app).post(url)
-      .field('biddingEntity', 'colaberry')
-      .attach('document', Buffer.from('z'), 'empty.zip');
+  it('GET job status — completed: returns the same { candidates, items, fileCount, files, extraction } payload', async () => {
+    getGovExtractionStatus.mockResolvedValue({ status: 'completed', result: {
+      candidates: [{ id: 'RQ1', text: 'Offeror shall be registered in SAM.', extractedText: '...', sourceDocument: 'rfp.pdf', section: 'L.3', kind: 'eligibility', priority: 'must' }],
+      items: [], fileCount: 3,
+      files: [{ name: 'scan.pdf', status: 'image_only_pdf', chars: 0, truncated: false, warning: 'scanned' }],
+      extraction: { mode: 'deterministic', model: null, aiKept: 0, aiDropped: 0, aiError: null },
+    } });
+    const res = await request(app).get(`${url}/44444444-4444-4444-4444-444444444444`);
     expect(res.status).toBe(200);
-    expect(res.body.candidates).toEqual([]);
-    expect(res.body.fileCount).toBe(1);
+    expect(res.body.status).toBe('completed');
+    expect(res.body.fileCount).toBe(3);
+    expect(res.body.candidates).toHaveLength(1);
+    expect(res.body.files.find((f: any) => f.name === 'scan.pdf').status).toBe('image_only_pdf');
+    expect(getGovExtractionStatus).toHaveBeenCalledWith('44444444-4444-4444-4444-444444444444', 'ten-1', CLEAN_CANONICAL);
+  });
+
+  it('GET job status — failed surfaces the error, an unknown job is 404, running reports running', async () => {
+    getGovExtractionStatus.mockResolvedValueOnce({ status: 'failed', error: 'Extraction failed.' });
+    let res = await request(app).get(`${url}/44444444-4444-4444-4444-444444444444`);
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ status: 'failed', error: 'Extraction failed.' });
+    getGovExtractionStatus.mockResolvedValueOnce(null);
+    res = await request(app).get(`${url}/44444444-4444-4444-4444-444444444444`);
+    expect(res.status).toBe(404);
+    getGovExtractionStatus.mockResolvedValueOnce({ status: 'running' });
+    res = await request(app).get(`${url}/44444444-4444-4444-4444-444444444444`);
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ status: 'running' });
   });
 
   it('400 when no file is attached (never calls the extractor)', async () => {
@@ -399,8 +416,8 @@ describe('POST extract-requirements (read-only: extract candidates from the soli
     expect(extractProposal).not.toHaveBeenCalled();
   });
 
-  it('500 when the extractor throws (mapped, never an unhandled crash)', async () => {
-    extractProposal.mockRejectedValue(new Error('boom'));
+  it('500 when enqueue fails (mapped, never an unhandled crash)', async () => {
+    startGovExtraction.mockRejectedValueOnce(new Error('boom'));
     const res = await request(app).post(url)
       .field('biddingEntity', 'colaberry')
       .attach('document', Buffer.from('z'), 'p.zip');
@@ -469,11 +486,11 @@ describe('DECOUPLED (discovery-ZIP) workspace — gws keys', () => {
     expect(res.status).toBe(403);
   });
 
-  it('extract-requirements accepts a gws key (proposal capture works on the decoupled path)', async () => {
-    extractProposal.mockResolvedValue({ blocks: [], fileCount: 1, requirements: [{ canonicalReqId: 'RQ1', statement: 'Offeror shall be registered in SAM.', extractedText: '...', sourceDocument: 'rfp.pdf', section: 'L.1', kind: 'eligibility', priority: 'must' }] });
+  it('extract-requirements accepts a gws key (stores + enqueues on the decoupled path)', async () => {
     const res = await request(app).post(`/api/admin/factory/qualification/${GWS}/extract-requirements`).attach('document', Buffer.from('zip'), 'rfp.zip');
-    expect(res.status).toBe(200);
-    expect(res.body.candidates).toHaveLength(1);
+    expect(res.status).toBe(202);
+    expect(res.body.jobId).toBe('job-default');
+    expect(startGovExtraction.mock.calls[0][0].qualificationKey).toBe(GWS);
   });
 
   it('decision (establish) accepts a gws key (confirm requirements into the Proposal)', async () => {
