@@ -188,7 +188,7 @@ export default function CampusWorld(p: CampusWorldProps): React.ReactElement {
     <div className={`cm-world${anyCard ? ' has-card' : ''}`} onKeyDown={onKeyDown}>
       <CampusWorldMap buildings={buildings} accessOf={accessOf} workplaceNames={workplaceNames} reduceMotion={reduceMotion}
         initialTarget={p.initialTarget} onArrive={onArrive} buildingRef={registerEl} counts={presenceError ? undefined : counts}
-        people={pp.people} yours={pp.yours} onPeek={pp.openPeek} presenceDown={presenceError && presence !== undefined} walkRequest={walkRequest} onTravel={setTravel} onGroundClick={onGroundClick} onGround={p.onGround}
+        people={pp.people} yours={pp.yours} onPeek={pp.openPeek} onWalker={onOpenPerson ? pickPerson : undefined} presenceDown={presenceError && presence !== undefined} walkRequest={walkRequest} onTravel={setTravel} onGroundClick={onGroundClick} onGround={p.onGround}
         onAir={p.onAir} plan={p.plan?.stops} ownGear={p.ownGear} showOpen={audience === 'explorer'} todayFlag={audience === 'explorer'} camera={camera} desks={mapDesks}
         me={p.me ?? (meInitials ? { initials: meInitials } : null)} hover={p.hover} startAt={p.startAt}
         liveMark={p.liveNow ? { state: p.liveNow.state, text: marqueeText(p.liveNow.b, p.liveNow.now) } : null} tourBadges={tourBadges} dimExcept={cardBuilding} moments={p.moments} notifs={p.notifs} quiet={p.quiet} />

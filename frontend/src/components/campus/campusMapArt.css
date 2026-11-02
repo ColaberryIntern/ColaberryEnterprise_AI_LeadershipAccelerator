@@ -164,3 +164,11 @@
 @keyframes cm-notif-ring{0%{opacity:.9;transform:scale(.8)}100%{opacity:0;transform:scale(1.9)}}
 .is-reduced .cm-notif-pin .ring{animation:none;opacity:0}
 @media (prefers-reduced-motion:reduce){.cm-notif-pin .ring{animation:none;opacity:0}}
+
+/* C23 Q1: real classmates on the map (MapWalkers; the prototype's .amb, D:3229): a face beside their building, walking when they move */
+.cm-walker .face{fill:var(--cm-art-pic-muted);stroke:var(--cm-art-white);stroke-width:1.6}
+.cm-walker.is-team .face{stroke:var(--cm-art-team)}
+.cm-walker .sh{fill:var(--cm-art-token-shadow)}
+.cm-walker text{font:800 5.4px 'DM Sans',var(--sans),sans-serif;fill:var(--cm-art-white)}
+.cm-walker.is-pickable{cursor:pointer}
+.cm-walker.is-pickable:hover .face{stroke:var(--cm-art-pic-ink)}
