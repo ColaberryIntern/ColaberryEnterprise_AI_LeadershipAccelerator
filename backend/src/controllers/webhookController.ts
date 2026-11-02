@@ -18,6 +18,7 @@ import {
   ingestRecordingForRoom,
   findAlwaysOpenRoomForZoomMeeting,
 } from '../services/sessionRecordingService';
+import { applyZoomLiveEvent } from '../services/communityRooms/roomLiveState';
 
 export async function handlePaySimpleWebhook(req: Request, res: Response): Promise<void> {
   // PaySimple sends signature in 'paysimple-hmac-sha256' header, computed over
@@ -252,6 +253,53 @@ export async function handleZoomWebhook(req: Request, res: Response): Promise<vo
     // 401, not 400: this is an authentication-shaped refusal. Zoom treats 4xx as
     // "do not retry", which is correct — a delivery this old will not get younger.
     res.status(401).json({ error: 'Webhook timestamp outside the accepted window' });
+    return;
+  }
+
+  // A MEETING STARTING IS THE ONLY HONEST SOURCE FOR "OPEN NOW".
+  //
+  // Until these two events were subscribed, the platform never learned that a call
+  // began: `recording.completed` is the only thing it listened for, and that arrives
+  // long after everyone has left. So the campus hallway inferred liveness from
+  // `room_presence`, which records that a BROWSER TAB is open, and a room with six
+  // idle tabs and no call read as "open now".
+  //
+  // Matched the same way `recording.completed` finds an always-open room: by the
+  // Zoom meeting id embedded in the room's own `meeting_link`. No match is the normal
+  // case, not an error — this subscription is account-wide, so every 1:1 and personal
+  // meeting on the account arrives here too.
+  if (event.event === 'meeting.started' || event.event === 'meeting.ended') {
+    const meetingId = String(event.payload?.object?.id || '');
+    try {
+      const room = meetingId ? await findAlwaysOpenRoomForZoomMeeting(meetingId) : null;
+      if (room) {
+        const applied = await applyZoomLiveEvent(room.id, {
+          kind: event.event === 'meeting.started' ? 'started' : 'ended',
+          // Zoom's per-occurrence id. It is what stops a late `ended` from switching
+          // off the call that is running now.
+          occurrenceUuid: String(event.payload?.object?.uuid || ''),
+          meetingId,
+          atMs: Date.now(),
+        });
+        console.log(JSON.stringify({
+          timestamp: new Date().toISOString(), level: 'info', service: 'backend',
+          event: 'zoom_room_liveness', outcome: 'success',
+          context: { zoom_event: event.event, room_id: room.id, live: applied !== null },
+        }));
+      }
+      res.status(200).json({ received: true, matched: !!room });
+    } catch (err: any) {
+      // Never 5xx at Zoom over this. A failed liveness write is a stale badge, and
+      // read-time expiry already bounds how long it can mislead; a non-2xx makes Zoom
+      // retry the delivery and changes nothing about the underlying failure.
+      console.error(JSON.stringify({
+        timestamp: new Date().toISOString(), level: 'error', service: 'backend',
+        event: 'zoom_room_liveness_failed', outcome: 'failure',
+        error_class: err?.constructor?.name ?? 'Error',
+        context: { zoom_event: event.event, meeting_id: meetingId },
+      }));
+      res.status(200).json({ received: true, matched: false });
+    }
     return;
   }
 

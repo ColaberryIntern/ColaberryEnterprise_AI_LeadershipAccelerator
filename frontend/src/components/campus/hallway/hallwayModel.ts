@@ -2,13 +2,22 @@ import type { Hallway, HallwayBooking, HallwayPerson, HallwayRoom } from './hall
 
 /**
  * The hallway's rules (C29, v7 R2), pure so each is tested. The prototype's MROOMS are illustrative; every door here is a real room:
- *  - a door per live room (someone inside), per upcoming booking of yours, then your own idle rooms ("Available");
- *  - order: live rooms with a friend inside, other live rooms, your bookings (soonest first), your idle rooms;
+ *  - a door per room with a meeting running, per room with people in it, per upcoming booking of yours, then your own idle rooms;
+ *  - order: live rooms with a friend inside, other live rooms, occupied rooms, your bookings (soonest first), your idle rooms;
  *  - at most six doors (three per side wall); with more, the sixth is "More rooms →" (the full list on /portal/rooms).
+ *
+ * LIVE AND OCCUPIED ARE DIFFERENT THINGS, and conflating them is the defect this file
+ * carried. A door was "live" when `inside_count > 0`, and that number counts people
+ * with the room's PAGE open in the last 70 seconds — not people in the call. So the
+ * board read "2 open now" for two idle browser tabs, and a real Zoom call with
+ * everyone off the website read as closed. `live_since` is the only field here that
+ * means a meeting is actually happening; `inside_count` is still shown, under a label
+ * that says what it counts.
  */
 export const MAX_DOORS = 6;
 export const TZ = 'America/Chicago';
-export type DoorState = 'live' | 'booked' | 'idle';
+/** `live` = a meeting is running. `occupied` = people are here, no call. */
+export type DoorState = 'live' | 'occupied' | 'booked' | 'idle';
 export interface Door {
   more: false; n: number; key: string; roomId: string; name: string; sub: string; emoji: string | null;
   state: DoorState; insideCount: number; inside: HallwayPerson[]; friends: boolean; booking: HallwayBooking | null;
@@ -28,16 +37,25 @@ const door = (r: HallwayRoom, state: DoorState, booking: HallwayBooking | null):
 /** Every door in hallway order, uncapped. */
 export function orderedDoors(h: Hallway): Omit<Door, 'n'>[] {
   const byId = new Map(h.rooms.map((r) => [r.room_id, r]));
-  const live = h.rooms.filter((r) => r.inside_count > 0).sort((a, b) => b.inside_count - a.inside_count);
+  // A meeting running outranks a busy page. A room can be live with nobody on the
+  // website at all, which is the normal shape of a real call.
+  const live = h.rooms.filter((r) => !!r.live_since).sort((a, b) => b.inside_count - a.inside_count);
   const liveIds = new Set(live.map((r) => r.room_id));
+  const occupied = h.rooms.filter((r) => !liveIds.has(r.room_id) && r.inside_count > 0).sort((a, b) => b.inside_count - a.inside_count);
+  const shownIds = new Set([...liveIds, ...occupied.map((r) => r.room_id)]);
   const firstBooking = new Map<string, HallwayBooking>();
   for (const b of [...h.bookings].sort((a, c) => a.start_at.localeCompare(c.start_at))) if (!firstBooking.has(b.room_id)) firstBooking.set(b.room_id, b);
-  const booked = Array.from(firstBooking.values()).filter((b) => !liveIds.has(b.room_id) && byId.has(b.room_id));
+  const booked = Array.from(firstBooking.values()).filter((b) => !shownIds.has(b.room_id) && byId.has(b.room_id));
   const bookedIds = new Set(booked.map((b) => b.room_id));
-  const idle = h.rooms.filter((r) => r.mine && !liveIds.has(r.room_id) && !bookedIds.has(r.room_id));
+  const idle = h.rooms.filter((r) => r.mine && !shownIds.has(r.room_id) && !bookedIds.has(r.room_id));
   const liveDoors = live.map((r) => door(r, 'live', firstBooking.get(r.room_id) ?? null));
+  // Friends-first applies WITHIN each tier, not just to live rooms. Splitting rooms
+  // into live and occupied would otherwise silently drop the rule for every room that
+  // has people but no call, which before this change was all of them.
+  const occupiedDoors = occupied.map((r) => door(r, 'occupied', firstBooking.get(r.room_id) ?? null));
   return [
     ...liveDoors.filter((d) => d.friends), ...liveDoors.filter((d) => !d.friends),
+    ...occupiedDoors.filter((d) => d.friends), ...occupiedDoors.filter((d) => !d.friends),
     ...booked.map((b) => door(byId.get(b.room_id)!, 'booked', b)), ...idle.map((r) => door(r, 'idle', null)),
   ];
 }
@@ -59,8 +77,38 @@ export function wallDoors(h: Hallway, max = MAX_DOORS): WallDoor[] {
   return real;
 }
 
-/** Live rooms, for the board's "n OPEN NOW" and its rows. */
+/** Rooms with a meeting actually running. */
 export const liveRooms = (h: Hallway): Omit<Door, 'n'>[] => orderedDoors(h).filter((d) => d.state === 'live');
+
+/** Rooms worth a row on the board: a meeting is running, or people are present. */
+export const boardRooms = (h: Hallway): Omit<Door, 'n'>[] =>
+  orderedDoors(h).filter((d) => d.state === 'live' || d.state === 'occupied');
+
+/**
+ * Is there anyone to walk in on?
+ *
+ * Named once because splitting `live` in two nearly removed the Join button from
+ * every room that has people in it but no call running — which, until the Zoom
+ * subscription is configured, is every room. "A meeting is on" gates the live DOT;
+ * "somebody is there" gates the door.
+ */
+export const canJoin = (d: Pick<Door, 'state'>): boolean => d.state === 'live' || d.state === 'occupied';
+
+/**
+ * The board's heading.
+ *
+ * Says "live now" only when a meeting is genuinely running. With no call anywhere it
+ * reports the people who are present, which is what the number always actually
+ * measured, under a label that admits it. The heading never claims a call that nobody
+ * started — the whole complaint this replaces.
+ */
+export function boardSummary(h: Hallway): { count: number; label: string } {
+  const liveCount = liveRooms(h).length;
+  if (liveCount > 0) return { count: liveCount, label: liveCount === 1 ? 'room live now' : 'rooms live now' };
+  const here = orderedDoors(h).filter((d) => d.state === 'occupied').reduce((n, d) => n + d.insideCount, 0);
+  if (here > 0) return { count: here, label: here === 1 ? 'person here' : 'people here' };
+  return { count: 0, label: 'rooms live now' };
+}
 
 /** "Tue 10:30 AM" in Central. */
 export function centralWhen(iso: string): string {
@@ -68,16 +116,20 @@ export function centralWhen(iso: string): string {
   return `${d.toLocaleDateString('en-US', { timeZone: TZ, weekday: 'short' })} ${d.toLocaleTimeString('en-US', { timeZone: TZ, hour: 'numeric', minute: '2-digit' })}`;
 }
 
-/** The door sign's state line: "● 3 inside", "Booked · Tue 10:30 AM" or "Available". */
+/** The door sign's state line: "● Live · 3 here", "3 here", "Booked · Tue 10:30 AM" or "Available". */
 export function doorSign(d: Door): string {
-  if (d.state === 'live') return `● ${d.insideCount} inside`;
+  // "inside" was the old word and it overclaimed: it described an open browser tab as
+  // being in the room. A live meeting gets the dot; presence gets a plain count.
+  if (d.state === 'live') return d.insideCount > 0 ? `● Live · ${d.insideCount} here` : '● Live now';
+  if (d.state === 'occupied') return `${d.insideCount} here`;
   if (d.state === 'booked' && d.booking) return `Booked · ${centralWhen(d.booking.start_at)}`;
   return 'Available';
 }
 
-/** The arrival card row's line: "3 inside · sub", "Booked · Tue 10:30 AM" or "Available". */
+/** The arrival card row's line: "Live now · sub", "3 here · sub", "Booked · Tue 10:30 AM" or "Available". */
 export function rowLine(d: Door): string {
-  if (d.state === 'live') return [`${d.insideCount} inside`, d.sub].filter(Boolean).join(' · ');
+  if (d.state === 'live') return ['Live now', d.sub].filter(Boolean).join(' · ');
+  if (d.state === 'occupied') return [`${d.insideCount} here`, d.sub].filter(Boolean).join(' · ');
   return doorSign(d);
 }
 

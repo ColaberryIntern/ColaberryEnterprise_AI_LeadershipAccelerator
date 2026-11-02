@@ -35,8 +35,10 @@ function buildApp(campus: string | undefined = 'all', rooms = 'true'): express.E
   return app;
 }
 
+// live_since null: three people have the room's page open, and no meeting is running.
+// The contract carries the two separately because inside_count never meant the second.
 const ROOM = { room_id: 'r1', name: 'Week 1 study group', sub: 'Cohort study', emoji: '📚', privacy: 'cohort', mine: false, inside_count: 3,
-  inside: [{ enrollment_id: 'e2', display_name: 'Grace H', avatar_url: null, friend: true }] };
+  inside: [{ enrollment_id: 'e2', display_name: 'Grace H', avatar_url: null, friend: true }], live_since: null };
 const BOOKING = { booking_id: 'b1', room_id: 'r2', title: 'Pair on STORY-001', start_at: '2026-10-27T15:00:00.000Z', end_at: null, state: 'scheduled', hosting: true };
 
 beforeAll(() => { buildApp(); }, 120_000);
