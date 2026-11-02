@@ -5,6 +5,7 @@ import {
   DEFAULT_INTERNSHIP_SETTINGS, ensureInternshipCohort, internshipSettings, type RequiredMeeting,
 } from './internshipCohortService';
 import { createMeeting, isZoomConfigured } from '../zoomService';
+import { reserveRoomHost } from '../zoom/roomHostAllocator';
 
 /**
  * Provision the internship's Zoom-in-Rooms meeting rooms.
@@ -97,17 +98,31 @@ async function ensureRoom(
   return room;
 }
 
-/** Mint the room's persistent Zoom link once; reuse it forever after. */
+/**
+ * Mint the room's persistent Zoom link once; reuse it forever after.
+ *
+ * ON ITS OWN HOST WHERE ONE EXISTS. These two rooms are why the host pool matters:
+ * both links were minted with no host, so both belonged to the single
+ * `ZOOM_HOST_EMAIL`, and a Zoom user may host one meeting at a time. The Monday
+ * standup therefore could not open while the public session was live — you had to
+ * end one to start the other. `reserveRoomHost` returns `null` while the pool is
+ * empty, which passes no host and reproduces the previous behavior exactly, so this
+ * is inert until an operator registers and verifies a second host.
+ */
 async function ensureRoomLink(room: CommunityRoom): Promise<string | null> {
   if (room.meeting_link) return room.meeting_link;
   if (!isZoomConfigured()) return null;
   try {
+    // Reserved BEFORE the call, so the sibling room minting in parallel sees this
+    // host as taken rather than reading a usage count that does not yet include it.
+    const hostEmail = await reserveRoomHost(room.id);
     const res = await createMeeting({
       topic: `Colaberry — ${room.name}`,
       agenda: room.description || 'Colaberry AI meeting room',
       startDateTime: new Date().toISOString().slice(0, 19),
       durationMinutes: ZOOM_YEAR_MINUTES,
       timezone: 'America/Chicago',
+      ...(hostEmail ? { hostEmail } : {}),
     });
     if (res.joinUrl) await room.update({ meeting_link: res.joinUrl });
     return res.joinUrl ?? null;

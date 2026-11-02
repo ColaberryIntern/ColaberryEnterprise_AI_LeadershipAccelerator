@@ -19,6 +19,10 @@ jest.mock('../../services/communityRooms/roomEntitlementService', () => ({
   canJoinMeeting: jest.fn(() => true),
 }));
 jest.mock('../../services/communityRooms/meetingProvider', () => ({ getMeetingProvider: jest.fn() }));
+// Rooms now reserve a Zoom host before minting. Stubbed to "no pool configured", which
+// leaves this test's subject exactly as it was; without it the real allocator reaches
+// for Postgres. The host threading itself is covered by roomService.joinVideoRoomHost.
+jest.mock('../../services/zoom/roomHostAllocator', () => ({ reserveRoomHost: jest.fn(async () => null) }));
 
 import CommunityRoom from '../../models/CommunityRoom';
 import RoomMembership from '../../models/RoomMembership';

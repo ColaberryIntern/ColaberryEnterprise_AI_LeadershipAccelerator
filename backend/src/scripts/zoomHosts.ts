@@ -17,11 +17,12 @@
  *
  *   npx ts-node src/scripts/zoomHosts.ts list
  *   npx ts-node src/scripts/zoomHosts.ts verify
+ *   npx ts-node src/scripts/zoomHosts.ts rooms
  *   npx ts-node src/scripts/zoomHosts.ts register <email> [label] [priority]
  *   npx ts-node src/scripts/zoomHosts.ts disable <email>
  *
- * `list` and `verify` are safe against production; `verify` writes only the
- * verified_at / last_error columns of the registry.
+ * `list`, `verify` and `rooms` are safe against production; `verify` writes only the
+ * verified_at / last_error columns of the registry, and `rooms` writes nothing.
  *
  * Exit 0 when the command succeeded. `verify` exits 1 if NO host ended up
  * allocatable, because a pool nothing can use is a failure worth noticing in a cron.
@@ -34,6 +35,7 @@ import {
   allocatableHostEmails,
   type ZoomHostRow,
 } from '../services/zoom/zoomHostRegistry';
+import { roomsSharingAHost } from '../services/zoom/roomHostAllocator';
 
 function pad(s: unknown, n: number): string {
   const v = String(s ?? '');
@@ -131,16 +133,47 @@ async function cmdDisable(argv: string[]): Promise<number> {
   return 0;
 }
 
+/**
+ * Which rooms would collide: any host carrying more than one room's permanent link.
+ *
+ * A Zoom user hosts one meeting at a time, so two rooms on one host can never both be
+ * live — the condition that made the Monday standup and the public AI session mutually
+ * exclusive. Exits 1 when any host is shared, so a cron notices before a person does.
+ *
+ * A non-zero exit here is a CAPACITY fact, not a code fault: it means there are more
+ * rooms than usable hosts, and the answer is another host, not another deploy.
+ */
+async function cmdRooms(): Promise<number> {
+  const shared = await roomsSharingAHost();
+  if (!shared.length) {
+    console.log('No host carries more than one room. Every room can be live at once.');
+    return 0;
+  }
+  console.log('Rooms sharing a Zoom host — only ONE of each group can be live at a time:');
+  for (const row of shared) {
+    console.log('');
+    console.log('  ' + row.host_email + '  (' + row.room_count + ' rooms)');
+    for (const name of row.rooms) console.log('    - ' + name);
+  }
+  console.log('');
+  console.log('Add and verify another host, then re-mint the extra rooms:');
+  console.log('  npx ts-node src/scripts/zoomHosts.ts register <email>');
+  console.log('  npx ts-node src/scripts/zoomHosts.ts verify');
+  console.log('Re-minting changes a room\'s join URL, so announce it before you do.');
+  return 1;
+}
+
 async function main(): Promise<void> {
   const [cmd, ...rest] = process.argv.slice(2);
   let code = 0;
   switch (cmd) {
     case 'list': code = await cmdList(); break;
     case 'verify': code = await cmdVerify(); break;
+    case 'rooms': code = await cmdRooms(); break;
     case 'register': code = await cmdRegister(rest); break;
     case 'disable': code = await cmdDisable(rest); break;
     default:
-      console.error('usage: zoomHosts.ts <list|verify|register|disable> [args]');
+      console.error('usage: zoomHosts.ts <list|verify|rooms|register|disable> [args]');
       code = 2;
   }
   process.exit(code);
