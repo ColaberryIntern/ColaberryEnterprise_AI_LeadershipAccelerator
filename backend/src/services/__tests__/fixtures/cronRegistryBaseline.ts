@@ -264,6 +264,7 @@ export const EXPECTED_CRON_IMPORT_FILES: ReadonlyArray<string> = [
   'services/aiOpsScheduler.ts', // the SCHEDULE_REGISTRY / DYNAMIC_SCHEDULE_REGISTRY loops
   'services/schedulerService.ts', // the 60-odd hand-written crons
   'services/scheduling/growthJourneyCrons.ts', // the three Growth Journey crons
+  'services/scheduling/adSpendCrons.ts', // the daily Meta ad spend pull (2026-11-02), seed row MetaAdSpendSync
 ];
 
 /** Files where the identifier is used as a VALUE rather than called — `const run =

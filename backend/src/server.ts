@@ -172,6 +172,7 @@ import { ensureChannelAccountSchema } from './db/ensureChannelAccountSchema';
 import { ensureLandingPageSchema } from './db/ensureLandingPageSchema';
 import { ensureBrandPixelSchema } from './db/ensureBrandPixelSchema';
 import { ensureLandingPageSnackbarSchema } from './db/ensureLandingPageSnackbarSchema';
+import { ensureMarketingSpendSchema } from './db/ensureMarketingSpendSchema';
 import { ensureContentItemDestinationSchema } from './db/ensureContentItemDestinationSchema';
 import { ensureCapeSchema } from './db/ensureCapeSchema';
 import { ensureCapstoneSchema } from './db/ensureCapstoneSchema';
@@ -2736,6 +2737,9 @@ async function start(): Promise<void> {
   await ensureBrandPixelSchema();
   // Snack bar columns on brands, landing_pages and leads. Additive, idempotent, post-checked.
   await ensureLandingPageSnackbarSchema();
+  // Ad spend per campaign per day (manual, CSV, or the Meta Marketing API). New tables only;
+  // read by the ad profitability report and nothing else.
+  await ensureMarketingSpendSchema();
   // After brand governance: the FK it adds to content_variants needs the accounts table, and
   // the accounts table references brands.
   await ensureChannelAccountSchema();

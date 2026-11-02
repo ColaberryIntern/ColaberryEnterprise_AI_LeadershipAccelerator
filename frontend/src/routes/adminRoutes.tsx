@@ -65,6 +65,7 @@ const AdminContentComposerPage = lazy(() => import('../pages/admin/marketing/com
 const AdminContentQueuePage = lazy(() => import('../pages/admin/marketing/AdminContentQueuePage'));
 const AdminPublishingQueuePage = lazy(() => import('../pages/admin/marketing/AdminPublishingQueuePage'));
 const AdminLandingPagesPage = lazy(() => import('../pages/admin/marketing/AdminLandingPagesPage'));
+const AdminAdSpendPage = lazy(() => import('../pages/admin/marketing/adSpend/AdminAdSpendPage'));
 const AdminCommunicationsPage = lazy(() => import('../pages/admin/AdminCommunicationsPage'));
 const AdminTicketBoardPage = lazy(() => import('../pages/admin/AdminTicketBoardPage'));
 const AgentDetailPage = lazy(() => import('../pages/admin/AgentDetailPage'));
@@ -276,6 +277,9 @@ const adminRoutes = (
               again, and inside /admin/marketing so it inherits section `campaigns` by prefix -
               the API side maps /api/admin/landing-pages the same way. */}
           <Route path="/admin/marketing/landing-pages" element={<AdminLandingPagesPage />} />
+          {/* Ad spend ledger: typed, imported, or synced from Meta. Feeds the profitability card on
+              Performance. Section `campaigns` by prefix, matching /api/admin/marketing/ad-spend. */}
+          <Route path="/admin/marketing/ad-spend" element={<AdminAdSpendPage />} />
         </Route>
         <Route path="/admin/brands" element={<RedirectKeepingQuery to="/admin/marketing/brands" />} />
         <Route path="/admin/tickets" element={<AdminTicketBoardPage />} />
