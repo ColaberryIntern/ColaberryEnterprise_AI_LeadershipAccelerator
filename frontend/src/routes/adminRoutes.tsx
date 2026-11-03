@@ -16,6 +16,9 @@ const AdminPipelinePage = lazy(() => import('../pages/admin/AdminPipelinePage'))
 const AdminImportPage = lazy(() => import('../pages/admin/AdminImportPage'));
 const AdminRevenueDashboardPage = lazy(() => import('../pages/admin/AdminRevenueDashboardPage'));
 const AdminCommercializationPage = lazy(() => import('../pages/admin/AdminCommercializationPage'));
+// R1 - the Revenue Room. Its API lives under the already-classified
+// /api/admin/commercialization prefix; only the page path is its own.
+const AdminRevenueRoomPage = lazy(() => import('../pages/admin/AdminRevenueRoomPage'));
 const AdminRefundsPage = lazy(() => import('../pages/admin/AdminRefundsPage'));
 const AdminSettingsPage = lazy(() => import('../pages/admin/AdminSettingsPage'));
 const AdminCapeSettingsPage = lazy(() => import('../pages/admin/AdminCapeSettingsPage'));
@@ -207,6 +210,7 @@ const adminRoutes = (
         <Route path="/admin/import" element={<AdminImportPage />} />
         <Route path="/admin/revenue" element={<AdminRevenueDashboardPage />} />
         <Route path="/admin/commercialization" element={<AdminCommercializationPage />} />
+        <Route path="/admin/revenue-room" element={<AdminRevenueRoomPage />} />
         <Route path="/admin/refunds" element={<AdminRefundsPage />} />
         <Route path="/admin/settings" element={<AdminSettingsPage />} />
         <Route path="/admin/cape-settings" element={<AdminCapeSettingsPage />} />

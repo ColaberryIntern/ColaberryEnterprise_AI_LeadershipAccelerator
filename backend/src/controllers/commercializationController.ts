@@ -5,6 +5,7 @@
 import { Request, Response } from 'express';
 import { z } from 'zod';
 import { getCommercializationBoard } from '../services/commercialization/commercializationBoardService';
+import { getFunnelSnapshot } from '../services/commercialization/funnelStageService';
 import { getHypothesisHealth } from '../services/commercialization/hypothesisHealthService';
 import {
   assertReportNeverQuotesAnUnmeasuredCount,
@@ -67,6 +68,35 @@ export async function handleGetHypothesisHealth(
       message: err.message,
     }));
     res.status(500).json({ success: false, error: 'Could not read hypothesis health.' });
+  }
+}
+
+/**
+ * C8.4's funnel, exposed directly for the first time.
+ *
+ * `getFunnelSnapshot()` has existed and been tested since C8.4 landed, but it had no
+ * route: the only way to observe it was to infer it from the hypothesis response, which
+ * reports verdicts rather than stage counts. R1 needs the stages themselves for the
+ * drill-down, and a service that can only be read as a side effect of another endpoint
+ * is one nobody can check against the database directly.
+ */
+export async function handleGetFunnelSnapshot(
+  _req: Request,
+  res: Response,
+): Promise<void> {
+  try {
+    res.json({ success: true, data: await getFunnelSnapshot() });
+  } catch (error) {
+    const err = error as Error;
+    console.error(JSON.stringify({
+      level: 'error',
+      service: 'commercialization-funnel',
+      event: 'funnel_snapshot_failed',
+      error_class: err.name || 'UnknownError',
+      outcome: 'failure',
+      message: err.message,
+    }));
+    res.status(500).json({ success: false, error: 'Could not read the funnel snapshot.' });
   }
 }
 
