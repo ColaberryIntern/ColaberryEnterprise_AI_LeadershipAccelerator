@@ -420,10 +420,12 @@ const CAMPAIGN_BREACH_CONSEQUENCE =
  *
  * ## Why a wrapper rather than a check at each return
  *
- * `generateMessageUnscreened` has four return paths: the parsed-JSON email branch, its
- * catch-fallback, the SMS/voice tail, and whatever a future channel adds. Four screens drift;
- * the one that gets forgotten is the one that matters, and it fails open and silent. Putting
- * the screen outside the function means a new return path is covered the moment it is
+ * `generateMessageUnscreened` has THREE return statements serving FOUR channel outcomes: the
+ * parsed-JSON email branch, its catch-fallback, and a tail shared by SMS and voice. The counts
+ * are stated exactly because they differ, and a reader who greps for one finds the other.
+ * Screening at each return means three screens today and a fourth the moment a channel is
+ * added; the one that gets forgotten is the one that matters, and it fails open and silent.
+ * Putting the screen outside the function means a new return path is covered the moment it is
  * written, which is the same argument the banned-word ratchet makes about scoping to a whole
  * directory rather than a curated file list.
  *
