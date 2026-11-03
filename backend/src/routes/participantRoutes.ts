@@ -38,7 +38,7 @@ import { requireContentEntitlement } from '../middlewares/requireContentEntitlem
 import { requireOrgManager } from '../middlewares/orgAuth';
 import {
   handleOrgRegister, handleOrgInvites, handleOrgOverview,
-  handleOrgRoster, handleOrgMemberDetail, handleOrgFeed,
+  handleOrgRoster, handleOrgMemberDetail, handleOrgFeed, handleOrgSponsoredCohorts,
 } from '../controllers/orgController';
 import { getInstrumentedOpenAI } from '../services/openaiInstrumented';
 import path from 'path';
@@ -483,6 +483,10 @@ router.get('/api/portal/org/overview', requireParticipant, requireOrgManager, ha
 router.get('/api/portal/org/members', requireParticipant, requireOrgManager, handleOrgRoster);
 router.get('/api/portal/org/members/:enrollmentId', requireParticipant, requireOrgManager, handleOrgMemberDetail);
 router.get('/api/portal/org/feed', requireParticipant, requireOrgManager, handleOrgFeed);
+// C8.9: the institution's own view of the cohorts it sponsored. Same guard as the rest of
+// this block, so the org is resolved from the authenticated enrollment and never from a path
+// parameter. No `:orgId` route exists here on purpose.
+router.get('/api/portal/org/cohorts', requireParticipant, requireOrgManager, handleOrgSponsoredCohorts);
 
 // Curriculum endpoints
 router.get('/api/portal/curriculum', requireParticipant, handleGetCurriculum);
