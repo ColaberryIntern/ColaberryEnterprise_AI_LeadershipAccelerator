@@ -58,25 +58,50 @@ describe('reading the ladder', () => {
     expect(urls.some((u) => u === `/buckets/${AGENT_FACTORY_BUCKET}/todolists/${AGENT_FACTORY_LIST}/todos.json`)).toBe(false);
   });
 
+  /**
+   * This test existed before, under this same name, and asserted `status=`. That is the bug it
+   * was written to prevent: `?status=` returns ONLY open todos, so the completed count was always
+   * zero and the renderer told readers to conclude "nobody closes todos on this board" from it.
+   * Completed todos are a separate collection, so the reader must make a SECOND request.
+   */
   it('asks for completed todos too, or the completed count is always a lie', async () => {
     respond({ [`/todolists/${AGENT_FACTORY_LIST}/groups.json`]: [group(11, 'G')], '/todolists/11/todos.json': [] });
     await readLadder();
-    const todoUrl = mockBcGetAll.mock.calls.map((c) => String(c[0])).find((u) => u.includes('/todos.json'));
-    expect(todoUrl).toContain('status=');
+    const todoUrls = mockBcGetAll.mock.calls.map((c) => String(c[0])).filter((u) => u.includes('/todos.json'));
+    expect(todoUrls).toHaveLength(2);
+    expect(todoUrls.some((u) => u.includes('completed=true'))).toBe(true);
+    // The old parameter must not come back; it is indistinguishable from working.
+    expect(todoUrls.some((u) => u.includes('status='))).toBe(false);
   });
 
-  it('counts completed separately and does not list them as work', async () => {
+  it('counts completed from the completed collection, not from the open one', async () => {
     respond({
-      [`/todolists/${AGENT_FACTORY_LIST}/groups.json`]: [group(11, 'G')],
-      '/todolists/11/todos.json': [
-        todo(1, 'open one'),
+      // Most specific key first: `respond` matches by substring, and the plain todos.json key
+      // would otherwise also match the ?completed=true URL.
+      '/todolists/11/todos.json?completed=true': [
         todo(2, 'done one', { completed: true }),
         todo(3, 'done two', { completed: true }),
       ],
+      [`/todolists/${AGENT_FACTORY_LIST}/groups.json`]: [group(11, 'G')],
+      '/todolists/11/todos.json': [todo(1, 'open one')],
     });
     const l = await readLadder();
     expect(l.open.map((t) => t.id)).toEqual([1]);
     expect(l.completedCount).toBe(2);
+  });
+
+  it('NEGATIVE CONTROL: an empty completed collection gives 0, even if the open one lies', async () => {
+    // If the open collection ever hands back a completed todo, it must not be counted twice nor
+    // listed as work. Previously this shape was the ONLY way the count was ever non-zero, which
+    // is why the suite passed while production always reported zero.
+    respond({
+      '/todolists/11/todos.json?completed=true': [],
+      [`/todolists/${AGENT_FACTORY_LIST}/groups.json`]: [group(11, 'G')],
+      '/todolists/11/todos.json': [todo(1, 'open one'), todo(9, 'stray', { completed: true })],
+    });
+    const l = await readLadder();
+    expect(l.open.map((t) => t.id)).toEqual([1]);
+    expect(l.completedCount).toBe(0);
   });
 
   it('keeps a missing due date as null rather than inventing a placeholder', async () => {
@@ -134,9 +159,11 @@ describe('rendering', () => {
   });
 
   /**
-   * The load-bearing one. This board reports 0 completed because nobody closes todos on it, and
-   * two sessions nearly started tickets whose work had already shipped. The warning has to be
-   * in the OUTPUT, not only in a docblock nobody reads at 1am.
+   * The load-bearing one. Two sessions nearly started tickets whose work had already shipped, so
+   * the warning has to be in the OUTPUT, not only in a docblock nobody reads at 1am.
+   *
+   * The note no longer claims "nobody closes todos on this board" as the REASON for a zero: that
+   * was an artefact of asking for the wrong collection, not an observation about the board.
    */
   it('warns that 0 completed does not mean the work is undone', () => {
     const out = renderLadder(ladder);

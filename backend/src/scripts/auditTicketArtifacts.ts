@@ -153,14 +153,31 @@ async function listTicketIds(bucket: number, list: number): Promise<number[]> {
   // list is how a reader reports an empty board and looks like it worked.
   for (const g of groups) {
     // eslint-disable-next-line no-await-in-loop
-    const todos = await bcGetAll<BcTodo>(`/buckets/${bucket}/todolists/${g.id}/todos.json?status=`);
-    ids.push(...todos.map((t) => t.id));
+    ids.push(...await listBoth(bucket, g.id));
   }
   if (ids.length === 0) {
-    const direct = await bcGetAll<BcTodo>(`/buckets/${bucket}/todolists/${list}/todos.json?status=`);
-    ids.push(...direct.map((t) => t.id));
+    ids.push(...await listBoth(bucket, list));
   }
-  return ids;
+  // Dedupe: a todo should appear in exactly one collection, but if Basecamp ever returns it in
+  // both, auditing it twice would double its PDFs and could push it over the closure threshold.
+  return [...new Set(ids)];
+}
+
+/**
+ * Open AND completed todos of one list or group.
+ *
+ * Two requests, because completed todos are a SEPARATE collection in Basecamp rather than a
+ * filter on the open one. The earlier `?status=` returned only open todos, so a closed ticket was
+ * silently missing from the sweep — and a sweep that cannot see a closed ticket reports "still
+ * open" for work that was finished and signed off. Measured 2026-11-03: L9.1 (10396178653) and
+ * C2.6 (10379236363) were both absent from their sweeps while a direct read showed each
+ * `completed=true`.
+ */
+export async function listBoth(bucket: number, listOrGroup: number): Promise<number[]> {
+  const base = `/buckets/${bucket}/todolists/${listOrGroup}/todos.json`;
+  const open = await bcGetAll<BcTodo>(base);
+  const done = await bcGetAll<BcTodo>(`${base}?completed=true`);
+  return [...open, ...done].map((t) => t.id);
 }
 
 export function renderAudit(audits: readonly TicketAudit[], raw: boolean): string {

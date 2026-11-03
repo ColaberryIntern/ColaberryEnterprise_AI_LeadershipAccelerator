@@ -1,9 +1,50 @@
+const mockBcGetAll = jest.fn();
+jest.mock('../../services/ops/basecampClient', () => ({
+  bcGet: jest.fn(),
+  bcGetAll: (...a: unknown[]) => mockBcGetAll(...a),
+}));
+
 import {
   scanAttachments,
   pdfCount,
   renderAudit,
+  listBoth,
   type TicketAudit,
 } from '../auditTicketArtifacts';
+
+beforeEach(() => { mockBcGetAll.mockReset(); });
+
+describe('listBoth — a sweep that cannot see a closed ticket reports it as open', () => {
+  function respond(map: Record<string, unknown[]>) {
+    mockBcGetAll.mockImplementation(async (url: string) => {
+      const hit = Object.keys(map).find((k) => url.includes(k));
+      return hit ? map[hit] : [];
+    });
+  }
+
+  it('makes TWO requests, one of them for the completed collection', async () => {
+    respond({ '/todos.json': [] });
+    await listBoth(7463955, 11);
+    const urls = mockBcGetAll.mock.calls.map((c) => String(c[0]));
+    expect(urls).toHaveLength(2);
+    expect(urls.some((u) => u.includes('completed=true'))).toBe(true);
+    // `?status=` is the parameter that caused the blind spot; it must not return.
+    expect(urls.some((u) => u.includes('status='))).toBe(false);
+  });
+
+  it('returns open AND completed ids', async () => {
+    respond({
+      '/todos.json?completed=true': [{ id: 99 }],
+      '/todos.json': [{ id: 1 }, { id: 2 }],
+    });
+    expect((await listBoth(7463955, 11)).sort((a, b) => a - b)).toEqual([1, 2, 99]);
+  });
+
+  it('NEGATIVE CONTROL: with an empty completed collection only the open ids come back', async () => {
+    respond({ '/todos.json?completed=true': [], '/todos.json': [{ id: 1 }] });
+    expect(await listBoth(7463955, 11)).toEqual([1]);
+  });
+});
 
 /** The markup shape that `htmlToText` destroys: the filename is an ATTRIBUTE, not text. */
 const COMMENT_WITH_TWO_PDFS = `

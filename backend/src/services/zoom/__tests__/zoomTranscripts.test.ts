@@ -3,6 +3,8 @@ import {
   localHhMm,
   localDate,
   selectInstanceNearestLocalTime,
+  isScopeError,
+  instancesFromHostRecordings,
   pickTranscriptFile,
   parseVtt,
   renderTranscript,
@@ -109,6 +111,61 @@ describe('selectInstanceNearestLocalTime', () => {
   it('rejects a malformed target time instead of coercing it', () => {
     expect(() => selectInstanceNearestLocalTime(instances, '2026-11-03', '10am', CHICAGO))
       .toThrow(/expected HH:MM/);
+  });
+});
+
+describe('isScopeError — a missing scope is not a missing recording', () => {
+  it('recognises the Zoom 4711 scope message', () => {
+    expect(isScopeError(new Error(
+      'Zoom API error 400: {"code":4711,"message":"Invalid access token, does not contain '
+      + 'scopes:[meeting:read:list_past_instances]"}',
+    ))).toBe(true);
+  });
+
+  it('recognises it by code alone', () => {
+    expect(isScopeError(new Error('{"code":4711}'))).toBe(true);
+  });
+
+  it('does NOT classify an ordinary failure as a scope problem', () => {
+    // The control. If this returned true, a 404 or a 500 would silently take the fallback path
+    // and the real error would never surface.
+    expect(isScopeError(new Error('Zoom API error 404: meeting not found'))).toBe(false);
+    expect(isScopeError(new Error('socket hang up'))).toBe(false);
+    expect(isScopeError('not even an error')).toBe(false);
+  });
+});
+
+describe('instancesFromHostRecordings', () => {
+  const meetings = [
+    { id: 8563379136, uuid: 'u-a', start_time: '2026-11-03T16:02:00Z' },
+    { id: 8563379136, uuid: 'u-b', start_time: '2026-11-03T15:27:00Z' },
+    { id: 9999999999, uuid: 'u-other', start_time: '2026-11-03T16:00:00Z' },
+  ];
+
+  it('keeps only the requested meeting id, oldest first', () => {
+    const got = instancesFromHostRecordings(meetings, '8563379136');
+    expect(got.map((i) => i.uuid)).toEqual(['u-b', 'u-a']);
+  });
+
+  it('matches a numeric id against a string id', () => {
+    // Zoom returns the id as a NUMBER here and a string elsewhere; comparing types would drop all.
+    expect(instancesFromHostRecordings([{ id: 123, uuid: 'x', start_time: 'z' }], '123'))
+      .toHaveLength(1);
+  });
+
+  it('tolerates a spaced meeting id as people paste it', () => {
+    expect(instancesFromHostRecordings([{ id: '856 3379 136', uuid: 'x', start_time: 'z' }], '8563379136'))
+      .toHaveLength(1);
+  });
+
+  it('drops entries missing a uuid or a start time rather than emitting a broken instance', () => {
+    expect(instancesFromHostRecordings(
+      [{ id: 1, uuid: 'x' }, { id: 1, start_time: 'z' }, { id: 1 }], '1',
+    )).toEqual([]);
+  });
+
+  it('returns nothing when the host owns no such meeting', () => {
+    expect(instancesFromHostRecordings(meetings, '5555555555')).toEqual([]);
   });
 });
 

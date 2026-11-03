@@ -11,6 +11,14 @@
  *   docker exec -w /app -e MEETING_ID=8563379136 -e AT=10:00 \
  *     accelerator-backend node dist/scripts/pullZoomTranscript.js
  *
+ * ## It survives a missing scope instead of reporting "no recording"
+ *
+ * This app does not hold `meeting:read:list_past_instances`. On that error — and ONLY that error —
+ * it falls back to `/users/{host}/recordings`, which the class-recording correlation already uses
+ * in production, so it is known to be granted. That listing carries `start_time` and
+ * `recording_files` per occurrence, so instance selection survives rather than degrading to
+ * "whatever ran last". A missing scope is not a missing recording and is never reported as one.
+ *
  * ## It prints a roster and a selection trail, not just an answer
  *
  * A recurring meeting id has many instances per day, and `/meetings/{id}/recordings` returns only
@@ -32,6 +40,9 @@
 import fs from 'fs';
 import {
   listPastInstances,
+  listHostRecordings,
+  instancesFromHostRecordings,
+  isScopeError,
   getRecordingDetail,
   pickTranscriptFile,
   downloadTranscriptBody,
@@ -42,6 +53,8 @@ import {
   localDate,
   localHhMm,
   type VttCue,
+  type ZoomPastInstance,
+  type HostRecordingMeeting,
 } from '../services/zoom/zoomTranscripts';
 
 /** Speaker -> cue count, most talkative first. The roster that proves who was in the room. */
@@ -69,9 +82,31 @@ export async function main(): Promise<void> {
 
   // Numeric ids can have many instances; a UUID is already one instance.
   let uuid = meetingId;
+  let hostMeetings: HostRecordingMeeting[] = [];
   if (/^\d+$/.test(meetingId.replace(/\s/g, ''))) {
-    const instances = await listPastInstances(meetingId);
-    out.push(`past instances returned by Zoom: ${instances.length}`);
+    let instances: ZoomPastInstance[] = [];
+    let via = 'past_meetings/{id}/instances';
+    try {
+      instances = await listPastInstances(meetingId);
+    } catch (err) {
+      // A MISSING SCOPE IS NOT A MISSING RECORDING, and must not be reported as one.
+      if (!isScopeError(err)) throw err;
+      via = 'users/{host}/recordings';
+      out.push('past-instances scope is NOT granted on this app. Falling back to the host');
+      out.push('  recording listing -- the endpoint the class-recording correlation already uses,');
+      out.push('  so it is known to be granted. It carries start_time AND files per occurrence,');
+      out.push('  which means instance selection survives the missing scope.');
+      out.push('  LIMIT: it only sees recordings owned by ZOOM_HOST_EMAIL.');
+      hostMeetings = await listHostRecordings(on, on);
+      out.push(`  host listing returned ${hostMeetings.length} recording(s) on ${on}`);
+      instances = instancesFromHostRecordings(hostMeetings, meetingId);
+      if (instances.length === 0 && hostMeetings.length > 0) {
+        // Distinguish "this host has no such meeting" from "this host has nothing at all".
+        out.push(`  none of them is meeting ${meetingId}. Ids present: `
+          + `${[...new Set(hostMeetings.map((m) => String(m.id ?? '?')))].join(', ')}`);
+      }
+    }
+    out.push(`instances via ${via}: ${instances.length}`);
     for (const i of instances) {
       out.push(`  ${i.start_time}  ->  ${localDate(i.start_time, tz)} ${localHhMm(i.start_time, tz)} ${tz}`);
     }
@@ -91,12 +126,23 @@ export async function main(): Promise<void> {
     out.push('MEETING_ID looks like an instance UUID; using it directly');
   }
 
-  const detail = await getRecordingDetail(uuid);
+  // Prefer the files the host listing already handed us: a per-meeting call would need another
+  // scope we may not have, and asking for data we are holding is how a working path breaks.
+  const fromHostListing = hostMeetings.find((m) => m.uuid === uuid);
+  const detail = fromHostListing ?? await getRecordingDetail(uuid);
+  if (fromHostListing) out.push('files taken from the host listing; no per-meeting call made');
   out.push('');
   out.push(`recording topic : ${detail.topic ?? '(none)'}`);
   out.push(`recording start : ${detail.start_time ?? '(none)'}`);
   out.push(`duration (min)  : ${detail.duration ?? '(none)'}`);
   out.push(`files           : ${(detail.recording_files ?? []).map((f) => f.file_type).join(', ') || '(none)'}`);
+
+  // Independent of how the instance was chosen: confirm what we actually got lines up with what
+  // was asked for. Cheap, and it catches a UUID passed in by hand for the wrong occurrence.
+  if (detail.start_time) {
+    out.push(`resolved instance: ${localDate(detail.start_time, tz)} `
+      + `${localHhMm(detail.start_time, tz)} ${tz}`);
+  }
 
   const picked = pickTranscriptFile(detail.recording_files);
   if (!picked) {

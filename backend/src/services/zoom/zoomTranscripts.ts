@@ -24,6 +24,7 @@
  *    to CST on 2026-11-01, so a hardcoded -6 or -5 is right half the year and wrong the other
  *    half. We convert through `Intl` with a real IANA zone instead of arithmetic.
  */
+import { env } from '../../config/env';
 import { zoomApiRequest, getZoomAccessToken, zoomFetchWithTimeout } from './zoomApiClient';
 
 /** A past occurrence of a meeting id. */
@@ -311,6 +312,58 @@ export function speakerExchange(
 // ---------------------------------------------------------------------------
 // Network. Thin wrappers; the logic above is what gets tested.
 // ---------------------------------------------------------------------------
+
+/** Does this error mean the token lacks a scope, rather than the data being absent? */
+export function isScopeError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  return /does not contain scopes|\b4711\b/i.test(msg);
+}
+
+export interface HostRecordingMeeting extends ZoomRecordingDetail {
+  /** Numeric meeting id, as Zoom returns it on the host listing (may arrive as a number). */
+  readonly id?: number | string;
+}
+
+/**
+ * Every cloud recording owned by `ZOOM_HOST_EMAIL` in a date window, WITH its files.
+ *
+ * This is the fallback that makes a missing `meeting:read:list_past_instances` scope survivable.
+ * It is the endpoint the class-recording correlation already uses in production — 8 rows in
+ * `presentation_recordings`, newest 2026-10-30 — so it is known to be granted, which is exactly
+ * why it is worth reaching for before asking anyone to change the Zoom app.
+ *
+ * It returns one entry per OCCURRENCE with `start_time` and `recording_files` already attached,
+ * so instance selection survives and no per-instance call is needed.
+ *
+ * The limit, stated rather than discovered later: it only sees recordings owned by that one host.
+ * A meeting run from somebody else's personal meeting id will not appear here, and that is
+ * indistinguishable from "no recording" at this layer — so the caller must say which it asked for.
+ */
+export async function listHostRecordings(
+  fromDate: string,
+  toDate: string,
+): Promise<HostRecordingMeeting[]> {
+  const data = await zoomApiRequest<{ meetings?: HostRecordingMeeting[] }>(
+    'GET',
+    `/users/${encodeURIComponent(env.zoomHostEmail)}/recordings`
+    + `?from=${encodeURIComponent(fromDate)}&to=${encodeURIComponent(toDate)}&page_size=100`,
+  );
+  return data.meetings ?? [];
+}
+
+/** Host-listing entries for one meeting id, as instances the selector can choose between. */
+export function instancesFromHostRecordings(
+  meetings: readonly HostRecordingMeeting[],
+  meetingId: string,
+): ZoomPastInstance[] {
+  const want = String(meetingId).replace(/\s/g, '');
+  return meetings
+    .filter((m) => String(m.id ?? '').replace(/\s/g, '') === want)
+    .filter((m): m is HostRecordingMeeting & { uuid: string; start_time: string } =>
+      Boolean(m.uuid && m.start_time))
+    .map((m) => ({ uuid: m.uuid, start_time: m.start_time }))
+    .sort((a, b) => a.start_time.localeCompare(b.start_time));
+}
 
 /** Past occurrences of a meeting id, oldest first. Empty when Zoom has none. */
 export async function listPastInstances(meetingId: string): Promise<ZoomPastInstance[]> {
