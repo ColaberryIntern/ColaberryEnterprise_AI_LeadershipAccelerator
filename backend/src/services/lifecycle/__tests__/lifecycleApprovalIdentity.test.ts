@@ -94,7 +94,11 @@ const call = (over: Record<string, unknown> = {}) => approveLifecycleBlueprint({
   scope: 'full',
   rationale: 'looks right to me',
   selectedDesignRef: 'design-abc',
-  admin: { email: 'admin@test', id: 'admin-id-1', role: 'DELIVERY_OWNER' },
+  // `super_admin` because the approve path now ENFORCES the role (LC-10's authorized-human limb),
+  // and because it is a role that actually exists: these fixtures previously used
+  // 'DELIVERY_OWNER', which appears nowhere in `admin_users` (ai_staff / admin / sales /
+  // super_admin). A fixture role the system does not have cannot exercise an authorization rule.
+  admin: { email: 'admin@test', id: 'admin-id-1', role: 'super_admin' },
   ...over,
 } as any);
 
@@ -114,20 +118,20 @@ describe('the approver handed on is the SESSION identity', () => {
   });
 
   it('falls back to the id when there is no email', async () => {
-    await call({ admin: { id: 'admin-id-1', role: 'DELIVERY_OWNER' } });
+    await call({ admin: { id: 'admin-id-1', role: 'super_admin' } });
     expect(passed().approvedBy).toBe('admin-id-1');
   });
 
   it('records unknown-admin rather than null when the session carries neither', async () => {
     // Null would be written to the column and read later as "nobody approved this", which is a
     // worse lie than a placeholder that is obviously a placeholder.
-    await call({ admin: { role: 'DELIVERY_OWNER' } });
+    await call({ admin: { role: 'super_admin' } });
     expect(passed().approvedBy).toBe('unknown-admin');
   });
 
   it('takes the role from the session too', async () => {
     await call();
-    expect(passed().approvedByRole).toBe('DELIVERY_OWNER');
+    expect(passed().approvedByRole).toBe('super_admin');
   });
 });
 
@@ -139,7 +143,7 @@ describe('THE PIN: no caller-supplied value can become the approver', () => {
       approvedByRole: 'SUPERADMIN',
     });
     expect(passed().approvedBy).toBe('admin@test');
-    expect(passed().approvedByRole).toBe('DELIVERY_OWNER');
+    expect(passed().approvedByRole).toBe('super_admin');
   });
 
   it('lets NO attacker value through on any field at all', async () => {
@@ -213,5 +217,43 @@ describe('the approve path still refuses what it refused before', () => {
     requireTenantAccessAudited.mockRejectedValueOnce(new Error('TenantAccessError'));
     await expect(call()).rejects.toThrow();
     expect(approveBlueprint).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * LC-10's "authorized human" limb. Until 2026-11-03 the role was recorded into a nullable column
+ * and never compared, so this limb was satisfied by bookkeeping. These pin the enforcement.
+ */
+describe('LC-10 — the approving session must hold a permitted role', () => {
+  it('a super_admin approves', async () => {
+    await call({ admin: { id: 'a', role: 'super_admin' } });
+    expect(approveBlueprint).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(['admin', 'ai_staff', 'sales'])('a %s is REFUSED and nothing is approved', async (role) => {
+    // All three exist in admin_users — 48 users between them — so this is the real population
+    // being excluded, not a hypothetical.
+    await expect(call({ admin: { id: 'a', role } })).rejects.toMatchObject({
+      name: 'ApproverRoleError',
+      refusal: 'approver_role_not_permitted',
+    });
+    expect(approveBlueprint).not.toHaveBeenCalled();
+  });
+
+  it('a session with NO role is refused as missing, not as not-permitted', async () => {
+    await expect(call({ admin: { id: 'a' } })).rejects.toMatchObject({
+      name: 'ApproverRoleError',
+      refusal: 'approver_role_missing',
+    });
+    expect(approveBlueprint).not.toHaveBeenCalled();
+  });
+
+  it('the attempt is AUDITED before it is refused', async () => {
+    // The refusal sits after loadAndAuthorize on purpose: a refusal nobody can see is worse than
+    // no refusal, so the access decision must already have been recorded.
+    await expect(call({ admin: { id: 'a', role: 'sales' } })).rejects.toThrow();
+    const audited = requireTenantAccessAudited.mock.calls.length
+      + recordAccessDecision.mock.calls.length;
+    expect(audited).toBeGreaterThan(0);
   });
 });
