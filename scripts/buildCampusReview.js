@@ -46,12 +46,6 @@ const VIEW_TITLES = {
   '35-inbox': ['Messages', 'The message inbox.'],
 };
 const ORDER = Object.keys(VIEW_TITLES);
-/** Views the fidelity gate runs on desktop only, and why the phone has no build shot (a recorded gap, not a missed capture). */
-const NO_PHONE_BUILD = {
-  '07-notifications': 'Not reachable on a phone in the build: the phone tab bar has no Alerts tab and the stats pill (with the bell) is hidden. Known gap.',
-  '12-me': 'Not reachable on a phone in the build: the tab bar Me opens the settings page, not this panel, and the stats pill is hidden. Known gap.',
-  '35-inbox': 'Not reachable on a phone in the build: the phone tab bar has no Messages tab and the stats pill is hidden. Known gap.',
-};
 
 const exists = (p) => { try { return fs.statSync(p).isFile(); } catch { return false; } };
 const fidOf = (a, s, v) => fidelity.find((r) => r.account === a && r.size === s && r.view === v);
@@ -66,7 +60,7 @@ function shot(dir, a, s, v, label) {
 const views = ORDER.filter((v) => fidelity.some((r) => r.view === v) || designRuns.some((r) => r.view === v));
 const buildOnly = Array.from(new Set(fidelity.map((r) => r.view))).filter((v) => !ORDER.includes(v)).sort();
 let diffId = 0;
-const totals = { pairs: 0, missing: 0, known: 0 };
+const totals = { pairs: 0, missing: 0, known: 0, open: 0 };
 
 const sections = views.map((v, i) => {
   const [title, what] = VIEW_TITLES[v];
@@ -77,13 +71,18 @@ const sections = views.map((v, i) => {
       if (f || exists(path.join(DESIGN, `${a}-${s}-${v}.png`))) totals.pairs += 1;
       const missing = (f && f.missing) || [];
       const known = (f && f.known) || [];
-      totals.missing += missing.length; totals.known += known.length;
-      const gate = !f ? (s === 'phone' && NO_PHONE_BUILD[v] ? `<p class="gate bad">${esc(NO_PHONE_BUILD[v])}</p>` : '<p class="gate warn">Build not captured for this size.</p>')
+      // C23 WP-11: `open` = not built and not decided (a gap to build or to decide); `seed` = built, not showable on the local stack
+      const open = (f && f.open) || [];
+      const seed = (f && f.seed) || [];
+      totals.missing += missing.length; totals.known += known.length; totals.open += open.length;
+      const gate = !f ? '<p class="gate warn">Build not captured for this size.</p>'
         : f.error ? `<p class="gate bad">Build run error: ${esc(f.error)}</p>`
           : missing.length ? `<p class="gate bad">Missing in the build: ${missing.map(esc).join(', ')}</p>`
             : '<p class="gate ok">Every required element present and visible.</p>';
       const diffs = known.map((k) => { diffId += 1; return `<label class="diff"><input type="checkbox" data-diff="${esc(`${v} / ${AUD[a]} / ${s}: ${k}`)}" id="d${diffId}"> ${esc(k)}</label>`; }).join('');
-      return `<div class="pair-block"><h4>${s === 'desktop' ? 'Desktop 1440×900' : 'Phone 390×844'}</h4><div class="pair ${s}">${shot(DESIGN, a, s, v, 'Design')}${shot(BUILD, a, s, v, 'Build')}</div>${gate}${diffs ? `<div class="diffs"><b>Deliberate differences the gate reports</b> (tick any you want changed)${diffs}</div>` : ''}</div>`;
+      const gaps = open.map((k) => { diffId += 1; return `<label class="diff"><input type="checkbox" data-diff="${esc(`${v} / ${AUD[a]} / ${s}: OPEN: ${k}`)}" id="d${diffId}"> ${esc(k)}</label>`; }).join('');
+      const seeds = seed.length ? `<p class="gate warn">Built, not shown on the test stack: ${seed.map(esc).join('; ')}</p>` : '';
+      return `<div class="pair-block"><h4>${s === 'desktop' ? 'Desktop 1440×900' : 'Phone 390×844'}</h4><div class="pair ${s}">${shot(DESIGN, a, s, v, 'Design')}${shot(BUILD, a, s, v, 'Build')}</div>${gate}${gaps ? `<div class="diffs"><b>Not built yet, not decided</b> (tick to build it)${gaps}</div>` : ''}${diffs ? `<div class="diffs"><b>Deliberate differences: your Section 3 decisions or the real-data rule</b> (tick any you want changed)${diffs}</div>` : ''}${seeds}</div>`;
     }).join('');
     return `<div class="aud"><h3>${esc(AUD[a])}</h3>${pairs}</div>`;
   }).join('');
@@ -140,7 +139,7 @@ button{font:inherit;padding:8px 16px;border-radius:8px;border:1px solid var(--ac
   <h1>Campus: design next to build</h1>
   <p>C23 WP-11 part 2. Left is the original prototype (<code>docs/design/campus/colaberry-campus.html</code>), right is the build from main on the local test stack with the four seeded test accounts. Generated ${generated}.</p>
   <p>Differences that come from later design rounds, DECISIONS.md or the real-data rule are expected; the gate lists them under each shot. A missing element is a real gap.</p>
-  <div class="bar"><div><b>${views.length}</b>views</div><div><b>${totals.pairs}</b>design / build pairs</div><div><b>${totals.missing}</b>missing elements</div><div><b>${totals.known}</b>deliberate differences reported</div></div>
+  <div class="bar"><div><b>${views.length}</b>views</div><div><b>${totals.pairs}</b>design / build pairs</div><div><b>${totals.missing}</b>missing elements</div><div><b>${totals.known}</b>deliberate differences reported</div><div><b>${totals.open}</b>not built, not decided</div></div>
   <nav class="toc" aria-label="Views">${toc}</nav>
   ${buildOnly.length ? `<p style="margin-top:12px">Build-only views (no state in this prototype; later rounds have their own design files and reviews, or the view is a behavior the e2e asserts): ${buildOnly.map(esc).join(', ')}.</p>` : ''}
 </header>
@@ -171,4 +170,4 @@ document.getElementById('reset').onclick=()=>{try{localStorage.removeItem(KEY)}c
 </script></body></html>
 `;
 fs.writeFileSync(OUT, html);
-console.log(`review: ${views.length} views, ${totals.pairs} pairs, ${totals.missing} missing, ${totals.known} known -> ${OUT}`);
+console.log(`review: ${views.length} views, ${totals.pairs} pairs, ${totals.missing} missing, ${totals.known} known, ${totals.open} open -> ${OUT}`);

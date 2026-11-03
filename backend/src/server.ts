@@ -107,6 +107,7 @@ import { ensureBroadcastReplayIndexSchema } from './db/ensureBroadcastReplayInde
 import { ensureFactoryTaskSchema } from './db/ensureFactoryTaskSchema';
 import { ensureAgentDomainStoryLadderSchema } from './db/ensureAgentDomainStoryLadderSchema';
 import { ensureEmailSendLedgerSchema } from './db/ensureEmailSendLedgerSchema';
+import { ensureProjectMeasurementSchema } from './db/ensureProjectMeasurementSchema';
 import { ensureInternshipSchema } from './db/ensureInternshipSchema';
 import { ensureMilestoneLadderSchema } from './db/ensureMilestoneLadderSchema';
 import { ensureOauthTokenVaultSchema } from './db/ensureOauthTokenVaultSchema';
@@ -2925,6 +2926,12 @@ async function start(): Promise<void> {
   // useless without the UNIQUE indexes this creates, which is why it is
   // ensured at boot alongside its siblings rather than by the send script.
   await ensureEmailSendLedgerSchema();
+  // Approved measurement definitions and the readings taken against them. Until
+  // these existed, `computeMaturity` could not reach `operational_result`, so the
+  // publish gate refused EVERY case study linked to a student project — which is
+  // why every live case study is an unlinked repo collection. Reads fail soft, so
+  // a boot that skipped this leaves the ladder exactly where it was.
+  await ensureProjectMeasurementSchema();
   // AI Internship: application lifecycle, two-channel interview, decisions,
   // documents, and `cohort_memberships` — the secondary membership that lets an
   // intern join the internship cohort WITHOUT disturbing the class cohort in

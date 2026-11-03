@@ -10,6 +10,13 @@ import { DIMENSION_HEADING, groupOf } from './intakeReview';
 import type { StoryEnrichmentRow } from './storyEnrichmentLedger';
 import type { UnderstandingItem } from '../delivery/projectUnderstanding';
 import type { BuildPlan } from './planContract';
+import {
+  outcomeEvidenceItems,
+  outcomeGapReason,
+  type MeasurementDefinition,
+  type MeasurementOutcome,
+  type OutcomeEvidenceItem,
+} from './projectMeasurement';
 
 /**
  * caseStudyFoundation - everything a case study could be built from, kept in
@@ -38,15 +45,25 @@ import type { BuildPlan } from './planContract';
  *   build_record              at least one story has been verified from the
  *                             repo, or at least one enrichment merged
  *   capability_demonstration  a verified story pointed at a demonstration
- *   operational_result        UNREACHABLE here: needs an outcome measured
- *                             through an approved measurement definition
+ *   operational_result        a confirmed reading against an approved measurement
+ *                             definition (projectMeasurement.ts). Reachable since
+ *                             2026-11-03; it was UNREACHABLE before that, and the
+ *                             publish gate refusing every project-linked case study
+ *                             was the consequence
  *   impact_case_study         UNREACHABLE here: needs a client-confirmed
  *                             business impact on top of that
  *
- * The last two rungs are not "not yet implemented"; they are not reachable
- * from a build alone, and the publish gate refuses anything below
- * operational_result. That is the line between a build record and a case
- * study, and it is drawn in code rather than in an editor's judgement.
+ * Neither of the last two rungs is reachable from a build alone, and the publish
+ * gate refuses anything below operational_result. That is the line between a build
+ * record and a case study, and it is drawn in code rather than in an editor's
+ * judgement.
+ *
+ * What changed on 2026-11-03 is the way ACROSS that line, not the line itself.
+ * `operational_result` now requires a reading somebody took in real use, against a
+ * question approved in advance, confirmed by a second person — which is a harder
+ * claim than a demonstration, not a softer one. Before that there was no way across
+ * at all, so the gate refused every case study linked to a student project and the
+ * whole published library is unlinked repo collections.
  */
 
 export interface BuildFact {
@@ -94,7 +111,13 @@ export interface CaseStudyFoundation {
   };
   readonly demonstrationEvidence: readonly DemonstrationRef[];
   readonly outcomeEvidence: {
-    readonly items: readonly never[];
+    /**
+     * Confirmed readings against approved measurement definitions. Was
+     * `readonly never[]` — the type itself said no outcome could exist, because
+     * nothing could produce one. See `projectMeasurement.ts`.
+     */
+    readonly items: readonly OutcomeEvidenceItem[];
+    /** Empty when `items` is non-empty: there is no gap left to explain. */
     readonly why: string;
     /** Measurement events the stories reported, held unmerged. */
     readonly heldMeasurementEvents: number;
@@ -114,9 +137,15 @@ export interface FoundationInput {
   readonly enrichments: readonly StoryEnrichmentRow[];
   /** Stories the platform verified from the repo, by count. */
   readonly verifiedStories: number;
+  /**
+   * The project's measurement definitions and the readings taken against them.
+   * Optional so every existing caller keeps compiling and keeps its behaviour
+   * exactly: absent means no outcome, which is what every project had before
+   * these tables existed.
+   */
+  readonly measurementDefinitions?: readonly MeasurementDefinition[];
+  readonly measurementOutcomes?: readonly MeasurementOutcome[];
 }
-
-const OUTCOME_WHY = 'No approved measurement definitions exist, so nothing measured in use can be recorded as an outcome yet.';
 
 export const rungIndex = (m: CaseStudyMaturity): number => CASE_STUDY_MATURITIES.indexOf(m);
 
@@ -124,6 +153,11 @@ export function computeMaturity(input: {
   verifiedStories: number;
   mergedEnrichments: number;
   demonstrations: number;
+  /**
+   * Confirmed readings against approved measurement definitions. Optional, and
+   * absent means zero, so every existing caller keeps the rung it had.
+   */
+  outcomes?: number;
 }): { maturity: CaseStudyMaturity; reason: string; nextRungNeeds: string | null } {
   const built = input.verifiedStories > 0 || input.mergedEnrichments > 0;
   if (!built) {
@@ -131,6 +165,23 @@ export function computeMaturity(input: {
       maturity: 'story_hypothesis',
       reason: 'No story has been verified and no story has reported what it built.',
       nextRungNeeds: 'A story verified from the repo, or a story that reports what it built.',
+    };
+  }
+  const outcomes = input.outcomes ?? 0;
+  if (outcomes > 0) {
+    // The top rung this function can reach. `impact_case_study` stays unreachable
+    // on purpose: nobody has written down what distinguishes it from a measured
+    // outcome, and inventing a criterion here to fill the ladder would be exactly
+    // the thing the rung above was built to prevent.
+    //
+    // A demonstration is NOT required alongside. Something measured in use is
+    // stronger evidence than something watched working, and a project that has the
+    // stronger evidence should not be reported at a lower rung for missing the
+    // weaker one.
+    return {
+      maturity: 'operational_result',
+      reason: `${outcomes} confirmed ${outcomes === 1 ? 'outcome' : 'outcomes'} measured in use against an approved measurement definition.`,
+      nextRungNeeds: null,
     };
   }
   if (input.verifiedStories > 0 && input.demonstrations > 0) {
@@ -191,11 +242,20 @@ export function buildCaseStudyFoundation(input: FoundationInput): CaseStudyFound
     .filter((r) => r.outcome === 'merged' || r.outcome === 'no_op')
     .reduce((n, r) => n + (r.event.measurementEvents ?? []).length, 0);
 
+  // Confirmed readings against approved definitions. The filtering rule lives in
+  // projectMeasurement.ts so it can be tested on its own; what arrives here has
+  // already passed it.
+  const outcomes = outcomeEvidenceItems(
+    input.measurementDefinitions ?? [],
+    input.measurementOutcomes ?? [],
+  );
+
   const mergedEnrichments = input.enrichments.filter((r) => r.outcome === 'merged').length;
   const { maturity, reason, nextRungNeeds } = computeMaturity({
     verifiedStories: input.verifiedStories,
     mergedEnrichments,
     demonstrations: demonstrations.length,
+    outcomes: outcomes.length,
   });
 
   const openQuestions = items.filter((i) => groupOf(i) === 'openQuestions').length;
@@ -208,9 +268,15 @@ export function buildCaseStudyFoundation(input: FoundationInput): CaseStudyFound
   // that section nothing has. At record level the sentence is only true on the
   // bottom rung; above it, it contradicts the rung one line up.
   const built = rungIndex(maturity) > 0;
+  // The outcome gap is a limitation only while there IS one. Listing it under a
+  // record that carries a confirmed outcome would contradict the rung in the line
+  // above it, which is the same mistake the hypothesis filter one line up avoids.
+  const outcomeGap = outcomes.length === 0
+    ? outcomeGapReason(input.measurementDefinitions ?? [], input.measurementOutcomes ?? [])
+    : null;
   const limitations: string[] = [
     ...hypothesis.limitations.filter((l) => !built || l !== HYPOTHESIS_ONLY_LIMITATION),
-    OUTCOME_WHY,
+    ...(outcomeGap ? [outcomeGap] : []),
   ];
   if (openQuestions > 0) {
     limitations.push(`${openQuestions} ${openQuestions === 1 ? 'question a story raised is' : 'questions stories raised are'} still unsettled; the truth disagrees with itself until a person decides.`);
@@ -229,7 +295,7 @@ export function buildCaseStudyFoundation(input: FoundationInput): CaseStudyFound
     hypothesisCoverage: hypothesisCoverage(hypothesis),
     buildEvidence: { facts, stories, verifiedStories: input.verifiedStories },
     demonstrationEvidence: demonstrations,
-    outcomeEvidence: { items: [], why: OUTCOME_WHY, heldMeasurementEvents },
+    outcomeEvidence: { items: outcomes, why: outcomeGap ?? '', heldMeasurementEvents },
     openQuestions,
     publicationPreference: 'undecided',
     publishable: false,

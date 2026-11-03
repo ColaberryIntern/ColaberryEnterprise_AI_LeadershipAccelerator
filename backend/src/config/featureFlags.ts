@@ -18,6 +18,23 @@ export const FLAGS = {
   // regardless, so the tables exist on the next backend deploy either way — see the comment at
   // its registration in server.ts. The code is dark; the schema is not.
   lifecycleEnforcement: process.env.ENABLE_PROJECT_LIFECYCLE === 'true',
+  // SBP story-authorization gate ENFORCEMENT (L8.4, P8-T4). Ships DARK (default off), and the
+  // default is deliberate, not provisional.
+  //
+  // `sbpOrchestrator` now passes `projectId` into `decomposeBuild`, so the story gate is CONSULTED
+  // on every student build generation (it was unreachable before, because no project id was
+  // passed). What this flag controls is what a REFUSAL does:
+  //   off (observe) -> log `sbp_story_gate_would_refuse` and PROCEED. The gate is armed and
+  //                    measured, but it cannot break a build that cannot yet pass it.
+  //   on  (enforce) -> throw `StoryNotAuthorizedError`, refusing the build.
+  //
+  // Measured on production 2026-11-03 over all 82 student projects: hard enforcement would refuse
+  // 20 (every post-cutoff project), because ZERO projects hold an approved lifecycle blueprint —
+  // the blueprint-approval step is not wired into the student build flow yet. So this flag stays
+  // off until that path exists; observe mode surfaces exactly who would be refused in the meantime.
+  // The per-project legacy cutoff (`STUDENT_REGISTRATION_LIVE_SINCE`) is separate and already
+  // permits the 62 pre-cutoff builds regardless of this flag.
+  sbpStoryGateEnforce: process.env.ENABLE_SBP_STORY_GATE_ENFORCE === 'true',
   // Gov pursuit STEP 6 — on a bid-pursuit APPROVAL, auto-create the two-track gov delivery project
   // (Proposal + Build tracks) and map the established requirements onto it. Ships DARK (default off);
   // the approval route calls it only when ENABLE_GOV_INGESTION=true, so deploying it changes nothing.

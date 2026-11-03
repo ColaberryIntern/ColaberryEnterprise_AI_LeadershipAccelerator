@@ -307,6 +307,16 @@ export async function approveLifecycleBlueprint(input: {
     throw new ManifestNotFoundError();
   }
 
+  // LC-10's "authorized human" limb, enforced rather than merely recorded.
+  //
+  // Deliberately AFTER `loadAndAuthorize` so the attempt is audited before it is refused: a
+  // refusal nobody can see is worse than no refusal. And deliberately HERE rather than inside
+  // `approveBlueprint`, because this is where the authenticated session exists — that function
+  // receives the role as data and has no way to know whether it came from a session or a request
+  // body. A source guard in the test suite keeps that from quietly becoming untrue.
+  const { assertApproverRole } = await import('./approverRolePolicy');
+  assertApproverRole(input.admin.role);
+
   const { approveBlueprint } = await import('./blueprintApproval');
   return approveBlueprint({
     tenantId: row.tenant_id,

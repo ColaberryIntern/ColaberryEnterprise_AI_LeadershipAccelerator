@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Navigate, useNavigate } from 'react-router-dom';
+import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useFirstWinPending, FIRST_LESSON_HREF } from '../today/explorerFirstWin';
 import CampusWorld from '../../../components/campus/CampusWorld';
 import CampusTopBar from '../../../components/campus/home/CampusTopBar';
@@ -38,9 +38,11 @@ import CampusDmToast from '../../../components/campus/CampusDmToast';
 import CampusDmDock from '../../../components/campus/CampusDmDock';
 import CampusInbox from '../../../components/campus/home/CampusInbox';
 import { unreadConversations } from '../../../components/campus/home/inboxModel';
+import { OPEN_BELL_EVENT } from '../../../components/campus/art/BuildingBadges';
 import { useNotifPins } from '../../../components/campus/home/useNotifPins';
 import CampusAlerts from '../../../components/campus/events/CampusAlerts';
-import CampusTabBar from '../../../components/campus/CampusTabBar';
+import CampusTabBar, { PANEL_STATE } from '../../../components/campus/CampusTabBar';
+import type { PhonePanel } from '../../../components/campus/CampusTabBar';
 import CampusLive from '../../../components/campus/CampusLive';
 import CampusCheer from '../../../components/campus/CampusCheer';
 import { useLevelCheer } from '../../../components/campus/home/useLevelCheer';
@@ -106,6 +108,16 @@ function CampusHome(): React.ReactElement {
   // C23 phase 3 (Q6): the 💬 inbox under the top bar; closing it recenters the map (rule R10)
   const [inboxOpen, setInboxOpen] = useState(false);
   const closeInbox = useCallback(() => { setInboxOpen(false); map.camRef.current?.recenter(); }, [map.camRef]);
+  // C23 WP-11: a page's phone tab (Messages, Alerts, Me) walked back here to open its panel; once past the gate, open it and clear the ask
+  const location = useLocation();
+  const askedPanel = (location.state as Record<string, PhonePanel> | null)?.[PANEL_STATE] ?? null;
+  useEffect(() => {
+    if (!askedPanel || gateOpen) return;
+    if (askedPanel === 'messages') setInboxOpen(true);
+    else if (askedPanel === 'alerts') window.dispatchEvent(new Event(OPEN_BELL_EVENT));
+    else campus.openMe();
+    navigate(location.pathname + location.search, { replace: true, state: null });
+  }, [askedPanel, gateOpen, campus.openMe, navigate, location.pathname, location.search]);
   const onCard = useCallback((s: { open: boolean; building: BuildingId | null }) => {
     setCardOpen(s.open); if (s.building) { setHere(s.building); setOnLawn(false); }
   }, [setHere]);
@@ -176,7 +188,7 @@ function CampusHome(): React.ReactElement {
         onWalk={map.goTo} onRun={(id) => map.goTo(id, { run: true })} onHover={setHover} onTour={campus.resumeTour} onEndTour={campus.endTour} onDismissTour={campus.dismissTour} onDone={onComplete}
         onOpen={(r) => campus.enterThroughDoor(r, null)} photo={photo} call={call} coming={coming} openHouse={openHouse} weatherLine={wxLine} team={team} />
       <div className="cm-home-livebar"><CampusLive onWalk={(id, run) => map.goTo(id, { run })} hereId={campus.here ?? null} /></div>
-      <CampusTabBar active="/portal/campus" />
+      <CampusTabBar active="/portal/campus" onMessages={() => setInboxOpen(true)} />
       <CampusListView />
       <CampusDoorTransition />
       <CampusDmToast />
