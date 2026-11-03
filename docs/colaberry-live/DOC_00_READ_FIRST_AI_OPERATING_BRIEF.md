@@ -317,7 +317,7 @@ Eighteen documents are required by bootstrap §3.1 and §17. Status as of 2026-1
 | **08** | Test Plan, Failure Drills & Launch Runbook | L11.8 | `docs/colaberry-live/DOC_08_TEST_PLAN_FAILURE_DRILLS_LAUNCH_RUNBOOK.md` |
 | **09** | Traceability Matrix | L0.4 | `docs/COLABERRY_LIVE_TRACEABILITY_MATRIX.md` — **generated, do not hand-edit** |
 | **10** | Current State Migration Ledger | **none** | **Not written.** Required by §17. No ticket covers it. |
-| **11** | System Architecture Handbook | L11.1 | Not written |
+| **11** | System Architecture Handbook | L11.1 | `docs/colaberry-live/DOC_11_SYSTEM_ARCHITECTURE_HANDBOOK.md` — **read this second**, after DOC 00 |
 | **12** | Architecture Diagrams | L11.2 | Not written — ten diagrams, Mermaid source plus rendered |
 | **13** | Ali + Piyush Studio Operator Manual | L11.3 | Not written — needs the studio installed (L6.3) |
 | **14** | Developer & AI Maintenance Runbook | L11.4 | Not written — needs DOC 11 |
@@ -325,8 +325,13 @@ Eighteen documents are required by bootstrap §3.1 and §17. Status as of 2026-1
 | **16** | Ram Executive Brief | L11.6 | Not written — needs DOC 12's diagrams |
 | **17** | Case Study Source Pack | L11.7 | Not written |
 
-**Eleven of eighteen written, counting this pass.** Rebuild the index with
-`node scripts/artifacts/buildL118Artifacts.js`, which checks every row above against the disk.
+**Twelve of eighteen written.** Rebuild the index with
+`node scripts/artifacts/buildL118Artifacts.js`, which checks every row above against the disk in
+both directions — a document that lands here without a ledger row fails the build.
+
+**DOC 11 carries a capability proof register**: all 28 capability claims in the system with the
+level of proof behind each. **4 have run in a real airing; 10 have never run at all.** Read it
+before trusting any "it works" in this program — including the ones in this document.
 
 Related, not part of the eighteen: `docs/COLABERRY_LIVE_PROGRAM_SPEC.md` (the maintained state
 analysis), `directives/go-live-colaberry-live-broadcast.md`,
