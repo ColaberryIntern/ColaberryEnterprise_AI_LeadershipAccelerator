@@ -2,6 +2,13 @@ import crypto from 'crypto';
 import { Readable } from 'stream';
 import { env } from '../config/env';
 import LiveSession from '../models/LiveSession';
+// OAuth mint + authenticated request helper, extracted 2026-11-03 because this file is past
+// CLAUDE.md's 500-line ceiling. Imported under the old local names so nothing below changed.
+import {
+  assertZoomConfigured as assertConfigured,
+  getZoomAccessToken as getAccessToken,
+  zoomApiRequest,
+} from './zoom/zoomApiClient';
 
 // Zoom Server-to-Server OAuth + Cloud Recording access — replaces
 // driveService.ts (Google Meet/Drive) as the class meeting/recording
@@ -10,65 +17,6 @@ import LiveSession from '../models/LiveSession';
 // a session's Room. Mirrors driveService.ts's shape (findRecordingForSession
 // / stream*File) so sessionRecordingService can dispatch to either provider
 // through the same small interface.
-
-const TOKEN_URL = 'https://zoom.us/oauth/token';
-const API_BASE = 'https://api.zoom.us/v2';
-const API_TIMEOUT_MS = 15_000; // small/fast calls only — the file stream below is unbounded, matching driveService.streamDriveFile
-
-function assertConfigured(): void {
-  if (!env.zoomAccountId || !env.zoomClientId || !env.zoomClientSecret || !env.zoomHostEmail) {
-    throw new Error('Zoom not configured');
-  }
-}
-
-async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs = API_TIMEOUT_MS): Promise<Response> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    return await fetch(url, { ...init, signal: controller.signal });
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-// ---- Server-to-Server OAuth ----
-let cachedToken: { token: string; expiresAt: number } | null = null;
-
-async function getAccessToken(): Promise<string> {
-  assertConfigured();
-  const now = Date.now();
-  if (cachedToken && cachedToken.expiresAt > now + 60_000) return cachedToken.token;
-
-  const basicAuth = Buffer.from(`${env.zoomClientId}:${env.zoomClientSecret}`).toString('base64');
-  const res = await fetchWithTimeout(
-    `${TOKEN_URL}?grant_type=account_credentials&account_id=${encodeURIComponent(env.zoomAccountId)}`,
-    { method: 'POST', headers: { Authorization: `Basic ${basicAuth}` } },
-  );
-  if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`Zoom OAuth token error ${res.status}: ${body}`);
-  }
-  const data: any = await res.json();
-  cachedToken = { token: data.access_token, expiresAt: now + data.expires_in * 1000 };
-  return cachedToken.token;
-}
-
-async function zoomApiRequest<T>(method: string, path: string, body?: unknown): Promise<T> {
-  const token = await getAccessToken();
-  const res = await fetchWithTimeout(`${API_BASE}${path}`, {
-    method,
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  if (!res.ok) {
-    const errBody = await res.text();
-    console.error(`[Zoom] API error ${res.status} ${method} ${path}: ${errBody}`);
-    throw new Error(`Zoom API error ${res.status}: ${errBody}`);
-  }
-  // PATCH/DELETE meeting calls return 204 with no body — res.json() would throw.
-  if (res.status === 204) return undefined as T;
-  return res.json() as Promise<T>;
-}
 
 /** Whether the Zoom integration is configured in this env. */
 export function isZoomConfigured(): boolean {
