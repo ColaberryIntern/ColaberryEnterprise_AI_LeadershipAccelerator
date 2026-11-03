@@ -1,8 +1,19 @@
 import { QueryTypes, Transaction, type Sequelize } from 'sequelize';
 import AgentDomainChangeRequest from '../../models/AgentDomainChangeRequest';
+import AgentDomainToolRequestDetail from '../../models/AgentDomainToolRequestDetail';
 import { AGENT_DOMAIN_ORG_ID } from './agentDomainRegistry';
 import { loadMyDomains, resolveOwnerIdentityIds } from './agentDomainProvisionedReader';
 import type { ChangeRequestKind } from '../../db/ensureAgentDomainChangeRequestSchema';
+import { allCapabilities } from './capabilityRecord';
+import {
+  DUPLICATE_OPEN_REQUEST,
+  TOOL_REQUEST_DETAIL_MISSING,
+  TOOL_REQUEST_ON_A_CHANGE,
+  acceptToolRequest,
+  type ToolRequestDetail,
+  type ToolRequestDetailInput,
+  type ToolRequestIssue,
+} from './toolRequestContract';
 import {
   gateAgentChangeRequest,
   type AgentChangeRequestIssue,
@@ -59,6 +70,25 @@ export class ChangeRequestRefusedError extends Error {
   }
 }
 
+/**
+ * AF11.1. An incomplete tool request, with the field names that are wrong.
+ *
+ * A SEPARATE class from `ChangeRequestRefusedError` because the two answer different HTTP statuses
+ * and mean different things: that one is "your decision may not stand" (409, the caller is
+ * authorized and the decision is not allowed), this one is "this request is not yet fileable"
+ * (400, go and fill these in). Collapsing them would leave an intern unable to tell whether to
+ * edit the form or stop trying.
+ */
+export class ToolRequestRefusedError extends Error {
+  readonly issues: ToolRequestIssue[];
+
+  constructor(issues: ToolRequestIssue[]) {
+    super(issues.map((i) => i.detail).join(' '));
+    this.name = 'ToolRequestRefusedError';
+    this.issues = issues;
+  }
+}
+
 export interface ChangeRequestRow {
   id: string;
   kind: ChangeRequestKind;
@@ -71,6 +101,14 @@ export interface ChangeRequestRow {
   approved_by_identity: string | null;
   approved_at: string | null;
   declined_reason: string | null;
+  /**
+   * AF11.1. Present on a `tool` request and `null` on a `change` one.
+   *
+   * On the SAME row the approver already reads, so the review console in AF11.3 needs one call
+   * rather than a second fetch per request — the ticket's own criterion is that all six groups are
+   * visible without opening another screen.
+   */
+  tool_request?: ToolRequestDetail | null;
 }
 
 /**
@@ -107,6 +145,49 @@ export async function resolveRecordedHumans(
   return rows.length > 0 ? [trimmed] : [];
 }
 
+/** A stored detail row, back in the contract's own shape. */
+function projectDetail(d: AgentDomainToolRequestDetail): ToolRequestDetail {
+  const strings = (v: unknown): string[] => (Array.isArray(v) ? v.map(String) : []);
+  return {
+    agent_id: d.agent_id,
+    domain_key: d.domain_key,
+    tool_name: d.tool_name,
+    purpose: d.purpose,
+    reads: strings(d.reads),
+    produces: strings(d.produces),
+    capability_id: d.capability_id,
+    task_unblocked: d.task_unblocked,
+    manual_today: d.manual_today,
+    // `DATEONLY` already comes back as `YYYY-MM-DD`; `String()` rather than a `Date` round trip,
+    // which is what would let a timezone move a needed-by date a day either way.
+    needed_by: String(d.needed_by),
+    run_frequency: d.run_frequency,
+    touches: strings(d.touches),
+    inputs: strings(d.inputs),
+    writes: d.writes,
+    side_effects: d.side_effects ?? null,
+    reversible: d.reversible ?? null,
+    reversibility_note: d.reversibility_note ?? null,
+  };
+}
+
+/**
+ * Load the details for a page of requests in ONE query.
+ *
+ * Per request would be N+1 on a queue the whole point of which is to be read in a list.
+ */
+async function loadDetails(ids: string[]): Promise<Map<string, ToolRequestDetail>> {
+  if (ids.length === 0) return new Map();
+  const rows = await AgentDomainToolRequestDetail.findAll({ where: { change_request_id: ids } });
+  return new Map(rows.map((r) => [r.change_request_id, projectDetail(r)]));
+}
+
+/** Attach each row's detail, leaving `null` where there is none. */
+async function withDetails(rows: AgentDomainChangeRequest[]): Promise<ChangeRequestRow[]> {
+  const details = await loadDetails(rows.filter((r) => r.kind === 'tool').map((r) => r.id));
+  return rows.map((r) => ({ ...project(r), tool_request: details.get(r.id) ?? null }));
+}
+
 function project(r: AgentDomainChangeRequest): ChangeRequestRow {
   const iso = (d: Date | null): string | null => (d ? new Date(d).toISOString() : null);
   return {
@@ -124,6 +205,44 @@ function project(r: AgentDomainChangeRequest): ChangeRequestRow {
   };
 }
 
+/**
+ * Does this person already have an undecided request open for this tool on this agent?
+ *
+ * WHAT THIS CLOSES. The double-click, and the retry after a response that never arrived: a form
+ * submitted twice would otherwise put two identical requests in the queue Ali has to triage, and
+ * `CLAUDE.md` is explicit that a script which "works once but breaks on the second run" is a
+ * production defect rather than a rough edge.
+ *
+ * WHAT IT DOES NOT CLAIM, stated rather than left for someone to discover. This is a check, not a
+ * constraint, so two genuinely simultaneous transactions could both pass it. The constraint that
+ * would make it structural needs `status` on the detail row, and putting a status there is exactly
+ * the second approval spine the whole design refuses — a status in two places is a status two
+ * readers will disagree about. So the sequential case is closed and the concurrent one is
+ * accepted, visibly, with a duplicate request in a queue as the worst outcome rather than a
+ * duplicate grant.
+ *
+ * `lower()` on the tool name because `read_feed` and `Read_Feed` are the same ask, and a
+ * near-duplicate that slips through is worse than none: it teaches the approver to stop reading.
+ */
+async function hasOpenRequestFor(
+  sequelize: Sequelize,
+  requester: string,
+  detail: ToolRequestDetail,
+): Promise<boolean> {
+  const rows = await sequelize.query<{ id: string }>(
+    `SELECT r.id AS id
+       FROM agent_domain_tool_request_details d
+       JOIN agent_domain_change_requests r ON r.id = d.change_request_id
+      WHERE r.requested_by_identity = $1
+        AND r.status = 'submitted'
+        AND d.agent_id = $2
+        AND lower(d.tool_name) = lower($3)
+      LIMIT 1`,
+    { bind: [requester, detail.agent_id, detail.tool_name], type: QueryTypes.SELECT },
+  );
+  return rows.length > 0;
+}
+
 export interface FileChangeRequestArgs {
   sequelize: Sequelize;
   email: string;
@@ -132,6 +251,18 @@ export interface FileChangeRequestArgs {
   domainKey: string;
   title: string;
   description?: string | null;
+  /**
+   * AF11.1. REQUIRED when `kind` is `tool`, refused otherwise.
+   *
+   * This is a deliberate narrowing of what AF7.1 accepted. Between AF7.1 and now, a tool request
+   * was a title and a description, and approving one did nothing — the service's own words,
+   * unchanged below: *"Nothing is built as a result; the row is the whole effect."* So no behaviour
+   * that worked is being taken away; what is being removed is the ability to file a tool request
+   * that the approver cannot act on. No frontend sends `kind` at all today
+   * (`frontend/src/services/agentDomainApi.ts` has no such field), so the narrowed contract reaches
+   * no existing caller.
+   */
+  toolRequest?: ToolRequestDetailInput | null;
 }
 
 /**
@@ -142,6 +273,7 @@ export interface FileChangeRequestArgs {
  */
 export async function fileChangeRequest(args: FileChangeRequestArgs): Promise<ChangeRequestRow> {
   const { sequelize, email, domainKey, title } = args;
+  const kind: ChangeRequestKind = args.kind ?? 'change';
 
   const identityIds = await resolveOwnerIdentityIds(sequelize, email);
   const recorded = await resolveRecordedHumans(sequelize, email);
@@ -159,15 +291,63 @@ export async function fileChangeRequest(args: FileChangeRequestArgs): Promise<Ch
   }).filter((i) => i.rule !== 'illegal_transition');
   if (issues.length > 0) throw new ChangeRequestRefusedError(issues);
 
-  const created = await AgentDomainChangeRequest.create({
-    kind: args.kind ?? 'change',
-    domain_key: domainKey,
-    title,
-    description: args.description ?? null,
-    status: 'submitted',
-    requested_by_identity: recorded[0],
+  // AF11.1 — the pairing, then the fields. Both BEFORE anything is written, for the same reason
+  // ownership is checked first: a 400 that happens after a row exists is not a 400.
+  if (kind === 'tool' && !args.toolRequest) {
+    throw new ToolRequestRefusedError([TOOL_REQUEST_DETAIL_MISSING]);
+  }
+  if (kind !== 'tool' && args.toolRequest) {
+    throw new ToolRequestRefusedError([TOOL_REQUEST_ON_A_CHANGE]);
+  }
+
+  let accepted: ToolRequestDetail | null = null;
+  if (kind === 'tool' && args.toolRequest) {
+    // The rosters are read HERE and passed in, so the contract stays pure and an unreadable
+    // registry refuses the request rather than waving it through: `allCapabilities()` returning
+    // nothing becomes `capability_roster_absent`, not a pass.
+    const verdict = acceptToolRequest({
+      detail: args.toolRequest,
+      domainKey,
+      knownCapabilityIds: allCapabilities().map((c) => c.capability_id),
+      // Only the agents of domains this person owns. A null `agent_id` means the domain has no
+      // employee yet, which is a real state and cannot be the agent a tool is requested for.
+      ownedAgentIds: mine.map((d) => d.agent_id).filter((id): id is string => Boolean(id)),
+    });
+    if (!verdict.ok) throw new ToolRequestRefusedError(verdict.issues);
+    accepted = verdict.detail;
+
+    if (await hasOpenRequestFor(sequelize, recorded[0], accepted)) {
+      throw new ToolRequestRefusedError([DUPLICATE_OPEN_REQUEST]);
+    }
+  }
+
+  // One transaction, because a tool request with no detail row is exactly the thin request this
+  // ticket exists to stop. A partial commit here would create one that no gate can ever refuse,
+  // since the gate only runs at filing time.
+  const created = await sequelize.transaction(async (transaction) => {
+    const row = await AgentDomainChangeRequest.create({
+      kind,
+      domain_key: domainKey,
+      title,
+      description: args.description ?? null,
+      status: 'submitted',
+      requested_by_identity: recorded[0],
+    }, { transaction });
+
+    if (accepted) {
+      await AgentDomainToolRequestDetail.create({
+        change_request_id: row.id,
+        ...accepted,
+        reads: [...accepted.reads],
+        produces: [...accepted.produces],
+        touches: [...accepted.touches],
+        inputs: [...accepted.inputs],
+      }, { transaction });
+    }
+    return row;
   });
-  return project(created);
+
+  return { ...project(created), tool_request: accepted };
 }
 
 export interface DecideChangeRequestArgs {
@@ -227,7 +407,13 @@ export async function decideChangeRequest(
         },
       { transaction },
     );
-    return project(row);
+    // The detail comes back with the decision so the console can render what was just approved
+    // without a second fetch. Reading it inside the transaction keeps it the same row the decision
+    // was made against.
+    const detail = row.kind === 'tool'
+      ? await AgentDomainToolRequestDetail.findByPk(row.id, { transaction })
+      : null;
+    return { ...project(row), tool_request: detail ? projectDetail(detail) : null };
   });
 }
 
@@ -244,7 +430,7 @@ export async function listMyChangeRequests(
     order: [['requested_at', 'DESC']],
     limit: 200,
   });
-  return rows.map(project);
+  return withDetails(rows);
 }
 
 /** The whole queue, for the person who triages it. Admin-gated at the route. */
@@ -259,5 +445,5 @@ export async function listAllChangeRequests(
     order: [['requested_at', 'DESC']],
     limit: 200,
   });
-  return rows.map(project);
+  return withDetails(rows);
 }

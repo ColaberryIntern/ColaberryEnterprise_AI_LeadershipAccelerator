@@ -114,9 +114,50 @@ export const CHANGE_REQUEST_TITLE_MAX = 140;
 export const CHANGE_REQUEST_DESCRIPTION_MAX = 4000;
 export const DECLINED_REASON_MAX = 1000;
 
+/**
+ * AF11.1 — the six field groups a tool request carries: who, what, what for, when, where, how.
+ *
+ * Field-for-field the backend's `ToolRequestDetail`
+ * (`backend/src/services/agentDomain/toolRequestContract.ts`), snake_case, no remapping. There is
+ * no `domain_key` here because the domain lives on the request itself, where it has been
+ * ownership-checked.
+ *
+ * `tool_name`, `reads` and `produces` are the CATALOG's own field names, so a request and a
+ * registered tool can be compared without a translation layer. `purpose` has no catalog
+ * counterpart: `ToolCapability` is `{ reads, produces }` and nothing else.
+ */
+export interface ToolRequestDetail {
+  agent_id: string;
+  domain_key: string;
+  tool_name: string;
+  purpose: string;
+  reads: string[];
+  produces: string[];
+  capability_id: string;
+  task_unblocked: string;
+  manual_today: string;
+  /** `YYYY-MM-DD`. */
+  needed_by: string;
+  run_frequency:
+  | 'once' | 'on_demand' | 'per_event' | 'hourly' | 'daily' | 'weekly' | 'monthly' | 'quarterly';
+  /** Every system the tool would touch. The blast-radius field, and the one being approved. */
+  touches: string[];
+  inputs: string[];
+  writes: boolean;
+  /** Required by the API when `writes` is true, and null when it is false. */
+  side_effects: string | null;
+  reversible: boolean | null;
+  reversibility_note: string | null;
+}
+
+/** What an intern submits. Every field optional here; the API names the missing ones. */
+export type ToolRequestSubmission = Partial<Omit<ToolRequestDetail, 'domain_key'>>;
+
 /** Field-for-field the backend payload, snake_case, with no remapping layer. */
 export interface ChangeRequest {
   id: string;
+  /** AF7.1. A request asks either for a change or for a tool. */
+  kind: 'change' | 'tool';
   domain_key: string;
   title: string;
   description: string | null;
@@ -126,6 +167,8 @@ export interface ChangeRequest {
   approved_by_identity: string | null;
   approved_at: string | null;
   declined_reason: string | null;
+  /** AF11.1. Present on a tool request, null on a change request. */
+  tool_request?: ToolRequestDetail | null;
 }
 
 /**
@@ -136,6 +179,16 @@ export async function fileChangeRequest(input: {
   domain_key: string;
   title: string;
   description?: string;
+  /** AF7.1. Omitted means a change request, which is what every existing caller sends. */
+  kind?: 'change' | 'tool';
+  /**
+   * AF11.1. REQUIRED by the API when `kind` is `'tool'`, and refused on a change request.
+   *
+   * A 400 from this carries `issues: [{ rule, detail }]` — one named reason per field that is
+   * missing or wrong, not a generic "invalid input". Render those sentences; they are written to
+   * be read by the person filling the form.
+   */
+  tool_request?: ToolRequestSubmission;
 }): Promise<ChangeRequest> {
   const { data } = await api.post('/api/admin/agent-domain-change-requests-mine', input);
   return data;

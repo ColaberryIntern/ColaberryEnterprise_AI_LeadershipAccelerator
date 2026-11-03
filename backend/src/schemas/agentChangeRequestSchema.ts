@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ToolRequestPayloadSchema } from './agentToolRequestSchema';
 
 /**
  * AF4.2 inbound schemas — what an intern may send, and what a decision may say.
@@ -46,6 +47,16 @@ export const FileChangeRequestSchema = z.object({
   description: z.string().trim()
     .max(CHANGE_REQUEST_DESCRIPTION_MAX, `A description can be at most ${CHANGE_REQUEST_DESCRIPTION_MAX} characters.`)
     .optional(),
+  /**
+   * AF11.1. The six field groups, carried on the SAME request a `change` would use.
+   *
+   * Optional here and required by `kind`: the service refuses `kind: 'tool'` without it
+   * (`tool_request_detail_missing`) and refuses it on a `change` (`tool_request_on_a_change`).
+   * Expressing that in Zod would need a discriminated union, and then a tool request missing its
+   * detail would read as "not a valid request body" rather than "a tool request needs these
+   * details", which is the sentence the intern has to act on.
+   */
+  tool_request: ToolRequestPayloadSchema.optional(),
 }).strict();
 
 export type FileChangeRequestInput = z.infer<typeof FileChangeRequestSchema>;
