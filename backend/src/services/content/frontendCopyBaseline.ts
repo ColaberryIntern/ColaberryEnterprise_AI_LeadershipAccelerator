@@ -56,6 +56,33 @@ export const FRONTEND_COPY_BASELINE: Readonly<Record<string, number>> = {
   'frontend/src/components/publicV2/PublicFooterV2.tsx': 1,
   'frontend/src/components/publicV2/PublicHeaderV2.tsx': 1,
   'frontend/src/components/timeline/claudeStudioParse.ts': 1,
+
+  // ── frontend/src/config — brought into scope by C5.12 on 2026-11-02 ──────────────────
+  // These 21 occurrences are not new copy. They were always in the tree and simply went
+  // uncounted, because the lint covered `pages` and `components` only. Each is recorded with
+  // what it actually is, so the next reader knows which are advertising (and must go when the
+  // CTA decision lands) and which are a different sense of the word.
+  //
+  // Nothing here is reworded in this change, deliberately: the primary CTA label is Ali's
+  // decision, and C10.1 is mid-measurement on checkout conversion, so a site-wide copy change
+  // now would make October's 2-of-14 against July's 19-of-37 unattributable.
+  //
+  // ADVERTISING - these are the ones that have to go.
+  'frontend/src/config/primaryCta.ts': 1, // the primary CTA label itself, the most-rendered instance on the site
+  'frontend/src/config/v2Pricing.ts': 9, // tier key + name, two ctaLabels, blurb, an include, and the pricing FAQ
+  'frontend/src/config/v2Platform.ts': 5, // "Free company workspace" as a feature label, value and progress row
+  'frontend/src/config/v2Content.ts': 1, // next-step prompt pointing at the workspace
+  'frontend/src/config/v2Services.ts': 1, // next-step prompt pointing at the workspace
+  'frontend/src/config/v2Signup.ts': 1, // post-signup confirmation line
+  // PUBLISHED CLAIM - do not edit here. `publicWording` is the registry's own approved text and
+  // changing it changes a published claim, which is governed by C0.6 (Claim Registry), not by
+  // this lint. It is counted so the breach is visible, and routed to the right owner.
+  'frontend/src/config/claimsRegistry.ts': 2,
+  // VERB SENSE, kept - "Free Up Staff" is an outcome label meaning release capacity, not an
+  // offer. The scanner's exclusions are syntactic (comment, identifier, object-key and so on),
+  // so a legitimate verb sense in user-facing prose correctly lands here as copy rather than
+  // being silently excluded. Kept with this reason, per the ticket's documented categories.
+  'frontend/src/config/utilityDemoScenarios.ts': 1,
   'frontend/src/pages/AIArchitectLandingPage.tsx': 11,
   'frontend/src/pages/AIPilotVerticalPage.tsx': 1,
   'frontend/src/pages/AIWorkforceDesignerPage.tsx': 4,
@@ -114,9 +141,23 @@ export const FRONTEND_COPY_BASELINE: Readonly<Record<string, number>> = {
  * was renamed `.am-input`); **270** since 2026-10-29 (C91), when the Explorer banner left TodayShell.tsx for
  * ExplorerPreviewBanner.tsx and its "Free AI Preview" / "learning AI for free" became "no card needed"; **264** since
  * 2026-10-30 (C95), when TodayShell.tsx and ClassroomPage.tsx went to zero (every Explorer-facing line now says
- * "AI Preview" / "no card needed"). This number may only ever go DOWN.
+ * "AI Preview" / "no card needed").
+ *
+ * **285 since 2026-11-02 (C5.12), and this one went UP. Read why before concluding the ratchet
+ * was defeated.** Not one line of copy was added. `BASELINE_SCOPE.roots` grew from two
+ * directories to four, so 21 occurrences that were always in the tree became countable for the
+ * first time — 9 of them in `config/v2Pricing.ts` alone, including the primary CTA label, which
+ * is the single most-rendered instance of the word on the site. The breach did not grow; the
+ * measurement stopped under-reporting it.
+ *
+ * **So the invariant is "may only go down AT A FIXED SCOPE", not "may only go down".** Those are
+ * different claims, and conflating them has a specific cost: it makes widening scope look like a
+ * regression, which is a reason not to widen it, which is how a lint quietly keeps reporting a
+ * number better than the truth. Whenever `BASELINE_SCOPE.roots` changes, this total is re-based
+ * and the entry says so. Within a scope it still only shrinks, and every per-file number is still
+ * exact in both directions.
  */
-export const FRONTEND_COPY_BASELINE_TOTAL = 264;
+export const FRONTEND_COPY_BASELINE_TOTAL = 285;
 
 /**
  * The scope the baseline was measured over. Anything outside it is NOT covered, and the
@@ -131,7 +172,24 @@ export const FRONTEND_COPY_BASELINE_TOTAL = 264;
  *     `frontend/src` were not measured and are not claimed.
  */
 export const BASELINE_SCOPE = {
-  roots: ['frontend/src/pages', 'frontend/src/components'],
+  /**
+   * `config` and `constants` were added by C5.12, and the reason is worth keeping. The lint
+   * covered `pages` and `components` only, which meant the single most-rendered instance of
+   * the word on the entire site — the primary CTA label — was invisible to the thing that
+   * counts it, along with every CTA label and tier name in `config/v2Pricing.ts`. A lint that
+   * cannot see the worst instance reports a number better than the truth, which is worse than
+   * reporting nothing because of the confidence it earns.
+   *
+   * Adding them is safe against machinery: the rule matches on word boundaries, so the
+   * `Object.freeze` calls that fill `config/` do not match, and `frontendCopyLint.test.ts`
+   * holds a NEGATIVE CONTROL for exactly that.
+   */
+  roots: [
+    'frontend/src/pages',
+    'frontend/src/components',
+    'frontend/src/config',
+    'frontend/src/constants',
+  ],
   extensions: ['.ts', '.tsx'],
   excludeDirectories: ['__tests__', 'testEnv'],
   excludeFilePatterns: ['.test.ts', '.test.tsx', '.spec.ts', '.spec.tsx', '.d.ts'],

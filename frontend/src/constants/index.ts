@@ -70,9 +70,17 @@ export const NAV_LINKS: NavItem[] = [
   { path: '/contact', label: 'Contact' },
 ];
 
-/** One primary CTA everywhere: start a free account. Soft secondary for a guided walkthrough. */
-export const PRIMARY_CTA = { path: '/try', label: 'Start free' };
-export const SECONDARY_CTA = { path: '/contact', label: 'Book a walkthrough' };
+/**
+ * One primary CTA everywhere, with a soft secondary for a guided walkthrough.
+ *
+ * Both are DECLARED in `config/primaryCta.ts` and re-exported here, so existing importers
+ * keep working while there stays exactly one declaration. The move is not cosmetic: `config/`
+ * is inside the frontend copy lint's scope and `constants/` is too, but the declaration needs
+ * a single home, and a second constant of the same name already existed elsewhere in the tree.
+ * Change the label there, not here.
+ */
+export { PRIMARY_CTA, SECONDARY_CTA, APPROVED_OFFER_PHRASINGS } from '../config/primaryCta';
+export type { CallToAction } from '../config/primaryCta';
 
 /** Footer link columns. Informational only; the free-start CTA lives in its own column. */
 export const FOOTER_LINKS = [

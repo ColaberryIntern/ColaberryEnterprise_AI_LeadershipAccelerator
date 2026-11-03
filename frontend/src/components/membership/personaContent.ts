@@ -39,7 +39,13 @@ export interface PersonaContent {
 
 const PRICE = 'Membership is $149/month when you pay for the year up front, or $199/month month-to-month. Sponsored by your employer? Redeem your seat code — no card needed.';
 const TAGLINE = 'Learn With Claude. Build Through Colaberry. Deploy In The Real World.';
-const PRIMARY_CTA = 'Join The Challenge';
+/**
+ * The membership funnel's own CTA. Named MEMBERSHIP_CTA rather than PRIMARY_CTA because the
+ * site's primary CTA is a different thing entirely, declared once in `config/primaryCta.ts`.
+ * This constant was called PRIMARY_CTA until C5.12; two unrelated constants sharing that name
+ * is what made "change the call to action" a hunt through three files instead of one edit.
+ */
+const MEMBERSHIP_CTA = 'Join The Challenge';
 const SEAT_CTA = 'Reserve My Free Seat';
 
 // The one line that appears at the close of every persona: the Door-B invitation.
@@ -63,7 +69,7 @@ export const workingProfessionals: PersonaContent = {
       'Start at our free Open House and see how working professionals turn AI from a buzzword into a workflow.',
     ],
     price: PRICE,
-    cta: PRIMARY_CTA,
+    cta: MEMBERSHIP_CTA,
   },
   gap: {
     title: 'Consuming AI Is Easy. Building With It Is Rare.',
@@ -176,7 +182,7 @@ export const beginners: PersonaContent = {
       'Start at our free Open House and see exactly where to begin.',
     ],
     price: PRICE,
-    cta: PRIMARY_CTA,
+    cta: MEMBERSHIP_CTA,
   },
   gap: {
     title: 'You Don’t Need To Be An Expert. You Need To Start Building.',
@@ -286,7 +292,7 @@ export const builders: PersonaContent = {
       'Start at our free Open House and see how builders go from concept to deployed.',
     ],
     price: PRICE,
-    cta: PRIMARY_CTA,
+    cta: MEMBERSHIP_CTA,
   },
   gap: {
     title: 'Your Idea Needs A Build Path',
