@@ -2158,21 +2158,6 @@ export function startScheduler(): void {
     { timezone: 'America/Chicago' }
   );
 
-  // C101: campus_room_visits keeps 90 days. Batched and capped (campusRoomVisitRetention), so a backlog is spread over
-  // nights rather than one long lock; the next night retries a failure.
-  cron.schedule(
-    '45 3 * * *',
-    () => {
-      instrumentCronJob('CampusRoomVisitRetention', async () => {
-        const { pruneCampusRoomVisits } = await import('./campus/campusRoomVisitRetention');
-        await pruneCampusRoomVisits();
-      }).catch((err) => {
-        console.error('[Scheduler] Campus room-visit retention error:', err);
-      });
-    },
-    { timezone: 'America/Chicago' }
-  );
-
   // Intelligence pipelines — the 9 generators beyond AI News Flash (arXiv research,
   // tools, YouTube, quotes, eng-blogs, GitHub builds, MCP servers, Claude Code
   // techniques, market intel). Daily 03:45 CT, staggered 30 min after AiNewsRefresh

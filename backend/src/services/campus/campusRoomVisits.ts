@@ -1,6 +1,7 @@
 import { QueryTypes } from 'sequelize';
 import { sequelize } from '../../config/database';
 import { ensureCampusRoomVisitsSchema } from '../../db/ensureCampusRoomVisitsSchema';
+import { pruneCampusRoomVisitsDaily } from './campusRoomVisitRetention';
 
 /**
  * Append a campus_room_visits row when a learner ENTERS a building (C101). Called by touchCampusArea BEFORE it upserts
@@ -35,6 +36,7 @@ export async function recordRoomVisitIfEntered(enrollmentId: string, area: strin
        RETURNING id`,
       { replacements: { enrollmentId, area, freshSecs: Math.round(freshMs / 1000) }, type: QueryTypes.SELECT },
     );
+    pruneCampusRoomVisitsDaily(); // at most once a day, not awaited (90-day retention)
     return rows.length > 0;
   } catch (err: unknown) {
     const e = err as { name?: string; message?: string };
