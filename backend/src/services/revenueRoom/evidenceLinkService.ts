@@ -37,6 +37,7 @@ import {
   SOURCE_SYSTEMS,
 } from '../../db/ensureEvidenceLinkSchema';
 import { REVENUE_HYPOTHESES } from '../commercialization/hypothesisRegister';
+import { INITIATIVE_DEFINITIONS } from './revenueInitiatives';
 
 export type SourceSystem = typeof SOURCE_SYSTEMS[number];
 export type InitiativeType = typeof INITIATIVE_TYPES[number];
@@ -108,23 +109,25 @@ async function tableExists(): Promise<boolean> {
 }
 
 /**
- * The membership initiative keys. A short declared list rather than a query, because
- * membership is one product line and not a growing set.
+ * The membership initiative keys, read from R1's Revenue Room card registry.
  *
- * R1's Revenue Room card registry uses the same literal. That duplication is deliberate for
- * now and should not survive: R3 is intentionally independent of R1 so the spine can be
- * reviewed and merged on its own rather than stacked behind the page that displays it. Once
- * both are on main, one of the two should import the other, and the spine is the better home
- * for the key vocabulary because it is what enforces it.
+ * An earlier revision declared this literal locally, because R1 was on an unmerged branch
+ * and stacking R3 behind it would have made merging the child block approval of the parent.
+ * R1 landed on main while this was being built, so the reason for the duplication is gone
+ * and the duplication goes with it: one list, in the registry that defines the cards, read
+ * by the spine that enforces it.
  */
-export const MEMBERSHIP_KEYS = ['membership_subscriptions'] as const;
+export const MEMBERSHIP_KEYS: ReadonlyArray<string> = INITIATIVE_DEFINITIONS
+  .filter((d) => d.kind === 'membership')
+  .map((d) => d.key);
 
 /**
  * The known initiative keys.
  *
- * Hypothesis keys are DERIVED from the C0.1 register rather than retyped, so a bet added or
- * renamed there cannot leave this validator describing a set that no longer exists — the
- * same drift that made `revenueOpportunityService`'s stage filter unsatisfiable.
+ * Both sets are DERIVED, never retyped — hypothesis keys from the C0.1 register, membership
+ * keys from the card registry. So a bet added or renamed in either place cannot leave this
+ * validator describing a set that no longer exists. That is the same drift that made
+ * `revenueOpportunityService`'s stage filter unsatisfiable against its own column.
  *
  * `gov_bid` and `account` are the deliberate exceptions: their keys are `delivery_project_id`
  * and organization UUIDs that only exist in the database, so they cannot be enumerated from
