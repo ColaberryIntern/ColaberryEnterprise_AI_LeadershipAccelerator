@@ -13,6 +13,7 @@ bash scripts/audits/explorer-ad-funnel/run.sh funnel                    # who si
 bash scripts/audits/explorer-ad-funnel/run.sh behavior                  # what ad Explorers did after signup
 bash scripts/audits/explorer-ad-funnel/run.sh cutover                   # before vs after C91 (2026-10-29 23:30 UTC)
 bash scripts/audits/explorer-ad-funnel/run.sh returnpath                # C97: who comes back, and what stops them
+bash scripts/audits/explorer-ad-funnel/run.sh path                      # C101: room-to-room path through the campus (from the C101 release on)
 bash scripts/audits/explorer-ad-funnel/run.sh funnel since=2026-11-01   # a different window
 bash scripts/audits/explorer-ad-funnel/run.sh cutover "cutover='2026-11-15 00:00:00+00'"
 ```
@@ -34,8 +35,10 @@ Read-only: one transaction, always rolled back, 60 s statement timeout, stops at
 
 - **Channel is reconstructed, not recorded.** `/portal/signup` does not send the ad's UTM tags, so `leads.utm_source`
   is empty for those signups. A visitor who blocks tracking lands in `untracked` even if they came from an ad.
-- **No room-visit history.** `campus_presence` keeps one row per person, overwritten on every move: it shows where
-  someone was **last**, not the path they took.
+- **Room-visit history starts with C101.** `campus_presence` keeps one row per person, overwritten on every move: it
+  shows where someone was **last**. From the C101 release on, `campus_room_visits` records each building entered
+  (`run.sh path`), kept 90 days; earlier signups have no path by construction, and a learner who turned off "Show
+  which building I'm in" is never recorded.
 - **Tour and admissions-call tables start on 2026-10-26.** Earlier signups show no tour activity by construction.
 - **Return visits** count visitor sessions started after signup; a returning visitor who blocks tracking is missed.
 - `cutover.sql` compares windows of different lengths. Compare the rates.

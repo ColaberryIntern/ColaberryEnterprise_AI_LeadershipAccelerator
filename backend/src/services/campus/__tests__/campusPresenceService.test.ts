@@ -2,6 +2,8 @@ const mockEnv = { peoplePanelRolesEnabled: true };
 jest.mock('../../../config/env', () => ({ env: mockEnv }));
 jest.mock('../../../db/ensureCampusPresenceSchema', () => ({ ensureCampusPresenceSchema: jest.fn() }));
 jest.mock('../../../models/CampusPresence', () => ({ __esModule: true, default: { findAll: jest.fn(), upsert: jest.fn(), destroy: jest.fn() } }));
+// C101: the room-visit write is measured separately (campusRoomVisits.test.ts); here only its call and order matter.
+jest.mock('../campusRoomVisits', () => ({ recordRoomVisitIfEntered: jest.fn().mockResolvedValue(true) }));
 jest.mock('../../peoplePanelService', () => ({ getPeoplePanel: jest.fn() }));
 jest.mock('../../cohortPresenceService', () => ({ getCohortPresence: jest.fn() }));
 jest.mock('../../communityRooms/dmEligibility', () => ({ canDmMany: jest.fn() }));
@@ -14,6 +16,7 @@ jest.mock('../campusLookService', () => ({ looksFor: jest.fn(async () => (mockLo
 jest.mock('../campusTeam', () => ({ teamEnrollmentIdsFor: jest.fn(async () => { if (mockTeam === 'throw') throw new TypeError('db down'); return mockTeam; }) }));
 
 import CampusPresence from '../../../models/CampusPresence';
+import { recordRoomVisitIfEntered } from '../campusRoomVisits';
 import { ensureCampusPresenceSchema } from '../../../db/ensureCampusPresenceSchema';
 import { getPeoplePanel } from '../../peoplePanelService';
 import { getCohortPresence } from '../../cohortPresenceService';
@@ -59,6 +62,24 @@ describe('touchCampusArea', () => {
     await touchCampusArea('enr-1', 'library');
     expect(upsert).toHaveBeenCalledTimes(1);
     expect(upsert.mock.calls[0][0]).toMatchObject({ enrollment_id: 'enr-1', area: 'library' });
+  });
+
+  it('C101: records the building entered BEFORE the upsert overwrites where they were, with the presence window', async () => {
+    const visit = recordRoomVisitIfEntered as unknown as jest.Mock;
+    visit.mockClear();
+    const order: string[] = [];
+    visit.mockImplementationOnce(async () => { order.push('visit'); return true; });
+    upsert.mockImplementationOnce(async () => { order.push('upsert'); });
+    await touchCampusArea('enr-1', 'library');
+    expect(visit).toHaveBeenCalledWith('enr-1', 'library', FRESH_MS);
+    expect(order).toEqual(['visit', 'upsert']);
+  });
+
+  it('C101: an unknown area records no visit either', async () => {
+    const visit = recordRoomVisitIfEntered as unknown as jest.Mock;
+    visit.mockClear();
+    await expect(touchCampusArea('enr-1', 'dungeon')).rejects.toBeInstanceOf(CampusAreaError);
+    expect(visit).not.toHaveBeenCalled();
   });
 
   it('Campus HQ: a campus beat clears the Management Portal page, so a stale floor never outlives the admin tab', async () => {
