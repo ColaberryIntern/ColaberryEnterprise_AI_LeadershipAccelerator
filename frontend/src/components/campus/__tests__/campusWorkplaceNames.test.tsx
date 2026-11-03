@@ -2,7 +2,7 @@
  * C11 Workplace names: with the setting on, NO campus-only name appears on any surface, for any of the four audiences.
  *
  * "Campus-only" = a building name that differs from its Workplace name (Game Room vs Break Room), a room label that has a
- * Workplace label, and the phone tab "Lounge". The map (labels and aria), the cards, the list, search, the trail, the tour
+ * Workplace label. The map (labels and aria), the cards, the list, search, the trail, the tour
  * and the tab bar are all checked (the map is the campus home, WP-1's one map), with the setting off as the control (the same names DO appear there).
  */
 import React from 'react';
@@ -65,7 +65,7 @@ const viewFor = (a: typeof AUDIENCES[number]) => campusViewFor(a, { isStaff: a =
 
 /** Names that must NOT be seen with Workplace names on, for this audience's buildings. */
 function campusOnlyNames(buildings: CampusBuilding[]): string[] {
-  const out = new Set<string>(['Lounge']);
+  const out = new Set<string>(); // C23 WP-11: no Lounge tab any more (the prototype's five: Map, Today, Messages, Alerts, Me)
   for (const b of buildings) {
     if (b.name !== b.workplaceName) out.add(b.name);
     for (const r of b.rooms) if (r.workplaceLabel && r.workplaceLabel !== r.label) out.add(r.label);
@@ -180,7 +180,6 @@ describe.each(AUDIENCES)('rendered surfaces with Workplace names on: %s', (audie
     await flush();
     seen += ' ' + readable(document.body);
     for (const n of banned) expect({ n, hit: wordIn(seen, n) }).toEqual({ n, hit: false });
-    expect(seen).toContain('Cafe');
   }, 30_000); // opens every building's card in turn
 
   it('control: with the setting OFF the same surfaces show the campus names', async () => {
