@@ -135,6 +135,41 @@ async function notifyDmRecipient(roomId: string, senderId: string, messageId: st
 
     const { createNotification } = await import('../communityNotificationService');
     await createNotification(recipientId, senderId, 'new_message', 'dm', messageId);
+
+    // AF-REPORT-KES-NOTIFY — the in-app row above is what Kes could only see once he was already
+    // logged in, and the 08:00 UTC digest turns it into a count the next morning. This mails him
+    // at message time. It sits HERE, after the Reese and Dara early returns above, so an AI agent
+    // is never emailed: those skips are reused rather than restated.
+    //
+    // NOT awaited. An independent review of the first version caught why that matters: this runs
+    // inside the request that posts the message, and `emailService` sets no `connectionTimeout`,
+    // `greetingTimeout` or `socketTimeout`, so an SMTP connection that hangs would hold the
+    // intern's own message POST open on nodemailer's defaults. The notification is strictly less
+    // important than the message, so it must never be in front of it. This also restores the
+    // precedent at `communityService.ts:729`, `void notifyReplyByEmail(...)`, which exists for
+    // the same reason: "a mail outage must never stop a reply posting."
+    //
+    // The outcome is still logged, which was the reason the first version awaited. `.then()` off
+    // a detached promise gets both, and `.catch()` is belt-and-suspenders: notifyDmByEmail does
+    // not throw by contract, but a detached rejection would be unhandled rather than caught by
+    // this function's try/catch, so it is handled here rather than trusted.
+    const { notifyDmByEmail } = await import('./dmNotificationService');
+    void notifyDmByEmail({ roomId, recipientEnrollmentId: recipientId, messageId })
+      .then((mail) => {
+        if (!mail.sent && mail.reason !== 'suppressed_window') {
+          console.log(JSON.stringify({
+            level: 'info', service: 'dm', event: 'dm_notification_email_not_sent',
+            outcome: 'partial', room_id: roomId, reason: mail.reason,
+          }));
+        }
+      })
+      .catch((err: any) => {
+        console.warn(JSON.stringify({
+          level: 'warn', service: 'dm', event: 'dm_notification_email_rejected',
+          outcome: 'failure', room_id: roomId,
+          error_class: err?.name || 'Error', message: String(err?.message || err),
+        }));
+      });
   } catch (e: any) {
     console.warn(JSON.stringify({
       level: 'warn', service: 'dm', event: 'dm_notification_failed',
