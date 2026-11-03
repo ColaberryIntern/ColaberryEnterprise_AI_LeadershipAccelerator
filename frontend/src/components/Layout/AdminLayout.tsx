@@ -3,7 +3,7 @@ import { Link, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import ErrorBoundary from '../ui/ErrorBoundary';
 import SafeModeBanner from '../admin/SafeModeBanner';
-import { PINNED_LINKS, NAV_GROUPS, ALL_LINKS, NavLink as NavLinkT } from './adminNav';
+import { PINNED_LINKS, NAV_GROUPS, ALL_LINKS, visibleNavGroups, NavLink as NavLinkT } from './adminNav';
 import { useAdminCampusPresence } from './useAdminCampusPresence';
 import { useAdminGovContractsNav } from './useAdminGovContractsNav';
 import { useAdminAgentsNav } from './useAdminAgentsNav';
@@ -117,21 +117,29 @@ function AdminLayout() {
   const pinned = PINNED_LINKS.filter(
     (l) => canSection(l.section as string) && (!l.requiresMgmtBridge || hasPortalAccount),
   );
-  // Filter per LINK (a link may carry its own section, e.g. Leads/Pipeline sit
-  // in the Revenue group but belong to the narrower 'leads' section), then drop
-  // any group left with nothing in it. Group-level filtering alone would hide
-  // Leads from a sales rep who holds 'leads' but not 'revenue'.
-  const groups = NAV_GROUPS
-    .map((g) => ({ ...g, links: g.links.filter((l) => canSection(l.section ?? g.section)) }))
-    .filter((g) => g.links.length > 0);
-
   // Per-contract sub-items for the nested "Interns → Gov Contracts" node. The fetch only fires for a
   // viewer who holds `gov_contracts` (owner/Kes), and the list is already row-scoped server-side, so
   // owner/Kes see every contract. Empty ⇒ the node is not rendered at all.
+  //
+  // READ BEFORE `groups`, because a group can now be kept alive by a sub-list alone and the filter
+  // needs to know whether that sub-list has anything in it.
   const subCards: NavSubCards = {
     gov: useAdminGovContractsNav(canSection('gov_contracts')),
     agents: useAdminAgentsNav(canSection('agents')),
   };
+
+  // Filter per LINK (a link may carry its own section, e.g. Leads/Pipeline sit
+  // in the Revenue group but belong to the narrower 'leads' section), then drop
+  // any group left with nothing in it. Group-level filtering alone would hide
+  // Leads from a sales rep who holds 'leads' but not 'revenue'.
+  //
+  // "Nothing in it" counts SUB-LISTS as well as links — see `visibleNavGroups`. Counting only
+  // links hid the Agents node from six of the seven agent builders, with no refusal message,
+  // because it hangs off the Interns group and their roles do not carry `internship`.
+  const groups = visibleNavGroups(
+    (section) => canSection(section),
+    (sl) => subNavEntries(sl.source, subCards).length > 0,
+  );
 
   // Per-agent sub-items for the nested "Interns → Agents" node — ALL agent domains (the fetch only fires
   // for an `agents` holder). Empty ⇒ the node is not rendered.
