@@ -12,9 +12,10 @@ import { FREE_WORD_RULE } from '../content/bannedCopyRule';
  *
  * ## What is asserted, and why it is shaped this way
  *
- * `generateMessage` has four return paths. Each is driven separately rather than trusting a
- * wrapper to cover them, because "there is one chokepoint" is the claim under test: a reader
- * can see the wrapper, but only a test per path proves no path escapes it.
+ * `generateMessage` has four channel outcomes across three return statements - SMS and voice
+ * share a tail. Each OUTCOME is driven separately rather than trusting a wrapper to cover them,
+ * because "there is one chokepoint" is the claim under test: a reader can see the wrapper, but
+ * only a test per outcome proves no path escapes it.
  *
  * The suite also pins the thing a second matcher would have broken - the idiom must NOT be
  * flagged here either - and the negative control that makes the zeroes mean something.
