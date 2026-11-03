@@ -135,31 +135,102 @@ export async function getCampaignById(id: string) {
   return { ...campaign.toJSON(), lead_count: leadCount, lead_status_counts: statusCounts };
 }
 
+/**
+ * Every field a campaign PATCH may write. Exported so the allowlist is a contract that can
+ * be asserted, rather than an array buried inside an async function that needs a database
+ * to reach. C0.13 existed because nothing could see what this list did or did not contain.
+ */
+export const CAMPAIGN_UPDATABLE_FIELDS = [
+  'name', 'description', 'type', 'sequence_id', 'targeting_criteria',
+  'channel_config', 'budget_total', 'ai_system_prompt', 'campaign_mode',
+  'settings', 'goals', 'gtm_notes', 'evolution_config',
+  'channel', 'destination_path', 'objective', 'budget_cap',
+  'cost_per_lead_target', 'expected_roi', 'status',
+  // Planning fields. `funnel_stage` was added to the table and the model but appeared in
+  // NO allowlist and no service, so the column existed and nothing could ever write it -
+  // a schema change with no way to reach it. Validated as an enum at the controller
+  // boundary before it gets here; this allowlist is what stops a raw PATCH body writing
+  // an arbitrary string into a column the ranking logic will later branch on.
+  'funnel_stage',
+  // Ownership. Reachable only through the controller, which resolves and
+  // validates the brand first — the allowlist is what stops a raw PATCH body
+  // writing an arbitrary brand_id straight to the column.
+  'brand_id', 'tenant_id', 'sender_profile_id',
+  // C0.13. The activation gate's `analytics_ready` check reads `tracking_link` and fails
+  // closed without it, but it was absent here, so the one surface that edits a campaign
+  // could not satisfy a gate requirement and said nothing about it. Safe to allow: it is
+  // an analytics destination with no authorization meaning, read nowhere except that
+  // check, unlike the approval fields below.
+  'tracking_link',
+] as const;
+
+/**
+ * The approval record, which a PATCH may NEVER write.
+ *
+ * These two are not missing from the allowlist by accident, and adding them would be the
+ * obvious fix to C0.13 and the wrong one. The activation gate treats
+ * `approval_status in (approved, live)` together with a recorded `approved_by` as proof
+ * that a human signed off. Routing them through a generic admin PATCH would let a campaign
+ * approve itself, which is the one thing the gate exists to prevent. The capability record
+ * for marketing states the requirement directly: the agent never appears as `approved_by`,
+ * and no submission occurs without a recorded human action.
+ *
+ * So the defect C0.13 reports - fields silently dropped - is fixed for `tracking_link` by
+ * allowing it, and for these two by REFUSING LOUDLY instead. A caller that tries to set an
+ * approval gets an error naming the field, not a 200 that quietly did nothing.
+ */
+export const CAMPAIGN_APPROVAL_FIELDS = ['approval_status', 'approved_by'] as const;
+
+/** Raised when a caller tries to write the approval record through a campaign update. */
+export class CampaignApprovalNotWritableError extends Error {
+  readonly fields: string[];
+
+  constructor(fields: string[]) {
+    super(
+      `${fields.join(' and ')} cannot be set through a campaign update. The approval record ` +
+        'is what the activation gate reads as evidence of human sign-off, so it is not ' +
+        'writable from a general-purpose PATCH. This request was rejected rather than ' +
+        'silently ignored.'
+    );
+    this.name = 'CampaignApprovalNotWritableError';
+    this.fields = fields;
+  }
+}
+
+/**
+ * Reduce an arbitrary update body to the fields a campaign may actually write.
+ *
+ * Pure on purpose: no model, no database, no clock. The allowlist is the contract that
+ * stops a raw PATCH body reaching columns the logic later branches on, and a contract that
+ * needs a database to test is a contract nobody tests.
+ *
+ * Unknown fields are still ignored silently, deliberately. Callers legitimately send whole
+ * campaign objects back, so rejecting every unrecognized key would break them for no
+ * security gain. The approval fields are different: dropping those silently is what lets a
+ * caller believe an approval was recorded when none was.
+ *
+ * @throws CampaignApprovalNotWritableError if the body carries an approval field.
+ */
+export function filterCampaignUpdate(updates: Record<string, any>): Record<string, any> {
+  const attemptedApproval = CAMPAIGN_APPROVAL_FIELDS.filter(
+    (field) => updates?.[field] !== undefined
+  );
+  if (attemptedApproval.length) {
+    throw new CampaignApprovalNotWritableError([...attemptedApproval]);
+  }
+
+  const filtered: Record<string, any> = {};
+  for (const key of CAMPAIGN_UPDATABLE_FIELDS) {
+    if (updates?.[key] !== undefined) filtered[key] = updates[key];
+  }
+  return filtered;
+}
+
 export async function updateCampaign(id: string, updates: Record<string, any>) {
   const campaign = await Campaign.findByPk(id);
   if (!campaign) return null;
 
-  const allowedFields = [
-    'name', 'description', 'type', 'sequence_id', 'targeting_criteria',
-    'channel_config', 'budget_total', 'ai_system_prompt', 'campaign_mode',
-    'settings', 'goals', 'gtm_notes', 'evolution_config',
-    'channel', 'destination_path', 'objective', 'budget_cap',
-    'cost_per_lead_target', 'expected_roi', 'status',
-    // Planning fields. `funnel_stage` was added to the table and the model but appeared in
-    // NO allowlist and no service, so the column existed and nothing could ever write it -
-    // a schema change with no way to reach it. Validated as an enum at the controller
-    // boundary before it gets here; this allowlist is what stops a raw PATCH body writing
-    // an arbitrary string into a column the ranking logic will later branch on.
-    'funnel_stage',
-    // Ownership. Reachable only through the controller, which resolves and
-    // validates the brand first — the allowlist is what stops a raw PATCH body
-    // writing an arbitrary brand_id straight to the column.
-    'brand_id', 'tenant_id', 'sender_profile_id',
-  ];
-  const filtered: Record<string, any> = {};
-  for (const key of allowedFields) {
-    if (updates[key] !== undefined) filtered[key] = updates[key];
-  }
+  const filtered = filterCampaignUpdate(updates);
   filtered.updated_at = new Date();
 
   // Validate autonomous mode is only allowed for appropriate campaign types

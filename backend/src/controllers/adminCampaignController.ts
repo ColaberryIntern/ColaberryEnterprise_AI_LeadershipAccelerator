@@ -13,6 +13,7 @@ import {
   getMatchingLeads,
   getCampaignStats,
   getCampaignLeads,
+  CampaignApprovalNotWritableError,
 } from '../services/campaignService';
 import {
   searchPeople,
@@ -211,6 +212,14 @@ export async function handleUpdateCampaign(req: Request, res: Response, next: Ne
     }
     res.json({ campaign });
   } catch (error) {
+    // C0.13. An attempt to write the approval record is a bad request, not a server
+    // fault: the caller asked for something the approval model forbids. Surfacing it as
+    // a 400 that names the field is the whole fix - the previous behavior was a 200 that
+    // had silently discarded it, so a caller could believe an approval was recorded.
+    if (error instanceof CampaignApprovalNotWritableError) {
+      res.status(400).json({ error: error.message, fields: error.fields });
+      return;
+    }
     next(error);
   }
 }
