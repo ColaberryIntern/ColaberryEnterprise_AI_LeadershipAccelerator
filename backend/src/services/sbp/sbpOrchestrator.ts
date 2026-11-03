@@ -326,6 +326,12 @@ async function runGeneration(input: StartBuildInput, correlationId: string): Pro
   const started = Date.now();
   try {
     const { plan, attempts, model, client } = await decomposeBuild({
+      // L8.4: pass the project id so the story-authorization gate is actually REACHED. Without
+      // it the gate at `decomposeService` is skipped (`if (opts.projectId)`), which is why
+      // enforcement was wired everywhere else and still never fired on the live path. Observe vs
+      // enforce is `FLAGS.sbpStoryGateEnforce`; passing the id alone changes nothing while that
+      // flag is off beyond emitting the would-refuse log.
+      projectId: input.projectId,
       brief: buildBriefText(input),
       document: input.document ?? '',
       // FR-002: the tier the student picked has to change the plan's depth.
