@@ -65,7 +65,7 @@ const CLICK_SQL = `
 
 const iso = (v: Date | string | null): string | null => (v ? new Date(v).toISOString() : null);
 
-/** One read.  on success (row undefined = no rows, which is zero, not unknown); null when it failed. */
+/** One read. `{ row }` on success (row undefined = no rows, which is zero, not unknown); null when it failed. */
 async function readOne<T>(label: string, enrollmentId: string, run: () => Promise<T[]>): Promise<{ row: T | undefined } | null> {
   try {
     const [row] = await run();
