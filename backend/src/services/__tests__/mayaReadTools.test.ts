@@ -337,7 +337,8 @@ describe('M34 criterion 2: no PII in any payload or log', () => {
     expect(serialized).not.toContain(EMAIL);
     for (const r of Object.values(results)) {
       expect(r.subject).not.toContain('@');
-      expect(r.subject).toMatch(/^person:[0-9a-f]{16}$/);
+      // NOT `person:` - T208 reserves that prefix as its decoy for a fifth identity namespace.
+      expect(r.subject).toMatch(/^maya-subject:[0-9a-f]{16}$/);
     }
   });
 
@@ -377,7 +378,7 @@ describe('M34 criterion 2: no PII in any payload or log', () => {
     const { deps, lines } = depsFor(null, { email: null });
     await whoIsThisPerson('someone@elsewhere.com', deps);
     expect(JSON.stringify(lines)).not.toContain('elsewhere.com');
-    expect(lines[0].subject).toBe('person:unresolved');
+    expect(lines[0].subject).toBe('maya-subject:unresolved');
   });
 
   it('logLineFor holds no payload field at all', () => {

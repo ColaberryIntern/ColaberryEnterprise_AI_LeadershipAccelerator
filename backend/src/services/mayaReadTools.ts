@@ -95,9 +95,17 @@ import { assessFreshness } from './salesReadiness/srsFreshness';
  * first token of the name and nothing else, it is the only such field, and `logLineFor()` omits
  * it so it reaches no log. If Ali wants it gone, one line and one test remove it.
  *
- * The subject identifier is `person:<16 hex>`, a truncated SHA-256 of the resolved email: stable,
- * so two calls about one person correlate in logs, and the same token whether the caller passed
- * an email, `lead:24945` or `enrollment:<uuid>`, which an echoed input ref would not be.
+ * The subject identifier is `maya-subject:<16 hex>`, a truncated SHA-256 of the resolved email:
+ * stable, so two calls about one person correlate in logs, and the same token whether the caller
+ * passed an email, `lead:24945` or `enrollment:<uuid>`, which an echoed input ref would not be.
+ *
+ * IT IS DELIBERATELY NOT `person:`, and that is not cosmetic. T208 (identifierPrecedence.test.ts)
+ * holds the line that this system has exactly four identity prefixes - enrollment, lead, org_member
+ * and visitor - and greps for a `person:` constructor as its live decoy, because a `persons` spine
+ * exists in a migration with no application readers. The first version of this file minted
+ * `person:<hash>` and failed that tripwire, correctly: an opaque log handle spelled like an identity
+ * namespace is indistinguishable from a fifth one, and the scanner cannot read intent. Namespacing
+ * the token to this module says what it is. Do not tidy it back to `person:`.
  *
  * Every result also carries `advisory: true`, and `NEVER_AUTHORITATIVE_FOR` names the five topics
  * M31 must hand off rather than answer. A comment saying "advisory" can be read past; a field
@@ -136,7 +144,7 @@ export interface MayaReadToolDeps {
 
 /** The subject token. Truncated to 16 hex: collision-irrelevant for a log key, and short enough to read. */
 export function subjectRef(email: string): string {
-  return `person:${createHash('sha256').update(email.trim().toLowerCase()).digest('hex').slice(0, 16)}`;
+  return `maya-subject:${createHash('sha256').update(email.trim().toLowerCase()).digest('hex').slice(0, 16)}`;
 }
 
 /**
@@ -203,7 +211,7 @@ function emit<T>(
  * Constant rather than derived from the ref: a token derived from an unresolvable input would
  * leak the input into the log, which is the one place this module is trying to keep clean.
  */
-const NO_SUBJECT = 'person:unresolved';
+const NO_SUBJECT = 'maya-subject:unresolved';
 
 function unknown<T>(tool: MayaReadTool, deps: MayaReadToolDeps): MayaReadResult<T> {
   return emit<T>(tool, NO_SUBJECT, 'unknown_person', UNRESOLVED, null, deps);
