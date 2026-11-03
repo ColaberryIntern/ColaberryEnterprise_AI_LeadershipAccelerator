@@ -5,7 +5,8 @@
  * it, and the live nginx bundle carried no card - found on production, not by
  * a test, because every test of the card rendered the card. This suite is the
  * check that was missing: the card's importers are exactly the wrapper, the
- * wrapper's importer is exactly TodayShell, and TodayShell is what
+ * wrapper's importer is exactly TodayRail (C101 moved the rail out of TodayShell), TodayRail's is exactly
+ * TodayShell, and TodayShell is what
  * portalRoutes.tsx renders at /portal/today, where /portal/dashboard and
  * /portal/home redirect. Read from source, so a mount that drifts back into
  * a page nothing routes to fails here by name.
@@ -16,6 +17,8 @@ import path from 'path';
 const SRC = path.join(__dirname, '..', '..');
 const ROUTES = fs.readFileSync(path.join(SRC, 'routes', 'portalRoutes.tsx'), 'utf8');
 const SHELL = fs.readFileSync(path.join(SRC, 'pages', 'portal', 'today', 'TodayShell.tsx'), 'utf8');
+/** C101: the sidebar (and so the nudges mount) moved from TodayShell into TodayRail, which TodayShell renders. */
+const RAIL = fs.readFileSync(path.join(SRC, 'pages', 'portal', 'today', 'TodayRail.tsx'), 'utf8');
 const WRAPPER = fs.readFileSync(path.join(SRC, 'pages', 'portal', 'today', 'TodayJourneyNudges.tsx'), 'utf8');
 /** The page that carried the mount nothing could see. T603 deleted it; this suite pins that it stays deleted. */
 const DEAD_PAGE = path.join(SRC, 'pages', 'portal', 'PortalDashboardPage.tsx');
@@ -44,12 +47,14 @@ describe('the route to the card', () => {
     expect(ROUTES).not.toContain('PortalDashboardPage');
   });
 
-  it('TodayShell mounts TodayJourneyNudges once, inside the sidebar, above the community pulse', () => {
-    expect(SHELL).toContain("import TodayJourneyNudges from './TodayJourneyNudges';");
-    expect(SHELL.match(/<TodayJourneyNudges \/>/g)).toHaveLength(1);
-    const aside = SHELL.indexOf('<aside className="te-side">');
-    const mount = SHELL.indexOf('<TodayJourneyNudges />');
-    const pulse = SHELL.indexOf('<CommunityPulse />');
+  it('TodayRail mounts TodayJourneyNudges once, inside the sidebar, above the community pulse; TodayShell renders TodayRail', () => {
+    expect(SHELL).toContain("import TodayRail from './TodayRail';");
+    expect(SHELL.match(/<TodayRail\b/g)).toHaveLength(1);
+    expect(RAIL).toContain("import TodayJourneyNudges from './TodayJourneyNudges';");
+    expect(RAIL.match(/<TodayJourneyNudges \/>/g)).toHaveLength(1);
+    const aside = RAIL.indexOf('<aside className="te-side">');
+    const mount = RAIL.indexOf('<TodayJourneyNudges />');
+    const pulse = RAIL.indexOf('<CommunityPulse />');
     expect(aside).toBeGreaterThan(-1);
     expect(mount).toBeGreaterThan(aside);
     expect(pulse).toBeGreaterThan(mount);
@@ -61,9 +66,10 @@ describe('the route to the card', () => {
     expect(WRAPPER).toContain("export const JOURNEY_NUDGES_PATH = '/api/portal/journey-nudges';");
   });
 
-  it('the importers are exactly the chain: the card by the wrapper only, the wrapper by TodayShell only', () => {
+  it('the importers are exactly the chain: the card by the wrapper only, the wrapper by TodayRail only, the rail by TodayShell only', () => {
     expect(filesContaining("components/portal/JourneyNudgeCard'")).toEqual(['pages/portal/today/TodayJourneyNudges.tsx']);
-    expect(filesContaining("from './TodayJourneyNudges'")).toEqual(['pages/portal/today/TodayShell.tsx']);
+    expect(filesContaining("from './TodayJourneyNudges'")).toEqual(['pages/portal/today/TodayRail.tsx']);
+    expect(filesContaining("from './TodayRail'")).toEqual(['pages/portal/today/TodayShell.tsx']);
   });
 
   it('the page nothing routed to is gone (T603), so the mount cannot drift back into it', () => {

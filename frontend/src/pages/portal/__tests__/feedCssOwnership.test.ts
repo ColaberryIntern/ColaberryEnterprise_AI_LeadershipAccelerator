@@ -38,7 +38,8 @@ describe('feed.css ownership', () => {
 
   it('finds the pages this guards (sanity: the rule is not vacuously true)', () => {
     const names = rendersFeedHead.map((f) => path.relative(PORTAL, f).replace(/\\/g, '/'));
-    expect(names).toEqual(expect.arrayContaining(['projects/ProjectsPage.tsx', 'today/TodayShell.tsx']));
+    // C101 moved Today's timeline section (and its feed.css import) from TodayShell.tsx into TodayTimeline.tsx.
+    expect(names).toEqual(expect.arrayContaining(['projects/ProjectsPage.tsx', 'today/TodayTimeline.tsx']));
   });
 
   it.each(rendersFeedHead.map((f) => [path.relative(PORTAL, f).replace(/\\/g, '/'), f]))(
