@@ -3,6 +3,7 @@ import { z } from 'zod';
 import {
   registerManager, inviteMembers, getOverview, getRoster, getMemberDetail, getFeed,
 } from '../services/orgService';
+import { getSponsoredCohorts } from '../services/orgSponsoredCohorts';
 import { emailSignInLinkInstead } from '../services/signup/existingAccountSignIn';
 
 // ── Validation schemas (Zod v4 — read .issues, not .errors) ──────────────────
@@ -92,5 +93,19 @@ export async function handleOrgFeed(req: Request, res: Response, next: NextFunct
   try {
     const feed = await getFeed(req.org!.id);
     res.json({ feed });
+  } catch (err) { next(err); }
+}
+
+/**
+ * C8.9 — what this institution has been sold, and how much of it its own people occupy.
+ *
+ * The org comes from `req.org`, which `requireOrgManager` derives from the authenticated
+ * enrollment. There is deliberately no org id in the path: an institution cannot ask about
+ * another institution because there is no parameter to substitute.
+ */
+export async function handleOrgSponsoredCohorts(req: Request, res: Response, next: NextFunction) {
+  try {
+    const cohorts = await getSponsoredCohorts(req.org!.id);
+    res.json({ cohorts });
   } catch (err) { next(err); }
 }
