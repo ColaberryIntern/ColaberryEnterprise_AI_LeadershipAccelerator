@@ -1,5 +1,5 @@
 import api from '../utils/api';
-import type { StudentGovProjectView } from './govProjectPortalApi';
+import type { StudentGovProjectView, GovCockpitApi, GovCopilotAnswer, GovProposalDocument } from './govProjectPortalApi';
 
 /**
  * adminGovContractsApi — the admin Interns-hub "Gov Contracts" tab's one data call.
@@ -74,3 +74,40 @@ export function errorMessage(e: unknown, fallback: string): string {
   const r = e as { response?: { data?: { error?: string } } };
   return r?.response?.data?.error ?? fallback;
 }
+
+// ── Management-drivable cockpit: the admin mirror of the portal proposal + copilot actions ───────────────────────
+// These post to the `gov_contracts`-gated admin routes (admin token via `utils/api`), so management can run the
+// copilot and draft / accept / request-changes / comment on proposal documents from the admin cockpit.
+const adminBase = (projectId: string): string => `/api/admin/gov-contracts/${encodeURIComponent(projectId)}`;
+const adminDocUrl = (projectId: string, docKey: string, action: string): string =>
+  `${adminBase(projectId)}/documents/${encodeURIComponent(docKey)}/${action}`;
+
+export async function adminAskGovCopilot(projectId: string, question: string): Promise<GovCopilotAnswer> {
+  const { data } = await api.post<GovCopilotAnswer>(`${adminBase(projectId)}/copilot`, { question });
+  return data as GovCopilotAnswer;
+}
+export async function adminDraftGovProposalDocument(projectId: string, docKey: string, contentHtml?: string): Promise<GovProposalDocument> {
+  const { data } = await api.post<{ document: GovProposalDocument }>(adminDocUrl(projectId, docKey, 'draft'), contentHtml !== undefined ? { contentHtml } : {});
+  return data.document;
+}
+export async function adminAcceptGovProposalDocument(projectId: string, docKey: string): Promise<GovProposalDocument> {
+  const { data } = await api.post<{ document: GovProposalDocument }>(adminDocUrl(projectId, docKey, 'accept'), {});
+  return data.document;
+}
+export async function adminRequestChangesGovProposalDocument(projectId: string, docKey: string, note: string): Promise<GovProposalDocument> {
+  const { data } = await api.post<{ document: GovProposalDocument }>(adminDocUrl(projectId, docKey, 'request-changes'), { note });
+  return data.document;
+}
+export async function adminCommentGovProposalDocument(projectId: string, docKey: string, body: string): Promise<GovProposalDocument> {
+  const { data } = await api.post<{ document: GovProposalDocument }>(adminDocUrl(projectId, docKey, 'comment'), { body });
+  return data.document;
+}
+
+/** The admin adapter — management drives the gov cockpit via the `gov_contracts`-gated admin routes. */
+export const adminGovCockpitApi: GovCockpitApi = {
+  askCopilot: adminAskGovCopilot,
+  draftDocument: adminDraftGovProposalDocument,
+  acceptDocument: adminAcceptGovProposalDocument,
+  requestChanges: adminRequestChangesGovProposalDocument,
+  commentDocument: adminCommentGovProposalDocument,
+};

@@ -220,3 +220,24 @@ export async function commentGovProposalDocument(projectId: string, docKey: stri
   const { data } = await portalApi.post<{ document: GovProposalDocument }>(docUrl(projectId, docKey, 'comment'), { body });
   return data.document;
 }
+
+// ── Cockpit API adapter ──────────────────────────────────────────────────────────────────────────────────────
+// CockpitView / CopilotRail / ProposalDocumentDrawer post through this adapter so the SAME components drive either
+// the student PORTAL routes (the default below) or the ADMIN gov-contracts routes (injected by the admin cockpit
+// page), without the components knowing which token/route is in play.
+export interface GovCockpitApi {
+  askCopilot(projectId: string, question: string): Promise<GovCopilotAnswer>;
+  draftDocument(projectId: string, docKey: string, contentHtml?: string): Promise<GovProposalDocument>;
+  acceptDocument(projectId: string, docKey: string): Promise<GovProposalDocument>;
+  requestChanges(projectId: string, docKey: string, note: string): Promise<GovProposalDocument>;
+  commentDocument(projectId: string, docKey: string, body: string): Promise<GovProposalDocument>;
+}
+
+/** The default adapter — the student portal endpoints (participant token). */
+export const portalGovCockpitApi: GovCockpitApi = {
+  askCopilot: askGovCopilot,
+  draftDocument: draftGovProposalDocument,
+  acceptDocument: acceptGovProposalDocument,
+  requestChanges: requestChangesGovProposalDocument,
+  commentDocument: commentGovProposalDocument,
+};

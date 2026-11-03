@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { PageHeader } from '../../components/admin/shell';
 import CockpitView from '../portal/projects/govCockpit/CockpitView';
-import { fetchGovContractCockpit, errorMessage } from '../../services/adminGovContractsApi';
+import { fetchGovContractCockpit, errorMessage, adminGovCockpitApi } from '../../services/adminGovContractsApi';
 import type { StudentGovProjectView } from '../../services/govProjectPortalApi';
 
 /**
@@ -43,7 +43,7 @@ const AdminGovContractCockpitPage: React.FC = () => {
     <div>
       <PageHeader
         title="Gov Contract"
-        subtitle="The contract exactly as the assigned intern sees it (read-only)"
+        subtitle="The contract as the assigned intern sees it — management can run the copilot and draft, accept and comment on proposal documents"
         icon="government-line"
         breadcrumb={[
           { label: 'Admin', to: '/admin/dashboard' },
@@ -66,7 +66,7 @@ const AdminGovContractCockpitPage: React.FC = () => {
           <button type="button" className="btn btn-outline-secondary btn-sm" onClick={load}>Try again</button>
         </div>
       )}
-      {state.k === 'ready' && <CockpitView view={state.view} projectId={projectId} onReload={load} readOnly />}
+      {state.k === 'ready' && <CockpitView view={state.view} projectId={projectId} onReload={load} api={adminGovCockpitApi} />}
     </div>
   );
 };
