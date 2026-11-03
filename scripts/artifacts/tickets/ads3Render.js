@@ -6,7 +6,7 @@
  * construction rather than by my re-typing it.
  *
  * The visual carries one idea, and it is not "done": the half of this ticket that could be proven
- * was proven on live rows, and the half that could not is labelled as such on the same page. A
+ * was proven on live rows, and the half that could not is labeled as such on the same page. A
  * page that said only "shipped" would be the exact failure this ticket turned out to be about.
  */
 
