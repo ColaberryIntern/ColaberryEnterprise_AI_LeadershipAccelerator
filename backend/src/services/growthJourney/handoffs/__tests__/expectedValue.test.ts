@@ -33,6 +33,12 @@ describe('state rank', () => {
     expect(stateRank('business', null)).toBe(0);
   });
 
+  it('C99: NOT_STARTED ranks exactly as ACTIVATING did, so the split re-orders no handoff', () => {
+    expect(stateRank('learner', 'NOT_STARTED')).toBe(stateRank('learner', 'ACTIVATING'));
+    expect(stateRank('learner', 'NOT_STARTED')).toBe(1);
+    expect(stateRank('business', 'NOT_STARTED')).toBe(0);
+  });
+
   it('the learner order is Explorer\'s own eight states', () => {
     expect(LEARNER_STATE_ORDER).toEqual(['NEW_EXPLORER', 'ACTIVATING', 'ACTIVE_LEARNER', 'ENGAGED_LEARNER', 'CONNECTED_TO_COMMUNITY', 'CONSIDERING_NEXT_STEP', 'ENROLLMENT_READY', 'CONVERTED']);
   });

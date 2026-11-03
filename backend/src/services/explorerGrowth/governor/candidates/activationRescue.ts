@@ -21,7 +21,7 @@ export function activationRescue(ctx: GovernorContext): Candidate | null {
 
   // Only pre-completion states. Once a card is done the learner belongs to
   // personalised learning (tier 7), not rescue.
-  if (s !== 'NEW_EXPLORER' && s !== 'ACTIVATING') return null;
+  if (s !== 'NEW_EXPLORER' && s !== 'NOT_STARTED' && s !== 'ACTIVATING') return null;
 
   // Nothing to rescue them with if we cannot reach them at all. The channel
   // check is here rather than in the policy layer because a candidate proposing

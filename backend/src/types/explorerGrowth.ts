@@ -134,6 +134,7 @@ export interface ExplorerSignalReadout {
 /** Exactly one of these holds at a time. Learning states never regress. */
 export type ExplorerPrimaryState =
   | 'NEW_EXPLORER'
+  | 'NOT_STARTED'
   | 'ACTIVATING'
   | 'ACTIVE_LEARNER'
   | 'ENGAGED_LEARNER'

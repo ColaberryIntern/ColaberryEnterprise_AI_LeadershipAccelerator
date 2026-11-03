@@ -156,6 +156,7 @@ export const PURPOSE_SPECS: Record<ExplorerAssetPurpose, PurposeSpec> = {
 export const PRIMARY_STATE_TO_STAGE: Record<ExplorerPrimaryState, ExplorerStageTag> = {
   // Not started, or barely. The beginning is what is useful.
   NEW_EXPLORER: 'activation',
+  NOT_STARTED: 'activation',
   ACTIVATING: 'activation',
 
   // Underway. Week-2-and-beyond material is what moves them.

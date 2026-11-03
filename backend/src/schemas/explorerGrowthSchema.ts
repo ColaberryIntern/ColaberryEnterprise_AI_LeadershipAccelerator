@@ -49,6 +49,7 @@ import type {
  */
 export const PRIMARY_STATES = [
   'NEW_EXPLORER',
+  'NOT_STARTED',
   'ACTIVATING',
   'ACTIVE_LEARNER',
   'ENGAGED_LEARNER',

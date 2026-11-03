@@ -85,9 +85,31 @@ describe('primary states', () => {
     expect(classify(input()).primary_state).toBe('NEW_EXPLORER');
   });
 
-  it('P3/P5 — 72h elapsed promotes to ACTIVATING with no activity at all', () => {
+  it('P3/P5 (C99) — 72h elapsed with no activity at all is NOT_STARTED, never ACTIVATING', () => {
     const r = classify(input({ enrollment: { createdAt: hoursAgo(73) } }));
+    expect(r.primary_state).toBe('NOT_STARTED');
+  });
+
+  it('P4 (C99) — after 72h, a feed interaction is still what makes ACTIVATING', () => {
+    const r = classify(
+      input({
+        enrollment: { createdAt: hoursAgo(200) },
+        readout: readout({ engagement: [{ signal: 'first_card_interacted' }] }),
+      }),
+    );
     expect(r.primary_state).toBe('ACTIVATING');
+  });
+
+  it('P5 (C99) — passive signals (account made, cards served, a portal visit) are not activation', () => {
+    const r = classify(
+      input({
+        enrollment: { createdAt: hoursAgo(100) },
+        readout: readout({
+          engagement: [{ signal: 'account_created' }, { signal: 'first_card_served' }, { signal: 'portal_session' }],
+        }),
+      }),
+    );
+    expect(r.primary_state).toBe('NOT_STARTED');
   });
 
   it('P3 — holds at NEW_EXPLORER just under 72h', () => {
@@ -226,6 +248,48 @@ describe('monotonicity (§8 line 765)', () => {
         readout: readout({ engagement: [{ signal: 'card_completed' }] }),
       }),
     );
+    expect(r.primary_state).toBe('ACTIVE_LEARNER');
+  });
+
+  it('C99 — a stored timer-only ACTIVATING is corrected to NOT_STARTED (the one allowed step down)', () => {
+    const r = classify(
+      input({
+        previousProfile: { primary_state: 'ACTIVATING', state_entered_at: daysAgo(5) },
+        enrollment: { createdAt: daysAgo(8) },
+      }),
+    );
+    expect(r.primary_state).toBe('NOT_STARTED');
+    expect(r.state_entered_at.getTime()).toBe(NOW.getTime());
+  });
+
+  it('C99 — a stored ACTIVATING backed by a real interaction stays ACTIVATING, clock kept', () => {
+    const entered = daysAgo(5);
+    const r = classify(
+      input({
+        previousProfile: { primary_state: 'ACTIVATING', state_entered_at: entered },
+        enrollment: { createdAt: daysAgo(8) },
+        readout: readout({ engagement: [{ signal: 'first_card_interacted', lastOccurredAt: daysAgo(6) }] }),
+      }),
+    );
+    expect(r.primary_state).toBe('ACTIVATING');
+    expect(r.state_entered_at.getTime()).toBe(entered.getTime());
+  });
+
+  it('C99 — NOT_STARTED moves up on a first interaction, and never back down to NEW_EXPLORER', () => {
+    const up = classify(
+      input({
+        previousProfile: { primary_state: 'NOT_STARTED' },
+        enrollment: { createdAt: daysAgo(4) },
+        readout: readout({ engagement: [{ signal: 'first_card_interacted' }] }),
+      }),
+    );
+    expect(up.primary_state).toBe('ACTIVATING');
+    const hold = classify(input({ previousProfile: { primary_state: 'NOT_STARTED' }, enrollment: { createdAt: hoursAgo(10) } }));
+    expect(hold.primary_state).toBe('NOT_STARTED');
+  });
+
+  it('C99 — the step down is ONLY ACTIVATING -> NOT_STARTED: an ACTIVE_LEARNER never becomes NOT_STARTED', () => {
+    const r = classify(input({ previousProfile: { primary_state: 'ACTIVE_LEARNER' }, enrollment: { createdAt: daysAgo(8) } }));
     expect(r.primary_state).toBe('ACTIVE_LEARNER');
   });
 
