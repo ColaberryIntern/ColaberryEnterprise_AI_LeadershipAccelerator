@@ -35,6 +35,54 @@ is the replay surface, not an editor handoff. Nothing in P1 through P7 produces 
 video, Shorts, thumbnails, titles, descriptions, social captions or a videographer handoff. If you
 build the seven phases to completion you still do not have R7.
 
+### Upkeep record — L0.2, pass of 2026-11-03
+
+L0.2's first criterion is that every document be *compared against implementation, not skimmed*, and
+its third asks that the pass be auditable in both directions. So this records what was checked, not
+only what was changed.
+
+**How the two stale sections were identified.** Not by reading all 848 lines again. Every section of
+this document was dated by its own edit marks, and **§5, §8, §9 and §10 all carry corrections from
+2026-11-01 or 2026-11-02** — they are maintained continuously by the sessions doing the work, which
+is what documentation-as-code is supposed to look like. §7 and §11 carried no edit since the picture
+moved, and both make *state* claims. That made them the two candidates before a word of either was
+read, and both turned out to be wrong.
+
+| Section | Verdict |
+|---|---|
+| §5 live participation, §8 what is built, §9 recommended order, §10 Ali's decisions | **Current.** Each carries edits dated 2026-11-01 or later; §8 alone holds ten. Not re-audited line by line, and the evidence for calling them current is that the sessions which changed the code also changed these rows. |
+| §7 the test ladder | **Corrected.** Said Test 2 had never run. An airing happened on 2026-10-20 and three tickets were raised from its findings. Also updated Test 4, 5 and 6. |
+| §11 the 48-point definition of done | **Corrected.** Declined to give a completion count on grounds that two of three have since stopped holding. Now counts, and points at the matrix. |
+| §2 what the system is, §3 the release ladder, §6 the content engine | **Not re-audited.** All three are descriptive or prescriptive rather than state claims — §3 and §6 restate the bootstrap, which has not changed — so drift is not possible in the way it was for §7 and §11. Named here so the gap is visible rather than implied. |
+| `docs/broadcast/ROLLOUT_RUNBOOK.md` | **Extended 2026-11-03** from one documented operational lever to five. Its pre-existing P3-09 section was re-verified claim by claim against the code and was accurate. |
+| `docs/COLABERRY_LIVE_TESTING_STRATEGY.md`, `docs/COLABERRY_LIVE_TRACEABILITY_MATRIX.md` | **Current by construction.** Both are generated from a data module with a self-check, so neither can disagree with its own counts. |
+
+**Diagrams: nothing to regenerate.** Criterion 2 covers diagram upkeep, and no Colaberry Live
+document contains one. The ten architecture diagrams are L11.2, which has not started, so there is
+no diagram whose shape could have drifted.
+
+**A tooling gap, logged rather than fixed.** `scripts/artifacts/checkAmericanSpelling.js` scans
+`SCAN_DIRS = ['scripts/artifacts']` and only `.js` files, so **no document in `docs/` has ever been
+spell-checked** — its "0 British spellings" result is silent about Markdown. Measured with the
+repo's own word list: 199 British spellings across 34 of 106 `docs/*.md`. Fixing all of them
+unattended is a scope expansion nobody asked for, and a gate that fails on a pre-existing backlog
+helps nobody. The proposal is to widen `SCAN_DIRS` to `docs/*.md` behind a **per-file ratchet** —
+current counts recorded, increases refused, decreases always allowed — which is the pattern this
+repo already uses for the frontend copy lint. Only the documents this pass touched were corrected.
+
+**And the ratchet needs an identifier exemption, which this pass discovered the hard way.**
+Measured before this pass, this document scored 18 British spellings — and **16 of them were the
+word `cancelled`**, which is the shipped lifecycle state name in `broadcastStateMachine.ts` and in
+the database, not a spelling mistake. "Correcting" them would make the document wrong about the code
+it describes. The other two were genuine prose and are fixed. So a naive gate over `docs/*.md` would
+have demanded sixteen edits that each introduced a defect, which is a stronger argument for the
+ratchet than the backlog size was: the exemption has to come first, and the rule is that a spelling
+inside a backticked identifier or a quoted state name is the code's spelling and not ours.
+
+A scan run *after* this pass returns 17 rather than 16, because the paragraph you are reading names
+the identifier too. That is the exemption in miniature, and the reason the count above is pinned to
+when it was taken instead of being left to be re-derived.
+
 ---
 
 ## 2. What the system is
@@ -201,7 +249,7 @@ the videographer.
 DOC 07 adds YouTube Live distribution, the raw replay policy, the audience-to-builder funnel, and
 *"post-show handoff to Piyush / videographer and marketing."*
 
-**Raw-live retention policy** (§12) — a judgement per airing, not a default:
+**Raw-live retention policy** (§12) — a judgment per airing, not a default:
 
 | Live quality | Disposition |
 |---|---|
@@ -237,16 +285,29 @@ the brief that carries the rest.
 | Stage | Requires | Status |
 |---|---|---|
 | **Test 1** — provider smoke test | RTMP accepted, HLS created, signed playback in Colaberry, grant renews, end state correct | **Mostly passed.** Two airings exist in the Cloudflare account (a 13 Oct test and the first private technical airing). Grant *renewal over time* is not separately evidenced. |
-| **Test 2** — private five-person airing | discovery, persistent player, navigation does not restart video, companion QR, poll, Prompt Drop, Builder pulse, reconnect, end, replay processing | **Never run — and mostly not blocked.** Eight of the ten are built (see §8); Builder-pulse-to-viewers and reconnect are partial. The gap here is an unexecuted test, not missing code. **Run sheet: `directives/run-test-2-private-five-person-airing.md`** — hard gates, the five roles, all ten checks with expected state. |
+| **Test 2** — private five-person airing | discovery, persistent player, navigation does not restart video, companion QR, poll, Prompt Drop, Builder pulse, reconnect, end, replay processing | **An airing happened on 2026-10-20 and was never written up.** *Corrected 2026-11-03 — this row said "Never run", which is wrong and was the most consequential stale claim in this document.* L10.1's own body records preconditions verified on production on 18 Oct and three fixes deployed, and **three tickets were raised from its findings** — L5.4, L5.5 and L7.4 each cite "FOUND BY TEST 2 (L10.1), 20 Oct 2026". So the stage is not unexecuted. What does not exist is the write-up L10.1 asks for: real bitrate, three viewers, the two deferred defects. Whether that airing *satisfies* the ten checks is an open judgment only Ali can make, and six launch tickets sit behind it. Eight of the ten checks are built (see §8); Builder-pulse-to-viewers and reconnect are partial. **Run sheet: `directives/run-test-2-private-five-person-airing.md`** — hard gates, the five roles, all ten checks with expected state. |
 | **Test 3** — internal staff pilot | **Piyush, Sohail, Aleem present**; evaluate content, UX, audio, video, lighting, camera, graphics, Prompt Drop timing, participation, marketing CTA | **Not run.** Needs R5 studio equipment and a completed Test 2 to be worth three people's time — and two of its ten evaluation criteria (graphics, marketing CTA) have nothing built to evaluate (§8, DOC 03 rows 10 and 12). |
-| **Test 4** — full dress rehearsal | actual studio, actual live-class flow, cold open through replay | **Not run.** |
-| **Test 5** — failure drills | thirteen deliberate failures; confirm state is honest and **no access fails open** | **Not run** (one of the thirteen, the auto-end window, is written up as an optional check). |
-| **Test 6** — production launch | proof of a real production airing | **Not met.** |
+| **Test 4** — full dress rehearsal | actual studio, actual live-class flow, cold open through replay | **Not run, and the only stage blocked by something no code can supply.** L10.3 waits on the uninstalled studio (L6.2, L6.3) and on an operator manual for it that has not been written (L11.3). That is the longest dependency chain on the board. |
+| **Test 5** — failure drills | thirteen deliberate failures; confirm state is honest and **no access fails open** | **Not run.** *Updated 2026-11-03:* several of the thirteen now have code and tests behind them — expired grant renewal (L2.1), fail-closed entitlement (L3.3), provider timeout (the circuit breaker), and the auto-end window with hysteresis (L7.4, which is why that one is no longer an "optional check"). None of that discharges the stage: L10.4's criterion is that every failure mode be **exercised**, not reasoned about, so a green suite is not evidence here. |
+| **Test 6** — production launch | proof of a real production airing | **Not met**, and it is item 34 of the 48. The 2026-10-29 Open House was the intended first public airing and did not stream; §4.2 has why, and it was an unclosed R0 prerequisite rather than a missing feature. |
 
 `directives/rehearse-colaberry-live-airing-procedure.md` is a console-driven rehearsal of the
 operator procedure and the access decision. It was previously named "Test 3: Dress Rehearsal", which
 was wrong twice — Test 3 is the staff pilot, Test 4 is the dress rehearsal, and that script is
 neither. It now carries a table saying exactly which ladder stages it does and does not cover.
+
+**The ladder is items 31 to 36 of the definition of done**, and
+`docs/COLABERRY_LIVE_TRACEABILITY_MATRIX.md` carries each one with its evidence and its owner.
+Nothing in this table can be closed from the repository: every stage needs an event to have
+happened, which is why nine other board tickets move the moment one does.
+
+**Before any airing, check the flag first.** `startBroadcastHealthLoop()` reads
+`BROADCAST_ENABLED` once at boot and returns `false` without scheduling anything when it is off
+(`broadcastHealthLoop.ts:97`), and the flag needs a container recreate. Turning it on *during* a
+class therefore means the health loop never schedules, nothing ever sets `provider_health`, and
+`go_live` refuses with `ProviderNotReady` for the whole show. That is what happened on 20 Oct and
+had to be hand-fed. L5.3's criteria also require the flag back to `false` afterwards, so every
+airing begins and ends with it. `docs/broadcast/ROLLOUT_RUNBOOK.md` has the ordering.
 
 ---
 
@@ -640,7 +701,7 @@ production polish. Applying it:
    **Preview-vs-program is not a software task in this repo, and should stop being listed as one.**
    There is exactly one provider input (`cloudflareStreamProvider.ts`). Cutting between a preview
    bus and a program bus is a vision-mixer function: it belongs to the studio in **P4-01/R5**, which
-   is Piyush's, and a software imitation of it — a second player labelled "preview" fed from the same
+   is Piyush's, and a software imitation of it — a second player labeled "preview" fed from the same
    single input — would be worse than its absence, because it would read as a monitor that is not
    monitoring anything. Note also that `PreviewBound` in `broadcastPlaybackGrant.ts` is **not** this:
    it is the paywall's free-preview window for an Explorer, which shares only the word.
@@ -839,10 +900,34 @@ participation (10–19), the studio (20–23), avatar and voice (24–26), distr
 testing and launch (31–36), documentation and enablement (37–44), and artifacts and case study
 (45–48).
 
-**This document does not give a completion count, because an honest one is not currently
-obtainable.** Items 1–4 and 45 require reading the Basecamp project, items 20–26 require a status
-report from Piyush on physical equipment and avatar training, and item 6 is the Zoom account setting
-that §4.2 shows was never verified end to end. What can be said without guessing: the provider spine
-(5, 7, 8, 9) and replay processing (28, 29) are satisfied; 30, 31, 32, 34, 35 and 36 are not; and the
-unsatisfied items cluster in the studio, avatar, distribution and documentation blocks — which is to
-say, in the releases that have not started rather than in the code that has been written.
+**There is now a count: 10 of the 48 are satisfied.** 13 are partial, 15 are not met, and 10 cannot
+be settled by reading this repository or that board. 10 are launch blockers.
+
+*Replaces the refusal this section carried until 2026-11-03,* which said an honest count was "not
+currently obtainable" because items 1–4 and 45 needed the Basecamp project read, 20–26 needed a
+status report from Piyush, and 6 was a Zoom setting never verified end to end. Two of those three
+have moved. The board was read on 2026-11-02 — all 61 todos on project 49210714 — which settles
+1–4, and §4.2 established exactly what is and is not true about item 6. Piyush's hardware report
+still does not exist, so items 20–26 say **not assessable** rather than being guessed at, and item
+45 needs all 61 todo *descriptions*, which the auto-mode classifier refused.
+
+The full matrix, with all nine columns DOC 09 requires — requirement, owner, Basecamp todo, repo
+files, test evidence, status, launch blocker, notes — is
+**`docs/COLABERRY_LIVE_TRACEABILITY_MATRIX.md`**, generated from
+`scripts/artifacts/tickets/l04DodData.js`. It is the artifact for L0.4's first criterion. Do not
+hand-edit it; rebuild it.
+
+Three things in it are worth reading before anything else:
+
+1. **Four conditions have no Basecamp ticket at all** — 17 (Claude pathway), 18 (Claude Code desktop
+   pathway), 19 (Builder Room participation at the agreed access tier) and 40 (the Ali and Piyush
+   operating walkthrough). Measured against all 61 todos, done and open. A board cannot show this
+   about itself, and it is the exact inverse of the L0.3 finding: there the board overstated what was
+   left, here it understates what is in scope.
+2. **Item 6 is the cheapest open item in the program and it gates R9 completely.** The Zoom account
+   setting is done; the operator half — which client, signed in as whom, on what license — has never
+   been confirmed by the host seeing the menu item in a throwaway meeting. Ten minutes, and no
+   repository work substitutes for it.
+3. **A partial is not scored as progress toward a yes.** Thirteen conditions are partial and each row
+   says which half is missing, because an average over "mostly done" is the number that feels like
+   progress and predicts nothing.
