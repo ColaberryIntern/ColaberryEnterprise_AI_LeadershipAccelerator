@@ -3409,7 +3409,7 @@ export async function seedAgentRegistry(): Promise<void> {
   // NULL `agent_id`, is tenant-scoped, and writes nothing to `enabled`, `autonomy_level` or
   // `tools_granted` -- a link makes an agent findable from its project, not able to act.
   //
-  // WIRED HERE ON PURPOSE. `promotionCriteria.ts` in this same subtree has 22 refusal codes and
+  // WIRED HERE ON PURPOSE. `promotionCriteria.ts` in this same subtree has 27 refusal codes and
   // zero callers, which is a gate that guards nothing; a reconcile with no caller is the same
   // mistake wearing different clothes.
   try {
