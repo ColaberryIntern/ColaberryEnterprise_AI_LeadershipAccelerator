@@ -5,6 +5,7 @@ import {
   getParticipantSubmissions, createParticipantSubmission, uploadParticipantSubmission,
   getParticipantProgress, getNextLiveSession,
 } from '../services/participantService';
+import { recordSignInLinkUse, recordSignInLinkInvalid } from '../services/signInLinkEvents';
 import { joinLiveSession, leaveMeetingSession } from '../services/liveSessionAttendanceService';
 import { createFreeAccount } from '../services/freeSignupService';
 import { emailSignInLinkInstead } from '../services/signup/existingAccountSignIn';
@@ -336,7 +337,12 @@ export async function handleVerifyMagicLink(req: Request, res: Response, next: N
     const token = req.query.token as string;
     if (!token) return res.status(400).json({ error: 'Token is required' });
     const result = await verifyMagicLink(token);
-    if (!result) return res.status(401).json({ error: 'Invalid or expired link. Please request a new one.' });
+    // C106: count the link's use (or failure) on the server. Never throws, so the response below is unchanged.
+    if (!result) {
+      await recordSignInLinkInvalid();
+      return res.status(401).json({ error: 'Invalid or expired link. Please request a new one.' });
+    }
+    await recordSignInLinkUse(result.enrollment.id);
     res.json(result);
   } catch (err) { next(err); }
 }
