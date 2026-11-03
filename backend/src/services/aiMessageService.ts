@@ -3,6 +3,12 @@ import { getInstrumentedOpenAI } from './openaiInstrumented';
 import { env } from '../config/env';
 import { getSetting } from './settingsService';
 import { Activity } from '../models';
+import { BANNED_COPY_RULES } from './content/bannedCopyRule';
+import {
+  bannedCopyInstruction,
+  findBannedCopy,
+  type BannedCopyHit,
+} from './content/bannedCopyMatch';
 
 export type AIChannel = 'email' | 'sms' | 'voice';
 
@@ -119,6 +125,16 @@ export interface GenerateMessageResult {
   body: string;
   tokens_used: number;
   model: string;
+  /**
+   * Banned-copy breaches found in the generated subject and body. Empty means screened and
+   * clean; it never means unscreened, because `findBannedCopy` throws on an empty rule set
+   * rather than reporting clean.
+   *
+   * Reported rather than enforced. Whether a breach stops a send is a behaviour change across
+   * every campaign in the product, so it is a deliberate separate decision and not something
+   * this screening takes on its own.
+   */
+  copy_flags: BannedCopyHit[];
 }
 
 let openaiClient: OpenAI | null = null;
@@ -383,13 +399,90 @@ function buildUserPrompt(params: GenerateMessageParams): string {
   return parts.join('\n');
 }
 
+/**
+ * What the generator produces before it has been screened. Screening is what turns this into
+ * a `GenerateMessageResult`, so the type system will not let a caller receive generated copy
+ * that skipped the screen.
+ */
+type UnscreenedMessage = Omit<GenerateMessageResult, 'copy_flags'>;
+
+/**
+ * How a breach is described to the model, as distinct from how the Explorer renderer
+ * describes it. The Explorer path discards a non-compliant draft; this path does not, so
+ * telling the model it would be discarded here would be a false statement inside a compliance
+ * instruction.
+ */
+const CAMPAIGN_BREACH_CONSEQUENCE =
+  'copy that breaks one is flagged for review before it is used';
+
+/**
+ * Screen generated copy for banned wording. The single chokepoint for this service.
+ *
+ * ## Why a wrapper rather than a check at each return
+ *
+ * `generateMessageUnscreened` has four return paths: the parsed-JSON email branch, its
+ * catch-fallback, the SMS/voice tail, and whatever a future channel adds. Four screens drift;
+ * the one that gets forgotten is the one that matters, and it fails open and silent. Putting
+ * the screen outside the function means a new return path is covered the moment it is
+ * written, which is the same argument the banned-word ratchet makes about scoping to a whole
+ * directory rather than a curated file list.
+ *
+ * ## Subject and body are screened separately
+ *
+ * Not joined and screened once. The idiom exemption looks back a bounded window for a
+ * preceding word, so joining the two fields would let a subject ending in that word exempt a
+ * genuine breach at the start of the body. The failure would be silent and in the wrong
+ * direction, which is the only direction that matters for a compliance guard.
+ */
+function screenGeneratedCopy(
+  message: UnscreenedMessage,
+  params: GenerateMessageParams,
+): GenerateMessageResult {
+  const subjectFlags = message.subject ? findBannedCopy(message.subject) : [];
+  const bodyFlags = findBannedCopy(message.body);
+  const copyFlags = [...subjectFlags, ...bodyFlags];
+
+  if (copyFlags.length > 0) {
+    // Structured, to stdout, per the observability contract. The copy itself is NOT logged:
+    // it is addressed to a real person and the flags already say what the breach was.
+    console.warn(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      level: 'warn',
+      service: 'ai-message',
+      event: 'banned_copy_in_generated_message',
+      outcome: 'partial',
+      error_class: 'ContractViolation',
+      context: {
+        channel: params.channel,
+        campaign_name: params.campaignContext?.name ?? null,
+        step_number: params.campaignContext?.step_number ?? null,
+        in_subject: subjectFlags.length,
+        in_body: bodyFlags.length,
+        rule_ids: [...new Set(copyFlags.map((f) => f.rule_id))],
+      },
+    }));
+  }
+
+  return { ...message, copy_flags: copyFlags };
+}
+
 export async function generateMessage(params: GenerateMessageParams): Promise<GenerateMessageResult> {
+  return screenGeneratedCopy(await generateMessageUnscreened(params), params);
+}
+
+async function generateMessageUnscreened(params: GenerateMessageParams): Promise<UnscreenedMessage> {
   const client = getClient();
 
   const model = (await getSetting('ai_model')) || env.aiModel;
   const maxTokens = (await getSetting('ai_max_tokens')) || env.aiMaxTokens;
 
-  const systemPrompt = buildSystemPrompt(params.channel, params);
+  // The rule is stated to the model as well as checked afterwards. Detection alone measured
+  // badly on the Explorer path: 8 of 12 drafts were refused for wording the model produced
+  // unprompted, with nothing in its inputs feeding it the term. Appended here rather than
+  // inside `buildSystemPrompt` so that function's characterization test keeps pinning exactly
+  // what it was written to pin.
+  const systemPrompt = `${buildSystemPrompt(params.channel, params)}\n\n`
+    + bannedCopyInstruction(BANNED_COPY_RULES, CAMPAIGN_BREACH_CONSEQUENCE);
   const userPrompt = buildUserPrompt(params);
 
   const response = await client.chat.completions.create({
