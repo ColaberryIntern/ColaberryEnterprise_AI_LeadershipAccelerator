@@ -14,6 +14,7 @@ import {
 import SubscriptionSection from './SubscriptionSection';
 import TeamSection from './TeamSection';
 import { useOrgManager } from '../useIsOrgManager';
+import { useCampus } from '../../../components/campus/CampusContext';
 import EnrollmentSection from './EnrollmentSection';
 import PointsDrilldown from '../points/PointsDrilldown';
 import './SettingsPage.css';
@@ -110,6 +111,9 @@ const SettingsPage: React.FC = () => {
   const [searchParams] = useSearchParams();
   // A business-account manager gets Team where a student gets Enrollment.
   const { isManager: isOrgManager, loaded: orgLoaded } = useOrgManager();
+  // The campus/classic view choice is rendered under Appearance. CampusProvider wraps the whole
+  // portal outlet (routes/portalRoutes.tsx), so this reads the same state the shell branches on.
+  const campus = useCampus();
   const tabs = useMemo(() => tabsFor(isOrgManager), [isOrgManager]);
   const [tab, setTab] = useState<SetTab>(() => {
     const t = searchParams.get('tab');
@@ -552,6 +556,30 @@ const SettingsPage: React.FC = () => {
 
         <section className="te-card set-section">
           <h3>Appearance</h3>
+          {/*
+            HOW YOU GET AROUND. The campus Me panel carries this same choice, but picking Classic
+            hides the Me panel along with the rest of the campus, so a learner who switches has no
+            way back from inside the thing they switched to. Settings is where they look for it
+            (the Me panel's own "All settings" link points here) and until now it was the one place
+            it was missing. Shown when the campus is on OR classic was explicitly chosen, so a
+            fail-closed flag read cannot leave someone stuck with no control at all.
+          */}
+          {(campus.enabled || campus.settings.nav === 'classic') && (
+          <div className="set-row">
+            <div>
+              <div className="lab">How you get around</div>
+              <div className="desc">The campus map, or the classic sidebar. Remembered on this device.</div>
+            </div>
+            <div className="set-seg" role="group" aria-label="How you get around">
+              <button type="button" className={campus.settings.nav === 'campus' ? 'on' : undefined}
+                aria-pressed={campus.settings.nav === 'campus'} data-testid="set-nav-campus"
+                onClick={() => campus.updateSettings({ nav: 'campus' })}>Campus</button>
+              <button type="button" className={campus.settings.nav === 'classic' ? 'on' : undefined}
+                aria-pressed={campus.settings.nav === 'classic'} data-testid="set-nav-classic"
+                onClick={() => campus.updateSettings({ nav: 'classic' })}>Classic</button>
+            </div>
+          </div>
+          )}
           <div className="set-row">
             <div>
               <div className="lab">Theme</div>
