@@ -135,9 +135,24 @@ describe('the boot registration is WRAPPED, because its assert throws', () => {
     // THIS ROSTER IS THE POINT, so it is updated rather than loosened: a new throwing
     // post-condition that nobody wrapped would otherwise reach `server.ts` and stop the port
     // binding, and the pin is what forces a reviewer to look.
+    // AF11.1 added the fourth member, 2026-11-03. `ensureAgentDomainToolRequestSchema.ts` holds
+    // the six field groups of a tool request, hung one-to-one off the AF7.1 change-request row,
+    // and it asserts the same way for the same reason: its `CREATE TABLE IF NOT EXISTS` is a
+    // no-op on an existing table and every statement error is warned, so `ensure` alone resolves
+    // identically whether the DDL worked or did nothing.
+    //
+    // It asserts one thing its siblings do not — the CHECK constraint that makes "a tool that
+    // writes must declare its side effects" structural rather than only an application rule. A
+    // missing constraint is therefore a named post-condition failure, not a silent accept.
+    //
+    // It is wrapped: `ensureAgentDomainToolRequestSchemaGuarded` cannot reject, and
+    // `__tests__/ensureAgentDomainToolRequestSchema.test.ts` drives that failure path rather than
+    // grepping for a try/catch. THIS PIN IS WHAT CAUGHT IT — the roster failed on the first CI run
+    // of that PR, which is the reviewer-forcing function working as designed.
     expect(throwing.sort()).toEqual([
       'ensureAgentDomainChangeRequestSchema.ts',
       'ensureAgentDomainProjectSchema.ts',
+      'ensureAgentDomainToolRequestSchema.ts',
       'ensureBroadcastTelemetrySchema.ts',
     ]);
   });

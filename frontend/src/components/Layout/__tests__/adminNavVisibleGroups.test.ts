@@ -1,4 +1,4 @@
-import { NAV_GROUPS, visibleNavGroups, type NavSubList } from '../adminNav';
+import { NAV_GROUPS, visibleNavGroups, type NavGroup, type NavSubList } from '../adminNav';
 
 /**
  * The Agents node, and the six builders who could not see it.
@@ -36,9 +36,9 @@ function oldRule(canSection: (s: string) => boolean) {
     .filter((g) => g.links.length > 0);
 }
 
-const groupLabels = (gs: Array<{ label: string | null }>) => gs.map((g) => g.label);
-const interns = (gs: Array<{ label: string | null; subLists?: NavSubList[] }>) =>
-  gs.find((g) => g.label === 'Interns');
+const groupLabels = (gs: NavGroup[]) => gs.map((g) => g.label);
+/** Typed as `NavGroup`, not a structural subset — the tests below read `.links` off the result. */
+const interns = (gs: NavGroup[]): NavGroup | undefined => gs.find((g) => g.label === 'Interns');
 
 describe('the declaration this rests on', () => {
   it('still has an Interns group whose Agents sub-list is gated on `agents`', () => {

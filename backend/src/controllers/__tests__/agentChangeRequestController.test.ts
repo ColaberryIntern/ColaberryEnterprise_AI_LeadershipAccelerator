@@ -25,6 +25,22 @@ class ChangeRequestRefusedError extends Error {
     this.issues = issues;
   }
 }
+/**
+ * AF11.1. An incomplete tool request.
+ *
+ * THIS LINE IS WHY THE FACTORY BELOW HAS TO LIST EVERY ERROR CLASS. A `jest.mock` factory replaces
+ * the WHOLE module, so an error class the controller imports and this object omits arrives as
+ * `undefined` — and `err instanceof undefined` throws `TypeError: Right-hand side of 'instanceof'
+ * is not an object` from inside the error handler, failing six tests that have nothing to do with
+ * the new branch. That is exactly how this suite broke on AF11.1's first CI run.
+ */
+class ToolRequestRefusedError extends Error {
+  issues: Array<{ rule: string; detail: string }>;
+  constructor(issues: Array<{ rule: string; detail: string }>) {
+    super(issues.map((i) => i.detail).join(' '));
+    this.issues = issues;
+  }
+}
 
 jest.mock('../../services/agentDomain/agentChangeRequestService', () => ({
   fileChangeRequest: (...a: unknown[]) => mockFile(...a),
@@ -35,6 +51,7 @@ jest.mock('../../services/agentDomain/agentChangeRequestService', () => ({
   DomainNotYoursError,
   ChangeRequestNotFoundError,
   ChangeRequestRefusedError,
+  ToolRequestRefusedError,
 }));
 jest.mock('../../config/database', () => ({ sequelize: { fake: true } }));
 
@@ -106,6 +123,47 @@ describe('filing', () => {
     expect(statusOf(r)).toBe(403);
     // The actor reaches the service as empty, which refuses. It is never defaulted to 'unknown'.
     expect(String(mockFile.mock.calls[0][0].email)).toBe('');
+  });
+
+  it('AF11.1: 400 with NAMED RULES when a tool request is incomplete, not a generic 400', async () => {
+    // The ticket's criterion is "refused with a named reason, not a generic 400", and the status
+    // is decided here rather than in the contract, so this is where that is pinned. 400 and not
+    // 409: 409 means "your decision is not allowed to stand", and this is "this body is not yet
+    // usable, go and fill these in".
+    mockFile.mockRejectedValue(new ToolRequestRefusedError([
+      { rule: 'touches_missing', detail: 'List every system this tool would touch.' },
+      { rule: 'writes_undeclared', detail: 'Say whether this tool writes anything.' },
+    ]));
+    const r = res();
+    await handleFileChangeRequest(req({
+      body: { kind: 'tool', domain_key: 'marketing', title: 'Read the feed' },
+    }), r);
+    expect(statusOf(r)).toBe(400);
+    const body = r.json.mock.calls[0][0] as { issues: Array<{ rule: string }> };
+    expect(body.issues.map((i) => i.rule)).toEqual(['touches_missing', 'writes_undeclared']);
+  });
+
+  it('AF11.1: passes the tool details through to the service rather than dropping them', async () => {
+    mockFile.mockResolvedValue({ id: 'cr-1', kind: 'tool', status: 'submitted' });
+    const r = res();
+    await handleFileChangeRequest(req({
+      body: {
+        kind: 'tool',
+        domain_key: 'marketing',
+        title: 'Read the feed',
+        tool_request: { tool_name: 'read_feed', writes: false },
+      },
+    }), r);
+    expect(statusOf(r)).toBe(201);
+    expect(mockFile.mock.calls[0][0].toolRequest).toEqual({ tool_name: 'read_feed', writes: false });
+  });
+
+  it('AF11.1: a change request with no tool details sends null, not undefined-by-accident', async () => {
+    mockFile.mockResolvedValue({ id: 'cr-1', kind: 'change', status: 'submitted' });
+    const r = res();
+    await handleFileChangeRequest(req({ body: { domain_key: 'marketing', title: 'Rename my agent' } }), r);
+    expect(statusOf(r)).toBe(201);
+    expect(mockFile.mock.calls[0][0].toolRequest).toBeNull();
   });
 });
 
