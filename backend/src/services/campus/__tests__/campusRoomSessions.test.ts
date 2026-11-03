@@ -136,6 +136,32 @@ describe('roomSessionWindows — what it refuses to invent', () => {
     expect(roomSessionWindows([PUBLIC_TUE], at('2026-11-02T16:10:00Z')).size).toBe(0);
   });
 
+  it('matches the CAPITALISED day names production actually stores', () => {
+    // Measured against production on 2026-11-02: the stored timetable reads "Monday",
+    // "Tuesday", "Wednesday", "Friday" — capitalised — while every other fixture in
+    // this file is lowercase because that is what `sessionsFor` hands over. Both paths
+    // have to work: this module is reachable with raw `required_meetings` too, and
+    // without this test, deleting the `.toLowerCase()` passes the whole suite and
+    // silently stops matching every real meeting.
+    const asStored: ScheduledMeeting = { day: 'Monday', time: '9:00 AM', title: 'Intern standup', room_id: 'room-interns' };
+    expect(roomSessionWindows([asStored], at('2026-11-02T15:30:00Z')).get('room-interns')?.in_progress).toBe(true);
+  });
+
+  it('tolerates a day with stray whitespace', () => {
+    const padded: ScheduledMeeting = { ...STANDUP, day: '  monday  ' };
+    expect(roomSessionWindows([padded], at('2026-11-02T15:30:00Z')).has('room-interns')).toBe(true);
+  });
+
+  it('binds three meetings that share ONE room on different days', () => {
+    // The real shape of production: Tue/Wed/Fri all run in Colaberry AI Sessions. Only
+    // the day being asked about may claim it.
+    const shared = (day: string): ScheduledMeeting => ({ day, time: '10:00 AM', title: 'AI Session', room_id: 'room-public' });
+    const tuesday = at('2026-11-03T16:10:00Z');
+    const got = roomSessionWindows([shared('Tuesday'), shared('Wednesday'), shared('Friday')], tuesday);
+    expect(got.size).toBe(1);
+    expect(got.get('room-public')?.start_at).toBe('2026-11-03T16:00:00.000Z');
+  });
+
   it('returns nothing for an unparsable now rather than throwing', () => {
     expect(roomSessionWindows([STANDUP], new Date('not-a-date')).size).toBe(0);
   });
