@@ -1,8 +1,5 @@
 import React, { useState } from 'react';
-import {
-  draftGovProposalDocument, acceptGovProposalDocument, requestChangesGovProposalDocument, commentGovProposalDocument,
-  type GovProposalDocument,
-} from '../../../../services/govProjectPortalApi';
+import type { GovProposalDocument, GovCockpitApi } from '../../../../services/govProjectPortalApi';
 
 /**
  * ProposalDocumentDrawer — work one named proposal document. The AI drafts it (or you edit the draft); you preview
@@ -47,7 +44,7 @@ function printDocument(title: string, html: string): void {
 }
 
 export default function ProposalDocumentDrawer(
-  { doc, projectId, canVerify, onReload, onClose }: { doc: GovProposalDocument; projectId: string; canVerify: boolean; onReload: () => void; onClose: () => void },
+  { doc, projectId, canVerify, onReload, onClose, api }: { doc: GovProposalDocument; projectId: string; canVerify: boolean; onReload: () => void; onClose: () => void; api: GovCockpitApi },
 ): React.ReactElement {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -81,7 +78,7 @@ export default function ProposalDocumentDrawer(
               <h4>Edit the draft (HTML)</h4>
               <textarea rows={14} value={draft} onChange={(e) => setDraft(e.target.value)} style={{ fontFamily: 'var(--mono)', fontSize: 12 }} />
               <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                <button type="button" className="gck-btn primary" disabled={!!busy} onClick={() => void run('save', async () => { await draftGovProposalDocument(projectId, doc.key, draft); setEditing(false); })}>{busy === 'save' ? 'Saving…' : 'Save draft'}</button>
+                <button type="button" className="gck-btn primary" disabled={!!busy} onClick={() => void run('save', async () => { await api.draftDocument(projectId, doc.key, draft); setEditing(false); })}>{busy === 'save' ? 'Saving…' : 'Save draft'}</button>
                 <button type="button" className="gck-btn ghost" disabled={!!busy} onClick={() => { setDraft(doc.contentHtml ?? ''); setEditing(false); }}>Cancel</button>
               </div>
             </div>
@@ -110,7 +107,7 @@ export default function ProposalDocumentDrawer(
           <div className="gck-sec">
             <h4>Add a comment</h4>
             <textarea rows={2} value={comment} placeholder="Note for this document…" onChange={(e) => setComment(e.target.value)} />
-            <button type="button" className="gck-btn" style={{ marginTop: 6 }} disabled={!!busy || !comment.trim()} onClick={() => void run('comment', async () => { await commentGovProposalDocument(projectId, doc.key, comment); setComment(''); })}>Add comment</button>
+            <button type="button" className="gck-btn" style={{ marginTop: 6 }} disabled={!!busy || !comment.trim()} onClick={() => void run('comment', async () => { await api.commentDocument(projectId, doc.key, comment); setComment(''); })}>Add comment</button>
           </div>
 
           {/* Reviewer: request changes */}
@@ -118,7 +115,7 @@ export default function ProposalDocumentDrawer(
             <div className="gck-sec">
               <h4>Send back with a note</h4>
               <textarea rows={2} value={note} placeholder="What needs to change…" onChange={(e) => setNote(e.target.value)} />
-              <button type="button" className="gck-btn" style={{ marginTop: 6 }} disabled={!!busy || !note.trim()} onClick={() => void run('changes', async () => { await requestChangesGovProposalDocument(projectId, doc.key, note); setNote(''); })}>Request changes</button>
+              <button type="button" className="gck-btn" style={{ marginTop: 6 }} disabled={!!busy || !note.trim()} onClick={() => void run('changes', async () => { await api.requestChanges(projectId, doc.key, note); setNote(''); })}>Request changes</button>
             </div>
           )}
 
@@ -127,13 +124,13 @@ export default function ProposalDocumentDrawer(
 
         <div className="gck-actions">
           {!editing && doc.status !== 'accepted' && (
-            <button type="button" className="gck-btn primary" disabled={!!busy} onClick={() => void run('draft', () => draftGovProposalDocument(projectId, doc.key))}>
+            <button type="button" className="gck-btn primary" disabled={!!busy} onClick={() => void run('draft', () => api.draftDocument(projectId, doc.key))}>
               <i className="ri-sparkling-2-line" aria-hidden="true" />{busy === 'draft' ? 'Drafting…' : (hasContent ? 'Re-draft with AI' : 'Draft with AI')}
             </button>
           )}
           {!editing && hasContent && doc.status !== 'accepted' && <button type="button" className="gck-btn" disabled={!!busy} onClick={() => { setDraft(doc.contentHtml ?? ''); setEditing(true); }}>Edit</button>}
           {hasContent && <button type="button" className="gck-btn" onClick={() => printDocument(doc.title, doc.contentHtml as string)}><i className="ri-printer-line" aria-hidden="true" />Download PDF</button>}
-          {canVerify && hasContent && doc.status !== 'accepted' && <button type="button" className="gck-btn ok" disabled={!!busy} onClick={() => void run('accept', () => acceptGovProposalDocument(projectId, doc.key))}>{busy === 'accept' ? 'Accepting…' : 'Accept'}</button>}
+          {canVerify && hasContent && doc.status !== 'accepted' && <button type="button" className="gck-btn ok" disabled={!!busy} onClick={() => void run('accept', () => api.acceptDocument(projectId, doc.key))}>{busy === 'accept' ? 'Accepting…' : 'Accept'}</button>}
           <span className="gck-spacer" />
           <button type="button" className="gck-btn ghost" onClick={onClose}>Close</button>
         </div>

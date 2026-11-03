@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { requireSection, adminAllowedSections } from '../../middlewares/authMiddleware';
 import { resolveGovProjectActor } from '../../middlewares/govProjectAccess';
+import type { StudentGovProjectView } from '../../services/factory/govProjectProjection';
 
 /**
  * Admin — Government Contracts tab (mgmt-portal M1).
@@ -66,10 +67,10 @@ router.get('/api/admin/gov-contracts', requireSection('gov_contracts'), async (r
  * no scoped role does — and it returns the read-only view for ANY non-archived government delivery
  * project, NOT only ones the caller is a member of, so management sees every contract the list shows.
  *
- * View-only by construction: the admin page renders CockpitView read-only (no copilot, no proposal
- * edits), and this asserts no verify identity — `viewerCanVerify=false` so the admin sees exactly the
- * intern's own view, never reviewer controls. The projection itself is already student-safe (never an
- * admin/internal field). 404 when the id is not a (non-archived) government project.
+ * Management-drivable (Ali, 2026-11-02): `viewerCanVerify=true` so an owner/admin sees reviewer controls and
+ * admin-only (pricing) documents, and the sibling POST routes below let management run the copilot and
+ * draft/accept/request-changes/comment on proposal documents from the admin cockpit. The projection is still
+ * student-safe in SHAPE (no admin/internal field leaks). 404 when the id is not a (non-archived) government project.
  */
 router.get('/api/admin/gov-contracts/:projectId/cockpit', requireSection('gov_contracts'), async (req: Request, res: Response) => {
   const projectId = req.params.projectId;
@@ -82,7 +83,7 @@ router.get('/api/admin/gov-contracts/:projectId/cockpit', requireSection('gov_co
     // Resolve the admin's identity only to feed the projection's proposal-share lookup; an owner/admin
     // is not an edit-share member, so it resolves to a read-only view regardless.
     const actor = await resolveGovProjectActor(req);
-    const view = await getStudentGovProjectView(projectId, false, actor?.platformIdentityId ?? null);
+    const view = await getStudentGovProjectView(projectId, true, actor?.platformIdentityId ?? null);
     if (!view) {
       res.status(404).json({ error: 'Not found' });
       return;
@@ -91,6 +92,113 @@ router.get('/api/admin/gov-contracts/:projectId/cockpit', requireSection('gov_co
   } catch (err: unknown) {
     logFail('gov_contract_cockpit_failed', err, { projectId });
     res.status(500).json({ error: 'Could not load the government contract.' });
+  }
+});
+
+// ── Management-drivable proposal + copilot (Ali, 2026-11-02) ──────────────────────────────────────────────────
+// Management does not just READ a gov contract — from the admin Interns-hub cockpit it can DRIVE the proposal
+// workflow (draft / accept / request-changes / comment) and ask the project copilot. These MIRROR the student
+// portal routes (govProjectPortalRoutes) but are gated `requireSection('gov_contracts')` instead of
+// participant+membership, and reuse the SAME services, so no business logic forks. The maker/approver split is
+// preserved exactly: it lives in the portal's route-capability gating, and `acceptProposalDocument` never enforced
+// maker≠accepter — so a `gov_contracts` holder gets the same authority an `evidence.verify` holder already had.
+const DOC_ERR_STATUS: Record<string, number> = { not_found: 404, empty: 422, no_reviewer: 401, not_drafted: 422, already_accepted: 409, no_author: 401, forbidden: 403, ai_failed: 502 };
+
+/**
+ * Resolve + validate an admin gov-contract context for a mutation: the project must be a (non-archived)
+ * government project (404 otherwise — the same enumeration defense as the cockpit GET), and we resolve the admin's
+ * platform identity to record who acted. Returns null (after writing the response) on a bad or absent project.
+ */
+async function adminGovContext(req: Request, res: Response): Promise<{ identityId: string | null; view: StudentGovProjectView } | null> {
+  const projectId = req.params.projectId;
+  if (typeof projectId !== 'string' || !projectId) { res.status(400).json({ error: 'Project id is required' }); return null; }
+  const { getStudentGovProjectView } = await import('../../services/factory/govProjectProjection');
+  const actor = await resolveGovProjectActor(req);
+  const view = await getStudentGovProjectView(projectId, true, actor?.platformIdentityId ?? null);
+  if (!view) { res.status(404).json({ error: 'Not found' }); return null; }
+  return { identityId: actor?.platformIdentityId ?? null, view };
+}
+
+function docKeyOf(req: Request, res: Response): string | null {
+  const docKey = req.params.docKey;
+  if (typeof docKey !== 'string' || !docKey) { res.status(400).json({ error: 'Document id is required' }); return null; }
+  return docKey;
+}
+
+/** POST /api/admin/gov-contracts/:projectId/copilot — management asks the project copilot (deterministic, grounded). */
+router.post('/api/admin/gov-contracts/:projectId/copilot', requireSection('gov_contracts'), async (req: Request, res: Response) => {
+  const ctx = await adminGovContext(req, res);
+  if (!ctx) return;
+  const question = String((req.body ?? {}).question ?? '').trim();
+  if (!question) { res.status(400).json({ error: 'A question is required' }); return; }
+  try {
+    const { answerCopilot } = await import('../../services/factory/govCopilot');
+    res.json(answerCopilot(ctx.view, question));
+  } catch (err: unknown) {
+    logFail('gov_contract_copilot_failed', err, { projectId: req.params.projectId });
+    res.status(500).json({ error: 'Could not answer right now.' });
+  }
+});
+
+/** POST .../:projectId/documents/:docKey/draft — management drafts a proposal document (manual or AI; canVerify=true). */
+router.post('/api/admin/gov-contracts/:projectId/documents/:docKey/draft', requireSection('gov_contracts'), async (req: Request, res: Response) => {
+  const ctx = await adminGovContext(req, res);
+  if (!ctx) return;
+  const docKey = docKeyOf(req, res); if (!docKey) return;
+  try {
+    const { draftProposalDocument } = await import('../../services/factory/proposal/govProposalDocumentActions');
+    const manual = typeof (req.body ?? {}).contentHtml === 'string' ? (req.body as any).contentHtml : null;
+    const document = await draftProposalDocument({ deliveryProjectId: req.params.projectId as string, docKey, identityId: ctx.identityId, canVerify: true, manualHtml: manual });
+    res.json({ document });
+  } catch (err: any) {
+    if (err?.name === 'ProposalDocumentError') { res.status(DOC_ERR_STATUS[err.reason] ?? 400).json({ error: err.message, reason: err.reason }); return; }
+    logFail('gov_contract_doc_draft_failed', err, { projectId: req.params.projectId, docKey });
+    res.status(500).json({ error: 'Could not draft the document.' });
+  }
+});
+
+/** POST .../:projectId/documents/:docKey/accept — management accepts a drafted document. */
+router.post('/api/admin/gov-contracts/:projectId/documents/:docKey/accept', requireSection('gov_contracts'), async (req: Request, res: Response) => {
+  const ctx = await adminGovContext(req, res);
+  if (!ctx) return;
+  const docKey = docKeyOf(req, res); if (!docKey) return;
+  try {
+    const { acceptProposalDocument } = await import('../../services/factory/proposal/govProposalDocumentStore');
+    res.json({ document: await acceptProposalDocument(req.params.projectId as string, docKey, ctx.identityId ?? '') });
+  } catch (err: any) {
+    if (err?.name === 'ProposalDocumentError') { res.status(DOC_ERR_STATUS[err.reason] ?? 400).json({ error: err.message, reason: err.reason }); return; }
+    logFail('gov_contract_doc_accept_failed', err, { projectId: req.params.projectId, docKey });
+    res.status(500).json({ error: 'Could not accept the document.' });
+  }
+});
+
+/** POST .../:projectId/documents/:docKey/request-changes — management sends a document back with a note. */
+router.post('/api/admin/gov-contracts/:projectId/documents/:docKey/request-changes', requireSection('gov_contracts'), async (req: Request, res: Response) => {
+  const ctx = await adminGovContext(req, res);
+  if (!ctx) return;
+  const docKey = docKeyOf(req, res); if (!docKey) return;
+  try {
+    const { requestChangesProposalDocument } = await import('../../services/factory/proposal/govProposalDocumentStore');
+    res.json({ document: await requestChangesProposalDocument(req.params.projectId as string, docKey, ctx.identityId ?? '', String((req.body ?? {}).note ?? '')) });
+  } catch (err: any) {
+    if (err?.name === 'ProposalDocumentError') { res.status(DOC_ERR_STATUS[err.reason] ?? 400).json({ error: err.message, reason: err.reason }); return; }
+    logFail('gov_contract_doc_changes_failed', err, { projectId: req.params.projectId, docKey });
+    res.status(500).json({ error: 'Could not update the document.' });
+  }
+});
+
+/** POST .../:projectId/documents/:docKey/comment — management adds a comment to a document's review thread. */
+router.post('/api/admin/gov-contracts/:projectId/documents/:docKey/comment', requireSection('gov_contracts'), async (req: Request, res: Response) => {
+  const ctx = await adminGovContext(req, res);
+  if (!ctx) return;
+  const docKey = docKeyOf(req, res); if (!docKey) return;
+  try {
+    const { addProposalDocumentComment } = await import('../../services/factory/proposal/govProposalDocumentStore');
+    res.json({ document: await addProposalDocumentComment(req.params.projectId as string, docKey, ctx.identityId ?? '', String((req.body ?? {}).body ?? '')) });
+  } catch (err: any) {
+    if (err?.name === 'ProposalDocumentError') { res.status(DOC_ERR_STATUS[err.reason] ?? 400).json({ error: err.message, reason: err.reason }); return; }
+    logFail('gov_contract_doc_comment_failed', err, { projectId: req.params.projectId, docKey });
+    res.status(500).json({ error: 'Could not add the comment.' });
   }
 });
 

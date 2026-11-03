@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
-import type { StudentGovProjectView, GovProposalDocument } from '../../../../services/govProjectPortalApi';
+import type { StudentGovProjectView, GovProposalDocument, GovCockpitApi } from '../../../../services/govProjectPortalApi';
+import { portalGovCockpitApi } from '../../../../services/govProjectPortalApi';
 import { parseDeadline, countdownTo, formatCountdown, dossierDeadlineIso } from '../../../admin/govDeadline';
 import BuildReleases from './BuildReleases';
 import ProposalDocuments from './ProposalDocuments';
@@ -20,7 +21,7 @@ import './govCockpit.css';
 type Tab = 'overview' | 'build' | 'proposal' | 'commits' | 'how';
 
 export default function CockpitView(
-  { view, projectId, onReload, readOnly = false }: { view: StudentGovProjectView; projectId: string; onReload: () => void; readOnly?: boolean },
+  { view, projectId, onReload, readOnly = false, api = portalGovCockpitApi }: { view: StudentGovProjectView; projectId: string; onReload: () => void; readOnly?: boolean; api?: GovCockpitApi },
 ): React.ReactElement {
   // readOnly: an owner/admin viewing an intern's contract from the admin left-nav sees the SAME tabs,
   // but the two interactive surfaces that post to participant-token endpoints are withheld — the
@@ -93,10 +94,10 @@ export default function CockpitView(
           {tab === 'commits' && <CommitFeed feed={feed} />}
           {tab === 'how' && <HowItWorks />}
         </div>
-        {!readOnly && <CopilotRail projectId={projectId} greeting={greeting} />}
+        {!readOnly && <CopilotRail projectId={projectId} greeting={greeting} api={api} />}
       </div>
 
-      {!readOnly && openDoc && <ProposalDocumentDrawer doc={openDoc} projectId={projectId} canVerify={view.viewerCanVerify} onReload={onReload} onClose={() => setOpenDocKey(null)} />}
+      {!readOnly && openDoc && <ProposalDocumentDrawer doc={openDoc} projectId={projectId} canVerify={view.viewerCanVerify} onReload={onReload} onClose={() => setOpenDocKey(null)} api={api} />}
     </div>
   );
 }

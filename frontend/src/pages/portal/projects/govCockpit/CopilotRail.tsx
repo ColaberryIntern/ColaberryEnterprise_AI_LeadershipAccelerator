@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { askGovCopilot } from '../../../../services/govProjectPortalApi';
+import type { GovCockpitApi } from '../../../../services/govProjectPortalApi';
 
 /**
  * CopilotRail — the project copilot. It asks the backend's DETERMINISTIC copilot endpoint, which answers from the
@@ -15,7 +15,7 @@ const QUICK: Array<{ q: string; label: string }> = [
   { q: 'Draft a proposal answer', label: 'Draft a proposal answer' },
 ];
 
-export default function CopilotRail({ projectId, greeting }: { projectId: string; greeting: string }): React.ReactElement {
+export default function CopilotRail({ projectId, greeting, api }: { projectId: string; greeting: string; api: GovCockpitApi }): React.ReactElement {
   const [log, setLog] = useState<Msg[]>([{ who: 'ai', text: greeting }]);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
@@ -29,7 +29,7 @@ export default function CopilotRail({ projectId, greeting }: { projectId: string
     if (!q || busy) return;
     push({ who: 'me', text: q }); scroll(); setBusy(true);
     try {
-      const { answer } = await askGovCopilot(projectId, q);
+      const { answer } = await api.askCopilot(projectId, q);
       push({ who: 'ai', text: answer });
     } catch {
       push({ who: 'ai', text: 'I could not answer just now. Try again in a moment.' });

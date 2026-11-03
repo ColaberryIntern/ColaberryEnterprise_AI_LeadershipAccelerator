@@ -277,7 +277,7 @@ router.post(
 );
 
 // ── v2 PROPOSAL DOCUMENTS — AI-drafted, reviewer-accepted named documents ─────────────────────────────────────
-const DOC_ERR_STATUS: Record<string, number> = { not_found: 404, empty: 422, no_reviewer: 401, not_drafted: 422, already_accepted: 409, no_author: 401 };
+const DOC_ERR_STATUS: Record<string, number> = { not_found: 404, empty: 422, no_reviewer: 401, not_drafted: 422, already_accepted: 409, no_author: 401, forbidden: 403, ai_failed: 502 };
 
 /**
  * POST /api/portal/gov-projects/:projectId/documents/:docKey/draft — draft a proposal document. With { contentHtml }
@@ -297,27 +297,10 @@ router.post(
     try {
       const { hasDeliveryPermission } = await import('../modules/delivery/deliveryAuthorization');
       const canVerify = !!(req.deliveryContext && hasDeliveryPermission(req.deliveryContext, 'evidence.verify'));
-      const store = await import('../services/factory/proposal/govProposalDocumentStore');
-      const { sanitizeProposalHtml, generateProposalDocumentDraftAI } = await import('../services/factory/proposal/govProposalDocumentDraftAI');
-      const existing = (await store.listProposalDocuments(projectId)).find((d) => d.key === docKey);
-      if (!existing) { res.status(404).json({ error: 'Not found' }); return; }
-      if (existing.adminOnly && !canVerify) { res.status(403).json({ error: 'Forbidden' }); return; } // an intern never drafts pricing
-
+      const { draftProposalDocument } = await import('../services/factory/proposal/govProposalDocumentActions');
       const manual = typeof (req.body ?? {}).contentHtml === 'string' ? (req.body as any).contentHtml : null;
-      if (manual !== null) {
-        const doc = await store.saveProposalDocumentDraft(projectId, docKey, sanitizeProposalHtml(manual), me);
-        res.json({ document: doc }); return;
-      }
-      // AI draft: re-derive to get this document's requirement statements for grounding.
-      const { default: ContractRequirement } = await import('../models/ContractRequirement');
-      const { deriveProposalDocuments } = await import('../services/factory/proposal/govProposalDocuments');
-      const reqRows: any[] = await ContractRequirement.findAll({ where: { delivery_project_id: projectId } });
-      const derived = deriveProposalDocuments(reqRows.map((r) => (r && r.get ? r.get({ plain: true }) : r))).find((d) => d.key === docKey);
-      await store.markProposalDocumentDrafting(projectId, docKey).catch(() => {});
-      const result = await generateProposalDocumentDraftAI({ docKey, title: existing.title, requirements: derived?.requirements ?? [] });
-      if (result.error || !result.html) { res.status(502).json({ error: result.error || 'The AI draft could not be generated.' }); return; }
-      const doc = await store.saveProposalDocumentDraft(projectId, docKey, result.html, me);
-      res.json({ document: doc });
+      const document = await draftProposalDocument({ deliveryProjectId: projectId, docKey, identityId: me, canVerify, manualHtml: manual });
+      res.json({ document });
     } catch (err: any) {
       if (err?.name === 'ProposalDocumentError') { res.status(DOC_ERR_STATUS[err.reason] ?? 400).json({ error: err.message, reason: err.reason }); return; }
       res.status(500).json({ error: 'Could not draft the document.' });
