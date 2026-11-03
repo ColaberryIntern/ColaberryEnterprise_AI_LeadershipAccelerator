@@ -29,7 +29,7 @@ function orderStates<T extends { primary_state: ExplorerPrimaryState }>(rows: T[
 function stateTone(state: ExplorerPrimaryState): 'neutral' | 'info' | 'success' | 'primary' {
   if (state === 'CONVERTED') return 'success';
   if (state === 'ENROLLMENT_READY' || state === 'CONSIDERING_NEXT_STEP') return 'primary';
-  if (state === 'NEW_EXPLORER' || state === 'ACTIVATING') return 'neutral';
+  if (state === 'NEW_EXPLORER' || state === 'NOT_STARTED' || state === 'ACTIVATING') return 'neutral';
   return 'info';
 }
 

@@ -107,7 +107,7 @@ describe('Map B bridges states to stage tags — the disjoint-vocabulary guard',
 
   it('maps every state in the real union, none invented', () => {
     const states = STATES_FROM_SOURCE();
-    expect(states.length).toBe(8);
+    expect(states.length).toBe(9); // C99 added NOT_STARTED
     expect(Object.keys(PRIMARY_STATE_TO_STAGE).sort()).toEqual([...states].sort());
   });
 

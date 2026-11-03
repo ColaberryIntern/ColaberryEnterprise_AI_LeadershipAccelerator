@@ -28,7 +28,10 @@ import { FLOTATION_STATES } from '../lifecycle/aiFlotationLifecycle';
  * outranks every value (`rankHandoffs`), so it is carried as its own flag.
  */
 
-/** Explorer's own primary states, in journey order (`types/explorerGrowth.ts`'s union, ordered). */
+/**
+ * Explorer's own primary states, in journey order (`types/explorerGrowth.ts`'s union, ordered). NOT_STARTED is not
+ * listed: it ranks as ACTIVATING (RANK_AS below).
+ */
 export const LEARNER_STATE_ORDER = [
   'NEW_EXPLORER',
   'ACTIVATING',
@@ -77,11 +80,18 @@ export interface ExpectedValue {
 
 export const EXPECTED_VALUE_FORMULA = 'state_rank*10 + path_weight*5 + engagement';
 
+/**
+ * States that rank as another state. C99 split the 72h-timer half of ACTIVATING out as NOT_STARTED; it keeps the rank
+ * those learners had, so the split relabels them without re-ordering anyone's handoff queue. Whether a learner who
+ * has done nothing should rank below one who has is a separate decision, not this one.
+ */
+const RANK_AS: Readonly<Record<string, string>> = Object.freeze({ NOT_STARTED: 'ACTIVATING' });
+
 /** The state's rank in its lifecycle: its index, with the terminal state (the last) ranked 0, unknown 0. */
 export function stateRank(kind: JourneyProgramKind | null, state: string | null): number {
   if (!kind || !state) return 0;
   const order = STATE_ORDER[kind];
-  const i = order.indexOf(state);
+  const i = order.indexOf(kind === 'learner' ? RANK_AS[state] ?? state : state);
   if (i < 0 || i === order.length - 1) return 0;
   return i;
 }

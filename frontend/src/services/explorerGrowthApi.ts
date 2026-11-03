@@ -28,6 +28,7 @@ import api from '../utils/api';
 
 export type ExplorerPrimaryState =
   | 'NEW_EXPLORER'
+  | 'NOT_STARTED'
   | 'ACTIVATING'
   | 'ACTIVE_LEARNER'
   | 'ENGAGED_LEARNER'
@@ -68,6 +69,7 @@ export type ExplorerActionType =
 /** Ordered for display: the roster reads as a journey, not an alphabet. */
 export const PRIMARY_STATE_ORDER: ExplorerPrimaryState[] = [
   'NEW_EXPLORER',
+  'NOT_STARTED',
   'ACTIVATING',
   'ACTIVE_LEARNER',
   'ENGAGED_LEARNER',

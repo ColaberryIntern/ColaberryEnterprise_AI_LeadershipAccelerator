@@ -36,6 +36,7 @@ import type { ExplorerScores } from './explorerScoringService';
 /** Ordered weakest to strongest. Index position IS the monotonicity rule. */
 const LEARNING_LADDER: ExplorerPrimaryState[] = [
   'NEW_EXPLORER',
+  'NOT_STARTED',
   'ACTIVATING',
   'ACTIVE_LEARNER',
   'ENGAGED_LEARNER',
@@ -171,10 +172,16 @@ function evidenceState(input: ClassifyInput): ExplorerPrimaryState {
   // declared but no reader query emits it, so a rule citing it could never fire.
   if (cardsCompleted >= 1) return 'ACTIVE_LEARNER';
 
-  // P4/P5 — ACTIVATING: first feed interaction, OR 72h elapsed in NEW.
-  const interacted = occurrences(readout, 'first_card_interacted') >= 1;
+  // P4 — ACTIVATING: a first feed interaction. Evidence only.
+  if (occurrences(readout, 'first_card_interacted') >= 1) return 'ACTIVATING';
+
+  // P5 — NOT_STARTED: 72h elapsed in NEW with no interaction. C99: this used to
+  // be ACTIVATING, so 251 ad Explorers read as engaged because a clock ran out.
+  // Send selection treats NOT_STARTED exactly as it treated a timer-only
+  // ACTIVATING (activationRescue, assetPurposeMap, stateRank), so only the label
+  // changes.
   const hoursSinceEnrollment = daysBetween(asOf, enrollment.createdAt) * 24;
-  if (interacted || hoursSinceEnrollment >= 72) return 'ACTIVATING';
+  if (hoursSinceEnrollment >= 72) return 'NOT_STARTED';
 
   // P1 — NEW_EXPLORER.
   return 'NEW_EXPLORER';
@@ -193,6 +200,12 @@ function applyMonotonicity(
   // P25 — CONVERTED is terminal. Nothing demotes a converted learner.
   if (previous === 'CONVERTED') return 'CONVERTED';
   if (candidate === 'CONVERTED') return 'CONVERTED';
+
+  // C99 — the one allowed step down. A stored ACTIVATING that reads as
+  // NOT_STARTED was only ever the 72h timer: the reader keeps every signal
+  // forever, so a learner who really interacted still reads as ACTIVATING or
+  // higher. Correcting the label is not a regression of real progress.
+  if (previous === 'ACTIVATING' && candidate === 'NOT_STARTED') return 'NOT_STARTED';
 
   const prevRung = LEARNING_LADDER.indexOf(previous);
   const candRung = LEARNING_LADDER.indexOf(candidate);
