@@ -111,6 +111,7 @@ import type { FactoryProject, FactoryTask } from '../../factory/contracts/factor
 // 15 public symbols against a ceiling of 12.
 import {
   audienceIssues,
+  backgroundSurfaceIssues,
   blank,
   err,
   headlessAccepted,
@@ -279,6 +280,25 @@ export function validateTaskSurfaces(
   }
 
   issues.push(...audienceIssues(sound));
+
+  // L9.5 — THE OTHER DEGENERATE ANSWER, and the module already had only one half.
+  //
+  // `SURFACE_NO_HUMAN_PATH` below catches ALL-HEADLESS: a plan that gives no task a human
+  // surface. Nothing caught ALL-WORKSPACE, which is the cheaper lie, because `workspace` is
+  // always available and the schema is satisfied by it. L9.5 states the hole exactly: "a model
+  // could satisfy the schema by labelling everything a workspace, which would make the rule pass
+  // on exactly the plans it was built to catch".
+  //
+  // WARNINGS, deliberately. See `backgroundSurfaceIssues` for why refusing would add a
+  // false-positive path, and why raising it to an error is an owner decision to take against a
+  // measured rate rather than in advance.
+  issues.push(...backgroundSurfaceIssues(
+    project.tasks as ReadonlyArray<{ id: unknown; judgment_level?: unknown }>,
+    project.assignments as ReadonlyArray<{
+      task_id?: unknown; responsibility?: unknown; executor?: { type?: unknown } | null;
+    }>,
+    sound,
+  ));
 
   // PROJECT level, and a DISCLOSURE rather than a threshold. See the module header: refusing
   // outright would force a legitimately headless pipeline to invent a screen to clear the gate.

@@ -162,5 +162,9 @@ export const SURFACE_CODES = [
   'SURFACE_ACCEPTANCE_SELF_SUPPLIED',
   'SURFACE_ARGUMENT_NOT_ARRAY',
   'SURFACE_PROJECT_UNUSABLE',
+  // L9.5. The all-workspace answer: a model satisfies the schema by labelling EVERY task a
+  // workspace, which makes LC-08 pass on exactly the plans it was built to catch. This is the
+  // only code here with severity 'warning' -- see `backgroundSurfaceIssues`.
+  'SURFACE_BACKGROUND_TASK_CLAIMS_SURFACE',
 ] as const;
 export type SurfaceCode = (typeof SURFACE_CODES)[number];
