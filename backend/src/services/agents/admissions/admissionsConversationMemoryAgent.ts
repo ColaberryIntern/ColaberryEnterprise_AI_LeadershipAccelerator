@@ -9,7 +9,20 @@ const AGENT_NAME = 'AdmissionsConversationMemoryAgent';
 
 /**
  * Process closed ChatConversations into AdmissionsMemory summaries.
- * Schedule: every 30 minutes.
+ *
+ * NOT SCHEDULED. This docblock claimed "Schedule: every 30 minutes" and that was
+ * untrue: `aiOpsScheduler.ts` contains zero references to this agent, so nothing
+ * invokes it on a timer. The capability catalog
+ * (`agentDomain/capabilities/admissions.json`) lists
+ * `admissions.conversation_memory_summarization`, which made the claim look
+ * corroborated. R5 asked for this to be either genuinely wired or corrected, and
+ * correcting it is the honest half: wiring a new recurring job that writes to
+ * `admissions_memory` changes production behaviour and is Ali's call.
+ *
+ * Worth knowing before wiring it: this agent filters `status: 'closed'`, so even
+ * once scheduled it would NOT satisfy R5's "a conversation that is never
+ * explicitly closed is still remembered". That criterion needs a different
+ * trigger, not this one on a timer.
  */
 export async function runAdmissionsConversationMemoryAgent(
   agentId: string,

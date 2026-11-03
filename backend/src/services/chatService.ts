@@ -21,6 +21,10 @@ import { executeMayaAction, MAYA_TOOLS, type MayaActionResult } from './mayaActi
 import { emitToolCall } from './aiEventService';
 import { addMayaInteractionTag } from './mayaCampaignRouter';
 import { recordConversationOutcome } from './mayaConversationIntelligenceService';
+import { fireAndForget } from '../utils/fireAndForget';
+
+/** Observability `service` field for every line this module emits. */
+const SERVICE = 'admissions-chat';
 
 let openaiClient: OpenAI | null = null;
 
@@ -324,9 +328,14 @@ export async function startConversation(params: {
     message_count: 1,
   } as any);
 
-  // Tag Maya interaction on lead (fire-and-forget)
+  // Not awaited for the same reason as the close path: starting a chat should
+  // not wait on a CRM tag. The failure is still reported.
   if (leadId) {
-    addMayaInteractionTag(leadId, 'maya_chat_started').catch(() => {});
+    fireAndForget(addMayaInteractionTag(leadId, 'maya_chat_started'), {
+      service: SERVICE,
+      event: 'maya_interaction_tag_failed',
+      context: { conversation_id: conversation.id, lead_id: leadId, stage: 'chat_started' },
+    });
   }
 
   return {
@@ -442,15 +451,24 @@ export async function sendMessage(
 
       actionResults.push(result.summary);
 
-      // Observability (TBI P1-6): record the tool call (name + arg keys + redacted summary). Swallow-safe.
-      emitToolCall({
+      // Observability (TBI P1-6): record the tool call (name + arg keys + redacted
+      // summary). This emit was marked "swallow-safe", which is true of the
+      // REQUEST - a failed telemetry write must not break the chat - but not of
+      // the SILENCE. Tool-call telemetry going quietly missing is the same
+      // failure mode as `conversation_count` reading zero: the absence looks like
+      // nothing happened. The emit stays unawaited; the failure gets one line.
+      fireAndForget(emitToolCall({
         tool: fn.name,
         ok: result.success,
         workflowId: 'maya_chat',
         agentId: 'Maya',
         argsJson: fn.arguments,
         resultSummary: result.summary,
-      }).catch(() => {});
+      }), {
+        service: SERVICE,
+        event: 'maya_tool_call_telemetry_failed',
+        context: { tool: fn.name, ok: result.success },
+      });
 
       // Add tool result to messages
       messages.push({
@@ -583,19 +601,35 @@ export async function closeConversation(conversationId: string): Promise<void> {
     }
   }
 
-  // Tag Maya interaction on lead (fire-and-forget)
+  // These three writes are deliberately not awaited: closing a conversation
+  // should not wait on a CRM tag, an intelligence row or a memory summary. What
+  // was wrong was the `.catch(() => {})` on each one, which threw the failure
+  // away as well as the wait. R5.
   if (conversation.lead_id) {
-    addMayaInteractionTag(conversation.lead_id, 'maya_chat_completed').catch(() => {});
+    fireAndForget(addMayaInteractionTag(conversation.lead_id, 'maya_chat_completed'), {
+      service: SERVICE,
+      event: 'maya_interaction_tag_failed',
+      context: { conversation_id: conversationId, lead_id: conversation.lead_id },
+    });
   }
 
-  // Record conversation outcome intelligence (fire-and-forget)
-  recordConversationOutcome({
+  fireAndForget(recordConversationOutcome({
     conversationId,
     leadId: conversation.lead_id ?? null,
-  }).catch(() => {});
+  }), {
+    service: SERVICE,
+    event: 'conversation_outcome_write_failed',
+    context: { conversation_id: conversationId, lead_id: conversation.lead_id ?? null },
+  });
 
-  // Save conversation to admissions memory
-  saveConversationToMemory(conversationId).catch(() => {});
+  // This is the write R5 is about. In production `conversation_count` sums to
+  // ZERO across all 111 `admissions_memory` rows, and while that was swallowed
+  // the zero was indistinguishable from "nobody ever chatted".
+  fireAndForget(saveConversationToMemory(conversationId), {
+    service: SERVICE,
+    event: 'admissions_memory_write_failed',
+    context: { conversation_id: conversationId, lead_id: conversation.lead_id ?? null },
+  });
 }
 
 // ---------------------------------------------------------------------------
