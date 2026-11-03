@@ -41,13 +41,27 @@ describe('the ladder is respected, not routed around', () => {
     );
   });
 
-  it('agrees with the engine that the publishable rung is currently unreachable', () => {
-    // The whole design rests on this. If the measurement-definition concept ever lands,
-    // this test fails and the design must be revisited rather than silently outdated.
+  it('the measurement-definition concept HAS landed, so the rung is no longer unreachable', () => {
+    // This test used to assert the opposite, with the note: "If the
+    // measurement-definition concept ever lands, this test fails and the design must
+    // be revisited rather than silently outdated." It landed on 2026-11-03
+    // (projectMeasurement.ts), so this is that revisit, done rather than skipped.
+    //
+    // WHAT CHANGED: the premise. C8.7's header said `operational_result` was
+    // unreachable "because no measurement-definition concept exists in the codebase".
+    // One now does, and a project with a confirmed reading against an approved
+    // definition can reach the rung.
+    //
+    // WHAT DID NOT CHANGE: the conclusion, which is the part that matters here. C7.6
+    // declined to measure business outcome in money or time for a twelve-week pilot
+    // inside a large organization, because it cannot be separated from everything
+    // else that moved. A mechanism for recording an outcome does not create an
+    // outcome nobody measured. A pilot still tops out at a capability demonstration.
     const foundation = read(SBP, 'caseStudyFoundation.ts');
-    expect(foundation).toMatch(/operational_result\s+UNREACHABLE here/);
-    expect(foundation).toMatch(/No approved measurement definitions exist/);
+    expect(foundation).not.toMatch(/operational_result\s+UNREACHABLE here/);
+    expect(foundation).toMatch(/projectMeasurement\.ts/);
   });
+
 });
 
 describe('the measure C7.6 declined cannot come back as a published claim', () => {
