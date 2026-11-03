@@ -117,7 +117,13 @@ export function dmBusinessEventId(
 
 /**
  * Stable for a given sender, which the idempotency key depends on. A DM room has exactly two
- * members, so within one room the sender is fixed and this cannot drift mid-window.
+ * members, so within one room the sending PERSON is fixed.
+ *
+ * The name string is a separate question, and an earlier version of this comment over-claimed by
+ * saying it "cannot drift mid-window". It can: `sender_name` is a snapshot stored on the message
+ * row, so somebody renaming their profile between two messages inside one window would produce a
+ * second subject and therefore a second key, and a second email. Bounded, rare, and harmless -
+ * one extra notification - but it is not impossible, and the comment should not say it is.
  */
 export function dmNotificationSubject(senderName: string): string {
   const who = (senderName || '').trim() || 'Someone';
