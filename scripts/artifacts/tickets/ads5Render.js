@@ -283,7 +283,7 @@ function buildDocument() {
   <table><tr><th><code>utm_source</code> on landing leads today</th><th class="num">Leads</th></tr>
     ${shapeRows}</table>
   <p>${D.LEADS.pipedShapes} leads carry a piped shape today, so the split has not begun. It begins
-    the day that frontend reaches production, which makes the ordering the actionable part: normalise
+    the day that frontend reaches production, which makes the ordering the actionable part: normalize
     <code>utm_source</code> at the read boundary <em>before</em> C104 ships, not after the first
     report has been read.</p>
 

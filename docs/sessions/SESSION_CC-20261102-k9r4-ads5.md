@@ -96,7 +96,7 @@ free in practice.
 2. **Deploying C104's frontend will split every campaign into two report rows.** The report
    groups by `(utm_source, utm_campaign)`. C104 writes the `fb|paid` convention; all 410 existing
    tagged leads carry bare `fb` or `ig`. **Zero leads carry a piped shape today**, so the split
-   has not begun — it begins the day that frontend reaches production. Normalising `utm_source`
+   has not begun — it begins the day that frontend reaches production. Normalizing `utm_source`
    at the read boundary belongs *before* that deploy, not after the first report is read. Posted
    to ADS-3, whose fourth bullet predicted it; the measurement turns it from a hypothetical into
    a dated one.
