@@ -1,0 +1,444 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bid Confirmation</title>
+<style>
+  :root {
+    --surface-page: #f8f8f7;
+    --surface-card: #ffffff;
+    --surface-subtle: #f8f8f7;
+    --border-subtle: #e4e4e3;
+    --border-strong: #d2d2d1;
+    --text-primary: #2d3748;
+    --text-body: #2b2b2b;
+    --text-muted: #6b6b6b;
+    --green-ink: #468A2E;  --green-bg: #F1F9EA;
+    --amber-ink: #B5710A;  --amber-bg: #FDF4E6;
+    --blue-ink:  #2E6A86;  --blue-bg:  #EAF2F6;
+    --neutral-ink:#6B6B6B; --neutral-bg:#F1F1F0;
+    --red-ink: #A3321E;    --red-bg: #FBEDEA;
+    --accent: #1a365d;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --surface-page: #1a1a19;
+      --surface-card: #242423;
+      --surface-subtle: #2c2c2b;
+      --border-subtle: #3a3a39;
+      --border-strong: #4a4a49;
+      --text-primary: #e8e8e7;
+      --text-body: #d8d8d7;
+      --text-muted: #a0a09f;
+      --green-bg: #1e2b18; --amber-bg: #2e2415; --blue-bg: #17262e;
+      --neutral-bg: #2c2c2b; --red-bg: #2e1a16;
+      --green-ink: #7FBF60; --amber-ink: #E0A440; --blue-ink: #6FAACB;
+      --neutral-ink: #a0a09f; --red-ink: #E08370;
+      --accent: #7FA9D6;
+    }
+  }
+  :root[data-theme="dark"] {
+    --surface-page: #1a1a19; --surface-card: #242423; --surface-subtle: #2c2c2b;
+    --border-subtle: #3a3a39; --border-strong: #4a4a49;
+    --text-primary: #e8e8e7; --text-body: #d8d8d7; --text-muted: #a0a09f;
+    --green-bg: #1e2b18; --amber-bg: #2e2415; --blue-bg: #17262e;
+    --neutral-bg: #2c2c2b; --red-bg: #2e1a16;
+    --green-ink: #7FBF60; --amber-ink: #E0A440; --blue-ink: #6FAACB;
+    --neutral-ink: #a0a09f; --red-ink: #E08370; --accent: #7FA9D6;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--surface-page); color: var(--text-body);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+    font-size: 15px; line-height: 1.6;
+  }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 0 16px 72px; }
+
+  header.hero {
+    background: var(--surface-card); border-bottom: 1px solid var(--border-subtle);
+    padding: 36px 16px 30px; margin-bottom: 28px;
+  }
+  .hero-in { max-width: 1120px; margin: 0 auto; }
+  .eyebrow {
+    font-size: 12px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase;
+    color: var(--text-muted); margin-bottom: 10px;
+  }
+  h1 { font-size: 30px; line-height: 1.25; margin: 0 0 12px; color: var(--text-primary); font-weight: 700; }
+  .sub { font-size: 17px; color: var(--text-body); margin: 0; max-width: 76ch; }
+  .meta { margin-top: 18px; font-size: 13px; color: var(--text-muted); }
+
+  .callout {
+    border-left: 4px solid var(--accent); background: var(--blue-bg);
+    padding: 18px 20px; border-radius: 0 8px 8px 0; margin: 0 0 28px;
+  }
+  .callout h2 { margin: 0 0 8px; font-size: 17px; color: var(--text-primary); }
+  .callout p { margin: 0 0 8px; }
+  .callout p:last-child { margin-bottom: 0; }
+
+  h2.sec {
+    font-size: 21px; color: var(--text-primary); margin: 40px 0 6px;
+    padding-bottom: 8px; border-bottom: 1px solid var(--border-subtle); font-weight: 700;
+  }
+  .lede { color: var(--text-muted); font-size: 14px; margin: 0 0 18px; max-width: 80ch; }
+
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin: 0 0 8px; }
+  .stat {
+    background: var(--surface-card); border: 1px solid var(--border-subtle);
+    border-radius: 10px; padding: 16px 18px;
+  }
+  .stat .n { font-size: 30px; font-weight: 700; color: var(--text-primary); line-height: 1.1; }
+  .stat .l { font-size: 13px; color: var(--text-muted); margin-top: 6px; }
+
+  .tablewrap {
+    background: var(--surface-card); border: 1px solid var(--border-subtle);
+    border-radius: 10px; overflow-x: auto;
+  }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 780px; }
+  th {
+    text-align: left; padding: 12px 14px; background: var(--surface-subtle);
+    color: var(--text-primary); font-weight: 700; font-size: 12px;
+    letter-spacing: .04em; text-transform: uppercase;
+    border-bottom: 1px solid var(--border-strong); white-space: nowrap;
+  }
+  td { padding: 12px 14px; border-bottom: 1px solid var(--border-subtle); vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .name { font-weight: 600; color: var(--text-primary); }
+  .uuid { font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 11px; color: var(--text-muted); }
+
+  .chip {
+    display: inline-block; padding: 2px 9px; border-radius: 11px;
+    font-size: 11px; font-weight: 700; white-space: nowrap;
+  }
+  .c-green { background: var(--green-bg); color: var(--green-ink); }
+  .c-amber { background: var(--amber-bg); color: var(--amber-ink); }
+  .c-blue  { background: var(--blue-bg);  color: var(--blue-ink); }
+  .c-grey  { background: var(--neutral-bg); color: var(--neutral-ink); }
+  .c-red   { background: var(--red-bg); color: var(--red-ink); }
+
+  .fill {
+    display: inline-block; min-width: 74px; border-bottom: 1px dashed var(--border-strong);
+    color: var(--text-muted); font-size: 12px; font-style: italic;
+  }
+
+  ol, ul { padding-left: 22px; }
+  li { margin-bottom: 9px; }
+  code {
+    background: var(--surface-subtle); border: 1px solid var(--border-subtle);
+    border-radius: 4px; padding: 1px 5px;
+    font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 12.5px;
+    color: var(--text-primary);
+  }
+  strong { color: var(--text-primary); }
+  .note {
+    background: var(--amber-bg); border-left: 4px solid var(--amber-ink);
+    padding: 14px 18px; border-radius: 0 8px 8px 0; margin: 18px 0; font-size: 14px;
+  }
+  .note strong { color: var(--amber-ink); }
+  footer { margin-top: 48px; padding-top: 18px; border-top: 1px solid var(--border-subtle); font-size: 13px; color: var(--text-muted); }
+  @media (max-width: 640px) { h1 { font-size: 24px; } .sub { font-size: 15px; } }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="hero-in">
+    <div class="eyebrow">Revenue Room &middot; R2 &middot; Step 1 of 2</div>
+    <h1>Which of these bids are actually live?</h1>
+    <p class="sub">
+      R2 was supposed to record two active proposals as revenue pipeline. Before writing anything,
+      I measured what the system believes. <strong>It flags twelve bids as approved for pursuit, and it
+      cannot tell which ones are real.</strong> One is a test row, one is a duplicate, three have no project
+      attached. This page asks you to settle it in one pass.
+    </p>
+    <div class="meta">
+      Measured read-only against production, 2026-11-03 &middot; All 166 rows of <code>gov_qualifications</code>
+      &middot; No figure on this page is estimated or inferred
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <div class="callout">
+    <h2>The one decision</h2>
+    <p>
+      For each row in the table below, mark it <strong>live</strong> or <strong>not live</strong>, and for the
+      live ones give a <strong>dollar value</strong> and a <strong>confidence</strong>. That is the whole ask.
+    </p>
+    <p>
+      I cannot derive any of it. <code>gov_qualifications</code> has no column for a value, a deadline, a close
+      date, or a submission date &mdash; so there is nothing to read, and inventing a number would breach the
+      Claim Registry rule (no row, no claim). Once you mark them, step 2 writes only the confirmed ones and
+      three tiles on the commercialization board light up.
+    </p>
+  </div>
+
+  <div class="cards">
+    <div class="stat"><div class="n">12</div><div class="l">flagged <code>approved_bid_pursuit</code> + active</div></div>
+    <div class="stat"><div class="n">3</div><div class="l">projects that have any proposal document</div></div>
+    <div class="stat"><div class="n">0</div><div class="l">submissions, ever &mdash; nothing has gone out</div></div>
+    <div class="stat"><div class="n">0</div><div class="l">rows in <code>revenue_opportunities</code></div></div>
+  </div>
+
+  <h2 class="sec">The twelve, with their evidence</h2>
+  <p class="lede">
+    Ordered by last update. &ldquo;Docs&rdquo; counts rows in <code>gov_proposal_documents</code> for that
+    project; every one of them has <code>accepted_at</code> null, so they are drafted, not accepted. The flag
+    column is mine, derived from the row itself, not from a judgment about the opportunity.
+  </p>
+
+  <div class="tablewrap">
+  <table>
+    <thead>
+      <tr>
+        <th>Bid</th>
+        <th>Updated</th>
+        <th class="num">Docs</th>
+        <th class="num">Sub&shy;mitted</th>
+        <th>What the row itself shows</th>
+        <th>Live?</th>
+        <th>Value</th>
+        <th>Conf.</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="name">Statewide Victim-Centered Information System</span><br>
+            <span class="uuid">c38e6fc4&hellip;</span></td>
+        <td>2026-10-24</td>
+        <td class="num">5</td>
+        <td class="num">0</td>
+        <td><span class="chip c-green">most evidence of all</span> You did not name this one, yet it has more
+            drafted proposal documents than anything else in the system.</td>
+        <td><span class="fill">&nbsp;</span></td>
+        <td><span class="fill">&nbsp;</span></td>
+        <td><span class="fill">&nbsp;</span></td>
+      </tr>
+      <tr>
+        <td><span class="name">2026 Saratoga Springs Municipal Asset Management and Permitting Software Solution RFP</span><br>
+            <span class="uuid">3867b241&hellip;</span></td>
+        <td>2026-11-02</td>
+        <td class="num">3</td>
+        <td class="num">0</td>
+        <td><span class="chip c-green">named by you</span> <span class="chip c-blue">has documents</span>
+            Most recently qualified, and corroborated by three drafted documents.</td>
+        <td><span class="fill">&nbsp;</span></td>
+        <td><span class="fill">&nbsp;</span></td>
+        <td><span class="fill">&nbsp;</span></td>
+      </tr>
+      <tr>
+        <td><span class="name">RFP &mdash; Enterprise Work Order Management System</span><br>
+            <span class="uuid">80b35be2&hellip;</span></td>
+        <td>2026-10-27</td>
+        <td class="num">1</td>
+        <td class="num">0</td>
+        <td><span class="chip c-amber">duplicate pair</span> Same title as the row below, different project.
+            <strong>This is the copy that holds the document.</strong></td>
+        <td><span class="fill">&nbsp;</span></td>
+        <td><span class="fill">&nbsp;</span></td>
+        <td><span class="fill">&nbsp;</span></td>
+      </tr>
+      <tr>
+        <td><span class="name">RFP &mdash; Enterprise Work Order Management System</span><br>
+            <span class="uuid">13ec298d&hellip;</span></td>
+        <td>2026-11-02</td>
+        <td class="num">0</td>
+        <td class="num">0</td>
+        <td><span class="chip c-amber">duplicate pair</span> <span class="chip c-green">named by you</span>
+            The copy I previously recorded as the live one &mdash; but it has <strong>no documents</strong>.
+            One of this pair should be retired.</td>
+        <td><span class="fill">&nbsp;</span></td>
+        <td><span class="fill">&nbsp;</span></td>
+        <td><span class="fill">&nbsp;</span></td>
+      </tr>
+      <tr>
+        <td><span class="name">Salt Lake City Department of Airports Automated Teller and Currency Exchange Machine Services</span><br>
+            <span class="uuid">35c36cbf&hellip;</span></td>
+        <td>2026-10-23</td>
+        <td class="num">0</td>
+        <td class="num">0</td>
+        <td><span class="chip c-grey">flagged only</span> Approved for pursuit, no work product behind it.</td>
+        <td><span class="fill">&nbsp;</span></td>
+        <td><span class="fill">&nbsp;</span></td>
+        <td><span class="fill">&nbsp;</span></td>
+      </tr>
+      <tr>
+        <td><span class="name">3202600194 Open Enrollment (OE) for Employment Services</span><br>
+            <span class="uuid">72e5384b&hellip;</span></td>
+        <td>2026-10-21</td>
+        <td class="num">0</td>
+        <td class="num">0</td>
+        <td><span class="chip c-grey">flagged only</span> Oldest of the set (created 2026-10-10), no documents.</td>
+        <td><span class="fill">&nbsp;</span></td>
+        <td><span class="fill">&nbsp;</span></td>
+        <td><span class="fill">&nbsp;</span></td>
+      </tr>
+      <tr>
+        <td><span class="name">SNOC26271024 &mdash; RFP &mdash; Adult Learner Strategy &amp; Organizational Design Consulting Services</span><br>
+            <span class="uuid">9345c291&hellip;</span></td>
+        <td>2026-10-21</td>
+        <td class="num">0</td>
+        <td class="num">0</td>
+        <td><span class="chip c-grey">flagged only</span> Closest to the core business of anything unnamed here.</td>
+        <td><span class="fill">&nbsp;</span></td>
+        <td><span class="fill">&nbsp;</span></td>
+        <td><span class="fill">&nbsp;</span></td>
+      </tr>
+      <tr>
+        <td><span class="name">Sports Video Technology &mdash; RFxPremier Cooperative</span><br>
+            <span class="uuid">f17aae4c&hellip;</span></td>
+        <td>2026-10-20</td>
+        <td class="num">0</td>
+        <td class="num">0</td>
+        <td><span class="chip c-grey">flagged only</span> No documents.</td>
+        <td><span class="fill">&nbsp;</span></td>
+        <td><span class="fill">&nbsp;</span></td>
+        <td><span class="fill">&nbsp;</span></td>
+      </tr>
+      <tr>
+        <td><span class="name">Snow College Adult Learner &mdash; T8 test</span><br>
+            <span class="uuid">6507d59e&hellip;</span></td>
+        <td>2026-10-23</td>
+        <td class="num">0</td>
+        <td class="num">0</td>
+        <td><span class="chip c-red">test row</span> Named &ldquo;T8 test&rdquo; in the database. It is sitting
+            in the approved-for-pursuit set. <strong>Recommend retiring it outright.</strong></td>
+        <td><span class="fill">&nbsp;</span></td>
+        <td><span class="fill">&nbsp;</span></td>
+        <td><span class="fill">&nbsp;</span></td>
+      </tr>
+      <tr>
+        <td><span class="name">(no project attached)</span><br><span class="uuid">f91f87cb&hellip;</span></td>
+        <td>2026-10-19</td>
+        <td class="num">0</td>
+        <td class="num">0</td>
+        <td><span class="chip c-red">orphan</span> <code>delivery_project_id</code> is null, so there is no
+            opportunity to name, price, or report.</td>
+        <td><span class="fill">&nbsp;</span></td>
+        <td><span class="fill">&nbsp;</span></td>
+        <td><span class="fill">&nbsp;</span></td>
+      </tr>
+      <tr>
+        <td><span class="name">(no project attached)</span><br><span class="uuid">38c78a1c&hellip;</span></td>
+        <td>2026-10-12</td>
+        <td class="num">0</td>
+        <td class="num">0</td>
+        <td><span class="chip c-red">orphan</span> Same.</td>
+        <td><span class="fill">&nbsp;</span></td>
+        <td><span class="fill">&nbsp;</span></td>
+        <td><span class="fill">&nbsp;</span></td>
+      </tr>
+      <tr>
+        <td><span class="name">(no project attached)</span><br><span class="uuid">9177a769&hellip;</span></td>
+        <td>2026-10-09</td>
+        <td class="num">0</td>
+        <td class="num">0</td>
+        <td><span class="chip c-red">orphan</span> Same.</td>
+        <td><span class="fill">&nbsp;</span></td>
+        <td><span class="fill">&nbsp;</span></td>
+        <td><span class="fill">&nbsp;</span></td>
+      </tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="note">
+    <strong>Correction to something I told you.</strong> I previously recorded
+    <code>13ec298d</code> as the live Enterprise Work Order bid. The data says that copy has
+    <strong>no proposal document</strong>; its twin <code>80b35be2</code> holds the one document. If Enterprise
+    Work Order is live, the copy with the work product is probably the one to keep &mdash; but that is your call,
+    not something the rows settle.
+  </div>
+
+  <h2 class="sec">The tier behind it cannot be shown as pipeline yet</h2>
+  <p class="lede">What the rest of <code>gov_qualifications</code> holds, across all 166 rows.</p>
+
+  <div class="tablewrap">
+  <table>
+    <thead><tr><th>Decision</th><th>Status</th><th class="num">Rows</th><th>What it means for the Room</th></tr></thead>
+    <tbody>
+      <tr><td><code>pending_review</code></td><td>superseded</td><td class="num">85</td>
+          <td>History. Re-qualified later; not pipeline.</td></tr>
+      <tr><td><code>pending_review</code></td><td>active</td><td class="num">21</td>
+          <td>Awaiting a qualification decision. Earliest possible tier.</td></tr>
+      <tr><td><code>needs_evidence</code></td><td>superseded</td><td class="num">19</td>
+          <td>History.</td></tr>
+      <tr><td><code>needs_evidence</code></td><td><strong>active</strong></td><td class="num">18</td>
+          <td><span class="chip c-red">all 18 are orphans</span> Every one has a null
+              <code>delivery_project_id</code>. There is no name to display and no project to hang evidence on,
+              so this tier <strong>cannot be rendered as named pipeline</strong> until the rows are linked.</td></tr>
+      <tr><td><code>approved_bid_pursuit</code></td><td><strong>active</strong></td><td class="num">12</td>
+          <td>The table above.</td></tr>
+      <tr><td><code>approved_bid_pursuit</code></td><td>superseded</td><td class="num">11</td>
+          <td>History.</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="note">
+    <strong>Second correction.</strong> I told you there were &ldquo;eight more bids at
+    <code>needs_evidence</code>&rdquo; and recommended showing them as a visible second tier. The real count is
+    <strong>18</strong>, and <strong>all 18 have no project attached</strong>. So the recommendation stands in
+    principle but cannot be executed as described &mdash; there is nothing to label them with. Linking them is
+    its own piece of work.
+  </div>
+
+  <h2 class="sec">Why this is a report and not twelve rows</h2>
+  <p class="lede">
+    R2 originally read &ldquo;write the rows.&rdquo; The diagnosis changed that. Two services already write to
+    <code>revenue_opportunities</code>; the table is empty for four independent reasons, and fixing any one of
+    them alone still yields zero rows.
+  </p>
+  <ol>
+    <li><strong>The first writer can never run.</strong> <code>revenueOpportunityAgent.ts</code> registers itself
+      as a module-load side effect, and nothing imports it &mdash; nor any of the other ten files in
+      <code>services/agents/reporting/</code>. There is no dynamic loader. The repo's own cron baseline already
+      records it as <code>confirmed_dead</code>.</li>
+    <li><strong>The database advertises it as healthy anyway.</strong> Its <code>ai_agents</code> row claims an
+      eight-hourly cron, status idle, <strong>zero errors</strong>. It has zero errors because it has zero runs,
+      and <code>last_run_at</code> is null. Any health surface reading that row sees a working agent.</li>
+    <li><strong>Its filter uses stage names that do not exist.</strong> It matches
+      <code>pipeline_stage IN (qualified, proposal, negotiation)</code>; the real vocabulary is
+      <code>new_lead, contacted, enrolled, meeting_scheduled, negotiation, proposal_sent</code>. Two of the three
+      literals are not values of that column.</li>
+    <li><strong>Even corrected, nothing matches.</strong> 1,100 leads score 70 or above and every one sits in an
+      early stage the filter excludes; the three leads in late stages all have a score of zero. Measured match
+      count: <strong>0</strong>.</li>
+  </ol>
+  <p>
+    The second writer, the OpenClaw conversion detector, <em>is</em> wired into
+    <code>aiOrchestrator</code> &mdash; but nothing calls its exported entry point, it has no
+    <code>ai_agents</code> row at all, and it needs conversations at stage 5 when all 138 rows sit at stage 2
+    and have not been touched since <strong>2026-04-19</strong>.
+  </p>
+  <p>
+    None of that is fixed by writing bid rows, and a government bid would never satisfy either predicate anyway.
+    The lead scanner is a real and separate defect worth its own ticket: <strong>1,100 high-intent leads are
+    invisible to it.</strong>
+  </p>
+
+  <h2 class="sec">What happens when you mark the table</h2>
+  <ol>
+    <li><strong>Confirmed bids become rows</strong> in <code>revenue_opportunities</code>, written by an
+      idempotent sync keyed on <code>delivery_project_id</code> &mdash; safe to re-run, no duplicates, going
+      through the existing service rather than a third code path.</li>
+    <li><strong>Three tiles on the commercialization board light up</strong> &mdash; qualified pipeline, proposal
+      value out, and the win-rate denominator. That part-pays C8.4 as a side effect.</li>
+    <li><strong>Anything you mark &ldquo;not live&rdquo; stays out</strong>, and the test row and the losing half
+      of the duplicate pair get retired so this does not have to be re-litigated next month.</li>
+    <li><strong>The Room shows value where you gave one and &ldquo;unknown&rdquo; where you did not.</strong>
+      No tile will display a number nobody measured.</li>
+  </ol>
+
+  <footer>
+    Colaberry &middot; Revenue Room R2, step 1 &middot; Generated 2026-11-03 from a read-only measurement of
+    production. Scope: <code>docs/REVENUE_ROOM_SCOPE.md</code>. Ticket:
+    R2 in Basecamp list 10379236013.
+  </footer>
+
+</div>
+</body>
+</html>
