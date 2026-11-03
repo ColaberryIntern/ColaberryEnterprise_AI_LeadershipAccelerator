@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Session CC-20261102-h8t3 — Change Report</title>
+<style>
+  :root{
+    --navy:#0f2942; --navy-2:#1a365d; --blue:#2b6cb0; --blue-l:#3b82f6;
+    --ink:#1e293b; --muted:#64748b; --line:#e2e8f0; --bg:#f1f5f9; --card:#ffffff;
+    --green:#059669; --green-bg:#ecfdf5;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  header{background:linear-gradient(135deg,var(--navy),var(--blue));color:#fff;padding:38px 40px 30px;}
+  header .eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;opacity:.8;font-weight:600}
+  header h1{margin:8px 0 6px;font-size:26px;font-weight:700;letter-spacing:-.01em}
+  header .meta{font-size:13px;opacity:.85}
+  header .sid{display:inline-block;margin-top:14px;background:rgba(255,255,255,.14);
+    border:1px solid rgba(255,255,255,.25);border-radius:8px;padding:6px 12px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;font-weight:600}
+  header .count{margin-left:10px;opacity:.8;font-size:13px}
+  main{max-width:980px;margin:0 auto;padding:28px 24px 60px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;
+    box-shadow:0 1px 3px rgba(15,41,66,.06);margin-bottom:18px;overflow:hidden}
+  .card-head{display:flex;align-items:center;gap:14px;padding:18px 22px;border-bottom:1px solid var(--line);
+    background:linear-gradient(to bottom,#fafcff,#fff)}
+  .card-head .num{font-family:ui-monospace,monospace;font-size:13px;font-weight:700;color:#fff;
+    background:var(--blue-l);border-radius:7px;padding:5px 9px;flex:none}
+  .card-head h2{flex:1;margin:0;font-size:16px;font-weight:650;color:var(--navy-2);letter-spacing:-.01em}
+  .badge{flex:none;font-size:12px;color:var(--muted);background:#f8fafc;border:1px solid var(--line);
+    border-radius:999px;padding:3px 11px;font-weight:600}
+  .card-body{padding:18px 22px 20px}
+  .row{display:flex;gap:16px;padding:7px 0;border-bottom:1px dashed #eef2f7}
+  .row:last-child{border-bottom:none}
+  .k{flex:none;width:120px;font-size:12px;font-weight:700;color:var(--muted);
+    text-transform:uppercase;letter-spacing:.04em;padding-top:2px}
+  .v{flex:1;color:var(--ink)}
+  .v.ver{color:var(--green);font-weight:550}
+  .files{margin-top:14px;background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .files-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;
+    letter-spacing:.06em;margin-bottom:8px}
+  .files table{width:100%;border-collapse:collapse;font-size:13px}
+  .files td{padding:6px 8px;vertical-align:top;border-top:1px solid #eef2f7}
+  .files tr:first-child td{border-top:none}
+  .files td.path{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;
+    color:var(--navy-2);white-space:nowrap;font-weight:600}
+  .empty{background:#fff;border:1px dashed var(--line);border-radius:14px;padding:40px;
+    text-align:center;color:var(--muted)}
+  footer{max-width:980px;margin:0 auto;padding:0 24px 40px;color:var(--muted);font-size:12px}
+  code{font-family:ui-monospace,monospace;background:#eef2f7;padding:1px 6px;border-radius:5px;font-size:.92em}
+</style>
+</head>
+<body>
+  <header>
+    <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
+    <h1>What changed this session</h1>
+    <div class="meta">Generated Monday, November 2, 2026 at 9:51 PM</div>
+    <div><span class="sid">CC-20261102-h8t3</span><span class="count">9 changes</span></div>
+  </header>
+  <main>
+    
+      <article class="card">
+        <div class="card-head">
+          <span class="num">01</span>
+          <h2>The renderer writes the DOMAIN Command Center, not the SBP one</h2>
+          <span class="badge">2026-11-02 · Session: CC-20261102-h8t3</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v"></span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`renderDocs.domainCommandCenter.test.ts` (14 assertions) + the two pre-existing</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">`mergeProgressFile` maps over the RENDERED stories, so the stale bare `STORY-000` entry</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">02</span>
+          <h2>`agent-domains-mine` returns the agent state its acceptance criteria require</h2>
+          <span class="badge">2026-11-02 · Session: CC-20261102-h8t3</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`agentDomainProvisionedReader.ts` — `ProvisionedDomainRow` gains `agent_enabled`,</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">TypeScript clean; route shape covered by the existing owner-scope suite.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">two traps avoided. `tools_granted` is **JSONB, not `text[]`**, so the count uses</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">03</span>
+          <h2>The committed snapshot a public Command Center reads</h2>
+          <span class="badge">2026-11-02 · Session: CC-20261102-h8t3</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">**NEW** `agentDomain/agentDomainSnapshot.ts` → `.colaberry/agent-domain.json`,</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`agentDomainCommandCenterDoc.test.ts` — 29 passed.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**the file deliberately carries no clock.** `renderDocs` is explicit that a wall-clock</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">04</span>
+          <h2>Every namespaced story id stops 400ing on the prompt route</h2>
+          <span class="badge">2026-11-02 · Session: CC-20261102-h8t3</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`sbpRoutes.ts` — `/^STORY-\d+$/i` rejected every story id on all ten domain boards</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">TypeScript clean; the existing `sbpRoutes.story000Prompt` suite still passes.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">ownership is unchanged — `requireOwnedProject` runs first and the domain is resolved from</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">05</span>
+          <h2>Resolve the Command Center story from the project instead of assuming the bare id</h2>
+          <span class="badge">2026-11-02</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`planStorySpecs` now takes the Command Center story to append; a new</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">22 storyPoints assertions, 41 across the three affected suites, 2824 passing in</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">found by Quincy Ninying from reading the code, confirmed in production.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">06</span>
+          <h2>Classify five agent prefixes in `mgmtSectionGate`, and add the standing test for the class</h2>
+          <span class="badge">2026-11-02</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">five rows added to `PATH_SECTION` plus</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">95 tests pass across 9 `mgmtSectionGate` suites; two mutations confirmed fatal</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">purely additive, 39 insertions and no deletions, so no existing classification moved</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">07</span>
+          <h2>Reword Command Center criterion 4 and label the foundation rung</h2>
+          <span class="badge">2026-11-02</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">criterion 4 of the agent-domain `COMMAND_CENTER_ACCEPTANCE` now asks for what</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">107 tests pass across the 6 touched suites, 2,661 across `agentDomain` + `sbp`;</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">the two pre-existing `buildVerificationService` failures are local-environment only</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">08</span>
+          <h2>Email a manager when an intern messages them, instead of waiting for the morning digest</h2>
+          <span class="badge">2026-11-03</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `dmNotificationService` sends one content-free email per DM thread per</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`jest --testPathPattern=&quot;src/services/communityRooms/__tests__/dmNotificationService&quot;`</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">ticket 10467362419, reported by Kes Delele 2 Nov</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">09</span>
+          <h2>A diagnostic that finds what actually overflows on the AI builder status page</h2>
+          <span class="badge">2026-11-03</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `scripts/diagnoseHorizontalOverflow.js` loads both points routes at several</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">refuses with exit 2 on a missing token, and refuses with exit 2 on an expired</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">ticket 10467362457, reported by Ruth Kumera 27 Oct. **No CSS fix ships here, on</span></div>
+          
+        </div>
+      </article>
+  </main>
+  <footer>
+    Sourced from <code>docs/sessions/CC-20261102-h8t3.md</code>.
+    Regenerated after each change per <code>CLAUDE.md</code> → Per-session change report.
+  </footer>
+</body>
+</html>
