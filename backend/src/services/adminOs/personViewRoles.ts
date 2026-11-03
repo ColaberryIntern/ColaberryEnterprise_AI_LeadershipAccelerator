@@ -65,6 +65,17 @@ export const PERSON_VIEWS: readonly PersonViewDeclaration[] = [
     answers: 'Is this person\'s identity CHAIN intact — which hops are linked, which '
       + 'are unavailable and why, not what the person\'s evidence says.',
   },
+  // M34 - Maya's read tools. The FIRST module to claim 'delegates', which is why that
+  // branch of the checker existed before anything exercised it outside a test.
+  //
+  // The claim is load-bearing rather than descriptive: M34 requires that Maya's tools
+  // re-query nothing, and the only way to state that so it can fail is to declare the
+  // delegation and let `checkPersonViewRoles` read the module's code for the target.
+  {
+    module: 'backend/src/services/mayaReadTools.ts',
+    role: 'delegates',
+    delegatesTo: 'backend/src/services/adminOs/personProfileService.ts',
+  },
 ];
 
 /**

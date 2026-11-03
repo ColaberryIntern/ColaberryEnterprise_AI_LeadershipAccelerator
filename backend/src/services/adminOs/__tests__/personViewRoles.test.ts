@@ -60,7 +60,9 @@ describe('T211 — failure mode 1: a FOURTH view appears undeclared', () => {
     expect(violations[0]).toContain('personFourthView.ts');
   });
 
-  it('the scan that feeds it really finds the three views in the repo', () => {
+  // Says "declared" rather than a count: M34 made it four, and a number in a test name is a
+  // claim that goes stale the moment somebody adds a view without reading it.
+  it('the scan that feeds it really finds the declared views in the repo', () => {
     // The control. Without this, failure mode 1 would also "pass" if the
     // discovery scan returned nothing and there were never anything to declare.
     // EXCLUDES TESTS by pathspec: this file contains the literal too, and the
