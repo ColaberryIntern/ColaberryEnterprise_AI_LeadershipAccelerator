@@ -165,6 +165,7 @@ const APPROVED = {
 
 afterEach(() => {
   delete process.env.ENABLE_PROJECT_LIFECYCLE;
+  delete process.env.ENABLE_SBP_STORY_GATE_ENFORCE;
   jest.resetModules();
 });
 
@@ -477,12 +478,17 @@ describe('THE TWO STAGES CONNECT: a refined set becomes stories, and survives do
 });
 
 describe('the gate guards STORY generation, and guards it before the model call', () => {
-  it('REFUSES to generate stories for an unapproved project, without calling the model', async () => {
+  it('REFUSES to generate stories for an unapproved project (enforce mode), without calling the model', async () => {
     // Checked before the call on purpose: a refusal must cost nothing and must not be able to
     // half-produce a plan. The assertion that the client was never touched is the one that
     // proves the ordering, which a thrown error alone would not.
+    //
+    // L8.4: a refusal only THROWS in enforce mode. The default is observe (log and proceed), so
+    // this test sets ENABLE_SBP_STORY_GATE_ENFORCE to exercise the hard-stop path; the observe
+    // default has its own coverage in decomposeService.storyGate.test.ts.
     jest.resetModules();
     process.env.ENABLE_PROJECT_LIFECYCLE = 'true';
+    process.env.ENABLE_SBP_STORY_GATE_ENFORCE = 'true';
     jest.doMock('../../../models/ProjectLifecycleState', () => ({
       __esModule: true,
       default: { findOne: jest.fn(async () => ({ student_project_id: PROJECT, tenant_id: 't' })) },
