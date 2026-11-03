@@ -6,6 +6,9 @@ const mockFindByPk = jest.fn();
 const mockFindAll = jest.fn();
 const mockResolveIds = jest.fn();
 const mockLoadMine = jest.fn();
+const mockDetailCreate = jest.fn();
+const mockDetailFindAll = jest.fn();
+const mockDetailFindByPk = jest.fn();
 
 jest.mock('../../../models/AgentDomainChangeRequest', () => ({
   __esModule: true,
@@ -21,11 +24,28 @@ jest.mock('../agentDomainProvisionedReader', () => ({
   loadMyDomains: (...a: unknown[]) => mockLoadMine(...a),
 }));
 
+// AF11.1. The detail model and the capability registry are both mocked so this stays a unit test:
+// the real registry reads eleven JSON files, and `toolRequestContract.test.ts` is where the real
+// one is exercised against real ids.
+jest.mock('../../../models/AgentDomainToolRequestDetail', () => ({
+  __esModule: true,
+  default: {
+    create: (...a: unknown[]) => mockDetailCreate(...a),
+    findAll: (...a: unknown[]) => mockDetailFindAll(...a),
+    findByPk: (...a: unknown[]) => mockDetailFindByPk(...a),
+  },
+}));
+
+jest.mock('../capabilityRecord', () => ({
+  allCapabilities: () => [{ capability_id: 'platform.read_cron_registry' }],
+}));
+
 import {
   ActorNotResolvedError,
   ChangeRequestNotFoundError,
   ChangeRequestRefusedError,
   DomainNotYoursError,
+  ToolRequestRefusedError,
   decideChangeRequest,
   fileChangeRequest,
   listMyChangeRequests,
@@ -78,17 +98,61 @@ function fakeSequelize(): Sequelize {
   } as unknown as Sequelize;
 }
 
+/**
+ * AF11.1. Whether the duplicate-request lookup finds an open request. Default: it does not.
+ *
+ * It has to be answered separately from the roster query, and by the SQL rather than by call
+ * order: a blanket `mockResolvedValue([{ email }])` makes the duplicate check find a row every
+ * time, so every tool filing would be refused as a duplicate and the suite would be testing the
+ * mock.
+ */
+let openRequests: unknown[] = [];
+
 /** A recorded person: the roster query returns a row. */
-const recorded = () => mockQuery.mockResolvedValue([{ email: 'whatever-the-stored-casing-is' }]);
+const recorded = () => mockQuery.mockImplementation((sql: string) => (
+  /agent_domain_tool_request_details/.test(sql)
+    ? Promise.resolve(openRequests)
+    : Promise.resolve([{ email: 'whatever-the-stored-casing-is' }])
+));
 /** Nobody on record: the roster query returns nothing. */
 const unrecorded = () => mockQuery.mockResolvedValue([]);
 
+/** AF11.1. The agent a tool request names, and the one `loadMyDomains` says this person owns. */
+const AGENT = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
+
+/**
+ * A complete tool-request detail.
+ *
+ * Every field filled, because the contract refuses an incomplete one and this suite is testing the
+ * SPINE, not the field rules. Those live in `toolRequestContract.test.ts`, field by field.
+ */
+const toolDetail = (over: Record<string, unknown> = {}) => ({
+  agent_id: AGENT,
+  tool_name: 'read_cron_registry',
+  purpose: 'Read the cron registry so the agent can tell which jobs are scheduled.',
+  reads: ['The cron registry table'],
+  produces: ['A list of scheduled jobs'],
+  capability_id: 'platform.read_cron_registry',
+  task_unblocked: 'STORY-002, the scheduled-job audit.',
+  manual_today: 'I ssh in and read the crontab.',
+  needed_by: '2026-11-30',
+  run_frequency: 'daily' as const,
+  touches: ['The production cron registry (read only)'],
+  inputs: [],
+  writes: false,
+  ...over,
+});
+
 beforeEach(() => {
-  [mockQuery, mockCreate, mockFindByPk, mockFindAll, mockResolveIds, mockLoadMine]
+  [mockQuery, mockCreate, mockFindByPk, mockFindAll, mockResolveIds, mockLoadMine,
+    mockDetailCreate, mockDetailFindAll, mockDetailFindByPk]
     .forEach((m) => m.mockReset());
   mockResolveIds.mockResolvedValue(['identity-1']);
-  mockLoadMine.mockResolvedValue([{ domain_key: 'platform-automation' }]);
+  mockLoadMine.mockResolvedValue([{ domain_key: 'platform-automation', agent_id: AGENT }]);
   mockCreate.mockImplementation(async (vals: Record<string, unknown>) => fakeRow(vals));
+  mockDetailFindAll.mockResolvedValue([]);
+  mockDetailFindByPk.mockResolvedValue(null);
+  openRequests = [];
 });
 
 describe('the actor must be nameable, never a placeholder', () => {
@@ -128,9 +192,13 @@ describe('filing', () => {
     });
     expect(out.requested_by_identity).toBe(INTERN);
     expect(out.status).toBe('submitted');
-    expect(mockCreate).toHaveBeenCalledWith(expect.objectContaining({
-      requested_by_identity: INTERN, status: 'submitted',
-    }));
+    // The second argument is the transaction AF11.1 added: the request row and any tool detail are
+    // written together, because a tool request with no detail is the thin request that ticket
+    // exists to stop.
+    expect(mockCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ requested_by_identity: INTERN, status: 'submitted' }),
+      expect.objectContaining({ transaction: expect.anything() }),
+    );
   });
 
   it('refuses a domain that is not yours, BEFORE writing anything', async () => {
@@ -361,17 +429,113 @@ describe('AF7.1: tool requests ride the same governance spine', () => {
     await fileChangeRequest({
       sequelize: fakeSequelize(), email: INTERN, domainKey: 'platform-automation', title: 'Something',
     });
-    expect(mockCreate).toHaveBeenCalledWith(expect.objectContaining({ kind: 'change' }));
+    expect(mockCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'change' }),
+      expect.anything(),
+    );
   });
 
-  it('stores `tool` when asked for one', async () => {
+  it('stores `tool` when asked for one, with its details', async () => {
     recorded();
     const out = await fileChangeRequest({
       sequelize: fakeSequelize(), email: INTERN, kind: 'tool',
       domainKey: 'platform-automation', title: 'Read the cron registry',
+      toolRequest: toolDetail(),
     });
-    expect(mockCreate).toHaveBeenCalledWith(expect.objectContaining({ kind: 'tool' }));
+    expect(mockCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'tool' }),
+      expect.anything(),
+    );
     expect(out.kind).toBe('tool');
+    expect(out.tool_request?.tool_name).toBe('read_cron_registry');
+  });
+
+  it('AF11.1: REFUSES a tool request with no details, which AF7.1 used to accept', async () => {
+    // Not a regression. Between AF7.1 and AF11.1 a tool request was a title and a description, and
+    // approving one did nothing — "the row is the whole effect". What is being removed is the
+    // ability to file a tool request the approver cannot act on.
+    recorded();
+    await expect(fileChangeRequest({
+      sequelize: fakeSequelize(), email: INTERN, kind: 'tool',
+      domainKey: 'platform-automation', title: 'Read the cron registry',
+    })).rejects.toBeInstanceOf(ToolRequestRefusedError);
+    expect(mockCreate).not.toHaveBeenCalled();
+    expect(mockDetailCreate).not.toHaveBeenCalled();
+  });
+
+  it('AF11.1: refuses tool details on a CHANGE request rather than silently dropping them', async () => {
+    recorded();
+    await expect(fileChangeRequest({
+      sequelize: fakeSequelize(), email: INTERN, domainKey: 'platform-automation',
+      title: 'Rename my agent', toolRequest: toolDetail(),
+    })).rejects.toBeInstanceOf(ToolRequestRefusedError);
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+
+  it('AF11.1: writes the detail in the SAME transaction as the request row', async () => {
+    recorded();
+    await fileChangeRequest({
+      sequelize: fakeSequelize(), email: INTERN, kind: 'tool',
+      domainKey: 'platform-automation', title: 'Read the cron registry',
+      toolRequest: toolDetail(),
+    });
+    const [, opts] = mockDetailCreate.mock.calls[0] as [unknown, { transaction: unknown }];
+    const [, reqOpts] = mockCreate.mock.calls[0] as [unknown, { transaction: unknown }];
+    expect(opts.transaction).toBe(reqOpts.transaction);
+  });
+
+  it('AF11.1: refuses an agent the requester does not own, before writing anything', async () => {
+    recorded();
+    mockLoadMine.mockResolvedValue([{ domain_key: 'platform-automation', agent_id: 'someone-else' }]);
+    await expect(fileChangeRequest({
+      sequelize: fakeSequelize(), email: INTERN, kind: 'tool',
+      domainKey: 'platform-automation', title: 'Read the cron registry',
+      toolRequest: toolDetail(),
+    })).rejects.toBeInstanceOf(ToolRequestRefusedError);
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+
+  it('AF11.1: refuses a SECOND open request for the same tool on the same agent', async () => {
+    // The double-click, and the retry after a response that never arrived. Two identical rows in
+    // the queue Ali triages is the defect; CLAUDE.md calls "works once, breaks on the second run"
+    // a production defect rather than a rough edge.
+    recorded();
+    openRequests = [{ id: 'cr-earlier' }];
+    await expect(fileChangeRequest({
+      sequelize: fakeSequelize(), email: INTERN, kind: 'tool',
+      domainKey: 'platform-automation', title: 'Read the cron registry',
+      toolRequest: toolDetail(),
+    })).rejects.toBeInstanceOf(ToolRequestRefusedError);
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+
+  it('AF11.1: the duplicate lookup is scoped to the requester, the agent and the tool', async () => {
+    recorded();
+    await fileChangeRequest({
+      sequelize: fakeSequelize(), email: INTERN, kind: 'tool',
+      domainKey: 'platform-automation', title: 'Read the cron registry',
+      toolRequest: toolDetail(),
+    });
+    const call = (mockQuery.mock.calls as Array<[string, { bind: unknown[] }]>)
+      .find(([sql]) => /agent_domain_tool_request_details/.test(sql));
+    expect(call).toBeDefined();
+    const [sql, opts] = call as [string, { bind: unknown[] }];
+    // Only an UNDECIDED request blocks a new one. A declined request must not lock an intern out
+    // of ever asking again, which is the failure mode of a naive "already exists" check.
+    expect(sql).toContain("r.status = 'submitted'");
+    expect(sql).toContain('lower(d.tool_name) = lower($3)');
+    expect(opts.bind).toEqual([INTERN, AGENT, 'read_cron_registry']);
+  });
+
+  it('AF11.1: a request for a DIFFERENT tool on the same agent is not a duplicate', async () => {
+    recorded();
+    await fileChangeRequest({
+      sequelize: fakeSequelize(), email: INTERN, kind: 'tool',
+      domainKey: 'platform-automation', title: 'Write to the cron registry',
+      toolRequest: toolDetail({ tool_name: 'write_cron_entry', writes: true,
+        side_effects: 'Adds one cron entry.', reversible: true }),
+    });
+    expect(mockCreate).toHaveBeenCalled();
   });
 
   it('A TOOL REQUEST IS NOT A GRANT. Filing one changes no agent and grants nothing', async () => {
@@ -381,8 +545,9 @@ describe('AF7.1: tool requests ride the same governance spine', () => {
     await fileChangeRequest({
       sequelize: fakeSequelize(), email: INTERN, kind: 'tool',
       domainKey: 'platform-automation', title: 'Read the cron registry',
+      toolRequest: toolDetail(),
     });
-    const written = JSON.stringify(mockCreate.mock.calls);
+    const written = JSON.stringify([...mockCreate.mock.calls, ...mockDetailCreate.mock.calls]);
     expect(written).not.toContain('tools_granted');
     expect(written).not.toContain('autonomy');
     expect(written).toContain('"status":"submitted"');

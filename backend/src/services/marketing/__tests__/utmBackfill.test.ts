@@ -27,12 +27,18 @@ const NOW = Date.parse('2026-11-03T12:00:00.000Z');
 const DAY_MS = 86_400_000;
 const daysAgo = (days: number) => new Date(NOW - days * DAY_MS);
 
-const session = (over: UtmSession = {}): UtmSession => ({
+/**
+ * A real `visitor_sessions` row, which carries a `utm_medium` that `leads` has no column for. The
+ * fixtures keep it so the tests exercise the shape production actually hands the backfill.
+ */
+type SessionRow = UtmSession & { utm_medium?: string | null };
+
+const session = (over: SessionRow = {}): SessionRow => ({
   utm_source: 'fb', utm_campaign: '52708443249234', utm_medium: 'paid',
   utm_content: '52708445138434', utm_term: '52708443249434', created_at: daysAgo(1), ...over,
 });
 
-const untagged = (over: UtmSession = {}): UtmSession => ({
+const untagged = (over: SessionRow = {}): SessionRow => ({
   utm_source: null, utm_campaign: null, utm_medium: null, utm_content: null, utm_term: null,
   created_at: daysAgo(0), ...over,
 });
@@ -118,13 +124,25 @@ describe('pickAttributionSession is bounded, so reaching back does not become fi
 });
 
 describe('utmBackfillUpdates', () => {
-  it('carries all five fields, not just the three that used to travel', () => {
+  it('carries every column the lead can hold, not just the two that used to land', () => {
     const updates = utmBackfillUpdates(session(), emptyLead());
     expect(Object.keys(updates).sort()).toEqual([...UTM_FIELDS].sort());
-    // utm_content and utm_term are which ad and which placement. 1,464 ad visits carried them and
-    // 0 of 450 leads did, because these two were the ones left out.
+    // utm_content and utm_term are which ad and which placement, and they were the two left out.
+    // Measured in production on 2026-11-03: 388 leads created in the previous 30 days carry no
+    // utm_content while a session of the same visitor does.
     expect(updates.utm_content).toBe('52708445138434');
     expect(updates.utm_term).toBe('52708443249434');
+  });
+
+  it('never tries to write utm_medium, because leads has no such column', () => {
+    // The session carries a medium and the lead has nowhere to put it: the column lives on
+    // visitor_sessions only. Sequelize drops a key that is not a model attribute, so including it
+    // would not break the write — it would make the caller's success log name a field it had not
+    // written. Verified against production on 2026-11-03, where `leads` carries exactly
+    // utm_source, utm_campaign, utm_content and utm_term.
+    expect([...UTM_FIELDS] as string[]).not.toContain('utm_medium');
+    const updates = utmBackfillUpdates(session({ utm_medium: 'paid' }), emptyLead());
+    expect(updates).not.toHaveProperty('utm_medium');
   });
 
   it('never overwrites a tag the lead already has', () => {
@@ -132,13 +150,13 @@ describe('utmBackfillUpdates', () => {
     const updates = utmBackfillUpdates(session({ utm_campaign: 'from_the_session' }), lead);
     expect(updates.utm_campaign).toBeUndefined();
     expect(updates.utm_source).toBeUndefined();
-    expect(updates.utm_medium).toBe('paid'); // the fields the lead lacks still travel
+    expect(updates.utm_content).toBe('52708445138434'); // the fields the lead lacks still travel
   });
 
   it('is safe to run twice: a retried identify call changes nothing the second time', () => {
     const lead: UtmFields = emptyLead();
     const first = utmBackfillUpdates(session(), lead);
-    expect(Object.keys(first)).toHaveLength(5);
+    expect(Object.keys(first)).toHaveLength(UTM_FIELDS.length);
     Object.assign(lead, first); // what the controller's lead.update() leaves behind
     expect(utmBackfillUpdates(session(), lead)).toEqual({});
   });
@@ -158,8 +176,12 @@ describe('utmBackfillUpdates', () => {
     expect(utmBackfillUpdates(session({ utm_source: 'fb|paid' }), emptyLead()).utm_source).toBe('fb|paid');
   });
 
-  it('ignores anything outside the five fields, so an unexpected session shape cannot write junk', () => {
-    const updates = utmBackfillUpdates({ ...session(), fbclid: 'IwAR123', email: 'x@y.com' } as UtmSession, emptyLead());
+  it('ignores anything outside those columns, so an unexpected session shape cannot write junk', () => {
+    // utm_medium sits in this list on purpose: it is a real session column with no lead column.
+    const updates = utmBackfillUpdates(
+      { ...session(), utm_medium: 'paid', fbclid: 'IwAR123', email: 'x@y.com' } as UtmSession,
+      emptyLead(),
+    );
     expect(Object.keys(updates).sort()).toEqual([...UTM_FIELDS].sort());
   });
 });

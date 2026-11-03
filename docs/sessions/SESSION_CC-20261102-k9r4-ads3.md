@@ -122,3 +122,63 @@ bare `Error`, and the lead id. No email, no address, no token.
   changed, to keep this diff to the ticket.
 - **No profitability number follows from any of this.** The spend ledger is still empty; that needs
   ADS-4 (the Meta token) and ADS-6 (the daily sync).
+
+---
+
+## Production verification, 2026-11-03, after PR #3622 merged
+
+Merge `92d103b2` landed 14:15:47Z. Main's tip then moved to `e8756aa8` (#3625 and #3616 merged
+behind it), and **another session deployed that tip at 18:35:20Z**, backend and nginx. So this
+shipped without a deploy from me. Verified in the running container rather than assumed: the marker
+`utm_backfill_failed` is present in `dist/controllers/trackingController.js`, both new modules
+(`dist/services/marketing/utmBackfill.js`, `dist/services/marketing/adSpend/utmSource.js`) are built
+at 18:31, and the containers read `Up 2 minutes`, so it was a real recreate and not a no-op.
+
+### The utm_source merge is proven on live production rows
+
+Called the deployed `knownCampaigns(LANDING_SOURCES)` read-only against production, beside the raw
+SQL grouping it replaces. For the one live campaign, `52708443249234`:
+
+- **Before**, the raw grouping handed the UI **four** rows: `fb` 297 signups, `ig` 114, `fb|paid` 3,
+  `ig|paid` 4. The two piped rows missed `PLACEMENT_FOR_SOURCE`, so their spend rendered blank.
+- **After**, the deployed code returns **two**: `fb` 300 and `ig` 118, each resolving a placement.
+
+The signups sum exactly (297+3, 114+4), and `canonicalUtmSource` is idempotent on all four shapes
+present in production. The report card's `bySource` now renders two lines rather than four.
+
+### Two claims in the pre-deploy write-up above are wrong
+
+1. **"Zero leads carry a piped shape today" is wrong.** `leads` holds 8 piped rows — one from
+   2026-03-20 and seven from today. The split was **already live in production**, not pre-empted.
+2. **"0 of 450 leads carry utm_content" was already wrong when written.** Seven leads carry it, the
+   earliest at 05:50Z today. They did not come from the backfill: `visitor_sessions` holds **zero**
+   piped `utm_source` rows while those leads have one, so the value can only have arrived in the
+   signup payload. `freeSignupService.ts:225` writes `utm_content` at lead creation.
+
+### A defect this verification found in the shipped change
+
+`UTM_FIELDS` included `utm_medium`, and **`leads` has no such column.** It exists on
+`visitor_sessions` only; the `Lead` model declares exactly `utm_source`, `utm_campaign`,
+`utm_content`, `utm_term`. Sequelize drops a key that is not a model attribute, so no write ever
+failed — the cost is that the success log could name a field it had not written. The old code's
+`utm_medium` copy was landing nowhere either, so the real improvement is **two columns to four**,
+not three to five as the docblock claimed. Fixed on `workstream/ads3-utm-medium`.
+
+### ADS-3's stated acceptance test would not exercise this change
+
+"Query one real tagged click's lead row" now passes **without the backfill running**. The frontend
+sends the tags in the signup payload, so `utmBackfillUpdates` returns `{}` for those leads: nothing
+is missing. Measured per hour, every tagged lead in the piped hours already carried campaign *and*
+content on arrival.
+
+What the backfill is worth, measured in production instead:
+
+- **388 leads** created in the previous 30 days carry no `utm_content` while a session of the same
+  visitor does.
+- **17 visitors** in 30 days had a tagged click sitting behind an untagged newest session, which is
+  exactly the case the newest-session fix addresses.
+
+Still unproven on live traffic: the backfill actually firing. It fires only for a lead whose payload
+lacks a tag its session has, now the uncommon path. Between the deploy and this check no leads and
+no `/api/t/identify` traffic arrived at all, and the backend logs show zero `Backfilled UTM` lines
+and zero `utm_backfill_failed` lines.

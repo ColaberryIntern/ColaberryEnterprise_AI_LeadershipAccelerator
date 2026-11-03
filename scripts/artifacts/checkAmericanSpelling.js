@@ -64,12 +64,32 @@ function filesToScan() {
  * Lines carrying `spelling-exempt` are skipped. Files are read as whole lines so the report
  * can name a line number, which is the difference between a finding somebody fixes and a
  * finding somebody re-greps for.
+ *
+ * ## Exempting a BLOCK
+ *
+ * Added 2026-11-03 for a case the per-line marker cannot reach. A Mermaid state diagram held
+ * inside a template literal spells a shipped lifecycle state seven times, and that spelling is
+ * the database's, not ours — but a `spelling-exempt` comment cannot go on those lines, because
+ * anything added inside the template becomes part of the rendered diagram.
+ *
+ * So `spelling-exempt-begin` suppresses until `spelling-exempt-end`, with both markers sitting
+ * on comment lines OUTSIDE the literal. Still an explicit marker rather than a guess at which
+ * blocks look like diagrams: a guess that errs generously silently stops checking real prose,
+ * which is how 79 lines of British spelling reached customer-facing PDFs the first time.
+ *
+ * An unterminated block would suppress the rest of a file silently, so that is an error rather
+ * than a default.
  */
 function scan(files = filesToScan()) {
   const findings = [];
   for (const file of files) {
     const lines = fs.readFileSync(file, 'utf8').split(/\r?\n/);
+    let blocked = false;
+    let blockedAt = 0;
     lines.forEach((text, i) => {
+      if (text.includes('spelling-exempt-begin')) { blocked = true; blockedAt = i + 1; return; }
+      if (text.includes('spelling-exempt-end')) { blocked = false; return; }
+      if (blocked) return;
       if (text.includes('spelling-exempt')) return;
       for (const hit of findAllBritishSpellings(text)) {
         findings.push({
@@ -81,6 +101,11 @@ function scan(files = filesToScan()) {
         });
       }
     });
+    if (blocked) {
+      throw new Error(`${path.relative(ROOT, file).replace(/\\/g, '/')}:${blockedAt} opens a `
+        + 'spelling-exempt-begin block that is never closed, so the rest of the file would go '
+        + 'unchecked. Add spelling-exempt-end.');
+    }
   }
   return findings;
 }
