@@ -202,6 +202,13 @@ describe('tracking', () => {
     expect(html).toContain('tracking omitted');
   });
 
+  it('C105: every hosted page loads the same-origin welcome-back script, with or without a site_slug', () => {
+    const tag = '<script src="/v1/welcome-back.js" defer></script>';
+    expect(render(MINIMAL).html).toContain(tag);
+    expect(render(MINIMAL, { siteSlug: null }).html).toContain(tag);
+    expect(render(MINIMAL).html.split(tag)).toHaveLength(2); // exactly once
+  });
+
   it('carries no inline script, so the CSP never needs unsafe-inline for scripts', () => {
     const { html } = render(MINIMAL);
     expect(html).not.toMatch(/<script(?![^>]*\bsrc=)/);

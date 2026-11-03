@@ -171,6 +171,11 @@ export function renderLandingPage(input: RenderLandingPageInput): RenderedLandin
     ? `<script src="/v1/track.js" data-site="${esc(siteSlug)}" defer></script>`
     : '<!-- tracking omitted: this page has no site_slug -->';
 
+  // C105: every hosted page offers a signed-in visitor the way back to Today. Unconditional (it needs no site_slug):
+  // the script itself shows nothing without a live session, so for everyone else the page is unchanged. Client-side
+  // only, which is also why the page's shared cache (max-age 60, s-maxage 300) is unaffected.
+  const welcomeBack = '<script src="/v1/welcome-back.js" defer></script>';
+
   // The brand lockup. An agreed logo renders as the image; a brand without one renders its name,
   // which is the same refusal-to-guess the palette registry makes.
   const brandMark = logo
@@ -240,6 +245,7 @@ ${darkLogo
 </div>
 </footer>
 ${tracker}
+${welcomeBack}
 ${snackbar ? snackbarScriptTag(snackbar) : ''}
 </body>
 </html>`;
