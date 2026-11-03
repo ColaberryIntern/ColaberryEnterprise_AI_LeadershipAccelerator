@@ -2,6 +2,7 @@ import { QueryTypes } from 'sequelize';
 import { sequelize } from '../../config/database';
 import type { ExplorerOverlay, ExplorerPrimaryState } from '../../types/explorerGrowth';
 import { withGhlUrls } from './explorerPersonLinks';
+import { readBuyingSignals, type BuyingSignals } from './explorerBuyingSignals';
 
 /**
  * The learner drawer: one learner, in detail.
@@ -71,6 +72,8 @@ export interface LearnerSignals {
    */
   per_signal_timeline_available: false;
   timeline_absent_reason: string;
+  /** C100: abandoned checkout and enroll-link clicks, read live and never scored (see explorerBuyingSignals). */
+  buying_signals: BuyingSignals;
 }
 
 export interface LearnerDecisionSummary {
@@ -180,6 +183,7 @@ export async function getLearnerSignals(
     series: await scoreSeries(enrollmentId, days),
     per_signal_timeline_available: false,
     timeline_absent_reason: TIMELINE_ABSENT,
+    buying_signals: await readBuyingSignals(enrollmentId, profile.lead_id ?? null),
   };
 }
 
