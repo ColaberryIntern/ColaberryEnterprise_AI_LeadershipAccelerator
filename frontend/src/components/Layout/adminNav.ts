@@ -437,3 +437,46 @@ export function firstAccessiblePath(canSection: (section: string) => boolean): s
   const link = ALL_LINKS.find((l) => !l.newTab && canSection(l.section as string));
   return link ? link.path : UNIVERSAL_ADMIN_PATHS[0];
 }
+
+/**
+ * The groups this viewer should see, with each group's links already filtered to their sections.
+ *
+ * ## The bug this fixes, reported from the outside
+ *
+ * Quincy Ninying, 2 Nov 2026: *"The Agents tab is still not in my sidebar. I signed out and back
+ * in, and tried again in a private window. My menu shows only Dashboard, My Domain, Change
+ * Requests, Tickets, Automated Reports and Settings. There is no refusal message, the tab is
+ * simply not listed."*
+ *
+ * He was right, and his grants were never the problem: he holds `agents`
+ * (`mgmt_role: platform` plus the extra), and the agent-factory feed returns his `platform` domain.
+ *
+ * The group survived or died on its LINKS alone. "Agents" is a sub-list of the Interns group, whose
+ * one link needs `internship`. A viewer holding `agents` but not `internship` lost the whole group
+ * before its sub-lists were ever looked at — so a node he was entitled to vanished with no refusal
+ * to explain it, which is the worst version of this failure: nothing to search for and nothing to
+ * report but an absence.
+ *
+ * Six of the seven agent builders are in that position (platform, marketing, curriculum,
+ * product_experience, lead_intake, revenue). The seventh, Tashima Diah, holds `internship_review`
+ * and therefore `internship` — and she is the one builder who did not report a missing tab, which
+ * is the confirmation rather than the coincidence.
+ *
+ * ## What stays true
+ *
+ * A sub-list is still gated by its OWN section and still hidden when its feed is empty, so this
+ * widens nothing: `hasSubListEntries` is the same row-scoped, server-side feed the node renders
+ * from. Admissions, who holds `internship` and not `agents`, still never sees Agents — the case
+ * `adminNav.ts`'s Interns comment is written to protect. A group kept by this rule alone renders
+ * its header and its sub-list with no links under it, which is the honest picture: the viewer may
+ * reach those agents and may not reach the Interns hub.
+ */
+export function visibleNavGroups(
+  canSection: (section: string) => boolean,
+  hasSubListEntries: (sl: NavSubList) => boolean,
+): NavGroup[] {
+  return NAV_GROUPS
+    .map((g) => ({ ...g, links: g.links.filter((l) => canSection(l.section ?? g.section)) }))
+    .filter((g) => g.links.length > 0
+      || (g.subLists ?? []).some((sl) => canSection(sl.section) && hasSubListEntries(sl)));
+}
