@@ -284,9 +284,11 @@ const LEDGER = [
       + 'L11.8, by counting §3.1 and §17 against all 61 todos.',
   },
   {
-    id: 11, title: 'System Architecture Handbook', ticket: 'L11.1', file: null,
-    state: 'NOT_WRITTEN',
-    note: 'Head of what is left of the chain now that L11.8 has landed. Writable from the repo.',
+    id: 11, title: 'System Architecture Handbook', ticket: 'L11.1',
+    file: 'docs/colaberry-live/DOC_11_SYSTEM_ARCHITECTURE_HANDBOOK.md', state: 'WRITTEN',
+    note: 'Written 2026-11-03. Its capability proof register is generated from l111Data.js and '
+      + 'spliced into the document, so the handbook cannot claim a capability is proven when the '
+      + 'data says otherwise: 4 of 28 claims have run in a real airing, 10 have never run.',
   },
   {
     id: 12, title: 'Architecture Diagrams', ticket: 'L11.2', file: null, state: 'NOT_WRITTEN',

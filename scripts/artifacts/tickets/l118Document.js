@@ -126,7 +126,21 @@ function selfCheck() {
     if (!body.includes('DOC 00')) throw new Error(`${rel} never points back at DOC 00`);
   });
 
-  // 8. AND DOC 00'S INDEX MUST NAME ALL EIGHTEEN, including the ones that do not exist yet —
+  // 8b. THE DISK MUST NOT HOLD A DOCUMENT THE LEDGER HAS NEVER HEARD OF.
+  //     Added 2026-11-03 while landing DOC 11, which exposed the gap: checks 2 and 4 both run
+  //     ledger -> disk, so a new document could appear in this folder and the ledger would stay
+  //     silently stale. An index that is only correct about the files it already knew about is
+  //     the drift this module exists to prevent, so the check now runs in both directions.
+  const dir = path.join(ROOT, D.META.dir);
+  const onDisk = fs.readdirSync(dir).filter((f) => /^DOC_\d\d.*\.md$/.test(f));
+  const ledgered = new Set(D.LEDGER.filter((d) => d.file).map((d) => path.basename(d.file)));
+  const unledgered = onDisk.filter((f) => !ledgered.has(f));
+  if (unledgered.length) {
+    throw new Error(`${D.META.dir} holds document(s) the ledger does not know about: `
+      + `${unledgered.join(', ')}. Add a LEDGER row, or the index is wrong the moment it is read.`);
+  }
+
+  // 9. AND DOC 00'S INDEX MUST NAME ALL EIGHTEEN, including the ones that do not exist yet —
   //    that is the half of the index that tells a future session what is missing.
   const brief = readDoc(D.WRITTEN.find((d) => d.id === 0)).body;
   const absent = D.LEDGER.filter((d) => !brief.includes(`**${String(d.id).padStart(2, '0')}**`));
