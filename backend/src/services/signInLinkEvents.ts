@@ -8,8 +8,9 @@ import { ensureSignInLinkEventsSchema } from '../db/ensureSignInLinkEventsSchema
  * NEVER AFFECTS SIGN-IN. This is measurement; the session is the product. Every error is logged with an error_class
  * and swallowed here, deliberately, so the caller's response is the same whether or not the record was written.
  *
- * What is stored: the enrollment and the time for a success; a per-day count for an invalid or expired link. Never
- * the token, the IP or the user agent (see ensureSignInLinkEventsSchema).
+ * What is stored: the enrollment and the time for a success, at most one row per person per minute (a link stays
+ * valid for reuse until it expires, so a replay loop on one valid link must not write a row per request); a per-day
+ * count for an invalid or expired link. Never the token, the IP or the user agent (see ensureSignInLinkEventsSchema).
  *
  * Retention: rows older than RETENTION_DAYS are pruned at most once a day per process, from this same path (batched
  * and capped, so a backlog is spread over days). Keeping it here rather than in the scheduler keeps it next to the
@@ -53,7 +54,10 @@ export async function recordSignInLinkUse(enrollmentId: string, now: Date = new 
   try {
     await ensureSignInLinkEventsSchema();
     await sequelize.query(
-      'INSERT INTO sign_in_link_uses (enrollment_id, used_at) VALUES (:enrollmentId, NOW())',
+      `INSERT INTO sign_in_link_uses (enrollment_id, used_at)
+       SELECT :enrollmentId, NOW()
+       WHERE NOT EXISTS (SELECT 1 FROM sign_in_link_uses u
+                         WHERE u.enrollment_id = :enrollmentId AND u.used_at > NOW() - interval '1 minute')`,
       { replacements: { enrollmentId }, type: QueryTypes.INSERT },
     );
     await pruneOncePerDay(now);

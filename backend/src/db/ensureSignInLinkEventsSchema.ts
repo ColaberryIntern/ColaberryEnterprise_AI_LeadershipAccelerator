@@ -7,7 +7,8 @@ import { sequelize } from '../config/database';
  * records it, and the backend request log is lost on every container recreate (C97 R5: zero /portal/verify page
  * events for any visitor).
  *
- *  - sign_in_link_uses: one row per SUCCESSFUL link sign-in (the enrollment and when). Bounded by real people.
+ *  - sign_in_link_uses: one row per SUCCESSFUL link sign-in (the enrollment and when), at most one per person per
+ *    minute: bounded by people and time, even if one valid (reusable) link is replayed in a loop.
  *  - sign_in_link_invalid_daily: one row per day counting invalid or expired links. A counter, not a row per
  *    attempt, because the verify route is public: a flood of junk tokens moves one number, never the table size.
  *

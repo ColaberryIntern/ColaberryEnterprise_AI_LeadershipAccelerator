@@ -17,8 +17,13 @@ beforeEach(() => { query.mockReset(); query.mockResolvedValue([]); __resetSignIn
 describe('recordSignInLinkUse', () => {
   it('inserts one row: the enrollment and the time, nothing else', async () => {
     await recordSignInLinkUse('e1', DAY1);
-    expect(sqls()[0]).toBe('INSERT INTO sign_in_link_uses (enrollment_id, used_at) VALUES (:enrollmentId, NOW())');
+    expect(sqls()[0]).toMatch(/^INSERT INTO sign_in_link_uses \(enrollment_id, used_at\)\s+SELECT :enrollmentId, NOW\(\)/);
     expect(query.mock.calls[0][1]).toMatchObject({ replacements: { enrollmentId: 'e1' } });
+  });
+
+  it('a replayed valid link writes at most one row per person per minute (the link stays reusable until it expires)', async () => {
+    await recordSignInLinkUse('e1', DAY1);
+    expect(sqls()[0]).toMatch(/WHERE NOT EXISTS \(SELECT 1 FROM sign_in_link_uses u\s+WHERE u\.enrollment_id = :enrollmentId AND u\.used_at > NOW\(\) - interval '1 minute'\)/);
   });
 
   it('prunes rows older than 180 days at most once a day, in a capped batch', async () => {
