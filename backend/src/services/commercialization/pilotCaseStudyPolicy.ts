@@ -6,9 +6,20 @@
  *
  *   - The publish gate requires maturity `operational_result`
  *     (caseStudyPublishMaturityRule.ts:38, PUBLISHABLE_FROM).
- *   - `operational_result` is documented UNREACHABLE because it "needs an outcome
- *     measured through an approved measurement definition", and no measurement-definition
- *     concept exists in the codebase (caseStudyFoundation.ts:41, OUTCOME_WHY at :119).
+ *   - `operational_result` needs "an outcome measured through an approved measurement
+ *     definition". UPDATED 2026-11-03: that concept now exists (`sbp/projectMeasurement.ts`
+ *     and the `project_measurement_*` tables), so the rung is reachable. It was NOT when
+ *     this file was written, and the premise below changed with it.
+ *
+ *     THE CONCLUSION DID NOT CHANGE, and that is the point. A mechanism for recording an
+ *     outcome does not create an outcome nobody measured. The rung now asks for a reading
+ *     taken in real use, against a question approved in advance, confirmed by a second
+ *     person — which is precisely the claim C7.6 declined to make for a pilot. A pilot
+ *     still tops out at `MATURITY_CEILING_TODAY`.
+ *
+ *     C8.7 should be re-read against this, rather than left to look as though nobody
+ *     noticed: the reasoning below now rests on C7.6's refusal alone, which is a stronger
+ *     footing than "the platform cannot express it anyway".
  *   - C7.6, the pilot measurement spec, DELIBERATELY DECLINED to measure business outcome
  *     in money or time, because a twelve-week pilot inside a large organization cannot be
  *     separated from everything else that moved.

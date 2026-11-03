@@ -3,6 +3,7 @@ import { loadBuildProgress } from './buildProgressSnapshot';
 import { loadIntakeTruthAtRevision } from './intakeTruthStore';
 import { getPublishedPlan } from './planStore';
 import { listStoryEnrichments } from './storyEnrichmentLedger';
+import { listProjectMeasurements } from './projectMeasurementStore';
 import type { BuildPlan } from './planContract';
 
 /**
@@ -23,10 +24,11 @@ export async function loadCaseStudyFoundation(projectId: string): Promise<CaseSt
   const stored = await loadIntakeTruthAtRevision(projectId);
   if (!stored) return null;
 
-  const [plan, enrichments, progress] = await Promise.all([
+  const [plan, enrichments, progress, measurements] = await Promise.all([
     getPublishedPlan(projectId).catch(() => null),
     listStoryEnrichments(projectId),
     loadBuildProgress(projectId),
+    listProjectMeasurements(projectId),
   ]);
 
   const verifiedStories = progress.progress.filter((p) => Boolean(p.verified_at)).length;
@@ -38,6 +40,8 @@ export async function loadCaseStudyFoundation(projectId: string): Promise<CaseSt
     plan: planShape ? { descriptor: planShape.descriptor, requirements: planShape.requirements } : null,
     enrichments,
     verifiedStories,
+    measurementDefinitions: measurements.definitions,
+    measurementOutcomes: measurements.outcomes,
   });
 }
 
@@ -49,15 +53,22 @@ export async function loadCaseStudyFoundation(projectId: string): Promise<CaseSt
 export async function loadCaseStudyFoundationForGate(projectId: string): Promise<CaseStudyFoundationSummary | null> {
   const stored = await loadIntakeTruthAtRevision(projectId);
   if (!stored) return null;
-  const [enrichments, progress] = await Promise.all([
+  const [enrichments, progress, measurements] = await Promise.all([
     listStoryEnrichments(projectId),
     loadBuildProgress(projectId),
+    listProjectMeasurements(projectId),
   ]);
+  // The gate reads the SAME foundation the portal does. If this ever stopped
+  // passing the measurements, a project would show `operational_result` on its own
+  // page and be refused at publish for being below it, with nothing to explain the
+  // disagreement.
   return summarise(buildCaseStudyFoundation({
     items: stored.items,
     truthRevision: stored.revision,
     plan: null,
     enrichments,
     verifiedStories: progress.progress.filter((p) => Boolean(p.verified_at)).length,
+    measurementDefinitions: measurements.definitions,
+    measurementOutcomes: measurements.outcomes,
   }));
 }

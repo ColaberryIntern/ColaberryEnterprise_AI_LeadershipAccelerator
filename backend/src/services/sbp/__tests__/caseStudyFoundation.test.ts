@@ -74,16 +74,51 @@ describe('the four sections stay apart', () => {
     expect(f.demonstrationEvidence).toEqual([]);
   });
 
-  it('outcome evidence is empty by construction and says why', () => {
+  it('outcome evidence is empty with no measurement defined, and says so about THIS project', () => {
+    // Was "empty by construction": the type was `readonly never[]` and the reason was
+    // one sentence about the whole platform. Since the measurement tables landed
+    // (2026-11-03) a project can have an outcome, so the gap is reported per project
+    // and the sentence names the step this one is actually missing.
     const f = buildCaseStudyFoundation({
       items: [item()],
       enrichments: [row({ event: { ...row().event, measurementEvents: [{ name: 'tickets_per_run', value: 12, evidence: 'logs/run.json' }] } })],
       verifiedStories: 3,
     });
     expect(f.outcomeEvidence.items).toEqual([]);
-    expect(f.outcomeEvidence.why).toMatch(/No approved measurement definitions/);
+    expect(f.outcomeEvidence.why).toMatch(/No measurement has been defined for this project/);
     expect(f.outcomeEvidence.heldMeasurementEvents).toBe(1);
     expect(f.limitations.join(' ')).toMatch(/1 measurement event is held unmerged/);
+  });
+
+  it('a confirmed reading against an approved definition becomes outcome evidence', () => {
+    // The rung that could not be reached before. The filtering rule itself is tested
+    // in projectMeasurement.test.ts; this proves the foundation is wired to it.
+    const definition = {
+      id: 'def-1', measurementKey: 'review-minutes', name: 'Reviewer minutes',
+      question: 'How long does one review take?', method: 'Audit-trail active time.',
+      unit: 'minutes', direction: 'lower_is_better' as const, baselineDisplay: null,
+      status: 'approved' as const, createdBy: 'builder@x.com',
+      approvedBy: 'reviewer@x.com', approvedAt: '2026-11-03T10:00:00.000Z',
+    };
+    const f = buildCaseStudyFoundation({
+      items: [item()],
+      enrichments: [row()],
+      verifiedStories: 3,
+      measurementDefinitions: [definition],
+      measurementOutcomes: [{
+        id: 'out-1', definitionId: 'def-1', valueDisplay: 'about 12 minutes',
+        numericValue: 12, unit: 'minutes', baselineDisplay: null, sample: null,
+        observedFrom: null, observedTo: null, evidence: 'audit trail', evidenceUrl: null,
+        status: 'confirmed' as const, recordedBy: 'builder@x.com',
+        confirmedBy: 'reviewer@x.com', confirmedAt: '2026-11-03T12:00:00.000Z',
+      }],
+    });
+
+    expect(f.maturity).toBe('operational_result');
+    expect(f.outcomeEvidence.items).toHaveLength(1);
+    // No gap left to explain, and no limitation contradicting the rung above it.
+    expect(f.outcomeEvidence.why).toBe('');
+    expect(f.limitations.join(' ')).not.toMatch(/measured in use can be recorded/);
   });
 
   it('a question a story raised is not build evidence; it is counted as open', () => {
