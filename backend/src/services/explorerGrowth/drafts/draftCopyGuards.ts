@@ -1,4 +1,14 @@
-import { BANNED_COPY_RULES, FREE_WORD_RULE, type BannedWordRule } from '../../content/bannedCopyRule';
+import { BANNED_COPY_RULES, type BannedWordRule } from '../../content/bannedCopyRule';
+import { assertRules, findBannedCopy } from '../../content/bannedCopyMatch';
+
+/**
+ * The matcher moved to `services/content/bannedCopyMatch.ts` on 2026-11-02, when
+ * `aiMessageService` needed the same decision for campaign copy. It is re-exported here so
+ * that every existing importer and the whole existing test suite keep working unchanged:
+ * this file's public surface is identical to what it was before the move.
+ */
+export { CopyRulesAbsentError, findBannedCopy, bannedCopyInstruction } from '../../content/bannedCopyMatch';
+export type { BannedCopyHit } from '../../content/bannedCopyMatch';
 
 /**
  * Explorer draft copy guards — the two defects found in the first real draft copy that has
@@ -49,166 +59,19 @@ import { BANNED_COPY_RULES, FREE_WORD_RULE, type BannedWordRule } from '../../co
  *
  * The cost of the exclusion is measured, not assumed: 5 of 468 active assets, about 1%.
  *
- * ## Rules are an argument, and an empty set is a programming error
+ * ## Rules are an argument, and the matcher lives elsewhere
  *
- * Same shape as `explorerQuoteGuard`, for the reason recorded in `bannedCopyRule.ts`: the
- * canonical rule lives in a dependency-free leaf precisely so a runtime module can read it.
- * `bannedCopyScanner.ts` must NOT be imported here — it opens with `import * as ts from
- * 'typescript'`, a devDependency absent from the production image, and
- * `explorerQuoteGuard`'s own test asserts no runtime file under `explorerGrowth/` imports it.
+ * The matching itself, the word-boundary regex and the idiom exemption now live in
+ * `services/content/bannedCopyMatch.ts`, because `aiMessageService` needs the same decision
+ * for campaign copy and two matchers would drift apart. Its header carries the reasoning.
+ * What stays here is the Explorer-specific part: which fields of an asset are screened, how a
+ * relative href is resolved, and how the rule is phrased for the model.
  *
- * An empty rule set throws rather than returning "clean". Returning clean would be a silent
- * pass, which is the failure this whole subsystem keeps producing; returning "everything is
- * unsafe" would take the feature down over a wiring mistake. A throw is neither, and names
- * the bug.
+ * An empty rule set throws rather than returning "clean", in the matcher and in every wrapper
+ * below. Returning clean would be a silent pass, which is the failure this whole subsystem
+ * keeps producing; returning "everything is unsafe" would take the feature down over a wiring
+ * mistake. A throw is neither, and names the bug.
  */
-
-/** Thrown when a guard is called with no rules, which can only be a wiring mistake. */
-export class CopyRulesAbsentError extends Error {
-  readonly error_class = 'ContractViolation';
-
-  constructor(fn: string) {
-    super(
-      `${fn} called with an empty rule set. Zero rules means UNCHECKED, never clean. `
-        + 'Pass BANNED_COPY_RULES from services/content/bannedCopyRule.',
-    );
-    this.name = 'CopyRulesAbsentError';
-  }
-}
-
-function assertRules(rules: readonly BannedWordRule[], fn: string): void {
-  if (rules.length === 0) throw new CopyRulesAbsentError(fn);
-}
-
-/**
- * Word-boundary, case-insensitive, built fresh per call.
- *
- * Fresh because these are `/g` elsewhere in this repo and a shared `lastIndex` makes results
- * depend on call order — the bug that reads as an intermittently passing guard, already
- * recorded in `explorerFactGuard`.
- *
- * Boundaries are what keep "freedom", "freely" and "freelance" out. They deliberately do NOT
- * keep "Training-Free" out, because a hyphen is a word boundary: that occurrence is reported,
- * and the asset carrying it is excluded from advertising rather than rewritten.
- */
-function wordRegex(word: string): RegExp {
-  return new RegExp(`\\b${word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi');
-}
-
-/**
- * An occurrence that is an idiom rather than an advertisement.
- *
- * ## The measurement that caused this
- *
- * Taken 2026-11-01, after the instruction added by #3554 was deployed and a second batch
- * rendered. Of the 24 Explorer drafts that have ever been generated, 18 were rejected, and
- * ALL 18 were rejected for the same thing: a closing courtesy offering help. Not one was a
- * real violation, and the word has never appeared in a single draft subject line.
- *
- * 40 TAC 807.172(d) forbids ADVERTISING training as no-cost. A sign-off offering to answer
- * questions advertises nothing, so rejecting it is a false positive — compliant email was
- * being discarded and the Governor held shut by a guard reporting a defect that was not
- * there. `bannedCopyRule.ts` already says as much: "The word is prohibited, not the offer."
- *
- * ## Why an idiom exemption rather than a context classifier
- *
- * Matching only advertising contexts is more correct in principle, and was weighed and
- * rejected on 2026-11-01: "advertising context" has no crisp definition, and a weak version
- * silently passes a real violation, which is the single failure mode that matters here.
- * Naming one idiom keeps the word banned everywhere else, so the exemption cannot widen by
- * accident — adding to it is a visible edit to this list, not an emergent property.
- *
- * ## Why `precededBy` rather than the phrase
- *
- * The phrase is never spelled out here. `precededBy` carries only the harmless half and the
- * banned half is read off the rule at match time. That keeps a banned-word literal out of
- * this file, which `bannedWordOutboundCopy.test.ts` scans with a shrink-only per-file ratchet
- * where a NEW occurrence fails too. It is the same constraint that shaped
- * `bannedCopyInstruction`, and writing the phrase by hand would pass every behavioural
- * assertion here and fail that ratchet.
- */
-interface IdiomExemption {
-  /** The rule this applies to, named so it cannot silently cover a rule added later. */
-  ruleId: string;
-  /** The word that must immediately precede the occurrence. Never the banned word itself. */
-  precededBy: string;
-  why: string;
-}
-
-const IDIOM_EXEMPTIONS: readonly IdiomExemption[] = [
-  {
-    ruleId: FREE_WORD_RULE.id,
-    precededBy: 'feel',
-    why:
-      'A closing courtesy offering help, not a claim about price. 18 of 18 Explorer '
-      + 'rejections measured on 2026-11-01 were this and nothing else.',
-  },
-];
-
-/**
- * How far back to look for the preceding word. Generous enough that the word sought is never
- * truncated, bounded so a long body stays linear instead of re-slicing from the start of the
- * content on every match.
- */
-const LOOKBACK_CHARS = 48;
-
-/**
- * Whether the occurrence at `at` is an exempt idiom for this rule.
- *
- * A newline is prepended when the window starts at the beginning of the content, so that
- * start-of-content counts as a word boundary. Doing it this way rather than with an `^`
- * branch is deliberate: `^` would also match a window truncated mid-word, which would exempt
- * an occurrence sitting inside a longer word that merely ends in `precededBy`.
- */
-function isExemptIdiom(ruleId: string, content: string, at: number): boolean {
-  const from = Math.max(0, at - LOOKBACK_CHARS);
-  const before = (from === 0 ? '\n' : '') + content.slice(from, at);
-  return IDIOM_EXEMPTIONS.some(
-    (ex) => ex.ruleId === ruleId
-      && new RegExp(`[^A-Za-z0-9_]${ex.precededBy}\\s+$`, 'i').test(before),
-  );
-}
-
-/** One banned-word hit in copy. */
-export interface BannedCopyHit {
-  /** The rule's id, e.g. `tac-807-172-d-free`. */
-  rule_id: string;
-  /** The word exactly as written, so case stays auditable. */
-  text: string;
-}
-
-/**
- * Every banned-word occurrence in `content`. Empty means clean.
- *
- * Takes the text as given, including HTML. A tag name or attribute cannot contain a banned
- * English word by accident, and stripping tags first would mean parsing HTML to decide what
- * counts — a parser with holes, where a hole is a silent pass.
- */
-export function findBannedCopy(
-  content: string,
-  rules: readonly BannedWordRule[] = BANNED_COPY_RULES,
-): BannedCopyHit[] {
-  assertRules(rules, 'findBannedCopy');
-  const out: BannedCopyHit[] = [];
-  for (const rule of rules) {
-    const seen = new Set<string>();
-    const re = wordRegex(rule.word);
-    let m: RegExpExecArray | null = re.exec(content);
-    while (m !== null) {
-      const key = m[0].toLowerCase();
-      // The exemption is checked BEFORE `seen`, and the order is load-bearing. `seen` keys on
-      // the lowercased text, so an exempt occurrence that claimed the key would mask a REAL
-      // violation of the same spelling later in the same body. `REAL_BODY_WITH_BOTH_DEFECTS`
-      // is a production draft carrying both at once, and is the fixture that pins this.
-      if (!isExemptIdiom(rule.id, content, m.index) && !seen.has(key)) {
-        seen.add(key);
-        out.push({ rule_id: rule.id, text: m[0] });
-      }
-      m = re.exec(content);
-    }
-  }
-  return out;
-}
 
 /**
  * Validator-shaped wrapper: human-readable issue strings naming the authority and the
@@ -308,52 +171,5 @@ export function emailLinkIssues(html: string, baseUrl: string): string[] {
     (href) =>
       `Explorer copy contains a link an email client cannot follow: "${href}". `
       + 'An email has no page to be relative to, so every href must be absolute.',
-  );
-}
-
-/**
- * The rule, written for the MODEL rather than for the reviewer.
- *
- * ## Why this exists, measured rather than assumed
- *
- * The two guards above are both defensive: `isSafeToAdvertise` keeps a non-compliant asset
- * out of the digest on the way in, and `bannedCopyIssues` refuses a non-compliant body on
- * the way out. Neither one ever TELLS the generator the rule, and on 2026-11-01 a live
- * render of 12 decisions measured what that costs: 8 of 12 drafts were refused, every one
- * of them for the same banned word, in prose the model wrote unprompted. The three Explorer
- * sequences it reads were checked and carry no banned word, so nothing was feeding it the
- * term - it is simply the ordinary English for a no-cost offer.
- *
- * A guard that refuses two thirds of what it is handed is working as specified and still
- * leaves the feature unusable. This is the missing third layer: state the rule up front, so
- * the refusal becomes the backstop it was meant to be instead of the normal path.
- *
- * ## The word is never written here
- *
- * Every part of the sentence is read off the rule object - `word`, `reason`,
- * `approvedAlternatives` - and none of it is spelled out in this file. That is deliberate
- * twice over. It means this instruction cannot drift from the guard that enforces it, since
- * both read the same constant; and it keeps a banned-word literal out of a source file that
- * `bannedWordOutboundCopy.test.ts` scans with a per-file ratchet, where a new occurrence is
- * a failure rather than a nit.
- *
- * Fails closed on an empty rule set for the same reason the guards do: zero rules means
- * UNCHECKED, and silently instructing the model in nothing would read as compliance.
- */
-export function bannedCopyInstruction(
-  rules: readonly BannedWordRule[] = BANNED_COPY_RULES,
-): string {
-  assertRules(rules, 'bannedCopyInstruction');
-  const lines = rules.map((rule) => {
-    const alternatives = rule.approvedAlternatives.map((a) => `"${a}"`).join(' or ');
-    return (
-      `- Never use the word "${rule.word}" anywhere in the subject or the body. ${rule.reason} `
-      + `Write ${alternatives} instead.`
-    );
-  });
-  return (
-    'COPY COMPLIANCE. These are legal requirements, not style preferences, and a draft '
-    + 'that breaks one is discarded rather than edited:\n'
-    + lines.join('\n')
   );
 }

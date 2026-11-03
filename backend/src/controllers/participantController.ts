@@ -139,6 +139,7 @@ export async function handleStartSubscriptionCheckout(req: Request, res: Respons
     const result = await startCheckout(req.participant!.sub, plan);
     if (result.ok) return res.json({ payment_link: result.payment_link, plan: result.plan, amount: result.amount, full_amount: result.full_amount, applied_credit: result.applied_credit });
     const status = result.reason === 'billing_unconfigured' ? 503
+      : result.reason === 'already_subscribed' ? 409
       : result.reason === 'enrollment_not_found' ? 404
       : result.reason === 'unknown_plan' ? 400 : 502;
     return res.status(status).json({ error: result.reason, message: result.message });

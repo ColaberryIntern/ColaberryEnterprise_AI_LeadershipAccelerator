@@ -245,3 +245,58 @@ describe('acceptance criteria -- the "Done means" block', () => {
     expect(joined).toMatch(/nothing on the page states or implies that filing it granted anything/);
   });
 });
+
+/**
+ * Criterion 4 asked for something no builder could produce, and it was the one thing standing
+ * between ten builders and their first verified story. Reworded 2 Nov 2026.
+ *
+ * `effectiveAuthority` applies the `no_tool_grants` cap only when the APPROVED level is above
+ * `autonomy:R2`; a ceiling can only ever lower that level; and all 443 capability records across
+ * all ten domains start at `autonomy:R0`. The old "Given a capability above `autonomy:R2` with no
+ * granted tools" was therefore unreachable by construction, not merely demanding.
+ *
+ * It was the single outstanding item on the one Command Center that had been graded at all
+ * (platform, 5 of 6, 2 Nov 20:29Z), and `agentDomainCommandCenterDoc.test.ts` had already recorded
+ * the problem as "a finding on AF3.9, not something to paper over here". This is the follow-through.
+ */
+describe('criterion 4 is demonstrable', () => {
+  const criterion4 = COMMAND_CENTER_ACCEPTANCE.find((c) => c.includes('no_tool_grants'));
+
+  it('exists, so a rewording cannot quietly drop the governance rule', () => {
+    expect(criterion4).toBeDefined();
+  });
+
+  it('no longer requires a capability above autonomy:R2, which nothing in the programme is', () => {
+    // The specific unreachable precondition, pinned by the shape that made it unreachable rather
+    // than by the whole sentence: any criterion gated on a capability being ABOVE R2 is gated on a
+    // state no capability record produces.
+    for (const c of COMMAND_CENTER_ACCEPTANCE) {
+      expect(c).not.toMatch(/capability above `autonomy:R2`/);
+      expect(c).not.toMatch(/Given a capability above/);
+    }
+  });
+
+  it('asks for the number the rule constrains, not for a demonstration of it firing', () => {
+    expect(criterion4).toMatch(/number of capabilities it currently constrains/);
+  });
+
+  it('requires the zero case to be stated in words, which is what makes it checkable today', () => {
+    // Without this clause a builder could satisfy the criterion with an empty panel, and an empty
+    // panel is indistinguishable from a broken one -- criterion 2's whole subject.
+    expect(criterion4).toMatch(/in words when that number is zero/);
+  });
+
+  it('is not hardcoded to zero, so it stays true once something IS approved above R2', () => {
+    // The count is reported, never asserted to be any particular value. The day a human approves
+    // a capability above R2 the criterion still reads correctly with no edit.
+    expect(criterion4).not.toMatch(/\bzero capabilities\b/);
+    expect(criterion4).not.toMatch(/constrains none/);
+  });
+
+  it('asks the page to show what effectiveAuthority returns rather than the record\'s ask', () => {
+    // This half of the criterion is unchanged in substance and is the part that carries the
+    // governance: a page showing the requested level would overstate the agent's authority.
+    expect(criterion4).toMatch(/effectiveAuthority\(\)/);
+    expect(criterion4).toMatch(/rather than the level the capability record asks for/);
+  });
+});

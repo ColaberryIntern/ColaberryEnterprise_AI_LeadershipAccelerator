@@ -79,8 +79,18 @@ export const ZOOM_HOST_REQUIRED_COLUMNS: string[] = [
   'zoom_hosts.verified_at',
 ];
 
-/** What a host may be used for. `any` is the default and the usual case. */
-export const ZOOM_HOST_PURPOSES = ['any', 'classes', 'practice', 'rooms'] as const;
+/**
+ * What a host may be used for is defined ONCE, in `HOST_PURPOSES` in
+ * `services/zoom/zoomHostRegistry.ts`, next to the query that reads the column.
+ *
+ * A `ZOOM_HOST_PURPOSES` lived here and listed `['any', 'classes', 'practice',
+ * 'rooms']`. Nothing consumed it but its own test, and it was wrong in a way that
+ * cost capacity rather than looking untidy: the room allocator queries `room`,
+ * singular, and no code has ever asked for `classes`. A host registered from this
+ * list as `rooms` matched no allocator at all — dead capacity that `zoomHosts.ts
+ * list` reported as verified and usable. A purpose is a join key between a row here
+ * and an allocator's WHERE clause, so it does not get a second definition.
+ */
 
 export async function ensureZoomHostSchema(): Promise<void> {
   for (const sql of ZOOM_HOST_STATEMENTS) {

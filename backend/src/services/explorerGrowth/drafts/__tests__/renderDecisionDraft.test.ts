@@ -118,7 +118,17 @@ function harness(over: Partial<DraftRenderDeps> = {}): Harness {
     buildContext: async () => context(),
     generate: async (params) => {
       generatedWith.push(params);
-      return { subject: 'Generated subject', body: '<p>Generated body</p>', tokens_used: 400, model: 'gpt-x' };
+      // `copy_flags` is required on the real result: `generateMessage` screens every return
+      // path for banned wording, and an absent array would read as "no breach" while proving
+      // nothing was screened. A fake that omitted it would be a fake of a contract that no
+      // longer exists.
+      return {
+        subject: 'Generated subject',
+        body: '<p>Generated body</p>',
+        tokens_used: 400,
+        model: 'gpt-x',
+        copy_flags: [],
+      };
     },
     validate: (content) => ({ valid: true, content, issues: [], autoFixed: [] }),
     // The default harness grounds nothing, so every pre-existing test keeps asserting the
@@ -199,7 +209,7 @@ describe('the happy path', () => {
     // All 24 steps carry a real subject even though every body_template is
     // empty, so there is always something true to fall back to.
     const h = harness({
-      generate: async () => ({ body: '<p>b</p>', tokens_used: 1, model: 'm' }),
+      generate: async () => ({ body: '<p>b</p>', tokens_used: 1, model: 'm', copy_flags: [] }),
     });
     await renderDecisionDraft(decision(), h.deps);
     expect(h.committed[0].input.subject).toBe('This week in AI, for practitioners');
@@ -785,7 +795,9 @@ describe('knowledge grounding', () => {
 describe('the copy guards on the generated body', () => {
   /** A `generate` dep that returns exactly this body. */
   function generating(body: string): Partial<DraftRenderDeps> {
-    return { generate: async () => ({ subject: 'S', body, tokens_used: 1, model: 'm' }) };
+    return {
+      generate: async () => ({ subject: 'S', body, tokens_used: 1, model: 'm', copy_flags: [] }),
+    };
   }
 
   it('REFUSES a body advertising the banned word, which 12 of 12 real drafts did', async () => {

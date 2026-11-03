@@ -87,9 +87,33 @@ export const COMMAND_CENTER_ACCEPTANCE: ReadonlyArray<string> = Object.freeze([
   + ' visibly distinct from a panel that is still loading.',
   'Given the autonomy ladder panel, when it renders, then all ten rungs are present with the'
   + ' owner\'s wording, and each capability\'s ceiling is marked against the rung it stops at.',
-  'Given a capability above `autonomy:R2` with no granted tools, when its authority is shown, then'
-  + ' the page shows the effective authority `effectiveAuthority()` returns and the reason'
-  + ' `no_tool_grants`, not the authority the capability record asks for.',
+  // ── REWORDED 2 NOV 2026, because the original described a state no builder could produce ──
+  //
+  // It asked for "a capability above `autonomy:R2` with no granted tools". `effectiveAuthority`
+  // applies the `no_tool_grants` cap only when the APPROVED level is above R2, a ceiling can only
+  // ever lower that level, and all 443 capability records across all ten domains start at
+  // `autonomy:R0`. So the precondition could not be met by anyone, and the criterion was
+  // undemonstrable rather than merely hard. It was the single outstanding item on the one Command
+  // Center that had been graded at all: platform, 5 of 6, on 2 Nov at 20:29Z.
+  //
+  // `agentDomainSnapshot.ts` already computes exactly what an honest panel needs here --
+  // `authority_rule.rule`, `approved_above_r2` and `binds_nothing`, with a note saying to put it
+  // in words -- and has done since before this criterion blocked anybody. The implementation was
+  // right and the criterion never caught up. This asks for what the snapshot provides: checkable
+  // today, and still correct the day a human approves something above R2 and the count stops
+  // being zero. Nothing here is hardcoded to zero for that reason.
+  //
+  // NO `SUPERSEDED_CRITERIA` ENTRY ACCOMPANIES THIS, and that is deliberate. Criteria match by
+  // normalised text (`criterionIdentity.ts`), so an alias would carry a tick on the old sentence
+  // forward onto this one. Measured across all ten boards on 2 Nov, the old sentence carries ZERO
+  // ticks and zero rejected claims -- there is nothing to carry. Aliasing it would credit a
+  // criterion nobody could have honestly satisfied, which is precisely what the trust criterion
+  // below forbids. The table's own doctrine agrees: a reworded criterion with no entry keeps
+  // failing, and that is what holds the gating model together.
+  'Given the autonomy ladder panel, when a capability\'s authority is shown, then the page shows the'
+  + ' effective authority `effectiveAuthority()` returns rather than the level the capability record'
+  + ' asks for, and names the `no_tool_grants` rule with the number of capabilities it currently'
+  + ' constrains, saying so in words when that number is zero.',
   'Given the governance panel, when a tool request is shown, then nothing on the page states or'
   + ' implies that filing it granted anything.',
   'Trust -- no panel shows a number, a grant, a rung or a result this domain has not actually'
