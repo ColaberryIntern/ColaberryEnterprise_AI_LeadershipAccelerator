@@ -43,20 +43,20 @@ jest.mock('../../../models/ProjectLifecycleState', () => ({ __esModule: true, de
 // The migration ramp is ridden deliberately: with both membership tables empty the audited guard
 // records `migration_open_legacy_admin` and allows. That is the production condition measured on
 // 2026-10-14, so it is the condition this suite runs under.
-const membershipSystemIsUnpopulated = jest.fn(async () => true);
-const contextFromAdminRequest = jest.fn(async () => ({ actor: 'ctx' }));
+const membershipSystemIsUnpopulated = jest.fn(async (..._a: any[]) => true);
+const contextFromAdminRequest = jest.fn(async (..._a: any[]) => ({ actor: 'ctx' }));
 jest.mock('../../../modules/tenancy/adminScopeBridge', () => ({
   contextFromAdminRequest: (...a: any[]) => contextFromAdminRequest(...a),
   membershipSystemIsUnpopulated: (...a: any[]) => membershipSystemIsUnpopulated(...a),
   logLegacyAdminScope: jest.fn(),
 }));
 
-const recordAccessDecision = jest.fn(async () => undefined);
+const recordAccessDecision = jest.fn(async (..._a: any[]) => undefined);
 jest.mock('../../../modules/tenancy/tenantAccessAudit', () => ({
   recordAccessDecision: (...a: any[]) => recordAccessDecision(...a),
 }));
 
-const requireTenantAccessAudited = jest.fn(async () => undefined);
+const requireTenantAccessAudited = jest.fn(async (..._a: any[]) => undefined);
 jest.mock('../../../modules/tenancy/tenantAccessGuards', () => ({
   requireTenantAccessAudited: (...a: any[]) => requireTenantAccessAudited(...a),
 }));
