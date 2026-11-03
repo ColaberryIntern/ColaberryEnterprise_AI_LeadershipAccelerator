@@ -3,6 +3,7 @@ import { buildProfitability, CohortRow } from '../profitability';
 import { parseSpendCsv } from '../spendCsv';
 import { parseDay, parseMoneyToCents, SpendInputSchema } from '../spendInput';
 import { insightToInput, readMetaAdsConfig, runMetaSpendSync, SyncDeps } from '../metaSpendSync';
+import { canonicalUtmSource, mergeSourceShapes, PLACEMENT_FOR_SOURCE, SourceCampaignGroup } from '../utmSource';
 
 const fact = (over: Partial<SpendFact>): SpendFact => ({
   platform: 'meta', campaignRef: '527', campaignName: 'AI Platform', placement: '',
@@ -364,5 +365,106 @@ describe('review regressions', () => {
   it('rejects an impossible date with a 400-style issue instead of reaching the database', () => {
     const res = SpendInputSchema.safeParse({ platform: 'meta', campaignRef: '1', periodStart: '2026-02-30', periodEnd: '2026-02-30', amountCents: 1 });
     expect(res.success).toBe(false);
+  });
+});
+
+describe('canonicalUtmSource', () => {
+  it('reduces every shape of the same source to one key', () => {
+    expect(canonicalUtmSource('fb|paid')).toBe('fb');
+    expect(canonicalUtmSource(' FB ')).toBe('fb');
+    expect(canonicalUtmSource('Fb|Paid')).toBe('fb');
+    expect(canonicalUtmSource('ig|paid')).toBe('ig');
+  });
+
+  it('reads a medium-only value as no source, not as a placement named after the medium', () => {
+    expect(canonicalUtmSource('|paid')).toBe('');
+  });
+
+  it('treats null, undefined and blank alike, the way the report always has', () => {
+    expect(canonicalUtmSource(null)).toBe('');
+    expect(canonicalUtmSource(undefined)).toBe('');
+    expect(canonicalUtmSource('   ')).toBe('');
+  });
+
+  it('is idempotent, so applying it at a second read cannot shift the key', () => {
+    for (const raw of ['fb|paid', ' IG ', '', '|paid', 'google|cpc']) {
+      expect(canonicalUtmSource(canonicalUtmSource(raw))).toBe(canonicalUtmSource(raw));
+    }
+  });
+
+  it('keys the placement map in canonical form, so a new alias cannot bypass the canonicalizer', () => {
+    for (const key of Object.keys(PLACEMENT_FOR_SOURCE)) expect(canonicalUtmSource(key)).toBe(key);
+  });
+});
+
+describe('the two shapes of utm_source are one placement line, not two', () => {
+  it('ADS-3: fb and fb|paid on one campaign stay one line, and it keeps its spend', () => {
+    const { rows } = buildProfitability(
+      [spend('527', 200000, { byPlacementCents: { facebook: 150000, instagram: 50000 } })],
+      [
+        cohort({ utmSource: 'fb', signups: 200, payers: 2, mrr: 398, collectedCents: 200000 }),
+        cohort({ utmSource: 'fb|paid', signups: 100, payers: 1, mrr: 199, collectedCents: 100000 }),
+        cohort({ utmSource: 'ig', signups: 97, payers: 1, mrr: 199, collectedCents: 19900 }),
+      ],
+    );
+    const fb = rows[0].bySource.filter((s) => s.utmSource === 'fb');
+    expect(fb).toHaveLength(1);
+    expect(fb[0].signups).toBe(300);
+    // This is the whole point. `fb|paid` misses the placement map, so split in two this line's
+    // spend and cost-per-signup would both read null while its signups stayed visible beside them.
+    expect(fb[0].spend).toBe(1500);
+    expect(fb[0].costPerSignup).toBeCloseTo(5, 2);
+    expect(rows[0].bySource.map((s) => s.utmSource).sort()).toEqual(['fb', 'ig']);
+  });
+
+  it('labels the surviving line with the canonical code, so the card never prints fb|paid', () => {
+    const { rows } = buildProfitability([spend('527', 100000)], [cohort({ utmSource: 'FB|paid' })]);
+    expect(rows[0].bySource[0].utmSource).toBe('fb');
+  });
+
+  it('leaves an untagged group with no source rather than inventing one', () => {
+    const { rows } = buildProfitability([], [cohort({ utmSource: null, utmCampaign: null, signups: 8 })]);
+    expect(rows[0].bySource[0].utmSource).toBeNull();
+  });
+});
+
+describe('mergeSourceShapes (the spend entry form suggestions)', () => {
+  const group = (over: Partial<SourceCampaignGroup>): SourceCampaignGroup => ({
+    utmSource: 'fb', utmCampaign: '527', signups: 10, lastSignup: '2026-11-01T00:00:00.000Z', ...over,
+  });
+
+  it('offers one suggestion per campaign and placement, with the signups added', () => {
+    const merged = mergeSourceShapes([
+      group({ utmSource: 'fb', signups: 10, lastSignup: '2026-11-01T00:00:00.000Z' }),
+      group({ utmSource: 'fb|paid', signups: 7, lastSignup: '2026-11-03T00:00:00.000Z' }),
+    ], 100);
+    expect(merged).toHaveLength(1);
+    expect(merged[0]).toMatchObject({ utmSource: 'fb', utmCampaign: '527', signups: 17, lastSignup: '2026-11-03T00:00:00.000Z' });
+  });
+
+  it('keeps genuinely different placements and campaigns apart', () => {
+    const merged = mergeSourceShapes([group({ utmSource: 'fb' }), group({ utmSource: 'ig' }), group({ utmCampaign: '999' })], 100);
+    expect(merged).toHaveLength(3);
+  });
+
+  it('matches campaigns the way the report does, so one report row is never two suggestions', () => {
+    expect(mergeSourceShapes([group({ utmCampaign: 'Fall AI Push' }), group({ utmCampaign: 'fall ai push' })], 100)).toHaveLength(1);
+  });
+
+  it('returns the most recent first and respects the limit', () => {
+    const merged = mergeSourceShapes([
+      group({ utmCampaign: 'a', lastSignup: '2026-10-01T00:00:00.000Z' }),
+      group({ utmCampaign: 'b', lastSignup: '2026-11-03T00:00:00.000Z' }),
+      group({ utmCampaign: 'c', lastSignup: '2026-10-20T00:00:00.000Z' }),
+    ], 2);
+    expect(merged.map((m) => m.utmCampaign)).toEqual(['b', 'c']);
+  });
+
+  it('handles an empty read and leaves the rows it was given untouched', () => {
+    const rows = [group({ utmSource: 'fb|paid' })];
+    const snapshot = JSON.stringify(rows);
+    mergeSourceShapes(rows, 100);
+    expect(JSON.stringify(rows)).toBe(snapshot);
+    expect(mergeSourceShapes([], 100)).toEqual([]);
   });
 });

@@ -31,6 +31,7 @@
  * Pure: cents in, dollars out, no database, no clock.
  */
 import { CampaignSpend, normaliseRef } from './spendAllocation';
+import { canonicalUtmSource, PLACEMENT_FOR_SOURCE } from './utmSource';
 
 export interface CohortRow {
   utmSource: string | null;
@@ -91,10 +92,6 @@ export interface ProfitTotals {
 }
 
 export const PAYBACK_TARGET_MONTHS = 12;
-
-const PLACEMENT_FOR_SOURCE: Record<string, string> = {
-  fb: 'facebook', facebook: 'facebook', ig: 'instagram', instagram: 'instagram',
-};
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
 const ratio = (n: number, d: number, dp = 2) => (d > 0 ? Math.round((n / d) * 10 ** dp) / 10 ** dp : null);
@@ -177,15 +174,17 @@ export function buildProfitability(spend: CampaignSpend[], cohorts: CohortRow[])
     for (const s of spends) for (const [p, c] of Object.entries(s.byPlacementCents)) placementCents[p] = (placementCents[p] ?? 0) + c;
     const fullyPlaced = spendCents > 0 && !placementCents[''];
 
+    // Grouped on the CANONICAL source, so `fb` and `fb|paid` are the one placement they describe
+    // rather than two lines, one of which would find no placement spend. See utmSource.ts.
     const bySourceMap = new Map<string, SourceSplit>();
     for (const c of list) {
-      const k = (c.utmSource ?? '').toLowerCase();
-      const cur = bySourceMap.get(k) ?? { utmSource: c.utmSource, signups: 0, payers: 0, mrr: 0, collected: 0, spend: null, costPerSignup: null };
+      const k = canonicalUtmSource(c.utmSource);
+      const cur = bySourceMap.get(k) ?? { utmSource: k || null, signups: 0, payers: 0, mrr: 0, collected: 0, spend: null, costPerSignup: null };
       cur.signups += c.signups; cur.payers += c.payers; cur.mrr = r2(cur.mrr + c.mrr); cur.collected = r2(cur.collected + c.collectedCents / 100);
       bySourceMap.set(k, cur);
     }
     const bySource = Array.from(bySourceMap.values()).map((b) => {
-      const placement = b.utmSource ? PLACEMENT_FOR_SOURCE[b.utmSource.toLowerCase()] : undefined;
+      const placement = b.utmSource ? PLACEMENT_FOR_SOURCE[b.utmSource] : undefined;
       const placed = fullyPlaced && placement ? r2((placementCents[placement] ?? 0) / 100) : null;
       return { ...b, spend: placed, costPerSignup: placed !== null && placed > 0 ? ratio(placed, b.signups) : null };
     }).sort((a, b) => b.signups - a.signups);
