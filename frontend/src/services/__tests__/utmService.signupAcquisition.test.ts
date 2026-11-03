@@ -59,6 +59,31 @@ describe('getSignupAcquisitionFields', () => {
     expect(getSignupAcquisitionFields()).not.toHaveProperty('page_url');
   });
 
+  // C104: what production actually does. The ad lands on a builder page outside the app, so nothing ever calls
+  // captureUTMFromURL and storage is empty when the signup page submits; the tags are only on its own URL.
+  it('reads a real Meta ad URL on the signup page with storage empty', () => {
+    window.history.replaceState({}, '', '/portal/signup?utm_medium=paid&utm_source=fb&utm_id=52708443249234&utm_content=52708445138434&utm_term=52708443249434&utm_campaign=52708443249234');
+    expect(window.localStorage.getItem(KEY)).toBeNull();
+    expect(getSignupAcquisitionFields()).toMatchObject({
+      utm_source: 'fb|paid', utm_campaign: '52708443249234', utm_content: '52708445138434', utm_term: '52708443249434',
+    });
+  });
+
+  it("the URL's tags win whole over an older stored visit; nothing is mixed from the two", () => {
+    store({ utmSource: 'google', utmMedium: 'cpc', utmCampaign: 'old', utmContent: 'old-ad', utmTerm: 'old-set' });
+    setUrl('?utm_source=ig&utm_campaign=new');
+    const f = getSignupAcquisitionFields();
+    expect(f).toMatchObject({ utm_source: 'ig', utm_campaign: 'new' });
+    expect(f).not.toHaveProperty('utm_content');
+    expect(f).not.toHaveProperty('utm_term');
+  });
+
+  it('a URL with no UTM tags falls back to storage', () => {
+    store({ utmSource: 'fb', utmMedium: 'paid', utmCampaign: 'c', utmContent: 'ad', utmTerm: 'set' });
+    setUrl('?fbclid=abc');
+    expect(getSignupAcquisitionFields()).toMatchObject({ utm_source: 'fb|paid', utm_content: 'ad', utm_term: 'set' });
+  });
+
   it('with nothing stored, returns no UTM keys at all', () => {
     const f = getSignupAcquisitionFields();
     for (const k of ['utm_source', 'utm_campaign', 'utm_content', 'utm_term'] as const) expect(f).not.toHaveProperty(k);
