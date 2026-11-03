@@ -91,14 +91,26 @@ export async function readLadder(
   let completedCount = 0;
 
   for (const g of groups) {
-    // `status=` (empty) asks Basecamp for completed todos as well as open ones; without it the
-    // completed count is always 0 and "0 completed" reads as "nobody finishes anything".
+    // COMPLETED TODOS ARE A SEPARATE COLLECTION, not a filter on this one.
+    //
+    // This used to pass `?status=` on the belief that an empty status asks for completed todos as
+    // well as open ones. It does not — `?status=` returns ONLY open todos, so `completedCount`
+    // could never be anything but zero, and the NOTE in `renderLadder` invited readers to
+    // conclude "nobody closes todos on this board" from a counter incapable of counting.
+    // Measured 2026-11-03: a sweep omitted L9.1 (10396178653) and C2.6 (10379236363) while a
+    // direct read of each showed them closed. The unit test did not catch it because its mock
+    // returned already-closed todos from a URL the real API never returns them from.
     // eslint-disable-next-line no-await-in-loop
-    const todos = await bcGetAll<BcTodo>(
-      `/buckets/${bucket}/todolists/${g.id}/todos.json?status=`,
+    const todos = await bcGetAll<BcTodo>(`/buckets/${bucket}/todolists/${g.id}/todos.json`);
+    // eslint-disable-next-line no-await-in-loop
+    const done = await bcGetAll<BcTodo>(
+      `/buckets/${bucket}/todolists/${g.id}/todos.json?completed=true`,
     );
+    completedCount += done.length;
     for (const t of todos) {
-      if (t.completed) { completedCount += 1; continue; }
+      // Belt and braces: the open collection should not contain these, and if it ever does we
+      // must not double-count them against `done` above.
+      if (t.completed) { continue; }
       open.push({
         id: t.id,
         group: g.title,
@@ -116,9 +128,14 @@ export async function readLadder(
 /**
  * One block per open ticket, plus a header.
  *
- * The header says the completed count out loud BECAUSE it is usually zero on this board: nobody
- * closes these todos, so an open row is not evidence the work is undone, and a reader who does
- * not know that will start a ticket that shipped a week ago. Two sessions nearly did.
+ * The header says the completed count out loud because an open row is not evidence the work is
+ * undone — a reader who does not know that will start a ticket that shipped a week ago, and two
+ * sessions nearly did.
+ *
+ * The note used to assert "nobody closes todos on this board" as the REASON for a zero. That
+ * claim was unfounded: the reader was passing `?status=`, which returns only open todos, so the
+ * count was always zero no matter who had closed what. The advice survived the correction; the
+ * stated reason did not. It now says what is actually known.
  */
 export function renderLadder(ladder: Ladder, descriptionChars = 300): string {
   const lines: string[] = [
@@ -126,8 +143,9 @@ export function renderLadder(ladder: Ladder, descriptionChars = 300): string {
     + `${ladder.open.length + ladder.completedCount} TOTAL  across ${ladder.groupCount} group(s)`,
   ];
   if (ladder.completedCount === 0 && ladder.open.length > 0) {
-    lines.push('NOTE: 0 completed. Nobody closes todos on this board, so an OPEN row is not');
-    lines.push('      evidence the work is undone. Check the code and git history first.');
+    lines.push('NOTE: 0 completed on this board. An OPEN row is not evidence the work is undone --');
+    lines.push('      tickets here are often shipped and then left open. Read the ticket comments');
+    lines.push('      and the git history before starting anything.');
   }
   for (const t of ladder.open) {
     lines.push('');
