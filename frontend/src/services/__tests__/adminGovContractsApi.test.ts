@@ -1,10 +1,10 @@
 import { adminGovCockpitApi } from '../adminGovContractsApi';
-import api from '../utils/api';
+import api from '../../utils/api';
 
 // The whole point of the admin adapter is that it posts to the ADMIN gov-contracts routes (admin token),
 // NOT the student portal routes. These assert the exact URL + body for each action, so a regression that
 // routes management's clicks to a participant-only portal endpoint fails here.
-jest.mock('../utils/api', () => ({ __esModule: true, default: { get: jest.fn(), post: jest.fn() } }));
+jest.mock('../../utils/api', () => ({ __esModule: true, default: { get: jest.fn(), post: jest.fn() } }));
 
 const mockedPost = (api as unknown as { post: jest.Mock }).post;
 
