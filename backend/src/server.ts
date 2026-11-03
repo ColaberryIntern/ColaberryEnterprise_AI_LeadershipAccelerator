@@ -184,6 +184,7 @@ import { ensureCapeGovernanceSchema } from './db/ensureCapeGovernanceSchema';
 import { ensureCapeAiPulseExposureSchema } from './db/ensureCapeAiPulseExposureSchema';
 import { ensureAgentDomainProjectSchemaGuarded } from './db/ensureAgentDomainProjectSchema';
 import { ensureAgentDomainChangeRequestSchemaGuarded } from './db/ensureAgentDomainChangeRequestSchema';
+import { ensureAgentDomainToolRequestSchemaGuarded } from './db/ensureAgentDomainToolRequestSchema';
 
 // Import models to register associations before sync
 import './models';
@@ -3168,6 +3169,10 @@ async function start(): Promise<void> {
   // failure path is testable, and it cannot reject, so this await is safe bare. The table is
   // additive and `IF NOT EXISTS`, so this is a no-op on every boot after the first.
   await ensureAgentDomainChangeRequestSchemaGuarded();
+  // AF11.1 tool-request detail. AFTER the call above, not beside it: the detail table's primary key
+  // references `agent_domain_change_requests(id)`, so on a database where the parent does not exist
+  // yet the `CREATE` would fail and this table would be missing with no obvious reason why.
+  await ensureAgentDomainToolRequestSchemaGuarded();
   // Colaberry Commons — seed the 10 always-open fruit video rooms (idempotent).
   // Gated on the feature flag so it only populates envs where Rooms is enabled.
   if (env.communityRoomsEnabled) {

@@ -10,6 +10,7 @@ import {
   ChangeRequestNotFoundError,
   ChangeRequestRefusedError,
   DomainNotYoursError,
+  ToolRequestRefusedError,
   decideChangeRequest,
   fileChangeRequest,
   listAllChangeRequests,
@@ -115,6 +116,19 @@ function respondToError(
     res.status(400).json({ error: 'Invalid input', issues: err.issues });
     return;
   }
+  // AF11.1 — an incomplete tool request. 400, because the body is not yet usable, but NEVER a
+  // generic one: `issues` carries a rule code and a sentence per field, so the person filing is
+  // told which field to go and fill in rather than that their request was rejected.
+  if (err instanceof ToolRequestRefusedError) {
+    log({
+      ...base,
+      level: 'warn',
+      error_class: 'ToolRequestRefusedError',
+      context: { action: ctx.action, rules: err.issues.map((i) => i.rule) },
+    });
+    res.status(400).json({ error: err.message, issues: err.issues });
+    return;
+  }
   if (err instanceof ActorNotResolvedError || err instanceof DomainNotYoursError) {
     log({ ...base, level: 'warn' });
     res.status(403).json({ error: (err as Error).message });
@@ -150,6 +164,7 @@ export async function handleFileChangeRequest(req: Request, res: Response): Prom
       domainKey: body.domain_key,
       title: body.title,
       description: body.description ?? null,
+      toolRequest: body.tool_request ?? null,
     });
     log({
       level: 'info', outcome: 'success', duration_ms: Date.now() - startedAt,
