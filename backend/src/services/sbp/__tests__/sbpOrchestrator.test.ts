@@ -171,6 +171,16 @@ describe('startBuild', () => {
     expect(call.document).toContain('Expanded detail');
   });
 
+  it('passes the projectId so the story-authorization gate is REACHED (L8.4)', async () => {
+    // The gate at decomposeService is guarded by `if (opts.projectId)`. Before L8.4 the
+    // orchestrator omitted it, so the gate — wired everywhere else — never fired on the live
+    // path. This is the one assertion that would catch that regression returning.
+    await startBuild(INPUT as any);
+    await flush();
+    const call = mockDecompose.mock.calls[0][0];
+    expect(call.projectId).toBe(PROJECT);
+  });
+
   it('records a gate-clean plan as drafted and then does not stop there', async () => {
     await startBuild(INPUT as any);
     await flush();

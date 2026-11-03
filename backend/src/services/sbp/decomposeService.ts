@@ -27,6 +27,7 @@ import {
   storyAuthorizationFor,
   StoryNotAuthorizedError,
 } from './storyAuthorization';
+import { FLAGS } from '../../config/featureFlags';
 
 /** Bounded per CLAUDE.md: no unbounded external call. Decomposition is a big completion. */
 const REQUEST_TIMEOUT_MS = 240_000;
@@ -133,14 +134,44 @@ export async function decomposeBuild(opts: DecomposeOptions): Promise<DecomposeR
   const model = opts.model || process.env.SBP_DECOMPOSE_MODEL || 'gpt-4o';
   const client = opts.client ?? defaultClient();
 
-  // STORY AUTHORIZATION (P6-T2). Generating stories is the step that needs an approved
+  // STORY AUTHORIZATION (P6-T2 / L8.4). Generating stories is the step that needs an approved
   // blueprint; refining requirements is not, which is why `extractRequirements` has no such
   // check. Consulted BEFORE the model call, so a refusal costs nothing and cannot half-produce
   // a plan. A no-op while `ENABLE_PROJECT_LIFECYCLE` is off, like every other gate this
   // programme has shipped.
+  //
+  // WIRED but OBSERVE-ONLY by default (L8.4). The orchestrator now passes `projectId`, so the
+  // gate is reached on every build. `FLAGS.sbpStoryGateEnforce` decides what a refusal does:
+  // off -> log the would-be refusal and proceed (so arming the wiring cannot break the 20
+  // post-cutoff builds that currently cannot pass it); on -> throw, a hard stop. See the flag's
+  // own comment for the production measurement behind that default.
   if (opts.projectId) {
-    const verdict = await storyAuthorizationFor(opts.projectId);
-    if (!verdict.authorized) throw new StoryNotAuthorizedError(verdict);
+    if (FLAGS.sbpStoryGateEnforce) {
+      // ENFORCE. A refusal stops the build, and a gate-read error PROPAGATES (fail closed): a
+      // build must not slip past enforcement because the gate's own lookup hiccuped.
+      const verdict = await storyAuthorizationFor(opts.projectId);
+      if (!verdict.authorized) throw new StoryNotAuthorizedError(verdict);
+    } else {
+      // OBSERVE (default). Consult and LOG, but never let a gate we are only watching break a
+      // build. A refusal is recorded; an ERROR in the gate read is recorded too (not swallowed
+      // silently — CLAUDE.md forbids that) and generation proceeds, because the gate adds a DB
+      // read this live path did not make before and an infra blip there must not fail a build
+      // that observe mode is explicitly not enforcing.
+      try {
+        const verdict = await storyAuthorizationFor(opts.projectId);
+        if (!verdict.authorized) {
+          log('sbp_story_gate_would_refuse', opts.correlationId, 'partial', {
+            projectId: opts.projectId, reason: verdict.reason, gaps: verdict.gaps, mode: 'observe',
+          });
+        }
+      } catch (err) {
+        log('sbp_story_gate_observe_error', opts.correlationId, 'partial', {
+          projectId: opts.projectId, mode: 'observe',
+          error_class: (err as { constructor?: { name?: string } })?.constructor?.name ?? 'Error',
+          message: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
   }
 
   const userPrompt = opts.requirements
