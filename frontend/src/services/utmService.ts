@@ -139,6 +139,21 @@ export function getUTMPayloadFields(): {
   };
 }
 
+/** The UTM tags on the current URL, or null when it carries none. */
+function utmFromCurrentUrl(): UTMParams | null {
+  try {
+    const p = new URLSearchParams(window.location.search);
+    const get = (k: string) => p.get(k) || '';
+    const tags = {
+      utmSource: get('utm_source'), utmMedium: get('utm_medium'), utmCampaign: get('utm_campaign'),
+      utmContent: get('utm_content'), utmTerm: get('utm_term'),
+    };
+    return Object.values(tags).some(Boolean) ? tags : null;
+  } catch {
+    return null;
+  }
+}
+
 export interface SignupAcquisitionFields {
   utm_source?: string;
   utm_campaign?: string;
@@ -160,10 +175,17 @@ const PAGE_URL_MAX = 500;
  * accept: an empty value is omitted (absent means "not known"), an over-long value is omitted rather than truncated
  * (a cut-off id is a wrong id), and page_url is sent only when it is http(s) and within 500 characters. A signup must
  * never fail because of a tracking value.
+ *
+ * C104: the tags are read from THIS page's URL first, storage second. Only the public layouts call captureUTMFromURL,
+ * and the ad lands on a builder page outside the app, so on /portal/signup the storage is normally empty: measured
+ * 0 of 53 ad signups storing utm_content while 443 of 446 ad URLs carried it. A URL with any UTM tag is taken whole
+ * (one ad click's tags, never mixed with an older visit's); a bare URL falls back to what storage holds.
  */
 export function getSignupAcquisitionFields(): SignupAcquisitionFields {
-  const { utmCampaign, utmContent, utmTerm } = getUTMParams();
-  const { utm_source: source } = getUTMPayloadFields();
+  const fromUrl = utmFromCurrentUrl();
+  const stored = getUTMParams();
+  const { utmSource, utmMedium, utmCampaign, utmContent, utmTerm } = fromUrl ?? stored;
+  const source = utmMedium ? `${utmSource || 'direct'}|${utmMedium}` : utmSource || undefined;
   const out: SignupAcquisitionFields = {};
   const put = (key: Exclude<keyof SignupAcquisitionFields, 'page_url'>, v: string | undefined) => {
     const s = (v || '').trim();
