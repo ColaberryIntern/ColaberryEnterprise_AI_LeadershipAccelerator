@@ -53,6 +53,7 @@ import {
 } from '../services/zoom/zoomHostRegistry';
 import { roomsSharingAHost, roomHostUsage, ROOM_HOST_PURPOSE } from '../services/zoom/roomHostAllocator';
 import { parseRegisterArgs, REGISTER_USAGE } from './lib/zoomHostArgs';
+import { registerMessageLines } from './lib/zoomHostRegisterMessage';
 
 function pad(s: unknown, n: number): string {
   const v = String(s ?? '');
@@ -143,16 +144,12 @@ async function cmdRegister(argv: string[]): Promise<number> {
   }
   const { email, label, priority, purpose } = parsed.args;
   await registerHost({ hostEmail: email, label, purpose, priority });
-  // Registering deliberately does NOT make a host usable. It must still be proved.
-  console.log(`Registered ${email} for purpose "${purpose}". It is NOT allocatable until it verifies — run:`);
-  console.log('  npx ts-node src/scripts/zoomHosts.ts verify');
-  if (purpose === 'any') {
-    // Said at the moment the choice is made, because by the time it shows up in
-    // `rooms` a room already holds the link and re-minting changes its join URL.
-    console.log('');
-    console.log('"any" means BOTH a room and a rehearsal can take this host, and they');
-    console.log('prefer the same one. With more than one host, use --purpose=room or');
-    console.log('--purpose=practice instead.');
+  // Read back rather than assume: registering a NEW host leaves it unverified, but
+  // re-registering an existing one PRESERVES its verification, and the operator needs
+  // to know which of the two just happened before relying on the host.
+  const row = (await listHosts()).find((h) => h.host_email.toLowerCase() === email.toLowerCase());
+  for (const line of registerMessageLines({ email, purpose, verifiedAt: row?.verified_at ?? null })) {
+    console.log(line);
   }
   return 0;
 }
