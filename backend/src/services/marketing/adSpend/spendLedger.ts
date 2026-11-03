@@ -2,6 +2,7 @@ import { QueryTypes } from 'sequelize';
 import { sequelize } from '../../../config/database';
 import type { SpendSource, SpendFact } from './spendAllocation';
 import type { SpendInput } from './spendInput';
+import { mergeSourceShapes } from './utmSource';
 
 /**
  * Reads and writes of marketing_spend_facts. Every write is an upsert on the table's identity
@@ -138,9 +139,24 @@ export async function deleteSpend(id: number): Promise<boolean> {
 
 export interface KnownCampaign { utmSource: string | null; utmCampaign: string; signups: number; lastSignup: string }
 
+/** Suggestions returned to the entry form. */
+const KNOWN_CAMPAIGN_LIMIT = 100;
+
+/**
+ * Raw groups read before merging. Larger than the limit because two shapes of `utm_source` on the
+ * same campaign arrive as two rows and leave as one, so reading exactly the limit would return
+ * fewer suggestions than asked for. It is still a bound: with more than this many distinct
+ * source-and-campaign pairs in the window, the suggestion list is the most recent of them.
+ */
+const KNOWN_CAMPAIGN_ROW_CAP = 300;
+
 /**
  * The utm_campaign values signups actually arrived with, for the entry form's suggestions. Typing
  * spend against a campaign id nobody signed up through is how spend ends up matched to nothing.
+ *
+ * The two shapes of `utm_source` are collapsed after the read rather than in the GROUP BY, so the
+ * rule lives in one place, in TypeScript, where it is unit-tested — instead of being written twice
+ * and left free to drift apart.
  */
 export async function knownCampaigns(sources: string[], days = 180): Promise<KnownCampaign[]> {
   const rows = await sequelize.query<{ utm_source: string | null; utm_campaign: string; signups: number; last_signup: string }>(
@@ -151,10 +167,10 @@ export async function knownCampaigns(sources: string[], days = 180): Promise<Kno
         AND l.created_at >= now() - (:days || ' days')::interval
       GROUP BY l.utm_source, l.utm_campaign
       ORDER BY max(l.created_at) DESC
-      LIMIT 100`,
-    { type: QueryTypes.SELECT, replacements: { sources, days: String(days) } },
+      LIMIT :cap`,
+    { type: QueryTypes.SELECT, replacements: { sources, days: String(days), cap: KNOWN_CAMPAIGN_ROW_CAP } },
   );
-  return rows.map((r) => ({
+  return mergeSourceShapes(rows.map((r) => ({
     utmSource: r.utm_source, utmCampaign: r.utm_campaign, signups: r.signups, lastSignup: new Date(r.last_signup).toISOString(),
-  }));
+  })), KNOWN_CAMPAIGN_LIMIT);
 }

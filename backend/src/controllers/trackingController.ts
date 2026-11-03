@@ -14,6 +14,13 @@ import { env } from '../config/env';
 import { logAgentExecution } from '../services/governanceService';
 import { redactForLogs } from '../utils/piiRedaction';
 import {
+  pickAttributionSession,
+  utmBackfillUpdates,
+  UTM_SESSION_LOOKBACK,
+  UtmFields,
+  UtmSession,
+} from '../services/marketing/utmBackfill';
+import {
   resolvePublicContext,
   resolveContextByHostname,
   hostnameFromUrl,
@@ -594,24 +601,44 @@ export async function handleIdentify(req: Request, res: Response): Promise<void>
     // Link visitor to lead (backfills all sessions + page events)
     await resolveIdentity(visitorId, lead.id);
 
-    // Backfill campaign attribution from visitor session
+    // Backfill campaign attribution from the visitor's sessions.
+    //
+    // Reads the recent sessions newest first and attributes to the newest one that actually
+    // carries a campaign, rather than to the newest session outright: sessions are reused for 30
+    // minutes and the React tracker's own flush sends no UTM fields, so "newest" is routinely an
+    // untagged session sitting in front of the tagged ad click. Which session, and which fields to
+    // take, is decided in services/marketing/utmBackfill.ts, where it is unit-tested. How far back
+    // it reaches is bounded there as well — by session count, because this runs on a request
+    // already racing the page navigation, and by the age of the click, because reaching back
+    // without a limit would turn last-touch attribution into first-touch.
     try {
       const { VisitorSession } = require('../models');
-      const latestSession = await VisitorSession.findOne({
+      const sessions = await VisitorSession.findAll({
         where: { visitor_id: visitorId },
         order: [['created_at', 'DESC']],
+        limit: UTM_SESSION_LOOKBACK,
       });
-      if (latestSession) {
-        const utmUpdates: Record<string, any> = {};
-        if ((latestSession as any).utm_source && !lead.utm_source) utmUpdates.utm_source = (latestSession as any).utm_source;
-        if ((latestSession as any).utm_campaign && !lead.utm_campaign) utmUpdates.utm_campaign = (latestSession as any).utm_campaign;
-        if ((latestSession as any).utm_medium && !lead.utm_medium) utmUpdates.utm_medium = (latestSession as any).utm_medium;
-        if (Object.keys(utmUpdates).length > 0) {
-          await lead.update(utmUpdates);
-          console.log(`[Tracking] Backfilled UTM for lead ${lead.id}: ${JSON.stringify(utmUpdates)}`);
-        }
+      const utmUpdates = utmBackfillUpdates(pickAttributionSession(sessions as UtmSession[]), lead as UtmFields);
+      if (Object.keys(utmUpdates).length > 0) {
+        await lead.update(utmUpdates);
+        // Field names only. The values are campaign and creative ids, which are not secrets, but
+        // the names are what a failure triage needs and the values are already in the row.
+        console.log(`[Tracking] Backfilled UTM for lead ${lead.id}: ${Object.keys(utmUpdates).join(', ')}`);
       }
-    } catch { /* non-blocking */ }
+    } catch (err: any) {
+      // Attribution rides on top of a lead that already exists, so losing it must not fail the
+      // identify call. Losing it SILENTLY is how these gaps stayed invisible for as long as they
+      // did: the `catch {}` that used to sit here made a broken backfill and a visitor with no ad
+      // click look exactly alike from the outside.
+      console.error(JSON.stringify({
+        level: 'error',
+        service: 'backend',
+        event: 'utm_backfill_failed',
+        outcome: 'failure',
+        error_class: err?.name && err.name !== 'Error' ? err.name : 'UtmBackfillFailed',
+        context: { lead_id: lead.id },
+      }));
+    }
 
     console.log(`[Tracking] Identified visitor ${fingerprint.substring(0, 12)} as lead ${lead.id} (${redactForLogs(lead.name)}, ${redactForLogs(emailLower)})${created ? ' [NEW]' : ''}`);
 
