@@ -12,6 +12,7 @@ import { todayFeedApi, type TodayFeedItem } from './todayFeedApi';
 import { onCardCollected } from '../../../services/pointsFx';
 import { filterExcluded } from './todayFeedDedupe';
 import { classifyCategories, countByCategory, type Category } from './todayCategoryFilter';
+import { useSeenTracker } from './useSeenTracker';
 
 const PAGE = 10;
 // CAPE Phase 5 defense-in-depth (design doc §10, §16 Phase 5): if excluding
@@ -108,6 +109,8 @@ const TodayFeedV2: React.FC<Props> = ({ fallbackCards, onOpen, onWorkspace, onCo
   const [cursor, setCursor] = useState(0);
   const [done, setDone] = useState(false);
   const [error, setError] = useState(false);
+  // C107: the server sent an Explorer's five-item starter lineup; the end of the list says what opens the rest.
+  const [starter, setStarter] = useState(false);
   const [visible, setVisible] = useState(PAGE); // fallback reveal count
   const loadingRef = useRef(false);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
@@ -126,14 +129,14 @@ const TodayFeedV2: React.FC<Props> = ({ fallbackCards, onOpen, onWorkspace, onCo
   const fetchFilteredPage = useCallback(async (
     startCursor: number,
     roundsLeft = MAX_BACKFILL_ROUNDS,
-  ): Promise<{ items: TodayFeedItem[]; nextCursor: number; exhausted: boolean }> => {
+  ): Promise<{ items: TodayFeedItem[]; nextCursor: number; exhausted: boolean; starter: boolean }> => {
     const page = await todayFeedApi.list(startCursor, PAGE, seedRef.current);
     const filtered = filterExcluded(page.items, excludeRefsRef.current);
     if (filtered.length >= page.items.length || page.exhausted || roundsLeft <= 0) {
-      return { items: filtered, nextCursor: page.nextCursor, exhausted: page.exhausted };
+      return { items: filtered, nextCursor: page.nextCursor, exhausted: page.exhausted, starter: !!page.starter };
     }
     const more = await fetchFilteredPage(page.nextCursor, roundsLeft - 1);
-    return { items: [...filtered, ...more.items], nextCursor: more.nextCursor, exhausted: more.exhausted };
+    return { items: [...filtered, ...more.items], nextCursor: more.nextCursor, exhausted: more.exhausted, starter: more.starter };
   }, []);
 
   // Initial load: prefer the real cursor feed; fall back to the looped classroom
@@ -146,6 +149,7 @@ const TodayFeedV2: React.FC<Props> = ({ fallbackCards, onOpen, onWorkspace, onCo
         setRows(page.items.map((item) => ({ item, card: adapt(item) })));
         setCursor(page.nextCursor);
         setDone(page.exhausted);
+        setStarter(page.starter);
         setMode('v2');
       })
       .catch(() => { if (alive) setMode('fallback'); });
@@ -203,6 +207,7 @@ const TodayFeedV2: React.FC<Props> = ({ fallbackCards, onOpen, onWorkspace, onCo
     window.setTimeout(() => setRows((prev) => prev.filter((r) => r.card.id !== id)), 1400);
   }), []);
   const collectHandler = onComplete;
+  const track = useSeenTracker(mode === 'v2');
 
   // CAPE Phase 5 real filter chips: report live counts whenever the loaded
   // set changes (never on a filter change — that only affects what's
@@ -221,16 +226,19 @@ const TodayFeedV2: React.FC<Props> = ({ fallbackCards, onOpen, onWorkspace, onCo
       {mode === 'loading' && <div className="fc-empty">Loading your feed…</div>}
 
       {mode === 'v2' && visibleRows.map(({ item, card }, i) => (
-        <TimelineCard
-          key={`${item.ref}-${i}`}
-          card={card}
-          onOpen={(c) => handleOpen(c, item.ref)}
-          onWorkspace={onWorkspace}
-          onComplete={collectHandler}
-        />
+        <div key={`${item.ref}-${i}`} ref={track(item.ref)} data-today-ref={item.ref}>
+          <TimelineCard
+            card={card}
+            onOpen={(c) => handleOpen(c, item.ref)}
+            onWorkspace={onWorkspace}
+            onComplete={collectHandler}
+          />
+        </div>
       ))}
       {mode === 'v2' && rows.length === 0 && <div className="fc-empty">Your feed is warming up — check back soon.</div>}
-      {mode === 'v2' && done && rows.length > 0 && <div className="fc-empty">You're all caught up for now.</div>}
+      {mode === 'v2' && done && rows.length > 0 && (starter
+        ? <div className="fc-empty" data-testid="te-feed-starter-end">Finish your first lesson and your full feed opens up.</div>
+        : <div className="fc-empty">You're all caught up for now.</div>)}
       {mode === 'v2' && error && !done && (
         <div className="fc-empty">
           Couldn’t load more.{' '}

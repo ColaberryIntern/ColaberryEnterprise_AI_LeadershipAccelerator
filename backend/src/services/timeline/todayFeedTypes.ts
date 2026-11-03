@@ -66,6 +66,8 @@ export interface TodayPage {
   items: TodayFeedItem[];
   nextCursor: number;
   exhausted: boolean;          // true only when even ambient produced nothing (empty pools)
+  /** C107: the Explorer's pre-first-win starter lineup (todayStarterFeed.ts): five items, no further pages. */
+  starter?: boolean;
 }
 
 export interface ImpressionRow {

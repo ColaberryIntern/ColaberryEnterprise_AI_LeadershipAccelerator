@@ -15,6 +15,9 @@ bash scripts/audits/explorer-ad-funnel/run.sh cutover                   # before
 bash scripts/audits/explorer-ad-funnel/run.sh returnpath                # C97: who comes back, and what stops them
 bash scripts/audits/explorer-ad-funnel/run.sh feed                      # C98: what the Today feed holds, and what is opened
 bash scripts/audits/explorer-ad-funnel/run.sh scorecard                 # release scorecard: first lesson, returns, paid, ad tags
+bash scripts/audits/explorer-ad-funnel/run.sh path                      # C101: room-to-room route through the campus
+bash scripts/audits/explorer-ad-funnel/run.sh signin                    # C106: sign-in link uses and invalid links
+bash scripts/audits/explorer-ad-funnel/run.sh seen                      # C107: cards seen on Today, and opens from feed vs banner
 bash scripts/audits/explorer-ad-funnel/run.sh funnel since=2026-11-01   # a different window
 bash scripts/audits/explorer-ad-funnel/run.sh cutover "cutover='2026-11-15 00:00:00+00'"
 ```

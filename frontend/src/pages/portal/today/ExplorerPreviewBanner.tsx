@@ -10,6 +10,8 @@ type Props = {
   firstWinPending: boolean;
   /** The lesson to start with (findFirstLessonCard); null hides the button. */
   firstLesson: TimelineFeedCard | null;
+  /** C107: after the first win, the single next card (findFirstLessonCard again); null keeps the enroll-only banner. */
+  nextLesson?: TimelineFeedCard | null;
   onStartLesson: (card: TimelineFeedCard) => void;
   /** C102: scroll to "Your timeline" below the fold. */
   onSeeTimeline: () => void;
@@ -46,9 +48,14 @@ const STYLE = {
  * C102 (Ali, 2026-10-31): the timeline sits below the fold and nothing said so, so Explorers could miss that the lessons and
  * assignments are there at all. Both versions now say it and offer a button that scrolls to it. "More loads as you go", not
  * "unlimited": the feed pages and does have an end.
+ *
+ * C107 (C98 recommendation 2, Nov 2026): only 53 of 325 Explorers on Today scrolled at all, and 24 of the 25 who opened
+ * a card did it from somewhere other than the feed, mostly this banner's first-lesson button. So after the first win
+ * the banner offers the single next card the same way, with the enroll ask beside it instead of alone.
  */
 const ExplorerPreviewBanner: React.FC<Props> = (p) => {
   const pending = p.firstWinPending;
+  const next = pending ? null : p.nextLesson ?? null;
   return (
     <div className="te-card" style={STYLE.card} data-testid="te-explorer-banner" data-first-win={pending ? 'pending' : 'done'}>
       <div style={STYLE.eyebrow}>
@@ -59,6 +66,11 @@ const ExplorerPreviewBanner: React.FC<Props> = (p) => {
         <>
           <h2 style={STYLE.h2}>Start with your first lesson</h2>
           <p style={STYLE.p}>{p.firstLesson ? <>Your first lesson is ready: <b>{p.firstLesson.title}</b>. Finish it and the rest of the program opens up from there.</> : 'Lessons, live events and the community are open to you. Pick anything below to start.'}</p>
+        </>
+      ) : next ? (
+        <>
+          <h2 style={STYLE.h2}>Your next lesson is ready</h2>
+          <p style={STYLE.p}>Up next: <b>{next.title}</b>. Enroll in the AI Systems Architect Accelerator any time to unlock all 12 weeks, the live build classes and your certification.</p>
         </>
       ) : (
         <>
@@ -78,7 +90,12 @@ const ExplorerPreviewBanner: React.FC<Props> = (p) => {
       <div style={STYLE.ctas}>
         {pending
           ? p.firstLesson && <button type="button" className="te-btn cherry" onClick={() => p.onStartLesson(p.firstLesson!)} data-testid="te-banner-first-lesson">Start your first lesson →</button>
-          : <Link className="te-btn cherry" to="/portal/settings?tab=subscription" data-testid="te-banner-enroll">Enroll to unlock →</Link>}
+          : next
+            ? <>
+                <button type="button" className="te-btn cherry" onClick={() => p.onStartLesson(next)} data-testid="te-banner-next-lesson">Open your next lesson →</button>
+                <Link className="te-btn" style={STYLE.ghost} to="/portal/settings?tab=subscription" data-testid="te-banner-enroll">Enroll to unlock →</Link>
+              </>
+            : <Link className="te-btn cherry" to="/portal/settings?tab=subscription" data-testid="te-banner-enroll">Enroll to unlock →</Link>}
         <button type="button" className="te-btn" style={STYLE.ghost} onClick={p.onSeeTimeline} data-testid="te-banner-see-timeline">See your timeline ↓</button>
         {p.showRsvp && <button type="button" className="te-btn" style={STYLE.ghost} onClick={p.onRsvp} disabled={p.busy || p.rsvped}>{p.rsvped ? "RSVP'd for the event" : 'RSVP for the event'}</button>}
       </div>

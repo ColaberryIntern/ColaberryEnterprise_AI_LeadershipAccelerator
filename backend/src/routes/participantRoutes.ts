@@ -96,7 +96,7 @@ import {
   handleArchitectState, handleArchitectAdvance, handleArchitectInterview,
   handleArchitectEvaluate, handleArchitectComplete, handleArchitectLedger,
 } from '../controllers/runtimeController';
-import { handleGetToday, handleTodayInteract } from '../controllers/todayController';
+import { handleGetToday, handleTodayInteract, handleTodayEvents } from '../controllers/todayController';
 import { env } from '../config/env';
 import projectRoutes from './projectRoutes';
 import studentOpsRoutes from './studentOpsRoutes';
@@ -236,6 +236,8 @@ router.get('/api/portal/runtime/readiness', requireParticipant, handleReadiness)
 // Today Timeline v2 — never-ending engagement feed (flag-gated in the controller).
 router.get('/api/portal/runtime/today', requireParticipant, handleGetToday);
 router.post('/api/portal/runtime/today/:cardRef/interact', requireParticipant, handleTodayInteract);
+// C107: cards seen on Today and opens from the banner (measurement only; never fails the page).
+router.post('/api/portal/runtime/today/events', requireParticipant, handleTodayEvents);
 router.get('/api/portal/runtime/notebook', requireParticipant, handleListNotes);
 router.post('/api/portal/runtime/notebook', requireParticipant, handleCreateNote);
 router.delete('/api/portal/runtime/notebook/:id', requireParticipant, handleDeleteNote);

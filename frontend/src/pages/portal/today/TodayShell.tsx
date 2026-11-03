@@ -41,6 +41,7 @@ import { fetchSkillProfile, LearnerSkillProfile } from '../../../services/capeAp
 import { useTodayNextStep } from './useTodayNextStep';
 import TodayNextStepCondensed from './TodayNextStepCondensed';
 import ExplorerPreviewBanner from './ExplorerPreviewBanner';
+import { recordBannerOpen } from './todayFeedApi';
 import { needsFirstWin, findFirstLessonCard, FIRST_LESSON_PARAM } from './explorerFirstWin';
 
 const TodayShell: React.FC = () => {
@@ -188,6 +189,10 @@ const TodayShell: React.FC = () => {
   // C91: an Explorer with no first win yet gets one job, their first lesson; the enroll ask waits until after it
   const firstWinPending = needsFirstWin(schedule);
   const firstLesson = useMemo(() => (firstWinPending ? findFirstLessonCard(curriculum, curriculumBuckets) : null), [firstWinPending, curriculum, curriculumBuckets]);
+  // C107: after an explicit first win the banner offers the next card; banner opens are recorded like feed opens
+  const firstWinDone = !!schedule?.is_explorer && schedule.first_win === true;
+  const nextLesson = useMemo(() => (firstWinDone ? findFirstLessonCard(curriculum, curriculumBuckets) : null), [firstWinDone, curriculum, curriculumBuckets]);
+  const openFromBanner = useCallback((card: TimelineFeedCard) => { recordBannerOpen(card.id); openCard(card); }, [openCard]);
   // The campus gate's "Start your first lesson" lands here with ?first=1: open that lesson once, as soon as it is known
   const firstOpened = React.useRef(false);
   useEffect(() => {
@@ -353,7 +358,7 @@ const TodayShell: React.FC = () => {
       </div>
 
       {schedule?.is_explorer && (
-        <ExplorerPreviewBanner firstWinPending={firstWinPending} firstLesson={firstLesson} onStartLesson={openCard}
+        <ExplorerPreviewBanner firstWinPending={firstWinPending} firstLesson={firstLesson} nextLesson={nextLesson} onStartLesson={openFromBanner}
           onSeeTimeline={scrollToAnchor('te-timeline-anchor')}
           fcCd={fcCd} ohCd={ohCd} ohTitle={oh?.title ?? null} showRsvp={!!oh} rsvped={rsvped} busy={busy} onRsvp={doRsvp} />
       )}

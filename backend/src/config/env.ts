@@ -312,6 +312,8 @@ export const env = {
   // Bounded top-up size for the above — kept small and tunable so the feature
   // stays "economical" (Ali's own requirement) without a redeploy to retune it.
   todayDailyRefreshTopupSize: Number(process.env.TODAY_DAILY_REFRESH_TOPUP_SIZE || 4),
+  // C107: five starter items before an Explorer's first win (todayStarterFeed.ts). Default ON; =false is the kill switch.
+  todayExplorerStarterFeed: process.env.TODAY_EXPLORER_STARTER_FEED !== 'false',
   // CAPE Phase 4 — the learning-value ranker (design doc §9, §16 Phase 4). Reorders
   // the ANCHORED candidate queue in todayFeedComposer.ts by an explainable
   // skill-gap/prerequisite/goal-fit score instead of raw gatherAnchored() order.

@@ -33,8 +33,8 @@
 import { randomUUID } from 'crypto';
 import { QueryTypes } from 'sequelize';
 import { sequelize } from '../../config/database';
-import TimelineCard from '../../models/TimelineCard';
-import { isCardServable } from './curriculumScope';
+import { completedCardIds, unservableCardIds, collectedAmbientRefs } from './todayFeedServeFilters';
+import { isStarterFeedLearner, pickStarterItems } from './todayStarterFeed';
 import { resolve as resolveType } from './typeRegistry';
 import { pickAmbientBatch, AMBIENT_PROVIDERS, AMBIENT_REPEAT_COOLDOWN_DAYS, type AmbientProviderSlug, type AmbientItem } from './ambientPool';
 import { planSlots, interleaveGroups, groupByType, isPrecedenceImpression, isWithinAmbientCooldown, type TodayItemKind } from './todayFeedPlan';
@@ -295,120 +295,6 @@ async function extendFeed(enrollmentId: string, existing: ImpressionRow[], need:
   return out;
 }
 
-/** Card ids the student has already completed — dropped from the served feed so a
- *  finished task disappears off the timeline. Batched, fail-soft (error → none
- *  dropped, never breaks the feed). */
-async function completedCardIds(enrollmentId: string, cardIds: string[]): Promise<Set<string>> {
-  const ids = Array.from(new Set(cardIds.filter((x): x is string => !!x)));
-  if (!ids.length) return new Set();
-  try {
-    const rows = await sequelize.query<{ card_id: string }>(
-      `SELECT card_id FROM timeline_card_progress
-         WHERE enrollment_id = :eid AND status = 'completed' AND card_id IN (:ids)`,
-      { replacements: { eid: enrollmentId, ids }, type: QueryTypes.SELECT },
-    );
-    return new Set(rows.map((r) => r.card_id));
-  } catch (err: any) {
-    console.warn('[todayFeedComposer] completed lookup failed:', err?.message?.split('\n')[0]);
-    return new Set();
-  }
-}
-
-/**
- * Card ids that are no longer SERVABLE — dropped from the served feed because
- * every action against them would 404.
- *
- * The Today feed is an append-only snapshot: `today_feed_impressions` stores a
- * frozen copy of the item and replays it forever, never re-consulting the live
- * row. Meanwhile `generatedContentRetention.pruneGeneratedContent` flips cards
- * from `published` to `archived` on an 18-day cycle, on the documented (and,
- * for this path, false) assumption that "getFeed only returns
- * visibility='published' … so flipping visibility -> 'archived' is the
- * discard". That is true of the Classroom, which reads through `getFeed`; it
- * was never true here.
- *
- * The result a student saw: the card renders, `POST /cards/:id/content` 200s,
- * and then `dwell`/`watch`/`openCard` all 404 "Card not available" — so Collect
- * Points sat frozen at "0s of 120s" through 140 seconds and fifteen heartbeats,
- * the gate could never be satisfied, and the button never appeared. Half of a
- * sampled 40-item feed was dead this way.
- *
- * Uses the shared {@link isCardServable} predicate rather than its own
- * `!== 'published'` — one rule, consulted by both the read side and the write
- * side, because two copies drifting apart is what produced this bug.
- *
- * POSITIVE IDENTIFICATION ONLY, and this is the important part. A card is
- * dropped when a row came back and that row says it is not servable. A card
- * whose row is simply ABSENT from the result is treated as UNKNOWN and KEPT —
- * absence is never read as a verdict.
- *
- * The first cut of this function did infer "missing row ⇒ unservable", on the
- * reasoning that `findByPk` in the action handlers would 404 on it anyway. That
- * was wrong, and an existing test caught it: `Model.findAll` routes through
- * `sequelize.query`, so anything that intercepts or perturbs that layer yields
- * an empty result set, and the inference silently converted it into "every card
- * is dead" — `todayFeedComposer.suppressionSharedPath` went from `["card:kept"]`
- * to `[]`. The asymmetry decides it: keeping a vanished card costs the student a
- * 404 they already get today, while dropping a live one costs them real content
- * for no reason. So only a row that positively states a non-published
- * visibility is allowed to remove anything.
- *
- * Batched, and fail-soft in the same safe direction: on error nothing is
- * dropped, so a database blip degrades to today's behaviour rather than
- * emptying the student's landing page.
- */
-async function unservableCardIds(cardIds: string[]): Promise<Set<string>> {
-  const ids = Array.from(new Set(cardIds.filter((x): x is string => !!x)));
-  if (!ids.length) return new Set();
-  try {
-    const rows = await TimelineCard.findAll({ where: { id: ids }, attributes: ['id', 'visibility'] });
-    return new Set(
-      rows
-        .map((r) => r.get({ plain: true }) as { id: string; visibility: string | null })
-        .filter((r) => !isCardServable(r.visibility))
-        .map((r) => r.id),
-    );
-  } catch (err: any) {
-    console.warn('[todayFeedComposer] servable lookup failed:', err?.message?.split('\n')[0]);
-    return new Set();
-  }
-}
-
-/** Ambient kinds whose points award is keyed on the feed ref itself — `blog:<id>`
- *  (blogReadGateService), `podcast:<id>` and `testimonial:<id>`
- *  (ambientMediaGateService). The points event and the impression share the
- *  exact string, which is what lets "collected" be decided without a join. */
-const COLLECTIBLE_AMBIENT_PREFIXES = ['blog:', 'podcast:', 'testimonial:'] as const;
-const isCollectibleAmbientRef = (ref: string) => COLLECTIBLE_AMBIENT_PREFIXES.some((p) => ref.startsWith(p));
-
-/** Ambient refs the student has already collected points for. Restricted to
- *  `refs` when given (serve-time: "is this placed item collected?"), otherwise
- *  every collected ref on record (generation: "never place these again").
- *  A collected item leaves the feed for good — Ali, 2026-09-11: "a collected
- *  podcast should be removed from the timeline for ever." Fails open to an
- *  empty set: a lookup error must never blank a feed. */
-async function collectedAmbientRefs(enrollmentId: string, refs?: string[]): Promise<Set<string>> {
-  const keys = refs ? Array.from(new Set(refs.filter(isCollectibleAmbientRef))) : null;
-  if (keys && !keys.length) return new Set();
-  try {
-    const rows = keys
-      ? await sequelize.query<{ event_key: string }>(
-        `SELECT event_key FROM student_points_events
-           WHERE enrollment_id = :eid AND event_key IN (:keys)`,
-        { replacements: { eid: enrollmentId, keys }, type: QueryTypes.SELECT },
-      )
-      : await sequelize.query<{ event_key: string }>(
-        `SELECT event_key FROM student_points_events
-           WHERE enrollment_id = :eid AND (${COLLECTIBLE_AMBIENT_PREFIXES.map((_, i) => `event_key LIKE :p${i}`).join(' OR ')})`,
-        { replacements: { eid: enrollmentId, ...Object.fromEntries(COLLECTIBLE_AMBIENT_PREFIXES.map((p, i) => [`p${i}`, `${p}%`])) }, type: QueryTypes.SELECT },
-      );
-    return new Set(rows.map((r) => r.event_key).filter(isCollectibleAmbientRef));   // same string as the impression ref
-  } catch (err: any) {
-    console.warn('[todayFeedComposer] collected-ambient lookup failed:', err?.message?.split('\n')[0]);
-    return new Set();
-  }
-}
-
 /**
  * The list actually served for a page: the materialised impressions minus cards
  * the student has completed ("finished tasks disappear"), reordered per visit when
@@ -482,16 +368,22 @@ export async function getTodayPage(enrollmentId: string, cursor = 0, pageSize = 
   const size = Math.min(MAX_PAGE_SIZE, Math.max(1, Math.floor(pageSize)));
   const from = Math.max(0, Math.floor(cursor));
   const targetEnd = from + size;
+  // C107: an Explorer before the first win gets five starter items on the first page and nothing after it
+  // (todayStarterFeed.ts). Generation is untouched: the first page still materialises what it always did.
+  const starter = await isStarterFeedLearner(enrollmentId);
 
   // Read-only "view as": ephemeral fresh feed (no writes), so the viewer sees a
   // live, different-each-refresh timeline rather than the member's frozen set.
   if (opts.readOnly) {
-    const items = await composeReadOnlyPage(enrollmentId, from, size, opts.seed);
+    const items = starter
+      ? (from === 0 ? pickStarterItems(await composeReadOnlyPage(enrollmentId, 0, MAX_PAGE_SIZE, opts.seed)) : [])
+      : await composeReadOnlyPage(enrollmentId, from, size, opts.seed);
     await rehydrateCardItems(items);
     await rehydrateCommunityItems(items);
     await rehydrateProjectItems(items);
     await rehydrateSessionItems(items);
     stampAmbientMediaPoints(items);
+    if (starter) return { items, nextCursor: from + items.length, exhausted: true, starter: true };
     return { items, nextCursor: from + items.length, exhausted: items.length < size };
   }
 
@@ -515,17 +407,18 @@ export async function getTodayPage(enrollmentId: string, cursor = 0, pageSize = 
   // Materialise until enough SURVIVING items fill the page (completed cards were
   // dropped above), or the pools run dry. Bounded so a persistently short pool
   // can never spin.
+  const fillTo = starter ? (from === 0 ? DEFAULT_PAGE_SIZE : 0) : targetEnd;
   let guard = 0;
-  while (served.length < targetEnd && guard++ < 6) {
+  while (served.length < fillTo && guard++ < 6) {
     const before = existing.length;
-    const added = await extendFeed(enrollmentId, existing, targetEnd - served.length + 4);
+    const added = await extendFeed(enrollmentId, existing, fillTo - served.length + 4);
     if (!added.length) { exhausted = true; break; }
     existing = await loadImpressions(enrollmentId);
     if (existing.length === before) { exhausted = true; break; }
     served = await buildServed(enrollmentId, existing, opts.seed);
   }
 
-  const items = served.slice(from, targetEnd);
+  const items = starter ? (from === 0 ? pickStarterItems(served) : []) : served.slice(from, targetEnd);
   // Class, community + session cards are all dynamic — refresh curriculum card
   // text/content, community media/author/text, and session recording/recap from
   // the live rows so the append-only snapshot never shows stale content (all
@@ -538,6 +431,7 @@ export async function getTodayPage(enrollmentId: string, cursor = 0, pageSize = 
   // Pure + synchronous, so it repairs the thousands of frozen `points: {}`
   // impressions on every serve with no backfill and nothing to fail soft.
   stampAmbientMediaPoints(items);
+  if (starter) return { items, nextCursor: from + items.length, exhausted: true, starter: true };
   return { items, nextCursor: from + items.length, exhausted: exhausted && items.length < size };
 }
 

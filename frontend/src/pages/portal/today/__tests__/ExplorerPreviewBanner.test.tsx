@@ -79,6 +79,36 @@ it('"See your timeline" scrolls, and does not replace the main ask', () => {
   expect(q('[data-testid="te-banner-enroll"]')).not.toBeNull();
 });
 
+// C107 (C98 recommendation 2): after the first win the banner offers the single next card, with enroll beside it.
+const next = { id: 'c2', title: 'How a model decides', status: 'available' } as unknown as TimelineFeedCard;
+
+it('after the first win with a next card: that card is the main ask, and enroll sits beside it', () => {
+  const opened: string[] = [];
+  render({ firstWinPending: false, firstLesson: null, nextLesson: next, onStartLesson: (c) => opened.push(c.id) });
+  expect(container.textContent).toContain('Your next lesson is ready');
+  expect(container.textContent).toContain('How a model decides');
+  const b = q('[data-testid="te-banner-next-lesson"]') as HTMLButtonElement;
+  expect(b.textContent).toBe('Open your next lesson →');
+  expect(b.className).toContain('cherry');
+  expect((q('[data-testid="te-banner-enroll"]') as HTMLAnchorElement).getAttribute('href')).toBe('/portal/settings?tab=subscription');
+  expect((q('[data-testid="te-banner-enroll"]') as HTMLAnchorElement).className).not.toContain('cherry');
+  act(() => { b.click(); });
+  expect(opened).toEqual(['c2']);
+  expect(container.textContent!.toLowerCase()).not.toMatch(/\bfree\b/);
+});
+
+it('a next card is ignored while the first win is still pending', () => {
+  render({ nextLesson: next });
+  expect(q('[data-testid="te-banner-next-lesson"]')).toBeNull();
+  expect(q('[data-testid="te-banner-first-lesson"]')).not.toBeNull();
+});
+
+it('after the first win with nothing left open: the enroll-only banner, as before', () => {
+  render({ firstWinPending: false, firstLesson: null, nextLesson: null });
+  expect(q('[data-testid="te-banner-next-lesson"]')).toBeNull();
+  expect((q('[data-testid="te-banner-enroll"]') as HTMLAnchorElement).className).toContain('cherry');
+});
+
 it('no Open House: no RSVP button; RSVP\'d: the button says so and is disabled', () => {
   render({ showRsvp: false });
   expect(container.textContent).not.toContain('RSVP');
