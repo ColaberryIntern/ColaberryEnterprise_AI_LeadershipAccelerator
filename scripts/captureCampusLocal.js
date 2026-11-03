@@ -39,10 +39,10 @@ const HALF = { name: 'half', width: 1100, height: 1000 };
 const REGIONS = { topbar: 'cm-topbar', concierge: 'cm-concierge', arrive: 'cm-arrive', tabbar: 'cm-tabbar', pageBar: 'cm-page-bar',
   pageSide: 'cm-page-side', pageRail: 'cm-page-rail', gateId: 'cm-gate-id', inside: 'cm-inside' };
 
+// a test id, or (for components without one) a CSS selector starting with '.', '[' or a tag
+const selectorOf = (id) => (/^[.[#]|^[a-z]+[.[ ]/.test(id) ? id : `[data-testid="${id}"]`);
 async function visibleBox(page, id) {
-  // a test id, or (for components without one) a CSS selector starting with '.', '[' or a tag
-  const sel = /^[.[#]|^[a-z]+[.[ ]/.test(id) ? id : `[data-testid="${id}"]`;
-  const el = page.locator(sel).first();
+  const el = page.locator(selectorOf(id)).first();
   if (!(await el.count())) return null;
   const box = await el.boundingBox();
   return box && box.width > 0 && box.height > 0 && (await el.isVisible()) ? box : null;
@@ -79,19 +79,38 @@ async function runFidelity(browser) {
         const page = await ctx.newPage();
         // Live views: broadcast discovery is MOCKED here (capture only) so a live broadcast exists on the local stack.
         if (view.needsLive) await page.route('**/api/portal/broadcasts/active', (r) => r.fulfill({ contentType: 'application/json', body: JSON.stringify(LIVE_MOCK) }));
-        const row = { account, size: size.name, view: view.name, missing: [], known: view.known ? view.known(account, size.name) : [], regions: {}, error: null };
+        const list = (k) => (view[k] ? view[k](account, size.name) : []);
+        const row = { account, size: size.name, view: view.name, missing: [], known: list('known'), seed: list('seed'), open: list('open'), regions: {}, error: null };
+        // C23 WP-11: a deliberate difference names its basis (a Section 3 decision, or the real-data rule), or it is an unrecorded gap
+        for (const k of row.known) if (!/^(Q\d+|real data): /.test(k)) row.missing.push('known without a basis (Qn: or real data:): ' + k);
         try {
           await page.goto(base + view.route, { waitUntil: 'networkidle', timeout: 60_000 });
           await page.waitForTimeout(1200);
-          for (const s of (view.steps ? view.steps(account) : [])) {
+          for (const s of (view.steps ? view.steps(account, size.name) : [])) {
             if (s.click) { await page.locator(s.click).first().click({ timeout: 10_000 }); await page.waitForTimeout(900); }
             // settle: a mid-animation view (WP-3 17-travel) checks before the usual 900 ms pause would let the walk finish
             if (s.evaluate) { await page.evaluate(s.evaluate); await page.waitForTimeout(s.settle ?? 900); }
             if (s.wait) await page.waitForTimeout(s.wait);
+            // waitFor: data that arrives on its own clock (a fixed wait missed the board's status line on a loaded machine); a
+            // timeout is not an error here, the required check that follows reports the element as missing
+            if (s.waitFor) await page.waitForSelector(selectorOf(s.waitFor), { state: 'visible', timeout: 15_000 }).catch(() => undefined);
           }
-          for (const id of view.required(account, size.name)) if (!(await visibleBox(page, id))) row.missing.push(id);
-          // WP-1: a view may assert a page fact (the camera back on the whole campus, the URL after Step outside).
-          if (view.assert) { const why = await page.evaluate(view.assert(account, size.name)); if (why) row.missing.push(`assert: ${why}`); }
+          const required = view.required(account, size.name);
+          if (view.snapshot) {
+            // A mid-animation view (17-travel): one round trip checks every element and the assert at the same instant. Checking
+            // them one by one took longer than the walk on a loaded machine, so the walk ended and the route cleared before the assert.
+            const snap = await page.evaluate(({ sels, assert }) => {
+              const seen = (sel) => [...document.querySelectorAll(sel)].some((el) => { const r = el.getBoundingClientRect(); const cs = getComputedStyle(el);
+                return r.width > 0 && r.height > 0 && cs.visibility !== 'hidden' && cs.display !== 'none'; });
+              // eslint-disable-next-line no-eval
+              return { missing: sels.filter(([, sel]) => !seen(sel)).map(([id]) => id), why: assert ? (0, eval)(assert) : '' };
+            }, { sels: required.map((id) => [id, selectorOf(id)]), assert: view.assert ? view.assert(account, size.name) : null });
+            row.missing.push(...snap.missing, ...(snap.why ? [`assert: ${snap.why}`] : []));
+          } else {
+            for (const id of required) if (!(await visibleBox(page, id))) row.missing.push(id);
+            // WP-1: a view may assert a page fact (the camera back on the whole campus, the URL after Step outside).
+            if (view.assert) { const why = await page.evaluate(view.assert(account, size.name)); if (why) row.missing.push(`assert: ${why}`); }
+          }
           for (const [k, id] of Object.entries(REGIONS)) { const b = await visibleBox(page, id); if (b) row.regions[k] = b; }
         } catch (e) {
           row.error = e.message.split('\n')[0];
@@ -100,7 +119,7 @@ async function runFidelity(browser) {
         try { await safeScreenshot(page, file); } catch { /* page gone */ }
         row.file = path.basename(file);
         results.push(row);
-        console.log(`${row.missing.length || row.error ? 'MISS' : 'OK  '} ${account} ${size.name} ${view.name}${row.missing.length ? ' (missing: ' + row.missing.join(', ') + ')' : ''}${row.known.length ? ' [known: ' + row.known.join('; ') + ']' : ''}${row.error ? ' ERROR ' + row.error : ''}`);
+        console.log(`${row.missing.length || row.error ? 'MISS' : 'OK  '} ${account} ${size.name} ${view.name}${row.missing.length ? ' (missing: ' + row.missing.join(', ') + ')' : ''}${row.known.length ? ' [known: ' + row.known.join('; ') + ']' : ''}${row.open.length ? ' [OPEN: ' + row.open.join('; ') + ']' : ''}${row.seed.length ? ' [seed: ' + row.seed.length + ']' : ''}${row.error ? ' ERROR ' + row.error : ''}`);
         await ctx.close();
       }
     }
