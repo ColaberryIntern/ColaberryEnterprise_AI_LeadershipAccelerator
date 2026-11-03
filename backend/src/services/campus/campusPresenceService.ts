@@ -9,6 +9,7 @@ import { canDmMany } from '../communityRooms/dmEligibility';
 import { campusAudienceFor } from './campusAudience';
 import { teamEnrollmentIdsFor } from './campusTeam';
 import { looksFor } from './campusLookService';
+import { recordRoomVisitIfEntered } from './campusRoomVisits';
 
 /**
  * Who is in each campus building right now (Colaberry Campus C4).
@@ -71,6 +72,8 @@ export class CampusAreaError extends Error {
 export async function touchCampusArea(enrollmentId: string, area: unknown): Promise<void> {
   if (!isCampusArea(area)) throw new CampusAreaError(area);
   await ensureCampusPresenceSchema();
+  // C101: log the building ENTERED (not every heartbeat) before the upsert overwrites where they were. Never throws.
+  await recordRoomVisitIfEntered(enrollmentId, area, FRESH_MS);
   // Campus HQ: a campus heartbeat clears the Management Portal page, so a stale floor never outlives the admin tab.
   await CampusPresence.upsert({ enrollment_id: enrollmentId, area, hq_path: null, updated_at: new Date() });
 }
