@@ -388,3 +388,45 @@
   background: var(--status-danger);
   flex: 0 0 auto;
 }
+
+/* ---- Ad profitability (2026-11-02) ----------------------------------- */
+
+/* The chips are a read-out elsewhere on this page; here two of them are real controls, so they
+   look pressable, show which is on, and meet the 44px touch target on coarse pointers. */
+.mp-chip--button {
+  cursor: pointer;
+  /* Family and line-height only: the shorthand `font` would also reset .mp-chip's 0.75rem size. */
+  font-family: inherit;
+  line-height: inherit;
+  text-decoration: none;
+}
+.mp-chip--button:hover { border-color: var(--border-default); color: var(--text-strong); }
+.mp-chip--button:focus-visible { outline: 2px solid var(--chart-1); outline-offset: 2px; }
+.mp-chip--on { background: var(--text-strong); border-color: var(--text-strong); color: var(--surface-card); }
+.mp-chip--on b { color: var(--surface-card); }
+@media (pointer: coarse) { .mp-chip--button { min-height: 44px; display: inline-flex; align-items: center; } }
+
+.mp-verdict {
+  display: inline-block;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+  white-space: nowrap;
+}
+.mp-verdict--ok { color: var(--status-success); }
+.mp-verdict--warn { color: var(--status-warning); }
+.mp-verdict--bad { color: var(--status-danger); }
+.mp-verdict--muted { color: var(--text-muted); border-color: var(--border-subtle); }
+
+.mp-table tr.mp-table__sub td { border-bottom-style: dashed; color: var(--text-muted); padding-top: 4px; padding-bottom: 4px; }
+
+.mp-empty {
+  border: 1px dashed var(--border-default);
+  border-radius: 8px;
+  padding: 16px 18px;
+  font-size: 0.8125rem;
+  color: var(--text-body);
+  background: var(--surface-page);
+}

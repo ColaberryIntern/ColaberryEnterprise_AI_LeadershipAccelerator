@@ -67,7 +67,7 @@ export interface AcquisitionFunnel {
 }
 
 /** The lead sources that come from a landing page or its signup form. */
-const LANDING_SOURCES = ['free_signup', 'popup', 'training.colaberry.com', 'training.colaberry.com/thank-you'];
+export const LANDING_SOURCES = ['free_signup', 'popup', 'training.colaberry.com', 'training.colaberry.com/thank-you'];
 
 interface DownstreamRow {
   signups: string;

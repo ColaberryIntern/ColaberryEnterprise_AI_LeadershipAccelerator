@@ -40,6 +40,7 @@ export const MARKETING_DESTINATIONS: readonly MarketingHubDestination[] = [
   { to: '/admin/marketing/landing-pages', group: 'Plan & write', label: 'Landing pages', blurb: 'Build a page from a brief and publish it with tracking wired.', icon: 'layout-masonry-line' },
   { to: '/admin/marketing/publishing', group: 'Ship & measure', label: 'Publishing queue', blurb: 'What is in flight, what failed, and what needs a person.', icon: 'send-plane-line' },
   { to: '/admin/marketing/performance', group: 'Ship & measure', label: 'Performance', blurb: 'Funnel, revenue, campaign links and the outreach queue.', icon: 'line-chart-line' },
+  { to: '/admin/marketing/ad-spend', group: 'Ship & measure', label: 'Ad spend', blurb: 'What the ads cost, typed, imported or pulled from Meta.', icon: 'money-dollar-box-line' },
   { to: '/admin/marketing/brands', group: 'Set up', label: 'Brands & channels', blurb: 'Where each brand posts from, and whether it still can.', icon: 'price-tag-3-line' },
 ];
 

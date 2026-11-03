@@ -8,6 +8,7 @@ import CampaignTable from './performance/CampaignTable';
 import LandingPagesTable from './performance/LandingPagesTable';
 import { takeawaySentence } from './performance/performanceMetrics';
 import type { MarketingDataState } from './marketingTrust';
+import AdProfitabilityCard from './performance/AdProfitabilityCard';
 import './performance/marketingPerformance.css';
 
 /**
@@ -166,6 +167,10 @@ export default function AcquisitionFunnelPanel({
               missing from every number above.
             </div>
           )}
+
+          {/* Spend against return. Its own request and its own window (90 days by default), so a
+              slow or failing spend query never holds up the funnel above it. */}
+          <AdProfitabilityCard />
 
           <section className="mp-card" aria-labelledby="mp-campaigns-title">
             <h3 className="mp-card__title" id="mp-campaigns-title">What each campaign produced</h3>

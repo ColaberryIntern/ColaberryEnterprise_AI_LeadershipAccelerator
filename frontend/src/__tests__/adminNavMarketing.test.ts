@@ -162,6 +162,7 @@ describe('the sidebar advertises only what exists', () => {
       '/admin/marketing/publishing',
       '/admin/marketing/brands',
       '/admin/marketing/performance',
+      '/admin/marketing/ad-spend',
     ];
     const reachable = MARKETING_DESTINATIONS.map((d) => d.to);
     built.forEach((p) => expect(reachable).toContain(p));
@@ -196,7 +197,8 @@ describe('the sidebar advertises only what exists', () => {
     // before anything is sent. Moved from the rail to the hub with the rest of the navigation.
     expect(MARKETING_DESTINATIONS.map((d) => d.label)).toEqual([
       'New post', 'All posts', 'Calendar', 'Landing pages',
-      'Publishing queue', 'Performance', 'Brands & channels',
+      // Ad spend sits after Performance: record what the ads cost, next to where the return is read.
+      'Publishing queue', 'Performance', 'Ad spend', 'Brands & channels',
     ]);
   });
 

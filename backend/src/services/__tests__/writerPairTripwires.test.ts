@@ -101,6 +101,8 @@ const PAID_FILES: Record<string, string> = {
     'READ (T210). The one conversion definition: SQL aggregates plus a TS predicate over payment_status, amount_paid and subscription state. No write of any kind - it is a derivation consumed by the roster, the profile and subjectResolver.',
   // ---- READS: filters, counts and reports. No write. ----
   'services/cohortService.ts': 'READ. Dashboard filter on paid enrolments.',
+  'services/marketing/payingMembersSql.ts':
+    'READ. The paid_enrollment fallback inside COLLECTED_CTE, so an enrolment that paid but has no activated term is not counted as zero cash.',
   'services/ops/schoolSignals.ts': 'READ. Count of paid actives.',
   'services/reporting/intelligenceMapsService.ts': 'READ. Count for the intelligence map.',
   'services/revenuePaymentsService.ts': 'READ. SQL WHERE over paid rows with an amount.',
