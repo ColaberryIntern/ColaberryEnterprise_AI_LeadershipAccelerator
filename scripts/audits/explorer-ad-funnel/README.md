@@ -13,7 +13,6 @@ bash scripts/audits/explorer-ad-funnel/run.sh funnel                    # who si
 bash scripts/audits/explorer-ad-funnel/run.sh behavior                  # what ad Explorers did after signup
 bash scripts/audits/explorer-ad-funnel/run.sh cutover                   # before vs after C91 (2026-10-29 23:30 UTC)
 bash scripts/audits/explorer-ad-funnel/run.sh returnpath                # C97: who comes back, and what stops them
-bash scripts/audits/explorer-ad-funnel/run.sh path                      # C101: room-to-room path through the campus (from the C101 release on)
 bash scripts/audits/explorer-ad-funnel/run.sh funnel since=2026-11-01   # a different window
 bash scripts/audits/explorer-ad-funnel/run.sh cutover "cutover='2026-11-15 00:00:00+00'"
 ```
