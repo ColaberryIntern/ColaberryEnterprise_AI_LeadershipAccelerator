@@ -18,12 +18,20 @@
  *    `UTM_SESSION_LOOKBACK` and `UTM_ATTRIBUTION_WINDOW_DAYS`. Unbounded, the same fix would
  *    quietly turn last-touch attribution into first-touch.
  *
- * 2. IT COPIES ALL FIVE FIELDS. The old copy took `utm_source`, `utm_campaign` and `utm_medium`
- *    only, so `utm_content` and `utm_term` — which ad, which placement — reached the session and
- *    stopped there. Measured in production on 2026-11-03: 1,464 ad visits carried both, and 0 of
- *    450 leads did, which is why spend could be judged per campaign and never per ad. Both
- *    columns already exist on `leads` (added by `ensureLeadAttributionColumns`); nothing was
- *    writing to them.
+ * 2. IT COPIES EVERY FIELD THE LEAD CAN ACTUALLY HOLD. The old copy took `utm_source`,
+ *    `utm_campaign` and `utm_medium`, so `utm_content` and `utm_term` — which ad, which placement
+ *    — reached the session and stopped there, which is why spend could be judged per campaign and
+ *    never per ad. Both columns already exist on `leads` (added by `ensureLeadAttributionColumns`);
+ *    nothing was writing to them. Measured in production on 2026-11-03: 388 leads created in the
+ *    previous 30 days carry no `utm_content` while a session of the same visitor does.
+ *
+ *    `utm_medium` is deliberately NOT in the list: `leads` has no such column. It belongs to
+ *    `visitor_sessions` only, so the old copy's third field was already landing nowhere — Sequelize
+ *    drops a key that is not a model attribute, so that write was silently discarded. Carrying it
+ *    here would cost nothing at the database but would make the caller's success log name a field
+ *    it had not written. Verified against production on 2026-11-03: `leads` carries exactly
+ *    `utm_source`, `utm_campaign`, `utm_content`, `utm_term`. A medium on a lead needs the column
+ *    added first — see `ensureLeadAttributionColumns`.
  *
  * ── WHAT THIS DOES NOT FIX ──
  *
@@ -42,15 +50,18 @@
  * Pure: rows in, a field map out.
  */
 
-/** The five columns both `visitor_sessions` and `leads` carry. */
-export const UTM_FIELDS = ['utm_source', 'utm_campaign', 'utm_medium', 'utm_content', 'utm_term'] as const;
+/**
+ * The four UTM columns a `leads` row can hold, and therefore the only ones worth copying.
+ * `visitor_sessions` carries a fifth, `utm_medium`; `leads` does not — see the note above.
+ */
+export const UTM_FIELDS = ['utm_source', 'utm_campaign', 'utm_content', 'utm_term'] as const;
 
 export type UtmField = typeof UTM_FIELDS[number];
 
-/** Anything carrying the five columns: a VisitorSession instance, a Lead instance, or a plain row. */
+/** Anything carrying those columns: a VisitorSession instance, a Lead instance, or a plain row. */
 export type UtmFields = { [K in UtmField]?: string | null };
 
-/** A session: the five columns plus when it started. */
+/** A session: those columns plus when it started. */
 export type UtmSession = UtmFields & { created_at?: Date | string | null };
 
 /**
