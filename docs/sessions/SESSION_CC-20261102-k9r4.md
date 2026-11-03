@@ -85,3 +85,29 @@ both suites pass on this branch.
 - **Production.** Not deployed. The Meta sync ships dormant — it returns early without
   `META_ADS_ACCESS_TOKEN` / `META_AD_ACCOUNT_ID` and its agent row seeds `enabled: false` — so
   merging switches nothing on. The two new tables are additive.
+
+- [x] ADS-1 ticket artifacts and close-out
+  - Date: 2026-11-02
+  - Session: CC-20261102-k9r4
+  - What changed: Added `scripts/artifacts/tickets/ads1Data.js`, `ads1Render.js` and
+    `buildAds1Artifacts.js`, following the committed per-ticket generator pattern. Both PDFs read
+    the one data module, so a figure on the visual cannot drift from the same figure in the
+    document. Committed rather than left in a scratchpad because the C2.6 generators were
+    scratchpad one-offs and were lost, which is the reason this pipeline had to be rebuilt once
+    already. The rendered PDFs are not committed: `docs/artifacts/` is gitignored.
+  - Verification: `buildAds1Artifacts.js` renders the visual at 1 page (the renderer counts
+    `/Type /Page` in the output bytes and throws over the limit) and the document at 3. The
+    visual was also screenshotted and **looked at** - the first render measured 539px of content
+    in 794px of landscape with 9px body text, so it was scaled up to 700px before posting; a page
+    that merely fits is not a page that reads. Both PDFs posted to the ticket with the attach
+    script reporting `preview OK`, which re-reads the stored comment to confirm Basecamp expanded
+    the attachment rather than leaving a broken glyph.
+  - Notes: Created Docs & Files folder "Marketing Ad Attribution - Artifacts" (10469067334),
+    since the Marketing list was new and `attachArtifactToTicket.js` resolves a folder by title
+    and throws otherwise - and it defaults to the Agent Factory vault, so `PARENT_VAULT` and
+    `LIST` were passed explicitly. The ticket title's "(currently unmerged)" was corrected by
+    read-modify-write before closing, so a false statement was not frozen into a closed record;
+    the todo PUT is a full replace, so description, due date and assignee were re-sent from the
+    live record and verified preserved. Closing threw `Unexpected end of JSON input` exactly as
+    expected - the endpoint answers 204 with no body - and the close was confirmed by re-reading
+    `completed`, not by retrying.
