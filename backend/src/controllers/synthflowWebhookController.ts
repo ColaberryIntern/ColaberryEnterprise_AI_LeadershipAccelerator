@@ -244,6 +244,11 @@ export async function handleSynthflowCallComplete(req: Request, res: Response): 
         : disposition === 'no_answer' ? 'no_answer'
         : 'no_answer';
 
+      // No `as any` here, deliberately. The cast that used to be on this call was needed
+      // only because `step_index` was declared required while the column defaults to 0 —
+      // and it also silenced the fact that `outcome` could be a value `OutcomeType` did not
+      // list. 407 rows of `no_answer` reached production that way. With the creation type in
+      // place the honest call compiles, which means a wrong outcome now fails the build.
       await InteractionOutcome.create({
         lead_id: commLog.lead_id,
         campaign_id: commLog.campaign_id,
@@ -256,7 +261,7 @@ export async function handleSynthflowCallComplete(req: Request, res: Response): 
           has_transcript: !!transcript,
           source: 'synthflow_webhook',
         },
-      } as any);
+      });
     }
 
     // If hot lead escalation call went to voicemail → send fallback SMS
