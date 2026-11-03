@@ -291,9 +291,12 @@ const LEDGER = [
       + 'data says otherwise: 4 of 28 claims have run in a real airing, 10 have never run.',
   },
   {
-    id: 12, title: 'Architecture Diagrams', ticket: 'L11.2', file: null, state: 'NOT_WRITTEN',
-    note: 'Ten diagrams, Mermaid source plus rendered. The artifact pipeline renders Mermaid '
-      + 'already, so the tooling exists and the diagrams do not.',
+    id: 12, title: 'Architecture Diagrams', ticket: 'L11.2',
+    file: 'docs/colaberry-live/DOC_12_ARCHITECTURE_DIAGRAMS.md', state: 'WRITTEN',
+    note: 'Written 2026-11-03. Ten diagrams, Mermaid source generated from l112Data.js, 76 '
+      + 'required elements checked against the source. 14 nodes across 7 diagrams are drawn '
+      + 'dashed and red because they are not built, and the build fails if an unbuilt path is '
+      + 'drawn like a working one.',
   },
   {
     id: 13, title: 'Ali + Piyush Studio Operator Manual', ticket: 'L11.3', file: null,
