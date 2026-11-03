@@ -51,7 +51,7 @@
     bar.setAttribute('role', 'region');
     bar.setAttribute('aria-label', 'Welcome back');
     bar.style.cssText = 'display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap;'
-      + 'padding:12px 44px 12px 16px;background:#1a365d;color:#fff;font:600 15px/1.4 system-ui,-apple-system,"Segoe UI",sans-serif;'
+      + 'padding:12px 52px 12px 16px;background:#1a365d;color:#fff;font:600 15px/1.4 system-ui,-apple-system,"Segoe UI",sans-serif;'
       + 'position:relative;z-index:50;text-align:center';
 
     var text = document.createElement('span');
@@ -68,7 +68,7 @@
     close.type = 'button';
     close.setAttribute('aria-label', 'Dismiss');
     close.textContent = '×';
-    close.style.cssText = 'position:absolute;right:8px;top:50%;transform:translateY(-50%);width:36px;height:36px;'
+    close.style.cssText = 'position:absolute;right:4px;top:50%;transform:translateY(-50%);width:44px;height:44px;'
       + 'border:0;background:transparent;color:#fff;font-size:22px;cursor:pointer';
     close.addEventListener('click', function () {
       try { sessionStorage.setItem(DISMISS_KEY, '1'); } catch (e) { /* private mode: dismiss for this view only */ }

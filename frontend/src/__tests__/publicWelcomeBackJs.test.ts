@@ -32,6 +32,11 @@ describe('welcome-back.js', () => {
     expect(links).toHaveLength(1);
     expect(links[0].getAttribute('href')).toBe('/portal/today');
     expect(document.getElementById('page')!.textContent).toBe('Start for $0'); // the page itself is untouched
+    // Tap targets: both controls are at least 44px tall (phones are where the re-clicks happen: 14 of 16 people).
+    expect(links[0].style.minHeight).toBe('44px');
+    const close = bar!.querySelector('button') as HTMLButtonElement;
+    expect(close.style.width).toBe('44px');
+    expect(close.style.height).toBe('44px');
   });
 
   it.each([

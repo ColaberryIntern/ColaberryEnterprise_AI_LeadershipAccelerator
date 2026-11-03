@@ -257,7 +257,7 @@ const CBFS_CSS = `
 .cbfs-link{color:#2E6A86;font-weight:700;text-decoration:none}
 .cbfs-link:hover{text-decoration:underline}
 .cbfs-btn-link{display:block;text-align:center;text-decoration:none;min-height:44px;box-sizing:border-box}
-.cbfs-linkbtn{background:none;border:none;padding:0;font:inherit;font-weight:700;color:#2E6A86;cursor:pointer}
+.cbfs-linkbtn{background:none;border:none;padding:0 4px;min-height:44px;font:inherit;font-weight:700;color:#2E6A86;cursor:pointer}
 .cbfs-linkbtn:hover{text-decoration:underline}
 .cbfs-linkbtn:focus-visible{outline:3px solid #367895;outline-offset:2px}
 `;
