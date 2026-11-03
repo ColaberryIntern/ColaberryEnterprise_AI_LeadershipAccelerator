@@ -5,6 +5,9 @@
 -- held where someone was LAST. A learner who turned off "Show which building I'm in" is never recorded.
 --
 -- "First session" = visits within 60 minutes of the learner's first recorded visit.
+--
+-- Known undercount: re-entering the SAME building within 90 s of the last entry to it records nothing (the writer's
+-- second guard), so a quick library -> commons -> library shows as library -> commons.
 
 \if :{?days}
 \else
@@ -14,7 +17,6 @@
 CREATE TEMP TABLE pv AS
 SELECT v.enrollment_id, v.area, v.entered_at,
        row_number() OVER (PARTITION BY v.enrollment_id ORDER BY v.entered_at, v.id) AS step,
-       lead(v.area) OVER (PARTITION BY v.enrollment_id ORDER BY v.entered_at, v.id) AS next_area,
        min(v.entered_at) OVER (PARTITION BY v.enrollment_id) AS first_visit
 FROM campus_room_visits v
 JOIN audit_base b ON b.id = v.enrollment_id
@@ -29,8 +31,11 @@ FROM pv;
 SELECT area, count(*) AS people FROM pv WHERE step = 1 GROUP BY 1 ORDER BY 2 DESC;
 
 \echo '== P3 first session: room-to-room moves (from -> to), most common first'
+-- next_area is taken WITHIN the first session, so the last room of that session reads (left campus) even when the
+-- learner came back on a later day.
 SELECT area AS from_area, COALESCE(next_area, '(left campus)') AS to_area, count(*) AS moves
-FROM pv WHERE entered_at < first_visit + interval '60 minutes'
+FROM (SELECT area, lead(area) OVER (PARTITION BY enrollment_id ORDER BY entered_at, step) AS next_area
+      FROM pv WHERE entered_at < first_visit + interval '60 minutes') fs
 GROUP BY 1, 2 ORDER BY 3 DESC LIMIT 25;
 
 \echo '== P4 first session: how many different buildings each person entered'
