@@ -58,8 +58,13 @@ async function tableExists(name: string): Promise<boolean> {
  * own checkout recorded the payment. It also happens to exclude every comp row, which
  * carries $0 and no payment id — so the revenue rule and the comp exclusion select the
  * same 27 rows rather than fighting each other.
+ *
+ * EXPORTED for the R1 Revenue Room, which shows the same figure on a different page.
+ * Reusing the function rather than re-deriving the SQL is the point: two surfaces that
+ * compute revenue independently will eventually disagree, and the first anyone will know
+ * of it is a meeting where two screens show different numbers.
  */
-async function annualizedRevenue(): Promise<{ value: string; caveat?: string }> {
+export async function annualizedRevenue(): Promise<{ value: string; caveat?: string }> {
   const rows = await sequelize.query<{ plan: string; cents: string }>(
     `SELECT plan::text AS plan, COALESCE(SUM(amount_cents), 0)::bigint AS cents
      FROM subscriptions

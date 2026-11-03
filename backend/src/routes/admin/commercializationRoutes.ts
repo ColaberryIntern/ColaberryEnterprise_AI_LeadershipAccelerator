@@ -12,13 +12,24 @@ import { requireAdmin } from '../../middlewares/authMiddleware';
 import {
   handleGetCommercializationBoard,
   handleGetDayNinetyReport,
+  handleGetFunnelSnapshot,
   handleGetHypothesisHealth,
   handleGetLivePopulation,
 } from '../../controllers/commercializationController';
+import { handleGetRevenueRoomBoard } from '../../controllers/revenueRoomController';
 
 const router = Router();
 
 router.get('/api/admin/commercialization/board', requireAdmin, handleGetCommercializationBoard);
+// R1 - the Revenue Room board (frontend route /admin/revenue-room). Mounted under this
+// prefix rather than a new one because mgmtSectionGate.ts is deny-by-default and
+// adminNav.ts carries a matching list; see revenueRoomController.ts for the full reason.
+router.get('/api/admin/commercialization/revenue-room', requireAdmin, handleGetRevenueRoomBoard);
+// C8.4's funnel snapshot had no route of its own: it was observable only indirectly,
+// through the shape of the hypothesis response. R1 needs it directly for the drill-down,
+// and a service that can only be read as a side effect of another endpoint is a service
+// nobody can verify.
+router.get('/api/admin/commercialization/funnel', requireAdmin, handleGetFunnelSnapshot);
 // C8.6 - hypothesis health, computed from the C8.4 funnel.
 router.get('/api/admin/commercialization/hypotheses', requireAdmin, handleGetHypothesisHealth);
 // C8.10 - Colaberry Live population and delivered minutes for one month. Mounted under

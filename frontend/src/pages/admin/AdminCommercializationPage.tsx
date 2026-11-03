@@ -3,6 +3,12 @@ import api from '../../utils/api';
 import { PageHeader, SectionCard } from '../../components/admin/shell';
 // C8.6 - hypothesis health, on this command center rather than a page of its own.
 import HypothesisHealthPanel from '../../components/admin/commercialization/HypothesisHealthPanel';
+import {
+  ORDER,
+  STATUS,
+  StatusChip,
+} from '../../components/admin/commercialization/statusVocabulary';
+import type { TileStatus as Status } from '../../components/admin/commercialization/statusVocabulary';
 import type { TrustSignal } from '../../components/admin/shell';
 
 /**
@@ -19,12 +25,15 @@ import type { TrustSignal } from '../../components/admin/shell';
  * so it survives a colorblind reader, a screenshot and a grayscale print.
  */
 
-export type TileStatus = 'live' | 'measured_zero' | 'undefined_rate' | 'proxy' | 'unmeasurable';
+// The five-state vocabulary moved to a shared module when R1's Revenue Room began
+// reporting the same distinction about different rows. Re-exported here because this
+// page's type is part of its public surface and its tests import it.
+export type { TileStatus } from '../../components/admin/commercialization/statusVocabulary';
 
 export interface Tile {
   key: string;
   label: string;
-  status: TileStatus;
+  status: Status;
   value: string | null;
   sourceTable: string | null;
   provenance: string;
@@ -36,53 +45,7 @@ export interface Tile {
 interface Board {
   asOf: string;
   tiles: Tile[];
-  summary: Partial<Record<TileStatus, number>>;
-}
-
-/**
- * Each status gets its own glyph AND its own words. Color is never the only carrier:
- * the four non-live states are easy to confuse at a glance and the whole value of the
- * board is that they are not confused.
- */
-const STATUS: Record<TileStatus, {
-  label: string; glyph: string; color: string; bg: string; showsNumber: boolean;
-}> = {
-  live: {
-    label: 'Measured', glyph: '●',
-    color: 'var(--status-success)', bg: 'var(--status-success-bg)', showsNumber: true,
-  },
-  measured_zero: {
-    label: 'Measured zero', glyph: '○',
-    color: 'var(--status-info)', bg: 'var(--status-info-bg)', showsNumber: true,
-  },
-  undefined_rate: {
-    label: 'Undefined', glyph: '—',
-    color: 'var(--text-muted)', bg: 'var(--surface-subtle)', showsNumber: false,
-  },
-  proxy: {
-    label: 'Proxy only', glyph: '◐',
-    color: 'var(--status-warning)', bg: 'var(--status-warning-bg)', showsNumber: true,
-  },
-  unmeasurable: {
-    label: 'Not yet measurable', glyph: '✕',
-    color: 'var(--text-muted)', bg: 'var(--surface-subtle)', showsNumber: false,
-  },
-};
-
-const ORDER: TileStatus[] = ['live', 'proxy', 'measured_zero', 'undefined_rate', 'unmeasurable'];
-
-function StatusChip({ status }: { status: TileStatus }) {
-  const s = STATUS[status];
-  return (
-    <span
-      className="d-inline-flex align-items-center gap-1 px-2 py-1 rounded-pill small fw-semibold"
-      style={{ color: s.color, background: s.bg, border: `1px solid ${s.color}` }}
-      data-testid={`status-chip-${status}`}
-    >
-      <span aria-hidden="true">{s.glyph}</span>
-      {s.label}
-    </span>
-  );
+  summary: Partial<Record<Status, number>>;
 }
 
 /**

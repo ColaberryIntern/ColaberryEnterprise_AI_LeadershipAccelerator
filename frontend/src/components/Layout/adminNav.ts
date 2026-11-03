@@ -67,6 +67,11 @@ export const NAV_GROUPS: NavGroup[] = [
     // maps the frontend half of the section contract through the group's own 'revenue'
     // key, so the two gates cannot drift the way an unlisted surface can.
     { path: '/admin/commercialization', label: 'Commercialization', icon: 'line-chart-line' },
+    // R1. Listed here for the same reason as the line above: a nav entry maps the
+    // frontend half of the section contract through this group's own 'revenue' key, so
+    // the backend gate and the sidebar cannot drift the way an unlisted surface can.
+    // The API sits under /api/admin/commercialization, which is already classified.
+    { path: '/admin/revenue-room', label: 'Revenue Room', icon: 'bank-line' },
     { path: '/admin/refunds', label: 'Refunds', icon: 'refund-2-line' },
     { path: '/admin/leads', label: 'Leads', icon: 'group-line', section: 'leads' },
     { path: '/admin/pipeline', label: 'Pipeline', icon: 'filter-3-line', section: 'leads' },
