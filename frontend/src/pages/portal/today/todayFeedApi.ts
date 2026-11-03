@@ -46,9 +46,21 @@ export interface TodayPage {
   items: TodayFeedItem[];
   nextCursor: number;
   exhausted: boolean;
+  /** C107: an Explorer's pre-first-win starter lineup (five items, no further pages). Absent on older servers. */
+  starter?: boolean;
 }
 
 export type TodayInteraction = 'open' | 'click' | 'complete' | 'dismiss';
+
+/** C107: a card that scrolled into view ('seen') or was opened, and which door: the feed or the banner. */
+export interface TodayCardEvent { ref: string; event: 'seen' | 'open'; source: 'feed' | 'banner' }
+/** Matches the server's per-call bound (todayCardEvents.MAX_EVENTS_PER_CALL). */
+export const MAX_EVENTS_PER_CALL = 30;
+
+/** C107: a card opened from the Today banner, under the same `card:<id>` ref the feed uses. Fire and forget. */
+export function recordBannerOpen(cardId: string): void {
+  void todayFeedApi.events([{ ref: `card:${cardId}`, event: 'open', source: 'banner' }]).catch(() => { /* measurement only */ });
+}
 
 export const todayFeedApi = {
   // `seed` reshuffles the lineup per visit (stable within a visit). Generate one
@@ -60,5 +72,10 @@ export const todayFeedApi = {
   interact: (cardRef: string, action: TodayInteraction): Promise<{ ok: true }> =>
     portalApi
       .post(`/api/portal/runtime/today/${encodeURIComponent(cardRef)}/interact`, { action })
+      .then((r) => r.data),
+  /** Measurement only: callers ignore failures. */
+  events: (events: TodayCardEvent[]): Promise<{ ok: true; recorded: number }> =>
+    portalApi
+      .post('/api/portal/runtime/today/events', { events: events.slice(0, MAX_EVENTS_PER_CALL) }, { timeout: 10000 })
       .then((r) => r.data),
 };
