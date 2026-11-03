@@ -154,9 +154,37 @@ describeIfDb('LC-13 — concurrent approval of one revision', () => {
     // rather than a silent success that wrote nothing.
     expect(fulfilled.length + rejected.length).toBe(2);
     expect(fulfilled.length).toBeGreaterThanOrEqual(1);
+
+    // TIGHTENED. The previous assertion was
+    //
+    //   if (rejected.length > 0) expect(String(err?.name ?? err))
+    //     .toMatch(/ApprovalConflictError|SequelizeUniqueConstraintError|Error/);
+    //
+    // and `ruling-lc10-coverage.md` recorded it as not being evidence about the CAS, correctly,
+    // for two independent reasons. The trailing `|Error` alternative matches ANY string
+    // containing "Error", so a bare `Error` -- or `TypeError` from a bug in this very helper --
+    // satisfied it. And the `if` meant that a race where nothing was rejected asserted nothing
+    // at all, so the weakest possible outcome was also the quietest.
+    //
+    // The race has exactly TWO legitimate outcomes and both are now named, so "whatever
+    // happened" is no longer one of them:
+    //
+    //   (a) one caller wins and the other is REFUSED by a named class, or
+    //   (b) both calls fulfil because the loser took the idempotent path and read back the
+    //       winner's row, which must then report alreadyApproved.
+    const NAMED_REFUSALS = ['ApprovalConflictError', 'SequelizeUniqueConstraintError'];
     if (rejected.length > 0) {
+      expect(rejected).toHaveLength(1);
       const err = (rejected[0] as PromiseRejectedResult).reason;
-      expect(String(err?.name ?? err)).toMatch(/ApprovalConflictError|SequelizeUniqueConstraintError|Error/);
+      // `name` specifically, not the message: a message is prose and can contain anything.
+      expect(NAMED_REFUSALS).toContain(String(err?.name));
+    } else {
+      expect(fulfilled).toHaveLength(2);
+      const flags = fulfilled
+        .map((r) => (r as PromiseFulfilledResult<{ alreadyApproved: boolean }>).value.alreadyApproved);
+      // Exactly one of the two may claim it did the writing.
+      expect(flags.filter((f) => f === false)).toHaveLength(1);
+      expect(flags.filter((f) => f === true)).toHaveLength(1);
     }
   });
 
@@ -190,6 +218,88 @@ describeIfDb('LC-13 — concurrent approval of one revision', () => {
     const manifestId = await seedManifest();
     await raceTwoApprovals(manifestId);
     expect(await approvedRowCount(manifestId)).toBe(1);
+  });
+
+  /**
+   * LC-10, THE INTEGRATION LEG. `ruling-lc10-coverage.md` recorded what was outstanding:
+   *
+   *   > Outstanding for a true row: one integration-tier refusal from the live approve path --
+   *   > stale CAS or cross-tenant.
+   *
+   * and separately, about the race assertion above:
+   *
+   *   > The only such reference in an integration file is a tolerant conditional in the race
+   *   > suite which permits a bare `Error`, and so is not evidence about the CAS.
+   *
+   * MEASURED 2026-11-02, AND IT IS WORSE THAN THE RULING SAID. Mutating the product to throw a
+   * bare `Error` where it throws `ApprovalConflictError` left the race test GREEN even after the
+   * conditional was tightened -- because this race resolves through the idempotent read-back
+   * path, so `rejected.length` is 0 and the rejection branch never executes at all. The old
+   * assertion did not merely permit a bare Error; it never ran.
+   *
+   * A race is the wrong instrument for this. These two tests force the refusal DETERMINISTICALLY,
+   * so the error class is asserted on every run rather than whenever scheduling happens to
+   * produce a loser.
+   */
+  describe('LC-10 — the live approve path REFUSES, by named class', () => {
+    it('a STALE expectedRevision is refused with ApprovalConflictError, and writes nothing', async () => {
+      const manifestId = await seedManifest();
+
+      // Move the manifest on, exactly as a revision bump would. The caller still believes 1.
+      await sequelize.query(
+        `UPDATE operating_blueprint_manifests SET revision = 2 WHERE id = $1`,
+        { bind: [manifestId] },
+      );
+
+      let caught: any = null;
+      try {
+        await approveBlueprint({
+          tenantId: TENANT, manifestId, expectedRevision: 1, scope: 'full',
+          approvedBy: 'owner-a@example.test', approvedByRole: 'DELIVERY_OWNER',
+        });
+      } catch (e) { caught = e; }
+
+      // By CLASS, not by message: a message is prose and can contain anything.
+      expect(caught).not.toBeNull();
+      expect(String(caught?.name)).toBe('ApprovalConflictError');
+      // And it reports the real revision, so a UI can refresh rather than guess.
+      expect(caught?.currentRevision ?? caught?.revision).toBe(2);
+      // REFUSED MEANS NOTHING WAS WRITTEN. A refusal that still persisted a row would be the
+      // worse half of this bug and no assertion above would have noticed.
+      expect(await approvedRowCount(manifestId)).toBe(0);
+    });
+
+    it('a CROSS-TENANT approval finds nothing to approve, and writes nothing', async () => {
+      const manifestId = await seedManifest();
+      const OTHER_TENANT = '22222222-2222-2222-2222-222222222222';
+
+      let caught: any = null;
+      try {
+        await approveBlueprint({
+          tenantId: OTHER_TENANT, manifestId, expectedRevision: 1, scope: 'full',
+          approvedBy: 'owner-a@example.test', approvedByRole: 'DELIVERY_OWNER',
+        });
+      } catch (e) { caught = e; }
+
+      // The service scopes its lookup by tenant, so another tenant's manifest is NOT FOUND
+      // rather than forbidden. Asserting the class keeps that distinction honest: if this ever
+      // becomes a successful approval, the row count below is what says so.
+      expect(caught).not.toBeNull();
+      expect(String(caught?.name)).toBe('ManifestNotFoundError');
+      expect(await approvedRowCount(manifestId)).toBe(0);
+    });
+
+    it('POSITIVE CONTROL: the same call with the CURRENT revision and tenant SUCCEEDS', async () => {
+      // Without this, both refusals above could be passing because the approve path is broken
+      // for every input, which would make them evidence of nothing.
+      const manifestId = await seedManifest();
+      const ok = await approveBlueprint({
+        tenantId: TENANT, manifestId, expectedRevision: 1, scope: 'full',
+        approvedBy: 'owner-a@example.test', approvedByRole: 'DELIVERY_OWNER',
+      });
+      expect(ok.alreadyApproved).toBe(false);
+      expect(await approvedRowCount(manifestId)).toBe(1);
+    });
   });
 
   it('a retried approval returns the original approver rather than re-stamping', async () => {
