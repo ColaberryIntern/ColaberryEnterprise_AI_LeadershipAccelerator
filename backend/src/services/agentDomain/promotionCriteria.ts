@@ -43,6 +43,39 @@ import {
 
 export { NON_HUMAN_APPROVER, isNonHumanIdentity, isThresholdAccepted };
 
+// The contract -- every shape a promotion attempt is made of, and every refusal code -- lives in
+// ./promotionContract. AF6.3 had to add five refusal codes and a second-signature field to a file
+// that had reached exactly 500 lines, CLAUDE.md's hard ceiling, so the change split before adding,
+// as promotionIdentity.ts did at 515. Re-exported in full because two suites and the rest of the
+// subtree import these names from here, and a split should not be a rename.
+import {
+  REQUIRED_SCENARIO_CLASSES,
+  type ScenarioClass,
+  type ThresholdState,
+  type QualityThreshold,
+  type EvidenceRecord,
+  type PromotionCriteria,
+  type Signature,
+  type PromotionRefusal,
+  type SecondSignatureRefusal,
+  type PromotionDecision,
+  type PromotionAttempt,
+} from './promotionContract';
+
+export { REQUIRED_SCENARIO_CLASSES };
+export type {
+  ScenarioClass, ThresholdState, QualityThreshold, EvidenceRecord, PromotionCriteria,
+  Signature, PromotionRefusal, SecondSignatureRefusal, PromotionDecision, PromotionAttempt,
+};
+
+// AF6.3's ruling: two signatures from autonomy:R6 up, one below it. The derivation from the
+// owner's agent-model wording onto this capability ladder lives in ./promotionSecondSignature.
+import {
+  SECOND_SIGNATURE_FLOOR, requiresSecondSignature, evaluateSecondSignature,
+} from './promotionSecondSignature';
+
+export { SECOND_SIGNATURE_FLOOR, requiresSecondSignature, evaluateSecondSignature };
+
 export const NON_PROMOTING_SIGNALS = Object.freeze([
   'story_completed',
   'elapsed_time',
@@ -87,122 +120,6 @@ export function isNonPromotingEvidence(e: EvidenceRecord): boolean {
 /** True when a signal is on the promoting allowlist. Anything else supports nothing. */
 export function isPromotingSignal(signal: unknown): boolean {
   return PROMOTING_SIGNALS.includes(norm(signal));
-}
-
-/** Scenario classes every applicable capability/release pair must define. */
-export const REQUIRED_SCENARIO_CLASSES = Object.freeze([
-  'success',
-  'ambiguity',
-  'failure',
-  'recovery',
-  'permission_denial',
-] as const);
-
-export type ScenarioClass = typeof REQUIRED_SCENARIO_CLASSES[number];
-
-export type ThresholdState = 'proposed' | 'accepted';
-
-export interface QualityThreshold {
-  readonly metric: string;
-  /** How it is measured. A threshold with no measurement method is not a threshold. */
-  readonly measured_by: string;
-  readonly target: string;
-  readonly state: ThresholdState;
-  readonly accepted_by?: string | null;
-  readonly accepted_at?: string | null;
-}
-
-export interface EvidenceRecord {
-  readonly kind: string;
-  /** Where it came from. A record without a source is refused — see `recordEvidence`. */
-  readonly source: string;
-  readonly observed_at: string;
-  /** Who evaluates it. Never the agent, and never the proposer of the capability. */
-  readonly evaluated_by: string;
-  readonly summary: string;
-}
-
-export interface PromotionCriteria {
-  readonly capability_id: string;
-  readonly from_autonomy: AutonomyStage;
-  readonly to_autonomy: AutonomyStage;
-  readonly entry_prerequisites: ReadonlyArray<string>;
-  readonly permitted_actions: ReadonlyArray<string>;
-  /** Prohibited actions are asserted to be REFUSED, not merely absent from the permitted list. */
-  readonly prohibited_actions: ReadonlyArray<string>;
-  readonly scenarios: Readonly<Record<ScenarioClass, string>>;
-  readonly thresholds: ReadonlyArray<QualityThreshold>;
-  readonly required_evidence: ReadonlyArray<string>;
-  readonly evaluated_by: string;
-  readonly human_approval_required: boolean;
-  readonly rollback_conditions: ReadonlyArray<string>;
-  readonly suspension_conditions: ReadonlyArray<string>;
-  readonly downgrade_conditions: ReadonlyArray<string>;
-}
-
-export type PromotionRefusal =
-  | 'no_criteria_defined'
-  | 'not_a_single_step'
-  | 'missing_scenario_class'
-  | 'threshold_not_accepted'
-  | 'threshold_has_no_measurement'
-  | 'evidence_missing'
-  | 'evidence_without_source'
-  | 'non_promoting_signal_only'
-  | 'human_approval_missing'
-  | 'self_evaluated'
-  | 'human_decision_cannot_be_automated'
-  | 'non_promoting_evidence_only'
-  | 'approver_is_not_human'
-  | 'no_thresholds_defined'
-  | 'required_evidence_not_supplied'
-  | 'prohibited_action_requested'
-  | 'proposer_not_recorded'
-  | 'approver_not_a_recorded_human'
-  | 'evaluator_is_not_human'
-  | 'automating_level_without_human_approval'
-  | 'signal_not_recognised'
-  // 22nd, AF7.2. The allowlist was applied to the approver and to evidence evaluators, and NEVER
-  // to the acceptor of the quality threshold the whole promotion rests on -- so the acceptor was
-  // guarded by the denylist alone. `accepted_by: 'auto-approval'`, one letter off the production
-  // identity, promoted with zero refusals. So did `Mallory`, whom this module already refuses as
-  // an APPROVER on the grounds that a denylist cannot establish humanity.
-  | 'threshold_acceptor_not_a_recorded_human';
-
-export interface PromotionDecision {
-  readonly capability_id: string;
-  readonly promoted: boolean;
-  readonly refusals: ReadonlyArray<PromotionRefusal>;
-}
-
-export interface PromotionAttempt {
-  readonly criteria: PromotionCriteria | null;
-  readonly evidence: ReadonlyArray<EvidenceRecord>;
-  /** Signals offered in support. Any of the four non-promoting ones are ignored. */
-  readonly signals: ReadonlyArray<string>;
-  readonly human_approval?: { readonly approver: string; readonly approved_at: string } | null;
-  /** The identity that proposed the capability. An approver equal to this is self-approval. */
-  readonly proposed_by?: string | null;
-  /** True when the underlying decision is human-required at every level. */
-  readonly human_decision: boolean;
-  /**
-   * Actions this attempt is asking to be allowed to take. Compared against the criteria's
-   * `prohibited_actions` and REFUSED on a match -- the point being that a prohibited action is
-   * actively refused, rather than merely left off the permitted list, which is the difference
-   * between a rule and a hope.
-   */
-  readonly requested_actions?: ReadonlyArray<string>;
-  /**
-   * The human identities on record who may approve. REQUIRED when `human_approval_required`.
-   *
-   * A denylist cannot establish that an approver is a person: there is no pattern separating a
-   * name from a model's name, and a verifier proved it by approving a promotion as `claude`, as
-   * `Autonomous Agent` and as `automation`, all of which the denylist read as human. So the
-   * approver must be PRESENT in a set the caller supplies from its own records. Absent or empty,
-   * the promotion is refused -- absence is not approval, which is the mistake this module has now
-   * made three times in three different fields.
-   */
-  readonly recorded_human_approvers?: ReadonlyArray<string>;
 }
 
 
@@ -374,6 +291,22 @@ export function evaluatePromotion(attempt: PromotionAttempt): PromotionDecision 
       }
     }
   }
+
+  // AF6.3. TWO SIGNATURES FROM autonomy:R6 UP -- the level at which the owner's ladder stops
+  // describing sandboxes and shadow mode and starts describing a production pilot.
+  //
+  // Keyed on the LEVEL and NOT on `human_approval_required`, because that flag is an opt-out this
+  // subsystem has already been burned by: a verifier promoted R6 -> R7 with no human approval at
+  // all by setting it false, which is what `automating_level_without_human_approval` above exists
+  // to catch. Gating the second signature on the same flag would hand the same opt-out to the
+  // same attacker, so nothing in the attempt can switch this requirement off.
+  refusals.push(...evaluateSecondSignature({
+    to_autonomy: c.to_autonomy,
+    first: attempt.human_approval,
+    second: attempt.second_approval,
+    proposed_by: attempt.proposed_by,
+    recorded_human_approvers: attempt.recorded_human_approvers,
+  }));
 
   // The evaluator is held to the same standard as the approver. `EvidenceRecord.evaluated_by`'s
   // own doc comment promises "Never the agent, and never the proposer" -- an unenforced documented
