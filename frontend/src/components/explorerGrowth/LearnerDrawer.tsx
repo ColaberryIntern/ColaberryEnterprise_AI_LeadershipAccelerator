@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import StatusBadge from '../admin/shell/StatusBadge';
 import AsyncPanel from './AsyncPanel';
 import SignalTimeline from './SignalTimeline';
+import BuyingSignalsCard from './BuyingSignalsCard';
 import DecisionWhyModal from './DecisionWhyModal';
 import { useExplorerData } from './useExplorerData';
 import LearnerName from './LearnerName';
@@ -153,6 +154,11 @@ export default function LearnerDrawer({ enrollmentId, email, onClose }: Props) {
                   <h6 className="text-uppercase text-muted small mb-2">Signals</h6>
                   <AsyncPanel state={signals} onRetry={signals.reload}>
                     {(s) => <SignalTimeline signals={s} />}
+                  </AsyncPanel>
+
+                  <h6 className="text-uppercase text-muted small mt-4 mb-2">Buying signals</h6>
+                  <AsyncPanel state={signals} onRetry={signals.reload}>
+                    {(s) => (s.buying_signals ? <BuyingSignalsCard signals={s.buying_signals} /> : <div className="text-muted small">Not available from this server yet.</div>)}
                   </AsyncPanel>
 
                   <h6 className="text-uppercase text-muted small mt-4 mb-2">Decision history</h6>

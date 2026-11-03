@@ -413,6 +413,17 @@ export interface LearnerSignals {
    */
   per_signal_timeline_available: false;
   timeline_absent_reason: string;
+  /** C100: read live, never scored. Absent from a backend older than C100, so optional. */
+  buying_signals?: BuyingSignals;
+}
+
+/** C100: abandoned checkout and enroll-link clicks (backend explorerBuyingSignals). */
+export interface BuyingSignal { count: number; last_at: string | null }
+export interface BuyingSignals {
+  checkout_abandoned: BuyingSignal & { plans: string[] };
+  enroll_link_click: BuyingSignal;
+  /** Sources that failed to read; never shown as "none". */
+  unavailable: Array<'checkout_abandoned' | 'enroll_link_click'>;
 }
 
 export interface LearnerDecisionSummary {
