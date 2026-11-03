@@ -323,3 +323,107 @@ export function headlessSelfSupplied(a: HeadlessAcceptance | null): boolean {
     && isStr(a.acceptedBy) && !blank(a.acceptedBy)
     && a.origin === 'model_turn';
 }
+
+/** The one WARNING in this module. Everything else here refuses; this one reports. */
+const warn = (code: SurfaceCode, message: string, stepId?: string): ValidationIssue =>
+  ({ code, message, stepId, severity: 'warning' });
+
+/**
+ * L9.5 — THE ALL-WORKSPACE ANSWER.
+ *
+ * The ticket states the hole precisely: *"The schema makes the field mandatory; only the prompt
+ * explains what an honest answer is. Gutting that paragraph leaves every test green. A model could
+ * satisfy the schema by labelling everything a workspace, which would make the rule pass on
+ * exactly the plans it was built to catch."*
+ *
+ * That is true, and it is a gap in the CHECK rather than in the schema: `TaskSurfaceBinding`
+ * requires one of `workspace` or `headless`, and `workspace` is always available.
+ *
+ * ## Why the obvious detectors were rejected
+ *
+ * **"No headless bindings at all"** — a plan can legitimately have none. Every task may genuinely
+ * have a human surface, so zero headless is not evidence of anything.
+ *
+ * **Lexical matching on the title** (ingest, sync, cron, nightly, purge) — a heuristic over prose
+ * the model also writes. It would flag an honestly-named background task and miss a dishonestly
+ * named one, which is the wrong way round.
+ *
+ * **`FactoryTask.kind`** — looks promising and is not: it is the flow-node kind,
+ * `START | TASK | DECISION | END`, and says nothing about automation.
+ *
+ * ## The signal this uses instead, which is structural
+ *
+ * A task is background work when the plan's OWN DATA says so, on two independent fields the model
+ * must already supply and which other rules already check:
+ *
+ *   1. its `PERFORMER` assignments are all `executor.type === 'agent'` — no person or team
+ *      performs it, which `factoryValidate`'s PERFORMER rules independently constrain; and
+ *   2. `judgment_level === 'none'` — the plan says it needs no human judgment at all.
+ *
+ * A task meeting BOTH, bound to a `workspace`, is system-to-system or derived-computation work
+ * claiming a human surface — and `HEADLESS_REASONS` carries `system_to_system` and
+ * `derived_computation` for exactly it. Both conditions are required because either alone is
+ * legitimate: an agent can perform work a human then judges on a screen, and a zero-judgment task
+ * can still be something a person does.
+ *
+ * ## It WARNS, and that is a deliberate choice rather than timidity
+ *
+ * A plan where an agent performs a task that a human also monitors on a screen is a real and
+ * reasonable design, so refusing would introduce a false-positive path into plan generation.
+ * `severity: 'warning'` satisfies what L9.5 asks for — a check that CAN detect the all-workspace
+ * answer — while refusing nothing, which keeps the change reversible and its blast radius local.
+ *
+ * **Raising it to an error is an owner decision, not a code decision**, and it should be taken
+ * against a measured false-positive rate on real plans rather than in advance.
+ *
+ * ## What it does NOT establish
+ *
+ * It does not prove dishonesty, and it does not detect every all-workspace answer: a model that
+ * also sets a human performer, or claims a judgment level it does not need, is not caught here.
+ * It raises the cost of the degenerate answer from "label everything a workspace" to "label
+ * everything a workspace AND misstate the executor or the judgment level on every background
+ * task" — which is a second lie, on a field two other rules read.
+ */
+export function backgroundSurfaceIssues(
+  tasks: ReadonlyArray<{ id: unknown; judgment_level?: unknown }>,
+  assignments: ReadonlyArray<{
+    task_id?: unknown; responsibility?: unknown;
+    executor?: { type?: unknown } | null;
+  }>,
+  bindings: ReadonlyArray<TaskSurfaceBinding>,
+): ValidationIssue[] {
+  if (!Array.isArray(tasks) || !Array.isArray(assignments)) return [];
+
+  const boundToWorkspace = new Set(
+    bindings.filter((b) => isObj(b) && b.kind === 'workspace' && isStr(b.taskId))
+      .map((b) => (b as { taskId: string }).taskId),
+  );
+  if (boundToWorkspace.size === 0) return [];
+
+  const issues: ValidationIssue[] = [];
+  for (const t of tasks) {
+    if (!isObj(t) || !isStr(t.id) || !boundToWorkspace.has(t.id)) continue;
+    if (t.judgment_level !== 'none') continue;
+
+    const performers = assignments.filter(
+      (a) => isObj(a) && a.task_id === t.id && a.responsibility === 'PERFORMER',
+    );
+    // ABSENCE IS NOT A SIGNAL. A task with no performer recorded is a different defect, owned by
+    // the allocation rules; reading it as "performed by an agent" would invent the finding.
+    if (performers.length === 0) continue;
+    const allAgents = performers.every(
+      (a) => isObj(a.executor) && (a.executor as { type?: unknown }).type === 'agent',
+    );
+    if (!allAgents) continue;
+
+    issues.push(warn('SURFACE_BACKGROUND_TASK_CLAIMS_SURFACE',
+      `Task ${t.id} is bound to a WORKSPACE, but this plan's own data describes background work: `
+      + 'every PERFORMER is an agent and judgment_level is "none". A task no person performs and '
+      + 'that needs no human judgment is the shape `headless` exists for — '
+      + '`system_to_system` or `derived_computation`. This is the all-workspace answer the '
+      + 'schema cannot catch, so it is reported rather than refused: an agent performing work a '
+      + 'human monitors on a screen is also a legitimate design.',
+      t.id));
+  }
+  return issues;
+}

@@ -996,6 +996,26 @@ describe('the code list is the contract', () => {
     for (const i of validateTaskSurfaces(project, null as never)) emitted.add(i.code);
     for (const i of validateTaskSurfaces(null as never, [])) emitted.add(i.code);
 
+    // L9.5's code needs a PROJECT the loop above cannot express. `manualOnlyProject()` is
+    // person-performed with real judgment levels on both tasks, so it correctly never triggers
+    // the background detector; reaching that code needs a plan whose own data describes
+    // background work, which is the whole signal.
+    const bg = manualOnlyProject();
+    const backgroundProject = {
+      ...bg,
+      tasks: bg.tasks.map(
+        (t) => (t.id === 't-intake' ? { ...t, judgment_level: 'none' as const } : t),
+      ),
+      assignments: bg.assignments.map(
+        (a) => (a.task_id === 't-intake' && a.responsibility === 'PERFORMER'
+          ? { ...a, executor: { type: 'agent' as const, id: 'agent-1' } }
+          : a),
+      ),
+    };
+    for (const i of validateTaskSurfaces(backgroundProject, [ws('t-intake'), ws('t-review')])) {
+      emitted.add(i.code);
+    }
+
     // Both directions. Attempt 1 passed this while one guard site had zero coverage, because two
     // unrelated branches shared one code; splitting SURFACE_REQUIREMENT_UNKNOWN out is what makes
     // the assertion able to see that branch at all.
