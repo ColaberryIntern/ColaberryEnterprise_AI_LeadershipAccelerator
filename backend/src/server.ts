@@ -107,6 +107,7 @@ import { ensureBroadcastReplayIndexSchema } from './db/ensureBroadcastReplayInde
 import { ensureFactoryTaskSchema } from './db/ensureFactoryTaskSchema';
 import { ensureAgentDomainStoryLadderSchema } from './db/ensureAgentDomainStoryLadderSchema';
 import { ensureEmailSendLedgerSchema } from './db/ensureEmailSendLedgerSchema';
+import { ensurePortalLinkTokenSchema } from './db/ensurePortalLinkTokenSchema';
 import { ensureInternshipSchema } from './db/ensureInternshipSchema';
 import { ensureMilestoneLadderSchema } from './db/ensureMilestoneLadderSchema';
 import { ensureOauthTokenVaultSchema } from './db/ensureOauthTokenVaultSchema';
@@ -2924,6 +2925,13 @@ async function start(): Promise<void> {
   // useless without the UNIQUE indexes this creates, which is why it is
   // ensured at boot alongside its siblings rather than by the send script.
   await ensureEmailSendLedgerSchema();
+  // One-click sign-in links carried by notification email. Separate from
+  // `enrollments.portal_token` because that is a single column and a notification
+  // minting into it would invalidate the previous notification's button and any
+  // login link in flight. Ensured at boot beside its siblings; without the table
+  // the mint fails soft and the email falls back to a plain link, which is the
+  // behaviour that shipped before this existed.
+  await ensurePortalLinkTokenSchema();
   // AI Internship: application lifecycle, two-channel interview, decisions,
   // documents, and `cohort_memberships` — the secondary membership that lets an
   // intern join the internship cohort WITHOUT disturbing the class cohort in

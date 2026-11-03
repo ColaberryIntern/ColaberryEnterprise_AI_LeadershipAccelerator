@@ -62,11 +62,49 @@ import RoomMessage from '../../models/RoomMessage';
 import { guardedSendMail, resolveEmailRecipient, htmlToPlainText } from '../emailService';
 import { sendOnce } from '../email/idempotentSend';
 import { env } from '../../config/env';
+import { mintPortalLinkToken, PURPOSE_DM_NOTIFICATION } from '../portalLinkTokenService';
 
 /** One email per thread per half hour. See the honest limit in the header. */
 export const DM_NOTIFY_WINDOW_MINUTES = 30;
 
-const PORTAL_COMMUNITY_URL = 'https://enterprise.colaberry.ai/portal/community';
+const PORTAL_BASE_URL = 'https://enterprise.colaberry.ai';
+
+/**
+ * Where "Read and reply" goes: the conversation itself.
+ *
+ * It has to be a PATH, not a query. `safeNextPath()` accepts `/portal/` plus
+ * unreserved path characters and rejects anything containing `?`, so a
+ * `/portal/today?dm=<id>` destination would be silently dropped on the way
+ * through the verify page and the reader would land on Today wondering where the
+ * message went. Loosening that regex was the other option and is a worse trade:
+ * it is a security control with its own tests and a frontend mirror.
+ *
+ * The old link went to `/portal/community`, which has no messages on it at all —
+ * direct messages are a chat dock hosted by the portal shell, not a page on the
+ * community feed. So this was never the right URL, signed in or out.
+ */
+export function dmThreadPath(roomId: string): string {
+  return `/portal/messages/${roomId}`;
+}
+
+/**
+ * The "Read and reply" href.
+ *
+ * With a token: `/portal/verify` signs the reader in and then forwards to the
+ * thread, which is the whole point — the reader came FROM an email, and asking
+ * them to go and find a second email to read the first one is the complaint this
+ * fixes.
+ *
+ * Without one: the bare thread path. Still correct, just not one click — the
+ * portal bounces an unauthenticated visitor to sign in and carries this
+ * destination through, so they land on the message afterwards rather than on a
+ * dashboard with no idea which conversation it was.
+ */
+export function buildDmCtaUrl(roomId: string, token: string | null): string {
+  const path = dmThreadPath(roomId);
+  if (!token) return `${PORTAL_BASE_URL}${path}`;
+  return `${PORTAL_BASE_URL}/portal/verify?token=${encodeURIComponent(token)}&next=${encodeURIComponent(path)}`;
+}
 
 export type DmNotifyReason =
   | 'sent'
@@ -139,13 +177,21 @@ function escapeHtml(s: string): string {
     .replace(/'/g, '&#39;');
 }
 
-/** Deliberately content-free. See "Difference 1" in the header. */
+/**
+ * Deliberately content-free. See "Difference 1" in the header.
+ *
+ * `ctaUrl` is passed in rather than built here so this stays pure: the one-click
+ * variant carries a live sign-in token and the fallback does not, and a test can
+ * assert the difference without minting anything.
+ */
 export function buildDmNotificationHtml(data: {
   recipientName: string;
   senderName: string;
+  ctaUrl: string;
 }): string {
   const who = escapeHtml((data.senderName || '').trim() || 'Someone');
   const first = escapeHtml((data.recipientName || '').trim().split(/\s+/)[0] || 'there');
+  const cta = escapeHtml(data.ctaUrl);
   return `<!DOCTYPE html>
 <html><body style="margin:0;padding:0;background:#f7fafc;">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f7fafc;padding:24px 0;">
@@ -156,12 +202,14 @@ export function buildDmNotificationHtml(data: {
           <p style="margin:0 0 14px;"><strong>${who}</strong> sent you a message on the Colaberry platform.</p>
           <p style="margin:0 0 22px;color:#6b7280;font-size:14px;">The message itself is only on the platform, not in this email.</p>
           <p style="margin:0 0 26px;">
-            <a href="${PORTAL_COMMUNITY_URL}" style="display:inline-block;background:#C20E1E;color:#ffffff;padding:11px 22px;border-radius:22px;text-decoration:none;font-weight:700;">Read and reply</a>
+            <a href="${cta}" style="display:inline-block;background:#C20E1E;color:#ffffff;padding:11px 22px;border-radius:22px;text-decoration:none;font-weight:700;">Read and reply</a>
           </p>
         </td></tr>
         <tr><td style="padding:14px 32px 24px;border-top:1px solid #e2e8f0;color:#6b7280;font-size:12px;line-height:1.6;">
+          This button signs you in, so keep it to yourself and do not forward this email. It works once, and stops working after a day.
+          <br><br>
           You are getting this because someone messaged you directly. Turn these off any time in
-          <a href="https://enterprise.colaberry.ai/portal/settings" style="color:#367895;">Settings &#8250; Preferences</a>.
+          <a href="${PORTAL_BASE_URL}/portal/settings" style="color:#367895;">Settings &#8250; Preferences</a>.
         </td></tr>
       </table>
     </td></tr>
@@ -208,9 +256,25 @@ export async function notifyDmByEmail(input: DmNotifyInput): Promise<DmNotifyRes
     const at = input.at ?? new Date();
     const subject = dmNotificationSubject(senderName);
     const businessEventId = dmBusinessEventId(input.roomId, input.recipientEnrollmentId, at);
+
+    // Minted INSIDE the send path, after every opt-out and pause check above has
+    // passed, so a token only ever exists for a mail that is actually going out.
+    // Minting earlier would leave live sign-in tokens behind for people who had
+    // switched these emails off.
+    //
+    // A null token is not a failure worth aborting on: `buildDmCtaUrl` falls back
+    // to the bare thread path, which is a normal signed-in link and still reaches
+    // the conversation. The mail matters more than the convenience.
+    const linkToken = await mintPortalLinkToken({
+      enrollmentId: input.recipientEnrollmentId,
+      purpose: PURPOSE_DM_NOTIFICATION,
+      nextPath: dmThreadPath(input.roomId),
+    });
+
     const html = buildDmNotificationHtml({
       recipientName: recipient.full_name || '',
       senderName,
+      ctaUrl: buildDmCtaUrl(input.roomId, linkToken),
     });
 
     const result = await sendOnce(

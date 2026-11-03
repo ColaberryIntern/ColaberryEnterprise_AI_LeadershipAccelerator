@@ -42,6 +42,7 @@ const PortfolioPreviewPage = lazy(() => import('../pages/portal/portfolio/Portfo
 const CertPrepPage = lazy(() => import('../pages/portal/certprep/CertPrepPage'));
 const CommunityPage = lazy(() => import('../pages/portal/community/CommunityPage'));
 const PeopleDirectoryPage = lazy(() => import('../pages/portal/community/PeopleDirectoryPage'));
+const MessagesPage = lazy(() => import('../pages/portal/messages/MessagesPage'));
 const RoomsPage = lazy(() => import('../pages/portal/rooms/RoomsPage'));
 const ReplaysPage = lazy(() => import('../pages/portal/replays/ReplaysPage'));
 const GlobalLibraryPage = lazy(() => import('../pages/portal/library/GlobalLibraryPage'));
@@ -174,6 +175,12 @@ const portalRoutes = (
       <Route path="/portal/cert-prep" element={<PageGate feature="cert-prep"><CertPrepPage /></PageGate>} />
       <Route path="/portal/community" element={<CommunityPage />} />
       <Route path="/portal/community/people" element={<PeopleDirectoryPage />} />
+      {/* A direct message at its own address. Until this existed a conversation was
+          reachable only by clicking a person inside the app, so the "sent you a message"
+          email could not link to one and pointed at /portal/community, which carries no
+          messages at all. Authenticated: PortalProtectedRoute now carries this path
+          through sign-in, so arriving signed out still lands here afterwards. */}
+      <Route path="/portal/messages/:roomId" element={<MessagesPage />} />
       {/* L8.3 — watch a past class back. AUTHENTICATED, unlike the live link: a replay list
           is per-viewer by definition, and its endpoint answers 401 to a stranger. No
           PageGate: the page's own entries carry the entitlement answer per class, so gating

@@ -25,6 +25,7 @@ const mockEnrollmentFindByPk = jest.fn();
 const mockMessageFindByPk = jest.fn();
 const mockGuardedSendMail = jest.fn();
 const mockSendOnce = jest.fn();
+const mockMintPortalLinkToken = jest.fn();
 
 jest.mock('../../../models/Enrollment', () => ({
   __esModule: true,
@@ -48,6 +49,13 @@ jest.mock('../../email/idempotentSend', () => ({
 jest.mock('../../../config/env', () => ({
   env: { trainingWelcomeFromEmail: 'noreply@colaberry.com' },
 }));
+// The one-click sign-in token the email now carries. Mocked so this suite stays a
+// pure unit test of the notifier — the real mint opens a database connection, and
+// the token's own behaviour is covered in portalLinkTokenService.test.ts.
+jest.mock('../../portalLinkTokenService', () => ({
+  mintPortalLinkToken: (...a: unknown[]) => mockMintPortalLinkToken(...a),
+  PURPOSE_DM_NOTIFICATION: 'dm_notification',
+}));
 
 import {
   notifyDmByEmail,
@@ -56,6 +64,8 @@ import {
   dmBusinessEventId,
   dmNotificationSubject,
   buildDmNotificationHtml,
+  buildDmCtaUrl,
+  dmThreadPath,
   DM_NOTIFY_WINDOW_MINUTES,
 } from '../dmNotificationService';
 
@@ -84,6 +94,8 @@ beforeEach(() => {
     return { outcome: 'sent', ledgerId: 'led-1', idempotencyKey: 'key-1', messageId: 'm-1' };
   });
   mockGuardedSendMail.mockResolvedValue({ messageId: 'smtp-1' });
+  // Default: the one-click token mints. The null case is exercised explicitly below.
+  mockMintPortalLinkToken.mockResolvedValue('tok-abc123');
 });
 
 // ───────────────────────────────────────────────────────────── pure helpers
@@ -178,9 +190,91 @@ describe('happy path', () => {
     const html = buildDmNotificationHtml({
       recipientName: 'Kes',
       senderName: '<img src=x onerror=alert(1)>',
+      ctaUrl: 'https://enterprise.colaberry.ai/portal/messages/room-abc',
     });
     expect(html).not.toContain('<img src=x');
     expect(html).toContain('&lt;img src=x');
+  });
+});
+
+// ──────────────────────────────────────────────── the "Read and reply" button
+//
+// Ali, 2026-11-03: "when receiving a message is clicked, it makes you put your
+// email in so you have to then check another email which makes no sense at all."
+// The button used to be a bare /portal/community, a page that carries no messages
+// at all, and sign-in is magic-link only, so a signed-out reader was sent to fetch
+// a second email to read the first one.
+describe('the Read and reply link', () => {
+  it('points at the conversation, as a PATH — safeNextPath rejects a query string', () => {
+    // A `?dm=` destination would be silently dropped on the way through the verify
+    // page and the reader would land on Today wondering where the message went.
+    expect(dmThreadPath(ROOM)).toBe(`/portal/messages/${ROOM}`);
+    expect(dmThreadPath(ROOM)).not.toContain('?');
+  });
+
+  it('signs the reader in and then forwards to the thread', () => {
+    const url = buildDmCtaUrl(ROOM, 'tok-abc123');
+
+    expect(url).toContain('/portal/verify?token=tok-abc123');
+    expect(url).toContain(`next=${encodeURIComponent(`/portal/messages/${ROOM}`)}`);
+  });
+
+  it('falls back to the plain thread path when no token could be minted', () => {
+    // Still correct, just not one click: the portal carries this destination
+    // through sign-in, so the reader lands on the message afterwards.
+    expect(buildDmCtaUrl(ROOM, null)).toBe(`https://enterprise.colaberry.ai/portal/messages/${ROOM}`);
+  });
+
+  it('percent-encodes the token, so a token containing a URL character cannot break the link', () => {
+    expect(buildDmCtaUrl(ROOM, 'a+b/c=d&e')).toContain(`token=${encodeURIComponent('a+b/c=d&e')}`);
+  });
+
+  it('the sent email carries the one-click link, and never the old community URL', async () => {
+    await notifyDmByEmail({ roomId: ROOM, recipientEnrollmentId: RECIPIENT, messageId: MESSAGE });
+
+    const sent = mockGuardedSendMail.mock.calls[0][0];
+    expect(sent.html).toContain('/portal/verify?token=tok-abc123');
+    expect(sent.html).not.toContain('/portal/community');
+  });
+
+  it('mints the token for the RECIPIENT, scoped to this thread', async () => {
+    await notifyDmByEmail({ roomId: ROOM, recipientEnrollmentId: RECIPIENT, messageId: MESSAGE });
+
+    expect(mockMintPortalLinkToken).toHaveBeenCalledWith({
+      enrollmentId: RECIPIENT,
+      purpose: 'dm_notification',
+      nextPath: `/portal/messages/${ROOM}`,
+    });
+  });
+
+  it('mints NOTHING for someone who opted out — no live sign-in is left behind', async () => {
+    mockEnrollmentFindByPk.mockResolvedValue(
+      activeRecipient({ intake_data_json: { preferences: { dm_notifications: false } } }),
+    );
+
+    const r = await notifyDmByEmail({ roomId: ROOM, recipientEnrollmentId: RECIPIENT, messageId: MESSAGE });
+
+    expect(r.reason).toBe('opted_out');
+    expect(mockMintPortalLinkToken).not.toHaveBeenCalled();
+  });
+
+  it('a failed mint still sends the email — the mail matters more than the convenience', async () => {
+    mockMintPortalLinkToken.mockResolvedValue(null);
+
+    const r = await notifyDmByEmail({ roomId: ROOM, recipientEnrollmentId: RECIPIENT, messageId: MESSAGE });
+
+    expect(r.sent).toBe(true);
+    const sent = mockGuardedSendMail.mock.calls[0][0];
+    expect(sent.html).toContain(`/portal/messages/${ROOM}`);
+    expect(sent.html).not.toContain('/portal/verify');
+  });
+
+  it('warns the reader that the button is a sign-in, since it now is one', async () => {
+    await notifyDmByEmail({ roomId: ROOM, recipientEnrollmentId: RECIPIENT, messageId: MESSAGE });
+
+    const sent = mockGuardedSendMail.mock.calls[0][0];
+    expect(sent.html).toMatch(/signs you in/i);
+    expect(sent.html).toMatch(/do not forward/i);
   });
 });
 

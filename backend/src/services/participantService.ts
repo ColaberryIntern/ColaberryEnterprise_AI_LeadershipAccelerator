@@ -8,6 +8,7 @@ import {
 import { sendPortalMagicLink } from './emailService';
 import { safeNextPath } from '../utils/safeNextPath';
 import { pickBestEnrollment } from './enrollmentPick';
+import { claimPortalLinkToken, PURPOSE_DM_NOTIFICATION } from './portalLinkTokenService';
 
 /** The canonical-enrolment rule lives in `./enrollmentPick` (pure, T407); re-exported so existing importers keep their name. */
 export { pickBestEnrollment };
@@ -126,7 +127,7 @@ export async function requestMagicLink(
 }
 
 export async function verifyMagicLink(token: string): Promise<{ jwt: string; enrollment: any } | null> {
-  const enrollment = await Enrollment.findOne({
+  let enrollment = await Enrollment.findOne({
     where: {
       portal_token: token,
       portal_token_expires_at: { [Op.gt]: new Date() },
@@ -134,10 +135,27 @@ export async function verifyMagicLink(token: string): Promise<{ jwt: string; enr
     },
   });
 
-  if (!enrollment) return null;
-
   // Keep token reusable — don't clear it. The token expires naturally
   // via portal_token_expires_at. This lets users bookmark their portal link.
+
+  // SECOND, and only on a miss: a one-click link carried by a notification email
+  // (`portal_link_tokens`). Order matters in both directions. Trying the login
+  // token first leaves the sign-in path above byte-for-byte unchanged, so nothing
+  // about requesting a link can regress here. And trying the link token second
+  // means a login token is never passed to `claimPortalLinkToken`, which WRITES —
+  // redeeming is a single-use consumption, and spending it on every ordinary login
+  // attempt would burn tokens that were never presented.
+  //
+  // A burned token whose enrollment is no longer active stays burned. That is the
+  // intended reading: the link was presented and answered, and the reason it did
+  // not produce a session is not one a retry fixes.
+  if (!enrollment) {
+    const claim = await claimPortalLinkToken(token, PURPOSE_DM_NOTIFICATION);
+    if (!claim) return null;
+    const viaLink = await Enrollment.findByPk(claim.enrollmentId);
+    if (!viaLink || viaLink.status !== 'active') return null;
+    enrollment = viaLink;
+  }
 
   const jwtToken = signParticipantJwt(enrollment);
 
