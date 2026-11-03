@@ -40,6 +40,8 @@ afterEach(() => {
 });
 
 const SHELL = fs.readFileSync(path.join(__dirname, '..', 'TodayShell.tsx'), 'utf8');
+// C101: the rail (and this card's mount) moved from TodayShell into TodayRail.
+const RAIL = fs.readFileSync(path.join(__dirname, '..', 'TodayRail.tsx'), 'utf8');
 const CARD = fs.readFileSync(path.join(__dirname, '..', 'TodayStreakCard.tsx'), 'utf8');
 // Marks that appear ONLY in the block (the command band also reads streak.next_points, so that is not one).
 const BLOCK_MARKS = ['te-streak accent-amber', 'te-streak-top', 'te-streak-week', "'Claimed today'"];
@@ -47,17 +49,21 @@ const BLOCK_MARKS = ['te-streak accent-amber', 'te-streak-top', 'te-streak-week'
 describe('the extraction', () => {
   it('the block is gone from TodayShell.tsx line for line, and lives in TodayStreakCard.tsx in the same order', () => {
     for (const mark of BLOCK_MARKS) expect(SHELL).not.toContain(mark);
+    for (const mark of BLOCK_MARKS) expect(RAIL).not.toContain(mark);
     const positions = BLOCK_MARKS.map((m) => CARD.indexOf(m));
     expect(positions.every((p) => p >= 0)).toBe(true);
     expect([...positions].sort((a, b) => a - b)).toEqual(positions);
   });
 
-  it('TodayShell mounts the card exactly once, with the six bindings by name, below the Daily-streak comment', () => {
-    expect(SHELL.match(/<TodayStreakCard\b/g)).toHaveLength(1);
-    const mount = SHELL.slice(SHELL.indexOf('<TodayStreakCard'), SHELL.indexOf('/>', SHELL.indexOf('<TodayStreakCard')));
-    for (const p of ['streak', 'streakCount', 'streakWeek', 'claimedToday', 'busy', 'doClaimStreak']) expect(mount).toContain(`${p}={${p}}`);
-    expect(SHELL.indexOf('{/* Daily streak */}')).toBeLessThan(SHELL.indexOf('<TodayStreakCard'));
-    expect(SHELL).toContain("import TodayStreakCard from './TodayStreakCard';");
+  it('TodayRail mounts the card exactly once, with the six bindings by name, below the Daily-streak comment', () => {
+    expect(RAIL.match(/<TodayStreakCard\b/g)).toHaveLength(1);
+    const mount = RAIL.slice(RAIL.indexOf('<TodayStreakCard'), RAIL.indexOf('/>', RAIL.indexOf('<TodayStreakCard')));
+    for (const p of ['streak', 'streakCount', 'streakWeek', 'claimedToday', 'busy', 'doClaimStreak']) expect(mount).toContain(`${p}={p.${p}}`);
+    expect(RAIL.indexOf('{/* Daily streak */}')).toBeLessThan(RAIL.indexOf('<TodayStreakCard'));
+    expect(RAIL).toContain("import TodayStreakCard from './TodayStreakCard';");
+    // ...and TodayShell feeds the rail the same six values by name.
+    const railMount = SHELL.slice(SHELL.indexOf('<TodayRail'), SHELL.indexOf('/>', SHELL.indexOf('<TodayRail')));
+    for (const p of ['streak', 'streakCount', 'streakWeek', 'claimedToday', 'busy', 'doClaimStreak']) expect(railMount).toContain(`${p}={${p}}`);
   });
 });
 

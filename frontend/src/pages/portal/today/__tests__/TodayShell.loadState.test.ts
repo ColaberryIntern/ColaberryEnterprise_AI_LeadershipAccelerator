@@ -31,8 +31,9 @@ const today = fs.readFileSync(path.join(__dirname, '..', 'TodayShell.tsx'), 'utf
 const shell = fs.readFileSync(path.join(__dirname, '..', 'PortalShell.tsx'), 'utf8');
 const css = fs.readFileSync(path.join(__dirname, '..', 'TodayShell.css'), 'utf8');
 
-/** The command band's JSX — where the wrong numbers were rendered. */
-const band = today.slice(today.indexOf('te-band'), today.indexOf('te-page-h'));
+/** The command band's JSX — where the wrong numbers were rendered. C101 moved it to TodayCommandBand.tsx. */
+const bandSrc = fs.readFileSync(path.join(__dirname, '..', 'TodayCommandBand.tsx'), 'utf8');
+const band = bandSrc.slice(bandSrc.indexOf('te-band'), bandSrc.indexOf('te-page-h'));
 
 describe('TodayShell load state', () => {
   it('tracks hydration and only flips it once everything has settled', () => {
@@ -49,7 +50,10 @@ describe('TodayShell load state', () => {
     expect(band).toMatch(/te-ring-skel/);
     const ring = band.slice(band.indexOf('te-cluster'), band.indexOf('te-metacol'));
     expect(ring.indexOf('hydrated ?')).toBeGreaterThan(-1);
-    expect(ring.indexOf('hydrated ?')).toBeLessThan(ring.indexOf('{total}'));
+    expect(ring.indexOf('hydrated ?')).toBeLessThan(ring.indexOf('{p.total}'));
+    // ...and TodayShell hands the band its real hydration flag, not a constant.
+    const mount = today.slice(today.indexOf('<TodayCommandBand'), today.indexOf('/>', today.indexOf('<TodayCommandBand')));
+    expect(mount).toContain('hydrated={hydrated}');
   });
 
   it('gates the next-step line, which read "0 points — you are all caught up"', () => {

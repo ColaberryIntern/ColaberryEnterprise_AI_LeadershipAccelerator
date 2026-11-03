@@ -7,7 +7,6 @@ import {
 } from '../../../services/onboardingApi';
 import { loadSchedule, resetScheduleCache } from '../scheduleCache';
 import PortalShell from './PortalShell';
-import OpenOnPhone from './OpenOnPhone';
 import { usePortalFlags } from '../../../hooks/usePortalFlags';
 import {
   readParticipant, countdown, firstClassTargetMs,
@@ -20,43 +19,26 @@ import { uploadResume, fileToBase64 } from '../../../services/portalSettingsApi'
 import { runtimeApi } from '../runtime/runtimeApi';
 import { TimelineFeedCard } from '../../../components/timeline/TimelineCard';
 import { ambientMediaOf } from '../../../components/timeline/ambientMedia';
-import TodayFeedV2 from './TodayFeedV2';
 import TodayEventsRail from './TodayEventsRail';
+import TodayRail from './TodayRail';
+import TodayCommandBand from './TodayCommandBand';
+import TodayTimeline from './TodayTimeline';
 import TodayPlan from './TodayPlan';
 import { useTodayPlanGate } from './useTodayPlanGate';
 import type { Category } from './todayCategoryFilter';
-import TimelineFilterChips from './TimelineFilterChips';
 import SkillDetailDrawer from './SkillDetailDrawer';
 import CardDetailDrawer from '../../../components/timeline/CardDetailDrawer';
-import CommunityPulse from './CommunityPulse';
-import TodayStreakCard from './TodayStreakCard';
-import TodayDayCard from './TodayDayCard';
-import { ExplorerKicker, ExplorerRailCards, useExplorerHomeBase } from './ExplorerHomeBase';
+import { useExplorerHomeBase } from './ExplorerHomeBase';
 import { promotable } from '../../../components/campus/events/eventsModel';
 import { useCampusView } from '../../../components/campus/useCampusView';
-import TodayJourneyNudges from './TodayJourneyNudges';
-import NextLiveClassCard from './NextLiveClassCard';
-import InternshipOpportunityCard from './InternshipOpportunityCard';
-import InternshipCommandCard from './InternshipCommandCard';
-import GovProjectCard from './GovProjectCard';
 import { fetchInternshipStatus, InternshipStatus } from '../../../services/internshipApi';
 import { useNextLiveSession } from './useNextLiveSession';
 import '../../../components/timeline/timeline.css';
-// The "Your timeline" section below renders .te-feed / .te-feed-head /
-// .te-feed-filter / .fchip, all of which are defined ONLY in feed.css. It used
-// to reach the bundle just via the CommunityPage / RoomsPage / FeedCard lazy
-// chunks, so a cold load of /portal/today — the default portal landing — had
-// none of those rules: the header icon fell back to the UA default (measured
-// at 462x462 in production on 2026-08-24) and the filter chips rendered as
-// raw default buttons. feed.css is fully scoped to .te-feed*, so importing it
-// here cannot leak into other surfaces.
-import '../feed/feed.css';
 import SkillMeter from '../SkillMeter';
 import SetupModal from './SetupModal';
 import { useReferralForm } from './useReferralForm';
 import { fetchSkillProfile, LearnerSkillProfile } from '../../../services/capeApi';
 import { useTodayNextStep } from './useTodayNextStep';
-import TodayNextStepBanner from './TodayNextStepBanner';
 import TodayNextStepCondensed from './TodayNextStepCondensed';
 import ExplorerPreviewBanner from './ExplorerPreviewBanner';
 import { needsFirstWin, findFirstLessonCard, FIRST_LESSON_PARAM } from './explorerFirstWin';
@@ -361,92 +343,13 @@ const TodayShell: React.FC = () => {
       {toast && <div className="te-toast">{toast}</div>}
 
       <div className={`te-condense-body${condensed ? ' is-condensed' : ''}`}>
-      {redesign ? (
-        /* command band — greeting + primary next step + the three meters in one row */
-        <div className="te-band">
-          <div>
-            {explorerHome ? <ExplorerKicker /> : <div className="crumb">◆ {schedule?.is_explorer ? 'AI Preview' : 'Command Center'}</div>}
-            <h2>
-              {hydrated
-                ? (firstName ? `Welcome back, ${firstName} 👋` : 'Welcome back 👋')
-                : <><span className="te-skel te-skel-name" />&nbsp;</>}
-            </h2>
-            {/* The next-step line is the worst offender: pre-load it reads
-                "0 points — you're all caught up in Classroom!", which is both
-                wrong and demoralising for someone with 678 points. */}
-            {hydrated ? (
-              <TodayNextStepBanner
-                nextStep={nextStep}
-                total={total}
-                onOpenCard={openCard}
-                onScrollTo={scrollToAnchor}
-              />
-            ) : (
-              <div className="te-skel-lines" aria-hidden="true">
-                <span className="te-skel te-skel-line" />
-                <span className="te-skel te-skel-line short" />
-              </div>
-            )}
-          </div>
-          <div className="te-cluster">
-            {/* Rings render as empty dials until the real figures land. The
-                SETUP ring is omitted entirely rather than skeletoned, because
-                whether it appears at all depends on setupRemaining — guessing
-                would make the row reflow when the answer arrives. */}
-            {hydrated ? (
-              <>
-                <div className="te-ringwrap lf">
-                  <div className="te-ring" style={{ '--p': lvl.pct, '--c': 'var(--leaf)' } as React.CSSProperties}><div className="v"><b>{total}</b><span>pts</span></div></div>
-                  <div className="cap">{lvl.name}</div>
-                </div>
-                {setupRemaining > 0 && (
-                  <div className="te-ringwrap">
-                    <div className="te-ring" style={{ '--p': setupPct, '--c': 'var(--berry)' } as React.CSSProperties}><div className="v"><b>{setupDone}/{steps.length}</b><span>setup</span></div></div>
-                    <div className="cap">Setup</div>
-                  </div>
-                )}
-                <div className="te-ringwrap">
-                  <div className="te-ring" style={{ '--p': Math.max(2, readiness), '--c': 'var(--cherry)' } as React.CSSProperties}><div className="v"><b>{readiness}</b><span>/100</span></div></div>
-                  <div className="cap">Skill proficiency</div>
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="te-ringwrap lf" aria-hidden="true">
-                  <div className="te-ring te-ring-skel"><div className="v"><span className="te-skel te-skel-num" /></div></div>
-                  <div className="cap"><span className="te-skel te-skel-cap" /></div>
-                </div>
-                <div className="te-ringwrap" aria-hidden="true">
-                  <div className="te-ring te-ring-skel"><div className="v"><span className="te-skel te-skel-num" /></div></div>
-                  <div className="cap"><span className="te-skel te-skel-cap" /></div>
-                </div>
-              </>
-            )}
-            <div className="te-metacol">
-              <span className="lab">Next tier</span>
-              {/* Tier and streak both come from the same fetch; pre-load they
-                  read "Builder / 150 pts to go / 0-day streak" for someone who
-                  is actually mid-tier with a live streak. */}
-              <span className="big">{hydrated ? (lvl.next ? lvl.next.name : 'Max level') : <span className="te-skel te-skel-tier" />}</span>
-              <span className="to">{hydrated ? (lvl.next ? `${lvl.next.min - total} pts to go` : 'Top tier reached') : <span className="te-skel te-skel-sub" />}</span>
-              <button className="te-bandflame" type="button" onClick={doClaimStreak} disabled={!hydrated || claimedToday || busy}>
-                {hydrated
-                  ? <>🔥 {streakCount}-day streak · {claimedToday ? 'claimed' : `claim${streak ? ` +${streak.next_points}` : ''}`}</>
-                  : <span className="te-skel te-skel-streak" />}
-              </button>
-              <OpenOnPhone />
-            </div>
-          </div>
-        </div>
-      ) : (
-        <div className="te-page-h">
-          {explorerHome ? <ExplorerKicker /> : <div className="crumb">{schedule?.is_explorer ? 'AI Preview' : 'Command Center'}</div>}
-          <h1>Welcome{me.email ? `, ${me.email.split('@')[0]}` : ''}</h1>
-          <div className="sub">{schedule?.is_explorer
-            ? "Explore AI, no card needed — watch, listen, learn, and try. Enroll when you're ready to build for real."
-            : "Let's get you set up. A few quick steps unlock your first points and your seat."}</div>
-        </div>
-      )}
+      <TodayCommandBand
+        redesign={redesign} explorerHome={explorerHome} isExplorer={!!schedule?.is_explorer} hydrated={hydrated}
+        firstName={firstName} email={me.email} nextStep={nextStep} total={total} onOpenCard={openCard}
+        onScrollTo={scrollToAnchor} lvl={lvl} setupRemaining={setupRemaining} setupPct={setupPct} setupDone={setupDone}
+        setupTotal={steps.length} readiness={readiness} streak={streak} streakCount={streakCount}
+        claimedToday={claimedToday} busy={busy} doClaimStreak={doClaimStreak}
+      />
       </div>
 
       {schedule?.is_explorer && (
@@ -534,98 +437,20 @@ const TodayShell: React.FC = () => {
               nothing when there are no events or CCPP is unreachable. */}
           <TodayEventsRail />
 
-          {/* ── aggregated timeline — the big feed pulling from every page ──
-              id is the "See your timeline" scroll target above. */}
-          <div className="te-feed" id="te-timeline-anchor">
-            <div className="te-feed-head">
-              <span className="h">
-                {/* Explicit width/height as well as the CSS rule: an SVG with
-                    neither falls back to the UA default ~300x150 the moment its
-                    stylesheet is missing, which is exactly what shipped here and
-                    in the 2026-08-04 CAPE incident. Belt and braces. */}
-                <svg viewBox="0 0 24 24" fill="none" width={16} height={16}><path d="M12 2v4M12 18v4M2 12h4M18 12h4M5 5l2.5 2.5M16.5 16.5L19 19M19 5l-2.5 2.5M7.5 16.5L5 19" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /><circle cx="12" cy="12" r="3.4" stroke="currentColor" strokeWidth="2" /></svg>
-                Your timeline · everything in one place
-              </span>
-            </div>
-            <TimelineFilterChips
-              enabled={!!flags?.cape_today_plan}
-              filter={categoryFilter}
-              counts={categoryCounts}
-              onChange={setCategoryFilter}
-            />
-            {/* Gated on planRefs !== null — closes the mount-order race. */}
-            {planRefs !== null && (
-              <TodayFeedV2
-                fallbackCards={curriculum}
-                onOpen={openCard}
-                onWorkspace={openCard}
-                onComplete={handleCardComplete}
-                excludeRefs={planRefs}
-                filter={flags?.cape_today_plan ? categoryFilter : undefined}
-                onCounts={flags?.cape_today_plan ? setCategoryCounts : undefined}
-              />
-            )}
-          </div>
+          <TodayTimeline
+            capeTodayPlan={!!flags?.cape_today_plan} categoryFilter={categoryFilter} categoryCounts={categoryCounts}
+            onFilterChange={setCategoryFilter} onCounts={setCategoryCounts} planRefs={planRefs} curriculum={curriculum}
+            onOpen={openCard} onComplete={handleCardComplete}
+          />
         </div>
 
-        {/* ── right sidebar ── */}
-        <aside className="te-side">
-          {/* Growth Journey nudges (Phase 5) — its own read; renders nothing until a rollout writes a row */}
-          <TodayJourneyNudges />
-          {/* Live community pulse — surfaces rooms people are in + live/next sessions */}
-          <CommunityPulse />
-          {/* Your day — meters fold into the command band when the redesign flag is on */}
-          {!redesign && <TodayDayCard lvl={lvl} total={total} setupDone={setupDone} setupTotal={steps.length} setupPct={setupPct} readiness={readiness} />}
-          {explorerHome && <ExplorerRailCards />}
-
-          {/* Daily streak */}
-          <TodayStreakCard streak={streak} streakCount={streakCount} streakWeek={streakWeek} claimedToday={claimedToday} busy={busy} doClaimStreak={doClaimStreak} />
-
-          {/* Next live class — when the student has an upcoming/live session
-              (from live_sessions) show the live-session card; otherwise fall
-              back to the first-class cohort countdown UNCHANGED. The Open House
-              "Coming up" card below is unaffected in either case. */}
-          {/* Once someone is an intern the recruiting card is replaced by the
-              command card — "after activation, replace the recruiting card with a
-              compact Internship Command Card". Same slot, different job. */}
-          {internship?.render && internship.card_state === 'active' && <InternshipCommandCard />}
-          {internship?.render && internship.card_state !== 'active' && (
-            <InternshipOpportunityCard
-              status={internship}
-              onChanged={() => setInternshipToken((n) => n + 1)}
-            />
-          )}
-          {/* P6: the "on your profile" entry to an assigned government project. Self-hides when the intern has
-              none, so it only appears for someone actually on a gov pursuit. */}
-          {internship?.render && <GovProjectCard />}
-          {nextLiveSession ? (
-            <NextLiveClassCard session={nextLiveSession} />
-          ) : schedule?.first_class ? (
-            <div className="te-card te-scard">
-              <h3>Countdown to your first class</h3>
-              <div className="te-muted">{schedule.first_class.cohort_name || 'Your cohort'}{schedule.first_class.core_day ? ` · ${schedule.first_class.core_day}s ${schedule.first_class.core_time || ''}` : ''}</div>
-              {fcCd && (
-                <div className="te-count">
-                  <div className="seg"><b>{fcCd.d}</b><span>days</span></div>
-                  <div className="seg"><b>{fcCd.h}</b><span>hrs</span></div>
-                  <div className="seg"><b>{fcCd.m}</b><span>min</span></div>
-                </div>
-              )}
-              {schedule.first_class.source === 'next_open_cohort' && <div className="te-muted" style={{ marginTop: 8 }}>Next cohort start (join to lock your seat)</div>}
-            </div>
-          ) : null}
-
-          <div className="te-card te-scard">
-            <h3>Coming up</h3>
-            {oh ? (
-              <>
-                <div className="te-stat"><span className="lab">{oh.title}</span></div>
-                <div className="te-muted">{fmtCentralDateTime(oh.starts_at)}</div>
-                <button className="te-btn berry sm" style={{ width: '100%', justifyContent: 'center', marginTop: 12 }} onClick={doRsvp} disabled={busy || rsvped}>{rsvped ? "RSVP'd" : 'RSVP for the next event'}</button>
-              </>
-            ) : <div className="te-muted">No open house scheduled yet — check back soon.</div>}
-          </div>
-        </aside>
+        <TodayRail
+          redesign={redesign} lvl={lvl} total={total} setupDone={setupDone} setupTotal={steps.length} setupPct={setupPct}
+          readiness={readiness} explorerHome={explorerHome} streak={streak} streakCount={streakCount} streakWeek={streakWeek}
+          claimedToday={claimedToday} busy={busy} doClaimStreak={doClaimStreak} internship={internship}
+          onInternshipChanged={() => setInternshipToken((n) => n + 1)} nextLiveSession={nextLiveSession}
+          firstClass={schedule?.first_class} fcCd={fcCd} oh={oh} rsvped={rsvped} doRsvp={doRsvp}
+        />
       </div>
       <CardDetailDrawer
         card={selectedCard}
