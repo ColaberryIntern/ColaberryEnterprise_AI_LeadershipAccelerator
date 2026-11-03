@@ -29,7 +29,9 @@ import fs from 'fs';
 import path from 'path';
 
 const HERE = __dirname;
-const SHELL = path.join(HERE, '..', 'TodayShell.tsx');
+// C101: the section moved out of TodayShell into TodayTimeline (TodayShell mounts it), and its stylesheet import
+// moved with it, so the guarantee is checked where the classes are rendered.
+const SHELL = path.join(HERE, '..', 'TodayTimeline.tsx');
 
 /** Resolve every relative `import './x.css'` in a module to its file contents. */
 function importedCss(modulePath: string): { files: string[]; css: string } {
