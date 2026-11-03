@@ -20,6 +20,30 @@ export function centralDateKey(ms: number): string {
   return `${parts.year}-${parts.month}-${parts.day}`;
 }
 
+/** Monday-first, matching how the weekly schedule names its days. */
+export const CENTRAL_WEEKDAYS = [
+  'sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday',
+] as const;
+
+/**
+ * The lowercase weekday name of a Central calendar date key ("2026-11-02" → "monday").
+ *
+ * WHY NOON AND NOT MIDNIGHT. The key is a Central calendar date, and the only job here
+ * is to name its weekday — so it is read at 12:00 UTC, which is the same calendar day
+ * everywhere from UTC-11 to UTC+11. Parsing it at midnight would put the instant on the
+ * previous day for every negative offset, naming Sunday for a Monday, and that error
+ * would be invisible for most of the week and wrong every time it mattered.
+ *
+ * Returns '' for a key that is not a date, so a caller gets no match rather than a
+ * confident wrong weekday.
+ */
+export function centralWeekdayName(dateKey: string): string {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(dateKey ?? ''))) return '';
+  const at = new Date(`${dateKey}T12:00:00Z`);
+  if (Number.isNaN(at.getTime())) return '';
+  return CENTRAL_WEEKDAYS[at.getUTCDay()];
+}
+
 /**
  * A naive wall-clock (its UTC getters carry the raw digits, e.g. built via
  * `new Date("2026-07-23T18:30:00Z")`) re-interpreted as Central time, DST-aware,
@@ -81,6 +105,30 @@ export function instantToWallClock(instant: Date, timeZone: string): string {
 }
 
 /**
+ * The one clock-time pattern. Shared rather than copied, for the reason in
+ * `convertTo24h` below: a second copy of this exact regex has already caused a
+ * production incident. Anything that needs to ASK whether a stored time is
+ * readable must test with this, never with its own regex.
+ */
+const CLOCK_TIME_RE = /^(\d{1,2}):(\d{2})(?::\d{2})?\s*(AM|PM)?$/i;
+
+/**
+ * Whether a stored time can actually be read, as opposed to falling through
+ * `convertTo24h`'s default.
+ *
+ * EXISTS BECAUSE THE DEFAULT IS A TRAP FOR CALLERS THAT DECIDE SOMETHING.
+ * `convertTo24h` returns '10:00' for anything it cannot parse, which is the
+ * right call for scheduling math that needs *some* instant, and the wrong one
+ * for a caller asking "is a session running right now" — that caller would
+ * confidently announce a session at 10:00 Central that does not exist.
+ * `formatCentralClock` already refuses to lean on the default for the same
+ * reason; this makes the check available instead of re-derived.
+ */
+export function isReadableClockTime(timeStr: unknown): boolean {
+  return typeof timeStr === 'string' && CLOCK_TIME_RE.test(timeStr);
+}
+
+/**
  * Normalize a stored class time to 24h "HH:MM".
  *
  * Lives here, not in a service, because more than one module needs it and a
@@ -92,7 +140,7 @@ export function instantToWallClock(instant: Date, timeZone: string): string {
  * Central. The seconds group is optional for that reason — do not "tidy" it.
  */
 export function convertTo24h(timeStr: string): string {
-  const match = timeStr.match(/^(\d{1,2}):(\d{2})(?::\d{2})?\s*(AM|PM)?$/i);
+  const match = timeStr.match(CLOCK_TIME_RE);
   if (!match) return '10:00';
   let hours = parseInt(match[1], 10);
   const minutes = match[2];

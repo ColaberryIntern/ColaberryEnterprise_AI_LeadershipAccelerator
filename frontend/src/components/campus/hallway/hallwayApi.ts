@@ -14,6 +14,19 @@ export interface HallwayRoom {
   inside_count: number; inside: HallwayPerson[];
   /** When Zoom reported a meeting started here, or null if no call is running. */
   live_since: string | null;
+  /**
+   * The scheduled session from the weekly timetable, or null.
+   *
+   * A THIRD independent fact, not a synonym for either of the two above: the clock
+   * says a session is due here. It can be set with no call started and nobody on the
+   * site, which is exactly when someone opens this page to find the room.
+   */
+  session: HallwayRoomSession | null;
+}
+export interface HallwayRoomSession {
+  title: string; start_at: string; end_at: string;
+  /** False while the session is only about to start. */
+  in_progress: boolean;
 }
 export interface HallwayBooking { booking_id: string; room_id: string; title: string; start_at: string; end_at: string | null; state: string; hosting: boolean }
 export interface Hallway { rooms: HallwayRoom[]; bookings: HallwayBooking[]; reese_id: string | null }

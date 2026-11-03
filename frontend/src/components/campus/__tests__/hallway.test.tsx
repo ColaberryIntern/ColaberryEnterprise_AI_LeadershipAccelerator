@@ -20,7 +20,7 @@ jest.mock('../campusApi', () => ({
 jest.mock('../../../utils/portalApi', () => ({ __esModule: true, default: { get: jest.fn() } }));
 
 // eslint-disable-next-line import/first
-import { hallwayDoors, orderedDoors, doorSign, centralSlotIso, bookDays, wallDoors, isEmptyDoor, type Door } from '../hallway/hallwayModel';
+import { hallwayDoors, orderedDoors, doorSign, centralSlotIso, bookDays, wallDoors, isEmptyDoor, canJoin, boardSummary, rowLine, type Door } from '../hallway/hallwayModel';
 // eslint-disable-next-line import/first
 import { HallwayWall, HallwayRows, HallwayBoard } from '../hallway/Hallway';
 // eslint-disable-next-line import/first
@@ -32,10 +32,15 @@ import { MEET_SHEET_EVENT, HALLWAY_CHANGED_EVENT, type Hallway, type HallwayRoom
 
 const person = (id: string, friend = false) => ({ enrollment_id: id, display_name: `Person ${id}`, avatar_url: null, friend });
 // live_since defaults to null: people present with NO meeting running, which is what
-// inside_count has always actually meant.
-const room = (id: string, o: Partial<HallwayRoom> = {}): HallwayRoom => ({ room_id: id, name: `Room ${id}`, sub: '', emoji: null, privacy: 'cohort', mine: false, inside_count: 0, inside: [], live_since: null, ...o });
+// inside_count has always actually meant. session defaults to null too: an ad-hoc room
+// is in nobody's timetable, and the three are independent.
+const room = (id: string, o: Partial<HallwayRoom> = {}): HallwayRoom => ({ room_id: id, name: `Room ${id}`, sub: '', emoji: null, privacy: 'cohort', mine: false, inside_count: 0, inside: [], live_since: null, session: null, ...o });
 const H = (rooms: HallwayRoom[], bookings: Hallway['bookings'] = []): Hallway => ({ rooms, bookings, reese_id: 'reese-1' });
 const booking = (id: string, roomId: string, start: string) => ({ booking_id: id, room_id: roomId, title: `Session ${id}`, start_at: start, end_at: null, state: 'scheduled', hosting: true });
+/** A scheduled session. 2026-11-02 is a Monday in CST, so 9:00 AM Central is 15:00Z. */
+const sess = (o: Partial<HallwayRoom['session'] & object> = {}) => ({
+  title: 'Intern standup', start_at: '2026-11-02T15:00:00.000Z', end_at: '2026-11-02T16:00:00.000Z', in_progress: true, ...o,
+});
 
 describe('the door rules', () => {
   const h = H([
@@ -242,5 +247,102 @@ describe('C44: the walls always show six doors', () => {
     act(() => { d5.click(); });
     window.removeEventListener(MEET_SHEET_EVENT, on);
     expect(seen).toEqual([{ mode: 'new' }]);
+  });
+});
+
+describe('the timetable reaches the door', () => {
+  const door1 = (h: Hallway): Door => ({ ...orderedDoors(h)[0], n: 1 });
+
+  it('a scheduled room outranks a busier room with nothing scheduled', () => {
+    // The complaint was that the panel named a meeting that was not in the room being
+    // looked at. The room the session is actually in now reads first.
+    const h = H([room('busy', { inside_count: 9 }), room('standup', { session: sess() })]);
+    expect(orderedDoors(h).map((d) => `${d.roomId}:${d.state}`)).toEqual(['standup:in_session', 'busy:occupied']);
+  });
+
+  it('a RUNNING call still outranks a scheduled session', () => {
+    // A started meeting is the thing happening; the timetable only says one is due.
+    const h = H([room('standup', { session: sess() }), room('calling', { live_since: '2026-11-02T15:02:00.000Z' })]);
+    expect(orderedDoors(h).map((d) => `${d.roomId}:${d.state}`)).toEqual(['calling:live', 'standup:in_session']);
+  });
+
+  it('a room that is both live and scheduled reads as live, once', () => {
+    const h = H([room('standup', { session: sess(), live_since: '2026-11-02T15:02:00.000Z' })]);
+    expect(orderedDoors(h).map((d) => `${d.roomId}:${d.state}`)).toEqual(['standup:live']);
+  });
+
+  it('shows a scheduled room nobody has arrived in yet', () => {
+    // The whole point: at 8:50 there is no presence and no call, and this is exactly
+    // when someone opens the campus looking for the room.
+    const h = H([room('standup', { session: sess({ in_progress: false }) })]);
+    expect(orderedDoors(h)).toHaveLength(1);
+    expect(door1(h).insideCount).toBe(0);
+  });
+
+  it('the door says what is happening, not just that something is', () => {
+    const running = H([room('standup', { session: sess() })]);
+    expect(doorSign(door1(running))).toBe('◆ In session');
+    const withPeople = H([room('standup', { session: sess(), inside_count: 4 })]);
+    expect(doorSign(door1(withPeople))).toBe('◆ In session · 4 here');
+  });
+
+  it('names the start time in CENTRAL before the session begins', () => {
+    // 15:00Z on 2026-11-02 is 9:00 AM Central (CST). A UTC render would say 3:00 PM.
+    const soon = H([room('standup', { session: sess({ in_progress: false }) })]);
+    expect(doorSign(door1(soon))).toBe('Starts 9:00 AM');
+  });
+
+  it('uses a different marker from live, so the two cannot be confused', () => {
+    const live = H([room('x', { live_since: '2026-11-02T15:02:00.000Z' })]);
+    const scheduled = H([room('y', { session: sess() })]);
+    expect(doorSign(door1(live))).toContain('●');
+    expect(doorSign(door1(scheduled))).toContain('◆');
+    expect(doorSign(door1(scheduled))).not.toContain('●');
+  });
+
+  it('the row names the SESSION, not the room tagline', () => {
+    const h = H([room('standup', { sub: 'Some room tagline', session: sess({ title: 'Intern standup' }) })]);
+    expect(rowLine(door1(h))).toBe('Intern standup · In session');
+    const soon = H([room('standup', { sub: 'tagline', session: sess({ in_progress: false }) })]);
+    expect(rowLine(door1(soon))).toBe('Intern standup · Starts 9:00 AM');
+  });
+
+  it('KEEPS the join button for a scheduled room', () => {
+    // The regression this guards: adding a state without adding it to canJoin removes
+    // the button from the one room everyone was told to be in.
+    expect(canJoin({ state: 'in_session' })).toBe(true);
+    expect(canJoin({ state: 'live' })).toBe(true);
+    expect(canJoin({ state: 'occupied' })).toBe(true);
+    expect(canJoin({ state: 'booked' })).toBe(false);
+    expect(canJoin({ state: 'idle' })).toBe(false);
+  });
+
+  it('the board reports a scheduled session rather than counting browser tabs', () => {
+    const h = H([room('standup', { session: sess() }), room('busy', { inside_count: 7 })]);
+    expect(boardSummary(h)).toEqual({ count: 1, label: 'session scheduled now' });
+  });
+
+  it('the board still prefers a running call over a scheduled one', () => {
+    const h = H([room('standup', { session: sess() }), room('calling', { live_since: '2026-11-02T15:02:00.000Z' })]);
+    expect(boardSummary(h)).toEqual({ count: 1, label: 'room live now' });
+  });
+
+  it('pluralises the scheduled count', () => {
+    const h = H([room('a', { session: sess() }), room('b', { session: sess({ title: 'AI Session' }) })]);
+    expect(boardSummary(h)).toEqual({ count: 2, label: 'sessions scheduled now' });
+  });
+
+  it('orders two scheduled rooms by start time, soonest first', () => {
+    const h = H([
+      room('later', { session: sess({ title: 'Later', start_at: '2026-11-02T16:00:00.000Z' }) }),
+      room('sooner', { session: sess({ title: 'Sooner', start_at: '2026-11-02T15:00:00.000Z' }) }),
+    ]);
+    expect(orderedDoors(h).map((d) => d.roomId)).toEqual(['sooner', 'later']);
+  });
+
+  it('changes nothing for a hallway with no scheduled sessions', () => {
+    const h = H([room('busy', { inside_count: 3 }), room('mine', { mine: true })]);
+    expect(orderedDoors(h).map((d) => `${d.roomId}:${d.state}`)).toEqual(['busy:occupied', 'mine:idle']);
+    expect(boardSummary(h)).toEqual({ count: 3, label: 'people here' });
   });
 });

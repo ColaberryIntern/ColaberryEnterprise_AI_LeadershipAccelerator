@@ -21,6 +21,12 @@ const Room = z.object({
   // tabs and never meant this; the two are reported separately so the UI can stop
   // calling the first one "open now".
   live_since: z.string().nullable(),
+  // What the TIMETABLE says, which is a different question from whether a call is
+  // running. Both are declared because both are shown, and collapsing them is how the
+  // panel came to announce a meeting that was not in the room being looked at.
+  session: z.object({
+    title: z.string(), start_at: z.string(), end_at: z.string(), in_progress: z.boolean(),
+  }).strict().nullable(),
 }).strict();
 const Booking = z.object({
   booking_id: z.string(), room_id: z.string(), title: z.string(), start_at: z.string(), end_at: z.string().nullable(), state: z.string(), hosting: z.boolean(),
