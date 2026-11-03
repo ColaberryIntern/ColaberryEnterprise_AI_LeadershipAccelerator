@@ -135,6 +135,24 @@ async function notifyDmRecipient(roomId: string, senderId: string, messageId: st
 
     const { createNotification } = await import('../communityNotificationService');
     await createNotification(recipientId, senderId, 'new_message', 'dm', messageId);
+
+    // AF-REPORT-KES-NOTIFY — the in-app row above is what Kes could only see once he was already
+    // logged in, and the 08:00 UTC digest turns it into a count the next morning. This mails him
+    // at message time. It sits HERE, after the Reese and Dara early returns above, so an AI agent
+    // is never emailed: those skips are reused rather than restated.
+    //
+    // Deliberately awaited inside this function's own try/catch rather than fired and forgotten:
+    // notifyDmByEmail never throws by contract, and this call site is itself wrapped, so the
+    // sender's message is safe either way — but awaiting means the outcome is logged, and a send
+    // that silently never happened is the failure mode this ticket exists to fix.
+    const { notifyDmByEmail } = await import('./dmNotificationService');
+    const mail = await notifyDmByEmail({ roomId, recipientEnrollmentId: recipientId, messageId });
+    if (!mail.sent && mail.reason !== 'suppressed_window') {
+      console.log(JSON.stringify({
+        level: 'info', service: 'dm', event: 'dm_notification_email_not_sent',
+        outcome: 'partial', room_id: roomId, reason: mail.reason,
+      }));
+    }
   } catch (e: any) {
     console.warn(JSON.stringify({
       level: 'warn', service: 'dm', event: 'dm_notification_failed',
