@@ -5,6 +5,7 @@ import { freeSignup } from '../../services/onboardingApi';
 import { identifyVisitor } from '../../utils/tracker';
 import { getSignupAcquisitionFields } from '../../services/utmService';
 import { SIGNUP_CONSENT_TEXT, PHONE_CONSENT_TEXT } from '../../config/consentText';
+import { hasLiveParticipantSession } from '../../utils/participantToken';
 
 // Public "Start for $0" front door. Creates a $0 guest account (0 points), logs
 // the visitor straight in, and drops them on the Today shell — the top of the
@@ -41,6 +42,10 @@ function PortalFreeSignupPage() {
   // marketing consent.
   const [marketingOptIn, setMarketingOptIn] = useState(false);
   const { login } = useParticipantAuth();
+  // C105 (C97: 32 return visits were Explorers re-clicking the ad and landing here as strangers): a browser that
+  // already holds a live session is offered the way back first. "Create a different account" still reaches the form,
+  // for a shared computer.
+  const [welcomeBack, setWelcomeBack] = useState(() => hasLiveParticipantSession());
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -118,6 +123,21 @@ function PortalFreeSignupPage() {
           <span className="cbfs-wordmark" aria-hidden="true"><span className="cbfs-c">C</span>olaberry</span>
         </div>
 
+        {welcomeBack ? (
+          <div data-testid="cbfs-welcome-back">
+            <div className="cbfs-head">
+              <span className="cbfs-badge">Welcome back</span>
+              <h1 className="cbfs-title">You're already signed in</h1>
+              <p className="cbfs-text">Pick up where you left off on your campus.</p>
+            </div>
+            <Link className="cbfs-btn cbfs-btn-link" to="/portal/today">Go to your campus →</Link>
+            <p className="cbfs-foot">
+              Not you?{' '}
+              <button type="button" className="cbfs-linkbtn" onClick={() => setWelcomeBack(false)}>Create a different account</button>
+            </p>
+          </div>
+        ) : (
+        <>
         <div className="cbfs-head">
           <span className="cbfs-badge">Preview access</span>
           <h1 className="cbfs-title">Start for $0</h1>
@@ -193,6 +213,8 @@ function PortalFreeSignupPage() {
         <p className="cbfs-foot">
           Already enrolled? <Link className="cbfs-link" to="/portal/login">Sign in</Link>
         </p>
+        </>
+        )}
       </main>
     </div>
   );
@@ -234,6 +256,10 @@ const CBFS_CSS = `
 .cbfs-foot{margin:20px 0 0;text-align:center;font-size:14px;color:#6B6B6B}
 .cbfs-link{color:#2E6A86;font-weight:700;text-decoration:none}
 .cbfs-link:hover{text-decoration:underline}
+.cbfs-btn-link{display:block;text-align:center;text-decoration:none;min-height:44px;box-sizing:border-box}
+.cbfs-linkbtn{background:none;border:none;padding:0 4px;min-height:44px;font:inherit;font-weight:700;color:#2E6A86;cursor:pointer}
+.cbfs-linkbtn:hover{text-decoration:underline}
+.cbfs-linkbtn:focus-visible{outline:3px solid #367895;outline-offset:2px}
 `;
 
 export default PortalFreeSignupPage;

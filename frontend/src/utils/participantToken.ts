@@ -7,6 +7,8 @@ export interface ParticipantTokenClaims {
   cohort_id?: string;
   read_only?: boolean;
   impersonated_by?: string;
+  /** Expiry, seconds since the epoch (JWT standard claim). */
+  exp?: number;
 }
 
 export function decodeParticipantClaims(token: string | null): ParticipantTokenClaims | null {
@@ -56,4 +58,18 @@ export function getParticipantToken(): string | null {
  */
 export function isReadOnlyParticipantSession(): boolean {
   return decodeParticipantClaims(getParticipantToken())?.read_only === true;
+}
+
+/**
+ * C105: does THIS browser hold a real, unexpired portal session? For display only (the "Welcome back" offer on
+ * /portal/signup): the server still decides on every request. Reads the real session (localStorage) only, so an
+ * admin's read-only "View as" tab never reads as a returning Explorer; a token without `exp`, or one expiring within a
+ * minute, is not live. Mirrors public/v1/welcome-back.js, which the hosted landing pages load.
+ */
+export function hasLiveParticipantSession(nowMs: number = Date.now()): boolean {
+  let token: string | null = null;
+  try { token = localStorage.getItem(PARTICIPANT_TOKEN_KEY); } catch { return false; }
+  const claims = decodeParticipantClaims(token);
+  if (!claims || claims.read_only === true || typeof claims.exp !== 'number') return false;
+  return claims.exp * 1000 > nowMs + 60_000;
 }
