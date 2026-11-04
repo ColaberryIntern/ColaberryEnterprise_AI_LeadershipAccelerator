@@ -3235,6 +3235,11 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
       'enroll_in_campaign',
       'retrieve_knowledge',
       'schedule_callback',
+      // Marketing quoting, 2026-11-04. Both are READS or DRAFTS, and neither is `send_email`:
+      // `agentEmailTool` checks `tools_granted` for that exact string before it will do anything
+      // but draft, so withholding it is one of the reasons the compose path cannot send.
+      'list_quotable_marketing_assets',
+      'draft_marketing_email',
     ],
     persona_version: '2026-10-26',
   },

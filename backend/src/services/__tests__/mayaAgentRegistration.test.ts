@@ -88,7 +88,10 @@ describe('the instruments themselves', () => {
 
   it('found the tool list, so the comparison below is not vacuous', () => {
     const names = realToolNames();
-    expect(names.length).toBe(10);
+    // 10 until 2026-11-04, when the marketing-quoting pair landed. The number is asserted
+    // rather than derived on purpose: it is the control that proves the regex read something,
+    // so it has to be updated by hand when the surface really changes.
+    expect(names.length).toBe(12);
     expect(names).toContain('capture_lead_details');
   });
 });
@@ -124,12 +127,21 @@ describe('her grants are her real tools, not an aspiration', () => {
     expect(granted).toEqual(realToolNames().sort());
   });
 
-  it('declares ten, which is the count I got wrong by hand', () => {
-    expect(maya.tools_granted).toHaveLength(10);
+  it('declares twelve, and the count is checked because I once got it wrong by hand', () => {
+    // Ten at registration; the marketing-quoting pair took it to twelve on 2026-11-04.
+    expect(maya.tools_granted).toHaveLength(12);
   });
 
   it('includes schedule_callback, the one the hand-written list dropped', () => {
     expect(maya.tools_granted).toContain('schedule_callback');
+  });
+
+  it('does NOT grant send_email, which is load-bearing rather than an oversight', () => {
+    // `agentEmailTool` checks `tools_granted` for exactly this string before it will do
+    // anything other than draft. The marketing compose path routes through that tool, so
+    // withholding the grant is one of the independent reasons it cannot send. Granting it
+    // here would quietly remove a safety layer that nothing else announces.
+    expect(maya.tools_granted).not.toContain('send_email');
   });
 });
 
