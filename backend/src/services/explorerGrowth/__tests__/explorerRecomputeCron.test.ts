@@ -14,19 +14,23 @@ const root = path.join(__dirname, '..', '..', '..');
 const read = (rel: string) => fs.readFileSync(path.join(root, rel), 'utf8');
 
 const scheduler = read('services/schedulerService.ts');
+const sequence = read('services/scheduling/explorerNightlySequence.ts');
 const registry = read('services/agentRegistrySeed.ts');
 const script = read('scripts/recomputeExplorerProfiles.ts');
 
 /** The cron block, from its schedule line to the closing of the callback. */
 function recomputeCronBlock(): string {
-  const i = scheduler.indexOf("instrumentCronJob('ExplorerProfileRecompute'");
+  const i = sequence.indexOf("instrumentCronJob('ExplorerProfileRecompute'");
   expect(i).toBeGreaterThan(-1);
-  return scheduler.slice(i - 400, i + 400);
+  return sequence.slice(i, sequence.indexOf('instrumentCronJob(', i + 10));
 }
 
 describe('the recompute cron is registered the house way', () => {
   it('is wrapped in instrumentCronJob', () => {
-    expect(scheduler).toContain("instrumentCronJob('ExplorerProfileRecompute'");
+    expect(sequence).toContain("instrumentCronJob('ExplorerProfileRecompute'");
+    // Registered through the sequence, not a second clock time beside it.
+    expect(scheduler).toContain('registerExplorerNightlySequence();');
+    expect(scheduler).not.toContain("instrumentCronJob('ExplorerProfileRecompute'");
   });
 
   it('is registered in agentRegistrySeed so it is pausable without a redeploy', () => {
@@ -36,13 +40,13 @@ describe('the recompute cron is registered the house way', () => {
   it('declares the same schedule in both places', () => {
     // A registry entry that disagrees with the real cron misleads whoever reads
     // Admin > Agents to decide whether a job has run.
-    expect(recomputeCronBlock()).toContain("cron.schedule('20 3 * * *'");
+    expect(sequence).toContain("cron.schedule('20 3 * * *'");
     expect(registry).toContain("schedule: '20 3 * * *'");
   });
 
   it('is offset from the on-the-hour and every-5-minute jobs', () => {
     // A 153-learner batch must not contend with them on the shared Postgres.
-    const m = recomputeCronBlock().match(/cron\.schedule\('(\d+) (\d+) \* \* \*'/);
+    const m = sequence.match(/cron\.schedule\('(\d+) (\d+) \* \* \*'/);
     expect(m).not.toBeNull();
     expect(Number(m![1])).toBeGreaterThan(0); // not on the hour
   });

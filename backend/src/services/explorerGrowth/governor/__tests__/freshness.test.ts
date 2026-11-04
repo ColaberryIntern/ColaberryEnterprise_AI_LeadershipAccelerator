@@ -157,3 +157,36 @@ describe('against a row the REAL bridge would produce', () => {
     ).toBe(false);
   });
 });
+
+describe('the nightly cutoff (C108)', () => {
+  const created = hoursAgo(100);
+
+  it('refuses a profile scored before the sequence started, though 26 hours would pass it', () => {
+    // The failure this closes: last night's scores are only about 24 hours old.
+    expect(
+      evaluateFreshness({ created_at: created, scores_computed_at: hoursAgo(24) }, NOW, hoursAgo(1)),
+    ).toEqual({ fresh: false, reason: 'not_rescored_tonight' });
+  });
+
+  it('accepts a profile scored after the sequence started', () => {
+    expect(
+      evaluateFreshness({ created_at: created, scores_computed_at: hoursAgo(0.5) }, NOW, hoursAgo(1)),
+    ).toEqual({ fresh: true });
+  });
+
+  it('accepts a score at the exact cutoff instant', () => {
+    expect(
+      evaluateFreshness({ created_at: created, scores_computed_at: hoursAgo(1) }, NOW, hoursAgo(1)),
+    ).toEqual({ fresh: true });
+  });
+
+  it('keeps the 26-hour rule for an operator run with no cutoff', () => {
+    expect(evaluateFreshness({ created_at: created, scores_computed_at: hoursAgo(24) }, NOW)).toEqual({ fresh: true });
+  });
+
+  it('still names the older reason when a profile fails both', () => {
+    expect(
+      evaluateFreshness({ created_at: created, scores_computed_at: hoursAgo(30) }, NOW, hoursAgo(1)),
+    ).toEqual({ fresh: false, reason: 'stale' });
+  });
+});

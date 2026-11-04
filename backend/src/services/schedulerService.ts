@@ -46,10 +46,8 @@ import { ingestRecordingForSession, ingestRecordingForBooking, ingestRecordingFo
 import { attachClassNotesForSession } from './sessionClassNotesService';
 import { extractZoomMeetingId, findRecordingInstancesByMeetingId } from './zoomService';
 import { instrumentCronJob } from './cronInstrumentation';
-import { runScheduledRecompute } from './explorerGrowth/explorerProfileService';
 import { recomputeAllMilestonePromotions } from './progression/milestoneSweep';
-import { runScheduledGovernor } from './explorerGrowth/governor/runGovernor';
-import { runScheduledDraftRender } from './explorerGrowth/drafts/runDraftRender';
+import { registerExplorerNightlySequence } from './scheduling/explorerNightlySequence';
 import { registerGrowthJourneyCrons } from './scheduling/growthJourneyCrons';
 import { registerAdSpendCrons } from './scheduling/adSpendCrons';
 import { runContentSync } from './explorerGrowth/content/runContentSync';
@@ -1807,74 +1805,10 @@ export function startScheduler(): void {
     });
   });
 
-  // Explorer Growth OS — nightly profile recompute (EPIC 3 T006).
-  //
-  // RECOMPUTES ONLY. It scores and classifies; it decides nothing and sends
-  // nothing. The Journey Governor that acts on a state is EPIC 4, behind its
-  // own separate flag.
-  //
-  // runScheduledRecompute checks isExplorerFeatureEnabled('journeyIntelligence')
-  // itself and returns immediately when off, so this is dark until BOTH the
-  // master flag and the sub-flag are on. Registered in agentRegistrySeed as
-  // ExplorerProfileRecompute so it is pausable from Admin > Agents without a
-  // redeploy.
-  //
-  // 03:20 UTC: deliberately offset from the :00 and */5 jobs above so a
-  // 153-learner batch does not contend with them on the shared Postgres.
-  // Explorer Growth OS - Journey Governor (EPIC 4 T005).
-  //
-  // 03:50 UTC, THIRTY MINUTES AFTER the recompute above. Ordering is the whole
-  // point: the Governor reads the scores and journey states the recompute
-  // writes, and deciding on yesterday's scores would defeat the freshness gate
-  // it enforces. The recompute takes ~4s for 153 learners, so 30 minutes is
-  // generous headroom rather than a tight coupling.
-  //
-  // DECIDES AND RECORDS ONLY. It enqueues nothing and sends nothing; every row
-  // is written with executed:false. Execution is EPIC 6, behind its own flag.
-  //
-  // runScheduledGovernor checks isExplorerFeatureEnabled('journeyGovernor')
-  // itself and returns immediately when off, so this is dark until BOTH the
-  // master flag and the sub-flag are on.
-  cron.schedule('50 3 * * *', () => {
-    instrumentCronJob('ExplorerGovernorDecide', async () => {
-      await runScheduledGovernor();
-    }).catch((err) => {
-      console.error('[Scheduler] ExplorerGovernorDecide failed:', err);
-    });
-  });
-
-  // Explorer Growth OS - draft render (Phase 1, docs/EXPLORER_MESSAGING_PLAN.html).
-  //
-  // 04:10 UTC, TWENTY MINUTES AFTER the Governor. It reads the decisions that
-  // job writes, so running it beside the Governor would render yesterday's
-  // decisions and leave today's with no message against them.
-  //
-  // A SEPARATE CRON BLOCK, not an extra call inside the Governor's. That block
-  // promises "DECIDES AND RECORDS ONLY - it enqueues nothing and sends
-  // nothing", and generating copy inside it would make the promise read as
-  // narrower than it looks. Keeping them apart also means Admin > Agents can
-  // pause the rendering without pausing the deciding, which matters because
-  // only one of the two costs money per run.
-  //
-  // RENDERS ONLY. Drafts land in scheduled_emails with a status the sender
-  // never claims - its candidate SELECT and its claiming UPDATE both require
-  // status = 'pending' - so nothing written here can be picked up and sent.
-  //
-  // runScheduledDraftRender checks isExplorerFeatureEnabled('draftRender')
-  // itself and returns immediately when off, so this is dark until BOTH the
-  // master flag and EXPLORER_DRAFT_RENDER_ENABLED are on.
-  cron.schedule('10 4 * * *', () => {
-    instrumentCronJob('ExplorerDraftRender', async () => {
-      await runScheduledDraftRender();
-    }).catch((err) => {
-      console.error('[Scheduler] ExplorerDraftRender failed:', err);
-    });
-  });
-
   // Explorer Growth OS - content registry sync (EPIC 5 T006).
   //
-  // 02:50 UTC, THIRTY MINUTES BEFORE the profile recompute and a full hour
-  // before the Governor decides. Ordering is the point again: the Governor
+  // 02:50 UTC, THIRTY MINUTES BEFORE the nightly sequence below, whose Governor
+  // step decides after the recompute. Ordering is the point again: the Governor
   // resolves content at decision time, so a registry refreshed after it runs
   // would serve yesterday's catalogue for a day.
   //
@@ -1908,17 +1842,8 @@ export function startScheduler(): void {
     });
   });
 
-  cron.schedule('20 3 * * *', () => {
-    // Wrapped so the callback resolves to void: instrumentCronJob expects
-    // Promise<void>, and runScheduledRecompute returns a BatchResult the cron
-    // has no use for. The result is still captured in ai_agent_activity_logs by
-    // the instrumentation itself.
-    instrumentCronJob('ExplorerProfileRecompute', async () => {
-      await runScheduledRecompute();
-    }).catch((err) => {
-      console.error('[Scheduler] ExplorerProfileRecompute failed:', err);
-    });
-  });
+  // Explorer Growth OS - recompute, then Governor, then draft render (C108).
+  registerExplorerNightlySequence();
 
   // Growth Journey OS crons - the Phase 4 T408 nightly shadow decisions and, from Phase 5 T513, the executor - live in
   // services/scheduling/growthJourneyCrons.ts, registered here at the position the shadow block held.

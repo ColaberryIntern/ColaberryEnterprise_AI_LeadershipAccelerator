@@ -251,50 +251,46 @@ describe('it is dark until two flags are on', () => {
 });
 
 describe('the cron is wired, and wired in the right order', () => {
-  const scheduler = read('services/schedulerService.ts');
+  const sequence = read('services/scheduling/explorerNightlySequence.ts');
   const registry = read('services/agentRegistrySeed.ts');
 
   it('is registered so it is pausable from Admin > Agents without a redeploy', () => {
     expect(registry).toContain("agent_name: 'ExplorerDraftRender'");
-    expect(scheduler).toContain("instrumentCronJob('ExplorerDraftRender'");
+    expect(sequence).toContain("instrumentCronJob('ExplorerDraftRender'");
   });
 
   it('declares the SAME schedule in both places', () => {
     // A registry entry that disagrees with the real cron misleads whoever
     // reads Admin > Agents to decide whether a job has run.
-    expect(scheduler).toContain("cron.schedule('10 4 * * *'");
-    expect(registry).toContain("schedule: '10 4 * * *'");
+    expect(sequence).toContain("cron.schedule('20 3 * * *'");
+    const at = registry.indexOf("agent_name: 'ExplorerDraftRender'");
+    expect(registry.slice(at, at + 400)).toContain("schedule: '20 3 * * *'");
+    expect(registry).not.toContain("schedule: '10 4 * * *'");
   });
 
   it('runs AFTER the Governor, whose rows it reads', () => {
     // Rendering before the Governor writes would draft yesterday's decisions
     // and leave today's with no message against them.
-    const governorAt = scheduler.indexOf("cron.schedule('50 3 * * *'");
-    const draftAt = scheduler.indexOf("cron.schedule('10 4 * * *'");
+    // Order in the sequence, not a clock gap (C108): the Governor can now take
+    // as long as it needs. Proved with a slow Governor in
+    // scheduling/__tests__/explorerNightlySequence.test.ts.
+    const governorAt = sequence.indexOf('await runScheduledGovernor(');
+    const draftAt = sequence.indexOf('await runScheduledDraftRender(');
     expect(governorAt).toBeGreaterThan(-1);
-    expect(draftAt).toBeGreaterThan(-1);
-    // 03:50 then 04:10 — twenty minutes later on the clock, not just later in
-    // the file, which is what actually determines the order.
-    expect(4 * 60 + 10).toBeGreaterThan(3 * 60 + 50);
+    expect(draftAt).toBeGreaterThan(governorAt);
   });
 
-  it('is a separate cron block, so the Governor keeps its decides-only promise', () => {
-    // Folding this into the Governor's block would make that block's stated
-    // guarantee read as narrower than it looks, and would stop Admin > Agents
-    // pausing the paid half without pausing the free half.
-    //
-    // COMMENTS STRIPPED FIRST. The draft block's own docblock names
-    // `runScheduledDraftRender` and sits between the two cron calls, so a raw
-    // slice fails on the prose that EXPLAINS the separation rather than on a
-    // real call. A guard that trips on its own documentation teaches people to
-    // reword the comment instead of trusting the guard.
-    const code = scheduler.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
-    const governorBlock = code.slice(
-      code.indexOf("cron.schedule('50 3 * * *'"),
-      code.indexOf("cron.schedule('10 4 * * *'"),
+  it('is a separate step, so the Governor keeps its decides-only promise', () => {
+    // Folding this into the Governor's step would make its stated guarantee
+    // read as narrower than it looks, and would stop Admin > Agents pausing the
+    // paid half without pausing the half that costs nothing.
+    const code = sequence.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+    const governorStep = code.slice(
+      code.indexOf("instrumentCronJob('ExplorerGovernorDecide'"),
+      code.indexOf("instrumentCronJob('ExplorerDraftRender'"),
     );
-    expect(governorBlock).toContain('runScheduledGovernor()');
-    expect(governorBlock).not.toContain('runScheduledDraftRender');
+    expect(governorStep).toContain('runScheduledGovernor(');
+    expect(governorStep).not.toContain('runScheduledDraftRender');
   });
 });
 

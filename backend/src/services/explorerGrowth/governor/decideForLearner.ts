@@ -113,6 +113,8 @@ export interface DecideOptions {
   policyInputFor: (candidate: Candidate) => ContactPolicyInput;
   /** The profile timestamps, for the staleness gate. */
   profileTimestamps: { created_at: Date | string; scores_computed_at: Date | string | null };
+  /** Refuse a profile scored before this. Set by the nightly sequence (C108). */
+  scoredSince?: Date;
 }
 
 /**
@@ -122,7 +124,7 @@ export interface DecideOptions {
 export function decideForLearner(ctx: GovernorContext, opts: DecideOptions): Decision {
   // 1. Freshness. §8.3: refuse on a stale profile rather than deciding on data
   //    that may be wrong. Fail-closed by design.
-  const freshness = evaluateFreshness(opts.profileTimestamps, ctx.asOf);
+  const freshness = evaluateFreshness(opts.profileTimestamps, ctx.asOf, opts.scoredSince);
   if (!freshness.fresh) {
     return waitDecision(ctx, `refused: profile ${freshness.reason}`);
   }
