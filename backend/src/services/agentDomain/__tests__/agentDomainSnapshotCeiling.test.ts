@@ -70,6 +70,7 @@ const build = (caps: Array<Partial<Record<string, unknown>>>) => buildAgentDomai
     approved_autonomy_note: string | null;
     max_permitted_autonomy: string | null;
     max_permitted_autonomy_note: string | null;
+    ceiling_reason: string | null;
   }>;
 };
 
@@ -102,6 +103,56 @@ describe('the ceiling is reported, not just consumed', () => {
     expect(s.authority[0].reasons).toContain('capped_by_max_permitted');
     expect(s.authority[0].max_permitted_autonomy).toBe('autonomy:R1');
     expect(s.authority[0].approved_autonomy).toBe('autonomy:R5');
+  });
+});
+
+describe('the ceiling REASON, which is a different question from `reasons`', () => {
+  it('carries the capability record\'s own rationale for where its ceiling sits', () => {
+    const s = build([{
+      capability_id: 'marketing.a',
+      max_permitted_autonomy: 'autonomy:R5',
+      max_autonomy_rationale: 'R8 and R9 withheld because the scan hands work to a publication chain.',
+    }]);
+    expect(s.authority[0].ceiling_reason)
+      .toBe('R8 and R9 withheld because the scan hands work to a publication chain.');
+  });
+
+  it('is NOT the same thing as `reasons`, and the two can disagree', () => {
+    // Sarbjit named this distinction herself: `reasons` says how the EFFECTIVE level was arrived
+    // at; `ceiling_reason` says why the CEILING is what it is. A capability can have a ceiling
+    // rationale while `reasons` is empty, because nothing capped it.
+    const s = build([{
+      capability_id: 'marketing.a',
+      starting_autonomy: 'autonomy:R0',
+      max_permitted_autonomy: 'autonomy:R9',
+      max_autonomy_rationale: 'Nothing here leaves the system.',
+    }]);
+    expect(s.authority[0].reasons).toEqual([]);
+    expect(s.authority[0].ceiling_reason).toBe('Nothing here leaves the system.');
+  });
+
+  it('is null, not an empty string, when the record has no rationale', () => {
+    // A blank string renders as an empty line that looks like a bug; null lets the page say
+    // "no rationale recorded" in words, which is the house rule for an absent value.
+    const s = build([{ capability_id: 'marketing.a', max_autonomy_rationale: '   ' }]);
+    expect(s.authority[0].ceiling_reason).toBeNull();
+  });
+
+  it('does not reach the ladder, so it cannot change any level', () => {
+    const withReason = build([{
+      capability_id: 'marketing.a',
+      starting_autonomy: 'autonomy:R1',
+      max_permitted_autonomy: 'autonomy:R6',
+      max_autonomy_rationale: 'anything at all',
+    }]);
+    const withoutReason = build([{
+      capability_id: 'marketing.a',
+      starting_autonomy: 'autonomy:R1',
+      max_permitted_autonomy: 'autonomy:R6',
+    }]);
+    expect(withReason.authority[0].effective_autonomy)
+      .toBe(withoutReason.authority[0].effective_autonomy);
+    expect(withReason.authority[0].reasons).toEqual(withoutReason.authority[0].reasons);
   });
 });
 
