@@ -76,3 +76,29 @@ not. That matters: `nginx/Dockerfile` runs a full React build, and running it on
 production host has twice pushed the shared Postgres into crash recovery. Deploy by
 pulling the published image once CI has produced one for main's tip, never by building
 nginx on the box.
+
+---
+
+## Follow-up: the hero thumbnail was never reachable, and why
+
+`identity.heroImageUrl` does **not** name the cover. `resolveHeroImage` in
+`caseStudyPublicSections.ts` honours it *only when the URL matches an artifact that
+already passed `projectArtifacts`* — approved, open, publicly viewable — and otherwise
+walks `HERO_IMAGE_PRIORITY` (`screenshot`, `architecture`, `photo`) and takes the first
+approved artifact of that kind. The module says why in terms: trusting the field on its
+own "would let a cover bypass artifact approval and publish a picture the gate never
+saw, which is the one thing it must not become."
+
+So `thumb-stress-test-review-app.jpg` was ignored, the cover fell through to the first
+approved screenshot, and the page looked right **by luck rather than by choice**. The
+record now names `shot-str-review-queue.png` explicitly, which is a URL the artifact
+gate has already cleared, and this commit removes the thumbnail nothing can reference.
+
+**The rule for the next record: a cover must be one of the record's own approved
+artifacts.** Shipping a separate thumbnail file is wasted work.
+
+Caught by reading the live projection rather than the write: every override reported
+success, the publish gate reported zero blockers, and the field was still being
+discarded downstream. The same read caught the measurement narrative opening with
+"Seventeen figures" over a list of sixteen — the counts are now derived from the array
+rather than retyped.
