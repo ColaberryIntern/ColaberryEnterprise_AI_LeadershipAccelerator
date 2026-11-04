@@ -39,17 +39,17 @@ async function projectsWithResponses(): Promise<string[]> {
 async function loadRequirements(pid: string): Promise<MigrationRequirement[]> {
   const rows = await ContractRequirement.findAll({ where: { delivery_project_id: pid } });
   return rows.map((r) => {
-    const p = r.get({ plain: true }) as Record<string, unknown>;
-    return { id: p.id as string, canonical_req_id: p.canonical_req_id as string, statement: p.statement as string, kind: p.kind as string };
+    const p = r.get({ plain: true }) as unknown as { id: string; canonical_req_id: string; statement: string; kind: string };
+    return { id: p.id, canonical_req_id: p.canonical_req_id, statement: p.statement, kind: p.kind };
   });
 }
 
 async function loadResponses(pid: string): Promise<MigrationResponse[]> {
   const rows = await GovProposalResponse.findAll({ where: { delivery_project_id: pid } });
   return rows.map((r) => {
-    const p = r.get({ plain: true }) as Record<string, unknown>;
+    const p = r.get({ plain: true }) as unknown as { requirement_id: string; content: unknown; figures: unknown; gaps: unknown };
     return {
-      requirementId: p.requirement_id as string,
+      requirementId: p.requirement_id,
       content: typeof p.content === 'string' ? p.content : '',
       figures: Array.isArray(p.figures) ? (p.figures as MigrationResponse['figures']) : [],
       gaps: Array.isArray(p.gaps) ? (p.gaps as MigrationResponse['gaps']) : [],

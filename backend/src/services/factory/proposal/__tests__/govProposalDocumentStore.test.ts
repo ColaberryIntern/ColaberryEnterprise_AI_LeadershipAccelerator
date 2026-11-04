@@ -23,7 +23,7 @@ describe('syncProposalDocuments', () => {
     const row = rowState({ status: 'drafted', content_html: '<p>draft</p>', version: 2, requirement_ids: ['R0'] });
     findOrCreate.mockResolvedValue([row, false]);
     findAll.mockResolvedValue([row]);
-    await syncProposalDocuments('dp-1', [{ key: 'technical', title: 'Technical Proposal', order: 11, gate: true, adminOnly: false, requirements: [{ canonicalReqId: 'R1', statement: 'x' }, { canonicalReqId: 'R2', statement: 'y' }] }]);
+    await syncProposalDocuments('dp-1', [{ key: 'technical', title: 'Technical Proposal', order: 11, gate: true, adminOnly: false, requirements: [{ canonicalReqId: 'R1', statement: 'x' }, { canonicalReqId: 'R2', statement: 'y' }], sections: [{ sectionKey: 'R1', heading: 'x', requirementIds: ['R1'], order: 1 }, { sectionKey: 'R2', heading: 'y', requirementIds: ['R2'], order: 2 }] }]);
     const patch = row.update.mock.calls[0][0];
     expect(patch).toMatchObject({ title: 'Technical Proposal', gate: true, requirement_ids: ['R1', 'R2'] });
     expect(patch.content_html).toBeUndefined();
@@ -35,7 +35,7 @@ describe('syncProposalDocuments', () => {
     const row = rowState();
     findOrCreate.mockResolvedValue([row, true]);
     findAll.mockResolvedValue([row]);
-    await syncProposalDocuments('dp-1', [{ key: 'technical', title: 'Technical Proposal', order: 11, gate: false, adminOnly: false, requirements: [] }]);
+    await syncProposalDocuments('dp-1', [{ key: 'technical', title: 'Technical Proposal', order: 11, gate: false, adminOnly: false, requirements: [], sections: [] }]);
     expect(row.update).not.toHaveBeenCalled();
   });
 });
