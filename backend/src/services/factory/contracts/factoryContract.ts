@@ -19,6 +19,21 @@
  *    fork-on-edit). Ids are idempotent from source identity (factoryIds).
  */
 
+/**
+ * IMPORTED, NOT REDEFINED. `AgentTeam` governs AI work, and this repo already holds every
+ * vocabulary that needs: the per-story execution and approval policies, the namespaced
+ * capability autonomy ladder, and the six INPACT trust dimensions from the book Colaberry
+ * sells. Re-declaring any of them here would fork the framework into a sixth dialect that
+ * drifts silently. All three sources are pure and dependency-free, and the factory tree
+ * already imports from `modules/delivery` (`govBuildAssignment`, `govDeliveryProject`), so
+ * this direction is the established one rather than new coupling.
+ */
+import type { ExecutionPolicy, ApprovalPolicy } from '../../delivery/deliveryStoryContract';
+import type { AutonomyStage } from '../../agentDomain/autonomyLadder';
+import type { InpactDimension } from '../../../modules/delivery/inpact';
+
+export type { ExecutionPolicy, ApprovalPolicy, AutonomyStage, InpactDimension };
+
 // ── enumerations (unions, mirrored in factoryContractSchema.ts) ────────────────
 
 /** Which of a contract's two first-class workstreams a record belongs to. */
@@ -237,8 +252,100 @@ export interface RoleMapRow {
 }
 
 /**
+ * An AI agent team: the ONE subject it owns, and the governance it runs under.
+ *
+ * ## Why this exists, and why it is not a new vocabulary
+ *
+ * Before this, an AI executor was `{type:'agent', id:'<free text>'}` and nothing more. There was
+ * no way to say "the admissions agent only handles admissions", so nothing stopped one unnamed
+ * agent absorbing every AI task in a project — the generic blob that cannot be held to anything,
+ * because no human owns it and no subject bounds it.
+ *
+ * The platform ALREADY has four axes for how autonomous something may be, at four different
+ * granularities, and a fifth would have been the easy mistake here:
+ *
+ *   | axis | granularity | home |
+ *   |---|---|---|
+ *   | `executor.type` | per assignment | this file |
+ *   | `execution_class` | per task | `AllocationRow`, this file |
+ *   | `ExecutionPolicy` | per story | `delivery/deliveryStoryContract` |
+ *   | `autonomy_level` | per agent | `models/AiAgent` |
+ *   | `autonomy:R0..R9` | per capability | `agentDomain/autonomyLadder` |
+ *
+ * So this type DECLARES NO NEW ENUM. `execution_policy`, `approval_policy`, `autonomy_stage` and
+ * `trust_dimensions` are the platform's existing types, imported. A team is the missing *subject*
+ * grouping, not a sixth opinion about autonomy.
+ */
+export interface AgentTeam {
+  id: string;
+  /** How a human refers to it: "Compliance", "Pricing". Never "AI" or "Agent". */
+  name: string;
+  /**
+   * The ONE subject this team owns. Two teams may not share a subject, and a team may not
+   * declare an empty one — that is the whole cohesion rule, and it is checkable.
+   */
+  subject: string;
+  /** Tasks this team performs. A task belongs to at most one team. */
+  task_ids: string[];
+  /**
+   * The human role answerable for this team's output. NEVER an agent: the decomposition prompt
+   * already forbids an agent holding ACCOUNTABLE or APPROVER, and this is that rule carried onto
+   * the team so a reviewer can see the oversight instead of reconstructing it from assignments.
+   */
+  approver_role_id: string | null;
+  /** Reused from `delivery/deliveryStoryContract`, not redefined. */
+  execution_policy: ExecutionPolicy;
+  /** Reused from `delivery/deliveryStoryContract`, not redefined. */
+  approval_policy: ApprovalPolicy;
+  /**
+   * The capability autonomy stage, namespaced `autonomy:R0`..`autonomy:R9` by
+   * `agentDomain/autonomyLadder` so it can never be read as a bare `R3` delivery RISK tier.
+   * Null means not yet assessed, which is a gap to report, never a default to assume.
+   */
+  autonomy_stage: AutonomyStage | null;
+  /**
+   * INPACT dimensions (Ram Katamaraja, *Trust Before Intelligence*) this team addresses.
+   * `delivery/deliveryTrustGate` requires all six of a production-bound agent and treats a
+   * missing dimension as unaddressed rather than not-applicable; the same reading applies here.
+   */
+  trust_dimensions: InpactDimension[];
+}
+
+/**
+ * Where a human task actually lands.
+ *
+ * ## The gap this closes
+ *
+ * Human tasks had an owner and no DESTINATION. Roles were therefore the only grouping primitive
+ * available downstream, so a generated app naturally grew one screen per role — many logins, a
+ * handoff between each, and the operator's first job being to remember where things live. That is
+ * the failure the first cohort shipped, and nothing in the contract prevented it.
+ *
+ * `kind` exists so "one console" stays an HONEST claim. Some human work genuinely happens
+ * elsewhere — submitting on a city's procurement portal is not a screen we can build — and
+ * forcing those onto the console would make the count look better while making it false.
+ */
+export interface Surface {
+  id: string;
+  name: string;
+  /**
+   * `console` is an operator surface this system builds. `external` is somewhere we do not
+   * control. Counting surfaces of kind `console` is what makes "one console" checkable.
+   */
+  kind: 'console' | 'external';
+  /** Human tasks that land here. */
+  task_ids: string[];
+}
+
+/**
  * The assembled contract-project instance factoryValidate() runs over. This is the shape the
  * Phase-1 sample is built as and later phases generate.
+ *
+ * `agent_teams` and `surfaces` are OPTIONAL deliberately. Every existing consumer — the Phase-1
+ * sample, `factoryAssemble`, `factoryValidate`, the 4 decompositions already in production —
+ * predates them, and making them required would be a breaking contract change that fails those
+ * builds for a shape nobody has emitted yet. Absent is read as UNSTRUCTURED and reported by
+ * `humanAiStructure`, never silently treated as compliant.
  */
 export interface FactoryProject {
   delivery_project_id: string;
@@ -252,6 +359,8 @@ export interface FactoryProject {
   transitions: TransitionEdge[];
   allocation: AllocationRow[];
   role_map: RoleMapRow[];
+  agent_teams?: AgentTeam[];
+  surfaces?: Surface[];
 }
 
 /** The union of executor types, for exhaustiveness checks and the schema mirror. */
