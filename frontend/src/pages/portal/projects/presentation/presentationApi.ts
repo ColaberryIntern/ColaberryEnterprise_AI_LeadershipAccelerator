@@ -162,7 +162,7 @@ const DEAD_BOOKING_STATES = ['cancelled', 'removed', 'rejected'];
  * that no longer existed, so the panel showed a booked room with no time, forever, and
  * never offered to book another. A usable room has a start time and a live booking.
  */
-export function hasUsableRoom(session: PracticeSession | null | undefined): boolean {
+export function hasUsableRoom(session: PracticeSession | null | undefined): session is PracticeSession {
   if (!session || !session.bookingId) return false;
   if (!session.startAt) return false;
   return !DEAD_BOOKING_STATES.includes(session.bookingState ?? '');
