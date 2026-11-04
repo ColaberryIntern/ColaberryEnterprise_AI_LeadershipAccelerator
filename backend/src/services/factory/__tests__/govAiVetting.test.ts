@@ -6,7 +6,8 @@ const vettingUpdate = jest.fn();
 const vettingFindOne = jest.fn();
 jest.mock('../../../models/GovAiVetting', () => ({ __esModule: true, default: { update: (...a: any[]) => vettingUpdate(...a), findOne: (...a: any[]) => vettingFindOne(...a) } }));
 const jobFindOne = jest.fn();
-jest.mock('../../../models/GovExtractionJob', () => ({ __esModule: true, default: { findOne: (...a: any[]) => jobFindOne(...a) } }));
+const jobCreate = jest.fn();
+jest.mock('../../../models/GovExtractionJob', () => ({ __esModule: true, default: { findOne: (...a: any[]) => jobFindOne(...a), create: (...a: any[]) => jobCreate(...a) } }));
 const bundleFindOne = jest.fn();
 jest.mock('../../../models/GovSourceBundle', () => ({ __esModule: true, default: { findOne: (...a: any[]) => bundleFindOne(...a) } }));
 const qualFindOne = jest.fn();
@@ -31,7 +32,7 @@ const claimSlot = jest.fn();
 jest.mock('../opportunities/govDailySlot', () => ({ claimDailySlot: (...a: any[]) => claimSlot(...a) }));
 jest.mock('../govPipeline', () => ({ resolveGovCloseDate: (r: any) => r?.closeDate ?? null }));
 
-import { BACKFILL_PER_DAY, claimVetting, ensureVettingRow, finalizeExhausted, loadAiVettingView, runGovAiVettingCatchup, runVetting, startGovAiVetting } from '../govAiVetting';
+import { BACKFILL_PER_DAY, claimVetting, ensureVettingRow, finalizeExhausted, loadAiVettingView, noteExtractionFailed, runGovAiVettingCatchup, runVetting, startGovAiVetting } from '../govAiVetting';
 
 const K = { tenantId: 'ten-1', qualificationKey: 'gws:abc', sha256: 'a'.repeat(64) };
 const CAND = { id: 'R1', text: 'Vendor must hold an active StateRAMP authorization at submission.', extractedText: 'Vendor must hold an active StateRAMP authorization at submission.' };
@@ -170,6 +171,32 @@ describe('where the requirements come from', () => {
     await runVetting(K);
     expect(extractBundlePayload).toHaveBeenCalledWith('ten-1', 'gws:abc', 'b1');
     expect(saved()[0].verdict).toBe('pursue');
+    // Saved, so the workspace finds these requirements on return with no second upload.
+    expect(jobCreate).toHaveBeenCalledWith(expect.objectContaining({ qualification_key: 'gws:abc', sha256: K.sha256, status: 'completed', result_json: { candidates: [CAND] } }));
+  });
+  it('if saving those requirements fails, the verdict still lands', async () => {
+    claimOk();
+    jobFindOne.mockResolvedValue(null);
+    bundleFindOne.mockResolvedValue({ id: 'b1' });
+    extractBundlePayload.mockResolvedValue({ candidates: [CAND] });
+    jobCreate.mockRejectedValue(new Error('db'));
+    await runVetting(K);
+    expect(saved()[0].verdict).toBe('pursue');
+  });
+  it('a retry that succeeds clears the earlier error, so a star does not say the checks failed', async () => {
+    claimOk(2);
+    jobFindOne.mockResolvedValue(null);
+    bundleFindOne.mockResolvedValue({ id: 'b1' });
+    extractBundlePayload.mockResolvedValue({ candidates: [CAND] });
+    await runVetting(K);
+    expect(saved()[0]).toMatchObject({ status: 'completed', error_class: null });
+  });
+  it('a failed extraction is recorded only on a row still waiting, so it cannot touch a finished verdict', async () => {
+    await noteExtractionFailed(K);
+    expect(vettingUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ error_class: 'extraction_failed' }),
+      { where: { tenant_id: K.tenantId, qualification_key: K.qualificationKey, sha256: K.sha256, status: 'queued' } },
+    );
   });
   it('no stored ZIP record: inconclusive zip_bytes_missing, no retry', async () => {
     claimOk(1);
@@ -267,6 +294,17 @@ describe('runGovAiVettingCatchup', () => {
     vettingFindOne.mockImplementation(async ({ where }: any) => (where.qualification_key === 'gws:hasrow' ? { id: 'x' } : null));
     bundleFindOne.mockResolvedValue(null);
     expect((await runGovAiVettingCatchup()).backfilled).toBe(0);
+  });
+  it('A, B, A: backfills the last upload, not the newest stored bytes, because a re-upload reuses its bundle row', async () => {
+    query.mockResolvedValue([]);
+    lookupContainer.mockResolvedValue({ tenant: { id: 'ten-1' } });
+    qualFindAll.mockResolvedValue([zipRec('aba')]);
+    jobFindOne.mockResolvedValue({ sha256: 'zip-a', result_json: { candidates: [] } });
+    bundleFindOne.mockImplementation(async ({ where }: any) => (where.sha256 === 'zip-a' ? { id: 'b', sha256: 'zip-a' } : { id: 'b2', sha256: 'zip-b' }));
+    vettingFindOne.mockResolvedValue(null);
+    expect((await runGovAiVettingCatchup()).backfilled).toBe(1);
+    expect(query.mock.calls.some(([, o]: any[]) => o?.replacements?.sha256 === 'zip-a')).toBe(true);
+    expect(query.mock.calls.some(([, o]: any[]) => o?.replacements?.sha256 === 'zip-b')).toBe(false);
   });
   it('never backfills an older attested ZIP over a newer upload, because its row would count as the newest', async () => {
     query.mockResolvedValue([]);

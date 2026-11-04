@@ -4,7 +4,8 @@
  * and the charts are table cells with widths. All feed and ZIP-derived text is escaped, and only http(s) links render.
  */
 import type { BoardRow, DiscoveryBoard, HideDecision } from './govDiscoveryBoard';
-import { AI_NOT_A_FIT_REASON, OFF_TARGET_REASON } from './govDiscoveryBoard';
+import { AI_NOT_A_FIT_REASON, isSameBid, OFF_TARGET_REASON } from './govDiscoveryBoard';
+import type { GovCurrentProject } from '../govPipeline';
 
 const APP_BASE = process.env.APP_PUBLIC_BASE || 'https://enterprise.colaberry.ai';
 const INK = '#1a2230';
@@ -100,6 +101,61 @@ function stackedBar(segments: { label: string; value: number; tone: Tone }[]): s
     + `<div style="font-size:12px;color:${MUTED};margin-bottom:12px">${key}</div>`;
 }
 
+/**
+ * PURE. A rough read of build progress against days left, not a forecast: there is no planned schedule to compare with.
+ * At risk: under 15 days left and under half built. Watch: up to 30 days left and under half built.
+ */
+export function projectHealth(p: Pick<GovCurrentProject, 'closeDate' | 'build'>, today: string): { label: string; tone: Tone } {
+  const pct = p.build?.pct ?? 0;
+  const days = daysUntil(p.closeDate, today);
+  if (days !== null && days < 15 && pct < 50) return { label: 'At risk', tone: 'bad' };
+  if (days !== null && days <= 30 && pct < 50) return { label: 'Watch', tone: 'warn' };
+  if (!p.build) return { label: 'Build not started', tone: 'mute' };
+  return { label: 'OK', tone: 'good' };
+}
+
+function projectCard(p: GovCurrentProject, today: string): string {
+  const days = daysUntil(p.closeDate, today);
+  const health = projectHealth(p, today);
+  const pct = Math.max(0, Math.min(100, p.build?.pct ?? 0));
+  const bar = p.build
+    ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 4px"><tr>`
+      + (pct > 0 ? `<td width="${pct}%" height="8" style="background:${TONES[health.tone].bar};font-size:1px;line-height:8px">&nbsp;</td>` : '')
+      + (pct < 100 ? `<td height="8" style="background:${LINE};font-size:1px;line-height:8px">&nbsp;</td>` : '')
+      + `</tr></table><div style="font-size:13px;color:${MUTED}">${p.build.verified} of ${p.build.total} build stories verified (${pct}%)</div>`
+    : `<div style="font-size:13px;color:${MUTED}">The build has not started.</div>`;
+  return `<tr><td style="padding:12px 14px;border-top:1px solid ${LINE}">`
+    + `<div style="font-size:15px;font-weight:bold;color:${INK};${WRAP}">🏗️ ${esc(p.title)}</div>`
+    + (p.agency ? `<div style="font-size:13px;color:${MUTED};margin:2px 0 6px;${WRAP}">${esc(p.agency)}</div>` : '')
+    + `<div style="margin:0 0 6px">${chip(health.label, health.tone)} ${chip(days === null ? 'Close date unknown' : `${days} days left`, daysTone(days))}</div>`
+    + bar
+    + `<div style="font-size:13px;color:${INK};margin-top:4px;${WRAP}">👤 ${esc(p.interns.join(', ') || 'No intern named')} &nbsp;&middot;&nbsp; ${p.establishedCount} requirements established</div>`
+    + `<div style="font-size:13px;margin-top:6px">${link(`${APP_BASE}/admin/internship/gov-contract/${encodeURIComponent(p.deliveryProjectId)}`, 'Open project')}</div>`
+    + `</td></tr>`;
+}
+
+const plural = (n: number, one: string, many: string): string => `${n} ${n === 1 ? one : many}`;
+
+/** PURE. The note at the top. Counts only and no titles, so no bid is named twice in the email. No em dashes. */
+export function summaryNote(board: DiscoveryBoard, hidden: readonly HideDecision[], today: string): string[] {
+  const c = board.counts;
+  const out: string[] = ['Ali, here is where your gov pursuit stands this morning.'];
+  const projects = board.currentProjects;
+  if (projects.length > 0) {
+    const risky = projects.filter((p) => projectHealth(p, today).label === 'At risk').length;
+    out.push(`${plural(projects.length, 'current project is', 'current projects are')} with interns${risky > 0 ? `, and ${plural(risky, 'is', 'are')} at risk` : ''}.`);
+  }
+  const soonest = board.rows.filter((r) => r.stage === 'vetted').map((r) => daysUntil(r.opportunity.closeDate, today)).filter((d): d is number => d !== null).sort((a, b) => a - b)[0];
+  if (c.vetted > 0) out.push(`${plural(c.vetted, 'bid is', 'bids are')} AI vetted and ready for you to read${soonest !== undefined ? `, the soonest closing in ${soonest} days` : ''}.`);
+  if (c.needs_read > 0) out.push(`${plural(c.needs_read, 'bid needs', 'bids need')} your read because the AI could not call it or someone has started it.`);
+  if (c.approved > 0) out.push(`${plural(c.approved, 'approved bid is', 'approved bids are')} waiting for an intern.`);
+  if (c.needs_zip > 0) out.push(`${plural(c.needs_zip, 'bid passed', 'bids passed')} the first check and ${c.needs_zip === 1 ? 'needs its' : 'need their'} ZIP uploaded.`);
+  if (c.analyzing > 0) out.push(`The AI is still working on ${c.analyzing}.`);
+  if (hidden.length > 0) out.push(`${plural(hidden.length, 'bid was', 'bids were')} hidden this morning.`);
+  if (out.length === 1) out.push('Nothing needs you today.');
+  return out;
+}
+
 const HIDE_WORDS: Record<string, string> = {
   [AI_NOT_A_FIT_REASON]: 'AI says not a fit',
   [OFF_TARGET_REASON]: 'Off-target title',
@@ -135,12 +191,18 @@ export function renderGovPursuitEmail(board: DiscoveryBoard, hidden: readonly Hi
     bonfireLink(r, '1. Download ZIP on Bonfire'),
     link(qualifyUrl(r.opportunity.uuid, r.opportunity.title, r.opportunity.agency), '2. Upload on Gov Opps'),
   ]));
-  const hiddenRows = hidden.slice(0, LIST_CAP).map((h) => `<tr><td style="padding:8px 14px;border-top:1px solid ${LINE};font-size:13px;color:${INK};${WRAP}">${esc(h.opportunity.title)} ${chip(hideWord(h.reason), h.reason === AI_NOT_A_FIT_REASON ? 'bad' : 'mute')}</td></tr>`);
+  const projects = board.currentProjects.map((p) => projectCard(p, today));
+  // A hidden bid that is also listed above or repeats another hide is reported once.
+  const listed = [...board.rows.map((r) => r.opportunity), ...board.currentProjects];
+  const hiddenOnce = hidden.filter((h, i) => !listed.some((l) => isSameBid(l, h.opportunity)) && !hidden.slice(0, i).some((e) => e.opportunity.uuid === h.opportunity.uuid || isSameBid(e.opportunity, h.opportunity)));
+  const note = summaryNote(board, hiddenOnce, today);
+  const hiddenRows = hiddenOnce.slice(0, LIST_CAP).map((h) => `<tr><td style="padding:8px 14px;border-top:1px solid ${LINE};font-size:13px;color:${INK};${WRAP}">${esc(h.opportunity.title)} ${chip(hideWord(h.reason), h.reason === AI_NOT_A_FIT_REASON ? 'bad' : 'mute')}</td></tr>`);
 
-  const nothing = vetted.length + read.length + approved.length + uploadCards.length === 0;
+  const nothing = projects.length + vetted.length + read.length + approved.length + uploadCards.length === 0;
   return `<div style="background:#f3f3f1;padding:16px;font-family:Arial,Helvetica,sans-serif;color:${INK}">`
     + `<table role="presentation" align="center" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;margin:0 auto">`
     + `<tr><td style="background:#15181f;border-top:4px solid #d81f29;border-radius:6px 6px 0 0;padding:16px 18px;color:#f5f5f2"><div style="font-size:20px;font-weight:bold">🏛️ Your gov pursuit morning</div><div style="font-size:13px;color:#c9c8c0">Same list as your Gov Opportunities board</div></td></tr>`
+    + `<tr><td style="background:#ffffff;border:1px solid ${LINE};border-top:0;padding:14px 18px;font-size:14px;line-height:21px;color:${INK}"><div style="font-weight:bold;margin-bottom:4px">${esc(note[0])}</div>${esc(note.slice(1).join(' '))}</td></tr>`
     + `<tr><td style="padding:12px 0 0">`
     + `<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>`
     + tile('⭐', 'Vetted', c.vetted, 'good') + tile('👀', 'To read', c.needs_read, 'warn') + tile('📦', 'ZIPs to upload', c.needs_zip, 'info') + tile('🤖', 'AI analyzing', c.analyzing, 'mute')
@@ -153,12 +215,13 @@ export function renderGovPursuitEmail(board: DiscoveryBoard, hidden: readonly Hi
     + `</td></tr><tr><td>`
     + (board.incomplete ? `<div style="background:${TONES.warn.bg};color:${TONES.warn.ink};border-radius:6px;padding:12px;margin-bottom:16px;font-size:14px">⚠️ Some saved data could not be read this morning, so this list may be incomplete. Check the board before relying on it.</div>` : '')
     + (nothing && !board.incomplete ? `<div style="background:#ffffff;border:1px solid ${LINE};border-radius:6px;padding:16px;margin-bottom:16px;font-size:15px">✅ Nothing needs you today.${c.analyzing > 0 ? ` The AI is still working on ${c.analyzing}.` : ''}</div>` : '')
-    // The stars come first on purpose: a day can have 40 ZIPs to upload, and the stars must not sit under them.
+    + section('🏗️ Current projects', 'With interns now, the same list as Interns > Gov Contracts. Status compares build progress with days left.', TONES.info.bar, projects)
+    // The stars come before the upload list on purpose: a day can have 40 ZIPs to upload, and the stars must not sit under them.
     + section('⭐ Vetted: read these first', 'The AI checked the ZIP and recommends pursuing. Read it, then build the project and assign an intern.', TONES.good.bar, vetted)
     + section('👀 Needs your read', 'The AI could not call it, or a person has already started this one.', TONES.warn.bar, read)
     + section('✅ Approved: waiting for an intern', 'Approved by a second admin. Assigning an intern moves it to Interns > Gov Contracts.', TONES.good.bar, approved)
     + section('📦 Upload the ZIP', 'These passed the first check. Download each ZIP from Bonfire and upload it. The AI runs the rest on its own.', TONES.info.bar, uploadCards, Math.max(0, uploads.length - LIST_CAP))
-    + section('🙈 Hidden this morning', 'Off your board now. Restore any of them from the Hidden list on the board.', TONES.mute.bar, hiddenRows, Math.max(0, hidden.length - LIST_CAP))
+    + section('🙈 Hidden this morning', 'Off your board now. Restore any of them from the Hidden list on the board.', TONES.mute.bar, hiddenRows, Math.max(0, hiddenOnce.length - LIST_CAP))
     + `<div style="font-size:12px;color:${MUTED};padding:4px 2px 0">AI verdicts and fit scores are advisory. Verify every deadline on the Bonfire cover page and addenda. ${board.dismissedCount} hidden in all. ${link(`${APP_BASE}/admin/gov-opportunities`, 'Open the board')}</div>`
     + `</td></tr></table></div>`;
 }

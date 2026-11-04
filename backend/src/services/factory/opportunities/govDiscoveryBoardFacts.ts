@@ -7,6 +7,7 @@
 import { FLAGS } from '../../../config/featureFlags';
 import type { BoardFacts, FactRead, QualFacts, VettingFacts } from './govDiscoveryBoard';
 import { deriveVettingStage, STAGE_RANK } from '../govOpportunityVetting';
+import type { GovCurrentProject } from '../govPipeline';
 
 async function readOrFlag<T>(failed: Set<FactRead>, name: FactRead, fallback: T, read: () => Promise<T>): Promise<T> {
   try {
@@ -76,9 +77,10 @@ export async function loadBoardFacts(tenantId: string): Promise<BoardFacts> {
   const failedReads = new Set<FactRead>();
   const restored = await readOrFlag(failedReads, 'restored', new Set<string>(), () => listRestoredKeys(tenantId));
 
-  const assigned = await readOrFlag(failedReads, 'assigned', new Set<string>(), async () => {
-    const { listGovPipeline, assignedOpportunityUuids } = await import('../govPipeline');
-    return assignedOpportunityUuids(await listGovPipeline(tenantId));
+  const { assigned, currentProjects } = await readOrFlag(failedReads, 'assigned', { assigned: new Set<string>(), currentProjects: [] as GovCurrentProject[] }, async () => {
+    const { listGovPipeline, assignedOpportunityUuids, currentGovProjects } = await import('../govPipeline');
+    const cards = await listGovPipeline(tenantId);
+    return { assigned: assignedOpportunityUuids(cards), currentProjects: currentGovProjects(cards, new Date().toLocaleDateString('en-CA', { timeZone: 'America/Chicago' })) };
   });
 
   const qualifications = await readOrFlag(failedReads, 'qualifications', new Map<string, QualFacts>(), async () => {
@@ -124,5 +126,5 @@ export async function loadBoardFacts(tenantId: string): Promise<BoardFacts> {
     return out;
   });
 
-  return { dismissed, restored, assigned, qualifications, vettings, bundles, aiEnabled: FLAGS.govAiVetting, sweepActs: FLAGS.govOpportunitySweep, failedReads };
+  return { dismissed, restored, assigned, qualifications, vettings, bundles, aiEnabled: FLAGS.govAiVetting, sweepActs: FLAGS.govOpportunitySweep, failedReads, currentProjects };
 }

@@ -6,6 +6,8 @@ import { ProposalSummaryPanel } from './ProposalSummaryPanel';
 import { ClarificationDraftPanel } from './ClarificationDraftPanel';
 import { FitCapabilitiesPanel } from './FitCapabilitiesPanel';
 import { buildCandidateRows } from './candidateRows';
+import { ScoreChip } from './govOpportunityParts';
+import { band } from '../govOppFormat';
 import * as factoryApi from '../../../services/factoryApi';
 
 jest.mock('../../../services/factoryApi');
@@ -26,6 +28,16 @@ beforeEach(() => { localStorage.clear(); });
 afterEach(() => { act(() => { root.unmount(); }); container.remove(); jest.clearAllMocks(); });
 
 const base = { status: 'completed', verdict: 'pursue', reason: 'A strong match.', quote: null, coveragePct: 80, errorClass: null, fit: null, summary: null, questions: null, extraction: null } as any;
+
+describe('a bid with no fit score', () => {
+  it('reads as unknown, not as a low score', async () => {
+    expect(band(null)).toEqual({ label: 'Unknown', tone: 'secondary' });
+    await render(<ScoreChip score={null} />);
+    expect(text()).toContain('Unknown');
+    expect(text()).not.toContain('Low');
+    expect(container.querySelector('.bg-danger, .bg-danger-subtle')).toBeNull();
+  });
+});
 
 describe('AiVettingCard', () => {
   it('renders nothing with no vetting, so a workspace before any upload is unchanged', async () => {

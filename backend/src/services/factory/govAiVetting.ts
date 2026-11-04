@@ -47,7 +47,8 @@ export async function ensureVettingRow(k: VettingKey): Promise<void> {
   await sequelize.query(
     `INSERT INTO gov_ai_vettings (id, tenant_id, qualification_key, sha256, status, attempts, last_uploaded_at, created_at, updated_at)
      VALUES (gen_random_uuid(), :tenantId, :qualificationKey, :sha256, 'queued', 0, NOW(), NOW(), NOW())
-     ON CONFLICT (tenant_id, qualification_key, sha256) DO UPDATE SET last_uploaded_at = NOW()`,
+     ON CONFLICT (tenant_id, qualification_key, sha256) DO UPDATE SET last_uploaded_at = NOW(),
+       error_class = CASE WHEN gov_ai_vettings.status = 'queued' THEN NULL ELSE gov_ai_vettings.error_class END`,
     { replacements: { ...k } });
 }
 
@@ -97,6 +98,16 @@ async function loadCandidates(k: VettingKey): Promise<any[]> {
   if (!bundle) throw new TerminalVettingError('zip_bytes_missing', 'The ZIP was not kept, so it could not be read. Please upload it again.');
   const { extractBundlePayload } = await import('./proposal/govExtractionJobService');
   const payload = await extractBundlePayload(k.tenantId, k.qualificationKey, bundle.id); // an unreadable file throws: retried
+  // Saved as a completed job, so the workspace finds these requirements on return, with no second upload. Best-effort: the
+  // verdict is still worth having without it.
+  try {
+    await GovExtractionJob.create({
+      tenant_id: k.tenantId, qualification_key: k.qualificationKey, source_bundle_id: bundle.id, sha256: k.sha256,
+      status: 'completed', result_json: payload, completed_at: new Date(),
+    } as any);
+  } catch (err: any) {
+    log('gov_ai_vetting_payload_save_failed', 'partial', { key: k.qualificationKey, message: err?.message }, err?.constructor?.name);
+  }
   return payload.candidates;
 }
 
@@ -260,6 +271,7 @@ async function backfillOlderZips(): Promise<number> {
   const tenantId = String(container.tenant.id);
   const { default: GovQualification } = await import('../../models/GovQualification');
   const { default: GovSourceBundle } = await import('../../models/GovSourceBundle');
+  const { default: GovExtractionJob } = await import('../../models/GovExtractionJob');
   const { resolveGovCloseDate } = await import('./govPipeline');
   const rows: any[] = await GovQualification.findAll({
     where: { tenant_id: tenantId, status: 'active', superseded_by_id: null }, order: [['updated_at', 'DESC']],
@@ -275,9 +287,13 @@ async function backfillOlderZips(): Promise<number> {
     if (close && String(close).slice(0, 10) < today) continue; // the deadline has passed: not worth a model call
     const docs: any[] = Array.isArray(rec.requirements_json?.reviewedDocuments) ? rec.requirements_json.reviewedDocuments : [];
     if (!docs.some((d) => d && d.method === 'solicitation_zip' && d.sha256)) continue;
-    // The newest stored ZIP, not the attested one, which can be older. A row made for an old ZIP would count as the newest
-    // upload and override the real newest, so only the newest bytes are ever backfilled.
-    const bundle: any = await GovSourceBundle.findOne({ where: { tenant_id: tenantId, qualification_key: key }, order: [['created_at', 'DESC']] });
+    // The newest UPLOAD, not the attested ZIP, which can be older, and not the newest stored bundle: a re-upload of known
+    // bytes reuses its bundle row, but each upload starts a job. A row made for anything older would count as the newest
+    // upload and override the real one.
+    const job: any = await GovExtractionJob.findOne({ where: { tenant_id: tenantId, qualification_key: key }, order: [['created_at', 'DESC']] });
+    const bundle: any = job
+      ? await GovSourceBundle.findOne({ where: { tenant_id: tenantId, qualification_key: key, sha256: job.sha256 } })
+      : await GovSourceBundle.findOne({ where: { tenant_id: tenantId, qualification_key: key }, order: [['created_at', 'DESC']] });
     if (!bundle) continue;
     const sha256 = String(bundle.sha256);
     if (await GovAiVetting.findOne({ where: { tenant_id: tenantId, qualification_key: key, sha256 } })) continue;

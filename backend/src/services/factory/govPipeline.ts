@@ -105,6 +105,34 @@ export function assignedOpportunityUuids(
   return uuids;
 }
 
+/** A pursuit an intern is working now, as the morning email reports it. */
+export interface GovCurrentProject {
+  deliveryProjectId: string;
+  title: string;
+  agency: string | null;
+  closeDate: string | null;
+  interns: string[];
+  build: GovPipelineBuildProgress | null;
+  establishedCount: number;
+}
+
+/**
+ * PURE. The current projects: the same test as the admin left nav (adminGovContractNavEntries), a delivery project with an
+ * active intern whose close date hasn't passed, so the email and Interns > Gov Contracts list the same ones. `today` is YYYY-MM-DD.
+ */
+export function currentGovProjects(cards: readonly GovPipelineCard[], today: string): GovCurrentProject[] {
+  const out: GovCurrentProject[] = [];
+  for (const c of cards) {
+    if (!c.deliveryProjectId || !c.hasActiveIntern) continue;
+    if (c.closeDate && String(c.closeDate).slice(0, 10) < today) continue;
+    out.push({
+      deliveryProjectId: c.deliveryProjectId, title: c.title || c.key, agency: c.agency, closeDate: c.closeDate,
+      interns: c.assignedInterns.map((i) => i.name).filter(Boolean), build: c.build, establishedCount: c.establishedCount,
+    });
+  }
+  return out;
+}
+
 /** Coerce a DB timestamp (Date | string | null) to an ISO string, or null if absent/unparseable. */
 function toIso(value: unknown): string | null {
   if (!value) return null;

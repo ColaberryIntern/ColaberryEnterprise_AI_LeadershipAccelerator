@@ -12,6 +12,7 @@
  * failed, nothing is hidden at all.
  */
 import type { GovOpportunity } from './govOpportunity';
+import type { GovCurrentProject } from '../govPipeline';
 
 export const AUTO_HIDE_FIT_BELOW = 60;
 export const AI_NOT_A_FIT_REASON = 'ai_not_a_fit';
@@ -81,6 +82,8 @@ export interface BoardFacts {
   /** `${uuid}:${sha256}` of each ZIP whose bytes are stored. */
   bundles: ReadonlySet<string>;
   aiEnabled: boolean;
+  /** The pursuits interns are working now. A bid matching one is never listed again as a candidate. */
+  currentProjects?: readonly GovCurrentProject[];
   /**
    * False when no sweep will act on a below-bar row: the sweep is off, or the feed isn't live. The row then stays listed,
    * because dropping it with no dismissal would leave it on neither the board nor the Hidden list. Unset means true.
@@ -97,6 +100,24 @@ const hasHumanProgress = (q: QualFacts | undefined): boolean =>
 function smellTestFailure(o: Pick<GovOpportunity, 'title' | 'fitScore'>): string | null {
   if (isOffTarget(o.title)) return OFF_TARGET_REASON;
   return typeof o.fitScore === 'number' && o.fitScore < AUTO_HIDE_FIT_BELOW ? AUTO_HIDE_REASON : null;
+}
+
+/** The reads a hide depends on. An empty one looks like "no human progress" or "never restored". */
+const HIDE_NEEDS_READS: readonly FactRead[] = ['restored', 'assigned', 'qualifications', 'vettings'];
+const hideReadFailed = (f: BoardFacts): boolean => HIDE_NEEDS_READS.some((r) => f.failedReads?.has(r));
+
+const squash = (s: unknown): string => String(s ?? '').toLowerCase().replace(/\([^)]*\)/g, ' ').replace(/[^a-z0-9]+/g, ' ').trim();
+
+/**
+ * PURE. Whether two listings are the same bid: the same title and buyer once case, punctuation and "(utah)"-style suffixes are
+ * set aside. An unknown buyer matches on title alone. Two agencies posting the same title stay separate, because dropping a
+ * real bid is worse than showing a duplicate. Op:gov pursuits carry no discovery uuid, so this is the only way to match them.
+ */
+export function isSameBid(a: { title?: string | null; agency?: string | null }, b: { title?: string | null; agency?: string | null }): boolean {
+  const title = squash(a.title);
+  if (!title || title !== squash(b.title)) return false;
+  const [x, y] = [squash(a.agency), squash(b.agency)];
+  return !x || !y || x === y;
 }
 
 /** PURE. The stage of one row, or null when it is off the board. Order is load-bearing: see the file header. */
@@ -119,7 +140,7 @@ export function classifyBoardRow(o: GovOpportunity, f: BoardFacts): BoardStage |
   }
   if (q?.zipSha && f.bundles.has(`${o.uuid}:${q.zipSha}`)) return f.aiEnabled ? 'analyzing' : 'needs_read';
   // A ZIP was attested but its bytes weren't kept: it needs uploading again, whatever its fit, and the sweep won't hide it.
-  if (f.sweepActs !== false && !f.restored.has(o.uuid) && !hasHumanProgress(q) && !q?.zipSha && smellTestFailure(o)) return 'below_bar';
+  if (f.sweepActs !== false && !hideReadFailed(f) && !f.restored.has(o.uuid) && !hasHumanProgress(q) && !q?.zipSha && smellTestFailure(o)) return 'below_bar';
   return 'needs_zip';
 }
 
@@ -138,6 +159,24 @@ export interface DiscoveryBoard {
   assignedCount: number;
   /** A saved-state read failed, so this load may understate progress. */
   incomplete: boolean;
+  currentProjects: readonly GovCurrentProject[];
+}
+
+/** When one bid would be listed twice, the most advanced listing is the one that stays. */
+const KEEP_ORDER: readonly BoardStage[] = ['approved', 'vetted', 'needs_read', 'analyzing', 'flagged', 'needs_zip'];
+
+/** PURE. Each bid once: never a current project again as a candidate, and never twice among candidates. Counts follow the rows. */
+function uniqueRows(rows: readonly BoardRow[], projects: readonly GovCurrentProject[], counts: Record<BoardStage, number>): BoardRow[] {
+  const kept: BoardRow[] = [];
+  for (const stage of KEEP_ORDER) {
+    for (const row of rows.filter((r) => r.stage === stage)) {
+      const o = row.opportunity;
+      const dupe = projects.some((p) => isSameBid(p, o)) || kept.some((k) => k.opportunity.uuid === o.uuid || isSameBid(k.opportunity, o));
+      if (dupe) counts[stage] -= 1;
+      else kept.push(row);
+    }
+  }
+  return rows.filter((r) => kept.includes(r)); // back in feed order
 }
 
 const AI_OFF_REASON = 'The AI checks are off, so this needs your read.';
@@ -189,11 +228,9 @@ export function buildDiscoveryBoard(feed: readonly GovOpportunity[], f: BoardFac
     const o = snapshotOpportunity(uuid, f, today);
     if (o && FROM_SNAPSHOT_STAGES.has(classifyBoardRow(o, f) as BoardStage)) add(o, true);
   }
-  return { rows, counts, dismissedCount: f.dismissed.size, assignedCount, incomplete: (f.failedReads?.size ?? 0) > 0 };
+  const currentProjects = f.currentProjects ?? [];
+  return { rows: uniqueRows(rows, currentProjects, counts), counts, dismissedCount: f.dismissed.size, assignedCount, incomplete: (f.failedReads?.size ?? 0) > 0, currentProjects };
 }
-
-/** The reads a hide depends on. An empty one looks like "no human progress" or "never restored". */
-const HIDE_NEEDS_READS: readonly FactRead[] = ['restored', 'assigned', 'qualifications', 'vettings'];
 
 export interface HideDecision { opportunity: GovOpportunity; reason: string }
 
@@ -202,10 +239,10 @@ export interface HideDecision { opportunity: GovOpportunity; reason: string }
  * at all when a read it depends on failed. Re-hiding a restored row would also clear its restored_at for good.
  */
 export function rowsToHide(feed: readonly GovOpportunity[], f: BoardFacts): HideDecision[] {
-  if (HIDE_NEEDS_READS.some((r) => f.failedReads?.has(r))) return [];
+  if (hideReadFailed(f)) return [];
   const out: HideDecision[] = [];
   for (const o of feed) {
-    if (f.dismissed.has(o.uuid) || f.restored.has(o.uuid) || f.assigned.has(o.uuid)) continue;
+    if (f.dismissed.has(o.uuid) || f.restored.has(o.uuid) || f.assigned.has(o.uuid) || isFlagged(o)) continue;
     const q = f.qualifications.get(o.uuid);
     if (hasHumanProgress(q) || q?.decision === 'no_bid') continue;
     const v = f.vettings.get(o.uuid);

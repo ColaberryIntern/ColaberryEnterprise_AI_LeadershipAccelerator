@@ -1,4 +1,4 @@
-import { daysTone, daysUntil, fitTone, govPursuitSubject, qualifyUrl, renderGovPursuitEmail } from '../govPursuitEmail';
+import { daysTone, daysUntil, fitTone, govPursuitSubject, projectHealth, qualifyUrl, renderGovPursuitEmail, summaryNote } from '../govPursuitEmail';
 import type { BoardRow, DiscoveryBoard } from '../govDiscoveryBoard';
 
 const TODAY = '2026-11-04';
@@ -7,10 +7,77 @@ const row = (stage: BoardRow['stage'], over: any = {}, vetting: any = null): Boa
   opportunity: { uuid: 'u1', title: 'Permitting Software', agency: 'City', closeDate: '2026-12-01', fitScore: 75, estimatedValue: 1, sourceUrl: 'https://city.bonfirehub.com/opportunities/1', ...over },
 });
 const board = (rows: BoardRow[], counts: any = {}): DiscoveryBoard => ({
-  rows, dismissedCount: 0, assignedCount: 0, incomplete: false,
+  rows, dismissedCount: 0, assignedCount: 0, incomplete: false, currentProjects: [],
   counts: { needs_zip: 0, analyzing: 0, vetted: 0, needs_read: 0, approved: 0, flagged: 0, below_bar: 0, ...counts },
 });
 const html = (b: DiscoveryBoard, hidden: any[] = []) => renderGovPursuitEmail(b, hidden, TODAY);
+
+describe('the note at the top', () => {
+  const project = { deliveryProjectId: 'dp1', title: 'Saratoga Springs Portal', agency: 'City', closeDate: '2026-11-12', interns: ['Sam Lee'], build: { studentProjectId: 's', pct: 20, verified: 2, total: 10 }, establishedCount: 7 };
+  it('is addressed to Ali and summarizes the report in counts', () => {
+    const b = { ...board([row('vetted', { closeDate: '2026-11-25' }), row('needs_zip', { uuid: 'u2', title: 'Other' })], { vetted: 1, needs_zip: 1, analyzing: 2 }), currentProjects: [project] };
+    const note = summaryNote(b, [{ opportunity: row('needs_zip', { uuid: 'h', title: 'Gone' }).opportunity, reason: 'ai_not_a_fit' }], TODAY);
+    expect(note[0]).toBe('Ali, here is where your gov pursuit stands this morning.');
+    const rest = note.slice(1).join(' ');
+    expect(rest).toContain('1 current project is with interns, and 1 is at risk.');
+    expect(rest).toContain('1 bid is AI vetted and ready for you to read, the soonest closing in 21 days.');
+    expect(rest).toContain('1 bid passed the first check and needs its ZIP uploaded.');
+    expect(rest).toContain('The AI is still working on 2.');
+    expect(rest).toContain('1 bid was hidden this morning.');
+  });
+  it('names no bid, so no title appears twice', () => {
+    const note = summaryNote({ ...board([row('vetted')], { vetted: 1 }), currentProjects: [project] }, [], TODAY).join(' ');
+    expect(note).not.toContain('Saratoga');
+    expect(note).not.toContain('Permitting');
+  });
+  it('says plainly when nothing needs him', () => {
+    expect(summaryNote(board([]), [], TODAY)).toEqual(['Ali, here is where your gov pursuit stands this morning.', 'Nothing needs you today.']);
+  });
+  it('is inside the body, above everything else', () => {
+    const out = html(board([row('vetted')], { vetted: 1 }));
+    expect(out.indexOf('Ali, here is where')).toBeGreaterThan(-1);
+    expect(out.indexOf('Ali, here is where')).toBeLessThan(out.indexOf('Vetted: read these first'));
+  });
+});
+
+describe('current projects', () => {
+  const p = (over: any = {}) => ({ deliveryProjectId: 'dp1', title: 'Saratoga Springs Portal', agency: 'City', closeDate: '2026-12-20', interns: ['Sam Lee', 'Ana Ruiz'], build: { studentProjectId: 's', pct: 60, verified: 6, total: 10 }, establishedCount: 7, ...over });
+  it('shows each with its interns, progress, deadline and link', () => {
+    const out = html({ ...board([]), currentProjects: [p(), p({ deliveryProjectId: 'dp2', title: 'Second Project' })] });
+    expect(out).toContain('Current projects');
+    expect(out).toContain('Sam Lee, Ana Ruiz');
+    expect(out).toContain('6 of 10 build stories verified (60%)');
+    expect(out).toContain('46 days left');
+    expect(out).toContain('/admin/internship/gov-contract/dp1');
+    expect(out).toContain('Second Project');
+    expect(out).not.toContain('Nothing needs you today.');
+  });
+  it('escapes project text', () => expect(html({ ...board([]), currentProjects: [p({ title: '<b>x</b>' })] })).not.toContain('<b>x</b>'));
+  it.each([
+    [{ closeDate: '2026-11-12', build: { pct: 20 } }, 'At risk'],
+    [{ closeDate: '2026-11-12', build: null }, 'At risk'],
+    [{ closeDate: '2026-11-12', build: { pct: 50 } }, 'OK'],
+    [{ closeDate: '2026-12-01', build: { pct: 20 } }, 'Watch'],
+    [{ closeDate: '2026-12-20', build: { pct: 20 } }, 'OK'],
+    [{ closeDate: '2026-12-20', build: null }, 'Build not started'],
+    [{ closeDate: null, build: { pct: 20 } }, 'OK'],
+  ])('status for %j is %s', (input, label) => expect(projectHealth(input as any, TODAY).label).toBe(label));
+  it('a missing build reads as not started, with no bar', () => {
+    expect(html({ ...board([]), currentProjects: [p({ build: null })] })).toContain('The build has not started.');
+  });
+});
+
+describe('the same project never shows twice', () => {
+  it('a hidden bid that matches a listed one is not reported again', () => {
+    const out = html(board([row('vetted')], { vetted: 1 }), [
+      { opportunity: row('needs_zip', { uuid: 'other' }).opportunity, reason: 'ai_not_a_fit' },
+      { opportunity: row('needs_zip', { uuid: 'x', title: 'Gone Bid' }).opportunity, reason: 'ai_not_a_fit' },
+      { opportunity: row('needs_zip', { uuid: 'y', title: 'Gone Bid' }).opportunity, reason: 'ai_not_a_fit' },
+    ]);
+    expect(out.match(/>[^<]*Permitting Software/g)).toHaveLength(1);
+    expect(out.match(/>[^<]*Gone Bid/g)).toHaveLength(1);
+  });
+});
 
 describe('text it cannot control', () => {
   const longWord = 'X'.repeat(120);

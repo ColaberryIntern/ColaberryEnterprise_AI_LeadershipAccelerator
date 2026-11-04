@@ -1,4 +1,4 @@
-import { buildDiscoveryBoard, classifyBoardRow, rowsToHide, isOffTarget, BoardFacts, QualFacts, VettingFacts } from '../govDiscoveryBoard';
+import { buildDiscoveryBoard, classifyBoardRow, rowsToHide, isOffTarget, isSameBid, BoardFacts, QualFacts, VettingFacts } from '../govDiscoveryBoard';
 import type { GovOpportunity } from '../govOpportunity';
 
 const opp = (over: Partial<GovOpportunity> = {}): GovOpportunity => ({ uuid: 'u1', title: 'Permitting Software RFP', agency: 'City', closeDate: '2026-12-01', fitScore: 70, estimatedValue: 1, sourceUrl: 'https://b.example/1', ...over });
@@ -90,6 +90,30 @@ describe('buildDiscoveryBoard', () => {
     expect(b).toMatchObject({ dismissedCount: 2, assignedCount: 1 });
     expect(b.rows).toEqual([]);
   });
+  const project = { deliveryProjectId: 'dp1', title: 'Permitting Software RFP', agency: 'City (utah)', closeDate: null, interns: [], build: null, establishedCount: 0 };
+  it('a bid matching a current project is not also a candidate, and the counts follow', () => {
+    const b = buildDiscoveryBoard([opp()], facts({ currentProjects: [project] }), today);
+    expect(b.rows).toEqual([]);
+    expect(b.counts.needs_zip).toBe(0);
+    expect(b.currentProjects).toEqual([project]);
+  });
+  it('a bid listed twice under two ids shows once, at its most advanced stage', () => {
+    const b = buildDiscoveryBoard([opp({ uuid: 'a' }), opp({ uuid: 'b', title: 'PERMITTING software, RFP' })], facts({ vettings: new Map([['b', v()]]) }), today);
+    expect(b.rows.map((r) => [r.opportunity.uuid, r.stage])).toEqual([['b', 'vetted']]);
+    expect(b.counts).toMatchObject({ vetted: 1, needs_zip: 0 });
+  });
+  it('the same title from two agencies stays two bids, because dropping a real bid is worse', () => {
+    expect(buildDiscoveryBoard([opp({ uuid: 'a', agency: 'Harris County' }), opp({ uuid: 'b', agency: 'Dallas County' })], facts(), today).rows).toHaveLength(2);
+  });
+  it('isSameBid ignores case, punctuation and a parenthetical, and an unknown buyer matches on title', () => {
+    expect(isSameBid({ title: 'A-B Portal', agency: 'U3P (utah)' }, { title: 'a b portal', agency: 'u3p' })).toBe(true);
+    expect(isSameBid({ title: 'A Portal', agency: null }, { title: 'A Portal', agency: 'City' })).toBe(true);
+    expect(isSameBid({ title: 'A Portal', agency: 'X' }, { title: 'B Portal', agency: 'X' })).toBe(false);
+    expect(isSameBid({ title: '', agency: 'X' }, { title: '', agency: 'X' })).toBe(false);
+  });
+  it('a failed read keeps a low-fit row listed rather than drop it with no way back', () => {
+    expect(stage({ failedReads: new Set(['restored']) }, opp({ fitScore: 40 }))).toBe('needs_zip');
+  });
   it('counts every hidden row, including one that left the feed, so the Hidden list stays reachable', () => {
     expect(buildDiscoveryBoard([], facts({ dismissed: new Set(['left-the-feed']) }), today).dismissedCount).toBe(1);
   });
@@ -157,6 +181,9 @@ describe('rowsToHide', () => {
   });
   it('still hides when only the bundles read failed, because no hide depends on it', () => {
     expect(uuids([opp({ fitScore: 40 })], { failedReads: new Set(['bundles']) })).toEqual([['u1', 'auto_fit_below_threshold']]);
+  });
+  it('a flagged row stays flagged, and is not moved into the email by hiding it', () => {
+    expect(uuids([opp({ fitScore: 40, vetVerdict: { status: 'no_bid' } } as any)], {})).toEqual([]);
   });
   it('never hides an already dismissed row again', () => expect(uuids([opp({ fitScore: 40 })], { dismissed: new Set(['u1']) })).toEqual([]));
   it('inconclusive, unfinished and pursue are never hidden', () => {

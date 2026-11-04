@@ -71,7 +71,7 @@ export function ScoreChip({ score }: { score: number | null | undefined }): Reac
     <div style={{ minWidth: 92 }}>
       <div className="d-flex align-items-center gap-2 mb-1">
         <span className={`badge ${subtle(b.tone)}`} style={{ fontVariantNumeric: 'tabular-nums' }}>{typeof score === 'number' ? score : '—'}</span>
-        <span className="small text-secondary">{typeof score === 'number' ? b.label : 'Unknown'}</span>
+        <span className="small text-secondary">{b.label}</span>
       </div>
       <div className="progress" style={{ height: 4 }} role="presentation">
         <div className={`progress-bar bg-${b.tone}`} style={{ width: `${pct}%` }} />

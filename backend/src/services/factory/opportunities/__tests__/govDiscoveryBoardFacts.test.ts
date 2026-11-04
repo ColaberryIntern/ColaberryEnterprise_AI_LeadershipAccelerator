@@ -2,7 +2,7 @@ const listDismissed = jest.fn();
 const listRestored = jest.fn();
 jest.mock('../govOpportunityDismissals', () => ({ listActiveDismissedKeys: (...a: any[]) => listDismissed(...a), listRestoredKeys: (...a: any[]) => listRestored(...a) }));
 const pipeline = jest.fn();
-jest.mock('../../govPipeline', () => ({ listGovPipeline: (...a: any[]) => pipeline(...a), assignedOpportunityUuids: () => new Set(), resolveGovCloseDate: () => null }));
+jest.mock('../../govPipeline', () => ({ listGovPipeline: (...a: any[]) => pipeline(...a), assignedOpportunityUuids: () => new Set(), currentGovProjects: () => [], resolveGovCloseDate: () => null }));
 jest.mock('../../govOpportunityVetting', () => ({ STAGE_RANK: { a: 1, b: 2, c: 3 }, deriveVettingStage: (r: any) => ({ stage: r.stageFixture }) }));
 const quals = jest.fn();
 jest.mock('../../../../models/GovQualification', () => ({ __esModule: true, default: { findAll: (...a: any[]) => quals(...a) } }));
