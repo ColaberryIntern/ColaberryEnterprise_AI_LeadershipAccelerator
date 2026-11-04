@@ -45,6 +45,23 @@ export function listAgentTools(agent: AgentKey): AgentToolName[] {
   return (GRANTS[agent] || []).filter((t) => !off.has(t));
 }
 
+/**
+ * Every tool name this grant table knows about, KILL SWITCH IGNORED.
+ *
+ * Added for AF11.2's duplicate-tool check, which asks "does a tool like this already exist?"
+ * rather than "may anybody use it right now". A tool switched off by `AGENT_TOOLS_DISABLED` still
+ * exists, so a request restating it is still a duplicate and must still surface the match;
+ * applying the kill switch here would make an incident look like a gap in the catalog.
+ *
+ * Measured 2026-11-04: this is the only source for `read_attachments`, which appears in no agent's
+ * `tools_granted` column and in no entry of `TOOL_CAPABILITIES`.
+ */
+export function allGrantTableToolNames(): AgentToolName[] {
+  const names = new Set<AgentToolName>();
+  for (const tools of Object.values(GRANTS)) for (const tool of tools) names.add(tool);
+  return [...names].sort();
+}
+
 /** Every agent holding `tool` (kill switch applied). Used by audits/tests. */
 export function agentsWithTool(tool: AgentToolName): AgentKey[] {
   if (disabledTools().has(tool)) return [];

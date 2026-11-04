@@ -1,7 +1,10 @@
 import { QueryTypes, Transaction, type Sequelize } from 'sequelize';
 import AgentDomainChangeRequest from '../../models/AgentDomainChangeRequest';
 import AgentDomainToolRequestDetail from '../../models/AgentDomainToolRequestDetail';
+import AgentDomainToolDuplicateCheck from '../../models/AgentDomainToolDuplicateCheck';
 import { AGENT_DOMAIN_ORG_ID } from './agentDomainRegistry';
+import { checkForDuplicateTool, type DuplicateCandidate } from './toolDuplicateCheck';
+import { loadToolCatalogForMatching } from './toolCatalogForMatching';
 import { loadMyDomains, resolveOwnerIdentityIds } from './agentDomainProvisionedReader';
 import type { ChangeRequestKind } from '../../db/ensureAgentDomainChangeRequestSchema';
 import { allCapabilities } from './capabilityRecord';
@@ -109,6 +112,34 @@ export interface ChangeRequestRow {
    * visible without opening another screen.
    */
   tool_request?: ToolRequestDetail | null;
+  /**
+   * AF11.2. The duplicate-tool check AS IT WAS COMPUTED when the request was filed.
+   *
+   * Read off the stored row, never recomputed here. The ticket's criterion is exact: *"The stored
+   * result is what the reviewer sees. Re-rendering the page does not recompute a different
+   * answer."* Recomputing on read would also mean the answer changed every time somebody granted a
+   * tool, so two people looking at one request on the same morning could disagree about it.
+   *
+   * `null` means no check is stored, which is NOT the same as "no duplicates found". A check that
+   * ran and found nothing is a row with `candidate_count: 0`.
+   */
+  duplicate_check?: StoredDuplicateCheck | null;
+}
+
+/**
+ * A stored duplicate check, in the shape a reader gets.
+ *
+ * Deliberately not the same type as `DuplicateCheckResult`: that one carries
+ * `ignored_common_tokens`, which is matcher diagnostics rather than something an approver needs on
+ * the row, and it has no `checked_at` because the matcher is pure and holds no clock.
+ */
+export interface StoredDuplicateCheck {
+  checked_at: string;
+  catalog_size: number;
+  catalog_absent: boolean;
+  threshold: number;
+  candidates: DuplicateCandidate[];
+  behaviorless_tools: string[];
 }
 
 /**
@@ -172,6 +203,27 @@ function projectDetail(d: AgentDomainToolRequestDetail): ToolRequestDetail {
 }
 
 /**
+ * A stored duplicate check, back in the shape a reader gets.
+ *
+ * `threshold` is `NUMERIC` and this driver returns `NUMERIC` as a STRING, so it is parsed here
+ * rather than handed on as something that looks like a number and compares like text. `candidates`
+ * is already typed going in, so the cast is a re-assertion of a shape this codebase wrote, not a
+ * guess about one it received.
+ */
+function projectDuplicateCheck(c: AgentDomainToolDuplicateCheck): StoredDuplicateCheck {
+  return {
+    checked_at: new Date(c.checked_at).toISOString(),
+    catalog_size: Number(c.catalog_size),
+    catalog_absent: Boolean(c.catalog_absent),
+    threshold: Number(c.threshold),
+    candidates: Array.isArray(c.candidates) ? (c.candidates as DuplicateCandidate[]) : [],
+    behaviorless_tools: Array.isArray(c.behaviorless_tools)
+      ? c.behaviorless_tools.map(String)
+      : [],
+  };
+}
+
+/**
  * Load the details for a page of requests in ONE query.
  *
  * Per request would be N+1 on a queue the whole point of which is to be read in a list.
@@ -182,10 +234,27 @@ async function loadDetails(ids: string[]): Promise<Map<string, ToolRequestDetail
   return new Map(rows.map((r) => [r.change_request_id, projectDetail(r)]));
 }
 
-/** Attach each row's detail, leaving `null` where there is none. */
+/** Same one-query rule as `loadDetails`, for the same reason. */
+async function loadDuplicateChecks(ids: string[]): Promise<Map<string, StoredDuplicateCheck>> {
+  if (ids.length === 0) return new Map();
+  const rows = await AgentDomainToolDuplicateCheck.findAll({
+    where: { change_request_id: ids },
+  });
+  return new Map(rows.map((r) => [r.change_request_id, projectDuplicateCheck(r)]));
+}
+
+/** Attach each row's detail and stored duplicate check, leaving `null` where there is none. */
 async function withDetails(rows: AgentDomainChangeRequest[]): Promise<ChangeRequestRow[]> {
-  const details = await loadDetails(rows.filter((r) => r.kind === 'tool').map((r) => r.id));
-  return rows.map((r) => ({ ...project(r), tool_request: details.get(r.id) ?? null }));
+  const toolIds = rows.filter((r) => r.kind === 'tool').map((r) => r.id);
+  // Two queries for the whole page, not two per row. Sequential rather than concurrent because
+  // the second is cheap and a shared pool under a queue read is not the place to double demand.
+  const details = await loadDetails(toolIds);
+  const checks = await loadDuplicateChecks(toolIds);
+  return rows.map((r) => ({
+    ...project(r),
+    tool_request: details.get(r.id) ?? null,
+    duplicate_check: checks.get(r.id) ?? null,
+  }));
 }
 
 function project(r: AgentDomainChangeRequest): ChangeRequestRow {
@@ -321,6 +390,56 @@ export async function fileChangeRequest(args: FileChangeRequestArgs): Promise<Ch
     }
   }
 
+  // AF11.2 — computed HERE, at submit time, and before the transaction opens.
+  //
+  // Before, because the catalog read is I/O and the matcher is pure: the same split as the rosters
+  // above, so the comparison itself stays a function of its inputs and can be tested without a
+  // database. At submit time, because the ticket requires the stored answer to be the one the
+  // approver reads rather than a different answer recomputed on page load.
+  //
+  // This is ADVICE, so it cannot refuse the request: `checkForDuplicateTool` has no refusal
+  // vocabulary, nothing below reads its result to make a decision, and a failure here leaves the
+  // request filed with no check rather than failing the filing.
+  let duplicateCheck: StoredDuplicateCheck | null = null;
+  if (accepted) {
+    try {
+      const catalog = await loadToolCatalogForMatching();
+      const result = checkForDuplicateTool({
+        request: {
+          tool_name: accepted.tool_name,
+          purpose: accepted.purpose,
+          reads: accepted.reads,
+          produces: accepted.produces,
+        },
+        catalog: catalog.tools,
+      });
+      duplicateCheck = {
+        checked_at: new Date().toISOString(),
+        catalog_size: result.catalog_size,
+        catalog_absent: result.catalog_absent,
+        threshold: result.threshold,
+        candidates: [...result.candidates],
+        behaviorless_tools: [...result.behaviorless_tools],
+      };
+    } catch (err: unknown) {
+      // Named class and full context, never a bare swallow. No row is written, so a reader sees
+      // "no check stored" rather than "checked, found nothing", which are different facts.
+      console.warn(JSON.stringify({
+        timestamp: new Date().toISOString(),
+        level: 'error',
+        service: 'backend',
+        event: 'tool_duplicate_check_failed',
+        outcome: 'failure',
+        error_class: err instanceof Error ? err.constructor.name : 'UnknownError',
+        context: {
+          message: err instanceof Error ? err.message : String(err),
+          domain_key: domainKey,
+          tool_name: accepted.tool_name,
+        },
+      }));
+    }
+  }
+
   // One transaction, because a tool request with no detail row is exactly the thin request this
   // ticket exists to stop. A partial commit here would create one that no gate can ever refuse,
   // since the gate only runs at filing time.
@@ -347,7 +466,46 @@ export async function fileChangeRequest(args: FileChangeRequestArgs): Promise<Ch
     return row;
   });
 
-  return { ...project(created), tool_request: accepted };
+  // Written AFTER the transaction, deliberately, and best effort.
+  //
+  // Inside it, a failure here would roll back the request itself, and losing a filed request to a
+  // failed piece of ADVICE is the wrong trade: the request is what the intern cannot recreate, and
+  // the check can be recomputed and backfilled at any time. The ranking still cannot half-exist,
+  // because it is one row and `chk_adtdc_count_matches` makes the count agree with the list.
+  let storedCheck: StoredDuplicateCheck | null = null;
+  if (duplicateCheck) {
+    try {
+      await AgentDomainToolDuplicateCheck.create({
+        change_request_id: created.id,
+        checked_at: new Date(duplicateCheck.checked_at),
+        catalog_size: duplicateCheck.catalog_size,
+        catalog_absent: duplicateCheck.catalog_absent,
+        threshold: duplicateCheck.threshold,
+        candidate_count: duplicateCheck.candidates.length,
+        candidates: duplicateCheck.candidates,
+        behaviorless_tools: duplicateCheck.behaviorless_tools,
+      });
+      storedCheck = duplicateCheck;
+    } catch (err: unknown) {
+      console.warn(JSON.stringify({
+        timestamp: new Date().toISOString(),
+        level: 'error',
+        service: 'backend',
+        event: 'tool_duplicate_check_not_stored',
+        outcome: 'failure',
+        error_class: err instanceof Error ? err.constructor.name : 'UnknownError',
+        context: {
+          message: err instanceof Error ? err.message : String(err),
+          change_request_id: created.id,
+          candidate_count: duplicateCheck.candidates.length,
+        },
+      }));
+    }
+  }
+
+  // `storedCheck`, not `duplicateCheck`: the caller is told what was STORED, so the response and
+  // the next page load cannot disagree about whether a check exists.
+  return { ...project(created), tool_request: accepted, duplicate_check: storedCheck };
 }
 
 export interface DecideChangeRequestArgs {
@@ -413,7 +571,18 @@ export async function decideChangeRequest(
     const detail = row.kind === 'tool'
       ? await AgentDomainToolRequestDetail.findByPk(row.id, { transaction })
       : null;
-    return { ...project(row), tool_request: detail ? projectDetail(detail) : null };
+    // AF11.2 — the stored check comes back with the decision for the same reason the detail does,
+    // and it is READ rather than recomputed. Recomputing at decision time would be the worst
+    // possible moment to change the answer: the approver would be shown one ranking while
+    // deciding and the record would keep a different one.
+    const check = row.kind === 'tool'
+      ? await AgentDomainToolDuplicateCheck.findByPk(row.id, { transaction })
+      : null;
+    return {
+      ...project(row),
+      tool_request: detail ? projectDetail(detail) : null,
+      duplicate_check: check ? projectDuplicateCheck(check) : null,
+    };
   });
 }
 

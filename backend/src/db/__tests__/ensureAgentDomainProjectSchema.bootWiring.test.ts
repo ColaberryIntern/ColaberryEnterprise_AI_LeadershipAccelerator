@@ -149,9 +149,22 @@ describe('the boot registration is WRAPPED, because its assert throws', () => {
     // `__tests__/ensureAgentDomainToolRequestSchema.test.ts` drives that failure path rather than
     // grepping for a try/catch. THIS PIN IS WHAT CAUGHT IT — the roster failed on the first CI run
     // of that PR, which is the reviewer-forcing function working as designed.
+    //
+    // AF11.2 added the fifth member, 2026-11-04. `ensureAgentDomainToolDuplicateCheckSchema.ts`
+    // stores the duplicate-tool check as computed at submit time, and asserts the same way for
+    // the same reason as the four above.
+    //
+    // Its own CHECK, `chk_adtdc_count_matches`, is what stops a stored ranking lying about
+    // itself: `candidate_count` must equal the length of `candidates`, so a truncated list
+    // cannot exist in the table. A missing constraint there is a named post-condition failure
+    // rather than a silent accept, exactly as with the sibling's write rule.
+    //
+    // It is wrapped: `ensureAgentDomainToolDuplicateCheckSchemaGuarded` cannot reject, and
+    // `__tests__/ensureAgentDomainToolDuplicateCheckSchema.test.ts` drives that failure path.
     expect(throwing.sort()).toEqual([
       'ensureAgentDomainChangeRequestSchema.ts',
       'ensureAgentDomainProjectSchema.ts',
+      'ensureAgentDomainToolDuplicateCheckSchema.ts',
       'ensureAgentDomainToolRequestSchema.ts',
       'ensureBroadcastTelemetrySchema.ts',
     ]);

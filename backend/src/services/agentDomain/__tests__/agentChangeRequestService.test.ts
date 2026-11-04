@@ -9,6 +9,10 @@ const mockLoadMine = jest.fn();
 const mockDetailCreate = jest.fn();
 const mockDetailFindAll = jest.fn();
 const mockDetailFindByPk = jest.fn();
+const mockCheckCreate = jest.fn();
+const mockCheckFindAll = jest.fn();
+const mockCheckFindByPk = jest.fn();
+const mockLoadCatalog = jest.fn();
 
 jest.mock('../../../models/AgentDomainChangeRequest', () => ({
   __esModule: true,
@@ -38,6 +42,24 @@ jest.mock('../../../models/AgentDomainToolRequestDetail', () => ({
 
 jest.mock('../capabilityRecord', () => ({
   allCapabilities: () => [{ capability_id: 'platform.read_cron_registry' }],
+}));
+// AF11.2. The duplicate-check store and the catalog READ are mocked; the MATCHER is not.
+//
+// That split is deliberate. `checkForDuplicateTool` is pure, so letting the real one run means
+// these tests exercise the real ranking rather than a stub that agrees with whatever the service
+// does with it. What gets mocked is the I/O on either side of it: the catalog query and the row
+// write. `toolDuplicateCheck.test.ts` is where the matcher is proved against the real catalog.
+jest.mock('../../../models/AgentDomainToolDuplicateCheck', () => ({
+  __esModule: true,
+  default: {
+    create: (...a: unknown[]) => mockCheckCreate(...a),
+    findAll: (...a: unknown[]) => mockCheckFindAll(...a),
+    findByPk: (...a: unknown[]) => mockCheckFindByPk(...a),
+  },
+}));
+
+jest.mock('../toolCatalogForMatching', () => ({
+  loadToolCatalogForMatching: (...a: unknown[]) => mockLoadCatalog(...a),
 }));
 
 import {
@@ -145,13 +167,26 @@ const toolDetail = (over: Record<string, unknown> = {}) => ({
 
 beforeEach(() => {
   [mockQuery, mockCreate, mockFindByPk, mockFindAll, mockResolveIds, mockLoadMine,
-    mockDetailCreate, mockDetailFindAll, mockDetailFindByPk]
+    mockDetailCreate, mockDetailFindAll, mockDetailFindByPk,
+    mockCheckCreate, mockCheckFindAll, mockCheckFindByPk, mockLoadCatalog]
     .forEach((m) => m.mockReset());
   mockResolveIds.mockResolvedValue(['identity-1']);
   mockLoadMine.mockResolvedValue([{ domain_key: 'platform-automation', agent_id: AGENT }]);
   mockCreate.mockImplementation(async (vals: Record<string, unknown>) => fakeRow(vals));
   mockDetailFindAll.mockResolvedValue([]);
   mockDetailFindByPk.mockResolvedValue(null);
+  mockCheckFindAll.mockResolvedValue([]);
+  mockCheckFindByPk.mockResolvedValue(null);
+  // A small real-shaped catalog: `read_cron_registry` is what `toolDetail()` asks for, so the
+  // default case in these tests is a request that duplicates an existing tool by name.
+  mockLoadCatalog.mockResolvedValue({
+    tools: [
+      { tool_name: 'read_cron_registry', reads: ['The cron registry table'], produces: ['A list of scheduled jobs'] },
+      { tool_name: 'send_sms_summary', reads: ['A phone number'], produces: ['An SMS'] },
+      { tool_name: 'rankQueue', reads: [], produces: [] },
+    ],
+    degraded: false,
+  });
   openRequests = [];
 });
 
@@ -586,5 +621,244 @@ describe('AF7.1: tool requests ride the same governance spine', () => {
       sequelize: fakeSequelize(), email: ALI, id: 'cr-1', decision: 'approved',
     });
     expect(out.kind).toBe('change');
+  });
+});
+
+describe('AF11.2: the duplicate check is computed at submit time and READ back, never recomputed', () => {
+  it('stores the check beside the request, with the candidates the real matcher produced', async () => {
+    recorded();
+    await fileChangeRequest({
+      sequelize: fakeSequelize(), email: INTERN, kind: 'tool',
+      domainKey: 'platform-automation', title: 'Read the cron registry',
+      toolRequest: toolDetail(),
+    });
+    expect(mockCheckCreate).toHaveBeenCalledTimes(1);
+    const [stored] = mockCheckCreate.mock.calls[0] as [Record<string, unknown>];
+    expect(stored.change_request_id).toBe('cr-1');
+    expect(stored.catalog_size).toBe(3);
+    expect(stored.catalog_absent).toBe(false);
+    // `toolDetail()` asks for `read_cron_registry`, which the staged catalog already has, so the
+    // real matcher finds it by name. Nothing here stubs the ranking.
+    const candidates = stored.candidates as Array<{ tool_name: string }>;
+    expect(candidates[0].tool_name).toBe('read_cron_registry');
+  });
+
+  it('records a count that agrees with the list, which is what the table CHECK enforces', async () => {
+    recorded();
+    await fileChangeRequest({
+      sequelize: fakeSequelize(), email: INTERN, kind: 'tool',
+      domainKey: 'platform-automation', title: 'Read the cron registry',
+      toolRequest: toolDetail(),
+    });
+    const [stored] = mockCheckCreate.mock.calls[0] as [Record<string, unknown>];
+    expect(stored.candidate_count).toBe((stored.candidates as unknown[]).length);
+  });
+
+  it('discloses the tools with no behavior text, so a zero is never read as novelty', async () => {
+    recorded();
+    await fileChangeRequest({
+      sequelize: fakeSequelize(), email: INTERN, kind: 'tool',
+      domainKey: 'platform-automation', title: 'Read the cron registry',
+      toolRequest: toolDetail(),
+    });
+    const [stored] = mockCheckCreate.mock.calls[0] as [Record<string, unknown>];
+    expect(stored.behaviorless_tools).toEqual(['rankQueue']);
+  });
+
+  it('THE ACCEPTANCE CRITERION: reading returns the STORED answer, not a fresh one', async () => {
+    // Proved by CONTENT rather than by counting calls. The stored row names a tool that is not in
+    // the catalog at all and gives it a score the matcher could never produce, so if the read
+    // recomputed anything, this candidate would be gone and the assertion would fail.
+    recorded();
+    mockFindAll.mockResolvedValue([fakeRow({ id: 'cr-9', kind: 'tool' })]);
+    mockCheckFindAll.mockResolvedValue([{
+      change_request_id: 'cr-9',
+      checked_at: new Date('2026-11-04T12:00:00.000Z'),
+      catalog_size: 41,
+      catalog_absent: false,
+      threshold: '0.2000',
+      candidate_count: 1,
+      candidates: [{
+        tool_name: 'a_tool_that_was_retired_last_week',
+        score: 0.99,
+        matched_fields: [{ field: 'tool_name', detail: 'as computed on the day', tokens: ['x'], coverage: 1 }],
+      }],
+      behaviorless_tools: ['rankQueue'],
+    }]);
+    const [row] = await listMyChangeRequests(fakeSequelize(), INTERN);
+    expect(row.duplicate_check?.candidates[0].tool_name).toBe('a_tool_that_was_retired_last_week');
+    expect(row.duplicate_check?.candidates[0].score).toBe(0.99);
+    // And the catalog the answer was computed against comes back with it, so a later reader can
+    // see the answer predates four tools being added.
+    expect(row.duplicate_check?.catalog_size).toBe(41);
+    expect(mockLoadCatalog).not.toHaveBeenCalled();
+  });
+
+  it('parses the NUMERIC threshold back to a number rather than passing on a string', async () => {
+    // This driver returns NUMERIC as a string, and `'0.2000' < 0.2` is a comparison nobody wants
+    // a console to make.
+    recorded();
+    mockFindAll.mockResolvedValue([fakeRow({ id: 'cr-9', kind: 'tool' })]);
+    mockCheckFindAll.mockResolvedValue([{
+      change_request_id: 'cr-9',
+      checked_at: new Date('2026-11-04T12:00:00.000Z'),
+      catalog_size: 57,
+      catalog_absent: false,
+      threshold: '0.2000',
+      candidate_count: 0,
+      candidates: [],
+      behaviorless_tools: [],
+    }]);
+    const [row] = await listMyChangeRequests(fakeSequelize(), INTERN);
+    expect(typeof row.duplicate_check?.threshold).toBe('number');
+    expect(row.duplicate_check?.threshold).toBe(0.2);
+  });
+
+  it('reads NO CHECK as null, which is a different fact from "checked, found nothing"', async () => {
+    recorded();
+    mockFindAll.mockResolvedValue([fakeRow({ id: 'cr-9', kind: 'tool' })]);
+    mockCheckFindAll.mockResolvedValue([]);
+    const [row] = await listMyChangeRequests(fakeSequelize(), INTERN);
+    expect(row.duplicate_check).toBeNull();
+  });
+
+  it('distinguishes "checked, found nothing" from "never checked" on the way out', async () => {
+    recorded();
+    mockFindAll.mockResolvedValue([fakeRow({ id: 'cr-9', kind: 'tool' })]);
+    mockCheckFindAll.mockResolvedValue([{
+      change_request_id: 'cr-9',
+      checked_at: new Date('2026-11-04T12:00:00.000Z'),
+      catalog_size: 57,
+      catalog_absent: false,
+      threshold: '0.2000',
+      candidate_count: 0,
+      candidates: [],
+      behaviorless_tools: [],
+    }]);
+    const [row] = await listMyChangeRequests(fakeSequelize(), INTERN);
+    expect(row.duplicate_check).not.toBeNull();
+    expect(row.duplicate_check?.candidates).toEqual([]);
+    expect(row.duplicate_check?.catalog_absent).toBe(false);
+  });
+
+  it('runs NO check for a change request, because there is no tool to compare', async () => {
+    recorded();
+    await fileChangeRequest({
+      sequelize: fakeSequelize(), email: INTERN,
+      domainKey: 'platform-automation', title: 'Rename my agent',
+    });
+    expect(mockCheckCreate).not.toHaveBeenCalled();
+    expect(mockLoadCatalog).not.toHaveBeenCalled();
+  });
+
+  it('A MATCH IS NOT A REFUSAL: a request that duplicates a tool exactly is still filed', async () => {
+    // The ticket's own words: "the match is advice to the approver, never a refusal". The default
+    // staged catalog makes `toolDetail()` an exact name duplicate, so this is that case.
+    recorded();
+    const out = await fileChangeRequest({
+      sequelize: fakeSequelize(), email: INTERN, kind: 'tool',
+      domainKey: 'platform-automation', title: 'Read the cron registry',
+      toolRequest: toolDetail(),
+    });
+    expect(out.status).toBe('submitted');
+    expect(out.duplicate_check?.candidates[0].tool_name).toBe('read_cron_registry');
+  });
+
+  it('A MATCH IS NOT A GRANT: filing one still touches no agent and grants nothing', async () => {
+    recorded();
+    await fileChangeRequest({
+      sequelize: fakeSequelize(), email: INTERN, kind: 'tool',
+      domainKey: 'platform-automation', title: 'Read the cron registry',
+      toolRequest: toolDetail(),
+    });
+    const sql = mockQuery.mock.calls.map((c) => String(c[0])).join(' ; ');
+    expect(sql).not.toMatch(/tools_granted/i);
+    expect(sql).not.toMatch(/UPDATE\s+ai_agents/i);
+  });
+
+  it('files the request anyway when the CATALOG READ throws, and says so in the log', async () => {
+    // Advice that fails must not cost the intern their request. No row is written, so a reader
+    // sees "no check stored" rather than "checked, found nothing".
+    recorded();
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    mockLoadCatalog.mockRejectedValue(new TypeError('catalog is down'));
+    const out = await fileChangeRequest({
+      sequelize: fakeSequelize(), email: INTERN, kind: 'tool',
+      domainKey: 'platform-automation', title: 'Read the cron registry',
+      toolRequest: toolDetail(),
+    });
+    expect(out.id).toBe('cr-1');
+    expect(out.duplicate_check).toBeNull();
+    expect(mockCheckCreate).not.toHaveBeenCalled();
+    const line = JSON.parse(
+      warn.mock.calls.map((c) => String(c[0])).find((s) => s.includes('tool_duplicate_check_failed')) ?? '{}',
+    );
+    expect(line.error_class).toBe('TypeError');
+    expect(line.outcome).toBe('failure');
+    warn.mockRestore();
+  });
+
+  it('files the request anyway when STORING the check throws, and says so in the log', async () => {
+    recorded();
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    mockCheckCreate.mockRejectedValue(new Error('relation does not exist'));
+    const out = await fileChangeRequest({
+      sequelize: fakeSequelize(), email: INTERN, kind: 'tool',
+      domainKey: 'platform-automation', title: 'Read the cron registry',
+      toolRequest: toolDetail(),
+    });
+    // The request survives. That is the trade: the request is what cannot be recreated, and the
+    // check can be recomputed and backfilled at any time.
+    expect(out.id).toBe('cr-1');
+    expect(out.tool_request?.tool_name).toBe('read_cron_registry');
+    // And the caller is told what was STORED, so the response and the next page load agree.
+    expect(out.duplicate_check).toBeNull();
+    const line = JSON.parse(
+      warn.mock.calls.map((c) => String(c[0])).find((s) => s.includes('tool_duplicate_check_not_stored')) ?? '{}',
+    );
+    expect(line.event).toBe('tool_duplicate_check_not_stored');
+    expect(line.context.change_request_id).toBe('cr-1');
+    warn.mockRestore();
+  });
+
+  it('writes the check AFTER the transaction, so a failed write cannot roll back the request', async () => {
+    recorded();
+    await fileChangeRequest({
+      sequelize: fakeSequelize(), email: INTERN, kind: 'tool',
+      domainKey: 'platform-automation', title: 'Read the cron registry',
+      toolRequest: toolDetail(),
+    });
+    // The detail row rides the request's transaction; the check deliberately does not.
+    const [, detailOpts] = mockDetailCreate.mock.calls[0] as [unknown, { transaction: unknown }];
+    expect(detailOpts.transaction).toBeDefined();
+    const checkCall = mockCheckCreate.mock.calls[0] as unknown[];
+    expect(checkCall.length).toBe(1);
+  });
+
+  it('returns the stored check with a DECISION too, read rather than recomputed', async () => {
+    // The worst possible moment to change the answer: the approver sees one ranking while deciding
+    // and the record keeps a different one.
+    mockQuery.mockResolvedValue([{ email: ALI }]);
+    mockFindByPk.mockResolvedValue(fakeRow({ kind: 'tool' }));
+    mockDetailFindByPk.mockResolvedValue(null);
+    mockCheckFindByPk.mockResolvedValue({
+      change_request_id: 'cr-1',
+      checked_at: new Date('2026-11-04T12:00:00.000Z'),
+      catalog_size: 57,
+      catalog_absent: false,
+      threshold: '0.2000',
+      candidate_count: 1,
+      candidates: [{
+        tool_name: 'the_one_shown_at_submit_time',
+        score: 0.5,
+        matched_fields: [{ field: 'reads', detail: 'as computed on the day', tokens: ['x'], coverage: 1 }],
+      }],
+      behaviorless_tools: [],
+    });
+    const out = await decideChangeRequest({
+      sequelize: fakeSequelize(), email: ALI, id: 'cr-1', decision: 'approved',
+    });
+    expect(out.duplicate_check?.candidates[0].tool_name).toBe('the_one_shown_at_submit_time');
+    expect(mockLoadCatalog).not.toHaveBeenCalled();
   });
 });

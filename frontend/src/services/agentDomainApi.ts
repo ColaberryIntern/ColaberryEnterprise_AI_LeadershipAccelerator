@@ -169,6 +169,58 @@ export interface ChangeRequest {
   declined_reason: string | null;
   /** AF11.1. Present on a tool request, null on a change request. */
   tool_request?: ToolRequestDetail | null;
+  /**
+   * AF11.2. The duplicate-tool check AS IT WAS COMPUTED when the request was filed.
+   *
+   * `null` means no check is stored, which is NOT "no duplicates found". A check that ran and
+   * found nothing is an object with an empty `candidates` array. The review console has to render
+   * those two differently, because "we compared this against 57 tools and found nothing" and "this
+   * was never checked" are different things to tell an approver.
+   */
+  duplicate_check?: ToolDuplicateCheck | null;
+}
+
+/**
+ * AF11.2. Why a candidate matched, in words rather than as a score.
+ *
+ * The field name is deliberately precise. `purpose_vs_behavior` is NOT `purpose`: the catalog has
+ * no purpose field, so the request's purpose is compared against what the tool reads and produces.
+ * Labelling it `purpose` would claim a comparison that did not happen.
+ */
+export interface ToolMatchedField {
+  field: 'tool_name' | 'tool_name_tokens' | 'reads' | 'produces' | 'purpose_vs_behavior';
+  /** A sentence to render as-is. Never show the score without it. */
+  detail: string;
+  /** The distinguishing words both sides used, for an approver to check by eye. */
+  tokens: string[];
+  /** This field's own 0..1 coverage, before weighting. */
+  coverage: number;
+}
+
+export interface ToolDuplicateCandidate {
+  tool_name: string;
+  /** 0..1. Advice, never a verdict: nothing is refused or granted on this number. */
+  score: number;
+  matched_fields: ToolMatchedField[];
+}
+
+export interface ToolDuplicateCheck {
+  checked_at: string;
+  /** How many tools the answer was computed against. 57 in production on 2026-11-04. */
+  catalog_size: number;
+  /**
+   * The detector could not see the catalog, so an empty `candidates` means nothing here. Render
+   * this case as "could not check", never as "no duplicates".
+   */
+  catalog_absent: boolean;
+  threshold: number;
+  /** Ranked, highest first, at most three. */
+  candidates: ToolDuplicateCandidate[];
+  /**
+   * Tools carrying no documented behavior, matchable by NAME only. Worth showing beside an empty
+   * result, because these four were effectively unsearched.
+   */
+  behaviorless_tools: string[];
 }
 
 /**

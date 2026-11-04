@@ -505,6 +505,7 @@ import DeliveryClientAcceptance from './DeliveryClientAcceptance';
 import DeliveryChangeRequest from './DeliveryChangeRequest';
 import AgentDomainChangeRequest from './AgentDomainChangeRequest';
 import AgentDomainToolRequestDetail from './AgentDomainToolRequestDetail';
+import AgentDomainToolDuplicateCheck from './AgentDomainToolDuplicateCheck';
 import BlueprintDesignDecision from './BlueprintDesignDecision';
 import BlueprintVisualContract from './BlueprintVisualContract';
 // Memory Graph. Imported here so the models register with Sequelize when the index is
@@ -1707,6 +1708,7 @@ export {
   DeliveryChangeRequest,
   AgentDomainChangeRequest,
   AgentDomainToolRequestDetail,
+  AgentDomainToolDuplicateCheck,
   BlueprintDesignDecision,
   BlueprintVisualContract,
   GraphNode,
