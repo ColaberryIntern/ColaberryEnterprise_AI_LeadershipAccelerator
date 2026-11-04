@@ -128,16 +128,24 @@ row) but only actually blocks when explicitly set to `'enforce'`. Fails open on 
 internal error.
 
 **`autonomy_level`'s real effect** — `resolveLevel(row, tier)`: the DB column governs
-ONLY when `autonomy_level_set_at` is non-null, i.e. `reactivateAgent()`
-(`agentReactivationService.ts`) was explicitly called, stamping both fields together
-in the same update. Otherwise the gate silently derives the level from the
-permission tier via `levelForTier()` — the column is simply not consulted. **A brand
-new agent's `autonomy_level` (default `'observe'`) has zero effect on anything until
-someone explicitly runs the reactivation flow.**
+ONLY when `autonomy_level_set_at` is non-null. Two paths stamp this today, as of PR
+#2540 (merged 2026-09-15): (1) a human explicitly calling `reactivateAgent()`
+(`agentReactivationService.ts`), stamping `autonomy_level_source: 'manual'`, or (2)
+the automatic classifier (`classifyNewAgentAutonomyLevel()`/
+`maybeReclassifyAutonomyLevel()`, wired into `seedAgentRegistry()`'s create/update
+loop in `agentRegistrySeed.ts`) running for a brand-new agent with `tools_granted`
+declared, stamping `autonomy_level_source: 'auto'`. Until either has run, the gate
+silently derives the level from the permission tier via `levelForTier()` — the column
+is simply not consulted. **A brand-new agent built before PR #2540 needed a manual
+reactivation to make `autonomy_level` live; a brand-new agent built today, with
+`tools_granted` declared, gets this automatically on first boot — no manual step
+needed.** The automatic path never overwrites a `'manual'`-sourced value.
 
-Don't confuse this `AUTONOMY_LEVELS` (validated via Zod in
-`workforceController.ts:208`, `z.enum(AUTONOMY_LEVELS)`) with the unrelated,
-same-named constant in `backend/src/types/inboxCase.ts`
+Don't confuse this `AUTONOMY_LEVELS` (imported into `workforceController.ts` from
+`../services/workforce/agentReactivationService`, validated via Zod as
+`autonomy_level: z.enum(AUTONOMY_LEVELS)` — verified at line 241 as of 2026-09-30, not
+a permanent line number) with the unrelated, same-named constant in
+`backend/src/types/inboxCase.ts`
 (`'READ_ONLY'|'PREPARE'|'EXECUTE_APPROVED'|'TRUSTED_LOW_RISK_RULES'`) — a completely
 separate governance model for a different subsystem.
 
