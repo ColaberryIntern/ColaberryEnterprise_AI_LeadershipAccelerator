@@ -167,3 +167,32 @@ after putting the two candidates side by side: the text sat too low and crowded 
 
 **All three are committed**, as the reference records' a/b/c variants are, so changing the
 pick later is one `apply-cover.js` run and no deploy.
+
+---
+
+## 2026-11-04 — the circuit-breaker screenshot was a picture of nothing
+
+`shot-str-circuit-breaker.png`, captioned "What the reviewer sees when Basecamp stops
+answering", carried the warning banner correctly and then roughly six hundred pixels of
+empty grey panel beneath it. The capture had been taken without Basecamp access, so the
+queue it was meant to show had no rows to draw. The failure path was the subject of the
+shot and the only thing visible was the failure of the capture.
+
+The builder re-took it on her own machine with the breaker open and the queue populated:
+banner, the seven step tiles, the "Newest in Basecamp / Basecamp not available" strip, and
+seven student rows. Nine reviews, all labelled fictional.
+
+Her capture was 2880x2000 at 2.4 MB, a 2x full-page shot. The other four screenshots in
+this record are uniformly 1280x760 at 264 to 434 KB, so it was resized to 1280 wide with
+lanczos3 and written as a palette PNG: **1280x889, 233,813 bytes**, inside the family's
+weight budget. The aspect is taller than its siblings because the source is; cropping to
+1.684 would have sliced a student row in half to buy nothing.
+
+**The repo commit is only half the job.** `?v=` is the first eight characters of the
+file's MD5 and is a separate Cloudflare cache key, so a new PNG shipped under the old
+`?v=` reaches no reader: the edge keeps serving the cached old image and the deploy looks
+successful while the page is unchanged. The artifact row's URL has to move with the file.
+
+- old file `bc9c50a3`, 151,825 bytes — and the live artifact URL said `?v=bc9c50a3`,
+  which is the control that proves the MD5 rule rather than assuming it
+- new file `01dbcc3a`, 233,813 bytes — the artifact URL is updated to match
