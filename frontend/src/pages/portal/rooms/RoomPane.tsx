@@ -7,6 +7,7 @@ import {
 } from '../../../services/roomsApi';
 import RoomFilesPanel, { ACCEPT, ALLOWED_MIMES, ALLOWED_EXT, MAX_SIZE, extOf } from './RoomFilesPanel';
 import { fetchClassSessionDetail, ClassSessionInfo, joinSession } from '../../../services/onboardingApi';
+import { openTabForJoin } from '../../../utils/openTabForJoin';
 import { emitPointsEarned } from '../../../services/pointsFx';
 import BroadcastWatchButton from '../../../components/portal/BroadcastWatchButton';
 import { useCountdown } from '../../../hooks/useCountdown';
@@ -190,6 +191,8 @@ type RoomTab = 'chat' | 'files' | 'recordings';
 
 const RoomPane: React.FC<{ roomId: string; onDeleted: () => void; onChanged: () => void }> = ({ roomId, onDeleted, onChanged }) => {
   const [view, setView] = useState<RoomView | null | 'error'>(null);
+  // Set only when the browser REFUSED the meeting tab, which used to be invisible here.
+  const [blockedJoinUrl, setBlockedJoinUrl] = useState<string | null>(null);
   const [messages, setMessages] = useState<RoomMessage[] | null>(null);
   const [activeCount, setActiveCount] = useState(0);
   const [draft, setDraft] = useState('');
@@ -330,12 +333,15 @@ const RoomPane: React.FC<{ roomId: string; onDeleted: () => void; onChanged: () 
     catch { window.alert('Could not mark that as the answer.'); }
   };
   const doRequest = async () => { try { await requestRoomAccess(roomId); window.alert('Access requested — a host will review it.'); } catch { /* no-op */ } };
+  // Reserved inside the tap, then pointed at the link, and a refusal is SAID rather than
+  // swallowed. The old shape awaited first and passed `noopener`, which returns null by
+  // specification, so a blocked tab and a working one looked identical from here and the button
+  // appeared dead. See utils/openTabForJoin.ts for the whole account.
   const doJoinVideo = async () => {
-    try {
-      const { join_url } = await joinVideoRoom(roomId);
-      if (join_url) window.open(join_url, '_blank', 'noopener');
-      else window.alert('Spinning up the video room… try again in a second.');
-    } catch { window.alert('Could not join the video room.'); }
+    const outcome = await openTabForJoin(async () => (await joinVideoRoom(roomId)).join_url);
+    if (outcome.status === 'no_url') window.alert('Spinning up the video room… try again in a second.');
+    else if (outcome.status === 'failed') window.alert('Could not join the video room.');
+    else if (outcome.status === 'blocked') setBlockedJoinUrl(outcome.url);
   };
   const doDelete = async () => {
     if (!window.confirm('Delete this room? This cannot be undone.')) return;
@@ -401,6 +407,23 @@ const RoomPane: React.FC<{ roomId: string; onDeleted: () => void; onChanged: () 
       {room.linked_live_session_id
         ? <ClassSessionBanner sessionId={room.linked_live_session_id} roomId={roomId} />
         : room.is_video && <AlwaysOpenVideoBanner onJoin={doJoinVideo} />}
+
+      {blockedJoinUrl && (
+        <div className="rm-joinblocked" role="alert">
+          <div>
+            <strong>Your browser blocked the meeting tab.</strong>
+            <div className="rm-joinblocked-sub">This happens on phones. The link still works, so open it yourself.</div>
+          </div>
+          <a
+            className="te-btn cherry sm"
+            href={blockedJoinUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={() => setBlockedJoinUrl(null)}
+          >Open the meeting</a>
+          <button type="button" className="rm-x" aria-label="Dismiss" onClick={() => setBlockedJoinUrl(null)}>×</button>
+        </div>
+      )}
 
       <div className="rm-tabs" role="tablist" aria-label="Room sections">
         <button type="button" role="tab" aria-selected={paneTab === 'chat'} className={`rm-tab${paneTab === 'chat' ? ' active' : ''}`} onClick={() => setPaneTab('chat')}>Chat</button>
