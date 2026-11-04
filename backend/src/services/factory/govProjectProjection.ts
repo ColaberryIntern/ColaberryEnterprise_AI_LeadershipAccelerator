@@ -15,7 +15,8 @@
 import { deriveGovBuildPlan, buildGovStoryPrompt, reconcileGovBuildPlan, type GovBuildStory, type GovBuildRelease } from './proposal/govBuildPlan';
 import type { EvidenceView } from './govBuildEvidence';
 import type { SharedProposalView, ProposalShareLevel } from './govProposalShare';
-import type { ProposalDocumentSection } from './proposal/govProposalDocuments';
+import type { ProposalDocumentSection, ProposalDocType } from './proposal/govProposalDocuments';
+import type { ProposalBlueprint } from './proposal/proposalBlueprintTypes';
 import { deriveBuildStoryStage, deriveProposalStage, toCommitFeed, readGovProvenanceFacts, computeOverallProgress, type BuildStage, type ProposalStage, type CommitFeedItem, type GovOverallProgress } from './govCockpit';
 import type { GovBuildSummary } from './govBuildSummary';
 
@@ -27,6 +28,8 @@ export interface StudentProposalDocument {
   /** P1: the document's sections (one per covered requirement). The pricing document is dropped whole above, so no
    *  pricing section ever reaches a student — the sections ride on the non-pricing documents only. */
   sections: ProposalDocumentSection[];
+  /** P2: blueprint-derived shape (the pricing document is dropped whole, so these never carry a price). */
+  docType: ProposalDocType; pageLimit: number | null; fileName: string | null; blueprintVersion: number | null;
   comments: StudentProposalDocumentComment[]; draftedAt: string | null; acceptedAt: string | null;
 }
 
@@ -100,6 +103,9 @@ export interface StudentGovProjectView {
   /** v2 Proposal view: the named documents a bid must submit (AI-drafted, reviewer-accepted). Admin-only docs
    *  (pricing) are dropped for non-reviewers. */
   proposalDocuments: StudentProposalDocument[];
+  /** P2: the current blueprint derived from the stored solicitation (scoring, Section L rules, required forms incl.
+   *  the Texas engine, addenda). Null until a reanalyze has run. Carries no pricing values and no identities. */
+  blueprint: ProposalBlueprint | null;
   /** v2: combined completion across verified build stories + accepted proposal documents — the honest project %. */
   overallProgress: GovOverallProgress;
 }
@@ -189,6 +195,7 @@ export function toStudentGovProjectView(project: any, tracks: any[], requirement
     commitFeed: [],
     buildSummary: null, // filled by the async loader from the materialized SBP build
     proposalDocuments: [], // filled by the async loader from the derived + synced documents
+    blueprint: null, // filled by the async loader from the latest stored blueprint
     overallProgress: computeOverallProgress({ buildVerified: 0, buildTotal: 0, docsAccepted: 0, docsTotal: 0 }),
   };
 }
@@ -277,12 +284,20 @@ export async function getStudentGovProjectView(deliveryProjectId: string, viewer
   try {
     const { deriveProposalDocuments } = await import('./proposal/govProposalDocuments');
     const { syncProposalDocuments } = await import('./proposal/govProposalDocumentStore');
-    const docs = await syncProposalDocuments(deliveryProjectId, deriveProposalDocuments(requirements));
+    // P2: derive the document set FROM the current blueprint (if one has been built), so the sync preserves the
+    // blueprint-derived fields (doc_type/page_limit/file_name/blueprint_version) rather than resetting them. The
+    // blueprint itself carries no pricing values and no identities, so it is projected as-is.
+    const { default: GovProposalBlueprint } = await import('../../models/GovProposalBlueprint');
+    const bpRow: any = await GovProposalBlueprint.findOne({ where: { delivery_project_id: deliveryProjectId }, order: [['version', 'DESC']] });
+    const blueprint: ProposalBlueprint | null = bpRow ? (bpRow.blueprint_json as ProposalBlueprint) : null;
+    view.blueprint = blueprint;
+    const docs = await syncProposalDocuments(deliveryProjectId, deriveProposalDocuments(requirements, blueprint, { blueprintVersion: bpRow?.version }));
     view.proposalDocuments = docs
       .filter((d) => viewerCanVerify || !d.adminOnly)
       .map((d) => ({
         key: d.key, title: d.title, status: d.status, contentHtml: d.contentHtml, version: d.version,
         gate: d.gate, order: d.order, requirementIds: d.requirementIds, sections: d.sections,
+        docType: d.docType, pageLimit: d.pageLimit, fileName: d.fileName, blueprintVersion: d.blueprintVersion,
         comments: d.comments.map((c) => ({ body: c.body, at: c.at })), draftedAt: d.draftedAt, acceptedAt: d.acceptedAt,
       }));
     view.overallProgress = computeOverallProgress({

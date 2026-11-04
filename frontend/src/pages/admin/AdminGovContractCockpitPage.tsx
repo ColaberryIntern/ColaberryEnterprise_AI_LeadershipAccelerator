@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { PageHeader } from '../../components/admin/shell';
 import CockpitView from '../portal/projects/govCockpit/CockpitView';
-import { fetchGovContractCockpit, errorMessage, adminGovCockpitApi } from '../../services/adminGovContractsApi';
+import { fetchGovContractCockpit, errorMessage, adminGovCockpitApi, adminReanalyzeGovBlueprint } from '../../services/adminGovContractsApi';
 import type { StudentGovProjectView } from '../../services/govProjectPortalApi';
 
 /**
@@ -39,6 +39,14 @@ const AdminGovContractCockpitPage: React.FC = () => {
 
   useEffect(() => load(), [load]);
 
+  const [reanalyzing, setReanalyzing] = useState(false);
+  const onReanalyze = useCallback(() => {
+    setReanalyzing(true);
+    adminReanalyzeGovBlueprint(projectId)
+      .catch(() => { /* surfaced on reload; a 409 (missing package) keeps the empty-state message */ })
+      .finally(() => { setReanalyzing(false); load(); });
+  }, [projectId, load]);
+
   return (
     <div>
       <PageHeader
@@ -66,7 +74,7 @@ const AdminGovContractCockpitPage: React.FC = () => {
           <button type="button" className="btn btn-outline-secondary btn-sm" onClick={load}>Try again</button>
         </div>
       )}
-      {state.k === 'ready' && <CockpitView view={state.view} projectId={projectId} onReload={load} api={adminGovCockpitApi} />}
+      {state.k === 'ready' && <CockpitView view={state.view} projectId={projectId} onReload={load} api={adminGovCockpitApi} onReanalyze={onReanalyze} reanalyzing={reanalyzing} />}
     </div>
   );
 };

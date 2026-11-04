@@ -202,4 +202,38 @@ router.post('/api/admin/gov-contracts/:projectId/documents/:docKey/comment', req
   }
 });
 
+// ── Proposal Studio P2: blueprint from the stored ZIP ──────────────────────────────────────────────────────────
+/**
+ * POST .../:projectId/blueprint/reanalyze — re-read the STORED solicitation ZIP into the next blueprint version and
+ * re-derive the document set, returning a diff from the previous blueprint. 409 when no stored package exists (the
+ * operator must re-upload on the Solicitation step); never fabricates a blueprint. 404 for a non-gov project.
+ */
+router.post('/api/admin/gov-contracts/:projectId/blueprint/reanalyze', requireSection('gov_contracts'), async (req: Request, res: Response) => {
+  const ctx = await adminGovContext(req, res);
+  if (!ctx) return;
+  try {
+    const { reanalyzeProposalBlueprint } = await import('../../services/factory/proposal/reanalyzeProposalBlueprint');
+    const result = await reanalyzeProposalBlueprint(req.params.projectId as string, ctx.identityId);
+    res.json(result);
+  } catch (err: any) {
+    if (err?.name === 'BlueprintReanalysisError') { res.status(err.reason === 'bundle_missing' ? 409 : 500).json({ error: err.message, reason: err.reason }); return; }
+    logFail('gov_contract_blueprint_reanalyze_failed', err, { projectId: req.params.projectId });
+    res.status(500).json({ error: 'Could not re-analyze the solicitation.' });
+  }
+});
+
+/** GET .../:projectId/blueprint — the current (highest-version) blueprint for the project, or null if none yet. */
+router.get('/api/admin/gov-contracts/:projectId/blueprint', requireSection('gov_contracts'), async (req: Request, res: Response) => {
+  const ctx = await adminGovContext(req, res);
+  if (!ctx) return;
+  try {
+    const { default: GovProposalBlueprint } = await import('../../models/GovProposalBlueprint');
+    const row: any = await GovProposalBlueprint.findOne({ where: { delivery_project_id: req.params.projectId }, order: [['version', 'DESC']] });
+    res.json({ blueprint: row ? row.blueprint_json : null, version: row ? row.version : null });
+  } catch (err: unknown) {
+    logFail('gov_contract_blueprint_get_failed', err, { projectId: req.params.projectId });
+    res.status(500).json({ error: 'Could not load the blueprint.' });
+  }
+});
+
 export default router;

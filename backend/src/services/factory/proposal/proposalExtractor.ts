@@ -112,6 +112,9 @@ export interface ProposalExtraction {
   fileCount: number;
   /** Every file in the ZIP with its extraction outcome — the honesty rail: no file is silently skipped. */
   files: ExtractedFileOutcome[];
+  /** The captured per-file text (name + extracted text), for consumers that re-analyze the source (the Proposal
+   *  Studio blueprint builder). Additive; existing consumers ignore it. Empty when the ZIP could not be opened. */
+  perFileText?: { name: string; text: string }[];
 }
 
 const EMAIL_RE = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g;
@@ -391,7 +394,7 @@ export async function extractProposal(zipBuffer: Buffer): Promise<ProposalExtrac
     // Record one legible outcome so the operator knows WHY and what to do.
     files.push({ name: 'upload', status: 'unreadable', chars: 0, truncated: false,
       warning: 'The upload did not open as a readable ZIP (it may be password-protected, an encrypted/ZIP64 archive, or not a ZIP at all). Re-export the solicitation ZIP from the source and upload again, or establish the requirements by hand.' });
-    return { blocks, requirements, dossier: { contacts: [], naics: [], codes: [], meetings: [], keyDates: [], complianceRules: [], evaluation: null }, fileCount: 0, files };
+    return { blocks, requirements, dossier: { contacts: [], naics: [], codes: [], meetings: [], keyDates: [], complianceRules: [], evaluation: null }, fileCount: 0, files, perFileText: [] };
   }
   entries.sort((a: any, b: any) => String(a.entryName).localeCompare(String(b.entryName)));
 
@@ -535,5 +538,5 @@ export async function extractProposal(zipBuffer: Buffer): Promise<ProposalExtrac
   const dossier = extractDossier(
     blocks.filter((b) => !(b.kind === 'context' && (dupNames.has(b.locator) || formNames.has(b.locator)))),
   );
-  return { blocks, requirements, dossier, fileCount, files };
+  return { blocks, requirements, dossier, fileCount, files, perFileText: readFiles.map((f) => ({ name: f.name, text: f.text })) };
 }

@@ -175,3 +175,15 @@
 @media (max-width:560px){.gck-reqrow{flex-wrap:wrap}.gck-reqrow .gck-tags{justify-content:flex-start}}
 
 @media (prefers-reduced-motion:reduce){.gck *{animation:none!important;transition:none!important}}
+
+/* P2 Blueprint view — scoring, Section L rules (with source quotes), required forms. Reuses gck tokens. */
+.gck-blueprint .gck-eyebrow{display:block;margin-bottom:8px}
+.gck-bp-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+.gck-bp-rule,.gck-bp-form{padding:8px 0;border-top:1px solid var(--line)}
+.gck-bp-rule:first-child,.gck-bp-form:first-child{border-top:0}
+.gck-bp-rule-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.gck-bp-key{text-transform:capitalize;font-weight:600}
+.gck-bp-src{color:var(--muted);font-size:12px;margin-left:auto}
+.gck-bp-quote{margin:6px 0 0;padding:6px 10px;border-left:3px solid var(--line);color:var(--muted);font-size:12.5px;line-height:1.45;overflow-wrap:anywhere}
+.gck-bp-factors{list-style:none;margin:8px 0 0;padding:0;display:flex;flex-direction:column;gap:4px}
+.gck-bp-factors li{display:flex;justify-content:space-between;gap:12px;font-size:13.5px}

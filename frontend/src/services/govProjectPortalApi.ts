@@ -104,6 +104,9 @@ export interface StudentGovProjectView {
   buildSummary?: GovBuildSummary | null;
   /** v2 Proposal view: the named documents a bid must submit (admin-only pricing dropped for non-reviewers). Optional. */
   proposalDocuments?: GovProposalDocument[];
+  /** P2: the blueprint derived from the stored solicitation (scoring, Section L rules, required forms). Null until a
+   *  reanalyze runs; optional on older backends. Carries no pricing values and no identities. */
+  blueprint?: GovProposalBlueprint | null;
   /** v2: combined completion across verified build stories + accepted documents. Optional (older backends). */
   overallProgress?: GovOverallProgress;
 }
@@ -119,10 +122,26 @@ export interface GovBuildSummary { studentProjectId: string; releases: GovBuildR
 
 export interface GovProposalDocumentComment { body: string; at: string; }
 export type GovProposalDocumentStatus = 'not_started' | 'drafting' | 'drafted' | 'changes_requested' | 'accepted';
+export type GovProposalDocType = 'derived' | 'form' | 'generated' | 'build';
 export interface GovProposalDocument {
   key: string; title: string; status: GovProposalDocumentStatus; contentHtml: string | null;
   version: number; gate: boolean; order: number; requirementIds: string[];
+  /** P2 blueprint-derived shape (optional — absent on older backends / the P1 path). */
+  docType?: GovProposalDocType; pageLimit?: number | null; fileName?: string | null; blueprintVersion?: number | null;
   comments: GovProposalDocumentComment[]; draftedAt: string | null; acceptedAt: string | null;
+}
+
+// ── P2: the blueprint (quoted, cited rulebook from the stored solicitation ZIP) ────────────────────────────────
+export type GovRuleSeverity = 'fatal' | 'curable' | 'info';
+export interface GovBlueprintRule { key: string; value: string; quote: string; sourceFile: string; page?: number; severity: GovRuleSeverity; }
+export type GovFormDisposition = 'required' | 'not_required' | 'needs_input' | 'at_award';
+export interface GovRequiredForm { key: string; label: string; disposition: GovFormDisposition; triggerReason: string; timing: string; severity: GovRuleSeverity; citation: string; quote?: string; sourceFile?: string; }
+export interface GovBlueprintScoringFactor { label: string; points?: number; percent?: number; quote: string; }
+export interface GovBlueprintScoring { basis: string | null; basisQuote: string | null; totalPoints: number | null; factors: GovBlueprintScoringFactor[]; }
+export interface GovProposalBlueprint {
+  rules: GovBlueprintRule[]; forms: GovRequiredForm[]; scoring: GovBlueprintScoring; addenda: GovBlueprintRule[];
+  eliminationRisks: Array<{ statement: string; quote: string; sourceFile: string }>;
+  buyerType: string | null; droppedRuleCount: number; sourceFiles: string[]; generatedAt: string;
 }
 export interface GovOverallProgress { buildVerified: number; buildTotal: number; docsAccepted: number; docsTotal: number; pct: number; }
 

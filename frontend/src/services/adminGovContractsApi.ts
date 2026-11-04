@@ -103,6 +103,19 @@ export async function adminCommentGovProposalDocument(projectId: string, docKey:
   return data.document;
 }
 
+/** P2: re-read the stored solicitation ZIP into the next blueprint version and re-derive the document set. The
+ *  server returns the new version, the blueprint, a diff from the previous one, and the document count (409 when no
+ *  stored package exists). */
+export interface AdminBlueprintReanalysisResult {
+  version: number;
+  diff: { summary: string[] };
+  documentCount: number;
+}
+export async function adminReanalyzeGovBlueprint(projectId: string): Promise<AdminBlueprintReanalysisResult> {
+  const { data } = await api.post<AdminBlueprintReanalysisResult>(`${adminBase(projectId)}/blueprint/reanalyze`, {});
+  return data;
+}
+
 /** The admin adapter — management drives the gov cockpit via the `gov_contracts`-gated admin routes. */
 export const adminGovCockpitApi: GovCockpitApi = {
   askCopilot: adminAskGovCopilot,

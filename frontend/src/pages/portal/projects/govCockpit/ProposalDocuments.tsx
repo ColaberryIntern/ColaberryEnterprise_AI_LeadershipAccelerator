@@ -14,6 +14,9 @@ const STATUS: Record<string, { cls: string; label: string }> = {
   accepted: { cls: 'ok', label: 'Accepted' },
 };
 
+// P2: the blueprint-derived document kind, shown as a readable chip so the document SET is visible on the card.
+const DOC_TYPE_LABEL: Record<string, string> = { derived: 'Proposal doc', form: 'Required form', generated: 'Generated', build: 'Build exhibit' };
+
 export default function ProposalDocuments(
   { docs, onOpen }: { docs: GovProposalDocument[]; onOpen: (d: GovProposalDocument) => void },
 ): React.ReactElement {
@@ -31,11 +34,12 @@ export default function ProposalDocuments(
               <span className={`gck-tag ${st.cls}`}>{st.label}</span>
             </div>
             <div className="gck-tags">
-              <span className="gck-tag">Proposal doc</span>
+              <span className="gck-tag">{DOC_TYPE_LABEL[d.docType ?? 'derived'] ?? 'Proposal doc'}</span>
               {d.gate && <span className="gck-tag warn">required</span>}
+              {typeof d.pageLimit === 'number' && <span className="gck-tag">{d.pageLimit}-page limit</span>}
               {d.version > 0 && <span className="gck-tag">v{d.version}</span>}
             </div>
-            <div className="gck-hint">Covers {d.requirementIds.length} requirement{d.requirementIds.length === 1 ? '' : 's'}{d.comments.length ? ` · ${d.comments.length} comment${d.comments.length === 1 ? '' : 's'}` : ''}</div>
+            <div className="gck-hint">Covers {d.requirementIds.length} requirement{d.requirementIds.length === 1 ? '' : 's'}{d.fileName ? ` · ${d.fileName}` : ''}{d.comments.length ? ` · ${d.comments.length} comment${d.comments.length === 1 ? '' : 's'}` : ''}</div>
           </button>
         );
       })}

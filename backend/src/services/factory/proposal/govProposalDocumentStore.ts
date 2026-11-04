@@ -11,7 +11,7 @@
  *  - acceptance is reversible by a re-draft (status falls back to `drafted`), so a comment-driven revision loop works.
  */
 import GovProposalDocument, { type GovProposalDocumentAttributes, type GovProposalDocumentComment, type GovProposalDocumentStatus } from '../../../models/GovProposalDocument';
-import type { ProposalDocument, ProposalDocumentSection } from './govProposalDocuments';
+import type { ProposalDocument, ProposalDocumentSection, ProposalDocType } from './govProposalDocuments';
 
 export interface ProposalDocumentView {
   key: string;
@@ -25,6 +25,11 @@ export interface ProposalDocumentView {
   requirementIds: string[];
   /** P1: the document's sections (one per covered requirement). The proposal is modelled here, not on slots. */
   sections: ProposalDocumentSection[];
+  /** P2: blueprint-derived shape. */
+  docType: ProposalDocType;
+  pageLimit: number | null;
+  fileName: string | null;
+  blueprintVersion: number | null;
   comments: GovProposalDocumentComment[];
   draftedAt: string | null;
   acceptedAt: string | null;
@@ -62,6 +67,10 @@ function toView(row: GovProposalDocumentAttributes): ProposalDocumentView {
     order: row.order_index ?? 0,
     requirementIds: Array.isArray(row.requirement_ids) ? row.requirement_ids : [],
     sections: Array.isArray(row.sections_json) ? row.sections_json : [],
+    docType: row.doc_type ?? 'derived',
+    pageLimit: row.page_limit ?? null,
+    fileName: row.file_name ?? null,
+    blueprintVersion: row.blueprint_version ?? null,
     comments: Array.isArray(row.comments) ? row.comments : [],
     draftedAt: row.drafted_at ? new Date(row.drafted_at).toISOString() : null,
     acceptedAt: row.accepted_at ? new Date(row.accepted_at).toISOString() : null,
@@ -80,14 +89,16 @@ export async function syncProposalDocuments(deliveryProjectId: string, derived: 
         delivery_project_id: deliveryProjectId, doc_key: d.key, title: d.title, status: 'not_started',
         content_html: null, version: 0, admin_only: d.adminOnly, gate: d.gate, order_index: d.order,
         requirement_ids: d.requirements.map((r) => r.canonicalReqId), sections_json: d.sections, comments: [],
+        doc_type: d.docType ?? 'derived', page_limit: d.pageLimit ?? null, file_name: d.fileName ?? null, blueprint_version: d.blueprintVersion ?? null,
         drafted_at: null, drafted_by_identity_id: null, accepted_at: null, accepted_by_identity_id: null,
       } as any,
     });
     if (!created) {
       // Source-derived fields only — NEVER content/status/version/comments/acceptance. Sections merge: derived
-      // structure wins, authored section content/plan/figures preserved by sectionKey (see mergeSections).
+      // structure wins, authored section content/plan/figures preserved by sectionKey (see mergeSections). The P2
+      // blueprint-derived fields (doc_type/page_limit/file_name/blueprint_version) are source-derived, so they sync.
       const plain = (row as any).get({ plain: true }) as GovProposalDocumentAttributes;
-      await (row as any).update({ title: d.title, admin_only: d.adminOnly, gate: d.gate, order_index: d.order, requirement_ids: d.requirements.map((r) => r.canonicalReqId), sections_json: mergeSections(d.sections, plain.sections_json), updated_at: new Date() });
+      await (row as any).update({ title: d.title, admin_only: d.adminOnly, gate: d.gate, order_index: d.order, requirement_ids: d.requirements.map((r) => r.canonicalReqId), sections_json: mergeSections(d.sections, plain.sections_json), doc_type: d.docType ?? 'derived', page_limit: d.pageLimit ?? null, file_name: d.fileName ?? null, blueprint_version: d.blueprintVersion ?? null, updated_at: new Date() });
     }
   }
   return listProposalDocuments(deliveryProjectId);
