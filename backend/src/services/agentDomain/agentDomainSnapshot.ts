@@ -174,6 +174,26 @@ export function notRecordedFor(agent: SnapshotAgentInput | null): Array<{ field:
  * `no_approved_autonomy` and the page can say why instead of rendering a rung nobody approved. A
  * blind cast would have typechecked and then shown a bad record as if it were a real level.
  */
+/**
+ * AF12.3. The rung, when there is one, and `null` when the record does not hold a real rung.
+ *
+ * `CapabilityAutonomy` is a union: either one of the ten rungs, or a `NotApplicable` object
+ * carrying the reason. Splitting it into a value and a note is what lets a panel render "no
+ * ceiling recorded, because ..." instead of either a blank or the string "[object Object]".
+ */
+function rungOf(value: CapabilityAutonomy | undefined): string | null {
+  if (value === undefined) return null;
+  return typeof value === 'string' ? value : null;
+}
+
+/** The reason a value is not a rung, or `null` when it is one. Never both. */
+function noteOf(value: CapabilityAutonomy | undefined): string | null {
+  if (value === undefined) {
+    return 'This capability was not found in the ladder inputs, which should not happen.';
+  }
+  return typeof value === 'string' ? null : value.reason;
+}
+
 function asCapabilityAutonomy(value: string, field: string): CapabilityAutonomy {
   if (isAutonomyStage(value)) return value;
   return {
@@ -194,21 +214,25 @@ export function buildAgentDomainSnapshot(input: SnapshotInput): Record<string, u
   // for. The two differ on purpose -- anything above `autonomy:R2` with no granted tools is forced
   // back down with the reason `no_tool_grants` -- and a page that showed the requested level would
   // be overstating what its agent may do.
-  const authority = effectiveAuthorityForDomain(
-    [...input.matrix.capabilities]
-      .sort((a, b) => a.capability_id.localeCompare(b.capability_id))
-      .map((c) => ({
-        capability_id: c.capability_id,
-        approved_autonomy: asCapabilityAutonomy(c.starting_autonomy, 'starting_autonomy'),
-        max_permitted_autonomy: asCapabilityAutonomy(c.max_permitted_autonomy, 'max_permitted_autonomy'),
-        granted_tools: tools,
-        // `sandbox`, never `production`. Not one of these ten domains has an authorized build, so
-        // claiming a production environment here would be the page overstating its own agent on
-        // the single axis the ladder treats as irreversible.
-        environment: 'sandbox' as const,
-        human_decision: c.human_decision,
-      })),
-  );
+  // AF12.3. Held in a variable rather than passed inline, because the OUTPUT of
+  // `effectiveAuthorityForDomain` deliberately drops its inputs: `EffectiveAuthority` is
+  // `{ capability_id, effective_autonomy, reasons }` and nothing else. The ceiling went in and
+  // never came out, which is what made the Command Center's third criterion unsatisfiable.
+  const ladderInputs = [...input.matrix.capabilities]
+    .sort((a, b) => a.capability_id.localeCompare(b.capability_id))
+    .map((c) => ({
+      capability_id: c.capability_id,
+      approved_autonomy: asCapabilityAutonomy(c.starting_autonomy, 'starting_autonomy'),
+      max_permitted_autonomy: asCapabilityAutonomy(c.max_permitted_autonomy, 'max_permitted_autonomy'),
+      granted_tools: tools,
+      // `sandbox`, never `production`. Not one of these ten domains has an authorized build, so
+      // claiming a production environment here would be the page overstating its own agent on
+      // the single axis the ladder treats as irreversible.
+      environment: 'sandbox' as const,
+      human_decision: c.human_decision,
+    }));
+  const ladderInputById = new Map(ladderInputs.map((i) => [i.capability_id, i]));
+  const authority = effectiveAuthorityForDomain(ladderInputs);
 
   return {
     schema: AGENT_DOMAIN_SNAPSHOT_SCHEMA,
@@ -258,11 +282,36 @@ export function buildAgentDomainSnapshot(input: SnapshotInput): Record<string, u
         tools_granted_count: tools.length,
       }
       : { exists: false },
-    authority: authority.map((a) => ({
-      capability_id: a.capability_id,
-      effective_autonomy: a.effective_autonomy,
-      reasons: [...a.reasons].sort(),
-    })),
+    // AF12.3. The CEILING now rides alongside the effective authority.
+    //
+    // Sarbjit Kaur, 3 Nov 2026: *"The current snapshot provides each capability's effective
+    // authority, but it does not expose `max_permitted_autonomy` or the associated reason for
+    // each capability. We need this information to display the maximum permitted autonomy ceiling
+    // alongside the effective authority."* She was exactly right, and her story's third criterion
+    // -- "each capability's ceiling is marked against the rung it stops at" -- could not be
+    // satisfied without it.
+    //
+    // The ceiling was always computed here; `effectiveAuthorityForDomain` just never gave it back.
+    // Nothing is granted, widened or recomputed by adding it: these are the same two values the
+    // ladder already read, reported rather than discarded.
+    //
+    // `approved_autonomy` goes with it, because a ceiling alone cannot be rendered "against the
+    // rung it stops at" -- the page needs the level the record ASKS for, the ceiling, and the
+    // level that actually applies, to show all three on one ladder.
+    authority: authority.map((a) => {
+      const inputs = ladderInputById.get(a.capability_id);
+      return {
+        capability_id: a.capability_id,
+        effective_autonomy: a.effective_autonomy,
+        // Already present, and already the answer to "the associated reason": this is where
+        // `capped_by_max_permitted` appears when the ceiling is what lowered the level.
+        reasons: [...a.reasons].sort(),
+        approved_autonomy: rungOf(inputs?.approved_autonomy),
+        approved_autonomy_note: noteOf(inputs?.approved_autonomy),
+        max_permitted_autonomy: rungOf(inputs?.max_permitted_autonomy),
+        max_permitted_autonomy_note: noteOf(inputs?.max_permitted_autonomy),
+      };
+    }),
     // ── THE `no_tool_grants` RULE CURRENTLY BINDS NOTHING, AND THE PAGE SHOULD SAY SO ──────────
     //
     // Measured 2 Nov 2026 across all ten capability records: **0 of 443 capabilities have a
