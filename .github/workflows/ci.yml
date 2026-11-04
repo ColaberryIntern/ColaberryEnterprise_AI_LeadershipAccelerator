@@ -23,8 +23,22 @@ jobs:
         run: |
           npm install --no-audit --no-fund
           cd backend && npm install --no-audit --no-fund
+      # HEAP, NOT A TYPE ERROR.
+      #
+      # 2026-11-03: this job died with "FATAL ERROR: Ineffective mark-compacts near heap limit
+      # Allocation failed - JavaScript heap out of memory" on a branch that added TWO files
+      # (~650 lines) to backend/src. Main passed at that branch's exact base commit (cc1ebc55),
+      # and the added module typechecks clean on its own under --strict -- so the program had
+      # simply outgrown Node's default old-space and any next file would have tipped it.
+      #
+      # An OOM here is indistinguishable from a real failure on the PR page, so the next person
+      # would have spent the time hunting a type error that does not exist. The headroom is the
+      # fix; the long-term answer is that backend/src is very large and wants splitting, which is
+      # not this job's problem to solve.
       - name: tsc --noEmit
         working-directory: backend
+        env:
+          NODE_OPTIONS: --max-old-space-size=6144
         run: npx tsc --noEmit
 
   frontend-typecheck:
