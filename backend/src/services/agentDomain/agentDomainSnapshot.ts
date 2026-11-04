@@ -230,6 +230,12 @@ export function buildAgentDomainSnapshot(input: SnapshotInput): Record<string, u
       // the single axis the ladder treats as irreversible.
       environment: 'sandbox' as const,
       human_decision: c.human_decision,
+      // Carried alongside, not into the ladder: `effectiveAuthority` does not read it and must
+      // not. It is the capability record's own prose explaining WHY its ceiling sits where it
+      // does, and it is for the reader, not the calculation.
+      ceiling_reason: typeof c.max_autonomy_rationale === 'string' && c.max_autonomy_rationale.trim()
+        ? c.max_autonomy_rationale.trim()
+        : null,
     }));
   const ladderInputById = new Map(ladderInputs.map((i) => [i.capability_id, i]));
   const authority = effectiveAuthorityForDomain(ladderInputs);
@@ -310,6 +316,20 @@ export function buildAgentDomainSnapshot(input: SnapshotInput): Record<string, u
         approved_autonomy_note: noteOf(inputs?.approved_autonomy),
         max_permitted_autonomy: rungOf(inputs?.max_permitted_autonomy),
         max_permitted_autonomy_note: noteOf(inputs?.max_permitted_autonomy),
+        // WHY the ceiling sits there, which is a DIFFERENT question from `reasons`.
+        //
+        // Sarbjit Kaur, 4 Nov 2026, naming the distinction exactly: she asked for "a
+        // capability-specific ceiling reason - an explanation of why that capability is
+        // restricted to that maximum level", separately from the existing `reasons`. She is
+        // right that they are not the same: `reasons` says how the EFFECTIVE level was arrived
+        // at (`capped_by_max_permitted` and friends), while this says why the CEILING itself is
+        // what it is.
+        //
+        // It is the capability record's `max_autonomy_rationale`, renamed to the word she asked
+        // for because the record's name describes where it came from and hers describes what it
+        // is for. Measured: all 64 marketing capabilities carry one, and the ceilings span R2 to
+        // R9, so the panel has real content rather than a column of nulls.
+        ceiling_reason: inputs?.ceiling_reason ?? null,
       };
     }),
     // ── THE `no_tool_grants` RULE CURRENTLY BINDS NOTHING, AND THE PAGE SHOULD SAY SO ──────────
