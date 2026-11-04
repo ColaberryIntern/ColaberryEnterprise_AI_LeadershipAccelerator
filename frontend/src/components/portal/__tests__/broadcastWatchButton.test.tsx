@@ -193,7 +193,15 @@ describe('RoomPane really passes the room id down', () => {
     // class recording comes from `recording_url` — a different system from broadcast
     // occurrences, and `ACTIVE_DISCOVERY_STATES` does not return `replay_ready` at all, so
     // there is no replay feed to hand off to. Pretending otherwise would be the fabrication.
-    expect(src).toContain("const { join_url } = await joinVideoRoom(roomId);");
+    // Pinned on the CALL and the MOUNT SITE rather than on one line of call syntax. The literal
+    // `const { join_url } = await joinVideoRoom(roomId);` was replaced on 4 Nov 2026 when the
+    // join moved inside `openTabForJoin` -- the tab now has to be reserved before the await or a
+    // phone refuses it, and a refused tab used to be undetectable. The ESCAPE did not go
+    // anywhere, which is what this test is about, so the assertion follows the claim instead of
+    // the syntax. It is not weaker: it now also pins the banner's mount site, so replacing the
+    // two-way escape with a one-way watch button still fails here.
+    expect(src).toMatch(/joinVideoRoom\(roomId\)/);
+    expect(src).toContain('<AlwaysOpenVideoBanner onJoin={doJoinVideo} />');
     expect(src).toMatch(/openSessionRecording\(session\.recording_url, session\.title\)/);
   });
 });
