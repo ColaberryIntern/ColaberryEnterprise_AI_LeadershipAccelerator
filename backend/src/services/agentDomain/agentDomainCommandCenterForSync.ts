@@ -43,7 +43,11 @@
  * imports happen AFTER the one cheap indexed query has confirmed this is a domain project.
  */
 import type { CommandCenterOverride } from '../sbp/renderDocs';
-import type { SnapshotAgentInput, SnapshotGovernanceRow } from './agentDomainSnapshot';
+import type {
+  SnapshotAgentInput,
+  SnapshotGovernanceRow,
+  SnapshotStoryVerdict,
+} from './agentDomainSnapshot';
 
 function logLine(
   event: string,
@@ -78,6 +82,68 @@ export async function domainKeyForProject(projectId: string): Promise<string | n
 }
 
 /** The live agent row behind this domain, or null when none is linked. */
+/**
+ * AF12.1. The verification verdicts this project's stories already carry.
+ *
+ * `buildVerificationService` writes `student_tasks.verification_json` on every sync, for every
+ * story. Nothing ever showed it to the builder: measured 3 Nov 2026, 264 stories across the ten
+ * agent domains carried an `in_progress` verdict while their page read "not started", and the
+ * count of unverified stories with SOME criteria claimed was zero across the whole platform.
+ *
+ * Read here so the snapshot can carry it into the builder's own repository, which is where their
+ * Command Center reads from. A story with no verdict yet is returned with nulls rather than
+ * skipped: the page has to be able to say "not checked" as distinct from "checked and clear".
+ *
+ * `checked_at` is deliberately NOT selected. It moves every sync, and this file takes part in the
+ * change comparison, so carrying it would make each sync a commit whose only difference is a
+ * timestamp (FR-026).
+ */
+async function storyVerdictsForProject(projectId: string): Promise<SnapshotStoryVerdict[]> {
+  const { sequelize } = await import('../../config/database');
+  const { QueryTypes } = await import('sequelize');
+  const rows = await sequelize.query<{
+    story_id: string;
+    title: string;
+    status: string;
+    verification_state: string | null;
+    criteria_passed: number | null;
+    criteria_total: number | null;
+    reasons: unknown;
+    outstanding: unknown;
+    commit_sha: string | null;
+    verified_at: Date | string | null;
+  }>(
+    `SELECT st.story_id,
+            st.title,
+            st.status,
+            st.verification_json->>'state'                     AS verification_state,
+            (st.verification_json->>'criteria_passed')::int    AS criteria_passed,
+            (st.verification_json->>'criteria_total')::int     AS criteria_total,
+            coalesce(st.verification_json->'reasons', '[]'::jsonb)     AS reasons,
+            coalesce(st.verification_json->'outstanding', '[]'::jsonb) AS outstanding,
+            st.verification_json->>'commit_sha'                AS commit_sha,
+            st.verified_at
+       FROM student_tasks st
+      WHERE st.project_id = $1
+      ORDER BY st.story_id`,
+    { bind: [projectId], type: QueryTypes.SELECT },
+  );
+
+  const strings = (v: unknown): string[] => (Array.isArray(v) ? v.map((x) => String(x)) : []);
+  return rows.map((r) => ({
+    story_id: r.story_id,
+    title: r.title,
+    status: r.status,
+    verification_state: r.verification_state,
+    criteria_passed: r.criteria_passed,
+    criteria_total: r.criteria_total,
+    reasons: strings(r.reasons),
+    outstanding: strings(r.outstanding),
+    commit_sha: r.commit_sha,
+    verified: Boolean(r.verified_at),
+  }));
+}
+
 async function agentForProject(projectId: string): Promise<SnapshotAgentInput | null> {
   const { sequelize } = await import('../../config/database');
   const { QueryTypes } = await import('sequelize');
@@ -210,11 +276,13 @@ export async function domainCommandCenterOverrideForProject(
       { loadDomainMatrix },
       agent,
       governance,
+      stories,
     ] = await Promise.all([
       import('./agentDomainSnapshot'),
       import('./capabilityRecord'),
       agentForProject(projectId),
       governanceForDomain(domainKey),
+      storyVerdictsForProject(projectId),
     ]);
     files.push({
       path: AGENT_DOMAIN_SNAPSHOT_PATH,
@@ -223,6 +291,7 @@ export async function domainCommandCenterOverrideForProject(
         agent,
         matrix: loadDomainMatrix(domainKey),
         governance,
+        stories,
       })),
     });
   } catch (err: unknown) {
