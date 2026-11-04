@@ -19,6 +19,10 @@ const AdminCommercializationPage = lazy(() => import('../pages/admin/AdminCommer
 // R1 - the Revenue Room. Its API lives under the already-classified
 // /api/admin/commercialization prefix; only the page path is its own.
 const AdminRevenueRoomPage = lazy(() => import('../pages/admin/AdminRevenueRoomPage'));
+// R4 - the drill-down behind one Revenue Room card. Not in adminNav: it is reached by
+// clicking a card, never from the sidebar, and a nav entry for a page that needs a
+// :cardKey would link to nothing.
+const AdminRevenueRoomDrilldownPage = lazy(() => import('../pages/admin/AdminRevenueRoomDrilldownPage'));
 const AdminRefundsPage = lazy(() => import('../pages/admin/AdminRefundsPage'));
 const AdminSettingsPage = lazy(() => import('../pages/admin/AdminSettingsPage'));
 const AdminCapeSettingsPage = lazy(() => import('../pages/admin/AdminCapeSettingsPage'));
@@ -211,6 +215,7 @@ const adminRoutes = (
         <Route path="/admin/revenue" element={<AdminRevenueDashboardPage />} />
         <Route path="/admin/commercialization" element={<AdminCommercializationPage />} />
         <Route path="/admin/revenue-room" element={<AdminRevenueRoomPage />} />
+        <Route path="/admin/revenue-room/:cardKey" element={<AdminRevenueRoomDrilldownPage />} />
         <Route path="/admin/refunds" element={<AdminRefundsPage />} />
         <Route path="/admin/settings" element={<AdminSettingsPage />} />
         <Route path="/admin/cape-settings" element={<AdminCapeSettingsPage />} />
