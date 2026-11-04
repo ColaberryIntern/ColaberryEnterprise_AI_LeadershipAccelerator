@@ -15,6 +15,7 @@
  * already drops pricing.
  */
 import { classifyRequirementCategory } from './govRequirementItems';
+import type { ResponseFigure } from './responseSlots';
 
 export interface ProposalDocumentRule {
   key: string;
@@ -48,6 +49,27 @@ export const DOCUMENT_RULES: ProposalDocumentRule[] = [
 const ruleFor = (statement: string): ProposalDocumentRule => DOCUMENT_RULES.find((d) => d.pattern.test(statement)) ?? DOCUMENT_RULES[DOCUMENT_RULES.length - 1];
 
 export interface ProposalDocumentReq { canonicalReqId: string; statement: string; }
+
+/**
+ * A SECTION of a proposal document (P1 "documents are the source"). One section per requirement the
+ * document covers: `sectionKey` is the requirement's canonical id, `requirementIds` the ids it answers
+ * (one today; the shape allows a future merge), `plan` the optional `hot-button → feature → benefit →
+ * proof → discriminator` section plan P5 fills in. The response-slot model's per-requirement content,
+ * figures and gaps migrate INTO these sections (see migrateProposalSlotsToDocumentSections.ts).
+ */
+export interface ProposalDocumentSection {
+  sectionKey: string;
+  heading: string;
+  requirementIds: string[];
+  order: number;
+  plan?: string;
+  /** Authored section body — migrated from the response slot, then written by drafting (P5). Preserved across
+   *  re-derivation (sync merges by `sectionKey`; derivation never clears it). */
+  contentHtml?: string;
+  /** Commit-bound figures migrated from the slot response. */
+  figures?: ResponseFigure[];
+}
+
 export interface ProposalDocument {
   key: string;
   title: string;
@@ -56,6 +78,16 @@ export interface ProposalDocument {
   adminOnly: boolean;
   /** The requirements this document must cover — the AI's grounding, and the reviewer's checklist. */
   requirements: ProposalDocumentReq[];
+  /** One section per covered requirement, in coverage order. The document is the source of record (P1). */
+  sections: ProposalDocumentSection[];
+}
+
+/** A short, stable section heading from a requirement statement: first sentence/clause, capped. Pure. */
+export function sectionHeading(statement: string): string {
+  const s = String(statement ?? '').replace(/\s+/g, ' ').trim();
+  if (!s) return 'Requirement';
+  const cut = s.split(/(?<=[.;:])\s/)[0];
+  return (cut.length > 90 ? cut.slice(0, 87).trimEnd() + '…' : cut);
 }
 
 /**
@@ -76,8 +108,12 @@ export function deriveProposalDocuments(established: any[]): ProposalDocument[] 
     // A pricing-kind requirement is always the price document, whatever its wording.
     const rule = kind === 'pricing' ? (DOCUMENT_RULES.find((d) => d.key === 'pricing') as ProposalDocumentRule) : ruleFor(statement);
     let doc = byKey.get(rule.key);
-    if (!doc) { doc = { key: rule.key, title: rule.title, order: rule.order, gate: rule.gate, adminOnly: rule.adminOnly, requirements: [] }; byKey.set(rule.key, doc); }
-    if (!doc.requirements.some((x) => x.canonicalReqId === canonicalReqId)) doc.requirements.push({ canonicalReqId, statement });
+    if (!doc) { doc = { key: rule.key, title: rule.title, order: rule.order, gate: rule.gate, adminOnly: rule.adminOnly, requirements: [], sections: [] }; byKey.set(rule.key, doc); }
+    if (!doc.requirements.some((x) => x.canonicalReqId === canonicalReqId)) {
+      doc.requirements.push({ canonicalReqId, statement });
+      // One section per covered requirement (P1). Content/figures/gaps land here via migration + drafting.
+      doc.sections.push({ sectionKey: canonicalReqId, heading: sectionHeading(statement), requirementIds: [canonicalReqId], order: doc.sections.length + 1 });
+    }
   }
   return [...byKey.values()].sort((a, b) => a.order - b.order);
 }

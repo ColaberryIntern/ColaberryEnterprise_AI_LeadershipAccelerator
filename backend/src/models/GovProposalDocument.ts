@@ -1,5 +1,6 @@
 import { DataTypes, Model } from 'sequelize';
 import { sequelize } from '../config/database';
+import type { ProposalDocumentSection } from '../services/factory/proposal/govProposalDocuments';
 
 /**
  * A named proposal document a bid must submit (cockpit v2 Proposal workstream): Cover Letter, Technical Proposal,
@@ -26,6 +27,8 @@ export interface GovProposalDocumentAttributes {
   order_index: number;
   /** The canonical_req_ids this document must cover — the AI's grounding and the reviewer's checklist. */
   requirement_ids: string[];
+  /** P1: the document's sections (one per covered requirement). Content/figures/gaps live on these. */
+  sections_json: ProposalDocumentSection[];
   /** The review thread (newest appended last). */
   comments: GovProposalDocumentComment[];
   drafted_at?: Date | null;
@@ -48,6 +51,7 @@ class GovProposalDocument extends Model<GovProposalDocumentAttributes> implement
   declare gate: boolean;
   declare order_index: number;
   declare requirement_ids: string[];
+  declare sections_json: ProposalDocumentSection[];
   declare comments: GovProposalDocumentComment[];
   declare drafted_at: Date | null;
   declare drafted_by_identity_id: string | null;
@@ -70,6 +74,7 @@ GovProposalDocument.init(
     gate: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     order_index: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
     requirement_ids: { type: DataTypes.JSONB, allowNull: false, defaultValue: [] },
+    sections_json: { type: DataTypes.JSONB, allowNull: false, defaultValue: [] },
     comments: { type: DataTypes.JSONB, allowNull: false, defaultValue: [] },
     drafted_at: { type: DataTypes.DATE, allowNull: true },
     drafted_by_identity_id: { type: DataTypes.UUID, allowNull: true },
