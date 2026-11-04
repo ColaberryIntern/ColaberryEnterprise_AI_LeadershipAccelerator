@@ -6,6 +6,7 @@ import {
   fetchPracticeSession,
   startPractice,
   SlotUnavailableError,
+  hasUsableRoom,
   type PracticeSession,
 } from './presentationApi';
 
@@ -367,7 +368,11 @@ export default function PracticePanel({ projectId, storyId, demo }: PracticePane
     return <p className="ps-note" data-testid="ps-practice-error">Could not load your practice room. Reload to try again.</p>;
   }
 
-  if (session && session.bookingId) {
+  // A booking id on its own is not a room. When the room behind it has been deleted
+  // or the booking cancelled, the server now reports no session at all — this is the
+  // second line of defence, so a stale payload in an open tab still offers the form
+  // instead of a room card with no time in it.
+  if (hasUsableRoom(session)) {
     return (
       <BookedSlot
         session={session}

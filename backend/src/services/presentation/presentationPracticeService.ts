@@ -1,8 +1,8 @@
 import { getOwnedProjectTree } from '../projects/projectReadService';
 import PresentationAssignment from '../../models/PresentationAssignment';
 import PresentationAttempt from '../../models/PresentationAttempt';
-import RoomBooking from '../../models/RoomBooking';
-import { reserveSlot, releaseSlot } from './presentationCapacityService';
+import RoomBooking, { isDeadBooking } from '../../models/RoomBooking';
+import { reserveSlot, releaseSlot, releaseSlotsForAttempt } from './presentationCapacityService';
 import { toSessionView, SessionView } from './presentationSessionService';
 
 /**
@@ -54,6 +54,14 @@ export type StartPracticeResult =
       nextAvailable: string | null;
       message: string;
     };
+
+function log(event: string, ctx: Record<string, unknown>, outcome: 'success' | 'failure' = 'success'): void {
+  console.log(JSON.stringify({
+    timestamp: new Date().toISOString(),
+    level: outcome === 'failure' ? 'warn' : 'info',
+    service: 'presentation-practice', event, outcome, context: ctx,
+  }));
+}
 
 /** Attempt states that mean "this take has not happened yet". */
 const RESUMABLE = new Set(['draft', 'scheduled']);
@@ -166,9 +174,26 @@ export async function startPracticeAttempt(input: StartPracticeInput): Promise<S
 
   // Already booked — a repeat click on a take that has a room is a no-op, not a
   // second reservation.
+  //
+  // Unless the room is gone. Deleting a room hard-deletes its bookings, so a take
+  // whose rehearsal has passed can be left pointing at a row that no longer exists,
+  // and a cancelled booking leaves one that exists but is called off. Returning
+  // either as "already booked" made this endpoint refuse to do the one thing the
+  // student was asking for: book another time. The dangling reference is cleared
+  // here and the request carries on to reserve a new slot.
   if (attempt.booking_id) {
     const existingBooking = await RoomBooking.findByPk(String(attempt.booking_id));
-    return { ok: true, created: false, session: toSessionView(attempt, existingBooking) };
+    if (!isDeadBooking(existingBooking)) {
+      return { ok: true, created: false, session: toSessionView(attempt, existingBooking) };
+    }
+    const freed = await releaseSlotsForAttempt(String(attempt.id), 'booking_no_longer_exists');
+    await attempt.update({ booking_id: null, room_id: null });
+    log('practice_dead_booking_cleared', {
+      attempt_id: String(attempt.id),
+      booking_id: String(attempt.booking_id),
+      booking_state: existingBooking ? String(existingBooking.state) : 'missing',
+      slots_released: freed,
+    });
   }
 
   const slot = await reserveSlot({

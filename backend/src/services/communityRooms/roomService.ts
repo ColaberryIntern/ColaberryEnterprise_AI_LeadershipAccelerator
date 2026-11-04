@@ -299,11 +299,37 @@ export async function deleteRoom(ctx: RoomAccessContext, roomId: string): Promis
     },
   });
   if (upcoming > 0) throw conflictError('This room has upcoming sessions — cancel them first.');
+
+  // The bookings about to be destroyed, read before they are gone.
+  //
+  // Note what the guard above does and does not stop: it counts only bookings that
+  // have not STARTED yet, so a room whose rehearsal is in the past deletes cleanly.
+  // `presentation_attempts.booking_id` has no foreign key and no cascade, so those
+  // attempts would be left pointing at rows that no longer exist, and the slot
+  // reservations that blocked the host's time would stay `held` forever. Detaching
+  // first is what keeps a deleted room from costing a student their next rehearsal.
+  //
+  // Deliberately not swallowed: if this fails the room is NOT deleted, which leaves
+  // the data consistent and the student able to try again.
+  const doomed = await RoomBooking.findAll({ where: { room_id: roomId }, attributes: ['id'] });
+  const { detachAttemptsForRoom } = await import('../presentation/presentationRoomDetach');
+  const detached = await detachAttemptsForRoom(
+    roomId,
+    doomed.map((b) => String(b.id)),
+    'room_deleted',
+  );
+
   await Promise.all([
     RoomMembership.destroy({ where: { room_id: roomId } }),
     RoomMessage.destroy({ where: { room_id: roomId } }),
     RoomBooking.destroy({ where: { room_id: roomId } }),
   ]);
   await room.destroy();
-  log('info', 'room_deleted', { room_id: roomId, by: ctx.enrollmentId });
+  log('info', 'room_deleted', {
+    room_id: roomId,
+    by: ctx.enrollmentId,
+    bookings_removed: doomed.length,
+    attempts_detached: detached.attempts,
+    slots_released: detached.slots,
+  });
 }
