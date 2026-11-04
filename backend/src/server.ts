@@ -3366,6 +3366,16 @@ async function start(): Promise<void> {
   } catch (err: any) {
     console.warn('[DB] account artifact link schema ensure failed:', err?.message);
   }
+  // R3 - the evidence spine. One join table mapping any artifact to any revenue
+  // initiative, which every Revenue Room surface reads instead of querying five systems
+  // separately. Depends on no other table (the initiative pointer is deliberately
+  // unconstrained - see the module header), so it only has to run before the port opens.
+  try {
+    const { ensureEvidenceLinkSchema } = await import('./db/ensureEvidenceLinkSchema');
+    await ensureEvidenceLinkSchema();
+  } catch (err: any) {
+    console.warn('[DB] evidence link schema ensure failed:', err?.message);
+  }
   // Seed v0 automation rules (idempotent).
   try {
     const { seedDefaultAutomationRules } = await import('./services/ops/automationRulesService');
