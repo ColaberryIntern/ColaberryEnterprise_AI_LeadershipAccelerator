@@ -15,6 +15,7 @@
 import { deriveGovBuildPlan, buildGovStoryPrompt, reconcileGovBuildPlan, type GovBuildStory, type GovBuildRelease } from './proposal/govBuildPlan';
 import type { EvidenceView } from './govBuildEvidence';
 import type { SharedProposalView, ProposalShareLevel } from './govProposalShare';
+import type { ProposalDocumentSection } from './proposal/govProposalDocuments';
 import { deriveBuildStoryStage, deriveProposalStage, toCommitFeed, readGovProvenanceFacts, computeOverallProgress, type BuildStage, type ProposalStage, type CommitFeedItem, type GovOverallProgress } from './govCockpit';
 import type { GovBuildSummary } from './govBuildSummary';
 
@@ -23,6 +24,9 @@ export interface StudentProposalDocumentComment { body: string; at: string; }
 export interface StudentProposalDocument {
   key: string; title: string; status: string; contentHtml: string | null;
   version: number; gate: boolean; order: number; requirementIds: string[];
+  /** P1: the document's sections (one per covered requirement). The pricing document is dropped whole above, so no
+   *  pricing section ever reaches a student — the sections ride on the non-pricing documents only. */
+  sections: ProposalDocumentSection[];
   comments: StudentProposalDocumentComment[]; draftedAt: string | null; acceptedAt: string | null;
 }
 
@@ -278,7 +282,7 @@ export async function getStudentGovProjectView(deliveryProjectId: string, viewer
       .filter((d) => viewerCanVerify || !d.adminOnly)
       .map((d) => ({
         key: d.key, title: d.title, status: d.status, contentHtml: d.contentHtml, version: d.version,
-        gate: d.gate, order: d.order, requirementIds: d.requirementIds,
+        gate: d.gate, order: d.order, requirementIds: d.requirementIds, sections: d.sections,
         comments: d.comments.map((c) => ({ body: c.body, at: c.at })), draftedAt: d.draftedAt, acceptedAt: d.acceptedAt,
       }));
     view.overallProgress = computeOverallProgress({

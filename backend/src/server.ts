@@ -96,6 +96,7 @@ import { ensureGovProposalResponseSchema } from './db/ensureGovProposalResponseS
 import { ensureGovProposalShareGrantSchema } from './db/ensureGovProposalShareGrantSchema';
 import { ensureGovProposalAmendmentSchema } from './db/ensureGovProposalAmendmentSchema';
 import { ensureGovProposalDocumentSchema } from './db/ensureGovProposalDocumentSchema';
+import { ensureGovProposalDocumentGapsSchema } from './db/ensureGovProposalDocumentGapsSchema';
 import { ensureGovSubmissionSchema } from './db/ensureGovSubmissionSchema';
 import { ensureServiceOfferingSchema } from './db/ensureServiceOfferingSchema';
 import { ensureCaseStudyServiceLinkSchema } from './db/ensureCaseStudyServiceLinkSchema';
@@ -2894,6 +2895,7 @@ async function start(): Promise<void> {
   // Gov proposal documents (gov_proposal_documents): the cockpit v2 Proposal workstream — one row per NAMED document
   // a bid must submit (AI-drafted, reviewer-accepted). A single additive NEW table FK'd to delivery_projects.
   await ensureGovProposalDocumentSchema();
+  await ensureGovProposalDocumentGapsSchema();
   // Gov submission + outcome (gov_submission): the per-project submission lifecycle (preparing→…→exported→
   // externally_submitted→acknowledged; exported ≠ submitted), the export manifest, the MANUAL external receipt, the
   // win/loss outcome, and the PRIVATE case-study + service-capability candidates. One additive NEW table (UNIQUE per

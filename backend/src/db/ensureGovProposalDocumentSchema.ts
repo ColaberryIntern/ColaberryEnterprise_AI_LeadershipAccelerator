@@ -36,6 +36,9 @@ export async function ensureGovProposalDocumentSchema(): Promise<void> {
      )`,
     // One row per (project, document): re-deriving the document list upserts in place rather than duplicating.
     `CREATE UNIQUE INDEX IF NOT EXISTS idx_gov_proposal_documents_project_key ON gov_proposal_documents (delivery_project_id, doc_key)`,
+    // P1 "documents are the source": sections carry {sectionKey, heading, requirementIds[], order, plan?}. The
+    // response-slot model's per-requirement content/figures migrate into these sections. Additive, self-healing.
+    `ALTER TABLE gov_proposal_documents ADD COLUMN IF NOT EXISTS sections_json JSONB NOT NULL DEFAULT '[]'::jsonb`,
   ];
 
   for (const sql of statements) {

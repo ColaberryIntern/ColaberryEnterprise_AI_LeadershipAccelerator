@@ -11,7 +11,7 @@
  *  - acceptance is reversible by a re-draft (status falls back to `drafted`), so a comment-driven revision loop works.
  */
 import GovProposalDocument, { type GovProposalDocumentAttributes, type GovProposalDocumentComment, type GovProposalDocumentStatus } from '../../../models/GovProposalDocument';
-import type { ProposalDocument } from './govProposalDocuments';
+import type { ProposalDocument, ProposalDocumentSection } from './govProposalDocuments';
 
 export interface ProposalDocumentView {
   key: string;
@@ -23,9 +23,27 @@ export interface ProposalDocumentView {
   gate: boolean;
   order: number;
   requirementIds: string[];
+  /** P1: the document's sections (one per covered requirement). The proposal is modelled here, not on slots. */
+  sections: ProposalDocumentSection[];
   comments: GovProposalDocumentComment[];
   draftedAt: string | null;
   acceptedAt: string | null;
+}
+
+/**
+ * Merge freshly-DERIVED sections with the STORED ones: derived structure (heading, requirementIds, order) wins, but
+ * authored content/plan/figures on a section with the same `sectionKey` are PRESERVED — the section-level form of
+ * the "re-derivation never wipes authored work" rail. A section whose requirement left the set is dropped, matching
+ * how `requirement_ids` drops a departed requirement; the whole-document `content_html` is preserved regardless.
+ */
+function mergeSections(derived: ProposalDocumentSection[], stored: ProposalDocumentSection[]): ProposalDocumentSection[] {
+  const authored = new Map<string, ProposalDocumentSection>();
+  for (const s of Array.isArray(stored) ? stored : []) if (s && s.sectionKey) authored.set(s.sectionKey, s);
+  return (Array.isArray(derived) ? derived : []).map((d) => {
+    const prior = authored.get(d.sectionKey);
+    if (!prior) return d;
+    return { ...d, plan: prior.plan ?? d.plan, contentHtml: prior.contentHtml, figures: prior.figures };
+  });
 }
 
 export class ProposalDocumentError extends Error {
@@ -43,6 +61,7 @@ function toView(row: GovProposalDocumentAttributes): ProposalDocumentView {
     gate: !!row.gate,
     order: row.order_index ?? 0,
     requirementIds: Array.isArray(row.requirement_ids) ? row.requirement_ids : [],
+    sections: Array.isArray(row.sections_json) ? row.sections_json : [],
     comments: Array.isArray(row.comments) ? row.comments : [],
     draftedAt: row.drafted_at ? new Date(row.drafted_at).toISOString() : null,
     acceptedAt: row.accepted_at ? new Date(row.accepted_at).toISOString() : null,
@@ -60,13 +79,15 @@ export async function syncProposalDocuments(deliveryProjectId: string, derived: 
       defaults: {
         delivery_project_id: deliveryProjectId, doc_key: d.key, title: d.title, status: 'not_started',
         content_html: null, version: 0, admin_only: d.adminOnly, gate: d.gate, order_index: d.order,
-        requirement_ids: d.requirements.map((r) => r.canonicalReqId), comments: [],
+        requirement_ids: d.requirements.map((r) => r.canonicalReqId), sections_json: d.sections, comments: [],
         drafted_at: null, drafted_by_identity_id: null, accepted_at: null, accepted_by_identity_id: null,
       } as any,
     });
     if (!created) {
-      // Source-derived fields only — NEVER content/status/version/comments/acceptance.
-      await (row as any).update({ title: d.title, admin_only: d.adminOnly, gate: d.gate, order_index: d.order, requirement_ids: d.requirements.map((r) => r.canonicalReqId), updated_at: new Date() });
+      // Source-derived fields only — NEVER content/status/version/comments/acceptance. Sections merge: derived
+      // structure wins, authored section content/plan/figures preserved by sectionKey (see mergeSections).
+      const plain = (row as any).get({ plain: true }) as GovProposalDocumentAttributes;
+      await (row as any).update({ title: d.title, admin_only: d.adminOnly, gate: d.gate, order_index: d.order, requirement_ids: d.requirements.map((r) => r.canonicalReqId), sections_json: mergeSections(d.sections, plain.sections_json), updated_at: new Date() });
     }
   }
   return listProposalDocuments(deliveryProjectId);

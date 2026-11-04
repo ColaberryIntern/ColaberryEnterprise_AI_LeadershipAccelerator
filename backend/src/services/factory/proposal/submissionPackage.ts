@@ -33,6 +33,45 @@ function detectPricingLeak(rows: ResponseSlot[]): string[] {
 }
 
 /**
+ * A proposal document, reduced to exactly what readiness needs (P1 "documents are the source"). Kept local and
+ * minimal so this module stays PURE — it never imports the store or the model, the same discipline `ResponseOverlay`
+ * follows. `status` mirrors `GovProposalDocumentStatus`; `gaps` are the document's section gaps.
+ */
+export interface ReadinessDocument {
+  key: string;
+  status: 'not_started' | 'drafting' | 'drafted' | 'changes_requested' | 'accepted';
+  gaps?: { resolution: 'open' | 'answered' | 'filler' }[];
+}
+
+/**
+ * P1: readiness computed from the NAMED DOCUMENTS, which are now the single source of the proposal. Mirrors the
+ * slot verdict: ready ONLY when there is at least one document, EVERY document is `accepted`, no section carries an
+ * open or filler gap, the ZIP coverage is sufficient, and no requirement is blocking. A document's `accepted` is the
+ * document-level equivalent of every one of its requirement responses being `approved`, so on a fixture where each
+ * document groups its requirements this returns the same verdict as `evaluateSubmissionReadiness(slots,…)`. Open
+ * gaps block here where the slot model relied on a slot never reaching `approved`; filler blocks in both.
+ * PURE + total.
+ */
+export function evaluateReadinessFromDocuments(documents: ReadinessDocument[], coverageSufficient: boolean, canApproveBid: boolean): SubmissionReadiness {
+  const rows = Array.isArray(documents) ? documents : [];
+  const blocking: string[] = [];
+  if (rows.length === 0) blocking.push('no_proposal_documents');
+  const notAccepted = rows.filter((d) => d.status !== 'accepted').map((d) => d.key);
+  if (notAccepted.length) blocking.push(`documents_not_accepted:${notAccepted.join(',')}`);
+  const hasGap = (d: ReadinessDocument, res: 'open' | 'filler') => Array.isArray(d.gaps) && d.gaps.some((g) => g && g.resolution === res);
+  const filler = rows.filter((d) => hasGap(d, 'filler')).map((d) => d.key);
+  if (filler.length) blocking.push(`documents_filler:${filler.join(',')}`);
+  const open = rows.filter((d) => hasGap(d, 'open')).map((d) => d.key);
+  if (open.length) blocking.push(`documents_open_gaps:${open.join(',')}`);
+  if (!coverageSufficient) blocking.push('coverage_insufficient');
+  if (!canApproveBid) blocking.push('requirements_blocking');
+  return { ready: blocking.length === 0, blocking, warnings: [] };
+}
+
+/**
+ * @deprecated P1 — readiness is computed from documents (`evaluateReadinessFromDocuments`). This slot path is kept
+ * as a read-through adapter until the UI no longer derives slots, then removed. Do not add new callers.
+ *
  * Readiness is the finalization gate: a proposal is ready to export/submit ONLY when there is at least one
  * response slot, EVERY slot is `approved`, the ZIP coverage is sufficient, and no requirement is blocking. This is
  * the "draft ≠ sent / exported ≠ submitted" honesty — you cannot package a proposal whose answers are not signed
