@@ -11,6 +11,24 @@ const q = sequelize.query as unknown as jest.Mock;
 const sessions = (LiveSession as unknown as { findAll: jest.Mock }).findAll;
 const hostPool = allocatableHostEmails as unknown as jest.Mock;
 
+/**
+ * THE CLOCK IS FROZEN, because the fixture date is not a detail here -- it is the assertion.
+ *
+ * `START` is a literal, and `reserveSlot` refuses a start that has already passed
+ * (`in_the_past`, presentationCapacityService.ts:167). So this suite passed every run until
+ * 19:00Z on 4 November 2026 and failed every run after it. It turned `main` red mid-afternoon
+ * that day and would have stayed red forever, blocking every PR on a Required check.
+ *
+ * Moving the date forward only re-arms the same bomb. A relative anchor such as "tomorrow"
+ * defuses it here but breaks the sibling capacity suite, which asserts that 13:00 Central is
+ * 19:00Z -- true only while Central is on CST, so a relative date fails at the next daylight
+ * saving shift. Freezing `now` keeps every literal, and every timezone fact derived from one,
+ * exactly as written, and cannot age.
+ */
+const FROZEN_NOW = new Date('2026-11-04T18:00:00Z');
+beforeAll(() => { jest.useFakeTimers({ now: FROZEN_NOW, doNotFake: ['nextTick', 'setImmediate'] }); });
+afterAll(() => { jest.useRealTimers(); });
+
 const START = new Date('2026-11-04T19:00:00Z');
 const END = new Date('2026-11-04T19:30:00Z');
 const req = (over: Record<string, unknown> = {}) => ({ enrollmentId: 'e1', startAt: START, endAt: END, ...over } as any);

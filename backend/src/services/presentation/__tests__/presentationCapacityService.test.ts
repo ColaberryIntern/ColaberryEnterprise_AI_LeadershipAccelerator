@@ -22,7 +22,24 @@ const q = sequelize.query as unknown as jest.Mock;
 const sessions = (LiveSession as unknown as { findAll: jest.Mock }).findAll;
 const hostPool = allocatableHostEmails as unknown as jest.Mock;
 
-/** Well in the future so the in-the-past guard never interferes. */
+/**
+ * THE CLOCK IS FROZEN so that "well in the future" stays true.
+ *
+ * The comment below used to say exactly that about a literal date, and on 4 November 2026 at
+ * 19:00Z it stopped being true: `reserveSlot` refuses a start that has already passed
+ * (`in_the_past`, presentationCapacityService.ts:167), so the suite failed every run from that
+ * minute on and took `main` red with it.
+ *
+ * The date cannot simply move. This suite asserts that a 13:00 Central class collides with a
+ * 19:00Z slot, which holds only while Central is on CST, so any relative or shifted date fails
+ * at the next daylight saving change. Freezing `now` keeps the literals and their timezone
+ * meaning untouched.
+ */
+const FROZEN_NOW = new Date('2026-11-04T18:00:00Z');
+beforeAll(() => { jest.useFakeTimers({ now: FROZEN_NOW, doNotFake: ['nextTick', 'setImmediate'] }); });
+afterAll(() => { jest.useRealTimers(); });
+
+/** An hour after FROZEN_NOW, so the in-the-past guard never interferes. */
 const START = new Date('2026-11-04T19:00:00Z');
 const END = new Date('2026-11-04T19:30:00Z');
 
