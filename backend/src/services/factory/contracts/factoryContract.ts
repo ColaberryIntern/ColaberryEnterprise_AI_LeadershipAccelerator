@@ -256,7 +256,7 @@ export interface RoleMapRow {
  *
  * ## Why this exists, and why it is not a new vocabulary
  *
- * Before this, an AI executor was `{type:'agent', id:'<free text>'}` and nothing more. There was
+ * Before this, an AI executor was `{type:'agent', id:'<arbitrary string>'}` and nothing more. There was
  * no way to say "the admissions agent only handles admissions", so nothing stopped one unnamed
  * agent absorbing every AI task in a project — the generic blob that cannot be held to anything,
  * because no human owns it and no subject bounds it.

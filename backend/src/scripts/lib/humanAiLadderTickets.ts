@@ -79,7 +79,7 @@ export const HUMAN_AI_LADDER: readonly LadderTicket[] = [
     body: body({
       what: 'Emit named, subject-bounded agent teams from a decomposition, with a human approver, '
         + 'an execution policy, an autonomy stage and the INPACT dimensions each team must address.',
-      why: 'An AI executor was a free-text id and nothing more, so one unnamed agent could absorb '
+      why: 'An AI executor was an arbitrary string id and nothing more, so one unnamed agent could absorb '
         + 'every AI task in a project. Nobody owns an unnamed agent and no subject bounds it, which '
         + 'is the generic blob. An admissions agent that only handles admissions can be judged.',
       inputs: 'The allocation rows, the assignments, and the role set from the decomposition.',
@@ -112,7 +112,7 @@ export const HUMAN_AI_LADDER: readonly LadderTicket[] = [
       what: 'Derive tasks from the role set first, then run SOURCE_COVERAGE over the result as a '
         + 'check. A requirement no role-derived task covers is either a real gap or a non-obligation.',
       why: 'Requirement-first guarantees compliance coverage and produces no subject structure, '
-        + 'because the requirements have none. Role-first produces the subject axis for free, '
+        + 'because the requirements have none. Role-first produces the subject axis as a by-product, '
         + 'because roles are subjects, which is what L10.2 needs to group on.',
       inputs: 'factoryDecomposePrompt.ts, factoryValidate.ts SOURCE_COVERAGE.',
       doneWhen: 'A decomposition of a 56-requirement project produces tasks scaled to the job '
