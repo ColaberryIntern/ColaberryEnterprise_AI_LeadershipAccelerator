@@ -11,6 +11,15 @@ const q = sequelize.query as unknown as jest.Mock;
 const sessions = (LiveSession as unknown as { findAll: jest.Mock }).findAll;
 const hostPool = allocatableHostEmails as unknown as jest.Mock;
 
+/**
+ * THE CLOCK IS PINNED. See the longer note in `presentationCapacityService.test.ts`: these
+ * fixtures are literal dates that real time overtook at 2026-11-04T19:30:00Z, after which
+ * `reserveSlot` refused every request as `in_the_past` and this suite's six allocation tests
+ * failed without any presentation code changing. Pinning `now` removes the dependency on the
+ * wall clock; bumping the dates would only rearm it.
+ */
+const NOW = new Date('2026-11-04T18:00:00Z');
+
 const START = new Date('2026-11-04T19:00:00Z');
 const END = new Date('2026-11-04T19:30:00Z');
 const req = (over: Record<string, unknown> = {}) => ({ enrollmentId: 'e1', startAt: START, endAt: END, ...over } as any);
@@ -21,6 +30,9 @@ const exclusionViolation = () =>
 
 const inserts = () => q.mock.calls.filter((c: any[]) => String(c[0]).includes('INSERT INTO presentation_slot_reservations'));
 const hostsTried = () => inserts().map((c: any[]) => c[1].replacements.host);
+
+beforeAll(() => { jest.useFakeTimers().setSystemTime(NOW); });
+afterAll(() => { jest.useRealTimers(); });
 
 beforeEach(() => {
   jest.clearAllMocks();

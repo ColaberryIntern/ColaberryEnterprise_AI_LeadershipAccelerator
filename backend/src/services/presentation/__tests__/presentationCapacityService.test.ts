@@ -22,7 +22,24 @@ const q = sequelize.query as unknown as jest.Mock;
 const sessions = (LiveSession as unknown as { findAll: jest.Mock }).findAll;
 const hostPool = allocatableHostEmails as unknown as jest.Mock;
 
-/** Well in the future so the in-the-past guard never interferes. */
+/**
+ * THE CLOCK IS PINNED, AND THAT IS NOT TIDYING.
+ *
+ * These fixtures were written as "well in the future so the in-the-past guard never
+ * interferes", but the date was a literal. At 2026-11-04T19:30:00Z real time caught up with
+ * it, `reserveSlot`'s `endAt <= new Date()` guard started returning `in_the_past` before any
+ * allocation happened, and 14 tests across this suite and `presentationHostAllocation` went
+ * red on a commit that changed no presentation code at all. Runs before 19:30Z that day
+ * passed and every run after failed, which reads exactly like a regression and is not one.
+ *
+ * Pinning `now` removes the dependency rather than moving the deadline. Every literal date
+ * below, including the mocked DB rows, is anchored to this instant, so the suite describes
+ * one fixed world instead of drifting against the wall clock. Bumping the fixture to a later
+ * date would just rearm the same bomb.
+ */
+const NOW = new Date('2026-11-04T18:00:00Z');
+
+/** Well in the future, relative to the pinned NOW above, so the in-the-past guard never fires. */
 const START = new Date('2026-11-04T19:00:00Z');
 const END = new Date('2026-11-04T19:30:00Z');
 
@@ -51,6 +68,9 @@ const insertCall = () => callMatching('INSERT INTO presentation_slot_reservation
 const exclusionViolation = () =>
   Object.assign(new Error('conflicting key value violates exclusion constraint "presentation_slot_no_overlap"'),
     { parent: { code: '23P01' } });
+
+beforeAll(() => { jest.useFakeTimers().setSystemTime(NOW); });
+afterAll(() => { jest.useRealTimers(); });
 
 beforeEach(() => {
   jest.clearAllMocks();
