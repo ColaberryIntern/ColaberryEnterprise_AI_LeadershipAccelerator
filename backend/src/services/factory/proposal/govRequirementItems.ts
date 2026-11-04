@@ -14,8 +14,14 @@
  * track (they become build stories); `submit` + `rule` + `after_award` are submission/award-stage obligations.
  */
 import type { ExtractedRequirement, ExtractedDossier } from './proposalExtractor';
+import { classifyRequirementCategory, type ReqItemCategory } from './requirementSignals';
 
-export type ReqItemCategory = 'submit' | 'rule' | 'scope' | 'after_award';
+// RE-EXPORTED so every existing importer keeps its path and this stays a pure move. The signals
+// left for `requirementSignals.ts` only because `proposalExtractor` now needs to categorise too,
+// and importing them back from here would close a cycle. This module's public surface is
+// unchanged, which is why its existing test suite was not touched to accommodate the move.
+export { classifyRequirementCategory };
+export type { ReqItemCategory };
 
 export interface RequirementItemFragment {
   reqId: string;
@@ -37,34 +43,9 @@ export interface RequirementItem {
   dueAt?: string | null;
 }
 
-// Category signals. Deliberately word-boundary anchored and specific; precedence resolves overlaps.
-const SIGNALS: Record<ReqItemCategory, RegExp> = {
-  // An obligation you must SUBMIT as part of the proposal package.
-  submit: /\b(proposal\s+(?:must|shall|should)\s+(?:include|contain)|submit(?:ted)?\s+(?:with|as\s+part\s+of|the\s+following|a\s+|three|two|one)|include\s+(?:in|with)\s+(?:the|your)\s+(?:proposal|response|submittal|submission)|cover\s+letter|letter\s+of\s+transmittal|transmittal\s+letter|completed?\s+(?:form|the\s+attached)|\breferences\b|past\s+performance|pricing\s+(?:sheet|schedule|form|proposal)|fee\s+schedule|cost\s+proposal|technical\s+(?:proposal|approach)|compliance\s+matrix|w-?9|certificat(?:e|ion)\s+of)\b/i,
-  // A post-award, ongoing obligation (not part of building the bid).
-  after_award: /\b(upon\s+award|after\s+award|post[-\s]?award|once\s+awarded|during\s+the\s+(?:contract|term|engagement|project)|contract\s+term|warranty\s+period|ongoing\s+(?:support|maintenance)|maintenance\s+and\s+support|service\s+level\s+agreement|\bslas?\b|renewal|for\s+the\s+(?:duration|term)\s+of|annually|per\s+year)\b/i,
-  // A compliance rule / legal term you must obey.
-  rule: /\b(insurance|bond(?:ed|ing)?|licen[cs]e?d?|comply|compliance|indemnif|liabilit|confidential|non[-\s]?disclosure|terms\s+and\s+conditions|prevailing\s+wage|equal\s+(?:employment\s+)?opportunity|non[-\s]?collusion|certify\s+that|shall\s+not|must\s+not|prohibited|conflict\s+of\s+interest|background\s+check|data\s+privacy|HIPAA|SOC\s*2|FERPA)\b/i,
-  // What the buyer is buying - the system/services to deliver.
-  scope: /\b(system|software|platform|application|integrat|interface|implement|develop|module|dashboard|\bAPI\b|migrat|hosting|host(?:ed|ing)?|work\s+order|asset\s+management|\bGIS\b|geographic\s+information|reporting\s+(?:system|module|tool)|data\s+(?:migration|conversion|warehouse)|functionalit|configure|deploy)\b/i,
-};
-
-// Precedence: the more SPECIFIC category wins over the catch-alls, by first match, not by hit count -
-// `scope` is full of common words (system/support/host) and would otherwise out-vote a clear `submit` or
-// `after_award` signal. "The proposal must include ... the system" is a submit, not a scope.
-const PRECEDENCE: ReqItemCategory[] = ['submit', 'after_award', 'rule', 'scope'];
 // Mirrors proposalExtractor DATE_RE — accepts ordinal day forms ("Nov. 6th, 2026") real RFPs use. Keep in sync.
 const DATE_RE = /\b(\d{1,2}[/-]\d{1,2}[/-]\d{2,4}|(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+\d{1,2}(?:st|nd|rd|th)?,?\s+\d{2,4})\b/i;
 
-/** Classify one requirement's text into a category by precedence (first match wins), so a strong submit or
- *  after-award signal beats incidental scope keywords. No signal at all -> 'rule' (a generic obligation you
- *  must follow; never a build story by default). */
-export function classifyRequirementCategory(text: string): ReqItemCategory {
-  for (const cat of PRECEDENCE) {
-    if (SIGNALS[cat].test(text)) return cat;
-  }
-  return 'rule';
-}
 
 const PREFIX: Record<ReqItemCategory, string> = { submit: 'SUB', rule: 'RUL', scope: 'SCP', after_award: 'AWD' };
 const stripMarker = (s: string): string => s.replace(/^\s*(?:[-*•]|\(?\d+[.)]|[A-Za-z][.)])\s+/, '').trim();
