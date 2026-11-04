@@ -41,7 +41,7 @@ export interface FreshnessInput {
 
 export type FreshnessVerdict =
   | { fresh: true }
-  | { fresh: false; reason: 'never_scored' | 'stale' | 'clock_skew' | 'missing_timestamps' };
+  | { fresh: false; reason: 'never_scored' | 'stale' | 'clock_skew' | 'missing_timestamps' | 'not_rescored_tonight' };
 
 function toDate(v: Date | string | null | undefined): Date | null {
   if (!v) return null;
@@ -69,10 +69,16 @@ export function isScored(profile: FreshnessInput): boolean {
  *
  * Every `false` carries a reason, so a refusal is explainable without
  * re-deriving it — the same rule the contact policy follows.
+ *
+ * `scoredSince` (C108) is the nightly sequence's start. 26 hours alone cannot
+ * tell tonight's scores from last night's, because a profile scored 24 hours ago
+ * still passes, so when the recompute fails for a learner the sequence's cutoff
+ * is what refuses them. Absent for an operator run, which keeps the 26-hour rule.
  */
 export function evaluateFreshness(
   profile: FreshnessInput,
   now: Date = new Date(),
+  scoredSince?: Date,
 ): FreshnessVerdict {
   const created = toDate(profile?.created_at);
   const scored = toDate(profile?.scores_computed_at);
@@ -93,6 +99,10 @@ export function evaluateFreshness(
   if (ageMs < 0) return { fresh: false, reason: 'clock_skew' };
 
   if (ageMs >= STALENESS_HOURS * HOUR_MS) return { fresh: false, reason: 'stale' };
+
+  if (scoredSince && scored.getTime() < scoredSince.getTime()) {
+    return { fresh: false, reason: 'not_rescored_tonight' };
+  }
 
   return { fresh: true };
 }

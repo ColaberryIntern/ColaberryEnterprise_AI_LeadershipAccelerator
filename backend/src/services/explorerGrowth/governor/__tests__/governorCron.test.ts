@@ -12,20 +12,22 @@ const ROOT = path.join(__dirname, '..', '..', '..', '..');
 const read = (rel: string) => fs.readFileSync(path.join(ROOT, rel), 'utf8');
 
 const scheduler = read('services/schedulerService.ts');
+const sequence = read('services/scheduling/explorerNightlySequence.ts');
 const registry = read('services/agentRegistrySeed.ts');
 const script = read('scripts/runExplorerGovernor.ts');
 const runner = read('services/explorerGrowth/governor/runGovernor.ts');
 
-/** The Governor cron block. */
+/** The Governor's step in the nightly sequence. */
 function cronBlock(): string {
-  const i = scheduler.indexOf("instrumentCronJob('ExplorerGovernorDecide'");
+  const i = sequence.indexOf("instrumentCronJob('ExplorerGovernorDecide'");
   expect(i).toBeGreaterThan(-1);
-  return scheduler.slice(Math.max(0, i - 900), i + 400);
+  return sequence.slice(i, sequence.indexOf('instrumentCronJob(', i + 10));
 }
 
 describe('registered the house way', () => {
   it('is wrapped in instrumentCronJob', () => {
-    expect(scheduler).toContain("instrumentCronJob('ExplorerGovernorDecide'");
+    expect(sequence).toContain("instrumentCronJob('ExplorerGovernorDecide'");
+    expect(scheduler).not.toContain("instrumentCronJob('ExplorerGovernorDecide'");
   });
 
   it('is registered in agentRegistrySeed so it is pausable without a redeploy', () => {
@@ -35,17 +37,21 @@ describe('registered the house way', () => {
   it('declares the SAME schedule in both places', () => {
     // A registry entry that disagrees with the real cron misleads whoever reads
     // Admin > Agents to decide whether a job has run.
-    expect(cronBlock()).toContain("cron.schedule('50 3 * * *'");
-    expect(registry).toContain("schedule: '50 3 * * *'");
+    expect(sequence).toContain("cron.schedule('20 3 * * *'");
+    const at = registry.indexOf("agent_name: 'ExplorerGovernorDecide'");
+    expect(registry.slice(at, at + 400)).toContain("schedule: '20 3 * * *'");
+    expect(registry).not.toContain("schedule: '50 3 * * *'");
   });
 
-  it('runs AFTER the recompute, not beside it', () => {
-    // The Governor reads the scores the recompute writes. Deciding on
-    // yesterday's scores would defeat the freshness gate it enforces.
-    const recompute = scheduler.match(/cron\.schedule\('(\d+) (\d+) \* \* \*'.*\n.*ExplorerProfileRecompute/);
-    const governorMinute = Number(cronBlock().match(/cron\.schedule\('(\d+) 3/)![1]);
-    expect(governorMinute).toBeGreaterThan(20); // recompute is at :20
-    expect(recompute || scheduler.includes('ExplorerProfileRecompute')).toBeTruthy();
+  it('runs AFTER the recompute, not at a clock time beside it', () => {
+    // C108. A 30-minute gap held while the recompute took 4 seconds; on 3 Nov
+    // 2026 it took 34 minutes. The order itself is proved behaviourally with a
+    // slow recompute in scheduling/__tests__/explorerNightlySequence.test.ts.
+    const recompute = sequence.indexOf('await runScheduledRecompute(');
+    const governor = sequence.indexOf('await runScheduledGovernor(');
+    expect(recompute).toBeGreaterThan(-1);
+    expect(governor).toBeGreaterThan(recompute);
+    expect(sequence.match(/cron\.schedule\(/g)).toHaveLength(1);
   });
 });
 
@@ -70,7 +76,8 @@ describe('the cron DECIDES ONLY — it must never send', () => {
   it('calls runScheduledGovernor and nothing else', () => {
     // The whitelist half of the pairing: a denylist alone would miss any send
     // helper nobody thought to name.
-    expect(cronBlock()).toContain('runScheduledGovernor()');
+    expect(cronBlock()).toContain('runScheduledGovernor({ scoredSince: startedAt })');
+    expect(cronBlock()).not.toContain('runScheduledDraftRender');
   });
 
   it('names no send function that emailService exports', () => {
@@ -83,6 +90,16 @@ describe('the cron DECIDES ONLY — it must never send', () => {
       expect(script).not.toContain(fn);
       expect(cronBlock()).not.toContain(fn);
     }
+  });
+});
+
+describe('the nightly cutoff reaches the decision (C108)', () => {
+  it('passes scoredSince from the scheduled entry through the batch to the decision', () => {
+    // The batch has no test that runs it (it needs the whole signal layer), so a
+    // dropped option here would silently restore the 26-hour rule.
+    expect(runner).toContain('options.dryRun === true, campaignsByKey, options.scoredSince)');
+    expect(runner).toMatch(/profileTimestamps: \{[\s\S]*?\},\s*scoredSince,\s*\}\);/);
+    expect(runner).toContain('return runGovernorBatch(options);');
   });
 });
 

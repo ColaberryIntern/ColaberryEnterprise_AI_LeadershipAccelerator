@@ -85,6 +85,14 @@ describe('the freshness gate refuses before anything else', () => {
     expect(d.rationale[0]).toBe('refused: profile stale');
   });
 
+  it('refuses a profile scored before tonight, and records why as a WAIT (C108)', () => {
+    const lastNight = { created_at: daysAgo(30), scores_computed_at: daysAgo(1) };
+    const d = decideForLearner(ctx(), { ...opts(allowPolicy, lastNight), scoredSince: daysAgo(0.5) });
+    expect(d.action_type).toBe('WAIT');
+    expect(d.executed).toBe(false);
+    expect(d.rationale[0]).toBe('refused: profile not_rescored_tonight');
+  });
+
   it('refuses BEFORE evaluating the hard stop, so the reason is the more specific one', () => {
     const d = decideForLearner(
       ctx({ hardStop: { ...ctx().hardStop, converted: true } }),

@@ -106,6 +106,7 @@ async function runOne(
   asOf: Date,
   dryRun: boolean,
   campaignsByKey: Map<string, string>,
+  scoredSince?: Date,
 ): Promise<'decided' | 'waited'> {
   const enrollmentId = profile.enrollment_id as string;
 
@@ -179,6 +180,7 @@ async function runOne(
       created_at: profile.created_at,
       scores_computed_at: profile.scores_computed_at,
     },
+    scoredSince,
   });
 
   // EPIC 5. Resolve the WINNING candidate's asset queries here rather than
@@ -306,7 +308,7 @@ async function runOne(
 
 /** Decide for every Explorer. One learner's failure never aborts the batch. */
 export async function runGovernorBatch(
-  options: { asOf?: Date; dryRun?: boolean; limit?: number } = {},
+  options: { asOf?: Date; dryRun?: boolean; limit?: number; scoredSince?: Date } = {},
 ): Promise<GovernorRunResult> {
   const asOf = options.asOf ?? new Date();
   // One query for all eight, before the loop. EPIC 6 T005.
@@ -326,7 +328,7 @@ export async function runGovernorBatch(
   for (const p of profiles) {
     const id = (p as any).enrollment_id as string;
     try {
-      const outcome = await runOne(p, asOf, options.dryRun === true, campaignsByKey);
+      const outcome = await runOne(p, asOf, options.dryRun === true, campaignsByKey, options.scoredSince);
       if (outcome === 'decided') out.decided += 1;
       else out.waited += 1;
     } catch (err: any) {
@@ -346,7 +348,7 @@ export async function runGovernorBatch(
  * directly instead — a human running it deliberately is its own authorisation.
  */
 export async function runScheduledGovernor(
-  options: { asOf?: Date } = {},
+  options: { asOf?: Date; scoredSince?: Date } = {},
 ): Promise<GovernorRunResult | { skipped: true }> {
   if (!isExplorerFeatureEnabled('journeyGovernor', env.explorerGrowth)) {
     return { skipped: true };

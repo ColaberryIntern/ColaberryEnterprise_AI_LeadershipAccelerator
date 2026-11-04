@@ -33,7 +33,7 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     schedule: '50 2 * * *',
     category: 'behavioral',
     description:
-      'Explorer Growth OS content registry sync. Projects published timeline cards into explorer_content_assets as POINTERS - title, summary and a portal URL - never as message copy, because the registry has no body column and the existing campaign engine renders at send time. PROJECTS ONLY: decides nothing, enqueues nothing, cannot send, and the no-send guard sweeps its directory. Idempotent by upsert against the partial unique index on (source_system, source_id), so two runs yield identical rows. Runs 30 minutes BEFORE ExplorerProfileRecompute and an hour before ExplorerGovernorDecide, which resolves content at decision time - a registry refreshed after the Governor ran would serve yesterday catalogue for a day. Dark unless both EXPLORER_GROWTH_OS_ENABLED and EXPLORER_JOURNEY_INTELLIGENCE_ENABLED are on.',
+      'Explorer Growth OS content registry sync. Projects published timeline cards into explorer_content_assets as POINTERS - title, summary and a portal URL - never as message copy, because the registry has no body column and the existing campaign engine renders at send time. PROJECTS ONLY: decides nothing, enqueues nothing, cannot send, and the no-send guard sweeps its directory. Idempotent by upsert against the partial unique index on (source_system, source_id), so two runs yield identical rows. Runs 30 minutes BEFORE ExplorerProfileRecompute, so also before ExplorerGovernorDecide, which resolves content at decision time - a registry refreshed after the Governor ran would serve yesterday catalogue for a day. Dark unless both EXPLORER_GROWTH_OS_ENABLED and EXPLORER_JOURNEY_INTELLIGENCE_ENABLED are on.',
   },
   {
     // Ad spend pull for the marketing profitability report (2026-11-02). Read-only against Meta.
@@ -61,10 +61,10 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     module: 'runGovernor',
     source_file: 'backend/src/services/explorerGrowth/governor/runGovernor.ts',
     trigger_type: 'cron',
-    schedule: '50 3 * * *',
+    schedule: '20 3 * * *',
     category: 'behavioral',
     description:
-      'Explorer Growth OS Journey Governor. Decides one action per Explorer per day across section 9.1 priority tiers, writing explorer_journey_decisions with the chosen action AND every suppressed candidate with its reason. DECIDES AND RECORDS ONLY - enqueues nothing and sends nothing; every row is executed:false and execution is a separate epic. Runs 30 minutes after ExplorerProfileRecompute because it reads the scores that job writes. Dark unless both EXPLORER_GROWTH_OS_ENABLED and EXPLORER_JOURNEY_GOVERNOR_ENABLED are on.',
+      'Explorer Growth OS Journey Governor. Decides one action per Explorer per day across section 9.1 priority tiers, writing explorer_journey_decisions with the chosen action AND every suppressed candidate with its reason. DECIDES AND RECORDS ONLY - enqueues nothing and sends nothing; every row is executed:false and execution is a separate epic. Runs when ExplorerProfileRecompute finishes, as the second step of one nightly sequence, because it reads the scores that job writes; it refuses any profile not scored by that same run. Dark unless both EXPLORER_GROWTH_OS_ENABLED and EXPLORER_JOURNEY_GOVERNOR_ENABLED are on.',
   },
   {
     agent_name: 'ExplorerDraftRender',
@@ -72,10 +72,10 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     module: 'runDraftRender',
     source_file: 'backend/src/services/explorerGrowth/drafts/runDraftRender.ts',
     trigger_type: 'cron',
-    schedule: '10 4 * * *',
+    schedule: '20 3 * * *',
     category: 'behavioral',
     description:
-      'Explorer Growth OS draft render. Reads the shadow decisions ExplorerGovernorDecide wrote for the date and generates the email each one WOULD have sent, so shadow mode shows the actual message rather than only the chosen action. All 24 Explorer sequence steps ship a real subject and a real prose brief with an empty body_template by design - the body was deferred to send time, and send time never arrived - so before this job no Explorer message body had ever existed for anybody. RENDERS ONLY: drafts go to scheduled_emails with status explorer_draft, or explorer_draft_rejected when the send-time quality gate refuses the copy, and the sender claims only status pending in both its candidate SELECT and its claiming UPDATE, so nothing written here can be picked up and sent. Copy naming an ungrounded date, price or seat count is KEPT with the refusal reasons on the row rather than discarded, because a decision with no message and no stated reason is the confusion this job exists to remove. Idempotent: a decision already carrying a scheduled_email_id is skipped, and the draft insert plus the decision stamp commit in one transaction so a crash cannot leave an orphan that gets drafted twice. Capped at 200 model calls per run. Runs 20 minutes after the Governor because it reads what that job writes. Dark unless both EXPLORER_GROWTH_OS_ENABLED and EXPLORER_DRAFT_RENDER_ENABLED are on.',
+      'Explorer Growth OS draft render. Reads the shadow decisions ExplorerGovernorDecide wrote for the date and generates the email each one WOULD have sent, so shadow mode shows the actual message rather than only the chosen action. All 24 Explorer sequence steps ship a real subject and a real prose brief with an empty body_template by design - the body was deferred to send time, and send time never arrived - so before this job no Explorer message body had ever existed for anybody. RENDERS ONLY: drafts go to scheduled_emails with status explorer_draft, or explorer_draft_rejected when the send-time quality gate refuses the copy, and the sender claims only status pending in both its candidate SELECT and its claiming UPDATE, so nothing written here can be picked up and sent. Copy naming an ungrounded date, price or seat count is KEPT with the refusal reasons on the row rather than discarded, because a decision with no message and no stated reason is the confusion this job exists to remove. Idempotent: a decision already carrying a scheduled_email_id is skipped, and the draft insert plus the decision stamp commit in one transaction so a crash cannot leave an orphan that gets drafted twice. Capped at 200 model calls per run. Runs when the Governor finishes, as the last step of one nightly sequence, because it reads what that job writes. Dark unless both EXPLORER_GROWTH_OS_ENABLED and EXPLORER_DRAFT_RENDER_ENABLED are on.',
   },
   {
     agent_name: 'ExplorerProfileRecompute',

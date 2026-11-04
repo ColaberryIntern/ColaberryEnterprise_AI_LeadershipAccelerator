@@ -75,22 +75,19 @@ describe('registered the house way', () => {
   });
 
   it('runs AFTER the three Explorer blocks, not inside any of them', () => {
-    // 02:50 content sync, 03:20 recompute, 03:50 Governor - the learner brands
+    // 02:50 content sync, then the sequence from 03:20 - the learner brands
     // decide on scores recomputed the same night.
     const nightly = scheduler.indexOf(CALL);
     expect(nightly).toBeGreaterThan(-1);
-    for (const explorer of ['ExplorerContentSync', 'ExplorerProfileRecompute', 'ExplorerGovernorDecide']) {
-      const at = scheduler.indexOf(`instrumentCronJob('${explorer}'`);
-      expect(at).toBeGreaterThan(-1);
-      expect(at).toBeLessThan(nightly);
-    }
-    // Textually after the recompute block CLOSES: the recompute's own `});` closers come before our schedule line.
-    const recompute = scheduler.indexOf("instrumentCronJob('ExplorerProfileRecompute'");
-    const recomputeClose = scheduler.indexOf('  });', scheduler.indexOf('}).catch', recompute));
-    expect(recomputeClose).toBeGreaterThan(recompute);
-    expect(scheduler.indexOf(CALL)).toBeGreaterThan(recomputeClose);
+    // The Explorer jobs register before this one: the content sync directly, the recompute and Governor through the sequence.
+    const contentSync = scheduler.indexOf("instrumentCronJob('ExplorerContentSync'");
+    const sequence = scheduler.indexOf('registerExplorerNightlySequence();');
+    expect(contentSync).toBeGreaterThan(-1);
+    expect(sequence).toBeGreaterThan(-1);
+    expect(contentSync).toBeLessThan(nightly);
+    expect(sequence).toBeLessThan(nightly);
     expect(crons).toContain(`cron.schedule('${SCHEDULE}'`);
-    // And the hour says the same: 04:20 is after 03:50.
+    // And the hour says the same: 04:20 is after the 03:20 start.
     expect(SCHEDULE).toMatch(/^20 4 /);
   });
 });

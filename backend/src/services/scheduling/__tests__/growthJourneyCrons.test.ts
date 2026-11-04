@@ -69,15 +69,13 @@ describe('the extraction (acceptance 4, 5)', () => {
     expect(scheduler).not.toContain(EXECUTOR.agent);
     expect(scheduler).not.toContain('runScheduledShadowDecisions');
     const call = scheduler.indexOf('registerGrowthJourneyCrons();');
-    for (const explorer of ['ExplorerContentSync', 'ExplorerProfileRecompute', 'ExplorerGovernorDecide']) {
-      const at = scheduler.indexOf(`instrumentCronJob('${explorer}'`);
-      expect(at).toBeGreaterThan(-1);
-      expect(at).toBeLessThan(call);
-    }
-    // Textually after the recompute block CLOSES, as the shadow block was.
-    const recompute = scheduler.indexOf("instrumentCronJob('ExplorerProfileRecompute'");
-    const recomputeClose = scheduler.indexOf('  });', scheduler.indexOf('}).catch', recompute));
-    expect(call).toBeGreaterThan(recomputeClose);
+    // The Explorer jobs register before this one: the content sync directly, the recompute and Governor through the sequence.
+    const contentSync = scheduler.indexOf("instrumentCronJob('ExplorerContentSync'");
+    const sequence = scheduler.indexOf('registerExplorerNightlySequence();');
+    expect(contentSync).toBeGreaterThan(-1);
+    expect(sequence).toBeGreaterThan(-1);
+    expect(contentSync).toBeLessThan(call);
+    expect(sequence).toBeLessThan(call);
   });
 
   it('the moved block is gone from schedulerService.ts line for line (a count is not a regression property - main grows)', () => {

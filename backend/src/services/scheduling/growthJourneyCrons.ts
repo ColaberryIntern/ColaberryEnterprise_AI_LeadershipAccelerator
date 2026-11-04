@@ -28,10 +28,13 @@ import { runScheduledShadowDecisions } from '../growthJourney/runShadowDecisions
 export function registerGrowthJourneyCrons(): void {
   // Growth Journey OS - the nightly shadow decisions (Phase 4 T408).
   //
-  // 04:20 UTC, AFTER the three Explorer jobs above (02:50 content sync, 03:20
-  // recompute, 03:50 Governor) and not inside any of them: the learner brands
-  // decide on scores recomputed the same night, and the business brands run
-  // once the shared Postgres is quiet again.
+  // 04:20 UTC, after the Explorer content sync (02:50) and the Explorer nightly
+  // sequence's 03:20 start: the learner brands decide on scores recomputed the
+  // same night, and the business brands run once the shared Postgres is quiet.
+  //
+  // KNOWN GAP (C108): this is still a clock time. The recompute took 34 minutes
+  // on 3 Nov 2026 and is growing, and with the Governor on the sequence runs past
+  // 04:20. This job is paused today; recheck the timing before turning it on.
   //
   // DECIDES AND RECORDS ONLY. Every brand's classified subjects get a shadow
   // decision (executed:false), each decision materialises its handoff rows
