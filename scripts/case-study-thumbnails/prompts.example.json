@@ -30,6 +30,11 @@
       "slug": "testing-ai-actions-before-they-reach-customers",
       "label": "Case 03",
       "currentHeroUrl": null
+    },
+    {
+      "slug": "stress-test-review-app",
+      "label": "Stress Test Review",
+      "currentHeroUrl": "https://enterprise.colaberry.ai/site-v2/shot-str-review-queue.png"
     }
   ],
   "picked": {
@@ -38,7 +43,8 @@
     "the-ai-proposes-a-verified-human-decides": "C",
     "your-repositories-already-wrote-your-resume": "C (words on the card repainted with edit.js)",
     "ai-systems-architect-training-system": "A",
-    "testing-ai-actions-before-they-reach-customers": "B"
+    "testing-ai-actions-before-they-reach-customers": "B",
+    "stress-test-review-app": "C"
   },
   "items": [
     {
@@ -166,6 +172,27 @@
       "concept": "C",
       "name": "Dress rehearsal for an empty theatre",
       "prompt": "A sleek white robot stands centre stage in a single spotlight, mid-performance, holding a telephone handset, playing to a grand theatre of completely empty red velvet seats. In the wings, half in shadow, a human director in a headset watches with a clipboard, pen raised. Deep red and gold theatre, cool blue spotlight on the robot, cinematic depth. No text."
+    },
+    {
+      "slug": "stress-test-review-app",
+      "title": "AI drafts the review, a person decides what the student reads",
+      "concept": "A",
+      "name": "The student still waiting",
+      "prompt": "A young woman in her twenties sits alone at a desk in a dark room late at night, chin resting on her fist, eyes tired and unfocused, lit from below by the cold blue glow of a laptop. Beside her elbow a single sheet of paper sits in a wire tray, untouched, catching a thin shaft of warm light. The rest of the room falls away into deep blue-black. Deep navy and cold cyan against one warm amber highlight on her face. Huge bold condensed white text with a thick black outline across the lower third reading exactly: STILL WAITING."
+    },
+    {
+      "slug": "stress-test-review-app",
+      "title": "AI drafts the review, a person decides what the student reads",
+      "concept": "B",
+      "name": "The draft held at the slot",
+      "prompt": "A glowing white sheet of paper emerges halfway out of a narrow slot in a sleek dark machine, its edge radiating hot light. A large human hand, palm flat and fingers spread, presses firmly against the page and stops it dead, holding it inside the slot. Sparks of light scatter where the hand meets the paper. Deep teal background, hot amber rim lighting on the knuckles, heavy volumetric haze, macro depth of field on the hand. No text anywhere in the image."
+    },
+    {
+      "slug": "stress-test-review-app",
+      "title": "AI drafts the review, a person decides what the student reads",
+      "concept": "C",
+      "name": "The stack, and the one she signed",
+      "prompt": "A split composition. On the left half, under flat cold grey light, a precarious leaning tower of identical blank pages rises past the top of the frame, blurred and endless. On the right half, under a single warm amber lamp, one page lies flat on a wooden desk and a red rubber stamp is caught mid-descent an inch above it, gripped firmly in a woman's hand: slim wrist, short unpainted nails, no jewellery, the cuff of a light rolled-up shirtsleeve. A shallow round pool of red ink sits beside it. The hard vertical edge between cold and warm light runs down the centre. Huge bold condensed white text with a thick black outline across the bottom reading exactly: A PERSON DECIDES."
     }
   ]
 }

@@ -90,15 +90,80 @@ own "would let a cover bypass artifact approval and publish a picture the gate n
 saw, which is the one thing it must not become."
 
 So `thumb-stress-test-review-app.jpg` was ignored, the cover fell through to the first
-approved screenshot, and the page looked right **by luck rather than by choice**. The
-record now names `shot-str-review-queue.png` explicitly, which is a URL the artifact
-gate has already cleared, and this commit removes the thumbnail nothing can reference.
-
-**The rule for the next record: a cover must be one of the record's own approved
-artifacts.** Shipping a separate thumbnail file is wasted work.
+approved screenshot, and the page looked right **by luck rather than by choice**.
 
 Caught by reading the live projection rather than the write: every override reported
 success, the publish gate reported zero blockers, and the field was still being
 discarded downstream. The same read caught the measurement narrative opening with
 "Seventeen figures" over a list of sixteen — the counts are now derived from the array
 rather than retyped.
+
+### And the conclusion drawn from it was half right
+
+The first reading of that failure was "a cover must be one of the record's own approved
+artifacts, so shipping a separate thumbnail file is wasted work." The first half is the
+rule. **The second half is wrong**, and following it would have left this record the only
+one in the library whose cover is a screenshot of a user interface.
+
+`scripts/case-study-thumbnails/` is the pipeline that makes a thumbnail reachable: three
+generated concepts per record, a person reads every word in the picture, the pick is
+cropped to 16:9, committed, deployed, and then `apply-cover.js` writes it as an
+`artifact_type: 'photo'` row — approved, public, and stamped `atmosphere` by the
+projection so it can never be read as evidence of the work. *That* row is what makes
+`identity.heroImageUrl` honour the URL. The thumbnail was never the wasted part; the
+missing artifact row was.
+
+---
+
+## The cover, run through the pipeline that exists for it
+
+- [x] Generate and ship a made cover for the Stress Test Review App record
+  - Date: 2026-11-04
+  - Session: CC-20261103-m9x4
+  - What changed: three cover concepts generated with `gpt-image-2.5-flare` inside
+    `accelerator-backend`, then the picked one re-run three more times to put a woman's
+    hand on the stamp; all three concepts cropped to 1536x864 and committed to
+    `frontend/public/site-v2/`. The screenshot crop that nothing could reference was
+    removed in PR #3647.
+  - Verification: every image looked at at full size before the crop was chosen — no
+    invented words, no numbers, no interface in any of the six; the shipped hand checked
+    at full resolution for anatomy and stray text; crop point chosen by measuring the
+    headline's pixel rows rather than by eye.
+  - Notes: see below.
+
+The record's cover was `shot-str-review-queue.png`, a screenshot of the application's
+queue. Both reference records carry a made cover instead — a cinematic photograph with a
+four-word hook, 1536x864 — and the pipeline for producing one has been in the repository
+since 2026-09-18. It had simply not been run for this record.
+
+| | Hook in the picture | Crop | Bytes | `?v=` |
+|---|---|---|---|---|
+| a — the student still waiting | `STILL WAITING.` | `--top 160` | 151,698 | `1391d5c9` |
+| b — the draft held at the slot | none | `--top 80` | 224,074 | `0a3fe385` |
+| **c — the stack, and the one she signed** | `A PERSON DECIDES.` | `--top 160` | 180,758 | `01975bd2` |
+
+**Ali picked c, with one change: a woman's hand on the stamp, not a man's.** The first
+draw of c had rendered a man's. The concept was re-run three times with the hand described
+(slender fingers, short unpainted nails, a light rolled-up shirtsleeve) and the third take
+shipped: the largest and most confident of the three, the stamp poised directly over the
+page, the hottest colour in the frame landing exactly on the gesture the record is about.
+Inspected at full resolution before the crop — five fingers, correctly formed, no stray
+text on the desk or the ink pot.
+
+For the record, c was not the recommendation. a was, on the argument that both reference
+covers lead with a face. The argument was sound and the call was still Ali's: c is the
+only one of the three that shows the decision the record is *about*, which beats matching
+a layout.
+
+The model added a full stop to both hooks that the prompt did not ask for. It is a mark,
+not an invented word, so `edit.js` was not run — the rule that matters is that the model
+invents *slogans* on cards and screens, and none of the six images drawn for this record
+carries a word the prompt did not supply.
+
+The crop point was measured, not judged. The shipped c's headline occupies rows 777-935 of
+the 1024-row source, so any `--top` below 72 clips it; `--top 160` keeps the text whole
+with 88 pixels beneath it. The same method rejected `--top 110` on a earlier in the day,
+after putting the two candidates side by side: the text sat too low and crowded the edge.
+
+**All three are committed**, as the reference records' a/b/c variants are, so changing the
+pick later is one `apply-cover.js` run and no deploy.
