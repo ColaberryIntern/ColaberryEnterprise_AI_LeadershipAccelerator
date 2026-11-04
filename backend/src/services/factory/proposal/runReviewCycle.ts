@@ -80,16 +80,24 @@ export async function runReviewCycle(deliveryProjectId: string, docKey: string, 
     runChecks: () => runProposalDocumentChecks(deliveryProjectId, docKey),
     gatherGrounding: async () => {
       const d = await docOf();
-      // Grounding inputs that are cheap + safe to assemble here; the blueprint/facts/artifacts loaders are best-effort.
+      // Grounding inputs that are cheap + safe to assemble here; the blueprint/facts loaders are best-effort.
       let blueprint: any = null; let facts: string[] = [];
       try { const { default: GovProposalBlueprint } = await import('../../../models/GovProposalBlueprint'); const bp: any = await GovProposalBlueprint.findOne({ where: { delivery_project_id: deliveryProjectId }, order: [['version', 'DESC']] }); blueprint = bp ? bp.blueprint_json : null; } catch { /* best-effort */ }
+      // Approved company-library facts (the "ask once" rail): resolve the tenant from the qualification, then pull
+      // only approved facts so the next cycle actually uses what a human answered (PROMPT end-to-end acceptance #4).
+      try {
+        const { default: GovQualification } = await import('../../../models/GovQualification');
+        const q: any = await GovQualification.findOne({ where: { delivery_project_id: deliveryProjectId }, order: [['version', 'DESC']] });
+        if (q?.tenant_id) { const { approvedGroundingFacts } = await import('./govCompanyLibrary'); facts = await approvedGroundingFacts(q.tenant_id); }
+      } catch { /* best-effort; grounding without facts still instructs a [PLACEHOLDER], never an invention */ }
       return buildGrounding({ blueprint, document: { title: d?.title ?? docKey, requirements: (d?.requirementIds ?? []).map((id) => ({ canonicalReqId: id, statement: id })), sections: d?.sections ?? [] }, approvedFacts: facts });
     },
     revise: (html, findings, g) => reviseDocument(html, findings, g),
     saveVersion: async (html) => { await draftProposalDocument({ deliveryProjectId, docKey, identityId: opts?.identityId ?? null, canVerify: true, manualHtml: html }); },
     persistGaps: async (gaps) => {
       for (const gp of gaps) {
-        try { await sequelize.query('INSERT INTO gov_proposal_document_gaps (delivery_project_id, doc_key, question, suggestions, resolution) VALUES ($1,$2,$3,$4::jsonb,$5)', { bind: [deliveryProjectId, docKey, gp.question, JSON.stringify(gp.suggestions ?? []), 'open'], type: QueryTypes.INSERT }); } catch { /* best-effort */ }
+        // section_key is NOT NULL; a cycle-raised gap is document-level, so it carries the 'document' sentinel.
+        try { await sequelize.query('INSERT INTO gov_proposal_document_gaps (delivery_project_id, doc_key, section_key, question, suggestions, resolution) VALUES ($1,$2,$3,$4,$5::jsonb,$6)', { bind: [deliveryProjectId, docKey, 'document', gp.question, JSON.stringify(gp.suggestions ?? []), 'open'], type: QueryTypes.INSERT }); } catch { /* best-effort */ }
       }
     },
     log,
