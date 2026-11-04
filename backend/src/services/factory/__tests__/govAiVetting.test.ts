@@ -106,7 +106,9 @@ describe('claiming', () => {
     await ensureVettingRow(K);
     const [sql] = query.mock.calls[0];
     expect(sql).toMatch(/ON CONFLICT \(tenant_id, qualification_key, sha256\) DO UPDATE SET last_uploaded_at = NOW\(\)/);
-    expect(sql).not.toMatch(/DO UPDATE SET[^;]*status/);
+    // The only mention of status left is the check that clears a stale error on a row still waiting. It never sets status.
+    expect(sql).toMatch(/error_class = CASE WHEN gov_ai_vettings\.status = 'queued' THEN NULL/);
+    expect(sql.replace(/CASE[\s\S]*?END/, '')).not.toMatch(/DO UPDATE SET[^;]*status/);
   });
   it('a process that died on its last attempt gets finalized as inconclusive', async () => {
     query.mockResolvedValueOnce([]);
@@ -310,7 +312,8 @@ describe('runGovAiVettingCatchup', () => {
     query.mockResolvedValue([]);
     lookupContainer.mockResolvedValue({ tenant: { id: 'ten-1' } });
     qualFindAll.mockResolvedValue([zipRec('replaced')]);
-    // The attested sha is sha-replaced, but the newest stored ZIP is newer-zip, which already has its row.
+    // The attested sha is sha-replaced, but the newest stored ZIP is newer-zip, which already has its row. No job on record.
+    jobFindOne.mockResolvedValue(null);
     bundleFindOne.mockResolvedValue({ id: 'b', sha256: 'newer-zip' });
     vettingFindOne.mockImplementation(async ({ where }: any) => (where.sha256 === 'newer-zip' ? { id: 'newer-row' } : null));
     expect((await runGovAiVettingCatchup()).backfilled).toBe(0);
@@ -320,6 +323,7 @@ describe('runGovAiVettingCatchup', () => {
     query.mockResolvedValue([]);
     lookupContainer.mockResolvedValue({ tenant: { id: 'ten-1' } });
     qualFindAll.mockResolvedValue([zipRec('uploadedwhileoff')]);
+    jobFindOne.mockResolvedValue({ sha256: 'newer-zip', result_json: { candidates: [] } });
     bundleFindOne.mockResolvedValue({ id: 'b', sha256: 'newer-zip' });
     vettingFindOne.mockImplementation(async ({ where }: any) => (where.sha256 === 'old-zip' ? { id: 'old-row' } : null));
     expect((await runGovAiVettingCatchup()).backfilled).toBe(1);

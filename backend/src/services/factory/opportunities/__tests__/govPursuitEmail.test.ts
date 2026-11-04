@@ -174,8 +174,8 @@ describe('sections', () => {
     expect(html(board(rows))).toContain('Plus 5 more');
   });
   it('explains each hide', () => {
-    const o = row('needs_zip').opportunity;
-    const out = html(board([]), [{ opportunity: o, reason: 'ai_not_a_fit' }, { opportunity: o, reason: 'auto_off_target' }, { opportunity: o, reason: 'auto_fit_below_threshold' }]);
+    const o = (uuid: string) => row('needs_zip', { uuid, title: `Bid ${uuid}` }).opportunity;
+    const out = html(board([]), [{ opportunity: o('a'), reason: 'ai_not_a_fit' }, { opportunity: o('b'), reason: 'auto_off_target' }, { opportunity: o('c'), reason: 'auto_fit_below_threshold' }]);
     expect(out).toContain('AI says not a fit');
     expect(out).toContain('Off-target title');
     expect(out).toContain('Fit under 60');

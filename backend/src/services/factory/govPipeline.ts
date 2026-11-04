@@ -127,7 +127,7 @@ export function currentGovProjects(cards: readonly GovPipelineCard[], today: str
     if (c.closeDate && String(c.closeDate).slice(0, 10) < today) continue;
     out.push({
       deliveryProjectId: c.deliveryProjectId, title: c.title || c.key, agency: c.agency, closeDate: c.closeDate,
-      interns: c.assignedInterns.map((i) => i.name).filter(Boolean), build: c.build, establishedCount: c.establishedCount,
+      interns: (c.assignedInterns ?? []).map((i) => i.name).filter(Boolean), build: c.build ?? null, establishedCount: c.establishedCount ?? 0,
     });
   }
   return out;
