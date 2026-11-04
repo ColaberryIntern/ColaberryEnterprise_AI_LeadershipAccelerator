@@ -9,6 +9,7 @@ import './rooms.css';
 import RoomPane from './RoomPane';
 import ImpactPanel from './ImpactPanel';
 import { fmtCentralDateTime } from '../today/shellUtils';
+import { openTabForJoin } from '../../../utils/openTabForJoin';
 import {
   fetchRoomsHome, fetchRooms, joinBooking, createBooking, createRoom,
   RoomsHome, RoomListItem, BookingCard, CreateBookingInput,
@@ -202,6 +203,11 @@ const RoomsPage: React.FC = () => {
   const [home, setHome] = useState<RoomsHome | null>(null);
   const [modal, setModal] = useState<'none' | 'book' | 'new'>('none');
 
+  // Set only when the browser REFUSED the tab. A blocked tab used to be invisible to this page,
+  // so the button looked dead and said nothing. Rendering the link as an anchor is the escape: a
+  // direct tap on a real link is never popup-blocked, whatever the phone's settings are.
+  const [blockedJoinUrl, setBlockedJoinUrl] = useState<string | null>(null);
+
   const loadRooms = useCallback(async () => { setRooms(await fetchRooms()); }, []);
   const loadHome = useCallback(async () => { setHome(await fetchRoomsHome()); }, []);
 
@@ -214,9 +220,15 @@ const RoomsPage: React.FC = () => {
   useEffect(() => { loadHome().catch(() => setHome({ happening_now: [], up_next: [], my_rooms: [] })); }, [loadHome]);
 
   const open = (id: string) => navigate(`/portal/rooms/${id}`);
+  // The tab is reserved BEFORE the join call, inside the tap, so a phone does not refuse it, and
+  // a refusal is reported rather than swallowed. The old shape opened after the await and passed
+  // `noopener`, which returns null by specification -- so a blocked tab and a successful one were
+  // indistinguishable and the button simply looked dead. See utils/openTabForJoin.ts.
   const joinSession = async (bookingId: string) => {
-    try { const { join_url } = await joinBooking(bookingId); if (join_url) window.open(join_url, '_blank', 'noopener'); else window.alert("You're in — the host hasn't posted the link yet."); }
-    catch { window.alert('You are not eligible to join this session.'); }
+    const outcome = await openTabForJoin(async () => (await joinBooking(bookingId)).join_url);
+    if (outcome.status === 'no_url') window.alert("You're in — the host hasn't posted the link yet.");
+    else if (outcome.status === 'failed') window.alert('You are not eligible to join this session.');
+    else if (outcome.status === 'blocked') setBlockedJoinUrl(outcome.url);
   };
 
   const items = rooms || [];
@@ -258,7 +270,12 @@ const RoomsPage: React.FC = () => {
       </div>
       </div>
 
-      <div className="rm-shell">
+      {/* `has-room` drives the phone layout. On one column the rail stacks ABOVE the pane, so
+          opening a room rendered the pane below a whole screen of list: the page looked
+          unchanged and only the active row lit up. Kalkidan Bezabeh, 4 Nov 2026, on an iPhone:
+          "the page doesn't change but it shows me a green indicator behind ... so i can't see
+          or click anything there." Below 820px this shows the list OR the room, never both. */}
+      <div className={`rm-shell${roomId ? ' has-room' : ''}`}>
         <div className="rm-rail">
           {rooms === null && <div className="rm-empty">Loading…</div>}
           {/* C32 (v7 R5): class sessions live in the Classroom now (Live classes, replays) */}
@@ -271,6 +288,10 @@ const RoomsPage: React.FC = () => {
         </div>
 
         <div className="rm-panewrap">
+          {/* Phone only (CSS), because on a wide screen the rail never went away and a back
+              control would be a dead end. Without it, hiding the rail would trap somebody in
+              the room they opened. */}
+          {roomId && <Link to="/portal/rooms" className="rm-backtorooms">&larr; All rooms</Link>}
           {roomId ? (
             <RoomPane roomId={roomId} onDeleted={() => navigate('/portal/rooms')} onChanged={() => { loadRooms().catch(() => {}); loadHome().catch(() => {}); }} />
           ) : (
@@ -298,6 +319,22 @@ const RoomsPage: React.FC = () => {
         </div>
       </div>
 
+      {blockedJoinUrl && (
+        <div className="rm-joinblocked" role="alert">
+          <div>
+            <strong>Your browser blocked the meeting tab.</strong>
+            <div className="rm-joinblocked-sub">This happens on phones. The link still works, so open it yourself.</div>
+          </div>
+          <a
+            className="te-btn cherry sm"
+            href={blockedJoinUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={() => setBlockedJoinUrl(null)}
+          >Open the meeting</a>
+          <button type="button" className="rm-x" aria-label="Dismiss" onClick={() => setBlockedJoinUrl(null)}>×</button>
+        </div>
+      )}
       {modal === 'book' && <BookRoomModal onClose={() => setModal('none')} onCreated={() => { loadRooms().catch(() => {}); loadHome().catch(() => {}); }} />}
       {modal === 'new' && <NewRoomModal onClose={() => setModal('none')} onCreated={(id) => { loadRooms().catch(() => {}); navigate(`/portal/rooms/${id}`); }} />}
         </>
