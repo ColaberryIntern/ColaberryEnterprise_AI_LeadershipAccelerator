@@ -326,6 +326,11 @@ export async function getDecoupledWorkspace(tenantId: string, gwsKey: string, bi
     const { getAgencyRelationship } = await import('./govRelationship');
     relationship = await getAgencyRelationship(tenantId, gwsKey, provenance ? provenance.agency : null);
   } catch { relationship = null; }
+  let aiVetting: unknown = null;
+  try {
+    const { loadAiVettingView } = await import('./govAiVetting');
+    aiVetting = await loadAiVettingView(tenantId, gwsKey);
+  } catch { aiVetting = null; } // advisory: the workspace must open without it
   return {
     canonicalOpportunityId: gwsKey,
     sourceLive: false,
@@ -348,6 +353,7 @@ export async function getDecoupledWorkspace(tenantId: string, gwsKey: string, bi
     submission,
     submissionReadiness,
     relationship,
+    aiVetting,
     changedSource: false,
     lastSyncedAt: sync ? sync.syncedAt : null,
     syncChange: sync && sync.change && sync.change.kind !== 'none' ? sync.change : null,

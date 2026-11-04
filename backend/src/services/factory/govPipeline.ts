@@ -89,6 +89,22 @@ export function deriveGovPipelineStage(decision: string, materialized: boolean):
   return 'qualifying';
 }
 
+/**
+ * PURE. The discovery uuids of pursuits now handed to an intern: a delivery project with at least one ACTIVE intern,
+ * the same test that puts a contract in the admin left nav (adminGovContractNavEntries). The discovery board hides
+ * these, so a pursuit is listed in one place. Derived on every read, with nothing stored: unassigning the intern
+ * brings the row back. Only a decoupled gws:<uuid> key maps to a discovery row; an op:gov: canonical id cannot.
+ */
+export function assignedOpportunityUuids(
+  cards: ReadonlyArray<Pick<GovPipelineCard, 'key' | 'deliveryProjectId' | 'hasActiveIntern'>>,
+): Set<string> {
+  const uuids = new Set<string>();
+  for (const c of cards) {
+    if (c.deliveryProjectId && c.hasActiveIntern && c.key.startsWith('gws:')) uuids.add(c.key.slice(4));
+  }
+  return uuids;
+}
+
 /** Coerce a DB timestamp (Date | string | null) to an ISO string, or null if absent/unparseable. */
 function toIso(value: unknown): string | null {
   if (!value) return null;

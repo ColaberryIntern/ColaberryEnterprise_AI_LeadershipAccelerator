@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { getGovClarificationQuestions, type GovClarificationDraft } from '../../../services/factoryApi';
+import { pickNewest } from './pickNewest';
 
 /**
  * ClarificationDraftPanel — "Ask the buyer". An advisory read that scans the ESTABLISHED requirements for the
@@ -8,26 +9,34 @@ import { getGovClarificationQuestions, type GovClarificationDraft } from '../../
  * gate, sends nothing, and every question cites a real requirement id (the server drops any that do not), so
  * it can surface a gap but never invent a requirement to ask about.
  */
-export function ClarificationDraftPanel({ canonical, requirements, title, buyer }: {
+export function ClarificationDraftPanel({ canonical, requirements, title, buyer, saved }: {
   canonical: string;
   requirements: { id: string; text: string }[];
   title?: string | null;
   buyer?: string | null;
+  /** Saved by the automatic AI checks on the ZIP. Shown with no click; a run from this page replaces it. */
+  saved?: GovClarificationDraft | null;
 }): React.ReactElement {
   const storeKey = `govClarificationDraft:${canonical}`;
   const [draft, setDraft] = useState<GovClarificationDraft | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [fromSaved, setFromSaved] = useState(false);
   // Keep the previously-generated draft (per-viewer convenience) so a revisit does not force a re-run.
   useEffect(() => {
-    try { const raw = localStorage.getItem(storeKey); if (raw) setDraft(JSON.parse(raw) as GovClarificationDraft); } catch { /* storage may be unavailable */ }
-  }, [storeKey]);
+    let local: GovClarificationDraft | null = null;
+    try { const raw = localStorage.getItem(storeKey); if (raw) local = JSON.parse(raw) as GovClarificationDraft; } catch { /* storage may be unavailable */ }
+    const { value, fromSaved: isSaved } = pickNewest(local, saved);
+    setDraft(value);
+    setFromSaved(isSaved);
+  }, [storeKey, saved]);
   const run = async (): Promise<void> => {
     setBusy(true); setErr(null); setCopied(false);
     try {
       const d = await getGovClarificationQuestions(canonical, { requirements, title: title ?? null, buyer: buyer ?? null });
       setDraft(d);
+      setFromSaved(false);
       try { localStorage.setItem(storeKey, JSON.stringify(d)); } catch { /* ignore */ }
     } catch { setErr('Could not draft the clarification questions right now.'); }
     finally { setBusy(false); }
@@ -41,7 +50,7 @@ export function ClarificationDraftPanel({ canonical, requirements, title, buyer 
       <button type="button" className="btn btn-outline-primary btn-sm" disabled={busy || requirements.length === 0} onClick={() => { void run(); }}>
         <i className="ri-questionnaire-line me-1" aria-hidden="true" />{busy ? 'Drafting…' : draft ? 'Re-draft questions (AI)' : 'Draft clarification questions (AI)'}
       </button>
-      {requirements.length === 0 && <div className="small text-secondary mt-1">Establish the cited requirements first — the questions are drawn from them.</div>}
+      {requirements.length === 0 && !draft && <div className="small text-secondary mt-1">Establish the cited requirements first — the questions are drawn from them.</div>}
       {err && <div className="alert alert-warning py-2 mt-2 mb-0 small" role="status">{err}</div>}
       {draft && (
         <div className="mt-2">
@@ -67,7 +76,7 @@ export function ClarificationDraftPanel({ canonical, requirements, title, buyer 
               </div>
             </>
           )}
-          <div className="small text-secondary mt-2"><i className="ri-robot-2-line me-1" aria-hidden="true" />AI draft — advisory, grounded only in the established requirements. Review and edit before you send; this app sends nothing.</div>
+          <div className="small text-secondary mt-2"><i className="ri-robot-2-line me-1" aria-hidden="true" />{fromSaved ? 'Saved by the automatic AI checks, from the requirements found in the ZIP.' : 'AI draft — advisory, grounded only in the established requirements.'} Review and edit before you send; this app sends nothing.</div>
         </div>
       )}
     </div>

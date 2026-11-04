@@ -179,9 +179,9 @@ describe('M23 - the committed baseline is internally consistent', () => {
   });
 
   it('still carries the debt it was measured with, so a silent wipe is visible', () => {
-    // 141 files, 400 errors, measured 2026-10-17. If someone empties the table
-    // the ratchet would pass trivially, so the size is asserted here.
-    expect(Object.keys(TEST_TYPECHECK_BASELINE).length).toBe(141);
-    expect(TEST_TYPECHECK_BASELINE_TOTAL).toBe(400);
+    // 141 files, 400 errors, measured 2026-10-17; factoryRoutes.test.ts fixed since.
+    // If someone empties the table the ratchet would pass trivially, so the size is asserted here.
+    expect(Object.keys(TEST_TYPECHECK_BASELINE).length).toBe(140);
+    expect(TEST_TYPECHECK_BASELINE_TOTAL).toBe(399);
   });
 });

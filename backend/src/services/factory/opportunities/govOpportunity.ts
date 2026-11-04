@@ -93,6 +93,10 @@ export interface GovOpportunityFeed {
   totalAvailable?: number | null;
   /** How many returned rows were hidden by active team dismissals (added by the route after filtering); 0 if none. */
   dismissedCount?: number | null;
+  /** How many returned rows were hidden because the pursuit is assigned to an active intern (route-added); 0 if none. */
+  assignedCount?: number | null;
+  /** How many rows sit in each stage of the daily process (govDiscoveryBoard); null when the board could not be built. */
+  boardCounts?: Record<string, number> | null;
 }
 
 /**

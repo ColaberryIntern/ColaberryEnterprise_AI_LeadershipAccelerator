@@ -171,7 +171,14 @@ export interface GovOpportunity {
   /** Where this opportunity sits on the qualification/approval ladder, joined server-side by canonical 'gws:'+uuid.
    *  Absent/null => not yet qualified (read as not_vetted). */
   vetting?: OpportunityVetting | null;
+  /** Where this row sits in the daily process: the same stages the morning email groups by. Absent when the board can't be built. */
+  boardStage?: BoardStage;
+  /** True when the row left the feed and is shown from what was saved when its ZIP was vetted. */
+  fromSnapshot?: boolean;
+  /** The saved AI result, separate from the human approval in `vetting`. */
+  aiVetting?: { status: string; verdict: 'pursue' | 'pass' | 'inconclusive' | null; reason: string | null; coveragePct: number | null } | null;
 }
+export type BoardStage = 'needs_zip' | 'analyzing' | 'vetted' | 'needs_read' | 'approved' | 'flagged' | 'below_bar';
 export type VettingStage = 'not_vetted' | 'in_review' | 'needs_requirements' | 'awaiting_approval' | 'rfi' | 'vetted' | 'no_bid';
 export interface OpportunityVetting { stage: VettingStage; decision: string | null; approvalStatus: string | null; }
 export type SnapshotReason = 'not_configured' | 'source_failed';
@@ -186,6 +193,12 @@ export interface GovOpportunityFeed {
   totalAvailable?: number | null;
   /** How many returned rows were hidden by active team dismissals this request; 0 if none. */
   dismissedCount?: number | null;
+  /** How many returned rows were hidden because the pursuit is assigned to an active intern (see the left nav); 0 if none. */
+  assignedCount?: number | null;
+  /** How many rows sit in each stage; null when the board could not be built. */
+  boardCounts?: Record<BoardStage, number> | null;
+  /** A saved-state read failed on this load, so rows may look less advanced than they are. */
+  boardIncomplete?: boolean;
 }
 export interface StartOpportunityResult { deliveryProjectId: string; created: boolean; }
 
@@ -227,6 +240,22 @@ export async function dismissGovOpportunity(
   const { data } = await api.post<{ dismissed: GovOpportunityDismissal }>(
     `/api/admin/factory/opportunities/${encodeURIComponent(key)}/dismiss`, body,
   );
+  return data;
+}
+
+/** A row hidden from the team's board, by the morning sweep or a person. */
+export interface HiddenGovOpportunity {
+  opportunityKey: string;
+  title: string | null;
+  agency: string | null;
+  reason: string | null;
+  dismissedBy: string | null;
+  dismissedAt: string | null;
+}
+
+/** Every row hidden from the team's board, with why. */
+export async function listHiddenGovOpportunities(): Promise<{ hidden: HiddenGovOpportunity[] }> {
+  const { data } = await api.get<{ hidden: HiddenGovOpportunity[] }>('/api/admin/factory/opportunities/hidden');
   return data;
 }
 
@@ -481,6 +510,27 @@ export interface QualificationRecord {
 }
 /** The resolved, honest source state (mirrors the server gate). */
 export type QualSourceState = 'available' | 'degraded' | 'snapshot_unrecorded' | 'unavailable' | 'auth_failed' | 'malformed' | 'zip_workspace';
+/** The saved result of the automatic AI checks on one ZIP. */
+export interface GovAiVettingView {
+  aiEnabled?: boolean;
+  status: 'queued' | 'running' | 'completed';
+  verdict: 'pursue' | 'pass' | 'inconclusive' | null;
+  reason: string | null;
+  quote: string | null;
+  coveragePct: number | null;
+  errorClass: string | null;
+  fit: { capabilities: CapabilityItem[] } | null;
+  summary: GovProposalSummary | null;
+  questions: GovClarificationDraft | null;
+  /** What the last extraction of these bytes found, so a return visit needs no second upload. */
+  extraction: {
+    candidates: ExtractedRequirementCandidate[];
+    items?: RequirementItem[] | null;
+    files?: ExtractedFileOutcome[] | null;
+    extraction?: GovExtractionMeta | null;
+  } | null;
+}
+
 export interface GovQualificationWorkspace {
   canonicalOpportunityId: string;
   /** false today: OP's live v2 detail endpoint is not wired, so the source is a labeled fixture. */
@@ -508,6 +558,8 @@ export interface GovQualificationWorkspace {
   /** Decoupled workspace only: opportunity dossier parsed from the ZIP at attest (contacts/meetings/key-dates/NAICS).
    *  "Detected — verify", never authoritative; reference info that gates nothing. Null until a ZIP is attested. */
   dossier?: GovDossier | null;
+  /** Decoupled workspace only: the saved automatic AI checks on the newest ZIP, or null before any upload. Advisory. */
+  aiVetting?: GovAiVettingView | null;
   /** Advisory "have we pursued this agency before?" — prior active qualifications for the same agency. Suggestion,
    *  never authoritative (agency names are free text); gates nothing. Null when the lookup is unavailable. */
   relationship?: GovRelationship | null;

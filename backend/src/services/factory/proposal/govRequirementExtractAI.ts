@@ -15,6 +15,7 @@ import { DEFAULT_MODEL } from '../../components/costEstimationService';
 import { FLAGS } from '../../../config/featureFlags';
 import { verifyQuotes, type AiRequirementCandidate } from './verifyQuotes';
 import { mergeCandidates } from './mergeCandidates';
+import { untrustedBlock } from '../govUntrustedText';
 import type { ProposalExtraction, ExtractedRequirement } from './proposalExtractor';
 
 const MAX_DOCS = 6;                 // solicitation-class files sent to the model
@@ -77,10 +78,10 @@ export async function govRequirementExtractAI(
   try {
     const client = getInstrumentedOpenAI({ workflow_id: 'gov_requirement_extract' }, { timeout: 120_000, maxRetries: 1 });
     const model = process.env.GOV_EXTRACT_MODEL || DEFAULT_MODEL;
-    const user = docs.map((d) => `=== ${d.name} ===\n${d.text.slice(0, MAX_CHARS_PER_DOC)}`).join('\n\n');
+    const { rule, block: user } = untrustedBlock(docs.map((d) => `=== ${d.name} ===\n${d.text.slice(0, MAX_CHARS_PER_DOC)}`).join('\n\n'));
     const res = await client.chat.completions.create({
       model, temperature: 0, max_tokens: 4000, response_format: { type: 'json_object' },
-      messages: [{ role: 'system', content: SYSTEM }, { role: 'user', content: user }],
+      messages: [{ role: 'system', content: `${SYSTEM} ${rule}` }, { role: 'user', content: user }],
     });
     let parsed: { requirements?: unknown } = {};
     try { parsed = JSON.parse(res.choices?.[0]?.message?.content || '{}'); } catch { parsed = {}; }

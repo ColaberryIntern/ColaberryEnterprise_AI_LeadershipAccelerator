@@ -19,6 +19,8 @@ import { derivePotentialDisqualifiers } from './govGaps';
 import { parseDeadline, countdownTo, deadlineTone, formatCountdown, dossierDeadlineIso } from './govDeadline';
 import { deriveNextStep } from './govNextStep';
 import { BidDecisionDashboard } from './govWorkspace/BidDecisionDashboard';
+import AiVettingCard from './govWorkspace/AiVettingCard';
+import { buildCandidateRows } from './govWorkspace/candidateRows';
 import { ProposalSummaryPanel } from './govWorkspace/ProposalSummaryPanel';
 import { ClarificationDraftPanel } from './govWorkspace/ClarificationDraftPanel';
 import { BuildSpecPanel } from './govWorkspace/BuildSpecPanel';
@@ -1073,6 +1075,21 @@ export default function AdminGovQualificationPage(): React.ReactElement {
 
   useEffect(() => { void load(); }, [load]);
 
+  // A return visit: bring back what the last upload's extraction found, so nothing has to be uploaded twice. Only before
+  // anything is established: establishing clears the list on purpose, and this must not undo that.
+  const savedExtraction = ws?.aiVetting?.extraction ?? null;
+  const establishedSoFar = ws?.evaluation?.evals.length ?? 0;
+  const candidatesShown = useRef(false); // once a list has been on screen, clearing it stays cleared
+  useEffect(() => {
+    if (candidates) { candidatesShown.current = true; return; }
+    if (!savedExtraction || establishedSoFar > 0 || candidatesShown.current) return;
+    setCandidates(savedExtraction.candidates);
+    setItems(savedExtraction.items ?? null);
+    setExtractOutcomes(savedExtraction.files ?? null);
+    setExtractionMeta(savedExtraction.extraction ?? null);
+    setCandRows(buildCandidateRows(savedExtraction.candidates, savedExtraction.items, dueStageForCategory));
+  }, [savedExtraction, establishedSoFar, candidates]);
+
   // Advisory service suggestions for this opportunity (deterministic matcher). Best-effort; feeds no gate. Runs for
   // the canonical path (source present) AND the decoupled ZIP path (source:null), matching on the established
   // requirements and the provenance/clicked title.
@@ -1131,16 +1148,7 @@ export default function AdminGovQualificationPage(): React.ReactElement {
       setExtractionMeta(r.extraction ?? null);
       const its = r.items ?? null;
       setItems(its);
-      // Default each candidate's due-stage from its item category when the taxonomy is present (scope -> delivery,
-      // submit/rule -> submission, after_award -> award), so a confirmed scope item lands as a build-stage obligation.
-      const catByCand = new Map<string, ReqItemCategory>();
-      for (const it of its ?? []) catByCand.set(it.sourceFragments[0]?.reqId ?? it.id, it.category);
-      const rows: Record<string, CandidateRow> = {};
-      for (const c of r.candidates) {
-        const cat = catByCand.get(c.id);
-        rows[c.id] = { checked: true, applicability: 'always', dueStage: cat ? dueStageForCategory(cat) : 'submission' };
-      }
-      setCandRows(rows);
+      setCandRows(buildCandidateRows(r.candidates, its, dueStageForCategory));
       return true;
     } catch (err: any) {
       setExtractError(err?.response?.data?.error ?? 'Could not extract requirements from the document.');
@@ -1619,6 +1627,7 @@ export default function AdminGovQualificationPage(): React.ReactElement {
               )}
               <ProposalSummaryPanel canonical={canonical}
                 requirements={(established ?? []).map((r) => ({ id: r.id, text: r.text }))}
+                saved={ws.aiVetting?.summary ?? null}
                 synopsis={oppDetail?.opportunity?.preliminarySummary ?? null}
                 title={oppDetail?.opportunity?.title ?? null} buyer={oppDetail?.opportunity?.agency ?? null} />
             </SectionCard>
@@ -1714,6 +1723,7 @@ export default function AdminGovQualificationPage(): React.ReactElement {
               version={version}
               canWrite={!!record}
               onSaved={() => { void load(); }}
+              savedCapabilities={ws.aiVetting?.fit?.capabilities ?? null}
             />
           )}
 
@@ -1722,6 +1732,7 @@ export default function AdminGovQualificationPage(): React.ReactElement {
               subtitle="Advisory: finds the vague requirements (a line like 'connect to their system' with no system named) and drafts a sharp question for each, plus a ready-to-send email. Grounded only in the established requirements; this app sends nothing and changes no gate.">
               <ClarificationDraftPanel
                 canonical={canonical}
+                saved={ws.aiVetting?.questions ?? null}
                 requirements={(established ?? []).map((r) => ({ id: r.id, text: r.text }))}
                 title={oppDetail?.opportunity?.title ?? ws.provenance?.title ?? null}
                 buyer={ws.source?.publisher?.leadBuyer?.name ?? oppDetail?.opportunity?.agency ?? null}
@@ -1983,6 +1994,7 @@ export default function AdminGovQualificationPage(): React.ReactElement {
 
             </div>{/* end LEFT column */}
             <aside className="col-12 col-lg-4">{/* ── RIGHT: pursuit brief + persistent rail (deadline, dates+buyer, messages, team) ── */}
+              <AiVettingCard vetting={ws.aiVetting} />
               {stepModel && (
                 <PursuitBrief sections={WORKSPACE_STEPS.filter((s) => s.n <= 6).map((s): BriefSection => {
                   const st = stepModel.statuses[s.key];

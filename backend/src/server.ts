@@ -90,6 +90,7 @@ import { ensureGovQualificationSchema } from './db/ensureGovQualificationSchema'
 import { ensureGovOpportunityDismissalSchema } from './db/ensureGovOpportunityDismissalSchema';
 import { ensureGovSourceBundleSchema } from './db/ensureGovSourceBundleSchema';
 import { ensureGovExtractionJobSchema } from './db/ensureGovExtractionJobSchema';
+import { ensureGovAiVettingSchema } from './db/ensureGovAiVettingSchema';
 import { ensureGovBuildStoryEvidenceSchema } from './db/ensureGovBuildStoryEvidenceSchema';
 import { ensureGovBuildStoryAssignmentSchema } from './db/ensureGovBuildStoryAssignmentSchema';
 import { ensureGovProposalResponseSchema } from './db/ensureGovProposalResponseSchema';
@@ -2877,6 +2878,8 @@ async function start(): Promise<void> {
   // upload returns a job id immediately instead of extracting in-request (which exceeded the ~100s edge timeout).
   // A single additive NEW table (no existing table altered). See ensureGovExtractionJobSchema.
   await ensureGovExtractionJobSchema();
+  // Gov AI vetting (gov_ai_vettings): the saved result of the automatic checks on a ZIP. A single additive NEW table.
+  await ensureGovAiVettingSchema();
   // Gov build-story evidence (gov_build_story_evidence): the student's completion hand-in for a Build story,
   // recorded `submitted` (never self-verified). A single additive NEW table; see ensureGovBuildStoryEvidenceSchema.
   await ensureGovBuildStoryEvidenceSchema();
