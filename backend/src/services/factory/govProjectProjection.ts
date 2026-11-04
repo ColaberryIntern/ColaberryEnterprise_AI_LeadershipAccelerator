@@ -106,9 +106,14 @@ export interface StudentGovProjectView {
   /** P2: the current blueprint derived from the stored solicitation (scoring, Section L rules, required forms incl.
    *  the Texas engine, addenda). Null until a reanalyze has run. Carries no pricing values and no identities. */
   blueprint: ProposalBlueprint | null;
+  /** P4: screenshots captured from the verified build demo, tagged with the requirements they prove. No identities. */
+  buildArtifacts: StudentGovBuildArtifact[];
   /** v2: combined completion across verified build stories + accepted proposal documents — the honest project %. */
   overallProgress: GovOverallProgress;
 }
+
+/** P4: a build-evidence screenshot projected student-safe (no identities; the artifact rows carry none). */
+export interface StudentGovBuildArtifact { id: string; storyId: string; requirementIds: string[]; commitSha: string | null; caption: string | null; capturedAt: string | null; status: string; }
 
 /**
  * PURE: a PRICE-FREE submission checklist for an intern — one row per NON-pricing response slot, its lifecycle
@@ -196,6 +201,7 @@ export function toStudentGovProjectView(project: any, tracks: any[], requirement
     buildSummary: null, // filled by the async loader from the materialized SBP build
     proposalDocuments: [], // filled by the async loader from the derived + synced documents
     blueprint: null, // filled by the async loader from the latest stored blueprint
+    buildArtifacts: [], // filled by the async loader from gov_build_artifacts
     overallProgress: computeOverallProgress({ buildVerified: 0, buildTotal: 0, docsAccepted: 0, docsTotal: 0 }),
   };
 }
@@ -307,6 +313,16 @@ export async function getStudentGovProjectView(deliveryProjectId: string, viewer
       docsTotal: docs.length,
     });
   } catch { /* additive; proposalDocuments/overallProgress stay at defaults */ }
+
+  // P4: build-evidence artifacts for this project (no identities — the rows carry none). Additive + best-effort.
+  try {
+    const { default: GovBuildArtifact } = await import('../../models/GovBuildArtifact');
+    const rows = await GovBuildArtifact.findAll({ where: { delivery_project_id: deliveryProjectId }, order: [['captured_at', 'DESC']] });
+    view.buildArtifacts = rows.map((r) => {
+      const p = r.get({ plain: true }) as any;
+      return { id: p.id, storyId: p.story_id, requirementIds: Array.isArray(p.requirement_ids) ? p.requirement_ids : [], commitSha: p.commit_sha ?? null, caption: p.caption ?? null, capturedAt: p.captured_at ? new Date(p.captured_at).toISOString() : null, status: p.status };
+    });
+  } catch { /* additive; buildArtifacts stays [] */ }
 
   // P6: the shared proposal (projected to THIS viewer's grant level) + the price-free submission checklist. Built
   // from the SAME response slots the admin workspace uses (deriveResponseSlots + the persisted responses), then run

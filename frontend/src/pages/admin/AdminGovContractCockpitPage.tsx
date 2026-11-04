@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { PageHeader } from '../../components/admin/shell';
 import CockpitView from '../portal/projects/govCockpit/CockpitView';
-import { fetchGovContractCockpit, errorMessage, adminGovCockpitApi, adminReanalyzeGovBlueprint } from '../../services/adminGovContractsApi';
+import { fetchGovContractCockpit, errorMessage, adminGovCockpitApi, adminGovReviewApi, adminReanalyzeGovBlueprint } from '../../services/adminGovContractsApi';
 import type { StudentGovProjectView } from '../../services/govProjectPortalApi';
 
 /**
@@ -74,7 +74,7 @@ const AdminGovContractCockpitPage: React.FC = () => {
           <button type="button" className="btn btn-outline-secondary btn-sm" onClick={load}>Try again</button>
         </div>
       )}
-      {state.k === 'ready' && <CockpitView view={state.view} projectId={projectId} onReload={load} api={adminGovCockpitApi} onReanalyze={onReanalyze} reanalyzing={reanalyzing} />}
+      {state.k === 'ready' && <CockpitView view={state.view} projectId={projectId} onReload={load} api={adminGovCockpitApi} reviewApi={adminGovReviewApi} onReanalyze={onReanalyze} reanalyzing={reanalyzing} />}
     </div>
   );
 };

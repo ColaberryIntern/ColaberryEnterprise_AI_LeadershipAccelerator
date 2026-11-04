@@ -236,4 +236,134 @@ router.get('/api/admin/gov-contracts/:projectId/blueprint', requireSection('gov_
   }
 });
 
+// ── Proposal Studio P4: build-artifact evidence ────────────────────────────────────────────────────────────────
+/** POST .../:projectId/build-demo — admin sets the demo URL (validated https + host-allowlisted) for capture. */
+router.post('/api/admin/gov-contracts/:projectId/build-demo', requireSection('gov_contracts'), async (req: Request, res: Response) => {
+  const ctx = await adminGovContext(req, res); if (!ctx) return;
+  try {
+    const { setGovBuildDemo } = await import('../../services/factory/proposal/captureStoryArtifact');
+    const b = (req.body ?? {}) as any;
+    await setGovBuildDemo(req.params.projectId as string, { demoUrl: String(b.demoUrl ?? ''), captureRoot: b.captureRoot ?? null, storyCapturePaths: b.storyCapturePaths ?? {}, identityId: ctx.identityId });
+    res.json({ ok: true });
+  } catch (err: any) {
+    if (err?.name === 'GovBuildDemoError') { res.status(400).json({ error: err.message, reason: err.reason }); return; }
+    logFail('gov_contract_build_demo_failed', err, { projectId: req.params.projectId });
+    res.status(500).json({ error: 'Could not set the demo URL.' });
+  }
+});
+
+/** POST .../:projectId/stories/:storyId/recapture — admin re-captures a story's screenshot at its latest commit. */
+router.post('/api/admin/gov-contracts/:projectId/stories/:storyId/recapture', requireSection('gov_contracts'), async (req: Request, res: Response) => {
+  const ctx = await adminGovContext(req, res); if (!ctx) return;
+  const storyId = String(req.params.storyId ?? ''); if (!storyId) { res.status(400).json({ error: 'Story id is required' }); return; }
+  try {
+    const { recaptureStory } = await import('../../services/factory/proposal/captureStoryArtifact');
+    res.json({ result: await recaptureStory(req.params.projectId as string, storyId) });
+  } catch (err: unknown) {
+    logFail('gov_contract_recapture_failed', err, { projectId: req.params.projectId, storyId });
+    res.status(500).json({ error: 'Could not re-capture the screenshot.' });
+  }
+});
+
+/** GET .../:projectId/artifacts/:artifactId/image — serve a captured PNG for a member (404 otherwise). */
+router.get('/api/admin/gov-contracts/:projectId/artifacts/:artifactId/image', requireSection('gov_contracts'), async (req: Request, res: Response) => {
+  const ctx = await adminGovContext(req, res); if (!ctx) return;
+  try {
+    const path = await import('path');
+    const { GOV_BUILD_ARTIFACT_DIR } = await import('../../config/upload');
+    const { default: GovBuildArtifact } = await import('../../models/GovBuildArtifact');
+    const row: any = await GovBuildArtifact.findByPk(String(req.params.artifactId));
+    if (!row || row.delivery_project_id !== req.params.projectId || !row.file_path) { res.status(404).json({ error: 'Not found' }); return; }
+    res.sendFile(path.join(GOV_BUILD_ARTIFACT_DIR, path.basename(String(row.file_path))));
+  } catch (err: unknown) {
+    logFail('gov_contract_artifact_image_failed', err, { projectId: req.params.projectId });
+    res.status(500).json({ error: 'Could not load the image.' });
+  }
+});
+
+/** POST .../:projectId/documents/:docKey/insert-figure — insert a captured artifact as the next numbered figure. */
+router.post('/api/admin/gov-contracts/:projectId/documents/:docKey/insert-figure', requireSection('gov_contracts'), async (req: Request, res: Response) => {
+  const ctx = await adminGovContext(req, res); if (!ctx) return;
+  const docKey = docKeyOf(req, res); if (!docKey) return;
+  const artifactId = String((req.body ?? {}).artifactId ?? ''); if (!artifactId) { res.status(400).json({ error: 'artifactId is required' }); return; }
+  try {
+    const { insertArtifactFigure } = await import('../../services/factory/proposal/insertArtifactFigure');
+    res.json({ document: await insertArtifactFigure(req.params.projectId as string, docKey, artifactId, ctx.identityId) });
+  } catch (err: any) {
+    if (err?.name === 'ProposalDocumentError') { res.status(DOC_ERR_STATUS[err.reason] ?? 400).json({ error: err.message, reason: err.reason }); return; }
+    logFail('gov_contract_insert_figure_failed', err, { projectId: req.params.projectId, docKey });
+    res.status(500).json({ error: 'Could not insert the figure.' });
+  }
+});
+
+// ── Proposal Studio P3: versions, checks, gates ────────────────────────────────────────────────────────────────
+const REVIEW_ERR_STATUS: Record<string, number> = { not_found: 404, gate_order: 409, checks_not_met: 409, separation_of_duties: 403, no_reviewer: 401, no_version: 409 };
+const VALID_GATES = new Set(['pink', 'red', 'gold', 'white_glove']);
+
+/** GET .../:projectId/documents/:docKey/versions — the immutable version history + stored check scores. */
+router.get('/api/admin/gov-contracts/:projectId/documents/:docKey/versions', requireSection('gov_contracts'), async (req: Request, res: Response) => {
+  const ctx = await adminGovContext(req, res); if (!ctx) return;
+  const docKey = docKeyOf(req, res); if (!docKey) return;
+  try {
+    const review = await import('../../services/factory/proposal/govProposalReviewStore');
+    const docId = await review.docIdFor(req.params.projectId as string, docKey);
+    if (!docId) { res.json({ versions: [], gates: [] }); return; }
+    res.json({ versions: await review.listDocumentVersions(docId), gates: await review.listGateReviews(docId) });
+  } catch (err: unknown) {
+    logFail('gov_contract_versions_failed', err, { projectId: req.params.projectId, docKey });
+    res.status(500).json({ error: 'Could not load the version history.' });
+  }
+});
+
+/** GET .../:projectId/versions/:a/diff/:b — HTML-aware word diff between two versions (server-side, in-repo LCS). */
+router.get('/api/admin/gov-contracts/:projectId/versions/:a/diff/:b', requireSection('gov_contracts'), async (req: Request, res: Response) => {
+  const ctx = await adminGovContext(req, res); if (!ctx) return;
+  try {
+    const review = await import('../../services/factory/proposal/govProposalReviewStore');
+    res.json({ segments: await review.diffVersions(String(req.params.a), String(req.params.b)) });
+  } catch (err: unknown) {
+    logFail('gov_contract_version_diff_failed', err, { projectId: req.params.projectId });
+    res.status(500).json({ error: 'Could not diff the versions.' });
+  }
+});
+
+/** POST .../:projectId/documents/:docKey/run-checks — score the current version on the six checks and store them. */
+router.post('/api/admin/gov-contracts/:projectId/documents/:docKey/run-checks', requireSection('gov_contracts'), async (req: Request, res: Response) => {
+  const ctx = await adminGovContext(req, res); if (!ctx) return;
+  const docKey = docKeyOf(req, res); if (!docKey) return;
+  try {
+    const { runProposalDocumentChecks } = await import('../../services/factory/proposal/runProposalDocumentChecks');
+    const result = await runProposalDocumentChecks(req.params.projectId as string, docKey);
+    if (!result) { res.status(409).json({ error: 'There is no drafted version to check yet.' }); return; }
+    res.json({ result });
+  } catch (err: unknown) {
+    logFail('gov_contract_run_checks_failed', err, { projectId: req.params.projectId, docKey });
+    res.status(500).json({ error: 'Could not run the checks.' });
+  }
+});
+
+/** POST .../:projectId/documents/:docKey/gates/:gate — a reviewer approves or returns a color-team gate. Enforces
+ *  gate order, the pass-the-relevant-checks rule, and Gold separation of duties (a holder of the broad `program`
+ *  section is the master-admin override). Interns never reach this (the route is section-gated gov_contracts). */
+router.post('/api/admin/gov-contracts/:projectId/documents/:docKey/gates/:gate', requireSection('gov_contracts'), async (req: Request, res: Response) => {
+  const ctx = await adminGovContext(req, res); if (!ctx) return;
+  const docKey = docKeyOf(req, res); if (!docKey) return;
+  const gate = String(req.params.gate ?? '');
+  if (!VALID_GATES.has(gate)) { res.status(400).json({ error: 'Unknown gate.' }); return; }
+  const decision = String((req.body ?? {}).decision ?? '');
+  if (decision !== 'approve' && decision !== 'return') { res.status(400).json({ error: 'decision must be "approve" or "return".' }); return; }
+  try {
+    const review = await import('../../services/factory/proposal/govProposalReviewStore');
+    const docId = await review.docIdFor(req.params.projectId as string, docKey);
+    if (!docId) { res.status(404).json({ error: 'Not found' }); return; }
+    const isMasterAdmin = adminAllowedSections((req as any).admin ?? {}).includes('program');
+    const gates = await review.decideGate({ documentId: docId, gate: gate as any, reviewerIdentityId: ctx.identityId, decision, note: String((req.body ?? {}).note ?? ''), isMasterAdmin });
+    res.json({ gates });
+  } catch (err: any) {
+    if (err?.name === 'ProposalReviewError') { res.status(REVIEW_ERR_STATUS[err.reason] ?? 400).json({ error: err.message, reason: err.reason }); return; }
+    logFail('gov_contract_gate_decide_failed', err, { projectId: req.params.projectId, docKey, gate });
+    res.status(500).json({ error: 'Could not record the gate decision.' });
+  }
+});
+
 export default router;

@@ -23,13 +23,23 @@ const cacheSet = <T>(k: string, v: T): void => { if (cache.size >= MAX_ENTRIES) 
 const hash = (o: unknown): string => crypto.createHash('sha256').update(JSON.stringify(o)).digest('hex');
 const clampStr = (v: unknown, n: number): string => String(v ?? '').trim().slice(0, n);
 
-// The only tags a drafted proposal document may contain. Everything else (script/style/iframe/a/img/…) is stripped.
-const ALLOWED_TAGS = new Set(['h2', 'h3', 'h4', 'p', 'ul', 'ol', 'li', 'strong', 'em', 'b', 'i', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'blockquote', 'br']);
+// The only tags a drafted proposal document may contain. `figure`/`figcaption`/`img` were added for P4 build-evidence
+// figures; every other tag (script/style/iframe/a/…) is still stripped.
+const ALLOWED_TAGS = new Set(['h2', 'h3', 'h4', 'p', 'ul', 'ol', 'li', 'strong', 'em', 'b', 'i', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'blockquote', 'br', 'figure', 'figcaption', 'img']);
+
+// P4: an <img> may keep ONLY a `src` pointing at THIS app's own, access-checked artifact-image route (relative,
+// same-origin), never an external/data:/javascript: url. A <figure> may keep ONLY a `data-artifact` uuid. This is
+// the narrow exception to the "no attributes" rail, kept deliberately tight so no XSS vector opens.
+const ARTIFACT_SRC_RE = /^\/api\/[\w/-]*artifacts\/[A-Za-z0-9-]+\/image$/;
+function attrValue(attrs: string, name: string): string | null {
+  const m = new RegExp(name + '\\s*=\\s*"([^"]*)"', 'i').exec(attrs) || new RegExp(name + "\\s*=\\s*'([^']*)'", 'i').exec(attrs);
+  return m ? m[1] : null;
+}
 
 /**
- * PURE + total: reduce untrusted HTML to the allowlisted structural tags with NO attributes. Drops the entire
- * contents of <script>/<style> (not just the tags), strips every attribute (so no event handlers / javascript: urls
- * survive), and removes any tag not on the allowlist while keeping its inner text. Caps length. This is the XSS rail.
+ * PURE + total: reduce untrusted HTML to the allowlisted structural tags with NO attributes (the two P4 exceptions
+ * above). Drops the entire contents of <script>/<style>, removes comments, strips every other attribute (so no event
+ * handlers / javascript: urls survive), and removes any non-allowlisted tag while keeping its inner text. The XSS rail.
  */
 export function sanitizeProposalHtml(raw: unknown): string {
   let html = clampStr(raw, 40000);
@@ -38,11 +48,15 @@ export function sanitizeProposalHtml(raw: unknown): string {
   html = html.replace(/<(script|style|iframe|head|title|template|svg|math)[\s\S]*?<\/\1\s*>/gi, '');
   // 2. Drop comments.
   html = html.replace(/<!--[\s\S]*?-->/g, '');
-  // 3. For every remaining tag, keep it ONLY if allowlisted, and ALWAYS strip its attributes.
-  html = html.replace(/<(\/?)([a-zA-Z0-9]+)([^>]*)>/g, (_m, slash: string, name: string) => {
+  // 3. For every remaining tag, keep it ONLY if allowlisted; strip attributes except the two narrow P4 exceptions.
+  html = html.replace(/<(\/?)([a-zA-Z0-9]+)([^>]*)>/g, (_m, slash: string, name: string, attrs: string) => {
     const tag = name.toLowerCase();
     if (!ALLOWED_TAGS.has(tag)) return '';
-    return slash ? `</${tag}>` : (tag === 'br' ? '<br>' : `<${tag}>`);
+    if (slash) return `</${tag}>`;
+    if (tag === 'br') return '<br>';
+    if (tag === 'img') { const src = attrValue(attrs, 'src'); return src && ARTIFACT_SRC_RE.test(src) ? `<img src="${src}">` : ''; }
+    if (tag === 'figure') { const da = attrValue(attrs, 'data-artifact'); return da && /^[A-Za-z0-9-]+$/.test(da) ? `<figure data-artifact="${da}">` : '<figure>'; }
+    return `<${tag}>`;
   });
   return html.trim().slice(0, 40000);
 }

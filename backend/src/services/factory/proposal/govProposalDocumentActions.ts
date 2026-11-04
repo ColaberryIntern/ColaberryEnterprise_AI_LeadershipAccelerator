@@ -12,6 +12,21 @@
  * plus `empty` (422) from the store when content is blank.
  */
 import type { ProposalDocumentView } from './govProposalDocumentStore';
+import type { VersionAuthorKind } from './proposalReviewTypes';
+
+/**
+ * P3: record an immutable version after a draft/edit (fail-soft — a version-store hiccup must never fail the draft
+ * the user just saved). `authorKind` is 'human' for a manual edit, 'agent' for an AI draft; this is the maker/author
+ * identity the Gold-gate separation-of-duties check keys on.
+ */
+async function recordNewVersion(deliveryProjectId: string, docKey: string, view: ProposalDocumentView, authorKind: VersionAuthorKind, identityId: string | null, changeSummary: string): Promise<void> {
+  try {
+    const { createVersionForDocKey } = await import('./govProposalReviewStore');
+    await createVersionForDocKey(deliveryProjectId, docKey, { contentHtml: view.contentHtml, sections: view.sections, authorKind, authorIdentityId: identityId, changeSummary });
+  } catch (err: any) {
+    console.error(JSON.stringify({ timestamp: new Date().toISOString(), level: 'error', service: 'backend', event: 'gov_proposal_version_record', outcome: 'failure', error_class: err?.constructor?.name ?? 'Error', context: { message: err?.message, docKey } }));
+  }
+}
 
 export interface DraftProposalDocumentInput {
   deliveryProjectId: string;
@@ -39,7 +54,9 @@ export async function draftProposalDocument(input: DraftProposalDocumentInput): 
 
   const manual = typeof input.manualHtml === 'string' ? input.manualHtml : null;
   if (manual !== null) {
-    return store.saveProposalDocumentDraft(deliveryProjectId, docKey, sanitizeProposalHtml(manual), identityId);
+    const view = await store.saveProposalDocumentDraft(deliveryProjectId, docKey, sanitizeProposalHtml(manual), identityId);
+    await recordNewVersion(deliveryProjectId, docKey, view, 'human', identityId, 'Manual edit');
+    return view;
   }
 
   // AI draft: re-derive to get this document's requirement statements for grounding.
@@ -50,5 +67,7 @@ export async function draftProposalDocument(input: DraftProposalDocumentInput): 
   await store.markProposalDocumentDrafting(deliveryProjectId, docKey).catch(() => { /* advisory state only */ });
   const result = await generateProposalDocumentDraftAI({ docKey, title: existing.title, requirements: derived?.requirements ?? [] });
   if (result.error || !result.html) throw new store.ProposalDocumentError(result.error || 'The AI draft could not be generated.', 'ai_failed');
-  return store.saveProposalDocumentDraft(deliveryProjectId, docKey, result.html, identityId);
+  const view = await store.saveProposalDocumentDraft(deliveryProjectId, docKey, result.html, identityId);
+  await recordNewVersion(deliveryProjectId, docKey, view, 'agent', identityId, 'AI draft');
+  return view;
 }

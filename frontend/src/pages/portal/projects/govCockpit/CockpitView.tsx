@@ -1,9 +1,11 @@
 import React, { useMemo, useState } from 'react';
-import type { StudentGovProjectView, GovProposalDocument, GovCockpitApi } from '../../../../services/govProjectPortalApi';
+import type { StudentGovProjectView, GovProposalDocument, GovCockpitApi, GovReviewApi } from '../../../../services/govProjectPortalApi';
 import { portalGovCockpitApi } from '../../../../services/govProjectPortalApi';
 import { parseDeadline, countdownTo, formatCountdown, dossierDeadlineIso } from '../../../admin/govDeadline';
 import BuildReleases from './BuildReleases';
 import BlueprintView from './BlueprintView';
+import ReviewGates from './ReviewGates';
+import BuildEvidence from './BuildEvidence';
 import ProposalDocuments from './ProposalDocuments';
 import ProposalDocumentDrawer from './ProposalDocumentDrawer';
 import CommitFeed from './CommitFeed';
@@ -19,11 +21,11 @@ import './govCockpit.css';
  * (verified build stories + accepted documents), the agency and the close countdown. The copilot rail is grounded in
  * the same student-safe projection. All data comes from one projection; this only arranges it + holds view state.
  */
-type Tab = 'overview' | 'blueprint' | 'build' | 'proposal' | 'commits' | 'how';
+type Tab = 'overview' | 'blueprint' | 'build' | 'proposal' | 'review' | 'evidence' | 'commits' | 'how';
 
 export default function CockpitView(
-  { view, projectId, onReload, readOnly = false, api = portalGovCockpitApi, onReanalyze, reanalyzing = false }:
-  { view: StudentGovProjectView; projectId: string; onReload: () => void; readOnly?: boolean; api?: GovCockpitApi; onReanalyze?: () => void; reanalyzing?: boolean },
+  { view, projectId, onReload, readOnly = false, api = portalGovCockpitApi, onReanalyze, reanalyzing = false, reviewApi }:
+  { view: StudentGovProjectView; projectId: string; onReload: () => void; readOnly?: boolean; api?: GovCockpitApi; onReanalyze?: () => void; reanalyzing?: boolean; reviewApi?: GovReviewApi },
 ): React.ReactElement {
   // readOnly: an owner/admin viewing an intern's contract from the admin left-nav sees the SAME tabs,
   // but the two interactive surfaces that post to participant-token endpoints are withheld — the
@@ -85,6 +87,8 @@ export default function CockpitView(
         <button className="gck-tab" role="tab" aria-selected={tab === 'blueprint'} onClick={() => setTab('blueprint')}>Blueprint</button>
         <button className="gck-tab" role="tab" aria-selected={tab === 'build'} onClick={() => setTab('build')}>Build</button>
         <button className="gck-tab" role="tab" aria-selected={tab === 'proposal'} onClick={() => setTab('proposal')}>Proposal<span className="n">{docs.length}</span></button>
+        <button className="gck-tab" role="tab" aria-selected={tab === 'review'} onClick={() => setTab('review')}>Review</button>
+        <button className="gck-tab" role="tab" aria-selected={tab === 'evidence'} onClick={() => setTab('evidence')}>Build evidence</button>
         <button className="gck-tab" role="tab" aria-selected={tab === 'commits'} onClick={() => setTab('commits')}>Commit sync<span className="n">{feed.length}</span></button>
         <button className="gck-tab" role="tab" aria-selected={tab === 'how'} onClick={() => setTab('how')}>How it works</button>
       </nav>
@@ -95,6 +99,8 @@ export default function CockpitView(
           {tab === 'blueprint' && <BlueprintView blueprint={view.blueprint} onReanalyze={onReanalyze} reanalyzing={reanalyzing} />}
           {tab === 'build' && <BuildReleases summary={view.buildSummary} />}
           {tab === 'proposal' && <ProposalDocuments docs={docs} onOpen={readOnly ? () => {} : (d) => setOpenDocKey(d.key)} />}
+          {tab === 'review' && <ReviewGates projectId={projectId} docs={docs} reviewApi={reviewApi} />}
+          {tab === 'evidence' && <BuildEvidence projectId={projectId} artifacts={view.buildArtifacts ?? []} docs={docs} reviewApi={reviewApi} onReload={onReload} />}
           {tab === 'commits' && <CommitFeed feed={feed} />}
           {tab === 'how' && <HowItWorks />}
         </div>

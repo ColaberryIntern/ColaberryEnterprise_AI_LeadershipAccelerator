@@ -39,6 +39,8 @@ export interface GovProposalDocumentAttributes {
   file_name: string | null;
   /** The blueprint version that produced this document's shape. */
   blueprint_version: number | null;
+  /** P3: the latest immutable version of this document (gov_proposal_document_versions). Null before any version. */
+  current_version_id: string | null;
   /** The review thread (newest appended last). */
   comments: GovProposalDocumentComment[];
   drafted_at?: Date | null;
@@ -66,6 +68,7 @@ class GovProposalDocument extends Model<GovProposalDocumentAttributes> implement
   declare page_limit: number | null;
   declare file_name: string | null;
   declare blueprint_version: number | null;
+  declare current_version_id: string | null;
   declare comments: GovProposalDocumentComment[];
   declare drafted_at: Date | null;
   declare drafted_by_identity_id: string | null;
@@ -93,6 +96,7 @@ GovProposalDocument.init(
     page_limit: { type: DataTypes.INTEGER, allowNull: true },
     file_name: { type: DataTypes.TEXT, allowNull: true },
     blueprint_version: { type: DataTypes.INTEGER, allowNull: true },
+    current_version_id: { type: DataTypes.UUID, allowNull: true },
     comments: { type: DataTypes.JSONB, allowNull: false, defaultValue: [] },
     drafted_at: { type: DataTypes.DATE, allowNull: true },
     drafted_by_identity_id: { type: DataTypes.UUID, allowNull: true },

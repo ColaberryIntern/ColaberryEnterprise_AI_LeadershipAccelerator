@@ -187,3 +187,7 @@
 .gck-bp-quote{margin:6px 0 0;padding:6px 10px;border-left:3px solid var(--line);color:var(--muted);font-size:12.5px;line-height:1.45;overflow-wrap:anywhere}
 .gck-bp-factors{list-style:none;margin:8px 0 0;padding:0;display:flex;flex-direction:column;gap:4px}
 .gck-bp-factors li{display:flex;justify-content:space-between;gap:12px;font-size:13.5px}
+
+/* P4 Build evidence — demo-url input + per-artifact doc select */
+.gck-input,.gck-select{font:inherit;font-size:13.5px;padding:6px 10px;border:1px solid var(--line);border-radius:8px;background:var(--paper,#fff);color:inherit;max-width:100%}
+.gck-select{min-width:160px}

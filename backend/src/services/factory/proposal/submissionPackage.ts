@@ -22,6 +22,12 @@ export interface SubmissionReadiness {
 // classic non-responsive mistake).
 const CURRENCY_RE = /\$\s?\d[\d,]*(?:\.\d{2})?|\b\d[\d,]{2,}(?:\.\d{2})?\s*(?:usd|dollars)\b/i;
 
+/** PURE: does this text contain a currency amount? Reused by the Proposal Studio P3 `format`/price-leak fatal check
+ *  (a dollar figure in a NON-pricing document is a price leak), so both paths share one definition of "a price". */
+export function containsCurrencyAmount(text: string | null | undefined): boolean {
+  return typeof text === 'string' && CURRENCY_RE.test(text);
+}
+
 /** PURE: the ids of any NON-price response whose authored content contains a currency amount — but only when a
  *  price/cost response exists (i.e. a separate cost volume IS expected). No price volume ⇒ a figure is not a leak. */
 function detectPricingLeak(rows: ResponseSlot[]): string[] {
