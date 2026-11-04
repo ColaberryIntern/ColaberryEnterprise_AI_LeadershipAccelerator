@@ -1,0 +1,723 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<style>:root{color-scheme:light}body{margin:0}[hidden]{display:none!important}</style></head><body>
+<title>Gov Proposal Studio</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Serif:ital,wght@0,400;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: proposal desk. Sticky contract bar; left stage rail (the proposal process); center workspace; right agent rail. Color teams (Pink/Red/Gold/White glove) are the semantic color system. */
+:root{
+  --bg:#eef1f5; --surface:#ffffff; --sunk:#e5e9ef; --line:#d3d9e2; --fg:#172133; --muted:#5d6a7e;
+  --accent:#23408e; --accent-soft:#e2e8f6; --paper:#fdfdfb; --paper-ink:#1d2430;
+  --ok:#1d7a4c; --ok-soft:#dff2e7; --warn:#a35b00; --warn-soft:#fbeed6; --bad:#b4302a; --bad-soft:#f9e1df;
+  --pink:#c43f7c; --pink-soft:#f8e3ed; --red:#b4302a; --red-soft:#f9e1df; --gold:#9a6f00; --gold-soft:#f6ecd0; --glove:#4b5568; --glove-soft:#e8ebf0;
+  --agent:#5a3fb0; --agent-soft:#ece7fa;
+  --sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif; --serif:"IBM Plex Serif",Georgia,"Times New Roman",serif; --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0f1520; --surface:#161e2c; --sunk:#1d2738; --line:#2b3850; --fg:#e3e9f3; --muted:#94a2b8;
+  --accent:#9db6f2; --accent-soft:#1f2d4d; --paper:#1b2230; --paper-ink:#e6e9ef;
+  --ok:#5ccf98; --ok-soft:#163626; --warn:#f0b25a; --warn-soft:#3a2b13; --bad:#ff8f86; --bad-soft:#3d1c1a;
+  --pink:#f08bb9; --pink-soft:#3b1d2c; --red:#ff8f86; --red-soft:#3d1c1a; --gold:#e8c35c; --gold-soft:#372d12; --glove:#b7c0d0; --glove-soft:#252f40;
+  --agent:#bba8f5; --agent-soft:#2a2448; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f1520; --surface:#161e2c; --sunk:#1d2738; --line:#2b3850; --fg:#e3e9f3; --muted:#94a2b8;
+  --accent:#9db6f2; --accent-soft:#1f2d4d; --paper:#1b2230; --paper-ink:#e6e9ef;
+  --ok:#5ccf98; --ok-soft:#163626; --warn:#f0b25a; --warn-soft:#3a2b13; --bad:#ff8f86; --bad-soft:#3d1c1a;
+  --pink:#f08bb9; --pink-soft:#3b1d2c; --red:#ff8f86; --red-soft:#3d1c1a; --gold:#e8c35c; --gold-soft:#372d12; --glove:#b7c0d0; --glove-soft:#252f40;
+  --agent:#bba8f5; --agent-soft:#2a2448; color-scheme:dark}
+*{box-sizing:border-box}
+html,body{background:var(--bg)}
+body{color:var(--fg);font-family:var(--sans);font-size:14px;line-height:1.5;margin:0}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--surface)}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.mono{font-family:var(--mono);font-size:12px}
+.num{font-variant-numeric:tabular-nums}
+.gut{padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+h1,h2,h3,h4{text-wrap:balance;margin:0}
+.eyebrow{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.sample{background:var(--warn-soft);color:var(--warn);font-size:12px;padding-block:6px;text-align:center}
+
+/* contract bar */
+.bar{position:sticky;top:env(safe-area-inset-top,0px);z-index:6;background:var(--surface);border-bottom:1px solid var(--line)}
+.bar-in{display:flex;flex-wrap:wrap;gap:10px 20px;align-items:center;padding-block:10px;max-width:1480px;margin:0 auto}
+.bar h1{font-size:18px;font-weight:700;letter-spacing:-.01em}
+.bar .meta{display:flex;flex-wrap:wrap;gap:6px;margin-left:auto}
+.chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;padding:2px 10px;font-size:12px;color:var(--muted);white-space:nowrap;background:var(--surface)}
+.chip b{color:var(--fg);font-weight:600}
+.meter{display:flex;align-items:center;gap:8px}
+.meter .m{width:120px;height:8px;border-radius:4px;background:var(--sunk);overflow:hidden}
+.meter .m span{display:block;height:100%;background:var(--accent);transition:width .5s}
+
+/* shell */
+.shell{display:grid;grid-template-columns:220px minmax(0,1fr) 340px;gap:16px;max-width:1480px;margin:0 auto;padding-block:16px 48px;align-items:start}
+@media (max-width:1180px){.shell{grid-template-columns:200px minmax(0,1fr)}.agent{grid-column:1/-1}}
+@media (max-width:760px){.shell{grid-template-columns:minmax(0,1fr)}}
+.rail{position:sticky;top:calc(env(safe-area-inset-top,0px) + 66px);display:flex;flex-direction:column;gap:2px}
+@media (max-width:760px){.rail{position:static;flex-direction:row;overflow-x:auto;gap:4px;padding-bottom:4px}}
+.rail .grp{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600;padding:10px 10px 4px}
+@media (max-width:760px){.rail .grp{display:none}}
+.step{display:flex;align-items:center;gap:10px;background:none;border:0;border-radius:6px;padding:7px 10px;text-align:left;color:var(--muted);white-space:nowrap;width:100%}
+@media (max-width:760px){.step{width:auto;border:1px solid var(--line);background:var(--surface)}}
+.step:hover{background:var(--sunk);color:var(--fg)}
+.step[aria-current="page"]{background:var(--surface);color:var(--fg);font-weight:600;box-shadow:inset 3px 0 0 var(--accent)}
+.step .ic{width:20px;height:20px;border-radius:50%;display:grid;place-items:center;font-size:11px;font-weight:700;flex:none;border:1.5px solid var(--line);color:var(--muted);background:var(--surface)}
+.step .ic.done{background:var(--ok);border-color:var(--ok);color:var(--surface)}
+.step .ic.now{border-color:var(--accent);color:var(--accent)}
+.step small{margin-left:auto;font-size:11px;color:var(--muted);font-weight:500}
+.past{font-size:12px;color:var(--muted);padding:2px 10px 8px;display:flex;flex-direction:column;gap:2px}
+@media (max-width:760px){.past{display:none}}
+.past span::before{content:"✓ ";color:var(--ok);font-weight:700}
+
+/* generic */
+.view{display:flex;flex-direction:column;gap:16px;min-width:0}
+.vh{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:flex-end}
+.vh h2{font-size:22px;font-weight:700;letter-spacing:-.015em}
+.vh p{margin:4px 0 0;color:var(--muted);max-width:68ch}
+.vh .act{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:14px 16px;min-width:0}
+.panel h3{font-size:14px;font-weight:600;margin-bottom:8px;display:flex;align-items:center;gap:8px}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+@media (max-width:900px){.grid2,.grid3{grid-template-columns:minmax(0,1fr)}}
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:6px;padding:6px 12px;font-weight:600;font-size:13px;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.btn:hover{border-color:var(--accent)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--surface)}
+.btn.agent{background:var(--agent);border-color:var(--agent);color:var(--surface)}
+.btn.ok{background:var(--ok);border-color:var(--ok);color:var(--surface)}
+.btn:disabled{opacity:.55;cursor:default}
+.btn.sm{padding:3px 9px;font-size:12px}
+.tag{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;border-radius:4px;padding:1px 7px;background:var(--sunk);color:var(--muted);white-space:nowrap}
+.tag.ok{background:var(--ok-soft);color:var(--ok)}.tag.warn{background:var(--warn-soft);color:var(--warn)}.tag.bad{background:var(--bad-soft);color:var(--bad)}
+.tag.agent{background:var(--agent-soft);color:var(--agent)}.tag.acc{background:var(--accent-soft);color:var(--accent)}
+.tag.pink{background:var(--pink-soft);color:var(--pink)}.tag.red{background:var(--red-soft);color:var(--red)}.tag.gold{background:var(--gold-soft);color:var(--gold)}.tag.glove{background:var(--glove-soft);color:var(--glove)}
+.muted{color:var(--muted)}
+.small{font-size:12px}
+.bar-s{height:6px;border-radius:3px;background:var(--sunk);overflow:hidden;min-width:60px}
+.bar-s span{display:block;height:100%;transition:width .5s}
+.tbl-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;min-width:720px}
+th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:middle}
+th{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600;background:var(--sunk)}
+tr:last-child td{border-bottom:0}
+tbody tr.click{cursor:pointer}
+tbody tr.click:hover td{background:var(--accent-soft)}
+.quote{font-family:var(--serif);font-style:italic;font-size:13px;color:var(--fg);border-left:2px solid var(--line);padding-left:10px;margin:4px 0}
+.src{font-family:var(--mono);font-size:11px;color:var(--muted)}
+
+/* overview */
+.pipe{display:flex;gap:4px;overflow-x:auto;padding-bottom:2px}
+.pipe div{flex:1;min-width:96px;padding:8px 10px;border-radius:6px;background:var(--sunk);font-size:12px;color:var(--muted)}
+.pipe div b{display:block;color:var(--fg);font-size:13px}
+.pipe .d{background:var(--ok-soft)}.pipe .d b::before{content:"✓ ";color:var(--ok)}
+.pipe .h{background:var(--accent);color:var(--surface)}.pipe .h b{color:var(--surface)}
+.ring{display:flex;gap:16px;align-items:center}
+.ring svg{flex:none}
+.big{font-size:30px;font-weight:700;letter-spacing:-.02em}
+.next{display:flex;flex-direction:column;gap:8px;margin:0;padding:0;list-style:none}
+.next li{display:flex;gap:10px;align-items:flex-start}
+.next .who{flex:none}
+.mini-docs{display:flex;flex-direction:column;gap:6px}
+.mini-docs .r{display:grid;grid-template-columns:minmax(0,1fr) 90px 36px;gap:10px;align-items:center;font-size:13px}
+
+/* blueprint */
+.log{font-family:var(--mono);font-size:12px;background:var(--sunk);border-radius:6px;padding:10px 12px;max-height:180px;overflow-y:auto;display:flex;flex-direction:column;gap:2px}
+.log .ok{color:var(--ok)}
+.bp-list{display:flex;flex-direction:column;gap:10px;margin:0;padding:0;list-style:none}
+.bp-list li{display:flex;flex-direction:column;gap:2px;padding-bottom:10px;border-bottom:1px dashed var(--line)}
+.bp-list li:last-child{border:0;padding:0}
+.bp-k{display:flex;justify-content:space-between;gap:8px;font-weight:600}
+.weights{display:flex;height:28px;border-radius:6px;overflow:hidden;margin:6px 0 10px}
+.weights div{display:grid;place-items:center;font-size:11px;font-weight:600;color:var(--surface);min-width:0;overflow:hidden;white-space:nowrap}
+
+/* evidence */
+.gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
+.shot{background:var(--surface);border:1px solid var(--line);border-radius:8px;overflow:hidden;display:flex;flex-direction:column}
+.shot .img{aspect-ratio:16/10;max-width:100%;background:var(--sunk);position:relative;padding:8px;display:flex;flex-direction:column;gap:4px}
+.shot .img .tb{height:8px;border-radius:2px;background:var(--line);width:40%}
+.shot .img .ln{height:6px;border-radius:2px;background:var(--line)}
+.shot .img .tiles{display:flex;gap:4px}.shot .img .tiles i{flex:1;height:22px;border-radius:3px;background:var(--surface);border:1px solid var(--line)}
+.shot .img .blk{flex:1;border-radius:3px;background:var(--surface);border:1px solid var(--line);display:grid;place-items:center;font-size:10px;color:var(--muted)}
+.shot .img.miss{display:grid;place-items:center;color:var(--muted);font-size:12px;background:repeating-linear-gradient(45deg,var(--sunk),var(--sunk) 8px,var(--surface) 8px,var(--surface) 16px)}
+.shot .cap{padding:10px 12px;display:flex;flex-direction:column;gap:6px;flex:1}
+.shot .cap b{font-size:13px}
+.shot .row{display:flex;flex-wrap:wrap;gap:4px;align-items:center}
+.shot .foot{margin-top:auto;display:flex;gap:6px;align-items:center;justify-content:space-between}
+
+/* editor */
+.ed{display:grid;grid-template-columns:minmax(0,1fr) 280px;gap:16px;align-items:start}
+@media (max-width:1320px){.ed{grid-template-columns:minmax(0,1fr)}}
+.doc-pick{display:flex;gap:6px;flex-wrap:wrap}
+.paper-wrap{background:var(--sunk);border-radius:8px;padding:20px;overflow-x:auto}
+.paper{background:var(--paper);color:var(--paper-ink);max-width:720px;margin:0 auto;padding:44px 52px;box-shadow:0 1px 3px rgba(0,0,0,.12),0 8px 24px rgba(20,30,50,.08);font-family:var(--serif);font-size:14.5px;line-height:1.65;min-width:0}
+@media (max-width:600px){.paper{padding:24px 20px}.paper-wrap{padding:10px}}
+.paper .run{display:flex;justify-content:space-between;font-family:var(--sans);font-size:10.5px;color:var(--muted);border-bottom:1px solid var(--line);padding-bottom:6px;margin-bottom:22px;gap:8px}
+.paper h3{font-family:var(--serif);font-size:19px;font-weight:600;margin:0 0 4px}
+.paper h4{font-family:var(--sans);font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin:18px 0 6px;font-weight:600}
+.paper p{margin:0 0 12px;max-width:66ch}
+.paper .reqref{font-family:var(--sans);font-size:11px;color:var(--accent);font-weight:600}
+.paper .ph{background:var(--warn-soft);color:var(--warn);font-family:var(--sans);font-size:12.5px;padding:1px 5px;border-radius:3px;font-weight:600}
+.paper .ph.done{background:var(--ok-soft);color:var(--ok)}
+.paper ins{background:var(--ok-soft);text-decoration:none;border-bottom:1px solid var(--ok)}
+.paper del{background:var(--bad-soft);color:var(--bad)}
+.paper figure{margin:16px 0;padding:0}
+.paper figcaption{font-family:var(--sans);font-size:11.5px;color:var(--muted);margin-top:6px}
+.fig{border:1px solid var(--line);border-radius:4px;padding:10px;background:var(--surface);font-family:var(--sans)}
+.fig .row{display:grid;grid-template-columns:120px 90px minmax(0,1fr) 70px;gap:8px;font-size:10.5px;padding:3px 0;border-bottom:1px solid var(--sunk);color:var(--paper-ink)}
+.fig .row.h{font-weight:700;color:var(--muted)}
+.fig-scroll{overflow-x:auto}
+.fig-scroll .fig{min-width:420px}
+.paper .note{font-family:var(--sans);font-size:11.5px;border-radius:4px;padding:6px 8px;margin:-4px 0 12px;display:flex;gap:6px;align-items:flex-start}
+.paper .note.red{background:var(--red-soft);color:var(--red)}
+.paper .note.ok{background:var(--ok-soft);color:var(--ok)}
+.side{display:flex;flex-direction:column;gap:12px}
+.ver{display:flex;flex-direction:column;margin:0;padding:0;list-style:none;max-height:340px;overflow-y:auto}
+.ver li button{width:100%;text-align:left;background:none;border:0;border-left:2px solid var(--line);padding:6px 0 8px 12px;position:relative;display:flex;flex-direction:column;gap:1px}
+.ver li button::before{content:"";position:absolute;left:-6px;top:10px;width:10px;height:10px;border-radius:50%;background:var(--surface);border:2px solid var(--line)}
+.ver li button[aria-pressed="true"]::before{background:var(--accent);border-color:var(--accent)}
+.ver li button[aria-pressed="true"] .vt{color:var(--accent)}
+.ver .vt{font-weight:600;font-size:13px;display:flex;gap:6px;align-items:center}
+.ver .vd{font-size:12px;color:var(--muted)}
+.ver li.new button{animation:pop .6s ease}
+@keyframes pop{from{background:var(--agent-soft)}to{background:transparent}}
+.checks{display:flex;flex-direction:column;gap:8px}
+.ck{display:grid;grid-template-columns:minmax(0,1fr) 36px;gap:4px 8px;align-items:center;font-size:12.5px}
+.ck .bar-s{grid-column:1/-1}
+.ck .sc{text-align:right;font-weight:700}
+.pass-line{display:flex;justify-content:space-between;align-items:baseline;border-top:1px solid var(--line);padding-top:8px;margin-top:4px}
+
+/* gates */
+.gate-cell{display:flex;align-items:center;gap:6px}
+.gate-cell .bar-s{flex:1}
+.lock{color:var(--muted);font-size:12px}
+.teams{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+@media (max-width:1000px){.teams{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:520px){.teams{grid-template-columns:minmax(0,1fr)}}
+.team{border-radius:8px;padding:12px 14px;border:1px solid var(--line);background:var(--surface);display:flex;flex-direction:column;gap:6px}
+.team h3{font-size:14px;margin:0}
+.team ul{margin:0;padding-left:16px;font-size:12.5px;color:var(--muted)}
+.team .who{font-size:12px}
+
+/* package */
+.tree{font-family:var(--mono);font-size:12.5px;display:flex;flex-direction:column;gap:2px}
+.tree .f{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:10px;align-items:center;padding:5px 8px;border-radius:4px}
+.tree .f:nth-child(odd){background:var(--sunk)}
+.tree .f span:first-child{overflow-wrap:anywhere}
+.tree .env{margin-top:10px;border:1.5px dashed var(--gold);border-radius:6px;padding:8px}
+
+/* gaps */
+.gapcols{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+@media (max-width:1000px){.gapcols{grid-template-columns:minmax(0,1fr)}}
+.gapcols ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:8px;font-size:13px}
+.gapcols code,.panel code{font-family:var(--mono);font-size:11.5px;background:var(--sunk);padding:0 4px;border-radius:3px;overflow-wrap:anywhere}
+.phases{display:flex;flex-direction:column;gap:0;margin:0;padding:0;list-style:none;counter-reset:ph}
+.phases li{display:grid;grid-template-columns:36px minmax(0,1fr);gap:10px;padding:10px 0;border-bottom:1px solid var(--line)}
+.phases li:last-child{border:0}
+.phases li::before{counter-increment:ph;content:"P" counter(ph);font-family:var(--mono);font-weight:500;color:var(--accent);font-size:13px;padding-top:1px}
+.phases b{display:block}
+.phases span{color:var(--muted);font-size:13px}
+
+/* agent */
+.agent{position:sticky;top:calc(env(safe-area-inset-top,0px) + 66px);display:flex;flex-direction:column;gap:12px}
+@media (max-width:1180px){.agent{position:static}}
+.ag{background:var(--surface);border:1px solid var(--line);border-radius:8px;display:flex;flex-direction:column;max-height:calc(100vh - 100px);min-height:380px}
+@media (max-width:1180px){.ag{max-height:none}}
+.ag header{display:flex;gap:10px;align-items:center;padding:12px 14px;border-bottom:1px solid var(--line)}
+.ag .av{width:30px;height:30px;border-radius:7px;background:var(--agent-soft);color:var(--agent);display:grid;place-items:center;font-weight:700;font-size:12px}
+.ag header h2{font-size:14px}
+.ag header p{margin:0;font-size:12px;color:var(--muted)}
+.ag .state{margin-left:auto}
+.ag-log{flex:1;overflow-y:auto;padding:12px 14px;display:flex;flex-direction:column;gap:8px;min-height:180px}
+.ev{font-size:12.5px;display:grid;grid-template-columns:14px minmax(0,1fr);gap:8px}
+.ev::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--agent);margin-top:6px}
+.ev.h::before{background:var(--accent)}
+.ev.ok::before{background:var(--ok)}
+.ev .t{color:var(--muted);font-size:11px}
+.ask{border-top:1px solid var(--line);padding:12px 14px;display:flex;flex-direction:column;gap:10px;max-height:48vh;overflow-y:auto}
+@media (max-width:1180px){.ask{max-height:none}}
+.ask h3{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);display:flex;justify-content:space-between}
+.q{background:var(--warn-soft);border-radius:6px;padding:10px;display:flex;flex-direction:column;gap:6px;font-size:12.5px}
+.q b{color:var(--fg)}
+.q .why{color:var(--muted);font-size:11.5px}
+.q .opts{display:flex;gap:6px;flex-wrap:wrap}
+.q input{border:1px solid var(--line);background:var(--surface);border-radius:5px;padding:5px 8px;width:100%;min-width:0}
+.q.done{background:var(--ok-soft)}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));background:var(--fg);color:var(--bg);padding:10px 16px;border-radius:8px;font-size:13px;z-index:30;max-width:calc(100% - 32px);box-shadow:0 6px 20px rgba(0,0,0,.25)}
+.spin{display:inline-block;width:10px;height:10px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:sp .7s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+
+<div class="sample gut">Sample contract with illustrative data (requirements from the TDCJ-OIG build guide). Every button works so you can walk the process.</div>
+<header class="bar">
+  <div class="bar-in gut">
+    <div>
+      <div class="eyebrow">Proposal Studio · Gov contract</div>
+      <h1>TDCJ-OIG Records Management System</h1>
+    </div>
+    <div class="meta">
+      <span class="chip">Stage <b>Proposal production</b></span>
+      <span class="chip">Build <b class="num">92%</b> verified</span>
+      <span class="chip meter">Proposal ready <span class="m"><span id="topBar"></span></span><b class="num" id="topPct">0%</b> / 95%</span>
+    </div>
+  </div>
+</header>
+
+<div class="shell gut">
+  <nav class="rail" aria-label="Proposal process">
+    <div class="grp">Done</div>
+    <div class="past"><span>Snapshot</span><span>Solicitation intake</span><span>Fit</span><span>Bid decision</span><span>Build (11 of 12 stories)</span></div>
+    <div class="grp">Proposal production</div>
+    <button class="step" data-v="overview" id="nav-overview"><span class="ic now">●</span>Where we are</button>
+    <button class="step" data-v="blueprint" id="nav-blueprint"><span class="ic done" id="ic-blueprint">1</span>Blueprint<small>from ZIP</small></button>
+    <button class="step" data-v="documents" id="nav-documents"><span class="ic" id="ic-documents">2</span>Document set<small id="nDocs">11</small></button>
+    <button class="step" data-v="evidence" id="nav-evidence"><span class="ic done">3</span>Build evidence<small>8</small></button>
+    <button class="step" data-v="editor" id="nav-editor"><span class="ic now">4</span>Draft &amp; versions</button>
+    <button class="step" data-v="gates" id="nav-gates"><span class="ic">5</span>Review gates<small>95%</small></button>
+    <button class="step" data-v="package" id="nav-package"><span class="ic">6</span>Package &amp; submit</button>
+    <div class="grp">For you</div>
+    <button class="step" data-v="gaps" id="nav-gaps"><span class="ic">!</span>Gap report</button>
+  </nav>
+
+  <main id="main" style="min-width:0"></main>
+
+  <aside class="agent">
+    <div class="ag">
+      <header>
+        <div class="av">AI</div>
+        <div><h2>Proposal agent</h2><p>Drafts, checks and revises. You approve.</p></div>
+        <span class="state tag agent" id="agState">Idle</span>
+      </header>
+      <div class="ag-log" id="agLog" aria-live="polite"></div>
+      <div class="ask">
+        <h3><span>Needs your answer</span><span class="num" id="qCount">0</span></h3>
+        <div id="questions" style="display:flex;flex-direction:column;gap:8px"></div>
+      </div>
+    </div>
+  </aside>
+</div>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+const $=s=>document.querySelector(s);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+/* ---------- data ---------- */
+const CHECKS=[
+ {k:'cov',n:'Requirement coverage',w:25,team:'pink',d:'Every mapped "shall" is answered and cross-referenced in the compliance matrix'},
+ {k:'eval',n:'Evaluator score',w:25,team:'red',d:'A simulated evaluator scores the draft against each Section M factor and its weight'},
+ {k:'proof',n:'Proof & evidence',w:15,team:'red',d:'Each claim is backed by a build artifact, reference, or company record'},
+ {k:'fact',n:'Fact integrity',w:15,team:'red',d:'No invented facts; every placeholder is resolved from a real source'},
+ {k:'fmt',n:'Format & instructions',w:10,team:'glove',d:'Page limit, font, section order, headings and file name follow Section L'},
+ {k:'clar',n:'Clarity & win themes',w:10,team:'red',d:'Customer-focused, themes carried through, readable at grade 10–12'},
+];
+const TYPES={narrative:['Narrative','acc','Agent drafts'],form:['Form','glove','Fill & sign'],build:['From build','agent','Assembled from artifacts'],generated:['Generated','ok','Built from the blueprint'],pricing:['Pricing','gold','Admin only']};
+const DOCS=[
+ {k:'cover',t:'Cover Letter / Transmittal',type:'narrative',src:'RFP §4.1',limit:2,pages:1,reqs:3,ver:3,s:{cov:100,eval:96,proof:95,fact:90,fmt:100,clar:97},gate:'gold'},
+ {k:'exec',t:'Execution of Offer (signed)',type:'form',src:'Attachment D',reqs:1,ver:1,s:{cov:100,eval:100,proof:100,fact:100,fmt:70,clar:100},gate:'gold',sign:'Waiting on signature'},
+ {k:'tech',t:'Technical Proposal',type:'narrative',src:'RFP §5.2',limit:30,pages:31,reqs:38,ver:6,s:{cov:94,eval:84,proof:88,fact:80,fmt:82,clar:90},gate:'red'},
+ {k:'demo',t:'Pilot Demonstration Exhibit',type:'build',src:'Our addition (allowed by §5.2.6)',limit:8,pages:6,reqs:12,ver:2,s:{cov:92,eval:94,proof:98,fact:95,fmt:96,clar:93},gate:'red'},
+ {k:'past',t:'Past Performance & References',type:'narrative',src:'RFP §5.3',limit:10,pages:4,reqs:4,ver:2,s:{cov:75,eval:62,proof:50,fact:40,fmt:95,clar:84},gate:'pink'},
+ {k:'staff',t:'Key Personnel & Resumes',type:'narrative',src:'RFP §5.4',limit:12,pages:7,reqs:5,ver:2,s:{cov:80,eval:70,proof:65,fact:55,fmt:92,clar:86},gate:'pink'},
+ {k:'hub',t:'HUB Subcontracting Plan',type:'form',src:'Texas HSP form · pass/fail',reqs:2,ver:1,s:{cov:60,eval:80,proof:70,fact:70,fmt:100,clar:90},gate:'pink'},
+ {k:'certs',t:'State Certifications & Affirmations',type:'form',src:'Attachment E',reqs:6,ver:1,s:{cov:100,eval:100,proof:100,fact:100,fmt:70,clar:100},gate:'glove',sign:'Waiting on signature'},
+ {k:'addenda',t:'Addenda Acknowledgment',type:'form',src:'Addenda 1–2',reqs:2,ver:1,s:{cov:100,eval:100,proof:100,fact:100,fmt:100,clar:100},gate:'glove'},
+ {k:'matrix',t:'Compliance Matrix',type:'generated',src:'Our addition',reqs:61,ver:9,s:{cov:97,eval:98,proof:100,fact:100,fmt:100,clar:96},gate:'red'},
+ {k:'price',t:'Price Proposal (separate sealed file)',type:'pricing',src:'Attachment B · Excel, live formulas',reqs:3,ver:2,admin:true,s:{cov:100,eval:100,proof:100,fact:100,fmt:100,clar:100},gate:'gold'},
+];
+const docBy=k=>DOCS.find(d=>d.k===k);
+const score=d=>Math.round(CHECKS.reduce((a,c)=>a+d.s[c.k]*c.w,0)/100);
+const passes=d=>!d.sign&&score(d)>=95&&CHECKS.every(c=>d.s[c.k]>=85);
+const colr=v=>v>=95?'var(--ok)':v>=85?'var(--accent)':v>=70?'var(--warn)':'var(--bad)';
+
+let VERS=[
+ {v:1,by:'Agent',when:'Oct 26',what:'First draft from the blueprint outline and 38 mapped requirements',sc:62},
+ {v:2,by:'Agent',when:'Oct 27',what:'Inserted 6 build screenshots as figures, each tied to its acceptance criteria',sc:71},
+ {v:3,by:'Dhee',when:'Oct 28',what:'Rewrote the implementation approach; answered 2 gaps',sc:76},
+ {v:4,by:'Agent',when:'Oct 29',what:'Pink team fixes: covered 4 missed requirements, reordered to match RFP §5.2',sc:82},
+ {v:5,by:'Agent',when:'Oct 30',what:'Red team pass: added proof to Audit Logging and Reporting sections',sc:85},
+ {v:6,by:'Agent',when:'Nov 2',what:'Tightened sections 2 and 4; still 1 page over the limit',sc:88},
+];
+let selVer=6, selDoc='tech', analyzed=false, running=false;
+
+const QS=[
+ {id:'q1',doc:['cover','tech'],ask:'How many years has Colaberry delivered data and AI projects?',why:'Used in the cover letter and Technical §1. The agent will not guess a number.',kind:'text',ph:'e.g. 12'},
+ {id:'q2',doc:['past'],ask:'Add 3 references: client, contact, phone, contract value, dates.',why:'RFP §5.3 requires three. None are in the company library yet.',kind:'pick',opts:['Pull from library','I\'ll paste them']},
+ {id:'q3',doc:['hub'],ask:'HUB plan approach: subcontract part of the work, or self-perform?',why:'Either way the plan is pass/fail. Subcontracting needs outreach to 3 HUBs and 2 trade orgs, 7 working days before the due date.',kind:'pick',opts:['Self-perform','Subcontract']},
+ {id:'q4',doc:['staff'],ask:'Confirm the key personnel for the project manager and lead engineer roles.',why:'Resumes are pulled from the staff library once you confirm who is proposed.',kind:'pick',opts:['Confirm suggested','Change']},
+];
+let answered={};
+
+/* ---------- agent log ---------- */
+let LOG=[
+ {c:'h',t:'Oct 25',m:'Build marked complete: 11 of 12 stories verified from commits.'},
+ {c:'',t:'Oct 26',m:'Re-read the solicitation ZIP and built the proposal blueprint.'},
+ {c:'',t:'Nov 2',m:'Technical Proposal v6 scored 88. Below 95: format (1 page over) and fact integrity (3 open placeholders).'},
+];
+function renderLog(){$('#agLog').innerHTML=LOG.map(l=>`<div class="ev ${l.c}"><div><div class="t">${l.t}</div>${l.m}</div></div>`).join('');$('#agLog').scrollTop=1e6}
+function log(m,c=''){LOG.push({c,t:'Now',m});renderLog()}
+function setState(s){$('#agState').textContent=s}
+
+function renderQs(){
+  const open=QS.filter(q=>!answered[q.id]);
+  $('#qCount').textContent=open.length;
+  $('#questions').innerHTML=QS.map(q=>{
+    if(answered[q.id]) return `<div class="q done"><b>✓ ${esc(q.ask)}</b><span class="why">${esc(answered[q.id])}</span></div>`;
+    const ctl=q.kind==='text'?`<div style="display:flex;gap:6px"><input id="in-${q.id}" placeholder="${q.ph}" aria-label="Answer"><button class="btn sm primary" data-ans="${q.id}">Save</button></div>`:`<div class="opts">${q.opts.map(o=>`<button class="btn sm" data-ans="${q.id}" data-o="${esc(o)}">${esc(o)}</button>`).join('')}</div>`;
+    return `<div class="q"><b>${esc(q.ask)}</b><span class="why">${esc(q.why)}</span>${ctl}</div>`;
+  }).join('');
+  document.querySelectorAll('[data-ans]').forEach(b=>b.onclick=()=>{
+    const q=QS.find(x=>x.id===b.dataset.ans);
+    let a=b.dataset.o; if(!a){const v=$('#in-'+q.id).value.trim(); if(!v){toast('Type an answer first.');return} a=v+' (saved to company library)';}
+    answered[q.id]=a;
+    q.doc.forEach(k=>{const d=docBy(k);d.s.fact=Math.min(100,d.s.fact+(k==='tech'?6:22));d.s.proof=Math.min(100,d.s.proof+(k==='tech'?2:20));d.s.cov=Math.min(100,d.s.cov+(k==='tech'?0:14));d.s.eval=Math.min(100,d.s.eval+(k==='tech'?1:16))});
+    log(`Answer saved. Re-scored ${q.doc.map(k=>docBy(k).t).join(', ')}.`,'h');
+    renderQs(); render(); toast('Saved. The agent will use it in the next revision.');
+  });
+}
+
+/* ---------- views ---------- */
+const V={};
+function pct(){const ds=DOCS.filter(d=>!d.admin);return Math.round(ds.reduce((a,d)=>a+score(d),0)/ds.length)}
+function bar(v){return `<div class="bar-s"><span style="width:${v}%;background:${colr(v)}"></span></div>`}
+function teamTag(g){return {pink:'<span class="tag pink">Pink</span>',red:'<span class="tag red">Red</span>',gold:'<span class="tag gold">Gold</span>',glove:'<span class="tag glove">White glove</span>'}[g]}
+
+V.overview=()=>{
+  const p=pct(), ready=DOCS.filter(passes).length;
+  const r=34,c=2*Math.PI*r;
+  return `<div class="view">
+  <div class="vh"><div><h2>Where we are</h2><p>Planning and the pilot build are done. The work now is turning the solicitation, the build and the company record into a submittable proposal, with every document checked against the requirements until it scores 95 or better.</p></div></div>
+  <div class="pipe" aria-label="Pursuit stages">
+    <div class="d"><b>Snapshot</b>advisory read</div><div class="d"><b>Solicitation</b>61 requirements</div><div class="d"><b>Fit</b>approved</div><div class="d"><b>Decide</b>bid approved</div><div class="d"><b>Build</b>11 / 12 verified</div><div class="h"><b>Proposal</b>you are here</div><div><b>Submit</b>export + record</div><div><b>Outcome</b>win / loss</div>
+  </div>
+  <div class="grid2">
+    <div class="panel">
+      <h3>Proposal readiness</h3>
+      <div class="ring">
+        <svg width="84" height="84" viewBox="0 0 84 84" aria-hidden="true"><circle cx="42" cy="42" r="${r}" fill="none" stroke="var(--sunk)" stroke-width="9"/><circle cx="42" cy="42" r="${r}" fill="none" stroke="${colr(p)}" stroke-width="9" stroke-linecap="round" stroke-dasharray="${c*p/100} ${c}" transform="rotate(-90 42 42)"/></svg>
+        <div><div class="big num">${p}%</div><div class="muted small">target 95% on every document · ${ready} of ${DOCS.filter(d=>!d.admin).length} documents pass</div></div>
+      </div>
+      <div class="mini-docs" style="margin-top:14px">${DOCS.filter(d=>!d.admin).map(d=>`<div class="r"><span>${d.t}</span>${bar(score(d))}<b class="num" style="text-align:right">${score(d)}</b></div>`).join('')}</div>
+    </div>
+    <div class="panel">
+      <h3>Next moves</h3>
+      <ul class="next">
+        <li><span class="who tag warn">You</span><span>Answer ${QS.filter(q=>!answered[q.id]).length} questions in the agent panel. They unblock Past Performance, Key Personnel, and the HUB plan.</span></li>
+        <li><span class="who tag agent">Agent</span><span>Run a review cycle on the Technical Proposal. It is 1 page over the 30-page limit, with 3 placeholders still open.</span></li>
+        <li><span class="who tag warn">You</span><span>Decide SSO (OIG.004): finish the build, or describe it without a screenshot. Covered in Build evidence.</span></li>
+        <li><span class="who tag acc">Signer</span><span>Sign the Execution of Offer and the State Certifications.</span></li>
+        <li><span class="who tag gold">Admin</span><span>Finish the sealed Price Proposal. Interns never see it.</span></li>
+      </ul>
+      <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap"><button class="btn agent" data-go="editor">Open Technical Proposal</button><button class="btn" data-go="gaps">See the gap report</button></div>
+    </div>
+  </div>
+  <div class="panel">
+    <h3>How a document gets to 95%</h3>
+    <div class="grid3 small">
+      <div><span class="tag acc">1 · Draft</span><p style="margin:6px 0 0">The agent drafts from the blueprint: requirements, evaluation weights, Section L format rules, build artifacts, and the company library. Missing facts become questions, not guesses.</p></div>
+      <div><span class="tag red">2 · Check</span><p style="margin:6px 0 0">Six checks score every version: coverage, evaluator score, proof, fact integrity, format, and clarity. Each one maps to a Shipley color team.</p></div>
+      <div><span class="tag ok">3 · Revise or approve</span><p style="margin:6px 0 0">Below 95, the agent writes a new version that fixes what failed. At 95 or above, a person approves the gate. Every version is kept with its scores and a diff.</p></div>
+    </div>
+  </div>
+  </div>`;
+};
+
+V.blueprint=()=>{
+  const files=['RFP_696-OIG-26-001.pdf · 64 pages','Attachment A — Technical Requirements.xlsx','Attachment B — Pricing Schedule.xlsx','Attachment C — Sample Contract.docx','Attachment D — Execution of Offer.pdf','Attachment E — Certifications.pdf','HUB Subcontracting Plan form.pdf','Addendum 1.pdf','Addendum 2 — Q&A.pdf'];
+  return `<div class="view">
+  <div class="vh"><div><h2>Proposal blueprint</h2><p>The agent re-reads the stored solicitation ZIP and writes the rules this proposal has to follow. Each rule quotes the source text and cites its file and page, so you can check it.</p></div>
+  <div class="act"><button class="btn agent" id="reanalyze">${analyzed?'Re-analyze again':'Re-analyze ZIP'}</button></div></div>
+  <div class="panel"><h3>Solicitation package <span class="tag ok">stored · sha256 9f2c…a41</span></h3>
+    <div class="log" id="zipLog">${files.map(f=>`<div><span class="ok">✓</span> ${f}</div>`).join('')}<div class="ok">61 requirements · 4 evaluation factors · 9 submission rules · 11 documents</div></div>
+  </div>
+  <div class="grid2">
+    <div class="panel"><h3>How it is scored <span class="tag">Section M</span></h3>
+      <div class="weights"><div style="flex:35;background:var(--accent)">Technical 35</div><div style="flex:20;background:var(--agent)">Work plan 20</div><div style="flex:15;background:var(--pink)">Experience 15</div><div style="flex:30;background:var(--gold)">Cost 30</div></div>
+      <div class="quote">"Responses will be scored as follows: Technical Approach and Functionality (35), Work Plan and Schedule (20), Qualifications and Experience (15), Cost (30). Cost points = (lowest cost ÷ respondent's cost) × 30."</div><div class="src">RFP p.38 §6.2</div>
+      <p class="small muted" style="margin:10px 0 0">The agent spends drafting effort by weight. The evaluators in the Red team score against these factors. The HUB plan is pass/fail: missing it makes the response nonresponsive, but it earns no points.</p>
+    </div>
+    <div class="panel"><h3>Submission rules <span class="tag">Section L</span></h3>
+      <ul class="bp-list">
+        <li><div class="bp-k">Technical Proposal: 30 pages max <span class="tag bad">elimination risk</span></div><div class="quote">"Technical responses exceeding thirty (30) pages will not be evaluated beyond page thirty."</div><div class="src">RFP p.31 §5.2.1</div></li>
+        <li><div class="bp-k">11-pt minimum, 8.5×11, searchable PDF</div><div class="quote">"…in a font no smaller than 11 point on 8.5 x 11 inch pages, submitted as searchable PDF."</div><div class="src">RFP p.30 §5.1</div></li>
+        <li><div class="bp-k">Price in a separate file <span class="tag gold">admin only</span></div><div class="quote">"Cost proposals shall be submitted as a separate file and shall not appear in any other part of the response."</div><div class="src">RFP p.33 §5.6</div></li>
+        <li><div class="bp-k">Redacted public copy required</div><div class="quote">"Respondent shall submit one redacted copy suitable for public release."</div><div class="src">RFP p.30 §5.1.4</div></li>
+        <li><div class="bp-k">Offer valid 120 days</div><div class="quote">"Offers shall remain valid for one hundred twenty (120) days."</div><div class="src">Attachment D p.1</div></li>
+        <li><div class="bp-k">Section order must follow §5.2.1–5.2.7</div><div class="src">RFP p.31</div></li>
+      </ul>
+    </div>
+  </div>
+  <div class="panel"><h3>Texas forms rules <span class="tag">applied to this contract</span></h3>
+    <div class="tbl-wrap" style="border:0"><table style="min-width:560px">
+      <thead><tr><th>Form</th><th>Trigger</th><th>This contract</th><th>Miss it</th></tr></thead>
+      <tbody>
+        <tr><td><b>HUB Subcontracting Plan</b></td><td class="small">State agency, value $100k or more, subcontracting probable (Gov't Code 2161.252)</td><td><span class="tag warn">Required</span><div class="small muted">Good-faith outreach: 3 HUBs + 2 trade orgs, 7 working days before due date</div></td><td><span class="tag bad">fatal</span></td></tr>
+        <tr><td><b>Execution of Offer</b></td><td class="small">Named in Attachment D</td><td><span class="tag warn">Required · signature</span></td><td><span class="tag bad">fatal</span></td></tr>
+        <tr><td><b>No-boycott certifications</b></td><td class="small">Israel, energy, firearms (Gov't Code 808, 809, 2274)</td><td><span class="tag warn">Required</span><div class="small muted">Inside Attachment E</div></td><td><span class="tag bad">fatal</span></td></tr>
+        <tr><td><b>TX-RAMP</b></td><td class="small">Cloud software for a state agency</td><td><span class="tag warn">Required</span><div class="small muted">Certification status goes in Technical §4</div></td><td><span class="tag warn">curable</span></td></tr>
+        <tr><td><b>Form 1295</b></td><td class="small">Governing-body vote or value of $1M or more</td><td><span class="tag">At award, not now</span><div class="small muted">Filed with the signed contract</div></td><td><span class="tag">—</span></td></tr>
+        <tr><td><b>Conflict of Interest (CIQ)</b></td><td class="small">Local government buyer only</td><td><span class="tag ok">Not required</span><div class="small muted">TDCJ is a state agency</div></td><td><span class="tag">—</span></td></tr>
+      </tbody></table></div>
+    <p class="small muted" style="margin:8px 0 0">The same rules switch on for other buyers. Harris County turns on the CIQ and asks for Form 1295 at submission. A UT campus turns on its own Execution of Offer.</p>
+  </div>
+  <div class="panel"><h3>Required documents</h3>
+    <p class="small muted" style="margin:0 0 8px">Named by the solicitation, plus Texas standard forms and two of our own additions that help the score. Click a document to see its rules.</p>
+    <div style="display:flex;flex-wrap:wrap;gap:6px">${DOCS.map(d=>`<span class="tag ${TYPES[d.type][1]}">${d.t}</span>`).join('')}</div>
+  </div>
+  </div>`;
+};
+
+V.documents=()=>`<div class="view">
+  <div class="vh"><div><h2>Document set</h2><p>The deliverables for this contract, shaped by its blueprint. Each has a type that sets how it is produced, a page limit, the requirements it must cover, and a current score.</p></div>
+  <div class="act"><button class="btn" id="addDoc">Add from library</button></div></div>
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>Document</th><th>Type</th><th>Source</th><th class="num">Pages</th><th class="num">Reqs</th><th>Ver</th><th>Gate</th><th style="width:150px">Score</th></tr></thead>
+    <tbody>${DOCS.map(d=>{const sc=score(d);return `<tr class="click" data-doc="${d.k}"><td><b>${d.t}</b>${d.sign?`<div class="small" style="color:var(--warn)">${d.sign} · click to record the signed copy</div>`:''}${d.admin?'<div class="small muted">Hidden from interns</div>':''}</td><td><span class="tag ${TYPES[d.type][1]}">${TYPES[d.type][0]}</span><div class="small muted">${TYPES[d.type][2]}</div></td><td class="small">${d.src}</td><td class="num">${d.limit?`<span style="color:${d.pages>d.limit?'var(--bad)':'inherit'}">${d.pages}/${d.limit}</span>`:'—'}</td><td class="num">${d.reqs}</td><td class="mono">v${d.k==='tech'?VERS.length:d.ver}</td><td>${passes(d)?'<span class="tag ok">Passed</span>':teamTag(d.gate)}</td><td><div class="gate-cell">${bar(sc)}<b class="num">${sc}</b></div></td></tr>`}).join('')}</tbody>
+  </table></div>
+  <div class="grid3">
+    ${Object.entries(TYPES).slice(0,4).map(([k,v])=>`<div class="panel small"><span class="tag ${v[1]}">${v[0]}</span><p style="margin:6px 0 0" class="muted">${{narrative:'The agent writes it from the blueprint and the company library. It goes through every check and the color-team gates.',form:'The agent pre-fills it from company records. A person checks and signs. Scored on completeness and signature.',build:'Assembled from verified build stories, screenshots and the demo URL. Proves the requirements with working software.',generated:'Generated from the blueprint and kept in sync automatically, like the compliance matrix and the page-limit report.'}[k]}</p></div>`).join('')}
+  </div>
+</div>`;
+
+const SHOTS=[
+ {k:'OIG.001',t:'Case dashboard',ac:'AC-1-1, AC-1-2',used:'Technical §3.1 · Exhibit p.2',kind:'tiles'},
+ {k:'OIG.002',t:'Immutable audit log',ac:'AC-2-1, AC-2-2',used:'Technical §3.2 (Figure 3)',kind:'table'},
+ {k:'OIG.003',t:'MFA code entry',ac:'AC-3-1, AC-3-2',used:'Technical §4.1',kind:'form'},
+ {k:'OIG.005',t:'Role permissions matrix',ac:'AC-5-1, AC-5-2',used:'Technical §4.2',kind:'table'},
+ {k:'OIG.006',t:'Evidence chain of custody',ac:'Use case 2',used:'Exhibit p.3',kind:'table'},
+ {k:'OIG.008',t:'Custom report export',ac:'AC-7-1, AC-7-2',used:'Technical §3.4',kind:'tiles'},
+ {k:'OIG.009',t:'Background job status',ac:'AC-11-1, AC-11-2',used:'Not used yet',kind:'form'},
+ {k:'OIG.004',t:'SSO sign-in',ac:'AC-4-1, AC-4-2',used:'—',miss:true},
+];
+function shotImg(s){
+  if(s.miss) return `<div class="img miss">Not verified yet. No capture.</div>`;
+  if(s.kind==='tiles') return `<div class="img"><div class="tb"></div><div class="tiles"><i></i><i></i><i></i></div><div class="blk">chart</div></div>`;
+  if(s.kind==='form') return `<div class="img" style="align-items:center;justify-content:center"><div class="blk" style="flex:none;width:60%;height:70%">••••••</div></div>`;
+  return `<div class="img"><div class="tb"></div>${'<div class="ln"></div>'.repeat(6)}</div>`;
+}
+V.evidence=()=>`<div class="view">
+  <div class="vh"><div><h2>Build evidence</h2><p>When a story is verified from its commit, the system opens the demo URL in a headless browser, captures the screen that proves it, and files the capture against that story's requirements. The agent puts these into documents as numbered figures with traceable captions.</p></div>
+  <div class="act"><button class="btn" id="recap">Re-capture all</button></div></div>
+  <div class="grid3">
+    <div class="panel"><div class="eyebrow">Build completion</div><div class="big num">11 / 12</div><div class="small muted">stories verified from commits</div>${bar(92)}</div>
+    <div class="panel"><div class="eyebrow">Demo URL</div><div class="mono" style="margin-top:6px;overflow-wrap:anywhere">oig-pilot.demo.colaberry.ai</div><div class="small muted">seeded with 50 sample cases · no real PII</div></div>
+    <div class="panel"><div class="eyebrow">Artifacts in documents</div><div class="big num">6 of 7</div><div class="small muted">captures used as figures</div></div>
+  </div>
+  <div class="gallery">${SHOTS.map(s=>`<div class="shot">${shotImg(s)}<div class="cap"><div class="row"><span class="mono" style="color:var(--accent)">${s.k}</span>${s.miss?'<span class="tag warn">Story open</span>':'<span class="tag ok">Verified</span>'}</div><b>${s.t}</b><span class="small muted">Proves ${s.ac}</span><div class="foot"><span class="small">${s.used}</span>${s.miss?`<button class="btn sm" data-sso="1">Decide</button>`:`<button class="btn sm" data-ins="${s.k}">Insert</button>`}</div></div></div>`).join('')}</div>
+</div>`;
+
+function paper(){
+  const v=selVer, a1=answered.q1;
+  const over=v<=6;
+  const diff=v>=7;
+  return `<div class="paper">
+    <div class="run"><span>Colaberry · Response to RFP 696-OIG-26-001</span><span>Technical Proposal · v${v}</span><span>Page 14 of ${v>=7?30:31}</span></div>
+    <h3>3.2 Audit Logging and Chain of Custody</h3>
+    <div class="reqref">Responds to RFP §5.2.3 · AC-2-1 · AC-2-2 · Evaluation factor: Technical Approach (35)</div>
+    <p style="font-weight:600;margin-top:12px">Every action in the system leaves a record no one can alter, so OIG can show exactly who touched a case and when, and it already works in our pilot.</p>
+    <h4>What TDCJ-OIG needs</h4>
+    <p>Investigators and compliance officers need to show, for any case, who touched a record, what changed, and when. The record has to stand up in an internal review or a court proceeding.</p>
+    <h4>How our solution does it</h4>
+    <p>Every action a user takes is written to an append-only audit log with the user ID, the action type, and a timestamp. ${diff?'<ins>No one can edit or delete an entry, administrators included, so the log can be produced as a record of fact.</ins> ':''}Entries cannot be edited or deleted through the application or the API. Authorized compliance officers retrieve them through a read-only endpoint and can export them for review.</p>
+    ${v===5||v===6?'<div class="note red">Red team: claim needs proof. Tie the claim to the pilot figure and state the benefit to the investigator.</div>':''}
+    <figure>
+      <div class="fig-scroll"><div class="fig">
+        <div class="row h"><span>Timestamp</span><span>User</span><span>Action</span><span>Case</span></div>
+        <div class="row"><span>2026-10-23 09:14:02</span><span>inv.alvarez</span><span>evidence.upload · photo_0412.jpg</span><span>C-1042</span></div>
+        <div class="row"><span>2026-10-23 09:15:40</span><span>an.chen</span><span>custody.transfer → Forensics Lab</span><span>C-1042</span></div>
+        <div class="row"><span>2026-10-23 10:02:11</span><span>co.reyes</span><span>audit.export · CSV</span><span>C-1042</span></div>
+      </div></div>
+      <figcaption>Figure 3. Audit log in the Colaberry pilot, captured automatically from the verified build on Oct 23 (story OIG.002, commit 7c0e5d1). Sample data.</figcaption>
+    </figure>
+    <h4>Why it matters</h4>
+    <p>Because the pilot already runs this feature on sample data, evaluators can see it working today${diff?'<ins> at the demo URL in Exhibit A</ins>':''}. Colaberry has delivered data and AI systems for ${a1?`<span class="ph done">${esc(a1.split(' (')[0])}</span>`:'<span class="ph">[NEEDS ANSWER: years delivering data/AI projects]</span>'} years, ${over?'and our team has deep experience building secure, compliant, scalable, robust and modern solutions for a wide variety of public-sector agencies across many jurisdictions.':'<del>and our team has deep experience building secure, compliant, scalable, robust and modern solutions for a wide variety of public-sector agencies across many jurisdictions.</del> <ins>and the references in Section 5.3 describe that work.</ins>'}</p>
+    ${v>=7?'<div class="note ok">Fixed in this version: removed an unsupported claim, linked to the references, cut 1 page to meet the 30-page limit.</div>':''}
+  </div>`;
+}
+function verChecks(){
+  const d=docBy('tech');
+  return CHECKS.map(c=>`<div class="ck"><span>${c.n}</span><b class="sc num" style="color:${colr(d.s[c.k])}">${d.s[c.k]}</b>${bar(d.s[c.k])}</div>`).join('')+`<div class="pass-line"><span class="small muted">Weighted score · pass at 95, no check under 85</span><b class="num big" style="font-size:22px;color:${colr(score(d))}">${score(d)}</b></div>`;
+}
+V.editor=()=>`<div class="view">
+  <div class="vh"><div><h2>Draft &amp; versions</h2><p>One working copy per document. Each agent pass or human edit saves a new version with its check scores, so you can compare versions or roll back.</p></div>
+  <div class="act"><button class="btn agent" id="runCycle" ${running?'disabled':''}>${running?'<span class="spin"></span> Running':'Run review cycle'}</button><button class="btn" id="editBtn">Edit</button></div></div>
+  <div class="doc-pick">${DOCS.filter(d=>d.type==='narrative'||d.type==='build').map(d=>`<button class="btn sm" data-pick="${d.k}" ${d.k===selDoc?'style="border-color:var(--accent);color:var(--accent)"':''}>${d.t}</button>`).join('')}</div>
+  <div class="ed">
+    <div class="paper-wrap">${selDoc==='tech'?paper():`<div class="paper"><div class="run"><span>Colaberry</span><span>${docBy(selDoc).t}</span><span>v${docBy(selDoc).ver}</span></div><h3>${docBy(selDoc).t}</h3><p class="muted" style="font-family:var(--sans);font-size:13px">In the full build this opens the document's working copy. The sample is set up on the Technical Proposal.</p><button class="btn sm" data-pick="tech">Open Technical Proposal</button></div>`}</div>
+    <div class="side">
+      <div class="panel"><h3>Section plan · §3.2</h3><dl class="small" style="margin:0;display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 10px"><dt class="muted">Hot button</dt><dd style="margin:0">Records that hold up in review or court</dd><dt class="muted">Feature</dt><dd style="margin:0">Append-only audit log</dd><dt class="muted">Benefit</dt><dd style="margin:0">Any action can be traced in seconds</dd><dt class="muted">Proof</dt><dd style="margin:0">Figure 3, OIG.002 capture</dd><dt class="muted">Discriminator</dt><dd style="margin:0">Working pilot, not a promise</dd></dl></div>
+      <div class="panel"><h3>Checks · v${selVer}</h3><div class="checks">${verChecks()}</div></div>
+      <div class="panel"><h3>Version history</h3><ul class="ver" id="verList">${VERS.slice().reverse().map(x=>`<li class="${x.isNew?'new':''}"><button aria-pressed="${x.v===selVer}" data-ver="${x.v}"><span class="vt">v${x.v} <span class="tag ${x.by==='Agent'?'agent':'acc'}">${x.by}</span><span class="num" style="margin-left:auto;color:${colr(x.sc)}">${x.sc}</span></span><span class="vd">${x.when} · ${x.what}</span></button></li>`).join('')}</ul></div>
+    </div>
+  </div>
+</div>`;
+
+V.gates=()=>`<div class="view">
+  <div class="vh"><div><h2>Review gates</h2><p>This is the Shipley color-team process with the agent doing the reading. Each gate passes when its checks score 95 or better. A person signs off at Gold before anything is packaged.</p></div></div>
+  <div class="teams">
+    <div class="team" style="border-top:3px solid var(--pink)"><h3>Pink team</h3><span class="who muted">Agent checks · reviewer confirms</span><ul><li>Outline follows the RFP section order</li><li>Every requirement is mapped and answered</li><li>Win themes are in place</li></ul></div>
+    <div class="team" style="border-top:3px solid var(--red)"><h3>Red team</h3><span class="who muted">3 independent AI evaluators</span><ul><li>Scoresheet built from Section M weights</li><li>Disagreement of 2+ levels is flagged for a person</li><li>Claims have proof</li><li>No invented facts</li><li>Clear and customer-focused</li></ul></div>
+    <div class="team" style="border-top:3px solid var(--gold)"><h3>Gold team</h3><span class="who muted">Executive approval (a person)</span><ul><li>Bid strategy and price agree</li><li>Commitments are ones we can keep</li><li>Signers are confirmed</li></ul></div>
+    <div class="team" style="border-top:3px solid var(--glove)"><h3>White glove</h3><span class="who muted">Agent checks the package</span><ul><li>Page limits, fonts, file names</li><li>Signatures and addenda present</li><li>Price only in its sealed file</li><li>Redacted copy built</li></ul></div>
+  </div>
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>Document</th>${CHECKS.map(c=>`<th>${c.n}<div style="text-transform:none;letter-spacing:0;font-weight:500">${teamTag(c.team)} · ${c.w}%</div></th>`).join('')}<th>Result</th></tr></thead>
+    <tbody>${DOCS.filter(d=>!d.admin).map(d=>`<tr class="click" data-doc="${d.k}"><td><b>${d.t}</b></td>${CHECKS.map(c=>`<td><div class="gate-cell">${bar(d.s[c.k])}<span class="num small" style="color:${colr(d.s[c.k])};font-weight:600">${d.s[c.k]}</span></div></td>`).join('')}<td>${passes(d)?'<span class="tag ok">Passed '+score(d)+'</span>':`<span class="tag warn">${score(d)} · ${teamTag(d.gate).replace(/<[^>]+>/g,'')}</span>`}</td></tr>`).join('')}</tbody>
+  </table></div>
+  <div class="panel small"><h3>Gates folded for a small bid</h3><p class="muted" style="margin:0">Blue team (the annotated outline) runs inside Pink, before any drafting. Green team (price matches the narrative) runs with Gold, admin only. Red is never merged into another gate.</p></div>
+  <div class="panel small"><h3>What "95% approval" means</h3><p class="muted" style="margin:0">A document passes when its weighted score is 95 or higher and no single check is below 85. That way one strong area can't hide a gap that gets the bid thrown out. Elimination risks such as page limits, missing signatures, or price outside its sealed file fail the document outright, whatever the score. The checks set the bar. A person still approves each gate.</p></div>
+</div>`;
+
+V.package=()=>{
+  const all=DOCS.filter(d=>!d.admin).every(passes);
+  const files=[['01_Cover_Letter.pdf','1 p','cover'],['02_Execution_of_Offer_SIGNED.pdf','2 p','exec'],['03_Technical_Proposal.pdf',(VERS.length>=7?'30':'31')+' / 30 p','tech'],['04_Pilot_Demonstration_Exhibit.pdf','6 / 8 p','demo'],['05_Past_Performance.pdf','4 p','past'],['06_Key_Personnel.pdf','7 p','staff'],['07_HUB_Subcontracting_Plan.pdf','form','hub'],['08_Certifications_SIGNED.pdf','form','certs'],['09_Addenda_Acknowledgment.pdf','form','addenda'],['10_Compliance_Matrix.xlsx','61 rows','matrix']];
+  return `<div class="view">
+  <div class="vh"><div><h2>Package &amp; submit</h2><p>Assembled from the approved version of each document, in the order and with the file names the blueprint requires. Exporting is not submitting. You upload to the agency's portal and record the receipt here.</p></div>
+  <div class="act"><button class="btn primary" id="exportBtn" ${all?'':'disabled'}>Export package</button></div></div>
+  <div class="grid2">
+    <div class="panel"><h3>Response files</h3><div class="tree">${files.map(([n,p,k])=>`<div class="f"><span>${n}</span><span class="muted">${p}</span>${passes(docBy(k))?'<span class="tag ok">ready</span>':'<span class="tag warn">'+score(docBy(k))+'</span>'}</div>`).join('')}
+      <div class="env"><div class="eyebrow" style="color:var(--gold)">Sealed · separate upload · admin only</div><div class="f"><span>11_Price_Proposal_SEALED.pdf</span><span class="muted">Attachment B</span><span class="tag gold">admin</span></div></div>
+      <div class="f" style="margin-top:8px"><span>Redacted_Public_Copy.pdf</span><span class="muted">auto-built</span><span class="tag">after export</span></div>
+    </div></div>
+    <div class="panel"><h3>Before export</h3>
+      <ul class="bp-list">
+        <li><div class="bp-k">Every document passes its gate <span class="tag ${all?'ok':'warn'}">${DOCS.filter(d=>!d.admin&&passes(d)).length} / ${DOCS.filter(d=>!d.admin).length}</span></div></li>
+        <li><div class="bp-k">Page limits met <span class="tag bad">fatal</span> <span class="tag ${VERS.length>=7?'ok':'bad'}">${VERS.length>=7?'yes':'Technical +1 page'}</span></div></li>
+        <li><div class="bp-k">Signatures collected <span class="tag bad">fatal</span> <span class="tag ${DOCS.some(d=>d.sign)?'warn':'ok'}">${DOCS.filter(d=>d.sign).length?DOCS.filter(d=>d.sign).length+' pending':'all signed'}</span></div></li>
+        <li><div class="bp-k">Price appears only in the sealed file <span class="tag bad">fatal</span> <span class="tag ok">scan clean</span></div></li>
+        <li><div class="bp-k">Addenda 1–2 acknowledged <span class="tag ok">yes</span></div></li>
+        <li><div class="bp-k">Formats: searchable PDF, 11 pt minimum <span class="tag ok">yes</span></div></li>
+      </ul>
+      <p class="small muted" style="margin:10px 0 0">Fatal items can't be fixed after the deadline, so they block export whatever the score. Export writes a manifest with each file's version number and hash, so you can always tell exactly what was sent.</p>
+    </div>
+  </div>
+  </div>`;
+};
+
+V.gaps=()=>`<div class="view">
+  <div class="vh"><div><h2>Gap report</h2><p>What the current system already does, what exists but isn't connected, and what has to be built to get here. From reading the repo on Nov 4.</p></div></div>
+  <div class="gapcols">
+    <div class="panel"><h3><span class="tag ok">Keep</span> Built and working</h3><ul>
+      <li>Solicitation ZIP is stored (<code>govSourceBundleStore</code>) and extracted in a background job, with every requirement quote-checked against source text (<code>verifyQuotes</code>).</li>
+      <li>Detects evaluation weights, elimination-risk lines, and submission rules: separate cost file, redacted copy, validity days.</li>
+      <li>Derives the named document set (<code>govProposalDocuments</code>), with AI draft, comment, request changes, and accept.</li>
+      <li>Build cockpit: releases and stories, commit sync, verified evidence, overall %.</li>
+      <li>Rails: pricing admin-only, separation of duties, filler gaps block export, no fabrication.</li>
+    </ul></div>
+    <div class="panel"><h3><span class="tag warn">Adjust</span> Built but disconnected</h3><ul>
+      <li><b>Two proposal models.</b> Export and readiness read per-requirement response slots. The cockpit drafts and accepts named documents. Accepted documents never reach the export.</li>
+      <li><b>Drafting is under-grounded.</b> The document AI sees only the title and requirement text. It doesn't get evaluation weights, Section L rules, build evidence, or company facts.</li>
+      <li><b>Evaluation and submission rules</b> show only on the admin qualification page. Drafting and review don't use them.</li>
+      <li><b>"Version" is a counter.</b> Each draft overwrites the content, so there is no history, diff, or rollback.</li>
+      <li><b>PDF is a browser print.</b> No agency template, page count, or page-limit check.</li>
+      <li><b>[PLACEHOLDER] text in documents</b> isn't tracked as gaps, so it doesn't block export the way slot gaps do.</li>
+      <li><b>Copilot is keyword Q&amp;A.</b> It can't run a pass or ask for a missing fact.</li>
+    </ul></div>
+    <div class="panel"><h3><span class="tag bad">Build</span> Not built yet</h3><ul>
+      <li>Proposal blueprint: format, page limits, section order, file names, and required forms per contract, plus a Texas forms library.</li>
+      <li>Version table with check scores and diffs per version.</li>
+      <li>Six-check scorer, color-team gates, the 95% rule, and the agent revise loop.</li>
+      <li>Screenshot capture of verified stories from the demo URL, and figure insertion.</li>
+      <li>Company library (facts, references, resumes) so questions get answered once and reused.</li>
+      <li>Forms: prefill and signature tracking.</li>
+      <li>Package assembly: one PDF per document, sealed price file, redacted copy, manifest.</li>
+    </ul></div>
+  </div>
+  <div class="panel"><h3>What we borrow instead of inventing</h3>
+    <div class="tbl-wrap" style="border:0"><table style="min-width:560px"><thead><tr><th>Idea</th><th>Where it comes from</th><th>Where it shows up here</th></tr></thead><tbody>
+      <tr><td>Source-linked requirement shred and compliance matrix</td><td class="small"><a href="https://support.govdash.com/docs/compliance-matrix-and-review-mode" target="_blank" rel="noopener">GovDash</a>, <a href="https://www.deltek.com/en/blog/govcon-ai-opportunity-proposal-tools" target="_blank" rel="noopener">Deltek GovWin</a></td><td class="small">Blueprint quotes · Compliance Matrix document</td></tr>
+      <tr><td>Basic outline with page budgets and an annotated outline</td><td class="small">Deltek GovWin</td><td class="small">Blue team inside Pink · page limits</td></tr>
+      <tr><td>Color-team review prompts (Pink, Red, Gold, White Glove)</td><td class="small"><a href="https://intercom.help/01010000-01010011-01000011-01001001/en/articles/11932445-proposal-manager-s-playbook" target="_blank" rel="noopener">Procurement Sciences</a>, <a href="https://www.visiblethread.com/blog/color-team-review-guide/" target="_blank" rel="noopener">Shipley practice</a></td><td class="small">Review gates</td></tr>
+      <tr><td>Red team scoresheet from Section M, flag 2-level disagreements</td><td class="small"><a href="https://www.goveagle.com/blog/red-team-review-best-practices-govcon" target="_blank" rel="noopener">GovEagle</a></td><td class="small">3 AI evaluators</td></tr>
+      <tr><td>Answer library that learns from approved answers</td><td class="small"><a href="https://support.loopio.com/hc/en-us/articles/360020261634-What-is-a-Project" target="_blank" rel="noopener">Loopio</a>, Responsive</td><td class="small">Company library, fed by your answers</td></tr>
+      <tr><td>Hot button → feature → benefit → proof</td><td class="small"><a href="https://www.shipleywins.com/blogs/do-your-theme-statements-pass-the-litmus-test" target="_blank" rel="noopener">Shipley</a></td><td class="small">Section plan, theme statements</td></tr>
+      <tr><td>Fatal vs curable documents</td><td class="small">Texas HHSC solicitations</td><td class="small">Texas forms rules · export blockers</td></tr>
+      <tr><td>Working demo as proof</td><td class="small">Ours. No platform does this.</td><td class="small">Build evidence · Pilot Demonstration Exhibit</td></tr>
+    </tbody></table></div>
+  </div>
+  <div class="panel"><h3>How we finish from here</h3><ol class="phases">
+    <li><div><b>Unify the proposal model</b><span>Named documents become the single source. Response slots become sections inside them, and readiness and export read documents. No data is lost: existing responses migrate in as sections.</span></div></li>
+    <li><div><b>Blueprint from the stored ZIP</b><span>Re-run extraction to add Section L rules and required forms next to the evaluation and submission rules already detected. Add the Texas forms rules (HSP, Execution of Offer, no-boycott, TX-RAMP, 1295, CIQ) with fatal or curable flags. Each rule cites its quote. One blueprint per contract.</span></div></li>
+    <li><div><b>Versions and checks</b><span>A <code>gov_proposal_document_versions</code> table, the six checks (deterministic where possible: coverage, format, placeholders, price leak; AI for evaluator score and clarity), gates, and the 95% rule.</span></div></li>
+    <li><div><b>Build artifacts into documents</b><span>A Playwright capture runs when a story is verified. Captures are stored as evidence tagged with requirement IDs, and the agent inserts them as numbered figures.</span></div></li>
+    <li><div><b>Agent loop and company library</b><span>Run a cycle: draft, check, revise, repeat until 95 or a question is needed. Answers go to the library. Turn the copilot into this agent panel.</span></div></li>
+    <li><div><b>Package and export</b><span>Render each approved version to PDF with page counts, build the sealed price file and the redacted copy, write the manifest, then record the external submission.</span></div></li>
+  </ol></div>
+</div>`;
+
+/* ---------- render + wiring ---------- */
+let view='overview';
+function render(){
+  $('#main').innerHTML=V[view]();
+  document.querySelectorAll('.step').forEach(b=>b.setAttribute('aria-current',b.dataset.v===view?'page':'false'));
+  const p=pct(); $('#topPct').textContent=p+'%'; $('#topBar').style.width=p+'%';
+  wire();
+}
+function go(v){view=v;try{history.replaceState(null,'','#'+v)}catch(e){}render();window.scrollTo({top:0})}
+document.querySelectorAll('.step').forEach(b=>b.onclick=()=>go(b.dataset.v));
+
+function wire(){
+  document.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>go(b.dataset.go));
+  document.querySelectorAll('[data-doc]').forEach(r=>r.onclick=()=>{const d=docBy(r.dataset.doc);if(d.type==='narrative'||d.type==='build'){selDoc=d.k;go('editor')}else if(d.sign){d.sign=null;d.s.fmt=100;log(d.t+': signed copy uploaded. Format check passes.','ok');render();toast('Signed copy recorded for '+d.t+'.')}else toast(d.t+': '+TYPES[d.type][2].toLowerCase()+'. Pre-filled from company records.')});
+  document.querySelectorAll('[data-pick]').forEach(b=>b.onclick=()=>{selDoc=b.dataset.pick;render()});
+  document.querySelectorAll('[data-ver]').forEach(b=>b.onclick=()=>{selVer=+b.dataset.ver;render()});
+  document.querySelectorAll('[data-ins]').forEach(b=>b.onclick=()=>{log(`Inserted the ${b.dataset.ins} capture into the Technical Proposal as a figure with a traceable caption.`);toast('Inserted as a figure. It is saved with the next version.')});
+  document.querySelectorAll('[data-sso]').forEach(b=>b.onclick=()=>{QS.push({id:'q5',doc:['tech'],ask:'SSO (OIG.004) is not built. Finish it before submission, or describe it without a screenshot?',why:'Evaluators weight working proof. Describing it is allowed but scores lower on Proof.',kind:'pick',opts:['Finish the build','Describe only']});b.disabled=true;renderQs();toast('Added to your questions in the agent panel.')});
+  const ra=$('#reanalyze'); if(ra) ra.onclick=reanalyze;
+  const rc=$('#runCycle'); if(rc) rc.onclick=runCycle;
+  const ed=$('#editBtn'); if(ed) ed.onclick=()=>toast('Edits save as a new version by you, then the checks re-run.');
+  const ad=$('#addDoc'); if(ad) ad.onclick=()=>toast('Library: Texas forms (HUB plan, Form 1295, CIQ), resumes, case studies, and our standard sections.');
+  const rp=$('#recap'); if(rp) rp.onclick=()=>{log('Re-captured 7 screens from the demo URL. No visual changes since Oct 23.','ok');toast('Re-captured 7 screens.')};
+  const ex=$('#exportBtn'); if(ex) ex.onclick=()=>toast('Package exported with manifest. Next: upload to the agency portal and record the receipt.');
+}
+
+function reanalyze(){
+  const lines=['Opening stored ZIP (9 files)…','RFP_696-OIG-26-001.pdf: 64 pages, 212 obligation lines','Attachment A: 41 table rows read as requirements','Addendum 2 Q&A: 2 answers change §5.2.4 scope','Section M: 4 weighted factors, 100 points','Section L: page limit, font, order, file naming','Forms: Execution of Offer, Certifications, HUB plan','Rules: separate cost file, redacted copy, 120-day validity','Blueprint v2 written. 2 changes from v1, both from Addendum 2.'];
+  const box=$('#zipLog'); box.innerHTML=''; setState('Reading ZIP'); let i=0;
+  const t=setInterval(()=>{box.insertAdjacentHTML('beforeend',`<div>${i===lines.length-1?'<span class="ok">✓</span> ':'› '}${lines[i]}</div>`);box.scrollTop=1e6;i++;if(i>=lines.length){clearInterval(t);analyzed=true;setState('Idle');log('Blueprint v2: Addendum 2 changed §5.2.4. The Technical Proposal will re-check against it.');toast('Blueprint updated from the ZIP.')}},380);
+}
+
+function runCycle(){
+  if(running) return;
+  const d=docBy('tech');
+  if(VERS.length>=9){toast('Already passing. Send it to Gold team for approval.');return}
+  running=true; setState('Running'); render();
+  const steps=VERS.length===6?[
+    ['Checking v6 against 38 requirements and Section L…'],
+    ['Format: 31 pages. Cutting repetition in §2 and §4.'],
+    ['Fact integrity: removed 1 unsupported claim, linked to the references section.'],
+  ]:[['Re-checking with your answers…'],['Evaluator pass: Technical Approach strengthened in §3.4.']];
+  let i=0;
+  const t=setInterval(()=>{
+    log(steps[i][0]); i++;
+    if(i>=steps.length){
+      clearInterval(t);
+      if(VERS.length===6){
+        d.s.fmt=100; d.s.fact=Math.max(d.s.fact,answered.q1?96:86); d.s.eval=89; d.s.proof=93; d.s.clar=94;
+        d.pages=30;
+        VERS.push({v:7,by:'Agent',when:'Now',what:'Cut to 30 pages, removed an unsupported claim, linked proof to the references',sc:score(d),isNew:true});
+      }else{
+        d.s.eval=96; d.s.cov=97; d.s.proof=96; d.s.clar=96; if(answered.q1) d.s.fact=97;
+        VERS.push({v:VERS.length+1,by:'Agent',when:'Now',what:'Strengthened §3.4 against the Technical Approach factor',sc:score(d),isNew:true});
+      }
+      selVer=VERS.length; running=false; setState('Idle');
+      const s=score(d);
+      if(passes(d)) log(`v${selVer} scored ${s}. Passes Red team. Ready for Gold team approval.`,'ok');
+      else if(!answered.q1) log(`v${selVer} scored ${s}. Blocked on a fact only you can give: years in business. See the questions below.`,'h');
+      else log(`v${selVer} scored ${s}. Run another cycle to reach 95.`);
+      render(); setTimeout(()=>VERS.forEach(x=>x.isNew=false),800);
+    }
+  },700);
+}
+
+let tt; function toast(m){const el=$('#toast');el.textContent=m;el.hidden=false;clearTimeout(tt);tt=setTimeout(()=>el.hidden=true,3400)}
+
+const h=(location.hash||'').slice(1); if(V[h]) view=h;
+window.addEventListener('hashchange',()=>{const k=(location.hash||'').slice(1); if(V[k]&&k!==view){view=k;render()}});
+renderLog(); renderQs(); render();
+</script>
+
+</body></html>
