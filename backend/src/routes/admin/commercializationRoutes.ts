@@ -16,7 +16,10 @@ import {
   handleGetHypothesisHealth,
   handleGetLivePopulation,
 } from '../../controllers/commercializationController';
-import { handleGetRevenueRoomBoard } from '../../controllers/revenueRoomController';
+import {
+  handleGetRevenueRoomBoard,
+  handleGetRevenueRoomDrilldown,
+} from '../../controllers/revenueRoomController';
 
 const router = Router();
 
@@ -25,6 +28,15 @@ router.get('/api/admin/commercialization/board', requireAdmin, handleGetCommerci
 // prefix rather than a new one because mgmtSectionGate.ts is deny-by-default and
 // adminNav.ts carries a matching list; see revenueRoomController.ts for the full reason.
 router.get('/api/admin/commercialization/revenue-room', requireAdmin, handleGetRevenueRoomBoard);
+// R4 - the drill-down behind one card: its timeline, or (for the government card, which is
+// an aggregate of many bids) the roster of bids inside it. `?bid=<delivery_project_id>`
+// turns that aggregate into the one bid's own timeline. Declared AFTER the board route so
+// the literal path above is never shadowed by this parameterized one.
+router.get(
+  '/api/admin/commercialization/revenue-room/:cardKey',
+  requireAdmin,
+  handleGetRevenueRoomDrilldown,
+);
 // C8.4's funnel snapshot had no route of its own: it was observable only indirectly,
 // through the shape of the hypothesis response. R1 needs it directly for the drill-down,
 // and a service that can only be read as a side effect of another endpoint is a service

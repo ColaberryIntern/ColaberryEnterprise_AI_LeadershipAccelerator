@@ -3376,6 +3376,19 @@ async function start(): Promise<void> {
   } catch (err: any) {
     console.warn('[DB] evidence link schema ensure failed:', err?.message);
   }
+  // R4 - link the proposal documents that already exist into the evidence spine.
+  //
+  // MUST run after ensureEvidenceLinkSchema above, which creates the table it writes to.
+  // Idempotent by construction: it goes through linkEvidence, so the unique index makes a
+  // repeat run a no-op and a document Ali deliberately unlinked stays unlinked. Safe on
+  // every boot, and the first producer the spine has - without it every drill-down
+  // timeline renders empty and the page cannot be checked against anything real.
+  try {
+    const { backfillGovProposalEvidence } = await import('./services/revenueRoom/govProposalEvidenceBackfill');
+    await backfillGovProposalEvidence();
+  } catch (err: any) {
+    console.warn('[RevenueRoom] gov proposal evidence backfill failed:', err?.message);
+  }
   // Seed v0 automation rules (idempotent).
   try {
     const { seedDefaultAutomationRules } = await import('./services/ops/automationRulesService');
