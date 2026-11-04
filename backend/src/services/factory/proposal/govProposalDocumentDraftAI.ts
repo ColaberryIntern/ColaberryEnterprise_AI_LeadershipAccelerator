@@ -13,6 +13,7 @@
 import crypto from 'crypto';
 import { getInstrumentedOpenAI } from '../../openaiInstrumented';
 import { DEFAULT_MODEL } from '../../components/costEstimationService';
+import { groundingToPromptText, type Grounding } from './proposalGrounding';
 
 interface CacheEntry<T> { value: T; at: number; }
 const TTL_MS = 60 * 60 * 1000;
@@ -62,8 +63,8 @@ export function sanitizeProposalHtml(raw: unknown): string {
 }
 
 export interface DocumentDraftReq { canonicalReqId: string; statement: string; }
-export interface DocumentDraftInput { docKey: string; title: string; requirements: DocumentDraftReq[]; title_opportunity?: string | null; buyer?: string | null; agency?: string | null; }
-export interface DocumentDraftResult { html: string; cached: boolean; generatedAt: string; error?: string; }
+export interface DocumentDraftInput { docKey: string; title: string; requirements: DocumentDraftReq[]; title_opportunity?: string | null; buyer?: string | null; agency?: string | null; /** P5: the grounding (blueprint weights/rules, section plans, artifacts, approved facts) — the ONLY specific facts the draft may assert. */ grounding?: Grounding | null; }
+export interface DocumentDraftResult { html: string; cached: boolean; generatedAt: string; error?: string; /** P5: structured questions the draft could not answer from the grounding (never asserted facts). */ gaps?: Array<{ question: string; suggestions: string[] }>; }
 
 /** Draft a full proposal document as sanitized HTML. FAIL SOFT; never throws. */
 export async function generateProposalDocumentDraftAI(input: DocumentDraftInput): Promise<DocumentDraftResult> {
@@ -73,7 +74,8 @@ export async function generateProposalDocumentDraftAI(input: DocumentDraftInput)
   if (reqs.length === 0) return { html: '', cached: false, generatedAt: now(), error: 'This document has no requirements to draft from yet.' };
 
   const reqBlock = reqs.slice(0, 40).map((r) => `- [${r.canonicalReqId}] ${clampStr(r.statement, 500)}`).join('\n');
-  const key = 'docdraftai:' + hash({ k: input.docKey, t: input.title, r: reqBlock, b: input.buyer ?? null, a: input.agency ?? null });
+  const groundingText = input.grounding ? groundingToPromptText(input.grounding) : '';
+  const key = 'docdraftai:' + hash({ k: input.docKey, t: input.title, r: reqBlock, b: input.buyer ?? null, a: input.agency ?? null, g: groundingText });
   const hit = cacheGet<DocumentDraftResult>(key);
   if (hit) return { ...hit, cached: true };
 
@@ -83,14 +85,17 @@ export async function generateProposalDocumentDraftAI(input: DocumentDraftInput)
     'statements; do NOT invent any specific fact - no client names, project names, metrics, dates, dollar figures, ' +
     'certifications, or personnel. Whenever a strong document WOULD need such a specific fact, insert a visible ' +
     'placeholder exactly like [PLACEHOLDER: what the firm must provide] rather than inventing it. ' +
-    'Return STRICT JSON {"html": "..."} where html uses ONLY these tags: h2, h3, h4, p, ul, ol, li, strong, em, ' +
-    'table, thead, tbody, tr, th, td, blockquote, br. No attributes, no <script>, no <style>, no links or images.';
+    'Return STRICT JSON {"html":"...","gaps":[{"question":"...","suggestions":["..."]}]} where html uses ONLY these ' +
+    'tags: h2, h3, h4, p, ul, ol, li, strong, em, table, thead, tbody, tr, th, td, blockquote, br. No attributes, no ' +
+    '<script>, no <style>, no links or images. `gaps` lists each specific fact you needed but could not find in the ' +
+    'grounding (you wrote a [PLACEHOLDER] for it) — never invent the fact.';
   const user = [
     `Document to draft: "${input.title}"`,
     input.title_opportunity ? `Opportunity: ${input.title_opportunity}` : '',
     (input.agency || input.buyer) ? `Agency / buyer: ${input.agency || input.buyer}` : '',
     'It must cover these requirements:',
     reqBlock,
+    groundingText ? `\nGROUNDING — the ONLY specific facts you may assert:\n${groundingText}` : '',
   ].filter(Boolean).join('\n');
 
   try {
@@ -103,7 +108,10 @@ export async function generateProposalDocumentDraftAI(input: DocumentDraftInput)
     try { parsed = JSON.parse(res.choices?.[0]?.message?.content || '{}'); } catch { parsed = {}; }
     const html = sanitizeProposalHtml(parsed?.html);
     if (!html) return { html: '', cached: false, generatedAt: now(), error: 'The AI returned no usable content. Try again.' };
-    const result: DocumentDraftResult = { html, cached: false, generatedAt: now() };
+    const gaps = Array.isArray(parsed?.gaps)
+      ? parsed.gaps.filter((g: any) => g && typeof g.question === 'string').map((g: any) => ({ question: String(g.question), suggestions: Array.isArray(g.suggestions) ? g.suggestions.map(String) : [] }))
+      : [];
+    const result: DocumentDraftResult = { html, cached: false, generatedAt: now(), gaps };
     cacheSet(key, result);
     return result;
   } catch (err) {

@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { requireSection, adminAllowedSections } from '../../middlewares/authMiddleware';
+import { signedDocumentUpload } from '../../config/upload';
 import { resolveGovProjectActor } from '../../middlewares/govProjectAccess';
 import type { StudentGovProjectView } from '../../services/factory/govProjectProjection';
 
@@ -234,6 +235,122 @@ router.get('/api/admin/gov-contracts/:projectId/blueprint', requireSection('gov_
     logFail('gov_contract_blueprint_get_failed', err, { projectId: req.params.projectId });
     res.status(500).json({ error: 'Could not load the blueprint.' });
   }
+});
+
+// ── Proposal Studio P6: package & export ───────────────────────────────────────────────────────────────────────
+/** GET .../:projectId/package/signatures — seed required-form signatures from the blueprint, then list their status. */
+router.get('/api/admin/gov-contracts/:projectId/package/signatures', requireSection('gov_contracts'), async (req: Request, res: Response) => {
+  const ctx = await adminGovContext(req, res); if (!ctx) return;
+  try {
+    const sig = await import('../../services/factory/proposal/govProposalSignatures');
+    const { default: GovProposalBlueprint } = await import('../../models/GovProposalBlueprint');
+    const bp: any = await GovProposalBlueprint.findOne({ where: { delivery_project_id: req.params.projectId }, order: [['version', 'DESC']] });
+    const forms: any[] = bp?.blueprint_json?.forms ?? [];
+    const required = forms.filter((f) => f.disposition === 'required' || f.disposition === 'at_award').map((f) => ({ key: f.key }));
+    if (required.length) await sig.syncRequiredSignatures(req.params.projectId as string, required);
+    res.json({ signatures: await sig.listSignatures(req.params.projectId as string) });
+  } catch (err: unknown) { logFail('gov_contract_signatures_failed', err, { projectId: req.params.projectId }); res.status(500).json({ error: 'Could not load the signatures.' }); }
+});
+
+/** POST .../:projectId/package/signatures/:formKey — upload a signed copy (PDF/scan) and mark the form signed. */
+router.post('/api/admin/gov-contracts/:projectId/package/signatures/:formKey', requireSection('gov_contracts'), signedDocumentUpload.single('file'), async (req: Request, res: Response) => {
+  const ctx = await adminGovContext(req, res); if (!ctx) return;
+  const formKey = String(req.params.formKey ?? ''); const signerRole = String((req.body ?? {}).signerRole ?? 'Authorized signatory');
+  const file = (req as any).file;
+  if (!formKey || !file?.filename) { res.status(400).json({ error: 'A form key and a signed file are required.' }); return; }
+  try {
+    const { recordSignature } = await import('../../services/factory/proposal/govProposalSignatures');
+    await recordSignature(req.params.projectId as string, formKey, signerRole, file.filename, ctx.identityId);
+    res.json({ ok: true });
+  } catch (err: unknown) { logFail('gov_contract_signature_record_failed', err, { projectId: req.params.projectId, formKey }); res.status(500).json({ error: 'Could not record the signed copy.' }); }
+});
+
+/** POST .../:projectId/package/assemble — assemble the package IF ready; returns the manifest, or the blocking
+ *  reasons (export refuses while anything fails passes / Gold is unapproved / a form is unsigned / a required
+ *  redacted copy is missing / anything is fatal). Exported is not submitted. */
+router.post('/api/admin/gov-contracts/:projectId/package/assemble', requireSection('gov_contracts'), async (req: Request, res: Response) => {
+  const ctx = await adminGovContext(req, res); if (!ctx) return;
+  try {
+    const { assembleProposalPackage } = await import('../../services/factory/proposal/buildProposalPackage');
+    const result = await assembleProposalPackage(req.params.projectId as string);
+    res.status(result.ok ? 200 : 409).json(result);
+  } catch (err: unknown) { logFail('gov_contract_assemble_package_failed', err, { projectId: req.params.projectId }); res.status(500).json({ error: 'Could not assemble the package.' }); }
+});
+
+// ── Proposal Studio P5: company library + agent review cycle ───────────────────────────────────────────────────
+/** The tenant for a gov delivery project (from its latest qualification). Null when unresolved. */
+async function tenantForProject(projectId: string): Promise<string | null> {
+  const { default: GovQualification } = await import('../../models/GovQualification');
+  const q: any = await GovQualification.findOne({ where: { delivery_project_id: projectId }, order: [['version', 'DESC']] });
+  return q ? q.tenant_id : null;
+}
+
+/** GET .../:projectId/library — the tenant's company library (facts, references, personnel). */
+router.get('/api/admin/gov-contracts/:projectId/library', requireSection('gov_contracts'), async (req: Request, res: Response) => {
+  const ctx = await adminGovContext(req, res); if (!ctx) return;
+  try {
+    const tenantId = await tenantForProject(req.params.projectId as string);
+    if (!tenantId) { res.json({ facts: [], references: [], personnel: [] }); return; }
+    const { listCompanyLibrary } = await import('../../services/factory/proposal/govCompanyLibrary');
+    res.json(await listCompanyLibrary(tenantId));
+  } catch (err: unknown) { logFail('gov_contract_library_failed', err, { projectId: req.params.projectId }); res.status(500).json({ error: 'Could not load the company library.' }); }
+});
+
+/** POST .../:projectId/library/:kind — add a library fact / reference / personnel (unapproved unless approved=true). */
+router.post('/api/admin/gov-contracts/:projectId/library/:kind', requireSection('gov_contracts'), async (req: Request, res: Response) => {
+  const ctx = await adminGovContext(req, res); if (!ctx) return;
+  const kind = String(req.params.kind ?? '');
+  try {
+    const tenantId = await tenantForProject(req.params.projectId as string);
+    if (!tenantId) { res.status(409).json({ error: 'No tenant resolved for this project.' }); return; }
+    const lib = await import('../../services/factory/proposal/govCompanyLibrary');
+    const b = (req.body ?? {}) as any;
+    let id: string;
+    if (kind === 'fact') id = await lib.addCompanyFact(tenantId, { key: String(b.key ?? ''), value: String(b.value ?? ''), source: b.source ?? null, approved: !!b.approved }, ctx.identityId);
+    else if (kind === 'reference') id = await lib.addCompanyReference(tenantId, b, ctx.identityId);
+    else if (kind === 'personnel') id = await lib.addCompanyPersonnel(tenantId, { name: String(b.name ?? ''), role: b.role ?? null, resumeHtml: b.resumeHtml ?? null, approved: !!b.approved }, ctx.identityId);
+    else { res.status(400).json({ error: 'Unknown library kind.' }); return; }
+    res.json({ id });
+  } catch (err: unknown) { logFail('gov_contract_library_add_failed', err, { projectId: req.params.projectId, kind }); res.status(500).json({ error: 'Could not save to the library.' }); }
+});
+
+/** POST .../:projectId/library/fact/:id/approve — approve a library fact (reviewer confirmation). */
+router.post('/api/admin/gov-contracts/:projectId/library/fact/:id/approve', requireSection('gov_contracts'), async (req: Request, res: Response) => {
+  const ctx = await adminGovContext(req, res); if (!ctx) return;
+  try {
+    const tenantId = await tenantForProject(req.params.projectId as string);
+    if (!tenantId) { res.status(409).json({ error: 'No tenant resolved for this project.' }); return; }
+    const { approveCompanyFact } = await import('../../services/factory/proposal/govCompanyLibrary');
+    await approveCompanyFact(tenantId, String(req.params.id), ctx.identityId);
+    res.json({ ok: true });
+  } catch (err: unknown) { logFail('gov_contract_library_approve_failed', err, { projectId: req.params.projectId }); res.status(500).json({ error: 'Could not approve the fact.' }); }
+});
+
+/** POST .../:projectId/answer-question — save an answer to the library and resolve every open gap that asked it. */
+router.post('/api/admin/gov-contracts/:projectId/answer-question', requireSection('gov_contracts'), async (req: Request, res: Response) => {
+  const ctx = await adminGovContext(req, res); if (!ctx) return;
+  const b = (req.body ?? {}) as any;
+  const question = String(b.question ?? '').trim(); const answer = String(b.answer ?? '').trim();
+  if (!question || !answer) { res.status(400).json({ error: 'A question and an answer are required.' }); return; }
+  try {
+    const tenantId = await tenantForProject(req.params.projectId as string);
+    if (!tenantId) { res.status(409).json({ error: 'No tenant resolved for this project.' }); return; }
+    const { answerQuestionToLibrary } = await import('../../services/factory/proposal/govCompanyLibrary');
+    res.json(await answerQuestionToLibrary(tenantId, req.params.projectId as string, { question, answer, key: b.key }, ctx.identityId));
+  } catch (err: unknown) { logFail('gov_contract_answer_question_failed', err, { projectId: req.params.projectId }); res.status(500).json({ error: 'Could not record the answer.' }); }
+});
+
+/** POST .../:projectId/documents/:docKey/review-cycle — kick off the agent review cycle (fire-and-forget; poll the
+ *  version history for new versions). Bounded by maxIterations (default 3). */
+router.post('/api/admin/gov-contracts/:projectId/documents/:docKey/review-cycle', requireSection('gov_contracts'), async (req: Request, res: Response) => {
+  const ctx = await adminGovContext(req, res); if (!ctx) return;
+  const docKey = docKeyOf(req, res); if (!docKey) return;
+  const maxIterations = Number((req.body ?? {}).maxIterations) || 3;
+  try {
+    const { runReviewCycle } = await import('../../services/factory/proposal/runReviewCycle');
+    void runReviewCycle(req.params.projectId as string, docKey, { maxIterations, identityId: ctx.identityId }).catch((err) => logFail('gov_contract_review_cycle_async_failed', err, { projectId: req.params.projectId, docKey }));
+    res.json({ started: true, maxIterations });
+  } catch (err: unknown) { logFail('gov_contract_review_cycle_failed', err, { projectId: req.params.projectId, docKey }); res.status(500).json({ error: 'Could not start the review cycle.' }); }
 });
 
 // ── Proposal Studio P4: build-artifact evidence ────────────────────────────────────────────────────────────────

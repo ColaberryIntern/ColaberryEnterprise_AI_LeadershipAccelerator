@@ -1,5 +1,5 @@
 import api from '../utils/api';
-import type { StudentGovProjectView, GovCockpitApi, GovCopilotAnswer, GovProposalDocument, GovReviewApi, GovDocumentVersion, GovGateReview, GovCheckRunResult, GovGateName, GovDiffSegment } from './govProjectPortalApi';
+import type { StudentGovProjectView, GovCockpitApi, GovCopilotAnswer, GovProposalDocument, GovReviewApi, GovDocumentVersion, GovGateReview, GovCheckRunResult, GovGateName, GovDiffSegment, GovSignatureView, GovPackageResult } from './govProjectPortalApi';
 
 /**
  * adminGovContractsApi — the admin Interns-hub "Gov Contracts" tab's one data call.
@@ -151,6 +151,29 @@ export async function adminRecaptureGovStory(projectId: string, storyId: string)
   const { data } = await api.post(`${adminBase(projectId)}/stories/${encodeURIComponent(storyId)}/recapture`, {});
   return data;
 }
+export async function adminRunGovReviewCycle(projectId: string, docKey: string, maxIterations?: number): Promise<{ started: boolean; maxIterations: number }> {
+  const { data } = await api.post<{ started: boolean; maxIterations: number }>(adminDocUrl(projectId, docKey, 'review-cycle'), { maxIterations });
+  return data;
+}
+export async function adminAnswerGovQuestion(projectId: string, question: string, answer: string, key?: string): Promise<{ factId: string; gapsResolved: number }> {
+  const { data } = await api.post<{ factId: string; gapsResolved: number }>(`${adminBase(projectId)}/answer-question`, { question, answer, key });
+  return data;
+}
+export async function adminListGovSignatures(projectId: string): Promise<{ signatures: GovSignatureView[] }> {
+  const { data } = await api.get<{ signatures: GovSignatureView[] }>(`${adminBase(projectId)}/package/signatures`);
+  return data;
+}
+export async function adminUploadGovSignedForm(projectId: string, formKey: string, file: File, signerRole?: string): Promise<{ ok: boolean }> {
+  const form = new FormData();
+  form.append('file', file);
+  if (signerRole) form.append('signerRole', signerRole);
+  const { data } = await api.post<{ ok: boolean }>(`${adminBase(projectId)}/package/signatures/${encodeURIComponent(formKey)}`, form, { headers: { 'Content-Type': 'multipart/form-data' } });
+  return data;
+}
+export async function adminAssembleGovPackage(projectId: string): Promise<GovPackageResult> {
+  try { const { data } = await api.post<GovPackageResult>(`${adminBase(projectId)}/package/assemble`, {}); return data; }
+  catch (e: any) { if (e?.response?.status === 409 && e.response.data) return e.response.data as GovPackageResult; throw e; }
+}
 
 /** The admin review adapter — the reviewer-only P3/P4 actions (versions, checks, gates, diff, artifacts). */
 export const adminGovReviewApi: GovReviewApi = {
@@ -162,6 +185,11 @@ export const adminGovReviewApi: GovReviewApi = {
   insertFigure: adminInsertGovFigure,
   setDemoUrl: adminSetGovDemoUrl,
   recapture: adminRecaptureGovStory,
+  runReviewCycle: adminRunGovReviewCycle,
+  answerQuestion: adminAnswerGovQuestion,
+  listSignatures: adminListGovSignatures,
+  uploadSignedForm: adminUploadGovSignedForm,
+  assemblePackage: adminAssembleGovPackage,
 };
 
 /** The admin adapter — management drives the gov cockpit via the `gov_contracts`-gated admin routes. */

@@ -6,6 +6,8 @@ import BuildReleases from './BuildReleases';
 import BlueprintView from './BlueprintView';
 import ReviewGates from './ReviewGates';
 import BuildEvidence from './BuildEvidence';
+import AgentPanel from './AgentPanel';
+import PackageSubmit from './PackageSubmit';
 import ProposalDocuments from './ProposalDocuments';
 import ProposalDocumentDrawer from './ProposalDocumentDrawer';
 import CommitFeed from './CommitFeed';
@@ -21,7 +23,7 @@ import './govCockpit.css';
  * (verified build stories + accepted documents), the agency and the close countdown. The copilot rail is grounded in
  * the same student-safe projection. All data comes from one projection; this only arranges it + holds view state.
  */
-type Tab = 'overview' | 'blueprint' | 'build' | 'proposal' | 'review' | 'evidence' | 'commits' | 'how';
+type Tab = 'overview' | 'blueprint' | 'build' | 'proposal' | 'review' | 'evidence' | 'agent' | 'package' | 'commits' | 'how';
 
 export default function CockpitView(
   { view, projectId, onReload, readOnly = false, api = portalGovCockpitApi, onReanalyze, reanalyzing = false, reviewApi }:
@@ -89,6 +91,8 @@ export default function CockpitView(
         <button className="gck-tab" role="tab" aria-selected={tab === 'proposal'} onClick={() => setTab('proposal')}>Proposal<span className="n">{docs.length}</span></button>
         <button className="gck-tab" role="tab" aria-selected={tab === 'review'} onClick={() => setTab('review')}>Review</button>
         <button className="gck-tab" role="tab" aria-selected={tab === 'evidence'} onClick={() => setTab('evidence')}>Build evidence</button>
+        <button className="gck-tab" role="tab" aria-selected={tab === 'agent'} onClick={() => setTab('agent')}>Agent</button>
+        <button className="gck-tab" role="tab" aria-selected={tab === 'package'} onClick={() => setTab('package')}>Package</button>
         <button className="gck-tab" role="tab" aria-selected={tab === 'commits'} onClick={() => setTab('commits')}>Commit sync<span className="n">{feed.length}</span></button>
         <button className="gck-tab" role="tab" aria-selected={tab === 'how'} onClick={() => setTab('how')}>How it works</button>
       </nav>
@@ -101,6 +105,8 @@ export default function CockpitView(
           {tab === 'proposal' && <ProposalDocuments docs={docs} onOpen={readOnly ? () => {} : (d) => setOpenDocKey(d.key)} />}
           {tab === 'review' && <ReviewGates projectId={projectId} docs={docs} reviewApi={reviewApi} />}
           {tab === 'evidence' && <BuildEvidence projectId={projectId} artifacts={view.buildArtifacts ?? []} docs={docs} reviewApi={reviewApi} onReload={onReload} />}
+          {tab === 'agent' && <AgentPanel projectId={projectId} docs={docs} reviewApi={reviewApi} />}
+          {tab === 'package' && <PackageSubmit projectId={projectId} reviewApi={reviewApi} />}
           {tab === 'commits' && <CommitFeed feed={feed} />}
           {tab === 'how' && <HowItWorks />}
         </div>

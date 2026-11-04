@@ -159,6 +159,11 @@ export interface GovDiffSegment { type: 'same' | 'add' | 'del'; text: string; }
 // ── P4: build-evidence artifacts ─────────────────────────────────────────────────────────────────────────────
 export interface GovBuildArtifactView { id: string; storyId: string; requirementIds: string[]; commitSha: string | null; caption: string | null; capturedAt: string | null; status: string; }
 
+// ── P6: package & export ─────────────────────────────────────────────────────────────────────────────────────
+export interface GovSignatureView { formKey: string; signerRole: string; status: string; required: boolean; hasFile: boolean }
+export interface GovPackageManifestItem { docKey: string; title: string; fileName: string; version: number; pageCount: number | null; sha256: string; blueprintVersion: number | null; sealed: boolean }
+export interface GovPackageResult { ok: boolean; blocking: string[]; manifest?: { exportedAt: string; blueprintVersion: number | null; fileCount: number; items: GovPackageManifestItem[] }; rendered?: number }
+
 /** The reviewer-only P3/P4 actions, provided by the admin cockpit (interns get no reviewApi — gates are reviewer-only). */
 export interface GovReviewApi {
   listReview(projectId: string, docKey: string): Promise<{ versions: GovDocumentVersion[]; gates: GovGateReview[] }>;
@@ -171,6 +176,16 @@ export interface GovReviewApi {
   insertFigure(projectId: string, docKey: string, artifactId: string): Promise<{ document: GovProposalDocument }>;
   setDemoUrl(projectId: string, demoUrl: string, captureRoot?: string): Promise<{ ok: boolean }>;
   recapture(projectId: string, storyId: string): Promise<unknown>;
+  /** P5: kick off the agent review cycle for a document (fire-and-forget; poll versions). */
+  runReviewCycle(projectId: string, docKey: string, maxIterations?: number): Promise<{ started: boolean; maxIterations: number }>;
+  /** P5: answer a question — saves to the company library and resolves every open gap that asked it. */
+  answerQuestion(projectId: string, question: string, answer: string, key?: string): Promise<{ factId: string; gapsResolved: number }>;
+  /** P6: the required-form signature status for the package. */
+  listSignatures(projectId: string): Promise<{ signatures: GovSignatureView[] }>;
+  /** P6: upload a signed copy of a required form. */
+  uploadSignedForm(projectId: string, formKey: string, file: File, signerRole?: string): Promise<{ ok: boolean }>;
+  /** P6: assemble the package if ready; returns the manifest, or the blocking reasons. */
+  assemblePackage(projectId: string): Promise<GovPackageResult>;
 }
 
 /** P6: a card for a gov project the intern is assigned to — minimal fields for the "on your profile" surface. */
