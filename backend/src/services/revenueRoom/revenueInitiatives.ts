@@ -108,19 +108,16 @@ export const INITIATIVE_DEFINITIONS: readonly InitiativeDefinition[] = [
   },
   {
     key: 'gov_bid_pursuit',
-    label: 'Government bids in pursuit',
+    label: 'Government bids in motion',
     kind: 'gov_pipeline',
-    status: 'proxy',
+    status: 'live',
     sourceTable: 'gov_qualifications',
     provenance:
-      'Rows at decision=approved_bid_pursuit and status=active. This is a FLAG, not a '
-      + 'confirmed pipeline: on 2026-11-03 the twelve flagged rows included a row named '
-      + '"Snow College Adult Learner - T8 test", one RFP duplicated under two project ids, '
-      + 'and three rows with no delivery project. Nothing has ever been submitted.',
+      'Bids at decision=approved_bid_pursuit and status=active that ALSO carry a live '
+      + 'delivery_project_members row (revoked_at IS NULL) — in motion, and assigned to a '
+      + 'named person right now. Measured 2026-11-04: 2 of the 12 flagged rows qualify, '
+      + 'and they are the two Ali names as active. The other 10 have no live assignment.',
     owner: 'Ali',
-    unlockedBy:
-      'R2 step 2 — a recorded human confirmation of which bids are live, and a value for '
-      + 'each. No column records that today, so it cannot be computed.',
   },
   ...HYPOTHESIS_CARDS,
 ];
@@ -191,19 +188,39 @@ export function assertUnfinishedInitiativesNameTheirUnlock(): void {
  * as revenue. If someone later promotes this card to `live`, this assertion fails and
  * forces them to deal with the confirmation column instead of the status field.
  */
-export function assertGovPipelineIsNotPresentedAsConfirmed(): void {
+/**
+ * The government card counts only bids that are in motion AND assigned right now.
+ *
+ * WHY THIS ASSERTION REPLACED THE ONE BEFORE IT. The earlier version forbade this card
+ * from ever being `live`, on the grounds that "no column records which bids a human
+ * confirmed". Ali corrected the design on 2026-11-04 — he wants only the projects in
+ * motion and assigned right now, not the twelve flagged rows annotated — and measuring
+ * that instruction showed the premise was wrong: a live `delivery_project_members` row
+ * IS a recorded human act. It carries `granted_by_identity_id` and `granted_at`, and
+ * revoking it is another. There are 8 such rows in the whole system, 6 revoked and 2
+ * live, and the 2 live ones sit on exactly the two bids Ali names as active.
+ *
+ * So the guard changed target rather than being deleted. What must never happen is this
+ * card drifting back to counting the raw flag, because that set has contained a row named
+ * "Snow College Adult Learner - T8 test", an RFP duplicated under two project ids, and
+ * three rows with no delivery project at all.
+ */
+export function assertGovPipelineCountsOnlyAssignedBids(): void {
   const gov = INITIATIVE_DEFINITIONS.find((d) => d.key === 'gov_bid_pursuit');
   if (!gov) throw new Error('the government pipeline initiative is missing');
-  if (gov.status === 'live') {
+  if (!/revoked_at IS NULL|live delivery_project_members/i.test(gov.provenance)) {
     throw new Error(
-      'gov_bid_pursuit is marked "live", but no column records which bids a human '
-      + 'confirmed. Add that confirmation (R2 step 2) before calling this measured.',
+      'gov_bid_pursuit provenance must state that the count requires a LIVE assignment. '
+      + 'Counting decision=approved_bid_pursuit alone puts a test row in front of a reader '
+      + 'as pipeline, which is what this card was corrected away from.',
     );
   }
-  if (!/flag/i.test(gov.provenance)) {
-    throw new Error(
-      'gov_bid_pursuit provenance must say that the count is a flag rather than a '
-      + 'confirmed pipeline, because the flagged set has included a test row.',
-    );
+  if (!/assigned/i.test(gov.provenance)) {
+    throw new Error('gov_bid_pursuit provenance must say the bid is assigned to someone');
+  }
+  // A count of bids is not a value. Nothing in the system records what a bid is worth, so
+  // a dollar figure on this card would be invented.
+  if (/\$\s?\d/.test(gov.provenance)) {
+    throw new Error('gov_bid_pursuit carries a dollar figure; no bid has a recorded value');
   }
 }

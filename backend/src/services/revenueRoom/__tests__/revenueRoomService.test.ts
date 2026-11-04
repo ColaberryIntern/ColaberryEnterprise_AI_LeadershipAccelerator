@@ -26,20 +26,24 @@ import type { InitiativeCard, RevenueRoomBoard } from '../revenueRoomService';
  * separately by running the same statements read-only against production on 2026-11-03.
  * Saying so here is cheaper than someone later believing a green suite covered it.
  */
-const GOV_FILTER = /FROM gov_qualifications\s+WHERE decision/;
 
 interface DbOpts {
   tables?: Record<string, boolean>;
   columns?: Record<string, boolean>;
-  flagged?: number;
-  withoutProject?: number;
+  /** Bids approved for pursuit AND holding a live assignment. The card's number. */
+  inMotion?: number;
+  /** Flagged bids with nobody assigned, so excluded from the count. */
+  excluded?: number;
   lastActivity?: string | null;
   withDocuments?: number;
   submitted?: number;
 }
 
 function mockDb(opts: DbOpts = {}) {
-  const tables = { gov_qualifications: true, gov_proposal_documents: true, gov_submission: true, ...(opts.tables ?? {}) };
+  const tables = {
+    gov_qualifications: true, delivery_project_members: true,
+    gov_proposal_documents: true, gov_submission: true, ...(opts.tables ?? {}),
+  };
   const columns = { updated_at: true, ...(opts.columns ?? {}) };
 
   m.query.mockImplementation((sql: string, o?: { replacements?: Record<string, string> }) => {
@@ -51,18 +55,20 @@ function mockDb(opts: DbOpts = {}) {
       const col = o?.replacements?.column ?? '';
       return Promise.resolve([{ n: columns[col as keyof typeof columns] ? 1 : 0 }]);
     }
+    // The in-motion classification CTE. Matched before the document count below, because
+    // both mention delivery_project_id and this one is the headline number.
+    if (/WITH flagged AS/.test(sql)) {
+      return Promise.resolve([{
+        in_motion: opts.inMotion ?? 0,
+        excluded: opts.excluded ?? 0,
+        last_activity: opts.lastActivity ?? null,
+      }]);
+    }
     if (/COUNT\(DISTINCT q\.delivery_project_id\)/.test(sql)) {
       return Promise.resolve([{ n: opts.withDocuments ?? 0 }]);
     }
     if (/FROM gov_submission/.test(sql)) {
       return Promise.resolve([{ n: opts.submitted ?? 0 }]);
-    }
-    if (GOV_FILTER.test(sql)) {
-      return Promise.resolve([{
-        flagged: opts.flagged ?? 0,
-        without_project: opts.withoutProject ?? 0,
-        last_activity: opts.lastActivity ?? null,
-      }]);
     }
     return Promise.resolve([]);
   });
@@ -133,60 +139,83 @@ describe('the happy path', () => {
   });
 });
 
-describe('the government pipeline card tells the reader what the count contains', () => {
-  it('reports the flag count as a proxy and discloses the breakdown', async () => {
-    mockDb({ flagged: 12, withoutProject: 3, withDocuments: 3, submitted: 0, lastActivity: '2026-11-02' });
+describe('the government card counts bids in motion, not flagged rows', () => {
+  it('reports the in-motion count as measured, and says what was excluded', async () => {
+    // Ali, 2026-11-04: only the projects in motion and assigned right now. Measured that
+    // day: 2 of 12 flagged bids hold a live assignment, and they are the two he names.
+    mockDb({ inMotion: 2, excluded: 10, withDocuments: 2, submitted: 0, lastActivity: '2026-11-04' });
     const card = find(await getRevenueRoomBoard(), 'gov_bid_pursuit');
-    expect(card.status).toBe('proxy');
-    expect(card.value).toBe('12');
-    expect(card.caveat).toMatch(/3 of the distinct projects behind them hold a proposal document/);
-    expect(card.caveat).toMatch(/3 have no delivery project at all/);
+    expect(card.status).toBe('live');
+    expect(card.value).toBe('2');
+    expect(card.caveat).toMatch(/2 bid\(s\) are in motion/);
+    expect(card.caveat).toMatch(/assignment has not been revoked/);
+    expect(card.caveat).toMatch(/10 further bid\(s\).*NOT\s+counted here/s);
     expect(card.caveat).toMatch(/nothing has ever been submitted/);
-    expect(card.caveat).toMatch(/not a pipeline/);
+    expect(card.caveat).toMatch(/not a value/);
   });
 
-  it('counts documented projects DISTINCT, so a duplicated RFP is not two opportunities', async () => {
-    mockDb({ flagged: 12, withDocuments: 3 });
+  it('requires a LIVE assignment in the SQL, so the flag alone cannot qualify a bid', async () => {
+    mockDb({ inMotion: 2, excluded: 10 });
     await getRevenueRoomBoard();
-    const sqls = m.query.mock.calls.map((c) => String(c[0]));
-    expect(sqls.some((s) => /COUNT\(DISTINCT q\.delivery_project_id\)/.test(s))).toBe(true);
+    const sqls = m.query.mock.calls.map((c) => String(c[0])).join('\n');
+    expect(sqls).toMatch(/delivery_project_members m/);
+    expect(sqls).toMatch(/m\.revoked_at IS NULL/);
   });
 
-  it('reports a measured zero when the table is present and nothing is flagged', async () => {
-    mockDb({ flagged: 0 });
+  it('counts projects DISTINCT, so a duplicated RFP is not two bids', async () => {
+    mockDb({ inMotion: 2 });
+    await getRevenueRoomBoard();
+    const sqls = m.query.mock.calls.map((c) => String(c[0])).join('\n');
+    expect(sqls).toMatch(/SELECT DISTINCT q\.delivery_project_id/);
+  });
+
+  it('reports a measured zero when bids are flagged but none is assigned', async () => {
+    // A meaningful state, not an edge case: plenty approved for pursuit and nobody
+    // working any of it. Worth saying out loud rather than rendering a bare 0.
+    mockDb({ inMotion: 0, excluded: 12 });
     const card = find(await getRevenueRoomBoard(), 'gov_bid_pursuit');
     expect(card.status).toBe('measured_zero');
     expect(card.value).toBe('0');
-    expect(card.caveat).toMatch(/measured rather than assumed/);
+    expect(card.caveat).toMatch(/No bid is in motion/);
+    expect(card.caveat).toMatch(/12 bid\(s\) carry the pursuit flag but none has a live assignment/);
+  });
+
+  it('says so differently when nothing is even flagged', async () => {
+    mockDb({ inMotion: 0, excluded: 0 });
+    const card = find(await getRevenueRoomBoard(), 'gov_bid_pursuit');
+    expect(card.caveat).toMatch(/No bid is flagged for pursuit at all/);
   });
 
   // The distinction the whole five-state vocabulary exists for.
-  it('DEGRADES to unmeasurable when the table is absent, rather than reporting zero', async () => {
-    mockDb({ tables: { gov_qualifications: false } });
-    const card = find(await getRevenueRoomBoard(), 'gov_bid_pursuit');
-    expect(card.status).toBe('unmeasurable');
-    expect(card.value).toBeNull();
-    expect(card.caveat).toMatch(/A missing source is not an empty one/);
-  });
+  it.each(['gov_qualifications', 'delivery_project_members'])(
+    'DEGRADES to unmeasurable when %s is absent, rather than falling back to the flag count',
+    async (missing) => {
+      mockDb({ tables: { [missing]: false } });
+      const card = find(await getRevenueRoomBoard(), 'gov_bid_pursuit');
+      expect(card.status).toBe('unmeasurable');
+      expect(card.value).toBeNull();
+      expect(card.caveat).toMatch(/A missing source is not an empty one/);
+    },
+  );
 
   it('leaves the deadline null, because no column records one', async () => {
-    mockDb({ flagged: 12 });
+    mockDb({ inMotion: 2 });
     const card = find(await getRevenueRoomBoard(), 'gov_bid_pursuit');
     expect(card.nextDeadline).toBeNull();
     expect(card.nextDeadlineMeans).toBeNull();
   });
 
   it('survives a schema with no updated_at instead of crashing on it', async () => {
-    mockDb({ flagged: 4, columns: { updated_at: false } });
+    mockDb({ inMotion: 2, columns: { updated_at: false } });
     const card = find(await getRevenueRoomBoard(), 'gov_bid_pursuit');
-    expect(card.status).toBe('proxy');
+    expect(card.status).toBe('live');
     expect(card.lastActivity).toBeNull();
   });
 
-  it('says so plainly when none of the flagged projects has a document', async () => {
-    mockDb({ flagged: 5, withDocuments: 0 });
+  it('says plainly when an in-motion bid has no document yet', async () => {
+    mockDb({ inMotion: 2, withDocuments: 0 });
     const card = find(await getRevenueRoomBoard(), 'gov_bid_pursuit');
-    expect(card.caveat).toMatch(/None of them holds a proposal document/);
+    expect(card.caveat).toMatch(/None of them holds a proposal document yet/);
   });
 });
 
@@ -271,14 +300,14 @@ describe('the failure path costs a section, never the page', () => {
 
 describe('it is a reporting surface, so reading it changes nothing', () => {
   it('issues no INSERT, UPDATE or DELETE', async () => {
-    mockDb({ flagged: 12, withDocuments: 3 });
+    mockDb({ inMotion: 2, withDocuments: 2 });
     await getRevenueRoomBoard();
     const sqls = m.query.mock.calls.map((c) => String(c[0])).join('\n');
     expect(sqls).not.toMatch(/\b(INSERT|UPDATE|DELETE|TRUNCATE|ALTER)\b/i);
   });
 
   it('returns the same board twice for the same inputs', async () => {
-    mockDb({ flagged: 12, withoutProject: 3, withDocuments: 3 });
+    mockDb({ inMotion: 2, excluded: 10, withDocuments: 2 });
     const at = new Date('2026-11-03T12:00:00Z');
     const a = await getRevenueRoomBoard(at);
     const b = await getRevenueRoomBoard(at);

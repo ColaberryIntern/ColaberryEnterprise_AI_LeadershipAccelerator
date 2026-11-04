@@ -89,47 +89,89 @@ async function columnExists(table: string, column: string): Promise<boolean> {
 }
 
 interface GovFacts {
-  flagged: number;
-  withoutProject: number;
+  /** Bids in motion AND assigned right now. This is the card's number. */
+  inMotion: number;
+  /** Flagged rows that do NOT qualify, because nobody is assigned to them. */
+  excludedNoAssignment: number;
   withDocuments: number;
   submitted: number;
   lastActivity: string | null;
 }
 
 /**
- * What the government pipeline actually holds.
+ * How many government bids are in motion and assigned right now.
  *
- * Every number here is a fact about rows. None of them is "how many bids are live",
- * because nothing in the schema records that. The breakdown exists so the card can say
- * what its headline count includes instead of leaving the reader to assume.
+ * ── WHY THIS COUNTS ASSIGNMENT RATHER THAN THE PURSUIT FLAG ──────────────────────────────
+ *
+ * The first version of this card counted `decision = approved_bid_pursuit AND status =
+ * active` and reported it as a proxy, annotating what the count contained. Ali corrected
+ * that on 2026-11-04: he wants only the projects in motion and assigned right now, not
+ * twelve flagged rows with warnings attached. A card is a number someone acts on, and
+ * annotating a wrong number does not make it the right one.
+ *
+ * Measuring that instruction produced a sharper definition than the annotation ever was.
+ * `delivery_project_members` holds 8 rows in the entire system: 6 revoked and 2 live. The
+ * 2 live rows sit on exactly the two bids Ali names as active — Enterprise Work Order
+ * (80b35be2) and Saratoga Springs (3867b241), both assigned 2026-10-28.
+ *
+ * It also settles three things the annotated version could only flag:
+ *   - The "Snow College Adult Learner - T8 test" row has no live assignment. Excluded.
+ *   - Of the RFP duplicated under two project ids, 80b35be2 holds the live assignment and
+ *     the drafted document. The other copy is excluded.
+ *   - Statewide Victim-Centered has the MOST documents (5) and its membership is REVOKED,
+ *     so it is not in motion. Document count was the misleading signal; assignment is not.
+ *
+ * `delivery_projects.status` is deliberately NOT the test for "in motion". Every one of
+ * the 12 flagged bids reads `discovery`, while the 4 projects reading `building` are two
+ * sandbox demos and two government projects that are not pursuit bids at all and carry no
+ * members. Using it would have produced an empty card.
  */
 async function govPipelineFacts(): Promise<GovFacts | null> {
   if (!(await tableExists('gov_qualifications'))) return null;
+  // Without the membership table there is no way to tell in-motion from flagged, and the
+  // honest answer is "cannot measure" rather than falling back to the flag count.
+  if (!(await tableExists('delivery_project_members'))) return null;
 
   const hasUpdatedAt = await columnExists('gov_qualifications', 'updated_at');
   const docsExist = await tableExists('gov_proposal_documents');
   const submissionsExist = await tableExists('gov_submission');
 
-  const rows = await sequelize.query<{
-    flagged: number; without_project: number; last_activity: string | null;
-  }>(
-    `SELECT COUNT(*)::int AS flagged,
-            COUNT(*) FILTER (WHERE delivery_project_id IS NULL)::int AS without_project,
-            ${hasUpdatedAt ? 'MAX(updated_at)::text' : 'NULL::text'} AS last_activity
-     FROM gov_qualifications
-     WHERE decision::text = 'approved_bid_pursuit' AND status::text = 'active'`,
-    { type: QueryTypes.SELECT },
-  );
-  const base = rows[0] ?? { flagged: 0, without_project: 0, last_activity: null };
-
   // Counted over DISTINCT projects, not rows: the flagged set has contained the same RFP
   // twice, so a row count would report one opportunity as two.
+  const rows = await sequelize.query<{
+    in_motion: number; excluded: number; last_activity: string | null;
+  }>(
+    `WITH flagged AS (
+       SELECT DISTINCT q.delivery_project_id, q.updated_at
+         FROM gov_qualifications q
+        WHERE q.decision::text = 'approved_bid_pursuit' AND q.status::text = 'active'
+          AND q.delivery_project_id IS NOT NULL
+     ), classified AS (
+       SELECT f.delivery_project_id, f.updated_at,
+              EXISTS (SELECT 1 FROM delivery_project_members m
+                       WHERE m.delivery_project_id = f.delivery_project_id
+                         AND m.revoked_at IS NULL) AS assigned
+         FROM flagged f
+     )
+     SELECT COUNT(*) FILTER (WHERE assigned)::int AS in_motion,
+            COUNT(*) FILTER (WHERE NOT assigned)::int AS excluded,
+            ${hasUpdatedAt ? 'MAX(updated_at) FILTER (WHERE assigned)::text' : 'NULL::text'} AS last_activity
+       FROM classified`,
+    { type: QueryTypes.SELECT },
+  );
+  const base = rows[0] ?? { in_motion: 0, excluded: 0, last_activity: null };
+
+  // Documents on the bids that are actually in motion. Counting documents across every
+  // flagged row is what made Statewide Victim-Centered look like the biggest pursuit.
   const withDocuments = docsExist
     ? (await sequelize.query<{ n: number }>(
       `SELECT COUNT(DISTINCT q.delivery_project_id)::int AS n
          FROM gov_qualifications q
         WHERE q.decision::text = 'approved_bid_pursuit' AND q.status::text = 'active'
           AND q.delivery_project_id IS NOT NULL
+          AND EXISTS (SELECT 1 FROM delivery_project_members m
+                       WHERE m.delivery_project_id = q.delivery_project_id
+                         AND m.revoked_at IS NULL)
           AND EXISTS (SELECT 1 FROM gov_proposal_documents d
                        WHERE d.delivery_project_id = q.delivery_project_id)`,
       { type: QueryTypes.SELECT },
@@ -144,8 +186,8 @@ async function govPipelineFacts(): Promise<GovFacts | null> {
     : 0;
 
   return {
-    flagged: base.flagged,
-    withoutProject: base.without_project,
+    inMotion: base.in_motion,
+    excludedNoAssignment: base.excluded,
     withDocuments,
     submitted,
     lastActivity: base.last_activity,
@@ -171,40 +213,50 @@ function govCard(def: InitiativeDefinition, facts: GovFacts | null): InitiativeC
       ...shell,
       status: 'unmeasurable',
       sourceTable: null,
-      caveat: 'gov_qualifications is not present in this database, so the pipeline cannot '
-        + 'be counted. A missing source is not an empty one.',
+      caveat: 'Either gov_qualifications or delivery_project_members is not present in '
+        + 'this database. Without both, a bid in motion cannot be told from a bid merely '
+        + 'flagged, and the flag count is not the number this card reports. A missing '
+        + 'source is not an empty one.',
     };
   }
 
-  if (facts.flagged === 0) {
-    // The table is there and the filter matches nothing. That is a real zero.
+  if (facts.inMotion === 0) {
+    // Both tables are there and nothing qualifies. That is a real zero, and it is a
+    // different statement from "nothing is flagged" — there may be plenty flagged with
+    // nobody assigned to any of it, which is worth seeing rather than hiding.
     return {
       ...shell,
       status: 'measured_zero',
       value: '0',
       lastActivity: facts.lastActivity,
-      caveat: 'No bid is flagged for pursuit. The table is present and the filter matches '
-        + 'nothing, so this zero is measured rather than assumed.',
+      caveat: facts.excludedNoAssignment > 0
+        ? `No bid is in motion. ${facts.excludedNoAssignment} bid(s) carry the pursuit `
+          + 'flag but none has a live assignment, so nobody is currently working any of '
+          + 'them. This zero is measured, not assumed.'
+        : 'No bid is flagged for pursuit at all. Measured, not assumed.',
     };
   }
 
   const parts = [
-    `${facts.flagged} row(s) carry the pursuit flag.`,
+    `${facts.inMotion} bid(s) are in motion: approved for pursuit and assigned to a named `
+      + 'person whose assignment has not been revoked.',
     facts.withDocuments > 0
-      ? `${facts.withDocuments} of the distinct projects behind them hold a proposal document.`
-      : 'None of them holds a proposal document.',
-    facts.withoutProject > 0
-      ? `${facts.withoutProject} have no delivery project at all, so they cannot be named or priced.`
+      ? `${facts.withDocuments} of them hold at least one proposal document.`
+      : 'None of them holds a proposal document yet.',
+    facts.excludedNoAssignment > 0
+      ? `${facts.excludedNoAssignment} further bid(s) carry the pursuit flag and are NOT `
+        + 'counted here, because nobody is assigned to them.'
       : null,
     facts.submitted === 0
-      ? 'gov_submission is empty: nothing has ever been submitted, so none of these may be reported as submitted.'
+      ? 'gov_submission is empty: nothing has ever been submitted, so none of these may be '
+        + 'reported as submitted.'
       : `${facts.submitted} submission(s) exist.`,
-    'No column records which of these a human confirmed as live, so the headline is a flag count, not a pipeline.',
+    'A count of bids, not a value: no bid has a recorded dollar figure anywhere in the system.',
   ].filter(Boolean);
 
   return {
     ...shell,
-    value: String(facts.flagged),
+    value: String(facts.inMotion),
     lastActivity: facts.lastActivity,
     caveat: parts.join(' '),
   };

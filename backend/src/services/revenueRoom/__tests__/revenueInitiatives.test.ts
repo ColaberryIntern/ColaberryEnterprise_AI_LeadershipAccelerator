@@ -1,7 +1,7 @@
 import {
   INITIATIVE_DEFINITIONS,
   assertEveryInitiativeNamesItsSource,
-  assertGovPipelineIsNotPresentedAsConfirmed,
+  assertGovPipelineCountsOnlyAssignedBids,
   assertNoCardShowsAnUnmeasuredValue,
   assertUnfinishedInitiativesNameTheirUnlock,
 } from '../revenueInitiatives';
@@ -93,19 +93,35 @@ describe('a card never shows a number nobody measured', () => {
   });
 });
 
-describe('the government pipeline is never presented as a confirmed pipeline', () => {
+describe('the government card counts only bids in motion and assigned right now', () => {
   it('holds today', () => {
-    expect(() => assertGovPipelineIsNotPresentedAsConfirmed()).not.toThrow();
+    expect(() => assertGovPipelineCountsOnlyAssignedBids()).not.toThrow();
   });
 
-  it('is declared a proxy, because the flagged set has contained a test row', () => {
+  it('requires a live assignment in its provenance, not just the pursuit flag', () => {
+    // Counting decision=approved_bid_pursuit alone put a row named "T8 test" in front of
+    // a reader as pipeline. Ali corrected the design on 2026-11-04; this is the guard that
+    // stops it drifting back.
     const gov = INITIATIVE_DEFINITIONS.find((d) => d.key === 'gov_bid_pursuit');
-    expect(gov?.status).toBe('proxy');
-    expect(gov?.provenance).toMatch(/flag/i);
+    expect(gov?.provenance).toMatch(/revoked_at IS NULL/);
+    expect(gov?.provenance).toMatch(/assigned/i);
   });
 
-  it('names the confirmation that would make it measurable', () => {
+  it('is measured, because a live assignment IS a recorded human act', () => {
+    // delivery_project_members carries granted_by_identity_id and granted_at, and
+    // revoking is another act. That is what the earlier version wrongly said did not exist.
     const gov = INITIATIVE_DEFINITIONS.find((d) => d.key === 'gov_bid_pursuit');
-    expect(gov?.unlockedBy).toMatch(/confirmation/i);
+    expect(gov?.status).toBe('live');
+  });
+
+  it('is named for motion rather than for the flag', () => {
+    const gov = INITIATIVE_DEFINITIONS.find((d) => d.key === 'gov_bid_pursuit');
+    expect(gov?.label).toBe('Government bids in motion');
+  });
+
+  it('claims no dollar figure, because no bid has a recorded value', () => {
+    expect(() => assertGovPipelineCountsOnlyAssignedBids()).not.toThrow();
+    const gov = INITIATIVE_DEFINITIONS.find((d) => d.key === 'gov_bid_pursuit');
+    expect(gov?.provenance).not.toMatch(/\$\s?\d/);
   });
 });

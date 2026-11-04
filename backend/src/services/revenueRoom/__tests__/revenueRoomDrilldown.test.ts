@@ -29,7 +29,9 @@ const timeline = (over: Record<string, unknown> = {}) => ({
 });
 
 function mockDb(opts: { tables?: Record<string, boolean>; bids?: Array<Record<string, unknown>> } = {}) {
-  const tables = { gov_qualifications: true, ...(opts.tables ?? {}) };
+  const tables = {
+    gov_qualifications: true, delivery_project_members: true, ...(opts.tables ?? {}),
+  };
   m.query.mockImplementation((sql: string, o?: { replacements?: Record<string, string> }) => {
     if (/FROM information_schema\.tables/.test(sql)) {
       const name = o?.replacements?.name ?? '';
@@ -42,7 +44,9 @@ function mockDb(opts: { tables?: Record<string, boolean>; bids?: Array<Record<st
 
 const bid = (over: Record<string, unknown> = {}) => ({
   delivery_project_id: BID_A, project_name: 'Saratoga Springs RFP',
-  docs: 3, submissions: 0, updated: '2026-11-02', ...over,
+  docs: 3, drafted: 0, submissions: 0,
+  assignees: 'Akiwam', roles: 'associate_builder', assigned_on: '2026-10-28',
+  updated: '2026-11-02', ...over,
 });
 
 beforeEach(() => {
@@ -103,40 +107,61 @@ describe('the government card is an aggregate and gets a roster', () => {
     expect(e.getEvidenceTimeline).not.toHaveBeenCalled();
   });
 
-  it('flags a test row so it cannot be read as a deal', async () => {
-    mockDb({ bids: [bid({ project_name: 'Snow College Adult Learner - T8 test', docs: 0 })] });
-    const d = await getDrilldown('gov_bid_pursuit');
-    expect(d.roster![0].flags).toContain('looks like a test row');
+  // The scoping rule, in the query rather than in a warning on the page. Ali's correction
+  // on 2026-11-04: only the projects in motion and assigned right now.
+  it('requires a LIVE assignment, so an unassigned bid never reaches the roster', async () => {
+    await getDrilldown('gov_bid_pursuit');
+    const sql = m.query.mock.calls.map((c) => String(c[0])).find((s) => /FROM gov_qualifications q/.test(s))!;
+    expect(sql).toMatch(/EXISTS \(SELECT 1 FROM delivery_project_members m/);
+    expect(sql).toMatch(/m\.revoked_at IS NULL/);
   });
 
-  it('flags BOTH rows of a duplicated title, not neither', async () => {
-    // The real failure: on 2026-11-03 one RFP appeared twice under two project ids. A
-    // per-row check would see each as unique and flag neither.
-    mockDb({ bids: [
-      bid({ delivery_project_id: BID_A, project_name: 'RFP - Enterprise Work Order', docs: 1 }),
-      bid({ delivery_project_id: BID_B, project_name: 'RFP - Enterprise Work Order', docs: 0 }),
-    ] });
+  it('leads each row with who holds it, since that is why it is on the list', async () => {
+    mockDb({ bids: [bid({ assignees: 'Akiwam', roles: 'associate_builder' })] });
     const d = await getDrilldown('gov_bid_pursuit');
-    expect(d.roster).toHaveLength(2);
-    for (const r of d.roster!) expect(r.flags).toContain('duplicate title');
+    expect(d.roster![0].flags[0]).toBe('assigned to Akiwam (associate_builder)');
   });
 
-  it('says plainly when a bid has no proposal document', async () => {
-    mockDb({ bids: [bid({ docs: 0 })] });
-    const d = await getDrilldown('gov_bid_pursuit');
-    expect(d.roster![0].flags).toContain('no proposal document');
+  it('says how long it has been assigned', async () => {
+    mockDb({ bids: [bid({ assigned_on: '2026-10-28' })] });
+    expect((await getDrilldown('gov_bid_pursuit')).roster![0].flags).toContain('since 2026-10-28');
   });
 
-  it('states that nothing has been submitted, since gov_submission is empty', async () => {
+  it('reports drafted progress rather than a bare document count', async () => {
+    mockDb({ bids: [bid({ docs: 3, drafted: 2 })] });
+    expect((await getDrilldown('gov_bid_pursuit')).roster![0].flags)
+      .toContain('2 of 3 documents drafted');
+  });
+
+  it('distinguishes documents that exist from documents that are written', async () => {
+    mockDb({ bids: [bid({ docs: 3, drafted: 0 })] });
+    expect((await getDrilldown('gov_bid_pursuit')).roster![0].flags)
+      .toContain('3 documents, none drafted yet');
+  });
+
+  it('says plainly when a bid has no document at all', async () => {
+    mockDb({ bids: [bid({ docs: 0, drafted: 0 })] });
+    expect((await getDrilldown('gov_bid_pursuit')).roster![0].flags).toContain('no proposal document yet');
+  });
+
+  it('states that it has not been submitted, since gov_submission is empty', async () => {
     mockDb({ bids: [bid({ submissions: 0 })] });
-    expect((await getDrilldown('gov_bid_pursuit')).roster![0].flags).toContain('never submitted');
+    expect((await getDrilldown('gov_bid_pursuit')).roster![0].flags).toContain('not yet submitted');
   });
 
-  it('counts a documented bid in words rather than leaving it to the reader', async () => {
-    mockDb({ bids: [bid({ docs: 1 })] });
-    expect((await getDrilldown('gov_bid_pursuit')).roster![0].flags).toContain('1 proposal document');
-    mockDb({ bids: [bid({ docs: 3 })] });
-    expect((await getDrilldown('gov_bid_pursuit')).roster![0].flags).toContain('3 proposal documents');
+  it('carries no suspicion flags, because the definition excludes those rows', async () => {
+    // A test row, a duplicate and an undocumented bid are all excluded by having no live
+    // assignment, so the page does not have to warn about any of them.
+    mockDb({ bids: [bid()] });
+    const flags = (await getDrilldown('gov_bid_pursuit')).roster![0].flags.join(' ');
+    expect(flags).not.toMatch(/test row|duplicate/i);
+  });
+
+  it('de-duplicates by project, so two qualification rows are one bid', async () => {
+    mockDb({ bids: [bid()] });
+    await getDrilldown('gov_bid_pursuit');
+    const sql = m.query.mock.calls.map((c) => String(c[0])).find((s) => /FROM gov_qualifications q/.test(s))!;
+    expect(sql).toMatch(/DISTINCT ON \(q\.delivery_project_id\)/);
   });
 
   it('shows the live evidence count per bid', async () => {
@@ -160,18 +185,25 @@ describe('the government card is an aggregate and gets a roster', () => {
     expect((await getDrilldown('gov_bid_pursuit')).roster![0].label).toBe('(unnamed project)');
   });
 
-  it('DEGRADES to absent when gov_qualifications is missing, rather than reporting zero bids', async () => {
-    mockDb({ tables: { gov_qualifications: false } });
-    const d = await getDrilldown('gov_bid_pursuit');
-    expect(d.spine).toBe('absent');
-    expect(d.note).toMatch(/A missing source is not an empty one/);
-  });
+  it.each(['gov_qualifications', 'delivery_project_members'])(
+    'DEGRADES to absent when %s is missing, rather than falling back to the flag count',
+    async (missing) => {
+      // Falling back would reinstate exactly the behaviour this card was corrected away
+      // from, and it would do it silently.
+      mockDb({ tables: { [missing]: false } });
+      const d = await getDrilldown('gov_bid_pursuit');
+      expect(d.spine).toBe('absent');
+      expect(d.note).toMatch(/A missing source is not an empty one/);
+      expect(d.roster).toEqual([]);
+    },
+  );
 
-  it('reports a measured zero when the table is present and nothing is flagged', async () => {
+  it('reports a measured zero when both tables are present and nothing is in motion', async () => {
     mockDb({ bids: [] });
     const d = await getDrilldown('gov_bid_pursuit');
     expect(d.spine).toBe('ready');
     expect(d.roster).toEqual([]);
+    expect(d.note).toMatch(/No bid is in motion/);
     expect(d.note).toMatch(/measured zero/);
   });
 
@@ -207,9 +239,13 @@ describe('it is a reporting surface', () => {
   });
 
   it('only lists bids that have a delivery project, since the others cannot be named', async () => {
+    // An INNER join rather than a LEFT one plus an IS NOT NULL filter: a row with no
+    // project cannot match, so the exclusion is structural instead of being a clause
+    // somebody could drop. Three of the twelve flagged rows have no project at all.
     mockDb({ bids: [bid()] });
     await getDrilldown('gov_bid_pursuit');
     const sql = m.query.mock.calls.map((c) => String(c[0])).find((s) => /FROM gov_qualifications q/.test(s))!;
-    expect(sql).toMatch(/delivery_project_id IS NOT NULL/);
+    expect(sql).toMatch(/\n\s*JOIN delivery_projects p ON p\.id = q\.delivery_project_id/);
+    expect(sql).not.toMatch(/LEFT JOIN delivery_projects/);
   });
 });

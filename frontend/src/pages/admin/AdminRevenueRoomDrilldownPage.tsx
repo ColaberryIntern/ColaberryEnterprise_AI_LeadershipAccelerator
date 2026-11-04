@@ -175,7 +175,8 @@ export function RosterView({ cardKey, roster }: { cardKey: string; roster: Roste
   if (roster.length === 0) {
     return (
       <p className="mb-0" style={{ color: 'var(--text-muted)' }} data-testid="roster-empty">
-        No bid carries the pursuit flag.
+        <strong>No bid is in motion.</strong> Nothing is both approved for pursuit and
+        currently assigned to anyone.
       </p>
     );
   }
@@ -197,10 +198,15 @@ export function RosterView({ cardKey, roster }: { cardKey: string; roster: Roste
                   key={f}
                   className="px-2 py-1 rounded-pill"
                   style={{
-                    // A test row and a documented pursuit must not look the same.
-                    background: /test|no proposal|never submitted/i.test(f)
-                      ? 'var(--surface-subtle)' : 'var(--status-info-bg)',
-                    color: /test/i.test(f) ? 'var(--status-danger)' : 'var(--text-secondary)',
+                    // Who holds it is the reason the bid is on this list, so it reads as a
+                    // fact rather than as one chip among several. "Nothing drafted yet" and
+                    // "not yet submitted" are states of work, not warnings, so they stay
+                    // quiet rather than borrowing an alarm colour they have not earned.
+                    background: /^assigned to/i.test(f)
+                      ? 'var(--status-success-bg)' : 'var(--surface-subtle)',
+                    color: /^assigned to/i.test(f)
+                      ? 'var(--status-success)' : 'var(--text-secondary)',
+                    fontWeight: /^assigned to/i.test(f) ? 600 : 400,
                   }}
                 >
                   {f}
@@ -277,11 +283,11 @@ export default function AdminRevenueRoomDrilldownPage() {
           </SectionCard>
 
           {data.shape === 'roster' ? (
-            <SectionCard title="The bids behind this card">
+            <SectionCard title="Bids in motion">
               <p className="small mb-3" style={{ color: 'var(--text-muted)' }}>
-                This card reports a <strong>flag count</strong>, not a confirmed pipeline. Each
-                row below shows what its own record contains, so a test row and a documented
-                pursuit do not look alike. Nothing here has been submitted.
+                Only bids that are <strong>approved for pursuit and assigned to someone right
+                now</strong> appear here. A bid whose assignment has been revoked drops off
+                this list, which is why it is short. Nothing here has been submitted yet.
               </p>
               {data.spine === 'absent'
                 ? (

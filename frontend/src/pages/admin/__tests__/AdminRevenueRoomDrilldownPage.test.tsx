@@ -104,10 +104,12 @@ describe('a timeline event says where it came from and who vouched for it', () =
   });
 });
 
-describe('the roster shows what each bid record actually contains', () => {
+describe('the roster shows only bids in motion, and who holds each', () => {
   const entry = (over: Record<string, unknown> = {}) => ({
     initiativeType: 'gov_bid', initiativeKey: 'bid-1', label: 'Saratoga Springs RFP',
-    evidenceCount: 3, flags: ['3 proposal documents', 'never submitted'], ...over,
+    evidenceCount: 3,
+    flags: ['assigned to Akiwam (associate_builder)', 'since 2026-10-28', '3 documents, none drafted yet', 'not yet submitted'],
+    ...over,
   });
 
   it('renders one clickable row per bid, carrying the bid key', () => {
@@ -126,18 +128,34 @@ describe('the roster shows what each bid record actually contains', () => {
     expect(html).toContain('linked item<');
   });
 
-  it('renders every flag, including the test-row warning', () => {
-    const html = wrap(<RosterView cardKey="gov_bid_pursuit" roster={[
-      entry({ label: 'Snow College - T8 test', flags: ['looks like a test row', 'no proposal document'] }),
-    ]} />);
-    expect(html).toContain('looks like a test row');
-    expect(html).toContain('no proposal document');
+  it('leads with who holds the bid, since that is why it is on the list', () => {
+    const html = wrap(<RosterView cardKey="gov_bid_pursuit" roster={[entry()]} />);
+    expect(html).toContain('assigned to Akiwam (associate_builder)');
+    expect(html).toContain('since 2026-10-28');
   });
 
-  it('says so plainly when no bid is flagged', () => {
+  it('renders every flag, including the work-state ones', () => {
+    const html = wrap(<RosterView cardKey="gov_bid_pursuit" roster={[entry()]} />);
+    expect(html).toContain('3 documents, none drafted yet');
+    expect(html).toContain('not yet submitted');
+  });
+
+  it('gives the assignment its own emphasis, not the same chip as a work state', () => {
+    // Ali's correction scoped this list to bids in motion, so the owner is the headline
+    // fact about a row rather than one chip among four.
+    const html = wrap(<RosterView cardKey="gov_bid_pursuit" roster={[entry()]} />);
+    const assigned = html.indexOf('assigned to Akiwam');
+    const submitted = html.indexOf('not yet submitted');
+    expect(assigned).toBeGreaterThan(-1);
+    expect(assigned).toBeLessThan(submitted);
+    expect(html).toContain('--status-success');
+  });
+
+  it('says NO BID IS IN MOTION rather than talking about flags', () => {
     const html = wrap(<RosterView cardKey="gov_bid_pursuit" roster={[]} />);
     expect(html).toContain('roster-empty');
-    expect(html).toContain('No bid carries the pursuit flag');
+    expect(html).toContain('No bid is in motion');
+    expect(html).not.toMatch(/pursuit flag/i);
   });
 });
 
