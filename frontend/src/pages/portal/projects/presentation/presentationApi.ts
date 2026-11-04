@@ -148,6 +148,26 @@ export async function fetchPresentationPrompt(
  * asks to join, so a link carried in a page payload would outlive the permission
  * that produced it.
  */
+/**
+ * States in which a booking is no longer a room anyone can turn up to. Mirrors
+ * `DEAD_BOOKING_STATES` in the backend's RoomBooking model.
+ */
+const DEAD_BOOKING_STATES = ['cancelled', 'removed', 'rejected'];
+
+/**
+ * Whether this take has a room the student can actually use.
+ *
+ * `bookingId` alone is not enough, and trusting it was the bug: a student who deleted
+ * the room their past rehearsal used was left with an attempt pointing at a booking
+ * that no longer existed, so the panel showed a booked room with no time, forever, and
+ * never offered to book another. A usable room has a start time and a live booking.
+ */
+export function hasUsableRoom(session: PracticeSession | null | undefined): session is PracticeSession {
+  if (!session || !session.bookingId) return false;
+  if (!session.startAt) return false;
+  return !DEAD_BOOKING_STATES.includes(session.bookingState ?? '');
+}
+
 export interface PracticeSession {
   attemptId: string;
   attemptNo: number;

@@ -10,6 +10,10 @@ jest.mock('../../../models/PresentationAttempt', () => ({
 jest.mock('../../../models/RoomBooking', () => ({
   __esModule: true,
   default: { findByPk: jest.fn(), findAll: jest.fn() },
+  // The real predicate, not a stub: these tests turn on which booking states still
+  // count as a room, so faking it would test nothing.
+  isDeadBooking: (b: { state?: string | null } | null | undefined) =>
+    !b || ['cancelled', 'removed', 'rejected'].includes(String(b.state ?? '')),
 }));
 // The session read now also looks up the learner's ingested takes, so the panel can
 // offer a player. Default to none: these tests are about room resolution, and an
@@ -339,5 +343,59 @@ describe('each take carries a poster, not just a player', () => {
     const out = await recordingsForAttempt('a1');
     expect(out[0].playbackUrl).toBe('');
     expect(out[0].thumbnailUrl).toBe('');
+  });
+});
+
+describe('a booking id that no longer names a room', () => {
+  // Production, 2026-11-04. Deleting a room hard-deletes its bookings, and the guard
+  // on that only counts bookings that have not started yet — so once a rehearsal was
+  // in the past the student could delete the room and leave this attempt pointing at
+  // a row that was gone. The panel then rendered "Your practice room / When: —"
+  // forever and never offered to book another.
+  it('reports NO session when the booking row has been deleted', async () => {
+    attempts.findAll.mockResolvedValue([attempt({ id: 'a1', booking_id: 'b-deleted' })]);
+    bookings.findByPk.mockResolvedValue(null);
+
+    const r = await resolveSessionForAssignment('e1', 'p1', 'PREP-4');
+
+    expect(r).toEqual({ ok: true, session: null });
+  });
+
+  it('reports NO session when the booking was cancelled', async () => {
+    // The soft path dead-ended the same way: the row exists, so bookingId was
+    // truthy, and nothing ever looked at the state.
+    attempts.findAll.mockResolvedValue([attempt({ id: 'a1', booking_id: 'b1' })]);
+    bookings.findByPk.mockResolvedValue(booking({ state: 'cancelled' }));
+
+    const r = await resolveSessionForAssignment('e1', 'p1', 'PREP-4');
+
+    expect(r).toEqual({ ok: true, session: null });
+  });
+
+  it('still reports the session when the room is alive', async () => {
+    // The control. If this stops passing, the fix above has started hiding real
+    // rooms, which is a worse bug than the one it replaced.
+    attempts.findAll.mockResolvedValue([attempt({ id: 'a1', booking_id: 'b1' })]);
+    bookings.findByPk.mockResolvedValue(booking({ state: 'scheduled' }));
+
+    const r = await resolveSessionForAssignment('e1', 'p1', 'PREP-4');
+
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.session?.bookingId).toBe('b1');
+    expect(r.session?.startAt).toBe(new Date('2026-11-04T19:00:00Z').toISOString());
+  });
+
+  it('a locked booking is still a room — it is not in the dead set', async () => {
+    // Boundary: `locked` and `archived` sit next to the three dead states and must
+    // not be swept up with them.
+    attempts.findAll.mockResolvedValue([attempt({ id: 'a1', booking_id: 'b1' })]);
+    bookings.findByPk.mockResolvedValue(booking({ state: 'locked' }));
+
+    const r = await resolveSessionForAssignment('e1', 'p1', 'PREP-4');
+
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.session?.bookingId).toBe('b1');
   });
 });

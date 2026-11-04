@@ -14,6 +14,24 @@ export type RoomBookingState =
   | 'rejected' | 'cancelled' | 'locked' | 'removed';
 export type RoomRecordingPolicy = 'ask' | 'always' | 'never';
 
+/**
+ * States in which a booking is no longer a room anyone can turn up to.
+ *
+ * `locked` and `archived` are deliberately NOT here: a locked booking is still the
+ * student's room and an archived one still happened. These three mean the occurrence
+ * was called off, so anything that asks "does this student have a room?" must answer
+ * no — otherwise the booked-slot card renders forever over a room that is not there,
+ * and the form that would book a replacement never appears.
+ */
+export const DEAD_BOOKING_STATES: ReadonlySet<string> = new Set<RoomBookingState>([
+  'cancelled', 'removed', 'rejected',
+]);
+
+/** True when a booking exists on paper but is not a room the student can use. */
+export function isDeadBooking(booking: { state?: string | null } | null | undefined): boolean {
+  return !booking || DEAD_BOOKING_STATES.has(String(booking.state ?? ''));
+}
+
 export interface RoomBookingAttributes {
   id?: string;
   room_id: string;

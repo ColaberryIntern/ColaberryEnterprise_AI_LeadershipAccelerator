@@ -10,10 +10,15 @@ jest.mock('../../../models/PresentationAttempt', () => ({
 jest.mock('../../../models/RoomBooking', () => ({
   __esModule: true,
   default: { findByPk: jest.fn(), findOne: jest.fn() },
+  // The real predicate, not a stub: these tests turn on which booking states count
+  // as a room you can still use, so faking it would test nothing.
+  isDeadBooking: (b: { state?: string | null } | null | undefined) =>
+    !b || ['cancelled', 'removed', 'rejected'].includes(String(b.state ?? '')),
 }));
 jest.mock('../presentationCapacityService', () => ({
   reserveSlot: jest.fn(),
   releaseSlot: jest.fn(),
+  releaseSlotsForAttempt: jest.fn(),
 }));
 jest.mock('../../communityRooms/roomBookingService', () => ({ createBooking: jest.fn() }));
 
@@ -21,7 +26,7 @@ import { getOwnedProjectTree } from '../../projects/projectReadService';
 import PresentationAssignment from '../../../models/PresentationAssignment';
 import PresentationAttempt from '../../../models/PresentationAttempt';
 import RoomBooking from '../../../models/RoomBooking';
-import { reserveSlot, releaseSlot } from '../presentationCapacityService';
+import { reserveSlot, releaseSlot, releaseSlotsForAttempt } from '../presentationCapacityService';
 import { createBooking } from '../../communityRooms/roomBookingService';
 import { startPracticeAttempt, abandonPracticeAttempt } from '../presentationPracticeService';
 
@@ -33,6 +38,7 @@ const attempts = PresentationAttempt as unknown as {
 const bookings = RoomBooking as unknown as { findByPk: jest.Mock; findOne: jest.Mock };
 const reserve = reserveSlot as unknown as jest.Mock;
 const release = releaseSlot as unknown as jest.Mock;
+const releaseForAttempt = releaseSlotsForAttempt as unknown as jest.Mock;
 const book = createBooking as unknown as jest.Mock;
 
 const START = new Date('2026-11-04T19:00:00Z');
@@ -66,6 +72,7 @@ beforeEach(() => {
   reserve.mockResolvedValue({ ok: true, reservationId: 'res1', startAt: START, endAt: END });
   book.mockResolvedValue({ id: 'b1', room_id: 'r1', title: 'Practice: Load Intake Agent', meeting_link: null, state: 'scheduled', related_project_id: 'p1' });
   release.mockResolvedValue(true);
+  releaseForAttempt.mockResolvedValue(0);
 });
 
 describe('a rehearsal is private, and the slot is really reserved', () => {
@@ -209,5 +216,98 @@ describe('abandoning a take', () => {
     // a later take, and anything already attached to this one survives.
     expect((row as any).update).toHaveBeenCalledWith({ attempt_state: 'draft', booking_id: null, room_id: null });
     expect(row.attempt_no).toBe(1);
+  });
+});
+
+describe('the room the take pointed at is gone', () => {
+  // Production, 2026-11-04. A student deleted the room his past rehearsal used.
+  // `deleteRoom` hard-deletes the room's bookings and nothing cleared
+  // `presentation_attempts.booking_id`, so the attempt pointed at a row that was no
+  // longer there. This endpoint answered "already booked" to every request to book
+  // another time, and the panel showed a room with no time in it forever. He emailed
+  // twice over two days asking how to get another room.
+  it('clears a booking_id that no longer resolves, and books a new slot', async () => {
+    const row = attemptRow({ id: 'at1', booking_id: 'b-deleted', room_id: 'r-deleted', attempt_state: 'scheduled' });
+    attempts.findAll.mockResolvedValue([row]);
+    bookings.findByPk.mockResolvedValue(null); // the row was hard-deleted with the room
+
+    const r = await startPracticeAttempt(input());
+
+    expect(r.ok).toBe(true);
+    // The dangling reference is cleared rather than reported as a room.
+    expect((row as any).update).toHaveBeenCalledWith({ booking_id: null, room_id: null });
+    // And the student actually gets what they asked for: a new reservation.
+    expect(reserve).toHaveBeenCalledTimes(1);
+    expect(book).toHaveBeenCalledTimes(1);
+  });
+
+  it('releases the hold the dead take was still keeping on the host', async () => {
+    // All seven reservations in production were still `held` with released_at null:
+    // nothing had ever released one. A hold for a rehearsal that cannot happen is
+    // the host's time, taken from whoever asks next.
+    const row = attemptRow({ id: 'at1', booking_id: 'b-deleted', attempt_state: 'scheduled' });
+    attempts.findAll.mockResolvedValue([row]);
+    bookings.findByPk.mockResolvedValue(null);
+
+    await startPracticeAttempt(input());
+
+    expect(releaseForAttempt).toHaveBeenCalledWith('at1', 'booking_no_longer_exists');
+  });
+
+  it('treats a CANCELLED booking the same as a deleted one', async () => {
+    // The soft path dead-ends identically: the row still exists, so booking_id is
+    // truthy, and nothing looked at the state.
+    const row = attemptRow({ id: 'at1', booking_id: 'b1', attempt_state: 'scheduled' });
+    attempts.findAll.mockResolvedValue([row]);
+    bookings.findByPk.mockResolvedValue({ id: 'b1', state: 'cancelled', related_project_id: 'p1' });
+
+    const r = await startPracticeAttempt(input());
+
+    expect(r.ok).toBe(true);
+    expect((row as any).update).toHaveBeenCalledWith({ booking_id: null, room_id: null });
+    expect(book).toHaveBeenCalledTimes(1);
+  });
+
+  it('still refuses to double-book a take whose room is alive', async () => {
+    // The guard this repairs must not become a way to mint two rooms on one Zoom
+    // host: a live booking is still a no-op, exactly as before.
+    const row = attemptRow({ id: 'at1', booking_id: 'b1', attempt_state: 'scheduled' });
+    attempts.findAll.mockResolvedValue([row]);
+    bookings.findByPk.mockResolvedValue({ id: 'b1', state: 'scheduled', related_project_id: 'p1', start_at: START });
+
+    const r = await startPracticeAttempt(input());
+
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.created).toBe(false);
+    expect(reserve).not.toHaveBeenCalled();
+    expect(book).not.toHaveBeenCalled();
+    expect((row as any).update).not.toHaveBeenCalled();
+  });
+
+  it('is safe to click twice — the healed take is then a live room, not a second one', async () => {
+    // Idempotency, the way it actually happens: the student reloads the dead panel
+    // and clicks Reserve twice. The first call clears the dangling reference and
+    // books a room; the second must find THAT room and do nothing, or one student
+    // ends up holding the single Zoom host twice.
+    const row = attemptRow({ id: 'at1', booking_id: 'b-deleted', attempt_state: 'scheduled' });
+    attempts.findAll.mockResolvedValue([row]);
+    bookings.findByPk.mockResolvedValue(null);
+
+    await startPracticeAttempt(input());
+    expect(row.booking_id).toBe('b1'); // re-attached to the room just made
+
+    releaseForAttempt.mockClear(); reserve.mockClear(); book.mockClear();
+    bookings.findByPk.mockResolvedValue({ id: 'b1', state: 'scheduled', related_project_id: 'p1', start_at: START });
+
+    const second = await startPracticeAttempt(input());
+
+    expect(second.ok).toBe(true);
+    if (!second.ok) return;
+    expect(second.created).toBe(false);
+    // Nothing healed, nothing reserved, no second room.
+    expect(releaseForAttempt).not.toHaveBeenCalled();
+    expect(reserve).not.toHaveBeenCalled();
+    expect(book).not.toHaveBeenCalled();
   });
 });

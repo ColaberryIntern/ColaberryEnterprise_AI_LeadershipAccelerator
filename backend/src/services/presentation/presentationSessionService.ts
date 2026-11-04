@@ -1,7 +1,7 @@
 import { getOwnedProjectTree } from '../projects/projectReadService';
 import PresentationAssignment from '../../models/PresentationAssignment';
 import PresentationAttempt from '../../models/PresentationAttempt';
-import RoomBooking from '../../models/RoomBooking';
+import RoomBooking, { isDeadBooking } from '../../models/RoomBooking';
 import type { PresentationAttemptMode } from '../../models/PresentationAttempt';
 import { presentationTypeLabel } from './takePresentationType';
 
@@ -296,6 +296,22 @@ export async function resolveSessionForAssignment(
   if (!booked) return { ok: true, session: null };
 
   const booking = await RoomBooking.findByPk(String(booked.booking_id));
+
+  // A booking_id that no longer resolves, or resolves to a booking that was called
+  // off, is not a room this student can use — so the honest answer to "do you have a
+  // practice room?" is no, and the panel offers to book one.
+  //
+  // This is not hypothetical. Deleting a room hard-deletes its bookings, and the
+  // guard on that only counts bookings that have not started yet, so once a
+  // rehearsal's time has passed the student can delete the room and leave this
+  // attempt pointing at a row that is gone. Reporting the dangling id rendered the
+  // booked-slot card permanently, with "When: —", over a room that did not exist,
+  // and hid the form that would have booked a replacement.
+  //
+  // An absent booking is always an inconsistency and never a room still being made:
+  // `booking_id` is written only after createBooking has returned the row, and the
+  // "Still being created" chip tracks the Zoom link, not the booking.
+  if (isDeadBooking(booking)) return { ok: true, session: null };
 
   // A booking that names a DIFFERENT project is an inconsistency, not something to
   // render. Showing it would leak another project's room title and timing into this

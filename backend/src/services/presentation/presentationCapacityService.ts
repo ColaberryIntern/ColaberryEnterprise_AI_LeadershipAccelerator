@@ -248,6 +248,27 @@ export async function reserveSlot(req: SlotRequest): Promise<SlotResult> {
  * `state = 'held'`, so flipping the state is enough to free the time while keeping a
  * record of who held it and why it went.
  */
+/**
+ * Releases every hold an attempt still carries, and reports how many it freed.
+ *
+ * Used when the room an attempt was booked into has gone away: the reservation is
+ * what keeps the host's time blocked, so leaving it `held` would quietly consume
+ * capacity for a rehearsal that can no longer happen. Measured in production on
+ * 2026-11-04: seven reservations, every one of them `held`, none ever released,
+ * because nothing called the release path.
+ */
+export async function releaseSlotsForAttempt(attemptId: string, reason: string): Promise<number> {
+  const sequelize = await db();
+  const [rows] = await sequelize.query(
+    `UPDATE presentation_slot_reservations
+        SET state = 'released', released_at = NOW(), released_reason = :reason, updated_at = NOW()
+      WHERE attempt_id = :attemptId AND state = 'held'
+      RETURNING id`,
+    { replacements: { attemptId, reason: String(reason).slice(0, 300) } },
+  ) as [Array<{ id: string }>, unknown];
+  return rows?.length || 0;
+}
+
 export async function releaseSlot(reservationId: string, reason: string): Promise<boolean> {
   const sequelize = await db();
   const [rows] = await sequelize.query(
