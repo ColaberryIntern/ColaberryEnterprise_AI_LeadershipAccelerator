@@ -13,6 +13,7 @@
  */
 import type { GovOpportunity } from './govOpportunity';
 import type { GovCurrentProject } from '../govPipeline';
+import { aiAgreement, type AiAgreement } from './govAiAgreement';
 
 export const AUTO_HIDE_FIT_BELOW = 60;
 export const AI_NOT_A_FIT_REASON = 'ai_not_a_fit';
@@ -91,6 +92,8 @@ export interface BoardFacts {
   sweepActs?: boolean;
   /** Reads that failed on this load. Their data above is empty, not true. */
   failedReads?: ReadonlySet<FactRead>;
+  /** Bids a person hid (not the sweep): Ali's "pass", for measuring the AI against him. */
+  humanPassed?: ReadonlySet<string>;
 }
 
 const hasHumanProgress = (q: QualFacts | undefined): boolean =>
@@ -160,6 +163,8 @@ export interface DiscoveryBoard {
   /** A saved-state read failed, so this load may understate progress. */
   incomplete: boolean;
   currentProjects: readonly GovCurrentProject[];
+  /** How often the AI's call matched Ali's on bids he has decided. */
+  agreement?: AiAgreement;
 }
 
 /** When one bid would be listed twice, the most advanced listing is the one that stays. */
@@ -229,7 +234,7 @@ export function buildDiscoveryBoard(feed: readonly GovOpportunity[], f: BoardFac
     if (o && FROM_SNAPSHOT_STAGES.has(classifyBoardRow(o, f) as BoardStage)) add(o, true);
   }
   const currentProjects = f.currentProjects ?? [];
-  return { rows: uniqueRows(rows, currentProjects, counts), counts, dismissedCount: f.dismissed.size, assignedCount, incomplete: (f.failedReads?.size ?? 0) > 0, currentProjects };
+  return { rows: uniqueRows(rows, currentProjects, counts), counts, dismissedCount: f.dismissed.size, assignedCount, incomplete: (f.failedReads?.size ?? 0) > 0, currentProjects, agreement: aiAgreement(f) };
 }
 
 export interface HideDecision { opportunity: GovOpportunity; reason: string }
