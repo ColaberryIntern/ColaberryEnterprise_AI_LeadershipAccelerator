@@ -19,7 +19,7 @@ import { classifyDocuments, FULL_SCAN_ROLES } from './documentClassifier';
 import { normalizeForMatch } from './verifyQuotes';
 import { detectSectionLRules } from './sectionLDetectors';
 import { texasFormsRules, type TexasFormsInput } from './texasFormsRules';
-import type { BlueprintRule, ProposalBlueprint, RequiredForm, TexasBuyerType } from './proposalBlueprintTypes';
+import type { BlueprintRule, ProposalBlueprint, RequiredForm, TexasBuyerType, Jurisdiction, StateFormsStatus } from './proposalBlueprintTypes';
 
 export interface BlueprintSourceFile { name: string; text: string; }
 
@@ -49,12 +49,74 @@ const FORM_NAME_PROBES: Array<{ key: string; re: RegExp }> = [
   { key: 'no_discrimination_firearms_2274', re: /\bfirearm\s+entit|\bdiscriminate\s+against\s+(?:a\s+)?firearm/i },
 ];
 
+/** The 50 states + DC, for jurisdiction detection. */
+const US_STATE_NAMES: string[] = [
+  'Alabama', 'Alaska', 'Arizona', 'Arkansas', 'California', 'Colorado', 'Connecticut', 'Delaware',
+  'District of Columbia', 'Florida', 'Georgia', 'Hawaii', 'Idaho', 'Illinois', 'Indiana', 'Iowa', 'Kansas',
+  'Kentucky', 'Louisiana', 'Maine', 'Maryland', 'Massachusetts', 'Michigan', 'Minnesota', 'Mississippi',
+  'Missouri', 'Montana', 'Nebraska', 'Nevada', 'New Hampshire', 'New Jersey', 'New Mexico', 'New York',
+  'North Carolina', 'North Dakota', 'Ohio', 'Oklahoma', 'Oregon', 'Pennsylvania', 'Rhode Island',
+  'South Carolina', 'South Dakota', 'Tennessee', 'Texas', 'Utah', 'Vermont', 'Virginia', 'Washington',
+  'West Virginia', 'Wisconsin', 'Wyoming',
+];
+const US_STATE_ABBR: Record<string, string> = {
+  AL: 'Alabama', AK: 'Alaska', AZ: 'Arizona', AR: 'Arkansas', CA: 'California', CO: 'Colorado', CT: 'Connecticut',
+  DE: 'Delaware', DC: 'District of Columbia', FL: 'Florida', GA: 'Georgia', HI: 'Hawaii', ID: 'Idaho', IL: 'Illinois',
+  IN: 'Indiana', IA: 'Iowa', KS: 'Kansas', KY: 'Kentucky', LA: 'Louisiana', ME: 'Maine', MD: 'Maryland',
+  MA: 'Massachusetts', MI: 'Michigan', MN: 'Minnesota', MS: 'Mississippi', MO: 'Missouri', MT: 'Montana',
+  NE: 'Nebraska', NV: 'Nevada', NH: 'New Hampshire', NJ: 'New Jersey', NM: 'New Mexico', NY: 'New York',
+  NC: 'North Carolina', ND: 'North Dakota', OH: 'Ohio', OK: 'Oklahoma', OR: 'Oregon', PA: 'Pennsylvania',
+  RI: 'Rhode Island', SC: 'South Carolina', SD: 'South Dakota', TN: 'Tennessee', TX: 'Texas', UT: 'Utah',
+  VT: 'Vermont', VA: 'Virginia', WA: 'Washington', WV: 'West Virginia', WI: 'Wisconsin', WY: 'Wyoming',
+};
+/** Texas-specific acronyms that identify the jurisdiction even when the word "Texas" is absent. */
+const TEXAS_ACRONYMS = /\b(?:HHSC|TDLR|TxDOT|TX-?RAMP|Texas\s+Ethics\s+Commission|ESBD)\b/i;
+
+const escapeRe = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+function jurQuote(text: string, index: number, len: number): string {
+  const start = Math.max(0, index - 20);
+  return String(text).slice(start, index + len + 30).replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * Detect the buyer's US state (jurisdiction) from the solicitation text. Precise over broad: prefers an explicit
+ * "State of <State>", then a Texas-specific acronym, then the EARLIEST full state name in document order, then an
+ * address-style 2-letter abbreviation. Returns `{ state:null }` when nothing clearly matches. Pure + total.
+ */
+export function detectJurisdiction(text: string): Jurisdiction {
+  const t = String(text ?? '');
+  if (!t.trim()) return { state: null, quote: null };
+  // Strong: explicit "State of <State>".
+  for (const name of US_STATE_NAMES) {
+    const m = new RegExp(`\\bState of ${escapeRe(name)}\\b`, 'i').exec(t);
+    if (m) return { state: name, quote: jurQuote(t, m.index, m[0].length) };
+  }
+  // Strong: a Texas-specific acronym resolves to Texas even without the word "Texas".
+  const txa = TEXAS_ACRONYMS.exec(t);
+  if (txa) return { state: 'Texas', quote: jurQuote(t, txa.index, txa[0].length) };
+  // Medium: the earliest full state name occurring in the text (document order, not list order).
+  let best: { name: string; index: number } | null = null;
+  for (const name of US_STATE_NAMES) {
+    const m = new RegExp(`\\b${escapeRe(name)}\\b`, 'i').exec(t); // case-insensitive so an all-caps "TEXAS"/"UTAH" header is not missed (a Texas false-negative would wrongly drop required Texas forms)
+    if (m && (best === null || m.index < best.index)) best = { name, index: m.index };
+  }
+  if (best) return { state: best.name, quote: jurQuote(t, best.index, best.name.length) };
+  // Weak: an address-style 2-letter abbreviation, e.g. ", UT 84043".
+  const addr = /,\s*([A-Z]{2})\b(?=\s+\d{5}(?:-\d{4})?|\s*(?:\n|$)|\s+\d)/.exec(t);
+  if (addr && US_STATE_ABBR[addr[1]]) return { state: US_STATE_ABBR[addr[1]], quote: jurQuote(t, addr.index, addr[0].length) };
+  return { state: null, quote: null };
+}
+
 /** Light buyer-type inference from the solicitation text, used only when the caller does not supply one. Precise
- *  over broad; returns null when nothing clearly matches (which keeps the Texas engine at `needs_input`). */
-export function detectBuyerType(text: string): TexasBuyerType | null {
+ *  over broad; returns null when nothing clearly matches (which keeps the Texas engine at `needs_input`).
+ *  JURISDICTION-AWARE: a "university"/"local government" buyer is a *Texas* buyer class only when the jurisdiction is
+ *  Texas; off-jurisdiction it is `other` (out of the Texas forms engine's scope), so a Utah city never pulls a
+ *  Texas CIQ. `state_agency` cues are already Texas-specific. */
+export function detectBuyerType(text: string, jurisdiction?: Jurisdiction | null): TexasBuyerType | null {
+  const isTexas = (jurisdiction ?? detectJurisdiction(text)).state === 'Texas';
   if (/\b(?:state\s+of\s+texas|texas\s+(?:department|commission|agency|health\s+and\s+human|workforce)|HHSC|TDLR|\bDIR\b)\b/i.test(text)) return 'state_agency';
-  if (/\b(?:university|college|\bUT\s+system\b|texas\s+a&m|institution\s+of\s+higher\s+education)\b/i.test(text)) return 'university';
-  if (/\b(?:county|city\s+of|municipal|school\s+district|\bISD\b|town\s+of|village\s+of)\b/i.test(text)) return 'local_government';
+  if (/\b(?:university|college|\bUT\s+system\b|texas\s+a&m|institution\s+of\s+higher\s+education)\b/i.test(text)) return isTexas ? 'university' : 'other';
+  if (/\b(?:county|city\s+of|municipal|school\s+district|\bISD\b|town\s+of|village\s+of)\b/i.test(text)) return isTexas ? 'local_government' : 'other';
   return null;
 }
 
@@ -126,9 +188,18 @@ export function buildProposalBlueprint(input: BuildBlueprintInput, opts?: BuildB
     .filter((r) => r.statement && isEliminationRisk({ text: r.statement, section: r.section }))
     .map((r) => ({ statement: r.statement, quote: r.statement, sourceFile: 'requirements' }));
 
-  // ── Buyer type + Texas forms engine, merged with forms the solicitation literally names. ──
-  const buyerType: TexasBuyerType | null = input?.buyer?.buyerType ?? detectBuyerType(allText);
-  const forms: RequiredForm[] = texasFormsRules({ ...(input?.buyer ?? {}), buyerType: buyerType ?? 'other' });
+  // ── Jurisdiction + buyer type + Texas forms engine, merged with forms the solicitation literally names. ──
+  // The forms engine is Texas-only. Run it with a real Texas buyer type ONLY when the jurisdiction is Texas (or the
+  // caller explicitly asserts a Texas buyer class). Off-jurisdiction we pass `other`, so NO Texas form is asserted
+  // (the Saratoga-Springs-UT bug), and we record why so the UI can say "No state forms rules loaded for <State>".
+  const jurisdiction: Jurisdiction = detectJurisdiction(allText);
+  const explicitBuyer = input?.buyer?.buyerType;
+  const isTexas = jurisdiction.state === 'Texas' || (explicitBuyer !== undefined && explicitBuyer !== 'other');
+  const buyerType: TexasBuyerType = isTexas ? (explicitBuyer ?? detectBuyerType(allText, jurisdiction) ?? 'other') : 'other';
+  const forms: RequiredForm[] = texasFormsRules({ ...(input?.buyer ?? {}), buyerType });
+  const stateFormsStatus: StateFormsStatus = isTexas
+    ? { state: 'Texas', loaded: true, note: null }
+    : { state: jurisdiction.state, loaded: false, note: `No state forms rules loaded for ${jurisdiction.state ?? 'this jurisdiction'}. Forms named in the solicitation are listed below.` };
   for (const probe of FORM_NAME_PROBES) {
     const hit = findNameQuote(files, probe.re);
     if (!hit) continue;
@@ -151,6 +222,8 @@ export function buildProposalBlueprint(input: BuildBlueprintInput, opts?: BuildB
     addenda,
     eliminationRisks,
     buyerType,
+    jurisdiction,
+    stateFormsStatus,
     droppedRuleCount: droppedCount,
     sourceFiles: files.map((f) => f.name),
     generatedAt: now.toISOString(),

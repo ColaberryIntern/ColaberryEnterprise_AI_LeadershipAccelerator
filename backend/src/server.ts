@@ -100,6 +100,7 @@ import { ensureGovProposalDocumentSchema } from './db/ensureGovProposalDocumentS
 import { ensureGovProposalDocumentGapsSchema } from './db/ensureGovProposalDocumentGapsSchema';
 import { ensureGovProposalBlueprintSchema } from './db/ensureGovProposalBlueprintSchema';
 import { ensureGovProposalReviewSchema } from './db/ensureGovProposalReviewSchema';
+import { ensureGovProposalReviewRunsSchema } from './db/ensureGovProposalReviewRunsSchema';
 import { ensureGovBuildArtifactSchema } from './db/ensureGovBuildArtifactSchema';
 import { ensureGovCompanyLibrarySchema } from './db/ensureGovCompanyLibrarySchema';
 import { ensureGovProposalPackageSchema } from './db/ensureGovProposalPackageSchema';
@@ -2911,6 +2912,9 @@ async function start(): Promise<void> {
   // Gov proposal review layer (gov_proposal_document_versions + gov_proposal_gate_reviews): immutable versions with
   // six-check scores + the Pink/Red/Gold/White-Glove gate decisions (Proposal Studio P3).
   await ensureGovProposalReviewSchema();
+  // Gov proposal review runs (gov_proposal_review_runs): one row per runReviewCycle invocation so the Studio UI can
+  // poll a run's status + progress; at most one active run per document (Proposal Studio B.5).
+  await ensureGovProposalReviewRunsSchema();
   // Gov build artifacts (gov_build_artifacts + gov_build_demo): screenshots captured from the verified build demo,
   // tagged with the requirements they prove, insertable as proposal figures (Proposal Studio P4).
   await ensureGovBuildArtifactSchema();

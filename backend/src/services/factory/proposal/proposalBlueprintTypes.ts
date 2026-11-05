@@ -21,6 +21,27 @@ export type RuleSeverity = 'fatal' | 'curable' | 'info';
 export type TexasBuyerType = 'state_agency' | 'university' | 'local_government' | 'other';
 
 /**
+ * The detected US jurisdiction (state) of the buyer, with the literal source `quote` it was read from. `state` is
+ * null when no state could be determined from the solicitation text. This gates whether the Texas forms rules engine
+ * applies at all — a non-Texas jurisdiction must never be assessed against Texas statutes.
+ */
+export interface Jurisdiction {
+  state: string | null;
+  quote: string | null;
+}
+
+/**
+ * Whether a state-specific forms rulebook was loaded for this jurisdiction. Today only the Texas rulebook exists, so
+ * a non-Texas (or undetermined) jurisdiction reports `loaded:false` with an explanatory note; the UI then lists only
+ * the forms the solicitation itself names, never invented state rules.
+ */
+export interface StateFormsStatus {
+  state: string | null;
+  loaded: boolean;
+  note: string | null;
+}
+
+/**
  * One blueprint rule — a Section L submission-mechanic, an addendum to acknowledge, or any other extracted
  * obligation. `key` is a stable machine key (e.g. `page_limit`, `min_font`, `page_size`, `file_format`,
  * `section_order`, `file_naming`, `copies`, `submission_method`, `due_datetime`). `value` is the normalized
@@ -94,6 +115,10 @@ export interface ProposalBlueprint {
   eliminationRisks: BlueprintEliminationRisk[];
   /** The Texas buyer type the forms engine keyed on (null when not determinable / out of scope). */
   buyerType: TexasBuyerType | null;
+  /** The detected buyer jurisdiction (state) + the quote it came from. Always set by the builder. */
+  jurisdiction?: Jurisdiction;
+  /** Whether a state forms rulebook was applied (Texas only today), else the explanatory note. Always set by the builder. */
+  stateFormsStatus?: StateFormsStatus;
   /** How many candidate rules were DROPPED because their quote was not literally present (never fabricate). */
   droppedRuleCount: number;
   /** The source files analyzed (names), for provenance. */

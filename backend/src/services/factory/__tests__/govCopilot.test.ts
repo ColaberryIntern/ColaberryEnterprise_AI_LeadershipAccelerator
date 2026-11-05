@@ -30,7 +30,8 @@ const view = (over: Partial<StudentGovProjectView> = {}): StudentGovProjectView 
   proposal: { level: 'edit', canComment: true, canEdit: true, responses: [] } as any,
   submissionChecklist: { items: [prop('PRP-1', 'CJIS + NIST security approach', 'build', 2), prop('PRP-2', 'Past performance', 'done', 0)], counts: { total: 2, approved: 1, remaining: 1 }, ready: false },
   viewerCanVerify: false, agency: 'TDCJ OIG', keyDates: [{ date: '2026-11-01', text: 'Proposals due' }], commitFeed: [],
-  buildSummary: null, proposalDocuments: [], overallProgress: { buildVerified: 0, buildTotal: 0, docsAccepted: 0, docsTotal: 0, pct: 0 },
+  buildSummary: null, proposalDocuments: [], proposalReadiness: { pct: 0, passing: 0, total: 0 },
+  overallProgress: { buildVerified: 0, buildTotal: 0, docsAccepted: 0, docsTotal: 0, pct: 0 },
   ...over,
 });
 

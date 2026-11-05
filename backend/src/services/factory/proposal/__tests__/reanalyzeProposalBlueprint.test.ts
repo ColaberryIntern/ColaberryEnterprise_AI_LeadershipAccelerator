@@ -11,6 +11,7 @@ const reqFindAll = jest.fn();
 const loadLatestBundle = jest.fn();
 const extractProposalMock = jest.fn();
 const syncDocs = jest.fn();
+const reconcileDocs = jest.fn();
 const readFileMock = jest.fn();
 
 jest.mock('../../../../models/GovQualification', () => ({ __esModule: true, default: { findOne: (...a: any[]) => qualFindOne(...a) } }));
@@ -18,7 +19,7 @@ jest.mock('../../../../models/GovProposalBlueprint', () => ({ __esModule: true, 
 jest.mock('../../../../models/ContractRequirement', () => ({ __esModule: true, default: { findAll: (...a: any[]) => reqFindAll(...a) } }));
 jest.mock('../govSourceBundleStore', () => ({ loadLatestGovSourceBundle: (...a: any[]) => loadLatestBundle(...a) }));
 jest.mock('../proposalExtractor', () => ({ extractProposal: (...a: any[]) => extractProposalMock(...a) }));
-jest.mock('../govProposalDocumentStore', () => ({ syncProposalDocuments: (...a: any[]) => syncDocs(...a) }));
+jest.mock('../govProposalDocumentStore', () => ({ syncProposalDocuments: (...a: any[]) => syncDocs(...a), reconcileSupersededFormDocuments: (...a: any[]) => reconcileDocs(...a) }));
 jest.mock('fs/promises', () => ({ __esModule: true, default: { readFile: (...a: any[]) => readFileMock(...a) }, readFile: (...a: any[]) => readFileMock(...a) }));
 
 import { reanalyzeProposalBlueprint, BlueprintReanalysisError } from '../reanalyzeProposalBlueprint';
@@ -37,6 +38,7 @@ beforeEach(() => {
   blueprintFindOne.mockResolvedValue(null);
   blueprintCreate.mockResolvedValue({ id: 'bp1' });
   syncDocs.mockResolvedValue([]);
+  reconcileDocs.mockResolvedValue({ toDelete: [], toFlag: [], toUnflag: [] });
 });
 
 describe('reanalyzeProposalBlueprint — missing package', () => {
@@ -65,6 +67,8 @@ describe('reanalyzeProposalBlueprint — happy path', () => {
     // documents synced from the blueprint
     expect(syncDocs).toHaveBeenCalledWith('dp-1', expect.any(Array));
     expect(syncDocs.mock.calls[0][1].every((d: any) => d.blueprintVersion === 1)).toBe(true);
+    // C.1: re-analyze reconciles no-longer-applicable form docs (prune/flag) against the fresh derived set.
+    expect(reconcileDocs).toHaveBeenCalledWith('dp-1', expect.any(Array));
   });
 
   it('increments the version off the previous blueprint', async () => {

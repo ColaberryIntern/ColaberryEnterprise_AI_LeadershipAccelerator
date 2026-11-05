@@ -46,6 +46,11 @@ export async function ensureGovProposalDocumentSchema(): Promise<void> {
     `ALTER TABLE gov_proposal_documents ADD COLUMN IF NOT EXISTS page_limit INTEGER`,
     `ALTER TABLE gov_proposal_documents ADD COLUMN IF NOT EXISTS file_name TEXT`,
     `ALTER TABLE gov_proposal_documents ADD COLUMN IF NOT EXISTS blueprint_version INTEGER`,
+    // C.1 jurisdiction fix: a blueprint FORM document (e.g. a Texas CIQ) can stop applying when the blueprint is
+    // re-analyzed (e.g. the buyer turns out to be non-Texas). Such a doc is DELETED on re-analyze when it has no
+    // authored work, else flagged `superseded` ("No longer required") and excluded from readiness + the package.
+    // Additive, self-healing.
+    `ALTER TABLE gov_proposal_documents ADD COLUMN IF NOT EXISTS superseded BOOLEAN NOT NULL DEFAULT FALSE`,
   ];
 
   for (const sql of statements) {

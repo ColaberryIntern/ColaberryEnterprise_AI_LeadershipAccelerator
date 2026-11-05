@@ -17,11 +17,25 @@ import type { EvidenceView } from './govBuildEvidence';
 import type { SharedProposalView, ProposalShareLevel } from './govProposalShare';
 import type { ProposalDocumentSection, ProposalDocType } from './proposal/govProposalDocuments';
 import type { ProposalBlueprint } from './proposal/proposalBlueprintTypes';
+import type { CheckScores, GovProposalGate, GateStatus } from './proposal/proposalReviewTypes';
+import { proposalReadiness, type ProposalReadiness } from './proposal/proposalReadiness';
+import type { VersionView, GateView } from './proposal/govProposalReviewStore';
+import type { ReviewRunView } from './proposal/govProposalReviewRunStore';
+import type { ProposalDocumentView } from './proposal/govProposalDocumentStore';
 import { deriveBuildStoryStage, deriveProposalStage, toCommitFeed, readGovProvenanceFacts, computeOverallProgress, type BuildStage, type ProposalStage, type CommitFeedItem, type GovOverallProgress } from './govCockpit';
 import type { GovBuildSummary } from './govBuildSummary';
 
 /** v2 Proposal view: one named document a bid must submit, projected student-safe (no comment-author identities). */
 export interface StudentProposalDocumentComment { body: string; at: string; }
+/** B.1: the current (latest) version summary for a document — identity-free (authorKind only, never an author id). */
+export interface GovDocLatest {
+  versionId: string;
+  version: number;
+  scores: Partial<CheckScores>;
+  passes: boolean;
+  pageCount: number | null;
+  createdAt: string | null;
+}
 export interface StudentProposalDocument {
   key: string; title: string; status: string; contentHtml: string | null;
   version: number; gate: boolean; order: number; requirementIds: string[];
@@ -31,6 +45,16 @@ export interface StudentProposalDocument {
   /** P2: blueprint-derived shape (the pricing document is dropped whole, so these never carry a price). */
   docType: ProposalDocType; pageLimit: number | null; fileName: string | null; blueprintVersion: number | null;
   comments: StudentProposalDocumentComment[]; draftedAt: string | null; acceptedAt: string | null;
+  /** C.1: "No longer required" — a blueprint form doc that no longer applies but still has authored work. */
+  superseded: boolean;
+  /** B.1 read-model (batch-loaded into the projection, no N+1): the per-document summary the Studio UI reads so it
+   *  does not fetch versions/gates/runs one doc at a time. All identity-free. */
+  latest: GovDocLatest | null;
+  gates: Record<GovProposalGate, GateStatus>;
+  currentGate: GovProposalGate | null;
+  openGapCount: number;
+  fatalCount: number;
+  cycle: { status: string; runId: string } | null;
 }
 
 export interface StudentGovTrackView { trackType: string; status: string; hasBuild: boolean; }
@@ -101,8 +125,13 @@ export interface StudentGovProjectView {
    *  deep-link to the build workspace. Null when no build is linked yet. */
   buildSummary: GovBuildSummary | null;
   /** v2 Proposal view: the named documents a bid must submit (AI-drafted, reviewer-accepted). Admin-only docs
-   *  (pricing) are dropped for non-reviewers. */
+   *  (pricing) are dropped for non-reviewers. Each carries the B.1 per-doc summary (latest/gates/currentGate/
+   *  openGapCount/fatalCount/cycle), batch-loaded. */
   proposalDocuments: StudentProposalDocument[];
+  /** B.1/C.2: the proposal readiness meter — `pct` of scored (non-pricing, non-superseded, non-form) documents that
+   *  pass, `passing` of `total`. The header's "Proposal ready x% / 95%" + Where-we-are read this. Same for everyone
+   *  (pricing is excluded, not viewer-dependent). */
+  proposalReadiness: ProposalReadiness;
   /** P2: the current blueprint derived from the stored solicitation (scoring, Section L rules, required forms incl.
    *  the Texas engine, addenda). Null until a reanalyze has run. Carries no pricing values and no identities. */
   blueprint?: ProposalBlueprint | null;
@@ -201,10 +230,63 @@ export function toStudentGovProjectView(project: any, tracks: any[], requirement
     commitFeed: [],
     buildSummary: null, // filled by the async loader from the materialized SBP build
     proposalDocuments: [], // filled by the async loader from the derived + synced documents
+    proposalReadiness: { pct: 0, passing: 0, total: 0 }, // filled by the async loader from the per-doc summaries
     blueprint: null, // filled by the async loader from the latest stored blueprint
     buildArtifacts: [], // filled by the async loader from gov_build_artifacts
     overallProgress: computeOverallProgress({ buildVerified: 0, buildTotal: 0, docsAccepted: 0, docsTotal: 0 }),
   };
+}
+
+/** B.1 per-document summary SOURCE: a synced doc view joined with its current version, gate decisions, open-gap count
+ *  and latest review run. The async loader builds these from batch-loaded maps; {@link assembleProposalDocuments} is
+ *  PURE over them, so it is unit-testable without a DB. */
+export interface ProposalDocSummarySource {
+  view: ProposalDocumentView;
+  latest: VersionView | null;
+  gates: GateView[];
+  openGapCount: number;
+  latestRun: ReviewRunView | null;
+}
+
+const EMPTY_GATES: Record<GovProposalGate, GateStatus> = { pink: 'pending', red: 'pending', gold: 'pending', white_glove: 'pending' };
+const GATE_SEQUENCE: GovProposalGate[] = ['pink', 'red', 'gold', 'white_glove'];
+
+/**
+ * PURE: assemble the viewer-filtered per-document summaries + the readiness meter from batch-loaded sources (B.1).
+ * Pricing (admin_only) docs are dropped for a non-reviewer in the CARD list; identities never appear (the version
+ * summary carries authorKind only, gates carry no reviewer id). `currentGate` is the first gate not yet approved
+ * (null ⇒ all approved ⇒ "Passed"). `fatalCount` comes from the latest version's findings. Readiness is computed
+ * over ALL sources via the pure proposalReadiness (which drops pricing/superseded/form), so it is the same honest
+ * number for admin and intern alike. Total: garbage ⇒ empty documents + zero readiness.
+ */
+export function assembleProposalDocuments(sources: ProposalDocSummarySource[], viewerCanVerify: boolean): { documents: StudentProposalDocument[]; readiness: ProposalReadiness } {
+  const list = (Array.isArray(sources) ? sources : []).filter((s) => s && s.view);
+  const documents: StudentProposalDocument[] = list
+    .filter((s) => viewerCanVerify || !s.view.adminOnly)
+    .map((s) => {
+      const d = s.view;
+      const gates: Record<GovProposalGate, GateStatus> = { ...EMPTY_GATES };
+      for (const g of Array.isArray(s.gates) ? s.gates : []) gates[g.gate] = (g.status as GateStatus) ?? 'pending';
+      const currentGate = GATE_SEQUENCE.find((g) => gates[g] !== 'approved') ?? null;
+      const fatalCount = s.latest ? (s.latest.findings ?? []).filter((f) => f.severity === 'fatal').length : 0;
+      const latest: GovDocLatest | null = s.latest
+        ? { versionId: s.latest.id, version: s.latest.version, scores: s.latest.scores ?? {}, passes: !!s.latest.passes, pageCount: s.latest.pageCount ?? null, createdAt: s.latest.createdAt ?? null }
+        : null;
+      return {
+        key: d.key, title: d.title, status: d.status, contentHtml: d.contentHtml, version: d.version,
+        gate: d.gate, order: d.order, requirementIds: d.requirementIds, sections: d.sections,
+        docType: d.docType, pageLimit: d.pageLimit, fileName: d.fileName, blueprintVersion: d.blueprintVersion,
+        comments: (Array.isArray(d.comments) ? d.comments : []).map((c) => ({ body: c.body, at: c.at })),
+        draftedAt: d.draftedAt, acceptedAt: d.acceptedAt,
+        superseded: !!d.superseded,
+        latest, gates, currentGate,
+        openGapCount: s.openGapCount ?? 0,
+        fatalCount,
+        cycle: s.latestRun ? { status: s.latestRun.status, runId: s.latestRun.id } : null,
+      };
+    });
+  const readiness = proposalReadiness(list.map((s) => ({ adminOnly: s.view.adminOnly, superseded: s.view.superseded, docType: s.view.docType, passes: !!s.latest?.passes })));
+  return { documents, readiness };
 }
 
 /**
@@ -299,14 +381,39 @@ export async function getStudentGovProjectView(deliveryProjectId: string, viewer
     const blueprint: ProposalBlueprint | null = bpRow ? (bpRow.blueprint_json as ProposalBlueprint) : null;
     view.blueprint = blueprint;
     const docs = await syncProposalDocuments(deliveryProjectId, deriveProposalDocuments(requirements, blueprint, { blueprintVersion: bpRow?.version }));
-    view.proposalDocuments = docs
-      .filter((d) => viewerCanVerify || !d.adminOnly)
-      .map((d) => ({
-        key: d.key, title: d.title, status: d.status, contentHtml: d.contentHtml, version: d.version,
-        gate: d.gate, order: d.order, requirementIds: d.requirementIds, sections: d.sections,
-        docType: d.docType, pageLimit: d.pageLimit, fileName: d.fileName, blueprintVersion: d.blueprintVersion,
-        comments: d.comments.map((c) => ({ body: c.body, at: c.at })), draftedAt: d.draftedAt, acceptedAt: d.acceptedAt,
-      }));
+    // B.1 read-model: fold the per-document summary (latest/gates/currentGate/openGapCount/fatalCount/cycle) into the
+    // projection, BATCH-loaded — one query each for current versions, gate decisions, open-gap counts and latest
+    // runs across all docs (no per-doc N+1). The pure assembleProposalDocuments applies the viewer filter + readiness.
+    const { listVersionsByIds, listGatesForDocs } = await import('./proposal/govProposalReviewStore');
+    const { latestRunsForDocs } = await import('./proposal/govProposalReviewRunStore');
+    const { openGapCountsByDoc } = await import('./proposal/govProposalGaps');
+    const { default: GovProposalDocumentModel } = await import('../../models/GovProposalDocument');
+    const docRows: any[] = await GovProposalDocumentModel.findAll({ where: { delivery_project_id: deliveryProjectId } });
+    const idByKey = new Map<string, string>();
+    const curVerByKey = new Map<string, string | null>();
+    for (const r of docRows) { const p: any = r.get({ plain: true }); idByKey.set(p.doc_key, p.id); curVerByKey.set(p.doc_key, p.current_version_id ?? null); }
+    const docIds = [...idByKey.values()];
+    const currentVersionIds = [...curVerByKey.values()].filter((v): v is string => !!v);
+    const [versionsById, gatesByDocId, openGapsByKey, runsByDocId] = await Promise.all([
+      listVersionsByIds(currentVersionIds),
+      listGatesForDocs(docIds),
+      openGapCountsByDoc(deliveryProjectId),
+      latestRunsForDocs(docIds),
+    ]);
+    const sources: ProposalDocSummarySource[] = docs.map((d) => {
+      const id = idByKey.get(d.key) ?? '';
+      const curVer = curVerByKey.get(d.key) ?? null;
+      return {
+        view: d,
+        latest: curVer ? (versionsById.get(curVer) ?? null) : null,
+        gates: gatesByDocId.get(id) ?? [],
+        openGapCount: openGapsByKey.get(d.key) ?? 0,
+        latestRun: runsByDocId.get(id) ?? null,
+      };
+    });
+    const assembled = assembleProposalDocuments(sources, viewerCanVerify);
+    view.proposalDocuments = assembled.documents;
+    view.proposalReadiness = assembled.readiness;
     view.overallProgress = computeOverallProgress({
       buildVerified: view.buildSummary?.rollup.verified ?? 0,
       buildTotal: view.buildSummary?.rollup.total ?? 0,

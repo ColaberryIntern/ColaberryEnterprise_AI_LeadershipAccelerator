@@ -18,7 +18,7 @@ import { extractProposal } from './proposalExtractor';
 import { readGovProvenanceFacts } from '../govCockpit';
 import { buildProposalBlueprint } from './buildProposalBlueprint';
 import { deriveProposalDocuments } from './govProposalDocuments';
-import { syncProposalDocuments } from './govProposalDocumentStore';
+import { syncProposalDocuments, reconcileSupersededFormDocuments } from './govProposalDocumentStore';
 import { diffBlueprints, type BlueprintDiff } from './blueprintDiff';
 import type { ProposalBlueprint } from './proposalBlueprintTypes';
 
@@ -84,6 +84,10 @@ export async function reanalyzeProposalBlueprint(deliveryProjectId: string, iden
   // Re-derive the document set from the blueprint and sync it (source-derived fields only; authored work preserved).
   const docs = deriveProposalDocuments(reqPlain, blueprint, { blueprintVersion: version });
   await syncProposalDocuments(deliveryProjectId, docs);
+  // C.1: a blueprint FORM doc that no longer applies (e.g. a Texas CIQ once the buyer is detected non-Texas) is
+  // removed when it has no authored work, else flagged "No longer required". Only runs on this explicit re-analyze
+  // action, never on a read projection, so a routine GET never deletes a row.
+  await reconcileSupersededFormDocuments(deliveryProjectId, docs);
 
   const diff = diffBlueprints(prevBlueprint, blueprint);
   log({ event: 'blueprint_reanalyzed', outcome: 'success', deliveryProjectId, version, rules: blueprint.rules.length, dropped: blueprint.droppedRuleCount, documents: docs.length });

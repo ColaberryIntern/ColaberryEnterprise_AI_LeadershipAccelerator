@@ -39,6 +39,9 @@ export interface GovProposalDocumentAttributes {
   file_name: string | null;
   /** The blueprint version that produced this document's shape. */
   blueprint_version: number | null;
+  /** C.1: a blueprint FORM document that no longer applies after a re-analyze but still has authored work — flagged
+   *  "No longer required" and excluded from readiness + the package. (A no-work stale form doc is deleted instead.) */
+  superseded?: boolean;
   /** P3: the latest immutable version of this document (gov_proposal_document_versions). Null before any version. */
   current_version_id: string | null;
   /** The review thread (newest appended last). */
@@ -68,6 +71,7 @@ class GovProposalDocument extends Model<GovProposalDocumentAttributes> implement
   declare page_limit: number | null;
   declare file_name: string | null;
   declare blueprint_version: number | null;
+  declare superseded: boolean;
   declare current_version_id: string | null;
   declare comments: GovProposalDocumentComment[];
   declare drafted_at: Date | null;
@@ -96,6 +100,7 @@ GovProposalDocument.init(
     page_limit: { type: DataTypes.INTEGER, allowNull: true },
     file_name: { type: DataTypes.TEXT, allowNull: true },
     blueprint_version: { type: DataTypes.INTEGER, allowNull: true },
+    superseded: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     current_version_id: { type: DataTypes.UUID, allowNull: true },
     comments: { type: DataTypes.JSONB, allowNull: false, defaultValue: [] },
     drafted_at: { type: DataTypes.DATE, allowNull: true },
