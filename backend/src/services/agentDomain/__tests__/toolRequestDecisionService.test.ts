@@ -115,10 +115,22 @@ describe('PROPERTY 1 — a refused decision writes nothing', () => {
   });
 
   it('writes nothing when the request has already been decided', async () => {
+    // Asserted on the RULE, not on the sentence. The first draft matched /already/i against the
+    // message and failed: the rule is `request_already_decided` but the sentence it carries is
+    // "This request is approved. A second decision does not replace the first..." — which never
+    // says "already". The rule code is the stable half of a refusal and the prose is not, so a
+    // test that greps the prose is a test that breaks on a wording change and proves less.
     const { update } = stageRow({ status: 'approved' });
-    await expect(decideToolRequest({
-      sequelize, email: APPROVER, id: ID, proposed: { verb: 'deny', reason: 'no' },
-    })).rejects.toThrow(/already/i);
+    try {
+      await decideToolRequest({
+        sequelize, email: APPROVER, id: ID, proposed: { verb: 'deny', reason: 'no' },
+      });
+      throw new Error('should have refused');
+    } catch (e) {
+      expect(e).toBeInstanceOf(ToolRequestDecisionRefusedError);
+      expect((e as ToolRequestDecisionRefusedError).issues.map((i) => i.rule))
+        .toContain('request_already_decided');
+    }
     expect(mockCreate).not.toHaveBeenCalled();
     expect(update).not.toHaveBeenCalled();
   });
