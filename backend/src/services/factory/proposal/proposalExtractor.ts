@@ -12,6 +12,7 @@ import { docxToText, xlsxToText } from './ooxmlText';
 import { classifyDocuments, SINGLE_ITEM_ROLES, roleLabel, type DocRole } from './documentClassifier';
 import { detectRfpComplianceRules, type RfpComplianceFinding } from './rfpComplianceRules';
 import { detectEvaluationCriteria, type EvaluationCriteria } from './evaluationCriteria';
+import { triageStatement } from './requirementTriage';
 // adm-zip is an undeclared/untyped dep (resolves via hoisted node_modules); the require() form keeps strict
 // tsc from rejecting it (TS7016), matching backend/src/scripts/lib/govBidContentExtractor.js.
 const AdmZip = require('adm-zip');
@@ -486,8 +487,15 @@ export async function extractProposal(zipBuffer: Buffer): Promise<ProposalExtrac
     const reqId = `REQ-${String(reqN).padStart(3, '0')}`;
     const blkId = `blk-${reqId}`;
     blocks.push({ id: blkId, locator, text: extractedText, kind: 'requirement' });
+    // WAS `kind: 'compliance', priority: 'must'` as literals. Those two constants are why 858 of
+    // 864 production rows across 13 projects read identically: the field existed, the classifier
+    // existed in govRequirementItems, and this line threw the answer away. A classifier with one
+    // output class is not classifying. Triage is deterministic and rule-based, so a reader can
+    // always ask why a row got its kind and check the answer.
+    const stored = truncate(statement, 500);
+    const triaged = triageStatement(stored);
     requirements.push({
-      canonicalReqId: reqId, statement: truncate(statement, 500), kind: 'compliance', priority: 'must',
+      canonicalReqId: reqId, statement: stored, kind: triaged.kind, priority: triaged.priority,
       tracks, sourceDocument: locator, section: locator, extractedText,
       interpretation: null, humanConfirmed: false, evidenceState: 'unassessed', sourceEvidence: [blkId],
     });
