@@ -197,6 +197,7 @@ import { ensureAgentDomainToolRequestSchemaGuarded } from './db/ensureAgentDomai
 import { ensureAgentDomainToolDuplicateCheckSchemaGuarded } from './db/ensureAgentDomainToolDuplicateCheckSchema';
 import { ensureCapabilityConfirmationSchemaGuarded } from './db/ensureCapabilityConfirmationSchema';
 import { ensureToolRequestDecisionSchemaGuarded } from './db/ensureToolRequestDecisionSchema';
+import { ensureAgentToolGrantSchemaGuarded } from './db/ensureAgentToolGrantSchema';
 
 // Import models to register associations before sync
 import './models';
@@ -3215,6 +3216,17 @@ async function start(): Promise<void> {
   await ensureAgentDomainToolDuplicateCheckSchemaGuarded();
   await ensureCapabilityConfirmationSchemaGuarded();
   await ensureToolRequestDecisionSchemaGuarded();
+  // AF3.5. The ledger behind `ai_agents.tools_granted`.
+  //
+  // ORDERING MATTERS AND IS SATISFIED HERE, but not by the name you would expect:
+  // `seedAgentRegistry` is not called from this file. It runs inside `startAIOpsScheduler`,
+  // reached via `startScheduler()` further down this same boot path, so this await completes
+  // first. The seed reads this table to avoid reverting a recorded grant.
+  //
+  // It does not DEPEND on that ordering, deliberately. `loadRecordedToolGrants` throws when the
+  // table is absent and the seed then leaves `tools_granted` untouched for that boot, which is
+  // the safe direction: a boot of staleness rather than a reverted grant.
+  await ensureAgentToolGrantSchemaGuarded();
   // Colaberry Commons — seed the 10 always-open fruit video rooms (idempotent).
   // Gated on the feature flag so it only populates envs where Rooms is enabled.
   if (env.communityRoomsEnabled) {

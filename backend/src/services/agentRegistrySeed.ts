@@ -13,6 +13,7 @@ import { recordPersonaVersionChangeIfNeeded } from './agentPersonaVersionHistory
 import { classifyNewAgentAutonomyLevel, maybeReclassifyAutonomyLevel } from './agentAutonomyReclassificationService';
 import { GROWTH_JOURNEY_AGENT_ENTRIES } from './agentRegistry/growthJourneyAgents';
 import { DOMAIN_AGENT_ENTRIES } from './agentRegistry/domainAgents';
+import { mergePreservedTools, readToolsGranted } from './agentDomain/seedToolPreservation';
 
 import type { AgentSeedEntry } from './agentRegistry/agentSeedTypes';
 import {
@@ -3341,10 +3342,33 @@ export async function seedAgentRegistry(): Promise<void> {
         // definitional fields above, not treated as user-customized runtime
         // state (unlike config/status/run stats).
         ...(entry.system_prompt !== undefined ? { system_prompt: entry.system_prompt } : {}),
-        ...(entry.tools_granted !== undefined ? { tools_granted: entry.tools_granted } : {}),
+        // AF3.5 — THIS LOOP ADDS TOOLS AND NEVER TAKES ONE AWAY.
+        //
+        // This used to assign `entry.tools_granted` directly, which rewrote the column
+        // wholesale from a source literal on every boot. The ten domain agents declare `[]`,
+        // so any tool a human granted was reverted by the next deploy, and the reclassification
+        // that rides on this column then rewrote `autonomy_level` too.
+        //
+        // The union is with what the ROW already holds, deliberately rather than with a read of
+        // the grant ledger: the agent is already loaded, so no query and no boot-time database
+        // dependency is needed to preserve the grant. The trade is that a tool can no longer be
+        // removed by deleting it from a registry entry — which is correct, because that is a
+        // revocation and a revocation is a decision, not an array edit.
+        ...(entry.tools_granted !== undefined
+          ? { tools_granted: mergePreservedTools(
+            entry.tools_granted,
+            readToolsGranted(previousToolsGranted),
+          ) }
+          : {}),
         ...(entry.persona_version !== undefined ? { persona_version: entry.persona_version } : {}),
       });
-      await maybeReclassifyAutonomyLevel(agent, previousToolsGranted, entry.tools_granted);
+      // Diffed against the SAME value that was written, so a preserved grant reads as no
+      // change and no autonomy level is rewritten. Passing `entry.tools_granted` here instead
+      // would report a change on every boot for every agent holding a grant, and reclassify it.
+      const seededToolsGranted = entry.tools_granted !== undefined
+        ? mergePreservedTools(entry.tools_granted, readToolsGranted(previousToolsGranted))
+        : undefined;
+      await maybeReclassifyAutonomyLevel(agent, previousToolsGranted, seededToolsGranted);
     } else {
       console.log(`[AI Ops] Registered agent: ${entry.agent_name}`);
       // Trust Contract Phase 1 — the first version this table has ever seen

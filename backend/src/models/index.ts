@@ -508,6 +508,7 @@ import AgentDomainToolRequestDetail from './AgentDomainToolRequestDetail';
 import AgentDomainToolDuplicateCheck from './AgentDomainToolDuplicateCheck';
 import AgentDomainCapabilityConfirmation from './AgentDomainCapabilityConfirmation';
 import AgentDomainToolRequestDecision from './AgentDomainToolRequestDecision';
+import AgentDomainToolGrant from './AgentDomainToolGrant';
 import BlueprintDesignDecision from './BlueprintDesignDecision';
 import BlueprintVisualContract from './BlueprintVisualContract';
 // Memory Graph. Imported here so the models register with Sequelize when the index is
@@ -1713,6 +1714,7 @@ export {
   AgentDomainToolDuplicateCheck,
   AgentDomainCapabilityConfirmation,
   AgentDomainToolRequestDecision,
+  AgentDomainToolGrant,
   BlueprintDesignDecision,
   BlueprintVisualContract,
   GraphNode,
