@@ -6,6 +6,7 @@
  */
 import type { FactoryProject, FactoryTask } from './contracts/factoryContract';
 import { evaluateHumanAiStructure, type StructureFinding } from './humanAiStructure';
+import { evaluatePerspective } from './factoryPerspective';
 
 export type Severity = 'error' | 'warning';
 export interface ValidationIssue {
@@ -132,6 +133,16 @@ export function factoryValidate(project: FactoryProject): ValidationIssue[] {
   // stays available for a caller that has earned the right to refuse.
   for (const f of structureFindings(project)) {
     issues.push(warn(`STRUCTURE_${f.rule}`, f.ref ? `${f.detail} (${f.ref})` : f.detail, f.ref ?? undefined));
+  }
+
+  // PERSPECTIVE (L10.4) — reported, never blocking, for the same reason as the block above.
+  //
+  // These catch a decomposition that is correctly classified and still written from the wrong
+  // side of the table: our obligation to submit a proposal emitted as the buyer's task to
+  // receive one. The prompt now forbids it; this is the half that does not depend on the model
+  // having read the prompt.
+  for (const f of evaluatePerspective({ tasks: project.tasks, source_blocks: project.source_blocks })) {
+    issues.push(warn(`PERSPECTIVE_${f.rule}`, `${f.detail}`, f.ref));
   }
 
   return issues;

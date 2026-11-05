@@ -36,6 +36,9 @@ import type {
   AllocationRow,
   Role,
   TransitionEdge,
+  AgentTeam,
+  Surface,
+  RoleMapRow,
 } from '../contracts/factoryContract';
 
 export interface HumanAiFlowInput {
@@ -47,101 +50,21 @@ export interface HumanAiFlowInput {
   /** Shown in the header. The project or bid this flow belongs to. */
   readonly title?: string;
   readonly subtitle?: string;
+  /**
+   * L10.5. OPTIONAL on purpose: every existing caller and fixture predates these three, and
+   * making them required would be a breaking change to a published type for no gain. Absent
+   * means "not declared", which the rules below render as a NAMED empty state rather than as
+   * silence — see VR8 in `humanAiVisualRules.ts`.
+   */
+  readonly agent_teams?: readonly AgentTeam[];
+  readonly surfaces?: readonly Surface[];
+  readonly role_map?: readonly RoleMapRow[];
 }
 
-/** The lane a task is drawn in. `spine` carries START/END, which nobody performs. */
-export type Lane = 'ai' | 'human' | 'spine' | 'unclassified';
-
-export const LANE_LABELS: Readonly<Record<Lane, string>> = {
-  ai: 'AI performs, human approves',
-  human: 'Human performs',
-  spine: 'Start and end',
-  unclassified: 'Not classified',
-};
-
-/**
- * Lane for one task.
- *
- * `ai_autonomous` shares the AI lane but is flagged separately in the node badge, because an
- * agent acting with NO human approver is a materially different claim to make in a bid than an
- * agent whose work a human signs off.
- */
-export function laneOf(task: FactoryTask, alloc: AllocationRow | undefined): Lane {
-  if (task.kind === 'START' || task.kind === 'END') return 'spine';
-  if (!alloc) return 'unclassified';
-  switch (alloc.execution_class) {
-    case 'human': return 'human';
-    case 'ai_with_approval':
-    case 'ai_autonomous':
-    case 'deterministic_software': return 'ai';
-    default: return 'unclassified';
-  }
-}
-
-/**
- * Depth of each task from the START nodes, following forward edges only.
- *
- * Rework edges are excluded from layering on purpose: a rework edge points BACKWARDS, so counting
- * it would put a task at a greater depth than the step it corrects and the flow would read as
- * though the correction happens later than the thing being corrected. They are still DRAWN — see
- * `renderHumanAiFlowSvg` — just not used to decide position.
- *
- * A task unreachable from any START still gets a level (after the deepest reachable one) rather
- * than being dropped. Dropping it would hide work from a diagram whose job is to show all of it.
- */
-export function levelsOf(
-  tasks: readonly FactoryTask[],
-  transitions: readonly TransitionEdge[],
-): Map<string, number> {
-  const ids = new Set(tasks.map((t) => t.id));
-  const forward = transitions.filter((e) => !e.is_rework
-    && ids.has(e.from_task_id) && ids.has(e.to_task_id));
-  const outgoing = new Map<string, string[]>();
-  const indegree = new Map<string, number>();
-  for (const t of tasks) { outgoing.set(t.id, []); indegree.set(t.id, 0); }
-  for (const e of forward) {
-    outgoing.get(e.from_task_id)!.push(e.to_task_id);
-    indegree.set(e.to_task_id, (indegree.get(e.to_task_id) ?? 0) + 1);
-  }
-
-  const level = new Map<string, number>();
-  // Seed with declared STARTs, else anything with no inbound edge, else the first task — so a
-  // malformed graph still lays out instead of producing an empty picture.
-  let frontier = tasks.filter((t) => t.kind === 'START').map((t) => t.id);
-  if (frontier.length === 0) frontier = tasks.filter((t) => (indegree.get(t.id) ?? 0) === 0).map((t) => t.id);
-  if (frontier.length === 0 && tasks.length > 0) frontier = [tasks[0].id];
-  for (const id of frontier) level.set(id, 0);
-
-  // Breadth-first with a visit cap, so a cycle among forward edges cannot spin forever.
-  let guard = tasks.length * tasks.length + 8;
-  while (frontier.length > 0 && guard-- > 0) {
-    const next: string[] = [];
-    for (const id of frontier) {
-      const base = level.get(id) ?? 0;
-      for (const to of outgoing.get(id) ?? []) {
-        const proposed = base + 1;
-        if ((level.get(to) ?? -1) < proposed) { level.set(to, proposed); next.push(to); }
-      }
-    }
-    frontier = next;
-  }
-
-  const deepest = [...level.values()].reduce((m, v) => Math.max(m, v), 0);
-  for (const t of tasks) if (!level.has(t.id)) level.set(t.id, deepest + 1);
-  return level;
-}
-
-const LANE_ORDER: readonly Lane[] = ['ai', 'spine', 'human', 'unclassified'];
-
-const NODE_W = 240;
-const MIN_GAP = 60;
-/** Condition labels render at 11px italic; this is the measured average advance per character. */
-const COND_CHAR_W = 6.2;
-const NODE_H = 104;
-const ROW_GAP = 26;
-const PAD_X = 28;
-const HEADER_H = 92;
-const LANE_LABEL_W = 0;
+import {
+  type Lane, type Placed, LANE_LABELS, LANE_ORDER, GEO,
+  laneOf, levelsOf, columnWidthFor, wrapText,
+} from './humanAiFlowLayout';
 
 /** Cherry/leaf tokens from `frontend/src/styles/tokens.css`, not invented hex. */
 const C = {
@@ -156,21 +79,6 @@ const C = {
   white: '#ffffff',
 };
 
-/**
- * Column width, DERIVED from the longest branch-condition label rather than fixed.
- *
- * Two rounds of this diagram shipped with clipped conditions -- "administrative" rendering as
- * "adr", then as "administrativ" -- because a hardcoded column left a gap narrower than the
- * label centred in it. Bumping the constant fixes today's data and waits to break on a longer
- * condition, so the gap is computed from the labels instead. The conditions carry the branch
- * logic; a diagram that hides them misrepresents the flow.
- */
-export function columnWidthFor(transitions: readonly TransitionEdge[]): number {
-  const longest = transitions.reduce(
-    (m, e) => Math.max(m, String(e.condition ?? '').length), 0,
-  );
-  return NODE_W + Math.max(MIN_GAP, Math.ceil(longest * COND_CHAR_W) + 20);
-}
 
 function esc(s: unknown): string {
   return String(s ?? '')
@@ -178,33 +86,6 @@ function esc(s: unknown): string {
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
-/** Greedy word wrap to a character budget per line, capped at `maxLines` with an ellipsis. */
-export function wrapText(text: string, perLine: number, maxLines: number): string[] {
-  const words = String(text ?? '').trim().split(/\s+/).filter(Boolean);
-  const lines: string[] = [];
-  let cur = '';
-  for (const w of words) {
-    if (cur === '') { cur = w; continue; }
-    if ((cur + ' ' + w).length <= perLine) { cur += ' ' + w; continue; }
-    lines.push(cur); cur = w;
-    if (lines.length === maxLines) break;
-  }
-  if (lines.length < maxLines && cur !== '') lines.push(cur);
-  if (lines.length === maxLines && words.join(' ').length > lines.join(' ').length) {
-    lines[maxLines - 1] = `${lines[maxLines - 1].replace(/[\s.,;:]+$/, '')}...`;
-  }
-  return lines.length > 0 ? lines : [''];
-}
-
-interface Placed {
-  task: FactoryTask;
-  lane: Lane;
-  alloc: AllocationRow | undefined;
-  performer: Assignment | undefined;
-  approver: Assignment | undefined;
-  x: number;
-  y: number;
-}
 
 /**
  * The whole flow as one standalone SVG string.
@@ -254,14 +135,25 @@ export function renderHumanAiFlowSvg(input: HumanAiFlowInput): string {
   }
 
   const laneTop = new Map<Lane, number>();
-  let y = HEADER_H;
+  let y = GEO.HEADER_H;
   for (const l of usedLanes) {
     laneTop.set(l, y);
-    y += (laneRows.get(l) ?? 1) * (NODE_H + ROW_GAP) + 18;
+    y += (laneRows.get(l) ?? 1) * (GEO.NODE_H + GEO.ROW_GAP) + 18;
   }
   const totalH = y + 96; // room for the legend
   const maxLevel = [...level.values()].reduce((m, v) => Math.max(m, v), 0);
-  const totalW = PAD_X * 2 + LANE_LABEL_W + (maxLevel + 1) * COL_W;
+  const totalW = GEO.PAD_X * 2 + GEO.LANE_LABEL_W + (maxLevel + 1) * COL_W;
+
+  // VR3/VR4 — which team owns a task, and which surface it lands on. Built as lookups so the
+  // node renderer states ownership instead of the reader inferring it from position.
+  const teamOf = new Map<string, AgentTeam>();
+  for (const t of input.agent_teams ?? []) {
+    for (const id of t.task_ids) if (!teamOf.has(id)) teamOf.set(id, t);
+  }
+  const surfaceOf = new Map<string, Surface>();
+  for (const s of input.surfaces ?? []) {
+    for (const id of s.task_ids) if (!surfaceOf.has(id)) surfaceOf.set(id, s);
+  }
 
   const placed: Placed[] = input.tasks.map((t) => {
     const lane = lanes.get(t.id)!;
@@ -271,8 +163,8 @@ export function renderHumanAiFlowSvg(input: HumanAiFlowInput): string {
       alloc: allocByTask.get(t.id),
       performer: perfByTask.get(t.id),
       approver: apprByTask.get(t.id),
-      x: PAD_X + LANE_LABEL_W + level.get(t.id)! * COL_W,
-      y: (laneTop.get(lane) ?? HEADER_H) + (slot.get(t.id) ?? 0) * (NODE_H + ROW_GAP),
+      x: GEO.PAD_X + GEO.LANE_LABEL_W + level.get(t.id)! * COL_W,
+      y: (laneTop.get(lane) ?? GEO.HEADER_H) + (slot.get(t.id) ?? 0) * (GEO.NODE_H + GEO.ROW_GAP),
     };
   });
   const byId = new Map(placed.map((p) => [p.task.id, p]));
@@ -290,20 +182,46 @@ export function renderHumanAiFlowSvg(input: HumanAiFlowInput): string {
     + '</defs>');
 
   // Header
-  out.push(`<text x="${PAD_X}" y="38" font-family="Segoe UI, system-ui, sans-serif" `
+  out.push(`<text x="${GEO.PAD_X}" y="38" font-family="Segoe UI, system-ui, sans-serif" `
     + `font-size="23" font-weight="700" fill="${C.cherry}">${esc(input.title ?? 'Human and AI task flow')}</text>`);
   if (input.subtitle) {
-    out.push(`<text x="${PAD_X}" y="62" font-family="Segoe UI, system-ui, sans-serif" `
+    out.push(`<text x="${GEO.PAD_X}" y="62" font-family="Segoe UI, system-ui, sans-serif" `
       + `font-size="13" fill="${C.textLight}">${esc(input.subtitle)}</text>`);
+  }
+
+  // VR6 — PRE-AI BASELINE. "AI does most of it" means nothing without what it was before, so
+  // where role_map says a function changed, the picture says how many and names them.
+  const displaced = input.role_map ?? [];
+  if (displaced.length > 0) {
+    const fns = displaced.map((r) => r.previous_function).filter(Boolean).join('; ');
+    out.push(`<text x="${GEO.PAD_X}" y="80" font-family="Segoe UI, system-ui, sans-serif" `
+      + `font-size="11.5" fill="${C.text}">`
+      + `${esc(`Before AI: ${displaced.length} function(s) changed - ${wrapText(fns, 110, 1)[0]}`)}</text>`);
+  } else {
+    out.push(`<text x="${GEO.PAD_X}" y="80" font-family="Segoe UI, system-ui, sans-serif" `
+      + `font-size="11.5" fill="${C.textLight}">Before AI: no displaced function declared</text>`);
+  }
+
+  // VR8 — EVERY EMPTY STATE SAYS WHICH EMPTY IT IS.
+  //
+  // Two different facts that a blank panel renders identically: nothing was generated, and
+  // something was generated that allocated nothing. Reading the first as the second is how a
+  // pipeline that never ran gets reported as a clean result.
+  if (input.tasks.length === 0) {
+    out.push(`<text x="${GEO.PAD_X}" y="${GEO.HEADER_H + 34}" font-family="Segoe UI, system-ui, sans-serif" `
+      + `font-size="14" font-weight="600" fill="${C.textLight}">No decomposition yet - nothing has been generated for this project.</text>`);
+  } else if (input.allocation.length === 0) {
+    out.push(`<text x="${GEO.PAD_X}" y="${GEO.HEADER_H + 34}" font-family="Segoe UI, system-ui, sans-serif" `
+      + `font-size="14" font-weight="600" fill="${C.textLight}">Nothing allocated yet - ${input.tasks.length} task(s) exist but none is classified human or AI.</text>`);
   }
 
   // Lane bands
   for (const l of usedLanes) {
     const top = laneTop.get(l)! - 14;
-    const h = (laneRows.get(l) ?? 1) * (NODE_H + ROW_GAP) + 6;
-    out.push(`<rect x="${PAD_X - 10}" y="${top}" width="${totalW - PAD_X * 2 + 20}" height="${h}" `
+    const h = (laneRows.get(l) ?? 1) * (GEO.NODE_H + GEO.ROW_GAP) + 6;
+    out.push(`<rect x="${GEO.PAD_X - 10}" y="${top}" width="${totalW - GEO.PAD_X * 2 + 20}" height="${h}" `
       + `rx="10" fill="${l === 'ai' ? C.cherryBg : C.bgAlt}" stroke="${C.border}"/>`);
-    out.push(`<text x="${PAD_X - 2}" y="${top + 15}" font-family="Segoe UI, system-ui, sans-serif" `
+    out.push(`<text x="${GEO.PAD_X - 2}" y="${top + 15}" font-family="Segoe UI, system-ui, sans-serif" `
       + `font-size="11" font-weight="600" letter-spacing="0.6" `
       + `fill="${l === 'ai' ? C.cherryDeep : C.textLight}">${esc(LANE_LABELS[l].toUpperCase())}</text>`);
   }
@@ -313,17 +231,17 @@ export function renderHumanAiFlowSvg(input: HumanAiFlowInput): string {
     const a = byId.get(e.from_task_id);
     const b = byId.get(e.to_task_id);
     if (!a || !b) continue;
-    const x1 = a.x + NODE_W;
-    const y1 = a.y + NODE_H / 2;
+    const x1 = a.x + GEO.NODE_W;
+    const y1 = a.y + GEO.NODE_H / 2;
     const x2 = b.x;
-    const y2 = b.y + NODE_H / 2;
+    const y2 = b.y + GEO.NODE_H / 2;
     const mid = x1 + Math.max(18, (x2 - x1) / 2);
     const stroke = e.is_rework ? C.cherry : C.textLight;
     const dash = e.is_rework ? ' stroke-dasharray="6 4"' : '';
     const marker = e.is_rework ? 'arrow-rework' : 'arrow';
     // A rework edge runs backwards, so route it under the row rather than through the nodes.
     const d = e.is_rework
-      ? `M ${x1 - NODE_W / 2} ${a.y + NODE_H} V ${Math.max(y1, y2) + 34} H ${x2 + NODE_W / 2} V ${b.y + NODE_H}`
+      ? `M ${x1 - GEO.NODE_W / 2} ${a.y + GEO.NODE_H} V ${Math.max(y1, y2) + 34} H ${x2 + GEO.NODE_W / 2} V ${b.y + GEO.NODE_H}`
       : `M ${x1} ${y1} H ${mid} V ${y2} H ${x2}`;
     out.push(`<path d="${d}" fill="none" stroke="${stroke}" stroke-width="1.6"${dash} marker-end="url(#${marker})"/>`);
     if (e.condition) {
@@ -340,9 +258,9 @@ export function renderHumanAiFlowSvg(input: HumanAiFlowInput): string {
     const isAi = p.lane === 'ai';
     const isSpine = p.lane === 'spine';
     const accent = p.lane === 'unclassified' ? C.textLight : (isAi ? C.cherry : (isSpine ? C.textLight : C.leaf));
-    const h = isSpine ? 48 : NODE_H;
-    const yTop = isSpine ? p.y + (NODE_H - 48) / 2 : p.y;
-    out.push(`<rect x="${p.x}" y="${yTop}" width="${NODE_W}" height="${h}" rx="9" `
+    const h = isSpine ? 48 : GEO.NODE_H;
+    const yTop = isSpine ? p.y + (GEO.NODE_H - 48) / 2 : p.y;
+    out.push(`<rect x="${p.x}" y="${yTop}" width="${GEO.NODE_W}" height="${h}" rx="9" `
       + `fill="${C.white}" stroke="${C.border}" stroke-width="1.2"/>`);
     out.push(`<rect x="${p.x}" y="${yTop}" width="4.5" height="${h}" rx="2" fill="${accent}"/>`);
 
@@ -362,7 +280,7 @@ export function renderHumanAiFlowSvg(input: HumanAiFlowInput): string {
       ? (p.alloc.execution_class === 'ai_autonomous' ? 'AI, NO APPROVER' : p.alloc.execution_class.replace(/_/g, ' '))
       : 'unclassified';
     const badgeY = yTop + 22 + lines.length * 15 + 4;
-    out.push(`<rect x="${p.x + 15}" y="${badgeY}" width="${Math.min(NODE_W - 30, 9 + badge.length * 6.1)}" height="16" `
+    out.push(`<rect x="${p.x + 15}" y="${badgeY}" width="${Math.min(GEO.NODE_W - 30, 9 + badge.length * 6.1)}" height="16" `
       + `rx="8" fill="${isAi ? C.cherryBg : C.bgAlt}" stroke="${accent}" stroke-width="0.9"/>`);
     out.push(`<text x="${p.x + 20}" y="${badgeY + 12}" font-family="Segoe UI, system-ui, sans-serif" `
       + `font-size="9.5" font-weight="600" fill="${isAi ? C.cherryDeep : C.text}">${esc(badge.toUpperCase())}</text>`);
@@ -380,14 +298,54 @@ export function renderHumanAiFlowSvg(input: HumanAiFlowInput): string {
         + `font-size="10.5" fill="${p.approver ? C.text : C.cherry}" `
         + `font-weight="${p.approver ? '400' : '600'}">${esc(wrapText(appr, 40, 1)[0])}</text>`);
     }
+
+    // VR3 — NAMED, SUBJECT-BOUNDED AGENTS. An AI task says which team owns it and what that
+    // team's subject is. A team called "AI" with no subject is the monolith relabelled, so the
+    // subject is rendered next to the name rather than left in the data.
+    const team = teamOf.get(p.task.id);
+    if (isAi) {
+      const teamLabel = team
+        ? `Team: ${team.name} - ${team.subject}`
+        : 'No team owns this AI task';
+      out.push(`<text x="${p.x + 15}" y="${badgeY + 59}" font-family="Segoe UI, system-ui, sans-serif" `
+        + `font-size="10" fill="${team ? C.cherryDeep : C.cherry}" `
+        + `font-weight="${team ? '400' : '600'}">${esc(wrapText(teamLabel, 42, 1)[0])}</text>`);
+    }
+  }
+
+  // VR4 — ONE SURFACE. Human tasks have to converge somewhere, and the picture has to show
+  // where. Human work with an owner and no destination is what grew one screen and one login
+  // per role in the first cohort's app: the contract permitted it, which was the real defect.
+  // So the count per surface is rendered, external is marked external, and "no surface" is
+  // stated rather than left as white space.
+  const humanTasks = placed.filter((p) => p.lane === 'human');
+  const surfaceBandY = totalH - 76;
+  if (humanTasks.length > 0) {
+    const surfaces = input.surfaces ?? [];
+    let label: string;
+    if (surfaces.length === 0) {
+      label = `${humanTasks.length} human task(s) land on NO surface - no destination declared`;
+    } else {
+      const consoles = surfaces.filter((s) => s.kind === 'console');
+      const parts = surfaces.map((s) => {
+        const n = humanTasks.filter((p) => surfaceOf.get(p.task.id)?.id === s.id).length;
+        return `${s.name}${s.kind === 'external' ? ' (external)' : ''}: ${n}`;
+      });
+      const prefix = consoles.length === 1
+        ? 'One console'
+        : (consoles.length === 0 ? 'NO console' : `${consoles.length} consoles - should be one`);
+      label = `${prefix} - ${parts.join('; ')}`;
+    }
+    out.push(`<text x="${GEO.PAD_X}" y="${surfaceBandY}" font-family="Segoe UI, system-ui, sans-serif" `
+      + `font-size="11" fill="${C.text}">${esc(`Human work lands on: ${wrapText(label, 120, 1)[0]}`)}</text>`);
   }
 
   // Legend. Counts are computed, never typed in.
   const counts = new Map<Lane, number>();
   for (const l of usedLanes) counts.set(l, placed.filter((p) => p.lane === l).length);
   const legendY = totalH - 52;
-  out.push(`<line x1="${PAD_X}" y1="${legendY - 18}" x2="${totalW - PAD_X}" y2="${legendY - 18}" stroke="${C.border}"/>`);
-  let lx = PAD_X;
+  out.push(`<line x1="${GEO.PAD_X}" y1="${legendY - 18}" x2="${totalW - GEO.PAD_X}" y2="${legendY - 18}" stroke="${C.border}"/>`);
+  let lx = GEO.PAD_X;
   for (const l of usedLanes) {
     const col = l === 'ai' ? C.cherry : (l === 'human' ? C.leaf : C.textLight);
     out.push(`<rect x="${lx}" y="${legendY}" width="11" height="11" rx="3" fill="${col}"/>`);

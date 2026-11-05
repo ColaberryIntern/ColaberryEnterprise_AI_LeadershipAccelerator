@@ -1,13 +1,15 @@
+import { renderHumanAiFlowSvg } from '../humanAiFlowSvg';
 import {
-  renderHumanAiFlowSvg,
   levelsOf,
   laneOf,
   columnWidthFor,
   wrapText,
   LANE_LABELS,
-} from '../humanAiFlowSvg';
+} from '../humanAiFlowLayout';
+import { readFileSync } from 'fs';
+import { HUMAN_AI_VISUAL_RULE_IDS } from '../humanAiVisualRules';
 import type {
-  FactoryTask, Assignment, AllocationRow, Role, TransitionEdge,
+  FactoryTask, Assignment, AllocationRow, Role, TransitionEdge, AgentTeam, Surface,
 } from '../../contracts/factoryContract';
 
 const task = (id: string, kind: FactoryTask['kind'], title = id): FactoryTask => ({
@@ -234,5 +236,163 @@ describe('renderHumanAiFlowSvg over the real production flow', () => {
       tasks: [], assignments: [], allocation: [], roles: [], transitions: [],
     });
     expect(out).toContain('<svg');
+  });
+});
+
+/**
+ * L10.5 — THE EIGHT VISUAL RULES, one test per rule id.
+ *
+ * The rules are declared as data in `humanAiVisualRules.ts` and `story-build` references that
+ * module rather than restating them. This block is the other half of that arrangement: a rule
+ * with no test is a rule that decays into a style guide nobody reads, so the completeness test
+ * at the bottom asserts the declared ids and the tested ids are the same set.
+ *
+ * Three rules already had coverage before L10.5 and are MAPPED rather than rewritten:
+ *   VR1 → 'separates human from AI' (:77)
+ *   VR2 → 'marks an unallocated task UNCLASSIFIED rather than guessing it into a lane' (:83)
+ *   VR5 → 'names the approver on an AI task' (:208) and 'flags an agent task with NO human
+ *          approver' (:212)
+ * Duplicating them to make this block look complete would be theatre; the map below records
+ * where each rule is really proven.
+ */
+describe('the eight visual rules', () => {
+  const team = (over: Partial<AgentTeam> = {}): AgentTeam => ({
+    id: 'team-compliance', name: 'Compliance', subject: 'Compliance',
+    task_ids: ['t-extract', 't-classify'], approver_role_id: 'role-a',
+    execution_policy: 'agent_with_review', approval_policy: 'internal_review',
+    autonomy_stage: null, trust_dimensions: [], ...over,
+  } as AgentTeam);
+
+  const surface = (over: Partial<Surface> = {}): Surface => ({
+    id: 'surf-console', name: 'Bid console', kind: 'console',
+    task_ids: ['t-route-admin', 't-route-tech'], ...over,
+  } as Surface);
+
+  const render = (over: Record<string, unknown> = {}) =>
+    renderHumanAiFlowSvg({ ...realFlow(), ...over } as Parameters<typeof renderHumanAiFlowSvg>[0]);
+
+  // VR1 and VR2 and VR5 are proven in the blocks above; these are the five that needed
+  // new renderer behaviour.
+
+  it('VR3_NAMED_SUBJECT_AGENTS: an AI task names its team AND that team\'s subject', () => {
+    const out = render({ agent_teams: [team({ name: 'Requirements', subject: 'Requirements' })] });
+    expect(out).toContain('Team: Requirements - Requirements');
+  });
+
+  it('VR3_NAMED_SUBJECT_AGENTS: an AI task owned by no team says so, rather than going blank', () => {
+    // The failure this guards is silence. An AI task with no owning team is the generic blob,
+    // and a blank line renders identically to a team that simply was not drawn.
+    const out = render({ agent_teams: [] });
+    expect(out).toContain('No team owns this AI task');
+  });
+
+  it('VR4_ONE_SURFACE_CONVERGENCE: states one console and the human count on it', () => {
+    const out = render({ surfaces: [surface()] });
+    expect(out).toContain('One console');
+    expect(out).toContain('Bid console: 2');
+  });
+
+  it('VR4_ONE_SURFACE_CONVERGENCE: marks an external surface as external', () => {
+    const out = render({
+      surfaces: [surface(), surface({
+        id: 'surf-portal', name: 'City portal', kind: 'external', task_ids: [],
+      })],
+    });
+    expect(out).toContain('City portal (external)');
+    // Two surfaces, one of which is external, is still ONE console - the external one must not
+    // be counted as a second, or the one-console claim reads as broken when it is not.
+    expect(out).toContain('One console');
+  });
+
+  it('VR4_ONE_SURFACE_CONVERGENCE: human tasks with no surface at all are called out', () => {
+    const out = render({ surfaces: [] });
+    expect(out).toContain('land on NO surface');
+  });
+
+  it('VR4_ONE_SURFACE_CONVERGENCE: two consoles are reported as too many', () => {
+    const out = render({
+      surfaces: [surface(), surface({ id: 'surf-2', name: 'Review console', task_ids: [] })],
+    });
+    expect(out).toContain('2 consoles - should be one');
+  });
+
+  it('VR6_PRE_AI_BASELINE: states how many functions changed and names them', () => {
+    const out = render({
+      role_map: [{
+        previous_function: 'Analyst reads every requirement by hand',
+        ai_contribution: 'Extraction and first-pass classification',
+        new_role_id: 'role-a',
+        retained_responsibilities: ['Final compliance sign-off'],
+      }],
+    });
+    expect(out).toContain('Before AI: 1 function(s) changed');
+    expect(out).toContain('Analyst reads every requirement by hand');
+  });
+
+  it('VR6_PRE_AI_BASELINE: says the baseline is undeclared rather than omitting the line', () => {
+    expect(render()).toContain('Before AI: no displaced function declared');
+  });
+
+  it('VR7_APPROVALS_HUMAN: the AI lane is labelled approval-gated', () => {
+    expect(render()).toContain(LANE_LABELS.ai);
+    expect(LANE_LABELS.ai).toMatch(/human approves/);
+  });
+
+  it('VR8_EMPTY_STATE_NAMED: no tasks says NO DECOMPOSITION, not just nothing', () => {
+    const out = renderHumanAiFlowSvg({
+      tasks: [], assignments: [], allocation: [], roles: [], transitions: [],
+    });
+    expect(out).toContain('No decomposition yet');
+  });
+
+  it('VR8_EMPTY_STATE_NAMED: tasks with no allocation says NOTHING ALLOCATED, a different fact', () => {
+    const out = render({ allocation: [] });
+    expect(out).toContain('Nothing allocated yet');
+    expect(out).not.toContain('No decomposition yet');
+  });
+
+  it('VR8_EMPTY_STATE_NAMED: the two empty states are not the same string', () => {
+    // The whole rule is that these differ. If a future edit collapses them into one message,
+    // "never ran" and "ran and found nothing" become indistinguishable again.
+    const noTasks = renderHumanAiFlowSvg({
+      tasks: [], assignments: [], allocation: [], roles: [], transitions: [],
+    });
+    const noAlloc = render({ allocation: [] });
+    expect(noTasks).not.toBe(noAlloc);
+    expect(noAlloc).not.toContain('No decomposition yet');
+  });
+
+  /**
+   * THE COMPLETENESS CHECK. Without it, adding a ninth rule to the contract and no test would
+   * leave the suite green, which is the decay this ticket exists to stop.
+   */
+  it('has a test for every declared rule, and declares every tested rule', () => {
+    const PROVEN_ELSEWHERE: Record<string, string> = {
+      VR1_EXPLICIT_SPLIT: 'separates human from AI',
+      VR2_UNCLASSIFIED_NEVER_DEFAULTED: 'marks an unallocated task UNCLASSIFIED rather than guessing it into a lane',
+      VR5_AGENT_SHOWS_APPROVER: 'names the approver on an AI task, because that IS the human/AI split',
+    };
+
+    const suiteSrc = readFileSync(__filename, 'utf8');
+
+    // CONTROL: if the source read came back empty or the title pattern stopped matching, every
+    // assertion below would pass vacuously. Eight declared rules must be found.
+    expect(HUMAN_AI_VISUAL_RULE_IDS).toHaveLength(8);
+    expect(suiteSrc.length).toBeGreaterThan(1000);
+
+    for (const id of HUMAN_AI_VISUAL_RULE_IDS) {
+      const hasOwnTest = suiteSrc.includes(`it('${id}:`) || suiteSrc.includes(`it(\`${id}:`)
+        || suiteSrc.includes(`it('${id}`);
+      const mappedTitle = PROVEN_ELSEWHERE[id];
+      const provenElsewhere = mappedTitle !== undefined && suiteSrc.includes(mappedTitle);
+      expect(hasOwnTest || provenElsewhere).toBe(true);
+    }
+
+    // And the other direction: no VR-shaped id appears in a test title unless it is declared.
+    const titled = [...suiteSrc.matchAll(/it\('(VR\d+_[A-Z_]+)/g)].map((m) => m[1]);
+    expect(titled.length).toBeGreaterThan(0);
+    for (const id of new Set(titled)) {
+      expect(HUMAN_AI_VISUAL_RULE_IDS).toContain(id);
+    }
   });
 });

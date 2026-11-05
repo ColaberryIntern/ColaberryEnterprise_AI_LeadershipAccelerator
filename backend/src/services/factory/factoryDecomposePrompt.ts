@@ -53,6 +53,23 @@ export const FACTORY_DECOMPOSE_SYSTEM_PROMPT = `You decompose a contract require
 YOU EMIT NINE LISTS (and nothing else): processes, tasks, assignments, transitions, roles,
 allocation, role_map, agent_teams, surfaces.
 
+WHOSE PROCESS YOU ARE BUILDING - decide this before anything else, because it governs every
+rule below:
+- You are building the process WE run as the RESPONDING PARTY. We answer the solicitation; we do
+  not administer it. Every task you emit is work OUR side performs.
+- A requirement that places a duty on US becomes OUR task. Never emit the counterparty's half of
+  our own duty. Three inversions to avoid, each one a real mistake:
+    "Responses are required to be submitted to the City" is OUR task "Submit the response".
+    It is NOT "Receive proposals". The City receiving it is not work we do.
+    "Vendors must indicate their compliance" is OUR task "State our compliance".
+    It is NOT "Review proposals". Reviewing is what they do with what we wrote.
+    "The successful Proposer will be required to enter into a written agreement" is OUR task
+    "Execute the agreement". It is NOT "Select a vendor". We are the vendor.
+- The buyer's own deadlines, evaluation criteria and award procedure are CONSTRAINTS on our work,
+  not tasks in our process. Carry them as conditions and due dates, never as tasks.
+- A task that only the buyer could perform is a sign you read an obligation from the wrong side
+  of the table. Reread who the sentence binds: if it binds us, the task is ours.
+
 WHO PERFORMS A TASK IS YOUR DECISION, NOT A FACT TO FIND IN THE SOURCE:
 - The solicitation describes what the buyer wants built. It will never tell you whether a person
   or an agent does the work on OUR side, because that is not the buyer's business. So do NOT read
@@ -76,8 +93,10 @@ WHO PERFORMS A TASK IS YOUR DECISION, NOT A FACT TO FIND IN THE SOURCE:
 - The test of a good split: a reader can see WHY each task sits on its side. "Requires human
   judgment" restates the verdict instead of giving a reason and is rejected as a rationale.
 
-ALLOCATION AND ROLE_MAP - send null (or []) for either if you genuinely have nothing to state; never
-invent rows to fill them.
+ALLOCATION AND ROLE_MAP - these two lists, and ONLY these two, may be empty when you have nothing
+to state. Send null (or []) for either if you genuinely have nothing to say, and never invent rows
+to fill them. THIS PERMISSION DOES NOT REACH AGENT_TEAMS OR SURFACES BELOW: those two are required
+whenever there is work of their kind, under the rules stated in their own sections.
 - allocation: one row per TASK/DECISION. execution_class is exactly one of human,
   ai_with_approval, ai_autonomous, deterministic_software. It MUST agree with the
   assignments you emitted: an agent PERFORMER with a human APPROVER is ai_with_approval,
@@ -104,6 +123,12 @@ invent rows to fill them.
   worse than none.
 
 AGENT_TEAMS - group the AI tasks BY SUBJECT, and declare the teams here:
+- REQUIRED WHENEVER YOU ALLOCATED ANY AI WORK. If even one task is ai_with_approval or
+  ai_autonomous, agent_teams MUST be non-empty. An empty agent_teams is correct ONLY when the
+  allocation contains no AI task at all. Both ways of being empty are rejected, by different
+  rules: OMITTING the key is STRUCTURE_ABSENT ("unstructured is not the same as correctly
+  structured"), and sending [] while AI tasks exist is AI_TASK_WITHOUT_TEAM ("ungrouped AI work
+  is the blob"). Deciding that work is AI without saying who runs it is half an answer.
 - One team owns ONE subject, stated plainly in business terms: "Admissions", "Compliance",
   "Pricing". Never "AI", "Agent", "Automation" or "General" - a team whose subject is everything
   is one omniscient agent, which is the monolith you are replacing with a new label on it.
@@ -129,6 +154,10 @@ AGENT_TEAMS - group the AI tasks BY SUBJECT, and declare the teams here:
   six to look complete is the failure this field exists to expose.
 
 SURFACES - where each HUMAN task actually lands:
+- REQUIRED WHENEVER YOU ALLOCATED ANY HUMAN WORK, on the same terms as agent_teams: omitting the
+  key is STRUCTURE_ABSENT, and sending [] while human tasks exist is HUMAN_TASK_WITHOUT_SURFACE
+  ("a task with no destination becomes its own screen"). Exactly one surface of kind "console" is
+  the target; more than one is ONE_CONSOLE and none is reported as a gap.
 - Every task allocated human MUST appear in exactly one surface's task_ids.
 - PREFER ONE surface of kind "console": a single place the operator works, with the approvals and
   the oversight on it. Many surfaces means many logins and a handoff between each, which is the
