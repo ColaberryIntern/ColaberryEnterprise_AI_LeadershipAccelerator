@@ -7,6 +7,7 @@ import { handleOpenHouseRegister, handleGetOpenHouseEvent } from '../controllers
 import { handleGetSalesKb } from '../controllers/publicKbController';
 import { handleGetPublicEventsList } from '../controllers/publicEventsController';
 import { lookupEnrollment } from '../controllers/v1EnrollmentLookupController';
+import { getOutreachFeed } from '../controllers/v1OutreachController';
 
 // Generous limit: 300 req/min absorbs bursty training-site traffic while blocking abuse.
 const v1RateLimiter = rateLimit({
@@ -38,5 +39,10 @@ router.get('/api/v1/knowledge/sales', v1RateLimiter, handleGetSalesKb);
 // enrollment roster, so a partner app never has to fall back to the school database
 // for launch students. Service token required; the email is hashed in the log, never written.
 router.get('/api/v1/enrollments/lookup', v1RateLimiter, requireServiceToken, lookupEnrollment);
+// The Explorer call queue, for Cora's nightly GoHighLevel tagging job. Service token required.
+// Same ranking as /api/admin/explorer-growth/outreach, which a machine cannot call because that
+// one takes a four-hour session JWT. The payload here is an ALLOWLIST and deliberately carries
+// no email and no name: Cora joins on ghl_url, so the personal data never crosses the boundary.
+router.get('/api/v1/explorer-growth/outreach', v1RateLimiter, requireServiceToken, getOutreachFeed);
 
 export default router;
