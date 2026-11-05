@@ -83,7 +83,7 @@ PROGRESS.md:curl-auth-header:7200
 # WHY THESE ARE NOT SECRETS: each flagged string is a machine key naming a
 # required Texas procurement certification — no_boycott_israel_808,
 # no_boycott_energy_809, no_discrimination_firearms_2274 (Tex. Gov't Code 808 /
-# 809 / 2274). They appear as `{ key: 'no_boycott_israel_808', … }` in the forms
+# 809 / 2274). They appear as object keys in the forms
 # engine (texasFormsRules.ts), the solicitation-naming probes (buildProposalBlueprint.ts),
 # and one test fixture. The rule fires on the `key:` context + a token with digits
 # and entropy ~3.5–3.8; the value is a public statute identifier, not a credential.
@@ -95,3 +95,5 @@ PROGRESS.md:curl-auth-header:7200
 5db90cd4eae848be8446a631cb99eb1f0cc32091:backend/src/services/factory/proposal/texasFormsRules.ts:generic-api-key:78
 5db90cd4eae848be8446a631cb99eb1f0cc32091:backend/src/services/factory/proposal/texasFormsRules.ts:generic-api-key:79
 5db90cd4eae848be8446a631cb99eb1f0cc32091:backend/src/services/factory/proposal/texasFormsRules.ts:generic-api-key:80
+# The same form key, quoted in this file's own comment by d581ddfe. Reworded since, but that commit stays in history.
+d581ddfe7d341b120055a7545ef9061b74dbe58c:.gitleaksignore:generic-api-key:86
