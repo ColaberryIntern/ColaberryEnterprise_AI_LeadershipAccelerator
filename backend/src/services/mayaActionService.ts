@@ -218,6 +218,41 @@ export const MAYA_TOOLS: ChatCompletionTool[] = [
       },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'list_quotable_marketing_assets',
+      description:
+        'List the marketing assets you are cleared to quote in an email, with their links. Call '
+        + 'this BEFORE drafting any email that references a lesson, resource or offer. You may '
+        + 'quote only what this returns. It also tells you the copy rules the draft must obey.',
+      parameters: { type: 'object', properties: {}, required: [] },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'draft_marketing_email',
+      description:
+        'Put a composed email into the review queue for a human. It is NOT sent: everything here '
+        + 'becomes a draft someone approves. Cite the assets you drew on by the id from '
+        + 'list_quotable_marketing_assets; citing anything else is refused. Never state a price, '
+        + 'a cohort date, a deadline or a seat count.',
+      parameters: {
+        type: 'object',
+        properties: {
+          subject: { type: 'string', description: 'Subject line.' },
+          body: { type: 'string', description: 'Message body.' },
+          asset_ids: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Ids of the quotable assets this message draws on. May be empty.',
+          },
+        },
+        required: ['subject', 'body'],
+      },
+    },
+  },
 ];
 
 // ─── Action Executor ────────────────────────────────────────────────────────
@@ -255,9 +290,61 @@ export async function executeMayaAction(
       return retrieveKnowledgeContent(args, visitorId, conversationId);
     case 'schedule_callback':
       return handleScheduleCallback(args, visitorId, conversationId);
+    case 'list_quotable_marketing_assets':
+      return handleListQuotableAssets();
+    case 'draft_marketing_email':
+      return handleDraftMarketingEmail(args, visitorId);
     default:
       return { success: false, summary: `Unknown action: ${functionName}` };
   }
+}
+
+// ─── Marketing quoting ──────────────────────────────────────────────────────
+//
+// Both handlers are thin. The decisions live in `mayaQuoteComposer`, which is where they are
+// tested; a handler that re-implemented any of them would be a second place for the gate to be
+// got wrong.
+
+async function handleListQuotableAssets(): Promise<MayaActionResult> {
+  const { quotableMaterialForMaya } = await import('./mayaQuoteComposer');
+  const { digest, assets, refusedCount } = await quotableMaterialForMaya();
+  return {
+    success: true,
+    summary: `${assets.length} asset(s) available to quote`
+      + (refusedCount > 0 ? `; ${refusedCount} refused by the copy rules` : ''),
+    // The digest carries the copy rules and the never-state list, so the model gets the
+    // constraint in the same payload as the material rather than three layers away.
+    details: { digest, assets, refused_count: refusedCount },
+  };
+}
+
+async function handleDraftMarketingEmail(
+  args: Record<string, any>,
+  visitorId: string,
+): Promise<MayaActionResult> {
+  const { subject, body, asset_ids } = args;
+  if (!subject || !body) {
+    return { success: false, summary: 'Missing subject or body' };
+  }
+  const { composeQuotedEmail } = await import('./mayaQuoteComposer');
+  const r = await composeQuotedEmail({
+    visitorId,
+    subject: String(subject),
+    body: String(body),
+    assetIds: Array.isArray(asset_ids) ? asset_ids.map(String) : [],
+  });
+  // A refusal is reported as `success: false` with the reason, so the model can correct and
+  // retry rather than conclude the tool is broken and give up or improvise around it.
+  return {
+    success: r.outcome === 'drafted',
+    summary: r.reason,
+    details: {
+      outcome: r.outcome,
+      draft_id: r.draftId,
+      rule_ids: r.ruleIds,
+      unquotable: r.unquotable,
+    },
+  };
 }
 
 // ─── Send Document Handler ──────────────────────────────────────────────────
