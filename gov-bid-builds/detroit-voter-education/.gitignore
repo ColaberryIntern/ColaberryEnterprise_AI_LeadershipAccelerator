@@ -1,0 +1,6 @@
+node_modules/
+.env
+app/client/dist/
+app/client/node_modules/
+app/client/src/__tests__/.tmp-a11y/
+*.log

@@ -1,0 +1,122 @@
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <h2 class="mb-0">Communications Hub</h2>
+    <p class="text-muted mb-0 small">Broadcasts, surveys, and staff messaging</p>
+  </div>
+  {{#if canManage}}
+  <div class="d-flex gap-2">
+    <a href="/communications/new" class="btn btn-primary btn-sm">
+      <i class="bi bi-megaphone me-1"></i>New Broadcast
+    </a>
+    <a href="/communications/surveys/new" class="btn btn-outline-primary btn-sm">
+      <i class="bi bi-clipboard-check me-1"></i>New Survey
+    </a>
+  </div>
+  {{/if}}
+</div>
+
+{{#if pendingCount}}
+<div class="alert alert-info border-0 d-flex gap-3 align-items-start mb-4">
+  <i class="bi bi-clipboard2-pulse fs-5 mt-1"></i>
+  <div>
+    <strong>{{pendingCount}} active survey{{#if (ne pendingCount 1)}}s{{/if}} awaiting your response.</strong>
+    See the Surveys panel below.
+  </div>
+</div>
+{{/if}}
+
+<div class="row g-4">
+
+  <!-- ── Broadcasts ── -->
+  <div class="col-lg-7">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h5 class="mb-0 fw-semibold">
+        <i class="bi bi-megaphone me-2 text-primary"></i>Recent Broadcasts
+      </h5>
+      <span class="text-muted small">{{broadcasts.length}} total</span>
+    </div>
+
+    {{#if broadcasts.length}}
+    <div class="d-flex flex-column gap-3">
+      {{#each broadcasts}}
+      <div class="card border-0 shadow-sm">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-start mb-1">
+            <h6 class="mb-0 fw-semibold">{{subject}}</h6>
+            <span class="badge {{channelBadge}} ms-2 flex-shrink-0">
+              <i class="bi {{channelIcon}} me-1"></i>{{channelLabel}}
+            </span>
+          </div>
+          <p class="text-muted small mb-2">
+            <i class="bi bi-person me-1"></i>{{sender_name}} &middot;
+            <i class="bi bi-people me-1 ms-2"></i>{{audienceLabel}} &middot;
+            <i class="bi bi-clock me-1 ms-2"></i>{{formattedDate}}
+          </p>
+          <p class="mb-0 small">{{body}}</p>
+        </div>
+      </div>
+      {{/each}}
+    </div>
+    {{else}}
+    <div class="card border-0 shadow-sm">
+      <div class="card-body text-center text-muted py-5">
+        <i class="bi bi-megaphone fs-2 d-block mb-2 opacity-25"></i>
+        No broadcasts yet.
+        {{#if canManage}}<a href="/communications/new">Send the first one.</a>{{/if}}
+      </div>
+    </div>
+    {{/if}}
+  </div>
+
+  <!-- ── Surveys ── -->
+  <div class="col-lg-5">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h5 class="mb-0 fw-semibold">
+        <i class="bi bi-clipboard-check me-2 text-success"></i>Surveys
+      </h5>
+      <span class="text-muted small">{{surveys.length}} total</span>
+    </div>
+
+    {{#if surveys.length}}
+    <div class="d-flex flex-column gap-2">
+      {{#each surveys}}
+      <a href="/communications/surveys/{{id}}" class="text-decoration-none">
+        <div class="card border-0 shadow-sm" style="transition:box-shadow .15s">
+          <div class="card-body py-3">
+            <div class="d-flex justify-content-between align-items-center">
+              <div class="me-2">
+                <div class="fw-semibold text-dark small">{{title}}</div>
+                <div class="text-muted" style="font-size:.78rem">
+                  {{audienceLabel}} &middot; {{questionCount}} question{{#if (ne questionCount 1)}}s{{/if}}
+                </div>
+              </div>
+              <div class="d-flex flex-column align-items-end gap-1">
+                <span class="badge {{statusBadge}}">{{statusLabel}}</span>
+                {{#if (eq status "active")}}
+                  {{#if hasResponded}}
+                  <span class="badge bg-light text-success border border-success" style="font-size:.7rem">
+                    <i class="bi bi-check2 me-1"></i>Responded
+                  </span>
+                  {{else}}
+                  <span class="badge bg-warning text-dark" style="font-size:.7rem">Awaiting you</span>
+                  {{/if}}
+                {{/if}}
+              </div>
+            </div>
+          </div>
+        </div>
+      </a>
+      {{/each}}
+    </div>
+    {{else}}
+    <div class="card border-0 shadow-sm">
+      <div class="card-body text-center text-muted py-5">
+        <i class="bi bi-clipboard-x fs-2 d-block mb-2 opacity-25"></i>
+        No surveys yet.
+        {{#if canManage}}<a href="/communications/surveys/new">Create one.</a>{{/if}}
+      </div>
+    </div>
+    {{/if}}
+  </div>
+
+</div>
