@@ -37,7 +37,7 @@ Production: `5b94857a`. Recipients set to `ali@colaberry.com,ram@colaberry.com` 
 
 **Not yet proven:**
 - A Restore by a person.
-- Ram receiving it. The first send to both is the 7:30 run on 2026-11-06.
+- Ram receiving it. The first send to both is the 7:30 run on 2026-11-05, because the setting changed before it.
 - The email in Outlook. Gmail and Chromium are fine.
 - The AI-agreement line, which appears after the first decided bid.
 
