@@ -39,9 +39,20 @@ function MatchedField({ m }: { m: ToolMatchedField }) {
     <li className="mb-1">
       <span className="fw-semibold">{FIELD_LABEL[m.field] ?? m.field}</span>
       <span className="text-muted">{` — ${m.detail}`}</span>
+      {/* Chips, for the reason `ToolRequestFacts` records: two bare `<code>` elements separated
+          by a gap render as one value. "feed posts" read as a single shared token rather than as
+          the two words `feed` and `posts` that the matcher actually found. */}
       {m.tokens.length > 0 && (
         <span className="d-inline-flex flex-wrap gap-1 ms-1 align-middle">
-          {m.tokens.map((t) => <code key={t} className="small">{t}</code>)}
+          {m.tokens.map((t) => (
+            <code
+              key={t}
+              className="small border rounded px-1"
+              style={{ background: 'var(--color-bg-alt)' }}
+            >
+              {t}
+            </code>
+          ))}
         </span>
       )}
     </li>

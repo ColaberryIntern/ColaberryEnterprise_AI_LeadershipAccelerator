@@ -63,10 +63,26 @@ function Value({ field, detail }: { field: string; detail: ToolRequestDetail }) 
     if (raw.length === 0) {
       return <span className="text-muted fst-italic">not stated</span>;
     }
+    // EACH VALUE IS ITS OWN CHIP, with a border and a background.
+    //
+    // A bare `gap-1` between two `<code>` elements was not enough separation: the first
+    // screenshot of this page rendered the blast-radius field as `skool postgres`, which reads as
+    // one system called "skool postgres" rather than two called `skool` and `postgres`. On the
+    // field the ticket calls "the thing being approved", an approver miscounting the systems is
+    // the worst available misreading. `community_posts community_members` had the same problem.
+    //
+    // Found by looking at the picture. Every test on this panel passed, because a test asserting
+    // the text contains "skool" and "postgres" passes whether or not a reader can tell them apart.
     return (
       <span className="d-inline-flex flex-wrap gap-1">
         {raw.map((v) => (
-          <code key={String(v)} className="small">{String(v)}</code>
+          <code
+            key={String(v)}
+            className="small border rounded px-1"
+            style={{ background: 'var(--color-bg-alt)' }}
+          >
+            {String(v)}
+          </code>
         ))}
       </span>
     );
