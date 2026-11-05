@@ -2,6 +2,19 @@ import { buildAgentSystemPrompt } from '../agentBlueprint/agentSystemPrompt';
 import { getDaraAgentId } from './daraIdentitySeed';
 import { DARA_STUDENT_PERSONA_BLOCK, DARA_STAFF_PERSONA_BLOCK } from './daraPersona';
 
+/** The agent id for directives and memory; a lookup failure is logged and the prompt is built without them. */
+async function daraAgentIdOrUndefined(): Promise<string | undefined> {
+  try {
+    return (await getDaraAgentId()) ?? undefined;
+  } catch (e: any) {
+    console.warn(JSON.stringify({
+      level: 'warn', service: 'dara', event: 'agent_id_lookup_failed', outcome: 'failure',
+      error_class: e?.name || 'Error',
+    }));
+    return undefined;
+  }
+}
+
 /**
  * Dara v2 Phase 3 — builds Dara's full system prompt for a student-initiated
  * curriculum-support DM. Mirrors `reeseSystemPrompt.ts`'s
@@ -16,12 +29,7 @@ import { DARA_STUDENT_PERSONA_BLOCK, DARA_STAFF_PERSONA_BLOCK } from './daraPers
  * persona block alone (buildAgentSystemPrompt()'s own contract).
  */
 export async function buildDaraSystemPrompt(enrollmentId: string): Promise<string> {
-  let agentId: string | undefined;
-  try {
-    agentId = (await getDaraAgentId()) ?? undefined;
-  } catch {
-    agentId = undefined;
-  }
+  const agentId = await daraAgentIdOrUndefined();
 
   return buildAgentSystemPrompt(DARA_STUDENT_PERSONA_BLOCK, enrollmentId, {
     agentLabel: 'dara',
@@ -43,12 +51,7 @@ export async function buildDaraSystemPrompt(enrollmentId: string): Promise<strin
  * not the subject. Never throws (same contract as above).
  */
 export async function buildDaraStaffSystemPrompt(enrollmentId: string): Promise<string> {
-  let agentId: string | undefined;
-  try {
-    agentId = (await getDaraAgentId()) ?? undefined;
-  } catch {
-    agentId = undefined;
-  }
+  const agentId = await daraAgentIdOrUndefined();
 
   return buildAgentSystemPrompt(DARA_STAFF_PERSONA_BLOCK, enrollmentId, {
     agentLabel: 'dara',

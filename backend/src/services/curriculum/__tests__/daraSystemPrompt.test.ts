@@ -41,9 +41,12 @@ describe('daraSystemPrompt (C88)', () => {
     expect(DARA_STAFF_PERSONA_BLOCK).not.toMatch(/\bfree\b/i);
   });
 
-  it('an identity lookup failure still builds the prompt (never throws)', async () => {
-    agentId.mockRejectedValue(new Error('db down'));
+  it('an identity lookup failure still builds the prompt (never throws) and is logged, not swallowed', async () => {
+    agentId.mockRejectedValue(Object.assign(new Error('db down'), { name: 'SequelizeConnectionError' }));
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
     await expect(buildDaraStaffSystemPrompt('staff-1')).resolves.toBe('PROMPT');
     expect(build.mock.calls[0][2].agentId).toBeUndefined();
+    expect(warn.mock.calls[0][0]).toMatch(/agent_id_lookup_failed.*SequelizeConnectionError/);
+    warn.mockRestore();
   });
 });
