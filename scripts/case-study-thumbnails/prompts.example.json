@@ -35,6 +35,11 @@
       "slug": "stress-test-review-app",
       "label": "Stress Test Review",
       "currentHeroUrl": "https://enterprise.colaberry.ai/site-v2/shot-str-review-queue.png"
+    },
+    {
+      "slug": "ai-inbox-manager",
+      "label": "AI Inbox Manager",
+      "currentHeroUrl": null
     }
   ],
   "picked": {
@@ -44,7 +49,8 @@
     "your-repositories-already-wrote-your-resume": "C (words on the card repainted with edit.js)",
     "ai-systems-architect-training-system": "A",
     "testing-ai-actions-before-they-reach-customers": "B",
-    "stress-test-review-app": "C"
+    "stress-test-review-app": "C",
+    "ai-inbox-manager": "C"
   },
   "items": [
     {
@@ -193,6 +199,27 @@
       "concept": "C",
       "name": "The stack, and the one she signed",
       "prompt": "A split composition. On the left half, under flat cold grey light, a precarious leaning tower of identical blank pages rises past the top of the frame, blurred and endless. On the right half, under a single warm amber lamp, one page lies flat on a wooden desk and a red rubber stamp is caught mid-descent an inch above it, gripped firmly in a woman's hand: slim wrist, short unpainted nails, no jewellery, the cuff of a light rolled-up shirtsleeve. A shallow round pool of red ink sits beside it. The hard vertical edge between cold and warm light runs down the centre. Huge bold condensed white text with a thick black outline across the bottom reading exactly: A PERSON DECIDES."
+    },
+    {
+      "slug": "ai-inbox-manager",
+      "title": "AI Inbox Manager",
+      "concept": "A",
+      "name": "One of them matters",
+      "prompt": "A towering wall of hundreds of identical dull grey post office pigeonholes stuffed with plain envelopes, filling the frame and receding into darkness. From one single slot near the centre, one crisp white envelope is being drawn out and catches a hard warm spotlight, glowing bright against the cold grey wall. Everything else falls into deep blue shadow and soft focus. The drawn envelope is the only lit object in the picture. No hands, no people. Bold condensed sans-serif text across the lower third reading exactly: \"ONE OF THEM MATTERS.\""
+    },
+    {
+      "slug": "ai-inbox-manager",
+      "title": "AI Inbox Manager",
+      "concept": "B",
+      "name": "Too much to read",
+      "prompt": "Close three-quarter portrait of a tired woman in her thirties at a desk late at night, lit only by a single warm desk lamp from one side and a cold blue window behind her. She is half buried in an enormous drift of unopened paper mail that spills across the desk and piles up past her elbows. She has one hand pressed to her forehead, eyes closed, exhausted rather than panicked. Deep shadows, strong rim light on her hair, the mail in soft focus. Bold condensed sans-serif text across the lower third reading exactly: \"TOO MUCH TO READ.\""
+    },
+    {
+      "slug": "ai-inbox-manager",
+      "title": "AI Inbox Manager",
+      "concept": "C",
+      "name": "The rest can wait",
+      "prompt": "A clean empty wooden desk in sharp focus in the foreground holding exactly one plain white envelope, lit by a bright warm pool of light. Behind it, filling the entire background and thrown far out of focus, a vast chaotic mountain of thousands of crumpled letters and papers in cold blue shadow, towering to the top of the frame. The contrast between the single sharp lit envelope and the blurred blue mass behind is the whole picture. No people, no hands. Bold condensed sans-serif text across the lower third reading exactly: \"THE REST CAN WAIT.\""
     }
   ]
 }
