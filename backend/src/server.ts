@@ -188,6 +188,7 @@ import { ensureAgentDomainProjectSchemaGuarded } from './db/ensureAgentDomainPro
 import { ensureAgentDomainChangeRequestSchemaGuarded } from './db/ensureAgentDomainChangeRequestSchema';
 import { ensureAgentDomainToolRequestSchemaGuarded } from './db/ensureAgentDomainToolRequestSchema';
 import { ensureAgentDomainToolDuplicateCheckSchemaGuarded } from './db/ensureAgentDomainToolDuplicateCheckSchema';
+import { ensureCapabilityConfirmationSchemaGuarded } from './db/ensureCapabilityConfirmationSchema';
 
 // Import models to register associations before sync
 import './models';
@@ -3184,6 +3185,7 @@ async function start(): Promise<void> {
   // yet the `CREATE` would fail and this table would be missing with no obvious reason why.
   await ensureAgentDomainToolRequestSchemaGuarded();
   await ensureAgentDomainToolDuplicateCheckSchemaGuarded();
+  await ensureCapabilityConfirmationSchemaGuarded();
   // Colaberry Commons — seed the 10 always-open fruit video rooms (idempotent).
   // Gated on the feature flag so it only populates envs where Rooms is enabled.
   if (env.communityRoomsEnabled) {

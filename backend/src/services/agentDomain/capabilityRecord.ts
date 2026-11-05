@@ -320,21 +320,81 @@ export function allCapabilities(): CapabilityRecord[] {
 }
 
 /**
- * Nothing is validated. Throws if any record claims otherwise.
+ * A non-draft record must have a RECORDED confirmation behind it. Throws naming the ones that
+ * do not.
  *
- * This is the invariant that keeps the whole exercise honest: shipped behaviour is evidence of
- * `implementation_state`, never of requirement validation. Reese and Dara have capabilities that
- * demonstrably run in production today, and every one of them is still `draft`.
+ * ## This REPLACES `assertDraftOnlyInvariant`, and is deliberately a superset of it
+ *
+ * AF11.0 is explicit that the old invariant must be replaced rather than deleted, because
+ * removing a guard is not the same as satisfying it. So the old behaviour is not reimplemented
+ * here, it is the EMPTY-SET CASE of this function: with nothing recorded, every non-draft record
+ * is refused, which is exactly what the old check did. `assertDraftOnlyInvariant` below now calls
+ * this with no recorded ids, so there is no window in which the guard is weaker, and a test
+ * asserts both directions.
+ *
+ * The original reasoning still holds and is why the check exists at all: shipped behaviour is
+ * evidence of `implementation_state`, never of requirement validation. Reese and Dara have
+ * capabilities that demonstrably run in production today, and every one of them is still
+ * `draft`. What changes is only that a confirmation recorded in the proper place is now
+ * expressible, instead of every non-draft record being a fabrication by definition.
+ *
+ * ## Why the recorded ids are passed IN
+ *
+ * This module reads JSON files and holds no database handle, and it stays that way. The caller
+ * reads the confirmation store and hands the ids over, which also means the whole check is a
+ * function of its inputs and can be driven both ways by a test without a database.
+ *
+ * @param recordedConfirmations capability ids with a confirmation recorded in the store.
  */
-export function assertDraftOnlyInvariant(): void {
-  const bad = allCapabilities().filter((c) => c.requirement_validation_state !== 'draft');
+export function assertConfirmationsAreRecorded(
+  recordedConfirmations: ReadonlyArray<string> = [],
+): void {
+  const recorded = new Set(recordedConfirmations);
+  const bad = allCapabilities().filter(
+    (c) => c.requirement_validation_state !== 'draft' && !recorded.has(c.capability_id),
+  );
   if (bad.length > 0) {
     throw new Error(
-      `${bad.length} capabilities are not 'draft' (${bad.slice(0, 3).map((c) => c.capability_id).join(', ')}). `
-      + 'No manager has validated anything in this phase, so a non-draft record is either a '
-      + 'fabricated approval or a real one that has not been recorded where it belongs.',
+      `${bad.length} capabilities are not 'draft' and have no recorded confirmation `
+      + `(${bad.slice(0, 3).map((c) => c.capability_id).join(', ')}). `
+      + 'A non-draft record with nothing recorded behind it is either a fabricated approval or a '
+      + 'real one that has not been recorded where it belongs.',
     );
   }
+}
+
+/**
+ * The original invariant, preserved as the no-confirmations case of the check above.
+ *
+ * Kept so every existing caller and test keeps asserting exactly what it asserted before, and so
+ * the claim "the guard was not weakened" is something the code demonstrates rather than something
+ * this comment asserts.
+ */
+export function assertDraftOnlyInvariant(): void {
+  assertConfirmationsAreRecorded([]);
+}
+
+/**
+ * What a capability's validation state IS, once the confirmation store is taken into account.
+ *
+ * The JSON files say `draft` and AF11.0 forbids editing them, so the recorded confirmation is
+ * the only thing that can make a capability confirmed today. This is the one function downstream
+ * code should ask, rather than reading `requirement_validation_state` off the record directly and
+ * getting `draft` forever.
+ *
+ * A recorded confirmation does NOT override a `rejected` record. Confirming something that was
+ * rejected is a reversal, which is a different decision with a different author, and the
+ * contract refuses it by name (`capability_rejected`) rather than letting it happen silently
+ * here.
+ */
+export function effectiveValidationState(
+  capability: Pick<CapabilityRecord, 'capability_id' | 'requirement_validation_state'>,
+  recordedConfirmations: ReadonlyArray<string> = [],
+): RequirementValidationState {
+  if (capability.requirement_validation_state === 'rejected') return 'rejected';
+  return recordedConfirmations.includes(capability.capability_id)
+    ? 'confirmed'
+    : capability.requirement_validation_state;
 }
 
 /** Counts the per-domain report needs. Three separate figures, deliberately never summed. */
