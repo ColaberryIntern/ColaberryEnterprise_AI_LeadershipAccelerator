@@ -6,12 +6,13 @@ import StageRail, { type StudioView } from './StageRail';
 import WhereWeAre from './WhereWeAre';
 import AgentPanel from './AgentPanel';
 import './studio.css';
-// Transitional: views not yet rebuilt (U3–U5) render the shipped govCockpit panels inside the new shell, so nothing
-// is lost. Each is wrapped in a `.gck` element to carry its own tokens.
-import BlueprintView from '../govCockpit/BlueprintView';
-import ProposalDocuments from '../govCockpit/ProposalDocuments';
+import Blueprint from './Blueprint';
+import DocumentSet from './DocumentSet';
+import BuildEvidence from './BuildEvidence';
+// Transitional: the views not yet rebuilt (U4–U5) render the shipped govCockpit panels inside the new shell, so
+// nothing is lost. Each is wrapped in a `.gck` element to carry its own tokens. The drafting drawer is reused until
+// the Draft & versions editor lands.
 import ProposalDocumentDrawer from '../govCockpit/ProposalDocumentDrawer';
-import BuildEvidence from '../govCockpit/BuildEvidence';
 import ReviewGates from '../govCockpit/ReviewGates';
 import PackageSubmit from '../govCockpit/PackageSubmit';
 
@@ -57,13 +58,13 @@ export default function StudioShell(
       center = <WhereWeAre view={view} questionCount={openQuestionCount} onNavigate={go} />;
       break;
     case 'blueprint':
-      center = gck(<BlueprintView blueprint={view.blueprint} onReanalyze={onReanalyze} reanalyzing={reanalyzing} />);
+      center = <Blueprint view={view} onReanalyze={onReanalyze} reanalyzing={reanalyzing} onToast={toast} />;
       break;
     case 'documents':
-      center = gck(<ProposalDocuments docs={docs} onOpen={(d) => setOpenDocKey(d.key)} />);
+      center = <DocumentSet docs={docs} onOpen={(d) => setOpenDocKey(d.key)} onToast={toast} />;
       break;
     case 'evidence':
-      center = gck(<BuildEvidence projectId={projectId} artifacts={view.buildArtifacts ?? []} docs={docs} reviewApi={reviewApi} onReload={onReload} />);
+      center = <BuildEvidence view={view} projectId={projectId} reviewApi={reviewApi} onReload={onReload} onToast={toast} />;
       break;
     case 'gates':
       center = gck(<ReviewGates projectId={projectId} docs={docs} reviewApi={reviewApi} />);

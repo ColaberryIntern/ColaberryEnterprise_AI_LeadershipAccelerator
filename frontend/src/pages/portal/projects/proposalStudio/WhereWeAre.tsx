@@ -1,17 +1,7 @@
 import React from 'react';
-import type { StudentGovProjectView, GovProposalDocument, GovCheckKey } from '../../../../services/govProjectPortalApi';
+import type { StudentGovProjectView } from '../../../../services/govProjectPortalApi';
 import type { StudioView } from './StageRail';
-
-const WEIGHTS: Record<GovCheckKey, number> = { coverage: 25, evaluator: 25, proof: 15, clarity: 15, format: 10, fact: 10 };
-export function docScore(d: GovProposalDocument): number {
-  const s = d.latest?.scores;
-  if (!s) return 0;
-  let total = 0;
-  (Object.keys(WEIGHTS) as GovCheckKey[]).forEach((k) => { total += (Number.isFinite(s[k]) ? (s[k] as number) : 0) * WEIGHTS[k]; });
-  return Math.round(total / 100);
-}
-const colr = (v: number): string => (v >= 95 ? 'var(--gps-ok)' : v >= 85 ? 'var(--gps-accent)' : v >= 70 ? 'var(--gps-warn)' : 'var(--gps-bad)');
-const Bar = ({ v }: { v: number }) => (<div className="gps-bar-s"><span style={{ width: `${v}%`, background: colr(v) }} /></div>);
+import { docScore, colr, Bar } from './studioHelpers';
 
 /**
  * WhereWeAre — the Studio's overview. The pursuit stage strip, the proposal-readiness ring + a score bar per scored

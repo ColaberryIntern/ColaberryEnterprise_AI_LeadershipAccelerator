@@ -174,6 +174,9 @@ export interface GovProposalBlueprint {
   rules: GovBlueprintRule[]; forms: GovRequiredForm[]; scoring: GovBlueprintScoring; addenda: GovBlueprintRule[];
   eliminationRisks: Array<{ statement: string; quote: string; sourceFile: string }>;
   buyerType: string | null; droppedRuleCount: number; sourceFiles: string[]; generatedAt: string;
+  /** U1 (C.1): detected jurisdiction + whether a state forms rulebook was loaded (Texas only today). Optional on older backends. */
+  jurisdiction?: { state: string | null; quote: string | null };
+  stateFormsStatus?: { state: string | null; loaded: boolean; note: string | null };
 }
 export interface GovOverallProgress { buildVerified: number; buildTotal: number; docsAccepted: number; docsTotal: number; pct: number; }
 
