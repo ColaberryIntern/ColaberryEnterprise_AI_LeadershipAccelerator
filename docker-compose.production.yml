@@ -96,7 +96,11 @@ services:
       ENABLE_GOV_AI_EXTRACTION: "true"
       ENABLE_GOV_AI_VETTING: "true"
       # Service-to-service token training.colaberry.com uses for /api/v1/* calls.
+      # Opens the three v1 writes; read-only consumers get their own client instead.
       ENTERPRISE_CRM_TOKEN: ${ENTERPRISE_CRM_TOKEN:-}
+      # Cora's own read-only token, for GET /api/v1/explorer-growth/outreach only.
+      # Must be a DIFFERENT value from the one above, or the scoping does nothing.
+      CORA_SERVICE_TOKEN: ${CORA_SERVICE_TOKEN:-}
       # AI News Flash intelligence pipeline — the daily generator behind the
       # intelligence-pipeline curriculum feed. These two knobs resolve from the
       # host .env (also via env_file) but are declared explicitly so the cadence

@@ -2,7 +2,7 @@
 jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
 
 jest.mock('../../config/env', () => ({
-  env: { enterpriseCrmToken: 'valid-test-token-32chars-abcdefgh' },
+  env: { enterpriseCrmToken: 'valid-test-token-32chars-abcdefgh', coraServiceToken: 'a-different-value-for-cora-00000' },
 }));
 
 jest.mock('../../services/leadService', () => ({
@@ -20,7 +20,7 @@ jest.mock('../../models/Lead', () => ({
 import Lead from '../../models/Lead';
 import { ingestExternalLead } from '../../services/externalLeadIngestService';
 import { v1LeadSchema } from '../../schemas/v1LeadSchema';
-import { requireServiceToken } from '../../middlewares/serviceAuthMiddleware';
+import { requireServiceClient } from '../../middlewares/serviceAuthMiddleware';
 
 const findOne = Lead.findOne as jest.Mock;
 const create = Lead.create as jest.Mock;
@@ -159,10 +159,10 @@ describe('v1LeadSchema', () => {
 });
 
 /* ------------------------------------------------------------------ */
-/*  Middleware — requireServiceToken                                    */
+/*  Middleware — requireServiceClient (enterprise_crm)                  */
 /* ------------------------------------------------------------------ */
 
-describe('requireServiceToken', () => {
+describe('requireServiceClient, on the shared enterprise_crm credential', () => {
   const makeRes = () => {
     const res: any = {};
     res.status = jest.fn().mockReturnValue(res);
@@ -175,7 +175,7 @@ describe('requireServiceToken', () => {
     const res = makeRes();
     const next = jest.fn();
 
-    requireServiceToken(req, res, next);
+    requireServiceClient('enterprise_crm')(req, res, next);
 
     expect(res.status).toHaveBeenCalledWith(401);
     expect(res.json).toHaveBeenCalledWith({ error: 'Service token required' });
@@ -187,7 +187,7 @@ describe('requireServiceToken', () => {
     const res = makeRes();
     const next = jest.fn();
 
-    requireServiceToken(req, res, next);
+    requireServiceClient('enterprise_crm')(req, res, next);
 
     expect(res.status).toHaveBeenCalledWith(401);
     expect(next).not.toHaveBeenCalled();
@@ -198,7 +198,7 @@ describe('requireServiceToken', () => {
     const res = makeRes();
     const next = jest.fn();
 
-    requireServiceToken(req, res, next);
+    requireServiceClient('enterprise_crm')(req, res, next);
 
     expect(res.status).toHaveBeenCalledWith(401);
     expect(res.json).toHaveBeenCalledWith({ error: 'Invalid service token' });
@@ -213,7 +213,7 @@ describe('requireServiceToken', () => {
     const res = makeRes();
     const next = jest.fn();
 
-    requireServiceToken(req, res, next);
+    requireServiceClient('enterprise_crm')(req, res, next);
 
     expect(next).toHaveBeenCalled();
     expect(res.status).not.toHaveBeenCalled();

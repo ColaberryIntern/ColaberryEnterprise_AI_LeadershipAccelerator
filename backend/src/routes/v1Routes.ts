@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
-import { requireServiceToken } from '../middlewares/serviceAuthMiddleware';
+import { requireServiceClient } from '../middlewares/serviceAuthMiddleware';
 import { createExternalLead } from '../controllers/v1LeadController';
 import { requestCallback } from '../controllers/v1CallbackController';
 import { handleOpenHouseRegister, handleGetOpenHouseEvent } from '../controllers/openHouseController';
@@ -20,11 +20,11 @@ const v1RateLimiter = rateLimit({
 
 const router = Router();
 
-router.post('/api/v1/leads', v1RateLimiter, requireServiceToken, createExternalLead);
+router.post('/api/v1/leads', v1RateLimiter, requireServiceClient('enterprise_crm'), createExternalLead);
 // Inbound "call me now" — training.colaberry.com triggers a Synthflow outbound call.
-router.post('/api/v1/request-callback', v1RateLimiter, requireServiceToken, requestCallback);
+router.post('/api/v1/request-callback', v1RateLimiter, requireServiceClient('enterprise_crm'), requestCallback);
 // Open House signup (training.colaberry.com -> creates an Explorer account + login link)
-router.post('/api/v1/open-house/register', v1RateLimiter, requireServiceToken, handleOpenHouseRegister);
+router.post('/api/v1/open-house/register', v1RateLimiter, requireServiceClient('enterprise_crm'), handleOpenHouseRegister);
 // Open House event details for the marketing card (public, cached; no token needed for this GET)
 router.get('/api/v1/open-house/event', v1RateLimiter, handleGetOpenHouseEvent);
 
@@ -38,11 +38,16 @@ router.get('/api/v1/knowledge/sales', v1RateLimiter, handleGetSalesKb);
 // Repo2Reputation login gate: "is this email an Accelerator student" against the live
 // enrollment roster, so a partner app never has to fall back to the school database
 // for launch students. Service token required; the email is hashed in the log, never written.
-router.get('/api/v1/enrollments/lookup', v1RateLimiter, requireServiceToken, lookupEnrollment);
-// The Explorer call queue, for Cora's nightly GoHighLevel tagging job. Service token required.
+router.get('/api/v1/enrollments/lookup', v1RateLimiter, requireServiceClient('enterprise_crm'), lookupEnrollment);
+// The Explorer call queue, for Cora's nightly GoHighLevel tagging job.
 // Same ranking as /api/admin/explorer-growth/outreach, which a machine cannot call because that
 // one takes a four-hour session JWT. The payload here is an ALLOWLIST and deliberately carries
 // no email and no name: Cora joins on ghl_url, so the personal data never crosses the boundary.
-router.get('/api/v1/explorer-growth/outreach', v1RateLimiter, requireServiceToken, getOutreachFeed);
+//
+// SCOPED TO 'cora' ALONE, and deliberately NOT to 'enterprise_crm'. This read does not belong
+// to the credential that opens the three writes above, and Cora has no business holding one
+// that does. Until CORA_SERVICE_TOKEN is set on the host this route answers 401 to everybody,
+// which is the correct state for a route whose only consumer has not been provisioned.
+router.get('/api/v1/explorer-growth/outreach', v1RateLimiter, requireServiceClient('cora'), getOutreachFeed);
 
 export default router;

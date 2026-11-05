@@ -58,14 +58,37 @@ Everything behind staff auth. Grouped by what they operate on:
 
 ## `v1Routes.ts` — the external API
 
-The only service-to-service surface. Two endpoints, both rate-limited and token-gated:
+The only service-to-service surface. Every route is rate-limited; the guarded ones name the
+**client** whose token they accept, and each client has its own environment variable.
 
 ```
-POST /api/v1/leads             v1RateLimiter, requireServiceToken
-POST /api/v1/request-callback  v1RateLimiter, requireServiceToken
+POST /api/v1/leads                      requireServiceClient('enterprise_crm')   WRITE
+POST /api/v1/request-callback           requireServiceClient('enterprise_crm')   WRITE - dials
+POST /api/v1/open-house/register        requireServiceClient('enterprise_crm')   WRITE
+GET  /api/v1/enrollments/lookup         requireServiceClient('enterprise_crm')
+GET  /api/v1/explorer-growth/outreach   requireServiceClient('cora')
+GET  /api/v1/open-house/event           (public, cached)
+GET  /api/v1/events                     (public - already public on Eventbrite)
+GET  /api/v1/knowledge/sales            (public - the frontend falls back to a bundle)
 ```
 
-Consumed by training.colaberry.com using `ENTERPRISE_CRM_TOKEN`. `request-callback` triggers a Synthflow voice callback, which will not actually dial unless `ENABLE_VOICE_CALLS=true` and test mode is off.
+| Client | Variable | Held by |
+|---|---|---|
+| `enterprise_crm` | `ENTERPRISE_CRM_TOKEN` | training.colaberry.com (Sai's Cloud Run), Repo2Reputation |
+| `cora` | `CORA_SERVICE_TOKEN` | the Cora recap engine, read-only |
+
+**Before 2026-11-05 there was one shared token and every guarded route took it.** That gave any
+holder the three writes, including `request-callback`, which asks Synthflow to dial a person. It
+also could not be rotated: three systems hold the same value, so rotating it means changing all
+three in the same minute or breaking lead capture. Scoping per client fixed both.
+
+So: **a read-only consumer never gets `enterprise_crm`.** Add it as its own client — one line in
+`ServiceClient`, one in `CLIENT_TOKENS`, one in `.env.example`, one in
+`docker-compose.production.yml`, and the value on the host. `requireServiceClient` is a factory,
+so it must be CALLED; the old `requireServiceToken` was passed directly and is gone, which makes
+a stale call site a compile error rather than a route that hangs.
+
+`request-callback` will not actually dial unless `ENABLE_VOICE_CALLS=true` and test mode is off.
 
 Adding an endpoint here is a contract change with an external consumer — coordinate before shipping.
 
