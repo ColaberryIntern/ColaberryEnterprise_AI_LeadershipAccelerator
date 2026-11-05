@@ -220,3 +220,101 @@ item on its roadmap.
   deception the field exists to prevent.
 
 Session: CC-20261105-k4r8
+
+---
+
+# Part three: the review
+
+Ali: *"the case study needs a review. It doesn't have all the pieces. Do a comparison with
+at least 5 and figure out what all is missing and add it."* Plus: name the builder, link
+his account, add the dollar figures, and the narration is synthetic.
+
+## What was missing, counted rather than guessed
+
+Every **published** record's approved snapshot was compared section by section, 15 of them,
+not 5. The new record was missing exactly five sections:
+
+| Missing | Records carrying it |
+|---|---|
+| `buildTimeline` | 14 of 15 |
+| `repositories` | 14 of 15 |
+| `surfaceVariants` | 14 of 15 |
+| `contributors` | 13 of 15 |
+| `builder` | 9 of 15 |
+
+All five were added. The same query after the change returns **no rows**: the record now
+carries every section any published record carries. `heroMetrics` is still absent, which
+matches the library — only 2 of 15 have it.
+
+## Reading the repository changed the record
+
+The repo sync was run first. It produced real repository facts and a verified build
+timeline seed, but it **rebuilt the snapshot from repo facts alone and dropped the authored
+content** — the draft it wrote had no artifacts, metrics, decisions, closing or video. The
+live pages were pinned to the approved snapshot throughout, so nothing broke, which is why
+the sync was run as a draft and inspected before anything was published. The repo-derived
+sections were merged into the authored content by hand instead.
+
+Reading the repository then turned up four things the builder's report did not say.
+
+**There is a second builder.** 267 commits by two people: a colleague wrote 76 from March
+to September 2026, and the named builder wrote 187 from 17 September to 28 October — the
+handover landing exactly where the reported measurement window starts. Crediting one person
+would have been wrong. The record now carries both: the consented builder by name, the
+earlier one by role, because no naming consent is recorded for them.
+
+**Delivery to students is gated, and defaults to off.** A commit of 20 October adds a
+live-delivery switch needing two independent keys, the server being armed and a separate
+Settings switch. An earlier commit changes the approval card to say plainly that nothing is
+delivered while the system is in shadow. So a notice being drafted and approved does not
+establish that a student received it. The metric was reworded from "none sent without
+approval" to "none released without a person approving", and a limitation now says
+delivery is a separate thing.
+
+**The cost figure rests on a rate that was once wrong.** A commit of 21 October fixes
+logged model spend that had been recorded at a more expensive model's rates, roughly
+seventeen times too high. Whether earlier rows were recomputed is not established, and the
+record now says so.
+
+**Most commits name an AI coding assistant as co-author** — 234 of 267. Stated rather than
+hidden, following the precedent of the record already on this platform that does the same.
+
+## The record is now on the default index
+
+Two metrics were added that are **independently checkable**: commits in the reported period,
+and commits carrying an AI co-author trailer. Both were counted directly from the public
+repository at a pinned commit, without the builder, so both carry
+`class: verified, method: repo` and cite a `case_study_evidence` row holding that repository
+at that commit. Anyone can recount them.
+
+That changed the record's standing. It was previously excluded from the production list
+because every figure was `illustrative`. Measured after the change: the default index
+returns it **first** of 12, `total` 15 — nothing was displaced, the index is paginated.
+
+The operational figures remain `illustrative / self` and render as "Self-reported", which
+is correct: that database is still not reachable from this platform.
+
+## The dollar figures, with the rates named
+
+Published as a **range**, as the builder recommended, not a single number: about $1,700 to
+$10,000 of staff cost avoided at his assumed rates of twenty, thirty and forty dollars an
+hour, against a running cost of about $350. Its limitations say in the first line that the
+rates are placeholders he asked to have replaced, that the hours are an estimate rather
+than a measurement, that staff approval time is not subtracted, and that this is the least
+solid figure on the record.
+
+## Two more gate refusals, both fixed at cause
+
+- **`ai_generated_quote`** — a skill line quoted an on-screen label with nothing recording
+  who wrote it. The label is now described rather than quoted.
+- The earlier `unverified_claim` rule bit again during authoring and shaped the writing:
+  figures stay out of `limitations` prose unless a verified metric carries them.
+
+## Final state
+
+Snapshot version 5, signed, published to `enterprise` and `training`. Builder named with
+consent recorded 2026-11-05 and linked to `github.com/KesetebirhanDelele`. Narration
+labelled `synthetic`. 9 metrics (2 verified, 7 self-reported), 11 timeline entries all
+repo-verified, 2 contributors, 7 artifacts, 1 repository.
+
+Session: CC-20261105-k4r8
