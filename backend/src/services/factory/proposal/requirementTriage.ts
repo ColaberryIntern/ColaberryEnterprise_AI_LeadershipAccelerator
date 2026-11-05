@@ -148,6 +148,44 @@ export function triageStatement(text: string): TriageResult {
   return { ...base, triageClass: 'note', reason: 'no obligation, question or buyer action found' };
 }
 
+/**
+ * The marker that makes a stored triage verdict recognisable on a re-read.
+ *
+ * Lives here rather than in the backfill script because SERVICES must not import from
+ * `scripts/`: the decomposition input builder needs to read this verdict, and the dependency
+ * has to point from the script at the service, never the other way.
+ */
+export const TRIAGE_PREFIX = 'TRIAGE:';
+
+/** Classes that represent an obligation on us. Only these belong in a compliance matrix. */
+export const BINDING_CLASSES: readonly TriageClass[] = ['obligation'];
+
+/**
+ * Read a stored verdict back out of `interpretation`, or null when there is none.
+ *
+ * NULL IS THE IMPORTANT RETURN. A row with no triage verdict is UNKNOWN, not non-binding, and
+ * every caller must treat it as binding. Otherwise a project that has never been triaged would
+ * silently lose its coverage requirement entirely — a gate that passes because nothing was
+ * asked of it, which is the exact failure this whole module exists to prevent.
+ */
+export function readTriageClass(interpretation: string | null | undefined): TriageClass | null {
+  const s = (interpretation ?? '').trim();
+  if (!s.startsWith(TRIAGE_PREFIX)) return null;
+  const rest = s.slice(TRIAGE_PREFIX.length).trim();
+  const cls = rest.split(/\s|-/)[0] as TriageClass;
+  return (['obligation', 'city_process', 'question', 'note'] as const).includes(cls) ? cls : null;
+}
+
+/**
+ * True only when the row carries an EXPLICIT verdict saying it binds nobody.
+ *
+ * Absence of a verdict returns false — include the row. Fail-safe by construction.
+ */
+export function isExplicitlyNonBinding(interpretation: string | null | undefined): boolean {
+  const cls = readTriageClass(interpretation);
+  return cls !== null && !BINDING_CLASSES.includes(cls);
+}
+
 export interface TriageTally {
   total: number;
   byClass: Record<TriageClass, number>;
