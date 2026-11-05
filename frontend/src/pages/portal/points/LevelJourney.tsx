@@ -55,8 +55,8 @@ const LevelJourney: React.FC<{ points: number; currentName?: string | null; mile
       <div className="pts-journey-h">
         <h3>Your level journey</h3>
         <span className="pts-mut">{milestoneLadder
-          ? 'Free rungs are earned with points; the build rungs are earned by finishing the curriculum, three verified builds, and a certification. Each rung has its own colour — the same one you will see next to names in Community.'
-          : 'Free rungs are earned with points; the build bands are earned by shipping in the program.'}</span>
+          ? 'Explorer rungs are earned with points; the build rungs are earned by finishing the curriculum, three verified builds, and a certification. Each rung has its own color — the same one you will see next to names in Community.'
+          : 'Explorer rungs are earned with points; the build bands are earned by shipping in the program.'}</span>
       </div>
       <ol className="pts-jtrack" aria-label="Level journey from AI Aware I to AI Architect">
         {journey.map((r, i) => {
