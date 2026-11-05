@@ -194,6 +194,29 @@ describe('PortalShell nav swap', () => {
     expect(has('[data-testid="cm-use-campus"]')).toBe(false);
   });
 
+  /**
+   * The strand case. fetchCampusFlags fails CLOSED, so a timeout or a 401 is indistinguishable
+   * from "the campus is off" and arrives here as campus:false. A learner who had already chosen
+   * the classic menu keeps that choice in localStorage, so gating the way back on the flag alone
+   * meant one bad flag read removed the only control that undoes it, permanently. Having chosen
+   * classic is itself proof the campus was once on for them, so the way back stays.
+   */
+  it('having CHOSEN classic keeps the way back even when the flag read comes back off', async () => {
+    await mount({ campus: false, nav: 'classic' });
+    const back = container.querySelector('nav.te-nav [data-testid="cm-use-campus"]');
+    expect(back).not.toBeNull();
+    act(() => { back!.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+    expect(JSON.parse(window.localStorage.getItem(CAMPUS_SETTINGS_KEY)!).nav).toBe('campus');
+  });
+
+  /** The label is what scrolls away on a collapsed rail; the control itself must not. */
+  it('the way back carries an accessible name that does not depend on the visible label', async () => {
+    await mount({ campus: true, nav: 'classic' });
+    const back = container.querySelector('nav.te-nav [data-testid="cm-use-campus"]')!;
+    expect(back.getAttribute('aria-label')).toBe('Switch to the campus view');
+    expect(back.querySelector('.lb')!.textContent).toBe('Switch to the campus view');
+  });
+
   it('the phone tab bar Map button opens the campus map (WP-1: the campus home, /portal/campus)', async () => {
     await mount({ campus: true });
     act(() => { container.querySelector('nav.cm-tabbar button')!.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
