@@ -98,16 +98,66 @@ re-checking that budget.
 | `pr_opened` | A watched PR is open and awaiting review. |
 | `pr_merged` | `merged_at` became non-null. |
 | `pr_closed_unmerged` | Closed without merging. Nothing reached main. |
+| `pr_deployed` | The merge's code is in the build production is running. Added by C0.14. |
 
-### Transitions it deliberately does NOT report
+### `pr_deployed`, and why it is read rather than inferred
 
-**It does not report "deployed" or "production-verified", and the comment it posts on a merge says
-so out loud.** Those are not fields on a pull request. This stack deploys over ssh with
-`docker compose`, not through GitHub Deployments, so there is no deployment event to read. A
-ticket that says "deployed" because something merged is worse than a ticket that says nothing,
-so the watcher reports the merge and states plainly that merged is not deployed.
+**Why it was added.** On 2026-11-05, **47 of the 222 open to-dos assigned to Ali carried a merge
+notice from this watcher and no deploy claim.** Forty-four of them had shipped. A watcher that can
+only ever say "merged" manufactures a backlog of finished work, and that backlog reads as overdue:
+the same day's recount moved Ali's overdue figure from 233 to 213 purely by closing work that was
+already live. The original refusal to report a deploy was right in its reasoning and wrong in its
+consequence, so the fix supplies a real signal rather than relaxing the standard.
 
-Closing that gap honestly needs a deploy-side signal. See Known limits.
+**Where the signal comes from.** Not from GitHub, which has no deployment event for this stack.
+This worker runs **on the host** from `scripts/cron-env-wrapper.sh`, which already shells out to
+the container runtime, so the runtime is reachable. `readRunningBuildTimes()` inspects each
+container in `PR_WATCH_DEPLOY_CONTAINERS` (default `accelerator-backend,accelerator-nginx`), reads
+the image it was created from, and reads that image's build time. `classifyDeploy()` then compares
+the merge time against it.
+
+**Four verdicts, and only one of them speaks.**
+
+| Verdict | Meaning | Posted? |
+|---|---|---|
+| `in_build` | Merged more than 30 minutes before the oldest running image was built. | **Yes** |
+| `ambiguous` | Merged inside that margin, so the build may or may not carry it. | No |
+| `not_in_build` | Merged after the oldest running image was built. | No |
+| `unknown` | No readable build time, or an unparseable merge time. | No |
+
+The margin exists because a build starts from whatever main's tip was some minutes *before* its
+image is stamped. Rounding `ambiguous` up to "deployed" is the one outcome worse than silence, so
+it is a named verdict rather than a rounding rule, and the next tick resolves it.
+
+**Four things it gets right on purpose, each a way to be wrong that matters:**
+
+1. **It bounds on the OLDEST running image, not the newest.** The API lives in the backend image
+   and the built frontend lives in the nginx image. Bounding on the backend alone would report a
+   frontend change live whenever the two drifted. There is a named test that fails if anyone
+   changes this to the newest.
+2. **It never reads `git HEAD` on the box.** That is not what is serving. Production deploys from a
+   published registry image, so when no image exists for main's tip the deploy no-ops and the
+   checkout moves on without the container. Measured 2026-11-05: the host sat at `a29dfb24`
+   (merged 13:16Z) while the running image had been built at 12:24:30Z, an hour behind.
+3. **It says what it proves.** The comment states that the code is in the running build and that
+   this is **not** behavioural verification, because a feature can ship dark behind a flag.
+   Deployed and working are different rungs.
+4. **It cannot flood.** `state.deployAdoptedAt` is stamped the first time a build time is
+   readable, and nothing merged before that instant is ever announced. Without it, switching this
+   on would post a deploy notice on every merged pull request in the repository's history, since
+   all of them predate the running image.
+
+### Transitions it still deliberately does NOT report
+
+**`production-verified`.** Nothing here observes behaviour, and nothing here should claim to.
+A ticket that says "verified" because a container was rebuilt is the same error this watcher was
+built to avoid.
+
+**A change to `accelerator-intelligence` is out of scope.** That container is deliberately absent
+from the default bound: on 2026-11-05 it had been up for seven weeks, so including it would hold
+the bound seven weeks in the past and no deploy would ever be reported. A change to that service
+therefore gets no `pr_deployed` notice, which is a limitation to know rather than one to paper
+over by dropping the container quietly.
 
 ---
 
@@ -216,13 +266,24 @@ this ticket, and it needs an admin action on the GitHub repo that no code change
 
 ## 9. Known limits
 
-1. **No deploy or production-verified signal.** The watcher reports merged and says plainly that
-   merged is not deployed. Reporting a deploy would mean inferring one. Closing this honestly
-   needs either a `deployment_status` event (which means the webhook path above) or a deploy-side
-   emitter calling back with a commit SHA. Out of scope for C0.4 and named here so nobody assumes
-   a silent ticket means "not deployed".
-2. **Polling granularity.** State is read every fifteen minutes. The `created_at` rule means a
+1. **The deploy signal is a timestamp comparison, not a commit identity.** C0.14 closed the
+   original gap, but with the weaker of the two possible signals. The running image carries **no
+   commit label and no `GIT_COMMIT` environment variable**, so the commit inside it cannot be read
+   and "is this merge an ancestor of what is running" cannot be answered directly. The watcher
+   compares times instead, which is why it needs a margin and an `ambiguous` verdict at all.
+   Stamping the commit SHA into the image at build time would replace the whole mechanism with an
+   exact ancestry check and remove the margin. That is a build-pipeline change and was not made
+   here.
+2. **No production-verified signal, and there should not be one from this worker.** It reports that
+   code is in the running build. Whether the feature works is a separate rung that needs something
+   that exercises the feature.
+3. **A change confined to `accelerator-intelligence` gets no deploy notice.** See the scope note
+   above. A silent ticket for that service means "not measured", not "not deployed".
+4. **Polling granularity.** State is read every fifteen minutes. The `created_at` rule means a
    fast merge is still announced, but it is announced as a merge, not as an open followed by a
    merge. The intermediate state is genuinely lost, and that is acceptable.
-3. **Anonymous rate budget is shared per IP** with any other unauthenticated GitHub caller on the
+5. **Anonymous rate budget is shared per IP** with any other unauthenticated GitHub caller on the
    same host. If a second such caller is added, re-check the budget before assuming both fit.
+6. **A deploy notice lags the deploy by up to fifteen minutes**, the tick interval. It is also
+   posted on the to-do only, never on the pull request, which is unchanged: this worker still
+   never writes to GitHub.
