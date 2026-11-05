@@ -193,7 +193,14 @@ describe('RoomPane really passes the room id down', () => {
     // class recording comes from `recording_url` — a different system from broadcast
     // occurrences, and `ACTIVE_DISCOVERY_STATES` does not return `replay_ready` at all, so
     // there is no replay feed to hand off to. Pretending otherwise would be the fabrication.
-    expect(src).toContain("const { join_url } = await joinVideoRoom(roomId);");
+    // Asserted as the CALL, not as the whole statement that wraps it. The statement was
+    // `const { join_url } = await joinVideoRoom(roomId);` until 2026-11-04, when
+    // `Rooms on a phone: opening a room now shows the room` (07141d6f) wrapped it in
+    // `openTabForJoin` so a mobile tab opens from the click. The escape it guards was never
+    // removed - only the line around it changed - but the literal match broke and took main
+    // red with it. What this test is for is that the two-way join is still wired, and that is
+    // exactly `joinVideoRoom(roomId)`; the surrounding plumbing is free to change.
+    expect(src).toContain('joinVideoRoom(roomId)');
     expect(src).toMatch(/openSessionRecording\(session\.recording_url, session\.title\)/);
   });
 });

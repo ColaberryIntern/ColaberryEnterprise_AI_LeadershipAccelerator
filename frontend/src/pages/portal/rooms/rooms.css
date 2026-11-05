@@ -119,6 +119,31 @@
 .rm-titlerow{display:flex;align-items:center;gap:12px;margin-top:2px}
 .rm-shell{display:grid;grid-template-columns:252px 1fr;gap:16px;align-items:start}
 @media (max-width:820px){.rm-shell{grid-template-columns:1fr}}
+
+/* MASTER / DETAIL ON ONE COLUMN.
+   Collapsing the grid to 1fr stacks the rail ABOVE the pane, so opening a room put the room
+   below a whole screen of room list. Nothing scrolled, so the page looked unchanged and the only
+   visible effect was the tapped row turning active. Reported by Kalkidan Bezabeh on an iPhone,
+   4 Nov 2026, in both Safari and Chrome: "the page doesn't change but it shows me a green
+   indicator behind ... so i can't see or click anything there."
+   Below the breakpoint this shows the LIST or the ROOM, never both, which is what every other
+   phone app does with a list that opens a detail. The back link is the way out and it only
+   exists here, because above the breakpoint the rail never left. */
+/* ORDER MATTERS HERE, and getting it wrong cost a measurement to catch: this base rule and the
+   media query below have the SAME specificity, so whichever comes last wins. With the base
+   written after the query, `display:none` beat `display:inline-flex` and the back link was never
+   rendered on a phone -- which, with the rail hidden, would have trapped somebody inside the
+   room they opened. The base goes FIRST. *//* Hidden by default so a wide screen, where the rail is still beside the pane, never shows a
+   control that would take somebody away from a room for no reason. */
+.rm-backtorooms{display:none;align-items:center;gap:6px;margin-bottom:10px;
+  font-size:14px;font-weight:700;color:var(--cherry-deep,#C20E1E);text-decoration:none;
+  /* 44px is this repo's touch-target floor below 992px (styles/responsive.css), and this is the
+     only way back to the list once the rail is hidden. */
+  min-height:44px}
+@media (max-width:820px){
+  .rm-shell.has-room .rm-rail{display:none}
+  .rm-backtorooms{display:inline-flex}
+}
 .rm-rail{background:var(--surface,#fff);border:1px solid var(--border-subtle,#E4E4E3);border-radius:var(--r-16,16px);padding:12px 10px;position:sticky;top:12px;align-self:start}
 .rm-railgroup{margin-bottom:12px}
 .rm-railhdr{font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--muted,#6B6B6B);padding:6px 8px 4px}
@@ -146,6 +171,21 @@
 .rm-classbanner-cd b{font-variant-numeric:tabular-nums}
 .rm-classbanner-live{display:flex;align-items:center;gap:7px;margin-top:8px;font-size:13px;font-weight:700;color:var(--cherry-deep,#C20E1E)}
 .rm-classbanner button.te-btn{margin-top:8px}
+
+/* The blocked-meeting-tab notice. Shown only when the browser REFUSED to open the meeting, which
+   this page could not previously detect at all: `window.open(url,'_blank','noopener')` returns
+   null by specification, so a refusal and a success looked identical and the button just seemed
+   dead. Reported by Kalkidan Bezabeh on a phone, 2 Nov 2026.
+   It wraps on purpose: at 360px the message, the link and the dismiss cannot sit on one line, and
+   an escape hatch that is itself cut off the screen is not an escape hatch. */
+.rm-joinblocked{display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px;
+  padding:12px 14px;border-radius:var(--r-16,16px);background:var(--cherry-bg,#FFF0F1);
+  border:1px solid var(--cherry,#FB2832);font-size:13.5px;color:var(--strong,#1A1A1A)}
+.rm-joinblocked > div:first-child{flex:1 1 200px;min-width:0}
+.rm-joinblocked-sub{font-size:12.5px;color:var(--muted,#6B6B6B);margin-top:2px}
+/* 44px is this repo's own touch-target floor below 992px (styles/responsive.css). The escape
+   link is the one control that must never be too small to hit. */
+.rm-joinblocked .te-btn{flex:none;min-height:44px}
 
 .rm-welcome-hero{text-align:center;padding:40px 20px;background:linear-gradient(135deg,var(--cherry-bg,#FFF0F1),var(--berry-bg,#EAF2F6));border-radius:var(--r-16,16px)}
 .rm-welcome-hero h2{margin:8px 0 4px;font-size:20px;color:var(--strong,#1A1A1A)}
