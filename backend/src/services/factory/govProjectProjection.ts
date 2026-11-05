@@ -105,9 +105,10 @@ export interface StudentGovProjectView {
   proposalDocuments: StudentProposalDocument[];
   /** P2: the current blueprint derived from the stored solicitation (scoring, Section L rules, required forms incl.
    *  the Texas engine, addenda). Null until a reanalyze has run. Carries no pricing values and no identities. */
-  blueprint: ProposalBlueprint | null;
-  /** P4: screenshots captured from the verified build demo, tagged with the requirements they prove. No identities. */
-  buildArtifacts: StudentGovBuildArtifact[];
+  blueprint?: ProposalBlueprint | null;
+  /** P4: screenshots captured from the verified build demo, tagged with the requirements they prove. No identities.
+   *  Optional at the type level (the loader always sets it) so pre-existing view literals still compile. */
+  buildArtifacts?: StudentGovBuildArtifact[];
   /** v2: combined completion across verified build stories + accepted proposal documents — the honest project %. */
   overallProgress: GovOverallProgress;
 }

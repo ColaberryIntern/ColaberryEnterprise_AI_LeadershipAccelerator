@@ -63,7 +63,7 @@ function timeoutAfter(ms: number): Promise<never> {
 /** Count the pages in a PDF buffer by reading the rendered bytes (pdf-parse), never by arithmetic. */
 async function countPdfPages(buffer: Buffer): Promise<number> {
   try {
-    const pdfParse = (await import('pdf-parse')).default as (b: Buffer) => Promise<{ numpages: number }>;
+    const pdfParse = (await import('pdf-parse')).default as unknown as (b: Buffer) => Promise<{ numpages: number }>;
     const parsed = await pdfParse(buffer);
     const n = Number(parsed?.numpages);
     if (!Number.isFinite(n) || n < 1) throw new Error('no page count');

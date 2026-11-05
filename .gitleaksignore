@@ -76,3 +76,22 @@ PROGRESS.md:curl-auth-header:7200
 # and bounded, and which still catches a new secret added to the same files in
 # a future commit. See the block there for what each finding actually is.
 # ==========================================================================
+
+# Gov Proposal Studio P2 (commit 5db90cd4) — the Texas "no-boycott" FORM-KEY
+# identifiers tripping the generic-api-key rule.
+#
+# WHY THESE ARE NOT SECRETS: each flagged string is a machine key naming a
+# required Texas procurement certification — no_boycott_israel_808,
+# no_boycott_energy_809, no_discrimination_firearms_2274 (Tex. Gov't Code 808 /
+# 809 / 2274). They appear as `{ key: 'no_boycott_israel_808', … }` in the forms
+# engine (texasFormsRules.ts), the solicitation-naming probes (buildProposalBlueprint.ts),
+# and one test fixture. The rule fires on the `key:` context + a token with digits
+# and entropy ~3.5–3.8; the value is a public statute identifier, not a credential.
+# Nothing to rotate; these are the stable keys the whole feature routes on.
+5db90cd4eae848be8446a631cb99eb1f0cc32091:backend/src/services/factory/proposal/__tests__/deriveProposalDocumentsBlueprint.test.ts:generic-api-key:21
+5db90cd4eae848be8446a631cb99eb1f0cc32091:backend/src/services/factory/proposal/buildProposalBlueprint.ts:generic-api-key:47
+5db90cd4eae848be8446a631cb99eb1f0cc32091:backend/src/services/factory/proposal/buildProposalBlueprint.ts:generic-api-key:48
+5db90cd4eae848be8446a631cb99eb1f0cc32091:backend/src/services/factory/proposal/buildProposalBlueprint.ts:generic-api-key:49
+5db90cd4eae848be8446a631cb99eb1f0cc32091:backend/src/services/factory/proposal/texasFormsRules.ts:generic-api-key:78
+5db90cd4eae848be8446a631cb99eb1f0cc32091:backend/src/services/factory/proposal/texasFormsRules.ts:generic-api-key:79
+5db90cd4eae848be8446a631cb99eb1f0cc32091:backend/src/services/factory/proposal/texasFormsRules.ts:generic-api-key:80
