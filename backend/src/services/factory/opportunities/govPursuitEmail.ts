@@ -25,11 +25,17 @@ type Tone = keyof typeof TONES;
 
 const esc = (s: unknown): string => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string));
 
+/**
+ * encodeURIComponent leaves ( ) ! ' * as they are. The mail click tracker (track.colaberry.com) cuts a URL at "(", which leaves junk
+ * after its signed payload and answers 400, and "(detroit)" is in most agency names. So those are encoded too.
+ */
+const encodeParam = (s: string): string => encodeURIComponent(s).replace(/[!'()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
+
 /** The Qualify link, with the title and agency the workspace stores when the record is first opened. */
 export function qualifyUrl(uuid: string, title?: string | null, agency?: string | null): string {
-  const q = [`gws=${encodeURIComponent(`gws:${uuid}`)}`];
-  if (title) q.push(`from=${encodeURIComponent(title)}`);
-  if (agency) q.push(`agency=${encodeURIComponent(agency)}`);
+  const q = [`gws=${encodeParam(`gws:${uuid}`)}`];
+  if (title) q.push(`from=${encodeParam(title)}`);
+  if (agency) q.push(`agency=${encodeParam(agency)}`);
   return `${APP_BASE}/admin/gov-qualification?${q.join('&')}`;
 }
 
@@ -60,8 +66,15 @@ function chips(r: BoardRow, today: string): string {
 /** Feed and ZIP text can hold one long unbroken string, which would otherwise push the email wider than the phone. */
 const WRAP = 'overflow-wrap:anywhere;word-break:break-word';
 
+/**
+ * A link for an href attribute. Not HTML-escaped, because the click tracker copies the attribute as written, so "&amp;" would reach the
+ * browser and "from" would arrive as "amp;from". Percent-encoding what could end the attribute keeps it just as safe. Parentheses go
+ * too, because the tracker cuts a URL at "(", and a feed's sourceUrl isn't ours to trust.
+ */
+const hrefAttr = (href: string): string => href.replace(/["'<>()\s]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase().padStart(2, '0')}`);
+
 const link = (href: string, text: string, color = '#1557b0'): string =>
-  `<a href="${esc(href)}" style="color:${color};font-weight:bold;text-decoration:none">${esc(text)}</a>`;
+  `<a href="${hrefAttr(href)}" style="color:${color};font-weight:bold;text-decoration:none">${esc(text)}</a>`;
 const bonfireLink = (r: BoardRow, text: string): string =>
   (typeof r.opportunity.sourceUrl === 'string' && /^https?:\/\//i.test(r.opportunity.sourceUrl) ? link(r.opportunity.sourceUrl, text) : '');
 
