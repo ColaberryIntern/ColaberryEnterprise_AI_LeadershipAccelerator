@@ -318,3 +318,80 @@ labelled `synthetic`. 9 metrics (2 verified, 7 self-reported), 11 timeline entri
 repo-verified, 2 contributors, 7 artifacts, 1 repository.
 
 Session: CC-20261105-k4r8
+
+---
+
+# Part four: the render audit
+
+Ali: *"I still think it needs another audit. It's lacking pizzazz."* Plus: name Jude too,
+and the platform is live and running deployed.
+
+## The pizzazz had a cause, and it was mine
+
+Part three compared **stored** sections against the library and found five missing. It did
+not check whether the stored sections **render**. Auditing the live projection instead of
+the snapshot found four sections coming back empty on the page while sitting perfectly
+well in the database:
+
+| Section | Stored as | The contract wanted | Rendered |
+|---|---|---|---|
+| `situation` | `context`, `problem`, `constraints` | `narrative[]` + `verification` | nothing |
+| `decisions` | `decision`, `rationale`, `tradeoff` | `key`, `title`, `problem`, `decision`, `evidence`, `consequence` | **0 of 4 cards** |
+| `roadmap` | `item`, `status` | `label`, `status`, `verification` | **0 of 6** |
+| `architecture` | `summary`, `components` | `narrative[]` | prose dropped |
+
+They were authored against invented shapes rather than the contracts in
+`types/caseStudy.ts`, and the projection drops what it cannot read **silently**. Four of
+the record's most visible sections were blank. That is what "lacking pizzazz" looked like
+from the outside, and no amount of adding would have fixed it.
+
+**The lesson worth keeping: comparing snapshots proves a section was written, not that a
+reader can see it. The projection is the only audit that counts.** Three of my probes in
+this session read snapshot field names that do not exist on the wire — `builder.displayName`
+is `name`, `repositories[].repoUrl` is `url`, `situation.narrative` is `body` — and each
+time the first reading looked like a fault that was not there. Read the projector, not the
+payload you expected.
+
+## What that fixed, measured on the live page
+
+```
+                  before   after
+heroMetrics            0       1     the thesis as one tile
+decisions              0       5     cards with a stage and a closing figure
+situation            none      4 paragraphs + 4 constraints + 3 goals
+roadmap                0       7
+architecture        prose dropped    9 lines + a Mermaid chart
+visualStory      0 cards/0 charts    2 cards, 1 chart, workflow
+```
+
+Every one of the fourteen sections on the wire is now non-empty, and the record sits
+**first of 12** on the default index with a **verified** card badge.
+
+## Jude Ojobo, named
+
+Consent given 5 November 2026, so the second builder is now named rather than credited by
+role: 76 commits from March to September 2026 building the original pipeline, handed on in
+September. The first timeline entry names them, and the second now names Kesetebirhan
+Delele with his commit count.
+
+## The platform is live
+
+Confirmed by the platform owner on 5 November 2026. Recorded as its own
+`case_study_evidence` row with `source_type: manual`, and `identity.productionStatus` now
+carries `class: verified, method: manual` citing it — **not** `self`, because the person who
+confirmed it is not the builder, and **not** `repo`, because a repository cannot evidence a
+deployment.
+
+It is deliberately kept separate from the measured period. The operational figures cover
+fifty days during which delivery sat behind a two-key switch that defaults to off, so the
+record says the confirmation is about the system today rather than about those fifty days.
+Claiming otherwise would have been the easiest sentence to write and the wrong one.
+
+## Final state
+
+Snapshot version 6, signed, published to `enterprise` and `training`. Record badge
+`verified / repo`. 9 metrics (2 verified by repository, 7 self-reported), 11 repo-verified
+timeline entries, 5 decision cards, 2 named contributors, 7 artifacts, 1 hero tile, a
+Mermaid architecture chart, and a visual story with two outcome cards and a chart.
+
+Session: CC-20261105-k4r8
