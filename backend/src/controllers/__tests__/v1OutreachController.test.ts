@@ -164,10 +164,20 @@ describe('the envelope', () => {
 describe('the route is guarded, and reads only', () => {
   const ROUTES = fs.readFileSync(path.join(__dirname, '..', '..', 'routes', 'v1Routes.ts'), 'utf8');
 
-  it('is registered with requireServiceToken and the rate limiter', () => {
+  it('is registered with the rate limiter and a guard scoped to cora ALONE', () => {
     expect(ROUTES).toContain(
-      "router.get('/api/v1/explorer-growth/outreach', v1RateLimiter, requireServiceToken, getOutreachFeed);",
+      "router.get('/api/v1/explorer-growth/outreach', v1RateLimiter, requireServiceClient('cora'), getOutreachFeed);",
     );
+  });
+
+  it('does NOT accept the shared enterprise_crm credential, which opens the v1 writes', () => {
+    // The point of scoping this route. If someone widens it to keep an old integration
+    // working, that is a decision worth making on purpose, and this test makes them make it.
+    const line = ROUTES.split('\n').find((l) => l.includes("router.get('/api/v1/explorer-growth/outreach'")) ?? '';
+    expect(line).not.toContain('enterprise_crm');
+    // Control: the credential name really does appear in this file, on the write routes, so
+    // the assertion above is not passing because the string is absent everywhere.
+    expect(ROUTES).toContain("requireServiceClient('enterprise_crm')");
   });
 
   it('CONTROL: the file really is being read, so the match above means something', () => {

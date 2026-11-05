@@ -443,8 +443,17 @@ export const env = {
   mssqlPass: process.env.MSSQL_PASS || '',
   mssqlDatabase: process.env.MSSQL_DATABASE || 'CCPP',
 
-  // Enterprise CRM service token (service-to-service auth for /api/v1/leads)
+  // Enterprise CRM service token. The ORIGINAL shared v1 credential, provisioned 2026-06-10
+  // and held by training.colaberry.com (Sai's Cloud Run) and Repo2Reputation. It opens the
+  // three v1 writes, so a read-only consumer must never be given it — see
+  // middlewares/serviceAuthMiddleware.ts for why the routes are scoped per client.
   enterpriseCrmToken: process.env.ENTERPRISE_CRM_TOKEN || '',
+
+  // Cora's own service token, for the Explorer call queue feed and nothing else. Separate from
+  // the value above so it can be rotated without touching the training site, and so the recap
+  // engine cannot create leads or ask Synthflow to dial anybody. Empty means the one route
+  // scoped to Cora answers 401 to everybody, which is the right state before provisioning.
+  coraServiceToken: process.env.CORA_SERVICE_TOKEN || '',
 
   // Branded welcome email for Open House / training.colaberry.com Explorer signups.
   // Sent by createExplorerEnrollment via emailService.sendTrainingWelcome. The

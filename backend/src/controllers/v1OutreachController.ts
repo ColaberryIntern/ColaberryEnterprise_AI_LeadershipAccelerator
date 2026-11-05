@@ -38,9 +38,15 @@ import { outreachQuerySchema } from '../schemas/explorerGrowthSchema';
  * ── WHAT THIS CANNOT DO ─────────────────────────────────────────────────────
  *
  * It is a GET over `getOutreach`, which is two SELECTs and a pure ranking function. It writes
- * nothing, sends nothing, and holds no state. The service token is checked by
- * `requireServiceToken` on the route, not here, for the same reason every other v1 route does
- * it there: a guard on the router cannot be forgotten by a handler.
+ * nothing, sends nothing, and holds no state. Auth is checked by `requireServiceClient('cora')`
+ * on the route, not here, for the same reason every other v1 route does it there: a guard on the
+ * router cannot be forgotten by a handler.
+ *
+ * SCOPED TO CORA ALONE as of 2026-11-05. It does NOT accept `enterprise_crm`, the original
+ * shared v1 credential, because that one also opens three writes — one of which asks Synthflow
+ * to dial a person — and a nightly read has no business holding it. Until `CORA_SERVICE_TOKEN`
+ * is set on the host this route answers 401 to everybody, which is correct for a route whose
+ * only consumer is not provisioned yet.
  */
 
 /**
