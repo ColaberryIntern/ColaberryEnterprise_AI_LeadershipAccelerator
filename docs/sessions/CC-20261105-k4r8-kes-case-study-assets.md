@@ -395,3 +395,67 @@ timeline entries, 5 decision cards, 2 named contributors, 7 artifacts, 1 hero ti
 Mermaid architecture chart, and a visual story with two outcome cards and a chart.
 
 Session: CC-20261105-k4r8
+
+---
+
+# Part five: looking at the page
+
+Ali asked for the rendered page to be looked at by eye rather than measured through the
+API. Two things came out of it, one of them a fault in my own tooling.
+
+## A capture that invented a bug
+
+The first full-page screenshot showed six application screenshots as empty grey bands with
+real captions underneath. It looked exactly like the silent-drop fault from part four, and
+it was not one.
+
+`StoryFigure.tsx` renders every figure with `loading="lazy"`. A Playwright `fullPage`
+screenshot does not scroll, so images below the fold never load and photograph as nothing.
+The data was correct the whole time: all twelve images on the page fetch successfully, the
+six screenshots at 1920px each.
+
+`scripts/captureCaseStudyRender.js` now walks the page to the bottom in viewport steps,
+waits for every `<img>` to report `complete && naturalWidth > 0`, and **names any image
+that did not load** rather than quietly photographing a blank. Without that it would have
+cost a wrong bug report, and nearly did.
+
+## A fault the eye did find
+
+Comparing the rendered measurement band against another published record's:
+
+```
+                    height   text
+this record          242px    64 chars   heading + a collapsed disclosure
+reference record     456px   866 chars   heading + narrative + disclosure
+```
+
+`measurement.narrative` is `readonly string[]`. It had been authored as one long string,
+so `lines()` returned nothing and the entire narrative — the careful paragraphs separating
+what was measured from what was assumed — rendered as blank. Same class of fault as
+part four, found the same way: by comparing against a record that works.
+
+Rewritten as six paragraphs. The band is now **795px and 2,147 characters**, ahead of the
+reference.
+
+A sweep then checked every section that the contracts type as a list, confirming all
+thirteen are lists and none is a lone string.
+
+## What the page looks like now
+
+15,501px tall. Hero with the video, poster and a VERIFIED badge; an interactive eight-step
+workflow walker drawn from the architecture diagram; two large outcome cards; the situation
+with its goals and constraints; five decision cards; an eleven-point build timeline naming
+both builders; the measurement narrative and nine metrics; a builder card with a six-skill
+grid and an approved-profile link; "Who built it" crediting Kesetebirhan Delele and Jude
+Ojobo; six application screenshots and the cover illustration.
+
+## The tool that was missing
+
+`scripts/captureCaseStudyRender.js` ships with this. It routes through `captureHelpers.js`
+for the width ceiling, slices a tall page into readable segments, asserts every image
+loaded, and reports headings with nothing beneath them. **The projection audit of part four
+proved a reader could reach the content; only this proves they can see it.**
+
+Final state: snapshot version 7, signed, published to `enterprise` and `training`.
+
+Session: CC-20261105-k4r8
