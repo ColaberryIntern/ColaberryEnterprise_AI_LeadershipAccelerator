@@ -21,8 +21,11 @@ import type { GovOpportunity } from '../../services/factory/opportunities/govOpp
 import { lookupGovContractsContainer } from '../../scripts/lib/factoryDemoContainer';
 // Team-scoped dismissals: hide a discovered v1 candidate from the whole team's feed (reversible). The service
 // lazy-loads its model inside each function, so this import never inits the ORM here.
-import { dismissOpportunity, restoreOpportunity, listActiveDismissedKeys } from '../../services/factory/opportunities/govOpportunityDismissals';
+import { dismissOpportunity, restoreOpportunity, listActiveDismissals } from '../../services/factory/opportunities/govOpportunityDismissals';
 import { loadVettingByCanonical, canonicalForUuid, type OpportunityVetting } from '../../services/factory/govOpportunityVetting';
+import { buildDiscoveryBoard, type BoardStage } from '../../services/factory/opportunities/govDiscoveryBoard';
+import { loadBoardFacts } from '../../services/factory/opportunities/govDiscoveryBoardFacts';
+import { centralToday } from '../../services/factory/opportunities/govOpportunitySweep';
 // Colaberry's service catalog (CRUD). Lazy-loads its model inside each function, so this import never inits the ORM.
 import {
   createServiceOffering, updateServiceOffering, retireServiceOffering, markGrowthServiceOffering, listServiceOfferings,
@@ -227,21 +230,28 @@ router.post('/api/admin/factory/contract/:deliveryProjectId/request-changes', re
 router.get('/api/admin/factory/opportunities', requireSection('program'), async (_req: Request, res: Response) => {
   try {
     const feed = await fetchBestFitOpportunities(); // never throws (carries totalAvailable when live)
-    // Best-effort team-dismissal filter: hide opportunities this tenant has actively dismissed. Discovery must
-    // stay up even when the gov container isn't configured, so a missing/erroring container returns the feed
-    // UNFILTERED (unlike the dismiss/restore WRITE routes, which fail closed). dismissedCount reports how many
-    // rows this page hid so the UI can say "showing N of M · K dismissed".
-    let opportunities: Array<GovOpportunity & { vetting?: OpportunityVetting | null }> = feed.opportunities;
+    // The board is buildDiscoveryBoard, the same function the morning email renders, so the two can't disagree. It removes
+    // dismissed rows and pursuits assigned to an active intern (those live under Interns > Gov Contracts) and stages the
+    // rest. Discovery must stay up even when the gov container isn't configured, so a missing/erroring container returns
+    // the feed UNFILTERED (unlike the dismiss/restore WRITE routes, which fail closed).
+    let opportunities: Array<GovOpportunity & { vetting?: OpportunityVetting | null; boardStage?: BoardStage; fromSnapshot?: boolean }> = feed.opportunities;
     let dismissedCount = 0;
+    let assignedCount = 0;
+    let boardCounts: Record<BoardStage, number> | null = null;
+    let boardIncomplete = false;
     try {
       const container = await lookupGovContractsContainer();
       if (container) {
-        const dismissed = await listActiveDismissedKeys(container.tenant.id);
-        if (dismissed.size > 0) {
-          const before = opportunities.length;
-          opportunities = opportunities.filter((o) => !dismissed.has(o.uuid)); // new array; never mutate the feed
-          dismissedCount = before - opportunities.length;
-        }
+        const facts = await loadBoardFacts(container.tenant.id);
+        const board = buildDiscoveryBoard(feed.opportunities, { ...facts, sweepActs: facts.sweepActs !== false && feed.source === 'live' }, centralToday());
+        dismissedCount = board.dismissedCount;
+        assignedCount = board.assignedCount;
+        boardCounts = board.counts;
+        boardIncomplete = board.incomplete;
+        opportunities = board.rows.map((r) => ({
+          ...r.opportunity, boardStage: r.stage, fromSnapshot: r.fromSnapshot,
+          aiVetting: r.vetting ? { status: r.vetting.status, verdict: r.vetting.verdict, reason: r.vetting.reason, coveragePct: r.vetting.coveragePct } : null,
+        }));
         // Annotate each row with its qualification-derived vetting stage (the approval ladder), joined by
         // canonical 'gws:'+uuid. Best-effort: on any failure rows stay un-annotated (the page reads that as
         // not-vetted), so discovery never breaks because this join failed.
@@ -253,10 +263,32 @@ router.get('/api/admin/factory/opportunities', requireSection('program'), async 
     } catch (filterErr: any) {
       logFail('factory_opportunities_dismissal_filter_failed', filterErr, {}); // non-fatal: serve the unfiltered feed
     }
-    res.json({ ...feed, opportunities, dismissedCount });
+    res.json({ ...feed, opportunities, dismissedCount, assignedCount, boardCounts, boardIncomplete });
   } catch (err: any) {
     logFail('factory_opportunities_failed', err, {});
     res.status(500).json({ error: 'Could not load government opportunities.' });
+  }
+});
+
+/**
+ * GET /api/admin/factory/opportunities/hidden: every row hidden from the team's board, with why, so a hide can be reviewed
+ * and restored from any browser. Registered before /opportunities/:uuid, which would otherwise answer 400 for this path.
+ * Program-gated and tenant-scoped; fails closed with 503 when the gov container is unresolvable.
+ */
+router.get('/api/admin/factory/opportunities/hidden', requireSection('program'), async (_req: Request, res: Response) => {
+  try {
+    const container = await lookupGovContractsContainer();
+    if (!container) { res.status(503).json({ error: 'The government contracts workspace is not configured.' }); return; }
+    const rows = await listActiveDismissals(container.tenant.id);
+    res.json({
+      hidden: rows.map((r: any) => ({
+        opportunityKey: r.opportunity_key, title: r.title ?? null, agency: r.agency ?? null, reason: r.reason ?? null,
+        dismissedBy: r.dismissed_by ?? null, dismissedAt: r.dismissed_at ?? null,
+      })),
+    });
+  } catch (err: any) {
+    logFail('factory_opportunities_hidden_failed', err, {});
+    res.status(500).json({ error: 'Could not load the hidden opportunities.' });
   }
 });
 

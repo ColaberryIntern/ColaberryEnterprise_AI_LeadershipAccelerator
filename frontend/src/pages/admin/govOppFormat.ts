@@ -5,11 +5,12 @@
  * No IO; deterministic; safe to unit-test and import anywhere.
  */
 
-export type Band = { label: 'High' | 'Med' | 'Low'; tone: 'success' | 'warning' | 'danger' };
+export type Band = { label: 'High' | 'Med' | 'Low' | 'Unknown'; tone: 'success' | 'warning' | 'danger' | 'secondary' };
 
-/** Legacy discovery score → High/Med/Low band (advisory only, never a verified fit). */
+/** Legacy discovery score → High/Med/Low band (advisory only, never a verified fit). No score is unknown, not low. */
 export const band = (score: number | null | undefined): Band => {
-  const s = typeof score === 'number' ? score : -1;
+  if (typeof score !== 'number') return { label: 'Unknown', tone: 'secondary' };
+  const s = score;
   if (s >= 75) return { label: 'High', tone: 'success' };
   if (s >= 60) return { label: 'Med', tone: 'warning' };
   return { label: 'Low', tone: 'danger' };

@@ -1,102 +1,186 @@
-import {
-  toAutoHide, needsRequirements, qualifyUrl, renderUploadEmail, renderVetSummaryEmail, isOffTarget,
-  type SweepOpportunity,
-} from '../govOpportunitySweep';
-import type { VettingStage } from '../../govOpportunityVetting';
+const FLAGS = { govOpportunitySweep: true, govAiVetting: true };
+jest.mock('../../../../config/featureFlags', () => ({ FLAGS }));
+const fetchFeed = jest.fn();
+jest.mock('../oppPulseClient', () => ({ fetchBestFitOpportunities: (...a: any[]) => fetchFeed(...a) }));
+const lookupContainer = jest.fn();
+jest.mock('../../../../scripts/lib/factoryDemoContainer', () => ({ lookupGovContractsContainer: (...a: any[]) => lookupContainer(...a) }));
+const claimSlot = jest.fn();
+jest.mock('../govDailySlot', () => ({ claimDailySlot: (...a: any[]) => claimSlot(...a) }));
+const loadFacts = jest.fn();
+jest.mock('../govDiscoveryBoardFacts', () => ({ loadBoardFacts: (...a: any[]) => loadFacts(...a) }));
+const dismiss = jest.fn();
+jest.mock('../govOpportunityDismissals', () => ({ dismissOpportunity: (...a: any[]) => dismiss(...a) }));
+const send = jest.fn();
+jest.mock('../../../emailService', () => ({ sendGovOpportunitySweepEmail: (...a: any[]) => send(...a) }));
 
-const opp = (uuid: string, fitScore: number | null, title = 'T', agency = 'A'): SweepOpportunity => ({ uuid, title, agency, fitScore });
-const stages = (m: Record<string, VettingStage>): Map<string, VettingStage> => new Map(Object.entries(m));
+import { afterHides, centralToday, runGovOpportunitySweep } from '../govOpportunitySweep';
+import { buildDiscoveryBoard, BoardFacts } from '../govDiscoveryBoard';
 
-describe('qualifyUrl', () => {
-  it('matches the discovery page Qualify link shape', () => {
-    expect(qualifyUrl('abc')).toContain('/admin/gov-qualification?gws=');
-    expect(qualifyUrl('abc')).toContain(encodeURIComponent('gws:abc'));
+const opp = (uuid: string, over: any = {}) => ({ uuid, title: `Software ${uuid}`, agency: 'City', closeDate: '2099-12-01', fitScore: 70, estimatedValue: 1, sourceUrl: `https://b.example/${uuid}`, ...over });
+const facts = (over: Partial<BoardFacts> = {}): BoardFacts => ({
+  dismissed: new Set(), restored: new Set(), assigned: new Set(), qualifications: new Map(), vettings: new Map(), bundles: new Set(), aiEnabled: true, ...over,
+});
+const completed = (verdict: string, reason = `AI says ${verdict}`) => ({ status: 'completed', verdict, reason, quote: null, coveragePct: 80, errorClass: null, opportunity: null }) as any;
+const live = (rows: any[]) => fetchFeed.mockResolvedValue({ source: 'live', opportunities: rows });
+const sentHtml = (): string => send.mock.calls[0][0].html;
+
+beforeEach(() => {
+  jest.resetAllMocks();
+  FLAGS.govOpportunitySweep = true;
+  jest.spyOn(console, 'log').mockImplementation(() => undefined);
+  lookupContainer.mockResolvedValue({ tenant: { id: 'ten-1' }, org: { id: 'org-1' } });
+  claimSlot.mockResolvedValue(true);
+  loadFacts.mockResolvedValue(facts());
+  dismiss.mockResolvedValue({});
+  send.mockResolvedValue(undefined);
+});
+
+describe('guards', () => {
+  it('flag off: nothing', async () => {
+    FLAGS.govOpportunitySweep = false;
+    expect((await runGovOpportunitySweep()).skipped).toBe('disabled');
+    expect(fetchFeed).not.toHaveBeenCalled();
+  });
+  it('a degraded feed returns the June snapshot without throwing: no hide, no email', async () => {
+    fetchFeed.mockResolvedValue({ source: 'snapshot', snapshotReason: 'source_failed', opportunities: [opp('old', { fitScore: 10 })] });
+    expect(await runGovOpportunitySweep()).toMatchObject({ skipped: 'feed_not_live', emailed: false });
+    expect(dismiss).not.toHaveBeenCalled();
+    expect(send).not.toHaveBeenCalled();
+    expect(claimSlot).not.toHaveBeenCalled(); // an outage does not use up the day's slot
+  });
+  it('no gov container: nothing', async () => {
+    live([opp('a')]);
+    lookupContainer.mockResolvedValue(null);
+    expect((await runGovOpportunitySweep()).skipped).toBe('no_container');
+    expect(send).not.toHaveBeenCalled();
+  });
+  it('a second scheduler instance the same day sends nothing', async () => {
+    live([opp('a')]);
+    claimSlot.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+    await runGovOpportunitySweep();
+    expect((await runGovOpportunitySweep()).skipped).toBe('already_ran_today');
+    expect(send).toHaveBeenCalledTimes(1);
   });
 });
 
-describe('toAutoHide', () => {
-  it('hides fit strictly below the threshold', () => {
-    const r = toAutoHide([opp('a', 59), opp('b', 60), opp('c', 10)], new Set(), new Map());
-    expect(r.map((o) => o.uuid).sort()).toEqual(['a', 'c']);
+describe('one email', () => {
+  it('sends exactly one, even with every section populated', async () => {
+    live([opp('v'), opp('z')]);
+    loadFacts.mockResolvedValue(facts({ vettings: new Map([['v', completed('pursue')]]) }));
+    await runGovOpportunitySweep();
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(send.mock.calls[0][0].subject).toContain('1 vetted');
+    expect(send.mock.calls[0][0].subject).toContain('1 ZIP to upload');
   });
-  it('never hides an already-dismissed row', () => {
-    expect(toAutoHide([opp('a', 10)], new Set(['a']), new Map())).toEqual([]);
+  it('a day with nothing to do still sends', async () => {
+    live([opp('low', { fitScore: 10 })]);
+    expect((await runGovOpportunitySweep()).emailed).toBe(true);
+    expect(sentHtml()).toContain('Nothing needs you today.');
   });
-  it('never hides a row whose qualification has started', () => {
-    expect(toAutoHide([opp('a', 10)], new Set(), stages({ a: 'in_review' }))).toEqual([]);
+  it('an empty feed is a broken feed, not a quiet day: no slot used, no "nothing needs you"', async () => {
+    live([]);
+    expect(await runGovOpportunitySweep()).toMatchObject({ skipped: 'feed_empty', emailed: false });
+    expect(claimSlot).not.toHaveBeenCalled();
+    expect(send).not.toHaveBeenCalled();
   });
-  it('ignores a missing fit score', () => {
-    expect(toAutoHide([opp('a', null)], new Set(), new Map())).toEqual([]);
+  it('a failed send is reported, and the hides already made still count', async () => {
+    live([opp('low', { fitScore: 10 })]);
+    send.mockRejectedValueOnce(new Error('smtp'));
+    expect(await runGovOpportunitySweep()).toMatchObject({ hidden: 1, emailed: false });
+    expect(send).toHaveBeenCalledTimes(1); // not retried: a retry can double-send
   });
-  it('hides an off-target title regardless of a high fit', () => {
-    expect(toAutoHide([opp('a', 90, 'New Construction of the Community Center')], new Set(), new Map()).map((o) => o.uuid)).toEqual(['a']);
-  });
-  it('never hides an off-target row whose qualification has started', () => {
-    expect(toAutoHide([opp('a', 90, 'Roof Replacement at Lincoln Elementary')], new Set(), stages({ a: 'in_review' }))).toEqual([]);
-  });
-});
-
-describe('needsRequirements', () => {
-  it('is good-fit, not dismissed, and not yet qualified', () => {
-    const r = needsRequirements([opp('a', 80), opp('b', 59), opp('c', 90)], new Set(), stages({ c: 'vetted' }));
-    expect(r.map((o) => o.uuid)).toEqual(['a']); // b too low, c already vetted
-  });
-  it('excludes dismissed rows', () => {
-    expect(needsRequirements([opp('a', 80)], new Set(['a']), new Map())).toEqual([]);
-  });
-  it('excludes a high-fit off-target title', () => {
-    const r = needsRequirements([opp('a', 80, 'Temporary Staffing Agencies'), opp('b', 80, 'Permitting Software Solution')], new Set(), new Map());
-    expect(r.map((o) => o.uuid)).toEqual(['b']);
+  it('a dismissal read that throws does not use up the day, so another instance can still run', async () => {
+    live([opp('a')]);
+    loadFacts.mockRejectedValueOnce(new Error('db'));
+    await expect(runGovOpportunitySweep()).rejects.toThrow('db');
+    expect(claimSlot).not.toHaveBeenCalled();
   });
 });
 
-describe('isOffTarget', () => {
-  it('flags physical / construction / trades / pure-labor / human-services titles', () => {
-    ['New South Elementary Construction', 'Abatement and Demolition at Multiple Locations',
-      'On-Call Contractor Services - Roofing', 'Temporary Staffing Agencies',
-      'DHHS Emergency Placement Short-Term Shelter', 'Residential Small Group Home (DCFS)',
-      'Security Guard Services', 'Timpanogos Sanitary Sewer District- General Contractor',
-    ].forEach((t) => expect(isOffTarget(t)).toBe(true));
+describe('hiding', () => {
+  it('hides an AI pass, reports it, and takes it off the list', async () => {
+    live([opp('p')]);
+    loadFacts.mockResolvedValue(facts({ vettings: new Map([['p', completed('pass')]]) }));
+    expect(await runGovOpportunitySweep()).toMatchObject({ hidden: 1 });
+    expect(dismiss).toHaveBeenCalledWith(expect.objectContaining({ opportunityKey: 'p', reason: 'ai_not_a_fit', dismissedBy: 'gov-opp-sweep', tenantId: 'ten-1' }));
+    expect(sentHtml()).toContain('Hidden this morning');
+    expect(sentHtml()).toContain('AI says not a fit');
+    expect(sentHtml()).not.toContain('Upload the ZIP');
   });
-  it('keeps software / data / AI titles (a rescue word wins over an off-target word)', () => {
-    ['RFP - Enterprise Work Order Management System', 'Micromobility Tracking Software',
-      'AI Field Assistants And Real-Time Emergency Platforms', 'Website Redesign, Hosting and Maintenance',
-      'Electronic Health Record System with Medicaid Billing', 'Sewer GIS Information System',
-    ].forEach((t) => expect(isOffTarget(t)).toBe(false));
+  it('does not hide a pass a person moved forward', async () => {
+    live([opp('p')]);
+    loadFacts.mockResolvedValue(facts({
+      vettings: new Map([['p', completed('pass', 'Weak fit.')]]),
+      qualifications: new Map([['p', { decision: 'needs_evidence', approvalRequested: false, establishedCount: 3, zipSha: 'x', title: null, agency: null, closeDate: null }]]),
+    }));
+    expect((await runGovOpportunitySweep()).hidden).toBe(0);
+    expect(sentHtml()).toContain('Needs your read');
+    expect(sentHtml()).toContain('Weak fit.');
+  });
+  it('does not re-hide a restored row, and it stays on the list', async () => {
+    live([opp('low', { fitScore: 40 })]);
+    loadFacts.mockResolvedValue(facts({ restored: new Set(['low']) }));
+    expect((await runGovOpportunitySweep()).hidden).toBe(0);
+    expect(dismiss).not.toHaveBeenCalled();
+    expect(sentHtml()).toContain('Software low');
+  });
+  it.each(['restored', 'assigned', 'qualifications', 'vettings'] as const)('hides nothing when the %s read failed, and the email says the list may be incomplete', async (read) => {
+    live([opp('low', { fitScore: 10 }), opp('pass')]);
+    loadFacts.mockResolvedValue(facts({ failedReads: new Set([read]), vettings: new Map([['pass', completed('pass')]]) }));
+    expect((await runGovOpportunitySweep()).hidden).toBe(0);
+    expect(dismiss).not.toHaveBeenCalled();
+    expect(sentHtml()).toContain('may be incomplete');
+    expect(sentHtml()).not.toContain('Nothing needs you today.');
+  });
+  it('one failed hide does not stop the rest; the failed row is not reported hidden', async () => {
+    live([opp('a', { fitScore: 10 }), opp('b', { fitScore: 10 })]);
+    dismiss.mockRejectedValueOnce(new Error('db')).mockResolvedValueOnce({});
+    expect((await runGovOpportunitySweep()).hidden).toBe(1);
+    expect(send).toHaveBeenCalledTimes(1);
   });
 });
 
-describe('email renderers', () => {
-  it('upload email lists each row with its Qualify link and escapes the title', () => {
-    const html = renderUploadEmail([opp('u1', 80, 'A & B <RFP>')]);
-    expect(html).toContain('requirements uploaded');
-    expect(html).toContain(qualifyUrl('u1'));
-    expect(html).toContain('A &amp; B &lt;RFP&gt;');
-    expect(html).not.toContain('<RFP>');
+describe('the board and the email agree', () => {
+  it('on one fixture, the same rows land in the same stages', async () => {
+    const feed = [
+      opp('upload1'), opp('upload2'), opp('star'), opp('read'), opp('analyze'), opp('flag', { vetVerdict: { status: 'no_bid' } }),
+      opp('assigned'), opp('dismissed'), opp('low', { fitScore: 20 }), opp('pass'), opp('approved'),
+    ];
+    const f = facts({
+      assigned: new Set(['assigned']),
+      dismissed: new Set(['dismissed']),
+      vettings: new Map([
+        ['star', completed('pursue')], ['read', completed('inconclusive')], ['pass', completed('pass')],
+        ['analyze', { ...completed('pursue'), status: 'running', verdict: null }],
+      ]),
+      qualifications: new Map([['approved', { decision: 'approved_bid_pursuit', approvalRequested: false, establishedCount: 2, zipSha: 'x', title: null, agency: null, closeDate: null }]]),
+    });
+    live(feed);
+    loadFacts.mockResolvedValue(f);
+    const result = await runGovOpportunitySweep();
+    const html = sentHtml();
+
+    // What the board route returns after the sweep ran.
+    const hidden = dismiss.mock.calls.map(([d]) => d.opportunityKey);
+    expect(hidden.sort()).toEqual(['low', 'pass']);
+    const board = buildDiscoveryBoard(feed as any, afterHides(f, hidden.map((u) => ({ opportunity: opp(u) as any, reason: 'x' }))), centralToday());
+    expect(result.counts).toEqual(board.counts);
+
+    const section = (from: string, to: string) => html.slice(html.indexOf(from), html.indexOf(to));
+    const inSection = (text: string) => board.rows.filter((r) => text.includes(`Software ${r.opportunity.uuid}<`)).map((r) => r.opportunity.uuid).sort();
+    const idsFor = (stage: string) => board.rows.filter((r) => r.stage === stage).map((r) => r.opportunity.uuid).sort();
+    expect(inSection(section('Vetted: read these first', 'Needs your read'))).toEqual(idsFor('vetted'));
+    expect(inSection(section('Needs your read', 'Approved: waiting'))).toEqual(idsFor('needs_read'));
+    expect(inSection(section('Approved: waiting', 'Upload the ZIP'))).toEqual(idsFor('approved'));
+    expect(inSection(section('Upload the ZIP', 'Hidden this morning'))).toEqual(idsFor('needs_zip'));
+    expect(idsFor('needs_zip')).toEqual(['upload1', 'upload2']);
+
+    // The analyzing tile matches, and off-board rows appear nowhere as work.
+    expect(html).toMatch(new RegExp(`>${board.counts.analyzing}</div><div[^>]*>[^<]*AI analyzing`));
+    for (const gone of ['assigned', 'dismissed', 'flag', 'analyze']) expect(html).not.toContain(`Software ${gone}<`);
   });
-  it('adds a View-on-Bonfire link, beside the Qualify CTA, when the row has an http(s) source URL (escaped)', () => {
-    const row: SweepOpportunity = { uuid: 'u2', title: 'T', agency: 'A', fitScore: 80, sourceUrl: 'https://op.colaberry.ai/b?a=1&b=2' };
-    const html = renderUploadEmail([row]);
-    expect(html).toContain('View on Bonfire');
-    expect(html).toContain('href="https://op.colaberry.ai/b?a=1&amp;b=2"');
-    expect(html).toContain(qualifyUrl('u2')); // still present, in addition to the Bonfire link
-  });
-  it('omits the Bonfire link when the source URL is missing or not http(s)', () => {
-    expect(renderUploadEmail([{ uuid: 'u3', title: 'T', agency: 'A', fitScore: 80, sourceUrl: null }])).not.toContain('View on Bonfire');
-    const bad = renderUploadEmail([{ uuid: 'u4', title: 'T', agency: 'A', fitScore: 80, sourceUrl: 'javascript:alert(1)' }]);
-    expect(bad).not.toContain('View on Bonfire');
-    expect(bad).not.toContain('javascript:');
-  });
-  it('vet summary email shows per-stage counts and links to the board, omitting zero rows', () => {
-    const html = renderVetSummaryEmail({ inReview: 22, needsRequirements: 17, awaitingApproval: 0, total: 39 });
-    expect(html).toContain('39 opportunities are ready to vet + assign');
-    expect(html).toContain('22 in review');
-    expect(html).toContain('17 with requirements being established');
-    expect(html).not.toContain('awaiting a second-admin approval'); // 0 -> row omitted
-    expect(html).toContain('/admin/gov-opportunities');
-  });
-  it('vet summary email uses the singular for a single opportunity', () => {
-    expect(renderVetSummaryEmail({ inReview: 1, needsRequirements: 0, awaitingApproval: 0, total: 1 }))
-      .toContain('1 opportunity is ready to vet + assign');
-  });
+});
+
+describe('centralToday', () => {
+  it('uses Central, not UTC', () => expect(centralToday(new Date('2026-11-05T03:00:00Z'))).toBe('2026-11-04'));
 });

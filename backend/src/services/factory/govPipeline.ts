@@ -89,6 +89,50 @@ export function deriveGovPipelineStage(decision: string, materialized: boolean):
   return 'qualifying';
 }
 
+/**
+ * PURE. The discovery uuids of pursuits now handed to an intern: a delivery project with at least one ACTIVE intern,
+ * the same test that puts a contract in the admin left nav (adminGovContractNavEntries). The discovery board hides
+ * these, so a pursuit is listed in one place. Derived on every read, with nothing stored: unassigning the intern
+ * brings the row back. Only a decoupled gws:<uuid> key maps to a discovery row; an op:gov: canonical id cannot.
+ */
+export function assignedOpportunityUuids(
+  cards: ReadonlyArray<Pick<GovPipelineCard, 'key' | 'deliveryProjectId' | 'hasActiveIntern'>>,
+): Set<string> {
+  const uuids = new Set<string>();
+  for (const c of cards) {
+    if (c.deliveryProjectId && c.hasActiveIntern && c.key.startsWith('gws:')) uuids.add(c.key.slice(4));
+  }
+  return uuids;
+}
+
+/** A pursuit an intern is working now, as the morning email reports it. */
+export interface GovCurrentProject {
+  deliveryProjectId: string;
+  title: string;
+  agency: string | null;
+  closeDate: string | null;
+  interns: string[];
+  build: GovPipelineBuildProgress | null;
+  establishedCount: number;
+}
+
+/**
+ * PURE. The current projects: the same test as the admin left nav (adminGovContractNavEntries), a delivery project with an
+ * active intern whose close date hasn't passed, so the email and Interns > Gov Contracts list the same ones. `today` is YYYY-MM-DD.
+ */
+export function currentGovProjects(cards: readonly GovPipelineCard[], today: string): GovCurrentProject[] {
+  const out: GovCurrentProject[] = [];
+  for (const c of cards) {
+    if (!c.deliveryProjectId || !c.hasActiveIntern) continue;
+    if (c.closeDate && String(c.closeDate).slice(0, 10) < today) continue;
+    out.push({
+      deliveryProjectId: c.deliveryProjectId, title: c.title || c.key, agency: c.agency, closeDate: c.closeDate,
+      interns: (c.assignedInterns ?? []).map((i) => i.name).filter(Boolean), build: c.build ?? null, establishedCount: c.establishedCount ?? 0,
+    });
+  }
+  return out;
+}
+
 /** Coerce a DB timestamp (Date | string | null) to an ISO string, or null if absent/unparseable. */
 function toIso(value: unknown): string | null {
   if (!value) return null;

@@ -451,10 +451,8 @@ const DYNAMIC_SCHEDULE_REGISTRY: DynamicScheduleEntry[] = [
     label: 'Gov opportunity daily sync',
   },
   {
-    // Gov pursuit daily SWEEP (PR 2) — hide low-fit discovery rows (silent) and email the DRI the
-    // upload-requirements and vet+assign prompts. Ships DARK: no-ops unless ENABLE_GOV_OPP_SWEEP=true, so
-    // registering changes nothing. Whoever enables it: this estate runs THREE scheduler instances — set the
-    // flag on ONE, or the mail arrives three times.
+    // Gov pursuit daily SWEEP: hides what did not survive and sends the one morning email. No-ops unless
+    // ENABLE_GOV_OPP_SWEEP=true. This estate runs THREE scheduler instances; a daily slot keeps it to one email.
     agentName: 'GovOpportunityDailySweep',
     hardcodedSchedule: '30 7 * * *',
     dynamicImport: async () => {
@@ -462,6 +460,18 @@ const DYNAMIC_SCHEDULE_REGISTRY: DynamicScheduleEntry[] = [
       await runGovOpportunitySweep();
     },
     label: 'Gov opportunity daily sweep (dark until enabled)',
+  },
+  {
+    // Gov AI vetting catch-up: retries unfinished AI checks and backfills older ZIPs ahead of the 7:30 sweep, so the
+    // morning email reflects them. Ships DARK behind ENABLE_GOV_AI_VETTING. A daily slot claim keeps the backfill cap
+    // true across scheduler instances.
+    agentName: 'GovAiVettingCatchup',
+    hardcodedSchedule: '15 6 * * *',
+    dynamicImport: async () => {
+      const { runGovAiVettingCatchup } = await import('./factory/govAiVetting');
+      await runGovAiVettingCatchup();
+    },
+    label: 'Gov AI vetting catch-up (dark until enabled)',
   },
   // REMOVED 2026-06-05 (CC-20260603-v7da, Ali approved): this morning
   // digest fires at 45 6 * * * — the same minute as DailyExecutiveBriefing

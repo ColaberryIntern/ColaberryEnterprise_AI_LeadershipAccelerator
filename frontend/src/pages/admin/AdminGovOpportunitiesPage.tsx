@@ -2,10 +2,12 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PageHeader, StatCard, SectionCard } from '../../components/admin/shell';
 import {
-  listGovOpportunities, dismissGovOpportunity, restoreGovOpportunity, matchServicesToOpportunity, listPendingGovApprovals,
-  type GovOpportunity, type GovOpportunityFeed, type ServiceMatch,
+  listGovOpportunities, dismissGovOpportunity, listPendingGovApprovals,
+  type BoardStage, type GovOpportunity, type GovOpportunityFeed,
 } from '../../services/factoryApi';
-import { band, subtle, fmtValue, shortValue, daysLeft, closeLabel } from './govOppFormat';
+import { subtle, fmtValue, shortValue, daysLeft, closeLabel } from './govOppFormat';
+import { BoardStageBadge, DetailsModal, MixBar, ScoreChip, VettingBadge, stageActionLabel } from './govWorkspace/govOpportunityParts';
+import HiddenOpportunitiesPanel from './govWorkspace/HiddenOpportunitiesPanel';
 
 /**
  * AdminGovOpportunitiesPage — the government-contract discovery dashboard.
@@ -17,7 +19,7 @@ import { band, subtle, fmtValue, shortValue, daysLeft, closeLabel } from './govO
  * needs_review / declined) are shown in a separate "flagged for review" section, never as candidates; and the
  * "Qualify" action routes to the qualification workspace (a canonical id is NEVER derived from a title here).
  *
- * Discovery upgrade: the feed now shows the full curated best-fit set (~50) with a "showing N of M" line, a
+ * Discovery upgrade: the feed now shows the best-fit set (~50) with a "showing N of M" line, a
  * "Good fits" count and a "Decent options" filter, a per-row Details popup (why it surfaced + OP's PRELIMINARY,
  * UNVERIFIED overview — never a requirement), and a team-scoped Dismiss (reversible) so a candidate can be
  * eliminated from everyone's feed.
@@ -37,183 +39,24 @@ const isFlaggedForReview = (o: GovOpportunity): boolean => {
   return s === 'no_bid' || s === 'needs_review' || o.pursuitStatus === 'declined';
 };
 
-/** The vetting-ladder ("approval level") badge for a row. Null for a not-yet-qualified row, so the caller falls
- *  back to the existing Unassessed / Approval-pending badges. Tones go through the shared `subtle()` token helper. */
-function VettingBadge({ v }: { v?: { stage: string } | null }): React.ReactElement | null {
-  if (!v || v.stage === 'not_vetted') return null;
-  const map: Record<string, { label: string; tone: 'success' | 'warning' | 'danger' | 'secondary' }> = {
-    vetted: { label: 'Vetted', tone: 'success' },
-    rfi: { label: 'RFI response', tone: 'secondary' },
-    awaiting_approval: { label: 'Awaiting approval', tone: 'secondary' },
-    needs_requirements: { label: 'Needs requirements', tone: 'warning' },
-    in_review: { label: 'In review', tone: 'secondary' },
-    no_bid: { label: 'No-bid', tone: 'danger' },
-  };
-  const m = map[v.stage];
-  if (!m) return null;
-  return <span className={`badge ${subtle(m.tone)}`} title={`Qualification stage: ${v.stage}`}>{m.label}</span>;
-}
+/** The server's stage decides when it sent one; the older check covers a feed the board could not stage. */
+const isFlaggedRow = (o: GovOpportunity): boolean => (o.boardStage ? o.boardStage === 'flagged' : isFlaggedForReview(o));
+
+const STAGE_CHIPS: { stage: BoardStage; label: string; on: string; off: string }[] = [
+  { stage: 'vetted', label: '\u2B50 Vetted', on: 'btn-success', off: 'btn-outline-success' },
+  { stage: 'needs_read', label: 'Needs your read', on: 'btn-warning', off: 'btn-outline-warning' },
+  { stage: 'approved', label: 'Approved', on: 'btn-success', off: 'btn-outline-success' },
+  { stage: 'needs_zip', label: 'Awaiting ZIP', on: 'btn-secondary', off: 'btn-outline-secondary' },
+  { stage: 'analyzing', label: 'AI analyzing', on: 'btn-info', off: 'btn-outline-info' },
+];
+const STAGE_ORDER: BoardStage[] = ['vetted', 'needs_read', 'approved', 'needs_zip', 'analyzing'];
+const stageRank = (o: GovOpportunity): number => {
+  const i = o.boardStage ? STAGE_ORDER.indexOf(o.boardStage) : -1;
+  return i === -1 ? STAGE_ORDER.length : i;
+};
 
 type CatFilter = 'all' | 'it' | 'consulting';
 type SortKey = 'priority' | 'fit' | 'closing' | 'value';
-
-/** The segmented High/Med/Low distribution bar + legend text. */
-function MixBar({ label, items }: { label: string; items: Array<number | null | undefined> }): React.ReactElement {
-  const high = items.filter((s) => typeof s === 'number' && s >= 75).length;
-  const med = items.filter((s) => typeof s === 'number' && s >= 60 && s < 75).length;
-  const low = items.filter((s) => typeof s === 'number' && s < 60).length;
-  const total = Math.max(high + med + low, 1);
-  const seg = (n: number, tone: string) => n > 0 && <div className={`bg-${tone}`} style={{ width: `${(n / total) * 100}%` }} aria-hidden="true" />;
-  return (
-    <div className="d-flex align-items-center gap-3 flex-wrap">
-      <span className="small fw-semibold" style={{ minWidth: 72 }}>{label}</span>
-      <div className="d-flex rounded overflow-hidden flex-grow-1" style={{ height: 8, minWidth: 160, background: 'var(--surface-sunken)' }}>
-        {seg(high, 'success')}{seg(med, 'warning')}{seg(low, 'danger')}
-      </div>
-      <span className="small text-secondary">{high} high · {med} med · {low} low</span>
-    </div>
-  );
-}
-
-/** A score chip: number + band label + a thin colored meter. */
-function ScoreChip({ score }: { score: number | null | undefined }): React.ReactElement {
-  const b = band(score);
-  const pct = Math.max(0, Math.min(100, typeof score === 'number' ? score : 0));
-  return (
-    <div style={{ minWidth: 92 }}>
-      <div className="d-flex align-items-center gap-2 mb-1">
-        <span className={`badge ${subtle(b.tone)}`} style={{ fontVariantNumeric: 'tabular-nums' }}>{typeof score === 'number' ? score : '—'}</span>
-        <span className="small text-secondary">{b.label}</span>
-      </div>
-      <div className="progress" style={{ height: 4 }} role="presentation">
-        <div className={`progress-bar bg-${b.tone}`} style={{ width: `${pct}%` }} />
-      </div>
-    </div>
-  );
-}
-
-/**
- * The per-row Details popup: why it surfaced (advisory scores + category + any OP verdict) and OP's PRELIMINARY,
- * UNVERIFIED overview. The overview is clearly labeled and can never become a confirmed requirement — qualification
- * (requirements, coverage, approval) happens in the separate workspace reached via Qualify.
- */
-function DetailsModal({ opp, onClose, onQualify, onDismiss, dismissing }: {
-  opp: GovOpportunity; onClose: () => void; onQualify: () => void; onDismiss: () => void; dismissing: boolean;
-}): React.ReactElement {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [onClose]);
-
-  // Advisory service suggestions (deterministic matcher, server-side). Best-effort: a failure shows the empty state.
-  const [matches, setMatches] = useState<ServiceMatch[] | null>(null);
-  const [matchLoading, setMatchLoading] = useState(true);
-  useEffect(() => {
-    let active = true;
-    setMatchLoading(true);
-    matchServicesToOpportunity({ category: opp.category, title: opp.title, summary: opp.preliminarySummary })
-      .then((r) => { if (active) setMatches(r.matches); })
-      .catch(() => { if (active) setMatches([]); })
-      .finally(() => { if (active) setMatchLoading(false); });
-    return () => { active = false; };
-  }, [opp.category, opp.title, opp.preliminarySummary]);
-
-  const v = opp.vetVerdict;
-  const dl = daysLeft(opp.closeDate);
-  return (
-    <div className="modal fade show d-block" tabIndex={-1} role="dialog" aria-modal="true" aria-label="Opportunity details"
-      style={{ background: 'rgba(0,0,0,.5)' }} onClick={onClose}>
-      <div className="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable" role="document" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-content">
-          <div className="modal-header">
-            <div>
-              <h5 className="modal-title">{opp.title}</h5>
-              <div className="small text-secondary d-flex flex-wrap align-items-center gap-2 mt-1">
-                <span>{opp.agency}</span>
-                {opp.category && <span className="badge bg-secondary-subtle text-secondary-emphasis">{opp.category}</span>}
-              </div>
-            </div>
-            <button type="button" className="btn-close" aria-label="Close" autoFocus onClick={onClose} />
-          </div>
-          <div className="modal-body">
-            {/* Why it surfaced */}
-            <div className="mb-3">
-              <div className="text-uppercase small fw-semibold text-secondary mb-2" style={{ letterSpacing: '.05em' }}>Why it surfaced</div>
-              <div className="d-flex flex-wrap gap-4">
-                <div><div className="small text-secondary">Priority (legacy)</div><ScoreChip score={opp.priorityScore} /></div>
-                <div><div className="small text-secondary">Fit (legacy)</div><ScoreChip score={opp.fitScore} /></div>
-                <div>
-                  <div className="small text-secondary">Est. value</div>
-                  <div className="fw-semibold" style={{ fontVariantNumeric: 'tabular-nums' }}>{fmtValue(opp.estimatedValue)}</div>
-                  <div className="small text-secondary">unverified</div>
-                </div>
-                <div>
-                  <div className="small text-secondary">Closes</div>
-                  <div>{closeLabel(opp.closeDate)}{dl !== null ? ` · ${dl} days` : ''} <i className="ri-error-warning-line text-warning" aria-hidden="true" title="Verify on the portal — timezone unverified." /></div>
-                </div>
-              </div>
-              <div className="small text-secondary mt-2">
-                {v
-                  ? <><i className="ri-alert-line me-1" aria-hidden="true" />Source note: {(v.label ?? v.status ?? 'flagged').replace(/_/g, ' ')}{v.reason ? ` — ${v.reason}` : ''}<span className="text-secondary"> · method: {v.method ?? 'unknown'}{v.method === 'title_regex' || v.evidence == null ? ' (legacy, unevidenced — weak)' : ''}</span></>
-                  : <>No source verdict — <strong>unassessed</strong>. Legacy discovery scores are advisory, not a verified company fit.</>}
-              </div>
-            </div>
-
-            {/* Preliminary overview — labeled, unverified, never a requirement */}
-            <div>
-              <div className="text-uppercase small fw-semibold text-secondary mb-2" style={{ letterSpacing: '.05em' }}>Project overview</div>
-              <div className="alert alert-warning py-2 px-3 small mb-2" role="note">
-                <i className="ri-draft-line me-1" aria-hidden="true" />Preliminary, unverified — not confirmed requirements. Download and qualify the solicitation before relying on anything here.
-              </div>
-              {opp.preliminarySummary
-                ? <p className="mb-0" style={{ whiteSpace: 'pre-line' }}>{opp.preliminarySummary}</p>
-                : <p className="text-secondary mb-0">No preliminary summary available yet — open the source posting or qualify to learn more.</p>}
-            </div>
-
-            {/* Services we could offer — advisory, deterministic match against Our Services; a suggestion to confirm */}
-            <div className="mt-3">
-              <div className="text-uppercase small fw-semibold text-secondary mb-2" style={{ letterSpacing: '.05em' }}>
-                Services we could offer <span className="badge bg-info-subtle text-info-emphasis ms-1">suggested — confirm</span>
-              </div>
-              {matchLoading ? (
-                <p className="text-secondary small mb-0">Matching against Our Services…</p>
-              ) : matches && matches.length > 0 ? (
-                <ul className="list-unstyled mb-0">
-                  {matches.map((m) => (
-                    <li key={m.id} className="py-1 border-bottom">
-                      <div className="d-flex align-items-center gap-2">
-                        <span className="fw-semibold">{m.name}</span>
-                        {m.category && <span className="badge bg-secondary-subtle text-secondary-emphasis">{m.category}</span>}
-                        <span className={`badge ${m.strength === 'strong' ? 'bg-success-subtle text-success-emphasis' : m.strength === 'moderate' ? 'bg-warning-subtle text-warning-emphasis' : 'bg-secondary-subtle text-secondary-emphasis'}`}>{m.strength}</span>
-                      </div>
-                      <div className="small text-secondary">{m.reason}</div>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="text-secondary small mb-0">No suggested services — add or refine keywords in <strong>Our Services</strong>.</p>
-              )}
-            </div>
-          </div>
-          <div className="modal-footer justify-content-between">
-            <button type="button" className="btn btn-outline-danger btn-sm" onClick={onDismiss} disabled={dismissing}>
-              <i className="ri-eye-off-line me-1" aria-hidden="true" />{dismissing ? 'Dismissing…' : 'Dismiss'}
-            </button>
-            <div className="d-flex gap-2">
-              {opp.sourceUrl && (
-                <a className="btn btn-outline-secondary btn-sm" href={opp.sourceUrl} target="_blank" rel="noopener noreferrer">
-                  <i className="ri-external-link-line me-1" aria-hidden="true" />Source
-                </a>
-              )}
-              <button type="button" className="btn btn-danger btn-sm" onClick={onQualify}>Qualify <i className="ri-arrow-right-line" aria-hidden="true" /></button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 export default function AdminGovOpportunitiesPage(): React.ReactElement {
   const navigate = useNavigate();
@@ -223,13 +66,10 @@ export default function AdminGovOpportunitiesPage(): React.ReactElement {
   const [catFilter, setCatFilter] = useState<CatFilter>('all');
   const [sort, setSort] = useState<SortKey>('priority');
   const [decentOnly, setDecentOnly] = useState(false);
-  // The "Vetted only" view Ali wants. Default OFF in PR 1 — almost nothing is vetted yet, so defaulting on would
-  // show an empty page; the default flips on with PR 2, whose daily sweep populates the vetted set. Toggle anytime.
-  const [vettedOnly, setVettedOnly] = useState(false);
+  // One chip per stage of the daily process, the same groups as the morning email. Null shows every stage.
+  const [stageFilter, setStageFilter] = useState<BoardStage | null>(null);
   const [detailsOf, setDetailsOf] = useState<GovOpportunity | null>(null);
   const [dismissingKey, setDismissingKey] = useState<string | null>(null);
-  const [recentlyDismissed, setRecentlyDismissed] = useState<GovOpportunity[]>([]);
-  const [showDismissed, setShowDismissed] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   // P4: discovery uuids whose pursuit has an approval awaiting a second admin (advisory list-flag).
   const [pendingKeys, setPendingKeys] = useState<Set<string>>(new Set());
@@ -267,8 +107,8 @@ export default function AdminGovOpportunitiesPage(): React.ReactElement {
 
   const opportunities = feed?.opportunities ?? [];
   const isLive = feed?.source === 'live';
-  const candidates = useMemo(() => opportunities.filter((o) => !isFlaggedForReview(o)), [opportunities]);
-  const flagged = useMemo(() => opportunities.filter(isFlaggedForReview), [opportunities]);
+  const candidates = useMemo(() => opportunities.filter((o) => !isFlaggedRow(o)), [opportunities]);
+  const flagged = useMemo(() => opportunities.filter(isFlaggedRow), [opportunities]);
 
   // The category filter is the base for the Decent-options count and for `shown`; the decent toggle narrows it.
   const categoryFiltered = useMemo(
@@ -279,23 +119,21 @@ export default function AdminGovOpportunitiesPage(): React.ReactElement {
     () => categoryFiltered.filter((o) => typeof o.fitScore === 'number' && o.fitScore >= DECENT_FIT).length,
     [categoryFiltered],
   );
-  const vettedInView = useMemo(
-    () => categoryFiltered.filter((o) => o.vetting?.stage === 'vetted').length,
-    [categoryFiltered],
-  );
+  const stageCounts = feed?.boardCounts ?? null;
   const shown = useMemo(() => {
     const base = decentOnly
       ? categoryFiltered.filter((o) => typeof o.fitScore === 'number' && o.fitScore >= DECENT_FIT)
       : categoryFiltered;
-    const list = vettedOnly ? base.filter((o) => o.vetting?.stage === 'vetted') : base;
+    const list = stageFilter ? base.filter((o) => o.boardStage === stageFilter) : base;
     const by: Record<SortKey, (a: GovOpportunity, b: GovOpportunity) => number> = {
-      priority: (a, b) => (b.priorityScore ?? -1) - (a.priorityScore ?? -1),
+      // The default view reads like the morning email: what needs a person first, then by priority.
+      priority: (a, b) => stageRank(a) - stageRank(b) || (b.priorityScore ?? -1) - (a.priorityScore ?? -1),
       fit: (a, b) => (b.fitScore ?? -1) - (a.fitScore ?? -1),
       closing: (a, b) => (daysLeft(a.closeDate) ?? 1e9) - (daysLeft(b.closeDate) ?? 1e9),
       value: (a, b) => (b.estimatedValue ?? -1) - (a.estimatedValue ?? -1),
     };
     return [...list].sort(by[sort]);
-  }, [categoryFiltered, decentOnly, vettedOnly, sort]);
+  }, [categoryFiltered, decentOnly, stageFilter, sort]);
 
   // Summary KPIs + the mix bars are computed over the CURRENTLY-FILTERED view (`shown`) so they move with the
   // filters. Estimates stay UNVERIFIED and are never called revenue. (The Flagged card is a separate bucket and
@@ -321,6 +159,7 @@ export default function AdminGovOpportunitiesPage(): React.ReactElement {
   }, [shown]);
 
   const dismissedCount = feed?.dismissedCount ?? 0;
+  const assignedCount = feed?.assignedCount ?? 0;
   const totalAvailable = feed?.totalAvailable ?? candidates.length;
 
   const handleDismiss = useCallback(async (o: GovOpportunity) => {
@@ -330,7 +169,6 @@ export default function AdminGovOpportunitiesPage(): React.ReactElement {
       await dismissGovOpportunity(o.uuid, { title: o.title, agency: o.agency });
       // Optimistically remove it from the feed and remember it for immediate restore.
       setFeed((prev) => (prev ? { ...prev, opportunities: prev.opportunities.filter((x) => x.uuid !== o.uuid), dismissedCount: (prev.dismissedCount ?? 0) + 1 } : prev));
-      setRecentlyDismissed((prev) => (prev.some((x) => x.uuid === o.uuid) ? prev : [o, ...prev]));
       setDetailsOf(null);
     } catch (err: any) {
       setActionError(err?.response?.data?.error ?? 'Could not dismiss that opportunity. Please try again.');
@@ -338,17 +176,6 @@ export default function AdminGovOpportunitiesPage(): React.ReactElement {
       setDismissingKey(null);
     }
   }, []);
-
-  const handleRestore = useCallback(async (o: GovOpportunity) => {
-    setActionError(null);
-    try {
-      await restoreGovOpportunity(o.uuid);
-      setRecentlyDismissed((prev) => prev.filter((x) => x.uuid !== o.uuid));
-      await load(); // bring it back into the authoritative feed
-    } catch (err: any) {
-      setActionError(err?.response?.data?.error ?? 'Could not restore that opportunity. Please try again.');
-    }
-  }, [load]);
 
   const livePill = isLive
     ? <span className="badge rounded-pill d-inline-flex align-items-center gap-1 bg-success-subtle text-success-emphasis"><i className="ri-broadcast-line" aria-hidden="true" />Live from Opportunity Pulse</span>
@@ -435,6 +262,12 @@ export default function AdminGovOpportunitiesPage(): React.ReactElement {
       {error && <div className="alert alert-danger" role="alert">{error}</div>}
       {actionError && <div className="alert alert-danger d-flex justify-content-between align-items-center" role="alert"><span>{actionError}</span><button type="button" className="btn-close" aria-label="Dismiss error" onClick={() => setActionError(null)} /></div>}
 
+      {feed?.boardIncomplete && (
+        <div className="alert alert-warning py-2 small" role="alert">Some saved data could not be read, so a row may look less advanced than it is. Try reloading.</div>
+      )}
+      {/* Outside the table on purpose: Restore must stay reachable when every row is hidden, and stay open across a reload. */}
+      <div className="mb-2"><HiddenOpportunitiesPanel count={dismissedCount} onRestored={load} /></div>
+
       {/* ── Candidates table ────────────────────────────────────────────────── */}
       {loading ? (
         <SectionCard title="Loading"><p className="text-secondary mb-0">Loading government opportunities…</p></SectionCard>
@@ -453,10 +286,12 @@ export default function AdminGovOpportunitiesPage(): React.ReactElement {
                 <button type="button" className={`btn ${catFilter === 'it' ? 'btn-dark' : 'btn-outline-secondary'}`} onClick={() => setCatFilter('it')}>IT {itCount}</button>
                 <button type="button" className={`btn ${catFilter === 'consulting' ? 'btn-dark' : 'btn-outline-secondary'}`} onClick={() => setCatFilter('consulting')}>Consulting {consultingCount}</button>
               </div>
-              <button type="button" className={`btn btn-sm ${vettedOnly ? 'btn-success' : 'btn-outline-success'}`} aria-pressed={vettedOnly}
-                onClick={() => setVettedOnly((v) => !v)} title="Show only vetted opportunities (passed pursuit approval)">
-                <i className="ri-shield-check-line me-1" aria-hidden="true" />Vetted only {vettedInView}
-              </button>
+              {stageCounts && STAGE_CHIPS.map((c) => (
+                <button key={c.stage} type="button" className={`btn btn-sm ${stageFilter === c.stage ? c.on : c.off}`} aria-pressed={stageFilter === c.stage}
+                  onClick={() => setStageFilter((v) => (v === c.stage ? null : c.stage))}>
+                  {c.label} {stageCounts[c.stage] ?? 0}
+                </button>
+              ))}
               <button type="button" className={`btn btn-sm ${decentOnly ? 'btn-success' : 'btn-outline-success'}`} aria-pressed={decentOnly}
                 onClick={() => setDecentOnly((v) => !v)} title={`Show only decent options (fit ≥ ${DECENT_FIT})`}>
                 <i className="ri-filter-3-line me-1" aria-hidden="true" />Decent options {decentInView}
@@ -473,35 +308,15 @@ export default function AdminGovOpportunitiesPage(): React.ReactElement {
         >
           <div className="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
             <div className="small text-secondary">
-              Showing <strong>{shown.length}</strong> of <strong>{totalAvailable}</strong> curated{totalAvailable > candidates.length ? ' (best-fit set)' : ''}
-              {dismissedCount > 0 && <> · <strong>{dismissedCount}</strong> dismissed</>}
+              Showing <strong>{shown.length}</strong> of <strong>{totalAvailable}</strong> from the feed
+              {assignedCount > 0 && <> · <strong>{assignedCount}</strong> assigned to interns (see Interns &gt; Gov Contracts)</>}
             </div>
-            {recentlyDismissed.length > 0 && (
-              <button type="button" className="btn btn-link btn-sm p-0 text-decoration-none" onClick={() => setShowDismissed((v) => !v)}>
-                <i className="ri-eye-off-line me-1" aria-hidden="true" />Dismissed this session ({recentlyDismissed.length}) {showDismissed ? '▲' : '▼'}
-              </button>
-            )}
           </div>
-
-          {showDismissed && recentlyDismissed.length > 0 && (
-            <div className="alert alert-secondary py-2" role="region" aria-label="Dismissed opportunities">
-              <ul className="list-unstyled mb-0">
-                {recentlyDismissed.map((o) => (
-                  <li key={o.uuid} className="d-flex justify-content-between align-items-center gap-2 py-1">
-                    <span className="small"><span className="fw-semibold">{o.title}</span> <span className="text-secondary">· {o.agency}</span></span>
-                    <button type="button" className="btn btn-outline-secondary btn-sm" onClick={() => handleRestore(o)}>
-                      <i className="ri-arrow-go-back-line me-1" aria-hidden="true" />Restore
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
 
           {shown.length === 0 ? (
             <p className="text-secondary mb-0">
-              {vettedOnly
-                ? 'No vetted opportunities yet. Toggle "Vetted only" off to see the full curated set, then Qualify an opportunity to start its approval.'
+              {stageFilter === 'vetted'
+                ? 'Nothing is vetted yet. Upload a ZIP and the AI checks run on their own, with the result here by the next morning.'
                 : 'No candidates in this filter.'}
             </p>
           ) : (
@@ -531,7 +346,9 @@ export default function AdminGovOpportunitiesPage(): React.ReactElement {
                           <div className="small text-secondary d-flex flex-wrap align-items-center gap-2">
                             <span>{o.agency}</span>
                             {o.category && <span className="badge bg-secondary-subtle text-secondary-emphasis">{o.category}</span>}
-                            {o.vetting && o.vetting.stage !== 'not_vetted' ? (
+                            {o.boardStage ? (
+                              <BoardStageBadge stage={o.boardStage} />
+                            ) : o.vetting && o.vetting.stage !== 'not_vetted' ? (
                               <VettingBadge v={o.vetting} />
                             ) : (
                               <>
@@ -539,7 +356,11 @@ export default function AdminGovOpportunitiesPage(): React.ReactElement {
                                 {pendingKeys.has(o.uuid) && <span className="badge bg-info-subtle text-info-emphasis" title="A pursuit approval is awaiting a second admin">Approval pending</span>}
                               </>
                             )}
+                            {o.fromSnapshot && <span className="badge bg-secondary-subtle text-secondary-emphasis" title="Closing soon, so it left the feed. Shown from what was saved when its ZIP was vetted.">Left the feed</span>}
                           </div>
+                          {o.aiVetting?.reason && (o.boardStage === 'vetted' || o.boardStage === 'needs_read') && (
+                            <div className="small mt-1">{o.aiVetting.reason}</div>
+                          )}
                         </td>
                         <td><ScoreChip score={o.priorityScore} /></td>
                         <td><ScoreChip score={o.fitScore} /></td>
@@ -570,7 +391,7 @@ export default function AdminGovOpportunitiesPage(): React.ReactElement {
                             </button>
                             <button type="button" className="btn btn-danger btn-sm" onClick={() => navigate(`/admin/gov-qualification?gws=${encodeURIComponent('gws:' + o.uuid)}&from=${encodeURIComponent(o.title)}&agency=${encodeURIComponent(o.agency ?? '')}`)}
                               title="Qualify this opportunity (open its ZIP workspace to upload the solicitation and pull in the requirements)">
-                              Qualify <i className="ri-arrow-right-line" aria-hidden="true" />
+                              {stageActionLabel(o.boardStage)} <i className="ri-arrow-right-line" aria-hidden="true" />
                             </button>
                           </div>
                         </td>

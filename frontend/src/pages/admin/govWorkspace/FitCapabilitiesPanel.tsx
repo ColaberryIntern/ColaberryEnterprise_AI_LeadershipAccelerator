@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   assessCapabilityFit, recordCapabilityDecisions, createServiceOffering,
   type CapabilityItem, type FitAssessment, type CapabilityDecision, type CapabilityDecisionsPayload,
@@ -19,7 +19,7 @@ const META: Record<FitAssessment, { label: string; badge: string; tile: string }
 };
 
 export function FitCapabilitiesPanel({
-  canonicalOpportunityId, needs, title, buyer, gaps, biddingEntity, version, canWrite, onSaved,
+  canonicalOpportunityId, needs, title, buyer, gaps, biddingEntity, version, canWrite, onSaved, savedCapabilities,
 }: {
   canonicalOpportunityId: string;
   needs: { id: string; text: string }[];
@@ -30,6 +30,8 @@ export function FitCapabilitiesPanel({
   version: number;
   canWrite: boolean;
   onSaved: () => void;
+  /** Saved by the automatic AI checks on the ZIP. Shown with no click; Re-assess replaces it. */
+  savedCapabilities?: CapabilityItem[] | null;
 }): React.ReactElement {
   const [caps, setCaps] = useState<CapabilityItem[] | null>(null);
   const [loading, setLoading] = useState(false);
@@ -38,12 +40,20 @@ export function FitCapabilitiesPanel({
   const [note, setNote] = useState<string | null>(null);
   const [actions, setActions] = useState<Record<string, CapabilityDecision['action']>>({});
   const [eligChecked, setEligChecked] = useState<Record<string, boolean>>({});
+  const [fromSaved, setFromSaved] = useState(false);
+
+  useEffect(() => {
+    if (caps || !savedCapabilities || savedCapabilities.length === 0) return; // a run from this page wins
+    setCaps(savedCapabilities);
+    setFromSaved(true);
+  }, [savedCapabilities, caps]);
 
   const assess = useCallback(async () => {
     if (needs.length === 0) { setError('Establish the cited requirements first; the assessment works from them.'); return; }
     setLoading(true); setError(null); setNote(null);
     try {
       const r = await assessCapabilityFit(canonicalOpportunityId, { requirements: needs.map((n) => ({ id: n.id, text: n.text })), title, buyer });
+      setFromSaved(false);
       if (r.error) { setError(r.error); setCaps(null); } else { setCaps(r.capabilities); }
     } catch (e: any) {
       setError(e?.response?.data?.error ?? 'Could not assess capability fit.');
@@ -103,6 +113,7 @@ export function FitCapabilitiesPanel({
         </div>
         <p className="small text-secondary mb-3">Advisory: the AI derives the capabilities this scope needs and checks each against Our Services (active catalog only). It sets no gate; confirm it with your judgment.</p>
 
+        {fromSaved && <p className="small text-secondary mb-2"><i className="ri-robot-2-line me-1" aria-hidden="true" />Saved by the automatic AI checks, from the requirements found in the ZIP.</p>}
         {error && <div className="alert alert-warning py-2 small" role="alert">{error}</div>}
         {note && <div className="alert alert-success py-2 small" role="status">{note}</div>}
 

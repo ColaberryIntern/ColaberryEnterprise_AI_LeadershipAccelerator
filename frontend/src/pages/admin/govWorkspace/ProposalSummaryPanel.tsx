@@ -1,12 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { getGovProposalSummary, type GovProposalSummary } from '../../../services/factoryApi';
+import { pickNewest } from './pickNewest';
 
 /**
  * ProposalSummaryPanel — an AI "what they want / what we'd build" read above the response checklist.
  * Advisory only: it is generated from the ESTABLISHED requirement statements and nothing else, so it
  * never invents scope. It changes no gate and does not author any response.
  */
-export function ProposalSummaryPanel({ canonical, requirements, title, buyer, synopsis }: {
+export function ProposalSummaryPanel({ canonical, requirements, title, buyer, synopsis, saved }: {
   canonical: string;
   requirements: { id: string; text: string }[];
   title?: string | null;
@@ -14,21 +15,29 @@ export function ProposalSummaryPanel({ canonical, requirements, title, buyer, sy
   /** The opportunity's existing synopsis (its preliminary summary). Lets the summary run at Snapshot, before any
    *  requirement is established — it summarizes what already exists rather than requiring the requirement set. */
   synopsis?: string | null;
+  /** Saved by the automatic AI checks on the ZIP. Shown with no click; a run from this page replaces it. */
+  saved?: GovProposalSummary | null;
 }): React.ReactElement {
   const storeKey = `govProposalSummary:${canonical}`;
   const [summary, setSummary] = useState<GovProposalSummary | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [fromSaved, setFromSaved] = useState(false);
   const canSummarize = requirements.length > 0 || !!(synopsis && synopsis.trim());
   // Keep the previously-generated summary (per-viewer convenience) so a revisit does not force a re-run.
   useEffect(() => {
-    try { const raw = localStorage.getItem(storeKey); if (raw) setSummary(JSON.parse(raw) as GovProposalSummary); } catch { /* storage may be unavailable */ }
-  }, [storeKey]);
+    let local: GovProposalSummary | null = null;
+    try { const raw = localStorage.getItem(storeKey); if (raw) local = JSON.parse(raw) as GovProposalSummary; } catch { /* storage may be unavailable */ }
+    const { value, fromSaved: isSaved } = pickNewest(local, saved);
+    setSummary(value);
+    setFromSaved(isSaved);
+  }, [storeKey, saved]);
   const run = async (): Promise<void> => {
     setBusy(true); setErr(null);
     try {
       const s = await getGovProposalSummary(canonical, { requirements, title: title ?? null, buyer: buyer ?? null, synopsis: synopsis ?? null });
       setSummary(s);
+      setFromSaved(false);
       try { localStorage.setItem(storeKey, JSON.stringify(s)); } catch { /* ignore */ }
     } catch { setErr('Could not generate the summary right now.'); }
     finally { setBusy(false); }
@@ -54,7 +63,7 @@ export function ProposalSummaryPanel({ canonical, requirements, title, buyer, sy
               <div className="small" style={{ whiteSpace: 'pre-wrap' }}>{summary.whatWedBuild}</div>
             </div>
           </div>
-          <div className="col-12"><div className="small text-secondary"><i className="ri-robot-2-line me-1" aria-hidden="true" />AI summary — advisory, grounded only in the established requirements. Verify before relying on it.</div></div>
+          <div className="col-12"><div className="small text-secondary"><i className="ri-robot-2-line me-1" aria-hidden="true" />{fromSaved ? 'Saved by the automatic AI checks, from the requirements found in the ZIP. Advisory: verify before relying on it.' : 'AI summary — advisory, grounded only in the established requirements. Verify before relying on it.'}</div></div>
         </div>
       )}
     </div>
