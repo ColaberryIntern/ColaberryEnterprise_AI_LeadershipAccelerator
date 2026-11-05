@@ -75,6 +75,18 @@ export async function loadBoardFacts(tenantId: string): Promise<BoardFacts> {
   const { listActiveDismissedKeys, listRestoredKeys } = await import('./govOpportunityDismissals');
   const dismissed = await listActiveDismissedKeys(tenantId);
   const failedReads = new Set<FactRead>();
+  // Display-only, so a failure here doesn't mark the board incomplete: it only leaves the AI-agreement count short for a load.
+  let humanPassed = new Set<string>();
+  try {
+    const { listActiveDismissals } = await import('./govOpportunityDismissals');
+    const rows: any[] = await listActiveDismissals(tenantId);
+    humanPassed = new Set(rows.filter((r) => r?.dismissed_by && r.dismissed_by !== 'gov-opp-sweep').map((r) => String(r.opportunity_key)));
+  } catch (err: any) {
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(), level: 'warn', service: 'backend', event: 'gov_board_human_passed_read_failed', outcome: 'partial',
+      error_class: err?.constructor?.name ?? 'Error', context: { message: err?.message },
+    }));
+  }
   const restored = await readOrFlag(failedReads, 'restored', new Set<string>(), () => listRestoredKeys(tenantId));
 
   const { assigned, currentProjects } = await readOrFlag(failedReads, 'assigned', { assigned: new Set<string>(), currentProjects: [] as GovCurrentProject[] }, async () => {
@@ -126,5 +138,5 @@ export async function loadBoardFacts(tenantId: string): Promise<BoardFacts> {
     return out;
   });
 
-  return { dismissed, restored, assigned, qualifications, vettings, bundles, aiEnabled: FLAGS.govAiVetting, sweepActs: FLAGS.govOpportunitySweep, failedReads, currentProjects };
+  return { dismissed, restored, assigned, qualifications, vettings, bundles, aiEnabled: FLAGS.govAiVetting, sweepActs: FLAGS.govOpportunitySweep, failedReads, currentProjects, humanPassed };
 }

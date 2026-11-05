@@ -165,6 +165,8 @@ export function summaryNote(board: DiscoveryBoard, hidden: readonly HideDecision
   if (c.needs_zip > 0) out.push(`${plural(c.needs_zip, 'bid passed', 'bids passed')} the first check and ${c.needs_zip === 1 ? 'needs its' : 'need their'} ZIP uploaded.`);
   if (c.analyzing > 0) out.push(`${plural(c.analyzing, 'ZIP is', 'ZIPs are')} in the AI queue.`);
   if (hidden.length > 0) out.push(`${plural(hidden.length, 'bid was', 'bids were')} hidden this morning.`);
+  const a = board.agreement;
+  if (a && a.decided > 0) out.push(`So far the AI's call matched yours on ${a.agreed} of ${plural(a.decided, 'bid', 'bids')} you decided.`);
   if (out.length === 1) out.push('Nothing needs you today.');
   return out;
 }
