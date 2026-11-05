@@ -2,7 +2,7 @@ import { QueryTypes, Transaction, type Sequelize } from 'sequelize';
 import AgentDomainChangeRequest from '../../models/AgentDomainChangeRequest';
 import AgentDomainToolRequestDetail from '../../models/AgentDomainToolRequestDetail';
 import AgentDomainToolDuplicateCheck from '../../models/AgentDomainToolDuplicateCheck';
-import { AGENT_DOMAIN_ORG_ID } from './agentDomainRegistry';
+import { resolveRecordedHumans } from './recordedHumans';
 import { checkForDuplicateTool, type DuplicateCandidate } from './toolDuplicateCheck';
 import { loadToolCatalogForMatching } from './toolCatalogForMatching';
 import { loadMyDomains, resolveOwnerIdentityIds } from './agentDomainProvisionedReader';
@@ -143,38 +143,15 @@ export interface StoredDuplicateCheck {
 }
 
 /**
- * Is this email a person we have a record of?
+ * Re-exported from `recordedHumans.ts`, where it now lives.
  *
- * This is the ALLOWLIST half of the humanity check, and it has to be a positive lookup against
- * records we keep, because a denylist cannot establish humanity: `isNonHumanIdentity` returns
- * false for `'unknown'` and false for `'auto-approval'`, which is one letter off the real
- * production timer identity.
- *
- * Both tables are consulted on purpose. An intern is an `org_members` row in the agent-domain org;
- * Ali is an `admin_users` row. Checking only one would have silently excluded whichever group it
- * left out — and since the decide route is admin-gated, checking only `org_members` would have made
- * approval impossible for the one person the ticket names as the approver.
+ * It moved for AF11.0: the capability-confirmation service needs the same roster, and importing
+ * THIS module to get it would have tripped `agentChangeRequestNoTrigger.test.ts`, which allows
+ * only two importers so that nothing can quietly start acting on approvals. The pin is right, so
+ * the function moved rather than the allowlist widening. Re-exported so every existing caller and
+ * test is untouched.
  */
-export async function resolveRecordedHumans(
-  sequelize: Sequelize,
-  email: string,
-): Promise<string[]> {
-  const trimmed = (email || '').trim();
-  if (!trimmed) return [];
-  const rows = await sequelize.query<{ email: string }>(
-    `SELECT au.email AS email FROM admin_users au WHERE lower(au.email) = lower($1)
-      UNION
-     SELECT om.email AS email
-       FROM org_members om
-       LEFT JOIN enrollments e ON e.id = om.enrollment_id
-      WHERE om.org_id = $2
-        AND (lower(om.email) = lower($1) OR lower(e.email) = lower($1))`,
-    { bind: [trimmed, AGENT_DOMAIN_ORG_ID], type: QueryTypes.SELECT },
-  );
-  // The acting email is what the gate compares, so return THAT rather than the stored spelling:
-  // a record existing is the fact being established, not how the record happens to be cased.
-  return rows.length > 0 ? [trimmed] : [];
-}
+export { resolveRecordedHumans };
 
 /** A stored detail row, back in the contract's own shape. */
 function projectDetail(d: AgentDomainToolRequestDetail): ToolRequestDetail {

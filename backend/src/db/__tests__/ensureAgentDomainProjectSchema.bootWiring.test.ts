@@ -161,12 +161,26 @@ describe('the boot registration is WRAPPED, because its assert throws', () => {
     //
     // It is wrapped: `ensureAgentDomainToolDuplicateCheckSchemaGuarded` cannot reject, and
     // `__tests__/ensureAgentDomainToolDuplicateCheckSchema.test.ts` drives that failure path.
+    //
+    // AF11.0 added the sixth member, 2026-11-05. `ensureCapabilityConfirmationSchema.ts` records
+    // that a named Super Admin confirmed a capability, which is the fact AF3.5 and AF11.4 need
+    // before a tool grant can ever be legal, and it asserts the same way for the same reason as
+    // the five above.
+    //
+    // Its CHECK, `chk_adcc_evidence_is_present`, is the one that matters: AF11.0 names a
+    // confirmation recording a date and a state but not the human and the evidence as something
+    // that would "satisfy the type and prove nothing". The constraint makes a row that cannot say
+    // who looked at what impossible, rather than merely discouraged.
+    //
+    // It is wrapped: `ensureCapabilityConfirmationSchemaGuarded` cannot reject, and
+    // `__tests__/ensureCapabilityConfirmationSchema.test.ts` drives that failure path.
     expect(throwing.sort()).toEqual([
       'ensureAgentDomainChangeRequestSchema.ts',
       'ensureAgentDomainProjectSchema.ts',
       'ensureAgentDomainToolDuplicateCheckSchema.ts',
       'ensureAgentDomainToolRequestSchema.ts',
       'ensureBroadcastTelemetrySchema.ts',
+      'ensureCapabilityConfirmationSchema.ts',
     ]);
   });
 
