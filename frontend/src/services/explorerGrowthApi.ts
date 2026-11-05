@@ -149,6 +149,19 @@ export interface LearnersQuery {
 
 // ─── Decisions and Shadow ───────────────────────────────────────────────────
 
+/**
+ * One asset a decision selected, as the decision recorded it.
+ *
+ * Every field is nullable because the backend projects a schemaless JSONB snapshot onto this
+ * allowlist and preserves its length rather than dropping an entry it cannot read — so an
+ * unreadable entry arrives as nulls instead of making the titles disagree with `asset_count`.
+ */
+export interface ExplorerDecisionAsset {
+  id: string | null;
+  title: string | null;
+  asset_type: string | null;
+}
+
 export interface ExplorerDecisionRow {
   id: string;
   enrollment_id: string;
@@ -164,6 +177,15 @@ export interface ExplorerDecisionRow {
   /** How many candidates lost. A row with >0 has a Why worth opening. */
   suppressed_count: number;
   asset_count: number;
+  /**
+   * WHAT the decision selected, not merely how many — same length as `asset_count`.
+   *
+   * The title is the one recorded WITH the decision, not the content library's name for that
+   * asset today. The two drift: on the run currently on production every selected asset has
+   * since been renamed, so the library's name would caption a two-month-old decision with copy
+   * it never chose. See `explorerDecisionsService.ExplorerDecisionAsset` for the measurement.
+   */
+  assets: ExplorerDecisionAsset[];
   email_normalized: string | null;
   primary_state: string | null;
   e_score: number | null;

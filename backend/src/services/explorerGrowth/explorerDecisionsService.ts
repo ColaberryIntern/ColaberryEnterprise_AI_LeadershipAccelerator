@@ -30,6 +30,63 @@ import { withGhlUrls } from './explorerPersonLinks';
  * VALUE instead.
  */
 
+/**
+ * One asset a decision selected, as the DECISION recorded it.
+ *
+ * WHY THE TITLE IS READ FROM THE DECISION AND NOT FROM THE REGISTRY. These rows are a
+ * historical record. `selected_content_assets` is a snapshot the Governor wrote at decision
+ * time and it already carries the title, so showing one needs no join at all. Joining
+ * `explorer_content_assets` for the asset's CURRENT title would answer a different question,
+ * and on the data that exists it would answer it misleadingly: measured against production on
+ * 2026-11-05, all 130 content-carrying decisions in the latest run (2026-09-02) name a title
+ * the registry has since changed, because that asset was renamed on 2026-11-05 to drop a word
+ * the copy rules ban. Captioning a two-month-old decision with today's name would show copy
+ * that decision never chose. A control proves the comparison was real rather than a failed
+ * join: the other asset ever selected, 24 entries, still matches the registry exactly.
+ *
+ * Every key here is one the Governor's resolver writes (`ResolvedAsset` in
+ * `content/resolveContentAssets.ts`). All 416 stored entries carry id, title, asset_type, url,
+ * source_id and source_system, none of them blank. `url`, `source_id` and `source_system` are
+ * deliberately absent from this type: they are internal addressing, no surface renders them,
+ * and an ALLOWLIST means a key the resolver gains tomorrow does not reach a browser by default.
+ */
+export interface ExplorerDecisionAsset {
+  id: string | null;
+  title: string | null;
+  asset_type: string | null;
+}
+
+/** A trimmed non-empty string, or null. Blank and non-string both mean "not recorded". */
+function recordedString(v: unknown): string | null {
+  if (typeof v !== 'string') return null;
+  const trimmed = v.trim();
+  return trimmed === '' ? null : trimmed;
+}
+
+/**
+ * Project the stored snapshot onto the allowlist above.
+ *
+ * LENGTH-PRESERVING, deliberately. `asset_count` is `jsonb_array_length` of the very same
+ * column, and the panel renders both; an entry dropped here for being malformed would make the
+ * titles silently disagree with the count, which reads as "the panel lost one" rather than
+ * "one of these is unusable". So a titleless or non-object entry still produces an element,
+ * carrying nulls, and renders as an unnamed asset.
+ *
+ * Takes `unknown` because the column is schemaless JSONB written by a resolver, not by a model
+ * with a shape anything enforces. Nothing here trusts it.
+ */
+export function decisionAssets(raw: unknown): ExplorerDecisionAsset[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.map((entry) => {
+    const e = (entry && typeof entry === 'object' ? entry : {}) as Record<string, unknown>;
+    return {
+      id: recordedString(e.id),
+      title: recordedString(e.title),
+      asset_type: recordedString(e.asset_type),
+    };
+  });
+}
+
 export interface ExplorerDecisionRow {
   id: string;
   enrollment_id: string;
@@ -41,6 +98,15 @@ export interface ExplorerDecisionRow {
   reason: string;
   suppressed_count: number;
   asset_count: number;
+  /**
+   * WHAT was selected, not merely how many. Always the same length as `asset_count`.
+   *
+   * The count alone could not answer the question it appeared to: no decision in any run has
+   * ever carried more than one asset, so `asset_count` reads `1` on every row that has
+   * anything, 130 times on the latest run. Both are returned because a surface that renders
+   * titles still needs the count to say "a gap" on the rows carrying nothing.
+   */
+  assets: ExplorerDecisionAsset[];
   email_normalized: string | null;
   primary_state: string | null;
   e_score: number | null;
@@ -136,6 +202,13 @@ const DECISION_COLUMNS = `d.id, d.enrollment_id, d.decision_date, d.mode, d.sele
        d.channel, d.executed, d.reason,
        jsonb_array_length(d.suppressed_actions) AS suppressed_count,
        jsonb_array_length(d.selected_content_assets) AS asset_count,
+       -- The snapshot itself, projected onto an allowlist and then dropped in TypeScript by
+       -- decisionAssets. Selected raw rather than reshaped in SQL on purpose: the titles are
+       -- already inside the column, so the alternative was a correlated subquery joining the
+       -- registry, and this file's header is explicit that nothing here can prove SQL correct.
+       -- A pure function is testable without a database at all. NOTE: no backticks in this
+       -- string, ever - it is a template literal, and one closed it.
+       d.selected_content_assets,
        p.email_normalized, p.primary_state, p.e_score, p.i_score, p.f_score,
        p.lead_id, l.ghl_contact_id, l.source AS lead_source,
        d.scheduled_email_id::text AS scheduled_email_id,
@@ -153,7 +226,14 @@ async function listDecisions(
     { replacements: bind, type: QueryTypes.SELECT },
   );
 
-  const raw = await sequelize.query<Omit<ExplorerDecisionRow, 'ghl_url'> & { ghl_contact_id: string | null; lead_source: string | null }>(
+  type RawDecision = Omit<ExplorerDecisionRow, 'ghl_url' | 'assets'> & {
+    ghl_contact_id: string | null;
+    lead_source: string | null;
+    /** The schemaless JSONB column. `unknown` so nothing downstream can assume a shape. */
+    selected_content_assets: unknown;
+  };
+
+  const raw = await sequelize.query<RawDecision>(
     `SELECT ${DECISION_COLUMNS}
        FROM explorer_journey_decisions d
        LEFT JOIN explorer_journey_profiles p ON p.enrollment_id = d.enrollment_id
@@ -169,7 +249,15 @@ async function listDecisions(
       LIMIT :limit OFFSET :offset`,
     { replacements: { ...bind, limit, offset }, type: QueryTypes.SELECT },
   );
-  const rows: ExplorerDecisionRow[] = await withGhlUrls(raw);
+  // The raw snapshot is projected onto the allowlist and the column is then DROPPED from the
+  // row, so the resolver's internal addressing never reaches a browser. Same reasoning as
+  // `withGhlUrls` removing the two raw lead columns it was given to build a link from.
+  const rows: ExplorerDecisionRow[] = (await withGhlUrls(raw)).map(
+    ({ selected_content_assets, ...rest }) => ({
+      ...rest,
+      assets: decisionAssets(selected_content_assets),
+    }),
+  );
 
   return {
     rows,
