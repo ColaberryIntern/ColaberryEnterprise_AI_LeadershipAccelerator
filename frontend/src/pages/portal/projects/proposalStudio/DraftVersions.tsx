@@ -58,8 +58,8 @@ export default function DraftVersions(
     const idx = versions.findIndex((v) => v.id === selVerId);
     const prev = versions[idx + 1]; // versions are newest-first
     if (!prev) { onToast?.('No earlier version to diff against.'); return; }
-    reviewApi.diffVersions(prev.id, selVerId).then(setDiff).catch(() => onToast?.('Could not diff the versions.'));
-  }, [reviewApi, selVerId, versions, diff, onToast]);
+    reviewApi.diffVersions(projectId, prev.id, selVerId).then((r) => setDiff(r.segments)).catch(() => onToast?.('Could not diff the versions.'));
+  }, [reviewApi, projectId, selVerId, versions, diff, onToast]);
 
   const runCycle = useCallback(() => {
     if (running || !docKey) return;
