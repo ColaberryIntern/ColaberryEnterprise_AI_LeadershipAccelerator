@@ -3,7 +3,8 @@
  *  - the home renders the world, the top bar and the concierge from real data, per account;
  *  - "open the map" on the home becomes a walk on this map (the overlay never opens on top of it);
  *  - with the campus off it is not a campus page: it goes to Today with ?stay=1;
- *  - the landing rule sends a tab's FIRST visit to Today to the campus home, once, never with ?stay=1 or the campus off.
+ *  - the landing rule sends a tab's FIRST visit to Today to the campus home, once, never with ?stay=1 or the campus off;
+ *  - C114: an Explorer with no first win lands on the first lesson instead, and an unreadable schedule still lands on the campus.
  */
 import React from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -12,6 +13,7 @@ import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 
 let mockAudience: 'member' | 'explorer' | 'business' | 'staff' = 'member';
 let mockFlag = true;
+let mockSchedule: () => Promise<unknown> = () => Promise.resolve({ is_explorer: false, first_win: null });
 const mockPresence = { commons: { count: 3, people: [] }, library: { count: 2, people: [] } };
 jest.mock('../campusApi', () => ({
   fetchCampusFlags: () => Promise.resolve({ campus: mockFlag }), CAMPUS_FLAGS_TIMEOUT_MS: 10000,
@@ -27,6 +29,7 @@ jest.mock('../../../services/onboardingApi', () => ({
   fetchOnboardingProfile: () => Promise.resolve({ profile: { full_name: 'Ali Muwwakkil' } }),
   fetchStreak: () => Promise.resolve({ count: 3, claimed_today: true, week: [], total_streak_points: 0, next_points: 0 }),
   fetchPortalFlags: () => Promise.resolve({}),
+  fetchSchedule: () => mockSchedule(),
 }));
 jest.mock('../../../services/communityApi', () => ({ ...jest.requireActual('../../../services/communityApi'), fetchUnreadNotificationCount: () => Promise.resolve(0) }));
 jest.mock('../useCampusView', () => {
@@ -45,7 +48,11 @@ import { ParticipantAuthProvider } from '../../../contexts/ParticipantAuthContex
 // eslint-disable-next-line import/first
 import { PARTICIPANT_TOKEN_KEY } from '../../../utils/participantToken';
 // eslint-disable-next-line import/first
-import { shouldLandOnCampus, useCampusLanding, CAMPUS_LANDED_KEY } from '../useCampusLanding';
+import { shouldLandOnCampus, useCampusLanding, CAMPUS_LANDED_KEY, campusLandingTarget } from '../useCampusLanding';
+// eslint-disable-next-line import/first
+import { resetScheduleCache } from '../../../pages/portal/scheduleCache';
+// eslint-disable-next-line import/first
+import { FIRST_LESSON_HREF } from '../../../pages/portal/today/explorerFirstWin';
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 jest.setTimeout(15000);
@@ -81,6 +88,8 @@ async function mount(path: string, nav: 'campus' | 'classic' = 'campus'): Promis
 
 beforeEach(() => {
   mockAudience = 'member'; mockFlag = true;
+  mockSchedule = () => Promise.resolve({ is_explorer: false, first_win: null });
+  resetScheduleCache();
   window.localStorage.setItem(PARTICIPANT_TOKEN_KEY, 'h.eyJlbWFpbCI6ImxlYXJuZXJAZXhhbXBsZS5jb20ifQ.s'); // gitleaks:allow (fake, unsigned)
   window.sessionStorage.clear();
 });
@@ -127,6 +136,42 @@ describe('the landing rule in the app', () => {
   it('the classic menu chosen never redirects', async () => {
     await mount('/portal/today', 'classic');
     expect(where).toBe('/portal/today');
+  });
+
+  it('C114: an Explorer with no first win lands on the first lesson, not the campus', async () => {
+    mockSchedule = () => Promise.resolve({ is_explorer: true, first_win: false });
+    await mount('/portal/today');
+    expect(where).toBe(FIRST_LESSON_HREF);
+    expect(window.sessionStorage.getItem(CAMPUS_LANDED_KEY)).toBe('1');
+  });
+
+  it('C114: an Explorer who already has a first win lands on the campus', async () => {
+    mockSchedule = () => Promise.resolve({ is_explorer: true, first_win: true });
+    await mount('/portal/today');
+    expect(where).toBe('/portal/campus');
+  });
+
+  it('C114: an unreadable schedule still lands on the campus, as before', async () => {
+    mockSchedule = () => Promise.reject(new Error('network'));
+    await mount('/portal/today');
+    expect(where).toBe('/portal/campus');
+  });
+
+  it('C114: the first-lesson landing happens once per tab, so the campus stays reachable', async () => {
+    mockSchedule = () => Promise.resolve({ is_explorer: true, first_win: false });
+    window.sessionStorage.setItem(CAMPUS_LANDED_KEY, '1');
+    await mount('/portal/today');
+    expect(where).toBe('/portal/today');
+  });
+});
+
+describe('campusLandingTarget (C114)', () => {
+  it('sends only an explicit "no first win yet" Explorer to the first lesson', () => {
+    expect(campusLandingTarget({ is_explorer: true, first_win: false })).toBe(FIRST_LESSON_HREF);
+    expect(campusLandingTarget({ is_explorer: true, first_win: true })).toBe('/portal/campus');
+    expect(campusLandingTarget({ is_explorer: true, first_win: null })).toBe('/portal/campus'); // unknown keeps the old landing
+    expect(campusLandingTarget({ is_explorer: false, first_win: false })).toBe('/portal/campus');
+    expect(campusLandingTarget(null)).toBe('/portal/campus');
   });
 });
 
