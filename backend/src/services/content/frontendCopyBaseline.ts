@@ -122,10 +122,6 @@ export const FRONTEND_COPY_BASELINE: Readonly<Record<string, number>> = {
   'frontend/src/pages/portal/projects/WorkspaceRepoPanel.tsx': 1,
   'frontend/src/pages/portal/projects/demoPrepGuide.ts': 1,
   'frontend/src/pages/portal/runtime/runtimeKit.tsx': 1,
-  'frontend/src/pages/portal/settings/EnrollmentSection.tsx': 2,
-  'frontend/src/pages/portal/settings/SettingsPage.tsx': 1,
-  'frontend/src/pages/portal/settings/SubscriptionSection.tsx': 4,
-  'frontend/src/pages/portal/settings/TeamSection.tsx': 1,
   'frontend/src/pages/publicV2/HomeV2.tsx': 4,
   'frontend/src/pages/publicV2/PlatformV2.tsx': 2,
   'frontend/src/pages/publicV2/PricingV2.tsx': 5,
@@ -157,7 +153,7 @@ export const FRONTEND_COPY_BASELINE: Readonly<Record<string, number>> = {
  * and the entry says so. Within a scope it still only shrinks, and every per-file number is still
  * exact in both directions.
  */
-export const FRONTEND_COPY_BASELINE_TOTAL = 285;
+export const FRONTEND_COPY_BASELINE_TOTAL = 277;
 
 /**
  * The scope the baseline was measured over. Anything outside it is NOT covered, and the

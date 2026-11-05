@@ -605,7 +605,7 @@ const SettingsPage: React.FC = () => {
               <div>
                 <div className="lab">Account</div>
                 <div className="desc">
-                  {acct?.tier === 'guest' ? 'Free preview account' : 'Member'}
+                  {acct?.tier === 'guest' ? 'Explorer account (no card needed)' : 'Member'}
                   {acct?.cohort_name ? ` · ${acct.cohort_name}` : ''}
                   {memberSince ? ` · since ${memberSince}` : ''}
                 </div>

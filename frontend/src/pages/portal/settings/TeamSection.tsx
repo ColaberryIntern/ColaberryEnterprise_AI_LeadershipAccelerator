@@ -83,7 +83,7 @@ function TeamSection({ onToast }: Props): React.ReactElement {
       <section className="te-card set-section">
         <h3>Invite your team</h3>
         <p className="set-sub">
-          Each teammate gets their own free builder account. They receive an email with an
+          Each teammate gets their own builder account, no card needed. They receive an email with an
           activation link.
         </p>
 
