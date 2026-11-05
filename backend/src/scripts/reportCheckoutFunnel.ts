@@ -10,11 +10,14 @@
  *   node dist/scripts/reportCheckoutFunnel.js --json           machine-readable
  *
  * WHAT IT WILL NOT DO. It never prints a single blended conversion rate. That number fell from
- * 76.6% to 14.3% between July and October and sent C10.1 looking for a broken payment page; the
- * page converts 88 to 100 percent and always did. The decline was the population changing from
- * paying members to free Explorers, who have converted at zero for five straight months. If the
- * composition moved enough to make an aggregate meaningless, this prints the warning ABOVE the
- * table rather than below it, because a caveat under a number does not get read.
+ * 76.6% to 14.3% between July and October and sent C10.1 looking for a broken payment page,
+ * when what had changed was the population arriving rather than the page. If the composition
+ * moved enough to make an aggregate meaningless, this prints the warning ABOVE the table rather
+ * than below it, because a caveat under a number does not get read.
+ *
+ * It also prints the ORIGIN warning above the table. The explorer / never-explorer split rests
+ * on two markers that disagree about 1 versus 30 former Explorers having ever paid, so the
+ * split is reported with its own reliability attached rather than as settled fact.
  */
 import { sequelize } from '../config/database';
 import {
@@ -32,8 +35,10 @@ async function main(): Promise<void> {
   const since = arg('since', '2026-07-01');
   const asJson = process.argv.includes('--json');
 
-  const [rows] = await sequelize.query(CHECKOUT_ATTEMPTS_SQL, { replacements: { since } });
-  const funnel = computeCheckoutFunnel(rows as CheckoutAttemptRow[], { period });
+  // Every row is loaded; `since` bounds the OUTPUT, not the input. Filtering rows first would
+  // make a returning person look like a first-timer. See CHECKOUT_ATTEMPTS_SQL.
+  const [rows] = await sequelize.query(CHECKOUT_ATTEMPTS_SQL);
+  const funnel = computeCheckoutFunnel(rows as CheckoutAttemptRow[], { period, since });
 
   if (asJson) {
     console.log(JSON.stringify({ since, attempts: (rows as unknown[]).length, ...funnel }, null, 2));
@@ -44,17 +49,17 @@ async function main(): Promise<void> {
   console.log('Raw attempt rows: ' + (rows as unknown[]).length
     + '   distinct people: ' + funnel.rows.reduce((n, r) => n + r.started, 0));
 
-  if (funnel.mixShiftWarning) {
-    console.log('\n!! ' + funnel.mixShiftWarning + '\n');
-  }
+  // Both warnings go ABOVE the table. A caveat printed underneath a number does not get read.
+  if (funnel.originWarning) console.log('\n!! ' + funnel.originWarning + '\n');
+  if (funnel.mixShiftWarning) console.log('\n!! ' + funnel.mixShiftWarning + '\n');
 
   const pad = (s: unknown, n: number) => String(s).padEnd(n);
   const padL = (s: unknown, n: number) => String(s).padStart(n);
-  console.log('\n' + pad('period', 12) + pad('type', 12) + padL('started', 9)
+  console.log('\n' + pad('period', 12) + pad('origin', 17) + padL('started', 9)
     + padL('paid', 7) + padL('%paid', 8) + padL('active sub', 12) + padL('%active', 9));
-  console.log('-'.repeat(69));
+  console.log('-'.repeat(74));
   for (const r of funnel.rows) {
-    console.log(pad(r.period, 12) + pad(r.enrollment_type, 12) + padL(r.started, 9)
+    console.log(pad(r.period, 12) + pad(r.origin, 17) + padL(r.started, 9)
       + padL(r.converted_paid, 7) + padL(r.pct_paid === null ? '-' : r.pct_paid, 8)
       + padL(r.converted_subscription, 12)
       + padL(r.pct_subscription === null ? '-' : r.pct_subscription, 9));
