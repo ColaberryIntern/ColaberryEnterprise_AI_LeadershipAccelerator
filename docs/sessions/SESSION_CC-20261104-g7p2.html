@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Session CC-20261104-g7p2 — Change Report</title>
+<style>
+  :root{
+    --navy:#0f2942; --navy-2:#1a365d; --blue:#2b6cb0; --blue-l:#3b82f6;
+    --ink:#1e293b; --muted:#64748b; --line:#e2e8f0; --bg:#f1f5f9; --card:#ffffff;
+    --green:#059669; --green-bg:#ecfdf5;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  header{background:linear-gradient(135deg,var(--navy),var(--blue));color:#fff;padding:38px 40px 30px;}
+  header .eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;opacity:.8;font-weight:600}
+  header h1{margin:8px 0 6px;font-size:26px;font-weight:700;letter-spacing:-.01em}
+  header .meta{font-size:13px;opacity:.85}
+  header .sid{display:inline-block;margin-top:14px;background:rgba(255,255,255,.14);
+    border:1px solid rgba(255,255,255,.25);border-radius:8px;padding:6px 12px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;font-weight:600}
+  header .count{margin-left:10px;opacity:.8;font-size:13px}
+  main{max-width:980px;margin:0 auto;padding:28px 24px 60px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;
+    box-shadow:0 1px 3px rgba(15,41,66,.06);margin-bottom:18px;overflow:hidden}
+  .card-head{display:flex;align-items:center;gap:14px;padding:18px 22px;border-bottom:1px solid var(--line);
+    background:linear-gradient(to bottom,#fafcff,#fff)}
+  .card-head .num{font-family:ui-monospace,monospace;font-size:13px;font-weight:700;color:#fff;
+    background:var(--blue-l);border-radius:7px;padding:5px 9px;flex:none}
+  .card-head h2{flex:1;margin:0;font-size:16px;font-weight:650;color:var(--navy-2);letter-spacing:-.01em}
+  .badge{flex:none;font-size:12px;color:var(--muted);background:#f8fafc;border:1px solid var(--line);
+    border-radius:999px;padding:3px 11px;font-weight:600}
+  .card-body{padding:18px 22px 20px}
+  .row{display:flex;gap:16px;padding:7px 0;border-bottom:1px dashed #eef2f7}
+  .row:last-child{border-bottom:none}
+  .k{flex:none;width:120px;font-size:12px;font-weight:700;color:var(--muted);
+    text-transform:uppercase;letter-spacing:.04em;padding-top:2px}
+  .v{flex:1;color:var(--ink)}
+  .v.ver{color:var(--green);font-weight:550}
+  .files{margin-top:14px;background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .files-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;
+    letter-spacing:.06em;margin-bottom:8px}
+  .files table{width:100%;border-collapse:collapse;font-size:13px}
+  .files td{padding:6px 8px;vertical-align:top;border-top:1px solid #eef2f7}
+  .files tr:first-child td{border-top:none}
+  .files td.path{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;
+    color:var(--navy-2);white-space:nowrap;font-weight:600}
+  .empty{background:#fff;border:1px dashed var(--line);border-radius:14px;padding:40px;
+    text-align:center;color:var(--muted)}
+  footer{max-width:980px;margin:0 auto;padding:0 24px 40px;color:var(--muted);font-size:12px}
+  code{font-family:ui-monospace,monospace;background:#eef2f7;padding:1px 6px;border-radius:5px;font-size:.92em}
+</style>
+</head>
+<body>
+  <header>
+    <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
+    <h1>What changed this session</h1>
+    <div class="meta">Generated Thursday, November 5, 2026 at 5:20 AM</div>
+    <div><span class="sid">CC-20261104-g7p2</span><span class="count">7 changes</span></div>
+  </header>
+  <main>
+    
+      <article class="card">
+        <div class="card-head">
+          <span class="num">01</span>
+          <h2>Hide intern-assigned pursuits from Discovered candidates on the Gov Opportunities board</h2>
+          <span class="badge">2026-11-04</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`GET /api/admin/factory/opportunities` now drops any row whose pursuit has a delivery</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`factoryRoutes.test.ts` and `govDiscoveryBoard.test.ts` pass (see the entry below for the runs).</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Ali&#39;s request, 2026-11-04. Assumptions: (1) &quot;assigned&quot; means exactly what the left nav shows, so a</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">02</span>
+          <h2>One morning email and automatic AI vetting of every uploaded ZIP</h2>
+          <span class="badge">2026-11-04</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">The two sweep emails became one, built by `govDiscoveryBoard.ts`, the same function the board route</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">backend `tsc` exit 0, frontend `tsc` exit 0, frontend</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Failure-first answers are in the headers of `govAiVetting.ts` and `govOpportunitySweep.ts`.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">03</span>
+          <h2>Morning email: a note to Ali, current projects, and each bid only once</h2>
+          <span class="badge">2026-11-04</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">The email opens with a note addressed to Ali that summarizes the report in counts. A Current projects section</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">Rendered with no overflow at 700 and 390 pixels. Merged as PR 3664, deployed at `29bdbb61` with the marker present</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Requested by Ali, 2026-11-04. Assumptions: (1) status is a rough read of build progress against days left, because no</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">04</span>
+          <h2>Backfill clears the board first, and the email stops saying the AI is working when it may only be queued</h2>
+          <span class="badge">2026-11-04</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">The daily backfill takes bids in the live feed first, skips projects already with an intern, and no longer skips a</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">85/85 locally on `govAiVetting`, `govPursuitDailyFlow` and `govPursuitEmail`. CI on the PR gates the full suites.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Found by `loop-production-verifier` on live data: 7 rows read &quot;AI working&quot; with no row started, only 1 of the first 10</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">05</span>
+          <h2>Email links survive the click tracker</h2>
+          <span class="badge">2026-11-04</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">The Qualify link now encodes parentheses and apostrophes, and hrefs are percent-encoded instead of HTML-escaped.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`govPursuitEmail.test.ts`; live proof is a real email&#39;s tracked links returning 302 (see the PR).</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Found by clicking the links in the first real email: any link with &quot;(&quot; returned HTTP 400 from track.colaberry.com, which</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">06</span>
+          <h2>AI go/no-go calibrated for a software firm, and the email reports how often the AI matches Ali</h2>
+          <span class="badge">2026-11-05</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">The go/no-go instructions now pass only for walls at submission or non-software work, and stop treating paperwork,</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">150/150 on six suites, backend `tsc` exit 0. Read-only comparison on 18 saved production bids: 0 stars before, 5 after,</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Requested by Ali, 2026-11-05. Re-scoring changed only verdict, reason, quote and coverage, and kept fit and summaries. It ran</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">07</span>
+          <h2>Gov Pursuit on autopilot: Ram added, schedule confirmed, handoff written</h2>
+          <span class="badge">2026-11-05</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`gov_pursuit_notification_email` set to `ali@colaberry.com,ram@colaberry.com` on production (Ali&#39;s request). Runbook</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">Production at `5b94857a` with markers `aiAgreement` and &quot;NOT walls&quot; in the running backend. Boot log shows the catch-up at</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Ram&#39;s first email is 7:30 on 2026-11-06 at the earliest, unless today&#39;s run is after this change. Not proven: Restore by a person,</span></div>
+          
+        </div>
+      </article>
+  </main>
+  <footer>
+    Sourced from <code>docs/sessions/CC-20261104-g7p2.md</code>.
+    Regenerated after each change per <code>CLAUDE.md</code> → Per-session change report.
+  </footer>
+</body>
+</html>

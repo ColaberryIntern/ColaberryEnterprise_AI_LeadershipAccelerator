@@ -8,7 +8,7 @@ This is the end-to-end process for taking a government opportunity from discover
 
 ## The daily rhythm
 
-One email goes out at 7:30 AM Central. It and the **Gov Opportunities** board come from the same code (`govDiscoveryBoard.ts`), so they list the same bids in the same stages.
+One email goes out at 7:30 AM Central, to Ali and Ram (setting `gov_pursuit_notification_email`, comma-separated). It and the **Gov Opportunities** board come from the same code (`govDiscoveryBoard.ts`), so they list the same bids in the same stages. It opens with a note summarizing the report, then the current projects with interns, then the bids. No bid appears twice.
 
 | When | Who | What happens |
 |---|---|---|
@@ -32,6 +32,10 @@ One email goes out at 7:30 AM Central. It and the **Gov Opportunities** board co
 - A failed send isn't retried, because a retry can send twice. That morning's hides aren't itemized in the next email, but they stay on the **Hidden** list.
 - A bid with no fit score stays on the upload list, marked "Fit unknown". With the sweep off, low-fit and off-target bids stay listed too, since nothing would put them on **Hidden**.
 - Risk narrative and build plan remain buttons: the risk score needs operator inputs, and the build plan belongs after approval.
+- The AI is calibrated for a software firm (`govAiGoNoGo.ts`, 2026-11-05). It passes only for a wall at submission (a security authorization required to submit, a pass/fail minimum of past projects, a set-aside, local presence) or non-software work. Paperwork, post-award certifications, support and hosting aren't walls. When unsure, it leans pursue.
+- The email reports how often the AI's call matched Ali's (`govAiAgreement.ts`): approve, RFI or assign counts as pursue, and no-bid or Ali's own hide counts as pass. Once there are 20 to 30 decided bids, feed them to the prompt as examples so it calls bids the way Ali would.
+
+**If the email didn't arrive:** check the board first. The sweep sends nothing on a broken or empty feed. Then check the logs for `gov_opp_sweep_sent` or `gov_opp_sweep_send_failed`, and the setting `gov_opp_sweep_run_log` (`lastRun` is today once it ran). To send once more today, set that `lastRun` to another value. The next run then claims the slot and sends again, so don't do it twice.
 
 **To undo:** one row, **Hidden → Restore** on the board. Many rows after a bad AI run, `node dist/scripts/restoreGovAiHides.js --since=YYYY-MM-DD` (a dry run until `--execute`). To stop new AI runs, `ENABLE_GOV_AI_VETTING=false`. To stop the email and all hides, `ENABLE_GOV_OPP_SWEEP=false`.
 
