@@ -9,6 +9,7 @@
  * the honesty rail holds — every row still cites text that literally exists in the source.
  */
 import type { ExtractedRequirement } from './proposalExtractor';
+import { triageStatement } from './requirementTriage';
 import type { VerifiedCandidate } from './verifyQuotes';
 
 const normDedup = (s: string): string => String(s ?? '').toLowerCase().replace(/\s+/g, ' ').trim();
@@ -31,11 +32,16 @@ export function mergeCandidates(
     if (!norm || seen.has(norm)) continue;
     seen.add(norm);
     n += 1;
+    // Second of the two sites that hardcoded `compliance`/`must`. Fixing only the other one
+    // would leave this path still flattening every row, and the measured 858-of-864 would
+    // barely move - which would read as the fix not working.
+    const stored = String(v.statement || v.quote).slice(0, 500);
+    const triaged = triageStatement(stored);
     out.push({
       canonicalReqId: `REQ-${String(n).padStart(3, '0')}`,
-      statement: String(v.statement || v.quote).slice(0, 500),
-      kind: 'compliance',
-      priority: 'must',
+      statement: stored,
+      kind: triaged.kind,
+      priority: triaged.priority,
       tracks: ['proposal', 'solution_build'],
       sourceDocument: v.document,
       section: v.document,
