@@ -109,6 +109,35 @@ describe('buildFactoryDecomposeInput demotes rather than drops', () => {
     expect(coversRequirementBlocks(prompt, prepared.promptInputs)).toBe(true);
   });
 
+  it('keeps a non-binding row OUT of the list the prompt labels REQUIREMENTS', () => {
+    // Demoting the block alone was half a fix. This list renders under a heading that reads
+    // REQUIREMENTS, so a city_process row still arrived labelled as something to satisfy and
+    // the model built a task for it: after the block-only change, Herriman still produced
+    // Evaluate Proposal, Select Vendor, Negotiate Contract and Finalize Contract.
+    const prepared = buildFactoryDecomposeInput({
+      requirements: [
+        req({ id: 'REQ-001', interpretation: binding }),
+        req({ id: 'REQ-002', interpretation: cityProcess, statement: 'All Proposals will be reviewed by a Review Panel.' }),
+      ],
+    });
+    expect(prepared.promptInputs.requirements.map((r) => r.id)).toEqual(['REQ-001']);
+  });
+
+  it('still shows the excluded row to the model, as context, so no information is lost', () => {
+    const prepared = buildFactoryDecomposeInput({
+      requirements: [req({ id: 'REQ-002', interpretation: cityProcess, statement: 'GIS and Bluestakes are two-way.' })],
+    });
+    expect(prepared.promptInputs.requirements).toEqual([]);
+    const block = prepared.promptInputs.sourceBlocks.find((b) => b.id === 'blk-REQ-002');
+    expect(block!.kind).toBe('context');
+    expect(block!.text).toContain('two-way');
+  });
+
+  it('keeps an UNTRIAGED row in the REQUIREMENTS list', () => {
+    const prepared = buildFactoryDecomposeInput({ requirements: [req()] });
+    expect(prepared.promptInputs.requirements.map((r) => r.id)).toEqual(['REQ-001']);
+  });
+
   it('an all-non-binding set yields no mandatory citations at all, rather than silently none', () => {
     const prepared = buildFactoryDecomposeInput({
       requirements: [req({ id: 'REQ-001', interpretation: cityProcess })],
