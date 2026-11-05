@@ -44,6 +44,8 @@ beforeEach(() => {
   // The persistent agent panel (and Open items) read these on mount; without a promise they throw.
   (api.portalGovStudioApi.listQuestions as jest.Mock).mockResolvedValue([]);
   (api.portalGovStudioApi.listActivity as jest.Mock).mockResolvedValue([]);
+  // The studio offers its guided tour once per browser; pre-seed "seen" so it doesn't auto-open during these tests.
+  try { window.localStorage.setItem('gps-tour-seen', '1'); } catch { /* jsdom always has storage */ }
 });
 afterEach(() => { act(() => root.unmount()); container.remove(); jest.clearAllMocks(); });
 

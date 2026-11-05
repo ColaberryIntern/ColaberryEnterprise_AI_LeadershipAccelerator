@@ -238,4 +238,20 @@
 .gps-spin{display:inline-block;width:10px;height:10px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:gps-sp .7s linear infinite}
 @keyframes gps-sp{to{transform:rotate(360deg)}}
 .gps-toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));background:var(--gps-fg);color:var(--gps-bg);padding:10px 16px;border-radius:8px;font-size:13px;z-index:1200;max-width:calc(100% - 32px);box-shadow:0 6px 20px rgba(0,0,0,.25)}
+/* guided tour */
+.gps-tour-start{margin-top:8px;border-color:var(--gps-accent);color:var(--gps-accent)}
+.gps-tour{position:fixed;left:50%;bottom:calc(22px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:1150;width:min(560px,calc(100vw - 32px))}
+.gps-tour-card{background:var(--gps-surface);border:1px solid var(--gps-line);border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,.28);padding:16px 18px;animation:gps-tour-in .18s ease-out}
+.gps-tour-card h3{margin:6px 0 4px;font-size:17px}
+.gps-tour-card>p{margin:0 0 6px;font-size:13.5px;line-height:1.5;color:var(--gps-fg)}
+.gps-tour-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.gps-tour-x{background:none;border:0;color:var(--gps-muted);font-size:22px;line-height:1;cursor:pointer;padding:0 2px}
+.gps-tour-x:hover{color:var(--gps-fg)}
+.gps-tour-do{font-size:12.5px!important;color:var(--gps-muted)!important}
+.gps-tour-do b{color:var(--gps-accent)}
+.gps-tour-dots{display:flex;gap:5px;margin:10px 0}
+.gps-tour-dots span{width:6px;height:6px;border-radius:50%;background:var(--gps-line)}
+.gps-tour-dots span.on{background:var(--gps-accent)}
+.gps-tour-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:4px}
+@keyframes gps-tour-in{from{opacity:0;transform:translate(-50%,8px)}to{opacity:1;transform:translate(-50%,0)}}
 @media (prefers-reduced-motion:reduce){.gps *{animation:none!important;transition:none!important}}

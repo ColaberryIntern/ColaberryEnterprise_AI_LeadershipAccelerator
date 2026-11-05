@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import type { StudentGovProjectView, GovCockpitApi, GovReviewApi, GovStudioApi, GovProposalDocument } from '../../../../services/govProjectPortalApi';
 import ContractBar from './ContractBar';
@@ -13,6 +13,7 @@ import DraftVersions from './DraftVersions';
 import ReviewGatesView from './ReviewGatesView';
 import PackageView from './PackageView';
 import OpenItems from './OpenItems';
+import StudioTour from './StudioTour';
 // The drafting drawer for a form/pricing row is the one shipped govCockpit piece still reused (wrapped in `.gck` to
 // carry its own tokens); every stage view is now a native `.gps` surface.
 import ProposalDocumentDrawer from '../govCockpit/ProposalDocumentDrawer';
@@ -36,6 +37,17 @@ export default function StudioShell(
   const current: StudioView = (raw && (VIEWS as string[]).includes(raw) ? raw : 'overview') as StudioView;
   const [openDocKey, setOpenDocKey] = useState<string | null>(null);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
+  const [tourStep, setTourStep] = useState<number | null>(null);
+
+  // Offer the walkthrough once per browser on a first visit; it stays reopenable from "Take a tour".
+  useEffect(() => {
+    try {
+      if (!window.localStorage.getItem('gps-tour-seen')) {
+        window.localStorage.setItem('gps-tour-seen', '1');
+        setTourStep(0);
+      }
+    } catch { /* storage blocked — the button is still there */ }
+  }, []);
 
   const docs = useMemo(() => view.proposalDocuments ?? [], [view.proposalDocuments]);
   const drawerDoc = openDocKey ? docs.find((d) => d.key === openDocKey) ?? null : null;
@@ -97,7 +109,7 @@ export default function StudioShell(
 
   return (
     <div className="gps">
-      <ContractBar view={view} />
+      <ContractBar view={view} onStartTour={() => setTourStep(0)} />
       <div className="gps-shell gps-gut">
         <StageRail view={view} current={current} onNavigate={go} />
         <main id="gps-main" style={{ minWidth: 0 }}>{center}</main>
@@ -107,6 +119,7 @@ export default function StudioShell(
         gck(<ProposalDocumentDrawer doc={drawerDoc} projectId={projectId} canVerify={view.viewerCanVerify} onReload={onReload} onClose={() => setOpenDocKey(null)} api={cockpitApi} />)
       )}
       {toastMsg && <div className="gps-toast" role="status">{toastMsg}</div>}
+      {tourStep !== null && <StudioTour step={tourStep} onNavigate={go} onSetStep={setTourStep} onClose={() => setTourStep(null)} />}
     </div>
   );
 }
