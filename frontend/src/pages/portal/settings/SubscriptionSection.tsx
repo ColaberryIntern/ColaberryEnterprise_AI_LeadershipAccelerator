@@ -147,7 +147,7 @@ const SubscriptionSection: React.FC<{ onToast?: (m: string) => void }> = ({ onTo
 
   // Plan-selection grid. `withFree` prepends the current (Free) plan, selected.
   const renderPlans = (withFree: boolean) => (
-    <div className={`set-plans${withFree ? ' has-free' : ''}`}>
+    <div className={`set-plans${withFree ? ' has-current-plan' : ''}`}>
       {creditCents > 0 && (
         <div className="set-credit-banner" style={{ gridColumn: '1 / -1' }}>
           <span className="set-credit-chip">${money(creditCents / 100)} credit</span>
@@ -159,10 +159,10 @@ const SubscriptionSection: React.FC<{ onToast?: (m: string) => void }> = ({ onTo
       {withFree && (
         <div className="set-plan current">
           <span className="set-plan-badge current"><svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4L19 6" stroke="#fff" strokeWidth="3" strokeLinecap="round" /></svg> Your plan</span>
-          <div className="set-plan-name">Free · Explorer</div>
+          <div className="set-plan-name">Explorer · No card needed</div>
           <div className="set-plan-price">$0<span>/mo</span></div>
           <div className="set-plan-terms">Week 0 preview access</div>
-          <p className="set-plan-blurb">You’re exploring for free. Upgrade any time to unlock live classes, projects, mentorship, and cert prep.</p>
+          <p className="set-plan-blurb">You’re exploring with no card needed. Upgrade any time to unlock live classes, projects, mentorship, and cert prep.</p>
           <button className="te-btn ghost sm" disabled>Current plan</button>
         </div>
       )}
@@ -262,7 +262,7 @@ const SubscriptionSection: React.FC<{ onToast?: (m: string) => void }> = ({ onTo
       {/* ── FREE: no subscription yet → Free (current) + the two paid plans ── */}
       {!sub && !waiting && (
         <>
-          <p className="set-sub">You’re on the free plan. Upgrade to unlock the full program.</p>
+          <p className="set-sub">You’re on the Explorer plan, no card needed. Upgrade to unlock the full program.</p>
           {renderPlans(true)}
           {/* C91: for an Explorer this tab was a dead end (ad audit: 121 of 308 ad signups ended up here, none paid); always offer the way back to learning */}
           <div className="set-actions" style={{ marginTop: 12 }} data-testid="set-sub-keep-learning">

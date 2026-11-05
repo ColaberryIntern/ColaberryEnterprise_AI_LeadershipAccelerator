@@ -115,7 +115,7 @@ const EnrollmentSection: React.FC<{
     <div className="set-enroll-callout">
       <div className="ttl">Enroll now — pay when you’re ready</div>
       <p>
-        Enrolling is free and reserves your spot. Paying locks your seat — and your
+        Enrolling needs no card and reserves your spot. Paying locks your seat — and your
         subscription month starts on your <b>class start date{dateLabel ? ` (${dateLabel})` : ''}</b>,
         not the day you pay. Pay before class starts and your first month still runs
         from {dateLabel || 'class day'} — paying early never costs you time.
@@ -165,7 +165,7 @@ const EnrollmentSection: React.FC<{
       {!enrolled && (
         <>
           <p className="set-sub">
-            Pick your class start date and enroll — it’s free and reserves your place in the cohort.
+            Pick your class start date and enroll. No card needed, and it reserves your place in the cohort.
           </p>
           {view.cohorts.length === 0 && !internshipOn ? (
             <div className="set-empty">No upcoming class dates are open right now — check back soon.</div>
