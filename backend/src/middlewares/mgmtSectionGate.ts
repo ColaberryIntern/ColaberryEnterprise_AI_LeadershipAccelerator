@@ -288,6 +288,26 @@ function matchesPrefix(path: string, prefix: string): boolean {
   return path === prefix || path.startsWith(prefix + '/');
 }
 
+/**
+ * The sentence a person reads, and the code a program reads. Both, because they answer
+ * different questions and conflating them is what caused the bug below.
+ *
+ * MIHRET NETSEREAB, 2 Nov 2026, sent a screenshot of /admin/dashboard under a scoped role: TEN
+ * red banners, every one of them this sentence, stacked over every tile on the page.
+ *
+ * Nothing was broken. The dashboard fires thirteen requests in one `Promise.allSettled`, a
+ * scoped role is refused about ten of them, and the page handles that correctly by simply not
+ * rendering those widgets. What produced the wall was `frontend/src/utils/api.ts`, whose response
+ * interceptor raises a global toast for EVERY 4xx carrying a server message. So the one case
+ * where a 403 is the system working as designed was reported ten times as a failure.
+ *
+ * A client cannot tell that case apart by matching on English. `code` lets it: an expected
+ * section refusal on a background fetch is not an error for a scoped user, while any OTHER 403
+ * still is. `error` is unchanged so nothing already reading the sentence breaks.
+ */
+export const SECTION_DENIED = 'You do not have access to this section.';
+export const SECTION_DENIED_CODE = 'section_not_permitted';
+
 /** The section a request path belongs to, or null if unmapped. */
 export function pathToSection(path: string): SectionKey | null {
   for (const [prefix, section] of PATH_SECTION) {
@@ -321,7 +341,7 @@ export function mgmtSectionGate(req: Request, res: Response, next: NextFunction)
   if (isBroad) {
     // Admin (all-but-inbox): deny only a path mapped to a section they lack.
     if (section && !allowed.includes(section)) {
-      res.status(403).json({ error: 'You do not have access to this section.' });
+      res.status(403).json({ error: SECTION_DENIED, code: SECTION_DENIED_CODE });
       return;
     }
     return next(); // everything else (mapped-allowed or unmapped cross-cutting) is fine
@@ -329,5 +349,5 @@ export function mgmtSectionGate(req: Request, res: Response, next: NextFunction)
 
   // Scoped role (curriculum/revenue/admissions/support): allow ONLY its sections.
   if (section && allowed.includes(section)) return next();
-  res.status(403).json({ error: 'You do not have access to this section.' });
+  res.status(403).json({ error: SECTION_DENIED, code: SECTION_DENIED_CODE });
 }
