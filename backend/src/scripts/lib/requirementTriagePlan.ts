@@ -44,8 +44,22 @@ export interface TriageChange {
 
 export interface TriagePlan {
   readonly changes: TriageChange[];
-  /** Rows a human already confirmed. Never touched, counted so the skip is visible. */
+  /** Rows a human already confirmed WITH content. Never touched, counted so the skip is visible. */
   readonly skippedConfirmed: string[];
+  /**
+   * Rows flagged `human_confirmed` whose interpretation is EMPTY — confirmed nothing.
+   *
+   * Measured 5 Nov 2026: all 56 Herriman rows, and 859 of 864 platform-wide, carry the flag,
+   * while every Herriman interpretation is the empty string. A flag set on 99.4% of rows with
+   * no content behind it is a default applied when requirements are established, not a record
+   * of anybody's judgement. Keying the refusal on the flag alone protected the label and
+   * blocked the entire backfill; keying it on the CONTENT protects the actual decision.
+   *
+   * Reported separately rather than folded into `changes`, because "a row claims human
+   * confirmation it does not have" is a data-integrity finding someone should see, not a
+   * detail to absorb silently.
+   */
+  readonly confirmedButEmpty: string[];
   /** Rows already carrying exactly what the triage would write. Idempotency in one number. */
   readonly alreadyCorrect: string[];
   readonly byClass: Record<TriageClass, number>;
@@ -67,6 +81,7 @@ export function interpretationFor(cls: TriageClass, reason: string): string {
 export function planTriageBackfill(rows: readonly TriagePlanRow[]): TriagePlan {
   const changes: TriageChange[] = [];
   const skippedConfirmed: string[] = [];
+  const confirmedButEmpty: string[] = [];
   const alreadyCorrect: string[] = [];
   const byClass: Record<TriageClass, number> = { obligation: 0, city_process: 0, question: 0, note: 0 };
 
@@ -74,10 +89,17 @@ export function planTriageBackfill(rows: readonly TriagePlanRow[]): TriagePlan {
     const t = triageStatement(row.statement);
     byClass[t.triageClass] += 1;
 
-    if (row.humanConfirmed) {
+    // A decision is protected by its CONTENT, not by a boolean. `interpretation` arrives as the
+    // empty string rather than null on every Herriman row, so a null check would also have been
+    // fooled - "not null" is not "has something in it".
+    const hasRecordedDecision = (row.interpretation ?? '').trim() !== ''
+      && !(row.interpretation ?? '').startsWith(TRIAGE_PREFIX);
+
+    if (row.humanConfirmed && hasRecordedDecision) {
       skippedConfirmed.push(row.canonicalReqId);
       continue;
     }
+    if (row.humanConfirmed) confirmedButEmpty.push(row.canonicalReqId);
 
     const interpretation = interpretationFor(t.triageClass, t.reason);
     const same = row.kind === t.kind
@@ -98,7 +120,7 @@ export function planTriageBackfill(rows: readonly TriagePlanRow[]): TriagePlan {
     });
   }
 
-  return { changes, skippedConfirmed, alreadyCorrect, byClass };
+  return { changes, skippedConfirmed, confirmedButEmpty, alreadyCorrect, byClass };
 }
 
 export function renderTriagePlan(projectId: string, plan: TriagePlan, execute: boolean): string {
@@ -110,7 +132,8 @@ export function renderTriagePlan(projectId: string, plan: TriagePlan, execute: b
     `  rows                  : ${total}`,
     `  would change          : ${plan.changes.length}`,
     `  already correct       : ${plan.alreadyCorrect.length}`,
-    `  skipped (human-confirmed, never overwritten) : ${plan.skippedConfirmed.length}`,
+    `  skipped (human-confirmed WITH content, never overwritten) : ${plan.skippedConfirmed.length}`,
+    `  flagged human-confirmed but EMPTY (confirmed nothing)      : ${plan.confirmedButEmpty.length}`,
     '',
     `  binding on us         : ${binding}`,
     `  buyer's own process   : ${plan.byClass.city_process}`,
