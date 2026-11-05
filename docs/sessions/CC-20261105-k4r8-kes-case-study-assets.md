@@ -143,3 +143,80 @@ next step rather than guessed at here.
   after the nginx deploy, then `apply-cover.js` and a read of the public projection.
 
 Session: CC-20261105-k4r8
+
+---
+
+# Part two: the record
+
+Created, approved and published after the assets PR (#3677) merged and nginx deployed.
+
+| | |
+|---|---|
+| Record | `fe1a02f7-b2e1-440f-9578-8d6a381f1358` |
+| Slug | `the-interview-was-in-the-inbox-the-student-still-had-to-be-told` |
+| Shape | `source_type: repo_collection`, `built_by_type: colaberry_team` |
+| Repository | `KesetebirhanDelele/AI-inbox-Manager` (public, primary) |
+| Snapshot | version 2, approved and signed |
+| Published | `enterprise` and `training` |
+
+## Assets verified live before the record cited them
+
+All eleven files answered 200 at the `?v=` URL the record names, and each was re-hashed
+from the edge against the blob committed to `main`. A file already live before this deploy
+was fetched as a control, so a query aimed at the wrong place could not read as a pass.
+
+## What the gate refused, and what was changed
+
+The first publish attempt was refused on both surfaces. Nothing was worked around; each
+blocker was fixed at its cause.
+
+1. **`snapshot_not_approved`** — the snapshot was written with `status: 'approved'` but
+   `persistCaseStudySnapshot` does not stamp an approver, and "an approval nobody signed is
+   not an approval". Fixed by persisting as `draft` and then calling `approveSnapshot`.
+2. **`unverified_claim` x6** — percentages in artifact descriptions and metric limitations
+   ("58%", "69%", "83%", "94%", "91%", "90%") that no *verified* metric carries. Every
+   figure on this record is the builder's own, so none of them can back a claim. The
+   percentages were restated in words rather than dropped or relabelled as verified.
+3. **`visual_story_missing`** — every published record has carried a visual story since
+   2026-09-16. An `architecture.diagram` of 8 components and 8 connections was authored,
+   and the story generated from it rather than hand-drawn, so it cannot drift from the
+   architecture it illustrates.
+
+## The record is published but NOT on the default index, by design
+
+Every metric carries `verification: { class: 'illustrative', method: 'self' }`, which the
+surface renders as "Self-reported". That is the designed landing place for a builder's own
+figures: `caseStudyPublishGate.ts` refuses `class: 'verified'` on `method: 'self'` outright
+as a mislabel rather than discounting it, and names `illustrative` as the publishable,
+labelled alternative.
+
+The consequence is stated in `caseStudySurfaceProfiles.ts`, spec §14: the production list
+hides `illustrative` by default, and such a record "stays reachable by an explicit
+`?verification=illustrative`, and never appears on the default index". Measured, with a
+control:
+
+```
+/api/public/case-studies                            12 records, this one absent
+/api/public/case-studies?verification=illustrative   1 record,  this one present
+```
+
+So the record is live, complete and reachable by its slug; it is not in the library index.
+The lever is verification, not publishing: if the figures are recounted by someone other
+than the builder, they become `verified` and the record joins the index. That is the first
+item on its roadmap.
+
+## Two judgement calls carried forward
+
+- **The builder is credited by role, not named.** `builderIdentityMode: 'role_only'`,
+  `builderNamingConsent: false`, matching his existing record on this platform
+  (`testing-ai-actions-before-they-reach-customers`), which credits "An AI Systems
+  Architect at Colaberry". Naming him is a one-field change if he consents.
+- **No currency figure for staff time saved.** The builder's estimate rests on assumed
+  hourly rates he explicitly asked to have replaced with real ones. His measured model
+  spend ($327) is published; the derived savings are not, because an assumed rate is not a
+  measurement.
+- **`narrationSource` is omitted** on the walkthrough rather than guessed. It is optional,
+  and asserting "human" or "synthetic" without knowing which would be the kind of small
+  deception the field exists to prevent.
+
+Session: CC-20261105-k4r8
