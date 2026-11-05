@@ -23,6 +23,7 @@ import TodayEventsRail from './TodayEventsRail';
 import TodayRail from './TodayRail';
 import TodayCommandBand from './TodayCommandBand';
 import TodayTimeline from './TodayTimeline';
+import TodayFeedPlacement from './TodayFeedPlacement';
 import TodayPlan from './TodayPlan';
 import { useTodayPlanGate } from './useTodayPlanGate';
 import type { Category } from './todayCategoryFilter';
@@ -365,6 +366,14 @@ const TodayShell: React.FC = () => {
 
       <div className="te-grid">
         <div>
+          {/* C110: before a first win the starter feed goes first, under the banner (TodayFeedPlacement.tsx) */}
+          <TodayFeedPlacement starterFirst={firstWinPending} timeline={(
+            <TodayTimeline
+              capeTodayPlan={!!flags?.cape_today_plan} categoryFilter={categoryFilter} categoryCounts={categoryCounts}
+              onFilterChange={setCategoryFilter} onCounts={setCategoryCounts} planRefs={planRefs} curriculum={curriculum}
+              onOpen={openCard} onComplete={handleCardComplete}
+            />
+          )}>
           {/* hero — the command band carries the primary CTA when the redesign flag is on */}
           {!redesign && (
           <div className="te-hero">
@@ -441,12 +450,7 @@ const TodayShell: React.FC = () => {
               events rail, next 7 (Ali, 2026-09-11). Self-rendering: shows
               nothing when there are no events or CCPP is unreachable. */}
           <TodayEventsRail />
-
-          <TodayTimeline
-            capeTodayPlan={!!flags?.cape_today_plan} categoryFilter={categoryFilter} categoryCounts={categoryCounts}
-            onFilterChange={setCategoryFilter} onCounts={setCategoryCounts} planRefs={planRefs} curriculum={curriculum}
-            onOpen={openCard} onComplete={handleCardComplete}
-          />
+          </TodayFeedPlacement>
         </div>
 
         <TodayRail
