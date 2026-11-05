@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AI Inbox Manager — what it saved</title>
+<style>
+  /* Palette: dataviz reference instance. Categorical slots 1-2 and a 3-step
+     ordinal blue ramp, both run through scripts/validate_palette.js and passing. */
+  :root {
+    --surface-1: #fcfcfb;
+    --ink:       #0b0b0b;
+    --ink-2:     #52514e;
+    --ink-3:     #86857e;
+    --rule:      #e3e2dd;
+    --measured:  #2a78d6;   /* slot 1 - recorded figures */
+    --estimated: #eb6834;   /* slot 2 - estimated figures */
+    --ord-1:     #86b6ef;
+    --ord-2:     #3987e5;
+    --ord-3:     #184f95;
+    --good:      #0ca30c;
+  }
+  @page { size: letter; margin: 14mm 13mm; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--surface-1); color: var(--ink);
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+    font-size: 10.2pt; line-height: 1.5;
+  }
+  .sheet { max-width: 7.0in; margin: 0 auto; }
+  h1 { font-size: 20pt; line-height: 1.15; margin: 0 0 2px; letter-spacing: -0.015em; }
+  .sub { color: var(--ink-2); font-size: 10pt; margin: 0 0 4px; }
+  .meta { color: var(--ink-3); font-size: 8.4pt; margin: 0 0 20px;
+          border-bottom: 1px solid var(--rule); padding-bottom: 12px; }
+  h2 { font-size: 12pt; margin: 26px 0 3px; letter-spacing: -0.01em; }
+  .note { color: var(--ink-2); font-size: 9pt; margin: 0 0 12px; }
+  .hero { display: flex; gap: 26px; align-items: baseline; margin: 18px 0 4px; }
+  .hero .n { font-size: 34pt; font-weight: 700; line-height: 1; letter-spacing: -0.02em; }
+  .hero .n small { font-size: 13pt; font-weight: 600; color: var(--ink-2); }
+  .hero .cap { color: var(--ink-2); font-size: 9.2pt; max-width: 3.1in; }
+  svg { display: block; overflow: visible; }
+  .lab    { font: 500 8.6pt "Segoe UI", sans-serif; fill: var(--ink); }
+  .lab-sm { font: 400 7.8pt "Segoe UI", sans-serif; fill: var(--ink-2); }
+  .lab-ax { font: 400 7.4pt "Segoe UI", sans-serif; fill: var(--ink-3); }
+  .val    { font: 700 10pt "Segoe UI", sans-serif; fill: var(--ink); }
+  .grid   { stroke: var(--rule); stroke-width: 1; }
+  .legend { display: flex; gap: 20px; margin: 10px 0 0; font-size: 8.6pt; color: var(--ink-2); }
+  .legend i { width: 15px; height: 10px; display: inline-block; margin-right: 6px;
+              vertical-align: -1px; border-radius: 2px; }
+  table { border-collapse: collapse; width: 100%; font-size: 8.8pt; margin-top: 8px; }
+  th, td { text-align: left; padding: 5px 8px 5px 0; border-bottom: 1px solid var(--rule);
+           vertical-align: top; }
+  th { font-weight: 600; color: var(--ink-2); font-size: 8pt; text-transform: uppercase;
+       letter-spacing: 0.05em; }
+  td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .tag { font-size: 7.4pt; font-weight: 600; padding: 1px 6px; border-radius: 9px;
+         white-space: nowrap; }
+  .tag.v { background: #e7f6e7; color: #0a6b0a; }
+  .tag.s { background: #fdf0e9; color: #a63f12; }
+  .caveat { border-left: 3px solid var(--estimated); background: #fdf6f2;
+            padding: 9px 13px; margin: 14px 0 0; font-size: 9pt; color: var(--ink-2); }
+  .caveat b { color: var(--ink); }
+  footer { margin-top: 26px; padding-top: 11px; border-top: 1px solid var(--rule);
+           color: var(--ink-3); font-size: 8pt; }
+</style>
+</head>
+<body>
+<div class="sheet">
+
+  <h1>AI Inbox Manager — what it saved</h1>
+  <p class="sub">Fifty days of a shared student job-search inbox, 17 September to 5 November 2026.</p>
+  <p class="meta">
+    Thirty students · 20,773 messages processed · built by Kesetebirhan Delele, on a pipeline
+    begun by Jude Ojobo · prepared 5 November 2026
+  </p>
+
+  <div class="hero">
+    <div>
+      <div class="n">~$4,700<small> saved, mid estimate</small></div>
+    </div>
+    <div class="cap">
+      Staff time avoided, less what the system cost to run. The range across the
+      estimate is <b>$2,200&ndash;$7,200</b>. It rests on an estimate of hours, not a
+      measurement of them.
+    </div>
+  </div>
+
+  <h2>What it would have cost by hand, against what it cost to run</h2>
+  <p class="note">
+    US dollars over the fifty days. One measure, one axis. The hatched bar is a
+    calculation; the solid bar is recorded spend.
+  </p>
+
+  <!-- Savings comparison. Axis 0-8000 over 560px => 0.07px per dollar. -->
+  <svg width="660" height="138" viewBox="0 0 660 138" role="img"
+       aria-label="By hand, 2,580 to 7,530 dollars with a mid estimate of 5,010. To run, 350 dollars.">
+    <defs>
+      <pattern id="hatch" width="7" height="7" patternUnits="userSpaceOnUse"
+               patternTransform="rotate(45)">
+        <rect width="7" height="7" fill="#fdf0e9"/>
+        <line x1="0" y1="0" x2="0" y2="7" stroke="#eb6834" stroke-width="3.4"/>
+      </pattern>
+    </defs>
+    <g transform="translate(126,12)">
+      <g class="grid">
+        <line x1="0"   y1="0" x2="0"   y2="100"/>
+        <line x1="125" y1="0" x2="125" y2="100"/>
+        <line x1="250" y1="0" x2="250" y2="100"/>
+        <line x1="375" y1="0" x2="375" y2="100"/>
+        <line x1="500" y1="0" x2="500" y2="100"/>
+      </g>
+
+      <text class="lab"    x="-10" y="26" text-anchor="end">If a person did it</text>
+      <text class="lab-sm" x="-10" y="39" text-anchor="end">86&ndash;251 h at $30/h</text>
+      <rect x="161.2" y="12" width="309.4" height="26" rx="4"
+            fill="url(#hatch)" stroke="#eb6834" stroke-width="1"/>
+      <line x1="313.1" y1="7" x2="313.1" y2="43" stroke="#a63f12" stroke-width="2.5"/>
+      <text class="lab-sm" x="313.1" y="2" text-anchor="middle" fill="#a63f12">mid $5,010</text>
+      <text class="lab-sm" x="157.2" y="29" text-anchor="end">$2,580</text>
+      <text class="lab-sm" x="475.6" y="29">$7,530</text>
+
+      <text class="lab"    x="-10" y="76" text-anchor="end">What it cost to run</text>
+      <text class="lab-sm" x="-10" y="89" text-anchor="end">model usage + hosting</text>
+      <rect x="0" y="62" width="21.9" height="26" rx="4" fill="var(--measured)"/>
+      <text class="val" x="29.9" y="81">$350</text>
+
+      <g class="lab-ax">
+        <text x="0"   y="116" text-anchor="middle">$0</text>
+        <text x="125" y="116" text-anchor="middle">$2,000</text>
+        <text x="250" y="116" text-anchor="middle">$4,000</text>
+        <text x="375" y="116" text-anchor="middle">$6,000</text>
+        <text x="500" y="116" text-anchor="middle">$8,000</text>
+      </g>
+    </g>
+  </svg>
+
+  <div class="legend">
+    <span><i style="background:repeating-linear-gradient(45deg,#eb6834 0 3px,#fdf0e9 3px 7px);border:1px solid #eb6834"></i>Estimated — a calculation over hours nobody measured</span>
+    <span><i style="background:#2a78d6"></i>Recorded — taken from the system&rsquo;s own spend log</span>
+  </div>
+
+  <div class="caveat">
+    <b>The bar on the left is not a measurement.</b> The hours are the builder&rsquo;s estimate of
+    how long this handling takes by hand; the rate is a single assumed $30/h, the average of
+    the three placeholder rates he supplied, standing in until Colaberry&rsquo;s real cost
+    replaces it. The spread shown is the spread in the hours, not in the rate. Staff time
+    spent approving notices is <i>not</i> subtracted.
+  </div>
+
+  <h2>Where the 20,773 messages went</h2>
+  <p class="note">
+    The saving comes from the ratio, not the volume: almost everything is routine, and a
+    small remainder carries a deadline.
+  </p>
+
+  <!-- Composition. 20,773 over 560px. -->
+  <svg width="660" height="108" viewBox="0 0 660 108" role="img"
+       aria-label="Of 20,773 messages: 19,199 routine, 1,146 job invitations, 268 interview-type needing a decision, 160 not broken out.">
+    <g transform="translate(126,14)">
+      <rect x="0"     y="0" width="462.1" height="30" rx="4" fill="var(--ord-1)"/>
+      <rect x="464.1" y="0" width="27.6" height="30" fill="var(--ord-2)"/>
+      <rect x="493.70000000000005" y="0" width="6.5" height="30" fill="var(--ord-3)"/>
+      <rect x="502.20000000000005" y="0" width="3.9" height="30" rx="4" fill="#c9c8c2"/>
+
+      <text class="lab"    x="8" y="20">19,199 routine</text>
+      <text class="lab-sm" x="0" y="46">job alerts, receipts, rejections &mdash; filed without a person</text>
+      <text class="lab-sm" x="506.1" y="-4" text-anchor="end">1,146 invitations &middot; 160 not broken out</text>
+
+      <line x1="496.95000000000005" y1="33" x2="496.95000000000005" y2="50" stroke="#184f95" stroke-width="1.5"/>
+      <text class="val"    x="506.1" y="64" text-anchor="end" fill="#184f95">268 need a human decision</text>
+      <text class="lab-sm" x="506.1" y="78" text-anchor="end">interview-type &mdash; 1.3% of everything that arrived</text>
+    </g>
+  </svg>
+
+  <h2>Every figure, and where it comes from</h2>
+  <table>
+    <thead>
+      <tr><th>Figure</th><th>Value</th><th>Source</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Commits in the measured period</td><td class="num">189 of 267</td>
+          <td><span class="tag v">Verified</span> counted from the public repository</td></tr>
+      <tr><td>Commits naming an AI assistant as co-author</td><td class="num">234 of 267</td>
+          <td><span class="tag v">Verified</span> counted from the public repository</td></tr>
+      <tr><td>Messages processed</td><td class="num">20,773</td>
+          <td><span class="tag s">Self-reported</span> the builder&rsquo;s database</td></tr>
+      <tr><td>Needing a human decision</td><td class="num">268</td>
+          <td><span class="tag s">Self-reported</span> the builder&rsquo;s database</td></tr>
+      <tr><td>Student notices drafted, none released unapproved</td><td class="num">167</td>
+          <td><span class="tag s">Self-reported</span> the builder&rsquo;s database</td></tr>
+      <tr><td>Harder cases staff reviewed, accepted as classified</td><td class="num">106 of 127</td>
+          <td><span class="tag s">Self-reported</span> the builder&rsquo;s database</td></tr>
+      <tr><td>Scheduled runs that completed</td><td class="num">571 of 572</td>
+          <td><span class="tag s">Self-reported</span> the builder&rsquo;s database</td></tr>
+      <tr><td>Model usage cost</td><td class="num">~$327</td>
+          <td><span class="tag s">Self-reported</span> recorded spend, rate corrected 21 Oct</td></tr>
+      <tr><td>Staff cost avoided</td><td class="num">$2,580&ndash;$7,530</td>
+          <td><span class="tag s">Estimated</span> assumed hours &times; one assumed rate</td></tr>
+    </tbody>
+  </table>
+
+  <div class="caveat" style="border-left-color:#2a78d6;background:#eef5fd">
+    <b>Two things this deliberately does not claim.</b> That a student was reached &mdash; during
+    this period delivery sat behind two independent keys that default to off, so the 167 counts
+    notices drafted, not students notified. And that the system beats a person &mdash; no human
+    error rate for this task was ever measured, and the builder asked that the comparison not
+    be made.
+  </div>
+
+  <footer>
+    Operational figures reported by the builder from the application&rsquo;s own database, 4 November
+    2026; not independently recounted. Repository figures counted directly from
+    github.com/KesetebirhanDelele/AI-inbox-Manager at its pinned head commit. Full record:
+    enterprise.colaberry.ai/stories/the-interview-was-in-the-inbox-the-student-still-had-to-be-told
+  </footer>
+
+</div>
+</body>
+</html>
