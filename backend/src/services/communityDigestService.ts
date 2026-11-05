@@ -6,6 +6,8 @@ import CommunityDigestLog from '../models/CommunityDigestLog';
 import Enrollment from '../models/Enrollment';
 import { getUpcomingEvents, CalendarEvent } from './communityCalendarService';
 import { sendCommunityDigestEmail } from './emailService';
+import { loadDigestMentions } from './communityDigestMentions';
+import type { DigestMention } from './email/communityDigestEmail';
 
 function log(level: 'info' | 'warn' | 'error', event: string, ctx: Record<string, unknown>): void {
   console[level](JSON.stringify({ timestamp: new Date().toISOString(), level, service: 'community-digest', event, ...ctx }));
@@ -132,6 +134,21 @@ export async function runDailyDigest(now: Date = new Date()): Promise<{ sent: nu
       }
 
       const content = await buildDigestContent(member, since);
+      // The Mentions card is detail, not the digest. If loading it fails the
+      // learner still gets their counts and their calendar, which is the part
+      // the email exists for. See communityDigestMentions.ts.
+      let mentions: DigestMention[] = [];
+      if (content.unread_notification_count > 0) {
+        try {
+          mentions = await loadDigestMentions(member.id);
+        } catch (err: any) {
+          log('warn', 'digest_mentions_load_failed', {
+            member_id: member.id,
+            error: err.message,
+            error_class: err.name || 'UnknownError',
+          });
+        }
+      }
       await sendCommunityDigestEmail({
         to: enrollment.email,
         fullName: enrollment.full_name,
@@ -140,6 +157,7 @@ export async function runDailyDigest(now: Date = new Date()): Promise<{ sent: nu
         unreadDmCount: content.unread_dm_count,
         newPostCount: content.new_post_count,
         upcomingEvents: content.upcoming_events,
+        mentions,
       });
       await logRow.update({ sent_at: new Date() });
       sent++;

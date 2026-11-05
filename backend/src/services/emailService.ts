@@ -10,6 +10,13 @@ import type { DigestData } from './digestService';
 import { redactForLogs } from '../utils/piiRedaction';
 import { sessionDayLabel } from './centralDate';
 import { SessionReminderData, buildSessionReminderHtml } from './email/sessionReminderEmail';
+import { buildPortalAccessEmailHtml } from './email/portalAccessEmail';
+import {
+  CommunityDigestEmailData,
+  DigestEvent,
+  DigestMention,
+  buildCommunityDigestHtml,
+} from './email/communityDigestEmail';
 import { isDev } from '../config/featureFlags';
 import { decideDevEmailRouting } from './devEmailGuard';
 import { buildLeadAlert, decideNotify, type AlertLead } from './leadAlertMessage';
@@ -2570,47 +2577,15 @@ export async function sendBriefingEmail(to: string, data: ExecutiveBriefingData)
   console.log(`[Email] ${isWeekly ? 'Weekly' : 'Daily'} briefing sent to: ${redactForLogs(r.to)} | msgId: ${info.messageId}`);
 }
 
+// Aleem's accepted redesign of this email lives in ./email/portalAccessEmail.ts
+// (UX Team to-do 10478732232, comment 10478789584, 2026-11-05). That module
+// also records the two claims from his mockup that are not true of this
+// system's tokens and so are not shipped.
 function buildPortalMagicLinkHtml(data: PortalMagicLinkData, magicLink: string): string {
-  return `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <style>
-    body { font-family: 'Segoe UI', system-ui, sans-serif; color: #2d3748; line-height: 1.6; max-width: 600px; margin: 0 auto; padding: 20px; }
-    h1 { color: #1a365d; font-size: 24px; }
-    .highlight { background: #f7fafc; border-left: 4px solid #1a365d; padding: 16px 20px; margin: 16px 0; border-radius: 0 8px 8px 0; }
-    .cta { display: inline-block; background: #1a365d; color: #ffffff; padding: 14px 28px; border-radius: 6px; text-decoration: none; font-weight: 600; margin: 16px 0; }
-    .footer { margin-top: 32px; padding-top: 16px; border-top: 1px solid #e2e8f0; font-size: 14px; color: #718096; }
-    .notice { font-size: 13px; color: #718096; margin-top: 12px; }
-  </style>
-</head>
-<body>
-  <h1>Access Your Accelerator Portal</h1>
-
-  <p>Dear ${data.fullName},</p>
-
-  <p>You requested access to the <strong>${data.cohortName}</strong> participant portal. Click the button below to sign in:</p>
-
-  <p><a href="${magicLink}" class="cta">Access My Portal</a></p>
-
-  <div class="highlight">
-    <strong>Your portal includes:</strong><br>
-    &bull; Session schedule and materials<br>
-    &bull; Assignment submissions<br>
-    &bull; Your readiness score and progress<br>
-    &bull; Session recordings
-  </div>
-
-  <p class="notice">This link expires in 24 hours and can only be used once. If you did not request this link, you can safely ignore this email.</p>
-
-  <div class="footer">
-    <p>Colaberry Enterprise AI Division<br>
-    AI Leadership | Architecture | Implementation | Advisory</p>
-  </div>
-</body>
-</html>
-  `.trim();
+  return buildPortalAccessEmailHtml(
+    { fullName: data.fullName, cohortName: data.cohortName },
+    magicLink
+  );
 }
 
 // ─── Curriculum Impact Digest ─────────────────────────────────────────────
@@ -2756,21 +2731,12 @@ export async function sendInterviewResult(data: InterviewResultEmailData): Promi
   console.log(`[Email] Interview result sent to: ${redactForLogs(r.to)} | week: ${data.week_number} | score: ${data.total_score} | msgId: ${info.messageId}`);
 }
 
-export interface CommunityDigestEmailEvent {
-  title: string;
-  event_type: string;
-  starts_at: Date;
-}
-
-export interface CommunityDigestEmailData {
-  to: string;
-  fullName: string;
-  digestDate: string;
-  unreadNotificationCount: number;
-  unreadDmCount: number;
-  newPostCount: number;
-  upcomingEvents: CommunityDigestEmailEvent[];
-}
+// The digest's data contract and its HTML live in ./email/communityDigestEmail
+// .ts, which carries Aleem's accepted redesign (UX Team to-do 10478732232,
+// 2026-11-05). Re-exported here so existing importers are unaffected.
+export type { CommunityDigestEmailData, DigestMention, DigestEvent };
+/** @deprecated Use DigestEvent from ./email/communityDigestEmail. */
+export type CommunityDigestEmailEvent = DigestEvent;
 
 // Daily community digest (REQ-C6) — one deduped send per (member, date),
 // enforced upstream by CommunityDigestLog's unique constraint in
@@ -2783,38 +2749,7 @@ export async function sendCommunityDigestEmail(data: CommunityDigestEmailData): 
 
   const r = await resolveEmailRecipient(data.to, '[Accelerator] Your Community Digest');
 
-  const eventsHtml = data.upcomingEvents.length
-    ? `<ul style="padding-left:20px;color:#374151">${data.upcomingEvents
-        .slice(0, 5)
-        .map(
-          (e) =>
-            `<li><strong>${e.title}</strong> - ${e.starts_at.toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</li>`
-        )
-        .join('')}</ul>`
-    : '<p style="color:#64748b">No upcoming sessions or Open Houses scheduled.</p>';
-
-  // DM line only appears when there's something to report (offline-DM-
-  // notification fix) — matches this template's existing posture of not
-  // printing a zero-value line (see the empty-state branch for eventsHtml
-  // above); a "0 new messages" line would just be noise every single day.
-  const dmLineHtml = data.unreadDmCount > 0
-    ? `<p style="margin:8px 0 0"><strong>${data.unreadDmCount}</strong> new message${data.unreadDmCount === 1 ? '' : 's'}</p>`
-    : '';
-
-  const html = `
-<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:24px">
-  <h2 style="color:#1e293b">Your Community Digest</h2>
-  <p>Hi ${data.fullName},</p>
-  <div style="background:#f8fafc;border-radius:8px;padding:20px;margin:20px 0">
-    <p style="margin:0 0 8px"><strong>${data.unreadNotificationCount}</strong> unread mention${data.unreadNotificationCount === 1 ? '' : 's'}/repl${data.unreadNotificationCount === 1 ? 'y' : 'ies'}</p>
-    <p style="margin:0"><strong>${data.newPostCount}</strong> new post${data.newPostCount === 1 ? '' : 's'} in your cohort since yesterday</p>
-    ${dmLineHtml}
-  </div>
-  <h3 style="color:#1e293b">Upcoming</h3>
-  ${eventsHtml}
-  <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0">
-  <p style="color:#64748b;font-size:13px">Colaberry Enterprise AI · AI Systems Architect Accelerator</p>
-</body></html>`;
+  const html = buildCommunityDigestHtml(data);
 
   const info = await guardedSendMail({
     from: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
