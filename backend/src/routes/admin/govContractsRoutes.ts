@@ -592,6 +592,19 @@ router.post('/api/admin/gov-contracts/:projectId/documents/:docKey/gates/:gate',
   }
 });
 
+// v3 (V1.4): the one open-needs list for the contract — what a human must supply before it can ship. Grouped
+// Blocking-export first, then Holding-score. Read-only; the resolve route lands with the resolution stores.
+router.get('/api/admin/gov-contracts/:projectId/needs', requireSection('gov_contracts'), async (req: Request, res: Response) => {
+  try {
+    const { collectProjectNeeds } = await import('../../services/factory/proposal/collectProjectNeeds');
+    const { groupNeeds } = await import('../../services/factory/proposal/aggregateNeeds');
+    const needs = await collectProjectNeeds(String(req.params.projectId));
+    res.json({ needs, ...groupNeeds(needs) });
+  } catch {
+    res.status(500).json({ error: 'Could not load the needs list.', error_class: 'NeedsLoadFailed' });
+  }
+});
+
 // "Report a problem" — the Studio's bug reporter (admin). Emails the Gov Studio recipients so the
 // Gov-contract Claude tab, which checks email, picks it up and starts on the fix, with the route, the
 // captured console errors / failed requests, and the screenshot. Shared core with the portal mirror.

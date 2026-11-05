@@ -509,6 +509,24 @@ router.get(
   },
 );
 
+// v3 (V1.4): the intern's open-needs list — same list, but never pricing and no approvals they can't give.
+router.get(
+  '/api/portal/gov-projects/:projectId/needs',
+  requireParticipant,
+  requireGovProjectAccess('project.read'),
+  async (req: GovProjectRequest, res: Response) => {
+    try {
+      const { collectProjectNeeds } = await import('../services/factory/proposal/collectProjectNeeds');
+      const { groupNeeds, needsForViewer } = await import('../services/factory/proposal/aggregateNeeds');
+      const all = await collectProjectNeeds(String(req.params.projectId));
+      const needs = needsForViewer(all, { includePricing: false, canApprove: false });
+      res.json({ needs, ...groupNeeds(needs) });
+    } catch {
+      res.status(500).json({ error: 'Could not load the needs list.', error_class: 'NeedsLoadFailed' });
+    }
+  },
+);
+
 // "Report a problem" from the intern's Studio — the portal mirror of the admin bug reporter, scoped to
 // a project the intern can read. Same email to the Gov Studio recipients so the Gov tab picks it up.
 router.post(
