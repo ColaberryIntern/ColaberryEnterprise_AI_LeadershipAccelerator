@@ -8,7 +8,19 @@ jest.mock('../../studentHealthAssessment', () => ({
   maybeRefreshStudentAssessment: (...a: any[]) => mockMaybeRefreshStudentAssessment(...a),
 }));
 
+const mockReadMyCurriculumProgress = jest.fn();
+jest.mock('../reeseCurriculumTool', () => ({ readMyCurriculumProgress: (...a: any[]) => mockReadMyCurriculumProgress(...a) }));
+
 import { executeReeseTool, isReeseTool, REESE_TOOLS } from '../reeseTools';
+
+describe('C88 my_curriculum_progress', () => {
+  it('runs for the conversation\'s own enrollment and returns the tool\'s result as JSON', async () => {
+    mockReadMyCurriculumProgress.mockResolvedValue({ status: 'ok', scheduledWeek: 3 });
+    const out = JSON.parse(await executeReeseTool('my_curriculum_progress', 'enrollment-1'));
+    expect(mockReadMyCurriculumProgress).toHaveBeenCalledWith('enrollment-1');
+    expect(out).toEqual({ status: 'ok', scheduledWeek: 3 });
+  });
+});
 
 function known<T>(value: T): any {
   return { value, status: 'known', sourceSystem: 'x', sourceRecordIds: ['rec-1'], observedAt: new Date('2026-09-06T00:00:00Z'), freshnessPolicy: 'n/a', reliabilityState: 'healthy' };
@@ -44,9 +56,9 @@ beforeEach(() => {
 });
 
 describe('REESE_TOOLS / isReeseTool', () => {
-  it('exposes exactly the 2 read-only tools this slice scopes to, with no parameters accepted from the model', () => {
+  it('exposes exactly the 3 read-only tools (C88 added my_curriculum_progress), with no parameters accepted from the model', () => {
     const functionTools = REESE_TOOLS.filter((t): t is Extract<typeof t, { type: 'function' }> => t.type === 'function');
-    expect(functionTools.map((t) => t.function.name).sort()).toEqual(['assess_student_health', 'read_student_success_snapshot']);
+    expect(functionTools.map((t) => t.function.name).sort()).toEqual(['assess_student_health', 'my_curriculum_progress', 'read_student_success_snapshot']);
     for (const tool of functionTools) {
       expect((tool.function.parameters as any).properties).toEqual({});
     }

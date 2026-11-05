@@ -12,7 +12,13 @@ jest.mock('../daraIdentitySeed', () => ({
   isDaraEnabled: jest.fn(), DARA_AGENT_NAME: 'Dara', DARA_RISK_TIER: 'R3',
 }));
 jest.mock('../../workLedger/agentActionAuthorizationBridge', () => ({ authorizeTicketDispatch: jest.fn() }));
-jest.mock('../daraSystemPrompt', () => ({ buildDaraSystemPrompt: jest.fn() }));
+jest.mock('../daraSystemPrompt', () => ({ buildDaraSystemPrompt: jest.fn(), buildDaraStaffSystemPrompt: jest.fn() }));
+jest.mock('../daraStaffTools', () => ({
+  DARA_STAFF_TOOLS: [{ type: 'function', function: { name: 'curriculum_health', parameters: {} } }],
+  isDaraStaffTool: (n: string) => n === 'curriculum_health' || n === 'student_pacing',
+  executeDaraStaffTool: jest.fn(),
+}));
+jest.mock('../../campus/agentPlaces', () => ({ canReachAgent: jest.fn() }));
 jest.mock('../../openaiInstrumented', () => ({ getInstrumentedOpenAI: jest.fn() }));
 jest.mock('../../communityRooms/dmService', () => ({ sendDmMessage: jest.fn() }));
 jest.mock('../daraTicketLinkService', () => ({
@@ -36,6 +42,13 @@ import { ensureDaraTicketForRoom, logDaraExchangeActivity } from '../daraTicketL
 import { executeDaraTool } from '../daraTools';
 import { logAgentActivity } from '../../agentBlueprint/agentActivityLogService';
 import { maybeTriggerDaraReply } from '../daraReplyService';
+import { buildDaraStaffSystemPrompt } from '../daraSystemPrompt';
+import { executeDaraStaffTool } from '../daraStaffTools';
+import { canReachAgent } from '../../campus/agentPlaces';
+
+const mockBuildStaffPrompt = buildDaraStaffSystemPrompt as unknown as jest.Mock;
+const mockExecuteStaffTool = executeDaraStaffTool as unknown as jest.Mock;
+const mockCanReachAgent = canReachAgent as unknown as jest.Mock;
 
 const mockMembershipFindOne = RoomMembership.findOne as unknown as jest.Mock;
 const mockMessageFindAll = RoomMessage.findAll as unknown as jest.Mock;
@@ -71,6 +84,9 @@ beforeEach(() => {
   mockGetDaraAdminUserId.mockResolvedValue(DARA_ADMIN_ID);
   mockGetDaraAgentId.mockResolvedValue(DARA_AGENT_ID);
   mockBuildDaraSystemPrompt.mockResolvedValue('SYSTEM PROMPT');
+  mockBuildStaffPrompt.mockResolvedValue('STAFF PROMPT');
+  mockCanReachAgent.mockResolvedValue(false); // the pre-C88 tests below are the student path
+  mockExecuteStaffTool.mockResolvedValue('{"status":"ok"}');
   mockMessageFindAll.mockResolvedValue([
     { id: 'student-msg-1', enrollment_id: STUDENT_ID, content: 'Hi Dara, what does Module 3 cover?' },
   ]);
@@ -346,6 +362,58 @@ describe('maybeTriggerDaraReply', () => {
 
       expect(mockAuthorizeTicketDispatch).not.toHaveBeenCalled();
       expect(mockSendDmMessage).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('C88: Dara upstairs (staff persona and monitoring tools)', () => {
+    const STAFF_ID = 'staff-enrollment-1';
+    const staffToolCall = (name: string, args: string) => ({
+      choices: [{ message: { role: 'assistant', content: null, tool_calls: [{ id: 'call-s', type: 'function', function: { name, arguments: args } }] } }],
+    });
+
+    it('a sender whose badge opens Dara\'s floor gets the staff prompt and ONLY the staff tools', async () => {
+      mockMembershipFindOne.mockResolvedValue({ id: 'membership-1' });
+      mockCanReachAgent.mockResolvedValue(true);
+
+      await maybeTriggerDaraReply(ROOM_ID, STAFF_ID);
+
+      expect(mockCanReachAgent).toHaveBeenCalledWith(STAFF_ID, 'dara');
+      expect(mockBuildStaffPrompt).toHaveBeenCalledWith(STAFF_ID);
+      expect(mockBuildDaraSystemPrompt).not.toHaveBeenCalled();
+      const first = mockCreateCompletion.mock.calls[0][0];
+      expect(first.messages[0].content).toBe('STAFF PROMPT');
+      expect(first.tools.map((t: any) => t.function.name)).toEqual(['curriculum_health']);
+    });
+
+    it('a staff tool call runs the read-only staff executor with the model\'s cohort name, never the escalation tool', async () => {
+      mockMembershipFindOne.mockResolvedValue({ id: 'membership-1' });
+      mockCanReachAgent.mockResolvedValue(true);
+      mockCreateCompletion
+        .mockResolvedValueOnce(staffToolCall('curriculum_health', '{"cohort":"Cohort - July 2026"}'))
+        .mockResolvedValueOnce({ choices: [{ message: { content: 'Week 6 Build lab is the lowest at 10%.' } }] });
+
+      await maybeTriggerDaraReply(ROOM_ID, STAFF_ID);
+
+      expect(mockExecuteStaffTool).toHaveBeenCalledWith('curriculum_health', { cohort: 'Cohort - July 2026' });
+      expect(mockExecuteDaraTool).not.toHaveBeenCalled();
+      expect(mockCreateCompletion.mock.calls[1][0].tools).toBeUndefined();
+      expect(mockSendDmMessage).toHaveBeenCalledWith(expect.anything(), ROOM_ID, 'Week 6 Build lab is the lowest at 10%.');
+    });
+
+    it('a non-staff sender keeps the student prompt and the escalate tool; a staff tool name asked for there never runs', async () => {
+      mockMembershipFindOne.mockResolvedValue({ id: 'membership-1' });
+      mockCanReachAgent.mockResolvedValue(false);
+      mockCreateCompletion
+        .mockResolvedValueOnce(staffToolCall('student_pacing', '{}'))
+        .mockResolvedValueOnce({ choices: [{ message: { content: 'I cannot look that up.' } }] });
+
+      await maybeTriggerDaraReply(ROOM_ID, STUDENT_ID);
+
+      expect(mockBuildDaraSystemPrompt).toHaveBeenCalledWith(STUDENT_ID);
+      expect(mockBuildStaffPrompt).not.toHaveBeenCalled();
+      expect(mockCreateCompletion.mock.calls[0][0].tools.map((t: any) => t.function.name)).toEqual(['escalate_to_human']);
+      expect(mockExecuteStaffTool).not.toHaveBeenCalled();
+      expect(mockExecuteDaraTool).toHaveBeenCalledWith('student_pacing', {}, expect.objectContaining({ studentEnrollmentId: STUDENT_ID }));
     });
   });
 });

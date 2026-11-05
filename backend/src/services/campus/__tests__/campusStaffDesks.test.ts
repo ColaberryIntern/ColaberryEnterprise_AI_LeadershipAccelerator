@@ -111,13 +111,22 @@ describe('Maya: every audience (C21, v6 D3; it replaced the C6 rule of staff and
 });
 
 describe('on duty', () => {
-  it('Reese and Dara on duty: their places (C87), enrollment ids and their questions (Reese 3; Dara 2, the staff-usable ones)', async () => {
+  it('Reese and Dara on duty: their places (C87), enrollment ids and their questions (Reese 4; Dara 2)', async () => {
     mockSections = ['dashboard', 'program'];
     const { desks } = (await getStaffDesks('enr-1'));
     expect(desks.filter((d) => d.id !== 'maya').map((d) => [d.id, d.building, d.on_duty, d.enrollment_id, d.prompts.length])).toEqual([
-      ['reese', 'lecture', true, 'reese-1', 3], ['dara', 'career', true, 'dara-1', 2],
+      ['reese', 'lecture', true, 'reese-1', 4], ['dara', 'career', true, 'dara-1', 2],
     ]);
     expect(desks.every((d) => d.ai === true)).toBe(true);
+  });
+
+  it('C88: Dara\'s desk asks only what her staff tools answer; Reese\'s desk takes the lesson question learners used to ask Dara', async () => {
+    mockSections = ['dashboard', 'program'];
+    const { desks } = (await getStaffDesks('enr-1'));
+    const dara = desks.find((d) => d.id === 'dara')!;
+    const reese = desks.find((d) => d.id === 'reese')!;
+    expect(dara.prompts).toEqual(['Which lessons are students stalling on this week?', 'Who is falling behind the schedule?']);
+    expect(reese.prompts[0]).toBe('What does this week\'s lesson cover?');
   });
 
   it('a disabled Reese is off duty, with no enrollment id and no questions', async () => {
