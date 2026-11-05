@@ -50,8 +50,31 @@ export const MAX_CONTEXT_CHARS = 20_000;
 
 export const FACTORY_DECOMPOSE_SYSTEM_PROMPT = `You decompose a contract requirement into a complete, buildable PROCESS: the work, who does it, and how it flows. Your output is graded by a deterministic machine gate; anything it rejects is worthless, so obey every rule below exactly.
 
-YOU EMIT SEVEN LISTS (and nothing else): processes, tasks, assignments, transitions, roles,
-allocation, role_map.
+YOU EMIT NINE LISTS (and nothing else): processes, tasks, assignments, transitions, roles,
+allocation, role_map, agent_teams, surfaces.
+
+WHO PERFORMS A TASK IS YOUR DECISION, NOT A FACT TO FIND IN THE SOURCE:
+- The solicitation describes what the buyer wants built. It will never tell you whether a person
+  or an agent does the work on OUR side, because that is not the buyer's business. So do NOT read
+  the performer off the source and do NOT leave it null because the source is silent about it.
+  Silence here is expected, not missing information.
+- For EVERY task, ask one question: CAN AN AI DO THIS WORK? If it can, it is an AI task. If it
+  genuinely needs a person, it is a human task. Then make the executor say so.
+- AN AI CAN DO IT when the work is reading, extracting, summarising, drafting, classifying,
+  formatting, assembling a document, checking something against a stated rule, reconciling two
+  lists, monitoring for a condition, or preparing a recommendation. Drafting a letter, writing
+  documentation, and checking a submission against a checklist are AI work with a human approving
+  - not human work because they involve words.
+- A HUMAN IS REQUIRED for: any APPROVAL or sign-off; committing the organisation (signing,
+  pricing, warranting, agreeing terms); a decision with authority to bind; anything irreversible
+  or externally visible once wrong; relationship and negotiation work; and final accountability.
+  These stay human even when an AI could draft the artefact that the human then approves - draft
+  and approve are TWO tasks, and splitting them is usually the honest decomposition.
+- WHEN IN DOUBT, ai_with_approval - an agent performs, a named human approves. That is a real
+  answer. "Human" chosen to avoid the question is not, and an all-human process for work of this
+  kind is a decomposition that has not been done.
+- The test of a good split: a reader can see WHY each task sits on its side. "Requires human
+  judgment" restates the verdict instead of giving a reason and is rejected as a rationale.
 
 ALLOCATION AND ROLE_MAP - send null (or []) for either if you genuinely have nothing to state; never
 invent rows to fill them.
@@ -80,6 +103,41 @@ invent rows to fill them.
   most one row per previous_function: two answers to "what happened to this job" is
   worse than none.
 
+AGENT_TEAMS - group the AI tasks BY SUBJECT, and declare the teams here:
+- One team owns ONE subject, stated plainly in business terms: "Admissions", "Compliance",
+  "Pricing". Never "AI", "Agent", "Automation" or "General" - a team whose subject is everything
+  is one omniscient agent, which is the monolith you are replacing with a new label on it.
+- Two teams may NOT share a subject, and a task belongs to AT MOST ONE team. If a task seems to
+  fit two subjects, it is probably two tasks.
+- Every task you allocated ai_with_approval or ai_autonomous MUST appear in exactly one team's
+  task_ids. A team may NOT claim a task you allocated human.
+- THE TEAM IDS YOU DECLARE HERE ARE THE AGENT IDS YOU USE AS EXECUTORS. An AI task's PERFORMER
+  executor is {"type":"agent","id":"<a team id from this list>"}. Referencing an id you declared
+  in this same response is not inventing anything - ANTI-INVENTION is about naming outside
+  things the source does not support, never about the structure you were asked to define.
+- approver_role_id is the human role answerable for that team's output, drawn from the roles you
+  emit. It may NEVER be an agent. Null is allowed and will be reported as a gap, so prefer naming
+  the real role.
+- execution_policy is one of manual_only, agent_with_review, agent_autonomous. approval_policy is
+  one of none, internal_review, client_approval. They must agree with the team's allocation: a
+  team of ai_with_approval tasks is agent_with_review, not agent_autonomous.
+- autonomy_stage is one of autonomy:R0 through autonomy:R9, or null when you have not assessed
+  it. NULL IS THE HONEST ANSWER unless the source supports a stage - a claimed stage with nothing
+  behind it is worse than an admitted gap. Never write a bare "R3".
+- trust_dimensions lists only the INPACT dimensions this team genuinely addresses, from instant,
+  natural, permitted, adaptive, contextual, transparent. An empty array is honest. Listing all
+  six to look complete is the failure this field exists to expose.
+
+SURFACES - where each HUMAN task actually lands:
+- Every task allocated human MUST appear in exactly one surface's task_ids.
+- PREFER ONE surface of kind "console": a single place the operator works, with the approvals and
+  the oversight on it. Many surfaces means many logins and a handoff between each, which is the
+  confusing app this process exists to prevent. Do not split the console by role.
+- kind is "external" ONLY where the work genuinely happens somewhere we do not control - a city's
+  procurement portal, a notarisation, an in-person meeting. Do not file work as external to tidy
+  the console, and do not pull genuinely external work onto the console to make the count look
+  better. Both make the "one console" claim false in opposite directions.
+
 GRANULARITY — one task is one unit of work:
 - One verb, one object, one outcome, one performer. "Extract requirements from the solicitation" is a task; "Build the system" is not.
 - Prefer fewer, truer tasks over padding. A task that fulfils nothing the source asked for should not exist.
@@ -93,7 +151,8 @@ METHOD — say how each task was derived (precedence EXPLICIT > INFERRED > LLM):
 - EXPLICIT: the source states this task outright. INFERRED: it follows necessarily from the source. LLM: your own proposal to make the process whole. Tag "method" honestly; do not label a guess EXPLICIT.
 
 THREE SEPARATE DECISIONS — task, role, executor:
-- A task is the work. A role is a named responsibility in THIS process. An executor is who fills the role: {"type":"person"|"team"|"agent","id":"..."} or null when unknown.
+- A task is the work. A role is a named responsibility in THIS process. An executor is who fills the role: {"type":"person"|"team"|"agent","id":"..."}.
+- A NULL EXECUTOR IS FOR A PERSON YOU CANNOT NAME, never for an undecided human-or-AI question. That question you answer for every task, from the rule at the top. If the work needs a person and the source does not say which, null is right; if an AI can do the work, the executor is the agent team.
 - Every TASK and every DECISION needs exactly one assignment with responsibility "PERFORMER".
 - OVERSIGHT: if a task's PERFORMER executor type is "agent", that same task MUST also have a human (person or team) assignment with responsibility "ACCOUNTABLE" or "APPROVER". An agent/system may NEVER itself be ACCOUNTABLE or APPROVER.
 - Never give the same (task, role, responsibility) twice.
@@ -112,10 +171,12 @@ NUMBERS CARRY A BASIS (EFFORT_EVIDENCE):
 - Give "effort_minutes" only with "effort_basis" of "ESTIMATED" or "MEASURED". If you do not know, set effort_minutes to null and effort_basis to "UNKNOWN". The same holds for an assignment's minutes/basis. A number with basis UNKNOWN is rejected.
 
 "DON'T KNOW" IS A VALUE, NOT A GUESS:
-- Empty arrays (required_skills: []), a null executor, effort_basis UNKNOWN, a null interaction_pattern — all are correct when the source does not tell you. They are more useful than an invented skill, tool, vendor, or number.
+- Empty arrays (required_skills: []), effort_basis UNKNOWN, a null interaction_pattern, a null autonomy_stage — all are correct when the source does not tell you. They are more useful than an invented skill, tool, vendor, or number.
+- WHO PERFORMS THE WORK IS NOT ON THAT LIST. It is a decision you make, so "the source does not say" is not a reason to leave it blank.
 
 ANTI-INVENTION:
 - Never name a technology, vendor, tool, skill, or integration that appears in neither the SOURCE_BLOCKS nor the CONTEXT. Use only what is actually there.
+- THIS IS ABOUT OUTSIDE FACTS, NOT ABOUT THE STRUCTURE YOU WERE ASKED FOR. Roles, agent teams and surfaces are yours to declare, and naming one you declared is not invention. Reading this rule as a reason to leave the AI side empty gets the decomposition wrong.
 
 IDS: use short, stable, readable slugs for task/process/role ids (e.g. "t-extract", "PROC-1", "role-analyst"). Assignment and edge ids may be any stable string; the system recomputes them.
 
@@ -208,6 +269,11 @@ export function buildFactoryDecomposeUserPrompt(inputs: FactoryDecomposeInputs):
       ? `Every one of these requirement blocks MUST be cited by at least one task: ${reqBlockIds.join(', ')}.`
       : `There are no requirement blocks to cover; decompose from the context.`,
     `Assign a PERFORMER to every task, with a human ACCOUNTABLE wherever an agent performs.`,
+    // Repeated here, in the USER message, because the system prompt's version of this rule was
+    // not enough on its own: with only the vocabulary offered and no question put, every
+    // allocation row of the 5 Nov Herriman run came back `human`.
+    `For EVERY task, decide whether an AI can do the work. Put the AI tasks on agent teams grouped `
+      + `by subject, and the human tasks on as few surfaces as the work honestly allows.`,
     '',
     delimited('SOURCE_BLOCKS', renderBlocks(inputs.sourceBlocks), MAX_BLOCK_CHARS * MAX_BLOCKS),
     '',

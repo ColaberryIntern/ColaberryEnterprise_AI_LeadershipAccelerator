@@ -171,6 +171,106 @@ export const FACTORY_ROLE_MAP_JSON_SCHEMA = {
 } as const;
 
 /**
+ * One AI agent team (L10.2) — the AI tasks of ONE subject, and the human answerable for them.
+ *
+ * ## Why the model declares these rather than picking from a roster
+ *
+ * The obvious design is a roster: hand the model the agents that exist and let it choose. That is
+ * wrong here for two reasons. A bid is a proposal to BUILD something, so the agents it needs do
+ * not exist yet - there is nothing to pick from. And the registry holds hundreds of agents, which
+ * is both unquotable in a prompt and the wrong question: "which of our agents applies" is not
+ * "what agent team does this contract require".
+ *
+ * So agent teams are DECLARED, exactly as `roles` are. The model emits the team and then names it
+ * as an executor, which is why doing so is not invention: the id it references is one it defined
+ * in the same response. ANTI-INVENTION bars naming an outside thing - a vendor, a tool, a
+ * number - that nothing in the source supports. It was never meant to bar declaring structure the
+ * output is asked for, but with no team list to declare into, an agent executor WAS an invented
+ * id, and the honest move was the null the prompt rewards. That is why every Herriman allocation
+ * row came back `human`.
+ *
+ * ## Why `subject` is the field that does the work
+ *
+ * One team, one subject, and no two teams sharing one. That is the rule that stops "the AI" from
+ * becoming a single omniscient agent holding every task, which is the pre-AI monolith with a new
+ * label. An admissions agent handles admissions. `humanAiStructure` checks it (SUBJECT_REQUIRED,
+ * SUBJECT_UNIQUE, TASK_ONE_TEAM).
+ */
+export const FACTORY_AGENT_TEAM_JSON_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: [
+    'id', 'name', 'subject', 'task_ids', 'approver_role_id',
+    'execution_policy', 'approval_policy', 'autonomy_stage', 'trust_dimensions',
+  ],
+  properties: {
+    id: { type: 'string' },
+    name: { type: 'string' },
+    subject: { type: 'string' },
+    task_ids: { type: 'array', items: { type: 'string' } },
+    // Nullable so a missing approver is VISIBLE as a gap (APPROVER_MISSING) rather than
+    // unrepresentable. An agent may never be the approver; that is checked, not requested.
+    approver_role_id: { type: ['string', 'null'] },
+    // Mirrors delivery/deliveryStoryContract. Not redefined, not re-spelled.
+    execution_policy: { type: 'string', enum: ['manual_only', 'agent_with_review', 'agent_autonomous'] },
+    approval_policy: { type: 'string', enum: ['none', 'internal_review', 'client_approval'] },
+    // NAMESPACED, and the enum is written out rather than interpolated so this file stays a
+    // frozen literal. A bare `R3` is the value that must never be stored (autonomyLadder), so
+    // offering only `autonomy:R0..R9` means the model cannot produce one.
+    //
+    // `oneOf` RATHER THAN an enum containing null, deliberately. A nullable enum written
+    // `{type:['string','null'], enum:[...,null]}` may or may not survive strict mode, and this
+    // file's own history records a schema mistake that made the WHOLE schema unsubmittable while
+    // every suite stayed green, because they all mock the client. The executor field above has
+    // used `oneOf` since Phase 2 and generates in production daily - `toStrictSchema` rewrites
+    // it to `anyOf` - so this is the construction with evidence behind it rather than the one
+    // that reads more neatly.
+    autonomy_stage: {
+      oneOf: [
+        {
+          type: 'string',
+          enum: [
+            'autonomy:R0', 'autonomy:R1', 'autonomy:R2', 'autonomy:R3', 'autonomy:R4',
+            'autonomy:R5', 'autonomy:R6', 'autonomy:R7', 'autonomy:R8', 'autonomy:R9',
+          ],
+        },
+        { type: 'null' },
+      ],
+    },
+    // The six INPACT dimensions from the book Colaberry sells. An empty array is honest; a
+    // team claiming all six without evidence is the thing deliveryTrustGate exists to refuse.
+    trust_dimensions: {
+      type: 'array',
+      items: {
+        type: 'string',
+        enum: ['instant', 'natural', 'permitted', 'adaptive', 'contextual', 'transparent'],
+      },
+    },
+  },
+} as const;
+
+/**
+ * Where a human task lands (L10.3) — the field that makes "one console" checkable.
+ *
+ * Human tasks had an owner and no DESTINATION, so roles were the only grouping primitive left
+ * downstream and a generated app grew one screen per role. That is the hundred-page, many-login
+ * app the first cohort shipped. `kind` keeps the claim honest: submitting on a city's procurement
+ * portal is genuinely not a screen we can build, and forcing it onto the console would improve
+ * the count by making it false.
+ */
+export const FACTORY_SURFACE_JSON_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['id', 'name', 'kind', 'task_ids'],
+  properties: {
+    id: { type: 'string' },
+    name: { type: 'string' },
+    kind: { type: 'string', enum: ['console', 'external'] },
+    task_ids: { type: 'array', items: { type: 'string' } },
+  },
+} as const;
+
+/**
  * The full decomposition the Phase-2 LLM returns in one structured-output call. factoryAssemble
  * (T5) then attaches the deterministic source_blocks/requirements/tracks from the input and derives
  * idempotent assignment/edge ids, producing a FactoryProject factoryValidate can gate. Every array
@@ -192,7 +292,13 @@ export const FACTORY_DECOMPOSITION_JSON_SCHEMA = {
   // its only non-test consumers are the two `response_format` sites, and stored shape is
   // checked by the hand-rolled isDecompositionShaped (factoryDecompose.ts:118-126), which
   // does not read either key.
-  required: ['processes', 'tasks', 'assignments', 'transitions', 'roles', 'allocation', 'role_map'],
+  //
+  // L10.2/L10.3 ADDED agent_teams AND surfaces TO BOTH LISTS, for the reason the paragraph above
+  // records: properties-only is unsubmittable, and no mocked suite would notice.
+  required: [
+    'processes', 'tasks', 'assignments', 'transitions', 'roles', 'allocation', 'role_map',
+    'agent_teams', 'surfaces',
+  ],
   properties: {
     processes: { type: 'array', items: FACTORY_PROCESS_JSON_SCHEMA },
     tasks: { type: 'array', items: FACTORY_TASK_JSON_SCHEMA },
@@ -210,5 +316,11 @@ export const FACTORY_DECOMPOSITION_JSON_SCHEMA = {
     // allocation/accountability evidence fields that are stubbed the same permissive way.
     allocation: { type: ['array', 'null'], items: FACTORY_ALLOCATION_JSON_SCHEMA },
     role_map: { type: ['array', 'null'], items: FACTORY_ROLE_MAP_JSON_SCHEMA },
+    // Nullable for the same reason as allocation: `null` is how a model says "nothing to
+    // declare" under strict mode. An all-human process legitimately has no agent teams, and
+    // that is a finding to report rather than rows to invent. `humanAiStructure` tells the two
+    // apart - it returns STRUCTURE_ABSENT for an undeclared structure instead of passing it.
+    agent_teams: { type: ['array', 'null'], items: FACTORY_AGENT_TEAM_JSON_SCHEMA },
+    surfaces: { type: ['array', 'null'], items: FACTORY_SURFACE_JSON_SCHEMA },
   },
 } as const;

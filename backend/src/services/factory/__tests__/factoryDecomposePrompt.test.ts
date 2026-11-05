@@ -28,13 +28,21 @@ const inputs: FactoryDecomposeInputs = {
 
 describe('FACTORY_DECOMPOSE_SYSTEM_PROMPT states every gate rule the model must satisfy', () => {
   const P = FACTORY_DECOMPOSE_SYSTEM_PROMPT;
-  it('asks for SEVEN lists, including allocation and role_map', () => {
-    // P3-T3 made allocation emittable in the schema. Without this assertion the prompt could be
-    // reverted to "FIVE LISTS (and nothing else)" and every other test would stay green, which
-    // is the exact defect class the gate exists to prevent: a contract change that no test sees.
-    expect(P).toMatch(/SEVEN LISTS/i);
+  it('asks for NINE lists, including allocation, role_map, agent_teams and surfaces', () => {
+    // P3-T3 made allocation emittable in the schema; L10.2/L10.3 added agent teams and surfaces.
+    // Without this assertion the prompt could be reverted to "FIVE LISTS (and nothing else)" and
+    // every other test would stay green, which is the exact defect class the gate exists to
+    // prevent: a contract change that no test sees.
+    //
+    // WAS "SEVEN", and the count is updated here rather than loosened to a regex that would pass
+    // for any number. The pin is the point - `humanAiDecisionPrompt.test.ts` additionally checks
+    // the named lists against the schema's own `required`, so the count and the names cannot
+    // drift apart from each other either.
+    expect(P).toMatch(/NINE LISTS/i);
     expect(P).toMatch(/allocation/);
     expect(P).toMatch(/role_map/);
+    expect(P).toMatch(/agent_teams/);
+    expect(P).toMatch(/surfaces/);
   });
 
   it('states the allocation rules the gate actually enforces, and no others', () => {
