@@ -111,7 +111,12 @@ export interface StudentGovProjectView {
   buildArtifacts?: GovBuildArtifactView[];
   /** v2: combined completion across verified build stories + accepted documents. Optional (older backends). */
   overallProgress?: GovOverallProgress;
+  /** U1 (B.1/C.2): the proposal readiness meter — pct of scored (non-pricing/superseded/form) documents that pass. */
+  proposalReadiness?: GovProposalReadiness;
 }
+
+/** U1: the readiness meter the Studio header + Where-we-are read ("Proposal ready x% / 95%"). */
+export interface GovProposalReadiness { pct: number; passing: number; total: number; }
 
 /** The project copilot's grounded answer to a question (deterministic, from the student-safe projection). */
 export interface GovCopilotAnswer { intent: 'next' | 'review' | 'risk' | 'proposal' | 'other'; answer: string; }
@@ -125,13 +130,38 @@ export interface GovBuildSummary { studentProjectId: string; releases: GovBuildR
 export interface GovProposalDocumentComment { body: string; at: string; }
 export type GovProposalDocumentStatus = 'not_started' | 'drafting' | 'drafted' | 'changes_requested' | 'accepted';
 export type GovProposalDocType = 'derived' | 'form' | 'generated' | 'build';
+export type GovGateStatus = 'pending' | 'approved' | 'returned';
+/** U1 (B.1): the current-version summary carried on each document (identity-free). */
+export interface GovDocLatest { versionId: string; version: number; scores: Partial<Record<GovCheckKey, number>>; passes: boolean; pageCount: number | null; createdAt: string | null; }
 export interface GovProposalDocument {
   key: string; title: string; status: GovProposalDocumentStatus; contentHtml: string | null;
   version: number; gate: boolean; order: number; requirementIds: string[];
   /** P2 blueprint-derived shape (optional — absent on older backends / the P1 path). */
   docType?: GovProposalDocType; pageLimit?: number | null; fileName?: string | null; blueprintVersion?: number | null;
   comments: GovProposalDocumentComment[]; draftedAt: string | null; acceptedAt: string | null;
+  /** U1 (B.1) per-doc summary (optional — absent on older backends): latest version, gate statuses, current gate,
+   *  open-question + fatal counts, the latest review-cycle, and the "No longer required" flag. */
+  superseded?: boolean;
+  latest?: GovDocLatest | null;
+  gates?: Record<GovGateName, GovGateStatus>;
+  currentGate?: GovGateName | null;
+  openGapCount?: number;
+  fatalCount?: number;
+  cycle?: { status: string; runId: string } | null;
 }
+
+// ── U1 read-model surfaces the Studio UI consumes (questions, activity, review runs, version content) ──────────────
+/** B.3: one open question for the agent panel's "Needs your answer" list. `key` round-trips to the answer route. */
+export interface GovOpenQuestion { key: string; question: string; why: string | null; documentKeys: string[]; suggestions: string[]; }
+/** B.4: one derived activity event for the agent-panel feed. */
+export type GovActivityKind = 'version' | 'gate' | 'artifact' | 'blueprint' | 'library_answer' | 'signature';
+export interface GovActivityEvent { kind: GovActivityKind; at: string; summary: string; docKey?: string | null; }
+/** B.5: a review-cycle run's pollable status. */
+export type GovReviewRunStatus = 'running' | 'passed' | 'blocked' | 'failed' | 'done';
+export interface GovReviewRun { id: string; documentId: string; status: GovReviewRunStatus; iterations: number; lastMessage: string | null; startedAt: string | null; finishedAt: string | null; }
+/** B.2: a version's stored content for the paper preview. */
+export interface GovVersionContent { contentHtml: string | null; sections: Array<{ sectionKey: string; heading: string; requirementIds: string[]; order: number; plan?: string; planFields?: GovSectionPlanFields; contentHtml?: string }>; figures: unknown[]; }
+export interface GovSectionPlanFields { hotButton: string; feature: string; benefit: string; proof: string; discriminator: string; }
 
 // ── P2: the blueprint (quoted, cited rulebook from the stored solicitation ZIP) ────────────────────────────────
 export type GovRuleSeverity = 'fatal' | 'curable' | 'info';
@@ -144,6 +174,9 @@ export interface GovProposalBlueprint {
   rules: GovBlueprintRule[]; forms: GovRequiredForm[]; scoring: GovBlueprintScoring; addenda: GovBlueprintRule[];
   eliminationRisks: Array<{ statement: string; quote: string; sourceFile: string }>;
   buyerType: string | null; droppedRuleCount: number; sourceFiles: string[]; generatedAt: string;
+  /** U1 (C.1): detected jurisdiction + whether a state forms rulebook was loaded (Texas only today). Optional on older backends. */
+  jurisdiction?: { state: string | null; quote: string | null };
+  stateFormsStatus?: { state: string | null; loaded: boolean; note: string | null };
 }
 export interface GovOverallProgress { buildVerified: number; buildTotal: number; docsAccepted: number; docsTotal: number; pct: number; }
 
@@ -186,6 +219,8 @@ export interface GovReviewApi {
   uploadSignedForm(projectId: string, formKey: string, file: File, signerRole?: string): Promise<{ ok: boolean }>;
   /** P6: assemble the package if ready; returns the manifest, or the blocking reasons. */
   assemblePackage(projectId: string): Promise<GovPackageResult>;
+  /** U1 (B.7): save a reviewer's structured section plan; saving writes a new human version. Admin only (optional). */
+  saveSectionPlan?(projectId: string, docKey: string, sectionKey: string, plan: GovSectionPlanFields): Promise<{ document: GovProposalDocument }>;
 }
 
 /** P6: a card for a gov project the intern is assigned to — minimal fields for the "on your profile" surface. */
@@ -302,4 +337,54 @@ export const portalGovCockpitApi: GovCockpitApi = {
   acceptDocument: acceptGovProposalDocument,
   requestChanges: requestChangesGovProposalDocument,
   commentDocument: commentGovProposalDocument,
+};
+
+// ── U1 Studio read-model surfaces (questions / activity / review runs / version content) ───────────────────────────
+const portalBase = (projectId: string) => `/api/portal/gov-projects/${encodeURIComponent(projectId)}`;
+
+export async function listGovQuestions(projectId: string): Promise<GovOpenQuestion[]> {
+  const { data } = await portalApi.get<{ questions: GovOpenQuestion[] }>(`${portalBase(projectId)}/questions?status=open`);
+  return Array.isArray(data?.questions) ? data.questions : [];
+}
+export async function answerGovQuestion(projectId: string, key: string, answer: string): Promise<{ resolved: number; documents: GovProposalDocument[] }> {
+  const { data } = await portalApi.post<{ resolved: number; documents: GovProposalDocument[] }>(`${portalBase(projectId)}/questions/${encodeURIComponent(key)}/answer`, { answer });
+  return { resolved: data?.resolved ?? 0, documents: Array.isArray(data?.documents) ? data.documents : [] };
+}
+export async function listGovActivity(projectId: string, limit = 50): Promise<GovActivityEvent[]> {
+  const { data } = await portalApi.get<{ activity: GovActivityEvent[] }>(`${portalBase(projectId)}/activity?limit=${limit}`);
+  return Array.isArray(data?.activity) ? data.activity : [];
+}
+export async function startGovReviewCycle(projectId: string, docKey: string, maxIterations?: number): Promise<{ runId: string }> {
+  const { data } = await portalApi.post<{ runId: string }>(`${portalBase(projectId)}/documents/${encodeURIComponent(docKey)}/review-cycle`, maxIterations ? { maxIterations } : {});
+  return { runId: data.runId };
+}
+export async function getGovReviewRun(projectId: string, runId: string): Promise<GovReviewRun> {
+  const { data } = await portalApi.get<{ run: GovReviewRun }>(`${portalBase(projectId)}/review-cycle/${encodeURIComponent(runId)}`);
+  return data.run;
+}
+export async function getGovVersionContent(projectId: string, docKey: string, versionId: string): Promise<GovVersionContent> {
+  const { data } = await portalApi.get<GovVersionContent>(`${portalBase(projectId)}/documents/${encodeURIComponent(docKey)}/versions/${encodeURIComponent(versionId)}`);
+  return data;
+}
+
+/**
+ * GovStudioApi — the Studio shell + agent panel's read-model adapter. The SAME Studio components drive either the
+ * portal routes (the default below, participant token) or the admin routes (injected by the admin cockpit page).
+ */
+export interface GovStudioApi {
+  listQuestions(projectId: string): Promise<GovOpenQuestion[]>;
+  answerQuestion(projectId: string, key: string, answer: string): Promise<{ resolved: number; documents: GovProposalDocument[] }>;
+  listActivity(projectId: string, limit?: number): Promise<GovActivityEvent[]>;
+  startReviewCycle(projectId: string, docKey: string, maxIterations?: number): Promise<{ runId: string }>;
+  getReviewRun(projectId: string, runId: string): Promise<GovReviewRun>;
+  getVersionContent(projectId: string, docKey: string, versionId: string): Promise<GovVersionContent>;
+}
+
+export const portalGovStudioApi: GovStudioApi = {
+  listQuestions: listGovQuestions,
+  answerQuestion: answerGovQuestion,
+  listActivity: listGovActivity,
+  startReviewCycle: startGovReviewCycle,
+  getReviewRun: getGovReviewRun,
+  getVersionContent: getGovVersionContent,
 };

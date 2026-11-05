@@ -1,5 +1,5 @@
 import api from '../utils/api';
-import type { StudentGovProjectView, GovCockpitApi, GovCopilotAnswer, GovProposalDocument, GovReviewApi, GovDocumentVersion, GovGateReview, GovCheckRunResult, GovGateName, GovDiffSegment, GovSignatureView, GovPackageResult } from './govProjectPortalApi';
+import type { StudentGovProjectView, GovCockpitApi, GovCopilotAnswer, GovProposalDocument, GovReviewApi, GovDocumentVersion, GovGateReview, GovCheckRunResult, GovGateName, GovDiffSegment, GovSignatureView, GovPackageResult, GovStudioApi, GovOpenQuestion, GovActivityEvent, GovReviewRun, GovVersionContent, GovSectionPlanFields } from './govProjectPortalApi';
 
 /**
  * adminGovContractsApi — the admin Interns-hub "Gov Contracts" tab's one data call.
@@ -190,7 +190,14 @@ export const adminGovReviewApi: GovReviewApi = {
   listSignatures: adminListGovSignatures,
   uploadSignedForm: adminUploadGovSignedForm,
   assemblePackage: adminAssembleGovPackage,
+  saveSectionPlan: adminSaveGovSectionPlan,
 };
+
+/** U1 (B.7): save a reviewer's section plan for one section; the backend writes a new human version. */
+export async function adminSaveGovSectionPlan(projectId: string, docKey: string, sectionKey: string, plan: GovSectionPlanFields): Promise<{ document: GovProposalDocument }> {
+  const { data } = await api.put<{ document: GovProposalDocument }>(`${adminDocUrl(projectId, docKey, 'sections')}/${encodeURIComponent(sectionKey)}/plan`, plan);
+  return data as { document: GovProposalDocument };
+}
 
 /** The admin adapter — management drives the gov cockpit via the `gov_contracts`-gated admin routes. */
 export const adminGovCockpitApi: GovCockpitApi = {
@@ -199,4 +206,40 @@ export const adminGovCockpitApi: GovCockpitApi = {
   acceptDocument: adminAcceptGovProposalDocument,
   requestChanges: adminRequestChangesGovProposalDocument,
   commentDocument: adminCommentGovProposalDocument,
+};
+
+// ── U1 Studio read-model surfaces (admin token) — the admin mirror of GovStudioApi ────────────────────────────────
+export async function adminListGovQuestions(projectId: string): Promise<GovOpenQuestion[]> {
+  const { data } = await api.get<{ questions: GovOpenQuestion[] }>(`${adminBase(projectId)}/questions?status=open`);
+  return Array.isArray(data?.questions) ? data.questions : [];
+}
+export async function adminAnswerGovQuestionKey(projectId: string, key: string, answer: string): Promise<{ resolved: number; documents: GovProposalDocument[] }> {
+  const { data } = await api.post<{ resolved: number; documents: GovProposalDocument[] }>(`${adminBase(projectId)}/questions/${encodeURIComponent(key)}/answer`, { answer });
+  return { resolved: data?.resolved ?? 0, documents: Array.isArray(data?.documents) ? data.documents : [] };
+}
+export async function adminListGovActivity(projectId: string, limit = 50): Promise<GovActivityEvent[]> {
+  const { data } = await api.get<{ activity: GovActivityEvent[] }>(`${adminBase(projectId)}/activity?limit=${limit}`);
+  return Array.isArray(data?.activity) ? data.activity : [];
+}
+export async function adminStartGovReviewCycle(projectId: string, docKey: string, maxIterations?: number): Promise<{ runId: string }> {
+  const { data } = await api.post<{ runId: string }>(`${adminDocUrl(projectId, docKey, 'review-cycle')}`, maxIterations ? { maxIterations } : {});
+  return { runId: (data as { runId: string }).runId };
+}
+export async function adminGetGovReviewRun(projectId: string, runId: string): Promise<GovReviewRun> {
+  const { data } = await api.get<{ run: GovReviewRun }>(`${adminBase(projectId)}/review-cycle/${encodeURIComponent(runId)}`);
+  return (data as { run: GovReviewRun }).run;
+}
+export async function adminGetGovVersionContent(projectId: string, docKey: string, versionId: string): Promise<GovVersionContent> {
+  const { data } = await api.get<GovVersionContent>(`${adminBase(projectId)}/documents/${encodeURIComponent(docKey)}/versions/${encodeURIComponent(versionId)}`);
+  return data as GovVersionContent;
+}
+
+/** The admin Studio read-model adapter (gates/pricing routes stay on adminGovReviewApi). */
+export const adminGovStudioApi: GovStudioApi = {
+  listQuestions: adminListGovQuestions,
+  answerQuestion: adminAnswerGovQuestionKey,
+  listActivity: adminListGovActivity,
+  startReviewCycle: adminStartGovReviewCycle,
+  getReviewRun: adminGetGovReviewRun,
+  getVersionContent: adminGetGovVersionContent,
 };

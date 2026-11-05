@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { getStudentGovProject, type StudentGovProjectView } from '../../../services/govProjectPortalApi';
-import CockpitView from './govCockpit/CockpitView';
+import { getStudentGovProject, portalGovCockpitApi, portalGovStudioApi, type StudentGovProjectView } from '../../../services/govProjectPortalApi';
+import StudioShell from './proposalStudio/StudioShell';
 
 /**
  * GovProjectPortalPage — the STUDENT entry to an assigned government project, rendered as the Build Cockpit.
@@ -48,7 +48,7 @@ export default function GovProjectPortalPage(): React.ReactElement {
 
   return (
     <div className="container-fluid py-4" data-testid="gov-project-view">
-      <CockpitView view={view} projectId={view.projectId} onReload={() => void load()} />
+      <StudioShell view={view} projectId={view.projectId} onReload={() => void load()} cockpitApi={portalGovCockpitApi} studioApi={portalGovStudioApi} />
     </div>
   );
 }

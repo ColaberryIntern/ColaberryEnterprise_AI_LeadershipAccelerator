@@ -1,0 +1,112 @@
+import React, { useCallback, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import type { StudentGovProjectView, GovCockpitApi, GovReviewApi, GovStudioApi, GovProposalDocument } from '../../../../services/govProjectPortalApi';
+import ContractBar from './ContractBar';
+import StageRail, { type StudioView } from './StageRail';
+import WhereWeAre from './WhereWeAre';
+import AgentPanel from './AgentPanel';
+import './studio.css';
+import Blueprint from './Blueprint';
+import DocumentSet from './DocumentSet';
+import BuildEvidence from './BuildEvidence';
+import DraftVersions from './DraftVersions';
+import ReviewGatesView from './ReviewGatesView';
+import PackageView from './PackageView';
+import OpenItems from './OpenItems';
+// The drafting drawer for a form/pricing row is the one shipped govCockpit piece still reused (wrapped in `.gck` to
+// carry its own tokens); every stage view is now a native `.gps` surface.
+import ProposalDocumentDrawer from '../govCockpit/ProposalDocumentDrawer';
+
+const VIEWS: StudioView[] = ['overview', 'blueprint', 'documents', 'evidence', 'editor', 'gates', 'package', 'openitems'];
+
+/**
+ * StudioShell — the Proposal Studio desk: a sticky contract bar, a left process rail, a center workspace, and the
+ * persistent agent panel on the right. Both entry points (admin + portal) render this: admin injects the review API
+ * (gates, pricing) and the admin-token clients; the portal injects the participant-token clients and no review API.
+ * The selected view lives in the URL (?view=…). A scored document deep-links to
+ * the editor (?doc=). Every stage view is a native `.gps` surface; only the drafting drawer for a form/pricing row
+ * reuses the shipped govCockpit panel.
+ */
+export default function StudioShell(
+  { view, projectId, onReload, cockpitApi, studioApi, reviewApi, onReanalyze, reanalyzing = false }:
+  { view: StudentGovProjectView; projectId: string; onReload: () => void; cockpitApi: GovCockpitApi; studioApi: GovStudioApi; reviewApi?: GovReviewApi; onReanalyze?: () => void; reanalyzing?: boolean },
+): React.ReactElement {
+  const [sp, setSp] = useSearchParams();
+  const raw = sp.get('view');
+  const current: StudioView = (raw && (VIEWS as string[]).includes(raw) ? raw : 'overview') as StudioView;
+  const [openDocKey, setOpenDocKey] = useState<string | null>(null);
+  const [toastMsg, setToastMsg] = useState<string | null>(null);
+
+  const docs = useMemo(() => view.proposalDocuments ?? [], [view.proposalDocuments]);
+  const drawerDoc = openDocKey ? docs.find((d) => d.key === openDocKey) ?? null : null;
+
+  const go = useCallback((v: StudioView) => {
+    const next = new URLSearchParams(sp);
+    next.set('view', v);
+    setSp(next);
+    try { window.scrollTo({ top: 0 }); } catch { /* noop */ }
+  }, [sp, setSp]);
+
+  const toast = useCallback((m: string) => {
+    setToastMsg(m);
+    window.setTimeout(() => setToastMsg((cur) => (cur === m ? null : cur)), 3400);
+  }, []);
+
+  const openQuestionCount = 0; // the agent panel owns the live count; Where-we-are only needs a hint for next-moves
+  const gck = (node: React.ReactNode) => <div className="gck">{node}</div>;
+
+  // A scored document opens in the Draft & versions editor (deep-linked via ?doc=); a form/pricing row opens the
+  // drafting drawer or is admin-only.
+  const openDoc = useCallback((d: GovProposalDocument) => {
+    if (d.key !== 'pricing' && (d.docType === 'derived' || d.docType === 'build' || d.docType === 'generated')) {
+      const next = new URLSearchParams(sp); next.set('view', 'editor'); next.set('doc', d.key); setSp(next);
+      try { window.scrollTo({ top: 0 }); } catch { /* noop */ }
+    } else {
+      setOpenDocKey(d.key);
+    }
+  }, [sp, setSp]);
+
+  let center: React.ReactNode;
+  switch (current) {
+    case 'overview':
+      center = <WhereWeAre view={view} questionCount={openQuestionCount} onNavigate={go} />;
+      break;
+    case 'blueprint':
+      center = <Blueprint view={view} onReanalyze={onReanalyze} reanalyzing={reanalyzing} onToast={toast} />;
+      break;
+    case 'documents':
+      center = <DocumentSet docs={docs} onOpen={openDoc} onToast={toast} />;
+      break;
+    case 'evidence':
+      center = <BuildEvidence view={view} projectId={projectId} reviewApi={reviewApi} onReload={onReload} onToast={toast} />;
+      break;
+    case 'gates':
+      center = <ReviewGatesView projectId={projectId} docs={docs} reviewApi={reviewApi} onOpenDoc={openDoc} />;
+      break;
+    case 'package':
+      center = <PackageView view={view} projectId={projectId} docs={docs} reviewApi={reviewApi} onToast={toast} />;
+      break;
+    case 'editor':
+      center = <DraftVersions view={view} projectId={projectId} docs={docs} studioApi={studioApi} reviewApi={reviewApi} initialDocKey={sp.get('doc')} onReload={onReload} onToast={toast} />;
+      break;
+    case 'openitems':
+    default:
+      center = <OpenItems view={view} projectId={projectId} docs={docs} studioApi={studioApi} onNavigate={go} onOpenDoc={openDoc} />;
+      break;
+  }
+
+  return (
+    <div className="gps">
+      <ContractBar view={view} />
+      <div className="gps-shell gps-gut">
+        <StageRail view={view} current={current} onNavigate={go} />
+        <main id="gps-main" style={{ minWidth: 0 }}>{center}</main>
+        <AgentPanel projectId={projectId} studioApi={studioApi} onReload={onReload} onToast={toast} />
+      </div>
+      {drawerDoc && (
+        gck(<ProposalDocumentDrawer doc={drawerDoc} projectId={projectId} canVerify={view.viewerCanVerify} onReload={onReload} onClose={() => setOpenDocKey(null)} api={cockpitApi} />)
+      )}
+      {toastMsg && <div className="gps-toast" role="status">{toastMsg}</div>}
+    </div>
+  );
+}
