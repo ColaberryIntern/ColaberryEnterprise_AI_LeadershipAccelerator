@@ -16,7 +16,7 @@
  * It does NOT validate — factoryGenerate (T7) runs factoryValidate and decides repair vs refuse.
  */
 import type {
-  FactoryProject, SourceBlock, ContractRequirement, ContractTrack, AllocationRow, RoleMapRow,
+  FactoryProject, SourceBlock, ContractRequirement, ContractTrack, AllocationRow, RoleMapRow, AgentTeam, Surface,
 } from './contracts/factoryContract';
 import type { FactoryDecomposition } from './factoryDecompose';
 import { factoryId } from './factoryIds';
@@ -33,6 +33,9 @@ export interface FactoryAssembleInput {
   /** optional, for the rendered review; the gate does not require them. */
   allocation?: AllocationRow[];
   role_map?: RoleMapRow[];
+  /** L10.2/L10.3, same contract as allocation: optional here, checked by humanAiStructure. */
+  agent_teams?: AgentTeam[];
+  surfaces?: Surface[];
 }
 
 /**
@@ -71,5 +74,17 @@ export function assembleFactoryProject(input: FactoryAssembleInput): FactoryProj
     // which is what keeps this additive for every decomposition already stored.
     allocation: input.allocation ?? d.allocation ?? [],
     role_map: input.role_map ?? d.role_map ?? [],
+    // Same precedence, same reason. The lesson from allocation was that a schema can permit a
+    // field while the pipeline silently drops it, which makes "the model can emit teams" true
+    // and useless at once. These two lines are what make L10.2/L10.3 reach storage.
+    //
+    // BUT NOT DEFAULTED TO [], UNLIKE THE TWO LINES ABOVE, and the difference is load-bearing.
+    // `humanAiStructure` keeps `structured` separate from `passes` precisely so that a project
+    // which declared NOTHING reports STRUCTURE_ABSENT instead of passing, and it decides that by
+    // `agent_teams !== undefined`. Defaulting to `[]` here would make every assembled project
+    // "structured" with zero teams - the check would go quiet exactly when it has something to
+    // say. `undefined` means nobody declared; `[]` means somebody declared none.
+    agent_teams: input.agent_teams ?? d.agent_teams ?? undefined,
+    surfaces: input.surfaces ?? d.surfaces ?? undefined,
   };
 }

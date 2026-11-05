@@ -12,7 +12,7 @@
  */
 import OpenAI from 'openai';
 import type {
-  ProcessRecord, FactoryTask, Assignment, TransitionEdge, Role, AllocationRow, RoleMapRow,
+  ProcessRecord, FactoryTask, Assignment, TransitionEdge, Role, AllocationRow, RoleMapRow, AgentTeam, Surface,
 } from './contracts/factoryContract';
 import { FACTORY_DECOMPOSITION_JSON_SCHEMA } from './contracts/factoryContractSchema';
 import {
@@ -58,6 +58,9 @@ export interface FactoryDecomposition {
    */
   allocation?: AllocationRow[] | null;
   role_map?: RoleMapRow[] | null;
+  /** L10.2/L10.3. Optional-on-type, required-in-schema, for the reason stated above. */
+  agent_teams?: AgentTeam[] | null;
+  surfaces?: Surface[] | null;
 }
 
 export interface FactoryDecomposeOptions {

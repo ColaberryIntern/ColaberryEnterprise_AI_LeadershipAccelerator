@@ -10,8 +10,15 @@
  * gate-valid project carries — the known zero-error sample's own records are checked field-for-field
  * against the schemas (additionalProperties:false + all-required means the key sets must be equal).
  */
-import type { FactoryTask, Assignment, ProcessRecord, Role, TransitionEdge } from '../factoryContract';
+import type {
+  FactoryTask, Assignment, ProcessRecord, Role, TransitionEdge, AgentTeam, Surface,
+} from '../factoryContract';
+import { EXECUTION_POLICIES, APPROVAL_POLICIES } from '../../../delivery/deliveryStoryContract';
+import { AUTONOMY_STAGES } from '../../../agentDomain/autonomyLadder';
+import { INPACT_DIMENSIONS } from '../../../../modules/delivery/inpact';
 import {
+  FACTORY_AGENT_TEAM_JSON_SCHEMA,
+  FACTORY_SURFACE_JSON_SCHEMA,
   FACTORY_TASK_JSON_SCHEMA,
   FACTORY_ASSIGNMENT_JSON_SCHEMA,
   FACTORY_PROCESS_JSON_SCHEMA,
@@ -50,6 +57,27 @@ const sampleRole: Role = { id: 'role-1', name: 'Compliance Analyst', definition:
 
 const sampleTransition: TransitionEdge = {
   id: 'edge-1', from_task_id: 'task-0', to_task_id: 'task-1', condition: null, is_rework: false,
+};
+
+// L10.2/L10.3. `autonomy_stage: null` on purpose: an unassessed stage is the honest value, and
+// the sample should demonstrate the honest shape rather than a flattering one.
+const sampleAgentTeam: AgentTeam = {
+  id: 'team-compliance',
+  name: 'Compliance',
+  subject: 'compliance review',
+  task_ids: ['task-1'],
+  approver_role_id: 'role-1',
+  execution_policy: 'agent_with_review',
+  approval_policy: 'internal_review',
+  autonomy_stage: null,
+  trust_dimensions: ['permitted', 'transparent'],
+};
+
+const sampleSurface: Surface = {
+  id: 'surface-console',
+  name: 'Delivery Console',
+  kind: 'console',
+  task_ids: ['task-1'],
 };
 
 function keysAgree(sample: Record<string, unknown>, schema: { required: readonly string[]; properties: Record<string, unknown> }) {
@@ -101,18 +129,22 @@ describe('factory contract ↔ JSON-schema mirror stay in lockstep', () => {
   });
 });
 
-describe('FACTORY_DECOMPOSITION_JSON_SCHEMA composes the seven record schemas', () => {
-  it('requires exactly the seven decomposition arrays, each keyed to its record schema', () => {
-    // SEVEN now, matching `properties` exactly. Strict structured outputs require that parity
+const NINE_LISTS = [
+  'agent_teams', 'allocation', 'assignments', 'processes', 'role_map',
+  'roles', 'surfaces', 'tasks', 'transitions',
+];
+
+describe('FACTORY_DECOMPOSITION_JSON_SCHEMA composes the nine record schemas', () => {
+  it('requires exactly the nine decomposition arrays, each keyed to its record schema', () => {
+    // NINE now, matching `properties` exactly. Strict structured outputs require that parity
     // at every object level, and the parity test below enforces it structurally; this keeps
     // the exact names pinned too, so adding a key silently is still impossible.
-    expect([...FACTORY_DECOMPOSITION_JSON_SCHEMA.required].sort())
-      .toEqual(['allocation', 'assignments', 'processes', 'role_map', 'roles', 'tasks', 'transitions']);
+    expect([...FACTORY_DECOMPOSITION_JSON_SCHEMA.required].sort()).toEqual(NINE_LISTS);
     const props = FACTORY_DECOMPOSITION_JSON_SCHEMA.properties;
     // CORRECTED: an earlier version of this comment said allocation and role_map were
     // deliberately absent from `required`. That was wrong and broke strict-mode parity. They
     // are in `required` and NULLABLE instead. Pinned as an exact set, never a subset check.
-    expect(Object.keys(props).sort()).toEqual(['allocation', 'assignments', 'processes', 'role_map', 'roles', 'tasks', 'transitions']);
+    expect(Object.keys(props).sort()).toEqual(NINE_LISTS);
     // every property is an array whose items reference the matching frozen/added record schema
     expect(props.processes.items).toBe(FACTORY_PROCESS_JSON_SCHEMA);
     expect(props.tasks.items).toBe(FACTORY_TASK_JSON_SCHEMA);
@@ -121,7 +153,36 @@ describe('FACTORY_DECOMPOSITION_JSON_SCHEMA composes the seven record schemas', 
     expect(props.roles.items).toBe(FACTORY_ROLE_JSON_SCHEMA);
     expect(props.allocation.items).toBe(FACTORY_ALLOCATION_JSON_SCHEMA);
     expect(props.role_map.items).toBe(FACTORY_ROLE_MAP_JSON_SCHEMA);
+    expect(props.agent_teams.items).toBe(FACTORY_AGENT_TEAM_JSON_SCHEMA);
+    expect(props.surfaces.items).toBe(FACTORY_SURFACE_JSON_SCHEMA);
     expect((FACTORY_DECOMPOSITION_JSON_SCHEMA as any).additionalProperties).toBe(false);
+  });
+
+  it('AgentTeam: schema properties, required, and the typed sample all carry the same keys', () => {
+    const { sampleKeys, schemaProps, required } = keysAgree(sampleAgentTeam as any, FACTORY_AGENT_TEAM_JSON_SCHEMA as any);
+    expect(schemaProps).toEqual(sampleKeys);
+    expect(required).toEqual(sampleKeys);
+  });
+
+  it('Surface: schema properties, required, and the typed sample all carry the same keys', () => {
+    const { sampleKeys, schemaProps, required } = keysAgree(sampleSurface as any, FACTORY_SURFACE_JSON_SCHEMA as any);
+    expect(schemaProps).toEqual(sampleKeys);
+    expect(required).toEqual(sampleKeys);
+  });
+
+  it('reuses the delivery and autonomy vocabularies instead of forking a sixth', () => {
+    // The whole point of importing ExecutionPolicy/ApprovalPolicy/AutonomyStage/InpactDimension
+    // rather than redeclaring them. If someone re-spells a value here, this fails.
+    const p = FACTORY_AGENT_TEAM_JSON_SCHEMA.properties;
+    expect([...(p.execution_policy as any).enum]).toEqual([...EXECUTION_POLICIES]);
+    expect([...(p.approval_policy as any).enum]).toEqual([...APPROVAL_POLICIES]);
+    expect([...(p.trust_dimensions as any).items.enum]).toEqual([...INPACT_DIMENSIONS]);
+    // Namespaced, every stage, and not one bare `R3` among them - that is the value
+    // autonomyLadder refuses to store, so the model must not be able to choose it.
+    const stages = (p.autonomy_stage as any).oneOf[0].enum as string[];
+    expect(stages).toEqual([...AUTONOMY_STAGES]);
+    expect(stages.some((s) => /^R[0-9]$/.test(s))).toBe(false);
+    expect((p.autonomy_stage as any).oneOf[1]).toEqual({ type: 'null' });
   });
 });
 

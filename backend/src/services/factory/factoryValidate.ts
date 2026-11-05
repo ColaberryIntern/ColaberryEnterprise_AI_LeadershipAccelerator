@@ -5,6 +5,7 @@
  * enough to test against. This is the "code does the deterministic work" half of the design.
  */
 import type { FactoryProject, FactoryTask } from './contracts/factoryContract';
+import { evaluateHumanAiStructure, type StructureFinding } from './humanAiStructure';
 
 export type Severity = 'error' | 'warning';
 export interface ValidationIssue {
@@ -117,6 +118,22 @@ export function factoryValidate(project: FactoryProject): ValidationIssue[] {
   const stages = new Set(tasks.map((t) => t.stage_id).filter(Boolean));
   if (stages.size > 15) issues.push(warn('STAGE_LIMIT', `${stages.size} stages exceeds the 15 top-level limit`));
 
+  // HUMAN/AI STRUCTURE (L10.2/L10.3) — reported, never blocking.
+  //
+  // WHY EVERY ONE OF THESE IS A WARNING, including the ones `humanAiStructure` itself calls
+  // `blocking`. Until this commit the evaluator had NO production caller at all: it was built,
+  // fully tested, and wired to nothing, so a decomposition could declare no teams and no
+  // console and the gate would not mention it. Giving it a voice is the fix.
+  //
+  // Giving it a VETO is a different change, and a riskier one: every decomposition stored
+  // before today has no teams and no surfaces, so promoting these to errors would retroactively
+  // un-approve the existing corpus and block regeneration of the one live bid. The severity
+  // mapping is deliberately the conservative half, and the evaluator's own `blockingFindings`
+  // stays available for a caller that has earned the right to refuse.
+  for (const f of structureFindings(project)) {
+    issues.push(warn(`STRUCTURE_${f.rule}`, f.ref ? `${f.detail} (${f.ref})` : f.detail, f.ref ?? undefined));
+  }
+
   return issues;
 }
 
@@ -189,6 +206,20 @@ function validateFlow(
   if (cycleFound) issues.push(err('LOOP', 'a cycle exists over non-rework edges (back-edges must be marked is_rework)'));
 
   return issues;
+}
+
+/**
+ * The structure findings, with the evaluator's own severity preserved in the code prefix so a
+ * consumer can tell "this would block once we turn it on" from "this is advice".
+ */
+function structureFindings(project: FactoryProject): StructureFinding[] {
+  return evaluateHumanAiStructure({
+    tasks: project.tasks,
+    allocation: project.allocation ?? [],
+    assignments: project.assignments,
+    agent_teams: project.agent_teams,
+    surfaces: project.surfaces,
+  }).findings;
 }
 
 /** Convenience: just the blocking errors. */
