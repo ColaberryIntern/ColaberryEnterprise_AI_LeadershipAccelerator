@@ -30,7 +30,12 @@ const lookupContainer = jest.fn();
 jest.mock('../../../scripts/lib/factoryDemoContainer', () => ({ lookupGovContractsContainer: (...a: any[]) => lookupContainer(...a) }));
 const claimSlot = jest.fn();
 jest.mock('../opportunities/govDailySlot', () => ({ claimDailySlot: (...a: any[]) => claimSlot(...a) }));
-jest.mock('../govPipeline', () => ({ resolveGovCloseDate: (r: any) => r?.closeDate ?? null }));
+const listPipeline = jest.fn();
+jest.mock('../govPipeline', () => ({
+  resolveGovCloseDate: (r: any) => r?.closeDate ?? null,
+  listGovPipeline: (...a: any[]) => listPipeline(...a),
+  assignedOpportunityUuids: (cards: any[]) => new Set(cards.map((c) => c.key.slice(4))),
+}));
 
 import { BACKFILL_PER_DAY, claimVetting, ensureVettingRow, finalizeExhausted, loadAiVettingView, noteExtractionFailed, runGovAiVettingCatchup, runVetting, startGovAiVetting } from '../govAiVetting';
 
@@ -296,6 +301,43 @@ describe('runGovAiVettingCatchup', () => {
     vettingFindOne.mockImplementation(async ({ where }: any) => (where.qualification_key === 'gws:hasrow' ? { id: 'x' } : null));
     bundleFindOne.mockResolvedValue(null);
     expect((await runGovAiVettingCatchup()).backfilled).toBe(0);
+  });
+  describe('what the daily cap goes to first', () => {
+    const backfilledKeys = () => query.mock.calls.map(([, o]: any[]) => o?.replacements?.qualificationKey).filter(Boolean);
+    beforeEach(() => {
+      query.mockResolvedValue([]);
+      lookupContainer.mockResolvedValue({ tenant: { id: 'ten-1' } });
+      vettingFindOne.mockResolvedValue(null);
+      bundleFindOne.mockResolvedValue({ id: 'b', sha256: 's' });
+      listPipeline.mockResolvedValue([]);
+    });
+    it('bids on the board come before older records, so the cap clears what the email shows', async () => {
+      qualFindAll.mockResolvedValue([...Array.from({ length: BACKFILL_PER_DAY }, (_, i) => zipRec(`old${i}`)), zipRec('onboard')]);
+      fetchFeed.mockResolvedValue({ source: 'live', opportunities: [{ uuid: 'onboard' }] });
+      await runGovAiVettingCatchup();
+      expect(backfilledKeys()[0]).toBe('gws:onboard');
+    });
+    it('a bid the live feed still lists is vetted even if its saved close date has passed', async () => {
+      qualFindAll.mockResolvedValue([zipRec('stale', '2020-01-01')]);
+      fetchFeed.mockResolvedValue({ source: 'live', opportunities: [{ uuid: 'stale' }] });
+      expect((await runGovAiVettingCatchup()).backfilled).toBe(1);
+    });
+    it('a stale snapshot feed can not rescue a passed date', async () => {
+      qualFindAll.mockResolvedValue([zipRec('stale', '2020-01-01')]);
+      fetchFeed.mockResolvedValue({ source: 'snapshot', opportunities: [{ uuid: 'stale' }] });
+      expect((await runGovAiVettingCatchup()).backfilled).toBe(0);
+    });
+    it('a project already with an intern spends no model call', async () => {
+      qualFindAll.mockResolvedValue([zipRec('withintern')]);
+      listPipeline.mockResolvedValue([{ key: 'gws:withintern' }]);
+      expect((await runGovAiVettingCatchup()).backfilled).toBe(0);
+    });
+    it('if the feed and pipeline reads fail, the backfill still runs in its plain order', async () => {
+      qualFindAll.mockResolvedValue([zipRec('a')]);
+      fetchFeed.mockRejectedValue(new Error('down'));
+      listPipeline.mockRejectedValue(new Error('db'));
+      expect((await runGovAiVettingCatchup()).backfilled).toBe(1);
+    });
   });
   it('A, B, A: backfills the last upload, not the newest stored bytes, because a re-upload reuses its bundle row', async () => {
     query.mockResolvedValue([]);

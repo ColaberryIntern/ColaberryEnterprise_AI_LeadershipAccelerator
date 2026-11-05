@@ -22,7 +22,7 @@ describe('the note at the top', () => {
     expect(rest).toContain('1 current project is with interns, and 1 is at risk.');
     expect(rest).toContain('1 bid is AI vetted and ready for you to read, the soonest closing in 21 days.');
     expect(rest).toContain('1 bid passed the first check and needs its ZIP uploaded.');
-    expect(rest).toContain('The AI is still working on 2.');
+    expect(rest).toContain('2 ZIPs are in the AI queue.');
     expect(rest).toContain('1 bid was hidden this morning.');
   });
   it('names no bid, so no title appears twice', () => {
@@ -158,7 +158,7 @@ describe('sections', () => {
   });
   it('an empty day still says so, with the analyzing count', () => {
     expect(html(board([]))).toContain('Nothing needs you today.');
-    expect(html(board([], { analyzing: 3 }))).toContain('The AI is still working on 3.');
+    expect(html(board([], { analyzing: 3 }))).toContain('3 ZIPs are in the AI queue.');
   });
   it('analyzing and flagged rows are never listed as work', () => {
     const out = html(board([row('analyzing', { title: 'Busy One' }), row('flagged', { title: 'Flagged One' })], { analyzing: 1, flagged: 1 }));
