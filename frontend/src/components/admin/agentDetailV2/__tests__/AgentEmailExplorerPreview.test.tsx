@@ -46,6 +46,10 @@ function row(over: Partial<ExplorerDecisionPage['rows'][0]> = {}): ExplorerDecis
     reason: 'state=EXPLORING, asset matched',
     suppressed_count: 0,
     asset_count: 1,
+    // Verbatim from production, one of only two entries the Governor has ever written. The
+    // other is the same shape. `url`, `source_id` and `source_system` are in the stored JSONB
+    // and absent here because the backend's allowlist drops them before the row is sent.
+    assets: [{ id: '02023336-4f00-4366-a01e-90eb336a8652', title: 'Knowledge Check', asset_type: 'LESSON' }],
     email_normalized: 'learner@example.com',
     primary_state: 'EXPLORING',
     e_score: 40,
@@ -131,6 +135,103 @@ describe('AgentEmailExplorerPreview', () => {
 
     return render().then(() => {
       expect(container.textContent ?? '').toContain('No asset');
+    });
+  });
+
+  describe('the marketing asset cell', () => {
+    /** Every entry the cell drew, so "one title per asset" is counted rather than eyeballed. */
+    const entries = () =>
+      Array.from(container.querySelectorAll('[data-testid="selected-assets"] > div'));
+
+    it('names the asset the decision chose, instead of counting it', () => {
+      api.getSummary.mockResolvedValue(SUMMARY);
+      api.getShadow.mockResolvedValue(page([row()]));
+
+      return render().then(() => {
+        const text = container.textContent ?? '';
+        expect(text).toContain('Knowledge Check');
+        // The count is what this cell used to say, on all 130 content-carrying rows of the
+        // real run, because no decision has ever carried more than one asset. If it comes
+        // back, the cell has lost the only thing it was changed to show.
+        expect(text).not.toContain('1 selected');
+      });
+    });
+
+    it('shows the asset type, so a lesson is not mistaken for a mailable document', () => {
+      api.getSummary.mockResolvedValue(SUMMARY);
+      api.getShadow.mockResolvedValue(page([row()]));
+
+      return render().then(() => {
+        expect(container.querySelector('[data-testid="selected-assets"] .badge')?.textContent)
+          .toBe('LESSON');
+      });
+    });
+
+    it('draws one entry per asset when a decision carries several', () => {
+      // No production decision carries two. This is the boundary the backend's length-preserving
+      // projection exists for, and the cell has to render it before one ever does.
+      api.getSummary.mockResolvedValue(SUMMARY);
+      api.getShadow.mockResolvedValue(page([row({
+        asset_count: 2,
+        assets: [
+          { id: 'a1', title: 'Knowledge Check', asset_type: 'LESSON' },
+          { id: 'a2', title: 'Second Asset', asset_type: 'DOCUMENT' },
+        ],
+      })]));
+
+      return render().then(() => {
+        expect(entries()).toHaveLength(2);
+        const text = container.textContent ?? '';
+        expect(text).toContain('Knowledge Check');
+        expect(text).toContain('Second Asset');
+      });
+    });
+
+    it('renders an untitled entry rather than dropping it, so the titles total the count', () => {
+      // A dropped entry would make the cell show one title where the row claims two, which
+      // reads as "the panel lost one" rather than "one of these is unusable".
+      api.getSummary.mockResolvedValue(SUMMARY);
+      api.getShadow.mockResolvedValue(page([row({
+        asset_count: 2,
+        assets: [
+          { id: 'a1', title: 'Knowledge Check', asset_type: 'LESSON' },
+          { id: 'a2', title: null, asset_type: null },
+        ],
+      })]));
+
+      return render().then(() => {
+        expect(entries()).toHaveLength(2);
+        expect(container.textContent ?? '').toContain('unnamed asset');
+      });
+    });
+
+    it('reports a payload with no titles instead of crashing or faking a gap', () => {
+      // THE CAST IS THE TEST. The type says `assets` is always an array; a response from an
+      // older backend behind a newer bundle is not bound by the type. Before the guard this
+      // threw on `undefined.length` and took the whole panel down, and a gap badge here would
+      // have been worse than the crash: it would report content as missing when it exists.
+      api.getSummary.mockResolvedValue(SUMMARY);
+      api.getShadow.mockResolvedValue(page([row({
+        assets: undefined as unknown as ExplorerDecisionPage['rows'][0]['assets'],
+      })]));
+
+      return render().then(() => {
+        const text = container.textContent ?? '';
+        expect(text).toContain('titles unavailable');
+        expect(text).not.toContain('No asset');
+        expect(container.querySelector('.text-danger')).toBeNull();
+      });
+    });
+
+    it('still calls a decision with nothing selected a gap, not an empty title list', () => {
+      api.getSummary.mockResolvedValue(SUMMARY);
+      api.getShadow.mockResolvedValue(page([row({ asset_count: 0, assets: [] })]));
+
+      return render().then(() => {
+        const text = container.textContent ?? '';
+        expect(text).toContain('No asset');
+        expect(text).not.toContain('titles unavailable');
+      });
     });
   });
 

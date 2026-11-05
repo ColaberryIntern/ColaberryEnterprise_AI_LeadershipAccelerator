@@ -37,6 +37,9 @@ const BASE: ExplorerDecisionRow = {
   reason: 'tier 7',
   suppressed_count: 0,
   asset_count: 1,
+  // Kept consistent with `asset_count` even though this suite renders only DraftSubject: a
+  // fixture claiming one asset and carrying none is the sort of thing a later test copies.
+  assets: [{ id: '02023336-4f00-4366-a01e-90eb336a8652', title: 'Knowledge Check', asset_type: 'LESSON' }],
   email_normalized: 'learner@example.com',
   primary_state: 'ACTIVE_LEARNER',
   e_score: 10,

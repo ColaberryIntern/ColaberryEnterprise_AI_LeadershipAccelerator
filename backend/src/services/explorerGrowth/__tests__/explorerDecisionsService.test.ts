@@ -3,6 +3,7 @@ const query = jest.fn();
 jest.mock('../../../config/database', () => ({ sequelize: { query: (...a: unknown[]) => query(...a) } }));
 
 import {
+  decisionAssets,
   getContentHealth,
   getDecisions,
   getShadow,
@@ -63,6 +64,7 @@ describe('getDecisions', () => {
             reason: 'r',
             suppressed_count: 2,
             asset_count: 0,
+            selected_content_assets: [],
             email_normalized: 'a@b.com',
             primary_state: 'ACTIVE_LEARNER',
             e_score: 33,
@@ -118,6 +120,106 @@ describe('getDecisions', () => {
     // exactly the rows most worth seeing.
     await getDecisions(base);
     expect(find('suppressed_count')).toContain('LEFT JOIN explorer_journey_profiles');
+  });
+
+  it('selects the snapshot column the asset titles come from', async () => {
+    await getDecisions(base);
+    const sql = find('suppressed_count');
+
+    // NOT `toContain('d.selected_content_assets')`. That substring is also inside
+    // `jsonb_array_length(d.selected_content_assets)`, which has been in this query since long
+    // before the titles were, so the naive assertion passed with the column removed — proven by
+    // mutating it out and watching this test stay green. It has to match the column selected on
+    // its OWN, which means not preceded by `(`.
+    expect(sql).toMatch(/(^|[\s,])d\.selected_content_assets\s*,/m);
+
+    // Control: the same regex must REJECT the length call, or it is matching that instead.
+    expect('jsonb_array_length(d.selected_content_assets) AS asset_count,')
+      .not.toMatch(/(^|[\s,])d\.selected_content_assets\s*,/m);
+  });
+
+  it('returns the selected assets as titles and does NOT leak the raw snapshot column', async () => {
+    // Verbatim from production, one of only two entries the Governor has ever written.
+    route([
+      { match: 'COUNT(*) AS count', rows: [{ count: '1', decision_date: '2026-09-02' }] },
+      {
+        match: 'suppressed_count',
+        rows: [{
+          id: 'd1', enrollment_id: 'e1', decision_date: '2026-09-02', mode: 'shadow',
+          selected_action: 'SEND_EMAIL', channel: 'email', executed: false, reason: 'r',
+          suppressed_count: 0, asset_count: 1,
+          selected_content_assets: [{
+            id: '02023336-4f00-4366-a01e-90eb336a8652',
+            url: '/portal/runtime/daaf2609-4626-46b9-abfa-806a2b9ee6be',
+            title: 'Knowledge Check',
+            source_id: 'daaf2609-4626-46b9-abfa-806a2b9ee6be',
+            asset_type: 'LESSON',
+            source_system: 'timeline_cards',
+          }],
+          email_normalized: 'a@b.com', primary_state: 'EXPLORING',
+          e_score: 1, i_score: 2, f_score: 3,
+        }],
+      },
+    ]);
+
+    const page = await getDecisions(base);
+    expect(page.rows[0].assets).toEqual([
+      { id: '02023336-4f00-4366-a01e-90eb336a8652', title: 'Knowledge Check', asset_type: 'LESSON' },
+    ]);
+    // The allowlist is the security property, so it is asserted on the ROW and not only on the
+    // projector: the raw column carries internal addressing and must not reach a browser.
+    expect(page.rows[0]).not.toHaveProperty('selected_content_assets');
+    expect(JSON.stringify(page.rows[0])).not.toContain('timeline_cards');
+    expect(JSON.stringify(page.rows[0])).not.toContain('/portal/runtime/');
+  });
+});
+
+/**
+ * The projector, tested as a pure function.
+ *
+ * This file's header records why that matters here more than usual: every other test in it
+ * mocks `sequelize.query` and asserts on the SQL TEMPLATE, so no test can tell whether the SQL
+ * runs. Reading the snapshot column raw and reshaping it in TypeScript moves the part that can
+ * actually be wrong out of SQL and into something a unit test does cover. The SQL itself was
+ * still run against production on 2026-11-05, because a template assertion proves nothing.
+ */
+describe('decisionAssets', () => {
+  const REAL = {
+    id: '02023336-4f00-4366-a01e-90eb336a8652',
+    url: '/portal/runtime/daaf2609-4626-46b9-abfa-806a2b9ee6be',
+    title: 'Knowledge Check',
+    source_id: 'daaf2609-4626-46b9-abfa-806a2b9ee6be',
+    asset_type: 'LESSON',
+    source_system: 'timeline_cards',
+  };
+
+  it('keeps exactly the allowlisted keys and drops the internal addressing', () => {
+    const [a] = decisionAssets([REAL]);
+    expect(Object.keys(a).sort()).toEqual(['asset_type', 'id', 'title']);
+    expect(a).toEqual({ id: REAL.id, title: 'Knowledge Check', asset_type: 'LESSON' });
+  });
+
+  it('preserves length, so the titles can never silently disagree with asset_count', () => {
+    // asset_count is jsonb_array_length of the same column. Every entry here is unusable in
+    // some way; dropping any of them would make a row show fewer titles than it claims.
+    const junk = [null, 'a string', 42, {}, { id: 'x' }, { title: '   ' }];
+    expect(decisionAssets(junk)).toHaveLength(junk.length);
+    expect(decisionAssets(junk).every((a) => a.title === null)).toBe(true);
+  });
+
+  it('treats a blank or non-string title as not recorded rather than as a title', () => {
+    expect(decisionAssets([{ ...REAL, title: '   ' }])[0].title).toBeNull();
+    expect(decisionAssets([{ ...REAL, title: 42 }])[0].title).toBeNull();
+    expect(decisionAssets([{ ...REAL, title: '  Knowledge Check  ' }])[0].title)
+      .toBe('Knowledge Check');
+  });
+
+  it('returns nothing for anything that is not an array', () => {
+    // The column is NOT NULL with a '[]' default, but it is schemaless JSONB written by a
+    // resolver: a scalar landing in it must empty the cell, not throw inside an admin page.
+    for (const notAnArray of [null, undefined, {}, 'x', 0, true]) {
+      expect(decisionAssets(notAnArray)).toEqual([]);
+    }
   });
 });
 

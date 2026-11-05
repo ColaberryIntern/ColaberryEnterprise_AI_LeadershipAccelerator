@@ -171,12 +171,8 @@ export default function AgentEmailExplorerPreview({ agentName }: { agentName: st
                   <td>{r.primary_state ?? '—'}</td>
                   <td><span className="badge bg-light text-dark border">{r.selected_action ?? '—'}</span></td>
                   <td>{r.channel ?? '—'}</td>
-                  <td>
-                    {r.asset_count > 0 ? (
-                      <span>{r.asset_count} selected</span>
-                    ) : (
-                      <span className="badge bg-warning text-dark">No asset &mdash; gap</span>
-                    )}
+                  <td style={{ maxWidth: 240 }} data-testid="selected-assets">
+                    <SelectedAssets row={r} />
                   </td>
                   <td className="text-muted small">{r.reason}</td>
                 </tr>
@@ -192,6 +188,73 @@ export default function AgentEmailExplorerPreview({ agentName }: { agentName: st
         per-decision reasoning, and the content library.
       </div>
     </PanelShell>
+  );
+}
+
+/**
+ * What the decision chose to put in front of this learner.
+ *
+ * ── WHY THE COUNT HAD TO GO ─────────────────────────────────────────────────
+ *
+ * This cell used to render `asset_count` as "N selected", and that number is the same on every
+ * row that has anything. Measured against production on 2026-11-05: across all 416 asset
+ * entries ever written, in three runs, no decision has EVER carried more than one asset. So the
+ * cell said "1 selected" on 130 of the 153 rows in the latest run and answered none of the
+ * question it appeared to answer. The titles were already in the row the panel had fetched.
+ *
+ * Reading them also exposes the finding the count was hiding, which is about the Governor and
+ * not about this panel: those 130 decisions all selected the SAME asset, and only two distinct
+ * assets have ever been chosen out of a library of 1,454. A journey that picks one piece of
+ * content for everybody is visible at a glance here and was invisible before.
+ *
+ * ── FOUR STATES, EACH A DIFFERENT FACT ──────────────────────────────────────
+ *
+ *   a gap              nothing was selected. Still the loudest thing on the row.
+ *   a title            what this learner would have been shown
+ *   "unnamed asset"    an entry the resolver wrote without a usable title. Rendered rather
+ *                      than skipped, because the backend preserves the array's length and so
+ *                      the rows here always total `asset_count`.
+ *   count only         `asset_count` says there is content but no projected entry arrived.
+ *                      That means the payload lost its shape — an older backend behind a newer
+ *                      bundle, say — and it is reported as such instead of crashing the panel
+ *                      on `undefined.length` or silently drawing a gap badge over real content.
+ *
+ * The title is the one RECORDED WITH THE DECISION, not the library's name for the asset today.
+ * Every asset on the current run has since been renamed, so today's name would caption a
+ * two-month-old decision with copy it never chose.
+ */
+export function SelectedAssets({ row }: { row: ExplorerDecisionRow }) {
+  if (row.asset_count === 0) {
+    return <span className="badge bg-warning text-dark">No asset &mdash; gap</span>;
+  }
+
+  // Not `row.assets.length`: the type says this is always an array, the network does not.
+  const assets = Array.isArray(row.assets) ? row.assets : [];
+  if (assets.length === 0) {
+    return (
+      <span className="text-muted small" title="The feed reported content but sent no titles">
+        {row.asset_count} selected &mdash; titles unavailable
+      </span>
+    );
+  }
+
+  return (
+    <>
+      {assets.map((a, i) => (
+        <div key={a.id ?? `entry-${i}`} className={i > 0 ? 'mt-1' : undefined}>
+          {a.title ? (
+            <span title={a.title}>{a.title}</span>
+          ) : (
+            <span className="text-muted fst-italic">unnamed asset</span>
+          )}
+          {a.asset_type && (
+            <span className="badge bg-light text-muted border ms-2" style={{ fontSize: 10 }}>
+              {a.asset_type}
+            </span>
+          )}
+        </div>
+      ))}
+    </>
   );
 }
 
