@@ -1,0 +1,53 @@
+{
+  "generated_at": "2026-11-05T18:17:14.318Z",
+  "max_safe_width": 1800,
+  "safe_viewport": {
+    "width": 1440,
+    "height": 900,
+    "deviceScaleFactor": 1
+  },
+  "entries": [
+    {
+      "file": "01-console-full.png",
+      "originalWidth": 1440,
+      "finalWidth": 1440,
+      "downscaled": false,
+      "outPath": "C:\\Users\\ali_m\\Downloads\\acc-agents-wt\\docs\\screenshots\\2026-11-05-af113-console\\01-console-full.png"
+    },
+    {
+      "file": "02-refusal.png",
+      "originalWidth": 1440,
+      "finalWidth": 1440,
+      "downscaled": false,
+      "outPath": "C:\\Users\\ali_m\\Downloads\\acc-agents-wt\\docs\\screenshots\\2026-11-05-af113-console\\02-refusal.png"
+    },
+    {
+      "file": "03-send-back.png",
+      "originalWidth": 1440,
+      "finalWidth": 1440,
+      "downscaled": false,
+      "outPath": "C:\\Users\\ali_m\\Downloads\\acc-agents-wt\\docs\\screenshots\\2026-11-05-af113-console\\03-send-back.png"
+    },
+    {
+      "file": "04-writer-and-clean-check.png",
+      "originalWidth": 1440,
+      "finalWidth": 1440,
+      "downscaled": false,
+      "outPath": "C:\\Users\\ali_m\\Downloads\\acc-agents-wt\\docs\\screenshots\\2026-11-05-af113-console\\04-writer-and-clean-check.png"
+    },
+    {
+      "file": "05-never-checked.png",
+      "originalWidth": 1440,
+      "finalWidth": 1440,
+      "downscaled": false,
+      "outPath": "C:\\Users\\ali_m\\Downloads\\acc-agents-wt\\docs\\screenshots\\2026-11-05-af113-console\\05-never-checked.png"
+    },
+    {
+      "file": "06-narrow.png",
+      "originalWidth": 820,
+      "finalWidth": 820,
+      "downscaled": false,
+      "outPath": "C:\\Users\\ali_m\\Downloads\\acc-agents-wt\\docs\\screenshots\\2026-11-05-af113-console\\06-narrow.png"
+    }
+  ]
+}

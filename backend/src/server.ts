@@ -196,6 +196,7 @@ import { ensureAgentDomainChangeRequestSchemaGuarded } from './db/ensureAgentDom
 import { ensureAgentDomainToolRequestSchemaGuarded } from './db/ensureAgentDomainToolRequestSchema';
 import { ensureAgentDomainToolDuplicateCheckSchemaGuarded } from './db/ensureAgentDomainToolDuplicateCheckSchema';
 import { ensureCapabilityConfirmationSchemaGuarded } from './db/ensureCapabilityConfirmationSchema';
+import { ensureToolRequestDecisionSchemaGuarded } from './db/ensureToolRequestDecisionSchema';
 
 // Import models to register associations before sync
 import './models';
@@ -3213,6 +3214,7 @@ async function start(): Promise<void> {
   await ensureAgentDomainToolRequestSchemaGuarded();
   await ensureAgentDomainToolDuplicateCheckSchemaGuarded();
   await ensureCapabilityConfirmationSchemaGuarded();
+  await ensureToolRequestDecisionSchemaGuarded();
   // Colaberry Commons — seed the 10 always-open fruit video rooms (idempotent).
   // Gated on the feature flag so it only populates envs where Rooms is enabled.
   if (env.communityRoomsEnabled) {

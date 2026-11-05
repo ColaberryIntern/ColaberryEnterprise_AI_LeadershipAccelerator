@@ -174,6 +174,18 @@ describe('the boot registration is WRAPPED, because its assert throws', () => {
     //
     // It is wrapped: `ensureCapabilityConfirmationSchemaGuarded` cannot reject, and
     // `__tests__/ensureCapabilityConfirmationSchema.test.ts` drives that failure path.
+    //
+    // AF11.3 added the seventh member, 2026-11-05. `ensureToolRequestDecisionSchema.ts` is the
+    // append-only log of the four verbs Ali decides a tool request with, and asserts the same
+    // way for the same reason as the six above.
+    //
+    // Two CHECKs rather than one: `chk_adtrd_verb_is_known` keeps the verb inside the four, and
+    // `chk_adtrd_verb_carries_its_words` makes the per-verb requirements structural -- a denial
+    // with no reason, or a send-back naming no field, cannot exist as a row even if a future
+    // caller skips the contract.
+    //
+    // It is wrapped: `ensureToolRequestDecisionSchemaGuarded` cannot reject, and
+    // `__tests__/ensureToolRequestDecisionSchema.test.ts` drives that failure path.
     expect(throwing.sort()).toEqual([
       'ensureAgentDomainChangeRequestSchema.ts',
       'ensureAgentDomainProjectSchema.ts',
@@ -181,6 +193,7 @@ describe('the boot registration is WRAPPED, because its assert throws', () => {
       'ensureAgentDomainToolRequestSchema.ts',
       'ensureBroadcastTelemetrySchema.ts',
       'ensureCapabilityConfirmationSchema.ts',
+      'ensureToolRequestDecisionSchema.ts',
     ]);
   });
 

@@ -227,6 +227,12 @@ export const NAV_GROUPS: NavGroup[] = [
     // queue-read routes behind it carry `requireAdmin`, and the page renders the decision queue
     // only when the API returns it. Visibility here is not the access control.
     { path: '/admin/change-requests', label: 'Change Requests', icon: 'git-pull-request-line', section: 'dashboard' },
+    // AF11.3 - reading and settling a tool request. DELIBERATELY WITHOUT its own section, so it
+    // inherits the Program group's 'program' rather than the 'dashboard' the two lines above
+    // carry. Those two are surfaces an intern needs; this is the approver's queue, and 'dashboard'
+    // is the one section every mgmt role holds. Matches the backend PATH_SECTION row for
+    // '/api/admin/agent-domain-tool-requests', and both routes behind it also carry requireAdmin.
+    { path: '/admin/tool-requests', label: 'Tool Requests', icon: 'tools-line' },
     // The programme-wide view of the same ten. Sits beside My Domain because the pair is
     // the distinction worth seeing in the nav: one is what you own, one is everything.
     { path: '/admin/all-domains', label: 'All Domains', icon: 'stack-line' },

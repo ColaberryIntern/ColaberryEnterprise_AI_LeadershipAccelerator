@@ -55,6 +55,7 @@ const AdminMyDomainPage = lazy(() => import('../pages/admin/AdminMyDomainPage'))
 const AdminAllDomainsPage = lazy(() => import('../pages/admin/AdminAllDomainsPage'));
 // AF4.2 - file a change request, and (for an admin) decide one.
 const AdminChangeRequestsPage = lazy(() => import('../pages/admin/AdminChangeRequestsPage'));
+const AdminToolRequestReviewPage = lazy(() => import('../pages/admin/AdminToolRequestReviewPage'));
 const AdminToolsPage = lazy(() => import('../pages/admin/AdminToolsPage'));
 const ApprovalRequestsPage = lazy(() => import('../pages/admin/ApprovalRequestsPage'));
 const EnterpriseIntelligencePage = lazy(() => import('../pages/admin/intelligence/EnterpriseIntelligencePage'));
@@ -238,6 +239,11 @@ const adminRoutes = (
             renders only when the admin-only API returns it, so the page cannot drift out of
             agreement with `requireAdmin` the way a client-side role check would. */}
         <Route path="/admin/change-requests" element={<AdminChangeRequestsPage />} />
+        {/* AF11.3. Its own page, not more rows on the queue above: a tool grant is the moment
+            an agent stops observing and starts acting, and the six field groups plus the
+            duplicate candidates do not fit in a list row. Admin-only at the API, so a
+            non-admin sees "not for you" rather than a failure. */}
+        <Route path="/admin/tool-requests" element={<AdminToolRequestReviewPage />} />
         {/* The programme-wide counterpart to My Domain. Same data source as the
             agent-domain routes, gated on 'program'; My Domain stays scoped by
             ownership and must not be widened to cover this. */}
