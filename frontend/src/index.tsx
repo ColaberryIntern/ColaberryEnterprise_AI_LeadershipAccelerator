@@ -7,6 +7,7 @@ import { applySavedPortalTheme } from './utils/portalTheme';
 // Self-hosted faces. Must load before the design-system stylesheets so the
 // families are declared by the time anything asks for them.
 import './fonts/fonts.css';
+import './fonts/studioFonts.css';
 import 'bootstrap/dist/css/bootstrap.min.css';
 // The ICON font is a separate package from the Bootstrap CSS framework above,
 // and it was never installed — so all 546 `bi bi-*` usages across 88 files
