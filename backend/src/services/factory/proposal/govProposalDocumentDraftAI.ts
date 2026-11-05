@@ -13,6 +13,7 @@
 import crypto from 'crypto';
 import { getInstrumentedOpenAI } from '../../openaiInstrumented';
 import { DEFAULT_MODEL } from '../../components/costEstimationService';
+import { groundingToPromptText, type Grounding } from './proposalGrounding';
 
 interface CacheEntry<T> { value: T; at: number; }
 const TTL_MS = 60 * 60 * 1000;
@@ -23,13 +24,23 @@ const cacheSet = <T>(k: string, v: T): void => { if (cache.size >= MAX_ENTRIES) 
 const hash = (o: unknown): string => crypto.createHash('sha256').update(JSON.stringify(o)).digest('hex');
 const clampStr = (v: unknown, n: number): string => String(v ?? '').trim().slice(0, n);
 
-// The only tags a drafted proposal document may contain. Everything else (script/style/iframe/a/img/…) is stripped.
-const ALLOWED_TAGS = new Set(['h2', 'h3', 'h4', 'p', 'ul', 'ol', 'li', 'strong', 'em', 'b', 'i', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'blockquote', 'br']);
+// The only tags a drafted proposal document may contain. `figure`/`figcaption`/`img` were added for P4 build-evidence
+// figures; every other tag (script/style/iframe/a/…) is still stripped.
+const ALLOWED_TAGS = new Set(['h2', 'h3', 'h4', 'p', 'ul', 'ol', 'li', 'strong', 'em', 'b', 'i', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'blockquote', 'br', 'figure', 'figcaption', 'img']);
+
+// P4: an <img> may keep ONLY a `src` pointing at THIS app's own, access-checked artifact-image route (relative,
+// same-origin), never an external/data:/javascript: url. A <figure> may keep ONLY a `data-artifact` uuid. This is
+// the narrow exception to the "no attributes" rail, kept deliberately tight so no XSS vector opens.
+const ARTIFACT_SRC_RE = /^\/api\/[\w/-]*artifacts\/[A-Za-z0-9-]+\/image$/;
+function attrValue(attrs: string, name: string): string | null {
+  const m = new RegExp(name + '\\s*=\\s*"([^"]*)"', 'i').exec(attrs) || new RegExp(name + "\\s*=\\s*'([^']*)'", 'i').exec(attrs);
+  return m ? m[1] : null;
+}
 
 /**
- * PURE + total: reduce untrusted HTML to the allowlisted structural tags with NO attributes. Drops the entire
- * contents of <script>/<style> (not just the tags), strips every attribute (so no event handlers / javascript: urls
- * survive), and removes any tag not on the allowlist while keeping its inner text. Caps length. This is the XSS rail.
+ * PURE + total: reduce untrusted HTML to the allowlisted structural tags with NO attributes (the two P4 exceptions
+ * above). Drops the entire contents of <script>/<style>, removes comments, strips every other attribute (so no event
+ * handlers / javascript: urls survive), and removes any non-allowlisted tag while keeping its inner text. The XSS rail.
  */
 export function sanitizeProposalHtml(raw: unknown): string {
   let html = clampStr(raw, 40000);
@@ -38,18 +49,22 @@ export function sanitizeProposalHtml(raw: unknown): string {
   html = html.replace(/<(script|style|iframe|head|title|template|svg|math)[\s\S]*?<\/\1\s*>/gi, '');
   // 2. Drop comments.
   html = html.replace(/<!--[\s\S]*?-->/g, '');
-  // 3. For every remaining tag, keep it ONLY if allowlisted, and ALWAYS strip its attributes.
-  html = html.replace(/<(\/?)([a-zA-Z0-9]+)([^>]*)>/g, (_m, slash: string, name: string) => {
+  // 3. For every remaining tag, keep it ONLY if allowlisted; strip attributes except the two narrow P4 exceptions.
+  html = html.replace(/<(\/?)([a-zA-Z0-9]+)([^>]*)>/g, (_m, slash: string, name: string, attrs: string) => {
     const tag = name.toLowerCase();
     if (!ALLOWED_TAGS.has(tag)) return '';
-    return slash ? `</${tag}>` : (tag === 'br' ? '<br>' : `<${tag}>`);
+    if (slash) return `</${tag}>`;
+    if (tag === 'br') return '<br>';
+    if (tag === 'img') { const src = attrValue(attrs, 'src'); return src && ARTIFACT_SRC_RE.test(src) ? `<img src="${src}">` : ''; }
+    if (tag === 'figure') { const da = attrValue(attrs, 'data-artifact'); return da && /^[A-Za-z0-9-]+$/.test(da) ? `<figure data-artifact="${da}">` : '<figure>'; }
+    return `<${tag}>`;
   });
   return html.trim().slice(0, 40000);
 }
 
 export interface DocumentDraftReq { canonicalReqId: string; statement: string; }
-export interface DocumentDraftInput { docKey: string; title: string; requirements: DocumentDraftReq[]; title_opportunity?: string | null; buyer?: string | null; agency?: string | null; }
-export interface DocumentDraftResult { html: string; cached: boolean; generatedAt: string; error?: string; }
+export interface DocumentDraftInput { docKey: string; title: string; requirements: DocumentDraftReq[]; title_opportunity?: string | null; buyer?: string | null; agency?: string | null; /** P5: the grounding (blueprint weights/rules, section plans, artifacts, approved facts) — the ONLY specific facts the draft may assert. */ grounding?: Grounding | null; }
+export interface DocumentDraftResult { html: string; cached: boolean; generatedAt: string; error?: string; /** P5: structured questions the draft could not answer from the grounding (never asserted facts). */ gaps?: Array<{ question: string; suggestions: string[] }>; }
 
 /** Draft a full proposal document as sanitized HTML. FAIL SOFT; never throws. */
 export async function generateProposalDocumentDraftAI(input: DocumentDraftInput): Promise<DocumentDraftResult> {
@@ -59,7 +74,8 @@ export async function generateProposalDocumentDraftAI(input: DocumentDraftInput)
   if (reqs.length === 0) return { html: '', cached: false, generatedAt: now(), error: 'This document has no requirements to draft from yet.' };
 
   const reqBlock = reqs.slice(0, 40).map((r) => `- [${r.canonicalReqId}] ${clampStr(r.statement, 500)}`).join('\n');
-  const key = 'docdraftai:' + hash({ k: input.docKey, t: input.title, r: reqBlock, b: input.buyer ?? null, a: input.agency ?? null });
+  const groundingText = input.grounding ? groundingToPromptText(input.grounding) : '';
+  const key = 'docdraftai:' + hash({ k: input.docKey, t: input.title, r: reqBlock, b: input.buyer ?? null, a: input.agency ?? null, g: groundingText });
   const hit = cacheGet<DocumentDraftResult>(key);
   if (hit) return { ...hit, cached: true };
 
@@ -69,14 +85,17 @@ export async function generateProposalDocumentDraftAI(input: DocumentDraftInput)
     'statements; do NOT invent any specific fact - no client names, project names, metrics, dates, dollar figures, ' +
     'certifications, or personnel. Whenever a strong document WOULD need such a specific fact, insert a visible ' +
     'placeholder exactly like [PLACEHOLDER: what the firm must provide] rather than inventing it. ' +
-    'Return STRICT JSON {"html": "..."} where html uses ONLY these tags: h2, h3, h4, p, ul, ol, li, strong, em, ' +
-    'table, thead, tbody, tr, th, td, blockquote, br. No attributes, no <script>, no <style>, no links or images.';
+    'Return STRICT JSON {"html":"...","gaps":[{"question":"...","suggestions":["..."]}]} where html uses ONLY these ' +
+    'tags: h2, h3, h4, p, ul, ol, li, strong, em, table, thead, tbody, tr, th, td, blockquote, br. No attributes, no ' +
+    '<script>, no <style>, no links or images. `gaps` lists each specific fact you needed but could not find in the ' +
+    'grounding (you wrote a [PLACEHOLDER] for it) — never invent the fact.';
   const user = [
     `Document to draft: "${input.title}"`,
     input.title_opportunity ? `Opportunity: ${input.title_opportunity}` : '',
     (input.agency || input.buyer) ? `Agency / buyer: ${input.agency || input.buyer}` : '',
     'It must cover these requirements:',
     reqBlock,
+    groundingText ? `\nGROUNDING — the ONLY specific facts you may assert:\n${groundingText}` : '',
   ].filter(Boolean).join('\n');
 
   try {
@@ -89,7 +108,10 @@ export async function generateProposalDocumentDraftAI(input: DocumentDraftInput)
     try { parsed = JSON.parse(res.choices?.[0]?.message?.content || '{}'); } catch { parsed = {}; }
     const html = sanitizeProposalHtml(parsed?.html);
     if (!html) return { html: '', cached: false, generatedAt: now(), error: 'The AI returned no usable content. Try again.' };
-    const result: DocumentDraftResult = { html, cached: false, generatedAt: now() };
+    const gaps = Array.isArray(parsed?.gaps)
+      ? parsed.gaps.filter((g: any) => g && typeof g.question === 'string').map((g: any) => ({ question: String(g.question), suggestions: Array.isArray(g.suggestions) ? g.suggestions.map(String) : [] }))
+      : [];
+    const result: DocumentDraftResult = { html, cached: false, generatedAt: now(), gaps };
     cacheSet(key, result);
     return result;
   } catch (err) {

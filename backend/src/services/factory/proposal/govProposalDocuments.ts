@@ -16,6 +16,12 @@
  */
 import { classifyRequirementCategory } from './govRequirementItems';
 import type { ResponseFigure } from './responseSlots';
+import type { ProposalBlueprint } from './proposalBlueprintTypes';
+
+/** How a document was derived (P2). `derived` = routed from a requirement (the P1 default); `form` = a required
+ *  form named by the blueprint / Texas engine; `generated` = we generate it (Compliance Matrix); `build` = the
+ *  Pilot Demonstration Exhibit backed by the verified build. The GovProposalDocument model aliases this. */
+export type ProposalDocType = 'derived' | 'form' | 'generated' | 'build';
 
 export interface ProposalDocumentRule {
   key: string;
@@ -80,6 +86,15 @@ export interface ProposalDocument {
   requirements: ProposalDocumentReq[];
   /** One section per covered requirement, in coverage order. The document is the source of record (P1). */
   sections: ProposalDocumentSection[];
+  /** P2: how this document was derived. `derived` unless the blueprint added it as a form/generated/build doc.
+   *  Optional at the type level so pre-P2 literals still compile; deriveProposalDocuments always sets it. */
+  docType?: ProposalDocType;
+  /** P2: Section L page limit for this document's volume, from the blueprint; null when none applies. */
+  pageLimit?: number | null;
+  /** P2: deterministic submission file name (slug of the title), so the package can name files per the blueprint. */
+  fileName?: string | null;
+  /** P2: the blueprint version that produced this document's shape; null when derived without a blueprint (P1 path). */
+  blueprintVersion?: number | null;
 }
 
 /** A short, stable section heading from a requirement statement: first sentence/clause, capped. Pure. */
@@ -95,7 +110,11 @@ export function sectionHeading(statement: string): string {
  * submittal, so it is excluded. Every other requirement is routed to exactly one named document; a document with no
  * requirements is not created. Returned in proposal-volume order. Pure + total (garbage ⇒ []).
  */
-export function deriveProposalDocuments(established: any[]): ProposalDocument[] {
+export function deriveProposalDocuments(
+  established: any[],
+  blueprint?: ProposalBlueprint | null,
+  opts?: { blueprintVersion?: number; allowSupplemental?: boolean },
+): ProposalDocument[] {
   const byKey = new Map<string, ProposalDocument>();
   for (const r of Array.isArray(established) ? established : []) {
     if (!r) continue;
@@ -108,12 +127,63 @@ export function deriveProposalDocuments(established: any[]): ProposalDocument[] 
     // A pricing-kind requirement is always the price document, whatever its wording.
     const rule = kind === 'pricing' ? (DOCUMENT_RULES.find((d) => d.key === 'pricing') as ProposalDocumentRule) : ruleFor(statement);
     let doc = byKey.get(rule.key);
-    if (!doc) { doc = { key: rule.key, title: rule.title, order: rule.order, gate: rule.gate, adminOnly: rule.adminOnly, requirements: [], sections: [] }; byKey.set(rule.key, doc); }
+    if (!doc) { doc = { key: rule.key, title: rule.title, order: rule.order, gate: rule.gate, adminOnly: rule.adminOnly, requirements: [], sections: [], docType: 'derived', pageLimit: null, fileName: null, blueprintVersion: null }; byKey.set(rule.key, doc); }
     if (!doc.requirements.some((x) => x.canonicalReqId === canonicalReqId)) {
       doc.requirements.push({ canonicalReqId, statement });
       // One section per covered requirement (P1). Content/figures/gaps land here via migration + drafting.
       doc.sections.push({ sectionKey: canonicalReqId, heading: sectionHeading(statement), requirementIds: [canonicalReqId], order: doc.sections.length + 1 });
     }
   }
-  return [...byKey.values()].sort((a, b) => a.order - b.order);
+  const docs = [...byKey.values()];
+  if (blueprint) enrichFromBlueprint(docs, blueprint, opts);
+  return docs.sort((a, b) => a.order - b.order);
+}
+
+/** A deterministic submission file name from a document title: slug + .pdf (the price doc stays .xlsx). Pure. */
+export function slugFileName(title: string, ext = 'pdf'): string {
+  const slug = String(title ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60) || 'document';
+  return `${slug}.${ext}`;
+}
+
+/** Required forms whose submittal is ALREADY a derived document — tag that document rather than duplicating it. */
+const FORM_TO_EXISTING_DOC: Record<string, string> = { hsp: 'socioeconomic', execution_of_offer: 'execution_offer' };
+
+/**
+ * Layer the blueprint onto the derived documents (P2): stamp the blueprint version + a file name on every document,
+ * assign the Section L page limit to the narrative (technical) volume, tag/add a document for each REQUIRED form,
+ * ensure a generated Compliance Matrix, and add the build-backed Pilot Demonstration Exhibit unless supplemental
+ * material is forbidden. Mutates `docs` in place. Pure w.r.t. its inputs (deterministic).
+ */
+function enrichFromBlueprint(docs: ProposalDocument[], blueprint: ProposalBlueprint, opts?: { blueprintVersion?: number; allowSupplemental?: boolean }): void {
+  const version = opts?.blueprintVersion ?? null;
+  const byKey = new Map(docs.map((d) => [d.key, d]));
+  const ensure = (key: string, title: string, order: number, docType: ProposalDocType, gate: boolean, adminOnly = false): ProposalDocument => {
+    let d = byKey.get(key);
+    if (!d) { d = { key, title, order, gate, adminOnly, requirements: [], sections: [], docType, pageLimit: null, fileName: null, blueprintVersion: null }; byKey.set(key, d); docs.push(d); }
+    d.docType = docType;
+    return d;
+  };
+
+  // Page limit for the narrative volume (the technical document), from the first page_limit rule.
+  const pageLimitRule = blueprint.rules.find((r) => r.key === 'page_limit');
+  const pageLimit = pageLimitRule ? Number.parseInt(pageLimitRule.value, 10) : NaN;
+
+  // Required forms (and at-award forms) → a form document. hsp/execution map onto existing derived docs.
+  for (const form of blueprint.forms) {
+    if (form.disposition !== 'required' && form.disposition !== 'at_award') continue;
+    const existingKey = FORM_TO_EXISTING_DOC[form.key];
+    if (existingKey) { ensure(existingKey, form.label, byKey.get(existingKey)?.order ?? 7, 'form', form.severity === 'fatal'); }
+    else { ensure(`form_${form.key}`, form.label, 3, 'form', form.severity === 'fatal'); }
+  }
+
+  // Compliance Matrix (we generate it) and the build-backed Pilot Demonstration Exhibit.
+  ensure('compliance_matrix', 'Compliance Matrix', 9, 'generated', false);
+  if (opts?.allowSupplemental !== false) ensure('pilot_demo_exhibit', 'Pilot Demonstration Exhibit', 12, 'build', false);
+
+  // Stamp blueprint version, file name, and the page limit (technical only) on every document.
+  for (const d of docs) {
+    d.blueprintVersion = version;
+    d.fileName = slugFileName(d.title, d.key === 'pricing' ? 'xlsx' : 'pdf');
+    if (d.key === 'technical' && Number.isFinite(pageLimit)) d.pageLimit = pageLimit;
+  }
 }

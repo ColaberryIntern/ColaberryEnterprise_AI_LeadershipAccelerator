@@ -39,6 +39,13 @@ export async function ensureGovProposalDocumentSchema(): Promise<void> {
     // P1 "documents are the source": sections carry {sectionKey, heading, requirementIds[], order, plan?}. The
     // response-slot model's per-requirement content/figures migrate into these sections. Additive, self-healing.
     `ALTER TABLE gov_proposal_documents ADD COLUMN IF NOT EXISTS sections_json JSONB NOT NULL DEFAULT '[]'::jsonb`,
+    // P2 "blueprint from the stored ZIP": the document set is derived from the blueprint, so each document records
+    // its blueprint-derived shape — doc_type ('derived' | 'form' | 'generated' | 'build'), the Section L page limit
+    // and file name, and which blueprint version produced it. Additive, self-healing (ADD COLUMN IF NOT EXISTS).
+    `ALTER TABLE gov_proposal_documents ADD COLUMN IF NOT EXISTS doc_type VARCHAR(24) NOT NULL DEFAULT 'derived'`,
+    `ALTER TABLE gov_proposal_documents ADD COLUMN IF NOT EXISTS page_limit INTEGER`,
+    `ALTER TABLE gov_proposal_documents ADD COLUMN IF NOT EXISTS file_name TEXT`,
+    `ALTER TABLE gov_proposal_documents ADD COLUMN IF NOT EXISTS blueprint_version INTEGER`,
   ];
 
   for (const sql of statements) {

@@ -1,6 +1,6 @@
 import { DataTypes, Model } from 'sequelize';
 import { sequelize } from '../config/database';
-import type { ProposalDocumentSection } from '../services/factory/proposal/govProposalDocuments';
+import type { ProposalDocumentSection, ProposalDocType } from '../services/factory/proposal/govProposalDocuments';
 
 /**
  * A named proposal document a bid must submit (cockpit v2 Proposal workstream): Cover Letter, Technical Proposal,
@@ -13,6 +13,8 @@ import type { ProposalDocumentSection } from '../services/factory/proposal/govPr
  */
 export interface GovProposalDocumentComment { id: string; authorIdentityId: string; body: string; at: string; }
 export type GovProposalDocumentStatus = 'not_started' | 'drafting' | 'drafted' | 'changes_requested' | 'accepted';
+/** P2 document provenance — the single definition lives in the service (govProposalDocuments.ts). */
+export type GovProposalDocType = ProposalDocType;
 
 export interface GovProposalDocumentAttributes {
   id?: string;
@@ -29,6 +31,16 @@ export interface GovProposalDocumentAttributes {
   requirement_ids: string[];
   /** P1: the document's sections (one per covered requirement). Content/figures/gaps live on these. */
   sections_json: ProposalDocumentSection[];
+  /** P2 blueprint-derived shape. */
+  doc_type: GovProposalDocType;
+  /** Section L page limit for this document's volume, when the blueprint found one. */
+  page_limit: number | null;
+  /** Blueprint-dictated submission file name, when known. */
+  file_name: string | null;
+  /** The blueprint version that produced this document's shape. */
+  blueprint_version: number | null;
+  /** P3: the latest immutable version of this document (gov_proposal_document_versions). Null before any version. */
+  current_version_id: string | null;
   /** The review thread (newest appended last). */
   comments: GovProposalDocumentComment[];
   drafted_at?: Date | null;
@@ -52,6 +64,11 @@ class GovProposalDocument extends Model<GovProposalDocumentAttributes> implement
   declare order_index: number;
   declare requirement_ids: string[];
   declare sections_json: ProposalDocumentSection[];
+  declare doc_type: GovProposalDocType;
+  declare page_limit: number | null;
+  declare file_name: string | null;
+  declare blueprint_version: number | null;
+  declare current_version_id: string | null;
   declare comments: GovProposalDocumentComment[];
   declare drafted_at: Date | null;
   declare drafted_by_identity_id: string | null;
@@ -75,6 +92,11 @@ GovProposalDocument.init(
     order_index: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
     requirement_ids: { type: DataTypes.JSONB, allowNull: false, defaultValue: [] },
     sections_json: { type: DataTypes.JSONB, allowNull: false, defaultValue: [] },
+    doc_type: { type: DataTypes.STRING(24), allowNull: false, defaultValue: 'derived' },
+    page_limit: { type: DataTypes.INTEGER, allowNull: true },
+    file_name: { type: DataTypes.TEXT, allowNull: true },
+    blueprint_version: { type: DataTypes.INTEGER, allowNull: true },
+    current_version_id: { type: DataTypes.UUID, allowNull: true },
     comments: { type: DataTypes.JSONB, allowNull: false, defaultValue: [] },
     drafted_at: { type: DataTypes.DATE, allowNull: true },
     drafted_by_identity_id: { type: DataTypes.UUID, allowNull: true },

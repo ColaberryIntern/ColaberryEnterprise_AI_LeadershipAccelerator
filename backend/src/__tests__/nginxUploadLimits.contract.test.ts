@@ -54,6 +54,7 @@ const KNOWN_UNRAISED: Array<{ route: string; multerCap: string; note: string }> 
   { route: '/api/strategy-prep/:token/upload', multerCap: '50MB', note: 'strategyPrepUpload; public token flow' },
   { route: '/api/admin/accelerator/submissions/:id/upload', multerCap: '50MB', note: 'strategyPrepUpload; staff' },
   { route: '/api/admin/flotation/intake/document', multerCap: '15MB', note: 'intakeDocumentUpload; staff' },
+  { route: '/api/admin/gov-contracts/:projectId/package/signatures/:formKey', multerCap: '25MB', note: 'signedDocumentUpload; Proposal Studio P6 signed-form copy (staff/reviewer). An nginx raise is ESCALATE-tier (CLAUDE.md) — left at the default pending approval; a signed scan over ~1MB is refused at the edge until then.' },
 ];
 
 /** Every `router.post|put|patch('<path>', … <x>Upload.single|array|fields(` in the route tree. */

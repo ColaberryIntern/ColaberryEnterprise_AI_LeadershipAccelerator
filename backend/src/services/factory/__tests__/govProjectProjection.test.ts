@@ -19,6 +19,11 @@ const gpsgFindOne = jest.fn();
 jest.mock('../../../models/GovProposalShareGrant', () => ({ __esModule: true, default: { findOne: (...a: any[]) => gpsgFindOne(...a) } }));
 const gqFindOne = jest.fn();
 jest.mock('../../../models/GovQualification', () => ({ __esModule: true, default: { findOne: (...a: any[]) => gqFindOne(...a) } }));
+const gpbFindOne = jest.fn();
+jest.mock('../../../models/GovProposalBlueprint', () => ({ __esModule: true, default: { findOne: (...a: any[]) => gpbFindOne(...a) } }));
+const gpdFindOrCreate = jest.fn();
+const gpdFindAll = jest.fn();
+jest.mock('../../../models/GovProposalDocument', () => ({ __esModule: true, default: { findOrCreate: (...a: any[]) => gpdFindOrCreate(...a), findAll: (...a: any[]) => gpdFindAll(...a), findOne: jest.fn() } }));
 const plain = (v: any) => ({ get: () => ({ ...v }) });
 
 import { toStudentGovProjectView, getStudentGovProjectView, toStudentSubmissionChecklist } from '../govProjectProjection';
@@ -141,7 +146,7 @@ describe('toStudentSubmissionChecklist (pure) — PRICE-FREE', () => {
 });
 
 describe('getStudentGovProjectView (loader) — only a non-archived government project', () => {
-  beforeEach(() => { jest.clearAllMocks(); ctFindAll.mockResolvedValue(trackRows); crFindAll.mockResolvedValue(reqRows); evFindAll.mockResolvedValue([]); asFindAll.mockResolvedValue([]); gprFindAll.mockResolvedValue([]); gpsgFindOne.mockResolvedValue(null); gqFindOne.mockResolvedValue(null); });
+  beforeEach(() => { jest.clearAllMocks(); ctFindAll.mockResolvedValue(trackRows); crFindAll.mockResolvedValue(reqRows); evFindAll.mockResolvedValue([]); asFindAll.mockResolvedValue([]); gprFindAll.mockResolvedValue([]); gpsgFindOne.mockResolvedValue(null); gqFindOne.mockResolvedValue(null); gpbFindOne.mockResolvedValue(null); gpdFindOrCreate.mockResolvedValue([{ get: () => ({}), update: jest.fn() }, true]); gpdFindAll.mockResolvedValue([]); });
 
   it('returns the view for a government_public_sector project', async () => {
     dpFindByPk.mockResolvedValue(projectRow);
@@ -202,6 +207,28 @@ describe('getStudentGovProjectView (loader) — only a non-archived government p
     expect(v!.agency).toBe('TxDOT Office of General Counsel');
     expect(v!.keyDates).toEqual([{ date: '2026-11-06', text: 'Proposals due' }]);
     expect(JSON.stringify(v)).not.toContain('phishing@irs.gov'); // dossier contacts are NOT carried to the student
+  });
+
+  it('P2: surfaces the blueprint + blueprint-derived doc fields, and still drops the pricing document for a non-verifier', async () => {
+    dpFindByPk.mockResolvedValue(projectRow);
+    gpbFindOne.mockResolvedValue({ version: 1, blueprint_json: {
+      rules: [{ key: 'page_limit', value: '20', quote: 'shall not exceed 20 pages', sourceFile: 'rfp.pdf', severity: 'fatal' }],
+      forms: [{ key: 'hsp', label: 'HSP', disposition: 'required', timing: 'with_proposal', severity: 'fatal', triggerReason: 't', citation: 'c' }],
+      scoring: { basis: 'best_value', basisQuote: 'q', totalPoints: 100, factors: [] },
+      addenda: [], eliminationRisks: [], buyerType: 'state_agency', droppedRuleCount: 0, sourceFiles: ['rfp.pdf'], generatedAt: 'x',
+    } });
+    gpdFindAll.mockResolvedValue([
+      plain({ doc_key: 'technical', title: 'Technical Proposal', status: 'drafted', content_html: '<p>x</p>', version: 1, admin_only: false, gate: false, order_index: 11, requirement_ids: ['R1'], sections_json: [], doc_type: 'form', page_limit: 20, file_name: 'technical-proposal.pdf', blueprint_version: 1, comments: [], drafted_at: null, accepted_at: null }),
+      plain({ doc_key: 'pricing', title: 'Price / Cost Proposal', status: 'not_started', content_html: null, version: 0, admin_only: true, gate: true, order_index: 4, requirement_ids: [], sections_json: [], doc_type: 'derived', page_limit: null, file_name: 'price-cost-proposal.xlsx', blueprint_version: 1, comments: [], drafted_at: null, accepted_at: null }),
+    ]);
+    const v = await getStudentGovProjectView('dp-1', false, 'id-1'); // non-verifier
+    expect(v!.blueprint?.buyerType).toBe('state_agency');
+    expect(v!.blueprint?.rules.some((r) => r.key === 'page_limit')).toBe(true);
+    // pricing document dropped whole for the non-verifier; the technical doc carries its P2 fields.
+    expect(v!.proposalDocuments.map((d) => d.key)).toEqual(['technical']);
+    const tech = v!.proposalDocuments[0];
+    expect(tech).toMatchObject({ docType: 'form', pageLimit: 20, fileName: 'technical-proposal.pdf', blueprintVersion: 1 });
+    expect(JSON.stringify(v)).not.toContain('price-cost-proposal.xlsx'); // pricing file name never reaches the intern
   });
 
   it('returns null for a NON-government project class (this surface serves only gov projects)', async () => {

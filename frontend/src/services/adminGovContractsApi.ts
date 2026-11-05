@@ -1,5 +1,5 @@
 import api from '../utils/api';
-import type { StudentGovProjectView, GovCockpitApi, GovCopilotAnswer, GovProposalDocument } from './govProjectPortalApi';
+import type { StudentGovProjectView, GovCockpitApi, GovCopilotAnswer, GovProposalDocument, GovReviewApi, GovDocumentVersion, GovGateReview, GovCheckRunResult, GovGateName, GovDiffSegment, GovSignatureView, GovPackageResult } from './govProjectPortalApi';
 
 /**
  * adminGovContractsApi — the admin Interns-hub "Gov Contracts" tab's one data call.
@@ -102,6 +102,95 @@ export async function adminCommentGovProposalDocument(projectId: string, docKey:
   const { data } = await api.post<{ document: GovProposalDocument }>(adminDocUrl(projectId, docKey, 'comment'), { body });
   return data.document;
 }
+
+/** P2: re-read the stored solicitation ZIP into the next blueprint version and re-derive the document set. The
+ *  server returns the new version, the blueprint, a diff from the previous one, and the document count (409 when no
+ *  stored package exists). */
+export interface AdminBlueprintReanalysisResult {
+  version: number;
+  diff: { summary: string[] };
+  documentCount: number;
+}
+export async function adminReanalyzeGovBlueprint(projectId: string): Promise<AdminBlueprintReanalysisResult> {
+  const { data } = await api.post<AdminBlueprintReanalysisResult>(`${adminBase(projectId)}/blueprint/reanalyze`, {});
+  return data;
+}
+
+// ── P3 review layer (reviewer-only; the admin cockpit holds gov_contracts) ───────────────────────────────────────
+export async function adminListGovDocumentReview(projectId: string, docKey: string): Promise<{ versions: GovDocumentVersion[]; gates: GovGateReview[] }> {
+  const { data } = await api.get(adminDocUrl(projectId, docKey, 'versions'));
+  return data as { versions: GovDocumentVersion[]; gates: GovGateReview[] };
+}
+export async function adminRunGovDocumentChecks(projectId: string, docKey: string): Promise<GovCheckRunResult> {
+  const { data } = await api.post<{ result: GovCheckRunResult }>(adminDocUrl(projectId, docKey, 'run-checks'), {});
+  return data.result;
+}
+export async function adminDecideGovGate(projectId: string, docKey: string, gate: GovGateName, decision: 'approve' | 'return', note?: string): Promise<{ gates: GovGateReview[] }> {
+  const { data } = await api.post<{ gates: GovGateReview[] }>(`${adminDocUrl(projectId, docKey, 'gates')}/${encodeURIComponent(gate)}`, { decision, note });
+  return data;
+}
+export async function adminDiffGovVersions(projectId: string, aVersionId: string, bVersionId: string): Promise<{ segments: GovDiffSegment[] }> {
+  const { data } = await api.get<{ segments: GovDiffSegment[] }>(`${adminBase(projectId)}/versions/${encodeURIComponent(aVersionId)}/diff/${encodeURIComponent(bVersionId)}`);
+  return data;
+}
+
+// ── P4 build-evidence (reviewer-only) ────────────────────────────────────────────────────────────────────────
+export async function adminFetchGovArtifactImage(projectId: string, artifactId: string): Promise<string> {
+  const { data } = await api.get(`${adminBase(projectId)}/artifacts/${encodeURIComponent(artifactId)}/image`, { responseType: 'blob' });
+  return URL.createObjectURL(data as Blob);
+}
+export async function adminInsertGovFigure(projectId: string, docKey: string, artifactId: string): Promise<{ document: GovProposalDocument }> {
+  const { data } = await api.post<{ document: GovProposalDocument }>(adminDocUrl(projectId, docKey, 'insert-figure'), { artifactId });
+  return data;
+}
+export async function adminSetGovDemoUrl(projectId: string, demoUrl: string, captureRoot?: string): Promise<{ ok: boolean }> {
+  const { data } = await api.post<{ ok: boolean }>(`${adminBase(projectId)}/build-demo`, { demoUrl, captureRoot });
+  return data;
+}
+export async function adminRecaptureGovStory(projectId: string, storyId: string): Promise<unknown> {
+  const { data } = await api.post(`${adminBase(projectId)}/stories/${encodeURIComponent(storyId)}/recapture`, {});
+  return data;
+}
+export async function adminRunGovReviewCycle(projectId: string, docKey: string, maxIterations?: number): Promise<{ started: boolean; maxIterations: number }> {
+  const { data } = await api.post<{ started: boolean; maxIterations: number }>(adminDocUrl(projectId, docKey, 'review-cycle'), { maxIterations });
+  return data;
+}
+export async function adminAnswerGovQuestion(projectId: string, question: string, answer: string, key?: string): Promise<{ factId: string; gapsResolved: number }> {
+  const { data } = await api.post<{ factId: string; gapsResolved: number }>(`${adminBase(projectId)}/answer-question`, { question, answer, key });
+  return data;
+}
+export async function adminListGovSignatures(projectId: string): Promise<{ signatures: GovSignatureView[] }> {
+  const { data } = await api.get<{ signatures: GovSignatureView[] }>(`${adminBase(projectId)}/package/signatures`);
+  return data;
+}
+export async function adminUploadGovSignedForm(projectId: string, formKey: string, file: File, signerRole?: string): Promise<{ ok: boolean }> {
+  const form = new FormData();
+  form.append('file', file);
+  if (signerRole) form.append('signerRole', signerRole);
+  const { data } = await api.post<{ ok: boolean }>(`${adminBase(projectId)}/package/signatures/${encodeURIComponent(formKey)}`, form, { headers: { 'Content-Type': 'multipart/form-data' } });
+  return data;
+}
+export async function adminAssembleGovPackage(projectId: string): Promise<GovPackageResult> {
+  try { const { data } = await api.post<GovPackageResult>(`${adminBase(projectId)}/package/assemble`, {}); return data; }
+  catch (e: any) { if (e?.response?.status === 409 && e.response.data) return e.response.data as GovPackageResult; throw e; }
+}
+
+/** The admin review adapter — the reviewer-only P3/P4 actions (versions, checks, gates, diff, artifacts). */
+export const adminGovReviewApi: GovReviewApi = {
+  listReview: adminListGovDocumentReview,
+  runChecks: adminRunGovDocumentChecks,
+  decideGate: adminDecideGovGate,
+  diffVersions: adminDiffGovVersions,
+  fetchArtifactImage: adminFetchGovArtifactImage,
+  insertFigure: adminInsertGovFigure,
+  setDemoUrl: adminSetGovDemoUrl,
+  recapture: adminRecaptureGovStory,
+  runReviewCycle: adminRunGovReviewCycle,
+  answerQuestion: adminAnswerGovQuestion,
+  listSignatures: adminListGovSignatures,
+  uploadSignedForm: adminUploadGovSignedForm,
+  assemblePackage: adminAssembleGovPackage,
+};
 
 /** The admin adapter — management drives the gov cockpit via the `gov_contracts`-gated admin routes. */
 export const adminGovCockpitApi: GovCockpitApi = {

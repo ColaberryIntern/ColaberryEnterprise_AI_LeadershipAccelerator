@@ -246,6 +246,13 @@ const GOV_SOURCE_BUNDLE_DIR = process.env.GOV_SOURCE_BUNDLE_DIR || path.resolve(
 try { fs.mkdirSync(GOV_SOURCE_BUNDLE_DIR, { recursive: true }); } catch { /* created lazily on first write */ }
 export { GOV_SOURCE_BUNDLE_DIR };
 
+// Gov build artifacts (Proposal Studio P4): PNG screenshots captured from the verified build demo by Playwright,
+// served back (later) through an access-checked route. Its own dir on the persistent uploads volume, like the gov
+// source bundles — procurement build evidence, not student chat files.
+const GOV_BUILD_ARTIFACT_DIR = process.env.GOV_BUILD_ARTIFACT_DIR || path.resolve('/app/uploads/gov-build-artifacts');
+try { fs.mkdirSync(GOV_BUILD_ARTIFACT_DIR, { recursive: true }); } catch { /* created lazily on first write */ }
+export { GOV_BUILD_ARTIFACT_DIR };
+
 // ── Room Resource uploads (Docs & Files) — documents attached to a Community
 // Room, one of its bookings, or the Global Library ──────────────────────────
 // Disk storage on the persistent `uploads` volume (survives deploys), same as

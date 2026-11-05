@@ -117,3 +117,18 @@ export async function loadGovSourceBundleScoped(
 ): Promise<ResolvedBundle | null> {
   return resolve(await GovSourceBundle.findOne({ where: { id, tenant_id: tenantId, qualification_key: qualificationKey } }));
 }
+
+/**
+ * Resolve the MOST RECENT stored source bundle for a (tenant, qualification) to a file on disk, without knowing its
+ * id — used by the Proposal Studio reanalyze, which has only the project/qualification, not a bundle id. Also returns
+ * the row's sha256 (blueprint provenance). Null when no bundle row exists OR its bytes are missing from the volume,
+ * so the caller answers 409 "solicitation package missing" for both.
+ */
+export async function loadLatestGovSourceBundle(
+  tenantId: string,
+  qualificationKey: string,
+): Promise<(ResolvedBundle & { sha256: string }) | null> {
+  const row = await GovSourceBundle.findOne({ where: { tenant_id: tenantId, qualification_key: qualificationKey }, order: [['created_at', 'DESC']] });
+  const resolved = await resolve(row);
+  return resolved && row ? { ...resolved, sha256: row.sha256 } : null;
+}

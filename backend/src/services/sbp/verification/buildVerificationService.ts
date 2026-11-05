@@ -384,6 +384,9 @@ export async function verifyBuildFromRepo(
 
   const stories: BuildVerificationSummary['stories'] = [];
   const newlyVerified: string[] = [];
+  // Proposal Studio P4: stories that crossed into verified THIS run, with the commit behind them, so a screenshot
+  // can be captured from the gov demo as proposal build evidence. No-ops for a non-gov project (no demo configured).
+  const newlyVerifiedCaptures: Array<{ storyId: string; commitSha: string | null }> = [];
   let xpAwarded = 0;
 
   for (const verdict of decision.verdicts) {
@@ -462,6 +465,7 @@ export async function verifyBuildFromRepo(
     });
     if (awarded.created) {
       newlyVerified.push(verdict.story_id);
+      newlyVerifiedCaptures.push({ storyId: verdict.story_id, commitSha: verdict.commit_sha });
       xpAwarded += awarded.builder_xp;
     }
 
@@ -533,6 +537,18 @@ export async function verifyBuildFromRepo(
         error: err?.message,
         reason: 'verification stands; the next sync re-evaluates',
       });
+    }
+  }
+
+  // Proposal Studio P4: capture a demo screenshot for each newly-verified story (proposal build evidence).
+  // NON-FATAL + no-op for a non-gov project (no demo row). Like the promotion block, the verification result is
+  // what the caller asked for; a capture hiccup must never fail the sync.
+  if (newlyVerifiedCaptures.length > 0) {
+    try {
+      const { enqueueStoryArtifactCaptures } = await import('../../factory/proposal/captureStoryArtifact');
+      await enqueueStoryArtifactCaptures(projectId, newlyVerifiedCaptures);
+    } catch (err: any) {
+      log('gov_build_artifact_capture_failed', opts.correlationId, 'partial', { projectId, error_class: classifyError(err), error: err?.message, reason: 'verification stands; artifacts can be re-captured' });
     }
   }
 

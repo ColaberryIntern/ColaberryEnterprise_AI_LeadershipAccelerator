@@ -98,6 +98,11 @@ import { ensureGovProposalShareGrantSchema } from './db/ensureGovProposalShareGr
 import { ensureGovProposalAmendmentSchema } from './db/ensureGovProposalAmendmentSchema';
 import { ensureGovProposalDocumentSchema } from './db/ensureGovProposalDocumentSchema';
 import { ensureGovProposalDocumentGapsSchema } from './db/ensureGovProposalDocumentGapsSchema';
+import { ensureGovProposalBlueprintSchema } from './db/ensureGovProposalBlueprintSchema';
+import { ensureGovProposalReviewSchema } from './db/ensureGovProposalReviewSchema';
+import { ensureGovBuildArtifactSchema } from './db/ensureGovBuildArtifactSchema';
+import { ensureGovCompanyLibrarySchema } from './db/ensureGovCompanyLibrarySchema';
+import { ensureGovProposalPackageSchema } from './db/ensureGovProposalPackageSchema';
 import { ensureGovSubmissionSchema } from './db/ensureGovSubmissionSchema';
 import { ensureServiceOfferingSchema } from './db/ensureServiceOfferingSchema';
 import { ensureCaseStudyServiceLinkSchema } from './db/ensureCaseStudyServiceLinkSchema';
@@ -2899,6 +2904,21 @@ async function start(): Promise<void> {
   // a bid must submit (AI-drafted, reviewer-accepted). A single additive NEW table FK'd to delivery_projects.
   await ensureGovProposalDocumentSchema();
   await ensureGovProposalDocumentGapsSchema();
+  // Gov proposal blueprints (gov_proposal_blueprints): the Proposal Studio's per-contract rulebook derived from the
+  // stored solicitation ZIP (Section M/L rules, required forms incl. the Texas engine), versioned per project.
+  await ensureGovProposalBlueprintSchema();
+  // Gov proposal review layer (gov_proposal_document_versions + gov_proposal_gate_reviews): immutable versions with
+  // six-check scores + the Pink/Red/Gold/White-Glove gate decisions (Proposal Studio P3).
+  await ensureGovProposalReviewSchema();
+  // Gov build artifacts (gov_build_artifacts + gov_build_demo): screenshots captured from the verified build demo,
+  // tagged with the requirements they prove, insertable as proposal figures (Proposal Studio P4).
+  await ensureGovBuildArtifactSchema();
+  // Gov company library (gov_company_facts/_references/_personnel): the tenant's reusable, human-approved facts that
+  // ground the agent so a question is asked once (Proposal Studio P5).
+  await ensureGovCompanyLibrarySchema();
+  // Gov proposal package (gov_proposal_form_signatures + gov_proposal_redaction_spans): the signature tracking and
+  // redaction spans the final package assembly needs (Proposal Studio P6).
+  await ensureGovProposalPackageSchema();
   // Gov submission + outcome (gov_submission): the per-project submission lifecycle (preparing→…→exported→
   // externally_submitted→acknowledged; exported ≠ submitted), the export manifest, the MANUAL external receipt, the
   // win/loss outcome, and the PRIVATE case-study + service-capability candidates. One additive NEW table (UNIQUE per

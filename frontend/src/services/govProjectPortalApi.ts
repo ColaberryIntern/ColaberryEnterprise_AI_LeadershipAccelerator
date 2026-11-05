@@ -104,6 +104,11 @@ export interface StudentGovProjectView {
   buildSummary?: GovBuildSummary | null;
   /** v2 Proposal view: the named documents a bid must submit (admin-only pricing dropped for non-reviewers). Optional. */
   proposalDocuments?: GovProposalDocument[];
+  /** P2: the blueprint derived from the stored solicitation (scoring, Section L rules, required forms). Null until a
+   *  reanalyze runs; optional on older backends. Carries no pricing values and no identities. */
+  blueprint?: GovProposalBlueprint | null;
+  /** P4: screenshots captured from the verified build demo, tagged with the requirements they prove. Optional. */
+  buildArtifacts?: GovBuildArtifactView[];
   /** v2: combined completion across verified build stories + accepted documents. Optional (older backends). */
   overallProgress?: GovOverallProgress;
 }
@@ -119,12 +124,69 @@ export interface GovBuildSummary { studentProjectId: string; releases: GovBuildR
 
 export interface GovProposalDocumentComment { body: string; at: string; }
 export type GovProposalDocumentStatus = 'not_started' | 'drafting' | 'drafted' | 'changes_requested' | 'accepted';
+export type GovProposalDocType = 'derived' | 'form' | 'generated' | 'build';
 export interface GovProposalDocument {
   key: string; title: string; status: GovProposalDocumentStatus; contentHtml: string | null;
   version: number; gate: boolean; order: number; requirementIds: string[];
+  /** P2 blueprint-derived shape (optional — absent on older backends / the P1 path). */
+  docType?: GovProposalDocType; pageLimit?: number | null; fileName?: string | null; blueprintVersion?: number | null;
   comments: GovProposalDocumentComment[]; draftedAt: string | null; acceptedAt: string | null;
 }
+
+// ── P2: the blueprint (quoted, cited rulebook from the stored solicitation ZIP) ────────────────────────────────
+export type GovRuleSeverity = 'fatal' | 'curable' | 'info';
+export interface GovBlueprintRule { key: string; value: string; quote: string; sourceFile: string; page?: number; severity: GovRuleSeverity; }
+export type GovFormDisposition = 'required' | 'not_required' | 'needs_input' | 'at_award';
+export interface GovRequiredForm { key: string; label: string; disposition: GovFormDisposition; triggerReason: string; timing: string; severity: GovRuleSeverity; citation: string; quote?: string; sourceFile?: string; }
+export interface GovBlueprintScoringFactor { label: string; points?: number; percent?: number; quote: string; }
+export interface GovBlueprintScoring { basis: string | null; basisQuote: string | null; totalPoints: number | null; factors: GovBlueprintScoringFactor[]; }
+export interface GovProposalBlueprint {
+  rules: GovBlueprintRule[]; forms: GovRequiredForm[]; scoring: GovBlueprintScoring; addenda: GovBlueprintRule[];
+  eliminationRisks: Array<{ statement: string; quote: string; sourceFile: string }>;
+  buyerType: string | null; droppedRuleCount: number; sourceFiles: string[]; generatedAt: string;
+}
 export interface GovOverallProgress { buildVerified: number; buildTotal: number; docsAccepted: number; docsTotal: number; pct: number; }
+
+// ── P3: versions, checks, gates ────────────────────────────────────────────────────────────────────────────────
+export type GovCheckKey = 'coverage' | 'format' | 'fact' | 'evaluator' | 'proof' | 'clarity';
+export interface GovCheckFinding { check: GovCheckKey; severity: 'fatal' | 'major' | 'minor' | 'info'; message: string; sectionKey?: string; }
+export interface GovDocumentVersion { id: string; version: number; authorKind: 'agent' | 'human'; changeSummary: string | null; scores: Partial<Record<GovCheckKey, number>>; findings: GovCheckFinding[]; passes: boolean; pageCount: number | null; createdAt: string | null; }
+export type GovGateName = 'pink' | 'red' | 'gold' | 'white_glove';
+export interface GovGateReview { gate: GovGateName; status: string; versionId: string | null; note: string | null; decidedAt: string | null; }
+export interface GovCheckRunResult { scores: Record<GovCheckKey, number>; findings: GovCheckFinding[]; fatal: GovCheckFinding[]; passes: boolean; pageCount: number | null; }
+export interface GovDiffSegment { type: 'same' | 'add' | 'del'; text: string; }
+
+// ── P4: build-evidence artifacts ─────────────────────────────────────────────────────────────────────────────
+export interface GovBuildArtifactView { id: string; storyId: string; requirementIds: string[]; commitSha: string | null; caption: string | null; capturedAt: string | null; status: string; }
+
+// ── P6: package & export ─────────────────────────────────────────────────────────────────────────────────────
+export interface GovSignatureView { formKey: string; signerRole: string; status: string; required: boolean; hasFile: boolean }
+export interface GovPackageManifestItem { docKey: string; title: string; fileName: string; version: number; pageCount: number | null; sha256: string; blueprintVersion: number | null; sealed: boolean }
+export interface GovPackageResult { ok: boolean; blocking: string[]; manifest?: { exportedAt: string; blueprintVersion: number | null; fileCount: number; items: GovPackageManifestItem[] }; rendered?: number }
+
+/** The reviewer-only P3/P4 actions, provided by the admin cockpit (interns get no reviewApi — gates are reviewer-only). */
+export interface GovReviewApi {
+  listReview(projectId: string, docKey: string): Promise<{ versions: GovDocumentVersion[]; gates: GovGateReview[] }>;
+  runChecks(projectId: string, docKey: string): Promise<GovCheckRunResult>;
+  decideGate(projectId: string, docKey: string, gate: GovGateName, decision: 'approve' | 'return', note?: string): Promise<{ gates: GovGateReview[] }>;
+  diffVersions(projectId: string, aVersionId: string, bVersionId: string): Promise<{ segments: GovDiffSegment[] }>;
+  /** P4: fetch an artifact PNG through the authenticated route and return an object URL (a bare <img src> can't
+   *  carry the bearer token). The caller revokes the URL when done. */
+  fetchArtifactImage(projectId: string, artifactId: string): Promise<string>;
+  insertFigure(projectId: string, docKey: string, artifactId: string): Promise<{ document: GovProposalDocument }>;
+  setDemoUrl(projectId: string, demoUrl: string, captureRoot?: string): Promise<{ ok: boolean }>;
+  recapture(projectId: string, storyId: string): Promise<unknown>;
+  /** P5: kick off the agent review cycle for a document (fire-and-forget; poll versions). */
+  runReviewCycle(projectId: string, docKey: string, maxIterations?: number): Promise<{ started: boolean; maxIterations: number }>;
+  /** P5: answer a question — saves to the company library and resolves every open gap that asked it. */
+  answerQuestion(projectId: string, question: string, answer: string, key?: string): Promise<{ factId: string; gapsResolved: number }>;
+  /** P6: the required-form signature status for the package. */
+  listSignatures(projectId: string): Promise<{ signatures: GovSignatureView[] }>;
+  /** P6: upload a signed copy of a required form. */
+  uploadSignedForm(projectId: string, formKey: string, file: File, signerRole?: string): Promise<{ ok: boolean }>;
+  /** P6: assemble the package if ready; returns the manifest, or the blocking reasons. */
+  assemblePackage(projectId: string): Promise<GovPackageResult>;
+}
 
 /** P6: a card for a gov project the intern is assigned to — minimal fields for the "on your profile" surface. */
 export interface MyGovProjectCard { projectId: string; name: string; status: string; }
