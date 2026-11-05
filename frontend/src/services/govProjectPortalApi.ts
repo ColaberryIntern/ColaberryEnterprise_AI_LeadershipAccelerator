@@ -219,6 +219,8 @@ export interface GovReviewApi {
   uploadSignedForm(projectId: string, formKey: string, file: File, signerRole?: string): Promise<{ ok: boolean }>;
   /** P6: assemble the package if ready; returns the manifest, or the blocking reasons. */
   assemblePackage(projectId: string): Promise<GovPackageResult>;
+  /** U1 (B.7): save a reviewer's structured section plan; saving writes a new human version. Admin only (optional). */
+  saveSectionPlan?(projectId: string, docKey: string, sectionKey: string, plan: GovSectionPlanFields): Promise<{ document: GovProposalDocument }>;
 }
 
 /** P6: a card for a gov project the intern is assigned to — minimal fields for the "on your profile" surface. */

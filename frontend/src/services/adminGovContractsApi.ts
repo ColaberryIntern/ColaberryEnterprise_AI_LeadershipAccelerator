@@ -1,5 +1,5 @@
 import api from '../utils/api';
-import type { StudentGovProjectView, GovCockpitApi, GovCopilotAnswer, GovProposalDocument, GovReviewApi, GovDocumentVersion, GovGateReview, GovCheckRunResult, GovGateName, GovDiffSegment, GovSignatureView, GovPackageResult, GovStudioApi, GovOpenQuestion, GovActivityEvent, GovReviewRun, GovVersionContent } from './govProjectPortalApi';
+import type { StudentGovProjectView, GovCockpitApi, GovCopilotAnswer, GovProposalDocument, GovReviewApi, GovDocumentVersion, GovGateReview, GovCheckRunResult, GovGateName, GovDiffSegment, GovSignatureView, GovPackageResult, GovStudioApi, GovOpenQuestion, GovActivityEvent, GovReviewRun, GovVersionContent, GovSectionPlanFields } from './govProjectPortalApi';
 
 /**
  * adminGovContractsApi — the admin Interns-hub "Gov Contracts" tab's one data call.
@@ -190,7 +190,14 @@ export const adminGovReviewApi: GovReviewApi = {
   listSignatures: adminListGovSignatures,
   uploadSignedForm: adminUploadGovSignedForm,
   assemblePackage: adminAssembleGovPackage,
+  saveSectionPlan: adminSaveGovSectionPlan,
 };
+
+/** U1 (B.7): save a reviewer's section plan for one section; the backend writes a new human version. */
+export async function adminSaveGovSectionPlan(projectId: string, docKey: string, sectionKey: string, plan: GovSectionPlanFields): Promise<{ document: GovProposalDocument }> {
+  const { data } = await api.put<{ document: GovProposalDocument }>(`${adminDocUrl(projectId, docKey, 'sections')}/${encodeURIComponent(sectionKey)}/plan`, plan);
+  return data as { document: GovProposalDocument };
+}
 
 /** The admin adapter — management drives the gov cockpit via the `gov_contracts`-gated admin routes. */
 export const adminGovCockpitApi: GovCockpitApi = {

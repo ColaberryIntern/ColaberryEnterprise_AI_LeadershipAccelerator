@@ -97,6 +97,9 @@
 .gps-btn.ok{background:var(--gps-ok);border-color:var(--gps-ok);color:#fff}
 .gps-btn:disabled{opacity:.55;cursor:default}
 .gps-btn.sm{padding:3px 9px;font-size:12px}
+.gps-tags{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.gps-link{text-decoration:underline;text-decoration-color:var(--gps-line);text-underline-offset:2px}
+.gps-link:hover{text-decoration-color:var(--gps-accent)}
 .gps-tag{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;border-radius:4px;padding:1px 7px;background:var(--gps-sunk);color:var(--gps-muted);white-space:nowrap}
 .gps-tag.ok{background:var(--gps-ok-soft);color:var(--gps-ok)}.gps-tag.warn{background:var(--gps-warn-soft);color:var(--gps-warn)}.gps-tag.bad{background:var(--gps-bad-soft);color:var(--gps-bad)}
 .gps-tag.agent{background:var(--gps-agent-soft);color:var(--gps-agent)}.gps-tag.acc{background:var(--gps-accent-soft);color:var(--gps-accent)}

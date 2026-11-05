@@ -1,6 +1,6 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import type { StudentGovProjectView, GovCockpitApi, GovReviewApi, GovStudioApi } from '../../../../services/govProjectPortalApi';
+import type { StudentGovProjectView, GovCockpitApi, GovReviewApi, GovStudioApi, GovProposalDocument } from '../../../../services/govProjectPortalApi';
 import ContractBar from './ContractBar';
 import StageRail, { type StudioView } from './StageRail';
 import WhereWeAre from './WhereWeAre';
@@ -9,12 +9,13 @@ import './studio.css';
 import Blueprint from './Blueprint';
 import DocumentSet from './DocumentSet';
 import BuildEvidence from './BuildEvidence';
-// Transitional: the views not yet rebuilt (U4–U5) render the shipped govCockpit panels inside the new shell, so
-// nothing is lost. Each is wrapped in a `.gck` element to carry its own tokens. The drafting drawer is reused until
-// the Draft & versions editor lands.
+import DraftVersions from './DraftVersions';
+import ReviewGatesView from './ReviewGatesView';
+import PackageView from './PackageView';
+import OpenItems from './OpenItems';
+// The drafting drawer for a form/pricing row is the one shipped govCockpit piece still reused (wrapped in `.gck` to
+// carry its own tokens); every stage view is now a native `.gps` surface.
 import ProposalDocumentDrawer from '../govCockpit/ProposalDocumentDrawer';
-import ReviewGates from '../govCockpit/ReviewGates';
-import PackageSubmit from '../govCockpit/PackageSubmit';
 
 const VIEWS: StudioView[] = ['overview', 'blueprint', 'documents', 'evidence', 'editor', 'gates', 'package', 'openitems'];
 
@@ -22,7 +23,9 @@ const VIEWS: StudioView[] = ['overview', 'blueprint', 'documents', 'evidence', '
  * StudioShell — the Proposal Studio desk: a sticky contract bar, a left process rail, a center workspace, and the
  * persistent agent panel on the right. Both entry points (admin + portal) render this: admin injects the review API
  * (gates, pricing) and the admin-token clients; the portal injects the participant-token clients and no review API.
- * The selected view lives in the URL (?view=…). Views not yet rebuilt render the shipped govCockpit panels.
+ * The selected view lives in the URL (?view=…). A scored document deep-links to
+ * the editor (?doc=). Every stage view is a native `.gps` surface; only the drafting drawer for a form/pricing row
+ * reuses the shipped govCockpit panel.
  */
 export default function StudioShell(
   { view, projectId, onReload, cockpitApi, studioApi, reviewApi, onReanalyze, reanalyzing = false }:
@@ -35,7 +38,7 @@ export default function StudioShell(
   const [toastMsg, setToastMsg] = useState<string | null>(null);
 
   const docs = useMemo(() => view.proposalDocuments ?? [], [view.proposalDocuments]);
-  const openDoc = openDocKey ? docs.find((d) => d.key === openDocKey) ?? null : null;
+  const drawerDoc = openDocKey ? docs.find((d) => d.key === openDocKey) ?? null : null;
 
   const go = useCallback((v: StudioView) => {
     const next = new URLSearchParams(sp);
@@ -52,6 +55,17 @@ export default function StudioShell(
   const openQuestionCount = 0; // the agent panel owns the live count; Where-we-are only needs a hint for next-moves
   const gck = (node: React.ReactNode) => <div className="gck">{node}</div>;
 
+  // A scored document opens in the Draft & versions editor (deep-linked via ?doc=); a form/pricing row opens the
+  // drafting drawer or is admin-only.
+  const openDoc = useCallback((d: GovProposalDocument) => {
+    if (d.key !== 'pricing' && (d.docType === 'derived' || d.docType === 'build' || d.docType === 'generated')) {
+      const next = new URLSearchParams(sp); next.set('view', 'editor'); next.set('doc', d.key); setSp(next);
+      try { window.scrollTo({ top: 0 }); } catch { /* noop */ }
+    } else {
+      setOpenDocKey(d.key);
+    }
+  }, [sp, setSp]);
+
   let center: React.ReactNode;
   switch (current) {
     case 'overview':
@@ -61,29 +75,23 @@ export default function StudioShell(
       center = <Blueprint view={view} onReanalyze={onReanalyze} reanalyzing={reanalyzing} onToast={toast} />;
       break;
     case 'documents':
-      center = <DocumentSet docs={docs} onOpen={(d) => setOpenDocKey(d.key)} onToast={toast} />;
+      center = <DocumentSet docs={docs} onOpen={openDoc} onToast={toast} />;
       break;
     case 'evidence':
       center = <BuildEvidence view={view} projectId={projectId} reviewApi={reviewApi} onReload={onReload} onToast={toast} />;
       break;
     case 'gates':
-      center = gck(<ReviewGates projectId={projectId} docs={docs} reviewApi={reviewApi} />);
+      center = <ReviewGatesView projectId={projectId} docs={docs} reviewApi={reviewApi} onOpenDoc={openDoc} />;
       break;
     case 'package':
-      center = gck(<PackageSubmit projectId={projectId} reviewApi={reviewApi} />);
+      center = <PackageView view={view} projectId={projectId} docs={docs} reviewApi={reviewApi} onToast={toast} />;
       break;
     case 'editor':
-      center = (
-        <div className="gps-view"><div className="gps-vh"><div><h2>Draft &amp; versions</h2><p>The paper preview, section plan, six-check scores, version history and the agent review cycle land here next. For now, open a document from Document set to draft it.</p></div></div>
-          <div className="gps-panel"><button className="gps-btn primary" onClick={() => go('documents')}>Go to Document set</button></div></div>
-      );
+      center = <DraftVersions view={view} projectId={projectId} docs={docs} studioApi={studioApi} reviewApi={reviewApi} initialDocKey={sp.get('doc')} onReload={onReload} onToast={toast} />;
       break;
     case 'openitems':
     default:
-      center = (
-        <div className="gps-view"><div className="gps-vh"><div><h2>Open items</h2><p>Blueprint rules that need input, fatal findings, documents with no requirements, and unused artifacts collect here. This view is rebuilt in the final phase.</p></div></div>
-          <div className="gps-panel"><p className="gps-muted" style={{ margin: 0 }}>Nothing blocking right now. Answer any questions in the agent panel, then run a review cycle.</p></div></div>
-      );
+      center = <OpenItems view={view} projectId={projectId} docs={docs} studioApi={studioApi} onNavigate={go} onOpenDoc={openDoc} />;
       break;
   }
 
@@ -95,8 +103,8 @@ export default function StudioShell(
         <main id="gps-main" style={{ minWidth: 0 }}>{center}</main>
         <AgentPanel projectId={projectId} studioApi={studioApi} onReload={onReload} onToast={toast} />
       </div>
-      {openDoc && (
-        gck(<ProposalDocumentDrawer doc={openDoc} projectId={projectId} canVerify={view.viewerCanVerify} onReload={onReload} onClose={() => setOpenDocKey(null)} api={cockpitApi} />)
+      {drawerDoc && (
+        gck(<ProposalDocumentDrawer doc={drawerDoc} projectId={projectId} canVerify={view.viewerCanVerify} onReload={onReload} onClose={() => setOpenDocKey(null)} api={cockpitApi} />)
       )}
       {toastMsg && <div className="gps-toast" role="status">{toastMsg}</div>}
     </div>
