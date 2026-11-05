@@ -17,6 +17,7 @@ import StudioTour from './StudioTour';
 // The drafting drawer for a form/pricing row is the one shipped govCockpit piece still reused (wrapped in `.gck` to
 // carry its own tokens); every stage view is now a native `.gps` surface.
 import ProposalDocumentDrawer from '../govCockpit/ProposalDocumentDrawer';
+import ReportAProblem from '../../../admin/marketing/bugReport/ReportAProblem';
 
 const VIEWS: StudioView[] = ['overview', 'blueprint', 'documents', 'evidence', 'editor', 'gates', 'package', 'openitems'];
 
@@ -29,8 +30,8 @@ const VIEWS: StudioView[] = ['overview', 'blueprint', 'documents', 'evidence', '
  * reuses the shipped govCockpit panel.
  */
 export default function StudioShell(
-  { view, projectId, onReload, cockpitApi, studioApi, reviewApi, onReanalyze, reanalyzing = false }:
-  { view: StudentGovProjectView; projectId: string; onReload: () => void; cockpitApi: GovCockpitApi; studioApi: GovStudioApi; reviewApi?: GovReviewApi; onReanalyze?: () => void; reanalyzing?: boolean },
+  { view, projectId, onReload, cockpitApi, studioApi, reviewApi, onReanalyze, reanalyzing = false, bugReportEndpoint }:
+  { view: StudentGovProjectView; projectId: string; onReload: () => void; cockpitApi: GovCockpitApi; studioApi: GovStudioApi; reviewApi?: GovReviewApi; onReanalyze?: () => void; reanalyzing?: boolean; bugReportEndpoint?: string },
 ): React.ReactElement {
   const [sp, setSp] = useSearchParams();
   const raw = sp.get('view');
@@ -120,6 +121,7 @@ export default function StudioShell(
       )}
       {toastMsg && <div className="gps-toast" role="status">{toastMsg}</div>}
       {tourStep !== null && <StudioTour step={tourStep} onNavigate={go} onSetStep={setTourStep} onClose={() => setTourStep(null)} />}
+      {bugReportEndpoint && <ReportAProblem brandLabel={null} endpoint={bugReportEndpoint} extra={{ projectId, contractName: view.name }} />}
     </div>
   );
 }

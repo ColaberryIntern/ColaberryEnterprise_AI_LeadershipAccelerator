@@ -509,4 +509,23 @@ router.get(
   },
 );
 
+// "Report a problem" from the intern's Studio — the portal mirror of the admin bug reporter, scoped to
+// a project the intern can read. Same email to the Gov Studio recipients so the Gov tab picks it up.
+router.post(
+  '/api/portal/gov-projects/:projectId/bug-report',
+  requireParticipant,
+  requireGovProjectAccess('project.read'),
+  async (req: GovProjectRequest, res: Response) => {
+    const projectId = String(req.params.projectId);
+    try {
+      const actor = await resolveGovProjectActor(req);
+      const { handleGovStudioBugReport } = await import('../services/govStudio/studioBugReport');
+      const result = await handleGovStudioBugReport(projectId, actor?.email, req.body);
+      res.status(result.status).json(result.body);
+    } catch {
+      res.status(500).json({ error: 'The report could not be sent.', error_class: 'BugReportSendFailed' });
+    }
+  },
+);
+
 export default router;

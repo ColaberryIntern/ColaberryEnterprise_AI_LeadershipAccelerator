@@ -48,7 +48,7 @@ export default function GovProjectPortalPage(): React.ReactElement {
 
   return (
     <div className="container-fluid py-4" data-testid="gov-project-view">
-      <StudioShell view={view} projectId={view.projectId} onReload={() => void load()} cockpitApi={portalGovCockpitApi} studioApi={portalGovStudioApi} />
+      <StudioShell view={view} projectId={view.projectId} onReload={() => void load()} cockpitApi={portalGovCockpitApi} studioApi={portalGovStudioApi} bugReportEndpoint={`/api/portal/gov-projects/${encodeURIComponent(view.projectId)}/bug-report`} />
     </div>
   );
 }

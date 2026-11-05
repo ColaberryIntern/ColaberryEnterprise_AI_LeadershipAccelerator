@@ -592,4 +592,24 @@ router.post('/api/admin/gov-contracts/:projectId/documents/:docKey/gates/:gate',
   }
 });
 
+// "Report a problem" — the Studio's bug reporter (admin). Emails the Gov Studio recipients so the
+// Gov-contract Claude tab, which checks email, picks it up and starts on the fix, with the route, the
+// captured console errors / failed requests, and the screenshot. Shared core with the portal mirror.
+router.post('/api/admin/gov-contracts/:projectId/bug-report', requireSection('gov_contracts'), async (req: Request, res: Response) => {
+  const projectId = String(req.params.projectId);
+  try {
+    const actor = await resolveGovProjectActor(req);
+    const { handleGovStudioBugReport } = await import('../../services/govStudio/studioBugReport');
+    const result = await handleGovStudioBugReport(projectId, actor?.email, req.body);
+    res.status(result.status).json(result.body);
+  } catch (err) {
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(), level: 'error', service: 'gov-studio-bug-report',
+      event: 'bug_report_failed', outcome: 'failure', error_class: 'BugReportSendFailed',
+      context: { projectId, message: String((err as Error)?.message ?? err).slice(0, 300) },
+    }));
+    res.status(500).json({ error: 'The report could not be sent.', error_class: 'BugReportSendFailed' });
+  }
+});
+
 export default router;

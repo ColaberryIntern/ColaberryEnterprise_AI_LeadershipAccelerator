@@ -35,6 +35,11 @@ export async function ensureGovProposalDocumentGapsSchema(): Promise<void> {
     `CREATE INDEX IF NOT EXISTS idx_gov_proposal_document_gaps_project_doc ON gov_proposal_document_gaps (delivery_project_id, doc_key)`,
     // Idempotency anchor for the slot->document migration. Partial so hand-created gaps (no source) are unconstrained.
     `CREATE UNIQUE INDEX IF NOT EXISTS idx_gov_proposal_document_gaps_source ON gov_proposal_document_gaps (delivery_project_id, source_gap_id) WHERE source_gap_id IS NOT NULL`,
+    // v3 (T-SCHEMA): the typed HumanNeed this gap carries, and a stable dedupe key so identical asks across
+    // documents collapse to one need. Additive + IF NOT EXISTS — rollback-safe (old code ignores these columns).
+    `ALTER TABLE gov_proposal_document_gaps ADD COLUMN IF NOT EXISTS need JSONB`,
+    `ALTER TABLE gov_proposal_document_gaps ADD COLUMN IF NOT EXISTS need_key TEXT`,
+    `CREATE INDEX IF NOT EXISTS idx_gov_proposal_document_gaps_need_key ON gov_proposal_document_gaps (delivery_project_id, need_key) WHERE need_key IS NOT NULL`,
   ];
 
   for (const sql of statements) {
