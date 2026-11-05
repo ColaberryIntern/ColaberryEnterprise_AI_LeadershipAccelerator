@@ -52,7 +52,10 @@ async function main(): Promise<void> {
       const row = byId.get(u.id);
       if (!row) throw new Error(`C112: card ${u.id} vanished mid-run`);
       row.changed('metadata', true);
-      await row.update(u.set as Partial<TimelineCard>, { transaction });
+      // hooks: false — the CAPE afterUpdate hook writes skill_mapping on its own connection, outside this transaction,
+      // and waits on the row lock this transaction holds: a deadlock (prod, 2026-11-05). The stamp reads only type,
+      // week and visibility, none of which this script changes, so skipping it loses nothing.
+      await row.update(u.set as Partial<TimelineCard>, { transaction, hooks: false });
     }
     console.log(`APPLIED: ${plan.length} card(s) updated.`);
   });
