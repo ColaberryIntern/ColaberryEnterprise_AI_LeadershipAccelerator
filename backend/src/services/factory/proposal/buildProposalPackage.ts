@@ -58,6 +58,7 @@ export async function assembleProposalPackage(deliveryProjectId: string): Promis
     const out: PackageDoc[] = [];
     for (const r of docRows) {
       const d = r.get({ plain: true });
+      if (d.superseded) continue; // C.1: a "No longer required" form doc is excluded from the package.
       const ver: any = d.current_version_id ? await GovProposalDocumentVersion.findByPk(d.current_version_id) : null;
       const v = ver ? ver.get({ plain: true }) : null;
       const goldRow: any = await GovProposalGateReview.findOne({ where: { document_id: d.id, gate: 'gold' } });

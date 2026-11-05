@@ -63,12 +63,24 @@ export interface ProposalDocumentReq { canonicalReqId: string; statement: string
  * proof → discriminator` section plan P5 fills in. The response-slot model's per-requirement content,
  * figures and gaps migrate INTO these sections (see migrateProposalSlotsToDocumentSections.ts).
  */
+/** P5 structured section plan (hot-button → feature → benefit → proof → discriminator). Reviewer-editable; saving it
+ *  writes a new human version so it stays auditable. (The legacy single-string `plan` below is kept for back-compat.) */
+export interface SectionPlanFields {
+  hotButton: string;
+  feature: string;
+  benefit: string;
+  proof: string;
+  discriminator: string;
+}
+
 export interface ProposalDocumentSection {
   sectionKey: string;
   heading: string;
   requirementIds: string[];
   order: number;
   plan?: string;
+  /** P5: the structured section plan the reviewer fills in (B.7). */
+  planFields?: SectionPlanFields;
   /** Authored section body — migrated from the response slot, then written by drafting (P5). Preserved across
    *  re-derivation (sync merges by `sectionKey`; derivation never clears it). */
   contentHtml?: string;

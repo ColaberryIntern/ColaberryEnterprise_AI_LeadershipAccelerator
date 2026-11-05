@@ -368,4 +368,145 @@ router.post(
   },
 );
 
+// ── B.8 INTERN PARITY (read versions/questions/activity; answer + run review cycle on EDIT-shared docs) ──────────
+// All guarded by membership (project.read). Reads carry no pricing (the projection drops it). Writes additionally
+// require an EDIT-level proposal share. Gates, pricing and the library admin are NEVER exposed here.
+
+/** The docKeys this caller may see (their student-safe projection drops pricing), plus whether they hold an EDIT share. */
+async function proposalAccess(req: GovProjectRequest, projectId: string): Promise<{ me: string | null; docKeys: Set<string>; canEdit: boolean } | null> {
+  const { hasDeliveryPermission } = await import('../modules/delivery/deliveryAuthorization');
+  const canVerify = !!(req.deliveryContext && hasDeliveryPermission(req.deliveryContext, 'evidence.verify'));
+  const me = req.deliveryContext?.platformIdentityId ?? null;
+  const view = await getStudentGovProjectView(projectId, canVerify, me);
+  if (!view) return null;
+  return { me, docKeys: new Set((view.proposalDocuments ?? []).map((d) => d.key)), canEdit: !!view.proposal?.canEdit };
+}
+
+/** GET .../documents/:docKey/versions/:versionId — read one version's content (B.2 mirror). The doc must be one the
+ *  caller may see (pricing is dropped from their projection ⇒ 404) and the version must belong to it. */
+router.get(
+  '/api/portal/gov-projects/:projectId/documents/:docKey/versions/:versionId',
+  requireParticipant, requireGovProjectAccess('project.read'),
+  async (req: GovProjectRequest, res: Response) => {
+    const projectId = req.params.projectId; const docKey = req.params.docKey; const versionId = req.params.versionId;
+    if (typeof projectId !== 'string' || !projectId || typeof docKey !== 'string' || !docKey || typeof versionId !== 'string' || !versionId) { res.status(400).json({ error: 'Project, document and version ids are required' }); return; }
+    try {
+      const access = await proposalAccess(req, projectId);
+      if (!access || !access.docKeys.has(docKey)) { res.status(404).json({ error: 'Not found' }); return; }
+      const review = await import('../services/factory/proposal/govProposalReviewStore');
+      const ref = await review.docRefForVersion(versionId);
+      if (!ref || ref.deliveryProjectId !== projectId || ref.docKey !== docKey) { res.status(404).json({ error: 'Not found' }); return; }
+      const content = await review.getDocumentVersionContent(versionId);
+      if (!content) { res.status(404).json({ error: 'Not found' }); return; }
+      res.json(content);
+    } catch { res.status(500).json({ error: 'Could not load the version.' }); }
+  },
+);
+
+/** GET .../questions?status=open — the open questions for the agent panel (B.3 mirror). project.read. */
+router.get(
+  '/api/portal/gov-projects/:projectId/questions',
+  requireParticipant, requireGovProjectAccess('project.read'),
+  async (req: GovProjectRequest, res: Response) => {
+    const projectId = req.params.projectId;
+    if (typeof projectId !== 'string' || !projectId) { res.status(400).json({ error: 'Project id is required' }); return; }
+    try {
+      const { listOpenQuestions } = await import('../services/factory/proposal/govProposalGaps');
+      res.json({ questions: await listOpenQuestions(projectId) });
+    } catch { res.status(500).json({ error: 'Could not load the questions.' }); }
+  },
+);
+
+/** GET .../activity?limit=50 — the derived activity feed (B.4 mirror). project.read. */
+router.get(
+  '/api/portal/gov-projects/:projectId/activity',
+  requireParticipant, requireGovProjectAccess('project.read'),
+  async (req: GovProjectRequest, res: Response) => {
+    const projectId = req.params.projectId;
+    if (typeof projectId !== 'string' || !projectId) { res.status(400).json({ error: 'Project id is required' }); return; }
+    const limit = Number(req.query.limit) || 50;
+    try {
+      const { loadProposalActivity } = await import('../services/factory/proposal/proposalActivity');
+      res.json({ activity: await loadProposalActivity(projectId, limit) });
+    } catch { res.status(500).json({ error: 'Could not load the activity feed.' }); }
+  },
+);
+
+/** POST .../questions/:key/answer — an EDIT-shared member answers an open question (B.3/B.8). Saves to the library
+ *  and resolves every open gap that asked it; returns the resolved count + re-scored docs. Requires an EDIT share. */
+router.post(
+  '/api/portal/gov-projects/:projectId/questions/:key/answer',
+  requireParticipant, requireGovProjectAccess('project.read'),
+  async (req: GovProjectRequest, res: Response) => {
+    const projectId = req.params.projectId;
+    if (typeof projectId !== 'string' || !projectId) { res.status(400).json({ error: 'Project id is required' }); return; }
+    const me = req.deliveryContext?.platformIdentityId ?? null;
+    if (!me) { res.status(401).json({ error: 'No resolvable identity' }); return; }
+    const { decodeQuestionKey } = await import('../services/factory/proposal/govProposalGaps');
+    const question = decodeQuestionKey(String(req.params.key ?? ''));
+    const answer = String((req.body ?? {}).answer ?? '').trim();
+    if (!question) { res.status(400).json({ error: 'Unknown question key.' }); return; }
+    if (!answer) { res.status(400).json({ error: 'An answer is required.' }); return; }
+    try {
+      const access = await proposalAccess(req, projectId);
+      if (!access) { res.status(404).json({ error: 'Not found' }); return; }
+      if (!access.canEdit) { res.status(403).json({ error: 'Forbidden' }); return; }
+      const { default: GovQualification } = await import('../models/GovQualification');
+      const q: any = await GovQualification.findOne({ where: { delivery_project_id: projectId }, order: [['version', 'DESC']] });
+      if (!q?.tenant_id) { res.status(409).json({ error: 'No tenant resolved for this project.' }); return; }
+      const { answerQuestionToLibrary } = await import('../services/factory/proposal/govCompanyLibrary');
+      const { gapsResolved } = await answerQuestionToLibrary(q.tenant_id, projectId, { question, answer }, me);
+      const view = await getStudentGovProjectView(projectId, false, me);
+      res.json({ resolved: gapsResolved, documents: view?.proposalDocuments ?? [] });
+    } catch { res.status(500).json({ error: 'Could not record the answer.' }); }
+  },
+);
+
+/** POST .../documents/:docKey/review-cycle — an EDIT-shared member runs the agent review cycle on a doc they can see
+ *  (B.5/B.8). 409 when a run is already active; never pricing (the doc must be in their projection). */
+router.post(
+  '/api/portal/gov-projects/:projectId/documents/:docKey/review-cycle',
+  requireParticipant, requireGovProjectAccess('project.read'),
+  async (req: GovProjectRequest, res: Response) => {
+    const projectId = req.params.projectId; const docKey = req.params.docKey;
+    if (typeof projectId !== 'string' || !projectId || typeof docKey !== 'string' || !docKey) { res.status(400).json({ error: 'Project and document ids are required' }); return; }
+    const me = req.deliveryContext?.platformIdentityId ?? null;
+    if (!me) { res.status(401).json({ error: 'No resolvable identity' }); return; }
+    const maxIterations = Number((req.body ?? {}).maxIterations) || 3;
+    try {
+      const access = await proposalAccess(req, projectId);
+      if (!access) { res.status(404).json({ error: 'Not found' }); return; }
+      if (!access.canEdit) { res.status(403).json({ error: 'Forbidden' }); return; }
+      if (!access.docKeys.has(docKey)) { res.status(404).json({ error: 'Not found' }); return; } // pricing/unseen ⇒ 404
+      const review = await import('../services/factory/proposal/govProposalReviewStore');
+      const runs = await import('../services/factory/proposal/govProposalReviewRunStore');
+      const docId = await review.docIdFor(projectId, docKey);
+      if (!docId) { res.status(404).json({ error: 'Not found' }); return; }
+      if (await runs.activeRunForDoc(docId)) { res.status(409).json({ error: 'A review cycle is already running for this document.', reason: 'run_active' }); return; }
+      const { id: runId } = await runs.createRun(docId);
+      const { runReviewCycle } = await import('../services/factory/proposal/runReviewCycle');
+      void runReviewCycle(projectId, docKey, { maxIterations, identityId: me, runId }).catch(async () => {
+        try { await runs.updateRun(runId, { status: 'failed', lastMessage: 'The review cycle errored.' }); } catch { /* best-effort */ }
+      });
+      res.json({ runId, started: true, maxIterations });
+    } catch { res.status(500).json({ error: 'Could not start the review cycle.' }); }
+  },
+);
+
+/** GET .../review-cycle/:runId — poll a review run (B.5 mirror). project.read. */
+router.get(
+  '/api/portal/gov-projects/:projectId/review-cycle/:runId',
+  requireParticipant, requireGovProjectAccess('project.read'),
+  async (req: GovProjectRequest, res: Response) => {
+    const projectId = req.params.projectId;
+    if (typeof projectId !== 'string' || !projectId) { res.status(400).json({ error: 'Project id is required' }); return; }
+    try {
+      const runs = await import('../services/factory/proposal/govProposalReviewRunStore');
+      const run = await runs.getRun(String(req.params.runId));
+      if (!run) { res.status(404).json({ error: 'Not found' }); return; }
+      res.json({ run });
+    } catch { res.status(500).json({ error: 'Could not load the review run.' }); }
+  },
+);
+
 export default router;

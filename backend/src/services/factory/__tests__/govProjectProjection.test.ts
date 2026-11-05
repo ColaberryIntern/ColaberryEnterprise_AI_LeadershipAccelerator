@@ -24,9 +24,17 @@ jest.mock('../../../models/GovProposalBlueprint', () => ({ __esModule: true, def
 const gpdFindOrCreate = jest.fn();
 const gpdFindAll = jest.fn();
 jest.mock('../../../models/GovProposalDocument', () => ({ __esModule: true, default: { findOrCreate: (...a: any[]) => gpdFindOrCreate(...a), findAll: (...a: any[]) => gpdFindAll(...a), findOne: jest.fn() } }));
+// B.1: the loader's per-doc summary batch-loads open-gap counts via a raw query and versions/gates/runs via their
+// stores; keep this unit test DB-free AND fast (loading the real stores' Sequelize models is slow enough to flake the
+// 5s timeout under full-suite load). The batch loaders would no-op here anyway (fixture rows carry no id).
+jest.mock('../proposal/govProposalGaps', () => ({ openGapCountsByDoc: jest.fn().mockResolvedValue(new Map()) }));
+jest.mock('../proposal/govProposalReviewStore', () => ({ listVersionsByIds: jest.fn().mockResolvedValue(new Map()), listGatesForDocs: jest.fn().mockResolvedValue(new Map()) }));
+jest.mock('../proposal/govProposalReviewRunStore', () => ({ latestRunsForDocs: jest.fn().mockResolvedValue(new Map()) }));
 const plain = (v: any) => ({ get: () => ({ ...v }) });
 
-import { toStudentGovProjectView, getStudentGovProjectView, toStudentSubmissionChecklist } from '../govProjectProjection';
+import { toStudentGovProjectView, getStudentGovProjectView, toStudentSubmissionChecklist, assembleProposalDocuments, type ProposalDocSummarySource } from '../govProjectProjection';
+import type { ProposalDocumentView } from '../proposal/govProposalDocumentStore';
+import type { VersionView, GateView } from '../proposal/govProposalReviewStore';
 
 // Rows carrying the FULL set of admin/internal fields that must NOT reach a student.
 const projectRow = { id: 'dp-1', name: 'TxDOT Claims Search', slug: 'gov-x', status: 'discovery', project_class: 'government_public_sector',
@@ -229,6 +237,10 @@ describe('getStudentGovProjectView (loader) — only a non-archived government p
     const tech = v!.proposalDocuments[0];
     expect(tech).toMatchObject({ docType: 'form', pageLimit: 20, fileName: 'technical-proposal.pdf', blueprintVersion: 1 });
     expect(JSON.stringify(v)).not.toContain('price-cost-proposal.xlsx'); // pricing file name never reaches the intern
+    // B.1: the per-doc summary + readiness meter are wired (the fixture's only scored doc is a FORM, so readiness is 0/0).
+    expect(tech).toMatchObject({ superseded: false, openGapCount: 0, fatalCount: 0, cycle: null });
+    expect(tech.gates).toEqual({ pink: 'pending', red: 'pending', gold: 'pending', white_glove: 'pending' });
+    expect(v!.proposalReadiness).toEqual({ pct: 0, passing: 0, total: 0 });
   });
 
   it('returns null for a NON-government project class (this surface serves only gov projects)', async () => {
@@ -262,5 +274,85 @@ describe('getStudentGovProjectView (loader) — only a non-archived government p
     expect(v!.proposal.canComment).toBe(false);                 // view is read-only
     expect(v!.proposal.responses.map((r) => r.requirementId)).toEqual(['REQ-1', 'REQ-2']); // no responses yet, slots unanswered
     expect(v!.proposal.responses.every((r) => r.status === 'unanswered')).toBe(true);
+  });
+});
+
+describe('assembleProposalDocuments (pure) — B.1 per-doc summary + readiness', () => {
+  const mkView = (over: Partial<ProposalDocumentView> & { key: string }): ProposalDocumentView => ({
+    title: over.key, status: 'drafted', contentHtml: null, version: 1, adminOnly: false, gate: false, order: 1,
+    requirementIds: [], sections: [], docType: 'derived', pageLimit: null, fileName: null, blueprintVersion: 1,
+    superseded: false, comments: [], draftedAt: null, acceptedAt: null, ...over,
+  });
+  const mkVersion = (over: Partial<VersionView> & { id: string }): VersionView => ({
+    version: 1, authorKind: 'agent', changeSummary: null, scores: {}, findings: [], passes: false, pageCount: null, createdAt: null, ...over,
+  });
+  const gatesAll = (status: string): GateView[] => (['pink', 'red', 'gold', 'white_glove'] as const).map((gate) => ({ gate, status, versionId: null, note: null, decidedAt: null }));
+
+  it('maps the per-doc summary: latest, gates record, currentGate, fatalCount, openGapCount, cycle', () => {
+    const src: ProposalDocSummarySource[] = [{
+      view: mkView({ key: 'technical' }),
+      latest: mkVersion({ id: 'v1', version: 2, scores: { coverage: 96, format: 90 }, passes: true, pageCount: 12, createdAt: '2026-11-05T00:00:00.000Z', findings: [{ check: 'format', severity: 'fatal', message: 'x' }, { check: 'fact', severity: 'minor', message: 'y' }] }),
+      gates: [
+        { gate: 'pink', status: 'approved', versionId: 'v1', note: null, decidedAt: null },
+        { gate: 'red', status: 'pending', versionId: null, note: null, decidedAt: null },
+        { gate: 'gold', status: 'pending', versionId: null, note: null, decidedAt: null },
+        { gate: 'white_glove', status: 'pending', versionId: null, note: null, decidedAt: null },
+      ],
+      openGapCount: 3,
+      latestRun: { id: 'run-9', documentId: 'd1', status: 'running', iterations: 2, lastMessage: 'iter 2', startedAt: null, finishedAt: null },
+    }];
+    const d = assembleProposalDocuments(src, true).documents[0];
+    expect(d.latest).toEqual({ versionId: 'v1', version: 2, scores: { coverage: 96, format: 90 }, passes: true, pageCount: 12, createdAt: '2026-11-05T00:00:00.000Z' });
+    expect(d.gates).toEqual({ pink: 'approved', red: 'pending', gold: 'pending', white_glove: 'pending' });
+    expect(d.currentGate).toBe('red');   // first gate not approved
+    expect(d.fatalCount).toBe(1);        // one fatal finding on the latest version
+    expect(d.openGapCount).toBe(3);
+    expect(d.cycle).toEqual({ status: 'running', runId: 'run-9' });
+  });
+
+  it('currentGate is null when every gate is approved (UI shows "Passed")', () => {
+    const src: ProposalDocSummarySource[] = [{ view: mkView({ key: 'technical' }), latest: mkVersion({ id: 'v1', passes: true }), gates: gatesAll('approved'), openGapCount: 0, latestRun: null }];
+    expect(assembleProposalDocuments(src, true).documents[0].currentGate).toBeNull();
+  });
+
+  it('a doc with no current version → latest null, fatalCount 0, cycle null, all gates pending, currentGate pink', () => {
+    const src: ProposalDocSummarySource[] = [{ view: mkView({ key: 'cover_letter' }), latest: null, gates: [], openGapCount: 0, latestRun: null }];
+    const d = assembleProposalDocuments(src, true).documents[0];
+    expect(d.latest).toBeNull();
+    expect(d.fatalCount).toBe(0);
+    expect(d.cycle).toBeNull();
+    expect(d.gates).toEqual({ pink: 'pending', red: 'pending', gold: 'pending', white_glove: 'pending' });
+    expect(d.currentGate).toBe('pink');
+  });
+
+  it('viewer filter: a non-verifier never receives a pricing (admin_only) doc; an admin does', () => {
+    const src: ProposalDocSummarySource[] = [
+      { view: mkView({ key: 'technical' }), latest: null, gates: [], openGapCount: 0, latestRun: null },
+      { view: mkView({ key: 'pricing', adminOnly: true }), latest: null, gates: [], openGapCount: 0, latestRun: null },
+    ];
+    expect(assembleProposalDocuments(src, false).documents.map((x) => x.key)).toEqual(['technical']);
+    expect(assembleProposalDocuments(src, true).documents.map((x) => x.key).sort()).toEqual(['pricing', 'technical']);
+  });
+
+  it('readiness counts scored (non-pricing, non-superseded, non-form) passing docs — same number for everyone', () => {
+    const src: ProposalDocSummarySource[] = [
+      { view: mkView({ key: 'technical', docType: 'derived' }), latest: mkVersion({ id: 'v1', passes: true }), gates: [], openGapCount: 0, latestRun: null },
+      { view: mkView({ key: 'past_performance', docType: 'derived' }), latest: mkVersion({ id: 'v2', passes: false }), gates: [], openGapCount: 0, latestRun: null },
+      { view: mkView({ key: 'pricing', adminOnly: true }), latest: mkVersion({ id: 'v3', passes: true }), gates: [], openGapCount: 0, latestRun: null },
+      { view: mkView({ key: 'form_ciq', docType: 'form', superseded: true }), latest: mkVersion({ id: 'v4', passes: true }), gates: [], openGapCount: 0, latestRun: null },
+      { view: mkView({ key: 'form_hsp', docType: 'form' }), latest: mkVersion({ id: 'v5', passes: true }), gates: [], openGapCount: 0, latestRun: null },
+    ];
+    expect(assembleProposalDocuments(src, true).readiness).toEqual({ pct: 50, passing: 1, total: 2 });
+    expect(assembleProposalDocuments(src, false).readiness).toEqual({ pct: 50, passing: 1, total: 2 });
+  });
+
+  it('carries no author/reviewer identity in the summary', () => {
+    const src: ProposalDocSummarySource[] = [{ view: mkView({ key: 'technical' }), latest: mkVersion({ id: 'v1', authorKind: 'human', passes: true }), gates: gatesAll('approved'), openGapCount: 0, latestRun: null }];
+    const blob = JSON.stringify(assembleProposalDocuments(src, true).documents[0]);
+    expect(blob).not.toMatch(/identity/i);
+  });
+
+  it('is total on garbage', () => {
+    expect(assembleProposalDocuments(undefined as unknown as ProposalDocSummarySource[], true)).toEqual({ documents: [], readiness: { pct: 0, passing: 0, total: 0 } });
   });
 });

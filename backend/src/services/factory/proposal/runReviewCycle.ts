@@ -58,21 +58,38 @@ export async function reviewCycleCore(deps: ReviewCycleDeps, opts?: { maxIterati
   return { iterations: max, stoppedBecause: 'max_iterations', finalPasses: false };
 }
 
+/** Map the cycle's stop reason to the observable run-row status (B.5). */
+const RUN_STATUS_FOR_STOP: Record<ReviewCycleStop, 'passed' | 'blocked' | 'failed' | 'done'> = {
+  passed: 'passed',
+  open_questions: 'blocked',   // a human must answer a question before the agent can continue
+  revise_failed: 'failed',
+  max_iterations: 'done',
+  no_document: 'failed',
+};
+
 /** Wire the real services for a project/document and run the cycle. Fire this fail-soft from a route (kick off,
- *  then the client polls the version history). */
-export async function runReviewCycle(deliveryProjectId: string, docKey: string, opts?: { maxIterations?: number; identityId?: string | null }): Promise<ReviewCycleResult> {
+ *  then the client polls the run — opts.runId — and the version history). When `runId` is given, the cycle writes its
+ *  progress (iterations + last message) and terminal status onto that gov_proposal_review_runs row (B.5). */
+export async function runReviewCycle(deliveryProjectId: string, docKey: string, opts?: { maxIterations?: number; identityId?: string | null; runId?: string | null }): Promise<ReviewCycleResult> {
   const { listProposalDocuments } = await import('./govProposalDocumentStore');
   const { runProposalDocumentChecks } = await import('./runProposalDocumentChecks');
   const { reviseDocument } = await import('./reviseProposalDocumentAI');
   const { buildGrounding } = await import('./proposalGrounding');
   const { draftProposalDocument } = await import('./govProposalDocumentActions');
+  const { updateRun } = await import('./govProposalReviewRunStore');
   const { QueryTypes } = await import('sequelize');
   const { sequelize } = await import('../../../config/database');
+  const runId = opts?.runId ?? null;
 
   const docOf = async () => (await listProposalDocuments(deliveryProjectId)).find((d) => d.key === docKey) ?? null;
 
   function log(fields: Record<string, unknown>): void {
     console.log(JSON.stringify({ timestamp: new Date().toISOString(), level: 'info', service: 'proposal-studio-cycle', deliveryProjectId, docKey, ...fields }));
+    // B.5: mirror per-iteration progress onto the run row so the agent panel can poll it (best-effort, fire-and-forget).
+    if (runId && fields.event === 'review_cycle_iteration') {
+      const iteration = typeof fields.iteration === 'number' ? fields.iteration : undefined;
+      void updateRun(runId, { iterations: iteration, lastMessage: fields.passes ? `Iteration ${iteration}: passed the checks` : `Iteration ${iteration}: revising failing sections` }).catch(() => undefined);
+    }
   }
 
   const deps: ReviewCycleDeps = {
@@ -102,5 +119,11 @@ export async function runReviewCycle(deliveryProjectId: string, docKey: string, 
     },
     log,
   };
-  return reviewCycleCore(deps, { maxIterations: opts?.maxIterations });
+  const result = await reviewCycleCore(deps, { maxIterations: opts?.maxIterations });
+  // B.5: stamp the terminal status + final iteration count onto the run row so the UI stops polling and shows the
+  // outcome (Passed / Blocked on a question / Done at max iterations / Failed). Best-effort; never throws past here.
+  if (runId) {
+    try { await updateRun(runId, { status: RUN_STATUS_FOR_STOP[result.stoppedBecause], iterations: result.iterations, lastMessage: `Stopped: ${result.stoppedBecause}`, resultJson: result }); } catch { /* best-effort */ }
+  }
+  return result;
 }

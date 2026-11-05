@@ -4,7 +4,7 @@
  * fabricated-quote rule is dropped and counted, (3) scoring, Section L mechanics, buyer type and the Texas forms
  * (upgraded when the solicitation names one) all come through.
  */
-import { buildProposalBlueprint, verifyBlueprintRules, detectBuyerType, type BlueprintSourceFile } from '../buildProposalBlueprint';
+import { buildProposalBlueprint, verifyBlueprintRules, detectBuyerType, detectJurisdiction, type BlueprintSourceFile } from '../buildProposalBlueprint';
 import { detectSectionLRules } from '../sectionLDetectors';
 import { normalizeForMatch } from '../verifyQuotes';
 import type { BlueprintRule } from '../proposalBlueprintTypes';
@@ -107,11 +107,64 @@ describe('detectSectionLRules — direct', () => {
   });
 });
 
-describe('detectBuyerType', () => {
+describe('detectBuyerType — jurisdiction-aware', () => {
   it('maps text cues to buyer types; null when unclear', () => {
     expect(detectBuyerType('State of Texas Department of Information Resources')).toBe('state_agency');
     expect(detectBuyerType('The University of Texas System')).toBe('university');
-    expect(detectBuyerType('City of Saratoga Springs')).toBe('local_government');
     expect(detectBuyerType('an ordinary sentence with no buyer cue')).toBeNull();
+  });
+  it('a local-government cue is a TEXAS class only in a Texas jurisdiction; otherwise out-of-scope (other)', () => {
+    // The Saratoga Springs (UT) production bug: a non-Texas / undetermined local must NOT be keyed as a Texas local
+    // (which pulled the Texas CIQ). It is now `other`.
+    expect(detectBuyerType('City of Saratoga Springs')).toBe('other');
+    expect(detectBuyerType('City of Provo, Utah')).toBe('other');
+    expect(detectBuyerType('Harris County, Texas')).toBe('local_government');
+  });
+  it('a university cue off-jurisdiction is out-of-scope', () => {
+    expect(detectBuyerType('University of Utah, Salt Lake City, Utah')).toBe('other');
+  });
+});
+
+describe('detectJurisdiction', () => {
+  it('reads the state from the solicitation text', () => {
+    expect(detectJurisdiction('RFP — State of Texas, Department of Information Resources').state).toBe('Texas');
+    expect(detectJurisdiction('City of Provo, Utah — Request for Proposals').state).toBe('Utah');
+    expect(detectJurisdiction('Harris County, Texas purchasing office').state).toBe('Texas');
+    expect(detectJurisdiction('resolves to Texas via an acronym: HHSC solicitation').state).toBe('Texas');
+    expect(detectJurisdiction('an address line, UT 84043 for delivery').state).toBe('Utah');
+    expect(detectJurisdiction('nothing identifying a state here').state).toBeNull();
+    expect(detectJurisdiction('').state).toBeNull();
+  });
+  it('carries the literal source quote', () => {
+    expect(detectJurisdiction('City of Provo, Utah').quote).toMatch(/Utah/);
+  });
+});
+
+describe('buildProposalBlueprint — jurisdiction gates the Texas forms engine (C.1 fix)', () => {
+  const UTAH_MUNI = `City of Provo, Utah — Request for Proposals
+RFP for Municipal Asset Management and Permitting Software Solution.
+The City of Provo is a municipal government in the State of Utah. Award on a best value basis.
+Submit a signed proposal as a searchable PDF.`;
+  const TEXAS_COUNTY = `Harris County, Texas — Request for Proposals
+RFP for Permitting Software. The County will award on a best value basis.
+A Conflict of Interest Questionnaire (CIQ) must accompany the proposal.`;
+
+  it('a Utah municipality pulls NO Texas form (the CIQ bug) and reports no state rulebook loaded', () => {
+    const bp = buildProposalBlueprint({ files: [{ name: 'provo.pdf', text: UTAH_MUNI }], buyer: {} }, { now: NOW });
+    expect(bp.jurisdiction?.state).toBe('Utah');
+    expect(bp.buyerType).toBe('other');
+    expect(bp.stateFormsStatus?.loaded).toBe(false);
+    expect(bp.stateFormsStatus?.note).toMatch(/Utah/);
+    expect(bp.forms.find((f) => f.key === 'ciq')?.disposition).toBe('not_required');
+    // No Texas form is asserted required/at-award for an off-jurisdiction buyer.
+    expect(bp.forms.every((f) => f.disposition === 'not_required')).toBe(true);
+  });
+
+  it('a Texas county still gets the Texas CIQ required and reports the Texas rulebook loaded', () => {
+    const bp = buildProposalBlueprint({ files: [{ name: 'harris.pdf', text: TEXAS_COUNTY }], buyer: {} }, { now: NOW });
+    expect(bp.jurisdiction?.state).toBe('Texas');
+    expect(bp.buyerType).toBe('local_government');
+    expect(bp.stateFormsStatus?.loaded).toBe(true);
+    expect(bp.forms.find((f) => f.key === 'ciq')?.disposition).toBe('required');
   });
 });

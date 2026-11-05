@@ -11,7 +11,7 @@
  *  - acceptance is reversible by a re-draft (status falls back to `drafted`), so a comment-driven revision loop works.
  */
 import GovProposalDocument, { type GovProposalDocumentAttributes, type GovProposalDocumentComment, type GovProposalDocumentStatus } from '../../../models/GovProposalDocument';
-import type { ProposalDocument, ProposalDocumentSection, ProposalDocType } from './govProposalDocuments';
+import type { ProposalDocument, ProposalDocumentSection, ProposalDocType, SectionPlanFields } from './govProposalDocuments';
 
 export interface ProposalDocumentView {
   key: string;
@@ -30,6 +30,9 @@ export interface ProposalDocumentView {
   pageLimit: number | null;
   fileName: string | null;
   blueprintVersion: number | null;
+  /** C.1: a blueprint FORM document that no longer applies (e.g. a Texas CIQ on a non-Texas buyer) but still has
+   *  authored work — flagged "No longer required", excluded from readiness + the package. */
+  superseded: boolean;
   comments: GovProposalDocumentComment[];
   draftedAt: string | null;
   acceptedAt: string | null;
@@ -71,6 +74,7 @@ function toView(row: GovProposalDocumentAttributes): ProposalDocumentView {
     pageLimit: row.page_limit ?? null,
     fileName: row.file_name ?? null,
     blueprintVersion: row.blueprint_version ?? null,
+    superseded: !!row.superseded,
     comments: Array.isArray(row.comments) ? row.comments : [],
     draftedAt: row.drafted_at ? new Date(row.drafted_at).toISOString() : null,
     acceptedAt: row.accepted_at ? new Date(row.accepted_at).toISOString() : null,
@@ -108,6 +112,74 @@ export async function listProposalDocuments(deliveryProjectId: string): Promise<
   if (!deliveryProjectId) return [];
   const rows = await GovProposalDocument.findAll({ where: { delivery_project_id: deliveryProjectId }, order: [['order_index', 'ASC']] });
   return rows.map((r) => toView(r.get({ plain: true }) as GovProposalDocumentAttributes));
+}
+
+/** One stored document, reduced to the facts the reconcile needs. */
+export interface StoredDocReconcile {
+  docKey: string;
+  docType: ProposalDocType;
+  status: GovProposalDocumentStatus;
+  version: number;
+  hasContent: boolean;
+  hasVersion: boolean;
+  superseded: boolean;
+}
+
+/** What to do with each stored document after a re-analyze. */
+export interface ReconcilePlan { toDelete: string[]; toFlag: string[]; toUnflag: string[]; }
+
+/**
+ * PURE decision core for the C.1 "no longer required" rail (so it is unit-testable without a DB). Given the stored
+ * documents and the keys the NEW blueprint derives, decide which blueprint FORM documents no longer apply:
+ *  - a FORM doc absent from the derived set with NO authored work (not_started, version 0, no content, no version) is
+ *    removed (`toDelete`); with work, it is flagged `superseded` (`toFlag`) so authored work is never destroyed;
+ *  - a doc that is back in the derived set is un-flagged (`toUnflag`).
+ * Requirement-derived / generated / build documents are left untouched — they follow the "persist, never delete"
+ * rail; only engine/solicitation FORM docs are pruned. Deterministic: same inputs ⇒ same plan (idempotent to re-run).
+ */
+export function planSupersededReconcile(stored: StoredDocReconcile[], derivedKeys: Set<string>): ReconcilePlan {
+  const toDelete: string[] = [];
+  const toFlag: string[] = [];
+  const toUnflag: string[] = [];
+  for (const d of Array.isArray(stored) ? stored : []) {
+    if (!d || !d.docKey) continue;
+    if (derivedKeys.has(d.docKey)) { if (d.superseded) toUnflag.push(d.docKey); continue; }
+    if (d.docType !== 'form') continue; // only blueprint FORM docs are pruned/flagged
+    const hasWork = d.status !== 'not_started' || (d.version ?? 0) > 0 || d.hasContent || d.hasVersion;
+    if (hasWork) { if (!d.superseded) toFlag.push(d.docKey); }
+    else toDelete.push(d.docKey);
+  }
+  return { toDelete, toFlag, toUnflag };
+}
+
+/**
+ * Reconcile stored FORM documents against the newly-derived document set (called from the re-analyze path, AFTER
+ * syncProposalDocuments, so authored work is already preserved). Applies {@link planSupersededReconcile}: deletes the
+ * no-work stale form docs, flags the ones with work as superseded, and un-flags any that apply again. A read-path
+ * projection never calls this, so a routine GET never deletes a row.
+ */
+export async function reconcileSupersededFormDocuments(deliveryProjectId: string, derived: ProposalDocument[]): Promise<ReconcilePlan> {
+  const empty: ReconcilePlan = { toDelete: [], toFlag: [], toUnflag: [] };
+  if (!deliveryProjectId) return empty;
+  const derivedKeys = new Set((Array.isArray(derived) ? derived : []).map((d) => d.key));
+  const rows = await GovProposalDocument.findAll({ where: { delivery_project_id: deliveryProjectId } });
+  const stored: StoredDocReconcile[] = rows.map((r) => {
+    const p = r.get({ plain: true }) as GovProposalDocumentAttributes;
+    return {
+      docKey: p.doc_key,
+      docType: p.doc_type ?? 'derived',
+      status: p.status,
+      version: p.version ?? 0,
+      hasContent: !!p.content_html,
+      hasVersion: !!p.current_version_id,
+      superseded: !!p.superseded,
+    };
+  });
+  const plan = planSupersededReconcile(stored, derivedKeys);
+  for (const key of plan.toDelete) await GovProposalDocument.destroy({ where: { delivery_project_id: deliveryProjectId, doc_key: key } });
+  for (const key of plan.toFlag) await GovProposalDocument.update({ superseded: true, updated_at: new Date() } as any, { where: { delivery_project_id: deliveryProjectId, doc_key: key } });
+  for (const key of plan.toUnflag) await GovProposalDocument.update({ superseded: false, updated_at: new Date() } as any, { where: { delivery_project_id: deliveryProjectId, doc_key: key } });
+  return plan;
 }
 
 async function findDoc(deliveryProjectId: string, docKey: string) {
@@ -153,6 +225,29 @@ export async function acceptProposalDocument(deliveryProjectId: string, docKey: 
 export async function requestChangesProposalDocument(deliveryProjectId: string, docKey: string, reviewerIdentityId: string, note: string): Promise<ProposalDocumentView> {
   const row = await addCommentRow(deliveryProjectId, docKey, reviewerIdentityId, note);
   await row.update({ status: 'changes_requested', updated_at: new Date() });
+  return toView(row.get({ plain: true }) as GovProposalDocumentAttributes);
+}
+
+/**
+ * Save the structured section plan (B.7) onto a document's section AND write a new HUMAN version capturing it, so a
+ * plan change is auditable in the version history. Reviewer-only (the route gates it). 404 when the section is not on
+ * the document; the content is unchanged (only the section's planFields updates).
+ */
+export async function saveSectionPlan(deliveryProjectId: string, docKey: string, sectionKey: string, plan: SectionPlanFields, reviewerIdentityId: string | null): Promise<ProposalDocumentView> {
+  if (!reviewerIdentityId) throw new ProposalDocumentError('A reviewer identity is required.', 'no_reviewer');
+  const row = await findDoc(deliveryProjectId, docKey);
+  const plain = row.get({ plain: true }) as GovProposalDocumentAttributes;
+  const sections: ProposalDocumentSection[] = Array.isArray(plain.sections_json) ? plain.sections_json : [];
+  const idx = sections.findIndex((s) => s && s.sectionKey === sectionKey);
+  if (idx < 0) throw new ProposalDocumentError('Section not found on this document.', 'not_found');
+  const updatedSections = sections.map((s, i) => (i === idx ? { ...s, planFields: plan } : s));
+  await row.update({ sections_json: updatedSections, updated_at: new Date() });
+  // A plan change is a reviewer edit — record it as a new human version (auditable), content unchanged.
+  const { createVersionForDocKey } = await import('./govProposalReviewStore');
+  await createVersionForDocKey(deliveryProjectId, docKey, {
+    contentHtml: plain.content_html ?? null, sections: updatedSections, authorKind: 'human',
+    authorIdentityId: reviewerIdentityId, changeSummary: `Section plan updated: ${sectionKey}`,
+  });
   return toView(row.get({ plain: true }) as GovProposalDocumentAttributes);
 }
 

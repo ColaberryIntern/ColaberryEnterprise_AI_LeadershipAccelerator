@@ -340,17 +340,92 @@ router.post('/api/admin/gov-contracts/:projectId/answer-question', requireSectio
   } catch (err: unknown) { logFail('gov_contract_answer_question_failed', err, { projectId: req.params.projectId }); res.status(500).json({ error: 'Could not record the answer.' }); }
 });
 
-/** POST .../:projectId/documents/:docKey/review-cycle — kick off the agent review cycle (fire-and-forget; poll the
- *  version history for new versions). Bounded by maxIterations (default 3). */
+/** GET .../:projectId/questions?status=open — the agent panel's "Needs your answer" list (B.3): open gaps grouped
+ *  by question, each with a why line, the documents it blocks, and suggested options. Only `open` is served today. */
+router.get('/api/admin/gov-contracts/:projectId/questions', requireSection('gov_contracts'), async (req: Request, res: Response) => {
+  const ctx = await adminGovContext(req, res); if (!ctx) return;
+  try {
+    const { listOpenQuestions } = await import('../../services/factory/proposal/govProposalGaps');
+    res.json({ questions: await listOpenQuestions(req.params.projectId as string) });
+  } catch (err: unknown) {
+    logFail('gov_contract_questions_failed', err, { projectId: req.params.projectId });
+    res.status(500).json({ error: 'Could not load the questions.' });
+  }
+});
+
+/** POST .../:projectId/questions/:key/answer — answer an open question (B.3): saves it to the library and resolves
+ *  every open gap that asked it ("ask once"), then returns the resolved count + the re-scored document summaries. */
+router.post('/api/admin/gov-contracts/:projectId/questions/:key/answer', requireSection('gov_contracts'), async (req: Request, res: Response) => {
+  const ctx = await adminGovContext(req, res); if (!ctx) return;
+  const { decodeQuestionKey } = await import('../../services/factory/proposal/govProposalGaps');
+  const question = decodeQuestionKey(String(req.params.key ?? ''));
+  const answer = String((req.body ?? {}).answer ?? '').trim();
+  if (!question) { res.status(400).json({ error: 'Unknown question key.' }); return; }
+  if (!answer) { res.status(400).json({ error: 'An answer is required.' }); return; }
+  try {
+    const tenantId = await tenantForProject(req.params.projectId as string);
+    if (!tenantId) { res.status(409).json({ error: 'No tenant resolved for this project.' }); return; }
+    const { answerQuestionToLibrary } = await import('../../services/factory/proposal/govCompanyLibrary');
+    const { gapsResolved } = await answerQuestionToLibrary(tenantId, req.params.projectId as string, { question, answer }, ctx.identityId);
+    // Re-scored documents: the fresh per-doc summaries (openGapCount now reflects the resolved gap).
+    const { getStudentGovProjectView } = await import('../../services/factory/govProjectProjection');
+    const view = await getStudentGovProjectView(req.params.projectId as string, true, ctx.identityId);
+    res.json({ resolved: gapsResolved, documents: view?.proposalDocuments ?? [] });
+  } catch (err: unknown) {
+    logFail('gov_contract_question_answer_failed', err, { projectId: req.params.projectId });
+    res.status(500).json({ error: 'Could not record the answer.' });
+  }
+});
+
+/** GET .../:projectId/activity?limit=50 — the agent-panel activity feed (B.4), DERIVED from existing rows (versions,
+ *  gate decisions, artifact captures, blueprint versions, library answers), newest-first. No new event table. */
+router.get('/api/admin/gov-contracts/:projectId/activity', requireSection('gov_contracts'), async (req: Request, res: Response) => {
+  const ctx = await adminGovContext(req, res); if (!ctx) return;
+  const limit = Number(req.query.limit) || 50;
+  try {
+    const { loadProposalActivity } = await import('../../services/factory/proposal/proposalActivity');
+    res.json({ activity: await loadProposalActivity(req.params.projectId as string, limit) });
+  } catch (err: unknown) {
+    logFail('gov_contract_activity_failed', err, { projectId: req.params.projectId });
+    res.status(500).json({ error: 'Could not load the activity feed.' });
+  }
+});
+
+/** POST .../:projectId/documents/:docKey/review-cycle — kick off the agent review cycle (B.5). Creates an observable
+ *  run row and returns its `runId` for polling; 409 when a run is already active for this document (one at a time).
+ *  Fire-and-forget: the cycle updates the run as it works; a crash releases the lock by marking the run failed. */
 router.post('/api/admin/gov-contracts/:projectId/documents/:docKey/review-cycle', requireSection('gov_contracts'), async (req: Request, res: Response) => {
   const ctx = await adminGovContext(req, res); if (!ctx) return;
   const docKey = docKeyOf(req, res); if (!docKey) return;
   const maxIterations = Number((req.body ?? {}).maxIterations) || 3;
   try {
+    const review = await import('../../services/factory/proposal/govProposalReviewStore');
+    const runs = await import('../../services/factory/proposal/govProposalReviewRunStore');
+    const docId = await review.docIdFor(req.params.projectId as string, docKey);
+    if (!docId) { res.status(404).json({ error: 'Not found' }); return; }
+    if (await runs.activeRunForDoc(docId)) { res.status(409).json({ error: 'A review cycle is already running for this document.', reason: 'run_active' }); return; }
+    const { id: runId } = await runs.createRun(docId);
     const { runReviewCycle } = await import('../../services/factory/proposal/runReviewCycle');
-    void runReviewCycle(req.params.projectId as string, docKey, { maxIterations, identityId: ctx.identityId }).catch((err) => logFail('gov_contract_review_cycle_async_failed', err, { projectId: req.params.projectId, docKey }));
-    res.json({ started: true, maxIterations });
+    void runReviewCycle(req.params.projectId as string, docKey, { maxIterations, identityId: ctx.identityId, runId }).catch(async (err) => {
+      logFail('gov_contract_review_cycle_async_failed', err, { projectId: req.params.projectId, docKey, runId });
+      try { await runs.updateRun(runId, { status: 'failed', lastMessage: 'The review cycle errored.' }); } catch { /* best-effort — never leave the run stuck active */ }
+    });
+    res.json({ runId, started: true, maxIterations });
   } catch (err: unknown) { logFail('gov_contract_review_cycle_failed', err, { projectId: req.params.projectId, docKey }); res.status(500).json({ error: 'Could not start the review cycle.' }); }
+});
+
+/** GET .../:projectId/review-cycle/:runId — poll a review run's status/iterations/last message (B.5). */
+router.get('/api/admin/gov-contracts/:projectId/review-cycle/:runId', requireSection('gov_contracts'), async (req: Request, res: Response) => {
+  const ctx = await adminGovContext(req, res); if (!ctx) return;
+  try {
+    const runs = await import('../../services/factory/proposal/govProposalReviewRunStore');
+    const run = await runs.getRun(String(req.params.runId));
+    if (!run) { res.status(404).json({ error: 'Not found' }); return; }
+    res.json({ run });
+  } catch (err: unknown) {
+    logFail('gov_contract_review_run_get_failed', err, { projectId: req.params.projectId, runId: req.params.runId });
+    res.status(500).json({ error: 'Could not load the review run.' });
+  }
 });
 
 // ── Proposal Studio P4: build-artifact evidence ────────────────────────────────────────────────────────────────
@@ -432,6 +507,22 @@ router.get('/api/admin/gov-contracts/:projectId/documents/:docKey/versions', req
   }
 });
 
+/** GET .../:projectId/documents/:docKey/versions/:versionId — one version's stored content (B.2): sanitized HTML +
+ *  sections + the figures bound to them. Powers the Draft & versions paper preview. */
+router.get('/api/admin/gov-contracts/:projectId/documents/:docKey/versions/:versionId', requireSection('gov_contracts'), async (req: Request, res: Response) => {
+  const ctx = await adminGovContext(req, res); if (!ctx) return;
+  const docKey = docKeyOf(req, res); if (!docKey) return;
+  try {
+    const review = await import('../../services/factory/proposal/govProposalReviewStore');
+    const content = await review.getDocumentVersionContent(String(req.params.versionId));
+    if (!content) { res.status(404).json({ error: 'Not found' }); return; }
+    res.json(content);
+  } catch (err: unknown) {
+    logFail('gov_contract_version_content_failed', err, { projectId: req.params.projectId, docKey, versionId: req.params.versionId });
+    res.status(500).json({ error: 'Could not load the version.' });
+  }
+});
+
 /** GET .../:projectId/versions/:a/diff/:b — HTML-aware word diff between two versions (server-side, in-repo LCS). */
 router.get('/api/admin/gov-contracts/:projectId/versions/:a/diff/:b', requireSection('gov_contracts'), async (req: Request, res: Response) => {
   const ctx = await adminGovContext(req, res); if (!ctx) return;
@@ -456,6 +547,24 @@ router.post('/api/admin/gov-contracts/:projectId/documents/:docKey/run-checks', 
   } catch (err: unknown) {
     logFail('gov_contract_run_checks_failed', err, { projectId: req.params.projectId, docKey });
     res.status(500).json({ error: 'Could not run the checks.' });
+  }
+});
+
+/** PUT .../:projectId/documents/:docKey/sections/:sectionKey/plan — a reviewer saves the structured section plan
+ *  (hot-button/feature/benefit/proof/discriminator). Saving writes a new HUMAN version so it is auditable (B.7). */
+router.put('/api/admin/gov-contracts/:projectId/documents/:docKey/sections/:sectionKey/plan', requireSection('gov_contracts'), async (req: Request, res: Response) => {
+  const ctx = await adminGovContext(req, res); if (!ctx) return;
+  const docKey = docKeyOf(req, res); if (!docKey) return;
+  const sectionKey = String(req.params.sectionKey ?? ''); if (!sectionKey) { res.status(400).json({ error: 'Section key is required' }); return; }
+  const b = (req.body ?? {}) as any;
+  const plan = { hotButton: String(b.hotButton ?? ''), feature: String(b.feature ?? ''), benefit: String(b.benefit ?? ''), proof: String(b.proof ?? ''), discriminator: String(b.discriminator ?? '') };
+  try {
+    const { saveSectionPlan } = await import('../../services/factory/proposal/govProposalDocumentStore');
+    res.json({ document: await saveSectionPlan(req.params.projectId as string, docKey, sectionKey, plan, ctx.identityId) });
+  } catch (err: any) {
+    if (err?.name === 'ProposalDocumentError') { res.status(DOC_ERR_STATUS[err.reason] ?? 400).json({ error: err.message, reason: err.reason }); return; }
+    logFail('gov_contract_section_plan_failed', err, { projectId: req.params.projectId, docKey, sectionKey });
+    res.status(500).json({ error: 'Could not save the section plan.' });
   }
 });
 

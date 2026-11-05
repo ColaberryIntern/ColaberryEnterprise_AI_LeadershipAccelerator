@@ -85,9 +85,67 @@ export async function listDocumentVersions(documentId: string): Promise<VersionV
   const rows = await GovProposalDocumentVersion.findAll({ where: { document_id: documentId }, order: [['version', 'DESC']] });
   return rows.map(toVersionView);
 }
+
+/** Batch: load specific versions by id (e.g. every document's current_version_id) in ONE query → map by version id.
+ *  Backs the projection's per-doc `latest` summary without an N+1. */
+export async function listVersionsByIds(ids: string[]): Promise<Map<string, VersionView>> {
+  const out = new Map<string, VersionView>();
+  const clean = (Array.isArray(ids) ? ids : []).filter(Boolean);
+  if (clean.length === 0) return out;
+  const rows = await GovProposalDocumentVersion.findAll({ where: { id: clean } });
+  for (const r of rows) { const v = toVersionView(r); out.set(v.id, v); }
+  return out;
+}
+
+/** Batch: load the gate decisions for many documents in ONE query → map document id → the GATE_ORDER gate views
+ *  (missing gates default to `pending`). Backs the projection's per-doc `gates`/`currentGate` summary without an N+1. */
+export async function listGatesForDocs(documentIds: string[]): Promise<Map<string, GateView[]>> {
+  const out = new Map<string, GateView[]>();
+  const clean = (Array.isArray(documentIds) ? documentIds : []).filter(Boolean);
+  if (clean.length === 0) return out;
+  const rows = await GovProposalGateReview.findAll({ where: { document_id: clean } });
+  const byDoc = new Map<string, Map<string, any>>();
+  for (const r of rows) {
+    const p: any = r.get({ plain: true });
+    const m = byDoc.get(p.document_id) ?? new Map<string, any>();
+    m.set(p.gate, p);
+    byDoc.set(p.document_id, m);
+  }
+  for (const docId of clean) {
+    const m = byDoc.get(docId) ?? new Map<string, any>();
+    out.set(docId, GATE_ORDER.map((gate) => {
+      const p: any = m.get(gate);
+      return { gate, status: p?.status ?? 'pending', versionId: p?.version_id ?? null, note: p?.note ?? null, decidedAt: p?.decided_at ? new Date(p.decided_at).toISOString() : null };
+    }));
+  }
+  return out;
+}
 export async function getDocumentVersion(versionId: string): Promise<VersionView | null> {
   const row = await GovProposalDocumentVersion.findByPk(versionId);
   return row ? toVersionView(row) : null;
+}
+
+/** The stored CONTENT of a version — the sanitized HTML, its sections, and the figures bound to them (B.2). */
+export interface VersionContentView { contentHtml: string | null; sections: ProposalDocumentSection[]; figures: unknown[] }
+export async function getDocumentVersionContent(versionId: string): Promise<VersionContentView | null> {
+  const row: any = await GovProposalDocumentVersion.findByPk(versionId);
+  if (!row) return null;
+  const p = row.get({ plain: true });
+  const sections: ProposalDocumentSection[] = Array.isArray(p.sections_json) ? p.sections_json : [];
+  const figures = sections.flatMap((s) => (Array.isArray(s.figures) ? s.figures : []));
+  return { contentHtml: p.content_html ?? null, sections, figures };
+}
+
+/** Resolve a version id to its (project, docKey) — used by the portal mirror to confirm the version belongs to a
+ *  document the caller may see (pricing is dropped from the caller's projection, so a pricing version 404s). */
+export async function docRefForVersion(versionId: string): Promise<{ deliveryProjectId: string; docKey: string } | null> {
+  const v: any = await GovProposalDocumentVersion.findByPk(versionId);
+  if (!v) return null;
+  const docId = v.get({ plain: true }).document_id;
+  const doc: any = docId ? await GovProposalDocument.findByPk(docId) : null;
+  if (!doc) return null;
+  const p = doc.get({ plain: true });
+  return { deliveryProjectId: p.delivery_project_id, docKey: p.doc_key };
 }
 
 /** HTML-aware word diff between two versions' content (server-side; the in-repo LCS, no new dependency). */
