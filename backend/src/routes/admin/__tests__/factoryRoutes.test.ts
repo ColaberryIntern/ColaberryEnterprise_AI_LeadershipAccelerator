@@ -7,7 +7,7 @@
 import fs from 'fs';
 import path from 'path';
 
-const requireSection = jest.fn(() => (req: any, _res: any, next: any) => { req.admin = { email: 'admin@test' }; next(); });
+const requireSection = jest.fn((section?: string) => Object.assign((req: any, _res: any, next: any) => { req.admin = { email: 'admin@test' }; next(); }, { section }));
 jest.mock('../../../middlewares/authMiddleware', () => ({ requireSection: (...a: any[]) => requireSection(...a) }));
 
 const docFindAll = jest.fn();
@@ -34,7 +34,22 @@ jest.mock('../../../services/factory/opportunities/govOpportunityDismissals', ()
   dismissOpportunity: (...a: any[]) => dismissOpportunity(...a),
   restoreOpportunity: (...a: any[]) => restoreOpportunity(...a),
   listActiveDismissedKeys: (...a: any[]) => listActiveDismissedKeys(...a),
+  listRestoredKeys: async () => new Set<string>(),
+  listActiveDismissals: (...a: any[]) => listActiveDismissals(...a),
 }));
+const listActiveDismissals = jest.fn();
+// Partial mock: fake the DB-reading list, KEEP the real pure predicate, so these tests exercise the actual rule.
+const listGovPipeline = jest.fn();
+jest.mock('../../../services/factory/govPipeline', () => ({
+  ...jest.requireActual('../../../services/factory/govPipeline'),
+  listGovPipeline: async (...a: any[]) => (await listGovPipeline(...a)) ?? [],
+}));
+// The board's saved-state reads: no rows unless a test says otherwise. Mocking these keeps a real model load out of the
+// request path, which was slow enough under load to trip the 5s test timeout.
+const vettingFindAll = jest.fn();
+jest.mock('../../../models/GovAiVetting', () => ({ __esModule: true, default: { findAll: async (...a: any[]) => (await vettingFindAll(...a)) ?? [] } }));
+jest.mock('../../../models/GovQualification', () => ({ __esModule: true, default: { findAll: async () => [] } }));
+jest.mock('../../../models/GovSourceBundle', () => ({ __esModule: true, default: { findAll: async () => [] } }));
 // Partial mock: override the CRUD fns but KEEP the real error class (instanceof must work in the route).
 const createServiceOffering = jest.fn();
 const updateServiceOffering = jest.fn();
@@ -262,6 +277,128 @@ describe('GET /api/admin/factory/opportunities', () => {
     expect(res.status).toBe(200);
     expect(res.body.opportunities).toHaveLength(2); // filter failure must not hide the feed
     expect(res.body.dismissedCount).toBe(0);
+  });
+
+  describe('a pursuit assigned to an active intern leaves the list', () => {
+    const card = (uuid: string, deliveryProjectId: string | null, hasActiveIntern: boolean) => ({ key: `gws:${uuid}`, deliveryProjectId, hasActiveIntern });
+
+    beforeEach(() => {
+      fetchBestFitOpportunities.mockResolvedValue(liveFeed);
+      lookupGovContractsContainer.mockResolvedValue(container);
+      listActiveDismissedKeys.mockResolvedValue(new Set());
+    });
+
+    it('hides the assigned row, counts it, and keeps the rest', async () => {
+      listGovPipeline.mockResolvedValue([card('u1', 'dp-1', true)]);
+      const res = await request(app).get('/api/admin/factory/opportunities');
+      expect(res.status).toBe(200);
+      expect(res.body.opportunities.map((o: any) => o.uuid)).toEqual(['u2']);
+      expect(res.body.assignedCount).toBe(1);
+      expect(res.body.dismissedCount).toBe(0); // assigned is not a dismissal: nothing to restore
+      expect(dismissOpportunity).not.toHaveBeenCalled(); // and nothing is written, so unassigning brings it back
+      expect(listGovPipeline).toHaveBeenCalledWith('ten-1'); // tenant-scoped
+    });
+
+    it('keeps a row that has a project but no active intern, and one being qualified with no project', async () => {
+      listGovPipeline.mockResolvedValue([card('u1', 'dp-1', false), card('u2', null, false)]);
+      const res = await request(app).get('/api/admin/factory/opportunities');
+      expect(res.body.opportunities.map((o: any) => o.uuid)).toEqual(['u1', 'u2']);
+      expect(res.body.assignedCount).toBe(0);
+    });
+
+    it('counts a row that is both dismissed and assigned once, as dismissed', async () => {
+      listActiveDismissedKeys.mockResolvedValue(new Set(['u1']));
+      listGovPipeline.mockResolvedValue([card('u1', 'dp-1', true)]);
+      const res = await request(app).get('/api/admin/factory/opportunities');
+      expect(res.body.opportunities.map((o: any) => o.uuid)).toEqual(['u2']);
+      expect(res.body.dismissedCount).toBe(1);
+      expect(res.body.assignedCount).toBe(0);
+    });
+
+    it('keeps every row and the dismissal filter when the assignment read fails', async () => {
+      listActiveDismissedKeys.mockResolvedValue(new Set(['u1']));
+      listGovPipeline.mockRejectedValue(new Error('db down'));
+      const res = await request(app).get('/api/admin/factory/opportunities');
+      expect(res.status).toBe(200);
+      expect(res.body.opportunities.map((o: any) => o.uuid)).toEqual(['u2']);
+      expect(res.body.dismissedCount).toBe(1);
+      expect(res.body.assignedCount).toBe(0);
+    });
+
+    it('does not read assignments when the gov container is not configured', async () => {
+      lookupGovContractsContainer.mockResolvedValue(null);
+      const res = await request(app).get('/api/admin/factory/opportunities');
+      expect(res.body.opportunities).toHaveLength(2);
+      expect(res.body.assignedCount).toBe(0);
+      expect(res.body.boardCounts).toBeNull();
+      expect(listGovPipeline).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('stages from the shared board', () => {
+    beforeEach(() => {
+      fetchBestFitOpportunities.mockResolvedValue(liveFeed);
+      lookupGovContractsContainer.mockResolvedValue(container);
+      listActiveDismissedKeys.mockResolvedValue(new Set());
+    });
+
+    it('stages each row, adds the counts, and shows the AI verdict', async () => {
+      vettingFindAll.mockResolvedValue([{ qualification_key: 'gws:u1', status: 'completed', verdict: 'pursue', reason: 'Good fit.', coverage_pct: 80 }]);
+      const res = await request(app).get('/api/admin/factory/opportunities');
+      const u1 = res.body.opportunities.find((o: any) => o.uuid === 'u1');
+      expect(u1).toMatchObject({ boardStage: 'vetted', aiVetting: { verdict: 'pursue', reason: 'Good fit.', coveragePct: 80 } });
+      expect(res.body.opportunities.find((o: any) => o.uuid === 'u2')).toMatchObject({ boardStage: 'needs_zip', aiVetting: null });
+      expect(res.body.boardCounts).toMatchObject({ vetted: 1, needs_zip: 1 });
+    });
+    it('still serves the board when the vetting read fails', async () => {
+      const spy = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+      vettingFindAll.mockRejectedValue(new Error('db down'));
+      const res = await request(app).get('/api/admin/factory/opportunities');
+      expect(res.status).toBe(200);
+      expect(res.body.opportunities).toHaveLength(2);
+      spy.mockRestore();
+    });
+  });
+});
+
+describe('GET /api/admin/factory/opportunities/hidden', () => {
+  it('lists the hidden rows with why, instead of matching /opportunities/:uuid', async () => {
+    lookupGovContractsContainer.mockResolvedValue({ tenant: { id: 'ten-1' }, org: { id: 'org-1' } });
+    listActiveDismissals.mockResolvedValue([{ opportunity_key: 'u9', title: 'Hidden One', agency: 'City', reason: 'ai_not_a_fit', dismissed_by: 'gov-opp-sweep', dismissed_at: '2026-11-05T13:30:00Z' }]);
+    const res = await request(app).get('/api/admin/factory/opportunities/hidden');
+    expect(res.status).toBe(200);
+    expect(res.body.hidden).toEqual([{ opportunityKey: 'u9', title: 'Hidden One', agency: 'City', reason: 'ai_not_a_fit', dismissedBy: 'gov-opp-sweep', dismissedAt: '2026-11-05T13:30:00Z' }]);
+    expect(listActiveDismissals).toHaveBeenCalledWith('ten-1');
+  });
+  it('this route carries the program gate, and is registered before /opportunities/:uuid', () => {
+    const stack: any[] = (factoryRoutes as any).stack;
+    const at = (path: string) => stack.findIndex((l) => l.route?.path === path && l.route?.methods?.get);
+    const hidden = at('/api/admin/factory/opportunities/hidden');
+    expect(hidden).toBeGreaterThan(-1);
+    expect(stack[hidden].route.stack[0].handle.section).toBe('program');
+    expect(hidden).toBeLessThan(at('/api/admin/factory/opportunities/:uuid'));
+  });
+  it('fails closed when the gov container is missing', async () => {
+    lookupGovContractsContainer.mockResolvedValue(null);
+    expect((await request(app).get('/api/admin/factory/opportunities/hidden')).status).toBe(503);
+  });
+  it('answers 500 without leaking the error', async () => {
+    const spy = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    lookupGovContractsContainer.mockResolvedValue({ tenant: { id: 'ten-1' }, org: { id: 'org-1' } });
+    listActiveDismissals.mockRejectedValue(new Error('secret db detail'));
+    const res = await request(app).get('/api/admin/factory/opportunities/hidden');
+    expect(res.status).toBe(500);
+    expect(JSON.stringify(res.body)).not.toContain('secret');
+    spy.mockRestore();
+  });
+});
+
+describe('GET /api/admin/factory/opportunities: unchanged tail', () => {
+  it('passes through source fields when there is no container', async () => {
+    lookupGovContractsContainer.mockResolvedValue(null);
+    fetchBestFitOpportunities.mockResolvedValue({ opportunities: [], source: 'live', snapshotDate: null, totalAvailable: 0 });
+    const res = await request(app).get('/api/admin/factory/opportunities');
+    expect(res.body.source).toBe('live');
   });
 });
 

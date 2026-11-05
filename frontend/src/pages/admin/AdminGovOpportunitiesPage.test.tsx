@@ -183,6 +183,18 @@ describe('AdminGovOpportunitiesPage — dashboard redesign (honesty rails preser
     expect(text).toContain('3'); // dismissed count surfaced
   });
 
+  it('says how many left the list because they are assigned to interns, and where they went', async () => {
+    (factoryApi.listGovOpportunities as jest.Mock).mockResolvedValue({ opportunities: [goodFit], source: 'live', snapshotDate: null, snapshotReason: null, totalAvailable: 50, dismissedCount: 0, assignedCount: 2 });
+    await renderPage();
+    expect(container.textContent ?? '').toMatch(/2\s*assigned to interns \(see Interns > Gov Contracts\)/);
+  });
+
+  it('shows no assigned note when nothing is assigned, or when the field is absent', async () => {
+    (factoryApi.listGovOpportunities as jest.Mock).mockResolvedValue({ opportunities: [goodFit], source: 'live', snapshotDate: null, snapshotReason: null, totalAvailable: 50, dismissedCount: 0 });
+    await renderPage();
+    expect(container.textContent ?? '').not.toContain('assigned to interns');
+  });
+
   it('Details opens a popup with why-it-surfaced + the PRELIMINARY, UNVERIFIED overview', async () => {
     const withSummary: GovOpportunity = { ...candidate, uuid: 's1', title: 'Summarized RFP', preliminarySummary: 'A courts case-management modernization.' };
     (factoryApi.listGovOpportunities as jest.Mock).mockResolvedValue({ opportunities: [withSummary], source: 'live', snapshotDate: null, snapshotReason: null });
@@ -238,40 +250,145 @@ describe('AdminGovOpportunitiesPage — dashboard redesign (honesty rails preser
     expect(container.textContent ?? '').not.toContain('High Fit Platform'); // row removed optimistically
   });
 
-  it('Restore calls the API for a session-dismissed opportunity', async () => {
-    (factoryApi.listGovOpportunities as jest.Mock).mockResolvedValue({ opportunities: [goodFit, lowFit], source: 'live', snapshotDate: null, snapshotReason: null, totalAvailable: 50 });
-    (factoryApi.dismissGovOpportunity as jest.Mock).mockResolvedValue({ dismissed: { opportunity_key: 'g1', restored_at: null } });
-    (factoryApi.restoreGovOpportunity as jest.Mock).mockResolvedValue({ restored: { opportunity_key: 'g1', restored_at: '2026-10-01T00:00:00Z' } });
+  it('the Hidden list loads on open, explains each hide, and restores from any browser', async () => {
+    (factoryApi.listGovOpportunities as jest.Mock).mockResolvedValue({ opportunities: [goodFit], source: 'live', snapshotDate: null, snapshotReason: null, totalAvailable: 50, dismissedCount: 2 });
+    (factoryApi.listHiddenGovOpportunities as jest.Mock).mockResolvedValue({ hidden: [
+      { opportunityKey: 'h1', title: 'AI Hid This', agency: 'City', reason: 'ai_not_a_fit', dismissedBy: 'gov-opp-sweep', dismissedAt: null },
+      { opportunityKey: 'h2', title: 'A Person Hid This', agency: 'County', reason: null, dismissedBy: 'x@y.com', dismissedAt: null },
+    ] });
+    (factoryApi.restoreGovOpportunity as jest.Mock).mockResolvedValue({ restored: { opportunity_key: 'h1', restored_at: '2026-11-05T00:00:00Z' } });
     await renderPage();
-    await clickEl(findButton('Dismiss')!);                 // dismiss g1 (l1 remains, so the card still renders)
-    const disclosure = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('Dismissed this session'));
-    expect(disclosure).toBeDefined();
-    await clickEl(disclosure!);                             // open the dismissed manager
-    const restoreBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('Restore'));
-    await clickEl(restoreBtn!);
-    expect(factoryApi.restoreGovOpportunity).toHaveBeenCalledWith('g1');
+    expect(factoryApi.listHiddenGovOpportunities).not.toHaveBeenCalled();
+    const disclosure = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('Hidden (2)'));
+    await clickEl(disclosure!);
+    await act(async () => { await Promise.resolve(); });
+    const text = container.textContent ?? '';
+    expect(text).toContain('AI Hid This');
+    expect(text).toContain('AI says not a fit');
+    expect(text).toContain('Dismissed by a person');
+    const calls = (factoryApi.listGovOpportunities as jest.Mock).mock.calls.length;
+    await clickEl(Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('Restore'))!);
+    await act(async () => { await Promise.resolve(); });
+    expect(factoryApi.restoreGovOpportunity).toHaveBeenCalledWith('h1');
+    expect(container.textContent ?? '').not.toContain('AI Hid This');
+    expect((factoryApi.listGovOpportunities as jest.Mock).mock.calls.length).toBeGreaterThan(calls); // the board reloads
   });
 
-  // ── Vetting ladder: approval-level badge + the "Vetted only" filter ──
-  it('shows the approval-level badge (Vetted) for a qualified opportunity in place of Unassessed', async () => {
-    const vetted: GovOpportunity = { ...candidate, uuid: 'v1', title: 'Vetted Platform', vetting: { stage: 'vetted', decision: 'approved_bid_pursuit', approvalStatus: 'approved' } };
-    (factoryApi.listGovOpportunities as jest.Mock).mockResolvedValue({ opportunities: [vetted], source: 'live', snapshotDate: null, snapshotReason: null });
+  it('Restore stays reachable when every row is hidden and the board is empty', async () => {
+    (factoryApi.listGovOpportunities as jest.Mock).mockResolvedValue({ opportunities: [], source: 'live', snapshotDate: null, snapshotReason: null, totalAvailable: 50, dismissedCount: 4 });
+    await renderPage();
+    expect(container.textContent ?? '').toContain('No discovered candidates');
+    expect(Array.from(container.querySelectorAll('button')).some((b) => b.textContent?.includes('Hidden (4)'))).toBe(true);
+  });
+
+  it('a failed Hidden load says so instead of showing an empty list', async () => {
+    (factoryApi.listGovOpportunities as jest.Mock).mockResolvedValue({ opportunities: [goodFit], source: 'live', snapshotDate: null, snapshotReason: null, dismissedCount: 1 });
+    (factoryApi.listHiddenGovOpportunities as jest.Mock).mockRejectedValue(new Error('down'));
+    await renderPage();
+    await clickEl(Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('Hidden (1)'))!);
+    await act(async () => { await Promise.resolve(); });
+    expect(container.textContent ?? '').toContain('Could not load the hidden list.');
+    expect(container.textContent ?? '').not.toContain('Nothing is hidden.');
+  });
+
+  it('shows no Hidden control when nothing is hidden', async () => {
+    (factoryApi.listGovOpportunities as jest.Mock).mockResolvedValue({ ...liveFeed, dismissedCount: 0 });
+    await renderPage();
+    expect(container.textContent ?? '').not.toContain('Hidden (');
+  });
+
+  // ── Approval stays a separate fact from the AI's star ──
+  it('labels human approval "Approved" when the board sent no stage, replacing Unassessed', async () => {
+    const approved: GovOpportunity = { ...candidate, uuid: 'v1', title: 'Approved Platform', vetting: { stage: 'vetted', decision: 'approved_bid_pursuit', approvalStatus: 'approved' } };
+    (factoryApi.listGovOpportunities as jest.Mock).mockResolvedValue({ opportunities: [approved], source: 'live', snapshotDate: null, snapshotReason: null });
     await renderPage();
     const badges = Array.from(container.querySelectorAll('.badge'));
-    expect(badges.some((b) => b.textContent === 'Vetted')).toBe(true);     // the stage badge
-    expect(badges.some((b) => b.textContent === 'Unassessed')).toBe(false); // it replaces the raw verdict badge
+    expect(badges.some((b) => b.textContent === 'Approved')).toBe(true);
+    expect(badges.some((b) => b.textContent === 'Vetted')).toBe(false);
+    expect(badges.some((b) => b.textContent === 'Unassessed')).toBe(false);
   });
 
-  it('the "Vetted only" toggle (off by default) hides a not-yet-vetted row', async () => {
-    const vetted: GovOpportunity = { ...candidate, uuid: 'v2', title: 'Vetted Platform', vetting: { stage: 'vetted', decision: 'approved_bid_pursuit', approvalStatus: null } };
-    const fresh: GovOpportunity = { ...candidate, uuid: 'nv2', title: 'Fresh Candidate' };
-    (factoryApi.listGovOpportunities as jest.Mock).mockResolvedValue({ opportunities: [vetted, fresh], source: 'live', snapshotDate: null, snapshotReason: null, totalAvailable: 50 });
-    await renderPage();
-    expect(container.textContent ?? '').toContain('Fresh Candidate'); // both shown by default (toggle off)
-    const toggle = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('Vetted only'));
-    await clickEl(toggle!);
-    const text = container.textContent ?? '';
-    expect(text).toContain('Vetted Platform');     // the vetted row stays
-    expect(text).not.toContain('Fresh Candidate');  // the not-yet-vetted row is hidden
+  // ── The stages, the same groups as the morning email ──
+  describe('stages', () => {
+    const counts = { needs_zip: 1, analyzing: 1, vetted: 1, needs_read: 1, approved: 1, flagged: 0, below_bar: 3 };
+    const star: GovOpportunity = { ...candidate, uuid: 's1', title: 'Star Bid', boardStage: 'vetted', priorityScore: 10, aiVetting: { status: 'completed', verdict: 'pursue', reason: 'A strong match for our work.', coveragePct: 80 } };
+    const zip: GovOpportunity = { ...candidate, uuid: 'z1', title: 'Zip Bid', boardStage: 'needs_zip', priorityScore: 99 };
+    const read: GovOpportunity = { ...candidate, uuid: 'r1', title: 'Read Bid', boardStage: 'needs_read', aiVetting: { status: 'completed', verdict: 'inconclusive', reason: 'The AI could not call this one.', coveragePct: null } };
+    const ok: GovOpportunity = { ...candidate, uuid: 'a1', title: 'Approved Bid', boardStage: 'approved' };
+    const busy: GovOpportunity = { ...candidate, uuid: 'b1', title: 'Busy Bid', boardStage: 'analyzing' };
+    const staged = { opportunities: [zip, star, read, ok, busy], source: 'live', snapshotDate: null, snapshotReason: null, totalAvailable: 50, boardCounts: counts };
+
+    it('stars a vetted row and shows the AI reason', async () => {
+      (factoryApi.listGovOpportunities as jest.Mock).mockResolvedValue(staged);
+      await renderPage();
+      const badges = Array.from(container.querySelectorAll('.badge')).map((b) => b.textContent);
+      expect(badges).toContain('\u2B50 AI vetted');
+      expect(badges).toContain('Awaiting ZIP');
+      expect(badges).toContain('Needs your read');
+      expect(badges).toContain('AI analyzing');
+      expect(container.textContent ?? '').toContain('A strong match for our work.');
+    });
+
+    it('chip counts come from the server, and a chip filters to its stage and toggles off', async () => {
+      (factoryApi.listGovOpportunities as jest.Mock).mockResolvedValue(staged);
+      await renderPage();
+      const chip = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('\u2B50 Vetted 1'));
+      expect(chip).toBeDefined();
+      await clickEl(chip!);
+      expect(container.textContent ?? '').toContain('Star Bid');
+      expect(container.textContent ?? '').not.toContain('Zip Bid');
+      await clickEl(chip!);
+      expect(container.textContent ?? '').toContain('Zip Bid');
+    });
+
+    it('the default order puts work needing a person first, even over a higher priority', async () => {
+      (factoryApi.listGovOpportunities as jest.Mock).mockResolvedValue(staged);
+      await renderPage();
+      const text = container.textContent ?? '';
+      expect(text.indexOf('Star Bid')).toBeLessThan(text.indexOf('Zip Bid'));
+      expect(text.indexOf('Read Bid')).toBeLessThan(text.indexOf('Zip Bid'));
+    });
+
+    it('the main button says what the stage calls for', async () => {
+      (factoryApi.listGovOpportunities as jest.Mock).mockResolvedValue(staged);
+      await renderPage();
+      const words = Array.from(container.querySelectorAll('button.btn-danger')).map((b) => b.textContent?.trim());
+      expect(words).toEqual(expect.arrayContaining(['Upload ZIP', 'Read', 'Build & assign', 'Open']));
+    });
+
+    it('marks a bid shown from saved details after it left the feed', async () => {
+      (factoryApi.listGovOpportunities as jest.Mock).mockResolvedValue({ ...staged, opportunities: [{ ...star, fromSnapshot: true }] });
+      await renderPage();
+      expect(container.textContent ?? '').toContain('Left the feed');
+    });
+
+    it('says how many were assigned and where they went', async () => {
+      (factoryApi.listGovOpportunities as jest.Mock).mockResolvedValue({ ...staged, assignedCount: 2 });
+      await renderPage();
+      expect(container.textContent ?? '').toMatch(/2\s*assigned to interns \(see Interns > Gov Contracts\)/);
+    });
+
+    it('a stage of flagged goes to the flagged section, never the candidates table', async () => {
+      const flaggedRow: GovOpportunity = { ...candidate, uuid: 'f1', title: 'Flag Bid', boardStage: 'flagged', vetVerdict: { status: 'no_bid', reason: 'No' } };
+      (factoryApi.listGovOpportunities as jest.Mock).mockResolvedValue({ ...staged, opportunities: [zip, flaggedRow] });
+      await renderPage();
+      expect(container.querySelector('tbody')?.textContent).not.toContain('Flag Bid');
+      expect(container.textContent ?? '').toContain('Flag Bid');
+    });
+
+    it('renders AI text as text, never as markup', async () => {
+      const evil: GovOpportunity = { ...star, aiVetting: { status: 'completed', verdict: 'pursue', reason: '<img src=x onerror=alert(1)>', coveragePct: 80 } };
+      (factoryApi.listGovOpportunities as jest.Mock).mockResolvedValue({ ...staged, opportunities: [evil] });
+      await renderPage();
+      expect(container.querySelector('img')).toBeNull();
+      expect(container.textContent ?? '').toContain('<img src=x');
+    });
+
+    it('with no stages from the server, the page still works and shows no chips', async () => {
+      (factoryApi.listGovOpportunities as jest.Mock).mockResolvedValue(liveFeed);
+      await renderPage();
+      expect(Array.from(container.querySelectorAll('button')).some((b) => b.textContent?.includes('Awaiting ZIP'))).toBe(false);
+      expect(container.textContent ?? '').toContain('Digital Evidence Platform');
+    });
   });
 });

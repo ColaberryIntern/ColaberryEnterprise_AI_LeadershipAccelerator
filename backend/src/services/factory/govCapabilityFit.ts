@@ -15,6 +15,7 @@
 import crypto from 'crypto';
 import { getInstrumentedOpenAI } from '../openaiInstrumented';
 import { DEFAULT_MODEL } from '../components/costEstimationService';
+import { untrustedBlock } from './govUntrustedText';
 
 interface CacheEntry<T> { value: T; at: number; }
 const TTL_MS = 60 * 60 * 1000; // 1h - advisory, regenerable
@@ -120,6 +121,7 @@ export async function assessCapabilityFit(req: CapabilityFitRequest): Promise<Ca
   const hit = cacheGet<CapabilityFitResult>(key);
   if (hit) return { ...hit, cached: true };
 
+  const { rule, block } = untrustedBlock(reqs.map((r) => `- ${r.id}: ${r.text}`).join('\n'));
   const system =
     'You help a small firm decide whether it can deliver a government contract. From the established requirement ' +
     'statements, derive the 5 to 8 distinct CAPABILITIES the scope needs (not a restatement of every requirement). ' +
@@ -129,11 +131,11 @@ export async function assessCapabilityFit(req: CapabilityFitRequest): Promise<Ca
     'or "new" (no listed service covers it). matchedServiceId MUST be the id of a service from the provided catalog, or null ' +
     'for new - NEVER invent a service or an id. For partial and new, also fill whatItIs (plain language), whatThisBidGivesUs ' +
     '(experience / reusable asset / case study we would gain even if we lose), and toDeliver (effort/plan); leave them empty ' +
-    'for have. Work only from the requirements and the catalog provided; never invent a requirement, a service, a number or a date.';
+    'for have. Work only from the requirements and the catalog provided; never invent a requirement, a service, a number or a date. ' + rule;
   const user = [
     `Opportunity: ${req.title || '(untitled)'}${req.buyer ? ` - buyer: ${req.buyer}` : ''}`,
     `Established requirements (${reqs.length}):`,
-    reqs.map((r) => `- ${r.id}: ${r.text}`).join('\n'),
+    block,
     '',
     `Our active service catalog (${services.length}) - match ONLY against these ids:`,
     services.length

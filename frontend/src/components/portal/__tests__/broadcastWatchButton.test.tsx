@@ -193,7 +193,7 @@ describe('RoomPane really passes the room id down', () => {
     // class recording comes from `recording_url` — a different system from broadcast
     // occurrences, and `ACTIVE_DISCOVERY_STATES` does not return `replay_ready` at all, so
     // there is no replay feed to hand off to. Pretending otherwise would be the fabrication.
-    expect(src).toContain("const { join_url } = await joinVideoRoom(roomId);");
+    expect(src).toContain('await openTabForJoin(async () => (await joinVideoRoom(roomId)).join_url);');
     expect(src).toMatch(/openSessionRecording\(session\.recording_url, session\.title\)/);
   });
 });

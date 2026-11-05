@@ -3,6 +3,12 @@
 A short runbook for running one government pursuit end to end. It assumes you have
 Program access to the admin workspace. For what each step does and why, see `FLOW.md`.
 
+## The daily email
+
+The 7:30 AM email and the Gov Opportunities board show the same bids in the same stages. See "The daily rhythm" in
+`directives/government-pursuit-runbook.md`. Uploading a ZIP runs the AI checks with no clicks, and the results are waiting
+in the workspace on your next visit.
+
 ## Before you start
 
 - You need the solicitation ZIP (the posted documents) and the submission deadline.

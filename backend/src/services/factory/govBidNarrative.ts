@@ -23,6 +23,7 @@
 import crypto from 'crypto';
 import { getInstrumentedOpenAI } from '../openaiInstrumented';
 import { DEFAULT_MODEL } from '../components/costEstimationService';
+import { untrustedBlock } from './govUntrustedText';
 
 interface CacheEntry<T> { value: T; at: number; }
 const TTL_MS = 60 * 60 * 1000; // 1h — advisory text, regenerable
@@ -129,14 +130,15 @@ export async function generateProposalSummary(req: ProposalSummaryRequest): Prom
   const hit = cacheGet<ProposalSummaryResult>(key);
   if (hit) return { ...hit, cached: true };
 
+  const { rule, block } = untrustedBlock(reqs.length > 0 ? reqs.map((r) => `- ${r.id}: ${r.text}`).join('\n') : synopsis);
   const system =
     'You summarize a government solicitation for a small firm deciding what to build. Work ONLY from the requirement statements provided, ' +
     'or, when no requirements are given, from the opportunity synopsis provided - never invent requirements, scope, numbers, or capabilities the inputs do not imply. ' +
     'Return strict JSON {"whatTheyWant": string, "whatWedBuild": string}. whatTheyWant: 3-5 sentences on what the buyer is asking for. ' +
-    'whatWedBuild: 3-5 sentences on the solution we would deliver to satisfy it, concrete about the system and the work. Plain prose, no markdown.';
+    'whatWedBuild: 3-5 sentences on the solution we would deliver to satisfy it, concrete about the system and the work. Plain prose, no markdown. ' + rule;
   const basis = reqs.length > 0
-    ? `Requirements (${reqs.length}):\n${reqs.map((r) => `- ${r.id}: ${r.text}`).join('\n')}`
-    : `Opportunity synopsis (no requirements established yet):\n${synopsis}`;
+    ? `Requirements (${reqs.length}):\n${block}`
+    : `Opportunity synopsis (no requirements established yet):\n${block}`;
   const user = `Opportunity: ${req.title || '(untitled)'}${req.buyer ? ` — ${req.buyer}` : ''}\n${basis}`;
 
   try {
@@ -219,12 +221,13 @@ export async function generateClarificationQuestions(req: ClarificationRequest):
   const hit = cacheGet<ClarificationResult>(key);
   if (hit) return { ...hit, cached: true };
 
+  const { rule, block } = untrustedBlock(reqs.map((r) => `- ${r.id}: ${r.text}`).join('\n'));
   const system =
     'You help a small firm find the AMBIGUOUS requirements in a government solicitation and draft precise clarification questions to send the buyer before the question deadline. ' +
     'Work ONLY from the requirement statements provided. For each requirement that is vague, under-specified, or references a system, standard, or interface it does not name (for example "connect to their system"), produce ONE sharp question that would make it concrete and answerable. ' +
     'Skip requirements that are already clear. NEVER invent a requirement, a system name, a date, or a fact; ask about what is missing rather than asserting it. ' +
-    'Return strict JSON {"questions": [{"requirementId": string, "ambiguity": string, "question": string}]}. requirementId MUST be one of the provided ids. Keep each question to one or two sentences. No markdown.';
-  const user = `Opportunity: ${req.title || '(untitled)'}${req.buyer ? `: ${req.buyer}` : ''}\nRequirements (${reqs.length}):\n${reqs.map((r) => `- ${r.id}: ${r.text}`).join('\n')}`;
+    'Return strict JSON {"questions": [{"requirementId": string, "ambiguity": string, "question": string}]}. requirementId MUST be one of the provided ids. Keep each question to one or two sentences. No markdown. ' + rule;
+  const user = `Opportunity: ${req.title || '(untitled)'}${req.buyer ? `: ${req.buyer}` : ''}\nRequirements (${reqs.length}):\n${block}`;
 
   try {
     const client = getInstrumentedOpenAI({ workflow_id: 'gov_clarification_questions' }, { timeout: 60000, maxRetries: 1 });

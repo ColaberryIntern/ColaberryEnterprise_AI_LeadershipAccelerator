@@ -51,14 +51,15 @@ export function deriveVettingStage(
   if (decision === 'approved_bid_pursuit') return { stage: 'vetted', decision, approvalStatus };
   if (decision === 'rfi_response') return { stage: 'rfi', decision, approvalStatus };
   if (decision === 'no_bid') return { stage: 'no_bid', decision, approvalStatus };
-  if (approvalStatus === 'pending') return { stage: 'awaiting_approval', decision, approvalStatus };
+  // requestApproval writes 'requested'. 'pending' never had a writer, which left this stage unreachable; keep accepting it.
+  if (approvalStatus === 'requested' || approvalStatus === 'pending') return { stage: 'awaiting_approval', decision, approvalStatus };
   if (decision === 'needs_evidence') return { stage: 'needs_requirements', decision, approvalStatus };
   if (decision === 'pending_review') return { stage: 'in_review', decision, approvalStatus };
   return { stage: decision ? 'in_review' : 'not_vetted', decision, approvalStatus };
 }
 
 /** Most-advanced stage wins when a canonical has several active qualifications (different bidding entities). */
-const STAGE_RANK: Record<VettingStage, number> = {
+export const STAGE_RANK: Record<VettingStage, number> = {
   not_vetted: 0, no_bid: 1, in_review: 2, needs_requirements: 3, awaiting_approval: 4, rfi: 5, vetted: 6,
 };
 

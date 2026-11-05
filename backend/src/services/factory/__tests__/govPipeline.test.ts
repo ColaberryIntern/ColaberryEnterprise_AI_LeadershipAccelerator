@@ -1,4 +1,24 @@
-import { deriveGovPipelineStage, projectGovPipelineCard, resolveGovCloseDate } from '../govPipeline';
+import { assignedOpportunityUuids, deriveGovPipelineStage, projectGovPipelineCard, resolveGovCloseDate } from '../govPipeline';
+
+describe('assignedOpportunityUuids', () => {
+  const card = (key: string, deliveryProjectId: string | null, hasActiveIntern: boolean) => ({ key, deliveryProjectId, hasActiveIntern });
+
+  it('returns the discovery uuid of a pursuit with a project and an active intern', () => {
+    expect([...assignedOpportunityUuids([card('gws:abc', 'dp1', true)])]).toEqual(['abc']);
+  });
+  it('skips a project with no active intern (the nav skips it too)', () => {
+    expect(assignedOpportunityUuids([card('gws:abc', 'dp1', false)]).size).toBe(0);
+  });
+  it('skips a pursuit with no delivery project', () => {
+    expect(assignedOpportunityUuids([card('gws:abc', null, true)]).size).toBe(0);
+  });
+  it('skips an op:gov: canonical id, which cannot map to a discovery uuid', () => {
+    expect(assignedOpportunityUuids([card('op:gov:abc', 'dp1', true)]).size).toBe(0);
+  });
+  it('is empty for no cards', () => {
+    expect(assignedOpportunityUuids([]).size).toBe(0);
+  });
+});
 
 describe('deriveGovPipelineStage', () => {
   it('no_bid → passed', () => expect(deriveGovPipelineStage('no_bid', false)).toBe('passed'));

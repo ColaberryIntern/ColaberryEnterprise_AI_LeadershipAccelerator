@@ -6,6 +6,37 @@ This is the end-to-end process for taking a government opportunity from discover
 
 ---
 
+## The daily rhythm
+
+One email goes out at 7:30 AM Central. It and the **Gov Opportunities** board come from the same code (`govDiscoveryBoard.ts`), so they list the same bids in the same stages.
+
+| When | Who | What happens |
+|---|---|---|
+| Overnight | Opportunity Pulse | Scrapes Bonfire and scores titles. The feed keeps bids closing 10+ days out, capped at 50. |
+| 6:15 AM | Accelerator | Catch-up: retries unfinished AI checks and backfills up to 10 older ZIPs. |
+| 7:30 AM | Accelerator | Hides fit under 60, off-target titles and AI passes, then sends the email. |
+| A few minutes | **You** | **📦 Upload the ZIP** section: download each ZIP from Bonfire, upload it on the board. |
+| After each upload | Accelerator | Extraction, capability fit, summary, buyer questions and a go/no-go run on their own and are saved. |
+| Next morning | **You** | **⭐ Vetted** section: open it, read the proposal, confirm the real requirements, then approve, build and assign. |
+| On assignment | Accelerator | The bid leaves the board and the email, and appears under **Interns > Gov Contracts**. |
+
+**Stages:** Awaiting ZIP → AI analyzing → ⭐ AI vetted, or Needs your read → Approved → assigned. An AI pass is hidden at the next 7:30 run and listed under **Hidden** on the board, with Restore. A restored row is never hidden again.
+
+**The rails:**
+- ⭐ is the AI's recommendation, not an approval. Establishing requirements and second-admin approval stay with people, and the AI can't do either.
+- An AI pass only hides a bid with no human progress. Established requirements, a requested approval or an approval all protect it.
+- The AI only hides with evidence: a quote found in the solicitation, or under 25% capability coverage. Anything else is "Needs your read".
+- A vetted or approved bid that leaves the feed stays listed from its saved details until its close date passes.
+- If the Opportunity Pulse feed is down or comes back empty, the sweep does nothing: no hide and no email. A missing morning email means check the board.
+- If saved data can't be read that morning, the sweep hides nothing and the email says the list may be incomplete.
+- A failed send isn't retried, because a retry can send twice. That morning's hides aren't itemized in the next email, but they stay on the **Hidden** list.
+- A bid with no fit score stays on the upload list, marked "Fit unknown". With the sweep off, low-fit and off-target bids stay listed too, since nothing would put them on **Hidden**.
+- Risk narrative and build plan remain buttons: the risk score needs operator inputs, and the build plan belongs after approval.
+
+**To undo:** one row, **Hidden → Restore** on the board. Many rows after a bad AI run, `node dist/scripts/restoreGovAiHides.js --since=YYYY-MM-DD` (a dry run until `--execute`). To stop new AI runs, `ENABLE_GOV_AI_VETTING=false`. To stop the email and all hides, `ENABLE_GOV_OPP_SWEEP=false`.
+
+---
+
 ## The flow at a glance
 
 | # | Step | What you do | Status |
@@ -25,7 +56,7 @@ This is the end-to-end process for taking a government opportunity from discover
 ## Step-by-step (what a person does)
 
 ### 1–4 (live today)
-1. **Gov Opportunities** → pick a promising row (fit is advisory, not a verified match).
+1. **Gov Opportunities** → pick a promising row (fit is advisory, not a verified match). A pursuit assigned to an active intern leaves this list and appears under **Interns > Gov Contracts** instead; unassigning the intern brings the row back. A bid closing within 10 days also leaves this list, because the source feed cuts it off, so find active pursuits in the left panel rather than here.
 2. **Qualify →** opens the ZIP workspace. The **Discovery details** card shows why it surfaced, estimated value (unverified), the close date + days left, the preliminary overview, and an **Open source posting** link to Bonfire.
 3. Download the solicitation ZIP from Bonfire, then **Open qualification** → upload it in **Extract requirements** → **Extract** → tick the real requirements, set applicability/due stage → **Establish selected**. They appear under **Requirements by due stage**.
 4. Review **What they want vs what we offer** and **Gaps / potential disqualifiers**. The gaps panel is advisory — it surfaces eligibility gates (SAM registration, set-asides, clearances, certs, bonding…) and blocking items to **verify or resolve before bidding**; it is never a verified pass/fail. Record **Needs evidence** (keep working) or **No bid** (pass).

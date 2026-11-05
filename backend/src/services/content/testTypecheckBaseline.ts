@@ -45,7 +45,6 @@ export const TEST_TYPECHECK_BASELINE: Readonly<Record<string, number>> = {
   'src/routes/__tests__/caseStudyPrivateRepoLeakProof.test.ts': 1,
   'src/routes/__tests__/linkedInCallbackRoutes.test.ts': 1,
   'src/routes/admin/__tests__/caseStudyServiceLinkRoutes.test.ts': 1,
-  'src/routes/admin/__tests__/factoryRoutes.test.ts': 1,
   'src/routes/admin/__tests__/govQualificationRoutes.test.ts': 1,
   'src/routes/admin/__tests__/internshipConsole.test.ts': 1,
   'src/routes/admin/__tests__/internshipConsoleTransition.test.ts': 1,
@@ -176,4 +175,4 @@ export const TEST_TYPECHECK_BASELINE: Readonly<Record<string, number>> = {
 };
 
 /** The sum the table asserts, kept beside it so a careless edit is visible. */
-export const TEST_TYPECHECK_BASELINE_TOTAL = 400;
+export const TEST_TYPECHECK_BASELINE_TOTAL = 399;

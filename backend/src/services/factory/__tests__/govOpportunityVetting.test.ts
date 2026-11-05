@@ -30,6 +30,14 @@ describe('deriveVettingStage', () => {
       .toBe('awaiting_approval');
   });
 
+  // 'requested' is the value requestApproval actually writes (govQualification.ts). This stage was unreachable before.
+  it('the status requestApproval really writes is awaiting_approval, ahead of the earlier review stages', () => {
+    expect(deriveVettingStage({ decision: 'pending_review', requirements_json: { approval: { status: 'requested' } } }).stage)
+      .toBe('awaiting_approval');
+    expect(deriveVettingStage({ decision: 'needs_evidence', requirements_json: { approval: { status: 'requested' } } }).stage)
+      .toBe('awaiting_approval');
+  });
+
   it('needs_evidence is needs_requirements', () => {
     expect(deriveVettingStage({ decision: 'needs_evidence' }).stage).toBe('needs_requirements');
   });

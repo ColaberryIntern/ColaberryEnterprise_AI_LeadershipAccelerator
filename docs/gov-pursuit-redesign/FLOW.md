@@ -13,6 +13,15 @@ There are TWO entry points onto the same delivery project:
   student-safe projection; a non-member gets a 404 (they cannot even learn the project
   exists).
 
+## Before the steps: the daily email and the automatic checks
+
+One 7:30 AM email and the Gov Opportunities board come from the same code (`govDiscoveryBoard.ts`), so they can't disagree.
+Uploading the ZIP runs capability fit, summary, buyer questions and a go/no-go with no clicks and saves them to
+`gov_ai_vettings`, so the workspace opens with them on the next visit. The AI's star is a recommendation, separate from
+the approval in step 4, and it sets no gate. See "The daily rhythm" in `directives/government-pursuit-runbook.md`.
+
+The code now has eight steps: Build the bid below splits into Build and Proposal (`workspaceSteps.ts`).
+
 ## The seven steps (admin workspace)
 
 The step bar runs left to right; each step asks one question and shows one primary

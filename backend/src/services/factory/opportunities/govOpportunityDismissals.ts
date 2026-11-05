@@ -105,6 +105,20 @@ export async function listActiveDismissedKeys(tenantId: string): Promise<Set<str
 }
 
 /**
+ * The opportunity keys a person restored (restored_at set). The sweep must never hide these again: without this it
+ * re-dismissed a restored row at its next run, so Restore undid itself overnight. Tenant-scoped.
+ */
+export async function listRestoredKeys(tenantId: string): Promise<Set<string>> {
+  const { Op } = await import('sequelize');
+  const { default: GovOpportunityDismissal } = await import('../../../models/GovOpportunityDismissal');
+  const rows: any[] = await GovOpportunityDismissal.findAll({
+    where: { tenant_id: tenantId, restored_at: { [Op.ne]: null } },
+    attributes: ['opportunity_key'],
+  });
+  return new Set(rows.map((r) => r?.opportunity_key).filter((k): k is string => typeof k === 'string' && !!k));
+}
+
+/**
  * The active dismissals for this tenant, newest first, as plain rows for the "Dismissed — manage" view. Tenant-scoped.
  */
 export async function listActiveDismissals(tenantId: string): Promise<any[]> {

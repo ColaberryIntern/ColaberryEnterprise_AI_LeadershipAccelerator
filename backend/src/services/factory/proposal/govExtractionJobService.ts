@@ -13,6 +13,7 @@
  * recorded on the row (status 'failed' + error_message), never thrown past the worker.
  */
 import fs from 'fs/promises';
+import { FLAGS } from '../../../config/featureFlags';
 import GovExtractionJob from '../../../models/GovExtractionJob';
 import { loadGovSourceBundleScoped } from './govSourceBundleStore';
 
@@ -67,6 +68,12 @@ export async function startGovExtraction(input: StartExtractionInput): Promise<{
       status: ['queued', 'running'],
     },
   });
+
+  // The ZIP reads as "analyzing" on the board from this moment, and these bytes are now the newest upload, even when their
+  // job is already running (A, B, A reads A). Best-effort: a failure here must not stop extraction.
+  await withVetting('gov_ai_vetting_row_failed', input.qualificationKey, async ({ ensureVettingRow }) => {
+    await ensureVettingRow({ tenantId: input.tenantId, qualificationKey: input.qualificationKey, sha256: input.sha256 });
+  });
   if (existing) return { jobId: existing.id };
 
   const job = await GovExtractionJob.create({
@@ -84,30 +91,52 @@ export async function startGovExtraction(input: StartExtractionInput): Promise<{
   return { jobId: job.id };
 }
 
-/** The background worker. Loads the stored ZIP, runs the extractor, and records the payload or the failure. */
+/** Run a step of the AI vetting hook. Flag-gated and contained: nothing in it can fail an extraction job. */
+async function withVetting(event: string, key: string, step: (m: typeof import('../govAiVetting')) => Promise<void> | void): Promise<void> {
+  if (!FLAGS.govAiVetting || !key.startsWith('gws:')) return;
+  try {
+    await step(await import('../govAiVetting'));
+  } catch (err: any) {
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(), level: 'error', service: 'backend', event, outcome: 'failure',
+      error_class: err?.constructor?.name ?? 'Error', context: { key, message: err?.message },
+    }));
+  }
+}
+
+/** Load one stored ZIP and run the extractor. Also used by the AI vetting catch-up when no completed job exists. */
+export async function extractBundlePayload(tenantId: string, qualificationKey: string, sourceBundleId: string): Promise<ExtractionResultPayload> {
+  const bundle = await loadGovSourceBundleScoped(tenantId, qualificationKey, sourceBundleId);
+  if (!bundle) throw new Error('Source bundle is missing from the store.');
+  const buffer = await fs.readFile(bundle.path);
+
+  const { extractProposal } = await import('./proposalExtractor');
+  const { buildRequirementItems } = await import('./govRequirementItems');
+  const { applyAiComprehension } = await import('./govRequirementExtractAI');
+
+  const result = await extractProposal(buffer);
+  const { requirements, aiMeta } = await applyAiComprehension(result);
+  const items = buildRequirementItems(requirements, result.dossier);
+  return toExtractionResult(requirements, items, result, aiMeta);
+}
+
+/** The background worker. Runs the extractor, records the payload or the failure, then starts the AI checks. */
 async function executeExtractionJob(jobId: string): Promise<void> {
   const job = await GovExtractionJob.findByPk(jobId);
   if (!job) return;
   try {
     await job.update({ status: 'running' });
-
-    const bundle = await loadGovSourceBundleScoped(job.tenant_id, job.qualification_key, job.source_bundle_id);
-    if (!bundle) throw new Error('Source bundle is missing from the store.');
-    const buffer = await fs.readFile(bundle.path);
-
-    const { extractProposal } = await import('./proposalExtractor');
-    const { buildRequirementItems } = await import('./govRequirementItems');
-    const { applyAiComprehension } = await import('./govRequirementExtractAI');
-
-    const result = await extractProposal(buffer);
-    const { requirements, aiMeta } = await applyAiComprehension(result);
-    const items = buildRequirementItems(requirements, result.dossier);
-    const payload = toExtractionResult(requirements, items, result, aiMeta);
-
+    const payload = await extractBundlePayload(job.tenant_id, job.qualification_key, job.source_bundle_id);
     await job.update({ status: 'completed', result_json: payload, completed_at: new Date() });
+    await withVetting('gov_ai_vetting_start_failed', job.qualification_key, ({ startGovAiVetting }) => {
+      startGovAiVetting({ tenantId: job.tenant_id, qualificationKey: job.qualification_key, sha256: job.sha256 });
+    });
   } catch (err: any) {
     console.error(`[GovExtract] Job ${jobId} failed:`, err?.message);
     await job.update({ status: 'failed', error_message: err?.message || 'Extraction failed.', completed_at: new Date() });
+    await withVetting('gov_ai_vetting_note_failed', job.qualification_key, async ({ noteExtractionFailed }) => {
+      await noteExtractionFailed({ tenantId: job.tenant_id, qualificationKey: job.qualification_key, sha256: job.sha256 });
+    });
   }
 }
 

@@ -464,6 +464,48 @@ describe('AdminGovQualificationPage — journey', () => {
     expect(openBtn.disabled).toBe(false);                                      // enabled even though sourceAvailable:false
   });
 
+  describe('saved AI results on a return visit', () => {
+    const qualified = { id: 'q1', bidding_entity: 'colaberry', decision: 'pending_review', version: 1, rationale: null, source_snapshot_version: null, reviewer_identity_id: 'rev', requirements_json: { established: [] } };
+    const aiVetting = {
+      status: 'completed', verdict: 'pursue', reason: 'A strong match for our work.', quote: null, coveragePct: 80, errorClass: null, fit: null, summary: null, questions: null,
+      extraction: { candidates: [{ id: 'REQ-1', text: 'The vendor shall provide permitting software.' }], items: null, files: null, extraction: null },
+    } as any;
+
+    it('shows the verdict with no click on any step', async () => {
+      (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(decoupledWs({ qualification: qualified as any, aiVetting }));
+      await renderAt(`?gws=${encodeURIComponent(GWS)}&tab=decide`);
+      await flush();
+      expect(container.querySelector('[data-testid="ai-vetting-card"]')?.textContent).toContain('A strong match for our work.');
+    });
+
+    it('brings back the extracted requirements, so the ZIP is not uploaded twice', async () => {
+      (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(decoupledWs({ qualification: qualified as any, aiVetting }));
+      await renderAt(`?gws=${encodeURIComponent(GWS)}&tab=solicitation`);
+      await flush();
+      await flush();
+      expect(container.textContent ?? '').toContain('The vendor shall provide permitting software.');
+      expect(factoryApi.extractGovQualificationRequirements).not.toHaveBeenCalled();
+    });
+
+    it('does not bring them back once requirements are established', async () => {
+      (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(decoupledWs({
+        qualification: qualified as any, aiVetting,
+        evaluation: { evals: [{ id: 'E1', dueStage: 'submission', applicability: 'always', blocking: false, reason: null }], blocking: [], deliveryObligations: [], byDueStage: { submission: [], award: [], delivery: [], unknown: [] }, canApproveBid: true } as any,
+      }));
+      await renderAt(`?gws=${encodeURIComponent(GWS)}&tab=solicitation`);
+      await flush();
+      await flush();
+      expect(container.textContent ?? '').not.toContain('The vendor shall provide permitting software.');
+    });
+
+    it('a workspace with no saved results is unchanged', async () => {
+      (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(decoupledWs());
+      await renderAt(`?gws=${encodeURIComponent(GWS)}&tab=solicitation`);
+      await flush();
+      expect(container.querySelector('[data-testid="ai-vetting-card"]')).toBeNull();
+    });
+  });
+
   it('Step bar: renders the eight numbered pursuit steps and marks the current one (replaces the journey strip)', async () => {
     (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(decoupledWs({
       qualification: { id: 'q1', bidding_entity: 'colaberry', decision: 'needs_evidence', version: 1, rationale: null, source_snapshot_version: null, reviewer_identity_id: 'rev', requirements_json: { established: [] } },
