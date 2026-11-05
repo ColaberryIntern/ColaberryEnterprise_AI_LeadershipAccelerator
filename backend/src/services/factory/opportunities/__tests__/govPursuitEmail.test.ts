@@ -79,6 +79,34 @@ describe('the same project never shows twice', () => {
   });
 });
 
+describe('links survive the mail click tracker', () => {
+  // Found on a real email, 2026-11-04: the tracker cut these links at "(" and answered 400, and "&amp;" reached the browser as "amp;from".
+  const out = html(board([
+    row('vetted', { uuid: 'a', title: 'Open Enrollment (OE) for Project', agency: 'City of Detroit (detroit)', sourceUrl: 'https://detroit.bonfirehub.com/opportunities/1?a=1&b=2' }, { reason: 'r', coveragePct: 80 }),
+    row('needs_zip', { uuid: 'b', title: "Sheriff's (Port) Grant", agency: 'Harris County (harriscountytx)' }),
+  ], { vetted: 1, needs_zip: 1 }));
+  const hrefs = (out.match(/href="[^"]*"/g) ?? []).map((h) => h.slice(6, -1));
+
+  it('no href holds a parenthesis, an apostrophe, a space or &amp;', () => {
+    expect(hrefs.length).toBeGreaterThan(3);
+    for (const h of hrefs) expect(h).not.toMatch(/[()'\s]|&amp;/);
+  });
+  it('the Qualify link still decodes to the record, title and agency', () => {
+    const u = new URL(hrefs.find((h) => h.includes('gws%3Aa')) as string);
+    expect(u.searchParams.get('gws')).toBe('gws:a');
+    expect(u.searchParams.get('from')).toBe('Open Enrollment (OE) for Project');
+    expect(u.searchParams.get('agency')).toBe('City of Detroit (detroit)');
+  });
+  it('a Bonfire link keeps its own query intact', () => {
+    expect(hrefs).toContain('https://detroit.bonfirehub.com/opportunities/1?a=1&b=2');
+  });
+  it('a feed URL can not break out of the attribute', () => {
+    const bad = html(board([row('needs_zip', { sourceUrl: 'https://x.example/"><script>alert(1)</script>' })]));
+    expect(bad).not.toContain('<script>');
+    expect(bad).toContain('%22%3E%3Cscript%3Ealert%281%29%3C/script%3E');
+  });
+});
+
 describe('text it cannot control', () => {
   const longWord = 'X'.repeat(120);
   it('lets a long unbroken title, agency, reason and quote wrap, so the email stays phone width', () => {
