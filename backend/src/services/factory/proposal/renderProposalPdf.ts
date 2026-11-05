@@ -61,15 +61,21 @@ function timeoutAfter(ms: number): Promise<never> {
 }
 
 /** Count the pages in a PDF buffer by reading the rendered bytes (pdf-parse), never by arithmetic. */
-async function countPdfPages(buffer: Buffer): Promise<number> {
+export async function countPdfPages(buffer: Buffer): Promise<number> {
+  let parser: { getInfo(): Promise<{ total: number }>; destroy(): Promise<void> } | undefined;
   try {
-    const pdfParse = (await import('pdf-parse')).default as unknown as (b: Buffer) => Promise<{ numpages: number }>;
-    const parsed = await pdfParse(buffer);
-    const n = Number(parsed?.numpages);
+    // pdf-parse@2 exports only the PDFParse class. A copy goes in because the parser may take ownership of the bytes
+    // it is given, and `buffer` is still returned to the caller.
+    const { PDFParse } = await import('pdf-parse');
+    parser = new PDFParse({ data: new Uint8Array(buffer) });
+    const info = await parser.getInfo();
+    const n = Number(info?.total);
     if (!Number.isFinite(n) || n < 1) throw new Error('no page count');
     return n;
   } catch (err: any) {
     throw new PdfRenderError(`Could not read the rendered PDF page count: ${err?.message ?? err}`, 'count_failed');
+  } finally {
+    await parser?.destroy().catch(() => { /* best-effort cleanup */ });
   }
 }
 

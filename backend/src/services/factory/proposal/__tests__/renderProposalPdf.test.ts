@@ -8,10 +8,14 @@ const newPageMock = jest.fn();
 const setContentMock = jest.fn();
 const pdfMock = jest.fn();
 const closeMock = jest.fn();
-const pdfParseMock = jest.fn();
+const getInfoMock = jest.fn();
+const destroyMock = jest.fn();
 
 jest.mock('playwright', () => ({ chromium: { launch: (...a: any[]) => launchMock(...a) } }));
-jest.mock('pdf-parse', () => ({ __esModule: true, default: (...a: any[]) => pdfParseMock(...a) }));
+// The pdf-parse@2 shape: a PDFParse class and no default export. renderProposalPdf.realPdfParse.test.ts proves it for real.
+jest.mock('pdf-parse', () => ({
+  PDFParse: jest.fn().mockImplementation(() => ({ getInfo: () => getInfoMock(), destroy: () => destroyMock() })),
+}));
 
 import { renderProposalPdf, wrapPrintableHtml, PdfRenderError } from '../renderProposalPdf';
 
@@ -22,7 +26,8 @@ beforeEach(() => {
   setContentMock.mockResolvedValue(undefined);
   newPageMock.mockResolvedValue({ setContent: setContentMock, pdf: pdfMock });
   launchMock.mockResolvedValue({ newPage: newPageMock, close: closeMock });
-  pdfParseMock.mockResolvedValue({ numpages: 3 });
+  getInfoMock.mockResolvedValue({ total: 3 });
+  destroyMock.mockResolvedValue(undefined);
 });
 
 describe('renderProposalPdf', () => {
@@ -54,8 +59,15 @@ describe('renderProposalPdf', () => {
   });
 
   it('throws count_failed when the rendered PDF has no readable page count', async () => {
-    pdfParseMock.mockResolvedValue({ numpages: 0 });
+    getInfoMock.mockResolvedValue({ total: 0 });
     await expect(renderProposalPdf('<p>x</p>')).rejects.toMatchObject({ reason: 'count_failed' });
     expect(closeMock).toHaveBeenCalled(); // still cleaned up
+    expect(destroyMock).toHaveBeenCalled();
+  });
+
+  it('throws count_failed when the parser itself rejects, and still releases it', async () => {
+    getInfoMock.mockRejectedValue(new Error('bad xref'));
+    await expect(renderProposalPdf('<p>x</p>')).rejects.toMatchObject({ reason: 'count_failed' });
+    expect(destroyMock).toHaveBeenCalled();
   });
 });
