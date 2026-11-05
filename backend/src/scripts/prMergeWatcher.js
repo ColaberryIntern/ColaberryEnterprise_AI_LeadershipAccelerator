@@ -57,12 +57,20 @@
  *   pr_merged   merged_at became non-null
  * and pr_closed_unmerged, when a PR is closed without merging.
  *
- * It does NOT report "deployed" or "production-verified". Those are not fields on a pull
- * request, and this stack deploys over ssh with docker compose rather than through GitHub
- * Deployments, so there is no deployment event to read. Reporting them would mean inferring
- * them, and a ticket that says "deployed" because something merged is worse than a ticket that
- * says nothing. Closing that gap honestly needs a deploy-side signal; it is out of scope here
- * and named as such in the runbook.
+ * It does NOT report "production-verified". That is not a field on a pull request and nothing
+ * here observes behaviour.
+ *
+ * It DOES now report a third transition, pr_deployed, added under ticket C0.14. The reason the
+ * original version refused to is still the right reason: "deployed" must never be inferred from
+ * "merged". So it is not inferred - it is read off the container runtime. See classifyDeploy()
+ * and readRunningBuildTimes() below. The distinction the comment draws for a reader is exact:
+ * the CODE is in the build production is running, which is not the same claim as the feature
+ * working. Those are different rungs and this watcher reports only the first.
+ *
+ * Why this gap mattered enough to close: on 2026-11-05, 47 of the 222 open to-dos assigned to
+ * Ali carried a merge notice from this watcher and no deploy claim, because nothing ever
+ * supplied one. Forty-four of them had shipped. A watcher that can only ever say "merged"
+ * manufactures a backlog of finished work, and the backlog reads as overdue.
  *
  * ---------------------------------------------------------------------------------------
  * IDEMPOTENCY  (CLAUDE.md > Idempotency & Replayability, NON-NEGOTIABLE)
@@ -94,6 +102,9 @@
 
 const fs = require('fs');
 const path = require('path');
+// execFileSync, not exec: the container runtime is called with an argument array and never a
+// shell string, so no part of a container name or image id can be read as shell syntax.
+const { execFileSync } = require('child_process');
 
 const REPO = process.env.PR_WATCH_REPO || 'ColaberryIntern/ColaberryEnterprise_AI_LeadershipAccelerator';
 const GH_API = 'https://api.github.com';
@@ -109,6 +120,26 @@ const LOCK_PATH = process.env.PR_WATCH_LOCK
 
 const LOCK_TTL_MS = 10 * 60 * 1000;                  // a lock older than this is stale
 const FIRED_KEY_TTL_MS = 90 * 24 * 60 * 60 * 1000;   // prune transition keys after 90 days
+
+// A build is not instantaneous: it starts from whatever main's tip was some minutes BEFORE its
+// image is stamped. So a pull request that landed close to the build cannot be resolved by time
+// alone, and gets the explicit 'ambiguous' verdict rather than being rounded up. The next tick,
+// after the next build, resolves it.
+const DEPLOY_MARGIN_MS = 30 * 60 * 1000;
+
+// The running containers that bound a deploy claim. Both are listed because they hold DIFFERENT
+// code: the backend image carries the API, the nginx image carries the built frontend. A
+// frontend-only change is live only once nginx was rebuilt, so bounding on the backend alone
+// would report frontend work deployed whenever the two drifted. classifyDeploy therefore takes
+// the OLDEST of these, not the newest.
+//
+// accelerator-intelligence is deliberately absent. On 2026-11-05 it had been up for seven weeks,
+// so including it would hold the bound seven weeks in the past and no deploy would ever be
+// reported. A change to that service is OUT OF SCOPE for this signal, which is a limitation to
+// state rather than to paper over by quietly dropping the container from the comparison.
+const DEPLOY_CONTAINERS = (process.env.PR_WATCH_DEPLOY_CONTAINERS
+  || 'accelerator-backend,accelerator-nginx')
+  .split(',').map((s) => s.trim()).filter(Boolean);
 
 // ---------------------------------------------------------------------------
 // Pure decision logic. Everything below this banner and above the I/O banner is
@@ -146,6 +177,42 @@ function transitionKey(prNumber, event, sha) {
   return String(prNumber) + ':' + event + ':' + String(sha || 'nosha');
 }
 
+/**
+ * Is the code from a merge in the build production is actually running?
+ *
+ * Pure, so the whole decision is testable without a container runtime. `buildTimes` are the
+ * build timestamps of the running images; the bound is the OLDEST of them, because a frontend
+ * change lives in a different image from an API change and the claim is only as good as the
+ * staler one.
+ *
+ * Four verdicts, not two. Collapsing the middle two into "deployed" is the only outcome worse
+ * than saying nothing, which is the whole reason this watcher refused to guess for so long:
+ *
+ *   in_build      merged more than `marginMs` before the oldest running image was built
+ *   ambiguous     merged inside that margin, so the build may or may not contain it
+ *   not_in_build  merged after the oldest running image was built
+ *   unknown       no readable build time, or an unparseable merge time
+ *
+ * Only in_build is ever announced. Note what this cannot tell you even then: that the code is
+ * present is not that the feature works, and a feature can ship dark behind a flag.
+ */
+function classifyDeploy(mergedAt, buildTimes, marginMs) {
+  const merged = Date.parse(mergedAt);
+  if (!Number.isFinite(merged)) return 'unknown';
+
+  const times = (buildTimes || [])
+    .map((t) => (typeof t === 'number' ? t : Date.parse(t)))
+    .filter((n) => Number.isFinite(n));
+  if (!times.length) return 'unknown';
+
+  const oldest = Math.min(...times);
+  const margin = Number.isFinite(marginMs) ? marginMs : DEPLOY_MARGIN_MS;
+
+  if (merged > oldest) return 'not_in_build';
+  if (merged > oldest - margin) return 'ambiguous';
+  return 'in_build';
+}
+
 /** The invisible marker that makes the Basecamp thread the authority on what was posted. */
 function marker(prNumber, event, sha) {
   return '<!-- pr-watch:' + transitionKey(prNumber, event, sha) + ' -->';
@@ -174,6 +241,13 @@ function computeTransitions(prs, state, opts = {}) {
   const fired = (state && state.firedKeys) || {};
   const lastSeen = (state && state.lastSeen) || {};
   const adoptedAt = state && state.adoptedAt ? Date.parse(state.adoptedAt) : null;
+  // The same backfill rule as adoptedAt, for the deploy event. Stamped the first time a build
+  // time could be read. Without it, switching this on would post a deploy notice on every
+  // merged pull request in the repository's history, because all of them predate the running
+  // image. A null stamp means "not watching deploys yet" and skips every one, so the failure
+  // direction is silence rather than a flood.
+  const deployAdoptedAt = state && state.deployAdoptedAt ? Date.parse(state.deployAdoptedAt) : null;
+  const buildTimes = opts.buildTimes || [];
   const out = [];
 
   for (const pr of prs) {
@@ -187,6 +261,26 @@ function computeTransitions(prs, state, opts = {}) {
     const sha = (pr.head && pr.head.sha) || pr.merge_commit_sha || null;
     const prev = lastSeen[String(pr.number)];
     const key = transitionKey(pr.number, event, sha);
+
+    // A merged pull request earns a SECOND transition later, once its code is in the build
+    // production is running. It is evaluated only after the merge notice itself has fired, so
+    // the two always arrive in rung order and one tick never posts both.
+    //
+    // Keyed on merge_commit_sha rather than the head sha: the head sha can still change after a
+    // merge (this repository has seen pushes land on an already-merged branch), and a changing
+    // key would let the same deploy be announced twice.
+    if (status === 'merged' && fired[key] && buildTimes.length && deployAdoptedAt !== null) {
+      const mergedMs = Date.parse(pr.merged_at);
+      const mergedAfterWeStartedWatching = Number.isFinite(mergedMs) && mergedMs >= deployAdoptedAt;
+      if (mergedAfterWeStartedWatching) {
+        const deploySha = pr.merge_commit_sha || sha;
+        const deployKey = transitionKey(pr.number, 'pr_deployed', deploySha);
+        if (!fired[deployKey]
+            && classifyDeploy(pr.merged_at, buildTimes, opts.deployMarginMs) === 'in_build') {
+          out.push({ pr, ticket, event: 'pr_deployed', sha: deploySha, key: deployKey, silent: false });
+        }
+      }
+    }
 
     if (fired[key]) continue;                    // already announced this exact transition
 
@@ -231,7 +325,7 @@ function escapeHtml(s) {
  * The comment body. Deliberately factual and short: this is a state transition notice on an
  * internal ticket, not a status report. It says what changed, when, and what it does not know.
  */
-function buildComment(pr, event, sha) {
+function buildComment(pr, event, sha, info = {}) {
   const title = escapeHtml(pr.title || '');
   const url = escapeHtml(pr.html_url || '');
   const num = escapeHtml(pr.number);
@@ -239,13 +333,26 @@ function buildComment(pr, event, sha) {
     pr_opened: 'Pull request opened',
     pr_merged: 'Pull request merged',
     pr_closed_unmerged: 'Pull request closed without merging',
+    pr_deployed: 'Code is in the build production is running',
   }[event] || event;
 
   let detail;
   if (event === 'pr_merged') {
     detail = 'Merged ' + escapeHtml(pr.merged_at) + '. <strong>Merged is not deployed.</strong> '
-      + 'This watcher reads pull request state only; it has no deploy signal and does not know '
-      + 'whether this is running in production.';
+      + 'A separate notice follows once the code reaches the running build; if one never '
+      + 'arrives, it has not.';
+  } else if (event === 'pr_deployed') {
+    // Says exactly what was measured and exactly what it does not establish. The whole point of
+    // this event is that "deployed" was read rather than inferred, so the reader is told what it
+    // was read from.
+    detail = 'Merged ' + escapeHtml(pr.merged_at) + ', and the oldest running accelerator image '
+      + 'was built ' + escapeHtml(info.builtAt || 'unknown') + '. This merge landed before that '
+      + 'build, so its code is in the image production is serving. Read from the container '
+      + 'runtime, not inferred from the merge, and bounded on the staler of the API and frontend '
+      + 'images so a frontend change is not reported live on the strength of a backend rebuild. '
+      + '<strong>This is not behavioural verification.</strong> It establishes that the code '
+      + 'shipped, not that the feature works, and a feature can ship dark behind a flag. '
+      + 'Production-verified remains a separate rung that this watcher does not read.';
   } else if (event === 'pr_closed_unmerged') {
     detail = 'Closed without merging. Nothing from this branch reached main.';
   } else {
@@ -318,6 +425,46 @@ async function bcPostComment(accountId, bucketId, todoId, html) {
   return res.json();
 }
 
+/**
+ * What is actually running, read from the container runtime.
+ *
+ * This worker runs ON THE HOST, from scripts/cron-env-wrapper.sh, which already shells out to
+ * the container runtime itself - so the runtime is reachable here. Two reads per container: the
+ * image the container was created from, then that image's build time.
+ *
+ * WHY NOT `git HEAD` ON THE BOX. Because it is not what is serving. Production deploys from a
+ * published registry image, so when no image exists for main's tip the deploy no-ops and the
+ * checkout moves on without the container. Measured 2026-11-05: the host sat at a29dfb24
+ * (merged 13:16Z) while the running image had been built at 12:24:30Z, an hour behind. A check
+ * built on the checkout would have reported code live that was not.
+ *
+ * Only `inspect` is ever called. Nothing here starts, stops, removes, or executes inside a
+ * container, and a test asserts that against the source text rather than trusting this comment.
+ *
+ * On any failure this returns fewer entries, or none. That is deliberate and it is the safe
+ * direction: classifyDeploy returns 'unknown' without a build time, and 'unknown' announces
+ * nothing. A runtime that cannot be read must never look like a deploy.
+ */
+function readRunningBuildTimes() {
+  const run = (args) => execFileSync('docker', args, {
+    encoding: 'utf8', timeout: 15000, stdio: ['ignore', 'pipe', 'ignore'],
+  }).trim();
+
+  const out = [];
+  for (const container of DEPLOY_CONTAINERS) {
+    try {
+      const image = run(['inspect', '-f', '{{.Image}}', container]);
+      if (!image) continue;
+      const builtAt = run(['image', 'inspect', '-f', '{{.Created}}', image]);
+      const ms = Date.parse(builtAt);
+      if (Number.isFinite(ms)) out.push({ container, image, builtAt, ms });
+    } catch {
+      /* unreadable container contributes nothing, which keeps the verdict 'unknown' */
+    }
+  }
+  return out;
+}
+
 function loadState() {
   try { return JSON.parse(fs.readFileSync(STATE_PATH, 'utf8')); } catch { return { firedKeys: {}, lastSeen: {} }; }
 }
@@ -361,7 +508,27 @@ async function main() {
     const firstRun = !state.adoptedAt;
     if (firstRun && execute) { state.adoptedAt = new Date().toISOString(); saveState(state); }
 
-    const transitions = computeTransitions(prs, state);
+    const builds = readRunningBuildTimes();
+    const buildTimes = builds.map((b) => b.ms);
+    const oldest = builds.length ? builds.reduce((a, b) => (a.ms < b.ms ? a : b)) : null;
+    log({
+      event: 'read_running_build',
+      outcome: builds.length === DEPLOY_CONTAINERS.length ? 'success'
+        : builds.length ? 'partial' : 'failure',
+      context: {
+        wanted: DEPLOY_CONTAINERS, read: builds.map((b) => b.container + '@' + b.builtAt),
+        bound: oldest ? oldest.container + '@' + oldest.builtAt : null,
+      },
+    });
+
+    // Same backfill rule as adoptedAt, for the deploy event: stamped the first time a build
+    // time is readable, so history is never announced. Until it exists, no deploy is reported.
+    if (!state.deployAdoptedAt && execute && buildTimes.length) {
+      state.deployAdoptedAt = new Date().toISOString();
+      saveState(state);
+    }
+
+    const transitions = computeTransitions(prs, state, { buildTimes });
     const watched = prs.filter((p) => parseTicketLink(p.body)).length;
     log({
       event: 'scanned', outcome: 'success',
@@ -406,7 +573,7 @@ async function main() {
 
       try {
         const c = await bcPostComment(t.ticket.accountId, t.ticket.bucketId, t.ticket.todoId,
-          buildComment(t.pr, t.event, t.sha));
+          buildComment(t.pr, t.event, t.sha, { builtAt: oldest ? oldest.builtAt : null }));
         record();
         log({ event: 'posted', outcome: 'success', context: { pr: t.pr.number, transition: t.event, todo: t.ticket.todoId, comment: c.app_url } });
       } catch (err) {
@@ -428,11 +595,14 @@ module.exports = {
   transitionKey,
   marker,
   computeTransitions,
+  classifyDeploy,
   alreadyPosted,
   buildComment,
   pruneFiredKeys,
   escapeHtml,
   FIRED_KEY_TTL_MS,
+  DEPLOY_MARGIN_MS,
+  DEPLOY_CONTAINERS,
 };
 
 if (require.main === module) {

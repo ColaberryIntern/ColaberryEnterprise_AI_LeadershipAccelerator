@@ -21,7 +21,7 @@ const watcher = require('../prMergeWatcher');
 const {
   parseTicketLink, classify, eventFor, transitionKey, marker,
   computeTransitions, alreadyPosted, buildComment, pruneFiredKeys, escapeHtml,
-  FIRED_KEY_TTL_MS,
+  FIRED_KEY_TTL_MS, classifyDeploy, DEPLOY_MARGIN_MS,
 } = watcher;
 
 const TODO_URL = 'https://app.basecamp.com/3945211/buckets/7463955/todos/10379236192';
@@ -313,9 +313,213 @@ describe('buildComment', () => {
   });
 
   it('contains no em dash, per the outbound copy rule', () => {
-    const all = ['pr_opened', 'pr_merged', 'pr_closed_unmerged']
-      .map((e) => buildComment(pr({ merged_at: '2026-10-08T06:00:00Z' }), e, 'abc')).join('');
+    const all = ['pr_opened', 'pr_merged', 'pr_closed_unmerged', 'pr_deployed']
+      .map((e) => buildComment(pr({ merged_at: '2026-10-08T06:00:00Z' }), e, 'abc',
+        { builtAt: '2026-10-09T00:00:00Z' })).join('');
     expect(all).not.toContain('—');
+  });
+
+  it('a deploy notice says what it measured and refuses the stronger claim', () => {
+    const html = buildComment(
+      pr({ merged_at: '2026-11-04T12:00:00Z' }), 'pr_deployed', 'deadbee',
+      { builtAt: '2026-11-05T12:24:30Z' },
+    );
+    // The measurement, both halves, so a reader can check the inference themselves.
+    expect(html).toContain('2026-11-04T12:00:00Z');
+    expect(html).toContain('2026-11-05T12:24:30Z');
+    // And the limit, stated rather than left to be assumed.
+    expect(html).toContain('not behavioural verification');
+    expect(html).toContain('dark behind a flag');
+    expect(html).toContain('Read from the container runtime, not inferred from the merge');
+  });
+
+  it('a merge notice now points forward instead of dead-ending at "no deploy signal"', () => {
+    const html = buildComment(pr({ merged_at: '2026-11-04T12:00:00Z' }), 'pr_merged', 'abc');
+    expect(html).toContain('Merged is not deployed');
+    // The old copy said the watcher "does not know"; it now says a notice follows, and that
+    // its absence is itself information.
+    expect(html).toContain('if one never');
+  });
+});
+
+// ---------------------------------------------------------------------------
+describe('classifyDeploy: four verdicts, because two would force a guess', () => {
+  const BUILT = '2026-11-05T12:24:30Z';
+
+  it('a merge well before the build is in it', () => {
+    expect(classifyDeploy('2026-11-04T12:00:00Z', [BUILT])).toBe('in_build');
+  });
+
+  it('a merge after the build cannot be in it', () => {
+    expect(classifyDeploy('2026-11-05T13:16:00Z', [BUILT])).toBe('not_in_build');
+  });
+
+  it('a merge inside the margin is ambiguous, not rounded up', () => {
+    // 10 minutes before the image was stamped: the build was probably already running from an
+    // earlier tip. Announcing this as deployed is the one failure that matters.
+    expect(classifyDeploy('2026-11-05T12:14:30Z', [BUILT])).toBe('ambiguous');
+    // Just outside the margin, it resolves.
+    expect(classifyDeploy('2026-11-05T11:50:00Z', [BUILT])).toBe('in_build');
+  });
+
+  it('no readable build time is unknown, never in_build', () => {
+    expect(classifyDeploy('2026-11-04T12:00:00Z', [])).toBe('unknown');
+    expect(classifyDeploy('2026-11-04T12:00:00Z', null)).toBe('unknown');
+    expect(classifyDeploy('2026-11-04T12:00:00Z', ['not a date'])).toBe('unknown');
+  });
+
+  it('an unparseable merge time is unknown', () => {
+    expect(classifyDeploy(null, [BUILT])).toBe('unknown');
+    expect(classifyDeploy('whenever', [BUILT])).toBe('unknown');
+  });
+
+  /**
+   * THE TEST THIS FUNCTION EXISTS FOR. The API and the built frontend live in different images.
+   * If the bound were the NEWEST running image, a backend rebuild would report a frontend-only
+   * change as live while the frontend serving it was two days old. Bounding on the OLDEST is
+   * what makes the claim true for whichever image the change actually landed in.
+   */
+  it('bounds on the stalest running image, not the freshest', () => {
+    const backendFresh = '2026-11-05T12:24:30Z';
+    const nginxStale = '2026-11-03T09:00:00Z';
+    const mergedBetween = '2026-11-04T12:00:00Z';
+
+    expect(classifyDeploy(mergedBetween, [backendFresh, nginxStale])).toBe('not_in_build');
+    // Order of the inputs must not change the verdict.
+    expect(classifyDeploy(mergedBetween, [nginxStale, backendFresh])).toBe('not_in_build');
+    // Sanity: against the fresh image alone it WOULD have read as deployed, which is the
+    // mistake this guards.
+    expect(classifyDeploy(mergedBetween, [backendFresh])).toBe('in_build');
+  });
+
+  it('accepts epoch numbers as well as ISO strings', () => {
+    expect(classifyDeploy('2026-11-04T12:00:00Z', [Date.parse(BUILT)])).toBe('in_build');
+  });
+
+  it('honours an explicit margin over the default', () => {
+    const merged = '2026-11-05T10:24:30Z';   // two hours before the build
+    expect(classifyDeploy(merged, [BUILT])).toBe('in_build');
+    expect(classifyDeploy(merged, [BUILT], 3 * 60 * 60 * 1000)).toBe('ambiguous');
+    expect(DEPLOY_MARGIN_MS).toBe(30 * 60 * 1000);
+  });
+});
+
+// ---------------------------------------------------------------------------
+describe('the pr_deployed transition: a second rung, and it must not flood', () => {
+  const BUILT = '2026-11-05T12:24:30Z';
+  const buildTimes = [Date.parse(BUILT)];
+
+  const mergedPr = (over: Record<string, unknown> = {}) => pr({
+    state: 'closed',
+    merged_at: '2026-11-04T12:00:00Z',
+    merge_commit_sha: 'deadbee',
+    ...over,
+  });
+
+  /** State as it stands after the merge notice has already been posted. */
+  const afterMerge = (p: any, deployAdoptedAt: string | null) => {
+    const s: any = {
+      firedKeys: { [transitionKey(p.number, 'pr_merged', p.head.sha)]: '2026-11-04T12:05:00Z' },
+      lastSeen: { [String(p.number)]: { event: 'pr_merged', sha: p.head.sha, at: '2026-11-04T12:05:00Z' } },
+      adoptedAt: '2026-10-07T00:00:00Z',
+    };
+    if (deployAdoptedAt) s.deployAdoptedAt = deployAdoptedAt;
+    return s;
+  };
+
+  it('announces the deploy once the code is in the running build', () => {
+    const p = mergedPr();
+    const out = computeTransitions([p], afterMerge(p, '2026-11-01T00:00:00Z'), { buildTimes });
+    expect(out).toHaveLength(1);
+    expect(out[0].event).toBe('pr_deployed');
+    expect(out[0].silent).toBe(false);
+  });
+
+  it('keys the deploy on the merge commit, not the head sha', () => {
+    // The head sha can still move after a merge; a moving key would announce the same deploy
+    // twice.
+    const p = mergedPr();
+    const out = computeTransitions([p], afterMerge(p, '2026-11-01T00:00:00Z'), { buildTimes });
+    expect(out[0].sha).toBe('deadbee');
+    expect(out[0].key).toBe(transitionKey(101, 'pr_deployed', 'deadbee'));
+  });
+
+  it('never announces the same deploy twice', () => {
+    const p = mergedPr();
+    const state = afterMerge(p, '2026-11-01T00:00:00Z');
+    const first = computeTransitions([p], state, { buildTimes });
+    expect(first).toHaveLength(1);
+    // Record it the way main() does, then run again.
+    state.firedKeys[first[0].key] = '2026-11-05T12:30:00Z';
+    expect(computeTransitions([p], state, { buildTimes })).toHaveLength(0);
+  });
+
+  /**
+   * The flood this would otherwise cause. Every pull request ever merged predates the running
+   * image, so without a stamp, switching this on posts a deploy notice on the entire history.
+   */
+  it('announces nothing for merges that predate the deploy watch', () => {
+    const p = mergedPr({ merged_at: '2026-10-01T00:00:00Z' });
+    const out = computeTransitions([p], afterMerge(p, '2026-11-01T00:00:00Z'), { buildTimes });
+    expect(out).toHaveLength(0);
+  });
+
+  it('announces nothing at all until the deploy watch has been stamped', () => {
+    const p = mergedPr();
+    const out = computeTransitions([p], afterMerge(p, null), { buildTimes });
+    expect(out).toHaveLength(0);
+  });
+
+  it('announces nothing when the container runtime could not be read', () => {
+    const p = mergedPr();
+    const state = afterMerge(p, '2026-11-01T00:00:00Z');
+    expect(computeTransitions([p], state, { buildTimes: [] })).toHaveLength(0);
+    expect(computeTransitions([p], state, {})).toHaveLength(0);
+  });
+
+  it('waits for the merge notice first, so the rungs arrive in order', () => {
+    // A merged PR whose merge has NOT been announced yet reports the merge this tick, not the
+    // deploy. The deploy follows on the next tick.
+    const p = mergedPr();
+    const state: any = { firedKeys: {}, lastSeen: {}, adoptedAt: '2026-10-07T00:00:00Z', deployAdoptedAt: '2026-11-01T00:00:00Z' };
+    const out = computeTransitions([p], state, { buildTimes });
+    expect(out).toHaveLength(1);
+    expect(out[0].event).toBe('pr_merged');
+  });
+
+  it('says nothing about a pull request that is merged but not yet in a build', () => {
+    const p = mergedPr({ merged_at: '2026-11-05T13:16:00Z' });   // after the image was built
+    const out = computeTransitions([p], afterMerge(p, '2026-11-01T00:00:00Z'), { buildTimes });
+    expect(out).toHaveLength(0);
+  });
+
+  /**
+   * THE ONE THAT MATTERS MOST, and it was missing until a mutation test exposed it.
+   *
+   * Changing the announce condition from `=== 'in_build'` to `!== 'not_in_build'` - which would
+   * publish an ambiguous verdict as a deploy - passed every other test in this file. The
+   * classifyDeploy unit test proves the verdict is 'ambiguous'; only this one proves the
+   * watcher STAYS SILENT on it. Rounding ambiguous up is the single failure this whole design
+   * exists to prevent, so it needs a test that dies when the rounding is reintroduced.
+   */
+  it('stays silent on an ambiguous verdict instead of rounding it up to deployed', () => {
+    // Ten minutes before the image was stamped: the build was very likely already running from
+    // an earlier tip, so the image may not carry this merge at all.
+    const p = mergedPr({ merged_at: '2026-11-05T12:14:30Z' });
+    const state = afterMerge(p, '2026-11-01T00:00:00Z');
+    expect(classifyDeploy(p.merged_at, buildTimes)).toBe('ambiguous');
+    expect(computeTransitions([p], state, { buildTimes })).toHaveLength(0);
+  });
+
+  it('stays silent when the merge time itself is unreadable', () => {
+    const p = mergedPr({ merged_at: 'sometime last week' });
+    const out = computeTransitions([p], afterMerge(p, '2026-11-01T00:00:00Z'), { buildTimes });
+    expect(out).toHaveLength(0);
+  });
+
+  it('still ignores a pull request with no ticket link', () => {
+    const p = mergedPr({ body: 'no link here' });
+    expect(computeTransitions([p], afterMerge(p, '2026-11-01T00:00:00Z'), { buildTimes })).toHaveLength(0);
   });
 });
 
@@ -346,6 +550,28 @@ describe('the structural promises, asserted against the source rather than the p
     expect(src).not.toMatch(/\bissues\/[^'"]*\/(labels|comments)/);
     expect(src).not.toMatch(/prAutoMerge/);
     expect(src).not.toMatch(/\bgh pr (merge|close|review|edit)\b/);
+  });
+
+  /**
+   * The deploy signal gave this worker a second external dependency: the container runtime.
+   * That is a far bigger surface than an unauthenticated GET, so it gets the same treatment as
+   * the GitHub promise - asserted against the source, not the prose.
+   */
+  it('calls the container runtime only to inspect, never to change anything', () => {
+    expect(src).toContain('execFileSync');
+    // An argument array, never a shell string, so a container name cannot be read as syntax.
+    expect(src).not.toMatch(/\bexecSync\b/);
+    expect(src).not.toMatch(/child_process['"]\)\.exec\b/);
+    expect(src).not.toMatch(/\bspawnSync?\(/);
+
+    const dockerArgs = src.match(/run\(\[[^\]]*\]\)/g) || [];
+    expect(dockerArgs.length).toBeGreaterThan(0);
+    for (const call of dockerArgs) {
+      expect(call).toMatch(/'inspect'/);
+    }
+    for (const verb of ['run', 'stop', 'start', 'rm', 'kill', 'restart', 'exec', 'compose', 'pull', 'push']) {
+      expect(src).not.toContain("'" + verb + "'");
+    }
   });
 
   it('never completes or closes a Basecamp to-do', () => {
