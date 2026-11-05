@@ -120,7 +120,7 @@ function judgeApprover(p: ProposedGrant, issues: GrantIssue[]): void {
     });
   }
 
-  if (false) {
+  if (isNonHumanIdentity(approver)) {
     issues.push({
       rule: 'approver_is_non_human',
       detail: `"${approver || '(empty)'}" is a machine identity. A tool grant is a human `
