@@ -264,6 +264,28 @@ export async function runGovAiVettingCatchup(): Promise<{ skipped?: string; retr
   return { retried, backfilled };
 }
 
+/**
+ * Which bids the live feed lists now, and which an intern already has (nothing to decide, so no model call). Each read is
+ * best-effort: on failure the backfill falls back to its plain order, which only delays a row by a day.
+ */
+async function backfillPriorities(tenantId: string): Promise<{ inFeed: Set<string>; assigned: Set<string> }> {
+  const out = { inFeed: new Set<string>(), assigned: new Set<string>() };
+  try {
+    const { fetchBestFitOpportunities } = await import('./opportunities/oppPulseClient');
+    const feed = await fetchBestFitOpportunities();
+    if (feed.source === 'live') out.inFeed = new Set(feed.opportunities.map((o) => o.uuid));
+  } catch (err: any) {
+    log('gov_ai_vetting_backfill_feed_failed', 'partial', { message: err?.message }, err?.constructor?.name);
+  }
+  try {
+    const { listGovPipeline, assignedOpportunityUuids } = await import('./govPipeline');
+    out.assigned = assignedOpportunityUuids(await listGovPipeline(tenantId));
+  } catch (err: any) {
+    log('gov_ai_vetting_backfill_pipeline_failed', 'partial', { message: err?.message }, err?.constructor?.name);
+  }
+  return out;
+}
+
 async function backfillOlderZips(): Promise<number> {
   const { lookupGovContractsContainer } = await import('../../scripts/lib/factoryDemoContainer');
   const container: any = await lookupGovContractsContainer();
@@ -276,15 +298,21 @@ async function backfillOlderZips(): Promise<number> {
   const rows: any[] = await GovQualification.findAll({
     where: { tenant_id: tenantId, status: 'active', superseded_by_id: null }, order: [['updated_at', 'DESC']],
   });
+  const { inFeed, assigned } = await backfillPriorities(tenantId);
+  const uuidOf = (rec: any): string => String(rec.canonical_opportunity_id ?? '').replace(/^gws:/, '');
+  const recs = rows.map((row) => (row?.get ? row.get() : row)).filter((rec) => !assigned.has(uuidOf(rec)));
+  // Bids on the board first, so the daily cap clears what the morning email shows before older records.
+  const ordered = [...recs.filter((rec) => inFeed.has(uuidOf(rec))), ...recs.filter((rec) => !inFeed.has(uuidOf(rec)))];
   const today = new Date().toISOString().slice(0, 10);
   let done = 0;
-  for (const row of rows) {
+  for (const rec of ordered) {
     if (done >= BACKFILL_PER_DAY) break;
-    const rec = row?.get ? row.get() : row;
     const key = String(rec.canonical_opportunity_id ?? '');
     if (!key.startsWith('gws:')) continue;
     const close = resolveGovCloseDate(rec);
-    if (close && String(close).slice(0, 10) < today) continue; // the deadline has passed: not worth a model call
+    // A passed deadline isn't worth a model call, unless the live feed still lists it: Opportunity Pulse keeps only bids closing
+    // 10+ days out, so a saved date that disagrees is the stale one, and skipping it would leave the row in the AI queue forever.
+    if (!inFeed.has(uuidOf(rec)) && close && String(close).slice(0, 10) < today) continue;
     const docs: any[] = Array.isArray(rec.requirements_json?.reviewedDocuments) ? rec.requirements_json.reviewedDocuments : [];
     if (!docs.some((d) => d && d.method === 'solicitation_zip' && d.sha256)) continue;
     // The newest UPLOAD, not the attested ZIP, which can be older, and not the newest stored bundle: a re-upload of known

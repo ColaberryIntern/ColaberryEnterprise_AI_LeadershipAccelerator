@@ -150,7 +150,7 @@ export function summaryNote(board: DiscoveryBoard, hidden: readonly HideDecision
   if (c.needs_read > 0) out.push(`${plural(c.needs_read, 'bid needs', 'bids need')} your read because the AI could not call it or someone has started it.`);
   if (c.approved > 0) out.push(`${plural(c.approved, 'approved bid is', 'approved bids are')} waiting for an intern.`);
   if (c.needs_zip > 0) out.push(`${plural(c.needs_zip, 'bid passed', 'bids passed')} the first check and ${c.needs_zip === 1 ? 'needs its' : 'need their'} ZIP uploaded.`);
-  if (c.analyzing > 0) out.push(`The AI is still working on ${c.analyzing}.`);
+  if (c.analyzing > 0) out.push(`${plural(c.analyzing, 'ZIP is', 'ZIPs are')} in the AI queue.`);
   if (hidden.length > 0) out.push(`${plural(hidden.length, 'bid was', 'bids were')} hidden this morning.`);
   if (out.length === 1) out.push('Nothing needs you today.');
   return out;
@@ -214,7 +214,7 @@ export function renderGovPursuitEmail(board: DiscoveryBoard, hidden: readonly Hi
     ])
     + `</td></tr><tr><td>`
     + (board.incomplete ? `<div style="background:${TONES.warn.bg};color:${TONES.warn.ink};border-radius:6px;padding:12px;margin-bottom:16px;font-size:14px">⚠️ Some saved data could not be read this morning, so this list may be incomplete. Check the board before relying on it.</div>` : '')
-    + (nothing && !board.incomplete ? `<div style="background:#ffffff;border:1px solid ${LINE};border-radius:6px;padding:16px;margin-bottom:16px;font-size:15px">✅ Nothing needs you today.${c.analyzing > 0 ? ` The AI is still working on ${c.analyzing}.` : ''}</div>` : '')
+    + (nothing && !board.incomplete ? `<div style="background:#ffffff;border:1px solid ${LINE};border-radius:6px;padding:16px;margin-bottom:16px;font-size:15px">✅ Nothing needs you today.${c.analyzing > 0 ? ` ${plural(c.analyzing, 'ZIP is', 'ZIPs are')} in the AI queue.` : ''}</div>` : '')
     + section('🏗️ Current projects', 'With interns now, the same list as Interns > Gov Contracts. Status compares build progress with days left.', TONES.info.bar, projects)
     // The stars come before the upload list on purpose: a day can have 40 ZIPs to upload, and the stars must not sit under them.
     + section('⭐ Vetted: read these first', 'The AI checked the ZIP and recommends pursuing. Read it, then build the project and assign an intern.', TONES.good.bar, vetted)
