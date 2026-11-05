@@ -137,6 +137,12 @@ const PATH_SECTION: Array<[string, SectionKey]> = [
   // platform change is not something a mentor or a support rep should be able to do.
   ['/api/admin/agent-domain-change-requests-mine', 'dashboard'],
   ['/api/admin/agent-domain-change-requests', 'program'],
+  // AF11.3 — the tool-request review console. `program`, and a hyphen sibling of neither row
+  // above (`-tool-requests` shares no `/` boundary with `-change-requests`), so declaration order
+  // is free here. Both routes under it additionally carry `requireAdmin`, and the service requires
+  // the decider to be a recorded human on the configured approver set: a section grant is what
+  // lets the page's data load, never what decides whose tool grant may stand.
+  ['/api/admin/agent-domain-tool-requests', 'program'],
   // Agent Factory tab list (M2). Its OWN 'agents'-gated prefix so the Interns-hub Agents tab's data
   // agrees with its nav gate; reusing '-provisioned' ('program') would 403 a future 'agents'-only
   // builder who can see the tab. Distinct from the '-domains' prefixes (no '/'-boundary overlap), so

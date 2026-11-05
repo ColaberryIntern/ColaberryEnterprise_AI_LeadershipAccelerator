@@ -64,6 +64,7 @@ import agentDomainRoutes from './admin/agentDomainRoutes';
 import agentNudgeRoutes from './admin/agentNudgeRoutes';
 import agentDisplayNameRoutes from './admin/agentDisplayNameRoutes';
 import agentChangeRequestRoutes from './admin/agentChangeRequestRoutes';
+import toolRequestDecisionRoutes from './admin/toolRequestDecisionRoutes';
 import ticketRoutes from './admin/ticketRoutes';
 import previewRoutes from './admin/previewRoutes';
 import alertRoutes from './admin/alertRoutes';
@@ -293,6 +294,11 @@ router.use(agentNudgeRoutes);
 // narrower `dashboard` grant, because it carries no builder name or address.
 router.use(agentDisplayNameRoutes);
 router.use(agentChangeRequestRoutes);
+// AF11.3: the tool-request review console. Its own router rather than a pair of handlers added
+// to the line above, because that one is `requireSection('dashboard')` on its filing half and
+// these two are `requireAdmin` on both -- settling a tool grant is not something the section
+// every mgmt role carries should reach.
+router.use(toolRequestDecisionRoutes);
 router.use(ticketRoutes);
 router.use(previewRoutes);
 router.use(alertRoutes);
