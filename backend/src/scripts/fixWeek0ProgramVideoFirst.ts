@@ -49,10 +49,12 @@ async function main(): Promise<void> {
     if (!apply) { console.log('DRY RUN: nothing written. Re-run with --apply to write.'); return; }
 
     for (const u of plan) {
-      const row = byId.get(u.id);
-      if (!row) throw new Error(`C112: card ${u.id} vanished mid-run`);
-      row.changed('metadata', true);
-      await row.update(u.set as Partial<TimelineCard>, { transaction });
+      if (!byId.has(u.id)) throw new Error(`C112: card ${u.id} vanished mid-run`);
+      // Model-level update, not row.update(): the instance afterUpdate (CAPE skill-mapping stamp) writes on its own
+      // connection, outside this transaction, and waited on the row lock this transaction holds, a deadlock on the
+      // first prod run (2026-11-05). A model-level update fires no instance hooks. The stamp reads only type, week and
+      // visibility, none of which this script changes, so nothing is lost.
+      await TimelineCard.update(u.set as Partial<TimelineCard>, { where: { id: u.id }, transaction });
     }
     console.log(`APPLIED: ${plan.length} card(s) updated.`);
   });
