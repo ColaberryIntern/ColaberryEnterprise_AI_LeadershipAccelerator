@@ -342,6 +342,9 @@ async function handleDraftMarketingEmail(
       outcome: r.outcome,
       draft_id: r.draftId,
       rule_ids: r.ruleIds,
+      // The offending text, not just the fact that something offended. "States a price" sends
+      // her hunting through her own draft; "$4,500" tells her what to delete.
+      ungrounded: r.ungrounded,
       unquotable: r.unquotable,
     },
   };

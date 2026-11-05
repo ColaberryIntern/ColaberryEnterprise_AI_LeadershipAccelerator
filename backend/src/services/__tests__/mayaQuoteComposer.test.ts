@@ -126,6 +126,69 @@ describe('the gate on the composed message', () => {
   });
 });
 
+describe('she is the source of no price, date, deadline or seat count', () => {
+  /**
+   * The gap this closes: until 2026-11-04 the composer screened for banned WORDS only. Her
+   * persona asks her never to state a price and `NEVER_AUTHORITATIVE_FOR` declares it, but
+   * neither is a guard, so `$4,500` would have gone straight into a draft. The real
+   * campaign-template library measured that day carries three of our own prices in twelve
+   * bodies, and the membership price of record is $199/mo, so one of them is stale too.
+   */
+  it('refuses a price', async () => {
+    const { deps, draft } = depsWith();
+    const r = await composeQuotedEmail(req({ body: 'The program is $4,500 all in.' }), deps);
+    expect(r.outcome).toBe('refused_fact');
+    expect(r.ungrounded).toEqual([{ kind: 'price', text: '$4,500' }]);
+    expect(draft).not.toHaveBeenCalled();
+  });
+
+  it('refuses a cohort date and a seat count', async () => {
+    const { deps } = depsWith();
+    const dated = await composeQuotedEmail(req({ body: 'We start November 12.' }), deps);
+    expect(dated.outcome).toBe('refused_fact');
+    expect(dated.ungrounded.map((f) => f.kind)).toContain('date');
+
+    const seats = await composeQuotedEmail(req({ body: 'Only 3 seats left.' }), deps);
+    expect(seats.outcome).toBe('refused_fact');
+    expect(seats.ungrounded.map((f) => f.kind)).toContain('seat count');
+  });
+
+  it('names the offending TEXT, not just the category', async () => {
+    // "states a price" sends her hunting through her own draft; "$4,500" says what to delete.
+    const { deps } = depsWith();
+    const r = await composeQuotedEmail(req({ body: 'Enroll for $4,500 today.' }), deps);
+    expect(r.reason).toContain('$4,500');
+    expect(r.ungrounded[0].text).toBe('$4,500');
+  });
+
+  it('reports a copy-rule breach AND a price in ONE call, not two round trips', async () => {
+    const { deps, draft } = depsWith();
+    const r = await composeQuotedEmail(req({ body: 'A free seat, yours for $4,500.' }), deps);
+    expect(r.ruleIds).toEqual([FREE_WORD_RULE.id]);
+    expect(r.ungrounded.map((f) => f.text)).toContain('$4,500');
+    // The enum has to pick one; the copy rule is the legal one, so it names that.
+    expect(r.outcome).toBe('refused_copy');
+    expect(draft).not.toHaveBeenCalled();
+  });
+
+  it('CONTROL: ordinary prose with no figures still drafts', async () => {
+    // Without this, a guard that refused everything would pass every test above.
+    const { deps, draft } = depsWith();
+    const r = await composeQuotedEmail(req({ body: 'Happy to walk you through what we cover.' }), deps);
+    expect(r.outcome).toBe('drafted');
+    expect(r.ungrounded).toEqual([]);
+    expect(draft).toHaveBeenCalled();
+  });
+
+  it('does not fire on a bare number that is not a price, date or seat count', async () => {
+    // A guard that refused "20 minutes" would make ordinary scheduling prose unwritable, which
+    // is how a gate that is working as specified still leaves a feature unusable.
+    const { deps } = depsWith();
+    const r = await composeQuotedEmail(req({ body: 'It runs about 20 minutes, 2 sessions.' }), deps);
+    expect(r.outcome).toBe('drafted');
+  });
+});
+
 describe('she cannot cite an asset she was not given', () => {
   it('refuses an id that is on the REFUSED list', async () => {
     const { deps, draft } = depsWith();

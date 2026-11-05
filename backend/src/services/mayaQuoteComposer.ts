@@ -1,5 +1,6 @@
 import { findBannedCopy } from './content/bannedCopyMatch';
 import { listQuotableAssets, quotableAssetDigest, type QuotableAsset } from './content/quotableAssets';
+import { findUngroundedFacts, type UngroundedFact } from './explorerGrowth/explorerFactGuard';
 import { resolveLeadForVisitor } from './mayaToolsService';
 import { sendAgentEmail, type AgentEmailResult } from './agents/tools/agentEmailTool';
 
@@ -35,6 +36,27 @@ import { sendAgentEmail, type AgentEmailResult } from './agents/tools/agentEmail
  * composed subject and body are screened here, after the model has written them, which is the
  * only place that failure is visible.
  *
+ * ── WHY A PRICE IS REFUSED BY A GUARD AND NOT ONLY BY THE PROMPT ───────────
+ *
+ * "Maya never states a price" is on both tickets, and `NEVER_AUTHORITATIVE_FOR` declares the
+ * whole set - price, cohort date, deadline, seat count. Until this change, neither was a
+ * guard: her persona asks her not to, and nothing checked. She could have put $4,500 in a
+ * draft and the banned-copy matcher would not have noticed, because it knows one word and that
+ * word is not a number.
+ *
+ * That is not hypothetical. Measured on 2026-11-04, the campaign-template library that was
+ * proposed as her second quote source carries three of our own prices in twelve bodies -
+ * "$2,500 for production AI", "Program Investment: $4,500", "Enroll directly ($4,500)". The
+ * membership price of record is $199 a month, so at least one of those is also stale: quoting
+ * it would state a price AND state it wrong.
+ *
+ * `explorerFactGuard` already does this job and is reused rather than reimplemented. Its
+ * insight is that a date is not banned, an UNGROUNDED date is - so it takes the facts resolved
+ * for the learner and refuses anything not among them. Maya is authoritative for NONE of them,
+ * so she is handed the empty fact set, and the guard's documented fail-closed behaviour does
+ * the rest: with nothing resolved, every date, price and seat count in her copy is ungrounded
+ * by definition. The semantics fall out of the existing guard rather than needing a new one.
+ *
  * ── WHY SHE CANNOT NAME AN ASSET THAT IS NOT ON THE LIST ────────────────────
  *
  * The asset ids she cites are re-resolved against a fresh `listQuotableAssets()` rather than
@@ -45,7 +67,8 @@ import { sendAgentEmail, type AgentEmailResult } from './agents/tools/agentEmail
  */
 
 /** What happened to the composition. Never `sent`: see the docblock. */
-export type QuoteComposeOutcome = 'drafted' | 'refused_copy' | 'refused_asset' | 'no_recipient';
+export type QuoteComposeOutcome =
+  | 'drafted' | 'refused_copy' | 'refused_fact' | 'refused_asset' | 'no_recipient';
 
 export interface QuoteComposeResult {
   outcome: QuoteComposeOutcome;
@@ -53,8 +76,17 @@ export interface QuoteComposeResult {
   reason: string;
   /** The row id in the draft queue, when one was written. */
   draftId: string | null;
-  /** Copy rules the COMPOSED message breaks. Non-empty exactly when `refused_copy`. */
+  /**
+   * Copy rules the COMPOSED message breaks.
+   *
+   * Populated whenever the copy breaks one, which is not quite the same as "when the outcome
+   * is `refused_copy`": a message can break a copy rule AND state a price, and both lists are
+   * filled so one call tells her everything that is wrong. The outcome names the first of the
+   * two, because an enum has to pick.
+   */
   ruleIds: string[];
+  /** Dates, prices and seat counts she stated that nothing grounds. See `ruleIds` on filling. */
+  ungrounded: UngroundedFact[];
   /** Asset ids cited that are not quotable. Non-empty exactly when `refused_asset`. */
   unquotable: string[];
 }
@@ -88,7 +120,9 @@ const result = (
   outcome: QuoteComposeOutcome,
   reason: string,
   over: Partial<QuoteComposeResult> = {},
-): QuoteComposeResult => ({ outcome, reason, draftId: null, ruleIds: [], unquotable: [], ...over });
+): QuoteComposeResult => ({
+  outcome, reason, draftId: null, ruleIds: [], ungrounded: [], unquotable: [], ...over,
+});
 
 /**
  * Compose a quoted email into the draft queue, or refuse and say why.
@@ -120,14 +154,28 @@ export async function composeQuotedEmail(
 
   // THE GATE AT THE POINT OF QUOTING. Subject and body together: a rule broken in the subject
   // line reaches the recipient's inbox list even if the body is never opened.
-  const hits = findBannedCopy(`${req.subject}\n${req.body}`);
-  if (hits.length > 0) {
-    const ruleIds = Array.from(new Set(hits.map((h) => h.rule_id)));
+  const composed = `${req.subject}\n${req.body}`;
+  const ruleIds = Array.from(new Set(findBannedCopy(composed).map((h) => h.rule_id)));
+  // No fact set passed, deliberately. Maya is authoritative for none of price, cohort date,
+  // deadline or seat count, so the guard's fail-closed default is the correct reading of her
+  // authority rather than a shortcut: nothing is resolved for her, so nothing may be stated.
+  const ungrounded = findUngroundedFacts(composed);
+
+  if (ruleIds.length > 0 || ungrounded.length > 0) {
+    // Both lists travel whatever the outcome says, so one call tells her everything that is
+    // wrong. A guard that reveals one fault at a time turns a fix into several round trips.
+    const parts: string[] = [];
+    if (ruleIds.length > 0) parts.push('breaks a copy rule');
+    if (ungrounded.length > 0) {
+      const kinds = Array.from(new Set(ungrounded.map((f) => f.kind))).join(', ');
+      parts.push(`states a ${kinds} you are not the source of (${ungrounded.map((f) => `"${f.text}"`).join(', ')})`);
+    }
     return result(
-      'refused_copy',
-      'The composed message breaks a copy rule and was not drafted. Rewrite it using the '
-      + 'approved wording and try again.',
-      { ruleIds },
+      ruleIds.length > 0 ? 'refused_copy' : 'refused_fact',
+      `The composed message ${parts.join(' and ')}, and was not drafted. Use the approved `
+      + 'wording, and leave a price, a date, a deadline or a seat count out entirely: those '
+      + 'come from the system of record, never from you.',
+      { ruleIds, ungrounded },
     );
   }
 
