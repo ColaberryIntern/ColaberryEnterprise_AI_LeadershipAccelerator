@@ -76,9 +76,44 @@ describe('pickStarterItems', () => {
     const feed = PROD_FIRST_14.map((i) => (i.position === 1 ? { ...i, status: 'completed' } : i));
     const picked = pickStarterItems(feed);
     expect(picked.map((i) => i.position)).not.toContain(1);
-    expect(picked[0].type).toBe('deep_dive');
+    expect(picked[0].position).toBe(4); // C112: the next point-bearing card is the 4-minute program video
+
     expect(picked.map((i) => i.type)).not.toContain('podcast');
     expect(picked.map((i) => i.type)).not.toContain('announcement');
+  });
+
+  describe('C112: the Week 0 program video placed ahead of the Quick check', () => {
+    // After the C112 data edit the program video sits in pre_class right after the welcome, so it is materialised first.
+    const C112_ORDER: TodayFeedItem[] = [
+      item(0, 'anchored', 'announcement', { points: { learning: 0, builder: 0, community: 0 } }),
+      item(1, 'anchored', 'video', { points: { learning: 5 }, estimated_time: 4 }),
+      item(2, 'anchored', 'knowledge_check', { points: { learning: 10, builder: 5 } }),
+      item(3, 'ambient', 'blog', { points: { learning: 10 } }),
+      item(4, 'anchored', 'warmup', { points: { learning: 10 } }),
+      item(5, 'ambient', 'testimonial'),
+      item(6, 'anchored', 'video', { points: { learning: 15 }, estimated_time: 6 }),
+      item(7, 'anchored', 'video', { points: { learning: 15 }, estimated_time: 8 }),
+    ];
+
+    it('opens on the program video, the same card the first-lesson banner opens', () => {
+      expect(pickStarterItems(C112_ORDER)[0].position).toBe(1);
+    });
+
+    it('still fills the short-video slot, with a different video', () => {
+      const picked = pickStarterItems(C112_ORDER);
+      expect(picked.map((i) => `${i.type}@${i.position}`)).toEqual(['video@1', 'warmup@4', 'video@6', 'testimonial@5', 'blog@3']);
+      expect(picked).toHaveLength(STARTER_FEED_SIZE);
+    });
+
+    it('moves on to the Quick check once the video is done', () => {
+      const feed = C112_ORDER.map((i) => (i.position === 1 ? { ...i, status: 'completed' } : i));
+      expect(pickStarterItems(feed)[0].type).toBe('knowledge_check');
+    });
+
+    it('does not make a 0-point video the first lesson', () => {
+      const feed = C112_ORDER.map((i) => (i.position === 1 ? { ...i, points: { learning: 0 } } : i));
+      expect(pickStarterItems(feed)[0].type).toBe('knowledge_check');
+    });
   });
 
   it('never returns the same ref twice and never more than five', () => {

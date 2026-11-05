@@ -25,8 +25,12 @@ import type { TodayFeedItem } from './todayFeedTypes';
 
 export const STARTER_FEED_SIZE = 5;
 
-/** Anchored card types that are not "the first lesson": they fill their own slot, or are not learning. */
-const NOT_A_LESSON = new Set(['warmup', 'video', 'announcement', 'community_discussion']);
+/**
+ * Anchored card types that are not "the first lesson": they fill their own slot, or are not learning.
+ * A video CAN be the first lesson (C112, Ali 2026-11-05: the Week 0 program video greets a new Explorer before the
+ * Quick check), so the feed opens on the same card the first-lesson banner does.
+ */
+const NOT_A_LESSON = new Set(['warmup', 'announcement', 'community_discussion']);
 
 const pointsOf = (it: TodayFeedItem) =>
   Object.values(it.points || {}).reduce((n: number, v) => n + (typeof v === 'number' ? v : 0), 0);
@@ -42,10 +46,15 @@ function pickLesson(items: TodayFeedItem[]): TodayFeedItem | undefined {
   return [...lessons].sort((a, b) => week(a) - week(b) || byPosition(a, b))[0];
 }
 
-/** One short video: the shortest by estimated time (unknown counts as longest), then the earliest placed. */
-function pickVideo(items: TodayFeedItem[]): TodayFeedItem | undefined {
+/**
+ * One short video: the shortest by estimated time (unknown counts as longest), then the earliest placed. Skips the
+ * video already serving as the first lesson, so the slot still adds a second item.
+ */
+function pickVideo(items: TodayFeedItem[], lesson: TodayFeedItem | undefined): TodayFeedItem | undefined {
   const mins = (it: TodayFeedItem) => (typeof it.estimated_time === 'number' ? it.estimated_time : Number.MAX_SAFE_INTEGER);
-  return items.filter((it) => isCard(it) && it.type === 'video').sort((a, b) => mins(a) - mins(b) || byPosition(a, b))[0];
+  return items
+    .filter((it) => isCard(it) && it.type === 'video' && it.ref !== lesson?.ref)
+    .sort((a, b) => mins(a) - mins(b) || byPosition(a, b))[0];
 }
 
 const firstOfType = (items: TodayFeedItem[], type: string, kind: TodayFeedItem['kind']) =>
@@ -56,10 +65,11 @@ const firstOfType = (items: TodayFeedItem[], type: string, kind: TodayFeedItem['
  * A slot with no candidate is skipped, so this returns at most five and never invents an item.
  */
 export function pickStarterItems(served: TodayFeedItem[]): TodayFeedItem[] {
+  const lesson = pickLesson(served);
   const slots = [
-    pickLesson(served),
+    lesson,
     firstOfType(served, 'warmup', 'anchored'),
-    pickVideo(served),
+    pickVideo(served, lesson),
     firstOfType(served, 'testimonial', 'ambient'),
     firstOfType(served, 'blog', 'ambient'),
   ];
