@@ -113,9 +113,20 @@ export function buildFactoryDecomposeInput(src: FactoryDecomposeSource): Prepare
 
   const promptInputs: FactoryDecomposeInputs = {
     sourceBlocks: blocks.map((b) => ({ id: b.id, locator: b.locator, text: b.text, kind: b.kind })),
-    requirements: src.requirements.map((r) => ({
-      id: r.id, statement: r.statement, kind: r.kind, priority: r.priority, section: r.section,
-    })),
+    // THE OTHER HALF OF THE DEMOTION. Demoting the BLOCK lifted the citation obligation, but
+    // this list is rendered to the model under a heading that literally reads REQUIREMENTS, so
+    // "All Proposals received will be reviewed by a Review Panel" still arrived labelled as
+    // something to satisfy - and the model duly built a task for it. Measured: after demoting
+    // blocks alone, the Herriman decomposition still produced Evaluate Proposal, Select Vendor,
+    // Negotiate Contract and Finalize Contract, all of them the City's job.
+    //
+    // Nothing is lost by excluding them here: the same text is still in sourceBlocks as a
+    // `context` block, so the model reads it as information rather than as an obligation.
+    requirements: src.requirements
+      .filter((r) => !isExplicitlyNonBinding(r.interpretation))
+      .map((r) => ({
+        id: r.id, statement: r.statement, kind: r.kind, priority: r.priority, section: r.section,
+      })),
     context: derivedContext,
   };
 
