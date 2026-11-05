@@ -326,6 +326,128 @@ router.get(
   }),
 );
 
+/**
+ * The two self-scoped siblings of `/api/admin/agent-domains/:domainKey` and its `/coverage`.
+ *
+ * ## The report that produced them
+ *
+ * Kalkidan Bezabeh, 5 Nov 2026, 9:10 AM CT, with a freshly minted token: both of those routes
+ * answer **403 `section_not_permitted`** for a builder. Her token carries `dashboard`,
+ * `lead_ingestion` and `agents`; `mgmtSectionGate` maps both paths to `program`. Her reading was
+ * exactly right. STORY-000's panels 2, 3 and 4 — capability inventory, autonomy ladder, per-rung
+ * behaviour — have no other source, so every builder is blocked on three of five panels.
+ *
+ * ## Why NOT the two fixes she proposed, and this instead
+ *
+ * She asked whether the routes could move to `agents`, or `program` be granted to builders. Both
+ * would work and both hand over more than she asked for:
+ *
+ *   - **Moving them to `agents`** does not scope anything. They take the domain key from the PATH
+ *     and check nothing, so every builder could read all ten domains, including each one's
+ *     `accountable_human`. That is the same disclosure with a different section on it.
+ *   - **Granting `program`** additionally hands over the programme-wide reads and the ten-domain
+ *     list. It is also a governance change — widening a role — for what is really a missing route.
+ *
+ * The header of `agent-domains-mine` already records the principle: *"Section access decides
+ * whether you may ask; ownership decides what comes back."* So these are new routes rather than a
+ * re-section of the old ones, and the old ones are untouched — the audience that reads all ten
+ * domains still needs `program` to do it.
+ *
+ * ## No new `PATH_SECTION` row, and that is checked rather than assumed
+ *
+ * `matchesPrefix` requires an exact match or a `/` boundary, so `/api/admin/agent-domains-mine/
+ * admissions` matches the existing `-mine` row and resolves to `dashboard`, while
+ * `/api/admin/agent-domains` cannot swallow it. A test asserts that mapping by name, because the
+ * gate is deny-by-default and getting this wrong ships the 403 it is meant to remove.
+ */
+
+/**
+ * Is this domain the caller's, by the SAME definition `-mine` uses?
+ *
+ * Managed or built, resolved from the verified token. Returning the whole list rather than a
+ * boolean so the refusal can distinguish two cases the caller needs to tell apart: a domain that
+ * belongs to somebody else, and an identity we cannot resolve to any domain at all. Collapsing
+ * them sends a builder to argue about permissions when the real problem is an `org_members` row.
+ */
+async function myDomainKeys(email: string): Promise<string[]> {
+  const identityIds = await resolveOwnerIdentityIds(sequelize, email);
+  const rows = await loadMyDomains(sequelize, email, identityIds);
+  return rows.map((r) => String(r.domain_key));
+}
+
+function refuseNotYours(res: Response, key: string, mine: string[]): void {
+  // 403 and not 404: the domain keys are already public to anyone holding `program`, so hiding
+  // existence buys nothing, and "that is not yours" is the sentence that tells her what to do.
+  res.status(403).json({
+    error: mine.length === 0
+      ? 'This email matches no domain as either accountable manager or intended builder, so there '
+        + 'is nothing you can read here. That is an ownership record to fix, not a section grant.'
+      : `"${key}" is not one of your domains.`,
+    code: 'domain_not_yours',
+    your_domains: mine,
+  });
+}
+
+/** Your own domain's detail. Same body as the `program` route, for a domain you own. */
+router.get(
+  '/api/admin/agent-domains-mine/:domainKey',
+  requireSection('dashboard'),
+  guarded(async (req: Request, res: Response) => {
+    const parsed = DomainParam.safeParse(req.params);
+    if (!parsed.success) return badRequest(res, parsed.error);
+    const key = parsed.data.domainKey;
+
+    const mine = await myDomainKeys(req.admin?.email ?? '');
+    if (!mine.includes(key)) return refuseNotYours(res, key, mine);
+
+    const m = loadDomainMatrix(key);
+    const plan = planProvision(key);
+    res.json({
+      ...publicDomainView(key),
+      accountable_human: m.accountable_human,
+      researched_at: m.researched_at,
+      releases: plan.releases.map((r) => ({ cluster: r.cluster, title: r.title, position: r.position })),
+      story_count: plan.stories.length,
+      // Carried over verbatim from the `program` route rather than paraphrased. This handler reads
+      // the REGISTRY and the capability files and queries no provisioning state, so it must not
+      // report one -- the field here used to be a hardcoded `provisioned: false` that had become a
+      // false statement to every caller.
+      provisioned_state: 'not checked by this route',
+      provisioning_note:
+        'These are the DERIVED ids, computed from the domain key. For the live database row -- '
+        + 'stage, release and story counts, verified count, authorization count -- call '
+        + 'GET /api/admin/agent-domains-mine, which queries it and is already scoped to you.',
+    });
+  }),
+);
+
+/** The capability -> story coverage matrix for a domain you own. STORY-000's panels 2, 3 and 4. */
+router.get(
+  '/api/admin/agent-domains-mine/:domainKey/coverage',
+  requireSection('dashboard'),
+  guarded(async (req: Request, res: Response) => {
+    const p = DomainParam.safeParse(req.params);
+    if (!p.success) return badRequest(res, p.error);
+    const q = CoverageQuery.safeParse(req.query);
+    if (!q.success) return badRequest(res, q.error);
+    const key = p.data.domainKey;
+
+    const mine = await myDomainKeys(req.admin?.email ?? '');
+    if (!mine.includes(key)) return refuseNotYours(res, key, mine);
+
+    let rows = coverageForDomain(key);
+    if (q.data.state) rows = rows.filter((r) => r.validation_state === q.data.state);
+    const summary = renderCoverageSummary(rows);
+    res.json({
+      domain_key: key,
+      summary,
+      rows: q.data.limit ? rows.slice(0, q.data.limit) : rows,
+      returned: q.data.limit ? Math.min(q.data.limit, rows.length) : rows.length,
+      matching: rows.length,
+    });
+  }),
+);
+
 // ─────────────────────────────── internship section ───────────────────────────────
 
 /**

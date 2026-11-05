@@ -88,6 +88,40 @@ describe('AF8.3 every intern can reach My Domain', () => {
     expect(roleCanAccessSection('curriculum', provisioned)).toBe(true);
   });
 
+  it('and the per-domain detail and coverage routes are reachable TOO', () => {
+    // Kalkidan Bezabeh, 5 Nov 2026, 9:10 AM CT: `/api/admin/agent-domains/admissions` and its
+    // `/coverage` both answer 403 `section_not_permitted` for a builder, and STORY-000's panels
+    // 2, 3 and 4 have no other source. The test above proved those paths are CLASSIFIED; being
+    // classified to a section she does not hold is exactly as blocking as not being classified
+    // at all, which is why it passed throughout.
+    //
+    // Note there is no new PATH_SECTION row behind these. `matchesPrefix` needs an exact match
+    // or a '/' boundary, so the existing `-mine` row covers both — and this asserts that rather
+    // than leaving it to be inferred from the matcher.
+    for (const path of [
+      '/api/admin/agent-domains-mine/admissions',
+      '/api/admin/agent-domains-mine/admissions/coverage',
+      '/api/admin/agent-domains-mine/product_experience/coverage',
+    ]) {
+      expect(pathToSection(path)).toBe('dashboard');
+    }
+    for (const role of INTERN_ROLES) {
+      expect(roleCanAccessSection(role, 'dashboard')).toBe(true);
+    }
+  });
+
+  it('and the UNSCOPED per-domain routes are still program, which is the point', () => {
+    // The fix adds routes; it does not re-section the old ones. Those take the domain key from
+    // the PATH and check no ownership, so moving them to a section a builder holds would hand
+    // every builder all ten domains and each one's accountable human. If this ever flips, the
+    // disclosure the new routes exist to avoid has been introduced by the back door.
+    expect(pathToSection('/api/admin/agent-domains/admissions')).toBe('program');
+    expect(pathToSection('/api/admin/agent-domains/admissions/coverage')).toBe('program');
+    for (const role of INTERN_ROLES) {
+      expect(roleCanAccessSection(role, 'program')).toBe(false);
+    }
+  });
+
   it('reaching My Domain does not widen anything else', () => {
     // 'dashboard' is a landing section and must stay one. If it ever starts carrying data
     // surfaces, this route's gate becomes a back door for every scoped role on the platform.
