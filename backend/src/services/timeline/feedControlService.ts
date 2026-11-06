@@ -332,11 +332,14 @@ export async function listEnrollments(limit = 60): Promise<EnrollmentOption[]> {
   const rows = await Enrollment.findAll({
     order: [['created_at', 'DESC']],
     limit: Math.max(1, Math.min(200, limit)),
-    attributes: ['id', 'full_name', 'email', 'cohort_id', 'enrollment_type', 'status', 'created_at'],
+    attributes: ['id', 'full_name', 'email', 'cohort_id', 'enrollment_type', 'payment_status', 'status', 'created_at'],
   });
+  // The ` · Free` tag says what someone IS, so it needs the paid term: `enrollment_type`
+  // records origin, and an operator picking a subject in the simulator would otherwise see
+  // a paying customer labeled Free. A no-op today, since no paid row carries 'explorer'.
   return rows.map((e: any) => ({
     id: e.id,
-    label: `${e.full_name || e.email || e.id.slice(0, 8)}${e.enrollment_type === 'explorer' ? ' · Free' : ''}${e.status && e.status !== 'active' ? ` · ${e.status}` : ''}`,
+    label: `${e.full_name || e.email || e.id.slice(0, 8)}${e.enrollment_type === 'explorer' && e.payment_status !== 'paid' ? ' · Free' : ''}${e.status && e.status !== 'active' ? ` · ${e.status}` : ''}`,
     cohort_id: e.cohort_id ?? null,
     type: e.enrollment_type || 'standard',
     status: e.status || 'active',

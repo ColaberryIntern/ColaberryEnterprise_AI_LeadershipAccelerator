@@ -37,6 +37,15 @@ export async function getExplorerRoster(): Promise<ExplorerRosterRow[]> {
   // (subscriptionService.grantMembership) — always null for a pure Explorer,
   // so created_at (when the Open House signup created this row) is the real
   // "how long have they been an Explorer" signal.
+  //
+  // Unpaid is asserted, not inferred. `enrollment_type` records where the account
+  // ORIGINATED; it is not a statement about whether they have since paid. Without the
+  // `payment_status IS DISTINCT FROM 'paid'` term below, an Explorer who upgraded would
+  // keep appearing on the free-Explorer revenue roster an operator uses for conversion
+  // targeting — i.e. we would chase a customer we had already won. `IS DISTINCT FROM`
+  // rather than `<>` is defensive, not required: the model declares `payment_status` NOT
+  // NULL, but that is a contract about new writes, and `NULL <> 'paid'` is NULL, which
+  // would drop genuinely unpaid Explorers from their own roster. It costs nothing.
   const rows = (await sequelize.query(
     `SELECT e.id AS enrollment_id, e.full_name, e.email, e.created_at
        FROM enrollments e
@@ -47,6 +56,7 @@ export async function getExplorerRoster(): Promise<ExplorerRosterRow[]> {
           LIMIT 1
        ) ac ON true
       WHERE e.enrollment_type = 'explorer' AND e.status = 'active' AND ac.enrollment_id IS NULL AND NOT ${IS_STAFF_SQL}
+        AND e.payment_status IS DISTINCT FROM 'paid'
         AND NOT ${syntheticEmailSql('e.email')}`,
     { type: QueryTypes.SELECT }
   )) as ExplorerRow[];

@@ -87,10 +87,22 @@ export function hasFullCurriculumAccess(
 /**
  * Should this enrollment be gated to the free Week-0 preview (vs the full 12 weeks)?
  *
- * Flag OFF (default): legacy — gate ONLY `enrollment_type='explorer'`, honoring
- *   EXPLORER_WEEK0_ONLY. Byte-identical to pre-paywall behavior; nothing else moves.
+ * Flag OFF (default): legacy — gate an UNPAID `enrollment_type='explorer'`, honoring
+ *   EXPLORER_WEEK0_ONLY.
  * Flag ON (CONTENT_PAID_GATE_ENABLED=true): gate anyone WITHOUT full curriculum
  *   access — guests, explorers, AND enrolled-but-unpaid members.
+ *
+ * ORIGIN-BLIND. The legacy branch used to gate on `enrollment_type='explorer'` alone,
+ * which made this function — and through it the whole Week-0 paywall — depend on the
+ * payment path REWRITING `enrollment_type` to 'standard'. That rewrite is what unlocked
+ * weeks 1-12 when someone paid, and it is also why free-to-paid conversion cannot be
+ * measured (see `checkoutFunnelService.ts`). Once `enrollment_type` records ORIGIN and
+ * stops being rewritten, gating on it alone would strip the curriculum from every paying
+ * ex-Explorer. The `!paid` term below is what makes that impossible.
+ *
+ * This is a NO-OP against today's data: no paid row carries `'explorer'`, precisely
+ * because the payment path still rewrites it. The term is the protection that has to be
+ * in place BEFORE the writers change, not a behavior change in itself.
  *
  * Failure-first: on any infra/DB error this FAILS OPEN (returns false = not gated),
  * so a possibly-paying member is never wrongly locked out over a transient hiccup.
@@ -102,10 +114,13 @@ export async function isFreePreviewTier(enrollmentId: string): Promise<boolean> 
     });
     if (!enrollment) return false;
 
-    // Legacy path — the paywall is dark; preserve the explorer-only Week-0 gate.
+    // Legacy path — the paywall is dark; preserve the explorer Week-0 gate, but never
+    // gate someone who has paid. `payment_status` is already in the attribute list above,
+    // so this costs no extra query.
     if (!env.contentPaidGateEnabled) {
       const isExplorer = (enrollment as any).enrollment_type === 'explorer';
-      return isExplorer && process.env.EXPLORER_WEEK0_ONLY !== 'false';
+      const paid = enrollment.payment_status === 'paid';
+      return isExplorer && !paid && process.env.EXPLORER_WEEK0_ONLY !== 'false';
     }
 
     const cohort = enrollment.cohort_id

@@ -183,6 +183,13 @@ export async function retireRedundantExplorerAccounts(email: string, paidEnrollm
   const today = new Date().toISOString().slice(0, 10);
   for (const stray of strays) {
     if (stray.id === paidEnrollmentId) continue;
+    // Never withdraw a row that has PAID, whatever its origin. Until now the only thing
+    // standing between this sweep and a paying customer was the caller passing the right
+    // `paidEnrollmentId` — and the query selects on `enrollment_type='explorer'`, which
+    // after the origin change will match paying ex-Explorers too. Defense in depth: a
+    // stale, null or sibling id from any future caller can no longer withdraw a paid seat.
+    // A no-op today, since no paid row carries 'explorer'.
+    if (stray.payment_status === 'paid') continue;
     await stray.update({
       status: 'withdrawn',
       notes: `${stray.notes ? stray.notes + ' | ' : ''}Retired ${today}: superseded by paid enrollment ${paidEnrollmentId}`,

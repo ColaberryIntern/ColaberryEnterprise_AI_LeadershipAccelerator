@@ -101,11 +101,20 @@ export interface TodayPlanResponse {
 
 async function isCohortLearner(enrollmentId: string): Promise<boolean> {
   try {
-    const rows = await sequelize.query<{ enrollment_type: string | null }>(
-      `SELECT enrollment_type FROM enrollments WHERE id = :eid`,
+    // A cohort learner is anyone who is not a FREE Explorer. `enrollment_type` records
+    // where the account originated, so testing it alone would hand a paying ex-Explorer
+    // the shorter free plan once the payment path stops rewriting it.
+    // A no-op today, since no paid row carries 'explorer'.
+    const rows = await sequelize.query<{ enrollment_type: string | null; payment_status: string | null }>(
+      `SELECT enrollment_type, payment_status FROM enrollments WHERE id = :eid`,
       { replacements: { eid: enrollmentId }, type: QueryTypes.SELECT },
     );
-    return rows[0]?.enrollment_type !== 'explorer';
+    const row = rows[0];
+    // A missing row keeps the answer it already got (`undefined !== 'explorer'` was true).
+    // That sits oddly beside the catch block's fail-soft `false`, but reconciling the two
+    // is a different question from this one and does not belong in this change.
+    if (!row) return true;
+    return row.enrollment_type !== 'explorer' || row.payment_status === 'paid';
   } catch {
     return false; // fail-soft: unknown -> treat as free/Explorer (the more conservative, shorter plan)
   }

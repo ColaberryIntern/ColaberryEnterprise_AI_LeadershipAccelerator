@@ -129,10 +129,29 @@ export async function resolveExplorerLead(
   };
 }
 
-/** Active free Explorers, with the communityMember include pickBestEnrollment needs. */
+/** Active free Explorers, with the communityMember include pickBestEnrollment needs.
+ *
+ *  "FREE" is asserted here, and it has to be: this function defines the entire Explorer
+ *  Growth population. `repairAllExplorerBridges` mints an `ExplorerJourneyProfile` for
+ *  every row it returns, and the Governor loads its batch straight from those profiles —
+ *  so anyone who leaks in here becomes a subject of conversion decisions and can be sent
+ *  an enroll pitch. `enrollment_type` records ORIGIN; keyed on it alone, a customer who
+ *  upgraded would stay in the growth population forever once the payment path stops
+ *  rewriting that field. Nothing else in `explorerGrowth/` carries a paid-state term, so
+ *  this is the only place the exclusion can be made.
+ *
+ *  A plain `Op.ne` is enough here, unlike the raw-SQL readers in this change which use
+ *  `IS DISTINCT FROM`. Those bypass the type system, so guarding against a NULL costs
+ *  nothing; this one cannot see a NULL — `payment_status` is a NOT NULL enum defaulting to
+ *  'pending', and TypeScript rejects `payment_status: null` in this where clause outright.
+ *  A no-op against today's data, where no paid row carries 'explorer'. */
 async function loadActiveExplorers(): Promise<any[]> {
   return (await Enrollment.findAll({
-    where: { enrollment_type: 'explorer', status: 'active' },
+    where: {
+      enrollment_type: 'explorer',
+      status: 'active',
+      payment_status: { [Op.ne]: 'paid' },
+    },
     attributes: ['id', 'email', 'enrollment_type', 'payment_status', 'created_at'],
     include: [{ model: CommunityMember, as: 'communityMember', attributes: ['mgmt_role'], required: false }],
   })) as any[];

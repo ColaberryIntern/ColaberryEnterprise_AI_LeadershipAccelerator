@@ -186,7 +186,7 @@ it, which is the gate doing exactly its job:
 - What "converted" now means, the defect the phase existed to fix:
   `backend/src/services/adminOs/conversionState.ts:84` → "export const IS_CONVERTED_SQL"
 - Why 86 accounts are invisible — the filter asks for programme and status, never access level:
-  `backend/src/services/explorerGrowth/explorerIdentityBridge.ts:122` → "where: { enrollment_type: 'explorer', status: 'active' },"
+  `backend/src/services/explorerGrowth/explorerIdentityBridge.ts:151` → "enrollment_type: 'explorer',"
 - The stage label the roster had never been taught, now in one place for both pages:
   `frontend/src/adminOs/personStages.ts:38` → "explorer: 'Explorer ($0 to start)',"
 

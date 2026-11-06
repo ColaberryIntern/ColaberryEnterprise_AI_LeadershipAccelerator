@@ -20,7 +20,7 @@ Those references are marked §N and should be read as "the prompt asks for", not
 **Current:** two anonymous-reachable public paths write opposite labels, and the Explorer OS
 gates on only one of them.
 
-`backend/src/services/explorerGrowth/explorerIdentityBridge.ts:122` → "where: { enrollment_type: 'explorer', status: 'active' },"
+`backend/src/services/explorerGrowth/explorerIdentityBridge.ts:151` → "enrollment_type: 'explorer',"
 
 **Disposition: FIX — Phase 2.** The mechanism exists; one of two populations is excluded
 from it. This is the single most consequential gap in the matrix.

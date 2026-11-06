@@ -82,7 +82,7 @@ together is display-only.
 
 **And the Explorer OS gates on one of them alone:**
 
-`backend/src/services/explorerGrowth/explorerIdentityBridge.ts:122` → "where: { enrollment_type: 'explorer', status: 'active' },"
+`backend/src/services/explorerGrowth/explorerIdentityBridge.ts:151` → "enrollment_type: 'explorer',"
 
 So **the entire population created by paths B and C is invisible to the Explorer Growth OS** —
 no profile, no E/I/F, no state, no overlays, no decisions, no journey participation. They

@@ -196,6 +196,14 @@ function pickBestSubscription(rows: MemberRow[]): MemberRow | null {
   );
 }
 
+/** Everyone who has actually paid. Keyed on `payment_status` ALONE, deliberately.
+ *
+ *  This used to also require `enrollment_type != 'explorer'`, which is a different
+ *  question: `enrollment_type` records where an account ORIGINATED, and the payment path
+ *  only happens to overwrite it. Once it stops being overwritten, that term would exclude
+ *  every Explorer who upgraded from MRR, ARR, ARPU, collectibleMrr and the tenure funnel —
+ *  i.e. silently understate revenue by exactly the customers we worked hardest to convert.
+ *  A no-op today (no paid row carries 'explorer' yet) and the correct question regardless. */
 async function fetchPayingMembers(): Promise<MemberRow[]> {
   return (await sequelize.query(
     `SELECT e.id AS enrollment_id, e.full_name, e.email, e.amount_paid, e.created_at AS enrollment_created_at,
@@ -205,7 +213,7 @@ async function fetchPayingMembers(): Promise<MemberRow[]> {
        FROM enrollments e
        LEFT JOIN community_members cm ON cm.enrollment_id = e.id
        LEFT JOIN subscriptions s ON s.enrollment_id = e.id
-      WHERE e.payment_status = 'paid' AND e.enrollment_type != 'explorer' AND e.status = 'active'
+      WHERE e.payment_status = 'paid' AND e.status = 'active'
       ORDER BY e.id, s.created_at DESC`,
     { type: QueryTypes.SELECT }
   )) as MemberRow[];
@@ -217,7 +225,22 @@ async function fetchPayingMembers(): Promise<MemberRow[]> {
  *  Real Colaberry staff who happen to hold an Explorer-shaped enrollment
  *  (internal test/onboarding signups) are excluded entirely — they were never
  *  real prospects and shouldn't dilute the funnel; getStaffRoster() already
- *  counts them under Staff regardless of enrollment_type. */
+ *  counts them under Staff regardless of enrollment_type.
+ *
+ *  "Still in their free trial" is asserted by `payment_status IS DISTINCT FROM 'paid'`,
+ *  not inferred from `enrollment_type` alone. `enrollment_type` records ORIGIN; once the
+ *  payment path stops rewriting it, an Explorer who upgraded would otherwise be counted
+ *  here as an unconverted free trial while ALSO being missing from fetchPayingMembers —
+ *  understating revenue and overstating the free population from one field.
+ *  `IS DISTINCT FROM` rather than `<>` is deliberate but defensive, not required: the model
+ *  declares `payment_status` NOT NULL with default 'pending', so a NULL should not exist.
+ *  The model is a contract about new writes, though, not a guarantee about every historical
+ *  row, and `NULL <> 'paid'` evaluates to NULL — which would drop a genuinely unpaid
+ *  Explorer out of the free-trial count rather than including them. The null-safe form
+ *  costs nothing and cannot fail that way.
+ *
+ *  This also makes the hardcoded `paymentStatusPaid: false` in the dedupe key below
+ *  true by construction rather than an assumption. */
 async function fetchExplorerCounts(): Promise<{ freeTrial: number; depositHolders: number; depositTotal: number }> {
   // Row-fetch (not an aggregate COUNT) so a duplicate identity — a Gmail
   // "+alias" re-signup or an unresolved exact-email duplicate — can be
@@ -234,6 +257,7 @@ async function fetchExplorerCounts(): Promise<{ freeTrial: number; depositHolder
           LIMIT 1
        ) ac ON true
       WHERE e.enrollment_type = 'explorer' AND e.status = 'active'
+        AND e.payment_status IS DISTINCT FROM 'paid'
         AND NOT ${syntheticEmailSql('e.email')}`,
     { type: QueryTypes.SELECT }
   )) as Array<{ enrollment_id: string; email: string | null; created_at: string | null; is_staff: boolean; deposit_enrollment_id: string | null; deposit_cents: number | null }>;

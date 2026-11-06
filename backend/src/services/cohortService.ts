@@ -428,13 +428,25 @@ export async function getDashboardStats() {
   const cohorts = await Cohort.findAll();
   // Explorers (Open House visitors) are not paying students — exclude them from
   // enrollment/pipeline counts so they never skew the dashboard.
-  const notExplorer = { enrollment_type: { [Op.ne]: 'explorer' } };
-  const totalEnrollments = await Enrollment.count({ where: notExplorer as any });
+  //
+  // The exclusion is "a FREE Explorer", not "an Explorer". `enrollment_type` records where
+  // an account ORIGINATED; it is only a statement about current payment because the payment
+  // path rewrites it. Keyed on origin alone, `paidEnrollments` would drop every Explorer who
+  // upgraded the moment that rewrite stops — undercounting paid students on the admin
+  // dashboard while they are simultaneously missing from MRR.
+  //
+  // Reads as "not an Explorer, OR has paid". A no-op today, since no paid row carries
+  // 'explorer' yet; for `paidEnrollments` the `payment_status: 'paid'` term satisfies the
+  // second branch outright, which is exactly the intent.
+  const notFreeExplorer = {
+    [Op.or]: [{ enrollment_type: { [Op.ne]: 'explorer' } }, { payment_status: 'paid' }],
+  };
+  const totalEnrollments = await Enrollment.count({ where: notFreeExplorer as any });
   const paidEnrollments = await Enrollment.count({
-    where: { payment_status: 'paid', ...notExplorer } as any,
+    where: { payment_status: 'paid', ...notFreeExplorer } as any,
   });
   const pendingInvoice = await Enrollment.count({
-    where: { payment_status: ['pending', 'pending_invoice'] as any, ...notExplorer } as any,
+    where: { payment_status: ['pending', 'pending_invoice'] as any, ...notFreeExplorer } as any,
   });
 
   const openCohorts = cohorts.filter((c) => c.status === 'open');

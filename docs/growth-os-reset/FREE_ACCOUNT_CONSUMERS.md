@@ -225,7 +225,7 @@ plan's assumption:**
 
 **The Today plan, row 3:**
 
-- `backend/src/services/cape/capeTodayPlanService.ts:108` → "return rows[0]?.enrollment_type !== 'explorer';"
+- `backend/src/services/cape/capeTodayPlanService.ts:117` → "row.enrollment_type !== 'explorer'"
 
 **`'explorer'` ranks worse than a non-learner row, which is both row 4 and the mechanism behind
 T201's org-teammate hole:**
@@ -235,7 +235,7 @@ T201's org-teammate hole:**
 **Explorer Growth's own population loader, with no deposit exclusion — row 5, and the reason T203
 does not reroute the deposit path:**
 
-- `backend/src/services/explorerGrowth/explorerIdentityBridge.ts:122` → "where: { enrollment_type: 'explorer', status: 'active' },"
+- `backend/src/services/explorerGrowth/explorerIdentityBridge.ts:151` → "enrollment_type: 'explorer',"
 
 **The two rosters that partition for revenue reporting — rows 6 and 7:**
 
@@ -252,7 +252,7 @@ does not reroute the deposit path:**
 
 **The admin feed label, row 12:**
 
-- `backend/src/services/timeline/feedControlService.ts:339` → "enrollment_type === 'explorer' ? ' · Free' : ''"
+- `backend/src/services/timeline/feedControlService.ts:342` → "e.payment_status !== 'paid' ? ' · Free' : ''"
 
 **Reese keys `isStudent` on `tier`, which is why that change belongs to population B — row 13:**
 
@@ -277,7 +277,7 @@ row 15:**
 **The Sequelize operator-object filter that the first scan could not see — row 29, the admin
 dashboard's three counts:**
 
-- `backend/src/services/cohortService.ts:431` → "const notExplorer = { enrollment_type: { [Op.ne]: 'explorer' } };"
+- `backend/src/services/cohortService.ts:441` → "const notFreeExplorer = {"
 
 **Where the Week-0 truncation is actually implemented, which this scan cannot see because it names
 neither column:**
@@ -322,3 +322,42 @@ neither column:**
   completeness tripwire proves a file is *listed*, never that it is in the right bucket.
 - It does not measure production. No row count, no flag value, no claim about how many real
   accounts are in either population — this phase takes no production read before T216.
+
+---
+
+## SUPERSEDED IN PART: the determinations assume the opposite change direction (2026-11-05)
+
+**Every "CHANGES / unchanged" cell in the table above was derived for free rows *gaining*
+`'explorer'`.** A later change runs the other way: `enrollment_type` is becoming an ORIGIN
+field, so *paid* rows will *keep* `'explorer'` instead of being rewritten to `'standard'`.
+
+That reversal flips several rows this document marks benign into money-and-access findings.
+Row 9's determination is the clearest case — it reasons that `fetchPayingMembers` "requires
+`payment_status='paid'`, so unpaid population A is in neither side of it", which is true in
+the old direction and wrong in the new one, where the `enrollment_type != 'explorer'` term
+was what would have dropped every upgrader out of MRR. Row 29 ("`paidEnrollments` does not
+move, because those rows are not paid") fails the same way.
+
+**The cells have NOT been re-derived, and this note is not a re-derivation.** Treat a
+determination here as answering "what happens if a free row becomes an Explorer", which is
+the only question it was built to answer.
+
+What has landed so far is **readers only**: 13 sites enumerated here now test "free
+Explorer" (origin AND unpaid) rather than "Explorer" (origin alone), and `enrollmentPick.ts`
+now ranks paid above origin. Each is a no-op against today's data — no row can currently be
+both paid and `'explorer'`, because the writers still rewrite the field — and each becomes a
+guard the moment they stop. The writers are untouched, so nothing in the table's *population*
+has moved yet.
+
+Two consequences for anyone using this page:
+
+- **Do not reintroduce an origin-only predicate to "fix" a row here.** The direction of travel
+  is toward pairing every `enrollment_type` test with a paid term, not away from it.
+- **The enumerator cannot see the sites that matter most.** `LEARNER_VALUE` matches only
+  `'explorer'`/`'guest'`, so every payment-path write of `'standard'`/`'member'` — the writers
+  Phase 2 has to change — is invisible to it. That set is pinned by hand in
+  `writerPairTripwires.test.ts`, which is the list to use.
+
+This extends, rather than replaces, the `checkoutFunnelService.ts` note above: the rule stated
+there — **never classify a population by a field the event you are measuring rewrites** — is
+what the origin change is finally fixing at the source instead of working around.

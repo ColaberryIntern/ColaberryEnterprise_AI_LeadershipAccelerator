@@ -180,6 +180,6 @@ in that file, so a reader can confirm the claim without being able to read TypeS
   `frontend/src/components/admin/person/ExplorerScoreTab.tsx:43` → "This is not a score of zero."
 - Why the 86 accounts are invisible — the filter asks for the programme and the status, and never
   the access level:
-  `backend/src/services/explorerGrowth/explorerIdentityBridge.ts:122` → "where: { enrollment_type: 'explorer', status: 'active' },"
+  `backend/src/services/explorerGrowth/explorerIdentityBridge.ts:151` → "enrollment_type: 'explorer',"
 - What "converted" now means, which is the defect this phase existed to fix:
   `backend/src/services/adminOs/conversionState.ts:84` → "export const IS_CONVERTED_SQL"
