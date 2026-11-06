@@ -33,6 +33,7 @@ import {
   ensureAgentToolGrantSchema,
   ensureAgentToolGrantSchemaGuarded,
 } from '../ensureAgentToolGrantSchema';
+import { activeBootCall, serverSourceText } from './helpers/bootCalls';
 
 beforeEach(() => { jest.clearAllMocks(); });
 
@@ -165,5 +166,65 @@ describe('the assert proves the DDL ran, rather than trusting that it did', () =
   it('the guarded entry point reports success when the assert passes', async () => {
     everythingPresent();
     await expect(ensureAgentToolGrantSchemaGuarded()).resolves.toEqual({ ok: true });
+  });
+});
+
+/**
+ * The boot wiring, asserted rather than claimed.
+ *
+ * The roster in `ensureAgentDomainProjectSchema.bootWiring.test.ts` records of every member that
+ * "it is wrapped", and the wrapping only means anything if the wrapped call is the one boot
+ * actually makes. Nothing checked that for this module: the registration could have been deleted
+ * from `server.ts`, or commented out, and the whole suite stayed green -- which is the exact
+ * defect `helpers/bootCalls.ts` was written for, and the one its docblock records costing 40
+ * passing tests.
+ *
+ * Six of the eight roster members still have no assertion of this kind. That is a gap in those
+ * tickets, not something this file can close for them.
+ */
+describe('the boot registration is wired', () => {
+  it('POSITIVE CONTROL: the helper can see real boot calls, so a -1 below would mean something', () => {
+    expect(serverSourceText().length).toBeGreaterThan(10_000);
+    expect(activeBootCall('await ensureCapabilityConfirmationSchemaGuarded()')).toBeGreaterThan(-1);
+  });
+
+  it('the call is ACTIVE, not merely present in the text', () => {
+    // MUTATION PROOF: comment out the call in server.ts and this dies with Received: -1. A plain
+    // indexOf would still find the commented line.
+    expect(activeBootCall('await ensureAgentToolGrantSchemaGuarded()')).toBeGreaterThan(-1);
+  });
+
+  it('calls the GUARDED helper, never the raw ensure or the raw assert', () => {
+    // Both are one word away, and either would put an uncontained throw in the boot path:
+    // `start()` is called bare and `backend/src` registers no unhandledRejection handler, so a
+    // rejection here stops the backend binding its port.
+    expect(activeBootCall('await ensureAgentToolGrantSchema()')).toBe(-1);
+    expect(activeBootCall('await assertAgentToolGrantSchema()')).toBe(-1);
+  });
+
+  it('runs BEFORE app.listen, so the ledger exists before the port opens', () => {
+    const callAt = activeBootCall('await ensureAgentToolGrantSchemaGuarded()');
+    const listenAt = activeBootCall('app.listen(');
+    expect(callAt).toBeGreaterThan(-1);
+    expect(listenAt).toBeGreaterThan(-1);
+    expect(callAt).toBeLessThan(listenAt);
+  });
+
+  it('runs BEFORE the scheduler, which is what reaches the boot seed that reads this table', () => {
+    // The ordering that matters for AF3.5: `startScheduler()` is the path to
+    // `seedAgentRegistry()`, and the seed unions `tools_granted` with the grants recorded in
+    // this table. A seed that runs before the table exists reverts every grant on that boot.
+    //
+    // BOTH OFFSETS COME FROM activeBootCall, NOT indexOf, and that is not stylistic. The first
+    // draft of this test read `serverSourceText().indexOf('startScheduler(')` and FAILED --
+    // because it matched the comment six lines above the ensure call, which names
+    // `startScheduler()` while explaining this very ordering. A prose mention of a function is
+    // not a call to it, and an ordering assertion that cannot tell the two apart would have
+    // been adjusted into a falsehood instead of catching one.
+    const callAt = activeBootCall('await ensureAgentToolGrantSchemaGuarded()');
+    const schedulerAt = activeBootCall('startScheduler(');
+    expect(callAt).toBeGreaterThan(-1);
+    expect(schedulerAt).toBeGreaterThan(-1);
+    expect(callAt).toBeLessThan(schedulerAt);
   });
 });
