@@ -18,6 +18,11 @@ export function isHumanNeed(n: unknown): n is HumanNeed {
   return typeof o.key === 'string' && typeof o.kind === 'string' && Array.isArray(o.usedIn);
 }
 
+/** PURE: drop needs whose key already has a recorded resolution (an answered gap carrying that need_key). */
+export function dropResolved(needs: HumanNeed[], resolvedKeys: Set<string>): HumanNeed[] {
+  return needs.filter((n) => !resolvedKeys.has(n.key));
+}
+
 /** PURE: extract HumanNeeds from raw gap `need` values and from version finding arrays (resolver==='human'). */
 export function extractNeeds(
   gapNeeds: Array<{ need?: unknown }>,
@@ -51,7 +56,12 @@ export async function collectProjectNeeds(deliveryProjectId: string): Promise<Hu
         WHERE d.delivery_project_id = $1`,
       { bind: [deliveryProjectId], type: QueryTypes.SELECT },
     );
-    return aggregateNeeds(extractNeeds(gaps, versions.map((v) => v.findings)));
+    const resolved = await sequelize.query<{ need_key: string }>(
+      "SELECT DISTINCT need_key FROM gov_proposal_document_gaps WHERE delivery_project_id = $1 AND need_key IS NOT NULL AND resolution <> 'open'",
+      { bind: [deliveryProjectId], type: QueryTypes.SELECT },
+    );
+    const resolvedKeys = new Set(resolved.map((r) => r.need_key));
+    return dropResolved(aggregateNeeds(extractNeeds(gaps, versions.map((v) => v.findings))), resolvedKeys);
   } catch {
     return [];
   }

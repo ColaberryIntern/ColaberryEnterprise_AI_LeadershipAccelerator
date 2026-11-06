@@ -527,6 +527,40 @@ router.get(
   },
 );
 
+// v3 (V1.4): the portal mirror of resolve. The intern CANNOT approve (fact -> library pending; Gold refused by
+// the core), and may only resolve a need their own viewer projection exposes — the rail check below rejects a
+// direct POST at a pricing or ungivable-approval key the list never showed them.
+router.post(
+  '/api/portal/gov-projects/:projectId/needs/:key/resolve',
+  requireParticipant,
+  requireGovProjectAccess('project.read'),
+  async (req: GovProjectRequest, res: Response) => {
+    try {
+      const { collectProjectNeeds } = await import('../services/factory/proposal/collectProjectNeeds');
+      const { needsForViewer } = await import('../services/factory/proposal/aggregateNeeds');
+      const { resolveProjectNeed } = await import('../services/factory/proposal/resolveProjectNeed');
+      const projectId = String(req.params.projectId);
+      const key = String(req.params.key);
+      const actor = await resolveGovProjectActor(req);
+      const visible = needsForViewer(await collectProjectNeeds(projectId), { includePricing: false, canApprove: false });
+      if (!visible.some((n) => n.key === key)) {
+        return res.status(403).json({ error: 'That need is not yours to resolve.', error_class: 'NeedNotVisible' });
+      }
+      const b = (req.body ?? {}) as Record<string, unknown>;
+      const submission = {
+        value: typeof b.value === 'string' ? b.value : undefined,
+        fileRef: typeof b.fileRef === 'string' ? b.fileRef : undefined,
+        approve: typeof b.approve === 'boolean' ? b.approve : undefined,
+        note: typeof b.note === 'string' ? b.note : undefined,
+      };
+      const result = await resolveProjectNeed(projectId, key, submission, { email: actor?.email, canApprove: false });
+      return res.status(result.status).json(result.body);
+    } catch {
+      return res.status(500).json({ error: 'Could not resolve the need.', error_class: 'NeedResolveFailed' });
+    }
+  },
+);
+
 // "Report a problem" from the intern's Studio — the portal mirror of the admin bug reporter, scoped to
 // a project the intern can read. Same email to the Gov Studio recipients so the Gov tab picks it up.
 router.post(

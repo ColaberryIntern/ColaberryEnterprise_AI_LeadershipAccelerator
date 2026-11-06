@@ -605,6 +605,27 @@ router.get('/api/admin/gov-contracts/:projectId/needs', requireSection('gov_cont
   }
 });
 
+// v3 (V1.4): resolve one open need. Admin holds `gov_contracts`, so this actor CAN approve (fact -> library
+// approved, Gold Go/No-go allowed). Validation + routing by kind is the pure resolveNeed core; the answer is
+// recorded on the gaps table and the need drops off the list. Idempotent: resolving an already-closed key is a 404.
+router.post('/api/admin/gov-contracts/:projectId/needs/:key/resolve', requireSection('gov_contracts'), async (req: Request, res: Response) => {
+  try {
+    const { resolveProjectNeed } = await import('../../services/factory/proposal/resolveProjectNeed');
+    const actor = await resolveGovProjectActor(req);
+    const b = (req.body ?? {}) as Record<string, unknown>;
+    const submission = {
+      value: typeof b.value === 'string' ? b.value : undefined,
+      fileRef: typeof b.fileRef === 'string' ? b.fileRef : undefined,
+      approve: typeof b.approve === 'boolean' ? b.approve : undefined,
+      note: typeof b.note === 'string' ? b.note : undefined,
+    };
+    const result = await resolveProjectNeed(String(req.params.projectId), String(req.params.key), submission, { email: actor?.email, canApprove: true });
+    res.status(result.status).json(result.body);
+  } catch {
+    res.status(500).json({ error: 'Could not resolve the need.', error_class: 'NeedResolveFailed' });
+  }
+});
+
 // "Report a problem" — the Studio's bug reporter (admin). Emails the Gov Studio recipients so the
 // Gov-contract Claude tab, which checks email, picks it up and starts on the fix, with the route, the
 // captured console errors / failed requests, and the screenshot. Shared core with the portal mirror.

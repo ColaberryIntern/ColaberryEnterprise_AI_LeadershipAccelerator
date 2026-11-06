@@ -1,4 +1,4 @@
-import { extractNeeds, isHumanNeed } from '../collectProjectNeeds';
+import { extractNeeds, isHumanNeed, dropResolved } from '../collectProjectNeeds';
 import type { HumanNeed } from '../proposalReviewTypes';
 
 const need = (over: Partial<HumanNeed> & Pick<HumanNeed, 'key' | 'kind'>): HumanNeed => ({
@@ -36,5 +36,13 @@ describe('extractNeeds', () => {
       [null, 'not-an-array', [{ resolver: 'human', need: need({ key: 'file:hub', kind: 'file' }) }]],
     );
     expect(out.map((n) => n.key).sort()).toEqual(['fact:years', 'file:hub']);
+  });
+});
+
+describe('dropResolved', () => {
+  it('removes needs whose key already has a recorded resolution', () => {
+    const needs = [need({ key: 'fact:a', kind: 'fact' }), need({ key: 'file:b', kind: 'file' })];
+    expect(dropResolved(needs, new Set(['file:b'])).map((n) => n.key)).toEqual(['fact:a']);
+    expect(dropResolved(needs, new Set()).map((n) => n.key)).toEqual(['fact:a', 'file:b']);
   });
 });

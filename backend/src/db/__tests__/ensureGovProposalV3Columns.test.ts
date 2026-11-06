@@ -22,6 +22,9 @@ describe('gaps table carries the typed need + a dedupe key', () => {
   it('indexes need_key for cross-document dedupe, with IF NOT EXISTS', () => {
     expect(gaps).toMatch(/CREATE INDEX IF NOT EXISTS \w*need_key\w* ON gov_proposal_document_gaps \(delivery_project_id, need_key\)/i);
   });
+  it('adds resolution_payload for the routed human answer (T04 resolve)', () => {
+    expect(addsColumn(gaps, 'gov_proposal_document_gaps', 'resolution_payload')).toBe(true);
+  });
 });
 
 describe('versions + gate reviews carry independent-judge evidence', () => {

@@ -40,6 +40,10 @@ export async function ensureGovProposalDocumentGapsSchema(): Promise<void> {
     `ALTER TABLE gov_proposal_document_gaps ADD COLUMN IF NOT EXISTS need JSONB`,
     `ALTER TABLE gov_proposal_document_gaps ADD COLUMN IF NOT EXISTS need_key TEXT`,
     `CREATE INDEX IF NOT EXISTS idx_gov_proposal_document_gaps_need_key ON gov_proposal_document_gaps (delivery_project_id, need_key) WHERE need_key IS NOT NULL`,
+    // v3 (T04 resolve): the structured, routed answer a human gave for this need (store + value + who + when),
+    // recorded when the need is resolved so the draft/check path and the audit can read exactly what was supplied.
+    // Additive + IF NOT EXISTS — rollback-safe (old code ignores it).
+    `ALTER TABLE gov_proposal_document_gaps ADD COLUMN IF NOT EXISTS resolution_payload JSONB`,
   ];
 
   for (const sql of statements) {
