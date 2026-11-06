@@ -20,6 +20,9 @@ jest.mock('../../services/reese/reeseReplyService', () => ({ maybeTriggerReeseRe
 // Dara v2 Phase 3 — same reasoning, same pattern, for Dara's own hooks.
 jest.mock('../../services/curriculum/daraIdentitySeed', () => ({ getDaraEnrollmentId: jest.fn() }));
 jest.mock('../../services/curriculum/daraReplyService', () => ({ maybeTriggerDaraReply: jest.fn() }));
+// C121 — and for Maya's.
+jest.mock('../../services/mayaIdentitySeed', () => ({ getMayaEnrollmentId: jest.fn() }));
+jest.mock('../../services/maya/mayaReplyService', () => ({ maybeTriggerMayaReply: jest.fn() }));
 // sendDmMessage() dynamically imports communityNotificationService the same
 // way it dynamically imports reeseReplyService above — mock the whole module
 // so this file only asserts dmService.ts calls it correctly (its own
@@ -40,6 +43,8 @@ import { getReeseEnrollmentId } from '../../services/reese/reeseIdentitySeed';
 import { maybeTriggerReeseReply } from '../../services/reese/reeseReplyService';
 import { getDaraEnrollmentId } from '../../services/curriculum/daraIdentitySeed';
 import { maybeTriggerDaraReply } from '../../services/curriculum/daraReplyService';
+import { getMayaEnrollmentId } from '../../services/mayaIdentitySeed';
+import { maybeTriggerMayaReply } from '../../services/maya/mayaReplyService';
 import { getMgmtStatus } from '../../services/access/mgmtBridgeService';
 
 const PROGRAM_BADGE = { is_mgmt: true, role: 'curriculum', label: 'Curriculum', sections: ['dashboard', 'program'] };
@@ -68,6 +73,7 @@ const me = '11111111-1111-1111-1111-111111111111';
 const other = '22222222-2222-2222-2222-222222222222';
 const reese = '99999999-9999-9999-9999-999999999999';
 const dara = '88888888-8888-8888-8888-888888888888';
+const maya = '77777777-7777-7777-7777-777777777777';
 const cohort = 'cohort-1';
 const ctx = { enrollmentId: me, cohortId: cohort, isAdmin: false };
 const [a, b] = [me, other].sort();
@@ -85,6 +91,8 @@ beforeEach(() => {
   // Same for Dara's own id — distinct from every other test identity by
   // default, same reasoning as Reese's above.
   getDaraEnrollmentIdMock.mockResolvedValue(dara);
+  (getMayaEnrollmentId as jest.Mock).mockResolvedValue(maya);
+  (maybeTriggerMayaReply as jest.Mock).mockResolvedValue(undefined);
   // No Reese/Dara membership by default — sendDmMessage's reply-trigger hooks
   // no-op cleanly in every pre-existing test that isn't specifically testing
   // Reese/Dara reply behavior.
@@ -263,6 +271,26 @@ describe('send / list guards', () => {
 
     const m = await sendDmMessage(ctx, 'room-1', 'hi');
     expect(m).toEqual({ id: 'm1', content: 'hi' });
+  });
+
+  it('C121: sendDmMessage also invokes the Maya reply-trigger hook, and a rejecting hook never breaks the send', async () => {
+    findByPkRoom.mockResolvedValue({ id: 'room-1', room_type: 'dm' });
+    postMock.mockResolvedValue({ id: 'm1', content: 'hi' });
+    (maybeTriggerMayaReply as jest.Mock).mockRejectedValue(new Error('reply generation blew up'));
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const m = await sendDmMessage(ctx, 'room-1', 'hi');
+    expect(m).toEqual({ id: 'm1', content: 'hi' });
+    expect(maybeTriggerMayaReply).toHaveBeenCalledWith('room-1', ctx.enrollmentId);
+    expect(warn.mock.calls.map((c) => JSON.parse(String(c[0])).event)).toContain('maya_reply_trigger_failed');
+    warn.mockRestore();
+  });
+
+  it('C121: a DM to Maya creates zero notifications (an AI agent is never notified or emailed)', async () => {
+    findByPkRoom.mockResolvedValue({ id: 'room-1', room_type: 'dm' });
+    postMock.mockResolvedValue({ id: 'm1', content: 'hi' });
+    findAllMember.mockResolvedValue([{ enrollment_id: maya }]);
+    await sendDmMessage(ctx, 'room-1', 'hi');
+    expect(createNotificationMock).not.toHaveBeenCalled();
   });
 
   it('C87: an existing thread with Dara is shut for a badge without the Program floor; nothing is posted', async () => {

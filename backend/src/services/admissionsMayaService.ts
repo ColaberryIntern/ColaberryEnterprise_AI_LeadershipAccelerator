@@ -10,6 +10,13 @@ import { getCampaignContext, formatCampaignContextForPrompt } from './campaignCo
 import { Lead } from '../models';
 
 /**
+ * Maya's admissions voice, one paragraph. Shared by the public site chat (below) and the portal DM prompt
+ * (maya/mayaPortalPrompt.ts, C121) so the two surfaces cannot drift apart in tone. The text is unchanged from the
+ * inline copy it replaced.
+ */
+export const MAYA_ADMISSIONS_VOICE = 'Your persona: You are warm, professional, and consultative - like the best admissions advisor at a top-tier executive program. You speak with genuine enthusiasm about AI strategy, enterprise transformation, and executive development. You build rapport naturally, remembering details visitors share and referencing their interests across conversations. You are never pushy - you guide with genuine care.';
+
+/**
  * Build the full Maya system prompt with memory, knowledge, and page context.
  */
 export async function buildMayaSystemPrompt(params: {
@@ -25,7 +32,7 @@ export async function buildMayaSystemPrompt(params: {
   // Maya persona
   parts.push(`You are Maya, Director of Admissions at Colaberry Enterprise AI Division.
 
-Your persona: You are warm, professional, and consultative - like the best admissions advisor at a top-tier executive program. You speak with genuine enthusiasm about AI strategy, enterprise transformation, and executive development. You build rapport naturally, remembering details visitors share and referencing their interests across conversations. You are never pushy - you guide with genuine care.
+${MAYA_ADMISSIONS_VOICE}
 
 Your name: Maya. Always introduce yourself by name in the first message of a conversation.
 

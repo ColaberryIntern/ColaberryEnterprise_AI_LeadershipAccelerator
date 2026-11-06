@@ -7,6 +7,7 @@ import { RoomAccessContext } from './roomEntitlementService';
 import { postMessage, listMessages } from './roomMessageService';
 import { getReeseEnrollmentId } from '../reese/reeseIdentitySeed';
 import { getDaraEnrollmentId } from '../curriculum/daraIdentitySeed';
+import { getMayaEnrollmentId } from '../mayaIdentitySeed';
 import { dmBlockReasonFor, agentFloorBlockFor } from './dmEligibility';
 
 // 1:1 direct messages, modelled as a 2-person private CommunityRoom
@@ -133,6 +134,18 @@ async function notifyDmRecipient(roomId: string, senderId: string, messageId: st
     }
     if (daraEnrollmentId && recipientId === daraEnrollmentId) return;
 
+    // C121 — Maya is an AI agent too: no in-app row or email about being messaged. Same fail-open lookup posture.
+    let mayaEnrollmentId: string | null = null;
+    try {
+      mayaEnrollmentId = await getMayaEnrollmentId();
+    } catch (e: any) {
+      console.warn(JSON.stringify({
+        level: 'warn', service: 'dm', event: 'maya_enrollment_lookup_failed_notify',
+        room_id: roomId, error_class: e?.name || 'Error', message: String(e?.message || e),
+      }));
+    }
+    if (mayaEnrollmentId && recipientId === mayaEnrollmentId) return;
+
     const { createNotification } = await import('../communityNotificationService');
     await createNotification(recipientId, senderId, 'new_message', 'dm', messageId);
 
@@ -228,6 +241,18 @@ export async function sendDmMessage(
   } catch (e: any) {
     console.warn(JSON.stringify({
       level: 'warn', service: 'dm', event: 'dara_reply_trigger_failed',
+      room_id: roomId, error_class: e?.name || 'Error', message: String(e?.message || e),
+    }));
+  }
+  // C121 — Maya answers admissions questions in the same shared chat, with the same reactive-only trigger and the same
+  // belt-and-suspenders try/catch. maybeTriggerMayaReply() no-ops unless the site chat flag is on, Maya is a member of
+  // this room and the sender is not Maya (see maya/mayaReplyService.ts).
+  try {
+    const { maybeTriggerMayaReply } = await import('../maya/mayaReplyService');
+    await maybeTriggerMayaReply(roomId, ctx.enrollmentId);
+  } catch (e: any) {
+    console.warn(JSON.stringify({
+      level: 'warn', service: 'dm', event: 'maya_reply_trigger_failed',
       room_id: roomId, error_class: e?.name || 'Error', message: String(e?.message || e),
     }));
   }

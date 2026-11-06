@@ -6,10 +6,6 @@ import { hasDmHost, openDmThroughShell } from './dmHost';
 import { openDm, sendDmMessage } from '../../services/dmApi';
 import { art } from './art/artColor';
 import { staffRole, staffTone } from './staffCard';
-import AskMaya from './AskMaya';
-
-// C6: Maya's chat (and the visitor-id and Do Not Track checks) live in AskMaya since C54, shared with the Explorer's pass on Today.
-export { hasSiteVisitorId, doNotTrackOn } from './AskMaya';
 
 /**
  * An AI staff member's card (Colaberry Campus C5; WP-5 the prototype's staff popover, D:2578-2583): Reese (Commons), Dara
@@ -19,7 +15,8 @@ export { hasSiteVisitorId, doNotTrackOn } from './AskMaya';
  * line, where their desk is and "On duty 24/7 · replies in seconds"; on duty, the suggested questions as quoted chips (a question
  * opens the conversation and sends it as the learner's own message, once, single flight) and "Message <name>"; "Visit the desk"
  * walks there (not when you are there, and not for Maya, whose desk is the gate); Profile opens the people page. Off duty: "Back
- * soon", no actions. Maya speaks through the website's chat (C6), so her card offers that instead.
+ * soon", no actions. C121 (Ali, 2026-11-06): Maya is in the same chat as everyone else, so her card is the same card: her
+ * questions and "Message Maya" open the shared chat dock. The website's widget (MayaChatWidget) is no longer used here.
  */
 export interface StaffDeskProps {
   desk: Desk;
@@ -72,8 +69,7 @@ export default function StaffDesk({ desk: d, onMessaged, place, here = false, wo
         {onVisit && !here && !isMaya && <button type="button" onClick={onVisit} data-testid={`cm-desk-visit-${d.id}`}><span aria-hidden="true">🚶 </span>Visit the desk</button>}
         <a href="/portal/community/people" target="_blank" rel="noopener noreferrer">Profile <span aria-hidden="true">↗</span></a>
       </div>}
-      {d.on_duty && !host && !isMaya && <p className="cm-pc-note">Open <Link to="/portal/today">Today</Link> to message {d.name}.</p>}
-      {isMaya && d.on_duty && <AskMaya />}
+      {d.on_duty && !host && <p className="cm-pc-note">Open <Link to="/portal/today">Today</Link> to message {d.name}.</p>}
       {note && <p className="cm-pc-note" role="status">{note}</p>}
     </div>
   );

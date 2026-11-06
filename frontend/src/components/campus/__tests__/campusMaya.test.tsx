@@ -1,9 +1,11 @@
 /**
- * C6 Maya at the gate (Ali's decision: the website chat, no new endpoint).
- *  - The public site's widget is unchanged with no props (floating launcher, proactive polling).
- *  - Embedded: no launcher, no proactive request; opens on request with trigger campus_gate; tells the campus when it closes.
- *  - The desk: on duty + this browser has the site's visitor id -> the embedded chat; no visitor id -> the enrollment page
- *    (never the widget's "try refreshing" dead end); the campus never writes the visitor id; site chat off -> opens soon.
+ * Maya on the campus.
+ *  - The public site's widget (MayaChatWidget) is unchanged: with no props it is the floating launcher with proactive polling, and
+ *    its embedded mode still works for any later public use. The campus no longer mounts it.
+ *  - C121 (Ali, 2026-11-06: "put Maya in the same IM system as everyone else"): her desk is the same card as Reese's and Dara's.
+ *    On duty with a DM host: "Message Maya" and her three questions, which open the shared chat dock; no embedded website chat,
+ *    no visitor-id check, no request to the public /api/chat endpoints, and no "Executive briefing" anywhere.
+ *  - Site chat off: "opens soon", no button and no link.
  */
 import React from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -21,12 +23,20 @@ jest.mock('../../../utils/api', () => ({
     },
   },
 }));
-jest.mock('../../../services/dmApi', () => ({ openDm: () => Promise.resolve('room'), sendDmMessage: () => Promise.resolve({}) }));
+let mockOpenCalls: string[] = [];
+let mockSendCalls: Array<[string, string]> = [];
+jest.mock('../../../services/dmApi', () => ({
+  openDm: (id: string) => { mockOpenCalls.push(id); return Promise.resolve('room-maya'); },
+  sendDmMessage: (roomId: string, content: string) => { mockSendCalls.push([roomId, content]); return Promise.resolve({}); },
+  myEnrollmentId: () => 'me',
+}));
 
 // eslint-disable-next-line import/first
 import MayaChatWidget from '../../MayaChatWidget';
 // eslint-disable-next-line import/first
-import StaffDesk, { hasSiteVisitorId } from '../StaffDesk';
+import StaffDesk from '../StaffDesk';
+// eslint-disable-next-line import/first
+import { registerDmHost } from '../dmHost';
 // eslint-disable-next-line import/first
 import type { StaffDesk as Desk } from '../campusPeopleApi';
 
@@ -36,17 +46,18 @@ import type { StaffDesk as Desk } from '../campusPeopleApi';
 
 let container: HTMLDivElement;
 let root: Root | undefined;
+let unhost: (() => void) | null = null;
 async function render(ui: React.ReactElement): Promise<void> {
   container = document.createElement('div');
   document.body.appendChild(container);
   await act(async () => { root = createRoot(container); root.render(<MemoryRouter initialEntries={['/portal/today']}>{ui}</MemoryRouter>); });
   for (let i = 0; i < 4; i++) await act(async () => { await Promise.resolve(); });
 }
-beforeEach(() => { mockApiCalls.length = 0; window.localStorage.clear(); window.sessionStorage.clear(); });
-afterEach(() => { if (root) act(() => root!.unmount()); root = undefined; container?.remove(); jest.useRealTimers(); window.localStorage.clear(); });
+beforeEach(() => { mockApiCalls.length = 0; mockOpenCalls = []; mockSendCalls = []; window.localStorage.clear(); window.sessionStorage.clear(); });
+afterEach(() => { if (root) act(() => root!.unmount()); root = undefined; container?.remove(); unhost?.(); unhost = null; jest.useRealTimers(); window.localStorage.clear(); });
 const launcher = () => container.querySelector('button[aria-label^="Chat with Maya"]');
 
-describe('MayaChatWidget', () => {
+describe('MayaChatWidget (the public website widget, unchanged)', () => {
   it('no props: the public site widget as before (floating launcher, proactive polling)', async () => {
     jest.useFakeTimers();
     window.localStorage.setItem('cb_visitor_fp', 'fp-1');
@@ -67,60 +78,65 @@ describe('MayaChatWidget', () => {
     expect(mockApiCalls.filter((c) => c.url.startsWith('/api/chat/proactive-check'))).toHaveLength(0);
   });
 
-  it('embedded, opened by the campus: starts a conversation tagged campus_gate; closing tells the campus', async () => {
+  it('embedded and opened: starts one conversation and tells its host when it closes', async () => {
     window.localStorage.setItem('cb_visitor_fp', 'fp-1');
     let closed = 0;
     await render(<MayaChatWidget mode="embedded" open onClose={() => { closed += 1; }} />);
-    const start = mockApiCalls.find((c) => c.url === '/api/chat/start');
-    expect(start?.body).toMatchObject({ visitor_id: 'fp-1', trigger_type: 'campus_gate' });
-    expect(container.textContent).toContain('Hi, I am Maya.');
+    expect(mockApiCalls.find((c) => c.url === '/api/chat/start')?.body).toMatchObject({ visitor_id: 'fp-1', trigger_type: 'campus_gate' });
     await act(async () => { (container.querySelector('button[aria-label="Close chat"]') as HTMLButtonElement).click(); });
     expect(closed).toBe(1);
-    expect(mockApiCalls.filter((c) => c.url === '/api/chat/start')).toHaveLength(1); // closing never re-opens
+    expect(mockApiCalls.filter((c) => c.url === '/api/chat/start')).toHaveLength(1);
   });
 });
 
-describe('the Maya desk', () => {
-  const maya: Desk = { id: 'maya', name: 'Maya', title: 'Welcome desk', building: 'gate', ai: true, on_duty: true, enrollment_id: null, opens: null, prompts: [] };
+describe('the Maya desk (C121: the shared chat)', () => {
+  const maya: Desk = {
+    id: 'maya', name: 'Maya', title: 'Welcome desk', building: 'admissions', ai: true, on_duty: true, enrollment_id: 'maya-1', opens: null,
+    prompts: ['Compare the plans for me', 'Book a call with admissions', 'Have someone call me'],
+  };
 
-  it('on duty, this browser has the site visitor id: Ask Maya opens the embedded chat at the gate', async () => {
-    window.localStorage.setItem('cb_visitor_fp', 'fp-1');
+  it('on duty with a DM host: Message Maya and her three questions; no website chat, no briefing, no public chat calls', async () => {
+    unhost = registerDmHost();
+    window.localStorage.setItem('cb_visitor_fp', 'fp-1'); // even with a site visitor id, the widget is not used
     await render(<StaffDesk desk={maya} />);
-    expect(container.querySelector('[data-testid="cm-ask-maya-site"]')).toBeNull();
-    await act(async () => { (container.querySelector('[data-testid="cm-ask-maya"]') as HTMLButtonElement).click(); });
-    for (let i = 0; i < 6; i++) await act(async () => { await Promise.resolve(); });
-    expect(mockApiCalls.find((c) => c.url === '/api/chat/start')?.body).toMatchObject({ trigger_type: 'campus_gate' });
-  });
-
-  it('on duty, NO visitor id (not seeded): a link to the enrollment page in a new tab, the chat is never mounted', async () => {
-    await render(<StaffDesk desk={maya} />);
-    expect(container.querySelector('[data-testid="cm-ask-maya"]')).toBeNull();
-    const link = container.querySelector('[data-testid="cm-ask-maya-site"]')!;
-    expect(link.getAttribute('href')).toBe('/enroll');
-    expect(link.getAttribute('target')).toBe('_blank');
-    expect(link.getAttribute('rel')).toBe('noopener noreferrer');
+    expect(container.querySelector('[data-testid="cm-desk-message-maya"]')?.textContent).toContain('Message Maya');
+    expect(Array.from(container.querySelectorAll('.cm-pc-q button')).map((b) => b.textContent)).toEqual([
+      '“Compare the plans for me”', '“Book a call with admissions”', '“Have someone call me”',
+    ]);
+    expect(container.querySelectorAll('[data-testid^="cm-ask-maya"], [data-testid="cm-maya-chat"], [data-testid="cm-maya-dnt"]')).toHaveLength(0);
+    expect(container.textContent?.toLowerCase()).not.toContain('briefing');
     expect(mockApiCalls.filter((c) => c.url.startsWith('/api/chat'))).toHaveLength(0);
-    expect(container.textContent).not.toContain('refreshing');
   });
 
-  it('the campus never writes the site visitor id', async () => {
+  it('Message Maya opens the shared dock through te-open-dm with her enrollment id', async () => {
+    unhost = registerDmHost();
+    const seen: unknown[] = [];
+    const on = (e: Event) => seen.push((e as CustomEvent).detail);
+    window.addEventListener('te-open-dm', on);
     await render(<StaffDesk desk={maya} />);
-    expect(hasSiteVisitorId()).toBe(false);
-    expect(window.localStorage.getItem('cb_visitor_fp')).toBeNull();
+    await act(async () => { (container.querySelector('[data-testid="cm-desk-message-maya"]') as HTMLButtonElement).click(); });
+    window.removeEventListener('te-open-dm', on);
+    expect(seen).toEqual([{ enrollmentId: 'maya-1', name: 'Maya' }]);
   });
 
-  it('a Do Not Track browser: the desk says the chat stays hidden (the widget hides itself for DNT), no dead link', async () => {
-    window.localStorage.setItem('cb_visitor_fp', 'fp-1');
-    const dnt = Object.getOwnPropertyDescriptor(Navigator.prototype, 'doNotTrack');
-    Object.defineProperty(navigator, 'doNotTrack', { configurable: true, get: () => '1' });
+  it('a question opens the conversation with Maya and sends it once', async () => {
+    unhost = registerDmHost();
     await render(<StaffDesk desk={maya} />);
-    expect(container.querySelector('[data-testid="cm-maya-dnt"]')).not.toBeNull();
-    expect(container.querySelectorAll('[data-testid^="cm-ask-maya"]')).toHaveLength(0);
-    if (dnt) Object.defineProperty(navigator, 'doNotTrack', dnt); else delete (navigator as unknown as { doNotTrack?: string }).doNotTrack;
+    const chip = container.querySelectorAll('.cm-pc-q button')[2] as HTMLButtonElement;
+    await act(async () => { chip.click(); chip.click(); });
+    for (let i = 0; i < 4; i++) await act(async () => { await Promise.resolve(); });
+    expect(mockOpenCalls).toEqual(['maya-1']);
+    expect(mockSendCalls).toEqual([['room-maya', 'Have someone call me']]);
+  });
+
+  it('no DM host on the page: "Open Today to message Maya", like the other desks', async () => {
+    await render(<StaffDesk desk={maya} />);
+    expect(container.textContent).toContain('to message Maya');
+    expect(container.querySelector('[data-testid="cm-desk-message-maya"]')).toBeNull();
   });
 
   it('site chat off: "opens soon", no button and no link', async () => {
-    await render(<StaffDesk desk={{ ...maya, on_duty: false, opens: 'site_chat_off' }} />);
+    await render(<StaffDesk desk={{ ...maya, on_duty: false, enrollment_id: null, prompts: [], opens: 'site_chat_off' }} />);
     expect(container.querySelector('[data-testid="cm-desk-status-maya"]')?.textContent).toBe("Maya's desk opens soon");
     expect(container.querySelectorAll('button, a')).toHaveLength(0);
   });

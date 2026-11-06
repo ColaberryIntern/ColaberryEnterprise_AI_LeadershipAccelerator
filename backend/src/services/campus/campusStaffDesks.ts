@@ -1,6 +1,7 @@
 import { campusAudienceFor, CampusAudienceKind } from './campusAudience';
 import { isReeseEnabled, getReeseEnrollmentId } from '../reese/reeseIdentitySeed';
 import { isDaraEnabled, getDaraEnrollmentId } from '../curriculum/daraIdentitySeed';
+import { getMayaEnrollmentId } from '../mayaIdentitySeed';
 import type { CampusArea } from './campusAreas';
 import { env } from '../../config/env';
 import { AGENT_PLACES, canReachAgent } from './agentPlaces';
@@ -15,15 +16,14 @@ import type { SectionKey } from '../access/mgmtRoles';
  * frontend/src/components/campus/campusAudience.ts (staff > business > explorer > member), so the two can only
  * disagree if one of those shared functions changes for both. A test pins the frontend precedence line.
  *
- * MAYA is shown to staff and Explorers only. She is the public admissions chat, not a portal agent. C6 (Ali's decision: the
- * website chat at the gate): her desk is on duty exactly when the site chat is switched on (ENABLE_CHAT), and the campus opens
- * her existing website chat; with the site chat off it reads "opens soon". (Historical note, C5: listed as opening with C6;
- * C7 owns her handoff). The frontend also renders her desk only inside the Main Gate, which it shows only to Explorers
- * and staff, so Maya appears only when both sides agree.
+ * MAYA (C121, Ali 2026-11-06: "put Maya in the same IM system as everyone else"): she answers in the shared portal chat like
+ * Reese and Dara, so her desk carries her enrollment id and her suggested questions. Her desk is still on duty exactly when
+ * the site chat is switched on (ENABLE_CHAT, the C6 rule), which is also what gates her DM replies (maya/mayaReplyService.ts);
+ * with it off it reads "opens soon". Her AiAgent row is NOT what gates her (see mayaIdentitySeed.ts).
  *
  * ON DUTY. Reese and Dara answer DMs whenever their AiAgent row is enabled and their identity is seeded (their reply
- * paths check nothing else). Off duty, the desk reads "Back soon" and carries no enrollment id, so nothing can open a
- * conversation that would get no answer.
+ * paths check nothing else); Maya when ENABLE_CHAT is on and her identity is seeded. Off duty, the desk reads "Back soon"
+ * and carries no enrollment id, so nothing can open a conversation that would get no answer.
  *
  * PLACES (C87). Each desk's building, and for the Staff Office its floor and office door, come from agentPlaces.ts: Reese
  * in the Classroom, Dara on the Program floor at Curriculum, Maya in Admissions. Dara is listed ONLY for a badge that opens
@@ -57,8 +57,12 @@ const REESE_PROMPTS = ['What does this week\'s lesson cover?', 'How do I get uns
 // answer from real data (curriculum_health, student_pacing in daraStaffTools.ts); nothing she cannot see yet.
 const DARA_PROMPTS = ['Which lessons are students stalling on this week?', 'Who is falling behind the schedule?'];
 
+// C121/C122: each one is answered by a real tool in her portal DM (retrieve_knowledge with the pricing rule,
+// book_admissions_call, request_callback in maya/mayaPortalTools.ts).
+export const MAYA_PROMPTS = ['Compare the plans for me', 'Book a call with admissions', 'Have someone call me'];
+
 async function agentDesk(
-  id: 'reese' | 'dara', name: string, title: string, prompts: string[],
+  id: DeskId, name: string, title: string, prompts: string[],
   enabled: () => Promise<boolean>, enrollment: () => Promise<string | null>,
 ): Promise<StaffDesk> {
   const [on, eid] = await Promise.all([enabled(), enrollment()]);
@@ -66,16 +70,28 @@ async function agentDesk(
   return { id, name, title, ...AGENT_PLACES[id], ai: true, on_duty: onDuty, enrollment_id: onDuty ? eid : null, opens: null, prompts: onDuty ? prompts : [] };
 }
 
-/** Maya's desk: on duty iff the public site chat is on (her chat endpoints answer 204 otherwise). No enrollment: she is not
- *  a portal DM agent, and no prompts: her own widget offers its quick replies. C21 (v6 D3): her desk is in the Admissions
- *  building beside the gate, no longer a bench at the gate. */
-function mayaDesk(): StaffDesk {
+/** Maya's identity lookup, fail closed: a lookup error leaves her desk off duty instead of failing every desk. */
+async function mayaEnrollmentOrNull(): Promise<string | null> {
+  try {
+    return await getMayaEnrollmentId();
+  } catch (e: any) {
+    console.warn(JSON.stringify({
+      level: 'warn', service: 'campus', event: 'maya_enrollment_lookup_failed', outcome: 'failure', error_class: e?.name || 'Error',
+    }));
+    return null;
+  }
+}
+
+/** Maya's desk (C121): the agentDesk pattern, on duty iff the site chat flag is on and her identity is seeded. With the flag
+ *  off it says "opens soon" (opens: 'site_chat_off'). C21 (v6 D3): her desk is in the Admissions building beside the gate. */
+async function mayaDesk(): Promise<StaffDesk> {
   const on = env.enableChat === true;
-  return { id: 'maya', name: 'Maya', title: 'Welcome desk', ...AGENT_PLACES.maya, ai: true, on_duty: on, enrollment_id: null, opens: on ? null : 'site_chat_off', prompts: [] };
+  const desk = await agentDesk('maya', 'Maya', 'Welcome desk', MAYA_PROMPTS, async () => on, mayaEnrollmentOrNull);
+  return on ? desk : { ...desk, opens: 'site_chat_off' };
 }
 
 /** C21 (v6 D3): Maya is always in her Admissions building and on every help desk, for every audience (it replaces C6's
- *  Explorer-and-staff rule; her chat is still the site widget, the C6 decision). */
+ *  Explorer-and-staff rule). C121: her chat is the shared portal chat, no longer the site widget. */
 export function mayaVisibleTo(audience: CampusAudienceKind): boolean {
   return ['staff', 'explorer', 'member', 'business'].includes(audience);
 }
@@ -89,6 +105,6 @@ export async function getStaffDesks(enrollmentId: string): Promise<{ audience: C
   ]);
   // C87: no badge for the Program floor = no Dara at all (not drawn, not on the help desk, no enrollment to message)
   const desks = daraReachable ? [reese, dara] : [reese];
-  if (mayaVisibleTo(audience)) desks.push(mayaDesk());
+  if (mayaVisibleTo(audience)) desks.push(await mayaDesk());
   return { audience, desks };
 }
