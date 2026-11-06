@@ -28,6 +28,7 @@ jest.mock('../../../models', () => ({
   },
 }));
 
+import { Op } from 'sequelize';
 import {
   normalizeEmail,
   resolveExplorerLead,
@@ -304,13 +305,30 @@ describe('loadActiveExplorers — the population filter (T202b row 5)', () => {
     expect(whereOf().status).toBe('active');
   });
 
-  it('filters on exactly those two things and nothing else', async () => {
-    // A third condition would narrow the population silently — for example
-    // excluding deposit holders, which the REVENUE roster does deliberately and
-    // this loader deliberately does not.
+  it('selects only UNPAID rows, so someone who upgraded leaves the growth population', async () => {
     await repairAllExplorerBridges({ dryRun: true });
 
-    expect(Object.keys(whereOf()).sort()).toEqual(['enrollment_type', 'status']);
+    // `enrollment_type` records ORIGIN, so it alone no longer means "has not paid". This
+    // loader defines the entire Explorer Growth population: every row it returns gets an
+    // ExplorerJourneyProfile, and the Governor draws its conversion decisions from those
+    // profiles. Without this term, a customer who upgraded would stay a subject of
+    // conversion work and could be sent an enroll pitch.
+    const clause = whereOf().payment_status as Record<symbol, unknown>;
+    expect(Object.getOwnPropertySymbols(clause)).toContain(Op.ne);
+    expect(Object.getOwnPropertySymbols(clause)).not.toContain(Op.eq);
+    expect(clause[Op.ne]).toBe('paid');
+  });
+
+  it('filters on exactly those three things and nothing else', async () => {
+    // A FOURTH condition would narrow the population silently — for example excluding
+    // deposit holders, which the REVENUE roster does deliberately and this loader
+    // deliberately does not. The third condition, `payment_status`, was added when
+    // `enrollment_type` became an ORIGIN field; it keys on membership payment and so
+    // cannot hide a deposit holder, because the $50 Open House deposit is an
+    // `account_credits` row and leaves `payment_status` alone.
+    await repairAllExplorerBridges({ dryRun: true });
+
+    expect(Object.keys(whereOf()).sort()).toEqual(['enrollment_type', 'payment_status', 'status']);
   });
 
   it('asks for the communityMember include that pickBestEnrollment needs to canonicalise', async () => {

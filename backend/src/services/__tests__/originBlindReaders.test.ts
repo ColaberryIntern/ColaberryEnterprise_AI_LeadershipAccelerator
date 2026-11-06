@@ -21,10 +21,16 @@ import { pickBestEnrollment } from '../enrollmentPick';
  *
  *   **it is a no-op against today's data, and becomes the protection once the writers stop.**
  *
- * The no-op holds because no row can currently be both `payment_status='paid'` and
- * `enrollment_type='explorer'` - the rewrite guarantees it. That is what makes this
+ * The no-op holds because no PRODUCTION row can currently be both `payment_status='paid'`
+ * and `enrollment_type='explorer'` - the rewrite guarantees it. That is what makes this
  * shippable on its own, ahead of Phase 2, with no flag day and no intermediate state in
  * which the system is wrong.
+ *
+ * "Production row" is the precise claim, and it is worth stating precisely: nothing in the
+ * schema or the type system forbids that shape, so a TEST can construct it, and one already
+ * did. `src/__tests__/services/access/contentEntitlement.test.ts` set `payment_status:
+ * 'paid'` on an `'explorer'` row as a PROBE, to show the legacy paywall branch ignored
+ * everything but origin. That probe inverts under this change, which is the change working.
  *
  * WHAT THIS FILE PROVES, and what it does not. The ranking rule is pure, so it is tested
  * behaviourally - driven with real inputs, including the shape that cannot exist yet. The

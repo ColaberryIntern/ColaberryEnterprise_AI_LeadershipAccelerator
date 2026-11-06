@@ -435,18 +435,28 @@ export async function getDashboardStats() {
   // upgraded the moment that rewrite stops — undercounting paid students on the admin
   // dashboard while they are simultaneously missing from MRR.
   //
-  // Reads as "not an Explorer, OR has paid". A no-op today, since no paid row carries
-  // 'explorer' yet; for `paidEnrollments` the `payment_status: 'paid'` term satisfies the
-  // second branch outright, which is exactly the intent.
-  const notFreeExplorer = {
-    [Op.or]: [{ enrollment_type: { [Op.ne]: 'explorer' } }, { payment_status: 'paid' }],
-  };
+  // Each count states the exclusion it actually needs, rather than sharing one clause:
+  //
+  //  - `totalEnrollments` is the only one that needs the compound form. It counts real
+  //    enrollments, and after the origin change a paying ex-Explorer is one. Reads as
+  //    "not an Explorer, OR has paid".
+  //  - `paidEnrollments` needs NO origin term at all. `payment_status = 'paid'` already
+  //    answers the question; the old `notExplorer` term here is precisely what would have
+  //    dropped every upgrader off the dashboard while they were also missing from MRR.
+  //  - `pendingInvoice` keeps the plain exclusion unchanged: a pending row cannot be paid,
+  //    so "not a free Explorer" and "not an Explorer" are the same set here, and the
+  //    simpler clause is the honest one.
+  //
+  // All three are no-ops against today's data, where no paid row carries 'explorer'.
+  const notExplorer = { enrollment_type: { [Op.ne]: 'explorer' } };
+  const notFreeExplorer = { [Op.or]: [notExplorer, { payment_status: 'paid' }] };
+
   const totalEnrollments = await Enrollment.count({ where: notFreeExplorer as any });
   const paidEnrollments = await Enrollment.count({
-    where: { payment_status: 'paid', ...notFreeExplorer } as any,
+    where: { payment_status: 'paid' } as any,
   });
   const pendingInvoice = await Enrollment.count({
-    where: { payment_status: ['pending', 'pending_invoice'] as any, ...notFreeExplorer } as any,
+    where: { payment_status: ['pending', 'pending_invoice'] as any, ...notExplorer } as any,
   });
 
   const openCohorts = cohorts.filter((c) => c.status === 'open');

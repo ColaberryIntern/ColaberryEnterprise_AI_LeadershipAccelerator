@@ -3,11 +3,20 @@ import { Op } from 'sequelize';
 /**
  * Phase 2 T202b — the admin dashboard's Explorer exclusion, asserted for real.
  *
- * WHY THIS SUITE EXISTS. `cohortService.getDashboardStats` builds ONE filter,
- * `{ enrollment_type: { [Op.ne]: 'explorer' } }`, and reuses it for three counts.
- * When T202b gives portal free accounts `enrollment_type: 'explorer'`,
- * `totalEnrollments` and `pendingInvoice` DROP by the size of that population,
- * while `paidEnrollments` does not move because those rows are never paid.
+ * WHY THIS SUITE EXISTS. `cohortService.getDashboardStats` issues three counts whose
+ * Explorer exclusions must each be exactly right. When T202b gives portal free accounts
+ * `enrollment_type: 'explorer'`, `totalEnrollments` and `pendingInvoice` DROP by the size
+ * of that population, while `paidEnrollments` does not move because those rows are never
+ * paid.
+ *
+ * UPDATED when `enrollment_type` became an ORIGIN field. It used to build ONE filter,
+ * `{ enrollment_type: { [Op.ne]: 'explorer' } }`, and reuse it for all three counts. That
+ * sharing was only sound while "is an Explorer" implied "has not paid". It no longer does,
+ * so the three counts now carry different clauses and are asserted separately:
+ * `totalEnrollments` gets "not an Explorer OR paid", `paidEnrollments` gets no origin term
+ * at all, and `pendingInvoice` keeps the plain exclusion because a pending row cannot be
+ * paid. Note that the paragraph above still holds for paidEnrollments, but for a stronger
+ * reason than before: it no longer mentions origin, so it cannot move for that reason.
  *
  * It needed its own suite for two reasons, both of which were mistakes caught by
  * verification rather than by me:
@@ -51,14 +60,34 @@ describe('getDashboardStats — the Explorer exclusion (T202b row 29)', () => {
     mockCount.mockResolvedValue(0);
   });
 
-  it('excludes Explorers from all three enrollment counts', async () => {
+  /**
+   * UPDATED when `enrollment_type` became an ORIGIN field. The exclusion is no longer one
+   * shared clause across all three counts, because the three counts do not ask the same
+   * question once "Explorer" stops meaning "unpaid":
+   *
+   *   - totalEnrollments  -> not an Explorer OR has paid  (a paying ex-Explorer is real)
+   *   - paidEnrollments   -> paid, with NO origin term    (the term here was the bug)
+   *   - pendingInvoice    -> not an Explorer              (pending cannot be paid)
+   *
+   * Each is asserted on its own below. Against today's data all three select exactly what
+   * they selected before, since no paid row carries 'explorer'.
+   */
+  it('still issues exactly three counts, and none of them counts free Explorers', async () => {
     await getDashboardStats();
 
     expect(mockCount).toHaveBeenCalledTimes(3);
-    for (const call of mockCount.mock.calls) {
-      const where = call[0].where as Record<string, unknown>;
-      expect(where.enrollment_type).toBeDefined();
-    }
+
+    const [total, paid, pending] = mockCount.mock.calls.map(
+      (c) => c[0].where as Record<string | symbol, unknown>,
+    );
+
+    // total: the compound form, so a payer survives the exclusion.
+    expect(Object.getOwnPropertySymbols(total)).toContain(Op.or);
+    // paid: no origin term at all - that is the point of the change.
+    expect(paid.enrollment_type).toBeUndefined();
+    expect(paid.payment_status).toBe('paid');
+    // pending: the plain exclusion, unchanged.
+    expect(pending.enrollment_type).toBeDefined();
   });
 
   /**
@@ -70,27 +99,53 @@ describe('getDashboardStats — the Explorer exclusion (T202b row 29)', () => {
   it('uses NOT-EQUAL, not equal — an inverted filter would count only Explorers', async () => {
     await getDashboardStats();
 
+    // Wherever the origin term appears it must still be NOT-EQUAL. `totalEnrollments` now
+    // nests it inside an Op.or, so collect the clause from both shapes rather than assuming
+    // a single position - an Op.eq in either place inverts the dashboard's headline numbers.
+    const clauses: Array<Record<symbol, unknown>> = [];
     for (const call of mockCount.mock.calls) {
-      const clause = (call[0].where as Record<string, Record<symbol, unknown>>).enrollment_type;
+      const where = call[0].where as Record<string | symbol, any>;
+      if (where.enrollment_type) clauses.push(where.enrollment_type);
+      for (const branch of (where[Op.or] as Array<Record<string, any>> | undefined) ?? []) {
+        if (branch.enrollment_type) clauses.push(branch.enrollment_type);
+      }
+    }
+
+    // Two counts carry it: totalEnrollments (nested) and pendingInvoice (top level).
+    // paidEnrollments deliberately carries none, so this must not become three.
+    expect(clauses).toHaveLength(2);
+    for (const clause of clauses) {
       expect(Object.getOwnPropertySymbols(clause)).toContain(Op.ne);
       expect(Object.getOwnPropertySymbols(clause)).not.toContain(Op.eq);
       expect(clause[Op.ne]).toBe('explorer');
     }
   });
 
-  it('totalEnrollments filters on nothing BUT the Explorer exclusion', async () => {
+  it('totalEnrollments filters on nothing BUT "not a free Explorer"', async () => {
     await getDashboardStats();
 
-    const total = mockCount.mock.calls[0][0].where as Record<string, unknown>;
-    expect(Object.keys(total)).toEqual(['enrollment_type']);
+    const total = mockCount.mock.calls[0][0].where as Record<string | symbol, any>;
+    // No string-keyed filters: the whole clause is the one Op.or and nothing else, so an
+    // unrelated filter cannot be smuggled into the headline enrollment count.
+    expect(Object.keys(total)).toEqual([]);
+    expect(Object.getOwnPropertySymbols(total)).toEqual([Op.or]);
+
+    const branches = total[Op.or] as Array<Record<string, any>>;
+    expect(branches).toHaveLength(2);
+    expect(branches[0].enrollment_type[Op.ne]).toBe('explorer');
+    expect(branches[1]).toEqual({ payment_status: 'paid' });
   });
 
-  it('paidEnrollments keeps its paid filter alongside the exclusion — it must not move', async () => {
+  it('paidEnrollments asks ONLY whether they paid — no origin term', async () => {
     await getDashboardStats();
 
     const paid = mockCount.mock.calls[1][0].where as Record<string, unknown>;
     expect(paid.payment_status).toBe('paid');
-    expect(paid.enrollment_type).toBeDefined();
+    // THE regression this guards. An origin term here excluded every Explorer who upgraded,
+    // undercounting paid students on the dashboard while the same people were missing from
+    // MRR. `payment_status` alone already answers the question.
+    expect(paid.enrollment_type).toBeUndefined();
+    expect(Object.keys(paid)).toEqual(['payment_status']);
   });
 
   it('pendingInvoice keeps both pending statuses alongside the exclusion', async () => {
