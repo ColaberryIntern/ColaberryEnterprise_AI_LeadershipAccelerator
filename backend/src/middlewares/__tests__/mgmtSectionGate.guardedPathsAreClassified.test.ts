@@ -169,6 +169,13 @@ describe('mgmtSectionGate classifies every path whose route guard names a sectio
   // `/api/admin/agents` classifies a whole subtree because a static prefix cannot express
   // ':agentId/display-name'. That is only safe while every other route under it carries its own
   // guard, so the claim is asserted rather than left in a comment.
+  //
+  // 2026-11-05: `AgentManagerOrDomainBuilder` joined the alternation. It is the read-only sibling
+  // of `AgentManagerOrAdmin` -- the same gate plus a GET-only path for the verified intended
+  // BUILDER of the agent's domain -- and it wraps `requireAdmin` internally exactly as its
+  // sibling does, so a route carrying it is guarded rather than open. This test caught the four
+  // routes that adopted it on the first run, which is the census working: a guard this file does
+  // not recognise reads as NO guard, and that is the safe direction to be wrong in.
   it('leaves every other /api/admin/agents route carrying its own guard', () => {
     const unguarded: string[] = [];
 
@@ -179,7 +186,7 @@ describe('mgmtSectionGate classifies every path whose route guard names a sectio
       for (const m of src.matchAll(/router\.(?:get|post|put|patch|delete)\(\s*['"`](\/api\/admin\/agents[^'"`]*)['"`]([\s\S]{0,300}?)\)\s*;/g)) {
         const routePath = m[1] as string;
         const rest = m[2] as string;
-        const guarded = /require(Admin|Section|AgentManagerOrAdmin)/.test(rest);
+        const guarded = /require(Admin|Section|AgentManagerOrAdmin|AgentManagerOrDomainBuilder)/.test(rest);
         if (!guarded) unguarded.push(`${routePath} (${rel})`);
       }
     }

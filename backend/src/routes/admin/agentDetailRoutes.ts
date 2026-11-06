@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { requireAgentManagerOrAdmin } from '../../middlewares/agentManagerAuthMiddleware';
+import { requireAgentManagerOrDomainBuilder } from '../../middlewares/agentManagerAuthMiddleware';
 import { getAgentDetailStats } from '../../controllers/agentDetailController';
 
 // Agent Detail — read-only, gated by requireAgentManagerOrAdmin: a platform
@@ -17,6 +17,6 @@ import { getAgentDetailStats } from '../../controllers/agentDetailController';
 // as of this change, by design.
 const router = Router();
 
-router.get('/api/admin/agents/:id', requireAgentManagerOrAdmin(), getAgentDetailStats);
+router.get('/api/admin/agents/:id', requireAgentManagerOrDomainBuilder(), getAgentDetailStats);
 
 export default router;

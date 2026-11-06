@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { requireAgentManagerOrAdmin } from '../../middlewares/agentManagerAuthMiddleware';
+import { requireAgentManagerOrAdmin, requireAgentManagerOrDomainBuilder } from '../../middlewares/agentManagerAuthMiddleware';
 import { handleGetRoleCharter, handleUpsertRoleCharter } from '../../controllers/agentRoleCharterController';
 
 // AI Workforce Management, Checkpoint B — an agent's business-facing job
@@ -10,7 +10,7 @@ import { handleGetRoleCharter, handleUpsertRoleCharter } from '../../controllers
 // record is upstream of this specific agent.
 const router = Router();
 
-router.get('/api/admin/agents/:id/charter', requireAgentManagerOrAdmin(), handleGetRoleCharter);
+router.get('/api/admin/agents/:id/charter', requireAgentManagerOrDomainBuilder(), handleGetRoleCharter);
 router.put('/api/admin/agents/:id/charter', requireAgentManagerOrAdmin(), handleUpsertRoleCharter);
 
 export default router;
