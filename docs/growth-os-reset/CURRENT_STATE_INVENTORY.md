@@ -146,7 +146,7 @@ The portal free-signup path sets the *other* flag and leaves the first at its de
 
 The Explorer OS gates on the first flag only:
 
-`backend/src/services/explorerGrowth/explorerIdentityBridge.ts:122` → "where: { enrollment_type: 'explorer', status: 'active' },"
+`backend/src/services/explorerGrowth/explorerIdentityBridge.ts:151` → "enrollment_type: 'explorer',"
 
 So a person who creates a free account through the portal is **invisible to the entire
 Explorer Growth OS**. This contradicts §1 of the build prompt, which makes free-account

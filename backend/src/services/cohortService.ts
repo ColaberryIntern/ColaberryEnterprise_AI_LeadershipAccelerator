@@ -428,10 +428,32 @@ export async function getDashboardStats() {
   const cohorts = await Cohort.findAll();
   // Explorers (Open House visitors) are not paying students — exclude them from
   // enrollment/pipeline counts so they never skew the dashboard.
+  //
+  // The exclusion is "a FREE Explorer", not "an Explorer". `enrollment_type` records where
+  // an account ORIGINATED; it is only a statement about current payment because the payment
+  // path rewrites it. Keyed on origin alone, `paidEnrollments` would drop every Explorer who
+  // upgraded the moment that rewrite stops — undercounting paid students on the admin
+  // dashboard while they are simultaneously missing from MRR.
+  //
+  // Each count states the exclusion it actually needs, rather than sharing one clause:
+  //
+  //  - `totalEnrollments` is the only one that needs the compound form. It counts real
+  //    enrollments, and after the origin change a paying ex-Explorer is one. Reads as
+  //    "not an Explorer, OR has paid".
+  //  - `paidEnrollments` needs NO origin term at all. `payment_status = 'paid'` already
+  //    answers the question; the old `notExplorer` term here is precisely what would have
+  //    dropped every upgrader off the dashboard while they were also missing from MRR.
+  //  - `pendingInvoice` keeps the plain exclusion unchanged: a pending row cannot be paid,
+  //    so "not a free Explorer" and "not an Explorer" are the same set here, and the
+  //    simpler clause is the honest one.
+  //
+  // All three are no-ops against today's data, where no paid row carries 'explorer'.
   const notExplorer = { enrollment_type: { [Op.ne]: 'explorer' } };
-  const totalEnrollments = await Enrollment.count({ where: notExplorer as any });
+  const notFreeExplorer = { [Op.or]: [notExplorer, { payment_status: 'paid' }] };
+
+  const totalEnrollments = await Enrollment.count({ where: notFreeExplorer as any });
   const paidEnrollments = await Enrollment.count({
-    where: { payment_status: 'paid', ...notExplorer } as any,
+    where: { payment_status: 'paid' } as any,
   });
   const pendingInvoice = await Enrollment.count({
     where: { payment_status: ['pending', 'pending_invoice'] as any, ...notExplorer } as any,

@@ -68,13 +68,39 @@ describe('isFreePreviewTier (async resolver)', () => {
     else process.env.EXPLORER_WEEK0_ONLY = OLD_ENV;
   });
 
-  // ── Flag OFF: legacy explorer-only behavior, byte-for-byte ──────────────────
-  it('flag OFF + explorer → gated (true), never checks payment/cohort', async () => {
+  // ── Flag OFF: legacy explorer gate, now origin-blind ────────────────────────
+  it('flag OFF + UNPAID explorer → gated (true), never checks cohort/staff', async () => {
     findEnrollment.mockResolvedValue({ id: 'e1', payment_status: 'pending', enrollment_type: 'explorer', cohort_id: null });
     expect(await isFreePreviewTier('e1')).toBe(true);
     expect(findCohort).not.toHaveBeenCalled();
     expect(staffOf).not.toHaveBeenCalled();
   });
+
+  // THE regression this guard exists for. `enrollment_type` records where an account
+  // ORIGINATED. Today the payment path rewrites it to 'standard', so this shape cannot
+  // occur -- which is exactly why it needs a test now rather than later: the moment that
+  // rewrite is removed, gating on origin alone would take weeks 1-12 away from a paying
+  // customer and fan out to ~70 frontend surfaces that read the published `is_explorer`.
+  // Cheap path preserved: still no cohort or staff lookup.
+  it('flag OFF + PAID explorer-origin → NOT gated, even on the legacy path', async () => {
+    findEnrollment.mockResolvedValue({ id: 'e1', payment_status: 'paid', enrollment_type: 'explorer', cohort_id: null });
+    expect(await isFreePreviewTier('e1')).toBe(false);
+    expect(findCohort).not.toHaveBeenCalled();
+    expect(staffOf).not.toHaveBeenCalled();
+  });
+
+  // Boundary: only the exact string 'paid' lifts the gate. The in-flight statuses are the
+  // real cases ('pending' is the column default); null/undefined are not reachable through
+  // the model, which declares payment_status NOT NULL, and are here because this resolver
+  // takes whatever the row hands it and must fail toward GATED rather than quietly
+  // granting the full curriculum on a missing value. 'PAID' pins case-sensitivity.
+  it.each([[null], [undefined], ['pending'], ['failed'], ['pending_invoice'], ['PAID']])(
+    'flag OFF + explorer with payment_status %p → still gated',
+    async (status) => {
+      findEnrollment.mockResolvedValue({ id: 'e1', payment_status: status, enrollment_type: 'explorer', cohort_id: null });
+      expect(await isFreePreviewTier('e1')).toBe(true);
+    },
+  );
 
   it('flag OFF + standard (non-explorer) → NOT gated (false), even if unpaid', async () => {
     findEnrollment.mockResolvedValue({ id: 'e1', payment_status: 'pending', enrollment_type: 'standard', cohort_id: null });

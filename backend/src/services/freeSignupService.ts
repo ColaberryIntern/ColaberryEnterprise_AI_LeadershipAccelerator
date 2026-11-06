@@ -395,7 +395,12 @@ export async function createFreeAccount(input: FreeSignupInput): Promise<FreeSig
   // would make it visible to Explorer Growth — the exact conscription that the
   // required `programme` argument exists to prevent. Keyed on the RESOLVED row, not
   // on the input, so a reused non-learner row is also correctly skipped.
-  if (enrollment.enrollment_type === 'explorer') {
+  // ...and only for a learner who has not PAID. Once `enrollment_type` records origin
+  // rather than current tier, a customer who upgraded and later re-touched this form
+  // would otherwise be handed a journey profile and conscripted into Explorer Growth —
+  // the same conscription this guard exists to prevent, arriving by a different door.
+  // A no-op today: no paid row carries 'explorer'.
+  if (enrollment.enrollment_type === 'explorer' && enrollment.payment_status !== 'paid') {
     await bridgeExplorerProfileAtRegistration(enrollment.id, 'portal_free_signup');
   }
 

@@ -192,8 +192,19 @@ export interface SubscriptionView {
 }
 
 export async function getSubscription(enrollmentId: string, nowMs: number = Date.now()): Promise<SubscriptionView> {
-  const enrollment = await Enrollment.findByPk(enrollmentId, { attributes: ['enrollment_type', 'cohort_id'] });
-  const isExplorer = (enrollment as any)?.enrollment_type === 'explorer';
+  const enrollment = await Enrollment.findByPk(enrollmentId, {
+    attributes: ['enrollment_type', 'cohort_id', 'payment_status'],
+  });
+  // Drives `needs_subscription` below, so it has to mean "free Explorer", not "started out
+  // as an Explorer". `enrollment_type` records origin; once the payment path stops
+  // rewriting it, keying on origin alone would tell a paying customer they still need a
+  // subscription. Already partly masked by `&& !active` further down, but that only helps
+  // someone whose payment came through a subscription -- an invoice, a legacy webhook or a
+  // reconciliation sweep leaves no active sub, which is exactly the population at risk.
+  // A no-op today, since no paid row carries 'explorer'.
+  const isExplorer =
+    (enrollment as any)?.enrollment_type === 'explorer' &&
+    (enrollment as any)?.payment_status !== 'paid';
   const sub = await currentSubscription(enrollmentId);
   const plans = [PLANS.annual, PLANS.monthly];
 

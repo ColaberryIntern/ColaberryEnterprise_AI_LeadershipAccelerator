@@ -359,11 +359,25 @@ describe('T203 — the writer allow-list', () => {
 
     it('the Explorer population loader has NO deposit exclusion — deposit holders are visible', () => {
       const src = read('explorerGrowth/explorerIdentityBridge.ts');
-      expect(src).toContain("where: { enrollment_type: 'explorer', status: 'active' }");
+      // Identifies the loader by its selection terms rather than by one line of text. The
+      // where clause gained a `payment_status` term when `enrollment_type` became an ORIGIN
+      // field, so the old single-line form no longer exists; these two are what make it the
+      // Explorer population loader.
+      expect(src).toContain("enrollment_type: 'explorer',");
+      expect(src).toContain("status: 'active',");
       // The clause that looked like an exclusion is not here. If it ever appears,
       // deposit holders stop being visible to Explorer Growth and the deposit path
       // would need rerouting after all.
       expect(src).not.toContain('ac.enrollment_id IS NULL');
+      // And the exclusion the loader DOES carry keys on membership payment, not on an
+      // account credit, so it cannot hide a deposit holder either. The $50 Open House
+      // deposit is an `account_credits` row and leaves `payment_status` alone - see
+      // openHouseCreditService, where the payer deliberately stays an Explorer. Asserted
+      // rather than reasoned about, because the decision not to reroute the deposit path
+      // rests on it.
+      expect(src).toContain("payment_status: { [Op.ne]: 'paid' }");
+      expect(src).not.toContain('account_credits');
+      expect(src).not.toContain('open_house_deposit');
     });
 
     it('the REVENUE roster is the one that excludes deposit holders', () => {

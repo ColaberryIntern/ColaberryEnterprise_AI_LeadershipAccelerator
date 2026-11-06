@@ -34,7 +34,12 @@ function sortByNextPaymentDesc(rows: TenureRosterRow[]): TenureRosterRow[] {
 /** Drill-down roster for the "Deposit Holder" category: Explorers who paid
  *  the $50 Open House deposit but haven't converted to a paying plan yet —
  *  the same population fetchExplorerCounts() counts, just as rows. Excludes
- *  staff and withdrawn rows, matching fetchExplorerCounts exactly. */
+ *  staff and withdrawn rows, matching fetchExplorerCounts exactly.
+ *
+ *  "Haven't converted" is asserted via `payment_status IS DISTINCT FROM 'paid'`, in step
+ *  with fetchExplorerCounts. These two MUST carry the same predicate — the docblock claim
+ *  "matching fetchExplorerCounts exactly" is the contract, and a count whose drill-down
+ *  lists a different population is worse than no drill-down. */
 export async function getDepositHolderRoster(): Promise<TenureRosterRow[]> {
   const rows = (await sequelize.query(
     `SELECT e.id AS enrollment_id, e.full_name, e.email, e.created_at, ac.amount_cents
@@ -42,6 +47,7 @@ export async function getDepositHolderRoster(): Promise<TenureRosterRow[]> {
        LEFT JOIN community_members cm ON cm.enrollment_id = e.id
        JOIN account_credits ac ON ac.enrollment_id = e.id
       WHERE e.enrollment_type = 'explorer' AND e.status = 'active' AND NOT ${IS_STAFF_SQL}
+        AND e.payment_status IS DISTINCT FROM 'paid'
         AND NOT ${syntheticEmailSql('e.email')}
         AND ac.reason = 'open_house_deposit' AND ac.status = 'available'`,
     { type: QueryTypes.SELECT }

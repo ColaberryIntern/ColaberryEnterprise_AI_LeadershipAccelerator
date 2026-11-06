@@ -124,18 +124,49 @@ describe('isFreePreviewTier — Today feed gate (CONTENT_PAID_GATE_ENABLED)', ()
     expect(gated).toBe(false);
   });
 
-  it('still preserves legacy explorer-only gating when the flag is off, regardless of access_starts_at', async () => {
+  /**
+   * UPDATED when `enrollment_type` became an ORIGIN field.
+   *
+   * The claim here is that the legacy branch ignores `access_starts_at` and short-circuits
+   * before any full-access lookup. That claim is unchanged. What changed is the PROBE: this
+   * test used to set `payment_status: 'paid'` to make the short-circuit visible, on the
+   * reasoning that a branch which consulted payment could not return `true`. The legacy
+   * branch now does consult payment - deliberately, so that freezing `enrollment_type` as
+   * origin cannot strip weeks 1-12 from a paying ex-Explorer - so `paid` no longer works as
+   * a probe for "this branch ignores everything else". An unpaid row probes the same two
+   * things without asserting the behaviour that was just fixed.
+   */
+  it('still preserves legacy explorer gating when the flag is off, regardless of access_starts_at', async () => {
     mockEnv.contentPaidGateEnabled = false;
     mockEnrollmentFindByPk.mockResolvedValue({
       id: 'e2',
-      payment_status: 'paid',
+      payment_status: 'pending',
       enrollment_type: 'explorer',
       access_starts_at: '2020-01-01',
     });
 
     const gated = await isFreePreviewTier('e2');
-    expect(gated).toBe(true); // legacy path: explorer => gated, independent of access_starts_at
+    expect(gated).toBe(true); // legacy path: unpaid explorer => gated, independent of access_starts_at
     expect(mockCohortFindByPk).not.toHaveBeenCalled(); // legacy branch short-circuits before any full-access lookup
+  });
+
+  // The behaviour the probe above used to assert the opposite of, now stated as its own
+  // expectation. `enrollment_type` is the live Week-0 paywall while the paid gate is dark,
+  // so this is what stops a paying ex-Explorer losing the curriculum they bought once the
+  // payment path stops rewriting that field. The short-circuit is still asserted: deciding
+  // this needs no cohort lookup.
+  it('does NOT gate a paid explorer-origin row on the legacy path', async () => {
+    mockEnv.contentPaidGateEnabled = false;
+    mockEnrollmentFindByPk.mockResolvedValue({
+      id: 'e3',
+      payment_status: 'paid',
+      enrollment_type: 'explorer',
+      access_starts_at: '2020-01-01',
+    });
+
+    const gated = await isFreePreviewTier('e3');
+    expect(gated).toBe(false);
+    expect(mockCohortFindByPk).not.toHaveBeenCalled();
   });
 });
 

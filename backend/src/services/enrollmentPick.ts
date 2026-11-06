@@ -3,7 +3,7 @@
  *
  * `enrollments.email` is not unique and duplicate rows are routine; every lookup
  * that goes from an address to ONE enrolment canonicalises through this rule
- * (mgmt_role > non-explorer > paid > newest), or it attaches to an empty shadow
+ * (mgmt_role > paid > non-explorer > newest), or it attaches to an empty shadow
  * account. Lifted out of `participantService.ts` (Phase 4 T407) so the Growth
  * Journey subject resolver - contracted to import no send path - can reuse the
  * SAME function without loading the mailer `participantService` imports.
@@ -21,8 +21,8 @@
  * to the real row. Prefer, in order: an enrollment flagged with a
  * `mgmt_role` (2026-07-30 incident: a staff member's newer, unrelated paid
  * duplicate silently outranked their real staff-flagged enrollment, hiding
- * their own Management Portal access), then non-explorer type, then paid
- * over pending, then most recently created. Exported for testing.
+ * their own Management Portal access), then paid over pending, then
+ * non-explorer type, then most recently created. Exported for testing.
  */
 export function pickBestEnrollment<T extends {
   enrollment_type?: string | null;
@@ -33,10 +33,21 @@ export function pickBestEnrollment<T extends {
   candidates: T[],
 ): T | null {
   if (!candidates.length) return null;
+  // PAID OUTRANKS ORIGIN. These two terms used to sit the other way round, which was
+  // safe only because the payment path rewrote `enrollment_type` to 'standard', so no row
+  // could be both paid and 'explorer'. Once `enrollment_type` records ORIGIN and stops
+  // being rewritten, the old order would make an UNPAID 'standard' row outrank a PAID
+  // Explorer-origin one and route that student's own login into the empty shadow account
+  // -- the exact incident this docblock describes, with the roles reversed.
+  //
+  // Provably a no-op on today's data. With no paid+'explorer' row possible, the three
+  // reachable shapes rank identically under both orders:
+  //   paid standard [0,0] -> unpaid standard [0,1]|[1,0] -> explorer [1,1]
+  // so the sequence paid-standard < unpaid-standard < explorer is unchanged either way.
   const rank = (e: T): [number, number, number, number] => [
     e.communityMember?.mgmt_role ? 0 : 1,
-    e.enrollment_type === 'explorer' ? 1 : 0,
     e.payment_status === 'paid' ? 0 : 1,
+    e.enrollment_type === 'explorer' ? 1 : 0,
     -new Date(e.created_at ?? 0).getTime(),
   ];
   return [...candidates].sort((a, b) => {

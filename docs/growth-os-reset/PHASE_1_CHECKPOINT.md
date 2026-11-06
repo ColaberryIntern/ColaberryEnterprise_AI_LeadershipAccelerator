@@ -111,7 +111,7 @@ not deployed, and nothing here is either.**
 In the North Star, yes, and it is now written down as the canonical event. **In code, no** —
 two public paths write opposite labels, and the Explorer OS gates on only one of them:
 
-`backend/src/services/explorerGrowth/explorerIdentityBridge.ts:122` → "where: { enrollment_type: 'explorer', status: 'active' },"
+`backend/src/services/explorerGrowth/explorerIdentityBridge.ts:151` → "enrollment_type: 'explorer',"
 
 so one whole population is invisible to it. That is the phase's central finding and Phase 2's
 central problem.

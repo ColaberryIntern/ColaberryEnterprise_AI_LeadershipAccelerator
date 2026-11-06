@@ -34,13 +34,20 @@ const LIMIT = Number(process.env.LIMIT || 250);
 
 interface Row { email: string }
 
-/** Fixed, so two runs of the report describe the same people. */
+/** Fixed, so two runs of the report describe the same people.
+ *
+ *  Scores free Explorers. `enrollment_type` records ORIGIN, so the unpaid term is what
+ *  keeps a paying ex-Explorer out of a sales-readiness distribution once the payment path
+ *  stops rewriting that field. `IS DISTINCT FROM` rather than `<>` is defensive: the model
+ *  declares `payment_status` NOT NULL, but `NULL <> 'paid'` would be NULL and silently
+ *  shrink the population. A no-op today, since no paid row carries 'explorer'. */
 async function population(): Promise<string[]> {
   const rows = await sequelize.query<Row>(
     `SELECT DISTINCT lower(btrim(email)) AS email
        FROM enrollments
       WHERE email IS NOT NULL AND btrim(email) <> ''
         AND enrollment_type = 'explorer'
+        AND payment_status IS DISTINCT FROM 'paid'
       ORDER BY 1
       LIMIT :limit`,
     { type: QueryTypes.SELECT, replacements: { limit: LIMIT } },

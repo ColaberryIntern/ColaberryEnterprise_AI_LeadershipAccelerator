@@ -175,9 +175,19 @@ export async function findMatchingEnrollment(
   const realCohort = candidates.filter((c) => !isProspect(c));
   if (realCohort.length === 0) return { kind: 'prospect_only', candidates };
 
-  // Prefer the real (non-explorer) seat over a free-preview duplicate that
-  // happens to share the email -- same reasoning as pickBestEnrollment.
-  const standard = realCohort.filter((c) => c.enrollment_type !== 'explorer');
+  // Prefer the real seat over a free-preview duplicate that happens to share the
+  // email -- same reasoning as pickBestEnrollment.
+  //
+  // "Free preview duplicate" means Explorer-origin AND unpaid. `enrollment_type` records
+  // origin, so once the payment path stops rewriting it, filtering on origin alone would
+  // push a paying ex-Explorer's real seat out of the preferred pool and route a new
+  // payment to an unpaid duplicate instead. Deliberately does NOT reorder paid ahead of
+  // unpaid: which row an incoming payment should attach to is this function's own
+  // question, and this change is only meant to stop a real seat being mistaken for a
+  // throwaway. A no-op today, since no paid row carries 'explorer'.
+  const standard = realCohort.filter(
+    (c) => c.enrollment_type !== 'explorer' || c.payment_status === 'paid'
+  );
   const pool = standard.length > 0 ? standard : realCohort;
   if (pool.length === 1) return { kind: 'match', enrollment: pool[0], matchType: 'email' };
   return { kind: 'ambiguous', candidates: pool };
