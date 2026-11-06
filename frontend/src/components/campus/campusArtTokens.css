@@ -35,6 +35,9 @@
   --cm-art-arcade:#6b2fa0;
   /* C26 (v6 D4): the auditorium: red seats in tiered rows, the raised stage, heads for the people really here */
   --cm-art-in-seat:#a8232a; --cm-art-in-seat-back:#7d1a1f; --cm-art-in-seat-edge:#5c1216; --cm-art-in-head:#e9c9a8; --cm-art-in-head-ink:#2a2026;
+  /* C118: the Events Hall's stage drapes (burgundy velvet, gold trim) and wall sconces */
+  --cm-art-in-drape:#7a1621; --cm-art-in-drape-fold:#4e0d15; --cm-art-in-drape-hi:#9b2533; --cm-art-in-drape-gold:#c9a24a; --cm-art-in-drape-shadow:rgba(0,0,0,.35);
+  --cm-art-in-sconce:#c9a24a; --cm-art-in-sconce-light:#ffe3a6; --cm-art-in-sconce-glow:rgba(255,206,128,.32);
   /* C21 (v6 D3): Admissions, Maya's rose; the pink-walled lobby inside */
   --cm-art-admissions:#b0306a; --cm-art-admissions-d30:#7e0038; --cm-art-hero-admissions:#b0306a;
   --cm-art-in-admissions-wall:#f8e4ec; --cm-art-in-admissions-wall-d16:#e8d4dc; --cm-art-in-admissions-wall-d28:#dcc8d0; --cm-art-in-admissions-floor:#c9a58c;
