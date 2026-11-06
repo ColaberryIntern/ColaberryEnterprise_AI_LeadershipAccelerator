@@ -57,7 +57,10 @@ export function approvedProjectIds(approvedIdentity: unknown): string[] {
   const a = approvedIdentity as { projects?: unknown } | null;
   const projects = a && typeof a === 'object' && Array.isArray(a.projects) ? a.projects : [];
   return projects
-    .map((p: any) => (typeof p?.id === 'string' ? p.id : ''))
+    .map((p: unknown) => {
+      const id = (p as { id?: unknown } | null)?.id;
+      return typeof id === 'string' ? id : '';
+    })
     .filter((id: string) => /^[0-9a-f-]{36}$/i.test(id));
 }
 
@@ -147,12 +150,13 @@ export function buildHireIndex(
   return out;
 }
 
-function logDrop(slug: string, err: any): void {
+function logDrop(slug: string, err: unknown): void {
+  const e = err instanceof Error ? err : new Error(String(err));
   console.warn(JSON.stringify({
     timestamp: new Date().toISOString(), level: 'warn', service: 'backend',
     event: 'hire_talent_person_dropped', outcome: 'partial',
-    error_class: err?.name || 'Error',
-    context: { slug, message: String(err?.message || '').slice(0, 200) },
+    error_class: e.name || 'Error',
+    context: { slug, message: e.message.slice(0, 200) },
   }));
 }
 

@@ -13,6 +13,8 @@ import {
 
 const eid = (req: Request) => req.participant!.sub;
 
+// `e` is any thrown value. The services throw errors carrying `status` and `error_class` (the
+// same contract careerPortfolioPageController.fail relies on), so they are read structurally.
 function fail(res: Response, e: any, next: NextFunction): void {
   if (e?.status) {
     res.status(e.status).json({ error: e.message || 'error', error_class: e.error_class });

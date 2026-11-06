@@ -17,7 +17,7 @@ import { sequelize } from '../config/database';
 export interface CaseStudyCollectionAttributes {
   id?: string;
   slug: string;
-  /** enterprise | training | ai-flotation | refactored */
+  /** enterprise | training | ai-flotation | refactored | hire */
   surface_key?: string;
   title: string;
   description?: string | null;

@@ -196,8 +196,9 @@ export async function getPublicPortfolioBySlug(
   slug: string,
   now: Date = new Date(),
   /* Which surface a project's case-study link must be published on. hire.refactored.ai
-     passes 'hire'; every existing caller gets the enterprise default, unchanged. */
-  surfaceKey?: string,
+     passes 'hire'; every existing caller gets the enterprise default, unchanged. `null`
+     resolves no links at all (the hire directory's cards, which never show them). */
+  surfaceKey?: string | null,
 ): Promise<PublicPortfolioResult | null> {
   const page = await findPageBySlug(String(slug || '').trim());
   const decision = publicViewDecision(page);
@@ -228,7 +229,7 @@ async function buildPortfolio(
   approvedProjects: unknown[] | null = null,
   /** null = read the resume history LIVE (reviewer preview); a value = the APPROVED one. */
   approvedResume: ResumeHistory | null = null,
-  surfaceKey?: string,
+  surfaceKey?: string | null,
 ): Promise<PublicPortfolio> {
   // A profile that fails to load is a shorter page, not a 500. The projection turns an
   // empty profile into an empty portfolio rather than throwing.

@@ -5,6 +5,7 @@ import {
 } from '../../../config/caseStudySurfaces';
 import type { CaseStudySurfaceKey } from '../../../config/caseStudySurfaces';
 import type { CaseStudyHirePerson, CaseStudyPublicationSummary } from '../../../services/caseStudyAdminTypes';
+import { CASE_STUDY_CONTROLS } from './caseStudyDesk';
 
 /**
  * The HIRE row's second line: WHO goes live. Hire lists people, so an operator about to
@@ -39,7 +40,6 @@ export function HirePersonLine({ person, liveUrl }: {
     </div>
   );
 }
-import { CASE_STUDY_CONTROLS } from './caseStudyDesk';
 
 /**
  * One row per surface a record may be published to: where it stands, and the

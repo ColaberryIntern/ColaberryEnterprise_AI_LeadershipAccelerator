@@ -71,11 +71,12 @@ async function claimKey(key: string, talentSlug: string): Promise<boolean> {
 async function releaseKey(key: string): Promise<void> {
   try {
     await sequelize.query('DELETE FROM hire_intro_requests WHERE idempotency_key = $1', { bind: [key] });
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const e = err instanceof Error ? err : new Error(String(err));
     console.warn(JSON.stringify({
       timestamp: new Date().toISOString(), level: 'warn', service: 'backend',
-      event: 'hire_intro_key_release_failed', outcome: 'failure', error_class: err?.name || 'Error',
-      context: { message: String(err?.message || '').slice(0, 200) },
+      event: 'hire_intro_key_release_failed', outcome: 'failure', error_class: e.name || 'Error',
+      context: { message: e.message.slice(0, 200) },
     }));
   }
 }
@@ -110,11 +111,12 @@ export async function requestHireIntro(raw: unknown, ctx: HireIntroContext): Pro
     entrySlug: HIRE_INTRO_ENTRY,
     rawBody,
     rawBodyText: JSON.stringify(rawBody),
+    // handleIngest declares headers as Record<string, any>; the request's headers pass through untouched.
     headers: ctx.headers as Record<string, any>,
     remoteIp: ctx.remoteIp,
     signature: '',
     sessionId: '',
-  }).catch((err: any) => ({ success: false, httpStatus: 500, error: String(err?.message || err) } as any));
+  }).catch((err: unknown) => ({ success: false as const, httpStatus: 500, error: err instanceof Error ? err.message : String(err) }));
 
   if (!result?.success) {
     await releaseKey(key);

@@ -19,7 +19,6 @@ import {
   isCaseStudyPublicationError, publishCaseStudy, unpublishCaseStudy,
 } from '../../services/caseStudy/caseStudyPublicationService';
 import { isCaseStudyProjectSourceError } from '../../services/caseStudy/caseStudyProjectSource';
-import { withHirePerson, withLinkedPerson } from '../../services/hire/hireAdminPerson';
 import { isCaseStudyEvidenceSourceError } from '../../services/caseStudy/caseStudyEvidenceSource';
 
 /**
@@ -71,6 +70,10 @@ import { isCaseStudyEvidenceSourceError } from '../../services/caseStudy/caseStu
  * which becomes a 500 carrying no upstream detail.
  */
 const router = Router();
+
+/* Loaded on first use, not at module load: it reaches the career services and the database
+   config, which this router's own suites (and CI, with no DATABASE_URL) must not pull in. */
+const hirePerson = () => import('../../services/hire/hireAdminPerson');
 
 /* ─────────────────────────────────────────────────────────────── schemas ──── */
 
@@ -279,7 +282,7 @@ router.get('/api/admin/case-studies/:id', requireAdmin, (req: Request, res: Resp
   // `hirePerson` names who a Hire publication would list, for the HIRE publish row.
   void run(res, () => getCaseStudy({
     caseStudyId: params.id, correlationId: correlationOf(req),
-  }).then((detail) => withHirePerson(detail, params.id)));
+  }).then(async (detail) => (await hirePerson()).withHirePerson(detail, params.id)));
 });
 
 /** Edit the human-owned editorial and consent fields (spec §34). */
@@ -416,7 +419,9 @@ router.get('/api/admin/case-studies/:id/preview', requireAdmin, (req: Request, r
     caseStudyId: params.id, surfaceKey: query.surfaceKey ?? DEFAULT_SURFACE,
     ...(query.snapshotId ? { snapshotId: query.snapshotId } : {}),
     correlationId: correlationOf(req),
-  }).then((preview) => withLinkedPerson(preview, params.id)));
+  }).then(async (preview) => (preview.surfaceKey === 'hire'
+    ? (await hirePerson()).withLinkedPerson(preview, params.id)
+    : preview)));
 });
 
 /**

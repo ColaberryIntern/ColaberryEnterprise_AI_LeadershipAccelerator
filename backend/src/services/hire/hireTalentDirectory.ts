@@ -46,7 +46,10 @@ async function cardFor(entry: HireIndexEntry, now: Date): Promise<HireTalentCard
   const key = JSON.stringify([entry.facts, entry.cases.map((c) => [c.slug, c.publishedAt, c.featured])]);
   const hit = cardCache.get(entry.page.slug);
   if (hit && hit.key === key && now.getTime() - hit.at < CARD_TTL_MS) return hit.card;
-  const result = await getPublicPortfolioBySlug(entry.page.slug, now, 'hire');
+  // `null`: resolve NO case-study links. The card never shows them, and resolving them
+  // here would re-run the gate per person (one loadPublishedRecordBySlug per linked row) -
+  // the index above has already decided, in one batch, which case studies count.
+  const result = await getPublicPortfolioBySlug(entry.page.slug, now, null);
   if (!result) return null; // unpublished between the index read and this one
   const card = toTalentCard(result.portfolio, entry.facts, entry.cases);
   if (cardCache.size >= CARD_CACHE_MAX) cardCache.delete(cardCache.keys().next().value as string);
@@ -126,7 +129,7 @@ export async function getHireTalentDirectory(query: HireTalentQuery, now: Date =
       // eslint-disable-next-line no-await-in-loop -- bounded by the listed set, and cached
       const card = await cardFor(entry, now);
       if (card) listed.push({ card, entry });
-    } catch (err: any) {
+    } catch (err: any) { // any thrown value: only name and message are read, both optional-chained
       console.warn(JSON.stringify({
         timestamp: now.toISOString(), level: 'warn', service: 'backend',
         event: 'hire_talent_person_dropped', outcome: 'partial', error_class: err?.name || 'Error',

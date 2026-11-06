@@ -37,7 +37,13 @@ class NotFoundError extends Error {
   constructor() { super('No portfolio page exists for this enrollment yet'); this.name = 'NotFoundError'; }
 }
 
-function toSettings(row: any): HireListingSettings {
+interface SettingsRow {
+  readonly availability_status?: string | null;
+  readonly availability_label?: string | null;
+  readonly hire_spotlight?: boolean | null;
+}
+
+function toSettings(row: SettingsRow | null | undefined): HireListingSettings {
   const status = row?.availability_status ?? null;
   const label = row?.availability_label ?? null;
   return { availability: status && label ? { status, label } : null, spotlight: row?.hire_spotlight === true };

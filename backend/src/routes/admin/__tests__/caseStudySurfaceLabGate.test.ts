@@ -60,6 +60,11 @@ jest.mock('../../../services/caseStudy/caseStudyProjectSource', () => ({
 jest.mock('../../../services/caseStudy/caseStudyEvidenceSource', () => ({
   isCaseStudyEvidenceSourceError: () => false,
 }));
+// The Hire person decorators read the career tables; pass the response through untouched.
+jest.mock('../../../services/hire/hireAdminPerson', () => ({
+  withHirePerson: async (d: object) => ({ ...d, hirePerson: null }),
+  withLinkedPerson: async (p: object) => ({ ...p, linkedPerson: null }),
+}));
 
 /* eslint-disable import/first */
 import * as fs from 'fs';
