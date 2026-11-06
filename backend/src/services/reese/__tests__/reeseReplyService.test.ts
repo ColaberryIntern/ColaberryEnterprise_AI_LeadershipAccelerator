@@ -368,7 +368,7 @@ describe('maybeTriggerReeseReply', () => {
       await maybeTriggerReeseReply(ROOM_ID, STUDENT_ID);
 
       expect(mockAuthorizeTicketDispatch).toHaveBeenCalledWith(
-        expect.objectContaining({ ticketId: 'ticket-1', agentName: 'Reese', action: 'reese_dm_reply', riskTier: 'R3' }),
+        expect.objectContaining({ ticketId: 'ticket-1', agentName: 'Reese', action: 'reese_dm_reply', riskTier: 'R2' }),
       );
       expect(mockSendDmMessage).toHaveBeenCalledTimes(1);
       expect(mockSendDmMessage).toHaveBeenCalledWith(
@@ -403,7 +403,7 @@ describe('maybeTriggerReeseReply', () => {
       expect(mockRecordHeldAction).toHaveBeenCalledTimes(1);
       expect(mockRecordHeldAction).toHaveBeenCalledWith(expect.objectContaining({
         action: 'reese_dm_reply',
-        riskTier: 'R3',
+        riskTier: 'R2',
         verdict: 'would_require_approval',
         reasonCode: 'requires_approval:high_risk_tier',
         decisionId: 'auth-1',
@@ -518,7 +518,7 @@ describe('maybeTriggerReeseReply', () => {
       expect(mockCreateWorkUnit).toHaveBeenCalledWith('ticket-1', expect.objectContaining({
         title: 'Reply to Jordan Rivera',
         requiredCapability: 'student_support.reply',
-        riskTier: 'R3',
+        riskTier: 'R2',
         status: 'in_progress',
         approvalPolicy: 'auto',
       }));
