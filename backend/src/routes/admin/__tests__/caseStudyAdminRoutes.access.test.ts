@@ -99,6 +99,12 @@ jest.mock('../../../services/caseStudy/caseStudyProjectSource', () => ({
 jest.mock('../../../services/caseStudy/caseStudyEvidenceSource', () => ({
   isCaseStudyEvidenceSourceError: () => false,
 }));
+const withHirePerson = jest.fn(async (d: object) => ({ ...d, hirePerson: null }));
+const withLinkedPerson = jest.fn(async (p: object) => ({ ...p, linkedPerson: { portfolioSlug: 'swati-raman', listed: true } }));
+jest.mock('../../../services/hire/hireAdminPerson', () => ({
+  withHirePerson: (...a: [object]) => withHirePerson(...a),
+  withLinkedPerson: (...a: [object]) => withLinkedPerson(...a),
+}));
 
 import caseStudyAdminRoutes from '../caseStudyAdminRoutes';
 import { mgmtSectionGate, pathToSection } from '../../../middlewares/mgmtSectionGate';
@@ -316,5 +322,46 @@ describe('Zod validation at the route boundary (AC4)', () => {
     expect(publishCaseStudy).toHaveBeenCalledWith(
       expect.objectContaining({ surfaceKey: 'enterprise' }),
     );
+  });
+});
+
+/* ─────────────────────────────────────── H3.1: the person-first Hire preview ── */
+
+describe('GET /:id/preview on surface hire (H3.1)', () => {
+  it('returns the preview decorated with linkedPerson', async () => {
+    previewSurfaceProjection.mockResolvedValue({ ok: true, surfaceKey: 'hire' });
+    const res = await request(app).get(`${BASE}/${ID}/preview`).query({ surfaceKey: 'hire' })
+      .set('Authorization', `Bearer ${LEGACY_ADMIN}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.linkedPerson).toEqual({ portfolioSlug: 'swati-raman', listed: true });
+    expect(withLinkedPerson).toHaveBeenCalledWith(expect.objectContaining({ surfaceKey: 'hire' }), ID);
+  });
+
+  it('does not decorate (or reach the person lookup) on any other surface', async () => {
+    previewSurfaceProjection.mockResolvedValue({ ok: true, surfaceKey: 'enterprise' });
+    const res = await request(app).get(`${BASE}/${ID}/preview`).query({ surfaceKey: 'enterprise' })
+      .set('Authorization', `Bearer ${LEGACY_ADMIN}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body).not.toHaveProperty('linkedPerson');
+    expect(withLinkedPerson).not.toHaveBeenCalled();
+  });
+
+  it('a Hire module that fails to load costs the person line, never the detail (200, hirePerson null)', async () => {
+    withHirePerson.mockRejectedValueOnce(new Error('module failed to load'));
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const res = await request(app).get(`${BASE}/${ID}`).set('Authorization', `Bearer ${LEGACY_ADMIN}`);
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ ok: true, hirePerson: null });
+    expect(warn.mock.calls.some(([l]) => String(l).includes('case_study_hire_decorator_load_failed'))).toBe(true);
+    warn.mockRestore();
+  });
+
+  it('the record detail carries hirePerson', async () => {
+    const res = await request(app).get(`${BASE}/${ID}`).set('Authorization', `Bearer ${LEGACY_ADMIN}`);
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty('hirePerson', null);
+    expect(withHirePerson).toHaveBeenCalledWith(expect.anything(), ID);
   });
 });

@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Request an intro · Hire · Refactored.ai</title>
+  <meta name="robots" content="noindex, nofollow" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" />
+  <link rel="stylesheet" href="/assets/tokens.css" />
+  <link rel="stylesheet" href="/assets/hire.css" />
+  <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg" />
+</head>
+<body data-api="{{brand.platformApiBase}}" data-site="hire-refactored" data-view="intro">
+  <a class="skip" href="#main">Skip to content</a>
+  <header class="masthead">
+    <div class="wrap bar">
+      <a class="logo" href="/" aria-label="Hire · Refactored.ai home">
+        <svg class="mark" width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="2" y="3" width="20" height="18" rx="2" stroke="currentColor" stroke-width="2"/><path d="M6 9l3 3-3 3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M12.5 15h5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        Refactored<span class="faint">.ai</span><span class="sub">hire</span>
+      </a>
+    </div>
+  </header>
+
+  <main id="main" tabindex="-1">
+    <section class="block"><div class="wrap" style="max-width:640px">
+      <div class="label">Request an intro</div>
+      <h1 class="mono" style="margin:6px 0 12px">Talk to the engineer who shipped it.</h1>
+      <p class="muted" id="intro-sub">We'll pass your request to the Colaberry team, who make the introduction. Candidates' contact details are never shown here.</p>
+      <!-- WORKS WITHOUT JAVASCRIPT: a plain form POST to the API, which answers a form
+           submission with a 303 back to /intro/?sent=1 (or ?error=1). With JS, intro.js
+           sends the same fields as JSON and reports the outcome in place. -->
+      <form class="intro-form" id="intro-form" method="post" action="{{brand.platformApiBase}}/api/public/hire/intro" novalidate>
+        <input type="hidden" name="talentSlug" id="talentSlug" value="" />
+        <label for="in-name">Your name</label>
+        <input id="in-name" name="name" autocomplete="name" required maxlength="120" />
+        <label for="in-email">Company email</label>
+        <input id="in-email" name="email" type="email" autocomplete="email" required maxlength="254" />
+        <label for="in-company">Company</label>
+        <input id="in-company" name="company" autocomplete="organization" required maxlength="160" />
+        <label for="in-role">Role you're hiring for</label>
+        <input id="in-role" name="role" required maxlength="120" placeholder="Forward Deployed Engineer" />
+        <label for="in-message">What would they walk into?</label>
+        <textarea id="in-message" name="message" rows="4" maxlength="2000" placeholder="The problem, the stack, the timeline"></textarea>
+        <div class="acts"><button class="btn btn-primary" type="submit">Send request</button></div>
+        <p class="form-status" id="intro-status" role="status" aria-live="polite"></p>
+      </form>
+    </div></section>
+  </main>
+
+  <footer>
+    <div class="wrap">
+      <span>Refactored.ai · Hire: introductions are made by the Colaberry team.</span>
+    </div>
+  </footer>
+  <script src="/assets/common.js" defer></script>
+  <script src="/assets/intro.js" defer></script>
+  <script src="/assets/track-v2.js" data-site="{{brand.sourceSlug}}" data-api="{{brand.platformApiBase}}" defer></script>
+</body>
+</html>

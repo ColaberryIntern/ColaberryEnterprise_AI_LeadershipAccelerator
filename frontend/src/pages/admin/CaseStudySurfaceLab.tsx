@@ -2,16 +2,16 @@ import React from 'react';
 import { SectionCard, StatusBadge } from '../../components/admin/shell';
 import CaseStudySurfaceTabs from './CaseStudySurfaceTabs';
 import {
-  LIVE_SURFACE_KEY, SURFACE_LENS_TABS, bandSummary, canonicalFacts, draftState,
-  lensComposition, publicationState,
+  SURFACE_LENS_TABS, bandSummary, canonicalFacts, draftState,
+  lensComposition, liveSurfaceKeys, publicationState,
 } from './caseStudySurfaceLabModel';
 import type { CaseStudyDetail, CaseStudySurfaceKey, CaseStudySurfacePreview } from '../../services/caseStudyAdminTypes';
 
 /**
- * CaseStudySurfaceLab — the admin-only four-lens preview.
+ * CaseStudySurfaceLab — the admin-only five-lens preview.
  *
- * ONE RECORD, FOUR ORDERS. The tabs do not switch between four stories. They
- * switch between four orders over one snapshot, and the panel is laid out to
+ * ONE RECORD, FIVE ORDERS. The tabs do not switch between five stories. They
+ * switch between five orders over one snapshot, and the panel is laid out to
  * make that legible: the canonical facts are printed FIRST and are read off the
  * projection, so an operator watching them not move while the band list
  * reshuffles is watching the lens model hold.
@@ -70,10 +70,10 @@ export default function CaseStudySurfaceLab({
   return (
     <SectionCard
       title="Preview story as" icon="layout-grid-line" className="mb-4"
-      subtitle="Four audience lenses over one verified record. Switching a lens reads; it never writes, publishes or changes the record."
+      subtitle="Five audience lenses over one verified record. Switching a lens reads; it never writes, publishes or changes the record."
     >
       {/* The segmented control moved to `CaseStudySurfaceTabs` when PREVIEW
-          acquired one of its own. Two copies of four tabs would agree on the day
+          acquired one of its own. Two copies of five tabs would agree on the day
           they were written and diverge afterwards. */}
       <CaseStudySurfaceTabs
         activeSurface={activeSurface}
@@ -83,6 +83,7 @@ export default function CaseStudySurfaceLab({
         tablistTestId="cs-surface-lab-tablist"
         panelId="cs-lens-panel"
         ariaLabel="Surface lens"
+        liveSurfaces={liveSurfaceKeys(detail?.publications)}
       />
 
       {error && (
@@ -108,7 +109,7 @@ export default function CaseStudySurfaceLab({
             ))}
             <span className="d-block text-muted mt-1">
               Read from the snapshot, not the profile. These five values must be identical on all
-              four tabs; if a lens moves one of them, the lens has reached past framing into fact.
+              five tabs; if a lens moves one of them, the lens has reached past framing into fact.
             </span>
           </dd>
 
@@ -205,10 +206,8 @@ export default function CaseStudySurfaceLab({
             )}
 
             <p className="small text-muted mb-0" data-testid="cs-surface-lab-publish-note">
-              Publishing is not on this panel. It stays bound to the
-              {` ${LIVE_SURFACE_KEY} `}
-              surface in the Publish panel above, chosen explicitly, so exploring a lens can never
-              become publishing to one.
+              Publishing is not on this panel. It stays in the Publish panel, one row per site,
+              each chosen explicitly, so exploring a lens can never become publishing to one.
             </p>
           </>
         )}

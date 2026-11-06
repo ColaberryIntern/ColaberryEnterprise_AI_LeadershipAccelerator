@@ -21,7 +21,7 @@ export const WORKFLOW_ROLES = ['human', 'system', 'external', 'data'] as const;
 export const WORKFLOW_STATUSES = ['processing', 'resolved', 'attention', 'failure', 'unknown'] as const;
 export const WORKFLOW_LANES = ['primary', 'recovery', 'manual'] as const;
 export const CHART_KINDS = ['composition', 'comparison', 'share', 'two_value', 'zero_card'] as const;
-export const STORY_SURFACES = ['enterprise', 'training', 'ai-flotation', 'refactored'] as const;
+export const STORY_SURFACES = ['enterprise', 'training', 'ai-flotation', 'refactored', 'hire'] as const;
 export const PANEL_KEYS = ['before', 'after', 'single'] as const;
 
 export interface NodeRow {

@@ -10,6 +10,7 @@ import {
   handleGetMyPortfolioPreview,
 } from '../controllers/careerPortfolioPageController';
 import { handleListPostConsent, handleSetPostConsent } from '../controllers/postConsentController';
+import { handleGetMyHireSettings, handleSetMyAvailability } from '../controllers/hireListingController';
 
 /**
  * Living Career Portfolio — the private Career Studio at /portal/portfolio.
@@ -94,6 +95,23 @@ router.post(
   requireParticipant,
   requireContentEntitlement('portfolio'),
   handleRequestPortfolioPageReview,
+);
+
+// hire.refactored.ai: the learner's OWN availability, self-reported (Ali, H1.2). Same two
+// gates. It lists nobody: listing is the case-study gate, so this only changes what a
+// listed person's card says.
+router.get(
+  '/api/portal/career/portfolio-page/availability',
+  requireParticipant,
+  requireContentEntitlement('portfolio'),
+  handleGetMyHireSettings,
+);
+
+router.put(
+  '/api/portal/career/portfolio-page/availability',
+  requireParticipant,
+  requireContentEntitlement('portfolio'),
+  handleSetMyAvailability,
 );
 
 // ── Per-post consent to appear on a public page ────────────────────────────

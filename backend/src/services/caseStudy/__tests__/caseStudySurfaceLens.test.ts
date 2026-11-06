@@ -9,7 +9,7 @@ import { CASE_STUDY_SURFACE_KEYS } from '../../../types/caseStudy';
 import type { CaseStudySectionKey, CaseStudySurfaceKey } from '../../../types/caseStudy';
 
 /**
- * The four lenses, the attribution floor, and who may look at either.
+ * The five lenses, the attribution floor, and who may look at either.
  *
  * WHAT THIS SUITE IS FOR. Before 2026-08-26 `sectionOrder` and `hiddenSections`
  * were a mechanism that had never been given two different values: all four
@@ -30,7 +30,7 @@ const ORDERS = CASE_STUDY_SURFACE_KEYS.map((key) => ({
   key, order: getCaseStudySurfaceProfile(key).sectionOrder,
 }));
 
-describe('the four lenses are genuinely different', () => {
+describe('the five lenses are genuinely different', () => {
   it('gives no two surfaces the same section order', () => {
     // Pairwise, not "the set of distinct orders has size 4" — a Set of joined
     // strings would also pass if three of them were identical and one differed,
@@ -57,7 +57,13 @@ describe('the four lenses are genuinely different', () => {
     // a reader meets the choices before the detail, the person after the
     // evidence, and leaves on what the work shows. Each lens keeps its own
     // opening band; the three story keys keep their relative places.
-    ORDERS.forEach(({ key, order }) => {
+    //
+    // HIRE IS THE ONE DELIBERATE EXCEPTION, and it is a product decision, not a drift:
+    // hire.refactored.ai is PERSON-FIRST (PROMPT §1.3, Ali 2026-11-06) because its reader is
+    // an employer deciding about the builder, so the builder band leads. It is excluded here
+    // and held to its own, equally literal, order in the test below - so the storytelling
+    // rule stays exactly as strict for the four surfaces it was written for.
+    ORDERS.filter(({ key }) => key !== 'hire').forEach(({ key, order }) => {
       const at = (k: CaseStudySectionKey) => order.indexOf(k);
       expect(at('decisions')).toBeGreaterThan(0);
       expect(at('decisions')).toBeLessThan(at('measurement'));
@@ -85,6 +91,13 @@ describe('the four lenses are genuinely different', () => {
     });
   });
 
+  it('leads hire with the builder, then what they personally did, then the context', () => {
+    expect([...getCaseStudySurfaceProfile('hire').sectionOrder]).toEqual([
+      'hero', 'builder', 'contributors', 'build', 'measurement', 'artifacts',
+      'repositories', 'architecture', 'decisions', 'situation', 'roadmap', 'closing', 'cta',
+    ]);
+  });
+
   it('leads each lens with the band its reader arrived for', () => {
     // The one substantive claim about content: the band immediately after the
     // hero is the answer to that audience's question. Everything downstream of
@@ -95,6 +108,7 @@ describe('the four lenses are genuinely different', () => {
     expect(second('training')).toBe('situation');
     expect(second('ai-flotation')).toBe('architecture');
     expect(second('refactored')).toBe('build');
+    expect(second('hire')).toBe('builder');
     // Training's distinguishing move is contributors ahead of the build, which
     // is what makes it a learner's page rather than a buyer's.
     const training = getCaseStudySurfaceProfile('training').sectionOrder;
@@ -113,7 +127,7 @@ describe('the attribution floor', () => {
     });
   });
 
-  it('is identical on all four surfaces — a floor a surface sets for itself is not a floor', () => {
+  it('is identical on all five surfaces — a floor a surface sets for itself is not a floor', () => {
     const floors = CASE_STUDY_SURFACE_KEYS.map(
       (key) => [...getCaseStudySurfaceProfile(key).requiredSections].sort().join(','),
     );

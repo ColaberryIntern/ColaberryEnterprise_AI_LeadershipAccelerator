@@ -21,7 +21,7 @@ import { sequelize } from '../config/database';
 export interface CaseStudyPublicationAttributes {
   id?: string;
   case_study_id: string;
-  /** enterprise | training | ai-flotation | refactored */
+  /** enterprise | training | ai-flotation | refactored | hire */
   surface_key: string;
   /** draft | published | unpublished */
   status?: string;

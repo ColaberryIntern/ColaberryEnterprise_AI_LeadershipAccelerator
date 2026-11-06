@@ -19,6 +19,8 @@ import { sequelize } from '../../../config/database';
 import {
   resolveCaseStudyLinks,
   queryLinkedCaseStudyRows,
+  queryProjectIdsForCaseStudy,
+  CASE_STUDY_PROJECT_LINKS_SQL,
   caseStudyLinksForProjects,
   PORTFOLIO_CASE_STUDY_SURFACE,
   type CaseStudyLinkGate,
@@ -182,7 +184,8 @@ describe('queryLinkedCaseStudyRows - both routes to a case study survive', () =>
     await queryLinkedCaseStudyRows(['p1']);
     const sql = String(mockQuery.mock.calls[0][0]);
 
-    expect(sql).toContain('c.project_id = ANY($1::uuid[])');        // created from a project
+    expect(sql).toContain('c.project_id IS NOT NULL');              // created from a project
+    expect(sql).toContain('linked.project_id = ANY($1::uuid[])');   // filtered to these projects
     expect(sql).toContain('github_connections');                     // reached via its repo
     expect(sql).toContain('case_study_repositories');
     expect(sql).toContain('case_study_repo_collections');
@@ -210,6 +213,43 @@ describe('queryLinkedCaseStudyRows - both routes to a case study survive', () =>
   it('returns an empty list when the driver hands back something unexpected', async () => {
     mockQuery.mockResolvedValue([null]);
     expect(await queryLinkedCaseStudyRows(['p1'])).toEqual([]);
+  });
+});
+
+/*
+ * FORWARD AND REVERSE AGREE BY CONSTRUCTION. The listing (projects -> case studies) and the
+ * hire_no_linked_person publish rule (case study -> projects) must answer "does this case
+ * study belong to this project?" the same way, or a record can pass the gate on a link the
+ * directory never follows and go live listing nobody (a verifier caught exactly that on
+ * 2026-11-06). Both queries therefore select from ONE relation; these assert that they do,
+ * and pin what the relation is.
+ */
+describe('one relation, both directions', () => {
+  it('embeds the identical relation in the forward and the reverse query', async () => {
+    await queryLinkedCaseStudyRows(['p1']);
+    mockQuery.mockResolvedValueOnce([[{ project_id: 'p1' }]]);
+    await queryProjectIdsForCaseStudy('cs-1');
+    const forward = String(mockQuery.mock.calls[0][0]);
+    const reverse = String(mockQuery.mock.calls[1][0]);
+    expect(forward).toContain(CASE_STUDY_PROJECT_LINKS_SQL);
+    expect(reverse).toContain(CASE_STUDY_PROJECT_LINKS_SQL);
+  });
+
+  it('has exactly two routes: case_studies.project_id, and a repo matched through github_connections', () => {
+    const branches = CASE_STUDY_PROJECT_LINKS_SQL.split(/\bUNION\b/);
+    expect(branches).toHaveLength(2);
+    expect(branches[0]).toMatch(/FROM case_studies c\s+WHERE c\.project_id IS NOT NULL/);
+    expect(branches[1]).toMatch(/FROM github_connections g/);
+    // The disagreement the verifier found: a repository's own project_id is NOT a route.
+    expect(CASE_STUDY_PROJECT_LINKS_SQL).not.toMatch(/\br\.project_id\b/);
+  });
+
+  it('reads the reverse direction by case study id, bound, and returns sorted project ids only', async () => {
+    mockQuery.mockResolvedValueOnce([[{ project_id: 'p2' }, { project_id: null }, { nope: 1 }]]);
+    expect(await queryProjectIdsForCaseStudy('cs-1')).toEqual(['p2']);
+    const [sql, opts] = mockQuery.mock.calls[mockQuery.mock.calls.length - 1];
+    expect(String(sql)).toContain('linked.case_study_id = $1');
+    expect(opts).toEqual({ bind: ['cs-1'] });
   });
 });
 

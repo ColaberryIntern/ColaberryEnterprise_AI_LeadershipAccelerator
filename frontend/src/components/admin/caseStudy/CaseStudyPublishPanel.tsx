@@ -4,7 +4,8 @@ import { CASE_STUDY_CONTROLS, formatDate } from './caseStudyDesk';
 import CaseStudySurfacePublishRows from './CaseStudySurfacePublishRows';
 import type { CaseStudySurfaceKey } from '../../../config/caseStudySurfaces';
 import type {
-  CaseStudyPublicationSummary, CaseStudyPublishBlocker, CaseStudySnapshotSummary, CaseStudySummary,
+  CaseStudyHirePerson, CaseStudyPublicationSummary, CaseStudyPublishBlocker, CaseStudySnapshotSummary,
+  CaseStudySummary,
 } from '../../../services/caseStudyAdminTypes';
 
 /**
@@ -30,6 +31,8 @@ interface Props {
   latestSnapshot: CaseStudySnapshotSummary | null;
   approvedSnapshot: CaseStudySnapshotSummary | null;
   publications: readonly CaseStudyPublicationSummary[];
+  /** Who a Hire publication would list; see `CaseStudyDetail.hirePerson`. */
+  hirePerson?: CaseStudyHirePerson | null;
   /** Verbatim from the gate: a refused publish, or the preview's decision. */
   blockers: readonly CaseStudyPublishBlocker[];
   blockerSource: 'publish' | 'preview' | null;
@@ -41,7 +44,7 @@ interface Props {
 }
 
 export default function CaseStudyPublishPanel({
-  record, latestSnapshot, approvedSnapshot, publications, blockers, blockerSource,
+  record, latestSnapshot, approvedSnapshot, publications, hirePerson, blockers, blockerSource,
   busy, onApprove, onPublish, onUnpublish, onArchive,
 }: Props): React.ReactElement {
   const enterprise = publications.find((p) => p.surfaceKey === 'enterprise') ?? null;
@@ -123,6 +126,7 @@ export default function CaseStudyPublishPanel({
 
       <CaseStudySurfacePublishRows
         publications={publications}
+        hirePerson={hirePerson}
         busy={busy}
         onPublish={onPublish}
         onUnpublish={onUnpublish}

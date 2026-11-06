@@ -70,10 +70,48 @@ export const SURFACE_LENS_TABS: readonly SurfaceLensTab[] = Object.freeze([
     label: 'Refactored',
     readerQuestion: 'How was this build architected, governed and verified?',
   },
+  {
+    key: 'hire',
+    label: 'Hire',
+    readerQuestion: 'Should I hire the person who built this?',
+  },
 ] as SurfaceLensTab[]);
 
 /** The one surface that is live, and the only one an admin may publish to here. */
 export const LIVE_SURFACE_KEY: CaseStudySurfaceKey = 'enterprise';
+
+/** A publication row as far as the LIVE marker cares. Structural, so the API summary fits. */
+export interface LivePublicationFacts {
+  readonly surfaceKey: string;
+  readonly status: string;
+}
+
+/**
+ * The surfaces THIS record is live on: a publication row in `published` for a key the
+ * tabs know. Unknown keys are dropped rather than trusted, and a withdrawn row (any other
+ * status) does not count, so the marker can never claim a live page that is gone.
+ */
+export function liveSurfaceKeys(
+  publications: readonly LivePublicationFacts[] | null | undefined,
+): readonly CaseStudySurfaceKey[] {
+  const known = new Set<string>(SURFACE_LENS_TABS.map((t) => t.key));
+  const live = (publications ?? [])
+    .filter((p) => p.status === 'published' && known.has(p.surfaceKey))
+    .map((p) => p.surfaceKey as CaseStudySurfaceKey);
+  return Array.from(new Set(live));
+}
+
+/**
+ * Whether a tab carries the LIVE marker. Enterprise always does (it is the platform's own
+ * live surface, unchanged); any other surface does once this record is published there -
+ * which is how the Hire tab reads "LIVE" the moment a person is listed.
+ */
+export function isLiveTab(
+  key: CaseStudySurfaceKey,
+  liveSurfaces: readonly CaseStudySurfaceKey[] = [],
+): boolean {
+  return key === LIVE_SURFACE_KEY || liveSurfaces.includes(key);
+}
 
 /* -------------------------------------------------------- canonical truth --- */
 

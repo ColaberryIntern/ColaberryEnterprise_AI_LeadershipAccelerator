@@ -56,15 +56,24 @@ export async function gatherOptionalEvidence(args: {
   repoUrls: unknown[];
   query: RowQuery;
   now: Date;
+  /**
+   * The surface a project's case-study link must be published on. Default: the portfolio's
+   * own. `null` = resolve NO case-study links: the hire directory builds a card per listed
+   * person and never shows those links, so resolving them there was one
+   * loadPublishedRecordBySlug per linked row per person (an N+1 the hire spec forbids).
+   */
+  surfaceKey?: string | null;
 }): Promise<OptionalEvidence> {
-  const { enrollmentId, projects, repoUrls, query, now } = args;
+  const { enrollmentId, projects, repoUrls, query, now, surfaceKey } = args;
 
   let caseStudyByProject: Record<string, string> = {};
-  try {
-    // A case study that cannot be resolved costs its link, never the page.
-    caseStudyByProject = await caseStudyLinksForProjects(projects as any);
-  } catch (err: any) {
-    warn('public_portfolio_case_study_unavailable', err, enrollmentId, now);
+  if (surfaceKey !== null) {
+    try {
+      // A case study that cannot be resolved costs its link, never the page.
+      caseStudyByProject = await caseStudyLinksForProjects(projects as any, surfaceKey);
+    } catch (err: any) {
+      warn('public_portfolio_case_study_unavailable', err, enrollmentId, now);
+    }
   }
 
   let verifiedCommits: PublicVerifiedCommit[] = [];

@@ -1043,7 +1043,7 @@ describe('AC13 — surface control', () => {
     },
   );
 
-  it.each(['enterprise', 'ai-flotation', 'training'] as const)(
+  it.each(['enterprise', 'ai-flotation', 'training', 'hire'] as const)(
     'raises no surface blocker for "%s", which has a page to appear on', (surfaceKey) => {
       const decision = evaluate({ surfaceKey });
       expect(withCode(decision, 'surface_not_publishable')).toEqual([]);
@@ -1237,6 +1237,8 @@ describe('the refusal is actionable and complete', () => {
       // project_truth_has_open_questions — a story disagreed with the student
       // and nobody settled it.
       { foundation: { maturity: 'operational_result', openQuestions: 2 } },
+      // hire_no_linked_person — published to Hire, resolves to nobody (no `hire` fact).
+      { surfaceKey: 'hire' },
       // metric_collected_sha_mismatch — computed at a commit nobody is reading
       // about, under a command that therefore does not reproduce the number.
       {

@@ -79,6 +79,7 @@ import {
 } from './caseStudyPublicationStore';
 import type { CaseStudyPublishDecision, CaseStudyPublishSnapshot } from './caseStudyPublishGate';
 import type { CaseStudySurfaceKey } from '../../types/caseStudy';
+import { hireGateFacts } from '../career/caseStudyLinkedPerson';
 
 /** One import site for the gate and the store, so callers need one module. */
 export {
@@ -278,6 +279,7 @@ export async function evaluateCaseStudyPublication(
     caseStudy: toPublishRecord(record),
     snapshot: toPublishSnapshot(snapshot),
     foundation: await foundationFor(record),
+    hire: await hireGateFacts(record, data.surfaceKey),
   });
 }
 
@@ -306,6 +308,7 @@ export async function publishCaseStudy(
     caseStudy: toPublishRecord(record),
     snapshot,
     foundation: await foundationFor(record),
+    hire: await hireGateFacts(record, data.surfaceKey),
   });
   const base: PublicationLogContext = {
     case_study_id: data.caseStudyId,

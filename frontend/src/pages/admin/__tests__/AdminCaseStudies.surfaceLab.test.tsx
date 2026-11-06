@@ -81,11 +81,36 @@ const WRITE_CALLS = [
   'createCaseStudyFromProject', 'createCaseStudyFromRepositories',
 ] as const;
 
-describe('the segmented control is four discrete lenses', () => {
+describe('the LIVE marker on the lens tabs follows the record', () => {
+  it('marks Hire LIVE once this record is published there', async () => {
+    api.getCaseStudy.mockResolvedValue(F.detailFixture({
+      publications: [
+        { id: 'pub-1', surfaceKey: 'enterprise', status: 'published', publishedSnapshotId: 's', publishedAt: '2026-11-01T00:00:00.000Z', unpublishedAt: null },
+        { id: 'pub-2', surfaceKey: 'hire', status: 'published', publishedSnapshotId: 's', publishedAt: '2026-11-06T00:00:00.000Z', unpublishedAt: null },
+      ],
+    }));
+    await mountDetail();
+    expect(H.query('cs-lens-live-marker-hire')).not.toBeNull();
+    expect(H.query('cs-lens-live-marker')).not.toBeNull(); // enterprise, unchanged
+  });
+
+  it('does not mark Hire when the record has no published Hire row, or only a withdrawn one', async () => {
+    await mountDetail(); // the default fixture is published on enterprise only
+    expect(H.query('cs-lens-live-marker-hire')).toBeNull();
+    H.unmount();
+    api.getCaseStudy.mockResolvedValue(F.detailFixture({
+      publications: [{ id: 'pub-2', surfaceKey: 'hire', status: 'unpublished', publishedSnapshotId: null, publishedAt: null, unpublishedAt: '2026-11-06T00:00:00.000Z' }],
+    }));
+    await mountDetail();
+    expect(H.query('cs-lens-live-marker-hire')).toBeNull();
+  });
+});
+
+describe('the segmented control is five discrete lenses', () => {
   it('renders one tab per surface inside a real tablist', async () => {
     await mountDetail();
     expect(H.query('cs-surface-lab-tablist')).not.toBeNull();
-    ['enterprise', 'training', 'ai-flotation', 'refactored'].forEach((key) => {
+    ['enterprise', 'training', 'ai-flotation', 'refactored', 'hire'].forEach((key) => {
       const tab = H.el(`cs-lens-tab-${key}`);
       expect(tab.getAttribute('role')).toBe('tab');
       expect(tab.getAttribute('aria-controls')).toBe('cs-lens-panel');
@@ -207,7 +232,9 @@ describe('switching a lens creates nothing, publishes nothing, mutates nothing',
     await mountDetail();
     H.click('cs-lens-tab-training');
     await H.settle();
-    expect(H.el('cs-surface-lab-publish-note').textContent).toContain('enterprise');
+    // Publishing lives in the Publish panel, one explicit row per site (hire included),
+    // never on this panel.
+    expect(H.el('cs-surface-lab-publish-note').textContent).toContain('Publish panel, one row per site');
     expect(H.text()).toContain('never writes, publishes or changes the record');
   });
 });

@@ -42,6 +42,7 @@ import buildArtifactRoutes from './routes/buildArtifactRoutes';
 import buildLogDraftRoutes from './routes/buildLogDraftRoutes';
 import publicPortfolioRoutes from './routes/publicPortfolioRoutes';
 import publicCareerPortfolioRoutes from './routes/publicCareerPortfolioRoutes';
+import publicHireTalentRoutes from './routes/publicHireTalentRoutes';
 import { previewProxyMiddleware } from './middlewares/previewProxyMiddleware';
 import { startScheduler } from './services/schedulerService';
 import { startRepoTreeRefresh } from './services/repoTree/repoTreeRefreshService';
@@ -326,6 +327,7 @@ app.use(trackingRoutes);
 // MUST stay above adminRoutes: a public route mounted after it inherits the admin
 // auth guard and 401s for the strangers it exists to serve.
 app.use(publicCareerPortfolioRoutes);
+app.use(publicHireTalentRoutes); // hire.refactored.ai directory + intro (public, unauthenticated)
 app.use(publicCaseStudyRoutes);
 
 app.use(adminRoutes);

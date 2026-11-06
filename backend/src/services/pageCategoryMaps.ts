@@ -193,6 +193,17 @@ export const BRAND_PAGE_CATEGORIES: Record<string, BrandPageCategoryMap> = {
       // regardless of this category.
       '/contact': 'contact',
 
+      // --- hire.refactored.ai (apps/hire-refactored-public) ---------------
+      // Same brand, its own subdomain: the talent directory over verified builds. Its
+      // `/` is the directory and shares the `homepage` entry above. Each record is a
+      // single shell that reads the slug from the path, as AI Flotation's
+      // `/results/record` does, so one entry covers every person and every case study.
+      // A portfolio of verified commits is evidence of outcomes, so `case_studies`.
+      '/talent/record': 'case_studies',
+      '/case-studies/record': 'case_studies',
+      // Asking for an introduction to a builder: "a person will reply", like `/contact`.
+      '/intro': 'contact',
+
       // --- Retired portal, kept for historical events ---------------------
       // The three audience pages: what Refactored offered, and to whom.
       '/individuals': 'program',

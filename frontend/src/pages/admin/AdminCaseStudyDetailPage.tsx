@@ -11,6 +11,7 @@ import {
 } from '../../components/admin/caseStudy';
 import type { CaseStudyStudioTabKey } from '../../components/admin/caseStudy';
 import CaseStudyRenderedPreview from './CaseStudyRenderedPreview';
+import { liveSurfaceKeys } from './caseStudySurfaceLabModel';
 import CaseStudySurfaceLab from './CaseStudySurfaceLab';
 import { PUBLISH_SURFACE, useCaseStudyDesk } from './useCaseStudyDesk';
 import { useCaseStudyPreviewLens } from './useCaseStudyPreviewLens';
@@ -361,6 +362,7 @@ function AdminCaseStudyDetailPage(): React.ReactElement {
                rather than appear for anyone who merely opened the tab. */
             payloadOpen={desk.rawPanelOpen}
             onTogglePayload={desk.setRawPanelOpen}
+            liveSurfaces={liveSurfaceKeys(detail.publications)}
           />
         ) : null}
 
@@ -375,6 +377,7 @@ function AdminCaseStudyDetailPage(): React.ReactElement {
               latestSnapshot={detail.latestSnapshot}
               approvedSnapshot={detail.approvedSnapshot}
               publications={detail.publications}
+              hirePerson={detail.hirePerson}
               blockers={desk.blockers}
               blockerSource={desk.blockerSource}
               busy={busy}

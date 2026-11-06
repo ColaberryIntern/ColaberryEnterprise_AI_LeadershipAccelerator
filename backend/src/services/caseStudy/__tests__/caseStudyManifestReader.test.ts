@@ -470,8 +470,16 @@ describe('no network capability', () => {
     expect(MODULE_SOURCE).not.toMatch(/\bimport\s*\(/);
   });
 
-  it('the one internal module it imports is itself a leaf that imports nothing', () => {
-    expect(fs.readFileSync(TYPES_PATH, 'utf8')).not.toMatch(/^\s*import\s/m);
+  it('the one internal module it imports is a leaf whose only import is a leaf that imports nothing', () => {
+    // caseStudy.ts re-exports the surface vocabulary from caseStudySurfaceKeys.ts (split
+    // 2026-11-06). The closure, not the single file, is what must stay free of I/O.
+    const types = fs.readFileSync(TYPES_PATH, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+    const specifiers = [...types.matchAll(/from\s+'([^']+)'/g)].map((m) => m[1]);
+    expect(new Set(specifiers)).toEqual(new Set(['./caseStudySurfaceKeys']));
+    const leaf = fs.readFileSync(path.join(path.dirname(TYPES_PATH), 'caseStudySurfaceKeys.ts'), 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, '');
+    expect(leaf).not.toMatch(/^\s*import\s/m);
+    expect(leaf).not.toMatch(/from\s+'/);
   });
 
   it('names no network client, model, database or analyzer in executable code', () => {

@@ -104,33 +104,68 @@ export async function resolveCaseStudyLinks(
 }
 
 /**
- * The union query: every case study reachable from these projects, by either route.
+ * THE ONE DEFINITION of "this case study belongs to this project", as a SQL relation of
+ * `(project_id, case_study_id, slug)`. Two routes, exactly:
+ *   1. `case_studies.project_id` - the record was created from the project;
+ *   2. a repository the record cites matches a `github_connections` row (owner + name,
+ *      case-insensitively) and that row names the project.
  *
- * Returns CANDIDATES, not permissions - `archived_at IS NULL` is a cheap way to avoid
- * loading rows the gate would refuse anyway, and is not itself the visibility rule.
+ * BOTH DIRECTIONS READ THIS STRING. The forward query (a person's projects -> their case
+ * studies, which decides who is LISTED on hire.refactored.ai and which portfolio cards
+ * link) and the reverse query (a case study -> its projects, which the
+ * `hire_no_linked_person` publish rule uses) select from this same relation. Before
+ * 2026-11-06 the reverse direction used a different resolver that also counted
+ * `case_study_repositories.project_id`, so a record could pass the publish gate on a link
+ * the listing would never follow and go live listing nobody. One relation makes the two
+ * agree by construction.
+ *
+ * `archived_at IS NULL` keeps out rows the gate would refuse anyway; it is not itself the
+ * visibility rule.
  */
-export async function queryLinkedCaseStudyRows(
-  projectIds: readonly string[],
-): Promise<LinkedCaseStudyRow[]> {
-  if (!projectIds.length) return [];
-  const [rows]: any = await sequelize.query(
-    `SELECT DISTINCT project_id, slug FROM (
-       SELECT c.project_id, c.slug
+export const CASE_STUDY_PROJECT_LINKS_SQL = `
+       SELECT c.project_id, c.id AS case_study_id, c.slug
          FROM case_studies c
-        WHERE c.project_id = ANY($1::uuid[]) AND c.archived_at IS NULL
+        WHERE c.project_id IS NOT NULL AND c.archived_at IS NULL
        UNION
-       SELECT g.project_id, c.slug
+       SELECT g.project_id, c.id AS case_study_id, c.slug
          FROM github_connections g
          JOIN case_study_repositories r
            ON lower(r.repo_owner) = lower(g.repo_owner)
           AND lower(r.repo_name)  = lower(g.repo_name)
          JOIN case_study_repo_collections col ON col.id = r.collection_id
          JOIN case_studies c ON c.id = col.case_study_id
-        WHERE g.project_id = ANY($1::uuid[]) AND c.archived_at IS NULL
-     ) linked`,
+        WHERE g.project_id IS NOT NULL AND c.archived_at IS NULL`;
+
+/**
+ * Forward: every case study reachable from these projects. Returns CANDIDATES, not
+ * permissions - the gate decides what may be shown.
+ */
+export async function queryLinkedCaseStudyRows(
+  projectIds: readonly string[],
+): Promise<LinkedCaseStudyRow[]> {
+  if (!projectIds.length) return [];
+  const [rows] = await sequelize.query(
+    `SELECT DISTINCT project_id, slug FROM (${CASE_STUDY_PROJECT_LINKS_SQL}
+     ) linked
+     WHERE linked.project_id = ANY($1::uuid[])`,
     { bind: [projectIds as string[]] },
   );
-  return Array.isArray(rows) ? rows : [];
+  // Raw query output, typed at the call site (CLAUDE.md: raw SQL results are typed where read).
+  return Array.isArray(rows) ? (rows as LinkedCaseStudyRow[]) : [];
+}
+
+/** Reverse: the projects this case study belongs to, by the same relation. Sorted. */
+export async function queryProjectIdsForCaseStudy(caseStudyId: string): Promise<string[]> {
+  const [rows] = await sequelize.query(
+    `SELECT DISTINCT project_id FROM (${CASE_STUDY_PROJECT_LINKS_SQL}
+     ) linked
+     WHERE linked.case_study_id = $1
+     ORDER BY project_id`,
+    { bind: [caseStudyId] },
+  );
+  return (Array.isArray(rows) ? (rows as { project_id?: unknown }[]) : [])
+    .map((r) => (typeof r?.project_id === 'string' ? r.project_id : ''))
+    .filter(Boolean);
 }
 
 /**

@@ -3,8 +3,10 @@ import { SectionCard, StatusBadge } from '../../components/admin/shell';
 import { CaseStudyPreviewPanel } from '../../components/admin/caseStudy';
 import StoryDetailArticle from '../publicV2/StoryDetailArticle';
 import CaseStudySurfaceTabs from './CaseStudySurfaceTabs';
+import HirePersonFirstPreview from './HirePersonFirstPreview';
 import { SURFACE_LENS_TABS } from './caseStudySurfaceLabModel';
 import type { CaseStudyPreviewLens } from './useCaseStudyPreviewLens';
+import type { CaseStudySurfaceKey } from '../../services/caseStudyAdminTypes';
 import './caseStudyRenderedPreview.css';
 
 /**
@@ -61,6 +63,8 @@ export interface CaseStudyRenderedPreviewProps {
   /** Whether the JSON payload panel is open. Held by the page, so it survives a tab change. */
   payloadOpen: boolean;
   onTogglePayload: (open: boolean) => void;
+  /** Surfaces this record is published on, for the tabs' LIVE marker. */
+  liveSurfaces?: readonly CaseStudySurfaceKey[];
 }
 
 /** What the operator is looking at, in the record's own words. */
@@ -71,7 +75,7 @@ function sourceLabel(source: 'approved_snapshot' | 'latest_draft' | 'none'): str
 }
 
 export default function CaseStudyRenderedPreview({
-  lens, payloadOpen, onTogglePayload,
+  lens, payloadOpen, onTogglePayload, liveSurfaces = [],
 }: CaseStudyRenderedPreviewProps): React.ReactElement {
   const { surface, preview, loading, error } = lens;
   const activeTab = SURFACE_LENS_TABS.find((t) => t.key === surface) ?? SURFACE_LENS_TABS[0];
@@ -107,6 +111,7 @@ export default function CaseStudyRenderedPreview({
           tablistTestId="cs-preview-surface-tablist"
           panelId="cs-preview-render-panel"
           ariaLabel="Preview surface"
+          liveSurfaces={liveSurfaces}
         />
 
         {error && (
@@ -158,7 +163,11 @@ export default function CaseStudyRenderedPreview({
             /* THE FRAME. See `caseStudyRenderedPreview.css` for why this is a
                container and not an iframe. */
             <div className="cs-story-preview" data-testid="cs-preview-render-frame">
-              <StoryDetailArticle record={projection} surface={surfaceView} />
+              {/* HIRE is person-first: the builder band and proof ledger lead, then the
+                  same article in HIRE_ORDER. Every other lens renders as before. */}
+              {surface === 'hire'
+                ? <HirePersonFirstPreview person={preview?.linkedPerson ?? null} projection={projection} surface={surfaceView} />
+                : <StoryDetailArticle record={projection} surface={surfaceView} />}
             </div>
           )}
         </div>

@@ -30,7 +30,7 @@ const COMPONENT_DIR = path.join(__dirname, '..');
 const SERVICES_DIR = path.join(__dirname, '..', '..', '..', 'services');
 const CONFIG_FILE = path.join(__dirname, '..', '..', '..', 'config', 'caseStudySurfaces.ts');
 
-const SURFACE_WORDS = ['enterprise', 'training', 'ai-flotation', 'refactored'] as const;
+const SURFACE_WORDS = ['enterprise', 'training', 'ai-flotation', 'refactored', 'hire'] as const;
 
 interface Scanned {
   readonly label: string;
@@ -80,9 +80,9 @@ describe('the config file is where the surface names live', () => {
     expect(config.toLowerCase()).toContain(word);
   });
 
-  it('exposes all four keys through the vocabulary export', () => {
+  it('exposes all five keys through the vocabulary export', () => {
     expect([...CASE_STUDY_SURFACE_KEYS].sort()).toEqual(
-      ['ai-flotation', 'enterprise', 'refactored', 'training'],
+      ['ai-flotation', 'enterprise', 'hire', 'refactored', 'training'],
     );
   });
 

@@ -19,6 +19,7 @@
  * LEAF: type-only imports plus one runtime guard from `caseStudyGuards`.
  */
 import { isPublishableSurfaceKey } from '../../types/caseStudyGuards';
+import { PUBLISHABLE_SURFACE_KEYS } from '../../types/caseStudy';
 import type {
   CaseStudyArtifactRef,
   CaseStudyContributor,
@@ -410,7 +411,7 @@ export const CASE_STUDY_READINESS_CHECKS: readonly ReadinessCheck[] = [
   { key: 'publication.surface_publishable', category: 'publication', points: 1,
     score: (c) => (declaredSurfaces(c.input).some(isPublishableSurfaceKey) ? 1 : 0),
     detail: 'the declared surface has no page to appear on',
-    remedy: 'target a surface that is published: enterprise, or ai-flotation' },
+    remedy: `target a surface that is published: ${PUBLISHABLE_SURFACE_KEYS.join(', ')}` },
   { key: 'publication.snapshot_approved', category: 'publication', points: 1,
     score: (c) => (c.input.snapshotStatus === 'approved' ? 1 : 0),
     detail: 'no approved snapshot exists',
