@@ -12,7 +12,7 @@ import type { CheckRunResult } from './proposalReviewTypes';
 import type { Grounding } from './proposalGrounding';
 import type { ReviseResult } from './reviseProposalDocumentAI';
 
-export type ReviewCycleStop = 'passed' | 'open_questions' | 'revise_failed' | 'max_iterations' | 'no_document';
+export type ReviewCycleStop = 'passed' | 'open_questions' | 'revise_failed' | 'max_iterations' | 'no_document' | 'build_failed';
 
 export interface ReviewCycleResult {
   iterations: number;
@@ -22,6 +22,9 @@ export interface ReviewCycleResult {
 
 export interface ReviewCycleDeps {
   loadContent: () => Promise<string | null>;        // current document HTML, or null if the document has no draft
+  /** v3 T06: build the FIRST draft (outline → section drafts → assemble → save) when the document has none. Returns
+   *  the assembled HTML, or null if the build failed. Absent ⇒ the legacy `no_document` stop (older callers). */
+  createDraft?: () => Promise<string | null>;
   runChecks: () => Promise<CheckRunResult | null>;  // score the current version
   gatherGrounding: () => Promise<Grounding>;        // the agent's only facts
   revise: (html: string, findings: CheckRunResult['findings'], g: Grounding) => Promise<ReviseResult>;
@@ -33,7 +36,17 @@ export interface ReviewCycleDeps {
 export async function reviewCycleCore(deps: ReviewCycleDeps, opts?: { maxIterations?: number }): Promise<ReviewCycleResult> {
   const max = Math.max(1, Math.min(10, opts?.maxIterations ?? 3));
   let currentHtml = await deps.loadContent();
-  if (currentHtml === null) return { iterations: 0, stoppedBecause: 'no_document', finalPasses: false };
+  if (currentHtml === null) {
+    // v3 T06: no draft yet — the agent BUILDS one from the outline instead of dead-ending. The create-path drafts
+    // the sections, assembles them, and saves the first version; the loop below then judges + revises it like any
+    // other draft. A caller that did not inject a create-path keeps the old `no_document` behavior.
+    if (!deps.createDraft) return { iterations: 0, stoppedBecause: 'no_document', finalPasses: false };
+    deps.log({ event: 'review_cycle_build', step: 'outlining' });
+    const built = await deps.createDraft();
+    if (!built) { deps.log({ event: 'review_cycle_build', step: 'build_failed' }); return { iterations: 0, stoppedBecause: 'build_failed', finalPasses: false }; }
+    deps.log({ event: 'review_cycle_build', step: 'built' });
+    currentHtml = built;
+  }
 
   for (let i = 1; i <= max; i++) {
     const checks = await deps.runChecks();
@@ -65,6 +78,7 @@ const RUN_STATUS_FOR_STOP: Record<ReviewCycleStop, 'passed' | 'blocked' | 'faile
   revise_failed: 'failed',
   max_iterations: 'done',
   no_document: 'failed',
+  build_failed: 'failed',      // v3 T06: the create-path could not draft any section (e.g. no API key)
 };
 
 /** Wire the real services for a project/document and run the cycle. Fire this fail-soft from a route (kick off,
@@ -92,23 +106,41 @@ export async function runReviewCycle(deliveryProjectId: string, docKey: string, 
     }
   }
 
+  // The grounding loader, shared by the create-path (T06) and the revise loop so both draft/revise against the same
+  // facts. Best-effort: a missing blueprint/facts still yields a grounding that instructs a [PLACEHOLDER], never an
+  // invention.
+  async function gather(): Promise<Grounding> {
+    const d = await docOf();
+    let blueprint: any = null; let facts: string[] = [];
+    try { const { default: GovProposalBlueprint } = await import('../../../models/GovProposalBlueprint'); const bp: any = await GovProposalBlueprint.findOne({ where: { delivery_project_id: deliveryProjectId }, order: [['version', 'DESC']] }); blueprint = bp ? bp.blueprint_json : null; } catch { /* best-effort */ }
+    try {
+      const { default: GovQualification } = await import('../../../models/GovQualification');
+      const q: any = await GovQualification.findOne({ where: { delivery_project_id: deliveryProjectId }, order: [['version', 'DESC']] });
+      if (q?.tenant_id) { const { approvedGroundingFacts } = await import('./govCompanyLibrary'); facts = await approvedGroundingFacts(q.tenant_id); }
+    } catch { /* best-effort; grounding without facts still instructs a [PLACEHOLDER], never an invention */ }
+    return buildGrounding({ blueprint, document: { title: d?.title ?? docKey, requirements: (d?.requirementIds ?? []).map((id) => ({ canonicalReqId: id, statement: id })), sections: d?.sections ?? [] }, approvedFacts: facts });
+  }
+
   const deps: ReviewCycleDeps = {
-    loadContent: async () => { const d = await docOf(); return d ? (d.contentHtml ?? '') : null; },
-    runChecks: () => runProposalDocumentChecks(deliveryProjectId, docKey),
-    gatherGrounding: async () => {
+    loadContent: async () => { const d = await docOf(); return d ? (d.contentHtml || null) : null; },
+    // T06 create-path: outline → grounded section drafts → assemble → save the first version. The grounding is the
+    // same `gather()` the revise loop uses; progress (outlining / drafting k/n) is mirrored onto the run row.
+    createDraft: async () => {
       const d = await docOf();
-      // Grounding inputs that are cheap + safe to assemble here; the blueprint/facts loaders are best-effort.
-      let blueprint: any = null; let facts: string[] = [];
-      try { const { default: GovProposalBlueprint } = await import('../../../models/GovProposalBlueprint'); const bp: any = await GovProposalBlueprint.findOne({ where: { delivery_project_id: deliveryProjectId }, order: [['version', 'DESC']] }); blueprint = bp ? bp.blueprint_json : null; } catch { /* best-effort */ }
-      // Approved company-library facts (the "ask once" rail): resolve the tenant from the qualification, then pull
-      // only approved facts so the next cycle actually uses what a human answered (PROMPT end-to-end acceptance #4).
-      try {
-        const { default: GovQualification } = await import('../../../models/GovQualification');
-        const q: any = await GovQualification.findOne({ where: { delivery_project_id: deliveryProjectId }, order: [['version', 'DESC']] });
-        if (q?.tenant_id) { const { approvedGroundingFacts } = await import('./govCompanyLibrary'); facts = await approvedGroundingFacts(q.tenant_id); }
-      } catch { /* best-effort; grounding without facts still instructs a [PLACEHOLDER], never an invention */ }
-      return buildGrounding({ blueprint, document: { title: d?.title ?? docKey, requirements: (d?.requirementIds ?? []).map((id) => ({ canonicalReqId: id, statement: id })), sections: d?.sections ?? [] }, approvedFacts: facts });
+      if (!d) return null;
+      const { createFirstProposalDraft } = await import('./createProposalDraft');
+      const { draftProposalSectionAI } = await import('./sectionDrafting');
+      const g = await gather();
+      return createFirstProposalDraft({
+        doc: { docKey, title: d.title ?? docKey, requirementIds: d.requirementIds ?? [], sections: (d.sections ?? []).map((s) => ({ sectionKey: s.sectionKey, heading: s.heading, requirementIds: s.requirementIds ?? [], order: s.order, plan: s.plan })), pageLimit: d.pageLimit ?? null },
+        grounding: g,
+        draftSection: async (section) => { const r = await draftProposalSectionAI({ docKey, docTitle: d.title ?? docKey, section, grounding: g }); return { html: r.html, gaps: r.gaps, error: r.error }; },
+        saveDraft: async (html) => { await draftProposalDocument({ deliveryProjectId, docKey, identityId: opts?.identityId ?? null, canVerify: true, manualHtml: html }); },
+        onProgress: (msg) => { if (runId) void updateRun(runId, { lastMessage: msg }).catch(() => undefined); },
+      });
     },
+    runChecks: () => runProposalDocumentChecks(deliveryProjectId, docKey),
+    gatherGrounding: gather,
     revise: (html, findings, g) => reviseDocument(html, findings, g),
     saveVersion: async (html) => { await draftProposalDocument({ deliveryProjectId, docKey, identityId: opts?.identityId ?? null, canVerify: true, manualHtml: html }); },
     persistGaps: async (gaps) => {
