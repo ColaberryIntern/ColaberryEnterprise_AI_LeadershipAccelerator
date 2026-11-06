@@ -93,7 +93,11 @@ function PortalLoginPage() {
 
       <header className="cbpl-header">
         <a className="cbpl-brand" href="https://colaberry.com">
-          <img src="/colaberry-icon.png" alt="Colaberry" className="cbpl-mark" />
+          {/* THE FULL LOCKUP, not the bare mark. `colaberry-icon.png` is the glyph on its
+              own, which left the first screen a learner sees carrying an unlabelled bike
+              where Aleem's design has the wordmark. Caught by looking at the deployed
+              page rather than in the diff. */}
+          <img src="/colaberry-logo-transparent.png" alt="Colaberry" className="cbpl-mark" />
           <span className="cbpl-rule" aria-hidden="true" />
           <span className="cbpl-brandtext">
             Enterprise AI Leadership
