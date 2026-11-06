@@ -34,7 +34,7 @@
  * the next ticket's work, named in the run handoff rather than left to be discovered.
  */
 import type {
-  FactoryProject, FactoryTask, AgentTeam, Surface, AllocationRow,
+  FactoryProject, AgentTeam, Surface, AllocationRow, Assignment,
 } from './contracts/factoryContract';
 import {
   validateStoryContract, findDeliveryTraceabilityGaps,
@@ -45,8 +45,12 @@ import {
   evaluateReleaseGate, assertDeploymentAuthorized,
   type ReleaseGateResult, type DeploymentAuthorizationRefusal,
 } from '../delivery/releaseGate';
+import { sourceBlockIdFor } from './factoryDecomposeInput';
+// `riskLevelFor` lived here until 2026-11-06 and moved to `factoryTaskRisk` when the upstream
+// gate (`factoryValidate`) needed the same thresholds. See that module's header: the validator
+// cannot import this one, because this one depends on the delivery layer.
+import { riskLevelFor } from './factoryTaskRisk';
 import type { ReleaseCheckResult } from '../../modules/delivery/releaseChecks';
-import type { DeliveryRiskLevel } from '../../modules/delivery/deliveryRiskLevels';
 import type { DeliveryEvidenceType } from '../../modules/delivery/deliveryEvidence';
 
 /** A gap the bridge could not fill from the decomposition. Reported, never guessed. */
@@ -72,8 +76,12 @@ export interface BridgeResult {
 }
 
 export interface BridgeInput {
+  // `assignments` was added 2026-11-06 so a human task's approval policy can be DERIVED from a
+  // named approver rather than defaulted. Without it this function could only ever return null
+  // for human work, which made every high-risk human story fail its own contract.
   project: Pick<FactoryProject,
-    'delivery_project_id' | 'tasks' | 'allocation' | 'requirements' | 'agent_teams' | 'surfaces'>;
+    'delivery_project_id' | 'tasks' | 'allocation' | 'requirements' | 'agent_teams' | 'surfaces'
+    | 'assignments'>;
   /** Release profile. Pinned by the caller; `mandatoryChecksFor` silently widens an unknown key. */
   profileKey: string;
   /** Check results from the pipeline. The bridge NEVER manufactures these. */
@@ -91,26 +99,6 @@ export interface BridgeInput {
 }
 
 const AI_CLASSES: readonly AllocationRow['execution_class'][] = ['ai_with_approval', 'ai_autonomous'];
-
-/**
- * Story risk, from what the task itself records.
- *
- * The table rather than a judgement call, so two runs over the same decomposition agree:
- *   regulated or confidential data, or decide_full authority  -> R4
- *   decide_bounded authority                                  -> R3
- *   recommend authority, or internal data                     -> R2
- *   anything else                                             -> R1
- * R0 is never assigned: a task that exists in a contract decomposition is not risk-free, and
- * R5 is never assigned, because nothing in a task record justifies the top of the scale.
- */
-export function riskLevelFor(task: FactoryTask): DeliveryRiskLevel {
-  const sensitivity = task.data_sensitivity;
-  const authority = task.decision_authority;
-  if (sensitivity === 'regulated' || sensitivity === 'confidential' || authority === 'decide_full') return 'R4';
-  if (authority === 'decide_bounded') return 'R3';
-  if (authority === 'recommend' || sensitivity === 'internal') return 'R2';
-  return 'R1';
-}
 
 /**
  * Evidence a story must produce, from the existing `DeliveryEvidenceType` vocabulary.
@@ -131,6 +119,17 @@ export function evidenceFor(executionClass: AllocationRow['execution_class'] | u
 function policiesFor(
   cls: AllocationRow['execution_class'] | undefined,
   team: AgentTeam | undefined,
+  /**
+   * The task's own APPROVER / ACCOUNTABLE assignments, if the decomposition states any.
+   *
+   * ADDED 2026-11-06. The previous version took only the class and the team, and its comment
+   * said approvalPolicy stays null for human work "because nothing in the decomposition states
+   * who reviews a human's work, and `internal_review` would be a guess wearing a policy's name".
+   * The second half of that is still exactly right and is why nothing is defaulted here. The
+   * first half was only true because this function was never shown the assignments - the
+   * decomposition CAN state an approver, as it already does for agent work.
+   */
+  approvers: readonly Assignment[],
 ): { executionPolicy: ExecutionPolicy | null; approvalPolicy: ApprovalPolicy | null } {
   // An AI task's policies are the OWNING TEAM's policies. That is the point of a team: the
   // governance is declared once, for a subject, rather than per task.
@@ -138,10 +137,19 @@ function policiesFor(
     if (!team) return { executionPolicy: null, approvalPolicy: null };
     return { executionPolicy: team.execution_policy, approvalPolicy: team.approval_policy };
   }
-  // Human work is manual_only by derivation, not by assumption: no agent performs it.
-  // approvalPolicy stays null because nothing in the decomposition states who reviews a human's
-  // work, and `internal_review` would be a guess wearing a policy's name.
-  if (cls === 'human') return { executionPolicy: 'manual_only', approvalPolicy: null };
+  if (cls === 'human') {
+    // Human work is manual_only by derivation, not by assumption: no agent performs it.
+    //
+    // The approval policy is DERIVED FROM A NAMED APPROVER or it stays null. A task whose
+    // approver is a person gets `internal_review` because a person reviewing it is what that
+    // policy means; a task with nobody named keeps `null`, and the story contract's
+    // `high_risk_story_without_approval` then fires on it. That finding is the correct outcome:
+    // on 6 Nov all four R4 tasks on Herriman - the bid bond, the financial statements, the legal
+    // documents and the insurance verification - had NO approver at all, and the honest answer
+    // is to say so rather than to invent one so the gate turns green.
+    const human = approvers.find((a) => a.executor?.type !== 'agent');
+    return { executionPolicy: 'manual_only', approvalPolicy: human ? 'internal_review' : null };
+  }
   return { executionPolicy: null, approvalPolicy: null };
 }
 
@@ -162,7 +170,28 @@ export function buildDeliveryStories(input: BridgeInput): {
     for (const id of s.task_ids) if (!surfaceOf.has(id)) surfaceOf.set(id, s);
   }
 
-  const map = input.blockToRequirement;
+  /**
+   * The block-to-requirement map, DERIVED when the caller does not supply one.
+   *
+   * This used to be caller-only, on the stated grounds that "ContractRequirement carries no block
+   * back-reference, so there is no way to derive this from the project record". That was wrong,
+   * and the cost of it was large: on 6 Nov Herriman reported all 51 of its must-requirements as
+   * unfulfilled - not because no story covered them, but because the stories cite `blk-REQ-011`
+   * while the requirements are known by UUID. One cause, reported 51 times, in the direction that
+   * makes a complete decomposition look like it covers nothing.
+   *
+   * `canonical_req_id` IS the back-reference: block ids are minted from it by
+   * `sourceBlockIdFor`, which both sides now share so the convention cannot drift.
+   *
+   * An explicitly supplied map still wins - this only fills the gap, and a citation that still
+   * resolves to nothing is still reported.
+   */
+  const derivedMap: Record<string, string> = {};
+  for (const r of project.requirements) {
+    const canonical = (r as { canonical_req_id?: string }).canonical_req_id;
+    if (canonical) derivedMap[sourceBlockIdFor(canonical)] = r.id;
+  }
+  const map = input.blockToRequirement ?? (Object.keys(derivedMap).length ? derivedMap : undefined);
   let unmappedCited = 0;
 
   const stories: DeliveryStoryContract[] = [];
@@ -195,7 +224,11 @@ export function buildDeliveryStories(input: BridgeInput): {
       return mapped ?? id;
     });
 
-    const { executionPolicy, approvalPolicy } = policiesFor(cls, team);
+    const taskApprovers = (input.project.assignments ?? []).filter(
+      (a) => a.task_id === task.id
+        && (a.responsibility === 'APPROVER' || a.responsibility === 'ACCOUNTABLE'),
+    );
+    const { executionPolicy, approvalPolicy } = policiesFor(cls, team, taskApprovers);
 
     stories.push({
       storyId: `story-${task.id}`,
@@ -220,12 +253,24 @@ export function buildDeliveryStories(input: BridgeInput): {
     });
   }
 
-  if (map === undefined && unmappedCited > 0) {
+  /**
+   * Reported whenever a citation DID NOT RESOLVE - not, as before, whenever no map was supplied.
+   *
+   * That older condition was correct only while the map was always caller-supplied. Now that one
+   * is derived, `map === undefined` is almost never true, so keeping the old test would have
+   * silenced this rule entirely: a citation pointing at a block with no matching requirement
+   * would resolve to the raw block id and pass unreported. Fixing a rule that fired 51 times for
+   * one reason, by making it fire zero times for any reason, is not a fix.
+   */
+  if (unmappedCited > 0) {
+    const source = input.blockToRequirement !== undefined
+      ? 'the supplied block-to-requirement map'
+      : (map !== undefined ? 'the map derived from canonical_req_id' : 'no map at all');
     gaps.push({
       rule: 'REQUIREMENT_LINK_UNAVAILABLE',
       ref: project.delivery_project_id,
-      detail: `No block-to-requirement map was supplied, so ${unmappedCited} citation(s) trace to SOURCE BLOCK ids rather than canonical requirement ids. `
-        + 'Block ids are not requirement ids; traceability against must-requirements will report gaps until the map is provided.',
+      detail: `${unmappedCited} citation(s) did not resolve against ${source}, so they trace to SOURCE BLOCK ids rather than requirement ids. `
+        + 'Block ids are not requirement ids; traceability against must-requirements will under-report coverage for those citations.',
     });
   }
 

@@ -7,6 +7,7 @@
 import type { FactoryProject, FactoryTask } from './contracts/factoryContract';
 import { evaluateHumanAiStructure, type StructureFinding } from './humanAiStructure';
 import { evaluatePerspective } from './factoryPerspective';
+import { requiresNamedApprover, riskLevelFor } from './factoryTaskRisk';
 
 export type Severity = 'error' | 'warning';
 export interface ValidationIssue {
@@ -89,6 +90,49 @@ export function factoryValidate(project: FactoryProject): ValidationIssue[] {
           && (a.responsibility === 'ACCOUNTABLE' || a.responsibility === 'APPROVER'),
       );
       if (!humanOversight) issues.push(err('OVERSIGHT', `task ${t.id} has an agent performer but no human ACCOUNTABLE/APPROVER`, t.id));
+    }
+  }
+
+  // HIGH_RISK_APPROVAL — risk R3 and up should name a human approver, WHOEVER performs the work.
+  //
+  // OVERSIGHT above keys on the performer being an agent, and that gap is not theoretical: on
+  // 6 Nov the Herriman decomposition left the bid bond, the financial statements, the legal
+  // documents and the insurance verification - every one R4, every one human-performed - with
+  // nobody named to approve them. Those are exactly the documents a person signs.
+  // `deliveryStoryContract` rejects every one of them downstream as
+  // `high_risk_story_without_approval`, so this is not a new standard, only an earlier reading
+  // of the existing one.
+  //
+  // A WARNING, NOT AN ERROR, AND THE REASON IS MEASURED. Shipped as an error it newly failed 27
+  // tests across 8 suites: the lifecycle generation corpus asserts that fixtures A, B and C
+  // compose with ZERO refusals, and each of them carries 8 high-risk tasks with no named
+  // approver. Worse than the count, it broke other tests' CONTROLS - CONTROL 5 in
+  // corpusControls proves that a below-target share raises BELOW_TARGET_UNEXPLAINED, and with
+  // this firing as an error its refusal array no longer isolated that one signal. A rule that
+  // destroys the discriminating power of neighboring controls costs more than it collects.
+  //
+  // THE CONSEQUENCE, STATED PLAINLY: a warning does NOT reach factoryRepair, which iterates
+  // `factoryErrors`. So the decomposition prompt asks for an approver, the bridge derives the
+  // policy from one, and this surfaces a missing one - but nothing yet FORCES it. Upgrading to
+  // an error means re-baselining the generation corpus, which is its own change with its own
+  // blast radius, and it is tracked separately rather than smuggled in here.
+  for (const t of flowTasks) {
+    if (!requiresNamedApprover(t)) continue;
+    const list = assignmentsByTask.get(t.id) ?? [];
+    // Deliberately DISJOINT from OVERSIGHT. An agent-performed task with no human approver is
+    // already reported above, with its own remedy; emitting both would hand the repair loop two
+    // findings for one missing assignment.
+    if (list.some((a) => a.executor?.type === 'agent' && a.responsibility === 'PERFORMER')) continue;
+    const namedApprover = list.some(
+      (a) => (a.executor?.type === 'person' || a.executor?.type === 'team')
+        && (a.responsibility === 'ACCOUNTABLE' || a.responsibility === 'APPROVER'),
+    );
+    if (!namedApprover) {
+      issues.push(warn(
+        'HIGH_RISK_APPROVAL',
+        `task ${t.id} is ${riskLevelFor(t)} but names no human APPROVER/ACCOUNTABLE`,
+        t.id,
+      ));
     }
   }
 

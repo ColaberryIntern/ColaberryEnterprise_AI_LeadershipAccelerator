@@ -15,12 +15,15 @@
  * what makes the assertion mean something.
  */
 import {
-  bridgeFactoryToDelivery, buildDeliveryStories, riskLevelFor, evidenceFor, type BridgeInput,
+  bridgeFactoryToDelivery, buildDeliveryStories, evidenceFor, type BridgeInput,
 } from '../factoryDeliveryBridge';
+// Moved out of the bridge 2026-11-06 so `factoryValidate` can share the thresholds without the
+// upstream gate importing the downstream adapter. The tests below are unchanged.
+import { riskLevelFor } from '../factoryTaskRisk';
 import { PROFILE_MANDATORY_CHECKS, type ReleaseCheckResult } from '../../../modules/delivery/releaseChecks';
 import { INPACT_DIMENSIONS } from '../../../modules/delivery/inpact';
 import type {
-  FactoryTask, AgentTeam, Surface, AllocationRow, ContractRequirement,
+  FactoryTask, AgentTeam, Surface, AllocationRow, ContractRequirement, Assignment,
 } from '../contracts/factoryContract';
 
 const task = (over: Partial<FactoryTask> & { id: string }): FactoryTask => ({
@@ -64,6 +67,9 @@ function baseInput(over: Partial<BridgeInput> = {}): BridgeInput {
       requirements: [requirement('REQ-1', 'must')],
       agent_teams: [team()],
       surfaces: [surface()],
+      // Empty by default, so the base fixture keeps the case that matters most: a high-risk
+      // human task with NOBODY named to approve it. That is what Herriman actually looked like.
+      assignments: [],
     },
     profileKey: 'internal_tool',
     ...over,
@@ -325,5 +331,147 @@ describe('story contract issues are reported, not swallowed', () => {
       },
     });
     expect(result.storyIssues.map((i) => i.rule)).toContain('story_fulfills_nothing');
+  });
+});
+
+/**
+ * A HUMAN TASK'S APPROVAL POLICY IS DERIVED FROM A NAMED APPROVER, OR IT STAYS NULL.
+ *
+ * Found on 6 Nov against the real Herriman decomposition: 5 of 13 stories failed their own
+ * contract with `high_risk_story_without_approval`, and the four R4s among them were the bid
+ * bond, the financial statements, the legal documents and the insurance verification - the exact
+ * items a person signs. None of the five named an approver.
+ *
+ * The tempting fix was to default `internal_review` for human work so the gate went green. That
+ * is the failure this repo already has a ticket for: documenting the system as safer than it is,
+ * then citing the document. So the policy is derived from a real assignment and nothing else, and
+ * a task with nobody named keeps `null` and keeps failing - because that finding is TRUE.
+ */
+describe('a human approval policy is derived, never defaulted', () => {
+  const approver = (task_id: string, type: 'person' | 'agent'): Assignment => ({
+    task_id, role_id: 'role-lead', responsibility: 'APPROVER',
+    executor: { type, id: `${type}-1` },
+  } as Assignment);
+
+  it('names internal_review when a PERSON approves the high-risk human task', () => {
+    const { stories } = buildDeliveryStories(baseInput({
+      project: { ...baseInput().project, assignments: [approver('t-human', 'person')] },
+    }));
+    const human = stories.find((s) => s.storyId === 'story-t-human');
+    expect(human?.riskLevel).toBe('R3');
+    expect(human?.approvalPolicy).toBe('internal_review');
+  });
+
+  it('clears the blocking contract issue once a person is named', () => {
+    const r = bridgeFactoryToDelivery(baseInput({
+      project: { ...baseInput().project, assignments: [approver('t-human', 'person')] },
+    }));
+    expect(r.storyIssues.filter((i) => i.rule === 'high_risk_story_without_approval')).toEqual([]);
+  });
+
+  /** THE CONTROL. Without it the two above would also pass on a function that defaults a policy. */
+  it('leaves approvalPolicy null and KEEPS the blocking issue when nobody is named', () => {
+    const r = bridgeFactoryToDelivery(baseInput());
+    const human = r.stories.find((s) => s.storyId === 'story-t-human');
+    expect(human?.approvalPolicy).toBeNull();
+    expect(r.storyIssues.map((i) => i.rule)).toContain('high_risk_story_without_approval');
+  });
+
+  /** An agent may never approve. A story contract that accepted one would launder the rule. */
+  it('does not accept an AGENT as the approver of human work', () => {
+    const r = bridgeFactoryToDelivery(baseInput({
+      project: { ...baseInput().project, assignments: [approver('t-human', 'agent')] },
+    }));
+    const human = r.stories.find((s) => s.storyId === 'story-t-human');
+    expect(human?.approvalPolicy).toBeNull();
+    expect(r.storyIssues.map((i) => i.rule)).toContain('high_risk_story_without_approval');
+  });
+});
+
+/**
+ * THE BLOCK-TO-REQUIREMENT MAP IS DERIVED, because the data for it was there all along.
+ *
+ * Found on 6 Nov against Herriman: all 51 must-requirements reported as unfulfilled. Not because
+ * no story covered them - because stories cite `blk-REQ-011` and requirements are known by UUID.
+ * One cause, 51 reports, all in the direction that makes a complete decomposition look empty.
+ *
+ * The bridge's own comment said no back-reference existed. `canonical_req_id` is the
+ * back-reference: block ids are minted from it, and both sides now share `sourceBlockIdFor` so
+ * the convention cannot drift apart silently.
+ */
+describe('requirement traceability resolves without a caller-supplied map', () => {
+  const reqWithCanonical = (uuid: string, canonical: string): ContractRequirement => ({
+    ...requirement(uuid, 'must'), canonical_req_id: canonical,
+  } as ContractRequirement);
+
+  function mapInput(over: Partial<BridgeInput> = {}): BridgeInput {
+    const base = baseInput();
+    return {
+      ...base,
+      project: {
+        ...base.project,
+        requirements: [reqWithCanonical('uuid-1', 'REQ-001')],
+        // EVERY task gets a resolving citation, not just t-human. The shared `task` fixture
+        // defaults `source_evidence: ['b1']`, so leaving t-ai alone left one unresolvable
+        // citation and REQUIREMENT_LINK_UNAVAILABLE kept firing - correctly. The rule was right
+        // and the fixture was incomplete.
+        tasks: base.project.tasks.map((t) => ({ ...t, source_evidence: ['blk-REQ-001'] })),
+      },
+      ...over,
+    };
+  }
+
+  it('resolves a cited block to the requirement UUID', () => {
+    const { stories } = buildDeliveryStories(mapInput());
+    const human = stories.find((s) => s.storyId === 'story-t-human');
+    expect(human?.fulfills).toEqual(['uuid-1']);
+  });
+
+  it('no longer reports the must-requirement as unfulfilled', () => {
+    const r = bridgeFactoryToDelivery(mapInput());
+    expect(r.traceabilityGaps.filter((g) => g.kind === 'must_requirement')).toEqual([]);
+  });
+
+  it('stops raising REQUIREMENT_LINK_UNAVAILABLE once citations resolve', () => {
+    const r = bridgeFactoryToDelivery(mapInput());
+    expect(r.gaps.map((g) => g.rule)).not.toContain('REQUIREMENT_LINK_UNAVAILABLE');
+  });
+
+  /**
+   * THE CONTROL THAT MATTERS. Fixing a rule that fired 51 times for one reason, by making it
+   * fire zero times for any reason, is not a fix. A citation that resolves to nothing must still
+   * be reported.
+   */
+  it('STILL reports a citation that resolves to no requirement', () => {
+    const base = mapInput();
+    const r = bridgeFactoryToDelivery({
+      ...base,
+      project: {
+        ...base.project,
+        tasks: base.project.tasks.map((t) => (t.id === 't-human'
+          ? { ...t, source_evidence: ['blk-REQ-999'] } : t)),
+      },
+    });
+    expect(r.gaps.map((g) => g.rule)).toContain('REQUIREMENT_LINK_UNAVAILABLE');
+  });
+
+  /** And a requirement genuinely covered by nothing is still a gap. */
+  it('STILL reports a must-requirement no story cites', () => {
+    const base = mapInput();
+    const r = bridgeFactoryToDelivery({
+      ...base,
+      project: {
+        ...base.project,
+        requirements: [reqWithCanonical('uuid-1', 'REQ-001'), reqWithCanonical('uuid-2', 'REQ-002')],
+      },
+    });
+    expect(r.traceabilityGaps.filter((g) => g.kind === 'must_requirement').map((g) => g.id))
+      .toEqual(['uuid-2']);
+  });
+
+  it('a caller-supplied map still wins over the derived one', () => {
+    const r = bridgeFactoryToDelivery({ ...mapInput(), blockToRequirement: { 'blk-REQ-001': 'override' } });
+    const human = r.stories.find((s) => s.storyId === 'story-t-human');
+    expect(human?.fulfills).toEqual(['override']);
   });
 });
