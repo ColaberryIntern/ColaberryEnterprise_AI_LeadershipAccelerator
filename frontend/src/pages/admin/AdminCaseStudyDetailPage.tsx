@@ -377,6 +377,7 @@ function AdminCaseStudyDetailPage(): React.ReactElement {
               latestSnapshot={detail.latestSnapshot}
               approvedSnapshot={detail.approvedSnapshot}
               publications={detail.publications}
+              hirePerson={detail.hirePerson}
               blockers={desk.blockers}
               blockerSource={desk.blockerSource}
               busy={busy}

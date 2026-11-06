@@ -19,6 +19,7 @@ import {
   isCaseStudyPublicationError, publishCaseStudy, unpublishCaseStudy,
 } from '../../services/caseStudy/caseStudyPublicationService';
 import { isCaseStudyProjectSourceError } from '../../services/caseStudy/caseStudyProjectSource';
+import { withHirePerson, withLinkedPerson } from '../../services/hire/hireAdminPerson';
 import { isCaseStudyEvidenceSourceError } from '../../services/caseStudy/caseStudyEvidenceSource';
 
 /**
@@ -275,9 +276,10 @@ router.post('/api/admin/case-studies/from-repositories', requireAdmin, (req: Req
 router.get('/api/admin/case-studies/:id', requireAdmin, (req: Request, res: Response) => {
   const params = parse(idParams, req.params, res);
   if (!params) return;
+  // `hirePerson` names who a Hire publication would list, for the HIRE publish row.
   void run(res, () => getCaseStudy({
     caseStudyId: params.id, correlationId: correlationOf(req),
-  }));
+  }).then((detail) => withHirePerson(detail, params.id)));
 });
 
 /** Edit the human-owned editorial and consent fields (spec §34). */
@@ -409,11 +411,12 @@ router.get('/api/admin/case-studies/:id/preview', requireAdmin, (req: Request, r
   if (!params) return;
   const query = parse(previewQuery, req.query, res);
   if (!query) return;
+  // On HIRE the preview is person-first: `linkedPerson` carries the builder band.
   void run(res, () => previewSurfaceProjection({
     caseStudyId: params.id, surfaceKey: query.surfaceKey ?? DEFAULT_SURFACE,
     ...(query.snapshotId ? { snapshotId: query.snapshotId } : {}),
     correlationId: correlationOf(req),
-  }));
+  }).then((preview) => withLinkedPerson(preview, params.id)));
 });
 
 /**

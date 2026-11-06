@@ -232,7 +232,9 @@ describe('switching a lens creates nothing, publishes nothing, mutates nothing',
     await mountDetail();
     H.click('cs-lens-tab-training');
     await H.settle();
-    expect(H.el('cs-surface-lab-publish-note').textContent).toContain('enterprise');
+    // Publishing lives in the Publish panel, one explicit row per site (hire included),
+    // never on this panel.
+    expect(H.el('cs-surface-lab-publish-note').textContent).toContain('Publish panel, one row per site');
     expect(H.text()).toContain('never writes, publishes or changes the record');
   });
 });

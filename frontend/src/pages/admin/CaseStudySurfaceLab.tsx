@@ -2,7 +2,7 @@ import React from 'react';
 import { SectionCard, StatusBadge } from '../../components/admin/shell';
 import CaseStudySurfaceTabs from './CaseStudySurfaceTabs';
 import {
-  LIVE_SURFACE_KEY, SURFACE_LENS_TABS, bandSummary, canonicalFacts, draftState,
+  SURFACE_LENS_TABS, bandSummary, canonicalFacts, draftState,
   lensComposition, liveSurfaceKeys, publicationState,
 } from './caseStudySurfaceLabModel';
 import type { CaseStudyDetail, CaseStudySurfaceKey, CaseStudySurfacePreview } from '../../services/caseStudyAdminTypes';
@@ -206,10 +206,8 @@ export default function CaseStudySurfaceLab({
             )}
 
             <p className="small text-muted mb-0" data-testid="cs-surface-lab-publish-note">
-              Publishing is not on this panel. It stays bound to the
-              {` ${LIVE_SURFACE_KEY} `}
-              surface in the Publish panel above, chosen explicitly, so exploring a lens can never
-              become publishing to one.
+              Publishing is not on this panel. It stays in the Publish panel, one row per site,
+              each chosen explicitly, so exploring a lens can never become publishing to one.
             </p>
           </>
         )}

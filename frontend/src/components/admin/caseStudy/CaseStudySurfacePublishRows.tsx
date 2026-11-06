@@ -4,7 +4,41 @@ import {
   PUBLISHABLE_CASE_STUDY_SURFACES,
 } from '../../../config/caseStudySurfaces';
 import type { CaseStudySurfaceKey } from '../../../config/caseStudySurfaces';
-import type { CaseStudyPublicationSummary } from '../../../services/caseStudyAdminTypes';
+import type { CaseStudyHirePerson, CaseStudyPublicationSummary } from '../../../services/caseStudyAdminTypes';
+
+/**
+ * The HIRE row's second line: WHO goes live. Hire lists people, so an operator about to
+ * publish there must see the person, not only the site - and when the record resolves to
+ * nobody, the same remedy the publish gate will give, before they click.
+ */
+export function HirePersonLine({ person, liveUrl }: {
+  person: CaseStudyHirePerson | null | undefined;
+  liveUrl: string | null;
+}): React.ReactElement | null {
+  if (person === undefined) return null;
+  if (person === null) {
+    return (
+      <div className="small text-danger mt-1" data-testid="cs-surface-hire-person">
+        No person is linked, so Hire will refuse this record. Link the case study&apos;s repository to
+        the builder&apos;s project (github_connections) or set case_studies.project_id.
+      </div>
+    );
+  }
+  const href = liveUrl ? `${liveUrl.replace(/\/+$/, '')}/talent/${encodeURIComponent(person.portfolioSlug)}/` : null;
+  return (
+    <div className="small mt-1" data-testid="cs-surface-hire-person">
+      {'Lists '}
+      {href
+        ? <a href={href} target="_blank" rel="noreferrer" className="fw-semibold">{person.name}</a>
+        : <span className="fw-semibold">{person.name}</span>}
+      <span className="text-muted">
+        {person.listed
+          ? ' · appears in the directory once published'
+          : ' · their portfolio is not published and public, so they will not appear in the directory yet'}
+      </span>
+    </div>
+  );
+}
 import { CASE_STUDY_CONTROLS } from './caseStudyDesk';
 
 /**
@@ -37,6 +71,8 @@ import { CASE_STUDY_CONTROLS } from './caseStudyDesk';
 
 export interface CaseStudySurfacePublishRowsProps {
   publications: readonly CaseStudyPublicationSummary[];
+  /** Who a Hire publication would list. `null` = nobody; absent = not reported. */
+  hirePerson?: CaseStudyHirePerson | null;
   busy: boolean;
   onPublish: (surfaceKey: CaseStudySurfaceKey) => void;
   onUnpublish: (surfaceKey: CaseStudySurfaceKey) => void;
@@ -51,6 +87,7 @@ export function publicationFor(
 
 export function CaseStudySurfacePublishRows({
   publications,
+  hirePerson,
   busy,
   onPublish,
   onUnpublish,
@@ -73,7 +110,10 @@ export function CaseStudySurfacePublishRows({
             const live = publication?.status === 'published';
             return (
               <tr key={surfaceKey} data-testid={`cs-surface-row-${surfaceKey}`}>
-                <th scope="row" className="fw-semibold">{profile.label}</th>
+                <th scope="row" className="fw-semibold">
+                  {profile.label}
+                  {surfaceKey === 'hire' && <HirePersonLine person={hirePerson} liveUrl={profile.liveUrl} />}
+                </th>
                 <td data-testid={`cs-surface-status-${surfaceKey}`}>
                   {/* The word, not only a colour: a status a reader has to
                       decode from a dot is a status they can misread. */}

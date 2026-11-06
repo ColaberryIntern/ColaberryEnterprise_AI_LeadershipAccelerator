@@ -229,6 +229,20 @@ export interface CaseStudyDetail {
   readonly approvedSnapshot: CaseStudySnapshotSummary | null;
   readonly publications: readonly CaseStudyPublicationSummary[];
   readonly readiness: CaseStudyReadinessReport | null;
+  /**
+   * Who a HIRE publication of this record would list (backend `hirePersonForRecord`).
+   * `null` = the record resolves to nobody, and the publish gate refuses Hire. Absent on
+   * older payloads, which the row reads as "unknown" rather than as nobody.
+   */
+  readonly hirePerson?: CaseStudyHirePerson | null;
+}
+
+/** The person a Hire publication would list, as the PUBLISH row names them. */
+export interface CaseStudyHirePerson {
+  readonly name: string;
+  readonly portfolioSlug: string;
+  /** `published` + `public` - the person appears in the directory once this is published. */
+  readonly listed: boolean;
 }
 
 export interface CaseStudyCreateResult {
@@ -374,4 +388,32 @@ export interface CaseStudySurfacePreview {
   /** ADVISORY, reported beside the decision and never consulted by it. */
   readonly readiness: CaseStudyReadinessReport | null;
   readonly projection: PublicCaseStudyDetail | null;
+  /**
+   * Who this record is about, for the HIRE surface only (mirror of the backend's
+   * `CaseStudyLinkedPerson`). `null` when the record resolves to nobody - the preview then
+   * shows the refusal band - and on every other surface. Built from the same allow-list
+   * projection a stranger would see, so the admin is shown nothing the public page hides.
+   */
+  readonly linkedPerson?: CaseStudyLinkedPerson | null;
+}
+
+/** The person a hire record links to, as the admin's person-first preview shows them. */
+export interface CaseStudyLinkedPerson {
+  readonly portfolioSlug: string;
+  /** `published` + `public` = appears in the directory; `unlisted` = direct link only. */
+  readonly pageStatus: string;
+  readonly pageVisibility: string;
+  readonly listed: boolean;
+  readonly name: string;
+  readonly avatarUrl: string | null;
+  readonly role: string | null;
+  readonly cohort: string | null;
+  readonly availability: { readonly kind: string; readonly label: string } | null;
+  readonly spotlight: boolean;
+  readonly proof: {
+    readonly publishedCaseStudies: number;
+    readonly verifiedCommits: number;
+    readonly capabilitiesProven: number;
+    readonly filesCommitted: number | null;
+  };
 }

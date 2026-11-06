@@ -3,6 +3,7 @@ import { SectionCard, StatusBadge } from '../../components/admin/shell';
 import { CaseStudyPreviewPanel } from '../../components/admin/caseStudy';
 import StoryDetailArticle from '../publicV2/StoryDetailArticle';
 import CaseStudySurfaceTabs from './CaseStudySurfaceTabs';
+import HirePersonFirstPreview from './HirePersonFirstPreview';
 import { SURFACE_LENS_TABS } from './caseStudySurfaceLabModel';
 import type { CaseStudyPreviewLens } from './useCaseStudyPreviewLens';
 import type { CaseStudySurfaceKey } from '../../services/caseStudyAdminTypes';
@@ -162,7 +163,11 @@ export default function CaseStudyRenderedPreview({
             /* THE FRAME. See `caseStudyRenderedPreview.css` for why this is a
                container and not an iframe. */
             <div className="cs-story-preview" data-testid="cs-preview-render-frame">
-              <StoryDetailArticle record={projection} surface={surfaceView} />
+              {/* HIRE is person-first: the builder band and proof ledger lead, then the
+                  same article in HIRE_ORDER. Every other lens renders as before. */}
+              {surface === 'hire'
+                ? <HirePersonFirstPreview person={preview?.linkedPerson ?? null} projection={projection} surface={surfaceView} />
+                : <StoryDetailArticle record={projection} surface={surfaceView} />}
             </div>
           )}
         </div>
