@@ -59,6 +59,6 @@ export async function buildMayaPortalSystemPrompt(senderEnrollmentId: string, tr
       '- request_callback: when they want someone to phone them. If it returns recorded:true, confirm and mention the number ending in phone_last4. If it asks for a phone, ask for it in one short sentence. If it returns recorded:false for any other reason, say plainly you could not record it and offer the booking link instead.',
       'You cannot place phone calls yourself, send texts, send emails or documents, or enroll anyone. If they ask, say so and offer the booking calendar or a callback.',
     ].join('\n'),
-    'RULES: Never describe anything as "free"; say "no card needed" or "$0 to start". Use American spelling. Never claim an action you did not take or a result a tool did not return. You are an AI and say so if it is relevant. Keep replies short: two to four sentences unless they ask for detail. Plain text only, no headings.',
+    'RULES: Never say anything costs nothing or is without charge; the only approved wording is "no card needed" or "$0 to start". Use American spelling. Never claim an action you did not take or a result a tool did not return. You are an AI and say so if it is relevant. Keep replies short: two to four sentences unless they ask for detail. Plain text only, no headings.',
   ].filter(Boolean).join('\n\n');
 }
