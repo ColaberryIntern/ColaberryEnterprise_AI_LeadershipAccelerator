@@ -847,18 +847,24 @@ python make_vtt.py       --deck <dir>/deck.json   # the accessible caption sidec
 `make_narration.py` runs FIRST. Segment durations come from how long each sentence
 actually takes to speak, not from the deck's guesses, or a slide ends mid-word.
 
-### The captions exist TWICE, on purpose — and only one of them may be shown
+### The captions: one layer, and check which one it is
 
-`build_video.py` **burns the narration into the picture**. `make_vtt.py` writes the same
-sentences again as a `.vtt` sidecar. Both are deliberate and neither is redundant: a
-burned-in caption cannot be read by a screen reader, resized, translated or turned off,
-and a `track` element needs a real file.
+The sentence the narrator speaks can reach the reader twice — burned into the picture by
+`build_video.py`, and again as the `.vtt` sidecar `make_vtt.py` writes. Ali, after seeing
+both at once: *"We have double captions - there should only be one."*
 
-**So the player must NOT mark that track `default`.** It shipped that way and put two
-read-overs on the same frame on two live records — the burned-in grey box, and the
-browser painting the identical words underneath it in its own black bar. The track stays
-attached, reachable from the CC control and to assistive technology, which is the job it
-was written for.
+**`BURN_CAPTIONS` in `build_video.py` is the switch, and it is currently `False`.** Read
+it before describing the film to anyone; this paragraph said the opposite for two months
+after the code changed, which is long enough for someone to "fix" a video that was right.
+With burning off, the `.vtt` is the only caption layer there is.
+
+**Which makes the `default` attribute on the `<track>` load-bearing, and it is absent.**
+`StoryHeroFigure.tsx` renders `<track kind="captions" srcLang="en" label="English">` with
+no `default`, because when captions were burned in, marking it default put two read-overs
+on the same frame. That reason is gone. As it stands a viewer sees no captions at all
+unless they find the CC control, which is one layer fewer than Ali asked for rather than
+one. **Do not flip it silently as part of a video build:** it changes every live record at
+once, so raise it as its own decision.
 
 It is also worth knowing that `crossorigin="anonymous"` on the `<video>` is load-bearing
 for the captions and nothing else: a cross-origin `track` is refused without it, the
@@ -948,8 +954,25 @@ applyHumanOverride({ path: 'walkthroughVideo', value: {
 `narrationSource: 'synthetic'` makes the page say so. An unlabelled synthetic voice is a
 small deception and this system's whole claim is that it does not make those.
 
-### Three ways this fails silently, all of which shipped
+### Four ways this fails silently, all of which shipped
 
+- **A walkthrough with no audio stream at all.** The Selective Service record shipped on
+  2026-11-05 with a 77-second film built by a one-off script in a scratch directory
+  instead of this toolchain, and nobody noticed for a day. **Every other check passed**:
+  the URL returned 200, `ffprobe` reported the intended duration to the frame, the poster
+  drew, the player rendered in the masthead, and the page looked finished. Silence is the
+  one defect a muted autoplaying player cannot show you. So probe the STREAMS, never just
+  the duration, and do it on the file production serves rather than the one you built:
+
+  ```bash
+  ffprobe -v error -show_entries stream=codec_type,codec_name,channels -of csv=p=0 walkthrough.mp4
+  # must list an audio line: aac,2 (or similar). One video line alone is a silent film.
+  ```
+
+  The deeper rule is the one this section opens with: **a record without a NARRATED
+  walkthrough is not finished**, and `make_narration.py` runs first for that reason. A
+  build that never called it cannot have produced sound, so if the toolchain was bypassed,
+  assume silence until the probe says otherwise.
 - **`ffmpeg -ss` into an animated GIF.** Seeks to 1s and 11.5s worked; a seek to 30s
   produced a segment with **no picture at all** and exit code 0. Pull frames by index with
   Pillow instead.
@@ -976,6 +999,9 @@ status code: two different videos both return 200.
 
 ### Done means
 
+- [ ] It was built by `scripts/walkthrough-video/`, starting with `make_narration.py`
+- [ ] `ffprobe` lists an **audio stream** on the file production serves, not only on the
+      local build
 - [ ] Every figure spoken or shown is a published metric on the same record
 - [ ] Every frame used has been checked for a person's name, face or email
 - [ ] `ffprobe` duration matches intended, within a second

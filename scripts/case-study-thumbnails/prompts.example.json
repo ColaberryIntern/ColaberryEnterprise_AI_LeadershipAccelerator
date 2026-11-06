@@ -40,6 +40,11 @@
       "slug": "ai-inbox-manager",
       "label": "AI Inbox Manager",
       "currentHeroUrl": null
+    },
+    {
+      "slug": "the-exemption-was-denied-someone-had-to-say-why",
+      "label": "Selective Service",
+      "currentHeroUrl": "https://enterprise.colaberry.ai/site-v2/thumb-sss-modernization.jpg?v=50e303ce"
     }
   ],
   "picked": {
@@ -50,7 +55,8 @@
     "ai-systems-architect-training-system": "A",
     "testing-ai-actions-before-they-reach-customers": "B",
     "stress-test-review-app": "C",
-    "ai-inbox-manager": "C"
+    "ai-inbox-manager": "C",
+    "the-exemption-was-denied-someone-had-to-say-why": "A"
   },
   "items": [
     {
@@ -220,6 +226,27 @@
       "concept": "C",
       "name": "The rest can wait",
       "prompt": "A clean empty wooden desk in sharp focus in the foreground holding exactly one plain white envelope, lit by a bright warm pool of light. Behind it, filling the entire background and thrown far out of focus, a vast chaotic mountain of thousands of crumpled letters and papers in cold blue shadow, towering to the top of the frame. The contrast between the single sharp lit envelope and the blurred blue mass behind is the whole picture. No people, no hands. Bold condensed sans-serif text across the lower third reading exactly: \"THE REST CAN WAIT.\""
+    },
+    {
+      "slug": "the-exemption-was-denied-someone-had-to-say-why",
+      "title": "The exemption was denied. Someone had to be able to say why.",
+      "concept": "A",
+      "name": "The letter that explains nothing",
+      "prompt": "A young man in his early twenties sitting alone at a kitchen table in low evening light, holding a single sheet of heavy official paper close to his chest, his expression falling from hope into bewilderment as he reads it. The sheet is almost entirely blank except for one heavy crimson mark slashed across its middle. Deep teal and charcoal background, hard crimson rim light on his face and on the paper, shallow depth of field. Huge bold condensed white text with a thick black outline in the upper left reading exactly: DENIED, and a small red angled sticker below it reading exactly: WHY?"
+    },
+    {
+      "slug": "the-exemption-was-denied-someone-had-to-say-why",
+      "title": "The exemption was denied. Someone had to be able to say why.",
+      "concept": "B",
+      "name": "The stamp with nothing carved into it",
+      "prompt": "An enormous worn wooden and brass official rubber stamp descending through the frame toward a single lone sheet of cream paper on a dark desk, caught a breath before it lands. The rubber face of the stamp is turned just enough toward the viewer to show it is completely smooth and blank, nothing carved into it at all, so it can press down but can leave no words behind. Ink-black background, one shaft of warm amber light raking across the blank rubber face, fine dust in the air, extreme macro depth of field. No text anywhere in the image."
+    },
+    {
+      "slug": "the-exemption-was-denied-someone-had-to-say-why",
+      "title": "The exemption was denied. Someone had to be able to say why.",
+      "concept": "C",
+      "name": "Before and after the reason",
+      "prompt": "A single sheet of official paper torn cleanly down the middle and the two halves laid side by side on black slate. The left half is cold, unlit and bare, carrying only a heavy crimson refusal mark and empty space beneath it. The right half of the very same sheet is warmly lit from above and carries beneath the mark a few lines of clear handwriting glowing faintly gold, as if someone finally signed their name to the decision. Strong cold blue versus warm gold contrast between the two halves, dramatic overhead light, shallow depth of field. Bold condensed white text with a thick black outline across the lower left half reading exactly: NO REASON GIVEN"
     }
   ]
 }
