@@ -27,7 +27,9 @@ const {
   runForward, runInverse, parseLedger, rowsAffected,
 } = require('../backfillFreeAccountCoherence');
 
-const COUNTS = { shape_a: '2', shape_b: '1', coherent_free: '0', total: '3' };
+// `shape_a_paid` added by C10.17 Phase 2: the witness counts paying upgraders apart from
+// real work, because `explorer` + `member` is now also the shape of a learner who paid.
+const COUNTS = { shape_a: '2', shape_a_paid: '0', shape_b: '1', coherent_free: '0', total: '3' };
 
 /** One Shape A row the predicate writes, one org row it must not. */
 const ROWS = [

@@ -396,10 +396,24 @@ const sqlLit = (s) => `'${String(s).replace(/'/g, "''")}'`;
 // ──────────────────────────────────────────────────────────── deployed ranking
 
 /**
- * A faithful port of `pickBestEnrollment` from
- * backend/src/services/participantService.ts. Kept in sync BY HAND, which is a
- * real risk, so the rank tuple is written in the same order and commented with
- * the same meaning. If the deployed function changes, this must change with it.
+ * A faithful port of `pickBestEnrollment`, which lives in
+ * backend/src/services/enrollmentPick.ts (it was extracted out of
+ * participantService.ts, which this docblock used to cite). Kept in sync BY HAND,
+ * which is a real risk, so the rank tuple is written in the same order and
+ * commented with the same meaning. If the deployed function changes, this must
+ * change with it.
+ *
+ * AND IT DID, WHICH IS THE POINT OF THIS NOTE. C10.17 Phase 1 swapped the middle two
+ * terms in the deployed function so that PAYMENT outranks ORIGIN, and this copy was
+ * missed - the hand-sync risk the paragraph above warns about, realised. It is
+ * corrected here, in the same change that makes the shape reachable.
+ *
+ * Why the order matters now: Phase 2 stops the payment paths rewriting
+ * `enrollment_type`, so a learner who signed up free and then paid rests at
+ * `explorer` + `paid`. Under the OLD order below, origin was tested first, so that
+ * paying student lost the tie-break to any unpaid 'standard' duplicate sitting under
+ * the same email - and this script would then build their entire fact base, and its
+ * claim about which account they log into, from the empty row.
  *
  * Candidates must already be filtered to { status: 'active', portal_enabled: true },
  * which is what `requestMagicLink` does before calling it.
@@ -408,8 +422,8 @@ function pickBestEnrollment(candidates) {
   if (!candidates.length) return null;
   const rank = (e) => [
     e.mgmt_role ? 0 : 1,
-    e.enrollment_type === 'explorer' ? 1 : 0,
     e.payment_status === 'paid' ? 0 : 1,
+    e.enrollment_type === 'explorer' ? 1 : 0,
     -new Date(e.created_at || 0).getTime(),
   ];
   return [...candidates].sort((a, b) => {

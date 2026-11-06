@@ -57,7 +57,7 @@ Two refinements the first scan needed, both recorded because they changed the an
    consumer into the reporting bucket, where it would never have been given a behaviour test. A
    rule was added for that form and the file is now row 29. Branching: 31 → 28 → **29**.
 
-## BRANCHING — 37 files
+## BRANCHING — 36 files
 
 **Row 17 is retired, and why is worth recording.** It was `services/freeSignupService.ts`, which
 used to decide `tier: 'guest'` itself. T202b made it delegate to the canonical service, so it no
@@ -100,7 +100,6 @@ any row does not.
 | 28 | `scripts/internshipJourneyE2E.ts` | `enrollment_type: 'standard', tier: 'standard'` | unchanged | unchanged | **An E2E script writes `tier: 'standard'`, which is not in the column's declared union** (`'guest' \| 'member'`). Pre-existing, out of this phase's scope, recorded because it is why the column has no CHECK constraint to rely on. |
 | 29 | `services/cohortService.ts` | `{ enrollment_type: { [Op.ne]: 'explorer' } }` | **CHANGES** | — | **Added on the fix pass; the first scan misfiled this as reporting-only.** `getDashboardStats()` builds one `notExplorer` filter and reuses it for three counts — `totalEnrollments`, `paidEnrollments` and `pendingInvoice`. Once population A gains `enrollment_type: 'explorer'`, **`totalEnrollments` and `pendingInvoice` on the admin dashboard drop** by the number of portal free accounts. `paidEnrollments` does not move, because those rows are not paid. Appended rather than inserted in theme order so the existing row numbers, and the determinations that reference them, stay stable. |
 | 30 | `services/freeSignupService.ts` | `enrollment.enrollment_type === 'explorer'` | **CHANGES** | unchanged | **Added by T205, and it is row 17 returning under a new number.** T202b retired row 17 because delegating to the canonical service removed both column literals from this file, and the scan moved it to REPORTING on its own. T205 reintroduces a branch here deliberately: the Explorer profile is created only when the RESOLVED row is an Explorer, so a `programme: 'standard'` account — an org teammate, a prospect — gets no journey profile and stays invisible to Explorer Growth. Population A gains a profile at registration; population B is unaffected because it never takes this branch. Renumbered rather than reusing 17, so citations that reference other rows by number stay valid. |
-| 31 | `services/appPaymentReconcileService.ts` | `tier = 'member'` in a raw-SQL UPDATE | writer | writer | **Added by T206, and it is the FIFTH paid-status writer — the plan named three.** Found by deriving the writer set from source rather than trusting the written list, which is the fifth time in this phase a population in the plan came up short when derived. It marks an enrolment paid in raw SQL while linking the payment id; in the happy path `activateByRef` has already granted membership, so this is a no-op re-assertion, but on the ERROR path it would otherwise leave paid-but-guest. Now writes the pair in the same statement. Neither population changes: a $50 deposit holder cannot be promoted by it because of `MEMBERSHIP_MIN_CENTS`, enforced on BOTH membership-selection paths — `backend/src/services/appPaymentReconcileService.ts:98` → "if (cents < MEMBERSHIP_MIN_CENTS) continue; // skip the $50 deposit" and `backend/src/services/appPaymentReconcileService.ts:331` → ".filter((p) => Math.round(Number(p.Amount) * 100) >= MEMBERSHIP_MIN_CENTS)". **An earlier version of this determination cited `paysimple_customer_id IS NOT NULL` instead, and that was wrong twice over:** `loadCandidates`' WHERE is a disjunction whose other branch needs no customer id, and path B searches the whole `unlinkedPool` by amount, timing and email - its own comment says path A's customer-id matches are a subset of it. Right conclusion, wrong mechanism, in the enumeration of record. |
 | 32 | `services/adminOs/conversionState.ts` | `WHEN e.email IS NOT NULL AND ${HAS_PROGRAM_ACCESS_SQL} THEN 'enrolled_student'` | **CHANGES** | **CHANGES** | **Added by T210, and it is the file that fixes the defect this enumeration exists to track.** Both stage derivations previously read `WHEN e.email IS NOT NULL THEN 'enrolled_student'`, so the mere EXISTENCE of an enrollments row staged a person as converted. Population A (free AI learners) was therefore represented as converted and, worse, had intent and temperature SUPPRESSED as post-conversion noise -- the people whose intent matters most. Conversion now derives from authoritative paid/subscription state, and T209's `explorer` stage gives the population a name. Population B (org teammates, AI Flotation prospects) also CHANGES: an unpaid non-Explorer account holder falls through to applicant/lead rather than being staged a student, which is correct and was previously wrong in the same way. Read-only: a derivation consumed by the roster, the profile and `subjectResolver`. It writes nothing. |
 | 33 | `scripts/backfillFreeAccountCoherence.ts` | `count(*) FILTER (WHERE enrollment_type = 'standard' AND tier = 'guest')` | writer | writer | **Added by T207. A WRITER, but opt-in only and not yet run.** Dry-run by default; the single `UPDATE` site is pinned to the value read (`WHERE id = :id AND col = :from`) so a row changed underneath is skipped rather than overwritten, and nothing reaches the database without `--confirm-production`, asserted by a test that counts statements rather than reading printed text. It writes `tier` and `enrollment_type` and never `payment_status`. Population A: rows that are free-AI learners by provenance gain the coherent pair. Population B: explicitly EXCLUDED -- org members, AI Flotation prospect accounts, staff by the union of all three disagreeing predicates, agent identities and anything undeclared. Rows it cannot prove either way are REPORTED for human decision, never guessed. **RAN AGAINST PRODUCTION 2026-10-13 on Ali's authorisation**: 56 writes, 37 programme and 19 tier, invisible `standard`+`guest` went 86 to 49 and coherent `explorer`+`guest` 0 to 56, with the 630 row total unmoved. An earlier version of this line said nothing had run; that stopped being true on 2026-10-13. Reversible from a 56-entry ledger. |
 | 34 | `scripts/backfillExplorerEnteredAt.ts` | `WHERE enrollment_type = 'explorer' AND tier = 'guest'` | writer | writer | **Added by M21. A WRITER, and it RAN against production 2026-10-16 on Ali's authorisation: 56 rows, `explorer_entered_at` NULL went 56 to 0.** It is a SHAPE match on this scan: the literal appears in a `WHERE` that SELECTS the population, and the only column it assigns is `explorer_entered_at`. It never touches `enrollment_type` or `tier`, so it cannot move anybody into or out of a programme — population B is untouched by construction. **Both population cells read `writer` anyway**, following row 19: the tally parses those cells, and a row spelled any other way counts as nothing at all. The cells mark it a writer; this determination says what it writes. Dry run is the default; every `UPDATE` is pinned to `explorer_entered_at IS NULL` so a row that gained a date between the plan and the commit is left alone; the ledger is validated before any of it reaches SQL; and the inverse is pinned to the value written. The date semantic was taken from the live writers rather than chosen — `backend/src/services/freeAccountRegistration.ts:85` → "explorer_entered_at: programme === 'learner' ? new Date() : null," — so a backfilled row means the same thing as a registered one. |
@@ -108,6 +107,23 @@ any row does not.
 | 35 | `scripts/srsDistributionReport.ts` | `enrollment_type = 'explorer'` inside a `SELECT` | unchanged | unchanged | **Added by M25, and it is the weakest match in this table: a READER that writes nothing at all.** The literal appears only in the `SELECT` that chooses which population to report on. It reads each person through the normal Person 360 reader, computes the Sales Readiness Score in memory, prints a distribution and persists nothing — there is no `INSERT`, `UPDATE` or `DELETE` anywhere in it, and it assigns `enrollment_type` nowhere, so neither population moves and **both population cells read `unchanged`**, not `writer` and not a dash, so the tally can account for it. It scores through the real reader rather than a faster bespoke query so that what is measured is what the product would score, absences included, which is also why it runs sequentially under a `LIMIT` and is a report rather than a batch job. **Ran read-only against production 2026-10-17 over 250 rows: nothing written, no score persisted, nothing sent.** The same two writer tripwires carry it with the same determination. |
 | 36 | `services/agentDomain/domainAgentIdentitySeed.ts` | writes `'standard'` | unchanged | unchanged | **Added by AF3.1.** Seeds the ten Agent Factory domain agents, one `Enrollment` each, as `'standard'` with `portal_enabled: false` so none of them appears as a learner. Same reasoning as rows 25 to 27: an agent identity is not a free account, neither population moves, and the T207 backfill skips it. One difference is worth recording rather than inheriting. These addresses are **derived** from the domain key at runtime, not written as string literals, so `AGENT_IDENTITY_EMAILS` cannot pin them and the drift guard that re-derives that list from the seed files finds nothing here to pin. What actually excludes them is the `staff_email` and `staff_role` terms, which is the open-ended case `freeAccountCoherenceBackfill.test.ts` already covers by name. |
 | 37 | `services/mayaIdentitySeed.ts` | writes `'standard'` | unchanged | unchanged | **Added 2026-10-27, when Maya was given a real staff identity.** Seeds her `Enrollment` as `'standard'` with `portal_enabled: false`, so she is not a learner. Same reasoning as rows 25 to 27 and 36: an agent identity is not a free account and neither population moves. Unlike row 36's ten domain agents, whose addresses are derived from the domain key at runtime, hers is a string literal in the seed file, so it is pinned by name in `AGENT_IDENTITY_EMAILS` rather than relying on the `staff_email` term alone. (The address itself is deliberately not written here: `verifyGrowthOsResetCitations.js` forbids email addresses in these docs, and it was right to reject the first version of this row.) Finding that out exposed a real gap: the drift guard that is supposed to re-derive that list scans a **hardcoded** list of seed paths, so a brand-new seed file is invisible to it. `mayaIdentitySeed.ts` was added to that list; globbing it would close the class and is left as its own change. |
+
+**Row 31 was `services/appPaymentReconcileService.ts` and is gone, C10.17 Phase 2.** It was in
+this table because it assigned `enrollment_type = 'standard'` in raw SQL beside the paid flag.
+Phase 2 deleted that assignment from all five payment writers - origin is not a payment
+outcome - so the file no longer branches on either column and the scan no longer returns it.
+It still writes `tier = 'member'`, which is what every student predicate actually reads, and
+that coherence is proved behaviourally in `services/__tests__/writerPairCoherence.test.ts`.
+`services/paymentSyncService.ts` left the REPORTING list for the same reason.
+
+**The row labels are NOT indices, and two of them are known to be wrong.** The table has 36
+rows labelled 1 to 37, with **17 missing and 34 used twice** - a defect that predates this
+change and that nothing catches, because every tripwire here counts rows and parses cells and
+none of them reads the number in the first column. Two faults in compensating directions that
+still sum correctly is the precise failure this file's own tally note already records from its
+first draft, which is why it is written down rather than left to be rediscovered. Renumbering
+is deliberately NOT done here: it would invalidate roughly two dozen "row N" references in the
+prose, so it is left as its own change, as row 37 leaves the seed-path globbing.
 
 **Tallies, counted from the table's own cells rather than by hand** — the first draft said "12 for
 A" and "9 unchanged", both off by one in **compensating** directions, so the two wrong numbers
@@ -118,20 +134,29 @@ asserts them from the parsed cells so they cannot drift again:
 |---|---|---|
 | Changes for population A | **14** | `grep -cE '^\| [0-9]+ \| ` + "`[^`]+`" + ` \| [^\|]*\| \*\*CHANGES\*\* \|'` |
 | Changes for population B | **3** (rows 1, 13 and 32) | `grep -cE '\| — \| \*\*CHANGES\*\* \|'` |
-| Writers | **6** | `grep -c "\| writer \| writer \|"` |
+| Writers | **5** | `grep -c "\| writer \| writer \|"` |
 | Unchanged, with a stated reason | **14** | `grep -c "\| unchanged \| unchanged \|"` |
-| **Total** | **37** | matches the generator's `BRANCHING` count |
+| **Total** | **36** | matches the generator's `BRANCHING` count |
 
-## REPORTING — 19 files
+## REPORTING — 18 files
 
-**`paymentSyncService.ts` is listed as REPORTING although it is a WRITER**, and the
-mismatch is recorded rather than corrected. It writes both columns, but in raw SQL via a
-`CASE WHEN :status = 'paid'` expression, which the generator does not read as a branch.
-The classification is the scanner's, and the scanner is deliberately not being taught to
-understand SQL `CASE` — that is the write-shape classification T203 failed three times
-trying to build. What matters is that the file is in the enumeration at all, with a
-determination saying what it really does; its coherence is proved behaviourally in
-`services/__tests__/writerPairCoherence.test.ts`, not by its row here.
+**`paymentSyncService.ts` WAS listed here although it is a WRITER, and as of C10.17 Phase 2
+it is not listed at all.** The history is worth keeping, because it explains a gap rather
+than hiding one. It wrote both columns, but in raw SQL via `CASE WHEN :status = 'paid'`
+expressions, which the generator does not read as a branch — so it landed in REPORTING, and
+that mismatch was recorded rather than corrected. The classification is the scanner's, and
+the scanner is deliberately not being taught to understand SQL `CASE`: that is the
+write-shape classification T203 failed three times trying to build.
+
+Phase 2 deleted its `enrollment_type` arm, so the only column it still assigns is `tier`,
+and it now falls out of this enumeration entirely. **That is a real blind spot, stated
+plainly:** a live writer of an enrollment's access level appears in neither list, because
+the scanner cannot see a `CASE` and this enumeration is scoped to the two columns. What
+covers it instead is behavioural and source-text, not this document — the
+`paymentSyncService` block in `services/__tests__/writerPairCoherence.test.ts` asserts the
+`tier` arm is still gated on `:status = 'paid'` and that nothing assigns `enrollment_type`,
+and `writerPairTripwires.test.ts` carries the file in its paid-literal population with a
+determination. Its coherence was never proved by its row here.
 
 
 Disclosure, not behaviour tests. **Pasted from the generator's output, after it caught me
@@ -147,7 +172,7 @@ hand-transcribing this list and dropping a file** — see the note below.
 `services/explorerGrowth/explorerSignalDefinitions.ts` ·
 `services/explorerGrowth/explorerStateMachine.ts` ·
 `services/growthJourney/outcomes/outcomeNormalizer.ts` · `services/icpProfileService.ts` ·
-`services/internship/internshipReviewQueue.ts` · **`services/paymentSyncService.ts`** ·
+`services/internship/internshipReviewQueue.ts` ·
 `services/portalEnrollmentService.ts` · `services/portalSettingsService.ts`
 
 Four notes on this list:
@@ -158,18 +183,28 @@ Four notes on this list:
   knowing before someone "fixes" it.** It measures checkout conversion per person and needs to
   split free from paid, so its first version (2026-11-05, C10.1) grouped by `enrollment_type` and
   was listed here as a reporting consumer. **That was a bug, not a classification question.**
-  `markEnrollmentPaid` rewrites `enrollment_type` to `'standard'` when a payment lands -
-  `backend/src/services/enrollmentService.ts:133` → "enrollment.enrollment_type = 'standard';" -
-  so an Explorer who pays stops being an Explorer: grouping on
-  that field makes the Explorer conversion rate **zero by construction**, and pushes every
-  upgrader into the standard bucket where they inflate it. Both numbers that version produced
-  were artifacts.
+  `markEnrollmentPaid` rewrote `enrollment_type` to `'standard'` when a payment landed, so an
+  Explorer who paid stopped being an Explorer: grouping on that field made the Explorer
+  conversion rate **zero by construction**, and pushed every upgrader into the standard bucket
+  where they inflated it. Both numbers that version produced were artifacts.
 
-  It now takes origin from `explorer_entered_at` and Explorer-cohort membership - two markers the
-  payment path does not touch - which is why it no longer appears in a scan for this column. Any
-  change that reintroduces `enrollment_type` there reintroduces the bug, and the test
-  `NEVER selects enrollment_type, which the payment path rewrites` in
-  `services/__tests__/checkoutFunnelService.test.ts` exists to stop it.
+  **That rewrite is GONE as of C10.17 Phase 2** (2026-11-06), in all five payment writers -
+  `backend/src/services/enrollmentService.ts` → "STOOD HERE AND IS GONE" marks the spot, and
+  explains why the column is origin and a payment is not a change of origin. This citation used
+  to quote the deleted assignment itself, which is how the citation checker caught the drift.
+
+  **The conclusion does not change, and the reason it does not is the thing to understand.**
+  Phase 2 preserves origin **from that commit onward; it does not restore it.** Every row that
+  paid before it shipped already had its `enrollment_type` overwritten, and nothing can recover
+  that from the column. So `checkoutFunnelService` still takes origin from `explorer_entered_at`
+  and Explorer-cohort membership - two markers the payment path never touched, and therefore the
+  only signals under which the HISTORICAL conversion rate is computable at all. Switching it to
+  the now-honest column would quietly re-zero every cohort that predates Phase 2.
+
+  Any change that reintroduces `enrollment_type` there reintroduces the bug for historical
+  periods, and the test `NEVER selects enrollment_type, which the payment path rewrites` in
+  `services/__tests__/checkoutFunnelService.test.ts` exists to stop it. Its name now describes
+  history rather than the present; what it guards is unchanged.
 
   The general rule, which applies to anything else on this page: **never classify a population by
   a field the event you are measuring rewrites.** On production those two origin markers disagree

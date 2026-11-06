@@ -525,18 +525,45 @@ export async function activateByRef(
 }
 
 /**
- * The single definition of "this enrollment has a paid seat" — shared by paid
- * activation (activateByRef) and comped grants (grantFreeAccess). Flipping
- * enrollment_type off 'explorer' is what drops the Week-0 timeline gate and the
- * Projects demo lock; the rest marks it paid/active/portal-enabled. Kept in one
- * place so the two callers can never drift apart.
+ * The single definition of "this enrollment has a paid seat" - shared by paid
+ * activation (activateByRef) and comped grants (grantFreeAccess). `tier: 'member'`
+ * is the access grant, and it is what every consumer of "is this person a student"
+ * actually reads: `isEnrolledMember` (v1EnrollmentLookupController, the partner-app
+ * predicate) tests `tier === 'member'`, `subjectResolver` tests `tier !== 'guest'`
+ * plus payment, and `reeseWelcomeService` tests `tier === 'member'`. The rest marks
+ * it paid/active/portal-enabled. Kept in one place so the two callers can never
+ * drift apart.
+ *
+ * C10.17 PHASE 2 - DOES NOT WRITE `enrollment_type`, AND THAT IS THE POINT.
+ *
+ * It used to write `enrollment_type: 'standard'` here, alongside `tier`, as "the pair"
+ * (T206). Dropping that one property is the whole of this phase, so it is worth saying
+ * exactly what it cost and what it buys.
+ *
+ * `enrollment_type` is supposed to record ORIGIN - 'explorer' means this account arrived
+ * free, 'standard' means it arrived paid. Rewriting it on payment destroyed the only
+ * record of that, which is why free-to-paid conversion reads as zero: the measured event
+ * mutated the field the population was defined by. Nobody can be counted as converting
+ * out of a group they are removed from on conversion.
+ *
+ * WHAT THE OLD WRITE WAS ACTUALLY DOING, which is not what its comment claimed. The
+ * previous version of this docblock said flipping off 'explorer' "is what drops the
+ * Week-0 timeline gate and the Projects demo lock". That was true, and it was an
+ * accident: with CONTENT_PAID_GATE_ENABLED unset in production, `isFreePreviewTier`
+ * had reduced to `enrollment_type === 'explorer'`, so the origin field WAS the paywall.
+ * Phase 1 (PR #3717) made that branch read payment instead, so the gate now drops
+ * because this function writes `payment_status: 'paid'` - the fact that actually means
+ * they bought it - and not because of a bookkeeping flag.
+ *
+ * So after this change a paying ex-Explorer rests at `explorer` + `member` + `paid`:
+ * origin preserved, access granted, revenue attributed. That shape is unreachable
+ * before this commit and routine after it.
  */
 async function grantMembership(
   enrollment: Enrollment,
   opts: { cohortId: string | null; amountPaid: number; now: Date },
 ): Promise<void> {
   await enrollment.update({
-    enrollment_type: 'standard',
     tier: 'member',
     payment_status: 'paid',
     status: 'active',

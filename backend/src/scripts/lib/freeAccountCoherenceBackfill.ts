@@ -13,17 +13,44 @@
  *
  *   A. `enrollment_type: 'explorer'` + `tier <> 'guest'`  — ENTITLEMENT.
  *      `explorerIdentityBridge.loadActiveExplorers` filters on
- *      `enrollment_type`/`status` and never reads `tier`, so these rows are
- *      already visible to Explorer Growth. What is wrong is that a free account
- *      holds the PAID access level, so the paywall never limits it.
+ *      `enrollment_type`/`status`/`payment_status` and never reads `tier`, so an
+ *      UNPAID row in this shape is already visible to Explorer Growth. What is
+ *      wrong with it is that a free account holds the PAID access level, so the
+ *      paywall never limits it.
+ *
+ *      SHAPE A IS NO LONGER ONE POPULATION, C10.17 Phase 2. The payment paths
+ *      used to rewrite `enrollment_type` to 'standard' on payment; they no longer
+ *      do, because that rewrite destroyed the origin record and was the reason
+ *      free-to-paid conversion measured zero. So `explorer` + `member` + PAID is
+ *      now the ordinary resting shape of every learner who signed up free and then
+ *      bought, and it matches Shape A exactly.
+ *
+ *      Those rows must never be written. Aligning a payer's access level "down" to
+ *      guest would revoke curriculum somebody paid for - the single most damaging
+ *      thing this module could do. They are already safe, and it is worth being
+ *      precise about WHY, because the reason is not the Shape A predicate: the
+ *      `paid_status` / `paid_amount` / `active_subscription` exclusions in
+ *      `exclusionsFor` short-circuit in `decideRow` AHEAD of the Shape A write.
+ *      That ordering is load-bearing, not incidental. Anybody who "optimises"
+ *      `decideRow` by testing the cheap shape predicates before the exclusions
+ *      turns this module into a tool that strips paid access in bulk.
+ *      `freeAccountBehaviourChanges.test.ts` drives the paid shape through the real
+ *      `decideRow` and asserts it is not a write, so the ordering cannot be lost
+ *      silently.
  *
  *   B. `tier: 'guest'` + `enrollment_type: 'standard'`    — VISIBILITY.
  *      These are invisible to Explorer Growth. This is the shape the reset
  *      exists to fix.
  *
- * WHY B NEEDS POSITIVE PROVENANCE AND A IS SAFE WITHOUT IT. A Shape A row has
- * already declared its programme: the row itself says 'explorer'. Aligning its
+ * WHY B NEEDS POSITIVE PROVENANCE AND A IS SAFE WITHOUT IT. An UNPAID Shape A row
+ * has already declared its programme: the row itself says 'explorer'. Aligning its
  * access level to a free programme asserts nothing new about the person.
+ *
+ * That qualifier is new and it is the whole correction. The sentence used to read
+ * "a Shape A row", unqualified, and as of C10.17 Phase 2 that is false: for a row
+ * that has PAID, aligning its access level down to guest asserts something new and
+ * badly wrong. Shape A is safe without provenance only because the paid exclusions
+ * run first, which is a property of `decideRow`'s ORDER rather than of the shape.
  *
  * Shape B asserts something new — it moves a row INTO the learner programme —
  * and the shape alone cannot support that, because three non-learner populations

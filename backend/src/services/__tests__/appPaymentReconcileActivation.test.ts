@@ -165,16 +165,21 @@ describe('reconcileAppPayments — activation consumes account credit', () => {
     expect(AccountCredit.update as jest.Mock).not.toHaveBeenCalled();
   });
 
-  it('converts the Explorer to a paying member — the raw-SQL path never did', async () => {
+  it('grants the Explorer a paying seat — the raw-SQL path never did — WITHOUT rewriting origin', async () => {
     wireDb();
     const { enrollment } = wireSubscription(0);
 
     await reconcileAppPayments();
 
     const enrUpdate = enrollment.update.mock.calls[0][0];
-    expect(enrUpdate.enrollment_type).toBe('standard'); // drops the Week-0 gate
     expect(enrUpdate.tier).toBe('member');
     expect(enrUpdate.payment_status).toBe('paid');
+    // C10.17 Phase 2: this asserted `enrollment_type === 'standard'` with the comment
+    // "drops the Week-0 gate". That was true and it was the bug: the Week-0 gate was keyed
+    // on origin, so paying overwrote the only record that this account arrived free, and
+    // free-to-paid conversion measured zero. Phase 1 moved the gate onto `payment_status`,
+    // which the line above is what sets, so the gate still drops - for the right reason.
+    expect(enrUpdate).not.toHaveProperty('enrollment_type');
   });
 
   it('never overwrites a payment id already on the subscription row (COALESCE semantics)', async () => {

@@ -254,6 +254,89 @@ describe('T207 AC4 — paid-and-guest is reported, never written and never silen
   });
 });
 
+describe('C10.17 Phase 2 — a PAYING upgrader at explorer + member is never downgraded', () => {
+  /**
+   * THE MOST DAMAGING THING THIS MODULE COULD DO, and the reason this block exists.
+   *
+   * Shape A is `enrollment_type: 'explorer'` + `tier <> 'guest'`, and its remedy is to set
+   * `tier` to 'guest'. Before Phase 2 that shape could only be an incoherence, because every
+   * payment path rewrote `enrollment_type` to 'standard' the moment somebody paid, so a payer
+   * could not be sitting at 'explorer'. Phase 2 deletes those rewrites: `enrollment_type` is
+   * now ORIGIN, and `explorer` + `member` + `paid` becomes the ordinary resting shape of
+   * every learner who signed up free and then bought the course.
+   *
+   * Which means Shape A's write would, unguarded, strip paid curriculum access from exactly
+   * the people this business most wants to keep - in bulk, in one sweep.
+   *
+   * It is already guarded, and the guard is NOT the Shape A predicate: `exclusionsFor` marks
+   * the row paid and `decideRow` short-circuits on a non-empty exclusion list BEFORE it
+   * reaches the Shape A branch. That is an ORDERING property. Nothing about `shapeA` itself
+   * says anything about payment, so reordering `decideRow` to test the cheap shape predicates
+   * first - an entirely natural-looking tidy-up - would turn this module into a tool that
+   * revokes paid access. These tests are what stands in the way of that edit, which is why
+   * they assert the absence of a TIER PATCH specifically rather than just `action !== 'write'`.
+   *
+   * Deliberately not "fixed" by adding `&& !isPaid(row)` to `shapeA`: the logic is already
+   * correct, and the only effect would be to move these rows from the `excluded` bucket to
+   * `already_coherent`, changing what the operator's report says for no gain in safety. The
+   * guard belongs in a test, not in a second opinion inside the predicate.
+   */
+  const paidUpgrader = (over: Partial<BackfillRow> = {}) => row({
+    id: 'paid-upgrader',
+    enrollment_type: 'explorer',
+    tier: 'member',
+    payment_status: 'paid',
+    amount_paid: 199,
+    ...over,
+  });
+
+  it('is not written at all', () => {
+    const d = decideRow(paidUpgrader());
+    expect(d.action).not.toBe('write');
+    expect(d.patch).toBeUndefined();
+  });
+
+  it('above all, is never given a tier patch - that patch is the revocation', () => {
+    // The assertion that survives a reordering of `decideRow`. `action !== 'write'` alone
+    // would too, but this one names the harm, so a future reader cannot mistake it for a
+    // bookkeeping preference.
+    const plan = planBackfill([paidUpgrader()]);
+    expect(plan.ledger.filter((p) => p.column === 'tier')).toEqual([]);
+    expect(plan.ledger).toEqual([]);
+  });
+
+  it('says why, so the operator report can tell a payer from pending work', () => {
+    expect(decideRow(paidUpgrader()).exclusions).toContain('paid_status');
+  });
+
+  /**
+   * One test per paid signal, because `isPaid` and `exclusionsFor` each have THREE terms and a
+   * single paid fixture lets two of them be deleted while the suite stays green. T207's own
+   * notes record a mutation that survived for exactly this reason.
+   */
+  it.each([
+    ['payment_status only', { payment_status: 'paid', amount_paid: 0, subscription_status: null }, 'paid_status'],
+    ['amount_paid only', { payment_status: 'pending', amount_paid: 199, subscription_status: null }, 'paid_amount'],
+    ['subscription only', { payment_status: 'pending', amount_paid: 0, subscription_status: 'active' }, 'active_subscription'],
+  ] as const)('is protected when the paid signal is %s', (_label, over, reason) => {
+    const d = decideRow(paidUpgrader(over));
+    expect(d.action).not.toBe('write');
+    expect(d.exclusions).toContain(reason);
+  });
+
+  /**
+   * THE POSITIVE CONTROL, and it is the one that makes the four assertions above mean
+   * something. The same shape, unpaid, IS still written - so the suite can see a Shape A
+   * write, and "nothing happened" above is a decision rather than a broken fixture. The ~260
+   * genuinely incoherent free rows this sweep exists for are untouched by Phase 2.
+   */
+  it('and the SAME shape unpaid is still written, so this is a payment test not a dead fixture', () => {
+    const d = decideRow(paidUpgrader({ payment_status: 'pending', amount_paid: 0, subscription_status: null }));
+    expect(d.action).toBe('write');
+    expect(d.patch).toEqual({ id: 'paid-upgrader', column: 'tier', from: 'member', to: 'guest' });
+  });
+});
+
 describe('T207 — the ambiguous bucket is reported, not guessed in either direction', () => {
   it('reports a guest+standard row with no learner provenance', () => {
     // 35 production rows match no lead by email, plus 2 with a non-free_signup

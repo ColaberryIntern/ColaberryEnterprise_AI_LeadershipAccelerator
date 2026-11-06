@@ -215,7 +215,7 @@ export async function reconcilePayment(
     enrolled_at: fresh.enrolled_at || new Date(payment.PaymentDate || Date.now()),
     paysimple_payment_id: String(payment.Id),
     paysimple_customer_id: String(customerId),
-    // T206: THE PAIR, kept coherent with the payment. Marking a row paid while leaving
+    // T206, NARROWED BY C10.17 PHASE 2 to `tier` alone. Marking a row paid while leaving
     // `tier: 'guest'` produces paid-but-guest, which breaks three consumers at once:
     // `v1EnrollmentLookupController` reports the person NOT enrolled to the partner app,
     // `growthJourney/subjectResolver` reads the customer fact as false, and
@@ -225,10 +225,11 @@ export async function reconcilePayment(
     // sweep only considers payments at or above `MINIMUM_FULL_PAYMENT_AMOUNT` (100),
     // chosen to sit between the $50 Open House deposit and the cheapest real plan, so a
     // deposit cannot reach this function and this cannot promote a deposit holder.
-    // `grantMembership` (`subscriptionService.ts:525`) is the reference; this agrees with
-    // it rather than offering a second opinion.
+    // `grantMembership` (subscriptionService.ts) is the reference; this agrees with
+    // it rather than offering a second opinion. It no longer writes `enrollment_type`
+    // either: origin is not a payment outcome, and `tier` is the column the three
+    // consumers named above actually read.
     tier: 'member',
-    enrollment_type: 'standard',
   });
   await Cohort.increment('seats_taken', { by: 1, where: { id: fresh.cohort_id } });
   return true;
