@@ -122,7 +122,7 @@ function buildScheduleAwarePatch(
 }
 
 export async function listOpenCohorts() {
-  return Cohort.findAll({
+  const rows = await Cohort.findAll({
     where: {
       status: 'open',
       // Private business/owner workspaces (cohort_type='business') are never shown
@@ -133,9 +133,45 @@ export async function listOpenCohorts() {
     // remaining internal lanes (explorer prospect cohort, corporate sponsor
     // cohorts, demo rows) out of public cohort pickers. The `business` exclusion
     // above only covers private owner workspaces.
-    attributes: ['id', 'name', 'start_date', 'core_day', 'core_time', 'optional_lab_day', 'max_seats', 'seats_taken', 'cohort_type'],
+    // `settings_json` is read but NOT returned: it carries the internal schedule
+    // and is not part of the public contract. Only `batch_month` is lifted out of
+    // it, below.
+    attributes: ['id', 'name', 'start_date', 'core_day', 'core_time', 'optional_lab_day', 'max_seats', 'seats_taken', 'cohort_type', 'settings_json'],
     order: [['start_date', 'ASC']],
   });
+
+  // Through `unknown`: CohortAttributes is a declared shape and does not structurally
+  // overlap an index signature, so a direct cast is a TS2352.
+  return rows.map((row) => toPublicCohort(row.get({ plain: true }) as unknown as Record<string, unknown>));
+}
+
+/**
+ * The public shape of a cohort row: `batch_month` lifted out, `settings_json` dropped.
+ *
+ * WHY `batch_month` REACHES THE PUBLIC LIST. Under the monthly batch model a batch
+ * row's `start_date` is its ORIENTATION, which falls in the month AFTER the batch.
+ * A marketing surface that prints `start_date` as "the next cohort" therefore names
+ * a month the visitor has not missed and cannot join yet: on 2026-11-06 the open
+ * November row showed "December 7, 2026" and leads concluded enrollment had closed
+ * for the month. Taiwo reported it while trying to enroll someone.
+ *
+ * The legacy fixed-start cohorts have no `batch_month` and their `start_date` IS a
+ * genuine start, so the two kinds cannot be told apart from the date alone. This is
+ * the field that tells them apart, and it is null for every legacy row.
+ *
+ * `settings_json` is deliberately NOT returned. It carries the internal schedule and
+ * has never been part of the public contract; only the one field is lifted out.
+ *
+ * Exported so it can be tested without a database.
+ */
+export function toPublicCohort(plain: Record<string, unknown>): Record<string, unknown> {
+  const settings = plain.settings_json as { batch_month?: unknown } | null | undefined;
+  const batchMonth = settings && typeof settings.batch_month === 'string' && settings.batch_month.trim()
+    ? settings.batch_month.trim()
+    : null;
+  const rest = { ...plain };
+  delete rest.settings_json;
+  return { ...rest, batch_month: batchMonth };
 }
 
 /**

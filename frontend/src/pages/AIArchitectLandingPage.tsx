@@ -8,7 +8,7 @@ import { Card } from '../colaberry/components/core/Card';
 import IndustryDemoGrid from '../components/IndustryDemoGrid';
 import { captureUTMFromURL } from '../services/utmService';
 import { initTracker, trackEvent } from '../utils/tracker';
-import { selectNextCohort } from '../utils/cohortSelection';
+import { selectNextCohort, formatBatchMonth } from '../utils/cohortSelection';
 
 const IntelligenceDemoSection = React.lazy(() => import('../components/intelligence-demo/IntelligenceDemoSection'));
 
@@ -139,7 +139,7 @@ function AIArchitectLandingPage() {
   const [showBooking, setShowBooking] = useState(false);
   const [showStickyCta, setShowStickyCta] = useState(false);
   const navigate = useNavigate();
-  const [nextCohort, setNextCohort] = useState<{ name: string; start_date: string; seats_remaining: number } | null>(null);
+  const [nextCohort, setNextCohort] = useState<{ name: string; start_date: string; seats_remaining: number; batch_month: string | null } | null>(null);
   const [prefill, setPrefill] = useState<{ name: string; email: string; company: string; phone: string }>({ name: '', email: '', company: '', phone: '' });
 
   // Show sticky CTA after scrolling past the hero section
@@ -176,6 +176,7 @@ function AIArchitectLandingPage() {
             name: next.name,
             start_date: next.start_date,
             seats_remaining: next.max_seats - next.seats_taken,
+            batch_month: next.batch_month ?? null,
           });
         }
       })
@@ -281,21 +282,52 @@ function AIArchitectLandingPage() {
       </Suspense>
 
       {/* COHORT URGENCY */}
-      {nextCohort && (
+      {nextCohort && (() => {
+        const batchMonthLabel = formatBatchMonth(nextCohort.batch_month);
+        return (
         <section className="cbaa-sec">
           <div className="cbaa-wrap">
             <Card elevation="md" className="cbaa-cohort">
               <div className="cbaa-cohort-body">
-                <Badge tone="blue" outline>Next Cohort</Badge>
-                <div className="date">
-                  {new Date(nextCohort.start_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
-                </div>
-                <div className="seats">{nextCohort.seats_remaining} seats remaining</div>
-                <p>
-                  Seats are limited so every builder gets real support. When this cohort fills, enrollment closes
-                  and the next start date moves out. If you’re serious about shipping a real AI system, this is
-                  your window.
-                </p>
+                {/*
+                  TWO KINDS OF ROW, AND THE DATE MEANS SOMETHING DIFFERENT IN EACH.
+
+                  A legacy fixed-start cohort's `start_date` is a genuine start, and
+                  printing it is right. A monthly batch's `start_date` is its ORIENTATION,
+                  which falls in the month AFTER the batch, so printing it names a month
+                  the visitor has not missed and cannot join yet. On 2026-11-06 the open
+                  November row showed "December 7, 2026" and leads concluded enrollment had
+                  closed for the month. `batch_month` is the only thing that distinguishes
+                  them, which is why the API now returns it.
+                */}
+                {batchMonthLabel ? (
+                  <>
+                    <Badge tone="blue" outline>Enrolling now</Badge>
+                    <div className="date">{batchMonthLabel}</div>
+                    <div className="seats">
+                      {nextCohort.seats_remaining} seats remaining &middot; orientation{' '}
+                      {new Date(nextCohort.start_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}
+                    </div>
+                    <p>
+                      You join the batch for the month you enroll in, so you start now rather than waiting for a
+                      date. The work is self-paced and your group opens the day you join. Orientation is the
+                      first Monday of the following month, and after it your batch joins the monthly class with
+                      everyone who came before you.
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <Badge tone="blue" outline>Next Cohort</Badge>
+                    <div className="date">
+                      {new Date(nextCohort.start_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+                    </div>
+                    <div className="seats">{nextCohort.seats_remaining} seats remaining</div>
+                    <p>
+                      Seats are limited so every builder gets real support. If you’re serious about shipping a
+                      real AI system, this is your window.
+                    </p>
+                  </>
+                )}
                 <div className="cbaa-mt5">
                   <CtaButton to="/try" size="lg" onClick={goJoin} data-track="aiarchitect_cohort_start_free" trailingIcon={<span aria-hidden>→</span>}>
                     Start free
@@ -305,7 +337,8 @@ function AIArchitectLandingPage() {
             </Card>
           </div>
         </section>
-      )}
+        );
+      })()}
 
       {/* WHO THIS IS FOR + CTA */}
       <section className="cbaa-sec cbaa-alt">
