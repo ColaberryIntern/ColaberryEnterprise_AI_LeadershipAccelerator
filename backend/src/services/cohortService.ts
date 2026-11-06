@@ -3,6 +3,7 @@ import { UpdateCohortInput, CreateCohortInput, ScheduleDayInput } from '../schem
 import { AppError } from '../utils/AppError';
 import { Op, fn, col, QueryTypes } from 'sequelize';
 import { sequelize } from '../config/database';
+import { env } from '../config/env';
 
 const SESSION_DEFAULT_DURATION_MIN = 90; // matches the existing "Add Session" form's own 10:00->11:30 default
 const DEFAULT_PROGRAM_WEEKS = 12; // matches sessionGenerationService.ts's own constant of the same name
@@ -180,11 +181,33 @@ export async function listAllCohorts() {
 }
 
 export async function createCohort(data: CreateCohortInput) {
-  return Cohort.create({
+  const cohort = await Cohort.create({
     seats_taken: 0,
     status: 'open',
     ...buildScheduleAwarePatch(data as unknown as Record<string, any>),
   } as any);
+  await resolveBatchRoom(cohort);
+  return cohort;
+}
+
+/**
+ * Give a new batch its own room (C10.14), so the monthly rollover cannot forget
+ * one. Same posture as `acceleratorService.resolveRoomId`: flag-gated,
+ * best-effort, non-fatal and lazily imported, because a room problem must never
+ * cost us the cohort row - the cohort is the thing enrollment depends on, and
+ * the room is idempotent and can be backfilled by calling this again.
+ *
+ * Only batches get one; `ensureRoomForCohort` enforces that and returns null for
+ * the Explorer prospect pool and the internship.
+ */
+async function resolveBatchRoom(cohort: Cohort): Promise<void> {
+  if (!env.communityRoomsEnabled) return;
+  try {
+    const { ensureRoomForCohort } = await import('./communityRooms/cohortRoomService');
+    await ensureRoomForCohort(cohort as any);
+  } catch (err: any) {
+    console.warn('[CommunityRooms] ensureRoomForCohort failed (non-fatal):', err?.message);
+  }
 }
 
 export interface CohortDependents {

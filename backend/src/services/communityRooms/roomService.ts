@@ -15,6 +15,7 @@ import {
   canJoinMeeting,
   canUploadResource,
 } from './roomEntitlementService';
+import { sessionRoomPrivacy } from './cohortRoomService';
 import { getMeetingProvider } from './meetingProvider';
 import { reserveRoomHost } from '../zoom/roomHostAllocator';
 import { log, slugify, shortToken, truncated, notFoundError, forbiddenError, validationError, conflictError } from './roomShared';
@@ -39,9 +40,13 @@ export async function ensureRoomForSession(session: LiveSession): Promise<Commun
       name: truncated(session.title, 200) || `Session ${session.session_number}`,
       category: 'your_cohort',
       room_type: 'scheduled',
-      privacy: 'cohort',
       status: 'active',
       topic: truncated(session.description, 255),
+      // The batch's orientation is theirs alone; every session after it is the
+      // combined monthly class that all batches attend. See
+      // cohortRoomService.sessionRoomPrivacy for why this is read off the title
+      // rather than session_number.
+      privacy: sessionRoomPrivacy(session),
       linked_cohort_id: session.cohort_id,
       linked_live_session_id: session.id,
       is_system: true,
