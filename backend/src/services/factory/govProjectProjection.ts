@@ -55,6 +55,10 @@ export interface StudentProposalDocument {
   openGapCount: number;
   fatalCount: number;
   cycle: { status: string; runId: string } | null;
+  /** v3 (T05): open HumanNeeds that touch this document, viewer-filtered. `fatalNeedsCount` of them block export.
+   *  Optional + loader-filled so pre-existing view literals still compile. */
+  needsCount?: number;
+  fatalNeedsCount?: number;
 }
 
 export interface StudentGovTrackView { trackType: string; status: string; hasBuild: boolean; }
@@ -140,6 +144,11 @@ export interface StudentGovProjectView {
   buildArtifacts?: StudentGovBuildArtifact[];
   /** v2: combined completion across verified build stories + accepted proposal documents — the honest project %. */
   overallProgress: GovOverallProgress;
+  /** v3 (T05): the one needs number for the project — open HumanNeeds a human must supply, viewer-filtered (an
+   *  intern never sees a pricing or Gold-approval need counted). `fatalNeedsCount` of them block export. Optional +
+   *  loader-filled so pre-existing view literals still compile. */
+  needsCount?: number;
+  fatalNeedsCount?: number;
 }
 
 /** P4: a build-evidence screenshot projected student-safe (no identities; the artifact rows carry none). */
@@ -290,6 +299,35 @@ export function assembleProposalDocuments(sources: ProposalDocSummarySource[], v
 }
 
 /**
+ * PURE (v3 T05): collapse a (viewer-filtered) HumanNeed list into counts — the project total + how many are fatal,
+ * and the same per document. A need counts once for the project and once per distinct document it touches, so a
+ * card's number is "needs that touch me" and the project number is "needs overall". Structurally typed so the
+ * projection does not couple to the full HumanNeed shape.
+ */
+export function summarizeNeeds(
+  needs: Array<{ blocking?: string; usedIn?: Array<{ docKey?: string }> }>,
+): { total: number; fatal: number; byDoc: Record<string, { total: number; fatal: number }> } {
+  const byDoc: Record<string, { total: number; fatal: number }> = {};
+  let total = 0;
+  let fatal = 0;
+  for (const n of needs || []) {
+    const isFatal = n?.blocking === 'fatal';
+    total += 1;
+    if (isFatal) fatal += 1;
+    const docs = new Set<string>();
+    for (const u of n?.usedIn || []) {
+      if (u && typeof u.docKey === 'string' && u.docKey) docs.add(u.docKey);
+    }
+    for (const dk of docs) {
+      const cell = byDoc[dk] || (byDoc[dk] = { total: 0, fatal: 0 });
+      cell.total += 1;
+      if (isFatal) cell.fatal += 1;
+    }
+  }
+  return { total, fatal, byDoc };
+}
+
+/**
  * Load + project. Serves ONLY a non-archived `government_public_sector` project (else null -> 404). Access must
  * already be authorized by the caller's guard; this never performs an access check of its own.
  */
@@ -414,6 +452,21 @@ export async function getStudentGovProjectView(deliveryProjectId: string, viewer
     const assembled = assembleProposalDocuments(sources, viewerCanVerify);
     view.proposalDocuments = assembled.documents;
     view.proposalReadiness = assembled.readiness;
+    // v3 (T05): the needs counts, viewer-filtered — an intern never sees a pricing or Gold-approval need counted.
+    // Project total + per-document, so the Needs-you inbox and each card show the number without a second fetch.
+    try {
+      const { collectProjectNeeds } = await import('./proposal/collectProjectNeeds');
+      const { needsForViewer } = await import('./proposal/aggregateNeeds');
+      const projNeeds = needsForViewer(await collectProjectNeeds(deliveryProjectId), { includePricing: viewerCanVerify, canApprove: viewerCanVerify });
+      const sum = summarizeNeeds(projNeeds);
+      view.needsCount = sum.total;
+      view.fatalNeedsCount = sum.fatal;
+      for (const d of view.proposalDocuments) {
+        const cell = sum.byDoc[d.key];
+        d.needsCount = cell?.total ?? 0;
+        d.fatalNeedsCount = cell?.fatal ?? 0;
+      }
+    } catch { /* additive; needs counts stay undefined */ }
     view.overallProgress = computeOverallProgress({
       buildVerified: view.buildSummary?.rollup.verified ?? 0,
       buildTotal: view.buildSummary?.rollup.total ?? 0,
