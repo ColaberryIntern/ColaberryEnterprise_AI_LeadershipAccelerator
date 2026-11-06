@@ -122,7 +122,7 @@ asserts them from the parsed cells so they cannot drift again:
 | Unchanged, with a stated reason | **14** | `grep -c "\| unchanged \| unchanged \|"` |
 | **Total** | **37** | matches the generator's `BRANCHING` count |
 
-## REPORTING — 21 files
+## REPORTING — 19 files
 
 **`paymentSyncService.ts` is listed as REPORTING although it is a WRITER**, and the
 mismatch is recorded rather than corrected. It writes both columns, but in raw SQL via a
@@ -140,10 +140,10 @@ hand-transcribing this list and dropping a file** — see the note below.
 `controllers/challengeController.ts` ·
 `intelligence/systemStateEngine/systemStateEngine.ts` ·
 `routes/admin/flotationIntakeRoutes.ts` · `routes/projectRoutes.ts` ·
-`scripts/enumerateFreeAccountConsumers.ts` · `scripts/reportCheckoutFunnel.ts` ·
+`scripts/enumerateFreeAccountConsumers.ts` ·
 `server.ts` · `services/adminOrgService.ts` · `services/adminOs/lifecycle.ts` ·
 `services/adminOs/metricRegistry.ts` · `services/adminOs/personProfileService.ts` ·
-`services/checkoutFunnelService.ts` · `services/enrollmentsWithoutProjects.ts` ·
+`services/enrollmentsWithoutProjects.ts` ·
 `services/explorerGrowth/explorerSignalDefinitions.ts` ·
 `services/explorerGrowth/explorerStateMachine.ts` ·
 `services/growthJourney/outcomes/outcomeNormalizer.ts` · `services/icpProfileService.ts` ·
@@ -154,17 +154,27 @@ Four notes on this list:
 
 - **The generator lists itself.** Kept rather than special-cased: an exclusion for "files that are
   part of the scan" is the kind of exception that later hides a real consumer.
-- **`services/checkoutFunnelService.ts` and `scripts/reportCheckoutFunnel.ts` arrived on
-  2026-11-05 (C10.1) and this tripwire is why their determination exists.** They measure checkout
-  conversion per person and **group by** `enrollment_type`; they never filter on it, compare it to
-  `'explorer'`, or change any behaviour from it, so reporting is the right bucket. The grouping is
-  the whole point: C10.1 had recorded that conversion "fell by about two thirds", and splitting
-  the population showed the paid product converting at 88-100% throughout while the free tier
-  converted at **zero** across five months. The decline was a mix shift between the two
-  populations, not a decline in either. `checkoutFunnelService` therefore refuses to emit a
-  blended rate at all, and `scripts/reportCheckoutFunnel.ts` prints the composition alongside
-  every figure. Behaviour is covered in `services/__tests__/checkoutFunnelService.test.ts`,
-  including a reconciliation against production of all ten period/type cells.
+- **`services/checkoutFunnelService.ts` is deliberately NOT in this list, and that is worth
+  knowing before someone "fixes" it.** It measures checkout conversion per person and needs to
+  split free from paid, so its first version (2026-11-05, C10.1) grouped by `enrollment_type` and
+  was listed here as a reporting consumer. **That was a bug, not a classification question.**
+  `markEnrollmentPaid` rewrites `enrollment_type` to `'standard'` when a payment lands -
+  `backend/src/services/enrollmentService.ts:133` → "enrollment.enrollment_type = 'standard';" -
+  so an Explorer who pays stops being an Explorer: grouping on
+  that field makes the Explorer conversion rate **zero by construction**, and pushes every
+  upgrader into the standard bucket where they inflate it. Both numbers that version produced
+  were artifacts.
+
+  It now takes origin from `explorer_entered_at` and Explorer-cohort membership - two markers the
+  payment path does not touch - which is why it no longer appears in a scan for this column. Any
+  change that reintroduces `enrollment_type` there reintroduces the bug, and the test
+  `NEVER selects enrollment_type, which the payment path rewrites` in
+  `services/__tests__/checkoutFunnelService.test.ts` exists to stop it.
+
+  The general rule, which applies to anything else on this page: **never classify a population by
+  a field the event you are measuring rewrites.** On production those two origin markers disagree
+  about **47 of 102** people who have started checkout, so the module reports that disagreement
+  alongside the split rather than presenting either answer as settled.
 - **`server.ts` appears** because it owns the `ALTER TABLE … ADD COLUMN IF NOT EXISTS` drift-guard
   list that creates both columns. That is the mechanism T205 needs and T215 verifies in production.
 - **The tripwire caught me doing the exact thing this file exists to prevent.** I wrote this list
