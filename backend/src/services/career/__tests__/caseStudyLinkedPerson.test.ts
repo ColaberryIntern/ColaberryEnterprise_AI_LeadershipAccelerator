@@ -1,25 +1,28 @@
 /**
  * caseStudyLinkedPerson - the reverse link, case study -> person.
  *
- * The database is mocked at the query boundary and the repository resolver is mocked at
- * its module boundary, so these assert the composition: both routes are consulted, the
- * answer is deduplicated and deterministic, and a failure on `hire` reads as NOBODY.
+ * The database is mocked at the query boundary and the shared reverse query
+ * (`queryProjectIdsForCaseStudy`, over the ONE link relation the listing also uses) at its
+ * module boundary, so these assert the composition: the shared relation is what is asked,
+ * the answer is deduplicated and deterministic, and a failure on `hire` reads as NOBODY.
+ * That the relation is the same one the listing reads is pinned in
+ * portfolioCaseStudyLinks.test.ts ("one relation, both directions").
  */
 jest.mock('../../../config/database', () => ({
   sequelize: { query: jest.fn().mockResolvedValue([[]]) },
 }));
-jest.mock('../../caseStudy/caseStudyProjectResolution', () => ({
-  resolveProjectsThroughRepositories: jest.fn().mockResolvedValue([]),
+jest.mock('../portfolioCaseStudyLinks', () => ({
+  queryProjectIdsForCaseStudy: jest.fn().mockResolvedValue([]),
 }));
 
 import { sequelize } from '../../../config/database';
-import { resolveProjectsThroughRepositories } from '../../caseStudy/caseStudyProjectResolution';
+import { queryProjectIdsForCaseStudy } from '../portfolioCaseStudyLinks';
 import {
   hireGateFacts, linkedPeopleForCaseStudy, projectIdsForCaseStudy, toLinkedPersonPages,
 } from '../caseStudyLinkedPerson';
 
 const mockQuery = sequelize.query as unknown as jest.Mock;
-const mockRepoProjects = resolveProjectsThroughRepositories as unknown as jest.Mock;
+const mockRepoProjects = queryProjectIdsForCaseStudy as unknown as jest.Mock;
 
 const P1 = '11111111-1111-4111-8111-111111111111';
 const P2 = '22222222-2222-4222-8222-222222222222';
@@ -31,20 +34,23 @@ beforeEach(() => {
   mockRepoProjects.mockReset().mockResolvedValue([]);
 });
 
-describe('projectIdsForCaseStudy - both routes, never a third', () => {
-  it('uses case_studies.project_id when the record was created from a project', async () => {
+describe('projectIdsForCaseStudy - the shared relation, read in reverse', () => {
+  it('asks the shared relation by case study id, whatever project_id the record carries', async () => {
+    mockRepoProjects.mockResolvedValue([P1]);
     expect(await projectIdsForCaseStudy({ id: 'cs1', project_id: P1 })).toEqual([P1]);
     expect(mockRepoProjects).toHaveBeenCalledWith('cs1');
   });
 
-  it('finds the project through a cited repository when project_id is null', async () => {
-    mockRepoProjects.mockResolvedValue([P2]);
-    expect(await projectIdsForCaseStudy({ id: 'cs1', project_id: null })).toEqual([P2]);
+  it('adds nothing of its own: a record project_id the relation did not return is not a link', async () => {
+    // The relation covers case_studies.project_id itself; trusting the record's field here
+    // as well would be a second rule, which is the disagreement this module exists without.
+    mockRepoProjects.mockResolvedValue([]);
+    expect(await projectIdsForCaseStudy({ id: 'cs1', project_id: P1 })).toEqual([]);
   });
 
-  it('unions and deduplicates the two routes in a stable order', async () => {
-    mockRepoProjects.mockResolvedValue([P2, P1]);
-    expect(await projectIdsForCaseStudy({ id: 'cs1', project_id: P1 })).toEqual([P1, P2]);
+  it('deduplicates and sorts, so the answer does not depend on row order', async () => {
+    mockRepoProjects.mockResolvedValue([P2, P1, P2]);
+    expect(await projectIdsForCaseStudy({ id: 'cs1', project_id: null })).toEqual([P1, P2]);
   });
 });
 
@@ -67,6 +73,7 @@ describe('linkedPeopleForCaseStudy', () => {
   });
 
   it('returns every linked page whatever its visibility - identity, not permission', async () => {
+    mockRepoProjects.mockResolvedValue([P1]);
     mockQuery.mockResolvedValue([[page('e1', 'ann', 'draft', 'private')]]);
     const out = await linkedPeopleForCaseStudy({ id: 'cs1', project_id: P1 });
     expect(out).toHaveLength(1);
@@ -88,6 +95,7 @@ describe('hireGateFacts - what the publish gate is told', () => {
   });
 
   it('counts the linked people on hire', async () => {
+    mockRepoProjects.mockResolvedValue([P1]);
     mockQuery.mockResolvedValue([[page('e1', 'ann'), page('e2', 'bo')]]);
     expect(await hireGateFacts({ id: 'cs1', project_id: P1 }, 'hire')).toEqual({ linkedPeople: 2 });
   });

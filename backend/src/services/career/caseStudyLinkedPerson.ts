@@ -7,11 +7,13 @@
  * preview, and the "Built by" chip on a hire case study. This module answers it, and it is
  * the only place that does.
  *
- * THE SAME TWO ROUTES AS THE FORWARD RULE, never a third. A case study belongs to a
- * project by `case_studies.project_id`, or through a repository it cites
- * (`resolveProjectsThroughRepositories`, which covers `case_study_repositories.project_id`
- * and a matching `github_connections` row, case-insensitively). That resolver is CALLED,
- * not copied. Then a project belongs to an enrollment, and an enrollment has at most one
+ * THE SAME RELATION AS THE FORWARD RULE, not a second resolver. "This case study belongs
+ * to this project" is ONE SQL relation, `CASE_STUDY_PROJECT_LINKS_SQL` in
+ * portfolioCaseStudyLinks.ts, which the listing (forward) and this module (reverse) both
+ * select from - so the publish gate can never accept a link the directory would not
+ * follow. (The first version called the maturity rule's resolver, which also counts
+ * `case_study_repositories.project_id`; that disagreed with the listing, and a verifier
+ * caught it.) Then a project belongs to an enrollment, and an enrollment has at most one
  * portfolio page (`career_portfolio_pages_enrollment_unique`).
  *
  * WHAT IT RETURNS IS IDENTITY, NOT PERMISSION. Every linked page comes back whatever its
@@ -25,7 +27,7 @@
  * person whose page was deleted mid-request, which reads as no person.
  */
 import { sequelize } from '../../config/database';
-import { resolveProjectsThroughRepositories } from '../caseStudy/caseStudyProjectResolution';
+import { queryProjectIdsForCaseStudy } from './portfolioCaseStudyLinks';
 
 /** One portfolio page a case study resolves to. */
 export interface LinkedPersonPage {
@@ -42,14 +44,11 @@ export interface LinkedPersonRecord {
 }
 
 /**
- * The project ids a case study is about, by either route, deduplicated and sorted so the
- * answer does not depend on row order.
+ * The project ids a case study is about: the shared relation, read in reverse. Sorted and
+ * deduplicated so the answer does not depend on row order.
  */
 export async function projectIdsForCaseStudy(record: LinkedPersonRecord): Promise<string[]> {
-  const ids = new Set<string>();
-  if (record.project_id) ids.add(String(record.project_id));
-  for (const id of await resolveProjectsThroughRepositories(record.id)) ids.add(id);
-  return [...ids].sort();
+  return [...new Set(await queryProjectIdsForCaseStudy(record.id))].sort();
 }
 
 /**
@@ -104,12 +103,13 @@ export async function hireGateFacts(
   if (surfaceKey !== 'hire') return null;
   try {
     return { linkedPeople: (await linkedPeopleForCaseStudy(record)).length };
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const e = err instanceof Error ? err : new Error(String(err));
     console.warn(JSON.stringify({
       timestamp: new Date().toISOString(), level: 'warn', service: 'backend',
       event: 'case_study_hire_person_read_failed', outcome: 'failure',
-      error_class: err?.name || 'Error',
-      context: { case_study_id: record.id, message: String(err?.message || '').slice(0, 200) },
+      error_class: e.name || 'Error',
+      context: { case_study_id: record.id, message: e.message.slice(0, 200) },
     }));
     return { linkedPeople: 0 };
   }
