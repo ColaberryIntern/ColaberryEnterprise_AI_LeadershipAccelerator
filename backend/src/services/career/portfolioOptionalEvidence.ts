@@ -56,13 +56,15 @@ export async function gatherOptionalEvidence(args: {
   repoUrls: unknown[];
   query: RowQuery;
   now: Date;
+  /** The surface a project's case-study link must be published on. Default: the portfolio's own. */
+  surfaceKey?: string;
 }): Promise<OptionalEvidence> {
-  const { enrollmentId, projects, repoUrls, query, now } = args;
+  const { enrollmentId, projects, repoUrls, query, now, surfaceKey } = args;
 
   let caseStudyByProject: Record<string, string> = {};
   try {
     // A case study that cannot be resolved costs its link, never the page.
-    caseStudyByProject = await caseStudyLinksForProjects(projects as any);
+    caseStudyByProject = await caseStudyLinksForProjects(projects as any, surfaceKey);
   } catch (err: any) {
     warn('public_portfolio_case_study_unavailable', err, enrollmentId, now);
   }

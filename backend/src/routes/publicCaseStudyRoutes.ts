@@ -391,6 +391,13 @@ router.get('/api/public/case-studies/:slug', async (req: Request, res: Response)
       }),
     };
     log('public_case_study_detail', 'success', correlationId, { surface: surfaceKey });
+    // On HIRE only: the builder's portfolio slug for the "Built by" chip, or null when the
+    // person is not reachable on Hire. Every other surface's response is unchanged.
+    if (surfaceKey === 'hire') {
+      const { builderPortfolioSlugForCaseStudySlug } = await import('../services/hire/hirePortfolio');
+      res.json({ ...body, builderPortfolioSlug: await builderPortfolioSlugForCaseStudySlug(record.candidate.slug) });
+      return;
+    }
     res.json(body);
   } catch (err) {
     serverError(res, 'public_case_study_detail', correlationId, err);

@@ -182,12 +182,39 @@ const PORTFOLIO_PAGES: string[] = [
      ON career_portfolio_pages (LOWER(slug)) WHERE status = 'published'`,
 ];
 
+/**
+ * hire.refactored.ai (2026-11-06). ADDITIVE ONLY: nullable columns and a default-false flag
+ * on the existing page row, and one dedupe table. Old code ignores all of it, so a rollback
+ * needs no down step; re-running is a no-op.
+ *
+ *   availability_status / _label   SELF-REPORTED by the learner (Ali, H1.2). Null until set,
+ *                                  and the hire site renders nothing while null. Never inferred.
+ *   hire_spotlight                 set by an ADMIN only (Ali, H1.1). At most three are shown.
+ *   hire_intro_requests            one row per (email, person, Central day) intro, keyed by a
+ *                                  sha256 - no email, no name - so a repeat the same day
+ *                                  notifies nobody twice.
+ */
+const HIRE_LISTING: string[] = [
+  `ALTER TABLE career_portfolio_pages ADD COLUMN IF NOT EXISTS availability_status VARCHAR(20)`,
+  `ALTER TABLE career_portfolio_pages ADD COLUMN IF NOT EXISTS availability_label VARCHAR(80)`,
+  `ALTER TABLE career_portfolio_pages ADD COLUMN IF NOT EXISTS hire_spotlight BOOLEAN NOT NULL DEFAULT false`,
+  `CREATE TABLE IF NOT EXISTS hire_intro_requests (
+     idempotency_key CHAR(64) PRIMARY KEY,
+     talent_slug VARCHAR(160) NOT NULL,
+     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+   )`,
+];
+
 const STATEMENTS: string[] = [
   ...DROP_SUPERSEDED,
   ...CAPSTONE_REVIEWS,
   ...MENTOR_SCOPES,
   ...PORTFOLIO_PAGES,
+  ...HIRE_LISTING,
 ];
+
+/** Exported for the additive/idempotent test. */
+export const HIRE_LISTING_STATEMENTS: readonly string[] = HIRE_LISTING;
 
 /**
  * Runs every statement, logging and continuing on failure. A schema step must never be

@@ -1,6 +1,7 @@
 import { connectDatabase } from '../config/database';
 import '../models';
 import { LeadSource, EntryPoint, FormDefinition } from '../models';
+import { HIRE_REFACTORED_LEAD_SOURCE } from './leadSources/hireRefactoredLeadSource';
 
 interface SeedEntryPoint {
   slug: string;
@@ -377,6 +378,7 @@ const SEEDS: SeedSource[] = [
       },
     ],
   },
+  HIRE_REFACTORED_LEAD_SOURCE,
 ];
 
 async function run() {

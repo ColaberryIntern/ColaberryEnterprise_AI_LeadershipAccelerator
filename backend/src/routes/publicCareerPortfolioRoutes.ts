@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { getPublicPortfolioBySlug } from '../services/career/careerPortfolioPageService';
+import { getHirePortfolio } from '../services/hire/hirePortfolio';
 
 /**
  * GET /api/public/portfolios/:slug — the person-level public portfolio.
@@ -33,6 +34,14 @@ router.get('/api/public/portfolios/:slug', async (req: Request, res: Response): 
     return;
   }
 
+  // hire.refactored.ai reads the SAME portfolio with case-study links resolved against
+  // `hire`, plus a `hire` block - and only for a person reachable on Hire. Any other
+  // `surface` value (or none) is the unchanged portfolio below, byte for byte.
+  if (req.query.surface === 'hire') {
+    await sendHirePortfolio(slug, res);
+    return;
+  }
+
   try {
     const result = await getPublicPortfolioBySlug(slug);
     if (!result) {
@@ -55,5 +64,30 @@ router.get('/api/public/portfolios/:slug', async (req: Request, res: Response): 
     res.status(500).json({ error: 'Unable to load this portfolio' });
   }
 });
+
+/**
+ * The hire mode. The 404 body is IDENTICAL to the portfolio's own, so "no such person",
+ * "not published", "private" and "nothing published to Hire" cannot be told apart.
+ */
+async function sendHirePortfolio(slug: string, res: Response): Promise<void> {
+  try {
+    const result = await getHirePortfolio(slug);
+    if (!result) {
+      res.status(404).json({ error: 'Not found' });
+      return;
+    }
+    if (!result.hire.indexable) res.set('X-Robots-Tag', 'noindex, nofollow');
+    res.set('Cache-Control', 'public, max-age=120');
+    res.json({ ok: true, portfolio: result.portfolio, hire: result.hire });
+  } catch (err: any) {
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(), level: 'error', service: 'backend',
+      event: 'public_hire_portfolio_read_failed', outcome: 'failure',
+      error_class: err?.error_class || err?.name || 'Error',
+      context: { slug, message: err?.message },
+    }));
+    res.status(500).json({ error: 'Unable to load this portfolio' });
+  }
+}
 
 export default router;

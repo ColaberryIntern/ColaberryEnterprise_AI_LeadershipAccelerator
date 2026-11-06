@@ -144,26 +144,27 @@ export async function queryLinkedCaseStudyRows(
   projectIds: readonly string[],
 ): Promise<LinkedCaseStudyRow[]> {
   if (!projectIds.length) return [];
-  const [rows]: any = await sequelize.query(
+  const [rows] = await sequelize.query(
     `SELECT DISTINCT project_id, slug FROM (${CASE_STUDY_PROJECT_LINKS_SQL}
      ) linked
      WHERE linked.project_id = ANY($1::uuid[])`,
     { bind: [projectIds as string[]] },
   );
-  return Array.isArray(rows) ? rows : [];
+  // Raw query output, typed at the call site (CLAUDE.md: raw SQL results are typed where read).
+  return Array.isArray(rows) ? (rows as LinkedCaseStudyRow[]) : [];
 }
 
 /** Reverse: the projects this case study belongs to, by the same relation. Sorted. */
 export async function queryProjectIdsForCaseStudy(caseStudyId: string): Promise<string[]> {
-  const [rows]: any = await sequelize.query(
+  const [rows] = await sequelize.query(
     `SELECT DISTINCT project_id FROM (${CASE_STUDY_PROJECT_LINKS_SQL}
      ) linked
      WHERE linked.case_study_id = $1
      ORDER BY project_id`,
     { bind: [caseStudyId] },
   );
-  return (Array.isArray(rows) ? rows : [])
-    .map((r: { project_id?: unknown }) => (typeof r?.project_id === 'string' ? r.project_id : ''))
+  return (Array.isArray(rows) ? (rows as { project_id?: unknown }[]) : [])
+    .map((r) => (typeof r?.project_id === 'string' ? r.project_id : ''))
     .filter(Boolean);
 }
 
