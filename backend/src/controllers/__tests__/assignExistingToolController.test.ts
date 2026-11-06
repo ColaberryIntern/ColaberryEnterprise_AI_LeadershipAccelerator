@@ -222,11 +222,20 @@ describe('409 — twice, and told apart', () => {
   });
 
   it('the two codes are different strings, which is the whole point of having two', async () => {
-    mockAssign.mockRejectedValue(new AssignmentRefusedError([{ rule: 'x', detail: 'y' }]));
+    // REAL rule codes, not placeholders. Both classes type `rule` as a union of their own
+    // refusal literals, so `'x'` does not compile — the frozen-baseline typecheck gate caught
+    // exactly that here, which is the gate earning its keep: a test that cannot compile is a
+    // test that was never going to run, and jest would not have told me, because ts-jest
+    // transpiles with `isolatedModules` and never typechecks.
+    mockAssign.mockRejectedValue(
+      new AssignmentRefusedError([{ rule: 'no_assignment_decision', detail: 'Nobody decided.' }]),
+    );
     const a = res();
     await handleAssignExistingTool(req(), a);
 
-    mockAssign.mockRejectedValue(new ToolGrantRefusedError([{ rule: 'x', detail: 'y' }]));
+    mockAssign.mockRejectedValue(
+      new ToolGrantRefusedError([{ rule: 'capability_not_confirmed', detail: 'Still draft.' }]),
+    );
     const b = res();
     await handleAssignExistingTool(req(), b);
 
@@ -235,7 +244,9 @@ describe('409 — twice, and told apart', () => {
 
   it('neither is a 403 — the caller IS authorized to use the endpoint', async () => {
     // A 403 would send Ali looking for a permissions problem that does not exist.
-    mockAssign.mockRejectedValue(new AssignmentRefusedError([{ rule: 'x', detail: 'y' }]));
+    mockAssign.mockRejectedValue(new AssignmentRefusedError([
+      { rule: 'caller_is_not_the_decider', detail: 'You did not make this decision.' },
+    ]));
     const r = res();
     await handleAssignExistingTool(req(), r);
     expect(r.status).not.toHaveBeenCalledWith(403);
