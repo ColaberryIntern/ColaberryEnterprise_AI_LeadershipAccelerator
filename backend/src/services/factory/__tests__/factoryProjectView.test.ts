@@ -7,6 +7,7 @@
 import {
   factoryProjectView, reconstructFactoryProject, sampleCommandCenterView, type FactoryDocJson,
 } from '../factoryProjectView';
+import type { AgentTeam, Surface } from '../contracts/factoryContract';
 import { buildSampleContractProject } from '../sample/sampleContractProject';
 
 const s = buildSampleContractProject();
@@ -77,6 +78,50 @@ describe('reconstructFactoryProject round-trips the split DB shape', () => {
       deliveryProjectId: s.delivery_project_id, docJson, tracks: s.tracks, requirements: s.requirements,
     });
     expect(rebuilt).toEqual(s);
+  });
+});
+
+/**
+ * The reconstruction used to drop agent_teams and surfaces, because FactoryDocJson did not declare
+ * them. Three cases, because two of them look alike and are not: a document that never declared the
+ * structure, and one that declared it empty. `humanAiStructure` reports those differently
+ * (STRUCTURE_ABSENT vs AI_TASK_WITHOUT_TEAM), so a `?? []` on the read path would relabel every
+ * legacy row as an empty declaration it never made.
+ */
+describe('reconstructFactoryProject carries the human/AI structure, and absence is not emptiness', () => {
+  const base: FactoryDocJson = {
+    processes: s.processes, roles: s.roles, tasks: s.tasks, assignments: s.assignments,
+    transitions: s.transitions, allocation: s.allocation, role_map: s.role_map, source_blocks: s.source_blocks,
+  };
+  const rebuild = (docJson: FactoryDocJson) => reconstructFactoryProject({
+    deliveryProjectId: s.delivery_project_id, docJson, tracks: s.tracks, requirements: s.requirements,
+  });
+
+  it('passes both through when the document carries them', () => {
+    const team: AgentTeam = {
+      id: 'team-extraction', name: 'Extraction', subject: 'Requirement extraction',
+      task_ids: ['task-extract'], approver_role_id: 'role-analyst',
+      execution_policy: 'agent_with_review', approval_policy: 'internal_review',
+      autonomy_stage: null, trust_dimensions: ['transparent'],
+    };
+    const surface: Surface = {
+      id: 'surf-console', name: 'Bid console', kind: 'console', task_ids: ['task-review'],
+    };
+    const rebuilt = rebuild({ ...base, agent_teams: [team], surfaces: [surface] });
+    expect(rebuilt.agent_teams).toEqual([team]);
+    expect(rebuilt.surfaces).toEqual([surface]);
+  });
+
+  it('leaves both UNDEFINED for a document written before they were persisted', () => {
+    const rebuilt = rebuild(base);
+    expect(rebuilt.agent_teams).toBeUndefined();
+    expect(rebuilt.surfaces).toBeUndefined();
+  });
+
+  it('keeps an explicitly EMPTY declaration empty, so the gate can still reject it', () => {
+    const rebuilt = rebuild({ ...base, agent_teams: [], surfaces: [] });
+    expect(rebuilt.agent_teams).toEqual([]);
+    expect(rebuilt.surfaces).toEqual([]);
   });
 });
 

@@ -4,9 +4,14 @@ import { sequelize } from '../config/database';
 /**
  * The versioned decomposition document: the processes / roles / assignments / transitions /
  * allocation / role_map of a track, as a JSONB blob, content-hashed and versioned exactly like
- * build_plans stores plan_json + plan_sha256. Immutable per (delivery_project_id, track_type,
- * version) — a regeneration is a new version, never an overwrite. The approval columns make the
+ * build_plans stores plan_json + plan_sha256. The approval columns make the
  * whole document approvable as a transaction (see services/factory/factoryApproval).
+ *
+ * NOT IMMUTABLE, whatever this comment claimed until 2026-11-06. It said "a regeneration is a new
+ * version, never an overwrite", and `factoryDecomposeRun` has always upserted over version 1 on a
+ * deterministic id: a regeneration REPLACES the draft in place, with no diff and no prior copy. Only
+ * approval forks a new version (factoryApproval). Read the write before trusting a comment about it —
+ * acting on this one would mean regenerating a client's decomposition believing the old one survived.
  * Schema: db/ensureContractTrackSchema.ts.
  *
  * `any` on doc_json is deliberate (repo JSONB convention): it holds the whole decomposition

@@ -4,7 +4,8 @@
  *
  * Two concerns, both pure (no I/O), so the read route (factoryRoutes) stays a thin loader:
  *  1. reconstructFactoryProject — contract_process_documents.doc_json is a SUBSET (processes, roles,
- *     tasks, assignments, transitions, allocation, role_map, source_blocks). The full FactoryProject the
+ *     tasks, assignments, transitions, allocation, role_map, source_blocks, and since 2026-11-06 the
+ *     optional agent_teams and surfaces). The full FactoryProject the
  *     UI needs also carries `tracks` (from contract_tracks) and `requirements` (from contract_requirements)
  *     and the delivery_project_id. This merges the three.
  *  2. factoryProjectView — the command-center view model the API serves and the page renders. Its gate
@@ -17,7 +18,14 @@ import type {
 import { factoryValidate } from './factoryValidate';
 import { buildSampleContractProject } from './sample/sampleContractProject';
 
-/** The eight members contract_process_documents.doc_json stores (see seedSampleContractProject). */
+/**
+ * The members contract_process_documents.doc_json stores (see seedSampleContractProject).
+ *
+ * `agent_teams` and `surfaces` are OPTIONAL here and nowhere defaulted, because a document written
+ * before 2026-11-06 cannot carry them: the writer did not persist them. Absent must stay absent all
+ * the way to `humanAiStructure`, which reads it as "no structure was declared" rather than "an empty
+ * structure was declared" — two different findings, and only one of them is true of a legacy row.
+ */
 export interface FactoryDocJson {
   processes: FactoryProject['processes'];
   roles: FactoryProject['roles'];
@@ -27,6 +35,8 @@ export interface FactoryDocJson {
   allocation: FactoryProject['allocation'];
   role_map: FactoryProject['role_map'];
   source_blocks: FactoryProject['source_blocks'];
+  agent_teams?: FactoryProject['agent_teams'];
+  surfaces?: FactoryProject['surfaces'];
 }
 
 /** Merge the persisted subset with the sibling-table rows into a full FactoryProject. Pure, total. */
@@ -49,6 +59,13 @@ export function reconstructFactoryProject(input: {
     transitions: d.transitions ?? [],
     allocation: d.allocation ?? [],
     role_map: d.role_map ?? [],
+    // DELIBERATELY NOT `?? []`, unlike every member above it. For the other members an absent key and
+    // an empty list mean the same thing, so defaulting is a kindness. For these two they are opposite
+    // claims, and `?? []` would make every pre-2026-11-06 document assert that it declared its
+    // structure and found nothing — turning STRUCTURE_ABSENT into AI_TASK_WITHOUT_TEAM on rows that
+    // never had the chance to say either.
+    agent_teams: d.agent_teams,
+    surfaces: d.surfaces,
   };
 }
 
