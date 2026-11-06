@@ -29,6 +29,8 @@ import { viewFrom } from '../../weather/windowView';
 import { CravingScreen, Chalkboard } from '../../chow/ChowRoom';
 import { openOrderSheet } from '../../chow/OrderSheet';
 import { CAMPUS_BUILDINGS } from '../../campusMap';
+import MyProgressScreen from '../../progress/MyProgressScreen';
+import { useMyProgress } from '../../progress/myProgressApi';
 
 const placeName = (b: BuildingId): string => CAMPUS_BUILDINGS.find((x) => x.id === b)?.name ?? b;
 import { useLiveNow } from '../../campusOnAir';
@@ -145,6 +147,8 @@ export default function Room3D(p: Room3DProps): React.ReactElement | null {
   // C36 (v8 G5): the Game Room is an arcade aisle (five cabinets, the champions wall, the break board), refreshed after each game
   const arcade = id === 'arcade';
   const games = useGameRoomData(arcade);
+  // C120: My Progress's screen is the celebration of the learner (their own data only); until it loads, the plain sign
+  const progress = useMyProgress(id === 'observatory').data;
   const { openMap, settings } = useCampus();
   // C37/C38 (v9 W5, v10 W5): the right wall's window: the weather and time of day outside, and the real buildings east of this one
   const wx = useCampusWeather(true);
@@ -189,7 +193,8 @@ export default function Room3D(p: Room3DProps): React.ReactElement | null {
         : id === 'amphi' && live ? <LiveScreen live={live} hereCount={people.length} onJoin={p.onOpen} onWatchHere={watchHere} docked={stage.docked} />
         : id === 'amphi' && events ? <NextEventBoard event={upcoming(events, new Date(), 1)[0] ?? null} onSection={section} />
         : hall ? <HallwayBoard hallway={hallway} onOpen={p.onOpen} />
-        : arcade ? <ArcadeBoard d={games} onOpen={p.onOpen} /> : undefined} />
+        : arcade ? <ArcadeBoard d={games} onOpen={p.onOpen} />
+        : id === 'observatory' && progress ? <MyProgressScreen p={progress} /> : undefined} />
   );
   // The left wall's one piece (the hallway's doors are doors, not a board, and do not enlarge)
   const leftPiece = (isBig: boolean): React.ReactNode => {

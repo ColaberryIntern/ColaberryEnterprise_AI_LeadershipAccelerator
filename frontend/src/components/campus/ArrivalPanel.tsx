@@ -47,6 +47,7 @@ import { TowerTodayTile, TODAY_HREF } from './home/TodayCard';
 import { EVENTS_BUILDING } from './campusRoomKind';
 import { useHq } from './hq/useHq';
 import { HqArrivalSide } from './hq/HqBuilding';
+import StoryUploadCard from './progress/StoryUploadCard';
 
 /** Campus HQ: the career building (Staff Office / Career Center / Partner Office) is the elevator tower. */
 const HQ_BUILDING = 'career';
@@ -209,6 +210,8 @@ export default function ArrivalPanel(p: ArrivalPanelProps): React.ReactElement {
           // C33 (v7 R6): the Schedule lists classes, events and booked sessions together
           // C23 WP-9: the Partner Office is the partner's team panel (roster, on campus now, invite, CSV)
           : b.id === 'career' && audience === 'business' ? <PartnerTeam presence={p.presenceError ? null : p.presence} onOpen={open} workplace={wp} />
+          // C120: My Progress's "Tell us your story" card (upload, replace or remove the resume; the screen re-reads)
+          : b.id === 'observatory' ? <StoryUploadCard enabled={inRoom} />
           : b.id === 'tower' ? <AgendaRows items={agendaItems} place={(id) => { const x = p.buildings.find((y) => y.id === id); return x ? buildingName(x, wp) : id; }} onWalk={(id) => openMap(id)} />
           : undefined}
         whoIsHere={p.presence === undefined && !p.presenceError ? undefined
