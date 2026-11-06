@@ -14,6 +14,8 @@ import {
   MAX_REPAIR_ATTEMPTS,
   type FactoryRepairContext,
 } from '../factoryRepair';
+import { readFileSync } from 'fs';
+import { join } from 'path';
 import { buildSampleContractProject } from '../sample/sampleContractProject';
 import { assembleFactoryProject } from '../factoryAssemble';
 import { factoryErrors } from '../factoryValidate';
@@ -134,9 +136,33 @@ describe('repair prompt and remedies are targeted to the violated rules', () => 
     expect(text).not.toContain(FACTORY_REMEDIES.LOOP); // not violated, not shown
   });
 
+  /**
+   * DERIVED FROM THE VALIDATOR'S SOURCE, not from a hand-kept list.
+   *
+   * This was a literal array of 13 codes until 2026-11-06, and a hand-kept list is how a new
+   * rule ships without guidance. A repair loop handed an error with no remedy is left to guess,
+   * and the header of FACTORY_REMEDIES says what its guess looks like - "add another task",
+   * which makes the graph worse.
+   *
+   * ONLY `err()` CODES, which is the whole point. `warn()` codes never reach repair, because the
+   * loop iterates `factoryErrors`, so requiring remedies for them would mean adding dead text to
+   * satisfy a test. HIGH_RISK_APPROVAL is exactly such a warning today and is correctly absent
+   * from both this list and FACTORY_REMEDIES.
+   *
+   * The length floor is not decoration. A regex that silently stopped matching would turn this
+   * into a loop over an empty array, which passes while checking nothing - the failure mode that
+   * has already produced two vacuous tests in this workstream.
+   *
+   * KNOWN LIMIT, stated rather than papered over: this sees only codes raised by `err()` inside
+   * factoryValidate.ts. Findings that arrive through `evaluateHumanAiStructure` or
+   * `evaluatePerspective` are not covered here, and were not covered by the old list either.
+   */
   it('every factoryValidate error code has a remedy entry', () => {
-    for (const code of ['WORK_REFERENCE', 'SOURCE_CLASSIFICATION', 'SOURCE_COVERAGE', 'PERFORMER', 'OVERSIGHT', 'DUPLICATE_ASSIGNMENT', 'EFFORT_EVIDENCE', 'START', 'END', 'REACHABILITY', 'BRANCH_KIND', 'DECISION', 'LOOP']) {
-      expect(FACTORY_REMEDIES[code]).toBeDefined();
-    }
+    const src = readFileSync(join(__dirname, '..', 'factoryValidate.ts'), 'utf8');
+    const errorCodes = [...new Set([...src.matchAll(/\berr\(\s*'([A-Z_]+)'/g)].map((m) => m[1]))];
+    expect(errorCodes.length).toBeGreaterThanOrEqual(13);
+    expect(errorCodes).toContain('OVERSIGHT'); // a known code, so a broken regex cannot pass
+    expect(errorCodes).not.toContain('HIGH_RISK_APPROVAL'); // a warning; see the docblock
+    expect(errorCodes.filter((c) => !FACTORY_REMEDIES[c])).toEqual([]);
   });
 });

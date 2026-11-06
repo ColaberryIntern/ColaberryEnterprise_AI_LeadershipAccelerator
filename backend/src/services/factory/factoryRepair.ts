@@ -52,6 +52,10 @@ export const FACTORY_REMEDIES: Record<string, string> = {
     'Either an agent is a PERFORMER with no human ACCOUNTABLE/APPROVER (add a person/team ACCOUNTABLE ' +
     'assignment for that task), or an agent was given APPROVER/ACCOUNTABLE (change that executor to a ' +
     'person or team). An agent may never be ACCOUNTABLE or APPROVER.',
+  // NO ENTRY FOR HIGH_RISK_APPROVAL, deliberately. That rule is a warning (see factoryValidate),
+  // and this loop iterates `factoryErrors`, so a remedy here would never be shown to the model -
+  // dead configuration that reads like coverage. The remedy text belongs with the change that
+  // upgrades the rule to an error and re-baselines the generation corpus, not before it.
   DUPLICATE_ASSIGNMENT:
     'The same (task, role, responsibility) appears twice. Remove the duplicate assignment.',
   EFFORT_EVIDENCE:

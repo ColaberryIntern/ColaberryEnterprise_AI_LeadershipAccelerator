@@ -114,3 +114,82 @@ describe('factoryValidate — one failure mode per rule', () => {
     expect(factoryErrors(p).map((i) => i.code)).not.toContain('LOOP');
   });
 });
+
+/**
+ * HIGH_RISK_APPROVAL — the rule that was missing on 6 Nov.
+ *
+ * Herriman's decomposition left the bid bond, the financial statements, the legal documents and
+ * the insurance verification with nobody named to approve them. All four are R4; all four are
+ * performed by a person, not an agent; and OVERSIGHT keys on an AGENT performer, so the gate let
+ * every one of them through. `deliveryStoryContract` rejected all four downstream as
+ * `high_risk_story_without_approval` - after the decomposition was stored and the repair loop had
+ * finished, which is the difference between a gate and a complaint.
+ *
+ * `base()` is deliberately NOT high risk (internal data, authority "none" -> R2), so the clean
+ * case above still yields zero errors and these tests have to opt in to the risk.
+ *
+ * EVERY ASSERTION HERE GOES THROUGH `codes()`, NEVER `factoryErrors()`. The rule is a WARNING
+ * (see factoryValidate for the measured reason), so `factoryErrors` can never contain it and
+ * `expect(factoryErrors(p)).not.toContain('HIGH_RISK_APPROVAL')` would pass whatever the code
+ * did - an assertion about absence over a branch that cannot run. The first draft of the
+ * "clears it" test below was written exactly that way. `codes()` returns warnings too, so these
+ * fail if the rule stops working.
+ */
+describe('factoryValidate — high-risk work must name a human approver', () => {
+  it('the rule is a WARNING, so it never blocks approval', () => {
+    const p = base();
+    p.tasks.find((t) => t.id === 't-1')!.data_sensitivity = 'regulated';
+    const issue = factoryValidate(p).find((i) => i.code === 'HIGH_RISK_APPROVAL');
+    expect(issue).toBeDefined();
+    expect(issue!.severity).toBe('warning');
+    expect(factoryErrors(p).map((i) => i.code)).not.toContain('HIGH_RISK_APPROVAL');
+  });
+
+  it('test_high_risk_human_task_without_approver → HIGH_RISK_APPROVAL', () => {
+    const p = base();
+    p.tasks.find((t) => t.id === 't-1')!.data_sensitivity = 'regulated'; // -> R4
+    expect(codes(p)).toContain('HIGH_RISK_APPROVAL');
+  });
+
+  it('and adding a human APPROVER clears it', () => {
+    const p = base();
+    p.tasks.find((t) => t.id === 't-1')!.data_sensitivity = 'regulated';
+    p.assignments.push(asg({ id: 'a-ap', task_id: 't-1', role_id: 'r-1', responsibility: 'APPROVER', executor: { type: 'person', id: 'human' } }));
+    expect(codes(p)).not.toContain('HIGH_RISK_APPROVAL');
+  });
+
+  it('decide_bounded authority is enough to require one (R3, the lower edge)', () => {
+    const p = base();
+    p.tasks.find((t) => t.id === 't-1')!.decision_authority = 'decide_bounded'; // -> R3
+    expect(codes(p)).toContain('HIGH_RISK_APPROVAL');
+  });
+
+  /**
+   * THE CONTROL THAT STOPS THE EASY FIX. If an agent could satisfy this, the repair loop's
+   * cheapest move would be to let the agent approve its own work.
+   */
+  it('an AGENT named as approver does NOT clear it', () => {
+    const p = base();
+    p.tasks.find((t) => t.id === 't-1')!.data_sensitivity = 'regulated';
+    p.assignments.push(asg({ id: 'a-bot', task_id: 't-1', role_id: 'r-1', responsibility: 'APPROVER', executor: { type: 'agent', id: 'bot' } }));
+    expect(codes(p)).toContain('HIGH_RISK_APPROVAL');
+  });
+
+  /** A rule that fires on everything is not a rule. Low-risk work needs no named approver. */
+  it('does NOT fire on a low-risk task with no approver', () => {
+    expect(codes(base())).not.toContain('HIGH_RISK_APPROVAL');
+  });
+
+  /**
+   * DISJOINT FROM OVERSIGHT, on purpose. One missing assignment must produce one finding with
+   * one remedy, or the repair loop is handed the same problem twice under two names.
+   */
+  it('an agent-performed high-risk task reports OVERSIGHT only, not both', () => {
+    const p = base();
+    p.tasks.find((t) => t.id === 't-1')!.data_sensitivity = 'regulated';
+    p.assignments[0].executor = { type: 'agent', id: 'bot' };
+    const c = codes(p);
+    expect(c).toContain('OVERSIGHT');
+    expect(c).not.toContain('HIGH_RISK_APPROVAL');
+  });
+});

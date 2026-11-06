@@ -189,6 +189,7 @@ THREE SEPARATE DECISIONS — task, role, executor:
 - A NULL EXECUTOR IS FOR A PERSON YOU CANNOT NAME, never for an undecided human-or-AI question. That question you answer for every task, from the rule at the top. If the work needs a person and the source does not say which, null is right; if an AI can do the work, the executor is the agent team.
 - Every TASK and every DECISION needs exactly one assignment with responsibility "PERFORMER".
 - OVERSIGHT: if a task's PERFORMER executor type is "agent", that same task MUST also have a human (person or team) assignment with responsibility "ACCOUNTABLE" or "APPROVER". An agent/system may NEVER itself be ACCOUNTABLE or APPROVER.
+- HIGH-RISK WORK NEEDS A NAMED APPROVER, WHOEVER PERFORMS IT. If a task has data_sensitivity "regulated" or "confidential", or decision_authority "decide_full" or "decide_bounded", it MUST also carry a human assignment with responsibility "APPROVER" or "ACCOUNTABLE" - even when a person, not an agent, performs it. The rule above covers agent work only, and that gap is not theoretical: on 6 Nov a real decomposition left the bid bond, the financial statements, the legal documents and the insurance verification with no approver at all. Those are exactly the documents a human signs. A story carrying that risk and naming nobody to approve it is rejected downstream as high_risk_story_without_approval, and rightly.
 - Never give the same (task, role, responsibility) twice.
 
 THE FLOW GRAPH — a single START to at least one END, everything reachable:

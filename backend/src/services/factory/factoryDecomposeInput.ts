@@ -19,6 +19,29 @@ import type { SourceBlock } from './contracts/factoryContract';
 import { isExplicitlyNonBinding } from './proposal/requirementTriage';
 import type { FactoryDecomposeInputs } from './factoryDecomposePrompt';
 
+/**
+ * The source-block id for a requirement, in ONE place.
+ *
+ * This was an inline template literal until 2026-11-06. It is exported now because the delivery
+ * bridge has to invert it: a task cites `blk-REQ-011`, the bridge knows requirements by their
+ * UUID, and the only thing connecting the two is this convention. A second copy of the prefix
+ * living in the bridge is how the two silently stop agreeing - and the failure would be
+ * invisible, because an unresolvable citation reads exactly like an uncovered requirement.
+ *
+ * NOTE WHICH ID THIS TAKES. The adapter is fed the CANONICAL requirement id (`REQ-011`), not the
+ * database UUID, so `REQ-011` is what ends up in the block id. That is why the bridge derives its
+ * map by building block ids FORWARD from `canonical_req_id` rather than parsing them back.
+ *
+ * THERE IS DELIBERATELY NO EXPORTED INVERSE. One was written and deleted the same day: nothing
+ * called it, and an exported function with no caller is a contract surface no test can break.
+ * The prefix stays module-local for the same reason - `sourceBlockIdFor` is the whole API.
+ */
+const SOURCE_BLOCK_PREFIX = 'blk-';
+
+export function sourceBlockIdFor(canonicalRequirementId: string): string {
+  return `${SOURCE_BLOCK_PREFIX}${canonicalRequirementId}`;
+}
+
 /** The requirement fields the adapter needs (a subset of ContractRequirement). */
 export interface FactoryDecomposeRequirementInput {
   id: string;
@@ -87,7 +110,7 @@ export function buildFactoryDecomposeInput(src: FactoryDecomposeSource): Prepare
   // The alternative - treating "no verdict" as "not binding" - would make the gate pass by
   // asking for nothing.
   const reqBlocks: SourceBlock[] = src.requirements.map((r): SourceBlock => ({
-    id: `blk-${r.id}`,
+    id: sourceBlockIdFor(r.id),
     locator: r.section ?? r.id,
     text: (r.extracted_text && r.extracted_text.trim()) || r.statement,
     kind: isExplicitlyNonBinding(r.interpretation) ? 'context' : 'requirement',

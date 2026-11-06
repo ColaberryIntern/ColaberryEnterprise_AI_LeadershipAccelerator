@@ -57,9 +57,20 @@ export function buildSampleContractProject(): FactoryProject {
       // t-classify: same shape — agent performs, human accountable.
       asg('t-classify', 'role-extract-agent', 'PERFORMER', { type: 'agent', id: 'agent.extract' }),
       asg('t-classify', 'role-analyst', 'ACCOUNTABLE', { type: 'person', id: 'person.analyst' }),
-      // routing tasks: humans perform.
+      // routing tasks: humans perform - AND a human approves, because both carry
+      // decision_authority 'decide_bounded', which makes them R3.
+      //
+      // THE APPROVERS WERE ADDED 2026-11-06, when HIGH_RISK_APPROVAL started enforcing what the
+      // delivery layer had been asking for all along. Until then this "clean" sample produced two
+      // stories that `deliveryStoryContract` rejected as high_risk_story_without_approval, so the
+      // fixture every other factory test treats as exemplary was quietly modeling the defect
+      // found on Herriman. A sample project is a worked example; it has to pass the gates it
+      // teaches. The risk fields are left exactly as they were - lowering decide_bounded to make
+      // the rule stop firing would have been changing the question to fit the answer.
       asg('t-route-admin', 'role-proposal-lead', 'PERFORMER', { type: 'person', id: 'person.proposal' }),
+      asg('t-route-admin', 'role-analyst', 'APPROVER', { type: 'person', id: 'person.analyst' }),
       asg('t-route-tech', 'role-analyst', 'PERFORMER', { type: 'person', id: 'person.analyst' }),
+      asg('t-route-tech', 'role-proposal-lead', 'APPROVER', { type: 'person', id: 'person.proposal' }),
     ],
     transitions: [
       edge('t-start', 't-extract'),
