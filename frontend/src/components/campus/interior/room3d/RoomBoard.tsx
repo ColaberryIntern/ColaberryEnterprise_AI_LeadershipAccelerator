@@ -54,13 +54,24 @@ export function EnlargeButton({ big, onZoom, testId }: { big?: boolean; onZoom: 
  * C42 (room fix F2): the fit pass. The screen's text is sized from the room (--fw x --fit); when a long card still overflows the
  * screen, --fit steps down 5% at a time to 80%, so nothing is clipped. Set on the element directly (no re-render), on every render
  * and when the screen resizes.
+ * C117 (Ali 2026-11-06, Meeting Rooms and Admissions screens clipped and broke words): the pass now also counts a WIDE overflow
+ * (the board wider than the screen, or a word wider than a box marked data-fit-box, such as a price tile), and may step down to
+ * 60%. On a custom screen --fit scales every piece (room3d.css folds it into --fw), so stepping down always makes room.
  */
+export const FIT_MIN = 0.6;
+
+/** Does the board overflow its screen, down or across, or does any marked box hold a word wider than itself? */
+export function screenOverflows(inner: HTMLElement): boolean {
+  if (inner.scrollHeight > inner.clientHeight + 1 || inner.scrollWidth > inner.clientWidth + 1) return true;
+  return Array.from(inner.querySelectorAll<HTMLElement>('[data-fit-box]')).some((b) => b.scrollWidth > b.clientWidth + 1);
+}
+
 export function fitScreen(el: HTMLElement): number {
   const inner = el.querySelector<HTMLElement>('.inner');
   if (!inner) return 1;
   let fit = 1;
   el.style.setProperty('--fit', '1');
-  while (inner.scrollHeight > inner.clientHeight + 1 && fit > 0.8 + 1e-9) {
+  while (screenOverflows(inner) && fit > FIT_MIN + 1e-9) {
     fit = Math.round((fit - 0.05) * 100) / 100;
     el.style.setProperty('--fit', String(fit));
   }
@@ -75,6 +86,20 @@ function useFitScreen(): React.RefObject<HTMLDivElement> {
     const ro = new ResizeObserver(() => fitScreen(el));
     ro.observe(el);
     return () => ro.disconnect();
+  }, []);
+  // C117: a custom board's own pieces load after the screen renders (the plan prices, the hallway's rooms, the countdown), and
+  // none of that re-renders RoomScreen; refit when the board's content changes. The pass writes only the screen's own style, so
+  // it never triggers itself. One refit per frame.
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el || typeof MutationObserver === 'undefined') return undefined;
+    let frame = 0;
+    const mo = new MutationObserver(() => {
+      if (frame) return;
+      frame = window.requestAnimationFrame(() => { frame = 0; fitScreen(el); });
+    });
+    mo.observe(el, { childList: true, subtree: true, characterData: true });
+    return () => { mo.disconnect(); if (frame) window.cancelAnimationFrame(frame); };
   }, []);
   return ref;
 }

@@ -3,6 +3,8 @@ import { badgeLevel, buttonSub, openFloors, roomHref, roomName, roomsText, type 
 import type { HqState } from './useHq';
 import { HqPeople, type HqPerson } from './HqPeople';
 import type { HqPlaced } from './hqModel';
+import type { StaffDesk } from '../campusPeopleApi';
+import { FloorLobbyDesks } from './FloorLobbyDesk';
 
 /**
  * Campus HQ scenes 4 and 5 (H5): the elevator (a brass button panel, top floor first then G, and the floor guide) and a
@@ -65,7 +67,8 @@ export function HqCab({ s, face, people }: { s: HqState; face: string; people: H
   );
 }
 
-export function HqFloorScene({ s, f, people }: { s: HqState; f: HqFloor; people: HqPlaced<HqPerson> }): React.ReactElement {
+/** `agents`: the AI agents at this floor's front desk (C119, already filtered by floorAgents for this viewer's badge). */
+export function HqFloorScene({ s, f, people, agents = [] }: { s: HqState; f: HqFloor; people: HqPlaced<HqPerson>; agents?: StaffDesk[] }): React.ReactElement {
   const { hq } = s;
   return (
     <div className="cm-hq-floor" data-testid="cm-hq-floor">
@@ -92,6 +95,7 @@ export function HqFloorScene({ s, f, people }: { s: HqState; f: HqFloor; people:
         <button type="button" className="cm-hq-btn is-navy" onClick={s.toCab} data-testid="cm-hq-to-cab">↕ Elevator</button>
         <button type="button" className="cm-hq-btn" onClick={s.toLobby} data-testid="cm-hq-to-lobby">Lobby</button>
       </div>
+      <FloorLobbyDesks desks={agents} variant="scene" />
       <span className="cm-hq-sr">{roomsText(f.rooms.length)} on this floor</span>
     </div>
   );

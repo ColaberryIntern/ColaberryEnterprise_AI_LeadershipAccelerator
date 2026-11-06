@@ -39,15 +39,24 @@
 .cm-r3-screen .cm-ev-board-rows .cm-ag-row{font-size:calc(var(--fw) * .014);padding:calc(var(--fw) * .005) 0;color:var(--cm-art-sp-ink)}
 .cm-r3-screen .cm-ag-act{height:calc(var(--fw) * .03);font-size:calc(var(--fw) * .013);padding:0 calc(var(--fw) * .012)}
 
-/* C28b: the countdown on the Events Hall board. Sits under the "Next event" line, in the
-   room's own type scale so it shrinks with the fit pass like everything else on the screen. */
-.cm-ev-countdown {
-  font-size: calc(var(--fw, 16px) * 0.9 * var(--fit, 1));
-  font-weight: 700;
-  color: var(--amber);
-  letter-spacing: .02em;
-  margin: 2px 0 4px;
-}
+/* C28b: the countdown on the Events Hall board, in the room's own type scale so it shrinks with the fit pass like everything else.
+   C117: it was --fw x 0.9 (a 0.9 x room-wide font, about 1,700px at a 1900px browser), which pushed the title and buttons off
+   the screen and left only the "Next event" line showing. Now a line the size of the facts above it. */
+.cm-ev-countdown{font-size:calc(var(--fw, 16px) * .014);font-weight:700;color:var(--amber);letter-spacing:.02em;margin:0 0 calc(var(--fw, 16px) * .006)}
+/* C118: the Events Hall board's facts (When / Where / Going) and its short description. Inside the custom screen: --fw is the room
+   width x 1.7 x --fit, so these shrink with the fit pass. */
+.cm-r3-screen .cm-evb{display:flex;flex-direction:column}
+.cm-r3-screen .cm-evb>*{flex-shrink:0}
+.cm-r3-screen .cm-evb h3{margin:calc(var(--fw) * .004) 0 calc(var(--fw) * .006);-webkit-line-clamp:2}
+.cm-evb-facts{display:grid;grid-template-columns:max-content minmax(0,1fr);column-gap:calc(var(--fw) * .01);row-gap:calc(var(--fw) * .002);margin:0 0 calc(var(--fw) * .005)}
+.cm-evb-facts>div{display:contents}
+.cm-evb-facts dt{font-size:calc(var(--fw) * .011);font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--cm-art-muted);align-self:baseline}
+.cm-evb-facts dd{margin:0;font-size:calc(var(--fw) * .015);font-weight:700;color:var(--cm-art-sp-ink);align-self:baseline}
+.cm-r3-screen .cm-evb-about{font-size:calc(var(--fw) * .014);line-height:1.35;color:var(--cm-art-muted);margin:0 0 calc(var(--fw) * .008);-webkit-line-clamp:2}
+/* the Sign up / You're going pill sits in the same row as the shared .b buttons, so it takes their size */
+.cm-r3-screen .cm-evb .cm-ev-signup,.cm-r3-screen .cm-evb .cm-ev-going{height:calc(var(--fwg, var(--fw)) * .07 * var(--fit));font-size:calc(var(--fwg, var(--fw)) * .03 * var(--fit));
+  padding:0 calc(var(--fwg, var(--fw)) * .03 * var(--fit));border-radius:999px}
 /* C80: the Schedule board's three small buttons (Calendar, Events, Today), one row, each a third of the old single button */
 .cm-r3-screen .cm-ag-btns{flex-wrap:nowrap;gap:calc(var(--fw) * .012)}
-.cm-r3-screen .cm-ag-btns .b{flex:1 1 0;min-width:0;height:calc(var(--fw) * .05 * var(--fit));font-size:calc(var(--fw) * .022 * var(--fit));padding:0 calc(var(--fw) * .012 * var(--fit))}
+/* C117: --fw on a custom screen already carries --fit, so these are not multiplied by it again */
+.cm-r3-screen .cm-ag-btns .b{flex:1 1 0;min-width:0;height:calc(var(--fw) * .05);font-size:calc(var(--fw) * .022);padding:0 calc(var(--fw) * .012)}

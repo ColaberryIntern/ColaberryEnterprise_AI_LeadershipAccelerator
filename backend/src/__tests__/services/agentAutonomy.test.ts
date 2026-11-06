@@ -85,6 +85,12 @@ describe('agentAutonomy — HITL always-approval rules (§5 Q2)', () => {
     // also triggers via resource type, regardless of the action verb
     expect(actionRequiresApproval('erp_update', { resourceType: 'legacy_erp_module' }).rule).toBe('erp_write');
   });
+  it('C116: a Reese reply in a conversation the learner started (R2) is not held; R3 outreach still is', () => {
+    expect(actionRequiresApproval('reese_dm_reply', { riskTier: 'R2' }).required).toBe(false);
+    const outreach = actionRequiresApproval('reese_dm_reply', { riskTier: 'R3' });
+    expect(outreach.required).toBe(true);
+    expect(outreach.rule).toBe('high_risk_tier');
+  });
 });
 
 describe('agentAutonomy — ProofDesk R0-R4 risk-tier reconciliation (Milestone 4, shadow mode)', () => {

@@ -25,7 +25,15 @@ import { createWorkUnit, updateWorkUnitStatus } from '../workGraph/workGraphServ
 // path before now (REESE_STANDARD_AUDIT.md gap #1 was "no authorization call
 // at all"); reusing R3 here is a disclosed, deliberate assumption for
 // consistency with her outreach path's own classification, not a guess.
-const REPLY_RISK_TIER = 'R3';
+//
+// C116 (Ali 2026-11-06, option "A"): that assumption held every reply, because
+// R3 always requires approval (agentAutonomy.ts high_risk_tier) and Reese runs
+// in enforce mode, so a learner who messaged Reese never heard back. A reply
+// inside a conversation the learner started is now R2: it still goes through
+// authorizeTicketDispatch and every other approval rule, but the tier alone no
+// longer holds it. Outreach Reese starts unprompted (autonomous outreach,
+// follow-ups, welcome) keeps its own R3 constant and still needs approval.
+const REPLY_RISK_TIER = 'R2';
 
 // Reese Phase 1 — the ONLY place Reese-authored DM content is ever produced.
 // Reactive, guarded, never proactive:

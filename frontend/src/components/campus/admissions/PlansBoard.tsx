@@ -17,9 +17,10 @@ export default function PlansBoard({ onSection }: { onSection: () => void }): Re
     <>
       <div className="k">Admissions</div>
       <h3 className="cm-plans-h" data-testid="cm-board-title">Plans &amp; pricing</h3>
+      {/* each tile is a data-fit-box: the screen's fit pass shrinks the board while a word is wider than its tile (C117) */}
       <div className="cm-plans-tiles" data-testid="cm-board-plans">
         {PLAN_CARDS.map((c) => (
-          <div key={c.id} className={`t${c.featured ? ' is-featured' : ''}`} data-testid={`cm-board-plan-${c.id}`}>
+          <div key={c.id} className={`t${c.featured ? ' is-featured' : ''}`} data-testid={`cm-board-plan-${c.id}`} data-fit-box="">
             <b>{c.name}</b>
             <span className="pr">{c.priceClaim ? <Claim claimKey={c.priceClaim} route={CAMPUS_ROUTE} /> : c.priceText}</span>
             {c.unit && <small>{c.unit}</small>}

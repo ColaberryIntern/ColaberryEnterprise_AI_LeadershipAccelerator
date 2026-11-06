@@ -72,3 +72,38 @@ it('the board: the next event with Sign up and All events; none says so', async 
   await mount();
   expect(container.querySelector('[data-testid="cm-board-title"]')!.textContent).toBe('No events on the calendar yet');
 });
+
+describe('C118: the Events Hall board details and its walls', () => {
+  const base: OpenHouseView = { id: 'e2', title: 'AI Leadership Open House', description: '<p>Meet the  team &amp; see a live class.</p>',
+    starts_at: '2099-01-06T15:00:00Z', ends_at: '2099-01-06T16:30:00Z', timezone: 'America/Chicago', registration_url: 'https://www.eventbrite.com/e/2',
+    meeting_link: 'https://zoom.us/j/1', image_url: null, signup_count: 12, is_registered: false };
+  const q = (t: string) => container.querySelector(`[data-testid="${t}"]`);
+
+  it('shows the title, when (Central, with the end), where, how many are going and the description, from the event', async () => {
+    mockEvents = [base];
+    await mount();
+    expect(q('cm-board-title')!.textContent).toBe('AI Leadership Open House');
+    expect(q('cm-ev-board-when')!.textContent).toBe('Tue, Jan 6 · 9:00 AM – 10:30 AM CT');
+    expect(q('cm-ev-board-where')!.textContent).toBe('Online');
+    expect(q('cm-ev-board-going')!.textContent).toBe('12 signed up');
+    expect(q('cm-ev-board-about')!.textContent).toBe('Meet the team & see a live class.');
+    expect(container.textContent).not.toMatch(/\bfree\b/i);
+  });
+
+  it('leaves off every line the event does not carry (no invented venue, count or blurb)', async () => {
+    mockEvents = [{ ...base, description: null, meeting_link: null, signup_count: null, ends_at: null }];
+    await mount();
+    expect(q('cm-ev-board-when')!.textContent).toBe('Tue, Jan 6 · 9:00 AM CT');
+    expect(q('cm-ev-board-where')).toBeNull();
+    expect(q('cm-ev-board-going')).toBeNull();
+    expect(q('cm-ev-board-about')).toBeNull();
+  });
+
+  it('has no window: stage drapes on the back wall and curtains on the right wall', async () => {
+    await mount();
+    expect(q('cm-room-window')).toBeNull();
+    expect(container.querySelector('.face.back [data-testid="cm-hall-stage-drapes"]')).not.toBeNull();
+    expect(container.querySelector('.face.right [data-testid="cm-hall-curtains"]')).not.toBeNull();
+    expect(q('cm-hall-curtains')!.getAttribute('aria-hidden')).toBe('true');
+  });
+});

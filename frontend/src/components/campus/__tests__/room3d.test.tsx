@@ -38,6 +38,15 @@ function mount(o: Partial<Room3DProps> = {}): jest.Mock {
   return onOpen;
 }
 
+describe('C118: walls', () => {
+  it('every room other than the Events Hall keeps its window and has no stage curtains', () => {
+    mount();
+    expect(q('.face.right [data-testid="cm-room-window"]')).not.toBeNull();
+    expect(q('[data-testid="cm-hall-curtains"]')).toBeNull();
+    expect(q('[data-testid="cm-hall-stage-drapes"]')).toBeNull();
+  });
+});
+
 describe('the board (back wall)', () => {
   it('shows the page\'s Next step: kicker with points, title, line, primary and Copy prompt', () => {
     mount();

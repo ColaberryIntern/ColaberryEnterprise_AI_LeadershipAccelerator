@@ -60,12 +60,16 @@
 
 /* C21 (v6 D3): the Admissions room's board, PLANS & PRICING (inside .cm-r3-screen, so it scales with the room like the board's text) */
 .cm-r3-screen .cm-plans-h{font-size:calc(var(--fw) * .03);margin:6px 0 8px}
-.cm-plans-tiles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:calc(var(--fw) * .01);margin:0 0 calc(var(--fw) * .014)}
+/* C117 (Ali 2026-11-06: "No card neede/d", "$1,20/0", "Scope/d on a/call"): the tile type was sized for a tile twice as wide, so
+   the browser broke words to fit. Now (a) the type is sized to the tile (a price is about two thirds of a tile at four across),
+   (b) the grid reflows: a tile is never narrower than 0.1 x --fw, so four become two rather than squeezing, and (c) the screen
+   never breaks a word (room3d.css) and each tile is a data-fit-box, so a word still too wide makes the fit pass shrink the board. */
+.cm-plans-tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,calc(var(--fw) * .1)),1fr));gap:calc(var(--fw) * .01);margin:0 0 calc(var(--fw) * .014)}
 .cm-plans-tiles .t{display:flex;flex-direction:column;gap:2px;padding:calc(var(--fw) * .01);border-radius:10px;border:1px solid var(--cm-art-line);background:var(--cm-art-sp-card);min-width:0}
 .cm-plans-tiles .t.is-featured{border-color:var(--cm-art-admissions);box-shadow:0 0 0 2px var(--cm-art-admissions)}
-.cm-plans-tiles .t b{font-size:calc(var(--fw) * .016);color:var(--cm-art-sp-ink)}
-.cm-plans-tiles .t .pr{font-family:'Fraunces',Georgia,serif;font-weight:700;font-size:calc(var(--fw) * .026);color:var(--cm-art-sp-ink);line-height:1.1}
-.cm-plans-tiles .t small{font-size:calc(var(--fw) * .013);color:var(--cm-art-muted)}
+.cm-plans-tiles .t b{font-size:calc(var(--fw) * .012);line-height:1.2;color:var(--cm-art-sp-ink)}
+.cm-plans-tiles .t .pr{font-family:'Fraunces',Georgia,serif;font-weight:700;font-size:calc(var(--fw) * .018);color:var(--cm-art-sp-ink);line-height:1.15}
+.cm-plans-tiles .t small{font-size:calc(var(--fw) * .0095);line-height:1.25;color:var(--cm-art-muted)}
 
 /* the arrival card's services block */
 .cm-adm{margin-top:12px}

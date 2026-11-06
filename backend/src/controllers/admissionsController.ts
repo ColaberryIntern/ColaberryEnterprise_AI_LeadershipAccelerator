@@ -242,7 +242,23 @@ export async function handleGetCallbacks(req: Request, res: Response, next: Next
       offset: parseInt(offset as string, 10),
     });
 
-    res.json({ callbacks: rows, total: count });
+    // C122: a request a signed-in learner made through Maya's portal DM carries who to call on its visitor row
+    // (maya/mayaCallbackService.ts), because agent_notes is overwritten once the callback agent schedules it. Additive
+    // field `portal_learner`; site requests keep exactly the shape they had.
+    const visitorIds = Array.from(new Set(rows.map((r) => r.visitor_id)));
+    const visitors = visitorIds.length
+      ? await Visitor.findAll({ where: { id: { [Op.in]: visitorIds } }, attributes: ['id', 'metadata'] })
+      : [];
+    const learnerByVisitor = new Map<string, { name: string | null; email: string | null; phone: string | null }>();
+    for (const v of visitors) {
+      const m = (v.metadata || {}) as Record<string, unknown>;
+      if (m.source !== 'portal_maya_dm') continue;
+      const s = (k: string) => (typeof m[k] === 'string' ? (m[k] as string) : null);
+      learnerByVisitor.set(v.id, { name: s('name'), email: s('email'), phone: s('callback_phone') });
+    }
+    const callbacks = rows.map((r) => ({ ...r.toJSON(), portal_learner: learnerByVisitor.get(r.visitor_id) ?? null }));
+
+    res.json({ callbacks, total: count });
   } catch (err) {
     next(err);
   }

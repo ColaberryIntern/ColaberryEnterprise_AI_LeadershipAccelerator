@@ -1,0 +1,25 @@
+/* C118: the Events Hall's stage drapes and curtain wall (HallDressing.tsx). Art tokens only; decorative, never clickable.
+   Pleats: a repeating gradient fold / velvet / highlight / velvet / fold, about 26px a pleat at any room size. */
+.cm-hall-drapes,.cm-hall-curtains{position:absolute;inset:0;pointer-events:none}
+.cm-hall-drapes i,.cm-hall-curtains i{position:absolute;display:block;font-style:normal}
+.cm-hall-drapes .leg,.cm-hall-drapes .valance,.cm-hall-curtains .drape,.cm-hall-curtains .pelmet{
+  background:repeating-linear-gradient(90deg,var(--cm-art-in-drape-fold) 0,var(--cm-art-in-drape) 8px,var(--cm-art-in-drape-hi) 13px,var(--cm-art-in-drape) 18px,var(--cm-art-in-drape-fold) 26px)}
+
+/* the back wall: a velvet leg in each 5% margin beside the screen, and a valance with a gold trim over it */
+.cm-hall-drapes .leg{top:0;bottom:0;width:4.6%;box-shadow:0 0 18px var(--cm-art-in-drape-shadow)}
+.cm-hall-drapes .leg.is-left{left:0}
+.cm-hall-drapes .leg.is-right{right:0}
+.cm-hall-drapes .valance{left:0;right:0;top:0;height:4.4%;border-bottom:4px solid var(--cm-art-in-drape-gold);box-shadow:0 6px 14px var(--cm-art-in-drape-shadow)}
+
+/* the right wall: two pairs of drapes drawn back to gold tie-backs, a lit sconce between each pair, a pelmet over them all */
+.cm-hall-curtains .pair{position:absolute;top:4%;bottom:0;width:42%}
+.cm-hall-curtains .drape{top:0;bottom:0;width:46%;filter:drop-shadow(0 8px 10px var(--cm-art-in-drape-shadow))}
+.cm-hall-curtains .drape.is-left{left:0;clip-path:polygon(0 0,100% 0,100% 6%,56% 58%,84% 100%,0 100%)}
+.cm-hall-curtains .drape.is-right{right:0;clip-path:polygon(0 0,100% 0,100% 100%,16% 100%,44% 58%,0 6%)}
+.cm-hall-curtains .tie{top:56%;height:2.6%;width:27%;border-radius:999px;background:var(--cm-art-in-drape-gold)}
+.cm-hall-curtains .tie.is-left{left:0}
+.cm-hall-curtains .tie.is-right{right:0}
+.cm-hall-curtains .sconce{left:50%;top:26%;width:7%;aspect-ratio:1/1.6;transform:translateX(-50%);border-radius:40% 40% 6px 6px;
+  background:linear-gradient(180deg,var(--cm-art-in-sconce-light),var(--cm-art-in-sconce) 70%);
+  box-shadow:0 0 22px 10px var(--cm-art-in-sconce-glow),0 0 60px 26px var(--cm-art-in-sconce-glow)}
+.cm-hall-curtains .pelmet{left:0;right:0;top:0;height:5%;border-bottom:4px solid var(--cm-art-in-drape-gold);box-shadow:0 6px 14px var(--cm-art-in-drape-shadow)}

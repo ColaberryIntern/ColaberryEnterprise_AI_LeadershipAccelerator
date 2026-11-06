@@ -46,7 +46,7 @@ export interface CampusInsideProps {
   onStepOutside: () => void;
   onPickPerson?: (p: CampusPerson, at: { x: number; y: number }) => void;
   /** The on-duty AI staff desk in this building, already filtered for the viewer. */
-  desk?: { name: string; title: string } | null;
+  desk?: { name: string; title: string; floor?: string | null } | null;
   onDesk?: (at: { x: number; y: number }) => void;
   /** The route you are walking through the back door to (the door reveal), or null. */
   going?: string | null;
@@ -95,7 +95,9 @@ export default function CampusInside(p: CampusInsideProps): React.ReactElement |
       <div className="cm-in-frame">
         {p.hq ? (
           <HqBuilding s={p.hq} audience={audience} face={buildingName} firstName={facts.firstName} reduceMotion={reduceMotion}
-            desk={desk ? { name: desk.name, initials: initialsOf(desk.name) } : null} named={named} onGround={(r) => p.onOpen?.(r)} />
+            /* C119: an agent placed on a staff floor (Dara) stands at that floor's front desk, so the ground lobby's concierge is
+               not labeled with her name; she is shown in one place */
+            desk={desk && !desk.floor ? { name: desk.name, initials: initialsOf(desk.name) } : null} named={named} onGround={(r) => p.onOpen?.(r)} />
         ) : <Room3D id={b.id} name={buildingName} people={people} you={you} summary={p.summary ?? null} planStep={p.planStep} spot={p.spot ?? null}
           firstName={(facts.firstName || 'You').toUpperCase()} reduceMotion={reduceMotion} lanyard={!!p.workplace || BIZ_ROOMS.has(b.id)}
           desk={desk ? { name: desk.name, title: desk.title, initials: initialsOf(desk.name) } : null} onDesk={p.onDesk}

@@ -40,6 +40,44 @@ export function upcoming(events: OpenHouseView[], now: Date, limit = Infinity): 
     .slice(0, limit);
 }
 
+/** The Events Hall screen's facts about one event (C118). Every field comes from the event itself; a missing one is null, never a guess. */
+export interface EventFacts {
+  /** "Fri, Nov 6 · 9:00 AM – 10:30 AM CT" (the end only when it is known and on the same Central day). */
+  when: string;
+  /** "Online" when the event carries a meeting link; null otherwise (the API has no venue field, so none is invented). */
+  where: string | null;
+  /** "12 signed up" from the real registrant count; null when unknown or zero (null must never render as 0). */
+  going: string | null;
+  /** The description as plain text, whitespace collapsed, cut at a word boundary to `max` characters; null when empty. */
+  about: string | null;
+}
+
+export const ABOUT_MAX = 180;
+
+/** Plain text from an Eventbrite description: tags dropped, entities for spaces and ampersands decoded, whitespace collapsed. */
+function plainText(s: string): string {
+  return s.replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim();
+}
+
+export function eventFacts(e: Pick<OpenHouseView, 'starts_at' | 'ends_at' | 'meeting_link' | 'signup_count' | 'description'>, max = ABOUT_MAX): EventFacts {
+  const start = eventWhen(e.starts_at);
+  const sameDay = !!e.ends_at && Number.isFinite(new Date(e.ends_at).getTime()) && centralDay(e.ends_at) === centralDay(e.starts_at);
+  const when = `${start.day} · ${start.time}${sameDay ? ` – ${eventWhen(e.ends_at as string).time}` : ''} CT`;
+  const text = e.description ? plainText(e.description) : '';
+  let about: string | null = text || null;
+  if (about && about.length > max) {
+    const cut = about.slice(0, max);
+    const at = cut.lastIndexOf(' ');
+    about = `${(at > max * 0.6 ? cut.slice(0, at) : cut).replace(/[\s,.;:–-]+$/, '')}…`;
+  }
+  return {
+    when,
+    where: e.meeting_link ? 'Online' : null,
+    going: e.signup_count && e.signup_count > 0 ? `${e.signup_count} signed up` : null,
+    about,
+  };
+}
+
 /** An Open House (the title says so; CCPP has no event type). */
 export const isOpenHouse = (e: Pick<OpenHouseView, 'title'>): boolean => /open house/i.test(e.title);
 

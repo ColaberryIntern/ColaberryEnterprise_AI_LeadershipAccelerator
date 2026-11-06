@@ -195,6 +195,20 @@ export function placePeople<P extends { hq_path?: string }>(hq: Hq, people: P[])
   return out;
 }
 
+/**
+ * C119 (Ali 2026-11-06: "I see Dara on the curriculum floor, but I have no way of communicating with her. Maybe she should be
+ * in the lobby of Floor 4."): the AI agents who stand in a floor's own lobby, at its front desk, instead of as a face on an
+ * office door. An agent belongs to the floor that holds its office (agentPlaces.ts: Dara's is Curriculum, so the Program floor).
+ * Shown only to a staff viewer whose badge opens that floor; the server already sends such a desk only to that badge, and this
+ * check keeps the client from ever widening it. Pure.
+ */
+export interface FloorAgent { on_duty: boolean; office?: string | null }
+export function floorAgents<D extends FloorAgent>(hq: Hq, f: HqFloor, desks: D[] | null | undefined): D[] {
+  if (!hq.isStaff || f.access === 'none') return [];
+  // the agent's own office room must be open to this badge (Curriculum opens on the 'program' section, the C87 gate)
+  return (desks ?? []).filter((d) => d.on_duty && !!d.office && f.rooms.some((r) => r.path === d.office && r.open));
+}
+
 /** Where-to search (H5): floors by label for staff, and the rooms you can open. Rooms you can't open never appear. */
 export interface HqSearchHit { kind: 'floor' | 'room'; floor: string; label: string; room?: HqRoom }
 export function hqSearch(hq: Hq, query: string): HqSearchHit[] {

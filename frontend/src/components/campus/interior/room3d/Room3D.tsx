@@ -10,6 +10,7 @@ import { Billboard, person } from './billboard';
 import type { PageSummary } from '../pageSummary';
 import type { PlanStop } from '../../campusPlan';
 import { BoardZoom, EnlargeButton, RoomScreen, WallBoard } from './RoomBoard';
+import { HallCurtainWall, StageDrapes } from './HallDressing';
 import PlansBoard from '../../admissions/PlansBoard';
 import { NextEventBoard } from '../../events/EventRows';
 import { useCampusEvents } from '../../events/EventSignup';
@@ -28,6 +29,8 @@ import { viewFrom } from '../../weather/windowView';
 import { CravingScreen, Chalkboard } from '../../chow/ChowRoom';
 import { openOrderSheet } from '../../chow/OrderSheet';
 import { CAMPUS_BUILDINGS } from '../../campusMap';
+import MyProgressScreen from '../../progress/MyProgressScreen';
+import { useMyProgress } from '../../progress/myProgressApi';
 
 const placeName = (b: BuildingId): string => CAMPUS_BUILDINGS.find((x) => x.id === b)?.name ?? b;
 import { useLiveNow } from '../../campusOnAir';
@@ -116,6 +119,7 @@ export default function Room3D(p: Room3DProps): React.ReactElement | null {
   const events = useCampusEvents(id === 'amphi');
   // C29 (v7 R2): Meeting Rooms is a hallway: doors on both side walls, the open rooms on the board
   const hall = id === 'commons';
+  const eventsHall = id === 'amphi'; // C118: stage drapes on the back wall, curtains in place of the window
   const { hallway } = useHallway(hall);
   const doors = hall && hallway ? wallDoors(hallway) : []; // C44: always six doors on the walls
   // C31 (v7 R4): while Colaberry Live is on air, the Events Hall's screen is the broadcast
@@ -143,6 +147,8 @@ export default function Room3D(p: Room3DProps): React.ReactElement | null {
   // C36 (v8 G5): the Game Room is an arcade aisle (five cabinets, the champions wall, the break board), refreshed after each game
   const arcade = id === 'arcade';
   const games = useGameRoomData(arcade);
+  // C120: My Progress's screen is the celebration of the learner (their own data only); until it loads, the plain sign
+  const progress = useMyProgress(id === 'observatory').data;
   const { openMap, settings } = useCampus();
   // C37/C38 (v9 W5, v10 W5): the right wall's window: the weather and time of day outside, and the real buildings east of this one
   const wx = useCampusWeather(true);
@@ -187,7 +193,8 @@ export default function Room3D(p: Room3DProps): React.ReactElement | null {
         : id === 'amphi' && live ? <LiveScreen live={live} hereCount={people.length} onJoin={p.onOpen} onWatchHere={watchHere} docked={stage.docked} />
         : id === 'amphi' && events ? <NextEventBoard event={upcoming(events, new Date(), 1)[0] ?? null} onSection={section} />
         : hall ? <HallwayBoard hallway={hallway} onOpen={p.onOpen} />
-        : arcade ? <ArcadeBoard d={games} onOpen={p.onOpen} /> : undefined} />
+        : arcade ? <ArcadeBoard d={games} onOpen={p.onOpen} />
+        : id === 'observatory' && progress ? <MyProgressScreen p={progress} /> : undefined} />
   );
   // The left wall's one piece (the hallway's doors are doors, not a board, and do not enlarge)
   const leftPiece = (isBig: boolean): React.ReactNode => {
@@ -216,6 +223,7 @@ export default function Room3D(p: Room3DProps): React.ReactElement | null {
           <div className="face ceil" aria-hidden="true">{[0.2, 0.5, 0.8].map((x) => <i key={x} style={{ left: `calc(${x * 100}% - 75px)` }} />)}</div>
           <div className="face floor" aria-hidden="true" />
           <div className="face back"><div className="wainscot" aria-hidden="true" />
+            {eventsHall && <StageDrapes />}
             {screen(false)}
             {tiers && <div className="cm-r3-platform" aria-hidden="true" data-testid="cm-r3-stage" />}
           </div>
@@ -223,7 +231,8 @@ export default function Room3D(p: Room3DProps): React.ReactElement | null {
             {hall ? <HallwayWall doors={doors} side="left" onOpen={p.onOpen} /> : leftPiece(false)}
           </div>
           <div className="face right"><div className="wainscot" aria-hidden="true" />
-            <RoomWindow wx={wx} small={hall} view={view} />
+            {/* C118: the Events Hall has no window; its right wall is stage curtains. Every other room keeps its window. */}
+            {eventsHall ? <HallCurtainWall /> : <RoomWindow wx={wx} small={hall} view={view} />}
             {hall && <HallwayWall doors={doors} side="right" onOpen={p.onOpen} />}
           </div>
           <div className="cm-r3-floorlayer">

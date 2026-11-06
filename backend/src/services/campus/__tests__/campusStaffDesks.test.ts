@@ -16,6 +16,7 @@ let mockSections: string[] = [];
 jest.mock('../../access/mgmtBridgeService', () => ({ getMgmtStatus: jest.fn(async () => { if (mockMgmt === 'throw') throw new TypeError('db down'); return { is_mgmt: mockMgmt, role: mockMgmt ? 'ops' : null, label: null, sections: mockSections }; }) }));
 jest.mock('../../reese/reeseIdentitySeed', () => ({ isReeseEnabled: jest.fn(), getReeseEnrollmentId: jest.fn() }));
 jest.mock('../../curriculum/daraIdentitySeed', () => ({ isDaraEnabled: jest.fn(), getDaraEnrollmentId: jest.fn() }));
+jest.mock('../../mayaIdentitySeed', () => ({ getMayaEnrollmentId: jest.fn() }));
 // The thing NOT to use: a broader staff test (staff role OR mgmt_role). Mocked to say "yes" so a regression to it shows.
 jest.mock('../../access/staffAccess', () => ({ isStaffOrMgmt: jest.fn(async () => true), isStaffEnrollment: jest.fn(async () => true) }));
 
@@ -23,6 +24,7 @@ import fs from 'fs';
 import path from 'path';
 import { isReeseEnabled, getReeseEnrollmentId } from '../../reese/reeseIdentitySeed';
 import { isDaraEnabled, getDaraEnrollmentId } from '../../curriculum/daraIdentitySeed';
+import { getMayaEnrollmentId } from '../../mayaIdentitySeed';
 import { getStaffDesks, campusAudienceFor, mayaVisibleTo } from '../campusStaffDesks';
 
 const set = (o: { staff?: boolean; manager?: boolean; explorer?: boolean; mgmt?: boolean | 'throw' }) => {
@@ -38,6 +40,7 @@ beforeEach(() => {
   (getReeseEnrollmentId as jest.Mock).mockResolvedValue('reese-1');
   (isDaraEnabled as jest.Mock).mockResolvedValue(true);
   (getDaraEnrollmentId as jest.Mock).mockResolvedValue('dara-1');
+  (getMayaEnrollmentId as jest.Mock).mockResolvedValue('maya-1');
 });
 
 describe('audience: the frontend\'s sources, the frontend\'s precedence', () => {
@@ -102,10 +105,31 @@ describe('Maya: every audience (C21, v6 D3; it replaced the C6 rule of staff and
     expect(maya).toMatchObject({ building: 'admissions', title: 'Welcome desk', ai: true, on_duty: false, opens: 'site_chat_off', enrollment_id: null, prompts: [] });
   });
 
-  it('C6: with the site chat ON (ENABLE_CHAT) she is on duty, still with no enrollment (she is the website chat, not a DM agent)', async () => {
+  it('C121: with the site chat ON (ENABLE_CHAT) she is on duty in the shared chat: her enrollment id and her three questions', async () => {
     set({ explorer: true }); mockEnv.enableChat = true;
     const maya = (await getStaffDesks('enr-1')).desks.find((d) => d.id === 'maya')!;
-    expect(maya).toMatchObject({ on_duty: true, opens: null, enrollment_id: null, prompts: [] });
+    expect(maya).toMatchObject({ on_duty: true, opens: null, enrollment_id: 'maya-1' });
+    expect(maya.prompts).toEqual(['Compare the plans for me', 'Book a call with admissions', 'Have someone call me']);
+    mockEnv.enableChat = false;
+  });
+
+  it('C121: flag on but her identity is not seeded: off duty, no enrollment, no prompts (nothing to answer as)', async () => {
+    mockEnv.enableChat = true;
+    (getMayaEnrollmentId as jest.Mock).mockResolvedValue(null);
+    const maya = (await getStaffDesks('enr-1')).desks.find((d) => d.id === 'maya')!;
+    expect(maya).toMatchObject({ on_duty: false, enrollment_id: null, prompts: [] });
+    mockEnv.enableChat = false;
+  });
+
+  it('C121: a failing Maya lookup leaves her desk off duty and the other desks intact (logged, never thrown)', async () => {
+    mockEnv.enableChat = true;
+    (getMayaEnrollmentId as jest.Mock).mockRejectedValue(new TypeError('db down'));
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const { desks } = await getStaffDesks('enr-1');
+    expect(desks.find((d) => d.id === 'maya')).toMatchObject({ on_duty: false, enrollment_id: null });
+    expect(desks.find((d) => d.id === 'reese')).toMatchObject({ on_duty: true });
+    expect(warn.mock.calls.map((c) => JSON.parse(String(c[0])).event)).toContain('maya_enrollment_lookup_failed');
+    warn.mockRestore();
     mockEnv.enableChat = false;
   });
 });

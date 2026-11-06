@@ -1,7 +1,7 @@
 import React from 'react';
 import type { OpenHouseView } from '../../../services/onboardingApi';
 import { EventSignup } from './EventSignup';
-import { eventWhen } from './eventsModel';
+import { eventFacts, eventWhen } from './eventsModel';
 import { useLiveClock } from '../campusLiveState';
 import './campusEvents.css';
 
@@ -78,26 +78,38 @@ export function EventCountdown({ startsAt }: { startsAt: string }): React.ReactE
   return <div className="cm-ev-countdown" data-testid="cm-board-countdown">Doors open {left}</div>;
 }
 
-/** C26 (v6 D4): the Events Hall's board: the next event with one-tap Sign up, and All events. */
+/**
+ * C26 (v6 D4): the Events Hall's board: the next event with one-tap Sign up, and All events.
+ * C118 (Ali 2026-11-06, "add more details about the next upcoming event on the wall"): the title, then When (Central, with the
+ * end time when known), the countdown, Where and how many signed up when the event says so, and a short description. Every
+ * line comes from the event; a field it does not carry is left off, never filled in.
+ */
 export function NextEventBoard({ event, onSection }: { event: OpenHouseView | null; onSection: () => void }): React.ReactElement {
   if (!event) {
     return (
       <>
+        <div className="k">Next event</div>
         <h3 className="plain" data-testid="cm-board-title">No events on the calendar yet</h3>
         <div className="row"><button type="button" className="b red" onClick={stop(onSection)} data-testid="cm-board-primary">All events &rarr;</button></div>
       </>
     );
   }
-  const w = eventWhen(event.starts_at);
+  const f = eventFacts(event);
   return (
-    <>
-      <div className="k">Next event · {w.day} · {w.time}</div>
-      <EventCountdown startsAt={event.starts_at} />
+    <div className="cm-evb" data-testid="cm-ev-board">
+      <div className="k">Next event</div>
       <h3 data-testid="cm-board-title">{event.title}</h3>
+      <dl className="cm-evb-facts">
+        <div><dt>When</dt><dd data-testid="cm-ev-board-when">{f.when}</dd></div>
+        {f.where && <div><dt>Where</dt><dd data-testid="cm-ev-board-where">{f.where}</dd></div>}
+        {f.going && <div><dt>Going</dt><dd data-testid="cm-ev-board-going">{f.going}</dd></div>}
+      </dl>
+      <EventCountdown startsAt={event.starts_at} />
+      {f.about && <p className="cm-evb-about" data-testid="cm-ev-board-about">{f.about}</p>}
       <div className="row" onClick={(ev) => ev.stopPropagation()}>
         <EventSignup event={event} />
         <button type="button" className="b" onClick={stop(onSection)} data-testid="cm-board-section">All events</button>
       </div>
-    </>
+    </div>
   );
 }

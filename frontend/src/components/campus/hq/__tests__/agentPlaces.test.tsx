@@ -1,39 +1,79 @@
 /**
- * C87 agent places, on the client: an AI agent whose place is a Staff Office floor stands at its office door in the tower
- * (Dara at Curriculum on the Program floor), and the staff card names the floor. The server decides who is sent Dara at all.
+ * C87 agent places, on the client, and C119 (Ali 2026-11-06: "I see Dara on the curriculum floor, but I have no way of
+ * communicating with her. Maybe she should be in the lobby of Floor 4."): an AI agent whose place is a Staff Office floor stands
+ * at that floor's FRONT DESK in its lobby (Dara on the Program floor), pressable, opening her staff card (Message Dara + her
+ * prompts), and is no longer a face on the Curriculum door. Only a staff badge that opens that floor sees her: the server sends
+ * her desk only to that badge, and floorAgents never widens it. The staff card still names the floor.
  */
-import { deskPeople } from '../HqBuilding';
-import { buildHq, placePeople } from '../hqModel';
+import React from 'react';
+import { createRoot, type Root } from 'react-dom/client';
+import { act } from 'react-dom/test-utils';
+import { buildHq, floorAgents, placePeople } from '../hqModel';
+import { FloorLobbyDesks } from '../FloorLobbyDesk';
 import { deskPlace } from '../../StaffPop';
 import { CAMPUS_BUILDINGS } from '../../campusMap';
+import { onStaffCard } from '../../staffCard';
 import type { StaffDesk } from '../../campusPeopleApi';
+
+(globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const desk = (over: Partial<StaffDesk>): StaffDesk => ({
   id: 'dara', name: 'Dara', title: 'Curriculum desk', building: 'career', floor: 'program', office: '/admin/orchestration',
-  ai: true, on_duty: true, enrollment_id: 'dara-1', opens: null, prompts: [], ...over,
+  ai: true, on_duty: true, enrollment_id: 'dara-1', opens: null, prompts: ['Which lessons are students stalling on this week?'], ...over,
 });
 const career = CAMPUS_BUILDINGS.find((b) => b.id === 'career');
+const reese = desk({ id: 'reese', name: 'Reese', title: 'Mentor desk', building: 'lecture', floor: null, office: null });
+const programOf = (hq: ReturnType<typeof buildHq>) => hq.floors.find((f) => f.label === 'Program')!;
 
-describe('deskPeople', () => {
-  it('an on-duty desk with an office becomes a face at that door; desks off the tower or off duty do not', () => {
-    const people = deskPeople([
-      desk({}),
-      desk({ id: 'reese', name: 'Reese', title: 'Mentor desk', building: 'lecture', floor: null, office: null }),
-      desk({ id: 'maya', name: 'Maya', title: 'Welcome desk', building: 'admissions', floor: null, office: null }),
-    ]);
-    expect(people).toEqual([{ key: 'desk-dara', name: 'Dara (AI, Curriculum desk)', initials: 'D', photo: null, hq_path: '/admin/orchestration' }]);
-    expect(deskPeople([desk({ on_duty: false })])).toEqual([]);
-    expect(deskPeople(null)).toEqual([]);
+describe('floorAgents', () => {
+  it('a staff badge that opens the Program floor finds Dara at its front desk, and only there', () => {
+    const hq = buildHq(() => true, true, 'staff');
+    const program = programOf(hq);
+    expect(floorAgents(hq, program, [desk({}), reese]).map((d) => d.id)).toEqual(['dara']);
+    for (const f of hq.floors.filter((x) => x !== program)) expect(floorAgents(hq, f, [desk({})])).toEqual([]);
   });
 
-  it('in a staff viewer\'s tower Dara stands at Curriculum, on the Program floor', () => {
+  it('never widens the gate: a badge that does not open the floor, a learner, an off-duty desk or no desks find nobody', () => {
+    const closed = buildHq((s) => s !== 'program', true, 'staff'); // the floor may still open other rooms, never Curriculum
+    expect(floorAgents(closed, programOf(closed), [desk({})])).toEqual([]);
+    const none = buildHq(() => false, true, 'staff');
+    expect(floorAgents(none, programOf(none), [desk({})])).toEqual([]);
+    const learner = buildHq(() => false, false, 'member');
+    expect(floorAgents(learner, programOf(learner), [desk({})])).toEqual([]);
     const hq = buildHq(() => true, true, 'staff');
-    const placed = placePeople(hq, deskPeople([desk({})]));
-    expect(placed.byRoom.get('/admin/orchestration')?.map((p) => p.key)).toEqual(['desk-dara']);
-    const floor = hq.floors.find((f) => f.rooms.some((r) => r.path === '/admin/orchestration'));
-    expect(floor?.label).toBe('Program');
-    expect(placed.byFloor.get(floor!.num)?.map((p) => p.key)).toEqual(['desk-dara']);
-    expect(placed.lobby).toEqual([]);
+    expect(floorAgents(hq, programOf(hq), [desk({ on_duty: false })])).toEqual([]);
+    expect(floorAgents(hq, programOf(hq), null)).toEqual([]);
+    expect(floorAgents(hq, programOf(hq), [desk({ office: '/admin/not-a-page' })])).toEqual([]);
+  });
+
+  it('Dara is no longer a face on the Curriculum door (placePeople only places the people sent by presence)', () => {
+    const hq = buildHq(() => true, true, 'staff');
+    expect(placePeople(hq, []).byRoom.get('/admin/orchestration')).toBeUndefined();
+  });
+});
+
+describe('the front desk', () => {
+  let container: HTMLDivElement;
+  let root: Root;
+  beforeEach(() => { container = document.createElement('div'); document.body.appendChild(container); root = createRoot(container); });
+  afterEach(() => { act(() => root.unmount()); container.remove(); });
+
+  it('shows Dara with her role and opens her staff card (the same card as Reese\'s mentor desk) when pressed', () => {
+    const opened: string[] = [];
+    const off = onStaffCard((r) => opened.push(r.id));
+    act(() => { root.render(<FloorLobbyDesks desks={[desk({})]} variant="scene" />); });
+    const btn = container.querySelector<HTMLButtonElement>('[data-testid="cm-hq-fdesk-scene-dara"]')!;
+    expect(btn.textContent).toContain('Dara');
+    expect(btn.textContent).toContain('Message Dara');
+    expect(btn.getAttribute('aria-label')).toMatch(/^Dara, AI guide/);
+    act(() => { btn.click(); });
+    expect(opened).toEqual(['dara']);
+    off();
+  });
+
+  it('renders nothing when no agent stands at this floor', () => {
+    act(() => { root.render(<FloorLobbyDesks desks={[]} variant="row" />); });
+    expect(container.innerHTML).toBe('');
   });
 });
 
