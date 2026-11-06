@@ -19,7 +19,8 @@ import StudioTour from './StudioTour';
 import ProposalDocumentDrawer from '../govCockpit/ProposalDocumentDrawer';
 import ReportAProblem from '../../../admin/marketing/bugReport/ReportAProblem';
 
-const VIEWS: StudioView[] = ['overview', 'blueprint', 'documents', 'evidence', 'editor', 'gates', 'package', 'openitems'];
+// v4: the Needs view's param is `needs`; `openitems` stays a working alias.
+const VIEWS: StudioView[] = ['overview', 'blueprint', 'documents', 'evidence', 'editor', 'gates', 'package', 'needs', 'openitems'];
 
 /**
  * StudioShell — the Proposal Studio desk: a sticky contract bar, a left process rail, a center workspace, and the
@@ -39,13 +40,15 @@ export default function StudioShell(
   const [openDocKey, setOpenDocKey] = useState<string | null>(null);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
   const [tourStep, setTourStep] = useState<number | null>(null);
+  const [tourPrompt, setTourPrompt] = useState(false);
 
-  // Offer the walkthrough once per browser on a first visit; it stays reopenable from "Take a tour".
+  // v4: on a first visit, offer the walkthrough with a NON-BLOCKING prompt (not an auto-opened card). It stays
+  // reopenable from "Take the tour" in the contract bar.
   useEffect(() => {
     try {
       if (!window.localStorage.getItem('gps-tour-seen')) {
         window.localStorage.setItem('gps-tour-seen', '1');
-        setTourStep(0);
+        setTourPrompt(true);
       }
     } catch { /* storage blocked — the button is still there */ }
   }, []);
@@ -101,6 +104,7 @@ export default function StudioShell(
     case 'editor':
       center = <DraftVersions view={view} projectId={projectId} docs={docs} studioApi={studioApi} reviewApi={reviewApi} initialDocKey={sp.get('doc')} onReload={onReload} onToast={toast} />;
       break;
+    case 'needs':
     case 'openitems':
     default:
       center = <NeedsInbox projectId={projectId} docs={docs} studioApi={studioApi} onReload={onReload} onNavigate={go} onToast={toast} />;
@@ -119,6 +123,12 @@ export default function StudioShell(
         gck(<ProposalDocumentDrawer doc={drawerDoc} projectId={projectId} canVerify={view.viewerCanVerify} onReload={onReload} onClose={() => setOpenDocKey(null)} api={cockpitApi} />)
       )}
       {toastMsg && <div className="gps-toast" role="status">{toastMsg}</div>}
+      {tourPrompt && tourStep === null && (
+        <div className="gps-tour-prompt" data-testid="tour-prompt" role="status">
+          New here? <button type="button" className="gps-link gps-tour-prompt-go" onClick={() => { setTourPrompt(false); setTourStep(0); }}>Take the 2-minute tour</button>
+          <button type="button" className="gps-link gps-muted" onClick={() => setTourPrompt(false)}>Not now</button>
+        </div>
+      )}
       {tourStep !== null && <StudioTour step={tourStep} onNavigate={go} onSetStep={setTourStep} onClose={() => setTourStep(null)} variant={view.viewerCanVerify ? 'admin' : 'intern'} />}
       {bugReportEndpoint && <ReportAProblem brandLabel={null} endpoint={bugReportEndpoint} extra={{ projectId, contractName: view.name }} />}
     </div>

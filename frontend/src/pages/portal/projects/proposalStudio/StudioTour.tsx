@@ -68,9 +68,10 @@ export default function StudioTour(
 
   return (
     <div className="gps-tour" role="dialog" aria-modal="false" aria-label="Proposal Studio walkthrough">
-      <div className="gps-tour-card">
+      <div className="gps-tour-ring" data-testid="tour-ring" aria-hidden="true" />
+      <div className="gps-tour-card" data-testid="tour-card" data-step={step + 1}>
         <div className="gps-tour-head">
-          <span className="gps-eyebrow">Guided tour &middot; Step {step + 1} of {total}</span>
+          <span className="gps-eyebrow">Tour &middot; {step + 1} of {total}</span>
           <button type="button" className="gps-tour-x" aria-label="Skip the tour" onClick={onClose}>&times;</button>
         </div>
         <h3>{s.title}</h3>
@@ -80,10 +81,10 @@ export default function StudioTour(
           {steps.map((_, i) => <span key={i} className={i === step ? 'on' : undefined} />)}
         </div>
         <div className="gps-tour-foot">
-          <button type="button" className="gps-btn sm" onClick={onClose}>Skip</button>
+          <button type="button" className="gps-btn sm" data-testid="tour-skip" onClick={onClose}>Skip</button>
           <div style={{ display: 'flex', gap: 8 }}>
             <button type="button" className="gps-btn sm" disabled={step === 0} onClick={back}>Back</button>
-            <button type="button" className="gps-btn sm primary" onClick={next}>{isLast ? 'Finish' : 'Next'}</button>
+            <button type="button" className="gps-btn sm primary" data-testid="tour-next" onClick={next}>{isLast ? 'Finish' : 'Next'}</button>
           </div>
         </div>
       </div>

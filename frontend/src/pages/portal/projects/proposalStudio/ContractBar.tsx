@@ -15,24 +15,24 @@ export default function ContractBar({ view, onStartTour, onNeeds }: { view: Stud
   const parsed = parseDeadline(closeIso);
   const countdown = parsed ? formatCountdown(countdownTo(parsed.ms, Date.now()), parsed.hasTime) : null;
   const needCount = view.needsCount ?? 0;
-  const needTone = (view.fatalNeedsCount ?? 0) > 0 ? 'bad' : 'warn';
+  // v4: the Needs chip is ALWAYS shown. Severity drives the fill colour.
+  const severity = (view.fatalNeedsCount ?? 0) > 0 ? 'fatal' : needCount > 0 ? 'score' : 'clear';
+  const needClass = severity === 'fatal' ? 'bad' : severity === 'score' ? 'warn' : 'ok';
 
   return (
-    <header className="gps-bar">
+    <header className="gps-bar" data-testid="studio-bar">
       <div className="gps-bar-in gps-gut">
         <div>
           <div className="gps-eyebrow">Proposal Studio &middot; Gov contract</div>
           <h1>{view.name}</h1>
-          {onStartTour && <button type="button" className="gps-btn sm gps-tour-start" onClick={onStartTour}>Take a tour</button>}
         </div>
         <div className="gps-bar-meta">
           <span className="gps-chip">Stage <b>{pursuitStageLabel(view)}</b></span>
-          {needCount > 0 && (
-            <button type="button" className={`gps-chip gps-chip-btn gps-chip-${needTone}`} onClick={onNeeds}>Needs you <b className="gps-num">{needCount}</b></button>
-          )}
-          <span className="gps-chip">Build <b className="gps-num">{buildPct}%</b> verified</span>
-          <span className="gps-chip gps-meter">Proposal ready <span className="gps-m"><span style={{ width: `${readiness}%` }} /></span><b className="gps-num">{readiness}%</b> / 95%</span>
           {view.agency && <span className="gps-chip">Agency <b>{view.agency}</b></span>}
+          <span className="gps-chip">Build <b className="gps-num">{buildPct}%</b> verified</span>
+          <span className="gps-chip gps-meter" data-testid="bar-ready">Proposal ready <span className="gps-m"><span style={{ width: `${readiness}%` }} /></span><b className="gps-num">{readiness}%</b> / 95%</span>
+          <button type="button" data-testid="bar-needs" data-count={needCount} data-severity={severity} className={`gps-chip gps-chip-btn gps-chip-${needClass}`} onClick={onNeeds}>Needs you <b className="gps-num">{needCount}</b></button>
+          {onStartTour && <button type="button" data-testid="bar-tour" className="gps-chip gps-chip-btn" onClick={onStartTour}>Take the tour</button>}
           {closeIso && <span className="gps-chip">Closes <b className="gps-num">{closeIso}</b>{countdown ? <> &middot; <b className="gps-num">{countdown}</b></> : null}</span>}
         </div>
       </div>

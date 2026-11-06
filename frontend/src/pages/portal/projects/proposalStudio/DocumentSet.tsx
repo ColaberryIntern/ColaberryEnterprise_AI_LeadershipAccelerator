@@ -1,7 +1,7 @@
 import React, { useCallback, useState } from 'react';
 import type { GovProposalDocument, GovStudioApi, StudentGovProjectView } from '../../../../services/govProjectPortalApi';
-import { docScore, Bar, teamTag, docTypeMeta } from './studioHelpers';
-import { docStageLabel, libraryPickerItems, type LibraryItem } from './buildHelpers';
+import { docScore, Bar, docTypeMeta } from './studioHelpers';
+import { docStageLabel, libraryPickerItems, anyNotStarted, type LibraryItem } from './buildHelpers';
 
 /**
  * DocumentSet — the deliverables table shaped by the blueprint (v3, T18). Each document's type, stage, the count of
@@ -16,6 +16,14 @@ export default function DocumentSet(
 ): React.ReactElement {
   const [picker, setPicker] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
+  const [buildingAll, setBuildingAll] = useState(false);
+  const canBuildAll = anyNotStarted(docs);
+
+  const buildAllDocs = useCallback(async () => {
+    setBuildingAll(true);
+    try { const r = await studioApi.buildAll(projectId); onToast?.(r.enqueued.length ? `Building ${r.enqueued.length} document${r.enqueued.length === 1 ? '' : 's'}…` : 'Nothing to build right now.'); onReload(); }
+    catch { onToast?.('Could not start Build all.'); } finally { setBuildingAll(false); }
+  }, [studioApi, projectId, onReload, onToast]);
 
   const buildIt = useCallback(async (d: GovProposalDocument) => {
     setBusy(d.key);
@@ -38,8 +46,8 @@ export default function DocumentSet(
 
   return (
     <div className="gps-view" data-tour="documents">
-      <div className="gps-vh"><div><h2>Document set</h2><p>The deliverables for this contract, shaped by its blueprint. Each has a type that sets how it is produced, a stage, the needs holding it, and a current score.</p></div>
-        <div className="gps-act"><button className="gps-btn" onClick={() => setPicker((v) => !v)}>Add from library</button></div></div>
+      <div className="gps-vh"><div><h2>Document set <button type="button" data-testid="help" className="gps-help" title="About this view" onClick={() => onToast?.('Document set: the deliverables shaped by the blueprint. Build a not-started document, or add one from the library.')}>i</button></h2><p>The deliverables for this contract, shaped by its blueprint. Each has a type that sets how it is produced, a stage, the needs holding it, and a current score.</p></div>
+        <div className="gps-act"><button className="gps-btn" data-testid="docs-library" onClick={() => setPicker((v) => !v)}>Add from library</button>{canBuildAll && <button className="gps-btn primary" data-testid="btn-build-all" disabled={buildingAll} onClick={buildAllDocs}>Build all documents</button>}</div></div>
 
       {picker && (
         <div className="gps-panel" style={{ marginBottom: 12 }}>
@@ -60,25 +68,26 @@ export default function DocumentSet(
         </div>
       )}
 
-      <div className="gps-tbl-wrap"><table>
-        <thead><tr><th>Document</th><th>Type</th><th>Stage</th><th className="gps-num">Needs</th><th className="gps-num">Pages</th><th>Ver</th><th>Gate</th><th style={{ width: 150 }}>Score</th></tr></thead>
+      <div className="gps-tbl-wrap"><table data-testid="docs-table">
+        <thead><tr><th>Document</th><th>Type</th><th>Stage</th><th className="gps-num">Needs</th><th className="gps-num">Pages</th><th className="gps-num">Reqs</th><th>Ver</th><th style={{ width: 150 }}>Score</th></tr></thead>
         <tbody>
           {docs.map((d) => {
             const sc = docScore(d);
             const meta = docTypeMeta(d);
             const over = d.pageLimit != null && d.latest?.pageCount != null && d.latest.pageCount > d.pageLimit;
             const needs = d.needsCount ?? d.openGapCount ?? 0;
+            const fatalNeeds = (d.fatalNeedsCount ?? d.fatalCount ?? 0) > 0;
             const notStarted = d.status === 'not_started' && d.key !== 'pricing' && !d.superseded;
             return (
-              <tr className="gps-click" key={d.key} onClick={() => (d.key === 'pricing' ? onToast?.('Price proposal — admin only, sealed separate file.') : onOpen(d))}>
-                <td><b>{d.title}</b>{d.key === 'pricing' ? <div className="gps-small gps-muted">Hidden from interns</div> : null}{d.superseded ? <div className="gps-small" style={{ color: 'var(--gps-warn)' }}>No longer required</div> : null}</td>
+              <tr className="gps-click" key={d.key} data-testid="docs-row" data-key={d.key} data-stage={docStageLabel(d)} onClick={() => (d.key === 'pricing' ? onToast?.('Price proposal — admin only, sealed separate file.') : onOpen(d))}>
+                <td><b>{d.title}</b>{d.fileName ? <div className="gps-small gps-mono gps-muted">{d.fileName}</div> : null}{d.key === 'pricing' ? <div className="gps-small gps-muted">Hidden from interns</div> : null}{d.superseded ? <div className="gps-small" style={{ color: 'var(--gps-warn)' }}>No longer required</div> : null}</td>
                 <td><span className={`gps-tag ${meta.tagClass}`}>{meta.label}</span></td>
-                <td><span className="gps-tag">{docStageLabel(d)}</span>{notStarted ? <div style={{ marginTop: 4 }}><button className="gps-btn sm primary" disabled={busy === d.key} onClick={(e) => { e.stopPropagation(); buildIt(d); }}>Build it</button></div> : null}</td>
-                <td className="gps-num">{needs > 0 ? <span style={{ color: (d.fatalNeedsCount ?? d.fatalCount ?? 0) > 0 ? 'var(--gps-bad)' : 'var(--gps-warn)' }}>{needs}</span> : '—'}</td>
+                <td>{notStarted ? <button className="gps-btn sm primary" data-testid="docs-build-it" disabled={busy === d.key} onClick={(e) => { e.stopPropagation(); buildIt(d); }}>Build it</button> : d.latest?.passes ? <span className="gps-tag ok">Passed</span> : <span className="gps-tag">{docStageLabel(d)}</span>}</td>
+                <td className="gps-num">{needs > 0 ? <span data-testid="docs-needs" className={`gps-tag ${fatalNeeds ? 'bad' : 'warn'}`}>{needs} from you</span> : <span className="gps-muted">—</span>}</td>
                 <td className="gps-num">{d.pageLimit != null ? <span style={{ color: over ? 'var(--gps-bad)' : 'inherit' }}>{d.latest?.pageCount ?? 0}/{d.pageLimit}</span> : '—'}</td>
+                <td className="gps-num">{d.requirementIds.length}</td>
                 <td className="gps-mono">v{d.latest?.version ?? d.version}</td>
-                <td>{d.latest?.passes ? <span className="gps-tag ok">Passed</span> : (teamTag(d.currentGate) ?? <span className="gps-tag">—</span>)}</td>
-                <td><div className="gps-gate-cell"><Bar v={sc} /><b className="gps-num">{sc}</b></div></td>
+                <td>{d.latest ? <div className="gps-gate-cell"><Bar v={sc} /><b className="gps-num">{sc}</b></div> : <span className="gps-muted">—</span>}</td>
               </tr>
             );
           })}

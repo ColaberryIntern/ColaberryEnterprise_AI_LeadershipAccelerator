@@ -46,7 +46,7 @@ export default function NeedsInbox(
   return (
     <div className="gps-view" data-tour="needs">
       <div className="gps-vh"><div>
-        <h2>Needs you</h2>
+        <h2>Needs you <button type="button" data-testid="help" className="gps-help" title="About this view" onClick={() => onToast('Needs you: everything only a person can supply before this proposal ships. Answer one and the agent resumes the documents it unblocks.')}>i</button></h2>
         <p>Everything only a person can supply before this proposal ships. Answer one and the agent picks the document back up automatically.</p>
       </div></div>
 
@@ -54,8 +54,8 @@ export default function NeedsInbox(
         <div className="gps-panel"><p className="gps-muted" style={{ margin: 0 }}>Nothing needs you right now. The agent has what it needs — follow progress in Where we are, or review the gates.</p></div>
       ) : (
         <>
-          {blocking.length > 0 && <NeedGroup label="Blocking export" tone="bad" needs={blocking} busyKey={busyKey} titleFor={titleFor} onResolve={resolve} onNavigate={onNavigate} />}
-          {holding.length > 0 && <NeedGroup label="Holding the score" tone="warn" needs={holding} busyKey={busyKey} titleFor={titleFor} onResolve={resolve} onNavigate={onNavigate} />}
+          <NeedGroup testid="needs-group-fatal" label="Blocking export" tone="bad" needs={blocking} busyKey={busyKey} titleFor={titleFor} onResolve={resolve} onNavigate={onNavigate} />
+          <NeedGroup testid="needs-group-score" label="Holding a score under 95" tone="warn" needs={holding} busyKey={busyKey} titleFor={titleFor} onResolve={resolve} onNavigate={onNavigate} />
         </>
       )}
     </div>
@@ -63,13 +63,14 @@ export default function NeedsInbox(
 }
 
 function NeedGroup(
-  { label, tone, needs, busyKey, titleFor, onResolve, onNavigate }:
-  { label: string; tone: string; needs: GovProjectNeed[]; busyKey: string | null; titleFor: (k: string) => string; onResolve: (n: GovProjectNeed, c: NeedControl, v: string) => void; onNavigate: (v: StudioView) => void },
+  { testid, label, tone, needs, busyKey, titleFor, onResolve, onNavigate }:
+  { testid: string; label: string; tone: string; needs: GovProjectNeed[]; busyKey: string | null; titleFor: (k: string) => string; onResolve: (n: GovProjectNeed, c: NeedControl, v: string) => void; onNavigate: (v: StudioView) => void },
 ): React.ReactElement {
   return (
-    <div className="gps-panel" style={{ marginTop: 14 }}>
+    <div className="gps-panel" data-testid={testid} style={{ marginTop: 14 }}>
       <h3><span className={`gps-tag ${tone}`}>{label}</span> <span className="gps-muted gps-small">{needs.length}</span></h3>
       <div className="gps-needs">
+        {needs.length === 0 && <div className="gps-muted gps-small">None.</div>}
         {needs.map((n) => (
           <NeedCard key={n.key} need={n} busy={busyKey === n.key} titleFor={titleFor} onResolve={onResolve} onNavigate={onNavigate} />
         ))}
@@ -85,21 +86,33 @@ function NeedCard(
   const control = needControl(need);
   const [value, setValue] = useState('');
   const docKeys = [...new Set((need.usedIn || []).map((u) => u.docKey).filter(Boolean))];
+  const border = need.blocking === 'fatal' ? 'var(--gps-bad)' : 'var(--gps-warn)';
+  const blockLabel = need.blocking === 'fatal' ? 'blocks export' : 'holds a score under 95';
 
   return (
-    <div className="gps-need-card">
-      <div className="gps-need-head">
-        <span className="gps-tag">{needKindLabel(need.kind)}</span>
-        <b>{need.ask}</b>
+    <div className="gps-need-card gps-need-2col" data-testid="need-card" data-key={need.key} data-kind={need.kind} data-blocking={need.blocking} data-done="false" style={{ borderLeft: `3px solid ${border}` }}>
+      <div className="gps-need-left" style={{ minWidth: 0 }}>
+        <div className="gps-need-head">
+          <span className="gps-tag">{needKindLabel(need.kind)}</span>
+          <span className={`gps-tag ${need.blocking === 'fatal' ? 'bad' : 'warn'}`}>{blockLabel}</span>
+          {(need.usedIn || []).some((u) => u.docKey === 'pricing') && <span className="gps-tag gold">admin only</span>}
+        </div>
+        <b style={{ display: 'block', marginTop: 4 }}>{need.ask}</b>
+        {need.why && <div className="gps-small gps-muted" style={{ marginTop: 2 }}>{need.why}</div>}
+        {need.source && (
+          <div className="gps-quote" data-testid="need-quote">&ldquo;{need.source.quote}&rdquo; <span className="gps-small gps-muted">— {need.source.file}{need.source.page ? `, p.${need.source.page}` : ''}</span></div>
+        )}
+        {docKeys.length > 0 && (
+          <div className="gps-choice-row" style={{ marginTop: 4 }}>
+            {docKeys.map((k) => (
+              <button key={k} type="button" data-testid="need-used" className="gps-tag gps-chip-btn" onClick={() => onNavigate('editor')}>{titleFor(k)}</button>
+            ))}
+          </div>
+        )}
+        <div className="gps-small gps-muted" data-testid="need-format" style={{ marginTop: 4 }}>Format: {need.format}</div>
       </div>
-      {need.why && <div className="gps-small gps-muted">{need.why}</div>}
-      <div className="gps-small gps-muted" style={{ marginTop: 4 }}>
-        {unblockLabel(need)}{docKeys.length ? ': ' : ''}
-        {docKeys.map((k) => titleFor(k)).join(', ')}
-      </div>
-      <div className="gps-small gps-muted" style={{ marginTop: 2 }}>Format: {need.format}</div>
 
-      <div className="gps-need-control" style={{ marginTop: 8 }}>
+      <div className="gps-need-control" data-testid="need-control" data-control={control}>
         {control === 'approve' ? (
           <button className="gps-btn sm" onClick={() => onNavigate('gates')}>Review &amp; decide at the Gold gate</button>
         ) : control === 'confirm' ? (
@@ -110,16 +123,14 @@ function NeedCard(
               <button key={opt} className="gps-btn sm" disabled={busy} onClick={() => onResolve(need, control, opt)}>{opt}</button>
             ))}
           </div>
+        ) : control === 'file' ? (
+          <label className="gps-file-drop">
+            <input type="file" data-control="file" style={{ display: 'none' }} disabled={busy} onChange={(e) => { const f = e.target.files?.[0]; if (f) onResolve(need, control, f.name); }} />
+            <span className="gps-btn sm">Choose file</span>
+          </label>
         ) : (
           <div className="gps-inline-field">
-            <input
-              className="gps-input"
-              type={control === 'url' ? 'url' : 'text'}
-              placeholder={control === 'file' ? 'Paste the uploaded file reference' : control === 'url' ? 'https://…' : 'Type the answer'}
-              value={value}
-              onChange={(e) => setValue(e.target.value)}
-              disabled={busy}
-            />
+            <input className="gps-input" type={control === 'url' ? 'url' : 'text'} placeholder={control === 'url' ? 'https://…' : 'Type the answer'} value={value} onChange={(e) => setValue(e.target.value)} disabled={busy} />
             <button className="gps-btn sm primary" disabled={busy || !value.trim()} onClick={() => onResolve(need, control, value.trim())}>Save</button>
           </div>
         )}

@@ -48,6 +48,7 @@ const TEAM_CARDS: Array<{ team: GovGateName; who: string; items: string[] }> = [
   { team: 'white_glove', who: 'Agent checks the package', items: ['Page limits, fonts, file names', 'Signatures and addenda present', 'Price only in its sealed file', 'Redacted copy built'] },
 ];
 const TEAM_VAR: Record<GovGateName, string> = { pink: 'var(--gps-pink)', red: 'var(--gps-red)', gold: 'var(--gps-gold)', white_glove: 'var(--gps-glove)' };
+const AI_TAG: Record<GovGateName, string> = { pink: 'AI', red: 'AI ×3', white_glove: 'AI', gold: 'You' };
 
 /** Reviewer-only per-document gate controls — the real run-checks / approve-gate actions, styled for the studio. */
 function DocGatePanel({ projectId, doc, reviewApi }: { projectId: string; doc: GovProposalDocument; reviewApi: GovReviewApi }): React.ReactElement {
@@ -95,26 +96,29 @@ export default function ReviewGatesView(
 
   return (
     <div className="gps-view">
-      <div className="gps-vh"><div><h2>Review gates</h2><p>This is the Shipley color-team process with the agent doing the reading. Each gate passes when its checks score 95 or better. A person signs off at Gold before anything is packaged.</p></div></div>
+      <div className="gps-vh"><div><h2>Review gates <button type="button" data-testid="help" className="gps-help" title="About this view" onClick={() => onToast?.('Review gates: the AI judge records Pink, Red and White glove as versions pass. Gold is your one Go for the whole package.')}>i</button></h2><p>This is the Shipley color-team process with the agent doing the reading. The AI judge records Pink, Red and White glove when a version passes their checks; Gold is the one human Go.</p></div></div>
       <div className="gps-teams">
         {TEAM_CARDS.map((t) => (
-          <div className="gps-team" style={{ borderTop: `3px solid ${TEAM_VAR[t.team]}` }} key={t.team}>
-            <h3>{GATE_LABEL[t.team]} team</h3><span className="gps-who gps-muted">{t.who}</span>
+          <div className="gps-team" data-testid={`gates-team-${t.team === 'white_glove' ? 'glove' : t.team}`} style={{ borderTop: `3px solid ${TEAM_VAR[t.team]}` }} key={t.team}>
+            <h3>{GATE_LABEL[t.team]} team <span className={`gps-tag ${t.team === 'gold' ? 'gold' : 'agent'}`}>{AI_TAG[t.team]}</span></h3><span className="gps-who gps-muted">{t.who}</span>
             <ul>{t.items.map((i) => <li key={i}>{i}</li>)}</ul>
           </div>
         ))}
       </div>
       {scored.length === 0 ? <div className="gps-panel gps-muted">No documents to review yet.</div> : (
-        <div className="gps-tbl-wrap"><table>
-          <thead><tr><th>Document</th>{CHECKS.map((c) => <th key={c.k}>{c.n}<div style={{ textTransform: 'none', letterSpacing: 0, fontWeight: 500 }}>{teamTag(c.team)}</div></th>)}<th>Result</th></tr></thead>
+        <div className="gps-tbl-wrap"><table data-testid="gates-matrix">
+          <thead><tr><th>Document</th>{CHECKS.map((c) => <th key={c.k}>{c.n}<div style={{ textTransform: 'none', letterSpacing: 0, fontWeight: 500 }}>{teamTag(c.team)}</div></th>)}<th className="gps-num">Score</th><th>Gates</th></tr></thead>
           <tbody>
             {scored.map((d) => {
               const sc = weightedScore(d.latest?.scores);
+              const g = d.gates ?? ({} as Record<GovGateName, string>);
+              const chip = (lab: string, gate: GovGateName) => <span className={`gps-tag ${g[gate] === 'approved' ? 'ok' : ''}`}>{lab} {g[gate] === 'approved' ? '✓' : '·'}</span>;
               return (
-                <tr className="gps-click" key={d.key} onClick={() => onOpenDoc(d)}>
+                <tr className="gps-click" data-testid="gates-row" data-key={d.key} key={d.key} onClick={() => onOpenDoc(d)}>
                   <td><b>{d.title}</b></td>
-                  {CHECKS.map((c) => { const v = d.latest?.scores?.[c.k] ?? 0; return (<td key={c.k}><div className="gps-gate-cell"><Bar v={v} /><span className="gps-num gps-small" style={{ color: colr(v), fontWeight: 600 }}>{v}</span></div></td>); })}
-                  <td>{d.latest?.passes ? <span className="gps-tag ok">Passed {sc}</span> : <span className="gps-tag warn">{sc}{d.currentGate ? ` · ${GATE_LABEL[d.currentGate]}` : ''}</span>}</td>
+                  {CHECKS.map((c) => { const v = d.latest?.scores?.[c.k] ?? 0; return (<td key={c.k}><span className="gps-score-chip gps-num" style={{ color: colr(v), background: 'var(--gps-sunk)' }}>{v}</span></td>); })}
+                  <td className="gps-num"><b style={{ color: colr(sc) }}>{sc}</b></td>
+                  <td data-testid="gates-row-chips"><div className="gps-choice-row">{chip('P', 'pink')}{chip('R', 'red')}{chip('WG', 'white_glove')}{chip('Gold', 'gold')}</div></td>
                 </tr>
               );
             })}

@@ -23,6 +23,8 @@ import DocumentSet from '../DocumentSet';
 import ReviewGatesView from '../ReviewGatesView';
 import BuildEvidence from '../BuildEvidence';
 import DraftVersions from '../DraftVersions';
+import Blueprint from '../Blueprint';
+import PackageView from '../PackageView';
 
 // ── fixtures ───────────────────────────────────────────────────────────────────────────────────────────────────
 const doc = (over: Partial<GovProposalDocument>): GovProposalDocument => ({
@@ -44,7 +46,10 @@ const VIEW = {
   requirementCounts: { total: 12, proposal: 8, build: 4 }, build: {} as any, viewerCanVerify: true, agency: 'City of Saratoga',
   keyDates: [], proposalDocuments: DOCS, proposalReadiness: { pct: 64, passing: 1, total: 3 }, needsCount: 2, fatalNeedsCount: 1,
   buildSummary: { studentProjectId: 'sp1', releases: [], rollup: { total: 10, verified: 6, complete: 6, inProgress: 0, blocked: 0, notStarted: 4, pct: 60 } },
-  buildArtifacts: [{ id: 'a1', storyId: 's1', requirementIds: ['R-1'], commitSha: 'abc1234', caption: 'Search screen', capturedAt: null, status: 'verified' }],
+  buildArtifacts: [
+    { id: 'a1', storyId: 's1', requirementIds: ['R-1'], commitSha: 'abc1234', caption: 'Search screen', capturedAt: null, status: 'verified' },
+    { id: 'a2', storyId: 's2', requirementIds: [], commitSha: null, caption: null, capturedAt: null, status: 'open' },
+  ],
   blueprint: { rules: [{ key: 'page_limit', value: '20', quote: 'q', sourceFile: 'f', severity: 'fatal' }], forms: [], scoring: { basis: 'best_value', basisQuote: 'q', totalPoints: 100, factors: [{ label: 'Technical', points: 40, quote: 'q' }] }, addenda: [], eliminationRisks: [], buyerType: 'local_government', droppedRuleCount: 0, sourceFiles: ['f'], generatedAt: 'x', jurisdiction: { state: 'UT', quote: 'Utah' }, stateFormsStatus: { state: 'UT', loaded: false, note: 'no rulebook' } },
 } as unknown as StudentGovProjectView;
 
@@ -85,9 +90,11 @@ const VIEW_TESTIDS: Record<string, string[]> = {
   overview: ['overview-build-hero', 'btn-build-all', 'overview-readiness', 'overview-doc-technical', 'overview-needs', 'help'],
   needs: ['needs-group-fatal', 'needs-group-score', 'need-card', 'need-quote', 'need-format', 'need-control', 'need-used'],
   documents: ['docs-library', 'btn-build-all', 'docs-table', 'docs-row', 'docs-build-it', 'docs-needs', 'help'],
+  blueprint: ['bp-reanalyze', 'bp-log', 'bp-weights', 'bp-rules', 'bp-state-forms', 'help'],
   gates: ['gates-matrix', 'gates-row', 'gates-row-chips', 'gates-team-pink', 'gates-team-red', 'gates-team-glove', 'gates-team-gold', 'help'],
   evidence: ['ev-demo-url', 'ev-capture', 'ev-insert', 'ev-decide', 'help'],
   editor: ['ed-paper', 'ed-running-header', 'ed-tab-paper', 'ed-tab-outline', 'ed-tab-pdf', 'ed-doc-pick', 'ed-section', 'ed-reqref', 'ed-checks', 'ed-plan', 'ed-versions', 'help'],
+  package: ['pkg-files', 'pkg-sealed', 'pkg-checklist', 'pkg-export', 'help'],
 };
 
 // ── render helpers (react-dom/client + act; no RTL in this repo) ─────────────────────────────────────────────────
@@ -111,11 +118,13 @@ const CHROME = (
 );
 const VIEW_EL: Record<string, React.ReactElement> = {
   overview: <WhereWeAre view={VIEW} onNavigate={noop} studioApi={studioApi} onReload={noop} onToast={noop} />,
+  blueprint: <Blueprint view={VIEW} onReanalyze={noop} reanalyzing={false} onToast={noop} />,
   needs: <NeedsInbox projectId="p1" docs={DOCS} studioApi={studioApi} onReload={noop} onNavigate={noop} onToast={noop} />,
   documents: <DocumentSet view={VIEW} projectId="p1" docs={DOCS} studioApi={studioApi} onOpen={noop} onReload={noop} onToast={noop} />,
   gates: <ReviewGatesView projectId="p1" docs={DOCS} reviewApi={reviewApi} onOpenDoc={noop} onToast={noop} />,
   evidence: <BuildEvidence view={VIEW} projectId="p1" reviewApi={reviewApi} onReload={noop} onToast={noop} />,
   editor: <DraftVersions view={VIEW} projectId="p1" docs={DOCS} studioApi={studioApi} reviewApi={reviewApi} initialDocKey="technical" onReload={noop} onToast={noop} />,
+  package: <PackageView view={VIEW} projectId="p1" docs={DOCS} reviewApi={reviewApi} onToast={noop} />,
 };
 
 describe('Proposal Studio v4 parity', () => {

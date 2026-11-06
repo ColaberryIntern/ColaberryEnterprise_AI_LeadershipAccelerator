@@ -73,23 +73,23 @@ export default function AgentPanel(
   const top = needs.slice(0, 5);
 
   return (
-    <aside className="gps-agent" data-tour="agent">
+    <aside className="gps-agent" data-tour="agent" data-testid="agent-panel">
       <div className="gps-ag">
         <header>
           <div className="gps-av" aria-hidden="true">AI</div>
-          <div><h2>Proposal agent</h2><p>Drafts, checks and revises. You approve.</p></div>
-          <span className="gps-state gps-tag agent">{state}</span>
+          <div><h2>Proposal agent</h2><p>Builds and judges. You supply what&rsquo;s missing.</p></div>
+          <span className={`gps-state gps-tag ${state === 'Waiting on you' ? 'warn' : 'agent'}`} data-testid="agent-state" data-state={state}>{state}</span>
         </header>
         {run?.lastMessage && state !== 'Idle' && state !== 'Waiting on you' && <div className="gps-small gps-muted" style={{ padding: '0 2px 6px' }}>{run.lastMessage}</div>}
 
-        <div className="gps-ag-log" aria-live="polite">
+        <div className="gps-ag-log" aria-live="polite" data-testid="agent-log">
           {activity.length === 0 && <div className="gps-ev"><div><div className="gps-t">&nbsp;</div><span className="gps-muted">No activity yet. It fills as the agent drafts, checks and you answer needs.</span></div></div>}
           {activity.map((e, i) => (
             <div className={`gps-ev ${evClass(e.kind)}`} key={i}><div><div className="gps-t">{shortTime(e.at)}</div>{e.summary}</div></div>
           ))}
         </div>
 
-        <div className="gps-ask">
+        <div className="gps-ask" data-testid="agent-needs">
           <h3><span>Needs you</span><span className="gps-num">{needs.length}</span></h3>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {needs.length === 0 && <div className="gps-muted gps-small">Nothing needs you right now.</div>}
@@ -120,7 +120,7 @@ export default function AgentPanel(
           <div className="gps-ask" style={{ marginTop: 10 }}>
             <h3><span>Ask the agent</span></h3>
             <div style={{ display: 'flex', gap: 6 }}>
-              <input className="gps-input" aria-label="Ask the agent" placeholder="Ask about this proposal…" value={ask} onChange={(e) => setAsk(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') submitAsk(); }} />
+              <input className="gps-input" data-testid="agent-ask" aria-label="Ask the agent" placeholder="Ask about this proposal…" value={ask} onChange={(e) => setAsk(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') submitAsk(); }} />
               <button className="gps-btn sm" disabled={asking || !ask.trim()} onClick={submitAsk}>Ask</button>
             </div>
             {answer && <div className="gps-small" style={{ marginTop: 6 }}>{answer}</div>}

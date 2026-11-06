@@ -39,9 +39,16 @@ export default function WhereWeAre(
   if (formsPending > 0) moves.push({ who: 'Signer', cls: 'acc', text: `Record the signed copy for ${formsPending} required form${formsPending === 1 ? '' : 's'}.` });
   if (moves.length === 0) moves.push({ who: 'Agent', cls: 'ok', text: 'Every scored document is passing. Give the package a final Go at the Gold gate, then submit.' });
 
+  const notStarted = docs.filter((d) => d.key !== 'pricing' && !d.superseded && d.status === 'not_started').length;
   return (
     <div className="gps-view">
-      <div className="gps-vh"><div><h2>Where we are</h2><p>Planning and the pilot build are done. The work now is turning the solicitation, the build and the company record into a submittable proposal, with every document checked against the requirements until it scores 95 or better.</p></div></div>
+      <div className="gps-vh"><div><h2>Where we are <button type="button" data-testid="help" className="gps-help" title="About this view" onClick={() => onToast('Where we are: readiness, the next moves led by what needs you, and Build all documents to start the agent on everything not yet begun.')}>i</button></h2><p>Planning and the pilot build are done. The work now is turning the solicitation, the build and the company record into a submittable proposal, with every document checked against the requirements until it scores 95 or better.</p></div></div>
+      {canBuildAll && (
+        <div className="gps-build-hero" data-testid="overview-build-hero">
+          <div style={{ minWidth: 0 }}><b>{notStarted} document{notStarted === 1 ? '' : 's'} not started.</b><div className="gps-small gps-muted">The agent builds, checks and revises each one; you answer only what it can&rsquo;t find.</div></div>
+          <button className="gps-btn primary" data-testid="btn-build-all" disabled={building} onClick={buildAll}>Build all documents</button>
+        </div>
+      )}
       <div className="gps-pipe" aria-label="Pursuit stages">
         <div className="d"><b>Snapshot</b>advisory read</div>
         <div className="d"><b>Solicitation</b>{view.requirementCounts.total} requirements</div>
@@ -53,7 +60,7 @@ export default function WhereWeAre(
         <div><b>Outcome</b>win / loss</div>
       </div>
       <div className="gps-grid2">
-        <div className="gps-panel">
+        <div className="gps-panel" data-testid="overview-readiness">
           <h3>Proposal readiness</h3>
           <div className="gps-ring">
             <svg width="84" height="84" viewBox="0 0 84 84" aria-hidden="true">
@@ -63,11 +70,11 @@ export default function WhereWeAre(
             <div><div className="gps-big gps-num">{p}%</div><div className="gps-muted gps-small">target 95% on every document &middot; {readiness.passing} of {readiness.total} documents pass</div></div>
           </div>
           <div className="gps-mini-docs" style={{ marginTop: 14 }}>
-            {scored.map((d) => { const sc = docScore(d); return (<div className="gps-r" key={d.key}><span>{d.title} <span className="gps-tag gps-small" style={{ marginLeft: 4 }}>{docStageLabel(d)}</span></span><Bar v={sc} /><b className="gps-num" style={{ textAlign: 'right' }}>{sc}</b></div>); })}
+            {scored.map((d) => { const sc = docScore(d); const scored0 = !!d.latest; return (<div className="gps-r" key={d.key} data-testid={`overview-doc-${d.key}`} data-stage={docStageLabel(d)}><span>{d.title} <span className="gps-tag gps-small" style={{ marginLeft: 4 }}>{docStageLabel(d)}</span></span><Bar v={sc} /><b className="gps-num" style={{ textAlign: 'right' }}>{scored0 ? sc : '—'}</b></div>); })}
           </div>
         </div>
-        <div className="gps-panel">
-          <h3>Next moves</h3>
+        <div className="gps-panel" data-testid="overview-needs">
+          <h3>What you need to do <span className="gps-muted gps-small">{needCount}</span></h3>
           <ul className="gps-next">
             {moves.map((m, i) => (<li key={i}><span className={`gps-who gps-tag ${m.cls}`}>{m.who}</span><span>{m.text}</span></li>))}
           </ul>

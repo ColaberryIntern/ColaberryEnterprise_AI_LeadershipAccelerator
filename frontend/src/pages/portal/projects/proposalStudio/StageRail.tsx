@@ -2,7 +2,7 @@ import React from 'react';
 import type { StudentGovProjectView } from '../../../../services/govProjectPortalApi';
 
 /** The Proposal Studio center-workspace views, in rail order. */
-export type StudioView = 'overview' | 'blueprint' | 'documents' | 'evidence' | 'editor' | 'gates' | 'package' | 'openitems';
+export type StudioView = 'overview' | 'blueprint' | 'documents' | 'evidence' | 'editor' | 'gates' | 'package' | 'needs' | 'openitems';
 
 type Icon = { kind: 'done' | 'now' | 'num'; label: string };
 
@@ -34,26 +34,29 @@ export default function StageRail(
 
   const icClass = (ic: Icon) => `gps-ic${ic.kind === 'done' ? ' done' : ic.kind === 'now' ? ' now' : ''}`;
 
+  const needSeverity = needCount === 0 ? 'ok' : (view.fatalNeedsCount ?? 0) > 0 ? 'bad' : 'warn';
+
   return (
-    <nav className="gps-rail" aria-label="Proposal process">
+    <nav className="gps-rail" aria-label="Proposal process" data-testid="rail">
       <div className="gps-grp">Done</div>
       <div className="gps-past">
         <span>Snapshot</span><span>Solicitation intake</span><span>Fit</span><span>Bid decision</span><span>{buildLabel}</span>
       </div>
+      {/* v4: For you → Needs you at the TOP of the live rail. */}
+      <div className="gps-grp">For you</div>
+      <button className={`gps-step${needCount > 0 ? ' gps-step-strong' : ''}`} data-v="openitems" data-testid="rail-step-needs" aria-current={current === 'openitems' ? 'page' : undefined} onClick={() => onNavigate('openitems')}>
+        <span className="gps-ic" aria-hidden="true">!</span>
+        Needs you
+        <small className={`gps-rail-badge ${needSeverity}`} data-testid="rail-needs-badge">{needCount}</small>
+      </button>
       <div className="gps-grp">Proposal production</div>
       {steps.map((s) => (
-        <button key={s.v} className="gps-step" data-v={s.v} aria-current={current === s.v ? 'page' : undefined} onClick={() => onNavigate(s.v)}>
+        <button key={s.v} className="gps-step" data-v={s.v} data-testid={`rail-step-${s.v}`} aria-current={current === s.v ? 'page' : undefined} onClick={() => onNavigate(s.v)}>
           <span className={icClass(s.ic)} aria-hidden="true">{s.ic.label}</span>
           {s.label}
           {s.small ? <small>{s.small}</small> : null}
         </button>
       ))}
-      <div className="gps-grp">For you</div>
-      <button className="gps-step" data-v="openitems" aria-current={current === 'openitems' ? 'page' : undefined} onClick={() => onNavigate('openitems')}>
-        <span className="gps-ic" aria-hidden="true">!</span>
-        Needs you
-        {needCount > 0 ? <small className={`gps-rail-badge ${(view.fatalNeedsCount ?? 0) > 0 ? 'bad' : 'warn'}`}>{needCount}</small> : null}
-      </button>
     </nav>
   );
 }

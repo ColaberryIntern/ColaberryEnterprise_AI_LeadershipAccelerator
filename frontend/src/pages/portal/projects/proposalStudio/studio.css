@@ -280,3 +280,28 @@
 .gps-outline{display:flex;flex-direction:column;gap:8px;margin-top:8px}
 .gps-outline-row{display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px dashed var(--gps-line)}
 .gps-outline-row > div:first-child{flex:1 1 auto;min-width:0}
+
+/* v4 (T2) global shell: clear/green chip + badge, strong rail label */
+.gps-chip-btn.gps-chip-ok{border-color:var(--gps-ok);color:var(--gps-ok)}
+.gps-rail-badge.ok{background:var(--gps-ok)}
+.gps-step.gps-step-strong{font-weight:700}
+
+/* v4 (T2) tour: spotlight ring + non-blocking first-visit prompt */
+.gps-tour-ring{position:fixed;border:2px solid var(--gps-accent);border-radius:10px;box-shadow:0 0 0 9999px rgba(10,16,26,.45);pointer-events:none;z-index:40;transition:all .2s ease;display:none}
+.gps-tour-prompt{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);z-index:30;background:var(--gps-surface);border:1px solid var(--gps-line);border-radius:999px;padding:8px 16px;display:flex;gap:10px;align-items:center;box-shadow:0 6px 24px rgba(10,16,26,.18);font-size:13px}
+.gps-tour-prompt-go{font-weight:700;color:var(--gps-accent)}
+@media (max-width:760px){.gps-tour-ring{display:none!important}}
+
+/* v4 (T3) needs: two-column card, file drop, per-view help button */
+.gps-need-2col{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:14px;align-items:start}
+.gps-need-left{min-width:0}
+.gps-file-drop{display:inline-block;cursor:pointer}
+.gps-help{margin-left:8px;width:18px;height:18px;border-radius:50%;border:1px solid var(--gps-line);background:var(--gps-surface);color:var(--gps-muted);font-size:11px;font-weight:700;font-style:italic;cursor:pointer;vertical-align:middle;line-height:1}
+.gps-help:hover{border-color:var(--gps-accent);color:var(--gps-accent)}
+@media (max-width:640px){.gps-need-2col{grid-template-columns:minmax(0,1fr)}}
+
+/* v4 (T4) overview build hero */
+.gps-build-hero{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;background:linear-gradient(90deg,var(--gps-agent-soft),transparent);border:1px solid var(--gps-agent-soft);border-left:3px solid var(--gps-agent);border-radius:10px;padding:14px 16px;margin-bottom:14px}
+
+/* v4 (T6) gates: score chip */
+.gps-score-chip{display:inline-block;min-width:30px;text-align:center;padding:2px 8px;border-radius:6px;font-weight:600}
