@@ -51,10 +51,11 @@ export interface StaffDesk {
 // campusAudienceFor moved to ./campusAudience (C6) so presence can use it too; re-exported for existing callers.
 export { campusAudienceFor } from './campusAudience';
 
-const REESE_PROMPTS = ['How do I get unstuck on this week\'s lab?', 'What should I focus on next?', 'Can you look over my project plan?'];
-// C87 (Ali, 2026-10-29): Dara is upstairs, for staff; learners go through Reese. Only the questions that work for staff stay;
-// her staff-facing role (monitoring curriculum and student habits) is C88.
-const DARA_PROMPTS = ['Where is this topic covered in the curriculum?', 'What does this week\'s assignment ask for?'];
+// C88: learners' curriculum questions moved from Dara to Reese (his my_curriculum_progress tool answers the first one).
+const REESE_PROMPTS = ['What does this week\'s lesson cover?', 'How do I get unstuck on this week\'s lab?', 'What should I focus on next?', 'Can you look over my project plan?'];
+// C87/C88 (Ali, 2026-10-29): Dara is upstairs, for staff, monitoring the curriculum. Each question is one her staff tools
+// answer from real data (curriculum_health, student_pacing in daraStaffTools.ts); nothing she cannot see yet.
+const DARA_PROMPTS = ['Which lessons are students stalling on this week?', 'Who is falling behind the schedule?'];
 
 async function agentDesk(
   id: 'reese' | 'dara', name: string, title: string, prompts: string[],

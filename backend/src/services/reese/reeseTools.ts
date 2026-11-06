@@ -2,6 +2,7 @@ import OpenAI from 'openai';
 import { getStudentSuccessSnapshot } from '../studentSuccessSnapshot';
 import { assembleEvidence } from '../studentHealthAssessment/evidenceAssembly';
 import { getLatestStudentAssessment, maybeRefreshStudentAssessment } from '../studentHealthAssessment';
+import { readMyCurriculumProgress } from './reeseCurriculumTool';
 
 /**
  * Reese Agentic AI Employee mission, Checkpoint E (Capability 5, first real
@@ -37,6 +38,15 @@ export const REESE_TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
     function: {
       name: 'assess_student_health',
       description: "Get this student's current structured health read: overall status, confidence, likely root cause, and a suggested approach. If none exists yet or the last one is due for a refresh, this runs a fresh evidence-grounded assessment first. Use this when you want a considered judgment, not just raw numbers.",
+      parameters: { type: 'object', properties: {}, required: [] },
+    },
+  },
+  {
+    // C88: learners' curriculum questions moved from Dara to Reese.
+    type: 'function',
+    function: {
+      name: 'my_curriculum_progress',
+      description: "Read this student's curriculum position: the cohort's scheduled week, the cards published for that week (title, type, section) with this student's status on each, and their completion of the weeks around it. Use this for questions about what this week covers, what an assignment is, or what to do next in the curriculum.",
       parameters: { type: 'object', properties: {}, required: [] },
     },
   },
@@ -91,6 +101,9 @@ export async function executeReeseTool(toolName: string, enrollmentId: string): 
     }
     if (toolName === 'assess_student_health') {
       return JSON.stringify(await assessStudentHealthTool(enrollmentId));
+    }
+    if (toolName === 'my_curriculum_progress') {
+      return JSON.stringify(await readMyCurriculumProgress(enrollmentId));
     }
     return JSON.stringify({ error: `Unknown tool: ${toolName}` });
   } catch (e: any) {

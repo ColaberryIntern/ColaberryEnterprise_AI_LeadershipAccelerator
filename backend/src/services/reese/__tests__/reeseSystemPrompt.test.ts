@@ -70,6 +70,14 @@ beforeEach(() => {
 });
 
 describe('buildReeseSystemPrompt', () => {
+  it('C88: Reese takes learner curriculum questions and is told to read the real week, not guess', async () => {
+    mockLearnerContext.mockResolvedValue('');
+    const prompt = await buildReeseSystemPrompt('enrollment-1');
+    expect(prompt).toMatch(/Curriculum questions are yours too/);
+    expect(prompt).toMatch(/my_curriculum_progress/);
+    expect(prompt).toMatch(/rather than handing over a\s+finished answer/);
+  });
+
   it('happy path: contains "Reese", omits "Cory", and includes locked persona guardrails', async () => {
     mockLearnerContext.mockResolvedValue('LEARNER PROFILE: Jane, VP Engineering at Acme.');
     const prompt = await buildReeseSystemPrompt('enrollment-1');

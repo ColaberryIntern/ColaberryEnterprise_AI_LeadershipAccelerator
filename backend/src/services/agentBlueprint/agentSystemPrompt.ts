@@ -62,6 +62,9 @@ export interface BuildAgentSystemPromptOptions {
    * line, in the mandated runtime-context order's layer-6 position, rather
    * than appended after the whole prompt by the caller. */
   extraBlocksBeforeClosing?: string[];
+  /** C88 — omit the learner-context block. For a conversation where the person talking is staff, not a learner (Dara
+   * upstairs): the sender's own learner profile is not what the conversation is about and would only mislead. */
+  skipLearnerContext?: boolean;
 }
 
 const DEFAULT_CLOSING_LINE =
@@ -125,7 +128,7 @@ export async function buildAgentSystemPrompt(
   parts.push('\n' + (await buildReliabilityStateBlock()));
 
   let learnerBlock = '';
-  try {
+  if (!options?.skipLearnerContext) try {
     learnerBlock = await getLearnerContextBlock(enrollmentId);
   } catch (e: any) {
     console.warn(JSON.stringify({

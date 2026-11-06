@@ -59,6 +59,15 @@ describe('buildAgentSystemPrompt', () => {
     expect(prompt).toContain('LEARNER PROFILE: Jane, VP Engineering at Acme.');
   });
 
+  it('C88 skipLearnerContext: the learner-context block is neither fetched nor injected', async () => {
+    mockLearnerContext.mockResolvedValue('LEARNER PROFILE: Jane, VP Engineering at Acme.');
+    const prompt = await buildAgentSystemPrompt(CURRICULUM_QA_PERSONA, 'enrollment-staff', { skipLearnerContext: true });
+
+    expect(mockLearnerContext).not.toHaveBeenCalled();
+    expect(prompt).not.toContain('LEARNER PROFILE');
+    expect(prompt).toContain('CurriculumQA');
+  });
+
   it('boundary/failure: getLearnerContextBlock rejecting does not crash prompt building; a valid non-empty prompt is still returned', async () => {
     mockLearnerContext.mockRejectedValue(new Error('learner context service unavailable'));
     const prompt = await buildAgentSystemPrompt(CURRICULUM_QA_PERSONA, 'enrollment-2');

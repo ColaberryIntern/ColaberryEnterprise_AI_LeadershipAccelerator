@@ -4,7 +4,9 @@ import { getInstrumentedOpenAI } from '../openaiInstrumented';
 import RoomMembership from '../../models/RoomMembership';
 import RoomMessage from '../../models/RoomMessage';
 import { getDaraEnrollmentId, getDaraAdminUserId, getDaraAgentId, isDaraEnabled, DARA_AGENT_NAME, DARA_RISK_TIER } from './daraIdentitySeed';
-import { buildDaraSystemPrompt } from './daraSystemPrompt';
+import { buildDaraSystemPrompt, buildDaraStaffSystemPrompt } from './daraSystemPrompt';
+import { DARA_STAFF_TOOLS, isDaraStaffTool, executeDaraStaffTool } from './daraStaffTools';
+import { canReachAgent } from '../campus/agentPlaces';
 import { ensureDaraTicketForRoom, logDaraExchangeActivity } from './daraTicketLinkService';
 import { logAgentActivity } from '../agentBlueprint/agentActivityLogService';
 import { agentHasTool } from '../agents/tools/agentToolRegistry';
@@ -161,7 +163,13 @@ export async function maybeTriggerDaraReply(roomId: string, senderEnrollmentId: 
     }
 
     const instruction = attachmentInstruction(attach);
-    const systemPrompt = await buildDaraSystemPrompt(senderEnrollmentId);
+    // C88: a sender whose badge opens Dara's floor (the C87 gate's own predicate, fail closed) is staff and gets Dara
+    // upstairs: the staff persona and the read-only monitoring tools. Anyone else keeps the student persona, which the
+    // gate already stops at send; a failed lookup lands here too, never on the staff tools.
+    const staff = await canReachAgent(senderEnrollmentId, 'dara');
+    const systemPrompt = staff
+      ? await buildDaraStaffSystemPrompt(senderEnrollmentId)
+      : await buildDaraSystemPrompt(senderEnrollmentId);
     const chatMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
       { role: 'system', content: instruction ? `${systemPrompt}\n\n${instruction}` : systemPrompt },
       ...ordered.map((m, i) => {
@@ -179,7 +187,7 @@ export async function maybeTriggerDaraReply(roomId: string, senderEnrollmentId: 
       messages: chatMessages,
       temperature: 0.7,
       max_tokens: 500,
-      tools: DARA_TOOLS,
+      tools: staff ? DARA_STAFF_TOOLS : DARA_TOOLS,
       tool_choice: 'auto',
     });
 
@@ -193,9 +201,13 @@ export async function maybeTriggerDaraReply(roomId: string, senderEnrollmentId: 
       const daraAdminUserId = await getDaraAdminUserId();
       for (const call of requestedToolCalls) {
         if (call.type !== 'function') continue;
-        let args: { reason?: string } = {};
+        let args: { reason?: string; cohort?: unknown } = {};
         try { args = JSON.parse(call.function.arguments || '{}'); } catch { /* malformed args -> empty, tool degrades gracefully */ }
-        const result = await executeDaraTool(call.function.name, args, {
+        // C88: a staff tool runs only in a staff conversation; a student conversation never reaches it, whatever the
+        // model asks for (executeDaraTool answers an unknown name with an error payload).
+        const result = staff && isDaraStaffTool(call.function.name)
+          ? await executeDaraStaffTool(call.function.name, args)
+          : await executeDaraTool(call.function.name, args, {
           ticketId,
           daraAdminUserId,
           studentEnrollmentId: senderEnrollmentId,

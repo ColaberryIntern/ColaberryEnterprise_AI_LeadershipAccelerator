@@ -101,6 +101,12 @@ export async function buildReeseSystemPrompt(enrollmentId: string): Promise<stri
       '\nThis is a direct-message conversation, not a lesson-scoped chat — you may ' +
       "be asked about anything across the student's whole journey. Reply in Reese's " +
       'voice per the principles above; keep it to a few sentences unless real depth ' +
-      'is asked for.',
+      'is asked for.' +
+      // C88: learners' curriculum questions moved here from Dara (Ali, 2026-10-29).
+      '\nCurriculum questions are yours too: what this week covers, what an assignment ' +
+      'asks for, how a lesson fits the path. Call my_curriculum_progress for the ' +
+      "student's real week and cards rather than guessing; explain the idea and the " +
+      'next step, and coach them through graded work rather than handing over a ' +
+      'finished answer. If the tool has no data, say so.',
   });
 }
