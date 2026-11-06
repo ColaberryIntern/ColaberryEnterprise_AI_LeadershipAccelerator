@@ -158,6 +158,25 @@ router.post('/api/admin/gov-contracts/:projectId/documents/:docKey/draft', requi
   }
 });
 
+// v3 (T14): the editor's Edit — save a sanitized HUMAN version, re-judge it, and resume the agent ONLY if the new
+// version is still below bar. Distinct from /draft (which saves without re-judging): Edit closes the loop so a human
+// edit is scored immediately and handed back to the agent when it still falls short.
+router.post('/api/admin/gov-contracts/:projectId/documents/:docKey/edit', requireSection('gov_contracts'), async (req: Request, res: Response) => {
+  const ctx = await adminGovContext(req, res); if (!ctx) return;
+  const docKey = docKeyOf(req, res); if (!docKey) return;
+  const html = typeof (req.body ?? {}).contentHtml === 'string' ? (req.body as any).contentHtml : '';
+  if (!html.trim()) { res.status(422).json({ error: 'Edit content is required.' }); return; }
+  try {
+    const { applyHumanEdit } = await import('../../services/factory/proposal/humanEdit');
+    const result = await applyHumanEdit(req.params.projectId as string, docKey, html, { identityId: ctx.identityId, canVerify: true });
+    res.json(result);
+  } catch (err: any) {
+    if (err?.name === 'ProposalDocumentError') { res.status(DOC_ERR_STATUS[err.reason] ?? 400).json({ error: err.message, reason: err.reason }); return; }
+    logFail('gov_contract_doc_edit_failed', err, { projectId: req.params.projectId, docKey });
+    res.status(500).json({ error: 'Could not save the edit.' });
+  }
+});
+
 /** POST .../:projectId/documents/:docKey/accept — management accepts a drafted document. */
 router.post('/api/admin/gov-contracts/:projectId/documents/:docKey/accept', requireSection('gov_contracts'), async (req: Request, res: Response) => {
   const ctx = await adminGovContext(req, res);
