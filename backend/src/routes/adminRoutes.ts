@@ -143,6 +143,9 @@ import projectLifecycleReviewRoutes from './admin/projectLifecycleReviewRoutes';
 // Which case study evidences which service. Its own router rather than more handlers in factoryRoutes, which is
 // already past the 500-line ceiling; the route prefixes still live under /api/admin/factory/.
 import caseStudyServiceLinkRoutes from './admin/caseStudyServiceLinkRoutes';
+// The flow diagram and the delivery stories: the two stages built on a settled decomposition that
+// nothing called until L10.9. Its own router for the same reason as the line above.
+import factoryDownstreamRoutes from './admin/factoryDownstreamRoutes';
 import govQualificationRoutes from './admin/govQualificationRoutes';
 import govContractsRoutes from './admin/govContractsRoutes';
 import agentFactoryRoutes from './admin/agentFactoryRoutes';
@@ -391,6 +394,9 @@ router.use(factoryAdminRoutes);
 router.use(projectLifecycleRoutes);
 router.use(projectLifecycleReviewRoutes);
 router.use(caseStudyServiceLinkRoutes);
+// Nested under /api/admin/factory/contract/:id/, so mgmtSectionGate's existing
+// '/api/admin/factory' -> 'program' PREFIX row already covers these too.
+router.use(factoryDownstreamRoutes);
 // Gov qualification workspace (Phase 2). Paths are nested under /api/admin/factory/qualification, so
 // mgmtSectionGate's existing '/api/admin/factory' → 'program' PREFIX row already covers them.
 router.use(govQualificationRoutes);

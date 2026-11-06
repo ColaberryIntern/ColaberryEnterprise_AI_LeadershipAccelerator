@@ -90,6 +90,30 @@ export async function getFactoryContract(deliveryProjectId: string): Promise<Fac
   return data;
 }
 
+/**
+ * The human/AI flow diagram for a contract, as a standalone SVG string (L10.9).
+ *
+ * A SEPARATE CALL rather than a field on the view, for two reasons: the diagram is not wanted on
+ * every page visit and the SVG is large, and the view's response shape has real consumers that
+ * should not change to add something optional.
+ *
+ * It arrives as JSON rather than from an `<img src>` because admin auth is Bearer-token only -
+ * a browser fetching an image URL sends no Authorization header and would get a 401.
+ */
+export interface FactoryFlowSvg {
+  svg: string;
+  documentVersion: number;
+  trackType: string;
+  approvalStatus: string;
+}
+
+export async function getFactoryFlowSvg(deliveryProjectId: string): Promise<FactoryFlowSvg> {
+  const { data } = await api.get<FactoryFlowSvg>(
+    `/api/admin/factory/contract/${encodeURIComponent(deliveryProjectId)}/flow`,
+  );
+  return data;
+}
+
 // ── Phase 4 write actions ────────────────────────────────────────────────────
 export interface FactoryContractListItem {
   deliveryProjectId: string;
