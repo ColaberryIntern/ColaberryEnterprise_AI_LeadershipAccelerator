@@ -1,0 +1,40 @@
+/*
+ * hire.refactored.ai tokens.
+ *
+ * The Refactored.ai "Terminal" system is VENDORED under ./design (kept current by the
+ * design-system-sync workflow) and imported here; no hex value from it is copied by hand.
+ * This file adds the ONE token hire.refactored.ai owns - `--star`, gold, reserved for
+ * proof and stardom (MOTION.md §1) - plus the hire motion durations. Both theme blocks and
+ * the light-preference block are set, mirroring the token file's three-state model.
+ */
+@import url("./design/tokens/colors.css");
+@import url("./design/tokens/typography.css");
+@import url("./design/tokens/spacing.css");
+@import url("./design/tokens/motion.css");
+
+:root {
+  --star: #F2C14E;
+  --star-soft: rgba(242, 193, 78, .14);
+  --star-ink: #1d1503;
+  --r: 14px;
+  --shadow: 0 20px 50px -24px rgba(0, 0, 0, .7);
+  --ease-launch: cubic-bezier(.2, .9, .3, 1);
+  --dur-lift: 220ms;
+  --dur-lift-lg: 250ms;
+  --dur-launch: 700ms;
+  --dur-fade: 450ms;
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --star: #B7860B;
+    --star-soft: rgba(183, 134, 11, .12);
+    --shadow: 0 18px 40px -22px rgba(22, 34, 44, .35);
+  }
+}
+
+:root[data-theme="light"] {
+  --star: #B7860B;
+  --star-soft: rgba(183, 134, 11, .12);
+  --shadow: 0 18px 40px -22px rgba(22, 34, 44, .35);
+}

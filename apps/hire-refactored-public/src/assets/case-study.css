@@ -1,0 +1,49 @@
+/*
+ * hire.refactored.ai - the case study (`/case-studies/<slug>/`).
+ *
+ * The record body is drawn by packages/case-study-shell/case-study-record.js, walking the
+ * server's HIRE_ORDER. That shell decides no colour: it reads `--cs-*`, answered here in
+ * the Refactored palette. Its own hero is hidden, because this page leads with the hire
+ * hero (person-first) and two heroes on one page is one too many.
+ */
+:root{
+  --cs-fg:var(--fg);--cs-fg-muted:var(--fg-muted);--cs-bg:var(--bg);--cs-surface:var(--bg-elevated);
+  --cs-line:var(--line);--cs-accent:var(--accent);--cs-accent-contrast:var(--accent-contrast);
+  --cs-radius:var(--r);--cs-ok:var(--success);--cs-warn:var(--warning);--cs-bad:var(--danger);
+  --cs-font-mono:var(--font-mono);--cs-font-display:var(--font-mono);
+}
+#cs-record > .cs-hero{display:none}
+
+.hire-hero{position:relative;overflow:hidden;border-bottom:1px solid var(--line)}
+.hire-hero .art{position:absolute;inset:0;opacity:.55}.hire-hero .art svg{width:100%;height:100%}
+.hire-hero::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,var(--bg) 35%,color-mix(in srgb,var(--bg) 40%,transparent))}
+.hire-hero .wrap{position:relative;z-index:2;padding-top:64px;padding-bottom:56px}
+.hire-hero h1{font-family:var(--font-mono);font-size:clamp(1.9rem,4.2vw,3rem);line-height:1.1;letter-spacing:-.025em;max-width:22ch;margin:16px 0 18px}
+.hire-hero h1:focus{outline:none}
+.hire-hero .dek{font-size:1.12rem;color:var(--fg-muted);max-width:58ch}
+.builder{display:inline-flex;align-items:center;gap:12px;margin-top:24px;padding:8px 16px 8px 8px;border:1px solid var(--line-strong);border-radius:60px;background:var(--bg-elevated)}
+.builder b{display:block;font-size:.92rem}.builder span span{font-size:.78rem;color:var(--fg-faint)}
+.outcomes{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:-34px 0 40px;position:relative;z-index:3}
+@media(max-width:760px){.outcomes{grid-template-columns:repeat(2,1fr)}}
+.outcomes div{background:var(--bg-elevated);border:1px solid var(--line);border-radius:var(--r);padding:18px;box-shadow:var(--shadow)}
+.outcomes b{font-family:var(--font-mono);font-size:1.9rem;color:var(--star);display:block;line-height:1.1}
+.outcomes span{font-size:.8rem;color:var(--fg-muted)}
+.cs-body{display:grid;grid-template-columns:1fr 300px;gap:36px;padding-bottom:60px}
+@media(max-width:960px){.cs-body{grid-template-columns:1fr}}
+.sticky{position:sticky;top:84px}
+.hire-cta{background:linear-gradient(160deg,var(--accent-soft),var(--bg-elevated));border:1px solid color-mix(in srgb,var(--accent) 40%,transparent);border-radius:var(--r);padding:22px;text-align:center}
+.hire-cta h4{margin:12px 0 4px}
+.hire-cta p{font-size:.85rem;color:var(--fg-muted);margin:0 0 14px}
+.hire-cta .btn{width:100%;justify-content:center}
+.hire-cta .btn + .btn{margin-top:8px}
+.side-card{background:var(--bg-elevated);border:1px solid var(--line);border-radius:var(--r);padding:20px;margin-top:18px}
+.side-card p{margin:6px 0 0}
+
+/* the boot sequence (MOTION.md §6): mounted by launch.js only when motion is allowed */
+.boot{position:fixed;inset:0;z-index:200;background:var(--bg-sunk);display:grid;place-items:center}
+.boot.out{opacity:0;pointer-events:none}
+.term{width:min(620px,92vw);background:var(--bg);border:1px solid var(--line-strong);border-radius:14px;box-shadow:var(--shadow);overflow:hidden}
+.term .tb{display:flex;gap:6px;padding:12px 14px;border-bottom:1px solid var(--line)}
+.term .tb i{width:10px;height:10px;border-radius:50%;background:var(--line-strong)}
+.term pre{margin:0;padding:18px 20px;font-family:var(--font-mono);font-size:.86rem;line-height:1.8;min-height:220px;white-space:pre-wrap;color:var(--fg-muted)}
+.term .g{color:var(--success)}.term .y{color:var(--star)}.term .a{color:var(--accent)}.term .w{color:var(--warning)}

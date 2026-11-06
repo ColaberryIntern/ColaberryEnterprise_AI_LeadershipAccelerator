@@ -1,0 +1,109 @@
+/* Base layer: element defaults, layout primitives, accessibility floor. */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  /* Explicit, from a token. A transparent body borrows the host page's ground and the
+     whole palette inverts against it. */
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-sans);
+  font-size: var(--step-0);
+  line-height: var(--leading-normal);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, h4 {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  line-height: var(--leading-tight);
+  letter-spacing: var(--tracking-tight);
+  text-wrap: balance;
+  margin: 0;
+}
+
+h1 { font-size: var(--step-5); }
+h2 { font-size: var(--step-4); }
+h3 { font-size: var(--step-2); }
+h4 { font-size: var(--step-1); }
+
+/* Running text stays readable. This is a PROSE rule, and component chrome that happens to
+   be a <p> - a status bar, a label inside a card - must opt out, or it inherits a
+   66-character ceiling it was never meant to have and quietly stops filling its
+   container. The .no-measure class is that opt-out, and components apply it to
+   themselves rather than every page having to remember. */
+p, li { max-width: var(--measure); }
+p { margin: 0; }
+.no-measure, .no-measure p { max-width: none; }
+
+a { color: var(--accent); text-underline-offset: 0.18em; }
+a:hover { color: var(--accent-hover); }
+
+img, svg, video { max-width: 100%; height: auto; }
+
+code, kbd, samp {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+}
+
+/* One visible focus state for everything, defined once. */
+:where(a, button, input, textarea, select, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+
+/* Layout primitives ------------------------------------------------------- */
+
+.wrap {
+  width: 100%;
+  max-width: var(--wrap);
+  margin-inline: auto;
+  padding-inline: clamp(1.15rem, 5vw, 2.5rem);
+}
+/* Narrow measure, SAME left edge.
+   Constraining the container itself would centre it inside the page, so a narrow hero
+   would start further right than the full-width section beneath it and the page would
+   have two competing left margins. The container therefore keeps `.wrap`'s geometry and
+   the limit falls on its children. */
+.wrap-narrow { max-width: var(--wrap); }
+.wrap-narrow > * { max-width: var(--wrap-narrow); }
+
+/* Sibling spacing comes from the container, never from per-element margins that
+   collapse or double when a block is reordered. */
+.stack { display: flex; flex-direction: column; }
+.stack-xs  { gap: var(--space-2xs); }
+.stack-s   { gap: var(--space-s); }
+.stack-m   { gap: var(--space-m); }
+.stack-l   { gap: var(--space-l); }
+
+.section { padding-block: var(--space-2xl); }
+.section-tight { padding-block: var(--space-xl); }
+.section + .section { border-top: 1px solid var(--line); }
+
+/* Wide content scrolls inside its own box; the page body never scrolls sideways. */
+.scroll-x { overflow-x: auto; }
+
+.skip {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  background: var(--accent);
+  color: var(--accent-contrast);
+  padding: var(--space-2xs) var(--space-s);
+  z-index: 100;
+}
+.skip:focus { left: 0; }
+
+.visually-hidden {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}

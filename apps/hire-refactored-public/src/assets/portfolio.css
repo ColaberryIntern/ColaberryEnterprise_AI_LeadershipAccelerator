@@ -1,0 +1,69 @@
+/* hire.refactored.ai - the portfolio (`/talent/<slug>/`). Ported from the prototype. */
+.p-banner{height:220px;position:relative;border-bottom:1px solid var(--line);overflow:hidden}
+.p-banner svg{width:100%;height:100%;display:block}
+.p-banner::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,transparent 40%,var(--bg))}
+.p-head{display:grid;grid-template-columns:auto 1fr auto;gap:28px;align-items:end;margin-top:-90px;position:relative;z-index:2}
+@media(max-width:860px){.p-head{grid-template-columns:1fr;align-items:start}}
+.p-head h1{font-family:var(--font-mono);font-size:clamp(1.9rem,3.6vw,2.6rem);letter-spacing:-.025em;margin:0;line-height:1.1}
+.p-head .role{color:var(--accent);font-weight:600;font-size:1.1rem;margin-top:4px}
+.p-head .meta{display:flex;gap:16px;flex-wrap:wrap;margin-top:10px;font-size:.85rem;color:var(--fg-muted)}
+.verified-pill{display:inline-flex;gap:6px;align-items:center;font-family:var(--font-mono);font-size:.72rem;color:var(--star);background:var(--star-soft);border:1px solid color-mix(in srgb,var(--star) 40%,transparent);padding:4px 10px;border-radius:20px;margin-bottom:10px}
+.p-actions{display:flex;gap:10px;flex-wrap:wrap}
+.p-ledger{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:34px 0}
+@media(max-width:760px){.p-ledger{grid-template-columns:repeat(2,1fr)}}
+.p-ledger div{background:var(--bg-elevated);border:1px solid var(--line);border-radius:var(--r);padding:18px 20px}
+.p-ledger b{font-family:var(--font-mono);font-size:2rem;font-weight:600;display:block;line-height:1.1}
+.p-ledger span{font-size:.78rem;color:var(--fg-faint)}
+.p-ledger .gold b{color:var(--star)}
+.p-cols{display:grid;grid-template-columns:1fr 320px;gap:28px;align-items:start}
+@media(max-width:960px){.p-cols{grid-template-columns:1fr}}
+.card{background:var(--bg-elevated);border:1px solid var(--line);border-radius:var(--r);padding:24px;margin-bottom:24px}
+.card h3.t{font-family:var(--font-mono);font-size:1rem;margin:6px 0 14px;font-weight:600}
+.about p{margin:0 0 10px;color:var(--fg-muted)}
+.src{font-family:var(--font-mono);font-size:.68rem;color:var(--success);background:var(--success-soft);padding:2px 8px;border-radius:20px;margin-left:8px;letter-spacing:0;text-transform:none}
+
+/* signature case study */
+.sig{position:relative;display:grid;grid-template-columns:1.1fr 1fr;border:1px solid color-mix(in srgb,var(--star) 45%,transparent);border-left:2px solid var(--star);border-radius:18px;overflow:hidden;background:var(--bg-elevated);margin-bottom:24px}
+@media(max-width:860px){.sig{grid-template-columns:1fr}}
+.sig .art{min-height:280px;position:relative}.sig .art svg{position:absolute;inset:0;width:100%;height:100%}
+.sig .body{padding:28px}
+.sig h3{font-family:var(--font-mono);font-size:1.4rem;line-height:1.25;letter-spacing:-.015em;margin:10px 0 10px}
+.sig p{color:var(--fg-muted);margin:0 0 16px;font-size:.95rem}
+.open-cue{display:inline-flex;align-items:center;gap:8px;font-family:var(--font-mono);font-size:.85rem;color:var(--star);font-weight:600}
+
+/* project cards */
+.projs{display:grid;grid-template-columns:repeat(2,1fr);gap:16px}
+@media(max-width:700px){.projs{grid-template-columns:1fr}}
+.proj{position:relative;border:1px solid var(--line);border-radius:var(--r);overflow:hidden;background:var(--bg-sunk);display:flex;flex-direction:column}
+.proj .art{height:140px;position:relative}.proj .art svg{width:100%;height:100%;display:block}
+.proj .b{padding:16px 18px 18px;flex:1;display:flex;flex-direction:column}
+.proj h4{margin:0 0 4px;font-size:1rem;line-height:1.35}
+.proj .org{font-size:.78rem;color:var(--fg-faint)}
+.proj p{font-size:.86rem;color:var(--fg-muted);margin:10px 0 14px}
+.proj .row{margin-top:auto;display:flex;justify-content:space-between;align-items:center}
+.proj.pending{opacity:.72}
+.proj.pending .art{filter:grayscale(.7)}
+.state{font-family:var(--font-mono);font-size:.7rem;padding:3px 8px;border-radius:20px}
+.state.pub{background:var(--star-soft);color:var(--star)}
+.state.wip{background:var(--bg-elevated);color:var(--fg-faint);border:1px solid var(--line)}
+
+/* capabilities, commits, experience, sidebar */
+.cap{display:grid;grid-template-columns:1fr auto;gap:4px 12px;padding:10px 0;border-top:1px solid var(--line)}
+.cap:first-of-type{border-top:0}
+.cap b{font-size:.92rem;font-weight:600}
+.cap .ev{font-family:var(--font-mono);font-size:.72rem;color:var(--success)}
+.cap .barw{grid-column:1/-1;height:5px;background:var(--bg-sunk);border-radius:5px;overflow:hidden}
+.cap .bar{height:100%;background:linear-gradient(90deg,var(--accent),var(--success));border-radius:5px}
+.commit{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center;padding:11px 0;border-top:1px dashed var(--line);font-size:.88rem}
+.commit:first-of-type{border-top:0}
+.sha{font-family:var(--font-mono);font-size:.78rem;color:var(--accent);background:var(--accent-soft);padding:3px 8px;border-radius:6px}
+a.sha:hover{text-decoration:underline}
+.crit{font-family:var(--font-mono);font-size:.75rem;color:var(--success)}
+.xp{display:grid;grid-template-columns:150px 1fr;gap:16px;padding:14px 0;border-top:1px solid var(--line)}
+.xp:first-of-type{border-top:0}
+.xp .when{font-size:.84rem;color:var(--fg-muted)}
+.xp b{display:block}
+.xp span{color:var(--accent);font-size:.9rem}
+.side .row{display:flex;gap:10px;align-items:center;padding:8px 0;font-size:.9rem;color:var(--fg-muted);overflow-wrap:anywhere}
+.side .row a:hover{color:var(--accent)}
+.btn-block{width:100%;justify-content:center}
