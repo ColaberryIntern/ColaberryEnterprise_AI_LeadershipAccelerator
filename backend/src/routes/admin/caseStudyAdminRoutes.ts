@@ -75,6 +75,24 @@ const router = Router();
    config, which this router's own suites (and CI, with no DATABASE_URL) must not pull in. */
 const hirePerson = () => import('../../services/hire/hireAdminPerson');
 
+/* The decorators never throw; this catch covers only the module failing to load, which
+   must cost the Hire person line (null = "no person"), never the detail or the preview. */
+async function decorateWithHire<T extends object, R>(
+  base: T, field: 'hirePerson' | 'linkedPerson', apply: (m: Awaited<ReturnType<typeof hirePerson>>) => Promise<R>,
+): Promise<R | (T & Record<typeof field, null>)> {
+  try {
+    return await apply(await hirePerson());
+  } catch (err) {
+    console.warn(JSON.stringify({
+      timestamp: new Date().toISOString(), level: 'warn', service: 'backend',
+      event: 'case_study_hire_decorator_load_failed', outcome: 'partial',
+      error_class: err instanceof Error ? err.name : 'Error',
+      context: { field, message: err instanceof Error ? err.message.slice(0, 200) : String(err) },
+    }));
+    return { ...base, [field]: null } as T & Record<typeof field, null>;
+  }
+}
+
 /* ─────────────────────────────────────────────────────────────── schemas ──── */
 
 const uuid = z.uuid();
@@ -282,7 +300,7 @@ router.get('/api/admin/case-studies/:id', requireAdmin, (req: Request, res: Resp
   // `hirePerson` names who a Hire publication would list, for the HIRE publish row.
   void run(res, () => getCaseStudy({
     caseStudyId: params.id, correlationId: correlationOf(req),
-  }).then(async (detail) => (await hirePerson()).withHirePerson(detail, params.id)));
+  }).then((detail) => decorateWithHire(detail, 'hirePerson', (m) => m.withHirePerson(detail, params.id))));
 });
 
 /** Edit the human-owned editorial and consent fields (spec §34). */
@@ -420,7 +438,7 @@ router.get('/api/admin/case-studies/:id/preview', requireAdmin, (req: Request, r
     ...(query.snapshotId ? { snapshotId: query.snapshotId } : {}),
     correlationId: correlationOf(req),
   }).then(async (preview) => (preview.surfaceKey === 'hire'
-    ? (await hirePerson()).withLinkedPerson(preview, params.id)
+    ? decorateWithHire(preview, 'linkedPerson', (m) => m.withLinkedPerson(preview, params.id))
     : preview)));
 });
 

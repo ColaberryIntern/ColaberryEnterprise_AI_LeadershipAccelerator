@@ -348,6 +348,16 @@ describe('GET /:id/preview on surface hire (H3.1)', () => {
     expect(withLinkedPerson).not.toHaveBeenCalled();
   });
 
+  it('a Hire module that fails to load costs the person line, never the detail (200, hirePerson null)', async () => {
+    withHirePerson.mockRejectedValueOnce(new Error('module failed to load'));
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const res = await request(app).get(`${BASE}/${ID}`).set('Authorization', `Bearer ${LEGACY_ADMIN}`);
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ ok: true, hirePerson: null });
+    expect(warn.mock.calls.some(([l]) => String(l).includes('case_study_hire_decorator_load_failed'))).toBe(true);
+    warn.mockRestore();
+  });
+
   it('the record detail carries hirePerson', async () => {
     const res = await request(app).get(`${BASE}/${ID}`).set('Authorization', `Bearer ${LEGACY_ADMIN}`);
     expect(res.status).toBe(200);
