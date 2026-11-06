@@ -16,6 +16,7 @@ import { getInstrumentedOpenAI } from '../../openaiInstrumented';
 import { DEFAULT_MODEL } from '../../components/costEstimationService';
 import type { AiCheckResults } from './documentChecks';
 import type { CheckFinding } from './proposalReviewTypes';
+import { newJudgeRun, type JudgeRun } from './judgeRuns';
 
 export interface AiCheckInput {
   docKey: string;
@@ -48,45 +49,50 @@ async function callJson(workflow: string, system: string, user: string): Promise
   }
 }
 
-/** Evaluator: 3 independent scores vs the Section M factors; median + a spread flag. */
-async function aiEvaluator(input: AiCheckInput): Promise<{ score: number; findings: CheckFinding[] }> {
+/** Evaluator: 3 independent scores vs the Section M factors; median + a spread flag. Its own judge run (T11). */
+async function aiEvaluator(input: AiCheckInput): Promise<{ score: number; findings: CheckFinding[]; run: JudgeRun }> {
+  const run = newJudgeRun('evaluator', input.docKey, text(input.contentHtml), DEFAULT_MODEL);
   const factors = (input.scoringFactors ?? []).map((f) => `- ${f.label}${typeof f.points === 'number' ? ` (${f.points} pts)` : typeof f.percent === 'number' ? ` (${f.percent}%)` : ''}`).join('\n') || '- Overall responsiveness and quality';
   const system = 'You are an independent government source-selection evaluator. Score the proposal section on the given factors from 0 to 100 as a real evaluator would (no points for "comply" boilerplate). Return STRICT JSON {"score": <0-100>, "rationale": "<one sentence>"}.';
   const user = `Factors:\n${factors}\n\nProposal content:\n${text(input.contentHtml)}`;
   const results = await Promise.all([0, 1, 2].map(() => callJson('gov_proposal_check_evaluator', system, user)));
   const scores = results.filter((r) => r && Number.isFinite(Number(r.score))).map((r) => clamp100(r.score));
-  if (scores.length === 0) return { score: 0, findings: [{ check: 'evaluator', severity: 'major', message: 'The evaluator check could not run (no model result).' }] };
+  if (scores.length === 0) return { score: 0, findings: [{ check: 'evaluator', severity: 'major', message: 'The evaluator check could not run (no model result).' }], run };
   const findings: CheckFinding[] = [];
   const spread = adjLevel(Math.max(...scores)) - adjLevel(Math.min(...scores));
   if (scores.length >= 2 && spread >= 2) findings.push({ check: 'evaluator', severity: 'major', message: `Evaluators disagree by ${spread} adjectival levels (${scores.join(', ')}) — needs a human reviewer.` });
-  return { score: median(scores), findings };
+  return { score: median(scores), findings, run };
 }
 
-/** Proof: claims extracted and marked backed/unbacked against the provided backing. */
-async function aiProof(input: AiCheckInput): Promise<{ score: number; findings: CheckFinding[] }> {
+/** Proof: claims extracted and marked backed/unbacked against the provided backing. Its own judge run (T11). */
+async function aiProof(input: AiCheckInput): Promise<{ score: number; findings: CheckFinding[]; run: JudgeRun }> {
+  const run = newJudgeRun('proof', input.docKey, text(input.contentHtml), DEFAULT_MODEL);
   const backing = (input.backingRefs ?? []).slice(0, 40).map((b, i) => `[${i + 1}] ${String(b).slice(0, 300)}`).join('\n') || '(no backing provided)';
   const system = 'You check whether the proposal\'s claims are backed. Extract each substantive claim (a capability, result, metric, differentiator) and mark it backed=true ONLY if the provided backing supports it; otherwise backed=false. Do not invent backing. Return STRICT JSON {"claims":[{"text":"...","backed":true|false}]}.';
   const user = `Backing available:\n${backing}\n\nProposal content:\n${text(input.contentHtml)}`;
   const r = await callJson('gov_proposal_check_proof', system, user);
   const claims: Array<{ text: string; backed: boolean }> = Array.isArray(r?.claims) ? r.claims : [];
-  if (!r || claims.length === 0) return { score: r ? 100 : 0, findings: r ? [] : [{ check: 'proof', severity: 'major', message: 'The proof check could not run (no model result).' }] };
+  if (!r || claims.length === 0) return { score: r ? 100 : 0, findings: r ? [] : [{ check: 'proof', severity: 'major', message: 'The proof check could not run (no model result).' }], run };
   const unbacked = claims.filter((c) => c && c.backed === false);
   const findings: CheckFinding[] = unbacked.slice(0, 10).map((c) => ({ check: 'proof', severity: 'major', message: `Unbacked claim: "${String(c.text).slice(0, 160)}"` }));
-  return { score: Math.round(((claims.length - unbacked.length) / claims.length) * 100), findings };
+  return { score: Math.round(((claims.length - unbacked.length) / claims.length) * 100), findings, run };
 }
 
-/** Clarity: theme statement per section, customer focus, readability band. */
-async function aiClarity(input: AiCheckInput): Promise<{ score: number; findings: CheckFinding[] }> {
+/** Clarity: theme statement per section, customer focus, readability band. Its own judge run (T11). */
+async function aiClarity(input: AiCheckInput): Promise<{ score: number; findings: CheckFinding[]; run: JudgeRun }> {
+  const run = newJudgeRun('clarity', input.docKey, text(input.contentHtml), DEFAULT_MODEL);
   const system = 'You assess a government proposal section for clarity: does it open with a theme statement (discriminator + customer benefit + proof), keep a customer focus, and read cleanly? Return STRICT JSON {"score": <0-100>, "issues": ["..."]}.';
   const r = await callJson('gov_proposal_check_clarity', system, text(input.contentHtml) ? `Proposal content:\n${text(input.contentHtml)}` : 'Proposal content: (empty)');
-  if (!r || !Number.isFinite(Number(r.score))) return { score: 0, findings: [{ check: 'clarity', severity: 'minor', message: 'The clarity check could not run (no model result).' }] };
+  if (!r || !Number.isFinite(Number(r.score))) return { score: 0, findings: [{ check: 'clarity', severity: 'minor', message: 'The clarity check could not run (no model result).' }], run };
   const issues: string[] = Array.isArray(r.issues) ? r.issues : [];
-  return { score: clamp100(r.score), findings: issues.slice(0, 5).map((i) => ({ check: 'clarity', severity: 'minor', message: String(i).slice(0, 200) })) };
+  return { score: clamp100(r.score), findings: issues.slice(0, 5).map((i) => ({ check: 'clarity', severity: 'minor', message: String(i).slice(0, 200) })), run };
 }
 
 /**
- * Run the three AI checks. Returns null when there is no API key (runDocumentChecks then shows the honest "not run"
- * state). Each check is fail-soft on its own, so one check's upstream error never sinks the others.
+ * Run the three AI checks AS INDEPENDENT JUDGES (T11): each is its own call with its own prompt + distinct judge run,
+ * so no judge shares another's reasoning or cache. Returns null when there is no API key (runDocumentChecks then shows
+ * the honest "not run" state). Each judge is fail-soft on its own, so one judge's upstream error never sinks the
+ * others. `judgeRuns` carries the per-judge run records recorded on the scored version.
  */
 export async function runAiChecks(input: AiCheckInput): Promise<AiCheckResults | null> {
   if (!process.env.OPENAI_API_KEY) return null;
@@ -94,5 +100,6 @@ export async function runAiChecks(input: AiCheckInput): Promise<AiCheckResults |
   return {
     scores: { evaluator: ev.score, proof: pr.score, clarity: cl.score },
     findings: [...ev.findings, ...pr.findings, ...cl.findings],
+    judgeRuns: [ev.run, pr.run, cl.run],
   };
 }

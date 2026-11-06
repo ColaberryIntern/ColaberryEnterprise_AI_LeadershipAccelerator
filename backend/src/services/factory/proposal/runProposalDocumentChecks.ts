@@ -17,6 +17,7 @@ import { renderProposalPdf } from './renderProposalPdf';
 import { recordVersionChecks } from './govProposalReviewStore';
 import { reconcilePlaceholderGaps } from './govProposalGaps';
 import { withClassification } from './classifyFinding';
+import { judgeRunIds } from './judgeRuns';
 import type { CheckRunResult } from './proposalReviewTypes';
 import type { ProposalBlueprint } from './proposalBlueprintTypes';
 
@@ -71,6 +72,7 @@ export async function runProposalDocumentChecks(deliveryProjectId: string, docKe
   const classified = result.findings.map((f) => withClassification(f, { docKey }));
   result.findings = classified;
   result.fatal = classified.filter((f) => f.severity === 'fatal');
-  await recordVersionChecks(doc.current_version_id, result);
+  // v3 (T11): record the independent judge run ids (evaluator/proof/clarity) on the scored version.
+  await recordVersionChecks(doc.current_version_id, result, judgeRunIds(ai?.judgeRuns as any));
   return result;
 }

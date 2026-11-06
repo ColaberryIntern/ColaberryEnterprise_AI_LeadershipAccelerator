@@ -64,21 +64,27 @@ export async function docIdFor(deliveryProjectId: string, docKey: string): Promi
   return doc ? doc.id : null;
 }
 
-/** Write a version's evaluation ONCE (content stays immutable; this fills scores/findings/passes/page_count). */
-export async function recordVersionChecks(versionId: string, result: { scores: CheckScores; findings: CheckFinding[]; passes: boolean; pageCount: number | null }): Promise<void> {
-  await GovProposalDocumentVersion.update(
-    { check_scores: result.scores, findings: result.findings, passes: result.passes, page_count: result.pageCount } as any,
-    { where: { id: versionId } },
-  );
+/** Write a version's evaluation ONCE (content stays immutable; this fills scores/findings/passes/page_count, and the
+ *  independent judge run ids when supplied — T11). */
+export async function recordVersionChecks(
+  versionId: string,
+  result: { scores: CheckScores; findings: CheckFinding[]; passes: boolean; pageCount: number | null },
+  judgeRunIds?: string[] | null,
+): Promise<void> {
+  const fields: Record<string, unknown> = { check_scores: result.scores, findings: result.findings, passes: result.passes, page_count: result.pageCount };
+  if (Array.isArray(judgeRunIds)) fields.judge_run_ids = judgeRunIds;
+  await GovProposalDocumentVersion.update(fields as any, { where: { id: versionId } });
 }
 
 export interface VersionView {
   id: string; version: number; authorKind: VersionAuthorKind; changeSummary: string | null;
   scores: Partial<CheckScores>; findings: CheckFinding[]; passes: boolean; pageCount: number | null; createdAt: string | null;
+  /** v3 T11: the independent judge run ids recorded for this version (evaluator/proof/clarity), when scored. */
+  judgeRunIds: string[];
 }
 function toVersionView(row: any): VersionView {
   const p = typeof row?.get === 'function' ? row.get({ plain: true }) : row;
-  return { id: p.id, version: p.version, authorKind: p.author_kind, changeSummary: p.change_summary ?? null, scores: p.check_scores ?? {}, findings: Array.isArray(p.findings) ? p.findings : [], passes: !!p.passes, pageCount: p.page_count ?? null, createdAt: p.created_at ? new Date(p.created_at).toISOString() : null };
+  return { id: p.id, version: p.version, authorKind: p.author_kind, changeSummary: p.change_summary ?? null, scores: p.check_scores ?? {}, findings: Array.isArray(p.findings) ? p.findings : [], passes: !!p.passes, pageCount: p.page_count ?? null, createdAt: p.created_at ? new Date(p.created_at).toISOString() : null, judgeRunIds: Array.isArray(p.judge_run_ids) ? p.judge_run_ids : [] };
 }
 
 export async function listDocumentVersions(documentId: string): Promise<VersionView[]> {
