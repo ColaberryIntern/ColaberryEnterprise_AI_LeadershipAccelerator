@@ -115,6 +115,31 @@ hand-fix the plan. The pipeline's guards (drop-untraceable, deterministic releas
   - `phase-gates` -> 4 consolidated gates across the window (e.g. Ali on Social Pilot).
 - **marketing_co_assignee_id** (optional) -> co-assigned on marketing/social/prompt/content tasks (e.g. Sohail on Social Pilot).
 
+## Story visuals: the eight rules live in code, not here
+
+Any human/AI visual this skill produces obeys eight standing rules. **They are declared once, as
+data, in `backend/src/services/factory/visual/humanAiVisualRules.ts`** - id, the rule in one line,
+the renderer behaviour that satisfies it, and why it exists. Read that module; do not restate it
+here.
+
+This section is a pointer on purpose. Until L10.5 this skill said nothing about visuals at all,
+so every diagram was drawn from scratch and the rules lived wherever they were last written down.
+A second copy in Markdown is how two versions of a rule start disagreeing, and the Markdown copy
+is the one with no test behind it.
+
+What the arrangement guarantees:
+
+- `HUMAN_AI_VISUAL_RULES` is the single source of the rules.
+- `visual/__tests__/humanAiFlowSvg.test.ts` has one test per rule id, plus a completeness test
+  asserting the declared ids and the tested ids are the same set. A ninth rule added without a
+  test fails the suite.
+- `renderHumanAiFlowSvg` is what obeys them. Drawing a story visual some other way means the
+  rules are unenforced, so use the renderer or extend it.
+
+The one thing worth repeating, because it is the rule most often broken by accident: **every
+empty state has to say WHICH empty it is.** "Not generated" and "generated, found nothing" are
+different facts, and a blank panel renders them identically.
+
 ## Rails (non-negotiable)
 
 - **Claude Code assumed** end to end. If a story ever says "use Airtable/Zapier/Bubble", the generator is misconfigured, not the plan.
