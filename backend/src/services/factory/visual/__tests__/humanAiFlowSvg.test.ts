@@ -396,3 +396,88 @@ describe('the eight visual rules', () => {
     }
   });
 });
+
+/**
+ * L10.9 - ESCAPING, pinned because a frontend is about to trust it.
+ *
+ * The Command Center page renders this SVG with `dangerouslySetInnerHTML`, which CLAUDE.md
+ * forbids without a written justification. The justification is that every model-derived string
+ * reaches the output through `esc()`. That was true when read by eye on 2026-11-06 - and reading
+ * by eye is exactly how it stops being true six months from now.
+ *
+ * The strings here are not hypothetical: a task title, a team name and subject, and a role name
+ * all come from an LLM's decomposition of a customer's document. `<script>` inserted via
+ * innerHTML does not execute, but an SVG event-handler attribute does, so breaking OUT OF THE
+ * ATTRIBUTE is the payload that matters and `"` is the character that does it.
+ */
+describe('escaping: untrusted decomposition text cannot break out of the SVG', () => {
+  const PAYLOAD = '"><script>alert(1)</script><a onload="alert(2)"';
+
+  /**
+   * The teams and surfaces are CONSTRUCTED here, not spread from `realFlow()`.
+   *
+   * The first version of this fixture did `(base.agent_teams ?? []).map(...)`, and `realFlow()`
+   * returns neither key - so both collapsed to `[]`, the team-label and surface-name branches
+   * never ran, and the test passed while proving nothing about them. Deleting `esc()` from the
+   * team label did not fail a single test. Each of these now owns a real task, so the branch
+   * actually renders.
+   */
+  function hostileFlow() {
+    const base = realFlow() as any;
+    return {
+      ...base,
+      tasks: base.tasks.map((t: any, i: number) => (i === 1 ? { ...t, title: PAYLOAD } : t)),
+      roles: base.roles.map((r: any, i: number) => (i === 0 ? { ...r, name: PAYLOAD } : r)),
+      agent_teams: [{
+        id: 'team-x', name: PAYLOAD, subject: PAYLOAD,
+        task_ids: ['t-extract', 't-classify'], approver_role_id: base.roles[0].id,
+        execution_policy: 'agent_with_review', approval_policy: 'internal_review',
+        autonomy_stage: null, trust_dimensions: [],
+      }],
+      surfaces: [{ id: 'surf-x', name: PAYLOAD, kind: 'console', task_ids: ['t-route-admin', 't-route-tech'] }],
+    };
+  }
+
+  /**
+   * THE ANTI-VACUITY CHECK. Everything below asserts that something is ABSENT, and an absent
+   * thing is also absent from a branch that never ran. This pins that the hostile team label and
+   * surface name genuinely reached the output.
+   */
+  it('actually renders the team and surface branches, so the checks below are not vacuous', () => {
+    const svg = renderHumanAiFlowSvg(hostileFlow());
+    expect(svg).toContain('Team: ');
+    expect(svg).not.toContain('No team owns this AI task');
+    expect(svg).toContain('Human work lands on:');
+  });
+
+  it('emits no executable markup for a hostile title, team, role or surface name', () => {
+    const svg = renderHumanAiFlowSvg(hostileFlow());
+    // No raw tag can have survived.
+    expect(svg).not.toMatch(/<script/i);
+    expect(svg).not.toMatch(/<\/script>/i);
+    // And no EVENT-HANDLER ATTRIBUTE. Asserting on the bare text `onload=` would be wrong: the
+    // payload's own characters legitimately appear as rendered text (`onload=&quot;`), escaped
+    // and inert. What must never appear is the attribute form, which needs a real quote - and a
+    // real quote is precisely what `esc` removes from untrusted input.
+    expect(svg).not.toMatch(/\son[a-z]+\s*=\s*"/i);
+  });
+
+  it('escapes the quote that would otherwise end an attribute', () => {
+    const svg = renderHumanAiFlowSvg(hostileFlow());
+    // The payload must appear, escaped - absent output would pass the test above vacuously.
+    expect(svg).toContain('&lt;script&gt;');
+    expect(svg).toContain('&quot;');
+  });
+
+  /**
+   * The control. Without it the two assertions above would also pass on a renderer that
+   * silently dropped every untrusted string, which is not the property being claimed.
+   */
+  it('still renders the benign text it is given, so the checks above are not vacuous', () => {
+    const svg = renderHumanAiFlowSvg(realFlow() as any);
+    // Short enough not to be wrapped across two <text> elements, which is a layout detail and
+    // would otherwise fail this control for the wrong reason.
+    expect(svg).toContain('Solicitation received');
+    expect(svg).not.toContain('&lt;script&gt;');
+  });
+});

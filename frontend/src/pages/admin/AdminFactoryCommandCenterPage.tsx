@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { PageHeader, StatCard, SectionCard } from '../../components/admin/shell';
 import {
   getFactorySample, getFactoryContract, listFactoryContracts, approveFactoryContract, requestFactoryChanges,
-  ingestProposal, generateDecomposition,
+  ingestProposal, generateDecomposition, getFactoryFlowSvg,
   type FactoryCommandCenterView, type CcFlowNode,
 } from '../../services/factoryApi';
 
@@ -250,6 +250,8 @@ export default function AdminFactoryCommandCenterPage(): React.ReactElement {
             )}
           </SectionCard>
 
+          {!view.isSample && <HumanAiFlowDiagram deliveryProjectId={view.deliveryProjectId} />}
+
           <SectionCard title="Human / AI allocation" subtitle="who does each task, and who is accountable" icon="scales-3-line" className="mb-3" padded={false}>
             <div className="table-responsive">
               <table className="table table-hover align-middle mb-0">
@@ -381,5 +383,95 @@ function FlowCard({ n }: { n: CcFlowNode }): React.ReactElement {
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * The human/AI flow diagram (L10.9).
+ *
+ * ── WHY THIS COMPONENT EXISTS ────────────────────────────────────────────────
+ *
+ * `renderHumanAiFlowSvg` was built, tested and deployed with NO CALLER - a correct picture
+ * nobody could look at. The cards above it show the same tasks as a list; the point of the
+ * diagram is the thing a list cannot show: which lane each task is in, which agent team owns
+ * the AI work, who approves it, and that every human task converges on one console.
+ *
+ * ── LOADED ON DEMAND ─────────────────────────────────────────────────────────
+ *
+ * Its own request, fired when the panel is opened rather than with the page, because the SVG is
+ * large and the diagram is not wanted on every visit. That also keeps the command-center
+ * response shape unchanged.
+ *
+ * ── dangerouslySetInnerHTML, and the justification CLAUDE.md requires ────────
+ *
+ * The payload is an SVG document, so React cannot render it as elements without parsing it.
+ * It is safe to inject because EVERY model-derived string in it - task titles, role names,
+ * team names and subjects, surface names - reaches the output through the renderer's `esc()`,
+ * which escapes the quote that would otherwise close an attribute. That is not a claim resting
+ * on a code read: `humanAiFlowSvg.test.ts` feeds `"><script>alert(1)</script><a onload="..."`
+ * through as a title, a role name, a team name and subject, and a surface name, and asserts no
+ * executable markup survives - with an anti-vacuity test proving those branches actually render,
+ * because the first version of that fixture silently exercised none of them.
+ *
+ * The SVG is produced by our own code from our own database. It is never user-pasted HTML.
+ */
+function HumanAiFlowDiagram({ deliveryProjectId }: { deliveryProjectId: string }): React.ReactElement {
+  const [open, setOpen] = useState(false);
+  const [svg, setSvg] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  /**
+   * `loading` is deliberately NOT a dependency, and is not in the guard.
+   *
+   * The first version had both. `setLoading(true)` then re-ran the effect, React ran the previous
+   * run's cleanup first, that cleanup set `cancelled = true` on the request still in flight, and
+   * the response was discarded every single time. The fetch happened, the panel stayed empty, and
+   * the only visible symptom was a spinner that never resolved - the request assertion passed
+   * while nothing rendered. `svg` is the real guard: once it is set, there is nothing to fetch.
+   */
+  useEffect(() => {
+    if (!open || svg !== null) return;
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    getFactoryFlowSvg(deliveryProjectId)
+      .then((r) => { if (!cancelled) setSvg(r.svg); })
+      .catch((e: any) => {
+        if (cancelled) return;
+        // 404 is the ordinary "nothing generated yet" case and is not an error to apologise for.
+        setError(e?.response?.status === 404
+          ? 'No decomposition has been generated for this contract yet.'
+          : 'Could not load the diagram.');
+      })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [open, svg, deliveryProjectId]);
+
+  return (
+    <SectionCard
+      title="Human / AI flow"
+      subtitle="the lanes, the agent teams and the one console, drawn from the stored decomposition"
+      icon="node-tree"
+      className="mb-3"
+    >
+      {!open && (
+        <button type="button" className="btn btn-outline-primary btn-sm" onClick={() => setOpen(true)}>
+          <i className="ri-eye-line me-1" aria-hidden="true" />
+          Show the diagram
+        </button>
+      )}
+      {open && loading && <div className="text-muted small">Rendering the flow…</div>}
+      {open && error && <div className="alert alert-warning py-2 px-3 mb-0 small">{error}</div>}
+      {open && svg && (
+        <div
+          className="overflow-auto border rounded p-2"
+          data-testid="human-ai-flow-svg"
+          // eslint-disable-next-line react/no-danger -- see the component header: server-rendered
+          // SVG whose every untrusted string is escaped, pinned by an XSS test with a control.
+          dangerouslySetInnerHTML={{ __html: svg }}
+        />
+      )}
+    </SectionCard>
   );
 }

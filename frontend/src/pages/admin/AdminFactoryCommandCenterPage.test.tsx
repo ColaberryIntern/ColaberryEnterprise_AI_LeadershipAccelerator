@@ -205,3 +205,78 @@ describe('AdminFactoryCommandCenterPage', () => {
     expect(container.textContent ?? '').toContain('The generation engine is off');
   });
 });
+
+/**
+ * L10.9 - the diagram panel. The gap this closes was not a wrong picture, it was NO CALLER, so
+ * what these pin is that opening the panel actually reaches the API and puts the SVG in the DOM.
+ */
+describe('the human/AI flow diagram', () => {
+  const flow = {
+    svg: '<svg xmlns="http://www.w3.org/2000/svg"><text>Compile Bid</text></svg>',
+    documentVersion: 1,
+    trackType: 'solution_build',
+    approvalStatus: 'draft',
+  };
+
+  // A REAL contract must be in the list, or the page falls back to the sample and the panel is
+  // deliberately absent - which would make every assertion below fail for the wrong reason.
+  async function renderReal() {
+    (factoryApi.listFactoryContracts as jest.Mock).mockResolvedValue([
+      { deliveryProjectId: 'dp-real', name: 'Demo', trackType: 'solution_build', status: 'draft', version: 1 },
+    ]);
+    (factoryApi.getFactorySample as jest.Mock).mockResolvedValue(sampleView);
+    (factoryApi.getFactoryContract as jest.Mock).mockResolvedValue(realView);
+    await renderPage();
+  }
+
+  // The panel's load runs through .then().catch().finally(), so one microtask is not enough to
+  // settle it. Flushing once left the SVG unrendered while the fetch assertion already passed.
+  async function settle() {
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); });
+  }
+
+  function clickShow() {
+    const btn = [...container.querySelectorAll('button')]
+      .find((b) => (b.textContent ?? '').includes('Show the diagram'));
+    expect(btn).toBeDefined();
+    act(() => { btn!.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+  }
+
+  it('does not fetch the diagram until it is asked for', async () => {
+    await renderReal();
+    expect(factoryApi.getFactoryFlowSvg).not.toHaveBeenCalled();
+    expect(container.querySelector('[data-testid="human-ai-flow-svg"]')).toBeNull();
+  });
+
+  it('fetches and injects the SVG when the panel is opened', async () => {
+    (factoryApi.getFactoryFlowSvg as jest.Mock).mockResolvedValue(flow);
+    await renderReal();
+    clickShow();
+    await settle();
+
+    expect(factoryApi.getFactoryFlowSvg).toHaveBeenCalledWith('dp-real');
+    const holder = container.querySelector('[data-testid="human-ai-flow-svg"]');
+    expect(holder).not.toBeNull();
+    // An <svg> ELEMENT, not the markup as escaped text - which is what a plain {svg} would give.
+    expect(holder!.querySelector('svg')).not.toBeNull();
+    expect(holder!.textContent).toContain('Compile Bid');
+  });
+
+  it('says so plainly when nothing has been generated, rather than showing an empty frame', async () => {
+    (factoryApi.getFactoryFlowSvg as jest.Mock).mockRejectedValue({ response: { status: 404 } });
+    await renderReal();
+    clickShow();
+    await settle();
+
+    expect(container.textContent).toContain('No decomposition has been generated');
+    expect(container.querySelector('[data-testid="human-ai-flow-svg"]')).toBeNull();
+  });
+
+  /** The sample is an in-code fixture with no stored document, so there is nothing to render. */
+  it('is absent for the sample contract', async () => {
+    (factoryApi.listFactoryContracts as jest.Mock).mockResolvedValue([]);
+    (factoryApi.getFactorySample as jest.Mock).mockResolvedValue(sampleView);
+    await renderPage();
+    expect(container.textContent).not.toContain('Show the diagram');
+  });
+});
