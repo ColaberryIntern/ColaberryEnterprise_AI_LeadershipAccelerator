@@ -6,6 +6,7 @@ import * as orchestrationService from '../services/orchestrationService';
 import * as promptValidationService from '../services/promptValidationService';
 import * as curriculumManagerService from '../services/curriculumManagerService';
 import { Cohort, SectionConfig, CurriculumModule, CurriculumLesson, LiveSession, SkillDefinition, SessionGate } from '../models';
+import { findSharedModules } from '../services/curriculumModuleScope';
 
 // --- Prompt Template CRUD ---
 
@@ -335,15 +336,17 @@ async function getFirstCohortId(): Promise<string | null> {
   return cohort ? cohort.id : null;
 }
 
+/**
+ * The program-wide module list, which is now actually program-wide.
+ *
+ * It used to call `getFirstCohortId()` and filter on whichever cohort was oldest
+ * - a stand-in for the global scope it wanted, which returned the right answer
+ * only because one cohort holds every row. The curriculum is shared across
+ * batches (see services/curriculumModuleScope), so the stand-in is gone.
+ */
 export async function handleGetProgramModules(req: Request, res: Response) {
   try {
-    const cohortId = await getFirstCohortId();
-    if (!cohortId) return res.json([]);
-    const modules = await CurriculumModule.findAll({
-      where: { cohort_id: cohortId },
-      include: [{ model: CurriculumLesson, as: 'lessons' }],
-      order: [['module_number', 'ASC'], [{ model: CurriculumLesson, as: 'lessons' }, 'lesson_number', 'ASC']],
-    });
+    const modules = await findSharedModules();
     res.json(modules);
   } catch (err: any) {
     res.status(500).json({ error: err.message });

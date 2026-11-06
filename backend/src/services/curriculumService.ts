@@ -11,6 +11,7 @@ import { awardLessonCompletionPoints } from './progression/cardPointsService';
 import { generateLessonContent } from './contentGenerationService';
 import * as variableService from './variableService';
 import * as artifactService from './artifactService';
+import { findSharedModules, findSharedModuleByNumber } from './curriculumModuleScope';
 
 /* ------------------------------------------------------------------ */
 /*  Initialization                                                     */
@@ -22,21 +23,21 @@ export async function initializeParticipantCurriculum(enrollmentId: string) {
   });
   if (!enrollment) throw new Error('Enrollment not found');
 
-  const cohortId = enrollment.cohort_id;
-
   // Check if already initialized
   const existing = await LessonInstance.findOne({ where: { enrollment_id: enrollmentId } });
   if (existing) return; // Already initialized
 
-  const modules = await CurriculumModule.findAll({
-    where: { cohort_id: cohortId },
-    order: [['module_number', 'ASC']],
-    include: [{ model: CurriculumLesson, as: 'lessons', order: [['lesson_number', 'ASC']] } as any],
-  });
+  // One shared curriculum for every batch - see curriculumModuleScope. This used
+  // to read `where: { cohort_id: enrollment.cohort_id }` and throw when a batch
+  // held no rows of its own, which is every live batch.
+  const modules = await findSharedModules();
 
   if (modules.length === 0) {
-    console.warn(`[curriculumService] No curriculum modules found for cohort ${cohortId}. Ensure modules are linked to this cohort.`);
-    throw new Error(`No curriculum modules found for cohort ${cohortId}. Ensure modules are linked.`);
+    // Not "this cohort has no curriculum" any more - there is only one curriculum,
+    // so an empty result means the program has none at all, which is a
+    // misconfiguration rather than a per-batch gap.
+    console.warn('[curriculumService] The shared curriculum has no modules. Seed curriculum_modules.');
+    throw new Error('The shared curriculum has no modules.');
   }
 
   for (const mod of modules) {
@@ -95,11 +96,8 @@ export async function getParticipantCurriculum(enrollmentId: string) {
   // Initialize if needed
   await initializeParticipantCurriculum(enrollmentId);
 
-  const modules = await CurriculumModule.findAll({
-    where: { cohort_id: enrollment.cohort_id },
-    order: [['module_number', 'ASC']],
-    include: [{ model: CurriculumLesson, as: 'lessons' }],
-  });
+  // Shared across batches - see curriculumModuleScope.
+  const modules = await findSharedModules();
 
   // Get all lesson instances for this enrollment
   const instances = await LessonInstance.findAll({
@@ -536,21 +534,17 @@ export async function getLabResponses(enrollmentId: string) {
 /*  Admin: Get modules for cohort                                      */
 /* ------------------------------------------------------------------ */
 
-export async function getModulesForCohort(cohortId: string) {
-  const modules = await CurriculumModule.findAll({
-    where: { cohort_id: cohortId },
-    order: [
-      ['module_number', 'ASC'],
-      [{ model: CurriculumLesson, as: 'lessons' }, 'lesson_number', 'ASC'],
-    ],
-    include: [
-      {
-        model: CurriculumLesson,
-        as: 'lessons',
-        attributes: ['id', 'lesson_number', 'title', 'lesson_type', 'estimated_minutes', 'requires_structured_input'],
-      },
-    ],
-  });
+/**
+ * The admin module list. `cohortId` is accepted and ignored: the curriculum is
+ * shared across every batch (see curriculumModuleScope), so every cohort's list
+ * is the same list. The parameter stays because the route it serves is
+ * `/cohorts/:cohortId/curriculum/modules` and removing it would be a URL change
+ * for no behavioural gain.
+ */
+export async function getModulesForCohort(_cohortId: string) {
+  const modules = await findSharedModules([
+    'id', 'lesson_number', 'title', 'lesson_type', 'estimated_minutes', 'requires_structured_input',
+  ]);
 
   // Same per-week course link as the participant view, so the admin module list
   // surfaces which weeks are confirmed / pending / Colaberry-original. Fail-soft.
@@ -805,11 +799,11 @@ async function unlockNextLesson(enrollmentId: string, currentLesson: CurriculumL
   });
 
   if (allCompleted) {
-    // Unlock first lesson of next module
-    const nextMod = await CurriculumModule.findOne({
-      where: { cohort_id: mod.cohort_id, module_number: mod.module_number + 1 },
-      include: [{ model: CurriculumLesson, as: 'lessons' }],
-    });
+    // Unlock first lesson of next module. Not scoped to mod.cohort_id any more:
+    // the curriculum is shared (see curriculumModuleScope), and the cohort term
+    // would stall progression for a learner whose modules came from another
+    // cohort's rows.
+    const nextMod = await findSharedModuleByNumber(mod.module_number + 1);
     if (nextMod) {
       const nextModLessons = ((nextMod as any).lessons || []).sort(
         (a: any, b: any) => a.lesson_number - b.lesson_number

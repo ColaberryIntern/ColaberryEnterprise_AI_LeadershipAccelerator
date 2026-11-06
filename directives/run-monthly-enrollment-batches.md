@@ -108,8 +108,16 @@ date filter, so it would start advertising the oldest batch in briefing and camp
    Success signal: the orientation appears on the calendar and in the group.
 5. **Ask Jackie to open the WhatsApp group for the batch that just opened.**
    Success signal: the group exists and its first message is posted.
-6. **Materialize curriculum for the newly opened batch** - see Edge cases; a new batch has no
-   `curriculum_modules` rows and the portal throws without them.
+6. **Confirm the batch has its own room.** `createCohort` mints one automatically (slug
+   `cohort-<id>`, private to the batch plus staff), so this is a check, not a task. If the batch
+   was inserted by some other path, call `ensureRoomForCohort` for it - it is idempotent.
+   Success signal: the batch appears in the Rooms browse rail for one of its members and is
+   absent for a member of another batch.
+
+**There is no curriculum step, and that is deliberate.** Curriculum is shared across every
+batch (C10.14, 2026-11-06: "everyone can use the same curriculum until future notice"). This
+step used to read "materialize curriculum for the newly opened batch", which at twelve batches
+a year is twelve copies a year. Nothing to do now: see Edge cases.
 
 ### B. When a member pays
 
@@ -164,7 +172,8 @@ Not "looks right". Each of these is a query or a request with one correct answer
 
 | Failure mode | What to do |
 |---|---|
-| **A new batch has no curriculum.** `curriculum_modules` and `live_sessions` are per-cohort (`backend/src/models/index.ts`), so a freshly inserted batch has none, and `backend/src/services/curriculumService.ts` throws `No curriculum modules found for cohort <id>`. **A batch row is a container, not a deliverable program.** Materialize modules for the batch before anyone in it opens the portal. | Blocking. Do it as part of step A6, not after the first complaint. |
+| **~~A new batch has no curriculum.~~ FIXED 2026-11-06 (C10.14).** Curriculum is shared: no reader scopes `curriculum_modules` by cohort any more (`backend/src/services/curriculumModuleScope.ts`), so a batch with no rows of its own is served the one shared set instead of throwing. The student-facing curriculum was never per-cohort to begin with - `timeline_cards` are course-scoped with `cohort_id NULL`. | Nothing to do per batch. Do **not** re-introduce a per-batch materialize step; a source ratchet in `__tests__/services/curriculumModuleScope.test.ts` fails the build if a cohort-scoped reader comes back. |
+| **`live_sessions` are still per-cohort, and that is correct.** A batch genuinely has its own meetings. Session rooms follow the batch model: the orientation's room is private to the batch, every later session's room is public, because after the first meeting all batches attend the combined monthly class. | Generate sessions per batch as before. The privacy is automatic (`cohortRoomService.sessionRoomPrivacy`). |
 | **Placement is not automated.** Every paid write path takes `cohort_id` from its caller (`backend/src/services/enrollmentService.ts`); the payment webhook only flips `payment_status` and never re-places anyone. Nothing computes "the batch for this month". | Until the resolver ships, step A must run on time, because the open batch is the only thing an admin add can land in correctly. |
 | **`selectNextOpenCohort()` is the wrong rule for this model.** It picks the soonest open cohort whose `start_date` is in the future. It has no callers today. If it is ever wired into placement, a mid-month signup lands in **next** month's batch. | Do not wire it in. Placement is a lookup on the batch month, not a sort on `start_date`. |
 | **Two batches open at once.** Public surfaces and `getNextCohort()` start disagreeing about which batch is current, and campaign copy advertises the older one. | Close the older one immediately, then verify check 2. |
