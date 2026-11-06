@@ -259,6 +259,16 @@ describe('AC8 - the 404 is uniform, byte for byte', () => {
     expect(malformed.text).toBe(unknown.text);
   });
 
+  it('?surface=hire: a slug published only on enterprise 404s with the same bytes as an unknown slug (SPEC §8 row 8)', async () => {
+    seedPublishedRecord({ publication: { surface_key: 'enterprise' } });
+    expect((await request(app).get(DETAIL)).status).toBe(200); // non-vacuous: it IS live on enterprise
+    const elsewhere = await request(app).get(`${DETAIL}?surface=hire`);
+    const unknown = await request(app).get('/api/public/case-studies/no-such-record-at-all?surface=hire');
+    expect(elsewhere.status).toBe(404);
+    expect(elsewhere.text).toBe(unknown.text);
+    expect(String(elsewhere.headers['content-type'])).toBe(String(unknown.headers['content-type']));
+  });
+
   it('a draft record 404s with the same bytes as an unknown slug', async () => {
     seedPublishedRecord({ study: { status: 'draft' } });
     const draft = await request(app).get(DETAIL);

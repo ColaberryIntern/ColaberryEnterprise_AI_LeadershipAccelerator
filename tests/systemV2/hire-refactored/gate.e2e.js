@@ -12,6 +12,11 @@
  */
 const L = require('./lib');
 
+/** Wait for the directory to settle into its empty state, on the condition, not a clock. */
+const waitForEmptyState = (page) => page
+  .waitForFunction(() => (document.querySelector('main')?.textContent || '').includes('Nobody is listed yet'), null, { timeout: 10000 })
+  .catch(() => null); // the check that follows reports the failure
+
 async function run() {
   L.build();
   const { server, base } = await L.serve();
@@ -26,11 +31,15 @@ async function run() {
     await L.routeApi(ctx, { '/api/public/hire/talent': selfTest ? broken : good });
     let page = await ctx.newPage();
     await page.goto(`${base}/`);
-    await page.waitForSelector('.tcard', { timeout: 10000 }).catch(() => null);
+    // Cards first, then their rings/badges: on a cold start the avatar decoration can land a beat later.
+    await page.waitForFunction(() => document.querySelectorAll('.tcard .ava .badge').length >= 2, null, { timeout: 10000 }).catch(() => null);
     const cards = await page.$$eval('.tcard a.tcard-link', (as) => as.map((a) => a.getAttribute('href')));
     check('listed people render as anchor cards to their portfolios', cards.length === 2 && cards[0] === '/talent/ann-lee/', JSON.stringify(cards));
     check('every listed person wears the gold ring and star', (await page.$$('.tcard .ava .ring')).length === 2 && (await page.$$('.tcard .ava .badge')).length === 2);
-    check('the ledger prints the API totals', /2/.test(await page.textContent('.ledger')));
+    // The ledger COUNTS UP to the API total over 600ms; read it once it has landed, not mid-count.
+    await page.waitForFunction(() => /2/.test(document.querySelector('.ledger')?.textContent || ''), null, { timeout: 5000 }).catch(() => null);
+    const ledger = await page.$('.ledger'); // read only if present: a missing ledger fails fast, not on a 30s timeout
+    check('the ledger prints the API totals', !!ledger && /2/.test((await ledger.textContent()) || ''));
     await ctx.close();
 
     // 2. Nobody listed.
@@ -38,7 +47,7 @@ async function run() {
     await L.routeApi(ctx, { '/api/public/hire/talent': L.directory([]) });
     page = await ctx.newPage();
     await page.goto(`${base}/`);
-    await page.waitForTimeout(800);
+    await waitForEmptyState(page);
     check('an empty directory says "Nobody is listed yet"', (await page.textContent('main')).includes('Nobody is listed yet'));
     await ctx.close();
 
@@ -49,7 +58,9 @@ async function run() {
     const errors = [];
     page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
     await page.goto(`${base}/`);
-    await page.waitForTimeout(1500);
+    await waitForEmptyState(page);
+    // A deliberate window AFTER the state settles: a retry loop would keep logging during it.
+    await page.waitForTimeout(1000);
     const main = await page.textContent('main');
     const noSample = (text) => !/Ann Lee|Bo Chen|sample/i.test(text);
     check('API down keeps the honest empty state', main.includes('Nobody is listed yet'));
