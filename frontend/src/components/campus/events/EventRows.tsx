@@ -88,7 +88,7 @@ export function NextEventBoard({ event, onSection }: { event: OpenHouseView | nu
   if (!event) {
     return (
       <>
-        <div className="k">Events Hall</div>
+        <div className="k">Next event</div>
         <h3 className="plain" data-testid="cm-board-title">No events on the calendar yet</h3>
         <div className="row"><button type="button" className="b red" onClick={stop(onSection)} data-testid="cm-board-primary">All events &rarr;</button></div>
       </>
