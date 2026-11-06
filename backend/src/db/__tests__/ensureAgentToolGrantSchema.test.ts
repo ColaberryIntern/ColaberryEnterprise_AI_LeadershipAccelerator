@@ -70,10 +70,31 @@ describe('the DDL cannot hold anything that widens what an agent may do', () => 
 describe('what the DDL does declare', () => {
   it('carries who approved it, what for, and when', async () => {
     const sql = await issuedStatements();
+    // `change_request_id` is deliberately NOT in this list: it is added by an ALTER, so it is
+    // not a declaration at the start of a line and this matcher would be the wrong instrument
+    // for it. It has its own assertion below, which is sharper — it pins the ALTER specifically.
     for (const col of ['agent_id', 'agent_name', 'tool_name', 'capability_id',
       'approved_by_identity', 'approved_at']) {
       expect(sql).toMatch(new RegExp(`^\\s*${col}\\s`, 'im'));
     }
+  });
+
+  it('adds change_request_id by ALTER, because the table already exists in production', async () => {
+    // AF11.4. `CREATE TABLE IF NOT EXISTS` is a NO-OP against the table AF3.5 already created,
+    // so a column declared only inside the CREATE would be absent on every environment that
+    // already has the table — and the ensure swallows failures into a warn, so it would resolve
+    // identically either way. Pinning the ALTER specifically is what makes this checkable:
+    // move the column into the CREATE and this dies, which is the mutation that would otherwise
+    // ship green and stay broken.
+    const sql = await issuedStatements();
+    expect(sql).toMatch(
+      /ALTER TABLE agent_domain_tool_grants\s+ADD COLUMN IF NOT EXISTS change_request_id UUID/i,
+    );
+    // NULLABLE: a grant made for a capability promotion answers no request.
+    expect(sql).not.toMatch(/change_request_id UUID NOT NULL/i);
+    // And the post-condition names it, so a deploy where the ALTER did not run fails at boot
+    // rather than at the first assignment.
+    expect(REQUIRED_COLUMNS).toContain('agent_domain_tool_grants.change_request_id');
   });
 
   it('makes a second grant of the same tool impossible rather than merely unlikely', async () => {

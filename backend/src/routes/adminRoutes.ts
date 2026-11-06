@@ -66,6 +66,7 @@ import agentDisplayNameRoutes from './admin/agentDisplayNameRoutes';
 import agentChangeRequestRoutes from './admin/agentChangeRequestRoutes';
 import toolRequestDecisionRoutes from './admin/toolRequestDecisionRoutes';
 import agentToolGrantRoutes from './admin/agentToolGrantRoutes';
+import assignExistingToolRoutes from './admin/assignExistingToolRoutes';
 import ticketRoutes from './admin/ticketRoutes';
 import previewRoutes from './admin/previewRoutes';
 import alertRoutes from './admin/alertRoutes';
@@ -304,6 +305,7 @@ router.use(agentChangeRequestRoutes);
 // every mgmt role carries should reach.
 router.use(toolRequestDecisionRoutes);
 router.use(agentToolGrantRoutes);
+router.use(assignExistingToolRoutes);
 router.use(ticketRoutes);
 router.use(previewRoutes);
 router.use(alertRoutes);

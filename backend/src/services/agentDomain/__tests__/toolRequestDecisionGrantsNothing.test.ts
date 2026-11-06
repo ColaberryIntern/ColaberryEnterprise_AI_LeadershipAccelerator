@@ -172,10 +172,26 @@ describe('nothing outside the decision module reaches into the service', () => {
    * AF11.4 will legitimately need to read a decision, and when it does it belongs on this list —
    * which is the point. Widening the allowlist is a visible, reviewable line in a diff, and that
    * is exactly the moment somebody should be asked whether the grant is a separate decision.
+   *
+   * ## AF11.4 took that line, 6 Nov 2026, and the question was asked
+   *
+   * `assignExistingToolService.ts` reads a recorded decision and hands it to AF3.5's grant
+   * service. It is the ONE module that imports both, which is what keeps "the decision grants
+   * nothing" true of every file below while still letting the decision be carried out. The
+   * answer to the question above is yes, deliberately: the decision commits first, the grant is
+   * a second step against it, and a refused grant leaves the decision standing with a reason
+   * rather than erasing a decision somebody did make.
+   *
+   * It is NOT mounted on `toolRequestDecisionRoutes.ts` for the same reason. That file is one of
+   * the seven read above, and because the import matcher below judges module paths against a
+   * vocabulary, `assignExistingToolController` would not have tripped it — the pin would have
+   * stayed green while the property it protects stopped holding. A route file of its own keeps
+   * the two facts aligned.
    */
   const ALLOWED = [
     path.join('services', 'agentDomain', 'toolRequestDecisionService.ts'),
     path.join('controllers', 'toolRequestDecisionController.ts'),
+    path.join('services', 'agentDomain', 'assignExistingToolService.ts'),
   ];
 
   function tsFilesUnder(dir: string, acc: string[] = []): string[] {
@@ -188,7 +204,7 @@ describe('nothing outside the decision module reaches into the service', () => {
     return acc;
   }
 
-  it('only the service and its controller import the decision service', () => {
+  it('only the controller and AF11.4 import the decision service', () => {
     const importers: string[] = [];
     for (const f of tsFilesUnder(BACKEND_SRC)) {
       if (f.includes('__tests__')) continue;
@@ -197,7 +213,10 @@ describe('nothing outside the decision module reaches into the service', () => {
         importers.push(path.relative(BACKEND_SRC, f));
       }
     }
-    // The controller is the only consumer today. The service imports its own contract, not itself.
-    expect(importers.sort()).toEqual([ALLOWED[1]]);
+    // Two consumers: the console's own controller, and the AF11.4 service that carries a
+    // recorded assignment out. The service imports its own contract, not itself. Anything else
+    // appearing here is a third party that found a way to a decision, which is the event this
+    // assertion exists to make visible.
+    expect(importers.sort()).toEqual([ALLOWED[1], ALLOWED[2]].sort());
   });
 });

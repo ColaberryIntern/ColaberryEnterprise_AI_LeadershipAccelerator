@@ -45,6 +45,9 @@ export const REQUIRED_COLUMNS: ReadonlyArray<string> = [
   `${T}.tool_name`,
   // WHAT FOR. The capability someone proved by hand and recorded.
   `${T}.capability_id`,
+  // WHICH REQUEST IT ANSWERS, when it answers one. AF11.4. Nullable: a grant made for a
+  // capability promotion answers no request.
+  `${T}.change_request_id`,
   // WHO SAID SO, and WHEN.
   `${T}.approved_by_identity`,
   `${T}.approved_at`,
@@ -52,6 +55,7 @@ export const REQUIRED_COLUMNS: ReadonlyArray<string> = [
 
 export const REQUIRED_INDEXES: ReadonlyArray<string> = [
   'idx_adtg_agent_name',
+  'idx_adtg_change_request',
   'uq_adtg_agent_tool',
 ];
 
@@ -78,6 +82,24 @@ const STATEMENTS: ReadonlyArray<string> = [
        AND length(btrim(approved_by_identity)) > 0
      )
    )`,
+  // AF11.4 — WHICH REQUEST THIS GRANT ANSWERS.
+  //
+  // An ALTER, and not a column in the CREATE above, because `CREATE TABLE IF NOT EXISTS` is a
+  // NO-OP against the table AF3.5 already created in production. Adding the column to the
+  // CREATE alone would have shipped green, resolved identically, and left the column absent on
+  // every environment the table already exists in. The `assertAgentToolGrantSchema`
+  // post-condition below names this column, so a deploy where the ALTER did not run fails loudly
+  // at boot rather than at the first assignment.
+  //
+  // NULLABLE on purpose: a grant made for a capability promotion answers no request, so a NOT
+  // NULL column would force a fake id into those rows. No foreign key, for the same reason
+  // `capability_id` has none — a grant outranks the paperwork that prompted it, and a cascade
+  // from a deleted request to a live grant would be the wrong direction of authority.
+  `ALTER TABLE agent_domain_tool_grants
+     ADD COLUMN IF NOT EXISTS change_request_id UUID`,
+  // "Which grants answered this request" is the question the review console asks.
+  `CREATE INDEX IF NOT EXISTS idx_adtg_change_request
+     ON agent_domain_tool_grants (change_request_id)`,
   // THE IDEMPOTENCY KEY. Granting the same tool to the same agent twice is one row, not two, so
   // a retried request cannot produce a duplicate grant.
   `CREATE UNIQUE INDEX IF NOT EXISTS uq_adtg_agent_tool
@@ -88,7 +110,14 @@ const STATEMENTS: ReadonlyArray<string> = [
      ON agent_domain_tool_grants (agent_name)`,
 ];
 
-/** Net-new, so it reverts whole. `ai_agents` is deliberately not mentioned here. */
+/**
+ * Net-new, so it reverts whole. `ai_agents` is deliberately not mentioned here.
+ *
+ * AF11.4's `change_request_id` goes with the table rather than getting a `DROP COLUMN` of its
+ * own: this module OWNS the table, so a module-level revert is dropping it. A column-only
+ * revert would be a different operation with a different blast radius, and inventing one here
+ * would mean two rollback paths where nothing calls even the first.
+ */
 export const ROLLBACK_STATEMENTS: ReadonlyArray<string> = [
   'DROP TABLE IF EXISTS agent_domain_tool_grants',
 ];

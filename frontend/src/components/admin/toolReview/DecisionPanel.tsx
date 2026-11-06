@@ -14,11 +14,16 @@ import {
  *
  * ## What this panel cannot express
  *
- * There is no autonomy control on it. No tool-grant toggle, no `enabled` switch, no risk tier.
+ * There is no autonomy control on it. No `enabled` switch, no risk tier, no autonomy level.
  * AF11.3's sharpest warning is that a console which grants a tool and lifts an autonomy level in
- * one action means nobody separately decided the agent may act more freely — so `assign_existing
- * tool` raises an INTENT and AF11.4 performs the grant. A panel with nowhere to put an autonomy
- * level cannot be used to lift one.
+ * one action means nobody separately decided the agent may act more freely. A panel with nowhere
+ * to put an autonomy level cannot be used to lift one.
+ *
+ * AF11.4 changed what `assign_existing_tool` does: the page now records the decision and then
+ * asks the server to grant the chosen tool. What it did NOT change is the sentence above — the
+ * grant touches the agent's tool list and nothing else, and the server rolls the whole thing
+ * back if anything else moved. The per-verb note below says so, because a label reading "assign"
+ * invites the assumption that the agent can then act, and usually it still cannot.
  *
  * ## Every refusal is shown, not just the first
  *
@@ -50,7 +55,9 @@ const VERB_NOTE: Record<ToolRequestVerb, string> = {
   approve_to_build: 'The tool does not exist and should. This records that decision and starts '
     + 'nothing — the request stays open until the tool is usable.',
   assign_existing_tool: 'The match was right and a tool for this already exists. This records the '
-    + 'intent; the grant itself is a separate decision.',
+    + 'decision and then grants that tool to the agent, as two steps — so if the grant is '
+    + 'refused, the decision still stands with a reason beside it. It does not change what the '
+    + 'agent is allowed to do with the tool.',
   send_back: 'Name the one field that is missing or too vague. The request stays open and the '
     + 'person who filed it is expected to fix that field.',
   deny: 'Refused, with a reason they can read. A denial with no reason teaches nothing and '
@@ -228,8 +235,15 @@ export default function DecisionPanel({
       <button type="submit" className="btn btn-primary btn-sm" disabled={!ready || busy}>
         {busy ? 'Recording…' : 'Record this decision'}
       </button>
+      {/* AF11.4 made one of the four verbs grant something, so this sentence can no longer be
+          the same for all four. It used to read "Nothing is granted or built by this" — true
+          when it was written and false now for `assign_existing_tool`, which is exactly the kind
+          of reassurance that keeps being believed after it stops being true. */}
       <span className="text-muted small ms-2">
-        Nothing is granted or built by this. It records who decided what, and when.
+        {verb === 'assign_existing_tool'
+          ? 'This grants that tool to the agent. It does not raise an autonomy level and does '
+            + 'not switch an agent on — both are separate decisions.'
+          : 'Nothing is granted or built by this. It records who decided what, and when.'}
       </span>
     </form>
   );

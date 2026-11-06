@@ -448,6 +448,98 @@ describe('resolveEffectiveAccess', () => {
     });
   });
 
+  describe("AF11.4 — a FINDING: `tools_granted` cannot move `usable`, so a grant alone can never make this resolver say yes for a domain agent", () => {
+    /**
+     * AF11.4's acceptance criterion reads "after the grant the resolver reports usable: true for
+     * that agent and tool". Measured here rather than assumed, it is NOT SATISFIABLE for any of
+     * the ten domain agents, and the reason is structural rather than a bug in the grant.
+     *
+     * `computeUsable` returns false immediately unless `registered` is true, and `registered` is
+     * `grantsTools.includes(tool) || registeredTools.includes(tool)` — the per-agent GRANTS
+     * table and the agent's own OpenAI tool-schema array. `toAgentKey` resolves exactly three
+     * names (cory, reese, dara) and `registeredHandlerToolNames` answers for exactly two
+     * (Reese, Dara), each by name, both deliberately and both documented as such. Every other
+     * agent gets two empty lists, so `registered` is false and `usable` is false whatever is
+     * granted.
+     *
+     * `tools_granted` contributes to `grantedVia` and to the mismatch list, and to nothing else.
+     * It is therefore the wrong instrument for proving a grant took effect. The right one is
+     * `agentEmailTool.readAgentGate`, which is a real gate on a real action and reads exactly
+     * this column — see `assignExistingToolMakesTheRealGateAnswer.test.ts`.
+     *
+     * Asserted rather than written in a PR description so that the day somebody wires per-agent
+     * registration for the domain agents, this test goes red and the claim gets revisited.
+     */
+    it('a domain agent granted send_email: held, visible, and still not usable', async () => {
+      mockGetAbacMode.mockResolvedValue('shadow');
+      mockAiAgentFindByPk.mockResolvedValue({
+        id: 'agent-maya',
+        agent_name: 'Maya',
+        tools_granted: ['send_email'],
+        enabled: true,
+        autonomy_level: 'communicate', // the TOP rung, so the level is not what is refusing
+        autonomy_level_set_at: new Date('2026-11-06T00:00:00Z'),
+        autonomy_level_source: 'manual',
+        abac_mode_override: null,
+      });
+
+      const result = await resolveEffectiveAccess('agent-maya');
+
+      const sendEmail = result!.tools.find((t) => t.toolName === 'send_email');
+      expect(sendEmail?.grantedVia).toEqual(['tools_granted']);
+      expect(sendEmail?.registered).toBe(false);
+      expect(sendEmail?.usable).toBe(false);
+    });
+
+    it('POSITIVE CONTROL — the same resolver DOES say usable: true when a handler exists', async () => {
+      // Without this, the assertion above would be satisfied just as well by a field that is
+      // always false. `read_attachments` is Reese's real GRANTS-table entry, so `registered` is
+      // true for her and shadow mode permits.
+      mockGetAbacMode.mockResolvedValue('shadow');
+      mockAiAgentFindByPk.mockResolvedValue({
+        id: 'agent-reese',
+        agent_name: 'Reese',
+        tools_granted: ['read_attachments'],
+        enabled: true,
+        autonomy_level: 'communicate',
+        autonomy_level_set_at: new Date('2026-09-15T00:00:00Z'),
+        autonomy_level_source: 'auto',
+        abac_mode_override: null,
+      });
+
+      const result = await resolveEffectiveAccess('agent-reese');
+
+      const readAttachments = result!.tools.find((t) => t.toolName === 'read_attachments');
+      expect(readAttachments?.registered).toBe(true);
+      expect(readAttachments?.usable).toBe(true);
+    });
+
+    it('send_email has no per-agent handler source at all, so it is unusable even for Reese', async () => {
+      // The sharpest form of the finding. `send_email` is a REGISTERED tool by AF3.5's
+      // definition — `registeredTools.ts` lists it as handler-backed, which is why it can be
+      // granted — and it appears in no GRANTS row and no tool-schema array, which is what this
+      // resolver means by registered. The two words mean different things, and a grant is
+      // judged against the first while `usable` is judged against the second.
+      mockGetAbacMode.mockResolvedValue('shadow');
+      mockAiAgentFindByPk.mockResolvedValue({
+        id: 'agent-reese',
+        agent_name: 'Reese',
+        tools_granted: ['send_email'],
+        enabled: true,
+        autonomy_level: 'communicate',
+        autonomy_level_set_at: new Date('2026-09-15T00:00:00Z'),
+        autonomy_level_source: 'auto',
+        abac_mode_override: null,
+      });
+
+      const result = await resolveEffectiveAccess('agent-reese');
+
+      const sendEmail = result!.tools.find((t) => t.toolName === 'send_email');
+      expect(sendEmail?.registered).toBe(false);
+      expect(sendEmail?.usable).toBe(false);
+    });
+  });
+
   describe('R201 — buildInventoryDriftReport() surfaces the real A09 findings', () => {
     it('surfaces both remaining named A09 findings: Reese’s tools_granted gap and the ProofDesk hardcoded-enabled disconnect (Dara’s 2 execution-gating findings closed by T12 completion, 2026-10-02)', async () => {
       const agents: Record<string, any> = {

@@ -9,8 +9,11 @@
  *      and only one of them is a reason to approve.
  *   3. **Every refusal is shown.** The server answers 409 with a list; one reason per round trip
  *      teaches the reader to click again rather than to read.
- *   4. **Nothing on the page can grant anything.** No autonomy control, no tool-grant toggle.
- *      `assign_existing_tool` records an intent and AF11.4 performs the grant.
+ *   4. **The page can grant exactly one thing, and nothing else.** AF11.4 wired
+ *      `assign_existing_tool` to the grant, so "nothing here grants anything" is no longer the
+ *      property — this is. There is still no autonomy control and no enable switch, the grant
+ *      call carries no body so it cannot name a different tool, and a request nobody has
+ *      assigned a tool on does not call it at all.
  *
  * TEST STYLE: this repo has no `@testing-library/react`; frontend suites drive React through
  * `createRoot` and `act` directly. Matching the sibling suites rather than adding a dependency.
@@ -34,6 +37,10 @@ jest.mock('../../../services/toolRequestReviewApi', () => {
     ...actual,
     decideToolRequest: jest.fn(),
     fetchToolRequestDecisions: jest.fn(),
+    // AF11.4. `decisionRefusals` and `refusalCode` come through from the real module above, so
+    // the "every reason is shown" and "which 409 was it" assertions below exercise the real
+    // readers rather than a stub that always agrees with them.
+    assignExistingTool: jest.fn(),
   };
 });
 
@@ -381,8 +388,8 @@ describe('PROPERTY 3 — the four verbs, and every refusal', () => {
   });
 });
 
-describe('PROPERTY 4 — nothing on this page grants anything', () => {
-  it('has no autonomy control, no tool-grant toggle and no enable switch', async () => {
+describe('PROPERTY 4 — the page grants one thing and nothing else', () => {
+  it('has no autonomy control and no enable switch', async () => {
     await render();
     const html = container.innerHTML;
     for (const forbidden of ['autonomy', 'tools_granted', 'abac_mode', 'risk_tier']) {
@@ -391,12 +398,25 @@ describe('PROPERTY 4 — nothing on this page grants anything', () => {
     expect(container.querySelectorAll('input[type="checkbox"]').length).toBe(0);
   });
 
-  it('says plainly that recording a decision grants and builds nothing', async () => {
+  it('says of the three non-granting verbs that they grant and build nothing', async () => {
     await render();
+    expect(text()).toContain('Nothing is granted or built by this');
+    await click(buttonNamed('Deny'));
     expect(text()).toContain('Nothing is granted or built by this');
   });
 
-  it('calls an assignment an INTENT where it is recorded', async () => {
+  it('says of the ONE granting verb that it grants, and what it still will not do', async () => {
+    // The sentence used to be the same for all four. It was true when it was written and false
+    // the day AF11.4 wired the grant, which is exactly the kind of reassurance that keeps being
+    // believed after it stops being true.
+    await render();
+    await click(buttonNamed('Assign an existing tool'));
+    expect(text()).toContain('This grants that tool to the agent');
+    expect(text()).toContain('does not raise an autonomy level');
+    expect(text()).not.toContain('Nothing is granted or built by this');
+  });
+
+  it('a recorded assignment points at where the grant is reported, rather than denying one', async () => {
     mockedReview.fetchToolRequestDecisions.mockResolvedValue([{
       change_request_id: 'cr-tool-1', verb: 'assign_existing_tool',
       decided_by_identity: 'ali@colaberry.com', decided_at: '2026-11-05T15:00:00Z',
@@ -404,7 +424,155 @@ describe('PROPERTY 4 — nothing on this page grants anything', () => {
       request_status: '',
     }]);
     await render();
-    expect(text()).toContain('an intent, not a grant');
+    expect(text()).toContain('the grant it asks for is recorded separately');
+    expect(text()).not.toContain('an intent, not a grant');
+  });
+});
+
+describe('AF11.4 — choosing "assign an existing tool" actually grants it', () => {
+  const RECORDED_ASSIGNMENT = {
+    change_request_id: 'cr-tool-1',
+    verb: 'assign_existing_tool',
+    decided_by_identity: 'ali@colaberry.com',
+    decided_at: '2026-11-06T15:00:00Z',
+    reason: null,
+    missing_field: null,
+    assigned_tool_name: 'fetch_skool_posts',
+    request_status: 'approved',
+  };
+
+  const GRANTED = {
+    changeRequestId: 'cr-tool-1',
+    grant: {
+      agentName: 'Maya',
+      toolName: 'fetch_skool_posts',
+      capabilityId: 'product_experience.CAP.daily_digest',
+      approvedBy: 'ali@colaberry.com',
+      toolsGranted: ['fetch_skool_posts'],
+      changeRequestId: 'cr-tool-1',
+      unchanged: false,
+    },
+    access: {
+      toolName: 'fetch_skool_posts',
+      registered: false,
+      grantedVia: ['tools_granted'],
+      mismatches: [],
+      usable: false,
+      agentEnabled: false,
+      autonomyLevel: 'observe',
+      abacMode: 'shadow',
+    },
+  };
+
+  /** Choose the verb, pick the tool, submit. */
+  async function assignAndSubmit() {
+    await render();
+    await click(buttonNamed('Assign an existing tool'));
+    await type(container.querySelector('#decision-tool') as HTMLSelectElement, 'fetch_skool_posts');
+    await click(buttons().find((b) => b.textContent?.includes('Record this decision')));
+  }
+
+  it('calls the grant with the request id and NO body', async () => {
+    // No body is the whole safety property: the tool comes from the decision the server just
+    // recorded, so this screen cannot grant a different one from the one it shows.
+    mockedReview.decideToolRequest.mockResolvedValue(RECORDED_ASSIGNMENT);
+    mockedReview.assignExistingTool.mockResolvedValue(GRANTED);
+
+    await assignAndSubmit();
+
+    expect(mockedReview.assignExistingTool).toHaveBeenCalledWith('cr-tool-1');
+    expect(mockedReview.assignExistingTool.mock.calls[0].length).toBe(1);
+  });
+
+  it('does NOT grant for the other three verbs', async () => {
+    // POSITIVE CONTROL in the other direction. A page that called the grant on every decision
+    // would pass the assertion above perfectly well.
+    mockedReview.decideToolRequest.mockResolvedValue({
+      ...RECORDED_ASSIGNMENT, verb: 'approve_to_build', assigned_tool_name: null,
+    });
+    await render();
+    await click(buttonNamed('Approve to build'));
+    await click(buttons().find((b) => b.textContent?.includes('Record this decision')));
+
+    expect(mockedReview.decideToolRequest).toHaveBeenCalled();
+    expect(mockedReview.assignExistingTool).not.toHaveBeenCalled();
+  });
+
+  it('keys the grant on the verb the SERVER recorded, not the one that was clicked', async () => {
+    // If the server recorded something else — a race, a replayed request, a verb the contract
+    // rewrote — the grant must follow the record. Clicking is a request; the record is the fact.
+    mockedReview.decideToolRequest.mockResolvedValue({
+      ...RECORDED_ASSIGNMENT, verb: 'send_back', assigned_tool_name: null,
+    });
+    await assignAndSubmit();
+    expect(mockedReview.assignExistingTool).not.toHaveBeenCalled();
+  });
+
+  it('reports that the agent holds the tool and STILL CANNOT USE IT', async () => {
+    // The ordinary outcome, not an edge case: `usable` also needs the agent enabled and its
+    // autonomy level to allow the action, and both are separate decisions. A green tick here
+    // would be telling the truth about the write and the wrong thing about the agent.
+    mockedReview.decideToolRequest.mockResolvedValue(RECORDED_ASSIGNMENT);
+    mockedReview.assignExistingTool.mockResolvedValue(GRANTED);
+
+    await assignAndSubmit();
+
+    expect(text()).toContain('What the grant did');
+    expect(text()).toContain('Granted');
+    expect(text()).toContain('The agent holds this tool and still cannot use it');
+    expect(text()).toContain('ali@colaberry.com');
+  });
+
+  it('reports that it can be used when the server says it can', async () => {
+    mockedReview.decideToolRequest.mockResolvedValue(RECORDED_ASSIGNMENT);
+    mockedReview.assignExistingTool.mockResolvedValue({
+      ...GRANTED,
+      access: { ...GRANTED.access, registered: true, usable: true, agentEnabled: true },
+    });
+
+    await assignAndSubmit();
+
+    expect(text()).toContain('The agent can use this tool now');
+  });
+
+  it('a refused grant says the DECISION still stands, and shows every reason', async () => {
+    // The decision committed before the grant was attempted. A reader who thought it had been
+    // undone would go and decide it again.
+    mockedReview.decideToolRequest.mockResolvedValue(RECORDED_ASSIGNMENT);
+    mockedReview.assignExistingTool.mockRejectedValue({
+      response: {
+        status: 409,
+        data: {
+          error: 'The decision stands, but the grant it asks for cannot.',
+          code: 'grant_refused',
+          issues: [
+            { rule: 'capability_not_confirmed', detail: 'Capability CAP.x is draft, not confirmed.' },
+            { rule: 'tool_not_registered', detail: '"fetch_skool_posts" is not a registered tool.' },
+          ],
+        },
+      },
+    });
+
+    await assignAndSubmit();
+
+    expect(text()).toContain('The decision is recorded. The grant it asks for cannot be made yet');
+    expect(text()).toContain('draft, not confirmed');
+    expect(text()).toContain('not a registered tool');
+  });
+
+  it('an unmeasurable verdict is reported as unmeasured, never as a no', async () => {
+    mockedReview.decideToolRequest.mockResolvedValue(RECORDED_ASSIGNMENT);
+    mockedReview.assignExistingTool.mockResolvedValue({ ...GRANTED, access: null });
+
+    await assignAndSubmit();
+
+    expect(text()).toContain('could not be read just now');
+    expect(text()).not.toContain('still cannot use it');
+  });
+
+  it('a request nobody has assigned anything on shows no grant panel at all', async () => {
+    await render();
+    expect(text()).not.toContain('What the grant did');
   });
 });
 

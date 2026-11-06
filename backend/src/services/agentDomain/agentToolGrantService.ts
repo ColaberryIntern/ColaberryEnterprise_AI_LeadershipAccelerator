@@ -68,6 +68,15 @@ export interface GrantToolArgs {
   readonly approvedBy: string;
   /** Who asked for the capability, when known. Refused as the approver. */
   readonly proposedBy?: string | null;
+  /**
+   * The tool request this grant answers, when it answers one. AF11.4.
+   *
+   * PROVENANCE, not authority: nothing in `acceptToolGrant` judges it, because what makes a
+   * grant legal is a confirmed capability and a configured approver, and a request id is
+   * neither. It is recorded so the ledger can answer "which request did this settle", which is
+   * the question the review console asks. Absent for a grant made for a capability promotion.
+   */
+  readonly changeRequestId?: string | null;
 }
 
 export interface GrantToolResult {
@@ -78,6 +87,15 @@ export interface GrantToolResult {
   readonly capabilityId: string;
   readonly approvedBy: string;
   readonly toolsGranted: string[];
+  /**
+   * The request this grant is recorded against, read back off the row.
+   *
+   * Read back rather than echoed: on a re-grant `findOrCreate` returns the row that already
+   * exists, which keeps the provenance it was written with. So this is what the ledger SAYS,
+   * not what the caller asked it to say — otherwise a second call would appear to have changed
+   * a record it deliberately left alone.
+   */
+  readonly changeRequestId: string | null;
   /** True when the agent already held the tool and nothing changed. */
   readonly unchanged: boolean;
 }
@@ -200,6 +218,7 @@ export async function grantToolToAgent(
         agent_name: grant.agentName,
         tool_name: grant.toolName,
         capability_id: grant.capabilityId,
+        change_request_id: args.changeRequestId ?? null,
         approved_by_identity: grant.approvedBy,
       },
       transaction,
@@ -224,6 +243,7 @@ export async function grantToolToAgent(
         agent_name: grant.agentName,
         tool_name: grant.toolName,
         capability_id: grant.capabilityId,
+        change_request_id: row.change_request_id ?? null,
         approved_by: grant.approvedBy,
         unchanged: grant.alreadyGranted,
       },
@@ -237,6 +257,7 @@ export async function grantToolToAgent(
       capabilityId: grant.capabilityId,
       approvedBy: grant.approvedBy,
       toolsGranted: [...grant.toolsGrantedAfter],
+      changeRequestId: row.change_request_id ?? null,
       unchanged: grant.alreadyGranted,
     };
   });

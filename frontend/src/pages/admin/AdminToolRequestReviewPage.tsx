@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { EmptyState, PageHeader, SectionCard } from '../../components/admin/shell';
 import DecisionHistory from '../../components/admin/toolReview/DecisionHistory';
 import DecisionPanel from '../../components/admin/toolReview/DecisionPanel';
+import GrantOutcomePanel from '../../components/admin/toolReview/GrantOutcomePanel';
 import DuplicateCandidatesPanel from '../../components/admin/toolReview/DuplicateCandidatesPanel';
 import ToolRequestFacts from '../../components/admin/toolReview/ToolRequestFacts';
 import {
@@ -10,9 +11,12 @@ import {
   type ChangeRequest,
 } from '../../services/agentDomainApi';
 import {
+  assignExistingTool,
   decideToolRequest,
   decisionRefusals,
   fetchToolRequestDecisions,
+  refusalCode,
+  type AssignExistingToolResult,
   type DecisionIssue,
   type ProposedToolRequestDecision,
   type ToolRequestDecision,
@@ -31,13 +35,21 @@ import {
  * not fit in a queue row, and the one thing this screen must not become is a list where a grant is
  * settled from a title. `/admin/change-requests` keeps the approve/decline queue it was built for.
  *
- * ## Nothing on this page grants anything
+ * ## What this page grants, as of AF11.4, and what it still cannot
  *
- * `assign_existing_tool` records an INTENT; AF11.4 performs the grant against
- * `ai_agents.tools_granted`. There is no autonomy control on this screen at all, because a console
- * that grants a tool and lifts an autonomy level in one action means nobody separately decided the
- * agent may act more freely. `toolRequestDecisionGrantsNothing.test.ts` asserts that by name
- * against the backend, and this page has no call that could reach those columns.
+ * Choosing `assign_existing_tool` now records the decision AND asks the server to carry it out,
+ * in that order, as two calls. The second one sends NO BODY: the tool comes from the decision
+ * just recorded, the agent and capability from the request the intern filed, and the approver
+ * from the verified token, so this screen cannot grant a different tool from the one it shows.
+ *
+ * The order is load-bearing. The decision commits first, so a grant the server refuses — most
+ * often an unconfirmed capability — leaves the decision on the record with a reason beside it
+ * rather than erasing a decision somebody did make. `GrantOutcomePanel` says exactly that.
+ *
+ * There is still no autonomy control on this screen, and no way to enable an agent. A console
+ * that granted a tool and lifted an autonomy level in one action would mean nobody separately
+ * decided the agent may act more freely — so a grant here routinely ends with the agent holding
+ * the tool and still unable to use it, which the outcome panel reports rather than hides.
  *
  * ## A 403 is not an error here
  *
@@ -72,6 +84,14 @@ export default function AdminToolRequestReviewPage() {
   const [busy, setBusy] = useState(false);
   const [issues, setIssues] = useState<DecisionIssue[]>([]);
   const [problem, setProblem] = useState('');
+
+  // AF11.4. Kept separate from `issues`/`problem` above, which belong to the DECISION. A grant
+  // that was refused after a decision that was recorded is two different outcomes at once, and
+  // one set of error state could only have shown one of them.
+  const [grant, setGrant] = useState<AssignExistingToolResult | null>(null);
+  const [grantIssues, setGrantIssues] = useState<DecisionIssue[]>([]);
+  const [grantCode, setGrantCode] = useState('');
+  const [grantProblem, setGrantProblem] = useState('');
 
   useEffect(() => {
     let alive = true;
@@ -116,15 +136,48 @@ export default function AdminToolRequestReviewPage() {
     if (!selectedId) { setDecisions([]); return; }
     setIssues([]);
     setProblem('');
+    // Clear the grant outcome with the selection, for the same reason `DecisionPanel` is keyed on
+    // the request id: a panel reading "granted send_email to Maya" left standing beside a
+    // different request is a sentence about work that was never done on it.
+    setGrant(null);
+    setGrantIssues([]);
+    setGrantCode('');
+    setGrantProblem('');
     void loadHistory(selectedId);
   }, [selectedId, loadHistory]);
 
   const selected = (queue ?? []).find((r) => r.id === selectedId) ?? null;
 
+  /**
+   * AF11.4 — carry out an assignment that has just been recorded.
+   *
+   * Its own function, and deliberately not inside the `try` that records the decision: a failure
+   * here must not be reported as a failure to decide. The decision has committed by this point,
+   * so the history below will show it either way, and the grant's own outcome is reported in its
+   * own panel with its own sentences.
+   */
+  async function carryOutAssignment(id: string) {
+    setGrant(null);
+    setGrantIssues([]);
+    setGrantCode('');
+    setGrantProblem('');
+    try {
+      setGrant(await assignExistingTool(id));
+    } catch (e) {
+      setGrantIssues(decisionRefusals(e));
+      setGrantCode(refusalCode(e));
+      setGrantProblem(errorMessage(e, 'Could not carry out that assignment.'));
+    }
+  }
+
   async function onDecide(proposed: ProposedToolRequestDecision) {
     if (!selected) return;
     setIssues([]);
     setProblem('');
+    setGrant(null);
+    setGrantIssues([]);
+    setGrantCode('');
+    setGrantProblem('');
     setBusy(true);
     try {
       const recorded = await decideToolRequest(selected.id, proposed);
@@ -136,6 +189,11 @@ export default function AdminToolRequestReviewPage() {
           : r
       )) : q));
       await loadHistory(selected.id);
+      // THE GRANT. Keyed on the verb the SERVER says it recorded, not on the one submitted: the
+      // decision that actually landed is the one worth acting on, and reading it back is free.
+      if (recorded.verb === 'assign_existing_tool') {
+        await carryOutAssignment(selected.id);
+      }
     } catch (e) {
       setIssues(decisionRefusals(e));
       setProblem(errorMessage(e, 'Could not record that decision.'));
@@ -266,6 +324,22 @@ export default function AdminToolRequestReviewPage() {
                     onDecide={onDecide}
                   />
                 </SectionCard>
+
+                {/* AF11.4. Rendered only once an assignment has actually been attempted, so an
+                    untouched request does not carry a panel about a grant nobody asked for. */}
+                {(grant || grantIssues.length > 0 || grantProblem) && (
+                  <SectionCard
+                    title="What the grant did"
+                    subtitle="The write, and whether the agent can use the tool it now holds"
+                  >
+                    <GrantOutcomePanel
+                      result={grant}
+                      issues={grantIssues}
+                      code={grantCode}
+                      problem={grantProblem}
+                    />
+                  </SectionCard>
+                )}
 
                 <SectionCard title="What has already been decided">
                   {/* The error REPLACES the history rather than sitting above it. Rendering both

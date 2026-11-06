@@ -81,7 +81,12 @@ export default function DecisionHistory({ decisions }: { decisions: ToolRequestD
                   <div className="mt-1">
                     <span className="text-muted">Tool named: </span>
                     <code className="small">{d.assigned_tool_name}</code>
-                    <span className="text-muted"> — an intent, not a grant</span>
+                    {/* This said "an intent, not a grant" until AF11.4, which was true of
+                        AF11.3's console and stopped being true the day the grant was wired. A
+                        history row is a record of what was decided, and the decision no longer
+                        stops at an intent — so it now points at where the grant itself is
+                        reported rather than denying that one happened. */}
+                    <span className="text-muted"> — the grant it asks for is recorded separately</span>
                   </div>
                 )}
                 {d.reason && <div className="mt-1 text-muted">{d.reason}</div>}
