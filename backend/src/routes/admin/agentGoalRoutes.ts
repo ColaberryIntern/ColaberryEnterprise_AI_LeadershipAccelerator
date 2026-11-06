@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { requireAgentManagerOrAdmin } from '../../middlewares/agentManagerAuthMiddleware';
+import { requireAgentManagerOrAdmin, requireAgentManagerOrDomainBuilder } from '../../middlewares/agentManagerAuthMiddleware';
 import { handleListGoals, handleCreateGoal, handleArchiveGoal } from '../../controllers/agentGoalController';
 
 // AI Workforce Management, Checkpoint D — a manager-set target for a real,
@@ -8,7 +8,7 @@ import { handleListGoals, handleCreateGoal, handleArchiveGoal } from '../../cont
 // is upstream of this specific agent.
 const router = Router();
 
-router.get('/api/admin/agents/:id/goals', requireAgentManagerOrAdmin(), handleListGoals);
+router.get('/api/admin/agents/:id/goals', requireAgentManagerOrDomainBuilder(), handleListGoals);
 router.post('/api/admin/agents/:id/goals', requireAgentManagerOrAdmin(), handleCreateGoal);
 router.post('/api/admin/agents/:id/goals/:goalId/archive', requireAgentManagerOrAdmin(), handleArchiveGoal);
 

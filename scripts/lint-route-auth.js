@@ -20,6 +20,17 @@
  * how this check matches — a comment mentioning a guard name passes as readily as a real import —
  * not something this change attempts to fix; it's flagged here for whoever next touches this file.)
  *
+ * 2026-11-05: added requireAgentManagerOrDomainBuilder, the read-only sibling of
+ * requireAgentManagerOrAdmin — the same gate plus a GET-only path for the verified intended
+ * BUILDER of the agent's domain. It wraps requireAdmin internally for exactly the same reason, so
+ * it is also a narrower gate rather than a bypass. This repeated the 2026-08-28 story precisely:
+ * agentExplainabilityRoutes.ts failed this check the moment it adopted the new guard, while
+ * agentDetailRoutes.ts, agentGoalRoutes.ts and agentRoleCharterRoutes.ts passed — the first
+ * because its header comment still says "requireAgentManagerOrAdmin" in prose, the other two
+ * because they genuinely still import it for their write routes. Only the file whose prose
+ * happened not to mention a guard name reported the truth, which is the substring weakness noted
+ * above doing real damage rather than hypothetical damage.
+ *
  * Run: `node scripts/lint-route-auth.js`
  */
 const fs = require('fs');
@@ -33,6 +44,7 @@ const GUARDS = [
   'requireSection',
   'requireSalesOrAdmin',
   'requireAgentManagerOrAdmin',
+  'requireAgentManagerOrDomainBuilder',
 ];
 
 let files;
