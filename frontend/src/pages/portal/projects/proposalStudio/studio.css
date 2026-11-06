@@ -305,3 +305,12 @@
 
 /* v4 (T6) gates: score chip */
 .gps-score-chip{display:inline-block;min-width:30px;text-align:center;padding:2px 8px;border-radius:6px;font-weight:600}
+
+/* v4 (T10) editor: section blocks, requirement reference line, need-chips, PDF preview */
+.gps-ed-section{padding:10px 0 4px;border-top:1px solid var(--gps-line)}
+.gps-ed-section:first-of-type{border-top:0}
+.gps-reqref{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:11px;color:var(--gps-muted);margin-bottom:6px}
+.gps-needchip{display:inline-block;background:var(--gps-warn-soft,rgba(214,158,46,.16));color:var(--gps-warn);border:1px dashed var(--gps-warn);border-radius:5px;padding:0 6px;font-size:12px;font-weight:600;white-space:nowrap}
+.gps-pdf{display:flex;flex-direction:column;gap:12px;align-items:center}
+.gps-pdf-page{width:100%;max-width:640px;background:#fff;color:#111;border:1px solid var(--gps-line);border-radius:4px;box-shadow:0 2px 12px rgba(10,16,26,.12);padding:40px 46px;aspect-ratio:8.5/11;overflow:auto}
+.gps-pdf-page .gps-run{color:#555}
