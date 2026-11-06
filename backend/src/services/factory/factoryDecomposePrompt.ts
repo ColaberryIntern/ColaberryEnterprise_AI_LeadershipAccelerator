@@ -143,6 +143,11 @@ AGENT_TEAMS - group the AI tasks BY SUBJECT, and declare the teams here:
 - approver_role_id is the human role answerable for that team's output, drawn from the roles you
   emit. It may NEVER be an agent. Null is allowed and will be reported as a gap, so prefer naming
   the real role.
+- GIVE THE APPROVER A ROLE OF THEIR OWN. Do not name as approver_role_id a role that an agent also
+  PERFORMS work under. On 6 Nov a run gave "Proposal Manager" an agent performer on two tasks and a
+  human approver on three, so the role name no longer said which side of the handoff it meant - a
+  reader could not tell the worker from the reviewer. The approval was genuinely a person's and the
+  decomposition was still unreadable, which is why APPROVER_ROLE_SHARED_WITH_AGENT reports it.
 - execution_policy is one of manual_only, agent_with_review, agent_autonomous. approval_policy is
   one of none, internal_review, client_approval. They must agree with the team's allocation: a
   team of ai_with_approval tasks is agent_with_review, not agent_autonomous.

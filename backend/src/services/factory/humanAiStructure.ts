@@ -121,9 +121,29 @@ function checkTeamIntegrity(teams: readonly AgentTeam[], out: StructureFinding[]
   }
 }
 
+/**
+ * The two ways an approver role can involve an agent, which are NOT the same finding.
+ *
+ * `oversight` holds roles where an agent actually holds APPROVER or ACCOUNTABLE — a system signing
+ * off, which is the violation this rule was written for. `performer` holds roles where an agent
+ * merely DOES the work. Until 2026-11-06 the rule used one set for both and so fired on the second
+ * case as though it were the first.
+ *
+ * The production case that forced the split: the 6 Nov Herriman regeneration gave
+ * `role-proposal_manager` an AGENT as PERFORMER on two tasks and a PERSON as APPROVER on three. The
+ * oversight was real and human; the model had simply reused one role label for both sides of it.
+ * Calling that "a system may never be the approver" was false, and had the rule been promoted to
+ * blocking on the strength of it — which is what I was about to recommend — it would have rejected
+ * a sound decomposition over a naming collision.
+ */
+interface AgentRoleSets {
+  readonly oversight: ReadonlySet<string>;
+  readonly performer: ReadonlySet<string>;
+}
+
 function checkOversight(
   teams: readonly AgentTeam[],
-  agentRoleIds: ReadonlySet<string>,
+  agentRoles: AgentRoleSets,
   out: StructureFinding[],
 ): void {
   for (const team of teams) {
@@ -134,9 +154,16 @@ function checkOversight(
         team.execution_policy === 'agent_autonomous' ? 'warning' : 'blocking',
         team.id,
         `Team "${team.name}" has no human approver while running ${team.execution_policy}.`));
-    } else if (agentRoleIds.has(team.approver_role_id)) {
+    } else if (agentRoles.oversight.has(team.approver_role_id)) {
       out.push(finding('APPROVER_IS_AGENT', 'blocking', team.id,
-        `Team "${team.name}" names ${team.approver_role_id} as approver, but an agent fills that role. A system may never be the approver.`));
+        `Team "${team.name}" names ${team.approver_role_id} as approver, and an agent holds APPROVER or ACCOUNTABLE under that role. A system may never be the approver.`));
+    } else if (agentRoles.performer.has(team.approver_role_id)) {
+      // A WEAKER CLAIM, DELIBERATELY. Nothing here says a system approved anything: a person may
+      // hold the approval and the decomposition still be unreadable, because the role name alone
+      // no longer tells a reviewer which side of the handoff it refers to. That is worth saying
+      // and not worth refusing over.
+      out.push(finding('APPROVER_ROLE_SHARED_WITH_AGENT', 'warning', team.id,
+        `Team "${team.name}" names ${team.approver_role_id} as approver, and an agent also PERFORMS work under that same role. The approval may still be a person's, but the role no longer distinguishes the worker from the reviewer; give the human approver a role of their own.`));
     }
 
     if (team.execution_policy === 'agent_autonomous') {
@@ -181,12 +208,16 @@ export function evaluateHumanAiStructure(input: StructureInput): StructureResult
   }
 
   const classOf = new Map(input.allocation.map((a) => [a.task_id, a.execution_class]));
-  const agentRoleIds = new Set(
-    input.assignments.filter((a) => a.executor?.type === 'agent').map((a) => a.role_id),
-  );
+  const agentAssignments = input.assignments.filter((a) => a.executor?.type === 'agent');
+  const agentRoles: AgentRoleSets = {
+    oversight: new Set(agentAssignments
+      .filter((a) => a.responsibility === 'APPROVER' || a.responsibility === 'ACCOUNTABLE')
+      .map((a) => a.role_id)),
+    performer: new Set(agentAssignments.map((a) => a.role_id)),
+  };
 
   checkTeamIntegrity(teams, findings);
-  checkOversight(teams, agentRoleIds, findings);
+  checkOversight(teams, agentRoles, findings);
   const consoleCount = checkSurfaces(surfaces, findings);
 
   const teamTaskIds = new Set(teams.flatMap((t) => t.task_ids));

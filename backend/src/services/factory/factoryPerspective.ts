@@ -74,8 +74,46 @@ export const BUYER_SIDE_VERBS = [
  */
 export const CITATION_BUCKET_SHARE = 0.4;
 
+/**
+ * The OBJECT a counterparty verb has to be acting on before the title is an inversion.
+ *
+ * ## Why a verb alone was not enough
+ *
+ * The 6 Nov Herriman regeneration produced `Review Compliance with Requirements`. That leads with
+ * `review` and cites nothing but requirement blocks, so the rule fired — and it was wrong.
+ * Reviewing OUR compliance before we submit is our own work; reviewing THEIR proposals is not.
+ * The verb is identical in both and the citations are identical in both. The object is the only
+ * thing that differs, so the object is what the rule now has to find.
+ *
+ * Checked against all four production cases: `Receive Proposals`, `Review Proposals` and
+ * `Select Vendor` each name something the buyer judges and still fire; `Review Compliance with
+ * Requirements` names our own obligation and goes quiet.
+ *
+ * ## What this deliberately gives up
+ *
+ * Precision over recall, because these are WARNINGS a person reads. `Select the winning firm`
+ * names no noun in this list and will be missed. An advisory that cries wolf gets filtered out
+ * entirely, and then it catches nothing at all — a miss costs one finding, a false positive costs
+ * the rule's standing. `response` is excluded for exactly that reason: our own submission is "the
+ * response", so `Review the response` is as likely to be our QA step as their evaluation.
+ */
+export const COUNTERPARTY_OBJECTS = [
+  'proposal', 'proposals', 'bid', 'bids', 'vendor', 'vendors', 'proposer', 'proposers',
+  'offer', 'offers', 'submission', 'submissions', 'respondent', 'respondents',
+  'quote', 'quotes', 'applicant', 'applicants', 'supplier', 'suppliers',
+] as const;
+
 const leadingVerb = (title: string): string =>
   title.trim().toLowerCase().replace(/^[^a-z]+/, '').split(/[\s:,]+/)[0] ?? '';
+
+/**
+ * The counterparty-side noun a title names, if any — looked for AFTER the leading verb, so a verb
+ * that happens to double as one of these nouns cannot satisfy its own second condition.
+ */
+const counterpartyObject = (title: string): string | null => {
+  const words = title.trim().toLowerCase().split(/[^a-z]+/).filter(Boolean).slice(1);
+  return words.find((w) => (COUNTERPARTY_OBJECTS as readonly string[]).includes(w)) ?? null;
+};
 
 /** The input is narrow on purpose, so a test does not have to build a whole project. */
 export type PerspectiveInput = Pick<FactoryProject, 'tasks' | 'source_blocks'>;
@@ -104,13 +142,17 @@ export function evaluatePerspective(input: PerspectiveInput): PerspectiveFinding
     // `out_of_scope` block may legitimately describe something the buyer does; a task built
     // ONLY from requirement blocks is built only from duties, and a duty on us performed by
     // them is a misreading rather than a task.
+    // A THIRD CONDITION SINCE 6 NOV: the verb must be acting on something the buyer judges.
+    // `Review Compliance with Requirements` satisfied the first two conditions and was still our
+    // own work. See COUNTERPARTY_OBJECTS for the four production cases this is calibrated against.
     const verb = leadingVerb(task.title);
     const isBuyerVerb = (BUYER_SIDE_VERBS as readonly string[]).includes(verb);
-    if (isBuyerVerb && cited.length > 0 && citedReqs.length === cited.length) {
+    const object = counterpartyObject(task.title);
+    if (isBuyerVerb && object !== null && cited.length > 0 && citedReqs.length === cited.length) {
       findings.push({
         rule: 'BUYER_SIDE_TASK',
         ref: task.id,
-        detail: `"${task.title}" leads with "${verb}", which names the counterparty's half of a duty that binds us. `
+        detail: `"${task.title}" leads with "${verb}" acting on "${object}", which names the counterparty's half of a duty that binds us. `
           + `It cites only requirement blocks (${citedReqs.join(', ')}), so the obligation is ours and the task should state OUR action.`,
       });
     }
