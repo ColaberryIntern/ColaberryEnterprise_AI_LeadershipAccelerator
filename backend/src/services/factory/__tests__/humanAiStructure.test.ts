@@ -28,11 +28,16 @@ const alloc = (task_id: string, execution_class: AllocationRow['execution_class'
   task_id, execution_class, rationale: 'because', accountable_role_id: 'role-lead',
 });
 
-const assign = (task_id: string, role_id: string, type: 'person' | 'agent'): Assignment => ({
-  id: `a-${task_id}-${role_id}`,
+const assign = (
+  task_id: string,
+  role_id: string,
+  type: 'person' | 'agent',
+  responsibility: Assignment['responsibility'] = 'PERFORMER',
+): Assignment => ({
+  id: `a-${task_id}-${role_id}-${responsibility}`,
   task_id,
   role_id,
-  responsibility: 'PERFORMER',
+  responsibility,
   executor: { type, id: 'x' },
   minutes: null,
   basis: 'UNKNOWN',
@@ -149,10 +154,37 @@ describe('evaluateHumanAiStructure', () => {
       expect(f?.severity).toBe('blocking');
     });
 
-    it('refuses an approver role that an agent actually fills', () => {
+    it('refuses an approver role under which an agent HOLDS the approval', () => {
+      // The violation the rule is for: a system signing off. Narrowed on 2026-11-06 from "an agent
+      // appears anywhere under this role" to "an agent holds APPROVER or ACCOUNTABLE under it".
       const i = clean();
+      i.assignments = [...i.assignments, assign('t-ai', 'role-agent', 'agent', 'APPROVER')];
       i.agent_teams = [team({ approver_role_id: 'role-agent' })];
-      expect(evaluateHumanAiStructure(i).findings.some((f) => f.rule === 'APPROVER_IS_AGENT')).toBe(true);
+      const f = evaluateHumanAiStructure(i).findings.find((x) => x.rule === 'APPROVER_IS_AGENT');
+      expect(f?.severity).toBe('blocking');
+    });
+
+    it('WARNS, not blocks, when the approver role is merely shared with an agent performer', () => {
+      // THE 6 NOV PRODUCTION CASE. `role-proposal_manager` had an AGENT as PERFORMER on two tasks
+      // and a PERSON as APPROVER on three. The old rule called that "a system may never be the
+      // approver", which was false — the oversight was a person's. Promoting the old rule to
+      // blocking on this evidence would have rejected a sound decomposition over a role label.
+      const i = clean();
+      i.assignments = [...i.assignments, assign('t-ai', 'role-agent', 'person', 'APPROVER')];
+      i.agent_teams = [team({ approver_role_id: 'role-agent' })];
+      const r = evaluateHumanAiStructure(i);
+      expect(r.findings.some((f) => f.rule === 'APPROVER_IS_AGENT')).toBe(false);
+      const shared = r.findings.find((f) => f.rule === 'APPROVER_ROLE_SHARED_WITH_AGENT');
+      expect(shared?.severity).toBe('warning');
+      expect(r.blockingFindings).toEqual([]);
+    });
+
+    it('says nothing when the approver role has no agent under it at all', () => {
+      // The control. Without this, both findings above could be firing on the fixture rather than
+      // on the condition they name.
+      const r = evaluateHumanAiStructure(clean());
+      expect(r.findings.some((f) => f.rule === 'APPROVER_IS_AGENT')).toBe(false);
+      expect(r.findings.some((f) => f.rule === 'APPROVER_ROLE_SHARED_WITH_AGENT')).toBe(false);
     });
 
     it('warns rather than blocks when an autonomous team has no approver', () => {

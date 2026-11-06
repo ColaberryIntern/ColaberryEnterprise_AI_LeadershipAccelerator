@@ -13,7 +13,7 @@
  * own trigger list proves only that the list matches itself.
  */
 import {
-  evaluatePerspective, BUYER_SIDE_VERBS, CITATION_BUCKET_SHARE, type PerspectiveInput,
+  evaluatePerspective, BUYER_SIDE_VERBS, COUNTERPARTY_OBJECTS, CITATION_BUCKET_SHARE, type PerspectiveInput,
 } from '../factoryPerspective';
 import { factoryValidate, factoryErrors } from '../factoryValidate';
 import type { FactoryTask, SourceBlock, FactoryProject } from '../contracts/factoryContract';
@@ -114,6 +114,80 @@ describe('BUYER_SIDE_TASK stays SILENT on the honest version of the same work', 
       source_blocks: SIX_REQS,
     });
     expect(rules).not.toContain('BUYER_SIDE_TASK');
+  });
+});
+
+/**
+ * The 6 Nov regeneration is the first run this rule judged that it had not been built from, and it
+ * produced one false positive and one near miss. Both are pinned here with the titles production
+ * actually used, because a rule calibrated only on the cases that motivated it has never been
+ * tested at all.
+ */
+describe('the 6 Nov run: the verb is not sufficient, and the object is not either', () => {
+  it('stays SILENT on "Review Compliance with Requirements" — our own compliance is our work', () => {
+    // THE FALSE POSITIVE THAT FORCED THE OBJECT CONDITION. Identical verb to `Review Proposals`
+    // and identical citation purity; only the object differs, so only the object can separate them.
+    const rules = rulesOf({
+      tasks: [task({ id: 't-review-compliance', title: 'Review Compliance with Requirements', source_evidence: ['b1', 'b2', 'b3'] })],
+      source_blocks: SIX_REQS,
+    });
+    expect(rules).not.toContain('BUYER_SIDE_TASK');
+  });
+
+  it('stays SILENT on "Compile Proposal Document" — the noun is there, the verb is ours', () => {
+    // The other direction, from the same run: a counterparty noun in a task that is plainly ours.
+    const rules = rulesOf({
+      tasks: [task({ id: 't-compile-proposal', title: 'Compile Proposal Document', source_evidence: ['b1'] })],
+      source_blocks: SIX_REQS,
+    });
+    expect(rules).not.toContain('BUYER_SIDE_TASK');
+  });
+
+  it('still flags "Review Proposals", so the fix narrowed the rule without disarming it', () => {
+    const rules = rulesOf({
+      tasks: [task({ id: 't-review-proposals', title: 'Review Proposals', source_evidence: ['b1'] })],
+      source_blocks: SIX_REQS,
+    });
+    expect(rules).toContain('BUYER_SIDE_TASK');
+  });
+
+  it('names the object in the finding, so the reader can judge the call', () => {
+    const findings = evaluatePerspective({
+      tasks: [task({ id: 't-x', title: 'Evaluate the bids', source_evidence: ['b1'] })],
+      source_blocks: SIX_REQS,
+    });
+    expect(findings[0].detail).toContain('"bids"');
+  });
+});
+
+describe('the object set and its fixtures cannot drift apart', () => {
+  it('fires on EVERY counterparty noun in the published set', () => {
+    for (const noun of COUNTERPARTY_OBJECTS) {
+      const rules = rulesOf({
+        tasks: [task({ id: `t-${noun}`, title: `Review the ${noun}`, source_evidence: ['b1'] })],
+        source_blocks: SIX_REQS,
+      });
+      expect(rules).toContain('BUYER_SIDE_TASK');
+    }
+  });
+
+  it('excludes "response", because our own submission is called that', () => {
+    expect(COUNTERPARTY_OBJECTS as readonly string[]).not.toContain('response');
+    const rules = rulesOf({
+      tasks: [task({ id: 't-x', title: 'Review the response', source_evidence: ['b1'] })],
+      source_blocks: SIX_REQS,
+    });
+    expect(rules).not.toContain('BUYER_SIDE_TASK');
+  });
+
+  it('shares no word with the verb set, so no title can satisfy both conditions with one word', () => {
+    // The two conditions are only independent while the sets are disjoint. The implementation
+    // looks for the object AFTER the leading word so that it stays correct if they ever overlap,
+    // but that guard cannot be exercised today — and a test written against an impossible input
+    // passes for the wrong reason. This pins the property the guard depends on instead.
+    const overlap = (COUNTERPARTY_OBJECTS as readonly string[])
+      .filter((n) => (BUYER_SIDE_VERBS as readonly string[]).includes(n));
+    expect(overlap).toEqual([]);
   });
 });
 
